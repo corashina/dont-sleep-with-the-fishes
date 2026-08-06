@@ -16,6 +16,7 @@ import type { PresentationWeatherId } from '../weather/presentationWeather';
 import type { AudioSystem } from '../audio/AudioSystem';
 import type { SurvivalEventModels } from '../survival/SurvivalEventModelLibrary';
 import type { EventModelLibrary } from '../survival/EventModelLibrary';
+import type { MenuModelLibrary } from '../menu/MenuModelLibrary';
 
 export interface PhaseContext {
   mount: HTMLElement;
@@ -36,6 +37,7 @@ export interface PhaseContext {
   physicsMode: PhysicsMode;
   audio: AudioSystem;
   featuredEventModels: SurvivalEventModels;
+  menuModels: MenuModelLibrary;
 }
 
 export interface GamePhase {

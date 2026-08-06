@@ -11,7 +11,7 @@ keyed animation keep the physical world dominant. Selective ambient occlusion
 and restrained print treatment add cohesion without substituting for geometry,
 materials, lighting, or composition.
 
-See the [visual style guide](docs/VISUAL_STYLE_GUIDE.md) for the durable
+See the [visual style guide](VISUAL_STYLE_GUIDE.md) for the durable
 direction and the [current visual audit](docs/VISUAL_AUDIT.md) for prioritized
 recommendations.
 
@@ -52,7 +52,13 @@ bun install
 bun run dev
 ```
 
-Open the local URL printed by Vite and select **Start**. The scavenging phase uses pointer lock; the survival phase releases it for a fixed seated view and mouse-accessible controls.
+Open the local URL printed by Vite.
+
+The main menu uses a fixed underwater camera. A skull rests in a small sunken boat in the foreground. The title is painted onto a planted wooden sign on the left. Sand ridges, sparse debris, and a large tilted wreck of Dorothy create the distant depth layers. Sharks, fish, kelp, bubbles, suspended matter, and caustics animate while the camera stays fixed.
+
+Select **START** to fade into the existing scavenging intro. The scavenging
+phase uses pointer lock; the survival phase releases it for a fixed seated view
+and mouse-accessible controls.
 
 ## Controls
 
@@ -181,6 +187,8 @@ bun run test
 bun run typecheck
 bun run build
 bun run preview
+bun run models:fetch:menu
+bun run models:check:menu
 ```
 
 `bun run build` type-checks the project and writes the static production site to `dist/`. Deploy that directory to any static host.
@@ -200,6 +208,11 @@ loading and keeps the seven obstacle visuals static.
 `src/world/ShipDangerEffects` owns room alarms and static puddles.
 
 - `src/app` — top-level game director, phase transitions, restart, and renderer ownership.
+- `src/menu` — underwater menu models, composition, animation, particles, and UI.
+- `src/menu/MenuSigns` — the owned title and interactive guide sign textures, geometry, and hover state.
+- `src/menu/SunkenDorothyWreck` — the simplified static Dorothy silhouette.
+- `src/menu/DistantSeabed` — the static ridge, rock, plant, and debris depth layers.
+- `src/phases/MainMenuPhase` — menu lifecycle, pointer lock, fade, and scavenging handoff.
 - `src/phases` — scavenging phase lifecycle and its handoff into survival.
 - `src/game` — scavenging timer, item state, score, and sinking progression.
 - `src/survival` — deterministic survival rules, inventory, events, orchestration, and lifeboat world.

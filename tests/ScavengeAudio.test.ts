@@ -64,9 +64,7 @@ describe('ScavengeAudio', () => {
     audio.beginRun();
     audio.beginRun();
     expect(calls).toEqual([
-      'loop:menuAmbient',
       'loop:roomTone',
-      'stopLoop:menuAmbient:0.8',
       'spatial:shipAlarm:3:0.5',
       'play:scavengeChase',
     ]);
@@ -90,7 +88,6 @@ describe('ScavengeAudio', () => {
     audio.update(null, false, 50);
     audio.update(null, false, 59);
     expect(calls).toEqual([
-      'stopLoop:menuAmbient:0.8',
       'spatial:shipAlarm:3:0.5',
       'play:scavengeChase',
       'stop:scavengeChase:0.08',
@@ -104,7 +101,6 @@ describe('ScavengeAudio', () => {
     audio.update(null, false, 50);
     audio.sink();
     expect(calls).toEqual([
-      'stopLoop:menuAmbient:0.8',
       'spatial:shipAlarm:3:0.5',
       'play:scavengeChase',
       'stop:scavengeChase:0.08',

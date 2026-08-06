@@ -11,9 +11,10 @@ import {
   type WebGLRenderer,
 } from 'three';
 import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
+import type { MenuModelLibrary } from '../src/menu/MenuModelLibrary';
 import type { ScavengeAudio } from '../src/audio/ScavengeAudio';
 import { AudioSystem } from '../src/audio/AudioSystem';
-import { Game } from '../src/Game';
+import { Game, type GameFactories } from '../src/Game';
 import { ScavengeSession, type ScavengeResult } from '../src/game/ScavengeSession';
 import {
   createScavengeCinematicFrame,
@@ -36,12 +37,7 @@ import { InteractionSystem } from '../src/interaction/InteractionSystem';
 import type { ContextAction } from '../src/interaction/InteractionSystem';
 import { ScavengePhysics } from '../src/physics/ScavengePhysics';
 import { PlayerController } from '../src/player/PlayerController';
-import {
-  ScavengePhase,
-  TITLE_CAMERA_POSITION,
-  TITLE_CAMERA_TARGET,
-} from '../src/phases/ScavengePhase';
-import { GameUI } from '../src/ui/GameUI';
+import { ScavengePhase } from '../src/phases/ScavengePhase';
 import type { ScavengeVisualState, SceneRenderer } from '../src/rendering/SceneRenderer';
 import type { PostProcessingControls } from '../src/rendering/postProcessingControls';
 import { createVisualQualityPreference } from '../src/rendering/visualQuality';
@@ -55,6 +51,9 @@ import { createTestSkyAssets } from './helpers/skyAssets';
 
 const noDynamicMovement = (): void => undefined;
 const physicsRuntime = await testPhysicsRuntime();
+const EMPTY_MENU_MODELS = {
+  dispose: () => undefined,
+} as unknown as MenuModelLibrary;
 
 function dangerAt(elapsed: number, alarmElapsed = elapsed) {
   const state = createShipDangerState();
@@ -244,6 +243,7 @@ function introHarness(elapsed = 0) {
   const triggerCrash = vi.fn();
   const setAudioPaused = vi.fn();
   const setUiPaused = vi.fn();
+  const setIntroFadeProgress = vi.fn();
   const consumeJump = vi.fn();
   const consumeLook = vi.fn();
   const clearLook = vi.fn();
@@ -270,6 +270,7 @@ function introHarness(elapsed = 0) {
     alarmPhase: createShipAlarmPhase(),
     worldTime: 1,
     presentation: 'intro',
+    introBegun: true,
     introElapsed: elapsed,
     introPaused: false,
     pausedIntroExitCarry: false,
@@ -305,6 +306,7 @@ function introHarness(elapsed = 0) {
     audio: { beginRun, crash, setPaused: setAudioPaused, update: vi.fn() },
     ui: {
       setPresentation: vi.fn(),
+      setIntroFadeProgress,
       setPaused: setUiPaused,
       clearPointerLockError: vi.fn(),
       render: vi.fn(),
@@ -349,6 +351,7 @@ function introHarness(elapsed = 0) {
     triggerCrash,
     setAudioPaused,
     setUiPaused,
+    setIntroFadeProgress,
     consumeJump,
     consumeLook,
     clearLook,
@@ -361,58 +364,279 @@ function introHarness(elapsed = 0) {
   };
 }
 
-describe('ScavengePhase lifecycle integration', () => {
-  it('keeps an animated title world while the session and sinking clock stay idle', () => {
-    const propModels = createTestPropModels();
-    const shipFurniture = createTestShipFurniture();
-    const skyAssets = createTestSkyAssets();
-    const camera = new PerspectiveCamera(70, 1, 0.1, 100);
-    const context = {
-      mount: document.createElement('main'),
-      camera,
-      renderer: { domElement: document.createElement('canvas') },
-      propModels,
-      shipFurniture,
-      skyAssets,
-      physicsRuntime,
-      maxTextureAnisotropy: 1,
-      audio: AudioSystem.silent(),
-    } as unknown as PhaseContext;
-    const phase = new ScavengePhase(context, vi.fn(), vi.fn());
-    const internals = phase as unknown as {
-      session: ScavengeSession;
-      world: World;
+function createImmediateMenu(
+  _context: PhaseContext,
+  onComplete: () => void,
+): GamePhase {
+  onComplete();
+  return gamePhase();
+}
+
+describe('Game menu lifecycle', () => {
+  it('starts in the menu and preserves pointer lock into scavenging', () => {
+    const menu = gamePhase();
+    const scavenge = gamePhase();
+    let completeMenu: () => void = () => undefined;
+    const factories: GameFactories = {
+      createMenu: vi.fn((_context, onComplete) => {
+        completeMenu = onComplete;
+        return menu;
+      }),
+      createScavenge: vi.fn(() => scavenge),
+      createSurvival: vi.fn(() => gamePhase()),
     };
-    const updateWorld = vi.spyOn(internals.world, 'update');
-    const expectedDirection = new Vector3(...TITLE_CAMERA_TARGET)
-      .sub(new Vector3(...TITLE_CAMERA_POSITION))
-      .normalize();
-
-    expect(TITLE_CAMERA_POSITION).toEqual([33, 11.5, -4]);
-    expect(TITLE_CAMERA_TARGET).toEqual([0, 5.5, 2]);
-    expect(camera.position).toEqual(new Vector3(...TITLE_CAMERA_POSITION));
-    expect(camera.getWorldDirection(new Vector3()).distanceTo(expectedDirection)).toBeLessThan(1e-10);
-
-    phase.update(0.25, 0.25);
-
-    expect(internals.session.snapshot()).toMatchObject({
-      status: 'idle',
-      remainingSeconds: SCAVENGE_DURATION_SECONDS,
+    const exitPointerLock = vi.fn();
+    const originalExitPointerLock = Object.getOwnPropertyDescriptor(document, 'exitPointerLock');
+    Object.defineProperty(document, 'exitPointerLock', {
+      configurable: true,
+      value: exitPointerLock,
     });
-    expect(updateWorld).toHaveBeenCalledWith(
-      0.25,
-      0.25,
-      expect.objectContaining({ progress: 0 }),
-      camera.position,
-      false,
-      dangerAt(0),
-    );
-    expect(camera.position).toEqual(new Vector3(...TITLE_CAMERA_POSITION));
-    phase.dispose();
-    context.audio.dispose();
-    propModels.dispose();
-    shipFurniture.dispose();
-    skyAssets.dispose();
+    const game = Game.forTest(factories, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+    });
+
+    try {
+      game.start();
+      expect(menu.start).toHaveBeenCalledOnce();
+      expect(scavenge.start).not.toHaveBeenCalled();
+
+      completeMenu();
+      expect(menu.dispose).toHaveBeenCalledOnce();
+      expect(exitPointerLock).not.toHaveBeenCalled();
+      expect(scavenge.start).toHaveBeenCalledOnce();
+    } finally {
+      game.dispose();
+      if (originalExitPointerLock) {
+        Object.defineProperty(document, 'exitPointerLock', originalExitPointerLock);
+      } else {
+        delete (document as { exitPointerLock?: () => void }).exitPointerLock;
+      }
+    }
+  });
+
+  it('reports phase construction failure before releasing the active menu', () => {
+    const menu = gamePhase();
+    const constructionError = new Error('scavenge construction failed');
+    const onFatalError = vi.fn();
+    let completeMenu: () => void = () => undefined;
+    const game = Game.forTest({
+      createMenu: (_context, onComplete) => {
+        completeMenu = onComplete;
+        return menu;
+      },
+      createScavenge: () => {
+        throw constructionError;
+      },
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      onFatalError,
+    });
+
+    try {
+      game.start();
+
+      expect(completeMenu).not.toThrow();
+      expect(onFatalError).toHaveBeenCalledOnce();
+      expect(onFatalError).toHaveBeenCalledWith(constructionError);
+      expect(menu.dispose).not.toHaveBeenCalled();
+    } finally {
+      game.dispose();
+    }
+  });
+
+  it('creates a fresh menu when scavenging returns from its ending', () => {
+    const menus = [gamePhase(), gamePhase()];
+    const scavenge = gamePhase();
+    let completeMenu: () => void = () => undefined;
+    let returnToMenu: () => void = () => undefined;
+    const createMenu = vi.fn((_context, onComplete) => {
+      completeMenu = onComplete;
+      return menus[createMenu.mock.calls.length - 1]!;
+    });
+    const game = Game.forTest({
+      createMenu,
+      createScavenge: (_context, _onComplete, onReturnToMenu) => {
+        returnToMenu = onReturnToMenu;
+        return scavenge;
+      },
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+    });
+
+    try {
+      game.start();
+      completeMenu();
+      returnToMenu();
+
+      expect(scavenge.dispose).toHaveBeenCalledOnce();
+      expect(createMenu).toHaveBeenCalledTimes(2);
+      expect(menus[1]!.start).toHaveBeenCalledOnce();
+    } finally {
+      game.dispose();
+    }
+  });
+
+  it('reports scavenge disposal failure and still activates the fresh menu', () => {
+    const disposalError = new Error('scavenge disposal failed');
+    const menus = [gamePhase(), gamePhase()];
+    const scavenge = gamePhase();
+    scavenge.dispose = vi.fn(() => {
+      throw disposalError;
+    });
+    const onFatalError = vi.fn();
+    let completeMenu: () => void = () => undefined;
+    let returnToMenu: () => void = () => undefined;
+    const createMenu = vi.fn((_context, onComplete) => {
+      completeMenu = onComplete;
+      return menus[createMenu.mock.calls.length - 1]!;
+    });
+    const game = Game.forTest({
+      createMenu,
+      createScavenge: (_context, _onComplete, onReturnToMenu) => {
+        returnToMenu = onReturnToMenu;
+        return scavenge;
+      },
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      onFatalError,
+    });
+
+    try {
+      game.start();
+      completeMenu();
+
+      expect(returnToMenu).not.toThrow();
+      expect(onFatalError).toHaveBeenCalledOnce();
+      expect(onFatalError).toHaveBeenCalledWith(disposalError);
+      expect(createMenu).toHaveBeenCalledTimes(2);
+      expect(menus[1]!.start).toHaveBeenCalledOnce();
+    } finally {
+      game.dispose();
+    }
+  });
+
+  it('starts scavenging directly when survival requests a restart', () => {
+    const menu = gamePhase();
+    const scavenges = [gamePhase(), gamePhase()];
+    const survival = gamePhase();
+    let completeMenu: () => void = () => undefined;
+    let completeScavenge: (result: Readonly<ScavengeResult>) => void = () => undefined;
+    let restartSurvival: () => void = () => undefined;
+    const createMenu = vi.fn((_context, onComplete) => {
+      completeMenu = onComplete;
+      return menu;
+    });
+    const createScavenge = vi.fn((_context, onComplete) => {
+      completeScavenge = onComplete;
+      return scavenges[createScavenge.mock.calls.length - 1]!;
+    });
+    const game = Game.forTest({
+      createMenu,
+      createScavenge,
+      createSurvival: (_context, _result, _seed, onRestart) => {
+        restartSurvival = onRestart;
+        return survival;
+      },
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+    });
+
+    try {
+      game.start();
+      completeMenu();
+      completeScavenge({ savedItems: [], elapsedSeconds: 3 });
+      restartSurvival();
+
+      expect(createMenu).toHaveBeenCalledOnce();
+      expect(createScavenge).toHaveBeenCalledTimes(2);
+      expect(scavenges[1]!.start).toHaveBeenCalledOnce();
+    } finally {
+      game.dispose();
+    }
+  });
+});
+
+describe('ScavengePhase lifecycle integration', () => {
+  it('begins the intro immediately when pointer lock already exists', () => {
+    const beginIntro = vi.fn();
+    const onPointerLockChange = vi.fn();
+    const onVisibilityChange = vi.fn();
+    const onKeyDown = vi.fn();
+    const onKeyUp = vi.fn();
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(phase, {
+      disposed: false,
+      started: false,
+      input: { pointerLocked: true },
+      world: { revealPhysicsObjects: vi.fn() },
+      audio: { start: vi.fn() },
+      beginIntro,
+      onPointerLockChange,
+      onVisibilityChange,
+      onKeyDown,
+      onKeyUp,
+    });
+
+    phase.start();
+    phase.start();
+
+    expect(beginIntro).toHaveBeenCalledOnce();
+    document.removeEventListener('pointerlockchange', onPointerLockChange);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    document.removeEventListener('keydown', onKeyDown);
+    document.removeEventListener('keyup', onKeyUp);
+  });
+
+  it('requests pointer lock immediately when scavenging starts unlocked', () => {
+    const requestPointerLock = vi.fn().mockResolvedValue(undefined);
+    const onPointerLockChange = vi.fn();
+    const onVisibilityChange = vi.fn();
+    const onKeyDown = vi.fn();
+    const onKeyUp = vi.fn();
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(phase, {
+      disposed: false,
+      started: false,
+      input: { pointerLocked: false },
+      world: { revealPhysicsObjects: vi.fn() },
+      audio: { start: vi.fn() },
+      requestPointerLock,
+      onPointerLockChange,
+      onVisibilityChange,
+      onKeyDown,
+      onKeyUp,
+    });
+
+    phase.start();
+
+    expect(requestPointerLock).toHaveBeenCalledOnce();
+    document.removeEventListener('pointerlockchange', onPointerLockChange);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    document.removeEventListener('keydown', onKeyDown);
+    document.removeEventListener('keyup', onKeyUp);
   });
 
   it('reveals physics objects before it requests pointer lock', () => {
@@ -433,12 +657,12 @@ describe('ScavengePhase lifecycle integration', () => {
     const revealPhysicsObjects = vi.fn();
     const requestPointerLock = vi.fn().mockResolvedValue(true);
     const phase = new ScavengePhase(context, vi.fn(), vi.fn());
-    const internals = phase as unknown as { ui: GameUI; world: World };
+    const internals = phase as unknown as { world: World };
     vi.spyOn(internals.world, 'revealPhysicsObjects').mockImplementation(revealPhysicsObjects);
     vi.spyOn(phase as unknown as { requestPointerLock(): Promise<boolean> }, 'requestPointerLock')
       .mockImplementation(requestPointerLock);
 
-    internals.ui.onStart();
+    phase.start();
 
     expect(revealPhysicsObjects).toHaveBeenCalledOnce();
     expect(requestPointerLock).toHaveBeenCalledOnce();
@@ -457,7 +681,8 @@ describe('ScavengePhase lifecycle integration', () => {
     const introFrame = createScavengeIntroFrame();
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
-      presentation: 'title',
+      presentation: 'intro',
+      introBegun: false,
       introElapsed: 0,
       introPaused: false,
       introFrame,
@@ -491,7 +716,7 @@ describe('ScavengePhase lifecycle integration', () => {
       ui: {
         setPresentation: (presentation: string) => order.push(`ui:${presentation}`),
         clearPointerLockError: () => order.push('clear-error'),
-        hideStart: () => order.push('hide-title'),
+        setPaused: vi.fn(),
       },
     });
 
@@ -502,10 +727,9 @@ describe('ScavengePhase lifecycle integration', () => {
       'jump',
       'ui:intro',
       'clear-error',
-      'hide-title',
-      'audio:resume',
       'scripted-pose',
       'camera',
+      'audio:resume',
     ]);
     expect(sessionStart).not.toHaveBeenCalled();
   });
@@ -515,6 +739,17 @@ describe('ScavengePhase lifecycle integration', () => {
     (phase as unknown as { updateIntro(delta: number): void }).updateIntro(3);
     expect(sessionStart).not.toHaveBeenCalled();
     expect(sessionTick).not.toHaveBeenCalled();
+  });
+
+  it('fades from black during the opening intro frames', () => {
+    const { phase, setIntroFadeProgress } = introHarness(0);
+    const updateIntro = (phase as unknown as { updateIntro(delta: number): void }).updateIntro;
+
+    updateIntro.call(phase, 0.35);
+    expect(setIntroFadeProgress).toHaveBeenLastCalledWith(0.5);
+
+    updateIntro.call(phase, 0.35);
+    expect(setIntroFadeProgress).toHaveBeenLastCalledWith(0);
   });
 
   it('fires the crash once across a large delta', () => {
@@ -1212,10 +1447,10 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(hands.update).toHaveBeenCalledWith(0.016, 0, true, false, true);
   });
 
-  it('hides hands when title, paused, overlay, hidden, or sinking states prevent control', () => {
-    const title = createUpdateHarness(new ScavengeSession());
-    title.phase.update(0.016, 0.016);
-    expect(title.hands.update).toHaveBeenLastCalledWith(0.016, 0, false, false, false);
+  it('hides hands when idle, paused, overlay, hidden, or sinking states prevent control', () => {
+    const idle = createUpdateHarness(new ScavengeSession());
+    idle.phase.update(0.016, 0.016);
+    expect(idle.hands.update).toHaveBeenLastCalledWith(0.016, 0, false, false, false);
 
     const pausedSession = new ScavengeSession();
     pausedSession.start();
@@ -1505,13 +1740,14 @@ describe('ScavengePhase lifecycle integration', () => {
     const shipFurniture = createTestShipFurniture();
     const skyAssets = createTestSkyAssets();
     const game = Game.forTest({
-      createScavenge: (context, onComplete, onRestart) => {
-        const phase = new ScavengePhase(context, onComplete, onRestart);
+      createMenu: createImmediateMenu,
+      createScavenge: (context, onComplete, onReturnToMenu) => {
+        const phase = new ScavengePhase(context, onComplete, onReturnToMenu);
         phases.push(phase);
         return phase;
       },
       createSurvival: () => gamePhase(),
-    }, { propModels, shipFurniture, skyAssets, physicsRuntime });
+    }, { propModels, menuModels: EMPTY_MENU_MODELS, shipFurniture, skyAssets, physicsRuntime });
 
     try {
       const firstWorld = (phases[0] as unknown as { world: World }).world;
@@ -1550,20 +1786,28 @@ describe('ScavengePhase lifecycle integration', () => {
     }
   });
 
-  it('runs the complete failure timeline and restarts once at a fresh title', () => {
+  it('runs the complete failure timeline and returns once to a fresh menu', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const phases: ScavengePhase[] = [];
-    const createScavenge = vi.fn((context, onComplete, onRestart) => {
-      const phase = new ScavengePhase(context, onComplete, onRestart);
+    const menus = [gamePhase(), gamePhase()];
+    const createMenu = vi.fn((_context, onComplete) => {
+      const index = createMenu.mock.calls.length - 1;
+      if (index === 0) onComplete();
+      return menus[index]!;
+    });
+    const createScavenge = vi.fn((context, onComplete, onReturnToMenu) => {
+      const phase = new ScavengePhase(context, onComplete, onReturnToMenu);
       phases.push(phase);
       return phase;
     });
     const game = Game.forTest({
+      createMenu,
       createScavenge,
       createSurvival: () => gamePhase(),
     }, {
       propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
       physicsRuntime,
@@ -1598,20 +1842,15 @@ describe('ScavengePhase lifecycle integration', () => {
       action.click();
       action.click();
 
-      expect(createScavenge).toHaveBeenCalledTimes(2);
-      const fresh = phases[1] as unknown as {
-        session: ScavengeSession;
-        presentation: string;
-        introElapsed: number;
-      };
-      expect(fresh.session.snapshot()).toMatchObject({
-        status: 'idle',
-        remainingSeconds: SCAVENGE_DURATION_SECONDS,
-      });
-      expect(fresh.presentation).toBe('title');
-      expect(fresh.introElapsed).toBe(0);
-      expect(mount.querySelector('[data-start]')?.classList).toContain('is-visible');
-      expect(mount.querySelector('[data-hud]')).toHaveProperty('hidden', true);
+      expect(createScavenge).toHaveBeenCalledOnce();
+      expect(createMenu).toHaveBeenCalledTimes(2);
+      expect(menus[1]!.resize).toHaveBeenCalledWith(
+        window.innerWidth,
+        window.innerHeight,
+      );
+      expect(menus[1]!.start).toHaveBeenCalledOnce();
+      expect(mount.querySelector('[data-start]')).toBeNull();
+      expect(mount.querySelector('[data-hud]')).toBeNull();
     } finally {
       game.dispose();
       mount.remove();
@@ -1713,6 +1952,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: (_context, onComplete) => {
         complete = onComplete;
         return scavenge;
@@ -1720,6 +1960,7 @@ describe('ScavengePhase lifecycle integration', () => {
       createSurvival: () => survival,
     }, {
       propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
       physicsRuntime,
@@ -1790,10 +2031,12 @@ describe('ScavengePhase lifecycle integration', () => {
       return survivalPhases[initialEventIds.length - 1]!;
     });
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: () => scavenge,
       createSurvival,
     }, {
       propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
       physicsRuntime,
@@ -1860,6 +2103,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: () => {
         scavengeCount += 1;
         return scavengeCount === 1
@@ -1869,6 +2113,7 @@ describe('ScavengePhase lifecycle integration', () => {
       createSurvival: () => gamePhase(),
     }, {
       propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
       physicsRuntime,
@@ -1907,6 +2152,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: (_context, onComplete) => {
         complete = onComplete;
         return gamePhase();
@@ -1914,6 +2160,7 @@ describe('ScavengePhase lifecycle integration', () => {
       createSurvival: () => failedPhase,
     }, {
       propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
       physicsRuntime,
@@ -1945,6 +2192,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const contexts: PhaseContext[] = [];
     let complete!: (result: { savedItems: readonly []; elapsedSeconds: number }) => void;
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: (context, onComplete) => {
         contexts.push(context);
         complete = onComplete;
@@ -1954,7 +2202,14 @@ describe('ScavengePhase lifecycle integration', () => {
         contexts.push(context);
         return gamePhase();
       },
-    }, { propModels, shipFurniture, skyAssets, physicsRuntime, sceneRenderer });
+    }, {
+      propModels,
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture,
+      skyAssets,
+      physicsRuntime,
+      sceneRenderer,
+    });
 
     complete({ savedItems: [], elapsedSeconds: 2 });
 
@@ -1983,6 +2238,7 @@ describe('ScavengePhase lifecycle integration', () => {
       null,
     );
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: (context) => {
         received = context;
         return gamePhase();
@@ -1990,6 +2246,7 @@ describe('ScavengePhase lifecycle integration', () => {
       createSurvival: () => gamePhase(),
     }, {
       propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
       physicsRuntime,
@@ -2014,6 +2271,7 @@ describe('ScavengePhase lifecycle integration', () => {
       setWaterQuality,
     };
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: (context) => {
         received = context;
         return phase;
@@ -2021,6 +2279,7 @@ describe('ScavengePhase lifecycle integration', () => {
       createSurvival: () => gamePhase(),
     }, {
       propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
       physicsRuntime,
@@ -2041,6 +2300,7 @@ describe('ScavengePhase lifecycle integration', () => {
   it('uses one long-range camera without changing its near view', () => {
     const received: PhaseContext[] = [];
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: (context) => {
         received.push(context);
         return gamePhase();
@@ -2048,6 +2308,7 @@ describe('ScavengePhase lifecycle integration', () => {
       createSurvival: () => gamePhase(),
     }, {
       propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
       physicsRuntime,
@@ -2079,9 +2340,11 @@ describe('ScavengePhase lifecycle integration', () => {
       dispose: vi.fn(() => { calls.push('sceneRenderer'); throw failure; }),
     };
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: () => gamePhase(), createSurvival: () => gamePhase(),
     }, {
       propModels,
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture,
       skyAssets,
       physicsRuntime,
@@ -2114,6 +2377,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const survivalEventModels: unknown[] = [];
     let complete!: (result: { savedItems: readonly []; elapsedSeconds: number }) => void;
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: (context, onComplete) => {
         scavengeModels.push(context.propModels);
         scavengeSkyAssets.push(context.skyAssets);
@@ -2133,6 +2397,7 @@ describe('ScavengePhase lifecycle integration', () => {
       },
     }, {
       propModels,
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture,
       skyAssets,
       eventModels: sharedEventModels,
@@ -2175,9 +2440,10 @@ describe('ScavengePhase lifecycle integration', () => {
     const disposeShipFurniture = vi.spyOn(shipFurniture, 'dispose');
     const disposeSkyAssets = vi.spyOn(skyAssets, 'dispose');
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: () => ({ ...gamePhase(), dispose: disposePhase }),
       createSurvival: () => gamePhase(),
-    }, { propModels, shipFurniture, skyAssets, physicsRuntime });
+    }, { propModels, menuModels: EMPTY_MENU_MODELS, shipFurniture, skyAssets, physicsRuntime });
 
     game.dispose();
     game.dispose();
@@ -2228,10 +2494,12 @@ describe('ScavengePhase lifecycle integration', () => {
       calls.push('canvas');
     });
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: () => ({ ...gamePhase(), dispose: disposePhase }),
       createSurvival: () => gamePhase(),
     }, {
       propModels,
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture,
       skyAssets,
       physicsRuntime,
@@ -2307,10 +2575,12 @@ describe('ScavengePhase lifecycle integration', () => {
       calls.push('canvas');
     });
     const game = Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: () => ({ ...gamePhase(), dispose: disposePhase }),
       createSurvival: () => gamePhase(),
     }, {
       propModels,
+      menuModels: EMPTY_MENU_MODELS,
       shipFurniture,
       skyAssets,
       physicsRuntime,
@@ -2774,17 +3044,24 @@ describe('ScavengePhase lifecycle integration', () => {
 
   it('reports pointer-lock rejection through the UI', async () => {
     const showPointerLockError = vi.fn();
+    const setPaused = vi.fn();
+    const audio = scavengeAudioStub();
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       disposed: false,
-      audio: scavengeAudioStub(),
+      presentation: 'intro',
+      introPaused: false,
+      audio,
       input: { requestPointerLock: vi.fn().mockResolvedValue(false) },
       session: { snapshot: () => ({ status: 'idle' }) },
-      ui: { showPointerLockError },
+      ui: { showPointerLockError, setPaused },
     });
 
     await (phase as unknown as { requestPointerLock: () => Promise<void> }).requestPointerLock();
 
     expect(showPointerLockError).toHaveBeenCalledOnce();
+    expect(setPaused).toHaveBeenCalledWith(true);
+    expect(audio.setPaused).toHaveBeenCalledWith(true);
+    expect((phase as unknown as { introPaused: boolean }).introPaused).toBe(true);
   });
 });

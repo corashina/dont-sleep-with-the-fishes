@@ -3,8 +3,13 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Game, type GameTestOptions } from '../src/Game';
+import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
 import { launchGame, type LaunchDependencies } from '../src/app/launchGame';
 import { AudioSystem } from '../src/audio/AudioSystem';
+import {
+  MenuModelLoadError,
+  type MenuModelLibrary,
+} from '../src/menu/MenuModelLibrary';
 import type { ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { PhysicsLoadError } from '../src/physics/PhysicsRuntime';
 import { BoatWorld } from '../src/survival/BoatWorld';
@@ -76,12 +81,31 @@ function eventModels(): EventModelLibrary {
   return createTestEventModels();
 }
 
+function createImmediateMenu(
+  _context: PhaseContext,
+  onComplete: () => void,
+): GamePhase {
+  onComplete();
+  return {
+    start: vi.fn(),
+    update: vi.fn(),
+    resize: vi.fn(),
+    render: vi.fn(),
+    dispose: vi.fn(),
+  };
+}
+
+function menuModels(): MenuModelLibrary {
+  return { dispose: vi.fn() } as unknown as MenuModelLibrary;
+}
+
 function dependencies(
   loadModels: LaunchDependencies['loadModels'],
   overrides: Partial<LaunchDependencies> = {},
 ): LaunchDependencies {
   return {
     loadModels,
+    loadMenuModels: () => Promise.resolve(menuModels()),
     loadShipFurniture: () => Promise.resolve(createTestShipFurniture()),
     loadSkyAssets: () => Promise.resolve(createTestSkyAssets()),
     loadLifeboatAssets: () => Promise.resolve(createTestLifeboatAssets()),
@@ -116,9 +140,9 @@ describe('launchGame', () => {
       .toContain('ui-role-display');
     const progress = mount.querySelector<HTMLProgressElement>('.system-loading-progress');
     expect(progress?.value).toBe(0);
-    expect(progress?.max).toBe(9);
+    expect(progress?.max).toBe(10);
     await Promise.resolve();
-    expect(progress?.value).toBe(8);
+    expect(progress?.value).toBe(9);
     handle.cancel();
     pending.resolve(models);
     await handle.completion;
@@ -133,6 +157,7 @@ describe('launchGame', () => {
     const shipAssets = createTestShipAssets();
     const shipFurniture = createTestShipFurniture();
     const loadedEventModels = eventModels();
+    const loadedMenuModels = menuModels();
     const loadEventModels = vi.fn(() => Promise.resolve(loadedEventModels));
     const game = { start: vi.fn(), dispose: vi.fn() };
     const createGame = vi.fn(() => game);
@@ -144,6 +169,7 @@ describe('launchGame', () => {
         loadLifeboatAssets: () => Promise.resolve(lifeboatAssets),
         loadShipAssets: () => Promise.resolve(shipAssets),
         loadEventModels,
+        loadMenuModels: () => Promise.resolve(loadedMenuModels),
         createGame,
       },
     ));
@@ -165,9 +191,69 @@ describe('launchGame', () => {
       'enabled',
       expect.any(AudioSystem),
       undefined,
+      loadedMenuModels,
+      expect.any(Function),
     );
     expect(loadEventModels).toHaveBeenCalledOnce();
     expect(game.start).toHaveBeenCalledOnce();
+  });
+
+  it('preloads required menu models before constructing the game', async () => {
+    const mount = connectedMount();
+    const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
+    const loadedMenuModels = menuModels();
+    const loadMenuModels = vi.fn().mockResolvedValue(loadedMenuModels);
+    const createGame = vi.fn(() => ({ start: vi.fn(), dispose: vi.fn() }));
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve(models),
+      { loadMenuModels, createGame },
+    ));
+
+    await handle.completion;
+    expect(loadMenuModels).toHaveBeenCalledOnce();
+    expect(createGame.mock.calls[0]?.at(-2)).toBe(loadedMenuModels);
+    expect(createGame.mock.calls[0]?.at(-1)).toEqual(expect.any(Function));
+  });
+
+  it('reports the required menu model that could not load', async () => {
+    const mount = connectedMount();
+    const createGame = vi.fn();
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve({ dispose: vi.fn() } as unknown as PropModelLibrary),
+      {
+        loadMenuModels: () => Promise.reject(
+          new MenuModelLoadError('shark', 'local file is missing'),
+        ),
+        createGame,
+      },
+    ));
+
+    await expect(handle.completion).resolves.toBeNull();
+    expect(mount.textContent).toContain('MENU MODEL UNAVAILABLE');
+    expect(mount.textContent).toContain('Unable to prepare shark');
+    expect(mount.textContent).toContain('local file is missing');
+    expect(createGame).not.toHaveBeenCalled();
+  });
+
+  it('disposes fulfilled menu models once after cancellation', async () => {
+    const pending = deferred<PropModelLibrary>();
+    const mount = connectedMount();
+    const loadedMenuModels = menuModels();
+    const createGame = vi.fn();
+    const handle = launchGame(mount, dependencies(
+      () => pending.promise,
+      {
+        loadMenuModels: () => Promise.resolve(loadedMenuModels),
+        createGame,
+      },
+    ));
+
+    handle.cancel();
+    pending.resolve({ dispose: vi.fn() } as unknown as PropModelLibrary);
+
+    await expect(handle.completion).resolves.toBeNull();
+    expect(loadedMenuModels.dispose).toHaveBeenCalledOnce();
+    expect(createGame).not.toHaveBeenCalled();
   });
 
   it('carries Captain Whiskers through the launched survival lifecycle', async () => {
@@ -178,6 +264,7 @@ describe('launchGame', () => {
     const lifeboatAssets = createTestLifeboatAssets();
     const shipAssets = createTestShipAssets();
     const loadedEventModels = eventModels();
+    const loadedMenuModels = menuModels();
     const savedItems = [
       { instanceId: 'captainWhiskers-1' as ItemInstanceId, type: 'captainWhiskers' },
       { instanceId: 'cannedFood-1' as ItemInstanceId, type: 'cannedFood' },
@@ -209,6 +296,7 @@ describe('launchGame', () => {
     const cancelFrame = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
 
     const createGame = vi.fn((gameMount: HTMLElement) => Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: (_context, onComplete) => ({
         start: () => onComplete({ savedItems, elapsedSeconds: 12 }),
         update: vi.fn(),
@@ -268,6 +356,7 @@ describe('launchGame', () => {
       lifeboatAssets,
       shipAssets,
       eventModels: loadedEventModels,
+      menuModels: loadedMenuModels,
       physicsRuntime,
       physicsMode: 'off',
       createSeed: () => 7,
@@ -281,6 +370,7 @@ describe('launchGame', () => {
         loadLifeboatAssets: () => Promise.resolve(lifeboatAssets),
         loadShipAssets: () => Promise.resolve(shipAssets),
         loadEventModels: () => Promise.resolve(loadedEventModels),
+        loadMenuModels: () => Promise.resolve(loadedMenuModels),
         createGame,
       },
     ));
@@ -499,6 +589,8 @@ describe('launchGame', () => {
       'enabled',
       expect.any(AudioSystem),
       undefined,
+      expect.anything(),
+      expect.any(Function),
     );
   });
 
@@ -529,6 +621,8 @@ describe('launchGame', () => {
       'off',
       expect.any(AudioSystem),
       undefined,
+      expect.anything(),
+      expect.any(Function),
     );
     expect(game.start).toHaveBeenCalledOnce();
   });
@@ -817,6 +911,35 @@ describe('launchGame', () => {
     expect(mount.textContent).not.toContain('WEBGL UNAVAILABLE');
   });
 
+  it('handles a ship placement failure reported after the game starts', async () => {
+    const mount = connectedMount();
+    const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
+    const game = { start: vi.fn(), dispose: vi.fn() };
+    let reportRuntimeError: ((error: unknown) => void) | undefined;
+    const createGame = vi.fn((...args: unknown[]) => {
+      reportRuntimeError = args[12] as ((error: unknown) => void) | undefined;
+      return game;
+    });
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve(models),
+      { createGame },
+    ));
+
+    await expect(handle.completion).resolves.toBe(game as unknown as Game);
+    expect(reportRuntimeError).toEqual(expect.any(Function));
+
+    reportRuntimeError!(new ShipItemPlacementError('shotgun-1'));
+
+    expect(game.dispose).toHaveBeenCalledOnce();
+    expect(mount.textContent).toContain('SHIP SETUP FAILED');
+    expect(mount.textContent).toContain('Unable to place ship item: shotgun-1');
+    expect(mount.textContent).not.toContain('WEBGL UNAVAILABLE');
+
+    handle.cancel();
+    expect(game.dispose).toHaveBeenCalledOnce();
+    expect(models.dispose).not.toHaveBeenCalled();
+  });
+
   it('disposes unowned models after Game rolls back a failed initial resize', async () => {
     const mount = connectedMount();
     const canvas = document.createElement('canvas');
@@ -828,6 +951,7 @@ describe('launchGame', () => {
     const disposeShipFurniture = vi.spyOn(shipFurniture, 'dispose');
     const skyAssets = createTestSkyAssets();
     const disposeSkyAssets = vi.spyOn(skyAssets, 'dispose');
+    const loadedMenuModels = menuModels();
     const renderer = {
       domElement: canvas,
       capabilities: { getMaxAnisotropy: () => 1 },
@@ -845,7 +969,12 @@ describe('launchGame', () => {
       loadedShipAssets: ShipAssets,
       loadedEventModels: EventModelLibrary,
       loadedPhysicsRuntime: typeof physicsRuntime,
+      _physicsMode: unknown,
+      _audioSystem: AudioSystem,
+      _featuredEventModels: unknown,
+      receivedMenuModels: MenuModelLibrary,
     ) => Game.forTest({
+      createMenu: createImmediateMenu,
       createScavenge: () => ({
         start: vi.fn(),
         update: vi.fn(),
@@ -862,6 +991,7 @@ describe('launchGame', () => {
       lifeboatAssets: loadedLifeboatAssets,
       shipAssets: loadedShipAssets,
       eventModels: loadedEventModels,
+      menuModels: receivedMenuModels,
       physicsRuntime: loadedPhysicsRuntime,
       mount: gameMount,
       renderer,
@@ -872,6 +1002,7 @@ describe('launchGame', () => {
       {
         loadShipFurniture: () => Promise.resolve(shipFurniture),
         loadSkyAssets: () => Promise.resolve(skyAssets),
+        loadMenuModels: () => Promise.resolve(loadedMenuModels),
         createGame,
       },
     ));
@@ -884,6 +1015,7 @@ describe('launchGame', () => {
     expect(disposeModels).toHaveBeenCalledOnce();
     expect(disposeShipFurniture).toHaveBeenCalledOnce();
     expect(disposeSkyAssets).toHaveBeenCalledOnce();
+    expect(loadedMenuModels.dispose).toHaveBeenCalledOnce();
     expect(canvas.parentElement).toBeNull();
   });
 

@@ -7,6 +7,12 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { inspectEventModel } from './event-model-metadata.mjs';
 import { parseModelCheckArguments } from './model-check-arguments.mjs';
 import { parseGlb, validateEmbeddedResources } from './glb-validation.mjs';
+import {
+  EVENT_MODEL_IDS as PROCESSED_EVENT_MODEL_IDS,
+  EVENT_MODEL_TOTAL_TRIANGLE_LIMIT as PROCESSED_EVENT_TOTAL_TRIANGLE_LIMIT,
+  EVENT_MODEL_TRIANGLE_LIMITS as PROCESSED_EVENT_TRIANGLE_LIMITS,
+  POLY_PIZZA_EVENT_MODEL_SOURCES as PROCESSED_EVENT_MODEL_SOURCES,
+} from './poly-pizza-event-models.mjs';
 
 const EVENT_SOURCES = Object.freeze({
   driftingLootBarrel: Object.freeze({
@@ -100,7 +106,7 @@ const EVENT_SOURCES = Object.freeze({
     license: 'CC0 1.0',
   }),
 });
-const EVENT_MODEL_IDS = Object.freeze(Object.keys(EVENT_SOURCES));
+const CURATED_EVENT_MODEL_IDS = Object.freeze(Object.keys(EVENT_SOURCES));
 const FOCUSED_EVENT_MODEL_IDS = Object.freeze([
   'chestClosed',
   'midnightIsland',
@@ -119,6 +125,12 @@ function sameNumbers(first, second) {
     && Array.isArray(second)
     && first.length === second.length
     && first.every((value, index) => Number.isFinite(value) && value === second[index]);
+}
+
+function isFiniteVector(value) {
+  return Array.isArray(value)
+    && value.length === 3
+    && value.every(Number.isFinite);
 }
 
 function sameAnimations(first, second) {
@@ -147,12 +159,17 @@ function exactKeys(value, expectedKeys, label) {
 }
 
 export function validateEventModelMetadata(metadata) {
-  for (const modelId of EVENT_MODEL_IDS) {
+  for (const modelId of CURATED_EVENT_MODEL_IDS) {
     if (!(modelId in metadata)) {
       throw new Error(`event model metadata is missing ${modelId}`);
     }
   }
-  for (const modelId of EVENT_MODEL_IDS) {
+  for (const modelId of PROCESSED_EVENT_MODEL_IDS) {
+    if (!(modelId in metadata)) {
+      throw new Error(`event model metadata is missing ${modelId}`);
+    }
+  }
+  for (const modelId of CURATED_EVENT_MODEL_IDS) {
     const model = metadata[modelId];
     exactKeys(model, ['triangles', 'rawBounds', 'animations'], `${modelId} metadata`);
     exactKeys(model.rawBounds, ['min', 'max'], `${modelId} rawBounds`);
@@ -166,6 +183,43 @@ export function validateEventModelMetadata(metadata) {
         `${modelId} animation ${index}`,
       );
     });
+  }
+  let processedTotal = 0;
+  for (const modelId of PROCESSED_EVENT_MODEL_IDS) {
+    const model = metadata[modelId];
+    const source = PROCESSED_EVENT_MODEL_SOURCES[modelId];
+    exactKeys(
+      model,
+      [
+        'triangles', 'rawBounds', 'sourceSha256', 'sourceTriangles',
+        'outputSha256', 'hasSkins', 'animationCount', 'processing',
+      ],
+      `${modelId} metadata`,
+    );
+    exactKeys(model.rawBounds, ['min', 'max'], `${modelId} rawBounds`);
+    if (
+      !isFiniteVector(model.rawBounds.min)
+      || !isFiniteVector(model.rawBounds.max)
+      || !model.rawBounds.max.some((maximum, axis) => maximum > model.rawBounds.min[axis])
+      || !Number.isInteger(model.triangles)
+      || model.triangles <= 0
+      || model.triangles > PROCESSED_EVENT_TRIANGLE_LIMITS[modelId]
+      || model.sourceSha256 !== source.sha256
+      || model.sourceTriangles !== source.sourceTriangles
+      || model.outputSha256 !== source.committedSha256
+      || model.hasSkins !== source.sourceHasSkins
+      || model.animationCount !== source.sourceAnimationCount
+      || typeof model.processing !== 'string'
+      || model.processing.length === 0
+    ) {
+      throw new Error(`${modelId} processed metadata does not match its pinned source`);
+    }
+    processedTotal += model.triangles;
+  }
+  if (processedTotal > PROCESSED_EVENT_TOTAL_TRIANGLE_LIMIT) {
+    throw new Error(
+      `processed event model total ${processedTotal} exceeds ${PROCESSED_EVENT_TOTAL_TRIANGLE_LIMIT}`,
+    );
   }
 }
 
@@ -254,6 +308,21 @@ function validateIndices(modelId, document) {
   }
 }
 
+async function inspectCommittedEventModel(modelId, modelsDir) {
+  const filePath = resolve(modelsDir, `${modelId}.glb`);
+  await access(filePath);
+  const bytes = await readFile(filePath);
+  const actualHash = createHash('sha256').update(bytes).digest('hex').toUpperCase();
+  validateEmbeddedResources(filePath, parseGlb(filePath, bytes));
+  const document = await io.read(filePath);
+  validateIndices(modelId, document);
+  return {
+    actualHash,
+    document,
+    measurement: inspectEventModel(modelId, document),
+  };
+}
+
 async function main() {
   const { assetsOnly, ledgerPath, modelsDir } = parseModelCheckArguments(
     process.argv.slice(2),
@@ -265,7 +334,8 @@ async function main() {
 
   try {
     const expected = new Set([
-      ...EVENT_MODEL_IDS.map((id) => `${id}.glb`),
+      ...CURATED_EVENT_MODEL_IDS.map((id) => `${id}.glb`),
+      ...PROCESSED_EVENT_MODEL_IDS.map((id) => `${id}.glb`),
       ...FOCUSED_EVENT_MODEL_IDS.map((id) => `${id}.glb`),
       'event-model-metadata.json',
     ]);
@@ -292,20 +362,16 @@ async function main() {
     errors.push(error instanceof Error ? error.message : String(error));
   }
 
-  for (const modelId of EVENT_MODEL_IDS) {
+  for (const modelId of CURATED_EVENT_MODEL_IDS) {
     const source = EVENT_SOURCES[modelId];
-    const filePath = resolve(modelsDir, `${modelId}.glb`);
     try {
-      await access(filePath);
-      const bytes = await readFile(filePath);
-      const actualHash = createHash('sha256').update(bytes).digest('hex').toUpperCase();
+      const { actualHash, measurement } = await inspectCommittedEventModel(
+        modelId,
+        modelsDir,
+      );
       if (actualHash !== source.sha256) {
         throw new Error(`${modelId}: source SHA-256 mismatch`);
       }
-      validateEmbeddedResources(filePath, parseGlb(filePath, bytes));
-      const document = await io.read(filePath);
-      validateIndices(modelId, document);
-      const measurement = inspectEventModel(modelId, document);
       measurements[modelId] = measurement;
       console.log(`${modelId}.glb: ${measurement.triangles} / ${source.maxTriangles} triangles`);
       if (measurement.triangles !== source.triangles) {
@@ -331,6 +397,40 @@ async function main() {
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));
     }
+  }
+
+  let processedTotal = 0;
+  for (const modelId of PROCESSED_EVENT_MODEL_IDS) {
+    const source = PROCESSED_EVENT_MODEL_SOURCES[modelId];
+    const expected = metadata?.[modelId];
+    try {
+      const { actualHash, document, measurement } = await inspectCommittedEventModel(
+        modelId,
+        modelsDir,
+      );
+      console.log(
+        `${modelId}.glb: ${measurement.triangles} / ${PROCESSED_EVENT_TRIANGLE_LIMITS[modelId]} triangles`,
+      );
+      if (
+        actualHash !== source.committedSha256
+        || expected?.outputSha256 !== actualHash
+        || expected?.triangles !== measurement.triangles
+        || !sameNumbers(expected?.rawBounds?.min, measurement.rawBounds.min)
+        || !sameNumbers(expected?.rawBounds?.max, measurement.rawBounds.max)
+        || expected?.hasSkins !== (document.getRoot().listSkins().length > 0)
+        || expected?.animationCount !== measurement.animations.length
+      ) {
+        throw new Error(`${modelId}: processed model does not match its pinned metadata`);
+      }
+      processedTotal += measurement.triangles;
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  if (processedTotal > PROCESSED_EVENT_TOTAL_TRIANGLE_LIMIT) {
+    errors.push(
+      `processed event model total ${processedTotal} exceeds ${PROCESSED_EVENT_TOTAL_TRIANGLE_LIMIT}`,
+    );
   }
 
   if (!assetsOnly) {
