@@ -8,7 +8,7 @@ $stagedRoot = Join-Path $modelsRoot ".menu-stage-$swapId"
 $backupRoot = Join-Path $modelsRoot ".menu-backup-$swapId"
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) "dont-sleep-menu-models-$swapId"
 $modelIds = @(
-  'boat', 'rockA', 'rockB', 'rockC',
+  'boat', 'rockA', 'rockB', 'rockC', 'coral', 'starfish',
   'fishBone', 'skull', 'largeBone', 'shark'
 )
 $expectedFiles = @($modelIds | ForEach-Object { "$_.glb" }) +

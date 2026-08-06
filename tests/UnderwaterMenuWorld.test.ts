@@ -4,6 +4,7 @@ import {
   BoxGeometry,
   Group,
   InstancedMesh,
+  Matrix4,
   Mesh,
   MeshStandardMaterial,
   NumberKeyframeTrack,
@@ -15,6 +16,11 @@ import {
 } from 'three';
 import { expect, it, vi } from 'vitest';
 import { UnderwaterMenuWorld } from '../src/menu/UnderwaterMenuWorld';
+import {
+  KELP_BOAT_CLEARANCE_FAR_Z,
+  KELP_BOAT_CLEARANCE_NEAR_Z,
+  KELP_BOAT_CLEARANCE_X,
+} from '../src/menu/UnderwaterPlantField';
 
 it('creates the approved fixed composition once', () => {
   const created: string[] = [];
@@ -86,16 +92,21 @@ it('creates the approved fixed composition once', () => {
 
   expect(created).toEqual(expect.arrayContaining([
     'boat', 'rockA', 'rockB', 'rockC',
-    'skull',
+    'coral', 'starfish', 'skull',
     'shark', 'sardine', 'clownfish', 'seaweed',
   ]));
   expect(created).not.toContain('fishBone');
   expect(created).not.toContain('largeBone');
   expect(created.filter((id) => id === 'skull')).toHaveLength(1);
+  expect(created.filter((id) => id === 'rockA')).toHaveLength(4);
+  expect(created.filter((id) => id === 'rockB')).toHaveLength(4);
+  expect(created.filter((id) => id === 'rockC')).toHaveLength(4);
+  expect(created.filter((id) => id === 'coral')).toHaveLength(6);
+  expect(created.filter((id) => id === 'starfish')).toHaveLength(1);
   expect(created.filter((id) => id === 'shark')).toHaveLength(2);
   expect(created.filter((id) => id === 'sardine')).toHaveLength(6);
   expect(created.filter((id) => id === 'clownfish')).toHaveLength(6);
-  expect(created.filter((id) => id === 'seaweed')).toHaveLength(3);
+  expect(created.filter((id) => id === 'seaweed')).toHaveLength(9);
   expect(camera.userData.menuCameraFixed).toBe(true);
   expect(camera.position.toArray()).toEqual([0, 1.35, 7.8]);
   const expected = new PerspectiveCamera();
@@ -118,7 +129,7 @@ it('creates the approved fixed composition once', () => {
   const boatPosition = world.root.getObjectByName('menu:boat')!.getWorldPosition(new Vector3());
   expect(skullPosition.z).toBeGreaterThan(boatPosition.z);
   expect(skullPosition.y).toBeLessThan(0);
-  expect(skullPosition.distanceTo(boatPosition)).toBeGreaterThan(1.5);
+  expect(skullPosition.distanceTo(boatPosition)).toBeGreaterThan(3);
   expect(world.actors.sharks[0].clip.name).toBe('Armature|Swim');
   expect(world.actors.sharks[1].clip.name).toBe('Armature|Swim');
   expect(world.fishSchools[0].children).toHaveLength(6);
@@ -131,6 +142,17 @@ it('creates the approved fixed composition once', () => {
   const kelp = world.root.getObjectByName('menu:procedural-kelp');
   expect(kelp).toBeInstanceOf(InstancedMesh);
   expect((kelp as InstancedMesh).count).toBe(54);
+  const kelpMatrix = new Matrix4();
+  const kelpPosition = new Vector3();
+  for (let index = 0; index < (kelp as InstancedMesh).count; index += 1) {
+    (kelp as InstancedMesh).getMatrixAt(index, kelpMatrix);
+    kelpPosition.setFromMatrixPosition(kelpMatrix);
+    const crossesBoatDepth = kelpPosition.z > KELP_BOAT_CLEARANCE_FAR_Z
+      && kelpPosition.z < KELP_BOAT_CLEARANCE_NEAR_Z;
+    if (crossesBoatDepth) {
+      expect(Math.abs(kelpPosition.x)).toBeGreaterThanOrEqual(KELP_BOAT_CLEARANCE_X);
+    }
+  }
   const bubbles = world.root.getObjectByName('menu:bubbles');
   const matter = world.root.getObjectByName('menu:suspended-matter');
   expect(bubbles).toBeInstanceOf(Points);

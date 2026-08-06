@@ -8,7 +8,7 @@ import {
 const source = ({ committedSha256, ...options }) => Object.freeze({
   ...createPolyPizzaSource({
     ...options,
-    downloadedOn: '2026-08-05',
+    downloadedOn: options.downloadedOn ?? '2026-08-05',
   }),
   committedSha256,
 });
@@ -45,6 +45,22 @@ export const POLY_PIZZA_MENU_MODEL_SOURCES = Object.freeze({
     sha256: 'AFF6F5DF4CB5309400C9E85790D8FBAAB5EBE281402A54E7BA4308038DEFC9F3',
     committedSha256: 'B9EB2A8A48D1E99474DDAD1B7EFE438085EEB783F816E43B1608978C508D97CB',
     sourceTriangles: 432, maxTriangles: 500,
+  }),
+  coral: source({
+    id: 'coral', publicId: '4KUXdtDdgHR',
+    resourceId: '7fc1ccd0-aa82-4eff-8881-dd7a83ebf6ea',
+    title: 'Coral', creator: 'Poly by Google', license: 'CC-BY 3.0',
+    sha256: '63219C5123CE4A69B2283DE514DCA9AE08E9EC2C1BCAD3094AFD2EC5043B12B7',
+    committedSha256: '2ACA833051D14C22B107D14B2AE84E533B69A1EFBEC2B7F0A087416B9079D0AD',
+    sourceTriangles: 817, maxTriangles: 900, downloadedOn: '2026-08-06',
+  }),
+  starfish: source({
+    id: 'starfish', publicId: '6H-0K9IEr56',
+    resourceId: 'c9c1bc97-d76e-4e87-bd3a-87ab44b78aac',
+    title: 'Starfish', creator: 'Poly by Google', license: 'CC-BY 3.0',
+    sha256: '71F088AB919DBB4961532D325A04E03504910F5C4ED72FCB67A5876ADC390A4A',
+    committedSha256: '7B79DB36F41814317A5888D10E5A7EA9EDEA7998DAE7F982F19608BC7F2D98A1',
+    sourceTriangles: 780, maxTriangles: 800, downloadedOn: '2026-08-06',
   }),
   fishBone: source({
     id: 'fishBone', publicId: 'bU5RLZnq6v',

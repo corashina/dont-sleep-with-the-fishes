@@ -55,10 +55,46 @@ export const MENU_PLACEMENT = {
   rockC: { position: [6.4, -0.2, -9.5], rotation: [0, 0.2, 0] },
 } as const;
 
+const ROCK_PLACEMENTS = {
+  rockA: [
+    MENU_PLACEMENT.rockA,
+    { position: [10.5, -0.25, -10.5], rotation: [0, -0.8, 0.08] },
+    { position: [-14, -0.32, -15], rotation: [0, 1.1, -0.05] },
+    { position: [18, -0.4, -22], rotation: [0, 0.25, 0.04] },
+  ],
+  rockB: [
+    MENU_PLACEMENT.rockB,
+    { position: [-8, -0.3, -8.5], rotation: [0, 0.65, 0.04] },
+    { position: [13.5, -0.34, -15.5], rotation: [0, -1.05, -0.06] },
+    { position: [-20, -0.42, -24], rotation: [0, 0.35, 0.03] },
+  ],
+  rockC: [
+    MENU_PLACEMENT.rockC,
+    { position: [-10.8, -0.32, -12], rotation: [0, -0.45, -0.05] },
+    { position: [16, -0.4, -20], rotation: [0, 0.85, 0.06] },
+    { position: [-24, -0.46, -30], rotation: [0, -1.2, -0.03] },
+  ],
+} as const;
+
+const CORAL_PLACEMENTS = [
+  [-3.2, -0.26, -5.9, -0.35],
+  [3.6, -0.3, -6.9, 0.65],
+  [-8.8, -0.34, -10.6, -0.9],
+  [8.4, -0.35, -11.8, 1.1],
+  [-14.5, -0.42, -17.5, 0.25],
+  [15.2, -0.42, -18.8, -0.6],
+] as const;
+
 const SEAWEED_POSITIONS = [
   [-4.65, -0.28, -5.1],
   [4.15, -0.32, -3.8],
   [5.75, -0.35, -8.75],
+  [-7.4, -0.34, -8.8],
+  [8.1, -0.36, -7.2],
+  [-11.8, -0.4, -14.2],
+  [12.6, -0.42, -16.4],
+  [-17, -0.45, -22],
+  [18.2, -0.46, -24],
 ] as const;
 
 const CAUSTIC_VERTEX_SHADER = `
@@ -134,9 +170,11 @@ export class UnderwaterMenuWorld {
     this.root.name = 'menu:underwater-world';
 
     let boat: MenuModelInstance;
-    let rockA: MenuModelInstance;
-    let rockB: MenuModelInstance;
-    let rockC: MenuModelInstance;
+    let rockAs: MenuModelInstance[];
+    let rockBs: MenuModelInstance[];
+    let rockCs: MenuModelInstance[];
+    let corals: MenuModelInstance[];
+    let starfish: MenuModelInstance;
     let skull: MenuModelInstance;
     let sharkOne: MenuModelInstance;
     let sharkTwo: MenuModelInstance;
@@ -146,9 +184,11 @@ export class UnderwaterMenuWorld {
     let distantSeabed: MenuSceneComponent;
     try {
       boat = this.createModel(models, 'boat');
-      rockA = this.createModel(models, 'rockA');
-      rockB = this.createModel(models, 'rockB');
-      rockC = this.createModel(models, 'rockC');
+      rockAs = ROCK_PLACEMENTS.rockA.map(() => this.createModel(models, 'rockA'));
+      rockBs = ROCK_PLACEMENTS.rockB.map(() => this.createModel(models, 'rockB'));
+      rockCs = ROCK_PLACEMENTS.rockC.map(() => this.createModel(models, 'rockC'));
+      corals = CORAL_PLACEMENTS.map(() => this.createModel(models, 'coral'));
+      starfish = this.createModel(models, 'starfish');
       skull = this.createModel(models, 'skull');
       sharkOne = this.createModel(models, 'shark');
       sharkTwo = this.createModel(models, 'shark');
@@ -171,11 +211,20 @@ export class UnderwaterMenuWorld {
     this.signHitTargets = [signs.startHitTarget, signs.guideHitTarget];
 
     this.placeModel(boat.root, 'boat', MENU_PLACEMENT.boat);
-    this.placeModel(rockA.root, 'rockA', MENU_PLACEMENT.rockA);
-    this.placeModel(rockB.root, 'rockB', MENU_PLACEMENT.rockB);
-    this.placeModel(rockC.root, 'rockC', MENU_PLACEMENT.rockC);
+    this.placeModelInstances(rockAs, 'rockA', ROCK_PLACEMENTS.rockA);
+    this.placeModelInstances(rockBs, 'rockB', ROCK_PLACEMENTS.rockB);
+    this.placeModelInstances(rockCs, 'rockC', ROCK_PLACEMENTS.rockC);
+    corals.forEach((coral, index) => {
+      const [x, y, z, yaw] = CORAL_PLACEMENTS[index]!;
+      coral.root.name = `menu:coral-${index + 1}`;
+      coral.root.position.set(x, y, z);
+      coral.root.rotation.y = yaw;
+    });
+    starfish.root.name = 'menu:starfish';
+    starfish.root.position.set(-1.65, -0.36, -2.15);
+    starfish.root.rotation.set(0.03, -0.25, -0.08);
     skull.root.name = 'menu:skull';
-    skull.root.position.set(0.45, -0.2, -2.85);
+    skull.root.position.set(0.7, -0.26, -1.5);
     skull.root.rotation.set(0.08, -0.4, -0.32);
 
     sharkOne.root.name = 'menu:shark-1';
@@ -208,9 +257,11 @@ export class UnderwaterMenuWorld {
     this.root.add(
       seabed,
       boat.root,
-      rockA.root,
-      rockB.root,
-      rockC.root,
+      ...rockAs.map(({ root }) => root),
+      ...rockBs.map(({ root }) => root),
+      ...rockCs.map(({ root }) => root),
+      ...corals.map(({ root }) => root),
+      starfish.root,
       skull.root,
       signs.root,
       dorothy.root,
@@ -365,6 +416,23 @@ export class UnderwaterMenuWorld {
     root.name = `menu:${name}`;
     root.position.set(...placement.position);
     root.rotation.set(...placement.rotation);
+  }
+
+  private placeModelInstances(
+    instances: readonly MenuModelInstance[],
+    name: string,
+    placements: readonly {
+      readonly position: readonly [number, number, number];
+      readonly rotation: readonly [number, number, number];
+    }[],
+  ): void {
+    instances.forEach((instance, index) => {
+      this.placeModel(
+        instance.root,
+        index === 0 ? name : `${name}-${index + 1}`,
+        placements[index]!,
+      );
+    });
   }
 
   private createSeabed(): Mesh<PlaneGeometry, MeshStandardMaterial> {

@@ -8,7 +8,7 @@ describe('underwater menu model sources', () => {
   it('pins the exact approved Poly Pizza models', () => {
     expect(POLY_PIZZA_MENU_MODEL_IDS).toEqual([
       'boat', 'rockA', 'rockB', 'rockC',
-      'fishBone', 'skull', 'largeBone', 'shark',
+      'coral', 'starfish', 'fishBone', 'skull', 'largeBone', 'shark',
     ]);
     expect(Object.fromEntries(POLY_PIZZA_MENU_MODEL_IDS.map((id) => [
       id,
@@ -42,6 +42,18 @@ describe('underwater menu model sources', () => {
         resourceId: 'a50f220b-3c4c-4226-ae97-0458ed615cd2',
         sha256: 'AFF6F5DF4CB5309400C9E85790D8FBAAB5EBE281402A54E7BA4308038DEFC9F3',
         sourceTriangles: 432,
+      },
+      coral: {
+        publicId: '4KUXdtDdgHR',
+        resourceId: '7fc1ccd0-aa82-4eff-8881-dd7a83ebf6ea',
+        sha256: '63219C5123CE4A69B2283DE514DCA9AE08E9EC2C1BCAD3094AFD2EC5043B12B7',
+        sourceTriangles: 817,
+      },
+      starfish: {
+        publicId: '6H-0K9IEr56',
+        resourceId: 'c9c1bc97-d76e-4e87-bd3a-87ab44b78aac',
+        sha256: '71F088AB919DBB4961532D325A04E03504910F5C4ED72FCB67A5876ADC390A4A',
+        sourceTriangles: 780,
       },
       fishBone: {
         publicId: 'bU5RLZnq6v',
