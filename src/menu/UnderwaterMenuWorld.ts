@@ -4,7 +4,6 @@ import {
   BufferGeometry,
   CatmullRomCurve3,
   Color,
-  ConeGeometry,
   DirectionalLight,
   DoubleSide,
   FogExp2,
@@ -13,7 +12,6 @@ import {
   type Intersection,
   Material,
   Mesh,
-  MeshBasicMaterial,
   MeshStandardMaterial,
   PerspectiveCamera,
   PlaneGeometry,
@@ -198,7 +196,6 @@ export class UnderwaterMenuWorld {
     this.particles = new UnderwaterParticles();
     const seabed = this.createSeabed();
     const storyProps = this.createStoryProps();
-    const lightShafts = this.createLightShafts();
     const caustic = this.createCausticOverlay();
     this.causticMaterial = caustic.material;
 
@@ -225,7 +222,6 @@ export class UnderwaterMenuWorld {
       storyProps,
       this.plants.root,
       this.particles.root,
-      lightShafts,
       caustic.mesh,
       hemisphereLight,
       directionalLight,
@@ -447,38 +443,6 @@ export class UnderwaterMenuWorld {
     rope.name = 'menu:curved-rope-mesh';
     ropeGroup.add(rope);
     root.add(ropeGroup);
-    return root;
-  }
-
-  private createLightShafts(): Group {
-    const root = new Group();
-    root.name = 'menu:light-shafts';
-    const geometry = new ConeGeometry(1.25, 9, 7, 1, true);
-    const material = new MeshBasicMaterial({
-      color: 0x8dc6c9,
-      transparent: true,
-      opacity: 0.055,
-      depthWrite: false,
-      side: DoubleSide,
-    });
-    this.ownedGeometries.add(geometry);
-    this.ownedMaterials.add(material);
-    const positions = [
-      [-15.5, 4.2, -12.0, -0.12, 1.15],
-      [-5.3, 3.6, -6.2, -0.12, 0.9],
-      [3.8, 4.1, -8.6, 0.17, 1.25],
-      [12.5, 4.5, -17.0, -0.2, 1.2],
-      [22.0, 5.2, -30.0, 0.14, 1.5],
-    ] as const;
-    for (let index = 0; index < positions.length; index += 1) {
-      const [x, y, z, tilt, scale] = positions[index]!;
-      const shaft = new Mesh(geometry, material);
-      shaft.name = `menu:light-shaft-${index + 1}`;
-      shaft.position.set(x, y, z);
-      shaft.rotation.z = tilt;
-      shaft.scale.set(scale, 1, scale);
-      root.add(shaft);
-    }
     return root;
   }
 
