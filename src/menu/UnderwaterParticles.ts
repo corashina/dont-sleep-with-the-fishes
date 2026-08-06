@@ -74,7 +74,7 @@ function createParticlePool(
     const offset = index * 3;
     const column = index % columns;
     const row = Math.floor(index / columns);
-    const horizontal = columns === 1 ? 0.5 : column / (columns - 1);
+    const horizontal = column / (columns - 1);
     const vertical = rows === 1 ? 0.5 : row / (rows - 1);
     const depthBand = (column * 5 + row * 7) % 8;
     const spread = 7.5 + depthBand * 4.2;
