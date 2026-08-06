@@ -15,12 +15,8 @@ import {
   Vector3,
 } from 'three';
 import { expect, it, vi } from 'vitest';
+import { MENU_PROTECTED_FOOTPRINTS } from '../src/menu/MenuSceneLayout';
 import { UnderwaterMenuWorld } from '../src/menu/UnderwaterMenuWorld';
-import {
-  KELP_BOAT_CLEARANCE_FAR_Z,
-  KELP_BOAT_CLEARANCE_NEAR_Z,
-  KELP_BOAT_CLEARANCE_X,
-} from '../src/menu/UnderwaterPlantField';
 
 it('creates the approved fixed composition once', () => {
   const created: string[] = [];
@@ -102,15 +98,15 @@ it('creates the approved fixed composition once', () => {
   expect(created).not.toContain('fishBone');
   expect(created).not.toContain('largeBone');
   expect(created.filter((id) => id === 'skull')).toHaveLength(1);
-  expect(created.filter((id) => id === 'rockA')).toHaveLength(4);
-  expect(created.filter((id) => id === 'rockB')).toHaveLength(4);
-  expect(created.filter((id) => id === 'rockC')).toHaveLength(4);
-  expect(created.filter((id) => id === 'coral')).toHaveLength(6);
+  expect(created.filter((id) => id === 'rockA')).toHaveLength(6);
+  expect(created.filter((id) => id === 'rockB')).toHaveLength(6);
+  expect(created.filter((id) => id === 'rockC')).toHaveLength(6);
+  expect(created.filter((id) => id === 'coral')).toHaveLength(10);
   expect(created.filter((id) => id === 'starfish')).toHaveLength(1);
   expect(created.filter((id) => id === 'shark')).toHaveLength(2);
   expect(created.filter((id) => id === 'sardine')).toHaveLength(6);
   expect(created.filter((id) => id === 'clownfish')).toHaveLength(6);
-  expect(created.filter((id) => id === 'seaweed')).toHaveLength(9);
+  expect(created.filter((id) => id === 'seaweed')).toHaveLength(14);
   expect(camera.userData.menuCameraFixed).toBe(true);
   expect(camera.position.toArray()).toEqual([0, 1.35, 7.8]);
   const expected = new PerspectiveCamera();
@@ -155,10 +151,12 @@ it('creates the approved fixed composition once', () => {
   for (let index = 0; index < (kelp as InstancedMesh).count; index += 1) {
     (kelp as InstancedMesh).getMatrixAt(index, kelpMatrix);
     kelpPosition.setFromMatrixPosition(kelpMatrix);
-    const crossesBoatDepth = kelpPosition.z > KELP_BOAT_CLEARANCE_FAR_Z
-      && kelpPosition.z < KELP_BOAT_CLEARANCE_NEAR_Z;
-    if (crossesBoatDepth) {
-      expect(Math.abs(kelpPosition.x)).toBeGreaterThanOrEqual(KELP_BOAT_CLEARANCE_X);
+    for (const footprint of MENU_PROTECTED_FOOTPRINTS) {
+      const insideX = Math.abs(kelpPosition.x - footprint.position[0])
+        < footprint.halfSize[0];
+      const insideZ = Math.abs(kelpPosition.z - footprint.position[2])
+        < footprint.halfSize[1];
+      expect(insideX && insideZ, `${index} enters ${footprint.id}`).toBe(false);
     }
   }
   const bubbles = world.root.getObjectByName('menu:bubbles');

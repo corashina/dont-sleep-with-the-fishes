@@ -8,11 +8,10 @@ import {
   PlaneGeometry,
   ShaderMaterial,
 } from 'three';
+import { MENU_PROTECTED_FOOTPRINTS } from './MenuSceneLayout';
 
 export const KELP_COUNT = 54;
-export const KELP_BOAT_CLEARANCE_X = 2.7;
-export const KELP_BOAT_CLEARANCE_NEAR_Z = -2.2;
-export const KELP_BOAT_CLEARANCE_FAR_Z = -8.2;
+const KELP_EDGE_CLEARANCE = 0.2;
 
 const KELP_VERTEX_SHADER = `
   attribute float phase;
@@ -78,12 +77,16 @@ export class UnderwaterPlantField {
       const depth = -3.2 - lane * 5.2 - (slot % 2) * 0.9;
       const spread = 7.5 + lane * 3.7;
       let x = ((slot / 5) * 2 - 1) * spread + ((lane + slot) % 3 - 1) * 0.8;
-      if (
-        depth > KELP_BOAT_CLEARANCE_FAR_Z
-        && depth < KELP_BOAT_CLEARANCE_NEAR_Z
-        && Math.abs(x) < KELP_BOAT_CLEARANCE_X
-      ) {
-        x += x < 0 ? -KELP_BOAT_CLEARANCE_X : KELP_BOAT_CLEARANCE_X;
+      for (const footprint of MENU_PROTECTED_FOOTPRINTS) {
+        const leftEdge = footprint.position[0] - footprint.halfSize[0];
+        const rightEdge = footprint.position[0] + footprint.halfSize[0];
+        const nearEdge = footprint.position[2] + footprint.halfSize[1];
+        const farEdge = footprint.position[2] - footprint.halfSize[1];
+        if (x > leftEdge && x < rightEdge && depth > farEdge && depth < nearEdge) {
+          x = x - leftEdge < rightEdge - x
+            ? leftEdge - KELP_EDGE_CLEARANCE
+            : rightEdge + KELP_EDGE_CLEARANCE;
+        }
       }
       const scale = 0.72 + (index % 5) * 0.11;
       transform.position.set(x, -0.42, depth);
