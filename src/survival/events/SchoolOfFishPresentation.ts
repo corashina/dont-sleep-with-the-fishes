@@ -33,7 +33,7 @@ import {
   sampleSchoolItemUse,
   sampleSchoolReaction,
   sampleSchoolReveal,
-  SCHOOL_ITEM_DURATION,
+  schoolItemDuration,
   SCHOOL_REACTION_DURATION,
   SCHOOL_REVEAL_DURATION,
   type SchoolFishPose,
@@ -295,7 +295,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
         kind: 'item',
         choiceId,
         elapsed: 0,
-        duration: SCHOOL_ITEM_DURATION,
+        duration: schoolItemDuration(choiceId),
         resolve,
       };
     });

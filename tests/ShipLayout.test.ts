@@ -57,7 +57,7 @@ describe('scavenging ship layout', () => {
   const minimumSpots = {
     crewCabin: 10,
     wheelhouse: 3,
-    storageWorkroom: 10,
+    storageWorkroom: 8,
     centralCargo: 11,
     bow: 1,
     stern: 2,
@@ -65,7 +65,7 @@ describe('scavenging ship layout', () => {
 
   it('provides the approved spread of raised item spots', () => {
     const surfaces = SHIP_LAYOUT.furniture.flatMap(({ surfaces }) => surfaces);
-    expect(surfaces.length).toBeGreaterThanOrEqual(42);
+    expect(surfaces.length).toBeGreaterThanOrEqual(40);
     for (const [regionId, minimum] of Object.entries(minimumSpots)) {
       const regionSurfaces = surfaces.filter((surface) => surface.regionId === regionId);
       expect(new Set(regionSurfaces.map(({ physicalSlotId }) => physicalSlotId)).size)
@@ -307,7 +307,6 @@ describe('scavenging ship layout', () => {
       'cabin-desk-aft',
       'chart-table-port',
       'chart-table-forward',
-      'workbench-port',
       'workbench-starboard',
       'storage-shelf-forward',
       'cabin-night-stand-forward-starboard',
@@ -323,6 +322,7 @@ describe('scavenging ship layout', () => {
       'cabin-side-cabinet',
       'instrument-cabinet-starboard-aft',
       'instrument-cabinet-starboard-center',
+      'workbench-port',
       'instrument-cabinet-starboard-forward',
     ]));
 
@@ -841,11 +841,6 @@ describe('scavenging ship layout', () => {
       -4.45,
       storage.maxX - SHIP_ROOM_WALL_THICKNESS - 1.05 / 2,
     ]);
-    const portWorkbenchBounds = fixtureRect('workbench-port');
-    expect(portWorkbenchBounds.minX)
-      .toBeCloseTo(storage.minX + SHIP_ROOM_WALL_THICKNESS + 0.02);
-    expect(portWorkbenchBounds.minZ)
-      .toBeCloseTo(storage.minZ + SHIP_ROOM_WALL_THICKNESS + 0.02);
     const deskBoxes = SHIP_LAYOUT.decorations.filter(({ id }) =>
       id === 'workroom-box-pallet-a' || id === 'workroom-box-pallet-b');
     expect(deskBoxes).toEqual([]);

@@ -118,7 +118,10 @@ function normalizeTemplate(id: MenuModelId, root: Group, spec: MenuModelSpec): v
 }
 
 function validateAnimations(id: MenuModelId, animations: readonly AnimationClip[]): void {
-  if (id === 'shark' && !animations.some((clip) => clip.name === 'Armature|Swim')) {
+  if (
+    (id === 'shark' || id === 'redSnapper')
+    && !animations.some((clip) => clip.name === 'Armature|Swim')
+  ) {
     throw new MenuModelLoadError(id, 'required Armature|Swim clip is missing');
   }
 }

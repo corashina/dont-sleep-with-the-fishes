@@ -111,7 +111,7 @@ describe('EventItemUseController', () => {
     const use = controller.play(request(actor.instanceId, target));
     controller.update(10);
     await use;
-    const initialForward = new Vector3(-1, 0, 0)
+    const initialForward = new Vector3(1, 0, 0)
       .applyQuaternion(actor.root.quaternion)
       .normalize();
 
@@ -123,7 +123,7 @@ describe('EventItemUseController', () => {
       .sub(actorPosition)
     expectedDirection.y = 0;
     expectedDirection.normalize();
-    const heldForward = new Vector3(-1, 0, 0)
+    const heldForward = new Vector3(1, 0, 0)
       .applyQuaternion(actor.root.quaternion)
       .normalize();
     expect(heldForward.angleTo(expectedDirection)).toBeLessThan(1e-6);
@@ -154,6 +154,22 @@ describe('EventItemUseController', () => {
     await use;
     expect(onAction).toHaveBeenCalledOnce();
 
+    controller.clear('day');
+    adapter.dispose();
+  });
+
+  it('fires all nine flashlight Morse cues', async () => {
+    const { actor, adapter, controller } = setup();
+    const onAction = vi.fn();
+    const use = controller.play({
+      ...request(actor.instanceId),
+      onAction,
+    });
+
+    controller.update(eventItemUseDuration('flashlight-flash'));
+    await use;
+
+    expect(onAction).toHaveBeenCalledTimes(9);
     controller.clear('day');
     adapter.dispose();
   });

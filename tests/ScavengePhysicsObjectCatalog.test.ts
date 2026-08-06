@@ -15,20 +15,20 @@ describe('scavenge physics object catalog', () => {
       [1, 1, 1],
       [1 / 3, 1.6 / 3, 1 / 3],
       [0.5, 0.5, 0.5],
-      [1, 1, 1],
+      [1.129507 / 1.187991, 1.15 / 1.6, 1.129507 / 1.187991],
       [1.5, 1.5, 1.5],
       [0.5, 0.5, 0.5],
       [0.75, 0.75, 0.75],
     ]);
     expect(SCAVENGE_PHYSICS_OBJECT_SPECS.map(({ visualHalfHeight }) => visualHalfHeight))
-      .toEqual([0.575, 0.64 / 3, 0.425, 0.8, 0.4125, 0.2875, 0.39375]);
+      .toEqual([0.575, 0.64 / 3, 0.425, 0.575, 0.4125, 0.2875, 0.39375]);
     expect(SCAVENGE_PHYSICS_OBJECT_SPECS.map(({ collider }) => collider.kind))
       .toEqual(['cylinder', 'sphere', 'cylinder', 'cylinder', 'cuboid', 'cuboid', 'cuboid']);
     expect(SCAVENGE_PHYSICS_OBJECT_SPECS.map(({ collider }) => collider)).toEqual([
       { kind: 'cylinder', halfHeight: 0.55775, radius: 0.547811 },
       { kind: 'sphere', radius: 0.6208 / 3 },
       { kind: 'cylinder', halfHeight: 0.41225, radius: 0.2922855 },
-      { kind: 'cylinder', halfHeight: 0.776, radius: 0.576176 },
+      { kind: 'cylinder', halfHeight: 0.55775, radius: 0.547811 },
       { kind: 'cuboid', halfExtents: { x: 0.45365325, y: 0.400125, z: 0.4606335 } },
       { kind: 'cuboid', halfExtents: { x: 0.278875, y: 0.278875, z: 0.278875 } },
       { kind: 'cuboid', halfExtents: { x: 0.458538, y: 0.3819375, z: 0.45351 } },

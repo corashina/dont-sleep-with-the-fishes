@@ -35,8 +35,8 @@ import {
   sampleSwarmItemUse,
   sampleSwarmReaction,
   sampleSwarmReveal,
+  swarmItemDuration,
   SWARM_FISH_COUNT,
-  SWARM_ITEM_DURATION,
   SWARM_REACTION_DURATION,
   SWARM_REVEAL_DURATION,
   type SwarmFishPose,
@@ -333,7 +333,7 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
         kind: 'item',
         choiceId,
         elapsed: 0,
-        duration: SWARM_ITEM_DURATION,
+        duration: swarmItemDuration(sceneChoiceId(choiceId)),
         resolve,
       };
     });

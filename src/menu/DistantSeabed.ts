@@ -12,6 +12,8 @@ import {
 import { disposeResourceSets } from '../world/SceneResources';
 import {
   findClearMenuX,
+  MENU_PROTECTED_FOOTPRINTS,
+  menuSeabedHeight,
   menuVisibleCenterLimit,
   type MenuGroundFootprint,
 } from './MenuSceneLayout';
@@ -24,16 +26,27 @@ export const DISTANT_PLANT_COUNT = 36;
 export const DISTANT_DEBRIS_COUNT = 20;
 
 const RIDGES = [
-  { width: 76, depth: 16, z: -16, height: 0.9, phase: 0.2 },
-  { width: 96, depth: 22, z: -32, height: 1.35, phase: 1.1 },
-  { width: 118, depth: 28, z: -50, height: 1.9, phase: 2.0 },
+  { width: 76, depth: 16, z: -34, height: 0.9, phase: 0.2 },
+  { width: 96, depth: 22, z: -52, height: 1.35, phase: 1.1 },
+  { width: 118, depth: 28, z: -72, height: 1.9, phase: 2.0 },
 ] as const;
 
 const MOUNTAINS = [
-  { width: 104, depth: 18, z: -34, height: 6.2, phase: 0.35 },
-  { width: 138, depth: 24, z: -50, height: 10.8, phase: 1.25 },
-  { width: 172, depth: 30, z: -72, height: 17.5, phase: 2.1 },
+  { width: 104, depth: 18, z: -42, height: 6.2, phase: 0.35 },
+  { width: 138, depth: 24, z: -60, height: 10.8, phase: 1.25 },
+  { width: 172, depth: 30, z: -82, height: 17.5, phase: 2.1 },
 ] as const;
+
+function terrainEdgeBlend(
+  x: number,
+  z: number,
+  width: number,
+  depth: number,
+): number {
+  const edgeDistance = Math.min(width / 2 - Math.abs(x), depth / 2 - Math.abs(z));
+  const progress = Math.max(0, Math.min(1, edgeDistance / 3));
+  return progress * progress * (3 - 2 * progress);
+}
 
 const ROCKS = [
   [-11.0, -0.20, -5.5, 0.8, 0.2], [10.5, -0.15, -7.5, 1.0, 1.1],
@@ -122,7 +135,10 @@ export class DistantSeabed implements MenuSceneComponent {
         const wave = Math.sin(x * 0.19 + spec.phase) * 0.48
           + Math.cos(z * 0.23 - spec.phase) * 0.32
           + Math.sin((x + z) * 0.11) * 0.2;
-        position.setY(vertex, Math.max(-0.15, wave) * spec.height - 0.25);
+        const blend = terrainEdgeBlend(x, z, spec.width, spec.depth);
+        const baseHeight = menuSeabedHeight(x, z + spec.z);
+        const lift = (0.04 + Math.max(0, wave + 0.15) * spec.height) * blend;
+        position.setY(vertex, baseHeight + lift);
       }
       position.needsUpdate = true;
       geometry.computeVertexNormals();
@@ -146,8 +162,11 @@ export class DistantSeabed implements MenuSceneComponent {
           + Math.abs(Math.sin(x * 0.27 - spec.phase)) * 0.16
           + Math.cos((x + z) * 0.13) * 0.06;
         const sideFade = Math.max(0.2, 1 - Math.abs(x) / (spec.width * 0.58));
-        position.setY(vertex, -0.35 + Math.max(0, peaks) * sideFade
-          * Math.pow(ridgeCrest, 1.3) * spec.height);
+        const blend = terrainEdgeBlend(x, z, spec.width, spec.depth);
+        const baseHeight = menuSeabedHeight(x, z + spec.z);
+        const lift = (0.04 + Math.max(0, peaks) * sideFade
+          * Math.pow(ridgeCrest, 1.3) * spec.height) * blend;
+        position.setY(vertex, baseHeight + lift);
       }
       position.needsUpdate = true;
       geometry.computeVertexNormals();
@@ -193,6 +212,7 @@ export class DistantSeabed implements MenuSceneComponent {
     geometry: BufferGeometry,
     material: MeshStandardMaterial,
   ): void {
+    const dorothy = MENU_PROTECTED_FOOTPRINTS.find(({ id }) => id === 'dorothy')!;
     details.forEach(([x, y, z, scale, yaw], index) => {
       const mesh = new Mesh(geometry, material);
       mesh.name = `${name}-${index + 1}`;
@@ -203,14 +223,19 @@ export class DistantSeabed implements MenuSceneComponent {
       this.detailBounds.setFromObject(mesh);
       const halfX = (this.detailBounds.max.x - this.detailBounds.min.x) * 0.5;
       const halfZ = (this.detailBounds.max.z - this.detailBounds.min.z) * 0.5;
+      const overlapsDorothyDepth = z + halfZ > dorothy.position[2] - dorothy.halfSize[1]
+        && z - halfZ < dorothy.position[2] + dorothy.halfSize[1];
+      const placedZ = overlapsDorothyDepth
+        ? dorothy.position[2] - dorothy.halfSize[1] - halfZ - 0.5
+        : z;
       const visibleLimit = menuVisibleCenterLimit(
         this.detailBounds.min.y,
-        this.detailBounds.max.z,
+        placedZ + halfZ,
         halfX,
       );
       mesh.position.x = findClearMenuX(
         x,
-        z,
+        placedZ,
         halfX,
         halfZ,
         0.2,
@@ -218,9 +243,10 @@ export class DistantSeabed implements MenuSceneComponent {
         -visibleLimit,
         visibleLimit,
       );
+      mesh.position.z = placedZ;
       this.detailFootprints.push({
         id: mesh.name,
-        position: [mesh.position.x, y, z],
+        position: [mesh.position.x, y, placedZ],
         halfSize: [halfX, halfZ],
       });
       group.add(mesh);

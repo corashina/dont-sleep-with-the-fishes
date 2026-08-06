@@ -17,6 +17,7 @@ import {
 import { expect, it, vi } from 'vitest';
 import { MENU_PROTECTED_FOOTPRINTS } from '../src/menu/MenuSceneLayout';
 import { UnderwaterMenuWorld } from '../src/menu/UnderwaterMenuWorld';
+import { ITEM_AMBIENT_OCCLUSION_LAYER } from '../src/rendering/ItemAmbientOcclusion';
 
 it('creates the approved fixed composition once', () => {
   const created: string[] = [];
@@ -24,7 +25,7 @@ it('creates the approved fixed composition once', () => {
   const models = {
     create: vi.fn((id: string) => {
       created.push(id);
-      const animations = id === 'shark'
+      const animations = id === 'shark' || id === 'redSnapper'
         ? [new AnimationClip('Armature|Swim', 1.25, [
           new NumberKeyframeTrack('.rotation[y]', [0, 1.25], [0, 0.1]),
         ])]
@@ -32,7 +33,7 @@ it('creates the approved fixed composition once', () => {
       const dispose = vi.fn();
       disposers.push(dispose);
       const root = new Group();
-      if (id === 'sardine' || id === 'clownfish') {
+      if (id === 'redSnapper') {
         root.add(new Mesh(new BoxGeometry(0.1, 0.1, 0.1)));
       }
       return { root, animations, dispose };
@@ -93,7 +94,7 @@ it('creates the approved fixed composition once', () => {
   expect(created).toEqual(expect.arrayContaining([
     'boat', 'rockA', 'rockB', 'rockC',
     'coral', 'starfish', 'skull',
-    'shark', 'sardine', 'clownfish', 'seaweed',
+    'shark', 'redSnapper', 'seaweed',
   ]));
   expect(created).not.toContain('fishBone');
   expect(created).not.toContain('largeBone');
@@ -104,8 +105,7 @@ it('creates the approved fixed composition once', () => {
   expect(created.filter((id) => id === 'coral')).toHaveLength(10);
   expect(created.filter((id) => id === 'starfish')).toHaveLength(1);
   expect(created.filter((id) => id === 'shark')).toHaveLength(2);
-  expect(created.filter((id) => id === 'sardine')).toHaveLength(6);
-  expect(created.filter((id) => id === 'clownfish')).toHaveLength(6);
+  expect(created.filter((id) => id === 'redSnapper')).toHaveLength(12);
   expect(created.filter((id) => id === 'seaweed')).toHaveLength(14);
   expect(camera.userData.menuCameraFixed).toBe(true);
   expect(camera.position.toArray()).toEqual([0, 1.35, 7.8]);
@@ -134,6 +134,9 @@ it('creates the approved fixed composition once', () => {
   expect(maxHeight - minHeight).toBeGreaterThan(0.55);
   expect(colors.size).toBeGreaterThan(8);
   expect((seabed.material as MeshStandardMaterial).vertexColors).toBe(true);
+  expect(seabed.layers.isEnabled(ITEM_AMBIENT_OCCLUSION_LAYER)).toBe(true);
+  expect(startHitTarget.layers.isEnabled(ITEM_AMBIENT_OCCLUSION_LAYER)).toBe(true);
+  expect(caustics.layers.isEnabled(ITEM_AMBIENT_OCCLUSION_LAYER)).toBe(false);
   world.root.updateMatrixWorld(true);
   expect(new Box3().setFromObject(seabed).max.z).toBeGreaterThan(camera.position.z);
   expect(new Box3().setFromObject(caustics).max.z).toBeGreaterThan(camera.position.z);
@@ -151,6 +154,8 @@ it('creates the approved fixed composition once', () => {
   expect(skullPosition.distanceTo(boatPosition)).toBeGreaterThan(3);
   expect(world.actors.sharks[0].clip.name).toBe('Armature|Swim');
   expect(world.actors.sharks[1].clip.name).toBe('Armature|Swim');
+  expect(world.actors.fish).toHaveLength(12);
+  expect(world.actors.fish.every(({ clip }) => clip.name === 'Armature|Swim')).toBe(true);
   expect(world.fishSchools[0].children).toHaveLength(6);
   expect(world.fishSchools[1].children).toHaveLength(6);
   for (const school of world.fishSchools) {
@@ -213,7 +218,7 @@ it('rolls back completed work and preserves a component creation error', () => {
   const modelDisposers: ReturnType<typeof vi.fn>[] = [];
   const models = {
     create: vi.fn((id: string) => {
-      const animations = id === 'shark'
+      const animations = id === 'shark' || id === 'redSnapper'
         ? [new AnimationClip('Armature|Swim', 1.25)]
         : [];
       const dispose = vi.fn();

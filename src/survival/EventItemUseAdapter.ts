@@ -31,6 +31,8 @@ const IDENTITY_POSE: MutableSupplyPose = {
 };
 const THROW_WATER_CONTACT_Y = 0.04;
 const THROW_FALLBACK_DISTANCE = 6;
+const COMPASS_TURN_AXIS = new Vector3(0, 1, 0);
+type CameraFacingSurface = 'none' | 'y' | 'z';
 
 /** Adapts sampled item-use poses to a borrowed supply actor. */
 export class EventItemUseAdapter {
@@ -46,6 +48,13 @@ export class EventItemUseAdapter {
   private readonly targetDirection = new Vector3();
   private readonly fallbackTargetDirection = new Vector3();
   private readonly cameraWorldMatrix = new Matrix4();
+  private readonly heldCameraLocalMatrix = new Matrix4();
+  private readonly heldCameraWorldMatrix = new Matrix4();
+  private readonly heldCameraWorldPosition = new Vector3();
+  private readonly heldCameraWorldQuaternion = new Quaternion();
+  private readonly heldCameraWorldScale = new Vector3();
+  private readonly cameraWorldQuaternion = new Quaternion();
+  private readonly cameraTargetWorldQuaternion = new Quaternion();
   private readonly actorParentWorldInverse = new Matrix4();
   private readonly actorWorldQuaternion = new Quaternion();
   private readonly aimDeltaQuaternion = new Quaternion();
@@ -54,10 +63,12 @@ export class EventItemUseAdapter {
   private readonly actorParentQuaternion = new Quaternion();
   private readonly facingWorldQuaternion = new Quaternion();
   private readonly facingTargetQuaternion = new Quaternion();
+  private readonly facingAdjustmentQuaternion = new Quaternion();
   private readonly facingCameraPosition = new Vector3();
   private readonly facingNormal = new Vector3();
   private readonly facingRight = new Vector3();
   private readonly facingDown = new Vector3();
+  private readonly facingUp = new Vector3();
   private readonly facingBasis = new Matrix4();
   private readonly pose: MutableSupplyPose = {
     x: 0,
@@ -73,7 +84,8 @@ export class EventItemUseAdapter {
   private actor: BorrowedSupplyActor | null = null;
   private profile: EventItemMotionProfile | null = null;
   private aimTarget: Object3D | null = null;
-  private faceCamera = false;
+  private cameraFacingSurface: CameraFacingSurface = 'none';
+  private lockItemToHeldCamera = false;
   private baseFieldOfView: number;
   private active = false;
   private disposed = false;
@@ -95,9 +107,16 @@ export class EventItemUseAdapter {
     this.clear();
     this.actor = actor;
     this.profile = eventItemMotionProfile(itemId);
-    this.effects.setHeldItem(itemId);
     this.aimTarget = aimTarget;
-    this.faceCamera = itemId === 'map';
+    this.cameraFacingSurface = itemId === 'map'
+      ? 'y'
+      : itemId === 'compass' || itemId === 'spyglass' ? 'z' : 'none';
+    this.lockItemToHeldCamera = itemId === 'map';
+    this.heldCameraLocalMatrix.compose(
+      this.camera.position,
+      this.camera.quaternion,
+      this.camera.scale,
+    );
     this.storedActorPosition.copy(actor.root.position);
     this.baseFieldOfView = this.camera.fov;
     this.cameraLook.capture();
@@ -115,12 +134,18 @@ export class EventItemUseAdapter {
     if (this.disposed || !this.active || actor === null || profile === null) return;
 
     this.cameraLook.apply(sample.cameraYaw, sample.cameraPitch);
+    this.applyCameraTarget(sample.cameraTargetBlend);
     this.applyFieldOfView(sample.fovScale);
     this.camera.updateWorldMatrix(true, false);
     this.cameraWorldMatrix.copy(this.camera.matrixWorld);
+    if (this.lockItemToHeldCamera) this.updateHeldCameraWorldTransform();
     this.cameraSpacePosition
       .set(sample.viewX, sample.viewY, sample.viewZ)
-      .applyMatrix4(this.cameraWorldMatrix);
+      .applyMatrix4(
+        this.lockItemToHeldCamera
+          ? this.heldCameraWorldMatrix
+          : this.cameraWorldMatrix,
+      );
 
     const parent = actor.root.parent;
     this.actorParentPosition.copy(this.cameraSpacePosition);
@@ -151,7 +176,6 @@ export class EventItemUseAdapter {
 
   clear(): void {
     if (this.disposed) return;
-    this.effects.setHeldItem(null);
     this.effects.clear();
     if (!this.active) return;
     this.actor?.applyPose(IDENTITY_POSE);
@@ -160,7 +184,8 @@ export class EventItemUseAdapter {
     this.actor = null;
     this.profile = null;
     this.aimTarget = null;
-    this.faceCamera = false;
+    this.cameraFacingSurface = 'none';
+    this.lockItemToHeldCamera = false;
     this.active = false;
   }
 
@@ -176,6 +201,23 @@ export class EventItemUseAdapter {
     if (this.camera.fov === fieldOfView) return;
     this.camera.fov = fieldOfView;
     this.camera.updateProjectionMatrix();
+  }
+
+  private applyCameraTarget(blend: number): void {
+    const aimTarget = this.aimTarget;
+    if (blend <= 0 || aimTarget === null) return;
+
+    aimTarget.updateWorldMatrix(true, false);
+    aimTarget.getWorldPosition(this.targetWorldPosition);
+    this.cameraWorldQuaternion.copy(this.camera.quaternion);
+    this.camera.lookAt(this.targetWorldPosition);
+    this.cameraTargetWorldQuaternion.copy(this.camera.quaternion);
+    this.camera.quaternion
+      .copy(this.cameraWorldQuaternion)
+      .slerp(
+      this.cameraTargetWorldQuaternion,
+      Math.min(1, blend),
+    );
   }
 
   private restoreFieldOfView(): void {
@@ -298,16 +340,38 @@ export class EventItemUseAdapter {
     actor.root.quaternion.copy(this.actorParentQuaternion);
   }
 
+  private updateHeldCameraWorldTransform(): void {
+    const parent = this.camera.parent;
+    if (parent === null) {
+      this.heldCameraWorldMatrix.copy(this.heldCameraLocalMatrix);
+    } else {
+      parent.updateWorldMatrix(true, false);
+      this.heldCameraWorldMatrix.multiplyMatrices(
+        parent.matrixWorld,
+        this.heldCameraLocalMatrix,
+      );
+    }
+    this.heldCameraWorldMatrix.decompose(
+      this.heldCameraWorldPosition,
+      this.heldCameraWorldQuaternion,
+      this.heldCameraWorldScale,
+    );
+  }
+
   private applyCameraFacing(
     sample: Readonly<EventItemUseSample>,
     actor: BorrowedSupplyActor,
   ): void {
-    if (!this.faceCamera || sample.cameraSpaceBlend <= 0) return;
+    if (this.cameraFacingSurface === 'none' || sample.cameraSpaceBlend <= 0) return;
 
     actor.root.updateWorldMatrix(true, false);
     actor.root.getWorldQuaternion(this.facingWorldQuaternion);
     actor.root.getWorldPosition(this.actorWorldPosition);
-    this.camera.getWorldPosition(this.facingCameraPosition);
+    if (this.lockItemToHeldCamera) {
+      this.facingCameraPosition.copy(this.heldCameraWorldPosition);
+    } else {
+      this.camera.getWorldPosition(this.facingCameraPosition);
+    }
     this.facingNormal.subVectors(
       this.facingCameraPosition,
       this.actorWorldPosition,
@@ -315,7 +379,11 @@ export class EventItemUseAdapter {
     if (this.facingNormal.lengthSq() === 0) return;
     this.facingNormal.normalize();
 
-    this.camera.getWorldQuaternion(this.facingTargetQuaternion);
+    if (this.lockItemToHeldCamera) {
+      this.facingTargetQuaternion.copy(this.heldCameraWorldQuaternion);
+    } else {
+      this.camera.getWorldQuaternion(this.facingTargetQuaternion);
+    }
     this.facingRight.set(1, 0, 0)
       .applyQuaternion(this.facingTargetQuaternion)
       .addScaledVector(
@@ -325,12 +393,28 @@ export class EventItemUseAdapter {
     if (this.facingRight.lengthSq() === 0) return;
     this.facingRight.normalize();
     this.facingDown.crossVectors(this.facingRight, this.facingNormal).normalize();
-    this.facingBasis.makeBasis(
-      this.facingRight,
-      this.facingNormal,
-      this.facingDown,
-    );
+    if (this.cameraFacingSurface === 'y') {
+      this.facingBasis.makeBasis(
+        this.facingRight,
+        this.facingNormal,
+        this.facingDown,
+      );
+    } else {
+      this.facingUp.copy(this.facingDown).multiplyScalar(-1);
+      this.facingBasis.makeBasis(
+        this.facingRight,
+        this.facingUp,
+        this.facingNormal,
+      );
+    }
     this.facingTargetQuaternion.setFromRotationMatrix(this.facingBasis);
+    if (this.cameraFacingSurface === 'z') {
+      this.facingAdjustmentQuaternion.setFromAxisAngle(
+        COMPASS_TURN_AXIS,
+        sample.yaw,
+      );
+      this.facingTargetQuaternion.multiply(this.facingAdjustmentQuaternion);
+    }
     this.facingWorldQuaternion.slerp(
       this.facingTargetQuaternion,
       sample.cameraSpaceBlend,

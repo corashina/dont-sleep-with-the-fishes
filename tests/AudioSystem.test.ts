@@ -145,7 +145,7 @@ describe('AudioSystem', () => {
     audio.eventItem('map');
 
     expect(backend.voices.map(({ id }) => id)).toEqual([
-      'tapeRepair',
+      'ductTapePickup',
       'flareGun',
       'shotgun',
       'flashlight',

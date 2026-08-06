@@ -1,9 +1,15 @@
 import { clamp01, pulse, smoothstep } from '../animationMath';
-import { scaleEventItemDuration } from '../eventItemTiming';
+import { scaleEventItemDuration, scaleThrownItemDuration } from '../eventItemTiming';
 
 export const SNATCHER_REVEAL_DURATION = 2.5;
 export const SNATCHER_ITEM_DURATION = scaleEventItemDuration(1.15);
 export const SNATCHER_REACTION_DURATION = 1.2;
+
+export function snatcherItemDuration(choiceId: string): number {
+  return choiceId === 'swimRing' || choiceId === 'fishingNet'
+    ? scaleThrownItemDuration(1.15)
+    : SNATCHER_ITEM_DURATION;
+}
 
 export type SnatcherItemEffectKind =
   | 'none'

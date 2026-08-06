@@ -26,8 +26,14 @@ export type MenuSignCanvasFactory = () => MenuSignCanvasSurface;
 export type MenuSignAction = 'start' | 'guide';
 
 export interface MenuSignsComponent extends MenuSceneComponent {
-  readonly startHitTarget: Mesh<BoxGeometry, MeshStandardMaterial>;
-  readonly guideHitTarget: Mesh<BoxGeometry, MeshStandardMaterial>;
+  readonly startHitTarget: Mesh<
+    BoxGeometry,
+    MeshStandardMaterial | MeshStandardMaterial[]
+  >;
+  readonly guideHitTarget: Mesh<
+    BoxGeometry,
+    MeshStandardMaterial | MeshStandardMaterial[]
+  >;
   setStartHighlighted(active: boolean): void;
   setGuideHighlighted(active: boolean): void;
 }
@@ -46,9 +52,10 @@ interface WoodenSignSpec {
 
 interface WoodenSignParts {
   readonly root: Group;
-  readonly board: Mesh<BoxGeometry, MeshStandardMaterial>;
+  readonly board: Mesh<BoxGeometry, MeshStandardMaterial[]>;
   readonly texture: CanvasTexture;
   readonly boardMaterial: MeshStandardMaterial;
+  readonly edgeMaterial: MeshStandardMaterial;
   readonly postMaterial: MeshStandardMaterial;
 }
 
@@ -61,8 +68,8 @@ function browserCanvas(): MenuSignCanvasSurface {
 
 export class MenuSigns implements MenuSignsComponent {
   readonly root = new Group();
-  readonly startHitTarget: Mesh<BoxGeometry, MeshStandardMaterial>;
-  readonly guideHitTarget: Mesh<BoxGeometry, MeshStandardMaterial>;
+  readonly startHitTarget: Mesh<BoxGeometry, MeshStandardMaterial[]>;
+  readonly guideHitTarget: Mesh<BoxGeometry, MeshStandardMaterial[]>;
   readonly textures: readonly [CanvasTexture, CanvasTexture];
 
   private readonly startSign: WoodenSignParts;
@@ -163,6 +170,11 @@ export class MenuSigns implements MenuSignsComponent {
       emissive: 0x000000,
       emissiveIntensity: 0,
     });
+    const edgeMaterial = new MeshStandardMaterial({
+      color: 0x36251b,
+      roughness: 1,
+      metalness: 0,
+    });
     const postMaterial = new MeshStandardMaterial({
       color: 0x4b3425,
       roughness: 1,
@@ -172,9 +184,17 @@ export class MenuSigns implements MenuSignsComponent {
     this.geometries.add(leftPostGeometry);
     this.geometries.add(rightPostGeometry);
     this.materials.add(boardMaterial);
+    this.materials.add(edgeMaterial);
     this.materials.add(postMaterial);
 
-    const board = new Mesh(boardGeometry, boardMaterial);
+    const board = new Mesh(boardGeometry, [
+      edgeMaterial,
+      edgeMaterial,
+      edgeMaterial,
+      edgeMaterial,
+      boardMaterial,
+      edgeMaterial,
+    ]);
     board.name = `${spec.name}-board`;
     board.position.set(0, spec.boardHeight, 0);
     const leftPost = new Mesh(leftPostGeometry, postMaterial);
@@ -191,13 +211,16 @@ export class MenuSigns implements MenuSignsComponent {
     root.position.set(...spec.position);
     root.rotation.set(...spec.rotation);
     root.add(board, leftPost, rightPost);
-    return { root, board, texture, boardMaterial, postMaterial };
+    return { root, board, texture, boardMaterial, edgeMaterial, postMaterial };
   }
 
   private setSignHighlighted(sign: WoodenSignParts, active: boolean): void {
     sign.boardMaterial.color.setHex(active ? 0xffe8bf : 0xffffff);
     sign.boardMaterial.emissive.setHex(active ? 0x6b431c : 0x000000);
     sign.boardMaterial.emissiveIntensity = active ? 0.72 : 0;
+    sign.edgeMaterial.color.setHex(active ? 0x765637 : 0x36251b);
+    sign.edgeMaterial.emissive.setHex(active ? 0x4b2f16 : 0x000000);
+    sign.edgeMaterial.emissiveIntensity = active ? 0.58 : 0;
     sign.postMaterial.color.setHex(active ? 0x765637 : 0x4b3425);
     sign.postMaterial.emissive.setHex(active ? 0x4b2f16 : 0x000000);
     sign.postMaterial.emissiveIntensity = active ? 0.58 : 0;

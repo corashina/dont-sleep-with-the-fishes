@@ -10,6 +10,7 @@ import { EventItemEffects } from '../src/survival/EventItemEffects';
 import { EventItemUseAdapter } from '../src/survival/EventItemUseAdapter';
 import {
   createEventItemUseSample,
+  sampleEventItemUse,
   type EventItemEffectKind,
 } from '../src/survival/eventItemUseChoreography';
 
@@ -21,7 +22,6 @@ const EFFECT_KINDS: readonly EventItemEffectKind[] = [
   'bucket-cover',
   'flare',
   'chain',
-  'umbrella',
   'flashlight',
   'shotgun-smoke',
 ];
@@ -241,6 +241,129 @@ describe('EventItemUseAdapter', () => {
     adapter.dispose();
   });
 
+  it('keeps a lifted map fixed while the camera looks around', () => {
+    const scene = new Group();
+    const camera = new PerspectiveCamera(62, 1.6, 0.1, 100);
+    camera.position.set(0.4, 1.7, 0.8);
+    camera.rotation.set(-0.12, 0.24, 0.03, 'YXZ');
+    scene.add(camera);
+    const actorParent = new Group();
+    scene.add(actorParent);
+    const { actor } = createActor(
+      actorParent,
+      'map-1' as ItemInstanceId,
+      new Vector3(-0.3, 0.2, -0.5),
+    );
+    const adapter = new EventItemUseAdapter(camera, new EventItemEffects());
+    const sample = createEventItemUseSample();
+    sample.cameraSpaceBlend = 1;
+    sample.viewY = -0.2;
+    sample.viewZ = -0.58;
+
+    adapter.begin(actor, 'map', null);
+    adapter.apply(sample);
+    const heldPosition = actor.root.getWorldPosition(new Vector3());
+    const heldRotation = actor.root.getWorldQuaternion(new Quaternion());
+
+    sample.cameraYaw = 0.2;
+    sample.cameraPitch = 0.26;
+    adapter.apply(sample);
+
+    expectVectorCloseTo(actor.root.getWorldPosition(new Vector3()), heldPosition);
+    expect(actor.root.getWorldQuaternion(new Quaternion()).angleTo(heldRotation))
+      .toBeCloseTo(0);
+    adapter.dispose();
+  });
+
+  it('faces the compass dial directly toward the camera', () => {
+    const scene = new Group();
+    const camera = new PerspectiveCamera(62, 1.6, 0.1, 100);
+    scene.add(camera);
+    const actorParent = new Group();
+    scene.add(actorParent);
+    const { actor } = createActor(
+      actorParent,
+      'compass-1' as ItemInstanceId,
+      new Vector3(0.4, -0.2, -0.7),
+    );
+    const adapter = new EventItemUseAdapter(camera, new EventItemEffects());
+    const sample = createEventItemUseSample();
+    sample.cameraSpaceBlend = 1;
+    sample.viewY = 0.04;
+    sample.viewZ = -0.44;
+
+    adapter.begin(actor, 'compass', null);
+    adapter.apply(sample);
+
+    const actorPosition = actor.root.getWorldPosition(new Vector3());
+    const toCamera = camera.getWorldPosition(new Vector3())
+      .sub(actorPosition)
+      .normalize();
+    const dialNormal = new Vector3(0, 0, 1)
+      .applyQuaternion(actor.root.getWorldQuaternion(new Quaternion()))
+      .normalize();
+    expect(dialNormal.dot(toCamera)).toBeGreaterThan(0.995);
+
+    sample.yaw = 0.14;
+    adapter.apply(sample);
+    const leftNormal = new Vector3(0, 0, 1)
+      .applyQuaternion(actor.root.getWorldQuaternion(new Quaternion()));
+    sample.yaw = -0.14;
+    adapter.apply(sample);
+    const rightNormal = new Vector3(0, 0, 1)
+      .applyQuaternion(actor.root.getWorldQuaternion(new Quaternion()));
+    expect(leftNormal.x).toBeGreaterThan(0);
+    expect(rightNormal.x).toBeLessThan(0);
+
+    adapter.dispose();
+  });
+
+  it('aligns Binoculars with the eyes before looking at the event target', () => {
+    const scene = new Group();
+    const camera = new PerspectiveCamera(62, 1.6, 0.1, 100);
+    camera.position.set(0.4, 1.7, 0.8);
+    camera.rotation.set(-0.08, 0.16, 0, 'YXZ');
+    scene.add(camera);
+    const actorParent = new Group();
+    scene.add(actorParent);
+    const { actor } = createActor(
+      actorParent,
+      'spyglass-1' as ItemInstanceId,
+      new Vector3(-0.3, 0.2, -0.5),
+    );
+    const aimTarget = new Group();
+    aimTarget.position.set(5, 3.2, -9);
+    scene.add(aimTarget);
+    const adapter = new EventItemUseAdapter(camera, new EventItemEffects());
+    const close = createEventItemUseSample();
+    sampleEventItemUse('binocular-look', 'spyglass', 0.52, close);
+
+    adapter.begin(actor, 'spyglass', aimTarget);
+    adapter.apply(close);
+
+    const toCamera = camera.getWorldPosition(new Vector3())
+      .sub(actor.root.getWorldPosition(new Vector3()))
+      .normalize();
+    const eyeAxis = new Vector3(0, 0, 1)
+      .applyQuaternion(actor.root.getWorldQuaternion(new Quaternion()))
+      .normalize();
+    expect(eyeAxis.dot(toCamera)).toBeGreaterThan(0.995);
+
+    const looking = createEventItemUseSample();
+    sampleEventItemUse('binocular-look', 'spyglass', 1, looking);
+    const cameraPosition = camera.position.clone();
+    adapter.apply(looking);
+    camera.updateWorldMatrix(true, false);
+    const expectedDirection = aimTarget.getWorldPosition(new Vector3())
+      .sub(camera.getWorldPosition(new Vector3()))
+      .normalize();
+    expect(camera.getWorldDirection(new Vector3()).dot(expectedDirection))
+      .toBeGreaterThan(0.999);
+    expect(camera.position).toEqual(cameraPosition);
+
+    adapter.dispose();
+  });
+
   it('restores the base field of view without releasing the caller actor', () => {
     const cameraParent = new Group();
     cameraParent.position.set(1.2, -0.7, 2.4);
@@ -327,7 +450,7 @@ function expectAimAccuracy(actor: BorrowedSupplyActor, aimTarget: Group): void {
   const expected = aimTarget.getWorldPosition(new Vector3()).sub(origin);
   expected.y = 0;
   expected.normalize();
-  const actual = new Vector3(-1, 0, 0)
+  const actual = new Vector3(1, 0, 0)
     .applyQuaternion(actor.root.getWorldQuaternion(new Quaternion()))
     .normalize();
   expect(actual.dot(expected)).toBeGreaterThan(0.995);

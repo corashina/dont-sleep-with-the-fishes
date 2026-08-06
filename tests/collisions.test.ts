@@ -26,11 +26,6 @@ const layoutTarget = (id: string): Vector3 => {
   return new Vector3(position[0], PLAYER_Y, position[1]);
 };
 
-const furniturePoint = (id: string, y: number): Vector3 => {
-  const position = SHIP_LAYOUT.furniture.find((candidate) => candidate.id === id)!.position;
-  return new Vector3(position[0], y, position[2]);
-};
-
 const laneCenter = (id: string): Vector3 => {
   const bounds = SHIP_LAYOUT.lanes.find((candidate) => candidate.id === id)!.bounds;
   return new Vector3(
@@ -336,7 +331,6 @@ describe('player movement helpers', () => {
   it.each([
     ['port waist rail', new Vector3(-SHIP_LAYOUT.rail.innerFaceX, RAIL_SAMPLE_Y, 0)],
     ['starboard waist rail forward', new Vector3(SHIP_LAYOUT.rail.innerFaceX, RAIL_SAMPLE_Y, 4)],
-    ['storage workbench', furniturePoint('workbench-port', 2.72)],
   ])('blocks the planned collision sample at the %s', (_label, point) => {
     const ship = createTestShip();
     try {

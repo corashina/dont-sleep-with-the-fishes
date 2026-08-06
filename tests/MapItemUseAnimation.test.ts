@@ -22,10 +22,10 @@ function returnSample(progress: number) {
 describe('map item use animation', () => {
   it('lifts the map before the camera turns left and right', () => {
     const lifted = useSample(0.34);
-    const beforeLook = useSample(0.5);
-    const leftLook = useSample(0.61);
+    const beforeLook = useSample(0.43);
+    const leftLook = useSample(0.58);
     const rightLook = useSample(0.81);
-    const centered = useSample(0.92);
+    const centered = useSample(0.96);
 
     expect(lifted.cameraSpaceBlend).toBe(1);
     expect(lifted.viewY).toBeCloseTo(-0.2);
@@ -36,11 +36,12 @@ describe('map item use animation', () => {
     expect(lifted.scaleZ).toBeCloseTo(1.5);
     expect(lifted.cameraPitch).toBe(0);
     expect(beforeLook.cameraYaw).toBe(0);
-    expect(leftLook.cameraYaw).toBeCloseTo(0.055);
-    expect(rightLook.cameraYaw).toBeCloseTo(-0.055);
+    expect(leftLook.cameraYaw).toBeCloseTo(0.2);
+    expect(rightLook.cameraYaw).toBeCloseTo(-0.2);
     expect(centered.cameraYaw).toBe(0);
-    expect(leftLook.cameraPitch).toBe(0);
-    expect(rightLook.cameraPitch).toBe(0);
+    expect(leftLook.cameraPitch).toBeCloseTo(0.26);
+    expect(rightLook.cameraPitch).toBeCloseTo(0.26);
+    expect(centered.cameraPitch).toBe(0);
     expect(leftLook.roll).toBe(0);
     expect(rightLook.roll).toBe(0);
   });

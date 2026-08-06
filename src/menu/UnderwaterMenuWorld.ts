@@ -26,10 +26,13 @@ import {
 } from 'three';
 import type { MenuModelInstance, MenuModelLibrary } from './MenuModelLibrary';
 import type { MenuModelId } from './menuModelManifest';
+import { enableItemAmbientOcclusionOccluder } from '../rendering/ItemAmbientOcclusion';
 import {
   MENU_CAMERA_POSITION,
   MENU_CAMERA_TARGET,
+  MENU_SEABED_POSITION,
   MENU_MODEL_PLACEMENTS,
+  menuSeabedHeight,
   type MenuGroundPlacement,
 } from './MenuSceneLayout';
 import { DistantSeabed } from './DistantSeabed';
@@ -41,6 +44,7 @@ import {
 } from './MenuSigns';
 import { SunkenDorothyWreck } from './SunkenDorothyWreck';
 import {
+  type MenuFishActor,
   type MenuSharkActor,
   type UnderwaterMenuActors,
 } from './UnderwaterMenuAnimator';
@@ -102,6 +106,7 @@ export class UnderwaterMenuWorld {
   readonly particles: UnderwaterParticles;
   readonly sharks: readonly [MenuSharkActor, MenuSharkActor];
   readonly fishSchools: readonly [Group, Group];
+  readonly fish: readonly MenuFishActor[];
   readonly actors: UnderwaterMenuActors;
 
   private readonly signRaycaster = new Raycaster();
@@ -137,6 +142,7 @@ export class UnderwaterMenuWorld {
     let sharkOne: MenuModelInstance;
     let sharkTwo: MenuModelInstance;
     let fishSchools: readonly [Group, Group];
+    let fish: readonly MenuFishActor[];
     let signs: MenuSignsComponent;
     let dorothy: MenuSceneComponent;
     let distantSeabed: MenuSceneComponent;
@@ -167,10 +173,10 @@ export class UnderwaterMenuWorld {
       }
       sharkOne = this.createModel(models, 'shark');
       sharkTwo = this.createModel(models, 'shark');
-      fishSchools = [
-        this.createFishSchool(models, 0),
-        this.createFishSchool(models, 1),
-      ];
+      const firstFishSchool = this.createFishSchool(models, 0);
+      const secondFishSchool = this.createFishSchool(models, 1);
+      fishSchools = [firstFishSchool.root, secondFishSchool.root];
+      fish = [...firstFishSchool.fish, ...secondFishSchool.fish];
       signs = components.createSigns();
       this.components.push(signs);
       dorothy = components.createDorothyWreck();
@@ -199,6 +205,7 @@ export class UnderwaterMenuWorld {
       { root: sharkTwo.root, clip: sharkTwoClip },
     ];
     this.fishSchools = fishSchools;
+    this.fish = fish;
 
     this.plants = new UnderwaterPlantField();
     this.particles = new UnderwaterParticles();
@@ -230,10 +237,12 @@ export class UnderwaterMenuWorld {
       hemisphereLight,
       directionalLight,
     );
+    enableItemAmbientOcclusionOccluder(this.root);
 
     this.actors = {
       sharks: this.sharks,
       fishSchools: this.fishSchools,
+      fish: this.fish,
       setPlantTime: (time) => this.plants.setTime(time),
       setBubbleTime: (time) => this.particles.setBubbleTime(time),
       setMatterTime: (time) => {
@@ -322,22 +331,29 @@ export class UnderwaterMenuWorld {
     }
   }
 
-  private createFishSchool(models: ModelFactory, schoolIndex: number): Group {
+  private createFishSchool(
+    models: ModelFactory,
+    schoolIndex: number,
+  ): { readonly root: Group; readonly fish: readonly MenuFishActor[] } {
     const school = new Group();
+    const actors: MenuFishActor[] = [];
     school.name = `menu:fish-school-${schoolIndex + 1}`;
     for (let fishIndex = 0; fishIndex < 6; fishIndex += 1) {
-      const id = fishIndex % 2 === 0 ? 'sardine' : 'clownfish';
-      const fish = this.createModel(models, id).root;
-      fish.name = `menu:fish-school-${schoolIndex + 1}-fish-${fishIndex + 1}`;
-      fish.position.set(
+      const instance = this.createModel(models, 'redSnapper');
+      const clip = instance.animations.find(({ name }) => name === 'Armature|Swim');
+      if (!clip) throw new Error('Menu fish require the Armature|Swim clip');
+      const slot = new Group();
+      slot.name = `menu:fish-school-${schoolIndex + 1}-fish-${fishIndex + 1}`;
+      slot.position.set(
         (fishIndex - 2.5) * 0.72,
         ((fishIndex + schoolIndex) % 3 - 1) * 0.34,
         (fishIndex % 2) * 0.8 - 0.4,
       );
-      fish.rotation.y = fishIndex % 2 === 0 ? 0.08 : -0.12;
-      school.add(fish);
+      slot.add(instance.root);
+      school.add(slot);
+      actors.push({ root: instance.root, clip });
     }
-    return school;
+    return { root: school, fish: actors };
   }
 
   private placeModel(
@@ -361,12 +377,10 @@ export class UnderwaterMenuWorld {
     for (let index = 0; index < position.count; index += 1) {
       const x = position.getX(index);
       const z = position.getZ(index);
-      const dune = Math.sin(x * 0.12) * 0.22
-        + Math.cos(z * 0.16) * 0.18
-        + Math.sin((x + z) * 0.08) * 0.14;
-      const ripple = Math.sin(z * 1.35 + Math.sin(x * 0.18)) * 0.045
-        + Math.sin(x * 0.75 + z * 0.31) * 0.025;
-      const height = dune + ripple;
+      const height = menuSeabedHeight(
+        x + MENU_SEABED_POSITION[0],
+        z + MENU_SEABED_POSITION[2],
+      ) - MENU_SEABED_POSITION[1];
       position.setY(index, height);
       const shade = 0.88 + Math.sin(x * 0.31 + z * 0.19) * 0.055
         + Math.cos(z * 0.47) * 0.035;
@@ -386,7 +400,7 @@ export class UnderwaterMenuWorld {
     this.ownedMaterials.add(material);
     const seabed = new Mesh(geometry, material);
     seabed.name = 'menu:seabed';
-    seabed.position.set(0, -0.46, -25);
+    seabed.position.set(...MENU_SEABED_POSITION);
     seabed.receiveShadow = true;
     return seabed;
   }

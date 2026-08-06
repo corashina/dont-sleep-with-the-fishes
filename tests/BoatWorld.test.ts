@@ -1476,8 +1476,7 @@ describe('BoatWorld helpers', () => {
       world.stageEvent(eventId);
       expect(doubles.get(eventId)!.stage).toHaveBeenCalledOnce();
     }
-    expect(createEventModel).toHaveBeenCalledWith('riggedHand');
-    expect(createEventModel).toHaveBeenCalledTimes(FOCUSED_EVENT_IDS.length + 2);
+    expect(createEventModel).toHaveBeenCalledTimes(FOCUSED_EVENT_IDS.length + 1);
 
     world.dispose();
     propModels.dispose();
@@ -3677,9 +3676,7 @@ describe('BoatWorld helpers', () => {
     const flarePeak = supernaturalItemUseDuration('ghosts', 'flareGun')! * 0.47;
     world.update(flarePeak, flarePeak);
     const flareFlash = world.scene.getObjectByName('supernatural-flare-flash')!;
-    expect(flareFlash.visible).toBe(true);
-    const flareSize = boundsRelativeTo(flareFlash).getSize(new Vector3());
-    expect(Math.max(flareSize.x, flareSize.y)).toBeLessThanOrEqual(1.6);
+    expect(flareFlash.visible).toBe(false);
     const flareDuration = supernaturalItemUseDuration('ghosts', 'flareGun')!;
     const useDuration = Math.max(
       flareDuration,
@@ -3936,6 +3933,13 @@ describe('BoatWorld helpers', () => {
     expect(borrowActor).toHaveBeenNthCalledWith(1, umbrella.instanceId);
     expect(borrowActor).toHaveBeenNthCalledWith(2, telescope.instanceId);
     expect(camera.fov).toBeLessThan(65);
+    camera.updateWorldMatrix(true, false);
+    const moonTarget = world.scene.getObjectByName('moon-event-item-aim-target')!;
+    const moonDirection = moonTarget.getWorldPosition(new Vector3())
+      .sub(camera.getWorldPosition(new Vector3()))
+      .normalize();
+    expect(camera.getWorldDirection(new Vector3()).dot(moonDirection))
+      .toBeGreaterThan(0.999);
     world.dispose();
     propModels.dispose();
     borrowActor.mockRestore();

@@ -1,7 +1,7 @@
 import type { ItemId } from '../game/ItemState';
 import { clamp01, pulse, smoothstep } from './animationMath';
 import { eventItemMotionProfile, type EventItemMass } from './eventItemMotionProfile';
-import { scaleEventItemDuration } from './eventItemTiming';
+import { scaleEventItemDuration, scaleThrownItemDuration } from './eventItemTiming';
 
 export type EventItemUseContext =
   | 'base' | 'throw-target' | 'tape-stretch' | 'compass-search' | 'map-read'
@@ -12,7 +12,7 @@ export type EventItemUseContext =
 
 export type EventItemEffectKind =
   | 'none' | 'tape' | 'binocular-mask' | 'net' | 'bucket-cover'
-  | 'flare' | 'chain' | 'umbrella' | 'flashlight' | 'shotgun-smoke';
+  | 'flare' | 'chain' | 'flashlight' | 'shotgun-smoke';
 
 export type EventItemDisposition = 'recover' | 'broken' | 'depart';
 
@@ -21,6 +21,17 @@ const ANTICIPATE = Symbol('event-item-anticipate');
 const ITEM_LIFT_START = 0.08;
 const MAP_LIFT_COMPLETION = 0.34;
 const MAP_LOOK_COMPLETION = 0.44;
+const FLASHLIGHT_MORSE_INTERVALS = Object.freeze([
+  [0.42, 0.438], [0.456, 0.474], [0.492, 0.51],
+  [0.564, 0.618], [0.636, 0.69], [0.708, 0.762],
+  [0.816, 0.834], [0.852, 0.87], [0.888, 0.906],
+] as const);
+const FLASHLIGHT_MORSE_CUE_PROGRESSES = Object.freeze([
+  0.42, 0.456, 0.492, 0.564, 0.636, 0.708, 0.816, 0.852, 0.888,
+]);
+const SHOTGUN_ACTION_CUE_PROGRESSES = Object.freeze([0.46]);
+const FLARE_GUN_ACTION_CUE_PROGRESSES = Object.freeze([0.46]);
+const NO_ACTION_CUE_PROGRESSES: readonly number[] = Object.freeze([]);
 type StagedEventItemUseSample = EventItemUseSample & {
   [MOTION_PROFILE]?: ReturnType<typeof eventItemMotionProfile>;
   [ANTICIPATE]?: number;
@@ -39,6 +50,7 @@ export interface EventItemUseSample {
   scaleZ: number;
   cameraYaw: number;
   cameraPitch: number;
+  cameraTargetBlend: number;
   fovScale: number;
   primaryEffect: number;
   secondaryEffect: number;
@@ -47,6 +59,8 @@ export interface EventItemUseSample {
   targetBlend: number;
   ballisticFlight: boolean;
   flightArc: number;
+  effectTravel: number;
+  effectArc: number;
   itemVisible: boolean;
 }
 
@@ -82,6 +96,7 @@ export function createEventItemUseSample(): EventItemUseSample {
     scaleZ: 1,
     cameraYaw: 0,
     cameraPitch: 0,
+    cameraTargetBlend: 0,
     fovScale: 1,
     primaryEffect: 0,
     secondaryEffect: 0,
@@ -90,6 +105,8 @@ export function createEventItemUseSample(): EventItemUseSample {
     targetBlend: 0,
     ballisticFlight: false,
     flightArc: 0,
+    effectTravel: 0,
+    effectArc: 0,
     itemVisible: true,
   };
 }
@@ -157,12 +174,12 @@ export function resolveEventItemUseContext(
 export function eventItemUseDuration(context: EventItemUseContext): number {
   switch (context) {
     case 'base': return scaleEventItemDuration(1.35);
-    case 'throw-target': return scaleEventItemDuration(1.35);
+    case 'throw-target': return scaleThrownItemDuration(1.35);
     case 'tape-stretch': return scaleEventItemDuration(1.45);
     case 'compass-search': return scaleEventItemDuration(1.6);
     case 'map-read': return scaleEventItemDuration(1.55);
     case 'binocular-look': return scaleEventItemDuration(1.7);
-    case 'net-throw': return scaleEventItemDuration(1.5);
+    case 'net-throw': return scaleThrownItemDuration(1.5);
     case 'bucket-scoop': return scaleEventItemDuration(1.45);
     case 'bucket-cover': return scaleEventItemDuration(1.35);
     case 'flare-target': return scaleEventItemDuration(1.5);
@@ -188,6 +205,7 @@ function resetSample(output: EventItemUseSample): void {
   output.scaleZ = 1;
   output.cameraYaw = 0;
   output.cameraPitch = 0;
+  output.cameraTargetBlend = 0;
   output.fovScale = 1;
   output.primaryEffect = 0;
   output.secondaryEffect = 0;
@@ -196,6 +214,8 @@ function resetSample(output: EventItemUseSample): void {
   output.targetBlend = 0;
   output.ballisticFlight = false;
   output.flightArc = 0;
+  output.effectTravel = 0;
+  output.effectArc = 0;
   output.itemVisible = true;
 }
 
@@ -258,15 +278,19 @@ function sampleTapeStretch(
 }
 
 function sampleCompassSearch(
-  output: EventItemUseSample, pickup: number, hold: number, action: number,
+  output: EventItemUseSample,
+  pickup: number,
+  hold: number,
+  progress: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  output.viewY += 0.06 * action;
-  output.yaw = -0.34 * hold + 0.42 * action;
-  output.pitch = 0.28 * hold;
-  output.roll = 0.1 * action;
-  output.cameraYaw = 0.12 * action;
-  output.cameraPitch = -0.05 * action;
+  const readingScale = 1 + 0.45 * hold;
+  const turnLeft = pulse(progress, 0.42, 0.55, 0.68);
+  const turnRight = pulse(progress, 0.64, 0.77, 0.9);
+  output.yaw = 0.14 * (turnLeft - turnRight);
+  output.scaleX = readingScale;
+  output.scaleY = readingScale;
+  output.scaleZ = readingScale;
 }
 
 function sampleMapRead(
@@ -284,24 +308,57 @@ function sampleMapRead(
   output.scaleY = 1 + 0.5 * hold;
   output.scaleZ = 1 + 0.5 * hold;
 
-  const lookLeft = pulse(progress, 0.5, 0.61, 0.72);
-  const lookRight = pulse(progress, 0.7, 0.81, 0.92);
-  output.cameraYaw = 0.055 * (lookLeft - lookRight);
-  output.cameraPitch = 0;
+  const lookYaw = 0.2;
+  const lookPitch = 0.26;
+  if (progress < 0.44) {
+    output.cameraYaw = 0;
+    output.cameraPitch = 0;
+  } else if (progress < 0.56) {
+    const lookUpLeft = smoothstep((progress - 0.44) / 0.12);
+    output.cameraYaw = lookYaw * lookUpLeft;
+    output.cameraPitch = lookPitch * lookUpLeft;
+  } else if (progress < 0.62) {
+    output.cameraYaw = lookYaw;
+    output.cameraPitch = lookPitch;
+  } else if (progress < 0.78) {
+    const lookAcross = smoothstep((progress - 0.62) / 0.16);
+    output.cameraYaw = lookYaw * (1 - lookAcross * 2);
+    output.cameraPitch = lookPitch + Math.sin(lookAcross * Math.PI) * 0.035;
+  } else if (progress < 0.84) {
+    output.cameraYaw = -lookYaw;
+    output.cameraPitch = lookPitch;
+  } else {
+    const center = smoothstep((progress - 0.84) / 0.12);
+    const remainingLook = 1 - center;
+    output.cameraYaw = remainingLook === 0 ? 0 : -lookYaw * remainingLook;
+    output.cameraPitch = lookPitch * remainingLook;
+  }
   output.roll = 0;
 }
 
 function sampleBinocularLook(
-  output: EventItemUseSample, pickup: number, hold: number, action: number,
+  output: EventItemUseSample,
+  pickup: number,
+  hold: number,
+  progress: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  output.effectKind = hold > 0 ? 'binocular-mask' : 'none';
+  const approach = smoothstep((progress - 0.34) / 0.18);
+  const passCamera = smoothstep((progress - 0.52) / 0.16);
+  const mask = smoothstep((progress - 0.5) / 0.14);
+  const targetLook = smoothstep((progress - 0.6) / 0.24);
   output.viewY += 0.2 * hold;
-  output.viewZ -= 0.14 * hold;
-  output.pitch = 0.08 * action;
-  output.fovScale = 1 - 0.28 * hold;
-  output.primaryEffect = hold;
-  output.secondaryEffect = action;
+  output.viewZ += 0.62 * approach + 0.5 * passCamera;
+  output.pitch = 0;
+  output.scaleX = 1 + 0.35 * approach;
+  output.scaleY = 1 + 0.35 * approach;
+  output.scaleZ = 1 + 0.35 * approach;
+  output.effectKind = mask > 0 ? 'binocular-mask' : 'none';
+  output.fovScale = 1 - 0.24 * mask;
+  output.primaryEffect = mask;
+  output.secondaryEffect = passCamera;
+  output.cameraTargetBlend = targetLook;
+  output.itemVisible = progress < 0.68;
 }
 
 function sampleNetThrow(
@@ -346,17 +403,23 @@ function sampleFlare(
   output: EventItemUseSample,
   pickup: number,
   hold: number,
-  action: number,
-  sky: boolean,
+  progress: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  output.effectKind = action > 0 ? 'flare' : 'none';
-  output.viewY += (sky ? 0.52 : 0.16) * action;
-  output.viewX += (sky ? 0.14 : 0.42) * action;
-  output.pitch = (sky ? -0.72 : 0.08) * action;
-  output.yaw = (sky ? -0.12 : -0.36) * action;
-  output.primaryEffect = action;
-  output.secondaryEffect = hold;
+  const ready = pickup;
+  const recoil = pulse(progress, 0.46, 0.5, 0.68);
+  const launched = progress >= FLARE_GUN_ACTION_CUE_PROGRESSES[0]!;
+  const travel = clamp01((progress - FLARE_GUN_ACTION_CUE_PROGRESSES[0]!) / 0.46);
+
+  output.pitch = -1.25 * ready + 0.16 * recoil;
+  output.yaw = 0.18 * ready - 0.16 * recoil;
+  output.roll = Math.PI / 2 * ready - 0.06 * recoil;
+  output.viewZ += 0.28 * recoil;
+  output.effectKind = launched && travel < 1 ? 'flare' : 'none';
+  output.primaryEffect = launched && travel < 1 ? 1 : 0;
+  output.secondaryEffect = recoil;
+  output.effectTravel = travel;
+  output.effectArc = 4 * travel * (1 - travel);
 }
 
 function sampleAnchorDrop(
@@ -390,23 +453,39 @@ function sampleUmbrella(
   shield: boolean,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  output.effectKind = action > 0 ? 'umbrella' : 'none';
-  output.viewY += (shield ? 0.14 : 0.66) * action;
-  output.viewZ -= (shield ? 0.42 : 0.12) * action;
-  output.pitch = (shield ? 0.18 : -0.6) * action;
-  output.yaw = (shield ? -0.32 : 0.08) * action;
-  output.primaryEffect = action;
+  output.viewY += (shield ? 0.14 : 0.2) * action;
+  output.viewZ -= (shield ? 0.42 : 0) * action;
+  output.pitch = (shield ? 0.18 : -0.465) * pickup;
+  output.yaw = (shield ? -0.32 : 0.455) * pickup;
+  output.roll = shield ? 0 : -Math.PI / 2 * pickup;
+}
+
+function sampleFlashlightMorse(progress: number): number {
+  const edge = 0.004;
+  for (let index = 0; index < FLASHLIGHT_MORSE_INTERVALS.length; index += 1) {
+    const interval = FLASHLIGHT_MORSE_INTERVALS[index]!;
+    if (progress < interval[0] || progress > interval[1]) continue;
+    return Math.min(
+      smoothstep((progress - interval[0]) / edge),
+      1 - smoothstep((progress - (interval[1] - edge)) / edge),
+    );
+  }
+  return 0;
 }
 
 function sampleFlashlightFlash(
-  output: EventItemUseSample, pickup: number, hold: number, action: number,
+  output: EventItemUseSample,
+  pickup: number,
+  hold: number,
+  progress: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  output.effectKind = action > 0 ? 'flashlight' : 'none';
-  output.viewX += 0.08 * action;
-  output.yaw = -0.18 * action;
-  output.primaryEffect = action;
-  output.secondaryEffect = pulse(action, 0.12, 0.58, 0.96);
+  const ready = smoothstep((progress - 0.34) / 0.08) * hold;
+  const signal = sampleFlashlightMorse(progress);
+  output.effectKind = signal > 0 ? 'flashlight' : 'none';
+  output.roll = -0.1 * ready - 0.025 * signal;
+  output.primaryEffect = signal;
+  output.secondaryEffect = signal;
 }
 
 function sampleShotgunFire(
@@ -468,18 +547,18 @@ export function sampleEventItemUse(
     case 'base': samplePickupAndHold(output, pickup, hold); break;
     case 'throw-target': sampleThrowTarget(output, pickup, hold, t, itemId); break;
     case 'tape-stretch': sampleTapeStretch(output, pickup, hold, action); break;
-    case 'compass-search': sampleCompassSearch(output, pickup, hold, action); break;
+    case 'compass-search': sampleCompassSearch(output, pickup, hold, t); break;
     case 'map-read': sampleMapRead(output, pickup, hold, t); break;
-    case 'binocular-look': sampleBinocularLook(output, pickup, hold, action); break;
+    case 'binocular-look': sampleBinocularLook(output, pickup, hold, t); break;
     case 'net-throw': sampleNetThrow(output, pickup, hold, action); break;
     case 'bucket-scoop': sampleBucketScoop(output, pickup, hold, action); break;
     case 'bucket-cover': sampleBucketCover(output, pickup, hold, action); break;
-    case 'flare-target': sampleFlare(output, pickup, hold, action, false); break;
-    case 'flare-sky': sampleFlare(output, pickup, hold, action, true); break;
+    case 'flare-target': sampleFlare(output, pickup, hold, t); break;
+    case 'flare-sky': sampleFlare(output, pickup, hold, t); break;
     case 'anchor-drop': sampleAnchorDrop(output, pickup, hold, action, t); break;
     case 'umbrella-overhead': sampleUmbrella(output, pickup, hold, action, false); break;
     case 'umbrella-shield': sampleUmbrella(output, pickup, hold, action, true); break;
-    case 'flashlight-flash': sampleFlashlightFlash(output, pickup, hold, action); break;
+    case 'flashlight-flash': sampleFlashlightFlash(output, pickup, hold, t); break;
     case 'shotgun-fire':
       sampleShotgunFire(
         output,
@@ -503,10 +582,15 @@ function liftCompletionForMass(mass: EventItemMass): number {
   }
 }
 
-export function eventItemActionCueProgress(
+export function eventItemActionCueProgresses(
   context: EventItemUseContext,
-): number | null {
-  return context === 'shotgun-fire' ? 0.46 : null;
+): readonly number[] {
+  if (context === 'shotgun-fire') return SHOTGUN_ACTION_CUE_PROGRESSES;
+  if (context === 'flare-target' || context === 'flare-sky') {
+    return FLARE_GUN_ACTION_CUE_PROGRESSES;
+  }
+  if (context === 'flashlight-flash') return FLASHLIGHT_MORSE_CUE_PROGRESSES;
+  return NO_ACTION_CUE_PROGRESSES;
 }
 
 export function sampleEventItemOutcome(
@@ -533,6 +617,17 @@ export function sampleEventItemOutcome(
     return;
   }
 
+  if (context === 'binocular-look') {
+    resetSample(output);
+    const mask = 1 - smoothstep(t);
+    output.effectKind = mask > 0 ? 'binocular-mask' : 'none';
+    output.primaryEffect = mask;
+    output.fovScale = 1 - 0.24 * mask;
+    output.cameraTargetBlend = mask;
+    output.itemVisible = false;
+    return;
+  }
+
   if (disposition === 'depart') {
     output.targetBlend = t;
     output.aimBlend = profile.aim === 'none' ? 0 : 1 - t;
@@ -553,7 +648,7 @@ export function sampleEventItemOutcome(
   if (context === 'flashlight-flash') {
     resetSample(output);
     const pickup = 1 - smoothstep(t);
-    sampleFlashlightFlash(output, pickup, pickup, 0);
+    sampleFlashlightFlash(output, pickup, pickup, 1);
     output.itemVisible = t < 1;
     return;
   }
@@ -586,6 +681,7 @@ export function eventItemOutcomeDuration(
     ) - ITEM_LIFT_START;
     return eventItemUseDuration('shotgun-fire') * liftWindow;
   }
+  if (itemId === 'spyglass') return scaleEventItemDuration(0.45);
   if (itemId === 'flashlight' && disposition !== 'depart') {
     return eventItemUseDuration('flashlight-flash')
       * (MAP_LIFT_COMPLETION - ITEM_LIFT_START);

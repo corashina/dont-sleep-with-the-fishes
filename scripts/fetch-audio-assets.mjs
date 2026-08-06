@@ -33,6 +33,7 @@ const freesoundSources = [
   ['medkit', 'SecureSubset', '800275'],
   ['hullRepair', 'zbig77', '244985'],
   ['tapeRepair', 'baidonovan', '187338'],
+  ['ductTapePickup', 'Geoff-Bremner-Audio', '795714', 'attribution'],
   ['diveEntry', 'Urkki69', '628350'],
   ['underwaterMovement', 'Tim_Verberne', '484187'],
   ['diveSurface', 'audiosmedia', '243519'],

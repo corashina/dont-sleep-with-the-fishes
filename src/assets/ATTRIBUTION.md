@@ -273,6 +273,7 @@ The dawn file contains the first eight seconds of its source WAVE file.
 | medkit | `medkit.mp3` | [Tape Bandage Rip / SecureSubset](https://freesound.org/people/SecureSubset/sounds/800275/) |
 | hullRepair | `hullRepair.mp3` | [Repair Metal / zbig77](https://freesound.org/people/zbig77/sounds/244985/) |
 | tapeRepair | `tapeRepair.mp3` | [Duct Tape Rip / baidonovan](https://freesound.org/people/baidonovan/sounds/187338/) |
+| ductTapePickup | `ductTapePickup.mp3` | [Tape Handling 8 / Geoff-Bremner-Audio](https://freesound.org/people/Geoff-Bremner-Audio/sounds/795714/), [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | diveEntry | `diveEntry.mp3` | [Jump into Water / Urkki69](https://freesound.org/people/Urkki69/sounds/628350/) |
 | underwaterMovement | `underwaterMovement.mp3` | [Underwater Movement / Tim_Verberne](https://freesound.org/people/Tim_Verberne/sounds/484187/) |
 | diveSurface | `diveSurface.mp3` | [Water Splash / audiosmedia](https://freesound.org/people/audiosmedia/sounds/243519/) |

@@ -29,7 +29,7 @@ import {
   sampleSnatcherItemUse,
   sampleSnatcherReaction,
   sampleSnatcherReveal,
-  SNATCHER_ITEM_DURATION,
+  snatcherItemDuration,
   SNATCHER_REACTION_DURATION,
   SNATCHER_REVEAL_DURATION,
   type SnatcherSample,
@@ -309,7 +309,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
         kind: 'item',
         choiceId,
         elapsed: 0,
-        duration: SNATCHER_ITEM_DURATION,
+        duration: snatcherItemDuration(choiceId),
         resolve,
       };
     });

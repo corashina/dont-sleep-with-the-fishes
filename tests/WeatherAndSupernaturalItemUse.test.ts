@@ -201,7 +201,7 @@ describe('weather and supernatural shared item use', () => {
     }
   });
 
-  it('bounds the Ghosts flare at its exact choreography peak', async () => {
+  it('does not show a second Ghosts flare before the shared shot', async () => {
     const harness = createHarness('flareGun');
     const animator = new SupernaturalEventAnimator(
       new Group(),
@@ -218,9 +218,7 @@ describe('weather and supernatural shared item use', () => {
     animator.update(peakTime, peakTime);
 
     const flare = animator.worldRoot.getObjectByName('supernatural-flare-flash')!;
-    const size = new Box3().setFromObject(flare).getSize(new Vector3());
-    expect(flare.visible).toBe(true);
-    expect(Math.max(size.x, size.y)).toBeLessThanOrEqual(1.6);
+    expect(flare.visible).toBe(false);
 
     animator.update(duration, duration - peakTime);
     await itemUse;

@@ -34,9 +34,9 @@ import type {
 } from '../eventPresentationTypes';
 import { StationaryEventCamera } from '../StationaryEventCamera';
 import {
-  DEATH_STARE_ITEM_DURATION,
   DEATH_STARE_REACTION_DURATION,
   DEATH_STARE_REVEAL_DURATION,
+  deathStareItemDuration,
   identityDeathStareSample,
   sampleDeathStareItemUse,
   sampleDeathStareReaction,
@@ -372,7 +372,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
         kind: 'item',
         choiceId,
         elapsed: 0,
-        duration: DEATH_STARE_ITEM_DURATION,
+        duration: deathStareItemDuration(sceneChoiceId(choiceId)),
         resolve,
       };
     });
