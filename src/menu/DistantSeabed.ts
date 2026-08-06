@@ -36,8 +36,8 @@ const RIDGES = [
 ] as const;
 
 const MOUNTAINS = [
-  { width: 112, depth: 22, z: -44, height: 7.4, phase: 0.35 },
-  { width: 176, depth: 32, z: -70, height: 16.5, phase: 1.7 },
+  { width: 112, depth: 18, z: -36, height: 13.2, phase: 0.35 },
+  { width: 176, depth: 26, z: -58, height: 23.5, phase: 1.7 },
 ] as const;
 
 function terrainEdgeBlend(

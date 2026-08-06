@@ -75,7 +75,11 @@ export class UnderwaterLightShafts {
       this.materials.add(material);
       const mesh = new Mesh(this.geometry, material);
       mesh.name = `menu:light-shaft-${index + 1}`;
-      mesh.position.set(...spec.position);
+      mesh.position.set(
+        spec.position[0],
+        spec.position[1],
+        spec.position[2],
+      );
       mesh.scale.set(spec.width, spec.length, 1);
       mesh.rotation.z = spec.roll;
       mesh.renderOrder = 2;
