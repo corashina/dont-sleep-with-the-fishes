@@ -38,7 +38,7 @@ const MOUNTAINS = [
 const ROCKS = [
   [-11.0, -0.20, -5.5, 0.8, 0.2], [10.5, -0.15, -7.5, 1.0, 1.1],
   [-16.0, -0.25, -11.0, 1.15, 0.6], [16.5, -0.22, -12.5, 0.9, 2.2],
-  [-21.5, -0.30, -17.0, 1.45, 0.4], [22.0, -0.28, -19.5, 1.2, 1.8],
+  [-21.5, -0.30, -16.0, 1.45, 0.4], [22.0, -0.28, -19.5, 1.2, 1.8],
   [-27.0, -0.34, -25.0, 1.0, 2.7], [28.5, -0.32, -27.5, 1.55, 0.9],
   [-34.0, -0.40, -34.0, 1.35, 0.3], [35.5, -0.38, -37.0, 1.7, 1.5],
   [-42.0, -0.45, -46.0, 1.8, 2.5], [43.0, -0.42, -49.0, 1.35, 0.7],
@@ -203,13 +203,11 @@ export class DistantSeabed implements MenuSceneComponent {
       this.detailBounds.setFromObject(mesh);
       const halfX = (this.detailBounds.max.x - this.detailBounds.min.x) * 0.5;
       const halfZ = (this.detailBounds.max.z - this.detailBounds.min.z) * 0.5;
-      const visibleLimit = z > -15
-        ? menuVisibleCenterLimit(
-          this.detailBounds.min.y,
-          this.detailBounds.max.z,
-          halfX,
-        )
-        : Infinity;
+      const visibleLimit = menuVisibleCenterLimit(
+        this.detailBounds.min.y,
+        this.detailBounds.max.z,
+        halfX,
+      );
       mesh.position.x = findClearMenuX(
         x,
         z,
