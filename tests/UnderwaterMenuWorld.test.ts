@@ -17,6 +17,7 @@ import {
 import { expect, it, vi } from 'vitest';
 import { MENU_PROTECTED_FOOTPRINTS } from '../src/menu/MenuSceneLayout';
 import { UnderwaterMenuWorld } from '../src/menu/UnderwaterMenuWorld';
+import { BUBBLE_COUNT } from '../src/menu/UnderwaterParticles';
 import { ITEM_AMBIENT_OCCLUSION_LAYER } from '../src/rendering/ItemAmbientOcclusion';
 
 it('creates the approved fixed composition once', () => {
@@ -187,7 +188,8 @@ it('creates the approved fixed composition once', () => {
   const matter = world.root.getObjectByName('menu:suspended-matter');
   expect(bubbles).toBeInstanceOf(Points);
   expect(matter).toBeInstanceOf(Points);
-  expect((bubbles as Points).geometry.getAttribute('basePosition').count).toBe(144);
+  expect((bubbles as Points).geometry.getAttribute('basePosition').count)
+    .toBe(BUBBLE_COUNT);
   expect((matter as Points).geometry.getAttribute('basePosition').count).toBe(180);
   expect((bubbles as Points).material).toBeInstanceOf(ShaderMaterial);
   const bubbleGeometryDispose = vi.spyOn((bubbles as Points).geometry, 'dispose');

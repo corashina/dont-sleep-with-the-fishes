@@ -1,5 +1,8 @@
 import { expect, it } from 'vitest';
-import { UnderwaterParticles } from '../src/menu/UnderwaterParticles';
+import {
+  BUBBLE_COUNT,
+  UnderwaterParticles,
+} from '../src/menu/UnderwaterParticles';
 
 function ranges(values: Float32Array): {
   readonly x: readonly [number, number];
@@ -20,22 +23,6 @@ function ranges(values: Float32Array): {
   return { x: [minX, maxX], y: [minY, maxY], z: [minZ, maxZ] };
 }
 
-function expectedBubblePosition(index: number): readonly [number, number, number] {
-  const column = index % 12;
-  const row = Math.floor(index / 12);
-  const horizontal = column / 11;
-  const vertical = row / 11;
-  const depthBand = (column * 5 + row * 7) % 8;
-  const spread = 7.5 + depthBand * 4.2;
-  const jitterX = ((index * 17) % 11 - 5) * 0.11;
-  const jitterY = ((index * 13) % 9 - 4) * 0.07;
-  return [
-    (horizontal * 2 - 1) * spread + jitterX,
-    -0.55 + vertical * 9.1 + jitterY,
-    4.4 - depthBand * 5.1 - (row % 3) * 0.35,
-  ];
-}
-
 it('spreads bubbles across all screen-facing depth bands', () => {
   const first = new UnderwaterParticles();
   const second = new UnderwaterParticles();
@@ -46,6 +33,7 @@ it('spreads bubbles across all screen-facing depth bands', () => {
     second.bubbles.geometry.getAttribute('basePosition').array as Float32Array,
   );
   expect(firstValues).toEqual(secondValues);
+  expect(BUBBLE_COUNT).toBe(264);
 
   const bounds = ranges(Float32Array.from(firstValues));
   expect(bounds.x[0]).toBeLessThan(-28);
@@ -55,24 +43,25 @@ it('spreads bubbles across all screen-facing depth bands', () => {
   expect(bounds.z[0]).toBeLessThan(-30);
   expect(bounds.z[1]).toBeGreaterThan(3);
 
-  const depthBandCounts = Array.from({ length: 8 }, () => 0);
-  for (let index = 0; index < 144; index += 1) {
-    const [expectedX, expectedY, expectedZ] = expectedBubblePosition(index);
+  const particleSize = first.bubbles.geometry.getAttribute('particleSize');
+  const riseSpeed = first.bubbles.geometry.getAttribute('riseSpeed');
+  const sizeValues = Array.from(particleSize.array as Float32Array);
+  const speedValues = Array.from(riseSpeed.array as Float32Array);
+  expect(particleSize.count).toBe(BUBBLE_COUNT);
+  expect(riseSpeed.count).toBe(BUBBLE_COUNT);
+  expect(Math.min(...sizeValues)).toBeCloseTo(0.65);
+  expect(Math.max(...sizeValues)).toBeCloseTo(1.7);
+  expect(Math.min(...speedValues)).toBeCloseTo(0.7);
+  expect(Math.max(...speedValues)).toBeCloseTo(1.6);
+
+  let wreckSourceCount = 0;
+  for (let index = 0; index < BUBBLE_COUNT; index += 1) {
     const offset = index * 3;
     const x = firstValues[offset]!;
-    const y = firstValues[offset + 1]!;
     const z = firstValues[offset + 2]!;
-    expect(x).toBeCloseTo(expectedX, 5);
-    expect(y).toBeCloseTo(expectedY, 5);
-    expect(z).toBeCloseTo(expectedZ, 5);
-
-    const row = Math.floor(index / 12);
-    const depthBand = Math.round((4.4 - (row % 3) * 0.35 - z) / 5.1);
-    expect(depthBand).toBeGreaterThanOrEqual(0);
-    expect(depthBand).toBeLessThan(8);
-    depthBandCounts[depthBand]! += 1;
+    if (x >= -10 && x <= 10 && z >= -22 && z <= -16) wreckSourceCount += 1;
   }
-  expect(depthBandCounts.every((count) => count > 0)).toBe(true);
+  expect(wreckSourceCount).toBeGreaterThanOrEqual(48);
 
   first.dispose();
   second.dispose();
