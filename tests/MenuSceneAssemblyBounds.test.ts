@@ -112,7 +112,7 @@ it('keeps assembled menu details and swept kelp outside model footprints', () =>
   expect(kelpConflicts, 'swept kelp/model intersections').toEqual([]);
 });
 
-it('keeps relocated near details and kelp visible at 1365 by 768', () => {
+it('keeps relocated details and kelp visible at 1365 by 768', () => {
   const camera = new PerspectiveCamera(
     MENU_CAMERA_FIELD_OF_VIEW,
     1365 / 768,
@@ -131,7 +131,6 @@ it('keeps relocated near details and kelp visible at 1365 by 768', () => {
     distant.root.getObjectByName('menu:distant-debris')!,
   ];
   const hiddenDetails = detailGroups.flatMap((group) => group.children)
-    .filter((detail) => detail.position.z > -15)
     .flatMap((detail) => {
       const [minimum, maximum] = horizontalNdcBounds(
         new Box3().setFromObject(detail),
@@ -161,6 +160,29 @@ it('keeps relocated near details and kelp visible at 1365 by 768', () => {
 
   distant.dispose();
   plants.dispose();
-  expect.soft(hiddenDetails, 'near distant details outside 1365x768').toEqual([]);
+  expect.soft(hiddenDetails, 'distant details outside 1365x768').toEqual([]);
   expect(hiddenKelp, 'near swept kelp outside 1365x768').toEqual([]);
+});
+
+it('keeps the full distant debris 4 bounds visible at 1365 by 768', () => {
+  const camera = new PerspectiveCamera(
+    MENU_CAMERA_FIELD_OF_VIEW,
+    1365 / 768,
+    0.08,
+    1000,
+  );
+  camera.position.set(...MENU_CAMERA_POSITION);
+  camera.lookAt(...MENU_CAMERA_TARGET);
+  camera.updateMatrixWorld();
+  camera.updateProjectionMatrix();
+  const distant = new DistantSeabed();
+  const debris = distant.root.getObjectByName('menu:distant-debris-4')!;
+  const [minimum, maximum] = horizontalNdcBounds(
+    new Box3().setFromObject(debris),
+    camera,
+  );
+
+  distant.dispose();
+  expect.soft(minimum, 'left debris edge').toBeGreaterThanOrEqual(-1);
+  expect(maximum, 'right debris edge').toBeLessThanOrEqual(1);
 });
