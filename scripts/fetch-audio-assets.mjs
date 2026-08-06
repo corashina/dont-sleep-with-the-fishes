@@ -129,6 +129,21 @@ async function runPool(entries, worker, width) {
 await mkdir(assetRoot, { recursive: true });
 await runPool(freesoundSources, fetchFreesound, 4);
 
+const menuAmbientDestination = join(assetRoot, 'menuAmbient.flac');
+if (!await hasFile(menuAmbientDestination)) {
+  const pageUrl = 'https://opengameart.org/content/eyes-of-the-ocean';
+  const page = (await fetchBuffer(pageUrl)).toString('utf8');
+  if (!page.includes('CC-BY 4.0')) {
+    throw new Error(`The page did not return its CC-BY 4.0 record: ${pageUrl}`);
+  }
+  await writeFile(
+    menuAmbientDestination,
+    await fetchBuffer(
+      'https://opengameart.org/sites/default/files/dark_eyes_of_the_ocean_0.flac',
+    ),
+  );
+}
+
 const dawnDestination = join(assetRoot, 'dawn.wav');
 if (!await hasFile(dawnDestination)) {
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'fishes-audio-'));
@@ -151,8 +166,11 @@ if (!await hasFile(dawnDestination)) {
 
 const results = await Promise.all([
   ...freesoundSources.map(([id]) => stat(join(assetRoot, `${id}.mp3`))),
+  stat(menuAmbientDestination),
   stat(dawnDestination),
 ]);
 if (results.some(({ size }) => size <= 0)) throw new Error('An audio asset is empty');
 const totalBytes = results.reduce((total, { size }) => total + size, 0);
-process.stdout.write(`Ready: 50 audio files (${(totalBytes / 1024 / 1024).toFixed(1)} MB).\n`);
+process.stdout.write(
+  `Ready: ${results.length} audio files (${(totalBytes / 1024 / 1024).toFixed(1)} MB).\n`,
+);

@@ -114,6 +114,11 @@ describe('launchGame', () => {
     expect(mount.querySelector('.system-screen--loading')).not.toBeNull();
     expect(mount.querySelector('.system-screen h1')?.classList)
       .toContain('ui-role-display');
+    const progress = mount.querySelector<HTMLProgressElement>('.system-loading-progress');
+    expect(progress?.value).toBe(0);
+    expect(progress?.max).toBe(9);
+    await Promise.resolve();
+    expect(progress?.value).toBe(8);
     handle.cancel();
     pending.resolve(models);
     await handle.completion;

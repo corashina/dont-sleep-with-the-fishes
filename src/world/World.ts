@@ -29,6 +29,7 @@ import {
 } from '../ocean/BoatBuoyancy';
 import { OceanRenderer } from '../ocean/OceanRenderer';
 import type { WaterQuality } from '../rendering/waterQuality';
+import { enableItemAmbientOcclusionOccluder } from '../rendering/ItemAmbientOcclusion';
 import { createWaterExclusion } from '../ocean/WaterExclusion';
 import {
   DEFAULT_WAVES,
@@ -420,6 +421,7 @@ export class World {
         visual.rotation.y = placement.rotationY;
         visual.scale.set(...spec.visualScale);
         visual.add(shipFurniture.clone(spec.modelId));
+        enableItemAmbientOcclusionOccluder(visual);
         this.physicsObjectsRoot.add(visual);
         return visual;
       });

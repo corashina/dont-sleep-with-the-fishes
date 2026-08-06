@@ -164,9 +164,7 @@ export class GameUI {
       </section>
       <section class="screen pause-screen poster-screen" data-pause>
         <div class="screen__content">
-          <p class="kicker ui-role-context">THE CLOCK IS STILL</p>
           <h2 class="ui-role-display">Back to the deck?</h2>
-          <p class="lead ui-role-narrative">The countdown is stopped while the mouse is released.</p>
           <button type="button" class="primary-action salvage-action ui-role-context" data-resume-button aria-label="Resume">
             RESUME
           </button>
@@ -179,9 +177,7 @@ export class GameUI {
       <section class="screen scavenge-ending-screen poster-screen"
         data-ending role="dialog" aria-modal="true" aria-hidden="true" inert>
         <div class="screen__content">
-          <p class="kicker ui-role-context">ENDING I</p>
           <h2 class="ui-role-display" data-ending-title tabindex="-1">SUNK WITH DOROTHY</h2>
-          <p class="lead ui-role-narrative">You stayed aboard for one trip too many.</p>
           <button type="button" class="primary-action salvage-action ui-role-context"
             data-ending-action hidden>BACK TO MAIN MENU</button>
         </div>

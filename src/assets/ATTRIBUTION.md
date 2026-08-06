@@ -218,8 +218,9 @@ The Tentacle Attack model keeps its source rig and four animation clips.
 
 ## Runtime audio ledger
 
-All audio in this ledger uses
-[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+Audio in this ledger uses
+[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/),
+unless its entry states a different license.
 
 Freesound files use the public high-quality MP3 preview of the approved recording.
 
@@ -231,6 +232,7 @@ The dawn file contains the first eight seconds of its source WAVE file.
 
 | Runtime ID | File | Source / creator |
 |---|---|---|
+| menuAmbient | `menuAmbient.flac` | [Eyes of the Ocean / Tsorthan Grove](https://opengameart.org/content/eyes-of-the-ocean), dark variant, [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | calmOcean | `calmOcean.mp3` | [Calm Ocean Waves / SamsterBirdies](https://freesound.org/people/SamsterBirdies/sounds/578524/) |
 | roughOcean | `roughOcean.mp3` | [Storm Sea Close / frodeims](https://freesound.org/people/frodeims/sounds/616222/) |
 | lightWind | `lightWind.mp3` | [Soft Breeze / Vrymaa](https://freesound.org/people/Vrymaa/sounds/734663/) |

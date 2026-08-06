@@ -14,6 +14,7 @@ import type { AudioBusId, SoundId } from '../src/audio/audioManifest';
 class FakeVoice implements AudioVoice {
   private readonly callbacks: (() => void)[] = [];
   readonly setGain = vi.fn();
+  readonly setPaused = vi.fn();
   readonly stop = vi.fn(() => {
     for (const callback of this.callbacks.splice(0)) callback();
   });
@@ -167,6 +168,7 @@ describe('AudioSystem', () => {
   it('silences game audio while paused and keeps interface feedback', () => {
     const backend = new FakeAudioBackend();
     const scope = AudioSystem.forTest(backend).createScope();
+    const music = scope.play('scavengeChase') as FakeVoice;
     scope.setPaused(true);
     scope.setPaused(false);
     expect(backend.busGains).toEqual([
@@ -177,7 +179,24 @@ describe('AudioSystem', () => {
       ['ambience', 1, 0.05],
       ['effects', 1, 0.05],
     ]);
-    expect(backend.voices.map(({ id }) => id)).toEqual(['pause', 'resume']);
+    expect(music.setPaused.mock.calls).toEqual([[true], [false]]);
+    expect(backend.voices.map(({ id }) => id)).toEqual([
+      'scavengeChase',
+      'pause',
+      'resume',
+    ]);
+  });
+
+  it('starts game voices paused when they are created from a paused scope', () => {
+    const backend = new FakeAudioBackend();
+    const scope = AudioSystem.forTest(backend).createScope();
+    scope.setPaused(true);
+
+    const music = scope.play('scavengeChase') as FakeVoice;
+    const feedback = scope.play('confirm') as FakeVoice;
+
+    expect(music.setPaused).toHaveBeenCalledExactlyOnceWith(true);
+    expect(feedback.setPaused).not.toHaveBeenCalled();
   });
 
   it('disposes scopes before the backend and remains idempotent', () => {

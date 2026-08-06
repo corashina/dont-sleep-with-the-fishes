@@ -28,6 +28,7 @@ import { getSinkingState } from '../src/game/sinking';
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import { resolveLocalMovement } from '../src/player/collisions';
+import { ITEM_AMBIENT_OCCLUSION_LAYER } from '../src/rendering/ItemAmbientOcclusion';
 import {
   ScavengePhysics,
 } from '../src/physics/ScavengePhysics';
@@ -516,6 +517,11 @@ describe('world builders', () => {
       expect(object.parent?.name).toBe('physics-objects');
       expect(physics.objectPoses[index]!.translation.y - object.position.y)
         .toBeCloseTo(SCAVENGE_PHYSICS_OBJECT_SPECS[index]!.visualHalfHeight);
+      object.traverse((child) => {
+        if (child instanceof Mesh) {
+          expect(child.layers.isEnabled(ITEM_AMBIENT_OCCLUSION_LAYER)).toBe(true);
+        }
+      });
     });
 
     world.revealPhysicsObjects();

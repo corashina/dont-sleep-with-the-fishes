@@ -17,6 +17,7 @@ function createHarness() {
     const created: AudioVoice = {
       id,
       setGain: vi.fn(),
+      setPaused: vi.fn(),
       stop: vi.fn((fadeSeconds) => calls.push(`stop:${id}:${fadeSeconds}`)),
       onEnded: vi.fn(),
     };
@@ -57,13 +58,15 @@ const ALARM_EMITTERS: readonly SpatialAudioEmitter[] = Object.freeze([
 ]);
 
 describe('ScavengeAudio', () => {
-  it('starts one synchronized room klaxon at half volume', () => {
+  it('fades the title ambience before one synchronized room klaxon', () => {
     const { audio, calls } = createHarness();
     audio.start();
     audio.beginRun();
     audio.beginRun();
     expect(calls).toEqual([
+      'loop:menuAmbient',
       'loop:roomTone',
+      'stopLoop:menuAmbient:0.8',
       'spatial:shipAlarm:3:0.5',
       'play:scavengeChase',
     ]);
@@ -87,6 +90,7 @@ describe('ScavengeAudio', () => {
     audio.update(null, false, 50);
     audio.update(null, false, 59);
     expect(calls).toEqual([
+      'stopLoop:menuAmbient:0.8',
       'spatial:shipAlarm:3:0.5',
       'play:scavengeChase',
       'stop:scavengeChase:0.08',
@@ -100,6 +104,7 @@ describe('ScavengeAudio', () => {
     audio.update(null, false, 50);
     audio.sink();
     expect(calls).toEqual([
+      'stopLoop:menuAmbient:0.8',
       'spatial:shipAlarm:3:0.5',
       'play:scavengeChase',
       'stop:scavengeChase:0.08',

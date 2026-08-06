@@ -70,6 +70,10 @@ const MIN_ITEM_SEPARATION = 1.25;
 const MAX_BACKTRACK_NODES_PER_ATTEMPT = 256;
 const RANDOM_PLACEMENT_ATTEMPTS = 64;
 const EPSILON = 1e-6;
+const UMBRELLA_FLOOR_ANGLE = -Math.PI / 4;
+const UMBRELLA_REST_TILT = -42.7 * Math.PI / 180;
+const UMBRELLA_REST_MIN_Y = -0.3008;
+const UMBRELLA_REST_MAX_Y = 0.3742;
 
 export const MAX_HEAVY_ITEM_DEPOSIT_DISTANCE = 14;
 
@@ -103,10 +107,15 @@ export function shipItemTransformBounds(
   transform: Pick<ShipItemTransform, 'position' | 'rotation' | 'scale'>,
 ): Box3 {
   const bounds = orientedItemBounds(itemId, transform.rotation);
-  return new Box3(
+  const transformed = new Box3(
     bounds.min.clone().multiplyScalar(transform.scale).add(transform.position),
     bounds.max.clone().multiplyScalar(transform.scale).add(transform.position),
   );
+  if (itemId === 'umbrella') {
+    transformed.min.y = transform.position.y + UMBRELLA_REST_MIN_Y * transform.scale;
+    transformed.max.y = transform.position.y + UMBRELLA_REST_MAX_Y * transform.scale;
+  }
+  return transformed;
 }
 
 function finiteVector(vector: Vector3): boolean {
@@ -301,10 +310,11 @@ function scavengingRestingRotation(itemId: ItemId, surface: ShipItemSurface): Eu
     );
     return new Euler().setFromQuaternion(surfaceOrientation.multiply(lyingOrientation));
   }
-  const rotation = surfaceRotation.clone();
   if (itemId === 'umbrella') {
-    rotation.y -= Math.PI / 4;
-  } else if (itemId === 'captainWhiskers') {
+    return new Euler(0, surfaceRotation.y + UMBRELLA_FLOOR_ANGLE, UMBRELLA_REST_TILT);
+  }
+  const rotation = surfaceRotation.clone();
+  if (itemId === 'captainWhiskers') {
     rotation.y = Math.atan2(surface.position.x, surface.position.z);
   }
   return rotation;
@@ -332,7 +342,7 @@ function surfaceFit(surface: ShipItemSurface, itemId: ItemId): SurfaceFit | unde
   if (itemId === 'captainWhiskers') {
     position.y += CAPTAIN_WHISKERS_SUPPORT_LIFT * scale;
   }
-  position.y -= bounds.min.y * scale;
+  position.y -= (itemId === 'umbrella' ? UMBRELLA_REST_MIN_Y : bounds.min.y) * scale;
   const itemCenter = bounds.getCenter(new Vector3()).multiplyScalar(scale).add(position);
   if (!surface.standingPoints.some((point) => {
     const interactionPoint = point.clone();
