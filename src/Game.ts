@@ -53,12 +53,18 @@ import type { PresentationWeatherId } from './weather/presentationWeather';
 import { AudioSystem } from './audio/AudioSystem';
 import type { EventModelLibrary } from './survival/EventModelLibrary';
 import { createEmptyEventModelLibraryForTest } from './survival/BoatWorld';
+import type { MenuModelLibrary } from './menu/MenuModelLibrary';
+import { MainMenuPhase } from './phases/MainMenuPhase';
 
 export interface GameFactories {
+  createMenu(
+    context: PhaseContext,
+    onComplete: () => void,
+  ): GamePhase;
   createScavenge(
     context: PhaseContext,
     onComplete: (result: Readonly<ScavengeResult>) => void,
-    onRestart: () => void,
+    onReturnToMenu: () => void,
   ): GamePhase;
   createSurvival(
     context: PhaseContext,
@@ -70,8 +76,11 @@ export interface GameFactories {
 }
 
 const PRODUCTION_FACTORIES: GameFactories = {
-  createScavenge: (context, onComplete, onRestart) => (
-    new ScavengePhase(context, onComplete, onRestart)
+  createMenu: (context, onComplete) => (
+    new MainMenuPhase(context, onComplete)
+  ),
+  createScavenge: (context, onComplete, onReturnToMenu) => (
+    new ScavengePhase(context, onComplete, onReturnToMenu)
   ),
   createSurvival: (context, result, seed, onRestart, initialEventId) => (
     new SurvivalPhase(
@@ -87,6 +96,14 @@ const PRODUCTION_FACTORIES: GameFactories = {
 
 type GameClock = Pick<Clock, 'start' | 'getDelta'>;
 
+const disposedMenuModelLibraries = new WeakSet<MenuModelLibrary>();
+
+export function disposeMenuModelLibrary(menuModels: MenuModelLibrary): void {
+  if (disposedMenuModelLibraries.has(menuModels)) return;
+  disposedMenuModelLibraries.add(menuModels);
+  menuModels.dispose();
+}
+
 export const GAME_CAMERA = Object.freeze({
   fov: 65,
   near: 0.08,
@@ -95,6 +112,7 @@ export const GAME_CAMERA = Object.freeze({
 
 export interface GameTestOptions {
   propModels: PropModelLibrary;
+  menuModels: MenuModelLibrary;
   supernaturalEventModels?: EventModelLibrary;
   shipFurniture: ShipFurnitureLibrary;
   skyAssets: SkyAssets;
@@ -112,6 +130,11 @@ export interface GameTestOptions {
   waterQuality?: WaterQualityPreference;
   audioSystem?: AudioSystem;
   featuredEventModels?: SurvivalEventModels;
+  onFatalError?: (error: unknown) => void;
+}
+
+function rethrowFatalError(error: unknown): never {
+  throw error;
 }
 
 function createRandomSeed(): number {
@@ -130,6 +153,7 @@ export class Game {
   private camera!: PerspectiveCamera;
   private clock!: GameClock;
   private propModels!: PropModelLibrary;
+  private menuModels!: MenuModelLibrary;
   private supernaturalEventModels!: EventModelLibrary;
   private shipFurniture!: ShipFurnitureLibrary;
   private skyAssets!: SkyAssets;
@@ -151,6 +175,8 @@ export class Game {
   private seed = 0;
   private phaseGeneration = 0;
   private createSeed!: () => number;
+  private onFatalError!: (error: unknown) => void;
+  private fatalErrorReported = false;
   private onResize!: () => void;
   private animate!: () => void;
 
@@ -162,10 +188,12 @@ export class Game {
     lifeboatAssets: LifeboatAssets,
     shipAssets: ShipAssets,
     eventModels: EventModelLibrary,
+    menuModels: MenuModelLibrary,
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode = 'enabled',
     audioSystem: AudioSystem = AudioSystem.silent(),
     featuredEventModels?: SurvivalEventModelLibrary,
+    onFatalError: (error: unknown) => void = rethrowFatalError,
   ) {
     const renderer = new WebGLRenderer({
       antialias: true,
@@ -207,6 +235,7 @@ export class Game {
         lifeboatAssets,
         shipAssets,
         eventModels,
+        menuModels,
         physicsRuntime,
         physicsMode,
         audioSystem,
@@ -214,6 +243,7 @@ export class Game {
         featuredEventModels ?? null,
         PRODUCTION_FACTORIES,
         createRandomSeed,
+        onFatalError,
       );
     } catch (error) {
       if (!initializationStarted) {
@@ -287,6 +317,7 @@ export class Game {
         animations: () => [],
         dispose: () => undefined,
       } as unknown as EventModelLibrary,
+      options.menuModels,
       options.physicsRuntime,
       options.physicsMode ?? 'enabled',
       options.audioSystem ?? AudioSystem.silent(),
@@ -294,6 +325,7 @@ export class Game {
       null,
       factories,
       options.createSeed ?? createRandomSeed,
+      options.onFatalError ?? rethrowFatalError,
     );
     return game;
   }
@@ -324,6 +356,7 @@ export class Game {
     this.postProcessingConsole = null;
     runCleanupSteps([
       () => outgoing?.dispose(),
+      () => disposeMenuModelLibrary(this.menuModels),
       () => postProcessingConsole?.dispose(),
       () => performanceStats?.dispose(),
       () => this.propModels.dispose(),
@@ -354,6 +387,7 @@ export class Game {
     lifeboatAssets: LifeboatAssets,
     shipAssets: ShipAssets,
     eventModels: EventModelLibrary,
+    menuModels: MenuModelLibrary,
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode,
     audioSystem: AudioSystem,
@@ -361,6 +395,7 @@ export class Game {
     ownedFeaturedEventModels: SurvivalEventModelLibrary | null,
     factories: GameFactories,
     createSeed: () => number,
+    onFatalError: (error: unknown) => void,
   ): void {
     this.renderer = renderer;
     this.sceneRenderer = sceneRenderer;
@@ -373,10 +408,12 @@ export class Game {
     this.lifeboatAssets = lifeboatAssets;
     this.shipAssets = shipAssets;
     this.eventModels = eventModels;
+    this.menuModels = menuModels;
     this.audio = audioSystem;
     this.ownedFeaturedEventModels = ownedFeaturedEventModels;
     this.factories = factories;
     this.createSeed = createSeed;
+    this.onFatalError = onFatalError;
     let maxTextureAnisotropy = 1;
     let resizeListenerRegistered = false;
     try {
@@ -401,6 +438,7 @@ export class Game {
         lifeboatAssets,
         shipAssets,
         eventModels,
+        menuModels,
         physicsRuntime,
         physicsMode,
         audio: audioSystem,
@@ -415,6 +453,7 @@ export class Game {
       this.disposed = false;
       this.elapsed = 0;
       this.phaseGeneration = 0;
+      this.fatalErrorReported = false;
       const showDevelopmentStats = import.meta.env.DEV
         && new URLSearchParams(window.location.search).has('stats');
       this.performanceStats = new PerformanceStats(mount, showDevelopmentStats);
@@ -460,12 +499,11 @@ export class Game {
           },
         );
       }
-      this.seed = this.createSeed();
       this.onResize = () => this.handleResize();
       this.animate = () => this.handleAnimationFrame();
       window.addEventListener('resize', this.onResize);
       resizeListenerRegistered = true;
-      this.activateScavenge(false);
+      this.activateMenu(false);
       this.onResize();
     } catch (error) {
       try {
@@ -488,6 +526,7 @@ export class Game {
         if (resizeListenerRegistered) window.removeEventListener('resize', this.onResize);
       },
       () => activePhase?.dispose(),
+      () => disposeMenuModelLibrary(this.menuModels),
       () => postProcessingConsole?.dispose(),
       () => performanceStats?.dispose(),
       () => this.sceneRenderer.dispose(),
@@ -498,10 +537,25 @@ export class Game {
 
   private activateScavenge(start: boolean): void {
     const generation = ++this.phaseGeneration;
-    const phase = this.factories.createScavenge(
+    const phase = this.createScavengePhase(generation);
+    if (!this.ownsGeneration(generation)) {
+      phase.dispose();
+      return;
+    }
+    this.applyWeatherOverrideOrDispose(phase);
+    this.activePhase = phase;
+    this.synchronizeWeatherState();
+    if (start) {
+      phase.resize(window.innerWidth, window.innerHeight);
+      phase.start();
+    }
+  }
+
+  private activateMenu(start: boolean): void {
+    const generation = ++this.phaseGeneration;
+    const phase = this.factories.createMenu(
       this.context,
-      (result) => this.completeScavenge(generation, result),
-      () => this.restartFrom(generation),
+      () => this.startScavengeFromMenu(generation),
     );
     if (!this.ownsGeneration(generation)) {
       phase.dispose();
@@ -513,6 +567,67 @@ export class Game {
     if (start) {
       phase.resize(window.innerWidth, window.innerHeight);
       phase.start();
+    }
+  }
+
+  private startScavengeFromMenu(generation: number): void {
+    if (!this.ownsGeneration(generation)) return;
+    const nextGeneration = this.phaseGeneration + 1;
+    let nextSeed: number;
+    let scavenge: GamePhase;
+    try {
+      nextSeed = this.createSeed();
+      scavenge = this.createScavengePhase(nextGeneration);
+      this.applyWeatherOverrideOrDispose(scavenge);
+    } catch (error) {
+      this.reportFatalError(error);
+      return;
+    }
+    if (!this.ownsGeneration(generation)) {
+      scavenge.dispose();
+      return;
+    }
+    const menu = this.detachActivePhase();
+    this.resetCamera();
+    this.elapsed = 0;
+    this.seed = nextSeed;
+    this.activePhase = scavenge;
+    this.synchronizeWeatherState();
+    try {
+      menu?.dispose();
+      scavenge.resize(window.innerWidth, window.innerHeight);
+      scavenge.start();
+    } catch (error) {
+      this.reportFatalError(error);
+    }
+  }
+
+  private createScavengePhase(generation: number): GamePhase {
+    return this.factories.createScavenge(
+      this.context,
+      (result) => this.completeScavenge(generation, result),
+      () => this.returnToMenuFromScavenge(generation),
+    );
+  }
+
+  private reportFatalError(error: unknown): void {
+    if (this.disposed || this.fatalErrorReported) return;
+    this.fatalErrorReported = true;
+    this.onFatalError(error);
+  }
+
+  private returnToMenuFromScavenge(generation: number): void {
+    if (!this.ownsGeneration(generation)) return;
+    const scavenge = this.detachActivePhase();
+    try {
+      runCleanupSteps([
+        () => this.exitPointerLock(),
+        () => scavenge?.dispose(),
+        () => this.resetCamera(),
+        () => this.activateMenu(true),
+      ]);
+    } catch (error) {
+      this.reportFatalError(error);
     }
   }
 
@@ -659,6 +774,8 @@ export class Game {
     this.activePhase?.update(this.elapsed, deltaSeconds);
     this.synchronizeWeatherState();
     this.activePhase?.render();
-    this.animationFrame = requestAnimationFrame(this.animate);
+    if (!this.disposed) {
+      this.animationFrame = requestAnimationFrame(this.animate);
+    }
   }
 }

@@ -314,6 +314,7 @@ function testContext(
     waterQuality: createWaterQualityPreference(() => undefined, null),
     camera: new PerspectiveCamera(),
     propModels: {} as PropModelLibrary,
+    menuModels: { dispose: () => undefined } as unknown as PhaseContext['menuModels'],
     supernaturalEventModels: createEmptyEventModelLibraryForTest(),
     shipFurniture: {} as ShipFurnitureLibrary,
     maxTextureAnisotropy: 1,
