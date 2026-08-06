@@ -18,7 +18,13 @@ it('exposes the approved title actions', () => {
   expect(mainStyles).toMatch(/\.menu-title-accessible\s*\{[^}]*clip:\s*rect\(0,\s*0,\s*0,\s*0\)/s);
   expect(mainStyles).toMatch(/\.underwater-menu-screen__content::before\s*\{[^}]*grid-row:\s*1/s);
   expect(mount.querySelector('[data-menu-start]')?.textContent).toContain('START');
-  expect(mount.querySelector('[data-menu-guide-open]')?.textContent).toContain('HOW TO PLAY');
+  const guideTrigger = mount.querySelector('[data-menu-guide-open]')!;
+  expect(guideTrigger.textContent).toContain('HOW TO PLAY');
+  expect(guideTrigger.classList).toContain('menu-guide-accessible');
+  expect(mainStyles).toMatch(/\.menu-guide-accessible\s*\{[^}]*clip:\s*rect\(0,\s*0,\s*0,\s*0\)/s);
+  expect(mainStyles).not.toMatch(/\.underwater-menu-screen \[data-menu-guide-open\]\s*\{[^}]*top:/s);
+  expect(mainStyles).toMatch(/\.underwater-menu-screen\.is-visible\s*\{[^}]*pointer-events:\s*none/s);
+  expect(mainStyles).toMatch(/\.underwater-menu-screen \[data-menu-start\]\s*\{[^}]*pointer-events:\s*auto/s);
   ui.dispose();
 });
 
@@ -43,6 +49,22 @@ it('locks focus inside the guide and restores its opener', () => {
   expect(document.activeElement).toBe(close);
   close.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   expect(document.activeElement).toBe(open);
+  ui.dispose();
+});
+
+it('forwards keyboard focus to the interactive guide sign', () => {
+  const mount = document.createElement('main');
+  document.body.append(mount);
+  const ui = new MenuUI(mount);
+  const onGuideFocusChange = vi.fn();
+  ui.onGuideFocusChange = onGuideFocusChange;
+  const open = mount.querySelector<HTMLButtonElement>('[data-menu-guide-open]')!;
+
+  open.focus();
+  open.blur();
+
+  expect(onGuideFocusChange).toHaveBeenNthCalledWith(1, true);
+  expect(onGuideFocusChange).toHaveBeenNthCalledWith(2, false);
   ui.dispose();
 });
 
@@ -98,5 +120,6 @@ it('uses the viewport height for the title and start layout', () => {
   expect(mainStyles).toMatch(/@media \(max-height: 760px\) and \(min-width: 821px\)\s*\{[\s\S]*?\.how-to-play-board\s*\{[^}]*padding:\s*12px 24px/s);
   expect(mainStyles).toMatch(/\.how-to-play-board\s*\[data-menu-guide-close\]\s*\{[^}]*min-height:\s*44px/s);
   expect(mainStyles).toMatch(/\.menu-title-accessible\s*\{[^}]*clip:\s*rect\(0,\s*0,\s*0,\s*0\)/s);
+  expect(mainStyles).toMatch(/\.menu-guide-accessible\s*\{[^}]*clip:\s*rect\(0,\s*0,\s*0,\s*0\)/s);
   expect(mainStyles).toMatch(/\.underwater-menu-screen__content::before\s*\{[^}]*grid-row:\s*1/s);
 });

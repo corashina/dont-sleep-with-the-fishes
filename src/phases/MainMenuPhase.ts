@@ -89,6 +89,8 @@ export class MainMenuPhase implements GamePhase {
   private started = false;
   private disposed = false;
   private pointerLockListenerRegistered = false;
+  private guidePointerHovered = false;
+  private guideKeyboardFocused = false;
   private readonly handlePointerLockChange = (): void => {
     if (
       this.disposed
@@ -122,6 +124,10 @@ export class MainMenuPhase implements GamePhase {
     this.ui.onStart = () => {
       void this.requestStart();
     };
+    this.ui.onGuideFocusChange = (focused) => {
+      this.guideKeyboardFocused = focused;
+      this.syncGuideHighlight();
+    };
   }
 
   start(): void {
@@ -129,6 +135,10 @@ export class MainMenuPhase implements GamePhase {
     this.started = true;
     document.addEventListener('pointerlockchange', this.handlePointerLockChange);
     this.pointerLockListenerRegistered = true;
+    const canvas = this.context.renderer.domElement;
+    canvas.addEventListener('pointermove', this.handleGuidePointerMove);
+    canvas.addEventListener('pointerleave', this.handleGuidePointerLeave);
+    canvas.addEventListener('click', this.handleGuideClick);
     this.ui.setTransitioning(false);
     this.ui.setFadeProgress(0);
   }
@@ -178,7 +188,22 @@ export class MainMenuPhase implements GamePhase {
           this.handlePointerLockChange,
         );
       },
-      () => { this.ui.onStart = NOOP; },
+      () => {
+        const canvas = this.context.renderer.domElement;
+        canvas.removeEventListener('pointermove', this.handleGuidePointerMove);
+        canvas.removeEventListener('pointerleave', this.handleGuidePointerLeave);
+        canvas.removeEventListener('click', this.handleGuideClick);
+        canvas.style.cursor = '';
+      },
+      () => {
+        this.ui.onStart = NOOP;
+        this.ui.onGuideFocusChange = NOOP;
+      },
+      () => {
+        this.guidePointerHovered = false;
+        this.guideKeyboardFocused = false;
+        this.world.setGuideSignHighlighted(false);
+      },
       () => this.scene.remove(this.context.camera),
       () => this.animator.dispose(),
       () => this.world.dispose(),
@@ -212,8 +237,53 @@ export class MainMenuPhase implements GamePhase {
     if (this.transitioning) return;
     this.ui.clearPointerLockError();
     this.transitioning = true;
+    this.clearGuideInteraction();
     this.fadeElapsed = 0;
     this.ui.setTransitioning(true);
     this.ui.setFadeProgress(0);
+  }
+
+  private readonly handleGuidePointerMove = (event: PointerEvent): void => {
+    this.guidePointerHovered = this.guideSignHit(event);
+    this.context.renderer.domElement.style.cursor = this.guidePointerHovered
+      ? 'pointer'
+      : '';
+    this.syncGuideHighlight();
+  };
+
+  private readonly handleGuidePointerLeave = (): void => {
+    this.guidePointerHovered = false;
+    this.context.renderer.domElement.style.cursor = '';
+    this.syncGuideHighlight();
+  };
+
+  private readonly handleGuideClick = (event: MouseEvent): void => {
+    if (event.button !== 0 || !this.guideSignHit(event)) return;
+    event.preventDefault();
+    this.ui.openGuide();
+  };
+
+  private guideSignHit(event: MouseEvent): boolean {
+    if (this.disposed || this.transitioning) return false;
+    const bounds = this.context.renderer.domElement.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) return false;
+    const ndcX = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
+    const ndcY = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
+    return this.world.isGuideSignHit(ndcX, ndcY);
+  }
+
+  private syncGuideHighlight(): void {
+    if (this.disposed) return;
+    this.world.setGuideSignHighlighted(
+      !this.transitioning
+      && (this.guidePointerHovered || this.guideKeyboardFocused),
+    );
+  }
+
+  private clearGuideInteraction(): void {
+    this.guidePointerHovered = false;
+    this.guideKeyboardFocused = false;
+    this.context.renderer.domElement.style.cursor = '';
+    this.world.setGuideSignHighlighted(false);
   }
 }

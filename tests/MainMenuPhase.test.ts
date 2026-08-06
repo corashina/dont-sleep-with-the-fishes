@@ -10,13 +10,20 @@ function createRig(
   const canvas = document.createElement('canvas');
   const ui = {
     onStart: () => undefined,
+    onGuideFocusChange: (_focused: boolean) => undefined,
     setTransitioning: vi.fn(),
     setFadeProgress: vi.fn(),
     clearPointerLockError: vi.fn(),
     showPointerLockError: vi.fn(),
+    openGuide: vi.fn(),
     dispose: vi.fn(),
   };
-  const world = { actors: {}, dispose: vi.fn() };
+  const world = {
+    actors: {},
+    isGuideSignHit: vi.fn(() => false),
+    setGuideSignHighlighted: vi.fn(),
+    dispose: vi.fn(),
+  };
   const animator = { update: vi.fn(), dispose: vi.fn() };
   const sceneRenderer = {
     render: vi.fn(),
@@ -216,6 +223,48 @@ describe('MainMenuPhase', () => {
     phase.dispose();
   });
 
+  it('highlights and opens the 3D guide sign with pointer or keyboard', () => {
+    const { canvas, phase, ui, world } = createRig();
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+      left: 10,
+      top: 20,
+      right: 210,
+      bottom: 120,
+      width: 200,
+      height: 100,
+      x: 10,
+      y: 20,
+      toJSON: () => undefined,
+    } as DOMRect);
+    world.isGuideSignHit.mockReturnValue(true);
+    phase.start();
+
+    canvas.dispatchEvent(new MouseEvent('pointermove', {
+      clientX: 110,
+      clientY: 70,
+      bubbles: true,
+    }));
+    expect(world.isGuideSignHit).toHaveBeenLastCalledWith(0, 0);
+    expect(world.setGuideSignHighlighted).toHaveBeenLastCalledWith(true);
+    expect(canvas.style.cursor).toBe('pointer');
+
+    canvas.dispatchEvent(new MouseEvent('click', {
+      button: 0,
+      clientX: 110,
+      clientY: 70,
+      bubbles: true,
+    }));
+    expect(ui.openGuide).toHaveBeenCalledOnce();
+
+    canvas.dispatchEvent(new MouseEvent('pointerleave'));
+    expect(world.setGuideSignHighlighted).toHaveBeenLastCalledWith(false);
+    ui.onGuideFocusChange(true);
+    expect(world.setGuideSignHighlighted).toHaveBeenLastCalledWith(true);
+    ui.onGuideFocusChange(false);
+    expect(world.setGuideSignHighlighted).toHaveBeenLastCalledWith(false);
+    phase.dispose();
+  });
+
   it('clears callbacks and disposes each owned resource once', async () => {
     let resolvePointerLock!: () => void;
     const requestPointerLock = vi.fn(() => new Promise<void>((resolve) => {
@@ -324,9 +373,15 @@ describe('MainMenuPhase', () => {
     const camera = new PerspectiveCamera();
     const ui = {
       onStart: () => undefined,
+      onGuideFocusChange: (_focused: boolean) => undefined,
       dispose: vi.fn(),
     };
-    const world = { actors: {}, dispose: vi.fn() };
+    const world = {
+      actors: {},
+      isGuideSignHit: vi.fn(() => false),
+      setGuideSignHighlighted: vi.fn(),
+      dispose: vi.fn(),
+    };
     let menuScene!: Scene;
     const context = {
       mount: document.createElement('main'),

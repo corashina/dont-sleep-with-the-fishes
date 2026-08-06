@@ -10,6 +10,7 @@ import {
   FogExp2,
   Group,
   HemisphereLight,
+  type Intersection,
   Material,
   Mesh,
   MeshBasicMaterial,
@@ -17,16 +18,18 @@ import {
   PerspectiveCamera,
   PlaneGeometry,
   Quaternion,
+  Raycaster,
   Scene,
   ShaderMaterial,
   TubeGeometry,
+  Vector2,
   Vector3,
 } from 'three';
 import type { MenuModelInstance, MenuModelLibrary } from './MenuModelLibrary';
 import type { MenuModelId } from './menuModelManifest';
 import { DistantSeabed } from './DistantSeabed';
 import type { MenuSceneComponent } from './MenuSceneComponent';
-import { MenuTitleSign } from './MenuTitleSign';
+import { MenuSigns, type MenuSignsComponent } from './MenuSigns';
 import { SunkenDorothyWreck } from './SunkenDorothyWreck';
 import {
   type MenuSharkActor,
@@ -81,13 +84,13 @@ const CAUSTIC_FRAGMENT_SHADER = `
 type ModelFactory = Pick<MenuModelLibrary, 'create'>;
 
 export interface UnderwaterMenuComponentFactories {
-  createTitleSign(): MenuSceneComponent;
+  createSigns(): MenuSignsComponent;
   createDorothyWreck(): MenuSceneComponent;
   createDistantSeabed(): MenuSceneComponent;
 }
 
 const DEFAULT_COMPONENT_FACTORIES: UnderwaterMenuComponentFactories = {
-  createTitleSign: () => new MenuTitleSign(),
+  createSigns: () => new MenuSigns(),
   createDorothyWreck: () => new SunkenDorothyWreck(),
   createDistantSeabed: () => new DistantSeabed(),
 };
@@ -100,6 +103,9 @@ export class UnderwaterMenuWorld {
   readonly fishSchools: readonly [Group, Group];
   readonly actors: UnderwaterMenuActors;
 
+  private readonly guideRaycaster = new Raycaster();
+  private readonly guidePointer = new Vector2();
+  private readonly guideIntersections: Intersection[] = [];
   private readonly modelInstances: MenuModelInstance[] = [];
   private readonly components: MenuSceneComponent[] = [];
   private readonly ownedGeometries = new Set<BufferGeometry>();
@@ -113,6 +119,7 @@ export class UnderwaterMenuWorld {
   private readonly previousCameraQuaternion: Quaternion;
   private readonly hadCameraFixedFlag: boolean;
   private readonly previousCameraFixed: unknown;
+  private readonly signs: MenuSignsComponent;
   private disposed = false;
 
   constructor(
@@ -131,7 +138,7 @@ export class UnderwaterMenuWorld {
     let sharkOne: MenuModelInstance;
     let sharkTwo: MenuModelInstance;
     let fishSchools: readonly [Group, Group];
-    let titleSign: MenuSceneComponent;
+    let signs: MenuSignsComponent;
     let dorothy: MenuSceneComponent;
     let distantSeabed: MenuSceneComponent;
     try {
@@ -147,8 +154,8 @@ export class UnderwaterMenuWorld {
         this.createFishSchool(models, 1),
       ];
       this.createStaticSeaweed(models);
-      titleSign = components.createTitleSign();
-      this.components.push(titleSign);
+      signs = components.createSigns();
+      this.components.push(signs);
       dorothy = components.createDorothyWreck();
       this.components.push(dorothy);
       distantSeabed = components.createDistantSeabed();
@@ -157,6 +164,7 @@ export class UnderwaterMenuWorld {
       this.rollbackConstruction();
       throw error;
     }
+    this.signs = signs;
 
     this.placeModel(boat.root, 'boat', MENU_PLACEMENT.boat);
     this.placeModel(rockA.root, 'rockA', MENU_PLACEMENT.rockA);
@@ -201,7 +209,7 @@ export class UnderwaterMenuWorld {
       rockB.root,
       rockC.root,
       skull.root,
-      titleSign.root,
+      signs.root,
       dorothy.root,
       distantSeabed.root,
       ...this.rootSeaweed(),
@@ -251,6 +259,23 @@ export class UnderwaterMenuWorld {
     );
     camera.userData.menuCameraFixed = true;
     scene.add(this.root);
+  }
+
+  isGuideSignHit(ndcX: number, ndcY: number): boolean {
+    if (this.disposed) return false;
+    this.guidePointer.set(ndcX, ndcY);
+    this.guideRaycaster.setFromCamera(this.guidePointer, this.camera);
+    this.guideIntersections.length = 0;
+    this.guideRaycaster.intersectObject(
+      this.signs.guideHitTarget,
+      false,
+      this.guideIntersections,
+    );
+    return this.guideIntersections.length > 0;
+  }
+
+  setGuideSignHighlighted(active: boolean): void {
+    this.signs.setGuideHighlighted(active);
   }
 
   dispose(): void {

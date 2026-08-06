@@ -211,7 +211,7 @@ and cleanup.
 
 - `src/app` — top-level game director, phase transitions, restart, and renderer ownership.
 - `src/menu` — underwater menu models, composition, animation, particles, and UI.
-- `src/menu/MenuTitleSign` — the owned title canvas texture and wooden sign geometry.
+- `src/menu/MenuSigns` — the owned title and interactive guide sign textures, geometry, and hover state.
 - `src/menu/SunkenDorothyWreck` — the simplified static Dorothy silhouette.
 - `src/menu/DistantSeabed` — the static ridge, rock, plant, and debris depth layers.
 - `src/phases/MainMenuPhase` — menu lifecycle, pointer lock, fade, and scavenging handoff.

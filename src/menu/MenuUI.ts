@@ -8,6 +8,7 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
 
 export class MenuUI {
   onStart: () => void = () => undefined;
+  onGuideFocusChange: (focused: boolean) => void = () => undefined;
   private readonly root: HTMLDivElement;
   private readonly menu: HTMLElement;
   private readonly guide: HTMLElement;
@@ -25,7 +26,7 @@ export class MenuUI {
     this.root.innerHTML = `
       <div class="ui-treatment" aria-hidden="true"></div>
       <section class="screen is-visible underwater-menu-screen" data-menu>
-        <button type="button" data-menu-guide-open aria-haspopup="dialog"
+        <button type="button" class="menu-guide-accessible" data-menu-guide-open aria-haspopup="dialog"
           aria-controls="menu-how-to-play-dialog">HOW TO PLAY</button>
         <div class="underwater-menu-screen__content">
           <h1 class="menu-title-accessible">DON'T SLEEP WITH THE FISHES</h1>
@@ -108,6 +109,8 @@ export class MenuUI {
     this.pointerLockError = requireElement(this.root, '[data-menu-pointer-lock-error]');
     this.startButton.addEventListener('click', this.handleStart);
     this.guideButton.addEventListener('click', this.handleGuideOpen);
+    this.guideButton.addEventListener('focus', this.handleGuideFocus);
+    this.guideButton.addEventListener('blur', this.handleGuideBlur);
     this.guideCloseButton.addEventListener('click', this.handleGuideClose);
     this.root.addEventListener('keydown', this.handleKeyDown);
   }
@@ -136,14 +139,21 @@ export class MenuUI {
     this.pointerLockError.classList.remove('is-visible');
   }
 
+  openGuide(): void {
+    if (!this.transitioning) this.setGuideOpen(true);
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.startButton.removeEventListener('click', this.handleStart);
     this.guideButton.removeEventListener('click', this.handleGuideOpen);
+    this.guideButton.removeEventListener('focus', this.handleGuideFocus);
+    this.guideButton.removeEventListener('blur', this.handleGuideBlur);
     this.guideCloseButton.removeEventListener('click', this.handleGuideClose);
     this.root.removeEventListener('keydown', this.handleKeyDown);
     this.onStart = () => undefined;
+    this.onGuideFocusChange = () => undefined;
     this.root.remove();
   }
 
@@ -154,8 +164,12 @@ export class MenuUI {
   };
 
   private readonly handleGuideOpen = (): void => {
-    if (!this.transitioning) this.setGuideOpen(true);
+    this.openGuide();
   };
+
+  private readonly handleGuideFocus = (): void => this.onGuideFocusChange(true);
+
+  private readonly handleGuideBlur = (): void => this.onGuideFocusChange(false);
 
   private readonly handleGuideClose = (): void => this.setGuideOpen(false);
 
