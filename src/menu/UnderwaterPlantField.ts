@@ -8,7 +8,10 @@ import {
   PlaneGeometry,
   ShaderMaterial,
 } from 'three';
-import { findClearMenuX } from './MenuSceneLayout';
+import {
+  findClearMenuX,
+  menuVisibleCenterLimit,
+} from './MenuSceneLayout';
 
 export const KELP_COUNT = 54;
 const KELP_EDGE_CLEARANCE = 0.2;
@@ -80,12 +83,20 @@ export class UnderwaterPlantField {
       const scale = 0.72 + (index % 5) * 0.11;
       const sourceX = ((slot / 5) * 2 - 1) * spread + ((lane + slot) % 3 - 1) * 0.8;
       const sweepRadius = KELP_SWEEP_RADIUS * scale;
+      const visibleLimit = menuVisibleCenterLimit(
+        -0.42,
+        depth + sweepRadius,
+        sweepRadius,
+      );
       const x = findClearMenuX(
         sourceX,
         depth,
         sweepRadius,
         sweepRadius,
         KELP_EDGE_CLEARANCE,
+        undefined,
+        -visibleLimit,
+        visibleLimit,
       );
       transform.position.set(x, -0.42, depth);
       transform.rotation.set(0, index * 1.37, 0);
