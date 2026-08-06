@@ -35,7 +35,11 @@ it('creates the approved fixed composition once', () => {
         : [];
       const dispose = vi.fn();
       disposers.push(dispose);
-      return { root: new Group(), animations, dispose };
+      const root = new Group();
+      if (id === 'sardine' || id === 'clownfish') {
+        root.add(new Mesh(new BoxGeometry(0.1, 0.1, 0.1)));
+      }
+      return { root, animations, dispose };
     }),
   };
   const componentDisposers: ReturnType<typeof vi.fn>[] = [];
@@ -134,6 +138,10 @@ it('creates the approved fixed composition once', () => {
   expect(world.actors.sharks[1].clip.name).toBe('Armature|Swim');
   expect(world.fishSchools[0].children).toHaveLength(6);
   expect(world.fishSchools[1].children).toHaveLength(6);
+  for (const school of world.fishSchools) {
+    const bounds = new Box3().setFromObject(school);
+    expect(bounds.getSize(new Vector3()).x).toBeGreaterThan(3.2);
+  }
   world.setMenuSignHighlighted('guide', true);
   expect(setGuideHighlighted).toHaveBeenCalledWith(true);
   world.setMenuSignHighlighted('start', true);
