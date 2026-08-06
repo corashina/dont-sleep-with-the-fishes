@@ -20,6 +20,37 @@ function ranges(values: Float32Array): {
   return { x: [minX, maxX], y: [minY, maxY], z: [minZ, maxZ] };
 }
 
+function expectedBubblePosition(
+  column: number,
+  row: number,
+): readonly [number, number, number] {
+  const index = row * 12 + column;
+  const horizontal = column / 11;
+  const vertical = row / 11;
+  const depthBand = (column * 5 + row * 7) % 8;
+  const spread = 7.5 + depthBand * 4.2;
+  const jitterX = ((index * 17) % 11 - 5) * 0.11;
+  const jitterY = ((index * 13) % 9 - 4) * 0.07;
+  return [
+    (horizontal * 2 - 1) * spread + jitterX,
+    -0.55 + vertical * 9.1 + jitterY,
+    4.4 - depthBand * 5.1 - (row % 3) * 0.35,
+  ];
+}
+
+function hasPosition(
+  values: number[],
+  position: readonly [number, number, number],
+): boolean {
+  const [x, y, z] = position.map(Math.fround);
+  for (let index = 0; index < values.length; index += 3) {
+    if (values[index] === x && values[index + 1] === y && values[index + 2] === z) {
+      return true;
+    }
+  }
+  return false;
+}
+
 it('spreads bubbles across all screen-facing depth bands', () => {
   const first = new UnderwaterParticles();
   const second = new UnderwaterParticles();
@@ -38,6 +69,19 @@ it('spreads bubbles across all screen-facing depth bands', () => {
   expect(bounds.y[1]).toBeGreaterThan(8);
   expect(bounds.z[0]).toBeLessThan(-30);
   expect(bounds.z[1]).toBeGreaterThan(3);
+
+  const columns = Array.from({ length: 12 }, (_, column) => column)
+    .filter((column) => hasPosition(firstValues, expectedBubblePosition(column, 0)));
+  const rows = Array.from({ length: 12 }, (_, row) => row)
+    .filter((row) => hasPosition(firstValues, expectedBubblePosition(0, row)));
+  const depthBandColumns = [0, 5, 2, 7, 4, 1, 6, 3];
+  const depthBands = depthBandColumns
+    .filter((column) => hasPosition(firstValues, expectedBubblePosition(column, 0)))
+    .map((column) => (column * 5) % 8)
+    .sort((left, right) => left - right);
+  expect(columns).toEqual(Array.from({ length: 12 }, (_, column) => column));
+  expect(rows).toEqual(Array.from({ length: 12 }, (_, row) => row));
+  expect(depthBands).toEqual(Array.from({ length: 8 }, (_, depthBand) => depthBand));
 
   first.dispose();
   second.dispose();
