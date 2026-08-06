@@ -15,12 +15,8 @@ import {
   Vector3,
 } from 'three';
 import { expect, it, vi } from 'vitest';
+import { MENU_PROTECTED_FOOTPRINTS } from '../src/menu/MenuSceneLayout';
 import { UnderwaterMenuWorld } from '../src/menu/UnderwaterMenuWorld';
-import {
-  KELP_BOAT_CLEARANCE_FAR_Z,
-  KELP_BOAT_CLEARANCE_NEAR_Z,
-  KELP_BOAT_CLEARANCE_X,
-} from '../src/menu/UnderwaterPlantField';
 
 it('creates the approved fixed composition once', () => {
   const created: string[] = [];
@@ -35,7 +31,11 @@ it('creates the approved fixed composition once', () => {
         : [];
       const dispose = vi.fn();
       disposers.push(dispose);
-      return { root: new Group(), animations, dispose };
+      const root = new Group();
+      if (id === 'sardine' || id === 'clownfish') {
+        root.add(new Mesh(new BoxGeometry(0.1, 0.1, 0.1)));
+      }
+      return { root, animations, dispose };
     }),
   };
   const componentDisposers: ReturnType<typeof vi.fn>[] = [];
@@ -98,15 +98,15 @@ it('creates the approved fixed composition once', () => {
   expect(created).not.toContain('fishBone');
   expect(created).not.toContain('largeBone');
   expect(created.filter((id) => id === 'skull')).toHaveLength(1);
-  expect(created.filter((id) => id === 'rockA')).toHaveLength(4);
-  expect(created.filter((id) => id === 'rockB')).toHaveLength(4);
-  expect(created.filter((id) => id === 'rockC')).toHaveLength(4);
-  expect(created.filter((id) => id === 'coral')).toHaveLength(6);
+  expect(created.filter((id) => id === 'rockA')).toHaveLength(6);
+  expect(created.filter((id) => id === 'rockB')).toHaveLength(6);
+  expect(created.filter((id) => id === 'rockC')).toHaveLength(6);
+  expect(created.filter((id) => id === 'coral')).toHaveLength(10);
   expect(created.filter((id) => id === 'starfish')).toHaveLength(1);
   expect(created.filter((id) => id === 'shark')).toHaveLength(2);
   expect(created.filter((id) => id === 'sardine')).toHaveLength(6);
   expect(created.filter((id) => id === 'clownfish')).toHaveLength(6);
-  expect(created.filter((id) => id === 'seaweed')).toHaveLength(9);
+  expect(created.filter((id) => id === 'seaweed')).toHaveLength(14);
   expect(camera.userData.menuCameraFixed).toBe(true);
   expect(camera.position.toArray()).toEqual([0, 1.35, 7.8]);
   const expected = new PerspectiveCamera();
@@ -115,6 +115,25 @@ it('creates the approved fixed composition once', () => {
   expect(camera.quaternion.angleTo(expected.quaternion)).toBeLessThan(1e-8);
   const seabed = world.root.getObjectByName('menu:seabed') as Mesh;
   const caustics = world.root.getObjectByName('menu:caustic-overlay') as Mesh;
+  const sandPosition = seabed.geometry.getAttribute('position');
+  const sandColor = seabed.geometry.getAttribute('color');
+  expect(sandColor).toBeDefined();
+  expect(sandColor.count).toBe(sandPosition.count);
+  let minHeight = Infinity;
+  let maxHeight = -Infinity;
+  const colors = new Set<string>();
+  for (let index = 0; index < sandPosition.count; index += 1) {
+    minHeight = Math.min(minHeight, sandPosition.getY(index));
+    maxHeight = Math.max(maxHeight, sandPosition.getY(index));
+    colors.add([
+      sandColor.getX(index).toFixed(3),
+      sandColor.getY(index).toFixed(3),
+      sandColor.getZ(index).toFixed(3),
+    ].join(':'));
+  }
+  expect(maxHeight - minHeight).toBeGreaterThan(0.55);
+  expect(colors.size).toBeGreaterThan(8);
+  expect((seabed.material as MeshStandardMaterial).vertexColors).toBe(true);
   world.root.updateMatrixWorld(true);
   expect(new Box3().setFromObject(seabed).max.z).toBeGreaterThan(camera.position.z);
   expect(new Box3().setFromObject(caustics).max.z).toBeGreaterThan(camera.position.z);
@@ -134,6 +153,10 @@ it('creates the approved fixed composition once', () => {
   expect(world.actors.sharks[1].clip.name).toBe('Armature|Swim');
   expect(world.fishSchools[0].children).toHaveLength(6);
   expect(world.fishSchools[1].children).toHaveLength(6);
+  for (const school of world.fishSchools) {
+    const bounds = new Box3().setFromObject(school);
+    expect(bounds.getSize(new Vector3()).x).toBeGreaterThan(3.2);
+  }
   world.setMenuSignHighlighted('guide', true);
   expect(setGuideHighlighted).toHaveBeenCalledWith(true);
   world.setMenuSignHighlighted('start', true);
@@ -147,10 +170,12 @@ it('creates the approved fixed composition once', () => {
   for (let index = 0; index < (kelp as InstancedMesh).count; index += 1) {
     (kelp as InstancedMesh).getMatrixAt(index, kelpMatrix);
     kelpPosition.setFromMatrixPosition(kelpMatrix);
-    const crossesBoatDepth = kelpPosition.z > KELP_BOAT_CLEARANCE_FAR_Z
-      && kelpPosition.z < KELP_BOAT_CLEARANCE_NEAR_Z;
-    if (crossesBoatDepth) {
-      expect(Math.abs(kelpPosition.x)).toBeGreaterThanOrEqual(KELP_BOAT_CLEARANCE_X);
+    for (const footprint of MENU_PROTECTED_FOOTPRINTS) {
+      const insideX = Math.abs(kelpPosition.x - footprint.position[0])
+        < footprint.halfSize[0];
+      const insideZ = Math.abs(kelpPosition.z - footprint.position[2])
+        < footprint.halfSize[1];
+      expect(insideX && insideZ, `${index} enters ${footprint.id}`).toBe(false);
     }
   }
   const bubbles = world.root.getObjectByName('menu:bubbles');
