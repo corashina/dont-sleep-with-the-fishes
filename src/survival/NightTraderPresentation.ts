@@ -30,7 +30,6 @@ import type { MutableSupplyPose } from './BoatSupplyDisplay';
 import {
   clamp01Unchecked as clamp01,
   smoothstepUnchecked as smoothstep,
-  type TimedAnimation,
 } from './animationMath';
 import type {
   EventChoicePresentation,
@@ -41,6 +40,7 @@ import type {
   ActionOutcome,
   EventResultPresentation,
 } from './survivalTypes';
+import { TimedPresentationAnimation } from './TimedPresentationAnimation';
 
 type NightTraderAnimationKind =
   | 'reveal'
@@ -48,8 +48,6 @@ type NightTraderAnimationKind =
   | 'choice-refuse'
   | 'result-reward'
   | 'result-refuse';
-
-type ActiveAnimation = TimedAnimation<NightTraderAnimationKind>;
 
 const REVEAL_DURATION = 1.6;
 const PAYMENT_DURATION = 1.05;
@@ -145,7 +143,10 @@ export class NightTraderPresentation implements FocusedEventPresentation {
   private readonly lanternLight: PointLight;
   private readonly reflectionMaterial: MeshStandardMaterial;
   private readonly mistMaterial: MeshStandardMaterial;
-  private activeAnimation: ActiveAnimation | null = null;
+  private readonly animation = new TimedPresentationAnimation<NightTraderAnimationKind>(
+    (kind, _time, progress) => this.applyAnimation(kind, progress),
+    (kind) => this.finishAnimation(kind),
+  );
   private paymentActor: Group | null = null;
   private rewardActor: Group | null = null;
   private paymentInstanceId: ItemInstanceId | null = null;
@@ -225,7 +226,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
 
   stage(): void {
     if (this.disposed) return;
-    this.cancelActiveAnimation(false);
+    this.animation.cancel();
     this.dependencies.supplyDisplay.releaseEventActor();
     this.dependencies.supplyDisplay.clearEventPose();
     this.clearExchangeActors();
@@ -305,7 +306,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
 
   clear(): void {
     if (this.disposed) return;
-    this.cancelActiveAnimation(false);
+    this.animation.cancel();
     this.dependencies.supplyDisplay.releaseEventActor();
     this.dependencies.supplyDisplay.clearEventPose();
     this.clearExchangeActors();
@@ -317,33 +318,18 @@ export class NightTraderPresentation implements FocusedEventPresentation {
 
   update(time: number, delta: number): void {
     if (this.disposed || delta < 0) return;
-    const animation = this.activeAnimation;
-    if (animation !== null) {
-      animation.elapsed = Math.min(
-        animation.duration,
-        animation.elapsed + Math.max(0, delta),
-      );
-      const progress = animation.duration <= 0
-        ? 1
-        : animation.elapsed / animation.duration;
-      this.applyAnimation(animation.kind, progress);
-      if (progress >= 1) {
-        this.activeAnimation = null;
-        this.finishAnimation(animation.kind);
-        animation.resolve();
-      }
-    }
+    this.animation.update(time, delta);
     this.applySharedWave(time);
   }
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
-    this.cancelActiveAnimation(true);
+    this.animation.settle();
   }
 
   dispose(): void {
     if (this.disposed) return;
-    this.cancelActiveAnimation(false);
+    this.animation.cancel();
     this.dependencies.supplyDisplay.releaseEventActor();
     this.dependencies.supplyDisplay.clearEventPose();
     this.clearExchangeActors();
@@ -359,11 +345,10 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     kind: NightTraderAnimationKind,
     duration: number,
   ): Promise<void> {
-    this.cancelActiveAnimation(true);
-    return new Promise<void>((resolve) => {
-      this.activeAnimation = { kind, elapsed: 0, duration, resolve };
-      this.applyAnimation(kind, 0);
-    });
+    this.animation.settle();
+    const animation = this.animation.start(kind, duration);
+    this.applyAnimation(kind, 0);
+    return animation;
   }
 
   private applyAnimation(
@@ -905,13 +890,5 @@ export class NightTraderPresentation implements FocusedEventPresentation {
       this.mist.add(cloud);
     }
     this.mist.position.set(6.3, 0.2, -10.8);
-  }
-
-  private cancelActiveAnimation(settle: boolean): void {
-    const animation = this.activeAnimation;
-    this.activeAnimation = null;
-    if (animation === null) return;
-    if (settle) this.finishAnimation(animation.kind);
-    animation.resolve();
   }
 }
