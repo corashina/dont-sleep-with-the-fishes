@@ -25,6 +25,7 @@ import type {
   DedicatedEventEnvironment,
   DedicatedEventPresentation,
 } from '../src/survival/eventPresentationTypes';
+import { FishingBiteParticles } from '../src/survival/FishingBiteParticles';
 import { AnglerfishSwarmPresentation } from '../src/survival/events/AnglerfishSwarmPresentation';
 import { DeathStarePresentation } from '../src/survival/events/DeathStarePresentation';
 import { LeakPresentation } from '../src/survival/events/LeakPresentation';
@@ -147,6 +148,33 @@ function createActor(
 }
 
 describe('dedicated event item use', () => {
+  it('does not emit Leak spray from a terminal item frame', async () => {
+    const emit = vi.spyOn(FishingBiteParticles.prototype, 'emit');
+    const camera = new PerspectiveCamera(62, 1.6, 0.1, 100);
+    const environment: DedicatedEventEnvironment = {
+      eventModels: createEventModels(),
+      supplies: {
+        borrowEventActor: vi.fn(() => null),
+        itemType: () => 'ductTape',
+      } as unknown as DedicatedEventEnvironment['supplies'],
+      captainWhiskers: {} as DedicatedEventEnvironment['captainWhiskers'],
+      vortexWave: createInactiveVortexWaveState(),
+      sampleWorldWaveInto: (output) => Object.assign(output, createWaveSample()),
+      readWorldWaveAmplitudeScale: () => 1,
+      camera,
+    };
+    const presentation = new LeakPresentation(environment);
+    presentation.stage({ eventId: 'leak', targetInstanceId: null, variantSeed: 41 });
+
+    const itemUse = presentation.playItemUse('ductTape', 'ductTape-1');
+    presentation.update(1, LEAK_ITEM_DURATION);
+
+    await expect(itemUse).resolves.toBe(true);
+    expect(emit).not.toHaveBeenCalled();
+    presentation.dispose();
+    emit.mockRestore();
+  });
+
   it.each(Object.entries(choices) as readonly (readonly [
     ItemAnimationEventId,
     readonly string[],

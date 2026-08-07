@@ -302,17 +302,23 @@ export class LeakPresentation implements DedicatedEventPresentation {
   update(time: number, delta: number): void {
     if (this.disposed || !this.staged) return;
     const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
+    const activeChoiceId = this.activeChoiceId;
     if (this.animation.active) {
       this.animation.update(time, safeDelta);
     } else {
       this.updateInteriorWave(time);
     }
     this.updateSpray(safeDelta);
+    if (activeChoiceId !== null && !this.animation.active) {
+      this.finishItemUse(activeChoiceId, time);
+    }
   }
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
+    const activeChoiceId = this.activeChoiceId;
     this.animation.settle();
+    if (activeChoiceId !== null) this.finishItemUse(activeChoiceId, 0);
   }
 
   skip(): void {
@@ -374,15 +380,16 @@ export class LeakPresentation implements DedicatedEventPresentation {
       if (choiceId === null) return;
       sampleLeakItemUse(choiceId, progress, this.sample);
       this.applySample(time);
-      if (progress === 1) {
-        sampleLeakItemUse(choiceId, 1, this.sample);
-        this.applyHeldLeak(time);
-      }
       return;
     }
     sampleLeakReaction(this.reactionState, progress, this.sample);
     this.borrowedActor?.applyPose(this.sample);
     this.applySample(time);
+  }
+
+  private finishItemUse(choiceId: string, time: number): void {
+    sampleLeakItemUse(choiceId, 1, this.sample);
+    this.applyHeldLeak(time);
   }
 
   private applyHeldLeak(time: number): void {
