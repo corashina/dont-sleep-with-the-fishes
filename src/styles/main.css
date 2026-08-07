@@ -756,13 +756,20 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 }
 .boat-anchor[data-condition="broken"] .boat-tooltip { border-left-style: dashed; }
 .boat-anchor:disabled { cursor: not-allowed; opacity: 0.42; }
-.boat-anchor[data-event-state="muted"] {
-  filter: grayscale(1) saturate(0) brightness(.58);
+.boat-anchor[data-event-state="locked"] {
+  pointer-events: none;
   cursor: default;
 }
-.boat-anchor[data-event-state="eligible"] {
-  filter: none;
+
+.boat-anchor[data-event-state="locked"] .boat-tooltip {
+  display: none;
 }
+
+.boat-anchor[data-event-state="unavailable"] {
+  filter: grayscale(.8) saturate(.3) brightness(.72);
+  cursor: default;
+}
+
 .boat-anchor[data-event-state="selected"] {
   filter: none;
 }
@@ -792,8 +799,8 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   transition: transform 160ms ease, opacity 160ms ease;
 }
 
-.boat-anchor:hover .boat-tooltip,
-.boat-anchor:focus-visible .boat-tooltip {
+.boat-anchor:not([data-event-state="locked"]):hover .boat-tooltip,
+.boat-anchor:not([data-event-state="locked"]):focus-visible .boat-tooltip {
   opacity: 1;
   visibility: visible;
   transform: translate(-50%, 0);
@@ -821,15 +828,15 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   transform: translateY(-6px);
 }
 
-.boat-anchor[data-tooltip-x="left"]:hover .boat-tooltip,
-.boat-anchor[data-tooltip-x="left"]:focus-visible .boat-tooltip,
-.boat-anchor[data-tooltip-x="right"]:hover .boat-tooltip,
-.boat-anchor[data-tooltip-x="right"]:focus-visible .boat-tooltip {
+.boat-anchor[data-tooltip-x="left"]:not([data-event-state="locked"]):hover .boat-tooltip,
+.boat-anchor[data-tooltip-x="left"]:not([data-event-state="locked"]):focus-visible .boat-tooltip,
+.boat-anchor[data-tooltip-x="right"]:not([data-event-state="locked"]):hover .boat-tooltip,
+.boat-anchor[data-tooltip-x="right"]:not([data-event-state="locked"]):focus-visible .boat-tooltip {
   transform: translateY(0);
 }
 
-.boat-anchor[data-tooltip-x="center"][data-tooltip-y="below"]:hover .boat-tooltip,
-.boat-anchor[data-tooltip-x="center"][data-tooltip-y="below"]:focus-visible .boat-tooltip {
+.boat-anchor[data-tooltip-x="center"][data-tooltip-y="below"]:not([data-event-state="locked"]):hover .boat-tooltip,
+.boat-anchor[data-tooltip-x="center"][data-tooltip-y="below"]:not([data-event-state="locked"]):focus-visible .boat-tooltip {
   transform: translate(-50%, 0);
 }
 

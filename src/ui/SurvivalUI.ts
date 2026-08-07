@@ -51,6 +51,10 @@ const BOAT_TOOL_COPY: Readonly<Record<BoatToolId, BoatToolCopy>> = Object.freeze
     label: 'END DAY',
     description: 'Douse the lantern to end the current day. Energy is restored at dawn.',
   },
+  chest: {
+    label: 'CHEST',
+    description: 'Open the recovered chest. The task costs three energy.',
+  },
 });
 
 type MeterId = 'health' | 'hunger' | 'energy' | 'hull';
@@ -82,6 +86,7 @@ const ACTIONS: readonly ActionDefinition[] = [
   { id: 'repairItem', label: 'REPAIR ITEM', cost: '1 DUCT TAPE', energyCost: 0, effect: 'Restore one broken item', risk: 'safe' },
   { id: 'sendMessage', label: 'SEND MESSAGE', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.actions.bottledPaperEnergy, effect: 'RESCUE +15', risk: 'safe' },
   { id: 'useEnergyBar', label: 'EAT ENERGY BAR', cost: '1 ENERGY BAR', energyCost: 0, effect: 'ENERGY TO 3', risk: 'safe' },
+  { id: 'openChest', label: 'OPEN CHEST', cost: '3 ENERGY', energyCost: 3, effect: 'RECOVER A SUPPLY', risk: 'uncertain' },
 ];
 
 const ENERGY_WORDS = ['', 'one', 'two', 'three'] as const;
@@ -227,6 +232,13 @@ export interface EventContextChoice {
   readonly anchorId?: string;
   readonly energyCost?: number;
 }
+
+type AnchorInteractionState =
+  | 'ordinary'
+  | 'eventLocked'
+  | 'eventAvailable'
+  | 'eventUnavailable'
+  | 'selected';
 
 interface PendingFade {
   readonly finish: () => void;
@@ -658,6 +670,7 @@ export class SurvivalUI {
 
   beginEventPresentation(): void {
     if (this.disposed) return;
+    this.clearAnchorHighlight();
     this.eventPresentationActive = true;
     this.syncCommandState();
   }
@@ -1190,8 +1203,8 @@ export class SurvivalUI {
     const lanternSleep = anchor.toolId === 'lantern'
       ? this.eventLanternChoice()
       : undefined;
-    const anchoredChoice = this.eventPresentationActive && anchor.eventChoiceId !== undefined
-      ? this.contextualEventChoices.find(({ id }) => id === anchor.eventChoiceId)
+    const anchoredChoice = this.eventPresentationActive
+      ? this.eventChoiceForAnchor(anchor.id, anchor)
       : undefined;
     const toolCopy = lanternSleep === undefined
       ? anchor.toolId === null ? undefined : BOAT_TOOL_COPY[anchor.toolId]
@@ -1336,88 +1349,59 @@ export class SurvivalUI {
 
   private syncCommandState(): void {
     this.journalMarker.disabled = this.busy;
-    const lanternChoice = this.eventLanternChoice();
+    let highlightInvalidated = false;
     this.anchorButtons.forEach((button, id) => {
       const anchor = this.anchors.get(id);
       const reason = anchor === undefined ? null : this.anchorUnavailableReason(anchor);
-      delete button.dataset.eventChoice;
-      const anchoredChoice = this.eventPresentationActive
-        ? this.contextualEventChoices.find(({ anchorId }) => anchorId === id)
-        : undefined;
-      if (anchor !== undefined && anchoredChoice !== undefined) {
-        button.dataset.eventChoice = anchoredChoice.id;
-        if (anchoredChoice.unavailableReason === null) {
-          delete button.dataset.unavailableReason;
-        } else {
-          button.dataset.unavailableReason = anchoredChoice.unavailableReason;
-        }
-        button.dataset.eventState = this.eventSelectedChoiceId === anchoredChoice.id
-          ? 'selected'
-          : 'eligible';
-        button.disabled = false;
-        button.setAttribute(
-          'aria-disabled',
-          anchoredChoice.unavailableReason === null
-            && !this.busy
-            && this.eventSelectedChoiceId === null
-            ? 'false'
-            : 'true',
-        );
+      const choice = anchor === undefined ? undefined : this.eventChoiceForAnchor(id, anchor);
+      const state = anchor === undefined ? 'ordinary' : this.anchorInteractionState(id, anchor);
+      const eventState = state === 'eventLocked'
+        ? 'locked'
+        : state === 'eventAvailable'
+          ? 'available'
+          : state === 'eventUnavailable'
+            ? 'unavailable'
+            : state === 'selected'
+              ? 'selected'
+              : null;
+
+      if (choice === undefined) {
+        delete button.dataset.eventChoice;
+        delete button.dataset.unavailableReason;
+      } else {
+        button.dataset.eventChoice = choice.id;
+        if (choice.unavailableReason === null) delete button.dataset.unavailableReason;
+        else button.dataset.unavailableReason = choice.unavailableReason;
+      }
+      if (eventState === null) delete button.dataset.eventState;
+      else button.dataset.eventState = eventState;
+
+      if (state === 'eventLocked') {
+        button.disabled = true;
+        button.tabIndex = -1;
+        button.setAttribute('aria-hidden', 'true');
+        button.setAttribute('aria-disabled', 'true');
+        highlightInvalidated = this.invalidateAnchorHighlight(id) || highlightInvalidated;
         return;
       }
-      if (
-        this.eventPresentationActive
-        && anchor?.toolId === 'lantern'
-        && lanternChoice !== undefined
-      ) {
-        button.dataset.eventChoice = lanternChoice.id;
-        if (lanternChoice.unavailableReason === null) {
-          delete button.dataset.unavailableReason;
-        } else {
-          button.dataset.unavailableReason = lanternChoice.unavailableReason;
-        }
-        button.dataset.eventState = this.eventSelectedChoiceId === lanternChoice.id
-          ? 'selected'
-          : 'eligible';
+
+      button.tabIndex = 0;
+      button.removeAttribute('aria-hidden');
+      if (state === 'eventAvailable') {
         button.disabled = false;
-        button.setAttribute(
-          'aria-disabled',
-          lanternChoice.unavailableReason === null
-            && !this.busy
-            && this.eventSelectedChoiceId === null
-            ? 'false'
-            : 'true',
-        );
+        button.setAttribute('aria-disabled', 'false');
         return;
       }
-      delete button.dataset.unavailableReason;
-      if (this.eventPresentationActive && anchor !== undefined && anchor.itemType !== null) {
-        const instanceId = anchor.backingInstanceId ?? (
-          id.startsWith('supply:') ? null : id as ItemInstanceId
-        );
-        if (instanceId === null) {
-          button.dataset.eventState = 'muted';
-          button.disabled = false;
-          button.setAttribute('aria-disabled', 'true');
-          return;
-        }
-        const eligible = this.eventEligibility?.has(instanceId) === true;
-        const selected = this.eventSelectedInstanceId === instanceId;
-        button.dataset.eventState = selected ? 'selected' : eligible ? 'eligible' : 'muted';
+      if (state === 'eventUnavailable' || state === 'selected') {
         button.disabled = false;
-        button.setAttribute(
-          'aria-disabled',
-          eligible && !this.busy && this.eventSelectedInstanceId === null ? 'false' : 'true',
-        );
+        button.setAttribute('aria-disabled', 'true');
         return;
       }
-      delete button.dataset.eventState;
+
       button.disabled = this.busy;
-      button.setAttribute(
-        'aria-disabled',
-        reason === null && !this.eventPresentationActive ? 'false' : 'true',
-      );
+      button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
     });
+    if (highlightInvalidated) this.publishAnchorHighlight();
     this.repairTargets.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
       button.disabled = this.busy;
     });
@@ -1465,17 +1449,75 @@ export class SurvivalUI {
     return this.contextualEventChoices.find((choice) => choice.id === 'sleep');
   }
 
+  private eventChoiceForAnchor(
+    id: string,
+    anchor: BoatInteractionAnchor,
+  ): EventContextChoice | undefined {
+    if (anchor.eventChoiceId !== undefined) {
+      const direct = this.contextualEventChoices.find(
+        (choice) => choice.id === anchor.eventChoiceId,
+      );
+      if (direct !== undefined) return direct;
+    }
+    const projected = this.contextualEventChoices.find(
+      (choice) => choice.anchorId === id,
+    );
+    if (projected !== undefined) return projected;
+    return anchor.toolId === 'lantern'
+      ? this.eventLanternChoice()
+      : undefined;
+  }
+
+  private anchorInteractionState(
+    id: string,
+    anchor: BoatInteractionAnchor,
+  ): AnchorInteractionState {
+    if (!this.eventPresentationActive) return 'ordinary';
+
+    const choice = this.eventChoiceForAnchor(id, anchor);
+    if (choice !== undefined) {
+      if (this.eventSelectedChoiceId === choice.id) return 'selected';
+      if (this.busy || this.eventSelectedChoiceId !== null) return 'eventLocked';
+      if (choice.unavailableReason !== null) return 'eventUnavailable';
+      return 'eventAvailable';
+    }
+
+    if (anchor.itemType !== null) {
+      const instanceId = anchor.backingInstanceId
+        ?? (id.startsWith('supply:') ? null : id as ItemInstanceId);
+      if (instanceId !== null && this.eventSelectedInstanceId === instanceId) {
+        return 'selected';
+      }
+      if (
+        this.busy
+        || this.eventSelectedInstanceId !== null
+        || this.eventEligibility === null
+      ) return 'eventLocked';
+      const available = instanceId !== null
+        && this.eventEligibility.has(instanceId);
+      return available ? 'eventAvailable' : 'eventUnavailable';
+    }
+
+    return 'eventLocked';
+  }
+
   private isHighlightableAnchor(anchor: BoatInteractionAnchor): boolean {
     return anchor.itemType !== null
       || anchor.toolId === 'repairTools'
       || anchor.toolId === 'lantern'
+      || anchor.toolId === 'chest'
       || anchor.eventChoiceId !== undefined;
   }
 
   private highlightAnchorId(target: EventTarget | null): string | null {
     if (!(target instanceof Element)) return null;
     const button = target.closest<HTMLButtonElement>('.boat-anchor');
-    if (button === null || !this.root.contains(button)) return null;
+    if (
+      button === null
+      || !this.root.contains(button)
+      || button.disabled
+      || button.dataset.eventState === 'locked'
+    ) return null;
     const anchorId = button.dataset.anchorId;
     const anchor = anchorId === undefined ? undefined : this.anchors.get(anchorId);
     return anchor !== undefined && this.isHighlightableAnchor(anchor) ? anchorId! : null;
@@ -1526,7 +1568,12 @@ export class SurvivalUI {
   };
 
   private readonly handleAnchorFocusIn = (event: FocusEvent): void => {
-    this.focusedAnchorId = this.highlightAnchorId(event.target);
+    const anchorId = this.highlightAnchorId(event.target);
+    if (anchorId === null && event.target instanceof Element) {
+      const button = event.target.closest<HTMLButtonElement>('.boat-anchor');
+      if (button?.disabled || button?.dataset.eventState === 'locked') button?.blur();
+    }
+    this.focusedAnchorId = anchorId;
     this.publishAnchorHighlight();
   };
 

@@ -27,6 +27,17 @@ export interface JournalEventRecord {
   readonly inventoryMutations: readonly JournalInventoryMutation[];
 }
 
+export interface JournalSinkingShipRecord {
+  readonly kind: 'sinkingShip';
+}
+
+export type JournalDaytimeRecord =
+  | JournalEventRecord
+  | JournalSinkingShipRecord;
+
+export const SINKING_SHIP_DAYTIME_TEXT =
+  'Dorothy struck something and began to sink. I reached the lifeboat with the supplies I could save.';
+
 export type JournalNightRecord =
   | { kind: 'event'; event: JournalEventRecord }
   | { kind: 'quiet' };
@@ -47,7 +58,7 @@ export interface JournalEntry {
   day: number;
   weather: WeatherId;
   readonly actions: readonly JournalDayActionRecord[];
-  daytime: JournalEventRecord | null;
+  daytime: JournalDaytimeRecord | null;
   nighttime: JournalNightRecord;
 }
 
@@ -116,6 +127,12 @@ function formatNight(record: JournalNightRecord): string {
     : formatEvent(record.event);
 }
 
+function formatDaytime(record: JournalDaytimeRecord | null): string {
+  if (record === null) return 'The daylight hours passed quietly.';
+  if ('kind' in record) return SINKING_SHIP_DAYTIME_TEXT;
+  return formatEvent(record);
+}
+
 function formatFishing(record: JournalFishingRecord): string {
   let sentence: string;
   if (record.result === 'miss') {
@@ -138,9 +155,7 @@ function formatFishing(record: JournalFishingRecord): string {
 
 export function formatJournalEntry(entry: JournalEntry): JournalPageCopy {
   const actions = entry.actions.map(formatFishing).join(' ');
-  const daytime = entry.daytime === null
-    ? 'The daylight hours passed quietly.'
-    : formatEvent(entry.daytime);
+  const daytime = formatDaytime(entry.daytime);
   return {
     heading: `DAY ${entry.day}`,
     weather: WEATHER_LABELS[entry.weather],

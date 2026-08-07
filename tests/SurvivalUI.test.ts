@@ -247,6 +247,16 @@ describe('SurvivalUI', () => {
     expect(mainStyles).toMatch(
       /\.boat-anchor\s*\{[^}]*cursor:\s*pointer;/s,
     );
+    expect(mainStyles).toMatch(
+      /\.boat-anchor\[data-event-state="locked"\]\s*\{[^}]*pointer-events:\s*none;/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.boat-anchor\[data-event-state="locked"\] \.boat-tooltip\s*\{[^}]*display:\s*none;/s,
+    );
+    expect(mainStyles).not.toMatch(
+      /\.boat-anchor\[data-event-state="available"\]\s*\{[^}]*(?:outline|box-shadow):/s,
+    );
+    expect(mainStyles).not.toContain('#c98242');
   });
 
   it('keeps low-energy Drifting Loot inspectable with an insufficient-energy tooltip', () => {
@@ -284,6 +294,7 @@ describe('SurvivalUI', () => {
     expect(loot.querySelector('[role="tooltip"]')?.textContent)
       .toBe('BARREL — ⚡⚡⚡ — INSUFFICIENT ENERGY');
     expect(loot.disabled).toBe(false);
+    expect(loot.dataset.eventState).toBe('unavailable');
     expect(loot.getAttribute('aria-disabled')).toBe('true');
     loot.click();
     expect(selected).not.toHaveBeenCalled();
@@ -488,12 +499,13 @@ describe('SurvivalUI', () => {
     ui.setEventSelection(new Map([['bucket-1', 'bucket']]));
     const bucket = mount.querySelector<HTMLButtonElement>('[data-anchor-id="bucket-1"]')!;
     const umbrella = mount.querySelector<HTMLButtonElement>('[data-anchor-id="umbrella-2"]')!;
-    expect(bucket.dataset.eventState).toBe('eligible');
+    expect(bucket.dataset.eventState).toBe('available');
     expect(bucket.getAttribute('aria-disabled')).toBe('false');
     expect(bucket.querySelector('[role="tooltip"]')?.textContent).toBe('BUCKET');
-    expect(umbrella.dataset.eventState).toBe('muted');
+    expect(umbrella.dataset.eventState).toBe('unavailable');
     expect(umbrella.disabled).toBe(false);
-    expect(umbrella.getAttribute('aria-disabled')).toBe('true');
+    expect(umbrella.tabIndex).toBe(0);
+    expect(umbrella.querySelector('[role="tooltip"]')?.textContent).toBe('UMBRELLA');
 
     umbrella.click();
     expect(selected).not.toHaveBeenCalled();
@@ -705,7 +717,112 @@ describe('SurvivalUI', () => {
 
     item.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
     void ui.showEventReveal(testEvent());
-    expect(highlight).toHaveBeenLastCalledWith('bucket-test');
+    expect(highlight).toHaveBeenLastCalledWith(null);
+  });
+
+  it('locks ordinary anchors until event choices become available', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const highlights: Array<string | null> = [];
+    ui.onAnchorHighlight = (id) => highlights.push(id);
+    ui.setAnchors([
+      {
+        id: 'bucket-1',
+        itemType: 'bucket',
+        toolId: null,
+        action: null,
+        remainingUses: null,
+        x: 140,
+        y: 180,
+        visible: true,
+        depleted: false,
+      },
+      {
+        id: 'end-day-lantern',
+        itemType: null,
+        toolId: 'lantern',
+        action: 'endDay',
+        remainingUses: null,
+        x: 640,
+        y: 280,
+        visible: true,
+        depleted: false,
+      },
+      {
+        id: 'scubaSet-1',
+        itemType: 'scubaSet',
+        toolId: null,
+        action: 'dive',
+        remainingUses: null,
+        x: 240,
+        y: 250,
+        visible: true,
+        depleted: false,
+      },
+      {
+        id: 'repair-tools',
+        itemType: null,
+        toolId: 'repairTools',
+        action: 'repair',
+        remainingUses: null,
+        x: 440,
+        y: 280,
+        visible: true,
+        depleted: false,
+      },
+    ]);
+    ui.render(snapshot(), () => null);
+
+    const bucket = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="bucket-1"]',
+    )!;
+    const lantern = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="end-day-lantern"]',
+    )!;
+    const scuba = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="scubaSet-1"]',
+    )!;
+    const repair = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="repair-tools"]',
+    )!;
+
+    bucket.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlights.at(-1)).toBe('bucket-1');
+
+    ui.beginEventPresentation();
+
+    expect(highlights.at(-1)).toBeNull();
+    expect(bucket.dataset.eventState).toBe('locked');
+    expect(bucket.disabled).toBe(true);
+    expect(bucket.tabIndex).toBe(-1);
+    expect(lantern.dataset.eventState).toBe('locked');
+    expect(lantern.disabled).toBe(true);
+    expect(repair.dataset.eventState).toBe('locked');
+    expect(repair.disabled).toBe(true);
+
+    const count = highlights.length;
+    bucket.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    bucket.focus();
+    expect(highlights).toHaveLength(count);
+    expect(document.activeElement).not.toBe(bucket);
+
+    ui.setEventSelection(new Map([['bucket-1', 'bucket'] as const]));
+
+    expect(bucket.dataset.eventState).toBe('available');
+    expect(bucket.disabled).toBe(false);
+    expect(bucket.tabIndex).toBe(0);
+    expect(scuba.dataset.eventState).toBe('unavailable');
+    expect(scuba.disabled).toBe(false);
+    expect(scuba.tabIndex).toBe(0);
+    expect(scuba.getAttribute('aria-disabled')).toBe('true');
+    expect(scuba.querySelector('.boat-tooltip')?.textContent).toContain('SCUBA');
+    expect(lantern.dataset.eventState).toBe('locked');
+    expect(repair.dataset.eventState).toBe('locked');
+    bucket.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlights.at(-1)).toBe('bucket-1');
+    scuba.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlights.at(-1)).toBe('scubaSet-1');
   });
 
   it.each([
@@ -1560,7 +1677,7 @@ describe('SurvivalUI', () => {
     expect(document.activeElement).toBe(dive);
   });
 
-  it('keeps scene items inspectable during an event while modal states isolate commands', () => {
+  it('keeps ordinary scene actions inert during an event', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -1573,11 +1690,13 @@ describe('SurvivalUI', () => {
     void ui.showEventReveal(testEvent());
     ui.setEventSelection(new Map());
     expect(anchorLayer.hasAttribute('inert')).toBe(false);
+    expect(fish.disabled).toBe(true);
     fish.click();
     expect(action).not.toHaveBeenCalled();
 
     ui.clearEventPresentation();
     expect(anchorLayer.hasAttribute('inert')).toBe(false);
+    expect(fish.disabled).toBe(false);
     fish.click();
     expect(action).toHaveBeenCalledOnce();
 

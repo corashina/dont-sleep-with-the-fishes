@@ -35,7 +35,15 @@ Food, Bait, Duct Tape, Medkit, Flare Gun, Bottled Paper, and Harpoon Gun are one
 
 The repair toolbox and starboard-mounted Fishing Rod are permanent lifeboat equipment rather than Dorothy collectibles. The rod is never picked up or recovered. It is available for fishing in every survival run, while the toolbox uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. Rest never requires an item: it restores two energy once per day. Bottled Paper costs one energy, adds 15 rescue progress, and is consumed. Energy Bar restores energy to the maximum of three and is consumed.
 
-The ordinary event catalog includes Drifting Loot, Drifting Bottle, Check the Back, Mystery Chest, Midnight Tour, Night Trader, The Handyman, and Other People alongside the existing encounters. Recovered usable items unlock suitable physical responses, while compact contextual buttons handle choices such as retrieving loot, visiting an island, accepting a resource trade, refusing, or letting a sighting pass. Encounters can generate stable onboard supplies such as Bottled Paper, Duct Tape, Energy Bars, Medkits, and traded tools; an occupied item slot falls back to food. Companion content, companion needs, lore and story branches, and alternate-ending chains remain explicitly excluded. The wiki informed the committed event data but is not a runtime dependency.
+The event catalog includes Mystery Chest, Chest Attack, and Flowers.
+
+Mystery Chest now places a closed chest aboard. Opening it costs three energy.
+
+An old chest can become a mimic. Fishing Net binds it shut.
+
+Flowers accepts Fishing Net or Bucket. It records the choice without a large reward.
+
+Run pressure rises on days 8, 15, 25, and 40. Night damage doubles from day 50.
 
 ## Run
 
@@ -71,6 +79,7 @@ Supplies are repeatable physical instances rather than one slot per item type. T
 | `Escape` | Pause or resume, including during fishing; pausing does not cancel the attempt or refund its energy |
 | Top-center journal button | Open completed entries; `NEW` marks unread history |
 | Boat lantern | End the day and fade into an event or quiet night |
+| Closed chest | Spend three energy to open the chest |
 
 ### Fishing
 
@@ -111,11 +120,16 @@ In the lifeboat, each day gives three energy for daytime actions:
 - **Repair item** consumes Duct Tape to restore one selected broken, repairable supply.
 - **Send message** consumes Bottled Paper and one energy to add 15 rescue progress.
 - **Eat Energy Bar** consumes the bar and restores energy to three.
+- **Open chest** costs three energy and recovers a missing tool or useful resource.
 - **End day** advances into the day and night event sequence.
 
 Health, Food, Energy, and Hull remain visible as condition meters. Food is the inverse of internal hunger, so it drains toward zero as the survivor becomes hungry. Food, bait, repair material, and rescue progress still exist as separate stores used by actions and outcomes, but they are not persistently tallied in the HUD.
 
-Day and night events fade to black for 2.5 seconds, stage the committed event while covered, and fade into the event over 2.5 seconds. Original procedural placeholder tableaus depict the bottle, drifting cargo, stern fish, chest, island, trader skiff, reaching hand, cargo vessel, and Death Stare fish without reproducing story artwork. The event title appears at the top of the scene; green, yellow, or red title color communicates its risk. Suitable recovered physical items become selectable after the reveal, contextual decisions appear as nearby buttons, and **Endure** appears only when no physical or authored contextual response is available. A one-use event supply is consumed only when its authored outcome spends it.
+Day and night events fade to black before each reveal.
+
+Event tableaus now include drifting flowers and the chest mimic.
+
+Pressure, flags, chest state, day bounds, cooldowns, and inventory can gate events.
 
 Clicking the physical boat lantern ends the day and uses the same slow cover before sleep. Most nights open an event decision; some nights pass quietly under the black cover before dawn fades back in over 2.5 seconds. Resolving a nighttime event or completing a quiet night advances to dawn. Each completed night adds an unread journal entry, and the player can open the journal later without advancing time.
 
