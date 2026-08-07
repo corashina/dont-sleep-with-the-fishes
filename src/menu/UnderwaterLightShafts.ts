@@ -23,8 +23,8 @@ const LIGHT_SHAFT_VERTEX_SHADER = `
     vec3 transformed = position;
     float top = smoothstep(0.0, 1.0, uv.y);
     transformed.x *= mix(1.0, uTaper, top);
-    float bend = sin(uTime * uDrift + uPhase + uv.y * 2.4) * 0.045;
-    bend += sin(uTime * uDrift * 0.47 - uPhase * 0.8 + uv.y * 5.2) * 0.015;
+    float bend = sin(uTime * uDrift + uPhase + uv.y * 2.4) * 0.018;
+    bend += sin(uTime * uDrift * 0.47 - uPhase * 0.8 + uv.y * 5.2) * 0.006;
     transformed.x += bend * (1.0 - top * 0.55);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(transformed, 1.0);
   }
@@ -58,12 +58,12 @@ const LIGHT_SHAFT_FRAGMENT_SHADER = `
     float slowTime = uTime * uDrift;
     float broadFlow = valueNoise(vec2(vUv.y * 2.8 + uPhase, slowTime * 0.035));
     float fineFlow = valueNoise(vec2(vUv.y * 7.5 - slowTime * 0.02, uPhase * 2.3));
-    float warpedX = vUv.x + (broadFlow - 0.5) * 0.12 + (fineFlow - 0.5) * 0.04;
+    float warpedX = vUv.x + (broadFlow - 0.5) * 0.045 + (fineFlow - 0.5) * 0.015;
 
     float edgeNoise = valueNoise(vec2(vUv.y * 4.3 + uPhase, slowTime * 0.025));
-    float edgeWidth = mix(0.33, 0.48, edgeNoise);
+    float edgeWidth = mix(0.36, 0.49, edgeNoise);
     float horizontal = 1.0 - smoothstep(
-      edgeWidth - 0.15,
+      edgeWidth - 0.2,
       edgeWidth,
       abs(warpedX - 0.5)
     );
@@ -72,20 +72,20 @@ const LIGHT_SHAFT_FRAGMENT_SHADER = `
     float secondaryCell = abs(
       fract((warpedX + 0.13) * (uDensity * 0.63) - uPhase * 0.11) - 0.5
     ) * 2.0;
-    float primary = 1.0 - smoothstep(0.12, 0.62, primaryCell);
-    float secondary = 1.0 - smoothstep(0.18, 0.78, secondaryCell);
-    float strands = max(primary, secondary * 0.52);
+    float primary = 1.0 - smoothstep(0.08, 0.72, primaryCell);
+    float secondary = 1.0 - smoothstep(0.12, 0.86, secondaryCell);
+    float strands = clamp(primary * 0.68 + secondary * 0.36, 0.0, 1.0);
 
     float breakupNoise = valueNoise(vec2(
       warpedX * 9.0 + uPhase,
       vUv.y * 5.0 - slowTime * 0.028
     ));
-    float breakup = mix(0.48, 1.0, smoothstep(0.16, 0.86, breakupNoise));
+    float breakup = mix(0.66, 1.0, smoothstep(0.16, 0.86, breakupNoise));
     float vertical = smoothstep(0.0, 0.22, vUv.y)
       * (1.0 - smoothstep(0.86, 1.0, vUv.y));
-    float shimmer = 0.93 + 0.07 * sin(slowTime * 0.09 + uPhase + vUv.y * 4.0);
+    float shimmer = 0.96 + 0.04 * sin(slowTime * 0.09 + uPhase + vUv.y * 4.0);
     float alpha = horizontal * vertical * breakup
-      * mix(0.18, 1.0, strands) * shimmer * uOpacity;
+      * mix(0.34, 1.0, strands) * shimmer * uOpacity;
     vec3 depthColor = mix(uColor * 0.58, uColor * 1.08, smoothstep(0.08, 0.92, vUv.y));
     gl_FragColor = vec4(depthColor, alpha);
   }
