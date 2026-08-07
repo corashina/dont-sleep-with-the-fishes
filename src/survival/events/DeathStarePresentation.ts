@@ -24,15 +24,14 @@ import type {
   SupplyAdditivePose,
 } from '../BoatSupplyDisplay';
 import { borrowSupplyActor, releaseSupplyActor } from '../BoatSupplyDisplay';
-import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
 import type {
   DedicatedEventEnvironment,
-  DedicatedEventAnimation,
   DedicatedEventPresentation,
   EventOutcomePresentation,
   EventSceneContext,
 } from '../eventPresentationTypes';
 import { StationaryEventCamera } from '../StationaryEventCamera';
+import { TimedPresentationAnimation } from '../TimedPresentationAnimation';
 import {
   DEATH_STARE_REACTION_DURATION,
   DEATH_STARE_REVEAL_DURATION,
@@ -179,7 +178,13 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   private readonly mouthWorldPosition = new Vector3();
   private readonly mouthParentPosition = new Vector3();
   private readonly actorParentWorldInverse = new Matrix4();
-  private active: DedicatedEventAnimation | null = null;
+  private readonly animation = new TimedPresentationAnimation<
+    'reveal' | 'item' | 'reaction'
+  >(
+    (kind, time, progress) => this.applyAnimation(kind, time, progress),
+    (kind) => this.finishAnimation(kind),
+  );
+  private activeChoiceId: string | null = null;
   private borrowedActor: BorrowedSupplyActor | null = null;
   private staged = false;
   private disposed = false;
@@ -343,17 +348,11 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
 
   reveal(): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = null;
     sampleDeathStareReveal(0, this.sample);
     this.applySample(0);
-    return new Promise((resolve) => {
-      this.active = {
-        kind: 'reveal',
-        elapsed: 0,
-        duration: DEATH_STARE_REVEAL_DURATION,
-        resolve,
-      };
-    });
+    return this.animation.start('reveal', DEATH_STARE_REVEAL_DURATION);
   }
 
   playItemUse(choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
@@ -364,23 +363,24 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     ) {
       return Promise.resolve(false);
     }
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = choiceId;
     sampleDeathStareItemUse(sceneChoiceId(choiceId), 0, this.sample);
     this.applySample(0);
-    return new Promise((resolve) => {
-      this.active = {
-        kind: 'item',
-        choiceId,
-        elapsed: 0,
-        duration: deathStareItemDuration(sceneChoiceId(choiceId)),
-        resolve,
-      };
-    });
+    return this.animation.start(
+      'item',
+      deathStareItemDuration(sceneChoiceId(choiceId)),
+      {
+        complete: true,
+        cancel: false,
+      },
+    );
   }
 
   react(result: EventOutcomePresentation): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = null;
     this.resetBorrowedPose();
 
     const selectedId = result.selectedInstanceId;
@@ -398,54 +398,21 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.applySample(0);
     this.applyReactionBorrowedPose();
 
-    return new Promise((resolve) => {
-      this.active = {
-        kind: 'reaction',
-        elapsed: 0,
-        duration: DEATH_STARE_REACTION_DURATION,
-        resolve,
-      };
-    });
+    return this.animation.start('reaction', DEATH_STARE_REACTION_DURATION);
   }
 
   update(time: number, delta: number): void {
     if (this.disposed || !this.staged) return;
-    const active = this.active;
-    if (active !== null) {
-      const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
-      active.elapsed = Math.min(active.duration, active.elapsed + safeDelta);
-      if (active.duration - active.elapsed <= 1e-9) {
-        active.elapsed = active.duration;
-      }
-      const progress = active.duration === 0 ? 1 : active.elapsed / active.duration;
-      if (active.kind === 'reveal') {
-        sampleDeathStareReveal(progress, this.sample);
-      } else if (active.kind === 'item') {
-        sampleDeathStareItemUse(sceneChoiceId(active.choiceId), progress, this.sample);
-      } else {
-        sampleDeathStareReaction(this.reactionState, progress, this.sample);
-      }
-      this.applySample(time);
-      if (active.kind === 'reaction') this.applyReactionBorrowedPose();
-      if (progress === 1) this.finishActive();
+    if (this.animation.active) {
+      this.animation.update(time, Number.isFinite(delta) ? delta : 0);
       return;
     }
     this.applySample(time);
   }
 
   settleForVisibilityChange(): void {
-    if (this.disposed || this.active === null) return;
-    this.active.elapsed = this.active.duration;
-    if (this.active.kind === 'reveal') {
-      sampleDeathStareReveal(1, this.sample);
-    } else if (this.active.kind === 'item') {
-      sampleDeathStareItemUse(sceneChoiceId(this.active.choiceId), 1, this.sample);
-    } else {
-      sampleDeathStareReaction(this.reactionState, 1, this.sample);
-    }
-    this.applySample(0);
-    if (this.active.kind === 'reaction') this.applyReactionBorrowedPose();
-    this.finishActive();
+    if (this.disposed) return;
+    this.animation.settle();
   }
 
   skip(): void {
@@ -454,7 +421,8 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
 
   clear(): void {
     if (this.disposed) return;
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = null;
     this.resetCameraEffect();
     this.releaseActor();
     this.staged = false;
@@ -464,11 +432,10 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    const active = this.active;
     const actor = this.borrowedActor;
-    this.active = null;
     this.borrowedActor = null;
-    resolveCancelledEventAnimation(active);
+    this.animation.cancel();
+    this.activeChoiceId = null;
 
     runCleanupSteps([
       () => this.resetCameraEffect(),
@@ -516,29 +483,34 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     actor.applyPose(this.itemPose);
   }
 
-  private finishActive(): void {
-    const active = this.active;
-    if (active === null) return;
-    this.active = null;
-    if (active.kind === 'item') {
-      sampleDeathStareItemUse(sceneChoiceId(active.choiceId), 1, this.sample);
-      this.applySample(0);
-      this.applySample(0);
-      active.resolve(true);
-      return;
+  private applyAnimation(
+    kind: 'reveal' | 'item' | 'reaction',
+    time: number,
+    progress: number,
+  ): void {
+    if (kind === 'reveal') {
+      sampleDeathStareReveal(progress, this.sample);
+    } else if (kind === 'item') {
+      if (this.activeChoiceId === null) return;
+      sampleDeathStareItemUse(
+        sceneChoiceId(this.activeChoiceId),
+        progress,
+        this.sample,
+      );
+    } else {
+      sampleDeathStareReaction(this.reactionState, progress, this.sample);
     }
-    if (active.kind === 'reaction' && this.reactionState.lostItem) {
+    this.applySample(time);
+    if (kind === 'reaction') this.applyReactionBorrowedPose();
+  }
+
+  private finishAnimation(kind: 'reveal' | 'item' | 'reaction'): void {
+    this.activeChoiceId = null;
+    if (kind === 'reaction' && this.reactionState.lostItem) {
       const actor = this.borrowedActor;
       this.borrowedActor = null;
       actor?.releaseOnNextSync();
     }
-    active.resolve();
-  }
-
-  private cancelActive(): void {
-    const active = this.active;
-    this.active = null;
-    resolveCancelledEventAnimation(active);
   }
 
   private applySample(time: number): void {
