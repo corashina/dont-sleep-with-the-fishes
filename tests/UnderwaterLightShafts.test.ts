@@ -16,17 +16,28 @@ it('builds four animated transparent light shafts and disposes shared resources'
   const geometry = meshes[0]!.geometry;
   const geometryDispose = vi.spyOn(geometry, 'dispose');
   const materialDisposers = meshes.map(({ material }) => vi.spyOn(material, 'dispose'));
+  expect(geometry.getAttribute('position').count).toBeGreaterThan(4);
   for (const mesh of meshes) {
     expect(mesh.geometry).toBe(geometry);
     expect(mesh.material).toBeInstanceOf(ShaderMaterial);
     expect(mesh.material.transparent).toBe(true);
     expect(mesh.material.depthWrite).toBe(false);
     expect(mesh.layers.isEnabled(ITEM_AMBIENT_OCCLUSION_LAYER)).toBe(false);
+    expect(mesh.material.uniforms.uTaper!.value).toBeGreaterThan(0);
+    expect(mesh.material.uniforms.uDensity!.value).toBeGreaterThan(1);
+    expect(mesh.material.uniforms.uDrift!.value).toBeGreaterThan(0);
+    expect(mesh.material.vertexShader).toContain('uTaper');
+    expect(mesh.material.fragmentShader).toContain('valueNoise');
   }
 
   shafts.setTime(2.5);
   for (const mesh of meshes) {
     expect(mesh.material.uniforms.uTime!.value).toBe(2.5);
+  }
+
+  shafts.setTime(Number.NaN);
+  for (const mesh of meshes) {
+    expect(mesh.material.uniforms.uTime!.value).toBe(0);
   }
 
   shafts.dispose();
