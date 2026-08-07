@@ -92,10 +92,10 @@ const LIGHT_SHAFT_FRAGMENT_SHADER = `
 `;
 
 const LIGHT_SHAFT_SPECS = [
-  { position: [-8.5, 4.6, -4.5], width: 5.4, length: 13.5, roll: -0.12, opacity: 0.06, phase: 0.2, taper: 0.34, density: 3.2, drift: 0.074 },
-  { position: [5.8, 5.1, -10.5], width: 6.8, length: 15, roll: 0.09, opacity: 0.052, phase: 1.6, taper: 0.41, density: 2.7, drift: 0.061 },
-  { position: [-4.2, 5.8, -18.5], width: 8.2, length: 17, roll: -0.06, opacity: 0.066, phase: 3.1, taper: 0.29, density: 3.6, drift: 0.052 },
-  { position: [10.5, 6.4, -28], width: 10, length: 19, roll: 0.1, opacity: 0.044, phase: 4.7, taper: 0.38, density: 3.0, drift: 0.046 },
+  { position: [-8.5, 8.6, -4.5], width: 5.4, length: 21.5, roll: -0.12, opacity: 0.06, phase: 0.2, taper: 0.34, density: 3.2, drift: 0.074 },
+  { position: [5.8, 9.1, -10.5], width: 6.8, length: 23, roll: 0.09, opacity: 0.052, phase: 1.6, taper: 0.41, density: 2.7, drift: 0.061 },
+  { position: [-4.2, 11.8, -18.5], width: 8.2, length: 29, roll: -0.06, opacity: 0.066, phase: 3.1, taper: 0.29, density: 3.6, drift: 0.052 },
+  { position: [10.5, 16.4, -28], width: 10, length: 39, roll: 0.1, opacity: 0.044, phase: 4.7, taper: 0.38, density: 3.0, drift: 0.046 },
 ] as const;
 
 export class UnderwaterLightShafts {
