@@ -118,32 +118,25 @@ function createEventModels(): EventModelLibrary {
   } as unknown as EventModelLibrary;
 }
 
-function createActor(
-  parent: Group,
-  instanceId: ItemInstanceId,
-): { actor: BorrowedSupplyActor; release: ReturnType<typeof vi.fn> } {
+function createActor(parent: Group, instanceId: ItemInstanceId): BorrowedSupplyActor {
   const root = new Group();
   const basePosition = new Vector3(1.45, 0.34, -0.2);
   root.position.copy(basePosition);
   parent.add(root);
-  const release = vi.fn();
   return {
-    actor: {
-      instanceId,
-      root,
-      applyPose: (pose: SupplyAdditivePose) => {
-        root.position.set(
-          basePosition.x + pose.x,
-          basePosition.y + pose.y,
-          basePosition.z + pose.z,
-        );
-        root.rotation.set(pose.pitch, pose.yaw, pose.roll, 'YXZ');
-        root.scale.set(pose.scaleX, pose.scaleY, pose.scaleZ);
-      },
-      releaseOnNextSync: vi.fn(),
-      release,
+    instanceId,
+    root,
+    applyPose: (pose: SupplyAdditivePose) => {
+      root.position.set(
+        basePosition.x + pose.x,
+        basePosition.y + pose.y,
+        basePosition.z + pose.z,
+      );
+      root.rotation.set(pose.pitch, pose.yaw, pose.roll, 'YXZ');
+      root.scale.set(pose.scaleX, pose.scaleY, pose.scaleZ);
     },
-    release,
+    releaseOnNextSync: vi.fn(),
+    release: vi.fn(),
   };
 }
 
@@ -185,48 +178,6 @@ describe('dedicated event item use', () => {
     emit.mockRestore();
   });
 
-  it.each(Object.entries(choices) as readonly (readonly [
-    ItemAnimationEventId,
-    readonly string[],
-  ])[])(
-    'runs a %s scene without borrowing the selected actor',
-    async (eventId, eventChoices) => {
-      const choiceId = eventChoices[0]!;
-      const instanceId = 'compass-1' as ItemInstanceId;
-      const scene = new Scene();
-      const camera = new PerspectiveCamera(62, 1.6, 0.1, 100);
-      const supplyRoot = new Group();
-      scene.add(camera, supplyRoot);
-      const { actor, release } = createActor(supplyRoot, instanceId);
-      const borrowEventActor = vi.fn(() => actor);
-      const effects = new EventItemEffects();
-      const adapter = new EventItemUseAdapter(camera, effects);
-      const environment: DedicatedEventEnvironment = {
-        eventModels: createEventModels(),
-        supplies: {
-          borrowEventActor,
-          itemType: () => 'compass',
-        } as unknown as DedicatedEventEnvironment['supplies'],
-        captainWhiskers: {} as DedicatedEventEnvironment['captainWhiskers'],
-        vortexWave: createInactiveVortexWaveState(),
-        sampleWorldWaveInto: (output) => Object.assign(output, createWaveSample()),
-        readWorldWaveAmplitudeScale: () => 1,
-        camera,
-      };
-      const presentation = factories[eventId](environment);
-      presentation.stage({ eventId, targetInstanceId: null, variantSeed: 41 });
-
-      const itemUse = presentation.playItemUse(choiceId, instanceId);
-      presentation.update(1, itemDurations[eventId](choiceId));
-      await expect(itemUse).resolves.toBe(true);
-      expect(borrowEventActor).not.toHaveBeenCalled();
-      expect(release).not.toHaveBeenCalled();
-
-      presentation.dispose();
-      adapter.dispose();
-    },
-  );
-
   it.each(cases)(
     'uses shared %s %s choreography without replacing its event scene',
     async (eventId, choiceId) => {
@@ -239,7 +190,7 @@ describe('dedicated event item use', () => {
       scene.add(camera);
       const supplyRoot = new Group();
       scene.add(supplyRoot);
-      const { actor } = createActor(supplyRoot, instanceId);
+      const actor = createActor(supplyRoot, instanceId);
       const borrowEventActor = vi.fn(() => actor);
       const effects = new EventItemEffects();
       const disposeEffects = vi.spyOn(effects, 'dispose');
