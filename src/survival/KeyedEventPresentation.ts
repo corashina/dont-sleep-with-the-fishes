@@ -1,16 +1,23 @@
 import { Group, type Object3D } from 'three';
 import type { EventPresentationKey } from './survivalTypes';
 import type { FeaturedEventPresentation } from './FeaturedEventPresentation';
-import type { TimedAnimation } from './animationMath';
+import { TimedPresentationAnimation } from './TimedPresentationAnimation';
 
 export abstract class KeyedEventPresentation implements FeaturedEventPresentation {
   readonly root = new Group();
   protected readonly subject = new Group();
   protected settledKind = 'staged';
-  private active: TimedAnimation<string> | null = null;
+  private readonly animation: TimedPresentationAnimation<string>;
   private disposed = false;
 
   protected constructor(name: string) {
+    this.animation = new TimedPresentationAnimation(
+      (kind, time, progress) => this.applyAnimation(kind, time, progress),
+      (kind) => {
+        this.settledKind = kind;
+        this.finishAnimation(kind);
+      },
+    );
     this.root.name = name;
     this.subject.name = `${name}:subject`;
     this.root.add(this.subject);
@@ -19,7 +26,7 @@ export abstract class KeyedEventPresentation implements FeaturedEventPresentatio
 
   stage(): void {
     if (this.disposed) return;
-    this.cancel();
+    this.animation.cancel();
     this.settledKind = 'staged';
     this.root.visible = true;
     this.subject.visible = true;
@@ -49,34 +56,18 @@ export abstract class KeyedEventPresentation implements FeaturedEventPresentatio
 
   update(time: number, delta: number): void {
     if (this.disposed || !this.root.visible) return;
-    if (this.active === null) {
-      this.applyIdle(time);
-      return;
-    }
-    const animation = this.active;
-    animation.elapsed = Math.min(animation.duration, animation.elapsed + Math.max(0, delta));
-    const progress = animation.duration <= 0 ? 1 : animation.elapsed / animation.duration;
-    this.applyAnimation(animation.kind, time, progress);
-    if (progress < 1) return;
-    this.active = null;
-    this.settledKind = animation.kind;
-    this.finishAnimation(animation.kind);
-    animation.resolve();
+    if (this.animation.active) this.animation.update(time, delta);
+    else this.applyIdle(time);
   }
 
   settleForVisibilityChange(): void {
-    if (this.disposed || this.active === null) return;
-    const animation = this.active;
-    this.active = null;
-    this.applyAnimation(animation.kind, 0, 1);
-    this.settledKind = animation.kind;
-    this.finishAnimation(animation.kind);
-    animation.resolve();
+    if (this.disposed) return;
+    this.animation.settle();
   }
 
   clear(): void {
     if (this.disposed) return;
-    this.cancel();
+    this.animation.cancel();
     this.settledKind = 'staged';
     this.reset();
     this.subject.visible = false;
@@ -85,7 +76,7 @@ export abstract class KeyedEventPresentation implements FeaturedEventPresentatio
 
   dispose(): void {
     if (this.disposed) return;
-    this.cancel();
+    this.animation.cancel();
     this.disposed = true;
     this.root.removeFromParent();
     this.disposeOwned();
@@ -109,19 +100,12 @@ export abstract class KeyedEventPresentation implements FeaturedEventPresentatio
 
   private start(kind: string, duration: number): Promise<void> {
     if (this.disposed || !this.root.visible) return Promise.resolve();
-    this.cancel();
+    this.animation.cancel();
     this.prepareAnimation(kind);
-    return new Promise((resolve) => {
-      this.active = { kind, elapsed: 0, duration, resolve };
-      this.applyAnimation(kind, 0, 0);
-    });
+    const animation = this.animation.start(kind, duration);
+    this.applyAnimation(kind, 0, 0);
+    return animation;
   }
 
   protected prepareAnimation(_kind: string): void {}
-
-  private cancel(): void {
-    const active = this.active;
-    this.active = null;
-    active?.resolve();
-  }
 }
