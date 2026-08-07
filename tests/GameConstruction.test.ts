@@ -9,6 +9,7 @@ import type { LifeboatAssets } from '../src/world/LifeboatAssets';
 import type { ShipAssets } from '../src/world/ShipAssets';
 import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
 import type { MenuModelLibrary } from '../src/menu/MenuModelLibrary';
+import type { MenuSandAssets } from '../src/menu/MenuSandAssets';
 import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
 import { testPhysicsRuntime } from './helpers/physics';
 
@@ -74,6 +75,9 @@ describe('Game construction rollback', () => {
     const menuModels = {
       dispose: vi.fn(() => calls.push('menuModels')),
     } as unknown as MenuModelLibrary;
+    const menuSandAssets = {
+      dispose: vi.fn(() => calls.push('menuSandAssets')),
+    } as unknown as MenuSandAssets;
     const { Game } = await import('../src/Game');
 
     let thrown: unknown;
@@ -87,6 +91,7 @@ describe('Game construction rollback', () => {
         {} as ShipAssets,
         {} as EventModelLibrary,
         menuModels,
+        menuSandAssets,
         physicsRuntime,
       );
     } catch (error) {
@@ -96,8 +101,15 @@ describe('Game construction rollback', () => {
     expect(thrown).toBeInstanceOf(TypeError);
     expect((thrown as Error).message).toContain('getMaxAnisotropy');
     expect(constructionMocks.createSceneRenderer).toHaveBeenCalledWith(renderer, 'low');
-    expect(calls).toEqual(['menuModels', 'sceneRenderer', 'renderer', 'canvas']);
+    expect(calls).toEqual([
+      'menuModels',
+      'menuSandAssets',
+      'sceneRenderer',
+      'renderer',
+      'canvas',
+    ]);
     expect(menuModels.dispose).toHaveBeenCalledOnce();
+    expect(menuSandAssets.dispose).toHaveBeenCalledOnce();
     expect(sceneRenderer.dispose).toHaveBeenCalledOnce();
     expect(renderer.dispose).toHaveBeenCalledOnce();
   }, 10_000);
@@ -118,6 +130,10 @@ describe('Game construction rollback', () => {
       dispose: vi.fn(),
     } as unknown as EventModelLibrary;
     const menuModels = { dispose: vi.fn() } as unknown as MenuModelLibrary;
+    const menuSandAssets = {
+      configure: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as MenuSandAssets;
     let phaseContext: PhaseContext | undefined;
     const { Game } = await import('../src/Game');
     const game = Game.forTest({
@@ -141,6 +157,7 @@ describe('Game construction rollback', () => {
       shipFurniture: { dispose: vi.fn() } as unknown as ShipFurnitureLibrary,
       skyAssets: { dispose: vi.fn() } as unknown as SkyAssets,
       menuModels,
+      menuSandAssets,
       physicsRuntime,
       mount: document.createElement('main'),
       renderer: renderer as never,
@@ -148,9 +165,12 @@ describe('Game construction rollback', () => {
 
     expect(phaseContext?.supernaturalEventModels).toBe(eventModels);
     expect(phaseContext?.menuModels).toBe(menuModels);
+    expect(phaseContext?.menuSandAssets).toBe(menuSandAssets);
+    expect(menuSandAssets.configure).toHaveBeenCalledWith(1);
     game.dispose();
     game.dispose();
     expect(eventModels.dispose).toHaveBeenCalledOnce();
     expect(menuModels.dispose).toHaveBeenCalledOnce();
+    expect(menuSandAssets.dispose).toHaveBeenCalledOnce();
   });
 });

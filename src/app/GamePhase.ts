@@ -17,6 +17,7 @@ import type { AudioSystem } from '../audio/AudioSystem';
 import type { SurvivalEventModels } from '../survival/SurvivalEventModelLibrary';
 import type { EventModelLibrary } from '../survival/EventModelLibrary';
 import type { MenuModelLibrary } from '../menu/MenuModelLibrary';
+import type { MenuSandAssets } from '../menu/MenuSandAssets';
 
 export interface PhaseContext {
   mount: HTMLElement;
@@ -38,6 +39,7 @@ export interface PhaseContext {
   audio: AudioSystem;
   featuredEventModels: SurvivalEventModels;
   menuModels: MenuModelLibrary;
+  menuSandAssets: MenuSandAssets;
 }
 
 export interface GamePhase {
