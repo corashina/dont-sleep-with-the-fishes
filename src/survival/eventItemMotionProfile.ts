@@ -59,12 +59,15 @@ const PROFILES: Readonly<Record<ItemId, EventItemMotionProfile>> = Object.freeze
   ductTape: createProfile('one-hand', 'ductTape'),
   compass: Object.freeze({
     ...createProfile('one-hand', 'compass'),
-    view: [0, -0.1, -0.44] as const,
+    view: [-0.06, -0.1, -0.44] as const,
   }),
   map: createProfile('reading', 'map'),
   medicalKit: createProfile('one-hand', 'medicalKit'),
   spyglass: createProfile('reading', 'spyglass'),
-  fishingNet: createProfile('large', 'fishingNet'),
+  fishingNet: Object.freeze({
+    ...createProfile('large', 'fishingNet'),
+    actionOrigin: [0, -0.82, 0] as const,
+  }),
   bucket: createProfile('large', 'bucket'),
   flareGun: Object.freeze({
     ...createProfile('one-hand', 'flareGun'),
@@ -75,7 +78,10 @@ const PROFILES: Readonly<Record<ItemId, EventItemMotionProfile>> = Object.freeze
   scubaSet: createProfile('one-hand', 'scubaSet'),
   anchor: createProfile('large', 'anchor'),
   bottledPaper: createProfile('one-hand', 'bottledPaper'),
-  umbrella: createProfile('large', 'umbrella'),
+  umbrella: Object.freeze({
+    ...createProfile('one-hand', 'umbrella'),
+    view: [0.32, 0.18, -0.38] as const,
+  }),
   swimRing: createProfile('large', 'swimRing'),
   flashlight: Object.freeze({
     ...createProfile('one-hand', 'flashlight'),

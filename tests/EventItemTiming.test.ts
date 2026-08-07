@@ -27,7 +27,7 @@ describe('event item timing', () => {
     expect(GENERIC_EVENT_ITEM_USE_DURATION).toBe(2.6);
     expect(DANGEROUS_WATERS_ITEM_DURATION).toBe(4.4);
     expect(eventItemUseDuration('throw-target')).toBeCloseTo(4.32);
-    expect(eventItemUseDuration('net-throw')).toBe(4.8);
+    expect(eventItemUseDuration('net-scoop')).toBe(6);
     expect(weatherItemUseDuration('shower-night', 'umbrella')).toBe(6);
     expect(supernaturalItemUseDuration('ghosts', 'flareGun')).toBe(4.8);
     expect(LEAK_ITEM_DURATION).toBe(4.4);

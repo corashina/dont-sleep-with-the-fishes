@@ -2,11 +2,12 @@
 import {
   BufferGeometry,
   Group,
-  LineSegments,
   Material,
   Mesh,
   MeshStandardMaterial,
   PointLight,
+  TorusGeometry,
+  Vector3,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { EventItemEffects } from '../src/survival/EventItemEffects';
@@ -21,7 +22,6 @@ const effectNames: Readonly<Record<EventItemEffectKind, string | null>> = {
   none: null,
   tape: 'event-item-tape',
   'binocular-mask': null,
-  net: 'event-item-net',
   'bucket-cover': null,
   flare: 'event-item-flare',
   chain: 'event-item-chain',
@@ -31,9 +31,7 @@ const effectNames: Readonly<Record<EventItemEffectKind, string | null>> = {
 
 const actionEffects = [
   ['tape-stretch', 'event-item-tape'],
-  ['net-throw', 'event-item-net'],
   ['flare-target', 'event-item-flare'],
-  ['anchor-drop', 'event-item-chain'],
   ['flashlight-flash', 'event-item-flashlight-beam'],
   ['shotgun-fire', 'event-item-shotgun-smoke'],
 ] as const satisfies readonly (readonly [EventItemUseContext, string])[];
@@ -41,7 +39,7 @@ const actionEffects = [
 function ownedResources(root: Group): readonly (BufferGeometry | Material)[] {
   const resources = new Set<BufferGeometry | Material>();
   root.traverse((object) => {
-    if (!(object instanceof Mesh) && !(object instanceof LineSegments)) return;
+    if (!(object instanceof Mesh)) return;
     resources.add(object.geometry);
     (Array.isArray(object.material) ? object.material : [object.material])
       .forEach((material) => resources.add(material));
@@ -54,7 +52,7 @@ describe('EventItemEffects', () => {
     const effects = new EventItemEffects();
 
     expect(effects.root.getObjectByName('event-item-tape')).not.toBeNull();
-    expect(effects.root.getObjectByName('event-item-net')).not.toBeNull();
+    expect(effects.root.getObjectByName('event-item-net')).toBeUndefined();
     expect(effects.root.getObjectByName('event-item-flare')).not.toBeNull();
     expect(effects.root.getObjectByName('event-item-umbrella')).toBeUndefined();
     expect(effects.root.getObjectByName('event-item-flashlight-beam')).not.toBeNull();
@@ -85,7 +83,7 @@ describe('EventItemEffects', () => {
           const requested = effects.root.getObjectByName(requestedName)!;
           expect(requested.visible).toBe(false);
           requested.traverse((object) => {
-            if (!(object instanceof Mesh) && !(object instanceof LineSegments)) return;
+            if (!(object instanceof Mesh)) return;
             const materials = Array.isArray(object.material)
               ? object.material
               : [object.material];
@@ -130,7 +128,7 @@ describe('EventItemEffects', () => {
           const effect = effects.root.getObjectByName(effectName)!;
           expect(effect.visible).toBe(false);
           effect.traverse((object) => {
-            if (!(object instanceof Mesh) && !(object instanceof LineSegments)) return;
+            if (!(object instanceof Mesh)) return;
             const materials = Array.isArray(object.material)
               ? object.material
               : [object.material];
@@ -243,21 +241,41 @@ describe('EventItemEffects', () => {
     effects.dispose();
   });
 
-  it('keeps the anchor chain full length and above the anchor', () => {
+  it('runs the anchor chain from the hand over the gunwale to the anchor', () => {
     const effects = new EventItemEffects();
+    const actorParent = new Group();
     const actor = new Group();
+    actor.position.set(0.1, 0.9, 1.2);
+    actorParent.add(actor);
     const sample = createEventItemUseSample();
     sample.effectKind = 'chain';
     sample.primaryEffect = 1;
-    sample.secondaryEffect = 1;
 
     effects.apply(sample, actor);
+    actor.position.set(2.1, 0.04, 0.55);
+    sample.secondaryEffect = 1;
+    effects.apply(sample, actor);
+    effects.root.updateMatrixWorld(true);
 
     const chain = effects.root.getObjectByName('event-item-chain')!;
     const links = chain.children;
-    expect(chain.scale.toArray()).toEqual([1, 1, 1]);
-    expect(links).toHaveLength(10);
-    expect(links.at(-1)!.position.y).toBeGreaterThan(links[0]!.position.y);
+    expect(links).toHaveLength(36);
+    links.forEach((link) => expect((link as Mesh).geometry).toBeInstanceOf(TorusGeometry));
+    expect((links[0] as Mesh).material).toBeInstanceOf(MeshStandardMaterial);
+    expect(((links[0] as Mesh).material as MeshStandardMaterial).metalness)
+      .toBeGreaterThan(0.7);
+
+    const hand = links[0]!.getWorldPosition(new Vector3());
+    const gunwale = links[15]!.getWorldPosition(new Vector3());
+    const anchor = links.at(-1)!.getWorldPosition(new Vector3());
+    expect(hand.x).toBeCloseTo(0.1);
+    expect(hand.y).toBeCloseTo(0.9);
+    expect(hand.z).toBeCloseTo(1.2);
+    expect(gunwale.x).toBeCloseTo(1.62, 1);
+    expect(gunwale.y).toBeCloseTo(0.5, 1);
+    expect(anchor.x).toBeCloseTo(actor.position.x);
+    expect(anchor.y).toBeCloseTo(actor.position.y + 0.22);
+    expect(anchor.z).toBeCloseTo(actor.position.z);
     effects.dispose();
   });
 

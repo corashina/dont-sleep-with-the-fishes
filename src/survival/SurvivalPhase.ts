@@ -558,7 +558,7 @@ export class SurvivalPhase implements GamePhase {
     this.audio.action(action, selectedOption);
     if (action === 'petWhiskers' || action === 'feedWhiskers') {
       this.syncPresentation(this.session.snapshot());
-      void this.runCaptainWhiskersAction(action, outcome);
+      void this.runCaptainWhiskersAction(action);
       return;
     }
     void this.runDayAction(outcome);
@@ -771,12 +771,14 @@ export class SurvivalPhase implements GamePhase {
       itemType === 'shotgun'
       || itemType === 'flashlight'
       || itemType === 'flareGun'
+      || itemType === 'anchor'
     ) {
+      if (itemType === 'anchor') this.audio.eventItem(itemType);
       return this.world.playEventItemUse?.(
         eventId,
         choiceId,
         instanceId,
-        () => this.audio.eventItem(itemType),
+        (cueIndex) => this.audio.eventItemCue(itemType, cueIndex),
       ) ?? Promise.resolve();
     }
     if (itemType !== undefined) this.audio.eventItem(itemType);
@@ -1140,7 +1142,6 @@ export class SurvivalPhase implements GamePhase {
     await (this.world.play?.(outcome.cue) ?? Promise.resolve());
     if (this.disposed) return;
     const snapshot = this.renderSnapshot(false, false);
-    this.ui.showFeedback?.(outcome);
     if (isTerminal(snapshot.state)) {
       this.setBusy(false);
       this.presentTerminalOnce(snapshot);
@@ -1152,13 +1153,11 @@ export class SurvivalPhase implements GamePhase {
 
   private async runCaptainWhiskersAction(
     action: 'petWhiskers' | 'feedWhiskers',
-    outcome: ActionOutcome,
   ): Promise<void> {
     this.setBusy(true);
     await (this.world.playCaptainWhiskersAction?.(action) ?? Promise.resolve());
     if (this.disposed) return;
     this.renderSnapshot(false, false);
-    this.ui.showFeedback?.(outcome);
     this.setBusy(false);
     this.ui.restoreCommandFocus?.();
   }

@@ -1196,7 +1196,7 @@ export class BoatWorld {
     eventId: string,
     choiceId: string,
     instanceId: ItemInstanceId,
-    onAction?: () => void,
+    onAction?: (cueIndex: number) => void,
   ): Promise<void> {
     if (this.disposed) return;
     const operation = ++this.weatherEventOperation;

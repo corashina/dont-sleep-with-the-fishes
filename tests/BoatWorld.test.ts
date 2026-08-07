@@ -2529,7 +2529,7 @@ describe('BoatWorld helpers', () => {
       ['compass-search', 'flowers', 'compass', 'compass', eventItemUseDuration('compass-search')],
       ['map-read', 'flowers', 'map', 'map', eventItemUseDuration('map-read')],
       ['binocular-look', 'flowers', 'spyglass', 'spyglass', eventItemUseDuration('binocular-look')],
-      ['net-throw', 'flowers', 'fishingNet', 'fishingNet', eventItemUseDuration('net-throw')],
+      ['net-scoop', 'flowers', 'fishingNet', 'fishingNet', eventItemUseDuration('net-scoop')],
       ['bucket-scoop', 'leak', 'bucket', 'bucket', LEAK_ITEM_DURATION],
       ['bucket-cover', 'eerie-melody', 'bucket', 'bucket', supernaturalItemUseDuration('eerie-melody', 'bucket')!],
       ['flare-target', 'ghosts', 'flareGun', 'flareGun', supernaturalItemUseDuration('ghosts', 'flareGun')!],
@@ -2630,6 +2630,7 @@ describe('BoatWorld helpers', () => {
     expect(onAction).not.toHaveBeenCalled();
     world.update(duration * 0.47, duration * 0.02);
     expect(onAction).toHaveBeenCalledOnce();
+    expect(onAction).toHaveBeenCalledWith(0);
     world.update(duration + 1, duration);
     await use;
     expect(onAction).toHaveBeenCalledOnce();
@@ -3146,7 +3147,7 @@ describe('BoatWorld helpers', () => {
       'ghosts',
       'flareGun',
       'flareGun',
-      'supernatural-flare-flash',
+      'supernatural-event-world',
       'flare-target',
       supernaturalItemUseDuration('ghosts', 'flareGun')!,
       0.47,
