@@ -35,6 +35,8 @@ it('builds smaller guide and start signs in swapped positions', () => {
   expect(start.position.toArray()).toEqual([...MENU_START_SIGN_POSITION]);
   expect(guide.position.x).toBeLessThan(0);
   expect(start.position.x).toBeGreaterThan(0);
+  expect(guide.position.z).toBeGreaterThanOrEqual(3.6);
+  expect(start.position.z).toBeGreaterThanOrEqual(3.6);
   expect(surfaces[0]!.context.fillText).toHaveBeenCalledWith(MENU_GUIDE_SIGN_TITLE, 512, 184);
   expect(surfaces[1]!.context.fillText).toHaveBeenCalledWith(MENU_START_SIGN_TITLE, 512, 184);
   expect((signs.guideHitTarget.geometry as BoxGeometry).parameters.width).toBeLessThan(2.5);

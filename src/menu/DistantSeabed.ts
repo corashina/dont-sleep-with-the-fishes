@@ -3,16 +3,19 @@ import {
   BoxGeometry,
   BufferGeometry,
   ConeGeometry,
+  CylinderGeometry,
   DodecahedronGeometry,
   Group,
   Mesh,
   MeshStandardMaterial,
   PlaneGeometry,
+  TorusGeometry,
 } from 'three';
 import { disposeResourceSets } from '../world/SceneResources';
 import {
   findClearMenuX,
   MENU_PROTECTED_FOOTPRINTS,
+  menuGroundedY,
   menuSeabedHeight,
   menuVisibleCenterLimit,
   type MenuGroundFootprint,
@@ -20,10 +23,11 @@ import {
 import type { MenuSceneComponent } from './MenuSceneComponent';
 
 export const DISTANT_RIDGE_COUNT = 3;
-export const DISTANT_MOUNTAIN_COUNT = 3;
+export const DISTANT_MOUNTAIN_COUNT = 2;
 export const DISTANT_ROCK_COUNT = 24;
 export const DISTANT_PLANT_COUNT = 36;
 export const DISTANT_DEBRIS_COUNT = 20;
+export const NEAR_WRECK_DEBRIS_COUNT = 14;
 
 const RIDGES = [
   { width: 76, depth: 16, z: -34, height: 0.9, phase: 0.2 },
@@ -32,9 +36,8 @@ const RIDGES = [
 ] as const;
 
 const MOUNTAINS = [
-  { width: 104, depth: 18, z: -42, height: 6.2, phase: 0.35 },
-  { width: 138, depth: 24, z: -60, height: 10.8, phase: 1.25 },
-  { width: 172, depth: 30, z: -82, height: 17.5, phase: 2.1 },
+  { width: 112, depth: 18, z: -36, height: 13.2, phase: 0.35 },
+  { width: 176, depth: 26, z: -58, height: 23.5, phase: 1.7 },
 ] as const;
 
 function terrainEdgeBlend(
@@ -97,6 +100,33 @@ const DEBRIS = [
   [-68.0, -0.25, -34.0, 1.1, -0.7], [68.0, -0.25, -37.0, 0.95, 0.75],
 ] as const;
 
+type WreckDebrisKind = 'plank' | 'plate' | 'rib' | 'pipe';
+
+interface WreckDebrisSpec {
+  readonly kind: WreckDebrisKind;
+  readonly x: number;
+  readonly z: number;
+  readonly scale: number;
+  readonly rotation: readonly [number, number, number];
+}
+
+const NEAR_WRECK_DEBRIS: readonly WreckDebrisSpec[] = [
+  { kind: 'plank', x: -14, z: -12.1, scale: 1.1, rotation: [0.04, -0.45, 0.08] },
+  { kind: 'plate', x: -9.5, z: -12.3, scale: 0.9, rotation: [0.08, 0.3, -0.12] },
+  { kind: 'rib', x: -5, z: -12, scale: 1.05, rotation: [1.42, -0.2, 0.15] },
+  { kind: 'pipe', x: 4.8, z: -12.2, scale: 1.2, rotation: [1.48, 0.55, -0.08] },
+  { kind: 'plank', x: 9.4, z: -12.4, scale: 0.85, rotation: [-0.05, 0.7, 0.06] },
+  { kind: 'plate', x: 14.2, z: -12.1, scale: 1.15, rotation: [0.12, -0.6, 0.09] },
+  { kind: 'pipe', x: -15.5, z: -26.5, scale: 0.95, rotation: [1.5, -0.35, 0.12] },
+  { kind: 'rib', x: -10.5, z: -26.7, scale: 1.2, rotation: [1.37, 0.4, -0.08] },
+  { kind: 'plank', x: -5.5, z: -26.4, scale: 1.25, rotation: [0.03, 0.65, -0.06] },
+  { kind: 'plate', x: -1.8, z: -26.8, scale: 0.8, rotation: [0.16, -0.75, 0.1] },
+  { kind: 'rib', x: 3.8, z: -26.6, scale: 0.9, rotation: [1.45, -0.6, 0.14] },
+  { kind: 'pipe', x: 8.2, z: -26.4, scale: 1.15, rotation: [1.38, 0.25, -0.1] },
+  { kind: 'plank', x: 12.2, z: -26.7, scale: 1, rotation: [-0.04, -0.5, 0.07] },
+  { kind: 'plate', x: 16.2, z: -26.5, scale: 1.05, rotation: [0.1, 0.55, -0.12] },
+] as const;
+
 type Detail = readonly [number, number, number, number, number];
 
 export class DistantSeabed implements MenuSceneComponent {
@@ -118,12 +148,14 @@ export class DistantSeabed implements MenuSceneComponent {
     const rocks = new Group();
     const plants = new Group();
     const debris = new Group();
+    const nearWreckDebris = new Group();
     const mountains = new Group();
     ridges.name = 'menu:distant-ridges';
     mountains.name = 'menu:distant-mountains';
     rocks.name = 'menu:distant-rocks';
     plants.name = 'menu:distant-plants';
     debris.name = 'menu:distant-debris';
+    nearWreckDebris.name = 'menu:near-wreck-debris';
 
     RIDGES.forEach((spec, index) => {
       const geometry = this.geometry(new PlaneGeometry(spec.width, spec.depth, 12, 6));
@@ -182,9 +214,22 @@ export class DistantSeabed implements MenuSceneComponent {
     this.addDetails(rocks, 'menu:distant-rock', ROCKS, rockGeometry, rock);
     this.addDetails(plants, 'menu:distant-plant', PLANTS, plantGeometry, plant);
     this.addDetails(debris, 'menu:distant-debris', DEBRIS, debrisGeometry, wood);
+    const debrisGeometries: Readonly<Record<WreckDebrisKind, BufferGeometry>> = {
+      plank: this.geometry(new BoxGeometry(1.5, 0.1, 0.24)),
+      plate: this.geometry(new BoxGeometry(1.1, 0.08, 0.75)),
+      rib: this.geometry(new TorusGeometry(0.55, 0.06, 4, 7, Math.PI * 0.72)),
+      pipe: this.geometry(new CylinderGeometry(0.1, 0.13, 1.25, 6)),
+    };
+    const debrisMaterials: Readonly<Record<WreckDebrisKind, MeshStandardMaterial>> = {
+      plank: wood,
+      plate: this.material(0x754433, 1),
+      rib: this.material(0x354446, 0.9),
+      pipe: this.material(0x4a5654, 0.88),
+    };
+    this.addNearWreckDebris(nearWreckDebris, debrisGeometries, debrisMaterials);
 
     this.root.name = 'menu:distant-seabed';
-    this.root.add(ridges, mountains, rocks, plants, debris);
+    this.root.add(ridges, mountains, rocks, plants, debris, nearWreckDebris);
   }
 
   dispose(): void {
@@ -247,6 +292,48 @@ export class DistantSeabed implements MenuSceneComponent {
       this.detailFootprints.push({
         id: mesh.name,
         position: [mesh.position.x, y, placedZ],
+        halfSize: [halfX, halfZ],
+      });
+      group.add(mesh);
+    });
+  }
+
+  private addNearWreckDebris(
+    group: Group,
+    geometries: Readonly<Record<WreckDebrisKind, BufferGeometry>>,
+    materials: Readonly<Record<WreckDebrisKind, MeshStandardMaterial>>,
+  ): void {
+    NEAR_WRECK_DEBRIS.forEach((spec, index) => {
+      const mesh = new Mesh(geometries[spec.kind], materials[spec.kind]);
+      mesh.name = `menu:near-wreck-debris-${index + 1}`;
+      mesh.position.set(0, 0, spec.z);
+      mesh.scale.setScalar(spec.scale);
+      mesh.rotation.set(...spec.rotation);
+      mesh.updateMatrixWorld(true);
+      this.detailBounds.setFromObject(mesh);
+      const halfX = (this.detailBounds.max.x - this.detailBounds.min.x) * 0.5;
+      const halfZ = (this.detailBounds.max.z - this.detailBounds.min.z) * 0.5;
+      const localBottom = this.detailBounds.min.y;
+      const visibleLimit = menuVisibleCenterLimit(
+        localBottom,
+        spec.z + halfZ,
+        halfX,
+      );
+      const x = findClearMenuX(
+        spec.x,
+        spec.z,
+        halfX,
+        halfZ,
+        0.24,
+        this.detailFootprints,
+        -visibleLimit,
+        visibleLimit,
+      );
+      mesh.position.x = x;
+      mesh.position.y = menuGroundedY(x, spec.z, localBottom);
+      this.detailFootprints.push({
+        id: mesh.name,
+        position: [x, mesh.position.y, spec.z],
         halfSize: [halfX, halfZ],
       });
       group.add(mesh);

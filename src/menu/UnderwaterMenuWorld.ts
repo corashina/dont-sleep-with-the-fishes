@@ -49,7 +49,10 @@ import {
   type UnderwaterMenuActors,
 } from './UnderwaterMenuAnimator';
 import { UnderwaterParticles } from './UnderwaterParticles';
+import { UnderwaterLightShafts } from './UnderwaterLightShafts';
 import { UnderwaterPlantField } from './UnderwaterPlantField';
+import type { MenuSandAssets } from './MenuSandAssets';
+import { createMenuSeabedMaterial } from './MenuSeabedMaterial';
 import {
   disposeResourceSets,
   ignoreCleanupError,
@@ -82,7 +85,7 @@ const CAUSTIC_FRAGMENT_SHADER = `
       * sin(vUv.y * 27.0 - uTime * 0.23);
     float second = sin((vUv.x + vUv.y) * 41.0 - uTime * 0.19);
     float bands = smoothstep(0.52, 0.94, first * 0.58 + second * 0.42);
-    gl_FragColor = vec4(0.28, 0.58, 0.61, bands * 0.13 * uStrength);
+    gl_FragColor = vec4(0.28, 0.58, 0.61, bands * 0.085 * uStrength);
   }
 `;
 
@@ -104,6 +107,7 @@ export class UnderwaterMenuWorld {
   readonly root = new Group();
   readonly plants: UnderwaterPlantField;
   readonly particles: UnderwaterParticles;
+  readonly lightShafts: UnderwaterLightShafts;
   readonly sharks: readonly [MenuSharkActor, MenuSharkActor];
   readonly fishSchools: readonly [Group, Group];
   readonly fish: readonly MenuFishActor[];
@@ -133,6 +137,7 @@ export class UnderwaterMenuWorld {
     private readonly scene: Scene,
     private readonly camera: PerspectiveCamera,
     models: ModelFactory,
+    sand: MenuSandAssets,
     components: UnderwaterMenuComponentFactories = DEFAULT_COMPONENT_FACTORIES,
   ) {
     this.root.name = 'menu:underwater-world';
@@ -209,14 +214,15 @@ export class UnderwaterMenuWorld {
 
     this.plants = new UnderwaterPlantField();
     this.particles = new UnderwaterParticles();
-    const seabed = this.createSeabed();
+    this.lightShafts = new UnderwaterLightShafts();
+    const seabed = this.createSeabed(sand);
     const storyProps = this.createStoryProps();
     const caustic = this.createCausticOverlay();
     this.causticMaterial = caustic.material;
 
-    const hemisphereLight = new HemisphereLight(0x6f9ca3, 0x172923, 1.65);
+    const hemisphereLight = new HemisphereLight(0x8dc6cf, 0x10221f, 1.8);
     hemisphereLight.name = 'menu:hemisphere-light';
-    const directionalLight = new DirectionalLight(0x9bc4cd, 2.2);
+    const directionalLight = new DirectionalLight(0xb7e1e5, 2.35);
     directionalLight.name = 'menu:directional-light';
     directionalLight.position.set(-5.5, 8.5, 3.2);
 
@@ -232,6 +238,7 @@ export class UnderwaterMenuWorld {
       ...fishSchools,
       storyProps,
       this.plants.root,
+      this.lightShafts.root,
       this.particles.root,
       caustic.mesh,
       hemisphereLight,
@@ -249,6 +256,7 @@ export class UnderwaterMenuWorld {
         this.particles.setMatterTime(time);
         this.causticMaterial.uniforms.uTime!.value = time;
       },
+      setLightTime: (time) => this.lightShafts.setTime(time),
       setCausticStrength: (strength) => {
         this.causticMaterial.uniforms.uStrength!.value = strength;
       },
@@ -309,6 +317,7 @@ export class UnderwaterMenuWorld {
     }
     cleanupSteps.push(
       () => this.plants.dispose(),
+      () => this.lightShafts.dispose(),
       () => this.particles.dispose(),
       () => disposeResourceSets(this.ownedGeometries, this.ownedMaterials),
       () => this.restoreSceneState(),
@@ -369,7 +378,9 @@ export class UnderwaterMenuWorld {
     root.rotation.set(...placement.rotation);
   }
 
-  private createSeabed(): Mesh<PlaneGeometry, MeshStandardMaterial> {
+  private createSeabed(
+    sand: MenuSandAssets,
+  ): Mesh<PlaneGeometry, MeshStandardMaterial> {
     const geometry = new PlaneGeometry(140, 100, 56, 42);
     geometry.rotateX(-Math.PI / 2);
     const position = geometry.getAttribute('position') as BufferAttribute;
@@ -389,13 +400,7 @@ export class UnderwaterMenuWorld {
     position.needsUpdate = true;
     geometry.setAttribute('color', color);
     geometry.computeVertexNormals();
-    const material = new MeshStandardMaterial({
-      color: 0x756d54,
-      roughness: 1,
-      metalness: 0,
-      flatShading: true,
-      vertexColors: true,
-    });
+    const material = createMenuSeabedMaterial(sand);
     this.ownedGeometries.add(geometry);
     this.ownedMaterials.add(material);
     const seabed = new Mesh(geometry, material);

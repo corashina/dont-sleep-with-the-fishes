@@ -315,6 +315,7 @@ function testContext(
     camera: new PerspectiveCamera(),
     propModels: {} as PropModelLibrary,
     menuModels: { dispose: () => undefined } as unknown as PhaseContext['menuModels'],
+    menuSandAssets: {} as PhaseContext['menuSandAssets'],
     supernaturalEventModels: createEmptyEventModelLibraryForTest(),
     shipFurniture: {} as ShipFurnitureLibrary,
     maxTextureAnisotropy: 1,
