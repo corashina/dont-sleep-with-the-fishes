@@ -19,14 +19,13 @@ import {
   runCleanupSteps,
 } from '../../world/SceneResources';
 import type { EventModelInstance } from '../EventModelLibrary';
-import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
 import type {
   DedicatedEventEnvironment,
-  DedicatedEventAnimation,
   DedicatedEventPresentation,
   EventOutcomePresentation,
   EventSceneContext,
 } from '../eventPresentationTypes';
+import { TimedPresentationAnimation } from '../TimedPresentationAnimation';
 import {
   createSwarmFishPose,
   createSwarmSample,
@@ -175,7 +174,15 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     baitDelta: 0,
     brokenItem: false,
   };
-  private active: DedicatedEventAnimation | null = null;
+  private readonly animation = new TimedPresentationAnimation<
+    'reveal' | 'item' | 'reaction'
+  >(
+    (kind, _time, progress) => this.applyAnimation(kind, progress),
+    () => {
+      this.activeChoiceId = null;
+    },
+  );
+  private activeChoiceId: string | null = null;
   private staged = false;
   private disposed = false;
 
@@ -308,40 +315,35 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
 
   reveal(): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = null;
     sampleSwarmReveal(0, this.currentVariants(), this.sample);
     this.applySample(0);
-    return new Promise((resolve) => {
-      this.active = {
-        kind: 'reveal',
-        elapsed: 0,
-        duration: SWARM_REVEAL_DURATION,
-        resolve,
-      };
-    });
+    return this.animation.start('reveal', SWARM_REVEAL_DURATION);
   }
 
   playItemUse(choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
     if (this.disposed || !this.staged || !supportedChoice(choiceId)) {
       return Promise.resolve(false);
     }
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = choiceId;
     sampleSwarmItemUse(sceneChoiceId(choiceId), 0, this.sample);
     this.applySample(0);
-    return new Promise((resolve) => {
-      this.active = {
-        kind: 'item',
-        choiceId,
-        elapsed: 0,
-        duration: swarmItemDuration(sceneChoiceId(choiceId)),
-        resolve,
-      };
-    });
+    return this.animation.start(
+      'item',
+      swarmItemDuration(sceneChoiceId(choiceId)),
+      {
+        complete: true,
+        cancel: false,
+      },
+    );
   }
 
   react(result: EventOutcomePresentation): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = null;
     this.reactionState.attacked = (result.resourceDeltas.hull ?? 0) < 0
       || (result.resourceDeltas.health ?? 0) < 0;
     this.reactionState.foodDelta = result.resourceDeltas.food ?? 0;
@@ -355,47 +357,19 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     }
     sampleSwarmReaction(this.reactionState, 0, this.sample);
     this.applySample(0);
-    return new Promise((resolve) => {
-      this.active = {
-        kind: 'reaction',
-        elapsed: 0,
-        duration: SWARM_REACTION_DURATION,
-        resolve,
-      };
-    });
+    return this.animation.start('reaction', SWARM_REACTION_DURATION);
   }
 
   update(time: number, delta: number): void {
     if (this.disposed || !this.staged) return;
-    const active = this.active;
-    if (active !== null) {
-      const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
-      active.elapsed = Math.min(active.duration, active.elapsed + safeDelta);
-      const progress = active.duration === 0 ? 1 : active.elapsed / active.duration;
-      if (active.kind === 'reveal') {
-        sampleSwarmReveal(progress, this.currentVariants(), this.sample);
-      } else if (active.kind === 'item') {
-        sampleSwarmItemUse(sceneChoiceId(active.choiceId), progress, this.sample);
-      } else {
-        sampleSwarmReaction(this.reactionState, progress, this.sample);
-      }
-      if (progress === 1) this.finishActive();
-    }
+    this.animation.update(time, Number.isFinite(delta) ? delta : 0);
     this.applySample(time);
   }
 
   settleForVisibilityChange(): void {
-    if (this.disposed || this.active === null) return;
-    this.active.elapsed = this.active.duration;
-    if (this.active.kind === 'reveal') {
-      sampleSwarmReveal(1, this.currentVariants(), this.sample);
-    } else if (this.active.kind === 'item') {
-      sampleSwarmItemUse(sceneChoiceId(this.active.choiceId), 1, this.sample);
-    } else {
-      sampleSwarmReaction(this.reactionState, 1, this.sample);
-    }
+    if (this.disposed) return;
+    this.animation.settle();
     this.applySample(0);
-    this.finishActive();
   }
 
   skip(): void {
@@ -404,7 +378,8 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
 
   clear(): void {
     if (this.disposed) return;
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = null;
     this.staged = false;
     this.hideScene();
   }
@@ -412,9 +387,8 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    const active = this.active;
-    this.active = null;
-    resolveCancelledEventAnimation(active);
+    this.animation.cancel();
+    this.activeChoiceId = null;
     runCleanupSteps([
       () => this.hideScene(),
       () => this.boatRoot.clear(),
@@ -430,22 +404,22 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     return this.variants;
   }
 
-  private finishActive(): void {
-    const active = this.active;
-    if (active === null) return;
-    this.active = null;
-    if (active.kind === 'item') {
-      sampleSwarmItemUse(sceneChoiceId(active.choiceId), 1, this.sample);
-      active.resolve(true);
-      return;
+  private applyAnimation(
+    kind: 'reveal' | 'item' | 'reaction',
+    progress: number,
+  ): void {
+    if (kind === 'reveal') {
+      sampleSwarmReveal(progress, this.currentVariants(), this.sample);
+    } else if (kind === 'item') {
+      if (this.activeChoiceId === null) return;
+      sampleSwarmItemUse(
+        sceneChoiceId(this.activeChoiceId),
+        progress,
+        this.sample,
+      );
+    } else {
+      sampleSwarmReaction(this.reactionState, progress, this.sample);
     }
-    active.resolve();
-  }
-
-  private cancelActive(): void {
-    const active = this.active;
-    this.active = null;
-    resolveCancelledEventAnimation(active);
   }
 
   private applySample(time: number): void {

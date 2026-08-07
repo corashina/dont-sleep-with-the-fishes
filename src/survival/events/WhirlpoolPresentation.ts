@@ -16,15 +16,14 @@ import {
   runCleanupSteps,
 } from '../../world/SceneResources';
 import type { BorrowedSupplyActor, MutableSupplyPose } from '../BoatSupplyDisplay';
-import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
 import { StationaryEventCamera } from '../StationaryEventCamera';
 import type {
   DedicatedEventEnvironment,
-  DedicatedEventAnimation,
   DedicatedEventPresentation,
   EventOutcomePresentation,
   EventSceneContext,
 } from '../eventPresentationTypes';
+import { TimedPresentationAnimation } from '../TimedPresentationAnimation';
 import {
   createWhirlpoolSample,
   resetWhirlpoolSample,
@@ -165,7 +164,13 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     { ...IDENTITY_ITEM_POSE },
   ];
   private readonly lostActors: Array<BorrowedSupplyActor | null> = [null, null];
-  private active: DedicatedEventAnimation | null = null;
+  private readonly animation = new TimedPresentationAnimation<
+    'reveal' | 'item' | 'reaction'
+  >(
+    (kind, time, progress) => this.applyAnimation(kind, time, progress),
+    (kind) => this.finishAnimation(kind),
+  );
+  private activeChoiceId: string | null = null;
   private lastChoiceId = '';
   private staged = false;
   private disposed = false;
@@ -240,42 +245,33 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
 
   reveal(): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = null;
     this.cameraLook?.capture();
     sampleWhirlpoolReveal(0, this.sample);
     this.applySample(0);
-    return new Promise((resolve) => {
-      this.active = {
-        kind: 'reveal',
-        elapsed: 0,
-        duration: WHIRLPOOL_REVEAL_DURATION,
-        resolve,
-      };
-    });
+    return this.animation.start('reveal', WHIRLPOOL_REVEAL_DURATION);
   }
 
   playItemUse(choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
     if (this.disposed || !this.staged || !supportedChoice(choiceId)) {
       return Promise.resolve(false);
     }
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = choiceId;
     this.lastChoiceId = choiceId;
     sampleWhirlpoolItemUse(choiceId, 0, this.sample);
     this.applySample(0);
-    return new Promise((resolve) => {
-      this.active = {
-        kind: 'item',
-        choiceId,
-        elapsed: 0,
-        duration: WHIRLPOOL_ITEM_DURATION,
-        resolve,
-      };
+    return this.animation.start('item', WHIRLPOOL_ITEM_DURATION, {
+      complete: true,
+      cancel: false,
     });
   }
 
   react(result: EventOutcomePresentation): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = null;
     this.releaseLostActors(false);
 
     const selectedId = result.selectedInstanceId;
@@ -302,58 +298,21 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     sampleWhirlpoolReaction(this.reactionState, 0, this.sample);
     this.applySample(0);
     this.applyReactionPoses();
-    return new Promise((resolve) => {
-      this.active = {
-        kind: 'reaction',
-        elapsed: 0,
-        duration: WHIRLPOOL_REACTION_DURATION,
-        resolve,
-      };
-    });
+    return this.animation.start('reaction', WHIRLPOOL_REACTION_DURATION);
   }
 
   update(time: number, delta: number): void {
     if (this.disposed || !this.staged) return;
-    const active = this.active;
-    if (active !== null) {
-      const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
-      active.elapsed = Math.min(active.duration, active.elapsed + safeDelta);
-      if (active.duration - active.elapsed <= 1e-9) active.elapsed = active.duration;
-      const progress = active.duration === 0 ? 1 : active.elapsed / active.duration;
-      if (active.kind === 'reveal') {
-        sampleWhirlpoolReveal(progress, this.sample);
-        this.applyRevealCamera(progress);
-      } else if (active.kind === 'item') {
-        this.cameraLook?.apply(0, 0);
-        sampleWhirlpoolItemUse(active.choiceId, progress, this.sample);
-      } else {
-        this.cameraLook?.apply(0, 0);
-        sampleWhirlpoolReaction(this.reactionState, progress, this.sample);
-        this.applyReactionPoses();
-      }
-      this.applySample(time);
-      if (progress === 1) this.finishActive();
+    if (this.animation.active) {
+      this.animation.update(time, Number.isFinite(delta) ? delta : 0);
       return;
     }
     this.applySample(time);
   }
 
   settleForVisibilityChange(): void {
-    if (this.disposed || this.active === null) return;
-    this.active.elapsed = this.active.duration;
-    if (this.active.kind === 'reveal') {
-      sampleWhirlpoolReveal(1, this.sample);
-      this.applyRevealCamera(1);
-    } else if (this.active.kind === 'item') {
-      this.cameraLook?.apply(0, 0);
-      sampleWhirlpoolItemUse(this.active.choiceId, 1, this.sample);
-    } else {
-      this.cameraLook?.apply(0, 0);
-      sampleWhirlpoolReaction(this.reactionState, 1, this.sample);
-      this.applyReactionPoses();
-    }
-    this.applySample(0);
-    this.finishActive();
+    if (this.disposed) return;
+    this.animation.settle();
   }
 
   skip(): void {
@@ -362,7 +321,8 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
 
   clear(): void {
     if (this.disposed) return;
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = null;
     this.releaseLostActors(false);
     this.resetPresentationState();
     this.cameraLook?.restore();
@@ -371,10 +331,9 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    const active = this.active;
-    this.active = null;
+    this.animation.cancel();
+    this.activeChoiceId = null;
     this.cameraLook?.restore();
-    resolveCancelledEventAnimation(active);
     runCleanupSteps([
       () => this.releaseLostActors(false),
       () => this.resetPresentationState(),
@@ -395,26 +354,29 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
     }
   }
 
-  private finishActive(): void {
-    const active = this.active;
-    if (active === null) return;
-    this.active = null;
-    if (active.kind === 'item') {
-      sampleWhirlpoolItemUse(active.choiceId, 1, this.sample);
-      this.applySample(0);
+  private applyAnimation(
+    kind: 'reveal' | 'item' | 'reaction',
+    time: number,
+    progress: number,
+  ): void {
+    if (kind === 'reveal') {
+      sampleWhirlpoolReveal(progress, this.sample);
+      this.applyRevealCamera(progress);
+    } else if (kind === 'item') {
+      if (this.activeChoiceId === null) return;
       this.cameraLook?.apply(0, 0);
-      this.applySample(0);
-      active.resolve(true);
-      return;
+      sampleWhirlpoolItemUse(this.activeChoiceId, progress, this.sample);
+    } else {
+      this.cameraLook?.apply(0, 0);
+      sampleWhirlpoolReaction(this.reactionState, progress, this.sample);
+      this.applyReactionPoses();
     }
-    if (active.kind === 'reaction') this.releaseLostActors(true);
-    active.resolve();
+    this.applySample(time);
   }
 
-  private cancelActive(): void {
-    const active = this.active;
-    this.active = null;
-    resolveCancelledEventAnimation(active);
+  private finishAnimation(kind: 'reveal' | 'item' | 'reaction'): void {
+    this.activeChoiceId = null;
+    if (kind === 'reaction') this.releaseLostActors(true);
   }
 
   private applySample(time: number): void {

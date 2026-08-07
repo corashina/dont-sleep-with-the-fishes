@@ -17,14 +17,13 @@ import {
   runCleanupSteps,
 } from '../../world/SceneResources';
 import type { EventModelInstance } from '../EventModelLibrary';
-import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
 import type {
   DedicatedEventEnvironment,
-  DedicatedEventAnimation,
   DedicatedEventPresentation,
   EventOutcomePresentation,
   EventSceneContext,
 } from '../eventPresentationTypes';
+import { TimedPresentationAnimation } from '../TimedPresentationAnimation';
 import {
   createSchoolVariants,
   identitySchoolFishPose,
@@ -152,8 +151,16 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     foodDelta: 0,
     brokenItem: false,
   };
+  private readonly animation = new TimedPresentationAnimation<
+    'reveal' | 'item' | 'reaction'
+  >(
+    (kind, _time, progress) => this.applyAnimation(kind, progress),
+    () => {
+      this.activeChoiceId = null;
+    },
+  );
   private activeFish = MAX_FISH;
-  private active: DedicatedEventAnimation | null = null;
+  private activeChoiceId: string | null = null;
   private staged = false;
   private disposed = false;
 
@@ -262,17 +269,11 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
 
   reveal(): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = null;
     sampleSchoolReveal(0, this.sample);
     this.applySample(0);
-    return new Promise((resolve) => {
-      this.active = {
-        kind: 'reveal',
-        elapsed: 0,
-        duration: SCHOOL_REVEAL_DURATION,
-        resolve,
-      };
-    });
+    return this.animation.start('reveal', SCHOOL_REVEAL_DURATION);
   }
 
   playItemUse(choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
@@ -287,23 +288,20 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     ) {
       return Promise.resolve(false);
     }
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = choiceId;
     sampleSchoolItemUse(choiceId, 0, this.sample);
     this.applySample(0);
-    return new Promise((resolve) => {
-      this.active = {
-        kind: 'item',
-        choiceId,
-        elapsed: 0,
-        duration: schoolItemDuration(choiceId),
-        resolve,
-      };
+    return this.animation.start('item', schoolItemDuration(choiceId), {
+      complete: true,
+      cancel: false,
     });
   }
 
   react(result: EventOutcomePresentation): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = null;
     const selected = result.selectedInstanceId;
     const selectedBroken = selected !== null
       && result.brokenInstanceIds.includes(selected);
@@ -313,47 +311,19 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     this.catchActor.userData.foodDelta = this.reactionState.foodDelta;
     sampleSchoolReaction(this.reactionState, 0, this.sample);
     this.applySample(0);
-    return new Promise((resolve) => {
-      this.active = {
-        kind: 'reaction',
-        elapsed: 0,
-        duration: SCHOOL_REACTION_DURATION,
-        resolve,
-      };
-    });
+    return this.animation.start('reaction', SCHOOL_REACTION_DURATION);
   }
 
   update(time: number, delta: number): void {
     if (this.disposed || !this.staged) return;
-    const active = this.active;
-    if (active !== null) {
-      const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
-      active.elapsed = Math.min(active.duration, active.elapsed + safeDelta);
-      const progress = active.duration === 0 ? 1 : active.elapsed / active.duration;
-      if (active.kind === 'reveal') {
-        sampleSchoolReveal(progress, this.sample);
-      } else if (active.kind === 'item') {
-        sampleSchoolItemUse(active.choiceId, progress, this.sample);
-      } else {
-        sampleSchoolReaction(this.reactionState, progress, this.sample);
-      }
-      if (progress === 1) this.finishActive();
-    }
+    this.animation.update(time, Number.isFinite(delta) ? delta : 0);
     this.applySample(time);
   }
 
   settleForVisibilityChange(): void {
-    if (this.disposed || this.active === null) return;
-    this.active.elapsed = this.active.duration;
-    if (this.active.kind === 'reveal') {
-      sampleSchoolReveal(1, this.sample);
-    } else if (this.active.kind === 'item') {
-      sampleSchoolItemUse(this.active.choiceId, 1, this.sample);
-    } else {
-      sampleSchoolReaction(this.reactionState, 1, this.sample);
-    }
+    if (this.disposed) return;
+    this.animation.settle();
     this.applySample(0);
-    this.finishActive();
   }
 
   skip(): void {
@@ -362,7 +332,8 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
 
   clear(): void {
     if (this.disposed) return;
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = null;
     this.staged = false;
     this.hideScene();
   }
@@ -370,9 +341,8 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    const active = this.active;
-    this.active = null;
-    resolveCancelledEventAnimation(active);
+    this.animation.cancel();
+    this.activeChoiceId = null;
 
     runCleanupSteps([
       () => this.hideScene(),
@@ -386,22 +356,18 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     ]);
   }
 
-  private finishActive(): void {
-    const active = this.active;
-    if (active === null) return;
-    this.active = null;
-    if (active.kind === 'item') {
-      sampleSchoolItemUse(active.choiceId, 1, this.sample);
-      active.resolve(true);
-      return;
+  private applyAnimation(
+    kind: 'reveal' | 'item' | 'reaction',
+    progress: number,
+  ): void {
+    if (kind === 'reveal') {
+      sampleSchoolReveal(progress, this.sample);
+    } else if (kind === 'item') {
+      if (this.activeChoiceId === null) return;
+      sampleSchoolItemUse(this.activeChoiceId, progress, this.sample);
+    } else {
+      sampleSchoolReaction(this.reactionState, progress, this.sample);
     }
-    active.resolve();
-  }
-
-  private cancelActive(): void {
-    const active = this.active;
-    this.active = null;
-    resolveCancelledEventAnimation(active);
   }
 
   private applySample(time: number): void {
