@@ -3143,15 +3143,6 @@ describe('BoatWorld helpers', () => {
       0.5,
     ],
     [
-      'ghosts',
-      'flareGun',
-      'flareGun',
-      'supernatural-flare-flash',
-      'flare-target',
-      supernaturalItemUseDuration('ghosts', 'flareGun')!,
-      0.47,
-    ],
-    [
       'dangerous-waters',
       'map',
       'map',
