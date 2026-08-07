@@ -87,11 +87,6 @@ interface ConditionMaterialBinding {
   readonly mutedBroken: Material | Material[];
 }
 
-interface HighlightState {
-  readonly emissive: number;
-  readonly emissiveIntensity: number;
-}
-
 interface ActiveAnimation {
   readonly root: Group;
   elapsed: number;
@@ -132,28 +127,6 @@ function mutedMaterial(material: Material): Material {
     clone.roughness = Math.max(0.8, clone.roughness);
   }
   return clone;
-}
-
-function setEmissiveHighlighted(root: Object3D, highlighted: boolean): void {
-  root.traverse((object) => {
-    if (!(object instanceof Mesh) || !(object.material instanceof MeshStandardMaterial)) return;
-    const material = object.material;
-    const state = material.userData.supplyHighlight as HighlightState | undefined;
-    if (state === undefined) {
-      material.userData.supplyHighlight = {
-        emissive: material.emissive.getHex(),
-        emissiveIntensity: material.emissiveIntensity,
-      } satisfies HighlightState;
-    }
-    const original = material.userData.supplyHighlight as HighlightState;
-    if (highlighted) {
-      material.emissive.setHex(0x6f4218);
-      material.emissiveIntensity = Math.max(0.65, original.emissiveIntensity);
-    } else {
-      material.emissive.setHex(original.emissive);
-      material.emissiveIntensity = original.emissiveIntensity;
-    }
-  });
 }
 
 function createRepairMaterialBundle(index: number): Group {
@@ -221,6 +194,7 @@ export class BoatSupplyDisplay {
   private eventSelectedItemId: ItemInstanceId | null = null;
   private highlightedGroupId: BoatSupplyGroupId | null = null;
   private readonly hoverOutline = new HoverOutline();
+  private readonly eventEligibleOutlines = new Map<BoatSupplyGroupId, HoverOutline>();
   private activeAnimation: ActiveAnimation | null = null;
   private eventAmbientRoll = 0;
   private eventAmbientLift = 0;
@@ -343,6 +317,7 @@ export class BoatSupplyDisplay {
     ) {
       this.setHighlighted(null);
     }
+    this.syncEventEligibleOutlines();
   }
 
   setHighlighted(anchorId: string | null): void {
@@ -357,7 +332,9 @@ export class BoatSupplyDisplay {
     const groupId = rawGroupId as BoatSupplyGroupId;
     const record = this.recordsById.get(groupId)!;
     if (record.visibleCopies === 0) return;
-    this.hoverOutline.setTarget(record.root);
+    if (!this.eventEligibleOutlines.has(groupId)) {
+      this.hoverOutline.setTarget(record.root);
+    }
     this.highlightedGroupId = groupId;
   }
 
@@ -371,6 +348,32 @@ export class BoatSupplyDisplay {
       this.eventSelectedItemId = null;
     }
     if (this.currentSnapshot !== null) this.sync(this.currentSnapshot);
+  }
+
+  private syncEventEligibleOutlines(): void {
+    const eligibleGroups = new Set<BoatSupplyGroupId>();
+    for (const instanceId of this.eventEligibleItemIds ?? []) {
+      const groupId = this.groupByInstanceId.get(instanceId);
+      if (groupId !== undefined) eligibleGroups.add(groupId);
+    }
+
+    for (const [groupId, outline] of this.eventEligibleOutlines) {
+      if (
+        eligibleGroups.has(groupId)
+        && this.recordsById.get(groupId)?.visibleCopies !== 0
+      ) continue;
+      outline.dispose();
+      this.eventEligibleOutlines.delete(groupId);
+    }
+
+    for (const groupId of eligibleGroups) {
+      if (this.eventEligibleOutlines.has(groupId)) continue;
+      const record = this.recordsById.get(groupId);
+      if (record === undefined || record.visibleCopies === 0) continue;
+      const outline = new HoverOutline();
+      outline.setTarget(record.root);
+      this.eventEligibleOutlines.set(groupId, outline);
+    }
   }
 
   setEventSelectedItem(instanceId: ItemInstanceId | null): void {
@@ -510,6 +513,8 @@ export class BoatSupplyDisplay {
     if (this.disposed) return;
     this.setHighlighted(null);
     this.hoverOutline.dispose();
+    for (const outline of this.eventEligibleOutlines.values()) outline.dispose();
+    this.eventEligibleOutlines.clear();
     this.clearEventMotion();
     this.cancelActiveAnimation();
     this.disposed = true;
@@ -605,7 +610,6 @@ export class BoatSupplyDisplay {
   }
 
   private applyCopyMaterials(groupId: BoatSupplyGroupId, copy: CopyBinding): void {
-    setEmissiveHighlighted(copy.root, false);
     let groupEligible = false;
     if (this.eventEligibleItemIds !== null) {
       for (const id of this.eventEligibleItemIds) {
@@ -623,11 +627,6 @@ export class BoatSupplyDisplay {
         ? muted ? binding.mutedBroken : binding.broken
         : muted ? binding.mutedUsable : binding.usable;
     }
-    const highlighted = copy.instanceId !== null && (
-      this.eventSelectedItemId === copy.instanceId
-      || this.eventEligibleItemIds?.has(copy.instanceId) === true
-    );
-    if (highlighted) setEmissiveHighlighted(copy.root, true);
   }
 
   private cancelActiveAnimation(): void {

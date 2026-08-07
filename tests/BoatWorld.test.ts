@@ -122,6 +122,7 @@ function snapshot(
   return {
     state: 'day',
     day: 1,
+    pressure: 0,
     health: 100,
     hunger: 20,
     energy: 80,
@@ -132,6 +133,8 @@ function snapshot(
     recoveredBait: 0,
     repairMaterial: 0,
     rescueProgress: 0,
+    chest: { state: 'none', acquiredDay: null },
+    eventFlags: [],
     weather: 'calm',
     actedToday: false,
     journalEntries: [],
@@ -865,6 +868,36 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('shows a closed chest as one physical day action', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    world.syncInventory(snapshot([], {
+      chest: { state: 'closed', acquiredDay: 3 },
+    }));
+
+    expect(world.scene.getObjectByName('persistent-chest')?.visible).toBe(true);
+    expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'persistent-chest',
+        toolId: 'chest',
+        action: 'openChest',
+        visible: true,
+      }),
+    ]));
+
+    world.setHighlightedItem('persistent-chest');
+    expect(world.scene.getObjectByName('persistent-chest')
+      ?.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('plays Captain Whiskers idle on the visible lifeboat perch', async () => {
     const whiskers = savedItem('captainWhiskers');
     const propModels = await loadProductionPropModels();
@@ -877,13 +910,13 @@ describe('BoatWorld helpers', () => {
     try {
       world.syncInventory(snapshot([whiskers]));
       const copy = world.scene.getObjectByName('boat-supply:captainWhiskers:copy-1')!;
-      const head = copy.getObjectByName('Head_CatArmature')!;
-      const before = head.quaternion.clone();
+      const animatedRoot = copy.getObjectByName('CaptainWhiskers')!;
+      const before = animatedRoot.quaternion.clone();
 
       world.update(0.5, 0.5);
 
       expect(copy.visible).toBe(true);
-      expect(head.quaternion.angleTo(before)).toBeGreaterThan(1e-5);
+      expect(animatedRoot.quaternion.angleTo(before)).toBeGreaterThan(1e-5);
     } finally {
       world.dispose();
       propModels.dispose();
@@ -977,6 +1010,32 @@ describe('BoatWorld helpers', () => {
     expect(repairTools.position.z).toBe(lantern.position.z);
     expect(repairTools.rotation.y).toBe(-Math.PI / 2);
 
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps the normal white outline on every event-eligible supply', () => {
+    const bucket = savedItem('bucket');
+    const map = savedItem('map');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [bucket, map],
+    );
+    world.syncInventory(snapshot([bucket, map]));
+    const bucketRoot = world.scene.getObjectByName('boat-supply:bucket')!;
+    const mapRoot = world.scene.getObjectByName('boat-supply:map')!;
+
+    world.setEventEligibleItems(new Set([bucket.instanceId, map.instanceId]));
+
+    expect(bucketRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+    expect(mapRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+
+    world.setEventEligibleItems(null);
+    expect(bucketRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+    expect(mapRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
     world.dispose();
     propModels.dispose();
   });

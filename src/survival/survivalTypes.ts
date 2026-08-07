@@ -7,7 +7,7 @@ export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dea
 export type WeatherId = 'calm' | 'overcast' | 'squall';
 export type DayActionId =
   | 'fish' | 'dive' | 'eat' | 'repair' | 'repairItem'
-  | 'treat' | 'sendMessage' | 'useEnergyBar' | 'endDay';
+  | 'treat' | 'sendMessage' | 'useEnergyBar' | 'openChest' | 'endDay';
 export type DayActionOption =
   | { readonly kind: 'hullRepair'; readonly material: 'repairMaterial' | 'ductTape' }
   | { readonly kind: 'itemRepair'; readonly target: ItemInstanceId };
@@ -28,6 +28,7 @@ export type SurvivalInventorySnapshot = Readonly<
 >;
 
 export interface ResourceDelta {
+  pressure?: number;
   health?: number;
   hunger?: number;
   energy?: number;
@@ -48,7 +49,7 @@ export type RewardSummary =
     }
   | {
       readonly kind: 'item';
-      readonly id: 'energyBar';
+      readonly id: ItemId;
       readonly quantity: 1;
     };
 
@@ -73,7 +74,18 @@ export type BeginFishingResult =
     };
 
 export type EventResource =
-  | 'health' | 'hull' | 'energy' | 'food' | 'bait' | 'repairMaterial' | 'rescueProgress';
+  | 'pressure' | 'health' | 'hull' | 'energy'
+  | 'food' | 'bait' | 'repairMaterial' | 'rescueProgress';
+export type ChestState = 'none' | 'closed' | 'mimic';
+export interface ChestSnapshot {
+  readonly state: ChestState;
+  readonly acquiredDay: number | null;
+}
+export type ChestEventEffect = 'acquire' | 'close' | 'destroy';
+export interface EventFlagEffects {
+  readonly set?: readonly string[];
+  readonly clear?: readonly string[];
+}
 export type IntegerValue = number | { readonly min: number; readonly max: number };
 export interface ResourceEffect {
   readonly resource: EventResource;
@@ -91,6 +103,8 @@ export interface WeightedEventOutcome {
   readonly effects: {
     readonly resources?: readonly ResourceEffect[];
     readonly items?: readonly EventInventoryMutation[];
+    readonly chest?: ChestEventEffect;
+    readonly flags?: EventFlagEffects;
     readonly rescue?: boolean;
   };
 }
@@ -131,6 +145,11 @@ export interface SurvivalEventDefinition {
   maximumAppearances?: number;
   absentItemIds?: readonly ItemId[];
   minimumRescueProgress?: number;
+  minimumPressure?: number;
+  maximumPressure?: number;
+  requiredFlags?: readonly string[];
+  forbiddenFlags?: readonly string[];
+  allowedChestStates?: readonly ChestState[];
   weather?: readonly WeatherId[];
   targetItemIds?: readonly ItemId[];
   choices: readonly [EventChoiceDefinition, ...EventChoiceDefinition[]];
@@ -140,6 +159,7 @@ export interface SurvivalEventDefinition {
 export interface SurvivalSnapshot {
   state: SurvivalState;
   day: number;
+  pressure: number;
   health: number;
   hunger: number;
   energy: number;
@@ -150,6 +170,8 @@ export interface SurvivalSnapshot {
   recoveredBait: number;
   repairMaterial: number;
   rescueProgress: number;
+  readonly chest: ChestSnapshot;
+  readonly eventFlags: readonly string[];
   weather: WeatherId;
   actedToday: boolean;
   readonly journalEntries: readonly JournalEntry[];

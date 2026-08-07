@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import type { FishingSession, FishingTerminalResult } from '../src/survival/FishingSession';
+import {
+  SINKING_SHIP_DAYTIME_TEXT,
+  formatJournalEntry,
+} from '../src/survival/journal';
 import type {
   DayActionId,
   DayActionOption,
@@ -152,6 +156,90 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot()).toBe(initial);
   });
 
+  it('raises scheduled pressure at dawn and doubles late night damage', () => {
+    const pressure = new SurvivalSession(saved(), {
+      seed: 7,
+      random: sequenceRandom([0, 0.99, 0.99]),
+      initial: { day: 7 },
+    });
+    pressure.perform('endDay');
+    expect(pressure.beginDawn().deltas.pressure).toBe(1);
+    expect(pressure.snapshot().pressure).toBe(1);
+
+    const increased = new SurvivalSession(saved('spyglass'), {
+      seed: 12,
+      random: sequenceRandom([0]),
+      initial: { day: 6 },
+      initialEventId: 'man-in-the-fog',
+    });
+    expect(increased.resolveEvent(itemResponse('spyglass')).deltas.pressure).toBe(1);
+
+    const lateAttack = new SurvivalSession(saved(), {
+      seed: 8,
+      random: sequenceRandom([0]),
+      initial: { day: 50 },
+      initialChest: { state: 'mimic', acquiredDay: 48 },
+      initialEventId: 'chest-attack',
+    });
+    expect(lateAttack.resolveEvent(choiceResponse('fight')).deltas.health).toBe(-50);
+  });
+
+  it('opens a recovered chest and prefers a missing durable item', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 9,
+      random: sequenceRandom([0]),
+      initialChest: { state: 'closed', acquiredDay: 1 },
+    });
+
+    expect(session.perform('openChest')).toMatchObject({
+      accepted: true,
+      code: 'chest-opened',
+      deltas: { energy: -3 },
+      rewardSummary: { kind: 'item', id: 'compass', quantity: 1 },
+    });
+    expect(session.snapshot().chest).toEqual({ state: 'none', acquiredDay: null });
+    expect(session.snapshot().inventory['compass-1']).toMatchObject({ condition: 'usable' });
+  });
+
+  it('turns an old chest into a mimic and lets a net bind it', () => {
+    const session = new SurvivalSession(saved('fishingNet'), {
+      seed: 10,
+      random: sequenceRandom([0, 0]),
+      initial: { day: 3 },
+      initialChest: { state: 'closed', acquiredDay: 1 },
+    });
+
+    expect(session.perform('endDay')).toMatchObject({ accepted: true, code: 'event-opened' });
+    expect(session.snapshot()).toMatchObject({
+      pendingEventId: 'chest-attack',
+      chest: { state: 'mimic', acquiredDay: 1 },
+    });
+    expect(session.resolveEvent(itemResponse('fishingNet'))).toMatchObject({
+      accepted: true,
+      deltas: {},
+    });
+    expect(session.snapshot().chest).toEqual({ state: 'closed', acquiredDay: 3 });
+  });
+
+  it('records the Flowers event without granting a survival reward', () => {
+    const session = new SurvivalSession(saved('bucket'), {
+      seed: 11,
+      random: sequenceRandom([0]),
+      initial: { day: 4 },
+      initialEventId: 'flowers',
+    });
+
+    expect(session.resolveEvent(itemResponse('bucket'))).toMatchObject({
+      accepted: true,
+      deltas: {},
+    });
+    expect(session.snapshot().eventFlags).toContain('flowers:collected');
+    expect(session.snapshot().journalEntries[0]?.nighttime).toMatchObject({
+      kind: 'event',
+      event: { eventId: 'flowers', attemptedItemId: 'bucket' },
+    });
+  });
+
 
   it('resolves the expanded contextual encounters deterministically', () => {
     const bottle = new SurvivalSession(saved('swimRing'), {
@@ -164,10 +252,10 @@ describe('SurvivalSession daytime actions', () => {
     const chest = new SurvivalSession(saved(), {
       seed: 102, random: sequenceRandom([0.99]), initial: { day: 6 }, initialEventId: 'mystery-chest',
     });
-    expect(chest.resolveEvent(choiceResponse('open'))).toMatchObject({
-      accepted: true, message: 'The chest bites back.', deltas: { health: -25 },
+    expect(chest.resolveEvent(choiceResponse('take'))).toMatchObject({
+      accepted: true, message: 'You haul the closed chest aboard.', deltas: {},
     });
-    expect(chest.snapshot().health).toBe(75);
+    expect(chest.snapshot().chest).toEqual({ state: 'closed', acquiredDay: 6 });
 
     const island = new SurvivalSession(saved(), {
       seed: 103, random: sequenceRandom([0.5]), initial: { day: 7 }, initialEventId: 'midnight-tour',
@@ -277,7 +365,7 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.resolveEvent(choiceResponse('sleep'))).toMatchObject({
       accepted: true, message: 'Nothing happens.', deltas: {},
     });
-    expect(session.snapshot()).toMatchObject({ health: 100, hull: 100, state: 'day' });
+    expect(session.snapshot()).toMatchObject({ health: 100, hull: 100, state: 'nightEvent' });
   });
   it('resolves a named itemless event choice', () => {
     const session = new SurvivalSession(saved(), { seed: 1, initialEventId: 'shower-night' });
@@ -603,10 +691,6 @@ describe('SurvivalSession daytime actions', () => {
     const attempt = beginFishing(session);
     session.finishFishing(attempt.snapshot().id, reelCatch(attempt));
 
-    expect(session.requestDayEvent()).toMatchObject({
-      accepted: false,
-      code: 'fishing-day-event-disabled',
-    });
     expect(session.snapshot()).toMatchObject({ state: 'day', pendingEventId: null });
   });
 
@@ -725,16 +809,19 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().pendingDriftingLootVariant).toBeNull();
   });
 
-  it('excludes Drifting Loot from later post-action day-event draws', () => {
-    const session = new SurvivalSession(saved('energyBar'), {
-      seed: 1,
-      random: sequenceRandom([0]),
-      initial: { day: 3, energy: 2 },
+  it('rejects manual day-event requests without changing state', () => {
+    const session = new SurvivalSession(saved('cannedFood'), {
+      seed: 2,
+      initial: { hunger: 80 },
     });
+    expect(session.perform('eat').accepted).toBe(true);
+    const before = session.snapshot();
 
-    expect(session.perform('useEnergyBar').accepted).toBe(true);
-    expect(session.requestDayEvent()).toMatchObject({ accepted: true, code: 'event-opened' });
-    expect(session.snapshot().pendingEventId).not.toBe('drifting-loot');
+    expect(session.requestDayEvent()).toMatchObject({
+      accepted: false,
+      code: 'day-event-scheduled',
+    });
+    expect(session.snapshot()).toEqual(before);
   });
 
   it('does not add a reward summary when Drifting Loot is allowed to drift', () => {
@@ -807,7 +894,11 @@ describe('SurvivalSession daytime actions', () => {
       session.beginDawn(),
     ];
 
-    expect(outcomes.every((outcome) => !outcome.accepted && outcome.code === 'fishing-in-progress')).toBe(true);
+    expect(outcomes.every((outcome) => !outcome.accepted)).toBe(true);
+    expect(outcomes.filter((_outcome, index) => index !== 1).every(
+      (outcome) => outcome.code === 'fishing-in-progress',
+    )).toBe(true);
+    expect(outcomes[1]).toMatchObject({ code: 'day-event-scheduled' });
     expect(session.snapshot()).toEqual(before);
   });
 
@@ -1278,30 +1369,6 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot()).toEqual(terminal);
   });
 
-  it('opens one day event only after an action and resolves an authored choice once', () => {
-    const session = new SurvivalSession(saved('map', 'cannedFood'), {
-      seed: 2,
-      random: sequenceRandom([0, 0, 0]),
-      initial: { day: 2, hunger: 80 },
-    });
-    expect(session.requestDayEvent().code).toBe('act-first');
-    expect(session.perform('eat').accepted).toBe(true);
-    expect(session.requestDayEvent()).toMatchObject({ accepted: true, code: 'event-opened' });
-    expect(session.snapshot().state).toBe('dayEvent');
-    const first = session.resolveEvent(itemResponse('map'));
-    expect(first.accepted).toBe(true);
-    const inventory = session.snapshot().inventory;
-    expect(session.resolveEvent(itemResponse('map')).accepted).toBe(false);
-    expect(session.snapshot().inventory).toEqual(inventory);
-    expect(session.endDay().code).toBe('quiet-night');
-    const journal = session.snapshot().journalEntries[0]!;
-    expect(journal).toMatchObject({
-      daytime: { eventId: expect.any(String) },
-      actions: [],
-    });
-    expect(Object.isFrozen(journal.actions)).toBe(true);
-  });
-
   it('rejects an unsuitable physical item atomically before random draws', () => {
     const random = { next: vi.fn(() => 0) };
     const session = new SurvivalSession(saved('anchor', 'bucket'), {
@@ -1435,9 +1502,9 @@ describe('SurvivalSession daytime actions', () => {
       seed: 9,
       random: sequenceRandom([0, 0.5, 0, 0]),
       initial: { day: 2 },
-      initialEventId: 'dangerous-waters',
+      initialEventId: 'drifting-loot',
     });
-    session.resolveEvent(itemResponse('map'));
+    session.resolveEvent(choiceResponse('sleep'));
     session.perform('endDay');
     session.resolveEvent(itemResponse('map'));
 
@@ -1445,11 +1512,9 @@ describe('SurvivalSession daytime actions', () => {
       day: 2,
       weather: 'calm',
       daytime: expect.objectContaining({
-        eventId: 'dangerous-waters',
-        attemptedChoiceId: 'map',
-        attemptedItemId: 'map',
-        resolution: 'suitableItem',
-        outcomeMessage: 'Nothing happens.',
+        eventId: 'drifting-loot',
+        attemptedChoiceId: 'sleep',
+        outcomeMessage: 'The loot drifts out of reach.',
         inventoryMutations: [],
       }),
       nighttime: {
@@ -1472,7 +1537,7 @@ describe('SurvivalSession daytime actions', () => {
     session.resolveEvent({ kind: 'endure' });
     const first = session.snapshot();
     expect(first.journalEntries).toHaveLength(1);
-    expect(first.journalEntries[0]!.daytime).toBeNull();
+    expect(first.journalEntries[0]!.daytime).toEqual({ kind: 'sinkingShip' });
     expect(() => {
       (first.journalEntries as unknown as Array<{ day: number }>)[0]!.day = 99;
     }).toThrow(TypeError);
@@ -1486,15 +1551,17 @@ describe('SurvivalSession daytime actions', () => {
       seed: 9,
       random: sequenceRandom([0, 0.5, 0, 0]),
       initial: { day: 2 },
-      initialEventId: 'dangerous-waters',
+      initialEventId: 'drifting-loot',
     });
-    session.resolveEvent(itemResponse('map'));
+    session.resolveEvent(choiceResponse('sleep'));
     session.perform('endDay');
-    session.resolveEvent(itemResponse('bucket'));
+    session.resolveEvent(itemResponse('map'));
     const first = session.snapshot().journalEntries[0]!;
     const daytime = first.daytime;
     const nighttime = first.nighttime;
-    if (daytime === null || nighttime.kind !== 'event') throw new Error('Expected resolved day and night events.');
+    if (daytime === null || 'kind' in daytime || nighttime.kind !== 'event') {
+      throw new Error('Expected resolved day and night events.');
+    }
     const daytimeTitle = daytime.title;
     const nighttimeTitle = nighttime.event.title;
 
@@ -1506,7 +1573,7 @@ describe('SurvivalSession daytime actions', () => {
     }).toThrow(TypeError);
 
     const fresh = session.snapshot().journalEntries[0]!;
-    expect(fresh.daytime?.title).toBe(daytimeTitle);
+    expect(fresh.daytime).toMatchObject({ title: daytimeTitle });
     expect(fresh.nighttime).toMatchObject({
       kind: 'event',
       event: { title: nighttimeTitle },
@@ -1520,7 +1587,7 @@ describe('SurvivalSession daytime actions', () => {
     });
     expect(session.perform('endDay').code).toBe('quiet-night');
     const first = session.snapshot().journalEntries[0]!;
-    expect(first.daytime).toBeNull();
+    expect(first.daytime).toEqual({ kind: 'sinkingShip' });
     expect(first.nighttime).toEqual({ kind: 'quiet' });
 
     expect(() => {
@@ -1528,6 +1595,35 @@ describe('SurvivalSession daytime actions', () => {
     }).toThrow(TypeError);
 
     expect(session.snapshot().journalEntries[0]!.nighttime).toEqual({ kind: 'quiet' });
+  });
+
+  it('records the Dorothy escape as the first daytime journal event', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 10,
+      random: sequenceRandom([0]),
+    });
+
+    expect(session.perform('endDay').code).toBe('quiet-night');
+    const entry = session.snapshot().journalEntries[0]!;
+
+    expect(entry.daytime).toEqual({ kind: 'sinkingShip' });
+    expect(formatJournalEntry(entry).daytime).toBe(SINKING_SHIP_DAYTIME_TEXT);
+    expect(SINKING_SHIP_DAYTIME_TEXT).toBe(
+      'Dorothy struck something and began to sink. I reached the lifeboat with the supplies I could save.',
+    );
+    expect(Object.isFrozen(entry.daytime)).toBe(true);
+  });
+
+  it('does not record the Dorothy escape when a session starts after day one', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 10,
+      initial: { day: 2 },
+      initialEventId: 'shower-night',
+    });
+
+    session.resolveEvent({ kind: 'endure' });
+
+    expect(session.snapshot().journalEntries[0]!.daytime).toBeNull();
   });
 
   it('finalizes the journal before a night consequence ends the run', () => {

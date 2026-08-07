@@ -37,9 +37,10 @@ function inventory(
 
 function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
   return {
-    state: 'day', day: 1, health: 100, hunger: 20, energy: 3, hull: 100,
+    state: 'day', day: 1, pressure: 0, health: 100, hunger: 20, energy: 3, hull: 100,
     food: 0, bait: 0, recoveredFood: 0, recoveredBait: 0, repairMaterial: 0,
-    rescueProgress: 0, weather: 'calm', actedToday: false,
+    rescueProgress: 0, chest: { state: 'none', acquiredDay: null }, eventFlags: [],
+    weather: 'calm', actedToday: false,
     journalEntries: [], inventory: inventory(), savedItems: [], pendingEventId: null,
     pendingDriftingLootVariant: null,
     lastOutcome: null, seed: 8, ...overrides,
@@ -1720,142 +1721,40 @@ describe('SurvivalPhase orchestration', () => {
     rig.phase.dispose();
   });
 
-  it('covers a scheduled day event and unlocks choices only after the reveal', async () => {
-    const event = SURVIVAL_EVENTS.find(({ phase }) => phase === 'day')!;
+  it('finishes a day action without requesting or staging a day event', async () => {
     let current = snapshot();
-    const calls: string[] = [];
-    const cover = deferred();
-    const tableauReveal = deferred();
-    const sceneSettle = deferred();
-    const uncover = deferred();
-    const sceneRenderer: SceneRenderer = {
-      render: vi.fn(() => { calls.push('scene-render'); }),
-      resize: vi.fn(),
-      dispose: vi.fn(),
-    };
-    const setEventSelection = vi.fn(() => { calls.push('selection'); });
-    const requestDayEvent = vi.fn(() => {
-      current = snapshot({ state: 'dayEvent', pendingEventId: event.id, actedToday: true });
-      return accepted({ code: 'event-opened', cue: event.cue, deltas: {} });
-    });
+    const requestDayEvent = vi.fn();
+    const stageEvent = vi.fn();
     const phase = SurvivalPhase.forTest({
-      session: { snapshot: vi.fn(() => current), perform: vi.fn(() => accepted()), requestDayEvent },
-      world: {
-        scene: new Scene(),
-        play: vi.fn(async (cue) => { calls.push(cue); }),
-        stageEvent: vi.fn(() => { calls.push('stage'); }),
-        revealEvent: vi.fn(() => {
-          calls.push('reveal-tableau');
-          return tableauReveal.promise;
+      session: {
+        snapshot: vi.fn(() => current),
+        perform: vi.fn(() => {
+          current = snapshot({ actedToday: true });
+          return accepted({ code: 'ate', cue: 'none' });
         }),
+        requestDayEvent,
+      },
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        stageEvent,
         dispose: vi.fn(),
       },
       ui: {
-        render: vi.fn(), showFeedback: vi.fn(), setBusy: vi.fn(), setJournalUnread: vi.fn(),
-        beginEventPresentation: vi.fn(() => { calls.push('begin-event'); }),
-        setSleepCovered: vi.fn((covered) => {
-          calls.push(covered ? 'cover' : 'uncover');
-          return covered ? cover.promise : uncover.promise;
-        }),
-        settleCoveredScene: vi.fn(() => {
-          calls.push('settle');
-          return sceneSettle.promise;
-        }),
-        showEventReveal: vi.fn(async () => { calls.push('event'); }), dispose: vi.fn(),
-        setEventSelection,
-      },
-      sceneRenderer,
-    });
-
-    phase.handleAction('dive');
-    await flushPromises();
-
-    expect(requestDayEvent).toHaveBeenCalledOnce();
-    expect(calls).toEqual(['fish', 'begin-event', 'cover']);
-    expect(setEventSelection).not.toHaveBeenCalled();
-
-    cover.resolve();
-    await flushPromises();
-    expect(calls).toEqual([
-      'fish', 'begin-event', 'cover', 'stage', 'event', 'scene-render', 'settle',
-    ]);
-    expect(setEventSelection).not.toHaveBeenCalled();
-    expect(calls).not.toContain('reveal-tableau');
-
-    sceneSettle.resolve();
-    await flushPromises();
-    expect(calls.at(-1)).toBe('uncover');
-    expect(calls).not.toContain('reveal-tableau');
-
-    uncover.resolve();
-    await flushPromises();
-    expect(calls.at(-1)).toBe('reveal-tableau');
-    expect(setEventSelection).not.toHaveBeenCalled();
-
-    tableauReveal.resolve();
-    await flushPromises();
-    expect(calls).toEqual([
-      'fish', 'begin-event', 'cover', 'stage', 'event',
-      'scene-render', 'settle', 'uncover', 'reveal-tableau', 'selection',
-    ]);
-  });
-
-  it('excludes Drifting Loot from the post-action daytime presentation pool', async () => {
-    const session = new SurvivalSession(
-      [{ instanceId: 'cannedFood-1', type: 'cannedFood' }],
-      {
-        seed: 202,
-        random: sequenceRandom([0.999999, 0, 0]),
-        initial: { day: 3, hunger: 35, energy: 3 },
-      },
-    );
-    const setEventSelection = vi.fn();
-    const ui: Partial<SurvivalUI> = {
-      render: vi.fn(),
-      setJournalUnread: vi.fn(),
-      setBusy: vi.fn(),
-      beginEventPresentation: vi.fn(),
-      setSleepCovered: vi.fn(() => Promise.resolve()),
-      showEventReveal: vi.fn(() => Promise.resolve()),
-      setEventSelection,
-      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
-      showFeedback: vi.fn(),
-      clearEventPresentation: vi.fn(),
-      restoreCommandFocus: vi.fn(),
-      dispose: vi.fn(),
-    };
-    const phase = SurvivalPhase.forTest({
-      session,
-      world: {
-        play: vi.fn(() => Promise.resolve()),
-        stageEvent: vi.fn(),
-        revealEvent: vi.fn(() => Promise.resolve()),
-        reactToEventOutcome: vi.fn(() => Promise.resolve()),
-        clearEvent: vi.fn(),
+        render: vi.fn(),
+        showFeedback: vi.fn(),
+        setBusy: vi.fn(),
+        setJournalUnread: vi.fn(),
+        restoreCommandFocus: vi.fn(),
         dispose: vi.fn(),
       },
-      ui,
     });
-    phase.start();
 
     phase.handleAction('eat');
     await flushPromises();
-    await flushPromises();
 
-    expect(session.snapshot()).toMatchObject({
-      state: 'dayEvent',
-      pendingEventId: 'dangerous-waters',
-      energy: 3,
-    });
-    expect(setEventSelection).toHaveBeenCalled();
-    ui.onEndure?.();
-    await flushPromises();
-    expect(session.snapshot()).toMatchObject({
-      state: 'day',
-      pendingEventId: null,
-      energy: 3,
-      food: 0,
-    });
+    expect(requestDayEvent).not.toHaveBeenCalled();
+    expect(stageEvent).not.toHaveBeenCalled();
+    expect(current.state).toBe('day');
   });
 
   it('stages a committed night event under cover before revealing choices', async () => {
@@ -2427,7 +2326,8 @@ describe('SurvivalPhase orchestration', () => {
 
     tableauReaction.resolve();
     await flushPromises();
-    expect(calls).toEqual(['resolve', 'cue', 'react', 'feedback', 'hold']);
+    expect(calls).toEqual(['resolve', 'cue', 'react', 'hold']);
+    expect(ui.showFeedback).not.toHaveBeenCalled();
 
     outcomeHold.resolve();
     await flushPromises();
@@ -2438,7 +2338,7 @@ describe('SurvivalPhase orchestration', () => {
     cover.resolve();
     await flushPromises();
     expect(calls).toEqual([
-      'resolve', 'cue', 'react', 'feedback', 'hold', 'cover',
+      'resolve', 'cue', 'react', 'hold', 'cover',
       'clear', 'dawn', 'dawn-cue',
     ]);
     expect(calls).not.toContain('uncover');
@@ -2462,99 +2362,6 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
     expect(setBusy).toHaveBeenLastCalledWith(false);
     expect(restoreCommandFocus).toHaveBeenCalledOnce();
-  });
-
-  it('renders a resolved day event under black without beginning dawn', async () => {
-    const event = SURVIVAL_EVENTS.find(({ phase }) => phase === 'day')!;
-    let current = snapshot({ state: 'dayEvent', pendingEventId: event.id });
-    const calls: string[] = [];
-    const outcomeHold = deferred();
-    const cover = deferred();
-    const sceneSettle = deferred();
-    const uncover = deferred();
-    let trackExit = false;
-    const beginDawn = vi.fn();
-    const phase = SurvivalPhase.forTest({
-      session: {
-        snapshot: vi.fn(() => current),
-        resolveEvent: vi.fn(() => {
-          current = snapshot({ state: 'day', pendingEventId: null });
-          return accepted({ code: 'event-resolved', cue: 'impact' });
-        }),
-        beginDawn,
-      },
-      world: {
-        scene: new Scene(),
-        revealEvent: vi.fn(() => Promise.resolve()),
-        play: vi.fn(() => Promise.resolve()),
-        reactToEventOutcome: vi.fn(() => Promise.resolve()),
-        clearEvent: vi.fn(() => { calls.push('clear'); }),
-        syncInventory: vi.fn((synced) => {
-          if (trackExit) calls.push(`inventory:${synced.state}`);
-        }),
-        dispose: vi.fn(),
-      },
-      ui: {
-        beginEventPresentation: vi.fn(),
-        setSleepCovered: vi.fn((covered) => {
-          if (!trackExit) return Promise.resolve();
-          calls.push(covered ? 'cover' : 'uncover');
-          return covered ? cover.promise : uncover.promise;
-        }),
-        settleCoveredScene: vi.fn(() => {
-          if (!trackExit) return Promise.resolve();
-          calls.push('settle');
-          return sceneSettle.promise;
-        }),
-        showEventReveal: vi.fn(() => Promise.resolve()),
-        setEventSelection: vi.fn(),
-        setBusy: vi.fn(),
-        showFeedback: vi.fn(() => { calls.push('feedback'); }),
-        holdEventOutcome: vi.fn(() => {
-          calls.push('hold');
-          return outcomeHold.promise;
-        }),
-        render: vi.fn((rendered) => {
-          if (trackExit) calls.push(`render:${rendered.state}`);
-        }),
-        setJournalUnread: vi.fn(),
-        restoreCommandFocus: vi.fn(),
-        dispose: vi.fn(),
-      },
-      sceneRenderer: {
-        render: vi.fn(() => { calls.push('scene-render'); }),
-        resize: vi.fn(),
-        dispose: vi.fn(),
-      },
-    });
-    phase.start();
-    await flushPromises();
-    calls.length = 0;
-    trackExit = true;
-
-    phase.handleEndure();
-    await flushPromises();
-    expect(calls).toEqual(['feedback', 'hold']);
-
-    outcomeHold.resolve();
-    await flushPromises();
-    expect(calls).toEqual(['feedback', 'hold', 'cover']);
-
-    cover.resolve();
-    await flushPromises();
-    expect(calls).toEqual([
-      'feedback', 'hold', 'cover', 'clear', 'render:day', 'inventory:day', 'scene-render', 'settle',
-    ]);
-    expect(beginDawn).not.toHaveBeenCalled();
-    expect(calls.indexOf('render:day')).toBeGreaterThan(calls.indexOf('cover'));
-    expect(calls).not.toContain('uncover');
-
-    sceneSettle.resolve();
-    await flushPromises();
-    expect(calls.at(-1)).toBe('uncover');
-
-    uncover.resolve();
-    await flushPromises();
   });
 
   it.each([
@@ -2813,8 +2620,8 @@ describe('SurvivalPhase orchestration', () => {
     expect(calls.indexOf('cover')).toBeLessThan(calls.indexOf('stage:drifting-bottle'));
     expect(calls.indexOf('reveal:drifting-bottle')).toBeLessThan(calls.indexOf('selection'));
     expect(calls.indexOf('use:swimRing-1')).toBeLessThan(calls.indexOf('react:drifting-bottle'));
-    expect(calls.indexOf('react:drifting-bottle')).toBeLessThan(calls.indexOf('feedback'));
-    expect(calls.indexOf('feedback')).toBeLessThan(calls.indexOf('hold'));
+    expect(calls.indexOf('react:drifting-bottle')).toBeLessThan(calls.indexOf('hold'));
+    expect(calls).not.toContain('feedback');
     expect(calls.indexOf('hold')).toBeLessThan(calls.lastIndexOf('cover'));
     expect(calls.lastIndexOf('cover')).toBeLessThan(calls.indexOf('clear:drifting-bottle'));
     expect(calls.indexOf('clear:drifting-bottle')).toBeLessThan(calls.indexOf('cue:dawn'));
@@ -3279,7 +3086,17 @@ describe('SurvivalPhase orchestration', () => {
     ['nightEvent', true],
   ] as const)('resolves %s and calls dawn only for night events', async (state, expectsDawn) => {
     const event = SURVIVAL_EVENTS.find(({ phase }) => phase === (state === 'dayEvent' ? 'day' : 'night'))!;
-    let current = snapshot({ state, pendingEventId: event.id });
+    let current = snapshot({
+      state,
+      pendingEventId: event.id,
+      ...(state === 'dayEvent' ? { pendingDriftingLootVariant: 'barrel' } : {}),
+    });
+    const calls: string[] = [];
+    const showFeedback = vi.fn(() => { calls.push('feedback'); });
+    const holdEventOutcome = vi.fn(() => {
+      calls.push('hold');
+      return Promise.resolve();
+    });
     const beginDawn = vi.fn(() => {
       current = snapshot({ state: 'day', day: 2 });
       return accepted({ code: 'dawn', cue: 'dawn' });
@@ -3296,7 +3113,7 @@ describe('SurvivalPhase orchestration', () => {
       world: { play: vi.fn(() => Promise.resolve()), dispose: vi.fn() },
       ui: {
         showEventReveal: vi.fn(() => Promise.resolve()), setEventSelection: vi.fn(),
-        showFeedback: vi.fn(), setBusy: vi.fn(), render: vi.fn(),
+        showFeedback, holdEventOutcome, setBusy: vi.fn(), render: vi.fn(),
         setJournalUnread: vi.fn(), restoreCommandFocus: vi.fn(), dispose: vi.fn(),
       },
     });
@@ -3304,7 +3121,12 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
     phase.handleEndure();
     await flushPromises();
+    await flushPromises();
     expect(beginDawn).toHaveBeenCalledTimes(expectsDawn ? 1 : 0);
+    if (state === 'dayEvent') {
+      expect(showFeedback).toHaveBeenCalledOnce();
+      expect(calls.indexOf('feedback')).toBeLessThan(calls.indexOf('hold'));
+    }
   });
 
   it('shows a terminal night ending after its cue and skips dawn', async () => {
@@ -3457,7 +3279,7 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
-  it('defers item resolution and outcome feedback across hidden item and reaction boundaries', async () => {
+  it('defers item resolution across hidden item and reaction boundaries without night feedback', async () => {
     const listeners = new Map<string, EventListener>();
     const fakeDocument = {
       hidden: false,
@@ -3557,7 +3379,7 @@ describe('SurvivalPhase orchestration', () => {
     fakeDocument.hidden = false;
     phase.setPaused(false);
     await flushPromises();
-    expect(showFeedback).toHaveBeenCalledWith(outcome);
+    expect(showFeedback).not.toHaveBeenCalled();
     hold.resolve();
     phase.dispose();
   });

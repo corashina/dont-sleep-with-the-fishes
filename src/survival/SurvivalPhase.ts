@@ -142,7 +142,7 @@ export function formatDriftingLootResult(
   reward: RewardSummary,
 ): DriftingLootResultView {
   const title = reward.kind === 'item'
-    ? 'ENERGY BAR'
+    ? ITEM_DEFINITIONS[reward.id].label
     : `+${reward.quantity} ${
       reward.id === 'repairMaterial'
         ? 'REPAIR MATERIAL'
@@ -209,8 +209,6 @@ export class SurvivalPhase implements GamePhase {
   private presentedTerminalState: SurvivalState | null = null;
   private presentedInventorySnapshot: SurvivalSnapshot | null = null;
   private lastReadJournalDay = 0;
-  private pendingDayEventDay: number | null = null;
-  private readonly requestedDayEventDays = new Set<number>();
   private visibilityDocument: Document | null = null;
   private viewportWidth = 1;
   private viewportHeight = 1;
@@ -375,8 +373,6 @@ export class SurvivalPhase implements GamePhase {
       void this.runEndDay(outcome);
       return;
     }
-    const day = this.session.snapshot().day;
-    if (!this.requestedDayEventDays.has(day)) this.pendingDayEventDay = day;
     void this.runDayAction(outcome);
   }
 
@@ -476,7 +472,6 @@ export class SurvivalPhase implements GamePhase {
     this.ui = ui;
     this.scavengeElapsedSeconds = scavengeElapsedSeconds;
     this.onRestart = onRestart;
-    this.requestedDayEventDays.clear();
     this.wireUI();
   }
 
@@ -824,43 +819,15 @@ export class SurvivalPhase implements GamePhase {
     this.setBusy(true);
     await (this.world.play?.(outcome.cue) ?? Promise.resolve());
     if (this.disposed) return;
-    let snapshot = this.renderSnapshot(false, false);
+    const snapshot = this.renderSnapshot(false, false);
     this.ui.showFeedback?.(outcome);
     if (isTerminal(snapshot.state)) {
       this.setBusy(false);
       this.presentTerminalOnce(snapshot);
       return;
     }
-    snapshot = await this.openScheduledDayEvent(snapshot);
-    if (this.disposed) return;
-    if (snapshot.pendingEventId !== null) {
-      await this.runPendingEventReveal(snapshot, this.lifecycleGeneration);
-      return;
-    }
     this.setBusy(false);
     this.ui.restoreCommandFocus?.();
-  }
-
-  private async openScheduledDayEvent(
-    snapshot: SurvivalSnapshot,
-    generation?: number,
-  ): Promise<SurvivalSnapshot> {
-    if (
-      this.pendingDayEventDay === null
-      || snapshot.day !== this.pendingDayEventDay
-      || snapshot.state !== 'day'
-    ) return snapshot;
-
-    const eventDay = this.pendingDayEventDay;
-    this.pendingDayEventDay = null;
-    this.requestedDayEventDays.add(eventDay);
-    const eventOutcome = this.session.requestDayEvent?.();
-    if (eventOutcome === undefined) return snapshot;
-    if (!eventOutcome.accepted) {
-      this.ui.showFeedback?.(eventOutcome);
-      return this.renderSnapshot(false, false);
-    }
-    return this.renderSnapshot(false, false);
   }
 
   private async runEndDay(outcome: ActionOutcome): Promise<void> {
@@ -1075,7 +1042,7 @@ export class SurvivalPhase implements GamePhase {
       && !await this.waitForEventResume(generation)
     ) return;
     const terminal = this.session.snapshot();
-    this.ui.showFeedback?.(outcome);
+    if (eventState !== 'nightEvent') this.ui.showFeedback?.(outcome);
     if (isTerminal(terminal.state)) {
       const snapshot = this.renderSnapshot(false, false);
       if (snapshot.state === 'rescued') this.retainTerminalEventTableau();
