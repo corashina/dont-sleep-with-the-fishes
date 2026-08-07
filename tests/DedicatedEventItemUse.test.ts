@@ -148,9 +148,12 @@ function createActor(
 }
 
 describe('dedicated event item use', () => {
-  it('does not emit Leak spray from a terminal item frame', async () => {
+  it('applies the terminal Leak item transition once after spray update', async () => {
     const emit = vi.spyOn(FishingBiteParticles.prototype, 'emit');
     const camera = new PerspectiveCamera(62, 1.6, 0.1, 100);
+    const sampleWorldWaveInto = vi.fn((output) => {
+      Object.assign(output, createWaveSample());
+    });
     const environment: DedicatedEventEnvironment = {
       eventModels: createEventModels(),
       supplies: {
@@ -159,7 +162,7 @@ describe('dedicated event item use', () => {
       } as unknown as DedicatedEventEnvironment['supplies'],
       captainWhiskers: {} as DedicatedEventEnvironment['captainWhiskers'],
       vortexWave: createInactiveVortexWaveState(),
-      sampleWorldWaveInto: (output) => Object.assign(output, createWaveSample()),
+      sampleWorldWaveInto,
       readWorldWaveAmplitudeScale: () => 1,
       camera,
     };
@@ -171,6 +174,13 @@ describe('dedicated event item use', () => {
 
     await expect(itemUse).resolves.toBe(true);
     expect(emit).not.toHaveBeenCalled();
+    const completedWaveSamples = sampleWorldWaveInto.mock.calls.length;
+
+    presentation.update(2, 0);
+    presentation.update(3, 0);
+    presentation.settleForVisibilityChange();
+
+    expect(sampleWorldWaveInto).toHaveBeenCalledTimes(completedWaveSamples + 2);
     presentation.dispose();
     emit.mockRestore();
   });

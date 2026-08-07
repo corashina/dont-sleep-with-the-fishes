@@ -302,8 +302,9 @@ export class LeakPresentation implements DedicatedEventPresentation {
   update(time: number, delta: number): void {
     if (this.disposed || !this.staged) return;
     const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
-    const activeChoiceId = this.activeChoiceId;
-    if (this.animation.active) {
+    const animationWasActive = this.animation.active;
+    const activeChoiceId = animationWasActive ? this.activeChoiceId : null;
+    if (animationWasActive) {
       this.animation.update(time, safeDelta);
     } else {
       this.updateInteriorWave(time);
@@ -316,7 +317,8 @@ export class LeakPresentation implements DedicatedEventPresentation {
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
-    const activeChoiceId = this.activeChoiceId;
+    const animationWasActive = this.animation.active;
+    const activeChoiceId = animationWasActive ? this.activeChoiceId : null;
     this.animation.settle();
     if (activeChoiceId !== null) this.finishItemUse(activeChoiceId, 0);
   }
