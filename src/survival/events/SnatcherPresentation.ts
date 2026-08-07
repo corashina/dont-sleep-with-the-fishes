@@ -16,14 +16,13 @@ import type {
   MutableSupplyPose,
 } from '../BoatSupplyDisplay';
 import { borrowSupplyActor, releaseSupplyActor } from '../BoatSupplyDisplay';
-import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
 import type {
   DedicatedEventEnvironment,
-  DedicatedEventAnimation,
   DedicatedEventPresentation,
   EventOutcomePresentation,
   EventSceneContext,
 } from '../eventPresentationTypes';
+import { TimedPresentationAnimation } from '../TimedPresentationAnimation';
 import {
   identitySnatcherSample,
   sampleSnatcherItemUse,
@@ -227,7 +226,13 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     scaleZ: 1,
   };
   private readonly reactionState = { targetLost: false };
-  private active: DedicatedEventAnimation | null = null;
+  private readonly animation = new TimedPresentationAnimation<
+    'reveal' | 'item' | 'reaction'
+  >(
+    (kind, _time, progress) => this.applyAnimation(kind, progress),
+    (kind) => this.finishAnimation(kind),
+  );
+  private activeChoiceId: string | null = null;
   private borrowedActor: BorrowedSupplyActor | null = null;
   private targetInstanceId: ItemInstanceId | null = null;
   private staged = false;
@@ -262,6 +267,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   stage(context: EventSceneContext): void {
     if (this.disposed || context.eventId !== 'snatcher') return;
     this.clear();
+    this.activeChoiceId = null;
     this.staged = true;
     this.targetInstanceId = context.targetInstanceId;
     this.boatRoot.visible = true;
@@ -275,17 +281,11 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
 
   reveal(): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = null;
     sampleSnatcherReveal(0, this.sample);
     this.applySample();
-    return new Promise((resolve) => {
-      this.active = {
-        kind: 'reveal',
-        elapsed: 0,
-        duration: SNATCHER_REVEAL_DURATION,
-        resolve,
-      };
-    });
+    return this.animation.start('reveal', SNATCHER_REVEAL_DURATION);
   }
 
   playItemUse(choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
@@ -301,23 +301,20 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     ) {
       return Promise.resolve(false);
     }
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = choiceId;
     sampleSnatcherItemUse(choiceId, 0, this.sample);
     this.applySample();
-    return new Promise((resolve) => {
-      this.active = {
-        kind: 'item',
-        choiceId,
-        elapsed: 0,
-        duration: snatcherItemDuration(choiceId),
-        resolve,
-      };
+    return this.animation.start('item', snatcherItemDuration(choiceId), {
+      complete: true,
+      cancel: false,
     });
   }
 
   react(result: EventOutcomePresentation): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = null;
     const targetId = this.targetInstanceId;
     this.reactionState.targetLost = targetId !== null
       && result.lostInstanceIds.includes(targetId);
@@ -327,49 +324,19 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     sampleSnatcherReaction(this.reactionState, 0, this.sample);
     this.applyBorrowedPose();
     this.applySample();
-    return new Promise((resolve) => {
-      this.active = {
-        kind: 'reaction',
-        elapsed: 0,
-        duration: SNATCHER_REACTION_DURATION,
-        resolve,
-      };
-    });
+    return this.animation.start('reaction', SNATCHER_REACTION_DURATION);
   }
 
   update(_time: number, delta: number): void {
     if (this.disposed || !this.staged) return;
     const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
     this.mixer?.update(safeDelta);
-    const active = this.active;
-    if (active === null) return;
-    active.elapsed = Math.min(active.duration, active.elapsed + safeDelta);
-    const progress = active.duration === 0 ? 1 : active.elapsed / active.duration;
-    if (active.kind === 'reveal') {
-      sampleSnatcherReveal(progress, this.sample);
-    } else if (active.kind === 'item') {
-      sampleSnatcherItemUse(active.choiceId, progress, this.sample);
-    } else {
-      sampleSnatcherReaction(this.reactionState, progress, this.sample);
-      this.applyBorrowedPose();
-    }
-    this.applySample();
-    if (progress === 1) this.finishActive();
+    this.animation.update(_time, safeDelta);
   }
 
   settleForVisibilityChange(): void {
-    if (this.disposed || this.active === null) return;
-    this.active.elapsed = this.active.duration;
-    if (this.active.kind === 'reveal') {
-      sampleSnatcherReveal(1, this.sample);
-    } else if (this.active.kind === 'item') {
-      sampleSnatcherItemUse(this.active.choiceId, 1, this.sample);
-    } else {
-      sampleSnatcherReaction(this.reactionState, 1, this.sample);
-      this.applyBorrowedPose();
-    }
-    this.applySample();
-    this.finishActive();
+    if (this.disposed) return;
+    this.animation.settle();
   }
 
   skip(): void {
@@ -378,7 +345,8 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
 
   clear(): void {
     if (this.disposed) return;
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = null;
     this.targetOutline.clear();
     this.releaseActor();
     this.targetInstanceId = null;
@@ -390,11 +358,10 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    const active = this.active;
     const actor = this.borrowedActor;
-    this.active = null;
     this.borrowedActor = null;
-    resolveCancelledEventAnimation(active);
+    this.animation.cancel();
+    this.activeChoiceId = null;
     this.mixer?.stopAllAction();
     this.mixer?.uncacheRoot(this.modelInstance.root);
 
@@ -436,28 +403,29 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     actor.applyPose(this.itemPose);
   }
 
-  private finishActive(): void {
-    const active = this.active;
-    if (active === null) return;
-    this.active = null;
-    if (active.kind === 'item') {
-      sampleSnatcherItemUse(active.choiceId, 1, this.sample);
-      this.applySample();
-      active.resolve(true);
-      return;
+  private applyAnimation(
+    kind: 'reveal' | 'item' | 'reaction',
+    progress: number,
+  ): void {
+    if (kind === 'reveal') {
+      sampleSnatcherReveal(progress, this.sample);
+    } else if (kind === 'item') {
+      if (this.activeChoiceId === null) return;
+      sampleSnatcherItemUse(this.activeChoiceId, progress, this.sample);
+    } else {
+      sampleSnatcherReaction(this.reactionState, progress, this.sample);
+      this.applyBorrowedPose();
     }
-    if (active.kind === 'reaction' && this.reactionState.targetLost) {
+    this.applySample();
+  }
+
+  private finishAnimation(kind: 'reveal' | 'item' | 'reaction'): void {
+    this.activeChoiceId = null;
+    if (kind === 'reaction' && this.reactionState.targetLost) {
       const actor = this.borrowedActor;
       this.borrowedActor = null;
       actor?.releaseOnNextSync();
     }
-    active.resolve();
-  }
-
-  private cancelActive(): void {
-    const active = this.active;
-    this.active = null;
-    resolveCancelledEventAnimation(active);
   }
 
   private applySample(): void {

@@ -78,31 +78,3 @@ export interface DedicatedEventPresentation {
   clear(): void;
   dispose(): void;
 }
-
-export type DedicatedEventAnimation<ItemState extends object = object> =
-  | {
-      readonly kind: 'reveal';
-      elapsed: number;
-      readonly duration: number;
-      readonly resolve: () => void;
-    }
-  | ({
-      readonly kind: 'item';
-      readonly choiceId: string;
-      elapsed: number;
-      readonly duration: number;
-      readonly resolve: (played: boolean) => void;
-    } & ItemState)
-  | {
-      readonly kind: 'reaction';
-      elapsed: number;
-      readonly duration: number;
-      readonly resolve: () => void;
-    };
-
-export function resolveCancelledEventAnimation(
-  active: DedicatedEventAnimation<object> | null,
-): void {
-  if (active?.kind === 'item') active.resolve(false);
-  else active?.resolve();
-}
