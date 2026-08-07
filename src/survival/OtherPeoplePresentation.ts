@@ -28,7 +28,6 @@ import type { MutableSupplyPose } from './BoatSupplyDisplay';
 import {
   clamp01Unchecked as clamp01,
   smoothstepUnchecked as smoothstep,
-  type TimedAnimation,
 } from './animationMath';
 import type {
   EventChoicePresentation,
@@ -40,6 +39,7 @@ import type {
   EventResultPresentation,
 } from './survivalTypes';
 import { StationaryEventCamera } from './StationaryEventCamera';
+import { TimedPresentationAnimation } from './TimedPresentationAnimation';
 
 type OtherPeopleAnimationKind =
   | 'reveal'
@@ -49,8 +49,6 @@ type OtherPeopleAnimationKind =
   | 'result-rescue'
   | 'result-missed'
   | 'result-pass';
-
-type ActiveAnimation = TimedAnimation<OtherPeopleAnimationKind>;
 
 const REVEAL_DURATION = 3.4;
 const FLARE_DURATION = 1.25;
@@ -191,7 +189,10 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     scaleY: 1,
     scaleZ: 1,
   };
-  private activeAnimation: ActiveAnimation | null = null;
+  private readonly animation = new TimedPresentationAnimation<OtherPeopleAnimationKind>(
+    (kind, _time, progress) => this.applyAnimation(kind, progress),
+    (kind) => this.finishAnimation(kind),
+  );
   private selectedInstanceId: ItemInstanceId | null = null;
   private shipStartYaw = SHIP_YAW;
   private rescueLifeboatWashStart = 0;
@@ -260,7 +261,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
 
   stage(): void {
     if (this.disposed) return;
-    this.cancelActiveAnimation(false);
+    this.animation.cancel();
     this.restoreCamera();
     this.releaseSupply();
     this.captureCamera();
@@ -340,7 +341,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.root.userData.courseTurns = 0;
     switch (result.resultId) {
       case 'people-rescue':
-        this.cancelActiveAnimation(true);
+        this.animation.settle();
         this.rescueLifeboatWashStart =
           this.flareLifeboatWash.intensity;
         this.rescueShipWashStart = this.flareShipWash.intensity;
@@ -365,7 +366,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
 
   clear(): void {
     if (this.disposed) return;
-    this.cancelActiveAnimation(false);
+    this.animation.cancel();
     this.releaseSupply();
     this.restoreCamera();
     this.setPlayerSignalsDark();
@@ -389,24 +390,9 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.root.userData.state = 'idle';
   }
 
-  update(_time: number, delta: number): void {
+  update(time: number, delta: number): void {
     if (this.disposed || delta < 0) return;
-    const animation = this.activeAnimation;
-    if (animation !== null) {
-      animation.elapsed = Math.min(
-        animation.duration,
-        animation.elapsed + Math.max(0, delta),
-      );
-      const progress = animation.duration <= 0
-        ? 1
-        : animation.elapsed / animation.duration;
-      this.applyAnimation(animation.kind, progress);
-      if (progress >= 1) {
-        this.activeAnimation = null;
-        this.finishAnimation(animation.kind);
-        animation.resolve();
-      }
-    }
+    this.animation.update(time, delta);
     if (this.staged && this.ship.visible && !this.terminalRescue) {
       this.advanceCruise(delta);
     }
@@ -414,12 +400,12 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
-    this.cancelActiveAnimation(true);
+    this.animation.settle();
   }
 
   dispose(): void {
     if (this.disposed) return;
-    this.cancelActiveAnimation(false);
+    this.animation.cancel();
     this.releaseSupply();
     this.restoreCamera();
     this.setPlayerSignalsDark();
@@ -453,7 +439,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       return;
     }
     if (!this.naturalRescueCue) {
-      this.cancelActiveAnimation(false);
+      this.animation.cancel();
       this.releaseSupply();
       this.restoreCamera();
       this.resetActors();
@@ -496,16 +482,10 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     kind: OtherPeopleAnimationKind,
     duration: number,
   ): Promise<void> {
-    this.cancelActiveAnimation(true);
-    return new Promise<void>((resolve) => {
-      this.activeAnimation = {
-        kind,
-        elapsed: 0,
-        duration,
-        resolve,
-      };
-      this.applyAnimation(kind, 0);
-    });
+    this.animation.settle();
+    const animation = this.animation.start(kind, duration);
+    this.applyAnimation(kind, 0);
+    return animation;
   }
 
   private applyAnimation(
@@ -1078,11 +1058,4 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     light.shadow.camera.updateProjectionMatrix();
   }
 
-  private cancelActiveAnimation(settle: boolean): void {
-    const animation = this.activeAnimation;
-    this.activeAnimation = null;
-    if (animation === null) return;
-    if (settle) this.finishAnimation(animation.kind);
-    animation.resolve();
-  }
 }
