@@ -1,4 +1,5 @@
 import type { CaptainWhiskersSnapshot } from './CaptainWhiskersState';
+import { clamp01Unchecked, smoothstepUnchecked } from './animationMath';
 
 export type CaptainWhiskersPoseState =
   | 'sick'
@@ -57,7 +58,7 @@ export function sampleCaptainWhiskersPoseInto(
   setBasePose(output, sample.status);
   if (sample.action === null || sample.duration <= 0) return output;
 
-  const progress = clamp01(sample.elapsed / sample.duration);
+  const progress = clamp01Unchecked(sample.elapsed / sample.duration);
   if (progress >= 1) return output;
   const weight = actionWeight(progress);
   if (sample.action === 'pet') {
@@ -124,22 +125,13 @@ function setBasePose(
 
 function actionWeight(progress: number): number {
   if (progress < 0.16) {
-    return -0.18 * smoothStep(progress / 0.16);
+    return -0.18 * smoothstepUnchecked(progress / 0.16);
   }
   if (progress < 0.48) {
-    const travel = smoothStep((progress - 0.16) / 0.32);
+    const travel = smoothstepUnchecked((progress - 0.16) / 0.32);
     return -0.18 + 1.18 * travel;
   }
   if (progress < 0.68) return 1;
-  const settle = smoothStep((progress - 0.68) / 0.32);
+  const settle = smoothstepUnchecked((progress - 0.68) / 0.32);
   return (1 - settle) * (1 + Math.sin(settle * Math.PI) * 0.08);
-}
-
-function smoothStep(value: number): number {
-  const clamped = clamp01(value);
-  return clamped * clamped * (3 - 2 * clamped);
-}
-
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value));
 }

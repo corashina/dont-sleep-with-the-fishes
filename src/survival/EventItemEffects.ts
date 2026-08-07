@@ -18,6 +18,7 @@ import {
   Vector2,
   Vector3,
 } from 'three';
+import { clamp01Unchecked } from './animationMath';
 import type { EventItemUseSample } from './eventItemUseChoreography';
 
 type EffectRoot = Group;
@@ -33,10 +34,6 @@ const FLARE_DISTANCE = 18;
 const FLARE_ARC_HEIGHT = 3.2;
 const FLARE_WATER_Y = 0.04;
 const FLARE_FORWARD = new Vector3(1, 0, 0);
-
-function clampEffect(value: number): number {
-  return Math.min(1, Math.max(0, value));
-}
 
 /** Owns the short-lived visual cues for survival item use. */
 export class EventItemEffects {
@@ -107,13 +104,13 @@ export class EventItemEffects {
     actor.getWorldQuaternion(this.root.quaternion);
     this.heldFillLight.visible = sample.cameraSpaceBlend > 0 && sample.itemVisible;
     this.heldFillLight.intensity = sample.itemVisible
-      ? clampEffect(sample.cameraSpaceBlend) * 3.4
+      ? clamp01Unchecked(sample.cameraSpaceBlend) * 3.4
       : 0;
 
     if (sample.effectKind === 'none' || sample.effectKind === 'bucket-cover') return;
 
-    const primary = clampEffect(sample.primaryEffect);
-    const secondary = clampEffect(sample.secondaryEffect);
+    const primary = clamp01Unchecked(sample.primaryEffect);
+    const secondary = clamp01Unchecked(sample.secondaryEffect);
     switch (sample.effectKind) {
       case 'tape':
         this.show(this.tape, primary);

@@ -1,3 +1,18 @@
+export function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+export function smoothstepRange(start: number, end: number, value: number): number {
+  const progress = clamp((value - start) / (end - start), 0, 1);
+  return progress * progress * (3 - 2 * progress);
+}
+
+export function smootherstepRange(start: number, end: number, value: number): number {
+  const progress = clamp((value - start) / (end - start), 0, 1);
+  return progress * progress * progress
+    * (progress * (progress * 6 - 15) + 10);
+}
+
 export function clamp01(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 0;
   return value >= 1 ? 1 : value;

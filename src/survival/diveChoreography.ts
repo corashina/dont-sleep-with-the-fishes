@@ -1,3 +1,9 @@
+import {
+  clamp,
+  smootherstepRange,
+  smoothstepRange,
+} from './animationMath';
+
 export const DIVE_SEAT_END_SECONDS = 1.1;
 export const DIVE_GOGGLES_END_SECONDS = 2.2;
 export const DIVE_IMPACT_SECONDS = 3.6;
@@ -41,21 +47,6 @@ export function createDivePose(): DivePose {
   };
 }
 
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(Math.max(value, minimum), maximum);
-}
-
-function smoothstep(start: number, end: number, value: number): number {
-  const progress = clamp((value - start) / (end - start), 0, 1);
-  return progress * progress * (3 - 2 * progress);
-}
-
-function smootherstep(start: number, end: number, value: number): number {
-  const progress = clamp((value - start) / (end - start), 0, 1);
-  return progress * progress * progress
-    * (progress * (progress * 6 - 15) + 10);
-}
-
 function keyedPulse(
   elapsed: number,
   start: number,
@@ -63,26 +54,26 @@ function keyedPulse(
   end: number,
 ): number {
   return elapsed <= peak
-    ? smoothstep(start, peak, elapsed)
-    : 1 - smoothstep(peak, end, elapsed);
+    ? smoothstepRange(start, peak, elapsed)
+    : 1 - smoothstepRange(peak, end, elapsed);
 }
 
 export function sampleDivePose(elapsedSeconds: number, output: DivePose): DivePose {
   const elapsed = Number.isFinite(elapsedSeconds)
     ? clamp(elapsedSeconds, 0, DIVE_ENTRY_DURATION_SECONDS)
     : 0;
-  const seatProgress = smootherstep(0, DIVE_SEAT_END_SECONDS, elapsed);
-  const goggleProgress = smoothstep(
+  const seatProgress = smootherstepRange(0, DIVE_SEAT_END_SECONDS, elapsed);
+  const goggleProgress = smoothstepRange(
     DIVE_SEAT_END_SECONDS,
     DIVE_GOGGLES_END_SECONDS,
     elapsed,
   );
-  const impactProgress = smoothstep(
+  const impactProgress = smoothstepRange(
     DIVE_GOGGLES_END_SECONDS,
     DIVE_IMPACT_SECONDS,
     elapsed,
   );
-  const underwaterProgress = smoothstep(
+  const underwaterProgress = smoothstepRange(
     DIVE_IMPACT_SECONDS,
     5,
     elapsed,

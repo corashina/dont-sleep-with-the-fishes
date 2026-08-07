@@ -15,6 +15,7 @@ import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
+import { clamp01Unchecked } from './animationMath';
 import type { ChestSnapshot } from './survivalTypes';
 
 export interface ChestEventPose {
@@ -34,10 +35,6 @@ const CLOSED_POSE: ChestEventPose = Object.freeze({
   broken: 0,
   overboard: 0,
 });
-
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value));
-}
 
 function findImportedLid(root: Group): Object3D | null {
   let lid: Object3D | null = null;
@@ -151,11 +148,11 @@ export class ChestDisplay {
 
   applyEventPose(pose: ChestEventPose): void {
     if (this.disposed) return;
-    const mouthOpen = clamp01(pose.mouthOpen);
-    const bite = clamp01(pose.bite);
-    const bound = clamp01(pose.bound);
-    const broken = clamp01(pose.broken);
-    const overboard = clamp01(pose.overboard);
+    const mouthOpen = clamp01Unchecked(pose.mouthOpen);
+    const bite = clamp01Unchecked(pose.bite);
+    const bound = clamp01Unchecked(pose.bound);
+    const broken = clamp01Unchecked(pose.broken);
+    const overboard = clamp01Unchecked(pose.overboard);
     const rattle = Math.min(1, Math.max(-1, pose.rattle));
 
     this.root.visible = overboard < 1;
