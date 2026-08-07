@@ -19,14 +19,13 @@ import {
 } from '../../world/SceneResources';
 import { borrowSupplyActor, releaseSupplyActor } from '../BoatSupplyDisplay';
 import type { BorrowedSupplyActor } from '../BoatSupplyDisplay';
-import { resolveCancelledEventAnimation } from '../eventPresentationTypes';
 import type {
   DedicatedEventEnvironment,
-  DedicatedEventAnimation,
   DedicatedEventPresentation,
   EventOutcomePresentation,
   EventSceneContext,
 } from '../eventPresentationTypes';
+import { TimedPresentationAnimation } from '../TimedPresentationAnimation';
 import {
   identityLeakSample,
   LEAK_ITEM_DURATION,
@@ -147,8 +146,15 @@ export class LeakPresentation implements DedicatedEventPresentation {
     displacementZ: 0,
     normal: { x: 0, y: 1, z: 0 },
   };
-  private active: DedicatedEventAnimation<{
-  }> | null = null;
+  private readonly animation = new TimedPresentationAnimation<
+    'reveal' | 'item' | 'reaction'
+  >(
+    (kind, time, progress) => this.applyAnimation(kind, time, progress),
+    () => {
+      this.activeChoiceId = null;
+    },
+  );
+  private activeChoiceId: string | null = null;
   private borrowedActor: BorrowedSupplyActor | null = null;
   private sprayElapsed = 0;
   private sprayHoleIndex = 0;
@@ -231,6 +237,7 @@ export class LeakPresentation implements DedicatedEventPresentation {
   stage(context: EventSceneContext): void {
     if (this.disposed || context.eventId !== 'leak') return;
     this.clear();
+    this.activeChoiceId = null;
     this.staged = true;
     this.boatRoot.visible = true;
     for (const hole of this.holes) hole.visible = true;
@@ -240,17 +247,11 @@ export class LeakPresentation implements DedicatedEventPresentation {
 
   reveal(): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = null;
     sampleLeakReveal(0, this.sample);
     this.applySample(0);
-    return new Promise((resolve) => {
-      this.active = {
-        kind: 'reveal',
-        elapsed: 0,
-        duration: LEAK_REVEAL_DURATION,
-        resolve,
-      };
-    });
+    return this.animation.start('reveal', LEAK_REVEAL_DURATION);
   }
 
   playItemUse(choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
@@ -261,23 +262,20 @@ export class LeakPresentation implements DedicatedEventPresentation {
     ) {
       return Promise.resolve(false);
     }
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = choiceId;
     sampleLeakItemUse(choiceId, 0, this.sample);
     this.applyHeldLeak(0);
-    return new Promise((resolve) => {
-      this.active = {
-        kind: 'item',
-        choiceId,
-        elapsed: 0,
-        duration: LEAK_ITEM_DURATION,
-        resolve,
-      };
+    return this.animation.start('item', LEAK_ITEM_DURATION, {
+      complete: true,
+      cancel: false,
     });
   }
 
   react(result: EventOutcomePresentation): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = null;
 
     const selected = result.selectedInstanceId;
     const selectedBroken = selected !== null
@@ -298,62 +296,23 @@ export class LeakPresentation implements DedicatedEventPresentation {
     this.borrowedActor?.applyPose(this.sample);
     this.applyHeldLeak(0);
 
-    return new Promise((resolve) => {
-      this.active = {
-        kind: 'reaction',
-        elapsed: 0,
-        duration: LEAK_REACTION_DURATION,
-        resolve,
-      };
-    });
+    return this.animation.start('reaction', LEAK_REACTION_DURATION);
   }
 
   update(time: number, delta: number): void {
     if (this.disposed || !this.staged) return;
-    const active = this.active;
     const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
-    if (active === null) {
+    if (this.animation.active) {
+      this.animation.update(time, safeDelta);
+    } else {
       this.updateInteriorWave(time);
-      this.updateSpray(safeDelta);
-      return;
     }
-
-    active.elapsed = Math.min(active.duration, active.elapsed + safeDelta);
-    const progress = active.duration === 0 ? 1 : active.elapsed / active.duration;
-    switch (active.kind) {
-      case 'reveal':
-        sampleLeakReveal(progress, this.sample);
-        break;
-      case 'item':
-        sampleLeakItemUse(active.choiceId, progress, this.sample);
-        break;
-      case 'reaction':
-        sampleLeakReaction(this.reactionState, progress, this.sample);
-        this.borrowedActor?.applyPose(this.sample);
-        break;
-    }
-    this.applySample(time);
     this.updateSpray(safeDelta);
-    if (progress === 1) this.finishActive(time);
   }
 
   settleForVisibilityChange(): void {
-    if (this.disposed || this.active === null) return;
-    this.active.elapsed = this.active.duration;
-    switch (this.active.kind) {
-      case 'reveal':
-        sampleLeakReveal(1, this.sample);
-        break;
-      case 'item':
-        sampleLeakItemUse(this.active.choiceId, 1, this.sample);
-        break;
-      case 'reaction':
-        sampleLeakReaction(this.reactionState, 1, this.sample);
-        this.borrowedActor?.applyPose(this.sample);
-        break;
-    }
-    this.applySample(0);
-    this.finishActive(0);
+    if (this.disposed) return;
+    this.animation.settle();
   }
 
   skip(): void {
@@ -362,7 +321,8 @@ export class LeakPresentation implements DedicatedEventPresentation {
 
   clear(): void {
     if (this.disposed) return;
-    this.cancelActive();
+    this.animation.cancel();
+    this.activeChoiceId = null;
     this.releaseActor();
     this.staged = false;
     this.hideScene();
@@ -371,11 +331,10 @@ export class LeakPresentation implements DedicatedEventPresentation {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    const active = this.active;
     const actor = this.borrowedActor;
-    this.active = null;
     this.borrowedActor = null;
-    resolveCancelledEventAnimation(active);
+    this.animation.cancel();
+    this.activeChoiceId = null;
 
     runCleanupSteps([
       () => actor?.release(),
@@ -400,23 +359,30 @@ export class LeakPresentation implements DedicatedEventPresentation {
     this.borrowedActor = releaseSupplyActor(this.borrowedActor);
   }
 
-  private finishActive(time: number): void {
-    const active = this.active;
-    if (active === null) return;
-    this.active = null;
-    if (active.kind === 'item') {
-      sampleLeakItemUse(active.choiceId, 1, this.sample);
-      this.applyHeldLeak(time);
-      active.resolve(true);
+  private applyAnimation(
+    kind: 'reveal' | 'item' | 'reaction',
+    time: number,
+    progress: number,
+  ): void {
+    if (kind === 'reveal') {
+      sampleLeakReveal(progress, this.sample);
+      this.applySample(time);
       return;
     }
-    active.resolve();
-  }
-
-  private cancelActive(): void {
-    const active = this.active;
-    this.active = null;
-    resolveCancelledEventAnimation(active);
+    if (kind === 'item') {
+      const choiceId = this.activeChoiceId;
+      if (choiceId === null) return;
+      sampleLeakItemUse(choiceId, progress, this.sample);
+      this.applySample(time);
+      if (progress === 1) {
+        sampleLeakItemUse(choiceId, 1, this.sample);
+        this.applyHeldLeak(time);
+      }
+      return;
+    }
+    sampleLeakReaction(this.reactionState, progress, this.sample);
+    this.borrowedActor?.applyPose(this.sample);
+    this.applySample(time);
   }
 
   private applyHeldLeak(time: number): void {
