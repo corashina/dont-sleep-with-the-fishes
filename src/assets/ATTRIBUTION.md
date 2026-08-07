@@ -286,8 +286,10 @@ The dawn file contains the first eight seconds of its source WAVE file.
 | bucketRain | `bucketRain.mp3` | [Rain Drips in Bucket / TheGloomWorker](https://freesound.org/people/TheGloomWorker/sounds/683249/) |
 | umbrella | `umbrella.mp3` | [Opening an Umbrella / randbsoundbites](https://freesound.org/people/randbsoundbites/sounds/792526/) |
 | anchorChain | `anchorChain.mp3` | [Thick Chain on Metal / kyles](https://freesound.org/people/kyles/sounds/452577/) |
+| anchorSplash | `anchorSplash.mp3` | [Water Splosh / benj500](https://freesound.org/people/benj500/sounds/545823/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | flashlight | `flashlight.mp3` | [Small Flashlight Click / Rudmer_Rotteveel](https://freesound.org/people/Rudmer_Rotteveel/sounds/457458/) |
-| flareGun | `flareGun.mp3` | [Firework Rocket Ignition / derplayer](https://freesound.org/people/derplayer/sounds/587173/) |
+| flareGunShot | `flareGunShot.mp3` | [Heathers Gunshot Effect2 / okieactor](https://freesound.org/people/okieactor/sounds/415912/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| flareGun | `flareGun.mp3` | [Firework Launch (1) / LukaCafuka](https://freesound.org/people/LukaCafuka/sounds/750684/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | shotgun | `shotgun.mp3` | [Shotgun Fire / hyperix6](https://freesound.org/people/hyperix6/sounds/660299/) |
 | goingToSleep | `goingToSleep.mp3` | [Rustling Bed Sheets / Froey_](https://freesound.org/people/Froey_/sounds/644490/) |
 | yawn | `yawn.mp3` | [Yawn.wav / spookymodem](https://freesound.org/people/spookymodem/sounds/202105/) |

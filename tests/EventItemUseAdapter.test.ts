@@ -18,7 +18,6 @@ const EFFECT_KINDS: readonly EventItemEffectKind[] = [
   'none',
   'tape',
   'binocular-mask',
-  'net',
   'bucket-cover',
   'flare',
   'chain',
@@ -100,6 +99,43 @@ describe('EventItemUseAdapter', () => {
       actor.root.getWorldPosition(new Vector3()),
       aimTarget.getWorldPosition(new Vector3()),
     );
+
+    adapter.dispose();
+  });
+
+  it('keeps the bucket visible while it clears the side and reaches water', () => {
+    const scene = new Group();
+    const camera = new PerspectiveCamera(62, 1.6, 0.1, 100);
+    camera.position.set(0, 1.7, 2.4);
+    camera.lookAt(0, 0.9, 0);
+    scene.add(camera);
+    const actorParent = new Group();
+    scene.add(actorParent);
+    const { actor } = createActor(
+      actorParent,
+      'bucket-1' as ItemInstanceId,
+      new Vector3(0, 0.2, 0),
+    );
+    const adapter = new EventItemUseAdapter(camera, new EventItemEffects());
+    const sample = createEventItemUseSample();
+    const projected = new Vector3();
+    const worldPosition = new Vector3();
+    adapter.begin(actor, 'bucket', null);
+
+    let apexY = 0;
+    let waterY = 0;
+    for (const progress of [0.48, 0.54, 0.6, 0.66, 0.72, 0.84, 0.9]) {
+      sampleEventItemUse('bucket-scoop', 'bucket', progress, sample);
+      adapter.apply(sample);
+      scene.updateWorldMatrix(true, true);
+      actor.root.getWorldPosition(worldPosition);
+      projected.copy(worldPosition).project(camera);
+      expect(Math.abs(projected.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(projected.y)).toBeLessThanOrEqual(1);
+      if (progress === 0.54) apexY = worldPosition.y;
+      if (progress === 0.66) waterY = worldPosition.y;
+    }
+    expect(apexY).toBeGreaterThan(waterY + 0.6);
 
     adapter.dispose();
   });
@@ -207,7 +243,7 @@ describe('EventItemUseAdapter', () => {
     adapter.dispose();
   });
 
-  it('faces a lifted map directly toward the camera', () => {
+  it('holds a lifted map perpendicular to the camera view', () => {
     const scene = new Group();
     const camera = new PerspectiveCamera(62, 1.6, 0.1, 100);
     camera.position.set(0.4, 1.7, 0.8);
@@ -233,10 +269,10 @@ describe('EventItemUseAdapter', () => {
     const mapNormal = new Vector3(0, 1, 0)
       .applyQuaternion(actor.root.getWorldQuaternion(new Quaternion()))
       .normalize();
-    const directionToCamera = camera.getWorldPosition(new Vector3())
-      .sub(actor.root.getWorldPosition(new Vector3()))
+    const cameraBackward = new Vector3(0, 0, 1)
+      .applyQuaternion(camera.getWorldQuaternion(new Quaternion()))
       .normalize();
-    expect(mapNormal.dot(directionToCamera)).toBeGreaterThan(0.999);
+    expect(mapNormal.dot(cameraBackward)).toBeGreaterThan(0.999);
 
     adapter.dispose();
   });

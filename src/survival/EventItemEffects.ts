@@ -1,30 +1,32 @@
 import {
-  BufferAttribute,
   BufferGeometry,
   ConeGeometry,
   CylinderGeometry,
   Group,
-  LineBasicMaterial,
-  LineSegments,
   Material,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
   PointLight,
+  Quaternion,
   Shape,
   ShapeGeometry,
   SphereGeometry,
+  TorusGeometry,
   Vector2,
   Vector3,
 } from 'three';
 import { clamp01Unchecked } from './animationMath';
+import {
+  LIFEBOAT_GUNWALE_SURFACE_Y,
+  lifeboatHullHalfWidthAt,
+} from '../world/Lifeboat';
 import type { EventItemUseSample } from './eventItemUseChoreography';
 
 type EffectRoot = Group;
 
 const TAPE = 'event-item-tape';
-const NET = 'event-item-net';
 const FLARE = 'event-item-flare';
 const CHAIN = 'event-item-chain';
 const FLASHLIGHT = 'event-item-flashlight-beam';
@@ -34,6 +36,12 @@ const FLARE_DISTANCE = 18;
 const FLARE_ARC_HEIGHT = 3.2;
 const FLARE_WATER_Y = 0.04;
 const FLARE_FORWARD = new Vector3(1, 0, 0);
+const CHAIN_LINK_AXIS = new Vector3(0, 1, 0);
+const CHAIN_FALLBACK_EDGE_OFFSET = new Vector3(1.35, -0.22, -0.25);
+const CHAIN_GUNWALE_Z = 0.55;
+const CHAIN_GUNWALE_X = lifeboatHullHalfWidthAt(CHAIN_GUNWALE_Z) ?? 1.63;
+const CHAIN_SEGMENT_SPLIT = 0.44;
+const CHAIN_LINK_COUNT = 36;
 
 /** Owns the short-lived visual cues for survival item use. */
 export class EventItemEffects {
@@ -54,15 +62,31 @@ export class EventItemEffects {
   private readonly flareLight: PointLight;
   private readonly heldFillLight: PointLight;
   private readonly tape: EffectRoot;
-  private readonly net: EffectRoot;
   private readonly flare: EffectRoot;
   private readonly chain: EffectRoot;
+  private readonly chainLinks: readonly Mesh<BufferGeometry, Material>[];
   private readonly flashlight: EffectRoot;
   private readonly shotgunSmoke: EffectRoot;
   private binocularStrength = 0;
   private effectOpacity = 0;
+  private chainCaptured = false;
+  private chainParent: Object3D | null = null;
+  private readonly chainHandLocal = new Vector3();
+  private readonly chainHandWorld = new Vector3();
+  private readonly chainGunwaleLocal = new Vector3(
+    CHAIN_GUNWALE_X,
+    LIFEBOAT_GUNWALE_SURFACE_Y + 0.035,
+    CHAIN_GUNWALE_Z,
+  );
+  private readonly chainGunwaleWorld = new Vector3();
+  private readonly chainAnchorWorld = new Vector3();
+  private readonly chainPoint = new Vector3();
+  private readonly chainBefore = new Vector3();
+  private readonly chainAfter = new Vector3();
+  private readonly chainTangent = new Vector3();
+  private readonly chainTwist = new Quaternion();
   private readonly applyEffectOpacity = (object: Object3D): void => {
-    if (!(object instanceof Mesh) && !(object instanceof LineSegments)) return;
+    if (!(object instanceof Mesh)) return;
     if (Array.isArray(object.material)) {
       for (const material of object.material) this.setMaterialOpacity(material);
       return;
@@ -74,9 +98,8 @@ export class EventItemEffects {
   constructor() {
     this.root.name = 'event-item-effects';
     this.tape = this.createTape();
-    this.net = this.createNet();
     [this.flare, this.flareLight] = this.createFlare();
-    this.chain = this.createChain();
+    [this.chain, this.chainLinks] = this.createChain();
     [this.flashlight, this.flashlightLight] = this.createFlashlight();
     this.shotgunSmoke = this.createShotgunSmoke();
     this.heldFillLight = new PointLight(0xffddad, 0, 2.8, 2);
@@ -84,7 +107,6 @@ export class EventItemEffects {
     this.heldFillLight.position.set(-0.24, 0.36, 0.48);
     this.effects = [
       this.tape,
-      this.net,
       this.flare,
       this.chain,
       this.flashlight,
@@ -118,12 +140,6 @@ export class EventItemEffects {
         this.tape.rotation.z = 0.08;
         this.tape.scale.set(0.72 + primary * 0.76, 0.9, 1);
         break;
-      case 'net':
-        this.show(this.net, primary);
-        this.net.position.set(0.26 + primary * 0.35, 0.14, -0.58);
-        this.net.rotation.set(0.08, -0.24, -0.18 - primary * 0.2);
-        this.net.scale.setScalar(0.7 + primary * 0.42);
-        break;
       case 'flare':
         this.root.quaternion.identity();
         this.show(this.flare, primary);
@@ -146,8 +162,7 @@ export class EventItemEffects {
       case 'chain':
         this.root.quaternion.identity();
         this.show(this.chain, primary);
-        this.chain.position.set(0.02, 0.12, 0.02);
-        this.chain.rotation.z = 0.025 * secondary;
+        this.updateChain(actor, secondary);
         break;
       case 'flashlight':
         this.show(this.flashlight, primary);
@@ -182,6 +197,8 @@ export class EventItemEffects {
     this.hideEffects();
     this.flareLaunched = false;
     this.flareTravel = 0;
+    this.chainCaptured = false;
+    this.chainParent = null;
   }
 
   private hideEffects(): void {
@@ -289,35 +306,6 @@ export class EventItemEffects {
     return tape;
   }
 
-  private createNet(): EffectRoot {
-    const net = new Group();
-    net.name = NET;
-    const geometry = new BufferGeometry();
-    const positions = new Float32Array([
-      -0.56, -0.45, 0, -0.29, -0.5, 0, 0, -0.46, 0, 0.31, -0.49, 0, 0.55, -0.42, 0,
-      -0.6, -0.16, 0, -0.31, -0.2, 0, 0.02, -0.15, 0, 0.29, -0.18, 0, 0.61, -0.12, 0,
-      -0.55, 0.15, 0, -0.27, 0.12, 0, -0.03, 0.19, 0, 0.33, 0.14, 0, 0.57, 0.2, 0,
-      -0.48, 0.47, 0, -0.24, 0.51, 0, 0.04, 0.46, 0, 0.28, 0.53, 0, 0.5, 0.43, 0,
-    ]);
-    const indices: number[] = [];
-    for (let row = 0; row < 4; row += 1) {
-      for (let column = 0; column < 5; column += 1) {
-        const index = row * 5 + column;
-        if (column < 4) indices.push(index, index + 1);
-        if (row < 3) indices.push(index, index + 5);
-      }
-    }
-    geometry.setAttribute('position', new BufferAttribute(positions, 3));
-    geometry.setIndex(indices);
-    const cord = new LineBasicMaterial({ color: 0x54766d, transparent: true, opacity: 0.82 });
-    this.geometries.add(geometry);
-    this.trackMaterial(cord);
-    const grid = new LineSegments(geometry, cord);
-    grid.name = 'event-item-net-grid';
-    net.add(grid);
-    return net;
-  }
-
   private createFlare(): [EffectRoot, PointLight] {
     const flare = new Group();
     flare.name = FLARE;
@@ -373,22 +361,77 @@ export class EventItemEffects {
     return [flare, light];
   }
 
-  private createChain(): EffectRoot {
+  private createChain(): [EffectRoot, readonly Mesh<BufferGeometry, Material>[]] {
     const chain = new Group();
     chain.name = CHAIN;
-    const linkGeometry = new CylinderGeometry(0.014, 0.018, 0.14, 5);
-    const iron = new MeshStandardMaterial({ color: 0x4d4a43, roughness: 0.76, metalness: 0.66 });
-    for (let index = 0; index < 10; index += 1) {
+    const links: Mesh<BufferGeometry, Material>[] = [];
+    const linkGeometry = new TorusGeometry(0.022, 0.005, 4, 8);
+    linkGeometry.scale(0.72, 1.18, 1);
+    const iron = new MeshStandardMaterial({
+      color: 0x45433d,
+      roughness: 0.68,
+      metalness: 0.78,
+      flatShading: true,
+    });
+    for (let index = 0; index < CHAIN_LINK_COUNT; index += 1) {
       const link = this.mesh(linkGeometry, iron, `event-item-chain-link-${index}`);
-      link.position.set(
-        Math.sin(index * 1.7) * 0.018,
-        index * 0.125,
-        -index * 0.008,
-      );
-      link.rotation.z = index % 2 === 0 ? -0.04 : 0.04;
+      links.push(link);
       chain.add(link);
     }
-    return chain;
+    return [chain, links];
+  }
+
+  private updateChain(actor: Object3D, travel: number): void {
+    const parent = actor.parent;
+    if (!this.chainCaptured || this.chainParent !== parent) {
+      actor.updateWorldMatrix(true, false);
+      actor.getWorldPosition(this.chainHandLocal);
+      if (parent !== null) parent.worldToLocal(this.chainHandLocal);
+      this.chainParent = parent;
+      this.chainCaptured = true;
+    }
+
+    actor.updateWorldMatrix(true, false);
+    actor.getWorldPosition(this.actorPosition);
+    this.chainAnchorWorld.set(0, 0.22, 0).applyMatrix4(actor.matrixWorld);
+    if (parent === null) {
+      this.chainHandWorld.copy(this.chainHandLocal);
+      this.chainGunwaleWorld
+        .copy(this.chainHandWorld)
+        .add(CHAIN_FALLBACK_EDGE_OFFSET);
+    } else {
+      parent.updateWorldMatrix(true, false);
+      this.chainHandWorld.copy(this.chainHandLocal).applyMatrix4(parent.matrixWorld);
+      this.chainGunwaleWorld.copy(this.chainGunwaleLocal).applyMatrix4(parent.matrixWorld);
+    }
+
+    const lastIndex = this.chainLinks.length - 1;
+    for (let index = 0; index <= lastIndex; index += 1) {
+      const progress = index / lastIndex;
+      this.sampleChainPoint(progress, travel, this.chainPoint);
+      this.sampleChainPoint(Math.max(0, progress - 0.02), travel, this.chainBefore);
+      this.sampleChainPoint(Math.min(1, progress + 0.02), travel, this.chainAfter);
+      this.chainTangent.subVectors(this.chainAfter, this.chainBefore).normalize();
+      const link = this.chainLinks[index]!;
+      link.position.copy(this.chainPoint).sub(this.actorPosition);
+      link.quaternion.setFromUnitVectors(CHAIN_LINK_AXIS, this.chainTangent);
+      if (index % 2 !== 0) {
+        this.chainTwist.setFromAxisAngle(this.chainTangent, Math.PI / 2);
+        link.quaternion.premultiply(this.chainTwist);
+      }
+    }
+  }
+
+  private sampleChainPoint(progress: number, travel: number, output: Vector3): void {
+    if (progress <= CHAIN_SEGMENT_SPLIT) {
+      const segmentProgress = progress / CHAIN_SEGMENT_SPLIT;
+      output.lerpVectors(this.chainHandWorld, this.chainGunwaleWorld, segmentProgress);
+      output.y -= Math.sin(Math.PI * segmentProgress) * 0.055;
+      return;
+    }
+    const segmentProgress = (progress - CHAIN_SEGMENT_SPLIT) / (1 - CHAIN_SEGMENT_SPLIT);
+    output.lerpVectors(this.chainGunwaleWorld, this.chainAnchorWorld, segmentProgress);
+    output.y -= Math.sin(Math.PI * segmentProgress) * (0.08 + travel * 0.22);
   }
 
   private createFlashlight(): [EffectRoot, PointLight] {
