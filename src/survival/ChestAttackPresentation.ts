@@ -18,7 +18,6 @@ import type { ChestEventPose } from './ChestDisplay';
 import {
   clamp01Unchecked as clamp01,
   smoothstepUnchecked as smoothstep,
-  type TimedAnimation,
 } from './animationMath';
 import type {
   EventChoicePresentation,
@@ -30,6 +29,7 @@ import type {
   EventResultPresentation,
 } from './survivalTypes';
 import { StationaryEventCamera } from './StationaryEventCamera';
+import { TimedPresentationAnimation } from './TimedPresentationAnimation';
 
 type ChestAttackAnimationKind =
   | 'reveal'
@@ -37,8 +37,6 @@ type ChestAttackAnimationKind =
   | 'choice-hide'
   | 'result-bound'
   | 'result-hide';
-
-type ActiveAnimation = TimedAnimation<ChestAttackAnimationKind>;
 
 interface MutableChestEventPose {
   rattle: number;
@@ -88,7 +86,7 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     broken: 0,
     overboard: 0,
   };
-  private activeAnimation: ActiveAnimation | null = null;
+  private readonly animation: TimedPresentationAnimation<ChestAttackAnimationKind>;
   private netInstanceId: EventChoicePresentation['instanceId'] = null;
   private usingSupplyNet = false;
   private staged = false;
@@ -98,6 +96,10 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     private readonly dependencies: FocusedEventPresentationDependencies,
   ) {
     this.cameraLook = new StationaryEventCamera(dependencies.camera);
+    this.animation = new TimedPresentationAnimation<ChestAttackAnimationKind>(
+      (kind, _time, progress) => this.applyAnimation(kind, progress),
+      (kind) => this.finishAnimation(kind),
+    );
     this.root.name = 'focused-event:chest-attack';
     this.root.visible = false;
     this.root.userData.revealRattles = 0;
@@ -119,7 +121,7 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
 
   stage(): void {
     if (this.disposed) return;
-    this.cancelActiveAnimation(false);
+    this.animation.cancel();
     this.dependencies.supplyDisplay.releaseEventActor();
     this.dependencies.supplyDisplay.clearEventPose();
     this.captureCamera();
@@ -138,7 +140,10 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     if (this.disposed) return Promise.resolve();
     if (!this.staged) this.stage();
     this.root.userData.state = 'revealing';
-    return this.startAnimation('reveal', REVEAL_DURATION);
+    this.animation.settle();
+    const animation = this.animation.start('reveal', REVEAL_DURATION);
+    this.applyAnimation('reveal', 0);
+    return animation;
   }
 
   playChoice(choice: EventChoicePresentation): Promise<void> {
@@ -150,10 +155,16 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
           && this.dependencies.supplyDisplay.pinEventActor(choice.instanceId);
         this.net.visible = !this.usingSupplyNet;
         this.root.userData.state = 'binding';
-        return this.startAnimation('choice-net', CHOICE_DURATION);
+        this.animation.settle();
+        const netAnimation = this.animation.start('choice-net', CHOICE_DURATION);
+        this.applyAnimation('choice-net', 0);
+        return netAnimation;
       case 'sleep':
         this.root.userData.state = 'hiding';
-        return this.startAnimation('choice-hide', CHOICE_DURATION);
+        this.animation.settle();
+        const hideAnimation = this.animation.start('choice-hide', CHOICE_DURATION);
+        this.applyAnimation('choice-hide', 0);
+        return hideAnimation;
       default:
         throw new Error(`Unsupported Chest Attack choice: ${choice.choiceId}`);
     }
@@ -172,10 +183,19 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
       case 'chest-bound':
         this.net.visible = !this.usingSupplyNet;
         this.root.userData.state = 'bound-result';
-        return this.startAnimation('result-bound', RESULT_DURATION * 0.7);
+        this.animation.settle();
+        const boundAnimation = this.animation.start(
+          'result-bound',
+          RESULT_DURATION * 0.7,
+        );
+        this.applyAnimation('result-bound', 0);
+        return boundAnimation;
       case 'chest-hide':
         this.root.userData.state = 'hide-result';
-        return this.startAnimation('result-hide', RESULT_DURATION);
+        this.animation.settle();
+        const hideAnimation = this.animation.start('result-hide', RESULT_DURATION);
+        this.applyAnimation('result-hide', 0);
+        return hideAnimation;
       default:
         throw new Error(`Unsupported Chest Attack result: ${result.resultId}`);
     }
@@ -183,7 +203,7 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
 
   clear(): void {
     if (this.disposed) return;
-    this.cancelActiveAnimation(false);
+    this.animation.cancel();
     this.resetActors();
     this.dependencies.supplyDisplay.releaseEventActor();
     this.dependencies.supplyDisplay.clearEventPose();
@@ -194,30 +214,19 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     this.staged = false;
   }
 
-  update(_time: number, delta: number): void {
+  update(time: number, delta: number): void {
     if (this.disposed || delta < 0) return;
-    const animation = this.activeAnimation;
-    if (animation === null) return;
-    animation.elapsed = Math.min(
-      animation.duration,
-      animation.elapsed + Math.max(0, delta),
-    );
-    const progress = animation.duration <= 0 ? 1 : animation.elapsed / animation.duration;
-    this.applyAnimation(animation.kind, progress);
-    if (progress < 1) return;
-    this.activeAnimation = null;
-    this.finishAnimation(animation.kind);
-    animation.resolve();
+    this.animation.update(time, delta);
   }
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
-    this.cancelActiveAnimation(true);
+    this.animation.settle();
   }
 
   dispose(): void {
     if (this.disposed) return;
-    this.cancelActiveAnimation(false);
+    this.animation.cancel();
     this.restoreCamera();
     this.dependencies.chestDisplay.restorePose();
     this.dependencies.supplyDisplay.releaseEventActor();
@@ -226,17 +235,6 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     this.staged = false;
     this.root.removeFromParent();
     disposeResourceSets(this.geometries, this.materials);
-  }
-
-  private startAnimation(
-    kind: ChestAttackAnimationKind,
-    duration: number,
-  ): Promise<void> {
-    this.cancelActiveAnimation(true);
-    return new Promise<void>((resolve) => {
-      this.activeAnimation = { kind, elapsed: 0, duration, resolve };
-      this.applyAnimation(kind, 0);
-    });
   }
 
   private applyAnimation(kind: ChestAttackAnimationKind, progress: number): void {
@@ -421,11 +419,4 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     this.net.add(cross);
   }
 
-  private cancelActiveAnimation(settle: boolean): void {
-    const animation = this.activeAnimation;
-    this.activeAnimation = null;
-    if (animation === null) return;
-    if (settle) this.finishAnimation(animation.kind);
-    animation.resolve();
-  }
 }
