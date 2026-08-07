@@ -25,7 +25,7 @@ export interface EventItemUseRequest {
   readonly itemId: ItemId;
   readonly context: EventItemUseContext;
   readonly aimTarget: Object3D | null;
-  readonly onAction?: () => void;
+  readonly onAction?: (cueIndex: number) => void;
 }
 
 type ActiveItemUse = {
@@ -174,8 +174,9 @@ export class EventItemUseController {
         && use.nextActionCueIndex < actionCueProgresses.length
         && progress >= actionCueProgresses[use.nextActionCueIndex]!
       ) {
+        const cueIndex = use.nextActionCueIndex;
         use.nextActionCueIndex += 1;
-        use.request.onAction();
+        use.request.onAction(cueIndex);
       }
       if (use.elapsed >= use.duration) {
         this.activeUse = null;

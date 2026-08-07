@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createEventItemUseSample,
   eventItemActionCueProgresses,
+  sampleEventItemOutcome,
   sampleEventItemUse,
 } from '../src/survival/eventItemUseChoreography';
 import { eventItemMotionProfile } from '../src/survival/eventItemMotionProfile';
@@ -70,7 +71,7 @@ describe('flare gun item-use animation', () => {
     const shot = sample(0.46);
     const recoil = sample(0.52);
 
-    expect(eventItemActionCueProgresses('flare-sky')).toEqual([0.46]);
+    expect(eventItemActionCueProgresses('flare-sky')).toEqual([0.46, 0.54]);
     expect(beforeShot.effectKind).toBe('none');
     expect(shot.effectKind).toBe('flare');
     expect(shot.effectTravel).toBe(0);
@@ -87,5 +88,39 @@ describe('flare gun item-use animation', () => {
     expect(midFlight.effectArc).toBeCloseTo(1);
     expect(impact.effectKind).toBe('none');
     expect(impact.primaryEffect).toBe(0);
+  });
+
+  it('returns through the lift path instead of dropping below the camera', () => {
+    const raised = sample(1);
+    const liftMidpoint = sample(0.21);
+    const returnStart = createEventItemUseSample();
+    const returnMidpoint = createEventItemUseSample();
+    const returned = createEventItemUseSample();
+
+    sampleEventItemOutcome('flare-sky', 'flareGun', 'depart', 0, returnStart);
+    sampleEventItemOutcome('flare-sky', 'flareGun', 'depart', 0.5, returnMidpoint);
+    sampleEventItemOutcome('flare-sky', 'flareGun', 'depart', 1, returned);
+
+    expect(returnStart).toMatchObject({
+      cameraSpaceBlend: raised.cameraSpaceBlend,
+      viewX: raised.viewX,
+      viewY: raised.viewY,
+      viewZ: raised.viewZ,
+      yaw: raised.yaw,
+      pitch: raised.pitch,
+      roll: raised.roll,
+    });
+    expect(returnMidpoint).toMatchObject({
+      cameraSpaceBlend: liftMidpoint.cameraSpaceBlend,
+      viewX: liftMidpoint.viewX,
+      viewY: liftMidpoint.viewY,
+      viewZ: liftMidpoint.viewZ,
+      yaw: liftMidpoint.yaw,
+      pitch: liftMidpoint.pitch,
+      roll: liftMidpoint.roll,
+    });
+    expect(returned.cameraSpaceBlend).toBe(0);
+    expect(returned.viewY).toBeCloseTo(0);
+    expect(returned.itemVisible).toBe(false);
   });
 });

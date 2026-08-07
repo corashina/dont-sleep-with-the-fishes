@@ -187,6 +187,29 @@ describe('AudioSystem', () => {
     ]);
   });
 
+  it('layers the flare gun shot before the flare launch', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.eventItemCue('flareGun', 0);
+    audio.eventItemCue('flareGun', 1);
+
+    expect(backend.voices.map(({ id }) => id)).toEqual([
+      'flareGunShot',
+      'flareGun',
+    ]);
+  });
+
+  it('plays the anchor splash at the water-contact cue', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.eventItem('anchor');
+    audio.eventItemCue('anchor', 0);
+
+    expect(backend.voices.map(({ id }) => id)).toEqual(['anchorChain', 'anchorSplash']);
+  });
+
   it('starts game voices paused when they are created from a paused scope', () => {
     const backend = new FakeAudioBackend();
     const scope = AudioSystem.forTest(backend).createScope();

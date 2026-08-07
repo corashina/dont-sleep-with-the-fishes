@@ -150,6 +150,7 @@ describe('EventItemUseController', () => {
     expect(onAction).not.toHaveBeenCalled();
     controller.update(duration * 0.02);
     expect(onAction).toHaveBeenCalledOnce();
+    expect(onAction).toHaveBeenCalledWith(0);
     controller.update(duration);
     await use;
     expect(onAction).toHaveBeenCalledOnce();
@@ -170,6 +171,9 @@ describe('EventItemUseController', () => {
     await use;
 
     expect(onAction).toHaveBeenCalledTimes(9);
+    expect(onAction.mock.calls.map(([cueIndex]) => cueIndex)).toEqual([
+      0, 1, 2, 3, 4, 5, 6, 7, 8,
+    ]);
     controller.clear('day');
     adapter.dispose();
   });

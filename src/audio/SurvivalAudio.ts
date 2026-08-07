@@ -189,6 +189,19 @@ export class SurvivalAudio {
     this.scope.play(EVENT_ITEM_SOUNDS[itemId] ?? 'itemHandling');
   }
 
+  eventItemCue(itemId: ItemId, cueIndex: number): void {
+    if (this.disposed) return;
+    if (itemId === 'flareGun') {
+      this.scope.play(cueIndex === 0 ? 'flareGunShot' : 'flareGun');
+      return;
+    }
+    if (itemId === 'anchor') {
+      this.scope.play('anchorSplash');
+      return;
+    }
+    this.eventItem(itemId);
+  }
+
   sleep(): void {
     if (!this.disposed) this.scope.play('goingToSleep');
   }

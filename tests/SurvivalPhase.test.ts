@@ -1573,7 +1573,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(setAnchors).toHaveBeenLastCalledWith(anchors);
   });
 
-  it('renders and unlocks an accepted daytime action after its cue', async () => {
+  it('renders and unlocks an accepted daytime action without text feedback', async () => {
     const cue = deferred();
     const perform = vi.fn(() => accepted());
     const showFeedback = vi.fn();
@@ -1593,7 +1593,7 @@ describe('SurvivalPhase orchestration', () => {
     cue.resolve();
     await flushPromises();
     expect(render).toHaveBeenCalled();
-    expect(showFeedback).toHaveBeenCalledWith(expect.objectContaining({ message: 'Caught one.' }));
+    expect(showFeedback).not.toHaveBeenCalled();
     expect(setBusy).toHaveBeenLastCalledWith(false);
 
     phase.handleAction('sendMessage');
@@ -2194,6 +2194,7 @@ describe('SurvivalPhase orchestration', () => {
     let current = snapshot();
     const calls: string[] = [];
     const requestDayEvent = vi.fn();
+    const showFeedback = vi.fn();
     const perform = vi.fn(() => {
       current = snapshot({ state: 'day', pendingEventId: null, actedToday: true });
       return accepted();
@@ -2205,7 +2206,7 @@ describe('SurvivalPhase orchestration', () => {
         dispose: vi.fn(),
       },
       ui: {
-        render: vi.fn(), showFeedback: vi.fn(), setBusy: vi.fn(), setJournalUnread: vi.fn(),
+        render: vi.fn(), showFeedback, setBusy: vi.fn(), setJournalUnread: vi.fn(),
         beginEventPresentation: vi.fn(),
         setSleepCovered: vi.fn(),
         setEventSelection: vi.fn(),
@@ -2220,6 +2221,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(requestDayEvent).not.toHaveBeenCalled();
     expect(current).toMatchObject({ state: 'day', pendingEventId: null });
     expect(calls).toEqual(['fish']);
+    expect(showFeedback).not.toHaveBeenCalled();
   });
 
   it('does not open Dangerous Waters after eating', async () => {
@@ -4459,7 +4461,8 @@ describe('SurvivalPhase orchestration', () => {
     ['shotgun', 'shotgun-1', 'death-stare'],
     ['flashlight', 'flashlight-1', 'death-stare'],
     ['flareGun', 'flareGun-1', 'other-people'],
-  ] as const)('defers the %s sound until its keyed action cue', async (
+    ['anchor', 'anchor-1', 'thunderstorm'],
+  ] as const)('defers the %s action sound until its keyed cue', async (
     itemType,
     instanceId,
     eventId,
@@ -4474,7 +4477,7 @@ describe('SurvivalPhase orchestration', () => {
       }),
     });
     const itemUse = deferred();
-    let actionCue: (() => void) | undefined;
+    let actionCue: ((cueIndex: number) => void) | undefined;
     const phase = SurvivalPhase.forTest({
       session: { snapshot: vi.fn(() => current) },
       world: {
@@ -4483,7 +4486,7 @@ describe('SurvivalPhase orchestration', () => {
           _eventId: string,
           _choiceId: string,
           _instanceId: ItemInstanceId,
-          onAction?: () => void,
+          onAction?: (cueIndex: number) => void,
         ) => {
           actionCue = onAction;
           return itemUse.promise;
@@ -4500,16 +4503,16 @@ describe('SurvivalPhase orchestration', () => {
       },
     });
     const audio = (phase as unknown as { audio: SurvivalAudio }).audio;
-    const eventItem = vi.spyOn(audio, 'eventItem');
+    const eventItemCue = vi.spyOn(audio, 'eventItemCue');
 
     phase.start();
     await flushPromises();
     phase.handleEventItem(itemType, instanceId);
 
-    expect(eventItem).not.toHaveBeenCalled();
+    expect(eventItemCue).not.toHaveBeenCalled();
     expect(actionCue).toEqual(expect.any(Function));
-    actionCue!();
-    expect(eventItem).toHaveBeenCalledExactlyOnceWith(itemType);
+    actionCue!(0);
+    expect(eventItemCue).toHaveBeenCalledExactlyOnceWith(itemType, 0);
 
     itemUse.resolve();
     await flushPromises();
@@ -5473,6 +5476,7 @@ describe('SurvivalPhase orchestration', () => {
         calls.push('play');
         return Promise.resolve();
       });
+      const showFeedback = vi.fn();
       const phase = SurvivalPhase.forTest({
         session: {
           snapshot: vi.fn(() => current),
@@ -5497,7 +5501,7 @@ describe('SurvivalPhase orchestration', () => {
         ui: {
           render: vi.fn(() => calls.push('render')),
           setBusy: vi.fn(),
-          showFeedback: vi.fn(),
+          showFeedback,
           restoreCommandFocus: vi.fn(),
           dispose: vi.fn(),
         },
@@ -5510,6 +5514,7 @@ describe('SurvivalPhase orchestration', () => {
 
       expect(calls).toEqual(['sync', 'play', 'render']);
       expect(playCaptainWhiskersAction).toHaveBeenCalledWith(action);
+      expect(showFeedback).not.toHaveBeenCalled();
       phase.dispose();
     },
   );
