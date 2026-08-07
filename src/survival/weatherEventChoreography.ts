@@ -1,5 +1,6 @@
 import { clamp01, pulse, smoothstep, smootherstep } from './animationMath';
 import { scaleEventItemDuration } from './eventItemTiming';
+import { resetTransformPose, type MutableTransformPose } from './transformPose';
 
 export type WeatherAnimationEventId =
   | 'shower-night'
@@ -41,16 +42,7 @@ export interface WeatherRevealSample {
   lightningEmphasis: number;
 }
 
-export interface WeatherItemSample {
-  x: number;
-  y: number;
-  z: number;
-  yaw: number;
-  pitch: number;
-  roll: number;
-  scaleX: number;
-  scaleY: number;
-  scaleZ: number;
+export interface WeatherItemSample extends MutableTransformPose {
   effect: number;
   cameraYaw: number;
   cameraPush: number;
@@ -154,15 +146,7 @@ function resetReveal(output: WeatherRevealSample): void {
 }
 
 function resetItem(output: WeatherItemSample): void {
-  output.x = 0;
-  output.y = 0;
-  output.z = 0;
-  output.yaw = 0;
-  output.pitch = 0;
-  output.roll = 0;
-  output.scaleX = 1;
-  output.scaleY = 1;
-  output.scaleZ = 1;
+  resetTransformPose(output);
   output.effect = 0;
   output.cameraYaw = 0;
   output.cameraPush = 0;

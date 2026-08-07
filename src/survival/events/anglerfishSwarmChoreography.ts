@@ -1,5 +1,6 @@
 import { clamp01, pulse, smoothstep } from '../animationMath';
 import { scaleEventItemDuration, scaleThrownItemDuration } from '../eventItemTiming';
+import { resetTransformPose, type MutableTransformPose } from '../transformPose';
 
 export const SWARM_REVEAL_DURATION = 2.9;
 export const SWARM_ITEM_DURATION = scaleEventItemDuration(1.2);
@@ -42,7 +43,7 @@ export interface SwarmReactionState {
   readonly brokenItem: boolean;
 }
 
-export interface SwarmSample {
+export interface SwarmSample extends MutableTransformPose {
   revealProgress: number;
   visibleCount: number;
   bodyVisibleCount: number;
@@ -60,15 +61,6 @@ export interface SwarmSample {
   catchStrength: number;
   foodDelta: number;
   baitDelta: number;
-  x: number;
-  y: number;
-  z: number;
-  yaw: number;
-  pitch: number;
-  roll: number;
-  scaleX: number;
-  scaleY: number;
-  scaleZ: number;
   effect: number;
   effectKind: SwarmItemEffectKind;
 }
@@ -152,6 +144,7 @@ export function createSwarmVariants(
 }
 
 function resetSample(output: SwarmSample): void {
+  resetTransformPose(output);
   output.revealProgress = 1;
   output.visibleCount = SWARM_FISH_COUNT;
   output.bodyVisibleCount = SWARM_FISH_COUNT;
@@ -169,15 +162,6 @@ function resetSample(output: SwarmSample): void {
   output.catchStrength = 0;
   output.foodDelta = 0;
   output.baitDelta = 0;
-  output.x = 0;
-  output.y = 0;
-  output.z = 0;
-  output.yaw = 0;
-  output.pitch = 0;
-  output.roll = 0;
-  output.scaleX = 1;
-  output.scaleY = 1;
-  output.scaleZ = 1;
   output.effect = 0;
   output.effectKind = 'none';
 }

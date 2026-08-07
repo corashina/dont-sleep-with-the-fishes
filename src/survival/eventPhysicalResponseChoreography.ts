@@ -1,33 +1,16 @@
 import { clamp01, pulse, smoothstep } from './animationMath';
 import type { ItemCondition } from './survivalTypes';
+import { resetTransformPose, type MutableTransformPose } from './transformPose';
 
 export interface EventPhysicalResponseDescriptor {
   readonly choiceId: string;
   readonly condition: ItemCondition;
 }
 
-export interface EventPhysicalResponsePose {
-  x: number;
-  y: number;
-  z: number;
-  yaw: number;
-  pitch: number;
-  roll: number;
-  scaleX: number;
-  scaleY: number;
-  scaleZ: number;
-}
+export interface EventPhysicalResponsePose extends MutableTransformPose {}
 
 function resetPose(output: EventPhysicalResponsePose): void {
-  output.x = 0;
-  output.y = 0;
-  output.z = 0;
-  output.yaw = 0;
-  output.pitch = 0;
-  output.roll = 0;
-  output.scaleX = 1;
-  output.scaleY = 1;
-  output.scaleZ = 1;
+  resetTransformPose(output);
 }
 
 export function sampleEventPhysicalResponsePose(
