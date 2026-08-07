@@ -40,6 +40,7 @@ export class TimedPresentationAnimation<Kind extends string> {
   constructor(
     private readonly sample: Sample<Kind>,
     private readonly finish: Finish<Kind> = NO_FINISH,
+    private readonly completionTolerance = 0,
   ) {}
 
   get active(): boolean {
@@ -79,6 +80,9 @@ export class TimedPresentationAnimation<Kind extends string> {
       this.state.duration,
       this.state.elapsed + Math.max(0, delta),
     );
+    if (this.state.duration - this.state.elapsed <= this.completionTolerance) {
+      this.state.elapsed = this.state.duration;
+    }
     const progress = this.state.duration === 0
       ? 1
       : this.state.elapsed / this.state.duration;
