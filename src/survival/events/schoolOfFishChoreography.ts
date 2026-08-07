@@ -1,5 +1,6 @@
 import { clamp01, pulse, smoothstep } from '../animationMath';
 import { scaleEventItemDuration, scaleThrownItemDuration } from '../eventItemTiming';
+import { resetTransformPose, type MutableTransformPose } from '../transformPose';
 
 export const SCHOOL_REVEAL_DURATION = 2.6;
 export const SCHOOL_ITEM_DURATION = scaleEventItemDuration(1.25);
@@ -37,16 +38,7 @@ export interface SchoolReactionState {
   readonly brokenItem: boolean;
 }
 
-export interface SchoolSample {
-  x: number;
-  y: number;
-  z: number;
-  yaw: number;
-  pitch: number;
-  roll: number;
-  scaleX: number;
-  scaleY: number;
-  scaleZ: number;
+export interface SchoolSample extends MutableTransformPose {
   gather: number;
   schoolAlpha: number;
   surfaceFlash: number;
@@ -109,15 +101,7 @@ export function createSchoolVariants(count: number, seed: number): readonly Scho
 }
 
 function resetSchoolSample(output: SchoolSample): void {
-  output.x = 0;
-  output.y = 0;
-  output.z = 0;
-  output.yaw = 0;
-  output.pitch = 0;
-  output.roll = 0;
-  output.scaleX = 1;
-  output.scaleY = 1;
-  output.scaleZ = 1;
+  resetTransformPose(output);
   output.gather = 0;
   output.schoolAlpha = 0;
   output.surfaceFlash = 0;
