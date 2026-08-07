@@ -44,4 +44,28 @@ describe('TimedPresentationAnimation', () => {
     expect(sample).toHaveBeenCalledWith('second', 2, 0);
     expect(sample).toHaveBeenCalledWith('second', 3, 1);
   });
+
+  it('snaps a nominal delta sum within the configured completion tolerance', async () => {
+    const strict = new TimedPresentationAnimation<'reveal'>(() => undefined);
+    const strictCompletion = strict.start('reveal', 0.8);
+    strict.update(1, 0.1);
+    strict.update(2, 0.7);
+
+    expect(0.1 + 0.7).toBeLessThan(0.8);
+    expect(strict.active).toBe(true);
+    strict.cancel();
+    await expect(strictCompletion).resolves.toBeUndefined();
+
+    const tolerant = new TimedPresentationAnimation<'reveal'>(
+      () => undefined,
+      undefined,
+      1e-9,
+    );
+    const tolerantCompletion = tolerant.start('reveal', 0.8);
+    tolerant.update(1, 0.1);
+    tolerant.update(2, 0.7);
+
+    expect(tolerant.active).toBe(false);
+    await expect(tolerantCompletion).resolves.toBeUndefined();
+  });
 });

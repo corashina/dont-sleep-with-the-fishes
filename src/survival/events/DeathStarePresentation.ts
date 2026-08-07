@@ -183,6 +183,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   >(
     (kind, time, progress) => this.applyAnimation(kind, time, progress),
     (kind) => this.finishAnimation(kind),
+    1e-9,
   );
   private activeChoiceId: string | null = null;
   private borrowedActor: BorrowedSupplyActor | null = null;

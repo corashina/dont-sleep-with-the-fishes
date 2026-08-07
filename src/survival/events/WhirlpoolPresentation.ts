@@ -169,6 +169,7 @@ export class WhirlpoolPresentation implements DedicatedEventPresentation {
   >(
     (kind, time, progress) => this.applyAnimation(kind, time, progress),
     (kind) => this.finishAnimation(kind),
+    1e-9,
   );
   private activeChoiceId: string | null = null;
   private lastChoiceId = '';
