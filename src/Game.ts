@@ -54,6 +54,7 @@ import { AudioSystem } from './audio/AudioSystem';
 import type { EventModelLibrary } from './survival/EventModelLibrary';
 import { createEmptyEventModelLibraryForTest } from './survival/BoatWorld';
 import type { MenuModelLibrary } from './menu/MenuModelLibrary';
+import { MenuSandAssets } from './menu/MenuSandAssets';
 import { MainMenuPhase } from './phases/MainMenuPhase';
 
 export interface GameFactories {
@@ -113,6 +114,7 @@ export const GAME_CAMERA = Object.freeze({
 export interface GameTestOptions {
   propModels: PropModelLibrary;
   menuModels: MenuModelLibrary;
+  menuSandAssets?: MenuSandAssets;
   supernaturalEventModels?: EventModelLibrary;
   shipFurniture: ShipFurnitureLibrary;
   skyAssets: SkyAssets;
@@ -154,6 +156,7 @@ export class Game {
   private clock!: GameClock;
   private propModels!: PropModelLibrary;
   private menuModels!: MenuModelLibrary;
+  private menuSandAssets!: MenuSandAssets;
   private supernaturalEventModels!: EventModelLibrary;
   private shipFurniture!: ShipFurnitureLibrary;
   private skyAssets!: SkyAssets;
@@ -189,6 +192,7 @@ export class Game {
     shipAssets: ShipAssets,
     eventModels: EventModelLibrary,
     menuModels: MenuModelLibrary,
+    menuSandAssets: MenuSandAssets,
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode = 'enabled',
     audioSystem: AudioSystem = AudioSystem.silent(),
@@ -236,6 +240,7 @@ export class Game {
         shipAssets,
         eventModels,
         menuModels,
+        menuSandAssets,
         physicsRuntime,
         physicsMode,
         audioSystem,
@@ -318,6 +323,11 @@ export class Game {
         dispose: () => undefined,
       } as unknown as EventModelLibrary,
       options.menuModels,
+      options.menuSandAssets ?? MenuSandAssets.fromTextures(
+        new Texture(),
+        new Texture(),
+        new Texture(),
+      ),
       options.physicsRuntime,
       options.physicsMode ?? 'enabled',
       options.audioSystem ?? AudioSystem.silent(),
@@ -357,6 +367,7 @@ export class Game {
     runCleanupSteps([
       () => outgoing?.dispose(),
       () => disposeMenuModelLibrary(this.menuModels),
+      () => this.menuSandAssets.dispose(),
       () => postProcessingConsole?.dispose(),
       () => performanceStats?.dispose(),
       () => this.propModels.dispose(),
@@ -388,6 +399,7 @@ export class Game {
     shipAssets: ShipAssets,
     eventModels: EventModelLibrary,
     menuModels: MenuModelLibrary,
+    menuSandAssets: MenuSandAssets,
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode,
     audioSystem: AudioSystem,
@@ -409,6 +421,7 @@ export class Game {
     this.shipAssets = shipAssets;
     this.eventModels = eventModels;
     this.menuModels = menuModels;
+    this.menuSandAssets = menuSandAssets;
     this.audio = audioSystem;
     this.ownedFeaturedEventModels = ownedFeaturedEventModels;
     this.factories = factories;
@@ -423,6 +436,7 @@ export class Game {
       );
       this.lifeboatAssets.configure(maxTextureAnisotropy);
       this.shipAssets.configure(maxTextureAnisotropy);
+      this.menuSandAssets.configure(maxTextureAnisotropy);
       this.context = {
         mount,
         renderer,
@@ -439,6 +453,7 @@ export class Game {
         shipAssets,
         eventModels,
         menuModels,
+        menuSandAssets,
         physicsRuntime,
         physicsMode,
         audio: audioSystem,
@@ -527,6 +542,7 @@ export class Game {
       },
       () => activePhase?.dispose(),
       () => disposeMenuModelLibrary(this.menuModels),
+      () => this.menuSandAssets.dispose(),
       () => postProcessingConsole?.dispose(),
       () => performanceStats?.dispose(),
       () => this.sceneRenderer.dispose(),

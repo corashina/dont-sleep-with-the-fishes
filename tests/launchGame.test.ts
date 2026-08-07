@@ -10,6 +10,11 @@ import {
   MenuModelLoadError,
   type MenuModelLibrary,
 } from '../src/menu/MenuModelLibrary';
+import {
+  MenuSandAssetLoadError,
+  MenuSandAssets,
+} from '../src/menu/MenuSandAssets';
+import { Texture } from 'three';
 import type { ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { PhysicsLoadError } from '../src/physics/PhysicsRuntime';
 import { BoatWorld } from '../src/survival/BoatWorld';
@@ -99,6 +104,14 @@ function menuModels(): MenuModelLibrary {
   return { dispose: vi.fn() } as unknown as MenuModelLibrary;
 }
 
+function menuSandAssets(): MenuSandAssets {
+  return MenuSandAssets.fromTextures(
+    new Texture(),
+    new Texture(),
+    new Texture(),
+  );
+}
+
 function dependencies(
   loadModels: LaunchDependencies['loadModels'],
   overrides: Partial<LaunchDependencies> = {},
@@ -106,6 +119,7 @@ function dependencies(
   return {
     loadModels,
     loadMenuModels: () => Promise.resolve(menuModels()),
+    loadMenuSandAssets: () => Promise.resolve(menuSandAssets()),
     loadShipFurniture: () => Promise.resolve(createTestShipFurniture()),
     loadSkyAssets: () => Promise.resolve(createTestSkyAssets()),
     loadLifeboatAssets: () => Promise.resolve(createTestLifeboatAssets()),
@@ -140,9 +154,9 @@ describe('launchGame', () => {
       .toContain('ui-role-display');
     const progress = mount.querySelector<HTMLProgressElement>('.system-loading-progress');
     expect(progress?.value).toBe(0);
-    expect(progress?.max).toBe(10);
+    expect(progress?.max).toBe(11);
     await Promise.resolve();
-    expect(progress?.value).toBe(9);
+    expect(progress?.value).toBe(10);
     handle.cancel();
     pending.resolve(models);
     await handle.completion;
@@ -158,6 +172,7 @@ describe('launchGame', () => {
     const shipFurniture = createTestShipFurniture();
     const loadedEventModels = eventModels();
     const loadedMenuModels = menuModels();
+    const loadedMenuSandAssets = menuSandAssets();
     const loadEventModels = vi.fn(() => Promise.resolve(loadedEventModels));
     const game = { start: vi.fn(), dispose: vi.fn() };
     const createGame = vi.fn(() => game);
@@ -170,6 +185,7 @@ describe('launchGame', () => {
         loadShipAssets: () => Promise.resolve(shipAssets),
         loadEventModels,
         loadMenuModels: () => Promise.resolve(loadedMenuModels),
+        loadMenuSandAssets: () => Promise.resolve(loadedMenuSandAssets),
         createGame,
       },
     ));
@@ -192,6 +208,7 @@ describe('launchGame', () => {
       expect.any(AudioSystem),
       undefined,
       loadedMenuModels,
+      loadedMenuSandAssets,
       expect.any(Function),
     );
     expect(loadEventModels).toHaveBeenCalledOnce();
@@ -211,7 +228,8 @@ describe('launchGame', () => {
 
     await handle.completion;
     expect(loadMenuModels).toHaveBeenCalledOnce();
-    expect(createGame.mock.calls[0]?.at(-2)).toBe(loadedMenuModels);
+    expect(createGame.mock.calls[0]?.at(-3)).toBe(loadedMenuModels);
+    expect(createGame.mock.calls[0]?.at(-2)).toBeInstanceOf(MenuSandAssets);
     expect(createGame.mock.calls[0]?.at(-1)).toEqual(expect.any(Function));
   });
 
@@ -232,6 +250,26 @@ describe('launchGame', () => {
     expect(mount.textContent).toContain('MENU MODEL UNAVAILABLE');
     expect(mount.textContent).toContain('Unable to prepare shark');
     expect(mount.textContent).toContain('local file is missing');
+    expect(createGame).not.toHaveBeenCalled();
+  });
+
+  it('reports a menu sand texture failure', async () => {
+    const mount = connectedMount();
+    const createGame = vi.fn();
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve({ dispose: vi.fn() } as unknown as PropModelLibrary),
+      {
+        loadMenuSandAssets: () => Promise.reject(
+          new MenuSandAssetLoadError('local sand file is missing'),
+        ),
+        createGame,
+      },
+    ));
+
+    await expect(handle.completion).resolves.toBeNull();
+    expect(mount.textContent).toContain('SEABED UNAVAILABLE');
+    expect(mount.textContent).toContain('Unable to prepare the underwater sand');
+    expect(mount.textContent).toContain('local sand file is missing');
     expect(createGame).not.toHaveBeenCalled();
   });
 
@@ -590,6 +628,7 @@ describe('launchGame', () => {
       expect.any(AudioSystem),
       undefined,
       expect.anything(),
+      expect.anything(),
       expect.any(Function),
     );
   });
@@ -621,6 +660,7 @@ describe('launchGame', () => {
       'off',
       expect.any(AudioSystem),
       undefined,
+      expect.anything(),
       expect.anything(),
       expect.any(Function),
     );
@@ -917,7 +957,7 @@ describe('launchGame', () => {
     const game = { start: vi.fn(), dispose: vi.fn() };
     let reportRuntimeError: ((error: unknown) => void) | undefined;
     const createGame = vi.fn((...args: unknown[]) => {
-      reportRuntimeError = args[12] as ((error: unknown) => void) | undefined;
+      reportRuntimeError = args[13] as ((error: unknown) => void) | undefined;
       return game;
     });
     const handle = launchGame(mount, dependencies(
@@ -973,6 +1013,7 @@ describe('launchGame', () => {
       _audioSystem: AudioSystem,
       _featuredEventModels: unknown,
       receivedMenuModels: MenuModelLibrary,
+      receivedMenuSandAssets: MenuSandAssets,
     ) => Game.forTest({
       createMenu: createImmediateMenu,
       createScavenge: () => ({
@@ -992,6 +1033,7 @@ describe('launchGame', () => {
       shipAssets: loadedShipAssets,
       eventModels: loadedEventModels,
       menuModels: receivedMenuModels,
+      menuSandAssets: receivedMenuSandAssets,
       physicsRuntime: loadedPhysicsRuntime,
       mount: gameMount,
       renderer,

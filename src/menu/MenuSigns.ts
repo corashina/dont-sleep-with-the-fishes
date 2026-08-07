@@ -12,9 +12,9 @@ import { disposeResourceSets } from '../world/SceneResources';
 
 export const MENU_START_SIGN_TITLE = 'START';
 export const MENU_GUIDE_SIGN_TITLE = 'HOW TO PLAY';
-export const MENU_GUIDE_SIGN_POSITION = [-2.55, -0.94, 2.55] as const;
+export const MENU_GUIDE_SIGN_POSITION = [-2.55, -0.94, 3.75] as const;
 export const MENU_GUIDE_SIGN_ROTATION = [0.02, 0.24, -0.06] as const;
-export const MENU_START_SIGN_POSITION = [2.55, -0.86, 2.45] as const;
+export const MENU_START_SIGN_POSITION = [2.55, -0.86, 3.72] as const;
 export const MENU_START_SIGN_ROTATION = [0.02, -0.22, 0.05] as const;
 
 export interface MenuSignCanvasSurface {

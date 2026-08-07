@@ -18,6 +18,7 @@ export interface UnderwaterMenuActors {
   readonly setPlantTime: (time: number) => void;
   readonly setBubbleTime: (time: number) => void;
   readonly setMatterTime: (time: number) => void;
+  readonly setLightTime: (time: number) => void;
   readonly setCausticStrength: (strength: number) => void;
 }
 
@@ -77,6 +78,7 @@ export class UnderwaterMenuAnimator {
     this.actors.setPlantTime(this.sample.plantTime);
     this.actors.setBubbleTime(this.sample.bubbleTime);
     this.actors.setMatterTime(this.sample.matterTime);
+    this.actors.setLightTime(this.sample.matterTime);
     this.actors.setCausticStrength(this.sample.causticStrength);
   }
 

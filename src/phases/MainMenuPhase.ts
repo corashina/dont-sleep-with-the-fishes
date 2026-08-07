@@ -7,6 +7,7 @@ import type { MenuSignAction } from '../menu/MenuSigns';
 import { MenuUI } from '../menu/MenuUI';
 import { UnderwaterMenuAnimator } from '../menu/UnderwaterMenuAnimator';
 import { UnderwaterMenuWorld } from '../menu/UnderwaterMenuWorld';
+import type { MenuSandAssets } from '../menu/MenuSandAssets';
 import type { MenuVisualState } from '../rendering/SceneRenderer';
 import {
   ignoreCleanupError as attemptCleanup,
@@ -21,6 +22,7 @@ export interface MainMenuPhaseDependencies {
     scene: Scene,
     camera: PerspectiveCamera,
     models: MenuModelLibrary,
+    sand: MenuSandAssets,
   ): UnderwaterMenuWorld;
   createAnimator(
     actors: UnderwaterMenuWorld['actors'],
@@ -30,8 +32,8 @@ export interface MainMenuPhaseDependencies {
 
 const PRODUCTION_MAIN_MENU_DEPENDENCIES: MainMenuPhaseDependencies = {
   createUI: (mount) => new MenuUI(mount),
-  createWorld: (scene, camera, models) => (
-    new UnderwaterMenuWorld(scene, camera, models)
+  createWorld: (scene, camera, models, sand) => (
+    new UnderwaterMenuWorld(scene, camera, models, sand)
   ),
   createAnimator: (actors) => new UnderwaterMenuAnimator(actors),
   requestPointerLock: (canvas) => canvas.requestPointerLock(),
@@ -57,6 +59,7 @@ function createMainMenuResources(
       scene,
       context.camera,
       context.menuModels,
+      context.menuSandAssets,
     );
     const animator = dependencies.createAnimator(world.actors);
     return { ui, world, animator };

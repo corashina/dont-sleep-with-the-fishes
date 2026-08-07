@@ -46,6 +46,10 @@ import {
   MenuModelLibrary,
   MenuModelLoadError,
 } from '../menu/MenuModelLibrary';
+import {
+  MenuSandAssetLoadError,
+  MenuSandAssets,
+} from '../menu/MenuSandAssets';
 
 export interface LaunchHandle {
   readonly completion: Promise<Game | null>;
@@ -55,6 +59,7 @@ export interface LaunchHandle {
 export interface LaunchDependencies {
   loadModels(): Promise<PropModelLibrary>;
   loadMenuModels(): Promise<MenuModelLibrary>;
+  loadMenuSandAssets(): Promise<MenuSandAssets>;
   loadSupernaturalEventModels?(): Promise<EventModelLibrary>;
   loadShipFurniture(): Promise<ShipFurnitureLibrary>;
   loadSkyAssets(): Promise<SkyAssets>;
@@ -77,6 +82,7 @@ export interface LaunchDependencies {
     audio: AudioSystem,
     featuredEventModels: SurvivalEventModelLibrary | undefined,
     menuModels: MenuModelLibrary,
+    menuSandAssets: MenuSandAssets,
     onFatalError: (error: unknown) => void,
   ): Pick<Game, 'start' | 'dispose'>;
 }
@@ -84,6 +90,7 @@ export interface LaunchDependencies {
 const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
   loadModels: () => PropModelLibrary.load(),
   loadMenuModels: () => MenuModelLibrary.load(),
+  loadMenuSandAssets: () => MenuSandAssets.load(),
   loadShipFurniture: () => ShipFurnitureLibrary.load(),
   loadSkyAssets: () => SkyAssets.load(),
   loadLifeboatAssets: () => LifeboatAssets.load(),
@@ -105,6 +112,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
     audio,
     featuredEventModels,
     menuModels,
+    menuSandAssets,
     onFatalError,
   ) => (
     new Game(
@@ -116,6 +124,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
       shipAssets,
       eventModels,
       menuModels,
+      menuSandAssets,
       physicsRuntime,
       physicsMode,
       audio,
@@ -128,6 +137,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
 interface LoadedGameAssets {
   models: PropModelLibrary;
   menuModels: MenuModelLibrary;
+  menuSandAssets: MenuSandAssets;
   shipFurniture: ShipFurnitureLibrary;
   skyAssets: SkyAssets;
   lifeboatAssets: LifeboatAssets;
@@ -138,7 +148,7 @@ interface LoadedGameAssets {
   featuredEventModels: SurvivalEventModelLibrary | null;
 }
 
-const GAME_ASSET_LOAD_COUNT = 10;
+const GAME_ASSET_LOAD_COUNT = 11;
 
 async function loadGameAssets(
   dependencies: LaunchDependencies,
@@ -168,6 +178,7 @@ async function loadGameAssets(
     audio,
     featuredEventModels,
     menuModels,
+    menuSandAssets,
   ] =
     await Promise.allSettled([
       track(dependencies.loadModels()),
@@ -180,6 +191,7 @@ async function loadGameAssets(
       track(dependencies.loadAudio?.() ?? Promise.resolve(AudioSystem.silent())),
       track(dependencies.loadFeaturedEventModels?.() ?? Promise.resolve(null)),
       track(dependencies.loadMenuModels()),
+      track(dependencies.loadMenuSandAssets()),
     ]);
   const assetResults = [
     models,
@@ -191,6 +203,7 @@ async function loadGameAssets(
     audio,
     eventModels,
     menuModels,
+    menuSandAssets,
   ] as const;
   const results = [...assetResults, physicsRuntime] as const;
   const firstFailure = results.find(
@@ -222,12 +235,14 @@ async function loadGameAssets(
     || audio.status !== 'fulfilled'
     || eventModels.status !== 'fulfilled'
     || menuModels.status !== 'fulfilled'
+    || menuSandAssets.status !== 'fulfilled'
   ) {
     throw new Error('Asset preload settled without a result');
   }
   return {
     models: models.value,
     menuModels: menuModels.value,
+    menuSandAssets: menuSandAssets.value,
     shipFurniture: shipFurniture.value,
     skyAssets: skyAssets.value,
     lifeboatAssets: lifeboatAssets.value,
@@ -250,6 +265,7 @@ function disposeGameAssets(assets: LoadedGameAssets): void {
     () => assets.audio.dispose(),
     () => assets.featuredEventModels?.dispose(),
     () => disposeMenuModelLibrary(assets.menuModels),
+    () => assets.menuSandAssets.dispose(),
   ]);
 }
 
@@ -307,6 +323,17 @@ function renderGameFailure(mount: HTMLElement, error: unknown): void {
 }
 
 function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
+  if (error instanceof MenuSandAssetLoadError) {
+    renderSystemScreen(mount, {
+      kind: 'error',
+      kicker: 'SEABED UNAVAILABLE',
+      title: 'Unable to prepare the underwater sand',
+      lead: 'Required local seabed textures could not be loaded.',
+      detail: error.message,
+    });
+    return;
+  }
+
   if (error instanceof MenuModelLoadError) {
     renderSystemScreen(mount, {
       kind: 'error',
@@ -497,6 +524,7 @@ export function launchGame(
         unownedAssets.audio,
         unownedAssets.featuredEventModels ?? undefined,
         unownedAssets.menuModels,
+        unownedAssets.menuSandAssets,
         reportRuntimeError,
       );
       game = createdGame;
