@@ -23,7 +23,6 @@ import { EVENT_MODEL_SPECS } from '../world/eventModelManifest';
 import {
   clamp01Unchecked as clamp01,
   smoothstepUnchecked as smoothstep,
-  type TimedAnimation,
 } from './animationMath';
 import type {
   EventChoicePresentation,
@@ -37,6 +36,7 @@ import type {
 } from './survivalTypes';
 import { eventSideFromSeed, type EventSide } from './eventVariant';
 import { StationaryEventCamera } from './StationaryEventCamera';
+import { TimedPresentationAnimation } from './TimedPresentationAnimation';
 
 type MidnightTourAnimationKind =
   | 'reveal'
@@ -47,8 +47,6 @@ type MidnightTourAnimationKind =
   | 'result-attack'
   | 'result-pass'
   | 'result-food';
-
-type ActiveAnimation = TimedAnimation<MidnightTourAnimationKind>;
 
 const REVEAL_DURATION = 1.25;
 const PASS_DURATION = 1.15;
@@ -102,7 +100,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private readonly foodEnd = new Vector3(0.18, 0.58, -1.22);
   private readonly creatureEnd = new Vector3();
   private readonly cameraLook: StationaryEventCamera;
-  private activeAnimation: ActiveAnimation | null = null;
+  private readonly animation: TimedPresentationAnimation<MidnightTourAnimationKind>;
   private activeActor: Group | null = null;
   private side: EventSide = -1;
   private greenTopLocalY = 0;
@@ -113,6 +111,10 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     private readonly dependencies: FocusedEventPresentationDependencies,
   ) {
     this.cameraLook = new StationaryEventCamera(dependencies.camera);
+    this.animation = new TimedPresentationAnimation<MidnightTourAnimationKind>(
+      (kind, _time, progress) => this.applyAnimation(kind, progress),
+      (kind) => this.finishAnimation(kind),
+    );
     this.root.name = 'focused-event:midnight-tour';
     this.root.visible = false;
     this.root.userData.motionSource = 'fixed';
@@ -138,7 +140,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     if (this.disposed) return;
     this.side = eventSideFromSeed(variantSeed);
     this.setSidePositions();
-    this.cancelActiveAnimation(false);
+    this.animation.cancel();
     this.clearResultActors();
     this.captureCamera();
     this.restoreCameraPose();
@@ -159,7 +161,10 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     if (this.disposed) return Promise.resolve();
     if (!this.staged) this.stage();
     this.root.userData.state = 'revealing';
-    return this.startAnimation('reveal', REVEAL_DURATION);
+    this.animation.settle();
+    const animation = this.animation.start('reveal', REVEAL_DURATION);
+    this.applyAnimation('reveal', 0);
+    return animation;
   }
 
   playChoice(choice: EventChoicePresentation): Promise<void> {
@@ -168,12 +173,18 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       case 'sleep':
         this.islandStart.copy(this.island.position);
         this.root.userData.state = 'sailing-on';
-        return this.startAnimation('choice-pass', PASS_DURATION);
+        this.animation.settle();
+        const passAnimation = this.animation.start('choice-pass', PASS_DURATION);
+        this.applyAnimation('choice-pass', 0);
+        return passAnimation;
       case 'visit':
         this.island.position.copy(this.islandBase);
         this.root.userData.approachBeats = 0;
         this.root.userData.state = 'approaching';
-        return this.startAnimation('choice-visit', VISIT_DURATION);
+        this.animation.settle();
+        const visitAnimation = this.animation.start('choice-visit', VISIT_DURATION);
+        this.applyAnimation('choice-visit', 0);
+        return visitAnimation;
       default:
         throw new Error(`Unsupported Midnight Tour choice: ${choice.choiceId}`);
     }
@@ -193,23 +204,41 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       case 'tour-chest':
         this.activeActor = this.createChestReward();
         this.root.userData.state = 'chest-result';
-        return this.startAnimation('result-chest', RESULT_DURATION);
+        this.animation.settle();
+        const chestAnimation = this.animation.start('result-chest', RESULT_DURATION);
+        this.applyAnimation('result-chest', 0);
+        return chestAnimation;
       case 'tour-bait':
         this.activeActor = this.createBaitReward();
         this.root.userData.state = 'bait-result';
-        return this.startAnimation('result-bait', RESULT_DURATION);
+        this.animation.settle();
+        const baitAnimation = this.animation.start('result-bait', RESULT_DURATION);
+        this.applyAnimation('result-bait', 0);
+        return baitAnimation;
       case 'tour-attack':
         this.activeActor = this.createCreature();
         this.root.userData.state = 'attack-result';
-        return this.startAnimation('result-attack', RESULT_DURATION);
+        this.animation.settle();
+        const attackAnimation = this.animation.start('result-attack', RESULT_DURATION);
+        this.applyAnimation('result-attack', 0);
+        return attackAnimation;
       case 'tour-pass':
         this.islandStart.copy(this.island.position);
         this.root.userData.state = 'pass-result';
-        return this.startAnimation('result-pass', PASS_DURATION * 0.55);
+        this.animation.settle();
+        const passAnimation = this.animation.start(
+          'result-pass',
+          PASS_DURATION * 0.55,
+        );
+        this.applyAnimation('result-pass', 0);
+        return passAnimation;
       case 'tour-food-fallback':
         this.activeActor = this.createFoodReward();
         this.root.userData.state = 'food-result';
-        return this.startAnimation('result-food', RESULT_DURATION);
+        this.animation.settle();
+        const foodAnimation = this.animation.start('result-food', RESULT_DURATION);
+        this.applyAnimation('result-food', 0);
+        return foodAnimation;
       default:
         throw new Error(`Unsupported Midnight Tour result: ${result.resultId}`);
     }
@@ -217,7 +246,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
 
   clear(): void {
     if (this.disposed) return;
-    this.cancelActiveAnimation(false);
+    this.animation.cancel();
     this.clearResultActors();
     this.restoreCamera();
     this.island.position.copy(this.islandBase);
@@ -228,25 +257,14 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.staged = false;
   }
 
-  update(_time: number, delta: number): void {
+  update(time: number, delta: number): void {
     if (this.disposed || delta < 0) return;
-    const animation = this.activeAnimation;
-    if (animation === null) return;
-    animation.elapsed = Math.min(
-      animation.duration,
-      animation.elapsed + Math.max(0, delta),
-    );
-    const progress = animation.duration <= 0 ? 1 : animation.elapsed / animation.duration;
-    this.applyAnimation(animation.kind, progress);
-    if (progress < 1) return;
-    this.activeAnimation = null;
-    this.finishAnimation(animation.kind);
-    animation.resolve();
+    this.animation.update(time, delta);
   }
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
-    this.cancelActiveAnimation(true);
+    this.animation.settle();
   }
 
   interactionTargets(): readonly FocusedEventInteractionTarget[] {
@@ -263,24 +281,13 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
 
   dispose(): void {
     if (this.disposed) return;
-    this.cancelActiveAnimation(false);
+    this.animation.cancel();
     this.restoreCamera();
     this.clearResultActors();
     this.disposed = true;
     this.staged = false;
     this.root.removeFromParent();
     disposeResourceSets(this.staticGeometries, this.staticMaterials);
-  }
-
-  private startAnimation(
-    kind: MidnightTourAnimationKind,
-    duration: number,
-  ): Promise<void> {
-    this.cancelActiveAnimation(true);
-    return new Promise<void>((resolve) => {
-      this.activeAnimation = { kind, elapsed: 0, duration, resolve };
-      this.applyAnimation(kind, 0);
-    });
   }
 
   private applyAnimation(kind: MidnightTourAnimationKind, progress: number): void {
@@ -712,11 +719,4 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     disposeResourceSets(this.resultGeometries, this.resultMaterials);
   }
 
-  private cancelActiveAnimation(settle: boolean): void {
-    const animation = this.activeAnimation;
-    this.activeAnimation = null;
-    if (animation === null) return;
-    if (settle) this.finishAnimation(animation.kind);
-    animation.resolve();
-  }
 }
