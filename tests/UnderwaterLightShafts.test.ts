@@ -1,10 +1,22 @@
-import { BufferGeometry, Mesh, ShaderMaterial } from 'three';
+import {
+  BufferGeometry,
+  Mesh,
+  PerspectiveCamera,
+  ShaderMaterial,
+  Vector3,
+} from 'three';
 import { expect, it, vi } from 'vitest';
 import { ITEM_AMBIENT_OCCLUSION_LAYER } from '../src/rendering/ItemAmbientOcclusion';
 import {
   LIGHT_SHAFT_COUNT,
   UnderwaterLightShafts,
 } from '../src/menu/UnderwaterLightShafts';
+import {
+  MENU_CAMERA_FIELD_OF_VIEW,
+  MENU_CAMERA_POSITION,
+  MENU_CAMERA_TARGET,
+  MENU_MINIMUM_ASPECT,
+} from '../src/menu/MenuSceneLayout';
 
 it('builds four animated transparent light shafts and disposes shared resources', () => {
   const shafts = new UnderwaterLightShafts();
@@ -44,4 +56,32 @@ it('builds four animated transparent light shafts and disposes shared resources'
   shafts.dispose();
   expect(geometryDispose).toHaveBeenCalledTimes(1);
   for (const dispose of materialDisposers) expect(dispose).toHaveBeenCalledTimes(1);
+});
+
+it('starts each upper fade above the minimum menu viewport', () => {
+  const shafts = new UnderwaterLightShafts();
+  const camera = new PerspectiveCamera(
+    MENU_CAMERA_FIELD_OF_VIEW,
+    MENU_MINIMUM_ASPECT,
+    0.08,
+    1000,
+  );
+  camera.position.set(...MENU_CAMERA_POSITION);
+  camera.lookAt(...MENU_CAMERA_TARGET);
+  camera.updateMatrixWorld();
+  camera.updateProjectionMatrix();
+  shafts.root.updateMatrixWorld(true);
+
+  const fadeStartLocalY = 0.86 - 0.5;
+  for (const mesh of shafts.root.children as Mesh[]) {
+    const lowestProjectedFadeEdge = Math.min(...[-0.5, 0.5].map((x) => (
+      new Vector3(x, fadeStartLocalY, 0)
+        .applyMatrix4(mesh.matrixWorld)
+        .project(camera)
+        .y
+    )));
+    expect.soft(lowestProjectedFadeEdge, mesh.name).toBeGreaterThan(1);
+  }
+
+  shafts.dispose();
 });
