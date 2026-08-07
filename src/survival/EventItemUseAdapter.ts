@@ -6,6 +6,7 @@ import {
   Vector3,
 } from 'three';
 import type { ItemId } from '../game/ItemState';
+import { lifeboatHullHalfWidthAt } from '../world/Lifeboat';
 import type {
   BorrowedSupplyActor,
   MutableSupplyPose,
@@ -31,6 +32,8 @@ const IDENTITY_POSE: MutableSupplyPose = {
 };
 const THROW_WATER_CONTACT_Y = 0.04;
 const THROW_FALLBACK_DISTANCE = 6;
+const ANCHOR_WATER_Z = 0.55;
+const ANCHOR_WATER_X = (lifeboatHullHalfWidthAt(ANCHOR_WATER_Z) ?? 1.63) + 0.48;
 const COMPASS_TURN_AXIS = new Vector3(0, 1, 0);
 type CameraFacingSurface = 'none' | 'y' | 'z';
 
@@ -134,7 +137,7 @@ export class EventItemUseAdapter {
     if (this.disposed || !this.active || actor === null || profile === null) return;
 
     this.cameraLook.apply(sample.cameraYaw, sample.cameraPitch);
-    this.applyCameraTarget(sample.cameraTargetBlend);
+    this.applyCameraTarget(sample, actor);
     this.applyFieldOfView(sample.fovScale);
     this.camera.updateWorldMatrix(true, false);
     this.cameraWorldMatrix.copy(this.camera.matrixWorld);
@@ -203,12 +206,20 @@ export class EventItemUseAdapter {
     this.camera.updateProjectionMatrix();
   }
 
-  private applyCameraTarget(blend: number): void {
-    const aimTarget = this.aimTarget;
-    if (blend <= 0 || aimTarget === null) return;
-
-    aimTarget.updateWorldMatrix(true, false);
-    aimTarget.getWorldPosition(this.targetWorldPosition);
+  private applyCameraTarget(
+    sample: Readonly<EventItemUseSample>,
+    actor: BorrowedSupplyActor,
+  ): void {
+    const blend = sample.cameraTargetBlend;
+    if (blend <= 0) return;
+    if (sample.flightTarget === 'starboard-water') {
+      this.setStarboardWaterTarget(actor);
+    } else {
+      const aimTarget = this.aimTarget;
+      if (aimTarget === null) return;
+      aimTarget.updateWorldMatrix(true, false);
+      aimTarget.getWorldPosition(this.targetWorldPosition);
+    }
     this.cameraWorldQuaternion.copy(this.camera.quaternion);
     this.camera.lookAt(this.targetWorldPosition);
     this.cameraTargetWorldQuaternion.copy(this.camera.quaternion);
@@ -234,7 +245,9 @@ export class EventItemUseAdapter {
     const aimTarget = this.aimTarget;
     if (sample.targetBlend <= 0) return;
 
-    if (aimTarget === null) {
+    if (sample.flightTarget === 'starboard-water') {
+      this.setStarboardWaterTarget(actor);
+    } else if (aimTarget === null) {
       if (!sample.ballisticFlight) return;
       this.camera.getWorldPosition(this.targetWorldPosition);
       this.camera.getWorldDirection(this.fallbackTargetDirection);
@@ -255,7 +268,9 @@ export class EventItemUseAdapter {
     );
     this.cameraSpacePosition.lerp(this.targetWorldPosition, sample.targetBlend);
     if (sample.ballisticFlight) {
-      const arcHeight = Math.min(2.2, Math.max(0.5, horizontalDistance * 0.14));
+      const arcHeight = sample.flightArcHeight > 0
+        ? sample.flightArcHeight
+        : Math.min(2.2, Math.max(0.5, horizontalDistance * 0.14));
       this.cameraSpacePosition.y += sample.flightArc * arcHeight;
     }
 
@@ -286,6 +301,16 @@ export class EventItemUseAdapter {
     this.pose.y = this.actorParentPosition.y;
     this.pose.z = this.actorParentPosition.z;
     actor.applyPose(this.pose);
+  }
+
+  private setStarboardWaterTarget(actor: BorrowedSupplyActor): void {
+    this.targetWorldPosition.set(ANCHOR_WATER_X, 0, ANCHOR_WATER_Z);
+    const actorParent = actor.root.parent;
+    if (actorParent !== null) {
+      actorParent.updateWorldMatrix(true, false);
+      this.targetWorldPosition.applyMatrix4(actorParent.matrixWorld);
+    }
+    this.targetWorldPosition.y = THROW_WATER_CONTACT_Y;
   }
 
   private applyAim(
@@ -368,14 +393,15 @@ export class EventItemUseAdapter {
     actor.root.getWorldQuaternion(this.facingWorldQuaternion);
     actor.root.getWorldPosition(this.actorWorldPosition);
     if (this.lockItemToHeldCamera) {
-      this.facingCameraPosition.copy(this.heldCameraWorldPosition);
+      this.facingNormal.set(0, 0, 1)
+        .applyQuaternion(this.heldCameraWorldQuaternion);
     } else {
       this.camera.getWorldPosition(this.facingCameraPosition);
+      this.facingNormal.subVectors(
+        this.facingCameraPosition,
+        this.actorWorldPosition,
+      );
     }
-    this.facingNormal.subVectors(
-      this.facingCameraPosition,
-      this.actorWorldPosition,
-    );
     if (this.facingNormal.lengthSq() === 0) return;
     this.facingNormal.normalize();
 
