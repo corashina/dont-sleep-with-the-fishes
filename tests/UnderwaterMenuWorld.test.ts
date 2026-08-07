@@ -12,6 +12,7 @@ import {
   Points,
   Scene,
   ShaderMaterial,
+  Texture,
   Vector3,
 } from 'three';
 import { expect, it, vi } from 'vitest';
@@ -20,6 +21,15 @@ import { UnderwaterMenuWorld } from '../src/menu/UnderwaterMenuWorld';
 import { BUBBLE_COUNT } from '../src/menu/UnderwaterParticles';
 import { LIGHT_SHAFT_COUNT } from '../src/menu/UnderwaterLightShafts';
 import { ITEM_AMBIENT_OCCLUSION_LAYER } from '../src/rendering/ItemAmbientOcclusion';
+import { MenuSandAssets } from '../src/menu/MenuSandAssets';
+
+function menuSandAssets(): MenuSandAssets {
+  return MenuSandAssets.fromTextures(
+    new Texture(),
+    new Texture(),
+    new Texture(),
+  );
+}
 
 it('creates the approved fixed composition once', () => {
   const created: string[] = [];
@@ -90,6 +100,7 @@ it('creates the approved fixed composition once', () => {
     scene,
     camera,
     models as never,
+    menuSandAssets(),
     components,
   );
 
@@ -272,6 +283,7 @@ it('rolls back completed work and preserves a component creation error', () => {
       new Scene(),
       new PerspectiveCamera(),
       models as never,
+      menuSandAssets(),
       components as never,
     );
   } catch (error) {

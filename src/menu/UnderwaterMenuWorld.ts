@@ -51,6 +51,8 @@ import {
 import { UnderwaterParticles } from './UnderwaterParticles';
 import { UnderwaterLightShafts } from './UnderwaterLightShafts';
 import { UnderwaterPlantField } from './UnderwaterPlantField';
+import type { MenuSandAssets } from './MenuSandAssets';
+import { createMenuSeabedMaterial } from './MenuSeabedMaterial';
 import {
   disposeResourceSets,
   ignoreCleanupError,
@@ -135,6 +137,7 @@ export class UnderwaterMenuWorld {
     private readonly scene: Scene,
     private readonly camera: PerspectiveCamera,
     models: ModelFactory,
+    sand: MenuSandAssets,
     components: UnderwaterMenuComponentFactories = DEFAULT_COMPONENT_FACTORIES,
   ) {
     this.root.name = 'menu:underwater-world';
@@ -212,7 +215,7 @@ export class UnderwaterMenuWorld {
     this.plants = new UnderwaterPlantField();
     this.particles = new UnderwaterParticles();
     this.lightShafts = new UnderwaterLightShafts();
-    const seabed = this.createSeabed();
+    const seabed = this.createSeabed(sand);
     const storyProps = this.createStoryProps();
     const caustic = this.createCausticOverlay();
     this.causticMaterial = caustic.material;
@@ -375,7 +378,9 @@ export class UnderwaterMenuWorld {
     root.rotation.set(...placement.rotation);
   }
 
-  private createSeabed(): Mesh<PlaneGeometry, MeshStandardMaterial> {
+  private createSeabed(
+    sand: MenuSandAssets,
+  ): Mesh<PlaneGeometry, MeshStandardMaterial> {
     const geometry = new PlaneGeometry(140, 100, 56, 42);
     geometry.rotateX(-Math.PI / 2);
     const position = geometry.getAttribute('position') as BufferAttribute;
@@ -395,13 +400,7 @@ export class UnderwaterMenuWorld {
     position.needsUpdate = true;
     geometry.setAttribute('color', color);
     geometry.computeVertexNormals();
-    const material = new MeshStandardMaterial({
-      color: 0x756d54,
-      roughness: 1,
-      metalness: 0,
-      flatShading: true,
-      vertexColors: true,
-    });
+    const material = createMenuSeabedMaterial(sand);
     this.ownedGeometries.add(geometry);
     this.ownedMaterials.add(material);
     const seabed = new Mesh(geometry, material);
