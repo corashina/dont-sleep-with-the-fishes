@@ -35,7 +35,9 @@ Food, Bait, Duct Tape, Medkit, Flare Gun, Bottled Paper, and Shotgun are one-use
 
 The repair toolbox and starboard-mounted Fishing Rod are permanent lifeboat equipment rather than Dorothy collectibles. The rod is never picked up or recovered. It is available for fishing in every survival run, while the toolbox uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. Rest never requires an item: it restores two energy once per day. Bottled Paper costs one energy, adds 15 rescue progress, and is consumed. Energy Bar restores energy to the maximum of three and is consumed.
 
-The event catalog includes Mystery Chest, Chest Attack, and Flowers.
+The event catalog contains 30 live events. The day pool contains Drifting Loot,
+Drifting Bottle, School of Fish, and Flowers. Event selection shows title,
+reveal text, and written risk before the player chooses a response.
 
 Mystery Chest now places a closed chest aboard. Opening it costs three energy.
 
@@ -43,7 +45,9 @@ An old chest can become a mimic. Fishing Net binds it shut.
 
 Flowers accepts Fishing Net or Bucket. It records the choice without a large reward.
 
-Run pressure rises on days 8, 15, 25, and 40. Night damage doubles from day 50.
+Run pressure rises on days 8, 15, 25, and 40. Successful supernatural
+counters can lower pressure. Night energy results apply at the next dawn.
+Night damage doubles from day 50.
 
 ## Run
 
