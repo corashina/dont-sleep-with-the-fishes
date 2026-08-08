@@ -1375,9 +1375,15 @@ export class BoatWorld {
     if (route === 'dedicated' && this.dedicatedEvents?.handles(eventId)) {
       await this.dedicatedEvents.reveal();
     } else if (route === 'focused') {
-      await this.eventPresentation.reveal(eventId);
+      await Promise.all([
+        this.eventPresentation.reveal(eventId),
+        this.weatherEventAnimator.reveal(eventId),
+      ]);
     } else if (route === 'featured') {
-      await this.featuredEvents.reveal(eventId);
+      await Promise.all([
+        this.featuredEvents.reveal(eventId),
+        this.weatherEventAnimator.reveal(eventId),
+      ]);
     } else if (route === 'weather') {
       await Promise.all([
         this.eventPresentation.reveal(eventId),
