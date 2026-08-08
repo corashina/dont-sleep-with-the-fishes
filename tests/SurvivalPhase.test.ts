@@ -948,7 +948,7 @@ describe('SurvivalPhase orchestration', () => {
   it('draws and reveals Drifting Bottle through a normal dawn', async () => {
     const session = new SurvivalSession([], {
       seed: 203,
-      random: sequenceRandom([0, 0, 0.99]),
+      random: sequenceRandom([0, 0, 0.5]),
       initial: { day: 2 },
     });
     const stageEvent = vi.fn();

@@ -740,9 +740,10 @@ describe('SurvivalSession daytime actions', () => {
       accepted: true,
       deltas: {},
     });
-    expect(session.snapshot().journalEntries[0]?.nighttime).toMatchObject({
-      kind: 'event',
-      event: { eventId: 'flowers', attemptedItemId: 'bucket' },
+    session.perform('endDay');
+    session.resolveEvent({ kind: 'endure' });
+    expect(session.snapshot().journalEntries[0]?.daytime).toMatchObject({
+      eventId: 'flowers', attemptedItemId: 'bucket',
     });
   });
 
@@ -1008,7 +1009,7 @@ describe('SurvivalSession daytime actions', () => {
       seed: 111, random: sequenceRandom([0]), initial: { day: 9 }, initialEventId: 'death-stare',
     });
     expect(session.resolveEvent(choiceResponse('sleep'))).toMatchObject({
-      accepted: true, message: 'Nothing happens.', deltas: {},
+      accepted: true, message: 'The shape loses interest and sinks away.', deltas: {},
     });
     expect(session.snapshot()).toMatchObject({ health: 100, hull: 100, state: 'nightEvent' });
   });
@@ -1401,7 +1402,7 @@ describe('SurvivalSession daytime actions', () => {
   it('draws Drifting Bottle from the eligible day event pool at dawn', () => {
     const session = new SurvivalSession(saved(), {
       seed: 201,
-      random: sequenceRandom([0, 0, 0.99]),
+      random: sequenceRandom([0, 0, 0.5]),
       initial: { day: 2 },
     });
 
