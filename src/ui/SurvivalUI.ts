@@ -380,6 +380,7 @@ export class SurvivalUI {
   private readonly anchoredEventResultCaption: HTMLElement;
   private readonly anchoredEventResultDetail: HTMLElement;
   private readonly eventDetail: HTMLElement;
+  private readonly eventRisk: HTMLElement;
   private readonly eventOutcomeResult: HTMLElement;
   private readonly eventResult: HTMLElement;
   private readonly eventResultMessage: HTMLElement;
@@ -584,6 +585,7 @@ export class SurvivalUI {
       <section class="event-caption" data-event-caption aria-hidden="true" aria-live="polite">
         <h2 class="ui-role-display" data-event-title></h2>
         <p class="event-caption__detail ui-role-narrative" data-event-detail></p>
+        <p class="event-caption__risk ui-role-context" data-event-risk></p>
         <p class="event-caption__result ui-role-context" data-event-result hidden></p>
         <section class="event-result event-result--inline" data-dedicated-event-result role="status" hidden>
           <p class="event-result__message ui-role-narrative" data-event-result-message></p>
@@ -665,6 +667,7 @@ export class SurvivalUI {
     this.anchoredEventResultCaption = requireElement(this.root, '[data-event-result-caption]');
     this.anchoredEventResultDetail = requireElement(this.root, '[data-event-result-detail]');
     this.eventDetail = requireElement(this.root, '[data-event-detail]');
+    this.eventRisk = requireElement(this.root, '[data-event-risk]');
     this.eventOutcomeResult = requireElement(this.root, '[data-event-result]');
     this.eventResult = requireElement(this.root, '[data-dedicated-event-result]');
     this.eventResultMessage = requireElement(this.root, '[data-event-result-message]');
@@ -848,6 +851,7 @@ export class SurvivalUI {
       this.eventDetail,
       'SELECT AN ITEM. EACH ITEM RETURNS AFTER ITS ANIMATION.',
     );
+    this.eventRisk.textContent = '';
     this.eventOutcomeResult.textContent = '';
     this.eventOutcomeResult.hidden = true;
     this.eventCaption.dataset.eventId = 'item-animation-lab';
@@ -873,8 +877,10 @@ export class SurvivalUI {
     if (this.disposed) return Promise.resolve();
     this.closeWhiskersCard(false);
     delete this.eventCaption.dataset.result;
-    this.updateText('event:title', this.eventTitle, '');
-    this.updateText('event:detail', this.eventDetail, '');
+    const risk = event.danger.toLocaleUpperCase('en-US');
+    this.updateText('event:title', this.eventTitle, event.title.toLocaleUpperCase('en-US'));
+    this.updateText('event:detail', this.eventDetail, event.revealText);
+    this.updateText('event:risk', this.eventRisk, risk);
     this.eventOutcomeResult.textContent = '';
     this.eventOutcomeResult.hidden = true;
     delete this.eventCaption.dataset.result;
@@ -1041,6 +1047,7 @@ export class SurvivalUI {
     delete this.eventCaption.dataset.danger;
     delete this.eventCaption.dataset.result;
     this.eventDetail.textContent = '';
+    this.eventRisk.textContent = '';
     this.eventOutcomeResult.textContent = '';
     this.eventOutcomeResult.hidden = true;
     this.clearEventResult();
@@ -2045,8 +2052,7 @@ export class SurvivalUI {
       });
     this.eventChoices.replaceChildren(...choices);
     this.eventChoices.hidden = choices.length === 0;
-    const showCaption = choices.length > 0
-      || this.eventCaption.dataset.eventId === 'item-animation-lab';
+    const showCaption = this.eventPresentationActive;
     this.eventCaption.classList.toggle('is-visible', showCaption);
     this.eventCaption.setAttribute('aria-hidden', showCaption ? 'false' : 'true');
   }

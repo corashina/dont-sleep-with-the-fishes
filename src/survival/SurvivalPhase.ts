@@ -148,6 +148,9 @@ export function formatEventResult(
   result: EventOutcomePresentation,
 ): Extract<EventResultView, { readonly message: string }> {
   const lines: string[] = [];
+  if (result.outcome.nextDawnEnergy !== undefined) {
+    lines.push(`NEXT DAWN ENERGY ${result.outcome.nextDawnEnergy}`);
+  }
   for (const [resource, label] of EVENT_RESULT_RESOURCES) {
     const delta = result.resourceDeltas[resource];
     if (delta === undefined || delta === 0) continue;
