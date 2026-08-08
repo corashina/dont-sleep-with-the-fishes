@@ -46,10 +46,10 @@ it('presents the emergency briefing as two action stages', () => {
     'Save what you can. Reach the lifeboat. Survive until rescue.',
   );
   expect(stages).toHaveLength(2);
-  expect(stages[0].textContent).toContain('ESCAPE DOROTHY');
-  expect(stages[0].textContent).toContain('Dorothy sinks in 60 seconds.');
-  expect(stages[1].textContent).toContain('SURVIVE THE SEA');
-  expect(stages[1].textContent).toContain('Stay alive and keep the hull intact until rescue.');
+  expect(stages[0]!.textContent).toContain('ESCAPE DOROTHY');
+  expect(stages[0]!.textContent).toContain('Dorothy sinks in 60 seconds.');
+  expect(stages[1]!.textContent).toContain('SURVIVE THE SEA');
+  expect(stages[1]!.textContent).toContain('Stay alive and keep the hull intact until rescue.');
   expect(labels).toEqual(['SEARCH', 'CARRY', 'SAVE', 'PREPARE', 'WATCH', 'END DAY']);
   expect(guide.textContent).toContain('RESCUE CHANCE RISES EACH DAY');
   expect(art.map((icon) => icon.dataset.uiArtwork)).toEqual([
@@ -152,4 +152,19 @@ it('uses the viewport height for the title and start layout', () => {
   expect(mainStyles).toMatch(/\.menu-title-accessible\s*\{[^}]*clip:\s*rect\(0,\s*0,\s*0,\s*0\)/s);
   expect(mainStyles).toMatch(/\.menu-action-accessible\s*\{[^}]*clip:\s*rect\(0,\s*0,\s*0,\s*0\)/s);
   expect(mainStyles).toMatch(/\.underwater-menu-screen__content::before\s*\{[^}]*grid-row:\s*1/s);
+});
+
+it('defines the emergency briefing layout contracts', () => {
+  expect(mainStyles).toMatch(
+    /\.how-to-play-board\s*\{[^}]*width:\s*min\(1060px,\s*calc\(100vw - 36px\)\)[^}]*max-height:\s*calc\(100dvh - 28px\)/s,
+  );
+  expect(mainStyles).toMatch(
+    /\.how-to-play-route\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s,
+  );
+  expect(mainStyles).toMatch(
+    /\.how-to-play-action\s*\{[^}]*grid-template-columns:\s*34px 72px minmax\(0,\s*1fr\)/s,
+  );
+  expect(mainStyles).toMatch(
+    /@media \(max-width: 820px\)\s*\{[\s\S]*?\.how-to-play-route\s*\{[^}]*grid-template-columns:\s*1fr/s,
+  );
 });
