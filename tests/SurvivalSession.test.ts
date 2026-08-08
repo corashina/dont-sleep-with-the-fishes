@@ -46,6 +46,20 @@ it('keeps a night energy result through the next dawn', () => {
   expect(session.snapshot().energy).toBe(2);
 });
 
+it('keeps a pressure reduction after a non-threshold dawn', () => {
+  const session = new SurvivalSession(saved('compass'), {
+    seed: 32,
+    random: sequenceRandom([0]),
+    initial: { day: 8, pressure: 2 },
+    initialEventId: 'man-in-the-fog',
+  });
+
+  session.resolveEvent(itemResponse('compass'));
+  expect(session.snapshot().pressure).toBe(1);
+  session.beginDawn();
+  expect(session.snapshot().pressure).toBe(1);
+});
+
 function driftingLootSession(random: readonly number[], energy = 3, items: ItemId[] = []): SurvivalSession {
   return new SurvivalSession(saved(...items), {
     seed: 1,
@@ -676,7 +690,6 @@ describe('SurvivalSession daytime actions', () => {
     expect(tour.snapshot()).toMatchObject({
       chest: { state: 'closed', acquiredDay: 1 },
       pressure: 1,
-      eventFlags: ['direction3'],
     });
 
     const bait = new SurvivalSession(saved(), {
@@ -688,8 +701,6 @@ describe('SurvivalSession daytime actions', () => {
       eventResult: { resultId: 'tour-bait' },
       deltas: { bait: 1 },
     });
-    expect(bait.snapshot().eventFlags).toContain('direction3');
-
     const attacked = new SurvivalSession(saved(), {
       seed: 11,
       random: sequenceRandom([100 / 112]),
@@ -699,8 +710,6 @@ describe('SurvivalSession daytime actions', () => {
       eventResult: { resultId: 'tour-attack' },
       deltas: { health: -35 },
     });
-    expect(attacked.snapshot().eventFlags).toContain('direction3');
-
     const passed = new SurvivalSession(saved(), {
       seed: 11,
       random: sequenceRandom([0]),
@@ -731,7 +740,6 @@ describe('SurvivalSession daytime actions', () => {
       accepted: true,
       deltas: {},
     });
-    expect(session.snapshot().eventFlags).toContain('flowers:collected');
     expect(session.snapshot().journalEntries[0]?.nighttime).toMatchObject({
       kind: 'event',
       event: { eventId: 'flowers', attemptedItemId: 'bucket' },
@@ -2238,7 +2246,6 @@ describe('SurvivalSession daytime actions', () => {
       });
       expect(session.snapshot()).toMatchObject({
         rescueProgress,
-        eventFlags: expect.arrayContaining(['direction2']),
       });
       for (const itemState of Object.values(session.snapshot().inventory)) {
         expect(itemState?.condition).toBe('usable');

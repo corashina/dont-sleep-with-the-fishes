@@ -31,7 +31,6 @@ export const INCLUDED_EVENT_PHASES = Object.freeze({
 } as const);
 
 type IncludedEventId = keyof typeof INCLUDED_EVENT_PHASES;
-const EMPTY_FLAGS: ReadonlySet<string> = new Set();
 
 const EVENT_REVEAL_TEXT: Readonly<Record<IncludedEventId, string>> = Object.freeze({
   'dangerous-waters': 'Jagged rocks break the surface as the current pulls the boat off course.',
@@ -112,10 +111,7 @@ function atNextDawn(
 function dangerousWatersEffects(
   resources: readonly ResourceEffect[] = [],
 ): WeightedEventOutcome['effects'] {
-  return {
-    ...(resources.length ? { resources } : {}),
-    flags: { set: ['direction2'] },
-  };
+  return resources.length ? { resources } : {};
 }
 
 const outcome = (
@@ -177,8 +173,8 @@ function event(
   eligibility: Pick<
     SurvivalEventDefinition,
     | 'maximumAppearances' | 'absentItemIds' | 'minimumRescueProgress'
-    | 'minimumPressure' | 'maximumPressure' | 'requiredFlags'
-    | 'forbiddenFlags' | 'allowedChestStates' | 'requiresLivingCompanion'
+    | 'minimumPressure' | 'maximumPressure' | 'allowedChestStates'
+    | 'requiresLivingCompanion'
   > = {},
 ): SurvivalEventDefinition {
   return {
@@ -332,7 +328,9 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       outcome(50, 'The waves damage the boat and take an item.', effects([subtract('hull', { min: 15, max: 25 })], [loseRandom(1)]))),
   ]),
   event('man-in-the-fog', 'Man in the Fog', 'darkness', 18, 6, 40, [
-    choice('compass', 'Use Compass', 'compass', outcome(1, 'Nothing happens.')),
+    choice('compass', 'Use Compass', 'compass',
+      outcome(1, 'The compass keeps the boat on a steady bearing.',
+        effects([subtract('pressure', 1)]))),
     choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'Danger increases.', effects([add('pressure', 1)]))),
     choice('flashlight', 'Use Flashlight', 'flashlight',
       outcome(70, 'The figure attacks.', atNextDawn(1, effects([add('pressure', 2), subtract('health', 20)]))),
@@ -342,7 +340,9 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       outcome(50, 'You are injured.', atNextDawn(2, effects([add('pressure', 1), subtract('health', 20)])))),
   ], undefined, { minimumPressure: 1 }),
   event('ghosts', 'Ghosts', 'darkness', 25, 8, 38, [
-    choice('flareGun', 'Use Flare Gun', 'flareGun', outcome(1, 'The flare is used.', effects(undefined, [consume('flareGun')]))),
+    choice('flareGun', 'Use Flare Gun', 'flareGun',
+      outcome(1, 'The flare drives the pale shapes into the dark.',
+        effects([subtract('pressure', 1)], [consume('flareGun')]))),
     choice('flashlight', 'Use Flashlight', 'flashlight', outcome(60, 'Nothing happens.'), outcome(40, 'You wake with one energy.', atNextDawn(1))),
     choice('sleep', 'Sleep', undefined, outcome(60, 'You wake with two energy.', atNextDawn(2)), outcome(30, 'You wake with one energy.', atNextDawn(1))),
   ], undefined, { minimumPressure: 1 }),
@@ -350,7 +350,9 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('bucket', 'Use Bucket', 'bucket', outcome(1, 'You wake with one energy.', atNextDawn(1, effects(undefined, [breakItem('bucket')])))),
     choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'The siren attacks.', effects([subtract('hull', { min: 50, max: 90 }), subtract('health', 50)]))),
     choice('umbrella', 'Use Umbrella', 'umbrella', outcome(1, 'The boat is damaged.', atNextDawn(1, effects([subtract('hull', { min: 40, max: 60 })])))),
-    choice('ductTape', 'Use Duct Tape', 'ductTape', outcome(1, 'The duct tape is used.', effects(undefined, [consume('ductTape')]))),
+    choice('ductTape', 'Use Duct Tape', 'ductTape',
+      outcome(1, 'The tape blocks the melody until it fades.',
+        effects([subtract('pressure', 1)], [consume('ductTape')]))),
     choice('sleep', 'Sleep', undefined,
       outcome(60, 'You wake exhausted.', atNextDawn(0)),
       outcome(40, 'The siren attacks.', atNextDawn(1, effects([subtract('hull', { min: 50, max: 90 }), subtract('health', 50)])))),
@@ -474,9 +476,9 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
   ], undefined, { allowedChestStates: ['none'] }),
   event('flowers', 'Flowers', 'sighting', 2, 2, 0, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet',
-      featuredOutcome('flowers.collect', 1, 'You lift the flowers aboard.', { flags: { set: ['flowers:collected'] } })),
+      featuredOutcome('flowers.collect', 1, 'You lift the flowers aboard.')),
     choice('bucket', 'Use Bucket', 'bucket',
-      featuredOutcome('flowers.collect', 1, 'You gather the flowers in the bucket.', { flags: { set: ['flowers:collected'] } })),
+      featuredOutcome('flowers.collect', 1, 'You gather the flowers in the bucket.')),
     contextualChoice('sleep', 'Let Them Drift',
       featuredOutcome('flowers.drift', 1, 'The flowers drift into the dark.')),
   ], 13, { maximumAppearances: 1 }),
@@ -494,15 +496,12 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       outcome(50, 'You find a chest.', {
         ...atNextDawn(2, { resources: [add('pressure', 1)] }),
         items: [gainChest()],
-        flags: { set: ['direction3'] },
       }, 'tour-chest'),
       outcome(50, 'You find one bait.', {
         resources: [add('bait', 1)],
-        flags: { set: ['direction3'] },
       }, 'tour-bait'),
       outcome(12, 'Something drops from the rocks.', {
         resources: [subtract('health', 35)],
-        flags: { set: ['direction3'] },
       }, 'tour-attack'),
     ),
     contextualChoice('sleep', 'Sail On', outcome(1, 'The island disappears into the dark.', {}, 'tour-pass')),
@@ -697,7 +696,7 @@ function validateOutcome(
     `${path}.effects`,
     'effect',
     [
-      'resources', 'items', 'chest', 'flags', 'rescue', 'companion',
+      'resources', 'items', 'chest', 'rescue', 'companion',
       'nextDawnEnergy', 'followUpNight', 'endingReason',
     ],
   );
@@ -705,13 +704,11 @@ function validateOutcome(
   const hasItems = Object.hasOwn(candidateEffects, 'items');
   const hasRescue = Object.hasOwn(candidateEffects, 'rescue');
   const hasChest = Object.hasOwn(candidateEffects, 'chest');
-  const hasFlags = Object.hasOwn(candidateEffects, 'flags');
   const hasCompanion = Object.hasOwn(candidateEffects, 'companion');
   const hasNextDawnEnergy = Object.hasOwn(candidateEffects, 'nextDawnEnergy');
   const hasFollowUpNight = Object.hasOwn(candidateEffects, 'followUpNight');
   const hasEndingReason = Object.hasOwn(candidateEffects, 'endingReason');
   const chest = hasChest ? candidateEffects.chest : undefined;
-  const flags = hasFlags ? candidateEffects.flags : undefined;
   const resourceEntries = hasResources
     ? candidateEffects.resources
     : undefined;
@@ -757,18 +754,6 @@ function validateOutcome(
   }
   if (hasChest && !['acquire', 'close', 'destroy'].includes(chest as string)) {
     throw new Error(`${path}.chest has an invalid effect`);
-  }
-  if (hasFlags) {
-    assertPlainObject(flags, `${path}.flags`);
-    assertExactKeys(flags, `${path}.flags`, 'flag effect', ['set', 'clear']);
-    for (const key of ['set', 'clear'] as const) {
-      const entries = flags[key];
-      if (entries === undefined) continue;
-      if (!Array.isArray(entries) || entries.length === 0
-        || entries.some((flag) => typeof flag !== 'string' || flag.trim().length === 0)) {
-        throw new Error(`${path}.flags.${key} must contain flag names`);
-      }
-    }
   }
   if (hasCompanion) {
     const companionEffects = candidateEffects.companion;
@@ -883,16 +868,6 @@ export function validateSurvivalEventCatalog(
       && eventEntry.minimumPressure > eventEntry.maximumPressure) {
       throw new Error(`${eventEntry.id} has inverted pressure bounds`);
     }
-    for (const [name, flags] of [
-      ['required', eventEntry.requiredFlags],
-      ['forbidden', eventEntry.forbiddenFlags],
-    ] as const) {
-      if (flags === undefined) continue;
-      if (!Array.isArray(flags) || flags.length === 0
-        || flags.some((flag) => typeof flag !== 'string' || flag.trim().length === 0)) {
-        throw new Error(`${eventEntry.id} ${name} flags are invalid`);
-      }
-    }
     if (eventEntry.allowedChestStates !== undefined
       && (!Array.isArray(eventEntry.allowedChestStates)
         || eventEntry.allowedChestStates.length === 0
@@ -986,7 +961,6 @@ export interface EventEligibility {
   inventoryItemIds: ReadonlySet<ItemId>;
   rescueProgress: number;
   pressure?: number;
-  eventFlags?: ReadonlySet<string>;
   chestState?: import('./survivalTypes').ChestState;
   hasLivingCompanion?: boolean;
 }
@@ -1012,11 +986,6 @@ export function eligibleEvents(
     const pressure = criteria.pressure ?? 0;
     if (eventEntry.minimumPressure !== undefined && pressure < eventEntry.minimumPressure) return false;
     if (eventEntry.maximumPressure !== undefined && pressure > eventEntry.maximumPressure) return false;
-    const flags = criteria.eventFlags ?? EMPTY_FLAGS;
-    if (eventEntry.requiredFlags !== undefined
-      && !eventEntry.requiredFlags.every((flag) => flags.has(flag))) return false;
-    if (eventEntry.forbiddenFlags !== undefined
-      && eventEntry.forbiddenFlags.some((flag) => flags.has(flag))) return false;
     const chestState = criteria.chestState ?? 'none';
     if (eventEntry.allowedChestStates !== undefined
       && !eventEntry.allowedChestStates.includes(chestState)) return false;
