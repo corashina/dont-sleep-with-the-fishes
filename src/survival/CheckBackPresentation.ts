@@ -74,7 +74,7 @@ export class CheckBackPresentation extends KeyedEventPresentation {
       this.cameraLook.apply(Math.PI, 0);
       this.fish.visible = false;
     } else if (this.settledKind === 'check-the-back.ignore') {
-      this.cameraLook.apply(0, 0);
+      this.cameraLook.apply(Math.PI, 0);
     }
   }
 
@@ -91,7 +91,7 @@ export class CheckBackPresentation extends KeyedEventPresentation {
       return;
     }
     if (kind === 'check-the-back.ignore') {
-      this.cameraLook.apply(0, 0);
+      this.cameraLook.apply(Math.PI, 0);
       return;
     }
     this.cameraLook.apply(Math.PI, 0);
