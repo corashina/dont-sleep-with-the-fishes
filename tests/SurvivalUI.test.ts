@@ -32,7 +32,7 @@ const journalEntries: readonly JournalEntry[] = [1, 2].map((day) => ({
       prompt: `Night ${day} settled over the boat.`,
       attemptedItemId: null,
       attemptedChoiceId: null,
-      resolution: 'endure',
+      choiceLabel: 'Endure',
       outcomeCode: 'event-resolved',
       outcomeMessage: 'I made it through until morning.',
       inventoryMutations: [],

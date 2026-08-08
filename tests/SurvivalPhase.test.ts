@@ -71,7 +71,7 @@ function completedEntry(
       phase: 'night', eventId: `night-${day}`, title: 'Quiet Night',
       prompt: 'The night passed without incident.', attemptedChoiceId: null,
       attemptedItemId: null,
-      resolution: 'endure', outcomeCode: 'event-resolved',
+      choiceLabel: 'Endure', outcomeCode: 'event-resolved',
       outcomeMessage: 'The night remained quiet.',
       inventoryMutations: [],
     },

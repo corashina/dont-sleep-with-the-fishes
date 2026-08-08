@@ -21,7 +21,6 @@ import type {
   JournalCaptainWhiskersDawnRecord,
   JournalNightRecord,
   JournalInventoryMutation,
-  JournalResolution,
 } from './journal';
 import { mulberry32 } from './random';
 import {
@@ -530,7 +529,6 @@ export class SurvivalSession {
     }
 
     const mutationExclusions = new Set<ItemInstanceId>();
-    const resolution: JournalResolution = choice.itemId === undefined ? 'endure' : 'suitableItem';
 
     const phase = event.phase;
     const pendingDriftingLootVariant = this.pendingDriftingLootVariant;
@@ -629,8 +627,8 @@ export class SurvivalSession {
       this.recordJournalEvent(
         event,
         choiceId,
+        choice.label,
         attemptedItemId,
-        resolution,
         outcome,
         inventoryMutations,
       );
@@ -1096,8 +1094,8 @@ export class SurvivalSession {
   private recordJournalEvent(
     event: SurvivalEventDefinition,
     attemptedChoiceId: string | null,
+    choiceLabel: string,
     attemptedItemId: ItemId | null,
-    resolution: JournalResolution,
     outcome: ActionOutcome,
     inventoryMutations: readonly JournalInventoryMutation[],
   ): void {
@@ -1107,8 +1105,8 @@ export class SurvivalSession {
       title: event.title,
       prompt: event.prompt,
       attemptedChoiceId,
+      choiceLabel,
       attemptedItemId,
-      resolution,
       outcomeCode: outcome.code,
       outcomeMessage: outcome.message,
       ...(outcome.eventPresentationKey === undefined

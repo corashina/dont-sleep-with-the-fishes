@@ -2280,10 +2280,39 @@ describe('SurvivalSession daytime actions', () => {
           phase: 'night',
           attemptedChoiceId: 'sleep',
           attemptedItemId: null,
-          resolution: 'endure',
+          choiceLabel: 'Sleep',
         }),
       },
     })]);
+  });
+
+  it('records an item action without claiming it helped', () => {
+    const session = new SurvivalSession(saved('flashlight'), {
+      seed: 40,
+      random: sequenceRandom([0.99]),
+      initialEventId: 'death-stare',
+    });
+
+    session.resolveEvent(itemResponse('flashlight'));
+    const page = formatJournalEntry(session.snapshot().journalEntries[0]!);
+
+    expect(page.nighttime).toContain('I used the flashlight.');
+    expect(page.nighttime).toContain('The flashlight is lost.');
+    expect(page.nighttime).not.toContain('it helped');
+  });
+
+  it('records the selected contextual label and actual result', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 41,
+      random: sequenceRandom([0]),
+      initialEventId: 'midnight-tour',
+    });
+
+    session.resolveEvent(choiceResponse('sleep'));
+    const page = formatJournalEntry(session.snapshot().journalEntries[0]!);
+
+    expect(page.nighttime).toContain('I chose \u201cSail On\u201d.');
+    expect(page.nighttime).toContain('The island disappears into the dark.');
   });
 
   it('records a quiet day and protects internal history from snapshot mutation', () => {
