@@ -32,6 +32,20 @@ function stateAfterDawn(day: number, rescueProgress: number, rescueRoll: number)
   return session.snapshot().state;
 }
 
+it('keeps a night energy result through the next dawn', () => {
+  const session = new SurvivalSession(saved(), {
+    seed: 31,
+    random: sequenceRandom([0]),
+    initialEventId: 'bad-sleep',
+  });
+
+  const result = session.resolveEvent({ kind: 'endure' });
+
+  expect(result).toMatchObject({ nextDawnEnergy: 2, deltas: {} });
+  session.beginDawn();
+  expect(session.snapshot().energy).toBe(2);
+});
+
 function driftingLootSession(random: readonly number[], energy = 3, items: ItemId[] = []): SurvivalSession {
   return new SurvivalSession(saved(...items), {
     seed: 1,
