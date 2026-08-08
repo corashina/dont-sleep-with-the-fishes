@@ -6,6 +6,10 @@ export function pressureForDay(day: number): number {
   return PRESSURE_DAYS.filter((threshold) => day >= threshold).length;
 }
 
+export function pressureIncreaseForDay(day: number): 0 | 1 {
+  return PRESSURE_DAYS.includes(day as typeof PRESSURE_DAYS[number]) ? 1 : 0;
+}
+
 export function nightDamageMultiplier(day: number): 1 | 2 {
   return day >= NIGHT_DAMAGE_DOUBLE_DAY ? 2 : 1;
 }

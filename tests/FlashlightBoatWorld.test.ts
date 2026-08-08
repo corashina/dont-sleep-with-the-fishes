@@ -33,7 +33,6 @@ function snapshot(): SurvivalSnapshot {
     repairMaterial: 0,
     rescueProgress: 0,
     chest: { state: 'none', acquiredDay: null },
-    eventFlags: [],
     weather: 'calm',
     actedToday: false,
     journalEntries: [],

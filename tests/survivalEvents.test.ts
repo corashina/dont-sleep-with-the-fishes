@@ -250,11 +250,10 @@ describe('survival events', () => {
           resources: [add('pressure', 1)],
           nextDawnEnergy: 2,
           items: [{ kind: 'gainChest', quantity: 1, fallbackFood: 1 }],
-          flags: { set: ['direction3'] },
         },
       },
-      { resultId: 'tour-bait', weight: 50, effects: { resources: [add('bait', 1)], flags: { set: ['direction3'] } } },
-      { resultId: 'tour-attack', weight: 12, effects: { resources: [subtract('health', 35)], flags: { set: ['direction3'] } } },
+      { resultId: 'tour-bait', weight: 50, effects: { resources: [add('bait', 1)] } },
+      { resultId: 'tour-attack', weight: 12, effects: { resources: [subtract('health', 35)] } },
     ]);
     expect(resultIds('midnight-tour', 'sleep')).toEqual(['tour-pass']);
     expect(['food', 'bait', 'map', 'umbrella'].every((choiceId) => (
@@ -314,6 +313,28 @@ describe('survival events', () => {
       .toMatchObject({ nextDawnEnergy: 1 });
     expect(manInTheFog?.choices.find(({ id }) => id === 'sleep')?.outcomes[1]?.effects)
       .toMatchObject({ nextDawnEnergy: 2 });
+
+    expect(manInTheFog?.choices.find(({ id }) => id === 'compass')?.outcomes).toEqual([{
+      weight: 1,
+      message: 'The compass keeps the boat on a steady bearing.',
+      effects: { resources: [subtract('pressure', 1)] },
+    }]);
+    expect(byId.ghosts?.choices.find(({ id }) => id === 'flareGun')?.outcomes).toEqual([{
+      weight: 1,
+      message: 'The flare drives the pale shapes into the dark.',
+      effects: {
+        resources: [subtract('pressure', 1)],
+        items: [{ kind: 'consume', itemId: 'flareGun', quantity: 1 }],
+      },
+    }]);
+    expect(byId['eerie-melody']?.choices.find(({ id }) => id === 'ductTape')?.outcomes).toEqual([{
+      weight: 1,
+      message: 'The tape blocks the melody until it fades.',
+      effects: {
+        resources: [subtract('pressure', 1)],
+        items: [{ kind: 'consume', itemId: 'ductTape', quantity: 1 }],
+      },
+    }]);
   });
 
   it('requires Fishing Net or Swim Ring to recover the Drifting Bottle', () => {
@@ -590,7 +611,6 @@ describe('survival events', () => {
     rejectsEffects({ items: undefined }, /items.*array/i);
     rejectsEffects({ rescue: undefined }, /rescue.*boolean/i);
     rejectsEffects({ chest: undefined }, /chest.*invalid effect/i);
-    rejectsEffects({ flags: undefined }, /flags.*plain object/i);
     const hiddenRoute = {};
     Object.defineProperty(hiddenRoute, 'route', { value: 'left' });
     rejectsEffects(hiddenRoute, /unsupported effect key route/i);
