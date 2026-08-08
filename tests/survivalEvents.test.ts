@@ -223,6 +223,19 @@ const EXPECTED_CHOICES = {
 } as const;
 
 describe('survival events', () => {
+  it('uses dawn energy instead of immediate energy during night events', () => {
+    for (const event of SURVIVAL_EVENTS.filter(({ phase }) => phase === 'night')) {
+      for (const choice of event.choices) {
+        for (const result of choice.outcomes) {
+          expect(
+            result.effects.resources?.some(({ resource }) => resource === 'energy') ?? false,
+            `${event.id}.${choice.id}`,
+          ).toBe(false);
+        }
+      }
+    }
+  });
+
   it('defines Captain Whiskers event gates and living-companion eligibility', () => {
     expect(survivalEventById('sick-companion')).toMatchObject({
       earliestDay: 5, weight: 6, cooldownDays: 26, requiresLivingCompanion: true,
@@ -381,7 +394,8 @@ describe('survival events', () => {
       {
         resultId: 'tour-chest', weight: 50,
         effects: {
-          resources: [set('energy', 2), add('pressure', 1)],
+          resources: [add('pressure', 1)],
+          nextDawnEnergy: 2,
           items: [{ kind: 'gainChest', quantity: 1, fallbackFood: 1 }],
           flags: { set: ['direction3'] },
         },
@@ -436,13 +450,17 @@ describe('survival events', () => {
       .find(({ id }) => id === choiceId)?.outcomes.map(({ effects }) => effects.resources ?? []);
     expect(outcomeResources('spyglass')).toEqual([[add('pressure', 1)]]);
     expect(outcomeResources('flashlight')).toEqual([
-      [add('pressure', 2), subtract('health', 20), set('energy', 1)],
+      [add('pressure', 2), subtract('health', 20)],
       [add('pressure', 2)],
     ]);
     expect(outcomeResources('sleep')).toEqual([
       [add('pressure', 1), subtract('hull', { min: 10, max: 30 })],
-      [add('pressure', 1), subtract('health', 20), set('energy', 2)],
+      [add('pressure', 1), subtract('health', 20)],
     ]);
+    expect(manInTheFog?.choices.find(({ id }) => id === 'flashlight')?.outcomes[0]?.effects)
+      .toMatchObject({ nextDawnEnergy: 1 });
+    expect(manInTheFog?.choices.find(({ id }) => id === 'sleep')?.outcomes[1]?.effects)
+      .toMatchObject({ nextDawnEnergy: 2 });
   });
 
   it('requires Fishing Net or Swim Ring to recover the Drifting Bottle', () => {

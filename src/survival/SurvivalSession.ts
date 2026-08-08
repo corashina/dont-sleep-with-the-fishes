@@ -48,6 +48,7 @@ import type {
   BeginFishingResult,
   DayActionOption,
   DayActionId,
+  DawnEnergy,
   DriftingLootVariant,
   EventResponse,
   EventResponseId,
@@ -138,7 +139,7 @@ export class SurvivalSession {
   private pendingEventTargetId: ItemInstanceId | null = null;
   private pendingDriftingLootVariant: DriftingLootVariant | null = null;
   private readonly pendingDawnBreaks = new Set<ItemInstanceId>();
-  private nextDawnEnergyOverride: 0 | null = null;
+  private nextDawnEnergyOverride: DawnEnergy | null = null;
   private lastEventId: string | null = null;
   private readonly lastSeenDay = new Map<string, number>();
   private readonly appearanceCounts = new Map<string, number>();
@@ -619,6 +620,9 @@ export class SurvivalSession {
         : resolved.message,
       deltas,
       cue,
+      ...(resolved.effects.nextDawnEnergy === undefined
+        ? {}
+        : { nextDawnEnergy: resolved.effects.nextDawnEnergy }),
       ...(resolved.presentationKey === undefined
         ? {}
         : { eventPresentationKey: resolved.presentationKey }),

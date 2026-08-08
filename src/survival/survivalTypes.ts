@@ -80,12 +80,15 @@ export type RewardSummary =
       readonly quantity: 1;
     };
 
+export type DawnEnergy = 0 | 1 | 2 | 3;
+
 export interface ActionOutcome {
   accepted: boolean;
   code: string;
   message: string;
   deltas: Readonly<ResourceDelta>;
   cue: PresentationCue;
+  readonly nextDawnEnergy?: DawnEnergy;
   readonly rewardSummary?: RewardSummary;
   readonly eventResult?: EventResultPresentation;
   readonly eventPresentationKey?: EventPresentationKey;
@@ -138,7 +141,7 @@ export interface EventEffects {
   readonly flags?: EventFlagEffects;
   readonly rescue?: boolean;
   readonly companion?: readonly CompanionEventEffect[];
-  readonly nextDawnEnergy?: 0;
+  readonly nextDawnEnergy?: DawnEnergy;
   readonly followUpNight?: true;
   readonly endingReason?: 'kidnapped';
 }
