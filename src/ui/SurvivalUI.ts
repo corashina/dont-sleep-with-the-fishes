@@ -934,6 +934,12 @@ export class SurvivalUI {
     this.anchoredEventResultPanel.setAttribute('aria-hidden', 'false');
   }
 
+  hideEventReveal(): void {
+    if (this.disposed) return;
+    this.eventCaption.classList.remove('is-visible');
+    this.eventCaption.setAttribute('aria-hidden', 'true');
+  }
+
   hideEventResult(): void {
     if (this.disposed) return;
     this.anchoredEventResultPanel.classList.remove('is-visible');

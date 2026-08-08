@@ -555,6 +555,36 @@ describe('survival events', () => {
   });
 
   it.each([
+    ['missing', undefined],
+    ['unknown', 'fatal'],
+  ])('rejects %s event danger', (_case, danger) => {
+    const catalog = structuredClone(SURVIVAL_EVENTS) as any[];
+    if (danger === undefined) delete catalog[0].danger;
+    else catalog[0].danger = danger;
+
+    expect(() => validateSurvivalEventCatalog(catalog)).toThrow(/danger.*invalid/i);
+  });
+
+  it('rejects an immediate energy change in a night outcome', () => {
+    const catalog = structuredClone(SURVIVAL_EVENTS) as any[];
+    catalog[0].choices[0].outcomes[0].effects.resources = [subtract('energy', 1)];
+
+    expect(() => validateSurvivalEventCatalog(catalog))
+      .toThrow(/immediate energy.*night event/i);
+  });
+
+  it.each([-1, 1.5, 4])(
+    'rejects next dawn energy outside zero through three: %s',
+    (nextDawnEnergy) => {
+      const catalog = structuredClone(SURVIVAL_EVENTS) as any[];
+      catalog[0].choices[0].outcomes[0].effects.nextDawnEnergy = nextDawnEnergy;
+
+      expect(() => validateSurvivalEventCatalog(catalog))
+        .toThrow(/nextDawnEnergy.*integer.*zero through three/i);
+    },
+  );
+
+  it.each([
     ['a non-array', 'anchor', /target item IDs.*array/i],
     ['an explicit undefined value', undefined, /target item IDs.*array/i],
     ['an empty array', [], /target item IDs.*empty/i],

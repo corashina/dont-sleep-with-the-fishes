@@ -187,6 +187,7 @@ describe('formatEventResult', () => {
   ): EventOutcomePresentation => ({
     outcome: accepted({ message: 'The event settles.', deltas: {} }),
     resourceDeltas: {},
+    gainedInstanceIds: [],
     brokenInstanceIds: [],
     lostInstanceIds: [],
     consumedInstanceIds: [],
@@ -198,12 +199,27 @@ describe('formatEventResult', () => {
 
   it('lists exact resource and broken-item changes', () => {
     expect(formatEventResult(result({
-      resourceDeltas: { food: 3 },
+      resourceDeltas: { pressure: 2, food: 3 },
+      gainedInstanceIds: ['energyBar-1'],
       brokenInstanceIds: ['bucket-1'],
     })).lines).toEqual([
       'FOOD +3',
+      'ENERGY BAR GAINED',
       'BUCKET BROKEN',
     ]);
+  });
+
+  it('never exposes hidden pressure', () => {
+    expect(formatEventResult(result({
+      resourceDeltas: { pressure: -1, health: -5 },
+    })).lines).toEqual(['HEALTH -5']);
+  });
+
+  it('shows fallback food without a gained item line', () => {
+    expect(formatEventResult(result({
+      resourceDeltas: { food: 1 },
+      gainedInstanceIds: [],
+    })).lines).toEqual(['FOOD +1']);
   });
 
   it('lists next dawn energy before immediate changes', () => {
@@ -2665,6 +2681,40 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
+  it('opens the internal quiet night through the real BoatWorld path', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const setEventSelection = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => snapshot({
+          state: 'nightEvent',
+          pendingEventId: 'night-calm-fallback',
+        })),
+      },
+      world,
+      ui: {
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection,
+        dispose: vi.fn(),
+      },
+    });
+
+    try {
+      phase.start();
+      await flushPromises();
+
+      expect(setEventSelection).toHaveBeenCalledOnce();
+    } finally {
+      phase.dispose();
+      propModels.dispose();
+    }
+  });
+
   it('plays thunder only after the lightning sample becomes visible', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -4076,6 +4126,7 @@ describe('SurvivalPhase orchestration', () => {
     ) => {
       calls.push('selection');
     });
+    const resultHold = deferred();
     const showEventResult = vi.fn(() => { calls.push('result:paper-inside'); });
     const phase = SurvivalPhase.forTest({
       session,
@@ -4103,11 +4154,12 @@ describe('SurvivalPhase orchestration', () => {
         showEventReveal: vi.fn(async () => { calls.push('caption:drifting-bottle'); }),
         setEventSelection,
         setEventUsing: vi.fn(),
+        hideEventReveal: vi.fn(() => { calls.push('hide-reveal'); }),
         showEventResult,
         showFeedback: vi.fn(() => { calls.push('feedback'); }),
         holdEventOutcome: vi.fn(() => {
           calls.push('hold');
-          return Promise.resolve();
+          return resultHold.promise;
         }),
         clearEventPresentation: vi.fn(),
         restoreCommandFocus: vi.fn(),
@@ -4125,6 +4177,19 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
     await flushPromises();
 
+    expect(showEventResult).toHaveBeenCalledWith({
+      message: 'You recover bottled paper.',
+      lines: ['BOTTLED PAPER GAINED'],
+    });
+    expect(calls.indexOf('hide-reveal')).toBeLessThan(calls.indexOf('react:drifting-bottle'));
+    expect(calls.indexOf('react:drifting-bottle')).toBeLessThan(calls.indexOf('result:paper-inside'));
+    expect(calls.indexOf('result:paper-inside')).toBeLessThan(calls.indexOf('hold'));
+    expect(calls).not.toContain('clear:drifting-bottle');
+
+    resultHold.resolve();
+    await flushPromises();
+    await flushPromises();
+
     expect(session.snapshot()).toMatchObject({
       state: 'day',
       day: 2,
@@ -4138,7 +4203,6 @@ describe('SurvivalPhase orchestration', () => {
     expect(calls.indexOf('cover')).toBeLessThan(calls.indexOf('stage:drifting-bottle'));
     expect(calls.indexOf('reveal:drifting-bottle')).toBeLessThan(calls.indexOf('selection'));
     expect(calls.indexOf('use:swimRing-1')).toBeLessThan(calls.indexOf('react:drifting-bottle'));
-    expect(showEventResult).not.toHaveBeenCalled();
     expect(calls.indexOf('react:drifting-bottle')).toBeLessThan(calls.indexOf('hold'));
     expect(calls).not.toContain('feedback');
     expect(calls.indexOf('hold')).toBeLessThan(calls.lastIndexOf('cover'));
@@ -4147,7 +4211,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(calls.indexOf('inventory:day:usable')).toBeLessThan(calls.lastIndexOf('uncover'));
   });
 
-  it('keeps the Flowers collection animation without a result callout', async () => {
+  it('shows the Flowers result after its collection animation', async () => {
     const session = new SurvivalSession(
       [{ instanceId: 'bucket-1', type: 'bucket' }],
       {
@@ -4199,7 +4263,10 @@ describe('SurvivalPhase orchestration', () => {
       expect.anything(),
       expect.anything(),
     );
-    expect(showEventResult).not.toHaveBeenCalled();
+    expect(showEventResult).toHaveBeenCalledWith({
+      message: 'You gather the flowers in the bucket.',
+      lines: [],
+    });
     phase.dispose();
   });
 
@@ -4841,6 +4908,7 @@ describe('SurvivalPhase orchestration', () => {
     const presentation = {
       outcome,
       resourceDeltas: { hull: -12 },
+      gainedInstanceIds: [],
       brokenInstanceIds: ['spyglass-1'],
       lostInstanceIds: [],
       consumedInstanceIds: [],
@@ -4858,7 +4926,10 @@ describe('SurvivalPhase orchestration', () => {
       },
       presentation,
     );
-    expect(showEventResult).not.toHaveBeenCalled();
+    expect(showEventResult).toHaveBeenCalledWith({
+      message: 'The spyglass breaks.',
+      lines: ['HULL -12', 'BINOCULARS BROKEN'],
+    });
   });
 
   it.each([
@@ -4961,8 +5032,10 @@ describe('SurvivalPhase orchestration', () => {
       phase.handleEndure();
       await flushPromises();
 
-      expect(visibleLines).toBeNull();
-      expect(calls).toEqual(['hold']);
+      expect(visibleLines).toEqual(
+        terminalState === 'dead' ? ['HEALTH -7'] : ['HULL -11'],
+      );
+      expect(calls).toEqual(['result', 'hold']);
       expect(showEnding).not.toHaveBeenCalled();
       expect(clearEventPresentation).not.toHaveBeenCalled();
       expect(setBusy).not.toHaveBeenCalledWith(false);
@@ -4974,7 +5047,7 @@ describe('SurvivalPhase orchestration', () => {
       hold.resolve();
       await flushPromises();
 
-      expect(calls).toEqual(['hold', 'clear-world', 'clear-ui', 'ending']);
+      expect(calls).toEqual(['result', 'hold', 'clear-world', 'clear-ui', 'ending']);
       expect(visibleLines).toBeNull();
       expect(showEnding).toHaveBeenCalledOnce();
       expect(setBusy).toHaveBeenLastCalledWith(false);
@@ -6354,7 +6427,7 @@ describe('SurvivalPhase orchestration', () => {
     ['swarm-of-anglerfish', 'baitTin', 'baitTin-1', 'baitTin'],
     ['whirlpool', 'swimRing', 'swimRing-1', 'swimRing'],
   ] as const)(
-    'keeps %s %s outcome text hidden after hide and restore',
+    'shows %s %s outcome text only after hide and restore',
     async (eventId, choiceId, instanceId, itemType) => {
       const listeners = new Map<string, EventListener>();
       const fakeDocument = {
@@ -6431,7 +6504,10 @@ describe('SurvivalPhase orchestration', () => {
       expect(setDocumentHidden).toHaveBeenNthCalledWith(1, true);
       expect(setDocumentHidden).toHaveBeenNthCalledWith(2, false);
       expect(resolveEvent).toHaveBeenCalledOnce();
-      expect(showEventResult).not.toHaveBeenCalled();
+      expect(showEventResult).toHaveBeenCalledWith({
+        message: `${eventId} result`,
+        lines: [],
+      });
       phase.dispose();
     },
   );

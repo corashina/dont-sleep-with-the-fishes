@@ -2867,6 +2867,7 @@ describe('BoatWorld helpers', () => {
       {
         outcome,
         resourceDeltas: {},
+        gainedInstanceIds: [],
         brokenInstanceIds: [],
         lostInstanceIds: [],
         consumedInstanceIds: [],
@@ -3013,6 +3014,7 @@ describe('BoatWorld helpers', () => {
           {
             outcome,
             resourceDeltas: {},
+            gainedInstanceIds: [],
             brokenInstanceIds: [],
             lostInstanceIds: [],
             consumedInstanceIds: [],
@@ -3081,6 +3083,7 @@ describe('BoatWorld helpers', () => {
       {
         outcome,
         resourceDeltas: {},
+        gainedInstanceIds: [],
         brokenInstanceIds: [],
         lostInstanceIds: [],
         consumedInstanceIds: [],
@@ -3161,6 +3164,7 @@ describe('BoatWorld helpers', () => {
       {
         outcome,
         resourceDeltas: {},
+        gainedInstanceIds: [],
         brokenInstanceIds: [],
         lostInstanceIds: [],
         consumedInstanceIds: [],
@@ -3270,6 +3274,7 @@ describe('BoatWorld helpers', () => {
       const presentation = {
         outcome,
         resourceDeltas: {},
+        gainedInstanceIds: [],
         brokenInstanceIds: [],
         lostInstanceIds: [],
         consumedInstanceIds: [],
@@ -3398,6 +3403,7 @@ describe('BoatWorld helpers', () => {
           cue: 'none',
         },
         resourceDeltas: {},
+        gainedInstanceIds: [],
         brokenInstanceIds: [],
         lostInstanceIds: [maps[1].instanceId],
         consumedInstanceIds: [],
@@ -5042,6 +5048,7 @@ describe('BoatWorld helpers', () => {
     const presentation = {
       outcome,
       resourceDeltas: { hull: -7 },
+      gainedInstanceIds: [],
       brokenInstanceIds: ['bucket-1'] as ItemInstanceId[],
       lostInstanceIds: [],
       consumedInstanceIds: [],

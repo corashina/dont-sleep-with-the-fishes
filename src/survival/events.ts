@@ -807,6 +807,9 @@ export function validateSurvivalEventCatalog(
   const eventIds = new Set<string>();
   for (const eventEntry of catalog) {
     if (typeof eventEntry.id !== 'string' || eventEntry.id.trim().length === 0) throw new Error('event ID is blank');
+    if (!['safe', 'uncertain', 'dangerous'].includes(eventEntry.danger)) {
+      throw new Error(`${eventEntry.id} danger is invalid`);
+    }
     if (typeof eventEntry.revealText !== 'string' || eventEntry.revealText.trim().length === 0) {
       throw new Error(`${eventEntry.id} reveal text is blank`);
     }

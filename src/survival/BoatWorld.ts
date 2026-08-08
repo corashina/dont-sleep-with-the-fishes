@@ -1310,6 +1310,10 @@ export class BoatWorld {
     const eventId = typeof eventOrContext === 'string'
       ? eventOrContext
       : eventOrContext.eventId;
+    if (eventId === 'night-calm-fallback') {
+      this.clearEvent();
+      return;
+    }
     const route = eventPresentationRoute(eventId);
     if (route === null) throw new Error(`Missing event presentation route: ${eventId}`);
     if (route === 'dedicated' && this.dedicatedEvents?.handles(eventId)) {
@@ -1369,6 +1373,10 @@ export class BoatWorld {
 
   async revealEvent(eventId: string): Promise<void> {
     if (this.disposed) return;
+    if (eventId === 'night-calm-fallback') {
+      this.restoreEventCameraFront();
+      return;
+    }
     const route = eventPresentationRoute(eventId);
     if (route === null) throw new Error(`Missing event presentation route: ${eventId}`);
     const operation = ++this.weatherEventOperation;
