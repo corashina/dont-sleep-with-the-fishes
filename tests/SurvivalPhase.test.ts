@@ -206,6 +206,16 @@ describe('formatEventResult', () => {
     ]);
   });
 
+  it('lists next dawn energy before immediate changes', () => {
+    expect(formatEventResult(result({
+      outcome: accepted({
+        message: 'Morning comes slowly.',
+        deltas: {},
+        nextDawnEnergy: 1,
+      }),
+    })).lines).toEqual(['NEXT DAWN ENERGY 1']);
+  });
+
   it('lists hull damage and exact lost and consumed items', () => {
     expect(formatEventResult(result({
       resourceDeltas: { hull: -18 },
