@@ -40,6 +40,21 @@ function changedTo(
     .sort((left, right) => left.localeCompare(right)) as ItemInstanceId[];
 }
 
+function gainedItems(
+  before: SurvivalSnapshot,
+  after: SurvivalSnapshot,
+): readonly ItemInstanceId[] {
+  return Object.keys(after.inventory)
+    .filter((id) => {
+      const instanceId = id as ItemInstanceId;
+      const previous = before.inventory[instanceId]?.condition;
+      const current = after.inventory[instanceId]?.condition;
+      return (previous === undefined || previous === 'lost' || previous === 'consumed')
+        && (current === 'usable' || current === 'broken');
+    })
+    .sort((left, right) => left.localeCompare(right)) as ItemInstanceId[];
+}
+
 export function deriveEventOutcomePresentation(
   before: SurvivalSnapshot,
   after: SurvivalSnapshot,
@@ -49,6 +64,7 @@ export function deriveEventOutcomePresentation(
   return {
     outcome,
     resourceDeltas: { ...outcome.deltas },
+    gainedInstanceIds: gainedItems(before, after),
     brokenInstanceIds: changedTo(before, after, 'broken'),
     lostInstanceIds: changedTo(before, after, 'lost'),
     consumedInstanceIds: changedTo(before, after, 'consumed'),

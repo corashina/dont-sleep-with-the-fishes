@@ -20,6 +20,7 @@ export interface EventSceneContext {
 export interface EventOutcomePresentation {
   readonly outcome: ActionOutcome;
   readonly resourceDeltas: Readonly<ResourceDelta>;
+  readonly gainedInstanceIds: readonly ItemInstanceId[];
   readonly brokenInstanceIds: readonly ItemInstanceId[];
   readonly lostInstanceIds: readonly ItemInstanceId[];
   readonly consumedInstanceIds: readonly ItemInstanceId[];

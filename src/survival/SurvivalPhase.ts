@@ -126,7 +126,6 @@ function isDriftingLootVariant(value: unknown): value is DriftingLootVariant {
 }
 
 const EVENT_RESULT_RESOURCES = [
-  ['pressure', 'PRESSURE'],
   ['health', 'HEALTH'],
   ['hunger', 'HUNGER'],
   ['energy', 'ENERGY'],
@@ -155,6 +154,9 @@ export function formatEventResult(
     const delta = result.resourceDeltas[resource];
     if (delta === undefined || delta === 0) continue;
     lines.push(`${label} ${delta > 0 ? '+' : ''}${delta}`);
+  }
+  for (const instanceId of result.gainedInstanceIds) {
+    lines.push(`${eventResultItemLabel(instanceId)} GAINED`);
   }
   for (const instanceId of result.brokenInstanceIds) {
     lines.push(`${eventResultItemLabel(instanceId)} BROKEN`);
@@ -1592,6 +1594,7 @@ export class SurvivalPhase implements GamePhase {
     focusedResult: boolean,
   ): Promise<void> {
     this.setBusy(true);
+    this.ui.hideEventReveal?.();
     this.audio.beginEventReaction(eventId, outcome);
     if (
       isEventPresentationRoute(eventId, 'dedicated')
@@ -1625,6 +1628,7 @@ export class SurvivalPhase implements GamePhase {
     if (focusedResult && !isTerminal(terminal.state)) {
       this.flushDeferredPresentationSync(terminal, generation);
     }
+    this.ui.showEventResult?.(formatEventResult(presentation));
     const isDedicatedEvent = isEventPresentationRoute(eventId, 'dedicated');
     if (isTerminal(terminal.state)) {
       if (isDedicatedEvent) {

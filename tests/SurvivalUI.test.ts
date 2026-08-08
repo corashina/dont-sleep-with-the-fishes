@@ -1123,10 +1123,28 @@ describe('SurvivalUI', () => {
       'lost',
       'consumed',
     ]);
+    expect(mainStyles).toMatch(
+      /\.event-result--inline\[hidden\]\s*\{[^}]*display:\s*none/s,
+    );
 
     ui.clearEventPresentation();
     expect(result.hidden).toBe(true);
     expect(result.querySelectorAll('li')).toHaveLength(0);
+  });
+
+  it('hides the reveal while an event resolves', async () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    await ui.showEventReveal(testEvent());
+    ui.setEventSelection(new Map());
+    const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
+    expect(caption.classList).toContain('is-visible');
+
+    ui.hideEventReveal();
+
+    expect(caption.classList).not.toContain('is-visible');
+    expect(caption.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('shows quantity only when an item represents more than one copy', () => {

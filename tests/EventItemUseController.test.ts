@@ -45,6 +45,7 @@ function result(
       cue: 'none',
     },
     resourceDeltas: {},
+    gainedInstanceIds: [],
     brokenInstanceIds: [],
     lostInstanceIds: [],
     consumedInstanceIds: [],
