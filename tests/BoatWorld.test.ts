@@ -2082,7 +2082,7 @@ describe('BoatWorld helpers', () => {
     },
   );
 
-  it('keeps Check the Back front-facing until its result turns astern', async () => {
+  it('turns Check the Back astern during reveal and holds that view for its result', async () => {
     const propModels = createTestPropModels();
     const camera = new PerspectiveCamera();
     const world = new BoatWorld(camera, propModels, createTestMoonTexture());
@@ -2092,7 +2092,8 @@ describe('BoatWorld helpers', () => {
     const reveal = world.revealEvent('check-the-back');
     world.update(2, 2);
     await reveal;
-    expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
+    world.update(2.1, 0.1);
+    expect(camera.quaternion.toArray()).not.toEqual(baseQuaternion);
     expect(world.scene.getObjectByName('check-back:fish')?.visible).toBe(false);
 
     const fish = world.reactToEventOutcome('check-the-back', {
@@ -2106,6 +2107,7 @@ describe('BoatWorld helpers', () => {
     world.update(4, 2);
     await fish;
     expect(world.scene.getObjectByName('check-back:fish')?.visible).toBe(true);
+    expect(camera.quaternion.toArray()).not.toEqual(baseQuaternion);
 
     world.dispose();
     propModels.dispose();
@@ -3587,6 +3589,7 @@ describe('BoatWorld helpers', () => {
     expect(world.scene.getObjectByName('supernatural-flare-flash')?.visible).toBe(false);
     world.update(6.5, 4.7);
     await reveal;
+    expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(true);
 
     world.dispose();
     propModels.dispose();

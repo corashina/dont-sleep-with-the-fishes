@@ -24,6 +24,6 @@ describe('event presentation routes', () => {
   });
 
   it('rejects unknown event IDs', () => {
-    expect(eventPresentationRoute('shark-men')).toBeNull();
+    expect(eventPresentationRoute('not-an-event')).toBeNull();
   });
 });

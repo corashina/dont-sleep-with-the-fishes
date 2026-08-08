@@ -111,7 +111,7 @@ function testEvent(itemIds: readonly ItemId[] = ['map']): SurvivalEventDefinitio
     id: itemId,
     label: `Use ${itemId}`,
     itemId,
-    outcomes: [{ weight: 1, message: 'Nothing happens.', effects: {} }] as const,
+    outcomes: [{ weight: 1, message: 'Test result.', effects: {} }] as const,
   });
   const [first, ...rest] = selected;
   return {
@@ -135,7 +135,7 @@ function eventWithChoices(...choiceIds: readonly string[]): SurvivalEventDefinit
     choices: choiceIds.map((id) => ({
       id,
       label: id === 'retrieve' ? 'RETRIEVE' : 'LEAVE IT',
-      outcomes: [{ weight: 1, message: 'Nothing happens.', effects: {} }],
+      outcomes: [{ weight: 1, message: 'Test result.', effects: {} }],
     })) as unknown as SurvivalEventDefinition['choices'],
   };
 }

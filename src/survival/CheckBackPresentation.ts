@@ -61,7 +61,9 @@ export class CheckBackPresentation extends KeyedEventPresentation {
   }
 
   protected applyIdle(_time: number): void {
-    if (this.settledKind === 'check-the-back.fish') {
+    if (this.settledKind === 'reveal') {
+      this.cameraLook.apply(Math.PI, 0);
+    } else if (this.settledKind === 'check-the-back.fish') {
       this.cameraLook.apply(Math.PI, 0);
       this.fish.visible = true;
       this.fish.rotation.z = -0.12;
@@ -84,7 +86,7 @@ export class CheckBackPresentation extends KeyedEventPresentation {
   protected applyAnimation(kind: string, _time: number, progress: number): void {
     const eased = progress * progress * (3 - 2 * progress);
     if (kind === 'reveal') {
-      this.cameraLook.apply(0, 0);
+      this.cameraLook.apply(eased * Math.PI, 0);
       this.wake.rotation.z = Math.sin(progress * Math.PI * 2) * 0.08;
       return;
     }
@@ -92,7 +94,7 @@ export class CheckBackPresentation extends KeyedEventPresentation {
       this.cameraLook.apply(0, 0);
       return;
     }
-    this.cameraLook.apply(eased * Math.PI, 0);
+    this.cameraLook.apply(Math.PI, 0);
     if (kind === 'check-the-back.fish') {
       this.fish.rotation.z = Math.sin(progress * Math.PI * 5) * (1 - progress) * 0.7;
       this.fish.position.y = 0.28 + Math.sin(progress * Math.PI) * 0.26;
