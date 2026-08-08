@@ -40,7 +40,6 @@ import {
   createEmptyEventModelLibraryForTest,
 } from './BoatWorld';
 import {
-  FOCUSED_EVENT_IDS,
   type EventChoicePresentation,
 } from './FocusedEventPresentation';
 import { SurvivalCameraLook } from './SurvivalCameraLook';
@@ -49,11 +48,8 @@ import {
   deriveEventOutcomePresentation,
   deriveEventVariantSeed,
 } from './eventPresentationOutcome';
-import {
-  DEDICATED_EVENT_IDS,
-  type DedicatedEventId,
-  type EventOutcomePresentation,
-} from './eventPresentationTypes';
+import { isEventPresentationRoute } from './eventPresentationRoutes';
+import type { EventOutcomePresentation } from './eventPresentationTypes';
 import { fishingCatchFood } from './fishingCatalog';
 import {
   ITEM_ANIMATION_LAB_USES,
@@ -95,7 +91,6 @@ export interface SurvivalPhaseTestDependencies {
 }
 
 const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
-const FOCUSED_EVENT_ID_SET = new Set<string>(FOCUSED_EVENT_IDS);
 const CAPTAIN_WHISKERS_LAB_INSTANCE_ID = 'captainWhiskers-1' as ItemInstanceId;
 
 type FishingPresentationState =
@@ -128,10 +123,6 @@ function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' 
 
 function isDriftingLootVariant(value: unknown): value is DriftingLootVariant {
   return value === 'barrel' || value === 'crate';
-}
-
-function isDedicatedEventId(eventId: string): eventId is DedicatedEventId {
-  return (DEDICATED_EVENT_IDS as readonly string[]).includes(eventId);
 }
 
 const EVENT_RESULT_RESOURCES = [
@@ -1294,7 +1285,7 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
-    const focusedResult = FOCUSED_EVENT_ID_SET.has(eventId);
+    const focusedResult = isEventPresentationRoute(eventId, 'focused');
     const invariantError = focusedResult
       ? this.focusedEventResultError(eventId, choiceId, outcome)
       : null;
@@ -1318,7 +1309,7 @@ export class SurvivalPhase implements GamePhase {
     } else if (isTerminal(resolved.state)) {
       this.flushDeferredPresentationSync(resolved, generation);
     }
-    const response = isDedicatedEventId(eventId)
+    const response = isEventPresentationRoute(eventId, 'dedicated')
       ? resolvedChoice
       : deriveEventPhysicalResponse(
           choiceId,
@@ -1370,7 +1361,7 @@ export class SurvivalPhase implements GamePhase {
       this.ui.playEventChoiceBeat?.(choiceId) ?? Promise.resolve(),
       this.world.playEventChoice?.(
         eventId,
-        FOCUSED_EVENT_ID_SET.has(eventId) ? choice : choiceId,
+        isEventPresentationRoute(eventId, 'focused') ? choice : choiceId,
       ) ?? Promise.resolve(),
     ]);
     if (!this.isContinuationActive(generation)) return;
@@ -1396,7 +1387,7 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
-    const focusedResult = FOCUSED_EVENT_ID_SET.has(eventId);
+    const focusedResult = isEventPresentationRoute(eventId, 'focused');
     const invariantError = focusedResult
       ? this.focusedEventResultError(eventId, choiceId, outcome)
       : null;
@@ -1546,7 +1537,7 @@ export class SurvivalPhase implements GamePhase {
       this.setBusy(false);
       return;
     }
-    const focusedResult = FOCUSED_EVENT_ID_SET.has(eventId);
+    const focusedResult = isEventPresentationRoute(eventId, 'focused');
     const invariantError = focusedResult
       ? this.focusedEventResultError(eventId, choice.choiceId, outcome)
       : null;
@@ -1600,7 +1591,7 @@ export class SurvivalPhase implements GamePhase {
     this.setBusy(true);
     this.audio.beginEventReaction(eventId, outcome);
     if (
-      isDedicatedEventId(eventId)
+      isEventPresentationRoute(eventId, 'dedicated')
       && (
         (presentation.resourceDeltas.hull ?? 0) < 0
         || (presentation.resourceDeltas.health ?? 0) < 0
@@ -1613,7 +1604,7 @@ export class SurvivalPhase implements GamePhase {
       this.world.reactToEventOutcome?.(
         eventId,
         outcome,
-        isDedicatedEventId(eventId)
+        isEventPresentationRoute(eventId, 'dedicated')
           ? physicalResponse
           : focusedResult ? choice : physicalResponse,
         presentation,
@@ -1631,7 +1622,7 @@ export class SurvivalPhase implements GamePhase {
     if (focusedResult && !isTerminal(terminal.state)) {
       this.flushDeferredPresentationSync(terminal, generation);
     }
-    const isDedicatedEvent = isDedicatedEventId(eventId);
+    const isDedicatedEvent = isEventPresentationRoute(eventId, 'dedicated');
     if (isTerminal(terminal.state)) {
       if (isDedicatedEvent) {
         await (this.ui.holdEventOutcome?.() ?? Promise.resolve());
@@ -1863,7 +1854,7 @@ export class SurvivalPhase implements GamePhase {
     }
     this.setAutomaticWeather(presentationWeatherForEvent(event.id));
     const variantSeed = deriveEventVariantSeed(current.seed, current.day, event.id);
-    if (isDedicatedEventId(event.id)) {
+    if (isEventPresentationRoute(event.id, 'dedicated')) {
       this.world.stageEvent?.({
         eventId: event.id,
         targetInstanceId: current.pendingEventTargetId,
@@ -1873,7 +1864,7 @@ export class SurvivalPhase implements GamePhase {
       this.world.stageEvent?.(event.id, driftingLootVariant, variantSeed);
     }
     this.eventPresentation = 'revealing';
-    if (isDedicatedEventId(event.id)) {
+    if (isEventPresentationRoute(event.id, 'dedicated')) {
       await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
       if (!this.isContinuationActive(generation)) return;
     }
@@ -1890,7 +1881,7 @@ export class SurvivalPhase implements GamePhase {
       if (event.id === 'bad-sleep') this.ui.setBadSleepCue?.(false);
     }
     if (!this.isContinuationActive(generation)) return;
-    if (!isDedicatedEventId(event.id)) {
+    if (!isEventPresentationRoute(event.id, 'dedicated')) {
       await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
       if (!this.isContinuationActive(generation)) return;
     }

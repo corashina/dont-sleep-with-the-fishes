@@ -104,13 +104,16 @@ import type {
   EventModelLibrary,
 } from './EventModelLibrary';
 import {
-  FOCUSED_EVENT_IDS,
   type EventChoicePresentation,
   type FocusedEventPresentationFactories,
 } from './FocusedEventPresentation';
 import { FeaturedEventPresentations } from './FeaturedEventPresentations';
-import { isFeaturedEventId, type FeaturedEventId } from './FeaturedEventPresentation';
 import { EventPresentationCoordinator } from './EventPresentationCoordinator';
+import {
+  eventPresentationRoute,
+  isEventPresentationRoute,
+  type FeaturedEventId,
+} from './eventPresentationRoutes';
 import type {
   DedicatedEventEnvironment,
   DedicatedEventPresentation,
@@ -525,8 +528,6 @@ function isFocusedEventFactoryMap(
     && !('clone' in models)
     && !('create' in models);
 }
-
-const FOCUSED_EVENT_ID_SET = new Set<string>(FOCUSED_EVENT_IDS);
 
 export class BoatWorld {
   readonly scene: Scene;
@@ -1309,7 +1310,9 @@ export class BoatWorld {
     const eventId = typeof eventOrContext === 'string'
       ? eventOrContext
       : eventOrContext.eventId;
-    if (this.dedicatedEvents?.handles(eventId)) {
+    const route = eventPresentationRoute(eventId);
+    if (route === null) throw new Error(`Missing event presentation route: ${eventId}`);
+    if (route === 'dedicated' && this.dedicatedEvents?.handles(eventId)) {
       const context = typeof eventOrContext === 'string'
         ? {
             eventId,
@@ -1330,7 +1333,7 @@ export class BoatWorld {
     this.dedicatedEvents?.clear();
     this.resetDedicatedEffects();
     Object.assign(this.vortexWave, createInactiveVortexWaveState());
-    if (FOCUSED_EVENT_ID_SET.has(eventId)) {
+    if (route === 'focused') {
       this.featuredEvents.clear();
       this.activeFeaturedEventId = null;
       this.activeDriftingLootVariant = null;
@@ -1341,11 +1344,11 @@ export class BoatWorld {
       this.supernaturalEventAnimator.clear();
       return;
     }
-    if (isFeaturedEventId(eventId)) {
+    if (route === 'featured') {
       this.eventPresentation.clear();
       if (variantSeed === undefined) this.featuredEvents.stage(eventId, variant);
       else this.featuredEvents.stage(eventId, variant, variantSeed);
-      this.activeFeaturedEventId = eventId;
+      this.activeFeaturedEventId = eventId as FeaturedEventId;
       this.activeDriftingLootVariant = eventId === 'drifting-loot' ? variant : null;
       this.weatherEventAnimator.stage(eventId);
       this.supernaturalEventAnimator.clear();
@@ -1358,32 +1361,40 @@ export class BoatWorld {
     this.stageMoonEvent(eventId);
     if (variantSeed === undefined) this.eventPresentation.stage(eventId);
     else this.eventPresentation.stage(eventId, variantSeed);
-    this.weatherEventAnimator.stage(eventId);
-    this.supernaturalEventAnimator.stage(eventId);
+    if (route === 'weather') this.weatherEventAnimator.stage(eventId);
+    else this.weatherEventAnimator.clear();
+    if (route === 'supernatural') this.supernaturalEventAnimator.stage(eventId);
+    else this.supernaturalEventAnimator.clear();
   }
 
   async revealEvent(eventId: string): Promise<void> {
     if (this.disposed) return;
+    const route = eventPresentationRoute(eventId);
+    if (route === null) throw new Error(`Missing event presentation route: ${eventId}`);
     const operation = ++this.weatherEventOperation;
-    if (this.dedicatedEvents?.handles(eventId)) {
+    if (route === 'dedicated' && this.dedicatedEvents?.handles(eventId)) {
       await this.dedicatedEvents.reveal();
-    } else if (FOCUSED_EVENT_ID_SET.has(eventId)) {
+    } else if (route === 'focused') {
+      await this.eventPresentation.reveal(eventId);
+    } else if (route === 'featured') {
+      await this.featuredEvents.reveal(eventId);
+    } else if (route === 'weather') {
       await Promise.all([
         this.eventPresentation.reveal(eventId),
         this.weatherEventAnimator.reveal(eventId),
       ]);
-    } else if (isFeaturedEventId(eventId)) {
-      await Promise.all([
-        this.featuredEvents.reveal(eventId),
-        this.weatherEventAnimator.reveal(eventId),
-      ]);
-    } else {
+    } else if (route === 'supernatural') {
       await Promise.all([
         this.eventPresentation.reveal(eventId),
-        this.weatherEventAnimator.reveal(eventId),
         this.supernaturalEventAnimator.reveal(eventId),
+      ]);
+    } else if (route === 'moon') {
+      await Promise.all([
+        this.eventPresentation.reveal(eventId),
         this.revealMoonEvent(eventId),
       ]);
+    } else {
+      await this.eventPresentation.reveal(eventId);
     }
     if (!this.disposed && operation === this.weatherEventOperation) {
       this.restoreEventCameraFront();
@@ -1463,7 +1474,7 @@ export class BoatWorld {
   ): Promise<void> {
     if (this.disposed) return;
     const focusedChoice = 'actors' in response ? null : response;
-    if (FOCUSED_EVENT_ID_SET.has(eventId)) {
+    if (isEventPresentationRoute(eventId, 'focused')) {
       const result = outcome.eventResult;
       if (
         focusedChoice === null
@@ -1491,11 +1502,11 @@ export class BoatWorld {
     if (this.dedicatedEvents?.handles(eventId) && presentation === undefined) {
       throw new Error('Dedicated event reaction requires exact result data.');
     }
-    if (FOCUSED_EVENT_ID_SET.has(eventId) && presentation === undefined) {
+    if (isEventPresentationRoute(eventId, 'focused') && presentation === undefined) {
       this.supplyDisplay.clearEventMotion();
     }
     const featuredReaction = outcome.eventPresentationKey !== undefined
-      && isFeaturedEventId(eventId)
+      && isEventPresentationRoute(eventId, 'featured')
       ? this.featuredEvents.react(eventId, outcome.eventPresentationKey)
       : Promise.resolve();
     const eventFamilyReaction = this.dedicatedEvents?.handles(eventId)
@@ -1507,9 +1518,9 @@ export class BoatWorld {
             physicalResponse,
             presentation?.selectedInstanceId ?? null,
           ),
-          FOCUSED_EVENT_ID_SET.has(eventId)
+          isEventPresentationRoute(eventId, 'focused')
             ? this.eventPresentation.react(eventId, outcome)
-            : isFeaturedEventId(eventId)
+            : isEventPresentationRoute(eventId, 'featured')
             ? featuredReaction
             : this.eventPresentation.react(eventId, outcome),
           this.supernaturalEventAnimator.react(
