@@ -2,8 +2,8 @@ import { Group } from 'three';
 import type { Object3D } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import { runCleanupSteps } from '../world/SceneResources';
+import type { DedicatedEventId } from './eventPresentationRoutes';
 import type {
-  DedicatedEventId,
   DedicatedEventPresentation,
   EventOutcomePresentation,
   EventSceneContext,

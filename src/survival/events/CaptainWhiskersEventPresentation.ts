@@ -14,9 +14,9 @@ import {
   runCleanupSteps,
 } from '../../world/SceneResources';
 import { keyedRevealProgress, pulse, smoothstep } from '../animationMath';
+import type { DedicatedEventId } from '../eventPresentationRoutes';
 import type {
   DedicatedEventEnvironment,
-  DedicatedEventId,
   DedicatedEventPresentation,
   EventOutcomePresentation,
   EventSceneContext,

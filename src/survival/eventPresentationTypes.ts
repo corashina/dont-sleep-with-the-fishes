@@ -4,26 +4,12 @@ import type { WaveSample, VortexWaveState } from '../ocean/WaveField';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { CaptainWhiskersPresentation } from './CaptainWhiskersPresentation';
 import type { EventModelLibrary } from './EventModelLibrary';
+import type { DedicatedEventId } from './eventPresentationRoutes';
 import type {
   ActionOutcome,
   ItemCondition,
   ResourceDelta,
 } from './survivalTypes';
-
-export const DEDICATED_EVENT_IDS = [
-  'leak',
-  'school-of-fish',
-  'snatcher',
-  'death-stare',
-  'swarm-of-anglerfish',
-  'whirlpool',
-  'sick-companion',
-  'shadow-figure',
-  'sea-watcher',
-  'guarded-sleep',
-] as const;
-
-export type DedicatedEventId = typeof DEDICATED_EVENT_IDS[number];
 
 export interface EventSceneContext {
   readonly eventId: DedicatedEventId;

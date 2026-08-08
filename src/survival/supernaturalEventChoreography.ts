@@ -1,8 +1,10 @@
 import { clamp01, pulse, smoothstep } from './animationMath';
+import {
+  isEventPresentationRoute,
+  type SupernaturalAnimationEventId,
+} from './eventPresentationRoutes';
 import { scaleEventItemDuration } from './eventItemTiming';
 import { resetTransformPose, type MutableTransformPose } from './transformPose';
-
-export type SupernaturalAnimationEventId = 'ghosts' | 'eerie-melody';
 
 export interface SupernaturalRevealSample {
   cameraX: number;
@@ -77,10 +79,6 @@ export const GHOST_FLIGHT_PATHS = Object.freeze([
 
 const GHOST_REVEAL_START = 0.16;
 const GHOST_REVEAL_STAGGER = 0.02;
-
-function isSupernaturalEventId(eventId: string): eventId is SupernaturalAnimationEventId {
-  return Object.hasOwn(REVEAL_DURATIONS, eventId);
-}
 
 function itemDuration(
   eventId: string,
@@ -172,7 +170,9 @@ function applyRevealEnvelope(output: SupernaturalRevealSample, envelope: number)
 }
 
 export function supernaturalRevealDuration(eventId: string): number | null {
-  return isSupernaturalEventId(eventId) ? REVEAL_DURATIONS[eventId] : null;
+  return isEventPresentationRoute(eventId, 'supernatural')
+    ? REVEAL_DURATIONS[eventId]
+    : null;
 }
 
 export function sampleSupernaturalReveal(
@@ -181,7 +181,7 @@ export function sampleSupernaturalReveal(
   output: SupernaturalRevealSample,
 ): boolean {
   resetReveal(output);
-  if (!isSupernaturalEventId(eventId)) return false;
+  if (!isEventPresentationRoute(eventId, 'supernatural')) return false;
 
   const t = clamp01(progress);
   if (t === 0 || t === 1) return true;
@@ -309,7 +309,7 @@ export function sampleSupernaturalReaction(
   output: SupernaturalReactionSample,
 ): boolean {
   resetReaction(output);
-  if (!isSupernaturalEventId(eventId)) return false;
+  if (!isEventPresentationRoute(eventId, 'supernatural')) return false;
 
   const t = clamp01(progress);
   if (t === 0 || t === 1) return true;

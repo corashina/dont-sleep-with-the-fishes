@@ -1,14 +1,10 @@
 import { clamp01, pulse, smoothstep, smootherstep } from './animationMath';
+import {
+  isEventPresentationRoute,
+  type WeatherAnimationEventId,
+} from './eventPresentationRoutes';
 import { scaleEventItemDuration } from './eventItemTiming';
 import { resetTransformPose, type MutableTransformPose } from './transformPose';
-
-export type WeatherAnimationEventId =
-  | 'shower-night'
-  | 'windy-night'
-  | 'thunderstorm'
-  | 'restless-waves'
-  | 'man-in-the-fog'
-  | 'bad-sleep';
 
 export type WeatherItemEffectKind =
   | 'none'
@@ -174,15 +170,11 @@ function resetReaction(output: WeatherReactionSample): void {
   output.effectKind = 'none';
 }
 
-function isWeatherEventId(eventId: string): eventId is WeatherAnimationEventId {
-  return Object.hasOwn(REVEAL_DURATIONS, eventId);
-}
-
 function itemChoreography(
   eventId: string,
   choiceId: string,
 ): WeatherItemChoreography | null {
-  if (!isWeatherEventId(eventId)) return null;
+  if (!isEventPresentationRoute(eventId, 'weather')) return null;
   const choices = ITEM_CHOREOGRAPHY[eventId];
   return Object.hasOwn(choices, choiceId) ? choices[choiceId]! : null;
 }
@@ -227,7 +219,7 @@ function multiplyReactionCamera(output: WeatherReactionSample, envelope: number)
 }
 
 export function weatherRevealDuration(eventId: string): number | null {
-  return isWeatherEventId(eventId) ? REVEAL_DURATIONS[eventId] : null;
+  return isEventPresentationRoute(eventId, 'weather') ? REVEAL_DURATIONS[eventId] : null;
 }
 
 export function sampleWeatherReveal(
@@ -236,7 +228,7 @@ export function sampleWeatherReveal(
   output: WeatherRevealSample,
 ): boolean {
   resetReveal(output);
-  if (!isWeatherEventId(eventId)) return false;
+  if (!isEventPresentationRoute(eventId, 'weather')) return false;
 
   const t = clamp01(progress);
   if (t === 0 || t === 1) return true;
@@ -447,7 +439,7 @@ export function weatherReactionDuration(
   choiceId: string,
   actorCount: number,
 ): number | null {
-  if (!isWeatherEventId(eventId)) return null;
+  if (!isEventPresentationRoute(eventId, 'weather')) return null;
   const actors = Math.max(0, Math.floor(actorCount));
   switch (eventId) {
     case 'shower-night': return 1.25 + Math.min(actors, 2) * 0.18;
@@ -472,7 +464,10 @@ export function sampleWeatherReaction(
   output: WeatherReactionSample,
 ): boolean {
   resetReaction(output);
-  if (!isWeatherEventId(eventId) || weatherReactionDuration(eventId, choiceId, actorCount) === null) {
+  if (
+    !isEventPresentationRoute(eventId, 'weather')
+    || weatherReactionDuration(eventId, choiceId, actorCount) === null
+  ) {
     return false;
   }
 

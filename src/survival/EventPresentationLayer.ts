@@ -45,15 +45,17 @@ import type { ItemInstanceId } from '../game/ItemState';
 import type { ActionOutcome } from './survivalTypes';
 import { ChestAttackPresentation } from './ChestAttackPresentation';
 import {
-  FOCUSED_EVENT_IDS,
   type EventChoicePresentation,
   type FocusedEventInteractionTarget,
-  type FocusedEventId,
   type FocusedEventPresentation,
   type FocusedEventPresentationDependencies,
   type FocusedEventPresentationFactories,
   type FocusedEventPresentationFactory,
 } from './FocusedEventPresentation';
+import {
+  FOCUSED_EVENT_IDS,
+  type FocusedEventId,
+} from './eventPresentationRoutes';
 import { HandymanPresentation } from './HandymanPresentation';
 import { MidnightTourPresentation } from './MidnightTourPresentation';
 import { NightTraderPresentation } from './NightTraderPresentation';

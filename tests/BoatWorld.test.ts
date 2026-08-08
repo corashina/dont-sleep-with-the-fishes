@@ -56,10 +56,10 @@ import { ChestDisplay } from '../src/survival/ChestDisplay';
 import { DANGEROUS_WATERS_ITEM_DURATION } from '../src/survival/DangerousWatersPresentation';
 import { DivePresentation } from '../src/survival/DivePresentation';
 import {
-  FOCUSED_EVENT_IDS,
   type FocusedEventPresentation,
   type FocusedEventPresentationFactories,
 } from '../src/survival/FocusedEventPresentation';
+import { FOCUSED_EVENT_IDS } from '../src/survival/eventPresentationRoutes';
 import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
 import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
 import { EventItemEffects } from '../src/survival/EventItemEffects';

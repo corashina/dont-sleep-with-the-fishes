@@ -3,11 +3,11 @@ import type { ProjectedBoatBounds } from './BoatInteraction';
 import { CheckBackPresentation } from './CheckBackPresentation';
 import { DriftingBottlePresentation } from './DriftingBottlePresentation';
 import { DriftingLootPresentation } from './DriftingLootPresentation';
+import type { FeaturedEventPresentation } from './FeaturedEventPresentation';
 import {
-  isFeaturedEventId,
+  isEventPresentationRoute,
   type FeaturedEventId,
-  type FeaturedEventPresentation,
-} from './FeaturedEventPresentation';
+} from './eventPresentationRoutes';
 import { FlowersPresentation } from './FlowersPresentation';
 import { MysteryChestPresentation } from './MysteryChestPresentation';
 import type { SurvivalEventModels } from './SurvivalEventModelLibrary';
@@ -65,7 +65,7 @@ export class FeaturedEventPresentations {
     variant: DriftingLootVariant | null,
     variantSeed?: number,
   ): void {
-    if (this.disposed || !isFeaturedEventId(eventId)) return;
+    if (this.disposed || !isEventPresentationRoute(eventId, 'featured')) return;
     this.clear();
     this.activeEventId = eventId;
     if (eventId === 'drifting-loot') {
@@ -81,7 +81,11 @@ export class FeaturedEventPresentations {
   }
 
   reveal(eventId: string): Promise<void> {
-    if (this.disposed || this.activeEventId !== eventId || !isFeaturedEventId(eventId)) {
+    if (
+      this.disposed
+      || this.activeEventId !== eventId
+      || !isEventPresentationRoute(eventId, 'featured')
+    ) {
       return Promise.resolve();
     }
     return eventId === 'drifting-loot'
@@ -90,7 +94,11 @@ export class FeaturedEventPresentations {
   }
 
   react(eventId: string, key: EventPresentationKey): Promise<void> {
-    if (this.disposed || this.activeEventId !== eventId || !isFeaturedEventId(eventId)) {
+    if (
+      this.disposed
+      || this.activeEventId !== eventId
+      || !isEventPresentationRoute(eventId, 'featured')
+    ) {
       return Promise.resolve();
     }
     if (eventId === 'drifting-loot') {
@@ -102,7 +110,11 @@ export class FeaturedEventPresentations {
   }
 
   interactionRoot(eventId: string): Object3D | null {
-    if (this.disposed || this.activeEventId !== eventId || !isFeaturedEventId(eventId)) return null;
+    if (
+      this.disposed
+      || this.activeEventId !== eventId
+      || !isEventPresentationRoute(eventId, 'featured')
+    ) return null;
     if (eventId === 'flowers') return null;
     return eventId === 'drifting-loot'
       ? this.driftingLoot.interactionRoot()
@@ -110,7 +122,11 @@ export class FeaturedEventPresentations {
   }
 
   itemAimTarget(eventId: string): Object3D | null {
-    if (this.disposed || this.activeEventId !== eventId || !isFeaturedEventId(eventId)) {
+    if (
+      this.disposed
+      || this.activeEventId !== eventId
+      || !isEventPresentationRoute(eventId, 'featured')
+    ) {
       return null;
     }
     return eventId === 'drifting-loot'
@@ -119,7 +135,11 @@ export class FeaturedEventPresentations {
   }
 
   resultRoot(eventId: string): Object3D | null {
-    if (this.disposed || this.activeEventId !== eventId || !isFeaturedEventId(eventId)) return null;
+    if (
+      this.disposed
+      || this.activeEventId !== eventId
+      || !isEventPresentationRoute(eventId, 'featured')
+    ) return null;
     return eventId === 'drifting-loot'
       ? this.driftingLoot.resultRoot()
       : this.presentations[eventId].resultRoot();
