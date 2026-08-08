@@ -2082,18 +2082,21 @@ describe('BoatWorld helpers', () => {
     },
   );
 
-  it('turns Check the Back astern during reveal and holds that view for its result', async () => {
+  it('holds Check the Back astern for reveal, fish, and ignore results', async () => {
     const propModels = createTestPropModels();
     const camera = new PerspectiveCamera();
     const world = new BoatWorld(camera, propModels, createTestMoonTexture());
-    const baseQuaternion = camera.quaternion.toArray();
+    const expectAstern = (): void => {
+      const direction = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+      expect(direction.z).toBeGreaterThan(0.99);
+    };
 
     world.stageEvent('check-the-back');
     const reveal = world.revealEvent('check-the-back');
     world.update(2, 2);
     await reveal;
     world.update(2.1, 0.1);
-    expect(camera.quaternion.toArray()).not.toEqual(baseQuaternion);
+    expectAstern();
     expect(world.scene.getObjectByName('check-back:fish')?.visible).toBe(false);
 
     const fish = world.reactToEventOutcome('check-the-back', {
@@ -2107,7 +2110,20 @@ describe('BoatWorld helpers', () => {
     world.update(4, 2);
     await fish;
     expect(world.scene.getObjectByName('check-back:fish')?.visible).toBe(true);
-    expect(camera.quaternion.toArray()).not.toEqual(baseQuaternion);
+    expectAstern();
+
+    const ignore = world.reactToEventOutcome('check-the-back', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The wake passes behind the boat.',
+      deltas: {},
+      cue: 'none',
+      eventPresentationKey: 'check-the-back.ignore',
+    });
+    world.update(6, 2);
+    await ignore;
+    expect(world.scene.getObjectByName('check-back:fish')?.visible).toBe(false);
+    expectAstern();
 
     world.dispose();
     propModels.dispose();

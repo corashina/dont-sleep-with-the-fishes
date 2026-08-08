@@ -64,11 +64,16 @@ describe('survival events', () => {
     expect(byId['swarm-of-anglerfish']!.requiresLivingCompanion).toBeUndefined();
   });
 
-  it('gives every live outcome result copy', () => {
+  it('rejects generic placeholder copy and keeps every live result specific', () => {
+    const genericPlaceholder = ['Nothing', 'happens.'].join(' ');
+    const isSpecificResultCopy = (message: string): boolean => (
+      message.trim().length > 0 && message.trim() !== genericPlaceholder
+    );
     const messages = SURVIVAL_EVENTS.flatMap(({ choices }) => (
       choices.flatMap(({ outcomes }) => outcomes.map(({ message }) => message))
     ));
-    expect(messages.every((message) => message.trim().length > 0)).toBe(true);
+    expect(isSpecificResultCopy(genericPlaceholder)).toBe(false);
+    expect(messages.every(isSpecificResultCopy)).toBe(true);
   });
   it('uses dawn energy instead of immediate energy during night events', () => {
     for (const event of SURVIVAL_EVENTS.filter(({ phase }) => phase === 'night')) {
