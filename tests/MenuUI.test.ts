@@ -32,13 +32,32 @@ it('exposes the approved title actions', () => {
   ui.dispose();
 });
 
-it('states the sixty-second ship search duration', () => {
+it('presents the emergency briefing as two action stages', () => {
   const mount = document.createElement('main');
   const ui = new MenuUI(mount);
   const guide = mount.querySelector<HTMLElement>('[data-menu-guide]')!;
+  const intro = guide.querySelector<HTMLElement>('#menu-how-to-play-intro')!;
+  const stages = [...guide.querySelectorAll<HTMLElement>('.how-to-play-step')];
+  const labels = [...guide.querySelectorAll<HTMLElement>('.how-to-play-action__label')]
+    .map((label) => label.textContent?.trim());
+  const art = [...guide.querySelectorAll<SVGElement>('[data-ui-artwork^="guide"]')];
 
-  expect(guide.textContent).toContain('You have 60 seconds before Dorothy sinks.');
-  expect(guide.textContent).not.toContain('two minutes');
+  expect(intro.textContent?.trim()).toBe(
+    'Save what you can. Reach the lifeboat. Survive until rescue.',
+  );
+  expect(stages).toHaveLength(2);
+  expect(stages[0].textContent).toContain('ESCAPE DOROTHY');
+  expect(stages[0].textContent).toContain('Dorothy sinks in 60 seconds.');
+  expect(stages[1].textContent).toContain('SURVIVE THE SEA');
+  expect(stages[1].textContent).toContain('Stay alive and keep the hull intact until rescue.');
+  expect(labels).toEqual(['SEARCH', 'CARRY', 'SAVE', 'PREPARE', 'WATCH', 'END DAY']);
+  expect(guide.textContent).toContain('RESCUE CHANCE RISES EACH DAY');
+  expect(art.map((icon) => icon.dataset.uiArtwork)).toEqual([
+    'guideSearch', 'guideCarry', 'guideSave',
+    'guidePrepare', 'guideWatch', 'guideEndDay',
+  ]);
+  expect(art.every((icon) => icon.getAttribute('aria-hidden') === 'true')).toBe(true);
+  expect(art.every((icon) => icon.getAttribute('focusable') === 'false')).toBe(true);
   ui.dispose();
 });
 

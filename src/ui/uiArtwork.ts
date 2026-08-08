@@ -2,6 +2,8 @@ import type { ItemId } from '../game/ItemState';
 
 export const UI_ARTWORK_IDS = [
   'health', 'hunger', 'energy', 'hull', 'watch', 'journal', 'warning', 'howToPlay',
+  'guideSearch', 'guideCarry', 'guideSave',
+  'guidePrepare', 'guideWatch', 'guideEndDay',
 ] as const;
 
 export type UiArtworkId = typeof UI_ARTWORK_IDS[number];
@@ -15,6 +17,12 @@ const ARTWORK: Record<UiArtworkId, string> = {
   journal: '<path d="M16 9h39c7 0 11 4 11 11v45H27c-7 0-11-4-11-11z"/><path d="M27 9v56M34 23h22M34 34h18"/><path class="ui-artwork__shine" d="M20 14h5"/>',
   warning: '<path d="M40 7 73 65H7z"/><path d="M40 25v21M40 55v2"/><path class="ui-artwork__shine" d="m20 56 20-35"/>',
   howToPlay: '<path d="M8 38c9-17 29-23 47-12l15-9-3 19 4 18-16-7C39 59 18 56 8 38z"/><path d="m23 28-8-10 15 7M24 48l-7 9 14-5"/><circle cx="47" cy="34" r="3"/><path class="ui-artwork__shine" d="M34 35c0-6 4-10 10-10 5 0 9 3 9 7 0 6-8 6-8 12m0 7v1"/>',
+  guideSearch: '<circle cx="32" cy="29" r="18"/><path d="m46 43 20 20"/><path class="ui-artwork__shine" d="M21 27c1-7 6-12 13-13"/>',
+  guideCarry: '<path d="M16 25h48l-5 38H21z"/><path d="M25 25c0-17 30-17 30 0M28 40h24M31 52h18"/><path class="ui-artwork__shine" d="M25 31h25"/>',
+  guideSave: '<path d="M10 45h60L59 62H21zM40 8v31m-12-11 12 11 12-11"/><path class="ui-artwork__shine" d="M20 50h34"/>',
+  guidePrepare: '<path d="M18 9v35c0 18 24 22 30 7 3-8-6-14-13-8"/><path d="m45 18 17 17M51 10l18 18-9 9-18-18z"/><path class="ui-artwork__shine" d="M22 13v25"/>',
+  guideWatch: '<path d="M12 60V37h12v23zm22 0V24h12v36zm22 0V12h12v48z"/><path class="ui-artwork__shine" d="M16 42h4m18-12h4m18-12h4"/>',
+  guideEndDay: '<path d="M26 20h28l7 43H19zM31 20c0-13 18-13 18 0M28 33h24v20H28z"/><path class="ui-artwork__shine" d="M33 37h8"/>',
 };
 
 const ITEM_ARTWORK: Readonly<Record<ItemId, string>> = {

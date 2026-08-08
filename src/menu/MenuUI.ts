@@ -1,3 +1,5 @@
+import { uiArtwork } from '../ui/uiArtwork';
+
 const POINTER_LOCK_ERROR = 'Mouse look was blocked. Click the button and allow pointer lock to continue.';
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
@@ -44,34 +46,57 @@ export class MenuUI {
             <p class="kicker ui-role-context">BEFORE THE WATER WINS</p>
             <h2 class="ui-role-display" id="menu-how-to-play-title">HOW TO PLAY</h2>
             <p class="lead ui-role-narrative" id="menu-how-to-play-intro">
-              Save supplies from Dorothy. Then survive in the lifeboat until rescue finds you.
+              Save what you can. Reach the lifeboat. Survive until rescue.
             </p>
           </header>
           <div class="how-to-play-route">
             <article class="how-to-play-step">
               <span class="how-to-play-step__number ui-role-numeral" aria-hidden="true">1</span>
-              <div>
-                <h3 class="ui-role-context">SEARCH THE SHIP</h3>
-                <p class="ui-role-narrative">You have 60 seconds before Dorothy sinks.</p>
-                <ul class="ui-role-narrative">
-                  <li>Find food, tools, and emergency supplies.</li>
-                  <li>Carry up to three weight at one time.</li>
-                  <li>Throw supplies into the lifeboat. Only saved items continue.</li>
-                  <li>Reach the lifeboat before the ship goes under.</li>
+              <div class="how-to-play-step__body">
+                <h3 class="ui-role-context">ESCAPE DOROTHY</h3>
+                <p class="how-to-play-step__objective ui-role-narrative">Dorothy sinks in 60 seconds.</p>
+                <ul class="how-to-play-actions ui-role-narrative">
+                  <li class="how-to-play-action">
+                    ${uiArtwork('guideSearch', 'how-to-play-action__art')}
+                    <strong class="how-to-play-action__label ui-role-context">SEARCH</strong>
+                    <span>Find food, tools, and emergency supplies.</span>
+                  </li>
+                  <li class="how-to-play-action">
+                    ${uiArtwork('guideCarry', 'how-to-play-action__art')}
+                    <strong class="how-to-play-action__label ui-role-context">CARRY</strong>
+                    <span>Carry items with a total weight of 3.</span>
+                  </li>
+                  <li class="how-to-play-action">
+                    ${uiArtwork('guideSave', 'how-to-play-action__art')}
+                    <strong class="how-to-play-action__label ui-role-context">SAVE</strong>
+                    <span>Throw supplies into the lifeboat. Then get aboard.</span>
+                  </li>
                 </ul>
               </div>
             </article>
             <article class="how-to-play-step">
               <span class="how-to-play-step__number ui-role-numeral" aria-hidden="true">2</span>
-              <div>
+              <div class="how-to-play-step__body">
                 <h3 class="ui-role-context">SURVIVE THE SEA</h3>
-                <p class="ui-role-narrative">Use your supplies and the boat before each night begins.</p>
-                <ul class="ui-role-narrative">
-                  <li>Protect Health, Food, Energy, and Hull.</li>
-                  <li>Click the rod, toolbox, lantern, or saved supplies to act.</li>
-                  <li>The lantern ends the day. Night events test your choices.</li>
-                  <li>Rescue becomes more likely as the days pass.</li>
+                <p class="how-to-play-step__objective ui-role-narrative">Stay alive and keep the hull intact until rescue.</p>
+                <ul class="how-to-play-actions ui-role-narrative">
+                  <li class="how-to-play-action">
+                    ${uiArtwork('guidePrepare', 'how-to-play-action__art')}
+                    <strong class="how-to-play-action__label ui-role-context">PREPARE</strong>
+                    <span>Fish, repair the hull, and use saved supplies.</span>
+                  </li>
+                  <li class="how-to-play-action">
+                    ${uiArtwork('guideWatch', 'how-to-play-action__art')}
+                    <strong class="how-to-play-action__label ui-role-context">WATCH</strong>
+                    <span>Protect Health, Food, Energy, and Hull.</span>
+                  </li>
+                  <li class="how-to-play-action">
+                    ${uiArtwork('guideEndDay', 'how-to-play-action__art')}
+                    <strong class="how-to-play-action__label ui-role-context">END DAY</strong>
+                    <span>Use the lantern when ready. Night events follow.</span>
+                  </li>
                 </ul>
+                <p class="how-to-play-rescue-stamp ui-role-context">RESCUE CHANCE RISES EACH DAY</p>
               </div>
             </article>
           </div>
