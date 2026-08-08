@@ -793,6 +793,38 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('keeps weather reveal choreography for focused and featured routes', async () => {
+    const propModels = createTestPropModels();
+    const focused = focusedPresenterTestDouble('handyman');
+    const weatherReveal = vi.spyOn(WeatherEventAnimator.prototype, 'reveal');
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      { handyman: () => focused.presenter },
+    );
+
+    try {
+      world.stageEvent('handyman');
+      await world.revealEvent('handyman');
+      expect(weatherReveal).toHaveBeenNthCalledWith(1, 'handyman');
+
+      world.stageEvent('flowers');
+      const featuredReveal = world.revealEvent('flowers');
+      expect(weatherReveal).toHaveBeenNthCalledWith(2, 'flowers');
+      world.setDocumentHidden(true);
+      await featuredReveal;
+    } finally {
+      weatherReveal.mockRestore();
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
   it('registers the five authored focused event presenters', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
