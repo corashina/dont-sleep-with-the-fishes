@@ -391,9 +391,8 @@ describe('SurvivalUI', () => {
     const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
     expect(caption.classList).toContain('is-visible');
     expect(caption.querySelector('[data-event-title]')?.textContent).toBe('A SHADOW');
-    expect(caption.querySelector('[data-event-detail]')?.textContent)
-      .toBe('A shadow moves beneath the boat.');
-    expect(caption.querySelector('[data-event-risk]')?.textContent).toBe('DANGEROUS');
+    expect(caption.querySelector<HTMLElement>('[data-event-detail]')?.hidden).toBe(true);
+    expect(caption.querySelector<HTMLElement>('[data-event-risk]')?.hidden).toBe(true);
   });
 
   it('activates a focused contextual choice with the keyboard', () => {
@@ -839,9 +838,8 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-event]')).toBeNull();
     const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
     expect(caption.querySelector('[data-event-title]')?.textContent).toBe('A SHADOW');
-    expect(caption.querySelector('[data-event-risk]')?.textContent).toBe('DANGEROUS');
-    expect(caption.querySelector('[data-event-detail]')?.textContent)
-      .toBe('A shadow moves beneath the boat.');
+    expect(caption.querySelector<HTMLElement>('[data-event-risk]')?.hidden).toBe(true);
+    expect(caption.querySelector<HTMLElement>('[data-event-detail]')?.hidden).toBe(true);
     expect(caption.dataset.danger).toBe('dangerous');
     expect(caption.classList).not.toContain('is-visible');
     expect(caption.getAttribute('aria-label')).toBeNull();
@@ -881,7 +879,7 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-action="endDay"]')?.getAttribute('aria-disabled')).toBe('false');
   });
 
-  it('shows title, reveal text, and written risk during event selection', async () => {
+  it('shows only the risk-colored title during event selection', async () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     ui.beginEventPresentation();
@@ -896,10 +894,11 @@ describe('SurvivalUI', () => {
     const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
     expect(caption.classList).toContain('is-visible');
     expect(caption.querySelector('[data-event-title]')?.textContent).toBe('A SHADOW');
-    expect(caption.querySelector('[data-event-detail]')?.textContent)
-      .toBe('A shadow moves beneath the boat.');
-    expect(caption.querySelector('[data-event-risk]')?.textContent)
-      .toBe('DANGEROUS');
+    expect(caption.querySelector<HTMLElement>('[data-event-detail]')?.hidden).toBe(true);
+    expect(caption.querySelector<HTMLElement>('[data-event-risk]')?.hidden).toBe(true);
+    expect(caption.dataset.danger).toBe('dangerous');
+    expect(mainStyles).toMatch(/\.event-caption__detail\[hidden\]/);
+    expect(mainStyles).toMatch(/\.event-caption__risk\[hidden\]/);
   });
 
   it('routes the event sleep response through the lantern instead of the caption', async () => {
@@ -998,7 +997,7 @@ describe('SurvivalUI', () => {
     const risk = caption.querySelector<HTMLElement>('[data-event-risk]')!;
 
     expect(title.textContent).toBe('A SHADOW');
-    expect(risk.textContent).toBe('DANGEROUS');
+    expect(risk.hidden).toBe(true);
     expect(caption.classList).not.toContain('is-visible');
     expect(caption.dataset.result).toBeUndefined();
 
@@ -1248,7 +1247,7 @@ describe('SurvivalUI', () => {
     ['safe', 'Safe event: A shadow. A shadow moves beneath the boat.'],
     ['uncertain', 'Uncertain event: A shadow. A shadow moves beneath the boat.'],
     ['dangerous', 'Dangerous event: A shadow. A shadow moves beneath the boat.'],
-  ] as const)('shows and announces %s event risk', async (danger, accessibleName) => {
+  ] as const)('colors the title and announces %s event risk', async (danger, accessibleName) => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     ui.beginEventPresentation();
@@ -1260,10 +1259,8 @@ describe('SurvivalUI', () => {
     expect(caption.getAttribute('aria-label')).toBeNull();
     expect(caption.classList).toContain('is-visible');
     expect(caption.querySelector('[data-event-title]')?.textContent).toBe('A SHADOW');
-    expect(caption.querySelector('[data-event-detail]')?.textContent)
-      .toBe('A shadow moves beneath the boat.');
-    expect(caption.querySelector('[data-event-risk]')?.textContent)
-      .toBe(danger.toLocaleUpperCase('en-US'));
+    expect(caption.querySelector<HTMLElement>('[data-event-detail]')?.hidden).toBe(true);
+    expect(caption.querySelector<HTMLElement>('[data-event-risk]')?.hidden).toBe(true);
     await Promise.resolve();
     expect(mount.querySelector('[data-survival-announcer]')?.textContent).toBe(accessibleName);
   });
