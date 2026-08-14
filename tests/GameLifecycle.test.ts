@@ -2286,14 +2286,15 @@ describe('ScavengePhase lifecycle integration', () => {
       mount,
       sceneRenderer: postProcessingSceneRenderer(),
     });
-    const high = mount.querySelector<HTMLButtonElement>(
-      '[data-water-quality-control] [data-quality="high"]',
-    )!;
+    const ultra = mount.querySelector<HTMLButtonElement>(
+      '[data-water-quality-control] [data-quality="ultra"]',
+    );
 
-    high.click();
+    expect(ultra).not.toBeNull();
+    ultra!.click();
 
-    expect(received.waterQuality.get()).toBe('high');
-    expect(setWaterQuality).toHaveBeenCalledWith('high');
+    expect(received.waterQuality.get()).toBe('ultra');
+    expect(setWaterQuality).toHaveBeenCalledWith('ultra');
     game.dispose();
   });
 
