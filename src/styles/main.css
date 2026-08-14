@@ -1421,6 +1421,17 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   font-size: clamp(.72rem, 1.35vw, .9rem);
   line-height: 1.35;
 }
+.event-caption__detail[hidden],
+.event-caption__risk[hidden] { display: none; }
+.event-caption__risk {
+  margin: 1px 0 0;
+  color: var(--ink-yellow);
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .18em;
+}
+.event-caption[data-danger="safe"] .event-caption__risk { color: var(--ink-green); }
+.event-caption[data-danger="dangerous"] .event-caption__risk { color: var(--ink-red-bright); }
 .event-caption__result {
   margin: 2px 0 0;
   color: var(--ink-yellow);
@@ -1447,6 +1458,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   background: #0d1112d9;
   clip-path: polygon(2% 2%, 99% 0, 100% 88%, 4% 100%, 0 45%);
 }
+.event-result--inline[hidden] { display: none; }
 .event-result__message {
   margin: 0;
   color: var(--ink-bone);

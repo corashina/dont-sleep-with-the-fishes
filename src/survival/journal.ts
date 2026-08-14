@@ -8,8 +8,6 @@ import type { FishingCatchId } from './fishingCatalog';
 import type { CaptainWhiskersDeathCause } from './CaptainWhiskersState';
 import type { EventPresentationKey, WeatherId } from './survivalTypes';
 
-export type JournalResolution = 'suitableItem' | 'unsuitableItem' | 'endure';
-
 export interface JournalInventoryMutation {
   readonly kind: 'consume' | 'break' | 'lose' | 'gain' | 'repair';
   readonly instanceIds: readonly ItemInstanceId[];
@@ -21,8 +19,8 @@ export interface JournalEventRecord {
   title: string;
   prompt: string;
   attemptedChoiceId: string | null;
+  readonly choiceLabel: string;
   attemptedItemId: ItemId | null;
-  resolution: JournalResolution;
   outcomeCode: string;
   outcomeMessage: string;
   eventPresentationKey?: EventPresentationKey;
@@ -106,21 +104,11 @@ function formatEvent(record: JournalEventRecord): string {
   }
   const timing = record.phase === 'day' ? 'During the day' : 'That night';
   const situation = `${timing}, I encountered ${record.title.toLocaleLowerCase('en-US')}.`;
-  let action: string;
-  if (record.resolution === 'endure') {
-    action = 'I faced it without using any supplies.';
-  } else {
-    if (record.attemptedItemId === null) {
-      throw new Error(
-        `Journal event ${record.eventId} with ${record.resolution} resolution requires an attempted item.`,
-      );
-    }
-    const label = ITEM_LABELS[record.attemptedItemId].toLocaleLowerCase('en-US');
-    action = record.resolution === 'suitableItem'
-      ? `I used the ${label} to handle it, and it helped.`
-      : `I tried the ${label}, but it did not help.`;
-  }
-  return `${situation} ${action}${formatMutations(record.inventoryMutations)}`;
+  const action = record.attemptedItemId === null
+    ? `I chose \u201c${record.choiceLabel}\u201d.`
+    : `I used the ${ITEM_LABELS[record.attemptedItemId].toLocaleLowerCase('en-US')}.`;
+
+  return `${situation} ${action} ${record.outcomeMessage}${formatMutations(record.inventoryMutations)}`;
 }
 
 function itemLabel(instanceId: ItemInstanceId): string {

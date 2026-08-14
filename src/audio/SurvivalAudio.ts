@@ -1,6 +1,6 @@
 import type { ItemId } from '../game/ItemState';
 import type { FishingTerminalResult } from '../survival/FishingSession';
-import type { DedicatedEventId } from '../survival/eventPresentationTypes';
+import type { DedicatedEventId } from '../survival/eventPresentationRoutes';
 import type {
   ActionOutcome,
   DayActionId,

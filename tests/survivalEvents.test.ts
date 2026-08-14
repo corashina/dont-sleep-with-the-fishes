@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ItemId } from '../src/game/ItemState';
 import {
-  INCLUDED_EVENT_PHASES,
+  SURVIVAL_EVENT_IDS,
   SURVIVAL_EVENTS,
   drawWeightedEvent,
   eligibleEvents,
@@ -11,236 +11,99 @@ import {
 } from '../src/survival/events';
 import { sequenceRandom } from './helpers/random';
 
-const INCLUDED = {
-  'dangerous-waters': 'night', leak: 'night', 'school-of-fish': 'night',
-  snatcher: 'night', 'death-stare': 'night', 'swarm-of-anglerfish': 'night',
-  whirlpool: 'night',
-  'shower-night': 'night', 'windy-night': 'night', 'bad-sleep': 'night',
-  thunderstorm: 'night', 'restless-waves': 'night', 'man-in-the-fog': 'night',
-  ghosts: 'night', 'eerie-melody': 'night', 'face-on-the-moon': 'night',
+const EXPECTED_WEIGHTS = {
+  'dangerous-waters': 2, leak: 2, 'school-of-fish': 4, snatcher: 3,
+  'death-stare': 4, 'swarm-of-anglerfish': 2, whirlpool: 1,
+  'shower-night': 3, 'windy-night': 4, 'bad-sleep': 4,
+  thunderstorm: 4, 'restless-waves': 3, 'man-in-the-fog': 2,
+  ghosts: 3, 'eerie-melody': 3, 'face-on-the-moon': 1,
+  'sick-companion': 1, 'shadow-figure': 1, 'sea-watcher': 2,
+  'guarded-sleep': 4, 'drifting-loot': 2, 'drifting-bottle': 3,
+  'check-the-back': 3, 'mystery-chest': 4, flowers: 1,
+  'chest-attack': 1, 'midnight-tour': 2, 'night-trader': 2,
+  handyman: 2, 'other-people': 2,
 } as const;
 
-const MOVED_NIGHT_EVENT_IDS = [
-  'dangerous-waters',
-  'leak',
-  'school-of-fish',
-  'snatcher',
-  'death-stare',
-  'swarm-of-anglerfish',
-  'whirlpool',
-] as const;
+const EXPECTED_RISK = {
+  'dangerous-waters': 'dangerous', leak: 'dangerous',
+  'school-of-fish': 'uncertain', snatcher: 'uncertain',
+  'death-stare': 'dangerous', 'swarm-of-anglerfish': 'dangerous',
+  whirlpool: 'dangerous', 'shower-night': 'uncertain',
+  'windy-night': 'dangerous', 'bad-sleep': 'uncertain',
+  thunderstorm: 'dangerous', 'restless-waves': 'dangerous',
+  'man-in-the-fog': 'dangerous', ghosts: 'uncertain',
+  'eerie-melody': 'dangerous', 'face-on-the-moon': 'uncertain',
+  'sick-companion': 'uncertain', 'shadow-figure': 'dangerous',
+  'sea-watcher': 'uncertain', 'guarded-sleep': 'uncertain',
+  'drifting-loot': 'safe', 'drifting-bottle': 'safe',
+  'check-the-back': 'safe', 'mystery-chest': 'dangerous',
+  flowers: 'safe', 'chest-attack': 'dangerous',
+  'midnight-tour': 'dangerous', 'night-trader': 'safe',
+  handyman: 'dangerous', 'other-people': 'safe',
+} as const;
 
 const resource = (resourceName: string, operation: string, value: unknown) => ({
   resource: resourceName, operation, value,
 });
 const add = (name: string, value: unknown) => resource(name, 'add', value);
 const subtract = (name: string, value: unknown) => resource(name, 'subtract', value);
-const set = (name: string, value: unknown) => resource(name, 'set', value);
 const item = (kind: string, itemId: string, quantity = 1) => ({ kind, itemId, quantity });
-const randomItem = (kind: string, quantity: number) => ({ kind, quantity });
-const target = () => ({ kind: 'loseEventTarget', quantity: 1 });
-const outcome = (
-  weight: number,
-  message: string,
-  resources: readonly unknown[] = [],
-  items: readonly unknown[] = [],
-) => ({
-  weight,
-  message,
-  effects: {
-    ...(resources.length ? { resources } : {}),
-    ...(items.length ? { items } : {}),
-  },
-});
-const dangerousWatersOutcome = (
-  weight: number,
-  message: string,
-  resources: readonly unknown[] = [],
-) => ({
-  weight,
-  message,
-  effects: {
-    ...(resources.length ? { resources } : {}),
-    flags: { set: ['direction2'] },
-  },
-});
-const choice = (id: string, label: string, itemId: string | undefined, ...outcomes: unknown[]) => ({
-  id, label, ...(itemId ? { itemId } : {}), outcomes,
-});
-
-const EXPECTED_METADATA = {
-  'dangerous-waters': ['Dangerous Waters', 'impact', 15, 2, 30, 0],
-  leak: ['Leak', 'impact', 10, 4, undefined, 0],
-  'school-of-fish': ['School of Fish', 'fish', 66, 8, undefined, 39],
-  snatcher: ['Tentacle Attack', 'impact', 28, 8, undefined, 45],
-  'death-stare': ['Death Stare', 'impact', 160, 9, undefined, 32],
-  'swarm-of-anglerfish': ['Swarm of Anglerfish', 'fish', 12, 10, undefined, 38],
-  whirlpool: ['Whirlpool', 'impact', 5, 12, undefined, 30],
-  'shower-night': ['Shower Night', 'storm', 35, 2, undefined, 35],
-  'windy-night': ['Windy Night', 'storm', 40, 2, undefined, 40],
-  'bad-sleep': ['Bad Sleep', 'darkness', 40, 2, 10, 40],
-  thunderstorm: ['Thunderstorm', 'storm', 40, 2, undefined, 35],
-  'restless-waves': ['Restless Waves', 'impact', 30, 3, undefined, 35],
-  'man-in-the-fog': ['Man in the Fog', 'darkness', 18, 6, undefined, 40],
-  ghosts: ['Ghosts', 'darkness', 25, 8, undefined, 38],
-  'eerie-melody': ['Eerie Melody', 'darkness', 19, 13, undefined, 30],
-  'face-on-the-moon': ['Face on the Moon', 'darkness', 5, 17, undefined, 50],
-} as const;
-
-const EXPECTED_REVEAL_TEXT = {
-  'dangerous-waters': 'Jagged rocks break the surface as the current pulls the boat off course.',
-  leak: 'Water pushes through a split in the hull.',
-  'school-of-fish': 'A dense school churns the water beside the boat.',
-  snatcher: 'A tentacle curls over the gunwale and reaches for one of your supplies.',
-  'death-stare': 'A huge shape rises and fixes its gaze on the boat.',
-  'swarm-of-anglerfish': 'Cold lights gather beneath the surface and close in.',
-  whirlpool: 'The sea begins circling faster around the boat.',
-  'shower-night': 'Rain starts falling over the exposed boat.',
-  'windy-night': 'Wind catches every loose object on the boat.',
-  'bad-sleep': 'Uneasy darkness settles over the boat.',
-  thunderstorm: 'Thunder rolls as the storm breaks overhead.',
-  'restless-waves': 'Waves hammer the sides through the night.',
-  'man-in-the-fog': 'A lone figure appears in the fog.',
-  ghosts: 'Pale shapes gather around the drifting boat.',
-  'eerie-melody': 'A distant melody drifts across the water.',
-  'face-on-the-moon': 'A face takes shape across the moon.',
-} as const;
-
-const EXPECTED_CHOICES = {
-  'dangerous-waters': [
-    choice('map', 'Use Map', 'map',
-      dangerousWatersOutcome(80, 'Nothing happens.'),
-      dangerousWatersOutcome(20, 'The rocks damage the boat.', [
-        subtract('hull', { min: 5, max: 10 }),
-        add('pressure', 1),
-      ])),
-    choice('compass', 'Use Compass', 'compass',
-      dangerousWatersOutcome(50, 'Nothing happens.'),
-      dangerousWatersOutcome(50, 'The rocks damage the boat.', [
-        subtract('hull', { min: 5, max: 8 }),
-        add('pressure', 1),
-      ])),
-    choice('sleep', 'Sleep', undefined,
-      dangerousWatersOutcome(1, 'The rocks damage the boat.', [
-        subtract('hull', { min: 25, max: 45 }),
-        add('pressure', 1),
-      ])),
-  ],
-  leak: [
-    choice('ductTape', 'Use Duct Tape', 'ductTape', outcome(1, 'The tape is used.', [], [item('consume', 'ductTape')])),
-    choice('bucket', 'Use Bucket', 'bucket', outcome(80, 'Nothing happens.'), outcome(20, 'The boat is damaged.', [subtract('hull', { min: 5, max: 10 })], [item('break', 'bucket')])),
-    choice('map', 'Use Map', 'map', outcome(1, 'The map slows the leak.', [], [item('break', 'map')])),
-    choice('sleep', 'Sleep', undefined,
-      outcome(60, 'The leak damages the boat.', [subtract('hull', { min: 15, max: 20 }), set('energy', 2)]),
-      outcome(40, 'The leak damages the boat and takes an item.', [subtract('hull', { min: 5, max: 20 })], [randomItem('loseRandom', 1)])),
-  ],
-  'school-of-fish': [
-    choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(60, 'You gain three food.', [add('food', 3)]), outcome(40, 'You gain two food.', [add('food', 2)], [item('break', 'fishingNet')])),
-    choice('bucket', 'Use Bucket', 'bucket', outcome(50, 'You gain one food.', [add('food', 1)]), outcome(50, 'Nothing happens.', [], [item('break', 'bucket')])),
-    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(50, 'Nothing happens.'), outcome(50, 'You gain one food.', [add('food', 1)])),
-    choice('sleep', 'Sleep', undefined, outcome(1, 'Nothing happens.')),
-  ],
-  snatcher: [
-    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'You keep sight of the tentacle.', [], [item('break', 'spyglass')])),
-    choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(1, 'The swim ring is lost.', [], [item('lose', 'swimRing')])),
-    choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The snatched item is lost.', [], [target()])),
-    choice('shotgun', 'Use Shotgun', 'shotgun', outcome(1, 'You gain two food.', [add('food', 2)], [item('consume', 'shotgun')])),
-    choice('sleep', 'Sleep', undefined, outcome(1, 'The snatched item is lost.', [], [target()])),
-  ],
-  'death-stare': [
-    choice('flashlight', 'Use Flashlight', 'flashlight', outcome(80, 'Nothing happens.'), outcome(35, 'The flashlight is lost.', [set('energy', 1)], [item('lose', 'flashlight')])),
-    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(40, 'Nothing happens.'), outcome(50, 'The creature attacks.', [subtract('hull', { min: 44, max: 66 }), subtract('health', 60)], [item('break', 'umbrella')])),
-    choice('cannedFood', 'Use Food', 'cannedFood', outcome(66, 'You lose two food.', [subtract('food', 2)]), outcome(33, 'The creature attacks.', [subtract('food', 1), subtract('hull', { min: 33, max: 55 }), subtract('health', 50)])),
-    choice('shotgun', 'Use Shotgun', 'shotgun', outcome(1, 'The shotgun is fired.', [], [item('consume', 'shotgun')])),
-    choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The creature attacks.', [subtract('hull', { min: 55, max: 66 }), subtract('health', 70)], [item('break', 'fishingNet')])),
-    choice('sleep', 'Sleep', undefined, outcome(5, 'Nothing happens.'), outcome(85, 'The creature attacks.', [subtract('hull', { min: 44, max: 66 }), subtract('health', 60)])),
-  ],
-  'swarm-of-anglerfish': [
-    choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The net holds the swarm back.', [], [item('break', 'fishingNet')])),
-    choice('shotgun', 'Use Shotgun', 'shotgun', outcome(1, 'You gain two food.', [add('food', 2)], [item('consume', 'shotgun')])),
-    choice('flashlight', 'Use Flashlight', 'flashlight', outcome(1, 'The swarm attacks.', [subtract('hull', { min: 20, max: 40 }), subtract('health', 50)])),
-    choice('baitTin', 'Use Bait', 'baitTin', outcome(1, 'You lose two bait.', [subtract('bait', 2)])),
-    choice('sleep', 'Sleep', undefined, outcome(65, 'The swarm attacks.', [subtract('hull', { min: 20, max: 40 }), subtract('health', 50)]), outcome(25, 'Nothing happens.')),
-  ],
-  whirlpool: [
-    choice('anchor', 'Use Anchor', 'anchor', outcome(90, 'Nothing happens.'), outcome(10, 'The boat is damaged.', [subtract('hull', { min: 5, max: 10 })], [item('break', 'anchor')])),
-    choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(50, 'The boat is damaged.', [subtract('hull', { min: 20, max: 40 })]), outcome(50, 'The boat is damaged.', [subtract('hull', { min: 20, max: 40 })], [item('break', 'swimRing')])),
-    choice('sleep', 'Sleep', undefined, outcome(80, 'The boat is damaged.', [subtract('hull', { min: 20, max: 40 }), set('energy', 0)]), outcome(30, 'The boat is badly damaged and two items are lost.', [subtract('hull', { min: 60, max: 80 }), set('energy', 2)], [randomItem('loseRandom', 2)])),
-  ],
-  'shower-night': [
-    choice('bucket', 'Use Bucket', 'bucket', outcome(90, 'The bucket keeps the rain under control.'), outcome(10, 'The bucket keeps the rain under control.', [], [item('break', 'bucket')])),
-    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(100, 'The umbrella shelters you.'), outcome(50, 'The umbrella shelters you.', [], [item('break', 'umbrella')])),
-    choice('map', 'Use Map', 'map', outcome(1, 'The map covers the exposed supplies.', [], [item('break', 'map')])),
-    choice('sleep', 'Sleep', undefined, outcome(80, 'Nothing happens.'), outcome(20, 'You wake with two energy.', [set('energy', 2)])),
-  ],
-  'windy-night': [
-    choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The net secures the loose supplies.', [], [item('break', 'fishingNet')])),
-    choice('map', 'Use Map', 'map', outcome(1, 'The map is lost, but you find food.', [add('food', 1)], [item('lose', 'map')])),
-    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(60, 'The umbrella is lost.', [], [item('lose', 'umbrella')]), outcome(40, 'You wake with two energy.', [set('energy', 2)])),
-    choice('sleep', 'Sleep', undefined, outcome(80, 'The wind batters the boat.', [subtract('hull', { min: 10, max: 30 })], [randomItem('breakRandom', 2)]), outcome(20, 'The wind batters the boat.', [subtract('hull', { min: 10, max: 30 }), set('energy', 1)])),
-  ],
-  'bad-sleep': [
-    choice('bucket', 'Use Bucket', 'bucket', outcome(1, 'Nothing happens.')),
-    choice('flashlight', 'Use Flashlight', 'flashlight', outcome(1, 'Nothing happens.')),
-    choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(1, 'Nothing happens.')),
-    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(100, 'Nothing happens.'), outcome(5, 'Nothing happens.', [], [item('break', 'umbrella')])),
-    choice('sleep', 'Sleep', undefined, outcome(1, 'You wake with two energy.', [set('energy', 2)])),
-  ],
-  thunderstorm: [
-    choice('anchor', 'Use Anchor', 'anchor', outcome(80, 'Nothing happens.'), outcome(20, 'You wake with two energy.', [set('energy', 2)])),
-    choice('bucket', 'Use Bucket', 'bucket', outcome(40, 'The boat is damaged.', [subtract('hull', { min: 15, max: 25 })], [item('break', 'bucket')]), outcome(30, 'The boat is damaged.', [subtract('hull', { min: 20, max: 30 })]), outcome(20, 'A random item is lost.', [], [randomItem('loseRandom', 1)]), outcome(5, 'A random item is lost.', [], [randomItem('loseRandom', 1), item('break', 'bucket')])),
-    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(65, 'The boat is damaged.', [subtract('hull', { min: 10, max: 20 })], [item('break', 'umbrella')]), outcome(35, 'The boat is damaged.', [subtract('hull', { min: 20, max: 30 })])),
-    choice('sleep', 'Sleep', undefined, outcome(60, 'The storm damages the boat and takes an item.', [subtract('hull', { min: 30, max: 48 }), set('energy', 2)], [randomItem('loseRandom', 1)]), outcome(30, 'The storm damages the boat.', [subtract('hull', { min: 20, max: 35 }), set('energy', 2)])),
-  ],
-  'restless-waves': [
-    choice('anchor', 'Use Anchor', 'anchor', outcome(1, 'Nothing happens.')),
-    choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(50, 'The waves damage the boat.', [subtract('hull', { min: 10, max: 20 })]), outcome(50, 'The swim ring steadies the boat.', [], [item('break', 'swimRing')])),
-    choice('sleep', 'Sleep', undefined, outcome(50, 'The waves damage the boat.', [subtract('hull', { min: 20, max: 30 }), set('energy', 1)]), outcome(50, 'The waves damage the boat and take an item.', [subtract('hull', { min: 15, max: 25 })], [randomItem('loseRandom', 1)])),
-  ],
-  'man-in-the-fog': [
-    choice('compass', 'Use Compass', 'compass', outcome(1, 'Nothing happens.')),
-    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'Danger increases.', [add('pressure', 1)])),
-    choice('flashlight', 'Use Flashlight', 'flashlight', outcome(70, 'The figure attacks.', [add('pressure', 2), subtract('health', 20), set('energy', 1)]), outcome(35, 'Danger increases.', [add('pressure', 2)])),
-    choice('sleep', 'Sleep', undefined, outcome(50, 'The boat is damaged.', [add('pressure', 1), subtract('hull', { min: 10, max: 30 })]), outcome(50, 'You are injured.', [add('pressure', 1), subtract('health', 20), set('energy', 2)])),
-  ],
-  ghosts: [
-    choice('flareGun', 'Use Flare Gun', 'flareGun', outcome(1, 'The flare is used.', [], [item('consume', 'flareGun')])),
-    choice('flashlight', 'Use Flashlight', 'flashlight', outcome(60, 'Nothing happens.'), outcome(40, 'You wake with one energy.', [set('energy', 1)])),
-    choice('sleep', 'Sleep', undefined, outcome(60, 'You wake with two energy.', [set('energy', 2)]), outcome(30, 'You wake with one energy.', [set('energy', 1)])),
-  ],
-  'eerie-melody': [
-    choice('bucket', 'Use Bucket', 'bucket', outcome(1, 'You wake with one energy.', [set('energy', 1)], [item('break', 'bucket')])),
-    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'The siren attacks.', [subtract('hull', { min: 50, max: 90 }), subtract('health', 50)])),
-    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(1, 'The boat is damaged.', [subtract('hull', { min: 40, max: 60 }), set('energy', 1)])),
-    choice('ductTape', 'Use Duct Tape', 'ductTape', outcome(1, 'The duct tape is used.', [], [item('consume', 'ductTape')])),
-    choice('sleep', 'Sleep', undefined, outcome(60, 'You wake exhausted.', [set('energy', 0)]), outcome(40, 'The siren attacks.', [subtract('hull', { min: 50, max: 90 }), subtract('health', 50), set('energy', 1)])),
-  ],
-  'face-on-the-moon': [
-    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(1, 'You wake with two energy.', [set('energy', 2)])),
-    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(60, 'You wake with one energy.', [set('energy', 1)], [item('break', 'spyglass')]), outcome(40, 'Danger increases.', [subtract('rescueProgress', 5), add('pressure', 1)])),
-    choice('sleep', 'Sleep', undefined, outcome(100, 'You wake exhausted.', [set('energy', 0)]), outcome(20, 'You wake with two energy.', [set('energy', 2)])),
-  ],
-} as const;
 
 describe('survival events', () => {
+  it('uses the approved phase, risk, weight, and cooldown rules', () => {
+    const byId = Object.fromEntries(SURVIVAL_EVENTS.map((event) => [event.id, event]));
+    expect(SURVIVAL_EVENTS.map(({ id }) => id)).toEqual(SURVIVAL_EVENT_IDS);
+    expect(Object.fromEntries(SURVIVAL_EVENTS.map(({ id, weight }) => [id, weight])))
+      .toEqual(EXPECTED_WEIGHTS);
+    expect(Object.fromEntries(SURVIVAL_EVENTS.map(({ id, danger }) => [id, danger])))
+      .toEqual(EXPECTED_RISK);
+    expect(SURVIVAL_EVENTS.filter(({ phase }) => phase === 'day').map(({ id }) => id))
+      .toEqual(['school-of-fish', 'drifting-loot', 'drifting-bottle', 'flowers']);
+    expect(byId['drifting-loot']!.cooldownDays).toBe(3);
+    expect(byId['guarded-sleep']!.cooldownDays).toBe(4);
+    expect(byId['swarm-of-anglerfish']!.requiresLivingCompanion).toBeUndefined();
+  });
+
+  it('rejects generic placeholder copy and keeps every live result specific', () => {
+    const genericPlaceholder = ['Nothing', 'happens.'].join(' ');
+    const isSpecificResultCopy = (message: string): boolean => (
+      message.trim().length > 0 && message.trim() !== genericPlaceholder
+    );
+    const messages = SURVIVAL_EVENTS.flatMap(({ choices }) => (
+      choices.flatMap(({ outcomes }) => outcomes.map(({ message }) => message))
+    ));
+    expect(isSpecificResultCopy(genericPlaceholder)).toBe(false);
+    expect(messages.every(isSpecificResultCopy)).toBe(true);
+  });
+  it('uses dawn energy instead of immediate energy during night events', () => {
+    for (const event of SURVIVAL_EVENTS.filter(({ phase }) => phase === 'night')) {
+      for (const choice of event.choices) {
+        for (const result of choice.outcomes) {
+          expect(
+            result.effects.resources?.some(({ resource }) => resource === 'energy') ?? false,
+            `${event.id}.${choice.id}`,
+          ).toBe(false);
+        }
+      }
+    }
+  });
+
   it('defines Captain Whiskers event gates and living-companion eligibility', () => {
     expect(survivalEventById('sick-companion')).toMatchObject({
-      earliestDay: 5, weight: 6, cooldownDays: 26, requiresLivingCompanion: true,
+      earliestDay: 5, weight: 1, cooldownDays: 26, requiresLivingCompanion: true,
     });
     expect(survivalEventById('shadow-figure')).toMatchObject({
-      earliestDay: 20, minimumPressure: 3, weight: 4, cooldownDays: 30,
+      earliestDay: 20, minimumPressure: 3, weight: 1, cooldownDays: 30,
       requiresLivingCompanion: true,
     });
     expect(survivalEventById('sea-watcher')).toMatchObject({
-      earliestDay: 20, minimumPressure: 2, weight: 9, cooldownDays: 40,
+      earliestDay: 20, minimumPressure: 2, weight: 2, cooldownDays: 40,
       requiresLivingCompanion: true,
     });
     expect(survivalEventById('guarded-sleep')).toMatchObject({
-      earliestDay: 7, weight: 50, cooldownDays: 0, requiresLivingCompanion: true,
+      earliestDay: 7, weight: 4, cooldownDays: 4, requiresLivingCompanion: true,
     });
-    expect(survivalEventById('swarm-of-anglerfish')).toMatchObject({
-      requiresLivingCompanion: true,
-    });
+    expect(survivalEventById('swarm-of-anglerfish')?.requiresLivingCompanion).toBeUndefined();
 
     const criteria = {
       phase: 'night' as const,
@@ -256,7 +119,6 @@ describe('survival events', () => {
     };
     const companionEvents = [
       'sick-companion', 'shadow-figure', 'sea-watcher', 'guarded-sleep',
-      'swarm-of-anglerfish',
     ];
     const absent = eligibleEvents(SURVIVAL_EVENTS, {
       ...criteria,
@@ -306,20 +168,6 @@ describe('survival events', () => {
       .some(({ resource }) => resource === 'energy')).toBe(false);
   });
 
-  it('keeps Drifting Loot and Drifting Bottle in the random day catalog', () => {
-    expect(
-      SURVIVAL_EVENTS
-        .filter(({ phase }) => phase === 'day')
-        .map(({ id }) => id),
-    ).toEqual(['drifting-loot', 'drifting-bottle']);
-    expect(
-      MOVED_NIGHT_EVENT_IDS.every((id) => (
-        SURVIVAL_EVENTS.find((event) => event.id === id)?.phase === 'night'
-      )),
-    ).toBe(true);
-  });
-
-
   it('sets the six night-event rule constraints', () => {
     const leak = survivalEventById('leak')!;
     const school = survivalEventById('school-of-fish')!;
@@ -346,7 +194,7 @@ describe('survival events', () => {
     const event = (id: string) => SURVIVAL_EVENTS.find((candidate) => candidate.id === id)!;
 
     expect(event('midnight-tour')).toMatchObject({
-      weight: 18,
+      weight: 2,
       earliestDay: 7,
       latestDay: 40,
       minimumPressure: 1,
@@ -354,13 +202,13 @@ describe('survival events', () => {
       allowedChestStates: ['none'],
     });
     expect(event('handyman')).toMatchObject({
-      weight: 12,
+      weight: 2,
       earliestDay: 20,
       minimumPressure: 2,
       cooldownDays: 50,
     });
     expect(event('other-people')).toMatchObject({
-      weight: 10,
+      weight: 2,
       earliestDay: 15,
       cooldownDays: 20,
       minimumRescueProgress: 15,
@@ -381,13 +229,13 @@ describe('survival events', () => {
       {
         resultId: 'tour-chest', weight: 50,
         effects: {
-          resources: [set('energy', 2), add('pressure', 1)],
+          resources: [add('pressure', 1)],
+          nextDawnEnergy: 2,
           items: [{ kind: 'gainChest', quantity: 1, fallbackFood: 1 }],
-          flags: { set: ['direction3'] },
         },
       },
-      { resultId: 'tour-bait', weight: 50, effects: { resources: [add('bait', 1)], flags: { set: ['direction3'] } } },
-      { resultId: 'tour-attack', weight: 12, effects: { resources: [subtract('health', 35)], flags: { set: ['direction3'] } } },
+      { resultId: 'tour-bait', weight: 50, effects: { resources: [add('bait', 1)] } },
+      { resultId: 'tour-attack', weight: 12, effects: { resources: [subtract('health', 35)] } },
     ]);
     expect(resultIds('midnight-tour', 'sleep')).toEqual(['tour-pass']);
     expect(['food', 'bait', 'map', 'umbrella'].every((choiceId) => (
@@ -436,13 +284,39 @@ describe('survival events', () => {
       .find(({ id }) => id === choiceId)?.outcomes.map(({ effects }) => effects.resources ?? []);
     expect(outcomeResources('spyglass')).toEqual([[add('pressure', 1)]]);
     expect(outcomeResources('flashlight')).toEqual([
-      [add('pressure', 2), subtract('health', 20), set('energy', 1)],
+      [add('pressure', 2), subtract('health', 20)],
       [add('pressure', 2)],
     ]);
     expect(outcomeResources('sleep')).toEqual([
       [add('pressure', 1), subtract('hull', { min: 10, max: 30 })],
-      [add('pressure', 1), subtract('health', 20), set('energy', 2)],
+      [add('pressure', 1), subtract('health', 20)],
     ]);
+    expect(manInTheFog?.choices.find(({ id }) => id === 'flashlight')?.outcomes[0]?.effects)
+      .toMatchObject({ nextDawnEnergy: 1 });
+    expect(manInTheFog?.choices.find(({ id }) => id === 'sleep')?.outcomes[1]?.effects)
+      .toMatchObject({ nextDawnEnergy: 2 });
+
+    expect(manInTheFog?.choices.find(({ id }) => id === 'compass')?.outcomes).toEqual([{
+      weight: 1,
+      message: 'The compass keeps the boat on a steady bearing.',
+      effects: { resources: [subtract('pressure', 1)] },
+    }]);
+    expect(byId.ghosts?.choices.find(({ id }) => id === 'flareGun')?.outcomes).toEqual([{
+      weight: 1,
+      message: 'The flare drives the pale shapes into the dark.',
+      effects: {
+        resources: [subtract('pressure', 1)],
+        items: [{ kind: 'consume', itemId: 'flareGun', quantity: 1 }],
+      },
+    }]);
+    expect(byId['eerie-melody']?.choices.find(({ id }) => id === 'ductTape')?.outcomes).toEqual([{
+      weight: 1,
+      message: 'The tape blocks the melody until it fades.',
+      effects: {
+        resources: [subtract('pressure', 1)],
+        items: [{ kind: 'consume', itemId: 'ductTape', quantity: 1 }],
+      },
+    }]);
   });
 
   it('requires Fishing Net or Swim Ring to recover the Drifting Bottle', () => {
@@ -489,13 +363,13 @@ describe('survival events', () => {
       .toEqual([['check', 'Yes'], ['sleep', 'No']]);
   });
 
-  it('keeps Drifting Loot in the catalog as a dawn-only zero-cooldown reward event', () => {
+  it('keeps Drifting Loot in the catalog as a dawn-only reward event', () => {
     const loot = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-loot');
 
     expect(loot).toMatchObject({
       phase: 'day',
       earliestDay: 3,
-      cooldownDays: 0,
+      cooldownDays: 3,
     });
     const retrieve = loot?.choices.find(({ id }) => id === 'retrieve');
     expect(retrieve?.label).toBe('Retrieve It');
@@ -506,10 +380,10 @@ describe('survival events', () => {
   it('encodes the exact rules and presentation keys for the five featured events', () => {
     const event = (id: string) => SURVIVAL_EVENTS.find((candidate) => candidate.id === id)!;
 
-    expect(event('drifting-loot')).toMatchObject({ phase: 'day', weight: 18, earliestDay: 3 });
+    expect(event('drifting-loot')).toMatchObject({ phase: 'day', weight: 2, earliestDay: 3 });
     expect(event('drifting-bottle')).toMatchObject({
       phase: 'day',
-      weight: 30,
+      weight: 3,
       earliestDay: 2,
       maximumAppearances: 1,
       absentItemIds: ['bottledPaper'],
@@ -529,7 +403,7 @@ describe('survival events', () => {
       },
     ]);
     expect(event('flowers')).toMatchObject({
-      weight: 2,
+      weight: 1,
       earliestDay: 2,
       latestDay: 13,
       maximumAppearances: 1,
@@ -590,7 +464,7 @@ describe('survival events', () => {
 
     expect(event).toMatchObject({
       phase: 'night',
-      weight: 15,
+      weight: 2,
       earliestDay: 2,
       latestDay: 30,
       maximumAppearances: 1,
@@ -681,6 +555,36 @@ describe('survival events', () => {
   });
 
   it.each([
+    ['missing', undefined],
+    ['unknown', 'fatal'],
+  ])('rejects %s event danger', (_case, danger) => {
+    const catalog = structuredClone(SURVIVAL_EVENTS) as any[];
+    if (danger === undefined) delete catalog[0].danger;
+    else catalog[0].danger = danger;
+
+    expect(() => validateSurvivalEventCatalog(catalog)).toThrow(/danger.*invalid/i);
+  });
+
+  it('rejects an immediate energy change in a night outcome', () => {
+    const catalog = structuredClone(SURVIVAL_EVENTS) as any[];
+    catalog[0].choices[0].outcomes[0].effects.resources = [subtract('energy', 1)];
+
+    expect(() => validateSurvivalEventCatalog(catalog))
+      .toThrow(/immediate energy.*night event/i);
+  });
+
+  it.each([-1, 1.5, 4])(
+    'rejects next dawn energy outside zero through three: %s',
+    (nextDawnEnergy) => {
+      const catalog = structuredClone(SURVIVAL_EVENTS) as any[];
+      catalog[0].choices[0].outcomes[0].effects.nextDawnEnergy = nextDawnEnergy;
+
+      expect(() => validateSurvivalEventCatalog(catalog))
+        .toThrow(/nextDawnEnergy.*integer.*zero through three/i);
+    },
+  );
+
+  it.each([
     ['a non-array', 'anchor', /target item IDs.*array/i],
     ['an explicit undefined value', undefined, /target item IDs.*array/i],
     ['an empty array', [], /target item IDs.*empty/i],
@@ -719,7 +623,6 @@ describe('survival events', () => {
     rejectsEffects({ items: undefined }, /items.*array/i);
     rejectsEffects({ rescue: undefined }, /rescue.*boolean/i);
     rejectsEffects({ chest: undefined }, /chest.*invalid effect/i);
-    rejectsEffects({ flags: undefined }, /flags.*plain object/i);
     const hiddenRoute = {};
     Object.defineProperty(hiddenRoute, 'route', { value: 'left' });
     rejectsEffects(hiddenRoute, /unsupported effect key route/i);

@@ -24,6 +24,11 @@ describe('event presentation outcome', () => {
       'bucket-1': { instanceId: 'bucket-1', type: 'bucket', condition: 'broken' },
       'map-1': { instanceId: 'map-1', type: 'map', condition: 'lost' },
       'ductTape-1': { instanceId: 'ductTape-1', type: 'ductTape', condition: 'consumed' },
+      'energyBar-1': {
+        instanceId: 'energyBar-1',
+        type: 'energyBar',
+        condition: 'usable',
+      },
     });
 
     const result = deriveEventOutcomePresentation(
@@ -40,11 +45,38 @@ describe('event presentation outcome', () => {
     );
 
     expect(result.resourceDeltas).toEqual({ hull: -18 });
+    expect(result.gainedInstanceIds).toEqual(['energyBar-1']);
     expect(result.brokenInstanceIds).toEqual(['bucket-1']);
     expect(result.lostInstanceIds).toEqual(['map-1']);
     expect(result.consumedInstanceIds).toEqual(['ductTape-1']);
     expect(result.selectedInstanceId).toBe('bucket-1');
     expect(result.selectedCondition).toBe('broken');
+  });
+
+  it('reports fallback food without reporting an occupied item slot as gained', () => {
+    const inventory = {
+      'energyBar-1': {
+        instanceId: 'energyBar-1' as const,
+        type: 'energyBar' as const,
+        condition: 'usable' as const,
+      },
+    };
+
+    const result = deriveEventOutcomePresentation(
+      snapshot(inventory),
+      snapshot(inventory),
+      {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The occupied slot yields food.',
+        deltas: { food: 1 },
+        cue: 'none',
+      },
+      null,
+    );
+
+    expect(result.resourceDeltas).toEqual({ food: 1 });
+    expect(result.gainedInstanceIds).toEqual([]);
   });
 
   it('derives stable unsigned variant seeds', () => {
