@@ -1,32 +1,39 @@
-export type BinaryQuality = 'low' | 'high';
-
-export interface BinaryQualityPreference {
-  get(): BinaryQuality;
-  set(value: BinaryQuality): void;
+export interface QualityPreference<T extends string> {
+  get(): T;
+  set(value: T): void;
 }
 
-export interface BinaryQualityControlOptions {
-  kind: string;
-  label: string;
-  note: string;
+export interface QualityChoice<T extends string> {
+  readonly value: T;
+  readonly label: string;
 }
 
-export class BinaryQualityControl {
+export interface QualityControlOptions<T extends string> {
+  readonly kind: string;
+  readonly label: string;
+  readonly note: string;
+  readonly choices: readonly QualityChoice<T>[];
+}
+
+export class QualityControl<T extends string> {
   readonly element = document.createElement('fieldset');
   private readonly buttons: readonly HTMLButtonElement[];
+  private readonly choices: readonly QualityChoice<T>[];
   private disposed = false;
 
   constructor(
-    private readonly preference: BinaryQualityPreference,
-    options: Readonly<BinaryQualityControlOptions>,
+    private readonly preference: QualityPreference<T>,
+    options: Readonly<QualityControlOptions<T>>,
   ) {
+    this.choices = options.choices;
     this.element.className = 'visual-quality-control';
     this.element.dataset.qualityControl = options.kind;
     this.element.innerHTML = `
       <legend class="ui-role-context">${options.label}</legend>
       <div class="visual-quality-control__choices">
-        <button type="button" data-quality="low">LOW</button>
-        <button type="button" data-quality="high">HIGH</button>
+        ${options.choices.map(({ value, label }) => `
+          <button type="button" data-quality="${value}">${label}</button>
+        `).join('')}
       </div>
       <p class="ui-role-narrative">${options.note}</p>
     `;
@@ -49,8 +56,9 @@ export class BinaryQualityControl {
       '[data-quality]',
     );
     const value = button?.dataset.quality;
-    if (value !== 'low' && value !== 'high') return;
-    this.preference.set(value);
+    const choice = this.choices.find(({ value: allowed }) => allowed === value);
+    if (choice === undefined) return;
+    this.preference.set(choice.value);
     this.sync();
   };
 
