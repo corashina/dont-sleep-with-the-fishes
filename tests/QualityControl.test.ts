@@ -40,6 +40,12 @@ describe('QualityControl', () => {
     expect(mainStyles).toMatch(
       /\.visual-quality-control\[data-quality-control="water"\]\s+\.visual-quality-control__choices\s*\{[^}]*grid-template-columns:\s*repeat\(3,/s,
     );
+    const consoleQualityRowRule = mainStyles.match(
+      /^\.post-processing-console__quality-row\s*\{([^}]*)\}/m,
+    )?.[1];
+    expect(consoleQualityRowRule).toContain(
+      'grid-template-columns: minmax(0, 1fr);',
+    );
 
     water.dispose();
     ao.dispose();
