@@ -608,7 +608,7 @@ const fragmentShader = `
     );
     float calmSuppression = mix(0.12, 1.0, weather);
     float body = (
-      crest * breaking * mix(0.45, 1.0, streakMask)
+      crest * breaking * mix(0.12, 1.0, streakMask)
       + trailingEnvelope * streakMask * 0.34
     ) * erosion * calmSuppression * distanceFade;
     float capNoise = valueNoise(
@@ -760,9 +760,9 @@ const fragmentShader = `
     float reflectionStrength = clamp(0.07 + fresnel * 0.89, 0.0, 0.95);
     #ifdef ULTRA_QUALITY_WATER
     reflectionStrength = clamp(
-      0.06 + fresnel * mix(0.91, 0.78, ultraRoughnessT),
+      0.05 + fresnel * mix(0.63, 0.45, ultraRoughnessT),
       0.0,
-      0.95
+      0.68
     );
     #else
       #ifdef HIGH_QUALITY_WATER
