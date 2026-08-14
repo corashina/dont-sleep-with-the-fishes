@@ -9,10 +9,11 @@ export class WaterQualityControl extends QualityControl<WaterQuality> {
     super(preference, {
       kind: 'water',
       label: 'WATER QUALITY',
-      note: 'High adds smoother waves and richer surface detail.',
+      note: 'Ultra adds a natural ocean surface at high GPU cost.',
       choices: [
         { value: 'low', label: 'LOW' },
         { value: 'high', label: 'HIGH' },
+        { value: 'ultra', label: 'ULTRA' },
       ],
     });
   }
