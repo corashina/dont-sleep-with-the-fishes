@@ -175,6 +175,30 @@ describe('OceanRenderer horizon geometry', () => {
     ultra.dispose();
   });
 
+  it('contains a bounded procedural Ultra surface and light model', () => {
+    const ocean = new OceanRenderer('ultra');
+    const shader = ocean.material.fragmentShader;
+    const microStart = shader.indexOf('vec2 ultraQualityMicroSlope');
+    const microEnd = shader.indexOf('#endif', microStart);
+    const microSource = shader.slice(microStart, microEnd);
+
+    expect(microStart).toBeGreaterThan(-1);
+    expect(microSource.match(/float band[A-D] =/g)).toHaveLength(4);
+    expect(shader).toContain('float ultraSurfaceRoughness');
+    expect(shader).toContain('float ultraSunGlint');
+    expect(shader).toContain('ultraOpticalPath');
+    expect(shader).toContain('ultraBroadReflection');
+    expect(shader).toContain('ultraReflectionBlur');
+    expect(shader).not.toContain('sampler2D');
+    expect(
+      Object.keys(ocean.material.uniforms)
+        .filter((name) => name.startsWith('uUltra')),
+    ).toEqual([]);
+    expect(ocean.material.transparent).toBe(false);
+
+    ocean.dispose();
+  });
+
   it('rebuilds geometry and state across Low, Ultra, and High', () => {
     const ocean = new OceanRenderer('low');
     const lowSurface = ocean.mesh.geometry;
