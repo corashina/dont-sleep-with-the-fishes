@@ -3,7 +3,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createWaterQualityPreference,
-  DEFAULT_WATER_QUALITY,
   WATER_QUALITY_STORAGE_KEY,
 } from '../src/rendering/waterQuality';
 
@@ -12,8 +11,8 @@ describe('water quality preference', () => {
     { stored: 'low', expected: 'low' },
     { stored: 'high', expected: 'high' },
     { stored: 'ultra', expected: 'ultra' },
-    { stored: 'medium', expected: DEFAULT_WATER_QUALITY },
-    { stored: null, expected: DEFAULT_WATER_QUALITY },
+    { stored: 'medium', expected: 'low' },
+    { stored: null, expected: 'low' },
   ] as const)('loads $stored as $expected', ({ stored, expected }) => {
     const storage = {
       getItem: vi.fn(() => stored),

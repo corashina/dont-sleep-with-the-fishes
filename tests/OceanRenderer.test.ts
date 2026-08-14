@@ -17,6 +17,15 @@ import {
   createInactiveVortexWaveState,
   type VortexWaveState,
 } from '../src/ocean/WaveField';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+vi.mock('three/addons/utils/BufferGeometryUtils.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('three/addons/utils/BufferGeometryUtils.js')>();
+  return {
+    ...actual,
+    mergeGeometries: vi.fn(actual.mergeGeometries),
+  };
+});
 
 function centerlineRadialDistances(ocean: OceanRenderer): number[] {
   const positions = ocean.horizonMesh.geometry.getAttribute(
@@ -134,6 +143,7 @@ describe('OceanRenderer horizon geometry', () => {
     const high = new OceanRenderer('high');
     const ultra = new OceanRenderer('ultra');
 
+    expect(OCEAN_SURFACE_QUALITY.ultra.horizonRadialSegments).toBe(96);
     expect(triangleCount(ultra.mesh.geometry)).toBe(294_912);
     expect(triangleCount(ultra.mesh.geometry)).toBeLessThan(
       triangleCount(high.mesh.geometry) * 2,
@@ -328,6 +338,44 @@ describe('OceanRenderer horizon geometry', () => {
     expect((ocean.material.uniforms.uDeepColor!.value as Color).getHex())
       .toBe(0x073844);
     expect(ocean.material.defines).toEqual({ HIGH_QUALITY_WATER: 1 });
+    ocean.dispose();
+  });
+
+  it('rolls back a failed horizon replacement without changing renderer state', () => {
+    const ocean = new OceanRenderer('low');
+    const surface = ocean.mesh.geometry;
+    const horizon = ocean.horizonMesh.geometry;
+    const surfaceDispose = vi.spyOn(surface, 'dispose');
+    const horizonDispose = vi.spyOn(horizon, 'dispose');
+    const detailFade = (ocean.material.uniforms.uDetailFade!.value as Vector2)
+      .clone();
+    const horizonFog = (ocean.material.uniforms.uHorizonFog!.value as Vector3)
+      .clone();
+    const deepColor = (ocean.material.uniforms.uDeepColor!.value as Color).clone();
+    const shallowColor = (ocean.material.uniforms.uShallowColor!.value as Color).clone();
+    const foamColor = (ocean.material.uniforms.uFoamColor!.value as Color).clone();
+    const defines = ocean.material.defines;
+    const materialVersion = ocean.material.version;
+    const failure = new Error('horizon build failed');
+
+    vi.mocked(mergeGeometries).mockImplementationOnce(() => {
+      throw failure;
+    });
+
+    expect(() => ocean.setQuality('ultra')).toThrow(failure);
+    expect(ocean.mesh.geometry).toBe(surface);
+    expect(ocean.horizonMesh.geometry).toBe(horizon);
+    expect(surfaceDispose).not.toHaveBeenCalled();
+    expect(horizonDispose).not.toHaveBeenCalled();
+    expect((ocean as unknown as { quality: string }).quality).toBe('low');
+    expect(ocean.material.defines).toBe(defines);
+    expect(ocean.material.version).toBe(materialVersion);
+    expect(ocean.material.uniforms.uDetailFade!.value).toEqual(detailFade);
+    expect(ocean.material.uniforms.uHorizonFog!.value).toEqual(horizonFog);
+    expect(ocean.material.uniforms.uDeepColor!.value).toEqual(deepColor);
+    expect(ocean.material.uniforms.uShallowColor!.value).toEqual(shallowColor);
+    expect(ocean.material.uniforms.uFoamColor!.value).toEqual(foamColor);
+
     ocean.dispose();
   });
 
