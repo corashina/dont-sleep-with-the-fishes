@@ -565,6 +565,66 @@ const fragmentShader = `
   }
   #endif
 
+  #ifdef ULTRA_QUALITY_WATER
+  vec2 ultraQualityFoam(
+    vec2 worldPosition,
+    float waveHeight,
+    float waveSlope,
+    float ribbonNoise,
+    float edgeNoise,
+    float distanceFade
+  ) {
+    float weather = clamp((uAmplitudeScale - 0.78) / 0.57, 0.0, 1.0);
+    vec2 wind = normalize(vec2(0.83, 0.56));
+    vec2 crossWind = vec2(-wind.y, wind.x);
+    vec2 drifted = worldPosition + wind * uTime * 0.34;
+    vec2 windSpace = vec2(dot(drifted, wind), dot(drifted, crossWind));
+    float longStreak = valueNoise(
+      windSpace * vec2(0.18, 0.82) + vec2(5.1, -9.3)
+    );
+    float brokenStreak = valueNoise(
+      windSpace * vec2(0.43, 1.64) + vec2(-7.6, 4.8)
+    );
+    float streakField = clamp(
+      longStreak * 0.66 + brokenStreak * 0.34,
+      0.0,
+      1.0
+    );
+    float streakMask = smoothstep(
+      mix(0.68, 0.56, weather),
+      mix(0.86, 0.73, weather),
+      streakField
+    );
+    float crestStart = mix(0.44, 0.22, weather);
+    float crest = smoothstep(crestStart, crestStart + 0.16, waveHeight);
+    float slopeStart = mix(0.22, 0.09, weather);
+    float breaking = smoothstep(slopeStart, slopeStart + 0.12, waveSlope);
+    float trailingEnvelope = smoothstep(-0.02, 0.18, waveHeight)
+      * (1.0 - smoothstep(0.30, 0.55, waveHeight));
+    float erosion = mix(
+      0.42,
+      1.0,
+      smoothstep(0.20, 0.62, mix(edgeNoise, ribbonNoise, 0.34))
+    );
+    float calmSuppression = mix(0.12, 1.0, weather);
+    float body = (
+      crest * breaking * mix(0.45, 1.0, streakMask)
+      + trailingEnvelope * streakMask * 0.34
+    ) * erosion * calmSuppression * distanceFade;
+    float capNoise = valueNoise(
+      windSpace * vec2(0.92, 2.10) + vec2(12.4, -3.2)
+    );
+    float cap = body
+      * smoothstep(mix(0.32, 0.18, weather), 0.62, waveHeight)
+      * smoothstep(0.44, 0.78, capNoise)
+      * mix(0.58, 1.0, breaking);
+    return vec2(
+      clamp(body, 0.0, 0.78),
+      clamp(cap, 0.0, 0.90)
+    );
+  }
+  #endif
+
   void main() {
     for (int i = 0; i < 2; i++) {
       if (i < uExclusionCount) {
@@ -773,7 +833,25 @@ const fragmentShader = `
       vViewDepth
     );
     bodyFoam *= bodyDistanceFade;
-    #ifdef HIGH_QUALITY_WATER
+    float capFoam;
+    #ifdef ULTRA_QUALITY_WATER
+    float ultraFoamDistanceFade = 1.0 - smoothstep(
+      uDetailFade.x * 0.72,
+      uDetailFade.y,
+      vViewDepth
+    );
+    vec2 ultraFoam = ultraQualityFoam(
+      vWorldPosition.xz,
+      waveHeight,
+      waveSlope,
+      ribbonNoise,
+      edgeNoise,
+      ultraFoamDistanceFade
+    );
+    bodyFoam = max(bodyFoam * 0.42, ultraFoam.x);
+    capFoam = ultraFoam.y;
+    #else
+      #ifdef HIGH_QUALITY_WATER
     float highFoamDistanceFade = 1.0 - smoothstep(
       uDetailFade.y * 0.42,
       uDetailFade.y * 0.88,
@@ -786,9 +864,9 @@ const fragmentShader = `
       highFoamDistanceFade
     );
     bodyFoam = max(bodyFoam, highFoam * 0.86);
-    #endif
-    float capFoam = foamCap(waveHeight, waveSlope, bodyFoam, ribbonNoise);
-    #ifdef HIGH_QUALITY_WATER
+      #endif
+    capFoam = foamCap(waveHeight, waveSlope, bodyFoam, ribbonNoise);
+      #ifdef HIGH_QUALITY_WATER
     float highCapFoam = highQualityCrestCap(
       vWorldPosition.xz,
       waveHeight,
@@ -797,6 +875,7 @@ const fragmentShader = `
       highFoamDistanceFade
     );
     capFoam = max(capFoam, highCapFoam);
+      #endif
     #endif
     float capDistanceFade = 1.0 - smoothstep(
       uDetailFade.y * 0.48,
@@ -807,10 +886,23 @@ const fragmentShader = `
     float foam = clamp(bodyFoam + capFoam, 0.0, 1.0);
     color += uSunColor * (sunCore + sunSheen) * uDirectLightStrength
       * (1.0 - clamp(foam * 0.72 + capFoam * 0.22, 0.0, 0.94));
-    vec3 capFoamColor = mix(uFoamColor, uSunColor, 0.08 * uDirectLightStrength);
+    #ifdef ULTRA_QUALITY_WATER
+    vec3 ultraFoamColor = mix(
+      uFoamColor,
+      uSunColor,
+      0.08 * uDirectLightStrength
+    );
+    color = mix(color, uFoamColor, bodyFoam * 0.56);
+    color = mix(color, ultraFoamColor, capFoam * 0.78);
+    #else
+    vec3 capFoamColor = mix(
+      uFoamColor,
+      uSunColor,
+      0.08 * uDirectLightStrength
+    );
     color = mix(color, uFoamColor, bodyFoam * 0.64);
     color = mix(color, capFoamColor, capFoam * 0.90);
-    #ifdef HIGH_QUALITY_WATER
+      #ifdef HIGH_QUALITY_WATER
     float highFoamLayer = clamp(
       highFoam * 0.78 + highCapFoam * capDistanceFade * 0.86,
       0.0,
@@ -822,6 +914,7 @@ const fragmentShader = `
       0.46
     );
     color = mix(color, highFoamColor, highFoamLayer * 0.78);
+      #endif
     #endif
 
     float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vViewDepth * vViewDepth);
