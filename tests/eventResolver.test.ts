@@ -96,6 +96,21 @@ describe('resolveWeightedOutcome', () => {
     expect(resolved.effects.companion).not.toBe(source.outcomes[0]?.effects.companion);
   });
 
+  it.each([0, 1, 2, 3] as const)('preserves next dawn energy %i', (value) => {
+    const choice: EventChoiceDefinition = {
+      id: 'sleep',
+      label: 'Sleep',
+      outcomes: [{
+        weight: 1,
+        message: 'Morning comes.',
+        effects: { nextDawnEnergy: value },
+      }],
+    };
+
+    expect(resolveWeightedOutcome(choice, sequenceRandom([0])))
+      .toMatchObject({ effects: { nextDawnEnergy: value } });
+  });
+
   it('selects the next outcome when a roll lands exactly on a cumulative boundary', () => {
     expect(resolveWeightedOutcome(choice(), sequenceRandom([0.25, 0, 0])).message).toBe('second');
   });

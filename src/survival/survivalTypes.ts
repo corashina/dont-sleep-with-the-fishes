@@ -80,12 +80,15 @@ export type RewardSummary =
       readonly quantity: 1;
     };
 
+export type DawnEnergy = 0 | 1 | 2 | 3;
+
 export interface ActionOutcome {
   accepted: boolean;
   code: string;
   message: string;
   deltas: Readonly<ResourceDelta>;
   cue: PresentationCue;
+  readonly nextDawnEnergy?: DawnEnergy;
   readonly rewardSummary?: RewardSummary;
   readonly eventResult?: EventResultPresentation;
   readonly eventPresentationKey?: EventPresentationKey;
@@ -115,10 +118,6 @@ export type CompanionEventEffect =
   | { readonly kind: 'sickness'; readonly operation: 'add' | 'set'; readonly value: number }
   | { readonly kind: 'kill'; readonly cause: 'sea-watcher' };
 export type SurvivalEndingReason = 'standard' | 'kidnapped';
-export interface EventFlagEffects {
-  readonly set?: readonly string[];
-  readonly clear?: readonly string[];
-}
 export type IntegerValue = number | { readonly min: number; readonly max: number };
 export interface ResourceEffect {
   readonly resource: EventResource;
@@ -135,10 +134,9 @@ export interface EventEffects {
   readonly resources?: readonly ResourceEffect[];
   readonly items?: readonly EventInventoryMutation[];
   readonly chest?: ChestEventEffect;
-  readonly flags?: EventFlagEffects;
   readonly rescue?: boolean;
   readonly companion?: readonly CompanionEventEffect[];
-  readonly nextDawnEnergy?: 0;
+  readonly nextDawnEnergy?: DawnEnergy;
   readonly followUpNight?: true;
   readonly endingReason?: 'kidnapped';
 }
@@ -196,8 +194,6 @@ export interface SurvivalEventDefinition {
   minimumRescueProgress?: number;
   minimumPressure?: number;
   maximumPressure?: number;
-  requiredFlags?: readonly string[];
-  forbiddenFlags?: readonly string[];
   allowedChestStates?: readonly ChestState[];
   weather?: readonly WeatherId[];
   targetItemIds?: readonly ItemId[];
@@ -222,7 +218,6 @@ export interface SurvivalSnapshot {
   repairMaterial: number;
   rescueProgress: number;
   readonly chest: ChestSnapshot;
-  readonly eventFlags: readonly string[];
   weather: WeatherId;
   actedToday: boolean;
   readonly journalEntries: readonly JournalEntry[];

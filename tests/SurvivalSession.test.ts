@@ -32,6 +32,34 @@ function stateAfterDawn(day: number, rescueProgress: number, rescueRoll: number)
   return session.snapshot().state;
 }
 
+it('keeps a night energy result through the next dawn', () => {
+  const session = new SurvivalSession(saved(), {
+    seed: 31,
+    random: sequenceRandom([0]),
+    initialEventId: 'bad-sleep',
+  });
+
+  const result = session.resolveEvent({ kind: 'endure' });
+
+  expect(result).toMatchObject({ nextDawnEnergy: 2, deltas: {} });
+  session.beginDawn();
+  expect(session.snapshot().energy).toBe(2);
+});
+
+it('keeps a pressure reduction after a non-threshold dawn', () => {
+  const session = new SurvivalSession(saved('compass'), {
+    seed: 32,
+    random: sequenceRandom([0]),
+    initial: { day: 8, pressure: 2 },
+    initialEventId: 'man-in-the-fog',
+  });
+
+  session.resolveEvent(itemResponse('compass'));
+  expect(session.snapshot().pressure).toBe(1);
+  session.beginDawn();
+  expect(session.snapshot().pressure).toBe(1);
+});
+
 function driftingLootSession(random: readonly number[], energy = 3, items: ItemId[] = []): SurvivalSession {
   return new SurvivalSession(saved(...items), {
     seed: 1,
@@ -662,7 +690,6 @@ describe('SurvivalSession daytime actions', () => {
     expect(tour.snapshot()).toMatchObject({
       chest: { state: 'closed', acquiredDay: 1 },
       pressure: 1,
-      eventFlags: ['direction3'],
     });
 
     const bait = new SurvivalSession(saved(), {
@@ -674,8 +701,6 @@ describe('SurvivalSession daytime actions', () => {
       eventResult: { resultId: 'tour-bait' },
       deltas: { bait: 1 },
     });
-    expect(bait.snapshot().eventFlags).toContain('direction3');
-
     const attacked = new SurvivalSession(saved(), {
       seed: 11,
       random: sequenceRandom([100 / 112]),
@@ -685,8 +710,6 @@ describe('SurvivalSession daytime actions', () => {
       eventResult: { resultId: 'tour-attack' },
       deltas: { health: -35 },
     });
-    expect(attacked.snapshot().eventFlags).toContain('direction3');
-
     const passed = new SurvivalSession(saved(), {
       seed: 11,
       random: sequenceRandom([0]),
@@ -717,10 +740,10 @@ describe('SurvivalSession daytime actions', () => {
       accepted: true,
       deltas: {},
     });
-    expect(session.snapshot().eventFlags).toContain('flowers:collected');
-    expect(session.snapshot().journalEntries[0]?.nighttime).toMatchObject({
-      kind: 'event',
-      event: { eventId: 'flowers', attemptedItemId: 'bucket' },
+    session.perform('endDay');
+    session.resolveEvent({ kind: 'endure' });
+    expect(session.snapshot().journalEntries[0]?.daytime).toMatchObject({
+      eventId: 'flowers', attemptedItemId: 'bucket',
     });
   });
 
@@ -986,7 +1009,7 @@ describe('SurvivalSession daytime actions', () => {
       seed: 111, random: sequenceRandom([0]), initial: { day: 9 }, initialEventId: 'death-stare',
     });
     expect(session.resolveEvent(choiceResponse('sleep'))).toMatchObject({
-      accepted: true, message: 'Nothing happens.', deltas: {},
+      accepted: true, message: 'The shape loses interest and sinks away.', deltas: {},
     });
     expect(session.snapshot()).toMatchObject({ health: 100, hull: 100, state: 'nightEvent' });
   });
@@ -1379,7 +1402,7 @@ describe('SurvivalSession daytime actions', () => {
   it('draws Drifting Bottle from the eligible day event pool at dawn', () => {
     const session = new SurvivalSession(saved(), {
       seed: 201,
-      random: sequenceRandom([0, 0, 0.99]),
+      random: sequenceRandom([0, 0, 0.5]),
       initial: { day: 2 },
     });
 
@@ -2224,7 +2247,6 @@ describe('SurvivalSession daytime actions', () => {
       });
       expect(session.snapshot()).toMatchObject({
         rescueProgress,
-        eventFlags: expect.arrayContaining(['direction2']),
       });
       for (const itemState of Object.values(session.snapshot().inventory)) {
         expect(itemState?.condition).toBe('usable');
@@ -2258,10 +2280,39 @@ describe('SurvivalSession daytime actions', () => {
           phase: 'night',
           attemptedChoiceId: 'sleep',
           attemptedItemId: null,
-          resolution: 'endure',
+          choiceLabel: 'Sleep',
         }),
       },
     })]);
+  });
+
+  it('records an item action without claiming it helped', () => {
+    const session = new SurvivalSession(saved('flashlight'), {
+      seed: 40,
+      random: sequenceRandom([0.99]),
+      initialEventId: 'death-stare',
+    });
+
+    session.resolveEvent(itemResponse('flashlight'));
+    const page = formatJournalEntry(session.snapshot().journalEntries[0]!);
+
+    expect(page.nighttime).toContain('I used the flashlight.');
+    expect(page.nighttime).toContain('The flashlight is lost.');
+    expect(page.nighttime).not.toContain('it helped');
+  });
+
+  it('records the selected contextual label and actual result', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 41,
+      random: sequenceRandom([0]),
+      initialEventId: 'midnight-tour',
+    });
+
+    session.resolveEvent(choiceResponse('sleep'));
+    const page = formatJournalEntry(session.snapshot().journalEntries[0]!);
+
+    expect(page.nighttime).toContain('I chose \u201cSail On\u201d.');
+    expect(page.nighttime).toContain('The island disappears into the dark.');
   });
 
   it('records a quiet day and protects internal history from snapshot mutation', () => {

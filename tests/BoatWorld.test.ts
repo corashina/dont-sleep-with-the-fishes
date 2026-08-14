@@ -56,10 +56,10 @@ import { ChestDisplay } from '../src/survival/ChestDisplay';
 import { DANGEROUS_WATERS_ITEM_DURATION } from '../src/survival/DangerousWatersPresentation';
 import { DivePresentation } from '../src/survival/DivePresentation';
 import {
-  FOCUSED_EVENT_IDS,
   type FocusedEventPresentation,
   type FocusedEventPresentationFactories,
 } from '../src/survival/FocusedEventPresentation';
+import { FOCUSED_EVENT_IDS } from '../src/survival/eventPresentationRoutes';
 import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
 import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
 import { EventItemEffects } from '../src/survival/EventItemEffects';
@@ -366,7 +366,6 @@ function snapshot(
     repairMaterial: 0,
     rescueProgress: 0,
     chest: { state: 'none', acquiredDay: null },
-    eventFlags: [],
     weather: 'calm',
     actedToday: false,
     journalEntries: [],
@@ -792,6 +791,38 @@ describe('BoatWorld helpers', () => {
       expect(presenter.dispose).toHaveBeenCalledOnce();
     }
     propModels.dispose();
+  });
+
+  it('keeps weather reveal choreography for focused and featured routes', async () => {
+    const propModels = createTestPropModels();
+    const focused = focusedPresenterTestDouble('handyman');
+    const weatherReveal = vi.spyOn(WeatherEventAnimator.prototype, 'reveal');
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      { handyman: () => focused.presenter },
+    );
+
+    try {
+      world.stageEvent('handyman');
+      await world.revealEvent('handyman');
+      expect(weatherReveal).toHaveBeenNthCalledWith(1, 'handyman');
+
+      world.stageEvent('flowers');
+      const featuredReveal = world.revealEvent('flowers');
+      expect(weatherReveal).toHaveBeenNthCalledWith(2, 'flowers');
+      world.setDocumentHidden(true);
+      await featuredReveal;
+    } finally {
+      weatherReveal.mockRestore();
+      world.dispose();
+      propModels.dispose();
+    }
   });
 
   it('registers the five authored focused event presenters', () => {
@@ -2051,17 +2082,21 @@ describe('BoatWorld helpers', () => {
     },
   );
 
-  it('keeps Check the Back front-facing until its result turns astern', async () => {
+  it('holds Check the Back astern for reveal, fish, and ignore results', async () => {
     const propModels = createTestPropModels();
     const camera = new PerspectiveCamera();
     const world = new BoatWorld(camera, propModels, createTestMoonTexture());
-    const baseQuaternion = camera.quaternion.toArray();
+    const expectAstern = (): void => {
+      const direction = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+      expect(direction.z).toBeGreaterThan(0.99);
+    };
 
     world.stageEvent('check-the-back');
     const reveal = world.revealEvent('check-the-back');
     world.update(2, 2);
     await reveal;
-    expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
+    world.update(2.1, 0.1);
+    expectAstern();
     expect(world.scene.getObjectByName('check-back:fish')?.visible).toBe(false);
 
     const fish = world.reactToEventOutcome('check-the-back', {
@@ -2075,6 +2110,20 @@ describe('BoatWorld helpers', () => {
     world.update(4, 2);
     await fish;
     expect(world.scene.getObjectByName('check-back:fish')?.visible).toBe(true);
+    expectAstern();
+
+    const ignore = world.reactToEventOutcome('check-the-back', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The wake passes behind the boat.',
+      deltas: {},
+      cue: 'none',
+      eventPresentationKey: 'check-the-back.ignore',
+    });
+    world.update(6, 2);
+    await ignore;
+    expect(world.scene.getObjectByName('check-back:fish')?.visible).toBe(false);
+    expectAstern();
 
     world.dispose();
     propModels.dispose();
@@ -2818,6 +2867,7 @@ describe('BoatWorld helpers', () => {
       {
         outcome,
         resourceDeltas: {},
+        gainedInstanceIds: [],
         brokenInstanceIds: [],
         lostInstanceIds: [],
         consumedInstanceIds: [],
@@ -2964,6 +3014,7 @@ describe('BoatWorld helpers', () => {
           {
             outcome,
             resourceDeltas: {},
+            gainedInstanceIds: [],
             brokenInstanceIds: [],
             lostInstanceIds: [],
             consumedInstanceIds: [],
@@ -3032,6 +3083,7 @@ describe('BoatWorld helpers', () => {
       {
         outcome,
         resourceDeltas: {},
+        gainedInstanceIds: [],
         brokenInstanceIds: [],
         lostInstanceIds: [],
         consumedInstanceIds: [],
@@ -3112,6 +3164,7 @@ describe('BoatWorld helpers', () => {
       {
         outcome,
         resourceDeltas: {},
+        gainedInstanceIds: [],
         brokenInstanceIds: [],
         lostInstanceIds: [],
         consumedInstanceIds: [],
@@ -3221,6 +3274,7 @@ describe('BoatWorld helpers', () => {
       const presentation = {
         outcome,
         resourceDeltas: {},
+        gainedInstanceIds: [],
         brokenInstanceIds: [],
         lostInstanceIds: [],
         consumedInstanceIds: [],
@@ -3349,6 +3403,7 @@ describe('BoatWorld helpers', () => {
           cue: 'none',
         },
         resourceDeltas: {},
+        gainedInstanceIds: [],
         brokenInstanceIds: [],
         lostInstanceIds: [maps[1].instanceId],
         consumedInstanceIds: [],
@@ -3556,6 +3611,7 @@ describe('BoatWorld helpers', () => {
     expect(world.scene.getObjectByName('supernatural-flare-flash')?.visible).toBe(false);
     world.update(6.5, 4.7);
     await reveal;
+    expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(true);
 
     world.dispose();
     propModels.dispose();
@@ -4992,6 +5048,7 @@ describe('BoatWorld helpers', () => {
     const presentation = {
       outcome,
       resourceDeltas: { hull: -7 },
+      gainedInstanceIds: [],
       brokenInstanceIds: ['bucket-1'] as ItemInstanceId[],
       lostInstanceIds: [],
       consumedInstanceIds: [],

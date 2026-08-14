@@ -4,21 +4,12 @@ import type { WaveComponent } from '../ocean/WaveField';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { ChestDisplay } from './ChestDisplay';
+import type { FocusedEventId } from './eventPresentationRoutes';
 import type {
   ActionOutcome,
   EventResultPresentation,
   ItemCondition,
 } from './survivalTypes';
-
-export const FOCUSED_EVENT_IDS = [
-  'chest-attack',
-  'midnight-tour',
-  'night-trader',
-  'handyman',
-  'other-people',
-] as const;
-
-export type FocusedEventId = typeof FOCUSED_EVENT_IDS[number];
 
 export interface EventChoicePresentation {
   readonly choiceId: string;

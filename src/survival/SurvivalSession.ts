@@ -21,7 +21,6 @@ import type {
   JournalCaptainWhiskersDawnRecord,
   JournalNightRecord,
   JournalInventoryMutation,
-  JournalResolution,
 } from './journal';
 import { mulberry32 } from './random';
 import {
@@ -29,7 +28,7 @@ import {
   drawChestReward,
   shouldBecomeMimic,
 } from './chest';
-import { nightDamageMultiplier, pressureForDay } from './RunPressure';
+import { nightDamageMultiplier, pressureForDay, pressureIncreaseForDay } from './RunPressure';
 import { repairEnergyCost, SURVIVAL_BALANCE } from './survivalBalance';
 import {
   advanceCaptainWhiskersDawn,
@@ -48,6 +47,7 @@ import type {
   BeginFishingResult,
   DayActionOption,
   DayActionId,
+  DawnEnergy,
   DriftingLootVariant,
   EventResponse,
   EventResponseId,
@@ -91,7 +91,6 @@ export interface SurvivalSessionOptions {
   initialConditions?: Partial<Record<ItemInstanceId, ItemCondition>>;
   initialEventId?: string;
   initialChest?: ChestSnapshot;
-  initialEventFlags?: readonly string[];
   initialAppearanceCounts?: Readonly<Record<string, number>>;
   initialCaptainWhiskers?: Partial<CaptainWhiskersSnapshot>;
 }
@@ -127,7 +126,6 @@ export class SurvivalSession {
   private rescueProgress: number;
   private chestState: ChestState;
   private chestAcquiredDay: number | null;
-  private readonly eventFlags: Set<string>;
   private weather: WeatherId;
   private actedToday = false;
   private readonly inventory: SurvivalInventoryState;
@@ -138,7 +136,7 @@ export class SurvivalSession {
   private pendingEventTargetId: ItemInstanceId | null = null;
   private pendingDriftingLootVariant: DriftingLootVariant | null = null;
   private readonly pendingDawnBreaks = new Set<ItemInstanceId>();
-  private nextDawnEnergyOverride: 0 | null = null;
+  private nextDawnEnergyOverride: DawnEnergy | null = null;
   private lastEventId: string | null = null;
   private readonly lastSeenDay = new Map<string, number>();
   private readonly appearanceCounts = new Map<string, number>();
@@ -171,7 +169,6 @@ export class SurvivalSession {
     this.chestAcquiredDay = this.chestState === 'none'
       ? null
       : options.initialChest?.acquiredDay ?? this.day;
-    this.eventFlags = new Set(options.initialEventFlags ?? []);
     for (const [eventId, count] of Object.entries(options.initialAppearanceCounts ?? {})) {
       if (!Number.isInteger(count) || count < 0) {
         throw new Error(`Invalid initial appearance count for ${eventId}.`);
@@ -234,7 +231,6 @@ export class SurvivalSession {
         state: this.chestState,
         acquiredDay: this.chestAcquiredDay,
       }),
-      eventFlags: Object.freeze([...this.eventFlags].sort()),
       weather: this.weather,
       actedToday: this.actedToday,
       journalEntries: this.journalSnapshot(),
@@ -533,7 +529,6 @@ export class SurvivalSession {
     }
 
     const mutationExclusions = new Set<ItemInstanceId>();
-    const resolution: JournalResolution = choice.itemId === undefined ? 'endure' : 'suitableItem';
 
     const phase = event.phase;
     const pendingDriftingLootVariant = this.pendingDriftingLootVariant;
@@ -575,7 +570,6 @@ export class SurvivalSession {
       if (mutationResult.mutation !== null) inventoryMutations.push(mutationResult.mutation);
     }
     this.applyChestEffect(resolved.effects.chest);
-    this.applyFlagEffects(resolved.effects.flags);
     this.applyCompanionEventEffects(resolved.effects.companion);
     if (resolved.effects.nextDawnEnergy !== undefined) {
       this.nextDawnEnergyOverride = resolved.effects.nextDawnEnergy;
@@ -619,6 +613,9 @@ export class SurvivalSession {
         : resolved.message,
       deltas,
       cue,
+      ...(resolved.effects.nextDawnEnergy === undefined
+        ? {}
+        : { nextDawnEnergy: resolved.effects.nextDawnEnergy }),
       ...(resolved.presentationKey === undefined
         ? {}
         : { eventPresentationKey: resolved.presentationKey }),
@@ -630,8 +627,8 @@ export class SurvivalSession {
       this.recordJournalEvent(
         event,
         choiceId,
+        choice.label,
         attemptedItemId,
-        resolution,
         outcome,
         inventoryMutations,
       );
@@ -683,10 +680,8 @@ export class SurvivalSession {
       hunger: SURVIVAL_BALANCE.dawn.hungerIncrease,
       energy: morningEnergy - this.energy,
     };
-    const scheduledPressure = pressureForDay(this.day);
-    if (scheduledPressure > this.pressure) {
-      deltas.pressure = scheduledPressure - this.pressure;
-    }
+    const pressureIncrease = pressureIncreaseForDay(this.day);
+    if (pressureIncrease > 0) deltas.pressure = pressureIncrease;
     if (hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.maximum) {
       deltas.health = -SURVIVAL_BALANCE.dawn.starvationDamage;
     }
@@ -1055,7 +1050,6 @@ export class SurvivalSession {
       inventoryItemIds: this.targetableItemIds(),
       rescueProgress: this.rescueProgress,
       pressure: this.pressure,
-      eventFlags: this.eventFlags,
       chestState: this.chestState,
       hasLivingCompanion: this.captainWhiskers?.alive === true,
     }).filter(({ id }) => !excludedIds.has(id));
@@ -1100,8 +1094,8 @@ export class SurvivalSession {
   private recordJournalEvent(
     event: SurvivalEventDefinition,
     attemptedChoiceId: string | null,
+    choiceLabel: string,
     attemptedItemId: ItemId | null,
-    resolution: JournalResolution,
     outcome: ActionOutcome,
     inventoryMutations: readonly JournalInventoryMutation[],
   ): void {
@@ -1111,8 +1105,8 @@ export class SurvivalSession {
       title: event.title,
       prompt: event.prompt,
       attemptedChoiceId,
+      choiceLabel,
       attemptedItemId,
-      resolution,
       outcomeCode: outcome.code,
       outcomeMessage: outcome.message,
       ...(outcome.eventPresentationKey === undefined
@@ -1322,9 +1316,6 @@ export class SurvivalSession {
     let delta = effect.operation === 'set'
       ? effect.value - current
       : effect.operation === 'add' ? effect.value : -effect.value;
-    if (effect.resource === 'pressure') {
-      delta = Math.max(0, delta);
-    }
     if (phase === 'night'
       && effect.operation === 'subtract'
       && (effect.resource === 'health' || effect.resource === 'hull')) {
@@ -1536,12 +1527,6 @@ export class SurvivalSession {
     }
     this.chestState = 'none';
     this.chestAcquiredDay = null;
-  }
-
-  private applyFlagEffects(effects: WeightedEventOutcome['effects']['flags']): void {
-    if (effects === undefined) return;
-    for (const flag of effects.clear ?? []) this.eventFlags.delete(flag);
-    for (const flag of effects.set ?? []) this.eventFlags.add(flag);
   }
 
   private applyCompanionEventEffects(

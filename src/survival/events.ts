@@ -1,6 +1,7 @@
 import { ITEM_DEFINITIONS, ITEM_IDS, type ItemId } from '../game/ItemState';
 import type {
   EventChoiceDefinition,
+  DawnEnergy,
   EventInventoryMutation,
   EventResource,
   IntegerValue,
@@ -14,25 +15,20 @@ import type {
   WeightedEventOutcome,
 } from './survivalTypes';
 
-export const INCLUDED_EVENT_PHASES = Object.freeze({
-  'dangerous-waters': 'night', leak: 'night', 'school-of-fish': 'night',
-  snatcher: 'night', 'death-stare': 'night', 'swarm-of-anglerfish': 'night',
-  whirlpool: 'night',
-  'shower-night': 'night', 'windy-night': 'night', 'bad-sleep': 'night',
-  thunderstorm: 'night', 'restless-waves': 'night', 'man-in-the-fog': 'night',
-  ghosts: 'night', 'eerie-melody': 'night', 'face-on-the-moon': 'night',
-  'shark-men': 'night', 'sick-companion': 'night', 'shadow-figure': 'night',
-  'sea-watcher': 'night', 'guarded-sleep': 'night',
-  'drifting-loot': 'day', 'drifting-bottle': 'day', 'check-the-back': 'night',
-  'mystery-chest': 'night', 'midnight-tour': 'night', 'night-trader': 'night',
-  handyman: 'night', 'other-people': 'night', flowers: 'night',
-  'chest-attack': 'night',
-} as const);
+export const SURVIVAL_EVENT_IDS = Object.freeze([
+  'dangerous-waters', 'leak', 'school-of-fish', 'snatcher',
+  'death-stare', 'swarm-of-anglerfish', 'whirlpool', 'shower-night',
+  'windy-night', 'bad-sleep', 'thunderstorm', 'restless-waves',
+  'man-in-the-fog', 'ghosts', 'eerie-melody', 'face-on-the-moon',
+  'sick-companion', 'shadow-figure', 'sea-watcher', 'guarded-sleep',
+  'drifting-loot', 'drifting-bottle', 'check-the-back', 'mystery-chest',
+  'flowers', 'chest-attack', 'midnight-tour', 'night-trader',
+  'handyman', 'other-people',
+] as const);
 
-type IncludedEventId = keyof typeof INCLUDED_EVENT_PHASES;
-const EMPTY_FLAGS: ReadonlySet<string> = new Set();
+export type SurvivalEventId = typeof SURVIVAL_EVENT_IDS[number];
 
-const EVENT_REVEAL_TEXT: Readonly<Record<IncludedEventId, string>> = Object.freeze({
+const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.freeze({
   'dangerous-waters': 'Jagged rocks break the surface as the current pulls the boat off course.',
   leak: 'Water pushes through a split in the hull.',
   'school-of-fish': 'A dense school churns the water beside the boat.',
@@ -49,7 +45,6 @@ const EVENT_REVEAL_TEXT: Readonly<Record<IncludedEventId, string>> = Object.free
   ghosts: 'Pale shapes gather around the drifting boat.',
   'eerie-melody': 'A distant melody drifts across the water.',
   'face-on-the-moon': 'A face takes shape across the moon.',
-  'shark-men': 'Fins circle the boat as wet hands reach over the rail.',
   'sick-companion': 'Captain Whiskers lies low and shivers beside the gunwale.',
   'shadow-figure': 'A second cat-shaped shadow watches from beyond the lantern light.',
   'sea-watcher': 'Unblinking eyes gather across the black water.',
@@ -101,13 +96,17 @@ function effects(
   };
 }
 
+function atNextDawn(
+  value: DawnEnergy,
+  outcomeEffects: WeightedEventOutcome['effects'] = {},
+): WeightedEventOutcome['effects'] {
+  return { ...outcomeEffects, nextDawnEnergy: value };
+}
+
 function dangerousWatersEffects(
   resources: readonly ResourceEffect[] = [],
 ): WeightedEventOutcome['effects'] {
-  return {
-    ...(resources.length ? { resources } : {}),
-    flags: { set: ['direction2'] },
-  };
+  return resources.length ? { resources } : {};
 }
 
 const outcome = (
@@ -151,15 +150,11 @@ const contextualChoice = (
   ...outcomes: [WeightedEventOutcome, ...WeightedEventOutcome[]]
 ): EventChoiceDefinition => ({ id, label, outcomes });
 
-function riskForCue(cue: PresentationCue): RiskLabel {
-  if (cue === 'fish') return 'safe';
-  if (cue === 'impact' || cue === 'storm') return 'dangerous';
-  return 'uncertain';
-}
-
 function event(
-  id: IncludedEventId,
+  id: SurvivalEventId,
+  phase: 'day' | 'night',
   title: string,
+  danger: RiskLabel,
   cue: PresentationCue,
   weight: number,
   earliestDay: number,
@@ -169,17 +164,17 @@ function event(
   eligibility: Pick<
     SurvivalEventDefinition,
     | 'maximumAppearances' | 'absentItemIds' | 'minimumRescueProgress'
-    | 'minimumPressure' | 'maximumPressure' | 'requiredFlags'
-    | 'forbiddenFlags' | 'allowedChestStates' | 'requiresLivingCompanion'
+    | 'minimumPressure' | 'maximumPressure' | 'allowedChestStates'
+    | 'requiresLivingCompanion'
   > = {},
 ): SurvivalEventDefinition {
   return {
     id,
-    phase: INCLUDED_EVENT_PHASES[id],
+    phase,
     title,
     revealText: EVENT_REVEAL_TEXT[id],
     prompt: 'Choose a response.',
-    danger: riskForCue(cue),
+    danger,
     cue,
     weight,
     earliestDay,
@@ -199,15 +194,15 @@ function deepFreeze<T>(value: T): T {
 }
 
 export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
-  event('dangerous-waters', 'Dangerous Waters', 'impact', 15, 2, 0, [
+  event('dangerous-waters', 'night', 'Dangerous Waters', 'dangerous', 'impact', 2, 2, 0, [
     choice('map', 'Use Map', 'map',
-      outcome(80, 'Nothing happens.', dangerousWatersEffects()),
+      outcome(80, 'The map guides the boat through a clear channel.', dangerousWatersEffects()),
       outcome(20, 'The rocks damage the boat.', dangerousWatersEffects([
         subtract('hull', { min: 5, max: 10 }),
         add('pressure', 1),
       ]))),
     choice('compass', 'Use Compass', 'compass',
-      outcome(50, 'Nothing happens.', dangerousWatersEffects()),
+      outcome(50, 'The compass holds a safe bearing through the rocks.', dangerousWatersEffects()),
       outcome(50, 'The rocks damage the boat.', dangerousWatersEffects([
         subtract('hull', { min: 5, max: 8 }),
         add('pressure', 1),
@@ -218,27 +213,27 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
         add('pressure', 1),
       ]))),
   ], 30, { maximumAppearances: 1 }),
-  event('leak', 'Leak', 'impact', 10, 4, 0, [
+  event('leak', 'night', 'Leak', 'dangerous', 'impact', 2, 4, 0, [
     choice('ductTape', 'Use Duct Tape', 'ductTape', outcome(1, 'The tape is used.', effects(undefined, [consume('ductTape')]))),
-    choice('bucket', 'Use Bucket', 'bucket', outcome(80, 'Nothing happens.'), outcome(20, 'The boat is damaged.', effects([subtract('hull', { min: 5, max: 10 })], [breakItem('bucket')]))),
+    choice('bucket', 'Use Bucket', 'bucket', outcome(80, 'You keep pace with the rising water until dawn.'), outcome(20, 'The boat is damaged.', effects([subtract('hull', { min: 5, max: 10 })], [breakItem('bucket')]))),
     choice('map', 'Use Map', 'map', outcome(1, 'The map slows the leak.', effects(undefined, [breakItem('map')]))),
     choice('sleep', 'Sleep', undefined,
-      outcome(60, 'The leak damages the boat.', effects([subtract('hull', { min: 15, max: 20 }), set('energy', 2)])),
+      outcome(60, 'The leak damages the boat.', atNextDawn(2, effects([subtract('hull', { min: 15, max: 20 })]))),
       outcome(40, 'The leak damages the boat and takes an item.', effects([subtract('hull', { min: 5, max: 20 })], [loseRandom(1)]))),
   ], undefined, { maximumAppearances: 1 }),
-  event('school-of-fish', 'School of Fish', 'fish', 66, 8, 39, [
+  event('school-of-fish', 'day', 'School of Fish', 'uncertain', 'fish', 4, 8, 39, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet',
       outcome(60, 'You gain three food.', effects([add('food', 3)])),
       outcome(40, 'You gain two food.', effects([add('food', 2)], [breakItem('fishingNet')]))),
     choice('bucket', 'Use Bucket', 'bucket',
       outcome(50, 'You gain one food.', effects([add('food', 1)])),
-      outcome(50, 'Nothing happens.', effects(undefined, [breakItem('bucket')]))),
+      outcome(50, 'The school slips beyond the bucket.', effects(undefined, [breakItem('bucket')]))),
     choice('spyglass', 'Use Binoculars', 'spyglass',
-      outcome(50, 'Nothing happens.'), outcome(50, 'You gain one food.', effects([add('food', 1)]))),
-    choice('sleep', 'Sleep', undefined, outcome(1, 'Nothing happens.')),
+      outcome(50, 'The school passes beyond reach.'), outcome(50, 'You gain one food.', effects([add('food', 1)]))),
+    choice('sleep', 'Sleep', undefined, outcome(1, 'The school moves on before dawn.')),
   ], undefined, { minimumPressure: 1 }),
   {
-    ...event('snatcher', 'Tentacle Attack', 'impact', 28, 8, 45, [
+    ...event('snatcher', 'night', 'Tentacle Attack', 'uncertain', 'impact', 3, 8, 45, [
       choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'You keep sight of the tentacle.', effects(undefined, [breakItem('spyglass')]))),
       choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(1, 'The swim ring is lost.', effects(undefined, [lose('swimRing')]))),
       choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The snatched item is lost.', effects(undefined, [loseEventTarget()]))),
@@ -250,58 +245,58 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       'map', 'scubaSet', 'umbrella', 'cannedFood',
     ],
   },
-  event('death-stare', 'Death Stare', 'impact', 160, 9, 32, [
+  event('death-stare', 'night', 'Death Stare', 'dangerous', 'impact', 4, 9, 32, [
     choice('flashlight', 'Use Flashlight', 'flashlight',
-      outcome(80, 'Nothing happens.'), outcome(35, 'The flashlight is lost.', effects([set('energy', 1)], [lose('flashlight')]))),
+      outcome(80, 'The creature sinks below the beam.'), outcome(35, 'The flashlight is lost.', atNextDawn(1, effects(undefined, [lose('flashlight')])))),
     choice('umbrella', 'Use Umbrella', 'umbrella',
-      outcome(40, 'Nothing happens.'), outcome(50, 'The creature attacks.', effects([subtract('hull', { min: 44, max: 66 }), subtract('health', 60)], [breakItem('umbrella')]))),
+      outcome(40, 'The umbrella breaks the creature\'s gaze.'), outcome(50, 'The creature attacks.', effects([subtract('hull', { min: 44, max: 66 }), subtract('health', 60)], [breakItem('umbrella')]))),
     choice('cannedFood', 'Use Food', 'cannedFood',
       outcome(66, 'You lose two food.', effects([subtract('food', 2)])),
       outcome(33, 'The creature attacks.', effects([subtract('food', 1), subtract('hull', { min: 33, max: 55 }), subtract('health', 50)]))),
     choice('shotgun', 'Use Shotgun', 'shotgun', outcome(1, 'The shotgun is fired.', effects(undefined, [consume('shotgun')]))),
     choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The creature attacks.', effects([subtract('hull', { min: 55, max: 66 }), subtract('health', 70)], [breakItem('fishingNet')]))),
-    choice('sleep', 'Sleep', undefined, outcome(5, 'Nothing happens.'), outcome(85, 'The creature attacks.', effects([subtract('hull', { min: 44, max: 66 }), subtract('health', 60)]))),
+    choice('sleep', 'Sleep', undefined, outcome(5, 'The shape loses interest and sinks away.'), outcome(85, 'The creature attacks.', effects([subtract('hull', { min: 44, max: 66 }), subtract('health', 60)]))),
   ], undefined, { minimumPressure: 1 }),
-  event('swarm-of-anglerfish', 'Swarm of Anglerfish', 'fish', 12, 10, 38, [
+  event('swarm-of-anglerfish', 'night', 'Swarm of Anglerfish', 'dangerous', 'fish', 2, 10, 38, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The net holds the swarm back.', effects(undefined, [breakItem('fishingNet')]))),
     choice('shotgun', 'Use Shotgun', 'shotgun', outcome(1, 'You gain two food.', effects([add('food', 2)], [consume('shotgun')]))),
     choice('flashlight', 'Use Flashlight', 'flashlight', outcome(1, 'The swarm attacks.', effects([subtract('hull', { min: 20, max: 40 }), subtract('health', 50)]))),
     choice('baitTin', 'Use Bait', 'baitTin', outcome(1, 'You lose two bait.', effects([subtract('bait', 2)]))),
     choice('sleep', 'Sleep', undefined,
-      outcome(65, 'The swarm attacks.', effects([subtract('hull', { min: 20, max: 40 }), subtract('health', 50)])), outcome(25, 'Nothing happens.')),
-  ], undefined, { minimumPressure: 1, requiresLivingCompanion: true }),
-  event('whirlpool', 'Whirlpool', 'impact', 5, 12, 30, [
-    choice('anchor', 'Use Anchor', 'anchor', outcome(90, 'Nothing happens.'), outcome(10, 'The boat is damaged.', effects([subtract('hull', { min: 5, max: 10 })], [breakItem('anchor')]))),
+      outcome(65, 'The swarm attacks.', effects([subtract('hull', { min: 20, max: 40 }), subtract('health', 50)])), outcome(25, 'The cold lights scatter before reaching the hull.')),
+  ], undefined, { minimumPressure: 1 }),
+  event('whirlpool', 'night', 'Whirlpool', 'dangerous', 'impact', 1, 12, 30, [
+    choice('anchor', 'Use Anchor', 'anchor', outcome(90, 'The anchor holds the boat outside the current.'), outcome(10, 'The boat is damaged.', effects([subtract('hull', { min: 5, max: 10 })], [breakItem('anchor')]))),
     choice('swimRing', 'Use Swim Ring', 'swimRing',
       outcome(50, 'The boat is damaged.', effects([subtract('hull', { min: 20, max: 40 })])),
       outcome(50, 'The boat is damaged.', effects([subtract('hull', { min: 20, max: 40 })], [breakItem('swimRing')]))),
     choice('sleep', 'Sleep', undefined,
-      outcome(80, 'The boat is damaged.', effects([subtract('hull', { min: 20, max: 40 }), set('energy', 0)])),
-      outcome(30, 'The boat is badly damaged and two items are lost.', effects([subtract('hull', { min: 60, max: 80 }), set('energy', 2)], [loseRandom(2)]))),
+      outcome(80, 'The boat is damaged.', atNextDawn(0, effects([subtract('hull', { min: 20, max: 40 })]))),
+      outcome(30, 'The boat is badly damaged and two items are lost.', atNextDawn(2, effects([subtract('hull', { min: 60, max: 80 })], [loseRandom(2)])))),
   ], undefined, { minimumPressure: 1 }),
-  event('shower-night', 'Shower Night', 'storm', 35, 2, 35, [
+  event('shower-night', 'night', 'Shower Night', 'uncertain', 'storm', 3, 2, 35, [
     choice('bucket', 'Use Bucket', 'bucket', outcome(90, 'The bucket keeps the rain under control.'), outcome(10, 'The bucket keeps the rain under control.', effects(undefined, [breakItem('bucket')]))),
     choice('umbrella', 'Use Umbrella', 'umbrella', outcome(100, 'The umbrella shelters you.'), outcome(50, 'The umbrella shelters you.', effects(undefined, [breakItem('umbrella')]))),
     choice('map', 'Use Map', 'map', outcome(1, 'The map covers the exposed supplies.', effects(undefined, [breakItem('map')]))),
-    choice('sleep', 'Sleep', undefined, outcome(80, 'Nothing happens.'), outcome(20, 'You wake with two energy.', effects([set('energy', 2)]))),
+    choice('sleep', 'Sleep', undefined, outcome(80, 'The rain eases before dawn.'), outcome(20, 'You wake with two energy.', atNextDawn(2))),
   ]),
-  event('windy-night', 'Windy Night', 'storm', 40, 2, 40, [
+  event('windy-night', 'night', 'Windy Night', 'dangerous', 'storm', 4, 2, 40, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The net secures the loose supplies.', effects(undefined, [breakItem('fishingNet')]))),
     choice('map', 'Use Map', 'map', outcome(1, 'The map is lost, but you find food.', effects([add('food', 1)], [lose('map')]))),
-    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(60, 'The umbrella is lost.', effects(undefined, [lose('umbrella')])), outcome(40, 'You wake with two energy.', effects([set('energy', 2)]))),
+    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(60, 'The umbrella is lost.', effects(undefined, [lose('umbrella')])), outcome(40, 'You wake with two energy.', atNextDawn(2))),
     choice('sleep', 'Sleep', undefined,
       outcome(80, 'The wind batters the boat.', effects([subtract('hull', { min: 10, max: 30 })], [breakRandom(2)])),
-      outcome(20, 'The wind batters the boat.', effects([subtract('hull', { min: 10, max: 30 }), set('energy', 1)]))),
+      outcome(20, 'The wind batters the boat.', atNextDawn(1, effects([subtract('hull', { min: 10, max: 30 })])))),
   ]),
-  event('bad-sleep', 'Bad Sleep', 'darkness', 40, 2, 40, [
-    choice('bucket', 'Use Bucket', 'bucket', outcome(1, 'Nothing happens.')),
-    choice('flashlight', 'Use Flashlight', 'flashlight', outcome(1, 'Nothing happens.')),
-    choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(1, 'Nothing happens.')),
-    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(100, 'Nothing happens.'), outcome(5, 'Nothing happens.', effects(undefined, [breakItem('umbrella')]))),
-    choice('sleep', 'Sleep', undefined, outcome(1, 'You wake with two energy.', effects([set('energy', 2)]))),
+  event('bad-sleep', 'night', 'Bad Sleep', 'uncertain', 'darkness', 4, 2, 40, [
+    choice('bucket', 'Use Bucket', 'bucket', outcome(1, 'The hollow bucket knocks through the night.')),
+    choice('flashlight', 'Use Flashlight', 'flashlight', outcome(1, 'The beam finds only empty water.')),
+    choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(1, 'The ring drifts against the gunwale.')),
+    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(100, 'The umbrella shelters a restless sleep.'), outcome(5, 'A hard gust folds the umbrella during the night.', effects(undefined, [breakItem('umbrella')]))),
+    choice('sleep', 'Sleep', undefined, outcome(1, 'You wake with two energy.', atNextDawn(2))),
   ], 10),
-  event('thunderstorm', 'Thunderstorm', 'storm', 40, 2, 35, [
-    choice('anchor', 'Use Anchor', 'anchor', outcome(80, 'Nothing happens.'), outcome(20, 'You wake with two energy.', effects([set('energy', 2)]))),
+  event('thunderstorm', 'night', 'Thunderstorm', 'dangerous', 'storm', 4, 2, 35, [
+    choice('anchor', 'Use Anchor', 'anchor', outcome(80, 'The anchor holds through the storm.'), outcome(20, 'You wake with two energy.', atNextDawn(2))),
     choice('bucket', 'Use Bucket', 'bucket',
       outcome(40, 'The boat is damaged.', effects([subtract('hull', { min: 15, max: 25 })], [breakItem('bucket')])),
       outcome(30, 'The boat is damaged.', effects([subtract('hull', { min: 20, max: 30 })])),
@@ -311,52 +306,58 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       outcome(65, 'The boat is damaged.', effects([subtract('hull', { min: 10, max: 20 })], [breakItem('umbrella')])),
       outcome(35, 'The boat is damaged.', effects([subtract('hull', { min: 20, max: 30 })]))),
     choice('sleep', 'Sleep', undefined,
-      outcome(60, 'The storm damages the boat and takes an item.', effects([subtract('hull', { min: 30, max: 48 }), set('energy', 2)], [loseRandom(1)])),
-      outcome(30, 'The storm damages the boat.', effects([subtract('hull', { min: 20, max: 35 }), set('energy', 2)]))),
+      outcome(60, 'The storm damages the boat and takes an item.', atNextDawn(2, effects([subtract('hull', { min: 30, max: 48 })], [loseRandom(1)]))),
+      outcome(30, 'The storm damages the boat.', atNextDawn(2, effects([subtract('hull', { min: 20, max: 35 })])))),
   ]),
-  event('restless-waves', 'Restless Waves', 'impact', 30, 3, 35, [
-    choice('anchor', 'Use Anchor', 'anchor', outcome(1, 'Nothing happens.')),
+  event('restless-waves', 'night', 'Restless Waves', 'dangerous', 'impact', 3, 3, 35, [
+    choice('anchor', 'Use Anchor', 'anchor', outcome(1, 'The anchor steadies the boat through the waves.')),
     choice('swimRing', 'Use Swim Ring', 'swimRing',
       outcome(50, 'The waves damage the boat.', effects([subtract('hull', { min: 10, max: 20 })])),
       outcome(50, 'The swim ring steadies the boat.', effects(undefined, [breakItem('swimRing')]))),
     choice('sleep', 'Sleep', undefined,
-      outcome(50, 'The waves damage the boat.', effects([subtract('hull', { min: 20, max: 30 }), set('energy', 1)])),
+      outcome(50, 'The waves damage the boat.', atNextDawn(1, effects([subtract('hull', { min: 20, max: 30 })]))),
       outcome(50, 'The waves damage the boat and take an item.', effects([subtract('hull', { min: 15, max: 25 })], [loseRandom(1)]))),
   ]),
-  event('man-in-the-fog', 'Man in the Fog', 'darkness', 18, 6, 40, [
-    choice('compass', 'Use Compass', 'compass', outcome(1, 'Nothing happens.')),
+  event('man-in-the-fog', 'night', 'Man in the Fog', 'dangerous', 'darkness', 2, 6, 40, [
+    choice('compass', 'Use Compass', 'compass',
+      outcome(1, 'The compass keeps the boat on a steady bearing.',
+        effects([subtract('pressure', 1)]))),
     choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'Danger increases.', effects([add('pressure', 1)]))),
     choice('flashlight', 'Use Flashlight', 'flashlight',
-      outcome(70, 'The figure attacks.', effects([add('pressure', 2), subtract('health', 20), set('energy', 1)])),
+      outcome(70, 'The figure attacks.', atNextDawn(1, effects([add('pressure', 2), subtract('health', 20)]))),
       outcome(35, 'Danger increases.', effects([add('pressure', 2)]))),
     choice('sleep', 'Sleep', undefined,
       outcome(50, 'The boat is damaged.', effects([add('pressure', 1), subtract('hull', { min: 10, max: 30 })])),
-      outcome(50, 'You are injured.', effects([add('pressure', 1), subtract('health', 20), set('energy', 2)]))),
+      outcome(50, 'You are injured.', atNextDawn(2, effects([add('pressure', 1), subtract('health', 20)])))),
   ], undefined, { minimumPressure: 1 }),
-  event('ghosts', 'Ghosts', 'darkness', 25, 8, 38, [
-    choice('flareGun', 'Use Flare Gun', 'flareGun', outcome(1, 'The flare is used.', effects(undefined, [consume('flareGun')]))),
-    choice('flashlight', 'Use Flashlight', 'flashlight', outcome(60, 'Nothing happens.'), outcome(40, 'You wake with one energy.', effects([set('energy', 1)]))),
-    choice('sleep', 'Sleep', undefined, outcome(60, 'You wake with two energy.', effects([set('energy', 2)])), outcome(30, 'You wake with one energy.', effects([set('energy', 1)]))),
+  event('ghosts', 'night', 'Ghosts', 'uncertain', 'darkness', 3, 8, 38, [
+    choice('flareGun', 'Use Flare Gun', 'flareGun',
+      outcome(1, 'The flare drives the pale shapes into the dark.',
+        effects([subtract('pressure', 1)], [consume('flareGun')]))),
+    choice('flashlight', 'Use Flashlight', 'flashlight', outcome(60, 'The beam keeps the pale shapes beyond the gunwale.'), outcome(40, 'You wake with one energy.', atNextDawn(1))),
+    choice('sleep', 'Sleep', undefined, outcome(60, 'You wake with two energy.', atNextDawn(2)), outcome(30, 'You wake with one energy.', atNextDawn(1))),
   ], undefined, { minimumPressure: 1 }),
-  event('eerie-melody', 'Eerie Melody', 'darkness', 19, 13, 30, [
-    choice('bucket', 'Use Bucket', 'bucket', outcome(1, 'You wake with one energy.', effects([set('energy', 1)], [breakItem('bucket')]))),
+  event('eerie-melody', 'night', 'Eerie Melody', 'dangerous', 'darkness', 3, 13, 30, [
+    choice('bucket', 'Use Bucket', 'bucket', outcome(1, 'You wake with one energy.', atNextDawn(1, effects(undefined, [breakItem('bucket')])))),
     choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'The siren attacks.', effects([subtract('hull', { min: 50, max: 90 }), subtract('health', 50)]))),
-    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(1, 'The boat is damaged.', effects([subtract('hull', { min: 40, max: 60 }), set('energy', 1)]))),
-    choice('ductTape', 'Use Duct Tape', 'ductTape', outcome(1, 'The duct tape is used.', effects(undefined, [consume('ductTape')]))),
+    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(1, 'The boat is damaged.', atNextDawn(1, effects([subtract('hull', { min: 40, max: 60 })])))),
+    choice('ductTape', 'Use Duct Tape', 'ductTape',
+      outcome(1, 'The tape blocks the melody until it fades.',
+        effects([subtract('pressure', 1)], [consume('ductTape')]))),
     choice('sleep', 'Sleep', undefined,
-      outcome(60, 'You wake exhausted.', effects([set('energy', 0)])),
-      outcome(40, 'The siren attacks.', effects([subtract('hull', { min: 50, max: 90 }), subtract('health', 50), set('energy', 1)]))),
+      outcome(60, 'You wake exhausted.', atNextDawn(0)),
+      outcome(40, 'The siren attacks.', atNextDawn(1, effects([subtract('hull', { min: 50, max: 90 }), subtract('health', 50)])))),
   ], undefined, { minimumPressure: 2 }),
-  event('face-on-the-moon', 'Face on the Moon', 'darkness', 5, 17, 50, [
-    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(1, 'You wake with two energy.', effects([set('energy', 2)]))),
+  event('face-on-the-moon', 'night', 'Face on the Moon', 'uncertain', 'darkness', 1, 17, 50, [
+    choice('umbrella', 'Use Umbrella', 'umbrella', outcome(1, 'You wake with two energy.', atNextDawn(2))),
     choice('spyglass', 'Use Binoculars', 'spyglass',
-      outcome(60, 'You wake with one energy.', effects([set('energy', 1)], [breakItem('spyglass')])),
+      outcome(60, 'You wake with one energy.', atNextDawn(1, effects(undefined, [breakItem('spyglass')]))),
       outcome(40, 'Danger increases.', effects([add('pressure', 1)]))),
     choice('sleep', 'Sleep', undefined,
-      outcome(100, 'You wake exhausted.', effects([set('energy', 0)])),
-      outcome(20, 'You wake with two energy.', effects([set('energy', 2)]))),
+      outcome(100, 'You wake exhausted.', atNextDawn(0)),
+      outcome(20, 'You wake with two energy.', atNextDawn(2))),
   ], undefined, { minimumPressure: 3 }),
-  event('sick-companion', 'Sick Companion', 'darkness', 6, 5, 26, [
+  event('sick-companion', 'night', 'Sick Companion', 'uncertain', 'darkness', 1, 5, 26, [
     choice('medicalKit', 'Use Medkit', 'medicalKit', outcome(
       1,
       'Captain Whiskers recovers.',
@@ -379,7 +380,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       { companion: [{ kind: 'sickness', operation: 'add', value: 2 }] },
     )),
   ], undefined, { requiresLivingCompanion: true }),
-  event('shadow-figure', 'Shadow Figure', 'darkness', 4, 20, 30, [
+  event('shadow-figure', 'night', 'Shadow Figure', 'dangerous', 'darkness', 1, 20, 30, [
     choice('spyglass', 'Use Binoculars', 'spyglass', outcome(
       1,
       'The false shape sharpens in the dark.',
@@ -395,7 +396,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     )),
     contextualChoice('sleep', 'Sleep', outcome(1, 'The shadow leaves before dawn.')),
   ], undefined, { minimumPressure: 3, requiresLivingCompanion: true }),
-  event('sea-watcher', 'Sea Watcher', 'sighting', 9, 20, 40, [
+  event('sea-watcher', 'night', 'Sea Watcher', 'uncertain', 'sighting', 2, 20, 40, [
     contextualChoice('stay-awake', 'Stay Awake', outcome(
       1,
       'You keep watch until dawn.',
@@ -407,7 +408,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       }),
       outcome(10, 'The watcher leaves before dawn.')),
   ], undefined, { minimumPressure: 2, requiresLivingCompanion: true }),
-  event('guarded-sleep', 'Guarded Sleep', 'darkness', 50, 7, 0, [
+  event('guarded-sleep', 'night', 'Guarded Sleep', 'uncertain', 'darkness', 4, 7, 4, [
     contextualChoice('watch', 'Let Whiskers Watch',
       outcome(85, 'Captain Whiskers keeps the night peaceful.'),
       outcome(15, 'Something slips past his watch.', { followUpNight: true })),
@@ -417,7 +418,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       { followUpNight: true },
     )),
   ], undefined, { requiresLivingCompanion: true }),
-  event('drifting-loot', 'Drifting Loot', 'fish', 18, 3, 0, [
+  event('drifting-loot', 'day', 'Drifting Loot', 'safe', 'fish', 2, 3, 3, [
     {
       ...contextualChoice('retrieve', 'Retrieve It',
         featuredOutcome('drifting-loot.food', 45, 'You recover two food.', effects([subtract('energy', 3), add('food', 2)])),
@@ -438,7 +439,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     contextualChoice('sleep', 'Let It Drift',
       featuredOutcome('drifting-loot.drift', 1, 'The loot drifts out of reach.')),
   ]),
-  event('drifting-bottle', 'Drifting Bottle', 'sighting', 30, 2, 0, [
+  event('drifting-bottle', 'day', 'Drifting Bottle', 'safe', 'sighting', 3, 2, 0, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet',
       featuredOutcome('drifting-bottle.retrieve', 1, 'You recover bottled paper.', effects(undefined, [gain('bottledPaper')]))),
     choice('swimRing', 'Use Swim Ring', 'swimRing',
@@ -446,7 +447,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     contextualChoice('sleep', 'Sleep',
       featuredOutcome('drifting-bottle.lost', 1, 'The bottle drifts away.')),
   ], undefined, { maximumAppearances: 1, absentItemIds: ['bottledPaper'] }),
-  event('check-the-back', 'Check the Back', 'fish', 35, 2, 35, [
+  event('check-the-back', 'night', 'Check the Back', 'safe', 'fish', 3, 2, 35, [
     contextualChoice('check', 'Yes',
       featuredOutcome('check-the-back.fish', 500, 'A fish has landed aboard.', effects([add('food', 1)])),
       featuredOutcome('check-the-back.empty', 50, 'There is nothing there.'),
@@ -454,7 +455,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     contextualChoice('sleep', 'No',
       featuredOutcome('check-the-back.ignore', 1, 'You leave the sound alone.')),
   ]),
-  event('mystery-chest', 'Mystery Chest', 'impact', 45, 6, 33, [
+  event('mystery-chest', 'night', 'Mystery Chest', 'dangerous', 'impact', 4, 6, 33, [
     contextualChoice('take', 'Take the Chest',
       featuredOutcome('mystery-chest.safe', 80, 'You haul the closed chest aboard.', { chest: 'acquire' }),
       featuredOutcome('mystery-chest.mimic', 30, 'The chest bites your arm.', {
@@ -464,15 +465,15 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     contextualChoice('sleep', 'Leave',
       featuredOutcome('mystery-chest.leave', 1, 'The chest slips back under the water.')),
   ], undefined, { allowedChestStates: ['none'] }),
-  event('flowers', 'Flowers', 'sighting', 2, 2, 0, [
+  event('flowers', 'day', 'Flowers', 'safe', 'sighting', 1, 2, 0, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet',
-      featuredOutcome('flowers.collect', 1, 'You lift the flowers aboard.', { flags: { set: ['flowers:collected'] } })),
+      featuredOutcome('flowers.collect', 1, 'You lift the flowers aboard.')),
     choice('bucket', 'Use Bucket', 'bucket',
-      featuredOutcome('flowers.collect', 1, 'You gather the flowers in the bucket.', { flags: { set: ['flowers:collected'] } })),
+      featuredOutcome('flowers.collect', 1, 'You gather the flowers in the bucket.')),
     contextualChoice('sleep', 'Let Them Drift',
       featuredOutcome('flowers.drift', 1, 'The flowers drift into the dark.')),
   ], 13, { maximumAppearances: 1 }),
-  event('chest-attack', 'Chest Attack', 'impact', 1, 1, 0, [
+  event('chest-attack', 'night', 'Chest Attack', 'dangerous', 'impact', 1, 1, 0, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet',
       outcome(1, 'The net binds the chest shut.', { chest: 'close' }, 'chest-bound')),
     contextualChoice('sleep', 'Hide',
@@ -481,32 +482,29 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
         chest: 'destroy',
       }, 'chest-hide')),
   ], undefined, { allowedChestStates: ['mimic'] }),
-  event('midnight-tour', 'Midnight Tour', 'sighting', 18, 7, 30, [
+  event('midnight-tour', 'night', 'Midnight Tour', 'dangerous', 'sighting', 2, 7, 30, [
     contextualChoice('visit', 'Visit the Island',
       outcome(50, 'You find a chest.', {
-        resources: [set('energy', 2), add('pressure', 1)],
+        ...atNextDawn(2, { resources: [add('pressure', 1)] }),
         items: [gainChest()],
-        flags: { set: ['direction3'] },
       }, 'tour-chest'),
       outcome(50, 'You find one bait.', {
         resources: [add('bait', 1)],
-        flags: { set: ['direction3'] },
       }, 'tour-bait'),
       outcome(12, 'Something drops from the rocks.', {
         resources: [subtract('health', 35)],
-        flags: { set: ['direction3'] },
       }, 'tour-attack'),
     ),
     contextualChoice('sleep', 'Sail On', outcome(1, 'The island disappears into the dark.', {}, 'tour-pass')),
   ], 40, { minimumPressure: 1, allowedChestStates: ['none'] }),
-  event('night-trader', 'Night Trader', 'sighting', 14, 10, 35, [
+  event('night-trader', 'night', 'Night Trader', 'safe', 'sighting', 2, 10, 35, [
     choice('food', 'Offer Food', 'cannedFood', outcome(1, 'The trader gives you duct tape.', effects([subtract('food', 1)], [gain('ductTape')]), 'trader-reward')),
     choice('bait', 'Offer Bait', 'baitTin', outcome(1, 'The trader gives you an energy bar.', effects([subtract('bait', 1)], [gain('energyBar')]), 'trader-reward')),
     choice('map', 'Offer Map', 'map', outcome(1, 'The trader gives you a compass.', effects(undefined, [lose('map'), gain('compass')]), 'trader-reward')),
     choice('umbrella', 'Offer Umbrella', 'umbrella', outcome(1, 'The trader gives you a medkit.', effects(undefined, [lose('umbrella'), gain('medicalKit')]), 'trader-reward')),
     contextualChoice('sleep', 'Refuse', outcome(1, 'The trader rows on into the night.', {}, 'trader-refuse')),
   ]),
-  event('handyman', 'Handyman', 'repair', 12, 20, 50, [
+  event('handyman', 'night', 'Handyman', 'dangerous', 'repair', 2, 20, 50, [
     choice('spyglass', 'Spyglass for Flashlight', 'spyglass', outcome(1, 'The handyman gives you a flashlight.', effects(undefined, [lose('spyglass'), gain('flashlight')]), 'handyman-reward')),
     choice('flashlight', 'Flashlight for Spyglass', 'flashlight', outcome(1, 'The handyman gives you binoculars.', effects(undefined, [lose('flashlight'), gain('spyglass')]), 'handyman-reward')),
     choice('flareGun', 'Flare Gun for Shotgun', 'flareGun', outcome(1, 'The handyman gives you a shotgun.', effects(undefined, [consume('flareGun'), gain('shotgun')]), 'handyman-reward')),
@@ -532,7 +530,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     )),
     contextualChoice('sleep', 'Sleep', outcome(1, 'The handyman shrugs and drifts away.', {}, 'handyman-sleep')),
   ], undefined, { minimumPressure: 2 }),
-  event('other-people', 'Other People', 'sighting', 10, 15, 20, [
+  event('other-people', 'night', 'Other People', 'safe', 'sighting', 2, 15, 20, [
     choice('flareGun', 'Use Flare Gun', 'flareGun', outcome(1, 'The other boat sees your flare.', { rescue: true, items: [consume('flareGun')] }, 'people-rescue')),
     choice('flashlight', 'Use Flashlight', 'flashlight',
       outcome(40, 'The other boat sees your signal.', { rescue: true }, 'people-rescue'),
@@ -651,7 +649,11 @@ function validateMutation(candidate: unknown, path: string): void {
   }
 }
 
-function validateOutcome(entry: WeightedEventOutcome, path: string): void {
+function validateOutcome(
+  entry: WeightedEventOutcome,
+  path: string,
+  phase: SurvivalEventDefinition['phase'],
+): void {
   const candidateOutcome: unknown = entry;
   assertPlainObject(candidateOutcome, `${path} outcome`);
   assertExactKeys(
@@ -685,7 +687,7 @@ function validateOutcome(entry: WeightedEventOutcome, path: string): void {
     `${path}.effects`,
     'effect',
     [
-      'resources', 'items', 'chest', 'flags', 'rescue', 'companion',
+      'resources', 'items', 'chest', 'rescue', 'companion',
       'nextDawnEnergy', 'followUpNight', 'endingReason',
     ],
   );
@@ -693,13 +695,11 @@ function validateOutcome(entry: WeightedEventOutcome, path: string): void {
   const hasItems = Object.hasOwn(candidateEffects, 'items');
   const hasRescue = Object.hasOwn(candidateEffects, 'rescue');
   const hasChest = Object.hasOwn(candidateEffects, 'chest');
-  const hasFlags = Object.hasOwn(candidateEffects, 'flags');
   const hasCompanion = Object.hasOwn(candidateEffects, 'companion');
   const hasNextDawnEnergy = Object.hasOwn(candidateEffects, 'nextDawnEnergy');
   const hasFollowUpNight = Object.hasOwn(candidateEffects, 'followUpNight');
   const hasEndingReason = Object.hasOwn(candidateEffects, 'endingReason');
   const chest = hasChest ? candidateEffects.chest : undefined;
-  const flags = hasFlags ? candidateEffects.flags : undefined;
   const resourceEntries = hasResources
     ? candidateEffects.resources
     : undefined;
@@ -732,6 +732,11 @@ function validateOutcome(entry: WeightedEventOutcome, path: string): void {
     if (!['add', 'subtract', 'set'].includes(effect.operation)) throw new Error(`${effectPath} has an invalid operation`);
     validateIntegerValue(effect, effectPath);
   }
+  if (phase === 'night' && resources.some(
+    (candidateEffect) => (candidateEffect as ResourceEffect).resource === 'energy',
+  )) {
+    throw new Error(`${path} changes immediate energy during a night event`);
+  }
   for (const [index, itemEffect] of items.entries()) {
     validateMutation(itemEffect, `${path}.items[${index}]`);
   }
@@ -740,18 +745,6 @@ function validateOutcome(entry: WeightedEventOutcome, path: string): void {
   }
   if (hasChest && !['acquire', 'close', 'destroy'].includes(chest as string)) {
     throw new Error(`${path}.chest has an invalid effect`);
-  }
-  if (hasFlags) {
-    assertPlainObject(flags, `${path}.flags`);
-    assertExactKeys(flags, `${path}.flags`, 'flag effect', ['set', 'clear']);
-    for (const key of ['set', 'clear'] as const) {
-      const entries = flags[key];
-      if (entries === undefined) continue;
-      if (!Array.isArray(entries) || entries.length === 0
-        || entries.some((flag) => typeof flag !== 'string' || flag.trim().length === 0)) {
-        throw new Error(`${path}.flags.${key} must contain flag names`);
-      }
-    }
   }
   if (hasCompanion) {
     const companionEffects = candidateEffects.companion;
@@ -793,8 +786,12 @@ function validateOutcome(entry: WeightedEventOutcome, path: string): void {
       throw new Error(`${effectPath} has an unknown companion effect kind`);
     });
   }
-  if (hasNextDawnEnergy && candidateEffects.nextDawnEnergy !== 0) {
-    throw new Error(`${path}.nextDawnEnergy must be zero`);
+  if (hasNextDawnEnergy && (
+    !Number.isInteger(candidateEffects.nextDawnEnergy)
+    || (candidateEffects.nextDawnEnergy as number) < 0
+    || (candidateEffects.nextDawnEnergy as number) > 3
+  )) {
+    throw new Error(`${path}.nextDawnEnergy must be an integer from zero through three`);
   }
   if (hasFollowUpNight && candidateEffects.followUpNight !== true) {
     throw new Error(`${path}.followUpNight must be true`);
@@ -810,6 +807,9 @@ export function validateSurvivalEventCatalog(
   const eventIds = new Set<string>();
   for (const eventEntry of catalog) {
     if (typeof eventEntry.id !== 'string' || eventEntry.id.trim().length === 0) throw new Error('event ID is blank');
+    if (!['safe', 'uncertain', 'dangerous'].includes(eventEntry.danger)) {
+      throw new Error(`${eventEntry.id} danger is invalid`);
+    }
     if (typeof eventEntry.revealText !== 'string' || eventEntry.revealText.trim().length === 0) {
       throw new Error(`${eventEntry.id} reveal text is blank`);
     }
@@ -861,16 +861,6 @@ export function validateSurvivalEventCatalog(
       && eventEntry.maximumPressure !== undefined
       && eventEntry.minimumPressure > eventEntry.maximumPressure) {
       throw new Error(`${eventEntry.id} has inverted pressure bounds`);
-    }
-    for (const [name, flags] of [
-      ['required', eventEntry.requiredFlags],
-      ['forbidden', eventEntry.forbiddenFlags],
-    ] as const) {
-      if (flags === undefined) continue;
-      if (!Array.isArray(flags) || flags.length === 0
-        || flags.some((flag) => typeof flag !== 'string' || flag.trim().length === 0)) {
-        throw new Error(`${eventEntry.id} ${name} flags are invalid`);
-      }
     }
     if (eventEntry.allowedChestStates !== undefined
       && (!Array.isArray(eventEntry.allowedChestStates)
@@ -942,9 +932,19 @@ export function validateSurvivalEventCatalog(
       }
       if (!Array.isArray(eventChoice.outcomes) || eventChoice.outcomes.length === 0) throw new Error(`${eventEntry.id}.${eventChoice.id} outcomes are empty`);
       (eventChoice.outcomes as readonly WeightedEventOutcome[]).forEach(
-        (entry, index) => validateOutcome(entry, `${eventEntry.id}.${eventChoice.id}.outcomes[${index}]`),
+        (entry, index) => validateOutcome(
+          entry,
+          `${eventEntry.id}.${eventChoice.id}.outcomes[${index}]`,
+          eventEntry.phase,
+        ),
       );
     }
+  }
+  for (const id of SURVIVAL_EVENT_IDS) {
+    if (!eventIds.has(id)) throw new Error(`event ${id} is missing`);
+  }
+  if (eventIds.size !== SURVIVAL_EVENT_IDS.length) {
+    throw new Error('event catalog contains an unsupported event');
   }
 }
 
@@ -961,7 +961,6 @@ export interface EventEligibility {
   inventoryItemIds: ReadonlySet<ItemId>;
   rescueProgress: number;
   pressure?: number;
-  eventFlags?: ReadonlySet<string>;
   chestState?: import('./survivalTypes').ChestState;
   hasLivingCompanion?: boolean;
 }
@@ -987,11 +986,6 @@ export function eligibleEvents(
     const pressure = criteria.pressure ?? 0;
     if (eventEntry.minimumPressure !== undefined && pressure < eventEntry.minimumPressure) return false;
     if (eventEntry.maximumPressure !== undefined && pressure > eventEntry.maximumPressure) return false;
-    const flags = criteria.eventFlags ?? EMPTY_FLAGS;
-    if (eventEntry.requiredFlags !== undefined
-      && !eventEntry.requiredFlags.every((flag) => flags.has(flag))) return false;
-    if (eventEntry.forbiddenFlags !== undefined
-      && eventEntry.forbiddenFlags.some((flag) => flags.has(flag))) return false;
     const chestState = criteria.chestState ?? 'none';
     if (eventEntry.allowedChestStates !== undefined
       && !eventEntry.allowedChestStates.includes(chestState)) return false;

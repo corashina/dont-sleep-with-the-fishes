@@ -817,7 +817,7 @@ export class SupernaturalEventAnimator {
     this.restoreCamera();
     switch (active.kind) {
       case 'reveal':
-        if (active.eventId === 'ghosts') this.hideAll();
+        if (active.eventId === 'ghosts') this.settleReaction(active.eventId, null);
         else this.restoreStage();
         active.resolve();
         break;

@@ -185,6 +185,7 @@ describe('CaptainWhiskersEventPresentation', () => {
         cue: 'none',
       },
       resourceDeltas: {},
+      gainedInstanceIds: [],
       brokenInstanceIds: [],
       lostInstanceIds: [],
       consumedInstanceIds: [],

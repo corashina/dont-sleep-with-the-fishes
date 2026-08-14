@@ -2,8 +2,8 @@
 import { Group } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { EventPresentationCoordinator } from '../src/survival/EventPresentationCoordinator';
+import type { DedicatedEventId } from '../src/survival/eventPresentationRoutes';
 import type {
-  DedicatedEventId,
   DedicatedEventPresentation,
   EventOutcomePresentation,
   EventSceneContext,
@@ -45,6 +45,7 @@ const outcome: EventOutcomePresentation = {
     cue: 'none',
   },
   resourceDeltas: {},
+  gainedInstanceIds: [],
   brokenInstanceIds: [],
   lostInstanceIds: [],
   consumedInstanceIds: [],
