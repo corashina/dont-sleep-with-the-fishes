@@ -584,8 +584,8 @@ export class SurvivalUI {
       </section>
       <section class="event-caption" data-event-caption aria-hidden="true" aria-live="polite">
         <h2 class="ui-role-display" data-event-title></h2>
-        <p class="event-caption__detail ui-role-narrative" data-event-detail></p>
-        <p class="event-caption__risk ui-role-context" data-event-risk></p>
+        <p class="event-caption__detail ui-role-narrative" data-event-detail hidden></p>
+        <p class="event-caption__risk ui-role-context" data-event-risk hidden></p>
         <p class="event-caption__result ui-role-context" data-event-result hidden></p>
         <section class="event-result event-result--inline" data-dedicated-event-result role="status" hidden>
           <p class="event-result__message ui-role-narrative" data-event-result-message></p>
@@ -851,7 +851,9 @@ export class SurvivalUI {
       this.eventDetail,
       'SELECT AN ITEM. EACH ITEM RETURNS AFTER ITS ANIMATION.',
     );
+    this.eventDetail.hidden = false;
     this.eventRisk.textContent = '';
+    this.eventRisk.hidden = true;
     this.eventOutcomeResult.textContent = '';
     this.eventOutcomeResult.hidden = true;
     this.eventCaption.dataset.eventId = 'item-animation-lab';
@@ -881,6 +883,8 @@ export class SurvivalUI {
     this.updateText('event:title', this.eventTitle, event.title.toLocaleUpperCase('en-US'));
     this.updateText('event:detail', this.eventDetail, event.revealText);
     this.updateText('event:risk', this.eventRisk, risk);
+    this.eventDetail.hidden = true;
+    this.eventRisk.hidden = true;
     this.eventOutcomeResult.textContent = '';
     this.eventOutcomeResult.hidden = true;
     delete this.eventCaption.dataset.result;
@@ -952,6 +956,8 @@ export class SurvivalUI {
     if (this.disposed) return;
     if (!('title' in view)) {
       this.updateText('event:title', this.eventTitle, view.message);
+      this.eventDetail.hidden = true;
+      this.eventRisk.hidden = true;
       this.eventCaption.dataset.result = 'true';
       this.eventCaption.setAttribute('aria-label', view.message);
       this.eventCaption.classList.add('is-visible');
@@ -963,6 +969,8 @@ export class SurvivalUI {
     }
     this.updateText('event:title', this.eventTitle, view.title);
     this.updateText('event:detail', this.eventDetail, view.detail);
+    this.eventDetail.hidden = false;
+    this.eventRisk.hidden = true;
     this.updateText('event:result', this.eventOutcomeResult, view.result);
     this.eventOutcomeResult.hidden = false;
     this.eventCaption.dataset.result = view.state;
@@ -1053,7 +1061,9 @@ export class SurvivalUI {
     delete this.eventCaption.dataset.danger;
     delete this.eventCaption.dataset.result;
     this.eventDetail.textContent = '';
+    this.eventDetail.hidden = true;
     this.eventRisk.textContent = '';
+    this.eventRisk.hidden = true;
     this.eventOutcomeResult.textContent = '';
     this.eventOutcomeResult.hidden = true;
     this.clearEventResult();
