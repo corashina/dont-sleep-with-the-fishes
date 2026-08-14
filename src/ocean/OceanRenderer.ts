@@ -67,6 +67,18 @@ export const OCEAN_SURFACE_QUALITY = Object.freeze({
     horizonFogEnd: 750,
     horizonFogLimit: 0.82,
   }),
+  ultra: Object.freeze({
+    segments: 384,
+    detailFadeNear: 52,
+    detailFadeFar: 160,
+    surfaceExtent: 180,
+    horizonHalfExtent: 1100,
+    horizonRadialSegments: 96,
+    horizonRadialExponent: 1.75,
+    horizonFogStart: 210,
+    horizonFogEnd: 820,
+    horizonFogLimit: 0.78,
+  }),
 }) satisfies Readonly<Record<WaterQuality, Readonly<OceanSurfaceQuality>>>;
 
 const OCEAN_COLORS = Object.freeze({
@@ -80,11 +92,28 @@ const OCEAN_COLORS = Object.freeze({
     shallow: 0x35a6a0,
     foam: 0xd4ded4,
   }),
+  ultra: Object.freeze({
+    deep: 0x062932,
+    shallow: 0x2f7377,
+    foam: 0xc6cdc4,
+  }),
 }) satisfies Readonly<Record<WaterQuality, Readonly<{
   deep: number;
   shallow: number;
   foam: number;
 }>>>;
+
+function createWaterQualityDefines(
+  quality: WaterQuality,
+): Record<string, number> {
+  if (quality === 'ultra') {
+    return {
+      HIGH_QUALITY_WATER: 1,
+      ULTRA_QUALITY_WATER: 1,
+    };
+  }
+  return quality === 'high' ? { HIGH_QUALITY_WATER: 1 } : {};
+}
 
 export interface OceanAtmosphere {
   fogColor: Color;
@@ -841,9 +870,7 @@ export class OceanRenderer {
       vertexShader,
       fragmentShader,
       transparent: false,
-      ...(quality === 'high'
-        ? { defines: { HIGH_QUALITY_WATER: 1 } }
-        : {}),
+      defines: createWaterQualityDefines(quality),
       uniforms: {
         uTime: { value: 0 },
         uAmplitudeScale: { value: 1 },
@@ -939,16 +966,7 @@ export class OceanRenderer {
     (this.material.uniforms.uDeepColor!.value as Color).setHex(colors.deep);
     (this.material.uniforms.uShallowColor!.value as Color).setHex(colors.shallow);
     (this.material.uniforms.uFoamColor!.value as Color).setHex(colors.foam);
-    if (value === 'high') {
-      this.material.defines = {
-        ...this.material.defines,
-        HIGH_QUALITY_WATER: 1,
-      };
-    } else if (this.material.defines !== undefined) {
-      const defines = { ...this.material.defines };
-      delete defines.HIGH_QUALITY_WATER;
-      this.material.defines = defines;
-    }
+    this.material.defines = createWaterQualityDefines(value);
     this.material.needsUpdate = true;
     this.quality = value;
   }

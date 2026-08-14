@@ -370,8 +370,8 @@ describe('world builders', () => {
     const setQuality = vi.spyOn(OceanRenderer.prototype, 'setQuality');
 
     try {
-      world.setWaterQuality('high');
-      expect(setQuality).toHaveBeenCalledWith('high');
+      world.setWaterQuality('ultra');
+      expect(setQuality).toHaveBeenCalledWith('ultra');
     } finally {
       world.dispose();
       propModels.dispose();

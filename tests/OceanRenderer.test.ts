@@ -1,6 +1,13 @@
 // Importance: 4/5. Protects the low-cost graded ocean horizon geometry.
-import { type BufferAttribute, Vector3 } from 'three';
-import { describe, expect, it } from 'vitest';
+import {
+  type BufferAttribute,
+  type BufferGeometry,
+  Color,
+  Vector2,
+  Vector3,
+  Vector4,
+} from 'three';
+import { describe, expect, it, vi } from 'vitest';
 import {
   OCEAN_SURFACE_QUALITY,
   OceanRenderer,
@@ -35,6 +42,12 @@ function expectedHorizonVertexCount(
   const radialVertices = quality.horizonRadialSegments + 1;
   return 4 * edgeVertices * radialVertices
     + 4 * radialVertices * radialVertices;
+}
+
+function triangleCount(geometry: BufferGeometry): number {
+  const index = geometry.getIndex();
+  if (index === null) throw new Error('Expected indexed ocean geometry.');
+  return index.count / 3;
 }
 
 describe('OceanRenderer horizon geometry', () => {
@@ -89,6 +102,7 @@ describe('OceanRenderer horizon geometry', () => {
   it.each([
     ['low', [150, 650, 0.86]],
     ['high', [180, 750, 0.82]],
+    ['ultra', [210, 820, 0.78]],
   ] as const)(
     'concentrates %s quality vertices beside the surface join',
     (qualityName, expectedFog) => {
@@ -116,34 +130,109 @@ describe('OceanRenderer horizon geometry', () => {
     },
   );
 
-  it('rebuilds the graded horizon when quality changes', () => {
+  it('keeps Ultra geometry below twice High geometry', () => {
+    const high = new OceanRenderer('high');
+    const ultra = new OceanRenderer('ultra');
+
+    expect(triangleCount(ultra.mesh.geometry)).toBe(294_912);
+    expect(triangleCount(ultra.mesh.geometry)).toBeLessThan(
+      triangleCount(high.mesh.geometry) * 2,
+    );
+    expect(
+      ultra.horizonMesh.geometry.getAttribute('position').count,
+    ).toBeLessThan(
+      high.horizonMesh.geometry.getAttribute('position').count * 2,
+    );
+    expect(ultra.mesh.children).toEqual([ultra.horizonMesh]);
+    expect(ultra.horizonMesh.material).toBe(ultra.material);
+
+    high.dispose();
+    ultra.dispose();
+  });
+
+  it.each([
+    ['low', {}],
+    ['high', { HIGH_QUALITY_WATER: 1 }],
+    ['ultra', { HIGH_QUALITY_WATER: 1, ULTRA_QUALITY_WATER: 1 }],
+  ] as const)('uses the exact %s shader defines', (quality, expectedDefines) => {
+    const ocean = new OceanRenderer(quality);
+
+    expect(ocean.material.defines ?? {}).toEqual(expectedDefines);
+    ocean.dispose();
+  });
+
+  it('keeps the four displacement waves identical in Ultra', () => {
+    const low = new OceanRenderer('low');
+    const ultra = new OceanRenderer('ultra');
+    const parameters = (ocean: OceanRenderer): number[][] => (
+      ocean.material.uniforms.uParameters!.value as Vector4[]
+    ).map((value) => value.toArray());
+
+    expect(parameters(ultra)).toEqual(parameters(low));
+    expect(parameters(ultra)).toHaveLength(4);
+
+    low.dispose();
+    ultra.dispose();
+  });
+
+  it('rebuilds geometry and state across Low, Ultra, and High', () => {
     const ocean = new OceanRenderer('low');
+    const lowSurface = ocean.mesh.geometry;
+    const lowHorizon = ocean.horizonMesh.geometry;
+    const lowSurfaceDispose = vi.spyOn(lowSurface, 'dispose');
+    const lowHorizonDispose = vi.spyOn(lowHorizon, 'dispose');
+    const lowMaterialVersion = ocean.material.version;
+    const directions = ocean.material.uniforms.uDirections!.value;
+    const parameters = ocean.material.uniforms.uParameters!.value;
+    const phases = ocean.material.uniforms.uPhases!.value;
+
+    ocean.setQuality('ultra');
+
+    expect(ocean.mesh.geometry).not.toBe(lowSurface);
+    expect(lowSurfaceDispose).toHaveBeenCalledOnce();
+    expect(lowHorizonDispose).toHaveBeenCalledOnce();
+    expect(ocean.material.version).toBe(lowMaterialVersion + 1);
+    expect(ocean.material.uniforms.uDirections!.value).toBe(directions);
+    expect(ocean.material.uniforms.uParameters!.value).toBe(parameters);
+    expect(ocean.material.uniforms.uPhases!.value).toBe(phases);
+    expect((ocean.material.uniforms.uDetailFade!.value as Vector2).toArray())
+      .toEqual([52, 160]);
+    expect((ocean.material.uniforms.uHorizonFog!.value as Vector3).toArray())
+      .toEqual([210, 820, 0.78]);
+    expect((ocean.material.uniforms.uDeepColor!.value as Color).getHex())
+      .toBe(0x062932);
+    expect((ocean.material.uniforms.uShallowColor!.value as Color).getHex())
+      .toBe(0x2f7377);
+    expect((ocean.material.uniforms.uFoamColor!.value as Color).getHex())
+      .toBe(0xc6cdc4);
+    expect(ocean.material.defines).toEqual({
+      HIGH_QUALITY_WATER: 1,
+      ULTRA_QUALITY_WATER: 1,
+    });
+    const ultraSurface = ocean.mesh.geometry;
+    const ultraHorizon = ocean.horizonMesh.geometry;
+    const ultraSurfaceDispose = vi.spyOn(ultraSurface, 'dispose');
+    const ultraHorizonDispose = vi.spyOn(ultraHorizon, 'dispose');
+    const ultraMaterialVersion = ocean.material.version;
 
     ocean.setQuality('high');
 
-    const quality = OCEAN_SURFACE_QUALITY.high;
-    const distances = centerlineRadialDistances(ocean);
-    expect(distances).toHaveLength(quality.horizonRadialSegments + 1);
-    expect(distances[1]! - distances[0]!).toBeLessThanOrEqual(
-      (quality.surfaceExtent / quality.segments) * 1.5,
-    );
-    expect(
-      ocean.horizonMesh.geometry.getAttribute('position').count,
-    ).toBe(expectedHorizonVertexCount(quality));
-    expect(ocean.material.uniforms.uHorizonHaze).toBeUndefined();
-    expect(
-      ocean.material.uniforms.uDistantDetailStrength,
-    ).toBeUndefined();
-    expect(
-      (ocean.material.uniforms.uHorizonFog!.value as Vector3).toArray(),
-    ).toEqual([180, 750, 0.82]);
+    expect(ocean.mesh.geometry).not.toBe(ultraSurface);
+    expect(ultraSurfaceDispose).toHaveBeenCalledOnce();
+    expect(ultraHorizonDispose).toHaveBeenCalledOnce();
+    expect(ocean.material.version).toBe(ultraMaterialVersion + 1);
+    expect((ocean.material.uniforms.uDetailFade!.value as Vector2).toArray())
+      .toEqual([40, 128]);
+    expect((ocean.material.uniforms.uDeepColor!.value as Color).getHex())
+      .toBe(0x073844);
+    expect(ocean.material.defines).toEqual({ HIGH_QUALITY_WATER: 1 });
     ocean.dispose();
   });
 
   it('disposes safely after a quality change', () => {
     const ocean = new OceanRenderer('low');
 
-    ocean.setQuality('high');
+    ocean.setQuality('ultra');
     expect(() => ocean.dispose()).not.toThrow();
     expect(() => ocean.dispose()).not.toThrow();
   });
