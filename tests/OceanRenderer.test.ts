@@ -205,6 +205,22 @@ describe('OceanRenderer horizon geometry', () => {
     const foamStart = shader.indexOf('vec2 ultraQualityFoam');
     const foamEnd = shader.indexOf('#endif', foamStart);
     const foamSource = shader.slice(foamStart, foamEnd);
+    const coverageStart = shader.indexOf(
+      '#ifdef ULTRA_QUALITY_WATER',
+      shader.indexOf('float capFoam;'),
+    );
+    const coverageEnd = shader.indexOf('float capDistanceFade', coverageStart);
+    const coverageElse = shader.indexOf('#else', coverageStart);
+    const ultraCoverage = shader.slice(coverageStart, coverageElse);
+    const nonUltraCoverage = shader.slice(coverageElse, coverageEnd);
+    const colorStart = shader.indexOf(
+      '#ifdef ULTRA_QUALITY_WATER',
+      shader.indexOf('vec3 ultraFoamColor'),
+    );
+    const colorEnd = shader.indexOf('float fogFactor', colorStart);
+    const colorElse = shader.indexOf('#else', colorStart);
+    const ultraColor = shader.slice(colorStart, colorElse);
+    const nonUltraColor = shader.slice(colorElse, colorEnd);
 
     expect(foamStart).toBeGreaterThan(-1);
     expect(foamSource).toContain('calmSuppression');
@@ -213,6 +229,14 @@ describe('OceanRenderer horizon geometry', () => {
     expect(shader).toContain('ultraFoamDistanceFade');
     expect(shader).toContain('ultraFoamColor');
     expect(shader).toContain('bodyFoam = max(bodyFoam * 0.42, ultraFoam.x)');
+    expect(coverageElse).toBeGreaterThan(coverageStart);
+    expect(ultraCoverage).not.toContain('highQualityFoamCoverage');
+    expect(ultraCoverage).not.toContain('highQualityCrestCap');
+    expect(nonUltraCoverage).toContain('highQualityFoamCoverage');
+    expect(nonUltraCoverage).toContain('highQualityCrestCap');
+    expect(colorElse).toBeGreaterThan(colorStart);
+    expect(ultraColor).not.toContain('highFoamLayer');
+    expect(nonUltraColor).toContain('highFoamLayer');
 
     ocean.dispose();
   });
