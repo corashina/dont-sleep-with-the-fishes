@@ -213,7 +213,7 @@ describe('OceanRenderer horizon geometry', () => {
     const coverageElse = shader.indexOf('#else', coverageStart);
     const ultraCoverage = shader.slice(coverageStart, coverageElse);
     const nonUltraCoverage = shader.slice(coverageElse, coverageEnd);
-    const colorStart = shader.indexOf(
+    const colorStart = shader.lastIndexOf(
       '#ifdef ULTRA_QUALITY_WATER',
       shader.indexOf('vec3 ultraFoamColor'),
     );
@@ -234,6 +234,7 @@ describe('OceanRenderer horizon geometry', () => {
     expect(ultraCoverage).not.toContain('highQualityCrestCap');
     expect(nonUltraCoverage).toContain('highQualityFoamCoverage');
     expect(nonUltraCoverage).toContain('highQualityCrestCap');
+    expect(colorStart).toBeGreaterThan(-1);
     expect(colorElse).toBeGreaterThan(colorStart);
     expect(ultraColor).not.toContain('highFoamLayer');
     expect(nonUltraColor).toContain('highFoamLayer');
