@@ -199,6 +199,24 @@ describe('OceanRenderer horizon geometry', () => {
     ocean.dispose();
   });
 
+  it('uses bounded weather-aware Ultra foam instead of stacked High foam', () => {
+    const ocean = new OceanRenderer('ultra');
+    const shader = ocean.material.fragmentShader;
+    const foamStart = shader.indexOf('vec2 ultraQualityFoam');
+    const foamEnd = shader.indexOf('#endif', foamStart);
+    const foamSource = shader.slice(foamStart, foamEnd);
+
+    expect(foamStart).toBeGreaterThan(-1);
+    expect(foamSource).toContain('calmSuppression');
+    expect(foamSource).toContain('trailingEnvelope');
+    expect(foamSource).not.toContain('for (');
+    expect(shader).toContain('ultraFoamDistanceFade');
+    expect(shader).toContain('ultraFoamColor');
+    expect(shader).toContain('bodyFoam = max(bodyFoam * 0.42, ultraFoam.x)');
+
+    ocean.dispose();
+  });
+
   it('rebuilds geometry and state across Low, Ultra, and High', () => {
     const ocean = new OceanRenderer('low');
     const lowSurface = ocean.mesh.geometry;
