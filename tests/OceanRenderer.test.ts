@@ -199,6 +199,24 @@ describe('OceanRenderer horizon geometry', () => {
     ocean.dispose();
   });
 
+  it('keeps Ultra reflection below the dark-body preservation limit', () => {
+    const ocean = new OceanRenderer('ultra');
+    const shader = ocean.material.fragmentShader;
+    const ultraStart = shader.indexOf(
+      '#ifdef ULTRA_QUALITY_WATER',
+      shader.indexOf('float reflectionStrength'),
+    );
+    const ultraEnd = shader.indexOf('#else', ultraStart);
+    const ultraReflection = shader.slice(ultraStart, ultraEnd);
+
+    expect(ultraReflection).toContain(
+      '0.05 + fresnel * mix(0.63, 0.45, ultraRoughnessT)',
+    );
+    expect(ultraReflection).toContain('0.68');
+
+    ocean.dispose();
+  });
+
   it('uses bounded weather-aware Ultra foam instead of stacked High foam', () => {
     const ocean = new OceanRenderer('ultra');
     const shader = ocean.material.fragmentShader;
@@ -238,6 +256,23 @@ describe('OceanRenderer horizon geometry', () => {
     expect(colorElse).toBeGreaterThan(colorStart);
     expect(ultraColor).not.toContain('highFoamLayer');
     expect(nonUltraColor).toContain('highFoamLayer');
+
+    ocean.dispose();
+  });
+
+  it('keeps rejected Ultra storm streaks below the continuous-foam limit', () => {
+    const ocean = new OceanRenderer('ultra');
+    const shader = ocean.material.fragmentShader;
+    const foamStart = shader.indexOf('vec2 ultraQualityFoam');
+    const foamEnd = shader.indexOf('#endif', foamStart);
+    const foamSource = shader.slice(foamStart, foamEnd);
+
+    expect(foamSource).toContain(
+      'crest * breaking * mix(0.12, 1.0, streakMask)',
+    );
+    expect(foamSource).not.toContain(
+      'crest * breaking * mix(0.45, 1.0, streakMask)',
+    );
 
     ocean.dispose();
   });
