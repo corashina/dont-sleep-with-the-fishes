@@ -41,7 +41,6 @@ import { ScavengePhase } from '../src/phases/ScavengePhase';
 import type { ScavengeVisualState, SceneRenderer } from '../src/rendering/SceneRenderer';
 import type { PostProcessingControls } from '../src/rendering/postProcessingControls';
 import { createVisualQualityPreference } from '../src/rendering/visualQuality';
-import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
 import type { PresentationWeatherId } from '../src/weather/presentationWeather';
 import { World } from '../src/world/World';
 import { createTestPropModels } from './helpers/propModels';
@@ -107,10 +106,6 @@ function gamePhase(): GamePhase {
     render: vi.fn(),
     dispose: vi.fn(),
   };
-}
-
-function eventModels(): EventModelLibrary {
-  return { dispose: vi.fn() } as unknown as EventModelLibrary;
 }
 
 function scavengeAudioStub(): ScavengeAudio {
@@ -2444,11 +2439,9 @@ describe('ScavengePhase lifecycle integration', () => {
     const propModels = createTestPropModels();
     const shipFurniture = createTestShipFurniture();
     const skyAssets = createTestSkyAssets();
-    const sharedEventModels = eventModels();
     const disposePropModels = vi.spyOn(propModels, 'dispose');
     const disposeShipFurniture = vi.spyOn(shipFurniture, 'dispose');
     const disposeSkyAssets = vi.spyOn(skyAssets, 'dispose');
-    const disposeEventModels = vi.spyOn(sharedEventModels, 'dispose');
     const scavengeModels: unknown[] = [];
     const survivalModels: unknown[] = [];
     const scavengeSkyAssets: unknown[] = [];
@@ -2457,8 +2450,6 @@ describe('ScavengePhase lifecycle integration', () => {
     const survivalFurniture: unknown[] = [];
     const scavengePhysics: unknown[] = [];
     const survivalPhysics: unknown[] = [];
-    const scavengeEventModels: unknown[] = [];
-    const survivalEventModels: unknown[] = [];
     let complete!: (result: { savedItems: readonly []; elapsedSeconds: number }) => void;
     const game = Game.forTest({
       createMenu: createImmediateMenu,
@@ -2467,7 +2458,6 @@ describe('ScavengePhase lifecycle integration', () => {
         scavengeSkyAssets.push(context.skyAssets);
         scavengeFurniture.push(context.shipFurniture);
         scavengePhysics.push(context.physicsRuntime);
-        scavengeEventModels.push(context.eventModels);
         complete = onComplete;
         return gamePhase();
       },
@@ -2476,7 +2466,6 @@ describe('ScavengePhase lifecycle integration', () => {
         survivalSkyAssets.push(context.skyAssets);
         survivalFurniture.push(context.shipFurniture);
         survivalPhysics.push(context.physicsRuntime);
-        survivalEventModels.push(context.eventModels);
         return gamePhase();
       },
     }, {
@@ -2484,7 +2473,6 @@ describe('ScavengePhase lifecycle integration', () => {
       menuModels: EMPTY_MENU_MODELS,
       shipFurniture,
       skyAssets,
-      eventModels: sharedEventModels,
       physicsRuntime,
     });
 
@@ -2503,17 +2491,13 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(survivalFurniture).toEqual([shipFurniture]);
     expect(scavengePhysics).toEqual([physicsRuntime, physicsRuntime]);
     expect(survivalPhysics).toEqual([physicsRuntime]);
-    expect(scavengeEventModels).toEqual([sharedEventModels, sharedEventModels]);
-    expect(survivalEventModels).toEqual([sharedEventModels]);
     expect(disposePropModels).not.toHaveBeenCalled();
     expect(disposeShipFurniture).not.toHaveBeenCalled();
     expect(disposeSkyAssets).not.toHaveBeenCalled();
-    expect(disposeEventModels).not.toHaveBeenCalled();
     game.dispose();
     expect(disposePropModels).toHaveBeenCalledOnce();
     expect(disposeShipFurniture).toHaveBeenCalledOnce();
     expect(disposeSkyAssets).toHaveBeenCalledOnce();
-    expect(disposeEventModels).toHaveBeenCalledOnce();
   });
 
   it('disposes the active phase before shared furniture and sky assets exactly once', () => {

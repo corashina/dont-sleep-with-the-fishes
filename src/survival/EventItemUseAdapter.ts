@@ -34,7 +34,6 @@ const THROW_WATER_CONTACT_Y = 0.04;
 const THROW_FALLBACK_DISTANCE = 6;
 const ANCHOR_WATER_Z = 0.55;
 const ANCHOR_WATER_X = (lifeboatHullHalfWidthAt(ANCHOR_WATER_Z) ?? 1.63) + 0.48;
-const BUCKET_WATER_X = (lifeboatHullHalfWidthAt(ANCHOR_WATER_Z) ?? 1.63) + 0.82;
 const COMPASS_TURN_AXIS = new Vector3(0, 1, 0);
 type CameraFacingSurface = 'none' | 'y' | 'z';
 
@@ -213,8 +212,8 @@ export class EventItemUseAdapter {
   ): void {
     const blend = sample.cameraTargetBlend;
     if (blend <= 0) return;
-    if (sample.flightTarget === 'starboard-water' || sample.flightTarget === 'bucket-water') {
-      this.setStarboardWaterTarget(actor, sample.flightTarget);
+    if (sample.flightTarget === 'starboard-water') {
+      this.setStarboardWaterTarget(actor);
     } else {
       const aimTarget = this.aimTarget;
       if (aimTarget === null) return;
@@ -246,8 +245,8 @@ export class EventItemUseAdapter {
     const aimTarget = this.aimTarget;
     if (sample.targetBlend <= 0) return;
 
-    if (sample.flightTarget === 'starboard-water' || sample.flightTarget === 'bucket-water') {
-      this.setStarboardWaterTarget(actor, sample.flightTarget);
+    if (sample.flightTarget === 'starboard-water') {
+      this.setStarboardWaterTarget(actor);
     } else if (aimTarget === null) {
       if (!sample.ballisticFlight) return;
       this.camera.getWorldPosition(this.targetWorldPosition);
@@ -288,10 +287,7 @@ export class EventItemUseAdapter {
       this.actionOriginPosition,
       this.actorWorldPosition,
     );
-    this.cameraSpacePosition.addScaledVector(
-      this.actionOriginOffset,
-      -sample.targetBlend,
-    );
+    this.cameraSpacePosition.sub(this.actionOriginOffset);
 
     this.actorParentPosition.copy(this.cameraSpacePosition);
     const parent = actor.root.parent;
@@ -307,15 +303,8 @@ export class EventItemUseAdapter {
     actor.applyPose(this.pose);
   }
 
-  private setStarboardWaterTarget(
-    actor: BorrowedSupplyActor,
-    target: 'starboard-water' | 'bucket-water',
-  ): void {
-    this.targetWorldPosition.set(
-      target === 'bucket-water' ? BUCKET_WATER_X : ANCHOR_WATER_X,
-      0,
-      ANCHOR_WATER_Z,
-    );
+  private setStarboardWaterTarget(actor: BorrowedSupplyActor): void {
+    this.targetWorldPosition.set(ANCHOR_WATER_X, 0, ANCHOR_WATER_Z);
     const actorParent = actor.root.parent;
     if (actorParent !== null) {
       actorParent.updateWorldMatrix(true, false);

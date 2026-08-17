@@ -14,8 +14,6 @@ import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
 import type { PhysicsMode } from '../physics/PhysicsOptions';
 import type { PresentationWeatherId } from '../weather/presentationWeather';
 import type { AudioSystem } from '../audio/AudioSystem';
-import type { SurvivalEventModels } from '../survival/SurvivalEventModelLibrary';
-import type { EventModelLibrary } from '../survival/EventModelLibrary';
 import type { MenuModelLibrary } from '../menu/MenuModelLibrary';
 import type { MenuSandAssets } from '../menu/MenuSandAssets';
 import type { SkyPhase } from '../world/skyPalette';
@@ -28,19 +26,17 @@ export interface PhaseContext {
   waterQuality: WaterQualityPreference;
   camera: PerspectiveCamera;
   propModels: PropModelLibrary;
-  readonly supernaturalEventModels: EventModelLibrary;
   shipFurniture: ShipFurnitureLibrary;
   maxTextureAnisotropy: number;
   skyAssets: SkyAssets;
   lifeboatAssets: LifeboatAssets;
   shipAssets: ShipAssets;
-  eventModels: EventModelLibrary;
   physicsRuntime: PhysicsRuntime | null;
   physicsMode: PhysicsMode;
   audio: AudioSystem;
-  featuredEventModels: SurvivalEventModels;
   menuModels: MenuModelLibrary;
   menuSandAssets: MenuSandAssets;
+  onFatalError(error: unknown): void;
 }
 
 export interface GamePhase {

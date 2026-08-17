@@ -64,6 +64,31 @@ export const SOUND_IDS = [
 export type SoundId = typeof SOUND_IDS[number];
 export type AudioBusId = 'music' | 'ambience' | 'effects' | 'interface';
 
+export const EVENT_ONLY_SOUND_IDS = Object.freeze([
+  'bucketRain',
+  'umbrella',
+  'anchorChain',
+  'anchorSplash',
+  'flashlight',
+  'flareGunShot',
+  'flareGun',
+  'shotgun',
+  'yawn',
+  'thunderLightning',
+  'thunderLightningCrack',
+  'thunderLightningDry',
+  'leak',
+  'tentacleMovement',
+  'eerieMelody',
+  'driftingCargo',
+] as const satisfies readonly SoundId[]);
+
+const eventOnlySounds = new Set<SoundId>(EVENT_ONLY_SOUND_IDS);
+
+export const SHARED_SOUND_IDS = Object.freeze(
+  SOUND_IDS.filter((id) => !eventOnlySounds.has(id)),
+);
+
 export interface AudioAssetDefinition {
   readonly url: string;
   readonly bus: AudioBusId;

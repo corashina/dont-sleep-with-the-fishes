@@ -32,7 +32,8 @@ export interface AudioVoice {
 }
 
 export interface AudioBackend {
-  load(): Promise<void>;
+  acquire(ids: readonly SoundId[]): Promise<void>;
+  release(ids: readonly SoundId[]): void;
   unlock(): Promise<void>;
   play(id: SoundId): AudioVoice | null;
   playSpatialLoop(
