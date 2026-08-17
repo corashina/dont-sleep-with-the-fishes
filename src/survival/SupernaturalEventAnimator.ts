@@ -346,12 +346,15 @@ export class SupernaturalEventAnimator {
     private readonly supplyDisplay: BoatSupplyDisplay,
     eventModels: EventModelLibrary,
     viewCamera?: Object3D,
+    onlyEventId?: string,
   ) {
     this.cameraLook = viewCamera === undefined
       ? null
       : new StationaryEventCamera(viewCamera);
     this.worldRoot.name = 'supernatural-event-world';
-    this.ghosts = Array.from({ length: 5 }, (_, index) => {
+    const includeGhosts = onlyEventId === undefined || onlyEventId === 'ghosts';
+    const includeSiren = onlyEventId === undefined || onlyEventId === 'eerie-melody';
+    this.ghosts = includeGhosts ? Array.from({ length: 5 }, (_, index) => {
       const ghost = eventModels.create('ghost');
       ghost.name = `ghost-${index + 1}`;
       replaceMaterials(ghost, this.ghostMaterial);
@@ -360,8 +363,8 @@ export class SupernaturalEventAnimator {
       ghost.scale.multiplyScalar(0.88 + index * 0.045);
       ghost.visible = false;
       return ghost;
-    });
-    this.siren = eventModels.create('siren');
+    }) : [];
+    this.siren = includeSiren ? eventModels.create('siren') : new Group();
     this.siren.name = 'event-siren';
     tuneReadableMaterials(this.siren, 0.2);
     this.siren.position.set(0, 0, 0);
@@ -371,7 +374,7 @@ export class SupernaturalEventAnimator {
     this.sirenHead = this.siren.getObjectByName('Formad_Head') ?? null;
     if (this.sirenHead !== null) this.sirenHeadBaseRotation.copy(this.sirenHead.rotation);
 
-    this.sirenRock = eventModels.create('sirenRock');
+    this.sirenRock = includeSiren ? eventModels.create('sirenRock') : new Group();
     this.sirenRock.name = 'event-siren-rock';
     tuneReadableMaterials(this.sirenRock, 0.08);
     this.sirenRock.position.set(0, 0, 0);
