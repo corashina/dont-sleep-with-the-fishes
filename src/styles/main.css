@@ -606,7 +606,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .survival-meter--health { --meter-accent: #a86252; }
 .survival-meter--hunger { --meter-accent: #b08968; }
 .survival-meter--energy { --meter-accent: #a8a797; }
-.survival-meter--hull { --meter-accent: #78929a; }
+.survival-meter--hull { --meter-accent: #956b49; }
 .survival-meter.is-danger .survival-meter__value { color: #d78a75; }
 .survival-meter__danger { margin-left: 0.35rem; color: #d78a75; }
 
@@ -2262,19 +2262,30 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   gap: 14px;
   padding: 0;
   border: 0;
+  pointer-events: auto;
   transform-origin: top left;
 }
 .survival-condition {
   position: relative;
-  width: 76px;
-  height: 70px;
+  display: grid;
+  grid-template: 'icon' 105px / 114px;
+  min-width: 114px;
+  justify-content: center;
   color: var(--meter-accent);
+}
+.survival-condition__icon {
+  position: relative;
+  grid-area: icon;
+  width: 114px;
+  height: 105px;
+  justify-self: center;
 }
 .survival-condition__art {
   position: absolute;
   inset: 0;
-  width: 76px;
-  height: 70px;
+  width: 114px;
+  height: 105px;
+  stroke-width: 2.5;
 }
 .survival-condition__fill {
   position: absolute;
@@ -2301,7 +2312,35 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .survival-meter--health { --meter-accent: var(--ink-red-bright); }
 .survival-meter--hunger { --meter-accent: #d77362; }
 .survival-meter--energy { --meter-accent: var(--ink-yellow); }
-.survival-meter--hull { --meter-accent: var(--ink-blue); }
+.survival-meter--hull { --meter-accent: #956b49; }
+.survival-meter__tooltip {
+  color: var(--ink-bone);
+  font: 700 1rem/1 var(--font-numeral);
+  text-shadow: 2px 2px 0 #050606;
+}
+.survival-meter__tooltip {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  bottom: auto;
+  z-index: 2;
+  width: max-content;
+  padding: 10px 14px;
+  background: #090b0cf2;
+  clip-path: polygon(2% 2%, 98% 0, 100% 92%, 5% 100%, 0 54%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-50%, -6px);
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+.survival-meter:hover .survival-meter__tooltip,
+.survival-meter:focus-visible .survival-meter__tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+.survival-meter:focus-visible { outline: 2px solid var(--ink-yellow); outline-offset: 4px; }
 .survival-meter.is-danger { animation: condition-jolt .75s steps(2, end) infinite; }
 .survival-top {
   position: absolute;
