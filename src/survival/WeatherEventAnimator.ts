@@ -238,6 +238,7 @@ export class WeatherEventAnimator {
     private readonly supplyDisplay: BoatSupplyDisplay,
     eventModels?: EventModelLibrary,
     viewCamera?: Object3D,
+    onlyEventId?: string,
   ) {
     this.cameraLook = viewCamera === undefined
       ? null
@@ -269,7 +270,9 @@ export class WeatherEventAnimator {
       side: DoubleSide,
     });
     this.ownedMaterials.add(this.figureMaterial);
-    this.silhouette = eventModels === undefined
+    this.silhouette = eventModels === undefined || (
+      onlyEventId !== undefined && onlyEventId !== 'man-in-the-fog'
+    )
       ? new Group()
       : prepareFogMan(eventModels.create('fogMan'), this.figureMaterial);
     this.silhouette.name = 'fog-man-silhouette';

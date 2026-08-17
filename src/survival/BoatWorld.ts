@@ -112,6 +112,7 @@ import { EventPresentationCoordinator } from './EventPresentationCoordinator';
 import {
   eventPresentationRoute,
   isEventPresentationRoute,
+  type DedicatedEventId,
   type FeaturedEventId,
 } from './eventPresentationRoutes';
 import type {
@@ -277,6 +278,7 @@ interface FishingVisuals {
 
 function createDedicatedEventCoordinator(
   environment: DedicatedEventEnvironment,
+  onlyEventId?: DedicatedEventId,
 ): EventPresentationCoordinator {
   const eventModels = {
     create: ((id: string): EventModelInstance => {
@@ -289,14 +291,26 @@ function createDedicatedEventCoordinator(
   } as unknown as EventModelLibrary;
   const dedicatedEnvironment = { ...environment, eventModels };
   const presentations: DedicatedEventPresentation[] = [];
+  const include = (eventId: DedicatedEventId): boolean => (
+    onlyEventId === undefined || onlyEventId === eventId
+  );
   try {
-    presentations.push(new LeakPresentation(dedicatedEnvironment));
-    presentations.push(new SchoolOfFishPresentation(dedicatedEnvironment));
-    presentations.push(new SnatcherPresentation(dedicatedEnvironment));
-    presentations.push(new DeathStarePresentation(dedicatedEnvironment));
-    presentations.push(new AnglerfishSwarmPresentation(dedicatedEnvironment));
-    presentations.push(new WhirlpoolPresentation(dedicatedEnvironment));
+    if (include('leak')) presentations.push(new LeakPresentation(dedicatedEnvironment));
+    if (include('school-of-fish')) {
+      presentations.push(new SchoolOfFishPresentation(dedicatedEnvironment));
+    }
+    if (include('snatcher')) presentations.push(new SnatcherPresentation(dedicatedEnvironment));
+    if (include('death-stare')) {
+      presentations.push(new DeathStarePresentation(dedicatedEnvironment));
+    }
+    if (include('swarm-of-anglerfish')) {
+      presentations.push(new AnglerfishSwarmPresentation(dedicatedEnvironment));
+    }
+    if (include('whirlpool')) {
+      presentations.push(new WhirlpoolPresentation(dedicatedEnvironment));
+    }
     for (const eventId of CAPTAIN_WHISKERS_EVENT_IDS) {
+      if (!include(eventId)) continue;
       presentations.push(new CaptainWhiskersEventPresentation(
         eventId,
         dedicatedEnvironment,
