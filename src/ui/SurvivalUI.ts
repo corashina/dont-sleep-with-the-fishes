@@ -235,13 +235,16 @@ const ROUTINE_DIALOG_PLACEMENTS: Readonly<Record<'fishing' | 'repair' | 'salvage
 const requireElement = createElementRequirement('survival UI');
 
 function meterMarkup(meter: MeterDefinition): string {
+  const artwork = METER_ARTWORK[meter.id];
   return `
     <div class="survival-meter survival-condition survival-meter--${meter.id}" data-meter="${meter.id}" role="meter"
       aria-label="${meter.label}" aria-valuemin="${meter.min}" aria-valuemax="${meter.max}" aria-valuenow="${meter.min}">
-      ${uiArtwork(METER_ARTWORK[meter.id], 'survival-condition__art')}
-      <span class="survival-meter__label ui-role-context">${meter.label}<span class="survival-meter__danger" data-meter-danger aria-hidden="true" hidden>${meter.dangerLabel}</span></span>
-      <div class="survival-meter__track" aria-hidden="true"><div class="survival-meter__fill"></div></div>
-      <span class="survival-meter__value ui-role-numeral" data-meter-value>0</span>
+      <span class="survival-condition__fill" data-meter-fill aria-hidden="true">
+        ${uiArtwork(artwork, 'survival-condition__art survival-condition__fill-art')}
+      </span>
+      <span class="survival-condition__outline" data-meter-outline aria-hidden="true">
+        ${uiArtwork(artwork, 'survival-condition__art survival-condition__outline-art')}
+      </span>
     </div>`;
 }
 
@@ -1943,11 +1946,9 @@ export class SurvivalUI {
     const percentage = ((safe - definition.min) / (definition.max - definition.min)) * 100;
     meter.setAttribute('aria-valuenow', String(safe));
     meter.classList.toggle('is-danger', danger);
-    requireElement<HTMLElement>(meter, '[data-meter-danger]').hidden = !danger;
     if (danger) meter.setAttribute('aria-valuetext', `${safe}, ${definition.dangerLabel.toLowerCase()}`);
     else meter.removeAttribute('aria-valuetext');
     meter.style.setProperty('--meter-value', `${percentage}%`);
-    requireElement<HTMLElement>(meter, '[data-meter-value]').textContent = String(safe);
   }
 
   private showUnavailableActionFeedback(action: DayActionId): boolean {
