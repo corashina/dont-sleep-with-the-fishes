@@ -48,6 +48,20 @@ function completeRoots(): Record<EventModelId, Group> {
 }
 
 describe('EventModelLibrary', () => {
+  it('loads only requested templates', async () => {
+    const roots = completeRoots();
+    const loader: EventModelLoader = {
+      load: vi.fn(async () => roots.ghost),
+    };
+
+    const library = await EventModelLibrary.load(['ghost'], loader);
+
+    expect(loader.load).toHaveBeenCalledOnce();
+    expect(library.create('ghost')).toBeInstanceOf(Group);
+    expect(() => library.create('leakPlanks')).toThrow('Missing event model template');
+    library.dispose();
+  });
+
   it('defines the approved event model IDs', () => {
     expect(EVENT_MODEL_IDS).toEqual([
       'fogMan',
@@ -65,7 +79,7 @@ describe('EventModelLibrary', () => {
 
   it('normalizes templates and makes owned deep clones', async () => {
     const roots = completeRoots();
-    const library = await EventModelLibrary.load(loaderFrom(roots));
+    const library = await EventModelLibrary.load(EVENT_MODEL_IDS, loaderFrom(roots));
 
     for (const id of [
       'leakPlanks',
@@ -106,7 +120,7 @@ describe('EventModelLibrary', () => {
       new VectorKeyframeTrack('joint.position', [0, 1], [0, 0, 0, 1, 0, 0]),
     ]);
     roots.snatcher.animations = [idle];
-    const library = await EventModelLibrary.load(loaderFrom(roots));
+    const library = await EventModelLibrary.load(EVENT_MODEL_IDS, loaderFrom(roots));
     const instance = library.create('snatcher');
 
     expect(instance.root.animations).toEqual([idle]);
@@ -119,7 +133,7 @@ describe('EventModelLibrary', () => {
     const roots = completeRoots();
     roots.snatcher = modelRoot(new BufferGeometry());
 
-    await expect(EventModelLibrary.load(loaderFrom(roots))).rejects.toMatchObject({
+    await expect(EventModelLibrary.load(EVENT_MODEL_IDS, loaderFrom(roots))).rejects.toMatchObject({
       name: 'EventModelLoadError',
       eventModelId: 'snatcher',
     });
@@ -143,7 +157,7 @@ describe('EventModelLibrary', () => {
       }),
     };
 
-    await expect(EventModelLibrary.load(loader)).rejects.toEqual(
+    await expect(EventModelLibrary.load(EVENT_MODEL_IDS, loader)).rejects.toEqual(
       expect.objectContaining<EventModelLoadError>({
         name: 'EventModelLoadError',
         eventModelId: 'anglerFish',
@@ -162,7 +176,7 @@ describe('EventModelLibrary', () => {
         vi.spyOn(mesh.material as MeshStandardMaterial, 'dispose'),
       ];
     });
-    const library = await EventModelLibrary.load(loaderFrom(roots));
+    const library = await EventModelLibrary.load(EVENT_MODEL_IDS, loaderFrom(roots));
     const first = library.create('anglerFish');
     const second = library.create('anglerFish');
     const ownedMeshes = [first, second].map(
@@ -192,7 +206,7 @@ describe('EventModelLibrary', () => {
       new MeshStandardMaterial({ map: sourceTexture }),
     );
     const sourceDispose = vi.spyOn(sourceTexture, 'dispose');
-    const library = await EventModelLibrary.load(loaderFrom(roots));
+    const library = await EventModelLibrary.load(EVENT_MODEL_IDS, loaderFrom(roots));
     const first = library.create('anglerFish');
     const second = library.create('anglerFish');
     const firstTexture = (
