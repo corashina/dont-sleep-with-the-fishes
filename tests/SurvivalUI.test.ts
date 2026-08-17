@@ -193,15 +193,43 @@ describe('SurvivalUI', () => {
       expect(Number.parseFloat(meter.style.getPropertyValue('--meter-value'))).toBeCloseTo(fill);
       expect(meter.querySelector('[data-meter-fill]')).not.toBeNull();
       expect(meter.querySelector('[data-meter-outline]')).not.toBeNull();
+      expect(meter.tabIndex).toBe(0);
     }
 
     const meters = mount.querySelector('[aria-label="Condition meters"]')!;
     expect(meters.querySelector('[data-meter-value]')).toBeNull();
+    expect(meters.querySelector('[data-meter="health"] [data-meter-tooltip]')?.textContent).toBe('50 / 100');
+    expect(meters.querySelector('[data-meter="energy"] [data-meter-tooltip]')?.textContent).toBe('1 / 3');
+    const hungerArtwork = meters.querySelector('[data-meter="hunger"] [data-ui-artwork="hunger"]')!;
+    expect(hungerArtwork.querySelector('[data-hunger-part="body"]')?.getAttribute('d'))
+      .toContain('M22 5h12c-1 11 0 20 5 25');
+    expect(hungerArtwork.querySelector('[data-hunger-part="body"]')?.getAttribute('d'))
+      .toContain('-5-5 2-9 7-11 14L4 67');
+    expect(hungerArtwork.querySelector('[data-hunger-part="pylorus"]')).toBeNull();
+    expect(hungerArtwork.querySelector('[data-hunger-part="shine"]')?.getAttribute('d')).toBe('M36 54c7 4 16 4 24 0');
+    const hullArtwork = meters.querySelector('[data-meter="hull"] [data-ui-artwork="hull"]')!;
+    const hullBody = hullArtwork.querySelector('[data-hull-part="body"]')!;
+    expect(hullBody.getAttribute('d')).not.toMatch(/[CcQqSs]/);
+    expect(hullArtwork.querySelector('[data-hull-part="rim"]')?.getAttribute('d')).toBe('M9 33h62');
+    expect(hullArtwork.querySelector('[data-hull-part="planks"]')).toBeNull();
+    expect(hullArtwork.querySelector('[data-hull-part="cabin"]')).toBeNull();
     expect(meters.querySelector('.survival-meter__label')).toBeNull();
     expect(meters.querySelector('.survival-meter__track')).toBeNull();
-    expect(meters.querySelector('[data-meter-danger]')).toBeNull();
+    expect(meters.querySelector('[data-meter="hull"]')?.getAttribute('aria-valuetext')).toBe('20, low');
     expect(mainStyles).toMatch(
-      /\.survival-condition__art\s*\{[^}]*width:\s*76px;[^}]*height:\s*70px;/s,
+      /\.survival-condition__art\s*\{[^}]*width:\s*114px;[^}]*height:\s*105px;[^}]*stroke-width:\s*2\.5;/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.survival-meter--hull\s*\{\s*--meter-accent:\s*#956b49;\s*\}/,
+    );
+    expect(mainStyles).toMatch(
+      /grid-template:\s*'icon' 105px \/ 114px;/,
+    );
+    expect(mainStyles).toMatch(
+      /\.survival-meter__tooltip\s*\{[^}]*font:\s*700 1rem\/1 var\(--font-numeral\);[^}]*text-shadow:\s*2px 2px 0 #050606;/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.survival-meter__tooltip\s*\{[^}]*top:\s*calc\(100% \+ 10px\);[^}]*bottom:\s*auto;/s,
     );
   });
 

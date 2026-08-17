@@ -236,15 +236,19 @@ const requireElement = createElementRequirement('survival UI');
 
 function meterMarkup(meter: MeterDefinition): string {
   const artwork = METER_ARTWORK[meter.id];
+  const tooltipId = `survival-meter-${meter.id}-tooltip`;
   return `
     <div class="survival-meter survival-condition survival-meter--${meter.id}" data-meter="${meter.id}" role="meter"
-      aria-label="${meter.label}" aria-valuemin="${meter.min}" aria-valuemax="${meter.max}" aria-valuenow="${meter.min}">
-      <span class="survival-condition__fill" data-meter-fill aria-hidden="true">
-        ${uiArtwork(artwork, 'survival-condition__art survival-condition__fill-art')}
+      aria-label="${meter.label}" aria-describedby="${tooltipId}" aria-valuemin="${meter.min}" aria-valuemax="${meter.max}" aria-valuenow="${meter.min}" tabindex="0">
+      <span class="survival-condition__icon" aria-hidden="true">
+        <span class="survival-condition__fill" data-meter-fill>
+          ${uiArtwork(artwork, 'survival-condition__art survival-condition__fill-art')}
+        </span>
+        <span class="survival-condition__outline" data-meter-outline>
+          ${uiArtwork(artwork, 'survival-condition__art survival-condition__outline-art')}
+        </span>
       </span>
-      <span class="survival-condition__outline" data-meter-outline aria-hidden="true">
-        ${uiArtwork(artwork, 'survival-condition__art survival-condition__outline-art')}
-      </span>
+      <span class="survival-meter__tooltip ui-role-numeral" data-meter-tooltip id="${tooltipId}" role="tooltip">${meter.min} / ${meter.max}</span>
     </div>`;
 }
 
@@ -1949,6 +1953,7 @@ export class SurvivalUI {
     if (danger) meter.setAttribute('aria-valuetext', `${safe}, ${definition.dangerLabel.toLowerCase()}`);
     else meter.removeAttribute('aria-valuetext');
     meter.style.setProperty('--meter-value', `${percentage}%`);
+    requireElement<HTMLElement>(meter, '[data-meter-tooltip]').textContent = `${safe} / ${definition.max}`;
   }
 
   private showUnavailableActionFeedback(action: DayActionId): boolean {
