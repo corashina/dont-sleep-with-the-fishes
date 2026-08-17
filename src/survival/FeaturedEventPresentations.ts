@@ -28,7 +28,7 @@ export class FeaturedEventPresentations {
     models: SurvivalEventModels,
     camera: PerspectiveCamera,
     deckTarget: Object3D,
-    onlyEventId?: FeaturedEventId,
+    onlyEventId?: FeaturedEventId | null,
   ) {
     this.root.name = 'featured-event-presentations';
     const include = (eventId: FeaturedEventId): boolean => (

@@ -1,6 +1,5 @@
 import {
   Clock,
-  Group,
   PCFSoftShadowMap,
   PerspectiveCamera,
   SRGBColorSpace,
@@ -8,11 +7,6 @@ import {
   Texture,
 } from 'three';
 import type { GamePhase, PhaseContext } from './app/GamePhase';
-import {
-  EMPTY_SURVIVAL_EVENT_MODELS,
-  type SurvivalEventModelLibrary,
-  type SurvivalEventModels,
-} from './survival/SurvivalEventModelLibrary';
 import {
   EVENT_TEST_OPTIONS,
   createEventTestResult,
@@ -51,8 +45,6 @@ import {
 } from './physics/PhysicsOptions';
 import type { PresentationWeatherId } from './weather/presentationWeather';
 import { AudioSystem } from './audio/AudioSystem';
-import type { EventModelLibrary } from './survival/EventModelLibrary';
-import { createEmptyEventModelLibraryForTest } from './survival/BoatWorld';
 import type { MenuModelLibrary } from './menu/MenuModelLibrary';
 import { MenuSandAssets } from './menu/MenuSandAssets';
 import { MainMenuPhase } from './phases/MainMenuPhase';
@@ -115,12 +107,10 @@ export interface GameTestOptions {
   propModels: PropModelLibrary;
   menuModels: MenuModelLibrary;
   menuSandAssets?: MenuSandAssets;
-  supernaturalEventModels?: EventModelLibrary;
   shipFurniture: ShipFurnitureLibrary;
   skyAssets: SkyAssets;
   lifeboatAssets?: LifeboatAssets;
   shipAssets?: ShipAssets;
-  eventModels?: EventModelLibrary;
   physicsRuntime: PhysicsRuntime | null;
   physicsMode?: PhysicsMode;
   clock?: GameClock;
@@ -131,7 +121,6 @@ export interface GameTestOptions {
   visualQuality?: VisualQualityPreference;
   waterQuality?: WaterQualityPreference;
   audioSystem?: AudioSystem;
-  featuredEventModels?: SurvivalEventModels;
   onFatalError?: (error: unknown) => void;
 }
 
@@ -157,14 +146,11 @@ export class Game {
   private propModels!: PropModelLibrary;
   private menuModels!: MenuModelLibrary;
   private menuSandAssets!: MenuSandAssets;
-  private supernaturalEventModels!: EventModelLibrary;
   private shipFurniture!: ShipFurnitureLibrary;
   private skyAssets!: SkyAssets;
   private lifeboatAssets!: LifeboatAssets;
   private shipAssets!: ShipAssets;
-  private eventModels!: EventModelLibrary;
   private audio!: AudioSystem;
-  private ownedFeaturedEventModels: SurvivalEventModelLibrary | null = null;
   private context!: PhaseContext;
   private factories!: GameFactories;
   private activePhase: GamePhase | null = null;
@@ -190,13 +176,11 @@ export class Game {
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
     shipAssets: ShipAssets,
-    eventModels: EventModelLibrary,
     menuModels: MenuModelLibrary,
     menuSandAssets: MenuSandAssets,
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode = 'enabled',
     audioSystem: AudioSystem = AudioSystem.silent(),
-    featuredEventModels?: SurvivalEventModelLibrary,
     onFatalError: (error: unknown) => void = rethrowFatalError,
   ) {
     const renderer = new WebGLRenderer({
@@ -238,14 +222,11 @@ export class Game {
         skyAssets,
         lifeboatAssets,
         shipAssets,
-        eventModels,
         menuModels,
         menuSandAssets,
         physicsRuntime,
         physicsMode,
         audioSystem,
-        featuredEventModels ?? EMPTY_SURVIVAL_EVENT_MODELS,
-        featuredEventModels ?? null,
         PRODUCTION_FACTORIES,
         createRandomSeed,
         onFatalError,
@@ -317,11 +298,6 @@ export class Game {
         new Texture(),
         new Texture(),
       ),
-      options.eventModels ?? options.supernaturalEventModels ?? {
-        create: () => new Group(),
-        animations: () => [],
-        dispose: () => undefined,
-      } as unknown as EventModelLibrary,
       options.menuModels,
       options.menuSandAssets ?? MenuSandAssets.fromTextures(
         new Texture(),
@@ -331,8 +307,6 @@ export class Game {
       options.physicsRuntime,
       options.physicsMode ?? 'enabled',
       options.audioSystem ?? AudioSystem.silent(),
-      options.featuredEventModels ?? EMPTY_SURVIVAL_EVENT_MODELS,
-      null,
       factories,
       options.createSeed ?? createRandomSeed,
       options.onFatalError ?? rethrowFatalError,
@@ -375,9 +349,7 @@ export class Game {
       () => this.skyAssets.dispose(),
       () => this.lifeboatAssets.dispose(),
       () => this.shipAssets.dispose(),
-      () => this.eventModels.dispose(),
       () => this.audio.dispose(),
-      () => this.ownedFeaturedEventModels?.dispose(),
       () => this.sceneRenderer.dispose(),
       () => this.renderer.dispose(),
       () => this.renderer.domElement.remove(),
@@ -397,14 +369,11 @@ export class Game {
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
     shipAssets: ShipAssets,
-    eventModels: EventModelLibrary,
     menuModels: MenuModelLibrary,
     menuSandAssets: MenuSandAssets,
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode,
     audioSystem: AudioSystem,
-    featuredEventModels: SurvivalEventModels,
-    ownedFeaturedEventModels: SurvivalEventModelLibrary | null,
     factories: GameFactories,
     createSeed: () => number,
     onFatalError: (error: unknown) => void,
@@ -414,16 +383,13 @@ export class Game {
     this.camera = camera;
     this.clock = clock;
     this.propModels = propModels;
-    this.supernaturalEventModels = eventModels;
     this.shipFurniture = shipFurniture;
     this.skyAssets = skyAssets;
     this.lifeboatAssets = lifeboatAssets;
     this.shipAssets = shipAssets;
-    this.eventModels = eventModels;
     this.menuModels = menuModels;
     this.menuSandAssets = menuSandAssets;
     this.audio = audioSystem;
-    this.ownedFeaturedEventModels = ownedFeaturedEventModels;
     this.factories = factories;
     this.createSeed = createSeed;
     this.onFatalError = onFatalError;
@@ -445,19 +411,17 @@ export class Game {
         waterQuality,
         camera,
         propModels,
-        supernaturalEventModels: eventModels,
         shipFurniture,
         maxTextureAnisotropy,
         skyAssets,
         lifeboatAssets,
         shipAssets,
-        eventModels,
         menuModels,
         menuSandAssets,
         physicsRuntime,
         physicsMode,
         audio: audioSystem,
-        featuredEventModels,
+        onFatalError: (error) => this.reportFatalError(error),
       };
       this.activePhase = null;
       this.performanceStats = null;

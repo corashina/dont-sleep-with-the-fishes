@@ -4,7 +4,7 @@ import {
   EVENT_PRESENTATION_ROUTES,
 } from './eventPresentationRoutes';
 import type { SurvivalEventModelId } from './eventModelManifest';
-import type { SurvivalEventId } from './events';
+import { SURVIVAL_EVENTS, type SurvivalEventId } from './events';
 
 export type EventBundleModelId = EventModelId | SurvivalEventModelId;
 
@@ -45,6 +45,24 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
   'chest-attack': { models: [], sounds: ['chest'] },
 };
 
+const ITEM_SOUNDS = Object.freeze({
+  bucket: ['bucketRain'],
+  umbrella: ['umbrella'],
+  anchor: ['anchorChain', 'anchorSplash'],
+  flashlight: ['flashlight'],
+  flareGun: ['flareGunShot', 'flareGun'],
+  shotgun: ['shotgun'],
+} as const satisfies Partial<Readonly<Record<string, readonly SoundId[]>>>);
+
+const eventChoiceSounds = new Map<SurvivalEventId, readonly SoundId[]>(
+  SURVIVAL_EVENTS.map((event) => [
+    event.id as SurvivalEventId,
+    Object.freeze([...new Set(event.choices.flatMap(({ itemId }) => (
+      itemId === undefined ? [] : ITEM_SOUNDS[itemId as keyof typeof ITEM_SOUNDS] ?? []
+    )))]) as readonly SoundId[],
+  ]),
+);
+
 const eventIds = Object.keys(EVENT_PRESENTATION_ROUTES) as SurvivalEventId[];
 
 export const EVENT_BUNDLE_SPECS = Object.freeze(Object.fromEntries(
@@ -52,7 +70,10 @@ export const EVENT_BUNDLE_SPECS = Object.freeze(Object.fromEntries(
     const resources = RESOURCES[eventId];
     return [eventId, Object.freeze({
       models: Object.freeze([...(resources?.models ?? [])]),
-      sounds: Object.freeze([...(resources?.sounds ?? [])]),
+      sounds: Object.freeze([...new Set([
+        ...(resources?.sounds ?? []),
+        ...(eventChoiceSounds.get(eventId) ?? []),
+      ])]),
     })];
   }),
 ) as Readonly<Record<SurvivalEventId, EventBundleSpec>>);

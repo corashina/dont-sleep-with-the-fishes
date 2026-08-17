@@ -35,10 +35,7 @@ import {
   resolvePresentationWeather,
   type PresentationWeatherId,
 } from '../weather/presentationWeather';
-import {
-  BoatWorld,
-  createEmptyEventModelLibraryForTest,
-} from './BoatWorld';
+import { BoatWorld } from './BoatWorld';
 import {
   type EventChoicePresentation,
 } from './FocusedEventPresentation';
@@ -65,6 +62,9 @@ import type {
   FishingTerminalResult,
 } from './FishingSession';
 import { SurvivalSession } from './SurvivalSession';
+import { EventBundleLoader } from './EventBundle';
+import { EventBundleManager } from './EventBundleManager';
+import type { SurvivalEventId } from './events';
 import type {
   ActionOutcome,
   DayActionId,
@@ -76,7 +76,6 @@ import type {
   SurvivalSnapshot,
   SurvivalState,
 } from './survivalTypes';
-import { EMPTY_SURVIVAL_EVENT_MODELS } from './SurvivalEventModelLibrary';
 
 export interface SurvivalPhaseTestDependencies {
   session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
@@ -87,7 +86,25 @@ export interface SurvivalPhaseTestDependencies {
   audio?: AudioSystem;
   onRestart?: () => void;
   onInvariantError?: (error: Error) => void;
+  onFatalError?: (error: unknown) => void;
+  eventBundles?: EventBundleManagerLike;
   sceneRenderer?: SceneRenderer;
+}
+
+export interface EventBundleManagerLike {
+  beginLoad(eventId: SurvivalEventId): Promise<unknown> | undefined;
+  activate(eventId: SurvivalEventId): Promise<unknown> | undefined;
+  releaseActive(): void;
+  dispose(): void;
+}
+
+function createTestEventBundleManager(): EventBundleManagerLike {
+  return {
+    beginLoad: () => undefined,
+    activate: () => undefined,
+    releaseActive: () => undefined,
+    dispose: () => undefined,
+  };
 }
 
 const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
@@ -312,17 +329,15 @@ function testContext(
     propModels: {} as PropModelLibrary,
     menuModels: { dispose: () => undefined } as unknown as PhaseContext['menuModels'],
     menuSandAssets: {} as PhaseContext['menuSandAssets'],
-    supernaturalEventModels: createEmptyEventModelLibraryForTest(),
     shipFurniture: {} as ShipFurnitureLibrary,
     maxTextureAnisotropy: 1,
     skyAssets: {} as SkyAssets,
     lifeboatAssets: {} as LifeboatAssets,
     shipAssets: {} as ShipAssets,
-    eventModels: createEmptyEventModelLibraryForTest(),
     physicsRuntime: {} as PhysicsRuntime,
     physicsMode: 'enabled',
     audio,
-    featuredEventModels: EMPTY_SURVIVAL_EVENT_MODELS,
+    onFatalError: () => undefined,
   };
 }
 
@@ -371,6 +386,10 @@ export class SurvivalPhase implements GamePhase {
   private cameraLook: SurvivalCameraLook | null = null;
   private audio!: SurvivalAudio;
   private onInvariantError: (error: Error) => void = reportInvariantError;
+  private onFatalError: (error: unknown) => void = (error) => reportInvariantError(
+    error instanceof Error ? error : new Error(String(error)),
+  );
+  private eventBundles!: EventBundleManagerLike;
   private itemAnimationLab = false;
 
   constructor(
@@ -400,25 +419,29 @@ export class SurvivalPhase implements GamePhase {
             : { initialEventId }
         ),
       });
+      const world = new BoatWorld(
+        context.camera,
+        context.propModels,
+        context.skyAssets.moonTexture,
+        session.snapshot().savedItems,
+        context.lifeboatAssets,
+        context.shipFurniture,
+        context.waterQuality?.get() ?? 'low',
+      );
       this.initialize(
         context,
         session,
-        new BoatWorld(
-          context.camera,
-          context.propModels,
-          context.skyAssets.moonTexture,
-          session.snapshot().savedItems,
-          context.lifeboatAssets,
-          context.shipFurniture,
-          context.waterQuality?.get() ?? 'low',
-          context.featuredEventModels,
-          context.eventModels,
-        ),
+        world,
         new SurvivalUI(context.mount),
         scavengeElapsedSeconds,
         onRestart,
         reportInvariantError,
         itemAnimationLab,
+        new EventBundleManager(new EventBundleLoader({
+          audio: context.audio,
+          host: world,
+        })),
+        context.onFatalError,
       );
       this.cameraLook = new SurvivalCameraLook(context.mount, context.camera);
       return;
@@ -432,6 +455,8 @@ export class SurvivalPhase implements GamePhase {
       testDependencies.onRestart ?? onRestart,
       testDependencies.onInvariantError,
       itemAnimationLab,
+      testDependencies.eventBundles ?? createTestEventBundleManager(),
+      testDependencies.onFatalError ?? context.onFatalError,
     );
   }
 
@@ -651,6 +676,7 @@ export class SurvivalPhase implements GamePhase {
     }
     this.cameraLook?.dispose();
     this.cameraLook = null;
+    this.eventBundles.dispose();
     this.audio.dispose();
     this.world.dispose?.();
     this.ui.dispose?.();
@@ -665,6 +691,10 @@ export class SurvivalPhase implements GamePhase {
     onRestart: () => void,
     onInvariantError: (error: Error) => void = reportInvariantError,
     itemAnimationLab = false,
+    eventBundles: EventBundleManagerLike = createTestEventBundleManager(),
+    onFatalError: (error: unknown) => void = (error) => reportInvariantError(
+      error instanceof Error ? error : new Error(String(error)),
+    ),
   ): void {
     this.context = context;
     this.session = session;
@@ -673,6 +703,8 @@ export class SurvivalPhase implements GamePhase {
     this.scavengeElapsedSeconds = scavengeElapsedSeconds;
     this.onRestart = onRestart;
     this.onInvariantError = onInvariantError;
+    this.onFatalError = onFatalError;
+    this.eventBundles = eventBundles;
     this.itemAnimationLab = itemAnimationLab;
     this.audio = new SurvivalAudio(context.audio.createScope());
     this.world.setLightningStrikeListener?.(() => this.audio.thunder());
@@ -732,6 +764,15 @@ export class SurvivalPhase implements GamePhase {
     this.ui.setEventUsing?.(instanceId);
     this.world.setEventSelectedItem?.(instanceId);
     this.setAutomaticWeather(presentationWeatherForEvent(use.eventId));
+    if (!this.beginEventBundleLoad(use.eventId)) return;
+    try {
+      const activation = this.eventBundles.activate(use.eventId as SurvivalEventId);
+      if (activation !== undefined) await activation;
+    } catch (error) {
+      this.onFatalError(error);
+      return;
+    }
+    if (!this.isContinuationActive(generation)) return;
     this.world.stageEvent?.(use.eventId);
 
     try {
@@ -749,6 +790,7 @@ export class SurvivalPhase implements GamePhase {
     } finally {
       if (!this.isContinuationActive(generation)) return;
       this.world.clearEvent?.();
+      this.eventBundles.releaseActive();
       this.setAutomaticWeather(null);
       this.world.setEventSelectedItem?.(null);
       this.world.setEventEligibleItems?.(new Set(this.eventEligibility.keys()));
@@ -1205,6 +1247,12 @@ export class SurvivalPhase implements GamePhase {
     this.eventPresentation = opensEvent ? 'transitioning' : 'sleeping';
     this.setBusy(true);
     if (opensEvent) this.ui.beginEventPresentation?.();
+    const pendingEventId = this.session.snapshot().pendingEventId;
+    if (
+      opensEvent
+      && pendingEventId !== null
+      && !this.beginEventBundleLoad(pendingEventId)
+    ) return;
     await Promise.all([
       this.world.play?.(outcome.cue) ?? Promise.resolve(),
       this.ui.setSleepCovered?.(true) ?? Promise.resolve(),
@@ -1646,6 +1694,12 @@ export class SurvivalPhase implements GamePhase {
 
     await (this.ui.holdEventOutcome?.() ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
+    if (
+      eventState === 'nightEvent'
+      && terminal.state === 'nightEvent'
+      && terminal.pendingEventId !== null
+      && !this.beginEventBundleLoad(terminal.pendingEventId)
+    ) return;
     await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
 
@@ -1836,8 +1890,7 @@ export class SurvivalPhase implements GamePhase {
     if (snapshot.pendingEventId === null || isTerminal(snapshot.state)) return;
     const event = survivalEventById(snapshot.pendingEventId);
     if (event === undefined) return;
-    this.audio.beginEvent(event.id);
-    if (event.id !== 'bad-sleep') this.audio.eventReveal(event.id);
+    if (!this.beginEventBundleLoad(event.id)) return;
     this.eventPresentation = 'transitioning';
     this.eventEligibility.clear();
     this.setBusy(true);
@@ -1848,6 +1901,17 @@ export class SurvivalPhase implements GamePhase {
       await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
       if (!this.isContinuationActive(generation)) return;
     }
+
+    try {
+      const activation = this.eventBundles.activate(event.id as SurvivalEventId);
+      if (activation !== undefined) await activation;
+    } catch (error) {
+      this.onFatalError(error);
+      return;
+    }
+    if (!this.isContinuationActive(generation)) return;
+    this.audio.beginEvent(event.id);
+    if (event.id !== 'bad-sleep') this.audio.eventReveal(event.id);
 
     const current = this.session.snapshot();
     if (current.pendingEventId !== event.id || isTerminal(current.state)) return;
@@ -2023,9 +2087,21 @@ export class SurvivalPhase implements GamePhase {
     this.world.setEventSelectedItem?.(null);
     this.world.setEventEligibleItems?.(null);
     this.world.clearEvent?.();
+    this.eventBundles.releaseActive();
     this.ui.clearEventPresentation?.();
     this.ui.hideDriftingLootResult?.();
     this.setAutomaticWeather(null);
+  }
+
+  private beginEventBundleLoad(eventId: string): boolean {
+    try {
+      const loading = this.eventBundles.beginLoad(eventId as SurvivalEventId);
+      if (loading !== undefined) void loading.catch(() => undefined);
+      return true;
+    } catch (error) {
+      this.onFatalError(error);
+      return false;
+    }
   }
 
   private finishDriftingLootPresentation(): void {

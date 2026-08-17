@@ -316,7 +316,7 @@ export class EventPresentationLayer {
   constructor(
     private readonly dependencies: FocusedEventPresentationDependencies,
     focusedFactories: FocusedEventPresentationFactories = {},
-    onlyEventId?: string,
+    onlyEventId?: string | null,
   ) {
     this.root.name = 'event-presentation-layer';
     this.dangerousWaters = onlyEventId === undefined || onlyEventId === 'dangerous-waters'

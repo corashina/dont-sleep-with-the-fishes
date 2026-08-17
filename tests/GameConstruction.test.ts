@@ -10,7 +10,6 @@ import type { ShipAssets } from '../src/world/ShipAssets';
 import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
 import type { MenuModelLibrary } from '../src/menu/MenuModelLibrary';
 import type { MenuSandAssets } from '../src/menu/MenuSandAssets';
-import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
 import { testPhysicsRuntime } from './helpers/physics';
 
 const physicsRuntime = await testPhysicsRuntime();
@@ -89,7 +88,6 @@ describe('Game construction rollback', () => {
         {} as SkyAssets,
         {} as LifeboatAssets,
         {} as ShipAssets,
-        {} as EventModelLibrary,
         menuModels,
         menuSandAssets,
         physicsRuntime,
@@ -114,7 +112,7 @@ describe('Game construction rollback', () => {
     expect(renderer.dispose).toHaveBeenCalledOnce();
   }, 10_000);
 
-  it('shares and disposes the loaded event model library once', async () => {
+  it('shares and disposes menu assets once', async () => {
     const canvas = document.createElement('canvas');
     const renderer = {
       domElement: canvas,
@@ -124,11 +122,6 @@ describe('Game construction rollback', () => {
       render: vi.fn(),
       dispose: vi.fn(),
     };
-    const eventModels = {
-      create: vi.fn(),
-      animations: vi.fn(() => []),
-      dispose: vi.fn(),
-    } as unknown as EventModelLibrary;
     const menuModels = { dispose: vi.fn() } as unknown as MenuModelLibrary;
     const menuSandAssets = {
       configure: vi.fn(),
@@ -153,7 +146,6 @@ describe('Game construction rollback', () => {
       },
     }, {
       propModels: { dispose: vi.fn() } as unknown as PropModelLibrary,
-      supernaturalEventModels: eventModels,
       shipFurniture: { dispose: vi.fn() } as unknown as ShipFurnitureLibrary,
       skyAssets: { dispose: vi.fn() } as unknown as SkyAssets,
       menuModels,
@@ -163,13 +155,11 @@ describe('Game construction rollback', () => {
       renderer: renderer as never,
     });
 
-    expect(phaseContext?.supernaturalEventModels).toBe(eventModels);
     expect(phaseContext?.menuModels).toBe(menuModels);
     expect(phaseContext?.menuSandAssets).toBe(menuSandAssets);
     expect(menuSandAssets.configure).toHaveBeenCalledWith(1);
     game.dispose();
     game.dispose();
-    expect(eventModels.dispose).toHaveBeenCalledOnce();
     expect(menuModels.dispose).toHaveBeenCalledOnce();
     expect(menuSandAssets.dispose).toHaveBeenCalledOnce();
   });
