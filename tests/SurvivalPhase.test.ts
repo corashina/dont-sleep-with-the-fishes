@@ -167,20 +167,6 @@ describe('formatDiveResult', () => {
   });
 });
 
-describe('SurvivalPhase test context', () => {
-  it('includes an empty event model library', () => {
-    const phase = SurvivalPhase.forTest({
-      session: { snapshot: vi.fn(() => snapshot()) },
-      world: { dispose: vi.fn() },
-      ui: { dispose: vi.fn() },
-    });
-    const context = (phase as unknown as { context: PhaseContext }).context;
-
-    expect(context.supernaturalEventModels.animations('ghost')).toEqual([]);
-    phase.dispose();
-  });
-});
-
 describe('formatEventResult', () => {
   const result = (
     overrides: Partial<EventOutcomePresentation> = {},
@@ -2275,6 +2261,156 @@ describe('SurvivalPhase orchestration', () => {
       'begin-event', 'nightfall', 'cover', 'stage',
       'uncover', 'reveal-tableau', 'caption', 'selection',
     ]);
+  });
+
+  it('starts event loading before cover and holds black until activation', async () => {
+    const loading = deferred();
+    const calls: string[] = [];
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => snapshot({
+          state: 'nightEvent',
+          pendingEventId: 'shower-night',
+        })),
+      },
+      eventBundles: {
+        beginLoad: vi.fn(() => {
+          calls.push('load');
+          return loading.promise;
+        }),
+        activate: vi.fn(async () => {
+          calls.push('activate');
+          await loading.promise;
+          calls.push('active');
+        }),
+        releaseActive: vi.fn(),
+        dispose: vi.fn(),
+      },
+      world: {
+        scene: new Scene(),
+        stageEvent: vi.fn(() => calls.push('stage')),
+        revealEvent: vi.fn(async () => { calls.push('reveal'); }),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(async (covered) => {
+          calls.push(covered ? 'cover' : 'uncover');
+        }),
+        settleCoveredScene: vi.fn(async () => { calls.push('settle'); }),
+        showEventReveal: vi.fn(async () => { calls.push('caption'); }),
+        setEventSelection: vi.fn(() => calls.push('selection')),
+        setBusy: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.start();
+    await flushPromises();
+    expect(calls).toEqual(['load', 'cover', 'activate']);
+
+    loading.resolve();
+    await flushPromises();
+    expect(calls).toEqual([
+      'load', 'cover', 'activate', 'active', 'stage', 'settle',
+      'uncover', 'reveal', 'caption', 'selection',
+    ]);
+    phase.dispose();
+  });
+
+  it('keeps the cover closed and reports a fatal bundle load error', async () => {
+    const failure = new Error('event model failed');
+    const onFatalError = vi.fn();
+    const setSleepCovered = vi.fn(async () => undefined);
+    const stageEvent = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => snapshot({
+          state: 'nightEvent',
+          pendingEventId: 'shower-night',
+        })),
+      },
+      eventBundles: {
+        beginLoad: vi.fn(() => Promise.reject(failure)),
+        activate: vi.fn(() => Promise.reject(failure)),
+        releaseActive: vi.fn(),
+        dispose: vi.fn(),
+      },
+      world: { stageEvent, dispose: vi.fn() },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered,
+        setBusy: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+      onFatalError,
+    });
+
+    phase.start();
+    await flushPromises();
+
+    expect(setSleepCovered).toHaveBeenCalledExactlyOnceWith(true);
+    expect(onFatalError).toHaveBeenCalledExactlyOnceWith(failure);
+    expect(stageEvent).not.toHaveBeenCalled();
+    phase.dispose();
+  });
+
+  it('releases the active event only after the exit cover closes', async () => {
+    const session = new SurvivalSession([], {
+      seed: 41,
+      initialEventId: 'shower-night',
+    });
+    const calls: string[] = [];
+    const releaseActive = vi.fn(() => calls.push('release'));
+    const phase = SurvivalPhase.forTest({
+      session,
+      eventBundles: {
+        beginLoad: vi.fn(() => undefined),
+        activate: vi.fn(() => undefined),
+        releaseActive,
+        dispose: vi.fn(),
+      },
+      world: {
+        scene: new Scene(),
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        play: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome: vi.fn(() => Promise.resolve()),
+        clearEvent: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(async (covered) => {
+          calls.push(covered ? 'cover' : 'uncover');
+        }),
+        settleCoveredScene: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        holdEventOutcome: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        showEventResult: vi.fn(),
+        setBusy: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.start();
+    await flushPromises();
+    calls.length = 0;
+
+    phase.handleEndure();
+    await flushPromises();
+
+    expect(calls.indexOf('cover')).toBeGreaterThanOrEqual(0);
+    expect(calls.indexOf('cover')).toBeLessThan(calls.indexOf('release'));
+    expect(releaseActive).toHaveBeenCalledOnce();
+    phase.dispose();
   });
 
   it('shows the Dangerous Waters caption after its scene reveal', async () => {
@@ -6257,7 +6393,8 @@ describe('SurvivalPhase orchestration', () => {
         onEnded: vi.fn(),
       };
       const backend: AudioBackend = {
-        load: vi.fn(() => Promise.resolve()),
+        acquire: vi.fn(() => Promise.resolve()),
+        release: vi.fn(),
         unlock: vi.fn(() => Promise.resolve()),
         play: vi.fn((id: SoundId) => {
           if (id === 'eerieMelody') calls.push('audio-begin');

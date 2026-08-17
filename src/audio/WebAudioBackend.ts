@@ -7,7 +7,6 @@ import type {
 } from './AudioBackend';
 import {
   AUDIO_MANIFEST,
-  SOUND_IDS,
   type AudioBusId,
   type SoundId,
 } from './audioManifest';
@@ -155,8 +154,9 @@ export class WebAudioBackend implements AudioBackend {
   private readonly master: GainNode;
   private readonly buses: Readonly<Record<AudioBusId, GainNode>>;
   private readonly buffers = new Map<SoundId, AudioBuffer>();
+  private readonly references = new Map<SoundId, number>();
+  private readonly pending = new Map<SoundId, Promise<AudioBuffer>>();
   private readonly voices = new Map<SoundId, WebAudioVoice[]>();
-  private loaded = false;
   private disposed = false;
 
   constructor(
@@ -174,19 +174,32 @@ export class WebAudioBackend implements AudioBackend {
     for (const bus of Object.values(this.buses)) bus.connect(this.master);
   }
 
-  async load(): Promise<void> {
-    if (this.disposed || this.loaded) return;
-    const decoded = await Promise.all(SOUND_IDS.map(async (id) => {
-      const response = await this.fetchAudio(AUDIO_MANIFEST[id].url);
-      if (!response.ok) {
-        throw new Error(`Audio download failed for ${id}: ${response.status}`);
+  async acquire(ids: readonly SoundId[]): Promise<void> {
+    if (this.disposed) throw new Error('Audio backend is disposed.');
+    const uniqueIds = [...new Set(ids)];
+    for (const id of uniqueIds) {
+      this.references.set(id, (this.references.get(id) ?? 0) + 1);
+    }
+    try {
+      await Promise.all(uniqueIds.map((id) => this.loadBuffer(id)));
+      if (this.disposed) throw new Error('Audio backend was disposed while loading.');
+    } catch (error) {
+      this.release(uniqueIds);
+      throw error;
+    }
+  }
+
+  release(ids: readonly SoundId[]): void {
+    for (const id of new Set(ids)) {
+      const references = this.references.get(id) ?? 0;
+      if (references > 1) {
+        this.references.set(id, references - 1);
+        continue;
       }
-      const bytes = await response.arrayBuffer();
-      return [id, await this.context.decodeAudioData(bytes)] as const;
-    }));
-    if (this.disposed) return;
-    for (const [id, buffer] of decoded) this.buffers.set(id, buffer);
-    this.loaded = true;
+      this.references.delete(id);
+      this.stopVoices(id);
+      this.buffers.delete(id);
+    }
   }
 
   async unlock(): Promise<void> {
@@ -195,7 +208,7 @@ export class WebAudioBackend implements AudioBackend {
   }
 
   play(id: SoundId): AudioVoice | null {
-    if (this.disposed || !this.loaded) return null;
+    if (this.disposed) return null;
     const definition = AUDIO_MANIFEST[id];
     const buffer = this.buffers.get(id);
     if (buffer === undefined) return null;
@@ -230,7 +243,7 @@ export class WebAudioBackend implements AudioBackend {
     emitters: readonly SpatialAudioEmitter[],
     options: Readonly<SpatialAudioOptions>,
   ): AudioVoice | null {
-    if (this.disposed || !this.loaded || emitters.length === 0) return null;
+    if (this.disposed || emitters.length === 0) return null;
     const definition = AUDIO_MANIFEST[id];
     const buffer = this.buffers.get(id);
     if (buffer === undefined) return null;
@@ -312,9 +325,43 @@ export class WebAudioBackend implements AudioBackend {
     }
     this.voices.clear();
     this.buffers.clear();
+    this.references.clear();
+    this.pending.clear();
     for (const bus of Object.values(this.buses)) bus.disconnect();
     this.master.disconnect();
     void this.context.close();
+  }
+
+  private loadBuffer(id: SoundId): Promise<AudioBuffer> {
+    const loaded = this.buffers.get(id);
+    if (loaded !== undefined) return Promise.resolve(loaded);
+    const current = this.pending.get(id);
+    if (current !== undefined) return current;
+
+    let request: Promise<AudioBuffer>;
+    request = (async () => {
+      const response = await this.fetchAudio(AUDIO_MANIFEST[id].url);
+      if (!response.ok) {
+        throw new Error(`Audio download failed for ${id}: ${response.status}`);
+      }
+      const bytes = await response.arrayBuffer();
+      const buffer = await this.context.decodeAudioData(bytes);
+      if (!this.disposed && (this.references.get(id) ?? 0) > 0) {
+        this.buffers.set(id, buffer);
+      }
+      return buffer;
+    })().finally(() => {
+      if (this.pending.get(id) === request) this.pending.delete(id);
+    });
+    this.pending.set(id, request);
+    return request;
+  }
+
+  private stopVoices(id: SoundId): void {
+    const active = this.voices.get(id);
+    if (active === undefined) return;
+    this.voices.delete(id);
+    for (const voice of active) voice.stop();
   }
 }
 

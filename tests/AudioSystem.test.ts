@@ -11,6 +11,7 @@ import { AudioSystem } from '../src/audio/AudioSystem';
 import { SurvivalAudio } from '../src/audio/SurvivalAudio';
 import {
   AUDIO_MANIFEST,
+  SHARED_SOUND_IDS,
   type AudioBusId,
   type SoundId,
 } from '../src/audio/audioManifest';
@@ -42,7 +43,9 @@ class FakeAudioBackend implements AudioBackend {
   }> = [];
   readonly listenerPoses: AudioListenerPose[] = [];
 
-  load(): Promise<void> { return Promise.resolve(); }
+  readonly acquire = vi.fn((_ids: readonly SoundId[]) => Promise.resolve());
+  readonly release = vi.fn((_ids: readonly SoundId[]) => undefined);
+
   unlock(): Promise<void> { return Promise.resolve(); }
 
   play(id: SoundId): AudioVoice {
@@ -74,6 +77,28 @@ class FakeAudioBackend implements AudioBackend {
 }
 
 describe('AudioSystem', () => {
+  it('loads only shared sounds during system startup', async () => {
+    const backend = new FakeAudioBackend();
+    const system = await AudioSystem.loadWithBackend(backend);
+
+    expect(backend.acquire).toHaveBeenCalledExactlyOnceWith(SHARED_SOUND_IDS);
+
+    system.dispose();
+  });
+
+  it('releases event buffers after owned voices stop', async () => {
+    const backend = new FakeAudioBackend();
+    const system = AudioSystem.forTest(backend);
+    const scope = system.createScope();
+    const lease = await system.acquireEventAudio(['tentacleMovement']);
+    const voice = scope.startLoop('tentacleMovement') as FakeVoice;
+
+    lease.dispose();
+
+    expect(voice.stop).toHaveBeenCalledOnce();
+    expect(backend.release).toHaveBeenCalledWith(['tentacleMovement']);
+  });
+
   it('stops only voices owned by the disposed scope', () => {
     const backend = new FakeAudioBackend();
     const system = AudioSystem.forTest(backend);

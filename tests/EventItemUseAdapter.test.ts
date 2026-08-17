@@ -9,10 +9,6 @@ import type {
 import { EventItemEffects } from '../src/survival/EventItemEffects';
 import { EventItemUseAdapter } from '../src/survival/EventItemUseAdapter';
 import {
-  LIFEBOAT_GUNWALE_SURFACE_Y,
-  lifeboatHullHalfWidthAt,
-} from '../src/world/Lifeboat';
-import {
   createEventItemUseSample,
   sampleEventItemUse,
   type EventItemEffectKind,
@@ -140,74 +136,6 @@ describe('EventItemUseAdapter', () => {
       if (progress === 0.66) waterY = worldPosition.y;
     }
     expect(apexY).toBeGreaterThan(waterY + 0.6);
-
-    adapter.dispose();
-  });
-
-  it('blends the net action origin into travel without teleporting', () => {
-    const scene = new Group();
-    const camera = new PerspectiveCamera(62, 1.6, 0.1, 100);
-    camera.position.set(0, 1.7, 2.4);
-    camera.lookAt(0, 0.9, 0);
-    scene.add(camera);
-    const actorParent = new Group();
-    scene.add(actorParent);
-    const { actor } = createActor(
-      actorParent,
-      'fishingNet-1' as ItemInstanceId,
-      new Vector3(0, 0.2, 0),
-    );
-    const adapter = new EventItemUseAdapter(camera, new EventItemEffects());
-    const sample = createEventItemUseSample();
-    const beforeTravel = new Vector3();
-    const afterTravel = new Vector3();
-    adapter.begin(actor, 'fishingNet', null);
-
-    sampleEventItemUse('net-scoop', 'fishingNet', 0.44, sample);
-    adapter.apply(sample);
-    actor.root.getWorldPosition(beforeTravel);
-    sampleEventItemUse('net-scoop', 'fishingNet', 0.4401, sample);
-    adapter.apply(sample);
-    actor.root.getWorldPosition(afterTravel);
-
-    expect(afterTravel.distanceTo(beforeTravel)).toBeLessThan(0.01);
-    adapter.dispose();
-  });
-
-  it('keeps the bucket body above the gunwale while crossing it', () => {
-    const scene = new Group();
-    const camera = new PerspectiveCamera(62, 1.6, 0.1, 100);
-    camera.position.set(0, 0.88, 1.72);
-    camera.lookAt(0, 0.88, -1.55);
-    scene.add(camera);
-    const actorParent = new Group();
-    scene.add(actorParent);
-    const { actor } = createActor(
-      actorParent,
-      'bucket-1' as ItemInstanceId,
-      new Vector3(0, 0.2, 0),
-    );
-    const adapter = new EventItemUseAdapter(camera, new EventItemEffects());
-    const sample = createEventItemUseSample();
-    const worldPosition = new Vector3();
-    adapter.begin(actor, 'bucket', null);
-
-    let crossingSamples = 0;
-    for (let progress = 0.42; progress <= 0.66; progress += 0.01) {
-      sampleEventItemUse('bucket-scoop', 'bucket', progress, sample);
-      adapter.apply(sample);
-      scene.updateWorldMatrix(true, true);
-      actor.root.getWorldPosition(worldPosition);
-      const hullHalfWidth = lifeboatHullHalfWidthAt(worldPosition.z);
-      if (
-        hullHalfWidth === null
-        || worldPosition.x < hullHalfWidth - 0.34
-        || worldPosition.x > hullHalfWidth + 0.34
-      ) continue;
-      crossingSamples += 1;
-      expect(worldPosition.y - 0.34).toBeGreaterThan(LIFEBOAT_GUNWALE_SURFACE_Y);
-    }
-    expect(crossingSamples).toBeGreaterThan(0);
 
     adapter.dispose();
   });

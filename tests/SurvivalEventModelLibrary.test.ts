@@ -29,11 +29,24 @@ describe('SurvivalEventModelLibrary', () => {
     expect(SURVIVAL_EVENT_MODEL_SPECS.driftingBottle.rotation).toEqual([0, 0, 0]);
   });
 
+  it('loads only requested templates', async () => {
+    const loader: SurvivalEventModelLoader = {
+      load: vi.fn(async (url: string): Promise<Object3D> => model(url)),
+    };
+
+    const library = await SurvivalEventModelLibrary.load(['flowers'], loader);
+
+    expect(loader.load).toHaveBeenCalledOnce();
+    expect(library.clone('flowers')).toBeInstanceOf(Group);
+    expect(() => library.clone('mysteryChest')).toThrow('Unknown survival event model');
+    library.dispose();
+  });
+
   it('loads all templates and returns clones with shared resources', async () => {
     const loader: SurvivalEventModelLoader = {
       load: vi.fn(async (url: string): Promise<Object3D> => model(url)),
     };
-    const library = await SurvivalEventModelLibrary.load(loader);
+    const library = await SurvivalEventModelLibrary.load(SURVIVAL_EVENT_MODEL_IDS, loader);
 
     expect(loader.load).toHaveBeenCalledTimes(SURVIVAL_EVENT_MODEL_IDS.length);
     const first = library.clone('driftingBottle');
@@ -44,18 +57,18 @@ describe('SurvivalEventModelLibrary', () => {
     library.dispose();
   });
 
-  it('uses a local fallback when one source fails', async () => {
+  it('rejects a required model when its source fails', async () => {
     const loader: SurvivalEventModelLoader = {
       load: async (url) => {
         if (url.includes('mysteryChest')) throw new Error('offline');
         return model(url);
       },
     };
-    const library = await SurvivalEventModelLibrary.load(loader);
-
-    expect(library.clone('mysteryChest').userData.eventModelSource).toBe('fallback');
-    expect(library.clone('driftingBottle').userData.eventModelSource).toBe('poly-pizza');
-    library.dispose();
+    await expect(SurvivalEventModelLibrary.load(['mysteryChest'], loader))
+      .rejects.toMatchObject({
+        name: 'SurvivalEventModelLoadError',
+        eventModelId: 'mysteryChest',
+      });
   });
 
   it('disposes each shared geometry and material once', async () => {
@@ -67,7 +80,7 @@ describe('SurvivalEventModelLibrary', () => {
         return root;
       },
     };
-    const library = await SurvivalEventModelLibrary.load(loader);
+    const library = await SurvivalEventModelLibrary.load(SURVIVAL_EVENT_MODEL_IDS, loader);
     const geometries = roots.map((root) => (root.children[0] as Mesh).geometry);
     const materials = roots.map((root) => (root.children[0] as Mesh).material as Material);
     const geometrySpies = geometries.map((geometry) => vi.spyOn(geometry, 'dispose'));

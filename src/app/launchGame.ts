@@ -37,11 +37,6 @@ import {
   AudioLoadError,
   AudioSystem,
 } from '../audio/AudioSystem';
-import { SurvivalEventModelLibrary } from '../survival/SurvivalEventModelLibrary';
-import {
-  EventModelLibrary,
-  EventModelLoadError,
-} from '../survival/EventModelLibrary';
 import {
   MenuModelLibrary,
   MenuModelLoadError,
@@ -60,15 +55,12 @@ export interface LaunchDependencies {
   loadModels(): Promise<PropModelLibrary>;
   loadMenuModels(): Promise<MenuModelLibrary>;
   loadMenuSandAssets(): Promise<MenuSandAssets>;
-  loadSupernaturalEventModels?(): Promise<EventModelLibrary>;
   loadShipFurniture(): Promise<ShipFurnitureLibrary>;
   loadSkyAssets(): Promise<SkyAssets>;
   loadLifeboatAssets(): Promise<LifeboatAssets>;
   loadShipAssets(): Promise<ShipAssets>;
-  loadEventModels?(): Promise<EventModelLibrary>;
   loadPhysicsRuntime(): Promise<PhysicsRuntime>;
   loadAudio?(): Promise<AudioSystem>;
-  loadFeaturedEventModels?(): Promise<SurvivalEventModelLibrary>;
   createGame(
     mount: HTMLElement,
     models: PropModelLibrary,
@@ -76,11 +68,9 @@ export interface LaunchDependencies {
     skyAssets: SkyAssets,
     lifeboatAssets: LifeboatAssets,
     shipAssets: ShipAssets,
-    eventModels: EventModelLibrary,
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode,
     audio: AudioSystem,
-    featuredEventModels: SurvivalEventModelLibrary | undefined,
     menuModels: MenuModelLibrary,
     menuSandAssets: MenuSandAssets,
     onFatalError: (error: unknown) => void,
@@ -95,10 +85,8 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
   loadSkyAssets: () => SkyAssets.load(),
   loadLifeboatAssets: () => LifeboatAssets.load(),
   loadShipAssets: () => ShipAssets.load(),
-  loadEventModels: () => EventModelLibrary.load(),
   loadPhysicsRuntime,
   loadAudio: () => AudioSystem.load(),
-  loadFeaturedEventModels: () => SurvivalEventModelLibrary.load(),
   createGame: (
     mount,
     models,
@@ -106,11 +94,9 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
     skyAssets,
     lifeboatAssets,
     shipAssets,
-    eventModels,
     physicsRuntime,
     physicsMode,
     audio,
-    featuredEventModels,
     menuModels,
     menuSandAssets,
     onFatalError,
@@ -122,13 +108,11 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
       skyAssets,
       lifeboatAssets,
       shipAssets,
-      eventModels,
       menuModels,
       menuSandAssets,
       physicsRuntime,
       physicsMode,
       audio,
-      featuredEventModels,
       onFatalError,
     )
   ),
@@ -142,13 +126,11 @@ interface LoadedGameAssets {
   skyAssets: SkyAssets;
   lifeboatAssets: LifeboatAssets;
   shipAssets: ShipAssets;
-  eventModels: EventModelLibrary;
   physicsRuntime: PhysicsRuntime | null;
   audio: AudioSystem;
-  featuredEventModels: SurvivalEventModelLibrary | null;
 }
 
-const GAME_ASSET_LOAD_COUNT = 11;
+const GAME_ASSET_LOAD_COUNT = 9;
 
 async function loadGameAssets(
   dependencies: LaunchDependencies,
@@ -164,19 +146,14 @@ async function loadGameAssets(
   const physicsRuntimePromise = physicsMode === 'off'
     ? Promise.resolve(null)
     : dependencies.loadPhysicsRuntime();
-  const eventModelsPromise = dependencies.loadEventModels?.()
-    ?? dependencies.loadSupernaturalEventModels?.()
-    ?? Promise.reject(new Error('No event model loader is configured.'));
   const [
     models,
     shipFurniture,
     skyAssets,
     lifeboatAssets,
     shipAssets,
-    eventModels,
     physicsRuntime,
     audio,
-    featuredEventModels,
     menuModels,
     menuSandAssets,
   ] =
@@ -186,10 +163,8 @@ async function loadGameAssets(
       track(dependencies.loadSkyAssets()),
       track(dependencies.loadLifeboatAssets()),
       track(dependencies.loadShipAssets()),
-      track(eventModelsPromise),
       track(physicsRuntimePromise),
       track(dependencies.loadAudio?.() ?? Promise.resolve(AudioSystem.silent())),
-      track(dependencies.loadFeaturedEventModels?.() ?? Promise.resolve(null)),
       track(dependencies.loadMenuModels()),
       track(dependencies.loadMenuSandAssets()),
     ]);
@@ -199,9 +174,7 @@ async function loadGameAssets(
     skyAssets,
     lifeboatAssets,
     shipAssets,
-    featuredEventModels,
     audio,
-    eventModels,
     menuModels,
     menuSandAssets,
   ] as const;
@@ -230,10 +203,8 @@ async function loadGameAssets(
     || skyAssets.status !== 'fulfilled'
     || lifeboatAssets.status !== 'fulfilled'
     || shipAssets.status !== 'fulfilled'
-    || featuredEventModels.status !== 'fulfilled'
     || physicsRuntime.status !== 'fulfilled'
     || audio.status !== 'fulfilled'
-    || eventModels.status !== 'fulfilled'
     || menuModels.status !== 'fulfilled'
     || menuSandAssets.status !== 'fulfilled'
   ) {
@@ -247,10 +218,8 @@ async function loadGameAssets(
     skyAssets: skyAssets.value,
     lifeboatAssets: lifeboatAssets.value,
     shipAssets: shipAssets.value,
-    eventModels: eventModels.value,
     physicsRuntime: physicsRuntime.value,
     audio: audio.value,
-    featuredEventModels: featuredEventModels.value,
   };
 }
 
@@ -261,9 +230,7 @@ function disposeGameAssets(assets: LoadedGameAssets): void {
     () => assets.skyAssets.dispose(),
     () => assets.lifeboatAssets.dispose(),
     () => assets.shipAssets.dispose(),
-    () => assets.eventModels.dispose(),
     () => assets.audio.dispose(),
-    () => assets.featuredEventModels?.dispose(),
     () => disposeMenuModelLibrary(assets.menuModels),
     () => assets.menuSandAssets.dispose(),
   ]);
@@ -362,17 +329,6 @@ function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
       kicker: 'AUDIO UNAVAILABLE',
       title: 'Unable to prepare the soundscape',
       lead: 'A required local audio file could not be loaded.',
-      detail: error.message,
-    });
-    return;
-  }
-
-  if (error instanceof EventModelLoadError) {
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'EVENT MODEL UNAVAILABLE',
-      title: `Unable to prepare ${error.eventModelId}`,
-      lead: 'A required local event model could not be loaded.',
       detail: error.message,
     });
     return;
@@ -518,11 +474,9 @@ export function launchGame(
         unownedAssets.skyAssets,
         unownedAssets.lifeboatAssets,
         unownedAssets.shipAssets,
-        unownedAssets.eventModels,
         unownedAssets.physicsRuntime,
         physicsMode,
         unownedAssets.audio,
-        unownedAssets.featuredEventModels ?? undefined,
         unownedAssets.menuModels,
         unownedAssets.menuSandAssets,
         reportRuntimeError,

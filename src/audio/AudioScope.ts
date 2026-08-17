@@ -119,6 +119,20 @@ export class OwnedAudioScope implements AudioScope {
     this.play(paused ? 'pause' : 'resume');
   }
 
+  stopSounds(ids: ReadonlySet<SoundId>): void {
+    if (this.disposed || ids.size === 0) return;
+    for (const [id, voice] of [...this.loops]) {
+      if (!ids.has(id)) continue;
+      this.loops.delete(id);
+      voice.stop(0.05);
+    }
+    for (const voice of [...this.effects]) {
+      if (!ids.has(voice.id)) continue;
+      this.effects.delete(voice);
+      voice.stop();
+    }
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;

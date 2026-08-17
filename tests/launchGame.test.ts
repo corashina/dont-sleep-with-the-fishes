@@ -19,10 +19,6 @@ import type { ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { PhysicsLoadError } from '../src/physics/PhysicsRuntime';
 import { BoatWorld } from '../src/survival/BoatWorld';
 import { CarlitosPresentation } from '../src/survival/CarlitosPresentation';
-import {
-  EventModelLoadError,
-  type EventModelLibrary,
-} from '../src/survival/EventModelLibrary';
 import { selectFishingCatch } from '../src/survival/fishingCatalog';
 import { SurvivalPhase, type SurvivalPhaseTestDependencies } from '../src/survival/SurvivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
@@ -74,18 +70,6 @@ function connectedMount(): HTMLElement {
   return mount;
 }
 
-function createTestEventModels(): EventModelLibrary {
-  return {
-    create: vi.fn(),
-    animations: vi.fn(() => []),
-    dispose: vi.fn(),
-  } as unknown as EventModelLibrary;
-}
-
-function eventModels(): EventModelLibrary {
-  return createTestEventModels();
-}
-
 function createImmediateMenu(
   _context: PhaseContext,
   onComplete: () => void,
@@ -123,7 +107,6 @@ function dependencies(
     loadSkyAssets: () => Promise.resolve(createTestSkyAssets()),
     loadLifeboatAssets: () => Promise.resolve(createTestLifeboatAssets()),
     loadShipAssets: () => Promise.resolve(createTestShipAssets()),
-    loadEventModels: () => Promise.resolve(eventModels()),
     loadPhysicsRuntime: () => Promise.resolve(physicsRuntime),
     createGame: vi.fn(() => ({ start: vi.fn(), dispose: vi.fn() })),
     ...overrides,
@@ -153,9 +136,9 @@ describe('launchGame', () => {
       .toContain('ui-role-display');
     const progress = mount.querySelector<HTMLProgressElement>('.system-loading-progress');
     expect(progress?.value).toBe(0);
-    expect(progress?.max).toBe(11);
+    expect(progress?.max).toBe(9);
     await Promise.resolve();
-    expect(progress?.value).toBe(10);
+    expect(progress?.value).toBe(8);
     handle.cancel();
     pending.resolve(models);
     await handle.completion;
@@ -169,10 +152,8 @@ describe('launchGame', () => {
     const lifeboatAssets = createTestLifeboatAssets();
     const shipAssets = createTestShipAssets();
     const shipFurniture = createTestShipFurniture();
-    const loadedEventModels = eventModels();
     const loadedMenuModels = menuModels();
     const loadedMenuSandAssets = menuSandAssets();
-    const loadEventModels = vi.fn(() => Promise.resolve(loadedEventModels));
     const game = { start: vi.fn(), dispose: vi.fn() };
     const createGame = vi.fn(() => game);
     const handle = launchGame(mount, dependencies(
@@ -182,7 +163,6 @@ describe('launchGame', () => {
         loadSkyAssets: () => Promise.resolve(skyAssets),
         loadLifeboatAssets: () => Promise.resolve(lifeboatAssets),
         loadShipAssets: () => Promise.resolve(shipAssets),
-        loadEventModels,
         loadMenuModels: () => Promise.resolve(loadedMenuModels),
         loadMenuSandAssets: () => Promise.resolve(loadedMenuSandAssets),
         createGame,
@@ -201,16 +181,13 @@ describe('launchGame', () => {
       skyAssets,
       lifeboatAssets,
       shipAssets,
-      loadedEventModels,
       physicsRuntime,
       'enabled',
       expect.any(AudioSystem),
-      undefined,
       loadedMenuModels,
       loadedMenuSandAssets,
       expect.any(Function),
     );
-    expect(loadEventModels).toHaveBeenCalledOnce();
     expect(game.start).toHaveBeenCalledOnce();
   });
 
@@ -300,7 +277,6 @@ describe('launchGame', () => {
     const skyAssets = createTestSkyAssets();
     const lifeboatAssets = createTestLifeboatAssets();
     const shipAssets = createTestShipAssets();
-    const loadedEventModels = eventModels();
     const loadedMenuModels = menuModels();
     const savedItems = [
       { instanceId: 'carlitos-1' as ItemInstanceId, type: 'carlitos' },
@@ -392,7 +368,6 @@ describe('launchGame', () => {
       skyAssets,
       lifeboatAssets,
       shipAssets,
-      eventModels: loadedEventModels,
       menuModels: loadedMenuModels,
       physicsRuntime,
       physicsMode: 'off',
@@ -406,7 +381,6 @@ describe('launchGame', () => {
         loadSkyAssets: () => Promise.resolve(skyAssets),
         loadLifeboatAssets: () => Promise.resolve(lifeboatAssets),
         loadShipAssets: () => Promise.resolve(shipAssets),
-        loadEventModels: () => Promise.resolve(loadedEventModels),
         loadMenuModels: () => Promise.resolve(loadedMenuModels),
         createGame,
       },
@@ -520,58 +494,18 @@ describe('launchGame', () => {
     expect(disposeAudio).toHaveBeenCalledOnce();
   });
 
-  it('reports an event model failure and disposes every fulfilled sibling', async () => {
-    const mount = connectedMount();
-    const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
-    const furniture = createTestShipFurniture();
-    const sky = createTestSkyAssets();
-    const lifeboat = createTestLifeboatAssets();
-    const ship = createTestShipAssets();
-    const disposeFurniture = vi.spyOn(furniture, 'dispose');
-    const disposeSky = vi.spyOn(sky, 'dispose');
-    const disposeLifeboat = vi.spyOn(lifeboat, 'dispose');
-    const disposeShip = vi.spyOn(ship, 'dispose');
-    const createGame = vi.fn();
-    const handle = launchGame(mount, dependencies(
-      () => Promise.resolve(models),
-      {
-        loadShipFurniture: () => Promise.resolve(furniture),
-        loadSkyAssets: () => Promise.resolve(sky),
-        loadLifeboatAssets: () => Promise.resolve(lifeboat),
-        loadShipAssets: () => Promise.resolve(ship),
-        loadEventModels: () => Promise.reject(
-          new EventModelLoadError('snatcher', 'local GLB missing'),
-        ),
-        createGame,
-      },
-    ));
-
-    await expect(handle.completion).resolves.toBeNull();
-    expect(models.dispose).toHaveBeenCalledOnce();
-    expect(disposeFurniture).toHaveBeenCalledOnce();
-    expect(disposeSky).toHaveBeenCalledOnce();
-    expect(disposeLifeboat).toHaveBeenCalledOnce();
-    expect(disposeShip).toHaveBeenCalledOnce();
-    expect(createGame).not.toHaveBeenCalled();
-    expect(mount.textContent).toContain('EVENT MODEL UNAVAILABLE');
-    expect(mount.textContent).toContain('Unable to prepare snatcher');
-    expect(mount.textContent).toContain('local GLB missing');
-  });
-
   it('waits for models, furniture, sky, lifeboat, ship, and physics before creating the game', async () => {
     const modelLoad = deferred<PropModelLibrary>();
     const furnitureLoad = deferred<ShipFurnitureLibrary>();
     const skyLoad = deferred<SkyAssets>();
     const lifeboatLoad = deferred<LifeboatAssets>();
     const shipLoad = deferred<ReturnType<typeof createTestShipAssets>>();
-    const eventModelLoad = deferred<EventModelLibrary>();
     const physicsLoad = deferred<typeof physicsRuntime>();
     const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
     const shipFurniture = createTestShipFurniture();
     const skyAssets = createTestSkyAssets();
     const lifeboatAssets = createTestLifeboatAssets();
     const shipAssets = createTestShipAssets();
-    const loadedEventModels = eventModels();
     const game = { start: vi.fn(), dispose: vi.fn() };
     const createGame = vi.fn(() => game);
     const mount = connectedMount();
@@ -582,7 +516,6 @@ describe('launchGame', () => {
         loadSkyAssets: () => skyLoad.promise,
         loadLifeboatAssets: () => lifeboatLoad.promise,
         loadShipAssets: () => shipLoad.promise,
-        loadEventModels: () => eventModelLoad.promise,
         loadPhysicsRuntime: () => physicsLoad.promise,
         createGame,
       },
@@ -608,10 +541,6 @@ describe('launchGame', () => {
     await Promise.resolve();
     expect(createGame).not.toHaveBeenCalled();
 
-    eventModelLoad.resolve(loadedEventModels);
-    await Promise.resolve();
-    expect(createGame).not.toHaveBeenCalled();
-
     physicsLoad.resolve(physicsRuntime);
     await expect(handle.completion).resolves.toBe(game as unknown as Game);
     expect(createGame).toHaveBeenCalledWith(
@@ -621,11 +550,9 @@ describe('launchGame', () => {
       skyAssets,
       lifeboatAssets,
       shipAssets,
-      loadedEventModels,
       physicsRuntime,
       'enabled',
       expect.any(AudioSystem),
-      undefined,
       expect.anything(),
       expect.anything(),
       expect.any(Function),
@@ -654,11 +581,9 @@ describe('launchGame', () => {
       expect.anything(),
       expect.anything(),
       expect.anything(),
-      expect.anything(),
       null,
       'off',
       expect.any(AudioSystem),
-      undefined,
       expect.anything(),
       expect.anything(),
       expect.any(Function),
@@ -668,12 +593,10 @@ describe('launchGame', () => {
 
   it('reports physics preload failure and disposes fulfilled assets', async () => {
     const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
-    const eventModels = createTestEventModels();
     const mount = connectedMount();
     const handle = launchGame(mount, dependencies(
       () => Promise.resolve(models),
       {
-        loadEventModels: () => Promise.resolve(eventModels),
         loadPhysicsRuntime: () => Promise.reject(
           new PhysicsLoadError('WASM unavailable'),
         ),
@@ -682,7 +605,6 @@ describe('launchGame', () => {
 
     await expect(handle.completion).resolves.toBeNull();
     expect(models.dispose).toHaveBeenCalledOnce();
-    expect(eventModels.dispose).toHaveBeenCalledOnce();
     expect(mount.textContent).toContain('PHYSICS UNAVAILABLE');
     expect(mount.textContent).toContain('Unable to prepare the moving deck');
     expect(mount.textContent).toContain('WASM unavailable');
@@ -764,26 +686,6 @@ describe('launchGame', () => {
     expect(models.dispose).toHaveBeenCalledOnce();
     expect(createGame).not.toHaveBeenCalled();
     expect(mount.textContent).toContain('ATMOSPHERE UNAVAILABLE');
-  });
-
-  it('identifies an event model preload failure without diagnosing WebGL', async () => {
-    const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
-    const mount = connectedMount();
-    const handle = launchGame(mount, dependencies(
-      () => Promise.resolve(models),
-      {
-        loadEventModels: () => Promise.reject(
-          new EventModelLoadError('ghost', 'local GLB missing'),
-        ),
-      },
-    ));
-
-    await expect(handle.completion).resolves.toBeNull();
-    expect(models.dispose).toHaveBeenCalledOnce();
-    expect(mount.textContent).toContain('EVENT MODEL UNAVAILABLE');
-    expect(mount.textContent).toContain('Unable to prepare ghost');
-    expect(mount.textContent).toContain('local GLB missing');
-    expect(mount.textContent).not.toContain('WEBGL UNAVAILABLE');
   });
 
   it('disposes fulfilled sky assets when model preload fails', async () => {
@@ -956,7 +858,7 @@ describe('launchGame', () => {
     const game = { start: vi.fn(), dispose: vi.fn() };
     let reportRuntimeError: ((error: unknown) => void) | undefined;
     const createGame = vi.fn((...args: unknown[]) => {
-      reportRuntimeError = args[13] as ((error: unknown) => void) | undefined;
+      reportRuntimeError = args[11] as ((error: unknown) => void) | undefined;
       return game;
     });
     const handle = launchGame(mount, dependencies(
@@ -1006,11 +908,9 @@ describe('launchGame', () => {
       loadedSkyAssets: SkyAssets,
       loadedLifeboatAssets: LifeboatAssets,
       loadedShipAssets: ShipAssets,
-      loadedEventModels: EventModelLibrary,
       loadedPhysicsRuntime: typeof physicsRuntime,
       _physicsMode: unknown,
       _audioSystem: AudioSystem,
-      _featuredEventModels: unknown,
       receivedMenuModels: MenuModelLibrary,
       receivedMenuSandAssets: MenuSandAssets,
     ) => Game.forTest({
@@ -1025,12 +925,10 @@ describe('launchGame', () => {
       createSurvival: () => { throw new Error('unexpected survival construction'); },
     }, {
       propModels,
-      supernaturalEventModels: loadedEventModels,
       shipFurniture: loadedShipFurniture,
       skyAssets: loadedSkyAssets,
       lifeboatAssets: loadedLifeboatAssets,
       shipAssets: loadedShipAssets,
-      eventModels: loadedEventModels,
       menuModels: receivedMenuModels,
       menuSandAssets: receivedMenuSandAssets,
       physicsRuntime: loadedPhysicsRuntime,
@@ -1157,14 +1055,11 @@ describe('launchGame', () => {
     const disposeShipFurniture = vi.spyOn(shipFurniture, 'dispose');
     const skyAssets = createTestSkyAssets();
     const disposeSky = vi.spyOn(skyAssets, 'dispose');
-    const loadedEventModels = eventModels();
-    const disposeEventModels = vi.spyOn(loadedEventModels, 'dispose');
     const handle = launchGame(mount, dependencies(
       () => Promise.resolve(models),
       {
         loadShipFurniture: () => Promise.resolve(shipFurniture),
         loadSkyAssets: () => Promise.resolve(skyAssets),
-        loadEventModels: () => Promise.resolve(loadedEventModels),
         createGame: () => { throw new Error('construction failed'); },
       },
     ));
@@ -1174,7 +1069,6 @@ describe('launchGame', () => {
     expect(disposeModels).toHaveBeenCalledOnce();
     expect(disposeShipFurniture).toHaveBeenCalledOnce();
     expect(disposeSky).toHaveBeenCalledOnce();
-    expect(disposeEventModels).toHaveBeenCalledOnce();
   });
 
   it('disposes the constructed game rather than models when start fails', async () => {
