@@ -12,7 +12,6 @@ import {
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import {
-  EVENT_MODEL_IDS,
   EVENT_MODEL_MAX_TOTAL_TRIANGLES,
   EVENT_MODEL_SPECS,
   type EventModelId,
@@ -286,12 +285,14 @@ export class EventModelLibrary {
   ) {}
 
   static async load(
+    ids: readonly EventModelId[],
     loader: EventModelLoader = new GltfEventModelLoader(),
   ): Promise<EventModelLibrary> {
-    for (const id of EVENT_MODEL_IDS) validateSpec(id, EVENT_MODEL_SPECS[id]);
+    const requestedIds = [...new Set(ids)];
+    for (const id of requestedIds) validateSpec(id, EVENT_MODEL_SPECS[id]);
 
-    const loadedRoots: Array<Group | undefined> = new Array(EVENT_MODEL_IDS.length);
-    const results = await Promise.allSettled(EVENT_MODEL_IDS.map(
+    const loadedRoots: Array<Group | undefined> = new Array(requestedIds.length);
+    const results = await Promise.allSettled(requestedIds.map(
       async (id, index): Promise<LoadedTemplate> => {
         const root = await loader.load(EVENT_MODEL_SPECS[id].url);
         loadedRoots[index] = root;
@@ -307,7 +308,7 @@ export class EventModelLibrary {
 
     const firstFailureIndex = results.findIndex((result) => result.status === 'rejected');
     if (firstFailureIndex >= 0) {
-      const id = EVENT_MODEL_IDS[firstFailureIndex]!;
+      const id = requestedIds[firstFailureIndex]!;
       const cause = (results[firstFailureIndex] as PromiseRejectedResult).reason;
       attemptCleanup(() => {
         disposeTemplateRoots(loadedRoots.filter((root): root is Group => root !== undefined));
@@ -325,7 +326,7 @@ export class EventModelLibrary {
       aggregateTriangles += loaded[index]!.triangles;
       if (aggregateTriangles > EVENT_MODEL_MAX_TOTAL_TRIANGLES) {
         const error = new EventModelLoadError(
-          EVENT_MODEL_IDS[index]!,
+          requestedIds[index]!,
           `aggregate triangle count ${aggregateTriangles} exceeds the ${EVENT_MODEL_MAX_TOTAL_TRIANGLES} limit`,
         );
         attemptCleanup(() => disposeTemplateRoots(loaded.map(({ root }) => root)));
@@ -334,7 +335,7 @@ export class EventModelLibrary {
     }
 
     return new EventModelLibrary(new Map(
-      EVENT_MODEL_IDS.map((id, index) => [id, loaded[index]!.root]),
+      requestedIds.map((id, index) => [id, loaded[index]!.root]),
     ));
   }
 

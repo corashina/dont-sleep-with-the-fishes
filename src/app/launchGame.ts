@@ -43,6 +43,10 @@ import {
   EventModelLoadError,
 } from '../survival/EventModelLibrary';
 import {
+  EVENT_MODEL_IDS,
+  SURVIVAL_EVENT_MODEL_IDS,
+} from '../survival/eventModelManifest';
+import {
   MenuModelLibrary,
   MenuModelLoadError,
 } from '../menu/MenuModelLibrary';
@@ -95,10 +99,10 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
   loadSkyAssets: () => SkyAssets.load(),
   loadLifeboatAssets: () => LifeboatAssets.load(),
   loadShipAssets: () => ShipAssets.load(),
-  loadEventModels: () => EventModelLibrary.load(),
+  loadEventModels: () => EventModelLibrary.load(EVENT_MODEL_IDS),
   loadPhysicsRuntime,
   loadAudio: () => AudioSystem.load(),
-  loadFeaturedEventModels: () => SurvivalEventModelLibrary.load(),
+  loadFeaturedEventModels: () => SurvivalEventModelLibrary.load(SURVIVAL_EVENT_MODEL_IDS),
   createGame: (
     mount,
     models,
