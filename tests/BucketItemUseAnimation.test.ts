@@ -81,7 +81,7 @@ describe('bucket item-use animation', () => {
     expect(outbound.targetBlend).toBeLessThan(1);
     expect(outbound.ballisticFlight).toBe(true);
     expect(outbound.flightArc).toBeGreaterThan(0.9);
-    expect(outbound.flightArcHeight).toBe(0.8);
+    expect(outbound.flightArcHeight).toBe(0.9);
     expect(outbound.flightTarget).toBe('bucket-water');
     expect(target.targetBlend).toBe(1);
     expect(target.flightArc).toBe(0);
