@@ -1,6 +1,6 @@
 # Event Bundle Streaming Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Load each survival event during its preceding fade-out and release its owned runtime resources under the exit cover.
 
@@ -33,7 +33,7 @@
 - Consumes: `SurvivalEventId`, `EventModelId`, `SurvivalEventModelId`, and `SoundId`.
 - Produces: `EventBundleSpec`, `EventBundleModelId`, `EVENT_BUNDLE_SPECS`, `EVENT_ONLY_SOUND_IDS`, and `SHARED_SOUND_IDS`.
 
-- [ ] **Step 1: Write the manifest completeness test**
+- [x] **Step 1: Write the manifest completeness test**
 
 ```ts
 it('declares one immutable bundle for every routed event', () => {
@@ -47,13 +47,13 @@ it('declares one immutable bundle for every routed event', () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test and verify the missing module failure**
+- [x] **Step 2: Run the focused test and verify the missing module failure**
 
 Run: `vitest run tests/EventBundleManifest.test.ts`
 
 Expected: FAIL because `eventBundleManifest.ts` does not exist.
 
-- [ ] **Step 3: Add sound ownership groups**
+- [x] **Step 3: Add sound ownership groups**
 
 Add these exact event-owned sound IDs to `audioManifest.ts`:
 
@@ -76,7 +76,7 @@ export const SHARED_SOUND_IDS = Object.freeze(
 );
 ```
 
-- [ ] **Step 4: Add the complete event manifest**
+- [x] **Step 4: Add the complete event manifest**
 
 Define the immutable type:
 
@@ -118,13 +118,13 @@ const RESOURCES = {
 
 Build `EVENT_BUNDLE_SPECS` from every `EVENT_PRESENTATION_ROUTES` key. Freeze each entry and both arrays.
 
-- [ ] **Step 5: Run the focused tests**
+- [x] **Step 5: Run the focused tests**
 
 Run: `vitest run tests/EventBundleManifest.test.ts tests/EventPresentationRoutes.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the manifest**
+- [x] **Step 6: Commit the manifest**
 
 ```bash
 git add src/audio/audioManifest.ts src/survival/eventBundleManifest.ts tests/EventBundleManifest.test.ts
@@ -146,7 +146,7 @@ git commit -m "feat: declare event bundle resources"
 - Consumes: `SHARED_SOUND_IDS`, event manifest sound arrays, and existing `AudioVoice` ownership.
 - Produces: `AudioBackend.acquire(ids)`, `AudioBackend.release(ids)`, `EventAudioLease`, `AudioSystem.loadWithBackend(backend)`, and `AudioSystem.acquireEventAudio(ids)`.
 
-- [ ] **Step 1: Add failing audio lease tests**
+- [x] **Step 1: Add failing audio lease tests**
 
 ```ts
 it('loads only shared sounds during system startup', async () => {
@@ -165,13 +165,13 @@ it('releases event buffers after owned voices stop', async () => {
 
 Add a backend test that acquires `leak`, releases it, and verifies `play('leak')` returns `null` afterward.
 
-- [ ] **Step 2: Run tests and verify interface failures**
+- [x] **Step 2: Run tests and verify interface failures**
 
 Run: `vitest run tests/AudioSystem.test.ts tests/WebAudioBackend.test.ts`
 
 Expected: FAIL because acquire, release, and event leases do not exist.
 
-- [ ] **Step 3: Replace whole-manifest loading with sound acquisition**
+- [x] **Step 3: Replace whole-manifest loading with sound acquisition**
 
 Change `AudioBackend` to:
 
@@ -184,7 +184,7 @@ Remove `load()`. In `WebAudioBackend`, keep a reference count per sound. Fetch a
 
 If one acquisition fails, decrement every reference acquired by that call. Preserve the first failure.
 
-- [ ] **Step 4: Add the event audio lease**
+- [x] **Step 4: Add the event audio lease**
 
 ```ts
 export interface EventAudioLease {
@@ -211,13 +211,13 @@ Make `AudioSystem.load()` acquire only `SHARED_SOUND_IDS`. Release shared sounds
 
 Implement `static loadWithBackend(backend, storage = null)` as the shared production and test construction path. `load()` creates a `WebAudioBackend` and delegates to it.
 
-- [ ] **Step 5: Run audio tests**
+- [x] **Step 5: Run audio tests**
 
 Run: `vitest run tests/AudioSystem.test.ts tests/WebAudioBackend.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit audio leases**
+- [x] **Step 6: Commit audio leases**
 
 ```bash
 git add src/audio tests/AudioSystem.test.ts tests/WebAudioBackend.test.ts
@@ -238,7 +238,7 @@ git commit -m "feat: lease event audio buffers"
 - Consumes: event manifest model arrays.
 - Produces: `EventModelLibrary.load(ids, loader)`, `SurvivalEventModelLibrary.load(ids, loader)`, and strict disposal for partial loads.
 
-- [ ] **Step 1: Add failing subset tests**
+- [x] **Step 1: Add failing subset tests**
 
 ```ts
 const library = await EventModelLibrary.load(['ghost'], loader);
@@ -248,13 +248,13 @@ expect(() => library.create('leakPlanks')).toThrow('Missing event model template
 
 Add the same test for `SurvivalEventModelLibrary.load(['flowers'], loader)`. Add a failure test that verifies completed roots dispose when a sibling load fails.
 
-- [ ] **Step 2: Run model tests and verify signature failures**
+- [x] **Step 2: Run model tests and verify signature failures**
 
 Run: `vitest run tests/EventModelLibrary.test.ts tests/SurvivalEventModelLibrary.test.ts`
 
 Expected: FAIL because both loaders always load all model IDs.
 
-- [ ] **Step 3: Implement strict subset loading**
+- [x] **Step 3: Implement strict subset loading**
 
 Change both static loaders to accept a readonly ID list first. Validate only requested specs. Load requested entries in parallel.
 
@@ -262,13 +262,13 @@ Remove the featured model fallback path. A missing or invalid required model mus
 
 Keep instance disposal idempotent. Dispose all completed templates after any partial failure.
 
-- [ ] **Step 4: Run model tests**
+- [x] **Step 4: Run model tests**
 
 Run: `vitest run tests/EventModelLibrary.test.ts tests/SurvivalEventModelLibrary.test.ts tests/EventModelAudit.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit model subsets**
+- [x] **Step 5: Commit model subsets**
 
 ```bash
 git add src/survival/EventModelLibrary.ts src/survival/SurvivalEventModelLibrary.ts tests/EventModelLibrary.test.ts tests/SurvivalEventModelLibrary.test.ts
@@ -294,17 +294,17 @@ git commit -m "feat: load event model subsets"
 - Consumes: one event ID and its two partial model libraries.
 - Produces: `ActiveEventPresenter`, `BoatWorld.createEventPresenter(resources)`, `attachEventPresenter`, and `detachEventPresenter`.
 
-- [ ] **Step 1: Add failing single-presenter tests**
+- [x] **Step 1: Add failing single-presenter tests**
 
 Record constructor calls through test factories. Verify one `flowers` presenter creates only Flowers content. Verify switching from Flowers to Leak disposes Flowers before Leak attaches. Verify interaction roots come only from the active presenter.
 
-- [ ] **Step 2: Run focused presenter tests**
+- [x] **Step 2: Run focused presenter tests**
 
 Run: `vitest run tests/ActiveEventPresenter.test.ts tests/BoatWorld.test.ts`
 
 Expected: FAIL because `BoatWorld` constructs every event system at startup.
 
-- [ ] **Step 3: Define the unified presenter boundary**
+- [x] **Step 3: Define the unified presenter boundary**
 
 ```ts
 export interface ActiveEventPresenter {
@@ -324,7 +324,7 @@ export interface ActiveEventPresenter {
 }
 ```
 
-- [ ] **Step 4: Make each route construct only one event**
+- [x] **Step 4: Make each route construct only one event**
 
 Change the existing route coordinators to accept one event ID. Build only that event's tableau, generated effects, models, and listeners.
 
@@ -332,13 +332,13 @@ Remove permanent event presenter fields from `BoatWorld`. Keep one `activeEventP
 
 `detachEventPresenter()` must remove roots and dispose the presenter once.
 
-- [ ] **Step 5: Run presenter tests**
+- [x] **Step 5: Run presenter tests**
 
 Run: `vitest run tests/ActiveEventPresenter.test.ts tests/BoatWorld.test.ts tests/EventPresentationCoordinator.test.ts tests/WeatherAndSupernaturalItemUse.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit presenter ownership**
+- [x] **Step 6: Commit presenter ownership**
 
 ```bash
 git add src/survival tests/ActiveEventPresenter.test.ts tests/BoatWorld.test.ts
@@ -358,7 +358,7 @@ git commit -m "refactor: own one event presenter"
 - Consumes: `EVENT_BUNDLE_SPECS`, model subset loaders, `AudioSystem.acquireEventAudio`, and `BoatWorld.createEventPresenter`.
 - Produces: `EventBundle`, `EventBundleLoader`, and `EventBundleManager`.
 
-- [ ] **Step 1: Add failing manager order tests**
+- [x] **Step 1: Add failing manager order tests**
 
 ```ts
 manager.beginLoad('leak');
@@ -376,31 +376,31 @@ expect(log.slice(-4)).toEqual([
 
 Add tests for idempotent disposal, conflicting IDs, partial failure cleanup, and late completion after cancellation.
 
-- [ ] **Step 2: Run the manager tests**
+- [x] **Step 2: Run the manager tests**
 
 Run: `vitest run tests/EventBundleManager.test.ts`
 
 Expected: FAIL because the manager does not exist.
 
-- [ ] **Step 3: Implement bundle loading**
+- [x] **Step 3: Implement bundle loading**
 
 Partition model IDs by the two model manifests. Start audio and both model loads in one `Promise.allSettled`. Create the presenter only after all resources succeed.
 
 An `EventBundle` disposes in this order: detach, presenter, featured models, dedicated models, audio lease.
 
-- [ ] **Step 4: Implement strict manager generations**
+- [x] **Step 4: Implement strict manager generations**
 
 `beginLoad(eventId)` must return the existing promise for the same pending ID. It must throw for a different pending ID.
 
 `activate(eventId)` waits for the matching pending bundle, attaches it, and makes it active. `releaseActive()` detaches and disposes the active bundle. `dispose()` invalidates the generation and cleans pending late results.
 
-- [ ] **Step 5: Run manager tests**
+- [x] **Step 5: Run manager tests**
 
 Run: `vitest run tests/EventBundleManager.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the manager**
+- [x] **Step 6: Commit the manager**
 
 ```bash
 git add src/survival/EventBundle.ts src/survival/EventBundleManager.ts tests/EventBundleManager.test.ts
@@ -424,7 +424,7 @@ git commit -m "feat: manage event bundle ownership"
 - Consumes: `EventBundleManager.beginLoad`, `activate`, `releaseActive`, and `dispose`.
 - Produces: the covered entry, exit, chaining, cancellation, and fatal error lifecycle.
 
-- [ ] **Step 1: Add failing transition order tests**
+- [x] **Step 1: Add failing transition order tests**
 
 Use deferred bundle promises. Assert this entry order:
 
@@ -445,37 +445,37 @@ expect(log).toEqual([
 
 Add tests that fade-in stays blocked, chained load starts with exit fade, disposal occurs after full cover, and a rejected load calls the fatal handler while the cover stays active.
 
-- [ ] **Step 2: Run phase lifecycle tests**
+- [x] **Step 2: Run phase lifecycle tests**
 
 Run: `vitest run tests/SurvivalPhase.test.ts tests/GameLifecycle.test.ts`
 
 Expected: FAIL because event resources are globally resident.
 
-- [ ] **Step 3: Start loads with fade-out**
+- [x] **Step 3: Start loads with fade-out**
 
 In `runPendingEventReveal`, call `beginLoad(event.id)` immediately before `setSleepCovered(true)`. After full cover, release the old bundle, await activation, stage, render, settle, then reveal the cover.
 
 For an already covered chained event, reuse the pending load started by the prior exit path.
 
-- [ ] **Step 4: Release bundles under exit cover**
+- [x] **Step 4: Release bundles under exit cover**
 
 After event resolution determines the next snapshot, start the next bundle load before the exit cover promise. After full cover, release the old bundle. Activate the next bundle or render normal play.
 
 Route drifting cargo continuation through the same covered exit. Keep a terminal tableau active only while the terminal screen still displays it. Phase disposal releases it.
 
-- [ ] **Step 5: Remove startup event loads**
+- [x] **Step 5: Remove startup event loads**
 
 Remove event model libraries from `LoadedGameAssets`, `PhaseContext`, `Game`, and `LaunchDependencies`. Reduce `GAME_ASSET_LOAD_COUNT` from 11 to 9. Construct model loaders only through event bundle loading.
 
 Keep `AudioSystem.load()` in startup because it acquires shared sounds only.
 
-- [ ] **Step 6: Run lifecycle tests**
+- [x] **Step 6: Run lifecycle tests**
 
 Run: `vitest run tests/SurvivalPhase.test.ts tests/GameLifecycle.test.ts tests/launchGame.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit transition wiring**
+- [x] **Step 7: Commit transition wiring**
 
 ```bash
 git add src/survival/SurvivalPhase.ts src/app/GamePhase.ts src/Game.ts src/app/launchGame.ts tests/SurvivalPhase.test.ts tests/GameLifecycle.test.ts tests/launchGame.test.ts
@@ -495,41 +495,41 @@ git commit -m "feat: stream events under transitions"
 - Consumes: the complete bundle lifecycle.
 - Produces: a clean build and regression suite without compatibility layers.
 
-- [ ] **Step 1: Search for obsolete global ownership**
+- [x] **Step 1: Search for obsolete global ownership**
 
 Run: `rg -n "featuredEventModels|supernaturalEventModels|EMPTY_SURVIVAL_EVENT_MODELS|createEmptyEventModelLibraryForTest|EventModelLibrary\.load\(\)" src tests`
 
 Expected: only focused model-library unit tests can reference direct library loading.
 
-- [ ] **Step 2: Remove obsolete paths and update direct test setup**
+- [x] **Step 2: Remove obsolete paths and update direct test setup**
 
 Delete compatibility aliases, empty model libraries, global disposal fields, and startup loader branches. Test setup must inject an `EventBundleLoader` or manager fake.
 
-- [ ] **Step 3: Run type checking**
+- [x] **Step 3: Run type checking**
 
 Run: `tsc --noEmit`
 
 Expected: PASS with no diagnostics.
 
-- [ ] **Step 4: Run the full test suite**
+- [x] **Step 4: Run the full test suite**
 
 Run: `vitest run`
 
 Expected: all test files pass.
 
-- [ ] **Step 5: Run the production build**
+- [x] **Step 5: Run the production build**
 
 Run: `vite build`
 
 Expected: PASS. Event presenter modules and event assets appear outside the startup chunk where Vite can split them.
 
-- [ ] **Step 6: Review the final diff**
+- [x] **Step 6: Review the final diff**
 
 Run: `git diff --check master...HEAD` and `git status --short`.
 
 Expected: no whitespace errors and only the plan completion edit remains uncommitted.
 
-- [ ] **Step 7: Commit final cleanup**
+- [x] **Step 7: Commit final cleanup**
 
 ```bash
 git add src tests docs/superpowers/plans/2026-08-17-event-bundle-streaming.md

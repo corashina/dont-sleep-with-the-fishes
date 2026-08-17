@@ -39,7 +39,11 @@ describe('EventBundleManager', () => {
           dispose: audioDispose,
         })),
       },
-      host: { createEventPresenter: vi.fn() },
+      host: {
+        createEventPresenter: vi.fn(),
+        attachEventPresenter: vi.fn(),
+        detachEventPresenter: vi.fn(),
+      },
       loadDedicatedModels: vi.fn(async () => {
         throw new Error('model failed');
       }),

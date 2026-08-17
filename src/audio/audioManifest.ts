@@ -62,11 +62,18 @@ export type SoundId = typeof SOUND_IDS[number];
 export type AudioBusId = 'music' | 'ambience' | 'effects' | 'interface';
 
 export const EVENT_ONLY_SOUND_IDS = Object.freeze([
+  'bucketRain',
+  'umbrella',
+  'anchorChain',
+  'anchorSplash',
+  'flashlight',
+  'flareGunShot',
+  'flareGun',
+  'shotgun',
   'yawn',
   'thunderLightning',
   'tentacleMovement',
   'eerieMelody',
-  'chest',
   'driftingCargo',
 ] as const satisfies readonly SoundId[]);
 

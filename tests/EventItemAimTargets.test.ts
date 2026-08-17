@@ -273,11 +273,13 @@ describe('event item aim targets', () => {
       }
     ).eventItemAimTarget;
     const world = {
-      eventPresentation: { itemAimTarget: genericTarget },
-      dedicatedEvents: { itemAimTarget: dedicatedTarget },
-      featuredEvents: { itemAimTarget: featuredTarget },
-      weatherEventAnimator: { itemAimTarget: weatherTarget },
-      supernaturalEventAnimator: { itemAimTarget: supernaturalTarget },
+      activeEventPresenter: {
+        layer: { itemAimTarget: genericTarget },
+        dedicated: { itemAimTarget: dedicatedTarget },
+        featured: { itemAimTarget: featuredTarget },
+        weather: { itemAimTarget: weatherTarget },
+        supernatural: { itemAimTarget: supernaturalTarget },
+      },
     };
 
     expect(resolver.call(world, 'dangerous-waters')).toBe(dangerousWaters);

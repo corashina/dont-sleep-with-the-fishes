@@ -9,7 +9,10 @@ import {
   type SurvivalEventModelId,
 } from './eventModelManifest';
 import { EVENT_BUNDLE_SPECS } from './eventBundleManifest';
-import { SurvivalEventModelLibrary } from './SurvivalEventModelLibrary';
+import {
+  SurvivalEventModelLibrary,
+  type SurvivalEventModels,
+} from './SurvivalEventModelLibrary';
 import type { SurvivalEventId } from './events';
 
 function preservePrimaryErrorCleanup(steps: Array<() => void>): void {
@@ -24,8 +27,10 @@ export interface EventPresenterHost {
   createEventPresenter(
     eventId: SurvivalEventId,
     dedicatedModels: EventModelLibrary,
-    featuredModels: SurvivalEventModelLibrary,
+    featuredModels: SurvivalEventModels,
   ): ActiveEventPresenter;
+  attachEventPresenter(presenter: ActiveEventPresenter): void;
+  detachEventPresenter(presenter: ActiveEventPresenter): void;
 }
 
 export interface EventBundleLoaderDependencies {
@@ -55,6 +60,7 @@ export class EventBundle {
 
   constructor(
     readonly eventId: SurvivalEventId,
+    private readonly host: EventPresenterHost,
     private readonly presenter: ActiveEventPresenter,
     private readonly featuredModels: SurvivalEventModelLibrary,
     private readonly dedicatedModels: EventModelLibrary,
@@ -63,13 +69,14 @@ export class EventBundle {
 
   attach(): void {
     if (this.disposed) throw new Error(`Event bundle is disposed: ${this.eventId}`);
-    this.presenter.attach();
+    this.host.attachEventPresenter(this.presenter);
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     runCleanupSteps([
+      () => this.host.detachEventPresenter(this.presenter),
       () => this.presenter.dispose(),
       () => this.featuredModels.dispose(),
       () => this.dedicatedModels.dispose(),
@@ -162,6 +169,13 @@ export class EventBundleLoader {
       const message = cause instanceof Error ? cause.message : String(cause);
       throw new EventBundleLoadError(eventId, message, { cause });
     }
-    return new EventBundle(eventId, presenter, featured, dedicated, audio);
+    return new EventBundle(
+      eventId,
+      this.dependencies.host,
+      presenter,
+      featured,
+      dedicated,
+      audio,
+    );
   }
 }
