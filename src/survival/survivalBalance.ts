@@ -20,7 +20,8 @@ export const SURVIVAL_BALANCE = {
   night: { quietChance: 0.25 },
   rescue: { firstDay: 5, initialChance: 0.05, dailyIncrease: 0.08, chanceCap: 0.60, progressCap: 25 },
   dayEvents: {
-    driftingLoot: { firstDay: 3, chance: 0.25, barrelChance: 0.5 },
+    firstDay: 3,
+    chance: 0.25,
   },
 } as const;
 

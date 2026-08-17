@@ -120,6 +120,7 @@ Keep source records after download.
 | Nightfall | Breath-like fade into uncertainty | [Transition Sound Effect](https://freesound.org/people/DeVern/sounds/427533/) |
 | Dawn | Quiet, introspective return of light | [First Light Particles](https://opengameart.org/content/first-light-particles-%E2%80%93-cc0-atmospheric-pianoambient-track) |
 | Event reveal | Quiet dread before a choice | [Dissonant Sting](https://freesound.org/people/nomiqbomi/sounds/578362/) |
+| Leak | Water pushes through the hull | [Water - Leak, small](https://freesound.org/people/colinpoh/sounds/146346/) |
 | Chest | Latch, worn wood, and lid | [Wooden Chest Open](https://freesound.org/people/The_Frisbee_of_Peace/sounds/573654/) |
 | Drifting cargo | Rope strain and crate drag | [Dragging a Crate](https://freesound.org/people/hz37/sounds/792375/) |
 | Visitor boat | Oars approach over calm water | [Rowing Boat Interior](https://freesound.org/people/Fenodyrie/sounds/588307/) |

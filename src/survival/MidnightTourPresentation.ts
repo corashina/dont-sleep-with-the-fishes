@@ -61,13 +61,6 @@ const MAXIMUM_WAVE_CREST = DEFAULT_WAVES.reduce(
 );
 const IMPORTED_GREEN_TOP_Y = EVENT_MODEL_SPECS.midnightIsland
   .normalizedBounds.max[1];
-function keyedTravel(progress: number): number {
-  if (progress < 0.16) return -0.045 * smoothstep(progress / 0.16);
-  if (progress < 0.82) {
-    return -0.045 + 1.09 * smoothstep((progress - 0.16) / 0.66);
-  }
-  return 1.045 + (1 - 1.045) * smoothstep((progress - 0.82) / 0.18);
-}
 
 function createMaterial(
   color: number,
@@ -91,7 +84,6 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private readonly resultGeometries = new Set<BufferGeometry>();
   private readonly resultMaterials = new Set<Material>();
   private readonly islandBase = new Vector3();
-  private readonly islandHidden = new Vector3();
   private readonly islandBehind = new Vector3();
   private readonly islandStart = new Vector3();
   private readonly actorStart = new Vector3();
@@ -147,7 +139,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.staged = true;
     this.root.visible = true;
     this.island.visible = true;
-    this.island.position.copy(this.islandHidden);
+    this.island.position.copy(this.islandBase);
     this.island.rotation.set(0, 0.08 * this.side, 0);
     this.updateGreenTopClearance();
     this.root.userData.state = 'staged';
@@ -351,8 +343,6 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   }
 
   private applyReveal(progress: number): void {
-    const travel = keyedTravel(progress);
-    this.island.position.lerpVectors(this.islandHidden, this.islandBase, travel);
     this.island.rotation.y = 0.08 * this.side
       - this.side * Math.sin(progress * Math.PI) * 0.035;
     this.island.userData.revealProgress = progress;
@@ -544,7 +534,6 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private setSidePositions(): void {
     const islandX = ISLAND_DISTANCE * this.side;
     this.islandBase.set(islandX, ISLAND_BASE_Y, ISLAND_Z);
-    this.islandHidden.set(islandX, ISLAND_BASE_Y - 3.2, ISLAND_Z);
     this.islandBehind.set(-4.6 * this.side, -0.72, 10.5);
     this.actorStart.set(islandX + 1.3 * this.side, 4.35, ISLAND_Z + 0.5);
     this.creatureEnd.set(islandX + 0.4 * this.side, -0.1, ISLAND_Z + 0.75);

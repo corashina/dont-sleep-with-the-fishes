@@ -33,15 +33,17 @@ async function flushPromises(): Promise<void> {
 }
 
 describe('Item Animation Lab', () => {
-  it('defines one canonical route for every item', () => {
-    expect(Object.keys(ITEM_ANIMATION_LAB_USES)).toEqual([...ITEM_IDS]);
-    expect(ITEM_ANIMATION_LAB_USES.scubaSet).toEqual({
+  const animatedItemIds = ITEM_IDS.filter((itemId) => (
+    itemId !== 'scubaSet' && itemId !== 'bottledPaper'
+  ));
+
+  it('defines one canonical route for every event-use item', () => {
+    expect(Object.keys(ITEM_ANIMATION_LAB_USES)).toEqual(animatedItemIds);
+    expect(ITEM_ANIMATION_LAB_USES.scubaSet).toBeUndefined();
+    expect(ITEM_ANIMATION_LAB_USES.bottledPaper).toBeUndefined();
+    expect(ITEM_ANIMATION_LAB_USES.carlitos).toEqual({
       eventId: 'flowers',
-      choiceId: 'scubaSet',
-    });
-    expect(ITEM_ANIMATION_LAB_USES.captainWhiskers).toEqual({
-      eventId: 'flowers',
-      choiceId: 'captainWhiskers',
+      choiceId: 'carlitos',
     });
   });
 
@@ -82,8 +84,8 @@ describe('Item Animation Lab', () => {
 
     const first = current.inventory['cannedFood-1']!;
     const second = current.inventory['flashlight-1']!;
-    const firstUse = ITEM_ANIMATION_LAB_USES[first.type];
-    const secondUse = ITEM_ANIMATION_LAB_USES[second.type];
+    const firstUse = ITEM_ANIMATION_LAB_USES[first.type]!;
+    const secondUse = ITEM_ANIMATION_LAB_USES[second.type]!;
     phase.handleEventItem(firstUse.choiceId, first.instanceId);
     phase.handleEventItem(secondUse.choiceId, second.instanceId);
 
@@ -94,6 +96,7 @@ describe('Item Animation Lab', () => {
       first.instanceId,
     );
     expect(resolveEvent).not.toHaveBeenCalled();
+    expect(setEventEligibleItems).toHaveBeenLastCalledWith(new Set());
 
     itemUse.resolve();
     await flushPromises();
@@ -102,8 +105,9 @@ describe('Item Animation Lab', () => {
     expect(clearEvent).toHaveBeenCalledOnce();
     expect(setEventSelection).toHaveBeenCalledTimes(2);
     expect(setEventEligibleItems).toHaveBeenLastCalledWith(
-      new Set(ITEM_IDS.map((type) => `${type}-1`)),
+      new Set(animatedItemIds.map((type) => `${type}-1`)),
     );
+    expect(setEventEligibleItems).toHaveBeenCalledTimes(3);
     expect(current.inventory[first.instanceId]).toBe(first);
 
     phase.handleEventItem(firstUse.choiceId, first.instanceId);

@@ -68,8 +68,8 @@ interface WeatherReactionActor {
   readonly condition: ItemCondition | null;
 }
 
-const DISTANT_FIGURE_Z = -9.2;
-const REVEAL_FIGURE_X = -2.1;
+const DISTANT_FIGURE_Z = -13.5;
+const FOG_MAN_SIDE_X = 2.6;
 const REVEAL_FIGURE_Y = 0;
 
 function resetItemSample(sample: WeatherItemSample): void {
@@ -121,7 +121,7 @@ function prepareFogMan(model: Group, material: Material): Group {
 
   const root = new Group();
   root.name = 'fog-man-silhouette';
-  root.position.set(REVEAL_FIGURE_X, REVEAL_FIGURE_Y, DISTANT_FIGURE_Z);
+  root.position.set(-FOG_MAN_SIDE_X, REVEAL_FIGURE_Y, DISTANT_FIGURE_Z);
   root.visible = false;
   root.add(tableau);
   return root;
@@ -228,6 +228,7 @@ export class WeatherEventAnimator {
   private readonly flashlightBeamCone: Mesh;
   private readonly lightningFlash: Group;
   private readonly windPaper: Mesh;
+  private fogManX = -FOG_MAN_SIDE_X;
   private active: ActiveWeatherAnimation | null = null;
   private selectedActorId: ItemInstanceId | null = null;
   private stagedEventId: string | null = null;
@@ -303,10 +304,15 @@ export class WeatherEventAnimator {
     this.rememberCameraBase();
   }
 
-  stage(eventId: string): void {
+  stage(eventId: string, variantSeed = 0): void {
     if (this.disposed) return;
     this.cancelActive();
     this.stagedEventId = eventId;
+    if (eventId === 'man-in-the-fog') {
+      this.fogManX = Math.abs(Math.trunc(variantSeed)) % 2 === 0
+        ? -FOG_MAN_SIDE_X
+        : FOG_MAN_SIDE_X;
+    }
     this.rememberCameraBase();
     this.hideTransientEffects();
     this.selectedActorId = null;
@@ -612,7 +618,7 @@ export class WeatherEventAnimator {
       const impact = pulse(progress, 0.04, 0.24, 0.62);
       this.applyCameraPose(
         0.14 * impact,
-        -0.025 * impact,
+        0,
         0,
         -0.06 * impact,
         0,
@@ -675,9 +681,9 @@ export class WeatherEventAnimator {
   private showSilhouette(visibility: number): void {
     if (visibility <= 0.015) return;
     this.silhouette.visible = true;
-    this.figureMaterial.opacity = Math.min(0.38, visibility * 0.36);
+    this.figureMaterial.opacity = Math.min(0.46, visibility * 0.44);
     this.silhouette.position.set(
-      REVEAL_FIGURE_X,
+      this.fogManX,
       REVEAL_FIGURE_Y,
       DISTANT_FIGURE_Z,
     );
@@ -709,7 +715,7 @@ export class WeatherEventAnimator {
 
   private hideTransientEffects(): void {
     this.silhouette.visible = false;
-    this.silhouette.position.set(REVEAL_FIGURE_X, REVEAL_FIGURE_Y, DISTANT_FIGURE_Z);
+    this.silhouette.position.set(this.fogManX, REVEAL_FIGURE_Y, DISTANT_FIGURE_Z);
     this.silhouette.scale.setScalar(1);
     this.figureMaterial.opacity = 0;
     this.flashlightBeam.visible = false;

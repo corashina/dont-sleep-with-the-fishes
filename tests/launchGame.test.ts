@@ -18,7 +18,7 @@ import { Texture } from 'three';
 import type { ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { PhysicsLoadError } from '../src/physics/PhysicsRuntime';
 import { BoatWorld } from '../src/survival/BoatWorld';
-import { CaptainWhiskersPresentation } from '../src/survival/CaptainWhiskersPresentation';
+import { CarlitosPresentation } from '../src/survival/CarlitosPresentation';
 import {
   EventModelLoadError,
   type EventModelLibrary,
@@ -106,7 +106,6 @@ function menuModels(): MenuModelLibrary {
 
 function menuSandAssets(): MenuSandAssets {
   return MenuSandAssets.fromTextures(
-    new Texture(),
     new Texture(),
     new Texture(),
   );
@@ -294,7 +293,7 @@ describe('launchGame', () => {
     expect(createGame).not.toHaveBeenCalled();
   });
 
-  it('carries Captain Whiskers through the launched survival lifecycle', async () => {
+  it('carries Carlitos through the launched survival lifecycle', async () => {
     const mount = connectedMount();
     const models = createTestPropModels();
     const shipFurniture = createTestShipFurniture();
@@ -304,7 +303,7 @@ describe('launchGame', () => {
     const loadedEventModels = eventModels();
     const loadedMenuModels = menuModels();
     const savedItems = [
-      { instanceId: 'captainWhiskers-1' as ItemInstanceId, type: 'captainWhiskers' },
+      { instanceId: 'carlitos-1' as ItemInstanceId, type: 'carlitos' },
       { instanceId: 'cannedFood-1' as ItemInstanceId, type: 'cannedFood' },
       { instanceId: 'medicalKit-1' as ItemInstanceId, type: 'medicalKit' },
     ] as const satisfies readonly ItemInstance[];
@@ -317,7 +316,7 @@ describe('launchGame', () => {
         selectFishingCatch(2, false, roll, activeFishingItems, 1.01).id
         !== selectFishingCatch(2, false, roll, activeFishingItems).id
       ));
-    if (deadFishRoll === undefined) throw new Error('Expected a Captain Whiskers fishing boundary.');
+    if (deadFishRoll === undefined) throw new Error('Expected a Carlitos fishing boundary.');
     const deadBoostedCatch = selectFishingCatch(
       2,
       false,
@@ -329,7 +328,7 @@ describe('launchGame', () => {
     let session!: SurvivalSession;
     let world!: BoatWorld;
     let ui!: SurvivalUI;
-    const disposeCompanion = vi.spyOn(CaptainWhiskersPresentation.prototype, 'dispose');
+    const disposeCompanion = vi.spyOn(CarlitosPresentation.prototype, 'dispose');
     const requestFrame = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(73);
     const cancelFrame = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
 
@@ -354,7 +353,7 @@ describe('launchGame', () => {
             0,
             deadFishRoll,
           ]),
-          initialCaptainWhiskers: { hunger: 2, sickness: 4 },
+          initialCarlitos: { hunger: 2, sickness: 4 },
         });
         world = new BoatWorld(
           context.camera,
@@ -417,37 +416,37 @@ describe('launchGame', () => {
     expect(game).not.toBeNull();
     expect(session.snapshot()).toMatchObject({
       food: 1,
-      captainWhiskers: { alive: true, hunger: 2, sickness: 4 },
+      carlitos: { alive: true, hunger: 2, sickness: 4 },
       inventory: {
         'cannedFood-1': { condition: 'usable' },
         'medicalKit-1': { condition: 'usable' },
       },
     });
     expect(session.snapshot().savedItems).not.toContainEqual(
-      expect.objectContaining({ type: 'captainWhiskers' }),
+      expect.objectContaining({ type: 'carlitos' }),
     );
 
     const companionAnchor = world.projectInteractionAnchors(
       window.innerWidth,
       window.innerHeight,
-    ).find(({ companionId }) => companionId === 'captainWhiskers');
+    ).find(({ companionId }) => companionId === 'carlitos');
     expect(companionAnchor).toMatchObject({
-      id: 'captain-whiskers',
+      id: 'carlitos',
       visible: true,
-      label: 'CAPTAIN WHISKERS',
+      label: 'CARLITOS',
     });
 
     const anchorButton = mount.querySelector<HTMLButtonElement>(
-      '[data-anchor-id="captain-whiskers"]',
+      '[data-anchor-id="carlitos"]',
     );
     expect(anchorButton).not.toBeNull();
     anchorButton!.click();
-    const card = mount.querySelector<HTMLElement>('[data-whiskers-card]');
+    const card = mount.querySelector<HTMLElement>('[data-carlitos-card]');
     expect(card).toMatchObject({ hidden: false });
-    card!.querySelector<HTMLButtonElement>('[data-action="feedWhiskers"]')!.click();
+    card!.querySelector<HTMLButtonElement>('[data-action="feedCarlitos"]')!.click();
     expect(session.snapshot()).toMatchObject({
       food: 0,
-      captainWhiskers: { hunger: 5 },
+      carlitos: { hunger: 5 },
     });
 
     const livingFishing = session.beginFishing();
@@ -469,7 +468,7 @@ describe('launchGame', () => {
 
     expect(session.perform('endDay')).toMatchObject({ accepted: true, code: 'quiet-night' });
     expect(session.beginDawn()).toMatchObject({ accepted: true, code: 'dawn' });
-    expect(session.snapshot().captainWhiskers).toMatchObject({
+    expect(session.snapshot().carlitos).toMatchObject({
       alive: false,
       deathCause: 'sickness',
       hunger: 4,

@@ -153,7 +153,7 @@ describe('dedicated event item use', () => {
         borrowEventActor: vi.fn(() => null),
         itemType: () => 'ductTape',
       } as unknown as DedicatedEventEnvironment['supplies'],
-      captainWhiskers: {} as DedicatedEventEnvironment['captainWhiskers'],
+      carlitos: {} as DedicatedEventEnvironment['carlitos'],
       vortexWave: createInactiveVortexWaveState(),
       sampleWorldWaveInto,
       readWorldWaveAmplitudeScale: () => 1,
@@ -204,7 +204,7 @@ describe('dedicated event item use', () => {
             requestedId === instanceId ? itemId : null
           ),
         } as unknown as DedicatedEventEnvironment['supplies'],
-        captainWhiskers: {} as DedicatedEventEnvironment['captainWhiskers'],
+        carlitos: {} as DedicatedEventEnvironment['carlitos'],
         vortexWave: createInactiveVortexWaveState(),
         sampleWorldWaveInto: (output) => Object.assign(output, createWaveSample()),
         readWorldWaveAmplitudeScale: () => 1,

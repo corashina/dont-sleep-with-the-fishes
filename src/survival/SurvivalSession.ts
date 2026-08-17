@@ -8,6 +8,7 @@ import {
   SURVIVAL_EVENTS,
   drawWeightedEvent,
   eligibleEvents,
+  isDriftingCargoEventId,
   survivalEventById,
 } from './events';
 import { resolveWeightedOutcome } from './eventResolver';
@@ -18,7 +19,7 @@ import type {
   JournalDaytimeRecord,
   JournalEntry,
   JournalEventRecord,
-  JournalCaptainWhiskersDawnRecord,
+  JournalCarlitosDawnRecord,
   JournalNightRecord,
   JournalInventoryMutation,
 } from './journal';
@@ -31,24 +32,23 @@ import {
 import { nightDamageMultiplier, pressureForDay, pressureIncreaseForDay } from './RunPressure';
 import { repairEnergyCost, SURVIVAL_BALANCE } from './survivalBalance';
 import {
-  advanceCaptainWhiskersDawn,
-  captainWhiskersStatus,
-  captainWhiskersWellness,
-  createCaptainWhiskersState,
-  feedCaptainWhiskers,
-  petCaptainWhiskers,
-  killCaptainWhiskers,
-  treatCaptainWhiskers,
-  type CaptainWhiskersSnapshot,
-  type CaptainWhiskersState,
-} from './CaptainWhiskersState';
+  advanceCarlitosDawn,
+  carlitosStatus,
+  carlitosWellness,
+  createCarlitosState,
+  feedCarlitos,
+  petCarlitos,
+  killCarlitos,
+  treatCarlitos,
+  type CarlitosSnapshot,
+  type CarlitosState,
+} from './CarlitosState';
 import type {
   ActionOutcome,
   BeginFishingResult,
   DayActionOption,
   DayActionId,
   DawnEnergy,
-  DriftingLootVariant,
   EventResponse,
   EventResponseId,
   EventInventoryMutation,
@@ -92,7 +92,7 @@ export interface SurvivalSessionOptions {
   initialEventId?: string;
   initialChest?: ChestSnapshot;
   initialAppearanceCounts?: Readonly<Record<string, number>>;
-  initialCaptainWhiskers?: Partial<CaptainWhiskersSnapshot>;
+  initialCarlitos?: Partial<CarlitosSnapshot>;
 }
 
 export type { DayActionOption } from './survivalTypes';
@@ -130,16 +130,16 @@ export class SurvivalSession {
   private actedToday = false;
   private readonly inventory: SurvivalInventoryState;
   private readonly savedItems: readonly ItemInstance[];
-  private readonly captainWhiskers: CaptainWhiskersState | null;
+  private readonly carlitos: CarlitosState | null;
   private pendingEventId: string | null;
   private pendingEvent: SurvivalEventDefinition | null = null;
   private pendingEventTargetId: ItemInstanceId | null = null;
-  private pendingDriftingLootVariant: DriftingLootVariant | null = null;
   private readonly pendingDawnBreaks = new Set<ItemInstanceId>();
   private nextDawnEnergyOverride: DawnEnergy | null = null;
   private lastEventId: string | null = null;
   private readonly lastSeenDay = new Map<string, number>();
   private readonly appearanceCounts = new Map<string, number>();
+  private rescueMessageSent = false;
   private lastOutcome: ActionOutcome | null = null;
   private pendingJournalDaytime: JournalDaytimeRecord | null;
   private pendingJournalNighttime: JournalNightRecord | null = null;
@@ -176,12 +176,12 @@ export class SurvivalSession {
       this.appearanceCounts.set(eventId, count);
     }
     this.pendingEventId = null;
-    const hasCaptainWhiskers = savedItems.some(({ type }) => type === 'captainWhiskers');
+    const hasCarlitos = savedItems.some(({ type }) => type === 'carlitos');
     this.savedItems = Object.freeze(savedItems
-      .filter(({ type }) => type !== 'captainWhiskers')
+      .filter(({ type }) => type !== 'carlitos')
       .map((item) => Object.freeze({ ...item })));
-    this.captainWhiskers = hasCaptainWhiskers
-      ? createCaptainWhiskersState(options.initialCaptainWhiskers)
+    this.carlitos = hasCarlitos
+      ? createCarlitosState(options.initialCarlitos)
       : null;
     this.inventory = new SurvivalInventoryState(this.savedItems);
     this.applyInitialConditions(options.initialConditions);
@@ -190,7 +190,6 @@ export class SurvivalSession {
       const initialEvent = survivalEventById(options.initialEventId);
       if (initialEvent === undefined) throw new Error(`Unknown survival event: ${options.initialEventId}`);
       this.openEvent(initialEvent);
-      if (initialEvent.id === 'drifting-loot') this.pendingDriftingLootVariant = 'barrel';
     }
 
     this.recoveredFood = this.inventory.count('cannedFood', 'usable');
@@ -236,11 +235,10 @@ export class SurvivalSession {
       journalEntries: this.journalSnapshot(),
       inventory: this.inventory.snapshot(),
       savedItems: this.savedItems,
-      captainWhiskers: this.captainWhiskers === null
+      carlitos: this.carlitos === null
         ? null
-        : Object.freeze({ ...this.captainWhiskers }),
+        : Object.freeze({ ...this.carlitos }),
       pendingEventId: this.pendingEventId,
-      pendingDriftingLootVariant: this.pendingDriftingLootVariant,
       pendingEventTargetId: this.pendingEventTargetId,
       lastOutcome,
       seed: this.seed,
@@ -255,34 +253,34 @@ export class SurvivalSession {
   companionEventActionAvailability(
     action: CompanionEventActionId,
   ): CompanionEventActionAvailability {
-    if (action !== 'delegateWhiskers') {
+    if (action !== 'delegateCarlitos') {
       throw new Error(`Unknown companion event action: ${action}`);
     }
-    if (this.captainWhiskers === null) {
+    if (this.carlitos === null) {
       return {
         visible: false,
-        unavailableReason: 'Captain Whiskers is not aboard.',
+        unavailableReason: 'Carlitos is not aboard.',
       };
     }
-    if (!this.captainWhiskers.alive) {
+    if (!this.carlitos.alive) {
       return {
         visible: false,
-        unavailableReason: 'Captain Whiskers cannot retrieve the loot.',
+        unavailableReason: 'Carlitos cannot retrieve the loot.',
       };
     }
-    if (captainWhiskersWellness(this.captainWhiskers) >= 4) {
+    if (carlitosWellness(this.carlitos) >= 4) {
       return { visible: true, unavailableReason: null };
     }
 
-    const status = captainWhiskersStatus(this.captainWhiskers);
-    const label = this.captainWhiskers.hunger < 4
+    const status = carlitosStatus(this.carlitos);
+    const label = this.carlitos.hunger < 4
       ? status.hunger
-      : this.captainWhiskers.sickness > 0
+      : this.carlitos.sickness > 0
         ? status.health
         : status.happiness;
     return {
       visible: true,
-      unavailableReason: `Captain Whiskers is ${label} and cannot retrieve the loot.`,
+      unavailableReason: `Carlitos is ${label} and cannot retrieve the loot.`,
     };
   }
 
@@ -300,9 +298,9 @@ export class SurvivalSession {
       case 'sendMessage': outcome = this.sendMessage(); break;
       case 'useEnergyBar': outcome = this.useEnergyBar(); break;
       case 'openChest': outcome = this.openChest(); break;
-      case 'petWhiskers': outcome = this.petWhiskers(); break;
-      case 'feedWhiskers': outcome = this.feedWhiskers(); break;
-      case 'treatWhiskers': outcome = this.treatWhiskers(); break;
+      case 'petCarlitos': outcome = this.petCarlitos(); break;
+      case 'feedCarlitos': outcome = this.feedCarlitos(); break;
+      case 'treatCarlitos': outcome = this.treatCarlitos(); break;
       case 'endDay': return this.endDay();
     }
     this.actedToday = true;
@@ -334,7 +332,7 @@ export class SurvivalSession {
       day: this.day,
       capturedBait,
       activeItemIds,
-      ...(this.captainWhiskers?.alive ? { fishWeightMultiplier: 1.01 } : {}),
+      ...(this.carlitos?.alive ? { fishWeightMultiplier: 1.01 } : {}),
       random: this.random,
     });
     const outcome = this.commit(
@@ -531,7 +529,6 @@ export class SurvivalSession {
     const mutationExclusions = new Set<ItemInstanceId>();
 
     const phase = event.phase;
-    const pendingDriftingLootVariant = this.pendingDriftingLootVariant;
     const before = this.resourceValues();
     const resolved = resolveWeightedOutcome(
       choice,
@@ -592,9 +589,12 @@ export class SurvivalSession {
     const after = this.resourceValues();
     const deltas = this.appliedResourceDelta(before, after);
     const cue = this.presentationCue('none');
-    const rewardSummary = pendingDriftingLootVariant === null
-      ? undefined
-      : this.driftingLootRewardSummary(event.id, choiceId, resolved, fallbackFoodGranted);
+    const rewardSummary = this.driftingCargoRewardSummary(
+      event.id,
+      choiceId,
+      resolved,
+      fallbackFoodGranted,
+    );
     const resolvedResultId = fallbackFoodGranted
       ? fallbackResultId(event.id)
       : resolved.resultId;
@@ -661,7 +661,7 @@ export class SurvivalSession {
     this.clearPendingEvent();
     this.state = 'day';
     this.applyPendingDawnBreaks();
-    this.advanceCaptainWhiskersDawn();
+    this.advanceCarlitosDawn();
 
     this.weather = 'calm';
 
@@ -785,6 +785,9 @@ export class SurvivalSession {
         }
         return null;
       case 'sendMessage':
+        if (this.rescueMessageSent) {
+          return { code: 'message-already-sent', message: 'You already sent the rescue message.' };
+        }
         if (!this.inventory.hasUsable('bottledPaper')) {
           return { code: 'no-bottled-paper', message: 'No bottled paper remains.' };
         }
@@ -808,12 +811,12 @@ export class SurvivalSession {
           return { code: 'not-enough-energy', message: 'Opening the chest requires three energy.' };
         }
         return null;
-      case 'petWhiskers':
-        return this.unavailableCaptainWhiskersCare('pet');
-      case 'feedWhiskers':
-        return this.unavailableCaptainWhiskersCare('feed');
-      case 'treatWhiskers':
-        return this.unavailableCaptainWhiskersCare('treat');
+      case 'petCarlitos':
+        return this.unavailableCarlitosCare('pet');
+      case 'feedCarlitos':
+        return this.unavailableCarlitosCare('feed');
+      case 'treatCarlitos':
+        return this.unavailableCarlitosCare('treat');
       case 'endDay':
         return null;
     }
@@ -830,25 +833,25 @@ export class SurvivalSession {
     return valid ? null : { code: 'invalid-option', message: 'That option cannot be used for this action.' };
   }
 
-  private unavailableCaptainWhiskersCare(action: 'pet' | 'feed' | 'treat'): Rejection | null {
-    if (this.captainWhiskers === null) {
-      return { code: 'no-captain-whiskers', message: 'Captain Whiskers is not aboard.' };
+  private unavailableCarlitosCare(action: 'pet' | 'feed' | 'treat'): Rejection | null {
+    if (this.carlitos === null) {
+      return { code: 'no-carlitos', message: 'Carlitos is not aboard.' };
     }
-    if (!this.captainWhiskers.alive) {
-      return { code: 'captain-whiskers-dead', message: 'Captain Whiskers cannot respond.' };
+    if (!this.carlitos.alive) {
+      return { code: 'carlitos-dead', message: 'Carlitos cannot respond.' };
     }
-    if (action === 'pet' && this.captainWhiskers.pettedToday) {
-      return { code: 'already-petted', message: 'Captain Whiskers has already been petted today.' };
+    if (action === 'pet' && this.carlitos.pettedToday) {
+      return { code: 'already-petted', message: 'Carlitos has already been petted today.' };
     }
     if (action === 'feed') {
-      if (this.captainWhiskers.hunger >= 5) {
-        return { code: 'whiskers-not-hungry', message: 'Captain Whiskers is already satiated.' };
+      if (this.carlitos.hunger >= 5) {
+        return { code: 'carlitos-not-hungry', message: 'Carlitos is already satiated.' };
       }
       if (this.food < 1) return { code: 'no-food', message: 'No food remains.' };
     }
     if (action === 'treat') {
-      if (this.captainWhiskers.sickness <= 0) {
-        return { code: 'whiskers-healthy', message: 'Captain Whiskers needs no treatment.' };
+      if (this.carlitos.sickness <= 0) {
+        return { code: 'carlitos-healthy', message: 'Carlitos needs no treatment.' };
       }
       if (!this.inventory.hasUsable('medicalKit')) {
         return { code: 'no-medical-kit', message: 'No medical kit remains.' };
@@ -953,36 +956,37 @@ export class SurvivalSession {
     );
   }
 
-  private petWhiskers(): ActionOutcome {
-    if (this.captainWhiskers === null || !petCaptainWhiskers(this.captainWhiskers)) {
-      throw new Error('Captain Whiskers pet action was not available.');
+  private petCarlitos(): ActionOutcome {
+    if (this.carlitos === null || !petCarlitos(this.carlitos)) {
+      throw new Error('Carlitos pet action was not available.');
     }
-    const outcome = this.commit('whiskers-petted', 'You pet Captain Whiskers.', {}, 'none');
-    this.pendingJournalActions.push(Object.freeze({ kind: 'captainWhiskersCare', action: 'pet' }));
+    const outcome = this.commit('carlitos-petted', 'You pet Carlitos.', {}, 'none');
+    this.pendingJournalActions.push(Object.freeze({ kind: 'carlitosCare', action: 'pet' }));
     return outcome;
   }
 
-  private feedWhiskers(): ActionOutcome {
-    if (this.captainWhiskers === null || !feedCaptainWhiskers(this.captainWhiskers)) {
-      throw new Error('Captain Whiskers feed action was not available.');
+  private feedCarlitos(): ActionOutcome {
+    if (this.carlitos === null || !feedCarlitos(this.carlitos)) {
+      throw new Error('Carlitos feed action was not available.');
     }
-    const outcome = this.commit('whiskers-fed', 'You feed Captain Whiskers.', { food: -1 }, 'none');
-    this.pendingJournalActions.push(Object.freeze({ kind: 'captainWhiskersCare', action: 'feed' }));
+    const outcome = this.commit('carlitos-fed', 'You feed Carlitos.', { food: -1 }, 'none');
+    this.pendingJournalActions.push(Object.freeze({ kind: 'carlitosCare', action: 'feed' }));
     return outcome;
   }
 
-  private treatWhiskers(): ActionOutcome {
-    if (this.captainWhiskers === null || !treatCaptainWhiskers(this.captainWhiskers)) {
-      throw new Error('Captain Whiskers treatment was not available.');
+  private treatCarlitos(): ActionOutcome {
+    if (this.carlitos === null || !treatCarlitos(this.carlitos)) {
+      throw new Error('Carlitos treatment was not available.');
     }
     this.inventory.consume('medicalKit', 1);
-    const outcome = this.commit('whiskers-treated', 'You treat Captain Whiskers.', {}, 'none');
-    this.pendingJournalActions.push(Object.freeze({ kind: 'captainWhiskersCare', action: 'treat' }));
+    const outcome = this.commit('carlitos-treated', 'You treat Carlitos.', {}, 'none');
+    this.pendingJournalActions.push(Object.freeze({ kind: 'carlitosCare', action: 'treat' }));
     return outcome;
   }
 
   private sendMessage(): ActionOutcome {
     this.inventory.consume('bottledPaper', 1);
+    this.rescueMessageSent = true;
     return this.commit('message-sent', 'You cast the message into the current.', {
       energy: -SURVIVAL_BALANCE.actions.bottledPaperEnergy,
       rescueProgress: SURVIVAL_BALANCE.actions.bottledPaperRescueProgress,
@@ -1051,32 +1055,30 @@ export class SurvivalSession {
       rescueProgress: this.rescueProgress,
       pressure: this.pressure,
       chestState: this.chestState,
-      hasLivingCompanion: this.captainWhiskers?.alive === true,
-    }).filter(({ id }) => !excludedIds.has(id));
+      hasLivingCompanion: this.carlitos?.alive === true,
+    }).filter(({ id }) => (
+      !excludedIds.has(id)
+      && !(id === 'drifting-bottle' && this.rescueMessageSent)
+    ));
     return drawWeightedEvent(pool, this.random, phase);
   }
 
   private openDayEventAfterDawn(): void {
-    const balance = SURVIVAL_BALANCE.dayEvents.driftingLoot;
+    const balance = SURVIVAL_BALANCE.dayEvents;
     if (this.day < balance.firstDay || this.random.next() >= balance.chance) return;
     const event = this.drawEvent('day');
     if (event.id === 'day-calm-fallback') return;
-    if (event.id === 'drifting-loot') {
-      this.pendingDriftingLootVariant = this.random.next() < balance.barrelChance
-        ? 'barrel'
-        : 'crate';
-    }
     this.openEvent(event);
   }
 
-  private driftingLootRewardSummary(
+  private driftingCargoRewardSummary(
     eventId: string,
     choiceId: string,
     resolved: WeightedEventOutcome,
     fallbackFoodGranted: boolean,
   ): RewardSummary | undefined {
-    if (eventId !== 'drifting-loot'
-      || (choiceId !== 'retrieve' && choiceId !== 'delegate-whiskers')) return undefined;
+    if (!isDriftingCargoEventId(eventId)
+      || (choiceId !== 'retrieve' && choiceId !== 'delegate-carlitos')) return undefined;
     if (fallbackFoodGranted) return Object.freeze({ kind: 'resource', id: 'food', quantity: 1 });
     const added = resolved.effects.resources?.find(
       ({ operation, resource }) => operation === 'add'
@@ -1184,7 +1186,6 @@ export class SurvivalSession {
     this.pendingEvent = null;
     this.pendingEventId = null;
     this.pendingEventTargetId = null;
-    this.pendingDriftingLootVariant = null;
   }
 
   private cloneOutcome(outcome: ActionOutcome): ActionOutcome {
@@ -1457,12 +1458,12 @@ export class SurvivalSession {
     this.pendingDawnBreaks.clear();
   }
 
-  private advanceCaptainWhiskersDawn(): void {
-    if (this.captainWhiskers === null) return;
-    const before = this.captainWhiskersDawnState();
-    advanceCaptainWhiskersDawn(this.captainWhiskers, this.random);
-    const after = this.captainWhiskersDawnState();
-    if (!this.captainWhiskersDawnChanged(before, after)) return;
+  private advanceCarlitosDawn(): void {
+    if (this.carlitos === null) return;
+    const before = this.carlitosDawnState();
+    advanceCarlitosDawn(this.carlitos, this.random);
+    const after = this.carlitosDawnState();
+    if (!this.carlitosDawnChanged(before, after)) return;
     const entryIndex = this.journalEntries.findIndex((entry) => entry.day === this.day - 1);
     if (entryIndex < 0) return;
     const entry = this.journalEntries[entryIndex]!;
@@ -1471,7 +1472,7 @@ export class SurvivalSession {
       actions: this.cloneJournalActions([
         ...entry.actions,
         Object.freeze({
-          kind: 'captainWhiskersDawn',
+          kind: 'carlitosDawn',
           before,
           after,
         }),
@@ -1479,21 +1480,21 @@ export class SurvivalSession {
     };
   }
 
-  private captainWhiskersDawnState(): JournalCaptainWhiskersDawnRecord['before'] {
-    if (this.captainWhiskers === null) throw new Error('Captain Whiskers is not aboard.');
+  private carlitosDawnState(): JournalCarlitosDawnRecord['before'] {
+    if (this.carlitos === null) throw new Error('Carlitos is not aboard.');
     return Object.freeze({
-      alive: this.captainWhiskers.alive,
-      hunger: this.captainWhiskers.hunger,
-      sickness: this.captainWhiskers.sickness,
-      unhappiness: this.captainWhiskers.unhappiness,
-      pettedToday: this.captainWhiskers.pettedToday,
-      deathCause: this.captainWhiskers.deathCause,
+      alive: this.carlitos.alive,
+      hunger: this.carlitos.hunger,
+      sickness: this.carlitos.sickness,
+      unhappiness: this.carlitos.unhappiness,
+      pettedToday: this.carlitos.pettedToday,
+      deathCause: this.carlitos.deathCause,
     });
   }
 
-  private captainWhiskersDawnChanged(
-    before: JournalCaptainWhiskersDawnRecord['before'],
-    after: JournalCaptainWhiskersDawnRecord['after'],
+  private carlitosDawnChanged(
+    before: JournalCarlitosDawnRecord['before'],
+    after: JournalCarlitosDawnRecord['after'],
   ): boolean {
     return before.hunger !== after.hunger
       || before.sickness !== after.sickness
@@ -1532,17 +1533,13 @@ export class SurvivalSession {
   private applyCompanionEventEffects(
     effects: readonly CompanionEventEffect[] | undefined,
   ): void {
-    if (effects === undefined || this.captainWhiskers === null) return;
+    if (effects === undefined || this.carlitos === null) return;
     for (const effect of effects) {
-      if (effect.kind === 'kill') {
-        killCaptainWhiskers(this.captainWhiskers, effect.cause);
-        continue;
-      }
-      const current = this.captainWhiskers.sickness;
+      const current = this.carlitos.sickness;
       const next = effect.operation === 'set' ? effect.value : current + effect.value;
-      this.captainWhiskers.sickness = Math.min(5, Math.max(0, next));
-      if (this.captainWhiskers.sickness === 5) {
-        killCaptainWhiskers(this.captainWhiskers, 'sickness');
+      this.carlitos.sickness = Math.min(5, Math.max(0, next));
+      if (this.carlitos.sickness === 5) {
+        killCarlitos(this.carlitos, 'sickness');
       }
     }
   }

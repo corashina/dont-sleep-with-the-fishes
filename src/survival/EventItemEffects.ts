@@ -32,12 +32,13 @@ const CHAIN = 'event-item-chain';
 const FLASHLIGHT = 'event-item-flashlight-beam';
 const SHOTGUN_SMOKE = 'event-item-shotgun-smoke';
 const FLARE_MUZZLE_X = 0.34;
-const FLARE_DISTANCE = 18;
+const FLARE_DISTANCE = 21;
 const FLARE_ARC_HEIGHT = 3.2;
 const FLARE_WATER_Y = 0.04;
 const FLARE_FORWARD = new Vector3(1, 0, 0);
 const CHAIN_LINK_AXIS = new Vector3(0, 1, 0);
 const CHAIN_FALLBACK_EDGE_OFFSET = new Vector3(1.35, -0.22, -0.25);
+const CHAIN_BOAT_ATTACHMENT_LOCAL = new Vector3(0, 0.29, 1.48);
 const CHAIN_GUNWALE_Z = 0.55;
 const CHAIN_GUNWALE_X = lifeboatHullHalfWidthAt(CHAIN_GUNWALE_Z) ?? 1.63;
 const CHAIN_SEGMENT_SPLIT = 0.44;
@@ -69,10 +70,7 @@ export class EventItemEffects {
   private readonly shotgunSmoke: EffectRoot;
   private binocularStrength = 0;
   private effectOpacity = 0;
-  private chainCaptured = false;
-  private chainParent: Object3D | null = null;
-  private readonly chainHandLocal = new Vector3();
-  private readonly chainHandWorld = new Vector3();
+  private readonly chainBoatWorld = new Vector3();
   private readonly chainGunwaleLocal = new Vector3(
     CHAIN_GUNWALE_X,
     LIFEBOAT_GUNWALE_SURFACE_Y + 0.035,
@@ -156,8 +154,8 @@ export class EventItemEffects {
         this.flare.scale.setScalar(
           0.94 + Math.sin(sample.effectTravel * Math.PI * 32) * 0.06,
         );
-        this.flareLight.intensity = 5.4
-          + Math.sin(sample.effectTravel * Math.PI * 38) * 0.8;
+        this.flareLight.intensity = 7.2
+          + Math.sin(sample.effectTravel * Math.PI * 38) * 1;
         break;
       case 'chain':
         this.root.quaternion.identity();
@@ -197,8 +195,6 @@ export class EventItemEffects {
     this.hideEffects();
     this.flareLaunched = false;
     this.flareTravel = 0;
-    this.chainCaptured = false;
-    this.chainParent = null;
   }
 
   private hideEffects(): void {
@@ -310,16 +306,16 @@ export class EventItemEffects {
     const flare = new Group();
     flare.name = FLARE;
     const core = this.mesh(
-      new SphereGeometry(0.045, 10, 8),
+      new SphereGeometry(0.035, 10, 8),
       new MeshBasicMaterial({ color: 0xfff4c7 }),
       'event-item-flare-core',
     );
     const halo = this.mesh(
-      new SphereGeometry(0.14, 10, 8),
+      new SphereGeometry(0.12, 10, 8),
       new MeshBasicMaterial({
         color: 0xff4b22,
         transparent: true,
-        opacity: 0.24,
+        opacity: 0.38,
         depthWrite: false,
       }),
       'event-item-flare-halo',
@@ -355,7 +351,7 @@ export class EventItemEffects {
       flare.add(smoke);
     }
 
-    const light = new PointLight(0xff5c27, 0, 5.5, 2);
+    const light = new PointLight(0xff5c27, 0, 7.5, 2);
     light.name = 'event-item-flare-light';
     flare.add(halo, flame, core, light);
     return [flare, light];
@@ -383,25 +379,19 @@ export class EventItemEffects {
 
   private updateChain(actor: Object3D, travel: number): void {
     const parent = actor.parent;
-    if (!this.chainCaptured || this.chainParent !== parent) {
-      actor.updateWorldMatrix(true, false);
-      actor.getWorldPosition(this.chainHandLocal);
-      if (parent !== null) parent.worldToLocal(this.chainHandLocal);
-      this.chainParent = parent;
-      this.chainCaptured = true;
-    }
-
     actor.updateWorldMatrix(true, false);
     actor.getWorldPosition(this.actorPosition);
     this.chainAnchorWorld.set(0, 0.22, 0).applyMatrix4(actor.matrixWorld);
     if (parent === null) {
-      this.chainHandWorld.copy(this.chainHandLocal);
+      this.chainBoatWorld.copy(this.actorPosition);
       this.chainGunwaleWorld
-        .copy(this.chainHandWorld)
+        .copy(this.chainBoatWorld)
         .add(CHAIN_FALLBACK_EDGE_OFFSET);
     } else {
       parent.updateWorldMatrix(true, false);
-      this.chainHandWorld.copy(this.chainHandLocal).applyMatrix4(parent.matrixWorld);
+      this.chainBoatWorld
+        .copy(CHAIN_BOAT_ATTACHMENT_LOCAL)
+        .applyMatrix4(parent.matrixWorld);
       this.chainGunwaleWorld.copy(this.chainGunwaleLocal).applyMatrix4(parent.matrixWorld);
     }
 
@@ -425,7 +415,7 @@ export class EventItemEffects {
   private sampleChainPoint(progress: number, travel: number, output: Vector3): void {
     if (progress <= CHAIN_SEGMENT_SPLIT) {
       const segmentProgress = progress / CHAIN_SEGMENT_SPLIT;
-      output.lerpVectors(this.chainHandWorld, this.chainGunwaleWorld, segmentProgress);
+      output.lerpVectors(this.chainBoatWorld, this.chainGunwaleWorld, segmentProgress);
       output.y -= Math.sin(Math.PI * segmentProgress) * 0.055;
       return;
     }

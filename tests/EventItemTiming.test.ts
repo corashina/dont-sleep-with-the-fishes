@@ -8,7 +8,10 @@ import {
   scaleThrownItemDuration,
   THROWN_ITEM_SPEED_MULTIPLIER,
 } from '../src/survival/eventItemTiming';
-import { eventItemUseDuration } from '../src/survival/eventItemUseChoreography';
+import {
+  eventItemUseDuration,
+  eventItemUseDurationForItem,
+} from '../src/survival/eventItemUseChoreography';
 import { SWARM_ITEM_DURATION, swarmItemDuration } from '../src/survival/events/anglerfishSwarmChoreography';
 import { DEATH_STARE_ITEM_DURATION, deathStareItemDuration } from '../src/survival/events/deathStareChoreography';
 import { LEAK_ITEM_DURATION } from '../src/survival/events/leakChoreography';
@@ -27,7 +30,8 @@ describe('event item timing', () => {
     expect(GENERIC_EVENT_ITEM_USE_DURATION).toBe(2.6);
     expect(DANGEROUS_WATERS_ITEM_DURATION).toBe(4.4);
     expect(eventItemUseDuration('throw-target')).toBeCloseTo(4.32);
-    expect(eventItemUseDuration('net-scoop')).toBe(6);
+    expect(eventItemUseDuration('net-scoop')).toBe(6.6);
+    expect(eventItemUseDuration('bucket-scoop')).toBe(6.6);
     expect(weatherItemUseDuration('shower-night', 'umbrella')).toBe(6);
     expect(supernaturalItemUseDuration('ghosts', 'flareGun')).toBe(4.8);
     expect(LEAK_ITEM_DURATION).toBe(4.4);
@@ -40,5 +44,15 @@ describe('event item timing', () => {
     expect(SWARM_ITEM_DURATION).toBe(4.8);
     expect(swarmItemDuration('baitTin')).toBeCloseTo(3.84);
     expect(WHIRLPOOL_ITEM_DURATION).toBe(4);
+  });
+
+  it('throws medium items fifteen percent slower than light items', () => {
+    const lightDuration = eventItemUseDurationForItem('throw-target', 'cannedFood');
+
+    expect(lightDuration).toBe(eventItemUseDuration('throw-target'));
+    expect(eventItemUseDurationForItem('throw-target', 'medicalKit'))
+      .toBeCloseTo(lightDuration * 1.15);
+    expect(eventItemUseDurationForItem('throw-target', 'swimRing'))
+      .toBeCloseTo(lightDuration * 1.15);
   });
 });

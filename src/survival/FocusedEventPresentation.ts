@@ -1,4 +1,10 @@
-import type { Group, Object3D, PerspectiveCamera } from 'three';
+import type {
+  Group,
+  Object3D,
+  PerspectiveCamera,
+  Scene,
+  WebGLRenderer,
+} from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import type { WaveComponent } from '../ocean/WaveField';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
@@ -23,6 +29,7 @@ export interface FocusedEventInteractionTarget {
   readonly description: string;
   readonly choiceId: string;
   readonly root: Object3D;
+  readonly tooltip?: boolean;
   readonly minimumHitWidth?: number;
   readonly minimumHitHeight?: number;
 }
@@ -41,6 +48,11 @@ export interface FocusedEventPresentation {
   update(time: number, delta: number): void;
   settleForVisibilityChange(): void;
   interactionTargets?(): readonly FocusedEventInteractionTarget[];
+  prepareRender?(
+    renderer: WebGLRenderer,
+    scene: Scene,
+    camera: PerspectiveCamera,
+  ): Promise<void>;
   dispose(): void;
 }
 

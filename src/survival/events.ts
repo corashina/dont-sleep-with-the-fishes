@@ -1,7 +1,13 @@
-import { ITEM_DEFINITIONS, ITEM_IDS, type ItemId } from '../game/ItemState';
+import {
+  DAY_ACTION_ONLY_ITEM_IDS,
+  ITEM_DEFINITIONS,
+  ITEM_IDS,
+  type ItemId,
+} from '../game/ItemState';
 import type {
   EventChoiceDefinition,
   DawnEnergy,
+  DriftingCargoKind,
   EventInventoryMutation,
   EventResource,
   IntegerValue,
@@ -20,13 +26,29 @@ export const SURVIVAL_EVENT_IDS = Object.freeze([
   'death-stare', 'swarm-of-anglerfish', 'whirlpool', 'shower-night',
   'windy-night', 'bad-sleep', 'thunderstorm', 'restless-waves',
   'man-in-the-fog', 'ghosts', 'eerie-melody', 'face-on-the-moon',
-  'sick-companion', 'shadow-figure', 'sea-watcher', 'guarded-sleep',
-  'drifting-loot', 'drifting-bottle', 'check-the-back', 'mystery-chest',
+  'sick-companion', 'shadow-figure', 'guarded-sleep',
+  'drifting-barrel', 'drifting-chest', 'drifting-bottle', 'check-the-back',
   'flowers', 'chest-attack', 'midnight-tour', 'night-trader',
   'handyman', 'other-people',
 ] as const);
 
 export type SurvivalEventId = typeof SURVIVAL_EVENT_IDS[number];
+export type DriftingCargoEventId = Extract<
+  SurvivalEventId,
+  'drifting-barrel' | 'drifting-chest'
+>;
+
+export function isDriftingCargoEventId(
+  eventId: string,
+): eventId is DriftingCargoEventId {
+  return eventId === 'drifting-barrel' || eventId === 'drifting-chest';
+}
+
+export function driftingCargoKindForEvent(
+  eventId: DriftingCargoEventId,
+): DriftingCargoKind {
+  return eventId === 'drifting-barrel' ? 'barrel' : 'chest';
+}
 
 const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.freeze({
   'dangerous-waters': 'Jagged rocks break the surface as the current pulls the boat off course.',
@@ -45,14 +67,13 @@ const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.free
   ghosts: 'Pale shapes gather around the drifting boat.',
   'eerie-melody': 'A distant melody drifts across the water.',
   'face-on-the-moon': 'A face takes shape across the moon.',
-  'sick-companion': 'Captain Whiskers lies low and shivers beside the gunwale.',
+  'sick-companion': 'Carlitos lies low and shivers beside the gunwale.',
   'shadow-figure': 'A second cat-shaped shadow watches from beyond the lantern light.',
-  'sea-watcher': 'Unblinking eyes gather across the black water.',
-  'guarded-sleep': 'Captain Whiskers sits alert while the night presses close.',
-  'drifting-loot': 'Something useful drifts within reach of the boat.',
+  'guarded-sleep': 'Carlitos sits alert while the night presses close.',
+  'drifting-barrel': 'A sealed barrel drifts within reach of the boat.',
+  'drifting-chest': 'A small chest drifts within reach of the boat.',
   'drifting-bottle': 'A sealed bottle bobs against the hull.',
   'check-the-back': 'Something thumps against the back of the boat.',
-  'mystery-chest': 'A waterlogged chest catches on the gunwale.',
   flowers: 'A small patch of flowers drifts beside the boat.',
   'chest-attack': 'The chest shudders and opens a row of wet teeth.',
   'midnight-tour': 'A low island shape rises from the midnight water.',
@@ -221,7 +242,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       outcome(60, 'The leak damages the boat.', atNextDawn(2, effects([subtract('hull', { min: 15, max: 20 })]))),
       outcome(40, 'The leak damages the boat and takes an item.', effects([subtract('hull', { min: 5, max: 20 })], [loseRandom(1)]))),
   ], undefined, { maximumAppearances: 1 }),
-  event('school-of-fish', 'day', 'School of Fish', 'uncertain', 'fish', 4, 8, 39, [
+  event('school-of-fish', 'night', 'School of Fish', 'uncertain', 'fish', 4, 8, 39, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet',
       outcome(60, 'You gain three food.', effects([add('food', 3)])),
       outcome(40, 'You gain two food.', effects([add('food', 2)], [breakItem('fishingNet')]))),
@@ -360,7 +381,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
   event('sick-companion', 'night', 'Sick Companion', 'uncertain', 'darkness', 1, 5, 26, [
     choice('medicalKit', 'Use Medkit', 'medicalKit', outcome(
       1,
-      'Captain Whiskers recovers.',
+      'Carlitos recovers.',
       { items: [consume('medicalKit')], companion: [{ kind: 'sickness', operation: 'set', value: 0 }] },
     )),
     choice('energyBar', 'Use Energy Bar', 'energyBar', outcome(
@@ -376,7 +397,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       outcome(10, 'The tape changes nothing.', { items: [consume('ductTape')] })),
     contextualChoice('sleep', 'Sleep', outcome(
       1,
-      'Captain Whiskers grows sicker through the night.',
+      'Carlitos grows sicker through the night.',
       { companion: [{ kind: 'sickness', operation: 'add', value: 2 }] },
     )),
   ], undefined, { requiresLivingCompanion: true }),
@@ -396,21 +417,9 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     )),
     contextualChoice('sleep', 'Sleep', outcome(1, 'The shadow leaves before dawn.')),
   ], undefined, { minimumPressure: 3, requiresLivingCompanion: true }),
-  event('sea-watcher', 'night', 'Sea Watcher', 'uncertain', 'sighting', 2, 20, 40, [
-    contextualChoice('stay-awake', 'Stay Awake', outcome(
-      1,
-      'You keep watch until dawn.',
-      { nextDawnEnergy: 0 },
-    )),
-    contextualChoice('sleep', 'Sleep',
-      outcome(90, 'The watcher takes Captain Whiskers.', {
-        companion: [{ kind: 'kill', cause: 'sea-watcher' }],
-      }),
-      outcome(10, 'The watcher leaves before dawn.')),
-  ], undefined, { minimumPressure: 2, requiresLivingCompanion: true }),
   event('guarded-sleep', 'night', 'Guarded Sleep', 'uncertain', 'darkness', 4, 7, 4, [
-    contextualChoice('watch', 'Let Whiskers Watch',
-      outcome(85, 'Captain Whiskers keeps the night peaceful.'),
+    contextualChoice('watch', 'Let Carlitos Watch',
+      outcome(85, 'Carlitos keeps the night peaceful.'),
       outcome(15, 'Something slips past his watch.', { followUpNight: true })),
     contextualChoice('sleep', 'Sleep Normally', outcome(
       1,
@@ -418,35 +427,60 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       { followUpNight: true },
     )),
   ], undefined, { requiresLivingCompanion: true }),
-  event('drifting-loot', 'day', 'Drifting Loot', 'safe', 'fish', 2, 3, 3, [
+  event('drifting-barrel', 'day', 'Drifting Barrel', 'safe', 'fish', 1, 3, 3, [
     {
       ...contextualChoice('retrieve', 'Retrieve It',
-        featuredOutcome('drifting-loot.food', 45, 'You recover two food.', effects([subtract('energy', 3), add('food', 2)])),
-        featuredOutcome('drifting-loot.bait', 25, 'You recover two bait.', effects([subtract('energy', 3), add('bait', 2)])),
-        featuredOutcome('drifting-loot.repair', 20, 'You recover repair timber.', effects([subtract('energy', 3), add('repairMaterial', 2)])),
-        featuredOutcome('drifting-loot.energy-bar', 10, 'You recover an energy bar.', effects([subtract('energy', 3)], [gain('energyBar')])),
+        featuredOutcome('drifting-barrel.food', 45, 'You recover two food.', effects([subtract('energy', 3), add('food', 2)])),
+        featuredOutcome('drifting-barrel.bait', 25, 'You recover two bait.', effects([subtract('energy', 3), add('bait', 2)])),
+        featuredOutcome('drifting-barrel.repair', 20, 'You recover repair timber.', effects([subtract('energy', 3), add('repairMaterial', 2)])),
+        featuredOutcome('drifting-barrel.energy-bar', 10, 'You recover an energy bar.', effects([subtract('energy', 3)], [gain('energyBar')])),
       ),
       requirements: [{ resource: 'energy', minimum: 3 }],
     },
     {
-      ...contextualChoice('delegate-whiskers', 'Send Whiskers',
-        featuredOutcome('drifting-loot.food', 45, 'Captain Whiskers recovers two food.', effects([add('food', 2)])),
-        featuredOutcome('drifting-loot.bait', 25, 'Captain Whiskers recovers two bait.', effects([add('bait', 2)])),
-        featuredOutcome('drifting-loot.repair', 20, 'Captain Whiskers recovers repair timber.', effects([add('repairMaterial', 2)])),
-        featuredOutcome('drifting-loot.energy-bar', 10, 'Captain Whiskers recovers an energy bar.', effects(undefined, [gain('energyBar')]))),
-      companionAction: 'delegateWhiskers',
+      ...contextualChoice('delegate-carlitos', 'Send Carlitos',
+        featuredOutcome('drifting-barrel.food', 45, 'Carlitos recovers two food.', effects([add('food', 2)])),
+        featuredOutcome('drifting-barrel.bait', 25, 'Carlitos recovers two bait.', effects([add('bait', 2)])),
+        featuredOutcome('drifting-barrel.repair', 20, 'Carlitos recovers repair timber.', effects([add('repairMaterial', 2)])),
+        featuredOutcome('drifting-barrel.energy-bar', 10, 'Carlitos recovers an energy bar.', effects(undefined, [gain('energyBar')]))),
+      companionAction: 'delegateCarlitos',
     },
     contextualChoice('sleep', 'Let It Drift',
-      featuredOutcome('drifting-loot.drift', 1, 'The loot drifts out of reach.')),
+      featuredOutcome('drifting-barrel.drift', 1, 'The barrel drifts out of reach.')),
+  ]),
+  event('drifting-chest', 'day', 'Drifting Chest', 'safe', 'fish', 1, 3, 3, [
+    {
+      ...contextualChoice('retrieve', 'Retrieve It',
+        featuredOutcome('drifting-chest.food', 45, 'You recover two food.', effects([subtract('energy', 3), add('food', 2)])),
+        featuredOutcome('drifting-chest.bait', 25, 'You recover two bait.', effects([subtract('energy', 3), add('bait', 2)])),
+        featuredOutcome('drifting-chest.repair', 20, 'You recover repair timber.', effects([subtract('energy', 3), add('repairMaterial', 2)])),
+        featuredOutcome('drifting-chest.energy-bar', 10, 'You recover an energy bar.', effects([subtract('energy', 3)], [gain('energyBar')])),
+      ),
+      requirements: [{ resource: 'energy', minimum: 3 }],
+    },
+    {
+      ...contextualChoice('delegate-carlitos', 'Send Carlitos',
+        featuredOutcome('drifting-chest.food', 45, 'Carlitos recovers two food.', effects([add('food', 2)])),
+        featuredOutcome('drifting-chest.bait', 25, 'Carlitos recovers two bait.', effects([add('bait', 2)])),
+        featuredOutcome('drifting-chest.repair', 20, 'Carlitos recovers repair timber.', effects([add('repairMaterial', 2)])),
+        featuredOutcome('drifting-chest.energy-bar', 10, 'Carlitos recovers an energy bar.', effects(undefined, [gain('energyBar')]))),
+      companionAction: 'delegateCarlitos',
+    },
+    contextualChoice('sleep', 'Let It Drift',
+      featuredOutcome('drifting-chest.drift', 1, 'The chest drifts out of reach.')),
   ]),
   event('drifting-bottle', 'day', 'Drifting Bottle', 'safe', 'sighting', 3, 2, 0, [
-    choice('fishingNet', 'Use Fishing Net', 'fishingNet',
-      featuredOutcome('drifting-bottle.retrieve', 1, 'You recover bottled paper.', effects(undefined, [gain('bottledPaper')]))),
-    choice('swimRing', 'Use Swim Ring', 'swimRing',
-      featuredOutcome('drifting-bottle.retrieve', 1, 'You recover bottled paper.', effects(undefined, [gain('bottledPaper')]))),
+    {
+      ...contextualChoice('retrieve', 'Pick It Up',
+        featuredOutcome('drifting-bottle.retrieve', 1, 'You recover the message bottle.', effects(
+          [subtract('energy', 1)],
+          [gain('bottledPaper')],
+        ))),
+      requirements: [{ resource: 'energy', minimum: 1 }],
+    },
     contextualChoice('sleep', 'Sleep',
       featuredOutcome('drifting-bottle.lost', 1, 'The bottle drifts away.')),
-  ], undefined, { maximumAppearances: 1, absentItemIds: ['bottledPaper'] }),
+  ], undefined, { absentItemIds: ['bottledPaper'] }),
   event('check-the-back', 'night', 'Check the Back', 'safe', 'fish', 3, 2, 35, [
     contextualChoice('check', 'Yes',
       featuredOutcome('check-the-back.fish', 500, 'A fish has landed aboard.', effects([add('food', 1)])),
@@ -455,17 +489,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     contextualChoice('sleep', 'No',
       featuredOutcome('check-the-back.ignore', 1, 'You leave the sound alone.')),
   ]),
-  event('mystery-chest', 'night', 'Mystery Chest', 'dangerous', 'impact', 4, 6, 33, [
-    contextualChoice('take', 'Take the Chest',
-      featuredOutcome('mystery-chest.safe', 80, 'You haul the closed chest aboard.', { chest: 'acquire' }),
-      featuredOutcome('mystery-chest.mimic', 30, 'The chest bites your arm.', {
-        resources: [subtract('health', 25)],
-      }),
-    ),
-    contextualChoice('sleep', 'Leave',
-      featuredOutcome('mystery-chest.leave', 1, 'The chest slips back under the water.')),
-  ], undefined, { allowedChestStates: ['none'] }),
-  event('flowers', 'day', 'Flowers', 'safe', 'sighting', 1, 2, 0, [
+  event('flowers', 'night', 'Flowers', 'safe', 'sighting', 1, 2, 0, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet',
       featuredOutcome('flowers.collect', 1, 'You lift the flowers aboard.')),
     choice('bucket', 'Use Bucket', 'bucket',
@@ -509,7 +533,6 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('flashlight', 'Flashlight for Spyglass', 'flashlight', outcome(1, 'The handyman gives you binoculars.', effects(undefined, [lose('flashlight'), gain('spyglass')]), 'handyman-reward')),
     choice('flareGun', 'Flare Gun for Shotgun', 'flareGun', outcome(1, 'The handyman gives you a shotgun.', effects(undefined, [consume('flareGun'), gain('shotgun')]), 'handyman-reward')),
     choice('shotgun', 'Shotgun for Flare Gun', 'shotgun', outcome(1, 'The handyman gives you a flare gun.', effects(undefined, [consume('shotgun'), gain('flareGun')]), 'handyman-reward')),
-    choice('scubaSet', 'Scuba Gear for Medkit', 'scubaSet', outcome(1, 'The handyman gives you a medkit.', effects(undefined, [lose('scubaSet'), gain('medicalKit')]), 'handyman-reward')),
     choice('medicalKit', 'Medkit for Scuba Gear', 'medicalKit', outcome(1, 'The handyman gives you scuba gear.', effects(undefined, [consume('medicalKit'), gain('scubaSet')]), 'handyman-reward')),
     choice('fishingNet', 'Fishing Net for Bucket', 'fishingNet', outcome(1, 'The handyman gives you a bucket.', effects(undefined, [lose('fishingNet'), gain('bucket')]), 'handyman-reward')),
     choice('bucket', 'Bucket for Fishing Net', 'bucket', outcome(1, 'The handyman gives you a fishing net.', effects(undefined, [lose('bucket'), gain('fishingNet')]), 'handyman-reward')),
@@ -770,19 +793,6 @@ function validateOutcome(
         }
         return;
       }
-      if (candidate.kind === 'kill') {
-        assertExactKeys(
-          candidate,
-          effectPath,
-          'companion kill effect',
-          ['kind', 'cause'],
-          ['kind', 'cause'],
-        );
-        if (candidate.cause !== 'sea-watcher') {
-          throw new Error(`${effectPath} has an invalid companion death cause`);
-        }
-        return;
-      }
       throw new Error(`${effectPath} has an unknown companion effect kind`);
     });
   }
@@ -898,8 +908,12 @@ export function validateSurvivalEventCatalog(
       if (choiceIds.has(eventChoice.id)) throw new Error(`${eventEntry.id} choice ID ${eventChoice.id} is duplicated`);
       choiceIds.add(eventChoice.id);
       if (eventChoice.itemId !== undefined && !isItemId(eventChoice.itemId)) throw new Error(`${eventEntry.id}.${eventChoice.id} contains unknown item`);
+      if (eventChoice.itemId !== undefined
+        && DAY_ACTION_ONLY_ITEM_IDS.includes(eventChoice.itemId)) {
+        throw new Error(`${eventEntry.id}.${eventChoice.id} uses a day-action-only item`);
+      }
       if (Object.hasOwn(eventChoice, 'companionAction')
-        && eventChoice.companionAction !== 'delegateWhiskers') {
+        && eventChoice.companionAction !== 'delegateCarlitos') {
         throw new Error(`${eventEntry.id}.${eventChoice.id} has an invalid companion action`);
       }
       if (eventChoice.requiredChestState !== undefined

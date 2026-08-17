@@ -273,17 +273,12 @@ export function sampleWeatherReveal(
       break;
     }
     case 'thunderstorm':
-      output.cameraYaw = 0.13 * Math.sin(2 * Math.PI * t) * sweep;
-      output.cameraPitch = -0.24 * pulse(t, 0.1, 0.54, 0.9);
       output.lightningEmphasis = pulse(t, 0.44, 0.55, 0.68);
       break;
     case 'restless-waves':
       output.cameraYaw = 0.25 * Math.sin(2 * Math.PI * t) * sweep;
-      output.cameraPitch = -0.2 * pulse(t, 0.08, 0.5, 0.92);
       break;
     case 'man-in-the-fog':
-      output.cameraYaw = 0.23 * smoothstep((t - 0.08) / 0.3);
-      output.cameraPitch = -0.08 * smoothstep((t - 0.12) / 0.3);
       output.figureVisibility = smoothstep((t - 0.2) / 0.18)
         * (1 - smoothstep((t - 0.84) / 0.12));
       output.figureDistance = 0;

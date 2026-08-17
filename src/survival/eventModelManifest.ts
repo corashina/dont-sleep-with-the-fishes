@@ -3,8 +3,7 @@
 import generatedMetadataJson from '../assets/models/events/event-model-metadata.json';
 
 export const SURVIVAL_EVENT_MODEL_IDS = [
-  'driftingLootBarrel',
-  'driftingLootCrate',
+  'driftingBarrel',
   'driftingBottle',
   'checkBackFish',
   'mysteryChest',
@@ -27,22 +26,16 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
   SurvivalEventModelId,
   SurvivalEventModelSpec
 >> = Object.freeze({
-  driftingLootBarrel: Object.freeze({
-    url: new URL('../assets/models/events/driftingLootBarrel.glb', import.meta.url).href,
+  driftingBarrel: Object.freeze({
+    url: new URL('../assets/models/events/driftingBarrel.glb', import.meta.url).href,
     targetLongestDimension: 1.15,
     rotation: [0, 0, Math.PI / 2] as const,
-    maxTriangles: generatedMetadataJson.driftingLootBarrel.triangles,
-  }),
-  driftingLootCrate: Object.freeze({
-    url: new URL('../assets/models/events/driftingLootCrate.glb', import.meta.url).href,
-    targetLongestDimension: 1.2,
-    rotation: NO_ROTATION,
-    maxTriangles: generatedMetadataJson.driftingLootCrate.triangles,
+    maxTriangles: generatedMetadataJson.driftingBarrel.triangles,
   }),
   driftingBottle: Object.freeze({
     url: new URL('../assets/models/events/driftingBottle.glb', import.meta.url).href,
     targetLongestDimension: 0.68,
-    rotation: [Math.PI / 2, 0, 0] as const,
+    rotation: NO_ROTATION,
     maxTriangles: generatedMetadataJson.driftingBottle.triangles,
   }),
   checkBackFish: Object.freeze({
@@ -112,7 +105,7 @@ const PRESENTATION = {
   },
   siren: {
     targetLongestDimension: 2.1,
-    rotation: [0, Math.PI, Math.PI / 2],
+    rotation: [0, 0, 0],
     offset: [0, 0.55, 0],
     maxTriangles: 800,
   },
@@ -142,7 +135,7 @@ const PRESENTATION = {
   },
   anglerFish: {
     targetLongestDimension: 1.0,
-    rotation: [0, Math.PI / 2, 0],
+    rotation: [0, -Math.PI / 2, 0],
     offset: [0, 0, 0],
     maxTriangles: 4_000,
   },

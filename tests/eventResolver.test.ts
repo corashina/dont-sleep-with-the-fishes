@@ -53,7 +53,7 @@ describe('resolveWeightedOutcome', () => {
         {
           weight: 100,
           message: 'rare',
-          presentationKey: 'check-the-back.face',
+          presentationKey: 'check-the-back.empty',
           minimumPriorAppearances: 1,
           effects: {},
         },

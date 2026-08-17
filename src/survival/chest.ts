@@ -19,7 +19,7 @@ interface WeightedChestReward {
 }
 
 const DURABLE_REWARDS = ITEM_IDS.filter((id) => (
-  ITEM_DEFINITIONS[id].durable && id !== 'captainWhiskers'
+  ITEM_DEFINITIONS[id].durable && id !== 'carlitos'
 ));
 
 export function drawChestReward(

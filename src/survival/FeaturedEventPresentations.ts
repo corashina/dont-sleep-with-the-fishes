@@ -2,25 +2,26 @@ import { Group, type Object3D, type PerspectiveCamera } from 'three';
 import type { ProjectedBoatBounds } from './BoatInteraction';
 import { CheckBackPresentation } from './CheckBackPresentation';
 import { DriftingBottlePresentation } from './DriftingBottlePresentation';
-import { DriftingLootPresentation } from './DriftingLootPresentation';
+import { DriftingCargoPresentation } from './DriftingCargoPresentation';
 import type { FeaturedEventPresentation } from './FeaturedEventPresentation';
 import {
   isEventPresentationRoute,
   type FeaturedEventId,
 } from './eventPresentationRoutes';
 import { FlowersPresentation } from './FlowersPresentation';
-import { MysteryChestPresentation } from './MysteryChestPresentation';
 import type { SurvivalEventModels } from './SurvivalEventModelLibrary';
-import type {
-  DriftingLootVariant,
-  EventPresentationKey,
-} from './survivalTypes';
+import {
+  driftingCargoKindForEvent,
+  isDriftingCargoEventId,
+  type DriftingCargoEventId,
+} from './events';
+import type { EventPresentationKey } from './survivalTypes';
 
 export class FeaturedEventPresentations {
   readonly root = new Group();
-  private readonly driftingLoot: DriftingLootPresentation;
+  private readonly driftingCargo: DriftingCargoPresentation;
   private readonly presentations: Readonly<Record<
-    Exclude<FeaturedEventId, 'drifting-loot'>,
+    Exclude<FeaturedEventId, DriftingCargoEventId>,
     FeaturedEventPresentation
   >>;
   private readonly presentationList: readonly FeaturedEventPresentation[];
@@ -31,11 +32,12 @@ export class FeaturedEventPresentations {
     models: SurvivalEventModels,
     camera: PerspectiveCamera,
     deckTarget: Object3D,
+    checkBackSternTarget: Object3D,
   ) {
     this.root.name = 'featured-event-presentations';
-    this.driftingLoot = new DriftingLootPresentation({
-      barrel: models.clone('driftingLootBarrel'),
-      crate: models.clone('driftingLootCrate'),
+    this.driftingCargo = new DriftingCargoPresentation({
+      barrel: models.clone('driftingBarrel'),
+      chest: models.clone('mysteryChest'),
     }, deckTarget);
     this.presentations = {
       'drifting-bottle': new DriftingBottlePresentation(
@@ -45,32 +47,26 @@ export class FeaturedEventPresentations {
       'check-the-back': new CheckBackPresentation(
         models.clone('checkBackFish'),
         camera,
-      ),
-      'mystery-chest': new MysteryChestPresentation(
-        models.clone('mysteryChest'),
-        deckTarget,
-        camera,
+        checkBackSternTarget,
       ),
       flowers: new FlowersPresentation(models, deckTarget),
     };
     this.presentationList = Object.freeze(Object.values(this.presentations));
     this.root.add(
-      this.driftingLoot.root,
+      this.driftingCargo.root,
       ...this.presentationList.map(({ root }) => root),
     );
   }
 
   stage(
     eventId: string,
-    variant: DriftingLootVariant | null,
     variantSeed?: number,
   ): void {
     if (this.disposed || !isEventPresentationRoute(eventId, 'featured')) return;
     this.clear();
     this.activeEventId = eventId;
-    if (eventId === 'drifting-loot') {
-      if (variant === null) throw new Error('Drifting loot requires a variant.');
-      this.driftingLoot.stage(variant);
+    if (isDriftingCargoEventId(eventId)) {
+      this.driftingCargo.stage(driftingCargoKindForEvent(eventId));
       return;
     }
     if (variantSeed === undefined) {
@@ -88,8 +84,8 @@ export class FeaturedEventPresentations {
     ) {
       return Promise.resolve();
     }
-    return eventId === 'drifting-loot'
-      ? this.driftingLoot.reveal()
+    return isDriftingCargoEventId(eventId)
+      ? this.driftingCargo.reveal()
       : this.presentations[eventId].reveal();
   }
 
@@ -101,10 +97,10 @@ export class FeaturedEventPresentations {
     ) {
       return Promise.resolve();
     }
-    if (eventId === 'drifting-loot') {
-      return key === 'drifting-loot.drift'
-        ? this.driftingLoot.recede()
-        : this.driftingLoot.retrieve();
+    if (isDriftingCargoEventId(eventId)) {
+      return key === 'drifting-barrel.drift' || key === 'drifting-chest.drift'
+        ? this.driftingCargo.recede()
+        : this.driftingCargo.retrieve();
     }
     return this.presentations[eventId].react(key);
   }
@@ -116,8 +112,8 @@ export class FeaturedEventPresentations {
       || !isEventPresentationRoute(eventId, 'featured')
     ) return null;
     if (eventId === 'flowers') return null;
-    return eventId === 'drifting-loot'
-      ? this.driftingLoot.interactionRoot()
+    return isDriftingCargoEventId(eventId)
+      ? this.driftingCargo.interactionRoot()
       : this.presentations[eventId].interactionRoot();
   }
 
@@ -129,8 +125,8 @@ export class FeaturedEventPresentations {
     ) {
       return null;
     }
-    return eventId === 'drifting-loot'
-      ? this.driftingLoot.itemAimTarget()
+    return isDriftingCargoEventId(eventId)
+      ? this.driftingCargo.itemAimTarget()
       : this.presentations[eventId].itemAimTarget();
   }
 
@@ -140,36 +136,36 @@ export class FeaturedEventPresentations {
       || this.activeEventId !== eventId
       || !isEventPresentationRoute(eventId, 'featured')
     ) return null;
-    return eventId === 'drifting-loot'
-      ? this.driftingLoot.resultRoot()
+    return isDriftingCargoEventId(eventId)
+      ? this.driftingCargo.resultRoot()
       : this.presentations[eventId].resultRoot();
   }
 
-  projectHeldDriftingLoot(
+  projectHeldDriftingCargo(
     camera: PerspectiveCamera,
     width: number,
     height: number,
   ): ProjectedBoatBounds | null {
     return this.disposed
       ? null
-      : this.driftingLoot.projectHeld(camera, width, height);
+      : this.driftingCargo.projectHeld(camera, width, height);
   }
 
   update(time: number, delta: number): void {
     if (this.disposed) return;
-    this.driftingLoot.update(time, delta);
+    this.driftingCargo.update(time, delta);
     for (const presentation of this.presentationList) presentation.update(time, delta);
   }
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
-    this.driftingLoot.settleForVisibilityChange();
+    this.driftingCargo.settleForVisibilityChange();
     for (const presentation of this.presentationList) presentation.settleForVisibilityChange();
   }
 
   clear(): void {
     if (this.disposed) return;
-    this.driftingLoot.clear();
+    this.driftingCargo.clear();
     for (const presentation of this.presentationList) presentation.clear();
     this.activeEventId = null;
   }
@@ -177,7 +173,7 @@ export class FeaturedEventPresentations {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.driftingLoot.dispose();
+    this.driftingCargo.dispose();
     for (const presentation of this.presentationList) presentation.dispose();
     this.root.removeFromParent();
   }

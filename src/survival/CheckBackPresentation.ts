@@ -1,46 +1,38 @@
 import {
-  BufferGeometry,
-  Group,
-  Material,
-  Mesh,
-  MeshStandardMaterial,
   Object3D,
   PerspectiveCamera,
-  TorusGeometry,
+  Quaternion,
+  Vector3,
 } from 'three';
-import { disposeResourceSets } from '../world/SceneResources';
 import { KeyedEventPresentation } from './KeyedEventPresentation';
 import { StationaryEventCamera } from './StationaryEventCamera';
 import type { EventPresentationKey } from './survivalTypes';
 
+const STERN_YAW = Math.PI;
+const STERN_LOOK_DOWN_PITCH = -0.74;
+
+function smoothstep(value: number): number {
+  const clamped = Math.min(1, Math.max(0, value));
+  return clamped * clamped * (3 - 2 * clamped);
+}
+
 export class CheckBackPresentation extends KeyedEventPresentation {
   private readonly fish: Object3D;
-  private readonly wake: Mesh;
-  private readonly geometries = new Set<BufferGeometry>();
-  private readonly materials = new Set<Material>();
   private readonly cameraLook: StationaryEventCamera;
+  private readonly targetPosition = new Vector3();
+  private readonly targetQuaternion = new Quaternion();
+  private readonly rootQuaternion = new Quaternion();
 
-  constructor(fish: Object3D, camera: PerspectiveCamera) {
+  constructor(
+    fish: Object3D,
+    camera: PerspectiveCamera,
+    private readonly sternFloorTarget: Object3D,
+  ) {
     super('check-back-presentation');
     this.cameraLook = new StationaryEventCamera(camera);
     this.fish = fish;
     this.fish.name = 'check-back:fish';
-    const wakeGeometry = new TorusGeometry(0.72, 0.035, 5, 18, Math.PI * 1.55);
-    const wakeMaterial = new MeshStandardMaterial({
-      color: 0x9bb3b5,
-      emissive: 0x58777a,
-      emissiveIntensity: 1.15,
-      transparent: true,
-      opacity: 0.72,
-      roughness: 0.5,
-      flatShading: true,
-    });
-    this.geometries.add(wakeGeometry);
-    this.materials.add(wakeMaterial);
-    this.wake = new Mesh(wakeGeometry, wakeMaterial);
-    this.wake.name = 'check-back:wake';
-    this.wake.rotation.x = Math.PI / 2;
-    this.subject.add(this.fish, this.wake);
+    this.subject.add(this.fish);
   }
 
   stage(): void {
@@ -50,60 +42,55 @@ export class CheckBackPresentation extends KeyedEventPresentation {
   }
 
   protected reset(): void {
-    this.subject.position.set(0, 0.55, 5.5);
-    this.subject.rotation.set(0, 0, 0);
-    this.fish.position.set(0, 0.28, 0);
+    this.placeSubjectInsideStern();
+    this.fish.position.set(0, 0, 0);
     this.fish.rotation.set(0, 0, 0);
     this.fish.scale.setScalar(1);
     this.fish.visible = false;
-    this.wake.visible = true;
     this.cameraLook.apply(0, 0);
   }
 
   protected applyIdle(_time: number): void {
+    this.placeSubjectInsideStern();
     if (this.settledKind === 'reveal') {
-      this.cameraLook.apply(Math.PI, 0);
+      this.applySternView();
     } else if (this.settledKind === 'check-the-back.fish') {
-      this.cameraLook.apply(Math.PI, 0);
+      this.applySternView();
       this.fish.visible = true;
       this.fish.rotation.z = -0.12;
-    } else if (this.settledKind === 'check-the-back.face') {
-      this.cameraLook.apply(Math.PI, 0);
-      this.showFace();
     } else if (this.settledKind === 'check-the-back.empty') {
-      this.cameraLook.apply(Math.PI, 0);
+      this.applySternView();
       this.fish.visible = false;
     } else if (this.settledKind === 'check-the-back.ignore') {
-      this.cameraLook.apply(Math.PI, 0);
+      this.applySternView();
     }
   }
 
   protected prepareAnimation(kind: string): void {
-    this.fish.visible = kind === 'check-the-back.fish' || kind === 'check-the-back.face';
-    if (kind === 'check-the-back.face') this.showFace();
+    this.fish.visible = kind === 'check-the-back.fish';
   }
 
   protected applyAnimation(kind: string, _time: number, progress: number): void {
-    const eased = progress * progress * (3 - 2 * progress);
+    this.placeSubjectInsideStern();
     if (kind === 'reveal') {
-      this.cameraLook.apply(eased * Math.PI, 0);
-      this.wake.rotation.z = Math.sin(progress * Math.PI * 2) * 0.08;
+      const turn = smoothstep(progress / 0.78);
+      const lookDown = smoothstep((progress - 0.58) / 0.42);
+      this.cameraLook.apply(
+        turn * STERN_YAW,
+        lookDown * STERN_LOOK_DOWN_PITCH,
+      );
       return;
     }
     if (kind === 'check-the-back.ignore') {
-      this.cameraLook.apply(Math.PI, 0);
+      this.applySternView();
       return;
     }
-    this.cameraLook.apply(Math.PI, 0);
+    this.applySternView();
     if (kind === 'check-the-back.fish') {
       this.fish.rotation.z = Math.sin(progress * Math.PI * 5) * (1 - progress) * 0.7;
-      this.fish.position.y = 0.28 + Math.sin(progress * Math.PI) * 0.26;
+      this.fish.position.y = Math.sin(progress * Math.PI) * 0.2;
     } else if (kind === 'check-the-back.empty') {
       this.fish.visible = false;
-      this.wake.scale.setScalar(1 + eased * 0.45);
-    } else if (kind === 'check-the-back.face') {
-      this.showFace();
-      this.fish.position.z = eased * -0.18;
     }
   }
 
@@ -115,7 +102,6 @@ export class CheckBackPresentation extends KeyedEventPresentation {
 
   protected disposeOwned(): void {
     this.cameraLook.restore();
-    disposeResourceSets(this.geometries, this.materials);
   }
 
   clear(): void {
@@ -123,10 +109,21 @@ export class CheckBackPresentation extends KeyedEventPresentation {
     this.cameraLook.restore();
   }
 
-  private showFace(): void {
-    this.fish.visible = true;
-    this.fish.rotation.set(0, Math.PI / 2, Math.PI / 2);
-    this.fish.scale.setScalar(1.35);
-    this.fish.position.y = 0.6;
+  interactionRoot(): Object3D | null {
+    return null;
+  }
+
+  private applySternView(): void {
+    this.cameraLook.apply(STERN_YAW, STERN_LOOK_DOWN_PITCH);
+  }
+
+  private placeSubjectInsideStern(): void {
+    this.sternFloorTarget.getWorldPosition(this.targetPosition);
+    this.sternFloorTarget.getWorldQuaternion(this.targetQuaternion);
+    this.root.worldToLocal(this.targetPosition);
+    this.root.getWorldQuaternion(this.rootQuaternion).invert();
+    this.targetQuaternion.premultiply(this.rootQuaternion);
+    this.subject.position.copy(this.targetPosition);
+    this.subject.quaternion.copy(this.targetQuaternion);
   }
 }

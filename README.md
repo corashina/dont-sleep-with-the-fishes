@@ -29,17 +29,15 @@ The ship combines original procedural geometry with locally committed wood maps 
 
 ## Dorothy supplies
 
-The carry limit is three weight points, not three objects. Weight-one Dorothy supplies are Food (3), Bait (2), Duct Tape, Compass, Map, Binoculars, Flare Gun, Bottled Paper, and Flashlight. Weight-two supplies are Medkit, Fishing Net, Bucket, Umbrella, Swim Ring, Shotgun, and Captain Whiskers. Scuba Gear and Anchor each weigh three points.
+The carry limit is three weight points, not three objects. Weight-one Dorothy supplies are Food (3), Bait (2), Duct Tape, Compass, Map, Binoculars, Flare Gun, Bottled Paper, and Flashlight. Weight-two supplies are Medkit, Fishing Net, Bucket, Umbrella, Swim Ring, Shotgun, and Carlitos. Scuba Gear and Anchor each weigh three points.
 
-Food, Bait, Duct Tape, Medkit, Flare Gun, Bottled Paper, and Shotgun are one-use Dorothy supplies; each recovered Food or Bait instance contributes one unit to its aggregate resource. Compass, Map, Binoculars, Fishing Net, Bucket, Scuba Gear, Anchor, Umbrella, Swim Ring, and Flashlight are durable items used by actions or events. Captain Whiskers changes from a saved Dorothy item to the living companion when survival starts. He then leaves the item inventory. Generic durable loss, breakage, and consumption rules do not apply to living Whiskers. A repairable durable item can become broken, and a durable item can be lost; a one-use supply becomes consumed when spent. Broken props remain aboard, while consumed and lost props no longer offer usable interactions. One recovered Duct Tape can repair a selected broken, repairable item.
+Food, Bait, Duct Tape, Medkit, Flare Gun, Bottled Paper, and Shotgun are one-use Dorothy supplies; each recovered Food or Bait instance contributes one unit to its aggregate resource. Compass, Map, Binoculars, Fishing Net, Bucket, Scuba Gear, Anchor, Umbrella, Swim Ring, and Flashlight are durable items used by actions or events. Carlitos changes from a saved Dorothy item to the living companion when survival starts. He then leaves the item inventory. Generic durable loss, breakage, and consumption rules do not apply to living Carlitos. A repairable durable item can become broken, and a durable item can be lost; a one-use supply becomes consumed when spent. Broken props remain aboard, while consumed and lost props no longer offer usable interactions. One recovered Duct Tape can repair a selected broken, repairable item.
 
 The repair toolbox and starboard-mounted Fishing Rod are permanent lifeboat equipment rather than Dorothy collectibles. The rod is never picked up or recovered. It is available for fishing in every survival run, while the toolbox uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. Rest never requires an item: it restores two energy once per day. Bottled Paper costs one energy, adds 15 rescue progress, and is consumed. Energy Bar restores energy to the maximum of three and is consumed.
 
-The event catalog contains 30 live events. The day pool contains Drifting Loot,
-Drifting Bottle, School of Fish, and Flowers. Event selection shows title,
-reveal text, and written risk before the player chooses a response.
-
-Mystery Chest now places a closed chest aboard. Opening it costs three energy.
+The event catalog contains 30 live events. The day pool contains Drifting Barrel,
+Drifting Chest, and Drifting Bottle. Event selection relies on the scene and response prompts.
+It does not show event titles.
 
 An old chest can become a mimic. Fishing Net binds it shut.
 
@@ -90,17 +88,17 @@ Supplies are repeatable physical instances rather than one slot per item type. T
 | Top-center journal button | Open completed entries; `NEW` marks unread history |
 | Boat lantern | End the day and fade into an event or quiet night |
 | Closed chest | Spend three energy to open the chest |
-| Captain Whiskers | Select **Check Status** to open his scene-linked care card |
+| Carlitos | Select **Check Status** to open his scene-linked care card |
 
-### Captain Whiskers
+### Carlitos
 
-Captain Whiskers is the only crewmate. Save him on Dorothy to bring him into the lifeboat.
+Carlitos is the only crewmate. Save him on Dorothy to bring him into the lifeboat.
 
 Select **Check Status** beside him to see his Hunger, Happiness, and Health. The card offers **Pet**, **Feed**, and **Treat**.
 
 Pet eases loneliness once each day. Feed uses one Food. Treat uses one Medkit when he is sick.
 
-Living Whiskers gives a small passive fishing-luck bonus. He also enables crewmate events that can harm or kill him.
+Living Carlitos gives a small passive fishing-luck bonus. He also enables crewmate events that can harm or kill him.
 
 ### Fishing
 
@@ -236,6 +234,6 @@ Water exclusion is rendered in the ocean shader rather than by layering flat pat
 
 ## Milestone boundaries
 
-This milestone targets desktop browsers with keyboard and mouse. Captain Whiskers is its only crewmate.
+This milestone targets desktop browsers with keyboard and mouse. Carlitos is its only crewmate.
 
 It does not include saves, touch controls, mobile controls, other crewmates, or persistent progression.

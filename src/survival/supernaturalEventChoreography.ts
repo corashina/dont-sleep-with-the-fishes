@@ -15,12 +15,8 @@ export interface SupernaturalRevealSample {
   cameraRoll: number;
   ghostVisibility: number;
   ghostVisibilities: [number, number, number, number, number];
-  ghostDistances: [number, number, number, number, number];
-  ghostSideOffsets: [number, number, number, number, number];
   flareFlash: number;
   fogCurtain: number;
-  sirenHeadTurn: number;
-  sirenLunge: number;
   melodyClarity: number;
 }
 
@@ -69,16 +65,99 @@ const ITEM_DURATIONS = Object.freeze({
   }),
 });
 
-export const GHOST_FLIGHT_PATHS = Object.freeze([
-  Object.freeze({ start: [-11.5, 0.38, -6.8] as const, end: [10.8, 0.52, -8.2] as const }),
-  Object.freeze({ start: [12.2, 0.54, -11] as const, end: [-10.4, 0.4, -12.5] as const }),
-  Object.freeze({ start: [-10.8, 0.64, -15.4] as const, end: [9.6, 0.48, -16.8] as const }),
-  Object.freeze({ start: [11.4, 0.44, -19.8] as const, end: [-9.8, 0.62, -21.2] as const }),
-  Object.freeze({ start: [-9.6, 0.56, -24.1] as const, end: [11.8, 0.36, -25.4] as const }),
-] as const);
+export interface GhostFloatPath {
+  readonly center: readonly [number, number, number];
+  readonly radiusX: number;
+  readonly radiusZ: number;
+  readonly period: number;
+  readonly phase: number;
+  readonly bobHeight: number;
+  readonly bobRate: number;
+}
 
-const GHOST_REVEAL_START = 0.16;
-const GHOST_REVEAL_STAGGER = 0.02;
+export interface GhostFloatPose {
+  readonly position: [number, number, number];
+  readonly tangent: [number, number, number];
+}
+
+export const GHOST_FLOAT_PATHS = Object.freeze([
+  Object.freeze({
+    center: [-2.8, 0.65, -8.2] as const,
+    radiusX: 5.4,
+    radiusZ: 2,
+    period: 18,
+    phase: 0.2,
+    bobHeight: 0.12,
+    bobRate: 0.72,
+  }),
+  Object.freeze({
+    center: [3.2, 0.92, -10.8] as const,
+    radiusX: 6.3,
+    radiusZ: 2.6,
+    period: 23,
+    phase: 2.4,
+    bobHeight: 0.15,
+    bobRate: 0.64,
+  }),
+  Object.freeze({
+    center: [-3.6, 1.2, -13.5] as const,
+    radiusX: 6.8,
+    radiusZ: 2.8,
+    period: 27,
+    phase: 4.1,
+    bobHeight: 0.18,
+    bobRate: 0.58,
+  }),
+  Object.freeze({
+    center: [3.8, 0.52, -16.4] as const,
+    radiusX: 7.5,
+    radiusZ: 3.2,
+    period: 31,
+    phase: 1.4,
+    bobHeight: 0.11,
+    bobRate: 0.68,
+  }),
+  Object.freeze({
+    center: [0, 1.42, -19.2] as const,
+    radiusX: 8,
+    radiusZ: 3.5,
+    period: 35,
+    phase: 5.2,
+    bobHeight: 0.2,
+    bobRate: 0.54,
+  }),
+] as const satisfies readonly GhostFloatPath[]);
+
+const GHOST_REVEAL_START = 0.02;
+const GHOST_REVEAL_STAGGER = 0.015;
+
+export function createGhostFloatPose(): GhostFloatPose {
+  return {
+    position: [0, 0, 0],
+    tangent: [0, 0, 0],
+  };
+}
+
+export function sampleGhostFloatPathInto(
+  output: GhostFloatPose,
+  path: GhostFloatPath,
+  elapsedSeconds: number,
+): GhostFloatPose {
+  const time = Number.isFinite(elapsedSeconds) ? elapsedSeconds : 0;
+  const angularSpeed = Math.PI * 2 / path.period;
+  const angle = time * angularSpeed + path.phase;
+  const cosine = Math.cos(angle);
+  const sine = Math.sin(angle);
+  const bobPhase = time * path.bobRate + path.phase * 1.7;
+
+  output.position[0] = path.center[0] + path.radiusX * cosine;
+  output.position[1] = path.center[1] + Math.sin(bobPhase) * path.bobHeight;
+  output.position[2] = path.center[2] + path.radiusZ * sine;
+  output.tangent[0] = -path.radiusX * sine * angularSpeed;
+  output.tangent[1] = Math.cos(bobPhase) * path.bobHeight * path.bobRate;
+  output.tangent[2] = path.radiusZ * cosine * angularSpeed;
+  return output;
+}
 
 function itemDuration(
   eventId: string,
@@ -110,20 +189,8 @@ function resetReveal(output: SupernaturalRevealSample): void {
   output.ghostVisibilities[2] = 0;
   output.ghostVisibilities[3] = 0;
   output.ghostVisibilities[4] = 0;
-  output.ghostDistances[0] = 0;
-  output.ghostDistances[1] = 0;
-  output.ghostDistances[2] = 0;
-  output.ghostDistances[3] = 0;
-  output.ghostDistances[4] = 0;
-  output.ghostSideOffsets[0] = 0;
-  output.ghostSideOffsets[1] = 0;
-  output.ghostSideOffsets[2] = 0;
-  output.ghostSideOffsets[3] = 0;
-  output.ghostSideOffsets[4] = 0;
   output.flareFlash = 0;
   output.fogCurtain = 0;
-  output.sirenHeadTurn = 0;
-  output.sirenLunge = 0;
   output.melodyClarity = 0;
 }
 
@@ -164,8 +231,6 @@ function applyRevealEnvelope(output: SupernaturalRevealSample, envelope: number)
   output.ghostVisibilities[4] *= envelope;
   output.flareFlash *= envelope;
   output.fogCurtain *= envelope;
-  output.sirenHeadTurn *= envelope;
-  output.sirenLunge *= envelope;
   output.melodyClarity *= envelope;
 }
 
@@ -184,36 +249,21 @@ export function sampleSupernaturalReveal(
   if (!isEventPresentationRoute(eventId, 'supernatural')) return false;
 
   const t = clamp01(progress);
-  if (t === 0 || t === 1) return true;
+  if (t === 0) return true;
 
   if (eventId === 'ghosts') {
-    const cameraSweep = smoothstep((t - 0.08) / 0.68);
-    output.cameraYaw = 0.3 - cameraSweep * 0.56;
-    output.cameraPitch = 0.04 - cameraSweep * 0.1;
-    for (let index = 0; index < GHOST_FLIGHT_PATHS.length; index += 1) {
-      const path = GHOST_FLIGHT_PATHS[index]!;
+    for (let index = 0; index < GHOST_FLOAT_PATHS.length; index += 1) {
       const start = GHOST_REVEAL_START + index * GHOST_REVEAL_STAGGER;
-      const visibility = smoothstep((t - start) / 0.1)
-        * (1 - smoothstep((t - 0.84) / 0.12));
-      const flight = smoothstep((t - start) / (0.84 - start));
-      output.ghostVisibilities[index] = visibility;
-      output.ghostDistances[index] = -(
-        path.start[2] + (path.end[2] - path.start[2]) * flight
-      );
-      output.ghostSideOffsets[index] = path.start[0]
-        + (path.end[0] - path.start[0]) * flight;
+      output.ghostVisibilities[index] = smoothstep((t - start) / 0.1);
     }
     output.ghostVisibility = output.ghostVisibilities[0];
-  } else {
-    const curtain = smoothstep((t - 0.12) / 0.42);
-    output.cameraYaw = 0.42 * smoothstep((t - 0.14) / 0.46);
-    output.cameraPitch = -0.1 * smoothstep((t - 0.18) / 0.44);
-    output.fogCurtain = curtain;
-    output.melodyClarity = smoothstep((t - 0.26) / 0.42);
-    output.sirenHeadTurn = smoothstep((t - 0.58) / 0.22);
-    output.sirenLunge = 0.1 * pulse(t, 0.72, 0.82, 0.94);
+    return true;
   }
 
+  if (t === 1) return true;
+  const curtain = smoothstep((t - 0.12) / 0.42);
+  output.fogCurtain = curtain;
+  output.melodyClarity = smoothstep((t - 0.26) / 0.42);
   applyRevealEnvelope(output, smoothstep(t / 0.1) * (1 - smoothstep((t - 0.82) / 0.18)));
   return true;
 }

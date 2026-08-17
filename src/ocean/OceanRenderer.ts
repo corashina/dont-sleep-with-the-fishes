@@ -626,6 +626,15 @@ const fragmentShader = `
   #endif
 
   void main() {
+    float vortexCoreRadius = uVortexRadius
+      * 0.56
+      * smoothstep(0.18, 0.72, uVortexStrength);
+    if (
+      uVortexStrength > 0.0
+      && distance(vOceanPosition, uVortexCenter) < vortexCoreRadius
+    ) {
+      discard;
+    }
     for (int i = 0; i < 2; i++) {
       if (i < uExclusionCount) {
         vec3 exclusionLocal = (uExclusionWorldToLocal[i] * vec4(vWorldPosition, 1.0)).xyz;

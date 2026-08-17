@@ -3,8 +3,10 @@ import {
   BufferGeometry,
   ConeGeometry,
   CylinderGeometry,
+  FloatType,
   Group,
   Material,
+  Matrix4,
   Mesh,
   MeshStandardMaterial,
   Object3D,
@@ -13,7 +15,11 @@ import {
   SpotLight,
   TorusGeometry,
   Vector3,
+  type PerspectiveCamera,
+  type Scene,
+  type WebGLRenderer,
 } from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { ItemInstanceId } from '../game/ItemState';
 import { addTransformedMesh as addMesh } from '../rendering/addTransformedMesh';
 import {
@@ -121,6 +127,57 @@ function createMaterial(
   });
 }
 
+function mergeStaticModelByMaterial(root: Group): Group {
+  root.updateWorldMatrix(true, true);
+  const rootWorldInverse = new Matrix4().copy(root.matrixWorld).invert();
+  const meshMatrix = new Matrix4();
+  const geometriesByMaterial = new Map<Material, BufferGeometry[]>();
+  const sourceGeometries = new Set<BufferGeometry>();
+  const transformedGeometries: BufferGeometry[] = [];
+
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    if (Array.isArray(object.material)) {
+      throw new Error('Container ship mesh uses multiple materials');
+    }
+    meshMatrix.multiplyMatrices(rootWorldInverse, object.matrixWorld);
+    const geometry = object.geometry.clone().applyMatrix4(meshMatrix);
+    geometry.getAttribute('position').gpuType = FloatType;
+    const entries = geometriesByMaterial.get(object.material);
+    if (entries === undefined) {
+      geometriesByMaterial.set(object.material, [geometry]);
+    } else {
+      entries.push(geometry);
+    }
+    sourceGeometries.add(object.geometry);
+    transformedGeometries.push(geometry);
+  });
+
+  const mergedRoot = new Group();
+  mergedRoot.userData = { ...root.userData };
+  let materialIndex = 0;
+  try {
+    for (const [material, geometries] of geometriesByMaterial) {
+      const geometry = mergeGeometries(geometries, false);
+      if (geometry === null) {
+        throw new Error('Container ship geometry merge failed');
+      }
+      const mesh = new Mesh(geometry, material);
+      mesh.name = `other-people-ship-material-${materialIndex + 1}`;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mergedRoot.add(mesh);
+      materialIndex += 1;
+    }
+  } finally {
+    for (const geometry of transformedGeometries) geometry.dispose();
+  }
+
+  for (const geometry of sourceGeometries) geometry.dispose();
+  root.clear();
+  return mergedRoot;
+}
+
 export class OtherPeoplePresentation implements FocusedEventPresentation {
   readonly root = new Group();
   private readonly ship = new Group();
@@ -204,6 +261,10 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   private staged = false;
   private terminalRescue = false;
   private naturalRescueCue = false;
+  private renderPreparation: Promise<void> = Promise.resolve();
+  private renderPreparationStarted = false;
+  private renderPrepared = true;
+  private pendingRescueCue: number | null | undefined;
   private disposed = false;
 
   constructor(
@@ -259,6 +320,27 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.resetActors();
   }
 
+  prepareRender(
+    renderer: WebGLRenderer,
+    scene: Scene,
+    camera: PerspectiveCamera,
+  ): Promise<void> {
+    if (this.renderPreparationStarted) return this.renderPreparation;
+    this.renderPreparationStarted = true;
+    this.renderPrepared = false;
+    this.renderPreparation = this.compileRenderStates(
+      renderer,
+      scene,
+      camera,
+    ).then(() => {
+      this.renderPrepared = true;
+      const pending = this.pendingRescueCue;
+      this.pendingRescueCue = undefined;
+      if (pending !== undefined && !this.disposed) this.setRescueCue(pending);
+    });
+    return this.renderPreparation;
+  }
+
   stage(): void {
     if (this.disposed) return;
     this.animation.cancel();
@@ -271,7 +353,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.root.visible = true;
     this.root.userData.holdOnClear = false;
     this.resetActors();
-    this.ship.visible = true;
+    this.ship.visible = this.renderPrepared;
     this.ship.position.copy(SHIP_BASE);
     this.ship.rotation.y = SHIP_YAW;
     this.updateBeaconPose();
@@ -288,6 +370,11 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   reveal(): Promise<void> {
     if (this.disposed) return Promise.resolve();
     if (!this.staged) this.stage();
+    if (!this.renderPrepared) {
+      return this.renderPreparation.then(() => this.reveal());
+    }
+    if (!this.staged) return Promise.resolve();
+    this.ship.visible = true;
     this.root.userData.state = 'revealing';
     return this.startAnimation('reveal', REVEAL_DURATION);
   }
@@ -295,6 +382,10 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   playChoice(choice: EventChoicePresentation): Promise<void> {
     if (this.disposed) return Promise.resolve();
     if (!this.staged) this.stage();
+    if (!this.renderPrepared) {
+      return this.renderPreparation.then(() => this.playChoice(choice));
+    }
+    if (!this.staged) return Promise.resolve();
     this.ensureShipPresented();
     switch (choice.choiceId) {
       case 'flareGun':
@@ -332,6 +423,9 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       throw new Error(
         `Other People received result for ${result.eventId}.`,
       );
+    }
+    if (!this.renderPrepared) {
+      return this.renderPreparation.then(() => this.react(result, outcome));
     }
     void outcome;
     this.ensureShipPresented();
@@ -430,6 +524,10 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
 
   setRescueCue(progress: number | null): void {
     if (this.disposed) return;
+    if (!this.renderPrepared) {
+      this.pendingRescueCue = progress;
+      return;
+    }
     if (progress === null) {
       if (!this.naturalRescueCue) return;
       this.terminalRescue = false;
@@ -598,12 +696,18 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.flare.scale.setScalar(0.82 + Math.sin(travel * Math.PI) * 0.28);
     if (progress >= 0.08) this.root.userData.flareLaunches = 1;
     const wash = smoothstep((progress - 0.14) / 0.24);
-    this.flareLifeboatWash.intensity = wash * 3.6;
-    this.flareShipWash.intensity = wash * 5.2;
+    this.setShadowedLightIntensity(
+      this.flareLifeboatWash,
+      wash * 3.6,
+    );
+    this.setShadowedLightIntensity(
+      this.flareShipWash,
+      wash * 5.2,
+    );
     this.root.userData.redWashTargets = wash > 0
       ? RED_WASH_TARGETS
       : NO_RED_WASH_TARGETS;
-    this.flashlightBeam.intensity = 0;
+    this.setLightIntensity(this.flashlightBeam, 0);
     this.beamVisual.visible = false;
     this.updateLightTargetPose();
   }
@@ -612,15 +716,15 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     const aim = smoothstep(progress / 0.24);
     this.applySupplyAim(aim, false);
     this.flare.visible = false;
-    this.flareLifeboatWash.intensity = 0;
-    this.flareShipWash.intensity = 0;
+    this.setShadowedLightIntensity(this.flareLifeboatWash, 0);
+    this.setShadowedLightIntensity(this.flareShipWash, 0);
     this.root.userData.redWashTargets = NO_RED_WASH_TARGETS;
     const phase = Math.min(5.999999, progress * 6);
     const segment = Math.floor(phase);
     const local = phase - segment;
     const on = progress < 1 && segment % 2 === 0;
     const pulse = on ? 0.25 + Math.sin(local * Math.PI) * 0.75 : 0;
-    this.flashlightBeam.intensity = pulse * 7.2;
+    this.setLightIntensity(this.flashlightBeam, pulse * 7.2);
     this.beamVisual.visible = on;
     const visual = this.beamVisual.children[0];
     if (visual instanceof Mesh) {
@@ -659,11 +763,15 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       + (RESCUE_YAW - this.shipStartYaw) * turn;
     this.root.userData.courseTurns = turn > 0 ? 1 : 0;
     const signalFade = 1 - smoothstep(progress / 0.46);
-    this.flareLifeboatWash.intensity =
-      this.rescueLifeboatWashStart * signalFade;
-    this.flareShipWash.intensity =
-      this.rescueShipWashStart * signalFade;
-    this.flashlightBeam.intensity = 0;
+    this.setShadowedLightIntensity(
+      this.flareLifeboatWash,
+      this.rescueLifeboatWashStart * signalFade,
+    );
+    this.setShadowedLightIntensity(
+      this.flareShipWash,
+      this.rescueShipWashStart * signalFade,
+    );
+    this.setLightIntensity(this.flashlightBeam, 0);
     this.beamVisual.visible = false;
     this.updateBeaconPose();
     this.updateLightTargetPose();
@@ -756,11 +864,99 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   }
 
   private setPlayerSignalsDark(): void {
-    this.flareLifeboatWash.intensity = 0;
-    this.flareShipWash.intensity = 0;
-    this.flashlightBeam.intensity = 0;
+    this.setShadowedLightIntensity(this.flareLifeboatWash, 0);
+    this.setShadowedLightIntensity(this.flareShipWash, 0);
+    this.setLightIntensity(this.flashlightBeam, 0);
     this.beamVisual.visible = false;
     this.root.userData.redWashTargets = NO_RED_WASH_TARGETS;
+  }
+
+  private async compileRenderStates(
+    renderer: WebGLRenderer,
+    scene: Scene,
+    camera: PerspectiveCamera,
+  ): Promise<void> {
+    await this.compileRenderState(renderer, scene, camera, 'reveal');
+    await this.compileRenderState(renderer, scene, camera, 'flare');
+    await this.compileRenderState(renderer, scene, camera, 'flashlight');
+  }
+
+  private compileRenderState(
+    renderer: WebGLRenderer,
+    scene: Scene,
+    camera: PerspectiveCamera,
+    state: 'reveal' | 'flare' | 'flashlight',
+  ): Promise<void> {
+    const rootVisible = this.root.visible;
+    const shipVisible = this.ship.visible;
+    const portVisible = this.portBeacon.visible;
+    const starboardVisible = this.starboardBeacon.visible;
+    const flareVisible = this.flare.visible;
+    const beamVisible = this.beamVisual.visible;
+    const portIntensity = this.portBeaconLight.intensity;
+    const starboardIntensity = this.starboardBeaconLight.intensity;
+    const lifeboatWashIntensity = this.flareLifeboatWash.intensity;
+    const lifeboatWashVisible = this.flareLifeboatWash.visible;
+    const lifeboatWashShadow = this.flareLifeboatWash.castShadow;
+    const shipWashIntensity = this.flareShipWash.intensity;
+    const shipWashVisible = this.flareShipWash.visible;
+    const shipWashShadow = this.flareShipWash.castShadow;
+    const flashlightIntensity = this.flashlightBeam.intensity;
+    const flashlightVisible = this.flashlightBeam.visible;
+    let compilation: Promise<Object3D>;
+    try {
+      this.root.visible = true;
+      this.ship.visible = true;
+      this.portBeacon.visible = true;
+      this.starboardBeacon.visible = true;
+      this.setBeaconIntensity(HORIZON_LIGHT_INTENSITY);
+      this.flare.visible = state === 'flare';
+      this.beamVisual.visible = state === 'flashlight';
+      this.setShadowedLightIntensity(
+        this.flareLifeboatWash,
+        state === 'flare' ? 1 : 0,
+      );
+      this.setShadowedLightIntensity(
+        this.flareShipWash,
+        state === 'flare' ? 1 : 0,
+      );
+      this.setLightIntensity(
+        this.flashlightBeam,
+        state === 'flashlight' ? 1 : 0,
+      );
+      compilation = renderer.compileAsync(scene, camera);
+    } finally {
+      this.root.visible = rootVisible;
+      this.ship.visible = shipVisible;
+      this.portBeacon.visible = portVisible;
+      this.starboardBeacon.visible = starboardVisible;
+      this.flare.visible = flareVisible;
+      this.beamVisual.visible = beamVisible;
+      this.portBeaconLight.intensity = portIntensity;
+      this.starboardBeaconLight.intensity = starboardIntensity;
+      this.flareLifeboatWash.intensity = lifeboatWashIntensity;
+      this.flareLifeboatWash.visible = lifeboatWashVisible;
+      this.flareLifeboatWash.castShadow = lifeboatWashShadow;
+      this.flareShipWash.intensity = shipWashIntensity;
+      this.flareShipWash.visible = shipWashVisible;
+      this.flareShipWash.castShadow = shipWashShadow;
+      this.flashlightBeam.intensity = flashlightIntensity;
+      this.flashlightBeam.visible = flashlightVisible;
+    }
+    return compilation.then(() => undefined);
+  }
+
+  private setLightIntensity(light: PointLight | SpotLight, intensity: number): void {
+    light.intensity = intensity;
+    light.visible = intensity > 0;
+  }
+
+  private setShadowedLightIntensity(light: SpotLight, intensity: number): void {
+    const active = intensity > 0;
+    light.intensity = intensity;
+    light.visible = active;
+    light.castShadow = active;
+    if (active) light.shadow.needsUpdate = true;
   }
 
   private setBeaconIntensity(intensity: number): void {
@@ -846,6 +1042,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       selected = null;
     }
     if (selected !== null && hasRenderableBounds(selected)) {
+      selected = mergeStaticModelByMaterial(selected);
       selected.name = 'event-model:containerShip';
       selected.position.y = 2.2;
       selected.rotation.y = Math.PI / 2;
@@ -1034,13 +1231,15 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       'other-people-flare-lifeboat-wash';
     this.flareLifeboatWash.position.set(-0.4, 14, -18);
     this.flareLifeboatWash.target = this.lifeboatLightTarget;
-    this.flareLifeboatWash.castShadow = true;
+    this.flareLifeboatWash.castShadow = false;
+    this.flareLifeboatWash.visible = false;
     this.configureShadow(this.flareLifeboatWash);
 
     this.flareShipWash.name = 'other-people-flare-ship-wash';
     this.flareShipWash.position.set(-4.5, 15, -27);
     this.flareShipWash.target = this.shipLightTarget;
-    this.flareShipWash.castShadow = true;
+    this.flareShipWash.castShadow = false;
+    this.flareShipWash.visible = false;
     this.configureShadow(this.flareShipWash);
 
     this.flashlightBeam.name =
@@ -1048,6 +1247,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.flashlightBeam.position.set(1.4, 2.1, -1.4);
     this.flashlightBeam.target = this.shipLightTarget;
     this.flashlightBeam.castShadow = false;
+    this.flashlightBeam.visible = false;
     this.configureShadow(this.flashlightBeam);
   }
 

@@ -58,6 +58,7 @@ const STREAM_X = 1.85;
 const STREAM_DROP = 0.21;
 const INTERIOR_WATER_Y = -0.25;
 const WATER_OPACITY = 0.72;
+const LEAK_SPRAY_LIFETIME_SCALE = 3;
 
 const INTERIOR_WATER_STATIONS = Object.freeze([
   { z: -3, halfWidth: 0.28 },
@@ -123,7 +124,7 @@ export class LeakPresentation implements DedicatedEventPresentation {
   private readonly ownedMaterials = new Set<Material>();
   private readonly holes: readonly Mesh[];
   private readonly streams: readonly Mesh[];
-  private readonly spray = new FishingBiteParticles();
+  private readonly spray = new FishingBiteParticles(LEAK_SPRAY_LIFETIME_SCALE);
   private readonly sprayOrigin = new Vector3();
   private readonly interiorWater: Mesh;
   private readonly sample: LeakSample = identityLeakSample();

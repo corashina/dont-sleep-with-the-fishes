@@ -14,7 +14,7 @@ export type EventItemEffectKind =
   | 'none' | 'tape' | 'binocular-mask' | 'bucket-cover'
   | 'flare' | 'chain' | 'flashlight' | 'shotgun-smoke';
 
-export type EventItemFlightTarget = 'event' | 'starboard-water';
+export type EventItemFlightTarget = 'event' | 'starboard-water' | 'bucket-water';
 
 export type EventItemDisposition = 'recover' | 'broken' | 'depart';
 
@@ -33,7 +33,16 @@ const FLASHLIGHT_MORSE_CUE_PROGRESSES = Object.freeze([
 ]);
 const SHOTGUN_ACTION_CUE_PROGRESSES = Object.freeze([0.46]);
 const FLARE_GUN_ACTION_CUE_PROGRESSES = Object.freeze([0.46, 0.54]);
-const ANCHOR_ACTION_CUE_PROGRESSES = Object.freeze([0.88]);
+const ANCHOR_FLIGHT_START = 0.56;
+const ANCHOR_IMPACT_PROGRESS = 0.84;
+const ANCHOR_ACTION_CUE_PROGRESSES = Object.freeze([ANCHOR_IMPACT_PROGRESS]);
+const TAPE_ACTION_CUE_PROGRESSES = Object.freeze([0.5]);
+const WEIGHTED_THROW_DURATION_MULTIPLIER = 1.15;
+const SCOOP_DURATION = 1.65;
+const SCOOP_FLIGHT_ARC_HEIGHT = 0.8;
+const SCOOP_GUNWALE_CLEARANCE = 0.28;
+const NET_PICKUP_DEPTH = 0.14;
+const BUCKET_BENCH_CLEARANCE_X = 0.32;
 const NO_ACTION_CUE_PROGRESSES: readonly number[] = Object.freeze([]);
 type StagedEventItemUseSample = EventItemUseSample & {
   [MOTION_PROFILE]?: ReturnType<typeof eventItemMotionProfile>;
@@ -152,10 +161,6 @@ export function resolveEventItemUseContext(
   if (itemId === 'anchor' && choiceId === 'anchor' && eventId === 'handyman') {
     return 'base';
   }
-  if (itemId === 'scubaSet' && choiceId === 'scubaSet' && eventId === 'handyman') {
-    return 'base';
-  }
-
   if (
     itemId === 'cannedFood'
     && (choiceId === 'food' || choiceId === 'cannedFood')
@@ -167,7 +172,6 @@ export function resolveEventItemUseContext(
   if (itemId === 'medicalKit' && choiceId === 'medicalKit') return 'throw-target';
   if (itemId === 'energyBar' && choiceId === 'energyBar') return 'throw-target';
   if (itemId === 'swimRing' && choiceId === 'swimRing') return 'throw-target';
-  if (itemId === 'bottledPaper' && choiceId === 'bottledPaper') return 'throw-target';
   if (itemId === 'ductTape' && choiceId === 'ductTape') return 'tape-stretch';
   if (itemId === 'compass' && choiceId === 'compass') return 'compass-search';
   if (itemId === 'map' && choiceId === 'map') return 'map-read';
@@ -186,8 +190,8 @@ export function eventItemUseDuration(context: EventItemUseContext): number {
     case 'compass-search': return scaleEventItemDuration(1.6);
     case 'map-read': return scaleEventItemDuration(1.55);
     case 'binocular-look': return scaleEventItemDuration(1.7);
-    case 'net-scoop': return scaleEventItemDuration(1.5);
-    case 'bucket-scoop': return scaleEventItemDuration(1.45);
+    case 'net-scoop': return scaleEventItemDuration(SCOOP_DURATION);
+    case 'bucket-scoop': return scaleEventItemDuration(SCOOP_DURATION);
     case 'bucket-cover': return scaleEventItemDuration(1.35);
     case 'flare-target': return scaleEventItemDuration(1.5);
     case 'flare-sky': return scaleEventItemDuration(1.65);
@@ -197,6 +201,18 @@ export function eventItemUseDuration(context: EventItemUseContext): number {
     case 'flashlight-flash': return scaleEventItemDuration(1.35);
     case 'shotgun-fire': return scaleEventItemDuration(1.2);
   }
+}
+
+export function eventItemUseDurationForItem(
+  context: EventItemUseContext,
+  itemId: ItemId,
+): number {
+  const duration = eventItemUseDuration(context);
+  if (
+    context !== 'throw-target'
+    || eventItemMotionProfile(itemId).mass === 'light'
+  ) return duration;
+  return duration * WEIGHTED_THROW_DURATION_MULTIPLIER;
 }
 
 function resetSample(output: EventItemUseSample): void {
@@ -318,29 +334,22 @@ function sampleMapRead(
   output.scaleZ = 1 + 0.5 * hold;
 
   const lookYaw = 0.2;
-  const lookPitch = 0.26;
   if (progress < 0.44) {
     output.cameraYaw = 0;
-    output.cameraPitch = 0;
   } else if (progress < 0.56) {
     const lookUpLeft = smoothstep((progress - 0.44) / 0.12);
     output.cameraYaw = lookYaw * lookUpLeft;
-    output.cameraPitch = lookPitch * lookUpLeft;
   } else if (progress < 0.62) {
     output.cameraYaw = lookYaw;
-    output.cameraPitch = lookPitch;
   } else if (progress < 0.78) {
     const lookAcross = smoothstep((progress - 0.62) / 0.16);
     output.cameraYaw = lookYaw * (1 - lookAcross * 2);
-    output.cameraPitch = lookPitch + Math.sin(lookAcross * Math.PI) * 0.035;
   } else if (progress < 0.84) {
     output.cameraYaw = -lookYaw;
-    output.cameraPitch = lookPitch;
   } else {
     const center = smoothstep((progress - 0.84) / 0.12);
     const remainingLook = 1 - center;
     output.cameraYaw = remainingLook === 0 ? 0 : -lookYaw * remainingLook;
-    output.cameraPitch = lookPitch * remainingLook;
   }
   output.roll = 0;
 }
@@ -376,27 +385,20 @@ function sampleNetScoop(
   hold: number,
   progress: number,
 ): void {
-  samplePickupAndHold(output, pickup, hold);
-  const clearance = Math.min(
-    smoothstep((progress - 0.3) / 0.18),
-    1 - smoothstep((progress - 0.94) / 0.06),
-  );
-  const outbound = smoothstep((progress - 0.48) / 0.24);
-  const inbound = 1 - smoothstep((progress - 0.82) / 0.16);
-  const travel = Math.min(outbound, inbound);
-  const dip = pulse(progress, 0.64, 0.76, 0.9);
+  sampleBucketScoop(output, pickup, hold, progress, false);
+  const closeHold = pickup
+    * (1 - smoothstep((progress - 0.38) / 0.06));
+  output.viewZ += NET_PICKUP_DEPTH * closeHold;
+  output.pitch *= -1;
+  output.aimBlend = 0;
+}
 
-  output.viewX += 0.22 * clearance;
-  output.viewY += 0.48 * clearance;
-  output.viewZ += 0.12 * clearance;
-  output.yaw = -0.24 * clearance - 0.18 * travel;
-  output.pitch += 0.24 * clearance + 0.42 * dip;
-  output.roll += 0.18 * clearance + 0.3 * travel;
-  output.cameraPitch = -0.04 * travel;
-  output.cameraTargetBlend = 0.5 * travel;
-  output.fovScale = 1 + 0.08 * travel;
-  output.targetBlend = travel;
-  output.flightTarget = 'starboard-water';
+function applyBucketBenchClearance(
+  output: EventItemUseSample,
+  pickup: number,
+): void {
+  output.viewX -= BUCKET_BENCH_CLEARANCE_X
+    * pulse(pickup, 0.08, 0.52, 0.94);
 }
 
 function sampleBucketScoop(
@@ -404,13 +406,18 @@ function sampleBucketScoop(
   pickup: number,
   hold: number,
   progress: number,
+  clearBench = true,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  const outbound = smoothstep((progress - 0.42) / 0.24);
-  const inbound = 1 - smoothstep((progress - 0.78) / 0.14);
+  if (clearBench) applyBucketBenchClearance(output, pickup);
+  const gunwaleClearance = pulse(progress, 0.38, 0.44, 0.58);
+  const outbound = smoothstep((progress - 0.44) / 0.26);
+  const inbound = 1 - smoothstep((progress - 0.79) / 0.17);
   const travel = Math.min(outbound, inbound);
-  const scoop = pulse(progress, 0.66, 0.72, 0.79);
-  output.viewY += 0.1 * travel - 0.16 * scoop;
+  const scoop = pulse(progress, 0.69, 0.75, 0.82);
+  output.viewY += SCOOP_GUNWALE_CLEARANCE * gunwaleClearance
+    + 0.1 * travel
+    - 0.16 * scoop;
   output.viewZ += 0.08 * travel;
   output.yaw = -0.28 * travel;
   output.pitch = 0.32 * travel + 0.92 * scoop;
@@ -419,8 +426,8 @@ function sampleBucketScoop(
   output.targetBlend = travel;
   output.ballisticFlight = travel > 0;
   output.flightArc = 4 * travel * (1 - travel);
-  output.flightArcHeight = 0.9;
-  output.flightTarget = 'starboard-water';
+  output.flightArcHeight = SCOOP_FLIGHT_ARC_HEIGHT;
+  output.flightTarget = 'bucket-water';
   output.primaryEffect = scoop;
 }
 
@@ -465,23 +472,26 @@ function sampleAnchorDrop(
   progress: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  const windUp = smoothstep((progress - 0.38) / 0.12);
-  const released = smoothstep((progress - 0.5) / 0.06);
-  const flight = clamp01((progress - 0.54) / 0.34);
+  const windUp = smoothstep((progress - 0.38) / 0.16);
+  const released = smoothstep((progress - 0.51) / 0.05);
+  const flight = clamp01(
+    (progress - ANCHOR_FLIGHT_START)
+      / (ANCHOR_IMPACT_PROGRESS - ANCHOR_FLIGHT_START),
+  );
   const flightArc = 4 * flight * (1 - flight);
   const lookStarboard = smoothstep((progress - 0.26) / 0.2);
-  output.viewX += 0.34 * windUp;
-  output.viewY += 0.3 * windUp;
-  output.viewZ += 0.12 * windUp;
-  output.yaw = -0.22 * windUp;
-  output.pitch += 0.34 * windUp + flight * Math.PI * 2;
-  output.roll += 0.72 * windUp + flight * Math.PI * 1.5;
+  output.viewX += 0.26 * windUp;
+  output.viewY += 0.18 * windUp;
+  output.viewZ += 0.08 * windUp;
+  output.yaw = -0.16 * windUp;
+  output.pitch += 0.24 * windUp + flight * Math.PI * 1.15;
+  output.roll += 0.46 * windUp + flight * Math.PI * 0.7;
   output.cameraYaw = -0.62 * lookStarboard;
-  output.cameraPitch = lookStarboard * (0.54 * flightArc - 0.18 * flight);
+  output.cameraPitch = lookStarboard * (0.3 * flightArc - 0.22 * flight);
   output.targetBlend = flight;
   output.ballisticFlight = flight > 0;
   output.flightArc = flightArc;
-  output.flightArcHeight = 2.8;
+  output.flightArcHeight = 0.65;
   output.flightTarget = 'starboard-water';
   output.effectKind = released > 0 ? 'chain' : 'none';
   output.primaryEffect = released;
@@ -496,6 +506,7 @@ function sampleUmbrella(
   shield: boolean,
 ): void {
   samplePickupAndHold(output, pickup, hold);
+  if (!shield) output.viewX = 0;
   output.pitch = (shield ? 0.18 : -0.465) * pickup;
   output.yaw = (shield ? -0.32 : 0.455) * pickup;
   output.roll = shield ? 0 : -Math.PI / 2 * pickup;
@@ -610,7 +621,9 @@ export function sampleEventItemUse(
       break;
   }
 
-  if (context !== 'map-read') output.roll += 0.03 * settle;
+  if (context !== 'map-read' && context !== 'net-scoop') {
+    output.roll += 0.03 * settle;
+  }
 }
 
 function liftCompletionForMass(mass: EventItemMass): number {
@@ -632,6 +645,7 @@ export function eventItemActionCueProgresses(
 ): readonly number[] {
   if (context === 'shotgun-fire') return SHOTGUN_ACTION_CUE_PROGRESSES;
   if (context === 'anchor-drop') return ANCHOR_ACTION_CUE_PROGRESSES;
+  if (context === 'tape-stretch') return TAPE_ACTION_CUE_PROGRESSES;
   if (context === 'flare-target' || context === 'flare-sky') {
     return FLARE_GUN_ACTION_CUE_PROGRESSES;
   }
@@ -690,6 +704,17 @@ export function sampleEventItemOutcome(
     return;
   }
 
+  if (context === 'tape-stretch') {
+    resetSample(output);
+    const pickup = 1 - smoothstep(t);
+    const staged = output as StagedEventItemUseSample;
+    staged[MOTION_PROFILE] = profile;
+    staged[ANTICIPATE] = 0;
+    sampleTapeStretch(output, pickup, pickup, 0);
+    output.itemVisible = t < 1;
+    return;
+  }
+
   if (disposition === 'depart') {
     output.targetBlend = t;
     output.aimBlend = profile.aim === 'none' ? 0 : 1 - t;
@@ -731,6 +756,7 @@ export function sampleEventItemOutcome(
     const staged = output as StagedEventItemUseSample;
     staged[MOTION_PROFILE] = eventItemMotionProfile(itemId);
     samplePickupAndHold(output, pickup, pickup);
+    applyBucketBenchClearance(output, pickup);
     output.itemVisible = t < 1;
     return;
   }
@@ -738,7 +764,10 @@ export function sampleEventItemOutcome(
   if (context === 'net-scoop') {
     resetSample(output);
     const pickup = 1 - smoothstep(t);
+    const staged = output as StagedEventItemUseSample;
+    staged[MOTION_PROFILE] = profile;
     samplePickupAndHold(output, pickup, pickup);
+    output.aimBlend = 0;
     output.itemVisible = t < 1;
     return;
   }
@@ -779,6 +808,10 @@ export function eventItemOutcomeDuration(
   if (itemId === 'flashlight' && disposition !== 'depart') {
     return eventItemUseDuration('flashlight-flash')
       * (MAP_LIFT_COMPLETION - ITEM_LIFT_START);
+  }
+  if (itemId === 'ductTape') {
+    return eventItemUseDuration('tape-stretch')
+      * (liftCompletionForItem(itemId) - ITEM_LIFT_START);
   }
   if (itemId === 'bucket' && disposition !== 'depart') {
     return eventItemUseDuration('flashlight-flash')

@@ -12,7 +12,8 @@ export function schoolItemDuration(choiceId: string): number {
     : SCHOOL_ITEM_DURATION;
 }
 export const SCHOOL_CENTER_X = 0;
-export const SCHOOL_CENTER_Z = -4.2;
+export const SCHOOL_CENTER_Z = -5.65;
+export const SCHOOL_HULL_LIMIT_Z = -3.4;
 
 export type SchoolItemEffectKind =
   | 'none'
@@ -261,10 +262,11 @@ export function sampleSchoolFishPose(
     output.x = orbitX + variant.scatterX * school.scatter * 0.92;
     output.z = orbitZ + variant.scatterZ * school.scatter * 0.92;
   }
-  output.yaw = Math.atan2(
-    -Math.sin(angle) * variant.orbitRadiusX,
-    Math.cos(angle) * variant.orbitRadiusZ,
-  );
+  const tangentX = -Math.sin(angle) * variant.orbitRadiusX;
+  const orbitTangentZ = Math.cos(angle) * variant.orbitRadiusZ;
+  const tangentZ = output.z >= SCHOOL_HULL_LIMIT_Z ? 0 : orbitTangentZ;
+  output.z = Math.min(output.z, SCHOOL_HULL_LIMIT_Z);
+  output.yaw = Math.atan2(tangentZ, -tangentX);
   output.pitch = variant.bank;
   output.roll = 0;
   output.scale = variant.scale * Math.max(0.01, school.schoolAlpha);

@@ -2,7 +2,7 @@ import type { Group, Object3D, PerspectiveCamera } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import type { WaveSample, VortexWaveState } from '../ocean/WaveField';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
-import type { CaptainWhiskersPresentation } from './CaptainWhiskersPresentation';
+import type { CarlitosPresentation } from './CarlitosPresentation';
 import type { EventModelLibrary } from './EventModelLibrary';
 import type { DedicatedEventId } from './eventPresentationRoutes';
 import type {
@@ -40,7 +40,7 @@ export type WorldWaveSampler = (
 export interface DedicatedEventEnvironment {
   readonly eventModels: EventModelLibrary;
   readonly supplies: BoatSupplyDisplay;
-  readonly captainWhiskers: CaptainWhiskersPresentation;
+  readonly carlitos: CarlitosPresentation;
   readonly vortexWave: VortexWaveState;
   readonly sampleWorldWaveInto: WorldWaveSampler;
   readonly readWorldWaveAmplitudeScale: () => number;

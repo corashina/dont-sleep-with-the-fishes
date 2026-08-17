@@ -23,6 +23,9 @@ const PAD_POSITIONS = Object.freeze([
   [8, 0.26, -9.1], [-7.9, 0.29, -10.92], [-4.2, 0.26, -11.24],
   [-0.5, 0.3, -10.86], [3.3, 0.27, -11.18], [7.1, 0.29, -10.8],
 ] as const);
+const PAD_SPREAD_X = 1.15;
+const PAD_SPREAD_Z = 1.3;
+const PAD_FRONT_Z = -4.2;
 
 export class FlowersPresentation extends KeyedEventPresentation {
   private readonly pads: Group[] = [];
@@ -45,7 +48,11 @@ export class FlowersPresentation extends KeyedEventPresentation {
       pad.scale.setScalar(0.76 + ((index * 7) % 9) * 0.045);
       pad.rotation.y = ((index * 11) % 17) * 0.37;
       this.pads.push(pad);
-      this.basePositions.push(new Vector3(x, y, z));
+      this.basePositions.push(new Vector3(
+        x * PAD_SPREAD_X,
+        y,
+        PAD_FRONT_Z + (z - PAD_FRONT_Z) * PAD_SPREAD_Z,
+      ));
       this.subject.add(pad);
     });
   }

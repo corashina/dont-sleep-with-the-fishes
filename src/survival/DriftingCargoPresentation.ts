@@ -15,34 +15,32 @@ import {
   type ProjectedBoatBounds,
 } from './BoatInteraction';
 import {
-  keyedRevealProgress,
   smoothstepUnchecked as smoothstep,
   type TimedAnimation,
 } from './animationMath';
-import type { DriftingLootVariant } from './survivalTypes';
+import type { DriftingCargoKind } from './survivalTypes';
 
-type DriftingLootAnimationKind = 'reveal' | 'retrieve' | 'recede';
+type DriftingCargoAnimationKind = 'retrieve' | 'recede';
 
-type ActiveDriftingLootAnimation = TimedAnimation<DriftingLootAnimationKind>;
+type ActiveDriftingCargoAnimation = TimedAnimation<DriftingCargoAnimationKind>;
 
-export interface DriftingLootModels {
+export interface DriftingCargoModels {
   readonly barrel: Group;
-  readonly crate: Group;
+  readonly chest: Group;
 }
 
-export interface DriftingLootInteractionProjection {
-  readonly variant: DriftingLootVariant;
+export interface DriftingCargoInteractionProjection {
+  readonly variant: DriftingCargoKind;
   readonly bounds: ProjectedBoatBounds;
 }
 
 const FLOAT_POSITION = Object.freeze({ x: -3, y: 0.02, z: -4.2 });
-const REVEAL_OFFSET = Object.freeze({ x: -1.1, y: -0.35, z: 0.3 });
 const RECEDE_OFFSET = Object.freeze({ x: -1.8, y: -0.25, z: 1.6 });
-const REVEAL_DURATION = 0.9;
-const RETRIEVE_DURATION = 1.1;
+const RETRIEVE_DURATIONS: Readonly<Record<DriftingCargoKind, number>> =
+  Object.freeze({ barrel: 1.35, chest: 1.55 });
 const RECEDE_DURATION = 0.8;
 
-type DriftingLootState = 'idle' | 'floating' | 'revealing' | 'retrieving' | 'held' | 'receding';
+type DriftingCargoState = 'idle' | 'floating' | 'retrieving' | 'held' | 'receding';
 
 function keyedRetrieveProgress(progress: number): number {
   if (progress < 0.14) return -0.045 * smoothstep(progress / 0.14);
@@ -52,12 +50,11 @@ function keyedRetrieveProgress(progress: number): number {
   return 1.04 + (1 - 1.04) * smoothstep((progress - 0.82) / 0.18);
 }
 
-export class DriftingLootPresentation {
+export class DriftingCargoPresentation {
   readonly root = new Group();
-  private readonly roots: Readonly<Record<DriftingLootVariant, Group>>;
-  private readonly basePositions: Readonly<Record<DriftingLootVariant, Vector3>>;
-  private readonly baseQuaternions: Readonly<Record<DriftingLootVariant, Quaternion>>;
-  private readonly positionScratch = new Vector3();
+  private readonly roots: Readonly<Record<DriftingCargoKind, Group>>;
+  private readonly basePositions: Readonly<Record<DriftingCargoKind, Vector3>>;
+  private readonly baseQuaternions: Readonly<Record<DriftingCargoKind, Quaternion>>;
   private readonly targetPositionScratch = new Vector3();
   private readonly animationStartPosition = new Vector3();
   private readonly quaternionScratch = new Quaternion();
@@ -69,62 +66,60 @@ export class DriftingLootPresentation {
     displacementZ: 0,
     normal: { x: 0, y: 1, z: 0 },
   };
-  private activeAnimation: ActiveDriftingLootAnimation | null = null;
-  private activeVariant: DriftingLootVariant | null = null;
-  private state: DriftingLootState = 'idle';
+  private activeAnimation: ActiveDriftingCargoAnimation | null = null;
+  private activeVariant: DriftingCargoKind | null = null;
+  private state: DriftingCargoState = 'idle';
   private disposed = false;
 
   constructor(
-    models: DriftingLootModels,
+    models: DriftingCargoModels,
     private readonly sternTarget: Object3D,
   ) {
-    this.root.name = 'drifting-loot-presentation';
+    this.root.name = 'drifting-cargo-presentation';
     const barrel = new Group();
-    barrel.name = 'drifting-loot:barrel';
+    barrel.name = 'drifting-barrel:model';
     barrel.position.set(FLOAT_POSITION.x, FLOAT_POSITION.y, FLOAT_POSITION.z);
     barrel.rotation.z = Math.PI / 2;
     barrel.scale.setScalar(0.9);
     barrel.visible = false;
+    barrel.userData.motionSource = 'shared-wave-field';
+    barrel.userData.waterlineY = 0;
     barrel.add(models.barrel);
 
-    const crate = new Group();
-    crate.name = 'drifting-loot:crate';
-    crate.position.set(FLOAT_POSITION.x, FLOAT_POSITION.y, FLOAT_POSITION.z);
-    crate.rotation.set(0.08, -0.18, -0.06);
-    crate.scale.setScalar(0.82);
-    crate.visible = false;
-    crate.add(models.crate);
+    const chest = new Group();
+    chest.name = 'drifting-chest:model';
+    chest.position.set(FLOAT_POSITION.x, FLOAT_POSITION.y, FLOAT_POSITION.z);
+    chest.rotation.set(0.08, -0.18, -0.06);
+    chest.scale.setScalar(0.82);
+    chest.visible = false;
+    chest.userData.motionSource = 'shared-wave-field';
+    chest.userData.waterlineY = 0;
+    chest.add(models.chest);
 
-    this.roots = { barrel, crate };
+    this.roots = { barrel, chest };
     this.basePositions = {
       barrel: barrel.position.clone(),
-      crate: crate.position.clone(),
+      chest: chest.position.clone(),
     };
     this.baseQuaternions = {
       barrel: barrel.quaternion.clone(),
-      crate: crate.quaternion.clone(),
+      chest: chest.quaternion.clone(),
     };
-    this.root.add(barrel, crate);
+    this.root.add(barrel, chest);
   }
 
-  stage(variant: DriftingLootVariant): void {
+  stage(variant: DriftingCargoKind): void {
     if (this.disposed) return;
     this.cancelActiveAnimation();
     this.activeVariant = variant;
     this.state = 'floating';
     this.resetAll();
     this.roots[variant].visible = true;
+    this.applyFloatingPose(variant, 0);
   }
 
   reveal(): Promise<void> {
-    if (this.disposed || this.activeVariant === null) return Promise.resolve();
-    const root = this.roots[this.activeVariant];
-    this.resetPose(this.activeVariant);
-    root.position.x += REVEAL_OFFSET.x;
-    root.position.y += REVEAL_OFFSET.y;
-    root.position.z += REVEAL_OFFSET.z;
-    this.state = 'revealing';
-    return this.startAnimation('reveal', REVEAL_DURATION);
+    return Promise.resolve();
   }
 
   retrieve(): Promise<void> {
@@ -133,7 +128,7 @@ export class DriftingLootPresentation {
     this.animationStartPosition.copy(root.position);
     this.animationStartQuaternion.copy(root.quaternion);
     this.state = 'retrieving';
-    return this.startAnimation('retrieve', RETRIEVE_DURATION);
+    return this.startAnimation('retrieve', RETRIEVE_DURATIONS[this.activeVariant]);
   }
 
   recede(): Promise<void> {
@@ -164,7 +159,7 @@ export class DriftingLootPresentation {
     camera: PerspectiveCamera,
     width: number,
     height: number,
-  ): DriftingLootInteractionProjection | null {
+  ): DriftingCargoInteractionProjection | null {
     if (
       this.disposed
       || this.state !== 'floating'
@@ -209,9 +204,6 @@ export class DriftingLootPresentation {
     } else if (animation.kind === 'recede') {
       this.state = 'idle';
       this.roots[this.activeVariant].visible = false;
-    } else {
-      this.state = 'floating';
-      this.applyFloatingPose(this.activeVariant, 0);
     }
     animation.resolve();
   }
@@ -241,16 +233,12 @@ export class DriftingLootPresentation {
       animation.elapsed + Math.max(0, delta),
     );
     const progress = animation.duration <= 0 ? 1 : animation.elapsed / animation.duration;
-    if (animation.kind === 'reveal') this.applyRevealPose(variant, time, progress);
-    else if (animation.kind === 'retrieve') this.applyRetrievePose(variant, progress);
+    if (animation.kind === 'retrieve') this.applyRetrievePose(variant, progress);
     else this.applyRecedePose(variant, progress);
     if (progress < 1) return;
 
     this.activeAnimation = null;
-    if (animation.kind === 'reveal') {
-      this.state = 'floating';
-      this.applyFloatingPose(variant, time);
-    } else if (animation.kind === 'retrieve') {
+    if (animation.kind === 'retrieve') {
       this.state = 'held';
       this.applySternPose(variant);
     } else {
@@ -269,7 +257,7 @@ export class DriftingLootPresentation {
   }
 
   private startAnimation(
-    kind: DriftingLootAnimationKind,
+    kind: DriftingCargoAnimationKind,
     duration: number,
   ): Promise<void> {
     this.cancelActiveAnimation();
@@ -278,7 +266,7 @@ export class DriftingLootPresentation {
     });
   }
 
-  private applyFloatingPose(variant: DriftingLootVariant, time: number): void {
+  private applyFloatingPose(variant: DriftingCargoKind, time: number): void {
     const root = this.roots[variant];
     const basePosition = this.basePositions[variant];
     sampleWaveFieldInto(
@@ -298,19 +286,7 @@ export class DriftingLootPresentation {
     root.rotateZ(-this.waveSample.normal.x * 0.12);
   }
 
-  private applyRevealPose(
-    variant: DriftingLootVariant,
-    time: number,
-    progress: number,
-  ): void {
-    this.applyFloatingPose(variant, time);
-    const travel = keyedRevealProgress(Math.min(1, Math.max(0, progress)));
-    this.positionScratch.set(REVEAL_OFFSET.x, REVEAL_OFFSET.y, REVEAL_OFFSET.z);
-    this.positionScratch.multiplyScalar(1 - travel);
-    this.roots[variant].position.add(this.positionScratch);
-  }
-
-  private applyRetrievePose(variant: DriftingLootVariant, progress: number): void {
+  private applyRetrievePose(variant: DriftingCargoKind, progress: number): void {
     this.readSternPose();
     const travel = keyedRetrieveProgress(Math.min(1, Math.max(0, progress)));
     const root = this.roots[variant];
@@ -326,7 +302,7 @@ export class DriftingLootPresentation {
     );
   }
 
-  private applyRecedePose(variant: DriftingLootVariant, progress: number): void {
+  private applyRecedePose(variant: DriftingCargoKind, progress: number): void {
     const travel = smoothstep(Math.min(1, Math.max(0, progress)));
     this.targetPositionScratch.copy(this.basePositions[variant]);
     this.targetPositionScratch.x += RECEDE_OFFSET.x;
@@ -345,7 +321,7 @@ export class DriftingLootPresentation {
     );
   }
 
-  private applySternPose(variant: DriftingLootVariant): void {
+  private applySternPose(variant: DriftingCargoKind): void {
     this.readSternPose();
     this.roots[variant].position.copy(this.targetPositionScratch);
     this.roots[variant].quaternion.copy(this.targetQuaternionScratch);
@@ -361,12 +337,12 @@ export class DriftingLootPresentation {
 
   private resetAll(): void {
     this.resetPose('barrel');
-    this.resetPose('crate');
+    this.resetPose('chest');
     this.roots.barrel.visible = false;
-    this.roots.crate.visible = false;
+    this.roots.chest.visible = false;
   }
 
-  private resetPose(variant: DriftingLootVariant): void {
+  private resetPose(variant: DriftingCargoKind): void {
     this.roots[variant].position.copy(this.basePositions[variant]);
     this.roots[variant].quaternion.copy(this.baseQuaternions[variant]);
   }

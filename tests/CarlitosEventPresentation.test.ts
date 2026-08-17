@@ -5,21 +5,21 @@ import {
   Mesh,
   MeshStandardMaterial,
   PerspectiveCamera,
-  SphereGeometry,
+  Vector3,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import type { ItemInstanceId } from '../src/game/ItemState';
-import { CaptainWhiskersPresentation } from '../src/survival/CaptainWhiskersPresentation';
-import { CaptainWhiskersEventPresentation } from '../src/survival/events/CaptainWhiskersEventPresentation';
-import type { CaptainWhiskersEventId } from '../src/survival/events/CaptainWhiskersEventPresentation';
+import { CarlitosPresentation } from '../src/survival/CarlitosPresentation';
+import { CarlitosEventPresentation } from '../src/survival/events/CarlitosEventPresentation';
+import type { CarlitosEventId } from '../src/survival/events/CarlitosEventPresentation';
 import type {
   DedicatedEventEnvironment,
 } from '../src/survival/eventPresentationTypes';
 import { createTestPropModels } from './helpers/propModels';
 
-function setup(eventId: CaptainWhiskersEventId, waveAmplitude = 1) {
+function setup(eventId: CarlitosEventId) {
   const propModels = createTestPropModels();
-  const companion = new CaptainWhiskersPresentation(propModels);
+  const companion = new CarlitosPresentation(propModels);
   companion.sync({
     alive: true,
     hunger: 5,
@@ -32,21 +32,10 @@ function setup(eventId: CaptainWhiskersEventId, waveAmplitude = 1) {
   camera.position.set(0, 0.88, 1.72);
   camera.lookAt(0, 0.55, -0.5);
   const baseCamera = camera.quaternion.clone();
-  const poseRoot = companion.root.getObjectByName('captain-whiskers-pose')!;
+  const poseRoot = companion.root.getObjectByName('carlitos-pose')!;
   const basePose = poseRoot.rotation.clone();
-  const sampleWorldWaveInto = vi.fn((
-    output: { height: number; displacementX: number; displacementZ: number },
-    time: number,
-    _x: number,
-    _z: number,
-    amplitude: number,
-  ) => {
-    output.height = time * amplitude;
-    output.displacementX = amplitude * 0.1;
-    output.displacementZ = amplitude * -0.1;
-  });
   const environment = {
-    captainWhiskers: companion,
+    carlitos: companion,
     camera,
     eventModels: {
       create: vi.fn(),
@@ -55,10 +44,10 @@ function setup(eventId: CaptainWhiskersEventId, waveAmplitude = 1) {
     },
     supplies: {},
     vortexWave: {},
-    sampleWorldWaveInto,
-    readWorldWaveAmplitudeScale: () => waveAmplitude,
+    sampleWorldWaveInto: vi.fn(),
+    readWorldWaveAmplitudeScale: () => 1,
   } as unknown as DedicatedEventEnvironment;
-  const presentation = new CaptainWhiskersEventPresentation(eventId, environment);
+  const presentation = new CarlitosEventPresentation(eventId, environment);
   presentation.stage({ eventId, targetInstanceId: null, variantSeed: 19 });
   return {
     propModels,
@@ -67,20 +56,19 @@ function setup(eventId: CaptainWhiskersEventId, waveAmplitude = 1) {
     baseCamera,
     poseRoot,
     basePose,
-    sampleWorldWaveInto,
     presentation,
   };
 }
 
 function finishReveal(
-  presentation: CaptainWhiskersEventPresentation,
+  presentation: CarlitosEventPresentation,
 ): Promise<void> {
   const reveal = presentation.reveal();
   presentation.update(3, 2);
   return reveal;
 }
 
-describe('CaptainWhiskersEventPresentation', () => {
+describe('CarlitosEventPresentation', () => {
   it('shows the keyed reveal anticipation before decisive travel', async () => {
     const state = setup('sick-companion');
     const reveal = state.presentation.reveal();
@@ -112,104 +100,41 @@ describe('CaptainWhiskersEventPresentation', () => {
     state.propModels.dispose();
   });
 
-  it('shows one separate dark false-cat silhouette', async () => {
+  it('spawns one static dark false-cat opposite Carlitos', async () => {
     const state = setup('shadow-figure');
-
-    await finishReveal(state.presentation);
-
     const falseCat = state.presentation.boatRoot.getObjectByName('shadow-figure:false-cat')!;
     const falseCatMesh = falseCat.getObjectByProperty('type', 'Mesh') as Mesh;
     const falseMaterial = Array.isArray(falseCatMesh.material)
       ? falseCatMesh.material[0]!
       : falseCatMesh.material;
+    const startPosition = falseCat.position.clone();
+    const startRotation = falseCat.rotation.clone();
+    const startScale = falseCat.scale.clone();
     expect(falseCat).not.toBe(state.companion.interactionRoot);
     expect(falseCat.visible).toBe(true);
-    expect((falseMaterial as MeshStandardMaterial).color.getHex()).toBeLessThan(0x303030);
+    expect(falseCat.position.x).toBeCloseTo(-state.companion.root.position.x);
+    expect(falseCat.position.y).toBeCloseTo(state.companion.root.position.y);
+    expect(falseCat.position.z).toBeCloseTo(state.companion.root.position.z);
+    expect(falseCat.rotation.toArray()).toEqual(state.companion.root.rotation.toArray());
+    expect(falseCat.scale.toArray()).toEqual(state.companion.root.scale.toArray());
+    expect(falseMaterial).toBeInstanceOf(MeshStandardMaterial);
+    expect(falseMaterial.name).toBe('shadow-figure-silhouette-material');
+    expect((falseMaterial as MeshStandardMaterial).color.getHex()).toBe(0x030506);
+    expect((falseMaterial as MeshStandardMaterial).map).toBeNull();
+    expect(state.camera.quaternion.equals(state.baseCamera)).toBe(true);
+
+    const reveal = state.presentation.reveal();
+    state.presentation.update(0.3, 0.3);
+    expect(falseCat.visible).toBe(true);
+    expect(falseCat.position.toArray()).toEqual(startPosition.toArray());
+    expect(falseCat.rotation.toArray()).toEqual(startRotation.toArray());
+    expect(falseCat.scale.toArray()).toEqual(startScale.toArray());
+    state.presentation.update(1, 1);
+    await reveal;
 
     state.presentation.clear();
     expect(falseCat.visible).toBe(false);
     expect(state.poseRoot.rotation.toArray()).toEqual(state.basePose.toArray());
-    state.presentation.dispose();
-    state.companion.dispose();
-    state.propModels.dispose();
-  });
-
-  it('shows restrained pooled eyes around the boat', async () => {
-    const state = setup('sea-watcher');
-
-    await finishReveal(state.presentation);
-
-    const eyes = state.presentation.worldRoot.children.filter(
-      ({ name }) => name.startsWith('sea-watcher:eye-'),
-    );
-    expect(eyes).toHaveLength(6);
-    expect(eyes.every(({ visible }) => visible)).toBe(true);
-    const meshes = eyes.map((eye) => eye.getObjectByProperty('type', 'Mesh') as Mesh);
-    expect(new Set(meshes.map(({ geometry }) => geometry))).toHaveLength(1);
-    expect(new Set(meshes.map(({ material }) => material))).toHaveLength(1);
-
-    state.presentation.settleForVisibilityChange();
-    expect(eyes.every(({ visible }) => !visible)).toBe(true);
-    expect(state.poseRoot.rotation.toArray()).toEqual(state.basePose.toArray());
-    state.presentation.dispose();
-    state.companion.dispose();
-    state.propModels.dispose();
-  });
-
-  it('samples Sea Watcher eyes at the exact rendered amplitude', async () => {
-    const state = setup('sea-watcher', 0.37);
-
-    await finishReveal(state.presentation);
-
-    expect(state.sampleWorldWaveInto).toHaveBeenCalled();
-    for (const call of state.sampleWorldWaveInto.mock.calls) {
-      expect(call[4]).toBe(0.37);
-    }
-    state.presentation.dispose();
-    state.companion.dispose();
-    state.propModels.dispose();
-  });
-
-  it.each([
-    ['choice', (state: ReturnType<typeof setup>) => state.presentation.playChoice('sleep')],
-    ['item', (state: ReturnType<typeof setup>) => state.presentation.playItemUse(
-      'spyglass',
-      'spyglass-1' as ItemInstanceId,
-    )],
-    ['result', (state: ReturnType<typeof setup>) => state.presentation.react({
-      outcome: {
-        accepted: true,
-        code: 'event-resolved',
-        message: 'The watcher remains.',
-        deltas: {},
-        cue: 'none',
-      },
-      resourceDeltas: {},
-      gainedInstanceIds: [],
-      brokenInstanceIds: [],
-      lostInstanceIds: [],
-      consumedInstanceIds: [],
-      selectedInstanceId: null,
-      selectedCondition: null,
-      targetInstanceId: null,
-    })],
-  ] as const)('keeps the current Sea Watcher wave time through %s completion', async (
-    _kind,
-    start,
-  ) => {
-    const state = setup('sea-watcher', 0.42);
-    await finishReveal(state.presentation);
-    state.sampleWorldWaveInto.mockClear();
-
-    const active = start(state);
-    state.presentation.update(7.25, 2);
-    const completion = await active;
-
-    const finalEyeSamples = state.sampleWorldWaveInto.mock.calls.slice(-6);
-    expect(finalEyeSamples).toHaveLength(6);
-    expect(finalEyeSamples.every((call) => call[1] === 7.25)).toBe(true);
-    expect(finalEyeSamples.every((call) => call[4] === 0.42)).toBe(true);
-    if (_kind === 'item') expect(completion).toBe(true);
     state.presentation.dispose();
     state.companion.dispose();
     state.propModels.dispose();
@@ -256,17 +181,40 @@ describe('CaptainWhiskersEventPresentation', () => {
 
   it('holds the real companion in an alert guarded-sleep pose', async () => {
     const state = setup('guarded-sleep');
-    const head = state.companion.root.getObjectByName('captain-whiskers-head-pose')!;
+    const head = state.companion.root.getObjectByName('carlitos-head-pose')!;
     const baseHeadYaw = head.rotation.y;
 
     await finishReveal(state.presentation);
 
+    const cameraLocal = state.camera.getWorldPosition(new Vector3());
+    state.poseRoot.parent!.worldToLocal(cameraLocal);
+    const expectedBodyYaw = Math.atan2(
+      -(cameraLocal.x - state.poseRoot.position.x),
+      -(cameraLocal.z - state.poseRoot.position.z),
+    );
+    const cameraPosition = state.camera.getWorldPosition(new Vector3());
+    const targetPosition = state.presentation.itemAimTarget.getWorldPosition(new Vector3());
+    const expectedView = targetPosition.sub(cameraPosition).normalize();
+    const cameraView = state.camera.getWorldDirection(new Vector3());
     expect(state.poseRoot.rotation.x).toBeLessThan(state.basePose.x);
-    expect(Math.abs(head.rotation.y - baseHeadYaw)).toBeGreaterThan(0.1);
+    expect(state.poseRoot.rotation.y).toBeCloseTo(expectedBodyYaw);
+    expect(head.rotation.y).toBe(0);
+    expect(cameraView.dot(expectedView)).toBeGreaterThan(0.999);
 
-    state.presentation.dispose();
+    const choice = state.presentation.playChoice('watch');
+    state.presentation.update(1, 0.3);
+    const heldCameraPosition = state.camera.getWorldPosition(new Vector3());
+    const heldTargetPosition = state.presentation.itemAimTarget.getWorldPosition(new Vector3());
+    const heldExpectedView = heldTargetPosition.sub(heldCameraPosition).normalize();
+    expect(state.camera.getWorldDirection(new Vector3()).dot(heldExpectedView))
+      .toBeGreaterThan(0.999);
+
+    state.presentation.clear();
+    await choice;
     expect(state.poseRoot.rotation.toArray()).toEqual(state.basePose.toArray());
     expect(head.rotation.y).toBe(baseHeadYaw);
+    expect(state.camera.quaternion.equals(state.baseCamera)).toBe(true);
+    state.presentation.dispose();
     state.companion.dispose();
     state.propModels.dispose();
   });
@@ -286,19 +234,18 @@ describe('CaptainWhiskersEventPresentation', () => {
     },
   );
 
-  it.each(['shadow-figure', 'sea-watcher'] as const)(
-    'captures the live sick pose before staging %s',
-    (eventId) => {
+  it('captures the live sick pose before staging Shadow Figure', () => {
+      const eventId = 'shadow-figure';
       const propModels = createTestPropModels();
-      const companion = new CaptainWhiskersPresentation(propModels);
-      const presentation = new CaptainWhiskersEventPresentation(eventId, {
-        captainWhiskers: companion,
+      const companion = new CarlitosPresentation(propModels);
+      const presentation = new CarlitosEventPresentation(eventId, {
+        carlitos: companion,
         camera: new PerspectiveCamera(),
         sampleWorldWaveInto: vi.fn(),
         readWorldWaveAmplitudeScale: () => 1,
       } as unknown as DedicatedEventEnvironment);
-      const poseRoot = companion.root.getObjectByName('captain-whiskers-pose')!;
-      const headRoot = companion.root.getObjectByName('captain-whiskers-head-pose')!;
+      const poseRoot = companion.root.getObjectByName('carlitos-pose')!;
+      const headRoot = companion.root.getObjectByName('carlitos-head-pose')!;
       const constructorRotation = poseRoot.rotation.toArray();
 
       companion.sync({
@@ -323,8 +270,7 @@ describe('CaptainWhiskersEventPresentation', () => {
       presentation.dispose();
       companion.dispose();
       propModels.dispose();
-    },
-  );
+    });
 
   it('disposes each owned false-cat material once', () => {
     const state = setup('shadow-figure');
@@ -345,56 +291,12 @@ describe('CaptainWhiskersEventPresentation', () => {
     state.propModels.dispose();
   });
 
-  it('disposes the pooled eye geometry and material once', () => {
-    const state = setup('sea-watcher');
-    const eye = state.presentation.worldRoot.getObjectByName('sea-watcher:eye-1') as Mesh;
-    const geometryDispose = vi.spyOn(eye.geometry, 'dispose');
-    const material = Array.isArray(eye.material) ? eye.material[0]! : eye.material;
-    const materialDispose = vi.spyOn(material, 'dispose');
-
-    state.presentation.dispose();
-    state.presentation.dispose();
-
-    expect(geometryDispose).toHaveBeenCalledOnce();
-    expect(materialDispose).toHaveBeenCalledOnce();
-    state.companion.dispose();
-    state.propModels.dispose();
-  });
-
-  it('rolls back owned resources when construction fails', () => {
-    const propModels = createTestPropModels();
-    const companion = new CaptainWhiskersPresentation(propModels);
-    companion.sync({
-      alive: true, hunger: 5, sickness: 0, unhappiness: 0,
-      pettedToday: false, deathCause: null,
-    });
-    const geometryDispose = vi.spyOn(SphereGeometry.prototype, 'dispose');
-    const materialDispose = vi.spyOn(MeshStandardMaterial.prototype, 'dispose');
-    const failure = new Error('eye construction failed');
-
-    expect(() => new CaptainWhiskersEventPresentation('sea-watcher', {
-      captainWhiskers: companion,
-      camera: new PerspectiveCamera(),
-    } as DedicatedEventEnvironment, {
-      onEyeCreated: (eye) => {
-        if (eye.name === 'sea-watcher:eye-2') throw failure;
-      },
-    })).toThrow(failure);
-
-    expect(geometryDispose).toHaveBeenCalledOnce();
-    expect(materialDispose).toHaveBeenCalledOnce();
-    geometryDispose.mockRestore();
-    materialDispose.mockRestore();
-    companion.dispose();
-    propModels.dispose();
-  });
-
   it('removes a shared-pose aim target when construction fails after attachment', () => {
     const root = new Group();
     const poseRoot = new Group();
     const headRoot = new Group();
-    poseRoot.name = 'captain-whiskers-pose';
-    headRoot.name = 'captain-whiskers-head-pose';
+    poseRoot.name = 'carlitos-pose';
+    headRoot.name = 'carlitos-head-pose';
     root.add(poseRoot, headRoot);
     const failure = new Error('aim target attachment failed');
     const add = poseRoot.add.bind(poseRoot);
@@ -403,8 +305,8 @@ describe('CaptainWhiskersEventPresentation', () => {
       throw failure;
     };
 
-    expect(() => new CaptainWhiskersEventPresentation('sick-companion', {
-      captainWhiskers: { root },
+    expect(() => new CarlitosEventPresentation('sick-companion', {
+      carlitos: { root },
     } as DedicatedEventEnvironment)).toThrow(failure);
 
     expect(poseRoot.getObjectByName('sick-companion-item-aim-target')).toBeUndefined();

@@ -125,7 +125,7 @@ function fallbackTemplate(id: SurvivalEventModelId): Group {
     addPart('Chest_Top', [1.15, 0.3, 0.78], 0.42);
   } else {
     const dimensions: readonly [number, number, number] = id === 'driftingBottle'
-      ? [0.18, 0.18, 0.68]
+      ? [0.18, 0.68, 0.18]
       : id === 'checkBackFish' ? [1.05, 0.42, 0.3]
         : id === 'flowers' ? [0.9, 0.08, 0.75]
           : [1, 0.72, 0.72];

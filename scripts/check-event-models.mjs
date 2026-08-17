@@ -15,7 +15,7 @@ import {
 } from './poly-pizza-event-models.mjs';
 
 const EVENT_SOURCES = Object.freeze({
-  driftingLootBarrel: Object.freeze({
+  driftingBarrel: Object.freeze({
     publicId: 'cu9GJ0j13fj',
     resourceId: '2244f3ae-5583-4ea0-b980-6fdd0084cee7',
     sha256: '89031BAAA180FD8040C8C2A27F56AC479BD6FE8A7C4EC5495D1433D185840EF5',
@@ -24,16 +24,6 @@ const EVENT_SOURCES = Object.freeze({
     title: 'Barrel',
     creator: 'Don Carson',
     license: 'CC BY 3.0',
-  }),
-  driftingLootCrate: Object.freeze({
-    publicId: '3VGWnZPXmG',
-    resourceId: '720097e2-63ed-4e5f-9b66-eb416942eea0',
-    sha256: '4FB00BA01EEFEA3F1A335A6D3ACC67E8F4E093B9FC227673B82F67E12E098D6E',
-    triangles: 784,
-    maxTriangles: 2_000,
-    title: 'Crate',
-    creator: 'Quaternius',
-    license: 'CC0 1.0',
   }),
   driftingBottle: Object.freeze({
     publicId: '13g9ucgxbHV',

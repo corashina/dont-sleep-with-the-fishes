@@ -10,6 +10,7 @@ import {
   eventItemActionCueProgresses,
   eventItemOutcomeDuration,
   eventItemUseDuration,
+  eventItemUseDurationForItem,
   sampleEventItemOutcome,
   sampleEventItemUse,
   type EventItemDisposition,
@@ -91,7 +92,7 @@ export class EventItemUseController {
         request,
         actor,
         elapsed: 0,
-        duration: eventItemUseDuration(request.context),
+        duration: eventItemUseDurationForItem(request.context, request.itemId),
         nextActionCueIndex: 0,
         resolve,
       };

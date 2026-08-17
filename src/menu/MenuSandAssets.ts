@@ -8,9 +8,8 @@ import {
   Texture,
   TextureLoader,
 } from 'three';
-import middleSandUrl from '../assets/menu-sand/ground054-color.jpg';
-import nearSandUrl from '../assets/menu-sand/ground055l-color.jpg';
-import farSandUrl from '../assets/menu-sand/ground079s-color.jpg';
+import smoothSandUrl from '../assets/menu-sand/aerial-beach-01-diffuse.jpg';
+import coarseSandUrl from '../assets/menu-sand/sandy-gravel-diffuse.jpg';
 
 export interface MenuSandTextureLoader {
   loadAsync(url: string): Promise<Texture>;
@@ -27,18 +26,16 @@ export class MenuSandAssets {
   private disposed = false;
 
   private constructor(
-    readonly near: Texture,
-    readonly middle: Texture,
-    readonly far: Texture,
+    readonly smooth: Texture,
+    readonly coarse: Texture,
   ) {}
 
   static async load(
     loader: MenuSandTextureLoader = new TextureLoader(),
   ): Promise<MenuSandAssets> {
     const results = await Promise.allSettled([
-      loader.loadAsync(nearSandUrl),
-      loader.loadAsync(middleSandUrl),
-      loader.loadAsync(farSandUrl),
+      loader.loadAsync(smoothSandUrl),
+      loader.loadAsync(coarseSandUrl),
     ]);
     const failure = results.find(
       (result): result is PromiseRejectedResult => result.status === 'rejected',
@@ -59,20 +56,19 @@ export class MenuSandAssets {
     const textures = results.map((result) => (
       result as PromiseFulfilledResult<Texture>
     ).value);
-    return new MenuSandAssets(textures[0]!, textures[1]!, textures[2]!);
+    return new MenuSandAssets(textures[0]!, textures[1]!);
   }
 
   static fromTextures(
-    near: Texture,
-    middle: Texture,
-    far: Texture,
+    smooth: Texture,
+    coarse: Texture,
   ): MenuSandAssets {
-    return new MenuSandAssets(near, middle, far);
+    return new MenuSandAssets(smooth, coarse);
   }
 
   configure(maxAnisotropy: number): void {
     const anisotropy = Math.max(1, Math.min(8, Math.floor(maxAnisotropy)));
-    for (const texture of [this.near, this.middle, this.far]) {
+    for (const texture of [this.smooth, this.coarse]) {
       texture.wrapS = RepeatWrapping;
       texture.wrapT = RepeatWrapping;
       texture.magFilter = LinearFilter;
@@ -88,7 +84,7 @@ export class MenuSandAssets {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    new Set([this.near, this.middle, this.far]).forEach((texture) => {
+    new Set([this.smooth, this.coarse]).forEach((texture) => {
       texture.dispose();
     });
   }

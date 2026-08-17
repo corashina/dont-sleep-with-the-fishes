@@ -1,28 +1,28 @@
 import type { RandomSource } from './survivalTypes';
 
-export type CaptainWhiskersDeathCause =
-  | 'starvation' | 'sickness' | 'misery' | 'sea-watcher';
+export type CarlitosDeathCause =
+  | 'starvation' | 'sickness' | 'misery';
 
-export interface CaptainWhiskersState {
+export interface CarlitosState {
   alive: boolean;
   hunger: number;
   sickness: number;
   unhappiness: number;
   pettedToday: boolean;
-  deathCause: CaptainWhiskersDeathCause | null;
+  deathCause: CarlitosDeathCause | null;
 }
 
-export type CaptainWhiskersSnapshot = Readonly<CaptainWhiskersState>;
+export type CarlitosSnapshot = Readonly<CarlitosState>;
 
-export interface CaptainWhiskersStatus {
+export interface CarlitosStatus {
   readonly hunger: 'Satiated' | 'Peckish' | 'Hungry' | 'Starving';
   readonly health: 'Healthy' | 'Unwell' | 'Sick' | 'Dying' | 'Dead';
   readonly happiness: 'Happy' | 'Bored' | 'Lonely' | 'Depressed' | 'Miserable';
 }
 
-export function createCaptainWhiskersState(
-  initial: Partial<CaptainWhiskersSnapshot> = {},
-): CaptainWhiskersState {
+export function createCarlitosState(
+  initial: Partial<CarlitosSnapshot> = {},
+): CarlitosState {
   return {
     alive: true,
     hunger: 5,
@@ -34,7 +34,7 @@ export function createCaptainWhiskersState(
   };
 }
 
-export function captainWhiskersStatus(state: CaptainWhiskersSnapshot): CaptainWhiskersStatus {
+export function carlitosStatus(state: CarlitosSnapshot): CarlitosStatus {
   return {
     hunger: hungerStatus(state.hunger),
     health: healthStatus(state.sickness),
@@ -42,11 +42,11 @@ export function captainWhiskersStatus(state: CaptainWhiskersSnapshot): CaptainWh
   };
 }
 
-export function captainWhiskersWellness(state: CaptainWhiskersSnapshot): number {
+export function carlitosWellness(state: CarlitosSnapshot): number {
   return clampNeed(state.hunger) - clampNeed(state.sickness) - unhappinessPenalty(state.unhappiness);
 }
 
-export function petCaptainWhiskers(state: CaptainWhiskersState): boolean {
+export function petCarlitos(state: CarlitosState): boolean {
   if (!state.alive || state.pettedToday) {
     return false;
   }
@@ -56,7 +56,7 @@ export function petCaptainWhiskers(state: CaptainWhiskersState): boolean {
   return true;
 }
 
-export function feedCaptainWhiskers(state: CaptainWhiskersState): boolean {
+export function feedCarlitos(state: CarlitosState): boolean {
   if (!state.alive) {
     return false;
   }
@@ -68,7 +68,7 @@ export function feedCaptainWhiskers(state: CaptainWhiskersState): boolean {
   return true;
 }
 
-export function treatCaptainWhiskers(state: CaptainWhiskersState): boolean {
+export function treatCarlitos(state: CarlitosState): boolean {
   if (!state.alive) {
     return false;
   }
@@ -80,9 +80,9 @@ export function treatCaptainWhiskers(state: CaptainWhiskersState): boolean {
   return true;
 }
 
-export function killCaptainWhiskers(
-  state: CaptainWhiskersState,
-  cause: CaptainWhiskersDeathCause,
+export function killCarlitos(
+  state: CarlitosState,
+  cause: CarlitosDeathCause,
 ): boolean {
   if (!state.alive) {
     return false;
@@ -93,10 +93,10 @@ export function killCaptainWhiskers(
   return true;
 }
 
-export function advanceCaptainWhiskersDawn(
-  state: CaptainWhiskersState,
+export function advanceCarlitosDawn(
+  state: CarlitosState,
   random: RandomSource,
-): CaptainWhiskersSnapshot {
+): CarlitosSnapshot {
   if (!state.alive) {
     return state;
   }
@@ -109,7 +109,7 @@ export function advanceCaptainWhiskersDawn(
     state.hunger -= 1;
   }
   if (state.hunger === 0) {
-    killCaptainWhiskers(state, 'starvation');
+    killCarlitos(state, 'starvation');
     return state;
   }
 
@@ -117,7 +117,7 @@ export function advanceCaptainWhiskersDawn(
     state.sickness = clampNeed(state.sickness + 1);
   }
   if (state.sickness === 5) {
-    killCaptainWhiskers(state, 'sickness');
+    killCarlitos(state, 'sickness');
     return state;
   }
 
@@ -129,7 +129,7 @@ export function advanceCaptainWhiskersDawn(
     state.unhappiness += 1;
   }
   if (state.unhappiness > 10 && random.next() < 0.45) {
-    killCaptainWhiskers(state, 'misery');
+    killCarlitos(state, 'misery');
     return state;
   }
 
@@ -137,14 +137,14 @@ export function advanceCaptainWhiskersDawn(
   return state;
 }
 
-function hungerStatus(hunger: number): CaptainWhiskersStatus['hunger'] {
+function hungerStatus(hunger: number): CarlitosStatus['hunger'] {
   if (hunger >= 5) return 'Satiated';
   if (hunger === 4) return 'Peckish';
   if (hunger >= 2) return 'Hungry';
   return 'Starving';
 }
 
-function healthStatus(sickness: number): CaptainWhiskersStatus['health'] {
+function healthStatus(sickness: number): CarlitosStatus['health'] {
   if (sickness <= 0) return 'Healthy';
   if (sickness === 1) return 'Unwell';
   if (sickness <= 3) return 'Sick';
@@ -152,7 +152,7 @@ function healthStatus(sickness: number): CaptainWhiskersStatus['health'] {
   return 'Dead';
 }
 
-function happinessStatus(unhappiness: number): CaptainWhiskersStatus['happiness'] {
+function happinessStatus(unhappiness: number): CarlitosStatus['happiness'] {
   if (unhappiness <= 2) return 'Happy';
   if (unhappiness <= 4) return 'Bored';
   if (unhappiness <= 6) return 'Lonely';

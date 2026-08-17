@@ -39,8 +39,8 @@ describe('map item use animation', () => {
     expect(leftLook.cameraYaw).toBeCloseTo(0.2);
     expect(rightLook.cameraYaw).toBeCloseTo(-0.2);
     expect(centered.cameraYaw).toBe(0);
-    expect(leftLook.cameraPitch).toBeCloseTo(0.26);
-    expect(rightLook.cameraPitch).toBeCloseTo(0.26);
+    expect(leftLook.cameraPitch).toBe(0);
+    expect(rightLook.cameraPitch).toBe(0);
     expect(centered.cameraPitch).toBe(0);
     expect(leftLook.roll).toBe(0);
     expect(rightLook.roll).toBe(0);

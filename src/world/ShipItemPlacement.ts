@@ -12,10 +12,7 @@ import {
   type ShipFurnitureKind,
   type ShipRouteMetric,
 } from './ShipLayout';
-import {
-  CAPTAIN_WHISKERS_SUPPORT_LIFT,
-  ITEM_MODEL_SPECS,
-} from './itemModelManifest';
+import { ITEM_MODEL_SPECS } from './itemModelManifest';
 
 export interface ShipItemSurface {
   readonly id: string;
@@ -314,7 +311,7 @@ function scavengingRestingRotation(itemId: ItemId, surface: ShipItemSurface): Eu
     return new Euler(0, surfaceRotation.y + UMBRELLA_FLOOR_ANGLE, UMBRELLA_REST_TILT);
   }
   const rotation = surfaceRotation.clone();
-  if (itemId === 'captainWhiskers') {
+  if (itemId === 'carlitos') {
     rotation.y = Math.atan2(surface.position.x, surface.position.z);
   }
   return rotation;
@@ -324,7 +321,7 @@ function surfaceFit(surface: ShipItemSurface, itemId: ItemId): SurfaceFit | unde
   const rotation = scavengingRestingRotation(itemId, surface);
   const fitBounds = orientedItemBounds(
     itemId,
-    itemId === 'anchor' || itemId === 'ductTape' || itemId === 'captainWhiskers'
+    itemId === 'anchor' || itemId === 'ductTape' || itemId === 'carlitos'
       ? rotation
       : surface.rotation,
   );
@@ -339,9 +336,6 @@ function surfaceFit(surface: ShipItemSurface, itemId: ItemId): SurfaceFit | unde
   if (!Number.isFinite(scale) || scale < MIN_UNIFORM_SCALE - EPSILON) return undefined;
   const bounds = orientedItemBounds(itemId, rotation);
   const position = surface.position.clone();
-  if (itemId === 'captainWhiskers') {
-    position.y += CAPTAIN_WHISKERS_SUPPORT_LIFT * scale;
-  }
   position.y -= (itemId === 'umbrella' ? UMBRELLA_REST_MIN_Y : bounds.min.y) * scale;
   const itemCenter = bounds.getCenter(new Vector3()).multiplyScalar(scale).add(position);
   if (!surface.standingPoints.some((point) => {

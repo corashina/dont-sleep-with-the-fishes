@@ -137,8 +137,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
   private readonly wrist = new Group();
   private readonly handPose = new Group();
   private readonly handVisual = new Group();
-  private readonly fingertips = new Group();
-  private readonly drain = new Group();
   private readonly paymentActors = new Group();
   private readonly rewardActors = new Group();
   private readonly staticGeometries = new Set<BufferGeometry>();
@@ -206,18 +204,12 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.handVisual.userData.facesPlayer = true;
     this.handVisual.userData.outsideHull = true;
     this.handVisual.userData.idleMotion = 'restrained';
-    this.fingertips.name = 'handyman-fingertips';
-    this.drain.name = 'handyman-joint-drain';
     this.paymentActors.name = 'handyman-payment-actors';
     this.rewardActors.name = 'handyman-reward-actors';
 
     this.buildHand();
-    this.buildFingertips();
-    this.buildDrain();
     this.handPose.add(
       this.handVisual,
-      this.fingertips,
-      this.drain,
       this.paymentActors,
       this.rewardActors,
     );
@@ -248,7 +240,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.wristMotionBase.copy(WRIST_HIDDEN);
     this.resetStaticActors();
     this.root.userData.state = 'staged';
-    this.root.userData.revealOrder = [];
     this.root.userData.hullTaps = 0;
     this.root.userData.paymentEnteredPalm = false;
     this.root.userData.paymentInPalm = false;
@@ -354,9 +345,10 @@ export class HandymanPresentation implements FocusedEventPresentation {
       {
         id: 'handyman:hand',
         label: 'HAND',
-        description: 'Reach toward the waiting hand.',
+        description: 'Touch the waiting hand.',
         choiceId: 'touch',
         root: this.handVisual,
+        tooltip: false,
         minimumHitWidth: 82,
         minimumHitHeight: 82,
       },
@@ -460,39 +452,13 @@ export class HandymanPresentation implements FocusedEventPresentation {
   }
 
   private applyReveal(progress: number): void {
-    if (progress > 0) {
-      this.fingertips.visible = true;
-      if ((this.root.userData.revealOrder as string[]).length === 0) {
-        (this.root.userData.revealOrder as string[]).push('fingertips');
-      }
-    }
-    if (progress < 0.28) {
-      this.handVisual.visible = false;
-      this.wristMotionBase.lerpVectors(
-        WRIST_HIDDEN,
-        WRIST_BASE,
-        smoothstep(progress / 0.42) * 0.42,
-      );
-      return;
-    }
-    if (!this.handVisual.visible) {
-      this.handVisual.visible = true;
-      this.fingertips.visible = false;
-      (this.root.userData.revealOrder as string[]).push('palm');
-    }
-    const rise = keyedTravel((progress - 0.28) / 0.54);
+    this.handVisual.visible = true;
+    const rise = keyedTravel(progress);
     this.wristMotionBase.lerpVectors(
       WRIST_HIDDEN,
       WRIST_BASE,
       rise,
     );
-    this.drain.visible = progress > 0.36 && progress < 0.86;
-    for (let index = 0; index < this.drain.children.length; index += 1) {
-      const drop = this.drain.children[index]!;
-      const local = clamp01((progress - 0.36 - index * 0.06) / 0.4);
-      drop.position.y = 0.18 - local * (0.7 + index * 0.12);
-      drop.scale.setScalar(Math.max(0.08, 1 - local));
-    }
     const tapWindow = clamp01((progress - 0.82) / 0.18);
     const tap = Math.sin(tapWindow * Math.PI);
     this.handPose.rotation.z = -tap * 0.055;
@@ -980,8 +946,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.handVisual.userData.wristDrift = 0;
     this.handVisual.userData.fingerTension = 0;
     this.handVisual.visible = false;
-    this.fingertips.visible = false;
-    this.drain.visible = false;
     this.setFingerBend(0);
     this.root.userData.cameraEnclosed = false;
     this.root.userData.cameraGrabbed = false;
@@ -1153,42 +1117,4 @@ export class HandymanPresentation implements FocusedEventPresentation {
     }
   }
 
-  private buildFingertips(): void {
-    const skin = createMaterial(0x9b8069, 0.96);
-    const positions = [
-      [-0.58, 0.08, 0.28],
-      [-0.2, 0.12, 0.4],
-      [0.18, 0.14, 0.44],
-      [0.55, 0.1, 0.35],
-    ] as const;
-    for (let index = 0; index < positions.length; index += 1) {
-      const [x, y, z] = positions[index]!;
-      const tip = new Mesh(
-        new SphereGeometry(0.16, 7, 5),
-        skin,
-      );
-      tip.name = `handyman-fingertip-${index + 1}`;
-      tip.position.set(x, y, z);
-      tip.scale.set(0.82, 1.35, 0.9);
-      this.fingertips.add(tip);
-    }
-  }
-
-  private buildDrain(): void {
-    const water = createMaterial(0x537b82, 0.68);
-    for (let index = 0; index < 4; index += 1) {
-      const drop = new Mesh(
-        new SphereGeometry(0.055 + index * 0.008, 6, 4),
-        water,
-      );
-      drop.name = `handyman-joint-drop-${index + 1}`;
-      drop.position.set(
-        -0.48 + index * 0.31,
-        0.18,
-        0.34 - index * 0.1,
-      );
-      drop.scale.set(0.72, 1.4, 0.72);
-      this.drain.add(drop);
-    }
-  }
 }

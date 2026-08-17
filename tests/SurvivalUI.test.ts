@@ -159,13 +159,13 @@ function openContextualEvent(ui: SurvivalUI): void {
   ]);
 }
 
-const captainWhiskersAnchor = (x = 720, y = 360) => ({
-  id: 'captain-whiskers',
+const carlitosAnchor = (x = 720, y = 360) => ({
+  id: 'carlitos',
   itemType: null,
   toolId: null,
   action: null,
-  companionId: 'captainWhiskers' as const,
-  label: 'CAPTAIN WHISKERS',
+  companionId: 'carlitos' as const,
+  label: 'CARLITOS',
   description: 'Check his hunger, happiness, and health.',
   remainingUses: null,
   x,
@@ -233,15 +233,15 @@ describe('SurvivalUI', () => {
     );
   });
 
-  it('opens the compact Whiskers card with status and short unavailable labels', () => {
+  it('opens the compact Carlitos card with status and short unavailable labels', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
     const action = vi.fn();
     ui.onAction = action;
-    ui.setAnchors([captainWhiskersAnchor()]);
+    ui.setAnchors([carlitosAnchor()]);
     ui.render(snapshot({
-      captainWhiskers: {
+      carlitos: {
         alive: true,
         hunger: 4,
         sickness: 2,
@@ -250,43 +250,43 @@ describe('SurvivalUI', () => {
         deathCause: null,
       },
     }), (action) => ({
-      petWhiskers: 'Captain Whiskers has already been petted today.',
-      feedWhiskers: 'No food remains.',
-      treatWhiskers: 'No medical kit remains.',
+      petCarlitos: 'Carlitos has already been petted today.',
+      feedCarlitos: 'No food remains.',
+      treatCarlitos: 'No medical kit remains.',
     } as Partial<Record<string, string>>)[action] ?? null);
 
     const anchor = mount.querySelector<HTMLButtonElement>(
-      '[data-anchor-id="captain-whiskers"]',
+      '[data-anchor-id="carlitos"]',
     )!;
     anchor.focus();
-    press('[data-anchor-id="captain-whiskers"]', 'Enter');
+    press('[data-anchor-id="carlitos"]', 'Enter');
 
-    const card = mount.querySelector<HTMLElement>('[data-whiskers-card]')!;
+    const card = mount.querySelector<HTMLElement>('[data-carlitos-card]')!;
     expect(card.hidden).toBe(false);
-    expect(card.querySelector('[data-whiskers-hunger-label]')?.textContent).toBe('PECKISH');
-    expect(card.querySelectorAll('[data-whiskers-hunger-step][data-filled="true"]')).toHaveLength(4);
-    expect(card.querySelector('[data-whiskers-happiness]')?.textContent).toBe('LONELY');
-    expect(card.querySelector('[data-whiskers-health]')?.textContent).toBe('SICK');
+    expect(card.querySelector('[data-carlitos-hunger-label]')?.textContent).toBe('PECKISH');
+    expect(card.querySelectorAll('[data-carlitos-hunger-step][data-filled="true"]')).toHaveLength(4);
+    expect(card.querySelector('[data-carlitos-happiness]')?.textContent).toBe('LONELY');
+    expect(card.querySelector('[data-carlitos-health]')?.textContent).toBe('SICK');
     expect(card.textContent).not.toContain('CREWMATE STATUS');
     expect(card.textContent).not.toContain("SHIP'S CAT");
     expect(card.textContent).not.toContain('DANGER');
     for (const [actionId, reason, shortReason] of [
-      ['petWhiskers', 'Captain Whiskers has already been petted today.', 'PETTED'],
-      ['feedWhiskers', 'No food remains.', 'NO FOOD'],
-      ['treatWhiskers', 'No medical kit remains.', 'NO KIT'],
+      ['petCarlitos', 'Carlitos has already been petted today.', 'PETTED'],
+      ['feedCarlitos', 'No food remains.', 'NO FOOD'],
+      ['treatCarlitos', 'No medical kit remains.', 'NO KIT'],
     ] as const) {
       const button = card.querySelector<HTMLButtonElement>(`[data-action="${actionId}"]`)!;
       expect(button.getAttribute('aria-disabled')).toBe('true');
       expect(button.getAttribute('aria-description')).toBe(reason);
-      expect(button.querySelector('[data-whiskers-action-reason]')?.textContent).toBe(shortReason);
+      expect(button.querySelector('[data-carlitos-action-reason]')?.textContent).toBe(shortReason);
       button.click();
     }
     expect(action).not.toHaveBeenCalled();
-    expect(document.activeElement).toBe(card.querySelector('[data-action="petWhiskers"]'));
+    expect(document.activeElement).toBe(card.querySelector('[data-action="petCarlitos"]'));
     expect(mount.querySelector('[data-pause]')?.contains(card)).toBe(false);
   });
 
-  it('supports Whiskers pointer, keyboard, dismissal, focus, and action flows', () => {
+  it('supports Carlitos pointer, keyboard, dismissal, focus, and action flows', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -294,9 +294,9 @@ describe('SurvivalUI', () => {
     const pause = vi.fn();
     ui.onAction = action;
     ui.onPauseChange = pause;
-    ui.setAnchors([captainWhiskersAnchor(1000, 760)]);
+    ui.setAnchors([carlitosAnchor(1000, 760)]);
     ui.render(snapshot({
-      captainWhiskers: {
+      carlitos: {
         alive: true,
         hunger: 3,
         sickness: 1,
@@ -307,27 +307,27 @@ describe('SurvivalUI', () => {
     }), () => null);
 
     const anchor = mount.querySelector<HTMLButtonElement>(
-      '[data-anchor-id="captain-whiskers"]',
+      '[data-anchor-id="carlitos"]',
     )!;
-    const card = mount.querySelector<HTMLElement>('[data-whiskers-card]')!;
+    const card = mount.querySelector<HTMLElement>('[data-carlitos-card]')!;
     anchor.click();
     expect(card.hidden).toBe(false);
-    expect(Number.parseFloat(card.style.getPropertyValue('--whiskers-card-x'))).toBeGreaterThanOrEqual(16);
-    expect(Number.parseFloat(card.style.getPropertyValue('--whiskers-card-y'))).toBeGreaterThanOrEqual(16);
-    card.querySelector<HTMLButtonElement>('[data-action="petWhiskers"]')!.click();
-    card.querySelector<HTMLButtonElement>('[data-action="feedWhiskers"]')!.click();
-    card.querySelector<HTMLButtonElement>('[data-action="treatWhiskers"]')!.click();
+    expect(Number.parseFloat(card.style.getPropertyValue('--carlitos-card-x'))).toBeGreaterThanOrEqual(16);
+    expect(Number.parseFloat(card.style.getPropertyValue('--carlitos-card-y'))).toBeGreaterThanOrEqual(16);
+    card.querySelector<HTMLButtonElement>('[data-action="petCarlitos"]')!.click();
+    card.querySelector<HTMLButtonElement>('[data-action="feedCarlitos"]')!.click();
+    card.querySelector<HTMLButtonElement>('[data-action="treatCarlitos"]')!.click();
     expect(action.mock.calls).toEqual([
-      ['petWhiskers', undefined],
-      ['feedWhiskers', undefined],
-      ['treatWhiskers', undefined],
+      ['petCarlitos', undefined],
+      ['feedCarlitos', undefined],
+      ['treatCarlitos', undefined],
     ]);
 
-    card.querySelector<HTMLButtonElement>('[data-whiskers-close]')!.click();
+    card.querySelector<HTMLButtonElement>('[data-carlitos-close]')!.click();
     expect(card.hidden).toBe(true);
     expect(document.activeElement).toBe(anchor);
 
-    press('[data-anchor-id="captain-whiskers"]', ' ');
+    press('[data-anchor-id="carlitos"]', ' ');
     expect(card.hidden).toBe(false);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(card.hidden).toBe(true);
@@ -353,12 +353,12 @@ describe('SurvivalUI', () => {
     expect(document.activeElement).not.toBe(anchor);
   });
 
-  it('clamps the Whiskers card inside the right and bottom viewport gutters', () => {
+  it('clamps the Carlitos card inside the right and bottom viewport gutters', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
     const root = mount.querySelector<HTMLElement>('.survival-ui')!;
-    const card = mount.querySelector<HTMLElement>('[data-whiskers-card]')!;
+    const card = mount.querySelector<HTMLElement>('[data-carlitos-card]')!;
     const viewport = {
       x: 0, y: 0, top: 0, left: 0, right: 800, bottom: 600,
       width: 800, height: 600, toJSON: () => ({}),
@@ -369,9 +369,9 @@ describe('SurvivalUI', () => {
     };
     vi.spyOn(root, 'getBoundingClientRect').mockReturnValue(viewport);
     vi.spyOn(card, 'getBoundingClientRect').mockReturnValue(measuredCard);
-    ui.setAnchors([captainWhiskersAnchor(850, 590)]);
+    ui.setAnchors([carlitosAnchor(850, 590)]);
     ui.render(snapshot({
-      captainWhiskers: {
+      carlitos: {
         alive: true,
         hunger: 4,
         sickness: 0,
@@ -381,21 +381,21 @@ describe('SurvivalUI', () => {
       },
     }), () => null);
 
-    mount.querySelector<HTMLButtonElement>('[data-anchor-id="captain-whiskers"]')!.click();
+    mount.querySelector<HTMLButtonElement>('[data-anchor-id="carlitos"]')!.click();
 
-    const x = Number.parseFloat(card.style.getPropertyValue('--whiskers-card-x'));
-    const y = Number.parseFloat(card.style.getPropertyValue('--whiskers-card-y'));
+    const x = Number.parseFloat(card.style.getPropertyValue('--carlitos-card-x'));
+    const y = Number.parseFloat(card.style.getPropertyValue('--carlitos-card-y'));
     expect(x).toBe(viewport.width - 16 - measuredCard.width);
     expect(y).toBe(viewport.height - 16 - measuredCard.height);
     expect(x + measuredCard.width).toBeLessThanOrEqual(viewport.width - 16);
     expect(y + measuredCard.height).toBeLessThanOrEqual(viewport.height - 16);
   });
 
-  it('closes the Whiskers card when Captain Whiskers dies', () => {
+  it('closes the Carlitos card when Carlitos dies', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
-    ui.setAnchors([captainWhiskersAnchor()]);
+    ui.setAnchors([carlitosAnchor()]);
     const living = {
       alive: true,
       hunger: 4,
@@ -404,12 +404,12 @@ describe('SurvivalUI', () => {
       pettedToday: false,
       deathCause: null,
     } as const;
-    ui.render(snapshot({ captainWhiskers: living }), () => null);
-    mount.querySelector<HTMLButtonElement>('[data-anchor-id="captain-whiskers"]')!.click();
+    ui.render(snapshot({ carlitos: living }), () => null);
+    mount.querySelector<HTMLButtonElement>('[data-anchor-id="carlitos"]')!.click();
     ui.render(snapshot({
-      captainWhiskers: { ...living, alive: false, deathCause: 'sickness' },
+      carlitos: { ...living, alive: false, deathCause: 'sickness' },
     }), () => null);
-    expect(mount.querySelector<HTMLElement>('[data-whiskers-card]')!.hidden).toBe(true);
+    expect(mount.querySelector<HTMLElement>('[data-carlitos-card]')!.hidden).toBe(true);
   });
 
   it('shows only the kidnapped ending title', () => {
@@ -448,9 +448,53 @@ describe('SurvivalUI', () => {
     expect(labels('[data-event-choice]')).toEqual(['RETRIEVE', 'LEAVE IT']);
     const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
     expect(caption.classList).toContain('is-visible');
-    expect(caption.querySelector('[data-event-title]')?.textContent).toBe('A SHADOW');
+    expect(caption.querySelector<HTMLElement>('[data-event-title]')?.hidden).toBe(true);
+    expect(caption.querySelector('[data-event-title]')?.textContent).toBe('');
     expect(caption.querySelector<HTMLElement>('[data-event-detail]')?.hidden).toBe(true);
     expect(caption.querySelector<HTMLElement>('[data-event-risk]')?.hidden).toBe(true);
+  });
+
+  it('uses the Handyman hand as a tooltip-free world choice', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const onEventChoice = vi.fn();
+    const onAnchorHighlight = vi.fn();
+    ui.onEventChoice = onEventChoice;
+    ui.onAnchorHighlight = onAnchorHighlight;
+    ui.setAnchors([{
+      id: 'handyman:hand',
+      label: 'HAND',
+      description: 'Touch the waiting hand.',
+      tooltip: false,
+      eventChoiceId: 'touch',
+      itemType: null,
+      toolId: null,
+      action: null,
+      remainingUses: null,
+      x: 240,
+      y: 180,
+      visible: true,
+      depleted: false,
+    }]);
+    ui.beginEventPresentation();
+    void ui.showEventReveal(eventWithChoices('touch'));
+    ui.setEventSelection(new Map(), [{
+      id: 'touch',
+      label: 'Touch the Hand',
+      unavailableReason: null,
+      anchorId: 'handyman:hand',
+    }]);
+
+    const hand = mount.querySelector<HTMLButtonElement>('[data-anchor-id="handyman:hand"]')!;
+    expect(mount.querySelector('[data-event-choices] [data-event-choice="touch"]')).toBeNull();
+    expect(hand.querySelector('[role="tooltip"]')).toBeNull();
+    expect(hand.getAttribute('aria-label')).toBe('HAND');
+
+    hand.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(onAnchorHighlight).toHaveBeenLastCalledWith('handyman:hand');
+    hand.click();
+    expect(onEventChoice).toHaveBeenCalledExactlyOnceWith('touch');
   });
 
   it('activates a focused contextual choice with the keyboard', () => {
@@ -556,7 +600,7 @@ describe('SurvivalUI', () => {
     expect(onEventItem).not.toHaveBeenCalled();
   });
 
-  it('routes Drifting Loot through its projected prop instead of a response button', () => {
+  it('routes Drifting Cargo through its projected prop instead of a response button', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -566,7 +610,7 @@ describe('SurvivalUI', () => {
     ui.onAnchorHighlight = highlighted;
     ui.setAnchors([
       {
-        id: 'drifting-loot',
+        id: 'drifting-barrel',
         label: 'CRATE',
         description: 'Floating salvage within reach.',
         eventChoiceId: 'retrieve',
@@ -598,7 +642,7 @@ describe('SurvivalUI', () => {
         id: 'retrieve',
         label: 'Retrieve It',
         unavailableReason: null,
-        anchorId: 'drifting-loot',
+        anchorId: 'drifting-barrel',
         energyCost: 3,
       },
       { id: 'sleep', label: 'Let It Drift', unavailableReason: null },
@@ -610,7 +654,7 @@ describe('SurvivalUI', () => {
       ),
     ).toBeNull();
     const loot = mount.querySelector<HTMLButtonElement>(
-      '[data-anchor-id="drifting-loot"]',
+      '[data-anchor-id="drifting-barrel"]',
     )!;
     expect(loot.querySelector('[role="tooltip"]')?.textContent)
       .toBe('CRATE — ⚡⚡⚡');
@@ -621,10 +665,10 @@ describe('SurvivalUI', () => {
       'data-event-choice',
     )).toBe('sleep');
     loot.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
-    expect(highlighted).toHaveBeenLastCalledWith('drifting-loot');
+    expect(highlighted).toHaveBeenLastCalledWith('drifting-barrel');
     loot.click();
     loot.focus();
-    press('[data-anchor-id="drifting-loot"]', 'Enter');
+    press('[data-anchor-id="drifting-barrel"]', 'Enter');
     expect(selected.mock.calls).toEqual([['retrieve'], ['retrieve']]);
     expect(mainStyles).toMatch(
       /\.boat-anchor\s*\{[^}]*cursor:\s*pointer;/s,
@@ -644,14 +688,14 @@ describe('SurvivalUI', () => {
     expect(mainStyles).not.toContain('#c98242');
   });
 
-  it('keeps low-energy Drifting Loot inspectable with an insufficient-energy tooltip', () => {
+  it('keeps low-energy Drifting Cargo inspectable with an insufficient-energy tooltip', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
     const selected = vi.fn();
     ui.onEventChoice = selected;
     ui.setAnchors([{
-      id: 'drifting-loot',
+      id: 'drifting-barrel',
       label: 'BARREL',
       description: 'Floating salvage within reach.',
       eventChoiceId: 'retrieve',
@@ -669,12 +713,12 @@ describe('SurvivalUI', () => {
       id: 'retrieve',
       label: 'Retrieve It',
       unavailableReason: 'Requires 3 energy; you have 2.',
-      anchorId: 'drifting-loot',
+      anchorId: 'drifting-barrel',
       energyCost: 3,
     }]);
 
     const loot = mount.querySelector<HTMLButtonElement>(
-      '[data-anchor-id="drifting-loot"]',
+      '[data-anchor-id="drifting-barrel"]',
     )!;
     expect(loot.querySelector('[role="tooltip"]')?.textContent)
       .toBe('BARREL — ⚡⚡⚡ — INSUFFICIENT ENERGY');
@@ -683,6 +727,41 @@ describe('SurvivalUI', () => {
     expect(loot.getAttribute('aria-disabled')).toBe('true');
     loot.click();
     expect(selected).not.toHaveBeenCalled();
+  });
+
+  it('shows the one-energy Drifting Bottle pickup tooltip', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.setAnchors([{
+      id: 'event:drifting-bottle',
+      label: 'BOTTLE',
+      description: 'A sealed bottle taps the hull.',
+      eventChoiceId: 'retrieve',
+      itemType: null,
+      toolId: null,
+      action: null,
+      remainingUses: null,
+      x: 420,
+      y: 260,
+      visible: true,
+      depleted: false,
+    }]);
+    ui.beginEventPresentation();
+    ui.setEventSelection(new Map(), [{
+      id: 'retrieve',
+      label: 'Pick It Up',
+      unavailableReason: null,
+      anchorId: 'event:drifting-bottle',
+      energyCost: 1,
+    }]);
+
+    const bottle = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="event:drifting-bottle"]',
+    )!;
+    expect(bottle.querySelector('[role="tooltip"]')?.textContent)
+      .toBe('BOTTLE — ⚡');
+    expect(bottle.dataset.eventChoice).toBe('retrieve');
   });
 
   it.each(['pointer', 'keyboard'] as const)(
@@ -794,20 +873,20 @@ describe('SurvivalUI', () => {
     expect(onEventChoice).not.toHaveBeenCalled();
   });
 
-  it('exposes the exact Whiskers delegation reason through aria-disabled', () => {
+  it('exposes the exact Carlitos delegation reason through aria-disabled', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
-    const reason = 'Captain Whiskers is Sick and cannot retrieve the loot.';
+    const reason = 'Carlitos is Sick and cannot retrieve the loot.';
     ui.beginEventPresentation();
     ui.setEventSelection(new Map(), [{
-      id: 'delegate-whiskers',
-      label: 'Send Whiskers',
+      id: 'delegate-carlitos',
+      label: 'Send Carlitos',
       unavailableReason: reason,
     }]);
 
     const choice = mount.querySelector<HTMLButtonElement>(
-      '[data-event-choice="delegate-whiskers"]',
+      '[data-event-choice="delegate-carlitos"]',
     )!;
     expect(choice.getAttribute('aria-disabled')).toBe('true');
     expect(choice.getAttribute('aria-description')).toBe(reason);
@@ -895,7 +974,8 @@ describe('SurvivalUI', () => {
     await reveal;
     expect(mount.querySelector('[data-event]')).toBeNull();
     const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
-    expect(caption.querySelector('[data-event-title]')?.textContent).toBe('A SHADOW');
+    expect(caption.querySelector<HTMLElement>('[data-event-title]')?.hidden).toBe(true);
+    expect(caption.querySelector('[data-event-title]')?.textContent).toBe('');
     expect(caption.querySelector<HTMLElement>('[data-event-risk]')?.hidden).toBe(true);
     expect(caption.querySelector<HTMLElement>('[data-event-detail]')?.hidden).toBe(true);
     expect(caption.dataset.danger).toBe('dangerous');
@@ -903,7 +983,7 @@ describe('SurvivalUI', () => {
     expect(caption.getAttribute('aria-label')).toBeNull();
     await Promise.resolve();
     expect(mount.querySelector('[data-survival-announcer]')?.textContent).toBe(
-      'Dangerous event: A shadow. A shadow moves beneath the boat.',
+      'Dangerous event. A shadow moves beneath the boat.',
     );
 
     ui.setEventSelection(new Map([['bucket-1', 'bucket']]));
@@ -937,7 +1017,7 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-action="endDay"]')?.getAttribute('aria-disabled')).toBe('false');
   });
 
-  it('shows only the risk-colored title during event selection', async () => {
+  it('does not show the event title during selection', async () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     ui.beginEventPresentation();
@@ -951,7 +1031,8 @@ describe('SurvivalUI', () => {
 
     const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
     expect(caption.classList).toContain('is-visible');
-    expect(caption.querySelector('[data-event-title]')?.textContent).toBe('A SHADOW');
+    expect(caption.querySelector<HTMLElement>('[data-event-title]')?.hidden).toBe(true);
+    expect(caption.querySelector('[data-event-title]')?.textContent).toBe('');
     expect(caption.querySelector<HTMLElement>('[data-event-detail]')?.hidden).toBe(true);
     expect(caption.querySelector<HTMLElement>('[data-event-risk]')?.hidden).toBe(true);
     expect(caption.dataset.danger).toBe('dangerous');
@@ -988,6 +1069,57 @@ describe('SurvivalUI', () => {
     ui.clearEventPresentation();
     expect(lantern.querySelector('[role="tooltip"]')?.textContent).toBe('END DAY');
     expect(lantern.hasAttribute('data-event-choice')).toBe(false);
+  });
+
+  it('routes Guarded Sleep watch through a Carlitos paper prompt', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const choose = vi.fn();
+    ui.onEventChoice = choose;
+    ui.render(snapshot({
+      carlitos: {
+        alive: true,
+        hunger: 5,
+        sickness: 0,
+        unhappiness: 0,
+        pettedToday: false,
+        deathCause: null,
+      },
+    }), () => null);
+    ui.setAnchors([{
+      id: 'carlitos',
+      companionId: 'carlitos',
+      label: 'CARLITOS',
+      description: 'Check his hunger, happiness, and health.',
+      itemType: null,
+      toolId: null,
+      action: null,
+      remainingUses: null,
+      x: 620,
+      y: 260,
+      visible: true,
+      depleted: false,
+    }]);
+
+    ui.beginEventPresentation();
+    ui.setEventSelection(new Map(), [{
+      id: 'watch',
+      label: 'Let Carlitos Watch',
+      unavailableReason: null,
+      anchorId: 'carlitos',
+    }]);
+
+    const prompt = mount.querySelector<HTMLButtonElement>('[data-anchor-id="carlitos"]')!;
+    expect(prompt.dataset.eventChoice).toBe('watch');
+    expect(prompt.dataset.eventState).toBe('available');
+    expect(prompt.querySelector('[role="tooltip"]')?.textContent)
+      .toBe('LET CARLITOS WATCH');
+    prompt.click();
+    expect(choose).toHaveBeenCalledWith('watch');
+    expect(mount.querySelector<HTMLElement>('[data-carlitos-card]')?.hidden).toBe(true);
+    expect(mainStyles).toMatch(
+      /data-companion="carlitos"\]\[data-event-state="available"\] \.boat-tooltip/,
+    );
   });
 
   it('keeps Other People sleep on the lantern beside eligible signals', () => {
@@ -1054,7 +1186,8 @@ describe('SurvivalUI', () => {
     const title = caption.querySelector<HTMLElement>('[data-event-title]')!;
     const risk = caption.querySelector<HTMLElement>('[data-event-risk]')!;
 
-    expect(title.textContent).toBe('A SHADOW');
+    expect(title.textContent).toBe('');
+    expect(title.hidden).toBe(true);
     expect(risk.hidden).toBe(true);
     expect(caption.classList).not.toContain('is-visible');
     expect(caption.dataset.result).toBeUndefined();
@@ -1070,6 +1203,7 @@ describe('SurvivalUI', () => {
     await vi.advanceTimersByTimeAsync(1_999);
 
     expect(title.textContent).toBe('The trader gives you a compass.');
+    expect(title.hidden).toBe(false);
     expect(caption.dataset.result).toBe('true');
     expect(caption.getAttribute('aria-label')).toBe('The trader gives you a compass.');
     expect(caption.classList).toContain('is-visible');
@@ -1087,13 +1221,15 @@ describe('SurvivalUI', () => {
     expect(mainStyles).toMatch(/\.event-caption\[data-result="true"\] h2/);
   });
 
-  it('shows and clears the small Bad Sleep eyelid cue', () => {
+  it('shows and clears the two-eye Bad Sleep eyelid cue', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
     ui.setBadSleepCue(true);
 
     const eyelids = mount.querySelector<HTMLElement>('[data-bad-sleep-cue]')!;
+    expect(eyelids.querySelectorAll('.bad-sleep-cue__eye')).toHaveLength(2);
+    expect(eyelids.querySelectorAll('.bad-sleep-cue__eyelid')).toHaveLength(4);
     expect(eyelids.classList).toContain('is-visible');
     expect(mainStyles).toMatch(/\.bad-sleep-cue\.is-visible/);
     ui.setBadSleepCue(false);
@@ -1103,7 +1239,12 @@ describe('SurvivalUI', () => {
     expect(eyelids.classList).not.toContain('is-visible');
     expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*z-index:\s*9/s);
     expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*background:\s*#010202/s);
-    expect(mainStyles).toMatch(/height:\s*12%/);
+    expect(mainStyles).toMatch(/\.bad-sleep-cue__eye\s*\{[^}]*width:\s*46%/s);
+    expect(mainStyles).toMatch(/\.bad-sleep-cue__eye\s*\{[^}]*height:\s*66%/s);
+    expect(mainStyles).toContain("fill-rule='evenodd'");
+    expect(mainStyles).not.toContain("%3Cellipse cx='26' cy='50'");
+    expect(mainStyles).toMatch(/translateY\(-58%\)/);
+    expect(mainStyles).toMatch(/translateY\(68%\)/);
   });
 
   it('reuses the event caption for the exact held result', async () => {
@@ -1302,10 +1443,10 @@ describe('SurvivalUI', () => {
   });
 
   it.each([
-    ['safe', 'Safe event: A shadow. A shadow moves beneath the boat.'],
-    ['uncertain', 'Uncertain event: A shadow. A shadow moves beneath the boat.'],
-    ['dangerous', 'Dangerous event: A shadow. A shadow moves beneath the boat.'],
-  ] as const)('colors the title and announces %s event risk', async (danger, accessibleName) => {
+    ['safe', 'Safe event. A shadow moves beneath the boat.'],
+    ['uncertain', 'Uncertain event. A shadow moves beneath the boat.'],
+    ['dangerous', 'Dangerous event. A shadow moves beneath the boat.'],
+  ] as const)('announces %s event risk without the title', async (danger, accessibleName) => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     ui.beginEventPresentation();
@@ -1316,7 +1457,8 @@ describe('SurvivalUI', () => {
     expect(caption.dataset.danger).toBe(danger);
     expect(caption.getAttribute('aria-label')).toBeNull();
     expect(caption.classList).toContain('is-visible');
-    expect(caption.querySelector('[data-event-title]')?.textContent).toBe('A SHADOW');
+    expect(caption.querySelector<HTMLElement>('[data-event-title]')?.hidden).toBe(true);
+    expect(caption.querySelector('[data-event-title]')?.textContent).toBe('');
     expect(caption.querySelector<HTMLElement>('[data-event-detail]')?.hidden).toBe(true);
     expect(caption.querySelector<HTMLElement>('[data-event-risk]')?.hidden).toBe(true);
     await Promise.resolve();
@@ -1951,7 +2093,7 @@ describe('SurvivalUI', () => {
     document.body.append(mount);
     const ui = createUI(mount);
     const continued = vi.fn();
-    ui.onDriftingLootContinue = continued;
+    ui.onDriftingCargoContinue = continued;
     const target = {
       x: 420,
       y: 280,
@@ -1960,33 +2102,33 @@ describe('SurvivalUI', () => {
       depth: 2,
       visible: true,
     };
-    ui.showDriftingLootResult({
+    ui.showDriftingCargoResult({
       caption: 'SALVAGE RECOVERED',
       reward: { kind: 'resource', id: 'food', quantity: 2 },
       energyCost: 3,
       target,
     });
 
-    const result = mount.querySelector<HTMLElement>('[data-drifting-loot-result]')!;
+    const result = mount.querySelector<HTMLElement>('[data-drifting-cargo-result]')!;
     expect(result.dataset.anchorState).toBe('projected');
-    expect(mainStyles).toContain('.drifting-loot-result__icons');
+    expect(mainStyles).toContain('.drifting-cargo-result__icons');
     const projectedX = result.style.getPropertyValue('--routine-x');
     target.x = 20;
     ui.setAnchors([]);
     expect(result.style.getPropertyValue('--routine-x')).toBe(projectedX);
-    expect(mount.querySelector('[data-drifting-loot-result-caption]')?.textContent)
+    expect(mount.querySelector('[data-drifting-cargo-result-caption]')?.textContent)
       .toBe('SALVAGE RECOVERED');
-    expect(mount.querySelector('[data-drifting-loot-result-title]')).toBeNull();
-    expect(mount.querySelector('[data-drifting-loot-result-detail]')).toBeNull();
-    expect(mount.querySelector<HTMLImageElement>('.drifting-loot-result__thumbnail')?.src)
+    expect(mount.querySelector('[data-drifting-cargo-result-title]')).toBeNull();
+    expect(mount.querySelector('[data-drifting-cargo-result-detail]')).toBeNull();
+    expect(mount.querySelector<HTMLImageElement>('.drifting-cargo-result__thumbnail')?.src)
       .toContain('cannedFood.png');
-    expect(mount.querySelector('.drifting-loot-result__quantity')?.textContent).toBe('×2');
+    expect(mount.querySelector('.drifting-cargo-result__quantity')?.textContent).toBe('×2');
     expect(result.querySelectorAll('[data-ui-artwork="energy"]')).toHaveLength(3);
     expect(result.getAttribute('aria-label'))
       .toBe('SALVAGE RECOVERED. food, quantity 2, recovered. 3 energy spent.');
 
     const button = mount.querySelector<HTMLButtonElement>(
-      '[data-drifting-loot-result-continue]',
+      '[data-drifting-cargo-result-continue]',
     )!;
     expect(document.activeElement).toBe(button);
     button.click();
@@ -1999,16 +2141,16 @@ describe('SurvivalUI', () => {
     document.body.append(mount);
     const ui = createUI(mount);
     const continued = vi.fn();
-    ui.onDriftingLootContinue = continued;
-    ui.showDriftingLootResult({
+    ui.onDriftingCargoContinue = continued;
+    ui.showDriftingCargoResult({
       caption: 'SALVAGE RECOVERED',
       reward: { kind: 'item', id: 'energyBar', quantity: 1 },
       energyCost: 3,
       target: null,
     });
 
-    const result = mount.querySelector<HTMLElement>('[data-drifting-loot-result]')!;
-    const button = mount.querySelector<HTMLButtonElement>('[data-drifting-loot-result-continue]')!;
+    const result = mount.querySelector<HTMLElement>('[data-drifting-cargo-result]')!;
+    const button = mount.querySelector<HTMLButtonElement>('[data-drifting-cargo-result-continue]')!;
     expect(result.dataset.anchorState).toBe('fallback');
     expect(result.style.getPropertyValue('--routine-width')).toBe('360px');
     const initialX = result.style.getPropertyValue('--routine-x');
@@ -2021,14 +2163,14 @@ describe('SurvivalUI', () => {
     window.dispatchEvent(new Event('resize'));
     expect(result.style.getPropertyValue('--routine-x')).not.toBe(initialX);
 
-    ui.hideDriftingLootResult();
+    ui.hideDriftingCargoResult();
     expect(result.classList).not.toContain('is-visible');
     expect(result.hasAttribute('inert')).toBe(true);
     expect(result.getAttribute('aria-hidden')).toBe('true');
     button.click();
     expect(continued).not.toHaveBeenCalled();
 
-    ui.showDriftingLootResult({
+    ui.showDriftingCargoResult({
       caption: 'SALVAGE RECOVERED',
       reward: { kind: 'resource', id: 'food', quantity: 1 },
       energyCost: 3,
@@ -2347,6 +2489,10 @@ describe('SurvivalUI', () => {
     ui.setPaused(true);
     expect(mount.querySelector('[data-pause]')?.classList).toContain('is-visible');
     expect(document.activeElement).toBe(mount.querySelector('[data-resume]'));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(pause).toHaveBeenLastCalledWith(false);
+    ui.setPaused(false);
+    ui.setPaused(true);
     mount.querySelector<HTMLButtonElement>('[data-resume]')!.click();
     expect(pause).toHaveBeenLastCalledWith(false);
   });

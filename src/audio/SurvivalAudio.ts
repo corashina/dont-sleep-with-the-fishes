@@ -83,9 +83,16 @@ const ROUGH_WEATHER = new Set<PresentationWeatherId>([
   'waves',
 ]);
 
+const THUNDER_SOUNDS = Object.freeze([
+  'thunderLightning',
+  'thunderLightningCrack',
+  'thunderLightningDry',
+] as const satisfies readonly SoundId[]);
+
 export class SurvivalAudio {
   private weather: PresentationWeatherId = 'calm';
   private waveClock = 0;
+  private thunderSoundIndex = 0;
   private diveActive = false;
   private eventMelodyActive = false;
   private disposed = false;
@@ -185,7 +192,7 @@ export class SurvivalAudio {
   }
 
   eventItem(itemId: ItemId): void {
-    if (this.disposed) return;
+    if (this.disposed || itemId === 'map' || itemId === 'compass') return;
     this.scope.play(EVENT_ITEM_SOUNDS[itemId] ?? 'itemHandling');
   }
 
@@ -221,7 +228,9 @@ export class SurvivalAudio {
       return;
     }
     this.scope.play('eventReveal');
-    if (eventId === 'drifting-loot') this.scope.play('driftingCargo');
+    if (eventId === 'drifting-barrel' || eventId === 'drifting-chest') {
+      this.scope.play('driftingCargo');
+    }
   }
 
   beginEvent(eventId: string): void {
@@ -229,6 +238,10 @@ export class SurvivalAudio {
     if (this.disposed) return;
     if (eventId === 'snatcher') {
       this.scope.startLoop('tentacleMovement');
+      return;
+    }
+    if (eventId === 'leak') {
+      this.scope.startLoop('leak');
       return;
     }
     if (eventId !== 'eerie-melody') return;
@@ -253,6 +266,7 @@ export class SurvivalAudio {
   }
 
   clearEvent(): void {
+    this.scope.stopLoop('leak', 0.08);
     this.scope.stopLoop('tentacleMovement', 0.08);
     this.stopEventMelody(0.08);
   }
@@ -287,7 +301,9 @@ export class SurvivalAudio {
   }
 
   thunder(): void {
-    if (!this.disposed) this.scope.play('thunderLightning');
+    if (this.disposed) return;
+    this.scope.play(THUNDER_SOUNDS[this.thunderSoundIndex]!);
+    this.thunderSoundIndex = (this.thunderSoundIndex + 1) % THUNDER_SOUNDS.length;
   }
 
   ending(state: Extract<SurvivalState, 'rescued' | 'dead' | 'sunk'>): void {

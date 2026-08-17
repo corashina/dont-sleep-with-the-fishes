@@ -2,11 +2,15 @@ export const ITEM_IDS = [
   'cannedFood', 'baitTin', 'ductTape', 'compass', 'map', 'medicalKit',
   'spyglass', 'fishingNet', 'bucket', 'flareGun', 'scubaSet', 'anchor',
   'bottledPaper', 'umbrella', 'swimRing', 'flashlight', 'shotgun',
-  'energyBar', 'captainWhiskers',
+  'energyBar', 'carlitos',
 ] as const;
 
 export type ItemId = typeof ITEM_IDS[number];
 export type ItemInstanceId = `${ItemId}-${number}`;
+export const DAY_ACTION_ONLY_ITEM_IDS: readonly ItemId[] = Object.freeze([
+  'scubaSet',
+  'bottledPaper',
+]);
 export type ItemDayAction =
   | 'dive' | 'eat' | 'treat' | 'repairItem'
   | 'sendMessage' | 'useEnergyBar' | null;
@@ -56,8 +60,8 @@ const rawDefinitions = {
   flashlight: define('FLASHLIGHT', 1, 1, null, true, false, null),
   shotgun: define('SHOTGUN', 2, 1, 1, false, false, null),
   energyBar: define('ENERGY BAR', 1, 1, 1, false, false, 'useEnergyBar'),
-  captainWhiskers: define(
-    'CAPTAIN WHISKERS', 2, 1, null, true, false, null,
+  carlitos: define(
+    'CARLITOS', 2, 1, null, true, false, null,
   ),
 } satisfies Record<ItemId, ItemDefinition>;
 
@@ -87,7 +91,7 @@ const APPROVED_SPAWN_COUNTS = {
   flashlight: 1,
   shotgun: 1,
   energyBar: 1,
-  captainWhiskers: 1,
+  carlitos: 1,
 } as const satisfies Record<ItemId, number>;
 
 export const ITEM_LABELS = Object.freeze(Object.fromEntries(

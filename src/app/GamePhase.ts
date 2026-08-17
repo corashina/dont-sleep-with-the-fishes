@@ -18,6 +18,7 @@ import type { SurvivalEventModels } from '../survival/SurvivalEventModelLibrary'
 import type { EventModelLibrary } from '../survival/EventModelLibrary';
 import type { MenuModelLibrary } from '../menu/MenuModelLibrary';
 import type { MenuSandAssets } from '../menu/MenuSandAssets';
+import type { SkyPhase } from '../world/skyPalette';
 
 export interface PhaseContext {
   mount: HTMLElement;
@@ -51,5 +52,7 @@ export interface GamePhase {
   setWaterQuality?(value: WaterQuality): void;
   setWeatherOverride?(id: PresentationWeatherId | null): void;
   getPresentationWeather?(): PresentationWeatherId;
+  setTimeOfDayOverride?(phase: SkyPhase | null): void;
+  getPresentationPhase?(): SkyPhase;
   dispose(): void;
 }

@@ -6,18 +6,10 @@ import {
   Group,
   Material,
   Mesh,
-  MeshBasicMaterial,
   MeshStandardMaterial,
-  SphereGeometry,
   TetrahedronGeometry,
-  TorusGeometry,
   Vector3,
 } from 'three';
-import {
-  DEFAULT_WAVES,
-  sampleWaveFieldInto,
-  type WaveSample,
-} from '../ocean/WaveField';
 import {
   addTransformedMesh as addMesh,
   type VectorTuple,
@@ -64,10 +56,6 @@ interface DangerousWatersMaterials {
   readonly stoneLight: MeshStandardMaterial;
   readonly wetStone: MeshStandardMaterial;
   readonly barnacle: MeshStandardMaterial;
-  readonly creature: MeshStandardMaterial;
-  readonly creatureDark: MeshStandardMaterial;
-  readonly eye: MeshStandardMaterial;
-  readonly foam: MeshBasicMaterial;
   readonly fragment: MeshStandardMaterial;
 }
 
@@ -75,7 +63,6 @@ const REVEAL_DURATION = 2.4;
 const CHOICE_DURATION = 1.1;
 export const DANGEROUS_WATERS_ITEM_DURATION = scaleEventItemDuration(CHOICE_DURATION);
 const REACTION_DURATION = 0.9;
-const FOAM_COUNT = 12;
 const FRAGMENT_COUNT = 8;
 
 const DISTANT_ROCK_PLACEMENTS: readonly Readonly<{
@@ -84,20 +71,41 @@ const DISTANT_ROCK_PLACEMENTS: readonly Readonly<{
   scale: VectorTuple;
   turn: number;
 }>[] = Object.freeze([
-  { name: 'distant-01', position: [-13.8, -0.88, -20.5], scale: [1.35, 0.88, 1.1], turn: 0.28 },
-  { name: 'distant-02', position: [-10.9, -0.92, -24.8], scale: [0.95, 0.72, 0.82], turn: -0.36 },
-  { name: 'distant-03', position: [-8.4, -0.86, -19.1], scale: [1.5, 1.02, 1.18], turn: 0.12 },
-  { name: 'distant-04', position: [-6.3, -0.94, -28.6], scale: [0.82, 0.58, 0.75], turn: 0.42 },
-  { name: 'distant-05', position: [-4.1, -0.9, -22.9], scale: [1.08, 0.76, 0.92], turn: -0.2 },
-  { name: 'distant-06', position: [-1.8, -0.96, -31.2], scale: [0.72, 0.5, 0.66], turn: 0.34 },
-  { name: 'distant-07', position: [0.3, -0.88, -20.8], scale: [1.32, 0.9, 1.05], turn: -0.08 },
-  { name: 'distant-08', position: [2.9, -0.94, -26.7], scale: [0.88, 0.62, 0.78], turn: 0.46 },
-  { name: 'distant-09', position: [5.4, -0.9, -21.7], scale: [1.18, 0.82, 0.96], turn: -0.3 },
-  { name: 'distant-10', position: [7.8, -0.96, -30.4], scale: [0.76, 0.54, 0.7], turn: 0.18 },
-  { name: 'distant-11', position: [9.6, -0.87, -18.8], scale: [1.42, 0.96, 1.12], turn: 0.38 },
-  { name: 'distant-12', position: [12.2, -0.92, -24.1], scale: [1.02, 0.7, 0.86], turn: -0.16 },
-  { name: 'distant-13', position: [14.8, -0.86, -20.2], scale: [1.3, 0.9, 1.04], turn: 0.24 },
-  { name: 'distant-14', position: [16.4, -0.97, -32.5], scale: [0.68, 0.48, 0.62], turn: -0.4 },
+  { name: 'distant-01', position: [-23, -0.88, -29], scale: [1.6, 1.02, 1.28], turn: 0.28 },
+  { name: 'distant-02', position: [-18, -0.92, -37], scale: [1.15, 0.82, 0.96], turn: -0.36 },
+  { name: 'distant-03', position: [-15, -0.86, -27], scale: [1.75, 1.18, 1.36], turn: 0.12 },
+  { name: 'distant-04', position: [-12, -0.94, -45], scale: [1.05, 0.72, 0.92], turn: 0.42 },
+  { name: 'distant-05', position: [-9, -0.9, -33], scale: [1.3, 0.9, 1.08], turn: -0.2 },
+  { name: 'distant-06', position: [-5, -0.96, -52], scale: [0.95, 0.68, 0.84], turn: 0.34 },
+  { name: 'distant-07', position: [-2, -0.88, -29], scale: [1.55, 1.05, 1.24], turn: -0.08 },
+  { name: 'distant-08', position: [2, -0.94, -41], scale: [1.1, 0.78, 0.96], turn: 0.46 },
+  { name: 'distant-09', position: [6, -0.9, -31], scale: [1.42, 0.98, 1.16], turn: -0.3 },
+  { name: 'distant-10', position: [10, -0.96, -49], scale: [0.98, 0.7, 0.9], turn: 0.18 },
+  { name: 'distant-11', position: [13, -0.87, -27], scale: [1.68, 1.12, 1.32], turn: 0.38 },
+  { name: 'distant-12', position: [16, -0.92, -38], scale: [1.25, 0.86, 1.04], turn: -0.16 },
+  { name: 'distant-13', position: [20, -0.86, -30], scale: [1.52, 1.04, 1.22], turn: 0.24 },
+  { name: 'distant-14', position: [24, -0.97, -53], scale: [0.92, 0.64, 0.82], turn: -0.4 },
+  { name: 'distant-15', position: [-27, -0.91, -48], scale: [1.3, 0.88, 1.06], turn: 0.16 },
+  { name: 'distant-16', position: [-21, -0.95, -56], scale: [0.9, 0.62, 0.8], turn: -0.28 },
+  { name: 'distant-17', position: [-1, -0.89, -59], scale: [1.38, 0.94, 1.12], turn: 0.36 },
+  { name: 'distant-18', position: [7, -0.96, -58], scale: [0.86, 0.6, 0.78], turn: -0.14 },
+  { name: 'distant-19', position: [18, -0.9, -59], scale: [1.46, 0.98, 1.18], turn: 0.3 },
+  { name: 'distant-20', position: [28, -0.93, -44], scale: [1.18, 0.8, 1], turn: -0.34 },
+  { name: 'distant-21', position: [27, -0.88, -35], scale: [1.58, 1.06, 1.26], turn: 0.2 },
+  { name: 'distant-22', position: [-15, -0.7, -25], scale: [2.5, 1.7, 1.9], turn: -0.24 },
+  { name: 'distant-23', position: [-10, -0.76, -29], scale: [2.1, 1.42, 1.64], turn: 0.32 },
+  { name: 'distant-24', position: [-5, -0.72, -24], scale: [2.35, 1.58, 1.82], turn: -0.1 },
+  { name: 'distant-25', position: [2.5, -0.74, -27], scale: [2.2, 1.48, 1.7], turn: 0.26 },
+  { name: 'distant-26', position: [8, -0.7, -25], scale: [2.55, 1.72, 1.94], turn: -0.3 },
+  { name: 'distant-27', position: [14, -0.78, -29], scale: [2.25, 1.52, 1.76], turn: 0.14 },
+  { name: 'distant-28', position: [-14, -0.82, -36], scale: [2.05, 1.38, 1.6], turn: 0.4 },
+  { name: 'distant-29', position: [18, -0.8, -38], scale: [2.4, 1.62, 1.86], turn: -0.18 },
+  { name: 'distant-30', position: [-24, -0.74, -25], scale: [2.7, 1.8, 2.05], turn: 0.18 },
+  { name: 'distant-31', position: [-32, -0.8, -34], scale: [2.4, 1.62, 1.88], turn: -0.3 },
+  { name: 'distant-32', position: [-41, -0.88, -44], scale: [2.15, 1.45, 1.7], turn: 0.36 },
+  { name: 'distant-33', position: [25, -0.72, -26], scale: [2.75, 1.84, 2.1], turn: -0.22 },
+  { name: 'distant-34', position: [33, -0.82, -35], scale: [2.45, 1.65, 1.9], turn: 0.32 },
+  { name: 'distant-35', position: [43, -0.9, -46], scale: [2.2, 1.48, 1.74], turn: -0.38 },
 ]);
 
 function createMaterials(): DangerousWatersMaterials {
@@ -122,29 +130,6 @@ function createMaterials(): DangerousWatersMaterials {
       color: 0xa49b7f,
       roughness: 1,
       flatShading: true,
-    }),
-    creature: new MeshStandardMaterial({
-      color: 0x183238,
-      roughness: 0.92,
-      flatShading: true,
-    }),
-    creatureDark: new MeshStandardMaterial({
-      color: 0x09191d,
-      roughness: 1,
-      flatShading: true,
-    }),
-    eye: new MeshStandardMaterial({
-      color: 0xd26d3e,
-      emissive: 0x5a190c,
-      emissiveIntensity: 1.1,
-      roughness: 0.38,
-      flatShading: true,
-    }),
-    foam: new MeshBasicMaterial({
-      color: 0xa8c9cb,
-      transparent: true,
-      opacity: 0.18,
-      depthWrite: false,
     }),
     fragment: new MeshStandardMaterial({
       color: 0x515b56,
@@ -229,105 +214,15 @@ function createRockGroup(
   return root;
 }
 
-function createLurker(materials: DangerousWatersMaterials): Group {
-  const root = new Group();
-  root.name = 'dangerous-waters-lurker';
-  root.position.set(3.25, 0.72, -8.6);
-  root.rotation.y = -0.42;
-
-  addMesh(
-    root,
-    'dangerous-waters-lurker:head',
-    new SphereGeometry(0.88, 9, 6),
-    materials.creature,
-    [0, 0.28, 0],
-    [0.03, 0.08, -0.06],
-    [1.3, 0.76, 0.9],
-  );
-  addMesh(
-    root,
-    'dangerous-waters-lurker:brow:left',
-    new SphereGeometry(0.27, 7, 5),
-    materials.creatureDark,
-    [-0.35, 0.46, 0.69],
-    [0, 0, 0.18],
-    [1.25, 0.62, 0.45],
-  );
-  addMesh(
-    root,
-    'dangerous-waters-lurker:brow:right',
-    new SphereGeometry(0.23, 7, 5),
-    materials.creatureDark,
-    [0.31, 0.51, 0.71],
-    [0, 0, -0.14],
-    [1.08, 0.7, 0.43],
-  );
-  addMesh(
-    root,
-    'dangerous-waters-lurker:eye:left',
-    new SphereGeometry(0.095, 7, 5),
-    materials.eye,
-    [-0.35, 0.46, 0.86],
-    [0, 0, 0],
-    [1, 0.72, 0.46],
-  );
-  addMesh(
-    root,
-    'dangerous-waters-lurker:eye:right',
-    new SphereGeometry(0.075, 7, 5),
-    materials.eye,
-    [0.31, 0.51, 0.88],
-    [0, 0, 0],
-    [1, 0.72, 0.46],
-  );
-  addMesh(
-    root,
-    'dangerous-waters-lurker:mouth',
-    new BoxGeometry(0.62, 0.055, 0.045),
-    materials.creatureDark,
-    [-0.02, 0.08, 0.84],
-    [0, 0, -0.06],
-  );
-
-  const fin = new Group();
-  fin.name = 'dangerous-waters-lurker:grip-fin';
-  fin.position.set(-0.95, -0.18, 0.12);
-  fin.rotation.set(0.18, -0.25, 0.42);
-  addMesh(
-    fin,
-    'dangerous-waters-lurker:grip-palm',
-    new DodecahedronGeometry(0.32, 0),
-    materials.creature,
-    [0, 0, 0],
-    [0, 0, 0],
-    [1.3, 0.55, 0.9],
-  );
-  for (let index = 0; index < 3; index += 1) {
-    addMesh(
-      fin,
-      `dangerous-waters-lurker:finger:${index}`,
-      new ConeGeometry(0.065, 0.48 - index * 0.045, 6),
-      materials.creature,
-      [-0.21 + index * 0.2, -0.3, 0.02],
-      [0, 0, -0.12 + index * 0.1],
-    );
-  }
-  root.add(fin);
-  return root;
-}
-
 export class DangerousWatersPresentation {
   readonly root = new Group();
   readonly itemAimTarget = new Group();
   private readonly passage = new Group();
-  private readonly lurker: Group;
-  private readonly foam = new Group();
   private readonly fragments = new Group();
   private readonly foregroundRock: Group;
   private readonly materials = createMaterials();
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
-  private readonly foamMembers: PoolMember[] = [];
   private readonly fragmentMembers: PoolMember[] = [];
   private readonly boatReaction: DangerousWatersBoatReaction = {
     driftX: 0,
@@ -340,72 +235,64 @@ export class DangerousWatersPresentation {
     supplyRoll: 0,
     supplyLift: 0,
   };
-  private readonly waveSample: WaveSample = {
-    height: 0,
-    displacementX: 0,
-    displacementZ: 0,
-    normal: { x: 0, y: 1, z: 0 },
-  };
   private activeMotion: ActiveMotion | null = null;
   private heldKind: MotionKind = 'reveal';
   private heldProgress = 0;
   private heldChoiceId: DangerousWatersChoiceId | null = null;
   private resultBaseChoiceId: DangerousWatersChoiceId | null = null;
-  private lastTime = 0;
   private disposed = false;
 
   constructor() {
     this.root.name = 'dangerous-waters-presentation';
     this.root.visible = false;
     this.passage.name = 'dangerous-waters-passage';
-    this.foam.name = 'dangerous-waters-foam';
     this.fragments.name = 'dangerous-waters-fragments';
 
     this.foregroundRock = createRockGroup(
       'dangerous-waters-rock:foreground',
-      [-3.8, -0.72, -3.4],
+      [-5.2, -0.72, -6.8],
       [2.1, 1.05, 1.45],
       this.materials,
       0.22,
     );
     const portRock = createRockGroup(
       'dangerous-waters-rock:port',
-      [-5.35, -0.42, -8.5],
+      [-9.2, -0.42, -12.5],
       [2.85, 2.15, 1.85],
       this.materials,
       -0.12,
     );
     const starboardRock = createRockGroup(
       'dangerous-waters-rock:starboard',
-      [4.95, -0.5, -10.2],
+      [8.7, -0.5, -14.8],
       [3.25, 2.45, 2.1],
       this.materials,
       0.18,
     );
     const portFarRock = createRockGroup(
       'dangerous-waters-rock:port-far',
-      [-7.1, -0.7, -13.4],
+      [-12.6, -0.7, -20.4],
       [1.8, 1.35, 1.4],
       this.materials,
       0.31,
     );
     const starboardNearRock = createRockGroup(
       'dangerous-waters-rock:starboard-near',
-      [3.45, -0.76, -5.8],
+      [5.4, -0.76, -8.1],
       [1.45, 0.92, 1.2],
       this.materials,
       -0.24,
     );
     const channelRock = createRockGroup(
       'dangerous-waters-rock:channel',
-      [0.7, -0.86, -12.8],
+      [1.2, -0.86, -18.2],
       [1.2, 0.78, 1.05],
       this.materials,
       0.12,
     );
     const horizonRock = createRockGroup(
       'dangerous-waters-rock:horizon',
-      [-2.2, -0.82, -16.2],
+      [-3.4, -0.82, -24.5],
       [1.6, 1.1, 1.25],
       this.materials,
       -0.18,
@@ -419,10 +306,8 @@ export class DangerousWatersPresentation {
         placement.turn,
       )
     ));
-    this.lurker = createLurker(this.materials);
     this.itemAimTarget.name = 'dangerous-waters-item-aim-target';
-    this.itemAimTarget.position.set(0, 0.32, 0.72);
-    this.lurker.add(this.itemAimTarget);
+    this.itemAimTarget.position.set(0, 0.5, -8);
     this.passage.add(
       this.foregroundRock,
       portRock,
@@ -432,13 +317,12 @@ export class DangerousWatersPresentation {
       channelRock,
       horizonRock,
       ...distantRocks,
-      this.lurker,
+      this.itemAimTarget,
     );
-    this.root.add(this.passage, this.foam, this.fragments);
-    this.buildFoamPool();
+    this.root.add(this.passage, this.fragments);
     this.buildFragmentPool();
     collectMeshResources(this.root, this.ownedGeometries, this.ownedMaterials);
-    this.applyPose('reveal', 0, null, 0);
+    this.applyPose('reveal', 0, null);
   }
 
   stage(): void {
@@ -449,8 +333,7 @@ export class DangerousWatersPresentation {
     this.heldProgress = 0;
     this.heldChoiceId = null;
     this.resultBaseChoiceId = null;
-    this.lastTime = 0;
-    this.applyPose('reveal', 0, null, 0);
+    this.applyPose('reveal', 0, null);
   }
 
   reveal(): Promise<void> {
@@ -523,8 +406,7 @@ export class DangerousWatersPresentation {
     this.heldProgress = 0;
     this.heldChoiceId = null;
     this.resultBaseChoiceId = null;
-    this.lastTime = 0;
-    this.applyPose('reveal', 0, null, 0);
+    this.applyPose('reveal', 0, null);
     this.root.visible = false;
   }
 
@@ -535,37 +417,36 @@ export class DangerousWatersPresentation {
     if (this.activeMotion === null) {
       this.heldKind = 'reveal';
       this.heldProgress = 1;
-      this.applyPose('reveal', 1, null, this.lastTime);
+      this.applyPose('reveal', 1, null);
       return;
     }
     const motion = this.activeMotion;
     this.activeMotion = null;
     this.heldKind = motion.kind === 'choice' ? 'reveal' : motion.kind;
     this.heldProgress = 1;
-    this.applyPose(this.heldKind, 1, null, this.lastTime);
+    this.applyPose(this.heldKind, 1, null);
     motion.resolve();
   }
 
-  update(time: number, delta: number): void {
+  update(_time: number, delta: number): void {
     if (this.disposed || !this.root.visible || delta < 0) return;
-    if (Number.isFinite(time)) this.lastTime = time;
     const motion = this.activeMotion;
     if (motion === null) {
       const choiceId = this.heldKind === 'choice' ? this.heldChoiceId : null;
-      this.applyPose(this.heldKind, this.heldProgress, choiceId, time);
+      this.applyPose(this.heldKind, this.heldProgress, choiceId);
       return;
     }
 
     motion.elapsed = Math.min(motion.duration, motion.elapsed + Math.max(0, delta));
     const progress = motion.elapsed / motion.duration;
-    this.applyPose(motion.kind, progress, motion.choiceId, time);
+    this.applyPose(motion.kind, progress, motion.choiceId);
     if (progress < 1) return;
 
     this.activeMotion = null;
     this.heldKind = motion.kind;
     this.heldProgress = 1;
     this.heldChoiceId = motion.kind === 'choice' ? motion.choiceId : null;
-    this.applyPose(this.heldKind, 1, this.heldChoiceId, time);
+    this.applyPose(this.heldKind, 1, this.heldChoiceId);
     motion.resolve();
   }
 
@@ -575,38 +456,6 @@ export class DangerousWatersPresentation {
     this.disposed = true;
     this.root.removeFromParent();
     disposeResourceSets(this.ownedGeometries, this.ownedMaterials);
-  }
-
-  private buildFoamPool(): void {
-    const geometry = new TorusGeometry(0.34, 0.055, 4, 9, Math.PI);
-    for (let index = 0; index < FOAM_COUNT; index += 1) {
-      const side = index % 2 === 0 ? -1 : 1;
-      const laneIndex = Math.floor(index / 2);
-      const base = new Vector3(
-        side * (2.9 + laneIndex * 0.34),
-        -0.14,
-        -2.8 - laneIndex * 1.42,
-      );
-      const mesh = addMesh(
-        this.foam,
-        `dangerous-waters-foam:${index}`,
-        geometry,
-        this.materials.foam,
-        [base.x, base.y, base.z],
-        [Math.PI / 2, side < 0 ? -0.28 : 0.28, 0],
-        [1 + (index % 3) * 0.16, 0.65, 0.8],
-      );
-      this.foamMembers.push({
-        mesh,
-        base,
-        baseRotation: new Vector3(
-          Math.PI / 2,
-          side < 0 ? -0.28 : 0.28,
-          0,
-        ),
-        travel: new Vector3(side * 0.08, 0, -0.12 - laneIndex * 0.02),
-      });
-    }
   }
 
   private buildFragmentPool(): void {
@@ -669,23 +518,20 @@ export class DangerousWatersPresentation {
       resolve,
       cancel,
     };
-    this.applyPose(kind, 0, choiceId, this.lastTime);
+    this.applyPose(kind, 0, choiceId);
   }
 
   private applyPose(
     kind: MotionKind,
     progress: number,
     choiceId: DangerousWatersChoiceId | null,
-    time: number,
   ): void {
     this.resetPose();
     const value = clamp01(progress);
     switch (kind) {
       case 'reveal':
-        this.applyRevealPose(value);
         break;
       case 'choice':
-        this.applyRevealPose(1);
         this.applyChoicePose(value, choiceId);
         break;
       case 'safe':
@@ -701,13 +547,10 @@ export class DangerousWatersPresentation {
         this.applySeverePose(value);
         break;
     }
-    this.applyWaterline(time, value);
   }
 
   private resetPose(): void {
     this.passage.position.set(0, 0, 0);
-    this.lurker.scale.set(1, 1, 1);
-    this.materials.foam.opacity = 0.18;
     this.boatReaction.pitch = 0;
     this.boatReaction.driftX = 0;
     this.boatReaction.yaw = 0;
@@ -728,17 +571,6 @@ export class DangerousWatersPresentation {
     }
   }
 
-  private applyRevealPose(progress: number): void {
-    const peek = smoothstep((progress - 0.42) / 0.2);
-    const sink = smoothstep((progress - 0.82) / 0.16);
-    this.lurker.scale.y = peek * (1 - sink);
-    this.materials.foam.opacity = 0.12 + smoothstep(progress) * 0.32;
-    this.boatReaction.driftX = -0.34 * Math.sin(Math.PI * progress)
-      + smoothstep(progress) * -0.16;
-    this.boatReaction.yaw = Math.sin(Math.PI * progress) * 0.035;
-    this.boatReaction.roll = Math.sin(Math.PI * progress) * -0.018;
-  }
-
   private applyChoicePose(
     progress: number,
     choiceId: DangerousWatersChoiceId | null,
@@ -753,13 +585,11 @@ export class DangerousWatersPresentation {
       this.boatReaction.driftX -= lift * 0.12;
       this.boatReaction.lightScale -= pulse * 0.36 + lift * 0.22;
       this.boatReaction.pitch += pulse * 0.025 + lift * 0.012;
-      this.materials.foam.opacity += pulse * 0.32 + lift * 0.04;
     }
   }
 
   private applySafePose(progress: number): void {
     const eased = smoothstep(progress);
-    this.materials.foam.opacity *= 1 - eased;
     this.boatReaction.driftX -= eased * 0.48;
     this.boatReaction.yaw -= Math.sin(Math.PI * progress) * 0.028;
   }
@@ -767,7 +597,6 @@ export class DangerousWatersPresentation {
   private applyDamagePose(progress: number, severity: number): void {
     const impact = Math.sin(Math.PI * progress);
     const hold = smoothstep((progress - 0.55) / 0.45);
-    this.materials.foam.opacity += impact * 0.48;
     this.boatReaction.pitch += (impact * 0.07 + hold * 0.018) * severity;
     this.boatReaction.roll += (impact * -0.045 + hold * -0.035) * severity;
     this.boatReaction.cameraZ += (impact * -0.09 + hold * -0.055) * severity;
@@ -776,9 +605,7 @@ export class DangerousWatersPresentation {
   }
 
   private applySeverePose(progress: number): void {
-    const impact = Math.sin(Math.PI * progress);
     this.applyDamagePose(progress, 1.65);
-    this.materials.foam.opacity += impact * 0.09;
     const fragmentTravel = smoothstep((progress - 0.24) / 0.5);
     for (const fragment of this.fragmentMembers) {
       fragment.mesh.visible = progress >= 0.24 && progress < 0.9;
@@ -792,31 +619,9 @@ export class DangerousWatersPresentation {
     }
   }
 
-  private applyWaterline(time: number, progress: number): void {
-    for (let index = 0; index < this.foamMembers.length; index += 1) {
-      const foam = this.foamMembers[index]!;
-      sampleWaveFieldInto(
-        this.waveSample,
-        DEFAULT_WAVES,
-        time,
-        foam.base.x,
-        foam.base.z,
-        1,
-      );
-      foam.mesh.position.x = foam.base.x
-        + this.waveSample.displacementX * 0.08
-        + foam.travel.x * progress;
-      foam.mesh.position.y = foam.base.y + this.waveSample.height * 0.32;
-      foam.mesh.position.z = foam.base.z
-        + this.waveSample.displacementZ * 0.08
-        + foam.travel.z * progress;
-    }
-  }
-
   private applySettledRoutePose(
     choiceId: DangerousWatersChoiceId | null,
   ): void {
-    this.applyRevealPose(1);
     if (choiceId !== null) this.applyChoicePose(1, choiceId);
   }
 
