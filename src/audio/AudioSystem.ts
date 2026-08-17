@@ -14,9 +14,14 @@ import {
   type AudioScope,
 } from './AudioScope';
 import { WebAudioBackend } from './WebAudioBackend';
+import {
+  SHARED_SOUND_IDS,
+  type SoundId,
+} from './audioManifest';
 
 class SilentAudioBackend implements AudioBackend {
-  load(): Promise<void> { return Promise.resolve(); }
+  acquire(): Promise<void> { return Promise.resolve(); }
+  release(): void {}
   unlock(): Promise<void> { return Promise.resolve(); }
   play(): null { return null; }
   playSpatialLoop(
@@ -37,9 +42,15 @@ export class AudioLoadError extends Error {
   }
 }
 
+export interface EventAudioLease {
+  readonly sounds: readonly SoundId[];
+  dispose(): void;
+}
+
 export class AudioSystem {
   private readonly preference: AudioPreference;
   private readonly scopes = new Set<OwnedAudioScope>();
+  private readonly eventLeases = new Set<EventAudioLease>();
   private unlockListening = false;
   private disposed = false;
 
@@ -47,6 +58,7 @@ export class AudioSystem {
     private readonly backend: AudioBackend,
     storage: Pick<Storage, 'getItem' | 'setItem'> | null | undefined,
     listenForUnlock: boolean,
+    private readonly ownsSharedAudio: boolean,
   ) {
     const onPreferenceChange = (state: Readonly<AudioControlState>): void => {
       this.applyPreference(state);
@@ -68,8 +80,21 @@ export class AudioSystem {
       return AudioSystem.silent();
     }
     try {
-      await backend.load();
-      return new AudioSystem(backend, undefined, true);
+      return await AudioSystem.loadWithBackend(backend, undefined, true);
+    } catch (cause) {
+      backend.dispose();
+      throw new AudioLoadError('Required audio files could not be loaded.', { cause });
+    }
+  }
+
+  static async loadWithBackend(
+    backend: AudioBackend,
+    storage: Pick<Storage, 'getItem' | 'setItem'> | null | undefined = null,
+    listenForUnlock = false,
+  ): Promise<AudioSystem> {
+    try {
+      await backend.acquire(SHARED_SOUND_IDS);
+      return new AudioSystem(backend, storage, listenForUnlock, true);
     } catch (cause) {
       backend.dispose();
       throw new AudioLoadError('Required audio files could not be loaded.', { cause });
@@ -80,11 +105,11 @@ export class AudioSystem {
     backend: AudioBackend,
     storage: Pick<Storage, 'getItem' | 'setItem'> | null = null,
   ): AudioSystem {
-    return new AudioSystem(backend, storage, false);
+    return new AudioSystem(backend, storage, false, false);
   }
 
   static silent(): AudioSystem {
-    return new AudioSystem(new SilentAudioBackend(), null, false);
+    return new AudioSystem(new SilentAudioBackend(), null, false, false);
   }
 
   createScope(): AudioScope {
@@ -95,6 +120,30 @@ export class AudioSystem {
     );
     this.scopes.add(scope);
     return scope;
+  }
+
+  async acquireEventAudio(sounds: readonly SoundId[]): Promise<EventAudioLease> {
+    if (this.disposed) throw new Error('Audio system is disposed.');
+    const ownedSounds = Object.freeze([...new Set(sounds)]);
+    await this.backend.acquire(ownedSounds);
+    if (this.disposed) {
+      this.backend.release(ownedSounds);
+      throw new Error('Audio system was disposed while loading event audio.');
+    }
+    let disposed = false;
+    const lease: EventAudioLease = {
+      sounds: ownedSounds,
+      dispose: () => {
+        if (disposed) return;
+        disposed = true;
+        this.eventLeases.delete(lease);
+        const soundSet = new Set<SoundId>(ownedSounds);
+        for (const scope of this.scopes) scope.stopSounds(soundSet);
+        this.backend.release(ownedSounds);
+      },
+    };
+    this.eventLeases.add(lease);
+    return lease;
   }
 
   getPreference(): Readonly<AudioControlState> {
@@ -113,8 +162,11 @@ export class AudioSystem {
     if (this.disposed) return;
     this.disposed = true;
     this.removeUnlockListeners();
+    for (const lease of [...this.eventLeases]) lease.dispose();
+    this.eventLeases.clear();
     for (const scope of [...this.scopes]) scope.dispose();
     this.scopes.clear();
+    if (this.ownsSharedAudio) this.backend.release(SHARED_SOUND_IDS);
     this.backend.dispose();
   }
 

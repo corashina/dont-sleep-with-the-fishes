@@ -14,7 +14,7 @@ export interface EventBundleSpec {
 }
 
 const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
-  leak: { models: ['leakPlanks'], sounds: ['leak'] },
+  leak: { models: ['leakPlanks'], sounds: [] },
   'school-of-fish': { models: ['schoolFish'], sounds: [] },
   snatcher: { models: ['snatcher'], sounds: ['tentacleMovement'] },
   'death-stare': { models: ['deathStareBlob'], sounds: [] },
@@ -28,20 +28,16 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
   },
   thunderstorm: {
     models: [],
-    sounds: [
-      'thunderLightning',
-      'thunderLightningCrack',
-      'thunderLightningDry',
-    ],
+    sounds: ['thunderLightning'],
   },
   'bad-sleep': { models: [], sounds: ['yawn'] },
-  'drifting-barrel': {
-    models: ['driftingBarrel'],
+  'drifting-loot': {
+    models: ['driftingLootBarrel', 'driftingLootCrate'],
     sounds: ['driftingCargo'],
   },
-  'drifting-chest': {
+  'mystery-chest': {
     models: ['mysteryChest'],
-    sounds: ['driftingCargo'],
+    sounds: ['chest'],
   },
   'drifting-bottle': { models: ['driftingBottle'], sounds: [] },
   'check-the-back': { models: ['checkBackFish'], sounds: [] },

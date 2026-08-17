@@ -64,9 +64,6 @@ export type AudioBusId = 'music' | 'ambience' | 'effects' | 'interface';
 export const EVENT_ONLY_SOUND_IDS = Object.freeze([
   'yawn',
   'thunderLightning',
-  'thunderLightningCrack',
-  'thunderLightningDry',
-  'leak',
   'tentacleMovement',
   'eerieMelody',
   'chest',

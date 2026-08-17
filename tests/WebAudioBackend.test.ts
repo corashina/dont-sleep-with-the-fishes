@@ -91,7 +91,7 @@ describe('WebAudioBackend spatial loops', () => {
       context as unknown as AudioContext,
       fetchAudio,
     );
-    await backend.load();
+    await backend.acquire(['scavengeChase']);
 
     const voice = backend.play('scavengeChase')!;
     expect(context.sources[0]!.start).toHaveBeenCalledWith(0, 0);
@@ -117,7 +117,7 @@ describe('WebAudioBackend spatial loops', () => {
       context as unknown as AudioContext,
       fetchAudio,
     );
-    await backend.load();
+    await backend.acquire(['shipAlarm']);
     const emitters = [
       { position: [1, 5, 9] as const },
       { position: [2, 5, 19] as const },
@@ -163,6 +163,26 @@ describe('WebAudioBackend spatial loops', () => {
     expect(context.listener.positionZ.value).toBe(8);
     expect(context.listener.forwardX.value).toBe(1);
     expect(context.listener.upY.value).toBe(1);
+    backend.dispose();
+  });
+
+  it('releases an event buffer after its last lease', async () => {
+    const context = new FakeContext();
+    const fetchAudio = vi.fn(() => Promise.resolve({
+      ok: true,
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(1)),
+    } as Response));
+    const backend = new WebAudioBackend(
+      context as unknown as AudioContext,
+      fetchAudio,
+    );
+
+    await backend.acquire(['tentacleMovement']);
+    expect(backend.play('tentacleMovement')).not.toBeNull();
+
+    backend.release(['tentacleMovement']);
+
+    expect(backend.play('tentacleMovement')).toBeNull();
     backend.dispose();
   });
 });

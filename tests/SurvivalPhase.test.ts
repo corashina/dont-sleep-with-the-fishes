@@ -6341,7 +6341,8 @@ describe('SurvivalPhase orchestration', () => {
         onEnded: vi.fn(),
       };
       const backend: AudioBackend = {
-        load: vi.fn(() => Promise.resolve()),
+        acquire: vi.fn(() => Promise.resolve()),
+        release: vi.fn(),
         unlock: vi.fn(() => Promise.resolve()),
         play: vi.fn((id: SoundId) => {
           if (id === 'eerieMelody') calls.push('audio-begin');
