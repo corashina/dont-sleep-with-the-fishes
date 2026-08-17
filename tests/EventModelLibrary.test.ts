@@ -6,6 +6,7 @@ import {
   Box3,
   BoxGeometry,
   BufferGeometry,
+  Euler,
   Group,
   Mesh,
   MeshStandardMaterial,
@@ -61,6 +62,23 @@ describe('EventModelLibrary', () => {
       'deathStareBlob',
       'whirlpoolCore',
     ]);
+  });
+
+  it('turns the Anglerfish nose toward presentation forward', () => {
+    const sourceNose = new Vector3(1, 0, 0);
+    sourceNose.applyEuler(new Euler(...EVENT_MODEL_SPECS.anglerFish.rotation));
+
+    expect(sourceNose.x).toBeCloseTo(0);
+    expect(sourceNose.z).toBeCloseTo(1);
+  });
+
+  it('keeps the Siren upright and facing presentation forward', () => {
+    const rotation = new Euler(...EVENT_MODEL_SPECS.siren.rotation);
+    const sourceUp = new Vector3(0, 1, 0).applyEuler(rotation);
+    const sourceForward = new Vector3(1, 0, 0).applyEuler(rotation);
+
+    expect(sourceUp.toArray()).toEqual([0, 1, 0]);
+    expect(sourceForward.toArray()).toEqual([1, 0, 0]);
   });
 
   it('normalizes templates and makes owned deep clones', async () => {

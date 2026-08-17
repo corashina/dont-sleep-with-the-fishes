@@ -8,6 +8,7 @@ import {
   Material,
   Mesh,
   MeshStandardMaterial,
+  PointLight,
   SphereGeometry,
   Vector3,
 } from 'three';
@@ -150,6 +151,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   private readonly ownedMaterials = new Set<Material>();
   private readonly cameraLook: StationaryEventCamera | null;
   private readonly dominantEye: Mesh;
+  private readonly dominantEyeLight = new PointLight(0xb4dfbf, 0, 4.2, 1.8);
   private readonly recessedEye: Mesh;
   private readonly jawInterior: Mesh;
   private readonly mouthTarget = new Group();
@@ -243,6 +245,10 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.dominantEye.rotation.z = -0.1;
     this.dominantEye.castShadow = true;
     this.angler.add(this.dominantEye);
+
+    this.dominantEyeLight.name = 'death-stare-dominant-eye-light';
+    this.dominantEyeLight.position.set(-0.46, 0.56, 1.02);
+    this.angler.add(this.dominantEyeLight);
 
     this.recessedEye = new Mesh(
       recessedEyeGeometry,
@@ -532,8 +538,11 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.dominantEye.position.x = -0.46 + (1 - this.sample.eyeTarget) * 0.07;
     this.recessedEye.scale.set(0.82, Math.max(0.08, 1 - this.sample.blink * 0.82), 0.56);
     this.recessedEye.position.x = 0.58 - (1 - this.sample.eyeTarget) * 0.035;
-    this.dominantEyeMaterial.emissiveIntensity = 0.72
-      + this.sample.eyeTarget * 0.63;
+    this.dominantEyeMaterial.emissiveIntensity = 0.9
+      + this.sample.eyeTarget * 0.9;
+    this.dominantEyeLight.intensity = this.sample.eyeTarget
+      * dominantBlinkScale
+      * 2.4;
     this.recessedEyeMaterial.emissiveIntensity = 0.16
       + this.sample.eyeTarget * 0.16;
     this.jawInterior.scale.set(
@@ -650,6 +659,7 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.angler.visible = false;
     this.angler.position.set(FACE_X, FACE_Y, FACE_Z);
     this.angler.rotation.set(FACE_PLAYER_PITCH, FACE_PLAYER_YAW, 0);
+    this.dominantEyeLight.intensity = 0;
     this.boatRoot.rotation.set(0, 0, 0);
     this.waterMaterial.opacity = 0;
     for (const strand of this.waterStrands) strand.mesh.visible = false;

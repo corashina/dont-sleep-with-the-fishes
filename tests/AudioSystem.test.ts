@@ -9,7 +9,11 @@ import type {
 } from '../src/audio/AudioBackend';
 import { AudioSystem } from '../src/audio/AudioSystem';
 import { SurvivalAudio } from '../src/audio/SurvivalAudio';
-import type { AudioBusId, SoundId } from '../src/audio/audioManifest';
+import {
+  AUDIO_MANIFEST,
+  type AudioBusId,
+  type SoundId,
+} from '../src/audio/audioManifest';
 
 class FakeVoice implements AudioVoice {
   private readonly callbacks: (() => void)[] = [];
@@ -123,6 +127,18 @@ describe('AudioSystem', () => {
     expect(movement.stop).toHaveBeenCalledExactlyOnceWith(0.08);
   });
 
+  it('loops leaking water only during the Leak event', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.beginEvent('leak');
+    const leak = backend.voices.at(-1)!;
+    expect(leak.id).toBe('leak');
+
+    audio.clearEvent();
+    expect(leak.stop).toHaveBeenCalledExactlyOnceWith(0.08);
+  });
+
   it('uses a yawn instead of the event sting for Bad Sleep', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
@@ -132,7 +148,36 @@ describe('AudioSystem', () => {
     expect(backend.voices.map(({ id }) => id)).toEqual(['yawn']);
   });
 
-  it('uses the exact sound for each event item', () => {
+  it('cycles through all thunder recordings', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.thunder();
+    audio.thunder();
+    audio.thunder();
+    audio.thunder();
+
+    expect(backend.voices.map(({ id }) => id)).toEqual([
+      'thunderLightning',
+      'thunderLightningCrack',
+      'thunderLightningDry',
+      'thunderLightning',
+    ]);
+  });
+
+  it('loads all thunder recordings as effects', () => {
+    expect([
+      AUDIO_MANIFEST.thunderLightning,
+      AUDIO_MANIFEST.thunderLightningCrack,
+      AUDIO_MANIFEST.thunderLightningDry,
+    ].map(({ bus, loop }) => ({ bus, loop }))).toEqual([
+      { bus: 'effects', loop: false },
+      { bus: 'effects', loop: false },
+      { bus: 'effects', loop: false },
+    ]);
+  });
+
+  it('uses exact event item sounds and keeps the map and compass silent', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
 
@@ -143,6 +188,7 @@ describe('AudioSystem', () => {
     audio.eventItem('anchor');
     audio.eventItem('umbrella');
     audio.eventItem('map');
+    audio.eventItem('compass');
 
     expect(backend.voices.map(({ id }) => id)).toEqual([
       'ductTapePickup',
@@ -151,7 +197,6 @@ describe('AudioSystem', () => {
       'flashlight',
       'anchorChain',
       'umbrella',
-      'itemHandling',
     ]);
   });
 

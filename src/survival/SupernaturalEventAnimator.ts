@@ -1,7 +1,10 @@
 import {
   Box3,
+  BoxGeometry,
   BufferGeometry,
   Color,
+  ConeGeometry,
+  DodecahedronGeometry,
   DoubleSide,
   Euler,
   Float32BufferAttribute,
@@ -18,6 +21,7 @@ import {
   Vector3,
 } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
+import { addTransformedMesh as addMesh } from '../rendering/addTransformedMesh';
 import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import {
@@ -32,7 +36,9 @@ import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse'
 import type { ActionOutcome } from './survivalTypes';
 import { StationaryEventCamera } from './StationaryEventCamera';
 import {
-  GHOST_FLIGHT_PATHS,
+  createGhostFloatPose,
+  GHOST_FLOAT_PATHS,
+  sampleGhostFloatPathInto,
   sampleSupernaturalItemUse,
   sampleSupernaturalReaction,
   sampleSupernaturalReveal,
@@ -70,6 +76,7 @@ type ActiveSupernaturalAnimation =
     };
 
 const REACTION_DURATION = 0.84;
+const GHOST_MODEL_FORWARD_YAW_OFFSET = Math.PI / 2;
 
 function itemDuration(eventId: string, choiceId: string): number | null {
   const sceneDuration = supernaturalItemUseDuration(eventId, choiceId);
@@ -79,13 +86,11 @@ function itemDuration(eventId: string, choiceId: string): number | null {
   if (choiceId === 'spyglass') return eventItemUseDuration('binocular-look');
   return null;
 }
-const SIREN_ROCK_X = -4.3;
-const SIREN_ROCK_Z = -9.2;
+const SIREN_ROCK_X = -6.3;
+const SIREN_ROCK_Z = -14.8;
 const SIREN_WATERLINE_Y = 0;
 const SIREN_ROCK_SUBMERGENCE = 0.28;
-const SIREN_ROCK_VERTICAL_SCALE = 2.2;
-const SIREN_MODEL_FORWARD_YAW = Math.PI / 2;
-const SIREN_HEAD_PLAYER_TURN = 0.82;
+const SIREN_BODY_SETTLE = 1.05;
 const FOG_OPACITY_WEIGHTS = [0.72, 0.9, 0.64, 0.78, 0.58] as const;
 const SEA_MIST_LAYERS = Object.freeze([
   Object.freeze({ x: -4.4, y: 0.38, z: -7.5, width: 8.6, height: 0.9, rotation: -0.08 }),
@@ -235,6 +240,65 @@ function createFlareFlash(material: Material): Mesh {
   return flash;
 }
 
+function createSirenRock(): Group {
+  const root = new Group();
+  root.name = 'event-siren-rock';
+  const stone = new MeshStandardMaterial({
+    color: 0x3f4b4a,
+    roughness: 0.98,
+    flatShading: true,
+  });
+  const stoneLight = new MeshStandardMaterial({
+    color: 0x59625c,
+    roughness: 0.96,
+    flatShading: true,
+  });
+  const barnacle = new MeshStandardMaterial({
+    color: 0xa49b7f,
+    roughness: 1,
+    flatShading: true,
+  });
+
+  addMesh(
+    root,
+    'event-siren-rock:mass',
+    new DodecahedronGeometry(1, 0),
+    stone,
+    [0, 0.22, 0],
+    [0.06, 0.1, -0.03],
+    [2.65, 0.72, 1.75],
+  );
+  addMesh(
+    root,
+    'event-siren-rock:shelf:upper',
+    new BoxGeometry(1.25, 0.22, 0.82),
+    stoneLight,
+    [-0.28, 0.74, 0.08],
+    [0.06, -0.22, 0.08],
+    [1.42, 1, 1.46],
+  );
+  addMesh(
+    root,
+    'event-siren-rock:shelf:side',
+    new BoxGeometry(0.88, 0.18, 1.05),
+    stoneLight,
+    [1.02, 0.42, -0.12],
+    [-0.03, 0.3, -0.04],
+    [1.3, 1, 1.18],
+  );
+  for (let index = 0; index < 3; index += 1) {
+    addMesh(
+      root,
+      `event-siren-rock:barnacle:${index}`,
+      new ConeGeometry(0.11 + index * 0.015, 0.22, 6),
+      barnacle,
+      [-0.9 + index * 0.65, -0.08 + index * 0.08, 1.42],
+      [Math.PI / 2, index * 0.6, 0],
+    );
+  }
+  return root;
+}
+
 export class SupernaturalEventAnimator {
   readonly worldRoot = new Group();
 
@@ -251,12 +315,8 @@ export class SupernaturalEventAnimator {
     cameraRoll: 0,
     ghostVisibility: 0,
     ghostVisibilities: [0, 0, 0, 0, 0],
-    ghostDistances: [0, 0, 0, 0, 0],
-    ghostSideOffsets: [0, 0, 0, 0, 0],
     flareFlash: 0,
     fogCurtain: 0,
-    sirenHeadTurn: 0,
-    sirenLunge: 0,
     melodyClarity: 0,
   };
   private readonly itemSample: SupernaturalItemSample = {
@@ -324,6 +384,7 @@ export class SupernaturalEventAnimator {
     side: DoubleSide,
   });
   private readonly ghosts: readonly Group[];
+  private readonly ghostFloatPose = createGhostFloatPose();
   private readonly siren: Group;
   private readonly sirenRock: Group;
   private readonly sirenTableau = new Group();
@@ -335,10 +396,10 @@ export class SupernaturalEventAnimator {
   private readonly sirenBaseRotation: Euler;
   private readonly sirenBasePosition: Vector3;
   private readonly sirenTableauBaseY: number;
-  private readonly sirenHead: Object3D | null;
-  private readonly sirenHeadBaseRotation = new Euler();
   private active: ActiveSupernaturalAnimation | null = null;
   private stagedEventId: string | null = null;
+  private ghostFloatTime = 0;
+  private ghostLoopVisible = false;
   private disposed = false;
 
   constructor(
@@ -355,8 +416,7 @@ export class SupernaturalEventAnimator {
       const ghost = eventModels.create('ghost');
       ghost.name = `ghost-${index + 1}`;
       replaceMaterials(ghost, this.ghostMaterial);
-      const path = GHOST_FLIGHT_PATHS[index]!;
-      this.poseGhost(ghost, index, path.start[0], path.start[1], path.start[2]);
+      this.poseFloatingGhost(ghost, index);
       ghost.scale.multiplyScalar(0.88 + index * 0.045);
       ghost.visible = false;
       return ghost;
@@ -368,14 +428,7 @@ export class SupernaturalEventAnimator {
     this.siren.rotation.set(0, 0, 0);
     this.sirenBasePosition = this.siren.position.clone();
     this.sirenBaseRotation = this.siren.rotation.clone();
-    this.sirenHead = this.siren.getObjectByName('Formad_Head') ?? null;
-    if (this.sirenHead !== null) this.sirenHeadBaseRotation.copy(this.sirenHead.rotation);
-
-    this.sirenRock = eventModels.create('sirenRock');
-    this.sirenRock.name = 'event-siren-rock';
-    tuneReadableMaterials(this.sirenRock, 0.08);
-    this.sirenRock.position.set(0, 0, 0);
-    this.sirenRock.scale.y *= SIREN_ROCK_VERTICAL_SCALE;
+    this.sirenRock = createSirenRock();
     const rockBounds = new Box3().setFromObject(this.sirenRock);
     const rockMinimumY = Number.isFinite(rockBounds.min.y) ? rockBounds.min.y : 0;
     const rockMaximumY = Number.isFinite(rockBounds.max.y) ? rockBounds.max.y : 0;
@@ -388,13 +441,17 @@ export class SupernaturalEventAnimator {
     const sirenMinimumY = Number.isFinite(sirenBounds.min.y) ? sirenBounds.min.y : 0;
     this.sirenFacingAnchor.position.set(
       -0.12,
-      rockMaximumY - sirenMinimumY + 0.03,
+      rockMaximumY - sirenMinimumY - SIREN_BODY_SETTLE,
       0.02,
     );
-    this.sirenFacingAnchor.rotation.y = Math.atan2(-SIREN_ROCK_X, -SIREN_ROCK_Z)
-      - SIREN_MODEL_FORWARD_YAW;
+    this.sirenFacingAnchor.rotation.set(
+      0,
+      Math.atan2(SIREN_ROCK_Z, -SIREN_ROCK_X),
+      0,
+    );
     this.sirenFacingAnchor.userData.modelForwardAxis = 'positive-x';
     this.sirenFacingAnchor.userData.facesPlayer = true;
+    this.sirenFacingAnchor.userData.pose = 'seated';
     this.sirenFacingAnchor.add(this.siren);
     this.sirenKeyLight.name = 'siren-tableau-key-light';
     this.sirenKeyLight.position.set(2.8, 4.2, 4.6);
@@ -437,6 +494,8 @@ export class SupernaturalEventAnimator {
     if (this.disposed) return;
     this.cancelActive();
     this.stagedEventId = supernaturalRevealDuration(eventId) === null ? null : eventId;
+    this.ghostFloatTime = 0;
+    this.ghostLoopVisible = false;
     this.rememberCameraBase();
     this.restoreStage();
   }
@@ -483,7 +542,10 @@ export class SupernaturalEventAnimator {
     this.stagedEventId = eventId;
     this.rememberCameraBase();
     this.restoreStage();
-    if (eventId === 'ghosts') this.hideGhosts();
+    if (eventId === 'ghosts') {
+      this.ghostLoopVisible = false;
+      this.hideGhosts();
+    }
     sampleSupernaturalItemUse(eventId, choiceId, 0, this.itemSample);
     return new Promise((resolve) => {
       this.active = {
@@ -509,7 +571,10 @@ export class SupernaturalEventAnimator {
     this.stagedEventId = eventId;
     this.rememberCameraBase();
     this.restoreStage();
-    if (eventId === 'ghosts') this.hideGhosts();
+    if (eventId === 'ghosts') {
+      this.ghostLoopVisible = false;
+      this.hideGhosts();
+    }
     const sceneResponse = response === null
       ? null
       : {
@@ -535,15 +600,22 @@ export class SupernaturalEventAnimator {
 
   update(_time: number, delta: number, _amplitudeScale = 1): void {
     if (this.disposed) return;
+    const frameDelta = Math.max(0, Number.isFinite(delta) ? delta : 0);
+    if (this.stagedEventId === 'ghosts') this.ghostFloatTime += frameDelta;
     const active = this.active;
-    if (active === null) return;
+    if (active === null) {
+      if (this.stagedEventId === 'ghosts' && this.ghostLoopVisible) {
+        this.showGhostLoop(0.56);
+      }
+      return;
+    }
 
     this.restoreCamera();
     this.supplyDisplay.resetEventPoseForFrame();
     this.restoreStage();
     active.elapsed = Math.min(
       active.duration,
-      active.elapsed + Math.max(0, Number.isFinite(delta) ? delta : 0),
+      active.elapsed + frameDelta,
     );
     const progress = active.elapsed / active.duration;
     switch (active.kind) {
@@ -564,6 +636,7 @@ export class SupernaturalEventAnimator {
     if (this.disposed) return;
     this.cancelActive();
     this.stagedEventId = null;
+    this.ghostLoopVisible = false;
     this.hideAll();
     this.supplyDisplay.clearEventPose();
   }
@@ -584,6 +657,18 @@ export class SupernaturalEventAnimator {
   private updateReveal(eventId: string, progress: number): void {
     if (!sampleSupernaturalReveal(eventId, progress, this.revealSample)) return;
     const sample = this.revealSample;
+    if (eventId === 'ghosts') {
+      this.sirenTableau.visible = false;
+      this.fogCurtain.visible = false;
+      this.ghostMaterial.opacity = Math.min(0.64, sample.ghostVisibility * 0.56);
+      for (let index = 0; index < this.ghosts.length; index += 1) {
+        const ghost = this.ghosts[index]!;
+        ghost.visible = sample.ghostVisibilities[index]! > 0.015;
+        this.poseFloatingGhost(ghost, index);
+      }
+      return;
+    }
+
     this.applyCameraPose(
       sample.cameraX,
       sample.cameraY,
@@ -592,37 +677,16 @@ export class SupernaturalEventAnimator {
       sample.cameraPitch,
       sample.cameraRoll,
     );
-    if (eventId === 'ghosts') {
-      this.sirenTableau.visible = false;
-      this.fogCurtain.visible = false;
-      this.ghostMaterial.opacity = Math.min(0.64, sample.ghostVisibility * 0.56);
-      for (let index = 0; index < this.ghosts.length; index += 1) {
-        const ghost = this.ghosts[index]!;
-        ghost.visible = sample.ghostVisibilities[index]! > 0.015;
-        this.poseGhost(
-          ghost,
-          index,
-          sample.ghostSideOffsets[index]!,
-          GHOST_FLIGHT_PATHS[index]!.start[1]
-            + (GHOST_FLIGHT_PATHS[index]!.end[1]
-              - GHOST_FLIGHT_PATHS[index]!.start[1]) * progress,
-          -sample.ghostDistances[index]!,
-        );
-      }
-      return;
-    }
 
     for (let index = 0; index < this.ghosts.length; index += 1) {
       this.ghosts[index]!.visible = false;
     }
-    this.sirenTableau.visible = sample.melodyClarity > 0.015;
+    this.sirenTableau.visible = true;
     this.fogCurtain.visible = sample.fogCurtain > 0.015;
     this.setFogOpacity(Math.min(
       0.42,
       sample.fogCurtain * (0.3 + sample.melodyClarity * 0.12),
     ));
-    this.turnSirenHead(sample.sirenHeadTurn);
-    this.siren.position.z = this.sirenBasePosition.z + sample.sirenLunge;
   }
 
   private updateItem(
@@ -686,8 +750,7 @@ export class SupernaturalEventAnimator {
       this.ghostMaterial.opacity = Math.min(0.62, sample.ghostVisibility * 0.52);
       for (let index = 0; index < this.ghosts.length; index += 1) {
         const ghost = this.ghosts[index]!;
-        const pathEnd = GHOST_FLIGHT_PATHS[index]!.end;
-        this.poseGhost(ghost, index, pathEnd[0], pathEnd[1], pathEnd[2]);
+        this.poseFloatingGhost(ghost, index);
         ghost.visible = sample.ghostVisibility > 0.015;
       }
       this.showFlare(sample.flareFlash);
@@ -704,30 +767,31 @@ export class SupernaturalEventAnimator {
     }
   }
 
-  private turnSirenHead(amount: number): void {
-    if (this.sirenHead !== null) {
-      this.sirenHead.rotation.copy(this.sirenHeadBaseRotation);
-      this.sirenHead.rotation.y += SIREN_HEAD_PLAYER_TURN + amount * 0.18;
-      return;
-    }
-    this.siren.rotation.copy(this.sirenBaseRotation);
-    this.siren.rotation.y += amount * 0.36;
-  }
-
-  private poseGhost(
+  private poseFloatingGhost(
     ghost: Group,
     index: number,
-    x: number,
-    y: number,
-    z: number,
   ): void {
-    const path = GHOST_FLIGHT_PATHS[index]!;
-    ghost.position.set(x, y, z);
-    ghost.rotation.y = Math.atan2(
-      path.end[0] - path.start[0],
-      path.end[2] - path.start[2],
+    sampleGhostFloatPathInto(
+      this.ghostFloatPose,
+      GHOST_FLOAT_PATHS[index]!,
+      this.ghostFloatTime,
     );
+    ghost.position.set(...this.ghostFloatPose.position);
+    ghost.rotation.y = Math.atan2(
+      this.ghostFloatPose.tangent[0],
+      this.ghostFloatPose.tangent[2],
+    ) + GHOST_MODEL_FORWARD_YAW_OFFSET;
+    ghost.userData.modelForwardAxis = 'negative-x';
     ghost.userData.facingPath = true;
+  }
+
+  private showGhostLoop(opacity: number): void {
+    this.ghostMaterial.opacity = opacity;
+    for (let index = 0; index < this.ghosts.length; index += 1) {
+      const ghost = this.ghosts[index]!;
+      this.poseFloatingGhost(ghost, index);
+      ghost.visible = true;
+    }
   }
 
   private showFlare(amount: number): void {
@@ -754,13 +818,11 @@ export class SupernaturalEventAnimator {
     this.sirenTableau.rotation.set(0, 0, 0);
     this.siren.position.copy(this.sirenBasePosition);
     this.siren.rotation.copy(this.sirenBaseRotation);
-    if (this.sirenHead !== null) this.sirenHead.rotation.copy(this.sirenHeadBaseRotation);
     if (this.stagedEventId === 'ghosts') {
       this.ghostMaterial.opacity = 0.42;
       for (let index = 0; index < this.ghosts.length; index += 1) {
-        const target = GHOST_FLIGHT_PATHS[index]!.start;
         const ghost = this.ghosts[index]!;
-        this.poseGhost(ghost, index, target[0], target[1], target[2]);
+        this.poseFloatingGhost(ghost, index);
         ghost.visible = false;
       }
     } else if (this.stagedEventId === 'eerie-melody') {
@@ -817,8 +879,10 @@ export class SupernaturalEventAnimator {
     this.restoreCamera();
     switch (active.kind) {
       case 'reveal':
-        if (active.eventId === 'ghosts') this.settleReaction(active.eventId, null);
-        else this.restoreStage();
+        if (active.eventId === 'ghosts') {
+          this.ghostLoopVisible = true;
+          this.showGhostLoop(0.56);
+        } else this.restoreStage();
         active.resolve();
         break;
       case 'item':
@@ -851,13 +915,10 @@ export class SupernaturalEventAnimator {
   ): void {
     this.hideAll();
     if (eventId === 'ghosts' && response?.choiceId !== 'flareGun') {
-      this.ghostMaterial.opacity = 0.32;
-      for (let index = 0; index < this.ghosts.length; index += 1) {
-        const target = GHOST_FLIGHT_PATHS[index]!.end;
-        const ghost = this.ghosts[index]!;
-        this.poseGhost(ghost, index, target[0], target[1], target[2]);
-        ghost.visible = true;
-      }
+      this.ghostLoopVisible = true;
+      this.showGhostLoop(0.32);
+    } else if (eventId === 'ghosts') {
+      this.ghostLoopVisible = false;
     }
   }
 

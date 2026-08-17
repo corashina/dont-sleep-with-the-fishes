@@ -24,10 +24,10 @@ const saved = (...types: ItemId[]): ItemInstance[] => {
 };
 
 describe('survival foundations', () => {
-  it('keeps Captain Whiskers out of the session inventory', () => {
-    const session = new SurvivalSession(saved('captainWhiskers', 'cannedFood'), { seed: 1 });
+  it('keeps Carlitos out of the session inventory', () => {
+    const session = new SurvivalSession(saved('carlitos', 'cannedFood'), { seed: 1 });
 
-    expect(session.snapshot().inventory).not.toHaveProperty('captainWhiskers-1');
+    expect(session.snapshot().inventory).not.toHaveProperty('carlitos-1');
     expect(session.snapshot().inventory).toHaveProperty('cannedFood-1');
   });
 
@@ -120,13 +120,13 @@ describe('survival foundations', () => {
 
   it('allows only catalog-approved break and repair transitions', () => {
     const inventory = new SurvivalInventoryState(saved(
-      'compass', 'flashlight', 'ductTape', 'captainWhiskers',
+      'compass', 'flashlight', 'ductTape', 'carlitos',
     ));
     expect(inventory.break('compass-1')).toBe(true);
     expect(inventory.repair('compass-1')).toBe(true);
     expect(inventory.break('flashlight-1')).toBe(false);
-    expect(inventory.break('captainWhiskers-1')).toBe(false);
-    expect(inventory.consume('captainWhiskers')).toEqual([]);
+    expect(inventory.break('carlitos-1')).toBe(false);
+    expect(inventory.consume('carlitos')).toEqual([]);
     inventory.consume('ductTape');
     expect(inventory.repair('ductTape-1')).toBe(false);
   });

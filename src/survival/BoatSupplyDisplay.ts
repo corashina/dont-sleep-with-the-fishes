@@ -315,7 +315,7 @@ export class BoatSupplyDisplay {
       parent.add(root);
       this.basePositionById.set(groupId, root.position.clone());
       this.baseQuaternionById.set(groupId, root.quaternion.clone());
-      const poolSize = groupId === 'captainWhiskers'
+      const poolSize = groupId === 'carlitos'
         ? 0
         : groupId === 'repairMaterial'
         || groupId === 'cannedFood'
@@ -753,7 +753,7 @@ export class BoatSupplyDisplay {
       || groupId === 'repairMaterial'
       ? 0
       : brokenItems.length;
-    record.visibleCopies = groupId === 'captainWhiskers'
+    record.visibleCopies = groupId === 'carlitos'
       ? 0
       : visibleCopyCount(record.quantity);
     record.backingInstanceId = this.preferredBackingId(

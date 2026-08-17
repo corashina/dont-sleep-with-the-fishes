@@ -9,18 +9,18 @@ import {
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  createCaptainWhiskersPose,
-  captainWhiskersPoseState,
-  sampleCaptainWhiskersPoseInto,
-} from '../src/survival/captainWhiskersMotion';
-import { CaptainWhiskersPresentation } from '../src/survival/CaptainWhiskersPresentation';
-import type { CaptainWhiskersSnapshot } from '../src/survival/CaptainWhiskersState';
+  createCarlitosPose,
+  carlitosPoseState,
+  sampleCarlitosPoseInto,
+} from '../src/survival/carlitosMotion';
+import { CarlitosPresentation } from '../src/survival/CarlitosPresentation';
+import type { CarlitosSnapshot } from '../src/survival/CarlitosState';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 import { createTestPropModels } from './helpers/propModels';
 
 function snapshot(
-  overrides: Partial<CaptainWhiskersSnapshot> = {},
-): CaptainWhiskersSnapshot {
+  overrides: Partial<CarlitosSnapshot> = {},
+): CarlitosSnapshot {
   return {
     alive: true,
     hunger: 5,
@@ -32,11 +32,11 @@ function snapshot(
   };
 }
 
-describe('Captain Whiskers motion', () => {
+describe('Carlitos motion', () => {
   it('uses the same mutable pose for a tactile pet beat', () => {
-    const pose = createCaptainWhiskersPose();
+    const pose = createCarlitosPose();
 
-    const result = sampleCaptainWhiskersPoseInto(pose, {
+    const result = sampleCarlitosPoseInto(pose, {
       status: 'hungry',
       action: 'pet',
       elapsed: 0.25,
@@ -50,31 +50,31 @@ describe('Captain Whiskers motion', () => {
   });
 
   it('selects sick, starving, unhappy, hungry, then healthy state priority', () => {
-    expect(captainWhiskersPoseState(snapshot({
+    expect(carlitosPoseState(snapshot({
       sickness: 1,
       hunger: 0,
       unhappiness: 9,
     }))).toBe('sick');
-    expect(captainWhiskersPoseState(snapshot({
+    expect(carlitosPoseState(snapshot({
       hunger: 1,
       unhappiness: 9,
     }))).toBe('starving');
-    expect(captainWhiskersPoseState(snapshot({
+    expect(carlitosPoseState(snapshot({
       hunger: 3,
       unhappiness: 3,
     }))).toBe('unhappy');
-    expect(captainWhiskersPoseState(snapshot({ hunger: 3 }))).toBe('hungry');
-    expect(captainWhiskersPoseState(snapshot())).toBe('healthy');
+    expect(carlitosPoseState(snapshot({ hunger: 3 }))).toBe('hungry');
+    expect(carlitosPoseState(snapshot())).toBe('healthy');
   });
 
   it('restores the selected base pose when an action completes', () => {
-    const pose = createCaptainWhiskersPose();
-    const base = createCaptainWhiskersPose();
-    sampleCaptainWhiskersPoseInto(base, {
+    const pose = createCarlitosPose();
+    const base = createCarlitosPose();
+    sampleCarlitosPoseInto(base, {
       status: 'unhappy', action: null, elapsed: 0, duration: 0,
     });
 
-    sampleCaptainWhiskersPoseInto(pose, {
+    sampleCarlitosPoseInto(pose, {
       status: 'unhappy', action: 'feed', elapsed: 0.8, duration: 0.8,
     });
 
@@ -82,20 +82,20 @@ describe('Captain Whiskers motion', () => {
   });
 });
 
-describe('CaptainWhiskersPresentation', () => {
+describe('CarlitosPresentation', () => {
   it('owns one placed model and only exposes a living companion', () => {
     const propModels = createTestPropModels();
     const create = vi.spyOn(propModels, 'createPresentation');
-    const companion = new CaptainWhiskersPresentation(propModels);
+    const companion = new CarlitosPresentation(propModels);
     const transform = boatStorageTransform({
-      instanceId: 'captainWhiskers-1',
-      type: 'captainWhiskers',
+      instanceId: 'carlitos-1',
+      type: 'carlitos',
     });
 
     expect(create).toHaveBeenCalledOnce();
     expect(create).toHaveBeenCalledWith({
-      instanceId: 'captainWhiskers-1',
-      type: 'captainWhiskers',
+      instanceId: 'carlitos-1',
+      type: 'carlitos',
     });
     expect(companion.root.position.toArray()).toEqual(transform.position.toArray());
     expect(companion.root.rotation.toArray()).toEqual(transform.rotation.toArray());
@@ -120,11 +120,11 @@ describe('CaptainWhiskersPresentation', () => {
 
   it('plays Pet and Feed, then hides props and restores the base pose', async () => {
     const propModels = createTestPropModels();
-    const companion = new CaptainWhiskersPresentation(propModels);
+    const companion = new CarlitosPresentation(propModels);
     companion.sync(snapshot({ hunger: 1 }));
-    const poseRoot = companion.root.getObjectByName('captain-whiskers-pose')!;
-    const hand = companion.root.getObjectByName('captain-whiskers-petting-hand')!;
-    const food = companion.root.getObjectByName('captain-whiskers-food')!;
+    const poseRoot = companion.root.getObjectByName('carlitos-pose')!;
+    const hand = companion.root.getObjectByName('carlitos-petting-hand')!;
+    const food = companion.root.getObjectByName('carlitos-food')!;
     const baseRotationX = poseRoot.rotation.x;
 
     const pet = companion.play('pet');
@@ -163,7 +163,7 @@ describe('CaptainWhiskersPresentation', () => {
     const geometryDispose = vi.spyOn(geometry, 'dispose');
     const materialDispose = vi.spyOn(material, 'dispose');
 
-    expect(() => new CaptainWhiskersPresentation({
+    expect(() => new CarlitosPresentation({
       createPresentation: () => ({
         root: modelRoot,
         animation: null,
@@ -183,9 +183,9 @@ describe('CaptainWhiskersPresentation', () => {
     const geometryDispose = vi.spyOn(BufferGeometry.prototype, 'dispose');
     const materialDispose = vi.spyOn(Material.prototype, 'dispose');
 
-    expect(() => new CaptainWhiskersPresentation(propModels, {
+    expect(() => new CarlitosPresentation(propModels, {
       onPropPartCreated: (prop, part) => {
-        if (prop === 'hand' && part.name === 'captain-whiskers-hand:thumb') {
+        if (prop === 'hand' && part.name === 'carlitos-hand:thumb') {
           throw failure;
         }
       },
@@ -204,9 +204,9 @@ describe('CaptainWhiskersPresentation', () => {
     const geometryDispose = vi.spyOn(BufferGeometry.prototype, 'dispose');
     const materialDispose = vi.spyOn(Material.prototype, 'dispose');
 
-    expect(() => new CaptainWhiskersPresentation(propModels, {
+    expect(() => new CarlitosPresentation(propModels, {
       onPropPartCreated: (prop, part) => {
-        if (prop === 'food' && part.name === 'captain-whiskers-food:bowl') {
+        if (prop === 'food' && part.name === 'carlitos-food:bowl') {
           throw failure;
         }
       },
@@ -222,7 +222,7 @@ describe('CaptainWhiskersPresentation', () => {
   it('disposes every model, hand, and food geometry and material once', () => {
     const propModels = createTestPropModels();
     const create = vi.spyOn(propModels, 'createPresentation');
-    const companion = new CaptainWhiskersPresentation(propModels);
+    const companion = new CarlitosPresentation(propModels);
     const modelPresentation = create.mock.results[0]!.value;
     const modelDispose = vi.spyOn(modelPresentation, 'dispose');
     const geometries = new Set<BufferGeometry>();
@@ -240,8 +240,8 @@ describe('CaptainWhiskersPresentation', () => {
       vi.spyOn(material, 'dispose')
     ));
 
-    expect(companion.root.getObjectByName('captain-whiskers-hand:palm')).toBeDefined();
-    expect(companion.root.getObjectByName('captain-whiskers-food:bowl')).toBeDefined();
+    expect(companion.root.getObjectByName('carlitos-hand:palm')).toBeDefined();
+    expect(companion.root.getObjectByName('carlitos-food:bowl')).toBeDefined();
 
     companion.dispose();
     companion.dispose();

@@ -13,6 +13,8 @@ import {
   SphereGeometry,
   TorusGeometry,
   Vector3,
+  type Scene,
+  type WebGLRenderer,
 } from 'three';
 import {
   sampleWaveFieldInto,
@@ -94,8 +96,6 @@ interface RescueCuePresentation extends FocusedEventPresentation {
 
 const TABLEAU_EVENT_IDS = [
   'drifting-bottle',
-  'check-the-back',
-  'mystery-chest',
   'chest-attack',
   'flowers',
   'midnight-tour',
@@ -332,8 +332,6 @@ export class EventPresentationLayer {
     const materials = createMaterials();
     const tableaus = [
       createTableau('drifting-bottle', bottleTableau(materials), [2.7, 0.04, -3.4], [1.15, -0.45, 0.2]),
-      createTableau('check-the-back', fishTableau(materials), [0.4, -0.08, 3.8], [0.25, -0.55, 1.2]),
-      createTableau('mystery-chest', chestTableau(materials), [-2.55, 0.02, -2.9], [-1.0, -0.42, 0.35]),
       createTableau('chest-attack', mimicChestTableau(materials), [-1.45, 0.14, -2.55], [-0.7, -0.32, 0.3]),
       createTableau('flowers', flowersTableau(materials), [2.45, -0.08, -3.65], [1.0, -0.26, 0.35]),
       createTableau('midnight-tour', islandTableau(materials), [-8.0, -0.18, -20], [-2.4, -0.55, -1.2]),
@@ -379,6 +377,20 @@ export class EventPresentationLayer {
     return true;
   }
 
+  prepareRender(
+    renderer: WebGLRenderer,
+    scene: Scene,
+    camera: PerspectiveCamera,
+  ): Promise<void> {
+    return Promise.all([...this.ownedFocused].map(
+      (presentation) => presentation.prepareRender?.(
+        renderer,
+        scene,
+        camera,
+      ),
+    )).then(() => undefined);
+  }
+
   projectInteractionAnchors(
     camera: PerspectiveCamera,
     width: number,
@@ -398,6 +410,7 @@ export class EventPresentationLayer {
         id: target.id,
         label: target.label,
         description: target.description,
+        tooltip: target.tooltip,
         eventChoiceId: target.choiceId,
         itemType: null,
         toolId: null,

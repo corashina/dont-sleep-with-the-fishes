@@ -20,32 +20,32 @@ import {
   disposeResourceSets,
   runCleanupSteps,
 } from '../world/SceneResources';
-import type { CaptainWhiskersSnapshot } from './CaptainWhiskersState';
+import type { CarlitosSnapshot } from './CarlitosState';
 import {
-  captainWhiskersPoseState,
-  createCaptainWhiskersPose,
-  sampleCaptainWhiskersPoseInto,
-  type CaptainWhiskersAction,
-  type CaptainWhiskersPoseSample,
-  type CaptainWhiskersPoseState,
-  type MutableCaptainWhiskersPose,
-} from './captainWhiskersMotion';
+  carlitosPoseState,
+  createCarlitosPose,
+  sampleCarlitosPoseInto,
+  type CarlitosAction,
+  type CarlitosPoseSample,
+  type CarlitosPoseState,
+  type MutableCarlitosPose,
+} from './carlitosMotion';
 
-const CAPTAIN_WHISKERS_INSTANCE = Object.freeze({
-  instanceId: 'captainWhiskers-1' as ItemInstanceId,
-  type: 'captainWhiskers',
+const CARLITOS_INSTANCE = Object.freeze({
+  instanceId: 'carlitos-1' as ItemInstanceId,
+  type: 'carlitos',
 } satisfies ItemInstance);
 
 const ACTION_DURATION = 0.8;
 
 interface ActiveAction {
-  readonly id: CaptainWhiskersAction;
+  readonly id: CarlitosAction;
   readonly duration: number;
   elapsed: number;
   readonly resolve: () => void;
 }
 
-export interface CaptainWhiskersPresentationConstructionHooks {
+export interface CarlitosPresentationConstructionHooks {
   readonly onPropPartCreated?: (
     prop: 'hand' | 'food',
     part: Mesh,
@@ -58,7 +58,7 @@ interface OwnedCompanionProp {
   readonly materials: Set<Material>;
 }
 
-export class CaptainWhiskersPresentation {
+export class CarlitosPresentation {
   readonly root = new Group();
   readonly interactionRoot = new Group();
   private readonly poseRoot = new Group();
@@ -68,40 +68,40 @@ export class CaptainWhiskersPresentation {
   private readonly modelPresentation: PropPresentation;
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
-  private readonly pose: MutableCaptainWhiskersPose = createCaptainWhiskersPose();
-  private readonly poseSample: CaptainWhiskersPoseSample = {
+  private readonly pose: MutableCarlitosPose = createCarlitosPose();
+  private readonly poseSample: CarlitosPoseSample = {
     status: 'healthy',
     action: null,
     elapsed: 0,
     duration: ACTION_DURATION,
   };
-  private status: CaptainWhiskersPoseState = 'healthy';
+  private status: CarlitosPoseState = 'healthy';
   private activeAction: ActiveAction | null = null;
   private living = false;
   private disposed = false;
 
   constructor(
     propModels: Pick<PropModelLibrary, 'createPresentation'>,
-    hooks: CaptainWhiskersPresentationConstructionHooks = {},
+    hooks: CarlitosPresentationConstructionHooks = {},
   ) {
-    this.root.name = 'captain-whiskers-companion';
-    const transform = boatStorageTransform(CAPTAIN_WHISKERS_INSTANCE);
+    this.root.name = 'carlitos-companion';
+    const transform = boatStorageTransform(CARLITOS_INSTANCE);
     this.root.position.copy(transform.position);
     this.root.rotation.copy(transform.rotation);
     this.root.scale.setScalar(transform.scale);
 
-    this.poseRoot.name = 'captain-whiskers-pose';
-    this.headPoseRoot.name = 'captain-whiskers-head-pose';
-    this.interactionRoot.name = 'captain-whiskers-interaction';
-    this.interactionRoot.userData.companionId = 'captainWhiskers';
-    this.modelPresentation = propModels.createPresentation(CAPTAIN_WHISKERS_INSTANCE);
+    this.poseRoot.name = 'carlitos-pose';
+    this.headPoseRoot.name = 'carlitos-head-pose';
+    this.interactionRoot.name = 'carlitos-interaction';
+    this.interactionRoot.userData.companionId = 'carlitos';
+    this.modelPresentation = propModels.createPresentation(CARLITOS_INSTANCE);
     try {
       collectMeshResources(
         this.modelPresentation.root,
         this.ownedGeometries,
         this.ownedMaterials,
       );
-      this.modelPresentation.root.name = 'captain-whiskers-model';
+      this.modelPresentation.root.name = 'carlitos-model';
       this.headPoseRoot.add(this.modelPresentation.root);
       this.poseRoot.add(this.headPoseRoot);
       this.interactionRoot.add(this.poseRoot);
@@ -133,16 +133,16 @@ export class CaptainWhiskersPresentation {
     }
   }
 
-  sync(snapshot: CaptainWhiskersSnapshot | null): void {
+  sync(snapshot: CarlitosSnapshot | null): void {
     if (this.disposed) return;
-    this.status = snapshot === null ? 'healthy' : captainWhiskersPoseState(snapshot);
+    this.status = snapshot === null ? 'healthy' : carlitosPoseState(snapshot);
     this.setLiving(snapshot?.alive === true);
     if (!this.living) this.finishAction();
     this.samplePose();
     this.applyPose();
   }
 
-  play(action: CaptainWhiskersAction, duration = ACTION_DURATION): Promise<void> {
+  play(action: CarlitosAction, duration = ACTION_DURATION): Promise<void> {
     if (this.disposed || !this.living) return Promise.resolve();
     this.finishAction();
     return new Promise((resolve) => {
@@ -213,7 +213,7 @@ export class CaptainWhiskersPresentation {
     this.poseSample.action = action?.id ?? null;
     this.poseSample.elapsed = action?.elapsed ?? 0;
     this.poseSample.duration = action?.duration ?? ACTION_DURATION;
-    sampleCaptainWhiskersPoseInto(this.pose, this.poseSample);
+    sampleCarlitosPoseInto(this.pose, this.poseSample);
   }
 
   private applyPose(): void {
@@ -239,10 +239,10 @@ export class CaptainWhiskersPresentation {
 }
 
 function createPettingHand(
-  onPartCreated?: CaptainWhiskersPresentationConstructionHooks['onPropPartCreated'],
+  onPartCreated?: CarlitosPresentationConstructionHooks['onPropPartCreated'],
 ): OwnedCompanionProp {
   const root = new Group();
-  root.name = 'captain-whiskers-petting-hand';
+  root.name = 'carlitos-petting-hand';
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
   try {
@@ -261,7 +261,7 @@ function createPettingHand(
     const palmGeometry = new BoxGeometry(0.24, 0.075, 0.2, 1, 1, 1);
     geometries.add(palmGeometry);
     const palm = new Mesh(palmGeometry, skin);
-    palm.name = 'captain-whiskers-hand:palm';
+    palm.name = 'carlitos-hand:palm';
     palm.rotation.y = -0.08;
     root.add(palm);
     onPartCreated?.('hand', palm);
@@ -269,7 +269,7 @@ function createPettingHand(
     const thumbGeometry = new CylinderGeometry(0.025, 0.035, 0.14, 5);
     geometries.add(thumbGeometry);
     const thumb = new Mesh(thumbGeometry, skin);
-    thumb.name = 'captain-whiskers-hand:thumb';
+    thumb.name = 'carlitos-hand:thumb';
     thumb.position.set(-0.12, -0.005, 0.035);
     thumb.rotation.z = 1.08;
     root.add(thumb);
@@ -286,7 +286,7 @@ function createPettingHand(
       );
       geometries.add(fingerGeometry);
       const finger = new Mesh(fingerGeometry, skin);
-      finger.name = `captain-whiskers-hand:finger-${index + 1}`;
+      finger.name = `carlitos-hand:finger-${index + 1}`;
       finger.position.set(-0.064 + index * 0.066, -0.045, -0.17);
       finger.rotation.x = 0.08 + index * 0.025;
       finger.rotation.y = (index - 1) * 0.035;
@@ -297,7 +297,7 @@ function createPettingHand(
     const cuffGeometry = new CylinderGeometry(0.13, 0.155, 0.16, 7);
     geometries.add(cuffGeometry);
     const cuff = new Mesh(cuffGeometry, cloth);
-    cuff.name = 'captain-whiskers-hand:cuff';
+    cuff.name = 'carlitos-hand:cuff';
     cuff.position.z = 0.19;
     cuff.rotation.x = Math.PI / 2;
     root.add(cuff);
@@ -311,10 +311,10 @@ function createPettingHand(
 }
 
 function createFoodProp(
-  onPartCreated?: CaptainWhiskersPresentationConstructionHooks['onPropPartCreated'],
+  onPartCreated?: CarlitosPresentationConstructionHooks['onPropPartCreated'],
 ): OwnedCompanionProp {
   const root = new Group();
-  root.name = 'captain-whiskers-food';
+  root.name = 'carlitos-food';
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
   try {
@@ -334,14 +334,14 @@ function createFoodProp(
     const bowlGeometry = new CylinderGeometry(0.2, 0.145, 0.09, 8, 1, false);
     geometries.add(bowlGeometry);
     const bowl = new Mesh(bowlGeometry, bowlMaterial);
-    bowl.name = 'captain-whiskers-food:bowl';
+    bowl.name = 'carlitos-food:bowl';
     root.add(bowl);
     onPartCreated?.('food', bowl);
 
     const rationGeometry = new SphereGeometry(0.12, 7, 4);
     geometries.add(rationGeometry);
     const ration = new Mesh(rationGeometry, foodMaterial);
-    ration.name = 'captain-whiskers-food:ration';
+    ration.name = 'carlitos-food:ration';
     ration.position.y = 0.065;
     ration.scale.set(1, 0.38, 0.78);
     ration.rotation.y = 0.24;

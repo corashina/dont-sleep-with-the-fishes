@@ -1,7 +1,7 @@
 import type { ItemId, ItemInstance, ItemInstanceId } from '../game/ItemState';
 import type { FishingSession } from './FishingSession';
 import type { JournalEntry } from './journal';
-import type { CaptainWhiskersSnapshot } from './CaptainWhiskersState';
+import type { CarlitosSnapshot } from './CarlitosState';
 
 export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dead' | 'sunk';
 /** Gameplay weather remains separate from renderer-only presentation weather. */
@@ -9,10 +9,10 @@ export type WeatherId = 'calm' | 'overcast' | 'squall';
 export type DayActionId =
   | 'fish' | 'dive' | 'eat' | 'repair' | 'repairItem'
   | 'treat' | 'sendMessage' | 'useEnergyBar' | 'openChest' | 'endDay'
-  | 'petWhiskers' | 'feedWhiskers' | 'treatWhiskers';
-export type CompanionEventActionId = 'delegateWhiskers';
+  | 'petCarlitos' | 'feedCarlitos' | 'treatCarlitos';
+export type CompanionEventActionId = 'delegateCarlitos';
 export type CompanionActionId =
-  | 'petWhiskers' | 'feedWhiskers' | 'treatWhiskers' | CompanionEventActionId;
+  | 'petCarlitos' | 'feedCarlitos' | 'treatCarlitos' | CompanionEventActionId;
 export interface CompanionEventActionAvailability {
   readonly visible: boolean;
   readonly unavailableReason: string | null;
@@ -48,23 +48,24 @@ export interface ResourceDelta {
   rescueProgress?: number;
 }
 
-export type DriftingLootVariant = 'barrel' | 'crate';
+export type DriftingCargoKind = 'barrel' | 'chest';
 
 export type EventPresentationKey =
-  | 'drifting-loot.food'
-  | 'drifting-loot.bait'
-  | 'drifting-loot.repair'
-  | 'drifting-loot.energy-bar'
-  | 'drifting-loot.drift'
+  | 'drifting-barrel.food'
+  | 'drifting-barrel.bait'
+  | 'drifting-barrel.repair'
+  | 'drifting-barrel.energy-bar'
+  | 'drifting-barrel.drift'
+  | 'drifting-chest.food'
+  | 'drifting-chest.bait'
+  | 'drifting-chest.repair'
+  | 'drifting-chest.energy-bar'
+  | 'drifting-chest.drift'
   | 'drifting-bottle.retrieve'
   | 'drifting-bottle.lost'
   | 'check-the-back.fish'
   | 'check-the-back.empty'
-  | 'check-the-back.face'
   | 'check-the-back.ignore'
-  | 'mystery-chest.safe'
-  | 'mystery-chest.mimic'
-  | 'mystery-chest.leave'
   | 'flowers.collect'
   | 'flowers.drift';
 
@@ -114,9 +115,11 @@ export interface ChestSnapshot {
   readonly acquiredDay: number | null;
 }
 export type ChestEventEffect = 'acquire' | 'close' | 'destroy';
-export type CompanionEventEffect =
-  | { readonly kind: 'sickness'; readonly operation: 'add' | 'set'; readonly value: number }
-  | { readonly kind: 'kill'; readonly cause: 'sea-watcher' };
+export type CompanionEventEffect = {
+  readonly kind: 'sickness';
+  readonly operation: 'add' | 'set';
+  readonly value: number;
+};
 export type SurvivalEndingReason = 'standard' | 'kidnapped';
 export type IntegerValue = number | { readonly min: number; readonly max: number };
 export interface ResourceEffect {
@@ -223,10 +226,9 @@ export interface SurvivalSnapshot {
   readonly journalEntries: readonly JournalEntry[];
   inventory: SurvivalInventorySnapshot;
   savedItems: readonly ItemInstance[];
-  readonly captainWhiskers: Readonly<CaptainWhiskersSnapshot> | null;
+  readonly carlitos: Readonly<CarlitosSnapshot> | null;
   pendingEventId: string | null;
   readonly pendingEventTargetId: ItemInstanceId | null;
-  readonly pendingDriftingLootVariant: DriftingLootVariant | null;
   lastOutcome: ActionOutcome | null;
   seed: number;
 }

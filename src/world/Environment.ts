@@ -15,7 +15,7 @@ import {
 import { alignDirectionalLightWithSun } from './celestialLight';
 import { Skybox } from './Skybox';
 import { WeatherEffects } from './WeatherEffects';
-import type { SkyPalette, SkyState } from './skyPalette';
+import type { SkyPalette, SkyPhase, SkyState } from './skyPalette';
 
 const SCAVENGE_SHADOW_CONFIG = Object.freeze({
   mapSize: 2048,
@@ -102,6 +102,11 @@ export class Environment {
     this.weatherProfileValue = presentationWeatherProfile(id);
     this.skyState.weather = this.weatherProfileValue.skyWeather;
     this.weatherEffects.setWeather(id);
+  }
+
+  setPhase(phase: SkyPhase): void {
+    if (this.disposed) return;
+    this.skyState.phase = phase;
   }
 
   update(

@@ -690,6 +690,11 @@ export class World {
     this.environment.setWeather(id);
   }
 
+  setPresentationPhase(phase: 'day' | 'night'): void {
+    if (this.disposed) return;
+    this.environment.setPhase(phase);
+  }
+
   setScavengeIntroImpact(y: number, pitch: number, roll: number): void {
     this.scavengeIntroImpactY = Number.isFinite(y) ? y : 0;
     this.scavengeIntroImpactPitch = Number.isFinite(pitch) ? pitch : 0;

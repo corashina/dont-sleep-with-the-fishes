@@ -23,6 +23,7 @@ import {
 } from '../weather/presentationWeather';
 import { VisualQualityControl } from './VisualQualityControl';
 import { WaterQualityControl } from './WaterQualityControl';
+import type { SkyPhase } from '../world/skyPalette';
 
 const PANEL_ID = 'post-processing-console-panel';
 
@@ -37,6 +38,11 @@ export interface WeatherControls {
   readonly selected: PresentationWeatherId;
   readonly source: WeatherControlSource;
   setWeather(id: PresentationWeatherId): void;
+}
+
+export interface TimeOfDayControls {
+  readonly selected: SkyPhase;
+  setTimeOfDay(phase: SkyPhase): void;
 }
 
 export interface EventTestControls {
@@ -83,6 +89,7 @@ export class PostProcessingConsole {
       null,
     ),
     private readonly weatherControls: WeatherControls = DEFAULT_WEATHER_CONTROLS,
+    private readonly timeOfDayControls?: TimeOfDayControls,
     private readonly eventTestControls?: EventTestControls,
     waterQuality: WaterQualityPreference = createWaterQualityPreference(
       () => undefined,
@@ -233,6 +240,21 @@ export class PostProcessingConsole {
             <section class="post-processing-console__category">
               <h2>GAMEPLAY</h2>
               ${gameplayPhysicsControl}
+              ${timeOfDayControls === undefined
+                ? ''
+                : `<div class="post-processing-console__group">
+                    <strong>TIME OF DAY</strong>
+                    <label class="post-processing-console__toggle">
+                      <span data-time-of-day-label>${timeOfDayControls.selected === 'night' ? 'Night' : 'Day'}</span>
+                      <input
+                        type="checkbox"
+                        role="switch"
+                        data-presentation-night
+                        ${timeOfDayControls.selected === 'night' ? 'checked' : ''}
+                      >
+                      <output data-time-of-day-state>${timeOfDayControls.selected.toUpperCase()}</output>
+                    </label>
+                  </div>`}
               <div class="post-processing-console__group">
                 <strong>WEATHER</strong>
                 <label class="post-processing-console__select">
@@ -288,6 +310,16 @@ export class PostProcessingConsole {
     this.weatherControlSource = source;
     this.weatherSelect.value = id;
     this.weatherSource.value = source.toUpperCase();
+  }
+
+  setTimeOfDayState(phase: SkyPhase): void {
+    if (this.disposed) return;
+    const input = this.element.querySelector<HTMLInputElement>('[data-presentation-night]');
+    const label = this.element.querySelector<HTMLElement>('[data-time-of-day-label]');
+    const output = this.element.querySelector<HTMLOutputElement>('[data-time-of-day-state]');
+    if (input !== null) input.checked = phase === 'night';
+    if (label !== null) label.textContent = phase === 'night' ? 'Night' : 'Day';
+    if (output !== null) output.value = phase.toUpperCase();
   }
 
   dispose(): void {
@@ -393,6 +425,15 @@ export class PostProcessingConsole {
 
   private readonly handleChange = (event: Event): void => {
     const target = event.target;
+    if (
+      target instanceof HTMLInputElement
+      && target.matches('[data-presentation-night]')
+    ) {
+      const phase: SkyPhase = target.checked ? 'night' : 'day';
+      this.setTimeOfDayState(phase);
+      this.timeOfDayControls?.setTimeOfDay(phase);
+      return;
+    }
     if (
       target instanceof HTMLInputElement
       && target.matches('[data-audio-muted]')

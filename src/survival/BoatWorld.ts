@@ -24,8 +24,10 @@ import {
   Texture,
   Vector2,
   Vector3,
+  type WebGLRenderer,
 } from 'three';
 import {
+  DAY_ACTION_ONLY_ITEM_IDS,
   ITEM_DEFINITIONS,
   type ItemId,
   type ItemInstance,
@@ -84,7 +86,7 @@ import {
   BoatSupplyDisplay,
   GENERIC_EVENT_ITEM_USE_DURATION,
 } from './BoatSupplyDisplay';
-import { CaptainWhiskersPresentation } from './CaptainWhiskersPresentation';
+import { CarlitosPresentation } from './CarlitosPresentation';
 import { ChestDisplay } from './ChestDisplay';
 import { DivePresentation } from './DivePresentation';
 import type { DangerousWatersBoatReaction } from './DangerousWatersPresentation';
@@ -108,6 +110,10 @@ import {
   type FocusedEventPresentationFactories,
 } from './FocusedEventPresentation';
 import { FeaturedEventPresentations } from './FeaturedEventPresentations';
+import {
+  isDriftingCargoEventId,
+  type DriftingCargoEventId,
+} from './events';
 import { EventPresentationCoordinator } from './EventPresentationCoordinator';
 import {
   eventPresentationRoute,
@@ -123,9 +129,9 @@ import type {
 import { AnglerfishSwarmPresentation } from './events/AnglerfishSwarmPresentation';
 import { DeathStarePresentation } from './events/DeathStarePresentation';
 import {
-  CAPTAIN_WHISKERS_EVENT_IDS,
-  CaptainWhiskersEventPresentation,
-} from './events/CaptainWhiskersEventPresentation';
+  CARLITOS_EVENT_IDS,
+  CarlitosEventPresentation,
+} from './events/CarlitosEventPresentation';
 import { LeakPresentation } from './events/LeakPresentation';
 import { SchoolOfFishPresentation } from './events/SchoolOfFishPresentation';
 import { SnatcherPresentation } from './events/SnatcherPresentation';
@@ -147,7 +153,6 @@ import {
 } from './SurvivalLantern';
 import type {
   ActionOutcome,
-  DriftingLootVariant,
   PresentationCue,
   SurvivalSnapshot,
   WeatherId,
@@ -259,7 +264,7 @@ interface ActiveMoonAnimation {
   readonly resolve: () => void;
 }
 
-interface ActiveCaptainWhiskersDelegation {
+interface ActiveCarlitosDelegation {
   elapsed: number;
   readonly duration: number;
   readonly resolve: () => void;
@@ -296,8 +301,8 @@ function createDedicatedEventCoordinator(
     presentations.push(new DeathStarePresentation(dedicatedEnvironment));
     presentations.push(new AnglerfishSwarmPresentation(dedicatedEnvironment));
     presentations.push(new WhirlpoolPresentation(dedicatedEnvironment));
-    for (const eventId of CAPTAIN_WHISKERS_EVENT_IDS) {
-      presentations.push(new CaptainWhiskersEventPresentation(
+    for (const eventId of CARLITOS_EVENT_IDS) {
+      presentations.push(new CarlitosEventPresentation(
         eventId,
         dedicatedEnvironment,
       ));
@@ -337,12 +342,14 @@ const FISHING_ROD_LEAN = MathUtils.degToRad(-22);
 const FISHING_TARGET_SIZE = 52;
 const FISHING_BITE_PARTICLE_INTERVAL_SECONDS = 0.12;
 const FISHING_BITE_PARTICLE_INTENSITY = 0.85;
-const MOON_FACE_REVEAL_DURATION = 3.8;
+const MOON_FACE_REVEAL_DURATION = 5.8;
 const MOON_FACE_REACTION_DURATION = 1.1;
 const MOON_FACE_HOLD_FRACTION = 0.2;
+const MOON_FACE_SHOCK_START = 0.7;
+const MOON_FACE_SHOCK_END = 0.84;
 const MOON_FACE_BASE_GRIN = 0.74;
 const MOON_FACE_STAR_SCALE = 0.16;
-const MOON_FACE_MOON_SCALE = 5.2;
+const MOON_FACE_MOON_SCALE = 4.15;
 const MOON_FACE_BASE_DIM = 0.18;
 const MOON_FACE_PRESSURE_GRIN = 0.96;
 const MOON_FACE_ENERGY_DIM = 0.48;
@@ -357,8 +364,13 @@ const DRIFTING_LOOT_STERN_REST = Object.freeze({
   y: 0.58,
   z: 1.05,
 });
-const CAPTAIN_WHISKERS_DELEGATE_DURATION = 1.45;
-const CAPTAIN_WHISKERS_DELEGATE_OFFSET = Object.freeze({
+const CHECK_BACK_STERN_FLOOR = Object.freeze({
+  x: 0,
+  y: -0.16,
+  z: 2.3,
+});
+const CARLITOS_DELEGATE_DURATION = 1.45;
+const CARLITOS_DELEGATE_OFFSET = Object.freeze({
   x: 0.08,
   y: -0.04,
   z: 2.08,
@@ -585,10 +597,10 @@ export class BoatWorld {
   private readonly fishingCameraStartQuaternion = new Quaternion();
   private readonly fishingMatrixScratch = new Matrix4();
   private readonly supplyDisplay: BoatSupplyDisplay;
-  private readonly captainWhiskers: CaptainWhiskersPresentation;
-  private readonly captainWhiskersDelegateBasePosition = new Vector3();
-  private readonly captainWhiskersDelegateBaseRotation = new Vector3();
-  private activeCaptainWhiskersDelegation: ActiveCaptainWhiskersDelegation | null = null;
+  private readonly carlitos: CarlitosPresentation;
+  private readonly carlitosDelegateBasePosition = new Vector3();
+  private readonly carlitosDelegateBaseRotation = new Vector3();
+  private activeCarlitosDelegation: ActiveCarlitosDelegation | null = null;
   private readonly chestDisplay: ChestDisplay;
   private readonly itemEffects: EventItemEffects;
   private readonly itemUseAdapter: EventItemUseAdapter;
@@ -610,10 +622,10 @@ export class BoatWorld {
     supplyRoll: 0,
     supplyLift: 0,
   };
-  private readonly driftingLootSternRest = new Object3D();
+  private readonly driftingCargoSternRest = new Object3D();
+  private readonly checkBackSternFloor = new Object3D();
   private readonly featuredEvents: FeaturedEventPresentations;
   private activeFeaturedEventId: FeaturedEventId | null = null;
-  private activeDriftingLootVariant: DriftingLootVariant | null = null;
   private readonly repairTools: Object3D;
   private readonly supplyAnchorBounds = new Map<
     BoatSupplyGroupId,
@@ -623,7 +635,7 @@ export class BoatWorld {
   private readonly repairAnchorBounds: BoatObjectBoundsCache | null;
   private readonly lanternAnchorBounds: BoatObjectBoundsCache | null;
   private readonly chestAnchorBounds: BoatObjectBoundsCache | null;
-  private readonly captainWhiskersAnchorBounds: BoatObjectBoundsCache | null;
+  private readonly carlitosAnchorBounds: BoatObjectBoundsCache | null;
   private readonly rodPivot = new Group();
   private readonly rod: Object3D;
   private readonly fishingLineOrigin = new Object3D();
@@ -752,6 +764,7 @@ export class BoatWorld {
   private weatherProfile: Readonly<PresentationWeatherProfile> =
     presentationWeatherProfile('calm');
   private phase: 'day' | 'night' = 'day';
+  private presentationPhaseOverride: 'day' | 'night' | null = null;
   private activeSequence: ActiveSequence | null = null;
   private settledCue: PresentationCue | null = null;
   private weatherEventOperation = 0;
@@ -774,6 +787,7 @@ export class BoatWorld {
     models?: SurvivalEventModels | EventModelLibrary | FocusedEventPresentationFactories,
     eventModels?: EventModelLibrary,
     focusedEventFactories: FocusedEventPresentationFactories = {},
+    renderer?: WebGLRenderer,
   ) {
     const resolvedFocusedFactories = isFocusedEventFactoryMap(models)
       ? models
@@ -800,8 +814,7 @@ export class BoatWorld {
         ? EMPTY_SURVIVAL_EVENT_MODELS
         : {
             clone: (id) => {
-              if (id === 'driftingLootBarrel') return shipFurniture.clone('barrel');
-              if (id === 'driftingLootCrate') return shipFurniture.clone('cargoCrate');
+              if (id === 'driftingBarrel') return shipFurniture.clone('barrel');
               return EMPTY_SURVIVAL_EVENT_MODELS.clone(id);
             },
           } satisfies SurvivalEventModels
@@ -810,7 +823,7 @@ export class BoatWorld {
     let sky: Skybox | null = null;
     let weatherEffects: WeatherEffects | null = null;
     let lantern: SurvivalLantern | null = null;
-    let captainWhiskers: CaptainWhiskersPresentation | null = null;
+    let carlitos: CarlitosPresentation | null = null;
     let supplyDisplay: BoatSupplyDisplay | null = null;
     let chestDisplay: ChestDisplay | null = null;
     let itemUseAdapter: EventItemUseAdapter | null = null;
@@ -859,21 +872,28 @@ export class BoatWorld {
         FISHING_CATCH_BOW_REST.z,
       );
       this.boat.add(this.fishingCatchRest);
-      this.driftingLootSternRest.name = 'drifting-loot-stern-rest';
-      this.driftingLootSternRest.position.set(
+      this.driftingCargoSternRest.name = 'drifting-cargo-stern-rest';
+      this.driftingCargoSternRest.position.set(
         DRIFTING_LOOT_STERN_REST.x,
         DRIFTING_LOOT_STERN_REST.y,
         DRIFTING_LOOT_STERN_REST.z,
       );
-      this.boat.add(this.driftingLootSternRest);
+      this.boat.add(this.driftingCargoSternRest);
+      this.checkBackSternFloor.name = 'check-back-stern-floor';
+      this.checkBackSternFloor.position.set(
+        CHECK_BACK_STERN_FLOOR.x,
+        CHECK_BACK_STERN_FLOOR.y,
+        CHECK_BACK_STERN_FLOOR.z,
+      );
+      this.boat.add(this.checkBackSternFloor);
       lantern = createSurvivalLantern(propModels.createPracticalLight('lantern'));
       this.lantern = lantern;
       this.boat.add(lantern.root);
 
-      captainWhiskers = new CaptainWhiskersPresentation(propModels);
-      this.captainWhiskers = captainWhiskers;
-      this.captureCaptainWhiskersDelegateBase();
-      this.boat.add(captainWhiskers.root);
+      carlitos = new CarlitosPresentation(propModels);
+      this.carlitos = carlitos;
+      this.captureCarlitosDelegateBase();
+      this.boat.add(carlitos.root);
 
       supplyDisplay = new BoatSupplyDisplay(
         propModels,
@@ -902,7 +922,7 @@ export class BoatWorld {
         : createDedicatedEventCoordinator({
             eventModels: dedicatedEventModels,
             supplies: this.supplyDisplay,
-            captainWhiskers: this.captainWhiskers,
+            carlitos: this.carlitos,
             vortexWave: this.vortexWave,
             sampleWorldWaveInto: this.sampleWorldWaveInto,
             readWorldWaveAmplitudeScale: this.readWorldWaveAmplitudeScale,
@@ -1003,7 +1023,8 @@ export class BoatWorld {
       featuredEvents = new FeaturedEventPresentations(
         resolvedEventModels,
         this.camera,
-        this.driftingLootSternRest,
+        this.driftingCargoSternRest,
+        this.checkBackSternFloor,
       );
       this.featuredEvents = featuredEvents;
       ocean = new OceanRenderer(
@@ -1047,9 +1068,16 @@ export class BoatWorld {
       this.repairAnchorBounds = createBoatObjectBoundsCache(this.repairTools);
       this.lanternAnchorBounds = createBoatObjectBoundsCache(this.lantern.root);
       this.chestAnchorBounds = createBoatObjectBoundsCache(this.chestDisplay.root);
-      this.captainWhiskersAnchorBounds = createBoatObjectBoundsCache(
-        this.captainWhiskers.interactionRoot,
+      this.carlitosAnchorBounds = createBoatObjectBoundsCache(
+        this.carlitos.interactionRoot,
       );
+      if (renderer !== undefined) {
+        void this.eventPresentation.prepareRender(
+          renderer,
+          this.scene,
+          this.camera,
+        ).catch(() => undefined);
+      }
       this.applyBasePresentation();
     } catch (error) {
       try {
@@ -1066,7 +1094,7 @@ export class BoatWorld {
           () => itemUseAdapter?.dispose(),
           () => chestDisplay?.dispose(),
           () => supplyDisplay?.dispose(),
-          () => captainWhiskers?.dispose(),
+          () => carlitos?.dispose(),
           () => this.toolHoverOutline.dispose(),
           () => lantern?.dispose(),
           () => weatherEffects?.dispose(),
@@ -1094,10 +1122,16 @@ export class BoatWorld {
     if (this.disposed) return;
     const previous = this.phase;
     this.phase = phase;
-    this.skyState.phase = phase;
+    this.skyState.phase = this.presentationPhaseOverride ?? phase;
     if (previous === 'night' && phase === 'day') {
       this.supplyDisplay.releaseDayStowedItems();
     }
+  }
+
+  setPresentationPhaseOverride(phase: 'day' | 'night' | null): void {
+    if (this.disposed) return;
+    this.presentationPhaseOverride = phase;
+    this.skyState.phase = phase ?? this.phase;
   }
 
   setWeather(weather: WeatherId): void {
@@ -1123,15 +1157,15 @@ export class BoatWorld {
   syncInventory(snapshot: SurvivalSnapshot): void {
     if (this.disposed) return;
     this.supplyDisplay.sync(snapshot);
-    this.captainWhiskers.sync(snapshot.captainWhiskers);
+    this.carlitos.sync(snapshot.carlitos);
     this.chestState = snapshot.chest.state;
     this.chestDisplay.sync(snapshot.chest);
   }
 
-  playCaptainWhiskersAction(
-    action: 'petWhiskers' | 'feedWhiskers',
+  playCarlitosAction(
+    action: 'petCarlitos' | 'feedCarlitos',
   ): Promise<void> {
-    return this.captainWhiskers.play(action === 'petWhiskers' ? 'pet' : 'feed');
+    return this.carlitos.play(action === 'petCarlitos' ? 'pet' : 'feed');
   }
 
   playDive(instanceId: ItemInstanceId, onWaterImpact: () => void): Promise<void> {
@@ -1155,18 +1189,14 @@ export class BoatWorld {
   setHighlightedItem(instanceId: string | null): void {
     if (this.disposed) return;
     this.supplyDisplay.setHighlighted(instanceId);
-    if (instanceId === 'event:mystery-chest') {
-      this.toolHoverOutline.setTarget(null);
-      return;
-    }
     const focusedRoot = instanceId === null
       ? null
       : this.eventPresentation.interactionRoot(instanceId);
     this.toolHoverOutline.setTarget(
       instanceId === 'repair-tools'
         ? this.repairTools
-        : instanceId === 'captain-whiskers'
-          ? this.captainWhiskers.interactionRoot
+        : instanceId === 'carlitos'
+          ? this.carlitos.interactionRoot
         : instanceId === 'end-day-lantern'
           ? this.lantern.root
           : instanceId === 'persistent-chest'
@@ -1175,7 +1205,7 @@ export class BoatWorld {
             ? focusedRoot.userData.disableHoverOutline === true
               ? null
               : focusedRoot
-          : instanceId === 'drifting-loot' || instanceId?.startsWith('event:') === true
+          : instanceId?.startsWith('event:') === true
             ? this.activeFeaturedEventId === null
               ? null
               : this.featuredEvents.interactionRoot(this.activeFeaturedEventId)
@@ -1204,13 +1234,14 @@ export class BoatWorld {
     this.itemUseController.clear(this.phase);
     if (
       eventId === 'flowers'
-      && choiceId === 'captainWhiskers'
-      && instanceId === 'captainWhiskers-1'
+      && choiceId === 'carlitos'
+      && instanceId === 'carlitos-1'
     ) {
-      await this.captainWhiskers.play('pet', GENERIC_EVENT_ITEM_USE_DURATION);
+      await this.carlitos.play('pet', GENERIC_EVENT_ITEM_USE_DURATION);
       return;
     }
     const itemId = this.supplyDisplay.itemType(instanceId);
+    if (itemId !== null && DAY_ACTION_ONLY_ITEM_IDS.includes(itemId)) return;
     const context = itemId === null
       ? null
       : resolveEventItemUseContext(eventId, choiceId, itemId);
@@ -1295,21 +1326,22 @@ export class BoatWorld {
   stageEvent(context: EventSceneContext): void;
   stageEvent(
     eventId: string,
-    variant?: DriftingLootVariant | null,
     variantSeed?: number,
   ): void;
   stageEvent(
     eventOrContext: string | EventSceneContext,
-    variant: DriftingLootVariant | null = null,
     variantSeed?: number,
   ): void {
     if (this.disposed) return;
-    this.finishCaptainWhiskersDelegation();
+    this.finishCarlitosDelegation();
     this.weatherEventOperation += 1;
     this.itemUseController.clear(this.phase);
     const eventId = typeof eventOrContext === 'string'
       ? eventOrContext
       : eventOrContext.eventId;
+    const resolvedVariantSeed = typeof eventOrContext === 'string'
+      ? variantSeed
+      : eventOrContext.variantSeed;
     if (eventId === 'night-calm-fallback') {
       this.clearEvent();
       return;
@@ -1328,7 +1360,6 @@ export class BoatWorld {
       this.weatherEventAnimator.clear();
       this.featuredEvents.clear();
       this.activeFeaturedEventId = null;
-      this.activeDriftingLootVariant = null;
       this.supernaturalEventAnimator.clear();
       this.clearMoonEvent();
       this.dedicatedEvents.stage(context);
@@ -1340,7 +1371,6 @@ export class BoatWorld {
     if (route === 'focused') {
       this.featuredEvents.clear();
       this.activeFeaturedEventId = null;
-      this.activeDriftingLootVariant = null;
       this.stageMoonEvent(eventId);
       if (variantSeed === undefined) this.eventPresentation.stage(eventId);
       else this.eventPresentation.stage(eventId, variantSeed);
@@ -1350,10 +1380,8 @@ export class BoatWorld {
     }
     if (route === 'featured') {
       this.eventPresentation.clear();
-      if (variantSeed === undefined) this.featuredEvents.stage(eventId, variant);
-      else this.featuredEvents.stage(eventId, variant, variantSeed);
+      this.featuredEvents.stage(eventId, variantSeed);
       this.activeFeaturedEventId = eventId as FeaturedEventId;
-      this.activeDriftingLootVariant = eventId === 'drifting-loot' ? variant : null;
       this.weatherEventAnimator.stage(eventId);
       this.supernaturalEventAnimator.clear();
       this.clearMoonEvent();
@@ -1361,11 +1389,13 @@ export class BoatWorld {
     }
     this.featuredEvents.clear();
     this.activeFeaturedEventId = null;
-    this.activeDriftingLootVariant = null;
     this.stageMoonEvent(eventId);
     if (variantSeed === undefined) this.eventPresentation.stage(eventId);
     else this.eventPresentation.stage(eventId, variantSeed);
-    if (route === 'weather') this.weatherEventAnimator.stage(eventId);
+    if (route === 'weather') {
+      if (resolvedVariantSeed === undefined) this.weatherEventAnimator.stage(eventId);
+      else this.weatherEventAnimator.stage(eventId, resolvedVariantSeed);
+    }
     else this.weatherEventAnimator.clear();
     if (route === 'supernatural') this.supernaturalEventAnimator.stage(eventId);
     else this.supernaturalEventAnimator.clear();
@@ -1410,7 +1440,11 @@ export class BoatWorld {
     } else {
       await this.eventPresentation.reveal(eventId);
     }
-    if (!this.disposed && operation === this.weatherEventOperation) {
+    if (
+      !this.disposed
+      && operation === this.weatherEventOperation
+      && eventId !== 'check-the-back'
+    ) {
       this.restoreEventCameraFront();
     }
   }
@@ -1420,41 +1454,53 @@ export class BoatWorld {
     this.camera.quaternion.copy(this.baseCameraQuaternion);
   }
 
-  retrieveDriftingLoot(): Promise<void> {
+  retrieveDriftingCargo(): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.toolHoverOutline.setTarget(null);
-    return this.featuredEvents.react('drifting-loot', 'drifting-loot.food');
+    const eventId = this.activeDriftingCargoEventId();
+    if (eventId === null) return Promise.resolve();
+    return this.featuredEvents.react(
+      eventId,
+      eventId === 'drifting-barrel' ? 'drifting-barrel.food' : 'drifting-chest.food',
+    );
   }
 
-  delegateDriftingLoot(): Promise<void> {
+  delegateDriftingCargo(): Promise<void> {
     if (this.disposed) return Promise.resolve();
+    const eventId = this.activeDriftingCargoEventId();
+    if (eventId === null) return Promise.resolve();
     this.toolHoverOutline.setTarget(null);
-    this.finishCaptainWhiskersDelegation();
-    this.captureCaptainWhiskersDelegateBase();
+    this.finishCarlitosDelegation();
+    this.captureCarlitosDelegateBase();
     const companionMotion = new Promise<void>((resolve) => {
-      this.activeCaptainWhiskersDelegation = {
+      this.activeCarlitosDelegation = {
         elapsed: 0,
-        duration: CAPTAIN_WHISKERS_DELEGATE_DURATION,
+        duration: CARLITOS_DELEGATE_DURATION,
         resolve,
-      };
+    };
     });
     const lootMotion = this.featuredEvents.react(
-      'drifting-loot',
-      'drifting-loot.food',
+      eventId,
+      eventId === 'drifting-barrel' ? 'drifting-barrel.food' : 'drifting-chest.food',
     );
     return Promise.all([companionMotion, lootMotion]).then(() => undefined);
   }
 
-  recedeDriftingLoot(): Promise<void> {
+  recedeDriftingCargo(): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.toolHoverOutline.setTarget(null);
-    return this.featuredEvents.react('drifting-loot', 'drifting-loot.drift');
+    const eventId = this.activeDriftingCargoEventId();
+    if (eventId === null) return Promise.resolve();
+    return this.featuredEvents.react(
+      eventId,
+      eventId === 'drifting-barrel' ? 'drifting-barrel.drift' : 'drifting-chest.drift',
+    );
   }
 
-  projectDriftingLoot(width: number, height: number): ProjectedBoatBounds | null {
+  projectDriftingCargo(width: number, height: number): ProjectedBoatBounds | null {
     if (this.disposed) return null;
     this.scene.updateMatrixWorld(true);
-    return this.featuredEvents.projectHeldDriftingLoot(this.camera, width, height);
+    return this.featuredEvents.projectHeldDriftingCargo(this.camera, width, height);
   }
 
   projectEventInteractionBounds(
@@ -1556,14 +1602,13 @@ export class BoatWorld {
   clearEvent(): void {
     if (this.disposed) return;
     this.weatherEventOperation += 1;
-    this.finishCaptainWhiskersDelegation();
+    this.finishCarlitosDelegation();
     this.itemUseController.clear(this.phase);
     this.dedicatedEvents?.clear();
     this.resetDedicatedEffects();
     this.eventPresentation.clear();
     this.featuredEvents.clear();
     this.activeFeaturedEventId = null;
-    this.activeDriftingLootVariant = null;
     this.weatherEventAnimator.clear();
     this.supernaturalEventAnimator.clear();
     this.clearMoonEvent();
@@ -1575,7 +1620,7 @@ export class BoatWorld {
   setDocumentHidden(hidden: boolean): void {
     if (this.disposed || !hidden) return;
     this.weatherEventOperation += 1;
-    this.finishCaptainWhiskersDelegation();
+    this.finishCarlitosDelegation();
     this.itemUseController.settleForVisibilityChange(this.phase);
     this.skipSequence();
     this.clearDivePresentation();
@@ -1646,10 +1691,10 @@ export class BoatWorld {
         },
       } satisfies BoatInteractionAnchor;
       });
-    const companionProjection = this.captainWhiskers.root.visible
+    const companionProjection = this.carlitos.root.visible
       ? projectCachedBoatObjectBounds(
-          this.captainWhiskers.interactionRoot,
-          this.captainWhiskersAnchorBounds,
+          this.carlitos.interactionRoot,
+          this.carlitosAnchorBounds,
           this.camera,
           width,
           height,
@@ -1658,9 +1703,9 @@ export class BoatWorld {
     const companionAnchor = companionProjection === null
       ? null
       : {
-          id: 'captain-whiskers',
-          companionId: 'captainWhiskers',
-          label: 'CAPTAIN WHISKERS',
+          id: 'carlitos',
+          companionId: 'carlitos',
+          label: 'CARLITOS',
           description: 'Check his hunger, happiness, and health.',
           itemType: null,
           toolId: null,
@@ -1776,9 +1821,7 @@ export class BoatWorld {
     const featuredAnchor = featuredProjection === null || this.activeFeaturedEventId === null
       ? null
       : {
-          id: this.activeFeaturedEventId === 'drifting-loot'
-            ? 'drifting-loot'
-            : `event:${this.activeFeaturedEventId}`,
+          id: `event:${this.activeFeaturedEventId}`,
           label: this.featuredAnchorLabel(this.activeFeaturedEventId),
           description: this.featuredAnchorDescription(this.activeFeaturedEventId),
           ...(this.featuredAnchorChoice(this.activeFeaturedEventId) === null
@@ -2133,7 +2176,7 @@ export class BoatWorld {
     this.applyBaseLighting(this.sky.palette);
     if (this.settledCue) this.applyCue(this.settledCue, 1, time);
     this.supplyDisplay.updatePropAnimations(delta);
-    this.captainWhiskers.update(delta);
+    this.carlitos.update(delta);
 
     if (advancePresentation) {
       const sequence = this.activeSequence;
@@ -2152,7 +2195,7 @@ export class BoatWorld {
       this.supplyDisplay.resetEventPoseForFrame();
       this.eventPresentation.update(time, delta);
       this.featuredEvents.update(time, delta);
-      this.updateCaptainWhiskersDelegation(delta);
+      this.updateCarlitosDelegation(delta);
       this.weatherEventAnimator.update(time, delta);
       this.applyDangerousWatersPresentation();
       this.supernaturalEventAnimator.update(time, delta, amplitudeScale);
@@ -2211,7 +2254,7 @@ export class BoatWorld {
       },
       () => this.cancelActiveSequence(),
       () => this.clearMoonEvent(),
-      () => this.finishCaptainWhiskersDelegation(),
+      () => this.finishCarlitosDelegation(),
       () => this.itemUseController.dispose(),
       () => this.dedicatedEvents?.dispose(),
       () => this.itemUseAdapter.dispose(),
@@ -2221,7 +2264,7 @@ export class BoatWorld {
       () => this.supernaturalEventAnimator.dispose(),
       () => this.clearDivePresentation(),
       () => this.divePresentation.dispose(),
-      () => this.captainWhiskers.dispose(),
+      () => this.carlitos.dispose(),
       () => this.supplyDisplay.dispose(),
       () => this.chestDisplay.dispose(),
       () => this.toolHoverOutline.dispose(),
@@ -2620,7 +2663,7 @@ export class BoatWorld {
     this.ambient.intensity = atmosphere.ambientLightIntensity * lightScale;
     this.key.color.copy(atmosphere.keyLightColor);
     this.key.intensity = atmosphere.keyLightIntensity * lightScale;
-    this.lantern.light.intensity = this.phase === 'night'
+    this.lantern.light.intensity = this.skyState.phase === 'night'
       ? SURVIVAL_LANTERN_NIGHT_INTENSITY
       : SURVIVAL_LANTERN_DAY_INTENSITY;
     if (this.scene.background instanceof Color) {
@@ -2704,29 +2747,29 @@ export class BoatWorld {
     }
   }
 
+  private activeDriftingCargoEventId(): DriftingCargoEventId | null {
+    return this.activeFeaturedEventId !== null
+      && isDriftingCargoEventId(this.activeFeaturedEventId)
+      ? this.activeFeaturedEventId
+      : null;
+  }
+
   private featuredAnchorLabel(eventId: FeaturedEventId): string {
-    if (eventId === 'drifting-loot') {
-      return this.activeDriftingLootVariant === 'barrel' ? 'BARREL' : 'CRATE';
-    }
+    if (eventId === 'drifting-barrel') return 'BARREL';
+    if (eventId === 'drifting-chest') return 'CHEST';
     if (eventId === 'drifting-bottle') return 'BOTTLE';
-    if (eventId === 'check-the-back') return 'ASTERN';
-    if (eventId === 'mystery-chest') return 'CHEST';
     return 'FLOWERS';
   }
 
   private featuredAnchorDescription(eventId: FeaturedEventId): string {
-    if (eventId === 'drifting-loot') return 'Floating salvage within reach.';
+    if (isDriftingCargoEventId(eventId)) return 'Floating salvage within reach.';
     if (eventId === 'drifting-bottle') return 'A sealed bottle taps the hull.';
-    if (eventId === 'check-the-back') return 'Something waits behind the boat.';
-    if (eventId === 'mystery-chest') return 'A waterlogged chest catches beside the hull.';
     return 'Pale blooms pass in the dark water.';
   }
 
   private featuredAnchorChoice(eventId: FeaturedEventId): string | null {
-    if (eventId === 'drifting-loot') return 'retrieve';
-    if (eventId === 'drifting-bottle') return 'sleep';
-    if (eventId === 'check-the-back') return 'check';
-    if (eventId === 'mystery-chest') return 'take';
+    if (isDriftingCargoEventId(eventId)) return 'retrieve';
+    if (eventId === 'drifting-bottle') return 'retrieve';
     return null;
   }
 
@@ -2840,18 +2883,24 @@ export class BoatWorld {
           0,
           1,
         ));
-        const grinProgress = smootherStep(clamp(
-          (revealProgress - 0.68) / 0.32,
+        const faceProgress = smootherStep(clamp(
+          (revealProgress - MOON_FACE_SHOCK_START)
+            / (MOON_FACE_SHOCK_END - MOON_FACE_SHOCK_START),
           0,
           1,
         ));
-        this.moonFace.reveal = revealProgress;
+        const grinProgress = smootherStep(clamp(
+          (faceProgress - 0.52) / 0.48,
+          0,
+          1,
+        ));
+        this.moonFace.reveal = faceProgress;
         this.moonFace.grin = MOON_FACE_BASE_GRIN * grinProgress;
         this.moonFace.starScale = 1
           - (1 - MOON_FACE_STAR_SCALE) * easeInOut(revealProgress);
         this.moonFace.dim = MOON_FACE_BASE_DIM * easeInOut(revealProgress);
         this.moonFace.scale = 1
-          + (MOON_FACE_MOON_SCALE - 1) * easeOut(revealProgress);
+          + (MOON_FACE_MOON_SCALE - 1) * easeInOut(revealProgress);
       } else {
         const eased = easeInOut(progress);
         this.moonFace.reveal = animation.fromReveal
@@ -2972,17 +3021,17 @@ export class BoatWorld {
     sequence?.resolve();
   }
 
-  private captureCaptainWhiskersDelegateBase(): void {
-    this.captainWhiskersDelegateBasePosition.copy(this.captainWhiskers.root.position);
-    this.captainWhiskersDelegateBaseRotation.set(
-      this.captainWhiskers.root.rotation.x,
-      this.captainWhiskers.root.rotation.y,
-      this.captainWhiskers.root.rotation.z,
+  private captureCarlitosDelegateBase(): void {
+    this.carlitosDelegateBasePosition.copy(this.carlitos.root.position);
+    this.carlitosDelegateBaseRotation.set(
+      this.carlitos.root.rotation.x,
+      this.carlitos.root.rotation.y,
+      this.carlitos.root.rotation.z,
     );
   }
 
-  private updateCaptainWhiskersDelegation(delta: number): void {
-    const animation = this.activeCaptainWhiskersDelegation;
+  private updateCarlitosDelegation(delta: number): void {
+    const animation = this.activeCarlitosDelegation;
     if (animation === null) return;
     const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
     animation.elapsed = Math.min(animation.duration, animation.elapsed + safeDelta);
@@ -3001,48 +3050,48 @@ export class BoatWorld {
       roll = 0.1 * travel;
     } else if (progress < 0.56) {
       const travel = easeInOut((progress - 0.12) / 0.44);
-      x = -0.08 + (CAPTAIN_WHISKERS_DELEGATE_OFFSET.x + 0.08) * travel;
-      y = -0.025 + (CAPTAIN_WHISKERS_DELEGATE_OFFSET.y + 0.025) * travel;
-      z = -0.07 + (CAPTAIN_WHISKERS_DELEGATE_OFFSET.z + 0.07) * travel;
+      x = -0.08 + (CARLITOS_DELEGATE_OFFSET.x + 0.08) * travel;
+      y = -0.025 + (CARLITOS_DELEGATE_OFFSET.y + 0.025) * travel;
+      z = -0.07 + (CARLITOS_DELEGATE_OFFSET.z + 0.07) * travel;
       yaw = -0.08 + 0.28 * travel;
       roll = 0.1 - 0.18 * travel;
     } else if (progress < 0.74) {
       const pull = Math.sin((progress - 0.56) / 0.18 * Math.PI);
-      x = CAPTAIN_WHISKERS_DELEGATE_OFFSET.x - pull * 0.04;
-      y = CAPTAIN_WHISKERS_DELEGATE_OFFSET.y - pull * 0.025;
-      z = CAPTAIN_WHISKERS_DELEGATE_OFFSET.z;
+      x = CARLITOS_DELEGATE_OFFSET.x - pull * 0.04;
+      y = CARLITOS_DELEGATE_OFFSET.y - pull * 0.025;
+      z = CARLITOS_DELEGATE_OFFSET.z;
       yaw = 0.2;
       roll = -0.08 - pull * 0.08;
     } else {
       const travel = 1 - easeInOut((progress - 0.74) / 0.26);
-      x = CAPTAIN_WHISKERS_DELEGATE_OFFSET.x * travel;
-      y = CAPTAIN_WHISKERS_DELEGATE_OFFSET.y * travel;
-      z = CAPTAIN_WHISKERS_DELEGATE_OFFSET.z * travel;
+      x = CARLITOS_DELEGATE_OFFSET.x * travel;
+      y = CARLITOS_DELEGATE_OFFSET.y * travel;
+      z = CARLITOS_DELEGATE_OFFSET.z * travel;
       yaw = 0.2 * travel;
       roll = -0.08 * travel;
     }
-    this.captainWhiskers.root.position.set(
-      this.captainWhiskersDelegateBasePosition.x + x,
-      this.captainWhiskersDelegateBasePosition.y + y,
-      this.captainWhiskersDelegateBasePosition.z + z,
+    this.carlitos.root.position.set(
+      this.carlitosDelegateBasePosition.x + x,
+      this.carlitosDelegateBasePosition.y + y,
+      this.carlitosDelegateBasePosition.z + z,
     );
-    this.captainWhiskers.root.rotation.set(
-      this.captainWhiskersDelegateBaseRotation.x,
-      this.captainWhiskersDelegateBaseRotation.y + yaw,
-      this.captainWhiskersDelegateBaseRotation.z + roll,
+    this.carlitos.root.rotation.set(
+      this.carlitosDelegateBaseRotation.x,
+      this.carlitosDelegateBaseRotation.y + yaw,
+      this.carlitosDelegateBaseRotation.z + roll,
     );
-    if (progress === 1) this.finishCaptainWhiskersDelegation();
+    if (progress === 1) this.finishCarlitosDelegation();
   }
 
-  private finishCaptainWhiskersDelegation(): void {
-    const animation = this.activeCaptainWhiskersDelegation;
+  private finishCarlitosDelegation(): void {
+    const animation = this.activeCarlitosDelegation;
     if (animation === null) return;
-    this.activeCaptainWhiskersDelegation = null;
-    this.captainWhiskers.root.position.copy(this.captainWhiskersDelegateBasePosition);
-    this.captainWhiskers.root.rotation.set(
-      this.captainWhiskersDelegateBaseRotation.x,
-      this.captainWhiskersDelegateBaseRotation.y,
-      this.captainWhiskersDelegateBaseRotation.z,
+    this.activeCarlitosDelegation = null;
+    this.carlitos.root.position.copy(this.carlitosDelegateBasePosition);
+    this.carlitos.root.rotation.set(
+      this.carlitosDelegateBaseRotation.x,
+      this.carlitosDelegateBaseRotation.y,
+      this.carlitosDelegateBaseRotation.z,
     );
     animation.resolve();
   }

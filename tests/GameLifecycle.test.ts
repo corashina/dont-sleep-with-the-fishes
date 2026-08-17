@@ -1371,6 +1371,42 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(requestPointerLock).toHaveBeenCalledOnce();
   });
 
+  it('arms Escape resume when pointer lock ends after the key is released', () => {
+    let status = 'running';
+    const requestPointerLock = vi.fn();
+    const pause = vi.fn(() => { status = 'paused'; });
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(phase, {
+      presentation: 'playing',
+      overlayActive: false,
+      escapeResumeArmed: false,
+      escapeKeyHeld: false,
+      session: { snapshot: () => ({ status }), pause },
+      requestPointerLock,
+      ui: { setPaused: vi.fn() },
+      hands: { hideAndReset: vi.fn() },
+      audio: { setPaused: vi.fn() },
+    });
+    const internals = phase as unknown as {
+      handleKeyDown(event: KeyboardEvent): void;
+      handleKeyUp(event: KeyboardEvent): void;
+      handlePointerLockChange(locked: boolean): void;
+    };
+
+    internals.handleKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }));
+    internals.handleKeyUp(new KeyboardEvent('keyup', { key: 'Escape' }));
+    internals.handlePointerLockChange(false);
+    const resumePress = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      cancelable: true,
+    });
+    internals.handleKeyDown(resumePress);
+
+    expect(pause).toHaveBeenCalledOnce();
+    expect(resumePress.defaultPrevented).toBe(true);
+    expect(requestPointerLock).toHaveBeenCalledOnce();
+  });
+
   it('advances the visual clock during active play and freezes it while inactive', () => {
     const session = new ScavengeSession();
     session.start();
@@ -1888,11 +1924,12 @@ describe('ScavengePhase lifecycle integration', () => {
     });
   });
 
-  it('forwards and reports scavenging presentation weather', () => {
+  it('forwards and reports scavenging presentation controls', () => {
     const setPresentationWeather = vi.fn();
+    const setPresentationPhase = vi.fn();
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
-      world: { setPresentationWeather },
+      world: { setPresentationWeather, setPresentationPhase },
     });
 
     phase.setWeatherOverride('rain');
@@ -1904,9 +1941,19 @@ describe('ScavengePhase lifecycle integration', () => {
 
     expect(setPresentationWeather).toHaveBeenLastCalledWith('calm');
     expect(phase.getPresentationWeather()).toBe('calm');
+
+    phase.setTimeOfDayOverride('night');
+
+    expect(setPresentationPhase).toHaveBeenLastCalledWith('night');
+    expect(phase.getPresentationPhase()).toBe('night');
+
+    phase.setTimeOfDayOverride(null);
+
+    expect(setPresentationPhase).toHaveBeenLastCalledWith('day');
+    expect(phase.getPresentationPhase()).toBe('day');
   });
 
-  it('persists a manual weather override across phase handoff and polls automatic weather', () => {
+  it('persists presentation overrides across phase handoff and polls automatic weather', () => {
     const order: string[] = [];
     let complete!: (result: { savedItems: readonly []; elapsedSeconds: number }) => void;
     let scavengeWeather: PresentationWeatherId = 'calm';
@@ -1917,12 +1964,20 @@ describe('ScavengePhase lifecycle integration', () => {
     const survivalSetWeather = vi.fn((id: PresentationWeatherId | null) => {
       order.push(`survival-weather:${id}`);
     });
+    const scavengeSetTimeOfDay = vi.fn((phase: 'day' | 'night' | null) => {
+      order.push(`scavenge-time:${phase}`);
+    });
+    const survivalSetTimeOfDay = vi.fn((phase: 'day' | 'night' | null) => {
+      order.push(`survival-time:${phase}`);
+    });
     const scavenge = {
       ...gamePhase(),
       update: vi.fn(() => order.push('scavenge-update')),
       render: vi.fn(() => order.push('scavenge-render')),
       setWeatherOverride: scavengeSetWeather,
       getPresentationWeather: vi.fn(() => scavengeWeather),
+      setTimeOfDayOverride: scavengeSetTimeOfDay,
+      getPresentationPhase: vi.fn(() => 'day' as const),
     };
     const survival = {
       ...gamePhase(),
@@ -1931,6 +1986,8 @@ describe('ScavengePhase lifecycle integration', () => {
       render: vi.fn(() => order.push('survival-render')),
       setWeatherOverride: survivalSetWeather,
       getPresentationWeather: vi.fn(() => 'rain' as const),
+      setTimeOfDayOverride: survivalSetTimeOfDay,
+      getPresentationPhase: vi.fn(() => 'night' as const),
     };
     const postProcessingControls: PostProcessingControls = {
       getState: vi.fn(() => ({
@@ -1975,15 +2032,36 @@ describe('ScavengePhase lifecycle integration', () => {
       const source = mount.querySelector<HTMLOutputElement>(
         '[data-weather-source]',
       )!;
+      const night = mount.querySelector<HTMLInputElement>(
+        '[data-presentation-night]',
+      )!;
+      const timeOfDay = mount.querySelector<HTMLOutputElement>(
+        '[data-time-of-day-state]',
+      )!;
+      const timeOfDayLabel = mount.querySelector<HTMLElement>(
+        '[data-time-of-day-label]',
+      )!;
       expect((game as unknown as { weatherOverride: unknown }).weatherOverride).toBeNull();
+      expect((game as unknown as { timeOfDayOverride: unknown }).timeOfDayOverride).toBeNull();
       expect(weather.value).toBe('calm');
       expect(source.value).toBe('NORMAL');
+      expect(night.checked).toBe(false);
+      expect(timeOfDayLabel.textContent).toBe('Day');
+      expect(timeOfDay.value).toBe('DAY');
       expect(scavengeSetWeather).not.toHaveBeenCalled();
+      expect(scavengeSetTimeOfDay).not.toHaveBeenCalled();
 
       scavengeWeather = 'wind';
       (game as unknown as { handleAnimationFrame(): void }).handleAnimationFrame();
       expect(weather.value).toBe('wind');
       expect(source.value).toBe('EVENT');
+
+      night.checked = true;
+      night.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(scavengeSetTimeOfDay).toHaveBeenCalledOnce();
+      expect(scavengeSetTimeOfDay).toHaveBeenLastCalledWith('night');
+      expect(timeOfDayLabel.textContent).toBe('Night');
+      expect(timeOfDay.value).toBe('NIGHT');
 
       weather.value = 'rain';
       weather.dispatchEvent(new Event('change', { bubbles: true }));
@@ -1997,15 +2075,20 @@ describe('ScavengePhase lifecycle integration', () => {
       expect(survivalSetWeather).toHaveBeenCalledWith('rain');
       expect(order).toEqual([
         'survival-weather:rain',
+        'survival-time:night',
         'survival-resize',
         'survival-start',
       ]);
+      expect(night.checked).toBe(true);
+      expect(timeOfDay.value).toBe('NIGHT');
 
       weather.value = 'fog';
       weather.dispatchEvent(new Event('change', { bubbles: true }));
       expect(survivalSetWeather).toHaveBeenCalledTimes(2);
       expect(survivalSetWeather).toHaveBeenLastCalledWith('fog');
       expect(scavengeSetWeather).toHaveBeenCalledOnce();
+      expect(survivalSetTimeOfDay).toHaveBeenCalledOnce();
+      expect(scavengeSetTimeOfDay).toHaveBeenCalledOnce();
     } finally {
       game.dispose();
       requestFrame.mockRestore();

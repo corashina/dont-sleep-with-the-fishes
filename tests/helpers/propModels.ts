@@ -9,7 +9,7 @@ import {
 import { PropModelLibrary } from '../../src/world/PropModelLibrary';
 
 export function createTestPropModels(): PropModelLibrary {
-  const staticItemCount = ITEM_IDS.filter((id) => id !== 'captainWhiskers').length;
+  const staticItemCount = ITEM_IDS.filter((id) => id !== 'carlitos').length;
   const template = (id: string, index: number): Group => {
     const root = new Group();
     const model = new Group();

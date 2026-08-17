@@ -4,6 +4,7 @@ import {
   Group,
   Material,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   PointLight,
   TorusGeometry,
@@ -161,12 +162,15 @@ describe('EventItemEffects', () => {
       const flare = effects.root.getObjectByName('event-item-flare') as Group;
       const core = effects.root.getObjectByName('event-item-flare-core') as Mesh;
       core.geometry.computeBoundingSphere();
-      expect(core.geometry.boundingSphere!.radius).toBeLessThanOrEqual(0.05);
-      expect(effects.root.getObjectByName('event-item-flare-halo')).toBeInstanceOf(Mesh);
+      expect(core.geometry.boundingSphere!.radius).toBeLessThanOrEqual(0.04);
+      const halo = effects.root.getObjectByName('event-item-flare-halo') as Mesh;
+      expect(halo).toBeInstanceOf(Mesh);
+      expect((halo.material as MeshBasicMaterial).opacity).toBeGreaterThan(0.35);
       expect(effects.root.getObjectByName('event-item-flare-flame')).toBeInstanceOf(Mesh);
       expect(effects.root.getObjectByName('event-item-flare-smoke-3')).toBeInstanceOf(Mesh);
       const light = effects.root.getObjectByName('event-item-flare-light') as PointLight;
-      expect(light.intensity).toBeGreaterThan(0);
+      expect(light.intensity).toBeGreaterThan(6);
+      expect(light.distance).toBeGreaterThan(7);
       expect(flare.children.length).toBe(8);
     } finally {
       effects.dispose();
@@ -203,7 +207,7 @@ describe('EventItemEffects', () => {
       expect(start.toArray()).toEqual([2.34, 1, 3]);
       expect(peak.x).toBeGreaterThan(start.x + 8);
       expect(peak.y).toBeGreaterThan(start.y + 2);
-      expect(impact.x).toBeCloseTo(start.x + 18);
+      expect(impact.x).toBeCloseTo(start.x + 21);
       expect(impact.y).toBeCloseTo(0.04);
     } finally {
       effects.dispose();
@@ -241,7 +245,7 @@ describe('EventItemEffects', () => {
     effects.dispose();
   });
 
-  it('runs the anchor chain from the hand over the gunwale to the anchor', () => {
+  it('runs the anchor chain from the player seat over the gunwale to the anchor', () => {
     const effects = new EventItemEffects();
     const actorParent = new Group();
     const actor = new Group();
@@ -265,12 +269,12 @@ describe('EventItemEffects', () => {
     expect(((links[0] as Mesh).material as MeshStandardMaterial).metalness)
       .toBeGreaterThan(0.7);
 
-    const hand = links[0]!.getWorldPosition(new Vector3());
+    const boatAttachment = links[0]!.getWorldPosition(new Vector3());
     const gunwale = links[15]!.getWorldPosition(new Vector3());
     const anchor = links.at(-1)!.getWorldPosition(new Vector3());
-    expect(hand.x).toBeCloseTo(0.1);
-    expect(hand.y).toBeCloseTo(0.9);
-    expect(hand.z).toBeCloseTo(1.2);
+    expect(boatAttachment.x).toBeCloseTo(0);
+    expect(boatAttachment.y).toBeCloseTo(0.29);
+    expect(boatAttachment.z).toBeCloseTo(1.48);
     expect(gunwale.x).toBeCloseTo(1.62, 1);
     expect(gunwale.y).toBeCloseTo(0.5, 1);
     expect(anchor.x).toBeCloseTo(actor.position.x);

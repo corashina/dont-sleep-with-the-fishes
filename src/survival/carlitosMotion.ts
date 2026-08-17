@@ -1,16 +1,16 @@
-import type { CaptainWhiskersSnapshot } from './CaptainWhiskersState';
+import type { CarlitosSnapshot } from './CarlitosState';
 import { clamp01Unchecked, smoothstepUnchecked } from './animationMath';
 
-export type CaptainWhiskersPoseState =
+export type CarlitosPoseState =
   | 'sick'
   | 'starving'
   | 'hungry'
   | 'unhappy'
   | 'healthy';
 
-export type CaptainWhiskersAction = 'pet' | 'feed';
+export type CarlitosAction = 'pet' | 'feed';
 
-export interface MutableCaptainWhiskersPose {
+export interface MutableCarlitosPose {
   bodyPitch: number;
   bodyYaw: number;
   bodyLift: number;
@@ -21,14 +21,14 @@ export interface MutableCaptainWhiskersPose {
   foodReach: number;
 }
 
-export interface CaptainWhiskersPoseSample {
-  status: CaptainWhiskersPoseState;
-  action: CaptainWhiskersAction | null;
+export interface CarlitosPoseSample {
+  status: CarlitosPoseState;
+  action: CarlitosAction | null;
   elapsed: number;
   duration: number;
 }
 
-export function createCaptainWhiskersPose(): MutableCaptainWhiskersPose {
+export function createCarlitosPose(): MutableCarlitosPose {
   return {
     bodyPitch: 0,
     bodyYaw: 0,
@@ -41,9 +41,9 @@ export function createCaptainWhiskersPose(): MutableCaptainWhiskersPose {
   };
 }
 
-export function captainWhiskersPoseState(
-  snapshot: CaptainWhiskersSnapshot,
-): CaptainWhiskersPoseState {
+export function carlitosPoseState(
+  snapshot: CarlitosSnapshot,
+): CarlitosPoseState {
   if (snapshot.sickness > 0) return 'sick';
   if (snapshot.hunger <= 1) return 'starving';
   if (snapshot.unhappiness >= 3) return 'unhappy';
@@ -51,10 +51,10 @@ export function captainWhiskersPoseState(
   return 'healthy';
 }
 
-export function sampleCaptainWhiskersPoseInto(
-  output: MutableCaptainWhiskersPose,
-  sample: CaptainWhiskersPoseSample,
-): MutableCaptainWhiskersPose {
+export function sampleCarlitosPoseInto(
+  output: MutableCarlitosPose,
+  sample: CarlitosPoseSample,
+): MutableCarlitosPose {
   setBasePose(output, sample.status);
   if (sample.action === null || sample.duration <= 0) return output;
 
@@ -78,8 +78,8 @@ export function sampleCaptainWhiskersPoseInto(
 }
 
 function setBasePose(
-  output: MutableCaptainWhiskersPose,
-  status: CaptainWhiskersPoseState,
+  output: MutableCarlitosPose,
+  status: CarlitosPoseState,
 ): void {
   output.actionLean = 0;
   output.handReach = 0;

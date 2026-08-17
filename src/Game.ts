@@ -56,6 +56,7 @@ import { createEmptyEventModelLibraryForTest } from './survival/BoatWorld';
 import type { MenuModelLibrary } from './menu/MenuModelLibrary';
 import { MenuSandAssets } from './menu/MenuSandAssets';
 import { MainMenuPhase } from './phases/MainMenuPhase';
+import type { SkyPhase } from './world/skyPalette';
 
 export interface GameFactories {
   createMenu(
@@ -171,6 +172,7 @@ export class Game {
   private performanceStats: PerformanceStats | null = null;
   private postProcessingConsole: PostProcessingConsole | null = null;
   private weatherOverride: PresentationWeatherId | null = null;
+  private timeOfDayOverride: SkyPhase | null = null;
   private animationFrame = 0;
   private started = false;
   private disposed = false;
@@ -326,7 +328,6 @@ export class Game {
       options.menuSandAssets ?? MenuSandAssets.fromTextures(
         new Texture(),
         new Texture(),
-        new Texture(),
       ),
       options.physicsRuntime,
       options.physicsMode ?? 'enabled',
@@ -463,6 +464,7 @@ export class Game {
       this.performanceStats = null;
       this.postProcessingConsole = null;
       this.weatherOverride = null;
+      this.timeOfDayOverride = null;
       this.animationFrame = 0;
       this.started = false;
       this.disposed = false;
@@ -496,6 +498,10 @@ export class Game {
             selected: 'calm',
             source: 'normal',
             setWeather: (id) => this.setWeatherOverride(id),
+          },
+          {
+            selected: 'day',
+            setTimeOfDay: (phase) => this.setTimeOfDayOverride(phase),
           },
           {
             options: EVENT_TEST_OPTIONS,
@@ -558,9 +564,9 @@ export class Game {
       phase.dispose();
       return;
     }
-    this.applyWeatherOverrideOrDispose(phase);
+    this.applyPresentationOverridesOrDispose(phase);
     this.activePhase = phase;
-    this.synchronizeWeatherState();
+    this.synchronizePresentationControls();
     if (start) {
       phase.resize(window.innerWidth, window.innerHeight);
       phase.start();
@@ -577,9 +583,9 @@ export class Game {
       phase.dispose();
       return;
     }
-    this.applyWeatherOverrideOrDispose(phase);
+    this.applyPresentationOverridesOrDispose(phase);
     this.activePhase = phase;
-    this.synchronizeWeatherState();
+    this.synchronizePresentationControls();
     if (start) {
       phase.resize(window.innerWidth, window.innerHeight);
       phase.start();
@@ -594,7 +600,7 @@ export class Game {
     try {
       nextSeed = this.createSeed();
       scavenge = this.createScavengePhase(nextGeneration);
-      this.applyWeatherOverrideOrDispose(scavenge);
+      this.applyPresentationOverridesOrDispose(scavenge);
     } catch (error) {
       this.reportFatalError(error);
       return;
@@ -608,7 +614,7 @@ export class Game {
     this.elapsed = 0;
     this.seed = nextSeed;
     this.activePhase = scavenge;
-    this.synchronizeWeatherState();
+    this.synchronizePresentationControls();
     try {
       menu?.dispose();
       scavenge.resize(window.innerWidth, window.innerHeight);
@@ -681,9 +687,9 @@ export class Game {
       survival.dispose();
       return;
     }
-    this.applyWeatherOverrideOrDispose(survival);
+    this.applyPresentationOverridesOrDispose(survival);
     this.activePhase = survival;
-    this.synchronizeWeatherState();
+    this.synchronizePresentationControls();
     survival.resize(window.innerWidth, window.innerHeight);
     survival.start();
   }
@@ -743,10 +749,21 @@ export class Game {
     this.activePhase?.setWeatherOverride?.(id);
   }
 
-  private applyWeatherOverrideOrDispose(phase: GamePhase): void {
-    if (this.weatherOverride === null) return;
+  private setTimeOfDayOverride(phase: SkyPhase): void {
+    this.timeOfDayOverride = phase;
+    this.postProcessingConsole?.setTimeOfDayState(phase);
+    this.activePhase?.setTimeOfDayOverride?.(phase);
+  }
+
+  private applyPresentationOverridesOrDispose(phase: GamePhase): void {
+    if (this.weatherOverride === null && this.timeOfDayOverride === null) return;
     try {
-      phase.setWeatherOverride?.(this.weatherOverride);
+      if (this.weatherOverride !== null) {
+        phase.setWeatherOverride?.(this.weatherOverride);
+      }
+      if (this.timeOfDayOverride !== null) {
+        phase.setTimeOfDayOverride?.(this.timeOfDayOverride);
+      }
     } catch (error) {
       try {
         phase.dispose();
@@ -757,8 +774,12 @@ export class Game {
     }
   }
 
-  private synchronizeWeatherState(): void {
+  private synchronizePresentationControls(): void {
     if (this.postProcessingConsole === null) return;
+    const effectivePhase = this.activePhase?.getPresentationPhase?.() ?? 'day';
+    this.postProcessingConsole.setTimeOfDayState(
+      this.timeOfDayOverride ?? effectivePhase,
+    );
     const effectiveWeather = this.activePhase?.getPresentationWeather?.() ?? 'calm';
     if (this.weatherOverride !== null) {
       this.postProcessingConsole.setWeatherState(this.weatherOverride, 'forced');
@@ -788,7 +809,7 @@ export class Game {
     const deltaSeconds = Math.min(rawDeltaSeconds, 0.05);
     this.elapsed += deltaSeconds;
     this.activePhase?.update(this.elapsed, deltaSeconds);
-    this.synchronizeWeatherState();
+    this.synchronizePresentationControls();
     this.activePhase?.render();
     if (!this.disposed) {
       this.animationFrame = requestAnimationFrame(this.animate);

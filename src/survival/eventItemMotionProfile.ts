@@ -27,13 +27,13 @@ const GRIPS = {
 } as const;
 
 const ENTITY_AIMED: ReadonlySet<ItemId> = new Set([
-  'flashlight', 'fishingNet', 'shotgun',
+  'flashlight', 'shotgun',
 ]);
 
 const HEAVY_ITEMS: ReadonlySet<ItemId> = new Set(['anchor', 'scubaSet']);
 const MEDIUM_ITEMS: ReadonlySet<ItemId> = new Set([
   'medicalKit', 'fishingNet', 'bucket', 'umbrella', 'swimRing',
-  'shotgun', 'captainWhiskers',
+  'shotgun', 'carlitos',
 ]);
 
 function createProfile(
@@ -66,7 +66,8 @@ const PROFILES: Readonly<Record<ItemId, EventItemMotionProfile>> = Object.freeze
   spyglass: createProfile('reading', 'spyglass'),
   fishingNet: Object.freeze({
     ...createProfile('large', 'fishingNet'),
-    actionOrigin: [0, -0.82, 0] as const,
+    view: [0.3, -0.34, -0.92] as const,
+    actionOrigin: [0, 0, -0.82] as const,
   }),
   bucket: createProfile('large', 'bucket'),
   flareGun: Object.freeze({
@@ -95,7 +96,7 @@ const PROFILES: Readonly<Record<ItemId, EventItemMotionProfile>> = Object.freeze
     aim: 'horizontal-entity' as const,
   }),
   energyBar: createProfile('one-hand', 'energyBar'),
-  captainWhiskers: createProfile('one-hand', 'captainWhiskers'),
+  carlitos: createProfile('one-hand', 'carlitos'),
 });
 
 export function eventItemMotionProfile(itemId: ItemId): EventItemMotionProfile {

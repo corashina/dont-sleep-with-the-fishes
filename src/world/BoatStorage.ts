@@ -15,10 +15,9 @@ import {
   LIFEBOAT_FLOOR_SURFACE_Y,
   LIFEBOAT_GUNWALE_SURFACE_Y,
 } from './Lifeboat';
-import {
-  CAPTAIN_WHISKERS_SUPPORT_LIFT,
-  ITEM_MODEL_SPECS,
-} from './itemModelManifest';
+import { ITEM_MODEL_SPECS } from './itemModelManifest';
+
+const CARLITOS_SEATED_SUPPORT_LIFT = 0.22;
 
 export type BoatItemSurface = 'shelf' | 'floor' | 'gunwale';
 export type BoatSupplyGroupId = ItemId | 'repairMaterial';
@@ -58,8 +57,8 @@ const restingSlot = (
       : LIFEBOAT_FLOOR_SURFACE_Y;
   const rotation = [pitch, yaw, roll] as const;
   const modelBounds = ITEM_MODEL_SPECS[id].normalizedBounds;
-  const supportLift = id === 'captainWhiskers'
-    ? CAPTAIN_WHISKERS_SUPPORT_LIFT * scale
+  const supportLift = id === 'carlitos'
+    ? CARLITOS_SEATED_SUPPORT_LIFT * scale
     : 0;
   const rotatedBounds = new Box3(
     new Vector3(...modelBounds.min),
@@ -105,8 +104,8 @@ const BOAT_STORAGE_SLOTS = {
   flashlight: [restingSlot('shelf', 'flashlight', 1.10, -1.74, 0.10)],
   shotgun: [restingSlot('floor', 'shotgun', 0.50, -1.05, Math.PI / 2 - 0.18)],
   energyBar: [restingSlot('shelf', 'energyBar', 0.29, -1.35, -0.08)],
-  captainWhiskers: [
-    restingSlot('gunwale', 'captainWhiskers', 1.58, -1.75, 0, 0.68),
+  carlitos: [
+    restingSlot('gunwale', 'carlitos', 1.58, -1.75, Math.PI, 0.68),
   ],
 } satisfies Readonly<Record<ItemId, readonly SlotSpec[]>>;
 

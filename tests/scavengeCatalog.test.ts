@@ -23,9 +23,9 @@ describe('scavenging item roster', () => {
     expect(createScavengeItemInstances().some(({ type }) => type === 'energyBar')).toBe(false);
   });
 
-  it('includes Captain Whiskers as a decorative two-slot rescue item', () => {
-    expect(ITEM_DEFINITIONS.captainWhiskers).toMatchObject({
-      label: 'CAPTAIN WHISKERS',
+  it('includes Carlitos as a decorative two-slot rescue item', () => {
+    expect(ITEM_DEFINITIONS.carlitos).toMatchObject({
+      label: 'CARLITOS',
       weight: 2,
       spawnCount: 1,
       charges: null,
@@ -33,11 +33,11 @@ describe('scavenging item roster', () => {
       breakable: false,
       dayAction: null,
     });
-    expect(ITEM_DEFINITIONS.captainWhiskers).not.toHaveProperty('placementCategory');
-    expect(SCAVENGE_ITEM_IDS).toContain('captainWhiskers');
-    expect(SURVIVAL_ITEM_DESCRIPTIONS.captainWhiskers).toContain('company');
-    expect(itemArtwork('captainWhiskers')).toContain(
-      'data-item-artwork="captainWhiskers"',
+    expect(ITEM_DEFINITIONS.carlitos).not.toHaveProperty('placementCategory');
+    expect(SCAVENGE_ITEM_IDS).toContain('carlitos');
+    expect(SURVIVAL_ITEM_DESCRIPTIONS.carlitos).toContain('company');
+    expect(itemArtwork('carlitos')).toContain(
+      'data-item-artwork="carlitos"',
     );
   });
 

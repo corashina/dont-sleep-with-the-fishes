@@ -64,7 +64,7 @@ function createDedicatedEnvironment(): DedicatedEventEnvironment {
       borrowEventActor: () => null,
       itemType: () => null,
     } as unknown as DedicatedEventEnvironment['supplies'],
-    captainWhiskers: {} as DedicatedEventEnvironment['captainWhiskers'],
+    carlitos: {} as DedicatedEventEnvironment['carlitos'],
     vortexWave: createInactiveVortexWaveState(),
     sampleWorldWaveInto: (output, time) => {
       output.height = time * 0.1;
@@ -204,7 +204,7 @@ describe('event item aim targets', () => {
     supernatural.dispose();
   });
 
-  it('keeps the dangerous-waters target on the moving lurker', () => {
+  it('keeps the dangerous-waters target in the rock passage', () => {
     const camera = new PerspectiveCamera();
     const focusedFactory = () => () => ({
       root: new Group(),
@@ -240,7 +240,7 @@ describe('event item aim targets', () => {
     layer.stage('dangerous-waters');
     const target = layer.itemAimTarget('dangerous-waters');
     expect(target).not.toBeNull();
-    expect(target!.parent?.name).toBe('dangerous-waters-lurker');
+    expect(target!.parent?.name).toBe('dangerous-waters-passage');
     scene.updateMatrixWorld(true);
     const before = worldPosition(target!);
 
@@ -249,7 +249,7 @@ describe('event item aim targets', () => {
     scene.updateMatrixWorld(true);
 
     expect(layer.itemAimTarget('dangerous-waters')).toBe(target);
-    expect(worldPosition(target!).distanceTo(before)).toBeGreaterThan(0.001);
+    expect(worldPosition(target!)).toEqual(before);
     layer.dispose();
   });
 
@@ -307,7 +307,7 @@ describe('event item aim targets', () => {
       createWorldEventModels(),
     );
 
-    world.stageEvent('drifting-bottle', null, 9);
+    world.stageEvent('drifting-bottle', 9);
     const bottle = resolveBoatWorldTarget(world, 'drifting-bottle');
     expect(bottle?.name).toBe('event-prop:drifting-bottle');
     expect(bottle?.visible).toBe(true);
@@ -317,7 +317,7 @@ describe('event item aim targets', () => {
     expect(resolveBoatWorldTarget(world, 'drifting-bottle')).toBe(bottle);
     expect(worldPosition(bottle!).distanceTo(bottleBefore)).toBeGreaterThan(0.001);
 
-    world.stageEvent('flowers', null, 9);
+    world.stageEvent('flowers', 9);
     const flowers = resolveBoatWorldTarget(world, 'flowers');
     expect(flowers?.name).toBe('flowers:pad:0');
     expect(flowers?.visible).toBe(true);
@@ -361,9 +361,8 @@ describe('event item aim targets', () => {
     ));
 
     expect(directionalChoices).toEqual(expect.arrayContaining([
-      { eventId: 'drifting-bottle', choiceId: 'fishingNet' },
-      { eventId: 'flowers', choiceId: 'fishingNet' },
-      { eventId: 'chest-attack', choiceId: 'fishingNet' },
+      { eventId: 'snatcher', choiceId: 'shotgun' },
+      { eventId: 'man-in-the-fog', choiceId: 'flashlight' },
     ]));
     for (const { eventId, choiceId } of directionalChoices) {
       world.stageEvent(eventId);

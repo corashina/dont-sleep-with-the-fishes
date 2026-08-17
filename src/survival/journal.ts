@@ -5,7 +5,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import type { FishingCatchId } from './fishingCatalog';
-import type { CaptainWhiskersDeathCause } from './CaptainWhiskersState';
+import type { CarlitosDeathCause } from './CarlitosState';
 import type { EventPresentationKey, WeatherId } from './survivalTypes';
 
 export interface JournalInventoryMutation {
@@ -52,30 +52,30 @@ export interface JournalFishingRecord {
   readonly baitConsumed: boolean;
 }
 
-export interface JournalCaptainWhiskersCareRecord {
-  readonly kind: 'captainWhiskersCare';
+export interface JournalCarlitosCareRecord {
+  readonly kind: 'carlitosCare';
   readonly action: 'pet' | 'feed' | 'treat';
 }
 
-export interface JournalCaptainWhiskersDawnRecord {
-  readonly kind: 'captainWhiskersDawn';
-  readonly before: JournalCaptainWhiskersDawnState;
-  readonly after: JournalCaptainWhiskersDawnState;
+export interface JournalCarlitosDawnRecord {
+  readonly kind: 'carlitosDawn';
+  readonly before: JournalCarlitosDawnState;
+  readonly after: JournalCarlitosDawnState;
 }
 
-export interface JournalCaptainWhiskersDawnState {
+export interface JournalCarlitosDawnState {
   readonly alive: boolean;
   readonly hunger: number;
   readonly sickness: number;
   readonly unhappiness: number;
   readonly pettedToday: boolean;
-  readonly deathCause: CaptainWhiskersDeathCause | null;
+  readonly deathCause: CarlitosDeathCause | null;
 }
 
 export type JournalDayActionRecord =
   | JournalFishingRecord
-  | JournalCaptainWhiskersCareRecord
-  | JournalCaptainWhiskersDawnRecord;
+  | JournalCarlitosCareRecord
+  | JournalCarlitosDawnRecord;
 
 export interface JournalEntry {
   day: number;
@@ -99,9 +99,6 @@ const WEATHER_LABELS: Readonly<Record<WeatherId, string>> = {
 };
 
 function formatEvent(record: JournalEventRecord): string {
-  if (record.eventPresentationKey === 'check-the-back.face') {
-    return 'I looked at me. And I looked back.';
-  }
   const timing = record.phase === 'day' ? 'During the day' : 'That night';
   const situation = `${timing}, I encountered ${record.title.toLocaleLowerCase('en-US')}.`;
   const action = record.attemptedItemId === null
@@ -169,14 +166,14 @@ function formatFishing(record: JournalFishingRecord): string {
   return record.baitConsumed ? `${sentence} I used one bait.` : sentence;
 }
 
-function formatCaptainWhiskers(record: JournalCaptainWhiskersCareRecord | JournalCaptainWhiskersDawnRecord): string {
-  if (record.kind === 'captainWhiskersCare') {
-    if (record.action === 'pet') return 'I petted Captain Whiskers.';
-    if (record.action === 'feed') return 'I fed Captain Whiskers.';
-    return 'I treated Captain Whiskers.';
+function formatCarlitos(record: JournalCarlitosCareRecord | JournalCarlitosDawnRecord): string {
+  if (record.kind === 'carlitosCare') {
+    if (record.action === 'pet') return 'I petted Carlitos.';
+    if (record.action === 'feed') return 'I fed Carlitos.';
+    return 'I treated Carlitos.';
   }
   if (record.before.alive && !record.after.alive) {
-    return 'Captain Whiskers died during the night.';
+    return 'Carlitos died during the night.';
   }
   const changes: string[] = [];
   if (record.before.hunger !== record.after.hunger) {
@@ -188,13 +185,13 @@ function formatCaptainWhiskers(record: JournalCaptainWhiskersCareRecord | Journa
   if (record.before.unhappiness !== record.after.unhappiness) {
     changes.push(`unhappiness ${record.before.unhappiness} to ${record.after.unhappiness}`);
   }
-  if (changes.length > 0) return `Captain Whiskers: ${changes.join('; ')}.`;
-  return 'Captain Whiskers changed during the night.';
+  if (changes.length > 0) return `Carlitos: ${changes.join('; ')}.`;
+  return 'Carlitos changed during the night.';
 }
 
 export function formatJournalEntry(entry: JournalEntry): JournalPageCopy {
   const actions = entry.actions.map((record) => (
-    record.kind === 'fishing' ? formatFishing(record) : formatCaptainWhiskers(record)
+    record.kind === 'fishing' ? formatFishing(record) : formatCarlitos(record)
   )).join(' ');
   const daytime = formatDaytime(entry.daytime);
   return {

@@ -14,6 +14,7 @@ import {
 } from '../src/survival/SurvivalEventModelLibrary';
 import {
   SURVIVAL_EVENT_MODEL_IDS,
+  SURVIVAL_EVENT_MODEL_SPECS,
 } from '../src/survival/eventModelManifest';
 
 function model(name: string): Group {
@@ -24,6 +25,10 @@ function model(name: string): Group {
 }
 
 describe('SurvivalEventModelLibrary', () => {
+  it('keeps the Drifting Bottle model upright', () => {
+    expect(SURVIVAL_EVENT_MODEL_SPECS.driftingBottle.rotation).toEqual([0, 0, 0]);
+  });
+
   it('loads all templates and returns clones with shared resources', async () => {
     const loader: SurvivalEventModelLoader = {
       load: vi.fn(async (url: string): Promise<Object3D> => model(url)),

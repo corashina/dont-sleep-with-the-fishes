@@ -14,8 +14,8 @@ import {
 import { createMenuSeabedMaterial } from '../src/menu/MenuSeabedMaterial';
 
 describe('MenuSandAssets', () => {
-  it('loads and configures the three color maps for repeated seabed use', async () => {
-    const textures = [new Texture(), new Texture(), new Texture()];
+  it('loads and configures the two color maps for repeated seabed use', async () => {
+    const textures = [new Texture(), new Texture()];
     const loader: MenuSandTextureLoader = {
       loadAsync: vi.fn(async () => textures.shift()!),
     };
@@ -23,8 +23,8 @@ describe('MenuSandAssets', () => {
     const assets = await MenuSandAssets.load(loader);
     assets.configure(16);
 
-    expect(loader.loadAsync).toHaveBeenCalledTimes(3);
-    for (const texture of [assets.near, assets.middle, assets.far]) {
+    expect(loader.loadAsync).toHaveBeenCalledTimes(2);
+    for (const texture of [assets.smooth, assets.coarse]) {
       expect(texture.wrapS).toBe(RepeatWrapping);
       expect(texture.wrapT).toBe(RepeatWrapping);
       expect(texture.magFilter).toBe(LinearFilter);
@@ -38,14 +38,11 @@ describe('MenuSandAssets', () => {
 
   it('disposes fulfilled textures when one texture fails', async () => {
     const first = new Texture();
-    const third = new Texture();
     const disposeFirst = vi.spyOn(first, 'dispose');
-    const disposeThird = vi.spyOn(third, 'dispose');
-    const failure = new Error('missing far sand');
+    const failure = new Error('missing coarse sand');
     const results = [
       Promise.resolve(first),
       Promise.reject(failure),
-      Promise.resolve(third),
     ];
     const loader: MenuSandTextureLoader = {
       loadAsync: vi.fn(() => results.shift()!),
@@ -58,17 +55,15 @@ describe('MenuSandAssets', () => {
       }),
     );
     expect(disposeFirst).toHaveBeenCalledOnce();
-    expect(disposeThird).toHaveBeenCalledOnce();
   });
 
   it('disposes each owned texture once', () => {
-    const near = new Texture();
-    const middle = new Texture();
-    const far = new Texture();
-    const disposals = [near, middle, far].map((texture) => (
+    const smooth = new Texture();
+    const coarse = new Texture();
+    const disposals = [smooth, coarse].map((texture) => (
       vi.spyOn(texture, 'dispose')
     ));
-    const assets = MenuSandAssets.fromTextures(near, middle, far);
+    const assets = MenuSandAssets.fromTextures(smooth, coarse);
 
     assets.dispose();
     assets.dispose();
@@ -82,11 +77,10 @@ describe('MenuSandAssets', () => {
 });
 
 describe('createMenuSeabedMaterial', () => {
-  it('keeps standard lighting and blends all three maps by world depth', () => {
-    const near = new Texture();
-    const middle = new Texture();
-    const far = new Texture();
-    const assets = MenuSandAssets.fromTextures(near, middle, far);
+  it('keeps standard lighting and blends both terrain maps by world depth', () => {
+    const smooth = new Texture();
+    const coarse = new Texture();
+    const assets = MenuSandAssets.fromTextures(smooth, coarse);
     const material = createMenuSeabedMaterial(assets);
     const shader = {
       uniforms: {},
@@ -96,19 +90,17 @@ describe('createMenuSeabedMaterial', () => {
 
     material.onBeforeCompile(shader as never, {} as never);
 
-    expect(material.map).toBe(near);
+    expect(material.map).toBe(smooth);
     expect(material.roughness).toBe(1);
     expect(material.vertexColors).toBe(true);
     expect(shader.uniforms).toMatchObject({
-      uMenuMiddleSand: { value: middle },
-      uMenuFarSand: { value: far },
+      uMenuCoarseSand: { value: coarse },
     });
     expect(shader.vertexShader).toContain('vMenuWorldZ');
-    expect(shader.fragmentShader).toContain('nearToMiddle');
-    expect(shader.fragmentShader).toContain('middleToFar');
+    expect(shader.fragmentShader).toContain('coarseBlend');
     expect(shader.fragmentShader).toContain('0.35');
     expect(material.customProgramCacheKey()).toBe(
-      'menu-seabed-three-sand-zones-v1',
+      'menu-seabed-two-terrain-zones-v2',
     );
   });
 });

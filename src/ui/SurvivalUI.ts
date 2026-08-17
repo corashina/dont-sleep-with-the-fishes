@@ -5,7 +5,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import { formatJournalEntry, type JournalEntry } from '../survival/journal';
-import { captainWhiskersStatus } from '../survival/CaptainWhiskersState';
+import { carlitosStatus } from '../survival/CarlitosState';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import { repairEnergyCost, SURVIVAL_BALANCE } from '../survival/survivalBalance';
 import type { BoatInteractionAnchor, BoatToolId, ProjectedBoatBounds } from '../survival/BoatInteraction';
@@ -96,23 +96,23 @@ const ACTIONS: readonly ActionDefinition[] = [
   { id: 'sendMessage', label: 'SEND MESSAGE', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.actions.bottledPaperEnergy, effect: 'RESCUE +15', risk: 'safe' },
   { id: 'useEnergyBar', label: 'EAT ENERGY BAR', cost: '1 ENERGY BAR', energyCost: 0, effect: 'ENERGY TO 3', risk: 'safe' },
   { id: 'openChest', label: 'OPEN CHEST', cost: '3 ENERGY', energyCost: 3, effect: 'RECOVER A SUPPLY', risk: 'uncertain' },
-  { id: 'petWhiskers', label: 'PET', cost: 'FREE', energyCost: 0, effect: 'EASE LONELINESS', risk: 'safe' },
-  { id: 'feedWhiskers', label: 'FEED', cost: '1 FOOD', energyCost: 0, effect: 'RESTORE HUNGER', risk: 'safe' },
-  { id: 'treatWhiskers', label: 'TREAT', cost: '1 MEDKIT', energyCost: 0, effect: 'CURE SICKNESS', risk: 'safe' },
+  { id: 'petCarlitos', label: 'PET', cost: 'FREE', energyCost: 0, effect: 'EASE LONELINESS', risk: 'safe' },
+  { id: 'feedCarlitos', label: 'FEED', cost: '1 FOOD', energyCost: 0, effect: 'RESTORE HUNGER', risk: 'safe' },
+  { id: 'treatCarlitos', label: 'TREAT', cost: '1 MEDKIT', energyCost: 0, effect: 'CURE SICKNESS', risk: 'safe' },
 ];
 
-const WHISKERS_ACTIONS = [
-  'petWhiskers',
-  'feedWhiskers',
-  'treatWhiskers',
+const CARLITOS_ACTIONS = [
+  'petCarlitos',
+  'feedCarlitos',
+  'treatCarlitos',
 ] as const satisfies readonly DayActionId[];
 
-function compactWhiskersActionReason(
-  action: (typeof WHISKERS_ACTIONS)[number],
+function compactCarlitosActionReason(
+  action: (typeof CARLITOS_ACTIONS)[number],
   reason: string,
 ): string {
-  if (action === 'petWhiskers') return 'PETTED';
-  if (action === 'feedWhiskers') {
+  if (action === 'petCarlitos') return 'PETTED';
+  if (action === 'feedCarlitos') {
     return reason.includes('satiated') ? 'FULL' : 'NO FOOD';
   }
   return reason.includes('no treatment') ? 'HEALTHY' : 'NO KIT';
@@ -125,14 +125,14 @@ function spokenEnergyCost(cost: number): string | null {
   return `${ENERGY_WORDS[cost] ?? String(cost)} energy`;
 }
 
-function driftingLootRewardItemId(reward: RewardSummary): ItemId {
+function driftingCargoRewardItemId(reward: RewardSummary): ItemId {
   if (reward.kind === 'item') return reward.id;
   if (reward.id === 'food') return 'cannedFood';
   if (reward.id === 'bait') return 'baitTin';
   return 'ductTape';
 }
 
-function driftingLootRewardLabel(reward: RewardSummary): string {
+function driftingCargoRewardLabel(reward: RewardSummary): string {
   if (reward.kind === 'item') {
     return `${ITEM_DEFINITIONS[reward.id].label}, quantity ${reward.quantity}, recovered`;
   }
@@ -224,7 +224,7 @@ const ROUTINE_DIALOG_PLACEMENTS: Readonly<Record<'fishing' | 'repair' | 'salvage
     height: 360,
   },
   salvage: {
-    anchorId: 'drifting-loot',
+    anchorId: 'drifting-cargo',
     fallbackX: 0.68,
     fallbackY: 0.58,
     width: 360,
@@ -262,7 +262,7 @@ export interface DiveResultView {
 }
 
 function diveRewardName(reward: RewardSummary): string {
-  return ITEM_DEFINITIONS[driftingLootRewardItemId(reward)].label;
+  return ITEM_DEFINITIONS[driftingCargoRewardItemId(reward)].label;
 }
 
 export interface FishingUiState {
@@ -278,7 +278,7 @@ export interface FishingResultView {
   readonly catchTarget: ProjectedBoatBounds | null;
 }
 
-export interface DriftingLootResultView {
+export interface DriftingCargoResultView {
   readonly caption: string;
   readonly reward: RewardSummary;
   readonly energyCost: number;
@@ -359,7 +359,7 @@ export class SurvivalUI {
   onFishingReel: (() => boolean) | null = null;
   onFishingResultContinue: (() => void) | null = null;
   onFishingViewExit: (() => void) | null = null;
-  onDriftingLootContinue: (() => void) | null = null;
+  onDriftingCargoContinue: (() => void) | null = null;
 
   private readonly root: HTMLDivElement;
   private readonly day: HTMLElement;
@@ -379,8 +379,8 @@ export class SurvivalUI {
   private readonly diveResultClose: HTMLButtonElement;
   private readonly eventSleepMask: HTMLElement;
   private readonly anchorLayer: HTMLElement;
-  private readonly whiskersCard: HTMLElement;
-  private readonly whiskersPet: HTMLButtonElement;
+  private readonly carlitosCard: HTMLElement;
+  private readonly carlitosPet: HTMLButtonElement;
   private readonly eventCaption: HTMLElement;
   private readonly eventTitle: HTMLElement;
   private readonly anchoredEventResultPanel: HTMLElement;
@@ -403,10 +403,10 @@ export class SurvivalUI {
   private readonly fishingResultTitle: HTMLElement;
   private readonly fishingResultDetail: HTMLElement;
   private readonly fishingResultContinue: HTMLButtonElement;
-  private readonly driftingLootResultLayer: HTMLElement;
-  private readonly driftingLootResultCaption: HTMLElement;
-  private readonly driftingLootResultIcons: HTMLElement;
-  private readonly driftingLootResultContinue: HTMLButtonElement;
+  private readonly driftingCargoResultLayer: HTMLElement;
+  private readonly driftingCargoResultCaption: HTMLElement;
+  private readonly driftingCargoResultIcons: HTMLElement;
+  private readonly driftingCargoResultContinue: HTMLButtonElement;
   private readonly fishingViewExit: HTMLButtonElement;
   private readonly repairOptionsLayer: HTMLElement;
   private readonly repairOptionsTitle: HTMLElement;
@@ -474,14 +474,14 @@ export class SurvivalUI {
   private pendingCoveredSceneSettle: PendingFade | null = null;
   private fishingResultContinueIssued = false;
   private fishingResultTarget: ProjectedBoatBounds | null = null;
-  private driftingLootContinueIssued = false;
-  private driftingLootResultTarget: ProjectedBoatBounds | null = null;
+  private driftingCargoContinueIssued = false;
+  private driftingCargoResultTarget: ProjectedBoatBounds | null = null;
   private eventEligibility: ReadonlyMap<ItemInstanceId, EventResponseId> | null = null;
   private contextualEventChoices: readonly EventContextChoice[] = [];
   private eventSelectedInstanceId: ItemInstanceId | null = null;
   private eventSelectedChoiceId: EventResponseId | null = null;
   private eventPresentationActive = false;
-  private whiskersReturnTarget: HTMLButtonElement | null = null;
+  private carlitosReturnTarget: HTMLButtonElement | null = null;
 
   constructor(private readonly mount: HTMLElement) {
     this.root = document.createElement('div');
@@ -492,8 +492,15 @@ export class SurvivalUI {
       <div class="survival-feedback" data-survival-feedback aria-hidden="true"></div>
       <div class="sleep-cover" data-sleep-cover data-profile="solid" aria-hidden="true"></div>
       <div class="bad-sleep-cue" data-bad-sleep-cue aria-hidden="true">
-        <span class="bad-sleep-cue__eyelid bad-sleep-cue__eyelid--top"></span>
-        <span class="bad-sleep-cue__eyelid bad-sleep-cue__eyelid--bottom"></span>
+        <span class="bad-sleep-cue__frame"></span>
+        <span class="bad-sleep-cue__eye bad-sleep-cue__eye--left">
+          <i class="bad-sleep-cue__eyelid bad-sleep-cue__eyelid--top"></i>
+          <i class="bad-sleep-cue__eyelid bad-sleep-cue__eyelid--bottom"></i>
+        </span>
+        <span class="bad-sleep-cue__eye bad-sleep-cue__eye--right">
+          <i class="bad-sleep-cue__eyelid bad-sleep-cue__eyelid--top"></i>
+          <i class="bad-sleep-cue__eyelid bad-sleep-cue__eyelid--bottom"></i>
+        </span>
       </div>
       <section class="dive-result" data-dive-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="dive-result-title" inert>
         <div class="dive-result__paper">
@@ -522,34 +529,34 @@ export class SurvivalUI {
         ${METERS.map(meterMarkup).join('')}
       </section>
       <div class="boat-anchors" data-boat-anchors aria-label="Boat interaction points"></div>
-      <section class="whiskers-card" data-whiskers-card aria-labelledby="whiskers-card-title" aria-hidden="true" hidden>
-        <div class="whiskers-card__heading">
-          <span class="whiskers-card__cat" aria-hidden="true"><i></i></span>
-          <h2 class="ui-role-display" id="whiskers-card-title">CAPTAIN WHISKERS</h2>
-          <button type="button" class="whiskers-card__close ui-role-context" data-whiskers-close aria-label="Close Captain Whiskers status">&times;</button>
+      <section class="carlitos-card" data-carlitos-card aria-labelledby="carlitos-card-title" aria-hidden="true" hidden>
+        <div class="carlitos-card__heading">
+          <span class="carlitos-card__cat" aria-hidden="true"><i></i></span>
+          <h2 class="ui-role-display" id="carlitos-card-title">CARLITOS</h2>
+          <button type="button" class="carlitos-card__close ui-role-context" data-carlitos-close aria-label="Close Carlitos status">&times;</button>
         </div>
-        <div class="whiskers-card__statuses">
-          <div class="whiskers-status" data-whiskers-hunger-row>
-            <span class="whiskers-status__name ui-role-context">HUNGER</span>
-            <strong class="ui-role-context" data-whiskers-hunger-label></strong>
-            <span class="whiskers-hunger" aria-hidden="true">
-              ${Array.from({ length: 5 }, (_, index) => `<i data-whiskers-hunger-step="${index + 1}" data-filled="false"></i>`).join('')}
+        <div class="carlitos-card__statuses">
+          <div class="carlitos-status" data-carlitos-hunger-row>
+            <span class="carlitos-status__name ui-role-context">HUNGER</span>
+            <strong class="ui-role-context" data-carlitos-hunger-label></strong>
+            <span class="carlitos-hunger" aria-hidden="true">
+              ${Array.from({ length: 5 }, (_, index) => `<i data-carlitos-hunger-step="${index + 1}" data-filled="false"></i>`).join('')}
             </span>
           </div>
-          <div class="whiskers-status" data-whiskers-happiness-row>
-            <span class="whiskers-status__name ui-role-context">MOOD</span>
-            <strong class="ui-role-context" data-whiskers-happiness></strong>
+          <div class="carlitos-status" data-carlitos-happiness-row>
+            <span class="carlitos-status__name ui-role-context">MOOD</span>
+            <strong class="ui-role-context" data-carlitos-happiness></strong>
           </div>
-          <div class="whiskers-status" data-whiskers-health-row>
-            <span class="whiskers-status__name ui-role-context">HEALTH</span>
-            <strong class="ui-role-context" data-whiskers-health></strong>
+          <div class="carlitos-status" data-carlitos-health-row>
+            <span class="carlitos-status__name ui-role-context">HEALTH</span>
+            <strong class="ui-role-context" data-carlitos-health></strong>
           </div>
         </div>
-        <nav class="whiskers-care" aria-label="Captain Whiskers care">
-          ${WHISKERS_ACTIONS.map((action) => `
-            <button type="button" class="whiskers-care__action ui-role-context" data-action="${action}" aria-disabled="false">
-              <span>${action === 'petWhiskers' ? 'PET' : action === 'feedWhiskers' ? 'FEED' : 'TREAT'}</span>
-              <small class="ui-role-narrative" data-whiskers-action-reason hidden></small>
+        <nav class="carlitos-care" aria-label="Carlitos care">
+          ${CARLITOS_ACTIONS.map((action) => `
+            <button type="button" class="carlitos-care__action ui-role-context" data-action="${action}" aria-disabled="false">
+              <span>${action === 'petCarlitos' ? 'PET' : action === 'feedCarlitos' ? 'FEED' : 'TREAT'}</span>
+              <small class="ui-role-narrative" data-carlitos-action-reason hidden></small>
             </button>`).join('')}
         </nav>
       </section>
@@ -571,11 +578,11 @@ export class SurvivalUI {
           </button>
         </div>
       </section>
-      <section class="routine-dialog routine-dialog--salvage" data-drifting-loot-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="drifting-loot-result-caption" inert>
+      <section class="routine-dialog routine-dialog--salvage" data-drifting-cargo-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="drifting-cargo-result-caption" inert>
         <div class="routine-dialog__card fishing-result-card">
-          <p class="eyebrow ui-role-context" id="drifting-loot-result-caption" data-drifting-loot-result-caption></p>
-          <div class="drifting-loot-result__icons" data-drifting-loot-result-icons aria-hidden="true"></div>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-drifting-loot-result-continue aria-label="Continue">CONTINUE</button>
+          <p class="eyebrow ui-role-context" id="drifting-cargo-result-caption" data-drifting-cargo-result-caption></p>
+          <div class="drifting-cargo-result__icons" data-drifting-cargo-result-icons aria-hidden="true"></div>
+          <button type="button" class="primary-action salvage-action ui-role-context" data-drifting-cargo-result-continue aria-label="Continue">CONTINUE</button>
         </div>
       </section>
       <section class="routine-dialog routine-dialog--repair" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Repair target" inert>
@@ -590,7 +597,7 @@ export class SurvivalUI {
         </div>
       </section>
       <section class="event-caption" data-event-caption aria-hidden="true" aria-live="polite">
-        <h2 class="ui-role-display" data-event-title></h2>
+        <h2 class="ui-role-display" data-event-title hidden></h2>
         <p class="event-caption__detail ui-role-narrative" data-event-detail hidden></p>
         <p class="event-caption__risk ui-role-context" data-event-risk hidden></p>
         <p class="event-caption__result ui-role-context" data-event-result hidden></p>
@@ -666,8 +673,8 @@ export class SurvivalUI {
     this.diveResultClose = requireElement(this.root, '[data-dive-result-close]');
     this.eventSleepMask = requireElement(this.root, '[data-event-sleep-mask]');
     this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
-    this.whiskersCard = requireElement(this.root, '[data-whiskers-card]');
-    this.whiskersPet = requireElement(this.whiskersCard, '[data-action="petWhiskers"]');
+    this.carlitosCard = requireElement(this.root, '[data-carlitos-card]');
+    this.carlitosPet = requireElement(this.carlitosCard, '[data-action="petCarlitos"]');
     this.eventCaption = requireElement(this.root, '[data-event-caption]');
     this.eventTitle = requireElement(this.root, '[data-event-title]');
     this.anchoredEventResultPanel = requireElement(this.root, '[data-event-result-panel]');
@@ -690,10 +697,10 @@ export class SurvivalUI {
     this.fishingResultTitle = requireElement(this.root, '[data-fishing-result-title]');
     this.fishingResultDetail = requireElement(this.root, '[data-fishing-result-detail]');
     this.fishingResultContinue = requireElement(this.root, '[data-fishing-result-continue]');
-    this.driftingLootResultLayer = requireElement(this.root, '[data-drifting-loot-result]');
-    this.driftingLootResultCaption = requireElement(this.root, '[data-drifting-loot-result-caption]');
-    this.driftingLootResultIcons = requireElement(this.root, '[data-drifting-loot-result-icons]');
-    this.driftingLootResultContinue = requireElement(this.root, '[data-drifting-loot-result-continue]');
+    this.driftingCargoResultLayer = requireElement(this.root, '[data-drifting-cargo-result]');
+    this.driftingCargoResultCaption = requireElement(this.root, '[data-drifting-cargo-result-caption]');
+    this.driftingCargoResultIcons = requireElement(this.root, '[data-drifting-cargo-result-icons]');
+    this.driftingCargoResultContinue = requireElement(this.root, '[data-drifting-cargo-result-continue]');
     this.fishingViewExit = requireElement(this.root, '[data-fishing-view-exit]');
     this.repairOptionsLayer = requireElement(this.root, '[data-repair-options]');
     this.repairOptionsTitle = requireElement(this.root, '[data-repair-options-title]');
@@ -719,7 +726,7 @@ export class SurvivalUI {
       this.repairOptionsLayer,
       this.endingLayer,
       this.diveResultLayer,
-      this.driftingLootResultLayer,
+      this.driftingCargoResultLayer,
       this.fishingResultLayer,
       this.fishingLayer,
     ];
@@ -750,7 +757,7 @@ export class SurvivalUI {
       const reason = unavailable(id);
       this.actionReasons.set(id, reason);
     });
-    this.renderWhiskers(snapshot);
+    this.renderCarlitos(snapshot);
     this.anchors.forEach((anchor, id) => this.refreshAnchorTooltip(this.anchorButtons.get(id)!, anchor));
     this.syncCommandState();
   }
@@ -820,12 +827,12 @@ export class SurvivalUI {
       this.anchorLayouts.delete(id);
     });
     const companionAnchor = anchors.find(
-      (anchor) => anchor.companionId === 'captainWhiskers' && anchor.visible,
+      (anchor) => anchor.companionId === 'carlitos' && anchor.visible,
     );
-    if (companionAnchor === undefined) this.closeWhiskersCard(false);
-    else if (!this.whiskersCard.hidden) {
-      this.whiskersReturnTarget = this.anchorButtons.get(companionAnchor.id) ?? null;
-      this.positionWhiskersCard(companionAnchor);
+    if (companionAnchor === undefined) this.closeCarlitosCard(false);
+    else if (!this.carlitosCard.hidden) {
+      this.carlitosReturnTarget = this.anchorButtons.get(companionAnchor.id) ?? null;
+      this.positionCarlitosCard(companionAnchor);
     }
     if (highlightInvalidated) this.publishAnchorHighlight();
     this.positionOpenRoutineDialogs();
@@ -844,7 +851,7 @@ export class SurvivalUI {
 
   beginEventPresentation(): void {
     if (this.disposed) return;
-    this.closeWhiskersCard(false);
+    this.closeCarlitosCard(false);
     this.clearAnchorHighlight();
     this.eventPresentationActive = true;
     this.syncCommandState();
@@ -853,6 +860,7 @@ export class SurvivalUI {
   showItemAnimationLab(): void {
     if (this.disposed) return;
     this.updateText('event:title', this.eventTitle, 'ITEM ANIMATION LAB');
+    this.eventTitle.hidden = false;
     this.updateText(
       'event:detail',
       this.eventDetail,
@@ -881,13 +889,14 @@ export class SurvivalUI {
   }
 
   showEventReveal(
-    event: Pick<SurvivalEventDefinition, 'id' | 'title' | 'revealText' | 'danger'>,
+    event: Pick<SurvivalEventDefinition, 'id' | 'revealText' | 'danger'>,
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    this.closeWhiskersCard(false);
+    this.closeCarlitosCard(false);
     delete this.eventCaption.dataset.result;
     const risk = event.danger.toLocaleUpperCase('en-US');
-    this.updateText('event:title', this.eventTitle, event.title.toLocaleUpperCase('en-US'));
+    this.updateText('event:title', this.eventTitle, '');
+    this.eventTitle.hidden = true;
     this.updateText('event:detail', this.eventDetail, event.revealText);
     this.updateText('event:risk', this.eventRisk, risk);
     this.eventDetail.hidden = true;
@@ -904,8 +913,7 @@ export class SurvivalUI {
     this.clearEventResult();
     this.syncCommandState();
     this.publishAnnouncement(
-      `${event.danger[0]!.toUpperCase()}${event.danger.slice(1)} event: `
-        + `${event.title}. ${event.revealText}`,
+      `${event.danger[0]!.toUpperCase()}${event.danger.slice(1)} event. ${event.revealText}`,
     );
     return Promise.resolve();
   }
@@ -963,6 +971,7 @@ export class SurvivalUI {
     if (this.disposed) return;
     if (!('title' in view)) {
       this.updateText('event:title', this.eventTitle, view.message);
+      this.eventTitle.hidden = false;
       this.eventDetail.hidden = true;
       this.eventRisk.hidden = true;
       this.eventCaption.dataset.result = 'true';
@@ -975,6 +984,7 @@ export class SurvivalUI {
       return;
     }
     this.updateText('event:title', this.eventTitle, view.title);
+    this.eventTitle.hidden = false;
     this.updateText('event:detail', this.eventDetail, view.detail);
     this.eventDetail.hidden = false;
     this.eventRisk.hidden = true;
@@ -1067,6 +1077,8 @@ export class SurvivalUI {
     delete this.eventCaption.dataset.eventId;
     delete this.eventCaption.dataset.danger;
     delete this.eventCaption.dataset.result;
+    this.updateText('event:title', this.eventTitle, '');
+    this.eventTitle.hidden = true;
     this.eventDetail.textContent = '';
     this.eventDetail.hidden = true;
     this.eventRisk.textContent = '';
@@ -1210,7 +1222,7 @@ export class SurvivalUI {
     this.diveResultRewards.replaceChildren();
     this.diveResultRewards.hidden = reward === null;
     if (reward === null) return;
-    const itemId = driftingLootRewardItemId(reward);
+    const itemId = driftingCargoRewardItemId(reward);
     const entry = document.createElement('span');
     entry.className = 'dive-result__reward-entry';
     const circle = document.createElement('span');
@@ -1360,46 +1372,46 @@ export class SurvivalUI {
     this.fishingResultTarget = null;
   }
 
-  showDriftingLootResult(view: DriftingLootResultView): void {
+  showDriftingCargoResult(view: DriftingCargoResultView): void {
     if (this.disposed) return;
-    this.driftingLootContinueIssued = false;
-    this.driftingLootResultCaption.textContent = view.caption;
-    const rewardItemId = driftingLootRewardItemId(view.reward);
+    this.driftingCargoContinueIssued = false;
+    this.driftingCargoResultCaption.textContent = view.caption;
+    const rewardItemId = driftingCargoRewardItemId(view.reward);
     const reward = document.createElement('span');
-    reward.className = 'drifting-loot-result__reward';
+    reward.className = 'drifting-cargo-result__reward';
     const thumbnail = document.createElement('img');
-    thumbnail.className = 'drifting-loot-result__thumbnail';
+    thumbnail.className = 'drifting-cargo-result__thumbnail';
     thumbnail.src = itemThumbnailUrl(rewardItemId);
     thumbnail.alt = '';
     thumbnail.decoding = 'async';
     thumbnail.draggable = false;
     const quantity = document.createElement('span');
-    quantity.className = 'drifting-loot-result__quantity ui-role-numeral';
+    quantity.className = 'drifting-cargo-result__quantity ui-role-numeral';
     quantity.textContent = `×${view.reward.quantity}`;
     reward.append(thumbnail, quantity);
 
     const energy = document.createElement('span');
-    energy.className = 'drifting-loot-result__energy';
+    energy.className = 'drifting-cargo-result__energy';
     energy.innerHTML = Array.from(
       { length: view.energyCost },
-      () => uiArtwork('energy', 'drifting-loot-result__energy-icon'),
+      () => uiArtwork('energy', 'drifting-cargo-result__energy-icon'),
     ).join('');
-    this.driftingLootResultIcons.replaceChildren(reward, energy);
-    this.driftingLootResultLayer.setAttribute(
+    this.driftingCargoResultIcons.replaceChildren(reward, energy);
+    this.driftingCargoResultLayer.setAttribute(
       'aria-label',
-      `${view.caption}. ${driftingLootRewardLabel(view.reward)}. ${view.energyCost} energy spent.`,
+      `${view.caption}. ${driftingCargoRewardLabel(view.reward)}. ${view.energyCost} energy spent.`,
     );
-    this.driftingLootResultTarget = view.target === null
+    this.driftingCargoResultTarget = view.target === null
       ? null
       : Object.freeze({ ...view.target });
-    this.showLayer(this.driftingLootResultLayer);
-    this.driftingLootResultContinue.focus();
+    this.showLayer(this.driftingCargoResultLayer);
+    this.driftingCargoResultContinue.focus();
   }
 
-  hideDriftingLootResult(): void {
+  hideDriftingCargoResult(): void {
     if (this.disposed) return;
-    this.hideLayer(this.driftingLootResultLayer);
-    this.driftingLootResultTarget = null;
+    this.hideLayer(this.driftingCargoResultLayer);
+    this.driftingCargoResultTarget = null;
   }
 
   setFishingViewExitVisible(visible: boolean): void {
@@ -1506,7 +1518,7 @@ export class SurvivalUI {
 
   setPaused(paused: boolean): void {
     if (this.disposed || paused === this.paused) return;
-    if (paused) this.closeWhiskersCard(true);
+    if (paused) this.closeCarlitosCard(true);
     if (paused && !this.paused) {
       this.pauseReturnTarget = this.resolveCommandOrigin();
     }
@@ -1539,7 +1551,7 @@ export class SurvivalUI {
       : state === 'dead'
         ? 'The sea outlasted you.'
         : 'Boat is gone.';
-    this.closeWhiskersCard(false);
+    this.closeCarlitosCard(false);
     this.clearEventPresentation();
     this.setPaused(false);
     this.updateText('ending:title', this.endingTitle, title);
@@ -1571,8 +1583,8 @@ export class SurvivalUI {
     this.pendingCoveredSceneSettle?.finish();
     this.fishingAnnouncementVersion += 1;
     this.anchorLayouts.clear();
-    this.hideLayer(this.driftingLootResultLayer);
-    this.driftingLootResultTarget = null;
+    this.hideLayer(this.driftingCargoResultLayer);
+    this.driftingCargoResultTarget = null;
     if (this.fishingMode !== 'hidden') {
       this.fishingLayer.classList.remove('is-visible');
       this.fishingMode = 'hidden';
@@ -1605,7 +1617,7 @@ export class SurvivalUI {
     this.onFishingReel = null;
     this.onFishingResultContinue = null;
     this.onFishingViewExit = null;
-    this.onDriftingLootContinue = null;
+    this.onDriftingCargoContinue = null;
     this.root.remove();
   }
 
@@ -1646,19 +1658,21 @@ export class SurvivalUI {
     button.type = 'button';
     button.className = 'boat-anchor';
     button.dataset.anchorId = anchor.id;
-    const tooltip = document.createElement('span');
-    tooltip.className = 'boat-tooltip ui-role-context';
-    tooltip.role = 'tooltip';
-    const label = document.createTextNode('');
-    const separator = document.createTextNode('');
-    const energy = document.createElement('span');
-    energy.className = 'boat-tooltip__energy ui-role-numeral';
-    energy.setAttribute('aria-hidden', 'true');
-    tooltip.append(label, separator, energy);
-    button.append(tooltip);
+    if (anchor.tooltip !== false) {
+      const tooltip = document.createElement('span');
+      tooltip.className = 'boat-tooltip ui-role-context';
+      tooltip.role = 'tooltip';
+      const label = document.createTextNode('');
+      const separator = document.createTextNode('');
+      const energy = document.createElement('span');
+      energy.className = 'boat-tooltip__energy ui-role-numeral';
+      energy.setAttribute('aria-hidden', 'true');
+      tooltip.append(label, separator, energy);
+      button.append(tooltip);
+      this.anchorTooltipNodes.set(button, { tooltip, label, separator, energy });
+    }
     this.anchorLayer.append(button);
     this.anchorButtons.set(anchor.id, button);
-    this.anchorTooltipNodes.set(button, { tooltip, label, separator, energy });
     return button;
   }
 
@@ -1731,8 +1745,8 @@ export class SurvivalUI {
     const text = action === null || preview === null
       ? `${itemLabel}${stateText} — ${itemDescription}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`
       : `${itemLabel}${stateText}${itemLabel === action.label ? '' : ` — ${action.label}`} — ${itemDescription} — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
-    const visibleLabel = anchor.companionId === 'captainWhiskers'
-      ? 'CAPTAIN WHISKERS: CHECK STATUS'
+    const visibleLabel = anchor.companionId === 'carlitos'
+      ? anchoredChoice?.label.toLocaleUpperCase('en-US') ?? 'CARLITOS: CHECK STATUS'
       : anchor.label ?? (anchor.itemType !== null
       ? quantityLabel(ITEM_LABELS[anchor.itemType], quantity)
       : anchor.supplyGroupId === 'repairMaterial'
@@ -1751,14 +1765,15 @@ export class SurvivalUI {
         ? reason === null ? '' : 'UNAVAILABLE'
         : `${'⚡'.repeat(energyCost)}${reason === null ? '' : ' — INSUFFICIENT ENERGY'}`;
     const tooltipNodes = this.anchorTooltipNodes.get(button);
-    if (tooltipNodes === undefined) throw new Error('Anchor tooltip nodes are missing');
-    if (tooltipNodes.label.data !== visibleLabel) tooltipNodes.label.data = visibleLabel;
-    const separator = energyIndicator === ''
-      ? ''
-      : anchoredChoice === undefined ? ' ' : ' — ';
-    if (tooltipNodes.separator.data !== separator) tooltipNodes.separator.data = separator;
-    if (tooltipNodes.energy.textContent !== energyIndicator) {
-      tooltipNodes.energy.textContent = energyIndicator;
+    if (tooltipNodes !== undefined) {
+      if (tooltipNodes.label.data !== visibleLabel) tooltipNodes.label.data = visibleLabel;
+      const separator = energyIndicator === ''
+        ? ''
+        : anchoredChoice === undefined ? ' ' : ' — ';
+      if (tooltipNodes.separator.data !== separator) tooltipNodes.separator.data = separator;
+      if (tooltipNodes.energy.textContent !== energyIndicator) {
+        tooltipNodes.energy.textContent = energyIndicator;
+      }
     }
     const spokenCost = spokenEnergyCost(energyCost);
     button.dataset.action = anchor.action ?? '';
@@ -1801,51 +1816,51 @@ export class SurvivalUI {
     button.dataset.tooltipY = y < 96 ? 'below' : 'above';
   }
 
-  private renderWhiskers(snapshot: SurvivalSnapshot): void {
-    const whiskers = snapshot.captainWhiskers;
-    if (whiskers === null || !whiskers.alive) {
-      this.closeWhiskersCard(false);
+  private renderCarlitos(snapshot: SurvivalSnapshot): void {
+    const carlitos = snapshot.carlitos;
+    if (carlitos === null || !carlitos.alive) {
+      this.closeCarlitosCard(false);
       return;
     }
-    const status = captainWhiskersStatus(whiskers);
-    requireElement(this.whiskersCard, '[data-whiskers-hunger-label]').textContent =
+    const status = carlitosStatus(carlitos);
+    requireElement(this.carlitosCard, '[data-carlitos-hunger-label]').textContent =
       status.hunger.toLocaleUpperCase('en-US');
-    requireElement(this.whiskersCard, '[data-whiskers-happiness]').textContent =
+    requireElement(this.carlitosCard, '[data-carlitos-happiness]').textContent =
       status.happiness.toLocaleUpperCase('en-US');
-    requireElement(this.whiskersCard, '[data-whiskers-health]').textContent =
+    requireElement(this.carlitosCard, '[data-carlitos-health]').textContent =
       status.health.toLocaleUpperCase('en-US');
-    this.whiskersCard.querySelectorAll<HTMLElement>('[data-whiskers-hunger-step]')
+    this.carlitosCard.querySelectorAll<HTMLElement>('[data-carlitos-hunger-step]')
       .forEach((step, index) => {
-        step.dataset.filled = String(index < whiskers.hunger);
+        step.dataset.filled = String(index < carlitos.hunger);
       });
-    this.setWhiskersDanger(
-      '[data-whiskers-hunger-row]',
+    this.setCarlitosDanger(
+      '[data-carlitos-hunger-row]',
       status.hunger === 'Starving',
     );
-    this.setWhiskersDanger(
-      '[data-whiskers-happiness-row]',
+    this.setCarlitosDanger(
+      '[data-carlitos-happiness-row]',
       status.happiness === 'Depressed' || status.happiness === 'Miserable',
     );
-    this.setWhiskersDanger(
-      '[data-whiskers-health-row]',
+    this.setCarlitosDanger(
+      '[data-carlitos-health-row]',
       status.health === 'Sick' || status.health === 'Dying',
     );
-    this.syncWhiskersActions();
+    this.syncCarlitosActions();
     const anchor = [...this.anchors.values()].find(
-      (candidate) => candidate.companionId === 'captainWhiskers' && candidate.visible,
+      (candidate) => candidate.companionId === 'carlitos' && candidate.visible,
     );
-    if (!this.whiskersCard.hidden && anchor !== undefined) this.positionWhiskersCard(anchor);
+    if (!this.carlitosCard.hidden && anchor !== undefined) this.positionCarlitosCard(anchor);
   }
 
-  private setWhiskersDanger(rowSelector: string, danger: boolean): void {
-    const row = requireElement<HTMLElement>(this.whiskersCard, rowSelector);
+  private setCarlitosDanger(rowSelector: string, danger: boolean): void {
+    const row = requireElement<HTMLElement>(this.carlitosCard, rowSelector);
     row.dataset.state = danger ? 'danger' : 'stable';
   }
 
-  private syncWhiskersActions(): void {
-    WHISKERS_ACTIONS.forEach((action) => {
+  private syncCarlitosActions(): void {
+    CARLITOS_ACTIONS.forEach((action) => {
       const button = requireElement<HTMLButtonElement>(
-        this.whiskersCard,
+        this.carlitosCard,
         `[data-action="${action}"]`,
       );
       const reason = this.actionReasons.get(action) ?? null;
@@ -1854,25 +1869,25 @@ export class SurvivalUI {
       button.setAttribute(
         'aria-description',
         reason ?? (
-          action === 'petWhiskers'
-            ? 'Pet Captain Whiskers.'
-            : action === 'feedWhiskers'
-              ? 'Feed Captain Whiskers one food.'
-              : 'Treat Captain Whiskers with one medical kit.'
+          action === 'petCarlitos'
+            ? 'Pet Carlitos.'
+            : action === 'feedCarlitos'
+              ? 'Feed Carlitos one food.'
+              : 'Treat Carlitos with one medical kit.'
         ),
       );
-      const reasonNode = requireElement<HTMLElement>(button, '[data-whiskers-action-reason]');
+      const reasonNode = requireElement<HTMLElement>(button, '[data-carlitos-action-reason]');
       reasonNode.hidden = reason === null;
       reasonNode.textContent = reason === null
         ? ''
-        : compactWhiskersActionReason(action, reason);
+        : compactCarlitosActionReason(action, reason);
     });
   }
 
-  private openWhiskersCard(anchorButton: HTMLButtonElement): void {
+  private openCarlitosCard(anchorButton: HTMLButtonElement): void {
     const snapshot = this.currentSnapshot;
     if (
-      snapshot?.captainWhiskers?.alive !== true
+      snapshot?.carlitos?.alive !== true
       || this.busy
       || this.paused
       || this.eventPresentationActive
@@ -1882,38 +1897,38 @@ export class SurvivalUI {
     ) return;
     const anchorId = anchorButton.dataset.anchorId;
     const anchor = anchorId === undefined ? undefined : this.anchors.get(anchorId);
-    if (anchor?.companionId !== 'captainWhiskers' || !anchor.visible) return;
-    this.whiskersReturnTarget = anchorButton;
-    this.whiskersCard.hidden = false;
-    this.whiskersCard.setAttribute('aria-hidden', 'false');
-    this.whiskersCard.classList.add('is-visible');
-    this.positionWhiskersCard(anchor);
-    this.whiskersPet.focus();
+    if (anchor?.companionId !== 'carlitos' || !anchor.visible) return;
+    this.carlitosReturnTarget = anchorButton;
+    this.carlitosCard.hidden = false;
+    this.carlitosCard.setAttribute('aria-hidden', 'false');
+    this.carlitosCard.classList.add('is-visible');
+    this.positionCarlitosCard(anchor);
+    this.carlitosPet.focus();
   }
 
-  private closeWhiskersCard(restoreFocus: boolean): void {
-    if (this.whiskersCard.hidden) return;
-    this.whiskersCard.hidden = true;
-    this.whiskersCard.setAttribute('aria-hidden', 'true');
-    this.whiskersCard.classList.remove('is-visible');
-    const target = this.whiskersReturnTarget;
-    this.whiskersReturnTarget = null;
+  private closeCarlitosCard(restoreFocus: boolean): void {
+    if (this.carlitosCard.hidden) return;
+    this.carlitosCard.hidden = true;
+    this.carlitosCard.setAttribute('aria-hidden', 'true');
+    this.carlitosCard.classList.remove('is-visible');
+    const target = this.carlitosReturnTarget;
+    this.carlitosReturnTarget = null;
     if (!restoreFocus || target === null) return;
     const anchorId = target.dataset.anchorId;
     const anchor = anchorId === undefined ? undefined : this.anchors.get(anchorId);
     if (
-      anchor?.companionId === 'captainWhiskers'
+      anchor?.companionId === 'carlitos'
       && anchor.visible
       && target.isConnected
       && !target.hidden
     ) target.focus();
   }
 
-  private positionWhiskersCard(anchor: BoatInteractionAnchor): void {
+  private positionCarlitosCard(anchor: BoatInteractionAnchor): void {
     const rootBounds = this.root.getBoundingClientRect();
     const viewportWidth = rootBounds.width || this.root.clientWidth || window.innerWidth;
     const viewportHeight = rootBounds.height || this.root.clientHeight || window.innerHeight;
-    const cardBounds = this.whiskersCard.getBoundingClientRect();
+    const cardBounds = this.carlitosCard.getBoundingClientRect();
     const cardWidth = cardBounds.width || 312;
     const cardHeight = cardBounds.height || 344;
     const anchorWidth = anchor.hitArea?.width ?? DEFAULT_ANCHOR_HIT_AREA.width;
@@ -1934,9 +1949,9 @@ export class SurvivalUI {
       maximumY,
       Math.max(gutter, anchor.y - cardHeight / 2),
     );
-    this.whiskersCard.style.setProperty('--whiskers-card-x', `${Math.round(x)}px`);
-    this.whiskersCard.style.setProperty('--whiskers-card-y', `${Math.round(y)}px`);
-    this.whiskersCard.dataset.placement = placeLeft ? 'left' : 'right';
+    this.carlitosCard.style.setProperty('--carlitos-card-x', `${Math.round(x)}px`);
+    this.carlitosCard.style.setProperty('--carlitos-card-y', `${Math.round(y)}px`);
+    this.carlitosCard.dataset.placement = placeLeft ? 'left' : 'right';
   }
 
   private updateMeter(id: MeterId, value: number): void {
@@ -2048,7 +2063,7 @@ export class SurvivalUI {
       );
     });
     this.endureButton.disabled = this.busy;
-    this.syncWhiskersActions();
+    this.syncCarlitosActions();
   }
 
   private renderContextualEventChoices(): void {
@@ -2189,9 +2204,9 @@ export class SurvivalUI {
     if (this.disposed) return;
     this.positionOpenRoutineDialogs();
     const anchor = [...this.anchors.values()].find(
-      (candidate) => candidate.companionId === 'captainWhiskers' && candidate.visible,
+      (candidate) => candidate.companionId === 'carlitos' && candidate.visible,
     );
-    if (!this.whiskersCard.hidden && anchor !== undefined) this.positionWhiskersCard(anchor);
+    if (!this.carlitosCard.hidden && anchor !== undefined) this.positionCarlitosCard(anchor);
   };
 
   private readonly handleAnchorPointerOver = (event: Event): void => {
@@ -2232,11 +2247,11 @@ export class SurvivalUI {
         ROUTINE_DIALOG_PLACEMENTS.fishing,
         this.fishingResultTarget,
       );
-    } else if (layer === this.driftingLootResultLayer) {
+    } else if (layer === this.driftingCargoResultLayer) {
       this.positionRoutineDialog(
         layer,
         ROUTINE_DIALOG_PLACEMENTS.salvage,
-        this.driftingLootResultTarget,
+        this.driftingCargoResultTarget,
       );
     } else if (layer === this.repairOptionsLayer) {
       this.positionRoutineDialog(layer, ROUTINE_DIALOG_PLACEMENTS.repair);
@@ -2258,11 +2273,11 @@ export class SurvivalUI {
         this.fishingResultTarget,
       );
     }
-    if (this.driftingLootResultLayer.classList.contains('is-visible')) {
+    if (this.driftingCargoResultLayer.classList.contains('is-visible')) {
       this.positionRoutineDialog(
-        this.driftingLootResultLayer,
+        this.driftingCargoResultLayer,
         ROUTINE_DIALOG_PLACEMENTS.salvage,
-        this.driftingLootResultTarget,
+        this.driftingCargoResultTarget,
       );
     }
     if (this.repairOptionsLayer.classList.contains('is-visible')) {
@@ -2364,7 +2379,7 @@ export class SurvivalUI {
   private focusModal(layer: HTMLElement): void {
     if (layer === this.endingLayer) this.endingTitle.focus();
     else if (layer === this.fishingResultLayer) this.fishingResultContinue.focus();
-    else if (layer === this.driftingLootResultLayer) this.driftingLootResultContinue.focus();
+    else if (layer === this.driftingCargoResultLayer) this.driftingCargoResultContinue.focus();
     else if (layer === this.repairOptionsLayer) this.repairOptionsTitle.focus();
     else if (layer === this.journalLayer) this.journalTitle.focus();
     else if (layer === this.pauseLayer) this.resumeButton.focus();
@@ -2581,12 +2596,15 @@ export class SurvivalUI {
     const button = target.closest<HTMLButtonElement>('button');
     if (!button || !this.root.contains(button) || button.disabled) return;
     if (topmostModal !== null && !topmostModal.contains(button)) return;
-    if (button.hasAttribute('data-whiskers-close')) {
-      this.closeWhiskersCard(true);
+    if (button.hasAttribute('data-carlitos-close')) {
+      this.closeCarlitosCard(true);
       return;
     }
-    if (button.dataset.companion === 'captainWhiskers') {
-      this.openWhiskersCard(button);
+    if (
+      button.dataset.companion === 'carlitos'
+      && !button.hasAttribute('data-event-choice')
+    ) {
+      this.openCarlitosCard(button);
       return;
     }
     const eventInstanceId = button.dataset.backingInstanceId as ItemInstanceId | undefined
@@ -2648,11 +2666,11 @@ export class SurvivalUI {
       this.onFishingResultContinue?.();
       return;
     }
-    if (button.hasAttribute('data-drifting-loot-result-continue')) {
-      if (topmostModal !== this.driftingLootResultLayer) return;
-      if (this.driftingLootContinueIssued) return;
-      this.driftingLootContinueIssued = true;
-      this.onDriftingLootContinue?.();
+    if (button.hasAttribute('data-drifting-cargo-result-continue')) {
+      if (topmostModal !== this.driftingCargoResultLayer) return;
+      if (this.driftingCargoContinueIssued) return;
+      this.driftingCargoContinueIssued = true;
+      this.onDriftingCargoContinue?.();
       return;
     }
     if (button.hasAttribute('data-fishing-view-exit')) {
@@ -2684,9 +2702,9 @@ export class SurvivalUI {
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.disposed || event.defaultPrevented || event.repeat) return;
-    if (event.key === 'Escape' && !this.whiskersCard.hidden) {
+    if (event.key === 'Escape' && !this.carlitosCard.hidden) {
       event.preventDefault();
-      this.closeWhiskersCard(true);
+      this.closeCarlitosCard(true);
       return;
     }
     const topmostModal = this.topmostModal();
@@ -2716,11 +2734,12 @@ export class SurvivalUI {
     const target = event.target;
     if (
       target instanceof HTMLButtonElement
-      && target.dataset.companion === 'captainWhiskers'
+      && target.dataset.companion === 'carlitos'
+      && !target.hasAttribute('data-event-choice')
       && (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar')
     ) {
       event.preventDefault();
-      this.openWhiskersCard(target);
+      this.openCarlitosCard(target);
       return;
     }
     if (
@@ -2766,15 +2785,15 @@ export class SurvivalUI {
   };
 
   private readonly handleDocumentClick = (event: MouseEvent): void => {
-    if (this.disposed || this.whiskersCard.hidden) return;
+    if (this.disposed || this.carlitosCard.hidden) return;
     const target = event.target;
     if (!(target instanceof Node)) return;
-    if (this.whiskersCard.contains(target) || this.whiskersReturnTarget?.contains(target)) return;
+    if (this.carlitosCard.contains(target) || this.carlitosReturnTarget?.contains(target)) return;
     const restoreFocus = !this.busy
       && !this.eventPresentationActive
       && !this.paused
       && this.topmostModal() === null;
-    this.closeWhiskersCard(restoreFocus);
+    this.closeCarlitosCard(restoreFocus);
   };
 
   private sameFishingTarget(target: ProjectedBoatBounds | null): boolean {

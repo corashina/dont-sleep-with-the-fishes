@@ -40,8 +40,7 @@ function snapshot(): SurvivalSnapshot {
     savedItems: [FLASHLIGHT],
     pendingEventId: 'flowers',
     pendingEventTargetId: null,
-    pendingDriftingLootVariant: null,
-    captainWhiskers: null,
+    carlitos: null,
     lastOutcome: null,
     seed: 8,
   };

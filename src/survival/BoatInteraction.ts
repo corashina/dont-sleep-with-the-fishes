@@ -31,9 +31,10 @@ export type BoatToolId = 'repairTools' | 'fishingRod' | 'lantern' | 'chest';
 
 export interface BoatInteractionAnchor {
   readonly id: string;
-  readonly companionId?: 'captainWhiskers';
+  readonly companionId?: 'carlitos';
   readonly label?: string;
   readonly description?: string;
+  readonly tooltip?: boolean;
   readonly eventChoiceId?: EventResponseId;
   readonly itemType: ItemId | null;
   readonly supplyGroupId?: BoatSupplyGroupId;

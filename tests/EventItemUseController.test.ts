@@ -160,6 +160,31 @@ describe('EventItemUseController', () => {
     adapter.dispose();
   });
 
+  it('fires the tape sound cue halfway through its animation', async () => {
+    const { actor, adapter, controller } = setup();
+    const onAction = vi.fn();
+    const use = controller.play({
+      ...request(actor.instanceId),
+      choiceId: 'ductTape',
+      itemId: 'ductTape',
+      context: 'tape-stretch',
+      onAction,
+    });
+    const duration = eventItemUseDuration('tape-stretch');
+
+    controller.update(duration * 0.49);
+    expect(onAction).not.toHaveBeenCalled();
+    controller.update(duration * 0.02);
+    expect(onAction).toHaveBeenCalledOnce();
+    expect(onAction).toHaveBeenCalledWith(0);
+    controller.update(duration);
+    await use;
+    expect(onAction).toHaveBeenCalledOnce();
+
+    controller.clear('day');
+    adapter.dispose();
+  });
+
   it('fires all nine flashlight Morse cues', async () => {
     const { actor, adapter, controller } = setup();
     const onAction = vi.fn();

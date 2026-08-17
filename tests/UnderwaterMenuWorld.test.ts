@@ -27,7 +27,6 @@ function menuSandAssets(): MenuSandAssets {
   return MenuSandAssets.fromTextures(
     new Texture(),
     new Texture(),
-    new Texture(),
   );
 }
 

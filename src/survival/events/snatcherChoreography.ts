@@ -4,6 +4,7 @@ import { scaleEventItemDuration, scaleThrownItemDuration } from '../eventItemTim
 export const SNATCHER_REVEAL_DURATION = 2.5;
 export const SNATCHER_ITEM_DURATION = scaleEventItemDuration(1.15);
 export const SNATCHER_REACTION_DURATION = 1.2;
+const SNATCHER_REVEAL_DEPTH = 2.4;
 
 export function snatcherItemDuration(choiceId: string): number {
   return choiceId === 'swimRing' || choiceId === 'fishingNet'
@@ -136,7 +137,9 @@ export function sampleSnatcherReveal(
   output.crouchStrength = smoothstep((t - 0.28) / 0.34);
   output.pointStrength = smoothstep((t - 0.37) / 0.24);
   output.warningStrength += pulse(t, 0.34, 0.58, 0.84) * 0.26;
-  output.creatureY = -0.16 * output.crouchStrength;
+  const rise = smoothstep((t - 0.04) / 0.52);
+  output.creatureY = -0.16 * output.crouchStrength
+    - SNATCHER_REVEAL_DEPTH * (1 - rise);
   output.creatureZ = 0.12 * (1 - output.headVisibility);
   output.creaturePitch = 0.14 * output.crouchStrength;
   output.creatureRoll = -0.035 * output.crouchStrength;

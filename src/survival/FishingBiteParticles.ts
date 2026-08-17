@@ -17,7 +17,7 @@ export class FishingBiteParticles {
   private readonly life = new Float32Array(FISHING_BITE_PARTICLE_CAPACITY);
   private cursor = 0;
 
-  constructor() {
+  constructor(private readonly lifetimeScale = 1) {
     for (let index = 0; index < FISHING_BITE_PARTICLE_CAPACITY; index += 1) {
       this.positions[index * 3 + 1] = INACTIVE_Y;
     }
@@ -51,7 +51,9 @@ export class FishingBiteParticles {
       this.velocities[offset] = Math.cos(phase) * radialSpeed;
       this.velocities[offset + 1] = 0.45 + strength * 0.65;
       this.velocities[offset + 2] = Math.sin(phase) * radialSpeed - 0.16;
-      this.life[index] = 0.28 + (index % 5) * 0.035 + strength * 0.12;
+      this.life[index] = (
+        0.28 + (index % 5) * 0.035 + strength * 0.12
+      ) * this.lifetimeScale;
     }
     (this.points.geometry.getAttribute('position') as BufferAttribute).needsUpdate = true;
   }

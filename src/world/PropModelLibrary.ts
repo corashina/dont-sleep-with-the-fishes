@@ -40,7 +40,7 @@ import { normalizeLongestDimensionTemplate } from './modelValidation';
 export { geometryTriangles } from './modelValidation';
 import { enableItemAmbientOcclusion } from '../rendering/ItemAmbientOcclusion';
 import {
-  CAPTAIN_WHISKERS_SITTING_IDLE_CLIP,
+  CARLITOS_SITTING_IDLE_CLIP,
   KeyedPropAnimation,
   type PropAnimation,
 } from './PropAnimation';
@@ -146,12 +146,20 @@ function normalizeTemplate(id: ModelId, root: Group, spec: RuntimeModelSpec): nu
 
 function cloneOwnedTemplate(template: Group): Group {
   const clone = cloneSkeleton(template) as Group;
+  const materialClones = new Map<Material, Material>();
+  const cloneMaterial = (material: Material): Material => {
+    const existing = materialClones.get(material);
+    if (existing !== undefined) return existing;
+    const owned = material.clone();
+    materialClones.set(material, owned);
+    return owned;
+  };
   clone.traverse((object) => {
     if (!(object instanceof Mesh)) return;
     object.geometry = object.geometry.clone();
     object.material = Array.isArray(object.material)
-      ? object.material.map((material) => material.clone())
-      : object.material.clone();
+      ? object.material.map(cloneMaterial)
+      : cloneMaterial(object.material);
     object.castShadow = true;
     object.receiveShadow = true;
   });
@@ -197,12 +205,12 @@ function validateAnimations(
     }
   }
   if (
-    id === 'captainWhiskers'
-    && !animations.some((clip) => clip.name === CAPTAIN_WHISKERS_SITTING_IDLE_CLIP)
+    id === 'carlitos'
+    && !animations.some((clip) => clip.name === CARLITOS_SITTING_IDLE_CLIP)
   ) {
     throw modelValidationError(
       id,
-      `required ${CAPTAIN_WHISKERS_SITTING_IDLE_CLIP} clip is missing`,
+      `required ${CARLITOS_SITTING_IDLE_CLIP} clip is missing`,
     );
   }
   return animations;
@@ -348,9 +356,9 @@ export class PropModelLibrary {
     const template = this.itemTemplates.get(instance.type);
     if (!template) throw new Error(`Missing item model template: ${instance.type}`);
     const root = this.createRoot(instance, template);
-    const clip = instance.type === 'captainWhiskers'
+    const clip = instance.type === 'carlitos'
       ? template.animations.find(
-        (candidate) => candidate.name === CAPTAIN_WHISKERS_SITTING_IDLE_CLIP,
+        (candidate) => candidate.name === CARLITOS_SITTING_IDLE_CLIP,
       )
       : undefined;
     const animation = clip === undefined

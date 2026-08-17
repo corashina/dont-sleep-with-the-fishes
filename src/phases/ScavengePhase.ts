@@ -63,6 +63,7 @@ import {
   type ScavengePresentation,
 } from '../ui/GameUI';
 import type { PresentationWeatherId } from '../weather/presentationWeather';
+import type { SkyPhase } from '../world/skyPalette';
 import type { WaterQuality } from '../rendering/waterQuality';
 import { World } from '../world/World';
 import {
@@ -153,7 +154,9 @@ export class ScavengePhase implements GamePhase {
   private viewportHeight = 1;
   private overlayActive = false;
   private escapeResumeArmed = false;
+  private escapeKeyHeld = false;
   private presentationWeather: PresentationWeatherId = 'calm';
+  private presentationPhase: SkyPhase = 'day';
   private readonly audio: ScavengeAudio;
   private readonly audioForward = new Vector3(0, 0, -1);
   private readonly audioUp = new Vector3(0, 1, 0);
@@ -451,6 +454,11 @@ export class ScavengePhase implements GamePhase {
     this.world.setPresentationWeather(this.presentationWeather);
   }
 
+  setTimeOfDayOverride(phase: SkyPhase | null): void {
+    this.presentationPhase = phase ?? 'day';
+    this.world.setPresentationPhase(this.presentationPhase);
+  }
+
   setWaterQuality(value: WaterQuality): void {
     if (this.disposed) return;
     this.world.setWaterQuality(value);
@@ -458,6 +466,10 @@ export class ScavengePhase implements GamePhase {
 
   getPresentationWeather(): PresentationWeatherId {
     return this.presentationWeather;
+  }
+
+  getPresentationPhase(): SkyPhase {
+    return this.presentationPhase;
   }
 
   render(): void {
@@ -709,7 +721,7 @@ export class ScavengePhase implements GamePhase {
     if (this.presentation === 'intro') {
       if (locked && !this.introBegun) this.beginIntro();
       this.introPaused = !locked;
-      this.escapeResumeArmed = false;
+      this.escapeResumeArmed = !locked && !this.escapeKeyHeld;
       this.ui.setPaused(!locked);
       this.audio.setPaused(!locked);
       return;
@@ -727,7 +739,7 @@ export class ScavengePhase implements GamePhase {
       this.ui.setPaused(false);
       this.audio.setPaused(false);
     } else if (transition === 'pause') {
-      this.escapeResumeArmed = false;
+      this.escapeResumeArmed = !this.escapeKeyHeld;
       this.session.pause();
       this.ui.setPaused(true);
       this.hands.hideAndReset();
@@ -758,6 +770,7 @@ export class ScavengePhase implements GamePhase {
   private readonly onVisibilityChange = (): void => this.handleVisibilityChange();
 
   private handleKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && !event.repeat) this.escapeKeyHeld = true;
     if (this.presentation === 'intro' && event.code === 'Space' && !event.repeat) {
       event.preventDefault();
       this.completeIntro();
@@ -772,12 +785,14 @@ export class ScavengePhase implements GamePhase {
       || this.session.snapshot().status !== 'paused'
     ) return;
     event.preventDefault();
+    this.escapeResumeArmed = false;
     void this.requestPointerLock();
   }
 
   private readonly onKeyDown = (event: KeyboardEvent): void => this.handleKeyDown(event);
 
   private handleKeyUp(event: KeyboardEvent): void {
+    if (event.key === 'Escape') this.escapeKeyHeld = false;
     if (
       event.key === 'Escape'
       && !this.overlayActive

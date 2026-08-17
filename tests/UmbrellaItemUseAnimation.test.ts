@@ -22,7 +22,7 @@ describe('umbrella item-use animation', () => {
     expect(Math.abs(early.viewY)).toBeLessThan(Math.abs(raised.viewY));
   });
 
-  it('holds the real canopy close to the right hand', () => {
+  it('centers the real canopy above the player', () => {
     const sample = createEventItemUseSample();
     sampleEventItemUse('umbrella-overhead', 'umbrella', 0.7, sample);
     const profile = eventItemMotionProfile('umbrella');
@@ -31,7 +31,7 @@ describe('umbrella item-use animation', () => {
     expect(profile.view).toEqual([0.32, 0.18, -0.38]);
     expect(sample.effectKind).toBe('none');
     expect(sample.primaryEffect).toBe(0);
-    expect(sample.viewX).toBeCloseTo(0.32);
+    expect(sample.viewX).toBe(0);
     expect(sample.viewY).toBeCloseTo(0.18);
     expect(sample.viewZ).toBeCloseTo(-0.38);
     expect(sample.roll).toBeCloseTo(-Math.PI / 2);
@@ -47,6 +47,13 @@ describe('umbrella item-use animation', () => {
       .normalize();
 
     expect(canopyDirection.y).toBeGreaterThan(0.98);
+  });
+
+  it('keeps the shield pose in the right hand', () => {
+    const sample = createEventItemUseSample();
+    sampleEventItemUse('umbrella-shield', 'umbrella', 0.7, sample);
+
+    expect(sample.viewX).toBeCloseTo(0.32);
   });
 
   it('holds still after lifting without an up-and-down pulse', () => {

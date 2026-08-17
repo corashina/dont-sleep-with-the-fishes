@@ -177,9 +177,9 @@ describe('ship item placement', () => {
     expect(size.y).toBeLessThan(size.z);
   });
 
-  it('faces Captain Whiskers toward the ship center during scavenging', () => {
+  it('faces Carlitos toward the ship center during scavenging', () => {
     const captain = createScavengeItemInstances().find(
-      ({ instanceId }) => instanceId === 'captainWhiskers-1',
+      ({ instanceId }) => instanceId === 'carlitos-1',
     )!;
     const restingSurface = surface('captain-rest', -4, {
       position: new Vector3(-4, 3, -3),

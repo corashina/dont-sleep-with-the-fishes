@@ -6,7 +6,7 @@ import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { dedup, prune, unpartition } from '@gltf-transform/functions';
 
-export const CAPTAIN_WHISKERS_SOURCE = Object.freeze({
+export const CARLITOS_SOURCE = Object.freeze({
   creator: 'DreamNoms',
   downloadedOn: '2026-08-04',
   license: 'CC-BY 4.0',
@@ -19,14 +19,14 @@ export const CAPTAIN_WHISKERS_SOURCE = Object.freeze({
   title: 'Somali Cat Animated ver 1.2',
 });
 
-export const CAPTAIN_WHISKERS_SITTING_IDLE_CLIP = 'SittingIdle';
-export const CAPTAIN_WHISKERS_FLOOR_NODE = 'Cube_41';
+export const CARLITOS_SITTING_IDLE_CLIP = 'SittingIdle';
+export const CARLITOS_FLOOR_NODE = 'Cube_41';
 
 const SOURCE_CLIPS = Object.freeze([
   'Idle',
   'WalkClean',
   'SitDown',
-  CAPTAIN_WHISKERS_SITTING_IDLE_CLIP,
+  CARLITOS_SITTING_IDLE_CLIP,
   'StandUp',
 ]);
 const DEFAULT_OUTPUT_PATH = resolve(
@@ -34,7 +34,7 @@ const DEFAULT_OUTPUT_PATH = resolve(
   'assets',
   'models',
   'items',
-  'captainWhiskers.glb',
+  'carlitos.glb',
 );
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
@@ -44,9 +44,9 @@ function sourceHash(bytes) {
 
 function verifySource(bytes) {
   const actual = sourceHash(bytes);
-  if (actual !== CAPTAIN_WHISKERS_SOURCE.sourceSha256) {
+  if (actual !== CARLITOS_SOURCE.sourceSha256) {
     throw new Error(
-      `Unexpected Somali Cat SHA-256: expected ${CAPTAIN_WHISKERS_SOURCE.sourceSha256}, received ${actual}`,
+      `Unexpected Somali Cat SHA-256: expected ${CARLITOS_SOURCE.sourceSha256}, received ${actual}`,
     );
   }
 }
@@ -58,7 +58,7 @@ function retainSittingIdle(document) {
     throw new Error(`Unexpected Somali Cat animation clips: ${names.join(', ')}`);
   }
   for (const animation of animations) {
-    if (animation.getName() !== CAPTAIN_WHISKERS_SITTING_IDLE_CLIP) {
+    if (animation.getName() !== CARLITOS_SITTING_IDLE_CLIP) {
       animation.dispose();
     }
   }
@@ -66,7 +66,7 @@ function retainSittingIdle(document) {
 
 function removeDisplayFloor(document) {
   const floorNodes = document.getRoot().listNodes().filter(
-    (node) => node.getName() === CAPTAIN_WHISKERS_FLOOR_NODE,
+    (node) => node.getName() === CARLITOS_FLOOR_NODE,
   );
   if (floorNodes.length !== 1) {
     throw new Error(
@@ -76,7 +76,7 @@ function removeDisplayFloor(document) {
   floorNodes[0].dispose();
 }
 
-export async function buildCaptainWhiskers(
+export async function buildCarlitos(
   sourcePath,
   outputPath = DEFAULT_OUTPUT_PATH,
 ) {
@@ -92,14 +92,14 @@ export async function buildCaptainWhiskers(
 async function runCli(args) {
   if (args.length < 1 || args.length > 2) {
     throw new Error(
-      'Usage: node scripts/captain-whiskers-model.mjs <source.glb> [output.glb]',
+      'Usage: node scripts/carlitos-model.mjs <source.glb> [output.glb]',
     );
   }
   const sourcePath = resolve(args[0]);
   const outputPath = args[1] ? resolve(args[1]) : DEFAULT_OUTPUT_PATH;
-  await buildCaptainWhiskers(sourcePath, outputPath);
+  await buildCarlitos(sourcePath, outputPath);
   console.log(
-    `Wrote ${outputPath} with animation ${CAPTAIN_WHISKERS_SITTING_IDLE_CLIP}`,
+    `Wrote ${outputPath} with animation ${CARLITOS_SITTING_IDLE_CLIP}`,
   );
 }
 

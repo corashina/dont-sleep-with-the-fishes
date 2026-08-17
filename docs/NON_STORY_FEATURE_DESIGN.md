@@ -120,7 +120,7 @@ Add one event-only Chest item.
 
 The player can hold one closed Chest.
 
-Mystery Chest gives the closed Chest.
+Midnight Tour and Handyman can give the closed Chest.
 
 Use `ChestState` with `none`, `closed`, and `mimic` states.
 
@@ -204,7 +204,7 @@ Add these actions:
 - Feed
 - Treat
 - Use support
-- Delegate Drifting Loot
+- Delegate Drifting Cargo
 
 Talk costs no Energy.
 
@@ -512,7 +512,7 @@ Add ship crew models, one selection, and phase handoff.
 
 ### Slice 4: crew survival
 
-Add needs, actions, support, display, and Drifting Loot delegation.
+Add needs, actions, support, display, and Drifting Cargo delegation.
 
 ### Slice 5: progress
 

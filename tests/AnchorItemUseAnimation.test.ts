@@ -24,9 +24,9 @@ describe('anchor item use animation', () => {
   it('looks toward starboard before releasing the anchor', () => {
     const beforeLook = anchorSample(0.25);
     const turning = anchorSample(0.36);
-    const release = anchorSample(0.54);
-    const apex = anchorSample(0.71);
-    const impact = anchorSample(0.88);
+    const release = anchorSample(0.56);
+    const apex = anchorSample(0.7);
+    const impact = anchorSample(0.84);
 
     expect(beforeLook.cameraYaw).toBeCloseTo(0);
     expect(turning.cameraYaw).toBeLessThan(-0.2);
@@ -35,23 +35,23 @@ describe('anchor item use animation', () => {
     expect(impact.cameraPitch).toBeLessThan(0);
   });
 
-  it('uses a short high throw and keeps the chain after water contact', () => {
-    const release = anchorSample(0.54);
-    const apex = anchorSample(0.71);
-    const impact = anchorSample(0.88);
+  it('uses a low heavy throw and keeps the chain after water contact', () => {
+    const release = anchorSample(0.56);
+    const apex = anchorSample(0.7);
+    const impact = anchorSample(0.84);
 
     expect(release.targetBlend).toBe(0);
     expect(release.effectKind).toBe('chain');
     expect(apex.targetBlend).toBeCloseTo(0.5);
     expect(apex.flightArc).toBe(1);
-    expect(apex.flightArcHeight).toBeGreaterThan(2.2);
+    expect(apex.flightArcHeight).toBeCloseTo(0.65);
     expect(apex.flightTarget).toBe('starboard-water');
     expect(apex.itemVisible).toBe(true);
     expect(impact.targetBlend).toBeCloseTo(1);
     expect(impact.itemVisible).toBe(false);
     expect(impact.effectKind).toBe('chain');
     expect(impact.primaryEffect).toBeCloseTo(1);
-    expect(eventItemActionCueProgresses('anchor-drop')).toEqual([0.88]);
+    expect(eventItemActionCueProgresses('anchor-drop')).toEqual([0.84]);
   });
 
   it('lands beside the starboard gunwale instead of at the event target', () => {
@@ -84,18 +84,23 @@ describe('anchor item use animation', () => {
     const adapter = new EventItemUseAdapter(camera, new EventItemEffects());
 
     adapter.begin(actor, 'anchor', eventTarget);
-    const release = anchorSample(0.54);
+    const release = anchorSample(0.56);
     adapter.apply(release);
     const releaseWorld = actor.root.getWorldPosition(new Vector3());
-    adapter.apply(anchorSample(0.71));
+    adapter.apply(anchorSample(0.7));
     const apex = actor.root.getWorldPosition(new Vector3());
-    expect(apex.y).toBeGreaterThan((releaseWorld.y + 0.04) * 0.5 + 2.6);
+    expect(apex.y).toBeGreaterThan((releaseWorld.y + 0.04) * 0.5 + 0.5);
+    expect(apex.y).toBeLessThan((releaseWorld.y + 0.04) * 0.5 + 0.8);
     camera.updateWorldMatrix(true, false);
     const projectedApex = apex.clone().project(camera);
     expect(Math.abs(projectedApex.x)).toBeLessThan(1);
     expect(Math.abs(projectedApex.y)).toBeLessThan(1);
 
-    adapter.apply(anchorSample(0.88));
+    adapter.apply(anchorSample(0.74));
+    const gunwaleCrossing = actor.root.getWorldPosition(new Vector3());
+    expect(gunwaleCrossing.y).toBeGreaterThan(0.95);
+
+    adapter.apply(anchorSample(0.84));
     const impact = actor.root.getWorldPosition(new Vector3());
     expect(impact.x).toBeCloseTo((lifeboatHullHalfWidthAt(0.55) ?? 1.63) + 0.48);
     expect(impact.y).toBeCloseTo(0.04);
