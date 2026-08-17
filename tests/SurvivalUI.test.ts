@@ -175,6 +175,36 @@ const captainWhiskersAnchor = (x = 720, y = 360) => ({
 });
 
 describe('SurvivalUI', () => {
+  it('renders large condition icons with bottom-up fills and accessible values', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    ui.render(snapshot({ health: 50, hunger: 25, energy: 1, hull: 20 }), () => null);
+
+    const expected = {
+      health: ['50', 50],
+      hunger: ['75', 75],
+      energy: ['1', 100 / 3],
+      hull: ['20', 20],
+    } as const;
+    for (const [id, [value, fill]] of Object.entries(expected)) {
+      const meter = mount.querySelector<HTMLElement>(`[data-meter="${id}"]`)!;
+      expect(meter.getAttribute('aria-valuenow')).toBe(value);
+      expect(Number.parseFloat(meter.style.getPropertyValue('--meter-value'))).toBeCloseTo(fill);
+      expect(meter.querySelector('[data-meter-fill]')).not.toBeNull();
+      expect(meter.querySelector('[data-meter-outline]')).not.toBeNull();
+    }
+
+    const meters = mount.querySelector('[aria-label="Condition meters"]')!;
+    expect(meters.querySelector('[data-meter-value]')).toBeNull();
+    expect(meters.querySelector('.survival-meter__label')).toBeNull();
+    expect(meters.querySelector('.survival-meter__track')).toBeNull();
+    expect(meters.querySelector('[data-meter-danger]')).toBeNull();
+    expect(mainStyles).toMatch(
+      /\.survival-condition__art\s*\{[^}]*width:\s*76px;[^}]*height:\s*70px;/s,
+    );
+  });
+
   it('opens the compact Whiskers card with status and short unavailable labels', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
