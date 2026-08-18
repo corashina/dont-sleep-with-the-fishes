@@ -774,11 +774,13 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
-    ui.setAnchors([{
+    const choose = vi.fn();
+    ui.onEventChoice = choose;
+    const projectedAnchors = () => [{
       id: 'carlitos',
+      companionId: 'carlitos' as const,
       label: 'CARLITOS',
-      description: 'Your companion waits beside the gunwale.',
-      eventChoiceId: 'delegate-carlitos',
+      description: 'Check his hunger, happiness, and health.',
       itemType: null,
       toolId: null,
       action: null,
@@ -787,12 +789,14 @@ describe('SurvivalUI', () => {
       y: 260,
       visible: true,
       depleted: false,
-    }]);
+    }];
+    ui.setAnchors(projectedAnchors());
     ui.beginEventPresentation();
     ui.setEventSelection(new Map(), [{
       id: 'delegate-carlitos',
       label: 'Send Carlitos',
       unavailableReason: null,
+      anchorId: 'carlitos',
       energyCost: 3,
       energyOwner: 'carlitos',
     }]);
@@ -801,6 +805,9 @@ describe('SurvivalUI', () => {
     const tooltip = carlitos.querySelector('[role="tooltip"]')?.textContent ?? '';
     expect(tooltip).toContain('CARLITOS: 3 ENERGY');
     expect(tooltip).not.toContain('⚡');
+    expect(mount.querySelector('[data-event-choices]')?.textContent).toBe('');
+    carlitos.click();
+    expect(choose).toHaveBeenCalledWith('delegate-carlitos');
   });
 
   it.each(['pointer', 'keyboard'] as const)(

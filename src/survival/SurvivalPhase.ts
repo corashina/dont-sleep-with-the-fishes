@@ -2050,6 +2050,7 @@ export class SurvivalPhase implements GamePhase {
     eventId: string,
     choiceId: string,
   ): string | null {
+    if (choiceId === 'delegate-carlitos') return 'carlitos';
     if (isDriftingItemEventId(eventId)
       && choiceId === 'retrieve') {
       return `event:${eventId}`;
