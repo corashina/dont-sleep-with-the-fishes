@@ -288,7 +288,7 @@
     "animationCount": 9,
     "processing": "pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data"
   },
-  "whirlpoolCore": {
+  "tornadoCore": {
     "triangles": 324,
     "rawBounds": {
       "min": [

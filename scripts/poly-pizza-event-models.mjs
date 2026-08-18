@@ -19,7 +19,7 @@ export const POLY_PIZZA_EVENT_MODEL_PAGES = Object.freeze({
   snatcher: 'https://poly.pizza/m/BR1vpIvvvv',
   anglerFish: 'https://poly.pizza/m/85n5_RiSeSf',
   deathStareBlob: 'https://poly.pizza/m/IoWG5F9WUc',
-  whirlpoolCore: 'https://poly.pizza/m/2TBzV_5N0ci',
+  tornadoCore: 'https://poly.pizza/m/2TBzV_5N0ci',
 });
 
 export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
@@ -28,7 +28,7 @@ export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
   snatcher: 4_000,
   anglerFish: 4_000,
   deathStareBlob: 5_000,
-  whirlpoolCore: 3_000,
+  tornadoCore: 3_000,
 });
 
 export const EVENT_MODEL_TOTAL_TRIANGLE_LIMIT = 12_000;

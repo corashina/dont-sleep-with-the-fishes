@@ -26,4 +26,8 @@ describe('event bundle manifest', () => {
     expect(EVENT_ONLY_SOUND_IDS.every((id) => bundledSounds.has(id))).toBe(true);
     expect(EVENT_ONLY_SOUND_IDS.every((id) => !sharedSounds.has(id))).toBe(true);
   });
+
+  it('bundles the dedicated tornado model', () => {
+    expect(EVENT_BUNDLE_SPECS.tornado.models).toEqual(['tornadoCore']);
+  });
 });
