@@ -1580,6 +1580,11 @@ export class SurvivalPhase implements GamePhase {
       || this.activeDriftingItemEventId !== eventId
       || this.driftingItemFocus !== 'resolving'
     ) return;
+    if (!await this.waitForVisibilityResume(generation)) return;
+    if (
+      this.activeDriftingItemEventId !== eventId
+      || this.driftingItemFocus !== 'resolving'
+    ) return;
 
     const outcome = this.session.resolveEvent?.({ kind: 'choice', choiceId });
     if (outcome === undefined || !this.isContinuationActive(generation)) return;
@@ -1625,6 +1630,11 @@ export class SurvivalPhase implements GamePhase {
         || this.activeDriftingItemEventId !== eventId
         || this.driftingItemFocus !== 'resolving'
       ) return;
+      if (!await this.waitForVisibilityResume(generation)) return;
+      if (
+        this.activeDriftingItemEventId !== eventId
+        || this.driftingItemFocus !== 'resolving'
+      ) return;
       this.eventPresentation = 'result';
       this.driftingItemFocus = 'result';
       const playerEnergyCost = survivalEventById(eventId)?.choices
@@ -1650,6 +1660,11 @@ export class SurvivalPhase implements GamePhase {
     if (
       !this.isContinuationActive(generation)
       || this.activeDriftingItemEventId !== eventId
+      || this.driftingItemFocus !== 'resolving'
+    ) return;
+    if (!await this.waitForVisibilityResume(generation)) return;
+    if (
+      this.activeDriftingItemEventId !== eventId
       || this.driftingItemFocus !== 'resolving'
     ) return;
     await this.returnFromDriftingItemView(eventId, generation);

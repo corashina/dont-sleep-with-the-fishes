@@ -604,13 +604,13 @@ export class SurvivalUI {
           </button>
         </div>
       </section>
-      <section class="drifting-item-focus" data-drifting-item-focus role="dialog" aria-modal="true" aria-hidden="true" inert>
+      <section class="drifting-item-focus" data-drifting-item-focus role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="drifting-item-focus-title" inert>
         <button type="button" class="drifting-item-focus__back" data-drifting-item-back aria-label="Let it drift and return">
           <span aria-hidden="true">&#8592;</span>
         </button>
         <div class="drifting-item-focus__card">
           <p class="eyebrow ui-role-context">DRIFTING ITEM</p>
-          <h2 class="ui-role-display" data-drifting-item-title></h2>
+          <h2 class="ui-role-display" id="drifting-item-focus-title" data-drifting-item-title></h2>
           <nav data-drifting-item-choices aria-label="Pickup choices"></nav>
         </div>
       </section>

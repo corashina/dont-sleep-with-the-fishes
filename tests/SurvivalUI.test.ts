@@ -2177,8 +2177,12 @@ describe('SurvivalUI', () => {
   });
 
   it('opens drifting item focus from an initial anchor and returns to the boat', () => {
+    const style = document.createElement('style');
+    style.textContent = mainStyles.match(
+      /\.drifting-item-focus__card nav(?:\[hidden\])?\s*\{[^}]*\}/g,
+    )?.join('\n') ?? '';
     const mount = document.createElement('main');
-    document.body.append(mount);
+    document.body.append(style, mount);
     const ui = createUI(mount);
     const selected = vi.fn();
     const returned = vi.fn();
@@ -2240,7 +2244,9 @@ describe('SurvivalUI', () => {
     });
 
     const focus = mount.querySelector<HTMLElement>('[data-drifting-item-focus]')!;
-    expect(focus.querySelector('[data-drifting-item-title]')?.textContent).toBe('A BOTTLE');
+    const focusTitle = focus.querySelector<HTMLElement>('[data-drifting-item-title]')!;
+    expect(focus.getAttribute('aria-labelledby')).toBe(focusTitle.id);
+    expect(focusTitle.textContent).toBe('A BOTTLE');
     expect(focus.textContent).toContain('PLAYER — 1 ENERGY');
     expect(focus.textContent).toContain('CARLITOS — 3 ENERGY');
     expect(focus.querySelector('.event-choice__reason')?.textContent)
@@ -2260,7 +2266,9 @@ describe('SurvivalUI', () => {
     ui.hideDriftingItemResult();
     ui.showDriftingItemReturn();
     expect(focus.classList).toContain('is-visible');
-    expect(focus.querySelector('[data-drifting-item-choices]')?.hasAttribute('hidden')).toBe(true);
+    const choices = focus.querySelector<HTMLElement>('[data-drifting-item-choices]')!;
+    expect(choices.hidden).toBe(true);
+    expect(getComputedStyle(choices).display).toBe('none');
     const back = focus.querySelector<HTMLButtonElement>('[data-drifting-item-back]')!;
     expect(back.getAttribute('aria-label')).toBe('Return to boat');
     back.click();

@@ -27,6 +27,7 @@ export class FeaturedEventPresentations {
     models: SurvivalEventModels,
     camera: PerspectiveCamera,
     driftingItemBowTarget: Object3D,
+    flowersDeckTarget: Object3D,
     checkBackSternTarget: Object3D,
     onlyEventId?: FeaturedEventId | null,
   ) {
@@ -56,7 +57,7 @@ export class FeaturedEventPresentations {
       ));
     }
     if (include('flowers')) {
-      this.presentations.set('flowers', new FlowersPresentation(models, driftingItemBowTarget));
+      this.presentations.set('flowers', new FlowersPresentation(models, flowersDeckTarget));
     }
     this.presentationList = Object.freeze([...this.presentations.values()]);
     this.root.add(

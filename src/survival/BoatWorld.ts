@@ -387,6 +387,11 @@ const DRIFTING_ITEM_BOW_REST = Object.freeze({
   y: 0.58,
   z: -2.52,
 });
+const FLOWERS_DECK_TARGET = Object.freeze({
+  x: 0.72,
+  y: 0.58,
+  z: 1.05,
+});
 const CHECK_BACK_STERN_FLOOR = Object.freeze({
   x: 0,
   y: -0.16,
@@ -646,6 +651,7 @@ export class BoatWorld {
     supplyLift: 0,
   };
   private readonly driftingItemBowRest = new Object3D();
+  private readonly flowersDeckTarget = new Object3D();
   private readonly driftingItemCameraStartPosition = new Vector3();
   private readonly driftingItemCameraStartQuaternion = new Quaternion();
   private readonly driftingItemCameraTargetQuaternion = new Quaternion();
@@ -905,6 +911,13 @@ export class BoatWorld {
         DRIFTING_ITEM_BOW_REST.z,
       );
       this.boat.add(this.driftingItemBowRest);
+      this.flowersDeckTarget.name = 'flowers-deck-target';
+      this.flowersDeckTarget.position.set(
+        FLOWERS_DECK_TARGET.x,
+        FLOWERS_DECK_TARGET.y,
+        FLOWERS_DECK_TARGET.z,
+      );
+      this.boat.add(this.flowersDeckTarget);
       this.checkBackSternFloor.name = 'check-back-stern-floor';
       this.checkBackSternFloor.position.set(
         CHECK_BACK_STERN_FLOOR.x,
@@ -1141,6 +1154,7 @@ export class BoatWorld {
           featuredModels,
           this.camera,
           this.driftingItemBowRest,
+          this.flowersDeckTarget,
           this.checkBackSternFloor,
           isEventPresentationRoute(eventId, 'featured') ? eventId : null,
         );
@@ -2626,7 +2640,6 @@ export class BoatWorld {
     if (eventId === null) return false;
     const target = this.featuredEvents.itemAimTarget(eventId);
     if (target === null) return false;
-    this.scene.updateMatrixWorld(true);
     target.getWorldPosition(this.driftingItemCameraWorldTarget);
     this.driftingItemCameraWorldPosition.copy(this.fishingCameraPosition);
     const parent = this.camera.parent;
