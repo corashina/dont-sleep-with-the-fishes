@@ -42,6 +42,7 @@ import {
 } from './FocusedEventPresentation';
 import {
   isDriftingCargoEventId,
+  isDriftingItemEventId,
   survivalEventById,
   type DriftingCargoEventId,
 } from './events';
@@ -2026,12 +2027,19 @@ export class SurvivalPhase implements GamePhase {
           ...(anchorId === null
             ? {}
             : { anchorId }),
-          ...((isDriftingCargoEventId(event.id) || event.id === 'drifting-bottle')
+          ...(isDriftingItemEventId(event.id)
             && choice.id === 'retrieve'
             ? {
                 energyCost: choice.requirements?.find(
                   ({ resource }) => resource === 'energy',
                 )?.minimum ?? 0,
+                energyOwner: 'player' as const,
+              }
+            : {}),
+          ...(choice.companionAction !== undefined && companionAvailability !== undefined
+            ? {
+                energyCost: companionAvailability.energyCost,
+                energyOwner: 'carlitos' as const,
               }
             : {}),
         }];
@@ -2042,7 +2050,7 @@ export class SurvivalPhase implements GamePhase {
     eventId: string,
     choiceId: string,
   ): string | null {
-    if ((isDriftingCargoEventId(eventId) || eventId === 'drifting-bottle')
+    if (isDriftingItemEventId(eventId)
       && choiceId === 'retrieve') {
       return `event:${eventId}`;
     }

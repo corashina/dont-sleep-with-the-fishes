@@ -770,6 +770,39 @@ describe('SurvivalUI', () => {
     expect(bottle.dataset.eventChoice).toBe('retrieve');
   });
 
+  it('shows Carlitos energy without player energy lightning', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.setAnchors([{
+      id: 'carlitos',
+      label: 'CARLITOS',
+      description: 'Your companion waits beside the gunwale.',
+      eventChoiceId: 'delegate-carlitos',
+      itemType: null,
+      toolId: null,
+      action: null,
+      remainingUses: null,
+      x: 420,
+      y: 260,
+      visible: true,
+      depleted: false,
+    }]);
+    ui.beginEventPresentation();
+    ui.setEventSelection(new Map(), [{
+      id: 'delegate-carlitos',
+      label: 'Send Carlitos',
+      unavailableReason: null,
+      energyCost: 3,
+      energyOwner: 'carlitos',
+    }]);
+
+    const carlitos = mount.querySelector<HTMLButtonElement>('[data-anchor-id="carlitos"]')!;
+    const tooltip = carlitos.querySelector('[role="tooltip"]')?.textContent ?? '';
+    expect(tooltip).toContain('CARLITOS: 3 ENERGY');
+    expect(tooltip).not.toContain('⚡');
+  });
+
   it.each(['pointer', 'keyboard'] as const)(
     'shows a distinct selected keyed response for %s activation',
     async (input) => {
