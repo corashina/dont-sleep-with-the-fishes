@@ -10,9 +10,9 @@ export type UiArtworkId = typeof UI_ARTWORK_IDS[number];
 
 const ARTWORK: Record<UiArtworkId, string> = {
   health: '<path d="M32 57C9 42 5 23 17 13c8-7 18-3 23 5 6-8 17-12 25-4 12 12 2 31-20 45l-6 4z"/><path class="ui-artwork__shine" d="M18 25c2-7 8-10 14-7"/>',
-  hunger: '<path data-hunger-part="body" d="M22 5h12c-1 11 0 20 5 25 4 4 8 4 14 0 10-6 19-3 23 7 6 13 1 25-10 31-10 6-23 4-31-5-4-4-6-6-10-5-5 2-9 7-11 14L4 67c3-9 8-15 14-18 7-3 10-6 9-13-1-8-5-16-5-24z"/><path class="ui-artwork__shine" data-hunger-part="shine" d="M36 54c7 4 16 4 24 0"/>',
-  energy: '<path d="M37 5 15 37h18l-5 28 25-36H35z"/><path class="ui-artwork__shine" d="m34 14-10 17"/>',
-  hull: '<path data-hull-part="body" d="M7 30h66l-2 20-11 8H20L9 50z"/><path data-hull-part="rim" fill="none" d="M9 33h62"/><path class="ui-artwork__shine" d="M18 40h16"/>',
+  hunger: '<g data-hunger-scale transform="translate(40 36) scale(.8) translate(-40 -36)"><path data-hunger-part="body" d="M22 5h12c-1 11 0 20 5 25 4 4 8 4 14 0 10-6 19-3 23 7 6 13 1 25-10 31-10 6-23 4-31-5-4-4-6-6-10-5-5 2-9 7-11 14L4 67c3-9 8-15 14-18 7-3 10-6 9-13-1-8-5-16-5-24z"/><path class="ui-artwork__shine" data-hunger-part="shine" d="M41 58c7 4 16 4 24 0"/></g>',
+  energy: '<g data-energy-scale transform="translate(40 36) scale(1.12 1) translate(-40 -36)"><path d="M37 5 15 37h18l-5 28 25-36H35z"/><path class="ui-artwork__shine" d="m34 14-10 17"/></g>',
+  hull: '<g data-hull-scale transform="translate(40 36) scale(1.12) translate(-40 -36)"><path data-hull-part="body" d="M7 30h66l-2 20-11 8H20L9 50z"/><path data-hull-part="rim" fill="none" d="M9 33h62"/><path class="ui-artwork__shine" d="M18 40h16"/></g>',
   watch: '<circle cx="40" cy="43" r="27"/><path d="M32 8h16v8H32zM40 16V4M40 43V26M40 43l12 8"/><circle class="ui-artwork__shine" cx="40" cy="43" r="21"/>',
   journal: '<path d="M16 9h39c7 0 11 4 11 11v45H27c-7 0-11-4-11-11z"/><path d="M27 9v56M34 23h22M34 34h18"/><path class="ui-artwork__shine" d="M20 14h5"/>',
   warning: '<path d="M40 7 73 65H7z"/><path d="M40 25v21M40 55v2"/><path class="ui-artwork__shine" d="m20 56 20-35"/>',

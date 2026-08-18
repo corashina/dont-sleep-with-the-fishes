@@ -72,11 +72,27 @@ const PROFILES: Readonly<Record<PresentationWeatherId, Readonly<PresentationWeat
 });
 
 const EVENT_WEATHER: Readonly<Record<string, PresentationWeatherId>> = Object.freeze({
+  'dangerous-waters': 'squall',
+  leak: 'rain',
+  snatcher: 'waves',
+  'death-stare': 'waves',
+  'swarm-of-anglerfish': 'waves',
+  tornado: 'wind',
   'shower-night': 'rain',
   'windy-night': 'wind',
+  'bad-sleep': 'overcast',
   thunderstorm: 'thunderstorm',
   'restless-waves': 'waves',
   'man-in-the-fog': 'fog',
+  ghosts: 'fog',
+  'eerie-melody': 'fog',
+  'sick-companion': 'overcast',
+  'shadow-figure': 'fog',
+  'guarded-sleep': 'overcast',
+  'check-the-back': 'waves',
+  'chest-attack': 'waves',
+  'midnight-tour': 'fog',
+  handyman: 'overcast',
 });
 
 const NORMAL_RESOLUTION: Readonly<ResolvedPresentationWeather> = Object.freeze({ id: 'calm', source: 'normal' });

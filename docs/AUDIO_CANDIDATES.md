@@ -26,7 +26,7 @@ Keep source records after download.
 
 | Slot | Use | Selected source |
 | --- | --- | --- |
-| Music | Sparse, melancholic maritime loop | [Emotional Deluge](https://opengameart.org/content/emotional-deluge) |
+| Music | Start-screen underwater ambience | [Underwater Ambience](https://freesound.org/people/Tim_Verberne/sounds/482167/) |
 | Calm ocean | Normal open-water ambience | [Calm Ocean Waves](https://freesound.org/people/SamsterBirdies/sounds/578524/) |
 | Rough ocean | Storm and high-wave ambience | [Storm Sea Close](https://freesound.org/people/frodeims/sounds/616222/) |
 | Light wind | Calm exposed-sea air | [Soft Breeze](https://freesound.org/people/Vrymaa/sounds/734663/) |
@@ -84,7 +84,7 @@ Keep source records after download.
 | Eat food | Short bite and chew | [Eating Sound](https://freesound.org/people/User391915396/sounds/570336/) |
 | Energy bar | Dry wrapper opening | [Candy Wrapper](https://freesound.org/people/BluetoothBoy/sounds/269338/) |
 | Medkit | Bandage and package movement | [Tape Bandage Rip](https://freesound.org/people/SecureSubset/sounds/800275/) |
-| Hull repair | Controlled metal strikes | [Repair Metal](https://freesound.org/people/zbig77/sounds/244985/) |
+| Hull repair | Rhythmic hammer strikes on wood | [hammer pounding on wood](https://freesound.org/people/Ryujin95/sounds/394891/) |
 | Tape repair | Peel and sharp tear | [Duct Tape Rip](https://freesound.org/people/baidonovan/sounds/187338/) |
 
 ## Diving and fishing
@@ -120,6 +120,7 @@ Keep source records after download.
 | Nightfall | Breath-like fade into uncertainty | [Transition Sound Effect](https://freesound.org/people/DeVern/sounds/427533/) |
 | Dawn | Quiet, introspective return of light | [First Light Particles](https://opengameart.org/content/first-light-particles-%E2%80%93-cc0-atmospheric-pianoambient-track) |
 | Event reveal | Quiet dread before a choice | [Dissonant Sting](https://freesound.org/people/nomiqbomi/sounds/578362/) |
+| Tornado | Continuous dangerous wind during the event | [Tornado Inside a Metallic Building](https://freesound.org/people/Julien_Matthey/sounds/557188/) |
 | Leak | Water pushes through the hull | [Water - Leak, small](https://freesound.org/people/colinpoh/sounds/146346/) |
 | Chest | Latch, worn wood, and lid | [Wooden Chest Open](https://freesound.org/people/The_Frisbee_of_Peace/sounds/573654/) |
 | Drifting cargo | Rope strain and crate drag | [Dragging a Crate](https://freesound.org/people/hz37/sounds/792375/) |

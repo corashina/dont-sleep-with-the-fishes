@@ -10,6 +10,7 @@ const assetRoot = join(projectRoot, 'src', 'assets', 'audio');
 const force = process.argv.includes('--force');
 
 const freesoundSources = [
+  ['menuAmbient', 'Tim_Verberne', '482167'],
   ['calmOcean', 'SamsterBirdies', '578524'],
   ['roughOcean', 'frodeims', '616222'],
   ['lightWind', 'Vrymaa', '734663'],
@@ -31,7 +32,7 @@ const freesoundSources = [
   ['journal', 'mateusboga', '614081'],
   ['eating', 'User391915396', '570336'],
   ['medkit', 'SecureSubset', '800275'],
-  ['hullRepair', 'zbig77', '244985'],
+  ['hullRepair', 'Ryujin95', '394891'],
   ['tapeRepair', 'baidonovan', '187338'],
   ['ductTapePickup', 'Geoff-Bremner-Audio', '795714', 'attribution'],
   ['diveEntry', 'Urkki69', '628350'],
@@ -55,6 +56,7 @@ const freesoundSources = [
   ['yawn', 'spookymodem', '202105'],
   ['nightfall', 'DeVern', '427533'],
   ['eventReveal', 'nomiqbomi', '578362'],
+  ['tornadoWind', 'Julien_Matthey', '557188'],
   ['leak', 'colinpoh', '146346'],
   ['tentacleMovement', 'iampagan', '177017'],
   ['chest', 'The_Frisbee_of_Peace', '573654'],
@@ -133,21 +135,6 @@ async function runPool(entries, worker, width) {
 await mkdir(assetRoot, { recursive: true });
 await runPool(freesoundSources, fetchFreesound, 4);
 
-const menuAmbientDestination = join(assetRoot, 'menuAmbient.flac');
-if (!await hasFile(menuAmbientDestination)) {
-  const pageUrl = 'https://opengameart.org/content/eyes-of-the-ocean';
-  const page = (await fetchBuffer(pageUrl)).toString('utf8');
-  if (!page.includes('CC-BY 4.0')) {
-    throw new Error(`The page did not return its CC-BY 4.0 record: ${pageUrl}`);
-  }
-  await writeFile(
-    menuAmbientDestination,
-    await fetchBuffer(
-      'https://opengameart.org/sites/default/files/dark_eyes_of_the_ocean_0.flac',
-    ),
-  );
-}
-
 const dawnDestination = join(assetRoot, 'dawn.wav');
 if (!await hasFile(dawnDestination)) {
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'fishes-audio-'));
@@ -170,7 +157,6 @@ if (!await hasFile(dawnDestination)) {
 
 const results = await Promise.all([
   ...freesoundSources.map(([id]) => stat(join(assetRoot, `${id}.mp3`))),
-  stat(menuAmbientDestination),
   stat(dawnDestination),
 ]);
 if (results.some(({ size }) => size <= 0)) throw new Error('An audio asset is empty');

@@ -89,10 +89,7 @@ function menuModels(): MenuModelLibrary {
 }
 
 function menuSandAssets(): MenuSandAssets {
-  return MenuSandAssets.fromTextures(
-    new Texture(),
-    new Texture(),
-  );
+  return MenuSandAssets.fromTexture(new Texture());
 }
 
 function dependencies(

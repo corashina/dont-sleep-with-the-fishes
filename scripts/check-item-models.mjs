@@ -20,7 +20,7 @@ export const COLLECTIBLE_ITEM_IDS = [
   'bottledPaper', 'umbrella', 'swimRing', 'flashlight', 'shotgun',
   'energyBar', 'carlitos',
 ];
-export const EQUIPMENT_MODEL_IDS = ['fishingRod'];
+export const EQUIPMENT_MODEL_IDS = ['fishingRod', 'hammer'];
 export const PRACTICAL_LIGHT_MODEL_IDS = ['lantern', 'ceilingLight'];
 export const MODEL_IDS = [
   ...COLLECTIBLE_ITEM_IDS,

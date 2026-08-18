@@ -3,6 +3,7 @@ import {
   Matrix4,
   PerspectiveCamera,
   Quaternion,
+  Texture,
   Vector3,
 } from 'three';
 import { expect, it } from 'vitest';
@@ -60,7 +61,7 @@ function horizontalNdcBounds(bounds: Box3, camera: PerspectiveCamera): readonly 
 }
 
 it('keeps assembled menu details and swept kelp outside model footprints', () => {
-  const distant = new DistantSeabed();
+  const distant = new DistantSeabed(new Texture());
   const plants = new UnderwaterPlantField();
   const layout = [
     ...MENU_PROTECTED_FOOTPRINTS,
@@ -123,7 +124,7 @@ it('keeps relocated details and kelp visible at 1365 by 768', () => {
   camera.lookAt(...MENU_CAMERA_TARGET);
   camera.updateMatrixWorld();
   camera.updateProjectionMatrix();
-  const distant = new DistantSeabed();
+  const distant = new DistantSeabed(new Texture());
   const plants = new UnderwaterPlantField();
   const detailGroups = [
     distant.root.getObjectByName('menu:distant-rocks')!,
@@ -175,7 +176,7 @@ it('keeps the full distant debris 4 bounds visible at 1365 by 768', () => {
   camera.lookAt(...MENU_CAMERA_TARGET);
   camera.updateMatrixWorld();
   camera.updateProjectionMatrix();
-  const distant = new DistantSeabed();
+  const distant = new DistantSeabed(new Texture());
   const debris = distant.root.getObjectByName('menu:distant-debris-4')!;
   const [minimum, maximum] = horizontalNdcBounds(
     new Box3().setFromObject(debris),

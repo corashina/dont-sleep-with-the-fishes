@@ -146,6 +146,10 @@ export class SurvivalAudio {
     }
   }
 
+  repairToolbox(): void {
+    if (!this.disposed) this.scope.play('hullRepair');
+  }
+
   beginDive(): void {
     if (this.disposed || this.diveActive) return;
     this.diveActive = true;
@@ -244,6 +248,10 @@ export class SurvivalAudio {
       this.scope.startLoop('leak');
       return;
     }
+    if (eventId === 'tornado') {
+      this.scope.startLoop('tornadoWind');
+      return;
+    }
     if (eventId !== 'eerie-melody') return;
     this.eventMelodyActive = true;
     this.scope.startLoop('eerieMelody');
@@ -268,6 +276,7 @@ export class SurvivalAudio {
   clearEvent(): void {
     this.scope.stopLoop('leak', 0.08);
     this.scope.stopLoop('tentacleMovement', 0.08);
+    this.scope.stopLoop('tornadoWind', 0.08);
     this.stopEventMelody(0.08);
   }
 

@@ -1,4 +1,11 @@
-import { Box3, Mesh, Vector3 } from 'three';
+import {
+  Box3,
+  LinearFilter,
+  Mesh,
+  MeshStandardMaterial,
+  Texture,
+  Vector3,
+} from 'three';
 import { expect, it, vi } from 'vitest';
 import {
   DISTANT_DEBRIS_COUNT, DISTANT_MOUNTAIN_COUNT, DISTANT_PLANT_COUNT, DISTANT_RIDGE_COUNT,
@@ -16,8 +23,11 @@ const getDistantDetails = (distant: DistantSeabed) => [
   distant.root.getObjectByName('menu:near-wreck-debris')!,
 ].flatMap((group) => group.children);
 
+const createDistantSeabed = () => new DistantSeabed(new Texture());
+
 it('builds broad deterministic depth and mountain layers', () => {
-  const distant = new DistantSeabed();
+  const sandTexture = new Texture();
+  const distant = new DistantSeabed(sandTexture);
   expect(distant.root.name).toBe('menu:distant-seabed');
   expect(distant.root.getObjectByName('menu:distant-ridges')?.children).toHaveLength(DISTANT_RIDGE_COUNT);
   expect(distant.root.getObjectByName('menu:distant-mountains')?.children).toHaveLength(DISTANT_MOUNTAIN_COUNT);
@@ -39,6 +49,29 @@ it('builds broad deterministic depth and mountain layers', () => {
     return new Box3().setFromObject(mountain).max.y;
   });
   expect(mountainHeights[1]).toBeGreaterThan(mountainHeights[0]!);
+  const texturedTerrain = [
+    distant.root.getObjectByName('menu:distant-ridge-1') as Mesh,
+    distant.root.getObjectByName('menu:distant-mountain-1') as Mesh,
+  ];
+  const distantTexture = (
+    texturedTerrain[0]!.material as MeshStandardMaterial
+  ).map!;
+  texturedTerrain.forEach((terrain) => {
+    expect((terrain.material as MeshStandardMaterial).map).toBe(distantTexture);
+  });
+  expect(distantTexture).not.toBe(sandTexture);
+  expect(distantTexture.repeat.toArray()).toEqual([1, 1]);
+  expect(distantTexture.minFilter).toBe(LinearFilter);
+  expect(distantTexture.generateMipmaps).toBe(false);
+  const terrainMaterial = texturedTerrain[0]!.material as MeshStandardMaterial;
+  const shader = {
+    fragmentShader: '#include <map_fragment>',
+  };
+  terrainMaterial.onBeforeCompile(shader as never, {} as never);
+  expect(shader.fragmentShader).toContain('sandContrast');
+  expect(terrainMaterial.customProgramCacheKey()).toBe(
+    'menu:distant-aerial-beach-v1',
+  );
   const first = distant.root.getObjectByName('menu:distant-debris-1') as Mesh;
   const second = distant.root.getObjectByName('menu:distant-debris-2') as Mesh;
   expect(first.geometry).toBe(second.geometry);
@@ -68,13 +101,17 @@ it('builds broad deterministic depth and mountain layers', () => {
     }
   }
   const dispose = vi.spyOn(first.geometry, 'dispose');
+  const disposeTexture = vi.spyOn(distantTexture, 'dispose');
+  const disposeSourceTexture = vi.spyOn(sandTexture, 'dispose');
   distant.dispose();
   distant.dispose();
   expect(dispose).toHaveBeenCalledTimes(1);
+  expect(disposeTexture).toHaveBeenCalledTimes(1);
+  expect(disposeSourceTexture).not.toHaveBeenCalled();
 });
 
 it('grounds nearby wreck debris with shallow penetration', () => {
-  const distant = new DistantSeabed();
+  const distant = createDistantSeabed();
   const debris = distant.root.getObjectByName('menu:near-wreck-debris')!;
   for (const child of debris.children) {
     const bounds = new Box3().setFromObject(child);
@@ -87,7 +124,7 @@ it('grounds nearby wreck debris with shallow penetration', () => {
 });
 
 it('keeps every detail outside the Dorothy footprint', () => {
-  const distant = new DistantSeabed();
+  const distant = createDistantSeabed();
   const dorothy = MENU_PROTECTED_FOOTPRINTS.find((footprint) => footprint.id === 'dorothy')!;
   const minX = dorothy.position[0] - dorothy.halfSize[0];
   const maxX = dorothy.position[0] + dorothy.halfSize[0];
@@ -103,7 +140,7 @@ it('keeps every detail outside the Dorothy footprint', () => {
 });
 
 it('joins each distant terrain edge to the main seabed', () => {
-  const distant = new DistantSeabed();
+  const distant = createDistantSeabed();
   const terrainGroups = [
     distant.root.getObjectByName('menu:distant-ridges')!,
     distant.root.getObjectByName('menu:distant-mountains')!,
@@ -127,7 +164,7 @@ it('joins each distant terrain edge to the main seabed', () => {
 });
 
 it('supports every detail on the seabed or distant terrain', () => {
-  const distant = new DistantSeabed();
+  const distant = createDistantSeabed();
   const mainSeabedBounds = new Box3(
     new Vector3(-70, -Infinity, -75),
     new Vector3(70, Infinity, 25),

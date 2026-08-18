@@ -217,6 +217,13 @@ export const POLY_PIZZA_MODEL_SOURCES = Object.freeze({
     sha256: '6D5BD9D93D74B61C68BD053F8B94F5D594DF998938D1A71D38119E2832F8FDB5',
     sourceTriangles: 522,
   }),
+  hammer: source({
+    id: 'hammer', publicId: 'cOizz1RJnb3',
+    resourceId: 'c4e48baf-d6de-4d27-9edb-7364bc6994b6',
+    title: 'Hammer', creator: 'jeremy', license: 'CC-BY 3.0',
+    sha256: '1D0B075FE64074255AB33F4BE232AE60CFF9B20DBD2592541831AFA238CE84C7',
+    sourceTriangles: 246, downloadedOn: '2026-08-18',
+  }),
   lantern: source({
     id: 'lantern', publicId: 'CtHBJ1ufeW',
     resourceId: 'ecbc7b04-09ca-4068-bb3c-4e5ce1163c9a',

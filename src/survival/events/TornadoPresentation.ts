@@ -62,6 +62,8 @@ const WIND_BAND_COUNT = 3;
 const SEA_SPRAY_COUNT = 6;
 const MAX_LOST_ACTORS = 2;
 const WATERLINE = 0.04;
+const TORNADO_SCALE = 2;
+const SUBMERGED_FRACTION = 0.1;
 const TORNADO_X = 12.8;
 const TORNADO_Z = -19;
 const TORNADO_DISTANCE = Math.hypot(TORNADO_X, TORNADO_Z);
@@ -139,6 +141,7 @@ export class TornadoPresentation implements DedicatedEventPresentation {
   private readonly lostActors: Array<BorrowedSupplyActor | null> = [null, null];
   private readonly cameraLook: StationaryEventCamera | null;
   private readonly modelBaseOffset: number;
+  private readonly modelHeight: number;
   private readonly animation = new TimedPresentationAnimation<
     'reveal' | 'item' | 'reaction'
   >(
@@ -163,6 +166,7 @@ export class TornadoPresentation implements DedicatedEventPresentation {
     this.boatRoot.name = 'tornado-boat';
     this.worldRoot.position.x = TORNADO_X;
     this.worldRoot.position.z = TORNADO_Z;
+    this.worldRoot.scale.setScalar(TORNADO_SCALE);
     this.worldRoot.userData.distanceFromBoat = TORNADO_DISTANCE;
 
     this.modelInstance = environment.eventModels.create('tornadoCore');
@@ -171,6 +175,7 @@ export class TornadoPresentation implements DedicatedEventPresentation {
     this.modelRoot.updateMatrixWorld(true);
     const bounds = new Box3().setFromObject(this.modelRoot);
     this.modelBaseOffset = bounds.isEmpty() ? 0 : -bounds.min.y;
+    this.modelHeight = bounds.isEmpty() ? 0 : bounds.max.y - bounds.min.y;
     const aimHeight = bounds.isEmpty()
       ? 1.5
       : (bounds.min.y + bounds.max.y) * 0.5;
@@ -420,7 +425,9 @@ export class TornadoPresentation implements DedicatedEventPresentation {
     const visible = this.sample.visibility > 0.012;
     const scale = this.sample.funnelScale;
     this.modelRoot.visible = visible;
-    this.modelRoot.position.y = this.modelBaseOffset * scale;
+    this.modelRoot.position.y = (
+      this.modelBaseOffset - this.modelHeight * SUBMERGED_FRACTION
+    ) * scale;
     this.modelRoot.scale.setScalar(scale);
     this.modelRoot.rotation.x = Math.sin(this.swayPhase + 0.8)
       * this.sample.sway * 0.025;

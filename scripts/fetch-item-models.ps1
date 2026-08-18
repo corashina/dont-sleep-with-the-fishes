@@ -28,6 +28,7 @@ $modelIds = @(
   'shotgun'
   'energyBar'
   'fishingRod'
+  'hammer'
   'lantern'
   'ceilingLight'
 )

@@ -119,6 +119,23 @@ describe('CarlitosPresentation', () => {
     propModels.dispose();
   });
 
+  it('sits on either gunwale side', () => {
+    const propModels = createTestPropModels();
+    const companion = new CarlitosPresentation(propModels);
+    const seatX = Math.abs(companion.root.position.x);
+
+    companion.setSeatSide(-1);
+    expect(companion.root.position.x).toBe(-seatX);
+    expect(companion.root.userData.seatSide).toBe('left');
+
+    companion.setSeatSide(1);
+    expect(companion.root.position.x).toBe(seatX);
+    expect(companion.root.userData.seatSide).toBe('right');
+
+    companion.dispose();
+    propModels.dispose();
+  });
+
   it('plays Pet and Feed, then hides props and restores the base pose', async () => {
     const propModels = createTestPropModels();
     const companion = new CarlitosPresentation(propModels);

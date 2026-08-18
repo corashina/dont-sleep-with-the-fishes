@@ -169,16 +169,11 @@ const fragmentShader = `
     return 1.0 - smoothstep(0.72, 1.0, dot(p, p));
   }
 
-  float sawGrinShape(vec2 uv, float grin) {
+  float zigzagGrinShape(vec2 uv, float grin) {
     vec2 p = uv - vec2(0.505 + grin * 0.008, 0.285);
     p.y += p.x * 0.04;
-    float normalizedX = abs(p.x) / mix(0.32, 0.37, grin);
-    float point = 1.0 - smoothstep(0.86, 1.0, normalizedX);
-    float cornerLift = normalizedX * normalizedX * 0.13;
-    float localY = p.y - cornerLift;
-    float aboveLower = smoothstep(-0.11, -0.095, localY);
-    float belowUpper = 1.0 - smoothstep(0.065, 0.08, localY);
-    return point * aboveLower * belowUpper;
+    float normalizedX = abs(p.x) / mix(0.345, 0.395, grin);
+    return 1.0 - smoothstep(0.86, 1.0, normalizedX);
   }
 
   vec4 sampleMoon(
@@ -257,76 +252,96 @@ const fragmentShader = `
     float faceReveal = smoothstep(0.08, 0.28, uMoonFaceReveal);
     float stareReveal = smoothstep(0.36, 0.43, uMoonFaceReveal);
     vec2 faceUv = moonUv;
-    float leftEyeMask = max(
-      eyeShape(faceUv, vec2(0.345, 0.625), vec2(0.16, 0.09), 0.72),
-      eyeShape(faceUv, vec2(0.285, 0.735), vec2(0.2, 0.032), 0.82)
+    float leftHookOuter = eyeShape(
+      faceUv,
+      vec2(0.29, 0.7),
+      vec2(0.205, 0.105),
+      0.48
+    );
+    float leftHookCut = eyeShape(
+      faceUv,
+      vec2(0.325, 0.66),
+      vec2(0.17, 0.075),
+      0.48
+    );
+    float leftHook = max(0.0, leftHookOuter - leftHookCut);
+    float leftEyeCore = eyeShape(
+      faceUv,
+      vec2(0.325, 0.61),
+      vec2(0.155, 0.105),
+      0.72
+    );
+    float rightHookOuter = eyeShape(
+      faceUv,
+      vec2(0.72, 0.69),
+      vec2(0.2, 0.102),
+      -0.5
+    );
+    float rightHookCut = eyeShape(
+      faceUv,
+      vec2(0.685, 0.65),
+      vec2(0.165, 0.072),
+      -0.5
+    );
+    float rightHook = max(0.0, rightHookOuter - rightHookCut);
+    float rightEyeCore = eyeShape(
+      faceUv,
+      vec2(0.685, 0.6),
+      vec2(0.15, 0.1),
+      -0.76
+    );
+    float hookedEyeMasks = max(
+      max(leftEyeCore, leftHook),
+      max(rightEyeCore, rightHook)
     ) * faceReveal;
-    float rightEyeMask = max(
-      eyeShape(faceUv, vec2(0.665, 0.615), vec2(0.15, 0.085), -0.78),
-      eyeShape(faceUv, vec2(0.725, 0.72), vec2(0.19, 0.03), -0.88)
-    ) * faceReveal;
-    float eyeMasks = max(leftEyeMask, rightEyeMask);
     float eyeSlits = max(
       eyeShape(
         faceUv,
-        vec2(0.38, 0.625),
-        vec2(0.064, 0.026),
-        0.62
+        vec2(0.36, 0.61),
+        vec2(0.045, 0.021),
+        0.72
       ),
       eyeShape(
         faceUv,
-        vec2(0.625, 0.615),
-        vec2(0.06, 0.024),
-        -0.68
+        vec2(0.65, 0.6),
+        vec2(0.043, 0.02),
+        -0.76
       )
-    ) * eyeMasks * stareReveal;
-    float wickedPupils = max(
-      eyeShape(faceUv, vec2(0.385, 0.625), vec2(0.01, 0.017), 0.0),
-      eyeShape(faceUv, vec2(0.62, 0.615), vec2(0.009, 0.016), 0.0)
-    ) * eyeSlits;
+    ) * hookedEyeMasks * stareReveal;
     float noseCut = eyeShape(
       faceUv,
       vec2(0.505, 0.485),
       vec2(0.021, 0.057),
       0.18
     ) * faceReveal;
-    float sawGrin = sawGrinShape(faceUv, uMoonGrin) * faceReveal;
+    float grinWidth = zigzagGrinShape(faceUv, uMoonGrin);
     vec2 grinUv = faceUv - vec2(0.505 + uMoonGrin * 0.008, 0.285);
     grinUv.y += grinUv.x * 0.04;
-    float grinX = abs(grinUv.x) / mix(0.32, 0.37, uMoonGrin);
-    float grinLocalY = grinUv.y - grinX * grinX * 0.13;
-    float upperCellPosition = fract((faceUv.x + 0.02) * 13.0);
-    float upperCellIndex = floor((faceUv.x + 0.02) * 13.0);
+    float grinX = abs(grinUv.x) / mix(0.345, 0.395, uMoonGrin);
+    float grinLocalY = grinUv.y - grinX * grinX * 0.14;
+    float upperCellPosition = fract((faceUv.x + 0.02) * 10.0);
     float upperPeak = 1.0 - abs(upperCellPosition - 0.5) * 2.0;
-    float upperDepth = mix(
-      0.075,
-      0.12,
-      hash21(vec2(upperCellIndex, 3.7))
-    );
-    float upperToothEdge = 0.068 - upperDepth * upperPeak;
-    float upperTeeth = smoothstep(
-      upperToothEdge - 0.008,
-      upperToothEdge + 0.008,
+    float upperSpikeEdge = 0.02 - upperPeak * 0.12;
+    float upperSpikes = smoothstep(
+      upperSpikeEdge - 0.008,
+      upperSpikeEdge + 0.008,
       grinLocalY
-    ) * (1.0 - smoothstep(0.064, 0.078, grinLocalY));
-    float lowerCellPosition = fract((faceUv.x + 0.055) * 14.0);
-    float lowerCellIndex = floor((faceUv.x + 0.055) * 14.0);
+    ) * (1.0 - smoothstep(0.014, 0.024, grinLocalY));
+    float lowerCellPosition = fract((faceUv.x + 0.07) * 10.0);
     float lowerPeak = 1.0 - abs(lowerCellPosition - 0.5) * 2.0;
-    float lowerHeight = mix(
-      0.07,
-      0.115,
-      hash21(vec2(lowerCellIndex, 8.2))
-    );
-    float lowerToothEdge = -0.098 + lowerHeight * lowerPeak;
-    float lowerTeeth = smoothstep(-0.11, -0.095, grinLocalY)
+    float lowerSpikeEdge = -0.02 + lowerPeak * 0.12;
+    float lowerSpikes = smoothstep(-0.024, -0.014, grinLocalY)
       * (1.0 - smoothstep(
-        lowerToothEdge - 0.008,
-        lowerToothEdge + 0.008,
+        lowerSpikeEdge - 0.008,
+        lowerSpikeEdge + 0.008,
         grinLocalY
       ));
-    float grinTeeth = sawGrin * max(upperTeeth, lowerTeeth);
+    float grinBridge = 1.0 - smoothstep(0.012, 0.022, abs(grinLocalY));
+    float zigzagGrin = grinWidth
+      * max(max(upperSpikes, lowerSpikes), grinBridge)
+      * faceReveal;
     float faceInk = clamp(
-      max(max(eyeMasks, noseCut), sawGrin),
+      max(max(hookedEyeMasks, noseCut), zigzagGrin),
       0.0,
       1.0
     );
@@ -339,16 +354,6 @@ const fragmentShader = `
       moonDisc,
       uMoonColor * moonSample.rgb * 1.3,
       eyeSlits * 0.96
-    );
-    moonDisc = mix(
-      moonDisc,
-      vec3(0.003, 0.004, 0.004),
-      wickedPupils
-    );
-    moonDisc = mix(
-      moonDisc,
-      vec3(0.78, 0.76, 0.61),
-      grinTeeth * 0.96
     );
     color += moonDisc
       * moonSample.a

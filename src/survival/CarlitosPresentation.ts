@@ -21,6 +21,7 @@ import {
   runCleanupSteps,
 } from '../world/SceneResources';
 import type { CarlitosSnapshot } from './CarlitosState';
+import type { EventSide } from './eventVariant';
 import {
   carlitosPoseState,
   createCarlitosPose,
@@ -66,6 +67,8 @@ export class CarlitosPresentation {
   private readonly hand: Group;
   private readonly food: Group;
   private readonly modelPresentation: PropPresentation;
+  private readonly seatPositionX: number;
+  private readonly seatRotationY: number;
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
   private readonly pose: MutableCarlitosPose = createCarlitosPose();
@@ -86,6 +89,8 @@ export class CarlitosPresentation {
   ) {
     this.root.name = 'carlitos-companion';
     const transform = boatStorageTransform(CARLITOS_INSTANCE);
+    this.seatPositionX = Math.abs(transform.position.x);
+    this.seatRotationY = Math.abs(transform.rotation.y);
     this.root.position.copy(transform.position);
     this.root.rotation.copy(transform.rotation);
     this.root.scale.setScalar(transform.scale);
@@ -214,6 +219,13 @@ export class CarlitosPresentation {
     this.poseSample.elapsed = action?.elapsed ?? 0;
     this.poseSample.duration = action?.duration ?? ACTION_DURATION;
     sampleCarlitosPoseInto(this.pose, this.poseSample);
+  }
+
+  setSeatSide(side: EventSide): void {
+    if (this.disposed) return;
+    this.root.position.x = this.seatPositionX * side;
+    this.root.rotation.y = this.seatRotationY * side;
+    this.root.userData.seatSide = side === -1 ? 'left' : 'right';
   }
 
   private applyPose(): void {

@@ -579,6 +579,10 @@ describe('BoatWorld helpers', () => {
               `boat-supply:${type}:copy-${index + 1}`,
             )!;
         const expected = boatSupplyTransform(type, index);
+        if (type === 'carlitos') {
+          expected.position.x = -Math.abs(expected.position.x);
+          expected.rotation.y = -Math.abs(expected.rotation.y);
+        }
 
         expect(copy.visible, `${type}-${index + 1}`).toBe(true);
         expect(copy.position.toArray()).toEqual(expected.position.toArray());
@@ -1058,6 +1062,8 @@ describe('BoatWorld helpers', () => {
     world.stageEvent('night-trader');
 
     expect(world.scene.getObjectByName('night-trader-rowboat')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('night-trader-oar-left')).toBeUndefined();
+    expect(world.scene.getObjectByName('night-trader-oar-right')).toBeUndefined();
     const trader = world.scene.getObjectByName('night-trader-trader')!;
     expect(trader.visible).toBe(true);
     expect(trader.position.y).toBeCloseTo(-0.24);
@@ -1082,6 +1088,100 @@ describe('BoatWorld helpers', () => {
     expect(world.scene.getObjectByName('night-trader-case')).toBeUndefined();
 
     world.dispose();
+    propModels.dispose();
+  });
+
+  it.each([
+    [8, 'left', -1],
+    [9, 'right', 1],
+  ] as const)('stages the Night Trader on the %s seed side with Carlitos opposite', (
+    variantSeed,
+    side,
+    direction,
+  ) => {
+    const carlitos = savedItem('carlitos');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [carlitos],
+    );
+    world.syncInventory(snapshot([], {
+      seed: 3,
+      carlitos: {
+        alive: true, energy: 3, hunger: 5, sickness: 0, unhappiness: 0,
+        pettedToday: false, deathCause: null,
+      },
+    }));
+
+    world.stageEvent('night-trader', variantSeed);
+    const trader = world.scene.getObjectByName('focused-event:night-trader')!;
+    const vessel = world.scene.getObjectByName('night-trader-vessel')!;
+    const companion = world.scene.getObjectByName('carlitos-companion')!;
+    expect(trader.userData.eventSide).toBe(side);
+    expect(Math.sign(vessel.position.x)).toBe(direction);
+    expect(Math.sign(companion.position.x)).toBe(-direction);
+
+    world.clearEvent();
+    expect(Math.sign(companion.position.x)).toBe(1);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('seats Carlitos opposite each side-controlled event', async () => {
+    const carlitos = savedItem('carlitos');
+    const propModels = createTestPropModels();
+    const featuredModels = await createTestFeaturedModels([
+      'driftingBarrel',
+      'mysteryChest',
+      'driftingBottle',
+    ]);
+    const eventModels = createTestEventModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [carlitos],
+      undefined,
+      undefined,
+      'low',
+      featuredModels,
+      eventModels,
+    );
+    world.syncInventory(snapshot([], {
+      seed: 3,
+      carlitos: {
+        alive: true, energy: 3, hunger: 5, sickness: 0, unhappiness: 0,
+        pettedToday: false, deathCause: null,
+      },
+    }));
+    const companion = world.scene.getObjectByName('carlitos-companion')!;
+    const cases = [
+      ['drifting-barrel', 8, 1],
+      ['drifting-chest', 8, 1],
+      ['drifting-bottle', 8, 1],
+      ['drifting-bottle', 9, -1],
+      ['man-in-the-fog', 8, 1],
+      ['man-in-the-fog', 9, -1],
+      ['tornado', 8, -1],
+      ['school-of-fish', 8, -1],
+      ['midnight-tour', 8, 1],
+      ['midnight-tour', 9, -1],
+      ['eerie-melody', 8, 1],
+      ['other-people', 8, 1],
+    ] as const;
+
+    for (const [eventId, variantSeed, expectedSide] of cases) {
+      world.stageEvent(eventId, variantSeed);
+      expect(Math.sign(companion.position.x), eventId).toBe(expectedSide);
+      world.clearEvent();
+      expect(Math.sign(companion.position.x), `${eventId} cleared`).toBe(1);
+    }
+
+    world.dispose();
+    eventModels.dispose();
+    featuredModels.dispose();
     propModels.dispose();
   });
 
@@ -1596,11 +1696,22 @@ describe('BoatWorld helpers', () => {
       expect(world.scene.getObjectByName(`event-prop:${eventId}`)).toBeUndefined();
 
       const stagedPosition = model.position.clone();
+      const stagedQuaternion = model.quaternion.clone();
       const reveal = world.revealEvent(eventId);
       await reveal;
       expect(model.position.toArray()).toEqual(stagedPosition.toArray());
+      world.setPresentationWeather('waves');
       world.update(1, 0.9);
+      const wave = sampleWaveField(
+        DEFAULT_WAVES,
+        1,
+        -3,
+        -4.2,
+        presentationWeatherProfile('waves').waveScale,
+      );
+      expect(model.position.y).toBeCloseTo(0.02 + wave.height);
       expect(model.position.distanceTo(stagedPosition)).toBeGreaterThan(0.001);
+      expect(model.quaternion.angleTo(stagedQuaternion)).toBeGreaterThan(0.001);
       expect(world.projectDriftingItemResult(800, 600)).not.toBeNull();
       const anchorId = `event:${eventId}`;
       const interaction = world.projectInteractionAnchors(800, 600)
@@ -1713,7 +1824,16 @@ describe('BoatWorld helpers', () => {
     );
     expect(world.projectInteractionAnchors(800, 600)
       .find(({ id }) => id === 'event:drifting-bottle')).not.toHaveProperty('eventChoiceId');
+    world.setPresentationWeather('waves');
     world.update(1, 1);
+    const wave = sampleWaveField(
+      DEFAULT_WAVES,
+      1,
+      -3.25,
+      -4.35,
+      presentationWeatherProfile('waves').waveScale,
+    );
+    expect(left.position.y).toBeCloseTo(0.14 + wave.height);
     expect(left.position.distanceTo(stagedPosition)).toBeGreaterThan(0.001);
     expect(left.quaternion.angleTo(stagedQuaternion)).toBeGreaterThan(0.001);
     expect(new Vector3(0, 1, 0).applyQuaternion(left.quaternion).y).toBeGreaterThan(0.96);
@@ -4135,13 +4255,13 @@ describe('BoatWorld helpers', () => {
       ShaderMaterial
     >;
 
-    expect(sky.material.fragmentShader).toContain('sawGrinShape');
-    expect(sky.material.fragmentShader).toContain('eyeMasks');
+    expect(sky.material.fragmentShader).toContain('zigzagGrinShape');
+    expect(sky.material.fragmentShader).toContain('hookedEyeMasks');
     expect(sky.material.fragmentShader).toContain('eyeSlits');
-    expect(sky.material.fragmentShader).toContain('grinTeeth');
+    expect(sky.material.fragmentShader).toContain('zigzagGrin');
     expect(sky.material.fragmentShader).toContain('noseCut');
     expect(sky.material.fragmentShader).toContain('stareReveal');
-    expect(sky.material.fragmentShader).not.toContain('predatorMawShape');
+    expect(sky.material.fragmentShader).not.toContain('grinTeeth');
 
     world.stageEvent('face-on-the-moon');
     const reveal = world.revealEvent('face-on-the-moon');
@@ -4738,11 +4858,12 @@ describe('BoatWorld helpers', () => {
           pettedToday: false, deathCause: null,
         },
       }));
+      const companion = world.scene.getObjectByName('carlitos-companion')!;
+      const ambientPosition = companion.position.clone();
       world.stageEvent('drifting-chest');
       const reveal = world.revealEvent('drifting-chest');
       world.update(1, 0.9);
       await reveal;
-      const companion = world.scene.getObjectByName('carlitos-companion')!;
       const basePosition = companion.position.clone();
       const delegated = world.delegateDriftingItem('drifting-chest');
       world.update(2, 0.3);
@@ -4753,7 +4874,10 @@ describe('BoatWorld helpers', () => {
       else world.dispose();
       await delegated;
 
-      expect(companion.position.toArray()).toEqual(basePosition.toArray());
+      const restoredPosition = interruption === 'clear'
+        ? ambientPosition
+        : basePosition;
+      expect(companion.position.toArray()).toEqual(restoredPosition.toArray());
       if (interruption !== 'dispose') world.dispose();
       furniture.dispose();
       propModels.dispose();

@@ -20,8 +20,6 @@ import type {
   SurvivalEventDefinition,
   SurvivalEndingReason,
   SurvivalSnapshot,
-  SurvivalState,
-  WeatherId,
 } from '../survival/survivalTypes';
 import { createElementRequirement } from './dom';
 import { itemThumbnailUrl } from './itemThumbnailManifest';
@@ -133,14 +131,6 @@ function driftingCargoRewardItemId(reward: RewardSummary): ItemId {
   return 'ductTape';
 }
 
-function driftingCargoRewardLabel(reward: RewardSummary): string {
-  if (reward.kind === 'item') {
-    return `${ITEM_DEFINITIONS[reward.id].label}, quantity ${reward.quantity}, recovered`;
-  }
-  const label = reward.id === 'repairMaterial' ? 'repair material' : reward.id;
-  return `${label}, quantity ${reward.quantity}, recovered`;
-}
-
 function quantityLabel(label: string, quantity: number): string {
   return quantity > 1 ? `${label} ×${quantity}` : label;
 }
@@ -175,21 +165,6 @@ const METERS: readonly MeterDefinition[] = [
   { id: 'energy', label: 'ENERGY', min: 0, max: SURVIVAL_BALANCE.actions.maximumEnergy, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 1 },
   { id: 'hull', label: 'HULL', min: 0, max: 100, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 20 },
 ];
-
-const PHASE_LABELS: Readonly<Record<SurvivalState, string>> = {
-  day: 'DAYLIGHT',
-  dayEvent: 'DAY EVENT',
-  nightEvent: 'NIGHT EVENT',
-  rescued: 'RESCUED',
-  dead: 'LOST AT SEA',
-  sunk: 'BOAT LOST',
-};
-
-const WEATHER_LABELS: Readonly<Record<WeatherId, string>> = {
-  calm: 'CALM',
-  overcast: 'OVERCAST',
-  squall: 'SQUALL',
-};
 
 const SLEEP_TRANSITION_MS = 2_500;
 const SLEEP_HOLD_MS = 450;
@@ -373,8 +348,6 @@ export class SurvivalUI {
 
   private readonly root: HTMLDivElement;
   private readonly day: HTMLElement;
-  private readonly weather: HTMLElement;
-  private readonly phase: HTMLElement;
   private readonly topControls: HTMLElement;
   private readonly journalMarker: HTMLButtonElement;
   private readonly journalUnread: HTMLElement;
@@ -431,6 +404,7 @@ export class SurvivalUI {
   private readonly journalLayer: HTMLElement;
   private readonly journalTitle: HTMLElement;
   private readonly journalWeather: HTMLElement;
+  private readonly journalStory: HTMLElement;
   private readonly journalDay: HTMLElement;
   private readonly journalNight: HTMLElement;
   private readonly journalPageCount: HTMLElement;
@@ -509,7 +483,6 @@ export class SurvivalUI {
       <div class="survival-feedback" data-survival-feedback aria-hidden="true"></div>
       <div class="sleep-cover" data-sleep-cover data-profile="solid" aria-hidden="true"></div>
       <div class="bad-sleep-cue" data-bad-sleep-cue aria-hidden="true">
-        <span class="bad-sleep-cue__frame"></span>
         <span class="bad-sleep-cue__eye bad-sleep-cue__eye--left">
           <i class="bad-sleep-cue__eyelid bad-sleep-cue__eyelid--top"></i>
           <i class="bad-sleep-cue__eyelid bad-sleep-cue__eyelid--bottom"></i>
@@ -538,7 +511,6 @@ export class SurvivalUI {
           </button>
           <section class="survival-status" data-survival-status aria-label="Current survival day">
             <strong class="ui-role-numeral" data-day>DAY 1</strong>
-            <span class="survival-status__detail ui-role-context"><span data-phase>DAYLIGHT</span><span aria-hidden="true"> &middot; </span><span data-weather>CALM</span></span>
           </section>
         </div>
       </div>
@@ -657,6 +629,7 @@ export class SurvivalUI {
           <div class="journal-book__rings" data-journal-rings aria-hidden="true"><i data-journal-ring></i><i data-journal-ring></i><i data-journal-ring></i></div>
           <div class="journal-book__tabs" data-journal-tabs aria-hidden="true"><i data-journal-tab></i><i data-journal-tab></i><i data-journal-tab></i><i data-journal-tab></i></div>
           <article class="journal-page">
+            <button type="button" class="journal-page__close ui-role-context" data-journal-close aria-label="Close journal">&times;</button>
             <p class="journal-page__weather ui-role-context" data-journal-weather></p>
             <h2 class="ui-role-display" data-journal-title tabindex="-1"></h2>
             <div class="journal-page__story ui-role-narrative" data-journal-story>
@@ -668,7 +641,6 @@ export class SurvivalUI {
               <span class="journal-page__folio ui-role-numeral" data-journal-page-count>PAGE 0 OF 0</span>
               <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--next ui-role-context" data-journal-next aria-label="Next journal page">&rsaquo;</button>
             </nav>
-            <button type="button" class="journal-page__close-strip ui-role-context" data-journal-close>X  CLOSE JOURNAL</button>
           </article>
         </div>
       </section>
@@ -694,8 +666,6 @@ export class SurvivalUI {
     mount.append(this.root);
 
     this.day = requireElement(this.root, '[data-day]');
-    this.weather = requireElement(this.root, '[data-weather]');
-    this.phase = requireElement(this.root, '[data-phase]');
     this.topControls = requireElement(this.root, '[data-survival-top]');
     this.journalMarker = requireElement(this.root, '[data-journal-open]');
     this.journalUnread = requireElement(this.root, '[data-journal-unread]');
@@ -752,6 +722,7 @@ export class SurvivalUI {
     this.journalLayer = requireElement(this.root, '[data-journal]');
     this.journalTitle = requireElement(this.root, '[data-journal-title]');
     this.journalWeather = requireElement(this.root, '[data-journal-weather]');
+    this.journalStory = requireElement(this.root, '[data-journal-story]');
     this.journalDay = requireElement(this.root, '[data-journal-day]');
     this.journalNight = requireElement(this.root, '[data-journal-night]');
     this.journalPageCount = requireElement(this.root, '[data-journal-page-count]');
@@ -792,8 +763,6 @@ export class SurvivalUI {
     if (this.disposed) return;
     this.currentSnapshot = snapshot;
     this.updateText('day', this.day, `DAY ${snapshot.day}`);
-    this.updateText('weather', this.weather, WEATHER_LABELS[snapshot.weather]);
-    this.updateText('phase', this.phase, PHASE_LABELS[snapshot.state]);
 
     METERS.forEach(({ id }) => this.updateMeter(id, snapshot[id]));
     ACTIONS.forEach(({ id }) => {
@@ -909,7 +878,7 @@ export class SurvivalUI {
     this.updateText(
       'event:detail',
       this.eventDetail,
-      'SELECT AN ITEM. EACH ITEM RETURNS AFTER ITS ANIMATION.',
+      'SELECT AN ITEM OR TOOL. EACH RETURNS AFTER ITS ANIMATION.',
     );
     this.eventDetail.hidden = false;
     this.eventRisk.textContent = '';
@@ -1688,15 +1657,19 @@ export class SurvivalUI {
   private renderJournalPage(): void {
     const entry = this.journalEntries[this.journalIndex];
     if (entry === undefined) {
-      this.journalTitle.textContent = 'NO COMPLETED ENTRIES YET';
+      this.journalTitle.textContent = 'The journal is still waiting for its first completed day.';
+      this.journalTitle.dataset.empty = 'true';
       this.journalWeather.textContent = '';
-      this.journalDay.textContent = 'The journal is still waiting for its first completed day.';
+      this.journalStory.hidden = true;
+      this.journalDay.textContent = '';
       this.journalNight.textContent = '';
       this.journalPageCount.textContent = 'PAGE 0 OF 0';
     } else {
       const page = formatJournalEntry(entry);
       this.journalTitle.textContent = page.heading;
+      delete this.journalTitle.dataset.empty;
       this.journalWeather.textContent = page.weather;
+      this.journalStory.hidden = false;
       this.journalDay.textContent = page.daytime;
       this.journalNight.textContent = page.nighttime;
       this.journalPageCount.textContent = `PAGE ${this.journalIndex + 1} OF ${this.journalEntries.length}`;
@@ -2170,7 +2143,14 @@ export class SurvivalUI {
       });
     this.eventChoices.replaceChildren(...choices);
     this.eventChoices.hidden = choices.length === 0;
-    const showCaption = this.eventPresentationActive;
+    const showCaption = this.eventPresentationActive && (
+      !this.eventTitle.hidden
+      || !this.eventDetail.hidden
+      || !this.eventRisk.hidden
+      || !this.eventOutcomeResult.hidden
+      || !this.eventResult.hidden
+      || choices.length > 0
+    );
     this.eventCaption.classList.toggle('is-visible', showCaption);
     this.eventCaption.setAttribute('aria-hidden', showCaption ? 'false' : 'true');
   }
@@ -2249,9 +2229,12 @@ export class SurvivalUI {
       return 'eventAvailable';
     }
 
-    if (anchor.itemType !== null) {
-      const instanceId = anchor.backingInstanceId
-        ?? (id.startsWith('supply:') ? null : id as ItemInstanceId);
+    const instanceId = anchor.backingInstanceId
+      ?? (id.startsWith('supply:') ? null : id as ItemInstanceId);
+    if (
+      instanceId !== null
+      && this.eventEligibility?.has(instanceId) === true
+    ) {
       if (instanceId !== null && this.eventSelectedInstanceId === instanceId) {
         return 'selected';
       }
@@ -2260,9 +2243,19 @@ export class SurvivalUI {
         || this.eventSelectedInstanceId !== null
         || this.eventEligibility === null
       ) return 'eventLocked';
-      const available = instanceId !== null
-        && this.eventEligibility.has(instanceId);
-      return available ? 'eventAvailable' : 'eventUnavailable';
+      return 'eventAvailable';
+    }
+
+    if (anchor.itemType !== null) {
+      if (instanceId !== null && this.eventSelectedInstanceId === instanceId) {
+        return 'selected';
+      }
+      if (
+        this.busy
+        || this.eventSelectedInstanceId !== null
+        || this.eventEligibility === null
+      ) return 'eventLocked';
+      return 'eventUnavailable';
     }
 
     return 'eventLocked';
@@ -2697,6 +2690,14 @@ export class SurvivalUI {
     const target = event.target;
     if (!(target instanceof Element)) return;
     const topmostModal = this.topmostModal();
+    if (
+      topmostModal === this.journalLayer
+      && this.journalLayer.contains(target)
+      && target.closest('[data-journal-book]') === null
+    ) {
+      this.onJournalClose();
+      return;
+    }
     if (this.fishingLayer.contains(target) && topmostModal === this.fishingLayer) {
       if (target.closest('[data-fishing-view-exit]') !== null) {
         this.onFishingViewExit?.();
@@ -2741,7 +2742,10 @@ export class SurvivalUI {
     if (
       this.eventPresentationActive
       && eventInstanceId !== undefined
-      && button.dataset.targetKind === 'item'
+      && (
+        button.dataset.targetKind === 'item'
+        || this.eventEligibility?.has(eventInstanceId) === true
+      )
     ) {
       const choiceId = this.eventEligibility?.get(eventInstanceId);
       if (
@@ -2891,7 +2895,7 @@ export class SurvivalUI {
         return;
       }
       const itemAnchor = target.closest<HTMLButtonElement>(
-        'button[data-target-kind="item"]',
+        'button[data-event-state="available"]',
       );
       const instanceId = itemAnchor?.dataset.backingInstanceId as ItemInstanceId | undefined
         ?? (

@@ -54,6 +54,11 @@ it('keeps every static model outside other model footprints', () => {
   ])).toEqual([]);
 });
 
+it('seats the near-right rock into the seabed', () => {
+  expect(MENU_MODEL_PLACEMENTS.find(({ id }) => id === 'rock-a-2')?.position)
+    .toEqual([10, -0.45, -4]);
+});
+
 it('uses the sign positions and grounds local bounds with fixed penetration', () => {
   expect(MENU_PROTECTED_FOOTPRINTS.find(({ id }) => id === 'guide-sign')?.position)
     .toEqual(MENU_GUIDE_SIGN_POSITION);

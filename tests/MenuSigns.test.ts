@@ -16,7 +16,8 @@ function fakeFactory(surfaces: MenuSignCanvasSurface[]): () => MenuSignCanvasSur
     const gradient = { addColorStop: vi.fn() };
     const context = {
       fillStyle: '', strokeStyle: '', lineWidth: 1, font: '', textAlign: '', textBaseline: '',
-      fillRect: vi.fn(), strokeRect: vi.fn(), fillText: vi.fn(),
+      globalAlpha: 1, lineJoin: 'miter',
+      fillRect: vi.fn(), strokeRect: vi.fn(), fillText: vi.fn(), strokeText: vi.fn(),
       createLinearGradient: vi.fn(() => gradient),
     } as unknown as CanvasRenderingContext2D;
     const surface = { canvas, context };
@@ -37,8 +38,11 @@ it('builds smaller guide and start signs in swapped positions', () => {
   expect(start.position.x).toBeGreaterThan(0);
   expect(guide.position.z).toBeGreaterThanOrEqual(3.6);
   expect(start.position.z).toBeGreaterThanOrEqual(3.6);
-  expect(surfaces[0]!.context.fillText).toHaveBeenCalledWith(MENU_GUIDE_SIGN_TITLE, 512, 184);
+  expect(surfaces[0]!.context.fillText).toHaveBeenCalledWith('HOW TO', 512, 112);
+  expect(surfaces[0]!.context.fillText).toHaveBeenCalledWith('PLAY', 512, 226);
   expect(surfaces[1]!.context.fillText).toHaveBeenCalledWith(MENU_START_SIGN_TITLE, 512, 184);
+  expect(surfaces[0]!.context.font).toContain('108px "Bowlby One SC"');
+  expect(surfaces[1]!.context.font).toContain('150px "Bowlby One SC"');
   expect((signs.guideHitTarget.geometry as BoxGeometry).parameters.width).toBeLessThan(2.5);
   expect((signs.startHitTarget.geometry as BoxGeometry).parameters.width).toBeLessThan(2.5);
   expect(signs.startHitTarget.name).toBe('menu:start-sign-board');

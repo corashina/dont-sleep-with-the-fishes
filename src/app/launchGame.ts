@@ -335,11 +335,12 @@ function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
   }
 
   if (error instanceof ItemModelLoadError) {
-    if (error.itemId === 'fishingRod') {
+    if (error.itemId === 'fishingRod' || error.itemId === 'hammer') {
+      const label = error.itemId === 'fishingRod' ? 'Fishing Rod' : 'repair hammer';
       renderSystemScreen(mount, {
         kind: 'error',
         kicker: 'EQUIPMENT UNAVAILABLE',
-        title: 'Unable to prepare the lifeboat Fishing Rod',
+        title: `Unable to prepare the lifeboat ${label}`,
         lead: 'A required fixed equipment model could not be loaded.',
         detail: error.message,
       });

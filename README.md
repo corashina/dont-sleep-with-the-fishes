@@ -56,6 +56,13 @@ bun run dev
 
 Open the local URL printed by Vite.
 
+## Audio source policy
+
+Source all new music and sound assets only from [Freesound](https://freesound.org/).
+Suggest only sounds from Freesound.
+Accept only files with a clear license and source history. Verify the source page before each download.
+Record the source page, creator, and license in `src/assets/ATTRIBUTION.md`.
+
 The main menu uses a fixed underwater camera. A skull rests in a small sunken boat in the foreground. The title is painted onto a planted wooden sign on the left. Sand ridges, sparse debris, and a large tilted wreck of Dorothy create the distant depth layers. Sharks, fish, kelp, bubbles, suspended matter, and caustics animate while the camera stays fixed.
 
 Select **START** to fade into the existing scavenging intro. The scavenging
@@ -121,7 +128,7 @@ The menu also offers **Calm**, **Overcast**, **Squall**, **Rain**, **Wind**,
 **Thunderstorm**, **Waves**, and **Fog**. A selection overrides event weather,
 carries across the phase handoff, and remains active until the page reloads.
 
-Normal gameplay is always **Calm**. Only five authored events change presentation weather while they are staged and resolved: **Shower Night → Rain**, **Windy Night → Wind**, **Thunderstorm → Thunderstorm**, **Restless Waves → Waves**, and **Man in the Fog → Fog**. All other events return to Calm after their presentation ends.
+Normal gameplay is **Calm** outside events. Night events can use authored presentation weather while staged and resolved. The event weather includes **Overcast**, **Squall**, **Rain**, **Wind**, **Thunderstorm**, **Waves**, and **Fog**. Calm returns after each event ends.
 
 For testing, the same menu includes an **Event Test** picker. Choose an authored
 event and select **Enter Event** to start a fresh lifeboat run at that event with

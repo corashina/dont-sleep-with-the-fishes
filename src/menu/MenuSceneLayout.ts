@@ -136,7 +136,7 @@ export const MENU_PROTECTED_FOOTPRINTS: readonly MenuGroundFootprint[] = [
 
 export const MENU_MODEL_PLACEMENTS: readonly MenuGroundPlacement[] = [
   { id: 'rock-a-1', modelId: 'rockA', position: [-10, -0.1, -2], rotation: [0, 0.4, 0], halfSize: MODEL_HALF_SIZE.rockA },
-  { id: 'rock-a-2', modelId: 'rockA', position: [10, -0.25, -4], rotation: [0, -0.8, 0.08], halfSize: MODEL_HALF_SIZE.rockA },
+  { id: 'rock-a-2', modelId: 'rockA', position: [10, -0.45, -4], rotation: [0, -0.8, 0.08], halfSize: MODEL_HALF_SIZE.rockA },
   { id: 'rock-a-3', modelId: 'rockA', position: [-1, -0.32, -30.5], rotation: [0, 1.1, -0.05], halfSize: MODEL_HALF_SIZE.rockA },
   { id: 'rock-a-4', modelId: 'rockA', position: [0, -0.4, -42], rotation: [0, 0.25, 0.04], halfSize: MODEL_HALF_SIZE.rockA },
   { id: 'rock-a-5', modelId: 'rockA', position: [-20, -0.45, -31], rotation: [0, -0.55, -0.03], halfSize: MODEL_HALF_SIZE.rockA },

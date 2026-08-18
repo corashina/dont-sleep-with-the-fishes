@@ -6,6 +6,7 @@ import {
   MeshStandardMaterial,
   PerspectiveCamera,
   Scene,
+  TubeGeometry,
   Vector3,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
@@ -141,6 +142,57 @@ function createActor(parent: Group, instanceId: ItemInstanceId): BorrowedSupplyA
 }
 
 describe('dedicated event item use', () => {
+  it('pours Leak arcs from each spray point into the interior puddle', async () => {
+    const environment: DedicatedEventEnvironment = {
+      eventModels: createEventModels(),
+      supplies: {} as DedicatedEventEnvironment['supplies'],
+      carlitos: {} as DedicatedEventEnvironment['carlitos'],
+      vortexWave: createInactiveVortexWaveState(),
+      sampleWorldWaveInto: (output) => Object.assign(output, createWaveSample()),
+      readWorldWaveAmplitudeScale: () => 1,
+    };
+    const presentation = new LeakPresentation(environment);
+    presentation.stage({ eventId: 'leak', targetInstanceId: null, variantSeed: 41 });
+    const reveal = presentation.reveal();
+    const arcs = presentation.boatRoot.children.filter(({ name }) => (
+      name.startsWith('leak-pour-arc-')
+    )) as Mesh[];
+    expect(arcs).toHaveLength(6);
+    expect(arcs.every(({ geometry }) => geometry.drawRange.count === 0)).toBe(true);
+
+    presentation.update(0.35, 0.35);
+    expect(arcs.every(({ geometry }) => geometry.drawRange.count > 0)).toBe(true);
+
+    presentation.update(1.4, 1.05);
+    expect(arcs.every(({ visible }) => visible)).toBe(true);
+    const radii = new Set<number>();
+    arcs.forEach((arc) => {
+      expect(Math.abs(arc.position.x)).toBeCloseTo(1.61);
+      arc.geometry.computeBoundingBox();
+      const bounds = arc.geometry.boundingBox!;
+      const innerX = arc.position.x + (
+        arc.position.x < 0 ? bounds.max.x : bounds.min.x
+      );
+      expect(Math.abs(innerX)).toBeGreaterThan(1.14);
+      expect(Math.abs(innerX)).toBeLessThan(Math.abs(arc.position.x));
+      expect(arc.position.y + bounds.min.y).toBeLessThan(-0.2);
+      const geometry = arc.geometry as TubeGeometry;
+      radii.add(geometry.parameters.radius);
+      expect(geometry.parameters.radius).toBeGreaterThan(0.01);
+      expect(geometry.parameters.radius).toBeLessThan(0.018);
+      expect(geometry.drawRange.count).toBeGreaterThan(0);
+      expect(geometry.drawRange.count).toBeLessThan(geometry.index!.count);
+    });
+    expect(radii.size).toBeGreaterThan(3);
+
+    presentation.settleForVisibilityChange();
+    expect(arcs.every(({ geometry }) => (
+      geometry.drawRange.count === geometry.index!.count
+    ))).toBe(true);
+    await reveal;
+    presentation.dispose();
+  });
+
   it('applies the terminal Leak item transition once after spray update', async () => {
     const emit = vi.spyOn(FishingBiteParticles.prototype, 'emit');
     const camera = new PerspectiveCamera(62, 1.6, 0.1, 100);

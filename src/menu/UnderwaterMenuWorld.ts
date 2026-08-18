@@ -20,6 +20,7 @@ import {
   Raycaster,
   Scene,
   ShaderMaterial,
+  Texture,
   TubeGeometry,
   Vector2,
   Vector3,
@@ -94,13 +95,13 @@ type ModelFactory = Pick<MenuModelLibrary, 'create'>;
 export interface UnderwaterMenuComponentFactories {
   createSigns(): MenuSignsComponent;
   createDorothyWreck(): MenuSceneComponent;
-  createDistantSeabed(): MenuSceneComponent;
+  createDistantSeabed(sandTexture: Texture): MenuSceneComponent;
 }
 
 const DEFAULT_COMPONENT_FACTORIES: UnderwaterMenuComponentFactories = {
   createSigns: () => new MenuSigns(),
   createDorothyWreck: () => new SunkenDorothyWreck(),
-  createDistantSeabed: () => new DistantSeabed(),
+  createDistantSeabed: (sandTexture) => new DistantSeabed(sandTexture),
 };
 
 export class UnderwaterMenuWorld {
@@ -186,7 +187,7 @@ export class UnderwaterMenuWorld {
       this.components.push(signs);
       dorothy = components.createDorothyWreck();
       this.components.push(dorothy);
-      distantSeabed = components.createDistantSeabed();
+      distantSeabed = components.createDistantSeabed(sand.smooth);
       this.components.push(distantSeabed);
     } catch (error) {
       this.rollbackConstruction();

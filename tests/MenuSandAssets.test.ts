@@ -14,38 +14,31 @@ import {
 import { createMenuSeabedMaterial } from '../src/menu/MenuSeabedMaterial';
 
 describe('MenuSandAssets', () => {
-  it('loads and configures the two color maps for repeated seabed use', async () => {
-    const textures = [new Texture(), new Texture()];
+  it('loads and configures one color map for all menu terrain', async () => {
+    const texture = new Texture();
     const loader: MenuSandTextureLoader = {
-      loadAsync: vi.fn(async () => textures.shift()!),
+      loadAsync: vi.fn(async () => texture),
     };
 
     const assets = await MenuSandAssets.load(loader);
     assets.configure(16);
 
-    expect(loader.loadAsync).toHaveBeenCalledTimes(2);
-    for (const texture of [assets.smooth, assets.coarse]) {
-      expect(texture.wrapS).toBe(RepeatWrapping);
-      expect(texture.wrapT).toBe(RepeatWrapping);
-      expect(texture.magFilter).toBe(LinearFilter);
-      expect(texture.minFilter).toBe(LinearMipmapLinearFilter);
-      expect(texture.anisotropy).toBe(8);
-      expect(texture.generateMipmaps).toBe(true);
-      expect(texture.colorSpace).toBe(SRGBColorSpace);
-      expect(texture.repeat.toArray()).toEqual([28, 20]);
-    }
+    expect(loader.loadAsync).toHaveBeenCalledOnce();
+    expect(assets.smooth).toBe(texture);
+    expect(texture.wrapS).toBe(RepeatWrapping);
+    expect(texture.wrapT).toBe(RepeatWrapping);
+    expect(texture.magFilter).toBe(LinearFilter);
+    expect(texture.minFilter).toBe(LinearMipmapLinearFilter);
+    expect(texture.anisotropy).toBe(8);
+    expect(texture.generateMipmaps).toBe(true);
+    expect(texture.colorSpace).toBe(SRGBColorSpace);
+    expect(texture.repeat.toArray()).toEqual([14, 10]);
   });
 
-  it('disposes fulfilled textures when one texture fails', async () => {
-    const first = new Texture();
-    const disposeFirst = vi.spyOn(first, 'dispose');
-    const failure = new Error('missing coarse sand');
-    const results = [
-      Promise.resolve(first),
-      Promise.reject(failure),
-    ];
+  it('reports texture load failures', async () => {
+    const failure = new Error('missing sand');
     const loader: MenuSandTextureLoader = {
-      loadAsync: vi.fn(() => results.shift()!),
+      loadAsync: vi.fn(() => Promise.reject(failure)),
     };
 
     await expect(MenuSandAssets.load(loader)).rejects.toEqual(
@@ -54,21 +47,17 @@ describe('MenuSandAssets', () => {
         cause: failure,
       }),
     );
-    expect(disposeFirst).toHaveBeenCalledOnce();
   });
 
-  it('disposes each owned texture once', () => {
-    const smooth = new Texture();
-    const coarse = new Texture();
-    const disposals = [smooth, coarse].map((texture) => (
-      vi.spyOn(texture, 'dispose')
-    ));
-    const assets = MenuSandAssets.fromTextures(smooth, coarse);
+  it('disposes the owned texture once', () => {
+    const texture = new Texture();
+    const dispose = vi.spyOn(texture, 'dispose');
+    const assets = MenuSandAssets.fromTexture(texture);
 
     assets.dispose();
     assets.dispose();
 
-    disposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+    expect(dispose).toHaveBeenCalledOnce();
   });
 
   it('reports a typed load error', () => {
@@ -77,30 +66,13 @@ describe('MenuSandAssets', () => {
 });
 
 describe('createMenuSeabedMaterial', () => {
-  it('keeps standard lighting and blends both terrain maps by world depth', () => {
-    const smooth = new Texture();
-    const coarse = new Texture();
-    const assets = MenuSandAssets.fromTextures(smooth, coarse);
+  it('uses the single sand map with standard lighting', () => {
+    const texture = new Texture();
+    const assets = MenuSandAssets.fromTexture(texture);
     const material = createMenuSeabedMaterial(assets);
-    const shader = {
-      uniforms: {},
-      vertexShader: '#include <common>\n#include <worldpos_vertex>',
-      fragmentShader: '#include <common>\n#include <map_fragment>',
-    };
 
-    material.onBeforeCompile(shader as never, {} as never);
-
-    expect(material.map).toBe(smooth);
+    expect(material.map).toBe(texture);
     expect(material.roughness).toBe(1);
     expect(material.vertexColors).toBe(true);
-    expect(shader.uniforms).toMatchObject({
-      uMenuCoarseSand: { value: coarse },
-    });
-    expect(shader.vertexShader).toContain('vMenuWorldZ');
-    expect(shader.fragmentShader).toContain('coarseBlend');
-    expect(shader.fragmentShader).toContain('0.35');
-    expect(material.customProgramCacheKey()).toBe(
-      'menu-seabed-two-terrain-zones-v2',
-    );
   });
 });

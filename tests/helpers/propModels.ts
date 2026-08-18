@@ -43,6 +43,7 @@ export function createTestPropModels(): PropModelLibrary {
   ]));
   const equipmentTemplates = new Map<LifeboatEquipmentId, Group>([
     ['fishingRod', template('fishingRod', staticItemCount)],
+    ['hammer', template('hammer', staticItemCount)],
   ]);
   const practicalLightTemplates = new Map<PracticalLightModelId, Group>([
     ['lantern', template('lantern', staticItemCount + 1)],
