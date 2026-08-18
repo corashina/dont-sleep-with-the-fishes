@@ -2248,6 +2248,37 @@ describe('SurvivalUI', () => {
     expect(returned).toHaveBeenCalledOnce();
   });
 
+  it('focuses the back control when no drifting item choice is available', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+
+    ui.showDriftingItemFocus({
+      eventId: 'drifting-bottle',
+      title: 'A BOTTLE',
+      choices: [
+        {
+          id: 'retrieve',
+          label: 'RETRIEVE',
+          energyCost: 1,
+          energyOwner: 'player',
+          unavailableReason: 'You need more energy.',
+        },
+        {
+          id: 'delegate-carlitos',
+          label: 'SEND CARLITOS',
+          energyCost: 3,
+          energyOwner: 'carlitos',
+          unavailableReason: 'Carlitos needs more energy.',
+        },
+      ],
+    });
+
+    expect(document.activeElement).toBe(
+      mount.querySelector<HTMLButtonElement>('[data-drifting-item-back]'),
+    );
+  });
+
   it('uses safe placement for unavailable salvage, repositions it, and cleans it up', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
