@@ -76,7 +76,7 @@ import {
 import { SWARM_ITEM_DURATION } from '../src/survival/events/anglerfishSwarmChoreography';
 import { DEATH_STARE_ITEM_DURATION } from '../src/survival/events/deathStareChoreography';
 import { LEAK_ITEM_DURATION } from '../src/survival/events/leakChoreography';
-import { WHIRLPOOL_ITEM_DURATION } from '../src/survival/events/whirlpoolChoreography';
+import { TORNADO_ITEM_DURATION } from '../src/survival/events/tornadoChoreography';
 import { SupernaturalEventAnimator } from '../src/survival/SupernaturalEventAnimator';
 import {
   GHOST_FLOAT_PATHS,
@@ -2609,7 +2609,7 @@ describe('BoatWorld helpers', () => {
     ['death-stare', 'flashlight', 'flashlight'],
     ['swarm-of-anglerfish', 'flashlight', 'flashlight'],
     ['swarm-of-anglerfish', 'baitTin', 'baitTin'],
-    ['whirlpool', 'swimRing', 'swimRing'],
+    ['tornado', 'swimRing', 'swimRing'],
   ] as const)(
     'settles the %s %s item action after elapsed time and across visibility',
     async (eventId, choiceId, itemType) => {
@@ -2635,8 +2635,8 @@ describe('BoatWorld helpers', () => {
         ? DEATH_STARE_ITEM_DURATION
         : eventId === 'swarm-of-anglerfish'
           ? SWARM_ITEM_DURATION
-          : WHIRLPOOL_ITEM_DURATION;
-      const context = eventId === 'whirlpool'
+          : TORNADO_ITEM_DURATION;
+      const context = eventId === 'tornado'
         ? 'throw-target'
         : 'flashlight-flash';
       const duration = Math.max(
@@ -2703,7 +2703,7 @@ describe('BoatWorld helpers', () => {
       ['bucket-cover', 'eerie-melody', 'bucket', 'bucket', supernaturalItemUseDuration('eerie-melody', 'bucket')!],
       ['flare-target', 'ghosts', 'flareGun', 'flareGun', supernaturalItemUseDuration('ghosts', 'flareGun')!],
       ['flare-sky', 'other-people', 'flareGun', 'flareGun', eventItemUseDuration('flare-sky')],
-      ['anchor-drop', 'whirlpool', 'anchor', 'anchor', WHIRLPOOL_ITEM_DURATION],
+      ['anchor-drop', 'tornado', 'anchor', 'anchor', TORNADO_ITEM_DURATION],
       ['umbrella-overhead', 'shower-night', 'umbrella', 'umbrella', weatherItemUseDuration('shower-night', 'umbrella')!],
       ['umbrella-shield', 'death-stare', 'umbrella', 'umbrella', DEATH_STARE_ITEM_DURATION],
       ['flashlight-flash', 'flowers', 'flashlight', 'flashlight', eventItemUseDuration('flashlight-flash')],
@@ -4732,7 +4732,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('shows a large starboard Whirlpool without moving the camera', async () => {
+  it('shows a distant starboard Tornado without moving the camera', async () => {
     const propModels = createTestPropModels();
     const eventModels = createTestEventModels();
     const camera = new PerspectiveCamera();
@@ -4748,20 +4748,61 @@ describe('BoatWorld helpers', () => {
     );
     const baseQuaternion = camera.quaternion.clone();
 
-    world.stageEvent('whirlpool');
-    const whirlpool = world.scene.getObjectByName('whirlpool-world')!;
-    expect(whirlpool.userData.vortexRadius).toBe(14.1);
-    expect(whirlpool.userData.distanceFromBoat).toBeGreaterThan(22);
-    expect(whirlpool.userData.surfaceOffset).toBeLessThan(0);
-    expect(whirlpool.getObjectByName('whirlpool-dark-funnel')).toBeDefined();
+    world.stageEvent('tornado');
+    const tornado = world.scene.getObjectByName('tornado-world')!;
+    const model = tornado.getObjectByName('tornado-model')!;
+    const vortex = (world as unknown as {
+      vortexWave: { strength: number; depression: number };
+    }).vortexWave;
+    expect(tornado.position.x).toBe(12.8);
+    expect(tornado.position.z).toBe(-19);
+    expect(tornado.userData.distanceFromBoat).toBeGreaterThan(22);
+    expect(model).toBeDefined();
+    expect(eventModels.create).toHaveBeenCalledWith('tornadoCore');
+    expect(tornado.getObjectByName('whirlpool-dark-funnel')).toBeUndefined();
+    expect(tornado.getObjectByName('whirlpool-water-stream-1')).toBeUndefined();
+    expect(vortex.strength).toBe(0);
+    expect(vortex.depression).toBe(0);
+    const initialRotation = model.rotation.y;
 
-    const reveal = world.revealEvent('whirlpool');
+    const reveal = world.revealEvent('tornado');
     world.update(1.5, 1.5);
     expect(camera.quaternion.toArray()).toEqual(baseQuaternion.toArray());
-    expect(whirlpool.getObjectByName('whirlpool-dark-funnel')?.visible).toBe(true);
+    expect(model.visible).toBe(true);
+    expect(model.rotation.y).not.toBe(initialRotation);
+    expect(tornado.getObjectByName('tornado-wind-band-1')?.visible).toBe(true);
+    expect(tornado.getObjectByName('tornado-sea-spray-1')?.visible).toBe(true);
     world.update(3, 1.5);
     await reveal;
     expect(camera.quaternion.toArray()).toEqual(baseQuaternion.toArray());
+
+    const outcome = {
+      accepted: true,
+      code: 'event-resolved' as const,
+      message: 'The hull takes damage.',
+      deltas: { hull: -8 },
+      cue: 'impact' as const,
+    };
+    const reaction = world.reactToEventOutcome(
+      'tornado',
+      outcome,
+      { choiceId: 'sleep', actors: [] },
+      {
+        outcome,
+        resourceDeltas: { hull: -8 },
+        gainedInstanceIds: [],
+        brokenInstanceIds: [],
+        lostInstanceIds: [],
+        consumedInstanceIds: [],
+        selectedInstanceId: null,
+        selectedCondition: null,
+        targetInstanceId: null,
+      },
+    );
+    world.update(4.4, 1.4);
+    await reaction;
+    expect(tornado.position.x).toBe(12.8);
+    expect(tornado.position.z).toBe(-19);
 
     world.dispose();
     propModels.dispose();
@@ -4875,7 +4916,7 @@ describe('BoatWorld helpers', () => {
       'low',
       eventModels,
     );
-    world.stageEvent('whirlpool');
+    world.stageEvent('tornado');
 
     const coordinatorWorld = world.scene.getObjectByName('dedicated-event-world')!;
     const coordinatorBoat = world.scene.getObjectByName('dedicated-event-boat')!;
@@ -4883,24 +4924,27 @@ describe('BoatWorld helpers', () => {
     const boatEffects = world.scene.getObjectByName('dedicated-event-boat-effects')!;
 
     expect(coordinatorWorld.children.map(({ name }) => name)).toEqual([
-      'whirlpool-world',
+      'tornado-world',
     ]);
     expect(coordinatorBoat.children.map(({ name }) => name)).toEqual([
-      'whirlpool-boat',
+      'tornado-boat',
     ]);
-    const whirlpoolWorld = coordinatorWorld.getObjectByName('whirlpool-world')!;
-    const whirlpoolBoat = coordinatorBoat.getObjectByName('whirlpool-boat')!;
-    expect(whirlpoolWorld.children.map(({ name }) => name)).toEqual(expect.arrayContaining([
-      'whirlpool-dark-funnel',
-      'whirlpool-water-stream-1',
-      'whirlpool-water-stream-2',
-      'whirlpool-water-stream-3',
-      'whirlpool-water-stream-4',
-      'whirlpool-water-stream-5',
-      'whirlpool-water-stream-6',
+    const tornadoWorld = coordinatorWorld.getObjectByName('tornado-world')!;
+    const tornadoBoat = coordinatorBoat.getObjectByName('tornado-boat')!;
+    expect(tornadoWorld.children.map(({ name }) => name)).toEqual(expect.arrayContaining([
+      'tornado-model',
+      'tornado-wind-band-1',
+      'tornado-wind-band-2',
+      'tornado-wind-band-3',
+      'tornado-sea-spray-1',
+      'tornado-sea-spray-2',
+      'tornado-sea-spray-3',
+      'tornado-sea-spray-4',
+      'tornado-sea-spray-5',
+      'tornado-sea-spray-6',
     ]));
-    expect(whirlpoolWorld.children).toHaveLength(7);
-    expect(whirlpoolBoat.children).toHaveLength(0);
+    expect(tornadoWorld.children).toHaveLength(10);
+    expect(tornadoBoat.children).toHaveLength(0);
     expect(cameraEffects.parent?.name).toBe('boat-featured-event-camera-rig');
     expect(cameraEffects.parent?.parent?.name).toBe('boat-cue-camera-rig');
     expect(cameraEffects.getObjectByName('boat-camera-rig')).toBeDefined();
@@ -5220,7 +5264,7 @@ describe('BoatWorld helpers', () => {
       'low',
       eventModels,
     );
-    world.stageEvent('whirlpool');
+    world.stageEvent('tornado');
     const internals = world as unknown as {
       dedicatedEvents: EventPresentationCoordinator;
       supplyDisplay: BoatSupplyDisplay;
