@@ -1070,6 +1070,7 @@ export class SurvivalUI {
     if (this.disposed || !this.eventPresentationActive) return Promise.resolve();
     const button = [
       ...this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]'),
+      ...this.driftingItemFocusChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]'),
       ...this.anchorButtons.values(),
     ].find((candidate) => candidate.dataset.eventChoice === choiceId);
     if (
@@ -1435,10 +1436,12 @@ export class SurvivalUI {
   }
 
   showDriftingItemReturn(): void {
-    if (this.disposed || !this.driftingItemFocusLayer.classList.contains('is-visible')) return;
+    if (this.disposed) return;
     this.driftingItemFocusReturning = true;
     this.driftingItemFocusChoices.hidden = true;
     this.driftingItemFocusBack.setAttribute('aria-label', 'Return to boat');
+    this.showLayer(this.driftingItemFocusLayer);
+    this.syncCommandState();
     this.driftingItemFocusBack.focus();
   }
 
@@ -1454,7 +1457,7 @@ export class SurvivalUI {
 
   showDriftingItemResult(view: DriftingItemResultView): void {
     if (this.disposed) return;
-    this.hideDriftingItemFocus();
+    this.hideLayer(this.driftingItemFocusLayer);
     this.driftingItemContinueIssued = false;
     this.driftingItemResultCaption.textContent = view.caption;
     this.driftingItemResultTitle.textContent = view.title;
