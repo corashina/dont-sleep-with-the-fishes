@@ -34,7 +34,7 @@ export class DriftingBottlePresentation extends KeyedEventPresentation {
   };
   private side: EventSide = -1;
 
-  constructor(model: Object3D, private readonly deckTarget: Object3D) {
+  constructor(model: Object3D, private readonly bowTarget: Object3D) {
     super('drifting-bottle-presentation');
     this.subject.name = 'event-prop:drifting-bottle';
     this.subject.userData.motionSource = 'shared-wave-field';
@@ -134,7 +134,7 @@ export class DriftingBottlePresentation extends KeyedEventPresentation {
 
   private moveToDeck(progress: number): void {
     const baseX = BASE.x * this.side;
-    this.deckTarget.getWorldPosition(this.target);
+    this.bowTarget.getWorldPosition(this.target);
     this.root.worldToLocal(this.target);
     this.subject.position.set(
       baseX + (this.target.x - baseX) * progress,

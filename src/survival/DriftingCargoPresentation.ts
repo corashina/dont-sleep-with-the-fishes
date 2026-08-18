@@ -73,7 +73,7 @@ export class DriftingCargoPresentation {
 
   constructor(
     models: DriftingCargoModels,
-    private readonly sternTarget: Object3D,
+    private readonly bowTarget: Object3D,
   ) {
     this.root.name = 'drifting-cargo-presentation';
     const barrel = new Group();
@@ -140,21 +140,6 @@ export class DriftingCargoPresentation {
     return this.startAnimation('recede', RECEDE_DURATION);
   }
 
-  projectHeld(
-    camera: PerspectiveCamera,
-    width: number,
-    height: number,
-  ): ProjectedBoatBounds | null {
-    if (
-      this.disposed
-      || this.state !== 'held'
-      || this.activeVariant === null
-      || width <= 0
-      || height <= 0
-    ) return null;
-    return projectBoatObjectBounds(this.roots[this.activeVariant], camera, width, height);
-  }
-
   projectInteraction(
     camera: PerspectiveCamera,
     width: number,
@@ -200,7 +185,7 @@ export class DriftingCargoPresentation {
     this.activeAnimation = null;
     if (animation.kind === 'retrieve') {
       this.state = 'held';
-      this.applySternPose(this.activeVariant);
+      this.applyBowPose(this.activeVariant);
     } else if (animation.kind === 'recede') {
       this.state = 'idle';
       this.roots[this.activeVariant].visible = false;
@@ -224,7 +209,7 @@ export class DriftingCargoPresentation {
     const animation = this.activeAnimation;
     if (animation === null) {
       if (this.state === 'floating') this.applyFloatingPose(variant, time);
-      else if (this.state === 'held') this.applySternPose(variant);
+      else if (this.state === 'held') this.applyBowPose(variant);
       return;
     }
 
@@ -240,7 +225,7 @@ export class DriftingCargoPresentation {
     this.activeAnimation = null;
     if (animation.kind === 'retrieve') {
       this.state = 'held';
-      this.applySternPose(variant);
+      this.applyBowPose(variant);
     } else {
       this.state = 'idle';
       this.resetPose(variant);
@@ -287,7 +272,7 @@ export class DriftingCargoPresentation {
   }
 
   private applyRetrievePose(variant: DriftingCargoKind, progress: number): void {
-    this.readSternPose();
+    this.readBowPose();
     const travel = keyedRetrieveProgress(Math.min(1, Math.max(0, progress)));
     const root = this.roots[variant];
     root.position.lerpVectors(
@@ -321,15 +306,15 @@ export class DriftingCargoPresentation {
     );
   }
 
-  private applySternPose(variant: DriftingCargoKind): void {
-    this.readSternPose();
+  private applyBowPose(variant: DriftingCargoKind): void {
+    this.readBowPose();
     this.roots[variant].position.copy(this.targetPositionScratch);
     this.roots[variant].quaternion.copy(this.targetQuaternionScratch);
   }
 
-  private readSternPose(): void {
-    this.sternTarget.getWorldPosition(this.targetPositionScratch);
-    this.sternTarget.getWorldQuaternion(this.targetQuaternionScratch);
+  private readBowPose(): void {
+    this.bowTarget.getWorldPosition(this.targetPositionScratch);
+    this.bowTarget.getWorldQuaternion(this.targetQuaternionScratch);
     this.root.worldToLocal(this.targetPositionScratch);
     this.root.getWorldQuaternion(this.quaternionScratch).invert();
     this.targetQuaternionScratch.premultiply(this.quaternionScratch);

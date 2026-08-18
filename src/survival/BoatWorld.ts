@@ -112,9 +112,13 @@ import {
 } from './FocusedEventPresentation';
 import { FeaturedEventPresentations } from './FeaturedEventPresentations';
 import {
+  driftingItemLeaveKey,
+  driftingItemRetrieveKey,
   isDriftingCargoEventId,
-  type DriftingCargoEventId,
+  isDriftingItemEventId,
+  type DriftingItemEventId,
 } from './events';
+import type { TimedAnimation } from './animationMath';
 import { EventPresentationCoordinator } from './EventPresentationCoordinator';
 import {
   eventPresentationRoute,
@@ -247,6 +251,9 @@ interface ActiveFishingAnimation {
   readonly resolve: () => void;
 }
 
+type DriftingItemCameraPhase = 'idle' | 'entering' | 'focused' | 'returning';
+type DriftingItemCameraAnimation = TimedAnimation<'enter' | 'return'>;
+
 interface ActiveMoonAnimation {
   readonly kind: 'reveal' | 'reaction';
   elapsed: number;
@@ -375,10 +382,10 @@ const FISHING_CATCH_BOW_REST = Object.freeze({
   y: 0.43,
   z: -2.52,
 });
-const DRIFTING_LOOT_STERN_REST = Object.freeze({
+const DRIFTING_ITEM_BOW_REST = Object.freeze({
   x: 0.72,
   y: 0.58,
-  z: 1.05,
+  z: -2.52,
 });
 const CHECK_BACK_STERN_FLOOR = Object.freeze({
   x: 0,
@@ -638,7 +645,17 @@ export class BoatWorld {
     supplyRoll: 0,
     supplyLift: 0,
   };
-  private readonly driftingCargoSternRest = new Object3D();
+  private readonly driftingItemBowRest = new Object3D();
+  private readonly driftingItemCameraStartPosition = new Vector3();
+  private readonly driftingItemCameraStartQuaternion = new Quaternion();
+  private readonly driftingItemCameraTargetQuaternion = new Quaternion();
+  private readonly driftingItemCameraWorldTarget = new Vector3();
+  private readonly driftingItemCameraWorldPosition = new Vector3();
+  private readonly driftingItemCameraParentQuaternion = new Quaternion();
+  private readonly driftingItemCameraLookMatrix = new Matrix4();
+  private activeDriftingItemCameraAnimation: DriftingItemCameraAnimation | null = null;
+  private driftingItemCameraPhase: DriftingItemCameraPhase = 'idle';
+  private focusedDriftingItemEventId: DriftingItemEventId | null = null;
   private readonly checkBackSternFloor = new Object3D();
   private activeFeaturedEventId: FeaturedEventId | null = null;
   private readonly repairTools: Object3D;
@@ -881,13 +898,13 @@ export class BoatWorld {
         FISHING_CATCH_BOW_REST.z,
       );
       this.boat.add(this.fishingCatchRest);
-      this.driftingCargoSternRest.name = 'drifting-cargo-stern-rest';
-      this.driftingCargoSternRest.position.set(
-        DRIFTING_LOOT_STERN_REST.x,
-        DRIFTING_LOOT_STERN_REST.y,
-        DRIFTING_LOOT_STERN_REST.z,
+      this.driftingItemBowRest.name = 'drifting-item-bow-rest';
+      this.driftingItemBowRest.position.set(
+        DRIFTING_ITEM_BOW_REST.x,
+        DRIFTING_ITEM_BOW_REST.y,
+        DRIFTING_ITEM_BOW_REST.z,
       );
-      this.boat.add(this.driftingCargoSternRest);
+      this.boat.add(this.driftingItemBowRest);
       this.checkBackSternFloor.name = 'check-back-stern-floor';
       this.checkBackSternFloor.position.set(
         CHECK_BACK_STERN_FLOOR.x,
@@ -1123,7 +1140,7 @@ export class BoatWorld {
       featured = new FeaturedEventPresentations(
           featuredModels,
           this.camera,
-          this.driftingCargoSternRest,
+          this.driftingItemBowRest,
           this.checkBackSternFloor,
           isEventPresentationRoute(eventId, 'featured') ? eventId : null,
         );
@@ -1566,21 +1583,44 @@ export class BoatWorld {
     this.camera.quaternion.copy(this.baseCameraQuaternion);
   }
 
-  retrieveDriftingCargo(): Promise<void> {
+  enterDriftingItemView(eventId: DriftingItemEventId): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    this.toolHoverOutline.setTarget(null);
-    const eventId = this.activeDriftingCargoEventId();
-    if (eventId === null) return Promise.resolve();
-    return this.featuredEvents.react(
-      eventId,
-      eventId === 'drifting-barrel' ? 'drifting-barrel.food' : 'drifting-chest.food',
-    );
+    if (this.activeFeaturedEventId !== eventId) return Promise.resolve();
+    this.cancelDriftingItemCameraAnimation();
+    this.focusedDriftingItemEventId = eventId;
+    this.driftingItemCameraStartPosition.copy(this.camera.position);
+    this.driftingItemCameraStartQuaternion.copy(this.camera.quaternion);
+    this.updateDriftingItemCameraTarget();
+    this.driftingItemCameraPhase = 'entering';
+    return this.startDriftingItemCameraAnimation('enter');
   }
 
-  delegateDriftingCargo(): Promise<void> {
+  exitDriftingItemView(): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    const eventId = this.activeDriftingCargoEventId();
-    if (eventId === null) return Promise.resolve();
+    if (
+      this.driftingItemCameraPhase === 'idle'
+      && this.activeDriftingItemCameraAnimation === null
+    ) {
+      this.restoreDriftingItemBaseCamera();
+      return Promise.resolve();
+    }
+    this.cancelDriftingItemCameraAnimation();
+    this.driftingItemCameraStartPosition.copy(this.camera.position);
+    this.driftingItemCameraStartQuaternion.copy(this.camera.quaternion);
+    this.driftingItemCameraPhase = 'returning';
+    return this.startDriftingItemCameraAnimation('return');
+  }
+
+  retrieveDriftingItem(eventId: DriftingItemEventId): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    this.toolHoverOutline.setTarget(null);
+    return this.featuredEvents.react(eventId, driftingItemRetrieveKey(eventId));
+  }
+
+  delegateDriftingItem(eventId: DriftingItemEventId): Promise<void> {
+    if (this.disposed || this.activeFeaturedEventId !== eventId) {
+      return Promise.resolve();
+    }
     this.toolHoverOutline.setTarget(null);
     this.finishCarlitosDelegation();
     this.captureCarlitosDelegateBase();
@@ -1593,26 +1633,29 @@ export class BoatWorld {
     });
     const lootMotion = this.featuredEvents.react(
       eventId,
-      eventId === 'drifting-barrel' ? 'drifting-barrel.food' : 'drifting-chest.food',
+      driftingItemRetrieveKey(eventId),
     );
     return Promise.all([companionMotion, lootMotion]).then(() => undefined);
   }
 
-  recedeDriftingCargo(): Promise<void> {
+  recedeDriftingItem(eventId: DriftingItemEventId): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.toolHoverOutline.setTarget(null);
-    const eventId = this.activeDriftingCargoEventId();
-    if (eventId === null) return Promise.resolve();
-    return this.featuredEvents.react(
-      eventId,
-      eventId === 'drifting-barrel' ? 'drifting-barrel.drift' : 'drifting-chest.drift',
-    );
+    return this.featuredEvents.react(eventId, driftingItemLeaveKey(eventId));
   }
 
-  projectDriftingCargo(width: number, height: number): ProjectedBoatBounds | null {
-    if (this.disposed || this.activeEventPresenter === null) return null;
+  projectDriftingItemResult(width: number, height: number): ProjectedBoatBounds | null {
+    if (
+      this.disposed
+      || this.activeEventPresenter === null
+      || this.activeFeaturedEventId === null
+      || !isDriftingItemEventId(this.activeFeaturedEventId)
+      || width <= 0
+      || height <= 0
+    ) return null;
     this.scene.updateMatrixWorld(true);
-    return this.featuredEvents.projectHeldDriftingCargo(this.camera, width, height);
+    const root = this.featuredEvents.resultRoot(this.activeFeaturedEventId);
+    return root === null ? null : projectBoatObjectBounds(root, this.camera, width, height);
   }
 
   projectEventInteractionBounds(
@@ -1726,6 +1769,7 @@ export class BoatWorld {
 
   clearEvent(): void {
     if (this.disposed) return;
+    this.cancelDriftingItemView();
     this.weatherEventOperation += 1;
     this.finishCarlitosDelegation();
     this.itemUseController.clear(this.phase);
@@ -1746,6 +1790,7 @@ export class BoatWorld {
 
   setDocumentHidden(hidden: boolean): void {
     if (this.disposed || !hidden) return;
+    this.settleDriftingItemCameraForVisibilityChange();
     this.weatherEventOperation += 1;
     this.finishCarlitosDelegation();
     this.itemUseController.settleForVisibilityChange(this.phase);
@@ -2328,6 +2373,7 @@ export class BoatWorld {
       this.supplyDisplay.resetEventPoseForFrame();
       this.activeEventPresenter?.layer?.update(time, delta);
       this.activeEventPresenter?.featured?.update(time, delta);
+      this.advanceDriftingItemCamera(delta);
       this.updateCarlitosDelegation(delta);
       this.activeEventPresenter?.weather?.update(time, delta);
       this.applyDangerousWatersPresentation();
@@ -2340,6 +2386,7 @@ export class BoatWorld {
     } else if (this.moonEventStaged) {
       this.applyMoonPresentation();
     }
+    if (!advancePresentation) this.applyDriftingItemCameraPose();
     setSceneBinocularMaskStrength(
       this.scene,
       this.itemEffects.binocularMaskStrength,
@@ -2379,6 +2426,7 @@ export class BoatWorld {
     if (this.disposed) return;
     runCleanupSteps([
       () => this.setHighlightedItem(null),
+      () => this.cancelDriftingItemView(),
       () => {
         this.disposed = true;
         this.weatherEventOperation += 1;
@@ -2493,6 +2541,131 @@ export class BoatWorld {
       this.applyFishingPhasePresentation();
       this.applyFishingAnimation(kind, 0);
     });
+  }
+
+  private startDriftingItemCameraAnimation(
+    kind: 'enter' | 'return',
+  ): Promise<void> {
+    this.cancelDriftingItemCameraAnimation();
+    return new Promise<void>((resolve) => {
+      this.activeDriftingItemCameraAnimation = {
+        kind,
+        duration: FISHING_CAMERA_DURATION,
+        elapsed: 0,
+        resolve,
+      };
+      this.applyDriftingItemCameraAnimation(kind, 0);
+    });
+  }
+
+  private advanceDriftingItemCamera(delta: number): void {
+    const animation = this.activeDriftingItemCameraAnimation;
+    if (animation === null) {
+      this.applyDriftingItemCameraPose();
+      return;
+    }
+    animation.elapsed = Math.min(animation.duration, animation.elapsed + delta);
+    const progress = animation.duration <= 0 ? 1 : animation.elapsed / animation.duration;
+    this.applyDriftingItemCameraAnimation(animation.kind, progress);
+    if (progress < 1) return;
+    this.activeDriftingItemCameraAnimation = null;
+    this.finishDriftingItemCameraAnimation(animation.kind);
+    animation.resolve();
+  }
+
+  private applyDriftingItemCameraPose(): void {
+    if (this.driftingItemCameraPhase !== 'focused') return;
+    if (!this.updateDriftingItemCameraTarget()) {
+      this.cancelDriftingItemView();
+      return;
+    }
+    this.camera.position.copy(this.fishingCameraPosition);
+    this.camera.quaternion.copy(this.driftingItemCameraTargetQuaternion);
+  }
+
+  private applyDriftingItemCameraAnimation(
+    kind: 'enter' | 'return',
+    progress: number,
+  ): void {
+    const travel = smootherStep(clamp(progress, 0, 1));
+    if (kind === 'enter') {
+      this.camera.position.lerpVectors(
+        this.driftingItemCameraStartPosition,
+        this.fishingCameraPosition,
+        travel,
+      );
+      this.camera.quaternion.copy(this.driftingItemCameraStartQuaternion)
+        .slerp(this.driftingItemCameraTargetQuaternion, travel);
+      return;
+    }
+    this.camera.position.lerpVectors(
+      this.driftingItemCameraStartPosition,
+      this.baseCameraPosition,
+      travel,
+    );
+    this.camera.quaternion.copy(this.driftingItemCameraStartQuaternion)
+      .slerp(this.baseCameraQuaternion, travel);
+  }
+
+  private finishDriftingItemCameraAnimation(kind: 'enter' | 'return'): void {
+    if (kind === 'enter') {
+      this.driftingItemCameraPhase = 'focused';
+      this.applyDriftingItemCameraPose();
+      return;
+    }
+    this.restoreDriftingItemBaseCamera();
+  }
+
+  private updateDriftingItemCameraTarget(): boolean {
+    const eventId = this.focusedDriftingItemEventId;
+    if (eventId === null) return false;
+    const target = this.featuredEvents.itemAimTarget(eventId);
+    if (target === null) return false;
+    this.scene.updateMatrixWorld(true);
+    target.getWorldPosition(this.driftingItemCameraWorldTarget);
+    this.driftingItemCameraWorldPosition.copy(this.fishingCameraPosition);
+    const parent = this.camera.parent;
+    if (parent !== null) parent.localToWorld(this.driftingItemCameraWorldPosition);
+    this.driftingItemCameraLookMatrix.lookAt(
+      this.driftingItemCameraWorldPosition,
+      this.driftingItemCameraWorldTarget,
+      this.camera.up,
+    );
+    this.driftingItemCameraTargetQuaternion
+      .setFromRotationMatrix(this.driftingItemCameraLookMatrix);
+    if (parent !== null) {
+      parent.getWorldQuaternion(this.driftingItemCameraParentQuaternion).invert();
+      this.driftingItemCameraTargetQuaternion
+        .premultiply(this.driftingItemCameraParentQuaternion);
+    }
+    return true;
+  }
+
+  private settleDriftingItemCameraForVisibilityChange(): void {
+    const animation = this.activeDriftingItemCameraAnimation;
+    if (animation === null) return;
+    this.activeDriftingItemCameraAnimation = null;
+    this.applyDriftingItemCameraAnimation(animation.kind, 1);
+    this.finishDriftingItemCameraAnimation(animation.kind);
+    animation.resolve();
+  }
+
+  private cancelDriftingItemView(): void {
+    this.cancelDriftingItemCameraAnimation();
+    this.restoreDriftingItemBaseCamera();
+  }
+
+  private restoreDriftingItemBaseCamera(): void {
+    this.driftingItemCameraPhase = 'idle';
+    this.focusedDriftingItemEventId = null;
+    this.camera.position.copy(this.baseCameraPosition);
+    this.camera.quaternion.copy(this.baseCameraQuaternion);
+  }
+
+  private cancelDriftingItemCameraAnimation(): void {
+    const animation = this.activeDriftingItemCameraAnimation;
+    this.activeDriftingItemCameraAnimation = null;
+    animation?.resolve();
   }
 
   private advanceFishingPresentation(delta: number): void {
@@ -2878,13 +3051,6 @@ export class BoatWorld {
         (this.scene.fog as FogExp2).density += eased * 0.02;
         break;
     }
-  }
-
-  private activeDriftingCargoEventId(): DriftingCargoEventId | null {
-    return this.activeFeaturedEventId !== null
-      && isDriftingCargoEventId(this.activeFeaturedEventId)
-      ? this.activeFeaturedEventId
-      : null;
   }
 
   private featuredAnchorLabel(eventId: FeaturedEventId): string {
