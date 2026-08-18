@@ -21,7 +21,7 @@ $modelIds = @(
   'snatcher'
   'anglerFish'
   'deathStareBlob'
-  'whirlpoolCore'
+  'tornadoCore'
 )
 $expectedFiles = @($modelIds | ForEach-Object { "$_.glb" }) + @('event-model-metadata.json')
 

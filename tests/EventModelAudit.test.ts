@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { validateEventModelMetadata } from '../scripts/check-event-models.mjs';
 
@@ -20,6 +20,18 @@ describe('event model audit contract', () => {
     expect(() => validateEventModelMetadata(metadata)).toThrow(
       'event model metadata is missing leakPlanks',
     );
+  });
+
+  it('contains the tornado model without the obsolete model ID or path', () => {
+    const metadata = eventMetadata();
+    const fetchScript = readFileSync('scripts/fetch-event-models.ps1', 'utf8');
+
+    expect(metadata.tornadoCore).toBeDefined();
+    expect(metadata.whirlpoolCore).toBeUndefined();
+    expect(existsSync('src/assets/models/events/whirlpoolCore.glb')).toBe(false);
+    expect(fetchScript).toContain("'tornadoCore'");
+    expect(fetchScript).not.toContain('whirlpoolCore');
+    expect(fetchScript).not.toContain('whirlpoolCore.glb');
   });
 
   it('rejects processed metadata that differs from its pinned source', () => {

@@ -74,7 +74,7 @@ describe('EventModelLibrary', () => {
       'snatcher',
       'anglerFish',
       'deathStareBlob',
-      'whirlpoolCore',
+      'tornadoCore',
     ]);
   });
 
@@ -95,6 +95,15 @@ describe('EventModelLibrary', () => {
     expect(sourceForward.toArray()).toEqual([1, 0, 0]);
   });
 
+  it('keeps the Tornado upright at its source origin', () => {
+    expect(EVENT_MODEL_SPECS.tornadoCore).toMatchObject({
+      targetLongestDimension: 10.5,
+      rotation: [0, 0, 0],
+      offset: [0, 0, 0],
+      maxTriangles: 3_000,
+    });
+  });
+
   it('normalizes templates and makes owned deep clones', async () => {
     const roots = completeRoots();
     const library = await EventModelLibrary.load(EVENT_MODEL_IDS, loaderFrom(roots));
@@ -105,7 +114,7 @@ describe('EventModelLibrary', () => {
       'snatcher',
       'anglerFish',
       'deathStareBlob',
-      'whirlpoolCore',
+      'tornadoCore',
     ] as const) {
       const instance = library.create(id);
       const bounds = new Box3().setFromObject(instance.root);

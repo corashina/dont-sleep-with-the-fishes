@@ -61,7 +61,7 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
 export const EVENT_MODEL_IDS = Object.freeze([
   'fogMan', 'ghost', 'siren', 'sirenRock',
   'leakPlanks', 'schoolFish', 'snatcher', 'anglerFish', 'deathStareBlob',
-  'whirlpoolCore',
+  'tornadoCore',
 ] as const);
 
 export type EventModelId = typeof EVENT_MODEL_IDS[number];
@@ -145,10 +145,10 @@ const PRESENTATION = {
     offset: [0, 0, 0],
     maxTriangles: 5_000,
   },
-  whirlpoolCore: {
-    targetLongestDimension: 7.0,
-    rotation: [Math.PI / 2, 0, 0],
-    offset: [0, -0.45, 0],
+  tornadoCore: {
+    targetLongestDimension: 10.5,
+    rotation: [0, 0, 0],
+    offset: [0, 0, 0],
     maxTriangles: 3_000,
   },
 } as const satisfies Readonly<Record<
