@@ -27,7 +27,8 @@ describe('event bundle manifest', () => {
     expect(EVENT_ONLY_SOUND_IDS.every((id) => !sharedSounds.has(id))).toBe(true);
   });
 
-  it('bundles the dedicated tornado model', () => {
+  it('bundles the dedicated tornado model and sound', () => {
     expect(EVENT_BUNDLE_SPECS.tornado.models).toEqual(['tornadoCore']);
+    expect(EVENT_BUNDLE_SPECS.tornado.sounds).toContain('tornadoWind');
   });
 });

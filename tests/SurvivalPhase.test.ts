@@ -955,22 +955,18 @@ describe('SurvivalPhase orchestration', () => {
   });
 
   it.each([
-    { kind: 'resource', id: 'food', quantity: 2 },
-    { kind: 'resource', id: 'bait', quantity: 2 },
-    { kind: 'resource', id: 'repairMaterial', quantity: 2 },
-    { kind: 'item', id: 'energyBar', quantity: 1 },
-    { kind: 'resource', id: 'food', quantity: 1 },
-  ] satisfies readonly RewardSummary[])(
+    [{ kind: 'resource', id: 'food', quantity: 2 }, 'FOOD', 'FOOD +2 — 3 ENERGY SPENT'],
+    [{ kind: 'resource', id: 'bait', quantity: 2 }, 'BAIT', 'BAIT +2 — 3 ENERGY SPENT'],
+    [{ kind: 'resource', id: 'repairMaterial', quantity: 2 }, 'REPAIR MATERIAL', 'REPAIR MATERIAL +2 — 3 ENERGY SPENT'],
+    [{ kind: 'item', id: 'energyBar', quantity: 1 }, 'ENERGY BAR', 'ENERGY BAR +1 — 3 ENERGY SPENT'],
+    [{ kind: 'resource', id: 'food', quantity: 1 }, 'FOOD', 'FOOD +1 — 3 ENERGY SPENT'],
+  ] satisfies readonly [RewardSummary, string, string][])(
     'formats the applied Drifting Cargo reward %#',
-    (reward) => {
+    (reward, title, detail) => {
       expect(formatDriftingCargoResult(reward)).toEqual({
         caption: 'SALVAGE RECOVERED',
-        title: reward.id === 'repairMaterial'
-          ? 'REPAIR MATERIAL'
-          : reward.id === 'energyBar' ? 'ENERGY BAR' : reward.id.toUpperCase(),
-        detail: `${reward.id === 'repairMaterial'
-          ? 'REPAIR MATERIAL'
-          : reward.id === 'energyBar' ? 'ENERGY BAR' : reward.id.toUpperCase()} +${reward.quantity} — 3 ENERGY SPENT`,
+        title,
+        detail,
         target: null,
       });
     },
@@ -4297,6 +4293,42 @@ describe('SurvivalPhase orchestration', () => {
       'reveal',
       'caption',
     ]);
+    phase.dispose();
+  });
+
+  it('starts the Leak loop after the boat floor reveal fills', async () => {
+    const reveal = deferred();
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => snapshot({
+          state: 'nightEvent',
+          pendingEventId: 'leak',
+        })),
+      },
+      world: {
+        revealEvent: vi.fn(() => reveal.promise),
+        dispose: vi.fn(),
+      },
+      ui: {
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        settleCoveredScene: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+    const phaseAudio = (phase as unknown as { audio: SurvivalAudio }).audio;
+    const beginEvent = vi.spyOn(phaseAudio, 'beginEvent');
+
+    phase.start();
+    await flushPromises();
+
+    expect(beginEvent).not.toHaveBeenCalled();
+
+    reveal.resolve();
+    await flushPromises();
+
+    expect(beginEvent).toHaveBeenCalledExactlyOnceWith('leak');
     phase.dispose();
   });
 

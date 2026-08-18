@@ -1,7 +1,10 @@
-import type { ItemId } from '../game/ItemState';
+import type { ItemId, ItemInstanceId } from '../game/ItemState';
+import type { EventResponseId } from './survivalTypes';
 
 export const ITEM_ANIMATION_LAB_ID = 'item-animation-lab';
 export const ITEM_ANIMATION_LAB_TITLE = 'Item Animation Lab';
+export const REPAIR_TOOLBOX_LAB_INSTANCE_ID = 'repair-tools' as ItemInstanceId;
+export const REPAIR_TOOLBOX_LAB_CHOICE_ID = 'toolboxRepair' as EventResponseId;
 
 export interface ItemAnimationLabUse {
   readonly eventId: string;

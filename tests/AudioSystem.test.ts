@@ -164,6 +164,18 @@ describe('AudioSystem', () => {
     expect(leak.stop).toHaveBeenCalledExactlyOnceWith(0.08);
   });
 
+  it('loops tornado wind only during the Tornado event', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.beginEvent('tornado');
+    const tornadoWind = backend.voices.at(-1)!;
+    expect(tornadoWind.id).toBe('tornadoWind');
+
+    audio.clearEvent();
+    expect(tornadoWind.stop).toHaveBeenCalledExactlyOnceWith(0.08);
+  });
+
   it('uses a yawn instead of the event sting for Bad Sleep', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());

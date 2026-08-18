@@ -6,8 +6,6 @@ import {
   Vector3,
 } from 'three';
 import {
-  DEFAULT_WAVES,
-  sampleWaveFieldInto,
   type WaveSample,
 } from '../ocean/WaveField';
 import {
@@ -18,6 +16,10 @@ import {
   smoothstepUnchecked as smoothstep,
   type TimedAnimation,
 } from './animationMath';
+import {
+  applyDriftingWavePose,
+  type DriftingWater,
+} from './DriftingWaveMotion';
 import type { DriftingCargoKind } from './survivalTypes';
 
 type DriftingCargoAnimationKind = 'retrieve' | 'recede';
@@ -74,6 +76,7 @@ export class DriftingCargoPresentation {
   constructor(
     models: DriftingCargoModels,
     private readonly bowTarget: Object3D,
+    private readonly water: DriftingWater,
   ) {
     this.root.name = 'drifting-cargo-presentation';
     const barrel = new Group();
@@ -252,23 +255,14 @@ export class DriftingCargoPresentation {
   }
 
   private applyFloatingPose(variant: DriftingCargoKind, time: number): void {
-    const root = this.roots[variant];
-    const basePosition = this.basePositions[variant];
-    sampleWaveFieldInto(
+    applyDriftingWavePose(
+      this.roots[variant],
+      this.basePositions[variant],
+      this.baseQuaternions[variant],
       this.waveSample,
-      DEFAULT_WAVES,
       time,
-      basePosition.x,
-      basePosition.z,
-      1,
+      this.water,
     );
-    root.position.copy(basePosition);
-    root.position.x += this.waveSample.displacementX * 0.12;
-    root.position.y += this.waveSample.height * 0.34;
-    root.position.z += this.waveSample.displacementZ * 0.12;
-    root.quaternion.copy(this.baseQuaternions[variant]);
-    root.rotateX(this.waveSample.normal.z * 0.12);
-    root.rotateZ(-this.waveSample.normal.x * 0.12);
   }
 
   private applyRetrievePose(variant: DriftingCargoKind, progress: number): void {

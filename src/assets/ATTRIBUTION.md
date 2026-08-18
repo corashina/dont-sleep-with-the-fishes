@@ -29,7 +29,7 @@ repository at commit `1fdb61d90d0e5a234f14b562aebf3e2a7addf374`.
 | `src/assets/ship/room-painted-wood-{color,roughness,normal}.webp` | White Planks Clean / Poly Haven | https://polyhaven.com/a/white_planks_clean | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `scripts/fetch-ship-textures.ps1` verifies the official 1K JPEG maps and produces 512x512 WebP maps. Runtime SHA-256: color `6734ECCC799B2954C2F3D9EE8CB4D8343EB4BBC4175DE3E8A834E078E05DDC6F`; roughness `AD00EB72E24ABA99CB518FDA947C15713B809C88CB64A149056D7D296D478D98`; normal `56866DE8136A804DDEC4DF7C4B32135C8D47B4F5E951EB271F153B96DC287FCB`. | 2026-07-29 |
 
 | `src/assets/menu-sand/aerial-beach-01-diffuse.jpg` | Aerial Beach 01 / Rob Tuytel, Poly Haven | https://polyhaven.com/a/aerial_beach_01 | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Retained the official 1K JPEG diffuse map for the smooth near and middle terrain. Runtime SHA-256 `5B849983D08FDA1C6D28B95B55851C2227697598721B25FF2B85E57CF8B04FC4`. | 2026-08-17 |
-| `src/assets/menu-sand/sandy-gravel-diffuse.jpg` | Sandy Gravel / Charlotte Baglioni, Poly Haven | https://polyhaven.com/a/sandy_gravel | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Retained the official 1K JPEG diffuse map for the coarse far terrain. Runtime SHA-256 `38829E669DC246E86B7CE94C4141485709988450B13F82CFC4BC6067DD69ED48`. | 2026-08-17 |
+| `src/assets/menu-sand/sandy-gravel-diffuse.jpg` | Sandy Gravel / Charlotte Baglioni, Poly Haven | https://polyhaven.com/a/sandy_gravel | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Source file retained for attribution. The game does not load it. SHA-256 `38829E669DC246E86B7CE94C4141485709988450B13F82CFC4BC6067DD69ED48`. | 2026-08-17 |
 
 ## Runtime item and practical-light model ledger
 
@@ -55,6 +55,7 @@ repository at commit `1fdb61d90d0e5a234f14b562aebf3e2a7addf374`.
 | energyBar | `energyBar.glb` | Chocolate Bar / Quaternius | https://poly.pizza/m/vJsJ1EIiOO | `poly-pizza:c2fe4825-1aed-430d-8925-4541a98d70f8` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 436 | 436 | Source GLB SHA-256 `D34C9AC94FDCE13CA2CB99110EB4A47451DB8F1B9D12B32EA89D12F6C0686FF2`; downloaded from the official Poly Pizza static GLB; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-25 |
 | carlitos | `carlitos.glb` | Somali Cat Animated ver 1.2 / DreamNoms | https://sketchfab.com/3d-models/somali-cat-animated-ver-12-e185c3fd92b64c32b4515a32b29252fc | `sketchfab:e185c3fd92b64c32b4515a32b29252fc` | [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) | 7632 | 7620 | Source GLB SHA-256 `52F3B3260D2610BA82E2B7FE0FD4A9E610A5A387F1B2D4C7C2419719AD3BD408`; retained only the source `SittingIdle` skin animation; removed the display floor; pruned unused clips and data, deduplicated, unpartitioned, and kept embedded textures. Regenerate with `node scripts/carlitos-model.mjs <source.glb>`. | 2026-08-04 |
 | fishingRod | `fishingRod.glb` | Fishing Rod / Quaternius | https://poly.pizza/m/0YAR0Lg58p | `poly-pizza:54eb8952-a61d-45c1-9e64-761376721e14` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 522 | 522 | Source GLB SHA-256 `6D5BD9D93D74B61C68BD053F8B94F5D594DF998938D1A71D38119E2832F8FDB5`; downloaded from the official Poly Pizza static GLB; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-25 |
+| hammer | `hammer.glb` | Hammer / jeremy | https://poly.pizza/m/cOizz1RJnb3 | `poly-pizza:c4e48baf-d6de-4d27-9edb-7364bc6994b6` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 246 | 246 | Source GLB SHA-256 `1D0B075FE64074255AB33F4BE232AE60CFF9B20DBD2592541831AFA238CE84C7`; downloaded from the official Poly Pizza static GLB; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-08-18 |
 | lantern | `lantern.glb` | Lantern / Kay Lousberg | https://poly.pizza/m/CtHBJ1ufeW | `poly-pizza:ecbc7b04-09ca-4068-bb3c-4e5ce1163c9a` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 264 | 264 | Source GLB SHA-256 `24EE9E4B9E280023CBBAF9FF6284E7BA51A07753F8D5EC8690ECC61DD156981D`; downloaded from the official Poly Pizza static GLB; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-25 |
 | ceilingLight | `ceilingLight.glb` | Light Ceiling Single / Quaternius | https://poly.pizza/m/JT44JUXU2d | `poly-pizza:2cc064fb-2b1b-4269-9007-473dfe78bffc` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 232 | 232 | Source GLB SHA-256 `4E307B591D68D8AFF049F07B59E5AA75B81E8DA211FD48B752BF847918EDED1B`; downloaded from the official Poly Pizza static GLB; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-25 |
 
@@ -249,7 +250,7 @@ The dawn file contains the first eight seconds of its source WAVE file.
 
 | Runtime ID | File | Source / creator |
 |---|---|---|
-| menuAmbient | `menuAmbient.flac` | [Eyes of the Ocean / Tsorthan Grove](https://opengameart.org/content/eyes-of-the-ocean), dark variant, [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| menuAmbient | `menuAmbient.mp3` | [Underwater Ambience / Tim_Verberne](https://freesound.org/people/Tim_Verberne/sounds/482167/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | calmOcean | `calmOcean.mp3` | [Calm Ocean Waves / SamsterBirdies](https://freesound.org/people/SamsterBirdies/sounds/578524/) |
 | roughOcean | `roughOcean.mp3` | [Storm Sea Close / frodeims](https://freesound.org/people/frodeims/sounds/616222/) |
 | lightWind | `lightWind.mp3` | [Soft Breeze / Vrymaa](https://freesound.org/people/Vrymaa/sounds/734663/) |
@@ -275,7 +276,7 @@ The dawn file contains the first eight seconds of its source WAVE file.
 | journal | `journal.mp3` | [Opening a Book / mateusboga](https://freesound.org/people/mateusboga/sounds/614081/) |
 | eating | `eating.mp3` | [Eating Sound / User391915396](https://freesound.org/people/User391915396/sounds/570336/) |
 | medkit | `medkit.mp3` | [Tape Bandage Rip / SecureSubset](https://freesound.org/people/SecureSubset/sounds/800275/) |
-| hullRepair | `hullRepair.mp3` | [Repair Metal / zbig77](https://freesound.org/people/zbig77/sounds/244985/) |
+| hullRepair | `hullRepair.mp3` | [hammer pounding on wood / Ryujin95](https://freesound.org/people/Ryujin95/sounds/394891/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | tapeRepair | `tapeRepair.mp3` | [Duct Tape Rip / baidonovan](https://freesound.org/people/baidonovan/sounds/187338/) |
 | ductTapePickup | `ductTapePickup.mp3` | [Tape Handling 8 / Geoff-Bremner-Audio](https://freesound.org/people/Geoff-Bremner-Audio/sounds/795714/), [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | diveEntry | `diveEntry.mp3` | [Jump into Water / Urkki69](https://freesound.org/people/Urkki69/sounds/628350/) |
@@ -300,6 +301,7 @@ The dawn file contains the first eight seconds of its source WAVE file.
 | nightfall | `nightfall.mp3` | [Transition Sound Effect / DeVern](https://freesound.org/people/DeVern/sounds/427533/) |
 | dawn | `dawn.wav` | [First Light Particles / Yoiyami](https://opengameart.org/content/first-light-particles-%E2%80%93-cc0-atmospheric-pianoambient-track) |
 | eventReveal | `eventReveal.mp3` | [Dissonant Sting / nomiqbomi](https://freesound.org/people/nomiqbomi/sounds/578362/) |
+| tornadoWind | `tornadoWind.mp3` | [JM_NATURAL ELEMENTS_Wind 01 - Tornado - Inside a metalic squeaking building.wav / Julien_Matthey](https://freesound.org/people/Julien_Matthey/sounds/557188/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | leak | `leak.mp3` | [Water - Leak, small / colinpoh](https://freesound.org/people/colinpoh/sounds/146346/) |
 | tentacleMovement | `tentacleMovement.mp3` | [Slimy flesh / iampagan](https://freesound.org/people/iampagan/sounds/177017/) |
 | eerieMelody | `eerieMelody.mp3` | [woman humming cathedral / Pennywind](https://freesound.org/people/Pennywind/sounds/816687/) |

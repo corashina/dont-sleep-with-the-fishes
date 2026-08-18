@@ -4,6 +4,7 @@ import {
   Group,
   Mesh,
   MeshStandardMaterial,
+  Object3D,
   TorusGeometry,
 } from 'three';
 
@@ -17,7 +18,7 @@ function box(
   return mesh;
 }
 
-export function createRepairToolbox(): Group {
+export function createRepairToolbox(hammerModel: Object3D): Group {
   const steel = new MeshStandardMaterial({
     color: 0x8c2f27,
     roughness: 0.78,
@@ -34,12 +35,6 @@ export function createRepairToolbox(): Group {
     color: 0xa77860,
     roughness: 0.9,
     metalness: 0.24,
-    flatShading: true,
-  });
-  const wood = new MeshStandardMaterial({
-    color: 0x6f4b2f,
-    roughness: 0.92,
-    metalness: 0,
     flatShading: true,
   });
   const rubber = new MeshStandardMaterial({
@@ -111,13 +106,8 @@ export function createRepairToolbox(): Group {
     toolbox.add(latch);
   }
 
-  const hammer = new Group();
+  const hammer = hammerModel;
   hammer.name = 'repair-toolbox-hammer';
-  const hammerHandle = new Mesh(new CylinderGeometry(0.024, 0.032, 0.48, 8), wood);
-  hammerHandle.rotation.z = Math.PI / 2;
-  const hammerHead = box('repair-toolbox-hammer-head', [0.18, 0.085, 0.09], darkSteel);
-  hammerHead.position.x = 0.24;
-  hammer.add(hammerHandle, hammerHead);
   hammer.position.set(-0.12, 0.39, 0.01);
   hammer.rotation.y = -0.25;
   toolbox.add(hammer);

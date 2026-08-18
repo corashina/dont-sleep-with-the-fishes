@@ -24,10 +24,7 @@ import { ITEM_AMBIENT_OCCLUSION_LAYER } from '../src/rendering/ItemAmbientOcclus
 import { MenuSandAssets } from '../src/menu/MenuSandAssets';
 
 function menuSandAssets(): MenuSandAssets {
-  return MenuSandAssets.fromTextures(
-    new Texture(),
-    new Texture(),
-  );
+  return MenuSandAssets.fromTexture(new Texture());
 }
 
 it('creates the approved fixed composition once', () => {

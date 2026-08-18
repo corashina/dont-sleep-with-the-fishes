@@ -93,6 +93,32 @@ describe('item animation lab caption', () => {
         ?.getAttribute('aria-label'),
     ).toBe('SCUBA GEAR');
   });
+
+  it('activates the fixed repair toolbox as a lab item', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const onEventItem = vi.fn();
+    ui.onEventItem = onEventItem;
+    ui.beginEventPresentation();
+    ui.showItemAnimationLab();
+    ui.setEventSelection(new Map<ItemInstanceId, string>([
+      ['repair-tools' as ItemInstanceId, 'toolboxRepair'],
+    ]));
+
+    const toolbox = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="repair-tools"]',
+    )!;
+    expect(toolbox.dataset.eventState).toBe('available');
+    expect(toolbox.getAttribute('aria-disabled')).toBe('false');
+
+    toolbox.click();
+
+    expect(onEventItem).toHaveBeenCalledExactlyOnceWith(
+      'toolboxRepair',
+      'repair-tools',
+    );
+  });
 });
 
 function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
@@ -201,13 +227,20 @@ describe('SurvivalUI', () => {
     expect(meters.querySelector('[data-meter="health"] [data-meter-tooltip]')?.textContent).toBe('50 / 100');
     expect(meters.querySelector('[data-meter="energy"] [data-meter-tooltip]')?.textContent).toBe('1 / 3');
     const hungerArtwork = meters.querySelector('[data-meter="hunger"] [data-ui-artwork="hunger"]')!;
+    expect(hungerArtwork.querySelector('[data-hunger-scale]')?.getAttribute('transform'))
+      .toBe('translate(40 36) scale(.8) translate(-40 -36)');
     expect(hungerArtwork.querySelector('[data-hunger-part="body"]')?.getAttribute('d'))
       .toContain('M22 5h12c-1 11 0 20 5 25');
     expect(hungerArtwork.querySelector('[data-hunger-part="body"]')?.getAttribute('d'))
       .toContain('-5-5 2-9 7-11 14L4 67');
     expect(hungerArtwork.querySelector('[data-hunger-part="pylorus"]')).toBeNull();
-    expect(hungerArtwork.querySelector('[data-hunger-part="shine"]')?.getAttribute('d')).toBe('M36 54c7 4 16 4 24 0');
+    expect(hungerArtwork.querySelector('[data-hunger-part="shine"]')?.getAttribute('d')).toBe('M41 58c7 4 16 4 24 0');
+    const energyArtwork = meters.querySelector('[data-meter="energy"] [data-ui-artwork="energy"]')!;
+    expect(energyArtwork.querySelector('[data-energy-scale]')?.getAttribute('transform'))
+      .toBe('translate(40 36) scale(1.12 1) translate(-40 -36)');
     const hullArtwork = meters.querySelector('[data-meter="hull"] [data-ui-artwork="hull"]')!;
+    expect(hullArtwork.querySelector('[data-hull-scale]')?.getAttribute('transform'))
+      .toBe('translate(40 36) scale(1.12) translate(-40 -36)');
     const hullBody = hullArtwork.querySelector('[data-hull-part="body"]')!;
     expect(hullBody.getAttribute('d')).not.toMatch(/[CcQqSs]/);
     expect(hullArtwork.querySelector('[data-hull-part="rim"]')?.getAttribute('d')).toBe('M9 33h62');
@@ -217,7 +250,10 @@ describe('SurvivalUI', () => {
     expect(meters.querySelector('.survival-meter__track')).toBeNull();
     expect(meters.querySelector('[data-meter="hull"]')?.getAttribute('aria-valuetext')).toBe('20, low');
     expect(mainStyles).toMatch(
-      /\.survival-condition__art\s*\{[^}]*width:\s*114px;[^}]*height:\s*105px;[^}]*stroke-width:\s*2\.5;/s,
+      /\.survival-condition__art\s*\{[^}]*width:\s*114px;[^}]*height:\s*105px;[^}]*stroke-width:\s*3\.75;/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.survival-condition__art \*\s*\{[^}]*vector-effect:\s*non-scaling-stroke;/s,
     );
     expect(mainStyles).toMatch(
       /\.survival-meter--hull\s*\{\s*--meter-accent:\s*#956b49;\s*\}/,
@@ -1033,7 +1069,7 @@ describe('SurvivalUI', () => {
     );
 
     ui.setEventSelection(new Map([['bucket-1', 'bucket']]));
-    expect(caption.classList).toContain('is-visible');
+    expect(caption.classList).not.toContain('is-visible');
     const bucket = mount.querySelector<HTMLButtonElement>('[data-anchor-id="bucket-1"]')!;
     const umbrella = mount.querySelector<HTMLButtonElement>('[data-anchor-id="umbrella-2"]')!;
     expect(bucket.dataset.eventState).toBe('available');
@@ -1063,7 +1099,7 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-action="endDay"]')?.getAttribute('aria-disabled')).toBe('false');
   });
 
-  it('does not show the event title during selection', async () => {
+  it('does not show an empty event caption during selection', async () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     ui.beginEventPresentation();
@@ -1076,7 +1112,9 @@ describe('SurvivalUI', () => {
     }]);
 
     const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
-    expect(caption.classList).toContain('is-visible');
+    expect(caption.classList).not.toContain('is-visible');
+    expect(caption.getAttribute('aria-hidden')).toBe('true');
+    expect(mainStyles).toMatch(/\.event-caption\[aria-hidden="true"\]\s*\{[^}]*visibility:\s*hidden/s);
     expect(caption.querySelector<HTMLElement>('[data-event-title]')?.hidden).toBe(true);
     expect(caption.querySelector('[data-event-title]')?.textContent).toBe('');
     expect(caption.querySelector<HTMLElement>('[data-event-detail]')?.hidden).toBe(true);
@@ -1268,7 +1306,7 @@ describe('SurvivalUI', () => {
     expect(mainStyles).toMatch(/\.event-caption\[data-result="true"\] h2/);
   });
 
-  it('shows and clears the two-eye Bad Sleep eyelid cue', () => {
+  it('shows and clears two gradual Bad Sleep eye closures', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -1286,12 +1324,12 @@ describe('SurvivalUI', () => {
     expect(eyelids.classList).not.toContain('is-visible');
     expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*z-index:\s*9/s);
     expect(mainStyles).toMatch(/\.sleep-cover\s*\{[^}]*background:\s*#010202/s);
-    expect(mainStyles).toMatch(/\.bad-sleep-cue__eye\s*\{[^}]*width:\s*46%/s);
-    expect(mainStyles).toMatch(/\.bad-sleep-cue__eye\s*\{[^}]*height:\s*66%/s);
-    expect(mainStyles).toContain("fill-rule='evenodd'");
-    expect(mainStyles).not.toContain("%3Cellipse cx='26' cy='50'");
-    expect(mainStyles).toMatch(/translateY\(-58%\)/);
-    expect(mainStyles).toMatch(/translateY\(68%\)/);
+    expect(mainStyles).not.toContain('.bad-sleep-cue__frame');
+    expect(mainStyles).not.toContain('fill-rule=');
+    expect(mainStyles).toMatch(/\.bad-sleep-cue__eye\s*\{[^}]*width:\s*48%/s);
+    expect(mainStyles).toMatch(/\.bad-sleep-cue__eyelid\s*\{[^}]*height:\s*28%/s);
+    expect(mainStyles).toMatch(/translateY\(-42%\)/);
+    expect(mainStyles).toMatch(/translateY\(46%\)/);
   });
 
   it('reuses the event caption for the exact held result', async () => {
@@ -1382,7 +1420,11 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
 
     await ui.showEventReveal(testEvent());
-    ui.setEventSelection(new Map());
+    ui.setEventSelection(new Map(), [{
+      id: 'continue',
+      label: 'Continue',
+      unavailableReason: null,
+    }]);
     const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
     expect(caption.classList).toContain('is-visible');
 
@@ -1503,7 +1545,8 @@ describe('SurvivalUI', () => {
     const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
     expect(caption.dataset.danger).toBe(danger);
     expect(caption.getAttribute('aria-label')).toBeNull();
-    expect(caption.classList).toContain('is-visible');
+    expect(caption.classList).not.toContain('is-visible');
+    expect(caption.getAttribute('aria-hidden')).toBe('true');
     expect(caption.querySelector<HTMLElement>('[data-event-title]')?.hidden).toBe(true);
     expect(caption.querySelector('[data-event-title]')?.textContent).toBe('');
     expect(caption.querySelector<HTMLElement>('[data-event-detail]')?.hidden).toBe(true);
@@ -1543,6 +1586,60 @@ describe('SurvivalUI', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(document.activeElement).toBe(marker);
     expect(mount.querySelector('[data-journal]')?.hasAttribute('inert')).toBe(true);
+  });
+
+  it('uses a top-right journal close icon and omits the empty title', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    ui.showJournal([]);
+
+    const close = mount.querySelector<HTMLButtonElement>('[data-journal-close]')!;
+    expect(close.textContent).toBe('×');
+    expect(close.getAttribute('aria-label')).toBe('Close journal');
+    expect(close.classList).toContain('journal-page__close');
+    expect(mount.querySelector('[data-journal-title]')?.textContent)
+      .toBe('The journal is still waiting for its first completed day.');
+    expect(mount.querySelector('[data-journal-title]')?.getAttribute('data-empty')).toBe('true');
+    expect(mount.querySelector<HTMLElement>('[data-journal-story]')?.hidden).toBe(true);
+    expect(mount.textContent).not.toContain('NO COMPLETED ENTRIES YET');
+    expect(mainStyles).toMatch(
+      /\.journal-page > \.journal-page__close\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*12px 14px auto auto;[^}]*width:\s*48px;[^}]*height:\s*48px;[^}]*padding:\s*6px 6px 9px;[^}]*border:\s*0;[^}]*background:\s*transparent;[^}]*font-size:\s*2\.4rem;/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.journal-page h2\[data-empty="true"\]\s*\{[^}]*font-family:\s*var\(--font-narrative\);[^}]*font-size:\s*clamp\(\.95rem, 2vw, 1\.12rem\);[^}]*font-weight:\s*400;[^}]*line-height:\s*1\.7;/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.journal-page__navigation\s*\{[^}]*grid-row:\s*4;[^}]*display:\s*grid;[^}]*grid-template-columns:\s*48px 1fr 48px;[^}]*align-self:\s*end;/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.journal-page\s*\{[^}]*background:\s*radial-gradient\(ellipse at 18% 78%/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.journal-overlay\s*\{[^}]*transition:\s*opacity 180ms ease, visibility 0s linear 180ms;/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.journal-overlay\.is-visible\s*\{[^}]*transition-delay:\s*0s;/s,
+    );
+    expect(mainStyles).not.toContain('.journal-page__close-strip');
+    ui.dispose();
+  });
+
+  it('closes the journal from its backdrop but not from the book', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const close = vi.fn(() => ui.hideJournal());
+    ui.onJournalClose = close;
+    ui.showJournal(journalEntries);
+
+    mount.querySelector<HTMLElement>('[data-journal-book]')!.click();
+    expect(close).not.toHaveBeenCalled();
+
+    const layer = mount.querySelector<HTMLElement>('[data-journal]')!;
+    layer.click();
+    expect(close).toHaveBeenCalledOnce();
+    expect(layer.hasAttribute('inert')).toBe(true);
+    ui.dispose();
   });
 
   it('publishes item, repair-toolbox, and lantern hover and focus', () => {
@@ -2166,6 +2263,8 @@ describe('SurvivalUI', () => {
       .toBe('SALVAGE RECOVERED');
     expect(mount.querySelector('[data-drifting-item-result-title]')?.textContent).toBe('CANNED FOOD');
     expect(mount.querySelector('[data-drifting-item-result-detail]')?.textContent).toBe('+2 FOOD');
+    expect(result.querySelectorAll('[data-ui-artwork="energy"]')).toHaveLength(0);
+    expect(result.getAttribute('aria-label')).toBeNull();
 
     const button = mount.querySelector<HTMLButtonElement>(
       '[data-drifting-item-result-continue]',
@@ -2785,10 +2884,16 @@ describe('SurvivalUI', () => {
     const endDay = mount.querySelector<HTMLButtonElement>('[data-action="endDay"]')!;
 
     expect(status.querySelector('[data-day]')?.textContent).toBe('DAY 1');
-    expect(status.querySelector('[data-phase]')?.textContent).toBe('DAYLIGHT');
-    expect(status.querySelector('[data-weather]')?.textContent).toBe('CALM');
+    expect(status.querySelector('[data-phase]')).toBeNull();
+    expect(status.querySelector('[data-weather]')).toBeNull();
     expect(status.querySelector('[data-ui-artwork="journal"]')).toBeNull();
     expect(journal.querySelector('[data-ui-artwork="journal"]')).not.toBeNull();
+    expect(mainStyles).toMatch(
+      /\.journal-marker\s*\{[^}]*width:\s*114px;[^}]*height:\s*105px/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.journal-marker__art\s*\{[^}]*width:\s*114px;[^}]*height:\s*105px/s,
+    );
     expect(top.querySelector('[data-action="endDay"]')).toBeNull();
     expect(endDay.closest('[data-boat-anchors]')).not.toBeNull();
     expect(endDay.dataset.anchorId).toBe('end-day-lantern');

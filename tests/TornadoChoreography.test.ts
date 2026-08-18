@@ -16,12 +16,13 @@ describe('tornado choreography', () => {
     expect(TORNADO_REACTION_DURATION).toBe(1.4);
   });
 
-  it('reveals the tornado in full', () => {
+  it('keeps the tornado full-sized and visible throughout its reveal', () => {
     const sample = createTornadoSample();
 
     sampleTornadoReveal(0, sample);
-    expect(sample.visibility).toBe(0);
-    expect(sample.effectStrength).toBe(0);
+    expect(sample.visibility).toBe(1);
+    expect(sample.funnelScale).toBe(1);
+    expect(sample.effectStrength).toBe(1);
 
     sampleTornadoReveal(1, sample);
     expect(sample.visibility).toBe(1);
@@ -48,7 +49,7 @@ describe('tornado choreography', () => {
     expect(sampleTornadoItemUse('sleep', 0.5, createTornadoSample())).toBe(false);
   });
 
-  it('collapses motion and effects before the late reaction fade', () => {
+  it('keeps full size while motion and effects fade during the reaction', () => {
     const sample = createTornadoSample();
     const reaction = {
       hullDamage: -60,
@@ -60,14 +61,14 @@ describe('tornado choreography', () => {
     sampleTornadoReaction(reaction, 0.5, sample);
     expect(sample.supplyTravel).toBeGreaterThan(0);
     expect(sample.visibility).toBe(1);
-    expect(sample.funnelScale).toBeLessThan(sample.visibility);
+    expect(sample.funnelScale).toBe(1);
     expect(sample.spinRate).toBeLessThan(sample.visibility);
     expect(sample.spinPhase).toBeLessThan(sample.visibility);
     expect(sample.effectStrength).toBeLessThan(sample.visibility);
 
     sampleTornadoReaction(reaction, 1, sample);
     expect(sample.visibility).toBe(0);
-    expect(sample.funnelScale).toBe(0);
+    expect(sample.funnelScale).toBe(1);
     expect(sample.spinRate).toBe(0);
     expect(sample.effectStrength).toBe(0);
   });

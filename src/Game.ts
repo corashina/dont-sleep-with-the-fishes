@@ -301,10 +301,7 @@ export class Game {
         new Texture(),
       ),
       options.menuModels,
-      options.menuSandAssets ?? MenuSandAssets.fromTextures(
-        new Texture(),
-        new Texture(),
-      ),
+      options.menuSandAssets ?? MenuSandAssets.fromTexture(new Texture()),
       options.physicsRuntime,
       options.physicsMode ?? 'enabled',
       options.audioSystem ?? AudioSystem.silent(),

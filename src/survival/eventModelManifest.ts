@@ -123,7 +123,7 @@ const PRESENTATION = {
   },
   schoolFish: {
     targetLongestDimension: 0.62,
-    rotation: [0, Math.PI / 2, 0],
+    rotation: [0, -Math.PI / 2, 0],
     offset: [0, 0, 0],
     maxTriangles: 2_000,
   },

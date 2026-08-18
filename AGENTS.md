@@ -10,6 +10,7 @@ Use active voice. Write "Turn the switch", not "The switch must be turned". Writ
 - Make architectural decisions for the long term. Do not accept a stopgap that only works for now and is meant to be replaced later.
 - Do not implement reduced-motion variants or `prefers-reduced-motion` handling unless the user explicitly requests it.
 - Avoid allocations and repeated setup in per-frame update and render paths.
+- Use only Freesound.org when finding or recommending sound assets.
 
 Before changing player-facing UI, models, materials, lighting, composition,
 animation, or post-processing, read [`VISUAL_STYLE_GUIDE.md`](VISUAL_STYLE_GUIDE.md).

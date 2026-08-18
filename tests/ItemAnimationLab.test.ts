@@ -8,6 +8,8 @@ import {
 import {
   ITEM_ANIMATION_LAB_ID,
   ITEM_ANIMATION_LAB_USES,
+  REPAIR_TOOLBOX_LAB_CHOICE_ID,
+  REPAIR_TOOLBOX_LAB_INSTANCE_ID,
 } from '../src/survival/ItemAnimationLab';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
@@ -105,13 +107,59 @@ describe('Item Animation Lab', () => {
     expect(clearEvent).toHaveBeenCalledOnce();
     expect(setEventSelection).toHaveBeenCalledTimes(2);
     expect(setEventEligibleItems).toHaveBeenLastCalledWith(
-      new Set(animatedItemIds.map((type) => `${type}-1`)),
+      new Set([
+        ...animatedItemIds.map((type) => `${type}-1`),
+        REPAIR_TOOLBOX_LAB_INSTANCE_ID,
+      ]),
     );
     expect(setEventEligibleItems).toHaveBeenCalledTimes(3);
     expect(current.inventory[first.instanceId]).toBe(first);
 
     phase.handleEventItem(firstUse.choiceId, first.instanceId);
     expect(playEventItemUse).toHaveBeenCalledTimes(2);
+    phase.dispose();
+  });
+
+  it('replays the fixed repair toolbox without resolving an event', async () => {
+    const current = new SurvivalSession(allItems(), { seed: 19 }).snapshot();
+    const toolboxUse = deferred();
+    const playRepairToolboxAnimation = vi.fn(() => toolboxUse.promise);
+    const stageEvent = vi.fn();
+    const resolveEvent = vi.fn();
+    const setEventUsing = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current), resolveEvent },
+      world: {
+        stageEvent,
+        playRepairToolboxAnimation,
+        setEventEligibleItems: vi.fn(),
+        setEventSelectedItem: vi.fn(),
+        syncInventory: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        showItemAnimationLab: vi.fn(),
+        setEventSelection: vi.fn(),
+        setEventUsing,
+        setBusy: vi.fn(),
+        dispose: vi.fn(),
+      },
+    }, ITEM_ANIMATION_LAB_ID);
+
+    phase.start();
+    phase.handleEventItem(
+      REPAIR_TOOLBOX_LAB_CHOICE_ID,
+      REPAIR_TOOLBOX_LAB_INSTANCE_ID,
+    );
+
+    expect(playRepairToolboxAnimation).toHaveBeenCalledOnce();
+    expect(setEventUsing).toHaveBeenCalledWith(REPAIR_TOOLBOX_LAB_INSTANCE_ID);
+    expect(stageEvent).not.toHaveBeenCalled();
+    expect(resolveEvent).not.toHaveBeenCalled();
+
+    toolboxUse.resolve();
+    await flushPromises();
     phase.dispose();
   });
 });

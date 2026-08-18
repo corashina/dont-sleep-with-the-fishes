@@ -165,9 +165,15 @@ import type {
 } from './survivalTypes';
 import type { SurvivalEventId } from './events';
 import {
+  eventSideFromSeed,
+  oppositeEventSide,
+  type EventSide,
+} from './eventVariant';
+import {
   EMPTY_SURVIVAL_EVENT_MODELS,
   type SurvivalEventModels,
 } from './SurvivalEventModelLibrary';
+import { RepairToolboxAnimation } from './RepairToolboxAnimation';
 
 export const SURVIVAL_CELESTIAL_DIRECTION = Object.freeze([
   0,
@@ -628,6 +634,8 @@ export class BoatWorld {
   private readonly carlitos: CarlitosPresentation;
   private readonly carlitosDelegateBasePosition = new Vector3();
   private readonly carlitosDelegateBaseRotation = new Vector3();
+  private ambientCarlitosSide: EventSide = 1;
+  private carlitosSideOverrideActive = false;
   private activeCarlitosDelegation: ActiveCarlitosDelegation | null = null;
   private readonly chestDisplay: ChestDisplay;
   private readonly itemEffects: EventItemEffects;
@@ -665,6 +673,7 @@ export class BoatWorld {
   private readonly checkBackSternFloor = new Object3D();
   private activeFeaturedEventId: FeaturedEventId | null = null;
   private readonly repairTools: Object3D;
+  private readonly repairToolboxAnimation: RepairToolboxAnimation;
   private readonly supplyAnchorBounds = new Map<
     BoatSupplyGroupId,
     BoatObjectBoundsCache | null
@@ -956,13 +965,19 @@ export class BoatWorld {
       this.boatEffectsRoot.name = 'dedicated-event-boat-effects';
       this.boat.add(this.chestDisplay.root);
 
-      const repairTools = createRepairToolbox();
+      const repairHammer = propModels.createEquipment('hammer');
+      const repairTools = createRepairToolbox(repairHammer);
       repairTools.position.set(-1.05, 0.225, 0.78);
       repairTools.rotation.y = -Math.PI / 2;
       repairTools.scale.setScalar(0.72);
       this.boat.add(repairTools);
       collectMeshResources(repairTools, this.ownedGeometries, this.ownedMaterials);
       this.repairTools = repairTools;
+      this.repairToolboxAnimation = new RepairToolboxAnimation(
+        this.boat,
+        repairTools,
+        repairHammer,
+      );
 
       this.rodPivot.name = 'fishing-rod-pivot';
       this.rodPivot.position.set(0, 0.56, -2.28);
@@ -1157,6 +1172,10 @@ export class BoatWorld {
           this.flowersDeckTarget,
           this.checkBackSternFloor,
           isEventPresentationRoute(eventId, 'featured') ? eventId : null,
+          {
+            sampleWaveInto: this.sampleWorldWaveInto,
+            readAmplitudeScale: this.readWorldWaveAmplitudeScale,
+          },
         );
       weather = new WeatherEventAnimator(
           this.cameraRig,
@@ -1286,6 +1305,10 @@ export class BoatWorld {
   syncInventory(snapshot: SurvivalSnapshot): void {
     if (this.disposed) return;
     this.supplyDisplay.sync(snapshot);
+    this.ambientCarlitosSide = eventSideFromSeed(snapshot.seed);
+    if (!this.carlitosSideOverrideActive) {
+      this.setCarlitosSeatSide(this.ambientCarlitosSide);
+    }
     this.carlitos.sync(snapshot.carlitos);
     this.chestState = snapshot.chest.state;
     this.chestDisplay.sync(snapshot.chest);
@@ -1411,6 +1434,11 @@ export class BoatWorld {
     return this.itemUseController.recover();
   }
 
+  playRepairToolboxAnimation(onAudioStart?: () => void): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    return this.repairToolboxAnimation.play(onAudioStart);
+  }
+
   private playEventSceneItemUse(
     eventId: string,
     choiceId: string,
@@ -1477,6 +1505,7 @@ export class BoatWorld {
     this.finishCarlitosDelegation();
     this.weatherEventOperation += 1;
     this.itemUseController.clear(this.phase);
+    this.repairToolboxAnimation.cancel();
     const eventId = typeof eventOrContext === 'string'
       ? eventOrContext
       : eventOrContext.eventId;
@@ -1490,6 +1519,14 @@ export class BoatWorld {
     const route = eventPresentationRoute(eventId);
     if (route === null) throw new Error(`Missing event presentation route: ${eventId}`);
     this.ensureEventPresenter(eventId as SurvivalEventId);
+    const carlitosEventSide = this.carlitosSeatSideForEvent(
+      eventId,
+      resolvedVariantSeed ?? 0,
+    );
+    this.carlitosSideOverrideActive = carlitosEventSide !== null;
+    this.setCarlitosSeatSide(
+      carlitosEventSide ?? this.ambientCarlitosSide,
+    );
     if (route === 'dedicated' && this.dedicatedEvents?.handles(eventId)) {
       const context = typeof eventOrContext === 'string'
         ? {
@@ -1786,6 +1823,8 @@ export class BoatWorld {
     this.cancelDriftingItemView();
     this.weatherEventOperation += 1;
     this.finishCarlitosDelegation();
+    this.carlitosSideOverrideActive = false;
+    this.setCarlitosSeatSide(this.ambientCarlitosSide);
     this.itemUseController.clear(this.phase);
     if (this.activeEventPresenter !== null) {
       this.dedicatedEvents.clear();
@@ -1808,6 +1847,7 @@ export class BoatWorld {
     this.weatherEventOperation += 1;
     this.finishCarlitosDelegation();
     this.itemUseController.settleForVisibilityChange(this.phase);
+    this.repairToolboxAnimation.cancel();
     this.skipSequence();
     this.clearDivePresentation();
     this.activeEventPresenter?.layer?.settleForVisibilityChange();
@@ -2401,6 +2441,7 @@ export class BoatWorld {
       this.activeEventPresenter?.dedicated?.update(time, delta);
       this.supplyDisplay.update(delta);
       this.itemUseController.update(delta);
+      this.repairToolboxAnimation.update(delta);
       this.updateFishingBiteParticles(delta);
     } else if (this.moonEventStaged) {
       this.applyMoonPresentation();
@@ -2456,6 +2497,7 @@ export class BoatWorld {
       () => this.clearMoonEvent(),
       () => this.finishCarlitosDelegation(),
       () => this.itemUseController.dispose(),
+      () => this.repairToolboxAnimation.cancel(),
       () => {
         const presenter = this.activeEventPresenter;
         this.activeEventPresenter = null;
@@ -3345,6 +3387,34 @@ export class BoatWorld {
       this.carlitos.root.rotation.y,
       this.carlitos.root.rotation.z,
     );
+  }
+
+  private setCarlitosSeatSide(side: EventSide): void {
+    this.carlitos.setSeatSide(side);
+    this.captureCarlitosDelegateBase();
+  }
+
+  private carlitosSeatSideForEvent(
+    eventId: string,
+    variantSeed: number,
+  ): EventSide | null {
+    switch (eventId) {
+      case 'night-trader':
+      case 'drifting-bottle':
+      case 'man-in-the-fog':
+      case 'midnight-tour':
+        return oppositeEventSide(eventSideFromSeed(variantSeed));
+      case 'drifting-barrel':
+      case 'drifting-chest':
+      case 'eerie-melody':
+      case 'other-people':
+        return 1;
+      case 'school-of-fish':
+      case 'tornado':
+        return -1;
+      default:
+        return null;
+    }
   }
 
   private updateCarlitosDelegation(delta: number): void {

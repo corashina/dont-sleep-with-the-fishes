@@ -50,6 +50,7 @@ export const SOUND_IDS = [
   'nightfall',
   'dawn',
   'eventReveal',
+  'tornadoWind',
   'leak',
   'tentacleMovement',
   'eerieMelody',
@@ -77,6 +78,7 @@ export const EVENT_ONLY_SOUND_IDS = Object.freeze([
   'thunderLightning',
   'thunderLightningCrack',
   'thunderLightningDry',
+  'tornadoWind',
   'leak',
   'tentacleMovement',
   'eerieMelody',
@@ -130,7 +132,7 @@ function asset(
 
 export const AUDIO_MANIFEST: Readonly<Record<SoundId, AudioAssetDefinition>> =
   Object.freeze({
-    menuAmbient: asset('menuAmbient', 'ambience', 0.3, true, 1, 'flac'),
+    menuAmbient: asset('menuAmbient', 'ambience', 0.3, true, 1),
     calmOcean: asset('calmOcean', 'ambience', 0.42, true),
     roughOcean: asset('roughOcean', 'ambience', 0.5, true),
     lightWind: asset('lightWind', 'ambience', 0.24, true),
@@ -181,6 +183,7 @@ export const AUDIO_MANIFEST: Readonly<Record<SoundId, AudioAssetDefinition>> =
     nightfall: asset('nightfall', 'effects', 0.36, false, 1),
     dawn: asset('dawn', 'music', 0.28, false, 1, 'wav'),
     eventReveal: asset('eventReveal', 'effects', 0.42, false, 1),
+    tornadoWind: asset('tornadoWind', 'ambience', 0.46, true, 1),
     leak: asset('leak', 'ambience', 0.34, true, 1),
     tentacleMovement: asset('tentacleMovement', 'ambience', 0.2, true, 1),
     eerieMelody: asset('eerieMelody', 'ambience', 0.38, true, 1),

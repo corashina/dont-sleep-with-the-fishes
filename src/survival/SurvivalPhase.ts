@@ -54,6 +54,8 @@ import type { EventOutcomePresentation } from './eventPresentationTypes';
 import { fishingCatchFood } from './fishingCatalog';
 import {
   ITEM_ANIMATION_LAB_USES,
+  REPAIR_TOOLBOX_LAB_CHOICE_ID,
+  REPAIR_TOOLBOX_LAB_INSTANCE_ID,
   isItemAnimationLabId,
 } from './ItemAnimationLab';
 import {
@@ -757,6 +759,10 @@ export class SurvivalPhase implements GamePhase {
         ITEM_ANIMATION_LAB_USES.carlitos!.choiceId,
       );
     }
+    eligibility.set(
+      REPAIR_TOOLBOX_LAB_INSTANCE_ID,
+      REPAIR_TOOLBOX_LAB_CHOICE_ID,
+    );
     return eligibility;
   }
 
@@ -764,6 +770,10 @@ export class SurvivalPhase implements GamePhase {
     instanceId: ItemInstanceId,
     generation: number,
   ): Promise<void> {
+    if (instanceId === REPAIR_TOOLBOX_LAB_INSTANCE_ID) {
+      await this.playRepairToolboxLab(generation);
+      return;
+    }
     const snapshot = this.session.snapshot();
     const inventoryItem = snapshot.inventory[instanceId];
     const carlitos = instanceId === CARLITOS_LAB_INSTANCE_ID
@@ -812,6 +822,34 @@ export class SurvivalPhase implements GamePhase {
       this.world.clearEvent?.();
       this.eventBundles.releaseActive();
       this.setAutomaticWeather(null);
+      this.world.setEventSelectedItem?.(null);
+      this.world.setEventEligibleItems?.(new Set(this.eventEligibility.keys()));
+      this.ui.setEventSelection?.(this.eventEligibility);
+      this.eventPresentation = 'choosing';
+      this.setBusy(false);
+    }
+  }
+
+  private async playRepairToolboxLab(generation: number): Promise<void> {
+    if (
+      this.eventPresentation !== 'choosing'
+      || !this.isContinuationActive(generation)
+    ) return;
+    this.eventPresentation = 'using';
+    this.setBusy(true);
+    this.ui.setEventUsing?.(REPAIR_TOOLBOX_LAB_INSTANCE_ID);
+    this.world.setEventEligibleItems?.(new Set());
+    this.world.setEventSelectedItem?.(REPAIR_TOOLBOX_LAB_INSTANCE_ID);
+    try {
+      await (this.world.playRepairToolboxAnimation?.(
+        () => this.audio.repairToolbox(),
+      ) ?? Promise.resolve());
+    } catch (error) {
+      this.onInvariantError(
+        error instanceof Error ? error : new Error(String(error)),
+      );
+    } finally {
+      if (!this.isContinuationActive(generation)) return;
       this.world.setEventSelectedItem?.(null);
       this.world.setEventEligibleItems?.(new Set(this.eventEligibility.keys()));
       this.ui.setEventSelection?.(this.eventEligibility);
@@ -2021,7 +2059,7 @@ export class SurvivalPhase implements GamePhase {
       return;
     }
     if (!this.isContinuationActive(generation)) return;
-    this.audio.beginEvent(event.id);
+    if (event.id !== 'leak') this.audio.beginEvent(event.id);
     if (event.id !== 'bad-sleep') this.audio.eventReveal(event.id);
 
     const current = this.session.snapshot();
@@ -2055,6 +2093,7 @@ export class SurvivalPhase implements GamePhase {
       if (event.id === 'bad-sleep') this.ui.setBadSleepCue?.(false);
     }
     if (!this.isContinuationActive(generation)) return;
+    if (event.id === 'leak') this.audio.beginEvent(event.id);
     if (!isEventPresentationRoute(event.id, 'dedicated')) {
       await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
       if (!this.isContinuationActive(generation)) return;

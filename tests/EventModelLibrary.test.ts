@@ -86,6 +86,14 @@ describe('EventModelLibrary', () => {
     expect(sourceNose.z).toBeCloseTo(1);
   });
 
+  it('turns the school fish nose toward its choreography forward', () => {
+    const sourceNose = new Vector3(0, 0, 1);
+    sourceNose.applyEuler(new Euler(...EVENT_MODEL_SPECS.schoolFish.rotation));
+
+    expect(sourceNose.x).toBeCloseTo(-1);
+    expect(sourceNose.z).toBeCloseTo(0);
+  });
+
   it('keeps the Siren upright and facing presentation forward', () => {
     const rotation = new Euler(...EVENT_MODEL_SPECS.siren.rotation);
     const sourceUp = new Vector3(0, 1, 0).applyEuler(rotation);

@@ -2,6 +2,7 @@ import { Group, type Object3D, type PerspectiveCamera } from 'three';
 import { CheckBackPresentation } from './CheckBackPresentation';
 import { DriftingBottlePresentation } from './DriftingBottlePresentation';
 import { DriftingCargoPresentation } from './DriftingCargoPresentation';
+import type { DriftingWater } from './DriftingWaveMotion';
 import type { FeaturedEventPresentation } from './FeaturedEventPresentation';
 import {
   isEventPresentationRoute,
@@ -30,6 +31,7 @@ export class FeaturedEventPresentations {
     flowersDeckTarget: Object3D,
     checkBackSternTarget: Object3D,
     onlyEventId?: FeaturedEventId | null,
+    driftingWater?: DriftingWater,
   ) {
     this.root.name = 'featured-event-presentations';
     const include = (eventId: FeaturedEventId): boolean => (
@@ -37,16 +39,20 @@ export class FeaturedEventPresentations {
     );
     const includeCargo = onlyEventId === undefined
       || (onlyEventId !== null && isDriftingCargoEventId(onlyEventId));
-    this.driftingCargo = includeCargo
+    if ((includeCargo || include('drifting-bottle')) && driftingWater === undefined) {
+      throw new Error('Drifting events require the world wave source.');
+    }
+    this.driftingCargo = includeCargo && driftingWater !== undefined
       ? new DriftingCargoPresentation({
           barrel: include('drifting-barrel') ? models.clone('driftingBarrel') : new Group(),
           chest: include('drifting-chest') ? models.clone('mysteryChest') : new Group(),
-        }, driftingItemBowTarget)
+        }, driftingItemBowTarget, driftingWater)
       : null;
     if (include('drifting-bottle')) {
       this.presentations.set('drifting-bottle', new DriftingBottlePresentation(
         models.clone('driftingBottle'),
         driftingItemBowTarget,
+        driftingWater!,
       ));
     }
     if (include('check-the-back')) {

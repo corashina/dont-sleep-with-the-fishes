@@ -9,22 +9,24 @@ import {
   Vector3,
 } from 'three';
 import {
-  DEFAULT_WAVES,
-  sampleWaveFieldInto,
   type WaveSample,
 } from '../ocean/WaveField';
 import { disposeResourceSets } from '../world/SceneResources';
+import {
+  applyDriftingWavePose,
+  type DriftingWater,
+} from './DriftingWaveMotion';
 import { KeyedEventPresentation } from './KeyedEventPresentation';
 import { eventSideFromSeed, type EventSide } from './eventVariant';
 
 const BASE = Object.freeze({ x: 3.25, y: 0.14, z: -4.35 });
-const WAVE_TILT = 0.18;
 
 export class DriftingBottlePresentation extends KeyedEventPresentation {
   private readonly geometries = new Set<BufferGeometry>();
   private readonly materials = new Set<Material>();
   private readonly paper: Mesh;
   private readonly baseQuaternion = new Quaternion();
+  private readonly basePosition = new Vector3();
   private readonly target = new Vector3();
   private readonly wave: WaveSample = {
     height: 0,
@@ -34,7 +36,11 @@ export class DriftingBottlePresentation extends KeyedEventPresentation {
   };
   private side: EventSide = -1;
 
-  constructor(model: Object3D, private readonly bowTarget: Object3D) {
+  constructor(
+    model: Object3D,
+    private readonly bowTarget: Object3D,
+    private readonly water: DriftingWater,
+  ) {
     super('drifting-bottle-presentation');
     this.subject.name = 'event-prop:drifting-bottle';
     this.subject.userData.motionSource = 'shared-wave-field';
@@ -77,7 +83,8 @@ export class DriftingBottlePresentation extends KeyedEventPresentation {
 
   protected reset(): void {
     const baseX = BASE.x * this.side;
-    this.subject.position.set(baseX, BASE.y, BASE.z);
+    this.basePosition.set(baseX, BASE.y, BASE.z);
+    this.subject.position.copy(this.basePosition);
     this.subject.rotation.set(0.06, -0.18 * this.side, 0.08 * this.side);
     this.baseQuaternion.copy(this.subject.quaternion);
     this.paper.visible = false;
@@ -120,16 +127,14 @@ export class DriftingBottlePresentation extends KeyedEventPresentation {
   }
 
   private float(time: number): void {
-    const baseX = BASE.x * this.side;
-    sampleWaveFieldInto(this.wave, DEFAULT_WAVES, time, baseX, BASE.z, 1);
-    this.subject.position.set(
-      baseX + this.wave.displacementX * 0.12,
-      BASE.y + this.wave.height * 0.34,
-      BASE.z + this.wave.displacementZ * 0.12,
+    applyDriftingWavePose(
+      this.subject,
+      this.basePosition,
+      this.baseQuaternion,
+      this.wave,
+      time,
+      this.water,
     );
-    this.subject.quaternion.copy(this.baseQuaternion);
-    this.subject.rotateX(this.wave.normal.z * WAVE_TILT);
-    this.subject.rotateZ(-this.wave.normal.x * WAVE_TILT);
   }
 
   private moveToDeck(progress: number): void {

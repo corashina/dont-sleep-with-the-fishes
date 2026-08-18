@@ -1,4 +1,5 @@
 import {
+  Box3,
   BoxGeometry,
   BufferGeometry,
   Group,
@@ -90,6 +91,23 @@ function forwardAngle(from: number, to: number): number {
 }
 
 describe('TornadoPresentation', () => {
+  it('stages the doubled tornado with one tenth below the sea', () => {
+    const fixture = createFixture();
+    fixture.presentation.worldRoot.updateMatrixWorld(true);
+    const bounds = new Box3().setFromObject(fixture.modelRoot);
+    const seaY = fixture.presentation.worldRoot.position.y;
+    const submergedFraction = (seaY - bounds.min.y) / (bounds.max.y - bounds.min.y);
+
+    expect(fixture.modelRoot.visible).toBe(true);
+    expect(fixture.modelRoot.scale.toArray()).toEqual([1, 1, 1]);
+    expect(fixture.presentation.worldRoot.scale.toArray()).toEqual([2, 2, 2]);
+    expect(submergedFraction).toBeCloseTo(0.1);
+    expect(fixture.presentation.worldRoot.getObjectByName('tornado-wind-band-1')?.visible)
+      .toBe(true);
+
+    fixture.presentation.dispose();
+  });
+
   it('uses the rendered sea amplitude at the fixed tornado coordinates', () => {
     const fixture = createFixture(0.35);
 
@@ -167,6 +185,7 @@ describe('TornadoPresentation', () => {
     expect(forwardAngle(itemEnd.spray, activeReaction.spray)).toBeGreaterThan(0);
     fixture.presentation.update(6_000, 1.2);
     await reaction;
+    expect(fixture.modelRoot.scale.toArray()).toEqual([1, 1, 1]);
     fixture.presentation.dispose();
   });
 

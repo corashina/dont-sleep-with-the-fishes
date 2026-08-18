@@ -6,9 +6,11 @@ import {
   CylinderGeometry,
   DodecahedronGeometry,
   Group,
+  LinearFilter,
   Mesh,
   MeshStandardMaterial,
   PlaneGeometry,
+  Texture,
   TorusGeometry,
 } from 'three';
 import { disposeResourceSets } from '../world/SceneResources';
@@ -133,14 +135,21 @@ export class DistantSeabed implements MenuSceneComponent {
   readonly root = new Group();
   private readonly geometries = new Set<BufferGeometry>();
   private readonly materials = new Set<MeshStandardMaterial>();
+  private readonly textures = new Set<Texture>();
   private readonly detailBounds = new Box3();
   private readonly detailFootprints: MenuGroundFootprint[] = [];
   private disposed = false;
 
-  constructor() {
-    const sand = this.material(0x526d69, 1);
-    const mountainSand = this.material(0x3e5958, 1);
-    mountainSand.flatShading = true;
+  constructor(sandTexture: Texture) {
+    const distantSand = sandTexture.clone();
+    distantSand.name = 'menu:distant-aerial-beach';
+    distantSand.repeat.set(1, 1);
+    distantSand.minFilter = LinearFilter;
+    distantSand.generateMipmaps = false;
+    distantSand.needsUpdate = true;
+    this.textures.add(distantSand);
+    const sand = this.terrainMaterial(0x8fa59a, distantSand);
+    const mountainSand = this.terrainMaterial(0x83978e, distantSand);
     const rock = this.material(0x3a4d50, 1);
     const plant = this.material(0x355d51, 0.95);
     const wood = this.material(0x5a4938, 1);
@@ -236,7 +245,7 @@ export class DistantSeabed implements MenuSceneComponent {
     if (this.disposed) return;
     this.disposed = true;
     this.root.removeFromParent();
-    disposeResourceSets(this.geometries, this.materials);
+    disposeResourceSets(this.geometries, this.materials, this.textures);
   }
 
   private geometry<T extends BufferGeometry>(geometry: T): T {
@@ -244,9 +253,32 @@ export class DistantSeabed implements MenuSceneComponent {
     return geometry;
   }
 
-  private material(color: number, roughness: number): MeshStandardMaterial {
+  private material(
+    color: number,
+    roughness: number,
+    map?: Texture,
+  ): MeshStandardMaterial {
     const material = new MeshStandardMaterial({ color, roughness, metalness: 0 });
+    if (map) material.map = map;
     this.materials.add(material);
+    return material;
+  }
+
+  private terrainMaterial(color: number, map: Texture): MeshStandardMaterial {
+    const material = this.material(color, 1, map);
+    material.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <map_fragment>',
+        `#ifdef USE_MAP
+vec4 sampledDiffuseColor = texture2D(map, vMapUv);
+float sandLuma = dot(sampledDiffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+float sandContrast = clamp((sandLuma - 0.38) * 4.5 + 0.55, 0.15, 1.25);
+vec3 sandColor = mix(vec3(sandContrast), sampledDiffuseColor.rgb, 0.2);
+diffuseColor *= vec4(sandColor, sampledDiffuseColor.a);
+#endif`,
+      );
+    };
+    material.customProgramCacheKey = () => 'menu:distant-aerial-beach-v1';
     return material;
   }
 

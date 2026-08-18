@@ -54,7 +54,7 @@ const RUNTIME_MODEL_IDS: readonly RuntimeModelId[] = [
 ];
 
 function runtimeModelSpec(id: RuntimeModelId): RuntimeModelSpec {
-  if (id === 'fishingRod') return LIFEBOAT_EQUIPMENT_MODEL_SPECS[id];
+  if (id === 'fishingRod' || id === 'hammer') return LIFEBOAT_EQUIPMENT_MODEL_SPECS[id];
   if (id === 'lantern' || id === 'ceilingLight') return PRACTICAL_LIGHT_MODEL_SPECS[id];
   return ITEM_MODEL_SPECS[id];
 }

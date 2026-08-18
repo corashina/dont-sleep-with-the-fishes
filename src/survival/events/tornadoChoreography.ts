@@ -65,15 +65,6 @@ function holdTornado(output: TornadoSample): void {
   output.effectStrength = 1;
 }
 
-function fadeTornado(output: TornadoSample, strength: number): void {
-  output.visibility = strength;
-  output.funnelScale = strength;
-  output.spinRate = strength;
-  output.spinPhase = strength;
-  output.sway = strength;
-  output.effectStrength = strength;
-}
-
 export function createTornadoSample(): TornadoSample {
   const sample = {} as TornadoSample;
   resetTornadoSample(sample);
@@ -81,16 +72,11 @@ export function createTornadoSample(): TornadoSample {
 }
 
 export function sampleTornadoReveal(
-  progress: number,
+  _progress: number,
   output: TornadoSample,
 ): boolean {
   resetTornadoSample(output);
-  const t = clamp01(progress);
-  const firstBeat = smoothstep(t / 0.3) * 0.32;
-  const secondBeat = smoothstep((t - 0.3) / 0.27) * 0.35;
-  const thirdBeat = smoothstep((t - 0.57) / 0.3) * 0.33;
-
-  fadeTornado(output, firstBeat + secondBeat + thirdBeat);
+  holdTornado(output);
   return true;
 }
 
@@ -145,14 +131,13 @@ export function sampleTornadoReaction(
   }
 
   const effect = 1 - smoothstep((t - 0.02) / 0.52);
-  const collapse = 1 - smoothstep((t - 0.05) / 0.62);
   const spin = 1 - smoothstep((t - 0.08) / 0.65);
   const lateOpacity = 1 - smoothstep((t - 0.62) / 0.38);
   output.visibility = lateOpacity;
-  output.funnelScale = collapse;
+  output.funnelScale = 1;
   output.spinRate = spin;
   output.spinPhase = spin;
-  output.sway = collapse;
+  output.sway = spin;
   output.effectStrength = effect;
   return true;
 }
