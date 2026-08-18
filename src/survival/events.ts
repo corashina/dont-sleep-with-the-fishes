@@ -23,7 +23,7 @@ import type {
 
 export const SURVIVAL_EVENT_IDS = Object.freeze([
   'dangerous-waters', 'leak', 'school-of-fish', 'snatcher',
-  'death-stare', 'swarm-of-anglerfish', 'whirlpool', 'shower-night',
+  'death-stare', 'swarm-of-anglerfish', 'tornado', 'shower-night',
   'windy-night', 'bad-sleep', 'thunderstorm', 'restless-waves',
   'man-in-the-fog', 'ghosts', 'eerie-melody', 'face-on-the-moon',
   'sick-companion', 'shadow-figure', 'guarded-sleep',
@@ -57,7 +57,7 @@ const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.free
   snatcher: 'A tentacle curls over the gunwale and reaches for one of your supplies.',
   'death-stare': 'A huge shape rises and fixes its gaze on the boat.',
   'swarm-of-anglerfish': 'Cold lights gather beneath the surface and close in.',
-  whirlpool: 'The sea begins circling faster around the boat.',
+  tornado: 'A dark wind funnel spins above the sea.',
   'shower-night': 'Rain starts falling over the exposed boat.',
   'windy-night': 'Wind catches every loose object on the boat.',
   'bad-sleep': 'Uneasy darkness settles over the boat.',
@@ -286,7 +286,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('sleep', 'Sleep', undefined,
       outcome(65, 'The swarm attacks.', effects([subtract('hull', { min: 20, max: 40 }), subtract('health', 50)])), outcome(25, 'The cold lights scatter before reaching the hull.')),
   ], undefined, { minimumPressure: 1 }),
-  event('whirlpool', 'night', 'Whirlpool', 'dangerous', 'impact', 1, 12, 30, [
+  event('tornado', 'night', 'Tornado', 'dangerous', 'impact', 1, 12, 30, [
     choice('anchor', 'Use Anchor', 'anchor', outcome(90, 'The anchor holds the boat outside the current.'), outcome(10, 'The boat is damaged.', effects([subtract('hull', { min: 5, max: 10 })], [breakItem('anchor')]))),
     choice('swimRing', 'Use Swim Ring', 'swimRing',
       outcome(50, 'The boat is damaged.', effects([subtract('hull', { min: 20, max: 40 })])),

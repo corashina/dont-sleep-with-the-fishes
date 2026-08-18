@@ -4990,7 +4990,7 @@ describe('SurvivalPhase orchestration', () => {
     },
     {
       terminalState: 'sunk' as const,
-      eventId: 'whirlpool',
+      eventId: 'tornado',
       initialResources: { hull: 11 },
       terminalResources: { hull: 0 },
       deltas: { hull: -11 },
@@ -6478,7 +6478,7 @@ describe('SurvivalPhase orchestration', () => {
     ['death-stare', 'flashlight', 'flashlight-1', 'flashlight'],
     ['swarm-of-anglerfish', 'flashlight', 'flashlight-1', 'flashlight'],
     ['swarm-of-anglerfish', 'baitTin', 'baitTin-1', 'baitTin'],
-    ['whirlpool', 'swimRing', 'swimRing-1', 'swimRing'],
+    ['tornado', 'swimRing', 'swimRing-1', 'swimRing'],
   ] as const)(
     'shows %s %s outcome text only after hide and restore',
     async (eventId, choiceId, instanceId, itemType) => {

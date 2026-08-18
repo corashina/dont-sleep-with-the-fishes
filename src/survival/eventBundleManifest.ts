@@ -19,7 +19,7 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
   snatcher: { models: ['snatcher'], sounds: ['tentacleMovement'] },
   'death-stare': { models: ['deathStareBlob'], sounds: [] },
   'swarm-of-anglerfish': { models: ['anglerFish'], sounds: [] },
-  whirlpool: { models: ['whirlpoolCore'], sounds: [] },
+  tornado: { models: ['whirlpoolCore'], sounds: [] },
   'man-in-the-fog': { models: ['fogMan'], sounds: [] },
   ghosts: { models: ['ghost'], sounds: [] },
   'eerie-melody': {

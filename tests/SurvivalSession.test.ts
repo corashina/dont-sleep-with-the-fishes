@@ -2462,7 +2462,7 @@ describe('SurvivalSession daytime actions', () => {
       seed: 17,
       random: sequenceRandom([0.9, 0, 0.99, 0]),
       initialConditions: { 'map-1': 'broken' },
-      initialEventId: 'whirlpool',
+      initialEventId: 'tornado',
     });
     session.resolveEvent({ kind: 'endure' });
     expect(session.snapshot().inventory).toMatchObject({

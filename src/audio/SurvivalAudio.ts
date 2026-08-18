@@ -281,7 +281,7 @@ export class SurvivalAudio {
       this.scope.play('fishCatch');
     } else if (choiceId === 'shotgun') {
       this.scope.play('shotgun');
-    } else if (eventId === 'whirlpool' && choiceId === 'anchor') {
+    } else if (eventId === 'tornado' && choiceId === 'anchor') {
       this.scope.play('anchorChain');
     } else {
       this.scope.play('itemHandling');
