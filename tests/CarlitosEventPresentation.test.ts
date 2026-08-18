@@ -22,6 +22,7 @@ function setup(eventId: CarlitosEventId) {
   const companion = new CarlitosPresentation(propModels);
   companion.sync({
     alive: true,
+    energy: 3,
     hunger: 5,
     sickness: 0,
     unhappiness: 0,
@@ -250,6 +251,7 @@ describe('CarlitosEventPresentation', () => {
 
       companion.sync({
         alive: true,
+        energy: 3,
         hunger: 5,
         sickness: 2,
         unhappiness: 0,

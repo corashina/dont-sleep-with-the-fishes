@@ -23,6 +23,7 @@ function snapshot(
 ): CarlitosSnapshot {
   return {
     alive: true,
+    energy: 3,
     hunger: 5,
     sickness: 0,
     unhappiness: 0,

@@ -33,12 +33,14 @@ import { nightDamageMultiplier, pressureForDay, pressureIncreaseForDay } from '.
 import { repairEnergyCost, SURVIVAL_BALANCE } from './survivalBalance';
 import {
   advanceCarlitosDawn,
+  CARLITOS_EVENT_ENERGY_COST,
   carlitosStatus,
   carlitosWellness,
   createCarlitosState,
   feedCarlitos,
   petCarlitos,
   killCarlitos,
+  spendCarlitosEnergy,
   treatCarlitos,
   type CarlitosSnapshot,
   type CarlitosState,
@@ -259,17 +261,34 @@ export class SurvivalSession {
     if (this.carlitos === null) {
       return {
         visible: false,
+        energyCost: 0,
+        availableEnergy: 0,
         unavailableReason: 'Carlitos is not aboard.',
       };
     }
     if (!this.carlitos.alive) {
       return {
         visible: false,
+        energyCost: 0,
+        availableEnergy: 0,
         unavailableReason: 'Carlitos cannot retrieve the loot.',
       };
     }
+    if (this.carlitos.energy < CARLITOS_EVENT_ENERGY_COST) {
+      return {
+        visible: true,
+        energyCost: CARLITOS_EVENT_ENERGY_COST,
+        availableEnergy: this.carlitos.energy,
+        unavailableReason: `Carlitos needs 3 energy; he has ${this.carlitos.energy}.`,
+      };
+    }
     if (carlitosWellness(this.carlitos) >= 4) {
-      return { visible: true, unavailableReason: null };
+      return {
+        visible: true,
+        energyCost: CARLITOS_EVENT_ENERGY_COST,
+        availableEnergy: this.carlitos.energy,
+        unavailableReason: null,
+      };
     }
 
     const status = carlitosStatus(this.carlitos);
@@ -280,6 +299,8 @@ export class SurvivalSession {
         : status.happiness;
     return {
       visible: true,
+      energyCost: CARLITOS_EVENT_ENERGY_COST,
+      availableEnergy: this.carlitos.energy,
       unavailableReason: `Carlitos is ${label} and cannot retrieve the loot.`,
     };
   }
@@ -524,6 +545,10 @@ export class SurvivalSession {
     }
     if (choice.requiredChestState !== undefined && choice.requiredChestState !== this.chestState) {
       return this.reject('chest-state-unavailable', `That response requires a ${choice.requiredChestState} chest.`);
+    }
+    if (choice.companionAction === 'delegateCarlitos'
+      && !spendCarlitosEnergy(this.carlitos!)) {
+      return this.reject('companion-action-unavailable', 'Carlitos does not have enough energy.');
     }
 
     const mutationExclusions = new Set<ItemInstanceId>();
@@ -1484,6 +1509,7 @@ export class SurvivalSession {
     if (this.carlitos === null) throw new Error('Carlitos is not aboard.');
     return Object.freeze({
       alive: this.carlitos.alive,
+      energy: this.carlitos.energy,
       hunger: this.carlitos.hunger,
       sickness: this.carlitos.sickness,
       unhappiness: this.carlitos.unhappiness,
@@ -1497,6 +1523,7 @@ export class SurvivalSession {
     after: JournalCarlitosDawnRecord['after'],
   ): boolean {
     return before.hunger !== after.hunger
+      || before.energy !== after.energy
       || before.sickness !== after.sickness
       || before.unhappiness !== after.unhappiness
       || before.alive !== after.alive

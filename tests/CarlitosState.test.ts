@@ -8,12 +8,36 @@ import {
   feedCarlitos,
   killCarlitos,
   petCarlitos,
+  spendCarlitosEnergy,
   treatCarlitos,
 } from '../src/survival/CarlitosState';
 
 const sequence = (...values: number[]) => ({ next: () => values.shift()! });
 
 describe('Carlitos state', () => {
+  it('bounds, spends, and recovers event energy', () => {
+    expect(createCarlitosState().energy).toBe(3);
+    expect(createCarlitosState({ energy: 8 }).energy).toBe(3);
+    expect(createCarlitosState({ energy: -2 }).energy).toBe(0);
+
+    const spent = createCarlitosState();
+    expect(spendCarlitosEnergy(spent)).toBe(true);
+    expect(spent.energy).toBe(0);
+    expect(spendCarlitosEnergy(spent)).toBe(false);
+
+    const recovered = createCarlitosState({ energy: 1 });
+    advanceCarlitosDawn(recovered, sequence(1, 1, 1));
+    expect(recovered.energy).toBe(2);
+
+    const full = createCarlitosState({ energy: 3 });
+    advanceCarlitosDawn(full, sequence(1, 1, 1));
+    expect(full.energy).toBe(3);
+
+    const dead = createCarlitosState({ energy: 1, hunger: 1 });
+    advanceCarlitosDawn(dead, sequence(0));
+    expect(dead).toMatchObject({ alive: false, energy: 1 });
+  });
+
   it('maps every approved status boundary', () => {
     expect(carlitosStatus({
       ...createCarlitosState(), hunger: 4, sickness: 3, unhappiness: 7,

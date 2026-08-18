@@ -65,6 +65,7 @@ export interface JournalCarlitosDawnRecord {
 
 export interface JournalCarlitosDawnState {
   readonly alive: boolean;
+  readonly energy: number;
   readonly hunger: number;
   readonly sickness: number;
   readonly unhappiness: number;
@@ -184,6 +185,9 @@ function formatCarlitos(record: JournalCarlitosCareRecord | JournalCarlitosDawnR
   }
   if (record.before.unhappiness !== record.after.unhappiness) {
     changes.push(`unhappiness ${record.before.unhappiness} to ${record.after.unhappiness}`);
+  }
+  if (record.before.energy !== record.after.energy) {
+    changes.push(`energy ${record.before.energy} to ${record.after.energy}`);
   }
   if (changes.length > 0) return `Carlitos: ${changes.join('; ')}.`;
   return 'Carlitos changed during the night.';
