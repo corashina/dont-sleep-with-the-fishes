@@ -17,7 +17,7 @@ import { DEATH_STARE_ITEM_DURATION, deathStareItemDuration } from '../src/surviv
 import { LEAK_ITEM_DURATION } from '../src/survival/events/leakChoreography';
 import { SCHOOL_ITEM_DURATION, schoolItemDuration } from '../src/survival/events/schoolOfFishChoreography';
 import { SNATCHER_ITEM_DURATION, snatcherItemDuration } from '../src/survival/events/snatcherChoreography';
-import { WHIRLPOOL_ITEM_DURATION } from '../src/survival/events/whirlpoolChoreography';
+import { TORNADO_ITEM_DURATION } from '../src/survival/events/tornadoChoreography';
 import { supernaturalItemUseDuration } from '../src/survival/supernaturalEventChoreography';
 import { weatherItemUseDuration } from '../src/survival/weatherEventChoreography';
 
@@ -43,7 +43,7 @@ describe('event item timing', () => {
     expect(deathStareItemDuration('food')).toBe(4);
     expect(SWARM_ITEM_DURATION).toBe(4.8);
     expect(swarmItemDuration('baitTin')).toBeCloseTo(3.84);
-    expect(WHIRLPOOL_ITEM_DURATION).toBe(4);
+    expect(TORNADO_ITEM_DURATION).toBe(4);
   });
 
   it('throws medium items fifteen percent slower than light items', () => {
