@@ -4813,6 +4813,59 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it.each([
+    ['anchor', 'anchor'],
+    ['swimRing', 'swimRing'],
+  ] as const)(
+    'keeps the Tornado camera fixed throughout %s item use',
+    async (choiceId, itemId) => {
+      const item = savedItem(itemId);
+      const propModels = createTestPropModels();
+      const camera = new PerspectiveCamera(67, 1.6, 0.1, 100);
+      camera.position.set(0.3, 1.2, -0.4);
+      camera.rotation.set(0.08, -0.12, 0.03);
+      const world = new BoatWorld(
+        camera,
+        propModels,
+        createTestMoonTexture(),
+        [item],
+        undefined,
+        undefined,
+        'low',
+        createTestEventModels(),
+      );
+      world.syncInventory(snapshot([item]));
+      world.stageEvent('tornado');
+      const basePosition = camera.position.clone();
+      const baseQuaternion = camera.quaternion.clone();
+      const baseFieldOfView = camera.fov;
+      const assertCameraFixed = () => {
+        expect(camera.position.toArray()).toEqual(basePosition.toArray());
+        expect(camera.quaternion.toArray()).toEqual(baseQuaternion.toArray());
+        expect(camera.fov).toBe(baseFieldOfView);
+      };
+
+      const use = world.playEventItemUse('tornado', choiceId, item.instanceId);
+      const actor = world.scene.getObjectByName(`boat-supply-event:${item.instanceId}`)!;
+      const initialActorPosition = actor.position.clone();
+      assertCameraFixed();
+      world.update(1, 1);
+      assertCameraFixed();
+      world.update(TORNADO_ITEM_DURATION, TORNADO_ITEM_DURATION - 1);
+      assertCameraFixed();
+      expect(actor.position.toArray()).not.toEqual(initialActorPosition.toArray());
+      if (choiceId === 'anchor') {
+        expect(world.scene.getObjectByName('event-item-chain')?.visible).toBe(true);
+      }
+      world.update(8, 8 - TORNADO_ITEM_DURATION);
+      await use;
+      assertCameraFixed();
+
+      world.dispose();
+      propModels.dispose();
+    },
+  );
+
   it('keeps School of Fish bodies visible beyond the hull', async () => {
     const propModels = createTestPropModels();
     const eventModels = createTestEventModels();

@@ -183,6 +183,109 @@ describe('survival events', () => {
     });
   });
 
+  it('preserves the exact approved Tornado event data', () => {
+    expect(survivalEventById('tornado')).toEqual({
+      id: 'tornado',
+      phase: 'night',
+      title: 'Tornado',
+      revealText: 'A dark wind funnel spins above the sea.',
+      prompt: 'Choose a response.',
+      danger: 'dangerous',
+      cue: 'impact',
+      weight: 1,
+      earliestDay: 12,
+      minimumPressure: 1,
+      cooldownDays: 30,
+      choices: [
+        {
+          id: 'anchor',
+          label: 'Use Anchor',
+          itemId: 'anchor',
+          outcomes: [
+            {
+              weight: 90,
+              message: 'The anchor holds the boat outside the current.',
+              effects: {},
+            },
+            {
+              weight: 10,
+              message: 'The boat is damaged.',
+              effects: {
+                resources: [{
+                  resource: 'hull',
+                  operation: 'subtract',
+                  value: { min: 5, max: 10 },
+                }],
+                items: [{ kind: 'break', itemId: 'anchor', quantity: 1 }],
+              },
+            },
+          ],
+        },
+        {
+          id: 'swimRing',
+          label: 'Use Swim Ring',
+          itemId: 'swimRing',
+          outcomes: [
+            {
+              weight: 50,
+              message: 'The boat is damaged.',
+              effects: {
+                resources: [{
+                  resource: 'hull',
+                  operation: 'subtract',
+                  value: { min: 20, max: 40 },
+                }],
+              },
+            },
+            {
+              weight: 50,
+              message: 'The boat is damaged.',
+              effects: {
+                resources: [{
+                  resource: 'hull',
+                  operation: 'subtract',
+                  value: { min: 20, max: 40 },
+                }],
+                items: [{ kind: 'break', itemId: 'swimRing', quantity: 1 }],
+              },
+            },
+          ],
+        },
+        {
+          id: 'sleep',
+          label: 'Sleep',
+          outcomes: [
+            {
+              weight: 80,
+              message: 'The boat is damaged.',
+              effects: {
+                resources: [{
+                  resource: 'hull',
+                  operation: 'subtract',
+                  value: { min: 20, max: 40 },
+                }],
+                nextDawnEnergy: 0,
+              },
+            },
+            {
+              weight: 30,
+              message: 'The boat is badly damaged and two items are lost.',
+              effects: {
+                resources: [{
+                  resource: 'hull',
+                  operation: 'subtract',
+                  value: { min: 60, max: 80 },
+                }],
+                items: [{ kind: 'loseRandom', quantity: 2 }],
+                nextDawnEnergy: 2,
+              },
+            },
+          ],
+        },
+      ],
+    });
+  });
+
   it('contains the approved non-story expansion', () => {
     expect(SURVIVAL_EVENTS.map(({ id }) => id)).toEqual(expect.arrayContaining([
       'drifting-barrel', 'drifting-chest', 'drifting-bottle', 'check-the-back',

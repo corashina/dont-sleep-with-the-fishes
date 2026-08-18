@@ -43,6 +43,7 @@ interface WindBandActor {
   readonly radius: number;
   readonly height: number;
   readonly speed: number;
+  motionPhase: number;
 }
 
 interface SeaSprayActor {
@@ -64,6 +65,11 @@ const WATERLINE = 0.04;
 const TORNADO_X = 12.8;
 const TORNADO_Z = -19;
 const TORNADO_DISTANCE = Math.hypot(TORNADO_X, TORNADO_Z);
+const FULL_TURN = Math.PI * 2;
+
+function advancePhase(phase: number, change: number): number {
+  return (phase + change) % FULL_TURN;
+}
 
 const IDENTITY_ITEM_POSE: MutableSupplyPose = {
   x: 0,
@@ -142,6 +148,10 @@ export class TornadoPresentation implements DedicatedEventPresentation {
   );
   private activeChoiceId: string | null = null;
   private lastChoiceId = '';
+  private waveTime = 0;
+  private modelSpinPhase = 0;
+  private swayPhase = 0;
+  private sprayPhase = 0;
   private staged = false;
   private disposed = false;
 
@@ -200,6 +210,7 @@ export class TornadoPresentation implements DedicatedEventPresentation {
         radius: 1.7 + index * 0.72,
         height: 0.72 + index * 1.35,
         speed: 0.78 + index * 0.16,
+        motionPhase: 0,
       });
       this.worldRoot.add(mesh);
     }
@@ -227,7 +238,7 @@ export class TornadoPresentation implements DedicatedEventPresentation {
     this.worldRoot.visible = true;
     this.boatRoot.visible = true;
     sampleTornadoReveal(0, this.sample);
-    this.applySample(0);
+    this.applySample(this.waveTime);
   }
 
   reveal(): Promise<void> {
@@ -236,7 +247,7 @@ export class TornadoPresentation implements DedicatedEventPresentation {
     this.activeChoiceId = null;
     this.cameraLook?.capture();
     sampleTornadoReveal(0, this.sample);
-    this.applySample(0);
+    this.applySample(this.waveTime);
     return this.animation.start('reveal', TORNADO_REVEAL_DURATION);
   }
 
@@ -248,7 +259,7 @@ export class TornadoPresentation implements DedicatedEventPresentation {
     this.activeChoiceId = choiceId;
     this.lastChoiceId = choiceId;
     sampleTornadoItemUse(choiceId, 0, this.sample);
-    this.applySample(0);
+    this.applySample(this.waveTime);
     return this.animation.start('item', TORNADO_ITEM_DURATION, {
       complete: true,
       cancel: false,
@@ -280,23 +291,28 @@ export class TornadoPresentation implements DedicatedEventPresentation {
     }
 
     sampleTornadoReaction(this.reactionState, 0, this.sample);
-    this.applySample(0);
+    this.applySample(this.waveTime);
     this.applyReactionPoses();
     return this.animation.start('reaction', TORNADO_REACTION_DURATION);
   }
 
   update(time: number, delta: number): void {
     if (this.disposed || !this.staged) return;
+    const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
     if (this.animation.active) {
-      this.animation.update(time, Number.isFinite(delta) ? delta : 0);
+      this.animation.update(time, safeDelta);
+      this.advancePhases(safeDelta);
+      this.applySample(time);
       return;
     }
+    this.advancePhases(safeDelta);
     this.applySample(time);
   }
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
-    this.animation.settle();
+    this.animation.settle(this.waveTime);
+    this.applySample(this.waveTime);
   }
 
   skip(): void {
@@ -341,7 +357,7 @@ export class TornadoPresentation implements DedicatedEventPresentation {
 
   private applyAnimation(
     kind: 'reveal' | 'item' | 'reaction',
-    time: number,
+    _time: number,
     progress: number,
   ): void {
     if (kind === 'reveal') {
@@ -355,7 +371,6 @@ export class TornadoPresentation implements DedicatedEventPresentation {
       sampleTornadoReaction(this.reactionState, progress, this.sample);
       this.applyReactionPoses();
     }
-    this.applySample(time);
   }
 
   private finishAnimation(kind: 'reveal' | 'item' | 'reaction'): void {
@@ -364,36 +379,60 @@ export class TornadoPresentation implements DedicatedEventPresentation {
   }
 
   private applySample(time: number): void {
+    if (Number.isFinite(time)) this.waveTime = time;
     this.environment.sampleWorldWaveInto(
       this.surfaceWave,
-      time,
+      this.waveTime,
       TORNADO_X,
       TORNADO_Z,
-      1,
+      this.environment.readWorldWaveAmplitudeScale(),
     );
     this.worldRoot.position.y = WATERLINE + this.surfaceWave.height;
-    this.applyModel(time);
-    this.applyWindBands(time);
-    this.applySeaSpray(time);
+    this.applyModel();
+    this.applyWindBands();
+    this.applySeaSpray();
   }
 
-  private applyModel(time: number): void {
+  private advancePhases(delta: number): void {
+    if (delta === 0) return;
+    this.modelSpinPhase = advancePhase(
+      this.modelSpinPhase,
+      delta * (0.7 + this.sample.spinRate * 1.8) * this.sample.spinPhase,
+    );
+    this.swayPhase = advancePhase(
+      this.swayPhase,
+      delta * 0.43 * this.sample.sway,
+    );
+    for (let index = 0; index < this.windBands.length; index += 1) {
+      const actor = this.windBands[index]!;
+      actor.motionPhase = advancePhase(
+        actor.motionPhase,
+        delta * this.sample.spinRate * actor.speed,
+      );
+    }
+    this.sprayPhase = advancePhase(
+      this.sprayPhase,
+      delta * (0.7 + this.sample.spinRate * 0.9) * this.sample.effectStrength,
+    );
+  }
+
+  private applyModel(): void {
     const visible = this.sample.visibility > 0.012;
     const scale = this.sample.funnelScale;
     this.modelRoot.visible = visible;
     this.modelRoot.position.y = this.modelBaseOffset * scale;
     this.modelRoot.scale.setScalar(scale);
-    this.modelRoot.rotation.x = Math.sin(time * 0.37 + 0.8) * this.sample.sway * 0.025;
-    this.modelRoot.rotation.y = this.sample.spinPhase * 2.4
-      + time * (0.7 + this.sample.spinRate * 1.8);
-    this.modelRoot.rotation.z = Math.sin(time * 0.43) * this.sample.sway * 0.045;
+    this.modelRoot.rotation.x = Math.sin(this.swayPhase + 0.8)
+      * this.sample.sway * 0.025;
+    this.modelRoot.rotation.y = this.modelSpinPhase;
+    this.modelRoot.rotation.z = Math.sin(this.swayPhase) * this.sample.sway * 0.045;
     for (let index = 0; index < this.modelMaterials.length; index += 1) {
       const actor = this.modelMaterials[index]!;
       actor.material.opacity = actor.opacity * this.sample.visibility;
     }
   }
 
-  private applyWindBands(time: number): void {
+  private applyWindBands(): void {
     const strength = this.sample.effectStrength;
     const visible = strength > 0.012;
     this.windMaterial.opacity = Math.min(0.5, strength * 0.42);
@@ -402,23 +441,25 @@ export class TornadoPresentation implements DedicatedEventPresentation {
       actor.mesh.visible = visible;
       actor.mesh.position.y = actor.height * this.sample.funnelScale;
       actor.mesh.rotation.x = Math.PI / 2
-        + Math.sin(time * 0.36 + actor.phase) * this.sample.sway * 0.08;
-      actor.mesh.rotation.y = actor.phase + time * actor.speed * this.sample.spinRate;
-      actor.mesh.rotation.z = Math.cos(time * 0.31 + actor.phase) * this.sample.sway * 0.06;
+        + Math.sin(this.swayPhase + actor.phase) * this.sample.sway * 0.08;
+      actor.mesh.rotation.y = actor.phase + actor.motionPhase;
+      actor.mesh.rotation.z = Math.cos(this.swayPhase + actor.phase)
+        * this.sample.sway * 0.06;
       actor.mesh.scale.setScalar(actor.radius * (0.72 + strength * 0.28));
     }
   }
 
-  private applySeaSpray(time: number): void {
+  private applySeaSpray(): void {
     const strength = this.sample.effectStrength;
     const visible = strength > 0.012;
     this.sprayMaterial.opacity = Math.min(0.62, strength * 0.58);
     for (let index = 0; index < this.seaSprays.length; index += 1) {
       const actor = this.seaSprays[index]!;
-      const angle = actor.phase + time * (0.7 + this.sample.spinRate * 0.9);
+      const angle = actor.phase + this.sprayPhase;
       actor.mesh.visible = visible;
       actor.mesh.position.x = Math.cos(angle) * actor.radius;
-      actor.mesh.position.y = 0.16 + Math.sin(time * 1.4 + actor.phase) * 0.1 * strength;
+      actor.mesh.position.y = 0.16
+        + Math.sin(this.sprayPhase + actor.phase) * 0.1 * strength;
       actor.mesh.position.z = Math.sin(angle) * actor.radius;
       actor.mesh.rotation.x = Math.sin(angle) * 0.24;
       actor.mesh.rotation.y = -angle;
@@ -462,6 +503,13 @@ export class TornadoPresentation implements DedicatedEventPresentation {
     this.reactionState.anchorBroken = false;
     this.reactionState.ringBroken = false;
     this.reactionState.lostItemCount = 0;
+    this.waveTime = 0;
+    this.modelSpinPhase = 0;
+    this.swayPhase = 0;
+    this.sprayPhase = 0;
+    for (let index = 0; index < this.windBands.length; index += 1) {
+      this.windBands[index]!.motionPhase = 0;
+    }
     resetTornadoSample(this.sample);
     this.hideScene();
   }

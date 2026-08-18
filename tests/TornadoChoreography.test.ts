@@ -48,7 +48,7 @@ describe('tornado choreography', () => {
     expect(sampleTornadoItemUse('sleep', 0.5, createTornadoSample())).toBe(false);
   });
 
-  it('fades tornado fields after the reaction and moves lost supplies', () => {
+  it('collapses motion and effects before the late reaction fade', () => {
     const sample = createTornadoSample();
     const reaction = {
       hullDamage: -60,
@@ -57,8 +57,13 @@ describe('tornado choreography', () => {
       lostItemCount: 2,
     };
 
-    sampleTornadoReaction(reaction, 0.6, sample);
+    sampleTornadoReaction(reaction, 0.5, sample);
     expect(sample.supplyTravel).toBeGreaterThan(0);
+    expect(sample.visibility).toBe(1);
+    expect(sample.funnelScale).toBeLessThan(sample.visibility);
+    expect(sample.spinRate).toBeLessThan(sample.visibility);
+    expect(sample.spinPhase).toBeLessThan(sample.visibility);
+    expect(sample.effectStrength).toBeLessThan(sample.visibility);
 
     sampleTornadoReaction(reaction, 1, sample);
     expect(sample.visibility).toBe(0);
