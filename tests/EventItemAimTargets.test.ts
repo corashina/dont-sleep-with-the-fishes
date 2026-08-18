@@ -24,7 +24,7 @@ import { AnglerfishSwarmPresentation } from '../src/survival/events/AnglerfishSw
 import { DeathStarePresentation } from '../src/survival/events/DeathStarePresentation';
 import { SchoolOfFishPresentation } from '../src/survival/events/SchoolOfFishPresentation';
 import { SnatcherPresentation } from '../src/survival/events/SnatcherPresentation';
-import { WhirlpoolPresentation } from '../src/survival/events/WhirlpoolPresentation';
+import { TornadoPresentation } from '../src/survival/events/TornadoPresentation';
 import { SupernaturalEventAnimator } from '../src/survival/SupernaturalEventAnimator';
 import { WeatherEventAnimator } from '../src/survival/WeatherEventAnimator';
 import { eventItemMotionProfile } from '../src/survival/eventItemMotionProfile';
@@ -103,7 +103,7 @@ describe('event item aim targets', () => {
       new SnatcherPresentation(environment),
       new DeathStarePresentation(environment),
       new AnglerfishSwarmPresentation(environment),
-      new WhirlpoolPresentation(environment),
+      new TornadoPresentation(environment),
     ];
     const coordinator = new EventPresentationCoordinator(presentations);
     const scene = new Scene();

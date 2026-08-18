@@ -31,13 +31,13 @@ import { DeathStarePresentation } from '../src/survival/events/DeathStarePresent
 import { LeakPresentation } from '../src/survival/events/LeakPresentation';
 import { SchoolOfFishPresentation } from '../src/survival/events/SchoolOfFishPresentation';
 import { SnatcherPresentation } from '../src/survival/events/SnatcherPresentation';
-import { WhirlpoolPresentation } from '../src/survival/events/WhirlpoolPresentation';
+import { TornadoPresentation } from '../src/survival/events/TornadoPresentation';
 import { swarmItemDuration } from '../src/survival/events/anglerfishSwarmChoreography';
 import { deathStareItemDuration } from '../src/survival/events/deathStareChoreography';
 import { LEAK_ITEM_DURATION } from '../src/survival/events/leakChoreography';
 import { schoolItemDuration } from '../src/survival/events/schoolOfFishChoreography';
 import { snatcherItemDuration } from '../src/survival/events/snatcherChoreography';
-import { WHIRLPOOL_ITEM_DURATION } from '../src/survival/events/whirlpoolChoreography';
+import { TORNADO_ITEM_DURATION } from '../src/survival/events/tornadoChoreography';
 
 const choices = {
   leak: ['ductTape', 'bucket', 'map'],
@@ -45,7 +45,7 @@ const choices = {
   snatcher: ['spyglass', 'swimRing', 'fishingNet', 'shotgun'],
   'death-stare': ['flashlight', 'umbrella', 'food', 'shotgun', 'fishingNet'],
   'swarm-of-anglerfish': ['fishingNet', 'shotgun', 'flashlight', 'bait'],
-  whirlpool: ['anchor', 'swimRing'],
+  tornado: ['anchor', 'swimRing'],
 } as const;
 type ItemAnimationEventId = keyof typeof choices;
 
@@ -70,7 +70,7 @@ const eventProbeNames: Readonly<Record<ItemAnimationEventId, string>> = {
   snatcher: 'tentacle-attack-model',
   'death-stare': 'death-stare-angler',
   'swarm-of-anglerfish': 'swarm-angler-1',
-  whirlpool: 'whirlpool-dark-funnel',
+  tornado: 'tornado-model',
 };
 
 const itemDurations: Readonly<Record<ItemAnimationEventId, (choiceId: string) => number>> = {
@@ -79,7 +79,7 @@ const itemDurations: Readonly<Record<ItemAnimationEventId, (choiceId: string) =>
   snatcher: snatcherItemDuration,
   'death-stare': deathStareItemDuration,
   'swarm-of-anglerfish': swarmItemDuration,
-  whirlpool: () => WHIRLPOOL_ITEM_DURATION,
+  tornado: () => TORNADO_ITEM_DURATION,
 };
 
 const factories: Readonly<Record<
@@ -91,7 +91,7 @@ const factories: Readonly<Record<
   snatcher: (environment) => new SnatcherPresentation(environment),
   'death-stare': (environment) => new DeathStarePresentation(environment),
   'swarm-of-anglerfish': (environment) => new AnglerfishSwarmPresentation(environment),
-  whirlpool: (environment) => new WhirlpoolPresentation(environment),
+  tornado: (environment) => new TornadoPresentation(environment),
 };
 
 const cases = Object.entries(choices).flatMap(([eventId, eventChoices]) => (

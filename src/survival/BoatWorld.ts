@@ -137,7 +137,7 @@ import {
 import { LeakPresentation } from './events/LeakPresentation';
 import { SchoolOfFishPresentation } from './events/SchoolOfFishPresentation';
 import { SnatcherPresentation } from './events/SnatcherPresentation';
-import { WhirlpoolPresentation } from './events/WhirlpoolPresentation';
+import { TornadoPresentation } from './events/TornadoPresentation';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
 import type { FishingCatchId } from './fishingCatalog';
@@ -313,8 +313,8 @@ function createDedicatedEventCoordinator(
     if (include('swarm-of-anglerfish')) {
       presentations.push(new AnglerfishSwarmPresentation(dedicatedEnvironment));
     }
-    if (include('whirlpool')) {
-      presentations.push(new WhirlpoolPresentation(dedicatedEnvironment));
+    if (include('tornado')) {
+      presentations.push(new TornadoPresentation(dedicatedEnvironment));
     }
     for (const eventId of CARLITOS_EVENT_IDS) {
       if (!include(eventId)) continue;
