@@ -86,7 +86,7 @@ export class EventItemUseController {
     this.held = { request, actor };
     this.adapter.begin(actor, request.itemId, request.aimTarget);
     sampleEventItemUse(request.context, request.itemId, 0, this.sample);
-    this.adapter.apply(this.sample);
+    this.applyRequestSample(request);
     return new Promise((resolve) => {
       this.activeUse = {
         request,
@@ -113,7 +113,7 @@ export class EventItemUseController {
         1,
         this.sample,
       );
-      this.adapter.apply(this.sample);
+      this.applyRequestSample(held.request);
       this.release(held.actor, held.request, true);
       this.held = null;
       return Promise.resolve();
@@ -142,7 +142,7 @@ export class EventItemUseController {
       0,
       this.sample,
     );
-    this.adapter.apply(this.sample);
+    this.applyRequestSample(held.request);
     return new Promise((resolve) => {
       this.activeReaction = {
         request: held.request,
@@ -168,7 +168,7 @@ export class EventItemUseController {
         progress,
         this.sample,
       );
-      this.adapter.apply(this.sample);
+      this.applyRequestSample(use.request);
       const actionCueProgresses = eventItemActionCueProgresses(use.request.context);
       while (
         use.request.onAction !== undefined
@@ -188,7 +188,7 @@ export class EventItemUseController {
 
     const reaction = this.activeReaction;
     if (reaction === null) {
-      if (this.held !== null) this.adapter.apply(this.sample);
+      if (this.held !== null) this.applyRequestSample(this.held.request);
       return;
     }
     reaction.elapsed = Math.min(reaction.duration, reaction.elapsed + safeDelta);
@@ -199,7 +199,7 @@ export class EventItemUseController {
       reaction.elapsed / reaction.duration,
       this.sample,
     );
-    this.adapter.apply(this.sample);
+    this.applyRequestSample(reaction.request);
     if (reaction.elapsed < reaction.duration) return;
     this.activeReaction = null;
     this.release(reaction.actor, reaction.request, true);
@@ -227,6 +227,16 @@ export class EventItemUseController {
     if (this.disposed) return;
     this.clear('night');
     this.disposed = true;
+  }
+
+  private applyRequestSample(request: EventItemUseRequest): void {
+    if (request.eventId === 'tornado') {
+      this.sample.cameraYaw = 0;
+      this.sample.cameraPitch = 0;
+      this.sample.cameraTargetBlend = 0;
+      this.sample.fovScale = 1;
+    }
+    this.adapter.apply(this.sample);
   }
 
   private release(

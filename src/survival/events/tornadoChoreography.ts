@@ -144,6 +144,15 @@ export function sampleTornadoReaction(
     output.supplyTravel = smoothstep((t - 0.12) / 0.7);
   }
 
-  fadeTornado(output, 1 - smoothstep(t));
+  const effect = 1 - smoothstep((t - 0.02) / 0.52);
+  const collapse = 1 - smoothstep((t - 0.05) / 0.62);
+  const spin = 1 - smoothstep((t - 0.08) / 0.65);
+  const lateOpacity = 1 - smoothstep((t - 0.62) / 0.38);
+  output.visibility = lateOpacity;
+  output.funnelScale = collapse;
+  output.spinRate = spin;
+  output.spinPhase = spin;
+  output.sway = collapse;
+  output.effectStrength = effect;
   return true;
 }
