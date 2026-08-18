@@ -82,7 +82,7 @@ describe('event presentation outcome', () => {
   it('derives stable unsigned variant seeds', () => {
     const first = deriveEventVariantSeed(42, 6, 'leak');
     expect(deriveEventVariantSeed(42, 6, 'leak')).toBe(first);
-    expect(deriveEventVariantSeed(42, 6, 'whirlpool')).not.toBe(first);
+    expect(deriveEventVariantSeed(42, 6, 'tornado')).not.toBe(first);
     expect(first).toBeGreaterThanOrEqual(0);
     expect(first).toBeLessThanOrEqual(0xffffffff);
   });

@@ -151,7 +151,7 @@ export function resolveEventItemUseContext(
     itemId === 'anchor'
     && choiceId === 'anchor'
     && (
-      eventId === 'whirlpool'
+      eventId === 'tornado'
       || eventId === 'thunderstorm'
       || eventId === 'restless-waves'
     )

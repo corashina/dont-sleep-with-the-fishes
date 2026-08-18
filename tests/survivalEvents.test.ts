@@ -13,7 +13,7 @@ import { sequenceRandom } from './helpers/random';
 
 const EXPECTED_WEIGHTS = {
   'dangerous-waters': 2, leak: 2, 'school-of-fish': 4, snatcher: 3,
-  'death-stare': 4, 'swarm-of-anglerfish': 2, whirlpool: 1,
+  'death-stare': 4, 'swarm-of-anglerfish': 2, tornado: 1,
   'shower-night': 3, 'windy-night': 4, 'bad-sleep': 4,
   thunderstorm: 4, 'restless-waves': 3, 'man-in-the-fog': 2,
   ghosts: 3, 'eerie-melody': 3, 'face-on-the-moon': 1,
@@ -29,7 +29,7 @@ const EXPECTED_RISK = {
   'dangerous-waters': 'dangerous', leak: 'dangerous',
   'school-of-fish': 'uncertain', snatcher: 'uncertain',
   'death-stare': 'dangerous', 'swarm-of-anglerfish': 'dangerous',
-  whirlpool: 'dangerous', 'shower-night': 'uncertain',
+  tornado: 'dangerous', 'shower-night': 'uncertain',
   'windy-night': 'dangerous', 'bad-sleep': 'uncertain',
   thunderstorm: 'dangerous', 'restless-waves': 'dangerous',
   'man-in-the-fog': 'dangerous', ghosts: 'uncertain',
@@ -170,13 +170,17 @@ describe('survival events', () => {
     const school = survivalEventById('school-of-fish')!;
     const death = survivalEventById('death-stare')!;
     const swarm = survivalEventById('swarm-of-anglerfish')!;
-    const whirlpool = survivalEventById('whirlpool')!;
+    const tornado = survivalEventById('tornado')!;
 
     expect(leak.maximumAppearances).toBe(1);
     expect(school.minimumPressure).toBe(1);
     expect(death.minimumPressure).toBe(1);
     expect(swarm.minimumPressure).toBe(1);
-    expect(whirlpool.minimumPressure).toBe(1);
+    expect(tornado.minimumPressure).toBe(1);
+    expect(tornado).toMatchObject({
+      title: 'Tornado',
+      revealText: 'A dark wind funnel spins above the sea.',
+    });
   });
 
   it('contains the approved non-story expansion', () => {
