@@ -1428,9 +1428,10 @@ export class SurvivalUI {
     this.renderDriftingItemFocusChoices();
     this.showLayer(this.driftingItemFocusLayer);
     this.syncCommandState();
-    this.driftingItemFocusChoices.querySelector<HTMLButtonElement>(
+    const firstAvailableChoice = this.driftingItemFocusChoices.querySelector<HTMLButtonElement>(
       '[data-event-choice][aria-disabled="false"]',
-    )?.focus();
+    );
+    (firstAvailableChoice ?? this.driftingItemFocusBack).focus();
   }
 
   showDriftingItemReturn(): void {
