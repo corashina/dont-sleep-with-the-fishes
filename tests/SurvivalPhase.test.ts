@@ -2834,6 +2834,7 @@ describe('SurvivalPhase orchestration', () => {
         unavailableReason: null,
         anchorId: 'event:drifting-barrel',
         energyCost: 3,
+        energyOwner: 'player',
       },
       { id: 'sleep', label: 'Let It Drift', unavailableReason: null },
     ]);
@@ -3643,6 +3644,7 @@ describe('SurvivalPhase orchestration', () => {
         unavailableReason: 'Requires 3 energy; you have 2.',
         anchorId: 'event:drifting-barrel',
         energyCost: 3,
+        energyOwner: 'player',
       },
       { id: 'sleep', label: 'Let It Drift', unavailableReason: null },
     ]);
@@ -4175,6 +4177,7 @@ describe('SurvivalPhase orchestration', () => {
       unavailableReason: null,
       anchorId: 'event:drifting-bottle',
       energyCost: 1,
+      energyOwner: 'player',
     });
     ui.onEventChoice?.('retrieve');
     await flushPromises();
@@ -5567,7 +5570,13 @@ describe('SurvivalPhase orchestration', () => {
     const choices = setEventSelection.mock.calls.at(-1)?.[1] ?? [];
     const delegate = choices.find(({ id }: { id: string }) => id === 'delegate-carlitos');
     if (expected === null) expect(delegate).toBeUndefined();
-    else expect(delegate?.unavailableReason).toBe(expected ?? null);
+    else {
+      expect(delegate).toMatchObject({
+        unavailableReason: expected ?? null,
+        energyCost: 3,
+        energyOwner: 'carlitos',
+      });
+    }
     phase.dispose();
   });
 

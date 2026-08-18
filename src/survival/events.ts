@@ -44,6 +44,26 @@ export function isDriftingCargoEventId(
   return eventId === 'drifting-barrel' || eventId === 'drifting-chest';
 }
 
+export type DriftingItemEventId = DriftingCargoEventId | 'drifting-bottle';
+
+export function isDriftingItemEventId(
+  eventId: string,
+): eventId is DriftingItemEventId {
+  return isDriftingCargoEventId(eventId) || eventId === 'drifting-bottle';
+}
+
+export function driftingItemRetrieveKey(eventId: DriftingItemEventId): EventPresentationKey {
+  if (eventId === 'drifting-barrel') return 'drifting-barrel.food';
+  if (eventId === 'drifting-chest') return 'drifting-chest.food';
+  return 'drifting-bottle.retrieve';
+}
+
+export function driftingItemLeaveKey(eventId: DriftingItemEventId): EventPresentationKey {
+  if (eventId === 'drifting-barrel') return 'drifting-barrel.drift';
+  if (eventId === 'drifting-chest') return 'drifting-chest.drift';
+  return 'drifting-bottle.lost';
+}
+
 export function driftingCargoKindForEvent(
   eventId: DriftingCargoEventId,
 ): DriftingCargoKind {
@@ -478,7 +498,18 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
         ))),
       requirements: [{ resource: 'energy', minimum: 1 }],
     },
-    contextualChoice('sleep', 'Sleep',
+    {
+      ...contextualChoice('delegate-carlitos', 'Send Carlitos',
+        featuredOutcome(
+          'drifting-bottle.retrieve',
+          1,
+          'Carlitos recovers the message bottle.',
+          effects(undefined, [gain('bottledPaper')]),
+        ),
+      ),
+      companionAction: 'delegateCarlitos',
+    },
+    contextualChoice('sleep', 'Let It Drift',
       featuredOutcome('drifting-bottle.lost', 1, 'The bottle drifts away.')),
   ], undefined, { absentItemIds: ['bottledPaper'] }),
   event('check-the-back', 'night', 'Check the Back', 'safe', 'fish', 3, 2, 35, [

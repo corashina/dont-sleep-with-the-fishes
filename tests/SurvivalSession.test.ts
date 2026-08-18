@@ -323,6 +323,23 @@ describe('SurvivalSession Carlitos events', () => {
     expect(session.snapshot().carlitos?.energy).toBe(0);
   });
 
+  it('delegates Drifting Bottle without spending player energy', () => {
+    const session = new SurvivalSession(saved('carlitos'), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initial: { energy: 1 },
+      initialCarlitos: { hunger: 5, energy: 3 },
+      initialEventId: 'drifting-bottle',
+    });
+
+    const outcome = session.resolveEvent({ kind: 'choice', choiceId: 'delegate-carlitos' });
+
+    expect(outcome).toMatchObject({ accepted: true });
+    expect(session.snapshot().inventory['bottledPaper-1']).toMatchObject({ condition: 'usable' });
+    expect(session.snapshot().energy).toBe(1);
+    expect(session.snapshot().carlitos?.energy).toBe(0);
+  });
+
   it('rejects Drifting Cargo delegation without Carlitos energy', () => {
     const session = new SurvivalSession(saved('carlitos'), {
       seed: 7,

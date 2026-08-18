@@ -4,8 +4,11 @@ import type { ItemId } from '../src/game/ItemState';
 import {
   SURVIVAL_EVENT_IDS,
   SURVIVAL_EVENTS,
+  driftingItemLeaveKey,
+  driftingItemRetrieveKey,
   drawWeightedEvent,
   eligibleEvents,
+  isDriftingItemEventId,
   survivalEventById,
   validateSurvivalEventCatalog,
 } from '../src/survival/events';
@@ -437,14 +440,37 @@ describe('survival events', () => {
 
     expect(bottle?.choices.map(({ id, itemId }) => ({ id, itemId }))).toEqual([
       { id: 'retrieve', itemId: undefined },
+      { id: 'delegate-carlitos', itemId: undefined },
       { id: 'sleep', itemId: undefined },
     ]);
     const retrieve = bottle?.choices.find(({ id }) => id === 'retrieve');
     expect(retrieve?.requirements).toEqual([{ resource: 'energy', minimum: 1 }]);
+    expect(bottle?.choices.find(({ id }) => id === 'delegate-carlitos')?.companionAction)
+      .toBe('delegateCarlitos');
+    expect(bottle?.choices.find(({ id }) => id === 'sleep')?.label).toBe('Let It Drift');
     expect(retrieve?.outcomes[0]?.effects).toMatchObject({
       resources: [{ resource: 'energy', operation: 'subtract', value: 1 }],
       items: [{ kind: 'gain', itemId: 'bottledPaper', quantity: 1 }],
     });
+  });
+
+  it('maps each drifting item to its retrieve and leave presentation keys', () => {
+    expect(isDriftingItemEventId('drifting-barrel')).toBe(true);
+    expect(isDriftingItemEventId('drifting-chest')).toBe(true);
+    expect(isDriftingItemEventId('drifting-bottle')).toBe(true);
+    expect(isDriftingItemEventId('flowers')).toBe(false);
+    expect([
+      'drifting-barrel',
+      'drifting-chest',
+      'drifting-bottle',
+    ].map((eventId) => [
+      driftingItemRetrieveKey(eventId as 'drifting-barrel' | 'drifting-chest' | 'drifting-bottle'),
+      driftingItemLeaveKey(eventId as 'drifting-barrel' | 'drifting-chest' | 'drifting-bottle'),
+    ])).toEqual([
+      ['drifting-barrel.food', 'drifting-barrel.drift'],
+      ['drifting-chest.food', 'drifting-chest.drift'],
+      ['drifting-bottle.retrieve', 'drifting-bottle.lost'],
+    ]);
   });
 
   it('encodes the authored Drifting Cargo cost, Handyman response, and fallback labels', () => {

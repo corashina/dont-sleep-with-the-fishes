@@ -298,6 +298,7 @@ export interface EventContextChoice {
   readonly unavailableReason: string | null;
   readonly anchorId?: string;
   readonly energyCost?: number;
+  readonly energyOwner?: 'player' | 'carlitos';
 }
 
 export type EventResultView = {
@@ -1772,7 +1773,9 @@ export class SurvivalUI {
       ? '⚡'.repeat(energyCost)
       : energyCost <= 0
         ? reason === null ? '' : 'UNAVAILABLE'
-        : `${'⚡'.repeat(energyCost)}${reason === null ? '' : ' — INSUFFICIENT ENERGY'}`;
+        : anchoredChoice.energyOwner === 'carlitos'
+          ? `CARLITOS: ${energyCost} ENERGY${reason === null ? '' : ' — UNAVAILABLE'}`
+          : `${'⚡'.repeat(energyCost)}${reason === null ? '' : ' — INSUFFICIENT ENERGY'}`;
     const tooltipNodes = this.anchorTooltipNodes.get(button);
     if (tooltipNodes !== undefined) {
       if (tooltipNodes.label.data !== visibleLabel) tooltipNodes.label.data = visibleLabel;
@@ -1784,7 +1787,9 @@ export class SurvivalUI {
         tooltipNodes.energy.textContent = energyIndicator;
       }
     }
-    const spokenCost = spokenEnergyCost(energyCost);
+    const spokenCost = anchoredChoice?.energyOwner === 'carlitos'
+      ? `${spokenEnergyCost(energyCost) ?? 'no energy'} from Carlitos`
+      : spokenEnergyCost(energyCost);
     button.dataset.action = anchor.action ?? '';
     if (anchor.companionId === undefined) delete button.dataset.companion;
     else button.dataset.companion = anchor.companionId;
