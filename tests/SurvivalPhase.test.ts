@@ -5573,6 +5573,7 @@ describe('SurvivalPhase orchestration', () => {
     else {
       expect(delegate).toMatchObject({
         unavailableReason: expected ?? null,
+        anchorId: 'carlitos',
         energyCost: 3,
         energyOwner: 'carlitos',
       });
