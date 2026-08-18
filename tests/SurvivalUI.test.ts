@@ -2135,12 +2135,12 @@ describe('SurvivalUI', () => {
     );
   });
 
-  it('shows the salvage result beside the held prop and issues Continue once', () => {
+  it('shows the drifting item result beside the held prop and issues Continue once', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
     const continued = vi.fn();
-    ui.onDriftingCargoContinue = continued;
+    ui.onDriftingItemContinue = continued;
     const target = {
       x: 420,
       y: 280,
@@ -2149,33 +2149,26 @@ describe('SurvivalUI', () => {
       depth: 2,
       visible: true,
     };
-    ui.showDriftingCargoResult({
+    ui.showDriftingItemResult({
       caption: 'SALVAGE RECOVERED',
-      reward: { kind: 'resource', id: 'food', quantity: 2 },
-      energyCost: 3,
+      title: 'CANNED FOOD',
+      detail: '+2 FOOD',
       target,
     });
 
-    const result = mount.querySelector<HTMLElement>('[data-drifting-cargo-result]')!;
+    const result = mount.querySelector<HTMLElement>('[data-drifting-item-result]')!;
     expect(result.dataset.anchorState).toBe('projected');
-    expect(mainStyles).toContain('.drifting-cargo-result__icons');
     const projectedX = result.style.getPropertyValue('--routine-x');
     target.x = 20;
     ui.setAnchors([]);
     expect(result.style.getPropertyValue('--routine-x')).toBe(projectedX);
-    expect(mount.querySelector('[data-drifting-cargo-result-caption]')?.textContent)
+    expect(mount.querySelector('[data-drifting-item-result-caption]')?.textContent)
       .toBe('SALVAGE RECOVERED');
-    expect(mount.querySelector('[data-drifting-cargo-result-title]')).toBeNull();
-    expect(mount.querySelector('[data-drifting-cargo-result-detail]')).toBeNull();
-    expect(mount.querySelector<HTMLImageElement>('.drifting-cargo-result__thumbnail')?.src)
-      .toContain('cannedFood.png');
-    expect(mount.querySelector('.drifting-cargo-result__quantity')?.textContent).toBe('×2');
-    expect(result.querySelectorAll('[data-ui-artwork="energy"]')).toHaveLength(3);
-    expect(result.getAttribute('aria-label'))
-      .toBe('SALVAGE RECOVERED. food, quantity 2, recovered. 3 energy spent.');
+    expect(mount.querySelector('[data-drifting-item-result-title]')?.textContent).toBe('CANNED FOOD');
+    expect(mount.querySelector('[data-drifting-item-result-detail]')?.textContent).toBe('+2 FOOD');
 
     const button = mount.querySelector<HTMLButtonElement>(
-      '[data-drifting-cargo-result-continue]',
+      '[data-drifting-item-result-continue]',
     )!;
     expect(document.activeElement).toBe(button);
     button.click();
@@ -2183,21 +2176,93 @@ describe('SurvivalUI', () => {
     expect(continued).toHaveBeenCalledOnce();
   });
 
+  it('opens drifting item focus from an initial anchor and returns to the boat', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const selected = vi.fn();
+    const returned = vi.fn();
+    ui.onDriftingItemSelect = selected;
+    ui.onDriftingItemBack = returned;
+    ui.setAnchors([{
+      id: 'event:drifting-bottle',
+      eventFocusId: 'drifting-bottle',
+      tooltip: false,
+      label: 'BOTTLE',
+      description: 'A sealed bottle taps the hull.',
+      itemType: null,
+      toolId: null,
+      action: null,
+      remainingUses: null,
+      x: 420,
+      y: 260,
+      visible: true,
+      depleted: false,
+      hitArea: { width: 64, height: 64, depth: 2 },
+    }]);
+
+    const anchor = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="event:drifting-bottle"]',
+    )!;
+    expect(anchor.querySelector('.boat-tooltip')).toBeNull();
+    anchor.click();
+    expect(selected).toHaveBeenCalledWith('drifting-bottle');
+
+    ui.showDriftingItemFocus({
+      eventId: 'drifting-bottle',
+      title: 'A BOTTLE',
+      choices: [
+        {
+          id: 'retrieve',
+          label: 'RETRIEVE',
+          energyCost: 1,
+          energyOwner: 'player',
+          unavailableReason: null,
+        },
+        {
+          id: 'delegate-carlitos',
+          label: 'SEND CARLITOS',
+          energyCost: 3,
+          energyOwner: 'carlitos',
+          unavailableReason: 'Carlitos needs more energy.',
+        },
+        { id: 'leave', label: 'LET IT DRIFT', unavailableReason: null },
+      ],
+    });
+
+    const focus = mount.querySelector<HTMLElement>('[data-drifting-item-focus]')!;
+    expect(focus.querySelector('[data-drifting-item-title]')?.textContent).toBe('A BOTTLE');
+    expect(focus.textContent).toContain('PLAYER — 1 ENERGY');
+    expect(focus.textContent).toContain('CARLITOS — 3 ENERGY');
+    expect(focus.querySelector('.event-choice__reason')?.textContent)
+      .toBe('Carlitos needs more energy.');
+    expect(document.activeElement).toBe(
+      focus.querySelector<HTMLButtonElement>('[data-event-choice="retrieve"]'),
+    );
+
+    ui.showDriftingItemReturn();
+    expect(focus.querySelector('[data-drifting-item-choices]')?.hasAttribute('hidden')).toBe(true);
+    const back = focus.querySelector<HTMLButtonElement>('[data-drifting-item-back]')!;
+    expect(back.getAttribute('aria-label')).toBe('Return to boat');
+    back.click();
+    expect(returned).toHaveBeenCalledOnce();
+  });
+
   it('uses safe placement for unavailable salvage, repositions it, and cleans it up', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
     const continued = vi.fn();
-    ui.onDriftingCargoContinue = continued;
-    ui.showDriftingCargoResult({
+    ui.onDriftingItemContinue = continued;
+    ui.showDriftingItemResult({
       caption: 'SALVAGE RECOVERED',
-      reward: { kind: 'item', id: 'energyBar', quantity: 1 },
-      energyCost: 3,
+      title: 'ENERGY BAR',
+      detail: 'RECOVERED',
       target: null,
     });
 
-    const result = mount.querySelector<HTMLElement>('[data-drifting-cargo-result]')!;
-    const button = mount.querySelector<HTMLButtonElement>('[data-drifting-cargo-result-continue]')!;
+    const result = mount.querySelector<HTMLElement>('[data-drifting-item-result]')!;
+    const button = mount.querySelector<HTMLButtonElement>('[data-drifting-item-result-continue]')!;
     expect(result.dataset.anchorState).toBe('fallback');
     expect(result.style.getPropertyValue('--routine-width')).toBe('360px');
     const initialX = result.style.getPropertyValue('--routine-x');
@@ -2210,17 +2275,17 @@ describe('SurvivalUI', () => {
     window.dispatchEvent(new Event('resize'));
     expect(result.style.getPropertyValue('--routine-x')).not.toBe(initialX);
 
-    ui.hideDriftingCargoResult();
+    ui.hideDriftingItemResult();
     expect(result.classList).not.toContain('is-visible');
     expect(result.hasAttribute('inert')).toBe(true);
     expect(result.getAttribute('aria-hidden')).toBe('true');
     button.click();
     expect(continued).not.toHaveBeenCalled();
 
-    ui.showDriftingCargoResult({
+    ui.showDriftingItemResult({
       caption: 'SALVAGE RECOVERED',
-      reward: { kind: 'resource', id: 'food', quantity: 1 },
-      energyCost: 3,
+      title: 'CANNED FOOD',
+      detail: 'RECOVERED',
       target: { x: 90, y: 180, width: 40, height: 40, depth: 2, visible: false },
     });
     expect(result.dataset.anchorState).toBe('fallback');

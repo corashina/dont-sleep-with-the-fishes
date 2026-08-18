@@ -9,6 +9,7 @@ import { carlitosStatus } from '../survival/CarlitosState';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import { repairEnergyCost, SURVIVAL_BALANCE } from '../survival/survivalBalance';
 import type { BoatInteractionAnchor, BoatToolId, ProjectedBoatBounds } from '../survival/BoatInteraction';
+import type { DriftingItemEventId } from '../survival/events';
 import type {
   ActionOutcome,
   DayActionId,
@@ -278,10 +279,16 @@ export interface FishingResultView {
   readonly catchTarget: ProjectedBoatBounds | null;
 }
 
-export interface DriftingCargoResultView {
+export interface DriftingItemFocusView {
+  readonly eventId: DriftingItemEventId;
+  readonly title: string;
+  readonly choices: readonly EventContextChoice[];
+}
+
+export interface DriftingItemResultView {
   readonly caption: string;
-  readonly reward: RewardSummary;
-  readonly energyCost: number;
+  readonly title: string;
+  readonly detail: string;
   readonly target: ProjectedBoatBounds | null;
 }
 
@@ -360,7 +367,9 @@ export class SurvivalUI {
   onFishingReel: (() => boolean) | null = null;
   onFishingResultContinue: (() => void) | null = null;
   onFishingViewExit: (() => void) | null = null;
-  onDriftingCargoContinue: (() => void) | null = null;
+  onDriftingItemSelect: ((eventId: DriftingItemEventId) => void) | null = null;
+  onDriftingItemBack: (() => void) | null = null;
+  onDriftingItemContinue: (() => void) | null = null;
 
   private readonly root: HTMLDivElement;
   private readonly day: HTMLElement;
@@ -404,10 +413,15 @@ export class SurvivalUI {
   private readonly fishingResultTitle: HTMLElement;
   private readonly fishingResultDetail: HTMLElement;
   private readonly fishingResultContinue: HTMLButtonElement;
-  private readonly driftingCargoResultLayer: HTMLElement;
-  private readonly driftingCargoResultCaption: HTMLElement;
-  private readonly driftingCargoResultIcons: HTMLElement;
-  private readonly driftingCargoResultContinue: HTMLButtonElement;
+  private readonly driftingItemFocusLayer: HTMLElement;
+  private readonly driftingItemFocusBack: HTMLButtonElement;
+  private readonly driftingItemFocusTitle: HTMLElement;
+  private readonly driftingItemFocusChoices: HTMLElement;
+  private readonly driftingItemResultLayer: HTMLElement;
+  private readonly driftingItemResultCaption: HTMLElement;
+  private readonly driftingItemResultTitle: HTMLElement;
+  private readonly driftingItemResultDetail: HTMLElement;
+  private readonly driftingItemResultContinue: HTMLButtonElement;
   private readonly fishingViewExit: HTMLButtonElement;
   private readonly repairOptionsLayer: HTMLElement;
   private readonly repairOptionsTitle: HTMLElement;
@@ -475,8 +489,10 @@ export class SurvivalUI {
   private pendingCoveredSceneSettle: PendingFade | null = null;
   private fishingResultContinueIssued = false;
   private fishingResultTarget: ProjectedBoatBounds | null = null;
-  private driftingCargoContinueIssued = false;
-  private driftingCargoResultTarget: ProjectedBoatBounds | null = null;
+  private driftingItemContinueIssued = false;
+  private driftingItemResultTarget: ProjectedBoatBounds | null = null;
+  private driftingItemFocusReturning = false;
+  private driftingItemFocusChoicesView: readonly EventContextChoice[] = [];
   private eventEligibility: ReadonlyMap<ItemInstanceId, EventResponseId> | null = null;
   private contextualEventChoices: readonly EventContextChoice[] = [];
   private eventSelectedInstanceId: ItemInstanceId | null = null;
@@ -588,11 +604,22 @@ export class SurvivalUI {
           </button>
         </div>
       </section>
-      <section class="routine-dialog routine-dialog--salvage" data-drifting-cargo-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="drifting-cargo-result-caption" inert>
+      <section class="drifting-item-focus" data-drifting-item-focus role="dialog" aria-modal="true" aria-hidden="true" inert>
+        <button type="button" class="drifting-item-focus__back" data-drifting-item-back aria-label="Let it drift and return">
+          <span aria-hidden="true">&#8592;</span>
+        </button>
+        <div class="drifting-item-focus__card">
+          <p class="eyebrow ui-role-context">DRIFTING ITEM</p>
+          <h2 class="ui-role-display" data-drifting-item-title></h2>
+          <nav data-drifting-item-choices aria-label="Pickup choices"></nav>
+        </div>
+      </section>
+      <section class="routine-dialog routine-dialog--salvage" data-drifting-item-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="drifting-item-result-title" inert>
         <div class="routine-dialog__card fishing-result-card">
-          <p class="eyebrow ui-role-context" id="drifting-cargo-result-caption" data-drifting-cargo-result-caption></p>
-          <div class="drifting-cargo-result__icons" data-drifting-cargo-result-icons aria-hidden="true"></div>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-drifting-cargo-result-continue aria-label="Continue">CONTINUE</button>
+          <p class="eyebrow ui-role-context" data-drifting-item-result-caption></p>
+          <h2 class="ui-role-display" id="drifting-item-result-title" data-drifting-item-result-title></h2>
+          <p class="fishing-result-detail ui-role-narrative" data-drifting-item-result-detail></p>
+          <button type="button" class="primary-action salvage-action ui-role-context" data-drifting-item-result-continue aria-label="Continue">CONTINUE</button>
         </div>
       </section>
       <section class="routine-dialog routine-dialog--repair" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Repair target" inert>
@@ -707,10 +734,15 @@ export class SurvivalUI {
     this.fishingResultTitle = requireElement(this.root, '[data-fishing-result-title]');
     this.fishingResultDetail = requireElement(this.root, '[data-fishing-result-detail]');
     this.fishingResultContinue = requireElement(this.root, '[data-fishing-result-continue]');
-    this.driftingCargoResultLayer = requireElement(this.root, '[data-drifting-cargo-result]');
-    this.driftingCargoResultCaption = requireElement(this.root, '[data-drifting-cargo-result-caption]');
-    this.driftingCargoResultIcons = requireElement(this.root, '[data-drifting-cargo-result-icons]');
-    this.driftingCargoResultContinue = requireElement(this.root, '[data-drifting-cargo-result-continue]');
+    this.driftingItemFocusLayer = requireElement(this.root, '[data-drifting-item-focus]');
+    this.driftingItemFocusBack = requireElement(this.root, '[data-drifting-item-back]');
+    this.driftingItemFocusTitle = requireElement(this.root, '[data-drifting-item-title]');
+    this.driftingItemFocusChoices = requireElement(this.root, '[data-drifting-item-choices]');
+    this.driftingItemResultLayer = requireElement(this.root, '[data-drifting-item-result]');
+    this.driftingItemResultCaption = requireElement(this.root, '[data-drifting-item-result-caption]');
+    this.driftingItemResultTitle = requireElement(this.root, '[data-drifting-item-result-title]');
+    this.driftingItemResultDetail = requireElement(this.root, '[data-drifting-item-result-detail]');
+    this.driftingItemResultContinue = requireElement(this.root, '[data-drifting-item-result-continue]');
     this.fishingViewExit = requireElement(this.root, '[data-fishing-view-exit]');
     this.repairOptionsLayer = requireElement(this.root, '[data-repair-options]');
     this.repairOptionsTitle = requireElement(this.root, '[data-repair-options-title]');
@@ -736,7 +768,8 @@ export class SurvivalUI {
       this.repairOptionsLayer,
       this.endingLayer,
       this.diveResultLayer,
-      this.driftingCargoResultLayer,
+      this.driftingItemResultLayer,
+      this.driftingItemFocusLayer,
       this.fishingResultLayer,
       this.fishingLayer,
     ];
@@ -783,10 +816,12 @@ export class SurvivalUI {
       }
       this.anchors.set(anchor.id, anchor);
       const button = this.anchorButtons.get(anchor.id) ?? this.createAnchorButton(anchor);
+      if (anchor.eventFocusId === undefined) delete button.dataset.eventFocusId;
+      else button.dataset.eventFocusId = anchor.eventFocusId;
       const itemTarget = anchor.itemType !== null;
       const targetKind = itemTarget
         ? 'item'
-        : anchor.eventChoiceId === undefined ? 'tool' : 'event';
+        : anchor.eventChoiceId === undefined && anchor.eventFocusId === undefined ? 'tool' : 'event';
       const hitArea = anchor.hitArea ?? DEFAULT_ANCHOR_HIT_AREA;
       const x = Math.round(anchor.x);
       const y = Math.round(anchor.y);
@@ -1382,46 +1417,58 @@ export class SurvivalUI {
     this.fishingResultTarget = null;
   }
 
-  showDriftingCargoResult(view: DriftingCargoResultView): void {
+  showDriftingItemFocus(view: DriftingItemFocusView): void {
     if (this.disposed) return;
-    this.driftingCargoContinueIssued = false;
-    this.driftingCargoResultCaption.textContent = view.caption;
-    const rewardItemId = driftingCargoRewardItemId(view.reward);
-    const reward = document.createElement('span');
-    reward.className = 'drifting-cargo-result__reward';
-    const thumbnail = document.createElement('img');
-    thumbnail.className = 'drifting-cargo-result__thumbnail';
-    thumbnail.src = itemThumbnailUrl(rewardItemId);
-    thumbnail.alt = '';
-    thumbnail.decoding = 'async';
-    thumbnail.draggable = false;
-    const quantity = document.createElement('span');
-    quantity.className = 'drifting-cargo-result__quantity ui-role-numeral';
-    quantity.textContent = `×${view.reward.quantity}`;
-    reward.append(thumbnail, quantity);
-
-    const energy = document.createElement('span');
-    energy.className = 'drifting-cargo-result__energy';
-    energy.innerHTML = Array.from(
-      { length: view.energyCost },
-      () => uiArtwork('energy', 'drifting-cargo-result__energy-icon'),
-    ).join('');
-    this.driftingCargoResultIcons.replaceChildren(reward, energy);
-    this.driftingCargoResultLayer.setAttribute(
-      'aria-label',
-      `${view.caption}. ${driftingCargoRewardLabel(view.reward)}. ${view.energyCost} energy spent.`,
-    );
-    this.driftingCargoResultTarget = view.target === null
-      ? null
-      : Object.freeze({ ...view.target });
-    this.showLayer(this.driftingCargoResultLayer);
-    this.driftingCargoResultContinue.focus();
+    this.driftingItemFocusReturning = false;
+    this.driftingItemFocusBack.setAttribute('aria-label', 'Let it drift and return');
+    this.driftingItemFocusTitle.textContent = view.title;
+    this.driftingItemFocusChoicesView = view.choices.filter((choice) => (
+      choice.id === 'retrieve' || choice.id === 'delegate-carlitos'
+    ));
+    this.renderDriftingItemFocusChoices();
+    this.showLayer(this.driftingItemFocusLayer);
+    this.syncCommandState();
+    this.driftingItemFocusChoices.querySelector<HTMLButtonElement>(
+      '[data-event-choice][aria-disabled="false"]',
+    )?.focus();
   }
 
-  hideDriftingCargoResult(): void {
+  showDriftingItemReturn(): void {
+    if (this.disposed || !this.driftingItemFocusLayer.classList.contains('is-visible')) return;
+    this.driftingItemFocusReturning = true;
+    this.driftingItemFocusChoices.hidden = true;
+    this.driftingItemFocusBack.setAttribute('aria-label', 'Return to boat');
+    this.driftingItemFocusBack.focus();
+  }
+
+  hideDriftingItemFocus(): void {
     if (this.disposed) return;
-    this.hideLayer(this.driftingCargoResultLayer);
-    this.driftingCargoResultTarget = null;
+    this.hideLayer(this.driftingItemFocusLayer);
+    this.driftingItemFocusReturning = false;
+    this.driftingItemFocusChoicesView = [];
+    this.driftingItemFocusChoices.replaceChildren();
+    this.driftingItemFocusChoices.hidden = false;
+    this.driftingItemFocusTitle.textContent = '';
+  }
+
+  showDriftingItemResult(view: DriftingItemResultView): void {
+    if (this.disposed) return;
+    this.hideDriftingItemFocus();
+    this.driftingItemContinueIssued = false;
+    this.driftingItemResultCaption.textContent = view.caption;
+    this.driftingItemResultTitle.textContent = view.title;
+    this.driftingItemResultDetail.textContent = view.detail;
+    this.driftingItemResultTarget = view.target === null
+      ? null
+      : Object.freeze({ ...view.target });
+    this.showLayer(this.driftingItemResultLayer);
+    this.driftingItemResultContinue.focus();
+  }
+
+  hideDriftingItemResult(): void {
+    if (this.disposed) return;
+    this.hideLayer(this.driftingItemResultLayer);
+    this.driftingItemResultTarget = null;
   }
 
   setFishingViewExitVisible(visible: boolean): void {
@@ -1593,8 +1640,9 @@ export class SurvivalUI {
     this.pendingCoveredSceneSettle?.finish();
     this.fishingAnnouncementVersion += 1;
     this.anchorLayouts.clear();
-    this.hideLayer(this.driftingCargoResultLayer);
-    this.driftingCargoResultTarget = null;
+    this.hideLayer(this.driftingItemFocusLayer);
+    this.hideLayer(this.driftingItemResultLayer);
+    this.driftingItemResultTarget = null;
     if (this.fishingMode !== 'hidden') {
       this.fishingLayer.classList.remove('is-visible');
       this.fishingMode = 'hidden';
@@ -1627,7 +1675,9 @@ export class SurvivalUI {
     this.onFishingReel = null;
     this.onFishingResultContinue = null;
     this.onFishingViewExit = null;
-    this.onDriftingCargoContinue = null;
+    this.onDriftingItemSelect = null;
+    this.onDriftingItemBack = null;
+    this.onDriftingItemContinue = null;
     this.root.remove();
   }
 
@@ -2082,6 +2132,13 @@ export class SurvivalUI {
         unavailable || this.busy || this.eventSelectedChoiceId !== null ? 'true' : 'false',
       );
     });
+    this.driftingItemFocusChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]').forEach((button) => {
+      const unavailable = button.dataset.unavailableReason !== undefined;
+      button.dataset.eventState = 'idle';
+      button.setAttribute('aria-pressed', 'false');
+      button.disabled = false;
+      button.setAttribute('aria-disabled', unavailable || this.busy ? 'true' : 'false');
+    });
     this.endureButton.disabled = this.busy;
     this.syncCarlitosActions();
   }
@@ -2112,6 +2169,36 @@ export class SurvivalUI {
     const showCaption = this.eventPresentationActive;
     this.eventCaption.classList.toggle('is-visible', showCaption);
     this.eventCaption.setAttribute('aria-hidden', showCaption ? 'false' : 'true');
+  }
+
+  private renderDriftingItemFocusChoices(): void {
+    const choices = this.driftingItemFocusChoicesView.map((choice) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'event-choice ui-role-context';
+      button.dataset.eventChoice = choice.id;
+      button.dataset.eventState = 'idle';
+      button.setAttribute('aria-pressed', 'false');
+      button.append(document.createTextNode(choice.label));
+
+      const cost = document.createElement('span');
+      cost.className = 'drifting-item-focus__cost ui-role-numeral';
+      const owner = choice.energyOwner === 'carlitos' ? 'CARLITOS' : 'PLAYER';
+      cost.textContent = `${owner} — ${choice.energyCost ?? 0} ENERGY`;
+      button.append(cost);
+
+      if (choice.unavailableReason !== null) {
+        button.dataset.unavailableReason = choice.unavailableReason;
+        button.setAttribute('aria-description', choice.unavailableReason);
+        const reason = document.createElement('span');
+        reason.className = 'event-choice__reason ui-role-narrative';
+        reason.textContent = choice.unavailableReason;
+        button.append(reason);
+      }
+      return button;
+    });
+    this.driftingItemFocusChoices.replaceChildren(...choices);
+    this.driftingItemFocusChoices.hidden = this.driftingItemFocusReturning;
   }
 
   private eventLanternChoice(): EventContextChoice | undefined {
@@ -2267,11 +2354,11 @@ export class SurvivalUI {
         ROUTINE_DIALOG_PLACEMENTS.fishing,
         this.fishingResultTarget,
       );
-    } else if (layer === this.driftingCargoResultLayer) {
+    } else if (layer === this.driftingItemResultLayer) {
       this.positionRoutineDialog(
         layer,
         ROUTINE_DIALOG_PLACEMENTS.salvage,
-        this.driftingCargoResultTarget,
+        this.driftingItemResultTarget,
       );
     } else if (layer === this.repairOptionsLayer) {
       this.positionRoutineDialog(layer, ROUTINE_DIALOG_PLACEMENTS.repair);
@@ -2293,11 +2380,11 @@ export class SurvivalUI {
         this.fishingResultTarget,
       );
     }
-    if (this.driftingCargoResultLayer.classList.contains('is-visible')) {
+    if (this.driftingItemResultLayer.classList.contains('is-visible')) {
       this.positionRoutineDialog(
-        this.driftingCargoResultLayer,
+        this.driftingItemResultLayer,
         ROUTINE_DIALOG_PLACEMENTS.salvage,
-        this.driftingCargoResultTarget,
+        this.driftingItemResultTarget,
       );
     }
     if (this.repairOptionsLayer.classList.contains('is-visible')) {
@@ -2399,7 +2486,8 @@ export class SurvivalUI {
   private focusModal(layer: HTMLElement): void {
     if (layer === this.endingLayer) this.endingTitle.focus();
     else if (layer === this.fishingResultLayer) this.fishingResultContinue.focus();
-    else if (layer === this.driftingCargoResultLayer) this.driftingCargoResultContinue.focus();
+    else if (layer === this.driftingItemFocusLayer) this.driftingItemFocusBack.focus();
+    else if (layer === this.driftingItemResultLayer) this.driftingItemResultContinue.focus();
     else if (layer === this.repairOptionsLayer) this.repairOptionsTitle.focus();
     else if (layer === this.journalLayer) this.journalTitle.focus();
     else if (layer === this.pauseLayer) this.resumeButton.focus();
@@ -2583,11 +2671,12 @@ export class SurvivalUI {
 
   private activateEventChoice(button: HTMLButtonElement): void {
     const choiceId = button.dataset.eventChoice as EventResponseId | undefined;
+    const focusActive = this.driftingItemFocusLayer.classList.contains('is-visible');
     if (
       choiceId === undefined
-      || !this.eventPresentationActive
+      || (!this.eventPresentationActive && !focusActive)
       || this.busy
-      || this.eventSelectedChoiceId !== null
+      || (this.eventPresentationActive && this.eventSelectedChoiceId !== null)
       || button.getAttribute('aria-disabled') === 'true'
     ) return;
     this.onEventChoice(choiceId);
@@ -2625,6 +2714,11 @@ export class SurvivalUI {
       && !button.hasAttribute('data-event-choice')
     ) {
       this.openCarlitosCard(button);
+      return;
+    }
+    const eventFocusId = button.dataset.eventFocusId as DriftingItemEventId | undefined;
+    if (eventFocusId !== undefined) {
+      this.onDriftingItemSelect?.(eventFocusId);
       return;
     }
     const eventInstanceId = button.dataset.backingInstanceId as ItemInstanceId | undefined
@@ -2686,11 +2780,16 @@ export class SurvivalUI {
       this.onFishingResultContinue?.();
       return;
     }
-    if (button.hasAttribute('data-drifting-cargo-result-continue')) {
-      if (topmostModal !== this.driftingCargoResultLayer) return;
-      if (this.driftingCargoContinueIssued) return;
-      this.driftingCargoContinueIssued = true;
-      this.onDriftingCargoContinue?.();
+    if (button.hasAttribute('data-drifting-item-back')) {
+      if (topmostModal !== this.driftingItemFocusLayer) return;
+      this.onDriftingItemBack?.();
+      return;
+    }
+    if (button.hasAttribute('data-drifting-item-result-continue')) {
+      if (topmostModal !== this.driftingItemResultLayer) return;
+      if (this.driftingItemContinueIssued) return;
+      this.driftingItemContinueIssued = true;
+      this.onDriftingItemContinue?.();
       return;
     }
     if (button.hasAttribute('data-fishing-view-exit')) {
@@ -2763,14 +2862,18 @@ export class SurvivalUI {
       return;
     }
     if (
-      this.eventPresentationActive
+      (this.eventPresentationActive || topmostModal === this.driftingItemFocusLayer)
       && target instanceof Element
       && (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar')
     ) {
       const choice = target.closest<HTMLButtonElement>('[data-event-choice]');
       if (
         choice !== null
-        && (this.eventChoices.contains(choice) || this.anchorLayer.contains(choice))
+        && (
+          this.eventChoices.contains(choice)
+          || this.driftingItemFocusChoices.contains(choice)
+          || this.anchorLayer.contains(choice)
+        )
       ) {
         event.preventDefault();
         this.activateEventChoice(choice);
