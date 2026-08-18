@@ -102,7 +102,10 @@ import { projectBoatBounds } from '../src/survival/BoatInteraction';
 import { collectMeshResources } from '../src/world/SceneResources';
 import { HOVER_OUTLINE_NAME } from '../src/rendering/HoverOutline';
 import { SurvivalInventoryState } from '../src/survival/inventory';
-import { SURVIVAL_EVENTS } from '../src/survival/events';
+import {
+  SURVIVAL_EVENTS,
+  type DriftingItemEventId,
+} from '../src/survival/events';
 import { SurvivalEventModelLibrary } from '../src/survival/SurvivalEventModelLibrary';
 import type {
   ActionOutcome,
@@ -1582,9 +1585,9 @@ describe('BoatWorld helpers', () => {
         'low',
         featuredModels,
       );
-      const sternRest = world.scene.getObjectByName('drifting-cargo-stern-rest')!;
+      const bowRest = world.scene.getObjectByName('drifting-item-bow-rest')!;
 
-      expect(sternRest.position.toArray()).toEqual([0.72, 0.58, 1.05]);
+      expect(bowRest.position.toArray()).toEqual([0.72, 0.58, -2.52]);
       world.stageEvent(eventId);
       const model = world.scene.getObjectByName(modelName)!;
       expect(model.visible).toBe(true);
@@ -1598,7 +1601,7 @@ describe('BoatWorld helpers', () => {
       expect(model.position.toArray()).toEqual(stagedPosition.toArray());
       world.update(1, 0.9);
       expect(model.position.distanceTo(stagedPosition)).toBeGreaterThan(0.001);
-      expect(world.projectDriftingCargo(800, 600)).toBeNull();
+      expect(world.projectDriftingItemResult(800, 600)).not.toBeNull();
       const anchorId = `event:${eventId}`;
       const interaction = world.projectInteractionAnchors(800, 600)
         .find(({ id }) => id === anchorId);
@@ -1615,15 +1618,15 @@ describe('BoatWorld helpers', () => {
       world.setHighlightedItem(anchorId);
       expect(model.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
 
-      const retrieve = world.retrieveDriftingCargo();
+      const retrieve = world.retrieveDriftingItem(eventId);
       expect(world.projectInteractionAnchors(800, 600)
         .find(({ id }) => id === anchorId)).toBeUndefined();
       expect(model.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
       world.update(2, retrieveDuration);
       await retrieve;
-      expect(world.projectDriftingCargo(800, 600)).not.toBeNull();
+      expect(world.projectDriftingItemResult(800, 600)).not.toBeNull();
 
-      const recede = world.recedeDriftingCargo();
+      const recede = world.recedeDriftingItem(eventId);
       world.update(3, 0.8);
       await recede;
       expect(model.visible).toBe(false);
@@ -1767,6 +1770,102 @@ describe('BoatWorld helpers', () => {
     world.dispose();
     propModels.dispose();
   });
+
+  it.each([
+    'drifting-barrel',
+    'drifting-chest',
+    'drifting-bottle',
+  ] as const)('focuses, retrieves, and frames %s at the bow', async (eventId) => {
+    const propModels = createTestPropModels();
+    const furniture = createTestShipFurniture();
+    const featuredModels = await createTestFeaturedModels([
+      'driftingBarrel',
+      'mysteryChest',
+      'driftingBottle',
+    ]);
+    const camera = new PerspectiveCamera(65, 4 / 3, 0.08, 220);
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      furniture,
+      'low',
+      featuredModels,
+    );
+    const basePosition = camera.position.clone();
+    const baseQuaternion = camera.quaternion.clone();
+    world.stageEvent(eventId, 8);
+
+    const entered = world.enterDriftingItemView(eventId);
+    world.update(1.2, 1.2);
+    await entered;
+
+    expect(camera.position).toEqual(expect.objectContaining(FISHING_PLAYER_SEAT));
+    const itemName = eventId === 'drifting-bottle'
+      ? 'event-prop:drifting-bottle'
+      : `${eventId}:model`;
+    const item = world.scene.getObjectByName(itemName)!;
+    const direction = camera.getWorldDirection(new Vector3());
+    const directionToItem = item.getWorldPosition(new Vector3())
+      .sub(camera.getWorldPosition(new Vector3()))
+      .normalize();
+    expect(direction.dot(directionToItem)).toBeGreaterThan(0.995);
+
+    const retrieved = world.retrieveDriftingItem(eventId);
+    world.update(3.2, 2);
+    await retrieved;
+    const bowRest = world.scene.getObjectByName('drifting-item-bow-rest')!;
+    expect(item.getWorldPosition(new Vector3()).distanceTo(
+      bowRest.getWorldPosition(new Vector3()),
+    )).toBeLessThan(0.001);
+    expect(world.projectDriftingItemResult(800, 600)).not.toBeNull();
+
+    const exited = world.exitDriftingItemView();
+    world.update(4.4, 1.2);
+    await exited;
+    expect(camera.position.toArray()).toEqual(basePosition.toArray());
+    expect(camera.quaternion.toArray()).toEqual(baseQuaternion.toArray());
+
+    world.dispose();
+    featuredModels.dispose();
+    furniture.dispose();
+    propModels.dispose();
+  });
+
+  it.each(['hidden', 'clear', 'dispose'] as const)(
+    'settles repeated drifting item camera work on %s',
+    async (interruption) => {
+      const propModels = createTestPropModels();
+      const camera = new PerspectiveCamera(65, 4 / 3, 0.08, 220);
+      const world = new BoatWorld(camera, propModels, createTestMoonTexture());
+      const basePosition = camera.position.clone();
+      const eventId: DriftingItemEventId = 'drifting-bottle';
+      world.stageEvent(eventId, 8);
+      let settled = 0;
+      const first = world.enterDriftingItemView(eventId).then(() => { settled += 1; });
+      const second = world.enterDriftingItemView(eventId).then(() => { settled += 1; });
+
+      if (interruption === 'hidden') world.setDocumentHidden(true);
+      else if (interruption === 'clear') world.clearEvent();
+      else world.dispose();
+      await Promise.all([first, second]);
+      expect(settled).toBe(2);
+      if (interruption === 'hidden') {
+        expect(camera.position).toEqual(expect.objectContaining(FISHING_PLAYER_SEAT));
+        const exitFirst = world.exitDriftingItemView();
+        const exitSecond = world.exitDriftingItemView();
+        world.setDocumentHidden(true);
+        await Promise.all([exitFirst, exitSecond]);
+      }
+      if (interruption !== 'dispose') {
+        expect(camera.position.toArray()).toEqual(basePosition.toArray());
+        world.dispose();
+      }
+      propModels.dispose();
+    },
+  );
 
   it('keeps the Flowers field fixed in place and removes its world interaction', () => {
     const propModels = createTestPropModels();
@@ -4558,14 +4657,14 @@ describe('BoatWorld helpers', () => {
     const companion = world.scene.getObjectByName('carlitos-companion')!;
     const basePosition = companion.position.clone();
 
-    const delegated = world.delegateDriftingCargo();
+    const delegated = world.delegateDriftingItem('drifting-barrel');
     world.update(2, 0.35);
     expect(companion.position.equals(basePosition)).toBe(false);
     world.update(3, 1.35);
     await delegated;
 
     expect(companion.position.toArray()).toEqual(basePosition.toArray());
-    expect(world.projectDriftingCargo(800, 600)).not.toBeNull();
+    expect(world.projectDriftingItemResult(800, 600)).not.toBeNull();
     world.dispose();
     furniture.dispose();
     propModels.dispose();
@@ -4596,7 +4695,7 @@ describe('BoatWorld helpers', () => {
       await reveal;
       const companion = world.scene.getObjectByName('carlitos-companion')!;
       const basePosition = companion.position.clone();
-      const delegated = world.delegateDriftingCargo();
+      const delegated = world.delegateDriftingItem('drifting-chest');
       world.update(2, 0.3);
       expect(companion.position.equals(basePosition)).toBe(false);
 

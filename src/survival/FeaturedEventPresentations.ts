@@ -1,5 +1,4 @@
 import { Group, type Object3D, type PerspectiveCamera } from 'three';
-import type { ProjectedBoatBounds } from './BoatInteraction';
 import { CheckBackPresentation } from './CheckBackPresentation';
 import { DriftingBottlePresentation } from './DriftingBottlePresentation';
 import { DriftingCargoPresentation } from './DriftingCargoPresentation';
@@ -27,7 +26,7 @@ export class FeaturedEventPresentations {
   constructor(
     models: SurvivalEventModels,
     camera: PerspectiveCamera,
-    deckTarget: Object3D,
+    driftingItemBowTarget: Object3D,
     checkBackSternTarget: Object3D,
     onlyEventId?: FeaturedEventId | null,
   ) {
@@ -41,12 +40,12 @@ export class FeaturedEventPresentations {
       ? new DriftingCargoPresentation({
           barrel: include('drifting-barrel') ? models.clone('driftingBarrel') : new Group(),
           chest: include('drifting-chest') ? models.clone('mysteryChest') : new Group(),
-        }, deckTarget)
+        }, driftingItemBowTarget)
       : null;
     if (include('drifting-bottle')) {
       this.presentations.set('drifting-bottle', new DriftingBottlePresentation(
         models.clone('driftingBottle'),
-        deckTarget,
+        driftingItemBowTarget,
       ));
     }
     if (include('check-the-back')) {
@@ -57,7 +56,7 @@ export class FeaturedEventPresentations {
       ));
     }
     if (include('flowers')) {
-      this.presentations.set('flowers', new FlowersPresentation(models, deckTarget));
+      this.presentations.set('flowers', new FlowersPresentation(models, driftingItemBowTarget));
     }
     this.presentationList = Object.freeze([...this.presentations.values()]);
     this.root.add(
@@ -151,16 +150,6 @@ export class FeaturedEventPresentations {
     return isDriftingCargoEventId(eventId)
       ? this.driftingCargo?.resultRoot() ?? null
       : this.presentations.get(eventId)?.resultRoot() ?? null;
-  }
-
-  projectHeldDriftingCargo(
-    camera: PerspectiveCamera,
-    width: number,
-    height: number,
-  ): ProjectedBoatBounds | null {
-    return this.disposed
-      ? null
-      : this.driftingCargo?.projectHeld(camera, width, height) ?? null;
   }
 
   update(time: number, delta: number): void {
