@@ -8,7 +8,7 @@ import {
   SURVIVAL_EVENTS,
   drawWeightedEvent,
   eligibleEvents,
-  isDriftingCargoEventId,
+  isDriftingItemEventId,
   survivalEventById,
 } from './events';
 import { resolveWeightedOutcome } from './eventResolver';
@@ -614,7 +614,7 @@ export class SurvivalSession {
     const after = this.resourceValues();
     const deltas = this.appliedResourceDelta(before, after);
     const cue = this.presentationCue('none');
-    const rewardSummary = this.driftingCargoRewardSummary(
+    const rewardSummary = this.driftingItemRewardSummary(
       event.id,
       choiceId,
       resolved,
@@ -1096,15 +1096,18 @@ export class SurvivalSession {
     this.openEvent(event);
   }
 
-  private driftingCargoRewardSummary(
+  private driftingItemRewardSummary(
     eventId: string,
     choiceId: string,
     resolved: WeightedEventOutcome,
     fallbackFoodGranted: boolean,
   ): RewardSummary | undefined {
-    if (!isDriftingCargoEventId(eventId)
+    if (!isDriftingItemEventId(eventId)
       || (choiceId !== 'retrieve' && choiceId !== 'delegate-carlitos')) return undefined;
     if (fallbackFoodGranted) return Object.freeze({ kind: 'resource', id: 'food', quantity: 1 });
+    if (eventId === 'drifting-bottle') {
+      return Object.freeze({ kind: 'item', id: 'bottledPaper', quantity: 1 });
+    }
     const added = resolved.effects.resources?.find(
       ({ operation, resource }) => operation === 'add'
         && (resource === 'food' || resource === 'bait' || resource === 'repairMaterial'),

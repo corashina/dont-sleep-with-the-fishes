@@ -2000,9 +2000,14 @@ export class BoatWorld {
           id: `event:${this.activeFeaturedEventId}`,
           label: this.featuredAnchorLabel(this.activeFeaturedEventId),
           description: this.featuredAnchorDescription(this.activeFeaturedEventId),
-          ...(this.featuredAnchorChoice(this.activeFeaturedEventId) === null
-            ? {}
-            : { eventChoiceId: this.featuredAnchorChoice(this.activeFeaturedEventId)! }),
+          ...(isDriftingItemEventId(this.activeFeaturedEventId)
+            ? {
+                tooltip: false,
+                eventFocusId: this.activeFeaturedEventId,
+              }
+            : this.featuredAnchorChoice(this.activeFeaturedEventId) === null
+              ? {}
+              : { eventChoiceId: this.featuredAnchorChoice(this.activeFeaturedEventId)! }),
           itemType: null,
           toolId: null,
           action: null,

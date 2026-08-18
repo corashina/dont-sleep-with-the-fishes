@@ -1609,9 +1609,11 @@ describe('BoatWorld helpers', () => {
         id: anchorId,
         label,
         description: 'Floating salvage within reach.',
-        eventChoiceId: 'retrieve',
+        eventFocusId: eventId,
+        tooltip: false,
         visible: true,
       }));
+      expect(interaction).not.toHaveProperty('eventChoiceId');
       expect(interaction?.hitArea?.width).toBeGreaterThanOrEqual(64);
       expect(interaction?.hitArea?.height).toBeGreaterThanOrEqual(64);
 
@@ -1705,9 +1707,12 @@ describe('BoatWorld helpers', () => {
       expect.objectContaining({
         id: 'event:drifting-bottle',
         label: 'BOTTLE',
-        eventChoiceId: 'retrieve',
+        eventFocusId: 'drifting-bottle',
+        tooltip: false,
       }),
     );
+    expect(world.projectInteractionAnchors(800, 600)
+      .find(({ id }) => id === 'event:drifting-bottle')).not.toHaveProperty('eventChoiceId');
     world.update(1, 1);
     expect(left.position.distanceTo(stagedPosition)).toBeGreaterThan(0.001);
     expect(left.quaternion.angleTo(stagedQuaternion)).toBeGreaterThan(0.001);

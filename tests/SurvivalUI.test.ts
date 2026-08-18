@@ -2240,7 +2240,17 @@ describe('SurvivalUI', () => {
       focus.querySelector<HTMLButtonElement>('[data-event-choice="retrieve"]'),
     );
 
+    ui.showDriftingItemResult({
+      caption: 'SALVAGE RECOVERED',
+      title: 'BOTTLED PAPER',
+      detail: 'BOTTLED PAPER +1 — 1 ENERGY SPENT',
+      target: null,
+    });
+    expect(focus.classList).not.toContain('is-visible');
+    expect(focus.querySelector('[data-drifting-item-title]')?.textContent).toBe('A BOTTLE');
+    ui.hideDriftingItemResult();
     ui.showDriftingItemReturn();
+    expect(focus.classList).toContain('is-visible');
     expect(focus.querySelector('[data-drifting-item-choices]')?.hasAttribute('hidden')).toBe(true);
     const back = focus.querySelector<HTMLButtonElement>('[data-drifting-item-back]')!;
     expect(back.getAttribute('aria-label')).toBe('Return to boat');

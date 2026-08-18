@@ -334,7 +334,10 @@ describe('SurvivalSession Carlitos events', () => {
 
     const outcome = session.resolveEvent({ kind: 'choice', choiceId: 'delegate-carlitos' });
 
-    expect(outcome).toMatchObject({ accepted: true });
+    expect(outcome).toMatchObject({
+      accepted: true,
+      rewardSummary: { kind: 'item', id: 'bottledPaper', quantity: 1 },
+    });
     expect(session.snapshot().inventory['bottledPaper-1']).toMatchObject({ condition: 'usable' });
     expect(session.snapshot().energy).toBe(1);
     expect(session.snapshot().carlitos?.energy).toBe(0);
@@ -768,6 +771,7 @@ describe('SurvivalSession daytime actions', () => {
     expect(bottle.resolveEvent(choiceResponse('retrieve'))).toMatchObject({
       accepted: true,
       deltas: { energy: -1 },
+      rewardSummary: { kind: 'item', id: 'bottledPaper', quantity: 1 },
     });
     expect(bottle.snapshot().inventory['bottledPaper-1']).toMatchObject({ condition: 'usable' });
     expect(bottle.snapshot().lastOutcome).toMatchObject({
