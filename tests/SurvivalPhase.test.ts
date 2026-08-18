@@ -34,7 +34,7 @@ import type {
 } from '../src/survival/survivalTypes';
 import type {
   DiveResultView,
-  DriftingCargoResultView,
+  DriftingItemResultView,
   EventContextChoice,
   FishingResultView,
   FishingUiState,
@@ -799,8 +799,12 @@ describe('SurvivalPhase orchestration', () => {
     (reward) => {
       expect(formatDriftingCargoResult(reward)).toEqual({
         caption: 'SALVAGE RECOVERED',
-        reward,
-        energyCost: 3,
+        title: reward.id === 'repairMaterial'
+          ? 'REPAIR MATERIAL'
+          : reward.id === 'energyBar' ? 'ENERGY BAR' : reward.id.toUpperCase(),
+        detail: `${reward.id === 'repairMaterial'
+          ? 'REPAIR MATERIAL'
+          : reward.id === 'energyBar' ? 'ENERGY BAR' : reward.id.toUpperCase()} +${reward.quantity} — 3 ENERGY SPENT`,
         target: null,
       });
     },
@@ -836,10 +840,10 @@ describe('SurvivalPhase orchestration', () => {
     const resultTarget = Object.freeze({
       x: 410, y: 260, width: 100, height: 80, depth: 1, visible: true,
     });
-    let resultView: DriftingCargoResultView | null = null;
+    let resultView: DriftingItemResultView | null = null;
     const setBusy = vi.fn((busy: boolean) => calls.push(busy ? 'lock' : 'unlock'));
     const restoreCommandFocus = vi.fn(() => calls.push('focus'));
-    const hideDriftingCargoResult = vi.fn(() => calls.push('hide-result'));
+    const hideDriftingItemResult = vi.fn(() => calls.push('hide-result'));
     const world = {
       scene: new Scene(),
       play: vi.fn((cue: string) => {
@@ -876,11 +880,11 @@ describe('SurvivalPhase orchestration', () => {
       setEventSelection: vi.fn(),
       playEventChoiceBeat: vi.fn(() => Promise.resolve()),
       clearEventPresentation: vi.fn(),
-      showDriftingCargoResult: vi.fn((view) => {
+      showDriftingItemResult: vi.fn((view) => {
         resultView = view;
         calls.push('result');
       }),
-      hideDriftingCargoResult,
+      hideDriftingItemResult,
       setBusy,
       render: vi.fn(),
       setJournalUnread: vi.fn(),
@@ -927,7 +931,7 @@ describe('SurvivalPhase orchestration', () => {
     calls.length = 0;
     setBusy.mockClear();
     restoreCommandFocus.mockClear();
-    hideDriftingCargoResult.mockClear();
+    hideDriftingItemResult.mockClear();
     ui.onEventChoice?.('retrieve');
     await flushPromises();
     expect(calls).toContain('retrieve');
@@ -939,19 +943,19 @@ describe('SurvivalPhase orchestration', () => {
     expect(calls).toContain('project');
     expect(resultView).toEqual({
       caption: 'SALVAGE RECOVERED',
-      reward: { kind: 'resource', id: 'food', quantity: 2 },
-      energyCost: 3,
+      title: 'FOOD',
+      detail: 'FOOD +2 — 3 ENERGY SPENT',
       target: resultTarget,
     });
     expect(clearEvent).not.toHaveBeenCalled();
     phase.handleAction('eat');
     expect(session.perform).toHaveBeenCalledOnce();
 
-    ui.onDriftingCargoContinue?.();
-    ui.onDriftingCargoContinue?.();
+    ui.onDriftingItemContinue?.();
+    ui.onDriftingItemContinue?.();
 
     expect(clearEvent).toHaveBeenCalledOnce();
-    expect(hideDriftingCargoResult).toHaveBeenCalledOnce();
+    expect(hideDriftingItemResult).toHaveBeenCalledOnce();
     expect(setBusy.mock.calls.filter(([busy]) => busy === false)).toHaveLength(1);
     expect(restoreCommandFocus).toHaveBeenCalledOnce();
     expect(realSession.snapshot()).toMatchObject({ state: 'day', day: 3 });
@@ -1014,7 +1018,7 @@ describe('SurvivalPhase orchestration', () => {
     });
     const recedeDriftingCargo = vi.fn(() => Promise.resolve());
     const clearEvent = vi.fn();
-    const showDriftingCargoResult = vi.fn();
+    const showDriftingItemResult = vi.fn();
     const restoreCommandFocus = vi.fn();
     const ui: Partial<SurvivalUI> = {
       setSleepCovered: vi.fn(() => Promise.resolve()),
@@ -1022,8 +1026,8 @@ describe('SurvivalPhase orchestration', () => {
       setEventSelection: vi.fn(),
       playEventChoiceBeat: vi.fn(() => Promise.resolve()),
       clearEventPresentation: vi.fn(),
-      hideDriftingCargoResult: vi.fn(),
-      showDriftingCargoResult,
+      hideDriftingItemResult: vi.fn(),
+      showDriftingItemResult,
       setBusy: vi.fn(),
       render: vi.fn(),
       setJournalUnread: vi.fn(),
@@ -1054,7 +1058,7 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
 
     expect(recedeDriftingCargo).toHaveBeenCalledOnce();
-    expect(showDriftingCargoResult).not.toHaveBeenCalled();
+    expect(showDriftingItemResult).not.toHaveBeenCalled();
     expect(clearEvent).toHaveBeenCalledOnce();
     expect(restoreCommandFocus).toHaveBeenCalledOnce();
     expect(current).toMatchObject({ state: 'day', day: 4 });
@@ -1069,7 +1073,7 @@ describe('SurvivalPhase orchestration', () => {
     });
     const before = realSession.snapshot();
     const retrieveDriftingCargo = vi.fn(() => Promise.resolve());
-    const showDriftingCargoResult = vi.fn();
+    const showDriftingItemResult = vi.fn();
     const setEventSelection = vi.fn();
     const ui: Partial<SurvivalUI> = {
       setSleepCovered: vi.fn(() => Promise.resolve()),
@@ -1078,7 +1082,7 @@ describe('SurvivalPhase orchestration', () => {
       playEventChoiceBeat: vi.fn(() => Promise.resolve()),
       showFeedback: vi.fn(),
       setBusy: vi.fn(),
-      showDriftingCargoResult,
+      showDriftingItemResult,
       dispose: vi.fn(),
     };
     const phase = SurvivalPhase.forTest({
@@ -1112,7 +1116,7 @@ describe('SurvivalPhase orchestration', () => {
     });
     expect(setEventSelection).toHaveBeenCalledTimes(2);
     expect(retrieveDriftingCargo).not.toHaveBeenCalled();
-    expect(showDriftingCargoResult).not.toHaveBeenCalled();
+    expect(showDriftingItemResult).not.toHaveBeenCalled();
   });
 
   it('reveals Drifting Cargo after resolving a non-terminal night event', async () => {
@@ -1183,7 +1187,7 @@ describe('SurvivalPhase orchestration', () => {
         pendingEventId: 'drifting-barrel',
       });
       const retrieval = deferred();
-      const showDriftingCargoResult = vi.fn();
+      const showDriftingItemResult = vi.fn();
       const restoreCommandFocus = vi.fn();
       const onRestart = vi.fn();
       const ui: Partial<SurvivalUI> = {
@@ -1192,8 +1196,8 @@ describe('SurvivalPhase orchestration', () => {
         setEventSelection: vi.fn(),
         playEventChoiceBeat: vi.fn(() => Promise.resolve()),
         clearEventPresentation: vi.fn(),
-        hideDriftingCargoResult: vi.fn(),
-        showDriftingCargoResult,
+        hideDriftingItemResult: vi.fn(),
+        showDriftingItemResult,
         setBusy: vi.fn(),
         render: vi.fn(),
         setJournalUnread: vi.fn(),
@@ -1232,7 +1236,7 @@ describe('SurvivalPhase orchestration', () => {
       else phase.requestRestart();
       await flushPromises();
 
-      expect(showDriftingCargoResult).not.toHaveBeenCalled();
+      expect(showDriftingItemResult).not.toHaveBeenCalled();
       expect(restoreCommandFocus).not.toHaveBeenCalled();
       expect(onRestart).toHaveBeenCalledTimes(teardown === 'restart' ? 1 : 0);
     },
@@ -1274,7 +1278,7 @@ describe('SurvivalPhase orchestration', () => {
           showEventReveal: vi.fn(() => Promise.resolve()),
           setEventSelection,
           clearEventPresentation: vi.fn(),
-          hideDriftingCargoResult: vi.fn(),
+          hideDriftingItemResult: vi.fn(),
           settleCoveredScene: vi.fn(() => Promise.resolve()),
           setBusy,
           render: vi.fn(),
@@ -1330,7 +1334,7 @@ describe('SurvivalPhase orchestration', () => {
       const clearEvent = vi.fn(() => recession.resolve());
       const setBusy = vi.fn();
       const restoreCommandFocus = vi.fn();
-      const showDriftingCargoResult = vi.fn();
+      const showDriftingItemResult = vi.fn();
       const onRestart = vi.fn();
       const ui: Partial<SurvivalUI> = {
         setSleepCovered: vi.fn(() => Promise.resolve()),
@@ -1338,8 +1342,8 @@ describe('SurvivalPhase orchestration', () => {
         setEventSelection: vi.fn(),
         playEventChoiceBeat: vi.fn(() => Promise.resolve()),
         clearEventPresentation: vi.fn(),
-        hideDriftingCargoResult: vi.fn(),
-        showDriftingCargoResult,
+        hideDriftingItemResult: vi.fn(),
+        showDriftingItemResult,
         setBusy,
         render: vi.fn(),
         setJournalUnread: vi.fn(),
@@ -1371,8 +1375,8 @@ describe('SurvivalPhase orchestration', () => {
       clearEvent.mockClear();
       ui.onEventChoice?.(stage === 'result' ? 'retrieve' : 'sleep');
       await flushPromises();
-      const continueResult = ui.onDriftingCargoContinue;
-      expect(showDriftingCargoResult).toHaveBeenCalledTimes(stage === 'result' ? 1 : 0);
+      const continueResult = ui.onDriftingItemContinue;
+      expect(showDriftingItemResult).toHaveBeenCalledTimes(stage === 'result' ? 1 : 0);
       if (stage === 'receding') expect(recession.isSettled()).toBe(false);
 
       if (teardown === 'dispose') phase.dispose();
@@ -1384,7 +1388,7 @@ describe('SurvivalPhase orchestration', () => {
       await flushPromises();
 
       expect(clearEvent).toHaveBeenCalledTimes(clearCount);
-      expect(showDriftingCargoResult).toHaveBeenCalledTimes(stage === 'result' ? 1 : 0);
+      expect(showDriftingItemResult).toHaveBeenCalledTimes(stage === 'result' ? 1 : 0);
       expect(setBusy).not.toHaveBeenCalledWith(false);
       expect(restoreCommandFocus).not.toHaveBeenCalled();
       expect(onRestart).toHaveBeenCalledTimes(teardown === 'restart' ? 1 : 0);
@@ -5298,14 +5302,14 @@ describe('SurvivalPhase orchestration', () => {
     });
     const delegateDriftingCargo = vi.fn(() => Promise.resolve());
     const retrieveDriftingCargo = vi.fn(() => Promise.resolve());
-    const showDriftingCargoResult = vi.fn();
+    const showDriftingItemResult = vi.fn();
     const ui: Partial<SurvivalUI> = {
       setSleepCovered: vi.fn(() => Promise.resolve()),
       showEventReveal: vi.fn(() => Promise.resolve()),
       setEventSelection: vi.fn(),
       playEventChoiceBeat: vi.fn(() => Promise.resolve()),
       clearEventPresentation: vi.fn(),
-      showDriftingCargoResult,
+      showDriftingItemResult,
       setBusy: vi.fn(),
       render: vi.fn(),
       setJournalUnread: vi.fn(),
@@ -5342,10 +5346,10 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(delegateDriftingCargo).toHaveBeenCalledOnce();
     expect(retrieveDriftingCargo).not.toHaveBeenCalled();
-    expect(showDriftingCargoResult).toHaveBeenCalledWith({
+    expect(showDriftingItemResult).toHaveBeenCalledWith({
       caption: 'SALVAGE RECOVERED',
-      reward: { kind: 'resource', id: 'food', quantity: 2 },
-      energyCost: 0,
+      title: 'FOOD',
+      detail: 'FOOD +2',
       target: null,
     });
     phase.dispose();

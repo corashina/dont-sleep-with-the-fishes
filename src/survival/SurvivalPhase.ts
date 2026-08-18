@@ -18,7 +18,7 @@ import {
 import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
 import {
   SurvivalUI,
-  type DriftingCargoResultView,
+  type DriftingItemResultView,
   type DiveResultView,
   type EventOutcomeView,
   type EventContextChoice,
@@ -263,11 +263,16 @@ export function formatDangerousWatersOutcome(
 export function formatDriftingCargoResult(
   reward: RewardSummary,
   energyCost = 3,
-): DriftingCargoResultView {
+): DriftingItemResultView {
+  const title = reward.kind === 'item'
+    ? ITEM_DEFINITIONS[reward.id].label.toLocaleUpperCase('en-US')
+    : reward.id === 'repairMaterial'
+      ? 'REPAIR MATERIAL'
+      : reward.id.toLocaleUpperCase('en-US');
   return {
     caption: 'SALVAGE RECOVERED',
-    reward,
-    energyCost,
+    title,
+    detail: `${title} +${reward.quantity}${energyCost > 0 ? ` — ${energyCost} ENERGY SPENT` : ''}`,
     target: null,
   };
 }
@@ -675,7 +680,7 @@ export class SurvivalPhase implements GamePhase {
     this.ui.setFishingViewExitVisible?.(false);
     this.ui.onFishingResultContinue = null;
     this.ui.onFishingViewExit = null;
-    this.ui.onDriftingCargoContinue = null;
+    this.ui.onDriftingItemContinue = null;
     if (this.visibilityDocument !== null) {
       this.visibilityDocument.removeEventListener('visibilitychange', this.handleVisibilityChange);
       this.visibilityDocument = null;
@@ -851,7 +856,7 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onFishingReel = () => this.handleFishingReel();
     this.ui.onFishingResultContinue = () => this.continueFishingResult();
     this.ui.onFishingViewExit = () => this.exitReadyFishingView();
-    this.ui.onDriftingCargoContinue = () => this.continueDriftingCargoResult();
+    this.ui.onDriftingItemContinue = () => this.continueDriftingCargoResult();
   }
 
   private repairOption(snapshot: SurvivalSnapshot): DayActionOption | undefined {
@@ -1546,7 +1551,7 @@ export class SurvivalPhase implements GamePhase {
         outcome.rewardSummary,
         choiceId === 'delegate-carlitos' ? 0 : 3,
       );
-      this.ui.showDriftingCargoResult?.({
+      this.ui.showDriftingItemResult?.({
         ...view,
         target: this.world.projectDriftingCargo?.(
           this.viewportWidth,
@@ -2094,7 +2099,7 @@ export class SurvivalPhase implements GamePhase {
     this.world.clearEvent?.();
     this.eventBundles.releaseActive();
     this.ui.clearEventPresentation?.();
-    this.ui.hideDriftingCargoResult?.();
+    this.ui.hideDriftingItemResult?.();
     this.setAutomaticWeather(null);
   }
 
@@ -2117,7 +2122,7 @@ export class SurvivalPhase implements GamePhase {
       || !this.isContinuationActive()
     ) return;
     this.eventPresentation = 'idle';
-    this.ui.hideDriftingCargoResult?.();
+    this.ui.hideDriftingItemResult?.();
     this.eventEligibility.clear();
     this.world.setEventSelectedItem?.(null);
     this.world.setEventEligibleItems?.(null);

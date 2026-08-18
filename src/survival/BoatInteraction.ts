@@ -10,6 +10,7 @@ import {
 } from '../rendering/projectScreenBounds';
 import type { DayActionId, EventResponseId } from './survivalTypes';
 import type { BoatSupplyGroupId } from '../world/BoatStorage';
+import type { DriftingItemEventId } from './events';
 
 export const ACTION_FOR_ITEM = Object.freeze(Object.fromEntries(
   ITEM_IDS.flatMap((id) => {
@@ -36,6 +37,7 @@ export interface BoatInteractionAnchor {
   readonly description?: string;
   readonly tooltip?: boolean;
   readonly eventChoiceId?: EventResponseId;
+  readonly eventFocusId?: DriftingItemEventId;
   readonly itemType: ItemId | null;
   readonly supplyGroupId?: BoatSupplyGroupId;
   readonly toolId: BoatToolId | null;
