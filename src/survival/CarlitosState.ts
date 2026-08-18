@@ -3,8 +3,12 @@ import type { RandomSource } from './survivalTypes';
 export type CarlitosDeathCause =
   | 'starvation' | 'sickness' | 'misery';
 
+export const CARLITOS_MAX_ENERGY = 3;
+export const CARLITOS_EVENT_ENERGY_COST = 3;
+
 export interface CarlitosState {
   alive: boolean;
+  energy: number;
   hunger: number;
   sickness: number;
   unhappiness: number;
@@ -23,8 +27,9 @@ export interface CarlitosStatus {
 export function createCarlitosState(
   initial: Partial<CarlitosSnapshot> = {},
 ): CarlitosState {
-  return {
+  const state: CarlitosState = {
     alive: true,
+    energy: CARLITOS_MAX_ENERGY,
     hunger: 5,
     sickness: 0,
     unhappiness: 0,
@@ -32,6 +37,8 @@ export function createCarlitosState(
     deathCause: null,
     ...initial,
   };
+  state.energy = clampCarlitosEnergy(state.energy);
+  return state;
 }
 
 export function carlitosStatus(state: CarlitosSnapshot): CarlitosStatus {
@@ -44,6 +51,16 @@ export function carlitosStatus(state: CarlitosSnapshot): CarlitosStatus {
 
 export function carlitosWellness(state: CarlitosSnapshot): number {
   return clampNeed(state.hunger) - clampNeed(state.sickness) - unhappinessPenalty(state.unhappiness);
+}
+
+export function spendCarlitosEnergy(
+  state: CarlitosState,
+  amount = CARLITOS_EVENT_ENERGY_COST,
+): boolean {
+  state.energy = clampCarlitosEnergy(state.energy);
+  if (!state.alive || state.energy < amount) return false;
+  state.energy -= amount;
+  return true;
 }
 
 export function petCarlitos(state: CarlitosState): boolean {
@@ -133,6 +150,7 @@ export function advanceCarlitosDawn(
     return state;
   }
 
+  state.energy = clampCarlitosEnergy(state.energy + 1);
   state.pettedToday = false;
   return state;
 }
@@ -171,4 +189,8 @@ function unhappinessPenalty(unhappiness: number): number {
 
 function clampNeed(value: number): number {
   return Math.min(5, Math.max(0, value));
+}
+
+function clampCarlitosEnergy(value: number): number {
+  return Math.min(CARLITOS_MAX_ENERGY, Math.max(0, Math.trunc(value)));
 }

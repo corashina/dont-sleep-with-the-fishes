@@ -5289,7 +5289,7 @@ describe('SurvivalPhase orchestration', () => {
       day: 3,
       pendingEventId: 'drifting-barrel',
       carlitos: {
-        alive: true, hunger: 5, sickness: 0, unhappiness: 0,
+        alive: true, energy: 3, hunger: 5, sickness: 0, unhappiness: 0,
         pettedToday: false, deathCause: null,
       },
     });
@@ -5603,7 +5603,7 @@ describe('SurvivalPhase orchestration', () => {
       const calls: string[] = [];
       let current = snapshot({
         carlitos: {
-          alive: true, hunger: 4, sickness: 0, unhappiness: 4,
+          alive: true, energy: 3, hunger: 4, sickness: 0, unhappiness: 4,
           pettedToday: false, deathCause: null,
         },
       });

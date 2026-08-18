@@ -558,6 +558,7 @@ describe('BoatWorld helpers', () => {
       recoveredBait: ITEM_DEFINITIONS.baitTin.spawnCount,
       carlitos: {
         alive: true,
+        energy: 3,
         hunger: 5,
         sickness: 0,
         unhappiness: 0,
@@ -4444,6 +4445,7 @@ describe('BoatWorld helpers', () => {
       world.syncInventory(snapshot([], {
         carlitos: {
           alive: true,
+          energy: 3,
           hunger: 5,
           sickness: 0,
           unhappiness: 0,
@@ -4491,6 +4493,7 @@ describe('BoatWorld helpers', () => {
     world.syncInventory(snapshot([], {
       carlitos: {
         alive: true,
+        energy: 3,
         hunger: 3,
         sickness: 0,
         unhappiness: 0,
@@ -4515,6 +4518,7 @@ describe('BoatWorld helpers', () => {
     world.syncInventory(snapshot([], {
       carlitos: {
         alive: false,
+        energy: 0,
         hunger: 0,
         sickness: 0,
         unhappiness: 0,
@@ -4543,7 +4547,7 @@ describe('BoatWorld helpers', () => {
     );
     world.syncInventory(snapshot([], {
       carlitos: {
-        alive: true, hunger: 5, sickness: 0, unhappiness: 0,
+        alive: true, energy: 3, hunger: 5, sickness: 0, unhappiness: 0,
         pettedToday: false, deathCause: null,
       },
     }));
@@ -4582,7 +4586,7 @@ describe('BoatWorld helpers', () => {
       );
       world.syncInventory(snapshot([], {
         carlitos: {
-          alive: true, hunger: 5, sickness: 0, unhappiness: 0,
+          alive: true, energy: 3, hunger: 5, sickness: 0, unhappiness: 0,
           pettedToday: false, deathCause: null,
         },
       }));
@@ -4623,7 +4627,7 @@ describe('BoatWorld helpers', () => {
     );
     world.syncInventory(snapshot([], {
       carlitos: {
-        alive: true, hunger: 5, sickness: 0, unhappiness: 0,
+        alive: true, energy: 3, hunger: 5, sickness: 0, unhappiness: 0,
         pettedToday: false, deathCause: null,
       },
     }));

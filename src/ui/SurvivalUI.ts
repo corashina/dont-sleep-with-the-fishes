@@ -551,6 +551,15 @@ export class SurvivalUI {
             <span class="carlitos-status__name ui-role-context">HEALTH</span>
             <strong class="ui-role-context" data-carlitos-health></strong>
           </div>
+          <div class="carlitos-status" data-carlitos-energy-row>
+            <span class="carlitos-status__name ui-role-context">ENERGY</span>
+            <strong class="ui-role-numeral" data-carlitos-energy-label></strong>
+            <span class="carlitos-energy" aria-hidden="true">
+              <i data-carlitos-energy-step="1"></i>
+              <i data-carlitos-energy-step="2"></i>
+              <i data-carlitos-energy-step="3"></i>
+            </span>
+          </div>
         </div>
         <nav class="carlitos-care" aria-label="Carlitos care">
           ${CARLITOS_ACTIONS.map((action) => `
@@ -1829,9 +1838,15 @@ export class SurvivalUI {
       status.happiness.toLocaleUpperCase('en-US');
     requireElement(this.carlitosCard, '[data-carlitos-health]').textContent =
       status.health.toLocaleUpperCase('en-US');
+    requireElement(this.carlitosCard, '[data-carlitos-energy-label]').textContent =
+      `${carlitos.energy} / 3`;
     this.carlitosCard.querySelectorAll<HTMLElement>('[data-carlitos-hunger-step]')
       .forEach((step, index) => {
         step.dataset.filled = String(index < carlitos.hunger);
+      });
+    this.carlitosCard.querySelectorAll<HTMLElement>('[data-carlitos-energy-step]')
+      .forEach((step, index) => {
+        step.dataset.filled = String(index < carlitos.energy);
       });
     this.setCarlitosDanger(
       '[data-carlitos-hunger-row]',

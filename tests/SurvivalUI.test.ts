@@ -243,6 +243,7 @@ describe('SurvivalUI', () => {
     ui.render(snapshot({
       carlitos: {
         alive: true,
+        energy: 2,
         hunger: 4,
         sickness: 2,
         unhappiness: 5,
@@ -265,6 +266,8 @@ describe('SurvivalUI', () => {
     expect(card.hidden).toBe(false);
     expect(card.querySelector('[data-carlitos-hunger-label]')?.textContent).toBe('PECKISH');
     expect(card.querySelectorAll('[data-carlitos-hunger-step][data-filled="true"]')).toHaveLength(4);
+    expect(card.querySelector('[data-carlitos-energy-label]')?.textContent).toBe('2 / 3');
+    expect(card.querySelectorAll('[data-carlitos-energy-step][data-filled="true"]')).toHaveLength(2);
     expect(card.querySelector('[data-carlitos-happiness]')?.textContent).toBe('LONELY');
     expect(card.querySelector('[data-carlitos-health]')?.textContent).toBe('SICK');
     expect(card.textContent).not.toContain('CREWMATE STATUS');
@@ -298,6 +301,7 @@ describe('SurvivalUI', () => {
     ui.render(snapshot({
       carlitos: {
         alive: true,
+        energy: 3,
         hunger: 3,
         sickness: 1,
         unhappiness: 3,
@@ -373,6 +377,7 @@ describe('SurvivalUI', () => {
     ui.render(snapshot({
       carlitos: {
         alive: true,
+        energy: 3,
         hunger: 4,
         sickness: 0,
         unhappiness: 0,
@@ -398,6 +403,7 @@ describe('SurvivalUI', () => {
     ui.setAnchors([carlitosAnchor()]);
     const living = {
       alive: true,
+      energy: 3,
       hunger: 4,
       sickness: 2,
       unhappiness: 5,
@@ -1079,6 +1085,7 @@ describe('SurvivalUI', () => {
     ui.render(snapshot({
       carlitos: {
         alive: true,
+        energy: 3,
         hunger: 5,
         sickness: 0,
         unhappiness: 0,

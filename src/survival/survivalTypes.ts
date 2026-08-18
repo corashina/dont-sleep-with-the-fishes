@@ -15,6 +15,8 @@ export type CompanionActionId =
   | 'petCarlitos' | 'feedCarlitos' | 'treatCarlitos' | CompanionEventActionId;
 export interface CompanionEventActionAvailability {
   readonly visible: boolean;
+  readonly energyCost: number;
+  readonly availableEnergy: number;
   readonly unavailableReason: string | null;
 }
 export type DayActionOption =
