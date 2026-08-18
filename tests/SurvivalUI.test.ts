@@ -2182,8 +2182,10 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
     const selected = vi.fn();
     const returned = vi.fn();
+    const highlighted = vi.fn();
     ui.onDriftingItemSelect = selected;
     ui.onDriftingItemBack = returned;
+    ui.onAnchorHighlight = highlighted;
     ui.setAnchors([{
       id: 'event:drifting-bottle',
       eventFocusId: 'drifting-bottle',
@@ -2200,11 +2202,18 @@ describe('SurvivalUI', () => {
       depleted: false,
       hitArea: { width: 64, height: 64, depth: 2 },
     }]);
+    ui.beginEventPresentation();
+    ui.setEventSelection(new Map());
 
     const anchor = mount.querySelector<HTMLButtonElement>(
       '[data-anchor-id="event:drifting-bottle"]',
     )!;
     expect(anchor.querySelector('.boat-tooltip')).toBeNull();
+    expect(anchor.dataset.eventState).toBe('available');
+    expect(anchor.disabled).toBe(false);
+    expect(anchor.tabIndex).toBe(0);
+    anchor.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlighted).toHaveBeenLastCalledWith('event:drifting-bottle');
     anchor.click();
     expect(selected).toHaveBeenCalledWith('drifting-bottle');
 

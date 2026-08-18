@@ -81,3 +81,38 @@ The build still prints the existing chunk-size warning.
 
 No correctness concern remains.
 The existing test and build warnings remain outside this task.
+
+## Fix Round 1
+
+### Changes
+
+- Classified initialized `eventFocusId` anchors as available during active events.
+- Kept those anchors locked before selection initializes and while the UI is busy.
+- Made `eventFocusId` anchors publish world hover and focus highlights.
+- Added an active-event regression test for enablement, highlighting, and selection.
+
+### Tests
+
+RED:
+
+`npx --no-install vitest run tests/SurvivalUI.test.ts`
+
+Result: 1 failed and 98 passed. The active focus anchor was locked.
+
+GREEN:
+
+`npx --no-install vitest run tests/SurvivalUI.test.ts`
+
+Result: 99 passed and 0 failed.
+
+`npx --no-install tsc --noEmit`
+
+Result: passed with no errors.
+
+`npx --no-install vitest run`
+
+Result: 1,692 passed and 0 failed across 128 files.
+
+### Commit
+
+`fix: keep drifting item focus anchors interactive`

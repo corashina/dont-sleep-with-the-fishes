@@ -2235,6 +2235,12 @@ export class SurvivalUI {
   ): AnchorInteractionState {
     if (!this.eventPresentationActive) return 'ordinary';
 
+    if (anchor.eventFocusId !== undefined) {
+      return this.busy || this.eventEligibility === null
+        ? 'eventLocked'
+        : 'eventAvailable';
+    }
+
     const choice = this.eventChoiceForAnchor(id, anchor);
     if (choice !== undefined) {
       if (this.eventSelectedChoiceId === choice.id) return 'selected';
@@ -2267,7 +2273,8 @@ export class SurvivalUI {
       || anchor.toolId === 'repairTools'
       || anchor.toolId === 'lantern'
       || anchor.toolId === 'chest'
-      || anchor.eventChoiceId !== undefined;
+      || anchor.eventChoiceId !== undefined
+      || anchor.eventFocusId !== undefined;
   }
 
   private highlightAnchorId(target: EventTarget | null): string | null {
