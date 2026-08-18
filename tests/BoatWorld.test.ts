@@ -4772,6 +4772,8 @@ describe('BoatWorld helpers', () => {
     expect(model.rotation.y).not.toBe(initialRotation);
     expect(tornado.getObjectByName('tornado-wind-band-1')?.visible).toBe(true);
     expect(tornado.getObjectByName('tornado-sea-spray-1')?.visible).toBe(true);
+    expect(vortex.strength).toBe(0);
+    expect(vortex.depression).toBe(0);
     world.update(3, 1.5);
     await reveal;
     expect(camera.quaternion.toArray()).toEqual(baseQuaternion.toArray());
@@ -4799,10 +4801,13 @@ describe('BoatWorld helpers', () => {
         targetInstanceId: null,
       },
     );
-    world.update(4.4, 1.4);
-    await reaction;
+    world.update(3.7, 0.7);
     expect(tornado.position.x).toBe(12.8);
     expect(tornado.position.z).toBe(-19);
+    expect(vortex.strength).toBe(0);
+    expect(vortex.depression).toBe(0);
+    world.update(4.4, 0.7);
+    await reaction;
 
     world.dispose();
     propModels.dispose();
