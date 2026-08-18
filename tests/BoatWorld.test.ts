@@ -1839,6 +1839,33 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('updates the full scene matrix once during a focused drifting-item frame', async () => {
+    const propModels = createTestPropModels();
+    const featuredModels = await createTestFeaturedModels(['driftingBottle']);
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      featuredModels,
+    );
+    world.stageEvent('drifting-bottle', 8);
+    const entered = world.enterDriftingItemView('drifting-bottle');
+    world.update(1.2, 1.2);
+    await entered;
+    const updateMatrixWorld = vi.spyOn(world.scene, 'updateMatrixWorld');
+
+    world.update(1.3, 0.1);
+
+    expect(updateMatrixWorld).toHaveBeenCalledOnce();
+    world.dispose();
+    featuredModels.dispose();
+    propModels.dispose();
+  });
+
   it.each(['hidden', 'clear', 'dispose'] as const)(
     'settles repeated drifting item camera work on %s',
     async (interruption) => {
@@ -1872,7 +1899,7 @@ describe('BoatWorld helpers', () => {
     },
   );
 
-  it('keeps the Flowers field fixed in place and removes its world interaction', () => {
+  it('keeps the Flowers field fixed in place and removes its world interaction', async () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
@@ -1895,6 +1922,23 @@ describe('BoatWorld helpers', () => {
     world.update(2, 2);
     expect(flowers.children.map(({ position }) => [position.x, position.z])).toEqual(before);
     expect(world.projectEventInteractionBounds('flowers', 800, 600)).toBeNull();
+
+    const deckTarget = world.scene.getObjectByName('flowers-deck-target')!;
+    expect(deckTarget.position.toArray()).toEqual([0.72, 0.58, 1.05]);
+    const collected = world.reactToEventOutcome('flowers', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The flowers are collected.',
+      deltas: {},
+      cue: 'none',
+      eventPresentationKey: 'flowers.collect',
+    });
+    world.update(6, 4);
+    await collected;
+    const firstFlower = world.scene.getObjectByName('flowers:pad:0')!;
+    expect(firstFlower.getWorldPosition(new Vector3()).distanceTo(
+      deckTarget.getWorldPosition(new Vector3()),
+    )).toBeLessThan(0.001);
 
     world.dispose();
     propModels.dispose();

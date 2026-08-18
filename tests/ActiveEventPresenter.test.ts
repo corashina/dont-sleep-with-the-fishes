@@ -39,6 +39,7 @@ describe('ActiveEventPresenter', () => {
       new PerspectiveCamera(),
       new Group(),
       new Group(),
+      new Group(),
       'flowers',
     );
 

@@ -1631,6 +1631,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 }
 .drifting-item-focus__card h2 { margin: 0; color: var(--ink-bone); }
 .drifting-item-focus__card nav { display: grid; gap: 9px; }
+.drifting-item-focus__card nav[hidden] { display: none; }
 .drifting-item-focus__back {
   position: absolute;
   right: min(378px, calc(100vw - 52px));

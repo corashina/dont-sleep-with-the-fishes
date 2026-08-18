@@ -116,3 +116,48 @@ Result: 1,692 passed and 0 failed across 128 files.
 ### Commit
 
 `fix: keep drifting item focus anchors interactive`
+
+## Final Fix Wave
+
+### Changes
+
+- Added an explicit hidden rule for the pickup choices.
+- Added a computed visibility regression for the return-only state.
+- Gave the drifting-item dialog a heading label.
+- Restored Flowers collection to its authored stern deck target.
+- Added visibility gates before choice resolution, pickup results, and camera return.
+- Removed the duplicate full scene matrix traversal from focused frames.
+- Added regressions for Flowers placement, hidden lifecycle boundaries, dialog access, and frame traversal.
+
+### Tests
+
+RED:
+
+`npx --no-install vitest run tests/SurvivalUI.test.ts tests/SurvivalPhase.test.ts tests/BoatWorld.test.ts`
+
+Result: 6 failed and 489 passed. The failures covered all five Important findings.
+
+GREEN:
+
+`npx --no-install vitest run tests/SurvivalUI.test.ts tests/SurvivalPhase.test.ts tests/BoatWorld.test.ts`
+
+Result: 495 passed and 0 failed.
+
+`npx --no-install tsc --noEmit`
+
+Result: passed with no errors.
+
+`npx --no-install vitest run`
+
+Result: 1,695 passed and 0 failed across 128 files.
+
+`npx --no-install --prefix "C:\Users\Corashina\Documents\Projects\dont-sleep-with-the-fishes" vite build --config "C:\Users\Corashina\Documents\Projects\dont-sleep-with-the-fishes\.worktrees\drifting-item-focus\vite.config.ts"`
+
+Result: 417 modules transformed. The production build completed in 9.74 seconds.
+
+One repeated focused batch hit an unrelated host timeout.
+The isolated timed test passed, and the final full suite passed.
+
+### Commit
+
+`fix: address drifting item final review`

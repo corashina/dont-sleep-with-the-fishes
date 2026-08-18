@@ -1148,7 +1148,36 @@ describe('SurvivalPhase orchestration', () => {
     expect(onRestart).toHaveBeenCalledTimes(teardown === 'restart' ? 1 : 0);
   });
 
-  it('settles hidden drifting item motion without a second resolution', async () => {
+  it('waits for visibility before resolving a settled drifting item choice beat', async () => {
+    const listeners = new Map<string, EventListener>();
+    const fakeDocument = {
+      hidden: false,
+      addEventListener: vi.fn((type: string, listener: EventListener) => listeners.set(type, listener)),
+      removeEventListener: vi.fn((type: string) => listeners.delete(type)),
+    };
+    vi.stubGlobal('document', fakeDocument);
+    const choiceBeat = deferred();
+    const rig = createDriftingItemRig('drifting-bottle');
+    rig.ui.playEventChoiceBeat = vi.fn(() => choiceBeat.promise);
+    await revealDriftingItem(rig);
+    await enterDriftingItemFocus(rig);
+    rig.ui.onEventChoice?.('retrieve');
+
+    fakeDocument.hidden = true;
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
+    choiceBeat.resolve();
+    await flushPromises();
+    expect(rig.resolveEvent).not.toHaveBeenCalled();
+
+    fakeDocument.hidden = false;
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
+    await flushPromises();
+    expect(rig.resolveEvent).toHaveBeenCalledOnce();
+    expect(rig.world.retrieveDriftingItem).toHaveBeenCalledOnce();
+    rig.phase.dispose();
+  });
+
+  it('settles hidden drifting item retrieval and defers its result until resume', async () => {
     const listeners = new Map<string, EventListener>();
     const fakeDocument = {
       hidden: false,
@@ -1169,11 +1198,45 @@ describe('SurvivalPhase orchestration', () => {
     fakeDocument.hidden = true;
     listeners.get('visibilitychange')!(new Event('visibilitychange'));
     await flushPromises();
-    expect(rig.showDriftingItemResult).toHaveBeenCalledOnce();
+    expect(rig.showDriftingItemResult).not.toHaveBeenCalled();
     fakeDocument.hidden = false;
     listeners.get('visibilitychange')!(new Event('visibilitychange'));
     await flushPromises();
     expect(rig.resolveEvent).toHaveBeenCalledOnce();
+    expect(rig.showDriftingItemResult).toHaveBeenCalledOnce();
+    rig.phase.dispose();
+  });
+
+  it('settles hidden drifting item recede and defers camera return until resume', async () => {
+    const listeners = new Map<string, EventListener>();
+    const fakeDocument = {
+      hidden: false,
+      addEventListener: vi.fn((type: string, listener: EventListener) => listeners.set(type, listener)),
+      removeEventListener: vi.fn((type: string) => listeners.delete(type)),
+    };
+    vi.stubGlobal('document', fakeDocument);
+    const rig = createDriftingItemRig('drifting-bottle');
+    rig.world.setDocumentHidden.mockImplementation((hidden: boolean) => {
+      if (hidden) rig.animations.recede.resolve();
+    });
+    await revealDriftingItem(rig);
+    await enterDriftingItemFocus(rig);
+    rig.ui.onDriftingItemBack?.();
+    await flushPromises();
+    expect(rig.resolveEvent).toHaveBeenCalledOnce();
+    expect(rig.world.recedeDriftingItem).toHaveBeenCalledOnce();
+
+    fakeDocument.hidden = true;
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
+    await flushPromises();
+    expect(rig.world.exitDriftingItemView).not.toHaveBeenCalled();
+
+    fakeDocument.hidden = false;
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
+    await flushPromises();
+    expect(rig.world.exitDriftingItemView).toHaveBeenCalledOnce();
+    rig.animations.exit.resolve();
+    await flushPromises();
     rig.phase.dispose();
   });
 
