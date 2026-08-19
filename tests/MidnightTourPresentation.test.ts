@@ -1,0 +1,218 @@
+// Importance: 9/10. Protects Midnight Tour staging, camera ownership, and result choreography.
+import {
+  Box3,
+  BoxGeometry,
+  Group,
+  Mesh,
+  MeshStandardMaterial,
+  PerspectiveCamera,
+} from 'three';
+import { describe, expect, it } from 'vitest';
+import type { FocusedEventPresentationDependencies } from '../src/survival/FocusedEventPresentation';
+import { MidnightTourPresentation } from '../src/survival/MidnightTourPresentation';
+
+function model(width: number, height: number, depth: number): Group {
+  const root = new Group();
+  const mesh = new Mesh(
+    new BoxGeometry(width, height, depth),
+    new MeshStandardMaterial(),
+  );
+  mesh.position.y = height / 2;
+  root.add(mesh);
+  return root;
+}
+
+function createFixture(options: { omitPalms?: boolean } = {}) {
+  const originalParent = new Group();
+  const camera = new PerspectiveCamera();
+  camera.position.set(3, 4, 5);
+  camera.rotation.set(0.2, -0.3, 0.1);
+  originalParent.add(camera);
+  const originalPosition = camera.position.clone();
+  const originalQuaternion = camera.quaternion.clone();
+  const dependencies = {
+    camera,
+    cameraRig: originalParent,
+    waves: [],
+    propModels: {
+      createEventModel(id: string) {
+        if (id === 'midnightPalmTrees' && options.omitPalms) return null;
+        if (id === 'midnightIsland') {
+          return { root: model(18, 7.3, 12), animations: [] };
+        }
+        if (id === 'midnightPalmTrees') {
+          return { root: model(5.8, 4.6, 2.8), animations: [] };
+        }
+        if (id === 'chestClosed') {
+          return { root: model(1.1, 0.7, 0.8), animations: [] };
+        }
+        return null;
+      },
+    },
+    supplyDisplay: {},
+    chestDisplay: {},
+  } as unknown as FocusedEventPresentationDependencies;
+  const presentation = new MidnightTourPresentation(dependencies);
+  return {
+    camera,
+    originalParent,
+    originalPosition,
+    originalQuaternion,
+    presentation,
+  };
+}
+
+function expectOriginalCamera(fixture: ReturnType<typeof createFixture>): void {
+  expect(fixture.camera.parent).toBe(fixture.originalParent);
+  expect(fixture.camera.position.toArray()).toEqual(fixture.originalPosition.toArray());
+  expect(fixture.camera.quaternion.toArray()).toEqual(fixture.originalQuaternion.toArray());
+}
+
+async function startResult(
+  fixture: ReturnType<typeof createFixture>,
+  resultId: 'tour-chest' | 'tour-attack',
+): Promise<void> {
+  fixture.presentation.stage(8);
+  const visit = fixture.presentation.playChoice({
+    choiceId: 'visit',
+    instanceId: null,
+    condition: null,
+  });
+  fixture.presentation.update(1.5, 1.5);
+  await visit;
+  const result = fixture.presentation.react({
+    eventId: 'midnight-tour',
+    choiceId: 'visit',
+    resultId,
+  }, {} as never);
+  fixture.presentation.update(6.3, 4.8);
+  await result;
+}
+
+describe('MidnightTourPresentation', () => {
+  it('keeps only the imported island, required palms, and restrained lights', () => {
+    const { presentation } = createFixture();
+    const island = presentation.root.getObjectByName('midnight-tour-island')!;
+    const palms = presentation.root.getObjectByName('event-model:midnightPalmTrees')!;
+
+    expect(presentation.root.getObjectByName('midnight-tour-rock-shelf-1')).toBeUndefined();
+    expect(presentation.root.getObjectByName('midnight-tour-dead-tree')).toBeUndefined();
+    expect(presentation.root.getObjectByName('midnight-tour-shore-ember')).toBeUndefined();
+    expect(presentation.root.getObjectByName('midnight-tour-horizon-wave')).toBeUndefined();
+    expect(presentation.root.getObjectByName('midnight-tour-reward-bait')).toBeUndefined();
+    expect(presentation.root.getObjectByName('midnight-tour-reward-food')).toBeUndefined();
+    expect(palms.position.toArray()).toEqual([0.65, island.userData.greenTopLocalY, 0.15]);
+    expect(palms.rotation.y).toBeCloseTo(-0.28);
+    const islandTop = island.position.y + island.userData.greenTopLocalY as number;
+    const palmMinimum = new Box3().setFromObject(palms).min.y + island.position.y;
+    expect(palmMinimum).toBeGreaterThanOrEqual(islandTop);
+    expect(island.userData.disableHoverOutline).not.toBe(true);
+    presentation.dispose();
+  });
+
+  it('requires the Midnight Tour palm model', () => {
+    expect(() => createFixture({ omitPalms: true })).toThrow(
+      'Missing required Midnight Tour palm model.',
+    );
+  });
+
+  it.each(['tour-chest', 'tour-attack'] as const)(
+    'searches both sides and reveals %s',
+    async (resultId) => {
+      const fixture = createFixture();
+      await startResult(fixture, resultId);
+
+      expect(fixture.presentation.root.userData.searchLeft).toBe(1);
+      expect(fixture.presentation.root.userData.searchRight).toBe(1);
+      expect(fixture.presentation.root.userData.resultReveals).toBe(1);
+      expect(fixture.presentation.root.userData.cameraKicks)
+        .toBe(resultId === 'tour-attack' ? 1 : 0);
+      const actorName = resultId === 'tour-attack'
+        ? 'midnight-tour-creature'
+        : 'midnight-tour-reward-chest';
+      expect(fixture.presentation.root.getObjectByName(actorName)?.visible).toBe(true);
+
+      fixture.presentation.clear();
+      expectOriginalCamera(fixture);
+      fixture.presentation.dispose();
+    },
+  );
+
+  it.each(['clear', 'settleForVisibilityChange', 'dispose'] as const)(
+    '%s restores the camera parent and exact local pose',
+    async (method) => {
+      const fixture = createFixture();
+      fixture.presentation.stage(9);
+      const visit = fixture.presentation.playChoice({
+        choiceId: 'visit',
+        instanceId: null,
+        condition: null,
+      });
+      fixture.presentation.update(0.75, 0.75);
+      const island = fixture.presentation.root.getObjectByName('midnight-tour-island')!;
+      expect(fixture.camera.parent).toBe(fixture.presentation.root);
+      expect(fixture.camera.position.toArray()).toEqual([
+        island.position.x,
+        island.position.y + island.userData.greenTopLocalY + 1.45,
+        island.position.z + 2.4,
+      ]);
+
+      fixture.presentation[method]();
+      await visit;
+      expectOriginalCamera(fixture);
+      if (method !== 'dispose') fixture.presentation.dispose();
+    },
+  );
+
+  it.each([
+    ['tour-chest', 'midnight-tour-reward-chest', [0.75, 0.2, 0.2]],
+    ['tour-attack', 'midnight-tour-creature', [-0.45, 0.55, -0.4]],
+  ] as const)('stages %s at its exact position before reveal', async (
+    resultId,
+    actorName,
+    [x, y, z],
+  ) => {
+    const fixture = createFixture();
+    fixture.presentation.stage(8);
+    const visit = fixture.presentation.playChoice({
+      choiceId: 'visit',
+      instanceId: null,
+      condition: null,
+    });
+    fixture.presentation.update(1.5, 1.5);
+    await visit;
+    const result = fixture.presentation.react({
+      eventId: 'midnight-tour',
+      choiceId: 'visit',
+      resultId,
+    }, {} as never);
+    const island = fixture.presentation.root.getObjectByName('midnight-tour-island')!;
+    const actor = fixture.presentation.root.getObjectByName(actorName)!;
+
+    expect(actor.position.toArray()).toEqual([
+      island.position.x + x,
+      island.position.y + island.userData.greenTopLocalY + y,
+      island.position.z + z,
+    ]);
+    expect(actor.visible).toBe(false);
+    fixture.presentation.clear();
+    await result;
+    fixture.presentation.dispose();
+  });
+
+  it('restores the camera before a staged visit supersedes active motion', async () => {
+    const fixture = createFixture();
+    fixture.presentation.stage(8);
+    const first = fixture.presentation.playChoice({
+      choiceId: 'visit',
+      instanceId: null,
+      condition: null,
+    });
+    fixture.presentation.update(0.5, 0.5);
+
+    fixture.presentation.stage(9);
+    await first;
+    expectOriginalCamera(fixture);
+    fixture.presentation.dispose();
+  });
+});
