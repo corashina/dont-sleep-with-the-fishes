@@ -1037,7 +1037,9 @@ describe('BoatWorld helpers', () => {
         instanceId: null,
         condition: null,
       });
-      world.update(4.8, 4.8);
+      for (let frame = 1; frame <= 12; frame += 1) {
+        world.update(frame * 0.4, 0.4);
+      }
       await reaction;
       const presentation = world.scene.getObjectByName('focused-event:midnight-tour')!;
       expect(presentation.userData.searchLeft).toBe(1);

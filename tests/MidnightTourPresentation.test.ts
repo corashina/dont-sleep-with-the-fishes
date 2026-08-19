@@ -71,7 +71,7 @@ function expectOriginalCamera(fixture: ReturnType<typeof createFixture>): void {
 async function startResult(
   fixture: ReturnType<typeof createFixture>,
   resultId: 'tour-chest' | 'tour-attack',
-): Promise<void> {
+): Promise<Record<ResultMarker, number[]>> {
   fixture.presentation.stage(8);
   const visit = fixture.presentation.playChoice({
     choiceId: 'visit',
@@ -80,13 +80,47 @@ async function startResult(
   });
   fixture.presentation.update(1.5, 1.5);
   await visit;
+  const writes = trackResultMarkerWrites(fixture.presentation.root);
   const result = fixture.presentation.react({
     eventId: 'midnight-tour',
     choiceId: 'visit',
     resultId,
   }, {} as never);
-  fixture.presentation.update(6.3, 4.8);
+  for (let frame = 1; frame <= 12; frame += 1) {
+    fixture.presentation.update(1.5 + frame * 0.4, 0.4);
+  }
   await result;
+  return writes;
+}
+
+const RESULT_MARKERS = [
+  'searchLeft',
+  'searchRight',
+  'resultReveals',
+  'cameraKicks',
+] as const;
+type ResultMarker = typeof RESULT_MARKERS[number];
+
+function trackResultMarkerWrites(root: Group): Record<ResultMarker, number[]> {
+  const writes: Record<ResultMarker, number[]> = {
+    searchLeft: [],
+    searchRight: [],
+    resultReveals: [],
+    cameraKicks: [],
+  };
+  for (const marker of RESULT_MARKERS) {
+    let value = root.userData[marker] as number;
+    Object.defineProperty(root.userData, marker, {
+      configurable: true,
+      enumerable: true,
+      get: () => value,
+      set: (next: number) => {
+        value = next;
+        writes[marker].push(next);
+      },
+    });
+  }
+  return writes;
 }
 
 describe('MidnightTourPresentation', () => {
@@ -120,13 +154,18 @@ describe('MidnightTourPresentation', () => {
     'searches both sides and reveals %s',
     async (resultId) => {
       const fixture = createFixture();
-      await startResult(fixture, resultId);
+      const writes = await startResult(fixture, resultId);
 
       expect(fixture.presentation.root.userData.searchLeft).toBe(1);
       expect(fixture.presentation.root.userData.searchRight).toBe(1);
       expect(fixture.presentation.root.userData.resultReveals).toBe(1);
       expect(fixture.presentation.root.userData.cameraKicks)
         .toBe(resultId === 'tour-attack' ? 1 : 0);
+      expect(writes.searchLeft.filter((value) => value === 1)).toHaveLength(1);
+      expect(writes.searchRight.filter((value) => value === 1)).toHaveLength(1);
+      expect(writes.resultReveals.filter((value) => value === 1)).toHaveLength(1);
+      expect(writes.cameraKicks.filter((value) => value === 1))
+        .toHaveLength(resultId === 'tour-attack' ? 1 : 0);
       const actorName = resultId === 'tour-attack'
         ? 'midnight-tour-creature'
         : 'midnight-tour-reward-chest';

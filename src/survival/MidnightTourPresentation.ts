@@ -93,6 +93,10 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private side: EventSide = -1;
   private greenTopLocalY = 0;
   private cameraCaptured = false;
+  private searchLeftMarked = false;
+  private searchRightMarked = false;
+  private resultRevealMarked = false;
+  private cameraKickMarked = false;
   private staged = false;
   private disposed = false;
 
@@ -347,15 +351,15 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       targetX -= 1.45 * turn;
       targetY -= Math.sin(turn * Math.PI) * 0.08;
     } else if (progress < SEARCH_RIGHT_END) {
-      this.root.userData.searchLeft = 1;
+      this.markSearchLeft();
       const turn = smoothstep(
         (progress - SEARCH_LEFT_END) / (SEARCH_RIGHT_END - SEARCH_LEFT_END),
       );
       targetX += -1.45 + 2.9 * turn;
       targetY -= Math.sin(turn * Math.PI) * 0.07;
     } else if (progress < RESULT_TURN_END) {
-      this.root.userData.searchLeft = 1;
-      this.root.userData.searchRight = 1;
+      this.markSearchLeft();
+      this.markSearchRight();
       const turn = smoothstep(
         (progress - SEARCH_RIGHT_END) / (RESULT_TURN_END - SEARCH_RIGHT_END),
       );
@@ -367,10 +371,9 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       targetY += (resultY - targetY) * turn;
       targetZ += (resultZ - targetZ) * turn;
     } else {
-      this.root.userData.searchLeft = 1;
-      this.root.userData.searchRight = 1;
-      this.root.userData.resultReveals = 1;
-      actor.visible = true;
+      this.markSearchLeft();
+      this.markSearchRight();
+      this.markResultReveal(actor);
       if (attack) {
         const lunge = smoothstep(
           (progress - RESULT_TURN_END) / (1 - RESULT_TURN_END),
@@ -383,7 +386,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
         targetZ = actor.position.z;
         const kickWindow = clamp01((lunge - 0.5) / 0.5);
         recoil = Math.sin(kickWindow * Math.PI) * 0.18;
-        if (lunge >= 0.5) this.root.userData.cameraKicks = 1;
+        if (lunge >= 0.5) this.markCameraKick();
       } else {
         targetX = this.chestEnd.x;
         targetY = this.chestEnd.y + 0.25;
@@ -521,10 +524,39 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   }
 
   private resetResultCounters(): void {
+    this.searchLeftMarked = false;
+    this.searchRightMarked = false;
+    this.resultRevealMarked = false;
+    this.cameraKickMarked = false;
     this.root.userData.searchLeft = 0;
     this.root.userData.searchRight = 0;
     this.root.userData.resultReveals = 0;
     this.root.userData.cameraKicks = 0;
+  }
+
+  private markSearchLeft(): void {
+    if (this.searchLeftMarked) return;
+    this.searchLeftMarked = true;
+    this.root.userData.searchLeft += 1;
+  }
+
+  private markSearchRight(): void {
+    if (this.searchRightMarked) return;
+    this.searchRightMarked = true;
+    this.root.userData.searchRight += 1;
+  }
+
+  private markResultReveal(actor: Group): void {
+    if (this.resultRevealMarked) return;
+    this.resultRevealMarked = true;
+    actor.visible = true;
+    this.root.userData.resultReveals += 1;
+  }
+
+  private markCameraKick(): void {
+    if (this.cameraKickMarked) return;
+    this.cameraKickMarked = true;
+    this.root.userData.cameraKicks += 1;
   }
 
   private createChestReward(): Group {
