@@ -1,14 +1,19 @@
 // Importance: 9/10. Protects event loading, activation, concurrency, failure cleanup, and shutdown.
 import { describe, expect, it, vi } from 'vitest';
+import { Group, PerspectiveCamera } from 'three';
+import { ActiveEventPresenter } from '../src/survival/ActiveEventPresenter';
 import {
   EventBundleLoader,
   type EventBundle,
 } from '../src/survival/EventBundle';
+import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
+import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
 import type { SurvivalEventModelLibrary } from '../src/survival/SurvivalEventModelLibrary';
 import {
   EventBundleManager,
   type EventBundleLoaderLike,
 } from '../src/survival/EventBundleManager';
+import { createTestPropModels } from './helpers/propModels';
 
 function deferred<T>(): {
   readonly promise: Promise<T>;
@@ -30,6 +35,76 @@ function bundle(eventId: EventBundle['eventId'], log: string[]): EventBundle {
 }
 
 describe('EventBundleManager', () => {
+  it('rejects Midnight Tour activation when the required palm template is missing', async () => {
+    const propModels = createTestPropModels();
+    const createEventModel = propModels.createEventModel.bind(propModels);
+    vi.spyOn(propModels, 'createEventModel').mockImplementation((id) => (
+      id === 'midnightPalmTrees' ? null : createEventModel(id)
+    ));
+    const scene = new Group();
+    const cameraRig = new Group();
+    const camera = new PerspectiveCamera();
+    cameraRig.add(camera);
+    const loader = new EventBundleLoader({
+      audio: {
+        acquireEventAudio: vi.fn(async () => ({
+          sounds: [],
+          dispose: vi.fn(),
+        })),
+      },
+      host: {
+        createEventPresenter: () => {
+          const layer = new EventPresentationLayer({
+            propModels,
+            waves: [],
+            cameraRig,
+            camera,
+            supplyDisplay: {} as never,
+            chestDisplay: {} as never,
+          }, {}, 'midnight-tour');
+          return new ActiveEventPresenter('midnight-tour', {
+            dedicated: null,
+            layer,
+            featured: null,
+            weather: null,
+            supernatural: null,
+            roots: [{ parent: scene, root: layer.root }],
+          });
+        },
+        attachEventPresenter: (presenter) => presenter.attach(),
+        detachEventPresenter: (presenter) => presenter.detach(),
+      },
+      loadDedicatedModels: vi.fn(async () => ({
+        dispose: vi.fn(),
+      } as unknown as EventModelLibrary)),
+      loadFeaturedModels: vi.fn(async () => ({
+        clone: () => { throw new Error('Unexpected featured model clone.'); },
+        dispose: vi.fn(),
+      } as unknown as SurvivalEventModelLibrary)),
+    });
+    const manager = new EventBundleManager(loader);
+    manager.beginLoad('midnight-tour');
+    let activationError: unknown;
+
+    try {
+      await manager.activate('midnight-tour');
+    } catch (error) {
+      activationError = error;
+    } finally {
+      manager.dispose();
+      propModels.dispose();
+    }
+
+    expect(activationError).toMatchObject({
+      name: 'EventBundleLoadError',
+      eventId: 'midnight-tour',
+      message: 'Event midnight-tour: Missing required Midnight Tour palm model.',
+      cause: {
+        message: 'Missing required Midnight Tour palm model.',
+      },
+    });
+  });
+
   it('cleans completed siblings when one event resource fails', async () => {
     const audioDispose = vi.fn();
     const featuredDispose = vi.fn();
