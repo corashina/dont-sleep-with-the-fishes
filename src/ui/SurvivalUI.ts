@@ -263,7 +263,7 @@ function meterMarkup(meter: MeterDefinition): string {
 }
 
 export type FishingUiMode = 'hidden' | 'aiming' | 'waiting' | 'bite' | 'result' | 'ready';
-export type SleepCoverProfile = 'solid' | 'dive';
+export type SleepCoverProfile = 'solid' | 'dive' | 'midnight-tour';
 
 export interface DiveResultView {
   readonly title: 'DIVE RESULT';
@@ -1027,7 +1027,9 @@ export class SurvivalUI {
     this.sleepCover.classList.toggle('is-covered', covered);
     const delay = this.sleepCover.dataset.profile === 'dive'
       ? DIVE_TRANSITION_MS
-      : SLEEP_TRANSITION_MS;
+      : this.sleepCover.dataset.profile === 'midnight-tour'
+        ? 600
+        : SLEEP_TRANSITION_MS;
     return new Promise((resolve) => {
       let settled = false;
       let timer = 0;
