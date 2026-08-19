@@ -4052,6 +4052,108 @@ describe('SurvivalPhase orchestration', () => {
     },
   );
 
+  it.each(['settle', 'uncover'] as const)(
+    'keeps recovering after the midnight tour recovery %s promise rejects',
+    async (failedStep) => {
+      let current = snapshot({
+        state: 'nightEvent',
+        pendingEventId: 'midnight-tour',
+        pressure: 1,
+      });
+      const originalFailure = new Error('reaction failed');
+      const cleanupFailure = new Error(`${failedStep} failed`);
+      const calls: string[] = [];
+      let trackTour = false;
+      let uncoverCalls = 0;
+      const setBusy = vi.fn((busy: boolean) => {
+        if (trackTour) calls.push(busy ? 'busy' : 'ready');
+      });
+      const onFatalError = vi.fn((error: unknown) => {
+        expect(error).toBe(originalFailure);
+        expect(setBusy).toHaveBeenLastCalledWith(true);
+        calls.push('fatal:original');
+      });
+      const beginDawn = vi.fn();
+      const ui: Partial<SurvivalUI> = {
+        beginEventPresentation: vi.fn(),
+        setSleepCoverProfile: vi.fn(async (profile) => {
+          calls.push(`profile:${profile}`);
+        }),
+        setSleepCovered: vi.fn((covered) => {
+          if (!trackTour) return Promise.resolve();
+          calls.push(`fade:${covered}`);
+          if (!covered) {
+            uncoverCalls += 1;
+            if (failedStep === 'uncover' && uncoverCalls === 2) {
+              return Promise.reject(cleanupFailure);
+            }
+          }
+          return Promise.resolve();
+        }),
+        settleCoveredScene: vi.fn(() => {
+          calls.push('settle');
+          return trackTour && failedStep === 'settle'
+            ? Promise.reject(cleanupFailure)
+            : Promise.resolve();
+        }),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+        setBusy,
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        clearEventPresentation: vi.fn(),
+        restoreCommandFocus: vi.fn(() => { calls.push('focus'); }),
+        dispose: vi.fn(),
+      };
+      const phase = SurvivalPhase.forTest({
+        session: {
+          snapshot: vi.fn(() => current),
+          resolveEvent: vi.fn(() => {
+            current = snapshot({ state: 'nightEvent', pendingEventId: null, pressure: 1 });
+            return accepted({
+              code: 'event-resolved',
+              cue: 'none',
+              eventResult: {
+                eventId: 'midnight-tour',
+                choiceId: 'visit',
+                resultId: 'tour-chest',
+              },
+            });
+          }),
+          beginDawn,
+        },
+        world: {
+          stageEvent: vi.fn(),
+          revealEvent: vi.fn(() => Promise.resolve()),
+          playEventChoice: vi.fn(() => Promise.resolve()),
+          reactToEventOutcome: vi.fn(() => Promise.reject(originalFailure)),
+          play: vi.fn(() => Promise.resolve()),
+          clearEvent: vi.fn(() => { calls.push('clear-event'); }),
+          dispose: vi.fn(),
+        },
+        ui,
+        onFatalError,
+      });
+
+      phase.start();
+      await flushPromises();
+      trackTour = true;
+      ui.onEventChoice?.('visit');
+      await flushPromises();
+      await flushPromises();
+
+      expect(beginDawn).not.toHaveBeenCalled();
+      expect(calls).toContain('settle');
+      expect(uncoverCalls).toBe(2);
+      expect(calls.lastIndexOf('fade:false')).toBeLessThan(calls.indexOf('fatal:original'));
+      expect(calls.indexOf('fatal:original')).toBeLessThan(calls.indexOf('ready'));
+      expect(onFatalError).toHaveBeenCalledExactlyOnceWith(originalFailure);
+      expect(setBusy).toHaveBeenLastCalledWith(false);
+      phase.dispose();
+    },
+  );
+
   it.each(['dispose', 'restart'] as const)(
     'does not sync, caption, or unlock after %s supersedes a focused result',
     async (teardown) => {
