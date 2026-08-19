@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects scavenging music timing and ownership.
+// Importance: 8/10 (scaled from 4/5). Protects scavenging music timing and ownership.
 
 import { describe, expect, it, vi } from 'vitest';
 import type {

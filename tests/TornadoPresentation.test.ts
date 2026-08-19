@@ -1,3 +1,4 @@
+// Importance: 8/10. Protects tornado staging, time continuity, effects, and resource cleanup.
 import {
   Box3,
   BoxGeometry,

@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects the visible flashlight pose in the survival world.
+// Importance: 8/10 (scaled from 4/5). Protects the visible flashlight pose in the survival world.
 import { PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import type { ItemInstance } from '../src/game/ItemState';

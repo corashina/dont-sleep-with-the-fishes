@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Importance: 9/10. Protects menu actions, focus, keyboard access, guidance, and cleanup.
 import { afterEach, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { MenuUI } from '../src/menu/MenuUI';
@@ -36,6 +37,8 @@ it('presents the emergency briefing as two action stages', () => {
   const mount = document.createElement('main');
   const ui = new MenuUI(mount);
   const guide = mount.querySelector<HTMLElement>('[data-menu-guide]')!;
+  expect(guide.querySelector('.how-to-play-board')?.classList).toContain('scuba-popup-paper');
+  expect(guide.querySelector('h2')?.classList).toContain('scuba-popup-title');
   const intro = guide.querySelector<HTMLElement>('#menu-how-to-play-intro')!;
   const stages = [...guide.querySelectorAll<HTMLElement>('.how-to-play-step')];
   const labels = [...guide.querySelectorAll<HTMLElement>('.how-to-play-action__label')]

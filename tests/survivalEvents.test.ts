@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects event eligibility and schema rules.
+// Importance: 10/10 (scaled from 5/5). Protects event eligibility and schema rules.
 import { describe, expect, it } from 'vitest';
 import type { ItemId } from '../src/game/ItemState';
 import {
@@ -20,8 +20,8 @@ const EXPECTED_WEIGHTS = {
   'shower-night': 3, 'windy-night': 4, 'bad-sleep': 4,
   thunderstorm: 4, 'restless-waves': 3, 'man-in-the-fog': 2,
   ghosts: 3, 'eerie-melody': 3, 'face-on-the-moon': 1,
-  'sick-companion': 1, 'shadow-figure': 1,
-  'guarded-sleep': 4, 'drifting-barrel': 1, 'drifting-chest': 1,
+  'shadow-figure': 1, 'guarded-sleep': 4,
+  'drifting-barrel': 1, 'drifting-chest': 1,
   'drifting-bottle': 3,
   'check-the-back': 3, flowers: 1,
   'chest-attack': 1, 'midnight-tour': 2, 'night-trader': 2,
@@ -37,8 +37,7 @@ const EXPECTED_RISK = {
   thunderstorm: 'dangerous', 'restless-waves': 'dangerous',
   'man-in-the-fog': 'dangerous', ghosts: 'uncertain',
   'eerie-melody': 'dangerous', 'face-on-the-moon': 'uncertain',
-  'sick-companion': 'uncertain', 'shadow-figure': 'dangerous',
-  'guarded-sleep': 'uncertain',
+  'shadow-figure': 'dangerous', 'guarded-sleep': 'uncertain',
   'drifting-barrel': 'safe', 'drifting-chest': 'safe', 'drifting-bottle': 'safe',
   'check-the-back': 'safe',
   flowers: 'safe', 'chest-attack': 'dangerous',
@@ -95,9 +94,7 @@ describe('survival events', () => {
   });
 
   it('defines Carlitos event gates and living-companion eligibility', () => {
-    expect(survivalEventById('sick-companion')).toMatchObject({
-      earliestDay: 5, weight: 1, cooldownDays: 26, requiresLivingCompanion: true,
-    });
+    expect(survivalEventById('sick-companion')).toBeUndefined();
     expect(survivalEventById('shadow-figure')).toMatchObject({
       earliestDay: 20, minimumPressure: 3, weight: 1, cooldownDays: 30,
       requiresLivingCompanion: true,
@@ -119,9 +116,7 @@ describe('survival events', () => {
       rescueProgress: 0,
       pressure: 4,
     };
-    const companionEvents = [
-      'sick-companion', 'shadow-figure', 'guarded-sleep',
-    ];
+    const companionEvents = ['shadow-figure', 'guarded-sleep'];
     const absent = eligibleEvents(SURVIVAL_EVENTS, {
       ...criteria,
       hasLivingCompanion: false,
@@ -138,13 +133,6 @@ describe('survival events', () => {
   it('defines exact Carlitos choices and delegated loot weights', () => {
     const event = (id: string) => survivalEventById(id)!;
 
-    expect(event('sick-companion').choices.map(({ id, itemId }) => ({ id, itemId })))
-      .toEqual([
-        { id: 'medicalKit', itemId: 'medicalKit' },
-        { id: 'energyBar', itemId: 'energyBar' },
-        { id: 'ductTape', itemId: 'ductTape' },
-        { id: 'sleep', itemId: undefined },
-      ]);
     expect(event('shadow-figure').choices.map(({ id, itemId }) => ({ id, itemId })))
       .toEqual([
         { id: 'spyglass', itemId: 'spyglass' },
@@ -154,9 +142,6 @@ describe('survival events', () => {
       ]);
     expect(event('guarded-sleep').choices.map(({ id }) => id))
       .toEqual(['watch', 'sleep']);
-    expect(event('sick-companion').choices.find(({ id }) => id === 'ductTape')
-      ?.outcomes.map(({ weight }) => weight)).toEqual([80, 10]);
-
     const delegate = event('drifting-barrel').choices.find(({ id }) => id === 'delegate-carlitos');
     expect(delegate).toMatchObject({
       label: 'Send Carlitos',
@@ -367,7 +352,14 @@ describe('survival events', () => {
     });
     expect(resultIds('handyman', 'touch')).toEqual(['handyman-touch']);
     expect(resultIds('handyman', 'sleep')).toEqual(['handyman-sleep']);
-    expect(resultIds('other-people', 'flareGun')).toEqual(['people-rescue']);
+    expect(resultIds('other-people', 'flareGun')).toEqual(['people-signaled']);
+    expect(event('other-people').choices.find(({ id }) => id === 'flareGun')?.outcomes)
+      .toMatchObject([{
+        effects: {
+          resources: [{ resource: 'rescueProgress', operation: 'add', value: 25 }],
+          items: [{ kind: 'consume', itemId: 'flareGun', quantity: 1 }],
+        },
+      }]);
     expect(resultIds('other-people', 'flashlight')).toEqual(['people-rescue', 'people-missed']);
     expect(resultIds('other-people', 'sleep')).toEqual(['people-pass']);
     expect(event('other-people').choices.map(({ id }) => id)).not.toContain('pass');
@@ -675,15 +667,8 @@ describe('survival events', () => {
     rejects((catalog) => { catalog[0].choices[0].companionAction = 'swim'; }, /companion action/i);
     rejects((catalog) => { catalog[0].choices[0].companionAction = undefined; }, /companion action/i);
     rejects((catalog) => {
-      catalog[0].choices[0].outcomes[0].effects.companion = [
-        { kind: 'sickness', operation: 'subtract', value: 1 },
-      ];
-    }, /companion sickness operation/i);
-    rejects((catalog) => {
-      catalog[0].choices[0].outcomes[0].effects.companion = [
-        { kind: 'sickness', operation: 'add', value: 1.5 },
-      ];
-    }, /companion sickness value/i);
+      catalog[0].choices[0].outcomes[0].effects.companion = [];
+    }, /unsupported effect key companion/i);
   });
 
   it.each([

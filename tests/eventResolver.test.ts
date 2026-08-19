@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects deterministic event outcomes.
+// Importance: 10/10 (scaled from 5/5). Protects deterministic event outcomes.
 import { describe, expect, it } from 'vitest';
 import { resolveWeightedOutcome } from '../src/survival/eventResolver';
 import type { EventChoiceDefinition } from '../src/survival/survivalTypes';
@@ -77,13 +77,12 @@ describe('resolveWeightedOutcome', () => {
     ]);
   });
 
-  it('preserves and clones typed companion flow effects', () => {
+  it('preserves typed night flow effects', () => {
     const source = choice({
       outcomes: [{
         weight: 1,
         message: 'changed',
         effects: {
-          companion: [{ kind: 'sickness', operation: 'add', value: 2 }],
           nextDawnEnergy: 0,
           followUpNight: true,
           endingReason: 'kidnapped',
@@ -93,7 +92,6 @@ describe('resolveWeightedOutcome', () => {
     const resolved = resolveWeightedOutcome(source, sequenceRandom([0]));
 
     expect(resolved.effects).toEqual(source.outcomes[0]?.effects);
-    expect(resolved.effects.companion).not.toBe(source.outcomes[0]?.effects.companion);
   });
 
   it.each([0, 1, 2, 3] as const)('preserves next dawn energy %i', (value) => {

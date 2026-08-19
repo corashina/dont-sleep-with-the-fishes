@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// Importance: 9/10. Protects menu input, transition, rendering, retry, and lifecycle ownership.
 import { PerspectiveCamera, type Scene } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { MENU_FADE_SECONDS } from '../src/menu/menuChoreography';

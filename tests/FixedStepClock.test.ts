@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects deterministic physics timing.
+// Importance: 10/10 (scaled from 5/5). Protects deterministic physics timing.
 import { describe, expect, it, vi } from 'vitest';
 import { FixedStepClock } from '../src/physics/FixedStepClock';
 

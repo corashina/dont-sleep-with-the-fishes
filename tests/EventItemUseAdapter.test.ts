@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects event actor borrowing, aiming, restoration, and camera state.
+// Importance: 8/10 (scaled from 4/5). Protects event actor borrowing, aiming, restoration, and camera state.
 import { Group, PerspectiveCamera, PointLight, Quaternion, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import type { ItemInstanceId } from '../src/game/ItemState';

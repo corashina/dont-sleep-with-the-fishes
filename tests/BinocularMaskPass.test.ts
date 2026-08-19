@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects the screen-space binocular filter state and responsive aspect.
+// Importance: 8/10 (scaled from 4/5). Protects the screen-space binocular filter state and responsive aspect.
 import { Scene } from 'three';
 import { describe, expect, it } from 'vitest';
 import {

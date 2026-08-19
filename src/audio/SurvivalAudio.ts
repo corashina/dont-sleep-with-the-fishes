@@ -227,14 +227,16 @@ export class SurvivalAudio {
 
   eventReveal(eventId: string): void {
     if (this.disposed) return;
+    if (
+      eventId === 'drifting-barrel'
+      || eventId === 'drifting-chest'
+      || eventId === 'drifting-bottle'
+    ) return;
     if (eventId === 'bad-sleep') {
       this.scope.play('yawn');
       return;
     }
     this.scope.play('eventReveal');
-    if (eventId === 'drifting-barrel' || eventId === 'drifting-chest') {
-      this.scope.play('driftingCargo');
-    }
   }
 
   beginEvent(eventId: string): void {

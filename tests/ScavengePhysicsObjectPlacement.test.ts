@@ -1,3 +1,4 @@
+// Importance: 8/10. Protects deterministic, valid, and playable physics object placement.
 import { describe, expect, it } from 'vitest';
 import type { CollisionBox } from '../src/player/collisions';
 import { SCAVENGE_PHYSICS_OBJECT_SPECS } from '../src/world/ScavengePhysicsObjectCatalog';

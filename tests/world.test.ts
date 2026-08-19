@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects world integration and resource ownership.
+// Importance: 10/10 (scaled from 5/5). Protects world integration and resource ownership.
 import { describe, expect, it, vi } from 'vitest';
 import {
   Box3,

@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects the low-cost graded ocean horizon geometry.
+// Importance: 8/10 (scaled from 4/5). Protects the low-cost graded ocean horizon geometry.
 import {
   type BufferAttribute,
   type BufferGeometry,

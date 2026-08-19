@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects stored water quality values.
+// Importance: 8/10 (scaled from 4/5). Protects stored water quality values.
 
 import { describe, expect, it, vi } from 'vitest';
 import {

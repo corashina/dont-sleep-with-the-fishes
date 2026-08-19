@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects survival world integration and cleanup.
+// Importance: 8/10 (scaled from 4/5). Protects survival world integration and cleanup.
 import { describe, expect, it, vi } from 'vitest';
 import {
   AnimationClip,
@@ -999,9 +999,9 @@ describe('BoatWorld helpers', () => {
     expect(rightX).toBeGreaterThan(0);
     expect(Math.abs(leftX)).toBeGreaterThan(11);
     expect(Math.abs(rightX)).toBeGreaterThan(11);
-    expect(leftY).toBeLessThanOrEqual(-1.5);
+    expect(leftY).toBeLessThan(-5.5);
     expect(leftZ).toBeLessThanOrEqual(-27);
-    expect(leftIsland.userData.greenTopWaveClearance).toBeGreaterThan(0);
+    expect(leftIsland.userData.greenTopWaveClearance).toBeCloseTo(0.18);
     expect(leftIsland.userData.disableHoverOutline).toBe(true);
 
     world.dispose();
@@ -1413,7 +1413,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('reapplies the held Handyman Touch camera after each base reset', async () => {
+  it('keeps the boat and camera stationary during Handyman Touch', async () => {
     const propModels = createTestPropModels();
     const camera = new PerspectiveCamera();
     const world = new BoatWorld(
@@ -1432,6 +1432,8 @@ describe('BoatWorld helpers', () => {
     });
     world.update(1, 1);
     await choice;
+    expect(camera.position.toArray()).toEqual(basePosition);
+    expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
 
     const reaction = world.reactToEventOutcome('handyman', {
       accepted: true,
@@ -1451,18 +1453,16 @@ describe('BoatWorld helpers', () => {
     });
     world.update(2, 2);
     await reaction;
-    const heldPosition = camera.position.toArray();
-    const heldQuaternion = camera.quaternion.toArray();
-    expect(heldPosition).toEqual(basePosition);
-    expect(heldQuaternion).not.toEqual(baseQuaternion);
+    expect(camera.position.toArray()).toEqual(basePosition);
+    expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
     expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
     expect(
       world.scene.getObjectByName('focused-event:handyman')?.userData.state,
     ).toBe('held-touch');
 
     world.update(3, 1 / 60);
-    expect(camera.position.toArray()).toEqual(heldPosition);
-    expect(camera.quaternion.toArray()).toEqual(heldQuaternion);
+    expect(camera.position.toArray()).toEqual(basePosition);
+    expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
 
     world.clearEvent();
     expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
@@ -1712,7 +1712,6 @@ describe('BoatWorld helpers', () => {
       expect(model.position.y).toBeCloseTo(0.02 + wave.height);
       expect(model.position.distanceTo(stagedPosition)).toBeGreaterThan(0.001);
       expect(model.quaternion.angleTo(stagedQuaternion)).toBeGreaterThan(0.001);
-      expect(world.projectDriftingItemResult(800, 600)).not.toBeNull();
       const anchorId = `event:${eventId}`;
       const interaction = world.projectInteractionAnchors(800, 600)
         .find(({ id }) => id === anchorId);
@@ -1737,7 +1736,6 @@ describe('BoatWorld helpers', () => {
       expect(model.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
       world.update(2, retrieveDuration);
       await retrieve;
-      expect(world.projectDriftingItemResult(800, 600)).not.toBeNull();
 
       const recede = world.recedeDriftingItem(eventId);
       world.update(3, 0.8);
@@ -1945,7 +1943,6 @@ describe('BoatWorld helpers', () => {
     expect(item.getWorldPosition(new Vector3()).distanceTo(
       bowRest.getWorldPosition(new Vector3()),
     )).toBeLessThan(0.001);
-    expect(world.projectDriftingItemResult(800, 600)).not.toBeNull();
 
     const exited = world.exitDriftingItemView();
     world.update(4.4, 1.2);
@@ -2345,9 +2342,9 @@ describe('BoatWorld helpers', () => {
     ['man-in-the-fog', 2.6, 5.2, 'still'],
     ['ghosts', 3.2, 6.4, 'still'],
     ['eerie-melody', 2.2, 4.4, 'still'],
-    ['other-people', 1.7, 3.4, 'left'],
+    ['other-people', 1.7, 3.4, 'still'],
   ] as const)(
-    'keeps the %s reveal camera stationary while looking at its cue',
+    'keeps the %s reveal camera position fixed with its authored view',
     async (eventId, sampleTime, duration, direction) => {
       const propModels = createTestPropModels();
       const camera = new PerspectiveCamera();
@@ -4833,7 +4830,6 @@ describe('BoatWorld helpers', () => {
     await delegated;
 
     expect(companion.position.toArray()).toEqual(basePosition.toArray());
-    expect(world.projectDriftingItemResult(800, 600)).not.toBeNull();
     world.dispose();
     furniture.dispose();
     propModels.dispose();
@@ -4884,7 +4880,7 @@ describe('BoatWorld helpers', () => {
     },
   );
 
-  it('skips a Carlitos event with its general cue exactly once', async () => {
+  it('skips a Guarded Sleep event with its general cue exactly once', async () => {
     const propModels = createTestPropModels();
     const eventModels = createTestEventModels();
     const world = new BoatWorld(
@@ -4907,13 +4903,13 @@ describe('BoatWorld helpers', () => {
     const pose = companion.getObjectByName('carlitos-pose')!;
     const baseRotation = pose.rotation.clone();
     world.stageEvent({
-      eventId: 'sick-companion',
+      eventId: 'guarded-sleep',
       targetInstanceId: null,
       variantSeed: 4,
     });
     let revealCompletions = 0;
     let cueCompletions = 0;
-    const reveal = world.revealEvent('sick-companion').then(() => {
+    const reveal = world.revealEvent('guarded-sleep').then(() => {
       revealCompletions += 1;
     });
     const cue = world.play('impact').then(() => {
@@ -5142,7 +5138,7 @@ describe('BoatWorld helpers', () => {
     },
   );
 
-  it('keeps School of Fish bodies visible beyond the hull', async () => {
+  it('keeps School of Fish visible while circling outside the hull', async () => {
     const propModels = createTestPropModels();
     const eventModels = createTestEventModels();
     const world = new BoatWorld(
@@ -5169,9 +5165,20 @@ describe('BoatWorld helpers', () => {
       name.startsWith('school-fish-') && visible
     ));
     expect(bodies.length).toBeGreaterThanOrEqual(18);
-    expect(bodies.every(({ position }) => position.z <= -3.4)).toBe(true);
-    expect(bodies.every(({ position }) => position.y > -0.5)).toBe(true);
+    expect(bodies.some(({ position }) => position.z < -3.5)).toBe(true);
+    expect(bodies.some(({ position }) => position.z > 3.5)).toBe(true);
+    expect(bodies.some(({ position }) => position.x < -2.1)).toBe(true);
+    expect(bodies.some(({ position }) => position.x > 2.1)).toBe(true);
+    expect(bodies.every(({ position }) => {
+      const hullHalfWidth = lifeboatHullHalfWidthAt(position.z);
+      return hullHalfWidth === null
+        || Math.abs(position.x) > hullHalfWidth + 0.45;
+    })).toBe(true);
+    expect(bodies.every(({ position }) => position.y > -1.05)).toBe(true);
     expect(bodies.some(({ scale }) => scale.x >= 0.9)).toBe(true);
+    expect(school.children.filter(({ name, visible }) => (
+      name.startsWith('school-surface-fin-') && visible
+    ))).toHaveLength(8);
 
     world.dispose();
     propModels.dispose();
@@ -5655,6 +5662,13 @@ describe('BoatWorld helpers', () => {
     const propModels = createTestPropModels();
     const parent = new Group();
     const display = new BoatSupplyDisplay(propModels, parent, [map]);
+    const preparedEventActors = (display as unknown as {
+      preparedEventActors: ReadonlyMap<ItemInstanceId, { readonly root: Group }>;
+    }).preparedEventActors;
+    expect(preparedEventActors).toBeInstanceOf(Map);
+    const preparedActorRoot = preparedEventActors.get(map.instanceId)?.root;
+    expect(preparedActorRoot).toBeDefined();
+    expect(preparedActorRoot?.parent).toBeNull();
     display.sync(snapshot([map]));
     parent.updateMatrixWorld(true);
     const storedCopy = parent.getObjectByName('boat-supply:map:copy-1')!;
@@ -5665,6 +5679,7 @@ describe('BoatWorld helpers', () => {
     const sameActor = display.borrowEventActor(map.instanceId);
 
     expect(actor).not.toBeNull();
+    expect(actor?.root).toBe(preparedActorRoot);
     expect(sameActor).toBe(actor);
     expect(actor?.instanceId).toBe(map.instanceId);
     expect(actor?.root.name).toBe(`boat-supply-event:${map.instanceId}`);
@@ -6181,7 +6196,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps the normal white outline on every event-eligible supply', () => {
+  it('outlines event-eligible supplies without muting other supplies', () => {
     const bucket = savedItem('bucket');
     const map = savedItem('map');
     const propModels = createTestPropModels();
@@ -6194,11 +6209,13 @@ describe('BoatWorld helpers', () => {
     world.syncInventory(snapshot([bucket, map]));
     const bucketRoot = world.scene.getObjectByName('boat-supply:bucket')!;
     const mapRoot = world.scene.getObjectByName('boat-supply:map')!;
+    const mapMaterial = firstMesh(mapRoot).material;
 
-    world.setEventEligibleItems(new Set([bucket.instanceId, map.instanceId]));
+    world.setEventEligibleItems(new Set([bucket.instanceId]));
 
     expect(bucketRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
-    expect(mapRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+    expect(mapRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+    expect(firstMesh(mapRoot).material).toBe(mapMaterial);
 
     world.setEventEligibleItems(new Set());
     expect(bucketRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();

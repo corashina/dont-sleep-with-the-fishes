@@ -49,13 +49,11 @@ import type {
   ActionOutcome,
   EventResultPresentation,
 } from './survivalTypes';
-import { StationaryEventCamera } from './StationaryEventCamera';
 import { TimedPresentationAnimation } from './TimedPresentationAnimation';
 
 type HandymanAnimationKind =
   | 'reveal'
   | 'choice-payment'
-  | 'choice-touch'
   | 'choice-sleep'
   | 'result-reward'
   | 'result-touch'
@@ -63,7 +61,6 @@ type HandymanAnimationKind =
 
 const REVEAL_DURATION = 1.45;
 const PAYMENT_DURATION = 1.08;
-const TOUCH_CHOICE_DURATION = 0.82;
 const SLEEP_CHOICE_DURATION = 0.38;
 const RESULT_DURATION = 1.12;
 const TOUCH_RESULT_DURATION = 1.05;
@@ -75,10 +72,6 @@ const PALM_TARGET = new Vector3(0.05, 0.32, 0.05);
 const PAYMENT_START = new Vector3(3.05, 0.38, 3.9);
 const REWARD_END = new Vector3(2.85, 0.55, 3.6);
 const CHEST_PALM_TARGET = new Vector3(-2.22, 0.9, -2.08);
-const TOUCH_HELD_CAMERA_YAW = -0.22;
-const TOUCH_HELD_CAMERA_PITCH = -0.2;
-const TOUCH_HELD_CAMERA_X = -0.16;
-const TOUCH_HELD_CAMERA_Z = -2.05;
 const X_AXIS = new Vector3(1, 0, 0);
 const Y_AXIS = new Vector3(0, 1, 0);
 const Z_AXIS = new Vector3(0, 0, 1);
@@ -165,7 +158,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
     scaleY: 1,
     scaleZ: 1,
   };
-  private readonly cameraLook: StationaryEventCamera;
   private readonly chestStartPosition = new Vector3();
   private readonly chestStartQuaternion = new Quaternion();
   private readonly chestStartScale = new Vector3(1, 1, 1);
@@ -179,7 +171,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
   private activeChoiceId: string | null = null;
   private usingSupplyPayment = false;
   private usingChestPayment = false;
-  private touchCameraHeld = false;
   private chestCaptured = false;
   private paymentVisible = false;
   private rewardVisible = false;
@@ -190,7 +181,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
   constructor(
     private readonly dependencies: FocusedEventPresentationDependencies,
   ) {
-    this.cameraLook = new StationaryEventCamera(dependencies.camera);
     this.root.name = 'focused-event:handyman';
     this.root.visible = false;
     this.root.userData.motionSource = 'shared-wave-field';
@@ -226,8 +216,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
   stage(): void {
     if (this.disposed) return;
     this.animation.cancel();
-    this.restoreCamera();
-    this.captureCamera();
     this.dependencies.supplyDisplay.releaseEventActor();
     this.dependencies.supplyDisplay.clearEventPose();
     this.restoreChestPose();
@@ -257,8 +245,8 @@ export class HandymanPresentation implements FocusedEventPresentation {
     if (this.disposed) return Promise.resolve();
     this.activeChoiceId = choice.choiceId;
     if (choice.choiceId === 'touch') {
-      this.root.userData.state = 'reaching-for-hand';
-      return this.startAnimation('choice-touch', TOUCH_CHOICE_DURATION);
+      this.root.userData.state = 'touch-selected';
+      return Promise.resolve();
     }
     if (choice.choiceId === 'sleep') {
       this.root.userData.state = 'waiting';
@@ -320,7 +308,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.dependencies.supplyDisplay.clearEventPose();
     this.restoreChestPose();
     this.clearExchangeActors();
-    this.restoreCamera();
     this.resetStaticActors();
     this.root.visible = false;
     this.root.userData.state = 'idle';
@@ -330,7 +317,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
   update(time: number, delta: number): void {
     if (this.disposed || delta < 0) return;
     this.animation.update(time, delta);
-    if (this.touchCameraHeld) this.applyHeldTouchCameraPose();
     this.applySharedWave(time);
     this.applyRestrainedIdle(time);
   }
@@ -370,7 +356,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.dependencies.supplyDisplay.releaseEventActor();
     this.dependencies.supplyDisplay.clearEventPose();
     this.restoreChestPose();
-    this.restoreCamera();
     this.clearExchangeActors();
     this.disposed = true;
     this.staged = false;
@@ -402,9 +387,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
       case 'choice-payment':
         this.applyPaymentChoice(normalized);
         break;
-      case 'choice-touch':
-        this.applyTouchChoice(normalized);
-        break;
       case 'choice-sleep':
         this.applySleepChoice(normalized);
         break;
@@ -429,9 +411,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
       case 'choice-payment':
         this.root.userData.state = 'payment-held';
         break;
-      case 'choice-touch':
-        this.root.userData.state = 'camera-at-palm';
-        break;
       case 'choice-sleep':
         this.root.userData.state = 'choice-sleep';
         break;
@@ -442,8 +421,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
         break;
       case 'result-touch':
         this.root.userData.state = 'held-touch';
-        this.touchCameraHeld = true;
-        this.applyHeldTouchCameraPose();
         break;
       case 'result-sleep':
         this.root.userData.state = 'held-sleep';
@@ -528,17 +505,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
     }
   }
 
-  private applyTouchChoice(progress: number): void {
-    const travel = keyedTravel(progress);
-    this.setFingerBend(0);
-    this.applyCameraPose(
-      -0.14 * travel,
-      -0.08 * travel,
-      -0.16 * travel,
-      -1.5 * travel,
-    );
-  }
-
   private applySleepChoice(progress: number): void {
     const anticipation = Math.sin(progress * Math.PI);
     this.handPose.rotation.x = -anticipation * 0.05;
@@ -570,25 +536,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
   private applyTouchResult(progress: number): void {
     const close = smoothstep((progress - 0.18) / 0.58);
     this.setFingerBend(close);
-    const kickWindow = clamp01((progress - 0.65) / 0.35);
-    const kick = Math.sin(kickWindow * Math.PI);
-    this.applyCameraPose(
-      -0.14 - close * 0.08,
-      -0.08 - close * 0.12,
-      -0.16 + kick * 0.12,
-      -1.5 - close * 0.55,
-    );
-    this.handPose.position.x = -kick * 0.18;
-    this.handPose.rotation.z = kick * 0.1;
-    this.dependencies.supplyDisplay.applyEventAmbientPose(
-      kick * 0.08,
-      kick * 0.055,
-    );
-    if (progress >= 0.72) {
-      this.root.userData.cameraEnclosed = true;
-      this.root.userData.cameraGrabbed = true;
-      this.root.userData.hullKicks = 1;
-    }
   }
 
   private applySleepResult(progress: number): void {
@@ -887,32 +834,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.updateExchangeState();
   }
 
-  private captureCamera(): void {
-    this.cameraLook.capture();
-  }
-
-  private restoreCamera(): void {
-    this.cameraLook.restore();
-  }
-
-  private applyCameraPose(
-    yaw: number,
-    pitch: number,
-    _x: number,
-    _z: number,
-  ): void {
-    this.cameraLook.apply(yaw, pitch);
-  }
-
-  private applyHeldTouchCameraPose(): void {
-    this.applyCameraPose(
-      TOUCH_HELD_CAMERA_YAW,
-      TOUCH_HELD_CAMERA_PITCH,
-      TOUCH_HELD_CAMERA_X,
-      TOUCH_HELD_CAMERA_Z,
-    );
-  }
-
   private captureChestPose(): void {
     this.chestStartPosition.copy(this.dependencies.chestDisplay.root.position);
     this.chestStartQuaternion.copy(
@@ -947,10 +868,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.handVisual.userData.fingerTension = 0;
     this.handVisual.visible = false;
     this.setFingerBend(0);
-    this.root.userData.cameraEnclosed = false;
-    this.root.userData.cameraGrabbed = false;
-    this.touchCameraHeld = false;
-    this.root.userData.hullKicks = 0;
     this.root.userData.shrugs = 0;
     this.root.userData.sank = false;
   }

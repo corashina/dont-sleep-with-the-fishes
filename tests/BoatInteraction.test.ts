@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects survival action targets.
+// Importance: 8/10 (scaled from 4/5). Protects survival action targets.
 import { describe, expect, it } from 'vitest';
 import {
   Box3,

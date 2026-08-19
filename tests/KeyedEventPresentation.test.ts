@@ -1,3 +1,4 @@
+// Importance: 8/10. Protects event reaction settlement during visibility changes.
 import { describe, expect, it, vi } from 'vitest';
 import { KeyedEventPresentation } from '../src/survival/KeyedEventPresentation';
 

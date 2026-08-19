@@ -24,7 +24,6 @@ import {
   Texture,
   Vector2,
   Vector3,
-  type WebGLRenderer,
 } from 'three';
 import {
   DAY_ACTION_ONLY_ITEM_IDS,
@@ -832,7 +831,6 @@ export class BoatWorld {
     models?: SurvivalEventModels | EventModelLibrary | FocusedEventPresentationFactories,
     eventModels?: EventModelLibrary,
     focusedEventFactories: FocusedEventPresentationFactories = {},
-    renderer?: WebGLRenderer,
   ) {
     const resolvedFocusedFactories = isFocusedEventFactoryMap(models)
       ? models
@@ -1067,13 +1065,6 @@ export class BoatWorld {
       this.carlitosAnchorBounds = createBoatObjectBoundsCache(
         this.carlitos.interactionRoot,
       );
-      if (renderer !== undefined) {
-        void this.eventPresentation.prepareRender(
-          renderer,
-          this.scene,
-          this.camera,
-        ).catch(() => undefined);
-      }
       this.applyBasePresentation();
     } catch (error) {
       try {
@@ -1693,20 +1684,6 @@ export class BoatWorld {
     if (this.disposed) return Promise.resolve();
     this.toolHoverOutline.setTarget(null);
     return this.featuredEvents.react(eventId, driftingItemLeaveKey(eventId));
-  }
-
-  projectDriftingItemResult(width: number, height: number): ProjectedBoatBounds | null {
-    if (
-      this.disposed
-      || this.activeEventPresenter === null
-      || this.activeFeaturedEventId === null
-      || !isDriftingItemEventId(this.activeFeaturedEventId)
-      || width <= 0
-      || height <= 0
-    ) return null;
-    this.scene.updateMatrixWorld(true);
-    const root = this.featuredEvents.resultRoot(this.activeFeaturedEventId);
-    return root === null ? null : projectBoatObjectBounds(root, this.camera, width, height);
   }
 
   projectEventInteractionBounds(

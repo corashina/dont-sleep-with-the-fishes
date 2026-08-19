@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Importance: 4/5. Protects start guidance and keyboard access.
+// Importance: 8/10 (scaled from 4/5). Protects start guidance and keyboard access.
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -67,6 +67,7 @@ describe('GameUI pause menu', () => {
     const ui = new GameUI(mount);
     const pause = mount.querySelector<HTMLElement>('[data-pause]')!;
 
+    expect(pause.querySelector('.screen__content')?.classList).toContain('scuba-popup-paper');
     expect(pause.textContent).toContain('Back to the deck?');
     expect(pause.textContent).not.toContain('THE CLOCK IS STILL');
     expect(pause.textContent).not.toContain('The countdown is stopped');
@@ -82,6 +83,7 @@ describe('GameUI ending', () => {
     const ui = new GameUI(mount);
     const ending = mount.querySelector<HTMLElement>('[data-ending]')!;
 
+    expect(ending.querySelector('.screen__content')?.classList).toContain('scuba-popup-paper');
     expect(ending.textContent).toContain('SUNK WITH DOROTHY');
     expect(ending.textContent).not.toContain('ENDING I');
     expect(ending.textContent).not.toContain('You stayed aboard');

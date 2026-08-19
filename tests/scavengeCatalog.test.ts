@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects the canonical scavenging roster.
+// Importance: 8/10 (scaled from 4/5). Protects the canonical scavenging roster.
 import { describe, expect, it } from 'vitest';
 import {
   createItemInstances,

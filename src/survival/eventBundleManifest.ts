@@ -33,11 +33,11 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
   'bad-sleep': { models: [], sounds: ['yawn'] },
   'drifting-barrel': {
     models: ['driftingBarrel'],
-    sounds: ['driftingCargo'],
+    sounds: [],
   },
   'drifting-chest': {
     models: ['mysteryChest'],
-    sounds: ['driftingCargo'],
+    sounds: [],
   },
   'drifting-bottle': { models: ['driftingBottle'], sounds: [] },
   'check-the-back': { models: ['checkBackFish'], sounds: [] },

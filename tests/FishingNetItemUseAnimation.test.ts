@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects the real net scoop and reverse stow motion.
+// Importance: 8/10 (scaled from 4/5). Protects the real net scoop and reverse stow motion.
 import { describe, expect, it } from 'vitest';
 import {
   createEventItemUseSample,

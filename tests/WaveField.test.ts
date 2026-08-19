@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects the shared deterministic wave field.
+// Importance: 10/10 (scaled from 5/5). Protects the shared deterministic wave field.
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_WAVES,

@@ -1,3 +1,4 @@
+// Importance: 8/10. Protects event model integrity, provenance, and current asset paths.
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { validateEventModelMetadata } from '../scripts/check-event-models.mjs';

@@ -76,8 +76,8 @@ export class GameUI {
       </div>
       <div class="scavenge-intro-fade" data-intro-fade aria-hidden="true"></div>
       <section class="screen pause-screen poster-screen" data-pause>
-        <div class="screen__content">
-          <h2 class="ui-role-display">Back to the deck?</h2>
+        <div class="screen__content scuba-popup-paper scuba-popup-panel">
+          <h2 class="scuba-popup-title ui-role-display">Back to the deck?</h2>
           <button type="button" class="primary-action salvage-action ui-role-context" data-resume-button aria-label="Resume">
             RESUME
           </button>
@@ -89,8 +89,8 @@ export class GameUI {
       </section>
       <section class="screen scavenge-ending-screen poster-screen"
         data-ending role="dialog" aria-modal="true" aria-hidden="true" inert>
-        <div class="screen__content">
-          <h2 class="ui-role-display" data-ending-title tabindex="-1">SUNK WITH DOROTHY</h2>
+        <div class="screen__content scuba-popup-paper scuba-popup-panel">
+          <h2 class="scuba-popup-title ui-role-display" data-ending-title tabindex="-1">SUNK WITH DOROTHY</h2>
           <button type="button" class="primary-action salvage-action ui-role-context"
             data-ending-action hidden>BACK TO MAIN MENU</button>
         </div>

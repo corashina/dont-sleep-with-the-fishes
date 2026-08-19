@@ -13,8 +13,6 @@ import {
   SphereGeometry,
   TorusGeometry,
   Vector3,
-  type Scene,
-  type WebGLRenderer,
 } from 'three';
 import {
   sampleWaveFieldInto,
@@ -374,20 +372,6 @@ export class EventPresentationLayer {
     }
     this.root.add(presenter.root);
     return true;
-  }
-
-  prepareRender(
-    renderer: WebGLRenderer,
-    scene: Scene,
-    camera: PerspectiveCamera,
-  ): Promise<void> {
-    return Promise.all([...this.ownedFocused].map(
-      (presentation) => presentation.prepareRender?.(
-        renderer,
-        scene,
-        camera,
-      ),
-    )).then(() => undefined);
   }
 
   projectInteractionAnchors(

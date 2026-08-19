@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects flashlight hold, aim, beam, and reverse stow motion.
+// Importance: 8/10 (scaled from 4/5). Protects flashlight hold, aim, beam, and reverse stow motion.
 import { Mesh, MeshBasicMaterial, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { EventItemEffects } from '../src/survival/EventItemEffects';

@@ -12,8 +12,7 @@ export function schoolItemDuration(choiceId: string): number {
     : SCHOOL_ITEM_DURATION;
 }
 export const SCHOOL_CENTER_X = 0;
-export const SCHOOL_CENTER_Z = -5.65;
-export const SCHOOL_HULL_LIMIT_Z = -3.4;
+export const SCHOOL_CENTER_Z = 0;
 
 export type SchoolItemEffectKind =
   | 'none'
@@ -27,8 +26,8 @@ export interface SchoolVariant {
   readonly orbitRadiusX: number;
   readonly orbitRadiusZ: number;
   readonly depth: number;
-  readonly scatterX: number;
-  readonly scatterZ: number;
+  readonly approachScale: number;
+  readonly scatterScale: number;
   readonly speed: number;
   readonly bank: number;
   readonly flashOffset: number;
@@ -83,16 +82,16 @@ export function createSchoolVariants(count: number, seed: number): readonly Scho
   const variants: SchoolVariant[] = [];
   for (let index = 0; index < safeCount; index += 1) {
     const lane = index % 4;
+    const orbitAngle = (index / Math.max(1, safeCount)) * Math.PI * 2
+      + (variantUnit(safeSeed, index, 1) - 0.5) * 0.22;
     variants.push({
       scale: 0.78 + variantUnit(safeSeed, index, 0) * 0.46,
-      orbitAngle: (index / Math.max(1, safeCount)) * Math.PI * 2
-        + (variantUnit(safeSeed, index, 1) - 0.5) * 0.22,
-      orbitRadiusX: 3.4 + lane * 0.28 + variantUnit(safeSeed, index, 2) * 0.22,
-      orbitRadiusZ: 1.2 + lane * 0.28 + variantUnit(safeSeed, index, 3) * 0.34,
+      orbitAngle,
+      orbitRadiusX: 2.65 + lane * 0.22 + variantUnit(safeSeed, index, 2) * 0.25,
+      orbitRadiusZ: 4.4 + lane * 0.28 + variantUnit(safeSeed, index, 3) * 0.3,
       depth: 0.04 + variantUnit(safeSeed, index, 4) * 0.16,
-      scatterX: (variantUnit(safeSeed, index, 5) < 0.5 ? -1 : 1)
-        * (5.8 + variantUnit(safeSeed, index, 6) * 2.4),
-      scatterZ: (variantUnit(safeSeed, index, 7) - 0.5) * 11,
+      approachScale: 0.45 + variantUnit(safeSeed, index, 5) * 0.45,
+      scatterScale: 0.7 + variantUnit(safeSeed, index, 6) * 0.5,
       speed: 0.72 + variantUnit(safeSeed, index, 8) * 0.48,
       bank: (variantUnit(safeSeed, index, 9) - 0.5) * 0.26,
       flashOffset: variantUnit(safeSeed, index, 10),
@@ -252,20 +251,15 @@ export function sampleSchoolFishPose(
 ): void {
   const safeTime = Number.isFinite(time) ? time : 0;
   const angle = variant.orbitAngle + safeTime * variant.speed;
-  const orbitX = SCHOOL_CENTER_X + Math.cos(angle) * variant.orbitRadiusX;
-  const orbitZ = SCHOOL_CENTER_Z + Math.sin(angle) * variant.orbitRadiusZ;
-  output.x = SCHOOL_CENTER_X + variant.scatterX
-    + (orbitX - SCHOOL_CENTER_X - variant.scatterX) * school.gather;
-  output.z = SCHOOL_CENTER_Z + variant.scatterZ
-    + (orbitZ - SCHOOL_CENTER_Z - variant.scatterZ) * school.gather;
-  if (school.scatter > 0) {
-    output.x = orbitX + variant.scatterX * school.scatter * 0.92;
-    output.z = orbitZ + variant.scatterZ * school.scatter * 0.92;
-  }
-  const tangentX = -Math.sin(angle) * variant.orbitRadiusX;
-  const orbitTangentZ = Math.cos(angle) * variant.orbitRadiusZ;
-  const tangentZ = output.z >= SCHOOL_HULL_LIMIT_Z ? 0 : orbitTangentZ;
-  output.z = Math.min(output.z, SCHOOL_HULL_LIMIT_Z);
+  const radiusScale = 1
+    + (1 - school.gather) * variant.approachScale
+    + school.scatter * variant.scatterScale;
+  output.x = SCHOOL_CENTER_X
+    + Math.cos(angle) * variant.orbitRadiusX * radiusScale;
+  output.z = SCHOOL_CENTER_Z
+    + Math.sin(angle) * variant.orbitRadiusZ * radiusScale;
+  const tangentX = -Math.sin(angle) * variant.orbitRadiusX * radiusScale;
+  const tangentZ = Math.cos(angle) * variant.orbitRadiusZ * radiusScale;
   output.yaw = Math.atan2(tangentZ, -tangentX);
   output.pitch = variant.bank;
   output.roll = 0;

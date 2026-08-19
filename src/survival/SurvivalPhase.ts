@@ -4,7 +4,6 @@ import { AudioSystem } from '../audio/AudioSystem';
 import { SurvivalAudio } from '../audio/SurvivalAudio';
 import {
   ITEM_DEFINITIONS,
-  ITEM_IDS,
   type ItemId,
   type ItemInstance,
   type ItemInstanceId,
@@ -18,11 +17,8 @@ import {
 import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
 import {
   SurvivalUI,
-  type DriftingItemResultView,
   type DiveResultView,
-  type EventOutcomeView,
   type EventContextChoice,
-  type EventResultView,
   type FishingResultView,
 } from '../ui/SurvivalUI';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
@@ -77,7 +73,6 @@ import type {
   DayActionOption,
   EventResponse,
   EventResponseId,
-  RewardSummary,
   SurvivalSnapshot,
   SurvivalState,
 } from './survivalTypes';
@@ -134,70 +129,17 @@ type EventPresentationState =
   | 'revealing'
   | 'choosing'
   | 'using'
-  | 'resolving'
-  | 'retrieving'
-  | 'result'
-  | 'receding';
+  | 'resolving';
 
 type DriftingItemFocusState =
   | 'idle'
   | 'entering'
   | 'choosing'
   | 'resolving'
-  | 'result'
-  | 'return-ready'
   | 'returning';
 
 function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' {
   return TERMINAL_STATES.includes(state);
-}
-
-const EVENT_RESULT_RESOURCES = [
-  ['health', 'HEALTH'],
-  ['hunger', 'HUNGER'],
-  ['energy', 'ENERGY'],
-  ['hull', 'HULL'],
-  ['food', 'FOOD'],
-  ['bait', 'BAIT'],
-  ['repairMaterial', 'REPAIR MATERIAL'],
-  ['rescueProgress', 'RESCUE PROGRESS'],
-] as const;
-
-function eventResultItemLabel(instanceId: ItemInstanceId): string {
-  const itemId = ITEM_IDS.find((id) => instanceId.startsWith(`${id}-`));
-  return itemId === undefined
-    ? instanceId.toLocaleUpperCase('en-US')
-    : ITEM_DEFINITIONS[itemId].label.toLocaleUpperCase('en-US');
-}
-
-export function formatEventResult(
-  result: EventOutcomePresentation,
-): Extract<EventResultView, { readonly message: string }> {
-  const lines: string[] = [];
-  if (result.outcome.nextDawnEnergy !== undefined) {
-    lines.push(`NEXT DAWN ENERGY ${result.outcome.nextDawnEnergy}`);
-  }
-  for (const [resource, label] of EVENT_RESULT_RESOURCES) {
-    const delta = result.resourceDeltas[resource];
-    if (delta === undefined || delta === 0) continue;
-    lines.push(`${label} ${delta > 0 ? '+' : ''}${delta}`);
-  }
-  for (const instanceId of result.gainedInstanceIds) {
-    lines.push(`${eventResultItemLabel(instanceId)} GAINED`);
-  }
-  for (const instanceId of result.brokenInstanceIds) {
-    lines.push(`${eventResultItemLabel(instanceId)} BROKEN`);
-  }
-  for (const instanceId of result.lostInstanceIds) {
-    lines.push(`${eventResultItemLabel(instanceId)} LOST`);
-  }
-  for (const instanceId of result.consumedInstanceIds) {
-    lines.push(`${eventResultItemLabel(instanceId)} CONSUMED`);
-  }
-  return {
-    message: result.outcome.message,
-    lines,
-  };
 }
 
 function reportInvariantError(error: Error): void {
@@ -246,44 +188,6 @@ export function formatFishingResult(
     title: result.catch.label.toLocaleUpperCase('en-US'),
     detail: `+${fishingCatchFood(result.catch)} FOOD${bait}`,
     catchTarget: null,
-  };
-}
-
-export function formatDangerousWatersOutcome(
-  outcome: ActionOutcome,
-): EventOutcomeView {
-  const hullDamage = Math.max(0, -(outcome.deltas.hull ?? 0));
-  if (hullDamage === 0) {
-    return {
-      title: 'CLEAR WATER',
-      detail: 'The route opens ahead.',
-      result: 'HULL HOLDS',
-      state: 'safe',
-    };
-  }
-  const severe = hullDamage >= 25;
-  return {
-    title: `HULL \u2212${hullDamage}`,
-    detail: outcome.message,
-    result: severe ? 'SEVERE ROCK STRIKE' : 'ROCK STRIKE',
-    state: severe ? 'severe' : 'damage',
-  };
-}
-
-export function formatDriftingCargoResult(
-  reward: RewardSummary,
-  energyCost = 3,
-): DriftingItemResultView {
-  const title = reward.kind === 'item'
-    ? ITEM_DEFINITIONS[reward.id].label.toLocaleUpperCase('en-US')
-    : reward.id === 'repairMaterial'
-      ? 'REPAIR MATERIAL'
-      : reward.id.toLocaleUpperCase('en-US');
-  return {
-    caption: 'SALVAGE RECOVERED',
-    title,
-    detail: `${title} +${reward.quantity}${energyCost > 0 ? ` — ${energyCost} ENERGY SPENT` : ''}`,
-    target: null,
   };
 }
 
@@ -548,6 +452,15 @@ export class SurvivalPhase implements GamePhase {
     this.context.camera.updateProjectionMatrix();
     this.syncPresentation(this.session.snapshot());
     this.syncFishingBiteTarget();
+    if (this.driftingItemFocus === 'choosing' && this.activeDriftingItemEventId !== null) {
+      this.ui.updateDriftingItemFocusTarget?.(
+        this.world.projectEventInteractionBounds?.(
+          this.activeDriftingItemEventId,
+          width,
+          height,
+        ) ?? null,
+      );
+    }
   }
 
   render(): void {
@@ -693,7 +606,6 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onFishingViewExit = null;
     this.ui.onDriftingItemSelect = null;
     this.ui.onDriftingItemBack = null;
-    this.ui.onDriftingItemContinue = null;
     if (this.visibilityDocument !== null) {
       this.visibilityDocument.removeEventListener('visibilitychange', this.handleVisibilityChange);
       this.visibilityDocument = null;
@@ -892,7 +804,6 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onEventItem = (choiceId, instanceId) => this.handleEventItem(choiceId, instanceId);
     this.ui.onEventChoice = (choiceId) =>
       void this.resolveContextualChoice(choiceId, this.lifecycleGeneration);
-    this.ui.onEndure = () => this.handleEndure();
     this.ui.onRestart = () => this.requestRestart();
     this.ui.onAnchorHighlight = (anchorId) => {
       if (!this.disposed) this.world.setHighlightedItem?.(anchorId);
@@ -909,7 +820,6 @@ export class SurvivalPhase implements GamePhase {
       void this.enterDriftingItemFocus(eventId, this.lifecycleGeneration);
     };
     this.ui.onDriftingItemBack = () => this.handleDriftingItemBack();
-    this.ui.onDriftingItemContinue = () => this.continueDriftingItemResult();
   }
 
   private repairOption(snapshot: SurvivalSnapshot): DayActionOption | undefined {
@@ -1496,6 +1406,11 @@ export class SurvivalPhase implements GamePhase {
       eventId,
       title: event.title.toLocaleUpperCase('en-US'),
       choices: this.contextualChoicesFor(event, snapshot),
+      target: this.world.projectEventInteractionBounds?.(
+        eventId,
+        this.viewportWidth,
+        this.viewportHeight,
+      ) ?? null,
     });
   }
 
@@ -1647,14 +1562,10 @@ export class SurvivalPhase implements GamePhase {
         this.onInvariantError(new Error(
           `Drifting item ${eventId}/${choiceId} requires a reward summary.`,
         ));
-        const feedback: ActionOutcome = {
+        this.ui.showFeedback?.({
           accepted: false,
-          code: 'drifting-item-reward-missing',
           message: 'The recovered salvage could not be identified.',
-          deltas: {},
-          cue: 'none',
-        };
-        this.ui.showFeedback?.(feedback);
+        });
         await this.returnFromDriftingItemView(eventId, generation);
         return;
       }
@@ -1673,23 +1584,7 @@ export class SurvivalPhase implements GamePhase {
         this.activeDriftingItemEventId !== eventId
         || this.driftingItemFocus !== 'resolving'
       ) return;
-      this.eventPresentation = 'result';
-      this.driftingItemFocus = 'result';
-      const playerEnergyCost = survivalEventById(eventId)?.choices
-        .find(({ id }) => id === 'retrieve')
-        ?.requirements?.find(({ resource }) => resource === 'energy')
-        ?.minimum ?? 0;
-      const view = formatDriftingCargoResult(
-        outcome.rewardSummary,
-        choiceId === 'delegate-carlitos' ? 0 : playerEnergyCost,
-      );
-      this.ui.showDriftingItemResult?.({
-        ...view,
-        target: this.world.projectDriftingItemResult?.(
-          this.viewportWidth,
-          this.viewportHeight,
-        ) ?? null,
-      });
+      await this.returnFromDriftingItemView(eventId, generation);
       return;
     }
 
@@ -1790,6 +1685,8 @@ export class SurvivalPhase implements GamePhase {
     presentation: EventOutcomePresentation,
     focusedResult: boolean,
   ): Promise<void> {
+    const stationaryHandymanTouch = eventId === 'handyman'
+      && choice.choiceId === 'touch';
     this.setBusy(true);
     this.ui.hideEventReveal?.();
     this.audio.beginEventReaction(eventId, outcome);
@@ -1803,7 +1700,9 @@ export class SurvivalPhase implements GamePhase {
       this.audio.eventAction(eventId, 'damage');
     }
     await Promise.all([
-      this.world.play?.(outcome.cue) ?? Promise.resolve(),
+      stationaryHandymanTouch
+        ? Promise.resolve()
+        : this.world.play?.(outcome.cue) ?? Promise.resolve(),
       this.world.reactToEventOutcome?.(
         eventId,
         outcome,
@@ -1825,7 +1724,6 @@ export class SurvivalPhase implements GamePhase {
     if (focusedResult && !isTerminal(terminal.state)) {
       this.flushDeferredPresentationSync(terminal, generation);
     }
-    this.ui.showEventResult?.(formatEventResult(presentation));
     const isDedicatedEvent = isEventPresentationRoute(eventId, 'dedicated');
     if (isTerminal(terminal.state)) {
       if (isDedicatedEvent) {
@@ -2249,7 +2147,6 @@ export class SurvivalPhase implements GamePhase {
     this.eventBundles.releaseActive();
     this.ui.clearEventPresentation?.();
     this.ui.hideDriftingItemFocus?.();
-    this.ui.hideDriftingItemResult?.();
     this.setAutomaticWeather(null);
   }
 
@@ -2266,30 +2163,38 @@ export class SurvivalPhase implements GamePhase {
 
   private handleDriftingItemBack(): void {
     if (!this.isContinuationActive()) return;
-    if (this.driftingItemFocus === 'choosing') {
-      void this.resolveDriftingItemChoice('sleep', this.lifecycleGeneration);
-      return;
-    }
-    if (
-      this.driftingItemFocus !== 'return-ready'
-      || this.activeDriftingItemEventId === null
-    ) return;
-    void this.returnFromDriftingItemView(
+    if (this.driftingItemFocus !== 'choosing') return;
+    void this.exitDriftingItemFocus(
       this.activeDriftingItemEventId,
       this.lifecycleGeneration,
     );
   }
 
-  private continueDriftingItemResult(): void {
+  private async exitDriftingItemFocus(
+    eventId: DriftingItemEventId | null,
+    generation: number,
+  ): Promise<void> {
     if (
-      this.driftingItemFocus !== 'result'
-      || this.activeDriftingItemEventId === null
-      || !this.isContinuationActive()
+      eventId === null
+      || !this.isContinuationActive(generation)
+      || this.activeDriftingItemEventId !== eventId
+      || this.driftingItemFocus !== 'choosing'
     ) return;
-    this.ui.hideDriftingItemResult?.();
-    this.driftingItemFocus = 'return-ready';
-    this.ui.showDriftingItemReturn?.();
+    this.driftingItemFocus = 'returning';
+    this.setBusy(true);
+    await (this.world.exitDriftingItemView?.() ?? Promise.resolve());
+    if (
+      !this.isContinuationActive(generation)
+      || this.activeDriftingItemEventId !== eventId
+      || this.driftingItemFocus !== 'returning'
+    ) return;
+
+    this.activeDriftingItemEventId = null;
+    this.driftingItemFocus = 'idle';
+    this.ui.hideDriftingItemFocus?.();
+    this.ui.setEventSelection?.(this.eventEligibility, []);
     this.setBusy(false);
+    this.ui.restoreCommandFocus?.();
   }
 
   private async returnFromDriftingItemView(
@@ -2299,10 +2204,7 @@ export class SurvivalPhase implements GamePhase {
     if (
       !this.isContinuationActive(generation)
       || this.activeDriftingItemEventId !== eventId
-      || (
-        this.driftingItemFocus !== 'resolving'
-        && this.driftingItemFocus !== 'return-ready'
-      )
+      || this.driftingItemFocus !== 'resolving'
     ) return;
     this.driftingItemFocus = 'returning';
     this.setBusy(true);

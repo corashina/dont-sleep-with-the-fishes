@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects companion rules, state boundaries, and dawn processing.
+// Importance: 10/10 (scaled from 5/5). Protects companion rules, state boundaries, and dawn processing.
 import { describe, expect, it } from 'vitest';
 import {
   advanceCarlitosDawn,

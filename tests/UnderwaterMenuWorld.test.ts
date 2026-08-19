@@ -1,3 +1,4 @@
+// Importance: 8/10. Protects menu world composition, construction rollback, and error ownership.
 import {
   AnimationClip,
   Box3,

@@ -26,7 +26,6 @@ export const EVENT_PRESENTATION_ROUTES = Object.freeze({
   ghosts: 'supernatural',
   'eerie-melody': 'supernatural',
   'face-on-the-moon': 'moon',
-  'sick-companion': 'dedicated',
   'shadow-figure': 'dedicated',
   'guarded-sleep': 'dedicated',
   'drifting-barrel': 'featured',
