@@ -1608,30 +1608,55 @@ export class SurvivalPhase implements GamePhase {
     if (!this.isContinuationActive(generation)) return;
     try {
       await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
-      if (!this.isContinuationActive(generation)) return;
+    } catch {
+      // Preserve the original failure while later cleanup steps continue.
+    }
+    if (!this.isContinuationActive(generation)) return;
+    try {
       this.clearEventPresentation();
+    } catch {
+      // Continue the remaining cleanup steps.
+    }
+    if (!this.isContinuationActive(generation)) return;
+    try {
       await (this.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
-      if (!this.isContinuationActive(generation)) return;
+    } catch {
+      // Continue the remaining cleanup steps.
+    }
+    if (!this.isContinuationActive(generation)) return;
+    try {
       this.renderSnapshot(false, false);
-      if (!await this.renderAndSettleCoveredScene(generation)) return;
+    } catch {
+      // Continue the remaining cleanup steps.
+    }
+    if (!this.isContinuationActive(generation)) return;
+    try {
+      await this.renderAndSettleCoveredScene(generation);
+    } catch {
+      // Continue to the final uncover.
+    }
+    if (!this.isContinuationActive(generation)) return;
+    try {
       await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
-      if (!this.isContinuationActive(generation)) return;
-    } catch (error) {
-      this.onFatalError(error);
-      return;
+    } catch {
+      // Continue to error reporting and input unlock.
     }
+    if (!this.isContinuationActive(generation)) return;
 
-    if (reason.rejection !== undefined) {
-      this.audio.deny();
-      this.ui.showFeedback?.(reason.rejection);
-      this.eventPresentation = 'choosing';
-      this.restoreEventSelection();
-    } else if (reason.invariantError !== undefined) {
-      this.onInvariantError(reason.invariantError);
-    } else {
-      this.onFatalError(reason.fatalError);
+    try {
+      if (reason.rejection !== undefined) {
+        this.audio.deny();
+        this.ui.showFeedback?.(reason.rejection);
+        this.eventPresentation = 'choosing';
+        this.restoreEventSelection();
+      } else if (reason.invariantError !== undefined) {
+        this.onInvariantError(reason.invariantError);
+      } else {
+        this.onFatalError(reason.fatalError);
+      }
+    } finally {
+      this.setBusy(false);
     }
-    this.setBusy(false);
     this.ui.restoreCommandFocus?.();
   }
 
