@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects vessel water exclusion math.
+// Importance: 8/10 (scaled from 4/5). Protects vessel water exclusion math.
 import { Group, Matrix4, Vector2, Vector3, Vector4 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';

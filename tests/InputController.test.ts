@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects input state and listener ownership.
+// Importance: 10/10 (scaled from 5/5). Protects input state and listener ownership.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InputController } from '../src/input/InputController';
 

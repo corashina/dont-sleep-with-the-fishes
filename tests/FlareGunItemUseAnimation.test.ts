@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects the flare gun hold, barrel direction, and fixed firing position.
+// Importance: 8/10 (scaled from 4/5). Protects the flare gun hold, barrel direction, and fixed firing position.
 import { Euler, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import {

@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects valid player navigation and containment.
+// Importance: 10/10 (scaled from 5/5). Protects valid player navigation and containment.
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import {

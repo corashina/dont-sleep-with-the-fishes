@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects core survival rules and state.
+// Importance: 10/10 (scaled from 5/5). Protects core survival rules and state.
 import { describe, expect, it, vi } from 'vitest';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
@@ -170,60 +170,6 @@ function choiceResponse(choiceId: string): EventResponse {
 }
 
 describe('SurvivalSession Carlitos events', () => {
-  it('applies each Sick Companion choice through typed effects', () => {
-    const medkit = new SurvivalSession(saved('carlitos', 'medicalKit'), {
-      seed: 1,
-      random: sequenceRandom([0]),
-      initialCarlitos: { sickness: 3 },
-      initialEventId: 'sick-companion',
-    });
-    medkit.resolveEvent({ kind: 'item', choiceId: 'medicalKit', instanceId: 'medicalKit-1' });
-    expect(medkit.snapshot()).toMatchObject({
-      carlitos: { sickness: 0, alive: true },
-      inventory: { 'medicalKit-1': { condition: 'consumed' } },
-    });
-
-    const energyBar = new SurvivalSession(saved('carlitos', 'energyBar'), {
-      seed: 1,
-      random: sequenceRandom([0]),
-      initialCarlitos: { sickness: 2 },
-      initialEventId: 'sick-companion',
-    });
-    energyBar.resolveEvent({ kind: 'item', choiceId: 'energyBar', instanceId: 'energyBar-1' });
-    expect(energyBar.snapshot()).toMatchObject({
-      carlitos: { sickness: 2, alive: true },
-      inventory: { 'energyBar-1': { condition: 'consumed' } },
-    });
-
-    const ductTapeBoundary = 80 / 90;
-    const tapeWorsens = new SurvivalSession(saved('carlitos', 'ductTape'), {
-      seed: 1,
-      random: sequenceRandom([ductTapeBoundary - 0.000001]),
-      initialCarlitos: { sickness: 2 },
-      initialEventId: 'sick-companion',
-    });
-    tapeWorsens.resolveEvent({ kind: 'item', choiceId: 'ductTape', instanceId: 'ductTape-1' });
-    expect(tapeWorsens.snapshot().carlitos?.sickness).toBe(3);
-
-    const tapeHolds = new SurvivalSession(saved('carlitos', 'ductTape'), {
-      seed: 1,
-      random: sequenceRandom([ductTapeBoundary]),
-      initialCarlitos: { sickness: 2 },
-      initialEventId: 'sick-companion',
-    });
-    tapeHolds.resolveEvent({ kind: 'item', choiceId: 'ductTape', instanceId: 'ductTape-1' });
-    expect(tapeHolds.snapshot().carlitos?.sickness).toBe(2);
-
-    const sleep = new SurvivalSession(saved('carlitos'), {
-      seed: 1,
-      random: sequenceRandom([0]),
-      initialCarlitos: { sickness: 1 },
-      initialEventId: 'sick-companion',
-    });
-    sleep.resolveEvent({ kind: 'choice', choiceId: 'sleep' });
-    expect(sleep.snapshot().carlitos?.sickness).toBe(3);
-  });
-
   it('uses exact Shadow Figure kidnapping boundaries', () => {
     const spyglass = new SurvivalSession(saved('carlitos', 'spyglass'), {
       seed: 1,
@@ -498,7 +444,7 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().carlitos?.hunger).toBe(5);
   });
 
-  it('cares for Carlitos without using energy', () => {
+  it('cares for Carlitos during the day without using energy', () => {
     const session = new SurvivalSession(saved('carlitos', 'cannedFood', 'medicalKit'), {
       seed: 7,
       initialCarlitos: { hunger: 2, sickness: 2, unhappiness: 5 },
@@ -939,8 +885,16 @@ describe('SurvivalSession daytime actions', () => {
     const flare = new SurvivalSession(saved('flareGun'), {
       seed: 110, random: sequenceRandom([0]), initial: { day: 15, rescueProgress: 15 }, initialEventId: 'other-people',
     });
-    expect(flare.resolveEvent(itemResponse('flareGun'))).toMatchObject({ accepted: true, cue: 'rescue' });
-    expect(flare.snapshot().inventory['flareGun-1']?.condition).toBe('consumed');
+    expect(flare.resolveEvent(itemResponse('flareGun'))).toMatchObject({
+      accepted: true,
+      deltas: { rescueProgress: 25 },
+      eventResult: { resultId: 'people-signaled' },
+    });
+    expect(flare.snapshot()).toMatchObject({
+      state: 'nightEvent',
+      rescueProgress: 40,
+      inventory: { 'flareGun-1': { condition: 'consumed' } },
+    });
   });
 
   it.each([

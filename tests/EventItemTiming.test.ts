@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects the approved slower event item pace.
+// Importance: 8/10 (scaled from 4/5). Protects the approved slower event item pace.
 import { describe, expect, it } from 'vitest';
 import { GENERIC_EVENT_ITEM_USE_DURATION } from '../src/survival/BoatSupplyDisplay';
 import { DANGEROUS_WATERS_ITEM_DURATION } from '../src/survival/DangerousWatersPresentation';

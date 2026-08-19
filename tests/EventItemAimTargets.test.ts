@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects stable event targeting across moving and competing entities.
+// Importance: 8/10 (scaled from 4/5). Protects stable event targeting across moving and competing entities.
 import {
   BoxGeometry,
   Group,

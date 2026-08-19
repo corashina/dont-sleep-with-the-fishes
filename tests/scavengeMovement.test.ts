@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects movement speed rules and invalid load handling.
+// Importance: 10/10 (scaled from 5/5). Protects movement speed rules and invalid load handling.
 import { describe, expect, it } from 'vitest';
 import { scavengeSpeedMultiplier } from '../src/game/scavengeMovement';
 

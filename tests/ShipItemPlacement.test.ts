@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects valid randomized item placement.
+// Importance: 8/10 (scaled from 4/5). Protects valid randomized item placement.
 import { Box3, Euler, Mesh, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import {

@@ -51,9 +51,9 @@ interface FishActor {
 const MAX_FISH = 24;
 const MIN_FISH = 18;
 const WATERLINE = 0.08;
-const BODY_DEPTH = 0.12;
+const BODY_SURFACE_LIFT = 0.04;
 const SURFACE_EFFECT_LIFT = 0.02;
-const SCHOOL_BODY_TINT = new Color(0xa9bcc0);
+const SCHOOL_BODY_TINT = new Color(0xc4d9dc);
 
 const DEFAULT_VARIANT: SchoolVariant = {
   scale: 1,
@@ -61,8 +61,8 @@ const DEFAULT_VARIANT: SchoolVariant = {
   orbitRadiusX: 1,
   orbitRadiusZ: 1,
   depth: 0.3,
-  scatterX: 4,
-  scatterZ: 0,
+  approachScale: 0.6,
+  scatterScale: 0.8,
   speed: 1,
   bank: 0,
   flashOffset: 0,
@@ -83,9 +83,9 @@ function styleSchoolFish(root: Group): void {
     for (let index = 0; index < materials.length; index += 1) {
       const material = materials[index]!;
       if (!(material instanceof MeshStandardMaterial)) continue;
-      material.color.lerp(SCHOOL_BODY_TINT, 0.38);
-      material.emissive.lerp(SCHOOL_BODY_TINT, 0.12);
-      material.emissiveIntensity = Math.min(0.3, Math.max(0.12, material.emissiveIntensity));
+      material.color.lerp(SCHOOL_BODY_TINT, 0.58);
+      material.emissive.lerp(SCHOOL_BODY_TINT, 0.24);
+      material.emissiveIntensity = Math.min(0.42, Math.max(0.24, material.emissiveIntensity));
       material.roughness = Math.min(0.64, material.roughness);
       material.flatShading = true;
       material.needsUpdate = true;
@@ -132,13 +132,13 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     side: DoubleSide,
   });
   private readonly finMaterial = new MeshStandardMaterial({
-    color: 0x244951,
-    emissive: 0x10282d,
-    emissiveIntensity: 0.16,
+    color: 0x4f7880,
+    emissive: 0x28464c,
+    emissiveIntensity: 0.24,
     roughness: 0.86,
     metalness: 0,
     transparent: true,
-    opacity: 0.24,
+    opacity: 0.46,
     depthWrite: false,
     flatShading: true,
     side: DoubleSide,
@@ -381,7 +381,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       this.environment.sampleWorldWaveInto(fish.wave, time, pose.x, pose.z, 1);
       fish.root.position.set(
         pose.x + fish.wave.displacementX,
-        WATERLINE + fish.wave.height - BODY_DEPTH - variant.depth * 0.32,
+        WATERLINE + fish.wave.height + BODY_SURFACE_LIFT - variant.depth * 0.32,
         pose.z + fish.wave.displacementZ,
       );
       fish.root.rotation.set(

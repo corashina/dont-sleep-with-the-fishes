@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects sinking timing and bounds.
+// Importance: 8/10 (scaled from 4/5). Protects sinking timing and bounds.
 import { describe, expect, it } from 'vitest';
 import { SCAVENGE_DURATION_SECONDS } from '../src/game/scavengeRules';
 import { getSinkingState } from '../src/game/sinking';

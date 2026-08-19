@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects the event item use state machine and cancellation cleanup.
+// Importance: 10/10 (scaled from 5/5). Protects the event item use state machine and cancellation cleanup.
 import { describe, expect, it, vi } from 'vitest';
 import { Group, Object3D, PerspectiveCamera, Vector3 } from 'three';
 import type { ItemInstanceId } from '../src/game/ItemState';

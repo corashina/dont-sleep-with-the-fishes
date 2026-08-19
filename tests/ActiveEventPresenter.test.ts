@@ -1,3 +1,4 @@
+// Importance: 8/10. Protects selected event construction, attachment, and exact resource cleanup.
 import { Group, PerspectiveCamera } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { ActiveEventPresenter } from '../src/survival/ActiveEventPresenter';

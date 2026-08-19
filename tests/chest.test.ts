@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects deterministic chest rewards and mimic timing.
+// Importance: 10/10 (scaled from 5/5). Protects deterministic chest rewards and mimic timing.
 import { describe, expect, it } from 'vitest';
 import { ITEM_IDS } from '../src/game/ItemState';
 import {

@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects survival item state.
+// Importance: 10/10 (scaled from 5/5). Protects survival item state.
 import { describe, expect, it } from 'vitest';
 import {
   ITEM_DEFINITIONS,

@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects audio scope ownership, routing, pause behavior, and cleanup.
+// Importance: 8/10 (scaled from 4/5). Protects audio scope ownership, routing, pause behavior, and cleanup.
 import { describe, expect, it, vi } from 'vitest';
 import type {
   AudioBackend,
@@ -183,6 +183,19 @@ describe('AudioSystem', () => {
     audio.eventReveal('bad-sleep');
 
     expect(backend.voices.map(({ id }) => id)).toEqual(['yawn']);
+  });
+
+  it.each([
+    'drifting-barrel',
+    'drifting-chest',
+    'drifting-bottle',
+  ])('does not play a reveal sound for %s', (eventId) => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.eventReveal(eventId);
+
+    expect(backend.voices).toEqual([]);
   });
 
   it('cycles through all thunder recordings', () => {

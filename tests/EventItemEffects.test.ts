@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects event effect ownership, visibility, geometry, and cleanup.
+// Importance: 8/10 (scaled from 4/5). Protects event effect ownership, visibility, geometry, and cleanup.
 import {
   BufferGeometry,
   Group,

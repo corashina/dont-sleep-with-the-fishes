@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Importance: 4/5. Protects safe error text rendering.
+// Importance: 8/10 (scaled from 4/5). Protects safe error text rendering.
 
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';

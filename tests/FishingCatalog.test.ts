@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects fishing reward contracts.
+// Importance: 8/10 (scaled from 4/5). Protects fishing reward contracts.
 import { describe, expect, it } from 'vitest';
 import {
   FISHING_CATCHES,
