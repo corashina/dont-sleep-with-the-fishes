@@ -15,6 +15,7 @@ export const EVENT_MODEL_IDS = [
   'traderOctopus',
   'riggedHand',
   'containerShip',
+  'midnightPalmTrees',
 ] as const;
 
 export type EventModelId = typeof EVENT_MODEL_IDS[number];
@@ -93,6 +94,15 @@ const presentations = {
     targetLongestDimension: 36,
     maxTriangles: 2_500,
     translation: [0, 0, 0],
+    rotation: [0, 0, 0],
+  },
+  midnightPalmTrees: {
+    sourceUrl: 'https://poly.pizza/m/VYslw9DEi6',
+    sourceModelId: 'poly-pizza:88fb0209-5e1e-4cb0-9d11-112e6140ab13',
+    license: 'CC0 1.0',
+    targetLongestDimension: 6.8,
+    maxTriangles: 6_000,
+    translation: [0, 3.4, 0],
     rotation: [0, 0, 0],
   },
 } as const satisfies Readonly<Record<EventModelId, EventModelPresentation>>;

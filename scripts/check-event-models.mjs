@@ -105,6 +105,7 @@ const FOCUSED_EVENT_MODEL_IDS = Object.freeze([
   'traderOctopus',
   'riggedHand',
   'containerShip',
+  'midnightPalmTrees',
 ]);
 const ATTRIBUTION_MODEL_IDS = Object.freeze(['ghost', 'fogMan', 'siren', 'sirenRock']);
 const ATTRIBUTION_HEADING = '## Runtime survival-event model ledger';
