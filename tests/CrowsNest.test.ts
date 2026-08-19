@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects climbable mast geometry and full player traversal.
+// Importance: 8/10 (scaled from 4/5). Protects climbable mast geometry and full player traversal.
 import { describe, expect, it } from 'vitest';
 import { BoxGeometry, Mesh, Object3D, PerspectiveCamera, Vector3 } from 'three';
 import type { InputController } from '../src/input/InputController';

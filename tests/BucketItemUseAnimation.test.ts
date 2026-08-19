@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects the targeted bucket scoop and flashlight-style return.
+// Importance: 8/10 (scaled from 4/5). Protects the targeted bucket scoop and flashlight-style return.
 import { describe, expect, it } from 'vitest';
 import {
   createEventItemUseSample,

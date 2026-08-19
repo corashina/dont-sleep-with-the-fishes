@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Importance: 4/5. Protects configurable quality choices and input validation.
+// Importance: 8/10 (scaled from 4/5). Protects configurable quality choices and input validation.
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';

@@ -1,3 +1,4 @@
+// Importance: 8/10. Protects event render cost, shared effects, and missed-signal behavior.
 import {
   Box3,
   BoxGeometry,
@@ -6,7 +7,6 @@ import {
   Mesh,
   MeshStandardMaterial,
   PerspectiveCamera,
-  Scene,
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { describe, expect, it, vi } from 'vitest';
@@ -61,7 +61,7 @@ async function productionContainerShip(): Promise<Group> {
   });
 }
 
-function visibleLights(root: Scene): readonly string[] {
+function visibleLights(root: Group): readonly string[] {
   const names: string[] = [];
   root.traverseVisible((object) => {
     if (object instanceof Light) names.push(object.name);
@@ -95,76 +95,62 @@ describe('OtherPeoplePresentation performance', () => {
     presentation.dispose();
   });
 
-  it('enables wash lights and shadows only while the flare is active', async () => {
+  it('uses the shared flare animation without a second flare visual', async () => {
     const presentation = createPresentation();
-    const lifeboatWash = presentation.root.getObjectByName(
-      'other-people-flare-lifeboat-wash',
-    )! as Light;
-    const shipWash = presentation.root.getObjectByName(
-      'other-people-flare-ship-wash',
-    )! as Light;
-
-    expect(lifeboatWash.visible).toBe(false);
-    expect(lifeboatWash.castShadow).toBe(false);
-    expect(shipWash.visible).toBe(false);
-    expect(shipWash.castShadow).toBe(false);
+    expect(visibleLights(presentation.root)).toEqual([]);
 
     presentation.stage();
+    const ship = presentation.root.getObjectByName('other-people-ship')!;
+    const start = ship.position.clone();
     const choice = presentation.playChoice({
       choiceId: 'flareGun',
       instanceId: null,
       condition: null,
     });
-    presentation.update(0.5, 0.5);
+    presentation.update(1.25, 1.25);
+    await choice;
+    await presentation.react({
+      eventId: 'other-people',
+      choiceId: 'flareGun',
+      resultId: 'people-signaled',
+    }, {} as never);
+    presentation.update(4, 4);
 
-    expect(lifeboatWash.visible).toBe(true);
-    expect(lifeboatWash.castShadow).toBe(true);
-    expect(shipWash.visible).toBe(true);
-    expect(shipWash.castShadow).toBe(true);
+    expect(presentation.root.getObjectByName('other-people-flare')).toBeUndefined();
+    expect(ship.visible).toBe(true);
+    expect(ship.position.distanceTo(start)).toBeGreaterThan(0);
+    expect(ship.position.distanceTo(start)).toBeLessThan(4);
+    expect(visibleLights(presentation.root)).toEqual([]);
 
     presentation.clear();
-    expect(lifeboatWash.visible).toBe(false);
-    expect(lifeboatWash.castShadow).toBe(false);
-    expect(shipWash.visible).toBe(false);
-    expect(shipWash.castShadow).toBe(false);
-    presentation.update(2, 2);
-    await choice;
+    expect(visibleLights(presentation.root)).toEqual([]);
     presentation.dispose();
   });
 
-  it('precompiles reveal, flare, and flashlight light states', async () => {
+  it('keeps cruising after a missed flashlight signal', async () => {
     const presentation = createPresentation();
-    const scene = new Scene();
-    const camera = new PerspectiveCamera();
-    scene.add(presentation.root);
-    const lightStates: readonly string[][] = [];
-    const compileAsync = vi.fn(() => {
-      (lightStates as string[][]).push([...visibleLights(scene)]);
-      return Promise.resolve(scene);
+    presentation.stage();
+    const ship = presentation.root.getObjectByName('other-people-ship')!;
+    const choice = presentation.playChoice({
+      choiceId: 'flashlight',
+      instanceId: null,
+      condition: null,
     });
+    presentation.update(2, 2);
+    await choice;
+    const resultStart = ship.position.clone();
 
-    await presentation.prepareRender(
-      { compileAsync } as never,
-      scene,
-      camera,
-    );
+    const result = presentation.react({
+      eventId: 'other-people',
+      choiceId: 'flashlight',
+      resultId: 'people-missed',
+    }, {} as never);
+    presentation.update(4.2, 4.2);
+    await result;
 
-    expect(compileAsync).toHaveBeenCalledTimes(3);
-    expect(lightStates[0]).toEqual(expect.arrayContaining([
-      'other-people-ship-fill',
-      'other-people-ship-deck-light',
-      'other-people-horizon-light-port-light',
-      'other-people-horizon-light-starboard-light',
-    ]));
-    expect(lightStates[0]).not.toContain('other-people-flare-lifeboat-wash');
-    expect(lightStates[1]).toEqual(expect.arrayContaining([
-      'other-people-flare-glow',
-      'other-people-flare-lifeboat-wash',
-      'other-people-flare-ship-wash',
-    ]));
-    expect(lightStates[2]).toContain('other-people-flashlight-beam-light');
-    expect(lightStates[2]).not.toContain('other-people-flare-lifeboat-wash');
-    expect(presentation.root.visible).toBe(false);
+    expect(ship.visible).toBe(true);
+    expect(ship.position.distanceTo(resultStart)).toBeGreaterThan(0);
+    expect(ship.position.distanceTo(resultStart)).toBeLessThan(4);
     presentation.dispose();
   });
 });

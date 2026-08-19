@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects the fishing state machine.
+// Importance: 10/10 (scaled from 5/5). Protects the fishing state machine.
 import { describe, expect, it } from 'vitest';
 import { FishingSession } from '../src/survival/FishingSession';
 import type { RandomSource } from '../src/survival/survivalTypes';

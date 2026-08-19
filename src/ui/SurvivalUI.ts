@@ -79,6 +79,7 @@ interface MeterDefinition {
   label: string;
   min: number;
   max: number;
+  fillBoundary?: (percentage: number) => number;
   dangerLabel: 'LOW' | 'HIGH';
   displayValue: (value: number) => number;
   isDanger: (value: number) => boolean;
@@ -159,12 +160,51 @@ function actionPreview(definition: ActionDefinition, snapshot: SurvivalSnapshot)
 
 const identity = (value: number): number => value;
 
+const CONDITION_ARTWORK_HEIGHT = 72;
+const HUNGER_FILL_BOUNDARIES = [
+  [0, 65],
+  [10, 58.4],
+  [20, 54.8],
+  [25, 53.2],
+  [30, 51.8],
+  [40, 48.8],
+  [50, 45.7],
+  [60, 42.2],
+  [70, 38.3],
+  [75, 36.4],
+  [80, 34.3],
+  [90, 28.1],
+  [100, 11],
+] as const;
+
+function hungerFillBoundary(percentage: number): number {
+  for (let index = 1; index < HUNGER_FILL_BOUNDARIES.length; index += 1) {
+    const [upperPercentage, upperBoundary] = HUNGER_FILL_BOUNDARIES[index]!;
+    if (percentage > upperPercentage) continue;
+    const [lowerPercentage, lowerBoundary] = HUNGER_FILL_BOUNDARIES[index - 1]!;
+    const progress = (percentage - lowerPercentage) / (upperPercentage - lowerPercentage);
+    return lowerBoundary + (upperBoundary - lowerBoundary) * progress;
+  }
+  return HUNGER_FILL_BOUNDARIES.at(-1)![1];
+}
+
+function hullFillBoundary(percentage: number): number {
+  const progress = (percentage / 100) ** 1.4;
+  return 61 - (61 - 29) * progress;
+}
+
 const METERS: readonly MeterDefinition[] = [
   { id: 'health', label: 'HEALTH', min: 0, max: 100, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 20 },
-  { id: 'hunger', label: 'FOOD', min: 0, max: 100, dangerLabel: 'LOW', displayValue: (value) => 100 - value, isDanger: (value) => value <= 30 },
+  { id: 'hunger', label: 'FOOD', min: 0, max: 100, fillBoundary: hungerFillBoundary, dangerLabel: 'LOW', displayValue: (value) => 100 - value, isDanger: (value) => value <= 30 },
   { id: 'energy', label: 'ENERGY', min: 0, max: SURVIVAL_BALANCE.actions.maximumEnergy, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 1 },
-  { id: 'hull', label: 'HULL', min: 0, max: 100, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 20 },
+  { id: 'hull', label: 'HULL', min: 0, max: 100, fillBoundary: hullFillBoundary, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 20 },
 ];
+
+function meterFillHeight(definition: MeterDefinition, percentage: number): number {
+  if (definition.fillBoundary === undefined) return percentage;
+  const boundary = definition.fillBoundary(percentage);
+  return (CONDITION_ARTWORK_HEIGHT - boundary) / CONDITION_ARTWORK_HEIGHT * 100;
+}
 
 const SLEEP_TRANSITION_MS = 2_500;
 const SLEEP_HOLD_MS = 450;
@@ -175,6 +215,7 @@ const EVENT_CHOICE_BEAT_MS = 240;
 const EVENT_OUTCOME_HOLD_MS = 2_000;
 const ROUTINE_DIALOG_MARGIN = 20;
 const ROUTINE_DIALOG_GAP = 22;
+const DRIFTING_FOCUS_BOTTOM_RESERVE = 128;
 
 interface RoutineDialogPlacement {
   readonly anchorId: string;
@@ -184,7 +225,7 @@ interface RoutineDialogPlacement {
   readonly height: number;
 }
 
-const ROUTINE_DIALOG_PLACEMENTS: Readonly<Record<'fishing' | 'repair' | 'salvage', RoutineDialogPlacement>> = {
+const ROUTINE_DIALOG_PLACEMENTS: Readonly<Record<'fishing' | 'repair', RoutineDialogPlacement>> = {
   fishing: {
     anchorId: 'fishing-tools',
     fallbackX: 0.7,
@@ -198,13 +239,6 @@ const ROUTINE_DIALOG_PLACEMENTS: Readonly<Record<'fishing' | 'repair' | 'salvage
     fallbackY: 0.6,
     width: 430,
     height: 360,
-  },
-  salvage: {
-    anchorId: 'drifting-cargo',
-    fallbackX: 0.68,
-    fallbackY: 0.58,
-    width: 360,
-    height: 250,
   },
 };
 
@@ -258,20 +292,7 @@ export interface DriftingItemFocusView {
   readonly eventId: DriftingItemEventId;
   readonly title: string;
   readonly choices: readonly EventContextChoice[];
-}
-
-export interface DriftingItemResultView {
-  readonly caption: string;
-  readonly title: string;
-  readonly detail: string;
   readonly target: ProjectedBoatBounds | null;
-}
-
-export interface EventOutcomeView {
-  readonly title: string;
-  readonly detail: string;
-  readonly result: string;
-  readonly state: 'safe' | 'damage' | 'severe';
 }
 
 export interface EventContextChoice {
@@ -282,15 +303,6 @@ export interface EventContextChoice {
   readonly energyCost?: number;
   readonly energyOwner?: 'player' | 'carlitos';
 }
-
-export type EventResultView = {
-  readonly caption: string;
-  readonly detail: string;
-  readonly target: ProjectedBoatBounds | null;
-} | {
-  readonly message: string;
-  readonly lines: readonly string[];
-};
 
 type AnchorInteractionState =
   | 'ordinary'
@@ -331,7 +343,6 @@ export class SurvivalUI {
   onAction: (action: DayActionId, option?: DayActionOption) => void = () => undefined;
   onEventItem: (choiceId: EventResponseId, instanceId: ItemInstanceId) => void = () => undefined;
   onEventChoice: (choiceId: EventResponseId) => void = () => undefined;
-  onEndure: () => void = () => undefined;
   onRestart: () => void = () => undefined;
   onAnchorHighlight: (anchorId: string | null) => void = () => undefined;
   onPauseChange: (paused: boolean) => void = () => undefined;
@@ -344,7 +355,6 @@ export class SurvivalUI {
   onFishingViewExit: (() => void) | null = null;
   onDriftingItemSelect: ((eventId: DriftingItemEventId) => void) | null = null;
   onDriftingItemBack: (() => void) | null = null;
-  onDriftingItemContinue: (() => void) | null = null;
 
   private readonly root: HTMLDivElement;
   private readonly day: HTMLElement;
@@ -366,17 +376,9 @@ export class SurvivalUI {
   private readonly carlitosPet: HTMLButtonElement;
   private readonly eventCaption: HTMLElement;
   private readonly eventTitle: HTMLElement;
-  private readonly anchoredEventResultPanel: HTMLElement;
-  private readonly anchoredEventResultCaption: HTMLElement;
-  private readonly anchoredEventResultDetail: HTMLElement;
   private readonly eventDetail: HTMLElement;
   private readonly eventRisk: HTMLElement;
-  private readonly eventOutcomeResult: HTMLElement;
-  private readonly eventResult: HTMLElement;
-  private readonly eventResultMessage: HTMLElement;
-  private readonly eventResultLines: HTMLElement;
   private readonly eventChoices: HTMLElement;
-  private readonly endureButton: HTMLButtonElement;
   private readonly fishingLayer: HTMLElement;
   private readonly fishingLive: HTMLElement;
   private readonly fishingBiteTarget: HTMLButtonElement;
@@ -387,14 +389,10 @@ export class SurvivalUI {
   private readonly fishingResultDetail: HTMLElement;
   private readonly fishingResultContinue: HTMLButtonElement;
   private readonly driftingItemFocusLayer: HTMLElement;
+  private readonly driftingItemFocusCard: HTMLElement;
   private readonly driftingItemFocusBack: HTMLButtonElement;
   private readonly driftingItemFocusTitle: HTMLElement;
   private readonly driftingItemFocusChoices: HTMLElement;
-  private readonly driftingItemResultLayer: HTMLElement;
-  private readonly driftingItemResultCaption: HTMLElement;
-  private readonly driftingItemResultTitle: HTMLElement;
-  private readonly driftingItemResultDetail: HTMLElement;
-  private readonly driftingItemResultContinue: HTMLButtonElement;
   private readonly fishingViewExit: HTMLButtonElement;
   private readonly repairOptionsLayer: HTMLElement;
   private readonly repairOptionsTitle: HTMLElement;
@@ -463,9 +461,7 @@ export class SurvivalUI {
   private pendingCoveredSceneSettle: PendingFade | null = null;
   private fishingResultContinueIssued = false;
   private fishingResultTarget: ProjectedBoatBounds | null = null;
-  private driftingItemContinueIssued = false;
-  private driftingItemResultTarget: ProjectedBoatBounds | null = null;
-  private driftingItemFocusReturning = false;
+  private driftingItemFocusTarget: ProjectedBoatBounds | null = null;
   private driftingItemFocusChoicesView: readonly EventContextChoice[] = [];
   private eventEligibility: ReadonlyMap<ItemInstanceId, EventResponseId> | null = null;
   private contextualEventChoices: readonly EventContextChoice[] = [];
@@ -493,9 +489,9 @@ export class SurvivalUI {
         </span>
       </div>
       <section class="dive-result" data-dive-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="dive-result-title" inert>
-        <div class="dive-result__paper">
+        <div class="dive-result__paper scuba-popup-paper">
           <button type="button" class="dive-result__close ui-role-context" data-dive-result-close aria-label="Close dive result">&times;</button>
-          <h2 class="dive-result__title ui-role-display" id="dive-result-title" data-dive-result-title></h2>
+          <h2 class="dive-result__title scuba-popup-title ui-role-display" id="dive-result-title" data-dive-result-title></h2>
           <ul class="dive-result__lines ui-role-numeral" data-dive-result-lines></ul>
           <div class="dive-result__rewards" data-dive-result-rewards hidden></div>
         </div>
@@ -518,10 +514,10 @@ export class SurvivalUI {
         ${METERS.map(meterMarkup).join('')}
       </section>
       <div class="boat-anchors" data-boat-anchors aria-label="Boat interaction points"></div>
-      <section class="carlitos-card" data-carlitos-card aria-labelledby="carlitos-card-title" aria-hidden="true" hidden>
+      <section class="carlitos-card scuba-popup-paper" data-carlitos-card aria-labelledby="carlitos-card-title" aria-hidden="true" hidden>
         <div class="carlitos-card__heading">
           <span class="carlitos-card__cat" aria-hidden="true"><i></i></span>
-          <h2 class="ui-role-display" id="carlitos-card-title">CARLITOS</h2>
+          <h2 class="scuba-popup-title ui-role-display" id="carlitos-card-title">CARLITOS</h2>
           <button type="button" class="carlitos-card__close ui-role-context" data-carlitos-close aria-label="Close Carlitos status">&times;</button>
         </div>
         <div class="carlitos-card__statuses">
@@ -567,9 +563,9 @@ export class SurvivalUI {
       </section>
       <div class="fishing-fade" data-fishing-fade aria-hidden="true"></div>
       <section class="routine-dialog routine-dialog--fishing" data-fishing-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="fishing-result-title" inert>
-        <div class="routine-dialog__card fishing-result-card">
+        <div class="routine-dialog__card fishing-result-card scuba-popup-paper">
           <p class="eyebrow ui-role-context" data-fishing-result-caption></p>
-          <h2 class="ui-role-display" id="fishing-result-title" data-fishing-result-title></h2>
+          <h2 class="scuba-popup-title ui-role-display" id="fishing-result-title" data-fishing-result-title></h2>
           <p class="fishing-result-detail ui-role-narrative" data-fishing-result-detail></p>
           <button type="button" class="primary-action salvage-action ui-role-context" data-fishing-result-continue aria-label="Continue">
             CONTINUE
@@ -577,27 +573,20 @@ export class SurvivalUI {
         </div>
       </section>
       <section class="drifting-item-focus" data-drifting-item-focus role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="drifting-item-focus-title" inert>
-        <button type="button" class="drifting-item-focus__back" data-drifting-item-back aria-label="Let it drift and return">
-          <span aria-hidden="true">&#8592;</span>
-        </button>
-        <div class="drifting-item-focus__card">
-          <p class="eyebrow ui-role-context">DRIFTING ITEM</p>
-          <h2 class="ui-role-display" id="drifting-item-focus-title" data-drifting-item-title></h2>
+        <div class="dive-result__paper drifting-item-focus__card scuba-popup-paper">
+          <h2 class="dive-result__title scuba-popup-title ui-role-display" id="drifting-item-focus-title" data-drifting-item-title></h2>
           <nav data-drifting-item-choices aria-label="Pickup choices"></nav>
         </div>
-      </section>
-      <section class="routine-dialog routine-dialog--salvage" data-drifting-item-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="drifting-item-result-title" inert>
-        <div class="routine-dialog__card fishing-result-card">
-          <p class="eyebrow ui-role-context" data-drifting-item-result-caption></p>
-          <h2 class="ui-role-display" id="drifting-item-result-title" data-drifting-item-result-title></h2>
-          <p class="fishing-result-detail ui-role-narrative" data-drifting-item-result-detail></p>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-drifting-item-result-continue aria-label="Continue">CONTINUE</button>
-        </div>
+        <button type="button" class="drifting-item-focus__back" data-drifting-item-back aria-label="Return to boat">
+          <svg class="drifting-item-focus__back-icon" data-drifting-item-back-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M9 3h6v10h5l-8 8-8-8h5z" />
+          </svg>
+        </button>
       </section>
       <section class="routine-dialog routine-dialog--repair" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Repair target" inert>
-        <div class="routine-dialog__card">
+        <div class="routine-dialog__card scuba-popup-paper">
           <p class="eyebrow ui-role-context">DUCT TAPE</p>
-          <h2 class="ui-role-display" data-repair-options-title tabindex="-1">Choose an item to repair</h2>
+          <h2 class="scuba-popup-title ui-role-display" data-repair-options-title tabindex="-1">Choose an item to repair</h2>
           <p class="ui-role-narrative">One emergency repair restores one broken item.</p>
           <div class="repair-targets" data-repair-targets></div>
           <button type="button" class="secondary-action salvage-action ui-role-context" data-repair-cancel aria-label="Cancel repair">
@@ -609,20 +598,8 @@ export class SurvivalUI {
         <h2 class="ui-role-display" data-event-title hidden></h2>
         <p class="event-caption__detail ui-role-narrative" data-event-detail hidden></p>
         <p class="event-caption__risk ui-role-context" data-event-risk hidden></p>
-        <p class="event-caption__result ui-role-context" data-event-result hidden></p>
-        <section class="event-result event-result--inline" data-dedicated-event-result role="status" hidden>
-          <p class="event-result__message ui-role-narrative" data-event-result-message></p>
-          <ul class="event-result__lines ui-role-numeral" data-event-result-lines></ul>
-        </section>
         <nav class="event-choices" data-event-choices aria-label="Event choices" hidden></nav>
       </section>
-      <section class="event-result event-result--anchored" data-event-result-panel aria-hidden="true" aria-live="polite">
-        <strong class="ui-role-display" data-event-result-caption></strong>
-        <span class="ui-role-narrative" data-event-result-detail></span>
-      </section>
-      <button type="button" class="event-endure salvage-action ui-role-context" data-endure aria-label="Endure" hidden>
-        ENDURE
-      </button>
       <section class="survival-overlay journal-overlay" data-journal role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival journal" inert>
         <div class="journal-book" data-journal-book>
           <div class="journal-book__cover" aria-hidden="true"></div>
@@ -644,19 +621,19 @@ export class SurvivalUI {
           </article>
         </div>
       </section>
-      <section class="survival-overlay pause-overlay cinematic-overlay" data-pause role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival paused" inert>
-        <div class="cinematic-overlay__content">
+      <section class="survival-overlay pause-overlay cinematic-overlay scuba-popup-overlay" data-pause role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival paused" inert>
+        <div class="cinematic-overlay__content scuba-popup-paper scuba-popup-panel">
           <p class="eyebrow ui-role-context">PAUSED</p>
-          <h2 class="ui-role-display">Hold Fast</h2>
+          <h2 class="scuba-popup-title ui-role-display">Hold Fast</h2>
           <p class="ui-role-narrative">The sea will wait until you return.</p>
           <button type="button" class="primary-action salvage-action ui-role-context" data-resume aria-label="Resume">
             RESUME
           </button>
         </div>
       </section>
-      <section class="survival-overlay ending-overlay cinematic-overlay" data-ending role="dialog" aria-modal="true" aria-hidden="true" aria-label="Journey ended" inert>
-        <div class="cinematic-overlay__content">
-          <h2 class="ui-role-display" data-ending-title tabindex="-1" role="alert"></h2>
+      <section class="survival-overlay ending-overlay cinematic-overlay scuba-popup-overlay" data-ending role="dialog" aria-modal="true" aria-hidden="true" aria-label="Journey ended" inert>
+        <div class="cinematic-overlay__content scuba-popup-paper scuba-popup-panel">
+          <h2 class="scuba-popup-title ui-role-display" data-ending-title tabindex="-1" role="alert"></h2>
           <button type="button" class="primary-action salvage-action ui-role-context" data-restart aria-label="Start from the ship">
             START FROM THE SHIP
           </button>
@@ -684,17 +661,9 @@ export class SurvivalUI {
     this.carlitosPet = requireElement(this.carlitosCard, '[data-action="petCarlitos"]');
     this.eventCaption = requireElement(this.root, '[data-event-caption]');
     this.eventTitle = requireElement(this.root, '[data-event-title]');
-    this.anchoredEventResultPanel = requireElement(this.root, '[data-event-result-panel]');
-    this.anchoredEventResultCaption = requireElement(this.root, '[data-event-result-caption]');
-    this.anchoredEventResultDetail = requireElement(this.root, '[data-event-result-detail]');
     this.eventDetail = requireElement(this.root, '[data-event-detail]');
     this.eventRisk = requireElement(this.root, '[data-event-risk]');
-    this.eventOutcomeResult = requireElement(this.root, '[data-event-result]');
-    this.eventResult = requireElement(this.root, '[data-dedicated-event-result]');
-    this.eventResultMessage = requireElement(this.root, '[data-event-result-message]');
-    this.eventResultLines = requireElement(this.root, '[data-event-result-lines]');
     this.eventChoices = requireElement(this.root, '[data-event-choices]');
-    this.endureButton = requireElement(this.root, '[data-endure]');
     this.fishingLayer = requireElement(this.root, '[data-fishing]');
     this.fishingLive = requireElement(this.root, '[data-fishing-live]');
     this.fishingBiteTarget = requireElement(this.root, '[data-fishing-bite]');
@@ -705,14 +674,13 @@ export class SurvivalUI {
     this.fishingResultDetail = requireElement(this.root, '[data-fishing-result-detail]');
     this.fishingResultContinue = requireElement(this.root, '[data-fishing-result-continue]');
     this.driftingItemFocusLayer = requireElement(this.root, '[data-drifting-item-focus]');
+    this.driftingItemFocusCard = requireElement(
+      this.driftingItemFocusLayer,
+      '.drifting-item-focus__card',
+    );
     this.driftingItemFocusBack = requireElement(this.root, '[data-drifting-item-back]');
     this.driftingItemFocusTitle = requireElement(this.root, '[data-drifting-item-title]');
     this.driftingItemFocusChoices = requireElement(this.root, '[data-drifting-item-choices]');
-    this.driftingItemResultLayer = requireElement(this.root, '[data-drifting-item-result]');
-    this.driftingItemResultCaption = requireElement(this.root, '[data-drifting-item-result-caption]');
-    this.driftingItemResultTitle = requireElement(this.root, '[data-drifting-item-result-title]');
-    this.driftingItemResultDetail = requireElement(this.root, '[data-drifting-item-result-detail]');
-    this.driftingItemResultContinue = requireElement(this.root, '[data-drifting-item-result-continue]');
     this.fishingViewExit = requireElement(this.root, '[data-fishing-view-exit]');
     this.repairOptionsLayer = requireElement(this.root, '[data-repair-options]');
     this.repairOptionsTitle = requireElement(this.root, '[data-repair-options-title]');
@@ -739,7 +707,6 @@ export class SurvivalUI {
       this.repairOptionsLayer,
       this.endingLayer,
       this.diveResultLayer,
-      this.driftingItemResultLayer,
       this.driftingItemFocusLayer,
       this.fishingResultLayer,
       this.fishingLayer,
@@ -883,11 +850,8 @@ export class SurvivalUI {
     this.eventDetail.hidden = false;
     this.eventRisk.textContent = '';
     this.eventRisk.hidden = true;
-    this.eventOutcomeResult.textContent = '';
-    this.eventOutcomeResult.hidden = true;
     this.eventCaption.dataset.eventId = 'item-animation-lab';
     delete this.eventCaption.dataset.danger;
-    delete this.eventCaption.dataset.result;
     this.eventPresentationActive = true;
     this.eventCaption.setAttribute(
       'aria-label',
@@ -895,7 +859,6 @@ export class SurvivalUI {
     );
     this.eventCaption.classList.add('is-visible');
     this.eventCaption.setAttribute('aria-hidden', 'false');
-    this.clearEventResult();
     this.syncCommandState();
     this.publishAnnouncement(
       'Item Animation Lab. Select an item. Each item returns after its animation.',
@@ -907,7 +870,6 @@ export class SurvivalUI {
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.closeCarlitosCard(false);
-    delete this.eventCaption.dataset.result;
     const risk = event.danger.toLocaleUpperCase('en-US');
     this.updateText('event:title', this.eventTitle, '');
     this.eventTitle.hidden = true;
@@ -915,16 +877,12 @@ export class SurvivalUI {
     this.updateText('event:risk', this.eventRisk, risk);
     this.eventDetail.hidden = true;
     this.eventRisk.hidden = true;
-    this.eventOutcomeResult.textContent = '';
-    this.eventOutcomeResult.hidden = true;
-    delete this.eventCaption.dataset.result;
     this.eventCaption.dataset.eventId = event.id;
     this.eventCaption.dataset.danger = event.danger;
     this.eventPresentationActive = true;
     this.eventCaption.classList.remove('is-visible');
     this.eventCaption.setAttribute('aria-hidden', 'true');
     this.eventCaption.removeAttribute('aria-label');
-    this.clearEventResult();
     this.syncCommandState();
     this.publishAnnouncement(
       `${event.danger[0]!.toUpperCase()}${event.danger.slice(1)} event. ${event.revealText}`,
@@ -932,84 +890,10 @@ export class SurvivalUI {
     return Promise.resolve();
   }
 
-  showEventResult(view: EventResultView): void {
-    if (this.disposed) return;
-    if ('message' in view) {
-      this.eventResultMessage.textContent = view.message;
-      this.eventResultLines.replaceChildren(...view.lines.map((line) => {
-        const item = document.createElement('li');
-        item.textContent = line;
-        item.dataset.state = line.endsWith(' BROKEN')
-          ? 'broken'
-          : line.endsWith(' LOST')
-            ? 'lost'
-            : line.endsWith(' CONSUMED')
-              ? 'consumed'
-              : / -\d+$/.test(line)
-                ? 'resource-negative'
-                : 'resource';
-        return item;
-      }));
-      this.eventResultLines.hidden = view.lines.length === 0;
-      this.eventResult.hidden = false;
-      this.eventCaption.classList.add('is-visible');
-      this.eventCaption.setAttribute('aria-hidden', 'false');
-      return;
-    }
-    this.anchoredEventResultCaption.textContent = view.caption;
-    this.anchoredEventResultDetail.textContent = view.detail;
-    const target = view.target?.visible === true ? view.target : null;
-    const x = target?.x ?? Math.max(24, this.mount.clientWidth * 0.5);
-    const y = target?.y ?? Math.max(120, this.mount.clientHeight * 0.68);
-    this.anchoredEventResultPanel.style.setProperty('--event-result-x', `${x}px`);
-    this.anchoredEventResultPanel.style.setProperty('--event-result-y', `${y}px`);
-    this.anchoredEventResultPanel.classList.add('is-visible');
-    this.anchoredEventResultPanel.setAttribute('aria-hidden', 'false');
-  }
-
   hideEventReveal(): void {
     if (this.disposed) return;
     this.eventCaption.classList.remove('is-visible');
     this.eventCaption.setAttribute('aria-hidden', 'true');
-  }
-
-  hideEventResult(): void {
-    if (this.disposed) return;
-    this.anchoredEventResultPanel.classList.remove('is-visible');
-    this.anchoredEventResultPanel.setAttribute('aria-hidden', 'true');
-  }
-
-  showEventOutcome(
-    view: EventOutcomeView | ActionOutcome | Pick<ActionOutcome, 'accepted' | 'message'>,
-  ): void {
-    if (this.disposed) return;
-    if (!('title' in view)) {
-      this.updateText('event:title', this.eventTitle, view.message);
-      this.eventTitle.hidden = false;
-      this.eventDetail.hidden = true;
-      this.eventRisk.hidden = true;
-      this.eventCaption.dataset.result = 'true';
-      this.eventCaption.setAttribute('aria-label', view.message);
-      this.eventCaption.classList.add('is-visible');
-      this.eventCaption.setAttribute('aria-hidden', 'false');
-      this.eventPresentationActive = true;
-      this.syncCommandState();
-      this.publishAnnouncement(view.message);
-      return;
-    }
-    this.updateText('event:title', this.eventTitle, view.title);
-    this.eventTitle.hidden = false;
-    this.updateText('event:detail', this.eventDetail, view.detail);
-    this.eventDetail.hidden = false;
-    this.eventRisk.hidden = true;
-    this.updateText('event:result', this.eventOutcomeResult, view.result);
-    this.eventOutcomeResult.hidden = false;
-    this.eventCaption.dataset.result = view.state;
-    const announcement = `${view.title}. ${view.detail} ${view.result}.`;
-    this.eventCaption.setAttribute('aria-label', announcement);
-    this.eventCaption.classList.add('is-visible');
-    this.eventCaption.setAttribute('aria-hidden', 'false');
-    this.publishAnnouncement(announcement);
   }
 
   setEventSelection(
@@ -1022,7 +906,6 @@ export class SurvivalUI {
     this.eventSelectedInstanceId = null;
     this.eventSelectedChoiceId = null;
     this.renderContextualEventChoices();
-    this.endureButton.hidden = eligible.size > 0 || contextualChoices.length > 0;
     this.anchors.forEach((anchor, id) => {
       this.refreshAnchorTooltip(this.anchorButtons.get(id)!, anchor);
     });
@@ -1085,25 +968,19 @@ export class SurvivalUI {
     this.eventSelectedInstanceId = null;
     this.eventSelectedChoiceId = null;
     this.eventPresentationActive = false;
-    this.hideEventResult();
     this.eventCaption.classList.remove('is-visible');
     this.eventCaption.setAttribute('aria-hidden', 'true');
     this.eventCaption.removeAttribute('aria-label');
     delete this.eventCaption.dataset.eventId;
     delete this.eventCaption.dataset.danger;
-    delete this.eventCaption.dataset.result;
     this.updateText('event:title', this.eventTitle, '');
     this.eventTitle.hidden = true;
     this.eventDetail.textContent = '';
     this.eventDetail.hidden = true;
     this.eventRisk.textContent = '';
     this.eventRisk.hidden = true;
-    this.eventOutcomeResult.textContent = '';
-    this.eventOutcomeResult.hidden = true;
-    this.clearEventResult();
     this.eventChoices.replaceChildren();
     this.eventChoices.hidden = true;
-    this.endureButton.hidden = true;
     this.anchors.forEach((anchor, id) => {
       this.refreshAnchorTooltip(this.anchorButtons.get(id)!, anchor);
     });
@@ -1142,13 +1019,6 @@ export class SurvivalUI {
   setBadSleepCue(visible: boolean): void {
     if (this.disposed) return;
     this.badSleepCue.classList.toggle('is-visible', visible);
-  }
-
-  private clearEventResult(): void {
-    this.eventResult.hidden = true;
-    this.eventResultMessage.textContent = '';
-    this.eventResultLines.replaceChildren();
-    this.eventResultLines.hidden = true;
   }
 
   setSleepCovered(covered: boolean): Promise<void> {
@@ -1389,13 +1259,14 @@ export class SurvivalUI {
 
   showDriftingItemFocus(view: DriftingItemFocusView): void {
     if (this.disposed) return;
-    this.driftingItemFocusReturning = false;
-    this.driftingItemFocusBack.setAttribute('aria-label', 'Let it drift and return');
+    this.driftingItemFocusBack.setAttribute('aria-label', 'Return to boat');
     this.driftingItemFocusTitle.textContent = view.title;
-    this.driftingItemFocusChoicesView = view.choices.filter((choice) => (
-      choice.id === 'retrieve' || choice.id === 'delegate-carlitos'
-    ));
+    this.driftingItemFocusTarget = view.target === null
+      ? null
+      : Object.freeze({ ...view.target });
+    this.driftingItemFocusChoicesView = [...view.choices];
     this.renderDriftingItemFocusChoices();
+    this.positionDriftingItemFocus();
     this.showLayer(this.driftingItemFocusLayer);
     this.syncCommandState();
     const firstAvailableChoice = this.driftingItemFocusChoices.querySelector<HTMLButtonElement>(
@@ -1404,44 +1275,22 @@ export class SurvivalUI {
     (firstAvailableChoice ?? this.driftingItemFocusBack).focus();
   }
 
-  showDriftingItemReturn(): void {
-    if (this.disposed) return;
-    this.driftingItemFocusReturning = true;
-    this.driftingItemFocusChoices.hidden = true;
-    this.driftingItemFocusBack.setAttribute('aria-label', 'Return to boat');
-    this.showLayer(this.driftingItemFocusLayer);
-    this.syncCommandState();
-    this.driftingItemFocusBack.focus();
-  }
-
   hideDriftingItemFocus(): void {
     if (this.disposed) return;
     this.hideLayer(this.driftingItemFocusLayer);
-    this.driftingItemFocusReturning = false;
     this.driftingItemFocusChoicesView = [];
     this.driftingItemFocusChoices.replaceChildren();
     this.driftingItemFocusChoices.hidden = false;
     this.driftingItemFocusTitle.textContent = '';
+    this.driftingItemFocusTarget = null;
   }
 
-  showDriftingItemResult(view: DriftingItemResultView): void {
-    if (this.disposed) return;
-    this.hideLayer(this.driftingItemFocusLayer);
-    this.driftingItemContinueIssued = false;
-    this.driftingItemResultCaption.textContent = view.caption;
-    this.driftingItemResultTitle.textContent = view.title;
-    this.driftingItemResultDetail.textContent = view.detail;
-    this.driftingItemResultTarget = view.target === null
+  updateDriftingItemFocusTarget(target: ProjectedBoatBounds | null): void {
+    if (this.disposed || !this.driftingItemFocusLayer.classList.contains('is-visible')) return;
+    this.driftingItemFocusTarget = target === null
       ? null
-      : Object.freeze({ ...view.target });
-    this.showLayer(this.driftingItemResultLayer);
-    this.driftingItemResultContinue.focus();
-  }
-
-  hideDriftingItemResult(): void {
-    if (this.disposed) return;
-    this.hideLayer(this.driftingItemResultLayer);
-    this.driftingItemResultTarget = null;
+      : Object.freeze({ ...target });
+    this.positionDriftingItemFocus();
   }
 
   setFishingViewExitVisible(visible: boolean): void {
@@ -1603,7 +1452,6 @@ export class SurvivalUI {
     this.badSleepCue.classList.remove('is-visible');
     this.eventChoices.replaceChildren();
     this.eventChoices.hidden = true;
-    this.endureButton.hidden = true;
     this.pendingSleepTransition?.finish();
     this.pendingDiveCoveredHold?.finish();
     this.pendingDiveResultConfirmation?.finish();
@@ -1614,8 +1462,6 @@ export class SurvivalUI {
     this.fishingAnnouncementVersion += 1;
     this.anchorLayouts.clear();
     this.hideLayer(this.driftingItemFocusLayer);
-    this.hideLayer(this.driftingItemResultLayer);
-    this.driftingItemResultTarget = null;
     if (this.fishingMode !== 'hidden') {
       this.fishingLayer.classList.remove('is-visible');
       this.fishingMode = 'hidden';
@@ -1637,7 +1483,6 @@ export class SurvivalUI {
     this.onAction = () => undefined;
     this.onEventItem = () => undefined;
     this.onEventChoice = () => undefined;
-    this.onEndure = () => undefined;
     this.onRestart = () => undefined;
     this.onAnchorHighlight = () => undefined;
     this.onPauseChange = () => undefined;
@@ -1650,7 +1495,6 @@ export class SurvivalUI {
     this.onFishingViewExit = null;
     this.onDriftingItemSelect = null;
     this.onDriftingItemBack = null;
-    this.onDriftingItemContinue = null;
     this.root.remove();
   }
 
@@ -2015,6 +1859,7 @@ export class SurvivalUI {
     if (danger) meter.setAttribute('aria-valuetext', `${safe}, ${definition.dangerLabel.toLowerCase()}`);
     else meter.removeAttribute('aria-valuetext');
     meter.style.setProperty('--meter-value', `${percentage}%`);
+    meter.style.setProperty('--meter-fill-height', `${meterFillHeight(definition, percentage)}%`);
     requireElement<HTMLElement>(meter, '[data-meter-tooltip]').textContent = `${safe} / ${definition.max}`;
   }
 
@@ -2116,7 +1961,6 @@ export class SurvivalUI {
       button.disabled = false;
       button.setAttribute('aria-disabled', unavailable || this.busy ? 'true' : 'false');
     });
-    this.endureButton.disabled = this.busy;
     this.syncCarlitosActions();
   }
 
@@ -2147,8 +1991,6 @@ export class SurvivalUI {
       !this.eventTitle.hidden
       || !this.eventDetail.hidden
       || !this.eventRisk.hidden
-      || !this.eventOutcomeResult.hidden
-      || !this.eventResult.hidden
       || choices.length > 0
     );
     this.eventCaption.classList.toggle('is-visible', showCaption);
@@ -2163,13 +2005,18 @@ export class SurvivalUI {
       button.dataset.eventChoice = choice.id;
       button.dataset.eventState = 'idle';
       button.setAttribute('aria-pressed', 'false');
-      button.append(document.createTextNode(choice.label));
-
-      const cost = document.createElement('span');
-      cost.className = 'drifting-item-focus__cost ui-role-numeral';
-      const owner = choice.energyOwner === 'carlitos' ? 'CARLITOS' : 'PLAYER';
-      cost.textContent = `${owner} — ${choice.energyCost ?? 0} ENERGY`;
-      button.append(cost);
+      const main = document.createElement('span');
+      main.className = 'drifting-item-focus__choice-main';
+      main.append(document.createTextNode(choice.label));
+      const energyCost = choice.energyCost ?? 0;
+      if (energyCost > 0) {
+        const cost = document.createElement('span');
+        cost.className = 'drifting-item-focus__cost';
+        cost.setAttribute('aria-label', `${energyCost} energy`);
+        cost.textContent = '⚡️'.repeat(energyCost);
+        main.append(cost);
+      }
+      button.append(main);
 
       if (choice.unavailableReason !== null) {
         button.dataset.unavailableReason = choice.unavailableReason;
@@ -2182,7 +2029,7 @@ export class SurvivalUI {
       return button;
     });
     this.driftingItemFocusChoices.replaceChildren(...choices);
-    this.driftingItemFocusChoices.hidden = this.driftingItemFocusReturning;
+    this.driftingItemFocusChoices.hidden = false;
   }
 
   private eventLanternChoice(): EventContextChoice | undefined {
@@ -2314,6 +2161,9 @@ export class SurvivalUI {
   private readonly handleWindowResize = (): void => {
     if (this.disposed) return;
     this.positionOpenRoutineDialogs();
+    if (this.driftingItemFocusLayer.classList.contains('is-visible')) {
+      this.positionDriftingItemFocus();
+    }
     const anchor = [...this.anchors.values()].find(
       (candidate) => candidate.companionId === 'carlitos' && candidate.visible,
     );
@@ -2358,12 +2208,6 @@ export class SurvivalUI {
         ROUTINE_DIALOG_PLACEMENTS.fishing,
         this.fishingResultTarget,
       );
-    } else if (layer === this.driftingItemResultLayer) {
-      this.positionRoutineDialog(
-        layer,
-        ROUTINE_DIALOG_PLACEMENTS.salvage,
-        this.driftingItemResultTarget,
-      );
     } else if (layer === this.repairOptionsLayer) {
       this.positionRoutineDialog(layer, ROUTINE_DIALOG_PLACEMENTS.repair);
     }
@@ -2384,16 +2228,99 @@ export class SurvivalUI {
         this.fishingResultTarget,
       );
     }
-    if (this.driftingItemResultLayer.classList.contains('is-visible')) {
-      this.positionRoutineDialog(
-        this.driftingItemResultLayer,
-        ROUTINE_DIALOG_PLACEMENTS.salvage,
-        this.driftingItemResultTarget,
-      );
-    }
     if (this.repairOptionsLayer.classList.contains('is-visible')) {
       this.positionRoutineDialog(this.repairOptionsLayer, ROUTINE_DIALOG_PLACEMENTS.repair);
     }
+  }
+
+  private positionDriftingItemFocus(): void {
+    const rootBounds = this.root.getBoundingClientRect();
+    const viewportWidth = Math.max(
+      1,
+      rootBounds.width || this.root.clientWidth || window.innerWidth,
+    );
+    const viewportHeight = Math.max(
+      1,
+      rootBounds.height || this.root.clientHeight || window.innerHeight,
+    );
+    const margin = ROUTINE_DIALOG_MARGIN;
+    const gap = ROUTINE_DIALOG_GAP;
+    const popupBottom = Math.max(margin, viewportHeight - DRIFTING_FOCUS_BOTTOM_RESERVE);
+    const target = this.driftingItemFocusTarget?.visible === true
+      ? this.driftingItemFocusTarget
+      : null;
+
+    if (target === null) {
+      const width = Math.min(420, viewportWidth - margin * 2);
+      this.driftingItemFocusLayer.style.setProperty('--drifting-width', `${Math.round(width)}px`);
+      this.driftingItemFocusLayer.style.setProperty(
+        '--drifting-max-height',
+        `${Math.round(Math.max(1, popupBottom - margin))}px`,
+      );
+      const height = Math.min(
+        Math.max(1, popupBottom - margin),
+        this.driftingItemFocusCard.getBoundingClientRect().height || 360,
+      );
+      this.driftingItemFocusLayer.style.setProperty(
+        '--drifting-x',
+        `${Math.round((viewportWidth - width) / 2)}px`,
+      );
+      this.driftingItemFocusLayer.style.setProperty(
+        '--drifting-y',
+        `${Math.round(Math.max(margin, (popupBottom - height) / 2))}px`,
+      );
+      this.driftingItemFocusLayer.dataset.placement = 'center';
+      this.driftingItemFocusLayer.dataset.anchorState = 'fallback';
+      return;
+    }
+
+    const targetLeft = target.x - target.width / 2;
+    const targetRight = target.x + target.width / 2;
+    const leftWidth = Math.max(0, targetLeft - gap - margin);
+    const rightWidth = Math.max(0, viewportWidth - margin - targetRight - gap);
+    const preferredWidth = 420;
+    const minimumWidth = 240;
+    const horizontal = [
+      { placement: 'left', available: leftWidth, edge: targetLeft - gap },
+      { placement: 'right', available: rightWidth, edge: targetRight + gap },
+    ] as const;
+    const usable = horizontal.filter(({ available }) => available >= minimumWidth);
+    const candidates = usable.length > 0 ? usable : horizontal;
+    const placement = candidates.reduce((best, candidate) => {
+      const bestWidth = Math.min(preferredWidth, best.available);
+      const candidateWidth = Math.min(preferredWidth, candidate.available);
+      const bestCenter = best.placement === 'left'
+        ? best.edge - bestWidth / 2
+        : best.edge + bestWidth / 2;
+      const candidateCenter = candidate.placement === 'left'
+        ? candidate.edge - candidateWidth / 2
+        : candidate.edge + candidateWidth / 2;
+      const bestDistance = Math.abs(bestCenter - viewportWidth / 2);
+      const candidateDistance = Math.abs(candidateCenter - viewportWidth / 2);
+      return candidateDistance < bestDistance ? candidate : best;
+    });
+    const width = Math.max(1, Math.min(preferredWidth, placement.available));
+    const maximumHeight = Math.max(1, popupBottom - margin);
+    this.driftingItemFocusLayer.style.setProperty('--drifting-width', `${Math.round(width)}px`);
+    this.driftingItemFocusLayer.style.setProperty(
+      '--drifting-max-height',
+      `${Math.round(maximumHeight)}px`,
+    );
+    const cardHeight = Math.min(
+      maximumHeight,
+      this.driftingItemFocusCard.getBoundingClientRect().height || 360,
+    );
+    const x = placement.placement === 'left'
+      ? placement.edge - width
+      : placement.edge;
+    const y = Math.min(
+      popupBottom - cardHeight,
+      Math.max(margin, target.y - cardHeight / 2),
+    );
+    this.driftingItemFocusLayer.style.setProperty('--drifting-x', `${Math.round(x)}px`);
+    this.driftingItemFocusLayer.style.setProperty('--drifting-y', `${Math.round(y)}px`);
+    this.driftingItemFocusLayer.dataset.placement = placement.placement;
+    this.driftingItemFocusLayer.dataset.anchorState = 'projected';
   }
 
   private positionRoutineDialog(
@@ -2491,7 +2418,6 @@ export class SurvivalUI {
     if (layer === this.endingLayer) this.endingTitle.focus();
     else if (layer === this.fishingResultLayer) this.fishingResultContinue.focus();
     else if (layer === this.driftingItemFocusLayer) this.driftingItemFocusBack.focus();
-    else if (layer === this.driftingItemResultLayer) this.driftingItemResultContinue.focus();
     else if (layer === this.repairOptionsLayer) this.repairOptionsTitle.focus();
     else if (layer === this.journalLayer) this.journalTitle.focus();
     else if (layer === this.pauseLayer) this.resumeButton.focus();
@@ -2572,8 +2498,8 @@ export class SurvivalUI {
       ?? (this.eventPresentationActive
         ? [...this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]')]
           .find((button) => this.isUsableCommand(button))
-          ?? (this.isUsableCommand(this.endureButton) ? this.endureButton : null)
-        : null);
+        : null)
+      ?? null;
   }
 
   private resolveCommandOrigin(): HTMLElement | null {
@@ -2653,7 +2579,6 @@ export class SurvivalUI {
     const controls = [
       ...this.anchorButtons.values(),
       ...this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]'),
-      this.endureButton,
     ].filter((element) => this.isFocusableCommand(element));
     if (controls.length === 0) return false;
     const first = controls[0]!;
@@ -2800,13 +2725,6 @@ export class SurvivalUI {
       this.onDriftingItemBack?.();
       return;
     }
-    if (button.hasAttribute('data-drifting-item-result-continue')) {
-      if (topmostModal !== this.driftingItemResultLayer) return;
-      if (this.driftingItemContinueIssued) return;
-      this.driftingItemContinueIssued = true;
-      this.onDriftingItemContinue?.();
-      return;
-    }
     if (button.hasAttribute('data-fishing-view-exit')) {
       this.onFishingViewExit?.();
       return;
@@ -2825,8 +2743,7 @@ export class SurvivalUI {
       this.closeRepairOptions();
       return;
     }
-    if (button.hasAttribute('data-endure')) this.onEndure();
-    else if (button.hasAttribute('data-resume')) this.onPauseChange(false);
+    if (button.hasAttribute('data-resume')) this.onPauseChange(false);
     else if (button.hasAttribute('data-restart') && !this.restartIssued) {
       this.restartIssued = true;
       button.disabled = true;

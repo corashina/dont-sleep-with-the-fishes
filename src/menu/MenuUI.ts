@@ -41,10 +41,10 @@ export class MenuUI {
         id="menu-how-to-play-dialog" data-menu-guide role="dialog"
         aria-modal="true" aria-hidden="true" aria-labelledby="menu-how-to-play-title"
         aria-describedby="menu-how-to-play-intro" inert>
-        <div class="screen__content how-to-play-board">
+        <div class="screen__content how-to-play-board scuba-popup-paper">
           <header class="how-to-play-board__header">
             <p class="kicker ui-role-context">BEFORE THE WATER WINS</p>
-            <h2 class="ui-role-display" id="menu-how-to-play-title">HOW TO PLAY</h2>
+            <h2 class="scuba-popup-title ui-role-display" id="menu-how-to-play-title">HOW TO PLAY</h2>
             <p class="lead ui-role-narrative" id="menu-how-to-play-intro">
               Save what you can. Reach the lifeboat. Survive until rescue.
             </p>

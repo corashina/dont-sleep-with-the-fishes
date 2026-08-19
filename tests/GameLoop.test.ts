@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects pointer-lock pause policy.
+// Importance: 8/10 (scaled from 4/5). Protects pointer-lock pause policy.
 import { describe, expect, it } from 'vitest';
 import { pointerLockTransition } from '../src/game/GameLoop';
 

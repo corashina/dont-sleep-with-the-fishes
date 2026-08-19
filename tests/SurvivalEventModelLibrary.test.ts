@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects shared event model ownership and fallbacks.
+// Importance: 10/10 (scaled from 5/5). Protects shared event model ownership and fallbacks.
 import {
   BoxGeometry,
   Group,

@@ -123,7 +123,6 @@ Keep source records after download.
 | Tornado | Continuous dangerous wind during the event | [Tornado Inside a Metallic Building](https://freesound.org/people/Julien_Matthey/sounds/557188/) |
 | Leak | Water pushes through the hull | [Water - Leak, small](https://freesound.org/people/colinpoh/sounds/146346/) |
 | Chest | Latch, worn wood, and lid | [Wooden Chest Open](https://freesound.org/people/The_Frisbee_of_Peace/sounds/573654/) |
-| Drifting cargo | Rope strain and crate drag | [Dragging a Crate](https://freesound.org/people/hz37/sounds/792375/) |
 | Visitor boat | Oars approach over calm water | [Rowing Boat Interior](https://freesound.org/people/Fenodyrie/sounds/588307/) |
 | Unknown hand | Wet contact against the boat | [Wet Slapping](https://freesound.org/people/fordps3/sounds/262588/) |
 | Rescue ending | Distant vessel becomes present | [Rescue Vessel Engine](https://freesound.org/people/Lydmakeren/sounds/510907/) |

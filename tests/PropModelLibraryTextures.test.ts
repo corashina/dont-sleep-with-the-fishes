@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects shared texture ownership.
+// Importance: 8/10 (scaled from 4/5). Protects shared texture ownership.
 import { describe, expect, it, vi } from 'vitest';
 import {
   AnimationClip,

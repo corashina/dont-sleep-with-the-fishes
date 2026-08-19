@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects the close camera pass, hidden model, and screen-mask transition.
+// Importance: 8/10 (scaled from 4/5). Protects the close camera pass, hidden model, and screen-mask transition.
 import { describe, expect, it } from 'vitest';
 import {
   createEventItemUseSample,

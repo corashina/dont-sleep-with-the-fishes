@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects the centered, close compass reading pose.
+// Importance: 8/10 (scaled from 4/5). Protects the centered, close compass reading pose.
 import { describe, expect, it } from 'vitest';
 import {
   createEventItemUseSample,

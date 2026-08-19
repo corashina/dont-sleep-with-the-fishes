@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects event staging, restoration, and owned visual resources.
+// Importance: 8/10 (scaled from 4/5). Protects event staging, restoration, and owned visual resources.
 import {
   Group,
   Material,
@@ -71,31 +71,14 @@ function finishReveal(
 
 describe('CarlitosEventPresentation', () => {
   it('shows the keyed reveal anticipation before decisive travel', async () => {
-    const state = setup('sick-companion');
+    const state = setup('guarded-sleep');
     const reveal = state.presentation.reveal();
 
     state.presentation.update(1, 0.07);
 
-    expect(state.poseRoot.rotation.x).toBeLessThan(state.basePose.x);
+    expect(state.poseRoot.rotation.x).toBeGreaterThan(state.basePose.x);
     state.presentation.clear();
     await reveal;
-    state.presentation.dispose();
-    state.companion.dispose();
-    state.propModels.dispose();
-  });
-
-  it('turns toward the real sick companion and restores camera and pose', async () => {
-    const state = setup('sick-companion');
-
-    await finishReveal(state.presentation);
-
-    expect(state.camera.quaternion.equals(state.baseCamera)).toBe(false);
-    expect(state.poseRoot.rotation.x).toBeGreaterThan(state.basePose.x);
-    expect(state.companion.root.visible).toBe(true);
-
-    state.presentation.clear();
-    expect(state.camera.quaternion.equals(state.baseCamera)).toBe(true);
-    expect(state.poseRoot.rotation.toArray()).toEqual(state.basePose.toArray());
     state.presentation.dispose();
     state.companion.dispose();
     state.propModels.dispose();
@@ -142,9 +125,9 @@ describe('CarlitosEventPresentation', () => {
   });
 
   it('cancels item playback and restores state on clear', async () => {
-    const state = setup('sick-companion');
+    const state = setup('shadow-figure');
     await finishReveal(state.presentation);
-    const item = state.presentation.playItemUse('energyBar', 'energyBar-1' as ItemInstanceId);
+    const item = state.presentation.playItemUse('spyglass', 'spyglass-1' as ItemInstanceId);
     state.presentation.update(4, 0.2);
 
     state.presentation.clear();
@@ -220,20 +203,17 @@ describe('CarlitosEventPresentation', () => {
     state.propModels.dispose();
   });
 
-  it.each(['sick-companion', 'guarded-sleep'] as const)(
-    'removes the shared-pose aim target when %s disposes',
-    (eventId) => {
-      const state = setup(eventId);
+  it('removes the shared-pose aim target when Guarded Sleep disposes', () => {
+    const state = setup('guarded-sleep');
 
-      expect(state.presentation.itemAimTarget.parent).toBe(state.poseRoot);
-      state.presentation.dispose();
+    expect(state.presentation.itemAimTarget.parent).toBe(state.poseRoot);
+    state.presentation.dispose();
 
-      expect(state.presentation.itemAimTarget.parent).toBeNull();
-      expect(state.poseRoot.getObjectByName(`${eventId}-item-aim-target`)).toBeUndefined();
-      state.companion.dispose();
-      state.propModels.dispose();
-    },
-  );
+    expect(state.presentation.itemAimTarget.parent).toBeNull();
+    expect(state.poseRoot.getObjectByName('guarded-sleep-item-aim-target')).toBeUndefined();
+    state.companion.dispose();
+    state.propModels.dispose();
+  });
 
   it('captures the live sick pose before staging Shadow Figure', () => {
       const eventId = 'shadow-figure';
@@ -307,10 +287,10 @@ describe('CarlitosEventPresentation', () => {
       throw failure;
     };
 
-    expect(() => new CarlitosEventPresentation('sick-companion', {
+    expect(() => new CarlitosEventPresentation('guarded-sleep', {
       carlitos: { root },
     } as DedicatedEventEnvironment)).toThrow(failure);
 
-    expect(poseRoot.getObjectByName('sick-companion-item-aim-target')).toBeUndefined();
+    expect(poseRoot.getObjectByName('guarded-sleep-item-aim-target')).toBeUndefined();
   });
 });

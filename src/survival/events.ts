@@ -26,7 +26,7 @@ export const SURVIVAL_EVENT_IDS = Object.freeze([
   'death-stare', 'swarm-of-anglerfish', 'tornado', 'shower-night',
   'windy-night', 'bad-sleep', 'thunderstorm', 'restless-waves',
   'man-in-the-fog', 'ghosts', 'eerie-melody', 'face-on-the-moon',
-  'sick-companion', 'shadow-figure', 'guarded-sleep',
+  'shadow-figure', 'guarded-sleep',
   'drifting-barrel', 'drifting-chest', 'drifting-bottle', 'check-the-back',
   'flowers', 'chest-attack', 'midnight-tour', 'night-trader',
   'handyman', 'other-people',
@@ -87,7 +87,6 @@ const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.free
   ghosts: 'Pale shapes gather around the drifting boat.',
   'eerie-melody': 'A distant melody drifts across the water.',
   'face-on-the-moon': 'A face takes shape across the moon.',
-  'sick-companion': 'Carlitos lies low and shivers beside the gunwale.',
   'shadow-figure': 'A second cat-shaped shadow watches from beyond the lantern light.',
   'guarded-sleep': 'Carlitos sits alert while the night presses close.',
   'drifting-barrel': 'A sealed barrel drifts within reach of the boat.',
@@ -109,8 +108,6 @@ const resource = (
 ): ResourceEffect => ({ resource: resourceName, operation, value });
 const add = (name: EventResource, value: IntegerValue) => resource(name, 'add', value);
 const subtract = (name: EventResource, value: IntegerValue) => resource(name, 'subtract', value);
-const set = (name: EventResource, value: IntegerValue) => resource(name, 'set', value);
-
 const mutation = (
   kind: 'consume' | 'break' | 'lose',
   itemId: ItemId,
@@ -398,29 +395,6 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       outcome(100, 'You wake exhausted.', atNextDawn(0)),
       outcome(20, 'You wake with two energy.', atNextDawn(2))),
   ], undefined, { minimumPressure: 3 }),
-  event('sick-companion', 'night', 'Sick Companion', 'uncertain', 'darkness', 1, 5, 26, [
-    choice('medicalKit', 'Use Medkit', 'medicalKit', outcome(
-      1,
-      'Carlitos recovers.',
-      { items: [consume('medicalKit')], companion: [{ kind: 'sickness', operation: 'set', value: 0 }] },
-    )),
-    choice('energyBar', 'Use Energy Bar', 'energyBar', outcome(
-      1,
-      'The energy bar is gone, but his condition does not change.',
-      { items: [consume('energyBar')] },
-    )),
-    choice('ductTape', 'Use Duct Tape', 'ductTape',
-      outcome(80, 'The tape makes his sickness worse.', {
-        items: [consume('ductTape')],
-        companion: [{ kind: 'sickness', operation: 'add', value: 1 }],
-      }),
-      outcome(10, 'The tape changes nothing.', { items: [consume('ductTape')] })),
-    contextualChoice('sleep', 'Sleep', outcome(
-      1,
-      'Carlitos grows sicker through the night.',
-      { companion: [{ kind: 'sickness', operation: 'add', value: 2 }] },
-    )),
-  ], undefined, { requiresLivingCompanion: true }),
   event('shadow-figure', 'night', 'Shadow Figure', 'dangerous', 'darkness', 1, 20, 30, [
     choice('spyglass', 'Use Binoculars', 'spyglass', outcome(
       1,
@@ -585,7 +559,12 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     contextualChoice('sleep', 'Sleep', outcome(1, 'The handyman shrugs and drifts away.', {}, 'handyman-sleep')),
   ], undefined, { minimumPressure: 2 }),
   event('other-people', 'night', 'Other People', 'safe', 'sighting', 2, 15, 20, [
-    choice('flareGun', 'Use Flare Gun', 'flareGun', outcome(1, 'The other boat sees your flare.', { rescue: true, items: [consume('flareGun')] }, 'people-rescue')),
+    choice('flareGun', 'Use Flare Gun', 'flareGun', outcome(
+      1,
+      'Your flare improves the chance of rescue.',
+      effects([add('rescueProgress', 25)], [consume('flareGun')]),
+      'people-signaled',
+    )),
     choice('flashlight', 'Use Flashlight', 'flashlight',
       outcome(40, 'The other boat sees your signal.', { rescue: true }, 'people-rescue'),
       outcome(60, 'The other boat disappears into the dark.', {}, 'people-missed')),
@@ -741,7 +720,7 @@ function validateOutcome(
     `${path}.effects`,
     'effect',
     [
-      'resources', 'items', 'chest', 'rescue', 'companion',
+      'resources', 'items', 'chest', 'rescue',
       'nextDawnEnergy', 'followUpNight', 'endingReason',
     ],
   );
@@ -749,7 +728,6 @@ function validateOutcome(
   const hasItems = Object.hasOwn(candidateEffects, 'items');
   const hasRescue = Object.hasOwn(candidateEffects, 'rescue');
   const hasChest = Object.hasOwn(candidateEffects, 'chest');
-  const hasCompanion = Object.hasOwn(candidateEffects, 'companion');
   const hasNextDawnEnergy = Object.hasOwn(candidateEffects, 'nextDawnEnergy');
   const hasFollowUpNight = Object.hasOwn(candidateEffects, 'followUpNight');
   const hasEndingReason = Object.hasOwn(candidateEffects, 'endingReason');
@@ -799,33 +777,6 @@ function validateOutcome(
   }
   if (hasChest && !['acquire', 'close', 'destroy'].includes(chest as string)) {
     throw new Error(`${path}.chest has an invalid effect`);
-  }
-  if (hasCompanion) {
-    const companionEffects = candidateEffects.companion;
-    if (!Array.isArray(companionEffects) || companionEffects.length === 0) {
-      throw new Error(`${path}.companion must be a non-empty array`);
-    }
-    companionEffects.forEach((candidate, index) => {
-      const effectPath = `${path}.companion[${index}]`;
-      assertPlainObject(candidate, `${effectPath} companion effect`);
-      if (candidate.kind === 'sickness') {
-        assertExactKeys(
-          candidate,
-          effectPath,
-          'companion sickness effect',
-          ['kind', 'operation', 'value'],
-          ['kind', 'operation', 'value'],
-        );
-        if (candidate.operation !== 'add' && candidate.operation !== 'set') {
-          throw new Error(`${effectPath} has an invalid companion sickness operation`);
-        }
-        if (!Number.isInteger(candidate.value) || (candidate.value as number) < 0) {
-          throw new Error(`${effectPath} has an invalid companion sickness value`);
-        }
-        return;
-      }
-      throw new Error(`${effectPath} has an unknown companion effect kind`);
-    });
   }
   if (hasNextDawnEnergy && (
     !Number.isInteger(candidateEffects.nextDawnEnergy)

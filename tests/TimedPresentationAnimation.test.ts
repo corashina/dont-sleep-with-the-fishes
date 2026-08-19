@@ -1,3 +1,4 @@
+// Importance: 9/10. Protects shared animation completion, cancellation, clamping, and timing tolerance.
 import { describe, expect, it, vi } from 'vitest';
 import { TimedPresentationAnimation } from '../src/survival/TimedPresentationAnimation';
 

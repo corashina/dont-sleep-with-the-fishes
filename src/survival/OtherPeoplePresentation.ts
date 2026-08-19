@@ -9,15 +9,9 @@ import {
   Matrix4,
   Mesh,
   MeshStandardMaterial,
-  Object3D,
-  PointLight,
   SphereGeometry,
-  SpotLight,
   TorusGeometry,
   Vector3,
-  type PerspectiveCamera,
-  type Scene,
-  type WebGLRenderer,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { ItemInstanceId } from '../game/ItemState';
@@ -49,15 +43,12 @@ import { TimedPresentationAnimation } from './TimedPresentationAnimation';
 
 type OtherPeopleAnimationKind =
   | 'reveal'
-  | 'choice-flare'
   | 'choice-flashlight'
   | 'choice-pass'
   | 'result-rescue'
-  | 'result-missed'
   | 'result-pass';
 
 const REVEAL_DURATION = 3.4;
-const FLARE_DURATION = 1.25;
 const FLASHLIGHT_DURATION = 1.8;
 const PASS_CHOICE_DURATION = 0.32;
 const RESCUE_DURATION = 3.2;
@@ -80,17 +71,8 @@ const SHIP_EXIT = new Vector3(
   0.68,
   -45.4 * SHIP_DISTANCE_SCALE,
 );
-const FLARE_START = new Vector3(1.4, 1.8, -1.8);
-const FLARE_END = new Vector3(-2.4, 19, -23);
 const HORIZON_LIGHT_INTENSITY = 0.82;
 const CRUISE_SPEED = 0.7;
-const RED_WASH_COLOR = 0xff3b2f;
-const NO_RED_WASH_TARGETS = Object.freeze([] as string[]);
-const RED_WASH_TARGETS = Object.freeze([
-  'lifeboat',
-  'container-ship',
-]);
-
 function keyedTravel(progress: number): number {
   const clamped = clamp01(progress);
   if (clamped < 0.14) {
@@ -183,54 +165,17 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   private readonly ship = new Group();
   private readonly portBeacon = new Group();
   private readonly starboardBeacon = new Group();
-  private readonly portBeaconLight = new PointLight(
-    0xe7c993,
-    0,
-    9,
-    1.8,
-  );
-  private readonly starboardBeaconLight = new PointLight(
-    0xe7c993,
-    0,
-    9,
-    1.8,
-  );
-  private readonly flare = new Group();
-  private readonly shipFillLight = new PointLight(0xa8c6cf, 3, 48, 1.15);
-  private readonly shipDeckLight = new PointLight(0xe8b56c, 2.2, 30, 1.35);
-  private readonly flareGlow = new PointLight(
-    0xff4836,
-    3.4,
-    16,
-    1.7,
-  );
+  private readonly portBeaconMaterial = createMaterial(0xe4c88e, 0.48, {
+    emissive: 0xb17b35,
+    transparent: true,
+    opacity: 0,
+  });
+  private readonly starboardBeaconMaterial = createMaterial(0xe4c88e, 0.48, {
+    emissive: 0xb17b35,
+    transparent: true,
+    opacity: 0,
+  });
   private readonly beamVisual = new Group();
-  private readonly lifeboatLightTarget = new Object3D();
-  private readonly shipLightTarget = new Object3D();
-  private readonly flareLifeboatWash = new SpotLight(
-    RED_WASH_COLOR,
-    0,
-    46,
-    Math.PI * 0.38,
-    0.7,
-    1.1,
-  );
-  private readonly flareShipWash = new SpotLight(
-    RED_WASH_COLOR,
-    0,
-    54,
-    Math.PI * 0.34,
-    0.68,
-    1.1,
-  );
-  private readonly flashlightBeam = new SpotLight(
-    0xeee3c2,
-    0,
-    72,
-    Math.PI * 0.075,
-    0.42,
-    1.05,
-  );
   private readonly staticGeometries = new Set<BufferGeometry>();
   private readonly staticMaterials = new Set<Material>();
   private readonly shipStartPosition = new Vector3();
@@ -252,8 +197,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   );
   private selectedInstanceId: ItemInstanceId | null = null;
   private shipStartYaw = SHIP_YAW;
-  private rescueLifeboatWashStart = 0;
-  private rescueShipWashStart = 0;
   private supplyPinned = false;
   private portRevealed = false;
   private starboardRevealed = false;
@@ -261,10 +204,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   private staged = false;
   private terminalRescue = false;
   private naturalRescueCue = false;
-  private renderPreparation: Promise<void> = Promise.resolve();
-  private renderPreparationStarted = false;
-  private renderPrepared = true;
-  private pendingRescueCue: number | null | undefined;
   private disposed = false;
 
   constructor(
@@ -281,36 +220,23 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.ship.position.copy(SHIP_BASE);
     this.ship.rotation.y = SHIP_YAW;
     this.buildShip();
-    this.shipFillLight.name = 'other-people-ship-fill';
-    this.shipFillLight.position.set(0, 11, 8);
-    this.shipDeckLight.name = 'other-people-ship-deck-light';
-    this.shipDeckLight.position.set(6.5, 7.5, 1.5);
-    this.ship.add(this.shipFillLight, this.shipDeckLight);
 
     this.buildBeacon(
       this.portBeacon,
-      this.portBeaconLight,
+      this.portBeaconMaterial,
       'other-people-horizon-light-port',
     );
     this.buildBeacon(
       this.starboardBeacon,
-      this.starboardBeaconLight,
+      this.starboardBeaconMaterial,
       'other-people-horizon-light-starboard',
     );
-    this.buildFlare();
     this.buildFlashlightBeam();
-    this.configureLightTargets();
     this.root.add(
       this.ship,
       this.portBeacon,
       this.starboardBeacon,
-      this.flare,
       this.beamVisual,
-      this.lifeboatLightTarget,
-      this.shipLightTarget,
-      this.flareLifeboatWash,
-      this.flareShipWash,
-      this.flashlightBeam,
     );
     collectMeshResources(
       this.root,
@@ -318,27 +244,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       this.staticMaterials,
     );
     this.resetActors();
-  }
-
-  prepareRender(
-    renderer: WebGLRenderer,
-    scene: Scene,
-    camera: PerspectiveCamera,
-  ): Promise<void> {
-    if (this.renderPreparationStarted) return this.renderPreparation;
-    this.renderPreparationStarted = true;
-    this.renderPrepared = false;
-    this.renderPreparation = this.compileRenderStates(
-      renderer,
-      scene,
-      camera,
-    ).then(() => {
-      this.renderPrepared = true;
-      const pending = this.pendingRescueCue;
-      this.pendingRescueCue = undefined;
-      if (pending !== undefined && !this.disposed) this.setRescueCue(pending);
-    });
-    return this.renderPreparation;
   }
 
   stage(): void {
@@ -353,7 +258,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.root.visible = true;
     this.root.userData.holdOnClear = false;
     this.resetActors();
-    this.ship.visible = this.renderPrepared;
+    this.ship.visible = true;
     this.ship.position.copy(SHIP_BASE);
     this.ship.rotation.y = SHIP_YAW;
     this.updateBeaconPose();
@@ -361,20 +266,13 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.root.userData.state = 'staged';
     this.root.userData.revealOrder = [];
     this.root.userData.signalPulses = 0;
-    this.root.userData.flareLaunches = 0;
     this.root.userData.answerPulses = 0;
     this.root.userData.courseTurns = 0;
-    this.root.userData.redWashTargets = NO_RED_WASH_TARGETS;
   }
 
   reveal(): Promise<void> {
     if (this.disposed) return Promise.resolve();
     if (!this.staged) this.stage();
-    if (!this.renderPrepared) {
-      return this.renderPreparation.then(() => this.reveal());
-    }
-    if (!this.staged) return Promise.resolve();
-    this.ship.visible = true;
     this.root.userData.state = 'revealing';
     return this.startAnimation('reveal', REVEAL_DURATION);
   }
@@ -382,16 +280,11 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   playChoice(choice: EventChoicePresentation): Promise<void> {
     if (this.disposed) return Promise.resolve();
     if (!this.staged) this.stage();
-    if (!this.renderPrepared) {
-      return this.renderPreparation.then(() => this.playChoice(choice));
-    }
-    if (!this.staged) return Promise.resolve();
     this.ensureShipPresented();
     switch (choice.choiceId) {
       case 'flareGun':
-        this.prepareSupply(choice);
-        this.root.userData.state = 'firing-flare';
-        return this.startAnimation('choice-flare', FLARE_DURATION);
+        this.root.userData.state = 'flare-sent';
+        return Promise.resolve();
       case 'flashlight':
         this.prepareSupply(choice);
         this.root.userData.state = 'signalling';
@@ -424,9 +317,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
         `Other People received result for ${result.eventId}.`,
       );
     }
-    if (!this.renderPrepared) {
-      return this.renderPreparation.then(() => this.react(result, outcome));
-    }
     void outcome;
     this.ensureShipPresented();
     this.shipStartPosition.copy(this.ship.position);
@@ -434,21 +324,24 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.root.userData.answerPulses = 0;
     this.root.userData.courseTurns = 0;
     switch (result.resultId) {
+      case 'people-signaled':
+        this.animation.settle();
+        this.setPlayerSignalsDark();
+        this.root.userData.state = 'signal-sent';
+        return Promise.resolve();
       case 'people-rescue':
         this.animation.settle();
-        this.rescueLifeboatWashStart =
-          this.flareLifeboatWash.intensity;
-        this.rescueShipWashStart = this.flareShipWash.intensity;
         this.root.userData.state = 'answering';
         return this.startAnimation('result-rescue', RESCUE_DURATION);
       case 'people-missed':
+        this.animation.settle();
+        this.releaseSupply();
         this.setPlayerSignalsDark();
-        this.root.userData.state = 'missing';
-        return this.startAnimation('result-missed', EXIT_DURATION);
+        this.root.userData.state = 'signal-missed';
+        return Promise.resolve();
       case 'people-pass':
         this.setPlayerSignalsDark();
         this.root.userData.signalPulses = 0;
-        this.root.userData.flareLaunches = 0;
         this.root.userData.state = 'passing';
         return this.startAnimation('result-pass', EXIT_DURATION);
       default:
@@ -464,7 +357,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.releaseSupply();
     this.restoreCamera();
     this.setPlayerSignalsDark();
-    this.flare.visible = false;
     this.staged = false;
     this.naturalRescueCue = false;
     if (this.terminalRescue) {
@@ -509,12 +401,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.naturalRescueCue = false;
     this.root.userData.holdOnClear = false;
     this.root.removeFromParent();
-    this.flareLifeboatWash.shadow.dispose();
-    this.flareShipWash.shadow.dispose();
-    this.flashlightBeam.shadow.dispose();
-    this.portBeaconLight.shadow.dispose();
-    this.starboardBeaconLight.shadow.dispose();
-    this.flareGlow.shadow.dispose();
     disposeResourceSets(
       this.staticGeometries,
       this.staticMaterials,
@@ -524,10 +410,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
 
   setRescueCue(progress: number | null): void {
     if (this.disposed) return;
-    if (!this.renderPrepared) {
-      this.pendingRescueCue = progress;
-      return;
-    }
     if (progress === null) {
       if (!this.naturalRescueCue) return;
       this.terminalRescue = false;
@@ -564,9 +446,14 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.root.userData.answerPulses = normalized > 0 ? 1 : 0;
     this.root.userData.courseTurns = normalized > 0 ? 1 : 0;
     const answer = Math.sin(Math.PI * clamp01(normalized / 0.34));
-    this.portBeaconLight.intensity = HORIZON_LIGHT_INTENSITY
-      + answer * 2.8;
-    this.starboardBeaconLight.intensity = HORIZON_LIGHT_INTENSITY;
+    this.setBeaconMaterialIntensity(
+      this.portBeaconMaterial,
+      HORIZON_LIGHT_INTENSITY + answer * 2.8,
+    );
+    this.setBeaconMaterialIntensity(
+      this.starboardBeaconMaterial,
+      HORIZON_LIGHT_INTENSITY,
+    );
     this.updateBeaconPose();
     this.updateOpenWaterDistance();
     this.terminalRescue = normalized >= 1;
@@ -595,9 +482,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       case 'reveal':
         this.applyReveal(normalized);
         break;
-      case 'choice-flare':
-        this.applyFlareChoice(normalized);
-        break;
       case 'choice-flashlight':
         this.applyFlashlightChoice(normalized);
         break;
@@ -607,7 +491,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       case 'result-rescue':
         this.applyRescueResult(normalized);
         break;
-      case 'result-missed':
       case 'result-pass':
         this.applyExitResult(normalized);
         break;
@@ -620,10 +503,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       case 'reveal':
         this.root.userData.state = 'revealed';
         break;
-      case 'choice-flare':
-        this.dependencies.supplyDisplay.releaseEventActorOnNextSync();
-        this.root.userData.state = 'flare-sent';
-        break;
       case 'choice-flashlight':
         this.root.userData.state = 'flashlight-sent';
         break;
@@ -633,15 +512,8 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       case 'result-rescue':
         this.terminalRescue = true;
         this.setPlayerSignalsDark();
-        this.flare.visible = false;
         this.root.userData.holdOnClear = true;
         this.root.userData.state = 'held-rescue';
-        break;
-      case 'result-missed':
-        this.ship.visible = false;
-        this.portBeacon.visible = false;
-        this.starboardBeacon.visible = false;
-        this.root.userData.state = 'held-missed';
         break;
       case 'result-pass':
         this.ship.visible = false;
@@ -653,11 +525,12 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   }
 
   private applyReveal(progress: number): void {
-    const cameraReturn = 1 - smoothstep((progress - 0.72) / 0.28);
     if (progress > 0) {
       this.portBeacon.visible = true;
-      this.portBeaconLight.intensity = HORIZON_LIGHT_INTENSITY
-        * smoothstep(progress / 0.1);
+      this.setBeaconMaterialIntensity(
+        this.portBeaconMaterial,
+        HORIZON_LIGHT_INTENSITY * smoothstep(progress / 0.1),
+      );
       if (!this.portRevealed) {
         this.portRevealed = true;
         (this.root.userData.revealOrder as string[])
@@ -666,8 +539,10 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     }
     if (progress >= 0.05) {
       this.starboardBeacon.visible = true;
-      this.starboardBeaconLight.intensity = HORIZON_LIGHT_INTENSITY
-        * smoothstep((progress - 0.05) / 0.1);
+      this.setBeaconMaterialIntensity(
+        this.starboardBeaconMaterial,
+        HORIZON_LIGHT_INTENSITY * smoothstep((progress - 0.05) / 0.1),
+      );
       if (!this.starboardRevealed) {
         this.starboardRevealed = true;
         (this.root.userData.revealOrder as string[])
@@ -679,52 +554,17 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       (this.root.userData.revealOrder as string[]).push('ship');
     }
     this.updateBeaconPose();
-    this.applyCameraPose(
-      0.17 * smoothstep(progress) * cameraReturn,
-      -0.012 * cameraReturn,
-    );
     this.updateOpenWaterDistance();
-  }
-
-  private applyFlareChoice(progress: number): void {
-    const aim = smoothstep(progress / 0.28);
-    this.applySupplyAim(aim, true);
-    const travel = smoothstep((progress - 0.08) / 0.76);
-    this.flare.visible = progress >= 0.08;
-    this.flare.position.lerpVectors(FLARE_START, FLARE_END, travel);
-    this.flare.rotation.z = -0.18 + travel * 0.34;
-    this.flare.scale.setScalar(0.82 + Math.sin(travel * Math.PI) * 0.28);
-    if (progress >= 0.08) this.root.userData.flareLaunches = 1;
-    const wash = smoothstep((progress - 0.14) / 0.24);
-    this.setShadowedLightIntensity(
-      this.flareLifeboatWash,
-      wash * 3.6,
-    );
-    this.setShadowedLightIntensity(
-      this.flareShipWash,
-      wash * 5.2,
-    );
-    this.root.userData.redWashTargets = wash > 0
-      ? RED_WASH_TARGETS
-      : NO_RED_WASH_TARGETS;
-    this.setLightIntensity(this.flashlightBeam, 0);
-    this.beamVisual.visible = false;
-    this.updateLightTargetPose();
   }
 
   private applyFlashlightChoice(progress: number): void {
     const aim = smoothstep(progress / 0.24);
-    this.applySupplyAim(aim, false);
-    this.flare.visible = false;
-    this.setShadowedLightIntensity(this.flareLifeboatWash, 0);
-    this.setShadowedLightIntensity(this.flareShipWash, 0);
-    this.root.userData.redWashTargets = NO_RED_WASH_TARGETS;
+    this.applySupplyAim(aim);
     const phase = Math.min(5.999999, progress * 6);
     const segment = Math.floor(phase);
     const local = phase - segment;
     const on = progress < 1 && segment % 2 === 0;
     const pulse = on ? 0.25 + Math.sin(local * Math.PI) * 0.75 : 0;
-    this.setLightIntensity(this.flashlightBeam, pulse * 7.2);
     this.beamVisual.visible = on;
     const visual = this.beamVisual.children[0];
     if (visual instanceof Mesh) {
@@ -736,21 +576,24 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.root.userData.signalPulses = progress <= 0
       ? 0
       : Math.min(3, Math.ceil(progress * 3));
-    this.updateLightTargetPose();
   }
 
   private applyPassChoice(): void {
     this.setPlayerSignalsDark();
     this.root.userData.signalPulses = 0;
-    this.root.userData.flareLaunches = 0;
   }
 
   private applyRescueResult(progress: number): void {
     const answerProgress = clamp01(progress / 0.24);
     const answer = Math.sin(answerProgress * Math.PI);
-    this.portBeaconLight.intensity = HORIZON_LIGHT_INTENSITY;
-    this.starboardBeaconLight.intensity = HORIZON_LIGHT_INTENSITY
-      + answer * 3.2;
+    this.setBeaconMaterialIntensity(
+      this.portBeaconMaterial,
+      HORIZON_LIGHT_INTENSITY,
+    );
+    this.setBeaconMaterialIntensity(
+      this.starboardBeaconMaterial,
+      HORIZON_LIGHT_INTENSITY + answer * 3.2,
+    );
     if (progress > 0) this.root.userData.answerPulses = 1;
     const turn = smoothstep((progress - 0.18) / 0.42);
     const approach = keyedTravel((progress - 0.28) / 0.72);
@@ -762,19 +605,8 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.ship.rotation.y = this.shipStartYaw
       + (RESCUE_YAW - this.shipStartYaw) * turn;
     this.root.userData.courseTurns = turn > 0 ? 1 : 0;
-    const signalFade = 1 - smoothstep(progress / 0.46);
-    this.setShadowedLightIntensity(
-      this.flareLifeboatWash,
-      this.rescueLifeboatWashStart * signalFade,
-    );
-    this.setShadowedLightIntensity(
-      this.flareShipWash,
-      this.rescueShipWashStart * signalFade,
-    );
-    this.setLightIntensity(this.flashlightBeam, 0);
     this.beamVisual.visible = false;
     this.updateBeaconPose();
-    this.updateLightTargetPose();
     this.applyCameraPose(
       0.17 + smoothstep(progress) * 0.01,
       -0.012,
@@ -805,7 +637,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.ship.position.x += travel;
     this.ship.position.z += travel * 0.05;
     this.updateBeaconPose();
-    this.updateLightTargetPose();
     this.updateOpenWaterDistance();
   }
 
@@ -817,14 +648,14 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.resetSupplyPose();
   }
 
-  private applySupplyAim(progress: number, flare: boolean): void {
+  private applySupplyAim(progress: number): void {
     if (!this.supplyPinned || this.selectedInstanceId === null) return;
-    this.supplyPose.x = (flare ? 0.72 : 0.42) * progress;
-    this.supplyPose.y = (flare ? 0.46 : 0.34) * progress;
-    this.supplyPose.z = (flare ? -1.15 : -0.72) * progress;
-    this.supplyPose.yaw = (flare ? -0.34 : -0.18) * progress;
-    this.supplyPose.pitch = (flare ? -0.72 : -0.32) * progress;
-    this.supplyPose.roll = (flare ? 0.12 : -0.06) * progress;
+    this.supplyPose.x = 0.42 * progress;
+    this.supplyPose.y = 0.34 * progress;
+    this.supplyPose.z = -0.72 * progress;
+    this.supplyPose.yaw = -0.18 * progress;
+    this.supplyPose.pitch = -0.32 * progress;
+    this.supplyPose.roll = -0.06 * progress;
     this.dependencies.supplyDisplay.applyEventItemPose(
       this.selectedInstanceId,
       this.supplyPose,
@@ -864,104 +695,20 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   }
 
   private setPlayerSignalsDark(): void {
-    this.setShadowedLightIntensity(this.flareLifeboatWash, 0);
-    this.setShadowedLightIntensity(this.flareShipWash, 0);
-    this.setLightIntensity(this.flashlightBeam, 0);
     this.beamVisual.visible = false;
-    this.root.userData.redWashTargets = NO_RED_WASH_TARGETS;
-  }
-
-  private async compileRenderStates(
-    renderer: WebGLRenderer,
-    scene: Scene,
-    camera: PerspectiveCamera,
-  ): Promise<void> {
-    await this.compileRenderState(renderer, scene, camera, 'reveal');
-    await this.compileRenderState(renderer, scene, camera, 'flare');
-    await this.compileRenderState(renderer, scene, camera, 'flashlight');
-  }
-
-  private compileRenderState(
-    renderer: WebGLRenderer,
-    scene: Scene,
-    camera: PerspectiveCamera,
-    state: 'reveal' | 'flare' | 'flashlight',
-  ): Promise<void> {
-    const rootVisible = this.root.visible;
-    const shipVisible = this.ship.visible;
-    const portVisible = this.portBeacon.visible;
-    const starboardVisible = this.starboardBeacon.visible;
-    const flareVisible = this.flare.visible;
-    const beamVisible = this.beamVisual.visible;
-    const portIntensity = this.portBeaconLight.intensity;
-    const starboardIntensity = this.starboardBeaconLight.intensity;
-    const lifeboatWashIntensity = this.flareLifeboatWash.intensity;
-    const lifeboatWashVisible = this.flareLifeboatWash.visible;
-    const lifeboatWashShadow = this.flareLifeboatWash.castShadow;
-    const shipWashIntensity = this.flareShipWash.intensity;
-    const shipWashVisible = this.flareShipWash.visible;
-    const shipWashShadow = this.flareShipWash.castShadow;
-    const flashlightIntensity = this.flashlightBeam.intensity;
-    const flashlightVisible = this.flashlightBeam.visible;
-    let compilation: Promise<Object3D>;
-    try {
-      this.root.visible = true;
-      this.ship.visible = true;
-      this.portBeacon.visible = true;
-      this.starboardBeacon.visible = true;
-      this.setBeaconIntensity(HORIZON_LIGHT_INTENSITY);
-      this.flare.visible = state === 'flare';
-      this.beamVisual.visible = state === 'flashlight';
-      this.setShadowedLightIntensity(
-        this.flareLifeboatWash,
-        state === 'flare' ? 1 : 0,
-      );
-      this.setShadowedLightIntensity(
-        this.flareShipWash,
-        state === 'flare' ? 1 : 0,
-      );
-      this.setLightIntensity(
-        this.flashlightBeam,
-        state === 'flashlight' ? 1 : 0,
-      );
-      compilation = renderer.compileAsync(scene, camera);
-    } finally {
-      this.root.visible = rootVisible;
-      this.ship.visible = shipVisible;
-      this.portBeacon.visible = portVisible;
-      this.starboardBeacon.visible = starboardVisible;
-      this.flare.visible = flareVisible;
-      this.beamVisual.visible = beamVisible;
-      this.portBeaconLight.intensity = portIntensity;
-      this.starboardBeaconLight.intensity = starboardIntensity;
-      this.flareLifeboatWash.intensity = lifeboatWashIntensity;
-      this.flareLifeboatWash.visible = lifeboatWashVisible;
-      this.flareLifeboatWash.castShadow = lifeboatWashShadow;
-      this.flareShipWash.intensity = shipWashIntensity;
-      this.flareShipWash.visible = shipWashVisible;
-      this.flareShipWash.castShadow = shipWashShadow;
-      this.flashlightBeam.intensity = flashlightIntensity;
-      this.flashlightBeam.visible = flashlightVisible;
-    }
-    return compilation.then(() => undefined);
-  }
-
-  private setLightIntensity(light: PointLight | SpotLight, intensity: number): void {
-    light.intensity = intensity;
-    light.visible = intensity > 0;
-  }
-
-  private setShadowedLightIntensity(light: SpotLight, intensity: number): void {
-    const active = intensity > 0;
-    light.intensity = intensity;
-    light.visible = active;
-    light.castShadow = active;
-    if (active) light.shadow.needsUpdate = true;
   }
 
   private setBeaconIntensity(intensity: number): void {
-    this.portBeaconLight.intensity = intensity;
-    this.starboardBeaconLight.intensity = intensity;
+    this.setBeaconMaterialIntensity(this.portBeaconMaterial, intensity);
+    this.setBeaconMaterialIntensity(this.starboardBeaconMaterial, intensity);
+  }
+
+  private setBeaconMaterialIntensity(
+    material: MeshStandardMaterial,
+    intensity: number,
+  ): void {
+    material.emissiveIntensity = Math.max(0, intensity * 2.4);
+    material.opacity = clamp01(intensity / HORIZON_LIGHT_INTENSITY);
   }
 
   private updateBeaconPose(): void {
@@ -979,16 +726,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       this.ship.position.x + starboardX * cosine,
       this.ship.position.y + 3.05,
       this.ship.position.z - starboardX * sine,
-    );
-    this.updateLightTargetPose();
-  }
-
-  private updateLightTargetPose(): void {
-    this.lifeboatLightTarget.position.set(0, 0.4, -0.4);
-    this.shipLightTarget.position.set(
-      this.ship.position.x,
-      this.ship.position.y + 1.4,
-      this.ship.position.z,
     );
   }
 
@@ -1018,13 +755,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.portBeacon.visible = false;
     this.starboardBeacon.visible = false;
     this.setBeaconIntensity(0);
-    this.flare.visible = false;
-    this.flare.position.copy(FLARE_START);
-    this.flare.rotation.set(0, 0, -0.18);
-    this.flare.scale.setScalar(1);
     this.setPlayerSignalsDark();
-    this.rescueLifeboatWashStart = 0;
-    this.rescueShipWashStart = 0;
     this.portRevealed = false;
     this.starboardRevealed = false;
     this.shipRevealed = false;
@@ -1162,47 +893,17 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
 
   private buildBeacon(
     beacon: Group,
-    light: PointLight,
+    material: MeshStandardMaterial,
     name: string,
   ): void {
     beacon.name = name;
-    const glow = createMaterial(0xe4c88e, 0.48, {
-      emissive: 0xb17b35,
-    });
     const lens = new Mesh(
       new SphereGeometry(0.14, 7, 5),
-      glow,
+      material,
     );
     lens.name = `${name}-lens`;
     lens.scale.set(1.25, 0.82, 0.7);
-    light.name = `${name}-light`;
-    light.position.z = 0.06;
-    beacon.add(lens, light);
-  }
-
-  private buildFlare(): void {
-    this.flare.name = 'other-people-flare';
-    const flareGlow = createMaterial(0xff5a3c, 0.42, {
-      emissive: 0xff2418,
-    });
-    const ash = createMaterial(0x5c3730, 0.92);
-    addMesh(
-      this.flare,
-      'other-people-flare-core',
-      new SphereGeometry(0.17, 8, 5),
-      flareGlow,
-    );
-    addMesh(
-      this.flare,
-      'other-people-flare-tail',
-      new ConeGeometry(0.09, 0.62, 6),
-      ash,
-      [0, -0.37, 0],
-      [0, 0, 0.08],
-    );
-    this.flareGlow.name = 'other-people-flare-glow';
-    this.flareGlow.castShadow = false;
-    this.flare.add(this.flareGlow);
+    beacon.add(lens);
   }
 
   private buildFlashlightBeam(): void {
@@ -1221,41 +922,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       [1.2, 2.2, -20],
       [Math.PI / 2, 0.02, 0.03],
     );
-  }
-
-  private configureLightTargets(): void {
-    this.lifeboatLightTarget.name = 'other-people-lifeboat-light-target';
-    this.shipLightTarget.name = 'other-people-ship-light-target';
-
-    this.flareLifeboatWash.name =
-      'other-people-flare-lifeboat-wash';
-    this.flareLifeboatWash.position.set(-0.4, 14, -18);
-    this.flareLifeboatWash.target = this.lifeboatLightTarget;
-    this.flareLifeboatWash.castShadow = false;
-    this.flareLifeboatWash.visible = false;
-    this.configureShadow(this.flareLifeboatWash);
-
-    this.flareShipWash.name = 'other-people-flare-ship-wash';
-    this.flareShipWash.position.set(-4.5, 15, -27);
-    this.flareShipWash.target = this.shipLightTarget;
-    this.flareShipWash.castShadow = false;
-    this.flareShipWash.visible = false;
-    this.configureShadow(this.flareShipWash);
-
-    this.flashlightBeam.name =
-      'other-people-flashlight-beam-light';
-    this.flashlightBeam.position.set(1.4, 2.1, -1.4);
-    this.flashlightBeam.target = this.shipLightTarget;
-    this.flashlightBeam.castShadow = false;
-    this.flashlightBeam.visible = false;
-    this.configureShadow(this.flashlightBeam);
-  }
-
-  private configureShadow(light: SpotLight): void {
-    light.shadow.mapSize.set(256, 256);
-    light.shadow.camera.near = 0.1;
-    light.shadow.camera.far = light.distance;
-    light.shadow.camera.updateProjectionMatrix();
   }
 
 }

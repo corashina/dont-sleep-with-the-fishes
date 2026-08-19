@@ -1,3 +1,4 @@
+// Importance: 9/10. Protects menu model loading, animation contracts, clones, and resource cleanup.
 import {
   AnimationClip,
   Bone,

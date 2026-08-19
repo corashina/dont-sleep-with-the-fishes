@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects exact routing and dedicated event scene ownership.
+// Importance: 10/10 (scaled from 5/5). Protects exact routing and dedicated event scene ownership.
 import { Group } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { EventPresentationCoordinator } from '../src/survival/EventPresentationCoordinator';

@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects exact resource ownership and cleanup.
+// Importance: 10/10 (scaled from 5/5). Protects exact resource ownership and cleanup.
 import {
   BoxGeometry,
   type BufferGeometry,

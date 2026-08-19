@@ -53,8 +53,8 @@ const PASS_DURATION = 1.15;
 const VISIT_DURATION = 1.5;
 const RESULT_DURATION = 1.05;
 const ISLAND_DISTANCE = 11.8;
-const ISLAND_BASE_Y = -1.55;
 const ISLAND_Z = -28;
+const ISLAND_TOP_WAVE_CLEARANCE = 0.18;
 const MAXIMUM_WAVE_CREST = DEFAULT_WAVES.reduce(
   (height, wave) => height + wave.amplitude,
   0,
@@ -114,12 +114,13 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.root.userData.cameraKicks = 0;
     this.root.userData.rewardLandings = 0;
 
-    this.setSidePositions();
     this.island.name = 'midnight-tour-island';
-    this.island.position.copy(this.islandBase);
     this.island.userData.motionSource = 'fixed';
     this.island.userData.disableHoverOutline = true;
     this.buildIsland();
+    this.setSidePositions();
+    this.island.position.copy(this.islandBase);
+    this.updateGreenTopClearance();
     this.root.add(this.island);
 
     this.buildForegroundWave();
@@ -461,7 +462,6 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       fallback.scale.z = 0.72;
       this.island.add(fallback);
       this.greenTopLocalY = 2.15;
-      this.updateGreenTopClearance();
       this.island.userData.islandModel = 'procedural';
     } else {
       islandModel.root.name = 'event-model:midnightIsland';
@@ -477,7 +477,6 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       });
       this.island.add(islandModel.root);
       this.greenTopLocalY = IMPORTED_GREEN_TOP_Y;
-      this.updateGreenTopClearance();
       this.island.userData.islandModel = 'imported';
     }
 
@@ -533,14 +532,17 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
 
   private setSidePositions(): void {
     const islandX = ISLAND_DISTANCE * this.side;
-    this.islandBase.set(islandX, ISLAND_BASE_Y, ISLAND_Z);
-    this.islandBehind.set(-4.6 * this.side, -0.72, 10.5);
+    const islandY = MAXIMUM_WAVE_CREST
+      + ISLAND_TOP_WAVE_CLEARANCE
+      - this.greenTopLocalY;
+    this.islandBase.set(islandX, islandY, ISLAND_Z);
+    this.islandBehind.set(-4.6 * this.side, islandY, 10.5);
     this.actorStart.set(islandX + 1.3 * this.side, 4.35, ISLAND_Z + 0.5);
     this.creatureEnd.set(islandX + 0.4 * this.side, -0.1, ISLAND_Z + 0.75);
   }
 
   private updateGreenTopClearance(): void {
-    this.island.userData.greenTopWaveClearance = ISLAND_BASE_Y
+    this.island.userData.greenTopWaveClearance = this.islandBase.y
       + this.greenTopLocalY
       - MAXIMUM_WAVE_CREST;
   }

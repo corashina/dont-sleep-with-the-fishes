@@ -86,7 +86,6 @@ const EVENT_WEATHER: Readonly<Record<string, PresentationWeatherId>> = Object.fr
   'man-in-the-fog': 'fog',
   ghosts: 'fog',
   'eerie-melody': 'fog',
-  'sick-companion': 'overcast',
   'shadow-figure': 'fog',
   'guarded-sleep': 'overcast',
   'check-the-back': 'waves',

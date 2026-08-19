@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects stable physical response ordering for event outcomes.
+// Importance: 8/10 (scaled from 4/5). Protects stable physical response ordering for event outcomes.
 import { describe, expect, it } from 'vitest';
 import type { ItemId, ItemInstanceId } from '../src/game/ItemState';
 import {

@@ -55,7 +55,6 @@ export const SOUND_IDS = [
   'tentacleMovement',
   'eerieMelody',
   'chest',
-  'driftingCargo',
   'rescueEnding',
   'deathEnding',
   'sinkingEnding',
@@ -82,7 +81,6 @@ export const EVENT_ONLY_SOUND_IDS = Object.freeze([
   'leak',
   'tentacleMovement',
   'eerieMelody',
-  'driftingCargo',
 ] as const satisfies readonly SoundId[]);
 
 const eventOnlySounds = new Set<SoundId>(EVENT_ONLY_SOUND_IDS);
@@ -188,7 +186,6 @@ export const AUDIO_MANIFEST: Readonly<Record<SoundId, AudioAssetDefinition>> =
     tentacleMovement: asset('tentacleMovement', 'ambience', 0.2, true, 1),
     eerieMelody: asset('eerieMelody', 'ambience', 0.38, true, 1),
     chest: asset('chest', 'effects', 0.5, false, 2),
-    driftingCargo: asset('driftingCargo', 'effects', 0.46, false, 2),
     rescueEnding: asset('rescueEnding', 'effects', 0.55, false, 1),
     deathEnding: asset('deathEnding', 'music', 0.48, false, 1),
     sinkingEnding: asset('sinkingEnding', 'effects', 0.64, false, 1),

@@ -39,7 +39,6 @@ import {
   createCarlitosState,
   feedCarlitos,
   petCarlitos,
-  killCarlitos,
   spendCarlitosEnergy,
   treatCarlitos,
   type CarlitosSnapshot,
@@ -67,7 +66,6 @@ import type {
   ChestState,
   CompanionEventActionAvailability,
   CompanionEventActionId,
-  CompanionEventEffect,
   SurvivalEndingReason,
   WeatherId,
   WeightedEventOutcome,
@@ -592,7 +590,6 @@ export class SurvivalSession {
       if (mutationResult.mutation !== null) inventoryMutations.push(mutationResult.mutation);
     }
     this.applyChestEffect(resolved.effects.chest);
-    this.applyCompanionEventEffects(resolved.effects.companion);
     if (resolved.effects.nextDawnEnergy !== undefined) {
       this.nextDawnEnergyOverride = resolved.effects.nextDawnEnergy;
     }
@@ -1558,20 +1555,6 @@ export class SurvivalSession {
     }
     this.chestState = 'none';
     this.chestAcquiredDay = null;
-  }
-
-  private applyCompanionEventEffects(
-    effects: readonly CompanionEventEffect[] | undefined,
-  ): void {
-    if (effects === undefined || this.carlitos === null) return;
-    for (const effect of effects) {
-      const current = this.carlitos.sickness;
-      const next = effect.operation === 'set' ? effect.value : current + effect.value;
-      this.carlitos.sickness = Math.min(5, Math.max(0, next));
-      if (this.carlitos.sickness === 5) {
-        killCarlitos(this.carlitos, 'sickness');
-      }
-    }
   }
 
   private mutateMatchingInstances(

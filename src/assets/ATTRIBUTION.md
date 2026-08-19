@@ -306,7 +306,6 @@ The dawn file contains the first eight seconds of its source WAVE file.
 | tentacleMovement | `tentacleMovement.mp3` | [Slimy flesh / iampagan](https://freesound.org/people/iampagan/sounds/177017/) |
 | eerieMelody | `eerieMelody.mp3` | [woman humming cathedral / Pennywind](https://freesound.org/people/Pennywind/sounds/816687/) |
 | chest | `chest.mp3` | [Wooden Chest Open / The_Frisbee_of_Peace](https://freesound.org/people/The_Frisbee_of_Peace/sounds/573654/) |
-| driftingCargo | `driftingCargo.mp3` | [Dragging a Crate / hz37](https://freesound.org/people/hz37/sounds/792375/) |
 | rescueEnding | `rescueEnding.mp3` | [Rescue Vessel Engine / Lydmakeren](https://freesound.org/people/Lydmakeren/sounds/510907/) |
 | deathEnding | `deathEnding.mp3` | [Ominous Drone / SilverIllusionist](https://freesound.org/people/SilverIllusionist/sounds/693405/) |
 | sinkingEnding | `sinkingEnding.mp3` | [Wooden Ship Break / Kodack](https://freesound.org/people/Kodack/sounds/257752/) |

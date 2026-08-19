@@ -1,3 +1,4 @@
+// Importance: 9/10. Protects complete event bundle coverage and asset ownership.
 import { describe, expect, it } from 'vitest';
 import { EVENT_BUNDLE_SPECS } from '../src/survival/eventBundleManifest';
 import { EVENT_PRESENTATION_ROUTES } from '../src/survival/eventPresentationRoutes';

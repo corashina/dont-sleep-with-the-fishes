@@ -1,3 +1,4 @@
+// Importance: 9/10. Protects event loading, activation, concurrency, failure cleanup, and shutdown.
 import { describe, expect, it, vi } from 'vitest';
 import {
   EventBundleLoader,
