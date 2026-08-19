@@ -338,11 +338,20 @@ export class EventPresentationLayer {
       this.root.add(tableau.root);
     }
     collectMeshResources(this.root, this.ownedGeometries, this.ownedMaterials);
-    for (const eventId of FOCUSED_EVENT_IDS) {
-      if (onlyEventId !== undefined && onlyEventId !== eventId) continue;
-      const factory = focusedFactories[eventId]
-        ?? AUTHORED_EVENT_PRESENTATION_FACTORIES[eventId];
-      if (factory !== undefined) this.registerFocusedFactory(eventId, factory);
+    try {
+      for (const eventId of FOCUSED_EVENT_IDS) {
+        if (onlyEventId !== undefined && onlyEventId !== eventId) continue;
+        const factory = focusedFactories[eventId]
+          ?? AUTHORED_EVENT_PRESENTATION_FACTORIES[eventId];
+        if (factory === undefined) continue;
+        const registered = this.registerFocusedFactory(eventId, factory);
+        if (eventId === 'midnight-tour' && !registered) {
+          throw new Error('Missing required Midnight Tour presentation.');
+        }
+      }
+    } catch (error) {
+      this.dispose();
+      throw error;
     }
     if (this.dangerousWaters !== null) this.root.add(this.dangerousWaters.root);
   }
@@ -355,7 +364,8 @@ export class EventPresentationLayer {
     let presenter: FocusedEventPresentation | null;
     try {
       presenter = factory(this.dependencies);
-    } catch {
+    } catch (error) {
+      if (eventId === 'midnight-tour') throw error;
       return false;
     }
     if (presenter === null || this.ownedFocused.has(presenter)) return false;
