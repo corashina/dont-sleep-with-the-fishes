@@ -60,7 +60,6 @@ const freesoundSources = [
   ['leak', 'colinpoh', '146346'],
   ['tentacleMovement', 'iampagan', '177017'],
   ['chest', 'The_Frisbee_of_Peace', '573654'],
-  ['driftingCargo', 'hz37', '792375'],
   ['rescueEnding', 'Lydmakeren', '510907'],
   ['deathEnding', 'SilverIllusionist', '693405'],
   ['sinkingEnding', 'Kodack', '257752'],

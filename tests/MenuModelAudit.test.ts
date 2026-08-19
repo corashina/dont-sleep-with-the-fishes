@@ -1,3 +1,4 @@
+// Importance: 8/10. Protects committed menu model integrity, provenance, and licenses.
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {

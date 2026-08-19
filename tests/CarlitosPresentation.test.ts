@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects companion pose, ownership, and action restoration.
+// Importance: 8/10 (scaled from 4/5). Protects companion pose, ownership, and action restoration.
 import {
   BoxGeometry,
   BufferGeometry,

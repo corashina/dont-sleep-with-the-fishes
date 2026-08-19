@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects pickup, carry, drop, and deposit rules.
+// Importance: 10/10 (scaled from 5/5). Protects pickup, carry, drop, and deposit rules.
 import { describe, expect, it } from 'vitest';
 import {
   Box3,

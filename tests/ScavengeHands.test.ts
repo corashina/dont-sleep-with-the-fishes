@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects hand model ownership, mirrored setup, and failed construction cleanup.
+// Importance: 8/10 (scaled from 4/5). Protects hand model ownership, mirrored setup, and failed construction cleanup.
 import {
   Bone,
   BoxGeometry,

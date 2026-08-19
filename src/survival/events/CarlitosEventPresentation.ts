@@ -22,7 +22,6 @@ import type {
 import { StationaryEventCamera } from '../StationaryEventCamera';
 
 export const CARLITOS_EVENT_IDS = [
-  'sick-companion',
   'shadow-figure',
   'guarded-sleep',
 ] as const satisfies readonly DedicatedEventId[];
@@ -298,15 +297,6 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
 
   private applyStrength(strength: number, facingStrength = strength): void {
     const value = Number.isFinite(strength) ? strength : 0;
-    if (this.eventId === 'sick-companion') {
-      this.poseRoot.position.y = this.basePosePosition[1]! - value * 0.07;
-      this.poseRoot.rotation.x = this.basePoseRotation[0]! + value * 0.38;
-      this.poseRoot.rotation.y = this.basePoseRotation[1]! - value * 0.13;
-      this.headRoot.rotation.x = this.baseHeadRotation[0]! + value * 0.24;
-      this.headRoot.rotation.y = this.baseHeadRotation[1]! - value * 0.08;
-      this.cameraLook?.apply(-0.2 * value, 0.11 * value);
-      return;
-    }
     if (this.eventId === 'guarded-sleep') {
       const facing = clamp01(facingStrength);
       this.poseRoot.position.y = this.basePosePosition[1]! + value * 0.055;

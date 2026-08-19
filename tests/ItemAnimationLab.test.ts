@@ -1,4 +1,4 @@
-// Importance: 4/5. Protects the non-ending item animation test scene.
+// Importance: 8/10 (scaled from 4/5). Protects the non-ending item animation test scene.
 import { describe, expect, it, vi } from 'vitest';
 import {
   ITEM_IDS,

@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects vertical player navigation.
+// Importance: 10/10 (scaled from 5/5). Protects vertical player navigation.
 import { describe, expect, it } from 'vitest';
 import {
   resolveLadderTraversal,

@@ -117,11 +117,6 @@ export interface ChestSnapshot {
   readonly acquiredDay: number | null;
 }
 export type ChestEventEffect = 'acquire' | 'close' | 'destroy';
-export type CompanionEventEffect = {
-  readonly kind: 'sickness';
-  readonly operation: 'add' | 'set';
-  readonly value: number;
-};
 export type SurvivalEndingReason = 'standard' | 'kidnapped';
 export type IntegerValue = number | { readonly min: number; readonly max: number };
 export interface ResourceEffect {
@@ -140,7 +135,6 @@ export interface EventEffects {
   readonly items?: readonly EventInventoryMutation[];
   readonly chest?: ChestEventEffect;
   readonly rescue?: boolean;
-  readonly companion?: readonly CompanionEventEffect[];
   readonly nextDawnEnergy?: DawnEnergy;
   readonly followUpNight?: true;
   readonly endingReason?: 'kidnapped';

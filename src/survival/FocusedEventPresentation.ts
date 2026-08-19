@@ -2,8 +2,6 @@ import type {
   Group,
   Object3D,
   PerspectiveCamera,
-  Scene,
-  WebGLRenderer,
 } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import type { WaveComponent } from '../ocean/WaveField';
@@ -48,11 +46,6 @@ export interface FocusedEventPresentation {
   update(time: number, delta: number): void;
   settleForVisibilityChange(): void;
   interactionTargets?(): readonly FocusedEventInteractionTarget[];
-  prepareRender?(
-    renderer: WebGLRenderer,
-    scene: Scene,
-    camera: PerspectiveCamera,
-  ): Promise<void>;
   dispose(): void;
 }
 

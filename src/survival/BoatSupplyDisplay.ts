@@ -1,7 +1,6 @@
 import {
   BoxGeometry,
   BufferGeometry,
-  Color,
   CylinderGeometry,
   Group,
   Material,
@@ -112,8 +111,6 @@ interface ConditionMaterialBinding {
   readonly mesh: Mesh;
   readonly usable: Material | Material[];
   readonly broken: Material | Material[];
-  readonly mutedUsable: Material | Material[];
-  readonly mutedBroken: Material | Material[];
 }
 
 interface ActiveAnimation {
@@ -148,6 +145,18 @@ interface BorrowedSupplyBinding {
   readonly copyQuaternion: Quaternion;
   readonly copyScale: Vector3;
   readonly pose: MutableSupplyPose;
+}
+
+interface PreparedEventActor {
+  readonly root: Group;
+  readonly heldCopy: Object3D;
+  readonly copyPosition: Vector3;
+  readonly copyQuaternion: Quaternion;
+  readonly copyScale: Vector3;
+  readonly materialBindings: readonly {
+    readonly source: Mesh;
+    readonly target: Mesh;
+  }[];
 }
 
 export const GENERIC_EVENT_ITEM_USE_DURATION = scaleEventItemDuration(0.65);
@@ -188,17 +197,6 @@ function brokenMaterial(material: Material): Material {
   return clone;
 }
 
-function mutedMaterial(material: Material): Material {
-  const clone = material.clone();
-  if (clone instanceof MeshStandardMaterial) {
-    clone.color.lerp(new Color(0x596063), 0.78);
-    clone.emissive.lerp(new Color(0x1d2224), 0.8);
-    clone.emissiveIntensity *= 0.25;
-    clone.roughness = Math.max(0.8, clone.roughness);
-  }
-  return clone;
-}
-
 function createRepairMaterialBundle(index: number): Group {
   const wood = new MeshStandardMaterial({
     color: index % 2 === 0 ? 0x73543a : 0x5c402d,
@@ -235,16 +233,10 @@ function createConditionBindings(
     if (!(object instanceof Mesh)) return;
     const usable = object.material;
     const broken = transformMaterial(usable, brokenMaterial);
-    const mutedUsable = transformMaterial(usable, mutedMaterial);
-    const mutedBroken = transformMaterial(broken, mutedMaterial);
-    for (const material of [
-      ...materialList(broken),
-      ...materialList(mutedUsable),
-      ...materialList(mutedBroken),
-    ]) {
+    for (const material of materialList(broken)) {
       ownedMaterials.add(material);
     }
-    bindings.push({ mesh: object, usable, broken, mutedUsable, mutedBroken });
+    bindings.push({ mesh: object, usable, broken });
   });
   return bindings;
 }
@@ -261,6 +253,10 @@ export class BoatSupplyDisplay {
   private readonly baseQuaternionById = new Map<BoatSupplyGroupId, Quaternion>();
   private readonly borrowedCopyOffset = new Vector3();
   private readonly borrowedActors = new Map<ItemInstanceId, BorrowedSupplyActor>();
+  private readonly preparedEventActors = new Map<
+    ItemInstanceId,
+    PreparedEventActor
+  >();
   private readonly borrowedBindings =
     new Map<ItemInstanceId, BorrowedSupplyBinding>();
   private readonly borrowedCountByGroup = new Map<BoatSupplyGroupId, number>();
@@ -363,6 +359,9 @@ export class BoatSupplyDisplay {
       this.recordsById.set(groupId, record);
       this.eventMotionRecords.push(record);
     }
+    for (const [instanceId, groupId] of this.groupByInstanceId) {
+      this.prepareEventActor(instanceId, groupId);
+    }
   }
 
   records(): readonly BoatSupplyPresentationRecord[] {
@@ -403,6 +402,7 @@ export class BoatSupplyDisplay {
     for (const item of Object.values(snapshot.inventory)) {
       if (item === undefined) continue;
       this.groupByInstanceId.set(item.instanceId, item.type);
+      this.prepareEventActor(item.instanceId, item.type);
     }
     if (this.releasePinnedActorOnSync) this.releasePinnedEventActor(false);
     for (const instanceId of this.releaseBorrowedOnSync) {
@@ -714,6 +714,7 @@ export class BoatSupplyDisplay {
     }
     for (const record of this.recordsById.values()) record.root.removeFromParent();
     this.borrowedActors.clear();
+    this.preparedEventActors.clear();
     disposeResourceSets(
       this.ownedGeometries,
       this.ownedMaterials,
@@ -789,7 +790,7 @@ export class BoatSupplyDisplay {
           !this.presentationHiddenItemIds.has(copy.instanceId)
           && !this.eventStowedUntilDay.has(copy.instanceId)
         );
-      this.applyCopyMaterials(groupId, copy);
+      this.applyCopyMaterials(copy);
     }
     record.root.visible = copies.some((copy) => copy.root.visible);
   }
@@ -811,23 +812,10 @@ export class BoatSupplyDisplay {
     return eligible ?? usableIds[0] ?? brokenIds[0] ?? null;
   }
 
-  private applyCopyMaterials(groupId: BoatSupplyGroupId, copy: CopyBinding): void {
-    let groupEligible = false;
-    if (this.eventEligibleItemIds !== null) {
-      for (const id of this.eventEligibleItemIds) {
-        if (this.groupByInstanceId.get(id) !== groupId) continue;
-        groupEligible = true;
-        break;
-      }
-    }
-    const muted = this.eventEligibleItemIds !== null
-      && !groupEligible
-      && this.eventSelectedItemId !== copy.instanceId;
+  private applyCopyMaterials(copy: CopyBinding): void {
     const broken = copy.condition === 'broken';
     for (const binding of copy.materials) {
-      binding.mesh.material = broken
-        ? muted ? binding.mutedBroken : binding.broken
-        : muted ? binding.mutedUsable : binding.usable;
+      binding.mesh.material = broken ? binding.broken : binding.usable;
     }
   }
 
@@ -901,24 +889,17 @@ export class BoatSupplyDisplay {
       return null;
     }
 
-    const root = cloneSkeleton(record.root) as Group;
-    root.name = `boat-supply-event:${instanceId}`;
-    root.userData.supplyInstanceId = instanceId;
-    const heldCopy = root.children[0];
-    if (heldCopy === undefined) {
+    const prepared = this.preparedEventActors.get(instanceId);
+    if (prepared === undefined) {
       this.eventSelectedItemId = previousSelectedItemId;
       this.syncGroup(groupId, this.currentSnapshot);
       return null;
     }
-    const copyPosition = heldCopy.position.clone();
-    const copyQuaternion = heldCopy.quaternion.clone();
-    const copyScale = heldCopy.scale.clone();
-    heldCopy.position.set(0, 0, 0);
-    heldCopy.quaternion.identity();
-    heldCopy.scale.set(1, 1, 1);
-    for (let index = 1; index < root.children.length; index += 1) {
-      root.children[index]!.visible = false;
+    for (const binding of prepared.materialBindings) {
+      binding.target.material = binding.source.material;
     }
+    prepared.heldCopy.visible = true;
+    const root = prepared.root;
     record.root.parent!.add(root);
 
     this.eventSelectedItemId = previousSelectedItemId;
@@ -928,9 +909,9 @@ export class BoatSupplyDisplay {
       groupId,
       motionIndex: BOAT_SUPPLY_GROUP_IDS.indexOf(groupId),
       root,
-      copyPosition,
-      copyQuaternion,
-      copyScale,
+      copyPosition: prepared.copyPosition,
+      copyQuaternion: prepared.copyQuaternion,
+      copyScale: prepared.copyScale,
       pose: createIdentitySupplyPose(),
     };
     this.borrowedBindings.set(instanceId, binding);
@@ -941,6 +922,53 @@ export class BoatSupplyDisplay {
     this.releaseBorrowedOnSync.delete(instanceId);
     this.applyBorrowedEventMotion(binding);
     return binding;
+  }
+
+  private prepareEventActor(
+    instanceId: ItemInstanceId,
+    groupId: BoatSupplyGroupId,
+  ): void {
+    if (this.preparedEventActors.has(instanceId)) return;
+    const record = this.recordsById.get(groupId);
+    const sourceCopy = record?.root.children[0];
+    if (record === undefined || sourceCopy === undefined) return;
+    const root = cloneSkeleton(record.root) as Group;
+    const heldCopy = root.children[0];
+    if (heldCopy === undefined) return;
+    root.name = `boat-supply-event:${instanceId}`;
+    root.userData.supplyInstanceId = instanceId;
+    root.visible = false;
+    const copyPosition = heldCopy.position.clone();
+    const copyQuaternion = heldCopy.quaternion.clone();
+    const copyScale = heldCopy.scale.clone();
+    heldCopy.position.set(0, 0, 0);
+    heldCopy.quaternion.identity();
+    heldCopy.scale.set(1, 1, 1);
+    for (let index = 1; index < root.children.length; index += 1) {
+      root.children[index]!.visible = false;
+    }
+    const sourceMeshes: Mesh[] = [];
+    const targetMeshes: Mesh[] = [];
+    sourceCopy.traverse((object) => {
+      if (object instanceof Mesh) sourceMeshes.push(object);
+    });
+    heldCopy.traverse((object) => {
+      if (object instanceof Mesh) targetMeshes.push(object);
+    });
+    if (sourceMeshes.length !== targetMeshes.length) {
+      throw new Error(`Prepared event actor mesh mismatch for ${instanceId}.`);
+    }
+    this.preparedEventActors.set(instanceId, {
+      root,
+      heldCopy,
+      copyPosition,
+      copyQuaternion,
+      copyScale,
+      materialBindings: sourceMeshes.map((source, index) => ({
+        source,
+        target: targetMeshes[index]!,
+      })),
+    });
   }
 
   private releaseBorrowedEventActor(

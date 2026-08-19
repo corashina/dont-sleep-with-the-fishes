@@ -1,4 +1,4 @@
-// Importance: 5/5. Protects run pacing and shared event gates.
+// Importance: 10/10 (scaled from 5/5). Protects run pacing and shared event gates.
 import { describe, expect, it } from 'vitest';
 import { eligibleEvents } from '../src/survival/events';
 import {
