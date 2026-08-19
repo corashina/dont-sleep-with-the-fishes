@@ -3153,49 +3153,58 @@ describe('SurvivalPhase orchestration', () => {
     hold.resolve();
   });
 
-  it('orders a focused contextual result before permanent sync and the held pose', async () => {
+  it('orders the surviving midnight tour under two covers and stays busy through dawn', async () => {
     let current = snapshot({
       state: 'nightEvent',
       pendingEventId: 'midnight-tour',
       pressure: 1,
     });
-    let resolvedSnapshot: SurvivalSnapshot | null = null;
     const calls: string[] = [];
-    const choiceMotion = deferred();
+    const profile = deferred();
+    const firstCover = deferred();
+    const choice = deferred();
     const reaction = deferred();
-    const hold = deferred();
-    let revealed = false;
-    let unlocked = false;
+    const firstUncover = deferred();
+    const secondCover = deferred();
+    const solidProfile = deferred();
+    const dawnCue = deferred();
+    const finalUncover = deferred();
+    let coverCalls = 0;
+    let trackTour = false;
     const outcome = accepted({
       code: 'event-resolved',
       cue: 'none',
-      message: 'You find one bait.',
-      deltas: { bait: 1 },
+      message: 'You find a chest.',
+      deltas: {},
       eventResult: {
         eventId: 'midnight-tour',
         choiceId: 'visit',
-        resultId: 'tour-bait',
+        resultId: 'tour-chest',
       },
     });
-    const showFeedback = vi.fn(() => { calls.push('feedback'); });
+    const setBusy = vi.fn();
     const ui = {
       beginEventPresentation: vi.fn(),
-      setSleepCovered: vi.fn(() => Promise.resolve()),
+      setSleepCoverProfile: vi.fn((value: string) => {
+        calls.push(`profile:${value}`);
+        return value === 'midnight-tour' ? profile.promise : solidProfile.promise;
+      }),
+      setSleepCovered: vi.fn((covered: boolean) => {
+        if (!trackTour) return Promise.resolve();
+        calls.push(`fade:${covered}`);
+        coverCalls += 1;
+        if (coverCalls === 1) return firstCover.promise;
+        if (coverCalls === 2) return firstUncover.promise;
+        if (coverCalls === 3) return secondCover.promise;
+        return finalUncover.promise;
+      }),
       settleCoveredScene: vi.fn(() => Promise.resolve()),
       showEventReveal: vi.fn(() => Promise.resolve()),
       setEventSelection: vi.fn(),
       playEventChoiceBeat: vi.fn(() => Promise.resolve()),
-      setBusy: vi.fn((busy: boolean) => {
-        if (!busy && revealed && !unlocked) {
-          unlocked = true;
-          calls.push('unlock');
-        }
-      }),
-      showFeedback,
-      holdEventOutcome: vi.fn(() => {
-        calls.push('hold');
-        return hold.promise;
-      }),
+      setBusy,
+      showFeedback: vi.fn(),
+      holdEventOutcome: vi.fn(() => Promise.resolve()),
       render: vi.fn(),
       setJournalUnread: vi.fn(),
       clearEventPresentation: vi.fn(),
@@ -3206,52 +3215,51 @@ describe('SurvivalPhase orchestration', () => {
       session: {
         snapshot: vi.fn(() => current),
         resolveEvent: vi.fn(() => {
-          calls.push('resolve');
-          resolvedSnapshot = snapshot({
+          calls.push('resolve:visit');
+          current = snapshot({
             state: 'nightEvent',
             pendingEventId: null,
             pressure: 1,
-            bait: 1,
+            chest: { state: 'closed', acquiredDay: 1 },
           });
-          current = resolvedSnapshot;
           return outcome;
         }),
         beginDawn: vi.fn(() => {
-          current = snapshot({ state: 'day', day: 2, bait: 1 });
-          return accepted({ code: 'dawn', cue: 'none', deltas: {} });
+          calls.push('dawn');
+          current = snapshot({
+            state: 'day',
+            day: 2,
+            pressure: 1,
+            chest: { state: 'closed', acquiredDay: 1 },
+          });
+          return accepted({ code: 'dawn', cue: 'dawn', deltas: {} });
         }),
       },
       world: {
-        stageEvent: vi.fn(() => { calls.push('stage'); }),
-        revealEvent: vi.fn(() => {
-          revealed = true;
-          calls.push('reveal');
-          return Promise.resolve();
-        }),
-        playEventChoice: vi.fn((_eventId, choice) => {
-          calls.push('choice');
-          expect(choice).toEqual({
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        playEventChoice: vi.fn((_eventId, receivedChoice) => {
+          calls.push('choice:visit');
+          expect(receivedChoice).toEqual({
             choiceId: 'visit',
             instanceId: null,
             condition: null,
           });
-          return choiceMotion.promise;
+          return choice.promise;
         }),
-        reactToEventOutcome: vi.fn((_eventId, received, choice) => {
-          calls.push('result');
+        reactToEventOutcome: vi.fn((_eventId, received, receivedChoice) => {
+          calls.push('react:tour-chest');
           expect(received).toBe(outcome);
-          expect(choice).toEqual({
+          expect(receivedChoice).toEqual({
             choiceId: 'visit',
             instanceId: null,
             condition: null,
           });
           return reaction.promise;
         }),
-        syncInventory: vi.fn((synced) => {
-          if (synced === resolvedSnapshot) calls.push('sync');
-        }),
-        play: vi.fn(() => Promise.resolve()),
-        clearEvent: vi.fn(() => { calls.push('clear'); }),
+        syncInventory: vi.fn(),
+        play: vi.fn((cue) => cue === 'dawn' ? dawnCue.promise : Promise.resolve()),
+        clearEvent: vi.fn(() => { calls.push('clear-event'); }),
         dispose: vi.fn(),
       },
       ui,
@@ -3259,29 +3267,250 @@ describe('SurvivalPhase orchestration', () => {
 
     phase.start();
     await flushPromises();
+    calls.length = 0;
+    setBusy.mockClear();
+    trackTour = true;
 
     (ui as Partial<SurvivalUI>).onEventChoice?.('visit');
     await flushPromises();
-    expect(calls).toEqual(['stage', 'reveal', 'unlock', 'choice']);
+    expect(calls).toEqual(['profile:midnight-tour']);
+    expect(setBusy).toHaveBeenLastCalledWith(true);
 
-    choiceMotion.resolve();
+    profile.resolve();
     await flushPromises();
-    phase.update(1, 0.016);
+    expect(calls).toEqual(['profile:midnight-tour', 'fade:true']);
+
+    firstCover.resolve();
+    await flushPromises();
+    expect(calls).toEqual(['profile:midnight-tour', 'fade:true', 'choice:visit']);
+
+    choice.resolve();
+    await flushPromises();
     expect(calls).toEqual([
-      'stage', 'reveal', 'unlock', 'choice', 'resolve', 'result',
+      'profile:midnight-tour', 'fade:true', 'choice:visit',
+      'resolve:visit', 'react:tour-chest', 'fade:false',
     ]);
+    expect(setBusy).not.toHaveBeenCalledWith(false);
 
     reaction.resolve();
     await flushPromises();
-    expect(calls).toEqual([
-      'stage', 'reveal', 'unlock', 'choice', 'resolve', 'result',
-      'sync', 'hold',
-    ]);
-    expect(showFeedback).not.toHaveBeenCalled();
+    expect(calls.at(-1)).toBe('fade:false');
 
-    hold.resolve();
+    firstUncover.resolve();
     await flushPromises();
-    expect(calls.at(-1)).toBe('clear');
+    expect(calls).toEqual([
+      'profile:midnight-tour', 'fade:true', 'choice:visit',
+      'resolve:visit', 'react:tour-chest', 'fade:false', 'fade:true',
+    ]);
+
+    secondCover.resolve();
+    await flushPromises();
+    expect(calls.slice(-2)).toEqual(['clear-event', 'profile:solid']);
+
+    solidProfile.resolve();
+    await flushPromises();
+    expect(calls.at(-1)).toBe('dawn');
+
+    dawnCue.resolve();
+    await flushPromises();
+    expect(calls.at(-1)).toBe('fade:false');
+    expect(setBusy).not.toHaveBeenCalledWith(false);
+
+    finalUncover.resolve();
+    await flushPromises();
+    expect(calls).toEqual([
+      'profile:midnight-tour',
+      'fade:true',
+      'choice:visit',
+      'resolve:visit',
+      'react:tour-chest',
+      'fade:false',
+      'fade:true',
+      'clear-event',
+      'profile:solid',
+      'dawn',
+      'fade:false',
+    ]);
+    expect(setBusy).toHaveBeenLastCalledWith(false);
+    phase.dispose();
+  });
+
+  it('uses the normal ending after a fatal midnight tour attack and skips dawn', async () => {
+    let current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'midnight-tour',
+      pressure: 1,
+      health: 25,
+    });
+    const calls: string[] = [];
+    let covered = false;
+    const setBusy = vi.fn((busy: boolean) => calls.push(busy ? 'busy' : 'ready'));
+    const beginDawn = vi.fn();
+    const showEnding = vi.fn(() => {
+      expect(setBusy).toHaveBeenLastCalledWith(true);
+      calls.push('ending');
+    });
+    const outcome = accepted({
+      code: 'event-resolved',
+      cue: 'impact',
+      message: 'Something jumps from the palms.',
+      deltas: { health: -25 },
+      eventResult: {
+        eventId: 'midnight-tour',
+        choiceId: 'visit',
+        resultId: 'tour-attack',
+      },
+    });
+    const ui: Partial<SurvivalUI> = {
+      beginEventPresentation: vi.fn(),
+      setSleepCoverProfile: vi.fn(async (profile) => { calls.push(`profile:${profile}`); }),
+      setSleepCovered: vi.fn(async (value) => {
+        covered = value;
+        calls.push(`fade:${value}`);
+      }),
+      settleCoveredScene: vi.fn(() => Promise.resolve()),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      setBusy,
+      showEnding,
+      render: vi.fn(),
+      setJournalUnread: vi.fn(),
+      clearEventPresentation: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          calls.push('resolve:visit');
+          current = snapshot({
+            state: 'dead',
+            pendingEventId: null,
+            pressure: 1,
+            health: 0,
+          });
+          return outcome;
+        }),
+        beginDawn,
+      },
+      world: {
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        playEventChoice: vi.fn(async () => { calls.push('choice:visit'); }),
+        reactToEventOutcome: vi.fn(async () => { calls.push('react:tour-attack'); }),
+        play: vi.fn(() => Promise.resolve()),
+        clearEvent: vi.fn(() => {
+          expect(covered).toBe(true);
+          calls.push('clear-event');
+        }),
+        dispose: vi.fn(),
+      },
+      ui,
+    });
+
+    phase.start();
+    await flushPromises();
+    calls.length = 0;
+    setBusy.mockClear();
+    ui.onEventChoice?.('visit');
+    await flushPromises();
+    await flushPromises();
+
+    expect(beginDawn).not.toHaveBeenCalled();
+    expect(calls).toEqual([
+      'busy',
+      'profile:midnight-tour',
+      'fade:true',
+      'choice:visit',
+      'resolve:visit',
+      'busy',
+      'react:tour-attack',
+      'fade:false',
+      'fade:true',
+      'clear-event',
+      'profile:solid',
+      'ending',
+      'ready',
+    ]);
+    expect(setBusy).toHaveBeenLastCalledWith(false);
+    expect(showEnding).toHaveBeenCalledOnce();
+    phase.dispose();
+  });
+
+  it('keeps Midnight Tour Sail On on the normal event route', async () => {
+    let current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'midnight-tour',
+      pressure: 1,
+    });
+    const calls: string[] = [];
+    const setSleepCoverProfile = vi.fn();
+    const ui: Partial<SurvivalUI> = {
+      beginEventPresentation: vi.fn(),
+      setSleepCoverProfile,
+      setSleepCovered: vi.fn(async (covered) => { calls.push(`fade:${covered}`); }),
+      settleCoveredScene: vi.fn(() => Promise.resolve()),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      setBusy: vi.fn(),
+      render: vi.fn(),
+      setJournalUnread: vi.fn(),
+      clearEventPresentation: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          calls.push('resolve:sleep');
+          current = snapshot({ state: 'nightEvent', pendingEventId: null, pressure: 1 });
+          return accepted({
+            code: 'event-resolved',
+            cue: 'none',
+            eventResult: {
+              eventId: 'midnight-tour',
+              choiceId: 'sleep',
+              resultId: 'tour-pass',
+            },
+          });
+        }),
+        beginDawn: vi.fn(() => {
+          calls.push('dawn');
+          current = snapshot({ state: 'day', day: 2, pressure: 1 });
+          return accepted({ code: 'dawn', cue: 'none' });
+        }),
+      },
+      world: {
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        playEventChoice: vi.fn(async () => { calls.push('choice:sleep'); }),
+        reactToEventOutcome: vi.fn(async () => { calls.push('react:tour-pass'); }),
+        play: vi.fn(() => Promise.resolve()),
+        clearEvent: vi.fn(() => { calls.push('clear-event'); }),
+        dispose: vi.fn(),
+      },
+      ui,
+    });
+
+    phase.start();
+    await flushPromises();
+    calls.length = 0;
+    ui.onEventChoice?.('sleep');
+    await flushPromises();
+    await flushPromises();
+
+    expect(setSleepCoverProfile).not.toHaveBeenCalled();
+    expect(calls).toEqual([
+      'choice:sleep',
+      'resolve:sleep',
+      'react:tour-pass',
+      'fade:true',
+      'clear-event',
+      'dawn',
+      'fade:false',
+    ]);
     phase.dispose();
   });
 
@@ -3454,7 +3683,7 @@ describe('SurvivalPhase orchestration', () => {
       eventResult: {
         eventId: 'handyman',
         choiceId: 'visit',
-        resultId: 'tour-bait',
+        resultId: 'tour-chest',
       },
       received: 'handyman/visit',
     },
@@ -3686,7 +3915,7 @@ describe('SurvivalPhase orchestration', () => {
         eventResult: {
           eventId: 'midnight-tour',
           choiceId: 'visit',
-          resultId: 'tour-bait',
+          resultId: 'tour-chest',
         },
       });
       const ui = {
@@ -6366,7 +6595,7 @@ describe('SurvivalPhase orchestration', () => {
       eventResult: {
         eventId: 'midnight-tour',
         choiceId: 'visit',
-        resultId: 'tour-bait',
+        resultId: 'tour-chest',
       },
     });
     const ui = {
