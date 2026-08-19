@@ -1002,13 +1002,13 @@ describe('BoatWorld helpers', () => {
     expect(leftY).toBeLessThan(-5.5);
     expect(leftZ).toBeLessThanOrEqual(-27);
     expect(leftIsland.userData.greenTopWaveClearance).toBeCloseTo(0.18);
-    expect(leftIsland.userData.disableHoverOutline).toBe(true);
+    expect(leftIsland.userData.disableHoverOutline).not.toBe(true);
 
     world.dispose();
     propModels.dispose();
   });
 
-  it('aims Midnight Tour attack cameras toward each seeded side', async () => {
+  it('runs and restores the Midnight Tour attack cutscene on each seeded side', async () => {
     const propModels = createTestPropModels();
     const camera = new PerspectiveCamera();
     const world = new BoatWorld(
@@ -1016,7 +1016,10 @@ describe('BoatWorld helpers', () => {
       propModels,
       createTestMoonTexture(),
     );
-    const attackDirectionX = async (seed: number): Promise<number> => {
+    const cameraParent = camera.parent;
+    const cameraPosition = camera.position.clone();
+    const cameraQuaternion = camera.quaternion.clone();
+    const runAttack = async (seed: number): Promise<void> => {
       world.stageEvent('midnight-tour', seed);
       const reaction = world.reactToEventOutcome('midnight-tour', {
         accepted: true,
@@ -1034,18 +1037,21 @@ describe('BoatWorld helpers', () => {
         instanceId: null,
         condition: null,
       });
-      world.update(2, 2);
+      world.update(4.8, 4.8);
       await reaction;
-      const directionX = camera.getWorldDirection(new Vector3()).x;
+      const presentation = world.scene.getObjectByName('focused-event:midnight-tour')!;
+      expect(presentation.userData.searchLeft).toBe(1);
+      expect(presentation.userData.searchRight).toBe(1);
+      expect(presentation.userData.resultReveals).toBe(1);
+      expect(presentation.userData.cameraKicks).toBe(1);
       world.clearEvent();
-      return directionX;
+      expect(camera.parent).toBe(cameraParent);
+      expect(camera.position.toArray()).toEqual(cameraPosition.toArray());
+      expect(camera.quaternion.toArray()).toEqual(cameraQuaternion.toArray());
     };
 
-    const leftDirectionX = await attackDirectionX(8);
-    const rightDirectionX = await attackDirectionX(9);
-
-    expect(leftDirectionX).toBeGreaterThan(0);
-    expect(rightDirectionX).toBeLessThan(0);
+    await runAttack(8);
+    await runAttack(9);
 
     world.dispose();
     propModels.dispose();
@@ -4651,7 +4657,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('projects the Handyman hand without a tooltip', async () => {
+  it('uses the standard outline for Midnight Tour before projecting the Handyman hand', async () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(65, 4 / 3, 0.1, 100),
@@ -4672,7 +4678,7 @@ describe('BoatWorld helpers', () => {
     ]));
     world.setHighlightedItem('midnight-tour:island');
     expect(world.scene.getObjectByName('midnight-tour-island')
-      ?.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+      ?.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
 
     world.clearEvent();
     world.syncInventory(snapshot([], {
