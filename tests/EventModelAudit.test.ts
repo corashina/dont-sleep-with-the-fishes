@@ -2,6 +2,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { validateEventModelMetadata } from '../scripts/check-event-models.mjs';
+import { EVENT_MODEL_IDS, EVENT_MODEL_SPECS } from '../src/world/eventModelManifest';
 
 function eventMetadata(): Record<string, Record<string, unknown>> {
   return JSON.parse(
@@ -10,6 +11,15 @@ function eventMetadata(): Record<string, Record<string, unknown>> {
 }
 
 describe('event model audit contract', () => {
+  it('registers the midnight tour palm trees', () => {
+    expect(EVENT_MODEL_IDS).toContain('midnightPalmTrees');
+    expect(EVENT_MODEL_SPECS.midnightPalmTrees).toMatchObject({
+      sourceUrl: 'https://poly.pizza/m/VYslw9DEi6',
+      license: 'CC0 1.0',
+    });
+    expect(existsSync('src/assets/models/events/midnightPalmTrees.glb')).toBe(true);
+  });
+
   it('accepts the combined curated and processed metadata', () => {
     expect(() => validateEventModelMetadata(eventMetadata())).not.toThrow();
   });

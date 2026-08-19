@@ -132,6 +132,9 @@ describe('PropModelLibrary texture ownership', () => {
     expect(library.createEventModel('containerShip')).toMatchObject({
       root: expect.any(Group),
     });
+    expect(library.createEventModel('midnightPalmTrees')).toMatchObject({
+      root: expect.any(Group),
+    });
   });
 
   it('keeps required item model failures fatal', async () => {
