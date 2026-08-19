@@ -1526,79 +1526,113 @@ export class SurvivalPhase implements GamePhase {
     this.audio.confirm();
     this.eventPresentation = 'using';
     this.setBusy(true);
-    await (this.ui.setSleepCoverProfile?.('midnight-tour') ?? Promise.resolve());
-    if (!this.isContinuationActive(generation)) return;
-    await Promise.all([
-      this.ui.playEventChoiceBeat?.('visit') ?? Promise.resolve(),
-      this.ui.setSleepCovered?.(true) ?? Promise.resolve(),
-    ]);
-    if (!this.isContinuationActive(generation)) return;
-    await (this.world.playEventChoice?.(eventId, choice) ?? Promise.resolve());
-    if (!this.isContinuationActive(generation)) return;
-    if (
-      (this.visibilityPauseActive || this.documentIsHidden())
-      && !await this.waitForVisibilityResume(generation)
-    ) return;
-    if (!this.isContinuationActive(generation)) return;
+    try {
+      await (this.ui.setSleepCoverProfile?.('midnight-tour') ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+      await Promise.all([
+        this.ui.playEventChoiceBeat?.('visit') ?? Promise.resolve(),
+        this.ui.setSleepCovered?.(true) ?? Promise.resolve(),
+      ]);
+      if (!this.isContinuationActive(generation)) return;
+      await (this.world.playEventChoice?.(eventId, choice) ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+      if (
+        (this.visibilityPauseActive || this.documentIsHidden())
+        && !await this.waitForVisibilityResume(generation)
+      ) return;
+      if (!this.isContinuationActive(generation)) return;
 
-    this.eventPresentation = 'resolving';
-    this.beginDeferredPresentationSync(pending, generation);
-    const outcome = this.session.resolveEvent?.({ kind: 'choice', choiceId: 'visit' });
-    if (outcome === undefined || !this.isContinuationActive(generation)) {
-      this.cancelDeferredPresentationSync(generation);
-      return;
-    }
-    if (!outcome.accepted) {
-      this.cancelDeferredPresentationSync(generation);
-      this.audio.deny();
-      this.ui.showFeedback?.(outcome);
-      this.eventPresentation = 'choosing';
-      this.restoreEventSelection();
-      await (this.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
+      this.eventPresentation = 'resolving';
+      this.beginDeferredPresentationSync(pending, generation);
+      const outcome = this.session.resolveEvent?.({ kind: 'choice', choiceId: 'visit' });
       if (!this.isContinuationActive(generation)) return;
-      await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
-      if (!this.isContinuationActive(generation)) return;
-      this.setBusy(false);
-      return;
-    }
+      if (outcome === undefined) {
+        throw new Error('Midnight Tour visit did not return an outcome.');
+      }
+      if (!outcome.accepted) {
+        await this.recoverMidnightTourVisit(
+          generation,
+          { rejection: outcome },
+        );
+        return;
+      }
 
-    const invariantError = this.focusedEventResultError(eventId, 'visit', outcome);
-    if (invariantError !== null) {
-      await (this.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
-      if (!this.isContinuationActive(generation)) return;
-      await this.recoverInvalidFocusedEventResult(
-        invariantError,
+      const invariantError = this.focusedEventResultError(eventId, 'visit', outcome);
+      if (invariantError !== null) {
+        await this.recoverMidnightTourVisit(
+          generation,
+          { invariantError },
+        );
+        return;
+      }
+      const resolved = this.session.snapshot();
+      if (isTerminal(resolved.state)) {
+        this.flushDeferredPresentationSync(resolved, generation);
+      }
+      const presentation = deriveEventOutcomePresentation(
+        pending,
+        resolved,
+        outcome,
+        null,
+      );
+      await this.runEventResolution(
+        eventId,
+        outcome,
         pending.state,
         generation,
+        choice,
+        deriveEventPhysicalResponse(
+          'visit',
+          pending.inventory,
+          resolved.inventory,
+          null,
+        ),
+        presentation,
+        true,
+        true,
       );
+    } catch (error) {
+      await this.recoverMidnightTourVisit(generation, { fatalError: error });
+    }
+  }
+
+  private async recoverMidnightTourVisit(
+    generation: number,
+    reason: {
+      readonly rejection?: ActionOutcome;
+      readonly invariantError?: Error;
+      readonly fatalError?: unknown;
+    },
+  ): Promise<void> {
+    this.cancelDeferredPresentationSync(generation);
+    if (!this.isContinuationActive(generation)) return;
+    try {
+      await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+      this.clearEventPresentation();
+      await (this.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+      this.renderSnapshot(false, false);
+      if (!await this.renderAndSettleCoveredScene(generation)) return;
+      await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+    } catch (error) {
+      this.onFatalError(error);
       return;
     }
-    const resolved = this.session.snapshot();
-    if (isTerminal(resolved.state)) {
-      this.flushDeferredPresentationSync(resolved, generation);
+
+    if (reason.rejection !== undefined) {
+      this.audio.deny();
+      this.ui.showFeedback?.(reason.rejection);
+      this.eventPresentation = 'choosing';
+      this.restoreEventSelection();
+    } else if (reason.invariantError !== undefined) {
+      this.onInvariantError(reason.invariantError);
+    } else {
+      this.onFatalError(reason.fatalError);
     }
-    const presentation = deriveEventOutcomePresentation(
-      pending,
-      resolved,
-      outcome,
-      null,
-    );
-    await this.runEventResolution(
-      eventId,
-      outcome,
-      pending.state,
-      generation,
-      choice,
-      deriveEventPhysicalResponse(
-        'visit',
-        pending.inventory,
-        resolved.inventory,
-        null,
-      ),
-      presentation,
-      true,
-      true,
-    );
+    this.setBusy(false);
+    this.ui.restoreCommandFocus?.();
   }
 
   private async resolveDriftingItemChoice(
@@ -1794,23 +1828,36 @@ export class SurvivalPhase implements GamePhase {
     ) {
       this.audio.eventAction(eventId, 'damage');
     }
-    const reaction = this.world.reactToEventOutcome?.(
-      eventId,
-      outcome,
-      isEventPresentationRoute(eventId, 'dedicated')
-        ? physicalResponse
-        : focusedResult ? choice : physicalResponse,
-      presentation,
-    ) ?? Promise.resolve();
-    await Promise.all([
-      stationaryHandymanTouch
-        ? Promise.resolve()
-        : this.world.play?.(outcome.cue) ?? Promise.resolve(),
-      reaction,
-      revealFromCover
-        ? this.ui.setSleepCovered?.(false) ?? Promise.resolve()
-        : Promise.resolve(),
-    ]);
+    const response = isEventPresentationRoute(eventId, 'dedicated')
+      ? physicalResponse
+      : focusedResult ? choice : physicalResponse;
+    if (revealFromCover) {
+      const reaction = this.world.reactToEventOutcome?.(
+        eventId,
+        outcome,
+        response,
+        presentation,
+      ) ?? Promise.resolve();
+      await Promise.all([
+        stationaryHandymanTouch
+          ? Promise.resolve()
+          : this.world.play?.(outcome.cue) ?? Promise.resolve(),
+        reaction,
+        this.ui.setSleepCovered?.(false) ?? Promise.resolve(),
+      ]);
+    } else {
+      await Promise.all([
+        stationaryHandymanTouch
+          ? Promise.resolve()
+          : this.world.play?.(outcome.cue) ?? Promise.resolve(),
+        this.world.reactToEventOutcome?.(
+          eventId,
+          outcome,
+          response,
+          presentation,
+        ) ?? Promise.resolve(),
+      ]);
+    }
     this.audio.finishEventReaction(eventId);
     if (!this.isContinuationActive(generation)) return;
     if (
