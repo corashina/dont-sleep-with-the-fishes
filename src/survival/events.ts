@@ -513,15 +513,12 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
   ], undefined, { allowedChestStates: ['mimic'] }),
   event('midnight-tour', 'night', 'Midnight Tour', 'dangerous', 'sighting', 2, 7, 30, [
     contextualChoice('visit', 'Visit the Island',
-      outcome(50, 'You find a chest.', {
+      outcome(80, 'You find a chest.', {
         ...atNextDawn(2, { resources: [add('pressure', 1)] }),
         items: [gainChest()],
       }, 'tour-chest'),
-      outcome(50, 'You find one bait.', {
-        resources: [add('bait', 1)],
-      }, 'tour-bait'),
-      outcome(12, 'Something drops from the rocks.', {
-        resources: [subtract('health', 35)],
+      outcome(20, 'Something jumps from the palms.', {
+        resources: [subtract('health', { min: 25, max: 45 })],
       }, 'tour-attack'),
     ),
     contextualChoice('sleep', 'Sail On', outcome(1, 'The island disappears into the dark.', {}, 'tour-pass')),

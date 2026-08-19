@@ -317,18 +317,24 @@ describe('survival events', () => {
     expect(resultIds('chest-attack', 'fishingNet')).toEqual(['chest-bound']);
     expect(event('chest-attack').choices.some(({ id }) => id === 'fight')).toBe(false);
     expect(resultIds('chest-attack', 'sleep')).toEqual(['chest-hide']);
-    expect(event('midnight-tour').choices.find(({ id }) => id === 'visit')?.outcomes).toMatchObject([
+    const visit = event('midnight-tour').choices.find(({ id }) => id === 'visit')!;
+    expect(visit.outcomes).toMatchObject([
       {
-        resultId: 'tour-chest', weight: 50,
+        resultId: 'tour-chest', weight: 80,
         effects: {
           resources: [add('pressure', 1)],
           nextDawnEnergy: 2,
           items: [{ kind: 'gainChest', quantity: 1, fallbackFood: 1 }],
         },
       },
-      { resultId: 'tour-bait', weight: 50, effects: { resources: [add('bait', 1)] } },
-      { resultId: 'tour-attack', weight: 12, effects: { resources: [subtract('health', 35)] } },
+      {
+        resultId: 'tour-attack', weight: 20,
+        effects: {
+          resources: [subtract('health', { min: 25, max: 45 })],
+        },
+      },
     ]);
+    expect(visit.outcomes.map(({ resultId }) => resultId)).toEqual(['tour-chest', 'tour-attack']);
     expect(resultIds('midnight-tour', 'sleep')).toEqual(['tour-pass']);
     expect(['food', 'bait', 'map', 'umbrella'].every((choiceId) => (
       resultIds('night-trader', choiceId).every((resultId) => resultId === 'trader-reward')
