@@ -209,6 +209,70 @@ describe('MidnightTourPresentation', () => {
     fixture.presentation.dispose();
   });
 
+  it.each([8, 9])('keeps every palm outside the chest camera depth corridor for seed %i', async (seed) => {
+    const fixture = createFixture();
+    fixture.presentation.stage(seed);
+    await fixture.presentation.playChoice({
+      choiceId: 'visit',
+      instanceId: null,
+      condition: null,
+    });
+    const result = fixture.presentation.react({
+      eventId: 'midnight-tour',
+      choiceId: 'visit',
+      resultId: 'tour-chest',
+    }, {} as never);
+    fixture.presentation.root.updateMatrixWorld(true);
+
+    const cameraZ = fixture.camera.getWorldPosition(new Vector3()).z;
+    const chestZ = fixture.presentation.root
+      .getObjectByName('midnight-tour-reward-chest')!
+      .getWorldPosition(new Vector3()).z;
+    const blockingPalms = PALM_NODE_NAMES.flatMap((_name, index) => {
+      const palm = fixture.presentation.root
+        .getObjectByName(`midnight-tour-palm-${index + 1}`)!;
+      const palmZ = palm.getWorldPosition(new Vector3()).z;
+      return palmZ > chestZ && palmZ < cameraZ
+        ? [{ name: palm.name, palmZ, cameraZ, chestZ }]
+        : [];
+    });
+
+    expect(cameraZ).toBeGreaterThan(chestZ);
+    expect(blockingPalms).toEqual([]);
+    fixture.presentation.clear();
+    await result;
+    fixture.presentation.dispose();
+  });
+
+  it('holds the chest camera until the covered scene is cleared', async () => {
+    const fixture = createFixture();
+    fixture.presentation.stage(8);
+    await fixture.presentation.playChoice({
+      choiceId: 'visit',
+      instanceId: null,
+      condition: null,
+    });
+    const result = fixture.presentation.react({
+      eventId: 'midnight-tour',
+      choiceId: 'visit',
+      resultId: 'tour-chest',
+    }, {} as never);
+    fixture.presentation.update(12, 12);
+    await result;
+    const heldPosition = fixture.camera.position.clone();
+    const heldQuaternion = fixture.camera.quaternion.clone();
+
+    fixture.camera.position.copy(fixture.originalPosition);
+    fixture.camera.quaternion.copy(fixture.originalQuaternion);
+    fixture.presentation.update(12.1, 0.1);
+
+    expect(fixture.camera.position.toArray()).toEqual(heldPosition.toArray());
+    expect(fixture.camera.quaternion.toArray()).toEqual(heldQuaternion.toArray());
+    fixture.presentation.clear();
+    expectOriginalCamera(fixture);
+    fixture.presentation.dispose();
+  });
+
   it('places five separate palms on the island ground', () => {
     const { presentation } = createFixture();
     const island = presentation.root.getObjectByName('midnight-tour-island')!;
