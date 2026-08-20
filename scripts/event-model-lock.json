@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedOn": "2026-07-31",
+  "generatedOn": "2026-08-20",
   "sources": {
     "leakPlanks": {
       "id": "leakPlanks",
@@ -18,7 +18,7 @@
       "sourceTriangles": 150,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-07-31"
+      "downloadedOn": "2026-08-20"
     },
     "schoolFish": {
       "id": "schoolFish",
@@ -36,7 +36,7 @@
       "sourceTriangles": 233,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-07-31"
+      "downloadedOn": "2026-08-20"
     },
     "snatcher": {
       "id": "snatcher",
@@ -54,7 +54,7 @@
       "sourceTriangles": 3874,
       "sourceHasSkins": true,
       "sourceAnimationCount": 4,
-      "downloadedOn": "2026-07-31"
+      "downloadedOn": "2026-08-20"
     },
     "anglerFish": {
       "id": "anglerFish",
@@ -72,7 +72,7 @@
       "sourceTriangles": 2150,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-07-31"
+      "downloadedOn": "2026-08-20"
     },
     "deathStareBlob": {
       "id": "deathStareBlob",
@@ -90,7 +90,7 @@
       "sourceTriangles": 4888,
       "sourceHasSkins": true,
       "sourceAnimationCount": 9,
-      "downloadedOn": "2026-08-01"
+      "downloadedOn": "2026-08-20"
     },
     "tornadoCore": {
       "id": "tornadoCore",
@@ -108,7 +108,43 @@
       "sourceTriangles": 324,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-07-31"
+      "downloadedOn": "2026-08-20"
+    },
+    "midnightShovel": {
+      "id": "midnightShovel",
+      "pageUrl": "https://poly.pizza/m/oNBQSf87ZJ",
+      "publicId": "oNBQSf87ZJ",
+      "resourceId": "4ca5006b-da27-4d96-9042-9672c9776750",
+      "downloadUrl": "https://static.poly.pizza/4ca5006b-da27-4d96-9042-9672c9776750.glb",
+      "sourceAssetId": "poly-pizza:4ca5006b-da27-4d96-9042-9672c9776750",
+      "modelName": "Shovel",
+      "author": "Quaternius",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "pageAnimated": false,
+      "sha256": "768F33C6BCD41E65208C7F0513D2A7010313FA44A932B4F5327A5BC66D22149B",
+      "sourceTriangles": 322,
+      "sourceHasSkins": false,
+      "sourceAnimationCount": 0,
+      "downloadedOn": "2026-08-20"
+    },
+    "midnightMonster": {
+      "id": "midnightMonster",
+      "pageUrl": "https://poly.pizza/m/22K0aSZkHV",
+      "publicId": "22K0aSZkHV",
+      "resourceId": "cf4368cf-b39e-4c9a-8a83-a9c637740eb8",
+      "downloadUrl": "https://static.poly.pizza/cf4368cf-b39e-4c9a-8a83-a9c637740eb8.glb",
+      "sourceAssetId": "poly-pizza:cf4368cf-b39e-4c9a-8a83-a9c637740eb8",
+      "modelName": "Zombie",
+      "author": "Quaternius",
+      "license": "CC-BY 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+      "pageAnimated": true,
+      "sha256": "A56B9E79CDF979363977C8252BF2D870061FCE36A86595E9D90631ECD8687A1F",
+      "sourceTriangles": 6174,
+      "sourceHasSkins": true,
+      "sourceAnimationCount": 16,
+      "downloadedOn": "2026-08-20"
     }
   }
 }

@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NodeIO } from '@gltf-transform/core';
@@ -107,10 +107,23 @@ export async function buildEventModelMetadata(modelsDir, eventModelIds) {
   return metadata;
 }
 
+export async function mergeEventModelMetadata(existingPath, generatedPath) {
+  const existing = JSON.parse(await readFile(existingPath, 'utf8'));
+  const generated = JSON.parse(await readFile(generatedPath, 'utf8'));
+  await writeFile(
+    generatedPath,
+    `${JSON.stringify({ ...existing, ...generated }, null, 2)}\n`,
+  );
+}
+
 async function runCli(args) {
+  if (args.length === 3 && args[0] === '--merge') {
+    await mergeEventModelMetadata(args[1], args[2]);
+    return;
+  }
   if (args.length < 2) {
     throw new Error(
-      'Usage: node scripts/event-model-metadata.mjs <modelsDir> <eventModelId...>',
+      'Usage: node scripts/event-model-metadata.mjs --merge <existingPath> <generatedPath> | <modelsDir> <eventModelId...>',
     );
   }
   await buildEventModelMetadata(args[0], args.slice(1));
