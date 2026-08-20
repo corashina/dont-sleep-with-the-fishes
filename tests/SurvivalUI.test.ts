@@ -1800,6 +1800,27 @@ describe('SurvivalUI', () => {
     expect(mainStyles).not.toMatch(/prefers-reduced[-]motion/);
   });
 
+  it('uses the standard 2.5 second fade for Midnight Tour travel', async () => {
+    vi.useFakeTimers();
+    const mount = document.createElement('main');
+    const ui = new SurvivalUI(mount);
+    activeUIs.push(ui);
+    const cover = mount.querySelector<HTMLElement>('[data-sleep-cover]')!;
+
+    await ui.setSleepCoverProfile('midnight-tour');
+    expect(cover.dataset.profile).toBe('midnight-tour');
+    let settled = false;
+    const pending = ui.setSleepCovered(true);
+    void pending.then(() => { settled = true; });
+    await vi.advanceTimersByTimeAsync(2_499);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await pending;
+    expect(mainStyles).not.toMatch(
+      /\.sleep-cover\[data-profile="midnight-tour"\][^{]*\{[^}]*transition-duration:/s,
+    );
+  });
+
   it('keeps a covered scene pending for two browser frames', async () => {
     const callbacks: FrameRequestCallback[] = [];
     const requestFrame = vi.fn((callback: FrameRequestCallback) => {

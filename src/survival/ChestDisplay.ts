@@ -43,6 +43,7 @@ function findImportedLid(root: Group): Object3D | null {
     const name = object.name.toLowerCase();
     if (
       name === 'lid'
+      || name === 'chest_top'
       || name.endsWith(':lid')
       || name.endsWith('-lid')
       || name.endsWith('_lid')

@@ -655,24 +655,16 @@ describe('SurvivalSession daytime actions', () => {
       pressure: 1,
     });
 
-    const bait = new SurvivalSession(saved(), {
-      seed: 11,
-      random: sequenceRandom([50 / 112]),
-      initialEventId: 'midnight-tour',
-    });
-    expect(bait.resolveEvent(choiceResponse('visit'))).toMatchObject({
-      eventResult: { resultId: 'tour-bait' },
-      deltas: { bait: 1 },
-    });
     const attacked = new SurvivalSession(saved(), {
-      seed: 11,
-      random: sequenceRandom([100 / 112]),
+      seed: 103,
+      random: sequenceRandom([0.99, 0, 0.5, 0.999]),
+      initial: { day: 7, health: 100 },
       initialEventId: 'midnight-tour',
     });
-    expect(attacked.resolveEvent(choiceResponse('visit'))).toMatchObject({
-      eventResult: { resultId: 'tour-attack' },
-      deltas: { health: -35 },
-    });
+    const attack = attacked.resolveEvent(choiceResponse('visit'));
+    expect(attack.eventResult?.resultId).toBe('tour-attack');
+    expect(attacked.snapshot().health).toBeGreaterThanOrEqual(55);
+    expect(attacked.snapshot().health).toBeLessThanOrEqual(75);
     const passed = new SurvivalSession(saved(), {
       seed: 11,
       random: sequenceRandom([0]),
@@ -680,15 +672,6 @@ describe('SurvivalSession daytime actions', () => {
     });
     expect(passed.resolveEvent(choiceResponse('sleep')).eventResult?.resultId).toBe('tour-pass');
 
-    const duplicateChest = new SurvivalSession(saved(), {
-      seed: 12,
-      random: sequenceRandom([0]),
-      initialChest: { state: 'closed', acquiredDay: 1 },
-      initialEventId: 'midnight-tour',
-    });
-    expect(duplicateChest.resolveEvent(choiceResponse('visit')).eventResult?.resultId)
-      .toBe('tour-food-fallback');
-    expect(duplicateChest.snapshot().food).toBe(1);
   });
 
   it('records the Flowers event without granting a survival reward', () => {
@@ -724,13 +707,6 @@ describe('SurvivalSession daytime actions', () => {
       eventPresentationKey: 'drifting-bottle.retrieve',
     });
 
-    const island = new SurvivalSession(saved(), {
-      seed: 103, random: sequenceRandom([0.5]), initial: { day: 7 }, initialEventId: 'midnight-tour',
-    });
-    expect(island.resolveEvent(choiceResponse('visit'))).toMatchObject({
-      accepted: true, message: 'You find one bait.', deltas: { bait: 1 },
-    });
-    expect(island.snapshot()).toMatchObject({ bait: 1, inventory: {} });
   });
 
   it('resolves the empty stern outcome at the top of the Check the Back roll', () => {

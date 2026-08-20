@@ -74,7 +74,6 @@ import type {
 const NO_EVENT_EXCLUSIONS: ReadonlySet<string> = new Set();
 
 function fallbackResultId(eventId: string): string | undefined {
-  if (eventId === 'midnight-tour') return 'tour-food-fallback';
   if (eventId === 'night-trader') return 'trader-food-fallback';
   if (eventId === 'handyman') return 'handyman-food-fallback';
   return undefined;
