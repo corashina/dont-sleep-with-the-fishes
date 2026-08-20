@@ -1,4 +1,12 @@
-import { BoxGeometry, Color, Group, Mesh, MeshStandardMaterial, type Object3D } from 'three';
+import {
+  AnimationClip,
+  BoxGeometry,
+  Color,
+  Group,
+  Mesh,
+  MeshStandardMaterial,
+  type Object3D,
+} from 'three';
 import { ITEM_IDS, type ItemId } from '../../src/game/ItemState';
 import type { LifeboatEquipmentId } from '../../src/world/lifeboatEquipmentManifest';
 import type { PracticalLightModelId } from '../../src/world/practicalLightModelManifest';
@@ -69,6 +77,13 @@ export function createTestPropModels(): PropModelLibrary {
     id,
     template(id, staticItemCount + 3 + index),
   ]));
+  const eventAnimations = new Map<EventModelId, readonly AnimationClip[]>([[
+    'midnightMonster',
+    [
+      new AnimationClip('CharacterArmature|Run', 1),
+      new AnimationClip('CharacterArmature|Run_Attack', 1),
+    ],
+  ]]);
 
   return PropModelLibrary.fromTemplatesForTest(
     itemTemplates,
@@ -76,6 +91,7 @@ export function createTestPropModels(): PropModelLibrary {
     practicalLightTemplates,
     new Map(),
     eventTemplates,
+    eventAnimations,
   );
 }
 

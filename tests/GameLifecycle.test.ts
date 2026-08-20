@@ -2155,6 +2155,7 @@ describe('ScavengePhase lifecycle integration', () => {
       22,
       expect.any(Function),
       'shower-night',
+      undefined,
     );
     expect(firstSurvival.resize).toHaveBeenCalledWith(
       window.innerWidth,
@@ -2175,6 +2176,51 @@ describe('ScavengePhase lifecycle integration', () => {
     ).enterTestEvent('missing-event')).toThrow(/unknown event test scene/i);
     expect(secondSurvival.dispose).not.toHaveBeenCalled();
 
+    game.dispose();
+  });
+
+  it('launches each Midnight Tour test option with its exact result', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const launches: Array<{ eventId: string | undefined; resultId: string | undefined }> = [];
+    const survivalPhases = [gamePhase(), gamePhase()];
+    const createSurvival = vi.fn((
+      _context: PhaseContext,
+      _result: Readonly<ScavengeResult>,
+      _seed: number,
+      _onRestart: () => void,
+      eventId?: string,
+      resultId?: string,
+    ) => {
+      launches.push({ eventId, resultId });
+      return survivalPhases[launches.length - 1]!;
+    });
+    const game = Game.forTest({
+      createMenu: createImmediateMenu,
+      createScavenge: () => gamePhase(),
+      createSurvival,
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      sceneRenderer: postProcessingSceneRenderer(),
+      mount,
+      createSeed: () => 41,
+    });
+
+    for (const id of ['midnight-tour-chest', 'midnight-tour-monster']) {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backquote', key: '`' }));
+      const select = mount.querySelector<HTMLSelectElement>('[data-event-test-select]')!;
+      select.value = id;
+      mount.querySelector<HTMLButtonElement>('[data-event-test-enter]')!.click();
+    }
+
+    expect(launches).toEqual([
+      { eventId: 'midnight-tour', resultId: 'tour-chest' },
+      { eventId: 'midnight-tour', resultId: 'tour-attack' },
+    ]);
     game.dispose();
   });
 

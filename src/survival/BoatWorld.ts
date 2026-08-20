@@ -107,6 +107,7 @@ import {
   type EventChoicePresentation,
   type FocusedEventPresentationFactories,
 } from './FocusedEventPresentation';
+import type { EventPresentationCue } from './midnightTourAudioCue';
 import { FeaturedEventPresentations } from './FeaturedEventPresentations';
 import {
   driftingItemLeaveKey,
@@ -648,6 +649,7 @@ export class BoatWorld {
   private readonly itemUseAdapter: EventItemUseAdapter;
   private readonly itemUseController: EventItemUseController;
   private activeEventPresenter: ActiveEventPresenter | null = null;
+  private eventCueHandler: (cue: EventPresentationCue) => void = () => undefined;
   private readonly fallbackDedicatedEventModels: EventModelLibrary | null;
   private readonly fallbackFeaturedEventModels: SurvivalEventModels | null;
   private readonly focusedEventFactories: FocusedEventPresentationFactories;
@@ -1160,6 +1162,7 @@ export class BoatWorld {
           boatMotionRoot: this.motionRig,
           supplyDisplay: this.supplyDisplay,
           chestDisplay: this.chestDisplay,
+          emitCue: (cue) => this.eventCueHandler(cue),
         }, this.focusedEventFactories, route === 'dedicated' || route === 'featured'
           ? null
           : eventId);
@@ -1315,6 +1318,10 @@ export class BoatWorld {
 
   setLightningStrikeListener(listener: () => void): void {
     this.lightningStrikeListener = listener;
+  }
+
+  setEventCueHandler(handler: (cue: EventPresentationCue) => void): void {
+    this.eventCueHandler = handler;
   }
 
   setWaterQuality(value: WaterQuality): void {
@@ -2486,6 +2493,7 @@ export class BoatWorld {
     if (this.disposed) return;
     runCleanupSteps([
       () => this.setHighlightedItem(null),
+      () => { this.eventCueHandler = () => undefined; },
       () => this.cancelDriftingItemView(),
       () => {
         this.disposed = true;

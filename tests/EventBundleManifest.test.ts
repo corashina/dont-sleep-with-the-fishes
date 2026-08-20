@@ -32,4 +32,12 @@ describe('event bundle manifest', () => {
     expect(EVENT_BUNDLE_SPECS.tornado.models).toEqual(['tornadoCore']);
     expect(EVENT_BUNDLE_SPECS.tornado.sounds).toContain('tornadoWind');
   });
+
+  it('bundles Midnight Tour sounds', () => {
+    expect(EVENT_BUNDLE_SPECS['midnight-tour'].sounds).toEqual([
+      'midnightShovel',
+      'midnightMonsterRun',
+      'midnightMonsterAttack',
+    ]);
+  });
 });

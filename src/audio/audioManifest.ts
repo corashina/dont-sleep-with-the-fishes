@@ -59,6 +59,9 @@ export const SOUND_IDS = [
   'deathEnding',
   'sinkingEnding',
   'shipCrash',
+  'midnightShovel',
+  'midnightMonsterRun',
+  'midnightMonsterAttack',
 ] as const;
 
 export type SoundId = typeof SOUND_IDS[number];
@@ -81,6 +84,9 @@ export const EVENT_ONLY_SOUND_IDS = Object.freeze([
   'leak',
   'tentacleMovement',
   'eerieMelody',
+  'midnightShovel',
+  'midnightMonsterRun',
+  'midnightMonsterAttack',
 ] as const satisfies readonly SoundId[]);
 
 const eventOnlySounds = new Set<SoundId>(EVENT_ONLY_SOUND_IDS);
@@ -193,4 +199,7 @@ export const AUDIO_MANIFEST: Readonly<Record<SoundId, AudioAssetDefinition>> =
       ...asset('sinkingEnding', 'effects', 0.68, false, 1),
       gain: 0.68,
     }),
+    midnightShovel: asset('midnightShovel', 'effects', 0.55, false, 1),
+    midnightMonsterRun: asset('midnightMonsterRun', 'effects', 0.5, true, 1),
+    midnightMonsterAttack: asset('midnightMonsterAttack', 'effects', 0.72, false, 1),
   });

@@ -504,7 +504,7 @@ export class SurvivalSession {
       ) {
         return this.reject('endure-unavailable', 'Use one of the highlighted items to face this event.');
       }
-      return this.resolveEventChoice('sleep', null, null);
+      return this.resolveEventChoice('sleep', null, null, undefined);
     }
 
     if (response.kind === 'choice') {
@@ -512,7 +512,7 @@ export class SurvivalSession {
       if (choice?.itemId !== undefined) {
         return this.reject('choice-unavailable', 'That response is not available for this event.');
       }
-      return this.resolveEventChoice(response.choiceId, null, null);
+      return this.resolveEventChoice(response.choiceId, null, null, response.resultId);
     }
 
     const item = this.inventory.snapshot()[response.instanceId];
@@ -527,13 +527,14 @@ export class SurvivalSession {
     if (item.condition !== 'usable') {
       return this.reject('item-unavailable', 'That item has no uses remaining.');
     }
-    return this.resolveEventChoice(choice.id, response.instanceId, choice.itemId);
+    return this.resolveEventChoice(choice.id, response.instanceId, choice.itemId, undefined);
   }
 
   private resolveEventChoice(
     choiceId: EventResponseId,
     selectedInstanceId: ItemInstanceId | null,
     attemptedItemId: ItemId | null,
+    resultId: string | undefined,
   ): ActionOutcome {
     const event = this.pendingEvent;
     if (event === null) return this.reject('no-event', 'There is no unresolved event.');
@@ -564,6 +565,7 @@ export class SurvivalSession {
       choice,
       this.random,
       this.appearanceCounts.get(event.id) ?? 0,
+      resultId,
     );
     const inventoryMutations: JournalInventoryMutation[] = [];
     let fallbackFoodGranted = false;
