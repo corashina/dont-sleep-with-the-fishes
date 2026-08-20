@@ -150,6 +150,12 @@ import {
 } from './eventPhysicalResponseChoreography';
 import { SupernaturalEventAnimator } from './SupernaturalEventAnimator';
 import {
+  createHangingLantern,
+  HANGING_LANTERN_DAY_INTENSITY,
+  HANGING_LANTERN_NIGHT_INTENSITY,
+  type HangingLantern,
+} from './HangingLantern';
+import {
   createSurvivalLantern,
   SURVIVAL_LANTERN_DAY_INTENSITY,
   SURVIVAL_LANTERN_NIGHT_INTENSITY,
@@ -589,6 +595,7 @@ export class BoatWorld {
   private readonly boatEffectsRoot = new Group();
   private readonly boat: Group;
   private readonly lantern: SurvivalLantern;
+  private readonly hangingLantern: HangingLantern;
   private readonly ambient = new AmbientLight(0xc4d1cf, 1.1);
   private readonly key = new DirectionalLight(0xffe1b5, 2.2);
   private readonly ownedGeometries = new Set<BufferGeometry>();
@@ -876,6 +883,7 @@ export class BoatWorld {
     let sky: Skybox | null = null;
     let weatherEffects: WeatherEffects | null = null;
     let lantern: SurvivalLantern | null = null;
+    let hangingLantern: HangingLantern | null = null;
     let carlitos: CarlitosPresentation | null = null;
     let supplyDisplay: BoatSupplyDisplay | null = null;
     let chestDisplay: ChestDisplay | null = null;
@@ -944,6 +952,11 @@ export class BoatWorld {
       lantern = createSurvivalLantern(propModels.createPracticalLight('lantern'));
       this.lantern = lantern;
       this.boat.add(lantern.root);
+      hangingLantern = createHangingLantern(
+        propModels.createPracticalLight('lantern'),
+      );
+      this.hangingLantern = hangingLantern;
+      this.boat.add(hangingLantern.root);
 
       carlitos = new CarlitosPresentation(propModels);
       this.carlitos = carlitos;
@@ -1087,6 +1100,7 @@ export class BoatWorld {
           () => supplyDisplay?.dispose(),
           () => carlitos?.dispose(),
           () => this.toolHoverOutline.dispose(),
+          () => hangingLantern?.dispose(),
           () => lantern?.dispose(),
           () => weatherEffects?.dispose(),
           () => this.fishingBiteParticles.dispose(),
@@ -2392,6 +2406,12 @@ export class BoatWorld {
     smoothBoatPoseInto(this.boatPose, this.boatPose, this.boatTargetPose, delta, 7);
     if (advancePresentation) this.advanceRearCameraTurn(delta);
     this.applyBasePresentation();
+    this.hangingLantern.update(
+      this.boatPose,
+      this.weatherProfile,
+      time,
+      delta,
+    );
     if (this.activeDiveItemId !== null) {
       if (advancePresentation) this.diveElapsed += Math.max(0, delta);
       this.divePresentation.copyWaterEntryWorldPosition(
@@ -2520,6 +2540,7 @@ export class BoatWorld {
       () => this.supplyDisplay.dispose(),
       () => this.chestDisplay.dispose(),
       () => this.toolHoverOutline.dispose(),
+      () => this.hangingLantern.dispose(),
       () => this.lantern.dispose(),
       () => this.cancelActiveFishingAnimation(),
       () => this.fishingCatches.dispose(),
@@ -3052,9 +3073,13 @@ export class BoatWorld {
     this.ambient.intensity = atmosphere.ambientLightIntensity * lightScale;
     this.key.color.copy(atmosphere.keyLightColor);
     this.key.intensity = atmosphere.keyLightIntensity * lightScale;
-    this.lantern.light.intensity = this.skyState.phase === 'night'
+    const night = this.skyState.phase === 'night';
+    this.lantern.light.intensity = night
       ? SURVIVAL_LANTERN_NIGHT_INTENSITY
       : SURVIVAL_LANTERN_DAY_INTENSITY;
+    this.hangingLantern.light.intensity = night
+      ? HANGING_LANTERN_NIGHT_INTENSITY
+      : HANGING_LANTERN_DAY_INTENSITY;
     if (this.scene.background instanceof Color) {
       this.scene.background.copy(atmosphere.horizonColor);
     } else {
