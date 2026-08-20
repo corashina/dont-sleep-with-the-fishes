@@ -70,7 +70,7 @@ export class ChestDisplay {
   private readonly geometries = new Set<BufferGeometry>();
   private readonly materials = new Set<Material>();
   private readonly materialStates = new Map<Material, ChestMaterialState>();
-  private readonly basePosition = new Vector3(0, 0.22, 0.55);
+  private readonly basePosition = new Vector3(0, 0.22, 2.15);
   private readonly baseQuaternion = new Quaternion();
   private readonly lidBaseQuaternion = new Quaternion();
   private lastSnapshot: ChestSnapshot = { state: 'none', acquiredDay: null };

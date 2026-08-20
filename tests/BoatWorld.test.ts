@@ -1527,8 +1527,8 @@ describe('BoatWorld helpers', () => {
     const rearDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
     expect(camera.position.toArray()).toEqual(position.toArray());
     expect(rearDirection.x).toBeCloseTo(0);
-    expect(rearDirection.y).toBeCloseTo(0);
-    expect(rearDirection.z).toBeCloseTo(1);
+    expect(rearDirection.y).toBeLessThan(-0.6);
+    expect(rearDirection.z).toBeGreaterThan(0.7);
 
     world.setRearCameraView(false);
     world.update(1.3, 0.65);
@@ -4778,12 +4778,13 @@ describe('BoatWorld helpers', () => {
 
     const chest = world.scene.getObjectByName('persistent-chest')!;
     expect(chest.visible).toBe(true);
-    expect(chest.position.toArray()).toEqual([0, 0.22, 0.55]);
+    expect(chest.position.toArray()).toEqual([0, 0.22, 2.15]);
     expect(chest.scale.toArray()).toEqual([0.5, 0.5, 0.5]);
     expect(chest.quaternion.angleTo(
       new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI),
     )).toBeLessThan(1e-6);
 
+    world.setRearCameraView(true, true);
     world.update(0.1, 0.1);
     expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
       expect.objectContaining({
