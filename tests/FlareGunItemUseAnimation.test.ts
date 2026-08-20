@@ -24,9 +24,9 @@ describe('flare gun item-use animation', () => {
     const raised = sample(0.3);
 
     expect(starting.roll).toBe(0);
-    expect(lifting.roll).toBeGreaterThan(0);
-    expect(lifting.roll).toBeLessThan(raised.roll);
-    expect(lifting.pitch).toBeLessThan(0);
+    expect(lifting.roll).toBeLessThan(0);
+    expect(lifting.roll).toBeGreaterThan(raised.roll);
+    expect(lifting.pitch).toBeGreaterThan(0);
   });
 
   it('uses the flashlight hold without moving right after pickup', () => {
