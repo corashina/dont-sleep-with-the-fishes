@@ -6472,7 +6472,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('uses the imported lantern model with a shadow-casting light', () => {
+  it('keeps the bench lantern emissive without emitting light', () => {
     const propModels = createTestPropModels();
     const camera = new PerspectiveCamera(75, 16 / 9, 0.08, 1000);
     const world = new BoatWorld(
@@ -6482,7 +6482,6 @@ describe('BoatWorld helpers', () => {
     );
     const lantern = world.scene.getObjectByName('survival-lantern')!;
     const model = lantern.getObjectByName('survival-lantern:model')!;
-    const light = lantern.getObjectByName('survival-lantern:light') as PointLight;
     const material = firstMesh(model).material as MeshStandardMaterial;
 
     expect(model).toBeDefined();
@@ -6490,12 +6489,7 @@ describe('BoatWorld helpers', () => {
     expect(material.emissive.getHex()).toBe(0xffc56a);
     expect(material.emissiveIntensity).toBe(1.35);
     expect(material.emissiveMap).toBe(material.map);
-    expect(light).toBeInstanceOf(PointLight);
-    expect(light.color.getHex()).toBe(0xffb261);
-    expect(light.intensity).toBe(3.8);
-    expect(light.distance).toBe(4);
-    expect(light.castShadow).toBe(true);
-    expect(light.shadow.mapSize.toArray()).toEqual([512, 512]);
+    expect(lantern.getObjectByName('survival-lantern:light')).toBeUndefined();
     expect(camera.position.toArray()).toEqual([0, 0.88, 1.56]);
     world.setPhase('night');
     world.update(1, 0.1);
@@ -6507,7 +6501,7 @@ describe('BoatWorld helpers', () => {
     const oldLanternOrigin = new Vector3(1.05, 0.235, 0.78).project(oldCamera);
     expect(lanternOrigin.x).toBeCloseTo(oldLanternOrigin.x, 2);
     expect(lanternOrigin.y).toBeCloseTo(oldLanternOrigin.y, 2);
-    expect(light.intensity).toBe(5.4);
+    expect(lantern.getObjectByName('survival-lantern:light')).toBeUndefined();
     expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: 'end-day-lantern',
@@ -6516,6 +6510,26 @@ describe('BoatWorld helpers', () => {
         itemType: null,
       }),
     ]));
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('casts stored item shadows onto the lifeboat', () => {
+    const map = savedItem('map');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(75, 16 / 9, 0.08, 1000),
+      propModels,
+      createTestMoonTexture(),
+      [map],
+    );
+    const storedMap = world.scene.getObjectByName('boat-supply:map:copy-1')!;
+    const floor = world.scene.getObjectByName('survival-floor')!;
+
+    expect(firstMesh(storedMap).castShadow).toBe(true);
+    expect(firstMesh(storedMap).receiveShadow).toBe(true);
+    expect(firstMesh(floor).receiveShadow).toBe(true);
 
     world.dispose();
     propModels.dispose();
