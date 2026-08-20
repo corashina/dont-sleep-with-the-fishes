@@ -177,6 +177,23 @@ describe('ship item placement', () => {
     expect(size.y).toBeLessThan(size.z);
   });
 
+  it('rests the scavenging compass face-up on its surface', () => {
+    const compass = createScavengeItemInstances().find(
+      ({ instanceId }) => instanceId === 'compass-1',
+    )!;
+    const restingSurface = surface('compass-rest', 0);
+    const transform = assignShipItems([compass], [restingSurface])
+      .get(compass.instanceId)!;
+    const bounds = shipItemTransformBounds(compass.type, transform);
+    const size = bounds.getSize(new Vector3());
+    const faceNormal = new Vector3(0, 0, 1).applyEuler(transform.rotation);
+
+    expect(bounds.min.y).toBeCloseTo(restingSurface.position.y);
+    expect(size.y).toBeLessThan(size.x);
+    expect(size.y).toBeLessThan(size.z);
+    expect(faceNormal.y).toBeGreaterThan(0.99);
+  });
+
   it('faces Carlitos toward the ship center during scavenging', () => {
     const captain = createScavengeItemInstances().find(
       ({ instanceId }) => instanceId === 'carlitos-1',

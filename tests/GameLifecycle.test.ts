@@ -2049,8 +2049,8 @@ describe('ScavengePhase lifecycle integration', () => {
       expect(night.checked).toBe(false);
       expect(timeOfDayLabel.textContent).toBe('Day');
       expect(timeOfDay.value).toBe('DAY');
-      expect(fieldOfView.value).toBe('75');
-      expect(fieldOfViewOutput.value).toBe('75°');
+      expect(fieldOfView.value).toBe('80');
+      expect(fieldOfViewOutput.value).toBe('80°');
       expect(scavengeSetWeather).not.toHaveBeenCalled();
       expect(scavengeSetTimeOfDay).not.toHaveBeenCalled();
 
@@ -2454,7 +2454,7 @@ describe('ScavengePhase lifecycle integration', () => {
     });
 
     expect(received[0]!.camera).toMatchObject({
-      fov: 75,
+      fov: 80,
       near: 0.08,
       far: 1000,
     });

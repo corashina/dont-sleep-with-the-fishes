@@ -299,6 +299,13 @@ interface PlacementCandidate {
 
 function scavengingRestingRotation(itemId: ItemId, surface: ShipItemSurface): Euler {
   const surfaceRotation = surface.rotation;
+  if (itemId === 'compass') {
+    const surfaceOrientation = new Quaternion().setFromEuler(surfaceRotation);
+    const lyingOrientation = new Quaternion().setFromEuler(
+      new Euler(Math.PI / 2, Math.PI, 0),
+    );
+    return new Euler().setFromQuaternion(surfaceOrientation.multiply(lyingOrientation));
+  }
   if (itemId === 'anchor' || itemId === 'ductTape') {
     const surfaceOrientation = new Quaternion().setFromEuler(surfaceRotation);
     const lyingOrientation = new Quaternion().setFromAxisAngle(
@@ -321,7 +328,7 @@ function surfaceFit(surface: ShipItemSurface, itemId: ItemId): SurfaceFit | unde
   const rotation = scavengingRestingRotation(itemId, surface);
   const fitBounds = orientedItemBounds(
     itemId,
-    itemId === 'anchor' || itemId === 'ductTape' || itemId === 'carlitos'
+    itemId === 'anchor' || itemId === 'compass' || itemId === 'ductTape' || itemId === 'carlitos'
       ? rotation
       : surface.rotation,
   );

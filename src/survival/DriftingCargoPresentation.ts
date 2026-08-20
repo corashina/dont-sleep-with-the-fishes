@@ -32,6 +32,11 @@ export interface DriftingCargoModels {
   readonly chest: Group;
 }
 
+export interface DriftingCargoTargets {
+  readonly barrel: Object3D;
+  readonly chest: Object3D;
+}
+
 export interface DriftingCargoInteractionProjection {
   readonly variant: DriftingCargoKind;
   readonly bounds: ProjectedBoatBounds;
@@ -58,11 +63,13 @@ export class DriftingCargoPresentation {
   private readonly roots: Readonly<Record<DriftingCargoKind, Group>>;
   private readonly basePositions: Readonly<Record<DriftingCargoKind, Vector3>>;
   private readonly baseQuaternions: Readonly<Record<DriftingCargoKind, Quaternion>>;
+  private readonly baseScales: Readonly<Record<DriftingCargoKind, number>>;
   private readonly targetPositionScratch = new Vector3();
   private readonly animationStartPosition = new Vector3();
   private readonly quaternionScratch = new Quaternion();
   private readonly targetQuaternionScratch = new Quaternion();
   private readonly animationStartQuaternion = new Quaternion();
+  private animationStartScale = 1;
   private readonly waveSample: WaveSample = {
     height: 0,
     displacementX: 0,
@@ -76,7 +83,7 @@ export class DriftingCargoPresentation {
 
   constructor(
     models: DriftingCargoModels,
-    private readonly bowTarget: Object3D,
+    private readonly targets: DriftingCargoTargets,
     private readonly water: DriftingWater,
   ) {
     this.root.name = 'drifting-cargo-presentation';
@@ -109,6 +116,10 @@ export class DriftingCargoPresentation {
       barrel: barrel.quaternion.clone(),
       chest: chest.quaternion.clone(),
     };
+    this.baseScales = {
+      barrel: barrel.scale.x,
+      chest: chest.scale.x,
+    };
     this.root.add(barrel, chest);
   }
 
@@ -131,6 +142,7 @@ export class DriftingCargoPresentation {
     const root = this.roots[this.activeVariant];
     this.animationStartPosition.copy(root.position);
     this.animationStartQuaternion.copy(root.quaternion);
+    this.animationStartScale = root.scale.x;
     this.state = 'retrieving';
     return this.startAnimation('retrieve', RETRIEVE_DURATIONS[this.activeVariant]);
   }
@@ -189,7 +201,7 @@ export class DriftingCargoPresentation {
     this.activeAnimation = null;
     if (animation.kind === 'retrieve') {
       this.state = 'held';
-      this.applyBowPose(this.activeVariant);
+      this.applyHeldPose(this.activeVariant);
     } else if (animation.kind === 'recede') {
       this.state = 'idle';
       this.roots[this.activeVariant].visible = false;
@@ -213,7 +225,7 @@ export class DriftingCargoPresentation {
     const animation = this.activeAnimation;
     if (animation === null) {
       if (this.state === 'floating') this.applyFloatingPose(variant, time);
-      else if (this.state === 'held') this.applyBowPose(variant);
+      else if (this.state === 'held') this.applyHeldPose(variant);
       return;
     }
 
@@ -229,7 +241,7 @@ export class DriftingCargoPresentation {
     this.activeAnimation = null;
     if (animation.kind === 'retrieve') {
       this.state = 'held';
-      this.applyBowPose(variant);
+      this.applyHeldPose(variant);
     } else {
       this.state = 'idle';
       this.resetPose(variant);
@@ -267,7 +279,7 @@ export class DriftingCargoPresentation {
   }
 
   private applyRetrievePose(variant: DriftingCargoKind, progress: number): void {
-    this.readBowPose();
+    this.readTargetPose(variant);
     const travel = keyedRetrieveProgress(Math.min(1, Math.max(0, progress)));
     const root = this.roots[variant];
     root.position.lerpVectors(
@@ -279,6 +291,10 @@ export class DriftingCargoPresentation {
       this.animationStartQuaternion,
       this.targetQuaternionScratch,
       Math.min(1, Math.max(0, travel)),
+    );
+    root.scale.setScalar(
+      this.animationStartScale
+      + (this.targetScale(variant) - this.animationStartScale) * travel,
     );
   }
 
@@ -301,18 +317,24 @@ export class DriftingCargoPresentation {
     );
   }
 
-  private applyBowPose(variant: DriftingCargoKind): void {
-    this.readBowPose();
+  private applyHeldPose(variant: DriftingCargoKind): void {
+    this.readTargetPose(variant);
     this.roots[variant].position.copy(this.targetPositionScratch);
     this.roots[variant].quaternion.copy(this.targetQuaternionScratch);
+    this.roots[variant].scale.setScalar(this.targetScale(variant));
   }
 
-  private readBowPose(): void {
-    this.bowTarget.getWorldPosition(this.targetPositionScratch);
-    this.bowTarget.getWorldQuaternion(this.targetQuaternionScratch);
+  private readTargetPose(variant: DriftingCargoKind): void {
+    const target = this.targets[variant];
+    target.getWorldPosition(this.targetPositionScratch);
+    target.getWorldQuaternion(this.targetQuaternionScratch);
     this.root.worldToLocal(this.targetPositionScratch);
     this.root.getWorldQuaternion(this.quaternionScratch).invert();
     this.targetQuaternionScratch.premultiply(this.quaternionScratch);
+  }
+
+  private targetScale(variant: DriftingCargoKind): number {
+    return variant === 'chest' ? CHEST_DISPLAY_SCALE : this.baseScales.barrel;
   }
 
   private resetAll(): void {
@@ -325,6 +347,7 @@ export class DriftingCargoPresentation {
   private resetPose(variant: DriftingCargoKind): void {
     this.roots[variant].position.copy(this.basePositions[variant]);
     this.roots[variant].quaternion.copy(this.baseQuaternions[variant]);
+    this.roots[variant].scale.setScalar(this.baseScales[variant]);
   }
 
   private cancelActiveAnimation(): void {

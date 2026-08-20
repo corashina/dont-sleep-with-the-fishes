@@ -363,6 +363,7 @@ export class SurvivalUI {
   private readonly eventSleepMask: HTMLElement;
   private readonly anchorLayer: HTMLElement;
   private readonly cameraTurn: HTMLButtonElement;
+  private readonly cameraTurnTooltip: HTMLElement;
   private readonly carlitosCard: HTMLElement;
   private readonly carlitosPet: HTMLButtonElement;
   private readonly eventCaption: HTMLElement;
@@ -500,16 +501,15 @@ export class SurvivalUI {
             <strong class="ui-role-numeral" data-day>DAY 1</strong>
           </section>
         </div>
+        <button type="button" class="chest-camera-turn" data-camera-turn aria-label="Look behind at the chest" aria-describedby="camera-turn-tooltip" aria-pressed="false" hidden>
+          ${uiArtwork('chest', 'chest-camera-turn__art')}
+          <span class="chest-camera-turn__tooltip ui-role-context" data-camera-turn-tooltip id="camera-turn-tooltip" role="tooltip">LOOK BACK</span>
+        </button>
       </div>
       <section class="survival-meters" aria-label="Condition meters">
         ${METERS.map(meterMarkup).join('')}
       </section>
       <div class="boat-anchors" data-boat-anchors aria-label="Boat interaction points"></div>
-      <button type="button" class="drifting-item-focus__back camera-turn" data-camera-turn aria-label="Look behind" aria-pressed="false" hidden>
-        <svg class="drifting-item-focus__back-icon" data-camera-turn-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M9 3h6v10h5l-8 8-8-8h5z" />
-        </svg>
-      </button>
       <section class="carlitos-card scuba-popup-paper" data-carlitos-card aria-label="Cat status" aria-hidden="true" hidden>
         <button type="button" class="carlitos-card__close ui-role-context" data-carlitos-close aria-label="Close cat status">&times;</button>
         <div class="carlitos-card__statuses">
@@ -644,6 +644,7 @@ export class SurvivalUI {
     this.eventSleepMask = requireElement(this.root, '[data-event-sleep-mask]');
     this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
     this.cameraTurn = requireElement(this.root, '[data-camera-turn]');
+    this.cameraTurnTooltip = requireElement(this.root, '[data-camera-turn-tooltip]');
     this.carlitosCard = requireElement(this.root, '[data-carlitos-card]');
     this.carlitosPet = requireElement(this.carlitosCard, '[data-action="petCarlitos"]');
     this.eventCaption = requireElement(this.root, '[data-event-caption]');
@@ -687,7 +688,7 @@ export class SurvivalUI {
     this.endingLayer = requireElement(this.root, '[data-ending]');
     this.endingTitle = requireElement(this.root, '[data-ending-title]');
     this.restartButton = requireElement(this.root, '[data-restart]');
-    this.backgroundRegions = [this.topControls, this.anchorLayer, this.cameraTurn];
+    this.backgroundRegions = [this.topControls, this.anchorLayer];
     this.modalLayers = [
       this.pauseLayer,
       this.journalLayer,
@@ -1301,7 +1302,11 @@ export class SurvivalUI {
     if (this.disposed) return;
     this.cameraTurn.hidden = !visible;
     this.cameraTurn.setAttribute('aria-pressed', String(rear));
-    this.cameraTurn.setAttribute('aria-label', rear ? 'Look forward' : 'Look behind');
+    this.cameraTurn.setAttribute(
+      'aria-label',
+      rear ? 'Look forward from the chest' : 'Look behind at the chest',
+    );
+    this.cameraTurnTooltip.textContent = rear ? 'LOOK FORWARD' : 'LOOK BACK';
   }
 
   updateFishingBiteTarget(target: ProjectedBoatBounds | null): void {

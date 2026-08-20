@@ -5,7 +5,7 @@ import {
   type StoredPreference,
 } from '../browser/storage';
 
-export type VisualQuality = 'low' | 'high';
+export type VisualQuality = 'low' | 'medium' | 'high';
 
 export const DEFAULT_VISUAL_QUALITY: VisualQuality = 'low';
 export const VISUAL_QUALITY_STORAGE_KEY =
@@ -14,7 +14,9 @@ export const VISUAL_QUALITY_STORAGE_KEY =
 export interface VisualQualityPreference extends StoredPreference<VisualQuality> {}
 
 export function parseVisualQuality(value: unknown): VisualQuality {
-  return value === 'high' ? 'high' : DEFAULT_VISUAL_QUALITY;
+  return value === 'medium' || value === 'high'
+    ? value
+    : DEFAULT_VISUAL_QUALITY;
 }
 
 export function createVisualQualityPreference(

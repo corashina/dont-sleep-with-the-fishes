@@ -28,6 +28,7 @@ export class FeaturedEventPresentations {
     models: SurvivalEventModels,
     camera: PerspectiveCamera,
     driftingItemBowTarget: Object3D,
+    driftingChestTarget: Object3D,
     flowersDeckTarget: Object3D,
     checkBackSternTarget: Object3D,
     onlyEventId?: FeaturedEventId | null,
@@ -46,7 +47,10 @@ export class FeaturedEventPresentations {
       ? new DriftingCargoPresentation({
           barrel: include('drifting-barrel') ? models.clone('driftingBarrel') : new Group(),
           chest: include('drifting-chest') ? models.clone('mysteryChest') : new Group(),
-        }, driftingItemBowTarget, driftingWater)
+        }, {
+          barrel: driftingItemBowTarget,
+          chest: driftingChestTarget,
+        }, driftingWater)
       : null;
     if (include('drifting-bottle')) {
       this.presentations.set('drifting-bottle', new DriftingBottlePresentation(

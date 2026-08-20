@@ -605,11 +605,13 @@ describe('BoatWorld helpers', () => {
     const scuba = world.scene.getObjectByName('boat-supply:scubaSet:copy-1')!;
     const umbrella = world.scene.getObjectByName('boat-supply:umbrella:copy-1')!;
     const medicalKit = world.scene.getObjectByName('boat-supply:medicalKit:copy-1')!;
+    const fishingNet = world.scene.getObjectByName('boat-supply:fishingNet:copy-1')!;
     const bucket = world.scene.getObjectByName('boat-supply:bucket:copy-1')!;
-    expect([scuba.position.x, scuba.position.z]).toEqual([1.33, -0.50]);
-    expect([umbrella.position.x, umbrella.position.z]).toEqual([0, 0.12]);
-    expect([medicalKit.position.x, medicalKit.position.z]).toEqual([-1.35, -1.05]);
-    expect([bucket.position.x, bucket.position.z]).toEqual([-0.93, -1.05]);
+    expect([scuba.position.x, scuba.position.z]).toEqual([1.33, -1.15]);
+    expect([umbrella.position.x, umbrella.position.z]).toEqual([0.55, -0.90]);
+    expect([medicalKit.position.x, medicalKit.position.z]).toEqual([-0.50, -1.27]);
+    expect([fishingNet.position.x, fishingNet.position.z]).toEqual([-0.96, -1.15]);
+    expect([bucket.position.x, bucket.position.z]).toEqual([1.03, -1.00]);
 
     const supplyBounds = (id: ItemId): Box3 => {
       const transform = boatSupplyTransform(id, 0);
@@ -624,10 +626,45 @@ describe('BoatWorld helpers', () => {
       ));
     };
     const medicalKitBounds = supplyBounds('medicalKit');
+    const fishingNetBounds = supplyBounds('fishingNet');
     const bucketBounds = supplyBounds('bucket');
+    const scubaBounds = supplyBounds('scubaSet');
     const umbrellaBounds = supplyBounds('umbrella');
-    expect(bucketBounds.min.x - medicalKitBounds.max.x).toBeGreaterThan(0.04);
-    expect(umbrellaBounds.min.x - bucketBounds.max.x).toBeGreaterThan(0.04);
+    const flareGunBounds = supplyBounds('flareGun');
+    const bottledPaperBounds = supplyBounds('bottledPaper');
+    const starboardShelf = world.scene.getObjectByName('lifeboat-edge-wear-1-1')!;
+    const flareShelf = world.scene.getObjectByName('lifeboat-edge-wear--1-1')!;
+    const starboardShelfBounds = new Box3().setFromObject(starboardShelf);
+    const flareShelfBounds = new Box3().setFromObject(flareShelf);
+    expect(bucketBounds.intersectsBox(umbrellaBounds)).toBe(false);
+    expect(bucketBounds.intersectsBox(scubaBounds)).toBe(false);
+    expect(fishingNetBounds.intersectsBox(medicalKitBounds)).toBe(false);
+    expect(flareGunBounds.min.y).toBeCloseTo(flareShelfBounds.max.y);
+    expect(flareGunBounds.min.x).toBeGreaterThan(flareShelfBounds.min.x);
+    expect(flareGunBounds.max.x).toBeLessThan(flareShelfBounds.max.x);
+    expect(flareGunBounds.min.z).toBeGreaterThan(flareShelfBounds.min.z);
+    expect(flareGunBounds.max.z).toBeLessThan(flareShelfBounds.max.z);
+    expect(bottledPaperBounds.min.y).toBeCloseTo(starboardShelfBounds.max.y);
+    expect(bottledPaperBounds.min.x).toBeGreaterThan(starboardShelfBounds.min.x);
+    expect(bottledPaperBounds.max.x).toBeLessThan(starboardShelfBounds.max.x);
+    expect(bottledPaperBounds.min.z).toBeGreaterThan(starboardShelfBounds.min.z);
+    expect(bottledPaperBounds.max.z).toBeLessThan(starboardShelfBounds.max.z);
+    expect(flareGunBounds.getCenter(new Vector3()).x).toBeCloseTo(-1.38);
+    expect(flareShelf.position.x).toBeCloseTo(-starboardShelf.position.x);
+    expect(flareShelf.position.y).toBeCloseTo(starboardShelf.position.y);
+    expect(flareShelf.position.z).toBeCloseTo(starboardShelf.position.z);
+    expect(flareShelf.rotation.y).toBeCloseTo(-starboardShelf.rotation.y);
+    expect(flareShelfBounds.getSize(new Vector3()).x)
+      .toBeCloseTo(starboardShelfBounds.getSize(new Vector3()).x);
+    expect(flareShelfBounds.getSize(new Vector3()).z)
+      .toBeCloseTo(starboardShelfBounds.getSize(new Vector3()).z);
+    for (const margin of [
+      flareGunBounds.min.z - flareShelfBounds.min.z,
+      flareShelfBounds.max.z - flareGunBounds.max.z,
+    ]) {
+      expect(margin).toBeGreaterThan(0.04);
+      expect(margin).toBeLessThan(0.10);
+    }
 
     world.dispose();
     propModels.dispose();
@@ -2081,7 +2118,7 @@ describe('BoatWorld helpers', () => {
     'drifting-barrel',
     'drifting-chest',
     'drifting-bottle',
-  ] as const)('focuses, retrieves, and frames %s at the bow', async (eventId) => {
+  ] as const)('focuses and retrieves %s to its storage target', async (eventId) => {
     const propModels = createTestPropModels();
     const furniture = createTestShipFurniture();
     const featuredModels = await createTestFeaturedModels([
@@ -2122,9 +2159,11 @@ describe('BoatWorld helpers', () => {
     const retrieved = world.retrieveDriftingItem(eventId);
     world.update(3.2, 2);
     await retrieved;
-    const bowRest = world.scene.getObjectByName('drifting-item-bow-rest')!;
+    const target = eventId === 'drifting-chest'
+      ? world.scene.getObjectByName('persistent-chest')!
+      : world.scene.getObjectByName('drifting-item-bow-rest')!;
     expect(item.getWorldPosition(new Vector3()).distanceTo(
-      bowRest.getWorldPosition(new Vector3()),
+      target.getWorldPosition(new Vector3()),
     )).toBeLessThan(0.001);
 
     const exited = world.exitDriftingItemView();
@@ -2132,6 +2171,49 @@ describe('BoatWorld helpers', () => {
     await exited;
     expect(camera.position.toArray()).toEqual(basePosition.toArray());
     expect(camera.quaternion.toArray()).toEqual(baseQuaternion.toArray());
+
+    world.dispose();
+    featuredModels.dispose();
+    furniture.dispose();
+    propModels.dispose();
+  });
+
+  it('hands a recovered drifting chest to the persistent stern storage', async () => {
+    const propModels = createTestPropModels();
+    const furniture = createTestShipFurniture();
+    const featuredModels = await createTestFeaturedModels(['mysteryChest']);
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      furniture,
+      'low',
+      featuredModels,
+    );
+    world.syncInventory(snapshot([], {
+      chest: { state: 'closed', acquiredDay: 3 },
+    }));
+    world.stageEvent('drifting-chest', 8);
+    const eventChest = world.scene.getObjectByName('drifting-chest:model')!;
+    const storedChest = world.scene.getObjectByName('persistent-chest')!;
+
+    const retrieved = world.retrieveDriftingItem('drifting-chest');
+    expect(storedChest.visible).toBe(false);
+    world.update(2, 2);
+    await retrieved;
+
+    expect(eventChest.getWorldPosition(new Vector3()).distanceTo(
+      storedChest.getWorldPosition(new Vector3()),
+    )).toBeLessThan(0.001);
+    expect(eventChest.scale.toArray()).toEqual([
+      CHEST_DISPLAY_SCALE,
+      CHEST_DISPLAY_SCALE,
+      CHEST_DISPLAY_SCALE,
+    ]);
+    expect(eventChest.visible).toBe(false);
+    expect(storedChest.visible).toBe(true);
 
     world.dispose();
     featuredModels.dispose();
@@ -4837,7 +4919,7 @@ describe('BoatWorld helpers', () => {
     const chest = world.scene.getObjectByName('persistent-chest')!;
     expect(chest.visible).toBe(true);
     expect(chest.position.toArray()).toEqual([0, 0.22, 2.15]);
-    expect(chest.scale.toArray()).toEqual([0.5, 0.5, 0.5]);
+    expect(chest.scale.toArray()).toEqual([0.75, 0.75, 0.75]);
     expect(chest.quaternion.angleTo(
       new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI),
     )).toBeLessThan(1e-6);
@@ -6092,7 +6174,7 @@ describe('BoatWorld helpers', () => {
       'boat-supply:scubaSet:copy-1',
     )!;
     const storedScubaPosition = storedScuba.position.clone();
-    expect([storedScubaPosition.x, storedScubaPosition.z]).toEqual([1.33, -0.50]);
+    expect([storedScubaPosition.x, storedScubaPosition.z]).toEqual([1.33, -1.15]);
     const initialPosition = camera.position.clone();
     const initialQuaternion = camera.quaternion.clone();
     const internals = world as unknown as {

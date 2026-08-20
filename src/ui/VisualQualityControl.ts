@@ -7,11 +7,12 @@ import { QualityControl } from './QualityControl';
 export class VisualQualityControl extends QualityControl<VisualQuality> {
   constructor(preference: VisualQualityPreference) {
     super(preference, {
-      kind: 'ao',
-      label: 'AO QUALITY',
-      note: 'High sharpens contact depth.',
+      kind: 'visual',
+      label: 'VISUAL QUALITY',
+      note: 'Medium adds atmosphere. High sharpens all effects.',
       choices: [
         { value: 'low', label: 'LOW' },
+        { value: 'medium', label: 'MEDIUM' },
         { value: 'high', label: 'HIGH' },
       ],
     });

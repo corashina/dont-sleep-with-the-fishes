@@ -1170,6 +1170,7 @@ export class BoatWorld {
           featuredModels,
           this.camera,
           this.driftingItemBowRest,
+          this.chestDisplay.root,
           this.flowersDeckTarget,
           this.checkBackSternFloor,
           isEventPresentationRoute(eventId, 'featured') ? eventId : null,
@@ -1684,7 +1685,7 @@ export class BoatWorld {
   retrieveDriftingItem(eventId: DriftingItemEventId): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.toolHoverOutline.setTarget(null);
-    return this.featuredEvents.react(eventId, driftingItemRetrieveKey(eventId));
+    return this.retrieveFeaturedDriftingItem(eventId);
   }
 
   delegateDriftingItem(eventId: DriftingItemEventId): Promise<void> {
@@ -1701,10 +1702,7 @@ export class BoatWorld {
         resolve,
     };
     });
-    const lootMotion = this.featuredEvents.react(
-      eventId,
-      driftingItemRetrieveKey(eventId),
-    );
+    const lootMotion = this.retrieveFeaturedDriftingItem(eventId);
     return Promise.all([companionMotion, lootMotion]).then(() => undefined);
   }
 
@@ -1712,6 +1710,21 @@ export class BoatWorld {
     if (this.disposed) return Promise.resolve();
     this.toolHoverOutline.setTarget(null);
     return this.featuredEvents.react(eventId, driftingItemLeaveKey(eventId));
+  }
+
+  private retrieveFeaturedDriftingItem(eventId: DriftingItemEventId): Promise<void> {
+    const handOffChest = eventId === 'drifting-chest' && this.chestState !== 'none';
+    const featuredEvents = this.featuredEvents;
+    if (handOffChest) this.chestDisplay.root.visible = false;
+    return featuredEvents.react(
+      eventId,
+      driftingItemRetrieveKey(eventId),
+    ).then(() => {
+      if (!handOffChest || this.disposed) return;
+      const eventChest = featuredEvents.resultRoot(eventId);
+      if (eventChest !== null) eventChest.visible = false;
+      this.chestDisplay.restorePose();
+    });
   }
 
   projectEventInteractionBounds(

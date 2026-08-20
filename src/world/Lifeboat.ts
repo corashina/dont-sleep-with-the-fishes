@@ -48,6 +48,7 @@ const FLOOR_HEIGHT = -0.38;
 export const LIFEBOAT_FLOOR_SURFACE_Y = FLOOR_HEIGHT + 0.0655;
 export const LIFEBOAT_DISPLAY_SHELF_SURFACE_Y = 0.22;
 export const LIFEBOAT_GUNWALE_SURFACE_Y = 0.472;
+export const LIFEBOAT_STARBOARD_EDGE_SHELF_SURFACE_Y = 0.3275;
 export const LIFEBOAT_FLOOR_RIB_DEPTH = 0.105;
 export const LIFEBOAT_FLOOR_RIB_CENTERS_Z = Object.freeze([
   -2.18,
@@ -221,6 +222,7 @@ function addFramesAndBenches(target: Group, materials: LifeboatMaterials): void 
     'lifeboat-display-bench-seat',
     DISPLAY_BENCH_Z,
   ));
+
   target.add(benches);
 }
 
@@ -240,6 +242,7 @@ function addGunwalesAndKeel(target: Group, materials: LifeboatMaterials): void {
   );
   inner.name = 'lifeboat-faded-rescue-trim';
   gunwales.add(outer, inner);
+
   target.add(gunwales);
 
   const keel = new Mesh(new BoxGeometry(0.16, 0.16, 5.65), materials.darkTimber);
@@ -268,10 +271,24 @@ function addWear(target: Group, materials: LifeboatMaterials): void {
   wear.name = 'lifeboat-wear-details';
   for (const sign of [-1, 1] as const) {
     for (const [index, z] of [-1.78, -0.34, 1.22].entries()) {
-      const scuff = new Mesh(new BoxGeometry(0.245, 0.035, 0.34), materials.cutWood);
+      const isSideShelf = index === 1;
+      const scuff = new Mesh(
+        new BoxGeometry(
+          isSideShelf ? 0.42 : 0.245,
+          0.035,
+          isSideShelf ? 0.48 : 0.34,
+        ),
+        materials.cutWood,
+      );
       scuff.name = `lifeboat-edge-wear-${sign}-${index}`;
-      scuff.position.set(sign * 1.535, 0.31, z);
-      scuff.rotation.y = index % 2 === 0 ? 0.12 : -0.09;
+      scuff.position.set(
+        sign * (isSideShelf ? 1.40 : 1.535),
+        0.31,
+        z,
+      );
+      scuff.rotation.y = isSideShelf
+        ? sign * -0.09
+        : index % 2 === 0 ? 0.12 : -0.09;
       wear.add(scuff);
     }
   }

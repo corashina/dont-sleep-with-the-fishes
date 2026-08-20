@@ -1,4 +1,5 @@
 import {
+  Box3,
   BoxGeometry,
   BufferAttribute,
   BufferGeometry,
@@ -33,6 +34,7 @@ import {
   MENU_CAMERA_TARGET,
   MENU_SEABED_POSITION,
   MENU_MODEL_PLACEMENTS,
+  menuGroundedY,
   menuSeabedHeight,
   type MenuGroundPlacement,
 } from './MenuSceneLayout';
@@ -61,7 +63,7 @@ import {
 } from '../world/SceneResources';
 
 export const MENU_PLACEMENT = {
-  boat: { position: [0, 0.42, -4.8], rotation: [0.05, -0.12, -0.09] },
+  boat: { position: [0, 0, -4.8], rotation: [0.05, -0.12, -0.09] },
 } as const;
 
 const MENU_GROUND_MODEL_IDS: readonly MenuGroundPlacement['modelId'][] = [
@@ -117,13 +119,14 @@ export class UnderwaterMenuWorld {
   private readonly signRaycaster = new Raycaster();
   private readonly signPointer = new Vector2();
   private readonly signIntersections: Intersection[] = [];
+  private readonly groundingBounds = new Box3();
   private readonly modelInstances: MenuModelInstance[] = [];
   private readonly components: MenuSceneComponent[] = [];
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
   private readonly causticMaterial: ShaderMaterial;
   private readonly menuBackground = new Color(0x071b24);
-  private readonly menuFog = new FogExp2(0x0b3440, 0.022);
+  private readonly menuFog = new FogExp2(0x0b3440, 0.015);
   private readonly previousBackground: Scene['background'];
   private readonly previousFog: Scene['fog'];
   private readonly previousCameraPosition: Vector3;
@@ -196,7 +199,7 @@ export class UnderwaterMenuWorld {
     this.signs = signs;
     this.signHitTargets = [signs.startHitTarget, signs.guideHitTarget];
 
-    this.placeModel(boat.root, 'boat', MENU_PLACEMENT.boat);
+    this.placeGroundedModel(boat.root, 'boat', MENU_PLACEMENT.boat, 0.1);
 
     sharkOne.root.name = 'menu:shark-1';
     sharkTwo.root.name = 'menu:shark-2';
@@ -221,11 +224,29 @@ export class UnderwaterMenuWorld {
     const caustic = this.createCausticOverlay();
     this.causticMaterial = caustic.material;
 
+    this.enableShadows(boat.root);
+    for (const root of groundModelRoots) this.enableShadows(root);
+    this.enableShadows(signs.root);
+    this.enableShadows(dorothy.root);
+    this.enableShadows(storyProps);
+
     const hemisphereLight = new HemisphereLight(0x8dc6cf, 0x10221f, 1.8);
     hemisphereLight.name = 'menu:hemisphere-light';
     const directionalLight = new DirectionalLight(0xb7e1e5, 2.35);
     directionalLight.name = 'menu:directional-light';
     directionalLight.position.set(-5.5, 8.5, 3.2);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.set(2048, 2048);
+    directionalLight.shadow.camera.left = -18;
+    directionalLight.shadow.camera.right = 18;
+    directionalLight.shadow.camera.top = 15;
+    directionalLight.shadow.camera.bottom = -5;
+    directionalLight.shadow.camera.near = 0.5;
+    directionalLight.shadow.camera.far = 55;
+    directionalLight.shadow.bias = -0.0004;
+    directionalLight.shadow.normalBias = 0.035;
+    directionalLight.target.name = 'menu:directional-light-target';
+    directionalLight.target.position.set(0, 0, -11);
 
     this.root.add(
       seabed,
@@ -244,6 +265,7 @@ export class UnderwaterMenuWorld {
       caustic.mesh,
       hemisphereLight,
       directionalLight,
+      directionalLight.target,
     );
     enableItemAmbientOcclusionOccluder(this.root);
 
@@ -332,6 +354,18 @@ export class UnderwaterMenuWorld {
     return instance;
   }
 
+  private enableShadows(root: Group): void {
+    root.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      const materials = Array.isArray(object.material)
+        ? object.material
+        : [object.material];
+      if (materials.some((material) => material.transparent)) return;
+      object.castShadow = true;
+      object.receiveShadow = true;
+    });
+  }
+
   private rollbackConstruction(): void {
     for (let index = this.components.length - 1; index >= 0; index -= 1) {
       ignoreCleanupError(() => this.components[index]!.dispose());
@@ -377,6 +411,24 @@ export class UnderwaterMenuWorld {
     root.name = `menu:${name}`;
     root.position.set(...placement.position);
     root.rotation.set(...placement.rotation);
+  }
+
+  private placeGroundedModel(
+    root: Group,
+    name: string,
+    placement: {
+      readonly position: readonly [number, number, number];
+      readonly rotation: readonly [number, number, number];
+    },
+    penetration: number,
+  ): void {
+    const [x, , z] = placement.position;
+    root.name = `menu:${name}`;
+    root.position.set(x, 0, z);
+    root.rotation.set(...placement.rotation);
+    root.updateMatrixWorld(true);
+    const localBottom = this.groundingBounds.setFromObject(root).min.y;
+    root.position.y = menuGroundedY(x, z, localBottom, penetration);
   }
 
   private createSeabed(
