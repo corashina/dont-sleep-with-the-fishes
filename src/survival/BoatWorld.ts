@@ -157,8 +157,6 @@ import {
 } from './HangingLantern';
 import {
   createSurvivalLantern,
-  SURVIVAL_LANTERN_DAY_INTENSITY,
-  SURVIVAL_LANTERN_NIGHT_INTENSITY,
   type SurvivalLantern,
 } from './SurvivalLantern';
 import type {
@@ -3074,9 +3072,6 @@ export class BoatWorld {
     this.key.color.copy(atmosphere.keyLightColor);
     this.key.intensity = atmosphere.keyLightIntensity * lightScale;
     const night = this.skyState.phase === 'night';
-    this.lantern.light.intensity = night
-      ? SURVIVAL_LANTERN_NIGHT_INTENSITY
-      : SURVIVAL_LANTERN_DAY_INTENSITY;
     this.hangingLantern.light.intensity = night
       ? HANGING_LANTERN_NIGHT_INTENSITY
       : HANGING_LANTERN_DAY_INTENSITY;

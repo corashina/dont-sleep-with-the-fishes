@@ -4,7 +4,6 @@ import {
   Material,
   Mesh,
   MeshStandardMaterial,
-  PointLight,
 } from 'three';
 import {
   collectMeshResources,
@@ -12,12 +11,8 @@ import {
   runCleanupSteps,
 } from '../world/SceneResources';
 
-export const SURVIVAL_LANTERN_DAY_INTENSITY = 3.8;
-export const SURVIVAL_LANTERN_NIGHT_INTENSITY = 5.4;
-
 export interface SurvivalLantern {
   readonly root: Group;
-  readonly light: PointLight;
   dispose(): void;
 }
 
@@ -50,32 +45,15 @@ export function createSurvivalLantern(model: Group): SurvivalLantern {
   });
   collectMeshResources(model, geometries, materials);
 
-  const light = new PointLight(
-    0xffb261,
-    SURVIVAL_LANTERN_DAY_INTENSITY,
-    4,
-    2,
-  );
-  light.name = 'survival-lantern:light';
-  light.position.y = 0.25;
-  light.castShadow = true;
-  light.shadow.mapSize.set(512, 512);
-  light.shadow.camera.near = 0.08;
-  light.shadow.camera.far = 4;
-  light.shadow.bias = -0.001;
-  light.shadow.normalBias = 0.025;
-  light.shadow.camera.updateProjectionMatrix();
-  root.add(model, light);
+  root.add(model);
 
   let disposed = false;
   return {
     root,
-    light,
     dispose: () => {
       if (disposed) return;
       disposed = true;
       runCleanupSteps([
-        () => light.shadow.dispose(),
         () => disposeResourceSets(geometries, materials),
         () => root.clear(),
       ]);

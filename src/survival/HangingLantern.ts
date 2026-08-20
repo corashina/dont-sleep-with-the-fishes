@@ -20,8 +20,8 @@ import {
   runCleanupSteps,
 } from '../world/SceneResources';
 
-export const HANGING_LANTERN_DAY_INTENSITY = 2.6;
-export const HANGING_LANTERN_NIGHT_INTENSITY = 4.4;
+export const HANGING_LANTERN_DAY_INTENSITY = 5.2;
+export const HANGING_LANTERN_NIGHT_INTENSITY = 7.2;
 export const HANGING_LANTERN_LINE_LENGTH = 0.22;
 export const HANGING_LANTERN_MOUNT = Object.freeze({ x: 0, y: 0.28, z: 2.35 });
 export const HANGING_LANTERN_TIP = Object.freeze({ x: 0, y: 1.57, z: -1.7 });
@@ -97,13 +97,13 @@ export function createHangingLantern(model: Group): HangingLantern {
     });
   });
 
-  const light = new PointLight(0xffb261, HANGING_LANTERN_DAY_INTENSITY, 3.6, 2);
+  const light = new PointLight(0xffb261, HANGING_LANTERN_DAY_INTENSITY, 5, 2);
   light.name = 'hanging-lantern:light';
   light.position.y = -HANGING_LANTERN_LINE_LENGTH - 0.24;
   light.castShadow = true;
   light.shadow.mapSize.set(512, 512);
   light.shadow.camera.near = 0.08;
-  light.shadow.camera.far = 3.6;
+  light.shadow.camera.far = 5;
   light.shadow.bias = -0.001;
   light.shadow.normalBias = 0.025;
   light.shadow.camera.updateProjectionMatrix();

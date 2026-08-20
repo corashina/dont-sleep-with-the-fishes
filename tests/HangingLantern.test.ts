@@ -12,6 +12,7 @@ import type { BoatPose } from '../src/ocean/BoatBuoyancy';
 import { presentationWeatherProfile } from '../src/weather/presentationWeather';
 import {
   HANGING_LANTERN_DAY_INTENSITY,
+  HANGING_LANTERN_NIGHT_INTENSITY,
   HANGING_LANTERN_LINE_LENGTH,
   HANGING_LANTERN_MOUNT,
   HANGING_LANTERN_TIP,
@@ -83,9 +84,12 @@ describe('hanging lantern', () => {
 
     expect(lantern.light).toBeInstanceOf(PointLight);
     expect(lantern.light.color.getHex()).toBe(0xffb261);
+    expect(HANGING_LANTERN_DAY_INTENSITY).toBe(5.2);
+    expect(HANGING_LANTERN_NIGHT_INTENSITY).toBe(7.2);
     expect(lantern.light.intensity).toBe(HANGING_LANTERN_DAY_INTENSITY);
-    expect(lantern.light.distance).toBe(3.6);
+    expect(lantern.light.distance).toBe(5);
     expect(lantern.light.castShadow).toBe(true);
+    expect(lantern.light.shadow.camera.far).toBe(5);
     expect(lantern.light.shadow.mapSize.toArray()).toEqual([512, 512]);
     expect(mesh.castShadow).toBe(false);
     expect(mesh.receiveShadow).toBe(true);
