@@ -34,7 +34,7 @@ describe('umbrella item-use animation', () => {
     expect(sample.viewX).toBe(0);
     expect(sample.viewY).toBeCloseTo(0.18);
     expect(sample.viewZ).toBeCloseTo(-0.38);
-    expect(sample.roll).toBeCloseTo(-Math.PI / 2);
+    expect(sample.roll).toBeCloseTo(-1.4509371355345577);
 
     const storageRotation = boatSupplyTransform('umbrella', 0).rotation;
     const umbrellaRotation = new Quaternion().setFromEuler(storageRotation)

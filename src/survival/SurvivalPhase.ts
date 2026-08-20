@@ -17,7 +17,7 @@ import {
 import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
 import {
   SurvivalUI,
-  type DiveResultView,
+  type RewardResultView,
   type EventContextChoice,
   type FishingResultView,
 } from '../ui/SurvivalUI';
@@ -49,6 +49,10 @@ import { isEventPresentationRoute } from './eventPresentationRoutes';
 import type { EventOutcomePresentation } from './eventPresentationTypes';
 import { fishingCatchFood } from './fishingCatalog';
 import {
+  CARLITOS_LAB_CHOICE_ID,
+  CARLITOS_LAB_INSTANCE_ID,
+  ITEM_ANIMATION_LAB_INITIAL_CHEST,
+  ITEM_ANIMATION_LAB_INITIAL_RESOURCES,
   ITEM_ANIMATION_LAB_USES,
   REPAIR_TOOLBOX_LAB_CHOICE_ID,
   REPAIR_TOOLBOX_LAB_INSTANCE_ID,
@@ -108,8 +112,6 @@ function createTestEventBundleManager(): EventBundleManagerLike {
 }
 
 const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
-const CARLITOS_LAB_INSTANCE_ID = 'carlitos-1' as ItemInstanceId;
-
 type FishingPresentationState =
   | 'idle'
   | 'ready'
@@ -191,7 +193,7 @@ export function formatFishingResult(
   };
 }
 
-export function formatDiveResult(outcome: ActionOutcome): DiveResultView {
+export function formatDiveResult(outcome: ActionOutcome): RewardResultView {
   const lines: string[] = [];
   let reward = outcome.rewardSummary ?? null;
   const itemRewards = [
@@ -333,6 +335,12 @@ export class SurvivalPhase implements GamePhase {
     if (testDependencies === undefined) {
       const session = new SurvivalSession(savedItems, {
         seed,
+        ...(itemAnimationLab
+          ? {
+              initial: ITEM_ANIMATION_LAB_INITIAL_RESOURCES,
+              initialChest: ITEM_ANIMATION_LAB_INITIAL_CHEST,
+            }
+          : {}),
         ...(
           initialEventId === undefined || itemAnimationLab
             ? {}
@@ -483,6 +491,7 @@ export class SurvivalPhase implements GamePhase {
       this.audio.deny();
       return;
     }
+    const beforeAction = this.session.snapshot();
     if (action === 'fish') {
       void this.beginFishing();
       return;
@@ -508,6 +517,10 @@ export class SurvivalPhase implements GamePhase {
     if (action === 'petCarlitos' || action === 'feedCarlitos') {
       this.syncPresentation(this.session.snapshot());
       void this.runCarlitosAction(action);
+      return;
+    }
+    if (action === 'openChest') {
+      void this.runChestAction(outcome, beforeAction);
       return;
     }
     void this.runDayAction(outcome);
@@ -668,7 +681,7 @@ export class SurvivalPhase implements GamePhase {
     if (snapshot.carlitos?.alive) {
       eligibility.set(
         CARLITOS_LAB_INSTANCE_ID,
-        ITEM_ANIMATION_LAB_USES.carlitos!.choiceId,
+        CARLITOS_LAB_CHOICE_ID,
       );
     }
     eligibility.set(
@@ -688,16 +701,14 @@ export class SurvivalPhase implements GamePhase {
     }
     const snapshot = this.session.snapshot();
     const inventoryItem = snapshot.inventory[instanceId];
-    const carlitos = instanceId === CARLITOS_LAB_INSTANCE_ID
-      && snapshot.carlitos?.alive === true;
     if (
-      (inventoryItem === undefined && !carlitos)
-      || (inventoryItem !== undefined && inventoryItem.condition !== 'usable')
+      inventoryItem === undefined
+      || inventoryItem.condition !== 'usable'
       || this.eventPresentation !== 'choosing'
       || !this.isContinuationActive(generation)
     ) return;
 
-    const itemType = carlitos ? 'carlitos' : inventoryItem!.type;
+    const itemType = inventoryItem.type;
     const use = ITEM_ANIMATION_LAB_USES[itemType];
     if (use === undefined) return;
     this.eventPresentation = 'using';
@@ -1163,6 +1174,29 @@ export class SurvivalPhase implements GamePhase {
     this.ui.restoreCommandFocus?.();
   }
 
+  private async runChestAction(
+    outcome: ActionOutcome,
+    beforeAction: SurvivalSnapshot,
+  ): Promise<void> {
+    const generation = ++this.lifecycleGeneration;
+    this.beginDeferredPresentationSync(beforeAction, generation);
+    this.setBusy(true);
+    await (this.world.play?.(outcome.cue) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+    const resultHold = this.ui.showRewardResult?.({
+      title: 'CHEST REWARD',
+      reward: outcome.rewardSummary ?? null,
+      lines: [],
+    }) ?? Promise.resolve();
+    await resultHold;
+    if (!this.isContinuationActive(generation)) return;
+    this.cancelDeferredPresentationSync(generation);
+    const snapshot = this.renderSnapshot(false, false);
+    this.setBusy(false);
+    if (isTerminal(snapshot.state)) this.presentTerminalOnce(snapshot);
+    else this.ui.restoreCommandFocus?.();
+  }
+
   private async runCarlitosAction(
     action: 'petCarlitos' | 'feedCarlitos',
   ): Promise<void> {
@@ -1206,7 +1240,7 @@ export class SurvivalPhase implements GamePhase {
     await (this.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
     if (!await this.waitForVisibilityResume(generation)) return;
 
-    const resultHold = this.ui.showDiveResult?.(formatDiveResult(outcome)) ?? Promise.resolve();
+    const resultHold = this.ui.showRewardResult?.(formatDiveResult(outcome)) ?? Promise.resolve();
     await resultHold;
     if (!await this.waitForVisibilityResume(generation)) return;
     this.setBusy(false);

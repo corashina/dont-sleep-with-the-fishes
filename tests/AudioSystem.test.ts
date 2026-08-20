@@ -185,6 +185,15 @@ describe('AudioSystem', () => {
     expect(backend.voices.map(({ id }) => id)).toEqual(['yawn']);
   });
 
+  it('plays the recovered chest sound when the chest opens', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.action('openChest');
+
+    expect(backend.voices.map(({ id }) => id)).toEqual(['chest']);
+  });
+
   it.each([
     'drifting-barrel',
     'drifting-chest',

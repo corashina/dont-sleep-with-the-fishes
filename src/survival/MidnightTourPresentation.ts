@@ -22,6 +22,7 @@ import {
   clamp01Unchecked as clamp01,
   smoothstepUnchecked as smoothstep,
 } from './animationMath';
+import { CHEST_DISPLAY_SCALE } from './ChestDisplay';
 import type {
   EventChoicePresentation,
   FocusedEventInteractionTarget,
@@ -626,7 +627,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       actor.userData.model = 'imported';
     }
     actor.position.copy(this.chestEnd);
-    actor.scale.setScalar(0.9);
+    actor.scale.setScalar(0.9 * CHEST_DISPLAY_SCALE);
     actor.visible = false;
     this.addResultActor(actor);
     return actor;

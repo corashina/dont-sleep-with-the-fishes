@@ -16,6 +16,7 @@ import {
   smoothstepUnchecked as smoothstep,
   type TimedAnimation,
 } from './animationMath';
+import { CHEST_DISPLAY_SCALE } from './ChestDisplay';
 import {
   applyDriftingWavePose,
   type DriftingWater,
@@ -93,7 +94,7 @@ export class DriftingCargoPresentation {
     chest.name = 'drifting-chest:model';
     chest.position.set(FLOAT_POSITION.x, FLOAT_POSITION.y, FLOAT_POSITION.z);
     chest.rotation.set(0.08, -0.18, -0.06);
-    chest.scale.setScalar(0.82);
+    chest.scale.setScalar(0.82 * CHEST_DISPLAY_SCALE);
     chest.visible = false;
     chest.userData.motionSource = 'shared-wave-field';
     chest.userData.waterlineY = 0;

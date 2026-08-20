@@ -18,6 +18,7 @@ import {
 import { ITEM_MODEL_SPECS } from './itemModelManifest';
 
 const CARLITOS_SEATED_SUPPORT_LIFT = 0.22;
+const STACK_GAP = 0.01;
 
 export type BoatItemSurface = 'shelf' | 'floor' | 'gunwale';
 export type BoatSupplyGroupId = ItemId | 'repairMaterial';
@@ -78,44 +79,54 @@ const restingSlot = (
   };
 };
 
+const stackedSlot = (
+  surface: BoatItemSurface,
+  id: ItemId,
+  x: number,
+  z: number,
+  yaw: number,
+  scale = 0.5,
+): SlotSpec => {
+  const slot = restingSlot(surface, id, x, z, yaw, scale);
+  const modelBounds = ITEM_MODEL_SPECS[id].normalizedBounds;
+  const height = (modelBounds.max[1] - modelBounds.min[1]) * scale;
+  return {
+    ...slot,
+    position: [x, slot.position[1] + height + STACK_GAP, z],
+  };
+};
+
 const BOAT_STORAGE_SLOTS = {
   cannedFood: [
-    restingSlot('shelf', 'cannedFood', -0.76, -1.47, -0.12),
-    restingSlot('shelf', 'cannedFood', -0.54, -1.56, 0.10),
-    restingSlot('shelf', 'cannedFood', -0.32, -1.43, -0.08),
+    restingSlot('floor', 'cannedFood', -0.10, -1.24, 0.10),
+    restingSlot('floor', 'cannedFood', 0.10, -1.24, -0.05),
+    stackedSlot('floor', 'cannedFood', 0, -1.24, -0.08),
   ],
   baitTin: [
-    restingSlot('shelf', 'baitTin', -0.08, -1.73, -0.05),
-    restingSlot('shelf', 'baitTin', 0.16, -1.70, 0.08),
+    restingSlot('shelf', 'baitTin', -0.28, -1.72, -0.05),
+    restingSlot('shelf', 'baitTin', -0.04, -1.72, 0.08),
+    restingSlot('shelf', 'baitTin', 0.20, -1.72, -0.03),
   ],
-  ductTape: [restingSlot('shelf', 'ductTape', 0.53, -1.37, 0.16, 0.5, Math.PI / 2)],
-  compass: [restingSlot('shelf', 'compass', 0.82, -1.32, -0.10)],
-  map: [restingSlot('shelf', 'map', -0.04, -1.35, 0.05, 0.5, Math.PI / 2)],
-  medicalKit: [restingSlot('floor', 'medicalKit', -1.12, -1.05, 0.10)],
-  spyglass: [restingSlot('shelf', 'spyglass', -1.08, -1.70, 0.14)],
+  ductTape: [restingSlot('shelf', 'ductTape', 0.50, -1.55, 0.05, 0.5, Math.PI / 2)],
+  compass: [restingSlot('shelf', 'compass', 0.78, -1.62, -0.10)],
+  map: [restingSlot('shelf', 'map', -0.68, -1.54, 0.04)],
+  medicalKit: [restingSlot('floor', 'medicalKit', -1.35, -1.05, 0.10)],
+  spyglass: [restingSlot('shelf', 'spyglass', -1.08, -1.70, Math.PI + 0.14)],
   fishingNet: [restingSlot('floor', 'fishingNet', -0.72, -0.34, 0.18)],
-  bucket: [restingSlot('floor', 'bucket', -1.25, -0.30, -0.12)],
-  flareGun: [restingSlot('shelf', 'flareGun', 0.59, -1.72, -0.18)],
-  scubaSet: [restingSlot('floor', 'scubaSet', -0.42, -1.05, -0.12)],
-  anchor: [restingSlot('floor', 'anchor', 0, -1.12, 0.08, 0.5, Math.PI / 2)],
-  bottledPaper: [restingSlot('shelf', 'bottledPaper', 1.17, -1.34, -0.10)],
-  umbrella: [restingSlot('floor', 'umbrella', 1.15, -0.28, 0.14, 0.5, 0.42, -0.28)],
-  swimRing: [restingSlot('floor', 'swimRing', 1.02, -1.05, -0.08)],
-  flashlight: [restingSlot('shelf', 'flashlight', 1.10, -1.74, 0.10)],
-  shotgun: [restingSlot('floor', 'shotgun', 0.50, -1.05, Math.PI / 2 - 0.18)],
-  energyBar: [restingSlot('shelf', 'energyBar', 0.29, -1.35, -0.08)],
+  bucket: [restingSlot('floor', 'bucket', -0.93, -1.05, -0.12)],
+  flareGun: [restingSlot('floor', 'flareGun', 0.72, -0.86, Math.PI / 2 - 0.22)],
+  scubaSet: [restingSlot('floor', 'scubaSet', 1.33, -0.50, -0.04)],
+  anchor: [restingSlot('floor', 'anchor', 1.43, -1.15, 0.75, 0.5, 0, -0.20)],
+  bottledPaper: [restingSlot('shelf', 'bottledPaper', 1.28, -1.52, Math.PI / 2)],
+  umbrella: [restingSlot('floor', 'umbrella', 0, 0.12, -Math.PI / 4, 0.5, 0, -42.7 * Math.PI / 180)],
+  swimRing: [restingSlot('floor', 'swimRing', -1.25, -0.35, -0.08, 0.5, 0, -0.95)],
+  flashlight: [restingSlot('shelf', 'flashlight', 1.05, -1.62, Math.PI / 2)],
+  shotgun: [restingSlot('floor', 'shotgun', 0.42, -0.67, 0.10)],
+  energyBar: [restingSlot('shelf', 'energyBar', 0.25, -1.35, -0.08)],
   carlitos: [
     restingSlot('gunwale', 'carlitos', 1.58, -1.75, Math.PI, 0.68),
   ],
 } satisfies Readonly<Record<ItemId, readonly SlotSpec[]>>;
-
-const BAIT_OVERFLOW_SLOT = restingSlot(
-  'shelf',
-  'baitTin',
-  0.23,
-  -1.58,
-  -0.06,
-);
 
 const REPAIR_MATERIAL_SLOTS = [
   {
@@ -192,8 +203,7 @@ export function boatSupplyTransform(
     if (!spec) throw new Error(`No boat supply slot for ${id}-${copyIndex + 1}`);
     return transformFromSpec(spec);
   }
-  const spec = BOAT_STORAGE_SLOTS[id][copyIndex]
-    ?? (id === 'baitTin' && copyIndex === 2 ? BAIT_OVERFLOW_SLOT : undefined);
+  const spec = BOAT_STORAGE_SLOTS[id][copyIndex];
   if (!spec) throw new Error(`No boat supply slot for ${id}-${copyIndex + 1}`);
   return transformFromSpec(spec);
 }

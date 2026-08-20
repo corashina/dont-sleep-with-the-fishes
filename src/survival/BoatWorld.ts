@@ -81,11 +81,9 @@ import {
   type BoatInteractionAnchor,
   type ProjectedBoatBounds,
 } from './BoatInteraction';
-import {
-  BoatSupplyDisplay,
-  GENERIC_EVENT_ITEM_USE_DURATION,
-} from './BoatSupplyDisplay';
+import { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import { CarlitosPresentation } from './CarlitosPresentation';
+import { CARLITOS_LAB_INSTANCE_ID } from './ItemAnimationLab';
 import { ChestDisplay } from './ChestDisplay';
 import { DivePresentation } from './DivePresentation';
 import type { DangerousWatersBoatReaction } from './DangerousWatersPresentation';
@@ -1001,7 +999,7 @@ export class BoatWorld {
       this.featuredEventCameraRig.add(this.cameraEffectsRoot);
       this.cameraEffectsRoot.add(this.cameraRig);
       this.cameraRig.add(camera);
-      camera.position.set(0, 0.88, 1.72);
+      camera.position.set(0, 0.88, 1.56);
       camera.lookAt(this.baseCameraLookTarget);
       this.baseCameraPosition.copy(camera.position);
       this.baseCameraQuaternion = camera.quaternion.clone();
@@ -1378,14 +1376,6 @@ export class BoatWorld {
     }
     const operation = ++this.weatherEventOperation;
     this.itemUseController.clear(this.phase);
-    if (
-      eventId === 'flowers'
-      && choiceId === 'carlitos'
-      && instanceId === 'carlitos-1'
-    ) {
-      await this.carlitos.play('pet', GENERIC_EVENT_ITEM_USE_DURATION);
-      return;
-    }
     const itemId = this.supplyDisplay.itemType(instanceId);
     if (itemId !== null && DAY_ACTION_ONLY_ITEM_IDS.includes(itemId)) return;
     const context = itemId === null
@@ -1924,7 +1914,7 @@ export class BoatWorld {
           quantity: 1,
           usableQuantity: 1,
           brokenQuantity: 0,
-          backingInstanceId: null,
+          backingInstanceId: CARLITOS_LAB_INSTANCE_ID,
           hitArea: {
             width: Math.max(54, companionProjection.width),
             height: Math.max(54, companionProjection.height),
@@ -2072,7 +2062,7 @@ export class BoatWorld {
     } = chestProjection;
     const chestAnchor = {
       id: 'persistent-chest',
-      label: 'CHEST',
+      label: 'OPEN',
       description: 'A closed chest. Opening it costs three energy.',
       itemType: null,
       toolId: 'chest',
@@ -2391,6 +2381,7 @@ export class BoatWorld {
     if (this.settledCue) this.applyCue(this.settledCue, 1, time);
     this.supplyDisplay.updatePropAnimations(delta);
     this.carlitos.update(delta);
+    this.chestDisplay.update(delta);
 
     if (advancePresentation) {
       const sequence = this.activeSequence;

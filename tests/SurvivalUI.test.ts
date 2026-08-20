@@ -87,7 +87,7 @@ describe('item animation lab caption', () => {
     expect(caption.classList.contains('is-visible')).toBe(true);
     expect(caption.textContent).toContain('ITEM ANIMATION LAB');
     expect(caption.textContent).toContain('SELECT AN ITEM');
-    expect(caption.getAttribute('aria-label')).toContain('Each item returns');
+    expect(caption.getAttribute('aria-label')).toContain('Carlitos opens his stats');
     expect(
       mount.querySelector<HTMLElement>('[data-anchor-id="scubaSet-test"]')
         ?.getAttribute('aria-label'),
@@ -119,6 +119,101 @@ describe('item animation lab caption', () => {
       'repair-tools',
     );
   });
+
+  it('opens the test chest from the lab', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const onAction = vi.fn();
+    ui.onAction = onAction;
+    ui.render(snapshot({ energy: 3 }), () => null);
+    ui.setAnchors([{
+      id: 'persistent-chest',
+      label: 'OPEN',
+      description: 'A closed chest.',
+      itemType: null,
+      toolId: 'chest',
+      action: 'openChest',
+      remainingUses: null,
+      quantity: 1,
+      x: 400,
+      y: 300,
+      visible: true,
+      depleted: false,
+    }]);
+    ui.beginEventPresentation();
+    ui.showItemAnimationLab();
+    ui.setEventSelection(new Map());
+
+    const chest = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="persistent-chest"]',
+    )!;
+    expect(chest.disabled).toBe(false);
+    expect(chest.getAttribute('aria-disabled')).toBe('false');
+
+    chest.click();
+
+    expect(onAction).toHaveBeenCalledExactlyOnceWith('openChest', undefined);
+  });
+
+  it.each(['pointer', 'keyboard'] as const)(
+    'opens Carlitos stats from his lab anchor with %s input',
+    (input) => {
+      const mount = document.createElement('main');
+      document.body.append(mount);
+      const ui = createUI(mount);
+      const onEventItem = vi.fn();
+      const onAction = vi.fn();
+      ui.onEventItem = onEventItem;
+      ui.onAction = onAction;
+      ui.render(snapshot({
+        carlitos: {
+          alive: true,
+          energy: 2,
+          hunger: 4,
+          sickness: 1,
+          unhappiness: 5,
+          pettedToday: false,
+          deathCause: null,
+        },
+      }), () => null);
+      ui.setAnchors([carlitosAnchor()]);
+      ui.beginEventPresentation();
+      ui.showItemAnimationLab();
+      ui.setEventSelection(new Map<ItemInstanceId, string>([
+        ['carlitos-1' as ItemInstanceId, 'carlitos'],
+      ]));
+
+      const carlitos = mount.querySelector<HTMLButtonElement>(
+        '[data-anchor-id="carlitos"]',
+      )!;
+      expect(carlitos.dataset.eventState).toBe('available');
+      expect(carlitos.getAttribute('aria-label')).toBe('CARLITOS');
+      expect(carlitos.querySelector<HTMLElement>('[role="tooltip"]')!.hidden)
+        .toBe(true);
+
+      if (input === 'pointer') carlitos.click();
+      else {
+        carlitos.focus();
+        press('[data-anchor-id="carlitos"]', 'Enter');
+      }
+
+      expect(onEventItem).not.toHaveBeenCalled();
+      const card = mount.querySelector<HTMLElement>('[data-carlitos-card]')!;
+      expect(card.hidden).toBe(false);
+      expect(card.querySelector('[data-carlitos-hunger-label]')?.textContent)
+        .toBe('PECKISH');
+      expect(card.querySelector('[data-carlitos-happiness]')?.textContent)
+        .toBe('LONELY');
+      expect(card.querySelector('[data-carlitos-health]')?.textContent)
+        .toBe('UNWELL');
+      expect(card.querySelector('[data-carlitos-energy-label]')?.textContent)
+        .toBe('2 / 3');
+
+      card.querySelector<HTMLButtonElement>('[data-action="petCarlitos"]')!.click();
+      expect(onAction).toHaveBeenCalledExactlyOnceWith('petCarlitos', undefined);
+    },
+  );
 });
 
 function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
@@ -187,6 +282,7 @@ function openContextualEvent(ui: SurvivalUI): void {
 
 const carlitosAnchor = (x = 720, y = 360) => ({
   id: 'carlitos',
+  backingInstanceId: 'carlitos-1' as ItemInstanceId,
   itemType: null,
   toolId: null,
   action: null,
@@ -317,7 +413,7 @@ describe('SurvivalUI', () => {
       .toBeCloseTo(52.36, 2);
   });
 
-  it('opens the compact Carlitos card with status and short unavailable labels', () => {
+  it('opens the simple cat status list with large actions and short unavailable labels', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -348,29 +444,58 @@ describe('SurvivalUI', () => {
 
     const card = mount.querySelector<HTMLElement>('[data-carlitos-card]')!;
     expect(card.hidden).toBe(false);
+    expect(card.textContent).not.toContain('CARLITOS');
+    expect(card.querySelector('.carlitos-card__cat')).toBeNull();
+    expect(card.querySelector('h2')).toBeNull();
+    expect(card.querySelector('.carlitos-status__name')).toBeNull();
+    expect(card.getAttribute('aria-label')).toBe('Cat status');
+    expect(card.querySelectorAll('.carlitos-status')).toHaveLength(4);
+    expect(card.querySelector('.carlitos-status:first-child'))
+      .toBe(card.querySelector('[data-carlitos-energy-row]'));
+    for (const [row, artwork] of [
+      ['hunger', 'hunger'],
+      ['happiness', 'mood'],
+      ['health', 'health'],
+      ['energy', 'energy'],
+    ] as const) {
+      expect(card.querySelector(`[data-carlitos-${row}-row] [data-ui-artwork="${artwork}"]`))
+        .not.toBeNull();
+    }
     expect(card.querySelector('[data-carlitos-hunger-label]')?.textContent).toBe('PECKISH');
-    expect(card.querySelectorAll('[data-carlitos-hunger-step][data-filled="true"]')).toHaveLength(4);
     expect(card.querySelector('[data-carlitos-energy-label]')?.textContent).toBe('2 / 3');
-    expect(card.querySelectorAll('[data-carlitos-energy-step][data-filled="true"]')).toHaveLength(2);
     expect(card.querySelector('[data-carlitos-happiness]')?.textContent).toBe('LONELY');
     expect(card.querySelector('[data-carlitos-health]')?.textContent).toBe('SICK');
+    expect(card.querySelector('[data-carlitos-hunger-row] [data-action="feedCarlitos"]')).not.toBeNull();
+    expect(card.querySelector('[data-carlitos-happiness-row] [data-action="petCarlitos"]')).not.toBeNull();
+    expect(card.querySelector('[data-carlitos-health-row] [data-action="treatCarlitos"]')).not.toBeNull();
+    expect(card.querySelector('[data-carlitos-energy-row] [data-action]')).toBeNull();
+    expect(card.querySelector('.carlitos-care')).toBeNull();
     expect(card.textContent).not.toContain('CREWMATE STATUS');
     expect(card.textContent).not.toContain("SHIP'S CAT");
     expect(card.textContent).not.toContain('DANGER');
-    for (const [actionId, reason, shortReason] of [
-      ['petCarlitos', 'Carlitos has already been petted today.', 'PETTED'],
-      ['feedCarlitos', 'No food remains.', 'NO FOOD'],
-      ['treatCarlitos', 'No medical kit remains.', 'NO KIT'],
+    for (const [actionId, reason, label] of [
+      ['petCarlitos', 'Carlitos has already been petted today.', 'PET'],
+      ['feedCarlitos', 'No food remains.', 'FEED'],
+      ['treatCarlitos', 'No medical kit remains.', 'TREAT'],
     ] as const) {
       const button = card.querySelector<HTMLButtonElement>(`[data-action="${actionId}"]`)!;
+      expect(button.classList).toContain('carlitos-status__action');
       expect(button.getAttribute('aria-disabled')).toBe('true');
       expect(button.getAttribute('aria-description')).toBe(reason);
-      expect(button.querySelector('[data-carlitos-action-reason]')?.textContent).toBe(shortReason);
+      expect(button.textContent?.trim()).toBe(label);
+      expect(button.querySelector('[data-carlitos-action-reason]')).toBeNull();
       button.click();
     }
     expect(action).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(card.querySelector('[data-action="petCarlitos"]'));
     expect(mount.querySelector('[data-pause]')?.contains(card)).toBe(false);
+    expect(mainStyles).not.toMatch(/\.carlitos-card::after/);
+    expect(mainStyles).toMatch(/\.carlitos-card__statuses\s*\{[^}]*grid-template-columns:\s*1fr/s);
+    expect(mainStyles).toMatch(/\.carlitos-status\s*\{[^}]*grid-template-columns:\s*32px minmax\(0, 1fr\) 88px/s);
+    expect(mainStyles).toMatch(/\.carlitos-status\s*\{[^}]*height:\s*58px[^}]*min-height:\s*58px/s);
+    expect(mainStyles).toMatch(/\.carlitos-status\[data-carlitos-energy-row\]\s*\{[^}]*grid-template-columns:\s*auto auto[^}]*justify-content:\s*start/s);
+    expect(mainStyles).toMatch(/\.carlitos-card__close\s*\{[^}]*top:\s*26px/s);
+    expect(mainStyles).toMatch(/\.carlitos-status__action\s*\{[^}]*display:\s*flex[^}]*min-height:\s*40px/s);
   });
 
   it('supports Carlitos pointer, keyboard, dismissal, focus, and action flows', () => {
@@ -1402,6 +1527,33 @@ describe('SurvivalUI', () => {
       .toBe(`REPAIR ${'\u26a1'.repeat(energyCost)}`);
     expect(repair.getAttribute('aria-label'))
       .toBe(`REPAIR, ${['', 'one', 'two', 'three'][energyCost]} energy`);
+  });
+
+  it('shows Open and three energy symbols beside the recovered chest', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.render(snapshot({ energy: 3 }), () => null);
+    ui.setAnchors([{
+      id: 'persistent-chest',
+      label: 'OPEN',
+      description: 'A closed chest.',
+      itemType: null,
+      toolId: 'chest',
+      action: 'openChest',
+      remainingUses: null,
+      quantity: 1,
+      x: 400,
+      y: 300,
+      visible: true,
+      depleted: false,
+    }]);
+
+    const chest = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="persistent-chest"]',
+    )!;
+    expect(chest.querySelector('[role="tooltip"]')?.textContent)
+      .toBe(`OPEN ${'\u26a1'.repeat(3)}`);
+    expect(chest.getAttribute('aria-label')).toBe('OPEN, three energy');
   });
 
   it('keeps full-hull repair visible but unavailable', () => {

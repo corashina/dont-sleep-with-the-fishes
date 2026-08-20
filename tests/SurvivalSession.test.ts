@@ -600,6 +600,7 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.perform('openChest')).toMatchObject({
       accepted: true,
       code: 'chest-opened',
+      cue: 'none',
       deltas: { energy: -3 },
       rewardSummary: { kind: 'item', id: 'compass', quantity: 1 },
     });
@@ -869,7 +870,7 @@ describe('SurvivalSession daytime actions', () => {
     expect(flare.snapshot()).toMatchObject({
       state: 'nightEvent',
       rescueProgress: 40,
-      inventory: { 'flareGun-1': { condition: 'consumed' } },
+      inventory: { 'flareGun-1': { condition: 'usable' } },
     });
   });
 

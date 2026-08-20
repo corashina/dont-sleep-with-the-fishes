@@ -107,17 +107,6 @@ const CARLITOS_ACTIONS = [
   'treatCarlitos',
 ] as const satisfies readonly DayActionId[];
 
-function compactCarlitosActionReason(
-  action: (typeof CARLITOS_ACTIONS)[number],
-  reason: string,
-): string {
-  if (action === 'petCarlitos') return 'PETTED';
-  if (action === 'feedCarlitos') {
-    return reason.includes('satiated') ? 'FULL' : 'NO FOOD';
-  }
-  return reason.includes('no treatment') ? 'HEALTHY' : 'NO KIT';
-}
-
 const ENERGY_WORDS = ['', 'one', 'two', 'three'] as const;
 
 function spokenEnergyCost(cost: number): string | null {
@@ -265,8 +254,8 @@ function meterMarkup(meter: MeterDefinition): string {
 export type FishingUiMode = 'hidden' | 'aiming' | 'waiting' | 'bite' | 'result' | 'ready';
 export type SleepCoverProfile = 'solid' | 'dive' | 'midnight-tour';
 
-export interface DiveResultView {
-  readonly title: 'DIVE RESULT';
+export interface RewardResultView {
+  readonly title: 'DIVE RESULT' | 'CHEST REWARD';
   readonly reward: RewardSummary | null;
   readonly lines: readonly string[];
 }
@@ -455,7 +444,7 @@ export class SurvivalUI {
   private pendingFishingFade: PendingFade | null = null;
   private pendingSleepTransition: PendingFade | null = null;
   private pendingDiveCoveredHold: PendingFade | null = null;
-  private pendingDiveResultConfirmation: PendingFade | null = null;
+  private pendingRewardResultConfirmation: PendingFade | null = null;
   private pendingEventChoiceBeat: PendingFade | null = null;
   private pendingEventOutcomeHold: PendingFade | null = null;
   private pendingCoveredSceneSettle: PendingFade | null = null;
@@ -514,45 +503,35 @@ export class SurvivalUI {
         ${METERS.map(meterMarkup).join('')}
       </section>
       <div class="boat-anchors" data-boat-anchors aria-label="Boat interaction points"></div>
-      <section class="carlitos-card scuba-popup-paper" data-carlitos-card aria-labelledby="carlitos-card-title" aria-hidden="true" hidden>
-        <div class="carlitos-card__heading">
-          <span class="carlitos-card__cat" aria-hidden="true"><i></i></span>
-          <h2 class="scuba-popup-title ui-role-display" id="carlitos-card-title">CARLITOS</h2>
-          <button type="button" class="carlitos-card__close ui-role-context" data-carlitos-close aria-label="Close Carlitos status">&times;</button>
-        </div>
+      <section class="carlitos-card scuba-popup-paper" data-carlitos-card aria-label="Cat status" aria-hidden="true" hidden>
+        <button type="button" class="carlitos-card__close ui-role-context" data-carlitos-close aria-label="Close cat status">&times;</button>
         <div class="carlitos-card__statuses">
+          <div class="carlitos-status" data-carlitos-energy-row>
+            <span class="carlitos-status__icon carlitos-status__icon--energy" aria-hidden="true">${uiArtwork('energy')}</span>
+            <strong class="ui-role-numeral" data-carlitos-energy-label></strong>
+          </div>
           <div class="carlitos-status" data-carlitos-hunger-row>
-            <span class="carlitos-status__name ui-role-context">HUNGER</span>
+            <span class="carlitos-status__icon carlitos-status__icon--hunger" aria-hidden="true">${uiArtwork('hunger')}</span>
             <strong class="ui-role-context" data-carlitos-hunger-label></strong>
-            <span class="carlitos-hunger" aria-hidden="true">
-              ${Array.from({ length: 5 }, (_, index) => `<i data-carlitos-hunger-step="${index + 1}" data-filled="false"></i>`).join('')}
-            </span>
+            <button type="button" class="carlitos-status__action ui-role-context" data-action="feedCarlitos" aria-disabled="false">
+              <span>FEED</span>
+            </button>
           </div>
           <div class="carlitos-status" data-carlitos-happiness-row>
-            <span class="carlitos-status__name ui-role-context">MOOD</span>
+            <span class="carlitos-status__icon carlitos-status__icon--mood" aria-hidden="true">${uiArtwork('mood')}</span>
             <strong class="ui-role-context" data-carlitos-happiness></strong>
+            <button type="button" class="carlitos-status__action ui-role-context" data-action="petCarlitos" aria-disabled="false">
+              <span>PET</span>
+            </button>
           </div>
           <div class="carlitos-status" data-carlitos-health-row>
-            <span class="carlitos-status__name ui-role-context">HEALTH</span>
+            <span class="carlitos-status__icon carlitos-status__icon--health" aria-hidden="true">${uiArtwork('health')}</span>
             <strong class="ui-role-context" data-carlitos-health></strong>
-          </div>
-          <div class="carlitos-status" data-carlitos-energy-row>
-            <span class="carlitos-status__name ui-role-context">ENERGY</span>
-            <strong class="ui-role-numeral" data-carlitos-energy-label></strong>
-            <span class="carlitos-energy" aria-hidden="true">
-              <i data-carlitos-energy-step="1"></i>
-              <i data-carlitos-energy-step="2"></i>
-              <i data-carlitos-energy-step="3"></i>
-            </span>
+            <button type="button" class="carlitos-status__action ui-role-context" data-action="treatCarlitos" aria-disabled="false">
+              <span>TREAT</span>
+            </button>
           </div>
         </div>
-        <nav class="carlitos-care" aria-label="Carlitos care">
-          ${CARLITOS_ACTIONS.map((action) => `
-            <button type="button" class="carlitos-care__action ui-role-context" data-action="${action}" aria-disabled="false">
-              <span>${action === 'petCarlitos' ? 'PET' : action === 'feedCarlitos' ? 'FEED' : 'TREAT'}</span>
-              <small class="ui-role-narrative" data-carlitos-action-reason hidden></small>
-            </button>`).join('')}
-        </nav>
       </section>
       <section class="fishing-layer" data-fishing role="region" aria-label="Fishing interaction" aria-hidden="true" inert tabindex="-1">
         <div class="survival-announcer" data-fishing-live aria-live="polite" aria-atomic="true"></div>
@@ -845,7 +824,7 @@ export class SurvivalUI {
     this.updateText(
       'event:detail',
       this.eventDetail,
-      'SELECT AN ITEM OR TOOL. EACH RETURNS AFTER ITS ANIMATION.',
+      'SELECT AN ITEM OR TOOL. CARLITOS OPENS HIS STATS.',
     );
     this.eventDetail.hidden = false;
     this.eventRisk.textContent = '';
@@ -855,13 +834,13 @@ export class SurvivalUI {
     this.eventPresentationActive = true;
     this.eventCaption.setAttribute(
       'aria-label',
-      'Item Animation Lab. Select an item. Each item returns after its animation.',
+      'Item Animation Lab. Select an item. Carlitos opens his stats.',
     );
     this.eventCaption.classList.add('is-visible');
     this.eventCaption.setAttribute('aria-hidden', 'false');
     this.syncCommandState();
     this.publishAnnouncement(
-      'Item Animation Lab. Select an item. Each item returns after its animation.',
+      'Item Animation Lab. Select an item. Carlitos opens his stats.',
     );
   }
 
@@ -958,6 +937,7 @@ export class SurvivalUI {
 
   clearEventPresentation(): void {
     if (this.disposed) return;
+    this.closeCarlitosCard(false);
     this.pendingEventChoiceBeat?.finish();
     this.eventSleepMask.classList.remove('is-visible');
     this.badSleepCue.classList.remove('is-visible');
@@ -1059,10 +1039,18 @@ export class SurvivalUI {
     );
   }
 
-  showDiveResult(view: DiveResultView): Promise<void> {
+  showRewardResult(view: RewardResultView): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    this.pendingDiveResultConfirmation?.finish();
+    this.pendingRewardResultConfirmation?.finish();
+    this.diveResultLayer.classList.toggle(
+      'is-chest-reward',
+      view.title === 'CHEST REWARD',
+    );
     this.diveResultTitle.textContent = view.title;
+    this.diveResultClose.setAttribute(
+      'aria-label',
+      view.title === 'CHEST REWARD' ? 'Close chest reward' : 'Close dive result',
+    );
     this.renderDiveReward(view.reward);
     this.diveResultLines.hidden = view.lines.length === 0;
     this.diveResultLines.replaceChildren(...view.lines.map((line) => {
@@ -1075,27 +1063,28 @@ export class SurvivalUI {
       const finish = (): void => {
         if (settled) return;
         settled = true;
-        if (this.pendingDiveResultConfirmation?.finish === finish) {
-          this.pendingDiveResultConfirmation = null;
-          this.clearDiveResultView();
+        if (this.pendingRewardResultConfirmation?.finish === finish) {
+          this.pendingRewardResultConfirmation = null;
+          this.clearRewardResultView();
         }
         resolve();
       };
-      this.pendingDiveResultConfirmation = { finish };
+      this.pendingRewardResultConfirmation = { finish };
     });
     this.showLayer(this.diveResultLayer);
     this.diveResultClose.focus();
     return confirmation;
   }
 
-  hideDiveResult(): void {
+  hideRewardResult(): void {
     if (this.disposed) return;
-    this.pendingDiveResultConfirmation?.finish();
-    this.clearDiveResultView();
+    this.pendingRewardResultConfirmation?.finish();
+    this.clearRewardResultView();
   }
 
-  private clearDiveResultView(): void {
+  private clearRewardResultView(): void {
     this.hideLayer(this.diveResultLayer);
+    this.diveResultLayer.classList.remove('is-chest-reward');
     this.diveResultTitle.textContent = '';
     this.diveResultRewards.hidden = true;
     this.diveResultRewards.replaceChildren();
@@ -1454,7 +1443,7 @@ export class SurvivalUI {
     this.eventChoices.hidden = true;
     this.pendingSleepTransition?.finish();
     this.pendingDiveCoveredHold?.finish();
-    this.pendingDiveResultConfirmation?.finish();
+    this.pendingRewardResultConfirmation?.finish();
     this.pendingFishingFade?.finish();
     this.pendingEventChoiceBeat?.finish();
     this.pendingEventOutcomeHold?.finish();
@@ -1627,7 +1616,8 @@ export class SurvivalUI {
       ? `${itemLabel}${stateText} — ${itemDescription}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`
       : `${itemLabel}${stateText}${itemLabel === action.label ? '' : ` — ${action.label}`} — ${itemDescription} — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
     const visibleLabel = anchor.companionId === 'carlitos'
-      ? anchoredChoice?.label.toLocaleUpperCase('en-US') ?? 'CARLITOS: CHECK STATUS'
+      ? anchoredChoice?.label.toLocaleUpperCase('en-US')
+        ?? (eventItemEligible ? 'CARLITOS' : 'CARLITOS: CHECK STATUS')
       : anchor.label ?? (anchor.itemType !== null
       ? quantityLabel(ITEM_LABELS[anchor.itemType], quantity)
       : anchor.supplyGroupId === 'repairMaterial'
@@ -1649,6 +1639,8 @@ export class SurvivalUI {
           : `${'⚡'.repeat(energyCost)}${reason === null ? '' : ' — INSUFFICIENT ENERGY'}`;
     const tooltipNodes = this.anchorTooltipNodes.get(button);
     if (tooltipNodes !== undefined) {
+      tooltipNodes.tooltip.hidden = this.itemAnimationLabActive()
+        && anchor.companionId === 'carlitos';
       if (tooltipNodes.label.data !== visibleLabel) tooltipNodes.label.data = visibleLabel;
       const separator = energyIndicator === ''
         ? ''
@@ -1716,14 +1708,6 @@ export class SurvivalUI {
       status.health.toLocaleUpperCase('en-US');
     requireElement(this.carlitosCard, '[data-carlitos-energy-label]').textContent =
       `${carlitos.energy} / 3`;
-    this.carlitosCard.querySelectorAll<HTMLElement>('[data-carlitos-hunger-step]')
-      .forEach((step, index) => {
-        step.dataset.filled = String(index < carlitos.hunger);
-      });
-    this.carlitosCard.querySelectorAll<HTMLElement>('[data-carlitos-energy-step]')
-      .forEach((step, index) => {
-        step.dataset.filled = String(index < carlitos.energy);
-      });
     this.setCarlitosDanger(
       '[data-carlitos-hunger-row]',
       status.hunger === 'Starving',
@@ -1767,11 +1751,6 @@ export class SurvivalUI {
               : 'Treat Carlitos with one medical kit.'
         ),
       );
-      const reasonNode = requireElement<HTMLElement>(button, '[data-carlitos-action-reason]');
-      reasonNode.hidden = reason === null;
-      reasonNode.textContent = reason === null
-        ? ''
-        : compactCarlitosActionReason(action, reason);
     });
   }
 
@@ -1781,7 +1760,7 @@ export class SurvivalUI {
       snapshot?.carlitos?.alive !== true
       || this.busy
       || this.paused
-      || this.eventPresentationActive
+      || (this.eventPresentationActive && !this.itemAnimationLabActive())
       || this.overlayOpen()
       || anchorButton.disabled
       || anchorButton.getAttribute('aria-hidden') === 'true'
@@ -1795,6 +1774,11 @@ export class SurvivalUI {
     this.carlitosCard.classList.add('is-visible');
     this.positionCarlitosCard(anchor);
     this.carlitosPet.focus();
+  }
+
+  private itemAnimationLabActive(): boolean {
+    return this.eventPresentationActive
+      && this.eventCaption.dataset.eventId === 'item-animation-lab';
   }
 
   private closeCarlitosCard(restoreFocus: boolean): void {
@@ -2061,6 +2045,9 @@ export class SurvivalUI {
     anchor: BoatInteractionAnchor,
   ): AnchorInteractionState {
     if (!this.eventPresentationActive) return 'ordinary';
+    if (this.itemAnimationLabActive() && anchor.action === 'openChest') {
+      return this.busy ? 'eventLocked' : 'ordinary';
+    }
 
     if (anchor.eventFocusId !== undefined) {
       return this.busy || this.eventEligibility === null
@@ -2649,6 +2636,10 @@ export class SurvivalUI {
     if (
       button.dataset.companion === 'carlitos'
       && !button.hasAttribute('data-event-choice')
+      && (
+        button.dataset.eventState === undefined
+        || this.itemAnimationLabActive()
+      )
     ) {
       this.openCarlitosCard(button);
       return;
@@ -2711,7 +2702,7 @@ export class SurvivalUI {
     }
     if (button.hasAttribute('data-dive-result-close')) {
       if (topmostModal !== this.diveResultLayer) return;
-      this.pendingDiveResultConfirmation?.finish();
+      this.pendingRewardResultConfirmation?.finish();
       return;
     }
     if (button.hasAttribute('data-fishing-result-continue')) {
@@ -2730,7 +2721,12 @@ export class SurvivalUI {
       return;
     }
     if (action !== undefined) {
-      if (this.overlayOpen() || this.eventPresentationActive) return;
+      const itemAnimationLabAction = this.itemAnimationLabActive()
+        && (
+          this.carlitosCard.contains(button)
+          || action.id === 'openChest'
+        );
+      if (this.overlayOpen() || (this.eventPresentationActive && !itemAnimationLabAction)) return;
       this.activateDayAction(action.id, button);
       return;
     }
@@ -2787,6 +2783,10 @@ export class SurvivalUI {
       target instanceof HTMLButtonElement
       && target.dataset.companion === 'carlitos'
       && !target.hasAttribute('data-event-choice')
+      && (
+        target.dataset.eventState === undefined
+        || this.itemAnimationLabActive()
+      )
       && (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar')
     ) {
       event.preventDefault();

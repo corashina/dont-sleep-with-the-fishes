@@ -62,6 +62,11 @@ export interface AudioControls {
   setMuted(muted: boolean): void;
 }
 
+export interface CameraControls {
+  readonly fieldOfView: number;
+  setFieldOfView(fieldOfView: number): void;
+}
+
 const DEFAULT_WEATHER_CONTROLS: WeatherControls = {
   selected: 'calm',
   source: 'normal',
@@ -97,6 +102,7 @@ export class PostProcessingConsole {
     ),
     private readonly performanceStatsControls?: PerformanceStatsControls,
     private readonly audioControls?: AudioControls,
+    private readonly cameraControls?: CameraControls,
   ) {
     const state = controls.getState();
     this.weatherId = weatherControls.selected;
@@ -182,6 +188,26 @@ export class PostProcessingConsole {
           </label>
         </div>
       `;
+    const cameraControl = cameraControls === undefined
+      ? ''
+      : `
+        <div class="post-processing-console__group">
+          <strong>CAMERA</strong>
+          <label class="post-processing-console__slider">
+            <span>Field of view</span>
+            <output data-camera-fov-output>${Math.round(cameraControls.fieldOfView)}°</output>
+            <input
+              type="range"
+              min="40"
+              max="110"
+              step="1"
+              value="${cameraControls.fieldOfView}"
+              data-camera-fov
+              aria-label="Vertical field of view"
+            >
+          </label>
+        </div>
+      `;
     this.element.className = 'post-processing-console';
     this.element.dataset.open = 'false';
     this.element.innerHTML = `
@@ -239,6 +265,7 @@ export class PostProcessingConsole {
             </section>
             <section class="post-processing-console__category">
               <h2>GAMEPLAY</h2>
+              ${cameraControl}
               ${gameplayPhysicsControl}
               ${timeOfDayControls === undefined
                 ? ''
@@ -499,6 +526,15 @@ export class PostProcessingConsole {
   private readonly handleInput = (event: Event): void => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement) || target.type !== 'range') return;
+    if (target.matches('[data-camera-fov]')) {
+      const fieldOfView = Math.min(110, Math.max(40, Number(target.value)));
+      const output = this.element.querySelector<HTMLOutputElement>(
+        '[data-camera-fov-output]',
+      );
+      if (output !== null) output.value = `${Math.round(fieldOfView)}°`;
+      this.cameraControls?.setFieldOfView(fieldOfView);
+      return;
+    }
     if (target.matches('[data-audio-volume]')) {
       const volume = Math.min(100, Math.max(0, Number(target.value)));
       const output = this.element.querySelector<HTMLOutputElement>(

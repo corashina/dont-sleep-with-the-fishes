@@ -34,6 +34,7 @@ import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
+import { CHEST_DISPLAY_SCALE } from './ChestDisplay';
 import type { MutableSupplyPose } from './BoatSupplyDisplay';
 import {
   clamp01Unchecked as clamp01,
@@ -775,7 +776,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
       actor.add(body, lid, band);
       actor.userData.model = 'procedural';
     }
-    actor.scale.setScalar(0.78);
+    actor.scale.setScalar(0.78 * CHEST_DISPLAY_SCALE);
     this.rewardActors.add(actor);
     collectMeshResources(
       actor,

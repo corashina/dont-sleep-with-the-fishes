@@ -45,7 +45,11 @@ const presentation = {
   cannedFood: { targetLongestDimension: 0.42, rotation: [0, 0, 0], offset: [0, 0.04, 0] },
   baitTin: { targetLongestDimension: 0.36, rotation: [0, 0, 0], offset: [0, 0.04, 0] },
   ductTape: { targetLongestDimension: 0.55, rotation: [0, 0, 0], offset: [0, 0, 0] },
-  compass: { targetLongestDimension: 0.48, rotation: [0, 0, 0], offset: [0, 0, 0] },
+  compass: {
+    targetLongestDimension: 0.48,
+    rotation: [0, -Math.PI / 2, 0],
+    offset: [0, 0, 0],
+  },
   map: { targetLongestDimension: 0.62, rotation: [0, 0, 0], offset: [0, 0, 0] },
   medicalKit: { targetLongestDimension: 0.72, rotation: [0, 0, 0], offset: [0, 0.07, 0] },
   spyglass: { targetLongestDimension: 0.72, rotation: [0, 0, 0], offset: [0, 0, 0] },

@@ -359,13 +359,14 @@ describe('survival events', () => {
     expect(resultIds('handyman', 'touch')).toEqual(['handyman-touch']);
     expect(resultIds('handyman', 'sleep')).toEqual(['handyman-sleep']);
     expect(resultIds('other-people', 'flareGun')).toEqual(['people-signaled']);
-    expect(event('other-people').choices.find(({ id }) => id === 'flareGun')?.outcomes)
-      .toMatchObject([{
-        effects: {
-          resources: [{ resource: 'rescueProgress', operation: 'add', value: 25 }],
-          items: [{ kind: 'consume', itemId: 'flareGun', quantity: 1 }],
-        },
-      }]);
+    const flareOutcome = event('other-people').choices
+      .find(({ id }) => id === 'flareGun')?.outcomes[0];
+    expect(flareOutcome).toMatchObject({
+      effects: {
+        resources: [{ resource: 'rescueProgress', operation: 'add', value: 25 }],
+      },
+    });
+    expect(flareOutcome?.effects.items).toBeUndefined();
     expect(resultIds('other-people', 'flashlight')).toEqual(['people-rescue', 'people-missed']);
     expect(resultIds('other-people', 'sleep')).toEqual(['people-pass']);
     expect(event('other-people').choices.map(({ id }) => id)).not.toContain('pass');
