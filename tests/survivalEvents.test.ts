@@ -13,6 +13,7 @@ import {
   validateSurvivalEventCatalog,
 } from '../src/survival/events';
 import { sequenceRandom } from './helpers/random';
+import type { SurvivalEventDefinition } from '../src/survival/survivalTypes';
 
 const EXPECTED_WEIGHTS = {
   'dangerous-waters': 2, leak: 2, 'school-of-fish': 4, snatcher: 3,
@@ -51,6 +52,27 @@ const resource = (resourceName: string, operation: string, value: unknown) => ({
 const add = (name: string, value: unknown) => resource(name, 'add', value);
 const subtract = (name: string, value: unknown) => resource(name, 'subtract', value);
 const item = (kind: string, itemId: string, quantity = 1) => ({ kind, itemId, quantity });
+
+const weightedTestEvent = (
+  id: string,
+  danger: SurvivalEventDefinition['danger'],
+): SurvivalEventDefinition => ({
+  id,
+  phase: 'night',
+  title: id,
+  revealText: id,
+  prompt: 'Choose.',
+  danger,
+  earliestDay: 1,
+  weight: 1,
+  cooldownDays: 0,
+  choices: [{
+    id: 'sleep',
+    label: 'Sleep',
+    outcomes: [{ weight: 1, message: 'Done.', effects: {} }],
+  }],
+  cue: 'none',
+});
 
 describe('survival events', () => {
   it('uses the approved phase, risk, weight, and cooldown rules', () => {
@@ -637,6 +659,15 @@ describe('survival events', () => {
     expect(drawWeightedEvent(pool, sequenceRandom([pool[0]!.weight / (pool[0]!.weight + pool[1]!.weight)])).id).toBe(pool[1]!.id);
     expect(drawWeightedEvent([], sequenceRandom([0]), 'day').id).toBe('day-calm-fallback');
     expect(drawWeightedEvent([], sequenceRandom([0]), 'night').id).toBe('night-calm-fallback');
+  });
+
+  it('uses pressure-adjusted dangerous weights', () => {
+    const safe = weightedTestEvent('safe-test', 'safe');
+    const dangerous = weightedTestEvent('danger-test', 'dangerous');
+    expect(drawWeightedEvent([safe, dangerous], sequenceRandom([0.4]), 'night', 0).id)
+      .toBe('safe-test');
+    expect(drawWeightedEvent([safe, dangerous], sequenceRandom([0.4]), 'night', 4).id)
+      .toBe('danger-test');
   });
 
   it('rejects malformed event IDs, choice IDs, weights, effects, mutations, and day bounds', () => {

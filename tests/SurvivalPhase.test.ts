@@ -1754,7 +1754,7 @@ describe('SurvivalPhase orchestration', () => {
     const rejection = {
       accepted: false,
       code: 'not-enough-energy',
-      message: 'Fishing requires one energy.',
+      message: 'Fishing requires two energy.',
       deltas: {},
       cue: 'none' as const,
     };
@@ -1788,9 +1788,9 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(rig.session.beginFishing).toHaveBeenCalledOnce();
     expect(rig.session.perform).not.toHaveBeenCalled();
-    expect(rig.realSession.snapshot()).toMatchObject({ energy: 2, actedToday: true });
+    expect(rig.realSession.snapshot()).toMatchObject({ energy: 1, actedToday: true });
     expect(rig.calls.indexOf('lock')).toBeLessThan(rig.calls.indexOf('play:enter'));
-    expect(rig.calls.indexOf('render:2:0:0')).toBeLessThan(rig.calls.indexOf('play:enter'));
+    expect(rig.calls.indexOf('render:1:0:0')).toBeLessThan(rig.calls.indexOf('play:enter'));
     expect(rig.calls.some((call) => call.startsWith('ui:aiming:'))).toBe(false);
     rig.phase.handleAction('dive');
     rig.phase.handleAction('repair');
@@ -2047,7 +2047,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.realSession.snapshot()).toMatchObject({ food: 1, bait: 0 });
     expect(rig.session.requestDayEvent).not.toHaveBeenCalled();
     const finishIndex = rig.calls.indexOf('finishFishing');
-    const renderIndex = rig.calls.indexOf('render:2:1:0');
+    const renderIndex = rig.calls.indexOf('render:1:1:0');
     const presentationIndex = rig.calls.indexOf('playFishingReel:cod');
     expect(finishIndex).toBeLessThan(renderIndex);
     expect(renderIndex).toBeLessThan(presentationIndex);
@@ -2252,7 +2252,7 @@ describe('SurvivalPhase orchestration', () => {
       expect(attempt.snapshot().state).toBe('bite');
       expect(attempt.snapshot().biteSeconds).toBeCloseTo(0, 12);
       fishingReelCallback(rig)();
-      expect(rig.realSession.snapshot()).toMatchObject({ food: 1, energy: 2 });
+      expect(rig.realSession.snapshot()).toMatchObject({ food: 1, energy: 1 });
       await settleFishingReturn(rig, 'reel');
 
       expect(rig.session.requestDayEvent).not.toHaveBeenCalled();

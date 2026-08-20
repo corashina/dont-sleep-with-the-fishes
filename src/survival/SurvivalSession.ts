@@ -29,7 +29,11 @@ import {
   drawChestReward,
   shouldBecomeMimic,
 } from './chest';
-import { nightDamageMultiplier, pressureForDay, pressureIncreaseForDay } from './RunPressure';
+import {
+  pressureForDay,
+  pressureIncreaseForDay,
+  quietNightChance,
+} from './RunPressure';
 import {
   clampRescueLead,
   repairEnergyCost,
@@ -355,7 +359,7 @@ export class SurvivalSession {
     } else if (this.state !== 'day') {
       rejection = this.reject('not-daytime', 'Fishing is only available during the day.');
     } else if (this.energy < SURVIVAL_BALANCE.actions.fishEnergy) {
-      rejection = this.reject('not-enough-energy', 'Fishing requires one energy.');
+      rejection = this.reject('not-enough-energy', 'Fishing requires two energy.');
     }
     if (rejection !== null) return { accepted: false, outcome: rejection };
 
@@ -491,7 +495,7 @@ export class SurvivalSession {
       return this.commit('event-opened', attack.prompt, {}, 'nightfall');
     }
 
-    if (this.random.next() < SURVIVAL_BALANCE.night.quietChance) {
+    if (this.random.next() < quietNightChance(this.pressure)) {
       this.state = 'nightEvent';
       this.pendingJournalNighttime = { kind: 'quiet' };
       this.finalizeJournalDay();
@@ -587,7 +591,6 @@ export class SurvivalSession {
         effect,
         mutationExclusions,
         selectedInstanceId,
-        phase,
       ));
     }
     for (const mutation of resolved.effects.items ?? []) {
@@ -756,7 +759,7 @@ export class SurvivalSession {
     switch (action) {
       case 'fish':
         if (this.energy < SURVIVAL_BALANCE.actions.fishEnergy) {
-          return { code: 'not-enough-energy', message: 'Fishing requires one energy.' };
+          return { code: 'not-enough-energy', message: 'Fishing requires two energy.' };
         }
         return null;
       case 'dive':
@@ -1098,7 +1101,7 @@ export class SurvivalSession {
       !excludedIds.has(id)
       && !(id === 'drifting-bottle' && this.rescueMessageSent)
     ));
-    return drawWeightedEvent(pool, this.random, phase);
+    return drawWeightedEvent(pool, this.random, phase, this.pressure);
   }
 
   private openDayEventAfterDawn(): void {
@@ -1349,20 +1352,14 @@ export class SurvivalSession {
     effect: ResourceEffect,
     excludedInstanceIds: ReadonlySet<ItemInstanceId>,
     selectedInstanceId: ItemInstanceId | null,
-    phase: SurvivalEventDefinition['phase'],
   ): JournalInventoryMutation[] {
     if (typeof effect.value !== 'number') {
       throw new Error(`Event resource ${effect.resource} was not resolved to a concrete value.`);
     }
     const current = this.resourceValues()[effect.resource];
-    let delta = effect.operation === 'set'
+    const delta = effect.operation === 'set'
       ? effect.value - current
       : effect.operation === 'add' ? effect.value : -effect.value;
-    if (phase === 'night'
-      && effect.operation === 'subtract'
-      && (effect.resource === 'health' || effect.resource === 'hull')) {
-      delta *= nightDamageMultiplier(this.day);
-    }
     return this.applyDeltas(
       { [effect.resource]: delta },
       excludedInstanceIds,
