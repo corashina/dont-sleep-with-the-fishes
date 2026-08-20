@@ -7,7 +7,7 @@ import {
   MeshStandardMaterial,
   PerspectiveCamera,
 } from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { FocusedEventPresentationDependencies } from '../src/survival/FocusedEventPresentation';
 import { MidnightTourPresentation } from '../src/survival/MidnightTourPresentation';
 import { presentationWeatherForEvent } from '../src/weather/presentationWeather';
@@ -42,7 +42,11 @@ function palmModel(): Group {
   return root;
 }
 
-function createFixture(options: { omitPalms?: boolean } = {}) {
+function createFixture(options: {
+  omitChest?: boolean;
+  omitPalms?: boolean;
+  omitShovel?: boolean;
+} = {}) {
   const originalParent = new Group();
   const camera = new PerspectiveCamera();
   camera.position.set(3, 4, 5);
@@ -50,6 +54,7 @@ function createFixture(options: { omitPalms?: boolean } = {}) {
   originalParent.add(camera);
   const originalPosition = camera.position.clone();
   const originalQuaternion = camera.quaternion.clone();
+  const emitCue = vi.fn();
   const dependencies = {
     camera,
     cameraRig: originalParent,
@@ -64,13 +69,19 @@ function createFixture(options: { omitPalms?: boolean } = {}) {
           return { root: palmModel(), animations: [] };
         }
         if (id === 'chestClosed') {
+          if (options.omitChest) return null;
           return { root: model(1.1, 0.7, 0.8), animations: [] };
+        }
+        if (id === 'midnightShovel') {
+          if (options.omitShovel) return null;
+          return { root: model(0.24, 1.25, 0.12), animations: [] };
         }
         return null;
       },
     },
     supplyDisplay: {},
     chestDisplay: {},
+    emitCue,
   } as unknown as FocusedEventPresentationDependencies;
   const presentation = new MidnightTourPresentation(dependencies);
   return {
@@ -78,6 +89,7 @@ function createFixture(options: { omitPalms?: boolean } = {}) {
     originalParent,
     originalPosition,
     originalQuaternion,
+    emitCue,
     presentation,
   };
 }
@@ -106,7 +118,8 @@ async function startResult(
     choiceId: 'visit',
     resultId,
   }, {} as never);
-  for (let frame = 1; frame <= 12; frame += 1) {
+  const frames = resultId === 'tour-chest' ? 30 : 12;
+  for (let frame = 1; frame <= frames; frame += 1) {
     fixture.presentation.update(1.5 + frame * 0.4, 0.4);
   }
   await result;
@@ -234,7 +247,6 @@ describe('MidnightTourPresentation', () => {
   );
 
   it.each([
-    ['tour-chest', 'midnight-tour-reward-chest', [0.75, 0.2, 0.2]],
     ['tour-attack', 'midnight-tour-creature', [-0.45, 0.55, -0.4]],
   ] as const)('stages %s at its exact position before reveal', async (
     resultId,
@@ -266,6 +278,82 @@ describe('MidnightTourPresentation', () => {
     expect(actor.visible).toBe(false);
     fixture.presentation.clear();
     await result;
+    fixture.presentation.dispose();
+  });
+
+  it('excavates the buried chest in three exact digging cycles', async () => {
+    const fixture = createFixture();
+    fixture.presentation.stage(8);
+    const visit = fixture.presentation.playChoice({
+      choiceId: 'visit',
+      instanceId: null,
+      condition: null,
+    });
+    fixture.presentation.update(1.5, 1.5);
+    await visit;
+    const result = fixture.presentation.react({
+      eventId: 'midnight-tour',
+      choiceId: 'visit',
+      resultId: 'tour-chest',
+    }, {} as never);
+    const island = fixture.presentation.root.getObjectByName('midnight-tour-island')!;
+    const chest = fixture.presentation.root.getObjectByName('midnight-tour-reward-chest')!;
+    const islandTop = island.position.y + island.userData.greenTopLocalY;
+
+    expect(chest.visible).toBe(true);
+    expect(new Box3().setFromObject(chest).max.y).toBeLessThan(islandTop);
+
+    fixture.presentation.update(4.5, 3);
+    const shovel = fixture.camera.getObjectByName('midnight-tour-fps-shovel')!;
+    expect(shovel).toBeDefined();
+    expect(shovel.position.toArray()).toEqual([0.52, -0.42, -0.85]);
+    const shovelMesh = shovel.getObjectByProperty('type', 'Mesh') as Mesh;
+    const disposeShovelGeometry = vi.spyOn(shovelMesh.geometry, 'dispose');
+    expect(fixture.emitCue).toHaveBeenCalledExactlyOnceWith({
+      eventId: 'midnight-tour',
+      cue: 'dig-start',
+    });
+
+    fixture.presentation.update(6.5, 2);
+    expect(fixture.presentation.root.userData.digContacts).toBe(1);
+    fixture.presentation.update(8.5, 2);
+    expect(fixture.presentation.root.userData.digContacts).toBe(2);
+    fixture.presentation.update(10.5, 2);
+    expect(fixture.presentation.root.userData.digContacts).toBe(3);
+    expect(new Box3().setFromObject(chest).min.y).toBeCloseTo(islandTop, 4);
+    expect(fixture.camera.getObjectByName('midnight-tour-fps-shovel')).toBeUndefined();
+    expect(disposeShovelGeometry).toHaveBeenCalledOnce();
+
+    fixture.presentation.update(13.5, 3);
+    await result;
+    expect(new Box3().setFromObject(chest).min.y).toBeCloseTo(islandTop, 4);
+    expect(fixture.emitCue).toHaveBeenCalledTimes(1);
+    fixture.presentation.dispose();
+  });
+
+  it.each([
+    ['chest', { omitChest: true }, 'Missing required Midnight Tour chest model.'],
+    ['shovel', { omitShovel: true }, 'Missing required Midnight Tour shovel model.'],
+  ] as const)('requires the Midnight Tour %s model', async (
+    _modelName,
+    options,
+    error,
+  ) => {
+    const fixture = createFixture(options);
+    fixture.presentation.stage(8);
+    const visit = fixture.presentation.playChoice({
+      choiceId: 'visit',
+      instanceId: null,
+      condition: null,
+    });
+    fixture.presentation.update(1.5, 1.5);
+    await visit;
+
+    expect(() => fixture.presentation.react({
+      eventId: 'midnight-tour',
+      choiceId: 'visit',
+      resultId: 'tour-chest',
+    }, {} as never)).toThrow(error);
     fixture.presentation.dispose();
   });
 
