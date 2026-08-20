@@ -367,6 +367,43 @@ describe('MidnightTourPresentation', () => {
     fixture.presentation.dispose();
   });
 
+  it('cancels an interrupted monster result without playing the attack cue', async () => {
+    const uncacheAction = vi.spyOn(AnimationMixer.prototype, 'uncacheAction');
+    const uncacheRoot = vi.spyOn(AnimationMixer.prototype, 'uncacheRoot');
+    const stop = vi.spyOn(AnimationAction.prototype, 'stop');
+    const fixture = createFixture();
+    const attack = fixture.presentation.react({
+      eventId: 'midnight-tour',
+      choiceId: 'visit',
+      resultId: 'tour-attack',
+    }, {} as never);
+    fixture.presentation.update(4, 4);
+
+    const replacement = fixture.presentation.react({
+      eventId: 'midnight-tour',
+      choiceId: 'visit',
+      resultId: 'tour-pass',
+    }, {} as never);
+    await attack;
+
+    expect(fixture.emitCue.mock.calls.map(([cue]) => cue)).toEqual([
+      { eventId: 'midnight-tour', cue: 'run-start' },
+      { eventId: 'midnight-tour', cue: 'run-stop' },
+    ]);
+    expect(uncacheAction).toHaveBeenCalledTimes(2);
+    expect(uncacheRoot).toHaveBeenCalledOnce();
+    expect(stop).toHaveBeenCalledTimes(2);
+    expect(fixture.presentation.root.getObjectByName('midnight-tour-monster'))
+      .toBeUndefined();
+
+    fixture.presentation.update(5, 1);
+    await replacement;
+    fixture.presentation.dispose();
+    uncacheAction.mockRestore();
+    uncacheRoot.mockRestore();
+    stop.mockRestore();
+  });
+
   it.each([
     [{ omitMonster: true }, 'Missing required Midnight Tour monster model.'],
     [
