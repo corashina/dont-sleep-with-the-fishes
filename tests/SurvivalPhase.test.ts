@@ -3191,6 +3191,74 @@ describe('SurvivalPhase orchestration', () => {
     hold.resolve();
   });
 
+  it('passes the selected Midnight Tour test result to the session', async () => {
+    let current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'midnight-tour',
+      pressure: 1,
+    });
+    const reaction = deferred();
+    const resolveEvent = vi.fn(() => {
+      current = snapshot({
+        state: 'nightEvent',
+        pendingEventId: null,
+        pressure: 1,
+        health: 65,
+      });
+      return accepted({
+        code: 'event-resolved',
+        cue: 'none',
+        deltas: { health: -35 },
+        eventResult: {
+          eventId: 'midnight-tour',
+          choiceId: 'visit',
+          resultId: 'tour-attack',
+        },
+      });
+    });
+    const ui: Partial<SurvivalUI> = {
+      beginEventPresentation: vi.fn(),
+      setSleepCoverProfile: vi.fn(() => Promise.resolve()),
+      setSleepCovered: vi.fn(() => Promise.resolve()),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      setBusy: vi.fn(),
+      render: vi.fn(),
+      setJournalUnread: vi.fn(),
+      clearEventPresentation: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent,
+      },
+      world: {
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        playEventChoice: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome: vi.fn(() => reaction.promise),
+        play: vi.fn(() => Promise.resolve()),
+        dispose: vi.fn(),
+      },
+      ui,
+    }, 'midnight-tour', 'tour-attack');
+
+    phase.start();
+    await flushPromises();
+    ui.onEventChoice?.('visit');
+    await flushPromises();
+
+    expect(resolveEvent).toHaveBeenCalledWith({
+      kind: 'choice',
+      choiceId: 'visit',
+      resultId: 'tour-attack',
+    });
+    phase.dispose();
+    reaction.resolve();
+  });
+
   it('orders the surviving midnight tour under two covers and stays busy through dawn', async () => {
     let current = snapshot({
       state: 'nightEvent',

@@ -311,6 +311,7 @@ export class SurvivalPhase implements GamePhase {
   );
   private eventBundles!: EventBundleManagerLike;
   private itemAnimationLab = false;
+  private initialEventResultId: string | undefined;
 
   constructor(
     context: PhaseContext,
@@ -319,6 +320,7 @@ export class SurvivalPhase implements GamePhase {
     scavengeElapsedSeconds: number,
     onRestart: () => void,
     initialEventId?: string,
+    initialEventResultId?: string,
   );
   constructor(
     context: PhaseContext,
@@ -327,8 +329,10 @@ export class SurvivalPhase implements GamePhase {
     scavengeElapsedSeconds: number,
     onRestart: () => void,
     initialEventId: string | undefined,
+    initialEventResultId: string | undefined,
     testDependencies?: SurvivalPhaseTestDependencies,
   ) {
+    this.initialEventResultId = initialEventResultId;
     const itemAnimationLab = isItemAnimationLabId(initialEventId);
     if (testDependencies === undefined) {
       const session = new SurvivalSession(savedItems, {
@@ -382,6 +386,7 @@ export class SurvivalPhase implements GamePhase {
   static forTest(
     dependencies: SurvivalPhaseTestDependencies,
     initialEventId?: string,
+    initialEventResultId?: string,
   ): SurvivalPhase {
     const TestConstructor = SurvivalPhase as unknown as new (
       context: PhaseContext,
@@ -390,6 +395,7 @@ export class SurvivalPhase implements GamePhase {
       scavengeElapsedSeconds: number,
       onRestart: () => void,
       initialEventId: string | undefined,
+      initialEventResultId: string | undefined,
       dependencies: SurvivalPhaseTestDependencies,
     ) => SurvivalPhase;
     return new TestConstructor(
@@ -399,6 +405,7 @@ export class SurvivalPhase implements GamePhase {
       0,
       dependencies.onRestart ?? (() => undefined),
       initialEventId,
+      initialEventResultId,
       dependencies,
     );
   }
@@ -1548,7 +1555,13 @@ export class SurvivalPhase implements GamePhase {
 
       this.eventPresentation = 'resolving';
       this.beginDeferredPresentationSync(pending, generation);
-      const outcome = this.session.resolveEvent?.({ kind: 'choice', choiceId: 'visit' });
+      const resultId = this.initialEventResultId;
+      this.initialEventResultId = undefined;
+      const outcome = this.session.resolveEvent?.({
+        kind: 'choice',
+        choiceId: 'visit',
+        ...(resultId === undefined ? {} : { resultId }),
+      });
       if (!this.isContinuationActive(generation)) return;
       if (outcome === undefined) {
         throw new Error('Midnight Tour visit did not return an outcome.');
