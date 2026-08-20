@@ -10,7 +10,6 @@ import type { GamePhase, PhaseContext } from './app/GamePhase';
 import {
   EVENT_TEST_OPTIONS,
   createEventTestResult,
-  isEventTestId,
 } from './app/EventTest';
 import type { ScavengeResult } from './game/ScavengeSession';
 import { ScavengePhase } from './phases/ScavengePhase';
@@ -66,6 +65,7 @@ export interface GameFactories {
     seed: number,
     onRestart: () => void,
     initialEventId?: string,
+    initialEventResultId?: string,
   ): GamePhase;
 }
 
@@ -76,7 +76,14 @@ const PRODUCTION_FACTORIES: GameFactories = {
   createScavenge: (context, onComplete, onReturnToMenu) => (
     new ScavengePhase(context, onComplete, onReturnToMenu)
   ),
-  createSurvival: (context, result, seed, onRestart, initialEventId) => (
+  createSurvival: (
+    context,
+    result,
+    seed,
+    onRestart,
+    initialEventId,
+    initialEventResultId,
+  ) => (
     new SurvivalPhase(
       context,
       result.savedItems,
@@ -84,6 +91,7 @@ const PRODUCTION_FACTORIES: GameFactories = {
       result.elapsedSeconds,
       onRestart,
       initialEventId,
+      initialEventResultId,
     )
   ),
 };
@@ -635,6 +643,7 @@ export class Game {
   private activateSurvival(
     result: Readonly<ScavengeResult>,
     initialEventId?: string,
+    initialEventResultId?: string,
   ): void {
     const generation = ++this.phaseGeneration;
     const survival = this.factories.createSurvival(
@@ -643,6 +652,7 @@ export class Game {
       this.seed,
       () => this.restartFrom(generation),
       initialEventId,
+      initialEventResultId,
     );
     if (!this.ownsGeneration(generation)) {
       survival.dispose();
@@ -657,14 +667,15 @@ export class Game {
 
   private enterTestEvent(id: string): void {
     if (this.disposed) return;
-    if (!isEventTestId(id)) throw new Error(`Unknown event test scene: ${id}`);
+    const option = EVENT_TEST_OPTIONS.find((candidate) => candidate.id === id);
+    if (option === undefined) throw new Error(`Unknown event test scene: ${id}`);
     const outgoing = this.detachActivePhase();
     this.exitPointerLock();
     outgoing?.dispose();
     this.resetCamera();
     this.elapsed = 0;
     this.seed = this.createSeed();
-    this.activateSurvival(createEventTestResult(), id);
+    this.activateSurvival(createEventTestResult(), option.eventId, option.resultId);
   }
 
   private restartFrom(generation: number): void {

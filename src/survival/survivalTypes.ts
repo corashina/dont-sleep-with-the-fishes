@@ -174,7 +174,11 @@ export type EventResponse =
       readonly choiceId: EventResponseId;
       readonly instanceId: ItemInstanceId;
     }
-  | { readonly kind: 'choice'; readonly choiceId: EventResponseId }
+  | {
+      readonly kind: 'choice';
+      readonly choiceId: EventResponseId;
+      readonly resultId?: string;
+    }
   | { readonly kind: 'endure' };
 
 export interface SurvivalEventDefinition {

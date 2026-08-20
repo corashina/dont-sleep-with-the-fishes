@@ -675,6 +675,39 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it.each([
+    {
+      resultId: 'tour-chest',
+      random: [0.99, 0.5],
+      expectedChest: 'closed',
+    },
+    {
+      resultId: 'tour-attack',
+      random: [0, 0.5],
+      expectedChest: 'none',
+    },
+  ])('forces the $resultId Midnight Tour test result', ({
+    resultId,
+    random,
+    expectedChest,
+  }) => {
+    const session = new SurvivalSession(saved(), {
+      seed: 103,
+      random: sequenceRandom(random),
+      initial: { health: 100 },
+      initialEventId: 'midnight-tour',
+    });
+
+    const resolution = session.resolveEvent({
+      kind: 'choice',
+      choiceId: 'visit',
+      resultId,
+    });
+
+    expect(resolution.eventResult?.resultId).toBe(resultId);
+    expect(session.snapshot().chest.state).toBe(expectedChest);
+  });
+
+  it.each([
     { resultId: 'tour-chest', random: [0, 0.99] },
     { resultId: 'tour-attack', random: [0.99, 0.5, 0.99] },
   ])('keeps the $resultId Midnight Tour result on the normal dawn path', ({

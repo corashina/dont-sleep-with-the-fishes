@@ -346,6 +346,7 @@ describe('launchGame', () => {
           elapsedSeconds: number,
           restart: () => void,
           initialEventId: string | undefined,
+          initialEventResultId: string | undefined,
           testDependencies: SurvivalPhaseTestDependencies,
         ) => SurvivalPhase;
         return new TestConstructor(
@@ -354,6 +355,7 @@ describe('launchGame', () => {
           seed,
           result.elapsedSeconds,
           onRestart,
+          undefined,
           undefined,
           dependencies,
         );
