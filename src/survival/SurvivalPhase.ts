@@ -437,8 +437,9 @@ export class SurvivalPhase implements GamePhase {
     this.simulationTimeInitialized = true;
     this.world.update?.(this.elapsedSeconds, deltaSeconds);
     const snapshot = this.session.snapshot();
+    const presentationSnapshot = this.deferredPresentationSync?.before ?? snapshot;
     this.audio.update(deltaSeconds);
-    this.syncVisualState(snapshot);
+    this.syncVisualState(presentationSnapshot);
     this.syncPresentation(snapshot);
     if (this.started) this.advanceFishing(deltaSeconds);
     this.presentTerminalOnce(snapshot);
@@ -1569,9 +1570,6 @@ export class SurvivalPhase implements GamePhase {
         return;
       }
       const resolved = this.session.snapshot();
-      if (isTerminal(resolved.state)) {
-        this.flushDeferredPresentationSync(resolved, generation);
-      }
       const presentation = deriveEventOutcomePresentation(
         pending,
         resolved,
@@ -1599,6 +1597,14 @@ export class SurvivalPhase implements GamePhase {
   ): Promise<void> {
     this.setBusy(true);
     this.ui.hideEventReveal?.();
+    await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+    if (
+      (this.visibilityPauseActive || this.documentIsHidden())
+      && !await this.waitForVisibilityResume(generation)
+    ) return;
+    if (!this.isContinuationActive(generation)) return;
+
     this.audio.beginEventReaction(eventId, outcome);
     await Promise.all([
       this.world.play?.(outcome.cue) ?? Promise.resolve(),
@@ -1608,7 +1614,6 @@ export class SurvivalPhase implements GamePhase {
         choice,
         presentation,
       ) ?? Promise.resolve(),
-      this.ui.setSleepCovered?.(false) ?? Promise.resolve(),
     ]);
     this.audio.finishEventReaction(eventId);
     if (!this.isContinuationActive(generation)) return;
@@ -2476,6 +2481,7 @@ export class SurvivalPhase implements GamePhase {
   private presentTerminalOnce(snapshot: SurvivalSnapshot, allowBusy = false): void {
     if (
       (this.busy && !allowBusy)
+      || this.deferredPresentationSync !== null
       || !isTerminal(snapshot.state)
       || this.presentedTerminalState !== null
     ) return;

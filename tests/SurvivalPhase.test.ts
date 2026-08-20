@@ -3296,7 +3296,11 @@ describe('SurvivalPhase orchestration', () => {
           return reaction.promise;
         }),
         syncInventory: vi.fn(),
-        play: vi.fn((cue) => cue === 'dawn' ? dawnCue.promise : Promise.resolve()),
+        play: vi.fn((cue) => {
+          if (cue === 'dawn') return dawnCue.promise;
+          calls.push(`cue:${cue}`);
+          return Promise.resolve();
+        }),
         clearEvent: vi.fn(() => { calls.push('clear-event'); }),
         dispose: vi.fn(),
       },
@@ -3326,20 +3330,21 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
     expect(calls).toEqual([
       'profile:midnight-tour', 'fade:true', 'choice:visit',
-      'resolve:visit', 'react:tour-chest', 'fade:false',
+      'resolve:visit', 'fade:false',
     ]);
+    expect(reaction.isSettled()).toBe(false);
     expect(setBusy).not.toHaveBeenCalledWith(false);
-
-    reaction.resolve();
-    await flushPromises();
-    expect(calls.at(-1)).toBe('fade:false');
 
     firstUncover.resolve();
     await flushPromises();
     expect(calls).toEqual([
       'profile:midnight-tour', 'fade:true', 'choice:visit',
-      'resolve:visit', 'react:tour-chest', 'fade:false', 'fade:true',
+      'resolve:visit', 'fade:false', 'cue:none', 'react:tour-chest',
     ]);
+
+    reaction.resolve();
+    await flushPromises();
+    expect(calls.at(-1)).toBe('fade:true');
 
     secondCover.resolve();
     await flushPromises();
@@ -3361,8 +3366,9 @@ describe('SurvivalPhase orchestration', () => {
       'fade:true',
       'choice:visit',
       'resolve:visit',
-      'react:tour-chest',
       'fade:false',
+      'cue:none',
+      'react:tour-chest',
       'fade:true',
       'clear-event',
       'profile:solid',
@@ -3635,8 +3641,8 @@ describe('SurvivalPhase orchestration', () => {
       'choice:visit',
       'resolve:visit',
       'busy',
-      'react:tour-attack',
       'fade:false',
+      'react:tour-attack',
       'fade:true',
       'clear-event',
       'profile:solid',
@@ -3644,6 +3650,100 @@ describe('SurvivalPhase orchestration', () => {
       'ready',
     ]);
     expect(setBusy).toHaveBeenLastCalledWith(false);
+    expect(showEnding).toHaveBeenCalledOnce();
+    phase.dispose();
+  });
+
+  it('defers a fatal midnight tour state through reaction and final cover', async () => {
+    let current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'midnight-tour',
+      health: 25,
+    });
+    const reaction = deferred();
+    const finalCover = deferred();
+    let holdFinalCover = false;
+    const showEnding = vi.fn();
+    const syncInventory = vi.fn();
+    const clearEvent = vi.fn();
+    const ui: Partial<SurvivalUI> = {
+      beginEventPresentation: vi.fn(),
+      setSleepCoverProfile: vi.fn(() => Promise.resolve()),
+      setSleepCovered: vi.fn((covered) => (
+        holdFinalCover && covered ? finalCover.promise : Promise.resolve()
+      )),
+      settleCoveredScene: vi.fn(() => Promise.resolve()),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      setBusy: vi.fn(),
+      showEnding,
+      render: vi.fn(),
+      setJournalUnread: vi.fn(),
+      clearEventPresentation: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          current = snapshot({
+            state: 'dead',
+            pendingEventId: null,
+            health: 0,
+          });
+          return accepted({
+            code: 'event-resolved',
+            cue: 'impact',
+            deltas: { health: -25 },
+            eventResult: {
+              eventId: 'midnight-tour',
+              choiceId: 'visit',
+              resultId: 'tour-attack',
+            },
+          });
+        }),
+        beginDawn: vi.fn(),
+      },
+      world: {
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        playEventChoice: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome: vi.fn(() => reaction.promise),
+        syncInventory,
+        play: vi.fn(() => Promise.resolve()),
+        clearEvent,
+        dispose: vi.fn(),
+      },
+      ui,
+    });
+
+    phase.start();
+    await flushPromises();
+    await flushPromises();
+    syncInventory.mockClear();
+    ui.onEventChoice?.('visit');
+    await flushPromises();
+    await flushPromises();
+
+    phase.update(1, 0.016);
+    expect(showEnding).not.toHaveBeenCalled();
+    expect(syncInventory).not.toHaveBeenCalledWith(current);
+    expect(clearEvent).not.toHaveBeenCalled();
+
+    holdFinalCover = true;
+    reaction.resolve();
+    await flushPromises();
+    phase.update(2, 0.016);
+    expect(showEnding).not.toHaveBeenCalled();
+    expect(syncInventory).not.toHaveBeenCalledWith(current);
+    expect(clearEvent).not.toHaveBeenCalled();
+
+    finalCover.resolve();
+    await flushPromises();
+    await flushPromises();
+    expect(clearEvent).toHaveBeenCalledOnce();
+    expect(syncInventory).toHaveBeenCalledWith(current);
     expect(showEnding).toHaveBeenCalledOnce();
     phase.dispose();
   });

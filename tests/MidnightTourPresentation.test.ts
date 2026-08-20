@@ -51,6 +51,7 @@ function createFixture(options: {
   omitChest?: boolean;
   omitMonster?: boolean;
   omitMonsterAttackClip?: boolean;
+  omitMonsterRunClip?: boolean;
   omitPalms?: boolean;
   omitShovel?: boolean;
 } = {}) {
@@ -98,7 +99,10 @@ function createFixture(options: {
           );
           return {
             root: model(0.8, 1.25, 0.55),
-            animations: options.omitMonsterAttackClip ? [run] : [run, attack],
+            animations: [
+              ...(options.omitMonsterRunClip ? [] : [run]),
+              ...(options.omitMonsterAttackClip ? [] : [attack]),
+            ],
           };
         }
         return null;
@@ -407,17 +411,15 @@ describe('MidnightTourPresentation', () => {
   it.each([
     [{ omitMonster: true }, 'Missing required Midnight Tour monster model.'],
     [
+      { omitMonsterRunClip: true },
+      'Missing required Midnight Tour monster clip: CharacterArmature|Run.',
+    ],
+    [
       { omitMonsterAttackClip: true },
-      'Midnight Tour monster requires Run and Run_Attack clips.',
+      'Missing required Midnight Tour monster clip: CharacterArmature|Run_Attack.',
     ],
   ] as const)('requires the monster model and clips', (options, error) => {
-    const fixture = createFixture(options);
-    expect(() => fixture.presentation.react({
-      eventId: 'midnight-tour',
-      choiceId: 'visit',
-      resultId: 'tour-attack',
-    }, {} as never)).toThrow(error);
-    fixture.presentation.dispose();
+    expect(() => createFixture(options)).toThrow(error);
   });
 
   it('excavates the buried chest in three exact digging cycles', async () => {
@@ -473,27 +475,12 @@ describe('MidnightTourPresentation', () => {
   it.each([
     ['chest', { omitChest: true }, 'Missing required Midnight Tour chest model.'],
     ['shovel', { omitShovel: true }, 'Missing required Midnight Tour shovel model.'],
-  ] as const)('requires the Midnight Tour %s model', async (
+  ] as const)('requires the Midnight Tour %s model', (
     _modelName,
     options,
     error,
   ) => {
-    const fixture = createFixture(options);
-    fixture.presentation.stage(8);
-    const visit = fixture.presentation.playChoice({
-      choiceId: 'visit',
-      instanceId: null,
-      condition: null,
-    });
-    fixture.presentation.update(1.5, 1.5);
-    await visit;
-
-    expect(() => fixture.presentation.react({
-      eventId: 'midnight-tour',
-      choiceId: 'visit',
-      resultId: 'tour-chest',
-    }, {} as never)).toThrow(error);
-    fixture.presentation.dispose();
+    expect(() => createFixture(options)).toThrow(error);
   });
 
   it('restores the camera before a staged visit supersedes active motion', async () => {
