@@ -236,7 +236,8 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       throw new Error(`Midnight Tour received result for ${result.eventId}.`);
     }
     void outcome;
-    this.animation.settle();
+    if (this.activeResultTimeline) this.animation.cancel();
+    else this.animation.settle();
     this.clearResultActors();
     this.activeResultTimeline = false;
     switch (result.resultId) {
