@@ -9,6 +9,7 @@ import type { PropModelLibrary } from '../world/PropModelLibrary';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { ChestDisplay } from './ChestDisplay';
 import type { FocusedEventId } from './eventPresentationRoutes';
+import type { EventPresentationCue } from './midnightTourAudioCue';
 import type {
   ActionOutcome,
   EventResultPresentation,
@@ -57,6 +58,7 @@ export interface FocusedEventPresentationDependencies {
   readonly boatMotionRoot?: Group;
   readonly supplyDisplay: BoatSupplyDisplay;
   readonly chestDisplay: ChestDisplay;
+  readonly emitCue: (cue: EventPresentationCue) => void;
 }
 
 export type FocusedEventPresentationFactory = (

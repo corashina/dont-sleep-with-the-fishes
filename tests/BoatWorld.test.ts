@@ -22,6 +22,7 @@ import {
   PointLight,
   Points,
   Quaternion,
+  QuaternionKeyframeTrack,
   ShaderMaterial,
   Skeleton,
   SkinnedMesh,
@@ -61,6 +62,7 @@ import { DANGEROUS_WATERS_ITEM_DURATION } from '../src/survival/DangerousWatersP
 import { DivePresentation } from '../src/survival/DivePresentation';
 import {
   type FocusedEventPresentation,
+  type FocusedEventPresentationDependencies,
   type FocusedEventPresentationFactories,
 } from '../src/survival/FocusedEventPresentation';
 import { FOCUSED_EVENT_IDS } from '../src/survival/eventPresentationRoutes';
@@ -1042,6 +1044,24 @@ describe('BoatWorld helpers', () => {
 
   it('runs and restores the Midnight Tour attack cutscene on each seeded side', async () => {
     const propModels = createTestPropModels();
+    const createEventModel = propModels.createEventModel.bind(propModels);
+    const track = new QuaternionKeyframeTrack(
+      '.quaternion',
+      [0, 1],
+      [0, 0, 0, 1, 0, 0, 0, 1],
+    );
+    const run = new AnimationClip('CharacterArmature|Run', 1, [track]);
+    const attack = new AnimationClip(
+      'CharacterArmature|Run_Attack',
+      1,
+      [track.clone()],
+    );
+    vi.spyOn(propModels, 'createEventModel').mockImplementation((id) => {
+      const selected = createEventModel(id);
+      return id === 'midnightMonster' && selected !== null
+        ? { root: selected.root, animations: [run, attack] }
+        : selected;
+    });
     const camera = new PerspectiveCamera();
     const world = new BoatWorld(
       camera,
@@ -1069,7 +1089,7 @@ describe('BoatWorld helpers', () => {
         instanceId: null,
         condition: null,
       });
-      for (let frame = 1; frame <= 12; frame += 1) {
+      for (let frame = 1; frame <= 28; frame += 1) {
         world.update(frame * 0.4, 0.4);
       }
       await reaction;
@@ -1078,6 +1098,7 @@ describe('BoatWorld helpers', () => {
       expect(presentation.userData.searchRight).toBe(1);
       expect(presentation.userData.resultReveals).toBe(1);
       expect(presentation.userData.cameraKicks).toBe(1);
+      expect(world.scene.getObjectByName('midnight-tour-monster')).toBeDefined();
       world.clearEvent();
       expect(camera.parent).toBe(cameraParent);
       expect(camera.position.toArray()).toEqual(cameraPosition.toArray());
@@ -1671,6 +1692,43 @@ describe('BoatWorld helpers', () => {
       .toBeUndefined();
 
     world.dispose();
+    propModels.dispose();
+  });
+
+  it('routes Midnight Tour presentation cues to the event cue handler', () => {
+    const propModels = createTestPropModels();
+    const emitCue = vi.fn();
+    let dependencies: FocusedEventPresentationDependencies | null = null;
+    const tour = focusedPresenterTestDouble('midnight-tour');
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      {
+        'midnight-tour': (value) => {
+          dependencies = value;
+          return tour.presenter;
+        },
+      },
+    );
+
+    world.setEventCueHandler(emitCue);
+    world.stageEvent('midnight-tour');
+    dependencies!.emitCue({ eventId: 'midnight-tour', cue: 'attack' });
+
+    expect(emitCue).toHaveBeenCalledExactlyOnceWith({
+      eventId: 'midnight-tour', cue: 'attack',
+    });
+
+    world.dispose();
+    dependencies!.emitCue({ eventId: 'midnight-tour', cue: 'attack' });
+    expect(emitCue).toHaveBeenCalledExactlyOnceWith({
+      eventId: 'midnight-tour', cue: 'attack',
+    });
     propModels.dispose();
   });
 

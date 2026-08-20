@@ -43,6 +43,14 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
   'check-the-back': { models: ['checkBackFish'], sounds: [] },
   flowers: { models: ['flowers'], sounds: [] },
   'chest-attack': { models: [], sounds: [] },
+  'midnight-tour': {
+    models: [],
+    sounds: [
+      'midnightShovel',
+      'midnightMonsterRun',
+      'midnightMonsterAttack',
+    ],
+  },
 };
 
 const ITEM_SOUNDS = Object.freeze({

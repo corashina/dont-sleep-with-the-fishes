@@ -15,6 +15,8 @@ export interface EventTestOption {
   readonly id: string;
   readonly title: string;
   readonly phase: 'lab' | 'day' | 'night';
+  readonly eventId: string;
+  readonly resultId?: string;
 }
 
 const NIGHT_EVENT_TYPE_ORDER: readonly PresentationCue[] = Object.freeze([
@@ -31,8 +33,8 @@ function nightEventTypeRank(cue: PresentationCue): number {
   return rank === -1 ? NIGHT_EVENT_TYPE_ORDER.length : rank;
 }
 
-export const EVENT_TEST_OPTIONS: readonly EventTestOption[] = Object.freeze(
-  [
+export const EVENT_TEST_OPTIONS: readonly EventTestOption[] = Object.freeze([
+  ...[
     {
       id: ITEM_ANIMATION_LAB_ID,
       title: ITEM_ANIMATION_LAB_TITLE,
@@ -48,16 +50,27 @@ export const EVENT_TEST_OPTIONS: readonly EventTestOption[] = Object.freeze(
       ))
       .map(({ event }) => event),
   ]
-    .map(({ id, title, phase }) => (
-      Object.freeze({ id, title, phase })
-    )),
-);
-
-const EVENT_TEST_IDS = new Set(EVENT_TEST_OPTIONS.map(({ id }) => id));
-
-export function isEventTestId(id: string): boolean {
-  return EVENT_TEST_IDS.has(id);
-}
+    .flatMap(({ id, title, phase }): readonly EventTestOption[] => {
+      if (id !== 'midnight-tour') return [{ id, title, phase, eventId: id }];
+      return [
+        {
+          id: 'midnight-tour-chest',
+          title: 'Midnight Tour Chest',
+          phase,
+          eventId: id,
+          resultId: 'tour-chest',
+        },
+        {
+          id: 'midnight-tour-monster',
+          title: 'Midnight Tour Monster',
+          phase,
+          eventId: id,
+          resultId: 'tour-attack',
+        },
+      ];
+    })
+    .map((option) => Object.freeze(option)),
+]);
 
 export function createEventTestResult(): Readonly<ScavengeResult> {
   const savedItems = ITEM_IDS.map((type): Readonly<ItemInstance> => Object.freeze({

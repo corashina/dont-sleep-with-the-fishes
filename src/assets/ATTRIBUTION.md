@@ -234,6 +234,8 @@ The Tentacle Attack model keeps its source rig and four animation clips.
 | anglerFish | `anglerFish.glb` | Angler Fish / Anonymous | https://poly.pizza/m/85n5_RiSeSf | `poly-pizza:b682255b-2f96-44fe-9221-9e3f126b4ddd` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `E0A9D0AF0A00FE6254831A6CC2C8980E292AD8B9BCEE37570163BC195DF0F1E8` | 2150 | 2150 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-31 |
 | deathStareBlob | `deathStareBlob.glb` | Green Spiky Blob / Quaternius | https://poly.pizza/m/IoWG5F9WUc | `poly-pizza:cd25a048-719e-4ec4-bbf5-a266776fe129` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `AD5E8B1CDF8C0D328B4B44537D3DA8FA98119A9A99FB6163E2F325DBB8BBECC1` | 4888 | 4888 | pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data | 2026-08-01 |
 | tornadoCore | `tornadoCore.glb` | Tornado / Poly by Google | https://poly.pizza/m/2TBzV_5N0ci | `poly-pizza:b48384ed-dc47-4bce-8c0b-c60bb3369ee2` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `A3199265639E07658F4D30AB1384CF9CE33832D0CDAFBCAB6CD268357A91AF4F` | 324 | 324 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-31 |
+| midnightShovel | `midnightShovel.glb` | Shovel / Quaternius | https://poly.pizza/m/oNBQSf87ZJ | `poly-pizza:4ca5006b-da27-4d96-9042-9672c9776750` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `768F33C6BCD41E65208C7F0513D2A7010313FA44A932B4F5327A5BC66D22149B` | 322 | 322 | Output GLB SHA-256 `1D482586A319E0C176BACE1EBFEB618F903187F36C91755E6CE061874B19F6D5`; pruned, deduplicated, welded, unpartitioned, renamed, and embedded. | 2026-08-20 |
+| midnightMonster | `midnightMonster.glb` | Zombie / Quaternius | https://poly.pizza/m/22K0aSZkHV | `poly-pizza:cf4368cf-b39e-4c9a-8a83-a9c637740eb8` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `A56B9E79CDF979363977C8252BF2D870061FCE36A86595E9D90631ECD8687A1F` | 6174 | 5985 | Output GLB SHA-256 `76599ABFADB3629F435165418BFCF02FB8FAC2C34A71B913106663655E6C41D0`; welded and simplified; retained the skin and 16 clips, including `CharacterArmature|Run` and `CharacterArmature|Run_Attack`. | 2026-08-20 |
 
 ## Runtime audio ledger
 
@@ -244,6 +246,8 @@ unless its entry states a different license.
 Freesound files use the public high-quality MP3 preview of the approved recording.
 
 The dawn file contains the first eight seconds of its source WAVE file.
+
+The Midnight shovel runtime cue uses a six-second cutoff. The MP3 remains unencoded.
 
 - "woman humming cathedral" by Pennywind.
   Source: https://freesound.org/people/Pennywind/sounds/816687/
@@ -311,3 +315,6 @@ The dawn file contains the first eight seconds of its source WAVE file.
 | deathEnding | `deathEnding.mp3` | [Ominous Drone / SilverIllusionist](https://freesound.org/people/SilverIllusionist/sounds/693405/) |
 | sinkingEnding | `sinkingEnding.mp3` | [Wooden Ship Break / Kodack](https://freesound.org/people/Kodack/sounds/257752/) |
 | shipCrash | `sinkingEnding.mp3` | Reuses [Wooden Ship Break / Kodack](https://freesound.org/people/Kodack/sounds/257752/). |
+| midnightShovel | `midnightShovel.mp3` | [Freesound 353907 / dr19](https://freesound.org/people/dr19/sounds/353907/); runtime uses the six-second cutoff. |
+| midnightMonsterRun | `midnightMonsterRun.mp3` | [Freesound 514585 / gabitomed](https://freesound.org/people/gabitomed/sounds/514585/) |
+| midnightMonsterAttack | `midnightMonsterAttack.mp3` | [Freesound 467701 / LucasDuff](https://freesound.org/people/LucasDuff/sounds/467701/) |

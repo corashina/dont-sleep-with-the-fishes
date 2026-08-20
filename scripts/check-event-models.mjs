@@ -105,6 +105,8 @@ const FOCUSED_EVENT_MODEL_IDS = Object.freeze([
   'riggedHand',
   'containerShip',
   'midnightPalmTrees',
+  'midnightShovel',
+  'midnightMonster',
 ]);
 const ATTRIBUTION_MODEL_IDS = Object.freeze(['ghost', 'fogMan', 'siren', 'sirenRock']);
 const ATTRIBUTION_HEADING = '## Runtime survival-event model ledger';
@@ -182,7 +184,7 @@ export function validateEventModelMetadata(metadata) {
       model,
       [
         'triangles', 'rawBounds', 'sourceSha256', 'sourceTriangles',
-        'outputSha256', 'hasSkins', 'animationCount', 'processing',
+        'outputSha256', 'hasSkins', 'animationCount', 'animations', 'processing',
       ],
       `${modelId} metadata`,
     );
@@ -199,6 +201,8 @@ export function validateEventModelMetadata(metadata) {
       || model.outputSha256 !== source.committedSha256
       || model.hasSkins !== source.sourceHasSkins
       || model.animationCount !== source.sourceAnimationCount
+      || !Array.isArray(model.animations)
+      || model.animations.length !== model.animationCount
       || typeof model.processing !== 'string'
       || model.processing.length === 0
     ) {
@@ -409,6 +413,7 @@ async function main() {
         || !sameNumbers(expected?.rawBounds?.max, measurement.rawBounds.max)
         || expected?.hasSkins !== (document.getRoot().listSkins().length > 0)
         || expected?.animationCount !== measurement.animations.length
+        || !sameAnimations(expected?.animations, measurement.animations)
       ) {
         throw new Error(`${modelId}: processed model does not match its pinned metadata`);
       }
