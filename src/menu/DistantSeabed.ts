@@ -2,13 +2,19 @@ import {
   Box3,
   BoxGeometry,
   BufferGeometry,
+  Color,
   ConeGeometry,
   CylinderGeometry,
   DodecahedronGeometry,
+  Float32BufferAttribute,
   Group,
+  InstancedMesh,
   LinearFilter,
+  Material,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
+  Object3D,
   PlaneGeometry,
   Texture,
   TorusGeometry,
@@ -25,11 +31,22 @@ import {
 import type { MenuSceneComponent } from './MenuSceneComponent';
 
 export const DISTANT_RIDGE_COUNT = 3;
-export const DISTANT_MOUNTAIN_COUNT = 2;
-export const DISTANT_ROCK_COUNT = 24;
-export const DISTANT_PLANT_COUNT = 36;
+export const DISTANT_MOUNTAIN_COUNT = 3;
+export const LEFT_SEABED_INSTANCE_COUNT = 20;
+export const SEABED_ROCK_INSTANCE_COUNT = 200;
+export const SEABED_STONE_INSTANCE_COUNT = 240;
+export const SEABED_PLANT_INSTANCE_COUNT = 300;
+export const MOUNTAIN_PLANT_INSTANCE_COUNT = 160;
 export const DISTANT_DEBRIS_COUNT = 20;
 export const NEAR_WRECK_DEBRIS_COUNT = 14;
+
+const FOREGROUND_SHARE = {
+  rock: 0.18,
+  stone: 0.28,
+  plant: 0.16,
+} as const;
+const FOREGROUND_NEAR_Z = 6.3;
+const FOREGROUND_FAR_Z = 2.3;
 
 const RIDGES = [
   { width: 76, depth: 16, z: -34, height: 0.9, phase: 0.2 },
@@ -38,8 +55,9 @@ const RIDGES = [
 ] as const;
 
 const MOUNTAINS = [
-  { width: 112, depth: 18, z: -36, height: 13.2, phase: 0.35 },
-  { width: 176, depth: 26, z: -58, height: 23.5, phase: 1.7 },
+  { width: 124, depth: 24, x: -14, z: -32, height: 15.5, phase: 0.35, color: 0x748984 },
+  { width: 158, depth: 30, x: 18, z: -49, height: 22.5, phase: 1.7, color: 0x6d8380 },
+  { width: 206, depth: 38, x: -6, z: -69, height: 29.5, phase: 2.8, color: 0x667b79 },
 ] as const;
 
 function terrainEdgeBlend(
@@ -53,41 +71,32 @@ function terrainEdgeBlend(
   return progress * progress * (3 - 2 * progress);
 }
 
-const ROCKS = [
-  [-11.0, -0.20, -5.5, 0.8, 0.2], [10.5, -0.15, -7.5, 1.0, 1.1],
-  [-16.0, -0.25, -11.0, 1.15, 0.6], [16.5, -0.22, -12.5, 0.9, 2.2],
-  [-21.5, -0.30, -16.0, 1.45, 0.4], [22.0, -0.28, -19.5, 1.2, 1.8],
-  [-27.0, -0.34, -25.0, 1.0, 2.7], [28.5, -0.32, -27.5, 1.55, 0.9],
-  [-34.0, -0.40, -34.0, 1.35, 0.3], [35.5, -0.38, -37.0, 1.7, 1.5],
-  [-42.0, -0.45, -46.0, 1.8, 2.5], [43.0, -0.42, -49.0, 1.35, 0.7],
-  [-18.0, -0.35, -39.0, 1.25, 1.2], [17.0, -0.32, -43.0, 1.5, 2.1],
-  [-7.0, -0.28, -30.0, 0.85, 0.4], [8.5, -0.30, -35.0, 1.1, 1.7],
-  [-52.0, -0.48, -58.0, 2.0, 0.8], [53.0, -0.45, -61.0, 1.7, 2.4],
-  [-60.0, -0.48, -64.0, 1.8, 0.4], [61.0, -0.47, -67.0, 1.65, 1.6],
-  [-68.0, -0.50, -52.0, 1.55, 2.2], [68.0, -0.48, -55.0, 1.85, 0.8],
-  [-63.0, -0.52, -28.0, 1.4, 1.1], [63.0, -0.50, -31.0, 1.6, 2.6],
-] as const;
+type MountainSpec = (typeof MOUNTAINS)[number];
 
-const PLANTS = [
-  [-9.0, -0.10, -7.0, 0.8, 0.1], [-13.0, -0.12, -10.0, 1.1, 0.5],
-  [11.5, -0.10, -9.0, 0.9, 1.2], [15.5, -0.14, -13.5, 1.3, 2.0],
-  [-17.5, -0.18, -15.0, 1.0, 0.8], [19.0, -0.16, -17.5, 0.75, 1.6],
-  [-24.0, -0.22, -21.0, 1.2, 2.4], [25.0, -0.22, -23.0, 1.4, 0.3],
-  [-30.0, -0.25, -28.0, 0.9, 1.9], [31.5, -0.25, -30.0, 1.1, 2.8],
-  [-36.0, -0.28, -36.0, 1.45, 0.4], [37.0, -0.28, -39.0, 1.2, 1.4],
-  [-47.0, -0.32, -44.0, 1.6, 2.2], [47.0, -0.32, -46.0, 1.3, 0.7],
-  [-50.0, -0.36, -55.0, 1.75, 1.1], [51.0, -0.36, -58.0, 1.5, 2.5],
-  [-10.0, -0.18, -18.0, 0.85, 0.2], [13.0, -0.20, -22.0, 1.0, 1.8],
-  [-12.0, -0.22, -27.0, 1.3, 2.7], [13.5, -0.22, -31.0, 1.2, 0.6],
-  [-19.0, -0.26, -34.0, 1.0, 1.5], [21.0, -0.28, -38.0, 1.4, 2.9],
-  [-27.0, -0.30, -43.0, 1.5, 0.9], [29.0, -0.32, -47.0, 1.2, 2.0],
-  [-8.0, -0.30, -50.0, 1.25, 0.3], [10.0, -0.32, -54.0, 1.4, 1.7],
-  [-34.0, -0.35, -57.0, 1.6, 2.4], [36.0, -0.36, -61.0, 1.5, 0.8],
-  [-58.0, -0.38, -47.0, 1.35, 0.5], [59.0, -0.38, -50.0, 1.55, 1.4],
-  [-64.0, -0.40, -38.0, 1.25, 2.1], [65.0, -0.40, -41.0, 1.45, 0.8],
-  [-61.0, -0.42, -32.0, 1.5, 2.7], [61.0, -0.42, -35.0, 1.3, 1.7],
-  [-68.0, -0.44, -24.0, 1.2, 0.3], [68.0, -0.44, -27.0, 1.4, 2.4],
-] as const;
+function mountainSurfaceHeight(spec: MountainSpec, x: number, z: number): number {
+  const depth = Math.min(1, Math.max(0, z / spec.depth + 0.5));
+  const ridgeCrest = Math.pow(Math.sin(depth * Math.PI), 1.25);
+  const peaks = 0.58
+    + Math.sin(x * 0.045 + spec.phase) * 0.18
+    + Math.sin(x * 0.085 - spec.phase * 0.7) * 0.12
+    + Math.cos((x + z) * 0.07 + spec.phase) * 0.06;
+  const sideProgress = Math.min(1, Math.abs(x) / (spec.width * 0.5));
+  const sideFade = 0.28
+    + Math.pow(Math.cos(sideProgress * Math.PI * 0.5), 2) * 0.72;
+  const blend = terrainEdgeBlend(x, z, spec.width, spec.depth);
+  const baseHeight = menuSeabedHeight(x + spec.x, z + spec.z);
+  const lift = (0.04 + Math.max(0, peaks) * sideFade
+    * ridgeCrest * spec.height) * blend;
+  return baseHeight + lift;
+}
+
+function deterministicRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x1_0000_0000;
+  };
+}
 
 const DEBRIS = [
   [-14.0, -0.05, -8.0, 0.8, -0.35], [13.0, -0.08, -11.0, 1.0, -0.5],
@@ -134,7 +143,7 @@ type Detail = readonly [number, number, number, number, number];
 export class DistantSeabed implements MenuSceneComponent {
   readonly root = new Group();
   private readonly geometries = new Set<BufferGeometry>();
-  private readonly materials = new Set<MeshStandardMaterial>();
+  private readonly materials = new Set<Material>();
   private readonly textures = new Set<Texture>();
   private readonly detailBounds = new Box3();
   private readonly detailFootprints: MenuGroundFootprint[] = [];
@@ -149,22 +158,27 @@ export class DistantSeabed implements MenuSceneComponent {
     distantSand.needsUpdate = true;
     this.textures.add(distantSand);
     const sand = this.terrainMaterial(0x8fa59a, distantSand);
-    const mountainSand = this.terrainMaterial(0x83978e, distantSand);
-    const rock = this.material(0x3a4d50, 1);
-    const plant = this.material(0x355d51, 0.95);
+    const rock = this.material(0xffffff, 1);
+    const stone = this.material(0xffffff, 1);
+    const plant = this.material(0xffffff, 0.95);
     const wood = this.material(0x5a4938, 1);
     const ridges = new Group();
     const rocks = new Group();
+    const stones = new Group();
     const plants = new Group();
     const debris = new Group();
     const nearWreckDebris = new Group();
     const mountains = new Group();
+    const mountainDetails = new Group();
     ridges.name = 'menu:distant-ridges';
     mountains.name = 'menu:distant-mountains';
     rocks.name = 'menu:distant-rocks';
+    stones.name = 'menu:distant-stones';
     plants.name = 'menu:distant-plants';
     debris.name = 'menu:distant-debris';
     nearWreckDebris.name = 'menu:near-wreck-debris';
+    mountainDetails.name = 'menu:mountain-details';
+    const horizon = this.createHorizon();
 
     RIDGES.forEach((spec, index) => {
       const geometry = this.geometry(new PlaneGeometry(spec.width, spec.depth, 12, 6));
@@ -190,38 +204,73 @@ export class DistantSeabed implements MenuSceneComponent {
     });
 
     MOUNTAINS.forEach((spec, index) => {
-      const geometry = this.geometry(new PlaneGeometry(spec.width, spec.depth, 24, 10));
+      const geometry = this.geometry(new PlaneGeometry(spec.width, spec.depth, 48, 18));
       geometry.rotateX(-Math.PI / 2);
       const position = geometry.getAttribute('position');
       for (let vertex = 0; vertex < position.count; vertex += 1) {
         const x = position.getX(vertex);
         const z = position.getZ(vertex);
-        const depth = (spec.depth * 0.5 - z) / spec.depth;
-        const ridgeCrest = Math.max(0, 1 - Math.abs(depth - 0.64) / 0.64);
-        const peaks = 0.5
-          + Math.abs(Math.sin(x * 0.11 + spec.phase)) * 0.28
-          + Math.abs(Math.sin(x * 0.27 - spec.phase)) * 0.16
-          + Math.cos((x + z) * 0.13) * 0.06;
-        const sideFade = Math.max(0.2, 1 - Math.abs(x) / (spec.width * 0.58));
-        const blend = terrainEdgeBlend(x, z, spec.width, spec.depth);
-        const baseHeight = menuSeabedHeight(x, z + spec.z);
-        const lift = (0.04 + Math.max(0, peaks) * sideFade
-          * Math.pow(ridgeCrest, 1.3) * spec.height) * blend;
-        position.setY(vertex, baseHeight + lift);
+        position.setY(vertex, mountainSurfaceHeight(spec, x, z));
       }
       position.needsUpdate = true;
       geometry.computeVertexNormals();
-      const mesh = new Mesh(geometry, mountainSand);
+      const mesh = new Mesh(
+        geometry,
+        this.terrainMaterial(spec.color, distantSand),
+      );
       mesh.name = `menu:distant-mountain-${index + 1}`;
+      mesh.position.x = spec.x;
       mesh.position.z = spec.z;
       mountains.add(mesh);
     });
 
-    const rockGeometry = this.geometry(new DodecahedronGeometry(0.55, 0));
-    const plantGeometry = this.geometry(new ConeGeometry(0.12, 1.3, 5));
+    const rockGeometry = this.groundGeometry(
+      this.geometry(new DodecahedronGeometry(0.55, 0)),
+    );
+    const stoneGeometry = this.groundGeometry(
+      this.geometry(new DodecahedronGeometry(0.48, 0)),
+    );
+    const plantGeometry = this.groundGeometry(
+      this.geometry(new ConeGeometry(0.12, 1.3, 5)),
+    );
+    rocks.add(this.createSeabedScatter(
+      'menu:scatter-rocks',
+      SEABED_ROCK_INSTANCE_COUNT,
+      rockGeometry,
+      rock,
+      'rock',
+      0x72a5,
+    ));
+    stones.add(this.createSeabedScatter(
+      'menu:scatter-stones',
+      SEABED_STONE_INSTANCE_COUNT,
+      stoneGeometry,
+      stone,
+      'stone',
+      0x14c9,
+    ));
+    plants.add(this.createSeabedScatter(
+      'menu:scatter-plants',
+      SEABED_PLANT_INSTANCE_COUNT,
+      plantGeometry,
+      plant,
+      'plant',
+      0x9ef1,
+    ));
+    const mountainPlantGeometry = this.groundGeometry(
+      this.geometry(new ConeGeometry(0.08, 0.8, 4)),
+    );
+    mountainDetails.add(
+      this.createMountainScatter(
+        'menu:mountain-plants',
+        MOUNTAIN_PLANT_INSTANCE_COUNT,
+        mountainPlantGeometry,
+        plant,
+        'plant',
+        0xa734,
+      ),
+    );
     const debrisGeometry = this.geometry(new BoxGeometry(1.25, 0.08, 0.22));
-    this.addDetails(rocks, 'menu:distant-rock', ROCKS, rockGeometry, rock);
-    this.addDetails(plants, 'menu:distant-plant', PLANTS, plantGeometry, plant);
     this.addDetails(debris, 'menu:distant-debris', DEBRIS, debrisGeometry, wood);
     const debrisGeometries: Readonly<Record<WreckDebrisKind, BufferGeometry>> = {
       plank: this.geometry(new BoxGeometry(1.5, 0.1, 0.24)),
@@ -238,7 +287,17 @@ export class DistantSeabed implements MenuSceneComponent {
     this.addNearWreckDebris(nearWreckDebris, debrisGeometries, debrisMaterials);
 
     this.root.name = 'menu:distant-seabed';
-    this.root.add(ridges, mountains, rocks, plants, debris, nearWreckDebris);
+    this.root.add(
+      horizon,
+      ridges,
+      mountains,
+      mountainDetails,
+      rocks,
+      stones,
+      plants,
+      debris,
+      nearWreckDebris,
+    );
   }
 
   dispose(): void {
@@ -251,6 +310,228 @@ export class DistantSeabed implements MenuSceneComponent {
   private geometry<T extends BufferGeometry>(geometry: T): T {
     this.geometries.add(geometry);
     return geometry;
+  }
+
+  private groundGeometry<T extends BufferGeometry>(geometry: T): T {
+    geometry.computeBoundingBox();
+    geometry.translate(0, -geometry.boundingBox!.min.y, 0);
+    return geometry;
+  }
+
+  private createSeabedScatter(
+    name: string,
+    count: number,
+    geometry: BufferGeometry,
+    material: MeshStandardMaterial,
+    kind: 'rock' | 'stone' | 'plant',
+    seed: number,
+  ): InstancedMesh {
+    const batch = new InstancedMesh(geometry, material, count);
+    const random = deterministicRandom(seed);
+    const transform = new Object3D();
+    const color = new Color();
+    const palette = kind === 'plant'
+      ? [0x315a4d, 0x466d58, 0x58745c]
+      : kind === 'stone'
+        ? [0x485a57, 0x586963, 0x68756c]
+        : [0x34494b, 0x415558, 0x52635f];
+    const radius = kind === 'plant' ? 0.22 : 0.55;
+    const regularCount = count - LEFT_SEABED_INSTANCE_COUNT;
+    const foregroundCount = Math.floor(regularCount * FOREGROUND_SHARE[kind]);
+
+    for (let index = 0; index < count; index += 1) {
+      const leftCluster = index < LEFT_SEABED_INSTANCE_COUNT;
+      const regularIndex = index - LEFT_SEABED_INSTANCE_COUNT;
+      const foreground = !leftCluster && regularIndex < foregroundCount;
+      const depthProgress = leftCluster
+        ? (index + 0.5) / LEFT_SEABED_INSTANCE_COUNT
+        : foreground
+          ? (regularIndex + 0.5) / foregroundCount
+          : (regularIndex - foregroundCount + 0.5)
+            / (regularCount - foregroundCount);
+      const z = leftCluster
+        ? 6.2 - depthProgress * 5.8 + (random() - 0.5) * 0.12
+        : foreground
+        ? FOREGROUND_NEAR_Z
+          + (FOREGROUND_FAR_Z - FOREGROUND_NEAR_Z) * depthProgress
+          + (random() - 0.5) * 0.18
+        : 2 - depthProgress * 82 + (random() - 0.5) * 1.6;
+      const limit = Math.max(
+        6,
+        menuVisibleCenterLimit(menuSeabedHeight(0, z), z, radius)
+          * (leftCluster || foreground ? 1.55 : 0.98),
+      );
+      const x = this.scatterX(
+        random,
+        z,
+        limit,
+        radius,
+        (leftCluster || foreground) && kind !== 'stone',
+        leftCluster,
+        kind === 'rock',
+      );
+      const distanceScale = leftCluster
+        ? 0.54 + depthProgress * 0.22
+        : foreground
+        ? 0.58 + depthProgress * 0.18
+        : 0.78 + depthProgress * 0.9;
+      const base = (0.55 + random() * 0.85) * distanceScale;
+      transform.position.set(x, menuSeabedHeight(x, z) - 0.035, z);
+      transform.rotation.set(
+        kind === 'plant' ? (random() - 0.5) * 0.16 : (random() - 0.5) * 0.28,
+        random() * Math.PI * 2,
+        (random() - 0.5) * (kind === 'plant' ? 0.18 : 0.3),
+      );
+      if (kind === 'plant') {
+        transform.scale.set(
+          base * (0.72 + random() * 0.7),
+          base * (0.85 + random() * 1.05),
+          base * (0.72 + random() * 0.7),
+        );
+      } else if (kind === 'stone') {
+        transform.scale.set(
+          base * (1.15 + random() * 1.25),
+          base * (0.18 + random() * 0.24),
+          base * (0.8 + random() * 0.9),
+        );
+      } else {
+        transform.scale.set(
+          base * (0.72 + random() * 0.85),
+          base * (0.55 + random() * 0.8),
+          base * (0.72 + random() * 0.85),
+        );
+      }
+      transform.updateMatrix();
+      batch.setMatrixAt(index, transform.matrix);
+      color.set(palette[index % palette.length]!);
+      color.offsetHSL((random() - 0.5) * 0.025, 0, (random() - 0.5) * 0.05);
+      batch.setColorAt(index, color);
+    }
+
+    batch.name = name;
+    batch.castShadow = false;
+    batch.receiveShadow = false;
+    batch.frustumCulled = false;
+    batch.instanceMatrix.needsUpdate = true;
+    if (batch.instanceColor) batch.instanceColor.needsUpdate = true;
+    return batch;
+  }
+
+  private createMountainScatter(
+    name: string,
+    count: number,
+    geometry: BufferGeometry,
+    material: MeshStandardMaterial,
+    kind: 'rock' | 'plant',
+    seed: number,
+  ): InstancedMesh {
+    const batch = new InstancedMesh(geometry, material, count);
+    const random = deterministicRandom(seed);
+    const transform = new Object3D();
+    const color = new Color();
+    const palette = kind === 'plant'
+      ? [0x3b5f50, 0x4d6b58, 0x59705c]
+      : [0x526561, 0x61726d, 0x718079];
+
+    for (let index = 0; index < count; index += 1) {
+      const mountainIndex = index % MOUNTAINS.length;
+      const spec = MOUNTAINS[mountainIndex]!;
+      const x = (random() * 2 - 1) * spec.width * 0.42;
+      const z = (random() * 2 - 1) * spec.depth * 0.32;
+      const distanceScale = 1 - mountainIndex * 0.18;
+      const base = (0.55 + random() * 1.1) * distanceScale;
+      transform.position.set(
+        spec.x + x,
+        mountainSurfaceHeight(spec, x, z) - 0.025,
+        spec.z + z,
+      );
+      transform.rotation.set(
+        (random() - 0.5) * 0.18,
+        random() * Math.PI * 2,
+        (random() - 0.5) * 0.2,
+      );
+      if (kind === 'plant') {
+        transform.scale.set(
+          base * (0.7 + random() * 0.65),
+          base * (0.8 + random() * 1.1),
+          base * (0.7 + random() * 0.65),
+        );
+      } else {
+        transform.scale.set(
+          base * (0.75 + random() * 0.8),
+          base * (0.5 + random() * 0.75),
+          base * (0.75 + random() * 0.8),
+        );
+      }
+      transform.updateMatrix();
+      batch.setMatrixAt(index, transform.matrix);
+      color.set(palette[index % palette.length]!);
+      color.offsetHSL((random() - 0.5) * 0.02, 0, (random() - 0.5) * 0.04);
+      batch.setColorAt(index, color);
+    }
+
+    batch.name = name;
+    batch.castShadow = false;
+    batch.receiveShadow = false;
+    batch.frustumCulled = false;
+    batch.instanceMatrix.needsUpdate = true;
+    if (batch.instanceColor) batch.instanceColor.needsUpdate = true;
+    return batch;
+  }
+
+  private scatterX(
+    random: () => number,
+    z: number,
+    limit: number,
+    radius: number,
+    sideBias = false,
+    leftOnly = false,
+    clearBoatSightline = false,
+  ): number {
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const side = leftOnly ? -1 : random() < 0.5 ? -1 : 1;
+      const magnitude = leftOnly
+        ? 0.72 + random() * 0.28
+        : sideBias ? 0.48 + random() * 0.52 : random();
+      const x = side * magnitude * limit;
+      const blocksBoatSightline = clearBoatSightline
+        && Math.abs(x) < 2.4
+        && z > -4.4
+        && z < 1.8;
+      const blocked = blocksBoatSightline
+        || MENU_PROTECTED_FOOTPRINTS.some((footprint) => (
+        Math.abs(x - footprint.position[0]) < footprint.halfSize[0] + radius
+        && Math.abs(z - footprint.position[2]) < footprint.halfSize[1] + radius
+      ));
+      if (!blocked) return x;
+    }
+    return limit * (leftOnly || random() < 0.5 ? -0.92 : 0.92);
+  }
+
+  private createHorizon(): Mesh<PlaneGeometry, MeshBasicMaterial> {
+    const geometry = this.geometry(new PlaneGeometry(500, 260, 1, 6));
+    const position = geometry.getAttribute('position');
+    const colors = new Float32BufferAttribute(position.count * 3, 3);
+    const lower = new Color(0x315b5c);
+    const upper = new Color(0x0a252e);
+    const color = new Color();
+    for (let vertex = 0; vertex < position.count; vertex += 1) {
+      const progress = Math.min(1, Math.max(0, position.getY(vertex) / 260 + 0.5));
+      color.lerpColors(lower, upper, progress);
+      colors.setXYZ(vertex, color.r, color.g, color.b);
+    }
+    geometry.setAttribute('color', colors);
+    const material = new MeshBasicMaterial({
+      depthWrite: false,
+      fog: false,
+      vertexColors: true,
+    });
+    this.materials.add(material);
+    const horizon = new Mesh(geometry, material);
+    horizon.name = 'menu:distant-horizon';
+    horizon.position.set(0, 35, -115);
+    horizon.renderOrder = -2;
+    return horizon;
   }
 
   private material(
@@ -321,6 +602,9 @@ diffuseColor *= vec4(sandColor, sampledDiffuseColor.a);
         visibleLimit,
       );
       mesh.position.z = placedZ;
+      const shadowsEnabled = placedZ > -28;
+      mesh.castShadow = shadowsEnabled;
+      mesh.receiveShadow = shadowsEnabled;
       this.detailFootprints.push({
         id: mesh.name,
         position: [mesh.position.x, y, placedZ],
@@ -363,6 +647,8 @@ diffuseColor *= vec4(sandColor, sampledDiffuseColor.a);
       );
       mesh.position.x = x;
       mesh.position.y = menuGroundedY(x, spec.z, localBottom);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
       this.detailFootprints.push({
         id: mesh.name,
         position: [x, mesh.position.y, spec.z],

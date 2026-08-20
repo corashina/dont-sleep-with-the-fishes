@@ -89,7 +89,10 @@ describe('Item Animation Lab', () => {
   });
 
   it('keeps the rear camera control available in the lab', () => {
-    const current = new SurvivalSession(allItems(), { seed: 19 }).snapshot();
+    const current = new SurvivalSession(allItems(), {
+      seed: 19,
+      initialChest: ITEM_ANIMATION_LAB_INITIAL_CHEST,
+    }).snapshot();
     const setRearCameraView = vi.fn();
     const setCameraTurnState = vi.fn();
     const ui: Partial<SurvivalUI> = {

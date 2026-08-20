@@ -13,6 +13,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import {
   ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY,
   ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS,
@@ -24,6 +25,10 @@ import {
   sceneBinocularMaskStrength,
 } from './BinocularMaskPass';
 import { sceneHoverOutlineTargets } from './HoverOutline';
+import {
+  MENU_ATMOSPHERE_QUALITY,
+  MenuAtmospherePass,
+} from './MenuAtmospherePass';
 import {
   DirectSceneRenderer,
   type SceneRenderer,
@@ -46,6 +51,14 @@ type FallbackReporter = (error: unknown) => void;
 
 const MAX_PIXEL_RATIO = 2;
 const FALLBACK_MAX_TEXTURE_SIZE = 4_096;
+const MENU_AMBIENT_OCCLUSION = {
+  low: null,
+  medium: { intensity: 1.08, radius: 0.2 },
+  high: { intensity: 1.18, radius: 0.17 },
+} as const satisfies Readonly<Record<VisualQuality, {
+  readonly intensity: number;
+  readonly radius: number;
+} | null>>;
 type MaterialObject = Object3D & {
   readonly material?: Material | Material[];
 };
@@ -277,11 +290,15 @@ export class PostProcessingPipeline implements SceneRenderer {
   private readonly renderPass: RenderPass;
   private itemAmbientOcclusionPass: ItemAmbientOcclusionPass | null;
   private readonly outlinePass: OutlinePass;
+  private readonly bloomPass: UnrealBloomPass;
+  private readonly menuAtmospherePass: MenuAtmospherePass;
   private readonly binocularMaskPass: BinocularMaskPass;
   private readonly outputPass: OutputPass;
   private readonly size: Vector2;
   private readonly maxTextureSize: number;
   private readonly controlState: PostProcessingControlState;
+  private visualQuality: VisualQuality;
+  private menuEffectsActive = false;
   private aoUnavailable = false;
   private disposed = false;
 
@@ -294,6 +311,7 @@ export class PostProcessingPipeline implements SceneRenderer {
       console.warn('Ambient occlusion unavailable; continuing without it.', error);
     },
   ) {
+    this.visualQuality = quality;
     this.controlState = {
       ambientOcclusionAvailable: true,
       ambientOcclusionMode: 'composite',
@@ -303,6 +321,8 @@ export class PostProcessingPipeline implements SceneRenderer {
     let target: WebGLRenderTarget | undefined;
     let composer: EffectComposer | undefined;
     let outlinePass: OutlinePass | undefined;
+    let bloomPass: UnrealBloomPass | undefined;
+    let menuAtmospherePass: MenuAtmospherePass | undefined;
     let binocularMaskPass: BinocularMaskPass | undefined;
     let outputPass: OutputPass | undefined;
     let itemAmbientOcclusionPass: ItemAmbientOcclusionPass | null = null;
@@ -328,6 +348,9 @@ export class PostProcessingPipeline implements SceneRenderer {
       }
       outlinePass = new HoverOutlinePass(this.size, new Scene(), new PerspectiveCamera());
       configureHoverOutlinePass(outlinePass);
+      bloomPass = new UnrealBloomPass(this.size, 0, 0, 1);
+      bloomPass.enabled = false;
+      menuAtmospherePass = new MenuAtmospherePass();
       binocularMaskPass = new BinocularMaskPass();
       outputPass = new OutputPass();
 
@@ -346,18 +369,24 @@ export class PostProcessingPipeline implements SceneRenderer {
         }
       }
       composer.addPass(outlinePass);
+      composer.addPass(bloomPass);
+      composer.addPass(menuAtmospherePass);
       composer.addPass(binocularMaskPass);
       composer.addPass(outputPass);
 
       this.composer = composer;
       this.itemAmbientOcclusionPass = itemAmbientOcclusionPass;
       this.outlinePass = outlinePass;
+      this.bloomPass = bloomPass;
+      this.menuAtmospherePass = menuAtmospherePass;
       this.binocularMaskPass = binocularMaskPass;
       this.outputPass = outputPass;
       this.resize(this.size.x, this.size.y, renderer.getPixelRatio());
     } catch (error) {
       itemAmbientOcclusionPass?.dispose();
       outlinePass?.dispose();
+      bloomPass?.dispose();
+      menuAtmospherePass?.dispose();
       binocularMaskPass?.dispose();
       outputPass?.dispose();
       if (composer === undefined) target?.dispose();
@@ -369,9 +398,17 @@ export class PostProcessingPipeline implements SceneRenderer {
   render(
     scene: Scene,
     camera: Camera,
-    _state: Readonly<SceneVisualState>,
+    state: Readonly<SceneVisualState>,
   ): void {
     if (this.disposed) return;
+    const menuEffectsActive = state.kind === 'menu';
+    if (menuEffectsActive !== this.menuEffectsActive) {
+      this.menuEffectsActive = menuEffectsActive;
+      this.syncMenuProfile();
+    }
+    if (menuEffectsActive) {
+      this.menuAtmospherePass.setTime(state.elapsedSeconds);
+    }
     this.renderPass.scene = scene;
     this.renderPass.camera = camera;
     this.itemAmbientOcclusionPass?.setContext(scene, camera);
@@ -418,10 +455,10 @@ export class PostProcessingPipeline implements SceneRenderer {
   }
 
   setVisualQuality(value: VisualQuality): void {
-    if (
-      this.disposed || this.aoUnavailable
-      || this.itemAmbientOcclusionPass === null
-    ) return;
+    if (this.disposed || value === this.visualQuality) return;
+    this.visualQuality = value;
+    this.syncMenuProfile();
+    if (this.aoUnavailable || this.itemAmbientOcclusionPass === null) return;
     try {
       this.itemAmbientOcclusionPass.setVisualQuality(value);
     } catch (error) {
@@ -434,6 +471,8 @@ export class PostProcessingPipeline implements SceneRenderer {
     this.disposed = true;
     this.itemAmbientOcclusionPass?.dispose();
     this.outlinePass.dispose();
+    this.bloomPass.dispose();
+    this.menuAtmospherePass.dispose();
     this.binocularMaskPass.dispose();
     this.outputPass.dispose();
     this.composer.dispose();
@@ -452,18 +491,34 @@ export class PostProcessingPipeline implements SceneRenderer {
     if (this.disposed) return;
     const clamped = clampPostProcessingSetting(setting, value);
     this.controlState[setting] = clamped;
-    switch (setting) {
-      case 'ambientOcclusionIntensity':
-        if (!this.aoUnavailable) {
-          this.itemAmbientOcclusionPass?.setIntensity(clamped);
-        }
-        break;
-      case 'ambientOcclusionRadius':
-        if (!this.aoUnavailable) {
-          this.itemAmbientOcclusionPass?.setRadius(clamped);
-        }
-        break;
-    }
+    this.syncAmbientOcclusionProfile();
+  }
+
+  private syncMenuProfile(): void {
+    const settings = MENU_ATMOSPHERE_QUALITY[this.visualQuality];
+    const enabled = this.menuEffectsActive && settings.gradeStrength > 0;
+    this.bloomPass.enabled = enabled;
+    this.bloomPass.strength = enabled ? settings.bloomStrength : 0;
+    this.bloomPass.radius = enabled ? settings.bloomRadius : 0;
+    this.bloomPass.threshold = enabled ? settings.bloomThreshold : 1;
+    this.menuAtmospherePass.setProfile(
+      this.menuEffectsActive,
+      this.visualQuality,
+    );
+    this.syncAmbientOcclusionProfile();
+  }
+
+  private syncAmbientOcclusionProfile(): void {
+    if (this.aoUnavailable || this.itemAmbientOcclusionPass === null) return;
+    const menuProfile = this.menuEffectsActive
+      ? MENU_AMBIENT_OCCLUSION[this.visualQuality]
+      : null;
+    this.itemAmbientOcclusionPass.setIntensity(
+      menuProfile?.intensity ?? this.controlState.ambientOcclusionIntensity,
+    );
+    this.itemAmbientOcclusionPass.setRadius(
+      menuProfile?.radius ?? this.controlState.ambientOcclusionRadius,
+    );
   }
 
   private retireAmbientOcclusion(error: unknown): void {

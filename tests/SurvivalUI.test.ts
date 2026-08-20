@@ -373,6 +373,9 @@ describe('SurvivalUI', () => {
       /\.survival-condition__art\s*\{[^}]*width:\s*114px;[^}]*height:\s*105px;[^}]*stroke-width:\s*3\.75;/s,
     );
     expect(mainStyles).toMatch(
+      /\.survival-meters\s*\{[^}]*display:\s*flex;[^}]*gap:\s*14px;/s,
+    );
+    expect(mainStyles).toMatch(
       /\.survival-condition__art \*\s*\{[^}]*vector-effect:\s*non-scaling-stroke;/s,
     );
     expect(mainStyles).toMatch(
@@ -494,7 +497,7 @@ describe('SurvivalUI', () => {
     expect(mainStyles).toMatch(/\.carlitos-status\s*\{[^}]*grid-template-columns:\s*32px minmax\(0, 1fr\) 88px/s);
     expect(mainStyles).toMatch(/\.carlitos-status\s*\{[^}]*height:\s*58px[^}]*min-height:\s*58px/s);
     expect(mainStyles).toMatch(/\.carlitos-status\[data-carlitos-energy-row\]\s*\{[^}]*grid-template-columns:\s*auto auto[^}]*justify-content:\s*start/s);
-    expect(mainStyles).toMatch(/\.carlitos-card__close\s*\{[^}]*top:\s*14px[^}]*width:\s*48px[^}]*height:\s*48px[^}]*padding:\s*6px 6px 9px[^}]*border:\s*0[^}]*background:\s*transparent[^}]*font-size:\s*2\.4rem[^}]*transform:\s*rotate\(-4deg\)/s);
+    expect(mainStyles).toMatch(/\.carlitos-card__close\s*\{[^}]*top:\s*10px[^}]*right:\s*6px[^}]*width:\s*48px[^}]*height:\s*48px[^}]*padding:\s*6px 6px 9px[^}]*border:\s*0[^}]*background:\s*transparent[^}]*font-size:\s*2\.4rem[^}]*transform:\s*rotate\(-4deg\)/s);
     expect(mainStyles).toMatch(/\.carlitos-status__action:focus-visible\s*\{[^}]*outline:\s*none[^}]*filter:\s*brightness\(1\.18\)/s);
     expect(mainStyles).not.toMatch(/\.carlitos-card button:focus-visible\s*\{[^}]*#9b3e2c/s);
     expect(mainStyles).toMatch(/\.carlitos-status__action\s*\{[^}]*display:\s*flex[^}]*min-height:\s*40px/s);
@@ -2437,7 +2440,7 @@ describe('SurvivalUI', () => {
     expect(returned).toHaveBeenCalledOnce();
   });
 
-  it('reuses the down arrow to switch between front and rear camera views', () => {
+  it('uses a top-left chest icon to switch between front and rear camera views', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -2446,20 +2449,37 @@ describe('SurvivalUI', () => {
     const button = mount.querySelector<HTMLButtonElement>('[data-camera-turn]')!;
 
     expect(button.hidden).toBe(true);
-    expect(button.classList).toContain('drifting-item-focus__back');
-    expect(button.querySelector('[data-camera-turn-icon] path')?.getAttribute('d'))
-      .toBe('M9 3h6v10h5l-8 8-8-8h5z');
+    expect(button.classList).toContain('chest-camera-turn');
+    expect(button.classList).not.toContain('drifting-item-focus__back');
+    expect(button.parentElement).toBe(mount.querySelector('[data-survival-top]'));
+    const chestArtwork = button.querySelector('[data-ui-artwork="chest"]');
+    expect(chestArtwork).not.toBeNull();
+    expect(chestArtwork?.querySelector('[data-chest-scale]')?.getAttribute('transform'))
+      .toBe('translate(40 36) scale(.84 .8) translate(-40 -36)');
+    expect(button.querySelector('[data-camera-turn-icon]')).toBeNull();
+    expect(mainStyles).toContain(
+      '.ui-artwork--chest path:not(.ui-artwork__shine) { stroke-width: 7.125; vector-effect: non-scaling-stroke; }',
+    );
 
     ui.setCameraTurnState(true, false);
     expect(button.hidden).toBe(false);
-    expect(button.getAttribute('aria-label')).toBe('Look behind');
+    expect(button.getAttribute('aria-label')).toBe('Look behind at the chest');
     expect(button.getAttribute('aria-pressed')).toBe('false');
+    expect(button.querySelector('[data-camera-turn-tooltip]')?.textContent).toBe('LOOK BACK');
     button.click();
     expect(turn).toHaveBeenCalledOnce();
 
     ui.setCameraTurnState(true, true);
-    expect(button.getAttribute('aria-label')).toBe('Look forward');
+    expect(button.getAttribute('aria-label')).toBe('Look forward from the chest');
     expect(button.getAttribute('aria-pressed')).toBe('true');
+    expect(button.querySelector('[data-camera-turn-tooltip]')?.textContent)
+      .toBe('LOOK FORWARD');
+    expect(mainStyles).toMatch(
+      /\.survival-meters\s*\{[^}]*position:\s*absolute;[^}]*top:\s*18px;[^}]*left:\s*22px;/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.chest-camera-turn\s*\{[^}]*width:\s*114px;[^}]*height:\s*105px;/s,
+    );
 
     ui.setCameraTurnState(false, false);
     expect(button.hidden).toBe(true);

@@ -18,7 +18,7 @@ import {
 import { clamp01Unchecked } from './animationMath';
 import type { ChestSnapshot } from './survivalTypes';
 
-export const CHEST_DISPLAY_SCALE = 0.5;
+export const CHEST_DISPLAY_SCALE = 0.75;
 export const CHEST_DISAPPEAR_DURATION = 0.6;
 
 interface ChestMaterialState {

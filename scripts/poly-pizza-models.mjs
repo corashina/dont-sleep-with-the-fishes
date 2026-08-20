@@ -122,11 +122,11 @@ export const POLY_PIZZA_MODEL_SOURCES = Object.freeze({
     sourceTriangles: 928,
   }),
   fishingNet: source({
-    id: 'fishingNet', publicId: '6xRmXaU-L7e',
-    resourceId: '9d291011-bf4c-4202-ad84-97bf9e964dae',
-    title: 'Fishing net', creator: 'Poly by Google', license: 'CC-BY 3.0',
-    sha256: '676BB90BE7356794BFE07D607C1BA1AF45F4C756BD94B400FEFBCF73C5582FB5',
-    sourceTriangles: 8_422, maxTriangles: 9_000,
+    id: 'fishingNet', publicId: 'Z11I3AUBO9',
+    resourceId: '76579ffe-a47f-40f5-9c6e-819c1e022fbb',
+    title: 'Fishing Net', creator: 'J-Toastie', license: 'CC-BY 3.0',
+    sha256: 'E258EBFF8154998105AE9E66B0BCC978C9A4B7E352E2E30C89229BF6DE06DAD5',
+    sourceTriangles: 1_864, downloadedOn: '2026-08-20',
   }),
   bucket: source({
     id: 'bucket', publicId: '5HPoa3eX0Jb',

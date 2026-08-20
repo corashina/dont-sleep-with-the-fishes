@@ -3,6 +3,8 @@ import {
   AnimationClip,
   Box3,
   BoxGeometry,
+  DirectionalLight,
+  FogExp2,
   Group,
   InstancedMesh,
   Matrix4,
@@ -17,7 +19,10 @@ import {
   Vector3,
 } from 'three';
 import { expect, it, vi } from 'vitest';
-import { MENU_PROTECTED_FOOTPRINTS } from '../src/menu/MenuSceneLayout';
+import {
+  MENU_PROTECTED_FOOTPRINTS,
+  menuSeabedHeight,
+} from '../src/menu/MenuSceneLayout';
 import { UnderwaterMenuWorld } from '../src/menu/UnderwaterMenuWorld';
 import { BUBBLE_COUNT } from '../src/menu/UnderwaterParticles';
 import { LIGHT_SHAFT_COUNT } from '../src/menu/UnderwaterLightShafts';
@@ -42,7 +47,12 @@ it('creates the approved fixed composition once', () => {
       const dispose = vi.fn();
       disposers.push(dispose);
       const root = new Group();
-      if (id === 'redSnapper') {
+      if (id === 'boat') {
+        root.add(new Mesh(
+          new BoxGeometry(2, 1, 4),
+          new MeshStandardMaterial(),
+        ));
+      } else if (id === 'redSnapper') {
         root.add(new Mesh(new BoxGeometry(0.1, 0.1, 0.1)));
       }
       return { root, animations, dispose };
@@ -126,6 +136,9 @@ it('creates the approved fixed composition once', () => {
   const seabed = world.root.getObjectByName('menu:seabed') as Mesh;
   const caustics = world.root.getObjectByName('menu:caustic-overlay') as Mesh;
   const lightShafts = world.root.getObjectByName('menu:light-shafts') as Group;
+  const keyLight = world.root.getObjectByName(
+    'menu:directional-light',
+  ) as DirectionalLight;
   const sandPosition = seabed.geometry.getAttribute('position');
   const sandColor = seabed.geometry.getAttribute('color');
   expect(sandColor).toBeDefined();
@@ -147,6 +160,13 @@ it('creates the approved fixed composition once', () => {
   expect((seabed.material as MeshStandardMaterial).vertexColors).toBe(true);
   expect(seabed.layers.isEnabled(ITEM_AMBIENT_OCCLUSION_LAYER)).toBe(true);
   expect(startHitTarget.layers.isEnabled(ITEM_AMBIENT_OCCLUSION_LAYER)).toBe(true);
+  expect(startHitTarget.castShadow).toBe(true);
+  expect(startHitTarget.receiveShadow).toBe(true);
+  expect(keyLight.castShadow).toBe(true);
+  expect(keyLight.shadow.mapSize.toArray()).toEqual([2048, 2048]);
+  expect(keyLight.shadow.camera.far).toBe(55);
+  expect(scene.fog).toBeInstanceOf(FogExp2);
+  expect((scene.fog as FogExp2).density).toBe(0.015);
   expect(caustics.layers.isEnabled(ITEM_AMBIENT_OCCLUSION_LAYER)).toBe(false);
   expect(lightShafts.children).toHaveLength(LIGHT_SHAFT_COUNT);
   expect(world.actors.setLightTime).toBeTypeOf('function');
@@ -164,7 +184,13 @@ it('creates the approved fixed composition once', () => {
   expect(world.root.getObjectByName('menu:dorothy-wreck')).toBeDefined();
   expect(world.root.getObjectByName('menu:distant-seabed')).toBeDefined();
   const skullPosition = world.root.getObjectByName('menu:skull')!.getWorldPosition(new Vector3());
-  const boatPosition = world.root.getObjectByName('menu:boat')!.getWorldPosition(new Vector3());
+  const boat = world.root.getObjectByName('menu:boat')!;
+  const boatPosition = boat.getWorldPosition(new Vector3());
+  const boatBottom = new Box3().setFromObject(boat).min.y;
+  expect(boatBottom).toBeCloseTo(
+    menuSeabedHeight(boatPosition.x, boatPosition.z) - 0.1,
+    5,
+  );
   expect(skullPosition.z).toBeGreaterThan(boatPosition.z);
   expect(skullPosition.y).toBeLessThan(0);
   expect(skullPosition.distanceTo(boatPosition)).toBeGreaterThan(3);
@@ -245,7 +271,14 @@ it('rolls back completed work and preserves a component creation error', () => {
         : [];
       const dispose = vi.fn();
       modelDisposers.push(dispose);
-      return { root: new Group(), animations, dispose };
+      const root = new Group();
+      if (id === 'boat') {
+        root.add(new Mesh(
+          new BoxGeometry(2, 1, 4),
+          new MeshStandardMaterial(),
+        ));
+      }
+      return { root, animations, dispose };
     }),
   };
   const signsDispose = vi.fn(() => {

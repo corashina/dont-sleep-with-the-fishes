@@ -3,7 +3,10 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { createVisualQualityPreference } from '../src/rendering/visualQuality';
+import {
+  createVisualQualityPreference,
+  parseVisualQuality,
+} from '../src/rendering/visualQuality';
 import { createWaterQualityPreference } from '../src/rendering/waterQuality';
 import {
   QualityControl,
@@ -22,7 +25,7 @@ function qualityValues(element: Element): string[] {
 type TestQuality = 'low' | 'high' | 'ultra';
 
 describe('QualityControl', () => {
-  it('shows three water choices and two AO choices', () => {
+  it('shows three water choices and three visual choices', () => {
     const water = new WaterQualityControl(
       createWaterQualityPreference(() => undefined, null),
     );
@@ -31,11 +34,11 @@ describe('QualityControl', () => {
     );
 
     expect(qualityValues(water.element)).toEqual(['low', 'high', 'ultra']);
-    expect(qualityValues(ao.element)).toEqual(['low', 'high']);
+    expect(qualityValues(ao.element)).toEqual(['low', 'medium', 'high']);
     expect(water.element.querySelector('p')?.textContent)
       .toBe('Ultra adds a natural ocean surface at high GPU cost.');
     expect(mainStyles).toMatch(
-      /\.visual-quality-control__choices\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s,
+      /\.visual-quality-control__choices\s*\{[^}]*grid-template-columns:\s*repeat\(3,/s,
     );
     expect(mainStyles).toMatch(
       /\.visual-quality-control\[data-quality-control="water"\]\s+\.visual-quality-control__choices\s*\{[^}]*grid-template-columns:\s*repeat\(3,/s,
@@ -49,6 +52,12 @@ describe('QualityControl', () => {
 
     water.dispose();
     ao.dispose();
+  });
+
+  it('accepts the medium visual quality preference', () => {
+    expect(parseVisualQuality('medium')).toBe('medium');
+    expect(parseVisualQuality('high')).toBe('high');
+    expect(parseVisualQuality('unknown')).toBe('low');
   });
 
   it('renders ordered choices and accepts only configured values', () => {

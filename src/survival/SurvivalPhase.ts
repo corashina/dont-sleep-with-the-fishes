@@ -2141,6 +2141,7 @@ export class SurvivalPhase implements GamePhase {
     );
     return !this.busy
       && snapshot.state === 'day'
+      && snapshot.chest.state !== 'none'
       && stableDayView
       && this.activeFishing === null
       && this.forcedPresentationPhase !== 'night';

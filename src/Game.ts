@@ -107,7 +107,7 @@ export function disposeMenuModelLibrary(menuModels: MenuModelLibrary): void {
 }
 
 export const GAME_CAMERA = Object.freeze({
-  fov: 75,
+  fov: 80,
   near: 0.08,
   far: 1000,
 });

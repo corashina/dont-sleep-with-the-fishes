@@ -89,7 +89,7 @@ Supplies are repeatable physical instances rather than one slot per item type. T
 | Input | Action |
 |---|---|
 | Mouse | Hover physical recovered props for details; click a prop to perform its action. While fishing, click valid water to cast and click the bubbles to reel |
-| Down arrow button | Turn the seated camera 180 degrees; use it again to look forward |
+| Chest icon | When a chest is aboard, turn the seated camera 180 degrees; use it again to look forward |
 | `Tab` / `Shift+Tab` | Move forward or backward through controls |
 | `Enter` / `Space` | Activate the focused control; while fishing, cast at the centered water point or reel during a bite |
 | `Escape` | Pause or resume, including during fishing; pausing does not cancel the attempt or refund its energy |

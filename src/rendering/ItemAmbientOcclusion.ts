@@ -31,6 +31,12 @@ export const ITEM_AMBIENT_OCCLUSION_QUALITY = {
     denoiseRings: 1,
     denoiseSamples: 4,
   },
+  medium: {
+    resolutionScale: 0.7,
+    gtaoSamples: 10,
+    denoiseRings: 2,
+    denoiseSamples: 8,
+  },
   high: {
     resolutionScale: 1,
     gtaoSamples: 16,
@@ -86,7 +92,7 @@ export class ItemAmbientOcclusionPass extends GTAOPass {
 
   setIntensity(value: number): void {
     if (!Number.isFinite(value)) return;
-    this.blendIntensity = Math.min(1, Math.max(0, value));
+    this.blendIntensity = Math.min(1.25, Math.max(0, value));
   }
 
   setRadius(value: number): void {

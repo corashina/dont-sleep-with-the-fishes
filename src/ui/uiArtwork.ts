@@ -1,7 +1,7 @@
 import type { ItemId } from '../game/ItemState';
 
 export const UI_ARTWORK_IDS = [
-  'health', 'hunger', 'mood', 'energy', 'hull', 'watch', 'journal', 'warning', 'howToPlay',
+  'health', 'hunger', 'mood', 'energy', 'hull', 'watch', 'journal', 'chest', 'warning', 'howToPlay',
   'guideSearch', 'guideCarry', 'guideSave',
   'guidePrepare', 'guideWatch', 'guideEndDay',
 ] as const;
@@ -16,6 +16,7 @@ const ARTWORK: Record<UiArtworkId, string> = {
   hull: '<g data-hull-scale transform="translate(40 36) scale(1.12) translate(-40 -36)"><path data-hull-part="body" d="M7 30h66l-2 20-11 8H20L9 50z"/><path data-hull-part="rim" fill="none" d="M9 33h62"/><path class="ui-artwork__shine" d="M18 40h16"/></g>',
   watch: '<circle cx="40" cy="43" r="27"/><path d="M32 8h16v8H32zM40 16V4M40 43V26M40 43l12 8"/><circle class="ui-artwork__shine" cx="40" cy="43" r="21"/>',
   journal: '<path d="M16 9h39c7 0 11 4 11 11v45H27c-7 0-11-4-11-11z"/><path d="M27 9v56M34 23h22M34 34h18"/><path class="ui-artwork__shine" d="M20 14h5"/>',
+  chest: '<g data-chest-scale transform="translate(40 36) scale(.84 .8) translate(-40 -36)"><path d="M14 27h52v37H14z"/><path d="M16 29V14c16-6 32-6 48 0v15z"/><path class="ui-artwork__chest-hardware" d="M11 12h6v52h-6zM63 12h6v52h-6zM10 28h60v7H10zM32 26h16l4 8-5 18H33l-5-18z"/><path d="M40 34c-3 0-5 2-5 5 0 2 1 4 3 5l-2 7h8l-2-7c2-1 3-3 3-5 0-3-2-5-5-5z"/><path class="ui-artwork__shine" d="M25 17c10-3 20-3 30-1"/></g>',
   warning: '<path d="M40 7 73 65H7z"/><path d="M40 25v21M40 55v2"/><path class="ui-artwork__shine" d="m20 56 20-35"/>',
   howToPlay: '<path d="M8 38c9-17 29-23 47-12l15-9-3 19 4 18-16-7C39 59 18 56 8 38z"/><path d="m23 28-8-10 15 7M24 48l-7 9 14-5"/><circle cx="47" cy="34" r="3"/><path class="ui-artwork__shine" d="M34 35c0-6 4-10 10-10 5 0 9 3 9 7 0 6-8 6-8 12m0 7v1"/>',
   guideSearch: '<circle cx="32" cy="29" r="18"/><path d="m46 43 20 20"/><path class="ui-artwork__shine" d="M21 27c1-7 6-12 13-13"/>',

@@ -1600,7 +1600,7 @@ describe('SurvivalPhase orchestration', () => {
   });
 
   it('toggles the rear camera and resets it outside the normal day view', () => {
-    const current = snapshot();
+    let current = snapshot();
     const setRearCameraView = vi.fn();
     const setCameraTurnState = vi.fn();
     const ui: Partial<SurvivalUI> = {
@@ -1616,6 +1616,10 @@ describe('SurvivalPhase orchestration', () => {
     });
 
     phase.start();
+    expect(setCameraTurnState).toHaveBeenLastCalledWith(false, false);
+
+    current = snapshot({ chest: { state: 'closed', acquiredDay: 1 } });
+    phase.update(1, 0.016);
     expect(setCameraTurnState).toHaveBeenLastCalledWith(true, false);
 
     ui.onCameraTurn?.();

@@ -53,7 +53,7 @@ const presentation = {
   map: { targetLongestDimension: 0.62, rotation: [0, 0, 0], offset: [0, 0, 0] },
   medicalKit: { targetLongestDimension: 0.72, rotation: [0, 0, 0], offset: [0, 0.07, 0] },
   spyglass: { targetLongestDimension: 0.72, rotation: [0, 0, 0], offset: [0, 0, 0] },
-  fishingNet: { targetLongestDimension: 0.82, rotation: [0, 0, 0], offset: [0, 0, 0] },
+  fishingNet: { targetLongestDimension: 1.64, rotation: [0, 0, 0], offset: [0, 0, 0] },
   bucket: { targetLongestDimension: 0.68, rotation: [0, 0, 0], offset: [0, 0, 0] },
   flareGun: { targetLongestDimension: 0.68, rotation: [Math.PI / 2, 0, 0], offset: [0, 0.07, 0] },
   scubaSet: { targetLongestDimension: 0.88, rotation: [0, 0, 0], offset: [0, 0.44, 0] },
@@ -75,7 +75,6 @@ const generatedMetadata = generatedMetadataJson as unknown as Readonly<
   Record<string, GeneratedRuntimeModelMetadata>
 >;
 const modelTriangleLimits: Readonly<Partial<Record<ItemId, number>>> = Object.freeze({
-  fishingNet: 9_000,
   carlitos: 8_000,
 });
 function generatedNormalization(id: string, authored: RuntimeModelPresentation) {
