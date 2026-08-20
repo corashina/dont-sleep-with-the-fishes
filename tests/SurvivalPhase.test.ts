@@ -10,6 +10,7 @@ import type { ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import type { SceneRenderer } from '../src/rendering/SceneRenderer';
 import type { ProjectedBoatBounds } from '../src/survival/BoatInteraction';
 import { BoatWorld } from '../src/survival/BoatWorld';
+import type { EventPresentationCue } from '../src/survival/midnightTourAudioCue';
 import { SURVIVAL_EVENTS, type DriftingItemEventId } from '../src/survival/events';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import type { FishingCastPoint } from '../src/survival/FishingSession';
@@ -134,6 +135,43 @@ describe('formatDiveResult', () => {
       reward: rewardSummary,
       lines: [],
     });
+  });
+});
+
+describe('Midnight Tour audio cue routing', () => {
+  it('routes a Midnight Tour cue to the survival audio scope', () => {
+    let handler: ((cue: EventPresentationCue) => void) | undefined;
+    const play = vi.fn((id: SoundId): AudioVoice => ({
+      id,
+      setGain: vi.fn(),
+      setPaused: vi.fn(),
+      stop: vi.fn(),
+      onEnded: vi.fn(),
+    }));
+    const backend: AudioBackend = {
+      acquire: vi.fn(() => Promise.resolve()),
+      release: vi.fn(),
+      unlock: vi.fn(() => Promise.resolve()),
+      play,
+      playSpatialLoop: vi.fn(() => null),
+      setListenerPose: vi.fn(),
+      setBusGain: vi.fn(),
+      setMasterGain: vi.fn(),
+      dispose: vi.fn(),
+    };
+
+    SurvivalPhase.forTest({
+      audio: AudioSystem.forTest(backend),
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world: {
+        setEventCueHandler: vi.fn((value) => { handler = value; }),
+      },
+      ui: {},
+    });
+
+    handler!({ eventId: 'midnight-tour', cue: 'run-start' });
+
+    expect(play).toHaveBeenCalledExactlyOnceWith('midnightMonsterRun');
   });
 });
 

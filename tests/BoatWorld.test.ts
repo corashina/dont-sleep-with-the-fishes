@@ -57,6 +57,7 @@ import { DANGEROUS_WATERS_ITEM_DURATION } from '../src/survival/DangerousWatersP
 import { DivePresentation } from '../src/survival/DivePresentation';
 import {
   type FocusedEventPresentation,
+  type FocusedEventPresentationDependencies,
   type FocusedEventPresentationFactories,
 } from '../src/survival/FocusedEventPresentation';
 import { FOCUSED_EVENT_IDS } from '../src/survival/eventPresentationRoutes';
@@ -1561,6 +1562,43 @@ describe('BoatWorld helpers', () => {
       .toBeUndefined();
 
     world.dispose();
+    propModels.dispose();
+  });
+
+  it('routes Midnight Tour presentation cues to the event cue handler', () => {
+    const propModels = createTestPropModels();
+    const emitCue = vi.fn();
+    let dependencies: FocusedEventPresentationDependencies | null = null;
+    const tour = focusedPresenterTestDouble('midnight-tour');
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      {
+        'midnight-tour': (value) => {
+          dependencies = value;
+          return tour.presenter;
+        },
+      },
+    );
+
+    world.setEventCueHandler(emitCue);
+    world.stageEvent('midnight-tour');
+    dependencies!.emitCue({ eventId: 'midnight-tour', cue: 'attack' });
+
+    expect(emitCue).toHaveBeenCalledExactlyOnceWith({
+      eventId: 'midnight-tour', cue: 'attack',
+    });
+
+    world.dispose();
+    dependencies!.emitCue({ eventId: 'midnight-tour', cue: 'attack' });
+    expect(emitCue).toHaveBeenCalledExactlyOnceWith({
+      eventId: 'midnight-tour', cue: 'attack',
+    });
     propModels.dispose();
   });
 

@@ -166,6 +166,7 @@ describe('event item aim targets', () => {
         camera,
         supplyDisplay: supplies as never,
         chestDisplay: {} as never,
+        emitCue: () => undefined,
       },
       {
         'chest-attack': focusedFactory(new Group()),
@@ -227,6 +228,7 @@ describe('event item aim targets', () => {
         itemType: () => null,
       } as never,
       chestDisplay: {} as never,
+      emitCue: () => undefined,
     }, {
       'chest-attack': focusedFactory(),
       'midnight-tour': focusedFactory(),
