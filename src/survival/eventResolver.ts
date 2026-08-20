@@ -62,7 +62,6 @@ export function resolveWeightedOutcome(
         ? { items: selected.effects.items.map((mutation) => ({ ...mutation })) }
         : {}),
       ...(selected.effects.chest !== undefined ? { chest: selected.effects.chest } : {}),
-      ...(selected.effects.rescue !== undefined ? { rescue: selected.effects.rescue } : {}),
       ...(selected.effects.nextDawnEnergy !== undefined
         ? { nextDawnEnergy: selected.effects.nextDawnEnergy }
         : {}),

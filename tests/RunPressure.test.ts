@@ -39,7 +39,7 @@ const eligible = (
   targetableItemIds: new Set(),
   appearanceCounts: new Map(),
   inventoryItemIds: new Set(),
-  rescueProgress: 0,
+  rescueLead: 0,
   pressure,
   chestState,
 });

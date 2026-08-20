@@ -5,7 +5,7 @@ export const SURVIVAL_BALANCE = {
   actions: {
     fishEnergy: 1, repairEnergy: 1, diveEnergy: 3,
     foodHunger: -35, repairHull: 25, tapeHull: 15, treatmentHealth: 30,
-    bottledPaperEnergy: 1, bottledPaperRescueProgress: 15, maximumEnergy: 3,
+    bottledPaperEnergy: 1, maximumEnergy: 3,
   },
   fishing: {
     minimumBiteDelaySeconds: 3,

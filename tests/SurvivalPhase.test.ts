@@ -52,7 +52,7 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
   return {
     state: 'day', endingReason: 'standard', day: 1, pressure: 0, health: 100, hunger: 20, energy: 3, hull: 100,
     food: 0, bait: 0, recoveredFood: 0, recoveredBait: 0, repairMaterial: 0,
-    rescueProgress: 0, chest: { state: 'none', acquiredDay: null },
+    rescueLead: 0, rescueTraceFinds: 0, chest: { state: 'none', acquiredDay: null },
     weather: 'calm', actedToday: false,
     journalEntries: [], inventory: inventory(), savedItems: [], carlitos: null, pendingEventId: null,
     pendingEventTargetId: null,
@@ -107,7 +107,7 @@ describe('formatDiveResult', () => {
     [{ food: 1, energy: -3 }, { kind: 'resource', id: 'food', quantity: 1 }, []],
     [{ bait: 1, energy: -3 }, { kind: 'resource', id: 'bait', quantity: 1 }, []],
     [{ repairMaterial: 1, energy: -3 }, { kind: 'resource', id: 'repairMaterial', quantity: 1 }, []],
-    [{ rescueProgress: 10, energy: -3 }, null, ['RESCUE PROGRESS +10']],
+    [{ rescueLead: 1, energy: -3 }, null, ['NOTHING FOUND']],
     [{ energy: -3 }, null, ['NOTHING FOUND']],
     [{ energy: -3, health: -10 }, null, ['NOTHING FOUND', 'YOU SUFFERED SOME INJURIES']],
   ] as const)('formats exact dive deltas', (deltas, reward, lines) => {
@@ -5429,7 +5429,7 @@ describe('SurvivalPhase orchestration', () => {
       {
         seed: 202,
         random: sequenceRandom([0, 0.99, 0.99]),
-        initial: { day: 15, rescueProgress: 15 },
+        initial: { day: 15, rescueLead: 2 },
         initialEventId: 'other-people',
       },
     );
@@ -5486,8 +5486,8 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
 
     expect(session.snapshot()).toMatchObject({
-      rescueProgress: 40,
-      inventory: { 'flareGun-1': { condition: 'usable' } },
+      rescueLead: 8,
+      inventory: { 'flareGun-1': { condition: 'consumed' } },
     });
     expect(session.snapshot().state).not.toBe('rescued');
     expect(showEnding).not.toHaveBeenCalled();
@@ -7096,7 +7096,7 @@ describe('SurvivalPhase orchestration', () => {
       {
         seed: 204,
         random: sequenceRandom([0, 0.99, 0.99]),
-        initial: { day: 15, rescueProgress: 15 },
+        initial: { day: 15, rescueLead: 2 },
         initialEventId: 'other-people',
       },
     );
@@ -7172,7 +7172,7 @@ describe('SurvivalPhase orchestration', () => {
       {
         seed: 205,
         random: sequenceRandom([0]),
-        initial: { day: 15, rescueProgress: 15 },
+        initial: { day: 15, rescueLead: 2 },
         initialEventId: 'other-people',
       },
     );
@@ -7221,14 +7221,15 @@ describe('SurvivalPhase orchestration', () => {
         eventResult: {
           eventId: 'other-people',
           choiceId: 'flashlight',
-          resultId: 'people-rescue',
+          resultId: 'people-signaled',
         },
       }),
       expect.anything(),
       expect.anything(),
     );
     expect(session.snapshot()).toMatchObject({
-      state: 'rescued',
+      state: 'dayEvent',
+      rescueLead: 6,
       inventory: { 'flashlight-1': { condition: 'usable' } },
     });
     phase.dispose();

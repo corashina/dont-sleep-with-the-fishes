@@ -201,7 +201,7 @@ function event(
   latestDay?: number,
   eligibility: Pick<
     SurvivalEventDefinition,
-    | 'maximumAppearances' | 'absentItemIds' | 'minimumRescueProgress'
+    | 'maximumAppearances' | 'absentItemIds' | 'minimumRescueLead'
     | 'minimumPressure' | 'maximumPressure' | 'allowedChestStates'
     | 'requiresLivingCompanion'
   > = {},
@@ -558,24 +558,27 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
   event('other-people', 'night', 'Other People', 'safe', 'sighting', 2, 15, 20, [
     choice('flareGun', 'Use Flare Gun', 'flareGun', outcome(
       1,
-      'Your flare improves the chance of rescue.',
-      effects([add('rescueProgress', 25)]),
+      'The distant crew sees your flare.',
+      effects([add('rescueLead', 6)], [consume('flareGun')]),
       'people-signaled',
     )),
-    choice('flashlight', 'Use Flashlight', 'flashlight',
-      outcome(40, 'The other boat sees your signal.', { rescue: true }, 'people-rescue'),
-      outcome(60, 'The other boat disappears into the dark.', {}, 'people-missed')),
+    choice('flashlight', 'Use Flashlight', 'flashlight', outcome(
+      1,
+      'The distant crew answers your light.',
+      effects([add('rescueLead', 4)]),
+      'people-signaled',
+    )),
     contextualChoice('sleep', 'Let It Pass', outcome(
       1,
       'You let the other boat pass.',
       {},
       'people-pass',
     )),
-  ], undefined, { minimumRescueProgress: 15, maximumAppearances: 2 }),
+  ], undefined, { minimumRescueLead: 2, maximumAppearances: 2 }),
 ]);
 
 const EVENT_RESOURCES: readonly EventResource[] = [
-  'pressure', 'health', 'hull', 'energy', 'food', 'bait', 'repairMaterial', 'rescueProgress',
+  'pressure', 'health', 'hull', 'energy', 'food', 'bait', 'repairMaterial', 'rescueLead',
 ];
 const ITEM_MUTATIONS = ['consume', 'break', 'lose', 'gain', 'gainChest', 'breakRandom', 'loseRandom', 'loseEventTarget'];
 
@@ -717,13 +720,12 @@ function validateOutcome(
     `${path}.effects`,
     'effect',
     [
-      'resources', 'items', 'chest', 'rescue',
+      'resources', 'items', 'chest',
       'nextDawnEnergy', 'followUpNight', 'endingReason',
     ],
   );
   const hasResources = Object.hasOwn(candidateEffects, 'resources');
   const hasItems = Object.hasOwn(candidateEffects, 'items');
-  const hasRescue = Object.hasOwn(candidateEffects, 'rescue');
   const hasChest = Object.hasOwn(candidateEffects, 'chest');
   const hasNextDawnEnergy = Object.hasOwn(candidateEffects, 'nextDawnEnergy');
   const hasFollowUpNight = Object.hasOwn(candidateEffects, 'followUpNight');
@@ -734,9 +736,6 @@ function validateOutcome(
     : undefined;
   const itemEntries = hasItems
     ? candidateEffects.items
-    : undefined;
-  const rescue = hasRescue
-    ? candidateEffects.rescue
     : undefined;
   if (hasResources && !Array.isArray(resourceEntries)) {
     throw new Error(`${path}.resources must be an array`);
@@ -760,6 +759,17 @@ function validateOutcome(
     if (!EVENT_RESOURCES.includes(effect.resource)) throw new Error(`${effectPath} contains unknown resource`);
     if (!['add', 'subtract', 'set'].includes(effect.operation)) throw new Error(`${effectPath} has an invalid operation`);
     validateIntegerValue(effect, effectPath);
+    if (effect.resource === 'rescueLead') {
+      if (effect.operation !== 'add') {
+        throw new Error(`${effectPath} rescue lead must use add`);
+      }
+      const value = effect.value;
+      const minimum = typeof value === 'number' ? value : value.min;
+      const maximum = typeof value === 'number' ? value : value.max;
+      if (minimum < 1 || maximum > 8) {
+        throw new Error(`${effectPath} rescue lead must stay from one through eight`);
+      }
+    }
   }
   if (phase === 'night' && resources.some(
     (candidateEffect) => (candidateEffect as ResourceEffect).resource === 'energy',
@@ -768,9 +778,6 @@ function validateOutcome(
   }
   for (const [index, itemEffect] of items.entries()) {
     validateMutation(itemEffect, `${path}.items[${index}]`);
-  }
-  if (hasRescue && typeof rescue !== 'boolean') {
-    throw new Error(`${path}.rescue must be boolean`);
   }
   if (hasChest && !['acquire', 'close', 'destroy'].includes(chest as string)) {
     throw new Error(`${path}.chest has an invalid effect`);
@@ -832,11 +839,12 @@ export function validateSurvivalEventCatalog(
         absentItemIds.add(itemId);
       }
     }
-    if (eventEntry.minimumRescueProgress !== undefined
-      && (!Number.isFinite(eventEntry.minimumRescueProgress)
-        || !Number.isInteger(eventEntry.minimumRescueProgress)
-        || eventEntry.minimumRescueProgress < 0)) {
-      throw new Error(`${eventEntry.id} has an invalid minimum rescue progress`);
+    if (eventEntry.minimumRescueLead !== undefined
+      && (!Number.isFinite(eventEntry.minimumRescueLead)
+        || !Number.isInteger(eventEntry.minimumRescueLead)
+        || eventEntry.minimumRescueLead < 0
+        || eventEntry.minimumRescueLead > 8)) {
+      throw new Error(`${eventEntry.id} has an invalid minimum rescue lead`);
     }
     for (const [name, value] of [
       ['minimum', eventEntry.minimumPressure],
@@ -952,7 +960,7 @@ export interface EventEligibility {
   targetableItemIds: ReadonlySet<ItemId>;
   appearanceCounts: ReadonlyMap<string, number>;
   inventoryItemIds: ReadonlySet<ItemId>;
-  rescueProgress: number;
+  rescueLead: number;
   pressure?: number;
   chestState?: import('./survivalTypes').ChestState;
   hasLivingCompanion?: boolean;
@@ -974,8 +982,8 @@ export function eligibleEvents(
       && (criteria.appearanceCounts.get(eventEntry.id) ?? 0) >= eventEntry.maximumAppearances) return false;
     if (eventEntry.absentItemIds !== undefined
       && eventEntry.absentItemIds.some((itemId) => criteria.inventoryItemIds.has(itemId))) return false;
-    if (eventEntry.minimumRescueProgress !== undefined
-      && criteria.rescueProgress < eventEntry.minimumRescueProgress) return false;
+    if (eventEntry.minimumRescueLead !== undefined
+      && criteria.rescueLead < eventEntry.minimumRescueLead) return false;
     const pressure = criteria.pressure ?? 0;
     if (eventEntry.minimumPressure !== undefined && pressure < eventEntry.minimumPressure) return false;
     if (eventEntry.maximumPressure !== undefined && pressure > eventEntry.maximumPressure) return false;

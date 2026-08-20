@@ -47,7 +47,7 @@ export interface ResourceDelta {
   food?: number;
   bait?: number;
   repairMaterial?: number;
-  rescueProgress?: number;
+  rescueLead?: number;
 }
 
 export type DriftingCargoKind = 'barrel' | 'chest';
@@ -110,7 +110,7 @@ export type BeginFishingResult =
 
 export type EventResource =
   | 'pressure' | 'health' | 'hull' | 'energy'
-  | 'food' | 'bait' | 'repairMaterial' | 'rescueProgress';
+  | 'food' | 'bait' | 'repairMaterial' | 'rescueLead';
 export type ChestState = 'none' | 'closed' | 'mimic';
 export interface ChestSnapshot {
   readonly state: ChestState;
@@ -134,7 +134,6 @@ export interface EventEffects {
   readonly resources?: readonly ResourceEffect[];
   readonly items?: readonly EventInventoryMutation[];
   readonly chest?: ChestEventEffect;
-  readonly rescue?: boolean;
   readonly nextDawnEnergy?: DawnEnergy;
   readonly followUpNight?: true;
   readonly endingReason?: 'kidnapped';
@@ -194,7 +193,7 @@ export interface SurvivalEventDefinition {
   cooldownDays: number;
   maximumAppearances?: number;
   absentItemIds?: readonly ItemId[];
-  minimumRescueProgress?: number;
+  minimumRescueLead?: number;
   minimumPressure?: number;
   maximumPressure?: number;
   allowedChestStates?: readonly ChestState[];
@@ -219,7 +218,8 @@ export interface SurvivalSnapshot {
   recoveredFood: number;
   recoveredBait: number;
   repairMaterial: number;
-  rescueProgress: number;
+  rescueLead: number;
+  readonly rescueTraceFinds: number;
   readonly chest: ChestSnapshot;
   weather: WeatherId;
   actedToday: boolean;
