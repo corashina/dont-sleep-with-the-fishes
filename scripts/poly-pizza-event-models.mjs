@@ -3,15 +3,19 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import eventModelLock from './event-model-lock.json' with { type: 'json' };
+import { inspectEventModel } from './event-model-metadata.mjs';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import {
   dedup,
   getBounds,
+  normals,
   prune,
+  simplify,
   unpartition,
   weld,
 } from '@gltf-transform/functions';
+import { MeshoptSimplifier } from 'meshoptimizer';
 
 export const POLY_PIZZA_EVENT_MODEL_PAGES = Object.freeze({
   leakPlanks: 'https://poly.pizza/m/hwQ1Fx5P8U',
@@ -20,6 +24,8 @@ export const POLY_PIZZA_EVENT_MODEL_PAGES = Object.freeze({
   anglerFish: 'https://poly.pizza/m/85n5_RiSeSf',
   deathStareBlob: 'https://poly.pizza/m/IoWG5F9WUc',
   tornadoCore: 'https://poly.pizza/m/2TBzV_5N0ci',
+  midnightShovel: 'https://poly.pizza/m/oNBQSf87ZJ',
+  midnightMonster: 'https://poly.pizza/m/22K0aSZkHV',
 });
 
 export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
@@ -29,9 +35,11 @@ export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
   anglerFish: 4_000,
   deathStareBlob: 5_000,
   tornadoCore: 3_000,
+  midnightShovel: 1_000,
+  midnightMonster: 6_000,
 });
 
-export const EVENT_MODEL_TOTAL_TRIANGLE_LIMIT = 12_000;
+export const EVENT_MODEL_TOTAL_TRIANGLE_LIMIT = 20_000;
 export const EVENT_MODEL_IDS = Object.freeze(Object.keys(POLY_PIZZA_EVENT_MODEL_PAGES));
 export const POLY_PIZZA_EVENT_MODEL_IDS = EVENT_MODEL_IDS;
 export const POLY_PIZZA_EVENT_MODEL_SOURCES = Object.freeze(Object.fromEntries(
@@ -47,7 +55,11 @@ export const POLY_PIZZA_EVENT_MODEL_SOURCES = Object.freeze(Object.fromEntries(
             ? '6BC94129AE46B671535537A74CE7369A824C3617D9C9FCA32CB7B417BFA72DDF'
             : id === 'deathStareBlob'
               ? 'CF870628D467F00FE6FBFE428C948C41FD7180F11D954075DFF998D320593D1F'
-              : '1E15643EBAE9F3B0FE109A97D47793F195FFB6F19819C59359BD21EBE2872FD7',
+              : id === 'tornadoCore'
+                ? 'A3060A591DE5B796C495FD7B329CE83766D2DFE39F9387B2DE44CF620FB3A24F'
+                : id === 'midnightShovel'
+                  ? '1D482586A319E0C176BACE1EBFEB618F903187F36C91755E6CE061874B19F6D5'
+                  : '76599ABFADB3629F435165418BFCF02FB8FAC2C34A71B913106663655E6C41D0',
   })]),
 ));
 
@@ -279,6 +291,18 @@ async function processEventModel(id, sourcePath, outputPath, descriptor) {
   if (staticSource) {
     await source.document.transform(prune(), dedup(), weld(), prune(), dedup(), unpartition());
   } else {
+    if (id === 'midnightMonster') {
+      await source.document.transform(
+        weld(),
+        simplify({
+          simplifier: MeshoptSimplifier,
+          ratio: 0.97,
+          error: 0.01,
+          lockBorder: false,
+        }),
+        normals({ overwrite: true }),
+      );
+    }
     await source.document.transform(prune(), dedup(), unpartition());
   }
 
@@ -308,9 +332,12 @@ async function processEventModel(id, sourcePath, outputPath, descriptor) {
     outputSha256: sha256(outputBytes),
     hasSkins: output.hasSkins,
     animationCount: output.animationCount,
+    animations: inspectEventModel(id, output.document).animations,
     processing: staticSource
       ? 'pruned, deduplicated, welded, unpartitioned, renamed, and embedded'
-      : 'pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data',
+      : id === 'midnightMonster'
+        ? 'welded, simplified, normals regenerated, pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data'
+        : 'pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data',
   };
 }
 

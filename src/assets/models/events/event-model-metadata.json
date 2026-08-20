@@ -202,6 +202,7 @@
     "outputSha256": "8EFEDCE21FEF2A542E047BD82F2C9E04D59CF81810ECFB6D62D5DA9239677DD6",
     "hasSkins": false,
     "animationCount": 0,
+    "animations": [],
     "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
   },
   "schoolFish": {
@@ -223,6 +224,7 @@
     "outputSha256": "94C8D591FA64FC5E9EE77669D1DEC18376F7EDD3EA5A659504D87E80FAA9308F",
     "hasSkins": false,
     "animationCount": 0,
+    "animations": [],
     "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
   },
   "snatcher": {
@@ -244,6 +246,28 @@
     "outputSha256": "F775807D6EB98B8D8DDF95FF8AB158779537A563C8C537A9F6CD9AA26EDD2C3E",
     "hasSkins": true,
     "animationCount": 4,
+    "animations": [
+      {
+        "name": "TentacleArmature|TentacleArmature|TentacleArmature|Tentacle_Attack2|TentacleArma",
+        "duration": 1,
+        "channels": 16
+      },
+      {
+        "name": "TentacleArmature|TentacleArmature|TentacleArmature|Tentacle_Attack|TentacleArmat",
+        "duration": 0.875,
+        "channels": 14
+      },
+      {
+        "name": "TentacleArmature|TentacleArmature|TentacleArmature|Tentacle_Idle|TentacleArmatur",
+        "duration": 3.3333332538604736,
+        "channels": 17
+      },
+      {
+        "name": "TentacleArmature|TentacleArmature|TentacleArmature|Tentacle_Poke|TentacleArmatur",
+        "duration": 1.3333333730697632,
+        "channels": 14
+      }
+    ],
     "processing": "pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data"
   },
   "anglerFish": {
@@ -265,6 +289,7 @@
     "outputSha256": "6BC94129AE46B671535537A74CE7369A824C3617D9C9FCA32CB7B417BFA72DDF",
     "hasSkins": false,
     "animationCount": 0,
+    "animations": [],
     "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
   },
   "deathStareBlob": {
@@ -286,6 +311,53 @@
     "outputSha256": "CF870628D467F00FE6FBFE428C948C41FD7180F11D954075DFF998D320593D1F",
     "hasSkins": true,
     "animationCount": 9,
+    "animations": [
+      {
+        "name": "CharacterArmature|Bite_Front",
+        "duration": 0.375,
+        "channels": 3
+      },
+      {
+        "name": "CharacterArmature|Dance",
+        "duration": 0.6666666865348816,
+        "channels": 4
+      },
+      {
+        "name": "CharacterArmature|Death",
+        "duration": 0.3333333432674408,
+        "channels": 5
+      },
+      {
+        "name": "CharacterArmature|HitRecieve",
+        "duration": 0.2916666567325592,
+        "channels": 5
+      },
+      {
+        "name": "CharacterArmature|Idle",
+        "duration": 2,
+        "channels": 2
+      },
+      {
+        "name": "CharacterArmature|Jump",
+        "duration": 0.4166666567325592,
+        "channels": 4
+      },
+      {
+        "name": "CharacterArmature|No",
+        "duration": 1,
+        "channels": 3
+      },
+      {
+        "name": "CharacterArmature|Walk",
+        "duration": 0.4166666567325592,
+        "channels": 5
+      },
+      {
+        "name": "CharacterArmature|Yes",
+        "duration": 0.9583333134651184,
+        "channels": 3
+      }
+    ],
     "processing": "pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data"
   },
   "tornadoCore": {
@@ -304,9 +376,135 @@
     },
     "sourceSha256": "A3199265639E07658F4D30AB1384CF9CE33832D0CDAFBCAB6CD268357A91AF4F",
     "sourceTriangles": 324,
-    "outputSha256": "1E15643EBAE9F3B0FE109A97D47793F195FFB6F19819C59359BD21EBE2872FD7",
+    "outputSha256": "A3060A591DE5B796C495FD7B329CE83766D2DFE39F9387B2DE44CF620FB3A24F",
     "hasSkins": false,
     "animationCount": 0,
+    "animations": [],
     "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "midnightShovel": {
+    "triangles": 322,
+    "rawBounds": {
+      "min": [
+        -0.4018623315982624,
+        -2.083291447183203,
+        -0.08338413385720644
+      ],
+      "max": [
+        0.4027827577357422,
+        1.7903624109757537,
+        0.1003567091991656
+      ]
+    },
+    "sourceSha256": "768F33C6BCD41E65208C7F0513D2A7010313FA44A932B4F5327A5BC66D22149B",
+    "sourceTriangles": 322,
+    "outputSha256": "1D482586A319E0C176BACE1EBFEB618F903187F36C91755E6CE061874B19F6D5",
+    "hasSkins": false,
+    "animationCount": 0,
+    "animations": [],
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "midnightMonster": {
+    "triangles": 5985,
+    "rawBounds": {
+      "min": [
+        -1.1763006448745728,
+        -0.0009017398851931852,
+        -0.4620694530783184
+      ],
+      "max": [
+        1.1763006448745728,
+        1.638694215296712,
+        0.3123278515955738
+      ]
+    },
+    "sourceSha256": "A56B9E79CDF979363977C8252BF2D870061FCE36A86595E9D90631ECD8687A1F",
+    "sourceTriangles": 6174,
+    "outputSha256": "76599ABFADB3629F435165418BFCF02FB8FAC2C34A71B913106663655E6C41D0",
+    "hasSkins": true,
+    "animationCount": 16,
+    "animations": [
+      {
+        "name": "CharacterArmature|Crawl",
+        "duration": 1.6666666269302368,
+        "channels": 52
+      },
+      {
+        "name": "CharacterArmature|Death",
+        "duration": 0.75,
+        "channels": 27
+      },
+      {
+        "name": "CharacterArmature|HitReact",
+        "duration": 0.5833333134651184,
+        "channels": 19
+      },
+      {
+        "name": "CharacterArmature|Idle",
+        "duration": 1,
+        "channels": 14
+      },
+      {
+        "name": "CharacterArmature|Idle_Attack",
+        "duration": 1.6666666269302368,
+        "channels": 42
+      },
+      {
+        "name": "CharacterArmature|Jump",
+        "duration": 0.3333333432674408,
+        "channels": 21
+      },
+      {
+        "name": "CharacterArmature|Jump_Idle",
+        "duration": 0.5,
+        "channels": 22
+      },
+      {
+        "name": "CharacterArmature|Jump_Land",
+        "duration": 0.3333333432674408,
+        "channels": 21
+      },
+      {
+        "name": "CharacterArmature|No",
+        "duration": 1.6666666269302368,
+        "channels": 15
+      },
+      {
+        "name": "CharacterArmature|Punch",
+        "duration": 0.75,
+        "channels": 25
+      },
+      {
+        "name": "CharacterArmature|Run",
+        "duration": 0.7083333134651184,
+        "channels": 48
+      },
+      {
+        "name": "CharacterArmature|Run_Arms",
+        "duration": 0.6666666865348816,
+        "channels": 45
+      },
+      {
+        "name": "CharacterArmature|Run_Attack",
+        "duration": 0.6666666865348816,
+        "channels": 46
+      },
+      {
+        "name": "CharacterArmature|Walk",
+        "duration": 1.3333333730697632,
+        "channels": 46
+      },
+      {
+        "name": "CharacterArmature|Wave",
+        "duration": 1.6666666269302368,
+        "channels": 20
+      },
+      {
+        "name": "CharacterArmature|Yes",
+        "duration": 1.6666666269302368,
+        "channels": 15
+      }
+    ],
+    "processing": "welded, simplified, normals regenerated, pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data"
   }
 }

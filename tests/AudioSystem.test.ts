@@ -11,6 +11,7 @@ import { AudioSystem } from '../src/audio/AudioSystem';
 import { SurvivalAudio } from '../src/audio/SurvivalAudio';
 import {
   AUDIO_MANIFEST,
+  EVENT_ONLY_SOUND_IDS,
   SHARED_SOUND_IDS,
   type AudioBusId,
   type SoundId,
@@ -77,6 +78,17 @@ class FakeAudioBackend implements AudioBackend {
 }
 
 describe('AudioSystem', () => {
+  it('registers Midnight Tour sounds with the required loop settings', () => {
+    expect(EVENT_ONLY_SOUND_IDS).toEqual(expect.arrayContaining([
+      'midnightShovel',
+      'midnightMonsterRun',
+      'midnightMonsterAttack',
+    ]));
+    expect(AUDIO_MANIFEST.midnightMonsterRun.loop).toBe(true);
+    expect(AUDIO_MANIFEST.midnightShovel.loop).toBe(false);
+    expect(AUDIO_MANIFEST.midnightMonsterAttack.loop).toBe(false);
+  });
+
   it('loads only shared sounds during system startup', async () => {
     const backend = new FakeAudioBackend();
     const system = await AudioSystem.loadWithBackend(backend);

@@ -22,10 +22,36 @@ $modelIds = @(
   'anglerFish'
   'deathStareBlob'
   'tornadoCore'
+  'midnightShovel'
+  'midnightMonster'
 )
-$expectedFiles = @($modelIds | ForEach-Object { "$_.glb" }) + @('event-model-metadata.json')
+$expectedFiles = @(
+  $modelIds | ForEach-Object { "$_.glb" }
+) + @(
+  Get-ChildItem -File -LiteralPath $outputRoot -Filter '*.glb' |
+    Where-Object { $modelIds -notcontains $_.BaseName } |
+    ForEach-Object Name
+) + @('event-model-metadata.json') | Sort-Object -Unique
 
 . (Join-Path $PSScriptRoot 'item-model-publication.ps1')
+
+function Assert-FileSha256 {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][string]$Expected
+  )
+
+  $hasher = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    $actual = -join ($hasher.ComputeHash([System.IO.File]::ReadAllBytes($Path)) |
+      ForEach-Object { $_.ToString('X2') })
+  } finally {
+    $hasher.Dispose()
+  }
+  if (-not $actual.Equals($Expected, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "SHA-256 mismatch for $Path`: expected $Expected, received $actual"
+  }
+}
 
 function Get-GuardedEventTempPath {
   param([Parameter(Mandatory = $true)][string]$Path)
@@ -98,6 +124,19 @@ try {
     Pop-Location
   }
   Copy-UniqueModelBuildOutputs -BuildRoots @($buildRoot) -DestinationRoot $stagedRoot
+  Get-ChildItem -File -LiteralPath $outputRoot -Filter '*.glb' |
+    Where-Object { $modelIds -notcontains $_.BaseName } |
+    ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $stagedRoot }
+
+  Push-Location $repositoryRoot
+  try {
+    & $NodeExecutable scripts/event-model-metadata.mjs --merge `
+      (Join-Path $outputRoot 'event-model-metadata.json') `
+      (Join-Path $stagedRoot 'event-model-metadata.json')
+    if ($LASTEXITCODE -ne 0) { throw 'Event model metadata merge failed' }
+  } finally {
+    Pop-Location
+  }
   Assert-ExactModelDirectory `
     -Directory $stagedRoot -ExpectedFiles $expectedFiles -Description 'Staged event models'
 

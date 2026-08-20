@@ -63,6 +63,9 @@ const freesoundSources = [
   ['rescueEnding', 'Lydmakeren', '510907'],
   ['deathEnding', 'SilverIllusionist', '693405'],
   ['sinkingEnding', 'Kodack', '257752'],
+  ['midnightShovel', 'dr19', '353907'],
+  ['midnightMonsterRun', 'gabitomed', '514585'],
+  ['midnightMonsterAttack', 'LucasDuff', '467701'],
   ['scavengeChase', 'Victor_Natas', '634513', 'attribution'],
   ['scavengeCountdown', 'qubodup', '211102', 'attribution'],
 ];

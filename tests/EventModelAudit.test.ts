@@ -30,6 +30,31 @@ describe('event model audit contract', () => {
     expect(existsSync('src/assets/models/events/midnightPalmTrees.glb')).toBe(true);
   });
 
+  it('registers the required Midnight Tour action models', () => {
+    expect(EVENT_MODEL_IDS).toEqual(expect.arrayContaining([
+      'midnightShovel',
+      'midnightMonster',
+    ]));
+    expect(EVENT_MODEL_SPECS.midnightShovel).toMatchObject({
+      sourceUrl: 'https://poly.pizza/m/oNBQSf87ZJ',
+      sourceModelId: 'poly-pizza:4ca5006b-da27-4d96-9042-9672c9776750',
+      license: 'CC0 1.0',
+    });
+    expect(EVENT_MODEL_SPECS.midnightMonster).toMatchObject({
+      sourceUrl: 'https://poly.pizza/m/22K0aSZkHV',
+      sourceModelId: 'poly-pizza:cf4368cf-b39e-4c9a-8a83-a9c637740eb8',
+      license: 'CC-BY 3.0',
+    });
+    expect(existsSync('src/assets/models/events/midnightShovel.glb')).toBe(true);
+    expect(existsSync('src/assets/models/events/midnightMonster.glb')).toBe(true);
+    expect(eventMetadata().midnightMonster?.animations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'CharacterArmature|Run' }),
+        expect.objectContaining({ name: 'CharacterArmature|Run_Attack' }),
+      ]),
+    );
+  });
+
   it('accepts the combined curated and processed metadata', () => {
     expect(() => validateEventModelMetadata(eventMetadata())).not.toThrow();
   });
