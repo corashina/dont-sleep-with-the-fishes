@@ -674,6 +674,29 @@ describe('SurvivalSession daytime actions', () => {
 
   });
 
+  it.each([
+    { resultId: 'tour-chest', random: [0, 0.99] },
+    { resultId: 'tour-attack', random: [0.99, 0.5, 0.99] },
+  ])('keeps the $resultId Midnight Tour result on the normal dawn path', ({
+    resultId,
+    random,
+  }) => {
+    const session = new SurvivalSession(saved(), {
+      seed: 103,
+      random: sequenceRandom(random),
+      initial: { health: 100 },
+      initialEventId: 'midnight-tour',
+    });
+
+    const resolution = session.resolveEvent(choiceResponse('visit'));
+
+    expect(resolution.accepted).toBe(true);
+    expect(resolution.eventResult?.resultId).toBe(resultId);
+    expect(session.snapshot().state).toBe('nightEvent');
+    expect(session.beginDawn()).toMatchObject({ accepted: true, code: 'dawn' });
+    expect(session.snapshot().state).toBe('day');
+  });
+
   it('records the Flowers event without granting a survival reward', () => {
     const session = new SurvivalSession(saved('bucket'), {
       seed: 11,

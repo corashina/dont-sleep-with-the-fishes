@@ -1578,25 +1578,73 @@ export class SurvivalPhase implements GamePhase {
         outcome,
         null,
       );
-      await this.runEventResolution(
+      await this.completeMidnightTourVisit(
         eventId,
         outcome,
-        pending.state,
         generation,
         choice,
-        deriveEventPhysicalResponse(
-          'visit',
-          pending.inventory,
-          resolved.inventory,
-          null,
-        ),
         presentation,
-        true,
-        true,
       );
     } catch (error) {
       await this.recoverMidnightTourVisit(generation, { fatalError: error });
     }
+  }
+
+  private async completeMidnightTourVisit(
+    eventId: 'midnight-tour',
+    outcome: ActionOutcome,
+    generation: number,
+    choice: EventChoicePresentation,
+    presentation: EventOutcomePresentation,
+  ): Promise<void> {
+    this.setBusy(true);
+    this.ui.hideEventReveal?.();
+    this.audio.beginEventReaction(eventId, outcome);
+    await Promise.all([
+      this.world.play?.(outcome.cue) ?? Promise.resolve(),
+      this.world.reactToEventOutcome?.(
+        eventId,
+        outcome,
+        choice,
+        presentation,
+      ) ?? Promise.resolve(),
+      this.ui.setSleepCovered?.(false) ?? Promise.resolve(),
+    ]);
+    this.audio.finishEventReaction(eventId);
+    if (!this.isContinuationActive(generation)) return;
+    if (
+      (this.visibilityPauseActive || this.documentIsHidden())
+      && !await this.waitForVisibilityResume(generation)
+    ) return;
+    if (!this.isContinuationActive(generation)) return;
+
+    await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+    this.audio.clearMidnightTour();
+    this.clearEventPresentation(true);
+    await (this.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+
+    const resolved = this.session.snapshot();
+    const snapshot = isTerminal(resolved.state)
+      ? this.renderSnapshot(false, false)
+      : await this.runDawn(generation);
+    if (!this.isContinuationActive(generation)) return;
+    if (!await this.renderAndSettleCoveredScene(generation)) return;
+    this.flushDeferredPresentationSync(snapshot, generation);
+
+    if (isTerminal(snapshot.state)) {
+      this.presentTerminalOnce(snapshot, true);
+      this.setBusy(false);
+      return;
+    }
+    if (await this.revealDawnEvent(snapshot, generation)) return;
+    await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+
+    this.eventPresentation = 'idle';
+    this.setBusy(false);
+    this.ui.restoreCommandFocus?.();
   }
 
   private async recoverMidnightTourVisit(
@@ -2324,8 +2372,8 @@ export class SurvivalPhase implements GamePhase {
     this.ui.clearEventPresentation?.();
   }
 
-  private clearEventPresentation(): void {
-    this.cancelDeferredPresentationSync();
+  private clearEventPresentation(preserveDeferredPresentationSync = false): void {
+    if (!preserveDeferredPresentationSync) this.cancelDeferredPresentationSync();
     this.audio.clearEvent();
     this.eventEligibility.clear();
     this.eventPresentation = 'idle';
