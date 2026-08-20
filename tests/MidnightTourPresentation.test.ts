@@ -190,6 +190,25 @@ describe('MidnightTourPresentation', () => {
     expect(presentationWeatherForEvent('midnight-tour')).toBe('calm');
   });
 
+  it('teleports the visit camera without holding the black cover', async () => {
+    const fixture = createFixture();
+    fixture.presentation.stage(8);
+    let settled = false;
+
+    const visit = fixture.presentation.playChoice({
+      choiceId: 'visit',
+      instanceId: null,
+      condition: null,
+    });
+    void visit.then(() => { settled = true; });
+    await Promise.resolve();
+
+    expect(settled).toBe(true);
+    expect(fixture.camera.parent).toBe(fixture.presentation.root);
+    expect(fixture.presentation.root.userData.state).toBe('choice-visited');
+    fixture.presentation.dispose();
+  });
+
   it('places five separate palms on the island ground', () => {
     const { presentation } = createFixture();
     const island = presentation.root.getObjectByName('midnight-tour-island')!;
