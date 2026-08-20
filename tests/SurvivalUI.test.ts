@@ -495,7 +495,7 @@ describe('SurvivalUI', () => {
     expect(mainStyles).toMatch(/\.carlitos-status\s*\{[^}]*height:\s*58px[^}]*min-height:\s*58px/s);
     expect(mainStyles).toMatch(/\.carlitos-status\[data-carlitos-energy-row\]\s*\{[^}]*grid-template-columns:\s*auto auto[^}]*justify-content:\s*start/s);
     expect(mainStyles).toMatch(/\.carlitos-card__close\s*\{[^}]*top:\s*14px[^}]*width:\s*48px[^}]*height:\s*48px[^}]*padding:\s*6px 6px 9px[^}]*border:\s*0[^}]*background:\s*transparent[^}]*font-size:\s*2\.4rem[^}]*transform:\s*rotate\(-4deg\)/s);
-    expect(mainStyles).toMatch(/\.carlitos-status__action:focus-visible\s*\{[^}]*outline:\s*3px solid #f0d59b/s);
+    expect(mainStyles).toMatch(/\.carlitos-status__action:focus-visible\s*\{[^}]*outline:\s*none[^}]*filter:\s*brightness\(1\.18\)/s);
     expect(mainStyles).not.toMatch(/\.carlitos-card button:focus-visible\s*\{[^}]*#9b3e2c/s);
     expect(mainStyles).toMatch(/\.carlitos-status__action\s*\{[^}]*display:\s*flex[^}]*min-height:\s*40px/s);
   });

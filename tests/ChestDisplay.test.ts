@@ -28,7 +28,7 @@ describe('ChestDisplay', () => {
       CHEST_DISPLAY_SCALE,
       CHEST_DISPLAY_SCALE,
     ]);
-    expect(display.root.position.toArray()).toEqual([0, 0.22, 0.55]);
+    expect(display.root.position.toArray()).toEqual([0, 0.22, 2.15]);
     expect(display.root.getObjectByName('chest-lid')
       ?.getObjectByName('Chest_Top')).toBeDefined();
 
