@@ -20,6 +20,7 @@ import type {
   WeatherId,
   WeightedEventOutcome,
 } from './survivalTypes';
+import { weightedEventDrawWeight } from './RunPressure';
 
 export const SURVIVAL_EVENT_IDS = Object.freeze([
   'dangerous-waters', 'leak', 'school-of-fish', 'snatcher',
@@ -1021,14 +1022,17 @@ export function drawWeightedEvent(
   pool: readonly SurvivalEventDefinition[],
   random: RandomSource,
   fallbackPhase: 'day' | 'night' = 'day',
+  pressure = 0,
 ): SurvivalEventDefinition {
   if (pool.length === 0) return FALLBACKS[fallbackPhase];
-  const totalWeight = pool.reduce((sum, eventEntry) => sum + Math.max(0, eventEntry.weight), 0);
-  if (totalWeight <= 0) return pool[0]!;
+  const totalWeight = pool.reduce(
+    (sum, eventEntry) => sum + weightedEventDrawWeight(eventEntry, pressure),
+    0,
+  );
   const roll = random.next() * totalWeight;
   let boundary = 0;
   for (const eventEntry of pool) {
-    boundary += Math.max(0, eventEntry.weight);
+    boundary += weightedEventDrawWeight(eventEntry, pressure);
     if (roll < boundary) return eventEntry;
   }
   return pool[pool.length - 1]!;

@@ -2,8 +2,10 @@
 import { describe, expect, it } from 'vitest';
 import { eligibleEvents } from '../src/survival/events';
 import {
-  nightDamageMultiplier,
+  dangerousEventWeightMultiplier,
   pressureIncreaseForDay,
+  quietNightChance,
+  weightedEventDrawWeight,
 } from '../src/survival/RunPressure';
 import type { SurvivalEventDefinition } from '../src/survival/survivalTypes';
 
@@ -48,8 +50,19 @@ describe('run pressure', () => {
   it('adds pressure only on the four threshold days', () => {
     expect([1, 8, 9, 15, 16, 25, 40, 80].map(pressureIncreaseForDay))
       .toEqual([0, 1, 0, 1, 0, 1, 1, 0]);
-    expect(nightDamageMultiplier(49)).toBe(1);
-    expect(nightDamageMultiplier(50)).toBe(2);
+  });
+
+  it('reduces quiet nights as actual pressure rises', () => {
+    expect([0, 1, 2, 3, 4].map(quietNightChance))
+      .toEqual([0.30, 0.25, 0.20, 0.15, 0.10]);
+  });
+
+  it('raises only dangerous event weights', () => {
+    expect([0, 1, 2, 3, 4].map(dangerousEventWeightMultiplier))
+      .toEqual([1, 1.25, 1.5, 1.75, 2]);
+    expect(weightedEventDrawWeight(event({ danger: 'safe', weight: 3 }), 4)).toBe(3);
+    expect(weightedEventDrawWeight(event({ danger: 'uncertain', weight: 3 }), 4)).toBe(3);
+    expect(weightedEventDrawWeight(event({ danger: 'dangerous', weight: 3 }), 4)).toBe(6);
   });
 
   it('applies pressure and chest gates together', () => {
