@@ -59,6 +59,9 @@ const REVEAL_DURATION = 1.25;
 const PASS_DURATION = 1.15;
 const CHEST_BURIED_CLEARANCE = 0.01;
 const CHEST_CONTACT_PHASE = 0.55;
+const CHEST_CAMERA_HEIGHT = 1.35;
+const CHEST_CAMERA_DEPTH = 0.8;
+const CHEST_LOCAL_DEPTH = -0.15;
 const FPS_SHOVEL_X = 0.52;
 const FPS_SHOVEL_Y = -0.42;
 const FPS_SHOVEL_Z = -0.85;
@@ -138,6 +141,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private monsterRunStopped = false;
   private monsterAttackStarted = false;
   private activeResultTimeline = false;
+  private heldResultKind: 'result-chest' | 'result-attack' | null = null;
   private digCueEmitted = false;
   private digContacts = 0;
   private chestBuriedY = 0;
@@ -244,6 +248,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
         this.prepareCutsceneCamera();
         this.resetResultCounters();
         this.activeActor = this.createChestReward();
+        this.prepareChestCamera();
         this.createShovel();
         this.root.userData.state = 'chest-result';
         this.activeResultTimeline = true;
@@ -301,11 +306,14 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       this.monsterMixer.update(delta);
     }
     this.animation.update(time, delta);
+    if (this.heldResultKind !== null) {
+      this.applyAnimation(this.heldResultKind, 1);
+    }
   }
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
-    if (this.activeResultTimeline) return;
+    if (this.activeResultTimeline || this.heldResultKind !== null) return;
     this.animation.settle();
     this.restoreCamera();
   }
@@ -365,10 +373,12 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       case 'result-chest':
         this.root.userData.state = 'held-chest';
         this.activeResultTimeline = false;
+        this.heldResultKind = 'result-chest';
         break;
       case 'result-attack':
         this.root.userData.state = 'held-attack';
         this.activeResultTimeline = false;
+        this.heldResultKind = 'result-attack';
         break;
       case 'result-pass':
         this.root.userData.state = 'held-pass';
@@ -735,7 +745,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.chestEnd.set(
       this.islandBase.x + 0.75,
       this.islandBase.y + this.greenTopLocalY + 0.2,
-      this.islandBase.z + 0.2,
+      this.islandBase.z + CHEST_LOCAL_DEPTH,
     );
     const islandTop = this.islandBase.y + this.greenTopLocalY;
     this.monsterHiddenStart.set(
@@ -869,6 +879,20 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     return actor;
   }
 
+  private prepareChestCamera(): void {
+    this.cutsceneCameraPosition.set(
+      this.islandBase.x,
+      this.islandBase.y + this.greenTopLocalY + CHEST_CAMERA_HEIGHT,
+      this.islandBase.z + CHEST_CAMERA_DEPTH,
+    );
+    this.applyCameraPose(
+      this.chestEnd.x,
+      this.chestEnd.y + 0.25,
+      this.chestEnd.z,
+      0,
+    );
+  }
+
   private createShovel(): void {
     const selected = this.dependencies.propModels.createEventModel('midnightShovel');
     if (selected === null) {
@@ -959,6 +983,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   }
 
   private clearResultActors(): void {
+    this.heldResultKind = null;
     this.disposeShovel();
     this.disposeMonsterAnimation();
     this.activeActor = null;
