@@ -67,6 +67,8 @@ const FPS_SHOVEL_Z = -0.85;
 const ISLAND_DISTANCE = 11.8;
 const ISLAND_Z = -28;
 const ISLAND_TOP_WAVE_CLEARANCE = 0.18;
+const MONSTER_RUN_CLIP = 'CharacterArmature|Run';
+const MONSTER_ATTACK_CLIP = 'CharacterArmature|Run_Attack';
 const MAXIMUM_WAVE_CREST = DEFAULT_WAVES.reduce(
   (height, wave) => height + wave.amplitude,
   0,
@@ -161,6 +163,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.root.userData.cameraKicks = 0;
     this.root.userData.digContacts = 0;
 
+    this.validateRequiredResultModels();
     this.island.name = 'midnight-tour-island';
     this.island.userData.motionSource = 'fixed';
     this.buildIsland();
@@ -628,6 +631,38 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.cameraCaptured = false;
   }
 
+  private validateRequiredResultModels(): void {
+    const geometries = new Set<BufferGeometry>();
+    const materials = new Set<Material>();
+    try {
+      const chest = this.dependencies.propModels.createEventModel('chestClosed');
+      if (chest === null) {
+        throw new Error('Missing required Midnight Tour chest model.');
+      }
+      collectMeshResources(chest.root, geometries, materials);
+
+      const shovel = this.dependencies.propModels.createEventModel('midnightShovel');
+      if (shovel === null) {
+        throw new Error('Missing required Midnight Tour shovel model.');
+      }
+      collectMeshResources(shovel.root, geometries, materials);
+
+      const monster = this.dependencies.propModels.createEventModel('midnightMonster');
+      if (monster === null) {
+        throw new Error('Missing required Midnight Tour monster model.');
+      }
+      collectMeshResources(monster.root, geometries, materials);
+      if (!monster.animations.some(({ name }) => name === MONSTER_RUN_CLIP)) {
+        throw new Error(`Missing required Midnight Tour monster clip: ${MONSTER_RUN_CLIP}.`);
+      }
+      if (!monster.animations.some(({ name }) => name === MONSTER_ATTACK_CLIP)) {
+        throw new Error(`Missing required Midnight Tour monster clip: ${MONSTER_ATTACK_CLIP}.`);
+      }
+    } finally {
+      disposeResourceSets(geometries, materials);
+    }
+  }
+
   private buildIsland(): void {
     const palms = this.dependencies.propModels.createEventModel('midnightPalmTrees');
     if (palms === null) throw new Error('Missing required Midnight Tour palm model.');
@@ -889,19 +924,28 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       throw new Error('Missing required Midnight Tour monster model.');
     }
     const runClip = selected.animations.find(
-      ({ name }) => name === 'CharacterArmature|Run',
+      ({ name }) => name === MONSTER_RUN_CLIP,
     );
     const attackClip = selected.animations.find(
-      ({ name }) => name === 'CharacterArmature|Run_Attack',
+      ({ name }) => name === MONSTER_ATTACK_CLIP,
     );
-    if (runClip === undefined || attackClip === undefined) {
+    if (runClip === undefined) {
       collectMeshResources(
         selected.root,
         this.resultGeometries,
         this.resultMaterials,
       );
       disposeResourceSets(this.resultGeometries, this.resultMaterials);
-      throw new Error('Midnight Tour monster requires Run and Run_Attack clips.');
+      throw new Error(`Missing required Midnight Tour monster clip: ${MONSTER_RUN_CLIP}.`);
+    }
+    if (attackClip === undefined) {
+      collectMeshResources(
+        selected.root,
+        this.resultGeometries,
+        this.resultMaterials,
+      );
+      disposeResourceSets(this.resultGeometries, this.resultMaterials);
+      throw new Error(`Missing required Midnight Tour monster clip: ${MONSTER_ATTACK_CLIP}.`);
     }
 
     const actor = selected.root;
