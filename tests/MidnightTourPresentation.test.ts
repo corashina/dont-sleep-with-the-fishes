@@ -10,6 +10,15 @@ import {
 import { describe, expect, it } from 'vitest';
 import type { FocusedEventPresentationDependencies } from '../src/survival/FocusedEventPresentation';
 import { MidnightTourPresentation } from '../src/survival/MidnightTourPresentation';
+import { presentationWeatherForEvent } from '../src/weather/presentationWeather';
+
+const PALM_NODE_NAMES = [
+  'PalmTree_1',
+  'PalmTree_2',
+  'PalmTree_3',
+  'PalmTree_4',
+  'PalmTree_5',
+] as const;
 
 function model(width: number, height: number, depth: number): Group {
   const root = new Group();
@@ -19,6 +28,17 @@ function model(width: number, height: number, depth: number): Group {
   );
   mesh.position.y = height / 2;
   root.add(mesh);
+  return root;
+}
+
+function palmModel(): Group {
+  const root = new Group();
+  PALM_NODE_NAMES.forEach((name, index) => {
+    const palm = model(0.45, 4 + index * 0.2, 0.45);
+    palm.name = name;
+    palm.position.x = index * 1.2;
+    root.add(palm);
+  });
   return root;
 }
 
@@ -41,7 +61,7 @@ function createFixture(options: { omitPalms?: boolean } = {}) {
           return { root: model(18, 7.3, 12), animations: [] };
         }
         if (id === 'midnightPalmTrees') {
-          return { root: model(5.8, 4.6, 2.8), animations: [] };
+          return { root: palmModel(), animations: [] };
         }
         if (id === 'chestClosed') {
           return { root: model(1.1, 0.7, 0.8), animations: [] };
@@ -124,10 +144,13 @@ function trackResultMarkerWrites(root: Group): Record<ResultMarker, number[]> {
 }
 
 describe('MidnightTourPresentation', () => {
-  it('keeps only the imported island, required palms, and restrained lights', () => {
+  it('uses calm weather', () => {
+    expect(presentationWeatherForEvent('midnight-tour')).toBe('calm');
+  });
+
+  it('places five separate palms on the island ground', () => {
     const { presentation } = createFixture();
     const island = presentation.root.getObjectByName('midnight-tour-island')!;
-    const palms = presentation.root.getObjectByName('event-model:midnightPalmTrees')!;
 
     expect(presentation.root.getObjectByName('midnight-tour-rock-shelf-1')).toBeUndefined();
     expect(presentation.root.getObjectByName('midnight-tour-dead-tree')).toBeUndefined();
@@ -135,11 +158,18 @@ describe('MidnightTourPresentation', () => {
     expect(presentation.root.getObjectByName('midnight-tour-horizon-wave')).toBeUndefined();
     expect(presentation.root.getObjectByName('midnight-tour-reward-bait')).toBeUndefined();
     expect(presentation.root.getObjectByName('midnight-tour-reward-food')).toBeUndefined();
-    expect(palms.position.toArray()).toEqual([0.65, island.userData.greenTopLocalY, 0.15]);
-    expect(palms.rotation.y).toBeCloseTo(-0.28);
-    const islandTop = island.position.y + island.userData.greenTopLocalY as number;
-    const palmMinimum = new Box3().setFromObject(palms).min.y + island.position.y;
-    expect(palmMinimum).toBeGreaterThanOrEqual(islandTop);
+    expect(presentation.root.getObjectByName('event-model:midnightPalmTrees')).toBeUndefined();
+
+    const islandTop = island.position.y + (island.userData.greenTopLocalY as number);
+    const palmPositions = new Set<string>();
+    for (let index = 0; index < PALM_NODE_NAMES.length; index += 1) {
+      const palm = presentation.root.getObjectByName(`midnight-tour-palm-${index + 1}`)!;
+      expect(palm).toBeDefined();
+      const bounds = new Box3().setFromObject(palm);
+      expect(bounds.min.y + island.position.y).toBeCloseTo(islandTop, 5);
+      palmPositions.add(`${palm.position.x},${palm.position.z}`);
+    }
+    expect(palmPositions.size).toBe(PALM_NODE_NAMES.length);
     expect(island.userData.disableHoverOutline).not.toBe(true);
     presentation.dispose();
   });
