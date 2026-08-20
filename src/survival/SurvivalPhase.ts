@@ -641,6 +641,9 @@ export class SurvivalPhase implements GamePhase {
     this.eventBundles = eventBundles;
     this.itemAnimationLab = itemAnimationLab;
     this.audio = new SurvivalAudio(context.audio.createScope());
+    this.world.setEventCueHandler?.(({ eventId, cue }) => {
+      if (eventId === 'midnight-tour') this.audio.midnightTourCue(cue);
+    });
     this.world.setLightningStrikeListener?.(() => this.audio.thunder());
     this.wireUI();
   }

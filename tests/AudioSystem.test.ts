@@ -89,6 +89,28 @@ describe('AudioSystem', () => {
     expect(AUDIO_MANIFEST.midnightMonsterAttack.loop).toBe(false);
   });
 
+  it('owns Midnight Tour sounds and stops each active voice', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.midnightTourCue('dig-start');
+    audio.midnightTourCue('dig-start');
+    audio.update(6);
+    audio.midnightTourCue('run-start');
+    audio.midnightTourCue('run-start');
+    audio.midnightTourCue('run-stop');
+    audio.midnightTourCue('attack');
+    audio.clearMidnightTour();
+
+    expect(backend.voices.filter(({ id }) => id === 'midnightShovel')).toHaveLength(1);
+    expect(backend.voices.filter(({ id }) => id === 'midnightMonsterRun')).toHaveLength(1);
+    expect(backend.voices.filter(({ id }) => id === 'midnightMonsterAttack')).toHaveLength(1);
+    expect(backend.voices.find(({ id }) => id === 'midnightShovel')?.stop)
+      .toHaveBeenCalledExactlyOnceWith(0.05);
+    expect(backend.voices.find(({ id }) => id === 'midnightMonsterRun')?.stop)
+      .toHaveBeenCalledExactlyOnceWith(0.05);
+  });
+
   it('loads only shared sounds during system startup', async () => {
     const backend = new FakeAudioBackend();
     const system = await AudioSystem.loadWithBackend(backend);

@@ -8,6 +8,8 @@ import type {
   SurvivalState,
 } from '../survival/survivalTypes';
 import type { PresentationWeatherId } from '../weather/presentationWeather';
+import type { MidnightTourAudioCue } from '../survival/midnightTourAudioCue';
+import type { AudioVoice } from './AudioBackend';
 import type { AudioScope } from './AudioScope';
 import type { SoundId } from './audioManifest';
 
@@ -95,6 +97,10 @@ export class SurvivalAudio {
   private thunderSoundIndex = 0;
   private diveActive = false;
   private eventMelodyActive = false;
+  private midnightDigVoice: AudioVoice | null = null;
+  private midnightDigRemaining = 0;
+  private midnightRunActive = false;
+  private midnightAttackPlayed = false;
   private disposed = false;
 
   constructor(private readonly scope: AudioScope) {}
@@ -107,7 +113,16 @@ export class SurvivalAudio {
 
   update(deltaSeconds: number): void {
     if (this.disposed) return;
-    this.waveClock += Math.max(0, deltaSeconds);
+    const elapsed = Math.max(0, deltaSeconds);
+    this.waveClock += elapsed;
+    if (this.midnightDigVoice !== null) {
+      this.midnightDigRemaining -= elapsed;
+      if (this.midnightDigRemaining <= 0) {
+        this.midnightDigVoice.stop(0.05);
+        this.midnightDigVoice = null;
+        this.midnightDigRemaining = 0;
+      }
+    }
     const rough = ROUGH_WEATHER.has(this.weather);
     const interval = rough ? 4 : 8;
     while (this.waveClock >= interval) {
@@ -275,7 +290,34 @@ export class SurvivalAudio {
     this.clearEvent();
   }
 
+  midnightTourCue(cue: MidnightTourAudioCue): void {
+    if (this.disposed) return;
+    if (cue === 'dig-start' && this.midnightDigVoice === null) {
+      this.midnightDigVoice = this.scope.play('midnightShovel');
+      this.midnightDigRemaining = 6;
+    } else if (cue === 'run-start' && !this.midnightRunActive) {
+      this.midnightRunActive = true;
+      this.scope.startLoop('midnightMonsterRun');
+    } else if (cue === 'run-stop') {
+      this.midnightRunActive = false;
+      this.scope.stopLoop('midnightMonsterRun', 0.05);
+    } else if (cue === 'attack' && !this.midnightAttackPlayed) {
+      this.midnightAttackPlayed = true;
+      this.scope.play('midnightMonsterAttack');
+    }
+  }
+
+  clearMidnightTour(): void {
+    this.midnightDigVoice?.stop(0.05);
+    this.midnightDigVoice = null;
+    this.midnightDigRemaining = 0;
+    this.midnightRunActive = false;
+    this.midnightAttackPlayed = false;
+    this.scope.stopLoop('midnightMonsterRun', 0.05);
+  }
+
   clearEvent(): void {
+    this.clearMidnightTour();
     this.scope.stopLoop('leak', 0.08);
     this.scope.stopLoop('tentacleMovement', 0.08);
     this.scope.stopLoop('tornadoWind', 0.08);

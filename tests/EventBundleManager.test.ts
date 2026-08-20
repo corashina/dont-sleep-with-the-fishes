@@ -61,6 +61,7 @@ describe('EventBundleManager', () => {
             camera,
             supplyDisplay: {} as never,
             chestDisplay: {} as never,
+            emitCue: () => undefined,
           }, {}, 'midnight-tour');
           return new ActiveEventPresenter('midnight-tour', {
             dedicated: null,
