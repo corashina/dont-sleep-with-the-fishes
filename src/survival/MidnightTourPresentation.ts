@@ -1,19 +1,19 @@
 import {
+  AnimationMixer,
   Box3,
   BufferGeometry,
   ConeGeometry,
-  CylinderGeometry,
   Group,
+  LoopOnce,
   Material,
   Matrix4,
   Mesh,
   MeshStandardMaterial,
   PointLight,
   Quaternion,
-  SphereGeometry,
   Vector3,
 } from 'three';
-import type { Object3D } from 'three';
+import type { AnimationAction, AnimationClip, Object3D } from 'three';
 import { DEFAULT_WAVES } from '../ocean/WaveField';
 import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
 import { EVENT_MODEL_SPECS } from '../world/eventModelManifest';
@@ -34,8 +34,18 @@ import {
   CHEST_DIG_END_SECONDS,
   CHEST_RESULT_DURATION_SECONDS,
   CHEST_SEARCH_END_SECONDS,
+  MONSTER_ATTACK_END_SECONDS,
+  MONSTER_HEAR_END_SECONDS,
+  MONSTER_RESULT_DURATION_SECONDS,
+  MONSTER_RUN_END_SECONDS,
+  MONSTER_TURN_END_SECONDS,
   chestCompletedStrokes,
   chestStrokeProgress,
+  monsterAttackProgress,
+  monsterCollapseProgress,
+  monsterHearProgress,
+  monsterRunProgress,
+  monsterTurnProgress,
 } from './midnightTourChoreography';
 
 type MidnightTourAnimationKind =
@@ -49,10 +59,6 @@ type MidnightTourAnimationKind =
 const REVEAL_DURATION = 1.25;
 const PASS_DURATION = 1.15;
 const VISIT_DURATION = 1.5;
-const ATTACK_RESULT_DURATION = 4.8;
-const SEARCH_LEFT_END = 0.28;
-const SEARCH_RIGHT_END = 0.56;
-const RESULT_TURN_END = 0.76;
 const CHEST_BURIED_CLEARANCE = 0.01;
 const CHEST_CONTACT_PHASE = 0.55;
 const FPS_SHOVEL_X = 0.52;
@@ -101,8 +107,11 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private readonly islandBehind = new Vector3();
   private readonly islandStart = new Vector3();
   private readonly chestEnd = new Vector3();
-  private readonly creatureStart = new Vector3();
-  private readonly creatureEnd = new Vector3();
+  private readonly monsterHiddenStart = new Vector3();
+  private readonly monsterHearEnd = new Vector3();
+  private readonly monsterRunStart = new Vector3();
+  private readonly monsterAttackStart = new Vector3();
+  private readonly monsterAttackEnd = new Vector3();
   private cameraParent: Object3D | null = null;
   private readonly cameraPosition = new Vector3();
   private readonly cameraQuaternion = new Quaternion();
@@ -112,6 +121,11 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private readonly chestBounds = new Box3();
   private readonly animation: TimedPresentationAnimation<MidnightTourAnimationKind>;
   private activeActor: Group | null = null;
+  private monsterMixer: AnimationMixer | null = null;
+  private monsterRunAction: AnimationAction | null = null;
+  private monsterAttackAction: AnimationAction | null = null;
+  private monsterRunClip: AnimationClip | null = null;
+  private monsterAttackClip: AnimationClip | null = null;
   private shovelHolder: Group | null = null;
   private shovelModel: Group | null = null;
   private side: EventSide = -1;
@@ -121,6 +135,9 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private searchRightMarked = false;
   private resultRevealMarked = false;
   private cameraKickMarked = false;
+  private monsterRunStopped = false;
+  private monsterAttackStarted = false;
+  private activeResultTimeline = false;
   private digCueEmitted = false;
   private digContacts = 0;
   private chestBuriedY = 0;
@@ -162,6 +179,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.animation.cancel();
     this.restoreCamera();
     this.clearResultActors();
+    this.activeResultTimeline = false;
     this.side = eventSideFromSeed(variantSeed);
     this.setSidePositions();
     this.staged = true;
@@ -187,6 +205,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
 
   playChoice(choice: EventChoicePresentation): Promise<void> {
     if (this.disposed) return Promise.resolve();
+    this.activeResultTimeline = false;
     switch (choice.choiceId) {
       case 'sleep': {
         this.animation.settle();
@@ -219,6 +238,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     void outcome;
     this.animation.settle();
     this.clearResultActors();
+    this.activeResultTimeline = false;
     switch (result.resultId) {
       case 'tour-chest': {
         this.prepareCutsceneCamera();
@@ -226,6 +246,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
         this.activeActor = this.createChestReward();
         this.createShovel();
         this.root.userData.state = 'chest-result';
+        this.activeResultTimeline = true;
         const animation = this.animation.start(
           'result-chest',
           CHEST_RESULT_DURATION_SECONDS,
@@ -236,11 +257,12 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       case 'tour-attack': {
         this.prepareCutsceneCamera();
         this.resetResultCounters();
-        this.activeActor = this.createCreature();
+        this.activeActor = this.createMonster();
         this.root.userData.state = 'attack-result';
+        this.activeResultTimeline = true;
         const animation = this.animation.start(
           'result-attack',
-          ATTACK_RESULT_DURATION,
+          MONSTER_RESULT_DURATION_SECONDS,
         );
         this.applyAnimation('result-attack', 0);
         return animation;
@@ -249,6 +271,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
         this.restoreCamera();
         this.islandStart.copy(this.island.position);
         this.root.userData.state = 'pass-result';
+        this.activeResultTimeline = true;
         const animation = this.animation.start('result-pass', PASS_DURATION * 0.55);
         this.applyAnimation('result-pass', 0);
         return animation;
@@ -261,6 +284,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   clear(): void {
     if (this.disposed) return;
     this.animation.cancel();
+    this.activeResultTimeline = false;
     this.clearResultActors();
     this.restoreCamera();
     this.island.position.copy(this.islandBase);
@@ -273,11 +297,15 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
 
   update(time: number, delta: number): void {
     if (this.disposed || delta < 0) return;
+    if (this.activeActor !== null && this.monsterMixer !== null) {
+      this.monsterMixer.update(delta);
+    }
     this.animation.update(time, delta);
   }
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
+    if (this.activeResultTimeline) return;
     this.animation.settle();
     this.restoreCamera();
   }
@@ -297,6 +325,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   dispose(): void {
     if (this.disposed) return;
     this.animation.cancel();
+    this.activeResultTimeline = false;
     this.restoreCamera();
     this.clearResultActors();
     this.disposed = true;
@@ -322,7 +351,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
         this.applyChestResult(normalized * CHEST_RESULT_DURATION_SECONDS);
         break;
       case 'result-attack':
-        this.applyAttackResult(normalized);
+        this.applyAttackResult(normalized * MONSTER_RESULT_DURATION_SECONDS);
         break;
     }
   }
@@ -341,12 +370,15 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
         break;
       case 'result-chest':
         this.root.userData.state = 'held-chest';
+        this.activeResultTimeline = false;
         break;
       case 'result-attack':
         this.root.userData.state = 'held-attack';
+        this.activeResultTimeline = false;
         break;
       case 'result-pass':
         this.root.userData.state = 'held-pass';
+        this.activeResultTimeline = false;
         break;
     }
   }
@@ -450,56 +482,91 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     shovel.rotation.z = -0.36 - 0.12 * strike;
   }
 
-  private applyAttackResult(progress: number): void {
+  private applyAttackResult(elapsedSeconds: number): void {
     const actor = this.activeActor;
     if (actor === null) return;
     let targetX = this.islandBase.x + 0.65;
     let targetY = this.islandBase.y + this.greenTopLocalY + 1;
     let targetZ = this.islandBase.z + 0.15;
     let recoil = 0;
+    let cameraDrop = 0;
+    let cameraRoll = 0;
+    let cameraPitch = 0;
 
-    if (progress < SEARCH_LEFT_END) {
-      const turn = smoothstep(progress / SEARCH_LEFT_END);
-      targetX -= 1.45 * turn;
-      targetY -= Math.sin(turn * Math.PI) * 0.08;
-    } else if (progress < SEARCH_RIGHT_END) {
-      this.markSearchLeft();
-      const turn = smoothstep(
-        (progress - SEARCH_LEFT_END) / (SEARCH_RIGHT_END - SEARCH_LEFT_END),
+    if (elapsedSeconds < MONSTER_HEAR_END_SECONDS) {
+      actor.position.lerpVectors(
+        this.monsterHiddenStart,
+        this.monsterHearEnd,
+        smoothstep(monsterHearProgress(elapsedSeconds)),
       );
-      targetX += -1.45 + 2.9 * turn;
-      targetY -= Math.sin(turn * Math.PI) * 0.07;
-    } else if (progress < RESULT_TURN_END) {
+    } else if (elapsedSeconds < MONSTER_TURN_END_SECONDS) {
       this.markSearchLeft();
-      this.markSearchRight();
-      const turn = smoothstep(
-        (progress - SEARCH_RIGHT_END) / (RESULT_TURN_END - SEARCH_RIGHT_END),
+      const turn = smoothstep(monsterTurnProgress(elapsedSeconds));
+      actor.position.lerpVectors(
+        this.monsterHearEnd,
+        this.monsterRunStart,
+        turn,
       );
-      const resultX = this.creatureStart.x;
-      const resultY = this.creatureStart.y;
-      const resultZ = this.creatureStart.z;
-      targetX += (1 - turn) * 1.45;
-      targetX += (resultX - targetX) * turn;
-      targetY += (resultY - targetY) * turn;
-      targetZ += (resultZ - targetZ) * turn;
-    } else {
+      targetX += (actor.position.x - targetX) * turn;
+      targetY += (actor.position.y + 0.7 - targetY) * turn;
+      targetZ += (actor.position.z - targetZ) * turn;
+    } else if (elapsedSeconds < MONSTER_RUN_END_SECONDS) {
       this.markSearchLeft();
       this.markSearchRight();
       this.markResultReveal(actor);
-      const lunge = smoothstep(
-        (progress - RESULT_TURN_END) / (1 - RESULT_TURN_END),
+      const run = smoothstep(monsterRunProgress(elapsedSeconds));
+      actor.position.lerpVectors(
+        this.monsterRunStart,
+        this.monsterAttackStart,
+        run,
       );
-      actor.position.lerpVectors(this.creatureStart, this.creatureEnd, lunge);
-      actor.rotation.x = -lunge * 0.24;
-      actor.rotation.z = Math.sin(lunge * Math.PI) * 0.16;
       targetX = actor.position.x;
-      targetY = actor.position.y;
+      targetY = actor.position.y + 0.7;
       targetZ = actor.position.z;
-      const kickWindow = clamp01((lunge - 0.5) / 0.5);
-      recoil = Math.sin(kickWindow * Math.PI) * 0.18;
-      if (lunge >= 0.5) this.markCameraKick();
+    } else if (elapsedSeconds < MONSTER_ATTACK_END_SECONDS) {
+      this.prepareMonsterAttack();
+      this.markSearchLeft();
+      this.markSearchRight();
+      this.markResultReveal(actor);
+      const attack = smoothstep(monsterAttackProgress(elapsedSeconds));
+      actor.position.lerpVectors(
+        this.monsterAttackStart,
+        this.monsterAttackEnd,
+        attack,
+      );
+      actor.rotation.x = -0.16 * attack;
+      actor.rotation.z = this.side * Math.sin(attack * Math.PI) * 0.08;
+      targetX = actor.position.x;
+      targetY = actor.position.y + 0.7;
+      targetZ = actor.position.z;
+      recoil = Math.sin(attack * Math.PI) * 0.22;
+      if (attack >= 0.5) this.markCameraKick();
+    } else {
+      this.prepareMonsterAttack();
+      this.markSearchLeft();
+      this.markSearchRight();
+      this.markResultReveal(actor);
+      actor.position.copy(this.monsterAttackEnd);
+      actor.rotation.x = -0.16;
+      actor.rotation.z = 0;
+      targetX = actor.position.x;
+      targetY = actor.position.y + 0.45;
+      targetZ = actor.position.z;
+      const collapse = smoothstep(monsterCollapseProgress(elapsedSeconds));
+      cameraDrop = collapse * 1.12;
+      cameraRoll = this.side * collapse * 0.14;
+      cameraPitch = collapse * 0.1;
+      this.markCameraKick();
     }
-    this.applyCameraPose(targetX, targetY, targetZ, recoil);
+    this.applyCameraPose(
+      targetX,
+      targetY,
+      targetZ,
+      recoil,
+      cameraDrop,
+      cameraRoll,
+      cameraPitch,
+    );
   }
 
   private applyCameraPose(
@@ -507,14 +574,20 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     targetY: number,
     targetZ: number,
     recoil: number,
+    drop = 0,
+    roll = 0,
+    pitch = 0,
   ): void {
     if (!this.cameraCaptured) return;
     const camera = this.dependencies.camera;
     camera.position.copy(this.cutsceneCameraPosition);
     camera.position.z += recoil;
+    camera.position.y -= drop;
     this.cutsceneLookTarget.set(targetX, targetY, targetZ);
     this.lookMatrix.lookAt(camera.position, this.cutsceneLookTarget, camera.up);
     camera.quaternion.setFromRotationMatrix(this.lookMatrix);
+    camera.rotateX(pitch);
+    camera.rotateZ(roll);
   }
 
   private prepareCutsceneCamera(): void {
@@ -648,15 +721,31 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       this.islandBase.y + this.greenTopLocalY + 0.2,
       this.islandBase.z + 0.2,
     );
-    this.creatureStart.set(
-      this.islandBase.x - 0.45,
-      this.islandBase.y + this.greenTopLocalY + 0.55,
-      this.islandBase.z - 0.4,
+    const islandTop = this.islandBase.y + this.greenTopLocalY;
+    this.monsterHiddenStart.set(
+      this.islandBase.x + 4.3 * this.side,
+      islandTop,
+      this.islandBase.z + 4.7,
     );
-    this.creatureEnd.set(
+    this.monsterHearEnd.set(
+      this.islandBase.x + 3.15 * this.side,
+      islandTop,
+      this.islandBase.z - 0.78,
+    );
+    this.monsterRunStart.set(
+      this.islandBase.x + 2.7 * this.side,
+      islandTop,
+      this.islandBase.z - 0.55,
+    );
+    this.monsterAttackStart.set(
       this.islandBase.x + 0.05,
-      this.islandBase.y + this.greenTopLocalY + 1.15,
-      this.islandBase.z + 1.95,
+      islandTop,
+      this.islandBase.z + 0.95,
+    );
+    this.monsterAttackEnd.set(
+      this.islandBase.x + 0.05,
+      islandTop + 0.08,
+      this.islandBase.z + 1.2,
     );
   }
 
@@ -670,6 +759,8 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.searchRightMarked = false;
     this.resultRevealMarked = false;
     this.cameraKickMarked = false;
+    this.monsterRunStopped = false;
+    this.monsterAttackStarted = false;
     this.digCueEmitted = false;
     this.digContacts = 0;
     this.root.userData.searchLeft = 0;
@@ -702,6 +793,24 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     if (this.cameraKickMarked) return;
     this.cameraKickMarked = true;
     this.root.userData.cameraKicks += 1;
+  }
+
+  private prepareMonsterAttack(): void {
+    if (!this.monsterRunStopped) {
+      this.monsterRunStopped = true;
+      this.monsterRunAction?.stop();
+      this.dependencies.emitCue({
+        eventId: 'midnight-tour',
+        cue: 'run-stop',
+      });
+    }
+    if (this.monsterAttackStarted) return;
+    this.monsterAttackStarted = true;
+    this.monsterAttackAction?.reset().play();
+    this.dependencies.emitCue({
+      eventId: 'midnight-tour',
+      cue: 'attack',
+    });
   }
 
   private markDigStart(): void {
@@ -773,35 +882,49 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     disposeResourceSets(this.shovelGeometries, this.shovelMaterials);
   }
 
-  private createCreature(): Group {
-    const actor = new Group();
-    actor.name = 'midnight-tour-creature';
-    const hide = createMaterial(0x26383a, 0.94);
-    const eye = createMaterial(0xc19454, 0.54);
-    const body = new Mesh(new SphereGeometry(0.34, 7, 5), hide);
-    body.name = 'midnight-tour-creature-body';
-    body.scale.set(1.25, 0.68, 0.85);
-    actor.add(body);
-    for (let index = 0; index < 6; index += 1) {
-      const leg = new Mesh(new CylinderGeometry(0.025, 0.04, 0.62, 5), hide);
-      leg.name = `midnight-tour-creature-leg-${index + 1}`;
-      leg.position.set(
-        (index < 3 ? -1 : 1) * (0.25 + index % 3 * 0.08),
-        -0.16,
-        (index % 3 - 1) * 0.2,
+  private createMonster(): Group {
+    const selected = this.dependencies.propModels.createEventModel('midnightMonster');
+    if (selected === null) {
+      throw new Error('Missing required Midnight Tour monster model.');
+    }
+    const runClip = selected.animations.find(
+      ({ name }) => name === 'CharacterArmature|Run',
+    );
+    const attackClip = selected.animations.find(
+      ({ name }) => name === 'CharacterArmature|Run_Attack',
+    );
+    if (runClip === undefined || attackClip === undefined) {
+      collectMeshResources(
+        selected.root,
+        this.resultGeometries,
+        this.resultMaterials,
       );
-      leg.rotation.z = (index < 3 ? -1 : 1) * 0.78;
-      actor.add(leg);
+      disposeResourceSets(this.resultGeometries, this.resultMaterials);
+      throw new Error('Midnight Tour monster requires Run and Run_Attack clips.');
     }
-    for (let index = 0; index < 2; index += 1) {
-      const creatureEye = new Mesh(new SphereGeometry(0.045, 6, 4), eye);
-      creatureEye.name = 'midnight-tour-creature-eye';
-      creatureEye.position.set(index === 0 ? -0.12 : 0.12, 0.12, 0.27);
-      actor.add(creatureEye);
-    }
-    actor.position.copy(this.creatureStart);
-    actor.visible = false;
+
+    const actor = selected.root;
+    actor.name = 'midnight-tour-monster';
+    actor.userData.model = 'imported';
+    actor.position.copy(this.monsterHiddenStart);
+    actor.visible = true;
     this.addResultActor(actor);
+
+    const mixer = new AnimationMixer(actor);
+    const runAction = mixer.clipAction(runClip);
+    const attackAction = mixer.clipAction(attackClip);
+    attackAction.setLoop(LoopOnce, 1);
+    attackAction.clampWhenFinished = true;
+    this.monsterMixer = mixer;
+    this.monsterRunAction = runAction;
+    this.monsterAttackAction = attackAction;
+    this.monsterRunClip = runClip;
+    this.monsterAttackClip = attackClip;
+    runAction.reset().play();
+    this.dependencies.emitCue({
+      eventId: 'midnight-tour',
+      cue: 'run-start',
+    });
     return actor;
   }
 
@@ -812,8 +935,39 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
 
   private clearResultActors(): void {
     this.disposeShovel();
+    this.disposeMonsterAnimation();
     this.activeActor = null;
     this.resultActors.clear();
     disposeResourceSets(this.resultGeometries, this.resultMaterials);
+  }
+
+  private disposeMonsterAnimation(): void {
+    const mixer = this.monsterMixer;
+    if (mixer === null) return;
+    if (!this.monsterRunStopped) {
+      this.monsterRunStopped = true;
+      this.dependencies.emitCue({
+        eventId: 'midnight-tour',
+        cue: 'run-stop',
+      });
+    }
+    this.monsterRunAction?.stop();
+    this.monsterAttackAction?.stop();
+    const actor = this.activeActor;
+    if (actor !== null) {
+      if (this.monsterRunClip !== null) {
+        mixer.uncacheAction(this.monsterRunClip, actor);
+      }
+      if (this.monsterAttackClip !== null) {
+        mixer.uncacheAction(this.monsterAttackClip, actor);
+      }
+      mixer.uncacheRoot(actor);
+    }
+    this.monsterMixer = null;
+    this.monsterRunAction = null;
+    this.monsterAttackAction = null;
+    this.monsterRunClip = null;
+    this.monsterAttackClip = null;
+    this.monsterAttackStarted = false;
   }
 }

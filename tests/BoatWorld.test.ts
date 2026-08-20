@@ -22,6 +22,7 @@ import {
   PointLight,
   Points,
   Quaternion,
+  QuaternionKeyframeTrack,
   ShaderMaterial,
   Skeleton,
   SkinnedMesh,
@@ -1011,6 +1012,24 @@ describe('BoatWorld helpers', () => {
 
   it('runs and restores the Midnight Tour attack cutscene on each seeded side', async () => {
     const propModels = createTestPropModels();
+    const createEventModel = propModels.createEventModel.bind(propModels);
+    const track = new QuaternionKeyframeTrack(
+      '.quaternion',
+      [0, 1],
+      [0, 0, 0, 1, 0, 0, 0, 1],
+    );
+    const run = new AnimationClip('CharacterArmature|Run', 1, [track]);
+    const attack = new AnimationClip(
+      'CharacterArmature|Run_Attack',
+      1,
+      [track.clone()],
+    );
+    vi.spyOn(propModels, 'createEventModel').mockImplementation((id) => {
+      const selected = createEventModel(id);
+      return id === 'midnightMonster' && selected !== null
+        ? { root: selected.root, animations: [run, attack] }
+        : selected;
+    });
     const camera = new PerspectiveCamera();
     const world = new BoatWorld(
       camera,
@@ -1038,7 +1057,7 @@ describe('BoatWorld helpers', () => {
         instanceId: null,
         condition: null,
       });
-      for (let frame = 1; frame <= 12; frame += 1) {
+      for (let frame = 1; frame <= 28; frame += 1) {
         world.update(frame * 0.4, 0.4);
       }
       await reaction;
@@ -1047,6 +1066,7 @@ describe('BoatWorld helpers', () => {
       expect(presentation.userData.searchRight).toBe(1);
       expect(presentation.userData.resultReveals).toBe(1);
       expect(presentation.userData.cameraKicks).toBe(1);
+      expect(world.scene.getObjectByName('midnight-tour-monster')).toBeDefined();
       world.clearEvent();
       expect(camera.parent).toBe(cameraParent);
       expect(camera.position.toArray()).toEqual(cameraPosition.toArray());
