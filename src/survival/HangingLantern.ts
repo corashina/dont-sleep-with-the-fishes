@@ -6,11 +6,14 @@ import {
   Material,
   Mesh,
   MeshStandardMaterial,
+  MathUtils,
   PointLight,
   TorusGeometry,
   TubeGeometry,
   Vector3,
 } from 'three';
+import type { BoatPose } from '../ocean/BoatBuoyancy';
+import type { PresentationWeatherProfile } from '../weather/presentationWeather';
 import {
   collectMeshResources,
   disposeResourceSets,
@@ -22,10 +25,17 @@ export const HANGING_LANTERN_NIGHT_INTENSITY = 4.4;
 export const HANGING_LANTERN_LINE_LENGTH = 0.22;
 export const HANGING_LANTERN_MOUNT = Object.freeze({ x: 0, y: 0.28, z: 2.35 });
 export const HANGING_LANTERN_TIP = Object.freeze({ x: 0, y: 1.57, z: -1.7 });
+export const HANGING_LANTERN_MAX_SWING = Math.PI / 9;
 
 export interface HangingLantern {
   readonly root: Group;
   readonly light: PointLight;
+  update(
+    pose: Readonly<BoatPose>,
+    weather: Readonly<PresentationWeatherProfile>,
+    time: number,
+    delta: number,
+  ): void;
   dispose(): void;
 }
 
@@ -109,9 +119,92 @@ export function createHangingLantern(model: Group): HangingLantern {
   const materials = new Set<Material>();
   collectMeshResources(root, geometries, materials);
   let disposed = false;
+  const MAX_PROCESSED_DELTA = 0.1;
+  const MAX_STEP = 1 / 120;
+  const GRAVITY_OVER_LENGTH = 9.81 / 0.68;
+  const DAMPING = 1.75;
+  const MAX_BOAT_DRIVE = 4.5;
+  let angleX = 0;
+  let angleZ = 0;
+  let velocityX = 0;
+  let velocityZ = 0;
+  let previousPitch = 0;
+  let previousRoll = 0;
+  let previousDriftX = 0;
+  let previousDriftZ = 0;
+  let hasPreviousPose = false;
+  const swingPivot = pivot;
   return {
     root,
     light,
+    update: (pose, weather, time, delta) => {
+      if (disposed) return;
+      const processedDelta = Math.min(MAX_PROCESSED_DELTA, Math.max(0, delta));
+      if (processedDelta === 0) return;
+
+      let driveX = 0;
+      let driveZ = 0;
+      if (hasPreviousPose) {
+        driveX = MathUtils.clamp(
+          -(pose.pitch - previousPitch) * 1.2 / processedDelta
+            -(pose.driftZ - previousDriftZ) * 0.7 / processedDelta,
+          -MAX_BOAT_DRIVE,
+          MAX_BOAT_DRIVE,
+        );
+        driveZ = MathUtils.clamp(
+          (pose.roll - previousRoll) * 1.2 / processedDelta
+            +(pose.driftX - previousDriftX) * 0.7 / processedDelta,
+          -MAX_BOAT_DRIVE,
+          MAX_BOAT_DRIVE,
+        );
+      }
+      previousPitch = pose.pitch;
+      previousRoll = pose.roll;
+      previousDriftX = pose.driftX;
+      previousDriftZ = pose.driftZ;
+      hasPreviousPose = true;
+
+      const weatherForce = 0.32
+        + weather.waveScale * 0.38
+        + weather.sprayIntensity * 0.52;
+      driveX += (
+        Math.sin(time * 0.83)
+        + Math.sin(time * 1.93 + 0.6) * 0.45
+      ) * weatherForce;
+      driveZ += (
+        Math.sin(time * 0.71 + 1.8)
+        + Math.sin(time * 2.17 + 0.2) * 0.35
+      ) * weatherForce;
+
+      const stepCount = Math.ceil(processedDelta / MAX_STEP);
+      const step = processedDelta / stepCount;
+      for (let index = 0; index < stepCount; index += 1) {
+        const accelerationX = -GRAVITY_OVER_LENGTH * Math.sin(angleX)
+          - DAMPING * velocityX
+          + driveX;
+        const accelerationZ = -GRAVITY_OVER_LENGTH * Math.sin(angleZ)
+          - DAMPING * velocityZ
+          + driveZ;
+        velocityX += accelerationX * step;
+        velocityZ += accelerationZ * step;
+        angleX += velocityX * step;
+        angleZ += velocityZ * step;
+
+        const magnitude = Math.hypot(angleX, angleZ);
+        if (magnitude <= HANGING_LANTERN_MAX_SWING) continue;
+        const scale = HANGING_LANTERN_MAX_SWING / magnitude;
+        angleX *= scale;
+        angleZ *= scale;
+        const outwardVelocity = (
+          angleX * velocityX + angleZ * velocityZ
+        ) / (HANGING_LANTERN_MAX_SWING ** 2);
+        if (outwardVelocity > 0) {
+          velocityX -= outwardVelocity * angleX;
+          velocityZ -= outwardVelocity * angleZ;
+        }
+      }
+      swingPivot.rotation.set(angleX, 0, angleZ);
+    },
     dispose: () => {
       if (disposed) return;
       disposed = true;
