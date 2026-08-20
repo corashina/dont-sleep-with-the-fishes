@@ -3373,6 +3373,178 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
+  it.each([
+    {
+      label: 'chest',
+      resultId: 'tour-chest',
+      deltas: {},
+      resolved: { chest: { state: 'closed' as const, acquiredDay: 1 } },
+    },
+    {
+      label: 'monster',
+      resultId: 'tour-attack',
+      deltas: { health: -35 },
+      resolved: { health: 65 },
+    },
+  ])('restores the daytime boat after the midnight tour $label branch', async ({
+    resultId,
+    deltas,
+    resolved,
+  }) => {
+    let current = snapshot({
+      state: 'nightEvent',
+      pendingEventId: 'midnight-tour',
+      pressure: 1,
+      health: 100,
+    });
+    const calls: string[] = [];
+    let branchFinished = false;
+    const snapshotAfterUncover: { value: SurvivalSnapshot | null } = { value: null };
+    const outcome = accepted({
+      code: 'event-resolved',
+      cue: 'none',
+      message: resultId === 'tour-chest'
+        ? 'You find a chest.'
+        : 'Something jumps from the palms.',
+      deltas,
+      eventResult: {
+        eventId: 'midnight-tour',
+        choiceId: 'visit',
+        resultId,
+      },
+    });
+    const ui: Partial<SurvivalUI> = {
+      beginEventPresentation: vi.fn(),
+      setSleepCoverProfile: vi.fn(() => Promise.resolve()),
+      setSleepCovered: vi.fn(async (covered) => {
+        if (!branchFinished) return;
+        calls.push(`ui:cover:${covered}:start`);
+        await Promise.resolve();
+        calls.push(`ui:cover:${covered}:end`);
+        if (!covered) snapshotAfterUncover.value = current;
+      }),
+      settleCoveredScene: vi.fn(async () => {
+        if (branchFinished) calls.push('world:settle-covered');
+      }),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      holdEventOutcome: vi.fn(() => Promise.resolve()),
+      setBusy: vi.fn(),
+      render: vi.fn(),
+      setJournalUnread: vi.fn(),
+      clearEventPresentation: vi.fn(),
+      restoreCommandFocus: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        resolveEvent: vi.fn(() => {
+          current = snapshot({
+            state: 'nightEvent',
+            pendingEventId: null,
+            pressure: 1,
+            health: 100,
+            ...resolved,
+          });
+          return outcome;
+        }),
+        beginDawn: vi.fn(() => {
+          calls.push('session:begin-dawn');
+          current = snapshot({
+            state: 'day',
+            day: 2,
+            pressure: 1,
+            health: 100,
+            ...resolved,
+          });
+          return accepted({ code: 'dawn', cue: 'none', deltas: {} });
+        }),
+      },
+      world: {
+        setPhase: vi.fn((phase) => { calls.push(`world:phase:${phase}`); }),
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        playEventChoice: vi.fn(() => Promise.resolve()),
+        reactToEventOutcome: vi.fn(async () => {
+          calls.push('world:react:start');
+          await Promise.resolve();
+          calls.push('world:react:end');
+          branchFinished = true;
+        }),
+        syncInventory: vi.fn((synced) => {
+          if (synced.chest.state === 'closed') {
+            calls.push("world:syncChest('closed')");
+          }
+        }),
+        play: vi.fn(() => Promise.resolve()),
+        clearEvent: vi.fn(() => { calls.push('world:clear-event'); }),
+        dispose: vi.fn(),
+      },
+      ui,
+    });
+    const phaseAudio = (phase as unknown as { audio: SurvivalAudio }).audio;
+    vi.spyOn(phaseAudio, 'finishEventReaction').mockImplementation(() => {
+      calls.push('audio:finish-reaction');
+    });
+    vi.spyOn(phaseAudio, 'clearMidnightTour').mockImplementation(() => {
+      calls.push('audio:clear-tour');
+    });
+
+    phase.start();
+    await flushPromises();
+    ui.onEventChoice?.('visit');
+    await flushPromises();
+    await flushPromises();
+    await vi.waitFor(() => {
+      expect(snapshotAfterUncover.value).not.toBeNull();
+    });
+
+    const orderedCalls = [
+      'world:react:start',
+      'world:react:end',
+      'ui:cover:true:start',
+      'ui:cover:true:end',
+      'world:clear-event',
+      'session:begin-dawn',
+      'world:phase:day',
+      'world:settle-covered',
+      'ui:cover:false:start',
+      'ui:cover:false:end',
+    ];
+    expect(calls).toEqual(expect.arrayContaining(orderedCalls));
+    for (let index = 1; index < orderedCalls.length; index += 1) {
+      expect(calls.indexOf(orderedCalls[index - 1]!))
+        .toBeLessThan(calls.indexOf(orderedCalls[index]!));
+    }
+    expect(calls.indexOf('world:phase:night'))
+      .toBeLessThan(calls.indexOf('world:react:start'));
+    expect(calls.lastIndexOf('world:phase:night'))
+      .toBeLessThan(calls.indexOf('ui:cover:true:end'));
+    expect(snapshotAfterUncover.value?.state).toBe('day');
+    expect(calls.indexOf('audio:finish-reaction'))
+      .toBeLessThan(calls.indexOf('ui:cover:true:start'));
+    const completionAudioClear = calls.findIndex((call, index) => (
+      call === 'audio:clear-tour'
+      && index > calls.indexOf('ui:cover:true:end')
+    ));
+    expect(completionAudioClear)
+      .toBeGreaterThan(calls.indexOf('ui:cover:true:end'));
+    expect(completionAudioClear)
+      .toBeLessThan(calls.indexOf('world:clear-event'));
+    if (resultId === 'tour-chest') {
+      const chestSync = calls.indexOf("world:syncChest('closed')");
+      expect(chestSync).toBeGreaterThan(calls.indexOf('session:begin-dawn'));
+      expect(chestSync).toBeLessThan(calls.indexOf('ui:cover:false:start'));
+    } else {
+      const healthLoss = typeof deltas.health === 'number' ? -deltas.health : 0;
+      expect(healthLoss).toBeGreaterThanOrEqual(25);
+      expect(healthLoss).toBeLessThanOrEqual(45);
+    }
+    phase.dispose();
+  });
+
   it('uses the normal ending after a fatal midnight tour attack and skips dawn', async () => {
     let current = snapshot({
       state: 'nightEvent',
