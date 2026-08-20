@@ -1967,9 +1967,6 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   background: #010405;
   transition-duration: 750ms;
 }
-.sleep-cover[data-profile="midnight-tour"] {
-  transition-duration: 600ms;
-}
 .bad-sleep-cue {
   position: absolute;
   inset: 0;

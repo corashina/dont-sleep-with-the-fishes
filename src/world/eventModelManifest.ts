@@ -34,8 +34,8 @@ type EventModelPresentation = Pick<
 
 const presentations = {
   chestClosed: {
-    sourceUrl: 'https://poly.pizza/m/AngpV0HxD8',
-    sourceModelId: 'poly-pizza:0ae3f497-8628-4864-b5d4-e81ab14704f8',
+    sourceUrl: 'https://poly.pizza/m/O72u4Drp8k',
+    sourceModelId: 'poly-pizza:803af4ae-433f-4b05-b1f1-c6a2da02d768',
     license: 'CC0 1.0',
     targetLongestDimension: 1.1,
     maxTriangles: 2_000,
@@ -151,8 +151,9 @@ function generatedNormalization(
 function createEventModelSpec(id: EventModelId): EventModelSpec {
   const authored = presentations[id];
   const metadata = generatedMetadata[id] ?? INVALID_METADATA;
+  const assetFile = id === 'chestClosed' ? 'mysteryChest' : id;
   return Object.freeze({
-    url: new URL(`../assets/models/events/${id}.glb`, import.meta.url).href,
+    url: new URL(`../assets/models/events/${assetFile}.glb`, import.meta.url).href,
     ...authored,
     offset: authored.translation,
     ...generatedNormalization(metadata, authored),

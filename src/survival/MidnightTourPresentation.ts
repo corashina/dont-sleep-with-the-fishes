@@ -1,4 +1,5 @@
 import {
+  Box3,
   BoxGeometry,
   BufferGeometry,
   ConeGeometry,
@@ -54,6 +55,13 @@ const MAXIMUM_WAVE_CREST = DEFAULT_WAVES.reduce(
   0,
 );
 const IMPORTED_GREEN_TOP_Y = EVENT_MODEL_SPECS.midnightIsland.normalizedBounds.max[1];
+const PALM_PLACEMENTS = [
+  { nodeName: 'PalmTree_1', x: -2.6, z: -0.8, height: 3.9, rotationY: -0.35 },
+  { nodeName: 'PalmTree_2', x: -1.25, z: 0.95, height: 3.2, rotationY: 0.22 },
+  { nodeName: 'PalmTree_3', x: 0, z: -1.15, height: 4.1, rotationY: -0.12 },
+  { nodeName: 'PalmTree_4', x: 1.65, z: 1.1, height: 3.4, rotationY: 0.42 },
+  { nodeName: 'PalmTree_5', x: 2.85, z: -0.65, height: 3.8, rotationY: -0.28 },
+] as const;
 
 function createMaterial(
   color: number,
@@ -480,10 +488,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     }
     this.island.userData.greenTopLocalY = this.greenTopLocalY;
 
-    palms.root.name = 'event-model:midnightPalmTrees';
-    palms.root.position.set(0.65, this.greenTopLocalY, 0.15);
-    palms.root.rotation.y = -0.28;
-    this.island.add(palms.root);
+    this.placePalms(palms.root);
 
     const shoreLight = new PointLight(0xe2a45e, 2.2, 24, 1.1);
     shoreLight.name = 'midnight-tour-shore-light';
@@ -493,6 +498,45 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     moonFill.name = 'midnight-tour-moon-fill';
     moonFill.position.set(1, 5, 7);
     this.island.add(moonFill);
+  }
+
+  private placePalms(sourceRoot: Object3D): void {
+    const palmNodes = PALM_PLACEMENTS.map((placement) => {
+      const palm = sourceRoot.getObjectByName(placement.nodeName);
+      if (palm === undefined) {
+        throw new Error(`Missing required Midnight Tour palm tree: ${placement.nodeName}.`);
+      }
+      return palm;
+    });
+    const bounds = new Box3();
+    const center = new Vector3();
+
+    this.island.add(sourceRoot);
+    sourceRoot.updateMatrixWorld(true);
+    PALM_PLACEMENTS.forEach((placement, index) => {
+      const sourcePalm = palmNodes[index];
+      if (sourcePalm === undefined) {
+        throw new Error(`Missing required Midnight Tour palm tree: ${placement.nodeName}.`);
+      }
+      const palm = new Group();
+      const content = new Group();
+      palm.name = `midnight-tour-palm-${index + 1}`;
+      palm.add(content);
+      this.island.add(palm);
+      content.attach(sourcePalm);
+
+      bounds.setFromObject(content);
+      bounds.getCenter(center);
+      const sourceHeight = bounds.max.y - bounds.min.y;
+      if (sourceHeight <= 0) {
+        throw new Error(`Invalid Midnight Tour palm tree: ${placement.nodeName}.`);
+      }
+      content.position.set(-center.x, -bounds.min.y, -center.z);
+      palm.position.set(placement.x, this.greenTopLocalY, placement.z);
+      palm.rotation.y = placement.rotationY;
+      palm.scale.setScalar(placement.height / sourceHeight);
+    });
+    sourceRoot.removeFromParent();
   }
 
   private setSidePositions(): void {

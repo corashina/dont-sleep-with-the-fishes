@@ -98,7 +98,6 @@ const EVENT_SOURCES = Object.freeze({
 });
 const CURATED_EVENT_MODEL_IDS = Object.freeze(Object.keys(EVENT_SOURCES));
 const FOCUSED_EVENT_MODEL_IDS = Object.freeze([
-  'chestClosed',
   'midnightIsland',
   'deadTree',
   'traderRowboat',

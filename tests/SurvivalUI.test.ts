@@ -1800,7 +1800,7 @@ describe('SurvivalUI', () => {
     expect(mainStyles).not.toMatch(/prefers-reduced[-]motion/);
   });
 
-  it('uses the 600 ms midnight-tour cover profile', async () => {
+  it('uses the standard 2.5 second fade for Midnight Tour travel', async () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');
     const ui = new SurvivalUI(mount);
@@ -1812,12 +1812,12 @@ describe('SurvivalUI', () => {
     let settled = false;
     const pending = ui.setSleepCovered(true);
     void pending.then(() => { settled = true; });
-    await vi.advanceTimersByTimeAsync(599);
+    await vi.advanceTimersByTimeAsync(2_499);
     expect(settled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
     await pending;
-    expect(mainStyles).toMatch(
-      /\.sleep-cover\[data-profile="midnight-tour"\][^{]*\{[^}]*transition-duration:\s*600ms/s,
+    expect(mainStyles).not.toMatch(
+      /\.sleep-cover\[data-profile="midnight-tour"\][^{]*\{[^}]*transition-duration:/s,
     );
   });
 
