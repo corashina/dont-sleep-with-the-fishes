@@ -8,13 +8,35 @@ import {
   PointLight,
   Vector3,
 } from 'three';
+import type { BoatPose } from '../src/ocean/BoatBuoyancy';
+import { presentationWeatherProfile } from '../src/weather/presentationWeather';
 import {
   HANGING_LANTERN_DAY_INTENSITY,
   HANGING_LANTERN_LINE_LENGTH,
   HANGING_LANTERN_MOUNT,
   HANGING_LANTERN_TIP,
+  HANGING_LANTERN_MAX_SWING,
   createHangingLantern,
 } from '../src/survival/HangingLantern';
+
+const ZERO_POSE: BoatPose = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
+
+function swingMagnitude(lantern: ReturnType<typeof createHangingLantern>): number {
+  const pivot = lantern.root.getObjectByName('hanging-lantern:swing-pivot')!;
+  return Math.hypot(pivot.rotation.x, pivot.rotation.z);
+}
+
+function simulateWeather(id: 'calm' | 'wind' | 'waves' | 'thunderstorm'): number {
+  const lantern = createHangingLantern(lanternModel());
+  const weather = presentationWeatherProfile(id);
+  let peak = 0;
+  for (let frame = 0; frame < 360; frame += 1) {
+    lantern.update(ZERO_POSE, weather, frame / 60, 1 / 60);
+    if (frame >= 120) peak = Math.max(peak, swingMagnitude(lantern));
+  }
+  lantern.dispose();
+  return peak;
+}
 
 function lanternModel(): Group {
   const root = new Group();
@@ -88,5 +110,48 @@ describe('hanging lantern', () => {
     expect(modelMaterialDispose).toHaveBeenCalledOnce();
     expect(shadowDispose).toHaveBeenCalledOnce();
     expect(lantern.root.children).toHaveLength(0);
+  });
+
+  it('uses weather strength to increase the continuous swing', () => {
+    const calm = simulateWeather('calm');
+    expect(calm).toBeGreaterThan(0.005);
+    expect(simulateWeather('wind')).toBeGreaterThan(calm * 1.25);
+    expect(simulateWeather('waves')).toBeGreaterThan(calm * 1.25);
+    expect(simulateWeather('thunderstorm')).toBeGreaterThan(calm * 1.25);
+  });
+
+  it('reacts to boat pitch, roll, and drift changes', () => {
+    const passive = createHangingLantern(lanternModel());
+    const driven = createHangingLantern(lanternModel());
+    const calm = presentationWeatherProfile('calm');
+    passive.update(ZERO_POSE, calm, 0, 1 / 60);
+    driven.update(ZERO_POSE, calm, 0, 1 / 60);
+    passive.update(ZERO_POSE, calm, 1 / 60, 1 / 60);
+    driven.update({ y: 0.08, pitch: 0.16, roll: -0.13, driftX: 0.18, driftZ: -0.16 }, calm, 1 / 60, 1 / 60);
+    expect(swingMagnitude(driven)).toBeGreaterThan(swingMagnitude(passive));
+    passive.dispose();
+    driven.dispose();
+  });
+
+  it('caps large frame steps and the combined swing angle', () => {
+    const lantern = createHangingLantern(lanternModel());
+    const storm = presentationWeatherProfile('thunderstorm');
+    for (let frame = 0; frame < 80; frame += 1) {
+      const sign = frame % 2 === 0 ? 1 : -1;
+      lantern.update({ y: sign, pitch: sign * 2, roll: -sign * 2, driftX: sign * 4, driftZ: -sign * 4 }, storm, frame, 1);
+    }
+    const magnitude = swingMagnitude(lantern);
+    expect(Number.isFinite(magnitude)).toBe(true);
+    expect(magnitude).toBeLessThanOrEqual(HANGING_LANTERN_MAX_SWING + 1e-8);
+    lantern.dispose();
+  });
+
+  it('does not move after disposal', () => {
+    const lantern = createHangingLantern(lanternModel());
+    const pivot = lantern.root.getObjectByName('hanging-lantern:swing-pivot')!;
+    lantern.dispose();
+    const before = pivot.rotation.toArray();
+    lantern.update(ZERO_POSE, presentationWeatherProfile('waves'), 3, 0.1);
+    expect(pivot.rotation.toArray()).toEqual(before);
   });
 });
