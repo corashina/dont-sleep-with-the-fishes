@@ -1512,6 +1512,36 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('turns the seated camera 180 degrees and returns it forward', () => {
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const position = camera.position.clone();
+
+    world.setRearCameraView(true);
+    world.update(0.65, 0.65);
+    const rearDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    expect(camera.position.toArray()).toEqual(position.toArray());
+    expect(rearDirection.x).toBeCloseTo(0);
+    expect(rearDirection.y).toBeCloseTo(0);
+    expect(rearDirection.z).toBeCloseTo(1);
+
+    world.setRearCameraView(false);
+    world.update(1.3, 0.65);
+    const frontDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    expect(camera.position.toArray()).toEqual(position.toArray());
+    expect(frontDirection.x).toBeCloseTo(0);
+    expect(frontDirection.y).toBeCloseTo(0);
+    expect(frontDirection.z).toBeCloseTo(-1);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('shows the Handyman chest reward at half scale', async () => {
     const anchor = savedItem('anchor');
     const propModels = createTestPropModels();

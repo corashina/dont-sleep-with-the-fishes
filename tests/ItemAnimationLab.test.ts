@@ -17,6 +17,7 @@ import {
 } from '../src/survival/ItemAnimationLab';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
+import type { SurvivalUI } from '../src/ui/SurvivalUI';
 
 function allItems(): readonly ItemInstance[] {
   return ITEM_IDS.map((type) => ({
@@ -85,6 +86,38 @@ describe('Item Animation Lab', () => {
       energy: 0,
       chest: { state: 'none', acquiredDay: null },
     });
+  });
+
+  it('keeps the rear camera control available in the lab', () => {
+    const current = new SurvivalSession(allItems(), { seed: 19 }).snapshot();
+    const setRearCameraView = vi.fn();
+    const setCameraTurnState = vi.fn();
+    const ui: Partial<SurvivalUI> = {
+      beginEventPresentation: vi.fn(),
+      showItemAnimationLab: vi.fn(),
+      setEventSelection: vi.fn(),
+      setBusy: vi.fn(),
+      setCameraTurnState,
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current) },
+      world: {
+        setRearCameraView,
+        setEventSelectedItem: vi.fn(),
+        setEventEligibleItems: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui,
+    }, ITEM_ANIMATION_LAB_ID);
+
+    phase.start();
+    expect(setCameraTurnState).toHaveBeenLastCalledWith(true, false);
+
+    ui.onCameraTurn?.();
+    expect(setRearCameraView).toHaveBeenLastCalledWith(true);
+    expect(setCameraTurnState).toHaveBeenLastCalledWith(true, true);
+    phase.dispose();
   });
 
   it('replays items without resolving outcomes or changing inventory', async () => {
