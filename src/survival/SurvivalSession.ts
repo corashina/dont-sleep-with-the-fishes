@@ -30,7 +30,13 @@ import {
   shouldBecomeMimic,
 } from './chest';
 import { nightDamageMultiplier, pressureForDay, pressureIncreaseForDay } from './RunPressure';
-import { repairEnergyCost, SURVIVAL_BALANCE } from './survivalBalance';
+import {
+  clampRescueLead,
+  repairEnergyCost,
+  rescueChanceForDay,
+  type RescueLead,
+  SURVIVAL_BALANCE,
+} from './survivalBalance';
 import {
   advanceCarlitosDawn,
   CARLITOS_EVENT_ENERGY_COST,
@@ -91,7 +97,7 @@ export interface SurvivalSessionOptions {
     | 'hull'
     | 'day'
     | 'pressure'
-    | 'rescueProgress'
+    | 'rescueLead'
     | 'food'
     | 'bait'
   >>;
@@ -100,6 +106,7 @@ export interface SurvivalSessionOptions {
   initialChest?: ChestSnapshot;
   initialAppearanceCounts?: Readonly<Record<string, number>>;
   initialCarlitos?: Partial<CarlitosSnapshot>;
+  readonly initialRescueTraceFinds?: number;
 }
 
 export type { DayActionOption } from './survivalTypes';
@@ -130,7 +137,8 @@ export class SurvivalSession {
   private recoveredFood = 0;
   private recoveredBait = 0;
   private repairMaterial = 0;
-  private rescueProgress: number;
+  private rescueLead: RescueLead;
+  private rescueTraceFinds: 0 | 1 | 2;
   private chestState: ChestState;
   private chestAcquiredDay: number | null;
   private weather: WeatherId;
@@ -171,7 +179,11 @@ export class SurvivalSession {
     this.hunger = options.initial?.hunger ?? SURVIVAL_BALANCE.start.hunger;
     this.energy = options.initial?.energy ?? SURVIVAL_BALANCE.start.energy;
     this.hull = options.initial?.hull ?? SURVIVAL_BALANCE.start.hull;
-    this.rescueProgress = options.initial?.rescueProgress ?? 0;
+    this.rescueLead = clampRescueLead(options.initial?.rescueLead ?? 0);
+    this.rescueTraceFinds = Math.min(
+      2,
+      Math.max(0, Math.trunc(options.initialRescueTraceFinds ?? 0)),
+    ) as 0 | 1 | 2;
     this.chestState = options.initialChest?.state ?? 'none';
     this.chestAcquiredDay = this.chestState === 'none'
       ? null
@@ -232,7 +244,8 @@ export class SurvivalSession {
       recoveredFood: this.recoveredFood,
       recoveredBait: this.recoveredBait,
       repairMaterial: this.repairMaterial,
-      rescueProgress: this.rescueProgress,
+      rescueLead: this.rescueLead,
+      rescueTraceFinds: this.rescueTraceFinds,
       chest: Object.freeze({
         state: this.chestState,
         acquiredDay: this.chestAcquiredDay,
@@ -607,11 +620,7 @@ export class SurvivalSession {
       this.state = 'dead';
     }
 
-    if (resolved.effects.rescue === true && !this.isTerminal()) {
-      this.state = 'rescued';
-      this.clearPendingEvent();
-    }
-    else this.resolveTerminal();
+    this.resolveTerminal();
     this.lastEventId = event.id;
     this.lastSeenDay.set(event.id, this.day);
     this.appearanceCounts.set(event.id, (this.appearanceCounts.get(event.id) ?? 0) + 1);
@@ -720,25 +729,20 @@ export class SurvivalSession {
     const dawn = this.commit('dawn', 'Another dawn breaks over the lifeboat.', deltas, 'dawn');
     if (this.isTerminal()) return dawn;
 
-    if (this.day < SURVIVAL_BALANCE.rescue.firstDay) {
-      this.openDayEventAfterDawn();
-      return dawn;
+    const rescueChance = rescueChanceForDay(this.day, this.rescueLead);
+    if (rescueChance > 0 && this.random.next() < rescueChance) {
+      this.state = 'rescued';
+      this.clearPendingEvent();
+      return this.commit(
+        'rescued',
+        'A rescue vessel finds the lifeboat at dawn.',
+        {},
+        'rescue',
+      );
     }
 
-    const baseChance = Math.min(
-      SURVIVAL_BALANCE.rescue.chanceCap,
-      SURVIVAL_BALANCE.rescue.initialChance
-        + (this.day - SURVIVAL_BALANCE.rescue.firstDay) * SURVIVAL_BALANCE.rescue.dailyIncrease,
-    );
-    const progressChance = Math.min(SURVIVAL_BALANCE.rescue.progressCap, this.rescueProgress) / 100;
-    if (this.random.next() >= Math.min(0.85, baseChance + progressChance)) {
-      this.openDayEventAfterDawn();
-      return dawn;
-    }
-
-    this.state = 'rescued';
-    this.clearPendingEvent();
-    return this.commit('rescued', 'A rescue vessel finds the lifeboat at dawn.', {}, 'rescue');
+    this.openDayEventAfterDawn();
+    return dawn;
   }
 
   private unavailable(action: DayActionId, option?: DayActionOption): Rejection | null {
@@ -921,7 +925,10 @@ export class SurvivalSession {
       if (rewardRoll < 0.25) deltas.food = 1;
       else if (rewardRoll < 0.5) deltas.bait = 1;
       else if (rewardRoll < 0.75) deltas.repairMaterial = 1;
-      else deltas.rescueProgress = 10;
+      else if (this.rescueTraceFinds < 2) {
+        this.rescueTraceFinds = (this.rescueTraceFinds + 1) as 1 | 2;
+        deltas.rescueLead = 1;
+      }
     }
 
     return this.commit(
@@ -1020,7 +1027,7 @@ export class SurvivalSession {
     this.rescueMessageSent = true;
     return this.commit('message-sent', 'You cast the message into the current.', {
       energy: -SURVIVAL_BALANCE.actions.bottledPaperEnergy,
-      rescueProgress: SURVIVAL_BALANCE.actions.bottledPaperRescueProgress,
+      rescueLead: 2,
     }, 'sighting');
   }
 
@@ -1083,7 +1090,7 @@ export class SurvivalSession {
       targetableItemIds: this.targetableItemIds(),
       appearanceCounts: this.appearanceCounts,
       inventoryItemIds: this.targetableItemIds(),
-      rescueProgress: this.rescueProgress,
+      rescueLead: this.rescueLead,
       pressure: this.pressure,
       chestState: this.chestState,
       hasLivingCompanion: this.carlitos?.alive === true,
@@ -1327,7 +1334,7 @@ export class SurvivalSession {
       pressure: this.pressure,
       health: this.health, hunger: this.hunger, energy: this.energy, hull: this.hull,
       food: this.food, bait: this.bait, repairMaterial: this.repairMaterial,
-      rescueProgress: this.rescueProgress,
+      rescueLead: this.rescueLead,
     };
   }
 
@@ -1642,7 +1649,9 @@ export class SurvivalSession {
     this.food += adjustedDeltas.food ?? 0;
     this.bait += adjustedDeltas.bait ?? 0;
     this.repairMaterial += adjustedDeltas.repairMaterial ?? 0;
-    this.rescueProgress += adjustedDeltas.rescueProgress ?? 0;
+    this.rescueLead = clampRescueLead(
+      this.rescueLead + (adjustedDeltas.rescueLead ?? 0),
+    );
     this.pressure += adjustedDeltas.pressure ?? 0;
     this.clampMeters();
     const consumedFood = spentRecoveredFood > 0
@@ -1706,7 +1715,6 @@ export class SurvivalSession {
     this.food = Math.max(0, this.food);
     this.bait = Math.max(0, this.bait);
     this.repairMaterial = Math.max(0, this.repairMaterial);
-    this.rescueProgress = Math.max(0, this.rescueProgress);
     this.pressure = Math.min(4, Math.max(0, this.pressure));
   }
 

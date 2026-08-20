@@ -113,7 +113,7 @@ describe('survival events', () => {
       targetableItemIds: new Set<ItemId>(),
       appearanceCounts: new Map<string, number>(),
       inventoryItemIds: new Set<ItemId>(),
-      rescueProgress: 0,
+      rescueLead: 0,
       pressure: 4,
     };
     const companionEvents = ['shadow-figure', 'guarded-sleep'];
@@ -303,7 +303,7 @@ describe('survival events', () => {
       weight: 2,
       earliestDay: 15,
       cooldownDays: 20,
-      minimumRescueProgress: 15,
+      minimumRescueLead: 2,
       maximumAppearances: 2,
     });
   });
@@ -363,11 +363,11 @@ describe('survival events', () => {
       .find(({ id }) => id === 'flareGun')?.outcomes[0];
     expect(flareOutcome).toMatchObject({
       effects: {
-        resources: [{ resource: 'rescueProgress', operation: 'add', value: 25 }],
+        resources: [{ resource: 'rescueLead', operation: 'add', value: 6 }],
+        items: [{ kind: 'consume', itemId: 'flareGun', quantity: 1 }],
       },
     });
-    expect(flareOutcome?.effects.items).toBeUndefined();
-    expect(resultIds('other-people', 'flashlight')).toEqual(['people-rescue', 'people-missed']);
+    expect(resultIds('other-people', 'flashlight')).toEqual(['people-signaled']);
     expect(resultIds('other-people', 'sleep')).toEqual(['people-pass']);
     expect(event('other-people').choices.map(({ id }) => id)).not.toContain('pass');
   });
@@ -392,7 +392,7 @@ describe('survival events', () => {
 
     for (const eventId of ['man-in-the-fog', 'face-on-the-moon'] as const) {
       const serialized = JSON.stringify(byId[eventId]?.choices);
-      expect(serialized).not.toContain('rescueProgress');
+      expect(serialized).not.toContain('rescueLead');
     }
 
     const outcomeResources = (choiceId: string) => manInTheFog?.choices
@@ -549,11 +549,11 @@ describe('survival events', () => {
     expect(event('flowers').maximumPressure).toBeUndefined();
   });
 
-  it('blocks one-time, absent-item, and rescue-progress events', () => {
+  it('blocks one-time, absent-item, and rescue-lead events', () => {
     const base = {
       phase: 'night' as const, day: 20, weather: 'calm' as const, lastEventId: null,
       lastSeenDay: new Map<string, number>(), targetableItemIds: new Set<ItemId>(),
-      appearanceCounts: new Map<string, number>(), inventoryItemIds: new Set<ItemId>(), rescueProgress: 0,
+      appearanceCounts: new Map<string, number>(), inventoryItemIds: new Set<ItemId>(), rescueLead: 0,
     };
     const bottleBase = { ...base, phase: 'day' as const };
     expect(eligibleEvents(SURVIVAL_EVENTS, {
@@ -562,7 +562,7 @@ describe('survival events', () => {
     }).some(({ id }) => id === 'drifting-bottle')).toBe(false);
     expect(eligibleEvents(SURVIVAL_EVENTS, {
       ...base,
-      rescueProgress: 14,
+      rescueLead: 1,
     }).some(({ id }) => id === 'other-people')).toBe(false);
     expect(eligibleEvents(SURVIVAL_EVENTS, {
       ...bottleBase,
@@ -570,12 +570,12 @@ describe('survival events', () => {
     }).some(({ id }) => id === 'drifting-bottle')).toBe(true);
     expect(eligibleEvents(SURVIVAL_EVENTS, {
       ...base,
-      rescueProgress: 15,
+      rescueLead: 2,
       appearanceCounts: new Map([['other-people', 2]]),
     }).some(({ id }) => id === 'other-people')).toBe(false);
     expect(eligibleEvents(SURVIVAL_EVENTS, {
       ...base,
-      rescueProgress: 15,
+      rescueLead: 2,
       appearanceCounts: new Map([['other-people', 1]]),
     }).some(({ id }) => id === 'other-people')).toBe(true);
   });
@@ -585,7 +585,7 @@ describe('survival events', () => {
       phase: 'night', day: 9, weather: 'calm', lastEventId: 'school-of-fish',
       lastSeenDay: new Map([['death-stare', 8], ['leak', 8]]),
       targetableItemIds: new Set(['anchor']),
-      appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueProgress: 0,
+      appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueLead: 0,
     });
     expect(events.every((event) => event.phase === 'night' && event.earliestDay <= 9)).toBe(true);
     expect(events.map((event) => event.id)).not.toContain('school-of-fish');
@@ -594,7 +594,7 @@ describe('survival events', () => {
     expect(eligibleEvents(SURVIVAL_EVENTS, {
       phase: 'night', day: 31, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
       targetableItemIds: new Set(['anchor']),
-      appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueProgress: 0,
+      appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueLead: 0,
     }).map((event) => event.id)).not.toContain('dangerous-waters');
   });
 
@@ -615,7 +615,7 @@ describe('survival events', () => {
       phase: 'night', day: 12, weather: 'calm', lastEventId: null,
       lastSeenDay: new Map(), targetableItemIds: new Set(),
       appearanceCounts: new Map([['dangerous-waters', 1]]),
-      inventoryItemIds: new Set(), rescueProgress: 0,
+      inventoryItemIds: new Set(), rescueLead: 0,
     }).map(({ id }) => id)).not.toContain('dangerous-waters');
   });
 
@@ -623,7 +623,7 @@ describe('survival events', () => {
     const eligible = (targetableItemIds: ReadonlySet<ItemId>) => eligibleEvents(SURVIVAL_EVENTS, {
       phase: 'night', day: 8, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
       targetableItemIds,
-      appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueProgress: 0,
+      appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueLead: 0,
     });
 
     expect(eligible(new Set()).map(({ id }) => id)).not.toContain('snatcher');
@@ -745,7 +745,7 @@ describe('survival events', () => {
     rejectsEffects({ terminal: 'sunk' }, /unsupported effect key terminal/i);
     rejectsEffects({ resources: undefined }, /resources.*array/i);
     rejectsEffects({ items: undefined }, /items.*array/i);
-    rejectsEffects({ rescue: undefined }, /rescue.*boolean/i);
+    rejectsEffects({ rescue: undefined }, /unsupported effect key rescue/i);
     rejectsEffects({ chest: undefined }, /chest.*invalid effect/i);
     const hiddenRoute = {};
     Object.defineProperty(hiddenRoute, 'route', { value: 'left' });
@@ -758,6 +758,9 @@ describe('survival events', () => {
     rejectsResource({ resource: 'hull', operation: 'subtract' }, /resource effect.*missing.*value/i);
     rejectsResource({ resource: 'hull', operation: 'subtract', value: 1, route: 'left' }, /unsupported resource effect key route/i);
     rejectsResource({ resource: 'hull', operation: 'subtract', value: { min: 1, max: 2, step: 1 } }, /unsupported range key step/i);
+    rejectsResource({ resource: 'rescueLead', operation: 'set', value: 1 }, /rescue lead.*add/i);
+    rejectsResource({ resource: 'rescueLead', operation: 'add', value: 0 }, /invalid resource value/i);
+    rejectsResource({ resource: 'rescueLead', operation: 'add', value: 9 }, /rescue lead.*one through eight/i);
     rejectsResource(['hull', 'subtract', 1], /resource effect.*plain object/i);
     rejectsResource(null, /resource effect.*plain object/i);
   });

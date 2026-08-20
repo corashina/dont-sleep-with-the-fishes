@@ -210,15 +210,6 @@ export function formatDiveResult(outcome: ActionOutcome): RewardResultView {
       }
     }
   }
-  const textRewards = [
-    ['rescueProgress', 'RESCUE PROGRESS'],
-  ] as const;
-  for (const [resource, label] of textRewards) {
-    const delta = outcome.deltas[resource];
-    if (delta !== undefined && delta !== 0) {
-      lines.push(`${label} ${delta > 0 ? '+' : ''}${delta}`);
-    }
-  }
   if (reward === null && lines.length === 0) lines.push('NOTHING FOUND');
   const appliedHealthDelta = outcome.deltas.health;
   if (appliedHealthDelta !== undefined && appliedHealthDelta < 0) {

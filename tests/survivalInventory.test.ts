@@ -198,6 +198,6 @@ describe('survival foundations', () => {
     expect(SURVIVAL_BALANCE.dawn.normalEnergy).toBe(3);
     expect(SURVIVAL_BALANCE.actions.maximumEnergy).toBe(3);
     expect(SURVIVAL_BALANCE.dawn.hungerIncrease).toBe(18);
-    expect(SURVIVAL_BALANCE.rescue.firstDay).toBe(5);
+    expect(SURVIVAL_BALANCE.rescue.firstDay).toBe(24);
   });
 });
