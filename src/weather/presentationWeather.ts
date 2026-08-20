@@ -90,7 +90,7 @@ const EVENT_WEATHER: Readonly<Record<string, PresentationWeatherId>> = Object.fr
   'guarded-sleep': 'overcast',
   'check-the-back': 'waves',
   'chest-attack': 'waves',
-  'midnight-tour': 'fog',
+  'midnight-tour': 'calm',
   handyman: 'overcast',
 });
 

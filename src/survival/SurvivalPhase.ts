@@ -1426,6 +1426,10 @@ export class SurvivalPhase implements GamePhase {
       await this.resolveDriftingItemChoice(choiceId, generation);
       return;
     }
+    if (eventId === 'midnight-tour' && choiceId === 'visit') {
+      await this.resolveMidnightTourVisit(generation);
+      return;
+    }
     this.ui.setEventSleepMask?.(eventId, choiceId === 'sleep');
     if (choiceId === 'sleep') this.audio.sleep();
     else this.audio.confirm();
@@ -1505,6 +1509,155 @@ export class SurvivalPhase implements GamePhase {
       presentation,
       focusedResult,
     );
+  }
+
+  private async resolveMidnightTourVisit(generation: number): Promise<void> {
+    const pending = this.session.snapshot();
+    if (
+      pending.pendingEventId !== 'midnight-tour'
+      || !this.isContinuationActive(generation)
+    ) return;
+    const eventId = 'midnight-tour';
+    const choice: EventChoicePresentation = {
+      choiceId: 'visit',
+      instanceId: null,
+      condition: null,
+    };
+    this.audio.confirm();
+    this.eventPresentation = 'using';
+    this.setBusy(true);
+    try {
+      await (this.ui.setSleepCoverProfile?.('midnight-tour') ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+      await Promise.all([
+        this.ui.playEventChoiceBeat?.('visit') ?? Promise.resolve(),
+        this.ui.setSleepCovered?.(true) ?? Promise.resolve(),
+      ]);
+      if (!this.isContinuationActive(generation)) return;
+      await (this.world.playEventChoice?.(eventId, choice) ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+      if (
+        (this.visibilityPauseActive || this.documentIsHidden())
+        && !await this.waitForVisibilityResume(generation)
+      ) return;
+      if (!this.isContinuationActive(generation)) return;
+
+      this.eventPresentation = 'resolving';
+      this.beginDeferredPresentationSync(pending, generation);
+      const outcome = this.session.resolveEvent?.({ kind: 'choice', choiceId: 'visit' });
+      if (!this.isContinuationActive(generation)) return;
+      if (outcome === undefined) {
+        throw new Error('Midnight Tour visit did not return an outcome.');
+      }
+      if (!outcome.accepted) {
+        await this.recoverMidnightTourVisit(
+          generation,
+          { rejection: outcome },
+        );
+        return;
+      }
+
+      const invariantError = this.focusedEventResultError(eventId, 'visit', outcome);
+      if (invariantError !== null) {
+        await this.recoverMidnightTourVisit(
+          generation,
+          { invariantError },
+        );
+        return;
+      }
+      const resolved = this.session.snapshot();
+      if (isTerminal(resolved.state)) {
+        this.flushDeferredPresentationSync(resolved, generation);
+      }
+      const presentation = deriveEventOutcomePresentation(
+        pending,
+        resolved,
+        outcome,
+        null,
+      );
+      await this.runEventResolution(
+        eventId,
+        outcome,
+        pending.state,
+        generation,
+        choice,
+        deriveEventPhysicalResponse(
+          'visit',
+          pending.inventory,
+          resolved.inventory,
+          null,
+        ),
+        presentation,
+        true,
+        true,
+      );
+    } catch (error) {
+      await this.recoverMidnightTourVisit(generation, { fatalError: error });
+    }
+  }
+
+  private async recoverMidnightTourVisit(
+    generation: number,
+    reason: {
+      readonly rejection?: ActionOutcome;
+      readonly invariantError?: Error;
+      readonly fatalError?: unknown;
+    },
+  ): Promise<void> {
+    this.cancelDeferredPresentationSync(generation);
+    if (!this.isContinuationActive(generation)) return;
+    try {
+      await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    } catch {
+      // Preserve the original failure while later cleanup steps continue.
+    }
+    if (!this.isContinuationActive(generation)) return;
+    try {
+      this.clearEventPresentation();
+    } catch {
+      // Continue the remaining cleanup steps.
+    }
+    if (!this.isContinuationActive(generation)) return;
+    try {
+      await (this.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
+    } catch {
+      // Continue the remaining cleanup steps.
+    }
+    if (!this.isContinuationActive(generation)) return;
+    try {
+      this.renderSnapshot(false, false);
+    } catch {
+      // Continue the remaining cleanup steps.
+    }
+    if (!this.isContinuationActive(generation)) return;
+    try {
+      await this.renderAndSettleCoveredScene(generation);
+    } catch {
+      // Continue to the final uncover.
+    }
+    if (!this.isContinuationActive(generation)) return;
+    try {
+      await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    } catch {
+      // Continue to error reporting and input unlock.
+    }
+    if (!this.isContinuationActive(generation)) return;
+
+    try {
+      if (reason.rejection !== undefined) {
+        this.audio.deny();
+        this.ui.showFeedback?.(reason.rejection);
+        this.eventPresentation = 'choosing';
+        this.restoreEventSelection();
+      } else if (reason.invariantError !== undefined) {
+        this.onInvariantError(reason.invariantError);
+      } else {
+        this.onFatalError(reason.fatalError);
+      }
+    } finally {
+      this.setBusy(false);
+    }
+    this.ui.restoreCommandFocus?.();
   }
 
   private async resolveDriftingItemChoice(
@@ -1684,6 +1837,7 @@ export class SurvivalPhase implements GamePhase {
     physicalResponse: EventPhysicalResponsePresentation | EventChoicePresentation,
     presentation: EventOutcomePresentation,
     focusedResult: boolean,
+    revealFromCover = false,
   ): Promise<void> {
     const stationaryHandymanTouch = eventId === 'handyman'
       && choice.choiceId === 'touch';
@@ -1699,20 +1853,36 @@ export class SurvivalPhase implements GamePhase {
     ) {
       this.audio.eventAction(eventId, 'damage');
     }
-    await Promise.all([
-      stationaryHandymanTouch
-        ? Promise.resolve()
-        : this.world.play?.(outcome.cue) ?? Promise.resolve(),
-      this.world.reactToEventOutcome?.(
+    const response = isEventPresentationRoute(eventId, 'dedicated')
+      ? physicalResponse
+      : focusedResult ? choice : physicalResponse;
+    if (revealFromCover) {
+      const reaction = this.world.reactToEventOutcome?.(
         eventId,
         outcome,
-        isEventPresentationRoute(eventId, 'dedicated')
-          ? physicalResponse
-          : focusedResult ? choice : physicalResponse,
+        response,
         presentation,
-      )
-        ?? Promise.resolve(),
-    ]);
+      ) ?? Promise.resolve();
+      await Promise.all([
+        stationaryHandymanTouch
+          ? Promise.resolve()
+          : this.world.play?.(outcome.cue) ?? Promise.resolve(),
+        reaction,
+        this.ui.setSleepCovered?.(false) ?? Promise.resolve(),
+      ]);
+    } else {
+      await Promise.all([
+        stationaryHandymanTouch
+          ? Promise.resolve()
+          : this.world.play?.(outcome.cue) ?? Promise.resolve(),
+        this.world.reactToEventOutcome?.(
+          eventId,
+          outcome,
+          response,
+          presentation,
+        ) ?? Promise.resolve(),
+      ]);
+    }
     this.audio.finishEventReaction(eventId);
     if (!this.isContinuationActive(generation)) return;
     if (
@@ -1730,12 +1900,25 @@ export class SurvivalPhase implements GamePhase {
         await (this.ui.holdEventOutcome?.() ?? Promise.resolve());
         if (!this.isContinuationActive(generation)) return;
       }
+      if (revealFromCover) {
+        await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
+        if (!this.isContinuationActive(generation)) return;
+      }
       const snapshot = this.renderSnapshot(false, false);
       if (snapshot.state === 'rescued') this.retainTerminalEventTableau();
       else this.clearEventPresentation();
+      if (revealFromCover) {
+        await (this.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
+        if (!this.isContinuationActive(generation)) return;
+      }
       this.eventPresentation = 'idle';
-      this.setBusy(false);
-      this.presentTerminalOnce(snapshot);
+      if (revealFromCover) {
+        this.presentTerminalOnce(snapshot, true);
+        this.setBusy(false);
+      } else {
+        this.setBusy(false);
+        this.presentTerminalOnce(snapshot);
+      }
       return;
     }
 
@@ -1751,6 +1934,10 @@ export class SurvivalPhase implements GamePhase {
     if (!this.isContinuationActive(generation)) return;
 
     this.clearEventPresentation();
+    if (revealFromCover) {
+      await (this.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+    }
     if (
       eventState === 'nightEvent'
       && terminal.state === 'nightEvent'
@@ -2235,9 +2422,9 @@ export class SurvivalPhase implements GamePhase {
     this.audio.setWeather(resolved.id);
   }
 
-  private presentTerminalOnce(snapshot: SurvivalSnapshot): void {
+  private presentTerminalOnce(snapshot: SurvivalSnapshot, allowBusy = false): void {
     if (
-      this.busy
+      (this.busy && !allowBusy)
       || !isTerminal(snapshot.state)
       || this.presentedTerminalState !== null
     ) return;

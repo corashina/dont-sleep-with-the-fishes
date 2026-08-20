@@ -263,7 +263,7 @@ function meterMarkup(meter: MeterDefinition): string {
 }
 
 export type FishingUiMode = 'hidden' | 'aiming' | 'waiting' | 'bite' | 'result' | 'ready';
-export type SleepCoverProfile = 'solid' | 'dive';
+export type SleepCoverProfile = 'solid' | 'dive' | 'midnight-tour';
 
 export interface DiveResultView {
   readonly title: 'DIVE RESULT';
