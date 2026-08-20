@@ -51,14 +51,12 @@ import {
 type MidnightTourAnimationKind =
   | 'reveal'
   | 'choice-pass'
-  | 'choice-visit'
   | 'result-chest'
   | 'result-attack'
   | 'result-pass';
 
 const REVEAL_DURATION = 1.25;
 const PASS_DURATION = 1.15;
-const VISIT_DURATION = 1.5;
 const CHEST_BURIED_CLEARANCE = 0.01;
 const CHEST_CONTACT_PHASE = 0.55;
 const FPS_SHOVEL_X = 0.52;
@@ -222,11 +220,9 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       case 'visit': {
         this.animation.settle();
         this.prepareCutsceneCamera();
-        this.root.userData.approachBeats = 0;
-        this.root.userData.state = 'approaching';
-        const animation = this.animation.start('choice-visit', VISIT_DURATION);
-        this.applyAnimation('choice-visit', 0);
-        return animation;
+        this.root.userData.approachBeats = 1;
+        this.root.userData.state = 'choice-visited';
+        return Promise.resolve();
       }
       default:
         throw new Error(`Unsupported Midnight Tour choice: ${choice.choiceId}`);
@@ -348,9 +344,6 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       case 'result-pass':
         this.applyPass(normalized);
         break;
-      case 'choice-visit':
-        this.applyVisit(normalized);
-        break;
       case 'result-chest':
         this.applyChestResult(normalized * CHEST_RESULT_DURATION_SECONDS);
         break;
@@ -368,9 +361,6 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
         break;
       case 'choice-pass':
         this.root.userData.state = 'choice-passed';
-        break;
-      case 'choice-visit':
-        this.root.userData.state = 'choice-visited';
         break;
       case 'result-chest':
         this.root.userData.state = 'held-chest';
@@ -397,16 +387,6 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     const travel = smoothstep(progress);
     this.island.position.lerpVectors(this.islandStart, this.islandBehind, travel);
     this.island.rotation.y = 0.08 * this.side - this.side * travel * 0.2;
-  }
-
-  private applyVisit(progress: number): void {
-    this.root.userData.approachBeats = progress >= 1 ? 1 : 0;
-    this.applyCameraPose(
-      this.islandBase.x + 0.65,
-      this.islandBase.y + this.greenTopLocalY + 1,
-      this.islandBase.z + 0.15,
-      0,
-    );
   }
 
   private applyChestResult(elapsedSeconds: number): void {
