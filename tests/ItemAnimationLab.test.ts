@@ -6,7 +6,11 @@ import {
   type ItemInstanceId,
 } from '../src/game/ItemState';
 import {
+  CARLITOS_LAB_CHOICE_ID,
+  CARLITOS_LAB_INSTANCE_ID,
   ITEM_ANIMATION_LAB_ID,
+  ITEM_ANIMATION_LAB_INITIAL_CHEST,
+  ITEM_ANIMATION_LAB_INITIAL_RESOURCES,
   ITEM_ANIMATION_LAB_USES,
   REPAIR_TOOLBOX_LAB_CHOICE_ID,
   REPAIR_TOOLBOX_LAB_INSTANCE_ID,
@@ -36,16 +40,50 @@ async function flushPromises(): Promise<void> {
 
 describe('Item Animation Lab', () => {
   const animatedItemIds = ITEM_IDS.filter((itemId) => (
-    itemId !== 'scubaSet' && itemId !== 'bottledPaper'
+    itemId !== 'scubaSet' && itemId !== 'bottledPaper' && itemId !== 'carlitos'
   ));
 
   it('defines one canonical route for every event-use item', () => {
     expect(Object.keys(ITEM_ANIMATION_LAB_USES)).toEqual(animatedItemIds);
     expect(ITEM_ANIMATION_LAB_USES.scubaSet).toBeUndefined();
     expect(ITEM_ANIMATION_LAB_USES.bottledPaper).toBeUndefined();
-    expect(ITEM_ANIMATION_LAB_USES.carlitos).toEqual({
-      eventId: 'flowers',
-      choiceId: 'carlitos',
+    expect(ITEM_ANIMATION_LAB_USES.carlitos).toBeUndefined();
+  });
+
+  it('starts with three food and bait supplies without duplicate actions', () => {
+    const current = new SurvivalSession(allItems(), {
+      seed: 19,
+      initial: ITEM_ANIMATION_LAB_INITIAL_RESOURCES,
+    }).snapshot();
+
+    expect(current.food).toBe(3);
+    expect(current.bait).toBe(3);
+    expect(Object.values(current.inventory).filter((item) => (
+      item?.type === 'cannedFood'
+    ))).toHaveLength(1);
+    expect(Object.values(current.inventory).filter((item) => (
+      item?.type === 'baitTin'
+    ))).toHaveLength(1);
+  });
+
+  it('starts with one chest and enough energy to test opening it', () => {
+    const session = new SurvivalSession(allItems(), {
+      seed: 19,
+      initial: ITEM_ANIMATION_LAB_INITIAL_RESOURCES,
+      initialChest: ITEM_ANIMATION_LAB_INITIAL_CHEST,
+    });
+
+    expect(session.snapshot()).toMatchObject({
+      energy: 3,
+      chest: ITEM_ANIMATION_LAB_INITIAL_CHEST,
+    });
+    expect(session.perform('openChest')).toMatchObject({
+      accepted: true,
+      code: 'chest-opened',
+    });
+    expect(session.snapshot()).toMatchObject({
+      energy: 0,
+      chest: { state: 'none', acquiredDay: null },
     });
   });
 
@@ -84,6 +122,13 @@ describe('Item Animation Lab', () => {
 
     phase.start();
 
+    const initialEligibility = setEventSelection.mock.calls[0]![0] as Map<
+      ItemInstanceId,
+      string
+    >;
+    expect(initialEligibility.get(CARLITOS_LAB_INSTANCE_ID))
+      .toBe(CARLITOS_LAB_CHOICE_ID);
+
     const first = current.inventory['cannedFood-1']!;
     const second = current.inventory['flashlight-1']!;
     const firstUse = ITEM_ANIMATION_LAB_USES[first.type]!;
@@ -109,6 +154,7 @@ describe('Item Animation Lab', () => {
     expect(setEventEligibleItems).toHaveBeenLastCalledWith(
       new Set([
         ...animatedItemIds.map((type) => `${type}-1`),
+        CARLITOS_LAB_INSTANCE_ID,
         REPAIR_TOOLBOX_LAB_INSTANCE_ID,
       ]),
     );

@@ -8,6 +8,7 @@ import {
   PerspectiveCamera,
 } from 'three';
 import { describe, expect, it } from 'vitest';
+import { CHEST_DISPLAY_SCALE } from '../src/survival/ChestDisplay';
 import type { FocusedEventPresentationDependencies } from '../src/survival/FocusedEventPresentation';
 import { MidnightTourPresentation } from '../src/survival/MidnightTourPresentation';
 import { presentationWeatherForEvent } from '../src/weather/presentationWeather';
@@ -257,6 +258,14 @@ describe('MidnightTourPresentation', () => {
     }, {} as never);
     const island = fixture.presentation.root.getObjectByName('midnight-tour-island')!;
     const actor = fixture.presentation.root.getObjectByName(actorName)!;
+
+    if (resultId === 'tour-chest') {
+      expect(actor.scale.toArray()).toEqual([
+        0.9 * CHEST_DISPLAY_SCALE,
+        0.9 * CHEST_DISPLAY_SCALE,
+        0.9 * CHEST_DISPLAY_SCALE,
+      ]);
+    }
 
     expect(actor.position.toArray()).toEqual([
       island.position.x + x,

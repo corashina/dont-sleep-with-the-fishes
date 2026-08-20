@@ -44,7 +44,7 @@ describe('DiveUI', () => {
     const focusTarget = document.createElement('button');
     mount.append(focusTarget);
     focusTarget.focus();
-    const confirmation = ui.showDiveResult({
+    const confirmation = ui.showRewardResult({
       title: 'DIVE RESULT',
       reward: { kind: 'item', id: 'energyBar', quantity: 1 },
       lines: ['YOU SUFFERED SOME INJURIES'],
@@ -87,8 +87,8 @@ describe('DiveUI', () => {
 
   it('settles a superseded result and waits for confirmation of the later result', async () => {
     const { mount, ui } = createUI();
-    const first = ui.showDiveResult({ title: 'DIVE RESULT', reward: null, lines: ['FOOD +1'] });
-    const second = ui.showDiveResult({ title: 'DIVE RESULT', reward: null, lines: ['BAIT +1'] });
+    const first = ui.showRewardResult({ title: 'DIVE RESULT', reward: null, lines: ['FOOD +1'] });
+    const second = ui.showRewardResult({ title: 'DIVE RESULT', reward: null, lines: ['BAIT +1'] });
     await first;
     const result = mount.querySelector<HTMLElement>('[data-dive-result]')!;
     expect(result.textContent).toContain('BAIT +1');
@@ -96,6 +96,30 @@ describe('DiveUI', () => {
     await second;
     expect(result.querySelector('[data-dive-result-title]')?.textContent).toBe('');
     expect(result.querySelector('[data-dive-result-lines]')?.textContent).toBe('');
+  });
+
+  it('uses the shared reward paper for a recovered chest reward', async () => {
+    const { mount, ui } = createUI();
+    const confirmation = ui.showRewardResult({
+      title: 'CHEST REWARD',
+      reward: { kind: 'resource', id: 'food', quantity: 2 },
+      lines: [],
+    });
+    const result = mount.querySelector<HTMLElement>('[data-dive-result]')!;
+
+    expect(result.classList).toContain('is-chest-reward');
+    expect(result.querySelector('[data-dive-result-title]')?.textContent)
+      .toBe('CHEST REWARD');
+    expect(result.querySelector('[data-dive-result-reward-name]')?.textContent)
+      .toBe('FOOD');
+    expect(result.querySelector('[data-dive-result-reward-quantity]')?.textContent)
+      .toBe('×2');
+    const close = result.querySelector<HTMLButtonElement>('[data-dive-result-close]')!;
+    expect(close.getAttribute('aria-label')).toBe('Close chest reward');
+
+    close.click();
+    await confirmation;
+    expect(result.classList).not.toContain('is-chest-reward');
   });
 
   it('settles superseded cover, covered hold, and result promises', async () => {
@@ -115,8 +139,8 @@ describe('DiveUI', () => {
     await vi.advanceTimersByTimeAsync(250);
     await secondCoveredHold;
 
-    const firstResult = ui.showDiveResult({ title: 'DIVE RESULT', reward: null, lines: ['FOOD +1'] });
-    const secondResult = ui.showDiveResult({ title: 'DIVE RESULT', reward: null, lines: ['NOTHING FOUND'] });
+    const firstResult = ui.showRewardResult({ title: 'DIVE RESULT', reward: null, lines: ['FOOD +1'] });
+    const secondResult = ui.showRewardResult({ title: 'DIVE RESULT', reward: null, lines: ['NOTHING FOUND'] });
     await firstResult;
     mount.querySelector<HTMLButtonElement>('[data-dive-result-close]')!.click();
     await secondResult;
@@ -124,8 +148,8 @@ describe('DiveUI', () => {
 
   it('hides the result, clears its text, and settles its hold', async () => {
     const { mount, ui } = createUI();
-    const hold = ui.showDiveResult({ title: 'DIVE RESULT', reward: null, lines: ['NOTHING FOUND'] });
-    ui.hideDiveResult();
+    const hold = ui.showRewardResult({ title: 'DIVE RESULT', reward: null, lines: ['NOTHING FOUND'] });
+    ui.hideRewardResult();
     await hold;
     const result = mount.querySelector<HTMLElement>('[data-dive-result]')!;
     expect(result.classList.contains('is-visible')).toBe(false);
@@ -138,7 +162,7 @@ describe('DiveUI', () => {
     const { ui } = createUI();
     const cover = ui.setSleepCovered(true);
     const coveredHold = ui.holdDiveCovered();
-    const result = ui.showDiveResult({ title: 'DIVE RESULT', reward: null, lines: ['NOTHING FOUND'] });
+    const result = ui.showRewardResult({ title: 'DIVE RESULT', reward: null, lines: ['NOTHING FOUND'] });
     ui.dispose();
     await Promise.all([cover, coveredHold, result]);
   });

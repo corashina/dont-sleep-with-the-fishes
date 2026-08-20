@@ -559,7 +559,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('flareGun', 'Use Flare Gun', 'flareGun', outcome(
       1,
       'Your flare improves the chance of rescue.',
-      effects([add('rescueProgress', 25)], [consume('flareGun')]),
+      effects([add('rescueProgress', 25)]),
       'people-signaled',
     )),
     choice('flashlight', 'Use Flashlight', 'flashlight',

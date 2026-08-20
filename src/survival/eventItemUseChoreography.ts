@@ -33,6 +33,17 @@ const FLASHLIGHT_MORSE_CUE_PROGRESSES = Object.freeze([
 ]);
 const SHOTGUN_ACTION_CUE_PROGRESSES = Object.freeze([0.46]);
 const FLARE_GUN_ACTION_CUE_PROGRESSES = Object.freeze([0.46, 0.54]);
+const FLARE_GUN_READY_YAW = -Math.PI / 2 + 0.22;
+const UMBRELLA_OVERHEAD_ROTATION = Object.freeze({
+  pitch: -0.7361036000458032,
+  yaw: 1.3933992747114876,
+  roll: -1.4509371355345577,
+});
+const UMBRELLA_SHIELD_ROTATION = Object.freeze({
+  pitch: 0.04275258056186774,
+  yaw: 0.7154158991967178,
+  roll: 0.25535318456913286,
+});
 const ANCHOR_FLIGHT_START = 0.56;
 const ANCHOR_IMPACT_PROGRESS = 0.84;
 const ANCHOR_ACTION_CUE_PROGRESSES = Object.freeze([ANCHOR_IMPACT_PROGRESS]);
@@ -455,7 +466,7 @@ function sampleFlare(
   const travel = clamp01((progress - FLARE_GUN_ACTION_CUE_PROGRESSES[0]!) / 0.46);
 
   output.pitch = -1.25 * ready + 0.16 * recoil;
-  output.yaw = 0.18 * ready - 0.16 * recoil;
+  output.yaw = FLARE_GUN_READY_YAW * ready - 0.16 * recoil;
   output.roll = Math.PI / 2 * ready - 0.06 * recoil;
   output.viewZ += 0.28 * recoil;
   output.effectKind = launched && travel < 1 ? 'flare' : 'none';
@@ -507,9 +518,12 @@ function sampleUmbrella(
 ): void {
   samplePickupAndHold(output, pickup, hold);
   if (!shield) output.viewX = 0;
-  output.pitch = (shield ? 0.18 : -0.465) * pickup;
-  output.yaw = (shield ? -0.32 : 0.455) * pickup;
-  output.roll = shield ? 0 : -Math.PI / 2 * pickup;
+  const rotation = shield
+    ? UMBRELLA_SHIELD_ROTATION
+    : UMBRELLA_OVERHEAD_ROTATION;
+  output.pitch = rotation.pitch * pickup;
+  output.yaw = rotation.yaw * pickup;
+  output.roll = rotation.roll * pickup;
 }
 
 function sampleFlashlightMorse(progress: number): number {

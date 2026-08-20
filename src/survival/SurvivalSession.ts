@@ -85,7 +85,15 @@ export interface SurvivalSessionOptions {
   weather?: WeatherId;
   initial?: Partial<Pick<
     SurvivalSnapshot,
-    'health' | 'hunger' | 'energy' | 'hull' | 'day' | 'pressure' | 'rescueProgress'
+    | 'health'
+    | 'hunger'
+    | 'energy'
+    | 'hull'
+    | 'day'
+    | 'pressure'
+    | 'rescueProgress'
+    | 'food'
+    | 'bait'
   >>;
   initialConditions?: Partial<Record<ItemInstanceId, ItemCondition>>;
   initialEventId?: string;
@@ -193,8 +201,8 @@ export class SurvivalSession {
 
     this.recoveredFood = this.inventory.count('cannedFood', 'usable');
     this.recoveredBait = this.inventory.count('baitTin', 'usable');
-    this.bait = this.recoveredBait;
-    this.food = this.recoveredFood;
+    this.bait = options.initial?.bait ?? this.recoveredBait;
+    this.food = options.initial?.food ?? this.recoveredFood;
 
     this.clampMeters();
     this.resolveTerminal();
@@ -1036,7 +1044,7 @@ export class SurvivalSession {
         'chest-opened',
         `The chest holds ${reward.quantity} ${reward.resource}.`,
         deltas,
-        'impact',
+        'none',
         { kind: 'resource', id: reward.resource, quantity: reward.quantity },
       );
     }
@@ -1047,7 +1055,7 @@ export class SurvivalSession {
         'chest-opened',
         'The item cannot fit, so you recover two food.',
         { energy: -CHEST_OPEN_ENERGY, food: 2 },
-        'impact',
+        'none',
         { kind: 'resource', id: 'food', quantity: 2 },
       );
     }
@@ -1055,7 +1063,7 @@ export class SurvivalSession {
       'chest-opened',
       `The chest holds ${ITEM_DEFINITIONS[reward.itemId].label.toLowerCase()}.`,
       { energy: -CHEST_OPEN_ENERGY },
-      'impact',
+      'none',
       { kind: 'item', id: reward.itemId, quantity: 1 },
     );
   }

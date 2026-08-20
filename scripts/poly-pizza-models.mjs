@@ -94,11 +94,11 @@ export const POLY_PIZZA_MODEL_SOURCES = Object.freeze({
     sourceTriangles: 2_376, downloadedOn: '2026-07-26',
   }),
   compass: source({
-    id: 'compass', publicId: 'LlnxQPETHh',
-    resourceId: 'db18fada-a70e-44da-961c-0cc31dffdaa6',
-    title: 'Compass', creator: 'Quaternius', license: 'CC0 1.0',
-    sha256: '02B285836B276A907019DF65F51674C3975364316B58FE859863921838867C7D',
-    sourceTriangles: 656,
+    id: 'compass', publicId: '0_8Fl9uTtY2',
+    resourceId: 'c9a055de-363b-4d31-9525-ac044f2958f1',
+    title: 'compass', creator: 'Chase Lortie', license: 'CC-BY 3.0',
+    sha256: '0B613A4C350666590341AF5B5FC7EF2F6629E9D8DDC60955D2FC12CBE481476B',
+    sourceTriangles: 720, downloadedOn: '2026-08-20',
   }),
   map: source({
     id: 'map', publicId: 'bU3B6P0ngfi',

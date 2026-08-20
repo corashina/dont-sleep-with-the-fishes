@@ -29,7 +29,7 @@ import type {
   SurvivalState,
 } from '../src/survival/survivalTypes';
 import type {
-  DiveResultView,
+  RewardResultView,
   DriftingItemFocusView,
   EventContextChoice,
   FishingResultView,
@@ -623,7 +623,7 @@ function createDiveRig(options: {
       calls.push('holdCovered');
       return coveredHold.promise;
     }),
-    showDiveResult: vi.fn((_view: DiveResultView) => {
+    showRewardResult: vi.fn((_view: RewardResultView) => {
       calls.push('showResult');
       return resultHold.promise;
     }),
@@ -704,7 +704,7 @@ describe('SurvivalPhase orchestration', () => {
       'coverProfile:solid',
       'showResult',
     ]);
-    expect(rig.ui.showDiveResult).toHaveBeenCalledWith({
+    expect(rig.ui.showRewardResult).toHaveBeenCalledWith({
       title: 'DIVE RESULT',
       reward: { kind: 'resource', id: 'food', quantity: 1 },
       lines: [],
@@ -792,7 +792,7 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(rig.calls).toEqual(['perform:dive', 'lock', 'playDive:scubaSet-1']);
     expect(rig.ui.setSleepCovered).not.toHaveBeenCalled();
-    expect(rig.ui.showDiveResult).not.toHaveBeenCalled();
+    expect(rig.ui.showRewardResult).not.toHaveBeenCalled();
     expect(rig.ui.restoreCommandFocus).not.toHaveBeenCalled();
     expect(rig.ui.showEnding).not.toHaveBeenCalled();
     expect(rig.cancelDive).toHaveBeenCalledOnce();
@@ -1586,6 +1586,73 @@ describe('SurvivalPhase orchestration', () => {
 
     phase.handleAction('sendMessage');
     expect(perform).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the recovered chest reward before unlocking commands', async () => {
+    const resultHold = deferred();
+    const beforeAction = snapshot({
+      chest: { state: 'closed', acquiredDay: 1 },
+    });
+    const afterAction = snapshot({
+      energy: 0,
+      chest: { state: 'none', acquiredDay: null },
+    });
+    let opened = false;
+    const rewardSummary = {
+      kind: 'item',
+      id: 'energyBar',
+      quantity: 1,
+    } as const;
+    const perform = vi.fn(() => {
+      opened = true;
+      return accepted({
+        code: 'chest-opened',
+        rewardSummary,
+        deltas: { energy: -3 },
+        cue: 'none',
+      });
+    });
+    const setBusy = vi.fn();
+    const restoreCommandFocus = vi.fn();
+    const showRewardResult = vi.fn(() => resultHold.promise);
+    const syncInventory = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => opened ? afterAction : beforeAction),
+        perform,
+      },
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        syncInventory,
+        dispose: vi.fn(),
+      },
+      ui: {
+        render: vi.fn(),
+        setBusy,
+        showRewardResult,
+        restoreCommandFocus,
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.handleAction('openChest');
+    await flushPromises();
+
+    expect(showRewardResult).toHaveBeenCalledExactlyOnceWith({
+      title: 'CHEST REWARD',
+      reward: rewardSummary,
+      lines: [],
+    });
+    expect(setBusy).toHaveBeenLastCalledWith(true);
+    expect(syncInventory).toHaveBeenCalledWith(beforeAction);
+    expect(syncInventory).not.toHaveBeenCalledWith(afterAction);
+
+    resultHold.resolve();
+    await flushPromises();
+    expect(syncInventory).toHaveBeenCalledWith(afterAction);
+    expect(setBusy).toHaveBeenLastCalledWith(false);
+    expect(restoreCommandFocus).toHaveBeenCalledOnce();
   });
 
   it('shows rejected feedback without playing or locking', () => {
@@ -5001,7 +5068,7 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(session.snapshot()).toMatchObject({
       rescueProgress: 40,
-      inventory: { 'flareGun-1': { condition: 'consumed' } },
+      inventory: { 'flareGun-1': { condition: 'usable' } },
     });
     expect(session.snapshot().state).not.toBe('rescued');
     expect(showEnding).not.toHaveBeenCalled();
@@ -5272,7 +5339,6 @@ describe('SurvivalPhase orchestration', () => {
     ['spyglass', 'spyglass-1'],
     ['swimRing', 'swimRing-1'],
     ['energyBar', 'energyBar-1'],
-    ['carlitos', 'carlitos-1'],
   ] as const)('starts the %s animation without an item handling sound', async (
     itemType,
     instanceId,

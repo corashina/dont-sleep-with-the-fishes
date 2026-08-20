@@ -99,7 +99,7 @@ export function disposeMenuModelLibrary(menuModels: MenuModelLibrary): void {
 }
 
 export const GAME_CAMERA = Object.freeze({
-  fov: 65,
+  fov: 75,
   near: 0.08,
   far: 1000,
 });
@@ -478,6 +478,14 @@ export class Game {
             muted: audioSystem.getPreference().muted,
             setVolume: (volume) => audioSystem.setVolume(volume),
             setMuted: (muted) => audioSystem.setMuted(muted),
+          },
+          {
+            fieldOfView: camera.fov,
+            setFieldOfView: (fieldOfView) => {
+              if (camera.fov === fieldOfView) return;
+              camera.fov = fieldOfView;
+              camera.updateProjectionMatrix();
+            },
           },
         );
       }

@@ -18,6 +18,15 @@ import {
 import { clamp01Unchecked } from './animationMath';
 import type { ChestSnapshot } from './survivalTypes';
 
+export const CHEST_DISPLAY_SCALE = 0.5;
+export const CHEST_DISAPPEAR_DURATION = 0.6;
+
+interface ChestMaterialState {
+  readonly opacity: number;
+  readonly transparent: boolean;
+  readonly depthWrite: boolean;
+}
+
 export interface ChestEventPose {
   readonly rattle: number;
   readonly mouthOpen: number;
@@ -60,16 +69,20 @@ export class ChestDisplay {
   private readonly mimicParts = new Group();
   private readonly geometries = new Set<BufferGeometry>();
   private readonly materials = new Set<Material>();
-  private readonly basePosition = new Vector3(-0.72, 0.39, -1.38);
+  private readonly materialStates = new Map<Material, ChestMaterialState>();
+  private readonly basePosition = new Vector3(0, 0.22, 0.55);
   private readonly baseQuaternion = new Quaternion();
   private readonly lidBaseQuaternion = new Quaternion();
   private lastSnapshot: ChestSnapshot = { state: 'none', acquiredDay: null };
+  private disappearElapsed = CHEST_DISAPPEAR_DURATION;
+  private disappearing = false;
   private disposed = false;
 
   constructor(chestClosed: Group | null = null) {
     this.root.name = 'persistent-chest';
     this.root.position.copy(this.basePosition);
-    this.root.rotation.y = -0.08;
+    this.root.rotation.y = Math.PI;
+    this.root.scale.setScalar(CHEST_DISPLAY_SCALE);
     this.baseQuaternion.copy(this.root.quaternion);
     this.root.visible = false;
 
@@ -130,18 +143,59 @@ export class ChestDisplay {
     this.root.add(this.mimicParts);
 
     collectMeshResources(this.root, this.geometries, this.materials);
+    this.materials.forEach((material) => {
+      this.materialStates.set(material, {
+        opacity: material.opacity,
+        transparent: material.transparent,
+        depthWrite: material.depthWrite,
+      });
+    });
     this.lidBaseQuaternion.copy(this.lid.quaternion);
     this.restorePose();
   }
 
   sync(chest: ChestSnapshot): void {
     if (this.disposed) return;
+    const previousState = this.lastSnapshot.state;
     this.lastSnapshot = chest;
+    if (chest.state === 'none' && previousState !== 'none') {
+      this.startDisappear();
+      return;
+    }
+    if (chest.state === 'none') {
+      if (!this.disappearing) this.root.visible = false;
+      return;
+    }
+    this.cancelDisappear();
     this.restorePose();
+  }
+
+  update(delta: number): void {
+    if (this.disposed || !this.disappearing || delta <= 0) return;
+    this.disappearElapsed = Math.min(
+      CHEST_DISAPPEAR_DURATION,
+      this.disappearElapsed + delta,
+    );
+    const progress = this.disappearElapsed / CHEST_DISAPPEAR_DURATION;
+    const opacity = 1 - progress * progress * (3 - 2 * progress);
+    this.materialStates.forEach((state, material) => {
+      material.opacity = state.opacity * opacity;
+    });
+    const scale = CHEST_DISPLAY_SCALE * (1 - progress * 0.08);
+    this.root.scale.setScalar(scale);
+
+    if (progress >= 1) {
+      this.disappearing = false;
+      this.root.userData.disappearing = false;
+      this.root.visible = false;
+      this.restoreMaterialState();
+      this.root.scale.setScalar(CHEST_DISPLAY_SCALE);
+    }
   }
 
   stageMimic(): void {
     if (this.disposed) return;
+    this.cancelDisappear();
     this.root.visible = true;
     this.mimicParts.visible = true;
     this.applyEventPose(CLOSED_POSE);
@@ -203,6 +257,37 @@ export class ChestDisplay {
     this.disposed = true;
     this.root.removeFromParent();
     disposeResourceSets(this.geometries, this.materials);
+  }
+
+  private startDisappear(): void {
+    this.disappearing = true;
+    this.disappearElapsed = 0;
+    this.root.userData.disappearing = true;
+    this.root.visible = true;
+    this.root.scale.setScalar(CHEST_DISPLAY_SCALE);
+    this.materialStates.forEach((_state, material) => {
+      material.transparent = true;
+      material.depthWrite = false;
+      material.needsUpdate = true;
+    });
+  }
+
+  private cancelDisappear(): void {
+    if (!this.disappearing) return;
+    this.disappearing = false;
+    this.disappearElapsed = CHEST_DISAPPEAR_DURATION;
+    this.root.userData.disappearing = false;
+    this.restoreMaterialState();
+    this.root.scale.setScalar(CHEST_DISPLAY_SCALE);
+  }
+
+  private restoreMaterialState(): void {
+    this.materialStates.forEach((state, material) => {
+      material.opacity = state.opacity;
+      material.transparent = state.transparent;
+      material.depthWrite = state.depthWrite;
+      material.needsUpdate = true;
+    });
   }
 
   private installStableLidPivot(importedLid: Object3D): void {

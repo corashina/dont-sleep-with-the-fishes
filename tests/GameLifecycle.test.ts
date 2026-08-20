@@ -2036,6 +2036,12 @@ describe('ScavengePhase lifecycle integration', () => {
       const timeOfDayLabel = mount.querySelector<HTMLElement>(
         '[data-time-of-day-label]',
       )!;
+      const fieldOfView = mount.querySelector<HTMLInputElement>(
+        '[data-camera-fov]',
+      )!;
+      const fieldOfViewOutput = mount.querySelector<HTMLOutputElement>(
+        '[data-camera-fov-output]',
+      )!;
       expect((game as unknown as { weatherOverride: unknown }).weatherOverride).toBeNull();
       expect((game as unknown as { timeOfDayOverride: unknown }).timeOfDayOverride).toBeNull();
       expect(weather.value).toBe('calm');
@@ -2043,8 +2049,16 @@ describe('ScavengePhase lifecycle integration', () => {
       expect(night.checked).toBe(false);
       expect(timeOfDayLabel.textContent).toBe('Day');
       expect(timeOfDay.value).toBe('DAY');
+      expect(fieldOfView.value).toBe('75');
+      expect(fieldOfViewOutput.value).toBe('75°');
       expect(scavengeSetWeather).not.toHaveBeenCalled();
       expect(scavengeSetTimeOfDay).not.toHaveBeenCalled();
+
+      fieldOfView.value = '90';
+      fieldOfView.dispatchEvent(new Event('input', { bubbles: true }));
+      const camera = (game as unknown as { camera: PerspectiveCamera }).camera;
+      expect(camera.fov).toBe(90);
+      expect(fieldOfViewOutput.value).toBe('90°');
 
       scavengeWeather = 'wind';
       (game as unknown as { handleAnimationFrame(): void }).handleAnimationFrame();
@@ -2394,7 +2408,7 @@ describe('ScavengePhase lifecycle integration', () => {
     });
 
     expect(received[0]!.camera).toMatchObject({
-      fov: 65,
+      fov: 75,
       near: 0.08,
       far: 1000,
     });
