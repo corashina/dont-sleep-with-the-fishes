@@ -344,6 +344,7 @@ export class SurvivalUI {
   onFishingViewExit: (() => void) | null = null;
   onDriftingItemSelect: ((eventId: DriftingItemEventId) => void) | null = null;
   onDriftingItemBack: (() => void) | null = null;
+  onCameraTurn: (() => void) | null = null;
 
   private readonly root: HTMLDivElement;
   private readonly day: HTMLElement;
@@ -361,6 +362,7 @@ export class SurvivalUI {
   private readonly diveResultClose: HTMLButtonElement;
   private readonly eventSleepMask: HTMLElement;
   private readonly anchorLayer: HTMLElement;
+  private readonly cameraTurn: HTMLButtonElement;
   private readonly carlitosCard: HTMLElement;
   private readonly carlitosPet: HTMLButtonElement;
   private readonly eventCaption: HTMLElement;
@@ -503,6 +505,11 @@ export class SurvivalUI {
         ${METERS.map(meterMarkup).join('')}
       </section>
       <div class="boat-anchors" data-boat-anchors aria-label="Boat interaction points"></div>
+      <button type="button" class="drifting-item-focus__back camera-turn" data-camera-turn aria-label="Look behind" aria-pressed="false" hidden>
+        <svg class="drifting-item-focus__back-icon" data-camera-turn-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M9 3h6v10h5l-8 8-8-8h5z" />
+        </svg>
+      </button>
       <section class="carlitos-card scuba-popup-paper" data-carlitos-card aria-label="Cat status" aria-hidden="true" hidden>
         <button type="button" class="carlitos-card__close ui-role-context" data-carlitos-close aria-label="Close cat status">&times;</button>
         <div class="carlitos-card__statuses">
@@ -636,6 +643,7 @@ export class SurvivalUI {
     this.diveResultClose = requireElement(this.root, '[data-dive-result-close]');
     this.eventSleepMask = requireElement(this.root, '[data-event-sleep-mask]');
     this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
+    this.cameraTurn = requireElement(this.root, '[data-camera-turn]');
     this.carlitosCard = requireElement(this.root, '[data-carlitos-card]');
     this.carlitosPet = requireElement(this.carlitosCard, '[data-action="petCarlitos"]');
     this.eventCaption = requireElement(this.root, '[data-event-caption]');
@@ -679,7 +687,7 @@ export class SurvivalUI {
     this.endingLayer = requireElement(this.root, '[data-ending]');
     this.endingTitle = requireElement(this.root, '[data-ending-title]');
     this.restartButton = requireElement(this.root, '[data-restart]');
-    this.backgroundRegions = [this.topControls, this.anchorLayer];
+    this.backgroundRegions = [this.topControls, this.anchorLayer, this.cameraTurn];
     this.modalLayers = [
       this.pauseLayer,
       this.journalLayer,
@@ -1289,6 +1297,13 @@ export class SurvivalUI {
     if (visible) this.clearAnchorHighlight();
   }
 
+  setCameraTurnState(visible: boolean, rear: boolean): void {
+    if (this.disposed) return;
+    this.cameraTurn.hidden = !visible;
+    this.cameraTurn.setAttribute('aria-pressed', String(rear));
+    this.cameraTurn.setAttribute('aria-label', rear ? 'Look forward' : 'Look behind');
+  }
+
   updateFishingBiteTarget(target: ProjectedBoatBounds | null): void {
     if (
       this.disposed
@@ -1484,6 +1499,7 @@ export class SurvivalUI {
     this.onFishingViewExit = null;
     this.onDriftingItemSelect = null;
     this.onDriftingItemBack = null;
+    this.onCameraTurn = null;
     this.root.remove();
   }
 
@@ -1871,6 +1887,7 @@ export class SurvivalUI {
 
   private syncCommandState(): void {
     this.journalMarker.disabled = this.busy;
+    this.cameraTurn.disabled = this.busy;
     let highlightInvalidated = false;
     this.anchorButtons.forEach((button, id) => {
       const anchor = this.anchors.get(id);
@@ -2714,6 +2731,11 @@ export class SurvivalUI {
     if (button.hasAttribute('data-drifting-item-back')) {
       if (topmostModal !== this.driftingItemFocusLayer) return;
       this.onDriftingItemBack?.();
+      return;
+    }
+    if (button.hasAttribute('data-camera-turn')) {
+      if (this.busy || this.paused || this.overlayOpen()) return;
+      this.onCameraTurn?.();
       return;
     }
     if (button.hasAttribute('data-fishing-view-exit')) {

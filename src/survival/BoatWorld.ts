@@ -355,6 +355,7 @@ const smootherStep = (value: number): number =>
   value * value * value * (value * (value * 6 - 15) + 10);
 
 const FISHING_CAMERA_DURATION = 1.1;
+const REAR_CAMERA_TURN_DURATION = 0.65;
 const FISHING_CAST_DURATION = 0.8;
 const FISHING_REEL_DURATION = 1;
 const FISHING_MISS_DURATION = 0.8;
@@ -604,6 +605,10 @@ export class BoatWorld {
   private readonly originalCameraQuaternion: Quaternion;
   private readonly baseCameraPosition = new Vector3();
   private readonly baseCameraQuaternion: Quaternion;
+  private rearCameraYaw = 0;
+  private rearCameraTurnStartYaw = 0;
+  private rearCameraTurnTargetYaw = 0;
+  private rearCameraTurnElapsed = REAR_CAMERA_TURN_DURATION;
   private readonly baseCameraLookTarget = new Vector3(0, 0.88, -1.55);
   private readonly fishingCameraPosition = new Vector3(
     FISHING_PLAYER_SEAT.x,
@@ -1269,6 +1274,22 @@ export class BoatWorld {
     if (this.disposed) return;
     this.presentationPhaseOverride = phase;
     this.skyState.phase = phase ?? this.phase;
+  }
+
+  setRearCameraView(rear: boolean, instant = false): void {
+    if (this.disposed) return;
+    const targetYaw = rear ? Math.PI : 0;
+    if (instant) {
+      this.rearCameraYaw = targetYaw;
+      this.rearCameraTurnStartYaw = targetYaw;
+      this.rearCameraTurnTargetYaw = targetYaw;
+      this.rearCameraTurnElapsed = REAR_CAMERA_TURN_DURATION;
+      return;
+    }
+    if (targetYaw === this.rearCameraTurnTargetYaw) return;
+    this.rearCameraTurnStartYaw = this.rearCameraYaw;
+    this.rearCameraTurnTargetYaw = targetYaw;
+    this.rearCameraTurnElapsed = 0;
   }
 
   setWeather(weather: WeatherId): void {
@@ -2352,6 +2373,7 @@ export class BoatWorld {
       amplitudeScale,
     );
     smoothBoatPoseInto(this.boatPose, this.boatPose, this.boatTargetPose, delta, 7);
+    if (advancePresentation) this.advanceRearCameraTurn(delta);
     this.applyBasePresentation();
     if (this.activeDiveItemId !== null) {
       if (advancePresentation) this.diveElapsed += Math.max(0, delta);
@@ -2529,8 +2551,20 @@ export class BoatWorld {
     this.cameraRig.rotation.set(0, 0, 0);
     this.camera.position.copy(this.baseCameraPosition);
     this.camera.quaternion.copy(this.baseCameraQuaternion);
+    this.camera.rotateY(this.rearCameraYaw);
     this.rodPivot.rotation.x = this.baseRodPivotRotationX;
     this.activeEventPresenter?.layer?.setRescueCue(null);
+  }
+
+  private advanceRearCameraTurn(delta: number): void {
+    if (this.rearCameraTurnElapsed >= REAR_CAMERA_TURN_DURATION) return;
+    this.rearCameraTurnElapsed = Math.min(
+      REAR_CAMERA_TURN_DURATION,
+      this.rearCameraTurnElapsed + delta,
+    );
+    const progress = easeInOut(this.rearCameraTurnElapsed / REAR_CAMERA_TURN_DURATION);
+    this.rearCameraYaw = this.rearCameraTurnStartYaw
+      + (this.rearCameraTurnTargetYaw - this.rearCameraTurnStartYaw) * progress;
   }
 
   private applyDangerousWatersPresentation(): void {

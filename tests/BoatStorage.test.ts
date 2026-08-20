@@ -78,22 +78,29 @@ describe('BoatStorage', () => {
     });
   });
 
-  it('places three bait jars beside each other on the bench', () => {
+  it('groups three bait jars in a tight circle on the bench', () => {
     const bait = [0, 1, 2].map((index) => boatSupplyTransform('baitTin', index));
     const otherItems = (Object.keys(ITEM_DEFINITIONS) as ItemId[])
       .filter((type) => type !== 'baitTin' && type !== 'carlitos')
       .flatMap((type) => Array.from(
         { length: ITEM_DEFINITIONS[type].spawnCount },
         (_, index) => item(type, index + 1),
-      ));
+    ));
 
     expect(bait[0]!.position.x).toBeLessThan(bait[1]!.position.x);
-    expect(bait[1]!.position.x).toBeLessThan(bait[2]!.position.x);
+    expect(bait[2]!.position.x).toBeCloseTo(
+      (bait[0]!.position.x + bait[1]!.position.x) / 2,
+    );
+    expect(bait[2]!.position.z).toBeCloseTo(bait[0]!.position.z);
+    expect(bait[0]!.position.z).toBeCloseTo(bait[1]!.position.z);
     expect(bait[0]!.position.y).toBeCloseTo(bait[1]!.position.y);
-    expect(bait[1]!.position.y).toBeCloseTo(bait[2]!.position.y);
+    expect(transformedBounds('baitTin', bait[2]!).min.y)
+      .toBeGreaterThan(transformedBounds('baitTin', bait[0]!).max.y);
     for (let left = 0; left < bait.length; left += 1) {
-      expect(transformedBounds('baitTin', bait[left]!).min.y)
-        .toBeCloseTo(LIFEBOAT_DISPLAY_SHELF_SURFACE_Y);
+      if (left < 2) {
+        expect(transformedBounds('baitTin', bait[left]!).min.y)
+          .toBeCloseTo(LIFEBOAT_DISPLAY_SHELF_SURFACE_Y);
+      }
       for (let right = left + 1; right < bait.length; right += 1) {
         expect(
           transformedBounds('baitTin', bait[left]!)

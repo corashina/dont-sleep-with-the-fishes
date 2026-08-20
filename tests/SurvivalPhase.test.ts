@@ -1561,6 +1561,43 @@ describe('SurvivalPhase orchestration', () => {
     expect(setAnchors).toHaveBeenLastCalledWith(anchors);
   });
 
+  it('toggles the rear camera and resets it outside the normal day view', () => {
+    const current = snapshot();
+    const setRearCameraView = vi.fn();
+    const setCameraTurnState = vi.fn();
+    const ui: Partial<SurvivalUI> = {
+      render: vi.fn(),
+      setCameraTurnState,
+      setJournalUnread: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current) },
+      world: { setRearCameraView, dispose: vi.fn() },
+      ui,
+    });
+
+    phase.start();
+    expect(setCameraTurnState).toHaveBeenLastCalledWith(true, false);
+
+    ui.onCameraTurn?.();
+    expect(setRearCameraView).toHaveBeenLastCalledWith(true);
+    expect(setCameraTurnState).toHaveBeenLastCalledWith(true, true);
+
+    ui.onCameraTurn?.();
+    expect(setRearCameraView).toHaveBeenLastCalledWith(false);
+    expect(setCameraTurnState).toHaveBeenLastCalledWith(true, false);
+
+    ui.onCameraTurn?.();
+    phase.setTimeOfDayOverride('night');
+    expect(setRearCameraView).toHaveBeenLastCalledWith(false, true);
+    expect(setCameraTurnState).toHaveBeenLastCalledWith(false, false);
+
+    phase.setTimeOfDayOverride(null);
+    expect(setCameraTurnState).toHaveBeenLastCalledWith(true, false);
+    phase.dispose();
+  });
+
   it('renders and unlocks an accepted daytime action without text feedback', async () => {
     const cue = deferred();
     const perform = vi.fn(() => accepted());

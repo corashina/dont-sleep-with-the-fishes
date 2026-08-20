@@ -313,6 +313,7 @@ export class SurvivalPhase implements GamePhase {
   );
   private eventBundles!: EventBundleManagerLike;
   private itemAnimationLab = false;
+  private rearCameraView = false;
 
   constructor(
     context: PhaseContext,
@@ -445,6 +446,7 @@ export class SurvivalPhase implements GamePhase {
     this.simulationTimeInitialized = true;
     this.world.update?.(this.elapsedSeconds, deltaSeconds);
     const snapshot = this.session.snapshot();
+    this.syncCameraTurnControl(snapshot);
     this.audio.update(deltaSeconds);
     this.syncVisualState(snapshot);
     this.syncPresentation(snapshot);
@@ -568,6 +570,7 @@ export class SurvivalPhase implements GamePhase {
     this.audio.setPaused(paused);
     if (!paused) this.visibilityPauseActive = false;
     this.ui.setPaused?.(paused);
+    this.syncCameraTurnControl(this.session.snapshot());
     if (!paused) this.releaseVisibilityResumeWaiters();
   }
 
@@ -579,6 +582,7 @@ export class SurvivalPhase implements GamePhase {
   setTimeOfDayOverride(phase: SkyPhase | null): void {
     this.forcedPresentationPhase = phase;
     this.world.setPresentationPhaseOverride?.(phase);
+    this.syncCameraTurnControl(this.session.snapshot());
   }
 
   setWaterQuality(value: WaterQuality): void {
@@ -831,6 +835,7 @@ export class SurvivalPhase implements GamePhase {
       void this.enterDriftingItemFocus(eventId, this.lifecycleGeneration);
     };
     this.ui.onDriftingItemBack = () => this.handleDriftingItemBack();
+    this.ui.onCameraTurn = () => this.handleCameraTurn();
   }
 
   private repairOption(snapshot: SurvivalSnapshot): DayActionOption | undefined {
@@ -868,6 +873,16 @@ export class SurvivalPhase implements GamePhase {
   private setBusy(busy: boolean): void {
     this.busy = busy;
     this.ui.setBusy?.(busy);
+    this.syncCameraTurnControl(this.session.snapshot());
+  }
+
+  private handleCameraTurn(): void {
+    if (!this.canAcceptCommand()) return;
+    const snapshot = this.session.snapshot();
+    if (!this.cameraTurnAvailable(snapshot)) return;
+    this.rearCameraView = !this.rearCameraView;
+    this.world.setRearCameraView?.(this.rearCameraView);
+    this.ui.setCameraTurnState?.(true, this.rearCameraView);
   }
 
   private async beginFishing(): Promise<void> {
@@ -2036,6 +2051,7 @@ export class SurvivalPhase implements GamePhase {
         action === 'repair' ? this.repairOption(snapshot) : undefined,
       ) ?? null;
     });
+    this.syncCameraTurnControl(snapshot);
     this.syncJournalUnread(snapshot);
     this.syncPresentation(snapshot);
     if (presentTerminal) this.presentTerminalOnce(snapshot);
@@ -2047,6 +2063,30 @@ export class SurvivalPhase implements GamePhase {
     this.visualState.elapsedSeconds = this.elapsedSeconds;
     this.visualState.phase = snapshot.state === 'nightEvent' ? 'night' : 'day';
     this.visualState.weather = snapshot.weather;
+  }
+
+  private cameraTurnAvailable(snapshot: Readonly<SurvivalSnapshot>): boolean {
+    const stableDayView = this.itemAnimationLab || (
+      snapshot.pendingEventId === null
+      && this.eventPresentation === 'idle'
+    );
+    return !this.busy
+      && snapshot.state === 'day'
+      && stableDayView
+      && this.activeFishing === null
+      && this.forcedPresentationPhase !== 'night';
+  }
+
+  private syncCameraTurnControl(snapshot: Readonly<SurvivalSnapshot>): void {
+    const available = this.cameraTurnAvailable(snapshot);
+    if (!available && this.rearCameraView && !this.paused) {
+      this.rearCameraView = false;
+      this.world.setRearCameraView?.(false, true);
+    }
+    this.ui.setCameraTurnState?.(
+      available && !this.paused,
+      this.rearCameraView,
+    );
   }
 
   private syncPresentation(snapshot: SurvivalSnapshot): void {

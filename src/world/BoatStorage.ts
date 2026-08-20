@@ -103,9 +103,9 @@ const BOAT_STORAGE_SLOTS = {
     stackedSlot('floor', 'cannedFood', 0, -1.24, -0.08),
   ],
   baitTin: [
-    restingSlot('shelf', 'baitTin', -0.28, -1.72, -0.05),
-    restingSlot('shelf', 'baitTin', -0.04, -1.72, 0.08),
-    restingSlot('shelf', 'baitTin', 0.20, -1.72, -0.03),
+    restingSlot('shelf', 'baitTin', -0.16, -1.70, -0.05),
+    restingSlot('shelf', 'baitTin', 0.08, -1.70, 0.08),
+    stackedSlot('shelf', 'baitTin', -0.04, -1.70, -0.03),
   ],
   ductTape: [restingSlot('shelf', 'ductTape', 0.50, -1.55, 0.05, 0.5, Math.PI / 2)],
   compass: [restingSlot('shelf', 'compass', 0.78, -1.62, -0.10)],
