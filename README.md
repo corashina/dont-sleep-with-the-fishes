@@ -33,7 +33,7 @@ The carry limit is three weight points, not three objects. Weight-one Dorothy su
 
 Food, Bait, Duct Tape, Medkit, Flare Gun, Bottled Paper, and Shotgun are one-use Dorothy supplies; each recovered Food or Bait instance contributes one unit to its aggregate resource. Compass, Map, Binoculars, Fishing Net, Bucket, Scuba Gear, Anchor, Umbrella, Swim Ring, and Flashlight are durable items used by actions or events. Carlitos changes from a saved Dorothy item to the living companion when survival starts. He then leaves the item inventory. Generic durable loss, breakage, and consumption rules do not apply to living Carlitos. A repairable durable item can become broken, and a durable item can be lost; a one-use supply becomes consumed when spent. Broken props remain aboard, while consumed and lost props no longer offer usable interactions. One recovered Duct Tape can repair a selected broken, repairable item.
 
-The repair toolbox and starboard-mounted Fishing Rod are permanent lifeboat equipment rather than Dorothy collectibles. The rod is never picked up or recovered. It is available for fishing in every survival run, while the toolbox uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. Rest never requires an item: it restores two energy once per day. Bottled Paper costs one energy, adds 15 rescue progress, and is consumed. Energy Bar restores energy to the maximum of three and is consumed.
+The repair toolbox and starboard-mounted Fishing Rod are permanent lifeboat equipment rather than Dorothy collectibles. The rod is never picked up or recovered. It is available for fishing in every survival run, while the toolbox uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. Rest never requires an item: it restores two energy once per day. Bottled Paper costs one energy, adds hidden rescue lead, and is consumed. Energy Bar restores energy to the maximum of three and is consumed.
 
 The event catalog contains 30 live events. The day pool contains Drifting Barrel,
 Drifting Chest, and Drifting Bottle. Event selection relies on the scene and response prompts.
@@ -44,8 +44,9 @@ An old chest can become a mimic. Fishing Net binds it shut.
 Flowers accepts Fishing Net or Bucket. It records the choice without a large reward.
 
 Run pressure rises on days 8, 15, 25, and 40. Successful supernatural
-counters can lower pressure. Night energy results apply at the next dawn.
-Night damage doubles from day 50.
+counters can lower pressure. Quiet-night chances fall as pressure rises.
+Dangerous event weights rise by 25 percent per pressure level. Night energy
+results apply at the next dawn. Event damage has no day-50 multiplier.
 
 ## Run
 
@@ -136,7 +137,7 @@ event and select **Enter Event** to start a fresh lifeboat run at that event wit
 one usable copy of every recoverable item. After the event resolves, survival
 continues normally.
 
-Recovered supplies remain as physical props clustered on the survival boat's forward platform; there is no bottom dock or inventory tray. A resource or item type appears in one stable place, with up to three nearby copies representing larger quantities while the label reports the exact total. Hovering or keyboard-focusing a group reveals its label, condition, purpose, cost, effect, risk, and any unavailable reason. Broken durable props stay in place with a damaged treatment; consumed and lost props disappear and stop exposing action anchors. The fixed starboard rod projects the **Fish - 1 Energy** action in every run. **Dive** still requires usable recovered Scuba Gear. Other unavailable actions remain visible and explain what is missing. Event and outcome dialogs keep keyboard focus until they are resolved.
+Recovered supplies remain as physical props clustered on the survival boat's forward platform; there is no bottom dock or inventory tray. A resource or item type appears in one stable place, with up to three nearby copies representing larger quantities while the label reports the exact total. Hovering or keyboard-focusing a group reveals its label, condition, purpose, cost, effect, risk, and any unavailable reason. Broken durable props stay in place with a damaged treatment; consumed and lost props disappear and stop exposing action anchors. The fixed starboard rod projects the **Fish - 2 Energy** action in every run. **Dive** still requires usable recovered Scuba Gear. Other unavailable actions remain visible and explain what is missing. Event and outcome dialogs keep keyboard focus until they are resolved.
 
 Accepted daytime actions play through the lifeboat scene, update the condition display, and leave a short non-blocking caption. Rejected actions explain the reason without opening a dialog.
 
@@ -146,19 +147,19 @@ The ship sinks in one minute. Search the cabin, wheelhouse, cargo deck, and stor
 
 In the lifeboat, each day gives three energy for daytime actions:
 
-- **Fish** costs one energy and uses the lifeboat's permanent bow rod. Click valid water to cast, or press `Enter`/`Space` for the centered cast; when bubbles appear, click them or press `Enter`/`Space` within the 1.5-second reel window. Available bait improves the catch automatically and is consumed only when a fish lands, never for junk or a miss. Pausing with `Escape` freezes the attempt but does not cancel it, and an accepted attempt's energy remains spent.
-- **Dive** requires rescued scuba gear and searches for food, bait, repair material, or rescue progress, with weather-dependent risk.
+- **Fish** costs two energy and uses the lifeboat's permanent bow rod. Click valid water to cast, or press `Enter`/`Space` for the centered cast; when bubbles appear, click them or press `Enter`/`Space` within the 1.5-second reel window. Available bait improves the catch automatically and is consumed only when a fish lands, never for junk or a miss. Pausing with `Escape` freezes the attempt but does not cancel it, and an accepted attempt's energy remains spent.
+- **Dive** requires rescued scuba gear and searches for food, bait, repair material, or hidden rescue traces, with weather-dependent risk.
 - **Eat** spends one food to reduce hunger.
 - **Repair** uses the lifeboat's fixed repair toolbox and recovered material to restore hull; Duct Tape can make a smaller emergency patch.
 - **Treat** consumes the recovered Medkit to restore health.
 - **Rest** requires no item, restores two energy, and is available once per day.
 - **Repair item** consumes Duct Tape to restore one selected broken, repairable supply.
-- **Send message** consumes Bottled Paper and one energy to add 15 rescue progress.
+- **Send message** consumes Bottled Paper and one energy to add hidden rescue lead.
 - **Eat Energy Bar** consumes the bar and restores energy to three.
 - **Open chest** costs three energy and recovers a missing tool or useful resource.
 - **End day** advances into the day and night event sequence.
 
-Health, Food, Energy, and Hull remain visible as condition meters. Food is the inverse of internal hunger, so it drains toward zero as the survivor becomes hungry. Food, bait, repair material, and rescue progress still exist as separate stores used by actions and outcomes, but they are not persistently tallied in the HUD.
+Health, Food, Energy, and Hull remain visible as condition meters. Food is the inverse of internal hunger, so it drains toward zero as the survivor becomes hungry. Food, bait, and repair material remain separate stores used by actions and outcomes, but they are not persistently tallied in the HUD.
 
 Day and night events fade to black before each reveal.
 
@@ -170,7 +171,17 @@ Clicking the physical boat lantern ends the day and uses the same slow cover bef
 
 Each journal page retells that day's fishing, daytime event, and nighttime event as a short first-person entry. Fishing records name catches or misses and note bait consumption; event entries mention supplies only when they were attempted during an event.
 
-Rescue is variable rather than tied to a fixed day. Progress and elapsed days increase the natural chance, while signaling the cargo vessel in **Other People** with a Flare Gun secures immediate rescue and holds the rescue tableau through the ending. Death and sinking each have distinct endings. **Start From the Ship** performs a full restart with a fresh scavenging run.
+Natural rescue cannot occur before day 24. After day 24, rescue remains random. Bottled Paper, rescue-trace dives, and the **Other People** event shorten the hidden wait. The Flare Gun is consumed during **Other People**, but **Other People** never ends the run immediately. Exact rescue progress and odds remain hidden. A well-supplied successful run targets about day 30. A no-signal successful run can reach day 40.
+
+## Endings
+
+- **SUNK WITH DOROTHY** — Dorothy sinks before the lifeboat clears her side.
+- **RESCUE FOUND YOU** — A rescue vessel finds the lifeboat after the minimum rescue day.
+- **THE SEA OUTLASTED YOU** — Hunger, diving, or an event reduces the survivor to death.
+- **THE BOAT IS GONE** — Damage sinks the lifeboat.
+- **TAKEN IN THE DARK** — A supernatural event takes the survivor.
+
+**Start From the Ship** performs a full restart with a fresh scavenging run.
 
 ## Asset sources
 
