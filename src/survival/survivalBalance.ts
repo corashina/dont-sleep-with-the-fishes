@@ -14,7 +14,7 @@ export const SURVIVAL_BALANCE = {
   },
   diving: {
     success: 0.65, injury: 0.25, flashlightSuccess: 0.80,
-    flashlightInjury: 0.10, injuryDamage: 10, overcastSuccessDelta: -0.05,
+    flashlightInjury: 0.18, injuryDamage: 60, overcastSuccessDelta: -0.05,
     overcastInjuryDelta: 0.05,
   },
   rescue: { firstDay: 24, maximumLead: 8 },

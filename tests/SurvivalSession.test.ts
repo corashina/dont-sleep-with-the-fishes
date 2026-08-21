@@ -1849,7 +1849,7 @@ describe('SurvivalSession daytime actions', () => {
 
   it('applies diving risk and blocks diving in a squall', () => {
     const injured = new SurvivalSession(saved('scubaSet'), { seed: 1, random: sequenceRandom([0.9, 0.1]) });
-    expect(injured.perform('dive')).toMatchObject({ accepted: true, deltas: { energy: -3, health: -10 } });
+    expect(injured.perform('dive')).toMatchObject({ accepted: true, deltas: { energy: -3, health: -60 } });
     const storm = new SurvivalSession(saved('scubaSet'), { seed: 1, random: sequenceRandom([0]), weather: 'squall' });
     expect(storm.perform('dive')).toMatchObject({ accepted: false, code: 'weather-blocked' });
   });
