@@ -57,7 +57,7 @@ export interface GameFactories {
   createScavenge(
     context: PhaseContext,
     onComplete: (result: Readonly<ScavengeResult>) => void,
-    onReturnToMenu: () => void,
+    onRestart: () => void,
   ): GamePhase;
   createSurvival(
     context: PhaseContext,
@@ -73,8 +73,8 @@ const PRODUCTION_FACTORIES: GameFactories = {
   createMenu: (context, onComplete) => (
     new MainMenuPhase(context, onComplete)
   ),
-  createScavenge: (context, onComplete, onReturnToMenu) => (
-    new ScavengePhase(context, onComplete, onReturnToMenu)
+  createScavenge: (context, onComplete, onRestart) => (
+    new ScavengePhase(context, onComplete, onRestart)
   ),
   createSurvival: (
     context,
@@ -605,7 +605,7 @@ export class Game {
     return this.factories.createScavenge(
       this.context,
       (result) => this.completeScavenge(generation, result),
-      () => this.returnToMenuFromScavenge(generation),
+      () => this.restartFrom(generation),
     );
   }
 
@@ -613,21 +613,6 @@ export class Game {
     if (this.disposed || this.fatalErrorReported) return;
     this.fatalErrorReported = true;
     this.onFatalError(error);
-  }
-
-  private returnToMenuFromScavenge(generation: number): void {
-    if (!this.ownsGeneration(generation)) return;
-    const scavenge = this.detachActivePhase();
-    try {
-      runCleanupSteps([
-        () => this.exitPointerLock(),
-        () => scavenge?.dispose(),
-        () => this.resetCamera(),
-        () => this.activateMenu(true),
-      ]);
-    } catch (error) {
-      this.reportFatalError(error);
-    }
   }
 
   private completeScavenge(

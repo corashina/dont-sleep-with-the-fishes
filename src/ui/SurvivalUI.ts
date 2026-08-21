@@ -4,7 +4,13 @@ import {
   type ItemId,
   type ItemInstanceId,
 } from '../game/ItemState';
-import { endingTitle, type EndingRecord } from '../game/ending';
+import {
+  endingCauseLine,
+  endingEpilogue,
+  endingSummary,
+  endingTitle,
+  type EndingRecord,
+} from '../game/ending';
 import { formatJournalEntry, type JournalEntry } from '../survival/journal';
 import { carlitosStatus } from '../survival/CarlitosState';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
@@ -403,6 +409,9 @@ export class SurvivalUI {
   private readonly journalClose: HTMLButtonElement;
   private readonly endingLayer: HTMLElement;
   private readonly endingTitle: HTMLElement;
+  private readonly endingBody: HTMLElement;
+  private readonly endingCause: HTMLElement;
+  private readonly endingStats: HTMLElement;
   private readonly restartButton: HTMLButtonElement;
   private readonly backgroundRegions: HTMLElement[];
   private readonly modalLayers: HTMLElement[];
@@ -620,6 +629,9 @@ export class SurvivalUI {
       <section class="survival-overlay ending-overlay cinematic-overlay scuba-popup-overlay" data-ending role="dialog" aria-modal="true" aria-hidden="true" aria-label="Journey ended" inert>
         <div class="cinematic-overlay__content scuba-popup-paper scuba-popup-panel">
           <h2 class="scuba-popup-title ui-role-display" data-ending-title tabindex="-1" role="alert"></h2>
+          <p class="ending-copy ui-role-narrative" data-ending-body></p>
+          <p class="ending-cause ui-role-context" data-ending-cause></p>
+          <p class="ending-stats ui-role-numeral" data-ending-stats></p>
           <button type="button" class="primary-action salvage-action ui-role-context" data-restart aria-label="Start from the ship">
             START FROM THE SHIP
           </button>
@@ -687,6 +699,9 @@ export class SurvivalUI {
     this.journalClose = requireElement(this.root, '[data-journal-close]');
     this.endingLayer = requireElement(this.root, '[data-ending]');
     this.endingTitle = requireElement(this.root, '[data-ending-title]');
+    this.endingBody = requireElement(this.root, '[data-ending-body]');
+    this.endingCause = requireElement(this.root, '[data-ending-cause]');
+    this.endingStats = requireElement(this.root, '[data-ending-stats]');
     this.restartButton = requireElement(this.root, '[data-restart]');
     this.backgroundRegions = [this.topControls, this.anchorLayer];
     this.modalLayers = [
@@ -1424,19 +1439,25 @@ export class SurvivalUI {
     }
   }
 
-  showEnding(
-    ending: EndingRecord,
-  ): void {
+  showEnding(record: Exclude<EndingRecord, { id: 'dorothy' }>): void {
     if (this.disposed) return;
     this.closeCarlitosCard(false);
     this.clearEventPresentation();
     this.setPaused(false);
-    this.updateText('ending:title', this.endingTitle, endingTitle(ending));
-    this.endingLayer.dataset.ending = ending.id;
+    this.renderEndingRecord(record);
     this.restartIssued = false;
     this.restartButton.disabled = false;
     this.showLayer(this.endingLayer);
     this.endingTitle.focus();
+  }
+
+  private renderEndingRecord(record: EndingRecord): void {
+    this.endingTitle.textContent = endingTitle(record);
+    this.endingBody.textContent = endingEpilogue(record);
+    this.endingCause.textContent = endingCauseLine(record) ?? '';
+    this.endingCause.hidden = this.endingCause.textContent.length === 0;
+    this.endingStats.textContent = endingSummary(record);
+    this.endingLayer.dataset.ending = record.id;
   }
 
   dispose(): void {
