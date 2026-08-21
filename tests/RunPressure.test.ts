@@ -4,9 +4,9 @@ import { eligibleEvents } from '../src/survival/events';
 import {
   dangerousEventWeightMultiplier,
   pressureIncreaseForDay,
-  quietNightChance,
   weightedEventDrawWeight,
 } from '../src/survival/RunPressure';
+import { quietNightChance } from '../src/survival/survivalBalance';
 import type { SurvivalEventDefinition } from '../src/survival/survivalTypes';
 
 const event = (overrides: Partial<SurvivalEventDefinition>): SurvivalEventDefinition => ({
@@ -53,13 +53,13 @@ describe('run pressure', () => {
   });
 
   it('reduces quiet nights as actual pressure rises', () => {
-    expect([0, 1, 2, 3, 4].map(quietNightChance))
-      .toEqual([0.30, 0.25, 0.20, 0.15, 0.10]);
+    expect([-1, 0, 1, 2, 3, 4, 5].map(quietNightChance))
+      .toEqual([0.30, 0.30, 0.25, 0.20, 0.15, 0.10, 0.10]);
   });
 
   it('raises only dangerous event weights', () => {
-    expect([0, 1, 2, 3, 4].map(dangerousEventWeightMultiplier))
-      .toEqual([1, 1.25, 1.5, 1.75, 2]);
+    expect([-1, 0, 1, 2, 3, 4, 5].map(dangerousEventWeightMultiplier))
+      .toEqual([1, 1, 1.25, 1.5, 1.75, 2, 2]);
     expect(weightedEventDrawWeight(event({ danger: 'safe', weight: 3 }), 4)).toBe(3);
     expect(weightedEventDrawWeight(event({ danger: 'uncertain', weight: 3 }), 4)).toBe(3);
     expect(weightedEventDrawWeight(event({ danger: 'dangerous', weight: 3 }), 4)).toBe(6);

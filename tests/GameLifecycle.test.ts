@@ -495,6 +495,59 @@ describe('Game menu lifecycle', () => {
     }
   });
 
+  it('reports disposal failure and still starts a fresh Dorothy run', () => {
+    const disposalError = new Error('scavenge disposal failed');
+    const menu = gamePhase();
+    const scavenges = [gamePhase(), gamePhase()];
+    scavenges[0]!.dispose = vi.fn(() => {
+      throw disposalError;
+    });
+    const onFatalError = vi.fn();
+    let completeMenu: () => void = () => undefined;
+    let restartDorothy: () => void = () => undefined;
+    const createScavenge = vi.fn((_context, _onComplete, onRestart) => {
+      restartDorothy = onRestart;
+      return scavenges[createScavenge.mock.calls.length - 1]!;
+    });
+    const createSeed = vi.fn()
+      .mockReturnValueOnce(11)
+      .mockReturnValueOnce(22);
+    const game = Game.forTest({
+      createMenu: (_context, onComplete) => {
+        completeMenu = onComplete;
+        return menu;
+      },
+      createScavenge,
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      createSeed,
+      onFatalError,
+    });
+
+    try {
+      game.start();
+      completeMenu();
+
+      expect(restartDorothy).not.toThrow();
+      expect(onFatalError).toHaveBeenCalledOnce();
+      expect(onFatalError).toHaveBeenCalledWith(disposalError);
+      expect(createSeed).toHaveBeenCalledTimes(2);
+      expect(createScavenge).toHaveBeenCalledTimes(2);
+      expect(scavenges[1]!.resize).toHaveBeenCalledWith(
+        window.innerWidth,
+        window.innerHeight,
+      );
+      expect(scavenges[1]!.start).toHaveBeenCalledOnce();
+    } finally {
+      game.dispose();
+    }
+  });
+
   it('starts scavenging directly when survival requests a restart', () => {
     const menu = gamePhase();
     const scavenges = [gamePhase(), gamePhase()];

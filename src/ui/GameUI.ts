@@ -54,6 +54,7 @@ export class GameUI {
   private disposed = false;
   private restartHandled = false;
   private endingStage: ScavengeEndingStage = 'playing';
+  private renderedEndingRecord: Extract<EndingRecord, { id: 'dorothy' }> | null = null;
   private renderedTimerSecond = SCAVENGE_DURATION_SECONDS;
 
   constructor(mount: HTMLElement) {
@@ -214,7 +215,10 @@ export class GameUI {
     if (visible && record === null) {
       throw new Error('Dorothy ending record is missing.');
     }
-    if (record !== null) this.renderEndingRecord(record);
+    if (record !== null && record !== this.renderedEndingRecord) {
+      this.renderEndingRecord(record);
+      this.renderedEndingRecord = record;
+    }
     const revealAction = stage === 'menuReady';
     this.root.style.setProperty('--scavenge-ending-blackout', String(Math.min(1, Math.max(0, blackout))));
     this.hud.hidden = stage !== 'playing' || this.root.dataset.presentation !== 'playing';
@@ -277,7 +281,7 @@ export class GameUI {
   }
 
   private readonly handleResume = (): void => this.onResume();
-  private renderEndingRecord(record: EndingRecord): void {
+  private renderEndingRecord(record: Extract<EndingRecord, { id: 'dorothy' }>): void {
     this.endingTitle.textContent = endingTitle(record);
     this.endingBody.textContent = endingEpilogue(record);
     this.endingCause.textContent = endingCauseLine(record) ?? '';

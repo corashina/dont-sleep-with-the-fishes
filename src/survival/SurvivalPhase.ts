@@ -210,6 +210,7 @@ export function formatDiveResult(outcome: ActionOutcome): RewardResultView {
       }
     }
   }
+  if ((outcome.deltas.rescueLead ?? 0) > 0) lines.push('RESCUE TRACE FOUND');
   if (reward === null && lines.length === 0) lines.push('NOTHING FOUND');
   const appliedHealthDelta = outcome.deltas.health;
   if (appliedHealthDelta !== undefined && appliedHealthDelta < 0) {

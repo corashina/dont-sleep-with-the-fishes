@@ -151,9 +151,10 @@ describe('survival events', () => {
     for (const eventEntry of SURVIVAL_EVENTS) {
       for (const choice of eventEntry.choices) {
         for (const result of choice.outcomes) {
-          for (const mutation of result.effects.items ?? []) {
-            if (mutation.kind === 'loseRandom') expect(mutation.quantity).toBe(1);
-          }
+          const randomLoss = (result.effects.items ?? [])
+            .filter(({ kind }) => kind === 'loseRandom')
+            .reduce((sum, mutation) => sum + mutation.quantity, 0);
+          expect(randomLoss, `${eventEntry.id}.${choice.id}`).toBeLessThanOrEqual(1);
         }
       }
     }
@@ -807,6 +808,12 @@ describe('survival events', () => {
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [item('consume', 'telescope')]; }, /unknown item/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [item('consume', 'ductTape', 1.5)]; }, /quantity/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [{ kind: 'loseRandom', quantity: 2 }]; }, /loseRandom.*one/i);
+    rejects((catalog) => {
+      catalog[0].choices[0].outcomes[0].effects.items = [
+        { kind: 'loseRandom', quantity: 1 },
+        { kind: 'loseRandom', quantity: 1 },
+      ];
+    }, /loseRandom.*one/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [item('break', 'flashlight')]; }, /not breakable/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [{ kind: 'gainChest', quantity: 1, fallbackFood: 2 }]; }, /fallback food/i);
     rejects((catalog) => { catalog[0].choices[0].requiredChestState = 'open'; }, /required chest state/i);

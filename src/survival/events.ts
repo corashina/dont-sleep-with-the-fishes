@@ -817,6 +817,13 @@ function validateOutcome(
   for (const [index, itemEffect] of items.entries()) {
     validateMutation(itemEffect, `${path}.items[${index}]`);
   }
+  const randomLossQuantity = items.reduce((sum, itemEffect) => {
+    const mutation = itemEffect as EventInventoryMutation;
+    return mutation.kind === 'loseRandom' ? sum + mutation.quantity : sum;
+  }, 0);
+  if (randomLossQuantity > 1) {
+    throw new Error(`${path} loseRandom quantity total must not exceed one`);
+  }
   for (const resourceName of ['health', 'hull'] as const) {
     if (maximumOutcomeLoss(outcomeEntry, resourceName) > 60) {
       throw new Error(`${path} removes more than 60 ${resourceName}`);
