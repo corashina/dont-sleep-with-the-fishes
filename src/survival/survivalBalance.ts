@@ -86,6 +86,13 @@ export function rescueChanceForDay(realDay: number, rescueLead: number): number 
 
 validateRescueChanceSteps(RESCUE_CHANCE_STEPS);
 
+const QUIET_NIGHT_CHANCES = Object.freeze([0.30, 0.25, 0.20, 0.15, 0.10]);
+
+export function quietNightChance(pressure: number): number {
+  const index = Math.min(4, Math.max(0, Math.trunc(pressure)));
+  return QUIET_NIGHT_CHANCES[index]!;
+}
+
 export function repairEnergyCost(hull: number): RepairEnergyCost {
   if (hull >= SURVIVAL_BALANCE.thresholds.maximum) return 0;
   return SURVIVAL_BALANCE.actions.repairEnergy;

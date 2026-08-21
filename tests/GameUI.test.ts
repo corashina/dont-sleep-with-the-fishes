@@ -110,4 +110,24 @@ describe('GameUI ending', () => {
 
     ui.dispose();
   });
+
+  it('updates ending text only when the Dorothy record changes', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+    const first = { id: 'dorothy', day: 0, savedPickupCount: 7 } as const;
+    const endingBody = mount.querySelector<HTMLElement>('[data-ending-body]')!;
+
+    ui.renderEnding('endingHold', 1, first);
+    endingBody.textContent = 'cached';
+    ui.renderEnding('menuReady', 1, first);
+    expect(endingBody.textContent).toBe('cached');
+
+    ui.renderEnding('menuReady', 1, {
+      id: 'dorothy', day: 0, savedPickupCount: 8,
+    });
+    expect(endingBody.textContent)
+      .toBe('Dorothy took you down before the lifeboat cleared her side.');
+
+    ui.dispose();
+  });
 });

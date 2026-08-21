@@ -159,8 +159,8 @@ function careForCarlitos(session: SurvivalSession): void {
   }
 }
 
-function repairHullBelowSixty(session: SurvivalSession): void {
-  if (session.snapshot().hull >= 60) return;
+function repairHullAtOrBelowSixty(session: SurvivalSession): void {
+  if (session.snapshot().hull > 60) return;
   const repairMaterial = { kind: 'hullRepair', material: 'repairMaterial' } as const;
   if (session.availableReason('repair', repairMaterial) === null) {
     session.perform('repair', repairMaterial);
@@ -192,7 +192,7 @@ function fishOnceWhenPossible(
   session.finishFishing(begun.attempt.snapshot().id, terminal);
 }
 
-function runCompetentDay(
+export function runCompetentDay(
   session: SurvivalSession,
   policyRandom: RandomSource,
   fishingReactionSuccess: number,
@@ -206,10 +206,7 @@ function runCompetentDay(
     session.perform('eat');
   }
   if (session.snapshot().health <= 60) session.perform('treat');
-  repairHullBelowSixty(session);
-  if (signalsEnabled && session.availableReason('sendMessage') === null) {
-    session.perform('sendMessage');
-  }
+  repairHullAtOrBelowSixty(session);
 
   const snapshot = session.snapshot();
   const canSeekTrace = signalsEnabled
@@ -219,6 +216,12 @@ function runCompetentDay(
     && session.availableReason('dive') === null;
   if (canSeekTrace) session.perform('dive');
   else fishOnceWhenPossible(session, policyRandom, fishingReactionSuccess);
+
+  if (signalsEnabled
+    && session.snapshot().energy === 1
+    && session.availableReason('sendMessage') === null) {
+    session.perform('sendMessage');
+  }
 
   session.perform('endDay');
   resolvePendingNightEvent(session, signalsEnabled);

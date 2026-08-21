@@ -107,7 +107,7 @@ describe('formatDiveResult', () => {
     [{ food: 1, energy: -3 }, { kind: 'resource', id: 'food', quantity: 1 }, []],
     [{ bait: 1, energy: -3 }, { kind: 'resource', id: 'bait', quantity: 1 }, []],
     [{ repairMaterial: 1, energy: -3 }, { kind: 'resource', id: 'repairMaterial', quantity: 1 }, []],
-    [{ rescueLead: 1, energy: -3 }, null, ['NOTHING FOUND']],
+    [{ rescueLead: 1, energy: -3 }, null, ['RESCUE TRACE FOUND']],
     [{ energy: -3 }, null, ['NOTHING FOUND']],
     [{ energy: -3, health: -10 }, null, ['NOTHING FOUND', 'YOU SUFFERED SOME INJURIES']],
   ] as const)('formats exact dive deltas', (deltas, reward, lines) => {

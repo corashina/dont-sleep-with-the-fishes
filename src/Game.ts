@@ -678,12 +678,18 @@ export class Game {
 
   private restartCurrentPhase(): void {
     const outgoing = this.detachActivePhase();
-    this.exitPointerLock();
-    outgoing?.dispose();
-    this.resetCamera();
-    this.elapsed = 0;
-    this.seed = this.createSeed();
-    this.activateScavenge(true);
+    try {
+      runCleanupSteps([
+        () => this.exitPointerLock(),
+        () => outgoing?.dispose(),
+        () => this.resetCamera(),
+        () => { this.elapsed = 0; },
+        () => { this.seed = this.createSeed(); },
+        () => this.activateScavenge(true),
+      ]);
+    } catch (error) {
+      this.reportFatalError(error);
+    }
   }
 
   private detachActivePhase(): GamePhase | null {
