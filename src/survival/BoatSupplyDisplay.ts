@@ -191,6 +191,14 @@ function materialList(material: Material | Material[]): readonly Material[] {
   return Array.isArray(material) ? material : [material];
 }
 
+function enableBoatSupplyShadows(root: Object3D): void {
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    object.castShadow = true;
+    object.receiveShadow = true;
+  });
+}
+
 function brokenMaterial(material: Material): Material {
   const clone = material.clone();
   applyBrokenMaterialTreatment(clone);
@@ -330,6 +338,7 @@ export class BoatSupplyDisplay {
           ? null
           : propModels.createPresentation(instance!);
         const copy = presentation?.root ?? createRepairMaterialBundle(index);
+        enableBoatSupplyShadows(copy);
         const transform = boatSupplyTransform(groupId, index);
         copy.name = `boat-supply:${groupId}:copy-${index + 1}`;
         copy.position.copy(transform.position);
