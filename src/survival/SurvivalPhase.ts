@@ -2565,7 +2565,7 @@ export class SurvivalPhase implements GamePhase {
       || this.presentedTerminalState !== null
     ) return;
     if (snapshot.ending === null || snapshot.ending.id === 'dorothy') {
-      throw new Error('Terminal survival snapshots require a survival ending record.');
+      throw new Error('Terminal survival snapshot is missing its ending record.');
     }
     this.presentedTerminalState = snapshot.state;
     this.audio.ending(snapshot.ending.id);

@@ -34,6 +34,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import { createScavengeItemInstances } from '../game/scavengeCatalog';
+import type { EndingRecord } from '../game/ending';
 import { scavengeSpeedMultiplier } from '../game/scavengeMovement';
 import {
   createShipAlarmPhase,
@@ -145,6 +146,7 @@ export class ScavengePhase implements GamePhase {
   };
   private ending = createScavengeEndingState();
   private endingStarted = false;
+  private dorothyEnding: Extract<EndingRecord, { id: 'dorothy' }> | null = null;
   private readonly cinematicFrame = createScavengeCinematicFrame();
   private readonly cinematicCameraTarget = new Vector3();
   private contextAction: ContextAction = { type: 'none', prompt: '' };
@@ -166,7 +168,7 @@ export class ScavengePhase implements GamePhase {
   constructor(
     private readonly context: PhaseContext,
     private readonly onComplete: (result: Readonly<ScavengeResult>) => void,
-    private readonly onReturnToMenu: () => void,
+    private readonly onRestart: () => void,
   ) {
     this.scene.add(context.camera);
     this.ui = new GameUI(context.mount);
@@ -229,7 +231,7 @@ export class ScavengePhase implements GamePhase {
     this.ui.onResume = () => {
       void this.requestPointerLock();
     };
-    this.ui.onReturnToMenu = this.onReturnToMenu;
+    this.ui.onRestart = this.onRestart;
     this.ui.setPresentation('intro');
     this.ui.setIntroFadeProgress(1);
   }
@@ -328,6 +330,11 @@ export class ScavengePhase implements GamePhase {
 
     sinking = getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
     const next = current;
+    if (next.status === 'failure' && this.dorothyEnding === null) {
+      this.dorothyEnding = Object.freeze({
+        id: 'dorothy', day: 0, savedPickupCount: next.savedCount,
+      });
+    }
     const failureStarted = !this.endingStarted && next.status === 'failure';
     this.ending = advanceScavengeEnding(
       this.ending,
@@ -414,7 +421,7 @@ export class ScavengePhase implements GamePhase {
     this.ui.setPrompt(visibleItemTooltip === null && stillActive ? this.contextAction.prompt : '');
     this.ui.setItemTooltip?.(visibleItemTooltip);
     this.ui.setPickupPointer?.(stillActive && this.contextAction.type === 'pickUp');
-    this.ui.renderEnding(this.ending.stage, blackout);
+    this.ui.renderEnding(this.ending.stage, blackout, this.dorothyEnding);
 
     if (next.status === 'success' && !this.completionReported) {
       const result = this.session.result();
