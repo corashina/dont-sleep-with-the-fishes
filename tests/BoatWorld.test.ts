@@ -61,6 +61,10 @@ import {
 import { DANGEROUS_WATERS_ITEM_DURATION } from '../src/survival/DangerousWatersPresentation';
 import { DivePresentation } from '../src/survival/DivePresentation';
 import {
+  HANGING_LANTERN_DAY_INTENSITY,
+  HANGING_LANTERN_NIGHT_INTENSITY,
+} from '../src/survival/HangingLantern';
+import {
   type FocusedEventPresentation,
   type FocusedEventPresentationDependencies,
   type FocusedEventPresentationFactories,
@@ -5712,6 +5716,22 @@ describe('BoatWorld helpers', () => {
   it('rolls back the companion and earlier owners when supply construction fails', () => {
     const propModels = createTestPropModels();
     const failure = new Error('supply construction failed');
+    const originalCreatePracticalLight = propModels.createPracticalLight.bind(propModels);
+    let practicalLightCall = 0;
+    let hangingGeometryDispose: ReturnType<typeof vi.spyOn> | null = null;
+    let hangingMaterialDispose: ReturnType<typeof vi.spyOn> | null = null;
+    const createPracticalLight = vi.spyOn(propModels, 'createPracticalLight')
+      .mockImplementation((id) => {
+        const root = originalCreatePracticalLight(id);
+        practicalLightCall += 1;
+        if (practicalLightCall === 2) {
+          const mesh = firstMesh(root);
+          hangingGeometryDispose = vi.spyOn(mesh.geometry, 'dispose');
+          const material = Array.isArray(mesh.material) ? mesh.material[0]! : mesh.material;
+          hangingMaterialDispose = vi.spyOn(material, 'dispose');
+        }
+        return root;
+      });
     const originalCreate = propModels.createPresentation.bind(propModels);
     const create = vi.spyOn(propModels, 'createPresentation').mockImplementation((instance) => {
       if (instance.type !== 'carlitos') throw failure;
@@ -5727,7 +5747,11 @@ describe('BoatWorld helpers', () => {
     )).toThrow(failure);
     expect(disposeCompanion).toHaveBeenCalledOnce();
     expect(disposeParticles).toHaveBeenCalledOnce();
+    expect(hangingGeometryDispose).not.toBeNull();
+    expect(hangingGeometryDispose!).toHaveBeenCalledOnce();
+    expect(hangingMaterialDispose!).toHaveBeenCalledOnce();
 
+    createPracticalLight.mockRestore();
     create.mockRestore();
     disposeCompanion.mockRestore();
     disposeParticles.mockRestore();
@@ -6530,7 +6554,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('uses the imported lantern model with a shadow-casting light', () => {
+  it('keeps the bench lantern emissive without emitting light', () => {
     const propModels = createTestPropModels();
     const camera = new PerspectiveCamera(75, 16 / 9, 0.08, 1000);
     const world = new BoatWorld(
@@ -6540,7 +6564,6 @@ describe('BoatWorld helpers', () => {
     );
     const lantern = world.scene.getObjectByName('survival-lantern')!;
     const model = lantern.getObjectByName('survival-lantern:model')!;
-    const light = lantern.getObjectByName('survival-lantern:light') as PointLight;
     const material = firstMesh(model).material as MeshStandardMaterial;
 
     expect(model).toBeDefined();
@@ -6548,12 +6571,7 @@ describe('BoatWorld helpers', () => {
     expect(material.emissive.getHex()).toBe(0xffc56a);
     expect(material.emissiveIntensity).toBe(1.35);
     expect(material.emissiveMap).toBe(material.map);
-    expect(light).toBeInstanceOf(PointLight);
-    expect(light.color.getHex()).toBe(0xffb261);
-    expect(light.intensity).toBe(3.8);
-    expect(light.distance).toBe(4);
-    expect(light.castShadow).toBe(true);
-    expect(light.shadow.mapSize.toArray()).toEqual([512, 512]);
+    expect(lantern.getObjectByName('survival-lantern:light')).toBeUndefined();
     expect(camera.position.toArray()).toEqual([0, 0.88, 1.56]);
     world.setPhase('night');
     world.update(1, 0.1);
@@ -6565,7 +6583,7 @@ describe('BoatWorld helpers', () => {
     const oldLanternOrigin = new Vector3(1.05, 0.235, 0.78).project(oldCamera);
     expect(lanternOrigin.x).toBeCloseTo(oldLanternOrigin.x, 2);
     expect(lanternOrigin.y).toBeCloseTo(oldLanternOrigin.y, 2);
-    expect(light.intensity).toBe(5.4);
+    expect(lantern.getObjectByName('survival-lantern:light')).toBeUndefined();
     expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: 'end-day-lantern',
@@ -6576,6 +6594,80 @@ describe('BoatWorld helpers', () => {
     ]));
 
     world.dispose();
+    propModels.dispose();
+  });
+
+  it('casts stored item shadows onto the lifeboat', () => {
+    const map = savedItem('map');
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(75, 16 / 9, 0.08, 1000),
+      propModels,
+      createTestMoonTexture(),
+      [map],
+    );
+    const storedMap = world.scene.getObjectByName('boat-supply:map:copy-1')!;
+    const floor = world.scene.getObjectByName('survival-floor')!;
+
+    expect(firstMesh(storedMap).castShadow).toBe(true);
+    expect(firstMesh(storedMap).receiveShadow).toBe(true);
+    expect(firstMesh(floor).receiveShadow).toBe(true);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('adds the hanging lantern near the upper camera center without another action', () => {
+    const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera(75, 16 / 9, 0.08, 1000);
+    const world = new BoatWorld(camera, propModels, createTestMoonTexture());
+    world.update(1, 0.1);
+    const root = world.scene.getObjectByName('hanging-lantern')!;
+    const light = root.getObjectByName('hanging-lantern:light') as PointLight;
+    const projected = light.getWorldPosition(new Vector3()).project(camera);
+    const lanternAnchors = world.projectInteractionAnchors(800, 600)
+      .filter((anchor) => anchor.toolId === 'lantern');
+
+    expect(root).toBeDefined();
+    expect(projected.x).toBeGreaterThanOrEqual(-0.12);
+    expect(projected.x).toBeLessThanOrEqual(0.12);
+    expect(projected.y).toBeGreaterThanOrEqual(0.55);
+    expect(projected.y).toBeLessThanOrEqual(0.9);
+    expect(light.intensity).toBe(HANGING_LANTERN_DAY_INTENSITY);
+    expect(lanternAnchors.map(({ id }) => id)).toEqual(['end-day-lantern']);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('raises hanging lantern intensity at night', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(75, 16 / 9, 0.08, 1000),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const light = world.scene.getObjectByName('hanging-lantern:light') as PointLight;
+    world.setPhase('night');
+    world.update(1, 0.1);
+    expect(light.intensity).toBe(HANGING_LANTERN_NIGHT_INTENSITY);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('disposes the hanging lantern during normal world cleanup', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const light = world.scene.getObjectByName('hanging-lantern:light') as PointLight;
+    const shadowDispose = vi.spyOn(light.shadow, 'dispose');
+    world.dispose();
+    world.dispose();
+    expect(shadowDispose).toHaveBeenCalledOnce();
     propModels.dispose();
   });
 
