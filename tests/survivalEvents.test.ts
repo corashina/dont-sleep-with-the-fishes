@@ -20,11 +20,11 @@ import type {
 } from '../src/survival/survivalTypes';
 
 const EXPECTED_WEIGHTS = {
-  'dangerous-waters': 2, leak: 2, 'school-of-fish': 4, snatcher: 3,
-  'death-stare': 4, 'swarm-of-anglerfish': 2, tornado: 1,
-  'shower-night': 3, 'windy-night': 4, 'bad-sleep': 4,
-  thunderstorm: 4, 'restless-waves': 3, 'man-in-the-fog': 2,
-  ghosts: 3, 'eerie-melody': 3, 'face-on-the-moon': 1,
+  'dangerous-waters': 1, leak: 1, 'school-of-fish': 4, snatcher: 3,
+  'death-stare': 1, 'swarm-of-anglerfish': 1, tornado: 1,
+  'shower-night': 3, 'windy-night': 1, 'bad-sleep': 4,
+  thunderstorm: 1, 'restless-waves': 1, 'man-in-the-fog': 1,
+  ghosts: 3, 'eerie-melody': 1, 'face-on-the-moon': 1,
   'shadow-figure': 1, 'guarded-sleep': 4,
   'drifting-barrel': 1, 'drifting-chest': 1,
   'drifting-bottle': 3,
@@ -735,7 +735,7 @@ describe('survival events', () => {
 
     expect(event).toMatchObject({
       phase: 'night',
-      weight: 2,
+      weight: 1,
       earliestDay: 2,
       latestDay: 30,
       maximumAppearances: 1,

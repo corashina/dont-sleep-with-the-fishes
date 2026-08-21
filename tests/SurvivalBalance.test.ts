@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   RESCUE_CHANCE_STEPS,
+  SURVIVAL_BALANCE,
   clampRescueLead,
   rescueChanceForDay,
   validateRescueChanceSteps,
@@ -45,5 +46,12 @@ describe('survival rescue balance', () => {
       { firstDay: 40, chance: 0.24 },
       { firstDay: 43, chance: 0.38 },
     ]);
+  });
+
+  it('keeps the calibrated diving risk exact', () => {
+    expect(SURVIVAL_BALANCE.diving).toMatchObject({
+      flashlightInjury: 0.18,
+      injuryDamage: 60,
+    });
   });
 });

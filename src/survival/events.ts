@@ -233,7 +233,7 @@ function deepFreeze<T>(value: T): T {
 }
 
 export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
-  event('dangerous-waters', 'night', 'Dangerous Waters', 'dangerous', 'impact', 2, 2, 0, [
+  event('dangerous-waters', 'night', 'Dangerous Waters', 'dangerous', 'impact', 1, 2, 0, [
     choice('map', 'Use Map', 'map',
       outcome(80, 'The map guides the boat through a clear channel.', dangerousWatersEffects()),
       outcome(20, 'The rocks damage the boat.', dangerousWatersEffects([
@@ -252,7 +252,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
         add('pressure', 1),
       ]))),
   ], 30, { maximumAppearances: 1 }),
-  event('leak', 'night', 'Leak', 'dangerous', 'impact', 2, 4, 0, [
+  event('leak', 'night', 'Leak', 'dangerous', 'impact', 1, 4, 0, [
     choice('ductTape', 'Use Duct Tape', 'ductTape', outcome(1, 'The tape is used.', effects(undefined, [consume('ductTape')]))),
     choice('bucket', 'Use Bucket', 'bucket', outcome(80, 'You keep pace with the rising water until dawn.'), outcome(20, 'The boat is damaged.', effects([subtract('hull', { min: 5, max: 10 })], [breakItem('bucket')]))),
     choice('map', 'Use Map', 'map',
@@ -286,7 +286,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       'map', 'scubaSet', 'umbrella', 'cannedFood',
     ],
   },
-  event('death-stare', 'night', 'Death Stare', 'dangerous', 'impact', 4, 9, 32, [
+  event('death-stare', 'night', 'Death Stare', 'dangerous', 'impact', 1, 9, 32, [
     choice('flashlight', 'Use Flashlight', 'flashlight',
       outcome(80, 'The creature sinks below the beam.'),
       outcome(20, 'The flashlight is lost.', atNextDawn(1, effects(undefined, [lose('flashlight')])))),
@@ -302,7 +302,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The creature attacks.', effects([subtract('hull', { min: 55, max: 60 }), subtract('health', 60)], [breakItem('fishingNet')]))),
     choice('sleep', 'Sleep', undefined, outcome(5, 'The shape loses interest and sinks away.'), outcome(85, 'The creature attacks.', effects([subtract('hull', { min: 44, max: 60 }), subtract('health', 60)]))),
   ], undefined, { minimumPressure: 1 }),
-  event('swarm-of-anglerfish', 'night', 'Swarm of Anglerfish', 'dangerous', 'fish', 2, 10, 38, [
+  event('swarm-of-anglerfish', 'night', 'Swarm of Anglerfish', 'dangerous', 'fish', 1, 10, 38, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet',
       outcome(80, 'The net holds the swarm back.'),
       outcome(20, 'The net tears while holding the swarm back.', effects(undefined, [breakItem('fishingNet')]))),
@@ -329,7 +329,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('map', 'Use Map', 'map', outcome(1, 'The map covers the exposed supplies.', effects(undefined, [breakItem('map')]))),
     choice('sleep', 'Sleep', undefined, outcome(80, 'The rain eases before dawn.'), outcome(20, 'You wake with two energy.', atNextDawn(2))),
   ]),
-  event('windy-night', 'night', 'Windy Night', 'dangerous', 'storm', 4, 2, 40, [
+  event('windy-night', 'night', 'Windy Night', 'dangerous', 'storm', 1, 2, 40, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet',
       outcome(80, 'The net secures the loose supplies.'),
       outcome(20, 'The net tears while securing the loose supplies.', effects(undefined, [breakItem('fishingNet')]))),
@@ -348,7 +348,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('umbrella', 'Use Umbrella', 'umbrella', outcome(100, 'The umbrella shelters a restless sleep.'), outcome(5, 'A hard gust folds the umbrella during the night.', effects(undefined, [breakItem('umbrella')]))),
     choice('sleep', 'Sleep', undefined, outcome(1, 'You wake with two energy.', atNextDawn(2))),
   ], 10),
-  event('thunderstorm', 'night', 'Thunderstorm', 'dangerous', 'storm', 4, 2, 35, [
+  event('thunderstorm', 'night', 'Thunderstorm', 'dangerous', 'storm', 1, 2, 35, [
     choice('anchor', 'Use Anchor', 'anchor', outcome(80, 'The anchor holds through the storm.'), outcome(20, 'You wake with two energy.', atNextDawn(2))),
     choice('bucket', 'Use Bucket', 'bucket',
       outcome(40, 'The boat is damaged.', effects([subtract('hull', { min: 15, max: 25 })], [breakItem('bucket')])),
@@ -364,7 +364,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       outcome(60, 'The storm damages the boat and takes an item.', atNextDawn(2, effects([subtract('hull', { min: 30, max: 48 })], [loseRandom(1)]))),
       outcome(30, 'The storm damages the boat.', atNextDawn(2, effects([subtract('hull', { min: 20, max: 35 })])))),
   ]),
-  event('restless-waves', 'night', 'Restless Waves', 'dangerous', 'impact', 3, 3, 35, [
+  event('restless-waves', 'night', 'Restless Waves', 'dangerous', 'impact', 1, 3, 35, [
     choice('anchor', 'Use Anchor', 'anchor', outcome(1, 'The anchor steadies the boat through the waves.')),
     choice('swimRing', 'Use Swim Ring', 'swimRing',
       outcome(50, 'The swim ring steadies the boat.'),
@@ -375,7 +375,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       outcome(50, 'The waves damage the boat.', atNextDawn(1, effects([subtract('hull', { min: 20, max: 30 })]))),
       outcome(50, 'The waves damage the boat and take an item.', effects([subtract('hull', { min: 15, max: 25 })], [loseRandom(1)]))),
   ]),
-  event('man-in-the-fog', 'night', 'Man in the Fog', 'dangerous', 'darkness', 2, 6, 40, [
+  event('man-in-the-fog', 'night', 'Man in the Fog', 'dangerous', 'darkness', 1, 6, 40, [
     choice('compass', 'Use Compass', 'compass',
       outcome(1, 'The compass keeps the boat on a steady bearing.',
         effects([subtract('pressure', 1)]))),
@@ -396,7 +396,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('flashlight', 'Use Flashlight', 'flashlight', outcome(60, 'The beam keeps the pale shapes beyond the gunwale.'), outcome(40, 'You wake with one energy.', atNextDawn(1))),
     choice('sleep', 'Sleep', undefined, outcome(60, 'You wake with two energy.', atNextDawn(2)), outcome(30, 'You wake with one energy.', atNextDawn(1))),
   ], undefined, { minimumPressure: 1 }),
-  event('eerie-melody', 'night', 'Eerie Melody', 'dangerous', 'darkness', 3, 13, 30, [
+  event('eerie-melody', 'night', 'Eerie Melody', 'dangerous', 'darkness', 1, 13, 30, [
     choice('bucket', 'Use Bucket', 'bucket', outcome(1, 'You wake with one energy.', atNextDawn(1, effects(undefined, [breakItem('bucket')])))),
     choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'The siren attacks.', effects([subtract('hull', { min: 50, max: 60 }), subtract('health', 50)]))),
     choice('umbrella', 'Use Umbrella', 'umbrella',
