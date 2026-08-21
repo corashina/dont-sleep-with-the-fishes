@@ -421,18 +421,13 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       outcome(20, 'You wake with two energy.', atNextDawn(2))),
   ], undefined, { minimumPressure: 3 }),
   event('shadow-figure', 'night', 'Shadow Figure', 'dangerous', 'darkness', 1, 20, 30, [
-    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(
-      1,
-      'The false shape sharpens in the dark.',
-      effects([add('pressure', 1)]),
-    )),
     choice('flashlight', 'Use Flashlight', 'flashlight',
       outcome(50, 'The false shape remains beyond the light.', effects([add('pressure', 1)])),
-      outcome(50, 'The false shape carries you into the dark.', { endingReason: 'kidnapped' })),
+      outcome(50, 'The false shape carries you into the dark.', { ending: 'taken' })),
     choice('flareGun', 'Use Flare Gun', 'flareGun', outcome(
       1,
       'The false shape carries you into the dark.',
-      { items: [consume('flareGun')], endingReason: 'kidnapped' },
+      { items: [consume('flareGun')], ending: 'taken' },
     )),
     contextualChoice('sleep', 'Sleep', outcome(1, 'The shadow leaves before dawn.')),
   ], undefined, { minimumPressure: 3, requiresLivingCompanion: true }),
@@ -764,7 +759,7 @@ function validateOutcome(
     'effect',
     [
       'resources', 'items', 'chest',
-      'nextDawnEnergy', 'followUpNight', 'endingReason',
+      'nextDawnEnergy', 'followUpNight', 'ending',
     ],
   );
   const hasResources = Object.hasOwn(candidateEffects, 'resources');
@@ -772,7 +767,7 @@ function validateOutcome(
   const hasChest = Object.hasOwn(candidateEffects, 'chest');
   const hasNextDawnEnergy = Object.hasOwn(candidateEffects, 'nextDawnEnergy');
   const hasFollowUpNight = Object.hasOwn(candidateEffects, 'followUpNight');
-  const hasEndingReason = Object.hasOwn(candidateEffects, 'endingReason');
+  const hasEnding = Object.hasOwn(candidateEffects, 'ending');
   const chest = hasChest ? candidateEffects.chest : undefined;
   const resourceEntries = hasResources
     ? candidateEffects.resources
@@ -840,8 +835,8 @@ function validateOutcome(
   if (hasFollowUpNight && candidateEffects.followUpNight !== true) {
     throw new Error(`${path}.followUpNight must be true`);
   }
-  if (hasEndingReason && candidateEffects.endingReason !== 'kidnapped') {
-    throw new Error(`${path}.endingReason must be kidnapped`);
+  if (hasEnding && candidateEffects.ending !== 'taken') {
+    throw new Error(`${path}.ending must be taken`);
   }
 }
 

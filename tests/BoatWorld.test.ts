@@ -378,7 +378,7 @@ function snapshot(
 ): SurvivalSnapshot {
   return {
     state: 'day',
-    endingReason: 'standard',
+    ending: null,
     day: 1,
     pressure: 0,
     health: 100,

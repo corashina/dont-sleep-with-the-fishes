@@ -245,12 +245,35 @@ describe('survival events', () => {
     expect(companionEvents.every((id) => living.includes(id))).toBe(true);
   });
 
+  it('keeps the approved Shadow Figure contract', () => {
+    const shadow = survivalEventById('shadow-figure')!;
+    expect(shadow).toMatchObject({
+      earliestDay: 20,
+      minimumPressure: 3,
+      requiresLivingCompanion: true,
+    });
+    expect(shadow.choices.map(({ id }) => id))
+      .toEqual(['flashlight', 'flareGun', 'sleep']);
+
+    const flashlight = shadow.choices[0]!;
+    const flashlightTotal = flashlight.outcomes
+      .reduce((sum, outcome) => sum + outcome.weight, 0);
+    expect(flashlight.outcomes
+      .filter(({ effects }) => effects.ending === 'taken')
+      .reduce((sum, outcome) => sum + outcome.weight, 0) / flashlightTotal)
+      .toBe(0.5);
+    expect(shadow.choices[1]!.outcomes[0]!.effects).toMatchObject({
+      ending: 'taken',
+      items: [{ kind: 'consume', itemId: 'flareGun', quantity: 1 }],
+    });
+    expect(shadow.choices[2]!.outcomes[0]!.effects).not.toHaveProperty('ending');
+  });
+
   it('defines exact Carlitos choices and delegated loot weights', () => {
     const event = (id: string) => survivalEventById(id)!;
 
     expect(event('shadow-figure').choices.map(({ id, itemId }) => ({ id, itemId })))
       .toEqual([
-        { id: 'spyglass', itemId: 'spyglass' },
         { id: 'flashlight', itemId: 'flashlight' },
         { id: 'flareGun', itemId: 'flareGun' },
         { id: 'sleep', itemId: undefined },

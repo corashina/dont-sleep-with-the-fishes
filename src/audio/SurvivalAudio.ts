@@ -1,11 +1,11 @@
 import type { ItemId } from '../game/ItemState';
+import type { EndingRecord } from '../game/ending';
 import type { FishingTerminalResult } from '../survival/FishingSession';
 import type { DedicatedEventId } from '../survival/eventPresentationRoutes';
 import type {
   ActionOutcome,
   DayActionId,
   DayActionOption,
-  SurvivalState,
 } from '../survival/survivalTypes';
 import type { PresentationWeatherId } from '../weather/presentationWeather';
 import type { MidnightTourAudioCue } from '../survival/midnightTourAudioCue';
@@ -359,15 +359,14 @@ export class SurvivalAudio {
     this.thunderSoundIndex = (this.thunderSoundIndex + 1) % THUNDER_SOUNDS.length;
   }
 
-  ending(state: Extract<SurvivalState, 'rescued' | 'dead' | 'sunk'>): void {
+  ending(id: Extract<EndingRecord['id'], 'rescue' | 'death' | 'sinking' | 'taken'>): void {
     if (this.disposed) return;
-    this.scope.play(
-      state === 'rescued'
-        ? 'rescueEnding'
-        : state === 'dead'
-          ? 'deathEnding'
-          : 'sinkingEnding',
-    );
+    const cue = id === 'rescue'
+      ? 'rescueEnding'
+      : id === 'sinking'
+        ? 'sinkingEnding'
+        : 'deathEnding';
+    this.scope.play(cue);
   }
 
   setPaused(paused: boolean): void {

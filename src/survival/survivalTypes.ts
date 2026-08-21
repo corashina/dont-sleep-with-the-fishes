@@ -1,4 +1,5 @@
 import type { ItemId, ItemInstance, ItemInstanceId } from '../game/ItemState';
+import type { EndingRecord } from '../game/ending';
 import type { FishingSession } from './FishingSession';
 import type { JournalEntry } from './journal';
 import type { CarlitosSnapshot } from './CarlitosState';
@@ -117,7 +118,6 @@ export interface ChestSnapshot {
   readonly acquiredDay: number | null;
 }
 export type ChestEventEffect = 'acquire' | 'close' | 'destroy';
-export type SurvivalEndingReason = 'standard' | 'kidnapped';
 export type IntegerValue = number | { readonly min: number; readonly max: number };
 export interface ResourceEffect {
   readonly resource: EventResource;
@@ -136,7 +136,7 @@ export interface EventEffects {
   readonly chest?: ChestEventEffect;
   readonly nextDawnEnergy?: DawnEnergy;
   readonly followUpNight?: true;
-  readonly endingReason?: 'kidnapped';
+  readonly ending?: 'taken';
 }
 export interface WeightedEventOutcome {
   readonly resultId?: string;
@@ -206,7 +206,7 @@ export interface SurvivalEventDefinition {
 
 export interface SurvivalSnapshot {
   state: SurvivalState;
-  readonly endingReason: SurvivalEndingReason;
+  readonly ending: EndingRecord | null;
   day: number;
   pressure: number;
   health: number;

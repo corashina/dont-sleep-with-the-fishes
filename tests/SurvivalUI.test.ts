@@ -632,13 +632,13 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector<HTMLElement>('[data-carlitos-card]')!.hidden).toBe(true);
   });
 
-  it('shows only the kidnapped ending title', () => {
+  it('shows only the taken ending title', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
 
-    ui.showEnding('dead', 8, 1234, 37, 'kidnapped');
+    ui.showEnding({ id: 'taken', day: 8, savedPickupCount: 4 });
 
-    expect(mount.querySelector('[data-ending-title]')?.textContent).toBe('Taken in the dark.');
+    expect(mount.querySelector('[data-ending-title]')?.textContent).toBe('TAKEN IN THE DARK');
     expect(mount.querySelector('[data-ending-body]')).toBeNull();
     expect(mount.querySelector('[data-ending-stats]')).toBeNull();
     expect(mount.querySelector('[data-ending]')?.textContent).not.toContain('JOURNEY ENDED');
@@ -2883,7 +2883,7 @@ describe('SurvivalUI', () => {
     fish.click();
     expect(action).toHaveBeenCalledTimes(2);
 
-    ui.showEnding('sunk', 2, 7, 40);
+    ui.showEnding({ id: 'sinking', day: 2, savedPickupCount: 4, cause: { eventId: null } });
     fish.click();
     expect(action).toHaveBeenCalledTimes(2);
   });
@@ -2897,7 +2897,7 @@ describe('SurvivalUI', () => {
     ui.render(snapshot(), () => null);
     const pause = mount.querySelector<HTMLElement>('[data-pause]')!;
 
-    ui.showEnding('sunk', 2, 7, 40);
+    ui.showEnding({ id: 'sinking', day: 2, savedPickupCount: 4, cause: { eventId: null } });
     const endingLayer = mount.querySelector<HTMLElement>('[data-ending]')!;
     const endingTitle = mount.querySelector<HTMLElement>('[data-ending-title]')!;
     ui.setPaused(true);
@@ -2927,9 +2927,9 @@ describe('SurvivalUI', () => {
     const restart = vi.fn();
     ui.onRestart = restart;
 
-    ui.showEnding('sunk', 8, 1234, 37);
+    ui.showEnding({ id: 'sinking', day: 8, savedPickupCount: 4, cause: { eventId: null } });
 
-    expect(mount.querySelector('[data-ending-title]')?.textContent).toContain('Boat is gone');
+    expect(mount.querySelector('[data-ending-title]')?.textContent).toBe('THE BOAT IS GONE');
     expect(mount.querySelector('[data-ending-body]')).toBeNull();
     expect(mount.querySelector('[data-ending-stats]')).toBeNull();
     mount.querySelector<HTMLButtonElement>('[data-restart]')!.click();

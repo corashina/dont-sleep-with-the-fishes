@@ -4,6 +4,7 @@ import {
   type ItemId,
   type ItemInstanceId,
 } from '../game/ItemState';
+import { endingTitle, type EndingRecord } from '../game/ending';
 import { formatJournalEntry, type JournalEntry } from '../survival/journal';
 import { carlitosStatus } from '../survival/CarlitosState';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
@@ -18,7 +19,6 @@ import type {
   ResourceDelta,
   RewardSummary,
   SurvivalEventDefinition,
-  SurvivalEndingReason,
   SurvivalSnapshot,
 } from '../survival/survivalTypes';
 import { createElementRequirement } from './dom';
@@ -1425,25 +1425,14 @@ export class SurvivalUI {
   }
 
   showEnding(
-    state: 'rescued' | 'dead' | 'sunk',
-    _day: number,
-    _seed: number,
-    _scavengeElapsedSeconds: number,
-    endingReason: SurvivalEndingReason = 'standard',
+    ending: EndingRecord,
   ): void {
     if (this.disposed) return;
-    const title = endingReason === 'kidnapped'
-      ? 'Taken in the dark.'
-      : state === 'rescued'
-      ? 'Rescue found you.'
-      : state === 'dead'
-        ? 'The sea outlasted you.'
-        : 'Boat is gone.';
     this.closeCarlitosCard(false);
     this.clearEventPresentation();
     this.setPaused(false);
-    this.updateText('ending:title', this.endingTitle, title);
-    this.endingLayer.dataset.ending = state;
+    this.updateText('ending:title', this.endingTitle, endingTitle(ending));
+    this.endingLayer.dataset.ending = ending.id;
     this.restartIssued = false;
     this.restartButton.disabled = false;
     this.showLayer(this.endingLayer);
