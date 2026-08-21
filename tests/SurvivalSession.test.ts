@@ -879,11 +879,11 @@ describe('SurvivalSession daytime actions', () => {
 
     expect(session.resolveEvent(choiceResponse('touch'))).toMatchObject({
       accepted: true,
-      deltas: { hull: hullDelta, health: -70 },
+      deltas: { hull: hullDelta, health: -60 },
     });
     expect(session.snapshot()).toMatchObject({
       hull: 100 + hullDelta,
-      health: 30,
+      health: 40,
     });
   });
 
@@ -2457,7 +2457,7 @@ describe('SurvivalSession daytime actions', () => {
     });
   });
 
-  it('loses random usable or broken items without replacement', () => {
+  it('limits a catastrophic Tornado outcome to one random lost item', () => {
     const session = new SurvivalSession(saved('bucket', 'map', 'spyglass'), {
       seed: 17,
       random: sequenceRandom([0.9, 0, 0.99, 0]),
@@ -2466,7 +2466,7 @@ describe('SurvivalSession daytime actions', () => {
     });
     session.resolveEvent({ kind: 'endure' });
     expect(session.snapshot().inventory).toMatchObject({
-      'bucket-1': { condition: 'lost' },
+      'bucket-1': { condition: 'usable' },
       'map-1': { condition: 'broken' },
       'spyglass-1': { condition: 'lost' },
     });
