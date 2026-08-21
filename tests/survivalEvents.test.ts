@@ -13,13 +13,18 @@ import {
   validateSurvivalEventCatalog,
 } from '../src/survival/events';
 import { sequenceRandom } from './helpers/random';
+import type {
+  IntegerValue,
+  SurvivalEventDefinition,
+  WeightedEventOutcome,
+} from '../src/survival/survivalTypes';
 
 const EXPECTED_WEIGHTS = {
-  'dangerous-waters': 2, leak: 2, 'school-of-fish': 4, snatcher: 3,
-  'death-stare': 4, 'swarm-of-anglerfish': 2, tornado: 1,
-  'shower-night': 3, 'windy-night': 4, 'bad-sleep': 4,
-  thunderstorm: 4, 'restless-waves': 3, 'man-in-the-fog': 2,
-  ghosts: 3, 'eerie-melody': 3, 'face-on-the-moon': 1,
+  'dangerous-waters': 1, leak: 1, 'school-of-fish': 4, snatcher: 3,
+  'death-stare': 1, 'swarm-of-anglerfish': 1, tornado: 1,
+  'shower-night': 3, 'windy-night': 1, 'bad-sleep': 4,
+  thunderstorm: 1, 'restless-waves': 1, 'man-in-the-fog': 1,
+  ghosts: 3, 'eerie-melody': 1, 'face-on-the-moon': 1,
   'shadow-figure': 1, 'guarded-sleep': 4,
   'drifting-barrel': 1, 'drifting-chest': 1,
   'drifting-bottle': 3,
@@ -52,7 +57,118 @@ const add = (name: string, value: unknown) => resource(name, 'add', value);
 const subtract = (name: string, value: unknown) => resource(name, 'subtract', value);
 const item = (kind: string, itemId: string, quantity = 1) => ({ kind, itemId, quantity });
 
+function maximumValue(value: IntegerValue): number {
+  return typeof value === 'number' ? value : value.max;
+}
+
+function maximumLoss(
+  outcome: WeightedEventOutcome,
+  resourceName: 'health' | 'hull',
+): number {
+  return (outcome.effects.resources ?? [])
+    .filter((effect) => (
+      effect.resource === resourceName && effect.operation === 'subtract'
+    ))
+    .reduce((sum, effect) => sum + maximumValue(effect.value), 0);
+}
+
+const APPROVED_COUNTER_CHANCES = [
+  ['dangerous-waters', 'map', 0.80],
+  ['dangerous-waters', 'compass', 0.50],
+  ['leak', 'ductTape', 1.00],
+  ['leak', 'map', 0.60],
+  ['death-stare', 'flashlight', 0.80],
+  ['death-stare', 'umbrella', 0.60],
+  ['swarm-of-anglerfish', 'fishingNet', 0.80],
+  ['tornado', 'anchor', 0.90],
+  ['tornado', 'swimRing', 0.60],
+  ['windy-night', 'fishingNet', 0.80],
+  ['windy-night', 'umbrella', 0.50],
+  ['thunderstorm', 'anchor', 0.80],
+  ['thunderstorm', 'umbrella', 0.60],
+  ['restless-waves', 'anchor', 1.00],
+  ['restless-waves', 'swimRing', 0.50],
+  ['man-in-the-fog', 'compass', 1.00],
+  ['man-in-the-fog', 'flashlight', 0.60],
+  ['eerie-melody', 'ductTape', 1.00],
+  ['eerie-melody', 'umbrella', 0.60],
+  ['chest-attack', 'fishingNet', 1.00],
+] as const;
+
+function event(eventId: string): SurvivalEventDefinition {
+  return SURVIVAL_EVENTS.find(({ id }) => id === eventId)!;
+}
+
+const weightedTestEvent = (
+  id: string,
+  danger: SurvivalEventDefinition['danger'],
+): SurvivalEventDefinition => ({
+  id,
+  phase: 'night',
+  title: id,
+  revealText: id,
+  prompt: 'Choose.',
+  danger,
+  earliestDay: 1,
+  weight: 1,
+  cooldownDays: 0,
+  choices: [{
+    id: 'sleep',
+    label: 'Sleep',
+    outcomes: [{ weight: 1, message: 'Done.', effects: {} }],
+  }],
+  cue: 'none',
+});
+
 describe('survival events', () => {
+  it('caps ordinary outcome damage at sixty per meter', () => {
+    for (const eventEntry of SURVIVAL_EVENTS) {
+      for (const choice of eventEntry.choices) {
+        for (const result of choice.outcomes) {
+          expect(
+            maximumLoss(result, 'health'),
+            `${eventEntry.id}.${choice.id} Health`,
+          ).toBeLessThanOrEqual(60);
+          expect(
+            maximumLoss(result, 'hull'),
+            `${eventEntry.id}.${choice.id} Hull`,
+          ).toBeLessThanOrEqual(60);
+        }
+      }
+    }
+  });
+
+  it('keeps one no-item response on every event', () => {
+    for (const eventEntry of SURVIVAL_EVENTS) {
+      expect(
+        eventEntry.choices.some(({ itemId }) => itemId === undefined),
+        eventEntry.id,
+      ).toBe(true);
+    }
+  });
+
+  it('limits random item loss to one', () => {
+    for (const eventEntry of SURVIVAL_EVENTS) {
+      for (const choice of eventEntry.choices) {
+        for (const result of choice.outcomes) {
+          const randomLoss = (result.effects.items ?? [])
+            .filter(({ kind }) => kind === 'loseRandom')
+            .reduce((sum, mutation) => sum + mutation.quantity, 0);
+          expect(randomLoss, `${eventEntry.id}.${choice.id}`).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+  });
+
+  it.each(APPROVED_COUNTER_CHANCES)(
+    '%s.%s keeps its protective chance',
+    (eventId, choiceId, expected) => {
+      const choice = event(eventId).choices.find(({ id }) => id === choiceId)!;
+      const total = choice.outcomes.reduce((sum, outcome) => sum + outcome.weight, 0);
+      expect(choice.outcomes[0]!.weight / total).toBeCloseTo(expected);
+    },
+  );
+
   it('uses the approved phase, risk, weight, and cooldown rules', () => {
     const byId = Object.fromEntries(SURVIVAL_EVENTS.map((event) => [event.id, event]));
     expect(SURVIVAL_EVENTS.map(({ id }) => id)).toEqual(SURVIVAL_EVENT_IDS);
@@ -113,7 +229,7 @@ describe('survival events', () => {
       targetableItemIds: new Set<ItemId>(),
       appearanceCounts: new Map<string, number>(),
       inventoryItemIds: new Set<ItemId>(),
-      rescueProgress: 0,
+      rescueLead: 0,
       pressure: 4,
     };
     const companionEvents = ['shadow-figure', 'guarded-sleep'];
@@ -130,12 +246,35 @@ describe('survival events', () => {
     expect(companionEvents.every((id) => living.includes(id))).toBe(true);
   });
 
+  it('keeps the approved Shadow Figure contract', () => {
+    const shadow = survivalEventById('shadow-figure')!;
+    expect(shadow).toMatchObject({
+      earliestDay: 20,
+      minimumPressure: 3,
+      requiresLivingCompanion: true,
+    });
+    expect(shadow.choices.map(({ id }) => id))
+      .toEqual(['flashlight', 'flareGun', 'sleep']);
+
+    const flashlight = shadow.choices[0]!;
+    const flashlightTotal = flashlight.outcomes
+      .reduce((sum, outcome) => sum + outcome.weight, 0);
+    expect(flashlight.outcomes
+      .filter(({ effects }) => effects.ending === 'taken')
+      .reduce((sum, outcome) => sum + outcome.weight, 0) / flashlightTotal)
+      .toBe(0.5);
+    expect(shadow.choices[1]!.outcomes[0]!.effects).toMatchObject({
+      ending: 'taken',
+      items: [{ kind: 'consume', itemId: 'flareGun', quantity: 1 }],
+    });
+    expect(shadow.choices[2]!.outcomes[0]!.effects).not.toHaveProperty('ending');
+  });
+
   it('defines exact Carlitos choices and delegated loot weights', () => {
     const event = (id: string) => survivalEventById(id)!;
 
     expect(event('shadow-figure').choices.map(({ id, itemId }) => ({ id, itemId })))
       .toEqual([
-        { id: 'spyglass', itemId: 'spyglass' },
         { id: 'flashlight', itemId: 'flashlight' },
         { id: 'flareGun', itemId: 'flareGun' },
         { id: 'sleep', itemId: undefined },
@@ -215,18 +354,12 @@ describe('survival events', () => {
           itemId: 'swimRing',
           outcomes: [
             {
-              weight: 50,
-              message: 'The boat is damaged.',
-              effects: {
-                resources: [{
-                  resource: 'hull',
-                  operation: 'subtract',
-                  value: { min: 20, max: 40 },
-                }],
-              },
+              weight: 60,
+              message: 'The ring pulls the boat outside the strongest current.',
+              effects: {},
             },
             {
-              weight: 50,
+              weight: 40,
               message: 'The boat is damaged.',
               effects: {
                 resources: [{
@@ -257,14 +390,14 @@ describe('survival events', () => {
             },
             {
               weight: 30,
-              message: 'The boat is badly damaged and two items are lost.',
+              message: 'The boat is badly damaged and one item is lost.',
               effects: {
                 resources: [{
                   resource: 'hull',
                   operation: 'subtract',
-                  value: { min: 60, max: 80 },
+                  value: { min: 50, max: 60 },
                 }],
-                items: [{ kind: 'loseRandom', quantity: 2 }],
+                items: [{ kind: 'loseRandom', quantity: 1 }],
                 nextDawnEnergy: 2,
               },
             },
@@ -303,7 +436,7 @@ describe('survival events', () => {
       weight: 2,
       earliestDay: 15,
       cooldownDays: 20,
-      minimumRescueProgress: 15,
+      minimumRescueLead: 2,
       maximumAppearances: 2,
     });
   });
@@ -363,11 +496,11 @@ describe('survival events', () => {
       .find(({ id }) => id === 'flareGun')?.outcomes[0];
     expect(flareOutcome).toMatchObject({
       effects: {
-        resources: [{ resource: 'rescueProgress', operation: 'add', value: 25 }],
+        resources: [{ resource: 'rescueLead', operation: 'add', value: 6 }],
+        items: [{ kind: 'consume', itemId: 'flareGun', quantity: 1 }],
       },
     });
-    expect(flareOutcome?.effects.items).toBeUndefined();
-    expect(resultIds('other-people', 'flashlight')).toEqual(['people-rescue', 'people-missed']);
+    expect(resultIds('other-people', 'flashlight')).toEqual(['people-signaled']);
     expect(resultIds('other-people', 'sleep')).toEqual(['people-pass']);
     expect(event('other-people').choices.map(({ id }) => id)).not.toContain('pass');
   });
@@ -392,21 +525,21 @@ describe('survival events', () => {
 
     for (const eventId of ['man-in-the-fog', 'face-on-the-moon'] as const) {
       const serialized = JSON.stringify(byId[eventId]?.choices);
-      expect(serialized).not.toContain('rescueProgress');
+      expect(serialized).not.toContain('rescueLead');
     }
 
     const outcomeResources = (choiceId: string) => manInTheFog?.choices
       .find(({ id }) => id === choiceId)?.outcomes.map(({ effects }) => effects.resources ?? []);
     expect(outcomeResources('spyglass')).toEqual([[add('pressure', 1)]]);
     expect(outcomeResources('flashlight')).toEqual([
+      [],
       [add('pressure', 2), subtract('health', 20)],
-      [add('pressure', 2)],
     ]);
     expect(outcomeResources('sleep')).toEqual([
       [add('pressure', 1), subtract('hull', { min: 10, max: 30 })],
       [add('pressure', 1), subtract('health', 20)],
     ]);
-    expect(manInTheFog?.choices.find(({ id }) => id === 'flashlight')?.outcomes[0]?.effects)
+    expect(manInTheFog?.choices.find(({ id }) => id === 'flashlight')?.outcomes[1]?.effects)
       .toMatchObject({ nextDawnEnergy: 1 });
     expect(manInTheFog?.choices.find(({ id }) => id === 'sleep')?.outcomes[1]?.effects)
       .toMatchObject({ nextDawnEnergy: 2 });
@@ -490,7 +623,7 @@ describe('survival events', () => {
         effects: {
           resources: [
             { resource: 'hull', operation: 'subtract', value: { min: 30, max: 60 } },
-            { resource: 'health', operation: 'subtract', value: 70 },
+            { resource: 'health', operation: 'subtract', value: 60 },
           ],
         },
       }],
@@ -549,11 +682,11 @@ describe('survival events', () => {
     expect(event('flowers').maximumPressure).toBeUndefined();
   });
 
-  it('blocks one-time, absent-item, and rescue-progress events', () => {
+  it('blocks one-time, absent-item, and rescue-lead events', () => {
     const base = {
       phase: 'night' as const, day: 20, weather: 'calm' as const, lastEventId: null,
       lastSeenDay: new Map<string, number>(), targetableItemIds: new Set<ItemId>(),
-      appearanceCounts: new Map<string, number>(), inventoryItemIds: new Set<ItemId>(), rescueProgress: 0,
+      appearanceCounts: new Map<string, number>(), inventoryItemIds: new Set<ItemId>(), rescueLead: 0,
     };
     const bottleBase = { ...base, phase: 'day' as const };
     expect(eligibleEvents(SURVIVAL_EVENTS, {
@@ -562,7 +695,7 @@ describe('survival events', () => {
     }).some(({ id }) => id === 'drifting-bottle')).toBe(false);
     expect(eligibleEvents(SURVIVAL_EVENTS, {
       ...base,
-      rescueProgress: 14,
+      rescueLead: 1,
     }).some(({ id }) => id === 'other-people')).toBe(false);
     expect(eligibleEvents(SURVIVAL_EVENTS, {
       ...bottleBase,
@@ -570,12 +703,12 @@ describe('survival events', () => {
     }).some(({ id }) => id === 'drifting-bottle')).toBe(true);
     expect(eligibleEvents(SURVIVAL_EVENTS, {
       ...base,
-      rescueProgress: 15,
+      rescueLead: 2,
       appearanceCounts: new Map([['other-people', 2]]),
     }).some(({ id }) => id === 'other-people')).toBe(false);
     expect(eligibleEvents(SURVIVAL_EVENTS, {
       ...base,
-      rescueProgress: 15,
+      rescueLead: 2,
       appearanceCounts: new Map([['other-people', 1]]),
     }).some(({ id }) => id === 'other-people')).toBe(true);
   });
@@ -585,7 +718,7 @@ describe('survival events', () => {
       phase: 'night', day: 9, weather: 'calm', lastEventId: 'school-of-fish',
       lastSeenDay: new Map([['death-stare', 8], ['leak', 8]]),
       targetableItemIds: new Set(['anchor']),
-      appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueProgress: 0,
+      appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueLead: 0,
     });
     expect(events.every((event) => event.phase === 'night' && event.earliestDay <= 9)).toBe(true);
     expect(events.map((event) => event.id)).not.toContain('school-of-fish');
@@ -594,7 +727,7 @@ describe('survival events', () => {
     expect(eligibleEvents(SURVIVAL_EVENTS, {
       phase: 'night', day: 31, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
       targetableItemIds: new Set(['anchor']),
-      appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueProgress: 0,
+      appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueLead: 0,
     }).map((event) => event.id)).not.toContain('dangerous-waters');
   });
 
@@ -603,7 +736,7 @@ describe('survival events', () => {
 
     expect(event).toMatchObject({
       phase: 'night',
-      weight: 2,
+      weight: 1,
       earliestDay: 2,
       latestDay: 30,
       maximumAppearances: 1,
@@ -615,7 +748,7 @@ describe('survival events', () => {
       phase: 'night', day: 12, weather: 'calm', lastEventId: null,
       lastSeenDay: new Map(), targetableItemIds: new Set(),
       appearanceCounts: new Map([['dangerous-waters', 1]]),
-      inventoryItemIds: new Set(), rescueProgress: 0,
+      inventoryItemIds: new Set(), rescueLead: 0,
     }).map(({ id }) => id)).not.toContain('dangerous-waters');
   });
 
@@ -623,7 +756,7 @@ describe('survival events', () => {
     const eligible = (targetableItemIds: ReadonlySet<ItemId>) => eligibleEvents(SURVIVAL_EVENTS, {
       phase: 'night', day: 8, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
       targetableItemIds,
-      appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueProgress: 0,
+      appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueLead: 0,
     });
 
     expect(eligible(new Set()).map(({ id }) => id)).not.toContain('snatcher');
@@ -637,6 +770,15 @@ describe('survival events', () => {
     expect(drawWeightedEvent(pool, sequenceRandom([pool[0]!.weight / (pool[0]!.weight + pool[1]!.weight)])).id).toBe(pool[1]!.id);
     expect(drawWeightedEvent([], sequenceRandom([0]), 'day').id).toBe('day-calm-fallback');
     expect(drawWeightedEvent([], sequenceRandom([0]), 'night').id).toBe('night-calm-fallback');
+  });
+
+  it('uses pressure-adjusted dangerous weights', () => {
+    const safe = weightedTestEvent('safe-test', 'safe');
+    const dangerous = weightedTestEvent('danger-test', 'dangerous');
+    expect(drawWeightedEvent([safe, dangerous], sequenceRandom([0.4]), 'night', 0).id)
+      .toBe('safe-test');
+    expect(drawWeightedEvent([safe, dangerous], sequenceRandom([0.4]), 'night', 4).id)
+      .toBe('danger-test');
   });
 
   it('rejects malformed event IDs, choice IDs, weights, effects, mutations, and day bounds', () => {
@@ -665,6 +807,13 @@ describe('survival events', () => {
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.resources = {}; }, /resources/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [item('consume', 'telescope')]; }, /unknown item/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [item('consume', 'ductTape', 1.5)]; }, /quantity/i);
+    rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [{ kind: 'loseRandom', quantity: 2 }]; }, /loseRandom.*one/i);
+    rejects((catalog) => {
+      catalog[0].choices[0].outcomes[0].effects.items = [
+        { kind: 'loseRandom', quantity: 1 },
+        { kind: 'loseRandom', quantity: 1 },
+      ];
+    }, /loseRandom.*one/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [item('break', 'flashlight')]; }, /not breakable/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [{ kind: 'gainChest', quantity: 1, fallbackFood: 2 }]; }, /fallback food/i);
     rejects((catalog) => { catalog[0].choices[0].requiredChestState = 'open'; }, /required chest state/i);
@@ -673,6 +822,16 @@ describe('survival events', () => {
     rejects((catalog) => { catalog[0].requiresLivingCompanion = undefined; }, /living companion.*boolean/i);
     rejects((catalog) => { catalog[0].choices[0].companionAction = 'swim'; }, /companion action/i);
     rejects((catalog) => { catalog[0].choices[0].companionAction = undefined; }, /companion action/i);
+    rejects((catalog) => { catalog[0].choices.at(-1).itemId = 'bucket'; }, /no-item response/i);
+    rejects((catalog) => {
+      catalog[0].choices[0].outcomes[0].effects.resources = [
+        subtract('hull', 40),
+        subtract('hull', { min: 10, max: 21 }),
+      ];
+    }, /more than 60 hull/i);
+    rejects((catalog) => {
+      catalog[0].choices[0].outcomes[0].effects.resources = [subtract('health', 61)];
+    }, /more than 60 health/i);
     rejects((catalog) => {
       catalog[0].choices[0].outcomes[0].effects.companion = [];
     }, /unsupported effect key companion/i);
@@ -745,7 +904,7 @@ describe('survival events', () => {
     rejectsEffects({ terminal: 'sunk' }, /unsupported effect key terminal/i);
     rejectsEffects({ resources: undefined }, /resources.*array/i);
     rejectsEffects({ items: undefined }, /items.*array/i);
-    rejectsEffects({ rescue: undefined }, /rescue.*boolean/i);
+    rejectsEffects({ rescue: undefined }, /unsupported effect key rescue/i);
     rejectsEffects({ chest: undefined }, /chest.*invalid effect/i);
     const hiddenRoute = {};
     Object.defineProperty(hiddenRoute, 'route', { value: 'left' });
@@ -758,6 +917,9 @@ describe('survival events', () => {
     rejectsResource({ resource: 'hull', operation: 'subtract' }, /resource effect.*missing.*value/i);
     rejectsResource({ resource: 'hull', operation: 'subtract', value: 1, route: 'left' }, /unsupported resource effect key route/i);
     rejectsResource({ resource: 'hull', operation: 'subtract', value: { min: 1, max: 2, step: 1 } }, /unsupported range key step/i);
+    rejectsResource({ resource: 'rescueLead', operation: 'set', value: 1 }, /rescue lead.*add/i);
+    rejectsResource({ resource: 'rescueLead', operation: 'add', value: 0 }, /invalid resource value/i);
+    rejectsResource({ resource: 'rescueLead', operation: 'add', value: 9 }, /rescue lead.*one through eight/i);
     rejectsResource(['hull', 'subtract', 1], /resource effect.*plain object/i);
     rejectsResource(null, /resource effect.*plain object/i);
   });

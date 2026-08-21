@@ -329,16 +329,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
         this.setPlayerSignalsDark();
         this.root.userData.state = 'signal-sent';
         return Promise.resolve();
-      case 'people-rescue':
-        this.animation.settle();
-        this.root.userData.state = 'answering';
-        return this.startAnimation('result-rescue', RESCUE_DURATION);
-      case 'people-missed':
-        this.animation.settle();
-        this.releaseSupply();
-        this.setPlayerSignalsDark();
-        this.root.userData.state = 'signal-missed';
-        return Promise.resolve();
       case 'people-pass':
         this.setPlayerSignalsDark();
         this.root.userData.signalPulses = 0;

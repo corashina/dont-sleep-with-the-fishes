@@ -1,4 +1,5 @@
 import type { ItemId, ItemInstance, ItemInstanceId } from '../game/ItemState';
+import type { EndingRecord } from '../game/ending';
 import type { FishingSession } from './FishingSession';
 import type { JournalEntry } from './journal';
 import type { CarlitosSnapshot } from './CarlitosState';
@@ -47,7 +48,7 @@ export interface ResourceDelta {
   food?: number;
   bait?: number;
   repairMaterial?: number;
-  rescueProgress?: number;
+  rescueLead?: number;
 }
 
 export type DriftingCargoKind = 'barrel' | 'chest';
@@ -110,14 +111,13 @@ export type BeginFishingResult =
 
 export type EventResource =
   | 'pressure' | 'health' | 'hull' | 'energy'
-  | 'food' | 'bait' | 'repairMaterial' | 'rescueProgress';
+  | 'food' | 'bait' | 'repairMaterial' | 'rescueLead';
 export type ChestState = 'none' | 'closed' | 'mimic';
 export interface ChestSnapshot {
   readonly state: ChestState;
   readonly acquiredDay: number | null;
 }
 export type ChestEventEffect = 'acquire' | 'close' | 'destroy';
-export type SurvivalEndingReason = 'standard' | 'kidnapped';
 export type IntegerValue = number | { readonly min: number; readonly max: number };
 export interface ResourceEffect {
   readonly resource: EventResource;
@@ -134,10 +134,9 @@ export interface EventEffects {
   readonly resources?: readonly ResourceEffect[];
   readonly items?: readonly EventInventoryMutation[];
   readonly chest?: ChestEventEffect;
-  readonly rescue?: boolean;
   readonly nextDawnEnergy?: DawnEnergy;
   readonly followUpNight?: true;
-  readonly endingReason?: 'kidnapped';
+  readonly ending?: 'taken';
 }
 export interface WeightedEventOutcome {
   readonly resultId?: string;
@@ -194,7 +193,7 @@ export interface SurvivalEventDefinition {
   cooldownDays: number;
   maximumAppearances?: number;
   absentItemIds?: readonly ItemId[];
-  minimumRescueProgress?: number;
+  minimumRescueLead?: number;
   minimumPressure?: number;
   maximumPressure?: number;
   allowedChestStates?: readonly ChestState[];
@@ -207,7 +206,7 @@ export interface SurvivalEventDefinition {
 
 export interface SurvivalSnapshot {
   state: SurvivalState;
-  readonly endingReason: SurvivalEndingReason;
+  readonly ending: EndingRecord | null;
   day: number;
   pressure: number;
   health: number;
@@ -219,7 +218,8 @@ export interface SurvivalSnapshot {
   recoveredFood: number;
   recoveredBait: number;
   repairMaterial: number;
-  rescueProgress: number;
+  rescueLead: number;
+  readonly rescueTraceFinds: number;
   readonly chest: ChestSnapshot;
   weather: WeatherId;
   actedToday: boolean;
