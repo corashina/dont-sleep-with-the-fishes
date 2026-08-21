@@ -4,6 +4,7 @@ import {
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
+import type { DeathCause, EndingRecord } from '../game/ending';
 import {
   SURVIVAL_EVENTS,
   drawWeightedEvent,
@@ -76,7 +77,6 @@ import type {
   ChestState,
   CompanionEventActionAvailability,
   CompanionEventActionId,
-  SurvivalEndingReason,
   WeatherId,
   WeightedEventOutcome,
 } from './survivalTypes';
@@ -129,7 +129,10 @@ interface ActiveFishingTransaction {
 
 export class SurvivalSession {
   private state: SurvivalState = 'day';
-  private endingReason: SurvivalEndingReason = 'standard';
+  private readonly savedPickupCount: number;
+  private ending: EndingRecord | null = null;
+  private lastHealthCause: DeathCause = { kind: 'other' };
+  private lastHullEventId: string | null = null;
   private day: number;
   private pressure: number;
   private health: number;
@@ -199,6 +202,7 @@ export class SurvivalSession {
       this.appearanceCounts.set(eventId, count);
     }
     this.pendingEventId = null;
+    this.savedPickupCount = savedItems.length;
     const hasCarlitos = savedItems.some(({ type }) => type === 'carlitos');
     this.savedItems = Object.freeze(savedItems
       .filter(({ type }) => type !== 'carlitos')
@@ -236,7 +240,7 @@ export class SurvivalSession {
 
     this.cachedSnapshot = Object.freeze({
       state: this.state,
-      endingReason: this.endingReason,
+      ending: this.ending,
       day: this.day,
       pressure: this.pressure,
       health: this.health,
@@ -589,6 +593,7 @@ export class SurvivalSession {
     for (const effect of resolved.effects.resources ?? []) {
       inventoryMutations.push(...this.applyEventResource(
         effect,
+        event.id,
         mutationExclusions,
         selectedInstanceId,
       ));
@@ -618,8 +623,12 @@ export class SurvivalSession {
     if (resolved.effects.nextDawnEnergy !== undefined) {
       this.nextDawnEnergyOverride = resolved.effects.nextDawnEnergy;
     }
-    if (resolved.effects.endingReason === 'kidnapped') {
-      this.endingReason = 'kidnapped';
+    if (resolved.effects.ending === 'taken') {
+      this.ending = Object.freeze({
+        id: 'taken',
+        day: this.day,
+        savedPickupCount: this.savedPickupCount,
+      });
       this.state = 'dead';
     }
 
@@ -726,6 +735,7 @@ export class SurvivalSession {
     const pressureIncrease = pressureIncreaseForDay(this.day);
     if (pressureIncrease > 0) deltas.pressure = pressureIncrease;
     if (hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.maximum) {
+      this.lastHealthCause = { kind: 'starvation' };
       deltas.health = -SURVIVAL_BALANCE.dawn.starvationDamage;
     }
 
@@ -734,6 +744,12 @@ export class SurvivalSession {
 
     const rescueChance = rescueChanceForDay(this.day, this.rescueLead);
     if (rescueChance > 0 && this.random.next() < rescueChance) {
+      this.ending = Object.freeze({
+        id: 'rescue',
+        day: this.day,
+        savedPickupCount: this.savedPickupCount,
+        signalAssisted: this.rescueLead > 0,
+      });
       this.state = 'rescued';
       this.clearPendingEvent();
       return this.commit(
@@ -921,7 +937,10 @@ export class SurvivalSession {
     const recovered = this.random.next() < successChance;
     const injured = this.random.next() < injuryChance;
     const deltas: ResourceDelta = { energy: -SURVIVAL_BALANCE.actions.diveEnergy };
-    if (injured) deltas.health = -SURVIVAL_BALANCE.diving.injuryDamage;
+    if (injured) {
+      this.lastHealthCause = { kind: 'diving' };
+      deltas.health = -SURVIVAL_BALANCE.diving.injuryDamage;
+    }
 
     if (recovered) {
       const rewardRoll = this.random.next();
@@ -1350,11 +1369,18 @@ export class SurvivalSession {
 
   private applyEventResource(
     effect: ResourceEffect,
+    eventId: string,
     excludedInstanceIds: ReadonlySet<ItemInstanceId>,
     selectedInstanceId: ItemInstanceId | null,
   ): JournalInventoryMutation[] {
     if (typeof effect.value !== 'number') {
       throw new Error(`Event resource ${effect.resource} was not resolved to a concrete value.`);
+    }
+    if (effect.operation === 'subtract' && effect.resource === 'health') {
+      this.lastHealthCause = { kind: 'event', eventId };
+    }
+    if (effect.operation === 'subtract' && effect.resource === 'hull') {
+      this.lastHullEventId = eventId;
     }
     const current = this.resourceValues()[effect.resource];
     const delta = effect.operation === 'set'
@@ -1694,10 +1720,21 @@ export class SurvivalSession {
   }
 
   private resolveTerminal(): void {
-    if (this.isTerminal()) return;
-    if (this.health <= 0) this.state = 'dead';
-    else if (this.hull <= 0) this.state = 'sunk';
-    if (this.isTerminal()) this.clearPendingEvent();
+    if (this.ending !== null) return;
+    if (this.health <= 0) {
+      this.state = 'dead';
+      this.ending = Object.freeze({
+        id: 'death', day: this.day, savedPickupCount: this.savedPickupCount,
+        cause: Object.freeze({ ...this.lastHealthCause }),
+      });
+    } else if (this.hull <= 0) {
+      this.state = 'sunk';
+      this.ending = Object.freeze({
+        id: 'sinking', day: this.day, savedPickupCount: this.savedPickupCount,
+        cause: Object.freeze({ eventId: this.lastHullEventId }),
+      });
+    }
+    if (this.ending !== null) this.clearPendingEvent();
   }
 
   private isTerminal(): boolean {

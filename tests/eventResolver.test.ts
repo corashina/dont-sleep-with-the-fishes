@@ -85,7 +85,7 @@ describe('resolveWeightedOutcome', () => {
         effects: {
           nextDawnEnergy: 0,
           followUpNight: true,
-          endingReason: 'kidnapped',
+          ending: 'taken',
         },
       }],
     });

@@ -68,8 +68,8 @@ export function resolveWeightedOutcome(
       ...(selected.effects.followUpNight !== undefined
         ? { followUpNight: selected.effects.followUpNight }
         : {}),
-      ...(selected.effects.endingReason !== undefined
-        ? { endingReason: selected.effects.endingReason }
+      ...(selected.effects.ending !== undefined
+        ? { ending: selected.effects.ending }
         : {}),
     },
   };

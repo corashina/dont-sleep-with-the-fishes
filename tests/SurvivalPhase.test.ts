@@ -50,7 +50,7 @@ function inventory(
 
 function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
   return {
-    state: 'day', endingReason: 'standard', day: 1, pressure: 0, health: 100, hunger: 20, energy: 3, hull: 100,
+    state: 'day', ending: null, day: 1, pressure: 0, health: 100, hunger: 20, energy: 3, hull: 100,
     food: 0, bait: 0, recoveredFood: 0, recoveredBait: 0, repairMaterial: 0,
     rescueLead: 0, rescueTraceFinds: 0, chest: { state: 'none', acquiredDay: null },
     weather: 'calm', actedToday: false,
@@ -623,6 +623,13 @@ function createDiveRig(options: {
     current = snapshot({
       inventory: diveInventory,
       state: options.terminalState ?? 'day',
+      ending: options.terminalState === 'dead'
+        ? { id: 'death', day: 1, savedPickupCount: 0, cause: { kind: 'diving' } }
+        : options.terminalState === 'sunk'
+          ? { id: 'sinking', day: 1, savedPickupCount: 0, cause: { eventId: null } }
+          : options.terminalState === 'rescued'
+            ? { id: 'rescue', day: 1, savedPickupCount: 0, signalAssisted: false }
+            : null,
       energy: 0,
       food: 1,
       health: options.terminalState === 'dead' ? 0 : 100,
@@ -3778,6 +3785,7 @@ describe('SurvivalPhase orchestration', () => {
           calls.push('resolve:visit');
           current = snapshot({
             state: 'dead',
+            ending: { id: 'death', day: 1, savedPickupCount: 0, cause: { kind: 'event', eventId: 'midnight-tour' } },
             pendingEventId: null,
             pressure: 1,
             health: 0,
@@ -3865,6 +3873,7 @@ describe('SurvivalPhase orchestration', () => {
         resolveEvent: vi.fn(() => {
           current = snapshot({
             state: 'dead',
+            ending: { id: 'death', day: 1, savedPickupCount: 0, cause: { kind: 'event', eventId: 'midnight-tour' } },
             pendingEventId: null,
             health: 0,
           });
@@ -6157,6 +6166,9 @@ describe('SurvivalPhase orchestration', () => {
       const resolveEvent = vi.fn(() => {
         current = snapshot({
           state: terminalState,
+          ending: terminalState === 'dead'
+            ? { id: 'death', day: 6, savedPickupCount: 0, cause: { kind: 'event', eventId } }
+            : { id: 'sinking', day: 6, savedPickupCount: 0, cause: { eventId } },
           day: 6,
           ...initialResources,
           ...terminalResources,
@@ -6398,7 +6410,10 @@ describe('SurvivalPhase orchestration', () => {
     const restart = vi.fn();
     const showEnding = vi.fn();
     const phase = SurvivalPhase.forTest({
-      session: { snapshot: vi.fn(() => snapshot({ state: 'sunk', day: 6, seed: 8 })) },
+      session: { snapshot: vi.fn(() => snapshot({
+        state: 'sunk', day: 6, seed: 8,
+        ending: { id: 'sinking', day: 6, savedPickupCount: 0, cause: { eventId: null } },
+      })) },
       world: { update: vi.fn(), dispose: vi.fn() },
       ui: { render: vi.fn(), showEnding, dispose: vi.fn() },
       onRestart: restart,
@@ -6408,7 +6423,9 @@ describe('SurvivalPhase orchestration', () => {
     phase.update(2, 0.016);
 
     expect(showEnding).toHaveBeenCalledOnce();
-    expect(showEnding).toHaveBeenCalledWith('sunk', 6, 8, expect.any(Number), 'standard');
+    expect(showEnding).toHaveBeenCalledWith({
+      id: 'sinking', day: 6, savedPickupCount: 0, cause: { eventId: null },
+    });
     phase.requestRestart();
     phase.requestRestart();
     expect(restart).toHaveBeenCalledOnce();
@@ -6713,13 +6730,13 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
-  it('passes the kidnapped ending reason to the UI', () => {
+  it('passes the taken ending record to the UI', () => {
     const showEnding = vi.fn();
     const phase = SurvivalPhase.forTest({
       session: {
         snapshot: vi.fn(() => snapshot({
           state: 'dead',
-          endingReason: 'kidnapped',
+          ending: { id: 'taken', day: 21, savedPickupCount: 4 },
           day: 21,
         })),
       },
@@ -6729,13 +6746,9 @@ describe('SurvivalPhase orchestration', () => {
 
     phase.update(1, 0.016);
 
-    expect(showEnding).toHaveBeenCalledWith(
-      'dead',
-      21,
-      8,
-      expect.any(Number),
-      'kidnapped',
-    );
+    expect(showEnding).toHaveBeenCalledWith({
+      id: 'taken', day: 21, savedPickupCount: 4,
+    });
     phase.dispose();
   });
 
@@ -6830,7 +6843,10 @@ describe('SurvivalPhase orchestration', () => {
       session: {
         snapshot: vi.fn(() => current),
         perform: vi.fn(() => {
-          current = snapshot({ state: 'sunk', day: 4 });
+          current = snapshot({
+            state: 'sunk', day: 4,
+            ending: { id: 'sinking', day: 4, savedPickupCount: 0, cause: { eventId: null } },
+          });
           return accepted({ code: 'boat-sunk', cue: 'sinking', deltas: { hull: -100 } });
         }),
       },
@@ -6887,7 +6903,10 @@ describe('SurvivalPhase orchestration', () => {
       session: {
         snapshot: vi.fn(() => current),
         resolveEvent: vi.fn(() => {
-          current = snapshot({ state: 'sunk', day: 5, journalEntries: [completedEntry(5)] });
+          current = snapshot({
+            state: 'sunk', day: 5, journalEntries: [completedEntry(5)],
+            ending: { id: 'sinking', day: 5, savedPickupCount: 0, cause: { eventId: event.id } },
+          });
           return accepted({ code: 'event-resolved', cue: 'sinking' });
         }),
         beginDawn,

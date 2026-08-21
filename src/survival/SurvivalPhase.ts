@@ -2564,15 +2564,12 @@ export class SurvivalPhase implements GamePhase {
       || !isTerminal(snapshot.state)
       || this.presentedTerminalState !== null
     ) return;
+    if (snapshot.ending === null || snapshot.ending.id === 'dorothy') {
+      throw new Error('Terminal survival snapshots require a survival ending record.');
+    }
     this.presentedTerminalState = snapshot.state;
-    this.audio.ending(snapshot.state);
-    this.ui.showEnding?.(
-      snapshot.state,
-      snapshot.day,
-      snapshot.seed,
-      this.scavengeElapsedSeconds,
-      snapshot.endingReason,
-    );
+    this.audio.ending(snapshot.ending.id);
+    this.ui.showEnding?.(snapshot.ending);
   }
 
   private documentIsHidden(): boolean {

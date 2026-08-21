@@ -170,17 +170,72 @@ function choiceResponse(choiceId: string): EventResponse {
   return { kind: 'choice', choiceId };
 }
 
-describe('SurvivalSession Carlitos events', () => {
-  it('uses exact Shadow Figure kidnapping boundaries', () => {
-    const spyglass = new SurvivalSession(saved('carlitos', 'spyglass'), {
-      seed: 1,
-      random: sequenceRandom([0]),
-      initial: { pressure: 3 },
-      initialEventId: 'shadow-figure',
-    });
-    spyglass.resolveEvent({ kind: 'item', choiceId: 'spyglass', instanceId: 'spyglass-1' });
-    expect(spyglass.snapshot()).toMatchObject({ pressure: 4, state: 'nightEvent' });
+it('records signal-assisted rescue once', () => {
+  const session = new SurvivalSession(saved('bottledPaper'), {
+    seed: 20,
+    random: sequenceRandom([0, 0]),
+    initial: { day: 23, rescueLead: 8 },
+    initialEventId: 'night-calm-fallback',
+  });
+  session.resolveEvent(choiceResponse('sleep'));
+  session.beginDawn();
+  expect(session.snapshot().ending).toEqual({
+    id: 'rescue', day: 24, savedPickupCount: 1, signalAssisted: true,
+  });
+  const ending = session.snapshot().ending;
+  expect(session.beginDawn().accepted).toBe(false);
+  expect(session.snapshot().ending).toBe(ending);
+});
 
+it('records starvation and diving causes', () => {
+  const starving = new SurvivalSession(saved(), {
+    seed: 21,
+    initial: { day: 10, hunger: 100, health: 15 },
+    initialEventId: 'night-calm-fallback',
+  });
+  starving.resolveEvent(choiceResponse('sleep'));
+  starving.beginDawn();
+  expect(starving.snapshot().ending).toMatchObject({
+    id: 'death', cause: { kind: 'starvation' },
+  });
+
+  const diving = new SurvivalSession(saved('scubaSet'), {
+    seed: 22,
+    random: sequenceRandom([0.99, 0, 0]),
+    initial: { health: 10, energy: 3 },
+  });
+  diving.perform('dive');
+  expect(diving.snapshot().ending).toMatchObject({
+    id: 'death', cause: { kind: 'diving' },
+  });
+});
+
+it('records the final event for death and sinking', () => {
+  const death = new SurvivalSession(saved(), {
+    seed: 23,
+    random: sequenceRandom([0.5, 0.5]),
+    initial: { health: 60 },
+    initialEventId: 'death-stare',
+  });
+  death.resolveEvent(choiceResponse('sleep'));
+  expect(death.snapshot().ending).toMatchObject({
+    id: 'death', cause: { kind: 'event', eventId: 'death-stare' },
+  });
+
+  const sinking = new SurvivalSession(saved(), {
+    seed: 23,
+    random: sequenceRandom([0, 0]),
+    initial: { hull: 20 },
+    initialEventId: 'restless-waves',
+  });
+  sinking.resolveEvent(choiceResponse('sleep'));
+  expect(sinking.snapshot().ending).toMatchObject({
+    id: 'sinking', cause: { eventId: 'restless-waves' },
+  });
+});
+
+describe('SurvivalSession Carlitos events', () => {
+  it('uses exact Shadow Figure taken boundaries', () => {
     const pressure = new SurvivalSession(saved('carlitos', 'flashlight'), {
       seed: 1,
       random: sequenceRandom([0.499999]),
@@ -188,16 +243,18 @@ describe('SurvivalSession Carlitos events', () => {
     });
     pressure.resolveEvent({ kind: 'item', choiceId: 'flashlight', instanceId: 'flashlight-1' });
     expect(pressure.snapshot()).toMatchObject({
-      state: 'nightEvent', pressure: 1, endingReason: 'standard',
+      state: 'nightEvent', pressure: 1, ending: null,
     });
 
-    const kidnapped = new SurvivalSession(saved('carlitos', 'flashlight'), {
+    const taken = new SurvivalSession(saved('carlitos', 'flashlight'), {
       seed: 1,
       random: sequenceRandom([0.5]),
       initialEventId: 'shadow-figure',
     });
-    kidnapped.resolveEvent({ kind: 'item', choiceId: 'flashlight', instanceId: 'flashlight-1' });
-    expect(kidnapped.snapshot()).toMatchObject({ state: 'dead', endingReason: 'kidnapped' });
+    taken.resolveEvent({ kind: 'item', choiceId: 'flashlight', instanceId: 'flashlight-1' });
+    expect(taken.snapshot()).toMatchObject({
+      state: 'dead', ending: { id: 'taken', day: 1, savedPickupCount: 2 },
+    });
 
     const flare = new SurvivalSession(saved('carlitos', 'flareGun'), {
       seed: 1,
@@ -206,7 +263,7 @@ describe('SurvivalSession Carlitos events', () => {
     });
     flare.resolveEvent({ kind: 'item', choiceId: 'flareGun', instanceId: 'flareGun-1' });
     expect(flare.snapshot()).toMatchObject({
-      state: 'dead', endingReason: 'kidnapped',
+      state: 'dead', ending: { id: 'taken', day: 1, savedPickupCount: 2 },
       inventory: { 'flareGun-1': { condition: 'consumed' } },
     });
 
@@ -217,7 +274,7 @@ describe('SurvivalSession Carlitos events', () => {
     });
     sleep.resolveEvent({ kind: 'choice', choiceId: 'sleep' });
     expect(sleep.snapshot()).toMatchObject({
-      state: 'nightEvent', pressure: 0, endingReason: 'standard',
+      state: 'nightEvent', pressure: 0, ending: null,
     });
   });
 
