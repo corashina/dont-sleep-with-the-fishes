@@ -23,6 +23,7 @@ import {
 export const HANGING_LANTERN_DAY_INTENSITY = 5.2;
 export const HANGING_LANTERN_NIGHT_INTENSITY = 7.2;
 export const HANGING_LANTERN_LINE_LENGTH = 0.22;
+export const HANGING_LANTERN_MODEL_SCALE = 0.5;
 export const HANGING_LANTERN_MOUNT = Object.freeze({ x: 0, y: 0.28, z: 2.35 });
 export const HANGING_LANTERN_TIP = Object.freeze({ x: 0, y: 1.57, z: -1.7 });
 export const HANGING_LANTERN_MAX_SWING = Math.PI / 9;
@@ -83,7 +84,8 @@ export function createHangingLantern(model: Group): HangingLantern {
   line.position.y = -HANGING_LANTERN_LINE_LENGTH / 2;
 
   model.name = 'hanging-lantern:model';
-  model.position.y = -HANGING_LANTERN_LINE_LENGTH - 0.48;
+  model.scale.setScalar(HANGING_LANTERN_MODEL_SCALE);
+  model.position.y = -HANGING_LANTERN_LINE_LENGTH - 0.24;
   model.traverse((object) => {
     if (!(object instanceof Mesh)) return;
     object.castShadow = false;
@@ -99,7 +101,7 @@ export function createHangingLantern(model: Group): HangingLantern {
 
   const light = new PointLight(0xffb261, HANGING_LANTERN_DAY_INTENSITY, 5, 2);
   light.name = 'hanging-lantern:light';
-  light.position.y = -HANGING_LANTERN_LINE_LENGTH - 0.24;
+  light.position.y = -HANGING_LANTERN_LINE_LENGTH - 0.13;
   light.castShadow = true;
   light.shadow.mapSize.set(512, 512);
   light.shadow.camera.near = 0.08;

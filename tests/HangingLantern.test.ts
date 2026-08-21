@@ -14,6 +14,7 @@ import {
   HANGING_LANTERN_DAY_INTENSITY,
   HANGING_LANTERN_NIGHT_INTENSITY,
   HANGING_LANTERN_LINE_LENGTH,
+  HANGING_LANTERN_MODEL_SCALE,
   HANGING_LANTERN_MOUNT,
   HANGING_LANTERN_TIP,
   HANGING_LANTERN_MAX_SWING,
@@ -71,6 +72,11 @@ describe('hanging lantern', () => {
       HANGING_LANTERN_TIP.z,
     ]);
     expect(pivotWorld.y - modelBounds.max.y).toBeCloseTo(HANGING_LANTERN_LINE_LENGTH, 5);
+    expect(model.scale.toArray()).toEqual([
+      HANGING_LANTERN_MODEL_SCALE,
+      HANGING_LANTERN_MODEL_SCALE,
+      HANGING_LANTERN_MODEL_SCALE,
+    ]);
     expect(modelBounds.min.y).toBeGreaterThan(0.9);
 
     lantern.dispose();
@@ -90,6 +96,9 @@ describe('hanging lantern', () => {
     expect(lantern.light.distance).toBe(5);
     expect(lantern.light.castShadow).toBe(true);
     expect(lantern.light.shadow.camera.far).toBe(5);
+    expect(lantern.light.position.y).toBeCloseTo(
+      -HANGING_LANTERN_LINE_LENGTH - 0.13,
+    );
     expect(lantern.light.shadow.mapSize.toArray()).toEqual([512, 512]);
     expect(mesh.castShadow).toBe(false);
     expect(mesh.receiveShadow).toBe(true);
