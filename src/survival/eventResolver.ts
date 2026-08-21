@@ -62,15 +62,14 @@ export function resolveWeightedOutcome(
         ? { items: selected.effects.items.map((mutation) => ({ ...mutation })) }
         : {}),
       ...(selected.effects.chest !== undefined ? { chest: selected.effects.chest } : {}),
-      ...(selected.effects.rescue !== undefined ? { rescue: selected.effects.rescue } : {}),
       ...(selected.effects.nextDawnEnergy !== undefined
         ? { nextDawnEnergy: selected.effects.nextDawnEnergy }
         : {}),
       ...(selected.effects.followUpNight !== undefined
         ? { followUpNight: selected.effects.followUpNight }
         : {}),
-      ...(selected.effects.endingReason !== undefined
-        ? { endingReason: selected.effects.endingReason }
+      ...(selected.effects.ending !== undefined
+        ? { ending: selected.effects.ending }
         : {}),
     },
   };

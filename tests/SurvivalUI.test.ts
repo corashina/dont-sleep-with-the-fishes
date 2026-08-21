@@ -297,6 +297,23 @@ const carlitosAnchor = (x = 720, y = 360) => ({
 });
 
 describe('SurvivalUI', () => {
+  it('shows a cause-aware ending with day and pickup count', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    ui.showEnding({
+      id: 'rescue', day: 30, savedPickupCount: 18, signalAssisted: true,
+    });
+
+    expect(mount.querySelector('[data-ending-title]')?.textContent).toBe('RESCUE FOUND YOU');
+    expect(mount.querySelector('[data-ending-body]')?.textContent)
+      .toBe('A distant crew followed the signs you left across the sea.');
+    expect(mount.querySelector('[data-ending-stats]')?.textContent)
+      .toBe('DAY 30 · 18 PICKUPS SAVED');
+    expect(mount.querySelector('[data-ending-cause]')?.textContent).toBe('');
+    expect(mount.textContent).not.toMatch(/seed|rescue lead|effective day/i);
+  });
+
   it('uses the scuba parchment material on the selected popups', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
@@ -632,15 +649,17 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector<HTMLElement>('[data-carlitos-card]')!.hidden).toBe(true);
   });
 
-  it('shows only the kidnapped ending title', () => {
+  it('shows the taken ending record', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
 
-    ui.showEnding('dead', 8, 1234, 37, 'kidnapped');
+    ui.showEnding({ id: 'taken', day: 8, savedPickupCount: 4 });
 
-    expect(mount.querySelector('[data-ending-title]')?.textContent).toBe('Taken in the dark.');
-    expect(mount.querySelector('[data-ending-body]')).toBeNull();
-    expect(mount.querySelector('[data-ending-stats]')).toBeNull();
+    expect(mount.querySelector('[data-ending-title]')?.textContent).toBe('TAKEN IN THE DARK');
+    expect(mount.querySelector('[data-ending-body]')?.textContent)
+      .toBe('The light found something that had been waiting for you.');
+    expect(mount.querySelector('[data-ending-stats]')?.textContent)
+      .toBe('DAY 8 · 4 PICKUPS SAVED');
     expect(mount.querySelector('[data-ending]')?.textContent).not.toContain('JOURNEY ENDED');
   });
 
@@ -2883,7 +2902,7 @@ describe('SurvivalUI', () => {
     fish.click();
     expect(action).toHaveBeenCalledTimes(2);
 
-    ui.showEnding('sunk', 2, 7, 40);
+    ui.showEnding({ id: 'sinking', day: 2, savedPickupCount: 4, cause: { eventId: null } });
     fish.click();
     expect(action).toHaveBeenCalledTimes(2);
   });
@@ -2897,7 +2916,7 @@ describe('SurvivalUI', () => {
     ui.render(snapshot(), () => null);
     const pause = mount.querySelector<HTMLElement>('[data-pause]')!;
 
-    ui.showEnding('sunk', 2, 7, 40);
+    ui.showEnding({ id: 'sinking', day: 2, savedPickupCount: 4, cause: { eventId: null } });
     const endingLayer = mount.querySelector<HTMLElement>('[data-ending]')!;
     const endingTitle = mount.querySelector<HTMLElement>('[data-ending-title]')!;
     ui.setPaused(true);
@@ -2921,17 +2940,21 @@ describe('SurvivalUI', () => {
     expect(action).toHaveBeenCalledWith('repair', undefined);
   });
 
-  it('shows only the terminal title and emits full restart once', () => {
+  it('shows the terminal record and emits full restart once', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     const restart = vi.fn();
     ui.onRestart = restart;
 
-    ui.showEnding('sunk', 8, 1234, 37);
+    ui.showEnding({ id: 'sinking', day: 8, savedPickupCount: 4, cause: { eventId: 'tornado' } });
 
-    expect(mount.querySelector('[data-ending-title]')?.textContent).toContain('Boat is gone');
-    expect(mount.querySelector('[data-ending-body]')).toBeNull();
-    expect(mount.querySelector('[data-ending-stats]')).toBeNull();
+    expect(mount.querySelector('[data-ending-title]')?.textContent).toBe('THE BOAT IS GONE');
+    expect(mount.querySelector('[data-ending-body]')?.textContent)
+      .toBe('The last damage opened the boat to the sea.');
+    expect(mount.querySelector('[data-ending-stats]')?.textContent)
+      .toBe('DAY 8 · 4 PICKUPS SAVED');
+    expect(mount.querySelector('[data-ending-cause]')?.textContent)
+      .toBe('LAST EVENT: TORNADO');
     mount.querySelector<HTMLButtonElement>('[data-restart]')!.click();
     expect(restart).toHaveBeenCalledOnce();
   });

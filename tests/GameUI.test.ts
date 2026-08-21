@@ -78,16 +78,55 @@ describe('GameUI pause menu', () => {
 });
 
 describe('GameUI ending', () => {
-  it('shows only the ending title and control', () => {
+  it('shows the Dorothy epilogue and restart action', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+
+    ui.renderEnding('menuReady', 1, {
+      id: 'dorothy', day: 0, savedPickupCount: 7,
+    });
+
+    expect(mount.querySelector('[data-ending-body]')?.textContent)
+      .toBe('Dorothy took you down before the lifeboat cleared her side.');
+    expect(mount.querySelector('[data-ending-stats]')?.textContent)
+      .toBe('BEFORE DAY 1 · 7 PICKUPS SAVED');
+    expect(mount.querySelector('[data-ending-action]')?.textContent)
+      .toContain('START FROM THE SHIP');
+
+    ui.dispose();
+  });
+
+  it('uses the shared sparse ending panel', () => {
     const mount = document.createElement('main');
     const ui = new GameUI(mount);
     const ending = mount.querySelector<HTMLElement>('[data-ending]')!;
 
     expect(ending.querySelector('.screen__content')?.classList).toContain('scuba-popup-paper');
-    expect(ending.textContent).toContain('SUNK WITH DOROTHY');
-    expect(ending.textContent).not.toContain('ENDING I');
-    expect(ending.textContent).not.toContain('You stayed aboard');
+    expect(ending.querySelector('[data-ending-title]')).not.toBeNull();
+    expect(ending.querySelector('[data-ending-body]')).not.toBeNull();
+    expect(ending.querySelector('[data-ending-cause]')).not.toBeNull();
+    expect(ending.querySelector('[data-ending-stats]')).not.toBeNull();
     expect(ending.querySelector('[data-ending-action]')).not.toBeNull();
+
+    ui.dispose();
+  });
+
+  it('updates ending text only when the Dorothy record changes', () => {
+    const mount = document.createElement('main');
+    const ui = new GameUI(mount);
+    const first = { id: 'dorothy', day: 0, savedPickupCount: 7 } as const;
+    const endingBody = mount.querySelector<HTMLElement>('[data-ending-body]')!;
+
+    ui.renderEnding('endingHold', 1, first);
+    endingBody.textContent = 'cached';
+    ui.renderEnding('menuReady', 1, first);
+    expect(endingBody.textContent).toBe('cached');
+
+    ui.renderEnding('menuReady', 1, {
+      id: 'dorothy', day: 0, savedPickupCount: 8,
+    });
+    expect(endingBody.textContent)
+      .toBe('Dorothy took you down before the lifeboat cleared her side.');
 
     ui.dispose();
   });

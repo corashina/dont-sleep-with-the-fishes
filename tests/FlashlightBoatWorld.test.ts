@@ -19,7 +19,7 @@ const FLASHLIGHT: ItemInstance = {
 function snapshot(): SurvivalSnapshot {
   return {
     state: 'day',
-    endingReason: 'standard',
+    ending: null,
     day: 1,
     pressure: 0,
     health: 100,
@@ -31,7 +31,8 @@ function snapshot(): SurvivalSnapshot {
     recoveredFood: 0,
     recoveredBait: 0,
     repairMaterial: 0,
-    rescueProgress: 0,
+    rescueLead: 0,
+    rescueTraceFinds: 0,
     chest: { state: 'none', acquiredDay: null },
     weather: 'calm',
     actedToday: false,

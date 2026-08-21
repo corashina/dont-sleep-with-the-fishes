@@ -465,9 +465,9 @@ function sampleFlare(
   const launched = progress >= FLARE_GUN_ACTION_CUE_PROGRESSES[0]!;
   const travel = clamp01((progress - FLARE_GUN_ACTION_CUE_PROGRESSES[0]!) / 0.46);
 
-  output.pitch = -1.25 * ready + 0.16 * recoil;
+  output.pitch = 1.25 * ready - 0.16 * recoil;
   output.yaw = FLARE_GUN_READY_YAW * ready - 0.16 * recoil;
-  output.roll = Math.PI / 2 * ready - 0.06 * recoil;
+  output.roll = -Math.PI / 2 * ready + 0.06 * recoil;
   output.viewZ += 0.28 * recoil;
   output.effectKind = launched && travel < 1 ? 'flare' : 'none';
   output.primaryEffect = launched && travel < 1 ? 1 : 0;

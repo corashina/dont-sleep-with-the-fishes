@@ -127,7 +127,7 @@ describe('OtherPeoplePresentation performance', () => {
     presentation.dispose();
   });
 
-  it('keeps cruising after a missed flashlight signal', async () => {
+  it('keeps cruising after a flashlight signal', async () => {
     const presentation = createPresentation();
     presentation.stage();
     const ship = presentation.root.getObjectByName('other-people-ship')!;
@@ -143,7 +143,7 @@ describe('OtherPeoplePresentation performance', () => {
     const result = presentation.react({
       eventId: 'other-people',
       choiceId: 'flashlight',
-      resultId: 'people-missed',
+      resultId: 'people-signaled',
     }, {} as never);
     presentation.update(4.2, 4.2);
     await result;

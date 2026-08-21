@@ -3,6 +3,13 @@ import type { ScavengeSnapshot } from '../game/ScavengeSession';
 import type { ScavengeEndingStage } from '../game/scavengeEnding';
 import { SCAVENGE_DURATION_SECONDS } from '../game/scavengeRules';
 import type { SinkingState } from '../game/sinking';
+import {
+  endingCauseLine,
+  endingEpilogue,
+  endingSummary,
+  endingTitle,
+  type EndingRecord,
+} from '../game/ending';
 import { createElementRequirement } from './dom';
 import { formatDuration } from './formatDuration';
 import { itemThumbnailUrl } from './itemThumbnailManifest';
@@ -21,7 +28,7 @@ export interface ScavengeItemTooltip {
 
 export class GameUI {
   onResume: () => void = () => undefined;
-  onReturnToMenu: () => void = () => undefined;
+  onRestart: () => void = () => undefined;
   private readonly root: HTMLDivElement;
   private readonly introFade: HTMLElement;
   private readonly hud: HTMLElement;
@@ -38,11 +45,16 @@ export class GameUI {
   private readonly carryTypes: [ItemId | null, ItemId | null, ItemId | null] =
     [null, null, null];
   private readonly resumeButton: HTMLButtonElement;
+  private readonly endingTitle: HTMLElement;
+  private readonly endingBody: HTMLElement;
+  private readonly endingCause: HTMLElement;
+  private readonly endingStats: HTMLElement;
   private readonly endingAction: HTMLButtonElement;
   private readonly pointerLockErrors: HTMLElement[];
   private disposed = false;
-  private returnToMenuHandled = false;
+  private restartHandled = false;
   private endingStage: ScavengeEndingStage = 'playing';
+  private renderedEndingRecord: Extract<EndingRecord, { id: 'dorothy' }> | null = null;
   private renderedTimerSecond = SCAVENGE_DURATION_SECONDS;
 
   constructor(mount: HTMLElement) {
@@ -90,9 +102,13 @@ export class GameUI {
       <section class="screen scavenge-ending-screen poster-screen"
         data-ending role="dialog" aria-modal="true" aria-hidden="true" inert>
         <div class="screen__content scuba-popup-paper scuba-popup-panel">
-          <h2 class="scuba-popup-title ui-role-display" data-ending-title tabindex="-1">SUNK WITH DOROTHY</h2>
-          <button type="button" class="primary-action salvage-action ui-role-context"
-            data-ending-action hidden>BACK TO MAIN MENU</button>
+          <h2 class="scuba-popup-title ui-role-display" data-ending-title tabindex="-1" role="alert"></h2>
+          <p class="ending-copy ui-role-narrative" data-ending-body></p>
+          <p class="ending-cause ui-role-context" data-ending-cause></p>
+          <p class="ending-stats ui-role-numeral" data-ending-stats></p>
+          <button type="button" class="primary-action salvage-action ui-role-context" data-ending-action hidden>
+            START FROM THE SHIP
+          </button>
         </div>
       </section>
     `;
@@ -111,10 +127,14 @@ export class GameUI {
     this.carrySlots = [...this.root.querySelectorAll<HTMLElement>('[data-weight-circle]')];
     if (this.carrySlots.length !== 3) throw new Error('Carry HUD requires three weight slots');
     this.resumeButton = requireElement(this.root, '[data-resume-button]');
+    this.endingTitle = requireElement(this.root, '[data-ending-title]');
+    this.endingBody = requireElement(this.root, '[data-ending-body]');
+    this.endingCause = requireElement(this.root, '[data-ending-cause]');
+    this.endingStats = requireElement(this.root, '[data-ending-stats]');
     this.endingAction = requireElement(this.root, '[data-ending-action]');
     this.pointerLockErrors = [...this.root.querySelectorAll<HTMLElement>('[data-pointer-lock-error]')];
     this.resumeButton.addEventListener('click', this.handleResume);
-    this.endingAction.addEventListener('click', this.handleReturnToMenu);
+    this.endingAction.addEventListener('click', this.handleRestart);
     this.setPresentation('intro');
     this.setIntroFadeProgress(1);
   }
@@ -186,8 +206,19 @@ export class GameUI {
     this.renderCarry(snapshot);
   }
 
-  renderEnding(stage: ScavengeEndingStage, blackout: number): void {
+  renderEnding(
+    stage: ScavengeEndingStage,
+    blackout: number,
+    record: Extract<EndingRecord, { id: 'dorothy' }> | null,
+  ): void {
     const visible = stage === 'endingHold' || stage === 'menuReady';
+    if (visible && record === null) {
+      throw new Error('Dorothy ending record is missing.');
+    }
+    if (record !== null && record !== this.renderedEndingRecord) {
+      this.renderEndingRecord(record);
+      this.renderedEndingRecord = record;
+    }
     const revealAction = stage === 'menuReady';
     this.root.style.setProperty('--scavenge-ending-blackout', String(Math.min(1, Math.max(0, blackout))));
     this.hud.hidden = stage !== 'playing' || this.root.dataset.presentation !== 'playing';
@@ -204,9 +235,9 @@ export class GameUI {
     if (this.disposed) return;
     this.disposed = true;
     this.resumeButton.removeEventListener('click', this.handleResume);
-    this.endingAction.removeEventListener('click', this.handleReturnToMenu);
+    this.endingAction.removeEventListener('click', this.handleRestart);
     this.onResume = () => undefined;
-    this.onReturnToMenu = () => undefined;
+    this.onRestart = () => undefined;
     this.root.remove();
   }
 
@@ -250,9 +281,18 @@ export class GameUI {
   }
 
   private readonly handleResume = (): void => this.onResume();
-  private readonly handleReturnToMenu = (): void => {
-    if (this.returnToMenuHandled) return;
-    this.returnToMenuHandled = true;
-    this.onReturnToMenu();
+  private renderEndingRecord(record: Extract<EndingRecord, { id: 'dorothy' }>): void {
+    this.endingTitle.textContent = endingTitle(record);
+    this.endingBody.textContent = endingEpilogue(record);
+    this.endingCause.textContent = endingCauseLine(record) ?? '';
+    this.endingCause.hidden = this.endingCause.textContent.length === 0;
+    this.endingStats.textContent = endingSummary(record);
+    this.endingLayer.dataset.ending = record.id;
+  }
+
+  private readonly handleRestart = (): void => {
+    if (this.restartHandled) return;
+    this.restartHandled = true;
+    this.onRestart();
   };
 }

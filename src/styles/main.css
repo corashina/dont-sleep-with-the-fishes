@@ -504,6 +504,18 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   box-shadow: inset 0 0 0 2px #050708, 8px 10px 0 #020303b8;
   clip-path: polygon(1% 3%, 98% 0, 100% 94%, 96% 100%, 2% 97%, 0 8%);
 }
+.ending-copy {
+  max-width: 34rem;
+  color: #b9b5a7;
+  line-height: 1.55;
+  text-align: center;
+}
+.ending-cause,
+.ending-stats {
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+.ending-cause[hidden] { display: none; }
 @keyframes timer-pulse { 50% { opacity: 0.58; } }
 
 /* Lifeboat survival phase */

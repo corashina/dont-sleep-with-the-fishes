@@ -212,6 +212,7 @@ function createUpdateHarness(
     contextAction: { type: 'none', prompt: '' },
     ending: createScavengeEndingState(),
     endingStarted: false,
+    dorothyEnding: null,
     cinematicFrame: createScavengeCinematicFrame(),
     cinematicCameraTarget: new Vector3(),
     completionReported: false,
@@ -327,6 +328,7 @@ function introHarness(elapsed = 0) {
     contextAction: { type: 'none', prompt: '' },
     ending: createScavengeEndingState(),
     endingStarted: false,
+    dorothyEnding: null,
     cinematicFrame: createScavengeCinematicFrame(),
     cinematicCameraTarget: new Vector3(),
     completionReported: false,
@@ -448,21 +450,25 @@ describe('Game menu lifecycle', () => {
     }
   });
 
-  it('creates a fresh menu when scavenging returns from its ending', () => {
-    const menus = [gamePhase(), gamePhase()];
-    const scavenge = gamePhase();
+  it('starts a fresh scavenging run and seed from the Dorothy action', () => {
+    const menu = gamePhase();
+    const scavenges = [gamePhase(), gamePhase()];
     let completeMenu: () => void = () => undefined;
-    let returnToMenu: () => void = () => undefined;
+    let restartDorothy: () => void = () => undefined;
     const createMenu = vi.fn((_context, onComplete) => {
       completeMenu = onComplete;
-      return menus[createMenu.mock.calls.length - 1]!;
+      return menu;
     });
+    const createScavenge = vi.fn((_context, _onComplete, onRestart) => {
+      restartDorothy = onRestart;
+      return scavenges[createScavenge.mock.calls.length - 1]!;
+    });
+    const createSeed = vi.fn()
+      .mockReturnValueOnce(11)
+      .mockReturnValueOnce(22);
     const game = Game.forTest({
       createMenu,
-      createScavenge: (_context, _onComplete, onReturnToMenu) => {
-        returnToMenu = onReturnToMenu;
-        return scavenge;
-      },
+      createScavenge,
       createSurvival: () => gamePhase(),
     }, {
       propModels: createTestPropModels(),
@@ -470,41 +476,48 @@ describe('Game menu lifecycle', () => {
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
       physicsRuntime,
+      createSeed,
     });
 
     try {
       game.start();
       completeMenu();
-      returnToMenu();
+      restartDorothy();
 
-      expect(scavenge.dispose).toHaveBeenCalledOnce();
-      expect(createMenu).toHaveBeenCalledTimes(2);
-      expect(menus[1]!.start).toHaveBeenCalledOnce();
+      expect(createMenu).toHaveBeenCalledOnce();
+      expect(createScavenge).toHaveBeenCalledTimes(2);
+      expect(createSeed).toHaveBeenCalledTimes(2);
+      expect((game as unknown as { seed: number }).seed).toBe(22);
+      expect(scavenges[0]!.dispose).toHaveBeenCalledOnce();
+      expect(scavenges[1]!.start).toHaveBeenCalledOnce();
     } finally {
       game.dispose();
     }
   });
 
-  it('reports scavenge disposal failure and still activates the fresh menu', () => {
+  it('reports disposal failure and still starts a fresh Dorothy run', () => {
     const disposalError = new Error('scavenge disposal failed');
-    const menus = [gamePhase(), gamePhase()];
-    const scavenge = gamePhase();
-    scavenge.dispose = vi.fn(() => {
+    const menu = gamePhase();
+    const scavenges = [gamePhase(), gamePhase()];
+    scavenges[0]!.dispose = vi.fn(() => {
       throw disposalError;
     });
     const onFatalError = vi.fn();
     let completeMenu: () => void = () => undefined;
-    let returnToMenu: () => void = () => undefined;
-    const createMenu = vi.fn((_context, onComplete) => {
-      completeMenu = onComplete;
-      return menus[createMenu.mock.calls.length - 1]!;
+    let restartDorothy: () => void = () => undefined;
+    const createScavenge = vi.fn((_context, _onComplete, onRestart) => {
+      restartDorothy = onRestart;
+      return scavenges[createScavenge.mock.calls.length - 1]!;
     });
+    const createSeed = vi.fn()
+      .mockReturnValueOnce(11)
+      .mockReturnValueOnce(22);
     const game = Game.forTest({
-      createMenu,
-      createScavenge: (_context, _onComplete, onReturnToMenu) => {
-        returnToMenu = onReturnToMenu;
-        return scavenge;
+      createMenu: (_context, onComplete) => {
+        completeMenu = onComplete;
+        return menu;
       },
+      createScavenge,
       createSurvival: () => gamePhase(),
     }, {
       propModels: createTestPropModels(),
@@ -512,6 +525,7 @@ describe('Game menu lifecycle', () => {
       shipFurniture: createTestShipFurniture(),
       skyAssets: createTestSkyAssets(),
       physicsRuntime,
+      createSeed,
       onFatalError,
     });
 
@@ -519,11 +533,16 @@ describe('Game menu lifecycle', () => {
       game.start();
       completeMenu();
 
-      expect(returnToMenu).not.toThrow();
+      expect(restartDorothy).not.toThrow();
       expect(onFatalError).toHaveBeenCalledOnce();
       expect(onFatalError).toHaveBeenCalledWith(disposalError);
-      expect(createMenu).toHaveBeenCalledTimes(2);
-      expect(menus[1]!.start).toHaveBeenCalledOnce();
+      expect(createSeed).toHaveBeenCalledTimes(2);
+      expect(createScavenge).toHaveBeenCalledTimes(2);
+      expect(scavenges[1]!.resize).toHaveBeenCalledWith(
+        window.innerWidth,
+        window.innerHeight,
+      );
+      expect(scavenges[1]!.start).toHaveBeenCalledOnce();
     } finally {
       game.dispose();
     }
@@ -1688,10 +1707,15 @@ describe('ScavengePhase lifecycle integration', () => {
       phase.update(0, SCAVENGE_DURATION_SECONDS);
 
       expect(session.snapshot().status).toBe('failure');
-      expect(internals.ui.renderEnding).toHaveBeenCalledWith('sinking', expect.any(Number));
+      expect(internals.ui.renderEnding).toHaveBeenCalledWith('sinking', expect.any(Number), {
+        id: 'dorothy', day: 0, savedPickupCount: 0,
+      });
       expect(exitPointerLock).toHaveBeenCalledOnce();
 
+      const firstRecord = internals.ui.renderEnding.mock.calls.at(-1)![2];
       phase.update(1, 1);
+      expect(internals.ui.renderEnding.mock.calls.at(-1)![2]).toBe(firstRecord);
+      expect(Object.isFrozen(firstRecord)).toBe(true);
 
       const [worldTime, , sinking, cameraPosition, simulatePhysics] = updateWorld.mock.calls.at(-1)!;
       expect(worldTime).toBe(SCAVENGE_DURATION_SECONDS + 2);
@@ -1817,18 +1841,17 @@ describe('ScavengePhase lifecycle integration', () => {
     }
   });
 
-  it('runs the complete failure timeline and returns once to a fresh menu', () => {
+  it('runs the complete failure timeline and restarts scavenging once', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const phases: ScavengePhase[] = [];
-    const menus = [gamePhase(), gamePhase()];
+    const menu = gamePhase();
     const createMenu = vi.fn((_context, onComplete) => {
-      const index = createMenu.mock.calls.length - 1;
-      if (index === 0) onComplete();
-      return menus[index]!;
+      onComplete();
+      return menu;
     });
-    const createScavenge = vi.fn((context, onComplete, onReturnToMenu) => {
-      const phase = new ScavengePhase(context, onComplete, onReturnToMenu);
+    const createScavenge = vi.fn((context, onComplete, onRestart) => {
+      const phase = new ScavengePhase(context, onComplete, onRestart);
       phases.push(phase);
       return phase;
     });
@@ -1873,15 +1896,11 @@ describe('ScavengePhase lifecycle integration', () => {
       action.click();
       action.click();
 
-      expect(createScavenge).toHaveBeenCalledOnce();
-      expect(createMenu).toHaveBeenCalledTimes(2);
-      expect(menus[1]!.resize).toHaveBeenCalledWith(
-        window.innerWidth,
-        window.innerHeight,
-      );
-      expect(menus[1]!.start).toHaveBeenCalledOnce();
+      expect(createScavenge).toHaveBeenCalledTimes(2);
+      expect(createMenu).toHaveBeenCalledOnce();
+      expect(phases[1]).toBeDefined();
       expect(mount.querySelector('[data-start]')).toBeNull();
-      expect(mount.querySelector('[data-hud]')).toBeNull();
+      expect(mount.querySelector('[data-hud]')).not.toBeNull();
     } finally {
       game.dispose();
       mount.remove();

@@ -210,15 +210,7 @@ export function formatDiveResult(outcome: ActionOutcome): RewardResultView {
       }
     }
   }
-  const textRewards = [
-    ['rescueProgress', 'RESCUE PROGRESS'],
-  ] as const;
-  for (const [resource, label] of textRewards) {
-    const delta = outcome.deltas[resource];
-    if (delta !== undefined && delta !== 0) {
-      lines.push(`${label} ${delta > 0 ? '+' : ''}${delta}`);
-    }
-  }
+  if ((outcome.deltas.rescueLead ?? 0) > 0) lines.push('RESCUE TRACE FOUND');
   if (reward === null && lines.length === 0) lines.push('NOTHING FOUND');
   const appliedHealthDelta = outcome.deltas.health;
   if (appliedHealthDelta !== undefined && appliedHealthDelta < 0) {
@@ -2573,15 +2565,12 @@ export class SurvivalPhase implements GamePhase {
       || !isTerminal(snapshot.state)
       || this.presentedTerminalState !== null
     ) return;
+    if (snapshot.ending === null || snapshot.ending.id === 'dorothy') {
+      throw new Error('Terminal survival snapshot is missing its ending record.');
+    }
     this.presentedTerminalState = snapshot.state;
-    this.audio.ending(snapshot.state);
-    this.ui.showEnding?.(
-      snapshot.state,
-      snapshot.day,
-      snapshot.seed,
-      this.scavengeElapsedSeconds,
-      snapshot.endingReason,
-    );
+    this.audio.ending(snapshot.ending.id);
+    this.ui.showEnding?.(snapshot.ending);
   }
 
   private documentIsHidden(): boolean {
