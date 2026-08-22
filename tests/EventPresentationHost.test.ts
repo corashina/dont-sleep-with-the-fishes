@@ -147,6 +147,27 @@ describe('EventPresentationHost', () => {
     expect(host.activeEventId()).toBeNull();
   });
 
+  it('leaves a root with its existing parent when add throws before attachment', () => {
+    const first = { parent: new Group(), root: new Group() };
+    const existingParent = new Group();
+    const root = new Group();
+    const failingParent = new Group();
+    const attachmentError = new Error('attach failed');
+    existingParent.add(root);
+    vi.spyOn(failingParent, 'add').mockImplementation(() => {
+      throw attachmentError;
+    });
+    const host = new EventPresentationHost();
+    const adapter = createAdapter('leak', [first, { parent: failingParent, root }]);
+
+    expect(() => host.attach(adapter)).toThrow(attachmentError);
+
+    expect(first.root.parent).toBeNull();
+    expect(root.parent).toBe(existingParent);
+    expect(existingParent.children).toEqual([root]);
+    expect(host.activeEventId()).toBeNull();
+  });
+
   it('rolls back all attached roots in reverse order', () => {
     const order: string[] = [];
     const first = { parent: new Group(), root: new Group() };
@@ -203,7 +224,7 @@ describe('EventPresentationHost', () => {
     expect(order).toEqual(['second', 'first']);
   });
 
-  it('cleans up after a clear failure and preserves that error', () => {
+  it('cleans up after a clear failure and leaves disposal to the bundle', () => {
     const order: string[] = [];
     const first = new Group();
     const second = new Group();
@@ -224,9 +245,6 @@ describe('EventPresentationHost', () => {
       order.push('second');
       return Group.prototype.removeFromParent.call(second);
     });
-    vi.mocked(adapter.dispose).mockImplementation(() => {
-      order.push('dispose');
-    });
     const host = new EventPresentationHost();
 
     host.attach(adapter);
@@ -235,8 +253,8 @@ describe('EventPresentationHost', () => {
     host.dispose();
 
     expect(adapter.clear).toHaveBeenCalledOnce();
-    expect(adapter.dispose).toHaveBeenCalledOnce();
-    expect(order).toEqual(['clear', 'second', 'first', 'dispose']);
+    expect(adapter.dispose).not.toHaveBeenCalled();
+    expect(order).toEqual(['clear', 'second', 'first']);
     expect(first.parent).toBeNull();
     expect(second.parent).toBeNull();
     expect(() => host.attach(createAdapter())).toThrow('Event presentation host is disposed.');
