@@ -28,7 +28,7 @@ import { TornadoPresentation } from '../src/survival/events/TornadoPresentation'
 import { SupernaturalEventAnimator } from '../src/survival/SupernaturalEventAnimator';
 import { WeatherEventAnimator } from '../src/survival/WeatherEventAnimator';
 import { eventItemMotionProfile } from '../src/survival/eventItemMotionProfile';
-import { SURVIVAL_EVENTS } from '../src/survival/events';
+import { SURVIVAL_EVENTS } from '../src/survival/eventCatalog';
 import { createTestPropModels } from './helpers/propModels';
 import { createTestMoonTexture } from './helpers/skyAssets';
 

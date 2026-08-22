@@ -1,6 +1,6 @@
 // Importance: 9/10. Protects complete event routing and presentation ownership lists.
 import { describe, expect, it } from 'vitest';
-import { SURVIVAL_EVENT_IDS } from '../src/survival/events';
+import { SURVIVAL_EVENT_IDS } from '../src/survival/eventCatalog';
 import {
   DEDICATED_EVENT_IDS,
   EVENT_PRESENTATION_ROUTES,

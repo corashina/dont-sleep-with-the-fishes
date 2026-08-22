@@ -1,5 +1,5 @@
 import type { EventBundle } from './EventBundle';
-import type { SurvivalEventId } from './events';
+import type { SurvivalEventId } from './eventCatalog';
 
 export interface EventBundleLoaderLike {
   load(eventId: SurvivalEventId): Promise<EventBundle>;

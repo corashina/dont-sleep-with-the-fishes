@@ -115,7 +115,7 @@ import {
   isDriftingCargoEventId,
   isDriftingItemEventId,
   type DriftingItemEventId,
-} from './events';
+} from './eventCatalog';
 import type { TimedAnimation } from './animationMath';
 import { EventPresentationCoordinator } from './EventPresentationCoordinator';
 import {
@@ -165,7 +165,7 @@ import type {
   SurvivalSnapshot,
   WeatherId,
 } from './survivalTypes';
-import type { SurvivalEventId } from './events';
+import type { SurvivalEventId } from './eventCatalog';
 import {
   eventSideFromSeed,
   oppositeEventSide,

@@ -1,4 +1,4 @@
-import type { SurvivalEventId } from './events';
+import type { SurvivalEventId } from './eventCatalog';
 
 export type EventPresentationRoute =
   | 'dangerousWaters'

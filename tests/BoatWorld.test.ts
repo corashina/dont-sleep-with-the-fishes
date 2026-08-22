@@ -116,7 +116,7 @@ import { SurvivalInventoryState } from '../src/survival/inventory';
 import {
   SURVIVAL_EVENTS,
   type DriftingItemEventId,
-} from '../src/survival/events';
+} from '../src/survival/eventCatalog';
 import { SurvivalEventModelLibrary } from '../src/survival/SurvivalEventModelLibrary';
 import type {
   ActionOutcome,

@@ -13,7 +13,7 @@ import {
   SurvivalEventModelLibrary,
   type SurvivalEventModels,
 } from './SurvivalEventModelLibrary';
-import type { SurvivalEventId } from './events';
+import type { SurvivalEventId } from './eventCatalog';
 
 function preservePrimaryErrorCleanup(steps: Array<() => void>): void {
   try {

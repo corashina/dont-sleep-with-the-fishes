@@ -5,7 +5,7 @@ import type { EventPresentationLayer } from './EventPresentationLayer';
 import type { FeaturedEventPresentations } from './FeaturedEventPresentations';
 import type { SupernaturalEventAnimator } from './SupernaturalEventAnimator';
 import type { WeatherEventAnimator } from './WeatherEventAnimator';
-import type { SurvivalEventId } from './events';
+import type { SurvivalEventId } from './eventCatalog';
 
 interface PresenterRootBinding {
   readonly parent: Object3D;

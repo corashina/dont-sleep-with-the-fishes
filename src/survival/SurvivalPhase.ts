@@ -40,7 +40,7 @@ import {
   isDriftingItemEventId,
   survivalEventById,
   type DriftingItemEventId,
-} from './events';
+} from './eventCatalog';
 import {
   deriveEventOutcomePresentation,
   deriveEventVariantSeed,
@@ -70,7 +70,7 @@ import type {
 import { SurvivalSession } from './SurvivalSession';
 import { EventBundleLoader } from './EventBundle';
 import { EventBundleManager } from './EventBundleManager';
-import type { SurvivalEventId } from './events';
+import type { SurvivalEventId } from './eventCatalog';
 import type {
   ActionOutcome,
   DayActionId,

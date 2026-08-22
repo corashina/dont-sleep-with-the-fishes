@@ -9,7 +9,7 @@ import { carlitosStatus } from '../survival/CarlitosState';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import { repairEnergyCost, SURVIVAL_BALANCE } from '../survival/survivalBalance';
 import type { BoatInteractionAnchor, BoatToolId, ProjectedBoatBounds } from '../survival/BoatInteraction';
-import type { DriftingItemEventId } from '../survival/events';
+import type { DriftingItemEventId } from '../survival/eventCatalog';
 import type {
   ActionOutcome,
   DayActionId,

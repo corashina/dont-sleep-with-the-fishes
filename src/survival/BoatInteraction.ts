@@ -10,7 +10,7 @@ import {
 } from '../rendering/projectScreenBounds';
 import type { DayActionId, EventResponseId } from './survivalTypes';
 import type { BoatSupplyGroupId } from '../world/BoatStorage';
-import type { DriftingItemEventId } from './events';
+import type { DriftingItemEventId } from './eventCatalog';
 
 export const ACTION_FOR_ITEM = Object.freeze(Object.fromEntries(
   ITEM_IDS.flatMap((id) => {
