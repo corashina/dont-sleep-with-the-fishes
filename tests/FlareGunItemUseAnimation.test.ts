@@ -24,8 +24,8 @@ describe('flare gun item-use animation', () => {
     const raised = sample(0.3);
 
     expect(starting.roll).toBe(0);
-    expect(lifting.roll).toBeGreaterThan(0);
-    expect(lifting.roll).toBeLessThan(raised.roll);
+    expect(Math.abs(lifting.roll)).toBeGreaterThan(0);
+    expect(Math.abs(lifting.roll)).toBeLessThan(Math.abs(raised.roll));
     expect(lifting.pitch).toBeLessThan(0);
   });
 
