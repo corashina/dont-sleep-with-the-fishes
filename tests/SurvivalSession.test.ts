@@ -1630,9 +1630,12 @@ describe('SurvivalSession daytime actions', () => {
     const attempt = beginFishing(session);
     const result = reelCatch(attempt);
     expect(result).toMatchObject({ kind: 'catch', catch: { id: catchId, kind: 'utility' } });
-    expect(session.finishFishing(attempt.snapshot().id, result)).toMatchObject({
+    const outcome = session.finishFishing(attempt.snapshot().id, result);
+    expect(outcome).toMatchObject({
       accepted: true, code: 'utility-caught', deltas,
     });
+    if (result.kind !== 'catch') throw new Error('Expected utility fishing catch.');
+    expect(outcome.message).toBe(`You reeled in ${result.catch.label.toLocaleLowerCase('en-US')}.`);
     expect(session.snapshot()).toMatchObject(snapshotMatch);
     if (item) {
       expect(session.snapshot().inventory[item[0]]?.condition).toBe(item[1]);

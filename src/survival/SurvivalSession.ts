@@ -12,6 +12,7 @@ import {
 import { drawWeightedEvent } from './eventSelection';
 import { resolveWeightedOutcome } from './eventResolver';
 import { FishingSession, type FishingTerminalResult } from './FishingSession';
+import { fishingSettlement } from './fishingSettlementRules';
 import { SurvivalInventoryState } from './inventory';
 import type {
   JournalDayActionRecord,
@@ -455,40 +456,25 @@ export class SurvivalSession {
       return this.reject('fishing-result-mismatch', 'That result does not belong to the active fishing attempt.');
     }
 
-    const reward = result.kind === 'catch' ? result.catch.reward : { kind: 'none' as const };
-    const food = reward.kind === 'food' ? reward.amount : 0;
-    const baitConsumed = reward.kind === 'food' && transaction.capturedBait;
-    const deltas: ResourceDelta = {};
-    if (food > 0) deltas.food = food;
-    if (reward.kind === 'bait') deltas.bait = reward.amount;
-    if (baitConsumed) deltas.bait = -1;
-    if (reward.kind === 'item') {
-      const gained = this.inventory.gain(reward.itemId, reward.condition);
+    const settlement = fishingSettlement(result, transaction.capturedBait);
+    if (settlement.itemReward !== null) {
+      const gained = this.inventory.gain(
+        settlement.itemReward.itemId,
+        settlement.itemReward.condition,
+      );
       if (gained === null) {
-        throw new Error(`Fishing reward would duplicate active ${reward.itemId}`);
+        throw new Error(`Fishing reward would duplicate active ${settlement.itemReward.itemId}`);
       }
     }
-    const code = result.kind === 'miss'
-      ? 'fish-missed'
-      : result.catch.kind === 'fish'
-        ? 'fish-caught'
-        : result.catch.kind === 'utility'
-          ? 'utility-caught'
-          : 'junk-caught';
-    const message = result.kind === 'miss'
-      ? 'The fish got away.'
-      : result.catch.kind === 'fish'
-        ? `You caught a ${result.catch.label.toLocaleLowerCase('en-US')}.`
-        : `You reeled in ${result.catch.label.toLocaleLowerCase('en-US')}.`;
-    const outcome = this.commit(code, message, deltas, 'none');
+    const outcome = this.commit(settlement.code, settlement.message, settlement.deltas, 'none');
     this.pendingJournalActions.push(Object.freeze({
       kind: 'fishing',
       attemptId,
       result: result.kind === 'miss' ? 'miss' : result.catch.kind,
       catchId: result.kind === 'miss' ? null : result.catch.id,
       catchLabel: result.kind === 'miss' ? null : result.catch.label,
-      food,
-      baitConsumed,
+      food: settlement.food,
+      baitConsumed: settlement.baitConsumed,
     }));
     this.activeFishing = null;
     return outcome;
