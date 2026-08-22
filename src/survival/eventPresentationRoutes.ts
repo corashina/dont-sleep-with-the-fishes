@@ -9,6 +9,11 @@ export type EventPresentationRoute =
   | 'supernatural'
   | 'moon';
 
+type EventPresentationRouteMap = Readonly<Record<
+  SurvivalEventId,
+  EventPresentationRoute
+>>;
+
 export const EVENT_PRESENTATION_ROUTES = Object.freeze({
   'dangerous-waters': 'dangerousWaters',
   leak: 'dedicated',
@@ -38,7 +43,7 @@ export const EVENT_PRESENTATION_ROUTES = Object.freeze({
   'night-trader': 'focused',
   handyman: 'focused',
   'other-people': 'focused',
-} as const satisfies Readonly<Record<SurvivalEventId, EventPresentationRoute>>);
+} as const satisfies EventPresentationRouteMap);
 
 export type EventIdForRoute<Route extends EventPresentationRoute> = {
   [Id in keyof typeof EVENT_PRESENTATION_ROUTES]:
