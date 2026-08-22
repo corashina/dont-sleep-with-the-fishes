@@ -25,20 +25,28 @@ export function cloneJournalEntry(entry: JournalEntry): JournalEntry {
     ...entry,
     actions: cloneJournalActions(entry.actions),
     daytime: entry.daytime === null ? null : cloneJournalDaytime(entry.daytime),
-    nighttime: Object.freeze(cloneJournalNight(entry.nighttime)),
+    nighttime: cloneJournalNight(entry.nighttime),
   });
 }
 
 export function cloneJournalNight(record: JournalNightRecord): JournalNightRecord {
-  return record.kind === 'quiet'
+  return Object.freeze(record.kind === 'quiet'
     ? { kind: 'quiet' }
-    : { kind: 'event', event: cloneJournalRecord(record.event) };
+    : { kind: 'event', event: cloneJournalRecord(record.event) });
 }
 
 export function cloneJournalActions(
   actions: readonly JournalDayActionRecord[],
 ): readonly JournalDayActionRecord[] {
-  return Object.freeze(actions.map((action) => Object.freeze({ ...action })));
+  return Object.freeze(actions.map((action) => Object.freeze(
+    action.kind === 'carlitosDawn'
+      ? {
+          ...action,
+          before: Object.freeze({ ...action.before }),
+          after: Object.freeze({ ...action.after }),
+        }
+      : { ...action },
+  )));
 }
 
 export function cloneJournalInventoryMutations(
