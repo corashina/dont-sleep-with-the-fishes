@@ -88,8 +88,10 @@ import { ChestDisplay } from './ChestDisplay';
 import { DivePresentation } from './DivePresentation';
 import type { DangerousWatersBoatReaction } from './DangerousWatersPresentation';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
-import { ActiveEventPresenter } from './ActiveEventPresenter';
-import { EventPresentationLayer } from './EventPresentationLayer';
+import type { EventPresentationAdapter } from './EventPresentationAdapter';
+import { EventPresentationHost } from './EventPresentationHost';
+import { EventPresentationRegistry } from './EventPresentationRegistry';
+import { AUTHORED_EVENT_PRESENTATION_FACTORIES } from './EventPresentationLayer';
 import { EventItemEffects } from './EventItemEffects';
 import { EventItemUseAdapter } from './EventItemUseAdapter';
 import {
@@ -99,16 +101,13 @@ import {
 import {
   resolveEventItemUseContext,
 } from './eventItemUseChoreography';
-import type {
-  EventModelInstance,
-  EventModelLibrary,
-} from './EventModelLibrary';
+import type { EventModelLibrary } from './EventModelLibrary';
 import {
   type EventChoicePresentation,
+  type FocusedEventPresentation,
   type FocusedEventPresentationFactories,
 } from './FocusedEventPresentation';
 import type { EventPresentationCue } from './midnightTourAudioCue';
-import { FeaturedEventPresentations } from './FeaturedEventPresentations';
 import {
   driftingItemLeaveKey,
   driftingItemRetrieveKey,
@@ -117,38 +116,22 @@ import {
   type DriftingItemEventId,
 } from './eventCatalog';
 import type { TimedAnimation } from './animationMath';
-import { EventPresentationCoordinator } from './EventPresentationCoordinator';
 import {
   eventPresentationRoute,
   isEventPresentationRoute,
-  type DedicatedEventId,
   type FeaturedEventId,
 } from './eventPresentationRoutes';
 import type {
-  DedicatedEventEnvironment,
-  DedicatedEventPresentation,
   EventOutcomePresentation,
   EventSceneContext,
 } from './eventPresentationTypes';
-import { AnglerfishSwarmPresentation } from './events/AnglerfishSwarmPresentation';
-import { DeathStarePresentation } from './events/DeathStarePresentation';
-import {
-  CARLITOS_EVENT_IDS,
-  CarlitosEventPresentation,
-} from './events/CarlitosEventPresentation';
-import { LeakPresentation } from './events/LeakPresentation';
-import { SchoolOfFishPresentation } from './events/SchoolOfFishPresentation';
-import { SnatcherPresentation } from './events/SnatcherPresentation';
-import { TornadoPresentation } from './events/TornadoPresentation';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
 import type { FishingCatchId } from './fishingCatalog';
-import { WeatherEventAnimator } from './WeatherEventAnimator';
 import {
   sampleEventPhysicalResponsePose,
   type EventPhysicalResponsePose,
 } from './eventPhysicalResponseChoreography';
-import { SupernaturalEventAnimator } from './SupernaturalEventAnimator';
 import {
   createHangingLantern,
   HANGING_LANTERN_DAY_INTENSITY,
@@ -161,6 +144,7 @@ import {
 } from './SurvivalLantern';
 import type {
   ActionOutcome,
+  EventPresentationKey,
   PresentationCue,
   SurvivalSnapshot,
   WeatherId,
@@ -298,57 +282,53 @@ interface FishingVisuals {
   readonly catchDisplay: Group;
 }
 
-function createDedicatedEventCoordinator(
-  environment: DedicatedEventEnvironment,
-  onlyEventId?: DedicatedEventId | null,
-): EventPresentationCoordinator {
-  const eventModels = {
-    create: ((id: string): EventModelInstance => {
-      const model = environment.eventModels.create(id as never) as Group | EventModelInstance;
-      if (!(model instanceof Group)) return model;
-      return { root: model, dispose: () => undefined };
-    }),
-    animations: (id: never) => environment.eventModels.animations(id),
-    dispose: () => undefined,
-  } as unknown as EventModelLibrary;
-  const dedicatedEnvironment = { ...environment, eventModels };
-  const presentations: DedicatedEventPresentation[] = [];
-  const include = (eventId: DedicatedEventId): boolean => (
-    onlyEventId === undefined || onlyEventId === eventId
-  );
-  try {
-    if (include('leak')) presentations.push(new LeakPresentation(dedicatedEnvironment));
-    if (include('school-of-fish')) {
-      presentations.push(new SchoolOfFishPresentation(dedicatedEnvironment));
-    }
-    if (include('snatcher')) presentations.push(new SnatcherPresentation(dedicatedEnvironment));
-    if (include('death-stare')) {
-      presentations.push(new DeathStarePresentation(dedicatedEnvironment));
-    }
-    if (include('swarm-of-anglerfish')) {
-      presentations.push(new AnglerfishSwarmPresentation(dedicatedEnvironment));
-    }
-    if (include('tornado')) {
-      presentations.push(new TornadoPresentation(dedicatedEnvironment));
-    }
-    for (const eventId of CARLITOS_EVENT_IDS) {
-      if (!include(eventId)) continue;
-      presentations.push(new CarlitosEventPresentation(
-        eventId,
-        dedicatedEnvironment,
-      ));
-    }
-    return new EventPresentationCoordinator(presentations);
-  } catch (error) {
-    try {
-      runCleanupSteps(presentations.map((presentation) => (
-        () => presentation.dispose()
-      )));
-    } catch {
-      // Preserve the construction error while releasing every completed sibling.
-    }
-    throw error;
-  }
+interface FocusedInteractionSpec {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly choiceId: string;
+  readonly tooltip?: boolean;
+  readonly minimumHitWidth: number;
+  readonly minimumHitHeight: number;
+}
+
+const FOCUSED_INTERACTION_SPECS: readonly FocusedInteractionSpec[] = Object.freeze([
+  Object.freeze({
+    id: 'handyman:hand',
+    label: 'HAND',
+    description: 'Touch the waiting hand.',
+    choiceId: 'touch',
+    tooltip: false,
+    minimumHitWidth: 82,
+    minimumHitHeight: 82,
+  }),
+  Object.freeze({
+    id: 'persistent-chest',
+    label: 'CHEST',
+    description: 'Offer the closed chest to the hand.',
+    choiceId: 'chest',
+    minimumHitWidth: 54,
+    minimumHitHeight: 54,
+  }),
+  Object.freeze({
+    id: 'midnight-tour:island',
+    label: 'ISLAND',
+    description: 'Turn the boat toward the small island.',
+    choiceId: 'visit',
+    minimumHitWidth: 96,
+    minimumHitHeight: 78,
+  }),
+]);
+
+interface RescueCuePresentation extends FocusedEventPresentation {
+  setRescueCue(progress: number | null): void;
+}
+
+function isRescueCuePresentation(
+  presentation: FocusedEventPresentation,
+): presentation is RescueCuePresentation {
+  return typeof (presentation as Partial<RescueCuePresentation>).setRescueCue
+    === 'function';
 }
 
 const clamp = (value: number, minimum: number, maximum: number): number =>
@@ -653,23 +633,35 @@ export class BoatWorld {
   private readonly itemEffects: EventItemEffects;
   private readonly itemUseAdapter: EventItemUseAdapter;
   private readonly itemUseController: EventItemUseController;
-  private activeEventPresenter: ActiveEventPresenter | null = null;
+  private readonly eventPresentationHost = new EventPresentationHost();
+  private readonly eventPresentationRegistry = new EventPresentationRegistry();
+  private fallbackEventPresentation: EventPresentationAdapter | null = null;
+  private readonly rescueCueCallbacks = new WeakMap<
+    EventPresentationAdapter,
+    (progress: number | null) => void
+  >();
+  private activeRescueCueCallback: ((progress: number | null) => void) | null = null;
   private eventCueHandler: (cue: EventPresentationCue) => void = () => undefined;
   private readonly fallbackDedicatedEventModels: EventModelLibrary | null;
   private readonly fallbackFeaturedEventModels: SurvivalEventModels | null;
   private readonly focusedEventFactories: FocusedEventPresentationFactories;
   private chestState: SurvivalSnapshot['chest']['state'] = 'none';
   private readonly toolHoverOutline = new HoverOutline();
-  private readonly dangerousWatersBoatReaction: DangerousWatersBoatReaction = {
-    driftX: 0,
-    pitch: 0,
-    yaw: 0,
-    roll: 0,
-    cameraYaw: 0,
-    cameraZ: 0,
-    lightScale: 1,
-    supplyRoll: 0,
-    supplyLift: 0,
+  private readonly applyDangerousWatersReaction = (
+    reaction: Readonly<DangerousWatersBoatReaction>,
+  ): void => {
+    this.motionRig.position.x += reaction.driftX;
+    this.motionRig.rotation.x += reaction.pitch;
+    this.motionRig.rotation.y += reaction.yaw;
+    this.motionRig.rotation.z += reaction.roll;
+    this.camera.rotateY(reaction.cameraYaw);
+    this.camera.rotateX(reaction.cameraZ * 0.9);
+    this.ambient.intensity *= reaction.lightScale;
+    this.key.intensity *= reaction.lightScale;
+    this.supplyDisplay.applyEventAmbientPose(
+      reaction.supplyRoll,
+      reaction.supplyLift,
+    );
   };
   private readonly driftingItemBowRest = new Object3D();
   private readonly flowersDeckTarget = new Object3D();
@@ -696,6 +688,10 @@ export class BoatWorld {
   private readonly lanternAnchorBounds: BoatObjectBoundsCache | null;
   private readonly chestAnchorBounds: BoatObjectBoundsCache | null;
   private readonly carlitosAnchorBounds: BoatObjectBoundsCache | null;
+  private readonly eventInteractionBounds = new WeakMap<
+    Object3D,
+    BoatObjectBoundsCache | null
+  >();
   private readonly rodPivot = new Group();
   private readonly rod: Object3D;
   private readonly fishingLineOrigin = new Object3D();
@@ -806,6 +802,19 @@ export class BoatWorld {
     scaleX: 1,
     scaleY: 1,
     scaleZ: 1,
+  };
+  private readonly moonEventPresentation = {
+    itemAimTarget: this.moonItemAimTarget,
+    stage: (eventId: SurvivalEventId): void => this.stageMoonEvent(eventId),
+    reveal: (eventId: SurvivalEventId): Promise<void> => this.revealMoonEvent(eventId),
+    react: (
+      eventId: SurvivalEventId,
+      outcome: ActionOutcome,
+      response: EventPhysicalResponsePresentation,
+    ): Promise<void> => this.reactMoonEvent(eventId, outcome, response),
+    update: (delta: number): void => this.updateMoonEvent(delta),
+    settleForVisibilityChange: (): void => this.settleMoonForVisibilityChange(),
+    clear: (): void => this.clearMoonEvent(),
   };
   private fishingPhase: FishingPresentationPhase = 'idle';
   private activeFishingCatch: Object3D | null = null;
@@ -1121,41 +1130,31 @@ export class BoatWorld {
     }
   }
 
-  private get dedicatedEvents(): EventPresentationCoordinator {
-    return this.activeEventPresenter!.dedicated!;
-  }
-
-  private get eventPresentation(): EventPresentationLayer {
-    return this.activeEventPresenter!.layer!;
-  }
-
-  private get featuredEvents(): FeaturedEventPresentations {
-    return this.activeEventPresenter!.featured!;
-  }
-
-  private get weatherEventAnimator(): WeatherEventAnimator {
-    return this.activeEventPresenter!.weather!;
-  }
-
-  private get supernaturalEventAnimator(): SupernaturalEventAnimator {
-    return this.activeEventPresenter!.supernatural!;
-  }
-
-  createEventPresenter(
+  createEventPresentation(
     eventId: SurvivalEventId,
     dedicatedModels: EventModelLibrary,
     featuredModels: SurvivalEventModels,
-  ): ActiveEventPresenter {
+  ): EventPresentationAdapter {
     if (this.disposed) throw new Error('Boat world is disposed.');
-    const route = eventPresentationRoute(eventId);
-    if (route === null) throw new Error(`Missing event presentation route: ${eventId}`);
-    let dedicated: EventPresentationCoordinator | null = null;
-    let layer: EventPresentationLayer | null = null;
-    let featured: FeaturedEventPresentations | null = null;
-    let weather: WeatherEventAnimator | null = null;
-    let supernatural: SupernaturalEventAnimator | null = null;
-    try {
-      dedicated = createDedicatedEventCoordinator({
+    let rescueCueCallback: ((progress: number | null) => void) | null = null;
+    const otherPeopleFactory = this.focusedEventFactories['other-people']
+      ?? AUTHORED_EVENT_PRESENTATION_FACTORIES['other-people']!;
+    const focusedFactories = eventId === 'other-people'
+      ? {
+          ...this.focusedEventFactories,
+          'other-people': (dependencies) => {
+            const presentation = otherPeopleFactory(dependencies);
+            if (presentation !== null && isRescueCuePresentation(presentation)) {
+              rescueCueCallback = (progress) => presentation.setRescueCue(progress);
+            }
+            return presentation;
+          },
+        } satisfies FocusedEventPresentationFactories
+      : this.focusedEventFactories;
+    const adapter = this.eventPresentationRegistry.create(eventId, {
+      worldParent: this.scene,
+      boatParent: this.boat,
+      dedicatedEnvironment: {
           eventModels: dedicatedModels,
           supplies: this.supplyDisplay,
           carlitos: this.carlitos,
@@ -1165,106 +1164,63 @@ export class BoatWorld {
           cameraEffectsRoot: this.cameraEffectsRoot,
           boatEffectsRoot: this.boatEffectsRoot,
           camera: this.camera,
-        }, isEventPresentationRoute(eventId, 'dedicated') ? eventId : null);
-      layer = new EventPresentationLayer({
-          propModels: this.propModels,
-          waves: DEFAULT_WAVES,
-          cameraRig: this.cameraRig,
-          camera: this.camera,
-          boatMotionRoot: this.motionRig,
-          supplyDisplay: this.supplyDisplay,
-          chestDisplay: this.chestDisplay,
-          emitCue: (cue) => this.eventCueHandler(cue),
-        }, this.focusedEventFactories, route === 'dedicated' || route === 'featured'
-          ? null
-          : eventId);
-      featured = new FeaturedEventPresentations(
-          featuredModels,
-          this.camera,
-          this.driftingItemBowRest,
-          this.chestDisplay.root,
-          this.flowersDeckTarget,
-          this.checkBackSternFloor,
-          isEventPresentationRoute(eventId, 'featured') ? eventId : null,
-          {
-            sampleWaveInto: this.sampleWorldWaveInto,
-            readAmplitudeScale: this.readWorldWaveAmplitudeScale,
-          },
-        );
-      weather = new WeatherEventAnimator(
-          this.cameraRig,
-          this.supplyDisplay,
-          dedicatedModels,
-          this.camera,
-          eventId,
-        );
-      supernatural = new SupernaturalEventAnimator(
-          this.cameraRig,
-          this.supplyDisplay,
-          dedicatedModels,
-          this.camera,
-          eventId,
-        );
-      const roots = [
-        ...(dedicated === null ? [] : [
-          { parent: this.scene, root: dedicated.worldRoot },
-          { parent: this.boat, root: dedicated.boatRoot },
-        ]),
-        ...(layer === null ? [] : [{ parent: this.scene, root: layer.root }]),
-        ...(featured === null ? [] : [{ parent: this.scene, root: featured.root }]),
-        ...(weather === null ? [] : [
-          { parent: this.scene, root: weather.worldRoot },
-          { parent: this.boat, root: weather.boatRoot },
-        ]),
-        ...(supernatural === null ? [] : [
-          { parent: this.scene, root: supernatural.worldRoot },
-        ]),
-      ];
-      return new ActiveEventPresenter(eventId, {
-        dedicated,
-        layer,
-        featured,
-        weather,
-        supernatural,
-        roots,
-      });
-    } catch (error) {
-      try {
-        runCleanupSteps([
-          () => dedicated?.dispose(),
-          () => layer?.dispose(),
-          () => featured?.dispose(),
-          () => weather?.dispose(),
-          () => supernatural?.dispose(),
-        ]);
-      } catch {
-        // Preserve the presenter construction error.
-      }
-      throw error;
+      },
+      focusedDependencies: {
+        propModels: this.propModels,
+        waves: DEFAULT_WAVES,
+        cameraRig: this.cameraRig,
+        camera: this.camera,
+        boatMotionRoot: this.motionRig,
+        supplyDisplay: this.supplyDisplay,
+        chestDisplay: this.chestDisplay,
+        emitCue: (cue) => this.eventCueHandler(cue),
+      },
+      focusedFactories,
+      featuredModels,
+      featuredTargets: {
+        driftingItemBow: this.driftingItemBowRest,
+        driftingChest: this.chestDisplay.root,
+        flowersDeck: this.flowersDeckTarget,
+        checkBackStern: this.checkBackSternFloor,
+      },
+      driftingWater: {
+        sampleWaveInto: this.sampleWorldWaveInto,
+        readAmplitudeScale: this.readWorldWaveAmplitudeScale,
+      },
+      moon: this.moonEventPresentation,
+      applyDangerousWatersReaction: this.applyDangerousWatersReaction,
+    });
+    if (rescueCueCallback !== null) {
+      this.rescueCueCallbacks.set(adapter, rescueCueCallback);
     }
+    return adapter;
   }
 
-  attachEventPresenter(presenter: ActiveEventPresenter): void {
+  attach(adapter: EventPresentationAdapter): void {
     if (this.disposed) throw new Error('Boat world is disposed.');
-    if (this.activeEventPresenter !== null) {
-      throw new Error(`Event presenter is already active: ${this.activeEventPresenter.eventId}`);
-    }
-    presenter.attach();
-    this.activeEventPresenter = presenter;
+    this.eventPresentationHost.attach(adapter);
+    this.activeRescueCueCallback = this.rescueCueCallbacks.get(adapter) ?? null;
   }
 
-  detachEventPresenter(presenter: ActiveEventPresenter): void {
-    if (this.activeEventPresenter !== presenter) return;
-    this.activeEventPresenter = null;
-    presenter.detach();
+  detach(adapter: EventPresentationAdapter): void {
+    this.eventPresentationHost.detach(adapter);
+    if (this.eventPresentationHost.activeEventId() === null) {
+      this.activeRescueCueCallback = null;
+    }
   }
 
   private ensureEventPresenter(eventId: SurvivalEventId): void {
-    if (this.activeEventPresenter?.eventId === eventId) return;
-    if (this.activeEventPresenter !== null) {
-      const previous = this.activeEventPresenter;
-      this.activeEventPresenter = null;
-      previous.dispose();
+    if (this.eventPresentationHost.activeEventId() === eventId) return;
+    if (this.fallbackEventPresentation !== null) {
+      const previous = this.fallbackEventPresentation;
+      this.fallbackEventPresentation = null;
+      runCleanupSteps([
+        () => this.detach(previous),
+        () => previous.dispose(),
+      ]);
+    }
+    if (this.eventPresentationHost.activeEventId() !== null) {
+      throw new Error(`Event bundle is not active: ${eventId}`);
     }
     if (
       this.fallbackDedicatedEventModels === null
@@ -1272,12 +1228,22 @@ export class BoatWorld {
     ) {
       throw new Error(`Event bundle is not active: ${eventId}`);
     }
-    const presenter = this.createEventPresenter(
+    const adapter = this.createEventPresentation(
       eventId,
       this.fallbackDedicatedEventModels,
       this.fallbackFeaturedEventModels,
     );
-    this.attachEventPresenter(presenter);
+    try {
+      this.attach(adapter);
+    } catch (error) {
+      try {
+        adapter.dispose();
+      } catch {
+        // Preserve the attachment error.
+      }
+      throw error;
+    }
+    this.fallbackEventPresentation = adapter;
   }
 
   setPhase(phase: 'day' | 'night'): void {
@@ -1381,9 +1347,9 @@ export class BoatWorld {
   setHighlightedItem(instanceId: string | null): void {
     if (this.disposed) return;
     this.supplyDisplay.setHighlighted(instanceId);
-    const focusedRoot = instanceId === null || this.activeEventPresenter === null
+    const focusedRoot = instanceId === null
       ? null
-      : this.eventPresentation.interactionRoot(instanceId);
+      : this.eventPresentationHost.interactionRoot(instanceId);
     this.toolHoverOutline.setTarget(
       instanceId === 'repair-tools'
         ? this.repairTools
@@ -1398,9 +1364,9 @@ export class BoatWorld {
               ? null
               : focusedRoot
           : instanceId?.startsWith('event:') === true
-            ? this.activeFeaturedEventId === null || this.activeEventPresenter === null
+            ? this.activeFeaturedEventId === null
               ? null
-              : this.featuredEvents.interactionRoot(this.activeFeaturedEventId)
+              : this.eventPresentationHost.interactionRoot(this.activeFeaturedEventId)
             : null,
     );
   }
@@ -1453,10 +1419,7 @@ export class BoatWorld {
       }
       return;
     }
-    if (
-      this.hasEventSceneItemUse(eventId, choiceId)
-      && await this.playEventSceneItemUse(eventId, choiceId, instanceId)
-    ) return;
+    if (await this.playEventSceneItemUse(eventId, choiceId, instanceId)) return;
     if (this.disposed || operation !== this.weatherEventOperation) return;
     await this.supplyDisplay.playEventItemUse(instanceId);
   }
@@ -1476,32 +1439,10 @@ export class BoatWorld {
     choiceId: string,
     instanceId: ItemInstanceId,
   ): Promise<boolean> {
-    const presenter = this.activeEventPresenter;
-    if (presenter === null) return Promise.resolve(false);
-    if (eventId === 'dangerous-waters') {
-      return presenter.layer?.playDangerousWatersItemUse(choiceId, instanceId)
-        ?? Promise.resolve(false);
+    if (this.eventPresentationHost.activeEventId() !== eventId) {
+      return Promise.resolve(false);
     }
-    if (presenter.dedicated?.handles(eventId)) {
-      return presenter.dedicated.playItemUse(choiceId, instanceId);
-    }
-    if (presenter.weather?.supportsItemUse(eventId, choiceId)) {
-      return presenter.weather.playItemUse(eventId, choiceId, instanceId);
-    }
-    if (presenter.supernatural?.supportsItemUse(eventId, choiceId)) {
-      return presenter.supernatural.playItemUse(eventId, choiceId, instanceId);
-    }
-    return Promise.resolve(false);
-  }
-
-  private hasEventSceneItemUse(eventId: string, choiceId: string): boolean {
-    const presenter = this.activeEventPresenter;
-    return presenter !== null && (
-      eventId === 'dangerous-waters'
-      || presenter.dedicated?.handles(eventId) === true
-      || presenter.weather?.supportsItemUse(eventId, choiceId) === true
-      || presenter.supernatural?.supportsItemUse(eventId, choiceId) === true
-    );
+    return this.eventPresentationHost.playItemUse(choiceId, instanceId);
   }
 
   playEventChoice(
@@ -1516,12 +1457,11 @@ export class BoatWorld {
     if (typeof choice === 'string' || choice.instanceId === null) {
       this.itemUseController.clear(this.phase);
     }
-    if (this.dedicatedEvents?.handles(eventId)) {
-      return this.dedicatedEvents.playChoice(
-        typeof choice === 'string' ? choice : choice.choiceId,
-      );
-    }
-    return this.eventPresentation.playChoice(eventId, choice);
+    return this.eventPresentationHost.playChoice(
+      typeof choice === 'string'
+        ? { choiceId: choice, instanceId: null, condition: null }
+        : choice,
+    );
   }
 
   stageEvent(context: EventSceneContext): void;
@@ -1559,57 +1499,22 @@ export class BoatWorld {
     this.setCarlitosSeatSide(
       carlitosEventSide ?? this.ambientCarlitosSide,
     );
-    if (route === 'dedicated' && this.dedicatedEvents?.handles(eventId)) {
-      const context = typeof eventOrContext === 'string'
+    this.activeFeaturedEventId = route === 'featured'
+      ? eventId as FeaturedEventId
+      : null;
+    if (route !== 'dedicated') {
+      this.resetDedicatedEffects();
+      Object.assign(this.vortexWave, createInactiveVortexWaveState());
+    }
+    this.eventPresentationHost.stage(
+      typeof eventOrContext === 'string'
         ? {
-            eventId,
+            eventId: eventId as SurvivalEventId,
             targetInstanceId: null,
-            variantSeed: variantSeed ?? 0,
-          } as EventSceneContext
-        : eventOrContext;
-      this.eventPresentation.clear();
-      this.weatherEventAnimator.clear();
-      this.featuredEvents.clear();
-      this.activeFeaturedEventId = null;
-      this.supernaturalEventAnimator.clear();
-      this.clearMoonEvent();
-      this.dedicatedEvents.stage(context);
-      return;
-    }
-    this.dedicatedEvents?.clear();
-    this.resetDedicatedEffects();
-    Object.assign(this.vortexWave, createInactiveVortexWaveState());
-    if (route === 'focused') {
-      this.featuredEvents.clear();
-      this.activeFeaturedEventId = null;
-      this.stageMoonEvent(eventId);
-      if (variantSeed === undefined) this.eventPresentation.stage(eventId);
-      else this.eventPresentation.stage(eventId, variantSeed);
-      this.weatherEventAnimator.stage(eventId);
-      this.supernaturalEventAnimator.clear();
-      return;
-    }
-    if (route === 'featured') {
-      this.eventPresentation.clear();
-      this.featuredEvents.stage(eventId, variantSeed);
-      this.activeFeaturedEventId = eventId as FeaturedEventId;
-      this.weatherEventAnimator.stage(eventId);
-      this.supernaturalEventAnimator.clear();
-      this.clearMoonEvent();
-      return;
-    }
-    this.featuredEvents.clear();
-    this.activeFeaturedEventId = null;
-    this.stageMoonEvent(eventId);
-    if (variantSeed === undefined) this.eventPresentation.stage(eventId);
-    else this.eventPresentation.stage(eventId, variantSeed);
-    if (route === 'weather') {
-      if (resolvedVariantSeed === undefined) this.weatherEventAnimator.stage(eventId);
-      else this.weatherEventAnimator.stage(eventId, resolvedVariantSeed);
-    }
-    else this.weatherEventAnimator.clear();
-    if (route === 'supernatural') this.supernaturalEventAnimator.stage(eventId);
-    else this.supernaturalEventAnimator.clear();
+            variantSeed: resolvedVariantSeed ?? 0,
+          }
+        : eventOrContext,
+    );
   }
 
   async revealEvent(eventId: string): Promise<void> {
@@ -1622,36 +1527,7 @@ export class BoatWorld {
     if (route === null) throw new Error(`Missing event presentation route: ${eventId}`);
     this.ensureEventPresenter(eventId as SurvivalEventId);
     const operation = ++this.weatherEventOperation;
-    if (route === 'dedicated' && this.dedicatedEvents?.handles(eventId)) {
-      await this.dedicatedEvents.reveal();
-    } else if (route === 'focused') {
-      await Promise.all([
-        this.eventPresentation.reveal(eventId),
-        this.weatherEventAnimator.reveal(eventId),
-      ]);
-    } else if (route === 'featured') {
-      await Promise.all([
-        this.featuredEvents.reveal(eventId),
-        this.weatherEventAnimator.reveal(eventId),
-      ]);
-    } else if (route === 'weather') {
-      await Promise.all([
-        this.eventPresentation.reveal(eventId),
-        this.weatherEventAnimator.reveal(eventId),
-      ]);
-    } else if (route === 'supernatural') {
-      await Promise.all([
-        this.eventPresentation.reveal(eventId),
-        this.supernaturalEventAnimator.reveal(eventId),
-      ]);
-    } else if (route === 'moon') {
-      await Promise.all([
-        this.eventPresentation.reveal(eventId),
-        this.revealMoonEvent(eventId),
-      ]);
-    } else {
-      await this.eventPresentation.reveal(eventId);
-    }
+    await this.eventPresentationHost.reveal();
     if (
       !this.disposed
       && operation === this.weatherEventOperation
@@ -1721,21 +1597,33 @@ export class BoatWorld {
   recedeDriftingItem(eventId: DriftingItemEventId): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.toolHoverOutline.setTarget(null);
-    return this.featuredEvents.react(eventId, driftingItemLeaveKey(eventId));
+    return this.playFeaturedPresentation(driftingItemLeaveKey(eventId));
   }
 
   private retrieveFeaturedDriftingItem(eventId: DriftingItemEventId): Promise<void> {
     const handOffChest = eventId === 'drifting-chest' && this.chestState !== 'none';
-    const featuredEvents = this.featuredEvents;
     if (handOffChest) this.chestDisplay.root.visible = false;
-    return featuredEvents.react(
-      eventId,
-      driftingItemRetrieveKey(eventId),
-    ).then(() => {
+    return this.playFeaturedPresentation(driftingItemRetrieveKey(eventId)).then(() => {
       if (!handOffChest || this.disposed) return;
-      const eventChest = featuredEvents.resultRoot(eventId);
+      const eventChest = this.eventPresentationHost.resultRoot(eventId);
       if (eventChest !== null) eventChest.visible = false;
       this.chestDisplay.restorePose();
+    });
+  }
+
+  private playFeaturedPresentation(key: EventPresentationKey): Promise<void> {
+    return this.eventPresentationHost.react({
+      outcome: {
+        accepted: true,
+        code: 'event-presentation',
+        message: '',
+        deltas: {},
+        cue: 'none',
+        eventPresentationKey: key,
+      },
+      physicalResponse: EMPTY_EVENT_PHYSICAL_RESPONSE,
+      result: null,
+      choice: null,
     });
   }
 
@@ -1746,12 +1634,12 @@ export class BoatWorld {
   ): ProjectedBoatBounds | null {
     if (
       this.disposed
-      || this.activeEventPresenter === null
+      || this.eventPresentationHost.activeEventId() === null
       || width <= 0
       || height <= 0
     ) return null;
     this.scene.updateMatrixWorld(true);
-    const root = this.featuredEvents.interactionRoot(eventId);
+    const root = this.eventPresentationHost.interactionRoot(eventId);
     return root === null ? null : projectBoatObjectBounds(root, this.camera, width, height);
   }
 
@@ -1762,12 +1650,12 @@ export class BoatWorld {
   ): ProjectedBoatBounds | null {
     if (
       this.disposed
-      || this.activeEventPresenter === null
+      || this.eventPresentationHost.activeEventId() === null
       || width <= 0
       || height <= 0
     ) return null;
     this.scene.updateMatrixWorld(true);
-    const root = this.featuredEvents.resultRoot(eventId);
+    const root = this.eventPresentationHost.resultRoot(eventId);
     return root === null ? null : projectBoatObjectBounds(root, this.camera, width, height);
   }
 
@@ -1808,43 +1696,22 @@ export class BoatWorld {
       this.ensureEventPresenter(eventId as SurvivalEventId);
     }
     this.weatherEventOperation += 1;
-    if (this.dedicatedEvents?.handles(eventId) && presentation === undefined) {
+    if (isEventPresentationRoute(eventId, 'dedicated') && presentation === undefined) {
       throw new Error('Dedicated event reaction requires exact result data.');
     }
     if (isEventPresentationRoute(eventId, 'focused') && presentation === undefined) {
       this.supplyDisplay.clearEventMotion();
     }
-    const featuredReaction = outcome.eventPresentationKey !== undefined
-      && isEventPresentationRoute(eventId, 'featured')
-      ? this.featuredEvents.react(eventId, outcome.eventPresentationKey)
-      : Promise.resolve();
-    const eventFamilyReaction = this.dedicatedEvents?.handles(eventId)
-      ? this.dedicatedEvents.react(presentation!)
-      : Promise.all([
-          this.weatherEventAnimator.react(
-            eventId,
-            outcome,
-            physicalResponse,
-            presentation?.selectedInstanceId ?? null,
-          ),
-          isEventPresentationRoute(eventId, 'focused')
-            ? this.eventPresentation.react(eventId, outcome)
-            : isEventPresentationRoute(eventId, 'featured')
-            ? featuredReaction
-            : this.eventPresentation.react(eventId, outcome),
-          this.supernaturalEventAnimator.react(
-            eventId,
-            outcome,
-            physicalResponse,
-            presentation?.selectedInstanceId ?? null,
-          ),
-          this.reactMoonEvent(eventId, outcome, physicalResponse),
-        ]);
     await Promise.all([
       presentation === undefined
         ? Promise.resolve()
         : this.itemUseController.react(presentation),
-      eventFamilyReaction,
+      this.eventPresentationHost.react({
+        outcome,
+        physicalResponse,
+        result: presentation ?? null,
+        choice: focusedChoice,
+      }),
     ]);
   }
 
@@ -1856,16 +1723,9 @@ export class BoatWorld {
     this.carlitosSideOverrideActive = false;
     this.setCarlitosSeatSide(this.ambientCarlitosSide);
     this.itemUseController.clear(this.phase);
-    if (this.activeEventPresenter !== null) {
-      this.dedicatedEvents.clear();
-      this.eventPresentation.clear();
-      this.featuredEvents.clear();
-      this.weatherEventAnimator.clear();
-      this.supernaturalEventAnimator.clear();
-    }
+    this.eventPresentationHost.clear();
     this.resetDedicatedEffects();
     this.activeFeaturedEventId = null;
-    this.clearMoonEvent();
     this.supplyDisplay.clearEventMotion();
     if (this.phase === 'day') this.supplyDisplay.releaseDayStowedItems();
     Object.assign(this.vortexWave, createInactiveVortexWaveState());
@@ -1880,33 +1740,14 @@ export class BoatWorld {
     this.repairToolboxAnimation.cancel();
     this.skipSequence();
     this.clearDivePresentation();
-    this.activeEventPresenter?.layer?.settleForVisibilityChange();
-    this.activeEventPresenter?.featured?.settleForVisibilityChange();
-    this.activeEventPresenter?.weather?.settleForVisibilityChange();
-    this.activeEventPresenter?.supernatural?.settleForVisibilityChange();
-    this.settleMoonForVisibilityChange();
-    this.activeEventPresenter?.dedicated?.settleForVisibilityChange();
     this.supplyDisplay.settleEventItemUse();
     this.supplyDisplay.clearEventMotion();
     this.resetDedicatedEffects();
     Object.assign(this.vortexWave, createInactiveVortexWaveState());
   }
 
-  private eventItemAimTarget(eventId: string): Object3D | null {
-    const presenter = this.activeEventPresenter;
-    if (presenter == null) return null;
-    if (eventId === 'dangerous-waters') {
-      return presenter.layer?.itemAimTarget(eventId) ?? null;
-    }
-    if (eventId === 'face-on-the-moon') {
-      return this.moonItemAimTarget;
-    }
-    return presenter.dedicated?.itemAimTarget()
-      ?? presenter.featured?.itemAimTarget(eventId)
-      ?? presenter.weather?.itemAimTarget(eventId)
-      ?? presenter.supernatural?.itemAimTarget(eventId)
-      ?? presenter.layer?.itemAimTarget(eventId)
-      ?? null;
+  private eventItemAimTarget(_eventId: string): Object3D | null {
+    return this.eventPresentationHost.itemAimTarget();
   }
 
   projectInteractionAnchors(width: number, height: number): BoatInteractionAnchor[] {
@@ -2072,9 +1913,8 @@ export class BoatWorld {
       },
     } satisfies BoatInteractionAnchor;
     const featuredRoot = this.activeFeaturedEventId === null
-      || this.activeEventPresenter === null
       ? null
-      : this.featuredEvents.interactionRoot(this.activeFeaturedEventId);
+      : this.eventPresentationHost.interactionRoot(this.activeFeaturedEventId);
     const featuredProjection = featuredRoot === null
       ? null
       : projectBoatObjectBounds(featuredRoot, this.camera, width, height);
@@ -2146,13 +1986,44 @@ export class BoatWorld {
         depth: chestDepth,
       },
     } satisfies BoatInteractionAnchor;
-    const focusedEventAnchors = this.activeEventPresenter === null
-      ? []
-      : this.eventPresentation.projectInteractionAnchors(
-          this.camera,
-          width,
-          height,
-        );
+    const focusedEventAnchors = FOCUSED_INTERACTION_SPECS.flatMap((spec) => {
+      const root = this.eventPresentationHost.interactionRoot(spec.id);
+      if (root === null) return [];
+      if (!this.eventInteractionBounds.has(root)) {
+        this.eventInteractionBounds.set(root, createBoatObjectBoundsCache(root));
+      }
+      const projection = projectCachedBoatObjectBounds(
+        root,
+        this.eventInteractionBounds.get(root) ?? null,
+        this.camera,
+        width,
+        height,
+      );
+      const { width: hitWidth, height: hitHeight, depth, ...point } = projection;
+      return [{
+        id: spec.id,
+        label: spec.label,
+        description: spec.description,
+        tooltip: spec.tooltip,
+        eventChoiceId: spec.choiceId,
+        itemType: null,
+        toolId: null,
+        action: null,
+        ...point,
+        visible: root.visible && point.visible,
+        depleted: false,
+        remainingUses: null,
+        quantity: 1,
+        usableQuantity: 1,
+        brokenQuantity: 0,
+        backingInstanceId: null,
+        hitArea: {
+          width: Math.max(spec.minimumHitWidth, hitWidth),
+          height: Math.max(spec.minimumHitHeight, hitHeight),
+          depth,
+        },
+      } satisfies BoatInteractionAnchor];
+    });
     const focusedIds = new Set(focusedEventAnchors.map(({ id }) => id));
     return [
       ...itemAnchors,
@@ -2389,7 +2260,7 @@ export class BoatWorld {
       this.applyCue(sequence.cue, 1, sequence.duration);
       sequence.resolve();
     }
-    this.activeEventPresenter?.dedicated?.skip();
+    this.eventPresentationHost.settleForVisibilityChange();
   }
 
   update(time: number, delta: number): void {
@@ -2468,15 +2339,9 @@ export class BoatWorld {
 
       this.advanceFishingPresentation(delta);
       this.supplyDisplay.resetEventPoseForFrame();
-      this.activeEventPresenter?.layer?.update(time, delta);
-      this.activeEventPresenter?.featured?.update(time, delta);
+      this.eventPresentationHost.update(time, delta);
       this.advanceDriftingItemCamera(delta);
       this.updateCarlitosDelegation(delta);
-      this.activeEventPresenter?.weather?.update(time, delta);
-      this.applyDangerousWatersPresentation();
-      this.activeEventPresenter?.supernatural?.update(time, delta, amplitudeScale);
-      this.updateMoonEvent(delta);
-      this.activeEventPresenter?.dedicated?.update(time, delta);
       this.supplyDisplay.update(delta);
       this.itemUseController.update(delta);
       this.repairToolboxAnimation.update(delta);
@@ -2533,14 +2398,17 @@ export class BoatWorld {
         this.lightningStrikeListener = null;
       },
       () => this.cancelActiveSequence(),
-      () => this.clearMoonEvent(),
       () => this.finishCarlitosDelegation(),
       () => this.itemUseController.dispose(),
       () => this.repairToolboxAnimation.cancel(),
       () => {
-        const presenter = this.activeEventPresenter;
-        this.activeEventPresenter = null;
-        presenter?.dispose();
+        this.eventPresentationHost.dispose();
+        this.activeRescueCueCallback = null;
+      },
+      () => {
+        const adapter = this.fallbackEventPresentation;
+        this.fallbackEventPresentation = null;
+        adapter?.dispose();
       },
       () => this.itemUseAdapter.dispose(),
       () => this.resetDedicatedEffects(),
@@ -2604,7 +2472,7 @@ export class BoatWorld {
     this.camera.rotateY(this.rearCameraYaw);
     this.camera.rotateX(this.rearCameraPitch);
     this.rodPivot.rotation.x = this.baseRodPivotRotationX;
-    this.activeEventPresenter?.layer?.setRescueCue(null);
+    this.activeRescueCueCallback?.(null);
   }
 
   private advanceRearCameraTurn(delta: number): void {
@@ -2618,24 +2486,6 @@ export class BoatWorld {
       + (this.rearCameraTurnTargetYaw - this.rearCameraTurnStartYaw) * progress;
     this.rearCameraPitch = this.rearCameraTurnStartPitch
       + (this.rearCameraTurnTargetPitch - this.rearCameraTurnStartPitch) * progress;
-  }
-
-  private applyDangerousWatersPresentation(): void {
-    const reaction = this.dangerousWatersBoatReaction;
-    if (this.activeEventPresenter?.layer?.copyDangerousWatersBoatReaction(reaction)) {
-      this.motionRig.position.x += reaction.driftX;
-      this.motionRig.rotation.x += reaction.pitch;
-      this.motionRig.rotation.y += reaction.yaw;
-      this.motionRig.rotation.z += reaction.roll;
-      this.camera.rotateY(reaction.cameraYaw);
-      this.camera.rotateX(reaction.cameraZ * 0.9);
-      this.ambient.intensity *= reaction.lightScale;
-      this.key.intensity *= reaction.lightScale;
-      this.supplyDisplay.applyEventAmbientPose(
-        reaction.supplyRoll,
-        reaction.supplyLift,
-      );
-    }
   }
 
   private resetDedicatedEffects(): void {
@@ -2735,7 +2585,7 @@ export class BoatWorld {
   private updateDriftingItemCameraTarget(): boolean {
     const eventId = this.focusedDriftingItemEventId;
     if (eventId === null) return false;
-    const target = this.featuredEvents.itemAimTarget(eventId);
+    const target = this.eventPresentationHost.itemAimTarget();
     if (target === null) return false;
     target.getWorldPosition(this.driftingItemCameraWorldTarget);
     this.driftingItemCameraWorldPosition.copy(this.fishingCameraPosition);
@@ -3153,7 +3003,7 @@ export class BoatWorld {
         this.key.intensity *= 0.3 + eased * 0.7;
         break;
       case 'rescue':
-        this.activeEventPresenter?.layer?.setRescueCue(eased);
+        this.activeRescueCueCallback?.(eased);
         this.camera.rotateY(-0.12 * eased);
         break;
       case 'death':

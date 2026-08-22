@@ -72,6 +72,8 @@ import {
 import { FOCUSED_EVENT_IDS } from '../src/survival/eventPresentationRoutes';
 import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
 import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
+import type { EventPresentationAdapter } from '../src/survival/EventPresentationAdapter';
+import { EventPresentationRegistry } from '../src/survival/EventPresentationRegistry';
 import { EventItemEffects } from '../src/survival/EventItemEffects';
 import { EventItemUseAdapter } from '../src/survival/EventItemUseAdapter';
 import { EventItemUseController } from '../src/survival/EventItemUseController';
@@ -96,7 +98,7 @@ import {
 import type {
   EventModelInstance,
 } from '../src/survival/EventModelLibrary';
-import type { EventPresentationCoordinator } from '../src/survival/EventPresentationCoordinator';
+import { EventPresentationCoordinator } from '../src/survival/EventPresentationCoordinator';
 import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { FishingBiteParticles } from '../src/survival/FishingBiteParticles';
 import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
@@ -116,6 +118,7 @@ import { SurvivalInventoryState } from '../src/survival/inventory';
 import {
   SURVIVAL_EVENTS,
   type DriftingItemEventId,
+  type SurvivalEventId,
 } from '../src/survival/eventCatalog';
 import { SurvivalEventModelLibrary } from '../src/survival/SurvivalEventModelLibrary';
 import type {
@@ -303,22 +306,24 @@ function firstMesh(root: Object3D): Mesh {
 }
 
 function expectEventEffectRootsCleared(scene: Object3D): void {
+  const itemEffects = scene.getObjectByName('event-item-effects');
+  expect(itemEffects, 'event-item-effects exists').toBeDefined();
+  itemEffects!.children.forEach((effect) => {
+    expect(effect.visible, `event-item-effects/${effect.name} hidden`).toBe(false);
+  });
   for (const name of [
-    'event-item-effects',
     'weather-event-world',
     'weather-event-boat',
     'supernatural-event-world',
   ]) {
     const root = scene.getObjectByName(name);
-    expect(root, `${name} exists`).toBeDefined();
-    root!.children.forEach((effect) => {
+    root?.children.forEach((effect) => {
       expect(effect.visible, `${name}/${effect.name} hidden`).toBe(false);
     });
   }
   for (const name of ['dedicated-event-world', 'dedicated-event-boat']) {
     const root = scene.getObjectByName(name);
-    expect(root, `${name} exists`).toBeDefined();
-    root!.children.forEach((effect) => {
+    root?.children.forEach((effect) => {
       const hasRenderableContent = effect.children.length > 0
         || effect instanceof Mesh
         || effect instanceof Line
@@ -328,7 +333,7 @@ function expectEventEffectRootsCleared(scene: Object3D): void {
       }
     });
   }
-  scene.getObjectByName('event-item-effects')!.traverse((object) => {
+  itemEffects!.traverse((object) => {
     if (object instanceof PointLight) expect(object.intensity).toBe(0);
   });
   for (const name of [
@@ -417,6 +422,25 @@ async function remainsPending(promise: Promise<unknown>): Promise<boolean> {
   });
   await Promise.resolve();
   return !settled;
+}
+
+function eventAdapterTestDouble(eventId: SurvivalEventId): EventPresentationAdapter {
+  return {
+    eventId,
+    roots: [],
+    stage: vi.fn(),
+    reveal: vi.fn(async () => undefined),
+    playChoice: vi.fn(async () => undefined),
+    playItemUse: vi.fn(async () => false),
+    itemAimTarget: vi.fn(() => null),
+    interactionRoot: vi.fn(() => null),
+    resultRoot: vi.fn(() => null),
+    react: vi.fn(async () => undefined),
+    update: vi.fn(),
+    settleForVisibilityChange: vi.fn(),
+    clear: vi.fn(),
+    dispose: vi.fn(),
+  };
 }
 
 interface FocusedPresenterTestDouble {
@@ -884,7 +908,103 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps weather reveal choreography for focused and featured routes', async () => {
+  it.each([
+    ['dedicated', 'leak'],
+    ['focused', 'other-people'],
+    ['featured', 'flowers'],
+    ['weather', 'windy-night'],
+    ['supernatural', 'ghosts'],
+    ['moon', 'face-on-the-moon'],
+  ] as const)('delegates one %s event lifecycle to one adapter', async (family, eventId) => {
+    const propModels = createTestPropModels();
+    const adapter = eventAdapterTestDouble(eventId);
+    const create = vi.spyOn(EventPresentationRegistry.prototype, 'create')
+      .mockReturnValue(adapter);
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const choice = {
+      choiceId: 'test-choice',
+      instanceId: null,
+      condition: null,
+    } as const;
+    const outcome: ActionOutcome = {
+      accepted: true,
+      code: 'event-resolved',
+      message: `${eventId} resolved.`,
+      deltas: {},
+      cue: 'none',
+      ...(family === 'focused'
+        ? {
+            eventResult: {
+              eventId,
+              choiceId: choice.choiceId,
+              resultId: 'test-result',
+            },
+          }
+        : {}),
+    };
+    const result = {
+      outcome,
+      resourceDeltas: {},
+      gainedInstanceIds: [],
+      brokenInstanceIds: [],
+      lostInstanceIds: [],
+      consumedInstanceIds: [],
+      selectedInstanceId: null,
+      selectedCondition: null,
+      targetInstanceId: null,
+    };
+
+    try {
+      world.stageEvent(eventId, 17);
+      await world.revealEvent(eventId);
+      await world.playEventChoice(eventId, choice);
+      await (world as unknown as {
+        playEventSceneItemUse(
+          activeEventId: string,
+          choiceId: string,
+          instanceId: ItemInstanceId,
+        ): Promise<boolean>;
+      }).playEventSceneItemUse(eventId, choice.choiceId, 'bucket-1');
+      (world as unknown as {
+        eventItemAimTarget(activeEventId: string): Object3D | null;
+      }).eventItemAimTarget(eventId);
+      world.projectEventInteractionBounds(eventId, 800, 600);
+      world.projectEventResultBounds(eventId, 800, 600);
+      await world.reactToEventOutcome(
+        eventId,
+        outcome,
+        choice,
+        family === 'dedicated' ? result : undefined,
+      );
+      world.update(1, 0.1);
+      world.setDocumentHidden(true);
+      world.clearEvent();
+
+      expect(create).toHaveBeenCalledWith(eventId, expect.any(Object));
+      expect(adapter.stage).toHaveBeenCalledOnce();
+      expect(adapter.reveal).toHaveBeenCalledOnce();
+      expect(adapter.playChoice).toHaveBeenCalledOnce();
+      expect(adapter.playItemUse).toHaveBeenCalledOnce();
+      expect(adapter.itemAimTarget).toHaveBeenCalledOnce();
+      expect(adapter.interactionRoot).toHaveBeenCalledOnce();
+      expect(adapter.resultRoot).toHaveBeenCalledOnce();
+      expect(adapter.react).toHaveBeenCalledOnce();
+      expect(adapter.update).toHaveBeenCalledOnce();
+      expect(adapter.settleForVisibilityChange).toHaveBeenCalledOnce();
+      expect(adapter.clear).toHaveBeenCalledOnce();
+    } finally {
+      world.dispose();
+      create.mockRestore();
+      propModels.dispose();
+    }
+    expect(adapter.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('does not construct inactive weather choreography for focused and featured routes', async () => {
     const propModels = createTestPropModels();
     const focused = focusedPresenterTestDouble('handyman');
     const weatherReveal = vi.spyOn(WeatherEventAnimator.prototype, 'reveal');
@@ -902,13 +1022,12 @@ describe('BoatWorld helpers', () => {
     try {
       world.stageEvent('handyman');
       await world.revealEvent('handyman');
-      expect(weatherReveal).toHaveBeenNthCalledWith(1, 'handyman');
 
       world.stageEvent('flowers');
       const featuredReveal = world.revealEvent('flowers');
-      expect(weatherReveal).toHaveBeenNthCalledWith(2, 'flowers');
       world.setDocumentHidden(true);
       await featuredReveal;
+      expect(weatherReveal).not.toHaveBeenCalled();
     } finally {
       weatherReveal.mockRestore();
       world.dispose();
@@ -4447,11 +4566,8 @@ describe('BoatWorld helpers', () => {
     expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(false);
 
     const itemUse = world.playEventItemUse('ghosts', 'flareGun', flare.instanceId);
-    expect(weatherSupport).toHaveBeenCalledWith('ghosts', 'flareGun');
+    expect(weatherSupport).not.toHaveBeenCalled();
     expect(supernaturalSupport).toHaveBeenCalledWith('ghosts', 'flareGun');
-    expect(weatherSupport.mock.invocationCallOrder[0]).toBeLessThan(
-      supernaturalSupport.mock.invocationCallOrder[0]!,
-    );
     const flarePeak = supernaturalItemUseDuration('ghosts', 'flareGun')! * 0.47;
     world.update(flarePeak, flarePeak);
     const flareFlash = world.scene.getObjectByName('supernatural-flare-flash')!;
@@ -5844,6 +5960,12 @@ describe('BoatWorld helpers', () => {
   it('routes dedicated events before generic and weather paths', async () => {
     const propModels = createTestPropModels();
     const eventModels = createTestEventModels();
+    const dedicatedStage = vi.spyOn(EventPresentationCoordinator.prototype, 'stage');
+    const dedicatedDispose = vi.spyOn(EventPresentationCoordinator.prototype, 'dispose');
+    const dedicatedItem = vi.spyOn(EventPresentationCoordinator.prototype, 'playItemUse')
+      .mockResolvedValue(false);
+    const dedicatedReact = vi.spyOn(EventPresentationCoordinator.prototype, 'react')
+      .mockResolvedValue();
     const genericStage = vi.spyOn(EventPresentationLayer.prototype, 'stage');
     const genericClear = vi.spyOn(EventPresentationLayer.prototype, 'clear');
     const genericReact = vi.spyOn(EventPresentationLayer.prototype, 'react');
@@ -5865,15 +5987,6 @@ describe('BoatWorld helpers', () => {
     (world as unknown as {
       ensureEventPresenter(eventId: 'leak'): void;
     }).ensureEventPresenter('leak');
-    const coordinator = (
-      world as unknown as { dedicatedEvents: EventPresentationCoordinator }
-    ).dedicatedEvents;
-    const dedicatedStage = vi.spyOn(coordinator, 'stage');
-    const dedicatedDispose = vi.spyOn(coordinator, 'dispose');
-    const dedicatedItem = vi.spyOn(coordinator, 'playItemUse')
-      .mockResolvedValue(false);
-    const dedicatedReact = vi.spyOn(coordinator, 'react')
-      .mockResolvedValue();
     const context = {
       eventId: 'leak' as const,
       targetInstanceId: null,
@@ -5911,20 +6024,24 @@ describe('BoatWorld helpers', () => {
     expect(dedicatedItem).toHaveBeenCalledWith('bucket', 'bucket-1');
     expect(dedicatedReact).toHaveBeenCalledWith(presentation);
     expect(genericStage).not.toHaveBeenCalled();
-    expect(genericClear).toHaveBeenCalled();
+    expect(genericClear).not.toHaveBeenCalled();
     expect(genericReact).not.toHaveBeenCalled();
     expect(weatherStage).not.toHaveBeenCalled();
-    expect(weatherClear).toHaveBeenCalled();
+    expect(weatherClear).not.toHaveBeenCalled();
     expect(weatherItem).not.toHaveBeenCalled();
     expect(weatherReact).not.toHaveBeenCalled();
     expect(supplyItem).toHaveBeenCalledWith('bucket-1');
 
     world.stageEvent('windy-night');
-    expect(genericStage).toHaveBeenCalledWith('windy-night');
-    expect(weatherStage).toHaveBeenCalledWith('windy-night');
+    expect(genericStage).toHaveBeenCalledWith('windy-night', 0);
+    expect(weatherStage).toHaveBeenCalledWith('windy-night', 0);
     expect(dedicatedDispose).toHaveBeenCalledOnce();
 
     world.dispose();
+    dedicatedStage.mockRestore();
+    dedicatedDispose.mockRestore();
+    dedicatedItem.mockRestore();
+    dedicatedReact.mockRestore();
     genericStage.mockRestore();
     genericClear.mockRestore();
     genericReact.mockRestore();
@@ -5939,6 +6056,7 @@ describe('BoatWorld helpers', () => {
   it('clears the coordinator, supplies, pose roots, and shared vortex', () => {
     const propModels = createTestPropModels();
     const eventModels = createTestEventModels();
+    const clearCoordinator = vi.spyOn(EventPresentationCoordinator.prototype, 'clear');
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
@@ -5951,7 +6069,6 @@ describe('BoatWorld helpers', () => {
     );
     world.stageEvent('tornado');
     const internals = world as unknown as {
-      dedicatedEvents: EventPresentationCoordinator;
       supplyDisplay: BoatSupplyDisplay;
       cameraEffectsRoot: Group;
       boatEffectsRoot: Group;
@@ -5965,7 +6082,6 @@ describe('BoatWorld helpers', () => {
         strength: number;
       };
     };
-    const clearCoordinator = vi.spyOn(internals.dedicatedEvents, 'clear');
     const clearSupplies = vi.spyOn(internals.supplyDisplay, 'clearEventMotion');
     internals.cameraEffectsRoot.rotation.z = 0.4;
     internals.boatEffectsRoot.rotation.y = 0.7;
@@ -5998,6 +6114,7 @@ describe('BoatWorld helpers', () => {
     });
 
     world.dispose();
+    clearCoordinator.mockRestore();
     propModels.dispose();
   });
 

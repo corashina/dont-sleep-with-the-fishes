@@ -255,47 +255,20 @@ describe('event item aim targets', () => {
     layer.dispose();
   });
 
-  it('resolves competing staged targets in BoatWorld priority order', () => {
-    const dangerousWaters = new Group();
-    const dedicated = new Group();
-    const featured = new Group();
-    const weather = new Group();
-    const supernatural = new Group();
-    const generic = new Group();
-    const genericTarget = vi.fn((eventId: string) => (
-      eventId === 'dangerous-waters' ? dangerousWaters : generic
-    ));
-    const dedicatedTarget = vi.fn(() => dedicated as Object3D | null);
-    const featuredTarget = vi.fn(() => featured as Object3D | null);
-    const weatherTarget = vi.fn(() => weather as Object3D | null);
-    const supernaturalTarget = vi.fn(() => supernatural as Object3D | null);
+  it('resolves the active event target through the presentation host', () => {
+    const target = new Group();
+    const itemAimTarget = vi.fn(() => target as Object3D | null);
     const resolver = (
       BoatWorld.prototype as unknown as {
         eventItemAimTarget(eventId: string): Object3D | null;
       }
     ).eventItemAimTarget;
     const world = {
-      activeEventPresenter: {
-        layer: { itemAimTarget: genericTarget },
-        dedicated: { itemAimTarget: dedicatedTarget },
-        featured: { itemAimTarget: featuredTarget },
-        weather: { itemAimTarget: weatherTarget },
-        supernatural: { itemAimTarget: supernaturalTarget },
-      },
+      eventPresentationHost: { itemAimTarget },
     };
 
-    expect(resolver.call(world, 'dangerous-waters')).toBe(dangerousWaters);
-    expect(dedicatedTarget).not.toHaveBeenCalled();
-
-    expect(resolver.call(world, 'school-of-fish')).toBe(dedicated);
-    dedicatedTarget.mockReturnValue(null);
-    expect(resolver.call(world, 'drifting-bottle')).toBe(featured);
-    featuredTarget.mockReturnValue(null);
-    expect(resolver.call(world, 'man-in-the-fog')).toBe(weather);
-    weatherTarget.mockReturnValue(null);
-    expect(resolver.call(world, 'ghosts')).toBe(supernatural);
-    supernaturalTarget.mockReturnValue(null);
-    expect(resolver.call(world, 'other-people')).toBe(generic);
+    expect(resolver.call(world, 'dangerous-waters')).toBe(target);
+    expect(itemAimTarget).toHaveBeenCalledOnce();
   });
 
   it('keeps featured and chest targets on their visible receiving entities', () => {
