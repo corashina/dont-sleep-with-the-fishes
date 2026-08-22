@@ -232,7 +232,7 @@ function validateOutcome(
 }
 
 export function validateSurvivalEventCatalog(
-  catalog: readonly SurvivalEventDefinition[] = SURVIVAL_EVENTS,
+  catalog: readonly SurvivalEventDefinition[],
 ): void {
   const eventIds = new Set<string>();
   for (const eventEntry of catalog) {
@@ -382,4 +382,4 @@ export function validateSurvivalEventCatalog(
   }
 }
 
-validateSurvivalEventCatalog();
+validateSurvivalEventCatalog(SURVIVAL_EVENTS);
