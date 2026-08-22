@@ -21,6 +21,7 @@ import {
   applyDriftingWavePose,
   type DriftingWater,
 } from './DriftingWaveMotion';
+import { eventSideFromSeed, type EventSide } from './eventVariant';
 import type { DriftingCargoKind } from './survivalTypes';
 
 type DriftingCargoAnimationKind = 'retrieve' | 'recede';
@@ -43,7 +44,7 @@ export interface DriftingCargoInteractionProjection {
 }
 
 const FLOAT_POSITION = Object.freeze({ x: -3, y: 0.02, z: -4.2 });
-const RECEDE_OFFSET = Object.freeze({ x: -1.8, y: -0.25, z: 1.6 });
+const RECEDE_OFFSET = Object.freeze({ x: 1.8, y: -0.25, z: 1.6 });
 const RETRIEVE_DURATIONS: Readonly<Record<DriftingCargoKind, number>> =
   Object.freeze({ barrel: 1.35, chest: 1.55 });
 const RECEDE_DURATION = 0.8;
@@ -78,6 +79,7 @@ export class DriftingCargoPresentation {
   };
   private activeAnimation: ActiveDriftingCargoAnimation | null = null;
   private activeVariant: DriftingCargoKind | null = null;
+  private side: EventSide = -1;
   private state: DriftingCargoState = 'idle';
   private disposed = false;
 
@@ -123,10 +125,12 @@ export class DriftingCargoPresentation {
     this.root.add(barrel, chest);
   }
 
-  stage(variant: DriftingCargoKind): void {
+  stage(variant: DriftingCargoKind, variantSeed = 0): void {
     if (this.disposed) return;
     this.cancelActiveAnimation();
     this.activeVariant = variant;
+    this.side = eventSideFromSeed(variantSeed);
+    this.basePositions[variant].x = Math.abs(FLOAT_POSITION.x) * this.side;
     this.state = 'floating';
     this.resetAll();
     this.roots[variant].visible = true;
@@ -301,7 +305,7 @@ export class DriftingCargoPresentation {
   private applyRecedePose(variant: DriftingCargoKind, progress: number): void {
     const travel = smoothstep(Math.min(1, Math.max(0, progress)));
     this.targetPositionScratch.copy(this.basePositions[variant]);
-    this.targetPositionScratch.x += RECEDE_OFFSET.x;
+    this.targetPositionScratch.x += RECEDE_OFFSET.x * this.side;
     this.targetPositionScratch.y += RECEDE_OFFSET.y;
     this.targetPositionScratch.z += RECEDE_OFFSET.z;
     const root = this.roots[variant];

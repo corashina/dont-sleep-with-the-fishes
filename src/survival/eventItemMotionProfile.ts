@@ -78,7 +78,7 @@ const PROFILES: Readonly<Record<ItemId, EventItemMotionProfile>> = Object.freeze
   }),
   scubaSet: createProfile('one-hand', 'scubaSet'),
   anchor: createProfile('large', 'anchor'),
-  bottledPaper: createProfile('one-hand', 'bottledPaper'),
+  radio: createProfile('one-hand', 'radio'),
   umbrella: Object.freeze({
     ...createProfile('one-hand', 'umbrella'),
     view: [0.32, 0.18, -0.38] as const,

@@ -1,0 +1,1 @@
+export const CARLITOS_SEATED_SUPPORT_LIFT = 0.22;

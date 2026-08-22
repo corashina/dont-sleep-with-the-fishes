@@ -284,7 +284,6 @@ const EXACT_FURNITURE_MODEL_BY_ID: Readonly<Record<string, ShipFurnitureKind>> =
   'cargo-crate-storage-starboard': 'cargoCrate',
   'cargo-rack-mast-port': 'cargoRack',
   'cargo-rack-mast-starboard': 'cargoRack',
-  'cargo-rod-rack-port': 'cargoRack',
   'workroom-crate-center-port': 'cargoCrate',
   'workroom-crate-center-starboard': 'cargoCrate',
   'workroom-crate-stack-port-forward': 'cargoCrateStack',
@@ -879,11 +878,6 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
   ),
   placement('cargo-rack-mast-port', 'cargoRack', 'cargoDeck', [-FORWARD_WALL_CARGO_X, 2.22, MAINMAST_Z], 0, [2.1, 0.55, 0.75], cargoRackSurfaces('cargo-rack-mast-port')),
   placement('cargo-rack-mast-starboard', 'cargoRack', 'cargoDeck', [FORWARD_WALL_CARGO_X, 2.22, MAINMAST_Z], 0, [2.1, 0.55, 0.75], cargoRackSurfaces('cargo-rack-mast-starboard')),
-  placement('cargo-rod-rack-port', 'cargoRack', 'cargoDeck', [-4.6, 2.22, -4.2], 0, [2.1, 0.55, 0.75], [itemSurface(
-    'cargo-rod-rack-port', 'rod', 'centralCargo', [0, 0.55, 0],
-    { width: 1.9, depth: 0.75 }, 0.82, [[-1.45, 0, 0], [1.45, 0, 0]],
-    { localRotation: [0, PI_OVER_TWO, 0] },
-  )]),
   ...([
     ['crew-wall-crate-starboard', 'cargoCrate', 'centralCargo', 4.7, 14.025, [-1.25, 0, 0]],
     ['crew-wall-barrel-port', 'barrel', 'centralCargo', -4.7, 14.0647535, [1.25, 0, 0]],

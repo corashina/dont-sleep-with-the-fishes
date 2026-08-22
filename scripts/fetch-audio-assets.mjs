@@ -30,6 +30,8 @@ const freesoundSources = [
   ['pause', 'BenjaminNelan', '321083'],
   ['resume', 'Leszek_Szary', '146720'],
   ['journal', 'mateusboga', '614081'],
+  ['radioSignal', 'Mart1001', '61386'],
+  ['radioReply', 'ERH', '30335', 'attribution'],
   ['eating', 'User391915396', '570336'],
   ['medkit', 'SecureSubset', '800275'],
   ['hullRepair', 'Ryujin95', '394891'],
@@ -66,6 +68,8 @@ const freesoundSources = [
   ['midnightShovel', 'dr19', '353907'],
   ['midnightMonsterRun', 'gabitomed', '514585'],
   ['midnightMonsterAttack', 'LucasDuff', '467701'],
+  ['checkBackFish', 'kyles', '450830'],
+  ['checkBackAnglerfish', 'ItsThatRoboGuy', '435683'],
   ['scavengeChase', 'Victor_Natas', '634513', 'attribution'],
   ['scavengeCountdown', 'qubodup', '211102', 'attribution'],
 ];

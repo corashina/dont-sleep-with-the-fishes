@@ -37,6 +37,7 @@ import {
 import {
   clampRescueLead,
   quietNightChance,
+  radioRescueLeadForSignal,
   repairEnergyCost,
   rescueChanceForDay,
   type RescueLead,
@@ -111,6 +112,7 @@ export interface SurvivalSessionOptions {
   initialAppearanceCounts?: Readonly<Record<string, number>>;
   initialCarlitos?: Partial<CarlitosSnapshot>;
   readonly initialRescueTraceFinds?: number;
+  readonly radioSignalsEnabled?: boolean;
 }
 
 export type { DayActionOption } from './survivalTypes';
@@ -146,6 +148,8 @@ export class SurvivalSession {
   private repairMaterial = 0;
   private rescueLead: RescueLead;
   private rescueTraceFinds: 0 | 1 | 2;
+  private radioSignalAvailable = false;
+  private radioSignalsSent = 0;
   private chestState: ChestState;
   private chestAcquiredDay: number | null;
   private weather: WeatherId;
@@ -161,7 +165,6 @@ export class SurvivalSession {
   private lastEventId: string | null = null;
   private readonly lastSeenDay = new Map<string, number>();
   private readonly appearanceCounts = new Map<string, number>();
-  private rescueMessageSent = false;
   private lastOutcome: ActionOutcome | null = null;
   private pendingJournalDaytime: JournalDaytimeRecord | null;
   private pendingJournalNighttime: JournalNightRecord | null = null;
@@ -169,6 +172,7 @@ export class SurvivalSession {
   private readonly journalEntries: JournalEntry[] = [];
   private readonly seed: number;
   private readonly random: RandomSource;
+  private readonly radioSignalsEnabled: boolean;
   private fishingCounter = 0;
   private activeFishing: ActiveFishingTransaction | null = null;
   private cachedSnapshot: Readonly<SurvivalSnapshot> | null = null;
@@ -176,6 +180,7 @@ export class SurvivalSession {
   constructor(savedItems: readonly ItemInstance[], options: SurvivalSessionOptions) {
     this.seed = options.seed;
     this.random = options.random ?? mulberry32(options.seed);
+    this.radioSignalsEnabled = options.radioSignalsEnabled ?? true;
     this.weather = options.weather ?? 'calm';
     this.day = options.initial?.day ?? 1;
     this.pendingJournalDaytime = this.day === 1
@@ -254,6 +259,8 @@ export class SurvivalSession {
       repairMaterial: this.repairMaterial,
       rescueLead: this.rescueLead,
       rescueTraceFinds: this.rescueTraceFinds,
+      radioSignalAvailable: this.radioSignalAvailable,
+      radioSignalsSent: this.radioSignalsSent,
       chest: Object.freeze({
         state: this.chestState,
         acquiredDay: this.chestAcquiredDay,
@@ -342,7 +349,7 @@ export class SurvivalSession {
       case 'repair': outcome = this.repair(option); break;
       case 'repairItem': outcome = this.repairItem(option); break;
       case 'treat': outcome = this.treat(); break;
-      case 'sendMessage': outcome = this.sendMessage(); break;
+      case 'answerRadio': outcome = this.answerRadio(); break;
       case 'useEnergyBar': outcome = this.useEnergyBar(); break;
       case 'openChest': outcome = this.openChest(); break;
       case 'petCarlitos': outcome = this.petCarlitos(); break;
@@ -486,6 +493,8 @@ export class SurvivalSession {
     if (this.activeFishing !== null) return this.fishingInProgress();
     if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
     if (this.state !== 'day') return this.reject('not-daytime', 'The day cannot end while an event is unresolved.');
+
+    this.radioSignalAvailable = false;
 
     if (this.chestState === 'closed'
       && this.chestAcquiredDay !== null
@@ -706,6 +715,7 @@ export class SurvivalSession {
     if (this.state !== 'nightEvent') return this.reject('not-nighttime', 'Dawn cannot begin before the night is complete.');
 
     this.day += 1;
+    this.radioSignalAvailable = false;
     this.pendingJournalDaytime = null;
     this.pendingJournalNighttime = null;
     this.pendingJournalActions = [];
@@ -760,8 +770,16 @@ export class SurvivalSession {
       );
     }
 
+    if (this.receiveRadioSignalAtDawn()) return dawn;
     this.openDayEventAfterDawn();
     return dawn;
+  }
+
+  expireRadioSignal(): boolean {
+    if (!this.radioSignalAvailable) return false;
+    this.radioSignalAvailable = false;
+    this.changed();
+    return true;
   }
 
   private unavailable(action: DayActionId, option?: DayActionOption): Rejection | null {
@@ -838,15 +856,15 @@ export class SurvivalSession {
           return { code: 'no-medical-kit', message: 'No medical-kit charges remain.' };
         }
         return null;
-      case 'sendMessage':
-        if (this.rescueMessageSent) {
-          return { code: 'message-already-sent', message: 'You already sent the rescue message.' };
+      case 'answerRadio':
+        if (!this.radioSignalAvailable) {
+          return { code: 'no-radio-signal', message: 'The radio has no active signal.' };
         }
-        if (!this.inventory.hasUsable('bottledPaper')) {
-          return { code: 'no-bottled-paper', message: 'No bottled paper remains.' };
+        if (!this.inventory.hasUsable('radio')) {
+          return { code: 'no-radio', message: 'No working radio remains.' };
         }
-        if (this.energy < SURVIVAL_BALANCE.actions.bottledPaperEnergy) {
-          return { code: 'not-enough-energy', message: 'Sending the message requires one energy.' };
+        if (this.energy < SURVIVAL_BALANCE.radio.energy) {
+          return { code: 'not-enough-energy', message: 'Answering the radio requires one energy.' };
         }
         return null;
       case 'useEnergyBar':
@@ -1044,13 +1062,26 @@ export class SurvivalSession {
     return outcome;
   }
 
-  private sendMessage(): ActionOutcome {
-    this.inventory.consume('bottledPaper', 1);
-    this.rescueMessageSent = true;
-    return this.commit('message-sent', 'You cast the message into the current.', {
-      energy: -SURVIVAL_BALANCE.actions.bottledPaperEnergy,
-      rescueLead: 2,
+  private answerRadio(): ActionOutcome {
+    const rescueLead = radioRescueLeadForSignal(this.radioSignalsSent);
+    this.radioSignalAvailable = false;
+    this.radioSignalsSent += 1;
+    return this.commit('radio-answered', 'You answer and transmit your position.', {
+      energy: -SURVIVAL_BALANCE.radio.energy,
+      rescueLead,
     }, 'sighting');
+  }
+
+  private receiveRadioSignalAtDawn(): boolean {
+    if (
+      !this.radioSignalsEnabled
+      || this.day < SURVIVAL_BALANCE.radio.firstDay
+      || !this.inventory.hasUsable('radio')
+      || this.random.next() >= SURVIVAL_BALANCE.radio.signalChance
+    ) return false;
+    this.radioSignalAvailable = true;
+    this.changed();
+    return true;
   }
 
   private useEnergyBar(): ActionOutcome {
@@ -1116,10 +1147,7 @@ export class SurvivalSession {
       pressure: this.pressure,
       chestState: this.chestState,
       hasLivingCompanion: this.carlitos?.alive === true,
-    }).filter(({ id }) => (
-      !excludedIds.has(id)
-      && !(id === 'drifting-bottle' && this.rescueMessageSent)
-    ));
+    }).filter(({ id }) => !excludedIds.has(id));
     return drawWeightedEvent(pool, this.random, phase, this.pressure);
   }
 
@@ -1140,9 +1168,6 @@ export class SurvivalSession {
     if (!isDriftingItemEventId(eventId)
       || (choiceId !== 'retrieve' && choiceId !== 'delegate-carlitos')) return undefined;
     if (fallbackFoodGranted) return Object.freeze({ kind: 'resource', id: 'food', quantity: 1 });
-    if (eventId === 'drifting-bottle') {
-      return Object.freeze({ kind: 'item', id: 'bottledPaper', quantity: 1 });
-    }
     const added = resolved.effects.resources?.find(
       ({ operation, resource }) => operation === 'add'
         && (resource === 'food' || resource === 'bait' || resource === 'repairMaterial'),

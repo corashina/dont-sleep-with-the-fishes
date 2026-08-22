@@ -3,7 +3,6 @@ import {
   Group,
   Material,
   Mesh,
-  MeshStandardMaterial,
 } from 'three';
 import {
   collectMeshResources,
@@ -11,40 +10,26 @@ import {
   runCleanupSteps,
 } from '../world/SceneResources';
 
-export interface SurvivalLantern {
+export interface SleepPillow {
   readonly root: Group;
   dispose(): void;
 }
 
-export function createSurvivalLantern(model: Group): SurvivalLantern {
+export function createSleepPillow(model: Group): SleepPillow {
   const root = new Group();
-  root.name = 'survival-lantern';
+  root.name = 'sleep-pillow';
   root.position.set(1.05, 0.235, 0.78);
   root.rotation.y = -0.12;
 
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
-  const glowingMaterials = new Set<MeshStandardMaterial>();
-  model.name = 'survival-lantern:model';
+  model.name = 'sleep-pillow:model';
   model.traverse((object) => {
     if (!(object instanceof Mesh)) return;
-    // The source lantern is one opaque mesh. Let the flame light escape while
-    // nearby boat supplies still cast shadows.
-    object.castShadow = false;
+    object.castShadow = true;
     object.receiveShadow = true;
-    const meshMaterials = Array.isArray(object.material)
-      ? object.material
-      : [object.material];
-    meshMaterials.forEach((material) => {
-      if (!(material instanceof MeshStandardMaterial) || glowingMaterials.has(material)) return;
-      glowingMaterials.add(material);
-      material.emissive.setHex(0xffc56a);
-      material.emissiveIntensity = 1.35;
-      material.emissiveMap = material.map;
-    });
   });
   collectMeshResources(model, geometries, materials);
-
   root.add(model);
 
   let disposed = false;

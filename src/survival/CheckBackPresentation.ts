@@ -6,10 +6,14 @@ import {
 } from 'three';
 import { KeyedEventPresentation } from './KeyedEventPresentation';
 import { StationaryEventCamera } from './StationaryEventCamera';
+import type { EventPresentationCue } from './eventPresentationCue';
 import type { EventPresentationKey } from './survivalTypes';
 
 const STERN_YAW = Math.PI;
 const STERN_LOOK_DOWN_PITCH = -0.74;
+const REVEAL_DURATION = 3.8;
+const REACTION_DURATION = 4.2;
+const ACTOR_REVEAL_PROGRESS = 0.72;
 
 function smoothstep(value: number): number {
   const clamped = Math.min(1, Math.max(0, value));
@@ -18,21 +22,28 @@ function smoothstep(value: number): number {
 
 export class CheckBackPresentation extends KeyedEventPresentation {
   private readonly fish: Object3D;
+  private readonly anglerfish: Object3D;
   private readonly cameraLook: StationaryEventCamera;
   private readonly targetPosition = new Vector3();
   private readonly targetQuaternion = new Quaternion();
   private readonly rootQuaternion = new Quaternion();
+  private cueEmitted = false;
 
   constructor(
     fish: Object3D,
+    anglerfish: Object3D,
     camera: PerspectiveCamera,
     private readonly sternFloorTarget: Object3D,
+    private readonly emitCue: (cue: EventPresentationCue) => void,
   ) {
     super('check-back-presentation');
     this.cameraLook = new StationaryEventCamera(camera);
     this.fish = fish;
     this.fish.name = 'check-back:fish';
+    this.anglerfish = anglerfish;
+    this.anglerfish.name = 'check-back:anglerfish';
     this.subject.add(this.fish);
+    this.subject.add(this.anglerfish);
   }
 
   stage(): void {
@@ -47,57 +58,90 @@ export class CheckBackPresentation extends KeyedEventPresentation {
     this.fish.rotation.set(0, 0, 0);
     this.fish.scale.setScalar(1);
     this.fish.visible = false;
+    this.anglerfish.position.set(0, 0, 0);
+    this.anglerfish.rotation.set(0, 0, 0);
+    this.anglerfish.scale.setScalar(1);
+    this.anglerfish.visible = false;
+    this.cueEmitted = false;
     this.cameraLook.apply(0, 0);
   }
 
   protected applyIdle(_time: number): void {
     this.placeSubjectInsideStern();
-    if (this.settledKind === 'reveal') {
-      this.applySternView();
-    } else if (this.settledKind === 'check-the-back.fish') {
+    if (this.settledKind === 'check-the-back.fish') {
       this.applySternView();
       this.fish.visible = true;
       this.fish.rotation.z = -0.12;
-    } else if (this.settledKind === 'check-the-back.empty') {
+      this.anglerfish.visible = false;
+    } else if (this.settledKind === 'check-the-back.bad') {
       this.applySternView();
       this.fish.visible = false;
-    } else if (this.settledKind === 'check-the-back.ignore') {
-      this.applySternView();
+      this.anglerfish.visible = true;
+    } else {
+      this.cameraLook.apply(0, 0);
+      this.fish.visible = false;
+      this.anglerfish.visible = false;
     }
   }
 
-  protected prepareAnimation(kind: string): void {
-    this.fish.visible = kind === 'check-the-back.fish';
+  protected prepareAnimation(_kind: string): void {
+    this.fish.visible = false;
+    this.anglerfish.visible = false;
+    this.cueEmitted = false;
   }
 
   protected applyAnimation(kind: string, _time: number, progress: number): void {
     this.placeSubjectInsideStern();
     if (kind === 'reveal') {
-      const turn = smoothstep(progress / 0.78);
-      const lookDown = smoothstep((progress - 0.58) / 0.42);
-      this.cameraLook.apply(
-        turn * STERN_YAW,
-        lookDown * STERN_LOOK_DOWN_PITCH,
-      );
+      const sweep = Math.sin(Math.PI * progress);
+      const ingress = smoothstep(progress / 0.12);
+      const returnToCenter = 1 - smoothstep((progress - 0.72) / 0.28);
+      const yaw = 0.25 * Math.sin(2 * Math.PI * progress)
+        * sweep * ingress * returnToCenter;
+      this.cameraLook.apply(yaw, 0);
       return;
     }
     if (kind === 'check-the-back.ignore') {
-      this.applySternView();
+      this.cameraLook.apply(0, 0);
       return;
     }
-    this.applySternView();
+    const turn = smoothstep(progress / 0.68);
+    const lookDown = smoothstep((progress - 0.42) / 0.3);
+    this.cameraLook.apply(turn * STERN_YAW, lookDown * STERN_LOOK_DOWN_PITCH);
+    if (kind !== 'check-the-back.fish' && kind !== 'check-the-back.bad') return;
+    if (progress <= ACTOR_REVEAL_PROGRESS) return;
+
+    const actorProgress = smoothstep(
+      (progress - ACTOR_REVEAL_PROGRESS) / (1 - ACTOR_REVEAL_PROGRESS),
+    );
+    const actor = kind === 'check-the-back.fish' ? this.fish : this.anglerfish;
+    actor.visible = true;
+    if (!this.cueEmitted) {
+      this.cueEmitted = true;
+      this.emitCue({
+        eventId: 'check-the-back',
+        cue: kind === 'check-the-back.fish' ? 'fish' : 'anglerfish',
+      });
+    }
     if (kind === 'check-the-back.fish') {
-      this.fish.rotation.z = Math.sin(progress * Math.PI * 5) * (1 - progress) * 0.7;
-      this.fish.position.y = Math.sin(progress * Math.PI) * 0.2;
-    } else if (kind === 'check-the-back.empty') {
-      this.fish.visible = false;
+      actor.rotation.z = Math.sin(actorProgress * Math.PI * 5)
+        * (1 - actorProgress) * 0.7;
+      actor.position.y = Math.sin(actorProgress * Math.PI) * 0.2;
+    } else {
+      actor.rotation.z = Math.sin(actorProgress * Math.PI * 3)
+        * (1 - actorProgress) * 0.18;
     }
   }
 
+  protected revealDuration(): number {
+    return REVEAL_DURATION;
+  }
+
   protected reactionDuration(kind: EventPresentationKey): number {
-    return kind === 'check-the-back.fish' || kind === 'check-the-back.empty'
-      ? 1.8
-      : super.reactionDuration(kind);
+    if (kind === 'check-the-back.fish' || kind === 'check-the-back.bad') {
+      return REACTION_DURATION;
+    }
+    return kind === 'check-the-back.ignore' ? 0.25 : super.reactionDuration(kind);
   }
 
   protected disposeOwned(): void {

@@ -23,6 +23,8 @@ export const SOUND_IDS = [
   'pause',
   'resume',
   'journal',
+  'radioSignal',
+  'radioReply',
   'eating',
   'medkit',
   'hullRepair',
@@ -62,6 +64,8 @@ export const SOUND_IDS = [
   'midnightShovel',
   'midnightMonsterRun',
   'midnightMonsterAttack',
+  'checkBackFish',
+  'checkBackAnglerfish',
 ] as const;
 
 export type SoundId = typeof SOUND_IDS[number];
@@ -87,6 +91,8 @@ export const EVENT_ONLY_SOUND_IDS = Object.freeze([
   'midnightShovel',
   'midnightMonsterRun',
   'midnightMonsterAttack',
+  'checkBackFish',
+  'checkBackAnglerfish',
 ] as const satisfies readonly SoundId[]);
 
 const eventOnlySounds = new Set<SoundId>(EVENT_ONLY_SOUND_IDS);
@@ -160,6 +166,8 @@ export const AUDIO_MANIFEST: Readonly<Record<SoundId, AudioAssetDefinition>> =
     pause: asset('pause', 'interface', 0.32, false, 1),
     resume: asset('resume', 'interface', 0.32, false, 1),
     journal: asset('journal', 'interface', 0.38, false, 2),
+    radioSignal: asset('radioSignal', 'effects', 0.46, false, 1),
+    radioReply: asset('radioReply', 'effects', 0.5, false, 1),
     eating: asset('eating', 'effects', 0.38, false, 2),
     medkit: asset('medkit', 'effects', 0.4, false, 2),
     hullRepair: asset('hullRepair', 'effects', 0.48, false, 2),
@@ -202,4 +210,6 @@ export const AUDIO_MANIFEST: Readonly<Record<SoundId, AudioAssetDefinition>> =
     midnightShovel: asset('midnightShovel', 'effects', 0.55, false, 1),
     midnightMonsterRun: asset('midnightMonsterRun', 'effects', 0.5, true, 1),
     midnightMonsterAttack: asset('midnightMonsterAttack', 'effects', 0.72, false, 1),
+    checkBackFish: asset('checkBackFish', 'effects', 0.5, false, 1),
+    checkBackAnglerfish: asset('checkBackAnglerfish', 'effects', 0.68, false, 1),
   });

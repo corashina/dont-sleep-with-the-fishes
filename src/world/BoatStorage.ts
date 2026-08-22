@@ -16,9 +16,13 @@ import {
   LIFEBOAT_FLOOR_SURFACE_Y,
   LIFEBOAT_GUNWALE_SURFACE_Y,
 } from './Lifeboat';
+import {
+  COMPASS_CASE_SUPPORT_POINT,
+  COMPASS_REST_ROTATION,
+} from './CompassRestPose';
+import { CARLITOS_SEATED_SUPPORT_LIFT } from './CarlitosRestPose';
 import { ITEM_MODEL_SPECS } from './itemModelManifest';
 
-const CARLITOS_SEATED_SUPPORT_LIFT = 0.22;
 const FISHING_NET_HANDLE_SUPPORT_POINT = new Vector3(0, 0.09468515, 0.81206911);
 const STACK_GAP = 0.01;
 
@@ -72,7 +76,9 @@ const restingSlot = (
   ).applyMatrix4(rotationMatrix);
   const supportPointY = id === 'fishingNet'
     ? FISHING_NET_HANDLE_SUPPORT_POINT.clone().applyMatrix4(rotationMatrix).y
-    : rotatedBounds.min.y;
+    : id === 'compass'
+      ? new Vector3(...COMPASS_CASE_SUPPORT_POINT).applyMatrix4(rotationMatrix).y
+      : rotatedBounds.min.y;
   return {
     surface,
     position: [
@@ -114,7 +120,16 @@ const BOAT_STORAGE_SLOTS = {
     restingSlot('shelf', 'baitTin', 0, -1.855, -0.03),
   ],
   ductTape: [restingSlot('shelf', 'ductTape', -0.55, -1.65, 0.05, 0.5, Math.PI / 2)],
-  compass: [restingSlot('shelf', 'compass', 0.78, -1.62, Math.PI, 0.5, Math.PI / 2, 0.16)],
+  compass: [restingSlot(
+    'shelf',
+    'compass',
+    0.78,
+    -1.62,
+    COMPASS_REST_ROTATION[1],
+    0.5,
+    COMPASS_REST_ROTATION[0],
+    COMPASS_REST_ROTATION[2],
+  )],
   map: [restingSlot('shelf', 'map', 0, 0.65, 0)],
   medicalKit: [restingSlot('floor', 'medicalKit', -0.50, -1.27, 0.10)],
   spyglass: [restingSlot('shelf', 'spyglass', -1.08, -1.70, Math.PI + 0.14)],
@@ -132,11 +147,11 @@ const BOAT_STORAGE_SLOTS = {
   )],
   scubaSet: [restingSlot('floor', 'scubaSet', 1.33, -1.15, -0.04)],
   anchor: [restingSlot('floor', 'anchor', 1.39, -0.50, 0.30, 0.5, 0, -0.20)],
-  bottledPaper: [restingSlot('edgeShelf', 'bottledPaper', 1.38, -0.34, Math.PI)],
+  radio: [restingSlot('edgeShelf', 'radio', 1.35, -0.34, Math.PI * 1.5)],
   umbrella: [restingSlot('floor', 'umbrella', 0.55, -0.90, -Math.PI / 2, 0.5, 0, -Math.PI / 4)],
-  swimRing: [restingSlot('floor', 'swimRing', -1.40, -1.00, -0.08, 0.5, 0, -0.95)],
+  swimRing: [restingSlot('floor', 'swimRing', -1.36, -0.52, -0.08, 0.5, 0, -0.95)],
   flashlight: [restingSlot('shelf', 'flashlight', 1.05, -1.62, -Math.PI / 2)],
-  shotgun: [restingSlot('floor', 'shotgun', -1.44, -0.55, 0.20, 0.5, Math.PI / 2)],
+  shotgun: [restingSlot('floor', 'shotgun', -1.43, -1.16, 0.20, 0.5, Math.PI / 2)],
   energyBar: [restingSlot('shelf', 'energyBar', 0.45, -1.64, Math.PI)],
   carlitos: [
     restingSlot('gunwale', 'carlitos', 1.58, -1.75, Math.PI, 0.68),

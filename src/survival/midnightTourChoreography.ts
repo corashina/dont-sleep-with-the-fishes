@@ -4,11 +4,12 @@ export const CHEST_SEARCH_END_SECONDS = 3;
 export const CHEST_DIG_END_SECONDS = 9;
 export const CHEST_RESULT_DURATION_SECONDS = 12;
 export const CHEST_STROKE_SECONDS = 2;
-export const MONSTER_HEAR_END_SECONDS = 2;
-export const MONSTER_TURN_END_SECONDS = 4.5;
-export const MONSTER_RUN_END_SECONDS = 8.5;
-export const MONSTER_ATTACK_END_SECONDS = 9.5;
-export const MONSTER_RESULT_DURATION_SECONDS = 11;
+export const MONSTER_SCAN_LEFT_END_SECONDS = 1.2;
+export const MONSTER_SCAN_RIGHT_END_SECONDS = 2.4;
+export const MONSTER_TURN_BACK_END_SECONDS = 3.6;
+export const MONSTER_RUN_END_SECONDS = 7.6;
+export const MONSTER_ATTACK_END_SECONDS = 8.6;
+export const MONSTER_RESULT_DURATION_SECONDS = MONSTER_ATTACK_END_SECONDS;
 
 const CHEST_DIG_DURATION_SECONDS = CHEST_DIG_END_SECONDS
   - CHEST_SEARCH_END_SECONDS;
@@ -26,7 +27,7 @@ export type MidnightChestStageSample =
   | Readonly<{ stage: 'hold'; progress: number }>;
 
 export type MidnightMonsterStageSample = Readonly<{
-  stage: 'hear' | 'turn' | 'run' | 'attack' | 'collapse';
+  stage: 'scan-left' | 'scan-right' | 'turn-back' | 'run' | 'attack';
   progress: number;
 }>;
 
@@ -48,22 +49,30 @@ function progressBetween(
   );
 }
 
-export function monsterHearProgress(elapsedSeconds: number): number {
-  return progressBetween(elapsedSeconds, 0, MONSTER_HEAR_END_SECONDS);
+export function monsterScanLeftProgress(elapsedSeconds: number): number {
+  return progressBetween(elapsedSeconds, 0, MONSTER_SCAN_LEFT_END_SECONDS);
 }
 
-export function monsterTurnProgress(elapsedSeconds: number): number {
+export function monsterScanRightProgress(elapsedSeconds: number): number {
   return progressBetween(
     elapsedSeconds,
-    MONSTER_HEAR_END_SECONDS,
-    MONSTER_TURN_END_SECONDS,
+    MONSTER_SCAN_LEFT_END_SECONDS,
+    MONSTER_SCAN_RIGHT_END_SECONDS,
+  );
+}
+
+export function monsterTurnBackProgress(elapsedSeconds: number): number {
+  return progressBetween(
+    elapsedSeconds,
+    MONSTER_SCAN_RIGHT_END_SECONDS,
+    MONSTER_TURN_BACK_END_SECONDS,
   );
 }
 
 export function monsterRunProgress(elapsedSeconds: number): number {
   return progressBetween(
     elapsedSeconds,
-    MONSTER_TURN_END_SECONDS,
+    MONSTER_TURN_BACK_END_SECONDS,
     MONSTER_RUN_END_SECONDS,
   );
 }
@@ -76,31 +85,23 @@ export function monsterAttackProgress(elapsedSeconds: number): number {
   );
 }
 
-export function monsterCollapseProgress(elapsedSeconds: number): number {
-  return progressBetween(
-    elapsedSeconds,
-    MONSTER_ATTACK_END_SECONDS,
-    MONSTER_RESULT_DURATION_SECONDS,
-  );
-}
-
 export function sampleMonsterStage(
   elapsedSeconds: number,
 ): MidnightMonsterStageSample {
   const elapsed = clampMonsterElapsed(elapsedSeconds);
-  if (elapsed < MONSTER_HEAR_END_SECONDS) {
-    return { stage: 'hear', progress: monsterHearProgress(elapsed) };
+  if (elapsed < MONSTER_SCAN_LEFT_END_SECONDS) {
+    return { stage: 'scan-left', progress: monsterScanLeftProgress(elapsed) };
   }
-  if (elapsed < MONSTER_TURN_END_SECONDS) {
-    return { stage: 'turn', progress: monsterTurnProgress(elapsed) };
+  if (elapsed < MONSTER_SCAN_RIGHT_END_SECONDS) {
+    return { stage: 'scan-right', progress: monsterScanRightProgress(elapsed) };
+  }
+  if (elapsed < MONSTER_TURN_BACK_END_SECONDS) {
+    return { stage: 'turn-back', progress: monsterTurnBackProgress(elapsed) };
   }
   if (elapsed < MONSTER_RUN_END_SECONDS) {
     return { stage: 'run', progress: monsterRunProgress(elapsed) };
   }
-  if (elapsed < MONSTER_ATTACK_END_SECONDS) {
-    return { stage: 'attack', progress: monsterAttackProgress(elapsed) };
-  }
-  return { stage: 'collapse', progress: monsterCollapseProgress(elapsed) };
+  return { stage: 'attack', progress: monsterAttackProgress(elapsed) };
 }
 
 export function chestDigProgress(elapsedSeconds: number): number {

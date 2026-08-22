@@ -14,7 +14,10 @@ import {
   HANGING_LANTERN_DAY_INTENSITY,
   HANGING_LANTERN_NIGHT_INTENSITY,
   HANGING_LANTERN_LINE_LENGTH,
+  HANGING_LANTERN_LINE_RADIUS,
+  HANGING_LANTERN_LIGHT_DISTANCE,
   HANGING_LANTERN_MODEL_SCALE,
+  HANGING_LANTERN_POLE_RADIUS,
   HANGING_LANTERN_MOUNT,
   HANGING_LANTERN_TIP,
   HANGING_LANTERN_MAX_SWING,
@@ -22,6 +25,12 @@ import {
 } from '../src/survival/HangingLantern';
 
 const ZERO_POSE: BoatPose = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
+const TEST_POLE_MATERIAL = new MeshStandardMaterial({
+  color: 0x4b382c,
+  roughness: 0.96,
+  metalness: 0,
+  flatShading: true,
+});
 
 function swingMagnitude(lantern: ReturnType<typeof createHangingLantern>): number {
   const pivot = lantern.root.getObjectByName('hanging-lantern:swing-pivot')!;
@@ -29,7 +38,7 @@ function swingMagnitude(lantern: ReturnType<typeof createHangingLantern>): numbe
 }
 
 function simulateWeather(id: 'calm' | 'wind' | 'waves' | 'thunderstorm'): number {
-  const lantern = createHangingLantern(lanternModel());
+  const lantern = createHangingLantern(lanternModel(), TEST_POLE_MATERIAL);
   const weather = presentationWeatherProfile(id);
   let peak = 0;
   for (let frame = 0; frame < 360; frame += 1) {
@@ -53,7 +62,7 @@ function lanternModel(): Group {
 
 describe('hanging lantern', () => {
   it('mounts at the stern center and hangs below the pole tip', () => {
-    const lantern = createHangingLantern(lanternModel());
+    const lantern = createHangingLantern(lanternModel(), TEST_POLE_MATERIAL);
     const pivot = lantern.root.getObjectByName('hanging-lantern:swing-pivot')!;
     const model = lantern.root.getObjectByName('hanging-lantern:model')!;
     lantern.root.updateMatrixWorld(true);
@@ -72,6 +81,10 @@ describe('hanging lantern', () => {
       HANGING_LANTERN_TIP.z,
     ]);
     expect(pivotWorld.y - modelBounds.max.y).toBeCloseTo(HANGING_LANTERN_LINE_LENGTH, 5);
+    expect(HANGING_LANTERN_LINE_LENGTH).toBe(0.36);
+    expect(HANGING_LANTERN_LINE_RADIUS).toBe(0.003);
+    expect(HANGING_LANTERN_MODEL_SCALE).toBe(0.375);
+    expect(HANGING_LANTERN_POLE_RADIUS).toBe(0.0225);
     expect(model.scale.toArray()).toEqual([
       HANGING_LANTERN_MODEL_SCALE,
       HANGING_LANTERN_MODEL_SCALE,
@@ -79,31 +92,52 @@ describe('hanging lantern', () => {
     ]);
     expect(modelBounds.min.y).toBeGreaterThan(0.9);
 
+    const pole = lantern.root.getObjectByName('hanging-lantern:pole') as Mesh;
+    const line = lantern.root.getObjectByName('hanging-lantern:line') as Mesh;
+    const mount = lantern.root.getObjectByName('hanging-lantern:mount') as Mesh;
+    expect((pole.material as MeshStandardMaterial).color.getHex()).toBe(
+      TEST_POLE_MATERIAL.color.getHex(),
+    );
+    expect((line.material as MeshStandardMaterial).color.getHex()).toBe(
+      TEST_POLE_MATERIAL.color.getHex(),
+    );
+    expect(mount.material).toBe(pole.material);
+    expect(pole.material).not.toBe(TEST_POLE_MATERIAL);
+
     lantern.dispose();
   });
 
-  it('builds a warm emissive model and shadow-casting point light', () => {
-    const lantern = createHangingLantern(lanternModel());
+  it('keeps the shadow-casting lamp off by day and lit at night', () => {
+    const lantern = createHangingLantern(lanternModel(), TEST_POLE_MATERIAL);
     const model = lantern.root.getObjectByName('hanging-lantern:model')!;
     const mesh = model.children[0] as Mesh;
     const material = mesh.material as MeshStandardMaterial;
 
     expect(lantern.light).toBeInstanceOf(PointLight);
     expect(lantern.light.color.getHex()).toBe(0xffb261);
-    expect(HANGING_LANTERN_DAY_INTENSITY).toBe(5.2);
-    expect(HANGING_LANTERN_NIGHT_INTENSITY).toBe(7.2);
+    expect(HANGING_LANTERN_DAY_INTENSITY).toBe(0);
+    expect(HANGING_LANTERN_NIGHT_INTENSITY).toBe(15);
     expect(lantern.light.intensity).toBe(HANGING_LANTERN_DAY_INTENSITY);
-    expect(lantern.light.distance).toBe(5);
+    expect(lantern.light.distance).toBe(HANGING_LANTERN_LIGHT_DISTANCE);
     expect(lantern.light.castShadow).toBe(true);
-    expect(lantern.light.shadow.camera.far).toBe(5);
-    expect(lantern.light.position.y).toBeCloseTo(
-      -HANGING_LANTERN_LINE_LENGTH - 0.13,
+    expect(lantern.light.shadow.camera.far).toBe(HANGING_LANTERN_LIGHT_DISTANCE);
+    lantern.root.updateMatrixWorld(true);
+    expect(lantern.light.getWorldPosition(new Vector3()).y).toBeCloseTo(
+      new Box3().setFromObject(model).getCenter(new Vector3()).y,
     );
-    expect(lantern.light.shadow.mapSize.toArray()).toEqual([512, 512]);
+    expect(lantern.light.shadow.mapSize.toArray()).toEqual([1024, 1024]);
     expect(mesh.castShadow).toBe(false);
     expect(mesh.receiveShadow).toBe(true);
     expect(material.emissive.getHex()).toBe(0xffc56a);
+    expect(material.emissiveIntensity).toBe(0);
+
+    lantern.setNight(true);
+    expect(lantern.light.intensity).toBe(HANGING_LANTERN_NIGHT_INTENSITY);
     expect(material.emissiveIntensity).toBe(1.35);
+
+    lantern.setNight(false);
+    expect(lantern.light.intensity).toBe(HANGING_LANTERN_DAY_INTENSITY);
+    expect(material.emissiveIntensity).toBe(0);
 
     lantern.dispose();
   });
@@ -113,7 +147,7 @@ describe('hanging lantern', () => {
     const modelMesh = model.children[0] as Mesh;
     const modelGeometryDispose = vi.spyOn(modelMesh.geometry, 'dispose');
     const modelMaterialDispose = vi.spyOn(modelMesh.material as MeshStandardMaterial, 'dispose');
-    const lantern = createHangingLantern(model);
+    const lantern = createHangingLantern(model, TEST_POLE_MATERIAL);
     const shadowDispose = vi.spyOn(lantern.light.shadow, 'dispose');
 
     lantern.dispose();
@@ -134,8 +168,8 @@ describe('hanging lantern', () => {
   });
 
   it('reacts to boat pitch, roll, and drift changes', () => {
-    const passive = createHangingLantern(lanternModel());
-    const driven = createHangingLantern(lanternModel());
+    const passive = createHangingLantern(lanternModel(), TEST_POLE_MATERIAL);
+    const driven = createHangingLantern(lanternModel(), TEST_POLE_MATERIAL);
     const calm = presentationWeatherProfile('calm');
     passive.update(ZERO_POSE, calm, 0, 1 / 60);
     driven.update(ZERO_POSE, calm, 0, 1 / 60);
@@ -147,7 +181,7 @@ describe('hanging lantern', () => {
   });
 
   it('caps large frame steps and the combined swing angle', () => {
-    const lantern = createHangingLantern(lanternModel());
+    const lantern = createHangingLantern(lanternModel(), TEST_POLE_MATERIAL);
     const storm = presentationWeatherProfile('thunderstorm');
     for (let frame = 0; frame < 80; frame += 1) {
       const sign = frame % 2 === 0 ? 1 : -1;
@@ -160,7 +194,7 @@ describe('hanging lantern', () => {
   });
 
   it('does not move after disposal', () => {
-    const lantern = createHangingLantern(lanternModel());
+    const lantern = createHangingLantern(lanternModel(), TEST_POLE_MATERIAL);
     const pivot = lantern.root.getObjectByName('hanging-lantern:swing-pivot')!;
     lantern.dispose();
     const before = pivot.rotation.toArray();

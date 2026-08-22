@@ -58,14 +58,14 @@ describe('scavenging ship layout', () => {
     crewCabin: 10,
     wheelhouse: 3,
     storageWorkroom: 8,
-    centralCargo: 11,
+    centralCargo: 10,
     bow: 1,
     stern: 2,
   } as const;
 
   it('provides the approved spread of raised item spots', () => {
     const surfaces = SHIP_LAYOUT.furniture.flatMap(({ surfaces }) => surfaces);
-    expect(surfaces.length).toBeGreaterThanOrEqual(40);
+    expect(surfaces).toHaveLength(39);
     for (const [regionId, minimum] of Object.entries(minimumSpots)) {
       const regionSurfaces = surfaces.filter((surface) => surface.regionId === regionId);
       expect(new Set(regionSurfaces.map(({ physicalSlotId }) => physicalSlotId)).size)
@@ -142,7 +142,9 @@ describe('scavenging ship layout', () => {
     }
 
     expect(SHIP_LAYOUT.furniture.some(({ id }) => id.startsWith('deck-bench-'))).toBe(false);
-    expect(SHIP_LAYOUT.furniture.filter(({ modelId }) => modelId === 'cargoRack')).toHaveLength(3);
+    expect(SHIP_LAYOUT.furniture.filter(({ modelId }) => modelId === 'cargoRack')).toHaveLength(2);
+    expect(SHIP_LAYOUT.furniture.some(({ id }) => id === 'cargo-rod-rack-port'))
+      .toBe(false);
 
     const storage = SHIP_LAYOUT.zones.find(
       ({ id }) => id === 'storageWorkroom',
@@ -735,6 +737,8 @@ describe('scavenging ship layout', () => {
     ]);
     expect(fixture('cargo-rack-mast-port').rotationY).toBe(0);
     expect(fixture('cargo-rack-mast-starboard').rotationY).toBe(0);
+    expect(SHIP_LAYOUT.furniture.some(({ id }) => id === 'cargo-rod-rack-port'))
+      .toBe(false);
     expect([
       fixture('cargo-crate-crew-port').modelId,
       fixture('cargo-barrel-crew-starboard').modelId,

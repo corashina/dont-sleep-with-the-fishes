@@ -58,7 +58,7 @@ const presentation = {
   flareGun: { targetLongestDimension: 0.68, rotation: [Math.PI / 2, 0, 0], offset: [0, 0.07, 0] },
   scubaSet: { targetLongestDimension: 0.88, rotation: [0, 0, 0], offset: [0, 0.44, 0] },
   anchor: { targetLongestDimension: 0.88, rotation: [0, 0, 0], offset: [0, 0, 0] },
-  bottledPaper: { targetLongestDimension: 0.62, rotation: [0, 0, Math.PI / 2], offset: [0, 0, 0] },
+  radio: { targetLongestDimension: 0.62, rotation: [0, 0, 0], offset: [0, 0, 0] },
   umbrella: { targetLongestDimension: 0.90, rotation: [0, 0, Math.PI / 2], offset: [0, 0, 0] },
   swimRing: { targetLongestDimension: 0.70, rotation: [0, 0, 0], offset: [0, 0, 0] },
   flashlight: { targetLongestDimension: 0.72, rotation: [0, 0, 0], offset: [0, 0, 0] },

@@ -139,18 +139,29 @@ describe('BoatStorage', () => {
     const map = boatStorageTransform(item('map'));
     const bait = boatStorageTransform(item('baitTin'));
     const spyglass = boatStorageTransform(item('spyglass'));
-    const energyBar = boatStorageTransform(item('energyBar'));
-    const compassFaceNormal = new Vector3(0, 0, 1).applyEuler(compass.rotation);
+    const compassFaceNormal = new Vector3(
+      0.32370741,
+      0.19367758,
+      0.92612230,
+    ).applyEuler(compass.rotation);
+    const compassCaseSupport = new Vector3(
+      -0.00871581,
+      -0.05992996,
+      -0.03037282,
+    ).applyEuler(compass.rotation).multiplyScalar(compass.scale).add(compass.position);
 
     expect(map.rotation.x).toBe(0);
     expect(ductTape.rotation.x).toBe(Math.PI / 2);
-    expect(compass.rotation.x).toBeCloseTo(Math.PI / 2);
-    expect(compass.rotation.y).toBe(energyBar.rotation.y);
-    expect(compass.rotation.z).toBeCloseTo(0.16);
+    expect(compass.rotation.x).toBeCloseTo(-1.77695267);
+    expect(compass.rotation.y).toBeCloseTo(0.32964526);
+    expect(compass.rotation.z).toBeCloseTo(-3.10718377);
+    expect(compassFaceNormal.x).toBeCloseTo(0);
     expect(compassFaceNormal.y).toBeCloseTo(1);
+    expect(compassFaceNormal.z).toBeCloseTo(0);
+    expect(compassCaseSupport.y).toBeCloseTo(LIFEBOAT_DISPLAY_SHELF_SURFACE_Y);
     expect(ductTape.position.x).toBeGreaterThan(spyglass.position.x);
     expect(ductTape.position.x).toBeLessThan(bait.position.x);
-    for (const id of ['map', 'ductTape', 'compass'] as const) {
+    for (const id of ['map', 'ductTape'] as const) {
       expect(storageBounds(item(id)).min.y)
         .toBeCloseTo(LIFEBOAT_DISPLAY_SHELF_SURFACE_Y);
     }
@@ -182,7 +193,7 @@ describe('BoatStorage', () => {
     expect(boatStorageSurface(item('flareGun'))).toBe('edgeShelf');
     expect(boatStorageSurface(item('shotgun'))).toBe('floor');
     expect(shotgun.position.x).toBeLessThan(-1);
-    expect(shotgun.position.z).toBeCloseTo(-0.55);
+    expect(shotgun.position.z).toBeCloseTo(-1.16);
     expect(shotgun.rotation.x).toBeCloseTo(Math.PI / 2);
     expect(shotgun.rotation.y).toBeCloseTo(0.20);
     expect(shotgun.rotation.z).toBe(0);
@@ -218,7 +229,7 @@ describe('BoatStorage', () => {
     }
   });
 
-  it('leans the visible anchor against the right hull and moves the swim ring aft', () => {
+  it('leans the visible anchor right and places the swim ring in the forward left slot', () => {
     const anchor = boatStorageTransform(item('anchor'));
     const anchorBounds = storageBounds(item('anchor'));
     const anchorHullEdge = lifeboatHullHalfWidthAt(anchor.position.z)!;
@@ -234,6 +245,8 @@ describe('BoatStorage', () => {
       .multiplyScalar(anchor.scale)
       .add(anchor.position);
     const swimRing = boatStorageTransform(item('swimRing'));
+    const swimRingBounds = storageBounds(item('swimRing'));
+    const swimRingHullEdge = lifeboatHullHalfWidthAt(swimRing.position.z)!;
 
     expect(anchor.position.x).toBeGreaterThan(1);
     expect(anchor.position.z).toBeCloseTo(-0.50);
@@ -243,26 +256,27 @@ describe('BoatStorage', () => {
     expect(anchorTop.x).toBeGreaterThan(anchorBottom.x);
     expect(anchorWallGap).toBeGreaterThan(0.03);
     expect(anchorWallGap).toBeLessThan(0.06);
-    expect(swimRing.position.x).toBeLessThan(-1);
-    expect(swimRing.position.z).toBeCloseTo(-1.00);
+    expect(swimRing.position.x).toBeCloseTo(-1.36);
+    expect(swimRing.position.z).toBeCloseTo(-0.52);
     expect(Math.abs(swimRing.rotation.z)).toBeGreaterThan(0.7);
+    expect(swimRingBounds.min.x).toBeGreaterThanOrEqual(-swimRingHullEdge + 0.12);
+    expect(swimRingBounds.min.x).toBeLessThan(-swimRingHullEdge + 0.16);
     expect(storageBounds(item('anchor')).min.y).toBeCloseTo(LIFEBOAT_FLOOR_SURFACE_Y);
-    expect(storageBounds(item('swimRing')).min.y).toBeCloseTo(LIFEBOAT_FLOOR_SURFACE_Y);
+    expect(swimRingBounds.min.y).toBeCloseTo(LIFEBOAT_FLOOR_SURFACE_Y);
   });
 
-  it('places bottled paper on the right shelf opposite the flare gun', () => {
-    const bottledPaper = boatStorageTransform(item('bottledPaper'));
+  it('centers the radio lengthwise and moves it toward the boat center', () => {
+    const radio = boatStorageTransform(item('radio'));
     const flareGun = boatStorageTransform(item('flareGun'));
 
-    expect(boatStorageSurface(item('bottledPaper'))).toBe('edgeShelf');
-    expect(bottledPaper.position.x).toBeCloseTo(1.38);
-    expect(bottledPaper.position.z).toBeCloseTo(-0.34);
-    expect(bottledPaper.rotation.y).toBeCloseTo(Math.PI);
-    expect(storageBounds(item('bottledPaper')).min.y)
+    expect(boatStorageSurface(item('radio'))).toBe('edgeShelf');
+    expect(radio.position.x).toBeCloseTo(1.35);
+    expect(radio.position.z).toBeCloseTo(-0.34);
+    expect(radio.rotation.y).toBeCloseTo(Math.PI * 1.5);
+    expect(storageBounds(item('radio')).min.y)
       .toBeCloseTo(LIFEBOAT_STARBOARD_EDGE_SHELF_SURFACE_Y);
-    expect(storageBounds(item('bottledPaper')).intersectsBox(storageBounds(item('flareGun'))))
+    expect(storageBounds(item('radio')).intersectsBox(storageBounds(item('flareGun'))))
       .toBe(false);
-    expect(bottledPaper.position.x).toBeCloseTo(-flareGun.position.x);
   });
 
   it('stands the scuba gear clear of the right hull wall', () => {

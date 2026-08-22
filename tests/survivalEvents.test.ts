@@ -27,7 +27,6 @@ const EXPECTED_WEIGHTS = {
   ghosts: 3, 'eerie-melody': 1, 'face-on-the-moon': 1,
   'shadow-figure': 1, 'guarded-sleep': 4,
   'drifting-barrel': 1, 'drifting-chest': 1,
-  'drifting-bottle': 3,
   'check-the-back': 3, flowers: 1,
   'chest-attack': 1, 'midnight-tour': 2, 'night-trader': 2,
   handyman: 2, 'other-people': 2,
@@ -43,7 +42,7 @@ const EXPECTED_RISK = {
   'man-in-the-fog': 'dangerous', ghosts: 'uncertain',
   'eerie-melody': 'dangerous', 'face-on-the-moon': 'uncertain',
   'shadow-figure': 'dangerous', 'guarded-sleep': 'uncertain',
-  'drifting-barrel': 'safe', 'drifting-chest': 'safe', 'drifting-bottle': 'safe',
+  'drifting-barrel': 'safe', 'drifting-chest': 'safe',
   'check-the-back': 'safe',
   flowers: 'safe', 'chest-attack': 'dangerous',
   'midnight-tour': 'dangerous', 'night-trader': 'safe',
@@ -177,7 +176,7 @@ describe('survival events', () => {
     expect(Object.fromEntries(SURVIVAL_EVENTS.map(({ id, danger }) => [id, danger])))
       .toEqual(EXPECTED_RISK);
     expect(SURVIVAL_EVENTS.filter(({ phase }) => phase === 'day').map(({ id }) => id))
-      .toEqual(['drifting-barrel', 'drifting-chest', 'drifting-bottle']);
+      .toEqual(['drifting-barrel', 'drifting-chest']);
     expect(byId['school-of-fish']!.phase).toBe('night');
     expect(byId.flowers!.phase).toBe('night');
     expect(byId['drifting-barrel']!.cooldownDays).toBe(3);
@@ -409,7 +408,7 @@ describe('survival events', () => {
 
   it('contains the approved non-story expansion', () => {
     expect(SURVIVAL_EVENTS.map(({ id }) => id)).toEqual(expect.arrayContaining([
-      'drifting-barrel', 'drifting-chest', 'drifting-bottle', 'check-the-back',
+      'drifting-barrel', 'drifting-chest', 'check-the-back',
       'midnight-tour', 'night-trader', 'handyman', 'other-people',
       'flowers', 'chest-attack',
     ]));
@@ -448,8 +447,8 @@ describe('survival events', () => {
     );
 
     expect(resultIds('chest-attack', 'fishingNet')).toEqual(['chest-bound']);
-    expect(event('chest-attack').choices.some(({ id }) => id === 'fight')).toBe(false);
-    expect(resultIds('chest-attack', 'sleep')).toEqual(['chest-hide']);
+    expect(resultIds('chest-attack', 'attack')).toEqual(['chest-attack']);
+    expect(event('chest-attack').choices.some(({ id }) => id === 'sleep')).toBe(false);
     const visit = event('midnight-tour').choices.find(({ id }) => id === 'visit')!;
     expect(visit.outcomes).toMatchObject([
       {
@@ -505,13 +504,13 @@ describe('survival events', () => {
     expect(event('other-people').choices.map(({ id }) => id)).not.toContain('pass');
   });
 
-  it('keeps Scuba Gear and Bottled Paper out of event choices', () => {
+  it('keeps Scuba Gear and Radio out of event choices', () => {
     const itemChoices = SURVIVAL_EVENTS.flatMap(({ choices }) => (
       choices.flatMap(({ itemId }) => itemId === undefined ? [] : [itemId])
     ));
 
     expect(itemChoices).not.toContain('scubaSet');
-    expect(itemChoices).not.toContain('bottledPaper');
+    expect(itemChoices).not.toContain('radio');
   });
 
   it('sets supernatural event pressure bounds and effects', () => {
@@ -567,41 +566,19 @@ describe('survival events', () => {
     }]);
   });
 
-  it('charges one energy to recover the Drifting Bottle without an item', () => {
-    const bottle = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-bottle');
-
-    expect(bottle?.choices.map(({ id, itemId }) => ({ id, itemId }))).toEqual([
-      { id: 'retrieve', itemId: undefined },
-      { id: 'delegate-carlitos', itemId: undefined },
-      { id: 'sleep', itemId: undefined },
-    ]);
-    const retrieve = bottle?.choices.find(({ id }) => id === 'retrieve');
-    expect(retrieve?.requirements).toEqual([{ resource: 'energy', minimum: 1 }]);
-    expect(bottle?.choices.find(({ id }) => id === 'delegate-carlitos')?.companionAction)
-      .toBe('delegateCarlitos');
-    expect(bottle?.choices.find(({ id }) => id === 'sleep')?.label).toBe('Let It Drift');
-    expect(retrieve?.outcomes[0]?.effects).toMatchObject({
-      resources: [{ resource: 'energy', operation: 'subtract', value: 1 }],
-      items: [{ kind: 'gain', itemId: 'bottledPaper', quantity: 1 }],
-    });
-  });
-
   it('maps each drifting item to its retrieve and leave presentation keys', () => {
     expect(isDriftingItemEventId('drifting-barrel')).toBe(true);
     expect(isDriftingItemEventId('drifting-chest')).toBe(true);
-    expect(isDriftingItemEventId('drifting-bottle')).toBe(true);
     expect(isDriftingItemEventId('flowers')).toBe(false);
     expect([
       'drifting-barrel',
       'drifting-chest',
-      'drifting-bottle',
     ].map((eventId) => [
-      driftingItemRetrieveKey(eventId as 'drifting-barrel' | 'drifting-chest' | 'drifting-bottle'),
-      driftingItemLeaveKey(eventId as 'drifting-barrel' | 'drifting-chest' | 'drifting-bottle'),
+      driftingItemRetrieveKey(eventId as 'drifting-barrel' | 'drifting-chest'),
+      driftingItemLeaveKey(eventId as 'drifting-barrel' | 'drifting-chest'),
     ])).toEqual([
       ['drifting-barrel.food', 'drifting-barrel.drift'],
       ['drifting-chest.food', 'drifting-chest.drift'],
-      ['drifting-bottle.retrieve', 'drifting-bottle.lost'],
     ]);
   });
 
@@ -660,19 +637,22 @@ describe('survival events', () => {
 
     expect(event('drifting-barrel')).toMatchObject({ phase: 'day', weight: 1, earliestDay: 3 });
     expect(event('drifting-chest')).toMatchObject({ phase: 'day', weight: 1, earliestDay: 3 });
-    expect(event('drifting-bottle')).toMatchObject({
-      phase: 'day',
-      weight: 3,
-      earliestDay: 2,
-      absentItemIds: ['bottledPaper'],
+    expect(event('check-the-back')).toMatchObject({
+      allowedChestStates: ['none'],
     });
-    expect(event('drifting-bottle').maximumAppearances).toBeUndefined();
-    expect(event('check-the-back').choices[0]?.outcomes).toMatchObject([
-      { weight: 500, presentationKey: 'check-the-back.fish' },
-      { weight: 50, presentationKey: 'check-the-back.empty' },
+    const check = event('check-the-back').choices.find(({ id }) => id === 'check')!;
+    expect(check.outcomes).toMatchObject([
+      { weight: 80, presentationKey: 'check-the-back.fish' },
+      {
+        weight: 20,
+        presentationKey: 'check-the-back.bad',
+        effects: {
+          resources: [{ resource: 'health', operation: 'subtract', value: 25 }],
+        },
+      },
     ]);
-    expect(event('check-the-back').choices[0]?.outcomes.map(({ presentationKey }) => presentationKey))
-      .toEqual(['check-the-back.fish', 'check-the-back.empty']);
+    expect(check.outcomes.map(({ presentationKey }) => presentationKey))
+      .toEqual(['check-the-back.fish', 'check-the-back.bad']);
     expect(event('flowers')).toMatchObject({
       weight: 1,
       earliestDay: 2,
@@ -688,19 +668,10 @@ describe('survival events', () => {
       lastSeenDay: new Map<string, number>(), targetableItemIds: new Set<ItemId>(),
       appearanceCounts: new Map<string, number>(), inventoryItemIds: new Set<ItemId>(), rescueLead: 0,
     };
-    const bottleBase = { ...base, phase: 'day' as const };
-    expect(eligibleEvents(SURVIVAL_EVENTS, {
-      ...bottleBase,
-      inventoryItemIds: new Set(['bottledPaper']),
-    }).some(({ id }) => id === 'drifting-bottle')).toBe(false);
     expect(eligibleEvents(SURVIVAL_EVENTS, {
       ...base,
       rescueLead: 1,
     }).some(({ id }) => id === 'other-people')).toBe(false);
-    expect(eligibleEvents(SURVIVAL_EVENTS, {
-      ...bottleBase,
-      appearanceCounts: new Map([['drifting-bottle', 1]]),
-    }).some(({ id }) => id === 'drifting-bottle')).toBe(true);
     expect(eligibleEvents(SURVIVAL_EVENTS, {
       ...base,
       rescueLead: 2,
@@ -711,6 +682,22 @@ describe('survival events', () => {
       rescueLead: 2,
       appearanceCounts: new Map([['other-people', 1]]),
     }).some(({ id }) => id === 'other-people')).toBe(true);
+  });
+
+  it('allows Check the Back only when no chest occupies the stern', () => {
+    const eligible = (chestState: 'none' | 'closed' | 'mimic') => eligibleEvents(
+      SURVIVAL_EVENTS,
+      {
+        phase: 'night', day: 20, weather: 'calm', lastEventId: null,
+        lastSeenDay: new Map(), targetableItemIds: new Set(),
+        appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueLead: 0,
+        chestState,
+      },
+    ).some(({ id }) => id === 'check-the-back');
+
+    expect(eligible('none')).toBe(true);
+    expect(eligible('closed')).toBe(false);
+    expect(eligible('mimic')).toBe(false);
   });
 
   it('filters by phase, day bounds, immediate repeat, and cooldown', () => {
@@ -800,7 +787,7 @@ describe('survival events', () => {
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].weight = 0; }, /outcome.*weight/i);
     rejects((catalog) => { catalog[0].choices[0].itemId = 'telescope'; }, /unknown item/i);
     rejects((catalog) => { catalog[0].choices[0].itemId = 'scubaSet'; }, /day-action-only item/i);
-    rejects((catalog) => { catalog[0].choices[0].itemId = 'bottledPaper'; }, /day-action-only item/i);
+    rejects((catalog) => { catalog[0].choices[0].itemId = 'radio'; }, /day-action-only item/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.resources = [add('danger', 1)]; }, /unknown resource/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.resources = [subtract('hull', { min: 4, max: 3 })]; }, /invalid range/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects = null; }, /effects/i);

@@ -28,7 +28,7 @@ export const SURVIVAL_EVENT_IDS = Object.freeze([
   'windy-night', 'bad-sleep', 'thunderstorm', 'restless-waves',
   'man-in-the-fog', 'ghosts', 'eerie-melody', 'face-on-the-moon',
   'shadow-figure', 'guarded-sleep',
-  'drifting-barrel', 'drifting-chest', 'drifting-bottle', 'check-the-back',
+  'drifting-barrel', 'drifting-chest', 'check-the-back',
   'flowers', 'chest-attack', 'midnight-tour', 'night-trader',
   'handyman', 'other-people',
 ] as const);
@@ -45,24 +45,20 @@ export function isDriftingCargoEventId(
   return eventId === 'drifting-barrel' || eventId === 'drifting-chest';
 }
 
-export type DriftingItemEventId = DriftingCargoEventId | 'drifting-bottle';
+export type DriftingItemEventId = DriftingCargoEventId;
 
 export function isDriftingItemEventId(
   eventId: string,
 ): eventId is DriftingItemEventId {
-  return isDriftingCargoEventId(eventId) || eventId === 'drifting-bottle';
+  return isDriftingCargoEventId(eventId);
 }
 
 export function driftingItemRetrieveKey(eventId: DriftingItemEventId): EventPresentationKey {
-  if (eventId === 'drifting-barrel') return 'drifting-barrel.food';
-  if (eventId === 'drifting-chest') return 'drifting-chest.food';
-  return 'drifting-bottle.retrieve';
+  return eventId === 'drifting-barrel' ? 'drifting-barrel.food' : 'drifting-chest.food';
 }
 
 export function driftingItemLeaveKey(eventId: DriftingItemEventId): EventPresentationKey {
-  if (eventId === 'drifting-barrel') return 'drifting-barrel.drift';
-  if (eventId === 'drifting-chest') return 'drifting-chest.drift';
-  return 'drifting-bottle.lost';
+  return eventId === 'drifting-barrel' ? 'drifting-barrel.drift' : 'drifting-chest.drift';
 }
 
 export function driftingCargoKindForEvent(
@@ -92,7 +88,6 @@ const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.free
   'guarded-sleep': 'Carlitos sits alert while the night presses close.',
   'drifting-barrel': 'A sealed barrel drifts within reach of the boat.',
   'drifting-chest': 'A small chest drifts within reach of the boat.',
-  'drifting-bottle': 'A sealed bottle bobs against the hull.',
   'check-the-back': 'Something thumps against the back of the boat.',
   flowers: 'A small patch of flowers drifts beside the boat.',
   'chest-attack': 'The chest shudders and opens a row of wet teeth.',
@@ -483,37 +478,20 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     contextualChoice('sleep', 'Let It Drift',
       featuredOutcome('drifting-chest.drift', 1, 'The chest drifts out of reach.')),
   ]),
-  event('drifting-bottle', 'day', 'Drifting Bottle', 'safe', 'sighting', 3, 2, 0, [
-    {
-      ...contextualChoice('retrieve', 'Pick It Up',
-        featuredOutcome('drifting-bottle.retrieve', 1, 'You recover the message bottle.', effects(
-          [subtract('energy', 1)],
-          [gain('bottledPaper')],
-        ))),
-      requirements: [{ resource: 'energy', minimum: 1 }],
-    },
-    {
-      ...contextualChoice('delegate-carlitos', 'Send Carlitos',
-        featuredOutcome(
-          'drifting-bottle.retrieve',
-          1,
-          'Carlitos recovers the message bottle.',
-          effects(undefined, [gain('bottledPaper')]),
-        ),
-      ),
-      companionAction: 'delegateCarlitos',
-    },
-    contextualChoice('sleep', 'Let It Drift',
-      featuredOutcome('drifting-bottle.lost', 1, 'The bottle drifts away.')),
-  ], undefined, { absentItemIds: ['bottledPaper'] }),
   event('check-the-back', 'night', 'Check the Back', 'safe', 'fish', 3, 2, 35, [
     contextualChoice('check', 'Yes',
-      featuredOutcome('check-the-back.fish', 500, 'A fish has landed aboard.', effects([add('food', 1)])),
-      featuredOutcome('check-the-back.empty', 50, 'There is nothing there.'),
+      {
+        ...featuredOutcome('check-the-back.fish', 80, 'A fish has landed aboard.', effects([add('food', 1)])),
+        resultId: 'check-the-back.fish',
+      },
+      {
+        ...featuredOutcome('check-the-back.bad', 20, 'An anglerfish strikes from the stern.', effects([subtract('health', 25)])),
+        resultId: 'check-the-back.bad',
+      },
     ),
     contextualChoice('sleep', 'No',
       featuredOutcome('check-the-back.ignore', 1, 'You leave the sound alone.')),
-  ]),
+  ], undefined, { allowedChestStates: ['none'] }),
   event('flowers', 'night', 'Flowers', 'safe', 'sighting', 1, 2, 0, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet',
       featuredOutcome('flowers.collect', 1, 'You lift the flowers aboard.')),
@@ -525,11 +503,11 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
   event('chest-attack', 'night', 'Chest Attack', 'dangerous', 'impact', 1, 1, 0, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet',
       outcome(1, 'The net binds the chest shut.', { chest: 'close' }, 'chest-bound')),
-    contextualChoice('sleep', 'Hide',
+    contextualChoice('attack', 'Attack',
       outcome(1, 'The chest tears into you before it falls overboard.', {
         resources: [subtract('health', 40)],
         chest: 'destroy',
-      }, 'chest-hide')),
+      }, 'chest-attack')),
   ], undefined, { allowedChestStates: ['mimic'] }),
   event('midnight-tour', 'night', 'Midnight Tour', 'dangerous', 'sighting', 2, 7, 30, [
     contextualChoice('visit', 'Visit the Island',

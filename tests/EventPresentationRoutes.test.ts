@@ -21,7 +21,7 @@ describe('event presentation routes', () => {
   it('derives the three presentation ownership lists', () => {
     expect(DEDICATED_EVENT_IDS).toHaveLength(8);
     expect(FOCUSED_EVENT_IDS).toHaveLength(5);
-    expect(FEATURED_EVENT_IDS).toHaveLength(5);
+    expect(FEATURED_EVENT_IDS).toHaveLength(4);
   });
 
   it('rejects unknown event IDs', () => {

@@ -8,6 +8,10 @@ import {
   parseVisualQuality,
 } from '../src/rendering/visualQuality';
 import { createWaterQualityPreference } from '../src/rendering/waterQuality';
+import { createAntiAliasingQualityPreference } from '../src/rendering/antiAliasingQuality';
+import { createShadowQualityPreference } from '../src/rendering/shadowQuality';
+import { AntiAliasingQualityControl } from '../src/ui/AntiAliasingQualityControl';
+import { ShadowQualityControl } from '../src/ui/ShadowQualityControl';
 import {
   QualityControl,
   type QualityPreference,
@@ -25,16 +29,24 @@ function qualityValues(element: Element): string[] {
 type TestQuality = 'low' | 'high' | 'ultra';
 
 describe('QualityControl', () => {
-  it('shows three water choices and three visual choices', () => {
+  it('shows water, visual, anti-aliasing, and shadow choices', () => {
     const water = new WaterQualityControl(
       createWaterQualityPreference(() => undefined, null),
     );
     const ao = new VisualQualityControl(
       createVisualQualityPreference(() => undefined, null),
     );
+    const antiAliasing = new AntiAliasingQualityControl(
+      createAntiAliasingQualityPreference(() => undefined, null),
+    );
+    const shadows = new ShadowQualityControl(
+      createShadowQualityPreference(() => undefined, null),
+    );
 
     expect(qualityValues(water.element)).toEqual(['low', 'high', 'ultra']);
     expect(qualityValues(ao.element)).toEqual(['low', 'medium', 'high']);
+    expect(qualityValues(antiAliasing.element)).toEqual(['low', 'high']);
+    expect(qualityValues(shadows.element)).toEqual(['low', 'high']);
     expect(water.element.querySelector('p')?.textContent)
       .toBe('Ultra adds a natural ocean surface at high GPU cost.');
     expect(mainStyles).toMatch(
@@ -42,6 +54,12 @@ describe('QualityControl', () => {
     );
     expect(mainStyles).toMatch(
       /\.visual-quality-control\[data-quality-control="water"\]\s+\.visual-quality-control__choices\s*\{[^}]*grid-template-columns:\s*repeat\(3,/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.visual-quality-control\[data-quality-control="anti-aliasing"\]\s+\.visual-quality-control__choices\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.visual-quality-control\[data-quality-control="shadows"\]\s+\.visual-quality-control__choices\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s,
     );
     const consoleQualityRowRule = mainStyles.match(
       /^\.post-processing-console__quality-row\s*\{([^}]*)\}/m,
@@ -52,6 +70,8 @@ describe('QualityControl', () => {
 
     water.dispose();
     ao.dispose();
+    antiAliasing.dispose();
+    shadows.dispose();
   });
 
   it('accepts the medium visual quality preference', () => {

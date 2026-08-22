@@ -45,7 +45,7 @@ describe('survival balance simulation', () => {
   });
 
   it('repairs Hull at sixty before spending Energy on fishing', () => {
-    const session = new SurvivalSession(saved('ductTape', 'bottledPaper'), {
+    const session = new SurvivalSession(saved('ductTape', 'radio'), {
       seed: 1,
       random: sequenceRandom([0]),
       initial: { hull: 60, energy: 3 },
@@ -59,33 +59,29 @@ describe('survival balance simulation', () => {
     expect(repairIndex).toBeGreaterThanOrEqual(0);
     expect(perform.mock.invocationCallOrder[repairIndex])
       .toBeLessThan(beginFishing.mock.invocationCallOrder[0]!);
-    expect(perform.mock.calls.some(([action]) => action === 'sendMessage')).toBe(false);
+    expect(perform.mock.calls.some(([action]) => action === 'answerRadio')).toBe(false);
   });
 
-  it('sends Bottled Paper only after fishing leaves one Energy', () => {
-    const session = new SurvivalSession(saved('bottledPaper'), {
+  it('answers the Radio only after fishing leaves one Energy', () => {
+    const session = new SurvivalSession(saved('radio'), {
       seed: 2,
-      random: sequenceRandom([0]),
-      initial: { energy: 3 },
+      random: sequenceRandom([0, 0]),
+      initial: { day: 4, energy: 3 },
+      initialEventId: 'shower-night',
     });
+    session.resolveEvent({ kind: 'endure' });
+    session.beginDawn();
     const perform = vi.spyOn(session, 'perform');
     const beginFishing = vi.spyOn(session, 'beginFishing');
 
     runCompetentDay(session, sequenceRandom([0.99]), 0, true);
 
-    const sendIndex = perform.mock.calls.findIndex(([action]) => action === 'sendMessage');
-    expect(sendIndex).toBeGreaterThanOrEqual(0);
+    const answerIndex = perform.mock.calls.findIndex(([action]) => action === 'answerRadio');
+    expect(answerIndex).toBeGreaterThanOrEqual(0);
     expect(beginFishing.mock.invocationCallOrder[0])
-      .toBeLessThan(perform.mock.invocationCallOrder[sendIndex]!);
-    expect(session.snapshot().inventory['bottledPaper-1']?.condition).toBe('consumed');
-
-    const twoEnergy = new SurvivalSession(saved('bottledPaper'), {
-      seed: 3,
-      random: sequenceRandom([0]),
-      initial: { energy: 2 },
-    });
-    runCompetentDay(twoEnergy, sequenceRandom([0.99]), 0, true);
-    expect(twoEnergy.snapshot().inventory['bottledPaper-1']?.condition).toBe('usable');
+      .toBeLessThan(perform.mock.invocationCallOrder[answerIndex]!);
+    expect(session.snapshot()).toMatchObject({ rescueLead: 2, radioSignalsSent: 1 });
+    expect(session.snapshot().inventory['radio-1']?.condition).toBe('usable');
   });
 
   it('rejects invalid simulation settings', () => {

@@ -1,6 +1,5 @@
 import { Group, type Object3D, type PerspectiveCamera } from 'three';
 import { CheckBackPresentation } from './CheckBackPresentation';
-import { DriftingBottlePresentation } from './DriftingBottlePresentation';
 import { DriftingCargoPresentation } from './DriftingCargoPresentation';
 import type { DriftingWater } from './DriftingWaveMotion';
 import type { FeaturedEventPresentation } from './FeaturedEventPresentation';
@@ -15,6 +14,7 @@ import {
   isDriftingCargoEventId,
 } from './events';
 import type { EventPresentationKey } from './survivalTypes';
+import type { EventPresentationCue } from './eventPresentationCue';
 
 export class FeaturedEventPresentations {
   readonly root = new Group();
@@ -31,6 +31,7 @@ export class FeaturedEventPresentations {
     driftingChestTarget: Object3D,
     flowersDeckTarget: Object3D,
     checkBackSternTarget: Object3D,
+    emitCue: (cue: EventPresentationCue) => void,
     onlyEventId?: FeaturedEventId | null,
     driftingWater?: DriftingWater,
   ) {
@@ -40,7 +41,7 @@ export class FeaturedEventPresentations {
     );
     const includeCargo = onlyEventId === undefined
       || (onlyEventId !== null && isDriftingCargoEventId(onlyEventId));
-    if ((includeCargo || include('drifting-bottle')) && driftingWater === undefined) {
+    if (includeCargo && driftingWater === undefined) {
       throw new Error('Drifting events require the world wave source.');
     }
     this.driftingCargo = includeCargo && driftingWater !== undefined
@@ -52,18 +53,13 @@ export class FeaturedEventPresentations {
           chest: driftingChestTarget,
         }, driftingWater)
       : null;
-    if (include('drifting-bottle')) {
-      this.presentations.set('drifting-bottle', new DriftingBottlePresentation(
-        models.clone('driftingBottle'),
-        driftingItemBowTarget,
-        driftingWater!,
-      ));
-    }
     if (include('check-the-back')) {
       this.presentations.set('check-the-back', new CheckBackPresentation(
         models.clone('checkBackFish'),
+        models.clone('checkBackAnglerfish'),
         camera,
         checkBackSternTarget,
+        emitCue,
       ));
     }
     if (include('flowers')) {
@@ -85,7 +81,7 @@ export class FeaturedEventPresentations {
     this.activeEventId = eventId;
     if (isDriftingCargoEventId(eventId)) {
       if (this.driftingCargo === null) throw new Error(`Featured event is not loaded: ${eventId}`);
-      this.driftingCargo.stage(driftingCargoKindForEvent(eventId));
+      this.driftingCargo.stage(driftingCargoKindForEvent(eventId), variantSeed);
       return;
     }
     const presentation = this.presentations.get(eventId);

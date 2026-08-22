@@ -28,7 +28,7 @@ export interface BoatInteractionHitArea {
 export type ProjectedBoatBounds = ProjectedScreenBounds;
 export type BoatObjectBoundsCache = ObjectScreenBoundsCache;
 
-export type BoatToolId = 'repairTools' | 'fishingRod' | 'lantern' | 'chest';
+export type BoatToolId = 'repairTools' | 'fishingRod' | 'pillow' | 'chest';
 
 export interface BoatInteractionAnchor {
   readonly id: string;

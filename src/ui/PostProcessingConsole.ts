@@ -1,4 +1,12 @@
 import type { EventTestOption } from '../app/EventTest';
+import {
+  createAntiAliasingQualityPreference,
+  type AntiAliasingQualityPreference,
+} from '../rendering/antiAliasingQuality';
+import {
+  createShadowQualityPreference,
+  type ShadowQualityPreference,
+} from '../rendering/shadowQuality';
 import type { ItemAmbientOcclusionMode } from '../rendering/ItemAmbientOcclusion';
 import {
   formatPostProcessingValue,
@@ -23,6 +31,8 @@ import {
 } from '../weather/presentationWeather';
 import { VisualQualityControl } from './VisualQualityControl';
 import { WaterQualityControl } from './WaterQualityControl';
+import { AntiAliasingQualityControl } from './AntiAliasingQualityControl';
+import { ShadowQualityControl } from './ShadowQualityControl';
 import type { SkyPhase } from '../world/skyPalette';
 
 const PANEL_ID = 'post-processing-console-panel';
@@ -78,6 +88,8 @@ export class PostProcessingConsole {
   private readonly panel: HTMLElement;
   private readonly visualQualityControl: VisualQualityControl;
   private readonly waterQualityControl: WaterQualityControl;
+  private readonly antiAliasingQualityControl: AntiAliasingQualityControl;
+  private readonly shadowQualityControl: ShadowQualityControl;
   private readonly weatherSelect: HTMLSelectElement;
   private readonly weatherSource: HTMLOutputElement;
   private weatherId: PresentationWeatherId;
@@ -103,6 +115,10 @@ export class PostProcessingConsole {
     private readonly performanceStatsControls?: PerformanceStatsControls,
     private readonly audioControls?: AudioControls,
     private readonly cameraControls?: CameraControls,
+    antiAliasingQuality: AntiAliasingQualityPreference =
+      createAntiAliasingQualityPreference(() => undefined, null),
+    shadowQuality: ShadowQualityPreference =
+      createShadowQualityPreference(() => undefined, null),
   ) {
     const state = controls.getState();
     this.weatherId = weatherControls.selected;
@@ -249,6 +265,8 @@ export class PostProcessingConsole {
               <div class="post-processing-console__quality-row">
                 <div class="post-processing-console__group" data-ao-quality-control></div>
                 <div class="post-processing-console__group" data-water-quality-control></div>
+                <div class="post-processing-console__group" data-anti-aliasing-quality-control></div>
+                <div class="post-processing-console__group" data-shadow-quality-control></div>
               </div>
               <div class="post-processing-console__group post-processing-console__group--ao">
                 <strong>AMBIENT OCCLUSION</strong>
@@ -310,6 +328,16 @@ export class PostProcessingConsole {
     this.requireElement('[data-water-quality-control]').append(
       this.waterQualityControl.element,
     );
+    this.antiAliasingQualityControl = new AntiAliasingQualityControl(
+      antiAliasingQuality,
+    );
+    this.requireElement('[data-anti-aliasing-quality-control]').append(
+      this.antiAliasingQualityControl.element,
+    );
+    this.shadowQualityControl = new ShadowQualityControl(shadowQuality);
+    this.requireElement('[data-shadow-quality-control]').append(
+      this.shadowQualityControl.element,
+    );
     if (eventTestControls !== undefined) this.buildEventTestControl(eventTestControls);
     this.weatherSelect = this.requireElement('[data-presentation-weather]');
     this.weatherSource = this.requireElement('[data-weather-source]');
@@ -359,6 +387,8 @@ export class PostProcessingConsole {
     this.element.removeEventListener('input', this.handleInput);
     this.visualQualityControl.dispose();
     this.waterQualityControl.dispose();
+    this.antiAliasingQualityControl.dispose();
+    this.shadowQualityControl.dispose();
     this.element.dataset.open = 'false';
     this.element.remove();
   }

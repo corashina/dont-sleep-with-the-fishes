@@ -3,7 +3,6 @@ import {
   Material,
   Mesh,
   MeshStandardMaterial,
-  Vector3,
 } from 'three';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import type { ItemInstanceId } from '../../game/ItemState';
@@ -58,8 +57,6 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
   private readonly basePosePosition = new Float64Array(3);
   private readonly basePoseRotation = new Float64Array(3);
   private readonly baseHeadRotation = new Float64Array(3);
-  private readonly cameraLocalPosition = new Vector3();
-  private guardedBodyYaw = 0;
   private active: ActiveAnimation | null = null;
   private staged = false;
   private disposed = false;
@@ -121,7 +118,6 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
     if (this.staged) this.clear();
     this.captureBasePose();
     this.cameraLook?.capture();
-    this.captureGuardedFacing();
     this.placeFalseCatOppositeCarlitos();
     this.staged = true;
     this.worldRoot.visible = true;
@@ -247,23 +243,6 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
     this.baseHeadRotation[2] = this.headRoot.rotation.z;
   }
 
-  private captureGuardedFacing(): void {
-    if (this.eventId !== 'guarded-sleep') return;
-    const camera = this.environment.camera;
-    const parent = this.poseRoot.parent;
-    if (camera === undefined || parent === null) {
-      this.guardedBodyYaw = this.basePoseRotation[1]!;
-      return;
-    }
-    camera.updateWorldMatrix(true, false);
-    parent.updateWorldMatrix(true, false);
-    camera.getWorldPosition(this.cameraLocalPosition);
-    parent.worldToLocal(this.cameraLocalPosition);
-    const x = this.cameraLocalPosition.x - this.poseRoot.position.x;
-    const z = this.cameraLocalPosition.z - this.poseRoot.position.z;
-    this.guardedBodyYaw = Math.atan2(-x, -z);
-  }
-
   private restoreBaseState(): void {
     this.poseRoot.position.set(
       this.basePosePosition[0]!,
@@ -296,15 +275,8 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
   }
 
   private applyStrength(strength: number, facingStrength = strength): void {
-    const value = Number.isFinite(strength) ? strength : 0;
     if (this.eventId === 'guarded-sleep') {
       const facing = clamp01(facingStrength);
-      this.poseRoot.position.y = this.basePosePosition[1]! + value * 0.055;
-      this.poseRoot.rotation.x = this.basePoseRotation[0]! - value * 0.18;
-      this.poseRoot.rotation.y = this.basePoseRotation[1]!
-        + (this.guardedBodyYaw - this.basePoseRotation[1]!) * facing;
-      this.headRoot.rotation.x = this.baseHeadRotation[0]! - value * 0.11;
-      this.headRoot.rotation.y = this.baseHeadRotation[1]! * (1 - facing);
       this.cameraLook?.applyLookAt(this.itemAimTarget, facing);
       return;
     }

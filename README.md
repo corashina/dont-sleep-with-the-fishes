@@ -29,14 +29,14 @@ The ship combines original procedural geometry with locally committed wood maps 
 
 ## Dorothy supplies
 
-The carry limit is three weight points, not three objects. Weight-one Dorothy supplies are Food (3), Bait (2), Duct Tape, Compass, Map, Binoculars, Flare Gun, Bottled Paper, and Flashlight. Weight-two supplies are Medkit, Fishing Net, Bucket, Umbrella, Swim Ring, Shotgun, and Carlitos. Scuba Gear and Anchor each weigh three points.
+The carry limit is three weight points, not three objects. Weight-one Dorothy supplies are Food (3), Bait (2), Duct Tape, Compass, Map, Binoculars, Flare Gun, Radio, and Flashlight. Weight-two supplies are Medkit, Fishing Net, Bucket, Umbrella, Swim Ring, Shotgun, and Carlitos. Scuba Gear and Anchor each weigh three points.
 
-Food, Bait, Duct Tape, Medkit, Flare Gun, Bottled Paper, and Shotgun are one-use Dorothy supplies; each recovered Food or Bait instance contributes one unit to its aggregate resource. Compass, Map, Binoculars, Fishing Net, Bucket, Scuba Gear, Anchor, Umbrella, Swim Ring, and Flashlight are durable items used by actions or events. Carlitos changes from a saved Dorothy item to the living companion when survival starts. He then leaves the item inventory. Generic durable loss, breakage, and consumption rules do not apply to living Carlitos. A repairable durable item can become broken, and a durable item can be lost; a one-use supply becomes consumed when spent. Broken props remain aboard, while consumed and lost props no longer offer usable interactions. One recovered Duct Tape can repair a selected broken, repairable item.
+Food, Bait, Duct Tape, Medkit, Flare Gun, and Shotgun are one-use Dorothy supplies; each recovered Food or Bait instance contributes one unit to its aggregate resource. Compass, Map, Binoculars, Fishing Net, Bucket, Scuba Gear, Anchor, Radio, Umbrella, Swim Ring, and Flashlight are durable items used by actions or events. Carlitos changes from a saved Dorothy item to the living companion when survival starts. He then leaves the item inventory. Generic durable loss, breakage, and consumption rules do not apply to living Carlitos. A repairable durable item can become broken, and a durable item can be lost; a one-use supply becomes consumed when spent. Broken props remain aboard, while consumed and lost props no longer offer usable interactions. One recovered Duct Tape can repair a selected broken, repairable item.
 
-The repair toolbox and starboard-mounted Fishing Rod are permanent lifeboat equipment rather than Dorothy collectibles. The rod is never picked up or recovered. It is available for fishing in every survival run, while the toolbox uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. Rest never requires an item: it restores two energy once per day. Bottled Paper costs one energy, adds hidden rescue lead, and is consumed. Energy Bar restores energy to the maximum of three and is consumed.
+The repair toolbox and starboard-mounted Fishing Rod are permanent lifeboat equipment rather than Dorothy collectibles. The rod is never picked up or recovered. It is available for fishing in every survival run, while the toolbox uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. Rest never requires an item: it restores two energy once per day. From day five, a saved Radio has a 20% chance to receive a signal at dawn. The signal remains actionable while its incoming audio plays. Answering costs one energy, keeps the Radio, and adds diminishing hidden rescue lead. Energy Bar restores energy to the maximum of three and is consumed.
 
-The event catalog contains 30 live events. The day pool contains Drifting Barrel,
-Drifting Chest, and Drifting Bottle. Event selection relies on the scene and response prompts.
+The event catalog contains 29 live events. The day pool contains Drifting Barrel and
+Drifting Chest. Event selection relies on the scene and response prompts.
 It does not show event titles.
 
 An old chest can become a mimic. Fishing Net binds it shut.
@@ -154,7 +154,7 @@ In the lifeboat, each day gives three energy for daytime actions:
 - **Treat** consumes the recovered Medkit to restore health.
 - **Rest** requires no item, restores two energy, and is available once per day.
 - **Repair item** consumes Duct Tape to restore one selected broken, repairable supply.
-- **Send message** consumes Bottled Paper and one energy to add hidden rescue lead.
+- **Answer signal** costs one energy while the Radio signal audio plays. Each answer adds diminishing hidden rescue lead.
 - **Eat Energy Bar** consumes the bar and restores energy to three.
 - **Open chest** costs three energy and recovers a missing tool or useful resource.
 - **End day** advances into the day and night event sequence.
@@ -171,7 +171,7 @@ Clicking the physical boat lantern ends the day and uses the same slow cover bef
 
 Each journal page retells that day's fishing, daytime event, and nighttime event as a short first-person entry. Fishing records name catches or misses and note bait consumption; event entries mention supplies only when they were attempted during an event.
 
-Natural rescue cannot occur before day 24. After day 24, rescue remains random. Bottled Paper, rescue-trace dives, and the **Other People** event shorten the hidden wait. The Flare Gun is consumed during **Other People**, but **Other People** never ends the run immediately. Exact rescue progress and odds remain hidden. A well-supplied successful run targets about day 30. A no-signal successful run can reach day 40.
+Natural rescue cannot occur before day 24. After day 24, rescue remains random. Radio replies, rescue-trace dives, and the **Other People** event shorten the hidden wait. The Flare Gun is consumed during **Other People**, but **Other People** never ends the run immediately. Exact rescue lead and odds remain hidden. A well-supplied successful run targets about day 30. A no-signal successful run can reach day 40.
 
 ## Endings
 

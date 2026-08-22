@@ -12,6 +12,11 @@ import {
   type ShipFurnitureKind,
   type ShipRouteMetric,
 } from './ShipLayout';
+import {
+  COMPASS_CASE_SUPPORT_POINT,
+  COMPASS_REST_ROTATION,
+} from './CompassRestPose';
+import { CARLITOS_SEATED_SUPPORT_LIFT } from './CarlitosRestPose';
 import { ITEM_MODEL_SPECS } from './itemModelManifest';
 
 export interface ShipItemSurface {
@@ -302,7 +307,7 @@ function scavengingRestingRotation(itemId: ItemId, surface: ShipItemSurface): Eu
   if (itemId === 'compass') {
     const surfaceOrientation = new Quaternion().setFromEuler(surfaceRotation);
     const lyingOrientation = new Quaternion().setFromEuler(
-      new Euler(Math.PI / 2, Math.PI, 0),
+      new Euler(...COMPASS_REST_ROTATION),
     );
     return new Euler().setFromQuaternion(surfaceOrientation.multiply(lyingOrientation));
   }
@@ -343,7 +348,13 @@ function surfaceFit(surface: ShipItemSurface, itemId: ItemId): SurfaceFit | unde
   if (!Number.isFinite(scale) || scale < MIN_UNIFORM_SCALE - EPSILON) return undefined;
   const bounds = orientedItemBounds(itemId, rotation);
   const position = surface.position.clone();
-  position.y -= (itemId === 'umbrella' ? UMBRELLA_REST_MIN_Y : bounds.min.y) * scale;
+  const supportPointY = itemId === 'umbrella'
+    ? UMBRELLA_REST_MIN_Y
+    : itemId === 'compass'
+      ? new Vector3(...COMPASS_CASE_SUPPORT_POINT).applyEuler(rotation).y
+      : bounds.min.y;
+  position.y -= supportPointY * scale;
+  if (itemId === 'carlitos') position.y += CARLITOS_SEATED_SUPPORT_LIFT * scale;
   const itemCenter = bounds.getCenter(new Vector3()).multiplyScalar(scale).add(position);
   if (!surface.standingPoints.some((point) => {
     const interactionPoint = point.clone();

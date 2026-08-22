@@ -140,24 +140,6 @@ function createMaterials(): MaritimeMaterials {
   };
 }
 
-function bottleTableau(materials: MaritimeMaterials): Group {
-  const root = new Group();
-  addMesh(root, 'bottle-body', new CylinderGeometry(0.13, 0.17, 0.62, 7), materials.glass);
-  addMesh(root, 'bottle-neck', new CylinderGeometry(0.07, 0.105, 0.24, 7), materials.glass, [0, 0.42, 0]);
-  addMesh(root, 'bottle-cork', new CylinderGeometry(0.068, 0.068, 0.11, 7), materials.rope, [0, 0.57, 0]);
-  addMesh(root, 'bottle-paper', new BoxGeometry(0.17, 0.28, 0.025), materials.paper, [0.015, 0.02, 0]);
-  addMesh(
-    root,
-    'bottle-retrieval-line',
-    new CylinderGeometry(0.012, 0.016, 1.35, 5),
-    materials.rope,
-    [0.72, 0.05, 0.02],
-    [0, 0, Math.PI / 2 - 0.08],
-  );
-  root.rotation.z = Math.PI / 2 + 0.13;
-  return root;
-}
-
 function fishTableau(materials: MaritimeMaterials, enormous = false): Group {
   const root = new Group();
   const scale = enormous ? 2.25 : 0.9;
@@ -324,7 +306,6 @@ export class EventPresentationLayer {
       : null;
     const materials = createMaterials();
     const tableauFactories: readonly [string, () => EventTableau][] = [
-      ['drifting-bottle', () => createTableau('drifting-bottle', bottleTableau(materials), [2.7, 0.04, -3.4], [1.15, -0.45, 0.2])],
       ['chest-attack', () => createTableau('chest-attack', mimicChestTableau(materials), [-1.45, 0.14, -2.55], [-0.7, -0.32, 0.3])],
       ['flowers', () => createTableau('flowers', flowersTableau(materials), [2.45, -0.08, -3.65], [1.0, -0.26, 0.35])],
       ['midnight-tour', () => createTableau('midnight-tour', islandTableau(materials), [-8.0, -0.18, -20], [-2.4, -0.55, -1.2])],

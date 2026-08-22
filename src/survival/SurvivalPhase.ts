@@ -58,6 +58,7 @@ import {
   REPAIR_TOOLBOX_LAB_INSTANCE_ID,
   isItemAnimationLabId,
 } from './ItemAnimationLab';
+import { ItemAnimationLabCameraControls } from './ItemAnimationLabCameraControls';
 import {
   deriveEventPhysicalResponse,
   type EventPhysicalResponsePresentation,
@@ -305,6 +306,7 @@ export class SurvivalPhase implements GamePhase {
   );
   private eventBundles!: EventBundleManagerLike;
   private itemAnimationLab = false;
+  private itemAnimationLabCameraControls: ItemAnimationLabCameraControls | null = null;
   private rearCameraView = false;
   private initialEventResultId: string | undefined;
 
@@ -419,6 +421,12 @@ export class SurvivalPhase implements GamePhase {
     const snapshot = this.renderSnapshot(false);
     if (this.itemAnimationLab) {
       this.enterItemAnimationLab(snapshot);
+      if (typeof this.context.mount.addEventListener === 'function') {
+        this.itemAnimationLabCameraControls = new ItemAnimationLabCameraControls(
+          this.context.mount,
+          (yaw, pitch) => this.world.setItemAnimationLabCameraLook?.(yaw, pitch),
+        );
+      }
     } else if (snapshot.pendingEventId !== null && !isTerminal(snapshot.state)) {
       void this.runPendingEventReveal(snapshot, this.lifecycleGeneration);
     }
@@ -507,6 +515,7 @@ export class SurvivalPhase implements GamePhase {
       return;
     }
     if (action === 'endDay') {
+      this.audio.clearRadioSignal();
       this.audio.sleep();
       void this.runEndDay(outcome);
       return;
@@ -570,6 +579,7 @@ export class SurvivalPhase implements GamePhase {
     this.audio.setPaused(paused);
     if (!paused) this.visibilityPauseActive = false;
     this.ui.setPaused?.(paused);
+    this.itemAnimationLabCameraControls?.setEnabled(!paused);
     this.syncCameraTurnControl(this.session.snapshot());
     if (!paused) this.releaseVisibilityResumeWaiters();
   }
@@ -623,6 +633,8 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onFishingViewExit = null;
     this.ui.onDriftingItemSelect = null;
     this.ui.onDriftingItemBack = null;
+    this.itemAnimationLabCameraControls?.dispose();
+    this.itemAnimationLabCameraControls = null;
     if (this.visibilityDocument !== null) {
       this.visibilityDocument.removeEventListener('visibilitychange', this.handleVisibilityChange);
       this.visibilityDocument = null;
@@ -660,6 +672,8 @@ export class SurvivalPhase implements GamePhase {
     this.audio = new SurvivalAudio(context.audio.createScope());
     this.world.setEventCueHandler?.(({ eventId, cue }) => {
       if (eventId === 'midnight-tour') this.audio.midnightTourCue(cue);
+      else if (eventId === 'chest-attack') this.audio.chestAttackCue(cue);
+      else this.audio.checkBackCue(cue);
     });
     this.world.setLightningStrikeListener?.(() => this.audio.thunder());
     this.wireUI();
@@ -670,6 +684,7 @@ export class SurvivalPhase implements GamePhase {
     this.eventPresentation = 'choosing';
     this.ui.beginEventPresentation?.();
     this.ui.showItemAnimationLab?.();
+    this.world.setItemAnimationLabCameraLook?.(0, 0);
     this.world.setEventSelectedItem?.(null);
     this.world.setEventEligibleItems?.(new Set(this.eventEligibility.keys()));
     this.ui.setEventSelection?.(this.eventEligibility);
@@ -823,9 +838,6 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onEventChoice = (choiceId) =>
       void this.resolveContextualChoice(choiceId, this.lifecycleGeneration);
     this.ui.onRestart = () => this.requestRestart();
-    this.ui.onAnchorHighlight = (anchorId) => {
-      if (!this.disposed) this.world.setHighlightedItem?.(anchorId);
-    };
     this.ui.onPauseChange = (paused) => this.setPaused(paused);
     this.ui.onJournalOpen = () => this.handleJournalOpen();
     this.ui.onJournalClose = () => this.handleJournalClose();
@@ -1320,12 +1332,14 @@ export class SurvivalPhase implements GamePhase {
     this.ui.setEventUsing?.(instanceId);
     this.world.setEventEligibleItems?.(new Set());
     this.world.setEventSelectedItem?.(instanceId);
-    await this.playEventItemUseWithSound(
-      eventId,
-      choiceId,
-      instanceId,
-      itemType,
-    );
+    if (eventId !== 'chest-attack') {
+      await this.playEventItemUseWithSound(
+        eventId,
+        choiceId,
+        instanceId,
+        itemType,
+      );
+    }
     if (!this.isContinuationActive(generation)) return;
     if (
       (this.visibilityPauseActive || this.documentIsHidden())
@@ -1482,6 +1496,10 @@ export class SurvivalPhase implements GamePhase {
       await this.resolveMidnightTourVisit(generation);
       return;
     }
+    if (eventId === 'chest-attack' && choiceId === 'attack') {
+      await this.resolveChestAttack(generation);
+      return;
+    }
     this.ui.setEventSleepMask?.(eventId, choiceId === 'sleep');
     if (choiceId === 'sleep') this.audio.sleep();
     else this.audio.confirm();
@@ -1507,7 +1525,15 @@ export class SurvivalPhase implements GamePhase {
     if (!this.isContinuationActive(generation)) return;
     this.eventPresentation = 'resolving';
     this.beginDeferredPresentationSync(pending, generation);
-    const outcome = this.session.resolveEvent?.({ kind: 'choice', choiceId });
+    const resultId = eventId === 'check-the-back' && choiceId === 'check'
+      ? this.initialEventResultId
+      : undefined;
+    if (eventId === 'check-the-back') this.initialEventResultId = undefined;
+    const outcome = this.session.resolveEvent?.({
+      kind: 'choice',
+      choiceId,
+      ...(resultId === undefined ? {} : { resultId }),
+    });
     if (outcome === undefined || !this.isContinuationActive(generation)) {
       this.cancelDeferredPresentationSync(generation);
       return;
@@ -1561,6 +1587,89 @@ export class SurvivalPhase implements GamePhase {
       presentation,
       focusedResult,
     );
+  }
+
+  private async resolveChestAttack(generation: number): Promise<void> {
+    if (this.eventPresentation !== 'choosing' || !this.isContinuationActive(generation)) return;
+    const pending = this.session.snapshot();
+    if (pending.pendingEventId !== 'chest-attack') return;
+    const choice: EventChoicePresentation = {
+      choiceId: 'attack',
+      instanceId: null,
+      condition: null,
+    };
+
+    this.eventPresentation = 'using';
+    this.setBusy(true);
+    this.eventEligibility.clear();
+    this.world.setEventEligibleItems?.(new Set());
+    this.ui.setEventSelection?.(this.eventEligibility, []);
+    await (this.world.playEventChoice?.('chest-attack', choice) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+    if (!await this.waitForVisibilityResume(generation)) return;
+
+    this.eventPresentation = 'resolving';
+    this.beginDeferredPresentationSync(pending, generation);
+    const outcome = this.session.resolveEvent?.({ kind: 'choice', choiceId: 'attack' });
+    if (outcome === undefined || !this.isContinuationActive(generation)) {
+      this.cancelDeferredPresentationSync(generation);
+      return;
+    }
+    if (!outcome.accepted) {
+      this.cancelDeferredPresentationSync(generation);
+      this.audio.deny();
+      this.ui.showFeedback?.(outcome);
+      this.eventPresentation = 'choosing';
+      this.setBusy(false);
+      return;
+    }
+    const invariantError = this.focusedEventResultError(
+      'chest-attack',
+      'attack',
+      outcome,
+    );
+    if (invariantError !== null) {
+      await this.recoverInvalidFocusedEventResult(
+        invariantError,
+        pending.state,
+        generation,
+      );
+      return;
+    }
+    await this.completeChestAttack(generation);
+  }
+
+  private async completeChestAttack(generation: number): Promise<void> {
+    this.ui.hideEventReveal?.();
+    await (this.ui.setSleepCoverProfile?.('midnight-attack') ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+    await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+
+    this.clearEventPresentation(true);
+    await (this.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+
+    const resolved = this.session.snapshot();
+    const snapshot = isTerminal(resolved.state)
+      ? this.renderSnapshot(false, false)
+      : await this.runDawn(generation);
+    if (!this.isContinuationActive(generation)) return;
+    if (!await this.renderAndSettleCoveredScene(generation)) return;
+    this.flushDeferredPresentationSync(snapshot, generation);
+
+    if (isTerminal(snapshot.state)) {
+      this.presentTerminalOnce(snapshot, true);
+      this.setBusy(false);
+      return;
+    }
+    if (await this.revealDawnEvent(snapshot, generation)) return;
+    await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    if (!this.isContinuationActive(generation)) return;
+
+    this.eventPresentation = 'idle';
+    this.setBusy(false);
+    this.ui.restoreCommandFocus?.();
   }
 
   private async resolveMidnightTourVisit(generation: number): Promise<void> {
@@ -1677,6 +1786,10 @@ export class SurvivalPhase implements GamePhase {
     ) return;
     if (!this.isContinuationActive(generation)) return;
 
+    if (outcome.eventResult?.resultId === 'tour-attack') {
+      await (this.ui.setSleepCoverProfile?.('midnight-attack') ?? Promise.resolve());
+      if (!this.isContinuationActive(generation)) return;
+    }
     await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
     this.audio.clearMidnightTour();
@@ -1951,6 +2064,8 @@ export class SurvivalPhase implements GamePhase {
   ): Promise<void> {
     const stationaryHandymanTouch = eventId === 'handyman'
       && choice.choiceId === 'touch';
+    const skipOutcomeHold = eventId === 'check-the-back'
+      && outcome.eventPresentationKey === 'check-the-back.ignore';
     this.setBusy(true);
     this.ui.hideEventReveal?.();
     this.audio.beginEventReaction(eventId, outcome);
@@ -2007,7 +2122,9 @@ export class SurvivalPhase implements GamePhase {
     const isDedicatedEvent = isEventPresentationRoute(eventId, 'dedicated');
     if (isTerminal(terminal.state)) {
       if (isDedicatedEvent) {
-        await (this.ui.holdEventOutcome?.() ?? Promise.resolve());
+        await (skipOutcomeHold
+          ? Promise.resolve()
+          : this.ui.holdEventOutcome?.() ?? Promise.resolve());
         if (!this.isContinuationActive(generation)) return;
       }
       if (revealFromCover) {
@@ -2032,7 +2149,9 @@ export class SurvivalPhase implements GamePhase {
       return;
     }
 
-    await (this.ui.holdEventOutcome?.() ?? Promise.resolve());
+    await (skipOutcomeHold
+      ? Promise.resolve()
+      : this.ui.holdEventOutcome?.() ?? Promise.resolve());
     if (!this.isContinuationActive(generation)) return;
     if (
       eventState === 'nightEvent'
@@ -2078,7 +2197,20 @@ export class SurvivalPhase implements GamePhase {
       await (this.world.play?.(dawn.cue) ?? Promise.resolve());
     }
     if (!this.isContinuationActive(generation)) return this.session.snapshot();
-    return this.renderSnapshot(false, false);
+    const snapshot = this.renderSnapshot(false, false);
+    this.beginRadioSignal(snapshot, generation);
+    return snapshot;
+  }
+
+  private beginRadioSignal(snapshot: SurvivalSnapshot, generation: number): void {
+    if (!snapshot.radioSignalAvailable) return;
+    const started = this.audio.beginRadioSignal(() => {
+      if (!this.isContinuationActive(generation)) return;
+      if (this.session.expireRadioSignal?.() !== true) return;
+      this.renderSnapshot(false, false);
+    });
+    if (started) return;
+    if (this.session.expireRadioSignal?.() === true) this.renderSnapshot(false, false);
   }
 
   private async revealDawnEvent(
@@ -2297,7 +2429,8 @@ export class SurvivalPhase implements GamePhase {
       this.world.stageEvent?.(event.id, variantSeed);
     }
     this.eventPresentation = 'revealing';
-    if (isEventPresentationRoute(event.id, 'dedicated')) {
+    const isChestAttack = event.id === 'chest-attack';
+    if (isEventPresentationRoute(event.id, 'dedicated') || isChestAttack) {
       await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
       if (!this.isContinuationActive(generation)) return;
     }
@@ -2308,6 +2441,16 @@ export class SurvivalPhase implements GamePhase {
       this.audio.eventReveal(event.id);
       this.ui.setBadSleepCue?.(true);
     }
+    if (isChestAttack) {
+      const warned = this.session.snapshot();
+      if (warned.pendingEventId !== event.id || isTerminal(warned.state)) return;
+      this.eventEligibility = this.eventEligibilityFor(event, warned);
+      this.world.setEventEligibleItems?.(new Set(this.eventEligibility.keys()));
+      this.syncPresentation(warned);
+      this.ui.setEventSelection?.(this.eventEligibility, []);
+      this.eventPresentation = 'choosing';
+      this.setBusy(false);
+    }
     try {
       await (this.world.revealEvent?.(event.id) ?? Promise.resolve());
     } finally {
@@ -2315,7 +2458,7 @@ export class SurvivalPhase implements GamePhase {
     }
     if (!this.isContinuationActive(generation)) return;
     if (event.id === 'leak') this.audio.beginEvent(event.id);
-    if (!isEventPresentationRoute(event.id, 'dedicated')) {
+    if (!isEventPresentationRoute(event.id, 'dedicated') && !isChestAttack) {
       await (this.ui.showEventReveal?.(event) ?? Promise.resolve());
       if (!this.isContinuationActive(generation)) return;
     }
@@ -2323,6 +2466,13 @@ export class SurvivalPhase implements GamePhase {
       (this.visibilityPauseActive || this.documentIsHidden())
       && !await this.waitForVisibilityResume(generation)
     ) return;
+
+    if (isChestAttack) {
+      if (this.eventPresentation === 'choosing') {
+        await this.resolveChestAttack(generation);
+      }
+      return;
+    }
 
     const revealed = this.session.snapshot();
     if (revealed.pendingEventId !== event.id || isTerminal(revealed.state)) return;
@@ -2367,7 +2517,8 @@ export class SurvivalPhase implements GamePhase {
     snapshot: SurvivalSnapshot,
   ): EventContextChoice[] {
     return event.choices
-      .filter((choice) => choice.itemId === undefined)
+      .filter((choice) => choice.itemId === undefined
+        && !(event.id === 'chest-attack' && choice.id === 'attack'))
       .flatMap((choice): EventContextChoice[] => {
         const companionAvailability = choice.companionAction === undefined
           ? undefined

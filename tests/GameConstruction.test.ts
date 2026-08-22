@@ -98,7 +98,12 @@ describe('Game construction rollback', () => {
 
     expect(thrown).toBeInstanceOf(TypeError);
     expect((thrown as Error).message).toContain('getMaxAnisotropy');
-    expect(constructionMocks.createSceneRenderer).toHaveBeenCalledWith(renderer, 'low');
+    expect(constructionMocks.createSceneRenderer).toHaveBeenCalledWith(
+      renderer,
+      'low',
+      'low',
+      'low',
+    );
     expect(calls).toEqual([
       'menuModels',
       'menuSandAssets',
@@ -121,6 +126,7 @@ describe('Game construction rollback', () => {
       setSize: vi.fn(),
       render: vi.fn(),
       dispose: vi.fn(),
+      shadowMap: { enabled: true, type: 0 },
     };
     const menuModels = { dispose: vi.fn() } as unknown as MenuModelLibrary;
     const menuSandAssets = {

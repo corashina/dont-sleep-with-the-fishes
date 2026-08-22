@@ -8,7 +8,11 @@ import type {
   DayActionOption,
 } from '../survival/survivalTypes';
 import type { PresentationWeatherId } from '../weather/presentationWeather';
-import type { MidnightTourAudioCue } from '../survival/midnightTourAudioCue';
+import type {
+  ChestAttackAudioCue,
+  CheckBackAudioCue,
+  MidnightTourAudioCue,
+} from '../survival/eventPresentationCue';
 import type { AudioVoice } from './AudioBackend';
 import type { AudioScope } from './AudioScope';
 import type { SoundId } from './audioManifest';
@@ -101,6 +105,7 @@ export class SurvivalAudio {
   private midnightDigRemaining = 0;
   private midnightRunActive = false;
   private midnightAttackPlayed = false;
+  private radioSignalVoice: AudioVoice | null = null;
   private disposed = false;
 
   constructor(private readonly scope: AudioScope) {}
@@ -156,9 +161,30 @@ export class SurvivalAudio {
       this.scope.play('tapeRepair');
     } else if (action === 'openChest') {
       this.scope.play('chest');
-    } else if (action === 'sendMessage') {
-      this.scope.play('confirm');
+    } else if (action === 'answerRadio') {
+      this.clearRadioSignal();
+      this.scope.play('radioReply');
     }
+  }
+
+  beginRadioSignal(onEnded: () => void): boolean {
+    if (this.disposed || this.radioSignalVoice !== null) return false;
+    const voice = this.scope.play('radioSignal');
+    if (voice === null) return false;
+    this.radioSignalVoice = voice;
+    voice.onEnded(() => {
+      if (this.radioSignalVoice !== voice) return;
+      this.radioSignalVoice = null;
+      onEnded();
+    });
+    return true;
+  }
+
+  clearRadioSignal(): void {
+    const voice = this.radioSignalVoice;
+    if (voice === null) return;
+    this.radioSignalVoice = null;
+    voice.stop(0.03);
   }
 
   repairToolbox(): void {
@@ -245,7 +271,6 @@ export class SurvivalAudio {
     if (
       eventId === 'drifting-barrel'
       || eventId === 'drifting-chest'
-      || eventId === 'drifting-bottle'
     ) return;
     if (eventId === 'bad-sleep') {
       this.scope.play('yawn');
@@ -305,6 +330,16 @@ export class SurvivalAudio {
       this.midnightAttackPlayed = true;
       this.scope.play('midnightMonsterAttack');
     }
+  }
+
+  chestAttackCue(cue: ChestAttackAudioCue): void {
+    if (this.disposed) return;
+    this.scope.play(cue === 'wood' ? 'chest' : 'midnightMonsterAttack');
+  }
+
+  checkBackCue(cue: CheckBackAudioCue): void {
+    if (this.disposed) return;
+    this.scope.play(cue === 'fish' ? 'checkBackFish' : 'checkBackAnglerfish');
   }
 
   clearMidnightTour(): void {
@@ -375,6 +410,7 @@ export class SurvivalAudio {
 
   dispose(): void {
     if (this.disposed) return;
+    this.clearRadioSignal();
     this.clearEvent();
     this.cancelDive();
     this.disposed = true;

@@ -4,8 +4,8 @@ import generatedMetadataJson from '../assets/models/events/event-model-metadata.
 
 export const SURVIVAL_EVENT_MODEL_IDS = [
   'driftingBarrel',
-  'driftingBottle',
   'checkBackFish',
+  'checkBackAnglerfish',
   'mysteryChest',
   'flowers',
 ] as const;
@@ -32,17 +32,17 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
     rotation: [0, 0, Math.PI / 2] as const,
     maxTriangles: generatedMetadataJson.driftingBarrel.triangles,
   }),
-  driftingBottle: Object.freeze({
-    url: new URL('../assets/models/events/driftingBottle.glb', import.meta.url).href,
-    targetLongestDimension: 0.68,
-    rotation: NO_ROTATION,
-    maxTriangles: generatedMetadataJson.driftingBottle.triangles,
-  }),
   checkBackFish: Object.freeze({
     url: new URL('../assets/models/fishing/bass.glb', import.meta.url).href,
     targetLongestDimension: 1.05,
     rotation: QUARTER_TURN_Y,
     maxTriangles: 506,
+  }),
+  checkBackAnglerfish: Object.freeze({
+    url: new URL('../assets/models/events/anglerFish.glb', import.meta.url).href,
+    targetLongestDimension: 1.4,
+    rotation: [0, -Math.PI / 2, 0] as const,
+    maxTriangles: generatedMetadataJson.anglerFish.triangles,
   }),
   mysteryChest: Object.freeze({
     url: new URL('../assets/models/events/mysteryChest.glb', import.meta.url).href,

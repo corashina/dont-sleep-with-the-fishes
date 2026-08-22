@@ -25,16 +25,6 @@ const EVENT_SOURCES = Object.freeze({
     creator: 'Don Carson',
     license: 'CC BY 3.0',
   }),
-  driftingBottle: Object.freeze({
-    publicId: '13g9ucgxbHV',
-    resourceId: 'b1a8f402-de55-4e49-b63e-1439e5851c13',
-    sha256: '5C1169A709CF2B897E9037771BC8B33EDE3C546A2CA872F33BF8A9348F112D54',
-    triangles: 304,
-    maxTriangles: 2_000,
-    title: 'Bottle of Wine',
-    creator: 'Jeremy',
-    license: 'CC BY 3.0',
-  }),
   mysteryChest: Object.freeze({
     publicId: 'O72u4Drp8k',
     resourceId: '803af4ae-433f-4b05-b1f1-c6a2da02d768',

@@ -7,6 +7,7 @@ import {
   DirectionalLight,
   FogExp2,
   Group,
+  HemisphereLight,
   Line,
   LineBasicMaterial,
   Material,
@@ -35,7 +36,6 @@ import {
 import { OceanRenderer } from '../ocean/OceanRenderer';
 import type { WaterQuality } from '../rendering/waterQuality';
 import { createWaterExclusion } from '../ocean/WaterExclusion';
-import { HoverOutline } from '../rendering/HoverOutline';
 import { setSceneBinocularMaskStrength } from '../rendering/BinocularMaskPass';
 import {
   BoatBuoyancy,
@@ -107,7 +107,7 @@ import {
   type EventChoicePresentation,
   type FocusedEventPresentationFactories,
 } from './FocusedEventPresentation';
-import type { EventPresentationCue } from './midnightTourAudioCue';
+import type { EventPresentationCue } from './eventPresentationCue';
 import { FeaturedEventPresentations } from './FeaturedEventPresentations';
 import {
   driftingItemLeaveKey,
@@ -151,14 +151,9 @@ import {
 import { SupernaturalEventAnimator } from './SupernaturalEventAnimator';
 import {
   createHangingLantern,
-  HANGING_LANTERN_DAY_INTENSITY,
-  HANGING_LANTERN_NIGHT_INTENSITY,
   type HangingLantern,
 } from './HangingLantern';
-import {
-  createSurvivalLantern,
-  type SurvivalLantern,
-} from './SurvivalLantern';
+import { createSleepPillow, type SleepPillow } from './SleepPillow';
 import type {
   ActionOutcome,
   PresentationCue,
@@ -184,6 +179,7 @@ export const SURVIVAL_CELESTIAL_DIRECTION = Object.freeze([
 ] as const);
 
 export const WEATHER_IDS = ['calm', 'overcast', 'squall'] as const satisfies readonly WeatherId[];
+export const DAY_CLOUD_BOUNCE_INTENSITY = 1.7;
 
 const CUE_DURATION: Readonly<Record<PresentationCue, number>> = {
   none: 0,
@@ -285,6 +281,7 @@ interface ActiveMoonAnimation {
 interface ActiveCarlitosDelegation {
   elapsed: number;
   readonly duration: number;
+  readonly direction: EventSide;
   readonly resolve: () => void;
 }
 
@@ -592,9 +589,10 @@ export class BoatWorld {
   private readonly cameraRig = new Group();
   private readonly boatEffectsRoot = new Group();
   private readonly boat: Group;
-  private readonly lantern: SurvivalLantern;
+  private readonly sleepPillow: SleepPillow;
   private readonly hangingLantern: HangingLantern;
   private readonly ambient = new AmbientLight(0xc4d1cf, 1.1);
+  private readonly dayCloudBounce = new HemisphereLight(0xdbe7e5, 0x46534f, 0);
   private readonly key = new DirectionalLight(0xffe1b5, 2.2);
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
@@ -619,6 +617,8 @@ export class BoatWorld {
   private rearCameraTurnTargetYaw = 0;
   private rearCameraTurnTargetPitch = 0;
   private rearCameraTurnElapsed = REAR_CAMERA_TURN_DURATION;
+  private itemAnimationLabCameraYaw = 0;
+  private itemAnimationLabCameraPitch = 0;
   private readonly baseCameraLookTarget = new Vector3(0, 0.88, -1.55);
   private readonly fishingCameraPosition = new Vector3(
     FISHING_PLAYER_SEAT.x,
@@ -659,7 +659,7 @@ export class BoatWorld {
   private readonly fallbackFeaturedEventModels: SurvivalEventModels | null;
   private readonly focusedEventFactories: FocusedEventPresentationFactories;
   private chestState: SurvivalSnapshot['chest']['state'] = 'none';
-  private readonly toolHoverOutline = new HoverOutline();
+  private radioSignalAvailable = false;
   private readonly dangerousWatersBoatReaction: DangerousWatersBoatReaction = {
     driftX: 0,
     pitch: 0,
@@ -693,7 +693,7 @@ export class BoatWorld {
   >();
   private readonly fishingAnchorBounds: BoatObjectBoundsCache | null;
   private readonly repairAnchorBounds: BoatObjectBoundsCache | null;
-  private readonly lanternAnchorBounds: BoatObjectBoundsCache | null;
+  private readonly sleepPillowAnchorBounds: BoatObjectBoundsCache | null;
   private readonly chestAnchorBounds: BoatObjectBoundsCache | null;
   private readonly carlitosAnchorBounds: BoatObjectBoundsCache | null;
   private readonly rodPivot = new Group();
@@ -880,7 +880,7 @@ export class BoatWorld {
     this.originalCameraQuaternion = camera.quaternion.clone();
     let sky: Skybox | null = null;
     let weatherEffects: WeatherEffects | null = null;
-    let lantern: SurvivalLantern | null = null;
+    let sleepPillow: SleepPillow | null = null;
     let hangingLantern: HangingLantern | null = null;
     let carlitos: CarlitosPresentation | null = null;
     let supplyDisplay: BoatSupplyDisplay | null = null;
@@ -947,11 +947,12 @@ export class BoatWorld {
         CHECK_BACK_STERN_FLOOR.z,
       );
       this.boat.add(this.checkBackSternFloor);
-      lantern = createSurvivalLantern(propModels.createPracticalLight('lantern'));
-      this.lantern = lantern;
-      this.boat.add(lantern.root);
+      sleepPillow = createSleepPillow(propModels.createEquipment('pillow'));
+      this.sleepPillow = sleepPillow;
+      this.boat.add(sleepPillow.root);
       hangingLantern = createHangingLantern(
         propModels.createPracticalLight('lantern'),
+        build.darkTimberMaterial,
       );
       this.hangingLantern = hangingLantern;
       this.boat.add(hangingLantern.root);
@@ -1060,12 +1061,15 @@ export class BoatWorld {
         SURVIVAL_CELESTIAL_DIRECTION,
       );
       this.key.castShadow = true;
+      this.dayCloudBounce.name = 'day-cloud-bounce-light';
+      this.dayCloudBounce.position.set(0, 1, 0);
 
       this.scene.add(
         this.motionRig,
         this.moonItemAimTarget,
         this.ocean.mesh,
         this.ambient,
+        this.dayCloudBounce,
         this.key,
         this.key.target,
         this.itemEffects.root,
@@ -1080,7 +1084,9 @@ export class BoatWorld {
       }
       this.fishingAnchorBounds = createBoatObjectBoundsCache(this.rodPivot);
       this.repairAnchorBounds = createBoatObjectBoundsCache(this.repairTools);
-      this.lanternAnchorBounds = createBoatObjectBoundsCache(this.lantern.root);
+      this.sleepPillowAnchorBounds = createBoatObjectBoundsCache(
+        this.sleepPillow.root,
+      );
       this.chestAnchorBounds = createBoatObjectBoundsCache(this.chestDisplay.root);
       this.carlitosAnchorBounds = createBoatObjectBoundsCache(
         this.carlitos.interactionRoot,
@@ -1097,9 +1103,8 @@ export class BoatWorld {
           () => chestDisplay?.dispose(),
           () => supplyDisplay?.dispose(),
           () => carlitos?.dispose(),
-          () => this.toolHoverOutline.dispose(),
           () => hangingLantern?.dispose(),
-          () => lantern?.dispose(),
+          () => sleepPillow?.dispose(),
           () => weatherEffects?.dispose(),
           () => this.fishingBiteParticles.dispose(),
           () => sky?.dispose(),
@@ -1185,6 +1190,7 @@ export class BoatWorld {
           this.chestDisplay.root,
           this.flowersDeckTarget,
           this.checkBackSternFloor,
+          (cue) => this.eventCueHandler(cue),
           isEventPresentationRoute(eventId, 'featured') ? eventId : null,
           {
             sampleWaveInto: this.sampleWorldWaveInto,
@@ -1318,6 +1324,12 @@ export class BoatWorld {
     this.rearCameraTurnElapsed = 0;
   }
 
+  setItemAnimationLabCameraLook(yaw: number, pitch: number): void {
+    if (this.disposed) return;
+    this.itemAnimationLabCameraYaw = yaw;
+    this.itemAnimationLabCameraPitch = pitch;
+  }
+
   setWeather(weather: WeatherId): void {
     this.setPresentationWeather(weather);
   }
@@ -1345,6 +1357,7 @@ export class BoatWorld {
   syncInventory(snapshot: SurvivalSnapshot): void {
     if (this.disposed) return;
     this.supplyDisplay.sync(snapshot);
+    this.radioSignalAvailable = snapshot.radioSignalAvailable;
     this.ambientCarlitosSide = eventSideFromSeed(snapshot.seed);
     if (!this.carlitosSideOverrideActive) {
       this.setCarlitosSeatSide(this.ambientCarlitosSide);
@@ -1376,33 +1389,6 @@ export class BoatWorld {
       this.activeDiveItemId = null;
     }
     this.diveElapsed = 0;
-  }
-
-  setHighlightedItem(instanceId: string | null): void {
-    if (this.disposed) return;
-    this.supplyDisplay.setHighlighted(instanceId);
-    const focusedRoot = instanceId === null || this.activeEventPresenter === null
-      ? null
-      : this.eventPresentation.interactionRoot(instanceId);
-    this.toolHoverOutline.setTarget(
-      instanceId === 'repair-tools'
-        ? this.repairTools
-        : instanceId === 'carlitos'
-          ? this.carlitos.interactionRoot
-        : instanceId === 'end-day-lantern'
-          ? this.lantern.root
-          : instanceId === 'persistent-chest'
-            ? this.chestDisplay.root
-          : focusedRoot !== null
-            ? focusedRoot.userData.disableHoverOutline === true
-              ? null
-              : focusedRoot
-          : instanceId?.startsWith('event:') === true
-            ? this.activeFeaturedEventId === null || this.activeEventPresenter === null
-              ? null
-              : this.featuredEvents.interactionRoot(this.activeFeaturedEventId)
-            : null,
-    );
   }
 
   setEventEligibleItems(instanceIds: ReadonlySet<ItemInstanceId> | null): void {
@@ -1591,7 +1577,7 @@ export class BoatWorld {
     }
     if (route === 'featured') {
       this.eventPresentation.clear();
-      this.featuredEvents.stage(eventId, variantSeed);
+      this.featuredEvents.stage(eventId, resolvedVariantSeed);
       this.activeFeaturedEventId = eventId as FeaturedEventId;
       this.weatherEventAnimator.stage(eventId);
       this.supernaturalEventAnimator.clear();
@@ -1696,7 +1682,6 @@ export class BoatWorld {
 
   retrieveDriftingItem(eventId: DriftingItemEventId): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    this.toolHoverOutline.setTarget(null);
     return this.retrieveFeaturedDriftingItem(eventId);
   }
 
@@ -1704,13 +1689,13 @@ export class BoatWorld {
     if (this.disposed || this.activeFeaturedEventId !== eventId) {
       return Promise.resolve();
     }
-    this.toolHoverOutline.setTarget(null);
     this.finishCarlitosDelegation();
     this.captureCarlitosDelegateBase();
     const companionMotion = new Promise<void>((resolve) => {
       this.activeCarlitosDelegation = {
         elapsed: 0,
         duration: CARLITOS_DELEGATE_DURATION,
+        direction: this.carlitosDelegateBasePosition.x < 0 ? -1 : 1,
         resolve,
     };
     });
@@ -1720,7 +1705,6 @@ export class BoatWorld {
 
   recedeDriftingItem(eventId: DriftingItemEventId): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    this.toolHoverOutline.setTarget(null);
     return this.featuredEvents.react(eventId, driftingItemLeaveKey(eventId));
   }
 
@@ -1914,7 +1898,8 @@ export class BoatWorld {
     this.scene.updateMatrixWorld(true);
 
     const itemAnchors = this.supplyDisplay.records()
-      .filter((record) => record.visibleCopies > 0)
+      .filter((record) => record.visibleCopies > 0
+        && (record.groupId !== 'radio' || this.radioSignalAvailable))
       .map((record) => {
       const projection = projectCachedBoatObjectBounds(
         record.root,
@@ -2039,26 +2024,26 @@ export class BoatWorld {
       backingInstanceId: null,
       hitArea: { width: hitWidth, height: hitHeight, depth },
     } satisfies BoatInteractionAnchor;
-    const lanternProjection = projectCachedBoatObjectBounds(
-      this.lantern.root,
-      this.lanternAnchorBounds,
+    const pillowProjection = projectCachedBoatObjectBounds(
+      this.sleepPillow.root,
+      this.sleepPillowAnchorBounds,
       this.camera,
       width,
       height,
     );
     const {
-      width: lanternHitWidth,
-      height: lanternHitHeight,
-      depth: lanternDepth,
-      ...lanternPoint
-    } = lanternProjection;
-    const lanternAnchor = {
-      id: 'end-day-lantern',
+      width: pillowHitWidth,
+      height: pillowHitHeight,
+      depth: pillowDepth,
+      ...pillowPoint
+    } = pillowProjection;
+    const pillowAnchor = {
+      id: 'end-day-pillow',
       itemType: null,
-      toolId: 'lantern',
+      toolId: 'pillow',
       action: 'endDay',
-      ...lanternPoint,
-      visible: this.lantern.root.visible && lanternPoint.visible,
+      ...pillowPoint,
+      visible: this.sleepPillow.root.visible && pillowPoint.visible,
       depleted: false,
       remainingUses: null,
       quantity: 1,
@@ -2066,9 +2051,9 @@ export class BoatWorld {
       brokenQuantity: 0,
       backingInstanceId: null,
       hitArea: {
-        width: lanternHitWidth,
-        height: lanternHitHeight,
-        depth: lanternDepth,
+        width: pillowHitWidth,
+        height: pillowHitHeight,
+        depth: pillowDepth,
       },
     } satisfies BoatInteractionAnchor;
     const featuredRoot = this.activeFeaturedEventId === null
@@ -2159,7 +2144,7 @@ export class BoatWorld {
       ...(companionAnchor === null ? [] : [companionAnchor]),
       fishingAnchor,
       repairAnchor,
-      lanternAnchor,
+      pillowAnchor,
       ...(focusedIds.has(chestAnchor.id) ? [] : [chestAnchor]),
       ...(featuredAnchor === null ? [] : [featuredAnchor]),
       ...focusedEventAnchors,
@@ -2492,6 +2477,9 @@ export class BoatWorld {
     this.updateFishingWave(time, amplitudeScale);
     this.updateFishingEffects();
 
+    this.camera.rotateY(this.itemAnimationLabCameraYaw);
+    this.camera.rotateX(this.itemAnimationLabCameraPitch);
+
     const fog = this.scene.fog as FogExp2;
     const atmosphere = this.sky.palette;
     this.oceanAtmosphere.fogColor.copy(fog.color);
@@ -2523,7 +2511,6 @@ export class BoatWorld {
   dispose(): void {
     if (this.disposed) return;
     runCleanupSteps([
-      () => this.setHighlightedItem(null),
       () => { this.eventCueHandler = () => undefined; },
       () => this.cancelDriftingItemView(),
       () => {
@@ -2550,9 +2537,8 @@ export class BoatWorld {
       () => this.carlitos.dispose(),
       () => this.supplyDisplay.dispose(),
       () => this.chestDisplay.dispose(),
-      () => this.toolHoverOutline.dispose(),
       () => this.hangingLantern.dispose(),
-      () => this.lantern.dispose(),
+      () => this.sleepPillow.dispose(),
       () => this.cancelActiveFishingAnimation(),
       () => this.fishingCatches.dispose(),
       () => this.ocean.dispose(),
@@ -2564,6 +2550,7 @@ export class BoatWorld {
         this.moonItemAimTarget,
         this.ocean.mesh,
         this.ambient,
+        this.dayCloudBounce,
         this.key,
         this.key.target,
         this.itemEffects.root,
@@ -3085,9 +3072,10 @@ export class BoatWorld {
     this.key.color.copy(atmosphere.keyLightColor);
     this.key.intensity = atmosphere.keyLightIntensity * lightScale;
     const night = this.skyState.phase === 'night';
-    this.hangingLantern.light.intensity = night
-      ? HANGING_LANTERN_NIGHT_INTENSITY
-      : HANGING_LANTERN_DAY_INTENSITY;
+    this.dayCloudBounce.intensity = night
+      ? 0
+      : DAY_CLOUD_BOUNCE_INTENSITY * lightScale;
+    this.hangingLantern.setNight(night);
     if (this.scene.background instanceof Color) {
       this.scene.background.copy(atmosphere.horizonColor);
     } else {
@@ -3172,19 +3160,16 @@ export class BoatWorld {
   private featuredAnchorLabel(eventId: FeaturedEventId): string {
     if (eventId === 'drifting-barrel') return 'BARREL';
     if (eventId === 'drifting-chest') return 'CHEST';
-    if (eventId === 'drifting-bottle') return 'BOTTLE';
     return 'FLOWERS';
   }
 
   private featuredAnchorDescription(eventId: FeaturedEventId): string {
     if (isDriftingCargoEventId(eventId)) return 'Floating salvage within reach.';
-    if (eventId === 'drifting-bottle') return 'A sealed bottle taps the hull.';
     return 'Pale blooms pass in the dark water.';
   }
 
   private featuredAnchorChoice(eventId: FeaturedEventId): string | null {
     if (isDriftingCargoEventId(eventId)) return 'retrieve';
-    if (eventId === 'drifting-bottle') return 'retrieve';
     return null;
   }
 
@@ -3456,12 +3441,12 @@ export class BoatWorld {
   ): EventSide | null {
     switch (eventId) {
       case 'night-trader':
-      case 'drifting-bottle':
       case 'man-in-the-fog':
       case 'midnight-tour':
         return oppositeEventSide(eventSideFromSeed(variantSeed));
       case 'drifting-barrel':
       case 'drifting-chest':
+        return oppositeEventSide(eventSideFromSeed(variantSeed));
       case 'eerie-melody':
       case 'other-people':
         return 1;
@@ -3479,6 +3464,7 @@ export class BoatWorld {
     const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
     animation.elapsed = Math.min(animation.duration, animation.elapsed + safeDelta);
     const progress = animation.duration === 0 ? 1 : animation.elapsed / animation.duration;
+    const direction = animation.direction;
     let x = 0;
     let y = 0;
     let z = 0;
@@ -3514,14 +3500,14 @@ export class BoatWorld {
       roll = -0.08 * travel;
     }
     this.carlitos.root.position.set(
-      this.carlitosDelegateBasePosition.x + x,
+      this.carlitosDelegateBasePosition.x + x * direction,
       this.carlitosDelegateBasePosition.y + y,
       this.carlitosDelegateBasePosition.z + z,
     );
     this.carlitos.root.rotation.set(
       this.carlitosDelegateBaseRotation.x,
-      this.carlitosDelegateBaseRotation.y + yaw,
-      this.carlitosDelegateBaseRotation.z + roll,
+      this.carlitosDelegateBaseRotation.y + yaw * direction,
+      this.carlitosDelegateBaseRotation.z + roll * direction,
     );
     if (progress === 1) this.finishCarlitosDelegation();
   }
