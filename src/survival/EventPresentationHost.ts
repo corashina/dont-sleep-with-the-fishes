@@ -18,13 +18,28 @@ export class EventPresentationHost {
     if (this.active !== null) throw new Error('Event presentation is already attached.');
 
     let attachedRootCount = 0;
+    let attemptedRoot: EventPresentationAdapter['roots'][number] | null = null;
+    let attemptedRootWasAttached = false;
     try {
-      for (const { parent, root } of adapter.roots) {
+      for (const root of adapter.roots) {
+        attemptedRoot = root;
+        attemptedRootWasAttached = root.root.parent === root.parent;
+        root.parent.add(root.root);
         attachedRootCount += 1;
-        parent.add(root);
+        attemptedRoot = null;
       }
     } catch (error) {
       const rollbackSteps: Array<() => void> = [];
+      const failedRoot = attemptedRoot;
+      if (
+        failedRoot !== null
+        && !attemptedRootWasAttached
+        && failedRoot.root.parent === failedRoot.parent
+      ) {
+        rollbackSteps.push(
+          () => ignoreCleanupError(() => failedRoot.root.removeFromParent()),
+        );
+      }
       for (let index = attachedRootCount - 1; index >= 0; index -= 1) {
         const root = adapter.roots[index];
         if (root !== undefined) {
@@ -105,7 +120,6 @@ export class EventPresentationHost {
     runCleanupSteps([
       () => active.clear(),
       ...this.detachSteps(active),
-      () => active.dispose(),
     ]);
   }
 
