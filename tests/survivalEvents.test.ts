@@ -673,7 +673,7 @@ describe('survival events', () => {
       expect(() => validateSurvivalEventCatalog(catalog)).toThrow(expected);
     };
 
-    expect(() => validateSurvivalEventCatalog()).not.toThrow();
+    expect(() => validateSurvivalEventCatalog(SURVIVAL_EVENTS)).not.toThrow();
     rejects((catalog) => { catalog[1].id = catalog[0].id; }, /event ID.*duplicated/i);
     rejects((catalog) => { catalog[0].id = ' '; }, /event ID.*blank/i);
     rejects((catalog) => { catalog[0].revealText = ' '; }, /reveal text.*blank/i);
