@@ -35,7 +35,12 @@ import {
 } from './chest';
 import { clampSurvivalResources, eventResourceDelta } from './eventOutcomeRules';
 import { pressureForDay, pressureIncreaseForDay } from './RunPressure';
-import { repairEnergyCost, SURVIVAL_BALANCE } from './survivalBalance';
+import { SURVIVAL_BALANCE } from './survivalBalance';
+import {
+  dayActionResourceDelta,
+  dayActionUnavailableReason,
+  type DayActionRuleState,
+} from './dayActionRules';
 import {
   advanceCarlitosDawn,
   CARLITOS_EVENT_ENERGY_COST,
@@ -114,6 +119,40 @@ interface Rejection {
   code: string;
   message: string;
 }
+
+const DAY_ACTION_REJECTION_CODES: Readonly<Record<string, string>> = Object.freeze({
+  'Finish the active fishing attempt first.': 'fishing-in-progress',
+  'That option cannot be used for this action.': 'invalid-option',
+  'The survival journey has already ended.': 'terminal',
+  'That action is only available during the day.': 'not-daytime',
+  'Fishing requires one energy.': 'not-enough-energy',
+  'Diving requires a recovered scuba set.': 'no-scuba-set',
+  'Diving is too dangerous during a squall.': 'weather-blocked',
+  'Diving requires three energy.': 'not-enough-energy',
+  'No food remains.': 'no-food',
+  'You are not hungry.': 'not-hungry',
+  'The hull needs no repair.': 'hull-full',
+  'Repairing requires one energy.': 'not-enough-energy',
+  'No duct tape remains.': 'no-duct-tape',
+  'No repair material remains.': 'no-repair-material',
+  'Choose a broken item to repair.': 'no-repair-target',
+  'That item cannot be repaired.': 'item-not-repairable',
+  'No treatment is needed.': 'health-full',
+  'No medical-kit charges remain.': 'no-medical-kit',
+  'You already sent the rescue message.': 'message-already-sent',
+  'No bottled paper remains.': 'no-bottled-paper',
+  'Sending the message requires one energy.': 'not-enough-energy',
+  'No energy bar remains.': 'no-energy-bar',
+  'Your energy is already full.': 'energy-full',
+  'There is no closed chest to open.': 'no-closed-chest',
+  'Opening the chest requires three energy.': 'not-enough-energy',
+  'Carlitos is not aboard.': 'no-carlitos',
+  'Carlitos cannot respond.': 'carlitos-dead',
+  'Carlitos has already been petted today.': 'already-petted',
+  'Carlitos is already satiated.': 'carlitos-not-hungry',
+  'Carlitos needs no treatment.': 'carlitos-healthy',
+  'No medical kit remains.': 'no-medical-kit',
+});
 
 interface ActiveFishingTransaction {
   readonly attempt: FishingSession;
@@ -259,7 +298,7 @@ export class SurvivalSession {
   }
 
   availableReason(action: DayActionId, option?: DayActionOption): string | null {
-    return this.unavailable(action, option)?.message ?? null;
+    return dayActionUnavailableReason(this.dayActionRuleState(), action, option);
   }
 
   companionEventActionAvailability(
@@ -339,17 +378,13 @@ export class SurvivalSession {
   }
 
   beginFishing(): BeginFishingResult {
-    let rejection: ActionOutcome | null = null;
-    if (this.activeFishing !== null) {
-      rejection = this.fishingInProgress();
-    } else if (this.isTerminal()) {
-      rejection = this.reject('terminal', 'The survival journey has already ended.');
-    } else if (this.state !== 'day') {
-      rejection = this.reject('not-daytime', 'Fishing is only available during the day.');
-    } else if (this.energy < SURVIVAL_BALANCE.actions.fishEnergy) {
-      rejection = this.reject('not-enough-energy', 'Fishing requires one energy.');
+    const unavailable = this.unavailable('fish');
+    if (unavailable !== null) {
+      const message = unavailable.code === 'not-daytime'
+        ? 'Fishing is only available during the day.'
+        : unavailable.message;
+      return { accepted: false, outcome: this.reject(unavailable.code, message) };
     }
-    if (rejection !== null) return { accepted: false, outcome: rejection };
 
     const capturedBait = this.bait > 0;
     const activeItemIds = new Set(
@@ -467,9 +502,13 @@ export class SurvivalSession {
   }
 
   endDay(): ActionOutcome {
-    if (this.activeFishing !== null) return this.fishingInProgress();
-    if (this.isTerminal()) return this.reject('terminal', 'The survival journey has already ended.');
-    if (this.state !== 'day') return this.reject('not-daytime', 'The day cannot end while an event is unresolved.');
+    const unavailable = this.unavailable('endDay');
+    if (unavailable !== null) {
+      const message = unavailable.code === 'not-daytime'
+        ? 'The day cannot end while an event is unresolved.'
+        : unavailable.message;
+      return this.reject(unavailable.code, message);
+    }
 
     if (this.chestState === 'closed'
       && this.chestAcquiredDay !== null
@@ -746,154 +785,34 @@ export class SurvivalSession {
     return this.commit('rescued', 'A rescue vessel finds the lifeboat at dawn.', {}, 'rescue');
   }
 
+  private dayActionRuleState(): DayActionRuleState {
+    return Object.freeze({
+      state: this.state,
+      activeFishing: this.activeFishing !== null,
+      actedToday: this.actedToday,
+      weather: this.weather,
+      rescueMessageSent: this.rescueMessageSent,
+      energy: this.energy,
+      health: this.health,
+      hunger: this.hunger,
+      hull: this.hull,
+      food: this.food,
+      bait: this.bait,
+      repairMaterial: this.repairMaterial,
+      chestState: this.chestState,
+      inventory: this.inventory.snapshot(),
+      carlitos: this.carlitos === null
+        ? null
+        : Object.freeze({ ...this.carlitos }),
+    });
+  }
+
   private unavailable(action: DayActionId, option?: DayActionOption): Rejection | null {
-    if (this.activeFishing !== null) {
-      return { code: 'fishing-in-progress', message: 'Finish the active fishing attempt first.' };
-    }
-    const invalidOption = this.invalidOption(action, option);
-    if (invalidOption !== null) return invalidOption;
-    if (this.isTerminal()) return { code: 'terminal', message: 'The survival journey has already ended.' };
-    if (this.state !== 'day') return { code: 'not-daytime', message: 'That action is only available during the day.' };
-    switch (action) {
-      case 'fish':
-        if (this.energy < SURVIVAL_BALANCE.actions.fishEnergy) {
-          return { code: 'not-enough-energy', message: 'Fishing requires one energy.' };
-        }
-        return null;
-      case 'dive':
-        if (!this.inventory.hasUsable('scubaSet')) {
-          return { code: 'no-scuba-set', message: 'Diving requires a recovered scuba set.' };
-        }
-        if (this.weather === 'squall') {
-          return { code: 'weather-blocked', message: 'Diving is too dangerous during a squall.' };
-        }
-        if (this.energy < SURVIVAL_BALANCE.actions.diveEnergy) {
-          return { code: 'not-enough-energy', message: 'Diving requires three energy.' };
-        }
-        return null;
-      case 'eat':
-        if (this.food < 1) return { code: 'no-food', message: 'No food remains.' };
-        if (this.hunger <= 0) return { code: 'not-hungry', message: 'You are not hungry.' };
-        return null;
-      case 'repair':
-        if (this.hull >= SURVIVAL_BALANCE.thresholds.maximum) {
-          return { code: 'hull-full', message: 'The hull needs no repair.' };
-        }
-        {
-          const energyCost = repairEnergyCost(this.hull);
-          if (this.energy < energyCost) {
-            const energyWord = ['', 'one', 'two', 'three'][energyCost];
-            return {
-              code: 'not-enough-energy',
-              message: `Repairing requires ${energyWord} energy.`,
-            };
-          }
-        }
-        if (option?.kind === 'hullRepair' && option.material === 'ductTape') {
-          if (!this.inventory.hasUsable('ductTape')) {
-            return { code: 'no-duct-tape', message: 'No duct tape remains.' };
-          }
-          return null;
-        }
-        if (this.repairMaterial < 1) {
-          return { code: 'no-repair-material', message: 'No repair material remains.' };
-        }
-        return null;
-      case 'repairItem': {
-        if (!this.inventory.hasUsable('ductTape')) {
-          return { code: 'no-duct-tape', message: 'No duct tape remains.' };
-        }
-        if (option?.kind !== 'itemRepair') {
-          return { code: 'no-repair-target', message: 'Choose a broken item to repair.' };
-        }
-        const target = this.inventory.snapshot()[option.target];
-        if (target === undefined || target.condition !== 'broken' || !ITEM_DEFINITIONS[target.type].breakable) {
-          return { code: 'item-not-repairable', message: 'That item cannot be repaired.' };
-        }
-        return null;
-      }
-      case 'treat':
-        if (this.health >= SURVIVAL_BALANCE.thresholds.maximum) {
-          return { code: 'health-full', message: 'No treatment is needed.' };
-        }
-        if (!this.inventory.hasUsable('medicalKit')) {
-          return { code: 'no-medical-kit', message: 'No medical-kit charges remain.' };
-        }
-        return null;
-      case 'sendMessage':
-        if (this.rescueMessageSent) {
-          return { code: 'message-already-sent', message: 'You already sent the rescue message.' };
-        }
-        if (!this.inventory.hasUsable('bottledPaper')) {
-          return { code: 'no-bottled-paper', message: 'No bottled paper remains.' };
-        }
-        if (this.energy < SURVIVAL_BALANCE.actions.bottledPaperEnergy) {
-          return { code: 'not-enough-energy', message: 'Sending the message requires one energy.' };
-        }
-        return null;
-      case 'useEnergyBar':
-        if (!this.inventory.hasUsable('energyBar')) {
-          return { code: 'no-energy-bar', message: 'No energy bar remains.' };
-        }
-        if (this.energy >= SURVIVAL_BALANCE.actions.maximumEnergy) {
-          return { code: 'energy-full', message: 'Your energy is already full.' };
-        }
-        return null;
-      case 'openChest':
-        if (this.chestState !== 'closed') {
-          return { code: 'no-closed-chest', message: 'There is no closed chest to open.' };
-        }
-        if (this.energy < CHEST_OPEN_ENERGY) {
-          return { code: 'not-enough-energy', message: 'Opening the chest requires three energy.' };
-        }
-        return null;
-      case 'petCarlitos':
-        return this.unavailableCarlitosCare('pet');
-      case 'feedCarlitos':
-        return this.unavailableCarlitosCare('feed');
-      case 'treatCarlitos':
-        return this.unavailableCarlitosCare('treat');
-      case 'endDay':
-        return null;
-    }
-  }
-
-  private invalidOption(action: DayActionId, option?: DayActionOption): Rejection | null {
-    const valid = action === 'fish'
-      ? option === undefined
-      : action === 'repair'
-        ? option?.kind === 'hullRepair'
-        : action === 'repairItem'
-          ? option?.kind === 'itemRepair'
-          : option === undefined;
-    return valid ? null : { code: 'invalid-option', message: 'That option cannot be used for this action.' };
-  }
-
-  private unavailableCarlitosCare(action: 'pet' | 'feed' | 'treat'): Rejection | null {
-    if (this.carlitos === null) {
-      return { code: 'no-carlitos', message: 'Carlitos is not aboard.' };
-    }
-    if (!this.carlitos.alive) {
-      return { code: 'carlitos-dead', message: 'Carlitos cannot respond.' };
-    }
-    if (action === 'pet' && this.carlitos.pettedToday) {
-      return { code: 'already-petted', message: 'Carlitos has already been petted today.' };
-    }
-    if (action === 'feed') {
-      if (this.carlitos.hunger >= 5) {
-        return { code: 'carlitos-not-hungry', message: 'Carlitos is already satiated.' };
-      }
-      if (this.food < 1) return { code: 'no-food', message: 'No food remains.' };
-    }
-    if (action === 'treat') {
-      if (this.carlitos.sickness <= 0) {
-        return { code: 'carlitos-healthy', message: 'Carlitos needs no treatment.' };
-      }
-      if (!this.inventory.hasUsable('medicalKit')) {
-        return { code: 'no-medical-kit', message: 'No medical kit remains.' };
-      }
-    }
-    return null;
+    const message = dayActionUnavailableReason(this.dayActionRuleState(), action, option);
+    if (message === null) return null;
+    const code = DAY_ACTION_REJECTION_CODES[message];
+    if (code === undefined) throw new Error(`Missing day action rejection code for: ${message}`);
+    return { code, message };
   }
 
   private unavailableCompanionEventAction(
@@ -938,25 +857,23 @@ export class SurvivalSession {
   }
 
   private eat(): ActionOutcome {
+    const deltas = dayActionResourceDelta(this.dayActionRuleState(), 'eat');
     return this.commit(
       'ate',
       'The food takes the edge off your hunger.',
-      {
-        hunger: SURVIVAL_BALANCE.actions.foodHunger,
-        food: -1,
-      },
+      deltas,
       'none',
     );
   }
 
   private repair(option?: DayActionOption): ActionOutcome {
-    const energyCost = repairEnergyCost(this.hull);
+    const deltas = dayActionResourceDelta(this.dayActionRuleState(), 'repair', option);
     if (option?.kind === 'hullRepair' && option.material === 'ductTape') {
       this.inventory.consume('ductTape', 1);
       return this.commit(
         'repaired-with-duct-tape',
         'The emergency patch holds for now.',
-        { energy: -energyCost, hull: SURVIVAL_BALANCE.actions.tapeHull },
+        deltas,
         'repair',
       );
     }
@@ -964,11 +881,7 @@ export class SurvivalSession {
     return this.commit(
       'repaired',
       'You reinforce the damaged hull.',
-      {
-        energy: -energyCost,
-        hull: SURVIVAL_BALANCE.actions.repairHull,
-        repairMaterial: -1,
-      },
+      deltas,
       'repair',
     );
   }
@@ -983,11 +896,12 @@ export class SurvivalSession {
   }
 
   private treat(): ActionOutcome {
+    const deltas = dayActionResourceDelta(this.dayActionRuleState(), 'treat');
     this.inventory.consume('medicalKit', 1);
     return this.commit(
       'treated',
       'You clean and dress your wounds.',
-      { health: SURVIVAL_BALANCE.actions.treatmentHealth },
+      deltas,
       'treat',
     );
   }
@@ -1021,19 +935,16 @@ export class SurvivalSession {
   }
 
   private sendMessage(): ActionOutcome {
+    const deltas = dayActionResourceDelta(this.dayActionRuleState(), 'sendMessage');
     this.inventory.consume('bottledPaper', 1);
     this.rescueMessageSent = true;
-    return this.commit('message-sent', 'You cast the message into the current.', {
-      energy: -SURVIVAL_BALANCE.actions.bottledPaperEnergy,
-      rescueProgress: SURVIVAL_BALANCE.actions.bottledPaperRescueProgress,
-    }, 'sighting');
+    return this.commit('message-sent', 'You cast the message into the current.', deltas, 'sighting');
   }
 
   private useEnergyBar(): ActionOutcome {
+    const deltas = dayActionResourceDelta(this.dayActionRuleState(), 'useEnergyBar');
     this.inventory.consume('energyBar', 1);
-    return this.commit('energy-bar-used', 'The ration restores your strength.', {
-      energy: SURVIVAL_BALANCE.actions.maximumEnergy - this.energy,
-    }, 'none');
+    return this.commit('energy-bar-used', 'The ration restores your strength.', deltas, 'none');
   }
 
   private openChest(): ActionOutcome {

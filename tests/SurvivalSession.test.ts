@@ -1830,6 +1830,39 @@ describe('SurvivalSession daytime actions', () => {
       .perform('dive').accepted).toBe(true);
   });
 
+  it.each([
+    ['eat', undefined, 'No food remains.'],
+    ['repair', { kind: 'hullRepair', material: 'repairMaterial' }, 'No repair material remains.'],
+    ['treat', undefined, 'No medical-kit charges remain.'],
+    ['sendMessage', undefined, 'No bottled paper remains.'],
+    ['useEnergyBar', undefined, 'No energy bar remains.'],
+    ['openChest', undefined, 'There is no closed chest to open.'],
+  ] satisfies ReadonlyArray<readonly [Exclude<DayActionId, 'fish'>, DayActionOption | undefined, string]>) (
+    'uses the delegated %s rejection in availability and performance',
+    (action, option, message) => {
+      const session = new SurvivalSession(saved(), {
+        seed: 1,
+        initial: { hunger: 50, health: 50, hull: 50, energy: 2 },
+      });
+
+      expect(session.availableReason(action, option)).toBe(message);
+      expect(session.perform(action, option)).toMatchObject({ accepted: false, message });
+    },
+  );
+
+  it('keeps public fishing and end-day daytime rejection messages', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 1,
+      initialEventId: 'bad-sleep',
+    });
+
+    const fishing = session.beginFishing();
+    expect(fishing.accepted).toBe(false);
+    if (fishing.accepted) throw new Error('Expected fishing to be unavailable.');
+    expect(fishing.outcome.message).toBe('Fishing is only available during the day.');
+    expect(session.endDay().message).toBe('The day cannot end while an event is unresolved.');
+  });
+
   it('applies diving risk and blocks diving in a squall', () => {
     const injured = new SurvivalSession(saved('scubaSet'), { seed: 1, random: sequenceRandom([0.9, 0.1]) });
     expect(injured.perform('dive')).toMatchObject({ accepted: true, deltas: { energy: -3, health: -10 } });
