@@ -238,8 +238,8 @@ it('converts add, subtract, and set operations to deltas', () => {
 });
 
 it('clamps survival resources to their current limits', () => {
-  expect(clampSurvivalResources({ health: 12, hunger: -2, energy: 4, hull: 15 }))
-    .toEqual({ health: 10, hunger: 0, energy: 3, hull: 10 });
+  expect(clampSurvivalResources({ health: 120, hunger: -2, energy: 4, hull: 150 }))
+    .toEqual({ health: 100, hunger: 0, energy: 3, hull: 100 });
 });
 ```
 
