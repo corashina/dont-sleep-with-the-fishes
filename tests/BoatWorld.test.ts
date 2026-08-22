@@ -1001,7 +1001,81 @@ describe('BoatWorld helpers', () => {
       create.mockRestore();
       propModels.dispose();
     }
+    expect(adapter.clear).toHaveBeenCalledOnce();
     expect(adapter.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('clears the rescue callback when adapter detachment fails after deactivation', () => {
+    const propModels = createTestPropModels();
+    const focused = focusedPresenterTestDouble('other-people');
+    const presenter = Object.assign(focused.presenter, { setRescueCue: vi.fn() });
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      { 'other-people': () => presenter },
+    );
+    const internals = world as unknown as {
+      fallbackEventPresentation: EventPresentationAdapter | null;
+      activeRescueCueCallback: ((progress: number | null) => void) | null;
+    };
+    world.stageEvent('other-people');
+    const adapter = internals.fallbackEventPresentation!;
+    const adapterRoot = adapter.roots[0]!.root;
+    const detachError = new Error('root detach failed');
+    const removeFromParent = adapterRoot.removeFromParent.bind(adapterRoot);
+    const remove = vi.spyOn(adapterRoot, 'removeFromParent').mockImplementation(() => {
+      removeFromParent();
+      throw detachError;
+    });
+
+    expect(internals.activeRescueCueCallback).not.toBeNull();
+    expect(() => world.detach(adapter)).toThrow(detachError);
+    expect(internals.activeRescueCueCallback).toBeNull();
+
+    remove.mockRestore();
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('clears the rescue callback when host disposal fails', () => {
+    const propModels = createTestPropModels();
+    const focused = focusedPresenterTestDouble('other-people');
+    const presenter = Object.assign(focused.presenter, { setRescueCue: vi.fn() });
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      { 'other-people': () => presenter },
+    );
+    const internals = world as unknown as {
+      fallbackEventPresentation: EventPresentationAdapter | null;
+      activeRescueCueCallback: ((progress: number | null) => void) | null;
+    };
+    world.stageEvent('other-people');
+    const adapterRoot = internals.fallbackEventPresentation!.roots[0]!.root;
+    const detachError = new Error('root detach failed');
+    const removeFromParent = adapterRoot.removeFromParent.bind(adapterRoot);
+    const remove = vi.spyOn(adapterRoot, 'removeFromParent').mockImplementation(() => {
+      removeFromParent();
+      throw detachError;
+    });
+
+    expect(internals.activeRescueCueCallback).not.toBeNull();
+    expect(() => world.dispose()).toThrow(detachError);
+    expect(internals.activeRescueCueCallback).toBeNull();
+    expect(remove).toHaveBeenCalled();
+
+    remove.mockRestore();
+    propModels.dispose();
   });
 
   it('does not construct inactive weather choreography for focused and featured routes', async () => {
@@ -4960,6 +5034,7 @@ describe('BoatWorld helpers', () => {
     world.clearEvent();
     await lost;
 
+    world.stageEvent('restless-waves');
     const broken = world.reactToEventOutcome(
       'restless-waves',
       {

@@ -224,6 +224,37 @@ describe('EventPresentationHost', () => {
     expect(order).toEqual(['second', 'first']);
   });
 
+  it('clears once for each staged activation and skips cleared work during disposal', () => {
+    const host = new EventPresentationHost();
+    const adapter = createAdapter();
+    const context = { eventId: 'leak' as const, targetInstanceId: null, variantSeed: 3 };
+
+    host.attach(adapter);
+    host.stage(context);
+    host.clear();
+    host.clear();
+    host.stage(context);
+    host.clear();
+    host.dispose();
+
+    expect(adapter.stage).toHaveBeenCalledTimes(2);
+    expect(adapter.clear).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a clear that throws', () => {
+    const host = new EventPresentationHost();
+    const adapter = createAdapter();
+    const clearError = new Error('clear failed');
+    vi.mocked(adapter.clear).mockImplementation(() => { throw clearError; });
+
+    host.attach(adapter);
+    expect(() => host.clear()).toThrow(clearError);
+    expect(() => host.clear()).not.toThrow();
+    expect(() => host.dispose()).not.toThrow();
+
+    expect(adapter.clear).toHaveBeenCalledOnce();
+  });
+
   it('cleans up after a clear failure and leaves disposal to the bundle', () => {
     const order: string[] = [];
     const first = new Group();

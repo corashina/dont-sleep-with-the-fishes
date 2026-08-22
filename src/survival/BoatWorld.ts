@@ -1203,9 +1203,12 @@ export class BoatWorld {
   }
 
   detach(adapter: EventPresentationAdapter): void {
-    this.eventPresentationHost.detach(adapter);
-    if (this.eventPresentationHost.activeEventId() === null) {
-      this.activeRescueCueCallback = null;
+    try {
+      this.eventPresentationHost.detach(adapter);
+    } finally {
+      if (this.eventPresentationHost.activeEventId() === null) {
+        this.activeRescueCueCallback = null;
+      }
     }
   }
 
@@ -2402,8 +2405,11 @@ export class BoatWorld {
       () => this.itemUseController.dispose(),
       () => this.repairToolboxAnimation.cancel(),
       () => {
-        this.eventPresentationHost.dispose();
-        this.activeRescueCueCallback = null;
+        try {
+          this.eventPresentationHost.dispose();
+        } finally {
+          this.activeRescueCueCallback = null;
+        }
       },
       () => {
         const adapter = this.fallbackEventPresentation;
