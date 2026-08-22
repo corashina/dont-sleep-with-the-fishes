@@ -587,7 +587,7 @@ describe('SurvivalSession daytime actions', () => {
       initialChest: { state: 'mimic', acquiredDay: 48 },
       initialEventId: 'chest-attack',
     });
-    expect(lateAttack.resolveEvent(choiceResponse('sleep')).deltas.health).toBe(-80);
+    expect(lateAttack.resolveEvent(choiceResponse('sleep')).deltas).toEqual({ health: -80 });
   });
 
   it('opens a recovered chest and prefers a missing durable item', () => {

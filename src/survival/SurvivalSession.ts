@@ -28,7 +28,8 @@ import {
   drawChestReward,
   shouldBecomeMimic,
 } from './chest';
-import { nightDamageMultiplier, pressureForDay, pressureIncreaseForDay } from './RunPressure';
+import { clampSurvivalResources, eventResourceDelta } from './eventOutcomeRules';
+import { pressureForDay, pressureIncreaseForDay } from './RunPressure';
 import { repairEnergyCost, SURVIVAL_BALANCE } from './survivalBalance';
 import {
   advanceCarlitosDawn,
@@ -1343,18 +1344,12 @@ export class SurvivalSession {
     selectedInstanceId: ItemInstanceId | null,
     phase: SurvivalEventDefinition['phase'],
   ): JournalInventoryMutation[] {
-    if (typeof effect.value !== 'number') {
+    const value = effect.value;
+    if (typeof value !== 'number') {
       throw new Error(`Event resource ${effect.resource} was not resolved to a concrete value.`);
     }
     const current = this.resourceValues()[effect.resource];
-    let delta = effect.operation === 'set'
-      ? effect.value - current
-      : effect.operation === 'add' ? effect.value : -effect.value;
-    if (phase === 'night'
-      && effect.operation === 'subtract'
-      && (effect.resource === 'health' || effect.resource === 'hull')) {
-      delta *= nightDamageMultiplier(this.day);
-    }
+    const delta = eventResourceDelta({ ...effect, value }, current, phase, this.day);
     return this.applyDeltas(
       { [effect.resource]: delta },
       excludedInstanceIds,
@@ -1698,10 +1693,16 @@ export class SurvivalSession {
   }
 
   private clampMeters(): void {
-    this.health = Math.min(100, Math.max(0, this.health));
-    this.hunger = Math.min(100, Math.max(0, this.hunger));
-    this.energy = Math.min(SURVIVAL_BALANCE.actions.maximumEnergy, Math.max(0, this.energy));
-    this.hull = Math.min(100, Math.max(0, this.hull));
+    const resources = clampSurvivalResources({
+      health: this.health,
+      hunger: this.hunger,
+      energy: this.energy,
+      hull: this.hull,
+    });
+    this.health = resources.health;
+    this.hunger = resources.hunger;
+    this.energy = resources.energy;
+    this.hull = resources.hull;
     this.food = Math.max(0, this.food);
     this.bait = Math.max(0, this.bait);
     this.repairMaterial = Math.max(0, this.repairMaterial);
