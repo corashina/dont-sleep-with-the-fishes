@@ -15,16 +15,16 @@ export interface JournalInventoryMutation {
 }
 
 export interface JournalEventRecord {
-  phase: 'day' | 'night';
-  eventId: string;
-  title: string;
-  prompt: string;
-  attemptedChoiceId: string | null;
+  readonly phase: 'day' | 'night';
+  readonly eventId: string;
+  readonly title: string;
+  readonly prompt: string;
+  readonly attemptedChoiceId: string | null;
   readonly choiceLabel: string;
-  attemptedItemId: ItemId | null;
-  outcomeCode: string;
-  outcomeMessage: string;
-  eventPresentationKey?: EventPresentationKey;
+  readonly attemptedItemId: ItemId | null;
+  readonly outcomeCode: string;
+  readonly outcomeMessage: string;
+  readonly eventPresentationKey?: EventPresentationKey;
   readonly inventoryMutations: readonly JournalInventoryMutation[];
 }
 
@@ -35,8 +35,8 @@ export interface JournalSinkingShipRecord {
 export type JournalDaytimeRecord = JournalEventRecord | JournalSinkingShipRecord;
 
 export type JournalNightRecord =
-  | { kind: 'event'; event: JournalEventRecord }
-  | { kind: 'quiet' };
+  | { readonly kind: 'event'; readonly event: JournalEventRecord }
+  | { readonly kind: 'quiet' };
 
 export interface JournalFishingRecord {
   readonly kind: 'fishing';
@@ -75,11 +75,11 @@ export type JournalDayActionRecord =
   | JournalCarlitosDawnRecord;
 
 export interface JournalEntry {
-  day: number;
-  weather: WeatherId;
+  readonly day: number;
+  readonly weather: WeatherId;
   readonly actions: readonly JournalDayActionRecord[];
-  daytime: JournalDaytimeRecord | null;
-  nighttime: JournalNightRecord;
+  readonly daytime: JournalDaytimeRecord | null;
+  readonly nighttime: JournalNightRecord;
 }
 
 export function createJournalEventRecord(
@@ -90,7 +90,7 @@ export function createJournalEventRecord(
   outcome: Pick<ActionOutcome, 'code' | 'message' | 'eventPresentationKey'>,
   inventoryMutations: readonly JournalInventoryMutation[],
 ): JournalEventRecord {
-  return {
+  return Object.freeze({
     phase: event.phase,
     eventId: event.id,
     title: event.title,
@@ -104,15 +104,15 @@ export function createJournalEventRecord(
       ? {}
       : { eventPresentationKey: outcome.eventPresentationKey }),
     inventoryMutations: cloneJournalInventoryMutations(inventoryMutations),
-  };
+  });
 }
 
 export function createJournalNightEventRecord(event: JournalEventRecord): JournalNightRecord {
-  return { kind: 'event', event };
+  return Object.freeze({ kind: 'event', event: cloneJournalRecord(event) });
 }
 
 export function createQuietJournalNightRecord(): JournalNightRecord {
-  return { kind: 'quiet' };
+  return Object.freeze({ kind: 'quiet' });
 }
 
 export function createJournalFishingRecord(
@@ -174,13 +174,13 @@ export function createJournalEntry(
   daytime: JournalDaytimeRecord | null,
   nighttime: JournalNightRecord,
 ): JournalEntry {
-  return {
+  return Object.freeze({
     day,
     weather,
     actions: cloneJournalActions(actions),
-    daytime,
-    nighttime,
-  };
+    daytime: daytime === null ? null : cloneJournalDaytime(daytime),
+    nighttime: cloneJournalNight(nighttime),
+  });
 }
 
 function cloneJournalRecord(record: JournalEventRecord): JournalEventRecord {
@@ -197,18 +197,19 @@ function cloneJournalDaytime(record: JournalDaytimeRecord): JournalDaytimeRecord
 }
 
 export function cloneJournalEntry(entry: JournalEntry): JournalEntry {
-  return Object.freeze({
-    ...entry,
-    actions: cloneJournalActions(entry.actions),
-    daytime: entry.daytime === null ? null : cloneJournalDaytime(entry.daytime),
-    nighttime: cloneJournalNight(entry.nighttime),
-  });
+  return createJournalEntry(
+    entry.day,
+    entry.weather,
+    entry.actions,
+    entry.daytime,
+    entry.nighttime,
+  );
 }
 
 export function cloneJournalNight(record: JournalNightRecord): JournalNightRecord {
-  return Object.freeze(record.kind === 'quiet'
+  return record.kind === 'quiet'
     ? createQuietJournalNightRecord()
-    : createJournalNightEventRecord(cloneJournalRecord(record.event)));
+    : createJournalNightEventRecord(record.event);
 }
 
 export function cloneJournalActions(
