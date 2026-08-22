@@ -47,9 +47,9 @@ it('creates the approved fixed composition once', () => {
       const dispose = vi.fn();
       disposers.push(dispose);
       const root = new Group();
-      if (id === 'boat') {
+      if (id === 'boat' || id === 'skull') {
         root.add(new Mesh(
-          new BoxGeometry(2, 1, 4),
+          id === 'boat' ? new BoxGeometry(2, 1, 4) : new BoxGeometry(0.4, 0.5, 0.4),
           new MeshStandardMaterial(),
         ));
       } else if (id === 'redSnapper') {
@@ -178,17 +178,23 @@ it('creates the approved fixed composition once', () => {
   expect(new Box3().setFromObject(caustics).max.z).toBeGreaterThan(camera.position.z);
   expect(world.root.getObjectByName('menu:boat')).toBeDefined();
   expect(world.root.getObjectByName('menu:seated-skeleton')).toBeUndefined();
-  expect(world.root.getObjectByName('menu:skull')).toBeDefined();
+  const skull = world.root.getObjectByName('menu:skull')!;
+  expect(skull).toBeDefined();
   expect(world.root.getObjectByName('menu:start-sign')).toBeDefined();
   expect(world.root.getObjectByName('menu:guide-sign')).toBeDefined();
   expect(world.root.getObjectByName('menu:dorothy-wreck')).toBeDefined();
   expect(world.root.getObjectByName('menu:distant-seabed')).toBeDefined();
-  const skullPosition = world.root.getObjectByName('menu:skull')!.getWorldPosition(new Vector3());
+  const skullPosition = skull.getWorldPosition(new Vector3());
+  const skullBottom = new Box3().setFromObject(skull).min.y;
+  expect(skullBottom).toBeCloseTo(
+    menuSeabedHeight(skullPosition.x, skullPosition.z) - 0.04,
+    5,
+  );
   const boat = world.root.getObjectByName('menu:boat')!;
   const boatPosition = boat.getWorldPosition(new Vector3());
   const boatBottom = new Box3().setFromObject(boat).min.y;
   expect(boatBottom).toBeCloseTo(
-    menuSeabedHeight(boatPosition.x, boatPosition.z) - 0.1,
+    menuSeabedHeight(boatPosition.x, boatPosition.z) - 0.2,
     5,
   );
   expect(skullPosition.z).toBeGreaterThan(boatPosition.z);

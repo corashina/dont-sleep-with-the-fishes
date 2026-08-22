@@ -72,6 +72,9 @@ describe('GameUI pause menu', () => {
     expect(pause.textContent).not.toContain('THE CLOCK IS STILL');
     expect(pause.textContent).not.toContain('The countdown is stopped');
     expect(pause.querySelector('[data-resume-button]')).not.toBeNull();
+    expect(mainStyles).toMatch(
+      /\.pause-screen \.illustrated-warning:not\(\.is-visible\)\s*\{[^}]*display:\s*none/s,
+    );
 
     ui.dispose();
   });

@@ -68,7 +68,7 @@ interface WeatherReactionActor {
   readonly condition: ItemCondition | null;
 }
 
-const DISTANT_FIGURE_Z = -13.5;
+const FOG_MAN_Z = -8;
 const FOG_MAN_SIDE_X = 2.6;
 const REVEAL_FIGURE_Y = 0;
 
@@ -121,7 +121,7 @@ function prepareFogMan(model: Group, material: Material): Group {
 
   const root = new Group();
   root.name = 'fog-man-silhouette';
-  root.position.set(-FOG_MAN_SIDE_X, REVEAL_FIGURE_Y, DISTANT_FIGURE_Z);
+  root.position.set(-FOG_MAN_SIDE_X, REVEAL_FIGURE_Y, FOG_MAN_Z);
   root.visible = false;
   root.add(tableau);
   return root;
@@ -374,6 +374,7 @@ export class WeatherEventAnimator {
     this.stagedEventId = eventId;
     this.rememberCameraBase();
     this.hideTransientEffects();
+    this.showStagedFogMan();
     resetItemSample(this.itemSample);
     this.selectedActorId = null;
     return new Promise((resolve) => {
@@ -409,6 +410,7 @@ export class WeatherEventAnimator {
     if (this.active !== null) this.cancelActive();
     this.rememberCameraBase();
     this.hideTransientEffects();
+    this.showStagedFogMan();
     if (!isCameraOnlyWeatherEvent(eventId)) {
       for (const actor of actors) {
         this.supplyDisplay.pinEventActor(actor.instanceId);
@@ -436,6 +438,7 @@ export class WeatherEventAnimator {
     this.restoreCamera();
     this.supplyDisplay.resetEventPoseForFrame();
     this.hideTransientEffects();
+    if (active.kind !== 'reveal') this.showStagedFogMan();
     active.elapsed = Math.min(
       active.duration,
       active.elapsed + Math.max(0, Number.isFinite(delta) ? delta : 0),
@@ -461,6 +464,7 @@ export class WeatherEventAnimator {
     if (this.disposed) return;
     this.cancelActive();
     this.stagedEventId = null;
+    this.hideTransientEffects();
     this.supplyDisplay.clearEventPose();
   }
 
@@ -688,9 +692,13 @@ export class WeatherEventAnimator {
     this.silhouette.position.set(
       this.fogManX,
       REVEAL_FIGURE_Y,
-      DISTANT_FIGURE_Z,
+      FOG_MAN_Z,
     );
     this.silhouette.scale.setScalar(0.86);
+  }
+
+  private showStagedFogMan(): void {
+    if (this.stagedEventId === 'man-in-the-fog') this.showSilhouette(1);
   }
 
   private applyWindPaper(progress: number): void {
@@ -718,7 +726,7 @@ export class WeatherEventAnimator {
 
   private hideTransientEffects(): void {
     this.silhouette.visible = false;
-    this.silhouette.position.set(this.fogManX, REVEAL_FIGURE_Y, DISTANT_FIGURE_Z);
+    this.silhouette.position.set(this.fogManX, REVEAL_FIGURE_Y, FOG_MAN_Z);
     this.silhouette.scale.setScalar(1);
     this.figureMaterial.opacity = 0;
     this.flashlightBeam.visible = false;
@@ -741,6 +749,7 @@ export class WeatherEventAnimator {
       case 'item':
         this.restoreCamera();
         this.hideTransientEffects();
+        this.showStagedFogMan();
         active.resolve(true);
         break;
       case 'react':
@@ -761,6 +770,7 @@ export class WeatherEventAnimator {
       case 'reveal':
         this.restoreCamera();
         this.hideTransientEffects();
+        this.showStagedFogMan();
         active.resolve();
         break;
     }
@@ -771,6 +781,7 @@ export class WeatherEventAnimator {
     this.active = null;
     if (active !== null) this.restoreCamera();
     this.hideTransientEffects();
+    this.showStagedFogMan();
     this.selectedActorId = null;
     if (active?.kind === 'item') {
       active.resolve(false);

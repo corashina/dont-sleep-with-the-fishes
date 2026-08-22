@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
+import { radioRescueLeadForSignal } from '../src/survival/survivalBalance';
 import { formatJournalEntry } from '../src/survival/journal';
 import type { FishingSession, FishingTerminalResult } from '../src/survival/FishingSession';
 import type {
@@ -171,7 +172,7 @@ function choiceResponse(choiceId: string): EventResponse {
 }
 
 it('records signal-assisted rescue once', () => {
-  const session = new SurvivalSession(saved('bottledPaper'), {
+  const session = new SurvivalSession(saved('radio'), {
     seed: 20,
     random: sequenceRandom([0, 0]),
     initial: { day: 23, rescueLead: 8 },
@@ -323,26 +324,6 @@ describe('SurvivalSession Carlitos events', () => {
       deltas: { food: 2 },
       rewardSummary: { kind: 'resource', id: 'food', quantity: 2 },
     });
-    expect(session.snapshot().energy).toBe(1);
-    expect(session.snapshot().carlitos?.energy).toBe(0);
-  });
-
-  it('delegates Drifting Bottle without spending player energy', () => {
-    const session = new SurvivalSession(saved('carlitos'), {
-      seed: 1,
-      random: sequenceRandom([0]),
-      initial: { energy: 1 },
-      initialCarlitos: { hunger: 5, energy: 3 },
-      initialEventId: 'drifting-bottle',
-    });
-
-    const outcome = session.resolveEvent({ kind: 'choice', choiceId: 'delegate-carlitos' });
-
-    expect(outcome).toMatchObject({
-      accepted: true,
-      rewardSummary: { kind: 'item', id: 'bottledPaper', quantity: 1 },
-    });
-    expect(session.snapshot().inventory['bottledPaper-1']).toMatchObject({ condition: 'usable' });
     expect(session.snapshot().energy).toBe(1);
     expect(session.snapshot().carlitos?.energy).toBe(0);
   });
@@ -686,13 +667,17 @@ describe('SurvivalSession daytime actions', () => {
     });
     expect(bound.resolveEvent(itemResponse('fishingNet')).eventResult?.resultId).toBe('chest-bound');
 
-    const hidden = new SurvivalSession(saved(), {
+    const chestAttacked = new SurvivalSession(saved(), {
       seed: 10,
       random: sequenceRandom([0]),
       initialChest: { state: 'mimic', acquiredDay: 1 },
       initialEventId: 'chest-attack',
     });
-    expect(hidden.resolveEvent(choiceResponse('sleep')).eventResult?.resultId).toBe('chest-hide');
+    expect(chestAttacked.resolveEvent(choiceResponse('attack'))).toMatchObject({
+      deltas: { health: -40 },
+      eventResult: { resultId: 'chest-attack' },
+    });
+    expect(chestAttacked.snapshot().chest.state).toBe('none');
 
     const tour = new SurvivalSession(saved(), {
       seed: 11,
@@ -798,24 +783,7 @@ describe('SurvivalSession daytime actions', () => {
     });
   });
 
-
-  it('resolves the expanded contextual encounters deterministically', () => {
-    const bottle = new SurvivalSession(saved(), {
-      seed: 101, random: sequenceRandom([0]), initial: { day: 2, energy: 2 }, initialEventId: 'drifting-bottle',
-    });
-    expect(bottle.resolveEvent(choiceResponse('retrieve'))).toMatchObject({
-      accepted: true,
-      deltas: { energy: -1 },
-      rewardSummary: { kind: 'item', id: 'bottledPaper', quantity: 1 },
-    });
-    expect(bottle.snapshot().inventory['bottledPaper-1']).toMatchObject({ condition: 'usable' });
-    expect(bottle.snapshot().lastOutcome).toMatchObject({
-      eventPresentationKey: 'drifting-bottle.retrieve',
-    });
-
-  });
-
-  it('resolves the empty stern outcome at the top of the Check the Back roll', () => {
+  it('resolves the damaging anglerfish outcome at the top of the Check the Back roll', () => {
     const session = new SurvivalSession(saved(), {
       seed: 105,
       random: sequenceRandom([0.999]),
@@ -823,8 +791,11 @@ describe('SurvivalSession daytime actions', () => {
       initialEventId: 'check-the-back',
       initialAppearanceCounts: { 'check-the-back': 1 },
     });
-    expect(session.resolveEvent(choiceResponse('check')).eventPresentationKey)
-      .toBe('check-the-back.empty');
+    expect(session.resolveEvent(choiceResponse('check'))).toMatchObject({
+      eventPresentationKey: 'check-the-back.bad',
+      deltas: { health: -25 },
+    });
+    expect(session.snapshot().health).toBe(75);
   });
 
   it('enforces contextual requirements without mutating the session', () => {
@@ -1429,23 +1400,6 @@ describe('SurvivalSession daytime actions', () => {
     });
   });
 
-  it('draws Drifting Bottle again after an earlier missed appearance', () => {
-    const session = new SurvivalSession(saved(), {
-      seed: 201,
-      random: sequenceRandom([0, 0, 0.5]),
-      initial: { day: 2 },
-      initialAppearanceCounts: { 'drifting-bottle': 1 },
-    });
-
-    expect(session.perform('endDay')).toMatchObject({ accepted: true });
-    expect(session.beginDawn()).toMatchObject({ accepted: true, code: 'dawn' });
-    expect(session.snapshot()).toMatchObject({
-      day: 3,
-      state: 'dayEvent',
-      pendingEventId: 'drifting-bottle',
-    });
-  });
-
   it('does not roll drifting cargo before day 3', () => {
     const next = vi.fn(() => 0);
     const session = new SurvivalSession(saved(), {
@@ -1849,7 +1803,7 @@ describe('SurvivalSession daytime actions', () => {
 
   it('applies diving risk and blocks diving in a squall', () => {
     const injured = new SurvivalSession(saved('scubaSet'), { seed: 1, random: sequenceRandom([0.9, 0.1]) });
-    expect(injured.perform('dive')).toMatchObject({ accepted: true, deltas: { energy: -3, health: -60 } });
+    expect(injured.perform('dive')).toMatchObject({ accepted: true, deltas: { energy: -3, health: -50 } });
     const storm = new SurvivalSession(saved('scubaSet'), { seed: 1, random: sequenceRandom([0]), weather: 'squall' });
     expect(storm.perform('dive')).toMatchObject({ accepted: false, code: 'weather-blocked' });
   });
@@ -1958,25 +1912,71 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.perform('treat').code).toBe('no-medical-kit');
   });
 
-  it('adds two hidden lead when Bottled Paper is sent', () => {
-    const session = new SurvivalSession(saved('bottledPaper'), {
+  it('receives a radio signal from day five on a twenty-percent dawn roll', () => {
+    const session = new SurvivalSession(saved('radio'), {
       seed: 1,
-      initial: { day: 3, energy: 3 },
+      random: sequenceRandom([0, 0.199]),
+      initial: { day: 4, energy: 3 },
+      initialEventId: 'shower-night',
     });
-    expect(session.perform('sendMessage')).toMatchObject({
+
+    session.resolveEvent({ kind: 'endure' });
+    session.beginDawn();
+
+    expect(session.snapshot()).toMatchObject({
+      day: 5,
+      radioSignalAvailable: true,
+      radioSignalsSent: 0,
+    });
+  });
+
+  it('answers a radio signal for one energy without consuming the radio', () => {
+    const session = new SurvivalSession(saved('radio'), {
+      seed: 1,
+      random: sequenceRandom([0, 0]),
+      initial: { day: 4, energy: 3 },
+      initialEventId: 'shower-night',
+    });
+    session.resolveEvent({ kind: 'endure' });
+    session.beginDawn();
+
+    expect(session.perform('answerRadio')).toMatchObject({
       accepted: true,
       deltas: { energy: -1, rescueLead: 2 },
     });
-    expect(session.snapshot()).toMatchObject({ rescueLead: 2 });
-    expect(session.snapshot().inventory['bottledPaper-1']?.condition).toBe('consumed');
-    expect(session.perform('sendMessage')).toMatchObject({
-      accepted: false,
-      code: 'message-already-sent',
+    expect(session.snapshot()).toMatchObject({
+      rescueLead: 2,
+      radioSignalAvailable: false,
+      radioSignalsSent: 1,
     });
-    const nextDayEvent = (session as unknown as {
-      drawEvent(phase: 'day'): SurvivalEventDefinition;
-    }).drawEvent('day');
-    expect(nextDayEvent.id).not.toBe('drifting-bottle');
+    expect(session.snapshot().inventory['radio-1']?.condition).toBe('usable');
+    expect(session.perform('answerRadio')).toMatchObject({
+      accepted: false,
+      code: 'no-radio-signal',
+    });
+  });
+
+  it('expires an unanswered radio signal', () => {
+    const session = new SurvivalSession(saved('radio'), {
+      seed: 1,
+      random: sequenceRandom([0, 0]),
+      initial: { day: 4 },
+      initialEventId: 'shower-night',
+    });
+    session.resolveEvent({ kind: 'endure' });
+    session.beginDawn();
+
+    expect(session.expireRadioSignal()).toBe(true);
+    expect(session.snapshot().radioSignalAvailable).toBe(false);
+    expect(session.perform('answerRadio')).toMatchObject({
+      accepted: false,
+      code: 'no-radio-signal',
+    });
+  });
+
+  it('uses diminishing hidden radio rescue lead', () => {
+    expect([0, 1, 2, 3, 4, 5].map(radioRescueLeadForSignal))
+      .toEqual([2, 1, 1, 1, 1, 1]);
   });
 
   it('caps Energy Bar recovery at three energy', () => {
@@ -2014,10 +2014,17 @@ describe('SurvivalSession daytime actions', () => {
     const cases = [
       new SurvivalSession(saved('cannedFood'), { seed: 1, initial: { hunger: 50 } }),
       new SurvivalSession(saved('medicalKit'), { seed: 1, initial: { health: 50 } }),
-      new SurvivalSession(saved('bottledPaper'), { seed: 1, initial: { energy: 3 } }),
+      new SurvivalSession(saved('radio'), {
+        seed: 1,
+        random: sequenceRandom([0, 0]),
+        initial: { day: 4, energy: 3 },
+        initialEventId: 'shower-night',
+      }),
       new SurvivalSession(saved('energyBar'), { seed: 1, initial: { energy: 1 } }),
     ] as const;
-    const actions = ['eat', 'treat', 'sendMessage', 'useEnergyBar'] as const;
+    cases[2].resolveEvent({ kind: 'endure' });
+    cases[2].beginDawn();
+    const actions = ['eat', 'treat', 'answerRadio', 'useEnergyBar'] as const;
 
     actions.forEach((action, index) => {
       expect(cases[index]!.perform(action).accepted).toBe(true);
@@ -2061,7 +2068,7 @@ describe('SurvivalSession daytime actions', () => {
       { action: 'repairItem', option: undefined },
       { action: 'repairItem', option: hullRepair },
       { action: 'treat', option: hullRepair },
-      { action: 'sendMessage', option: hullRepair },
+      { action: 'answerRadio', option: hullRepair },
       { action: 'useEnergyBar', option: hullRepair },
       { action: 'endDay', option: hullRepair },
     ];

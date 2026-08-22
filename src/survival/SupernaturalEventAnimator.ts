@@ -685,10 +685,13 @@ export class SupernaturalEventAnimator {
       this.ghosts[index]!.visible = false;
     }
     this.sirenTableau.visible = true;
-    this.fogCurtain.visible = sample.fogCurtain > 0.015;
-    this.setFogOpacity(Math.min(
-      0.42,
-      sample.fogCurtain * (0.3 + sample.melodyClarity * 0.12),
+    this.fogCurtain.visible = true;
+    this.setFogOpacity(Math.max(
+      0.2,
+      Math.min(
+        0.42,
+        sample.fogCurtain * (0.3 + sample.melodyClarity * 0.12),
+      ),
     ));
   }
 

@@ -41,13 +41,13 @@ async function flushPromises(): Promise<void> {
 
 describe('Item Animation Lab', () => {
   const animatedItemIds = ITEM_IDS.filter((itemId) => (
-    itemId !== 'scubaSet' && itemId !== 'bottledPaper' && itemId !== 'carlitos'
+    itemId !== 'scubaSet' && itemId !== 'radio' && itemId !== 'carlitos'
   ));
 
   it('defines one canonical route for every event-use item', () => {
     expect(Object.keys(ITEM_ANIMATION_LAB_USES)).toEqual(animatedItemIds);
     expect(ITEM_ANIMATION_LAB_USES.scubaSet).toBeUndefined();
-    expect(ITEM_ANIMATION_LAB_USES.bottledPaper).toBeUndefined();
+    expect(ITEM_ANIMATION_LAB_USES.radio).toBeUndefined();
     expect(ITEM_ANIMATION_LAB_USES.carlitos).toBeUndefined();
   });
 
@@ -121,6 +121,34 @@ describe('Item Animation Lab', () => {
     expect(setRearCameraView).toHaveBeenLastCalledWith(true);
     expect(setCameraTurnState).toHaveBeenLastCalledWith(true, true);
     phase.dispose();
+  });
+
+  it('enables the free camera look only in the lab', () => {
+    const current = new SurvivalSession(allItems(), { seed: 19 }).snapshot();
+    const setItemAnimationLabCameraLook = vi.fn();
+    const lab = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current) },
+      world: { setItemAnimationLabCameraLook, dispose: vi.fn() },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        showItemAnimationLab: vi.fn(),
+        setEventSelection: vi.fn(),
+        setBusy: vi.fn(),
+        dispose: vi.fn(),
+      },
+    }, ITEM_ANIMATION_LAB_ID);
+    const survival = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current) },
+      world: { setItemAnimationLabCameraLook, dispose: vi.fn() },
+      ui: { dispose: vi.fn() },
+    });
+
+    lab.start();
+    survival.start();
+
+    expect(setItemAnimationLabCameraLook).toHaveBeenCalledExactlyOnceWith(0, 0);
+    lab.dispose();
+    survival.dispose();
   });
 
   it('replays items without resolving outcomes or changing inventory', async () => {

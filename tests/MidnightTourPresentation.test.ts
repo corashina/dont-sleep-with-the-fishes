@@ -210,6 +210,26 @@ describe('MidnightTourPresentation', () => {
     fixture.presentation.dispose();
   });
 
+  it('holds the island camera while the travel cover fades away', async () => {
+    const fixture = createFixture();
+    fixture.presentation.stage(8);
+    await fixture.presentation.playChoice({
+      choiceId: 'visit',
+      instanceId: null,
+      condition: null,
+    });
+    const islandPosition = fixture.camera.position.clone();
+    const islandQuaternion = fixture.camera.quaternion.clone();
+
+    fixture.camera.position.copy(fixture.originalPosition);
+    fixture.camera.quaternion.copy(fixture.originalQuaternion);
+    fixture.presentation.update(0.1, 0.1);
+
+    expect(fixture.camera.position.toArray()).toEqual(islandPosition.toArray());
+    expect(fixture.camera.quaternion.toArray()).toEqual(islandQuaternion.toArray());
+    fixture.presentation.dispose();
+  });
+
   it.each([8, 9])('keeps every palm outside the chest camera depth corridor for seed %i', async (seed) => {
     const fixture = createFixture();
     fixture.presentation.stage(seed);
@@ -296,7 +316,6 @@ describe('MidnightTourPresentation', () => {
       palmPositions.add(`${palm.position.x},${palm.position.z}`);
     }
     expect(palmPositions.size).toBe(PALM_NODE_NAMES.length);
-    expect(island.userData.disableHoverOutline).not.toBe(true);
     presentation.dispose();
   });
 
@@ -359,7 +378,7 @@ describe('MidnightTourPresentation', () => {
     },
   );
 
-  it('starts the monster behind the camera direction', async () => {
+  it('scans the island before turning back to the running monster', async () => {
     const fixture = createFixture();
     fixture.presentation.stage(8);
     const visit = fixture.presentation.playChoice({
@@ -375,13 +394,57 @@ describe('MidnightTourPresentation', () => {
       resultId: 'tour-attack',
     }, {} as never);
     const actor = fixture.presentation.root.getObjectByName('midnight-tour-monster')!;
-    const cameraDirection = fixture.camera.getWorldDirection(new Vector3());
+    const startDirection = fixture.camera.getWorldDirection(new Vector3());
+    const startPosition = actor.position.clone();
     const cameraToActor = actor.getWorldPosition(new Vector3())
       .sub(fixture.camera.getWorldPosition(new Vector3()));
 
-    expect(cameraDirection.dot(cameraToActor)).toBeLessThan(0);
+    expect(startDirection.dot(cameraToActor)).toBeLessThan(0);
     expect(cameraToActor.length()).toBeGreaterThan(fixture.camera.near);
-    expect(actor.visible).toBe(true);
+
+    fixture.presentation.update(1.2, 1.2);
+    const leftDirection = fixture.camera.getWorldDirection(new Vector3());
+    const leftCameraToActor = actor.getWorldPosition(new Vector3())
+      .sub(fixture.camera.getWorldPosition(new Vector3()));
+    expect(actor.position.z).toBeLessThan(startPosition.z);
+    expect(leftDirection.x).toBeLessThan(startDirection.x);
+    expect(leftDirection.dot(leftCameraToActor)).toBeLessThan(0);
+
+    fixture.presentation.update(2.4, 1.2);
+    const rightDirection = fixture.camera.getWorldDirection(new Vector3());
+    const rightCameraToActor = actor.getWorldPosition(new Vector3())
+      .sub(fixture.camera.getWorldPosition(new Vector3()));
+    expect(rightDirection.x).toBeGreaterThan(leftDirection.x);
+    expect(rightDirection.dot(rightCameraToActor)).toBeLessThan(0);
+
+    fixture.presentation.update(3.6, 1.2);
+    const rearDirection = fixture.camera.getWorldDirection(new Vector3());
+    const rearCameraToActor = actor.getWorldPosition(new Vector3())
+      .add(new Vector3(0, 0.7, 0))
+      .sub(fixture.camera.getWorldPosition(new Vector3()))
+      .normalize();
+    expect(rearDirection.dot(rearCameraToActor)).toBeGreaterThan(0.99);
+    fixture.presentation.clear();
+    await result;
+    fixture.presentation.dispose();
+  });
+
+  it('faces the monster along its run path', async () => {
+    const fixture = createFixture();
+    const result = fixture.presentation.react({
+      eventId: 'midnight-tour',
+      choiceId: 'visit',
+      resultId: 'tour-attack',
+    }, {} as never);
+    fixture.presentation.update(4.6, 4.6);
+    const actor = fixture.presentation.root.getObjectByName('midnight-tour-monster')!;
+    const before = actor.getWorldPosition(new Vector3());
+
+    fixture.presentation.update(5.6, 1);
+    const movement = actor.getWorldPosition(new Vector3()).sub(before).normalize();
+    const facing = actor.getWorldDirection(new Vector3());
+
+    expect(facing.dot(movement)).toBeGreaterThan(0.99);
     fixture.presentation.clear();
     await result;
     fixture.presentation.dispose();

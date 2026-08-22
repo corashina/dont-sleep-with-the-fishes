@@ -40,6 +40,8 @@ import { PlayerController } from '../src/player/PlayerController';
 import { ScavengePhase } from '../src/phases/ScavengePhase';
 import type { ScavengeVisualState, SceneRenderer } from '../src/rendering/SceneRenderer';
 import type { PostProcessingControls } from '../src/rendering/postProcessingControls';
+import { createAntiAliasingQualityPreference } from '../src/rendering/antiAliasingQuality';
+import { createShadowQualityPreference } from '../src/rendering/shadowQuality';
 import { createVisualQualityPreference } from '../src/rendering/visualQuality';
 import type { PresentationWeatherId } from '../src/weather/presentationWeather';
 import { World } from '../src/world/World';
@@ -2418,6 +2420,82 @@ describe('ScavengePhase lifecycle integration', () => {
     game.dispose();
   });
 
+  it('applies anti-aliasing choices to the shared scene renderer', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const setAntiAliasingQuality = vi.fn();
+    const sceneRenderer: SceneRenderer = {
+      ...postProcessingSceneRenderer(),
+      setAntiAliasingQuality,
+    };
+    const preference = createAntiAliasingQualityPreference(
+      (quality) => sceneRenderer.setAntiAliasingQuality?.(quality),
+      null,
+    );
+    const game = Game.forTest({
+      createMenu: createImmediateMenu,
+      createScavenge: () => gamePhase(),
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      mount,
+      sceneRenderer,
+      antiAliasingQuality: preference,
+    });
+    const high = mount.querySelector<HTMLButtonElement>(
+      '[data-quality-control="anti-aliasing"] [data-quality="high"]',
+    );
+
+    expect(high).not.toBeNull();
+    high!.click();
+
+    expect(preference.get()).toBe('high');
+    expect(setAntiAliasingQuality).toHaveBeenCalledWith('high');
+    game.dispose();
+  });
+
+  it('applies shadow choices to the shared scene renderer', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const setShadowQuality = vi.fn();
+    const sceneRenderer: SceneRenderer = {
+      ...postProcessingSceneRenderer(),
+      setShadowQuality,
+    };
+    const preference = createShadowQualityPreference(
+      (quality) => sceneRenderer.setShadowQuality?.(quality),
+      null,
+    );
+    const game = Game.forTest({
+      createMenu: createImmediateMenu,
+      createScavenge: () => gamePhase(),
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      mount,
+      sceneRenderer,
+      shadowQuality: preference,
+    });
+    const high = mount.querySelector<HTMLButtonElement>(
+      '[data-quality-control="shadows"] [data-quality="high"]',
+    );
+
+    expect(high).not.toBeNull();
+    high!.click();
+
+    expect(preference.get()).toBe('high');
+    expect(setShadowQuality).toHaveBeenCalledWith('high');
+    game.dispose();
+  });
+
   it('applies water quality changes to the active phase', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -2837,7 +2915,6 @@ describe('ScavengePhase lifecycle integration', () => {
     });
     const resetCarry = vi.fn();
     const disposeInput = vi.fn();
-    const disposeInteraction = vi.fn();
     const disposeWorld = vi.fn();
     const disposeUI = vi.fn();
     const hands = scavengeHandsStub();
@@ -2848,7 +2925,6 @@ describe('ScavengePhase lifecycle integration', () => {
       hands,
       input: { pointerLocked: true, dispose: disposeInput },
       carry: { reset: resetCarry },
-      interaction: { dispose: disposeInteraction },
       world: { dispose: disposeWorld },
       ui: { dispose: disposeUI },
       onPointerLockChange: vi.fn(),
@@ -2863,7 +2939,6 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(exitPointerLock).toHaveBeenCalledOnce();
     expect(resetCarry).toHaveBeenCalledOnce();
     expect(disposeInput).toHaveBeenCalledOnce();
-    expect(disposeInteraction).toHaveBeenCalledOnce();
     expect(hands.dispose).toHaveBeenCalledOnce();
     expect(disposeWorld).toHaveBeenCalledOnce();
     expect(disposeUI).toHaveBeenCalledOnce();

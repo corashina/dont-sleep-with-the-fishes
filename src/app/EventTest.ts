@@ -51,6 +51,24 @@ export const EVENT_TEST_OPTIONS: readonly EventTestOption[] = Object.freeze([
       .map(({ event }) => event),
   ]
     .flatMap(({ id, title, phase }): readonly EventTestOption[] => {
+      if (id === 'check-the-back') {
+        return [
+          {
+            id: 'check-the-back-fish',
+            title: 'Check the Back Fish',
+            phase,
+            eventId: id,
+            resultId: 'check-the-back.fish',
+          },
+          {
+            id: 'check-the-back-bad',
+            title: 'Check the Back Bad',
+            phase,
+            eventId: id,
+            resultId: 'check-the-back.bad',
+          },
+        ];
+      }
       if (id !== 'midnight-tour') return [{ id, title, phase, eventId: id }];
       return [
         {

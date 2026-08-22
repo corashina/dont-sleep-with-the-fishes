@@ -21,6 +21,11 @@ import {
   FREIGHTER_DIMENSIONS,
   SHIP_LAYOUT,
 } from '../src/world/ShipLayout';
+import {
+  COMPASS_CASE_SUPPORT_POINT,
+  COMPASS_REST_ROTATION,
+} from '../src/world/CompassRestPose';
+import { CARLITOS_SEATED_SUPPORT_LIFT } from '../src/world/CarlitosRestPose';
 import { createTestShipFurniture } from './helpers/shipFurniture';
 import { loadProductionPropModels } from './helpers/productionPropModels';
 
@@ -186,26 +191,44 @@ describe('ship item placement', () => {
       .get(compass.instanceId)!;
     const bounds = shipItemTransformBounds(compass.type, transform);
     const size = bounds.getSize(new Vector3());
-    const faceNormal = new Vector3(0, 0, 1).applyEuler(transform.rotation);
+    const faceNormal = new Vector3(
+      0.32370741,
+      0.19367758,
+      0.92612230,
+    ).applyEuler(transform.rotation);
+    const caseSupport = new Vector3(...COMPASS_CASE_SUPPORT_POINT)
+      .applyEuler(transform.rotation)
+      .multiplyScalar(transform.scale)
+      .add(transform.position);
 
-    expect(bounds.min.y).toBeCloseTo(restingSurface.position.y);
+    expect(transform.rotation.x).toBeCloseTo(COMPASS_REST_ROTATION[0]);
+    expect(transform.rotation.y).toBeCloseTo(COMPASS_REST_ROTATION[1]);
+    expect(transform.rotation.z).toBeCloseTo(COMPASS_REST_ROTATION[2]);
+    expect(caseSupport.y).toBeCloseTo(restingSurface.position.y);
     expect(size.y).toBeLessThan(size.x);
     expect(size.y).toBeLessThan(size.z);
-    expect(faceNormal.y).toBeGreaterThan(0.99);
+    expect(faceNormal.x).toBeCloseTo(0);
+    expect(faceNormal.y).toBeCloseTo(1);
+    expect(faceNormal.z).toBeCloseTo(0);
   });
 
-  it('faces Carlitos toward the ship center during scavenging', () => {
+  it('keeps seated Carlitos above the crate and facing the ship center', () => {
     const captain = createScavengeItemInstances().find(
       ({ instanceId }) => instanceId === 'carlitos-1',
     )!;
     const restingSurface = surface('captain-rest', -4, {
+      furnitureModelId: 'cargoCrate',
       position: new Vector3(-4, 3, -3),
     });
     const transform = assignShipItems([captain], [restingSurface])
       .get(captain.instanceId)!;
+    const bounds = shipItemTransformBounds(captain.type, transform);
     const forward = new Vector3(0, 0, -1).applyEuler(transform.rotation).normalize();
     const towardCenter = transform.position.clone().setY(0).negate().normalize();
 
+    expect(bounds.min.y).toBeCloseTo(
+      restingSurface.position.y + CARLITOS_SEATED_SUPPORT_LIFT * transform.scale,
+    );
     expect(forward.dot(towardCenter)).toBeCloseTo(1);
   });
 
@@ -213,7 +236,7 @@ describe('ship item placement', () => {
     ['cannedFood-1', 'bow'],
     ['compass-1', 'storageWorkroom'],
     ['ductTape-1', 'crewCabin'],
-    ['bottledPaper-1', 'centralCargo'],
+    ['radio-1', 'centralCargo'],
   ] as const)('allows %s in fitting %s spots', (instanceId, regionId) => {
     const item = createScavengeItemInstances().find(
       (candidate) => candidate.instanceId === instanceId,

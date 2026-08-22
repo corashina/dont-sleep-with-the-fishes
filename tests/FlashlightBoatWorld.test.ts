@@ -33,6 +33,8 @@ function snapshot(): SurvivalSnapshot {
     repairMaterial: 0,
     rescueLead: 0,
     rescueTraceFinds: 0,
+    radioSignalAvailable: false,
+    radioSignalsSent: 0,
     chest: { state: 'none', acquiredDay: null },
     weather: 'calm',
     actedToday: false,

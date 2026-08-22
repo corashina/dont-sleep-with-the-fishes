@@ -39,10 +39,15 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
     models: ['mysteryChest'],
     sounds: [],
   },
-  'drifting-bottle': { models: ['driftingBottle'], sounds: [] },
-  'check-the-back': { models: ['checkBackFish'], sounds: [] },
+  'check-the-back': {
+    models: ['checkBackFish', 'checkBackAnglerfish'],
+    sounds: ['checkBackFish', 'checkBackAnglerfish'],
+  },
   flowers: { models: ['flowers'], sounds: [] },
-  'chest-attack': { models: [], sounds: [] },
+  'chest-attack': {
+    models: [],
+    sounds: ['chest', 'midnightMonsterAttack'],
+  },
   'midnight-tour': {
     models: [],
     sounds: [

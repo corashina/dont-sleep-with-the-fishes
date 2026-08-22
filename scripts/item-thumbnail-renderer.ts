@@ -19,7 +19,7 @@ const CAMERA_TARGET = new Vector3();
 const THUMBNAIL_ROTATIONS: Readonly<Partial<Record<ItemId, readonly [number, number, number]>>> = {
   map: [-0.35, 0.25, -0.08],
   fishingNet: [0, -0.35, 0],
-  bottledPaper: [0, -0.3, 0],
+  radio: [0, -0.3, 0],
   umbrella: [0, -0.45, 0],
   swimRing: [-0.25, 0.3, 0],
   shotgun: [0, -0.35, 0],

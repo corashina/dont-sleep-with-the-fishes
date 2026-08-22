@@ -9,7 +9,7 @@ import type { PropModelLibrary } from '../world/PropModelLibrary';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { ChestDisplay } from './ChestDisplay';
 import type { FocusedEventId } from './eventPresentationRoutes';
-import type { EventPresentationCue } from './midnightTourAudioCue';
+import type { EventPresentationCue } from './eventPresentationCue';
 import type {
   ActionOutcome,
   EventResultPresentation,

@@ -1,4 +1,5 @@
 import {
+  Box3,
   BufferGeometry,
   CatmullRomCurve3,
   CylinderGeometry,
@@ -20,10 +21,13 @@ import {
   runCleanupSteps,
 } from '../world/SceneResources';
 
-export const HANGING_LANTERN_DAY_INTENSITY = 5.2;
-export const HANGING_LANTERN_NIGHT_INTENSITY = 7.2;
-export const HANGING_LANTERN_LINE_LENGTH = 0.22;
-export const HANGING_LANTERN_MODEL_SCALE = 0.5;
+export const HANGING_LANTERN_DAY_INTENSITY = 0;
+export const HANGING_LANTERN_NIGHT_INTENSITY = 15;
+export const HANGING_LANTERN_LIGHT_DISTANCE = 6;
+export const HANGING_LANTERN_LINE_LENGTH = 0.36;
+export const HANGING_LANTERN_LINE_RADIUS = 0.003;
+export const HANGING_LANTERN_MODEL_SCALE = 0.375;
+export const HANGING_LANTERN_POLE_RADIUS = 0.0225;
 export const HANGING_LANTERN_MOUNT = Object.freeze({ x: 0, y: 0.28, z: 2.35 });
 export const HANGING_LANTERN_TIP = Object.freeze({ x: 0, y: 1.57, z: -1.7 });
 export const HANGING_LANTERN_MAX_SWING = Math.PI / 9;
@@ -31,6 +35,7 @@ export const HANGING_LANTERN_MAX_SWING = Math.PI / 9;
 export interface HangingLantern {
   readonly root: Group;
   readonly light: PointLight;
+  setNight(night: boolean): void;
   update(
     pose: Readonly<BoatPose>,
     weather: Readonly<PresentationWeatherProfile>,
@@ -40,14 +45,17 @@ export interface HangingLantern {
   dispose(): void;
 }
 
-export function createHangingLantern(model: Group): HangingLantern {
+export function createHangingLantern(
+  model: Group,
+  poleMaterialSource: MeshStandardMaterial,
+): HangingLantern {
   const root = new Group();
   root.name = 'hanging-lantern';
   root.position.set(HANGING_LANTERN_MOUNT.x, HANGING_LANTERN_MOUNT.y, HANGING_LANTERN_MOUNT.z);
 
-  const woodMaterial = new MeshStandardMaterial({ color: 0x59422f, roughness: 0.96, metalness: 0 });
   const bindingMaterial = new MeshStandardMaterial({ color: 0x3d3027, roughness: 0.98, metalness: 0 });
-  const mount = new Mesh(new CylinderGeometry(0.13, 0.16, 0.42, 8), woodMaterial);
+  const poleMaterial = poleMaterialSource.clone();
+  const mount = new Mesh(new CylinderGeometry(0.13, 0.16, 0.42, 8), poleMaterial);
   mount.name = 'hanging-lantern:mount';
   mount.position.y = 0.18;
   const bindingGeometry = new TorusGeometry(0.105, 0.016, 6, 8);
@@ -62,14 +70,14 @@ export function createHangingLantern(model: Group): HangingLantern {
 
   const poleCurve = new CatmullRomCurve3([
     new Vector3(0, 0.08, 0),
-    new Vector3(0.025, 0.72, -0.08),
-    new Vector3(-0.03, 1.22, -0.48),
-    new Vector3(0.035, 1.49, -1.10),
+    new Vector3(0, 0.72, -0.06),
+    new Vector3(0, 1.22, -0.42),
+    new Vector3(0, 1.49, -1.08),
     new Vector3(HANGING_LANTERN_TIP.x, HANGING_LANTERN_TIP.y, HANGING_LANTERN_TIP.z),
   ], false, 'centripetal');
   const pole = new Mesh(
-    new TubeGeometry(poleCurve, 24, 0.045, 7, false),
-    new MeshStandardMaterial({ color: 0x59422f, roughness: 0.96, metalness: 0, flatShading: true }),
+    new TubeGeometry(poleCurve, 24, HANGING_LANTERN_POLE_RADIUS, 7, false),
+    poleMaterial,
   );
   pole.name = 'hanging-lantern:pole';
 
@@ -77,15 +85,23 @@ export function createHangingLantern(model: Group): HangingLantern {
   pivot.name = 'hanging-lantern:swing-pivot';
   pivot.position.set(HANGING_LANTERN_TIP.x, HANGING_LANTERN_TIP.y, HANGING_LANTERN_TIP.z);
   const line = new Mesh(
-    new CylinderGeometry(0.012, 0.012, HANGING_LANTERN_LINE_LENGTH, 6),
-    bindingMaterial,
+    new CylinderGeometry(
+      HANGING_LANTERN_LINE_RADIUS,
+      HANGING_LANTERN_LINE_RADIUS,
+      HANGING_LANTERN_LINE_LENGTH,
+      6,
+    ),
+    poleMaterial,
   );
   line.name = 'hanging-lantern:line';
   line.position.y = -HANGING_LANTERN_LINE_LENGTH / 2;
 
   model.name = 'hanging-lantern:model';
   model.scale.setScalar(HANGING_LANTERN_MODEL_SCALE);
-  model.position.y = -HANGING_LANTERN_LINE_LENGTH - 0.24;
+  const modelBounds = new Box3().setFromObject(model);
+  const modelCenterY = (modelBounds.min.y + modelBounds.max.y) / 2;
+  model.position.y = -HANGING_LANTERN_LINE_LENGTH - modelBounds.max.y;
+  const glowingMaterials = new Set<MeshStandardMaterial>();
   model.traverse((object) => {
     if (!(object instanceof Mesh)) return;
     object.castShadow = false;
@@ -93,19 +109,25 @@ export function createHangingLantern(model: Group): HangingLantern {
     const meshMaterials = Array.isArray(object.material) ? object.material : [object.material];
     meshMaterials.forEach((material) => {
       if (!(material instanceof MeshStandardMaterial)) return;
+      glowingMaterials.add(material);
       material.emissive.setHex(0xffc56a);
-      material.emissiveIntensity = 1.35;
+      material.emissiveIntensity = 0;
       material.emissiveMap = material.map;
     });
   });
 
-  const light = new PointLight(0xffb261, HANGING_LANTERN_DAY_INTENSITY, 5, 2);
+  const light = new PointLight(
+    0xffb261,
+    HANGING_LANTERN_DAY_INTENSITY,
+    HANGING_LANTERN_LIGHT_DISTANCE,
+    2,
+  );
   light.name = 'hanging-lantern:light';
-  light.position.y = -HANGING_LANTERN_LINE_LENGTH - 0.13;
+  light.position.y = model.position.y + modelCenterY;
   light.castShadow = true;
-  light.shadow.mapSize.set(512, 512);
+  light.shadow.mapSize.set(1024, 1024);
   light.shadow.camera.near = 0.08;
-  light.shadow.camera.far = 5;
+  light.shadow.camera.far = HANGING_LANTERN_LIGHT_DISTANCE;
   light.shadow.bias = -0.001;
   light.shadow.normalBias = 0.025;
   light.shadow.camera.updateProjectionMatrix();
@@ -135,10 +157,21 @@ export function createHangingLantern(model: Group): HangingLantern {
   let previousDriftX = 0;
   let previousDriftZ = 0;
   let hasPreviousPose = false;
+  let nightLit = false;
   const swingPivot = pivot;
   return {
     root,
     light,
+    setNight: (night) => {
+      if (disposed || nightLit === night) return;
+      nightLit = night;
+      light.intensity = night
+        ? HANGING_LANTERN_NIGHT_INTENSITY
+        : HANGING_LANTERN_DAY_INTENSITY;
+      glowingMaterials.forEach((material) => {
+        material.emissiveIntensity = night ? 1.35 : 0;
+      });
+    },
     update: (pose, weather, time, delta) => {
       if (disposed) return;
       const processedDelta = Math.min(MAX_PROCESSED_DELTA, Math.max(0, delta));

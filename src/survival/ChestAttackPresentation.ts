@@ -34,9 +34,8 @@ import { TimedPresentationAnimation } from './TimedPresentationAnimation';
 type ChestAttackAnimationKind =
   | 'reveal'
   | 'choice-net'
-  | 'choice-hide'
-  | 'result-bound'
-  | 'result-hide';
+  | 'choice-attack'
+  | 'result-bound';
 
 interface MutableChestEventPose {
   rattle: number;
@@ -47,9 +46,10 @@ interface MutableChestEventPose {
   overboard: number;
 }
 
-const REVEAL_DURATION = 1.35;
-const CHOICE_DURATION = 0.85;
-const RESULT_DURATION = 0.9;
+const REVEAL_DURATION = 2.4;
+const NET_CHOICE_DURATION = 1.45;
+const ATTACK_CHOICE_DURATION = 1.15;
+const RESULT_DURATION = 0.65;
 function createMaterial(color: number, roughness: number, metalness = 0): MeshStandardMaterial {
   return new MeshStandardMaterial({
     color,
@@ -65,8 +65,8 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
   private readonly geometries = new Set<BufferGeometry>();
   private readonly materials = new Set<Material>();
   private readonly cameraLook: StationaryEventCamera;
-  private readonly netStart = new Vector3(-1.55, 1.45, -1.75);
-  private readonly netEnd = new Vector3(-0.72, 0.67, -1.06);
+  private readonly netStart = new Vector3(-0.48, 1.12, 0.2);
+  private readonly netEnd = new Vector3(0, 0.72, 2.08);
   private readonly supplyNetPose: MutableSupplyPose = {
     x: 0,
     y: 0,
@@ -89,6 +89,8 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
   private readonly animation: TimedPresentationAnimation<ChestAttackAnimationKind>;
   private netInstanceId: EventChoicePresentation['instanceId'] = null;
   private usingSupplyNet = false;
+  private woodCueEmitted = false;
+  private attackCueEmitted = false;
   private staged = false;
   private disposed = false;
 
@@ -104,7 +106,8 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     this.root.visible = false;
     this.root.userData.revealRattles = 0;
     this.root.userData.bites = 0;
-    this.root.userData.cameraLoweredBeforeBite = false;
+    this.root.userData.searchLeft = 0;
+    this.root.userData.searchRight = 0;
 
     this.buildNet();
     this.root.add(this.net);
@@ -133,13 +136,17 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     this.root.userData.state = 'staged';
     this.root.userData.revealRattles = 0;
     this.root.userData.bites = 0;
-    this.root.userData.cameraLoweredBeforeBite = false;
+    this.root.userData.searchLeft = 0;
+    this.root.userData.searchRight = 0;
+    this.woodCueEmitted = false;
+    this.attackCueEmitted = false;
   }
 
   reveal(): Promise<void> {
     if (this.disposed) return Promise.resolve();
     if (!this.staged) this.stage();
-    this.root.userData.state = 'revealing';
+    this.root.userData.state = 'warning';
+    this.emitWoodCue();
     this.animation.settle();
     const animation = this.animation.start('reveal', REVEAL_DURATION);
     this.applyAnimation('reveal', 0);
@@ -156,15 +163,18 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
         this.net.visible = !this.usingSupplyNet;
         this.root.userData.state = 'binding';
         this.animation.settle();
-        const netAnimation = this.animation.start('choice-net', CHOICE_DURATION);
+        const netAnimation = this.animation.start('choice-net', NET_CHOICE_DURATION);
         this.applyAnimation('choice-net', 0);
         return netAnimation;
-      case 'sleep':
-        this.root.userData.state = 'hiding';
+      case 'attack':
+        this.root.userData.state = 'turning-to-attack';
         this.animation.settle();
-        const hideAnimation = this.animation.start('choice-hide', CHOICE_DURATION);
-        this.applyAnimation('choice-hide', 0);
-        return hideAnimation;
+        const attackAnimation = this.animation.start(
+          'choice-attack',
+          ATTACK_CHOICE_DURATION,
+        );
+        this.applyAnimation('choice-attack', 0);
+        return attackAnimation;
       default:
         throw new Error(`Unsupported Chest Attack choice: ${choice.choiceId}`);
     }
@@ -190,12 +200,6 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
         );
         this.applyAnimation('result-bound', 0);
         return boundAnimation;
-      case 'chest-hide':
-        this.root.userData.state = 'hide-result';
-        this.animation.settle();
-        const hideAnimation = this.animation.start('result-hide', RESULT_DURATION);
-        this.applyAnimation('result-hide', 0);
-        return hideAnimation;
       default:
         throw new Error(`Unsupported Chest Attack result: ${result.resultId}`);
     }
@@ -246,14 +250,11 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
       case 'choice-net':
         this.applyNetChoice(normalized);
         break;
-      case 'choice-hide':
-        this.applyHideChoice(normalized);
+      case 'choice-attack':
+        this.applyAttackChoice(normalized);
         break;
       case 'result-bound':
         this.applyBoundResult(normalized);
-        break;
-      case 'result-hide':
-        this.applyHideResult(normalized);
         break;
     }
   }
@@ -267,48 +268,44 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
       case 'choice-net':
         this.root.userData.state = 'choice-bound';
         break;
-      case 'choice-hide':
-        this.root.userData.state = 'choice-hidden';
+      case 'choice-attack':
+        this.root.userData.state = 'impact';
         break;
       case 'result-bound':
         this.root.userData.state = 'held-bound';
-        break;
-      case 'result-hide':
-        this.root.userData.state = 'held-overboard';
         break;
     }
   }
 
   private applyReveal(progress: number): void {
     this.resetPose();
-    if (progress < 0.26) {
-      this.pose.rattle = Math.sin(progress / 0.26 * Math.PI * 2) * 0.38;
-      if (progress >= 0.08) this.root.userData.revealRattles = 1;
-    } else if (progress < 0.42) {
-      this.pose.rattle = 0;
-    } else if (progress < 0.72) {
-      this.pose.rattle = Math.sin((progress - 0.42) / 0.3 * Math.PI * 2) * 0.88;
-      if (progress >= 0.48) this.root.userData.revealRattles = 2;
+    if (progress < 0.34) {
+      const search = progress / 0.34;
+      this.applyCameraLook(Math.sin(search * Math.PI) * 0.62, 0);
+      if (progress >= 0.12) this.root.userData.searchLeft = 1;
+    } else if (progress < 0.74) {
+      const search = (progress - 0.34) / 0.4;
+      this.applyCameraLook(-Math.sin(search * Math.PI) * 0.72, 0);
+      if (progress >= 0.46) this.root.userData.searchRight = 1;
     } else {
-      this.root.userData.revealRattles = 2;
-      this.pose.mouthOpen = smoothstep((progress - 0.72) / 0.28);
-      this.pose.bite = smoothstep((progress - 0.76) / 0.24) * 0.2;
+      this.applyCameraLook(0, 0);
     }
-    if (progress >= 0.62 && progress < 0.72) {
-      this.pose.mouthOpen = smoothstep((progress - 0.62) / 0.1) * 0.18;
-    }
+    this.pose.rattle = Math.sin(progress * Math.PI * 10) * 0.42;
+    this.root.userData.revealRattles = Math.min(3, Math.floor(progress * 4));
     this.dependencies.chestDisplay.applyEventPose(this.pose as ChestEventPose);
   }
 
   private applyNetChoice(progress: number): void {
-    const travel = smoothstep(progress);
+    const turn = smoothstep(progress / 0.5);
+    const travel = smoothstep((progress - 0.42) / 0.58);
+    this.applyCameraLook(Math.PI * turn, -0.08 * turn);
     if (this.usingSupplyNet && this.netInstanceId !== null) {
-      this.supplyNetPose.x = -0.42 * travel;
-      this.supplyNetPose.y = 0.58 * travel;
-      this.supplyNetPose.z = -0.72 * travel;
-      this.supplyNetPose.yaw = 0.18 * travel;
-      this.supplyNetPose.pitch = -0.64 * travel;
-      this.supplyNetPose.roll = 0.22 * travel;
+      this.supplyNetPose.x = 0.96 * travel;
+      this.supplyNetPose.y = 0.5 * travel;
+      this.supplyNetPose.z = 3.24 * travel;
+      this.supplyNetPose.yaw = -0.24 * travel;
+      this.supplyNetPose.pitch = -0.72 * travel;
+      this.supplyNetPose.roll = 0.18 * travel;
       this.supplyNetPose.scaleX = 1;
       this.supplyNetPose.scaleY = 1;
       this.supplyNetPose.scaleZ = 1;
@@ -321,21 +318,25 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
       this.net.rotation.z = -0.22 + travel * 0.3;
     }
     this.resetPose();
-    this.pose.mouthOpen = 1 - smoothstep((progress - 0.48) / 0.52);
-    this.pose.bound = smoothstep((progress - 0.55) / 0.45);
-    this.pose.bite = 0.2 * (1 - travel);
+    this.pose.rattle = Math.sin(progress * Math.PI * 8) * (1 - travel) * 0.56;
+    this.pose.mouthOpen = smoothstep((progress - 0.3) / 0.28)
+      * (1 - smoothstep((progress - 0.64) / 0.3));
+    this.pose.bound = smoothstep((progress - 0.62) / 0.38);
     this.dependencies.chestDisplay.applyEventPose(this.pose as ChestEventPose);
   }
 
-  private applyHideChoice(progress: number): void {
-    const lower = smoothstep(progress);
-    this.applyCameraLook(0, -0.34 * lower);
+  private applyAttackChoice(progress: number): void {
+    const turn = smoothstep(progress / 0.54);
+    this.applyCameraLook(Math.PI * turn, -0.07 * turn);
     this.resetPose();
-    this.pose.mouthOpen = 1;
-    this.pose.bite = 0.2;
+    this.pose.rattle = Math.sin(progress * Math.PI * 10)
+      * (1 - smoothstep((progress - 0.7) / 0.2));
+    this.pose.mouthOpen = smoothstep((progress - 0.46) / 0.28);
+    this.pose.bite = smoothstep((progress - 0.74) / 0.24);
     this.dependencies.chestDisplay.applyEventPose(this.pose as ChestEventPose);
-    if (progress >= 1) {
-      this.root.userData.cameraLoweredBeforeBite = true;
+    if (progress >= 0.98) {
+      this.root.userData.bites = 1;
+      this.emitAttackCue();
     }
   }
 
@@ -348,25 +349,6 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     this.net.scale.set(1 + Math.sin(progress * Math.PI) * 0.08, 1, 1);
   }
 
-  private applyHideResult(progress: number): void {
-    this.resetPose();
-    this.pose.mouthOpen = 1;
-    if (progress < 0.46) {
-      const biteProgress = progress / 0.46;
-      this.pose.bite = Math.sin(biteProgress * Math.PI);
-      if (progress >= 0.06) this.root.userData.bites = 1;
-      this.applyCameraLook(
-        0,
-        -0.34 - Math.sin(biteProgress * Math.PI) * 0.12,
-      );
-    } else {
-      this.root.userData.bites = 1;
-      this.pose.overboard = smoothstep((progress - 0.46) / 0.54);
-      this.applyCameraLook(0, -0.34);
-    }
-    this.dependencies.chestDisplay.applyEventPose(this.pose as ChestEventPose);
-  }
-
   private applyCameraLook(yaw: number, pitch: number): void {
     this.cameraLook.apply(yaw, pitch);
   }
@@ -377,6 +359,18 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
 
   private restoreCamera(): void {
     this.cameraLook.restore();
+  }
+
+  private emitWoodCue(): void {
+    if (this.woodCueEmitted) return;
+    this.woodCueEmitted = true;
+    this.dependencies.emitCue({ eventId: 'chest-attack', cue: 'wood' });
+  }
+
+  private emitAttackCue(): void {
+    if (this.attackCueEmitted) return;
+    this.attackCueEmitted = true;
+    this.dependencies.emitCue({ eventId: 'chest-attack', cue: 'attack' });
   }
 
   private resetPose(): void {

@@ -51,7 +51,7 @@ describe('survival rescue balance', () => {
   it('keeps the calibrated diving risk exact', () => {
     expect(SURVIVAL_BALANCE.diving).toMatchObject({
       flashlightInjury: 0.18,
-      injuryDamage: 60,
+      injuryDamage: 50,
     });
   });
 });

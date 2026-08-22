@@ -36,17 +36,18 @@ import {
   CHEST_RESULT_DURATION_SECONDS,
   CHEST_SEARCH_END_SECONDS,
   MONSTER_ATTACK_END_SECONDS,
-  MONSTER_HEAR_END_SECONDS,
   MONSTER_RESULT_DURATION_SECONDS,
   MONSTER_RUN_END_SECONDS,
-  MONSTER_TURN_END_SECONDS,
+  MONSTER_SCAN_LEFT_END_SECONDS,
+  MONSTER_SCAN_RIGHT_END_SECONDS,
+  MONSTER_TURN_BACK_END_SECONDS,
   chestCompletedStrokes,
   chestStrokeProgress,
   monsterAttackProgress,
-  monsterCollapseProgress,
-  monsterHearProgress,
   monsterRunProgress,
-  monsterTurnProgress,
+  monsterScanLeftProgress,
+  monsterScanRightProgress,
+  monsterTurnBackProgress,
 } from './midnightTourChoreography';
 
 type MidnightTourAnimationKind =
@@ -112,7 +113,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private readonly islandStart = new Vector3();
   private readonly chestEnd = new Vector3();
   private readonly monsterHiddenStart = new Vector3();
-  private readonly monsterHearEnd = new Vector3();
+  private readonly monsterScanEnd = new Vector3();
   private readonly monsterRunStart = new Vector3();
   private readonly monsterAttackStart = new Vector3();
   private readonly monsterAttackEnd = new Vector3();
@@ -309,6 +310,13 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.animation.update(time, delta);
     if (this.heldResultKind !== null) {
       this.applyAnimation(this.heldResultKind, 1);
+    } else if (this.cameraCaptured && !this.activeResultTimeline) {
+      this.applyCameraPose(
+        this.cutsceneLookTarget.x,
+        this.cutsceneLookTarget.y,
+        this.cutsceneLookTarget.z,
+        0,
+      );
     }
   }
 
@@ -480,31 +488,40 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private applyAttackResult(elapsedSeconds: number): void {
     const actor = this.activeActor;
     if (actor === null) return;
-    let targetX = this.islandBase.x + 0.65;
+    const centerX = this.islandBase.x + 0.65;
+    const leftX = this.islandBase.x - 2.1;
+    const rightX = this.islandBase.x + 2.1;
+    let targetX = centerX;
     let targetY = this.islandBase.y + this.greenTopLocalY + 1;
     let targetZ = this.islandBase.z + 0.15;
     let recoil = 0;
-    let cameraDrop = 0;
-    let cameraRoll = 0;
-    let cameraPitch = 0;
 
-    if (elapsedSeconds < MONSTER_HEAR_END_SECONDS) {
+    if (elapsedSeconds < MONSTER_SCAN_LEFT_END_SECONDS) {
+      const scan = smoothstep(monsterScanLeftProgress(elapsedSeconds));
       actor.position.lerpVectors(
         this.monsterHiddenStart,
-        this.monsterHearEnd,
-        smoothstep(monsterHearProgress(elapsedSeconds)),
+        this.monsterScanEnd,
+        elapsedSeconds / MONSTER_SCAN_RIGHT_END_SECONDS,
       );
-    } else if (elapsedSeconds < MONSTER_TURN_END_SECONDS) {
+      targetX = centerX + (leftX - centerX) * scan;
+    } else if (elapsedSeconds < MONSTER_SCAN_RIGHT_END_SECONDS) {
       this.markSearchLeft();
-      const turn = smoothstep(monsterTurnProgress(elapsedSeconds));
+      const scan = smoothstep(monsterScanRightProgress(elapsedSeconds));
       actor.position.lerpVectors(
-        this.monsterHearEnd,
-        this.monsterRunStart,
-        turn,
+        this.monsterHiddenStart,
+        this.monsterScanEnd,
+        elapsedSeconds / MONSTER_SCAN_RIGHT_END_SECONDS,
       );
-      targetX += (actor.position.x - targetX) * turn;
+      targetX = leftX + (rightX - leftX) * scan;
+    } else if (elapsedSeconds < MONSTER_TURN_BACK_END_SECONDS) {
+      this.markSearchLeft();
+      this.markSearchRight();
+      const turn = smoothstep(monsterTurnBackProgress(elapsedSeconds));
+      actor.position.lerpVectors(this.monsterScanEnd, this.monsterRunStart, turn);
+      targetX = rightX + (actor.position.x - rightX) * turn;
       targetY += (actor.position.y + 0.7 - targetY) * turn;
       targetZ += (actor.position.z - targetZ) * turn;
+      if (turn > 0.5) this.markResultReveal(actor);
     } else if (elapsedSeconds < MONSTER_RUN_END_SECONDS) {
       this.markSearchLeft();
       this.markSearchRight();
@@ -545,22 +562,23 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       actor.rotation.x = -0.16;
       actor.rotation.z = 0;
       targetX = actor.position.x;
-      targetY = actor.position.y + 0.45;
+      targetY = actor.position.y + 0.7;
       targetZ = actor.position.z;
-      const collapse = smoothstep(monsterCollapseProgress(elapsedSeconds));
-      cameraDrop = collapse * 1.12;
-      cameraRoll = this.side * collapse * 0.14;
-      cameraPitch = collapse * 0.1;
       this.markCameraKick();
     }
+    this.faceMonsterAlongPath(actor);
     this.applyCameraPose(
       targetX,
       targetY,
       targetZ,
       recoil,
-      cameraDrop,
-      cameraRoll,
-      cameraPitch,
+    );
+  }
+
+  private faceMonsterAlongPath(actor: Group): void {
+    actor.rotation.y = Math.atan2(
+      this.monsterAttackEnd.x - this.monsterHiddenStart.x,
+      this.monsterAttackEnd.z - this.monsterHiddenStart.z,
     );
   }
 
@@ -750,29 +768,29 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     );
     const islandTop = this.islandBase.y + this.greenTopLocalY;
     this.monsterHiddenStart.set(
-      this.islandBase.x + 4.3 * this.side,
+      this.islandBase.x + 0.05,
       islandTop,
-      this.islandBase.z + 4.7,
+      this.islandBase.z + 7.8,
     );
-    this.monsterHearEnd.set(
-      this.islandBase.x + 3.15 * this.side,
+    this.monsterScanEnd.set(
+      this.islandBase.x + 0.05,
       islandTop,
-      this.islandBase.z - 0.78,
+      this.islandBase.z + 6.8,
     );
     this.monsterRunStart.set(
-      this.islandBase.x + 2.7 * this.side,
+      this.islandBase.x + 0.05,
       islandTop,
-      this.islandBase.z - 0.55,
+      this.islandBase.z + 5.8,
     );
     this.monsterAttackStart.set(
       this.islandBase.x + 0.05,
       islandTop,
-      this.islandBase.z + 0.95,
+      this.islandBase.z + 3.3,
     );
     this.monsterAttackEnd.set(
       this.islandBase.x + 0.05,
       islandTop + 0.08,
-      this.islandBase.z + 1.2,
+      this.islandBase.z + 2.65,
     );
   }
 

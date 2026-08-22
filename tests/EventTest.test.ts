@@ -3,6 +3,26 @@ import { describe, expect, it } from 'vitest';
 import { EVENT_TEST_OPTIONS } from '../src/app/EventTest';
 
 describe('event test options', () => {
+  it('replaces Check the Back with forced fish and bad variants', () => {
+    expect(EVENT_TEST_OPTIONS.filter(({ id }) => id.startsWith('check-the-back')))
+      .toEqual([
+        {
+          id: 'check-the-back-fish',
+          title: 'Check the Back Fish',
+          phase: 'night',
+          eventId: 'check-the-back',
+          resultId: 'check-the-back.fish',
+        },
+        {
+          id: 'check-the-back-bad',
+          title: 'Check the Back Bad',
+          phase: 'night',
+          eventId: 'check-the-back',
+          resultId: 'check-the-back.bad',
+        },
+      ]);
+  });
+
   it('replaces the random Midnight Tour entry with chest and monster variants', () => {
     const midnightTourOptions = EVENT_TEST_OPTIONS.filter(({ id }) => (
       id.startsWith('midnight-tour')

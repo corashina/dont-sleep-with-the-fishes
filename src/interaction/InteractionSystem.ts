@@ -12,7 +12,6 @@ import {
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
-import { HoverOutline } from '../rendering/HoverOutline';
 import {
   segmentBoxInterval,
   type CollisionBox,
@@ -114,7 +113,6 @@ export interface InteractionOcclusion {
 export class InteractionSystem {
   private readonly raycaster = new Raycaster();
   private readonly center = new Vector2(0, 0);
-  private readonly hoverOutline = new HoverOutline();
   private readonly inverseOcclusionMatrix = new Matrix4();
   private readonly localRayStart = new Vector3();
   private readonly localRayEnd = new Vector3();
@@ -213,8 +211,6 @@ export class InteractionSystem {
       this.raycaster.far = STANDARD_INTERACTION_DISTANCE;
       tagged = findTaggedAncestor(selectedHit?.object ?? null);
     }
-    this.hoverOutline.setTarget(targetItem === null ? null : tagged);
-
     if (!tagged) {
       return dropPoint
         ? { target: 'none', targetItem: null, dropPoint }
@@ -226,9 +222,5 @@ export class InteractionSystem {
     return targetItem
       ? { target: 'item', targetItem }
       : { target: 'none', targetItem: null };
-  }
-
-  dispose(): void {
-    this.hoverOutline.dispose();
   }
 }

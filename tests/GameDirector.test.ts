@@ -110,6 +110,7 @@ describe('Game director', () => {
       setSize: vi.fn(),
       render: vi.fn(),
       dispose: vi.fn(),
+      shadowMap: { enabled: true, type: 0 },
     } as unknown as GameTestOptions['renderer'];
     const game = Game.forTest({
       createMenu: createImmediateMenu,
@@ -371,6 +372,7 @@ describe('Game director', () => {
       setSize: vi.fn(() => { throw resizeError; }),
       render: vi.fn(),
       dispose: vi.fn(),
+      shadowMap: { enabled: true, type: 0 },
     };
     const active = phase();
     const propModels = createTestPropModels();

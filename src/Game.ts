@@ -1,6 +1,5 @@
 import {
   Clock,
-  PCFSoftShadowMap,
   PerspectiveCamera,
   SRGBColorSpace,
   WebGLRenderer,
@@ -18,6 +17,14 @@ import {
   type SceneRenderer,
 } from './rendering/SceneRenderer';
 import { createSceneRenderer } from './rendering/PostProcessingPipeline';
+import {
+  createAntiAliasingQualityPreference,
+  type AntiAliasingQualityPreference,
+} from './rendering/antiAliasingQuality';
+import {
+  createShadowQualityPreference,
+  type ShadowQualityPreference,
+} from './rendering/shadowQuality';
 import {
   createVisualQualityPreference,
   type VisualQualityPreference,
@@ -127,6 +134,8 @@ export interface GameTestOptions {
   mount?: HTMLElement;
   renderer?: WebGLRenderer;
   sceneRenderer?: SceneRenderer;
+  antiAliasingQuality?: AntiAliasingQualityPreference;
+  shadowQuality?: ShadowQualityPreference;
   visualQuality?: VisualQualityPreference;
   waterQuality?: WaterQualityPreference;
   audioSystem?: AudioSystem;
@@ -201,6 +210,12 @@ export class Game {
     const visualQuality = createVisualQualityPreference((quality) => {
       sceneRenderer?.setVisualQuality?.(quality);
     });
+    const antiAliasingQuality = createAntiAliasingQualityPreference((quality) => {
+      sceneRenderer?.setAntiAliasingQuality?.(quality);
+    });
+    const shadowQuality = createShadowQualityPreference((quality) => {
+      sceneRenderer?.setShadowQuality?.(quality);
+    });
     const waterQuality = createWaterQualityPreference((quality) => {
       this.activePhase?.setWaterQuality?.(quality);
     });
@@ -208,9 +223,13 @@ export class Game {
     try {
       renderer.outputColorSpace = SRGBColorSpace;
       renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = PCFSoftShadowMap;
       mount.prepend(renderer.domElement);
-      sceneRenderer = createSceneRenderer(renderer, visualQuality.get());
+      sceneRenderer = createSceneRenderer(
+        renderer,
+        visualQuality.get(),
+        antiAliasingQuality.get(),
+        shadowQuality.get(),
+      );
       const camera = new PerspectiveCamera(
         GAME_CAMERA.fov,
         1,
@@ -223,6 +242,8 @@ export class Game {
         mount,
         renderer,
         sceneRenderer,
+        antiAliasingQuality,
+        shadowQuality,
         visualQuality,
         waterQuality,
         camera,
@@ -265,6 +286,7 @@ export class Game {
       setSize: () => undefined,
       render: () => undefined,
       dispose: () => undefined,
+      shadowMap: { enabled: true, type: 0 },
       capabilities: { getMaxAnisotropy: () => 1 },
     } as unknown as WebGLRenderer;
     mount.prepend(renderer.domElement);
@@ -277,6 +299,16 @@ export class Game {
       (quality) => sceneRenderer.setVisualQuality?.(quality),
       null,
     );
+    const antiAliasingQuality = options.antiAliasingQuality
+      ?? createAntiAliasingQualityPreference(
+        (quality) => sceneRenderer.setAntiAliasingQuality?.(quality),
+        null,
+      );
+    const shadowQuality = options.shadowQuality
+      ?? createShadowQualityPreference(
+        (quality) => sceneRenderer.setShadowQuality?.(quality),
+        null,
+      );
     const game = Object.create(Game.prototype) as Game;
     const waterQuality = options.waterQuality ?? createWaterQualityPreference(
       (quality) => game.activePhase?.setWaterQuality?.(quality),
@@ -286,6 +318,8 @@ export class Game {
       mount,
       renderer,
       sceneRenderer,
+      antiAliasingQuality,
+      shadowQuality,
       visualQuality,
       waterQuality,
       new PerspectiveCamera(
@@ -366,6 +400,8 @@ export class Game {
     mount: HTMLElement,
     renderer: WebGLRenderer,
     sceneRenderer: SceneRenderer,
+    antiAliasingQuality: AntiAliasingQualityPreference,
+    shadowQuality: ShadowQualityPreference,
     visualQuality: VisualQualityPreference,
     waterQuality: WaterQualityPreference,
     camera: PerspectiveCamera,
@@ -495,6 +531,8 @@ export class Game {
               camera.updateProjectionMatrix();
             },
           },
+          antiAliasingQuality,
+          shadowQuality,
         );
       }
       this.onResize = () => this.handleResize();

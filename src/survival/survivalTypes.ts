@@ -9,7 +9,7 @@ export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dea
 export type WeatherId = 'calm' | 'overcast' | 'squall';
 export type DayActionId =
   | 'fish' | 'dive' | 'eat' | 'repair' | 'repairItem'
-  | 'treat' | 'sendMessage' | 'useEnergyBar' | 'openChest' | 'endDay'
+  | 'treat' | 'answerRadio' | 'useEnergyBar' | 'openChest' | 'endDay'
   | 'petCarlitos' | 'feedCarlitos' | 'treatCarlitos';
 export type CompanionEventActionId = 'delegateCarlitos';
 export type CompanionActionId =
@@ -64,10 +64,8 @@ export type EventPresentationKey =
   | 'drifting-chest.repair'
   | 'drifting-chest.energy-bar'
   | 'drifting-chest.drift'
-  | 'drifting-bottle.retrieve'
-  | 'drifting-bottle.lost'
   | 'check-the-back.fish'
-  | 'check-the-back.empty'
+  | 'check-the-back.bad'
   | 'check-the-back.ignore'
   | 'flowers.collect'
   | 'flowers.drift';
@@ -220,6 +218,8 @@ export interface SurvivalSnapshot {
   repairMaterial: number;
   rescueLead: number;
   readonly rescueTraceFinds: number;
+  radioSignalAvailable: boolean;
+  radioSignalsSent: number;
   readonly chest: ChestSnapshot;
   weather: WeatherId;
   actedToday: boolean;

@@ -899,6 +899,7 @@ describe('launchGame', () => {
       setSize: vi.fn(() => { throw new Error('initial resize failed'); }),
       render: vi.fn(),
       dispose: disposeRenderer,
+      shadowMap: { enabled: true, type: 0 },
     };
     const createGame = (
       gameMount: HTMLElement,

@@ -1,7 +1,7 @@
 export const ITEM_IDS = [
   'cannedFood', 'baitTin', 'ductTape', 'compass', 'map', 'medicalKit',
   'spyglass', 'fishingNet', 'bucket', 'flareGun', 'scubaSet', 'anchor',
-  'bottledPaper', 'umbrella', 'swimRing', 'flashlight', 'shotgun',
+  'radio', 'umbrella', 'swimRing', 'flashlight', 'shotgun',
   'energyBar', 'carlitos',
 ] as const;
 
@@ -9,11 +9,11 @@ export type ItemId = typeof ITEM_IDS[number];
 export type ItemInstanceId = `${ItemId}-${number}`;
 export const DAY_ACTION_ONLY_ITEM_IDS: readonly ItemId[] = Object.freeze([
   'scubaSet',
-  'bottledPaper',
+  'radio',
 ]);
 export type ItemDayAction =
   | 'dive' | 'eat' | 'treat' | 'repairItem'
-  | 'sendMessage' | 'useEnergyBar' | null;
+  | 'answerRadio' | 'useEnergyBar' | null;
 export interface ItemDefinition {
   readonly label: string;
   readonly weight: 1 | 2 | 3;
@@ -52,9 +52,7 @@ const rawDefinitions = {
   flareGun: define('FLARE GUN', 1, 1, 1, false, false, null),
   scubaSet: define('SCUBA GEAR', 3, 1, null, true, true, 'dive'),
   anchor: define('ANCHOR', 3, 1, null, true, true, null),
-  bottledPaper: define(
-    'BOTTLED PAPER', 1, 1, 1, false, false, 'sendMessage',
-  ),
+  radio: define('RADIO', 1, 1, null, true, false, 'answerRadio'),
   umbrella: define('UMBRELLA', 2, 1, null, true, true, null),
   swimRing: define('SWIM RING', 2, 1, null, true, true, null),
   flashlight: define('FLASHLIGHT', 1, 1, null, true, false, null),
@@ -85,7 +83,7 @@ const APPROVED_SPAWN_COUNTS = {
   flareGun: 1,
   scubaSet: 1,
   anchor: 1,
-  bottledPaper: 1,
+  radio: 1,
   umbrella: 1,
   swimRing: 1,
   flashlight: 1,

@@ -289,7 +289,6 @@ describe('event item aim targets', () => {
 
     expect(resolver.call(world, 'school-of-fish')).toBe(dedicated);
     dedicatedTarget.mockReturnValue(null);
-    expect(resolver.call(world, 'drifting-bottle')).toBe(featured);
     featuredTarget.mockReturnValue(null);
     expect(resolver.call(world, 'man-in-the-fog')).toBe(weather);
     weatherTarget.mockReturnValue(null);
@@ -310,16 +309,6 @@ describe('event item aim targets', () => {
       'low',
       createWorldEventModels(),
     );
-
-    world.stageEvent('drifting-bottle', 9);
-    const bottle = resolveBoatWorldTarget(world, 'drifting-bottle');
-    expect(bottle?.name).toBe('event-prop:drifting-bottle');
-    expect(bottle?.visible).toBe(true);
-    expect(world.scene.getObjectById(bottle!.id)).toBe(bottle);
-    const bottleBefore = worldPosition(bottle!);
-    world.update(1.3, 0.4);
-    expect(resolveBoatWorldTarget(world, 'drifting-bottle')).toBe(bottle);
-    expect(worldPosition(bottle!).distanceTo(bottleBefore)).toBeGreaterThan(0.001);
 
     world.stageEvent('flowers', 9);
     const flowers = resolveBoatWorldTarget(world, 'flowers');

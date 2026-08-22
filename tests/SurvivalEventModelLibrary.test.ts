@@ -25,10 +25,6 @@ function model(name: string): Group {
 }
 
 describe('SurvivalEventModelLibrary', () => {
-  it('keeps the Drifting Bottle model upright', () => {
-    expect(SURVIVAL_EVENT_MODEL_SPECS.driftingBottle.rotation).toEqual([0, 0, 0]);
-  });
-
   it('loads only requested templates', async () => {
     const loader: SurvivalEventModelLoader = {
       load: vi.fn(async (url: string): Promise<Object3D> => model(url)),
@@ -49,8 +45,8 @@ describe('SurvivalEventModelLibrary', () => {
     const library = await SurvivalEventModelLibrary.load(SURVIVAL_EVENT_MODEL_IDS, loader);
 
     expect(loader.load).toHaveBeenCalledTimes(SURVIVAL_EVENT_MODEL_IDS.length);
-    const first = library.clone('driftingBottle');
-    const second = library.clone('driftingBottle');
+    const first = library.clone('driftingBarrel');
+    const second = library.clone('driftingBarrel');
     expect(first).not.toBe(second);
     expect((first.getObjectByProperty('type', 'Mesh') as Mesh).geometry)
       .toBe((second.getObjectByProperty('type', 'Mesh') as Mesh).geometry);

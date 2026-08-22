@@ -22,13 +22,17 @@ class FakeVoice implements AudioVoice {
   readonly setGain = vi.fn();
   readonly setPaused = vi.fn();
   readonly stop = vi.fn(() => {
-    for (const callback of this.callbacks.splice(0)) callback();
+    this.finish();
   });
 
   constructor(readonly id: SoundId) {}
 
   onEnded(callback: () => void): void {
     this.callbacks.push(callback);
+  }
+
+  finish(): void {
+    for (const callback of this.callbacks.splice(0)) callback();
   }
 }
 
@@ -228,10 +232,55 @@ describe('AudioSystem', () => {
     expect(backend.voices.map(({ id }) => id)).toEqual(['chest']);
   });
 
+  it('plays Chest Attack movement and impact cues', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.chestAttackCue('wood');
+    audio.chestAttackCue('attack');
+
+    expect(backend.voices.map(({ id }) => id)).toEqual([
+      'chest',
+      'midnightMonsterAttack',
+    ]);
+  });
+
+  it('plays distinct Check the Back result cues', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.checkBackCue('fish');
+    audio.checkBackCue('anglerfish');
+
+    expect(backend.voices.map(({ id }) => id)).toEqual([
+      'checkBackFish',
+      'checkBackAnglerfish',
+    ]);
+  });
+
+  it('plays an incoming radio signal until it ends or the player answers', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    const expired = vi.fn();
+
+    expect(audio.beginRadioSignal(expired)).toBe(true);
+    const firstSignal = backend.voices.at(-1)!;
+    expect(firstSignal.id).toBe('radioSignal');
+    firstSignal.finish();
+    expect(expired).toHaveBeenCalledOnce();
+
+    expect(audio.beginRadioSignal(expired)).toBe(true);
+    const secondSignal = backend.voices.at(-1)!;
+    audio.action('answerRadio');
+
+    expect(secondSignal.stop).toHaveBeenCalledExactlyOnceWith(0.03);
+    expect(backend.voices.at(-1)?.id).toBe('radioReply');
+    expect(expired).toHaveBeenCalledOnce();
+  });
+
   it.each([
     'drifting-barrel',
     'drifting-chest',
-    'drifting-bottle',
   ])('does not play a reveal sound for %s', (eventId) => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());

@@ -79,7 +79,6 @@ const EVENT_CHOICE_PRIORITY = Object.freeze({
   'guarded-sleep': ['watch', 'sleep'],
   'drifting-barrel': ['retrieve', 'delegate-carlitos', 'sleep'],
   'drifting-chest': ['retrieve', 'delegate-carlitos', 'sleep'],
-  'drifting-bottle': ['retrieve', 'delegate-carlitos', 'sleep'],
   'check-the-back': ['check', 'sleep'],
   flowers: ['fishingNet', 'bucket', 'sleep'],
   'chest-attack': ['fishingNet', 'sleep'],
@@ -95,7 +94,7 @@ function resolvePendingEvent(session: SurvivalSession, signalsEnabled: boolean):
   const event = survivalEventById(eventId);
   if (event === undefined) throw new Error(`Unknown active event: ${eventId}`);
   const priorities = !signalsEnabled
-    && (eventId === 'drifting-bottle' || eventId === 'other-people')
+    && eventId === 'other-people'
     ? ['sleep']
     : eventId in EVENT_CHOICE_PRIORITY
       ? EVENT_CHOICE_PRIORITY[eventId as SurvivalEventId]
@@ -219,8 +218,8 @@ export function runCompetentDay(
 
   if (signalsEnabled
     && session.snapshot().energy === 1
-    && session.availableReason('sendMessage') === null) {
-    session.perform('sendMessage');
+    && session.availableReason('answerRadio') === null) {
+    session.perform('answerRadio');
   }
 
   session.perform('endDay');
@@ -235,7 +234,10 @@ function runToTerminal(
   fishingReactionSuccess: number,
   signalsEnabled: boolean,
 ): SurvivalSession {
-  const session = new SurvivalSession(saved, { seed });
+  const session = new SurvivalSession(saved, {
+    seed,
+    radioSignalsEnabled: signalsEnabled,
+  });
   const policyRandom = mulberry32(seed ^ 0x9e3779b9);
   while (session.snapshot().ending === null && session.snapshot().day <= 120) {
     runCompetentDay(session, policyRandom, fishingReactionSuccess, signalsEnabled);

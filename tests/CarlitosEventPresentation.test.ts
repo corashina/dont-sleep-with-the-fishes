@@ -70,13 +70,15 @@ function finishReveal(
 }
 
 describe('CarlitosEventPresentation', () => {
-  it('shows the keyed reveal anticipation before decisive travel', async () => {
+  it('keeps the daytime seated pose during the keyed reveal', async () => {
     const state = setup('guarded-sleep');
+    const basePosition = state.poseRoot.position.clone();
     const reveal = state.presentation.reveal();
 
     state.presentation.update(1, 0.07);
 
-    expect(state.poseRoot.rotation.x).toBeGreaterThan(state.basePose.x);
+    expect(state.poseRoot.position.toArray()).toEqual(basePosition.toArray());
+    expect(state.poseRoot.rotation.toArray()).toEqual(state.basePose.toArray());
     state.presentation.clear();
     await reveal;
     state.presentation.dispose();
@@ -163,26 +165,21 @@ describe('CarlitosEventPresentation', () => {
     state.propModels.dispose();
   });
 
-  it('holds the real companion in an alert guarded-sleep pose', async () => {
+  it('holds the real companion in its daytime seated pose', async () => {
     const state = setup('guarded-sleep');
     const head = state.companion.root.getObjectByName('carlitos-head-pose')!;
-    const baseHeadYaw = head.rotation.y;
+    const basePosition = state.poseRoot.position.clone();
+    const baseHeadRotation = head.rotation.clone();
 
     await finishReveal(state.presentation);
 
-    const cameraLocal = state.camera.getWorldPosition(new Vector3());
-    state.poseRoot.parent!.worldToLocal(cameraLocal);
-    const expectedBodyYaw = Math.atan2(
-      -(cameraLocal.x - state.poseRoot.position.x),
-      -(cameraLocal.z - state.poseRoot.position.z),
-    );
     const cameraPosition = state.camera.getWorldPosition(new Vector3());
     const targetPosition = state.presentation.itemAimTarget.getWorldPosition(new Vector3());
     const expectedView = targetPosition.sub(cameraPosition).normalize();
     const cameraView = state.camera.getWorldDirection(new Vector3());
-    expect(state.poseRoot.rotation.x).toBeLessThan(state.basePose.x);
-    expect(state.poseRoot.rotation.y).toBeCloseTo(expectedBodyYaw);
-    expect(head.rotation.y).toBe(0);
+    expect(state.poseRoot.position.toArray()).toEqual(basePosition.toArray());
+    expect(state.poseRoot.rotation.toArray()).toEqual(state.basePose.toArray());
+    expect(head.rotation.toArray()).toEqual(baseHeadRotation.toArray());
     expect(cameraView.dot(expectedView)).toBeGreaterThan(0.999);
 
     const choice = state.presentation.playChoice('watch');
@@ -195,8 +192,9 @@ describe('CarlitosEventPresentation', () => {
 
     state.presentation.clear();
     await choice;
+    expect(state.poseRoot.position.toArray()).toEqual(basePosition.toArray());
     expect(state.poseRoot.rotation.toArray()).toEqual(state.basePose.toArray());
-    expect(head.rotation.y).toBe(baseHeadYaw);
+    expect(head.rotation.toArray()).toEqual(baseHeadRotation.toArray());
     expect(state.camera.quaternion.equals(state.baseCamera)).toBe(true);
     state.presentation.dispose();
     state.companion.dispose();

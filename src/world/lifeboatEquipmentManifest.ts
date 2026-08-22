@@ -3,7 +3,7 @@ import {
   type RuntimeModelSpec,
 } from './itemModelManifest';
 
-export const LIFEBOAT_EQUIPMENT_IDS = ['fishingRod', 'hammer'] as const;
+export const LIFEBOAT_EQUIPMENT_IDS = ['fishingRod', 'hammer', 'pillow'] as const;
 export type LifeboatEquipmentId = typeof LIFEBOAT_EQUIPMENT_IDS[number];
 
 export const LIFEBOAT_EQUIPMENT_MODEL_SPECS: Readonly<
@@ -23,6 +23,14 @@ export const LIFEBOAT_EQUIPMENT_MODEL_SPECS: Readonly<
       targetLongestDimension: 0.62,
       rotation: [0, 0, -Math.PI / 2],
       offset: [0, 0, 0],
+    },
+  ),
+  pillow: createRuntimeModelSpec(
+    'pillow',
+    {
+      targetLongestDimension: 0.54,
+      rotation: [0, 0, 0],
+      offset: [0, 0.09, 0],
     },
   ),
 });

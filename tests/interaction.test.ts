@@ -13,7 +13,6 @@ import {
 import { CarryController } from '../src/interaction/CarryController';
 import { InteractionSystem, chooseContextAction } from '../src/interaction/InteractionSystem';
 import type { ItemInstance } from '../src/game/ItemState';
-import { HOVER_OUTLINE_NAME } from '../src/rendering/HoverOutline';
 import {
   createTestPropModels,
   TEST_PROP_MODEL_TRANSFORM,
@@ -237,8 +236,6 @@ describe('InteractionSystem', () => {
 
     expect(result).toEqual({ target: 'deposit', targetItem: null });
     expect(mesh.material).toBe(material);
-    expect(lifeboat.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
-    interaction.dispose();
     expect(mesh.material).toBe(material);
   });
 
@@ -323,7 +320,7 @@ describe('InteractionSystem', () => {
     expect(result).toEqual({ target: 'item', targetItem: flareGun });
   });
 
-  it('does not target or highlight an item through a ship wall', () => {
+  it('does not target an item through a ship wall', () => {
     const camera = new PerspectiveCamera(70, 1, 0.1, 100);
     const ship = new Group();
     ship.position.set(3, 2, -4);
@@ -361,10 +358,9 @@ describe('InteractionSystem', () => {
       new Group(),
       new Map([[flareGun.instanceId, flareGun]]),
     )).toEqual({ target: 'none', targetItem: null });
-    expect(hiddenItem.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
   });
 
-  it('switches highlighted targets and clears one beyond ray range', () => {
+  it('switches aimed targets and clears one beyond ray range', () => {
     const camera = new PerspectiveCamera(70, 1, 0.1, 100);
     const first = new Group();
     first.userData.instanceId = 'flareGun-1';
@@ -391,68 +387,15 @@ describe('InteractionSystem', () => {
     expect(interaction.update([first, second], lifeboat, depositTarget, instances)).toEqual({
       target: 'item', targetItem: item('flareGun-1', 'flareGun'),
     });
-    expect(firstMesh.material).toBe(firstMaterial);
-    expect(first.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
-
     first.position.x = 2;
     second.position.x = 0;
     expect(interaction.update([first, second], lifeboat, depositTarget, instances)).toEqual({
       target: 'item', targetItem: item('ductTape-1', 'ductTape'),
     });
-    expect(firstMesh.material).toBe(firstMaterial);
-    expect(first.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
-    expect(secondMesh.material).toBe(secondMaterial);
-    expect(second.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
-
     second.position.z = -4;
     expect(interaction.update([first, second], lifeboat, depositTarget, instances)).toEqual({
       target: 'none', targetItem: null,
     });
-    expect(secondMesh.material).toBe(secondMaterial);
-    expect(second.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
-  });
-
-  it('keeps shared materials intact and removes the outline marker once', () => {
-    const camera = new PerspectiveCamera(70, 1, 0.1, 100);
-    const sharedMaterial = new MeshStandardMaterial({
-      emissive: 0x123456,
-      emissiveIntensity: 0.2,
-    });
-    const aimedItem = new Group();
-    aimedItem.userData.instanceId = 'ductTape-1';
-    const aimedMesh = new Mesh(new BoxGeometry(0.5, 0.5, 0.5), sharedMaterial);
-    aimedItem.add(aimedMesh);
-    aimedItem.position.z = -2;
-    const otherItem = new Group();
-    otherItem.userData.instanceId = 'baitTin-1';
-    const otherMesh = new Mesh(new BoxGeometry(0.5, 0.5, 0.5), sharedMaterial);
-    otherItem.add(otherMesh);
-    otherItem.position.set(2, 0, -2);
-    const lifeboat = new Group();
-    lifeboat.name = 'lifeboat';
-    lifeboat.position.set(10, 0, -2);
-    const interaction = new InteractionSystem(camera);
-    const depositTarget = new Group();
-
-    interaction.update([aimedItem, otherItem], lifeboat, depositTarget, new Map([
-      ['ductTape-1', item('ductTape-1', 'ductTape')],
-      ['baitTin-1', item('baitTin-1', 'baitTin')],
-    ] as const));
-
-    const outline = aimedItem.getObjectByName(HOVER_OUTLINE_NAME)!;
-    let removals = 0;
-    outline.addEventListener('removed', () => { removals += 1; });
-    expect(aimedMesh.material).toBe(sharedMaterial);
-    expect(otherMesh.material).toBe(sharedMaterial);
-    expect(sharedMaterial.emissive.getHex()).toBe(0x123456);
-    expect(sharedMaterial.emissiveIntensity).toBe(0.2);
-
-    interaction.dispose();
-    interaction.dispose();
-
-    expect(aimedMesh.material).toBe(sharedMaterial);
-    expect(aimedItem.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
-    expect(removals).toBe(1);
   });
 });
 

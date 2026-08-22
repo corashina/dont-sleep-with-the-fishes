@@ -14,7 +14,7 @@ export const SURVIVAL_ITEM_DESCRIPTIONS: Readonly<Record<ItemId, string>> = {
   flareGun: 'Fires one signal flare.',
   scubaSet: 'Enables dives beneath the lifeboat.',
   anchor: 'Holds the lifeboat against dangerous water.',
-  bottledPaper: 'Sends one rescue message for one energy.',
+  radio: 'Receives brief signals and transmits your position for one energy.',
   umbrella: 'Provides cover from rain, sun, and strange sights.',
   swimRing: 'Provides emergency flotation.',
   flashlight: 'Improves visibility in darkness and while diving.',

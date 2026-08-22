@@ -214,7 +214,7 @@ export class ChestDisplay {
     this.root.position.copy(this.basePosition);
     this.root.position.x += rattle * 0.085 + broken * 0.14;
     this.root.position.y += bite * 0.12 - overboard * 1.65;
-    this.root.position.z += bite * 0.68;
+    this.root.position.z -= bite * 0.68;
     this.root.position.z += overboard * 1.25;
     this.root.quaternion.copy(this.baseQuaternion);
     this.root.rotateY(rattle * 0.12);

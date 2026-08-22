@@ -335,8 +335,14 @@ function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
   }
 
   if (error instanceof ItemModelLoadError) {
-    if (error.itemId === 'fishingRod' || error.itemId === 'hammer') {
-      const label = error.itemId === 'fishingRod' ? 'Fishing Rod' : 'repair hammer';
+    if (
+      error.itemId === 'fishingRod'
+      || error.itemId === 'hammer'
+      || error.itemId === 'pillow'
+    ) {
+      const label = error.itemId === 'fishingRod'
+        ? 'Fishing Rod'
+        : error.itemId === 'hammer' ? 'repair hammer' : 'sleep pillow';
       renderSystemScreen(mount, {
         kind: 'error',
         kicker: 'EQUIPMENT UNAVAILABLE',

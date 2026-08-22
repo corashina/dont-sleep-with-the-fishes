@@ -21,14 +21,16 @@ $modelIds = @(
   'flareGun'
   'scubaSet'
   'anchor'
-  'bottledPaper'
+  'radio'
   'umbrella'
   'swimRing'
   'flashlight'
   'shotgun'
   'energyBar'
+  'carlitos'
   'fishingRod'
   'hammer'
+  'pillow'
   'lantern'
   'ceilingLight'
 )
@@ -80,6 +82,11 @@ try {
   }
 
   Copy-UniqueModelBuildOutputs -BuildRoots @($buildRoot) -DestinationRoot $stagedRoot
+  $carlitosSource = Join-Path $outputRoot 'carlitos.glb'
+  if (-not (Test-Path -LiteralPath $carlitosSource)) {
+    throw 'Existing Carlitos model is required for the item model publication'
+  }
+  Copy-Item -LiteralPath $carlitosSource -Destination (Join-Path $stagedRoot 'carlitos.glb')
 
   Push-Location $repositoryRoot
   try {

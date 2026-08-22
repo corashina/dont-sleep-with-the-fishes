@@ -40,4 +40,18 @@ describe('event bundle manifest', () => {
       'midnightMonsterAttack',
     ]);
   });
+
+  it('bundles Chest Attack movement and impact sounds', () => {
+    expect(EVENT_BUNDLE_SPECS['chest-attack'].sounds).toEqual([
+      'chest',
+      'midnightMonsterAttack',
+    ]);
+  });
+
+  it('bundles both Check the Back actors and result sounds', () => {
+    expect(EVENT_BUNDLE_SPECS['check-the-back']).toEqual({
+      models: ['checkBackFish', 'checkBackAnglerfish'],
+      sounds: ['checkBackFish', 'checkBackAnglerfish'],
+    });
+  });
 });

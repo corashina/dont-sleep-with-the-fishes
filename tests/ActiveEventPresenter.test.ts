@@ -42,6 +42,7 @@ describe('ActiveEventPresenter', () => {
       new Group(),
       new Group(),
       new Group(),
+      () => undefined,
       'flowers',
     );
 

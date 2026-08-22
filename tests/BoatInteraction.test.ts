@@ -24,7 +24,7 @@ describe('BoatInteraction', () => {
       cannedFood: 'eat',
       ductTape: 'repairItem',
       medicalKit: 'treat',
-      bottledPaper: 'sendMessage',
+      radio: 'answerRadio',
       energyBar: 'useEnergyBar',
       scubaSet: 'dive',
     });

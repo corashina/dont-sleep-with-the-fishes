@@ -231,7 +231,11 @@ export function sampleWeatherReveal(
   if (!isEventPresentationRoute(eventId, 'weather')) return false;
 
   const t = clamp01(progress);
-  if (t === 0 || t === 1) return true;
+  if (t === 0) return true;
+  if (t === 1) {
+    if (eventId === 'man-in-the-fog') output.figureVisibility = 1;
+    return true;
+  }
   const sweep = Math.sin(Math.PI * t);
 
   switch (eventId) {
@@ -279,19 +283,15 @@ export function sampleWeatherReveal(
       output.cameraYaw = 0.25 * Math.sin(2 * Math.PI * t) * sweep;
       break;
     case 'man-in-the-fog':
-      output.figureVisibility = smoothstep((t - 0.2) / 0.18)
-        * (1 - smoothstep((t - 0.84) / 0.12));
+      output.figureVisibility = smoothstep((t - 0.2) / 0.18);
       output.figureDistance = 0;
-      break;
+      return true;
     case 'bad-sleep':
       return true;
   }
 
   const ingressEnvelope = smoothstep(t / 0.12);
-  const returnEnvelope = 1 - smoothstep(
-    (t - (eventId === 'man-in-the-fog' ? 0.9 : 0.72))
-      / (eventId === 'man-in-the-fog' ? 0.1 : 0.28),
-  );
+  const returnEnvelope = 1 - smoothstep((t - 0.72) / 0.28);
   multiplyReveal(output, ingressEnvelope * returnEnvelope);
   return true;
 }

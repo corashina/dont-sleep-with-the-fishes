@@ -525,7 +525,6 @@ export class ScavengePhase implements GamePhase {
     this.carry.reset();
     this.audio.dispose();
     this.input.dispose();
-    this.interaction.dispose();
     this.hands.dispose();
     this.world.dispose();
     this.ui.dispose();

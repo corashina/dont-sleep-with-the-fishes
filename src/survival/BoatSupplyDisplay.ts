@@ -28,7 +28,6 @@ import type {
   PropPresentation,
 } from '../world/PropModelLibrary';
 import { enableItemAmbientOcclusion } from '../rendering/ItemAmbientOcclusion';
-import { HoverOutline } from '../rendering/HoverOutline';
 import {
   collectMeshResources,
   disposeResourceSets,
@@ -274,9 +273,6 @@ export class BoatSupplyDisplay {
   private currentSnapshot: SurvivalSnapshot | null = null;
   private eventEligibleItemIds: ReadonlySet<ItemInstanceId> | null = null;
   private eventSelectedItemId: ItemInstanceId | null = null;
-  private highlightedGroupId: BoatSupplyGroupId | null = null;
-  private readonly hoverOutline = new HoverOutline();
-  private readonly eventEligibleOutlines = new Map<BoatSupplyGroupId, HoverOutline>();
   private activeAnimation: ActiveAnimation | null = null;
   private eventAmbientRoll = 0;
   private eventAmbientLift = 0;
@@ -427,31 +423,6 @@ export class BoatSupplyDisplay {
         this.recordsById.get(groupId)!.root.visible = false;
       }
     }
-    if (
-      this.highlightedGroupId !== null
-      && this.recordsById.get(this.highlightedGroupId)?.visibleCopies === 0
-    ) {
-      this.setHighlighted(null);
-    }
-    this.syncEventEligibleOutlines();
-  }
-
-  setHighlighted(anchorId: string | null): void {
-    if (this.disposed) return;
-    this.hoverOutline.setTarget(null);
-    this.highlightedGroupId = null;
-    if (anchorId === null) return;
-    const rawGroupId = anchorId.startsWith('supply:')
-      ? anchorId.slice('supply:'.length)
-      : this.groupByInstanceId.get(anchorId as ItemInstanceId);
-    if (!rawGroupId || !this.recordsById.has(rawGroupId as BoatSupplyGroupId)) return;
-    const groupId = rawGroupId as BoatSupplyGroupId;
-    const record = this.recordsById.get(groupId)!;
-    if (record.visibleCopies === 0) return;
-    if (!this.eventEligibleOutlines.has(groupId)) {
-      this.hoverOutline.setTarget(record.root);
-    }
-    this.highlightedGroupId = groupId;
   }
 
   setEventEligibleItems(instanceIds: ReadonlySet<ItemInstanceId> | null): void {
@@ -464,32 +435,6 @@ export class BoatSupplyDisplay {
       this.eventSelectedItemId = null;
     }
     if (this.currentSnapshot !== null) this.sync(this.currentSnapshot);
-  }
-
-  private syncEventEligibleOutlines(): void {
-    const eligibleGroups = new Set<BoatSupplyGroupId>();
-    for (const instanceId of this.eventEligibleItemIds ?? []) {
-      const groupId = this.groupByInstanceId.get(instanceId);
-      if (groupId !== undefined) eligibleGroups.add(groupId);
-    }
-
-    for (const [groupId, outline] of this.eventEligibleOutlines) {
-      if (
-        eligibleGroups.has(groupId)
-        && this.recordsById.get(groupId)?.visibleCopies !== 0
-      ) continue;
-      outline.dispose();
-      this.eventEligibleOutlines.delete(groupId);
-    }
-
-    for (const groupId of eligibleGroups) {
-      if (this.eventEligibleOutlines.has(groupId)) continue;
-      const record = this.recordsById.get(groupId);
-      if (record === undefined || record.visibleCopies === 0) continue;
-      const outline = new HoverOutline();
-      outline.setTarget(record.root);
-      this.eventEligibleOutlines.set(groupId, outline);
-    }
   }
 
   setEventSelectedItem(instanceId: ItemInstanceId | null): void {
@@ -709,10 +654,6 @@ export class BoatSupplyDisplay {
 
   dispose(): void {
     if (this.disposed) return;
-    this.setHighlighted(null);
-    this.hoverOutline.dispose();
-    for (const outline of this.eventEligibleOutlines.values()) outline.dispose();
-    this.eventEligibleOutlines.clear();
     this.clearEventMotion();
     this.cancelActiveAnimation();
     this.presentationHiddenItemIds.clear();

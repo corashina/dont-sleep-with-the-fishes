@@ -5,7 +5,7 @@ export const SURVIVAL_BALANCE = {
   actions: {
     fishEnergy: 2, repairEnergy: 1, diveEnergy: 3,
     foodHunger: -35, repairHull: 25, tapeHull: 15, treatmentHealth: 30,
-    bottledPaperEnergy: 1, maximumEnergy: 3,
+    maximumEnergy: 3,
   },
   fishing: {
     minimumBiteDelaySeconds: 3,
@@ -14,15 +14,26 @@ export const SURVIVAL_BALANCE = {
   },
   diving: {
     success: 0.65, injury: 0.25, flashlightSuccess: 0.80,
-    flashlightInjury: 0.18, injuryDamage: 60, overcastSuccessDelta: -0.05,
+    flashlightInjury: 0.18, injuryDamage: 50, overcastSuccessDelta: -0.05,
     overcastInjuryDelta: 0.05,
   },
   rescue: { firstDay: 24, maximumLead: 8 },
+  radio: {
+    firstDay: 5,
+    signalChance: 0.20,
+    energy: 1,
+    rescueLead: [2, 1, 1, 1, 1] as const,
+  },
   dayEvents: {
     firstDay: 3,
     chance: 0.25,
   },
 } as const;
+
+export function radioRescueLeadForSignal(sentSignals: number): number {
+  const gains = SURVIVAL_BALANCE.radio.rescueLead;
+  return gains[Math.min(sentSignals, gains.length - 1)]!;
+}
 
 export type RepairEnergyCost = 0 | 1 | 2 | 3;
 

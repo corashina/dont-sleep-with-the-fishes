@@ -10,6 +10,7 @@ import {
   DirectionalLight,
   FogExp2,
   Group,
+  HemisphereLight,
   Line,
   MathUtils,
   Matrix4,
@@ -44,6 +45,7 @@ import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { UNBOUNDED_MINIMUM_LOCAL_Y } from '../src/ocean/WaterExclusion';
 import {
   BoatWorld,
+  DAY_CLOUD_BOUNCE_INTENSITY,
   FISHING_PLAYER_SEAT,
   SURVIVAL_CELESTIAL_DIRECTION,
 } from '../src/survival/BoatWorld';
@@ -69,6 +71,7 @@ import {
   type FocusedEventPresentationDependencies,
   type FocusedEventPresentationFactories,
 } from '../src/survival/FocusedEventPresentation';
+import type { EventPresentationCue } from '../src/survival/eventPresentationCue';
 import { FOCUSED_EVENT_IDS } from '../src/survival/eventPresentationRoutes';
 import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
 import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
@@ -111,7 +114,6 @@ import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 import { lifeboatHullHalfWidthAt } from '../src/world/Lifeboat';
 import { projectBoatBounds } from '../src/survival/BoatInteraction';
 import { collectMeshResources } from '../src/world/SceneResources';
-import { HOVER_OUTLINE_NAME } from '../src/rendering/HoverOutline';
 import { SurvivalInventoryState } from '../src/survival/inventory';
 import {
   SURVIVAL_EVENTS,
@@ -284,10 +286,7 @@ async function createTestFeaturedModels(
   return SurvivalEventModelLibrary.load(ids, {
     load: async (url) => {
       const root = new Group();
-      const size = url.includes('driftingBottle')
-        ? [0.18, 0.68, 0.18] as const
-        : [1, 1, 1] as const;
-      root.add(new Mesh(new BoxGeometry(...size), new MeshStandardMaterial()));
+      root.add(new Mesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial()));
       return root;
     },
   });
@@ -396,6 +395,8 @@ function snapshot(
     repairMaterial: 0,
     rescueLead: 0,
     rescueTraceFinds: 0,
+    radioSignalAvailable: false,
+    radioSignalsSent: 0,
     chest: { state: 'none', acquiredDay: null },
     weather: 'calm',
     actedToday: false,
@@ -636,11 +637,19 @@ describe('BoatWorld helpers', () => {
     const scubaBounds = supplyBounds('scubaSet');
     const umbrellaBounds = supplyBounds('umbrella');
     const flareGunBounds = supplyBounds('flareGun');
-    const bottledPaperBounds = supplyBounds('bottledPaper');
+    const radioBounds = supplyBounds('radio');
     const starboardShelf = world.scene.getObjectByName('lifeboat-edge-wear-1-1')!;
     const flareShelf = world.scene.getObjectByName('lifeboat-edge-wear--1-1')!;
     const starboardShelfBounds = new Box3().setFromObject(starboardShelf);
     const flareShelfBounds = new Box3().setFromObject(flareShelf);
+    expect((starboardShelf as Mesh<BoxGeometry>).geometry.parameters.width)
+      .toBeCloseTo(0.315);
+    expect((flareShelf as Mesh<BoxGeometry>).geometry.parameters.width)
+      .toBeCloseTo(0.315);
+    expect((starboardShelf as Mesh<BoxGeometry>).geometry.parameters.depth)
+      .toBeCloseTo(0.48);
+    expect((flareShelf as Mesh<BoxGeometry>).geometry.parameters.depth)
+      .toBeCloseTo(0.48);
     expect(bucketBounds.intersectsBox(umbrellaBounds)).toBe(false);
     expect(bucketBounds.intersectsBox(scubaBounds)).toBe(false);
     expect(fishingNetBounds.intersectsBox(medicalKitBounds)).toBe(false);
@@ -649,11 +658,11 @@ describe('BoatWorld helpers', () => {
     expect(flareGunBounds.max.x).toBeLessThan(flareShelfBounds.max.x);
     expect(flareGunBounds.min.z).toBeGreaterThan(flareShelfBounds.min.z);
     expect(flareGunBounds.max.z).toBeLessThan(flareShelfBounds.max.z);
-    expect(bottledPaperBounds.min.y).toBeCloseTo(starboardShelfBounds.max.y);
-    expect(bottledPaperBounds.min.x).toBeGreaterThan(starboardShelfBounds.min.x);
-    expect(bottledPaperBounds.max.x).toBeLessThan(starboardShelfBounds.max.x);
-    expect(bottledPaperBounds.min.z).toBeGreaterThan(starboardShelfBounds.min.z);
-    expect(bottledPaperBounds.max.z).toBeLessThan(starboardShelfBounds.max.z);
+    expect(radioBounds.min.y).toBeCloseTo(starboardShelfBounds.max.y);
+    expect(radioBounds.min.x).toBeGreaterThan(starboardShelfBounds.min.x);
+    expect(radioBounds.max.x).toBeLessThan(starboardShelfBounds.max.x);
+    expect(radioBounds.min.z).toBeGreaterThan(starboardShelfBounds.min.z);
+    expect(radioBounds.max.z).toBeLessThan(starboardShelfBounds.max.z);
     expect(flareGunBounds.getCenter(new Vector3()).x).toBeCloseTo(-1.38);
     expect(flareShelf.position.x).toBeCloseTo(-starboardShelf.position.x);
     expect(flareShelf.position.y).toBeCloseTo(starboardShelf.position.y);
@@ -663,14 +672,6 @@ describe('BoatWorld helpers', () => {
       .toBeCloseTo(starboardShelfBounds.getSize(new Vector3()).x);
     expect(flareShelfBounds.getSize(new Vector3()).z)
       .toBeCloseTo(starboardShelfBounds.getSize(new Vector3()).z);
-    for (const margin of [
-      flareGunBounds.min.z - flareShelfBounds.min.z,
-      flareShelfBounds.max.z - flareGunBounds.max.z,
-    ]) {
-      expect(margin).toBeGreaterThan(0.04);
-      expect(margin).toBeLessThan(0.10);
-    }
-
     world.dispose();
     propModels.dispose();
   });
@@ -687,6 +688,7 @@ describe('BoatWorld helpers', () => {
     const profile = presentationWeatherProfile('thunderstorm');
     const internals = world as unknown as {
       ambient: { intensity: number };
+      dayCloudBounce: { intensity: number };
       key: { intensity: number };
       sky: { palette: Readonly<SkyPalette> };
       weatherEffects: {
@@ -707,6 +709,8 @@ describe('BoatWorld helpers', () => {
         .toBeCloseTo(internals.sky.palette.ambientLightIntensity * profile.lightIntensityScale);
       expect(internals.key.intensity)
         .toBeCloseTo(internals.sky.palette.keyLightIntensity * profile.lightIntensityScale);
+      expect(internals.dayCloudBounce.intensity)
+        .toBeCloseTo(DAY_CLOUD_BOUNCE_INTENSITY * profile.lightIntensityScale);
       expect(internals.sky.palette.fogDensity).toBeCloseTo(0.027);
       expect(internals.sky.palette.ambientLightIntensity).toBeCloseTo(0.44);
     } finally {
@@ -1078,8 +1082,6 @@ describe('BoatWorld helpers', () => {
     expect(leftY).toBeLessThan(-5.5);
     expect(leftZ).toBeLessThanOrEqual(-27);
     expect(leftIsland.userData.greenTopWaveClearance).toBeCloseTo(0.18);
-    expect(leftIsland.userData.disableHoverOutline).not.toBe(true);
-
     world.dispose();
     propModels.dispose();
   });
@@ -1238,7 +1240,6 @@ describe('BoatWorld helpers', () => {
     const featuredModels = await createTestFeaturedModels([
       'driftingBarrel',
       'mysteryChest',
-      'driftingBottle',
     ]);
     const eventModels = createTestEventModels();
     const world = new BoatWorld(
@@ -1263,8 +1264,6 @@ describe('BoatWorld helpers', () => {
     const cases = [
       ['drifting-barrel', 8, 1],
       ['drifting-chest', 8, 1],
-      ['drifting-bottle', 8, 1],
-      ['drifting-bottle', 9, -1],
       ['man-in-the-fog', 8, 1],
       ['man-in-the-fog', 9, -1],
       ['tornado', 8, -1],
@@ -1600,6 +1599,32 @@ describe('BoatWorld helpers', () => {
     expect(frontDirection.x).toBeCloseTo(0);
     expect(frontDirection.y).toBeCloseTo(0);
     expect(frontDirection.z).toBeCloseTo(-1);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('applies the Item Animation Lab free look without moving the camera', () => {
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+    );
+    const position = camera.position.clone();
+    const forwardQuaternion = camera.quaternion.clone();
+
+    world.setItemAnimationLabCameraLook(Math.PI / 2, -0.2);
+    world.update(1 / 60, 1 / 60);
+
+    expect(camera.position.toArray()).toEqual(position.toArray());
+    expect(camera.quaternion.equals(forwardQuaternion)).toBe(false);
+
+    world.setItemAnimationLabCameraLook(0, 0);
+    world.update(2 / 60, 1 / 60);
+    expect(camera.position.toArray()).toEqual(position.toArray());
+    expect(camera.quaternion.toArray()).toEqual(forwardQuaternion.toArray());
 
     world.dispose();
     propModels.dispose();
@@ -1952,13 +1977,9 @@ describe('BoatWorld helpers', () => {
       expect(interaction?.hitArea?.width).toBeGreaterThanOrEqual(64);
       expect(interaction?.hitArea?.height).toBeGreaterThanOrEqual(64);
 
-      world.setHighlightedItem(anchorId);
-      expect(model.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
-
       const retrieve = world.retrieveDriftingItem(eventId);
       expect(world.projectInteractionAnchors(800, 600)
         .find(({ id }) => id === anchorId)).toBeUndefined();
-      expect(model.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
       world.update(2, retrieveDuration);
       await retrieve;
 
@@ -2005,131 +2026,15 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('prespawns the upright Drifting Bottle and floats it on shared waves', async () => {
-    const propModels = createTestPropModels();
-    const featuredModels = await createTestFeaturedModels(['driftingBottle']);
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [],
-      undefined,
-      undefined,
-      'low',
-      featuredModels,
-    );
-
-    world.stageEvent('drifting-bottle', 8);
-    const left = world.scene.getObjectByName('event-prop:drifting-bottle')!;
-    expect(left.visible).toBe(true);
-    expect(left.position.x).toBeLessThan(-2.5);
-    expect(left.userData.motionSource).toBe('shared-wave-field');
-    expect(left.userData.waterlineY).toBe(0);
-    expect(Math.abs(left.rotation.x)).toBeLessThan(0.25);
-    expect(Math.abs(left.rotation.z)).toBeLessThan(0.25);
-    const bottleModel = left.getObjectByName('event-model:driftingBottle')!;
-    const modelSize = new Box3().setFromObject(bottleModel).getSize(new Vector3());
-    expect(modelSize.y).toBeGreaterThan(modelSize.z * 2);
-    const stagedPosition = left.position.clone();
-    const stagedQuaternion = left.quaternion.clone();
-    const stagedBounds = new Box3().setFromObject(bottleModel);
-    expect(stagedBounds.min.y).toBeLessThan(0);
-    expect(stagedBounds.max.y).toBeGreaterThan(0);
-    await world.revealEvent('drifting-bottle');
-    expect(left.position.toArray()).toEqual(stagedPosition.toArray());
-    expect(world.projectInteractionAnchors(800, 600)).toContainEqual(
-      expect.objectContaining({
-        id: 'event:drifting-bottle',
-        label: 'BOTTLE',
-        eventFocusId: 'drifting-bottle',
-        tooltip: false,
-      }),
-    );
-    expect(world.projectInteractionAnchors(800, 600)
-      .find(({ id }) => id === 'event:drifting-bottle')).not.toHaveProperty('eventChoiceId');
-    world.setPresentationWeather('waves');
-    world.update(1, 1);
-    const wave = sampleWaveField(
-      DEFAULT_WAVES,
-      1,
-      -3.25,
-      -4.35,
-      presentationWeatherProfile('waves').waveScale,
-    );
-    expect(left.position.y).toBeCloseTo(0.14 + wave.height);
-    expect(left.position.distanceTo(stagedPosition)).toBeGreaterThan(0.001);
-    expect(left.quaternion.angleTo(stagedQuaternion)).toBeGreaterThan(0.001);
-    expect(new Vector3(0, 1, 0).applyQuaternion(left.quaternion).y).toBeGreaterThan(0.96);
-
-    world.clearEvent();
-    world.stageEvent('drifting-bottle', 9);
-    const right = world.scene.getObjectByName('event-prop:drifting-bottle')!;
-    expect(right.position.x).toBeGreaterThan(2.5);
-    expect(world.scene.getObjectByName('drifting-bottle:wake')).toBeUndefined();
-    expect(world.scene.getObjectByName('drifting-bottle:bite-particles')).toBeUndefined();
-
-    world.dispose();
-    featuredModels.dispose();
-    propModels.dispose();
-  });
-
-  it('keeps Drifting Bottle water particles removed through each result', async () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-
-    world.stageEvent('drifting-bottle', 8);
-    const reveal = world.revealEvent('drifting-bottle');
-    world.update(2, 2);
-    await reveal;
-    expect(world.scene.getObjectByName('drifting-bottle:bite-particles')).toBeUndefined();
-
-    const retrieve = world.reactToEventOutcome('drifting-bottle', {
-      accepted: true,
-      code: 'event-resolved',
-      message: 'The bottle is aboard.',
-      deltas: {},
-      cue: 'none',
-      eventPresentationKey: 'drifting-bottle.retrieve',
-    });
-    world.update(4, 2);
-    await retrieve;
-    expect(world.scene.getObjectByName('drifting-bottle:bite-particles')).toBeUndefined();
-
-    world.stageEvent('drifting-bottle', 9);
-    const secondReveal = world.revealEvent('drifting-bottle');
-    world.update(6, 2);
-    await secondReveal;
-    const lost = world.reactToEventOutcome('drifting-bottle', {
-      accepted: true,
-      code: 'event-resolved',
-      message: 'The bottle drifts away.',
-      deltas: {},
-      cue: 'none',
-      eventPresentationKey: 'drifting-bottle.lost',
-    });
-    world.update(8, 2);
-    await lost;
-    expect(world.scene.getObjectByName('drifting-bottle:bite-particles')).toBeUndefined();
-
-    world.dispose();
-    propModels.dispose();
-  });
-
   it.each([
     'drifting-barrel',
     'drifting-chest',
-    'drifting-bottle',
   ] as const)('focuses and retrieves %s to its storage target', async (eventId) => {
     const propModels = createTestPropModels();
     const furniture = createTestShipFurniture();
     const featuredModels = await createTestFeaturedModels([
       'driftingBarrel',
       'mysteryChest',
-      'driftingBottle',
     ]);
     const camera = new PerspectiveCamera(65, 4 / 3, 0.08, 220);
     const world = new BoatWorld(
@@ -2151,9 +2056,7 @@ describe('BoatWorld helpers', () => {
     await entered;
 
     expect(camera.position).toEqual(expect.objectContaining(FISHING_PLAYER_SEAT));
-    const itemName = eventId === 'drifting-bottle'
-      ? 'event-prop:drifting-bottle'
-      : `${eventId}:model`;
+    const itemName = `${eventId}:model`;
     const item = world.scene.getObjectByName(itemName)!;
     const direction = camera.getWorldDirection(new Vector3());
     const directionToItem = item.getWorldPosition(new Vector3())
@@ -2228,7 +2131,7 @@ describe('BoatWorld helpers', () => {
 
   it('updates the full scene matrix once during a focused drifting-item frame', async () => {
     const propModels = createTestPropModels();
-    const featuredModels = await createTestFeaturedModels(['driftingBottle']);
+    const featuredModels = await createTestFeaturedModels(['driftingBarrel']);
     const world = new BoatWorld(
       new PerspectiveCamera(65, 4 / 3, 0.08, 220),
       propModels,
@@ -2239,8 +2142,8 @@ describe('BoatWorld helpers', () => {
       'low',
       featuredModels,
     );
-    world.stageEvent('drifting-bottle', 8);
-    const entered = world.enterDriftingItemView('drifting-bottle');
+    world.stageEvent('drifting-barrel', 8);
+    const entered = world.enterDriftingItemView('drifting-barrel');
     world.update(1.2, 1.2);
     await entered;
     const updateMatrixWorld = vi.spyOn(world.scene, 'updateMatrixWorld');
@@ -2260,7 +2163,7 @@ describe('BoatWorld helpers', () => {
       const camera = new PerspectiveCamera(65, 4 / 3, 0.08, 220);
       const world = new BoatWorld(camera, propModels, createTestMoonTexture());
       const basePosition = camera.position.clone();
-      const eventId: DriftingItemEventId = 'drifting-bottle';
+      const eventId: DriftingItemEventId = 'drifting-barrel';
       world.stageEvent(eventId, 8);
       let settled = 0;
       const first = world.enterDriftingItemView(eventId).then(() => { settled += 1; });
@@ -2694,7 +2597,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('turns down into the stern for Check the Back and keeps the fish inside', async () => {
+  it('scans both sides before Check the Back and reveals either stern actor', async () => {
     const checkBack = SURVIVAL_EVENTS.find(({ id }) => id === 'check-the-back')!;
     expect(checkBack.choices.find(({ id }) => id === 'check')?.outcomes)
       .toEqual(expect.arrayContaining([
@@ -2706,6 +2609,8 @@ describe('BoatWorld helpers', () => {
     const propModels = createTestPropModels();
     const camera = new PerspectiveCamera();
     const world = new BoatWorld(camera, propModels, createTestMoonTexture());
+    const cues: EventPresentationCue[] = [];
+    world.setEventCueHandler((cue) => cues.push(cue));
     const expectInsideStern = (): void => {
       const direction = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
       expect(direction.z).toBeGreaterThan(0.6);
@@ -2718,10 +2623,15 @@ describe('BoatWorld helpers', () => {
     expect(world.projectInteractionAnchors(800, 600)
       .find(({ id }) => id === 'event:check-the-back')).toBeUndefined();
     const reveal = world.revealEvent('check-the-back');
-    world.update(2, 2);
+    world.update(0.95, 0.95);
+    expect(new Vector3(0, 0, -1).applyQuaternion(camera.quaternion).x).toBeLessThan(0);
+    world.update(2.85, 1.9);
+    expect(new Vector3(0, 0, -1).applyQuaternion(camera.quaternion).x).toBeGreaterThan(0);
+    world.update(3.8, 0.95);
     await reveal;
-    expectInsideStern();
+    expect(new Vector3(0, 0, -1).applyQuaternion(camera.quaternion).z).toBeLessThan(-0.9);
     expect(world.scene.getObjectByName('check-back:fish')?.visible).toBe(false);
+    expect(world.scene.getObjectByName('check-back:anglerfish')?.visible).toBe(false);
 
     const fish = world.reactToEventOutcome('check-the-back', {
       accepted: true,
@@ -2731,7 +2641,10 @@ describe('BoatWorld helpers', () => {
       cue: 'none',
       eventPresentationKey: 'check-the-back.fish',
     });
-    world.update(4, 2);
+    world.update(6.8, 3);
+    expectInsideStern();
+    expect(world.scene.getObjectByName('check-back:fish')?.visible).toBe(false);
+    world.update(8, 1.2);
     await fish;
     const fishModel = world.scene.getObjectByName('check-back:fish')!;
     const sternFloor = world.scene.getObjectByName('check-back-stern-floor')!;
@@ -2740,6 +2653,25 @@ describe('BoatWorld helpers', () => {
       sternFloor.getWorldPosition(new Vector3()),
     )).toBeLessThan(0.001);
     expectInsideStern();
+    expect(cues).toContainEqual({ eventId: 'check-the-back', cue: 'fish' });
+
+    const bad = world.reactToEventOutcome('check-the-back', {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'An anglerfish waits in the stern.',
+      deltas: { health: -25 },
+      cue: 'impact',
+      eventPresentationKey: 'check-the-back.bad',
+    });
+    world.update(12.2, 4.2);
+    await bad;
+    const anglerfish = world.scene.getObjectByName('check-back:anglerfish')!;
+    expect(anglerfish.visible).toBe(true);
+    expect(anglerfish.getWorldPosition(new Vector3()).distanceTo(
+      sternFloor.getWorldPosition(new Vector3()),
+    )).toBeLessThan(0.001);
+    expect(world.scene.getObjectByName('check-back:fish')?.visible).toBe(false);
+    expect(cues).toContainEqual({ eventId: 'check-the-back', cue: 'anglerfish' });
 
     const ignore = world.reactToEventOutcome('check-the-back', {
       accepted: true,
@@ -2752,7 +2684,7 @@ describe('BoatWorld helpers', () => {
     world.update(6, 2);
     await ignore;
     expect(world.scene.getObjectByName('check-back:fish')?.visible).toBe(false);
-    expectInsideStern();
+    expect(world.scene.getObjectByName('check-back:anglerfish')?.visible).toBe(false);
 
     world.dispose();
     propModels.dispose();
@@ -3426,7 +3358,7 @@ describe('BoatWorld helpers', () => {
 
   it.each([
     ['scubaSet'],
-    ['bottledPaper'],
+    ['radio'],
   ] as const)('does not animate day-action-only item %s for events', async (itemId) => {
     const item = savedItem(itemId);
     const propModels = createTestPropModels();
@@ -4203,7 +4135,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('stages the loaded fog man and hides it when the event clears', () => {
+  it('keeps the nearby loaded Fog Man visible until the event clears', async () => {
     const propModels = createTestPropModels();
     const fogMan = new Group();
     const geometry = new BufferGeometry();
@@ -4235,10 +4167,18 @@ describe('BoatWorld helpers', () => {
     const silhouetteMaterial = figure.material as Material;
     const disposeSilhouetteMaterial = vi.spyOn(silhouetteMaterial, 'dispose');
     expect(create).toHaveBeenCalledWith('fogMan');
-    expect(world.scene.getObjectByName('fog-man-silhouette')).toBeDefined();
+    const silhouette = world.scene.getObjectByName('fog-man-silhouette')!;
+    expect(silhouette.position.z).toBe(-8);
+
+    const reveal = world.revealEvent('man-in-the-fog');
+    world.update(2.6, 2.6);
+    expect(silhouette.visible).toBe(true);
+    world.update(5.2, 2.6);
+    await reveal;
+    expect(silhouette.visible).toBe(true);
 
     world.clearEvent();
-    expect(world.scene.getObjectByName('fog-man-silhouette')?.visible).toBe(false);
+    expect(silhouette.visible).toBe(false);
 
     world.dispose();
     expect(disposeGeometry).toHaveBeenCalledOnce();
@@ -4396,13 +4336,25 @@ describe('BoatWorld helpers', () => {
     const facingPosition = sirenFacing.position.clone();
     const facingQuaternion = sirenFacing.quaternion.clone();
     const reveal = world.revealEvent('eerie-melody');
-    world.update(3.5, 3.5);
+    world.update(0.01, 0.01);
+    expect(fog.visible).toBe(true);
+    expect(
+      ((fog.children[0] as Mesh).material as ShaderMaterial)
+        .uniforms.uOpacity!.value,
+    ).toBeGreaterThan(0);
+    world.update(3.5, 3.49);
     expect(tableau.visible).toBe(true);
     expect(siren.position.toArray()).toEqual(sirenPosition.toArray());
     expect(siren.quaternion.toArray()).toEqual(sirenQuaternion.toArray());
     expect(sirenFacing.position.toArray()).toEqual(facingPosition.toArray());
     expect(sirenFacing.quaternion.toArray()).toEqual(facingQuaternion.toArray());
-    world.update(4.5, 1);
+    world.update(4.39, 0.89);
+    expect(fog.visible).toBe(true);
+    expect(
+      ((fog.children[0] as Mesh).material as ShaderMaterial)
+        .uniforms.uOpacity!.value,
+    ).toBeGreaterThan(0);
+    world.update(4.5, 0.11);
     await reveal;
 
     world.dispose();
@@ -4941,10 +4893,6 @@ describe('BoatWorld helpers', () => {
       }),
     ]));
 
-    world.setHighlightedItem('persistent-chest');
-    expect(world.scene.getObjectByName('persistent-chest')
-      ?.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
-
     world.dispose();
     propModels.dispose();
   });
@@ -4975,7 +4923,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('uses the standard outline for Midnight Tour before projecting the Handyman hand', async () => {
+  it('projects Midnight Tour and Handyman world choices', async () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(65, 4 / 3, 0.1, 100),
@@ -4994,10 +4942,6 @@ describe('BoatWorld helpers', () => {
         eventChoiceId: 'visit',
       }),
     ]));
-    world.setHighlightedItem('midnight-tour:island');
-    expect(world.scene.getObjectByName('midnight-tour-island')
-      ?.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
-
     world.clearEvent();
     world.syncInventory(snapshot([], {
       chest: { state: 'closed', acquiredDay: 3 },
@@ -5725,7 +5669,7 @@ describe('BoatWorld helpers', () => {
       .mockImplementation((id) => {
         const root = originalCreatePracticalLight(id);
         practicalLightCall += 1;
-        if (practicalLightCall === 2) {
+        if (practicalLightCall === 1) {
           const mesh = firstMesh(root);
           hangingGeometryDispose = vi.spyOn(mesh.geometry, 'dispose');
           const material = Array.isArray(mesh.material) ? mesh.material[0]! : mesh.material;
@@ -6555,7 +6499,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps the bench lantern emissive without emitting light', () => {
+  it('replaces the bench lantern with the sleep pillow', () => {
     const propModels = createTestPropModels();
     const camera = new PerspectiveCamera(75, 16 / 9, 0.08, 1000);
     const world = new BoatWorld(
@@ -6563,32 +6507,28 @@ describe('BoatWorld helpers', () => {
       propModels,
       createTestMoonTexture(),
     );
-    const lantern = world.scene.getObjectByName('survival-lantern')!;
-    const model = lantern.getObjectByName('survival-lantern:model')!;
-    const material = firstMesh(model).material as MeshStandardMaterial;
+    const pillow = world.scene.getObjectByName('sleep-pillow')!;
+    const model = pillow.getObjectByName('sleep-pillow:model')!;
 
     expect(model).toBeDefined();
-    expect(firstMesh(model).castShadow).toBe(false);
-    expect(material.emissive.getHex()).toBe(0xffc56a);
-    expect(material.emissiveIntensity).toBe(1.35);
-    expect(material.emissiveMap).toBe(material.map);
-    expect(lantern.getObjectByName('survival-lantern:light')).toBeUndefined();
+    expect(firstMesh(model).castShadow).toBe(true);
+    expect(firstMesh(model).receiveShadow).toBe(true);
+    expect(world.scene.getObjectByName('survival-lantern')).toBeUndefined();
+    const formerLanternPosition = new Vector3(1.05, 0.235, 0.78);
+    const lightsAtFormerLantern: PointLight[] = [];
+    world.scene.updateMatrixWorld(true);
+    world.scene.traverse((object) => {
+      if (!(object instanceof PointLight)) return;
+      if (object.getWorldPosition(new Vector3()).distanceTo(formerLanternPosition) < 0.5) {
+        lightsAtFormerLantern.push(object);
+      }
+    });
+    expect(lightsAtFormerLantern).toEqual([]);
     expect(camera.position.toArray()).toEqual([0, 0.88, 1.56]);
-    world.setPhase('night');
-    world.update(1, 0.1);
-    const lanternOrigin = lantern.getWorldPosition(new Vector3()).project(camera);
-    const oldCamera = new PerspectiveCamera(65, 16 / 9, 0.08, 1000);
-    oldCamera.position.set(0, 0.88, 1.72);
-    oldCamera.lookAt(0, 0.88, -1.55);
-    oldCamera.updateMatrixWorld(true);
-    const oldLanternOrigin = new Vector3(1.05, 0.235, 0.78).project(oldCamera);
-    expect(lanternOrigin.x).toBeCloseTo(oldLanternOrigin.x, 2);
-    expect(lanternOrigin.y).toBeCloseTo(oldLanternOrigin.y, 2);
-    expect(lantern.getObjectByName('survival-lantern:light')).toBeUndefined();
     expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        id: 'end-day-lantern',
-        toolId: 'lantern',
+        id: 'end-day-pillow',
+        toolId: 'pillow',
         action: 'endDay',
         itemType: null,
       }),
@@ -6609,10 +6549,13 @@ describe('BoatWorld helpers', () => {
     );
     const storedMap = world.scene.getObjectByName('boat-supply:map:copy-1')!;
     const floor = world.scene.getObjectByName('survival-floor')!;
+    const light = world.scene.getObjectByName('hanging-lantern:light') as PointLight;
 
     expect(firstMesh(storedMap).castShadow).toBe(true);
     expect(firstMesh(storedMap).receiveShadow).toBe(true);
     expect(firstMesh(floor).receiveShadow).toBe(true);
+    expect(light.castShadow).toBe(true);
+    expect(light.shadow.mapSize.toArray()).toEqual([1024, 1024]);
 
     world.dispose();
     propModels.dispose();
@@ -6625,9 +6568,14 @@ describe('BoatWorld helpers', () => {
     world.update(1, 0.1);
     const root = world.scene.getObjectByName('hanging-lantern')!;
     const light = root.getObjectByName('hanging-lantern:light') as PointLight;
+    const pole = root.getObjectByName('hanging-lantern:pole') as Mesh;
+    const floor = world.scene.getObjectByName('survival-floor') as Mesh;
     const projected = light.getWorldPosition(new Vector3()).project(camera);
-    const lanternAnchors = world.projectInteractionAnchors(800, 600)
-      .filter((anchor) => anchor.toolId === 'lantern');
+    const pillowAnchors = world.projectInteractionAnchors(800, 600)
+      .filter((anchor) => anchor.toolId === 'pillow');
+    const cloudBounce = world.scene.getObjectByName(
+      'day-cloud-bounce-light',
+    ) as HemisphereLight;
 
     expect(root).toBeDefined();
     expect(projected.x).toBeGreaterThanOrEqual(-0.12);
@@ -6635,7 +6583,16 @@ describe('BoatWorld helpers', () => {
     expect(projected.y).toBeGreaterThanOrEqual(0.55);
     expect(projected.y).toBeLessThanOrEqual(0.9);
     expect(light.intensity).toBe(HANGING_LANTERN_DAY_INTENSITY);
-    expect(lanternAnchors.map(({ id }) => id)).toEqual(['end-day-lantern']);
+    expect((pole.material as MeshStandardMaterial).color.getHex()).toBe(
+      (floor.material as MeshStandardMaterial).color.getHex(),
+    );
+    expect((pole.material as MeshStandardMaterial).map).toBe(
+      (floor.material as MeshStandardMaterial).map,
+    );
+    expect(DAY_CLOUD_BOUNCE_INTENSITY).toBe(1.7);
+    expect(cloudBounce.intensity).toBe(DAY_CLOUD_BOUNCE_INTENSITY);
+    expect(cloudBounce.castShadow).toBe(false);
+    expect(pillowAnchors.map(({ id }) => id)).toEqual(['end-day-pillow']);
 
     world.dispose();
     propModels.dispose();
@@ -6652,6 +6609,9 @@ describe('BoatWorld helpers', () => {
     world.setPhase('night');
     world.update(1, 0.1);
     expect(light.intensity).toBe(HANGING_LANTERN_NIGHT_INTENSITY);
+    expect((world.scene.getObjectByName(
+      'day-cloud-bounce-light',
+    ) as HemisphereLight).intensity).toBe(0);
 
     world.dispose();
     propModels.dispose();
@@ -6672,73 +6632,21 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('places the repair toolbox on the left end of the lantern bench', () => {
+  it('places the repair toolbox opposite the pillow', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
       createTestMoonTexture(),
     );
-    const lantern = world.scene.getObjectByName('survival-lantern')!;
+    const pillow = world.scene.getObjectByName('sleep-pillow')!;
     const repairTools = world.scene.getObjectByName('repair-toolbox')!;
 
     expect(repairTools.position.toArray()).toEqual([-1.05, 0.225, 0.78]);
-    expect(repairTools.position.x).toBe(-lantern.position.x);
-    expect(repairTools.position.z).toBe(lantern.position.z);
+    expect(repairTools.position.x).toBe(-pillow.position.x);
+    expect(repairTools.position.z).toBe(pillow.position.z);
     expect(repairTools.rotation.y).toBe(-Math.PI / 2);
 
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('outlines event-eligible supplies without muting other supplies', () => {
-    const bucket = savedItem('bucket');
-    const map = savedItem('map');
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [bucket, map],
-    );
-    world.syncInventory(snapshot([bucket, map]));
-    const bucketRoot = world.scene.getObjectByName('boat-supply:bucket')!;
-    const mapRoot = world.scene.getObjectByName('boat-supply:map')!;
-    const mapMaterial = firstMesh(mapRoot).material;
-
-    world.setEventEligibleItems(new Set([bucket.instanceId]));
-
-    expect(bucketRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
-    expect(mapRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
-    expect(firstMesh(mapRoot).material).toBe(mapMaterial);
-
-    world.setEventEligibleItems(new Set());
-    expect(bucketRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
-    expect(mapRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('outlines the repair toolbox and lantern as physical interaction targets', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-    const repairTools = world.scene.getObjectByName('repair-toolbox')!;
-    const lantern = world.scene.getObjectByName('survival-lantern')!;
-
-    world.setHighlightedItem('repair-tools');
-    expect(repairTools.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
-    expect(lantern.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
-
-    world.setHighlightedItem('end-day-lantern');
-    expect(repairTools.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
-    expect(lantern.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
-
-    world.setHighlightedItem(null);
-    expect(lantern.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
     world.dispose();
     propModels.dispose();
   });
@@ -6983,6 +6891,31 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('projects the radio action only while a signal is active', () => {
+    const savedItems = [savedItem('radio')];
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
+      propModels,
+      createTestMoonTexture(),
+      savedItems,
+    );
+
+    world.syncInventory(snapshot(savedItems));
+    expect(world.projectInteractionAnchors(800, 600)
+      .find(({ id }) => id === 'supply:radio')).toBeUndefined();
+
+    world.syncInventory(snapshot(savedItems, { radioSignalAvailable: true }));
+    expect(world.projectInteractionAnchors(800, 600)
+      .find(({ id }) => id === 'supply:radio')).toMatchObject({
+        itemType: 'radio',
+        action: 'answerRadio',
+      });
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('uses the full projected item model as its pointer target', () => {
     const savedItems = [savedItem('bucket')];
     const propModels = createTestPropModels();
@@ -7031,7 +6964,7 @@ describe('BoatWorld helpers', () => {
       'supply:bucket',
       'fishing-tools',
       'repair-tools',
-      'end-day-lantern',
+      'end-day-pillow',
     ]) {
       expect(ridingWave.get(id)?.x, id).toBeCloseTo(settled.get(id)!.x);
       expect(ridingWave.get(id)?.y, id).toBeCloseTo(settled.get(id)!.y);

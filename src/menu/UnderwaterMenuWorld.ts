@@ -176,7 +176,11 @@ export class UnderwaterMenuWorld {
       for (const modelId of MENU_GROUND_MODEL_IDS) {
         for (const placement of placementsByModelId[modelId]) {
           const groundModel = this.createModel(models, modelId);
-          this.placeModel(groundModel.root, placement.id, placement);
+          if (modelId === 'skull') {
+            this.placeGroundedModel(groundModel.root, placement.id, placement, 0.04);
+          } else {
+            this.placeModel(groundModel.root, placement.id, placement);
+          }
           groundModelRoots.push(groundModel.root);
         }
       }
@@ -199,7 +203,7 @@ export class UnderwaterMenuWorld {
     this.signs = signs;
     this.signHitTargets = [signs.startHitTarget, signs.guideHitTarget];
 
-    this.placeGroundedModel(boat.root, 'boat', MENU_PLACEMENT.boat, 0.1);
+    this.placeGroundedModel(boat.root, 'boat', MENU_PLACEMENT.boat, 0.2);
 
     sharkOne.root.name = 'menu:shark-1';
     sharkTwo.root.name = 'menu:shark-2';

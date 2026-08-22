@@ -6,6 +6,7 @@ import {
   ExtrudeGeometry,
   Group,
   Mesh,
+  type MeshStandardMaterial,
   Shape,
   ShapeGeometry,
   TorusGeometry,
@@ -21,6 +22,7 @@ import {
 export interface LifeboatBuild {
   readonly root: Group;
   readonly storageRoot: Group;
+  readonly darkTimberMaterial: MeshStandardMaterial;
   readonly acceptanceBox: Box3;
   readonly interiorBounds: Box3;
   readonly waterExclusion: {
@@ -45,6 +47,9 @@ const HULL_STATIONS = [
 
 const FLOOR_EDGE_INSET = 0.06;
 const FLOOR_HEIGHT = -0.38;
+const FLOORBOARD_WIDTH = 0.205;
+const FLOORBOARD_GAP = 0.055;
+const FLOORBOARD_THICKNESS = 0.055;
 export const LIFEBOAT_FLOOR_SURFACE_Y = FLOOR_HEIGHT + 0.0655;
 export const LIFEBOAT_DISPLAY_SHELF_SURFACE_Y = 0.22;
 export const LIFEBOAT_GUNWALE_SURFACE_Y = 0.472;
@@ -72,8 +77,12 @@ export function lifeboatHullHalfWidthAt(z: number): number | null {
   return null;
 }
 
-function floorShape(): Shape {
-  const shape = new Shape();
+interface FloorPoint {
+  readonly x: number;
+  readonly y: number;
+}
+
+function floorOutline(): FloorPoint[] {
   const starboard = HULL_STATIONS.map(({ halfWidth, z }) => ({
     x: halfWidth - FLOOR_EDGE_INSET,
     y: -z,
@@ -82,12 +91,65 @@ function floorShape(): Shape {
     x: -halfWidth + FLOOR_EDGE_INSET,
     y: -z,
   }));
-  const [first, ...remaining] = [...starboard, ...port];
+  return [...starboard, ...port];
+}
+
+function shapeFromPoints(points: readonly FloorPoint[]): Shape {
+  const shape = new Shape();
+  const [first, ...remaining] = points;
   if (!first) throw new Error('Lifeboat floor requires hull stations');
   shape.moveTo(first.x, first.y);
   remaining.forEach(({ x, y }) => shape.lineTo(x, y));
   shape.closePath();
   return shape;
+}
+
+function floorShape(): Shape {
+  return shapeFromPoints(floorOutline());
+}
+
+function clipFloorAtX(
+  points: readonly FloorPoint[],
+  boundary: number,
+  keepGreater: boolean,
+): FloorPoint[] {
+  const clipped: FloorPoint[] = [];
+  let previous = points.at(-1);
+  if (!previous) return clipped;
+  let previousInside = keepGreater
+    ? previous.x >= boundary
+    : previous.x <= boundary;
+
+  for (const current of points) {
+    const currentInside = keepGreater
+      ? current.x >= boundary
+      : current.x <= boundary;
+    if (currentInside !== previousInside) {
+      const progress = (boundary - previous.x) / (current.x - previous.x);
+      clipped.push({
+        x: boundary,
+        y: previous.y + (current.y - previous.y) * progress,
+      });
+    }
+    if (currentInside) clipped.push(current);
+    previous = current;
+    previousInside = currentInside;
+  }
+  return clipped;
+}
+
+function floorboardShape(centerX: number): Shape {
+  const halfWidth = FLOORBOARD_WIDTH / 2;
+  const afterPortEdge = clipFloorAtX(
+    floorOutline(),
+    centerX - halfWidth,
+    true,
+  );
+  return shapeFromPoints(clipFloorAtX(
+    afterPortEdge,
+    centerX + halfWidth,
+    false,
+  ));
 }
 
 function outlinePoints(height: number, inset = 0): Vector3[] {
@@ -154,15 +216,23 @@ function addFloor(target: Group, materials: LifeboatMaterials): void {
 
   const floorboards = new Group();
   floorboards.name = 'lifeboat-floorboards';
-  const xPositions = [-1.04, -0.78, -0.52, -0.26, 0, 0.26, 0.52, 0.78, 1.04];
+  const boardStep = FLOORBOARD_WIDTH + FLOORBOARD_GAP;
+  const xPositions = Array.from(
+    { length: 13 },
+    (_, index) => (index - 6) * boardStep,
+  );
   xPositions.forEach((x, index) => {
-    const outer = Math.abs(x) > 0.9;
+    const geometry = new ExtrudeGeometry(floorboardShape(x), {
+      depth: FLOORBOARD_THICKNESS,
+      bevelEnabled: false,
+    });
+    geometry.rotateX(-Math.PI / 2);
     const board = new Mesh(
-      new BoxGeometry(0.205, 0.055, outer ? 3.72 : Math.abs(x) > 0.65 ? 4.72 : 5.25),
+      geometry,
       index % 3 === 0 ? materials.cutWood : materials.timber,
     );
     board.name = `lifeboat-floorboard-${index}`;
-    board.position.set(x, FLOOR_HEIGHT + 0.038, 0.08);
+    board.position.y = FLOOR_HEIGHT + 0.0105;
     floorboards.add(board);
   });
   target.add(floorboards);
@@ -274,7 +344,7 @@ function addWear(target: Group, materials: LifeboatMaterials): void {
       const isSideShelf = index === 1;
       const scuff = new Mesh(
         new BoxGeometry(
-          isSideShelf ? 0.42 : 0.245,
+          isSideShelf ? 0.315 : 0.245,
           0.035,
           isSideShelf ? 0.48 : 0.34,
         ),
@@ -376,6 +446,7 @@ export function createLifeboat(assets: LifeboatAssets): LifeboatBuild {
   return {
     root,
     storageRoot,
+    darkTimberMaterial: materials.darkTimber,
     acceptanceBox: new Box3(
       new Vector3(-1.35, -0.30, -2.72),
       new Vector3(1.35, 1.00, 2.72),

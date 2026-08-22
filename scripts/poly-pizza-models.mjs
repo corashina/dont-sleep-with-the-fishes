@@ -167,12 +167,12 @@ export const POLY_PIZZA_MODEL_SOURCES = Object.freeze({
     sha256: 'C0DB06912345342FFFE764B87A7C8532644691957A885E00B268CF84BE669EE4',
     sourceTriangles: 520,
   }),
-  bottledPaper: source({
-    id: 'bottledPaper', publicId: 'arIYNl9gMyr',
-    resourceId: 'ec54b417-3509-498c-9b09-75eef6db1363',
-    title: 'Scroll', creator: 'Poly by Google', license: 'CC-BY 3.0',
-    sha256: '9F9BC296790FD8B1E95E1B02BF3B92C73E488CF837F5C39E4A3CCFDC2A4A17C7',
-    sourceTriangles: 796, downloadedOn: '2026-07-26',
+  radio: source({
+    id: 'radio', publicId: 'TPqvwkyWdV',
+    resourceId: '7ed34c76-5ef7-4b70-b7d8-ce06e8128b07',
+    title: 'Radio', creator: 'Quaternius', license: 'CC0 1.0',
+    sha256: '9E5C7934F44EE538446E6F54CBE9C09D4E49A7E78EE2E7F16D4CC7483C43E710',
+    sourceTriangles: 481, downloadedOn: '2026-08-21',
   }),
   umbrella: source({
     id: 'umbrella', publicId: 'ez4MoDQFgXz',
@@ -223,6 +223,13 @@ export const POLY_PIZZA_MODEL_SOURCES = Object.freeze({
     title: 'Hammer', creator: 'jeremy', license: 'CC-BY 3.0',
     sha256: '1D0B075FE64074255AB33F4BE232AE60CFF9B20DBD2592541831AFA238CE84C7',
     sourceTriangles: 246, downloadedOn: '2026-08-18',
+  }),
+  pillow: source({
+    id: 'pillow', publicId: 'f60emm1Xkas',
+    resourceId: '33ea1609-8cb3-40a0-8f0b-be517e2fa055',
+    title: 'Pillow', creator: 'Poly by Google', license: 'CC-BY 3.0',
+    sha256: '02287DDD8CBCE78FC41E422A2ECC23178F12B334075541AD747EDFC0E6CBE6E2',
+    sourceTriangles: 192, downloadedOn: '2026-08-21',
   }),
   lantern: source({
     id: 'lantern', publicId: 'CtHBJ1ufeW',
