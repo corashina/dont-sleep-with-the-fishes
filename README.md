@@ -226,6 +226,8 @@ loading and keeps the seven obstacle visuals static.
 - `src/phases` — scavenging phase lifecycle and its handoff into survival.
 - `src/game` — scavenging timer, item state, score, and sinking progression.
 - `src/survival` — deterministic survival rules, inventory, events, orchestration, and lifeboat world.
+- `src/survival/eventCatalog`, `eventCatalogValidation`, `eventSelection`, `eventOutcomeRules`, `journalRecords`, `dayActionRules`, and `fishingSettlementRules` — focused survival domain rules.
+- `src/survival/SurvivalSession` — owns mutable survival state.
 - `src/world` and `src/ocean` — procedural ship and boat geometry, shared wave field, ocean shader, weather, and buoyancy.
 - `src/world/ShipItemPlacement` — physical-fit item profiles, anchor validation, and randomized assignment to authored surfaces.
 - `src/world/ShipAssets` and `src/world/ShipMaterials` — locally committed PBR timber maps, procedural secondary surfaces, ship materials, and explicit texture ownership.
