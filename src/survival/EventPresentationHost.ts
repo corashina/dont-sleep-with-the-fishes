@@ -20,8 +20,8 @@ export class EventPresentationHost {
     let attachedRootCount = 0;
     try {
       for (const { parent, root } of adapter.roots) {
-        parent.add(root);
         attachedRootCount += 1;
+        parent.add(root);
       }
     } catch (error) {
       const rollbackSteps: Array<() => void> = [];
@@ -105,6 +105,7 @@ export class EventPresentationHost {
     runCleanupSteps([
       () => active.clear(),
       ...this.detachSteps(active),
+      () => active.dispose(),
     ]);
   }
 
