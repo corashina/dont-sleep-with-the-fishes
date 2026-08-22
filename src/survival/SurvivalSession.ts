@@ -22,6 +22,11 @@ import type {
   JournalNightRecord,
   JournalInventoryMutation,
 } from './journal';
+import {
+  cloneJournalActions,
+  cloneJournalInventoryMutations,
+  journalSnapshot,
+} from './journalRecords';
 import { mulberry32 } from './random';
 import {
   CHEST_OPEN_ENERGY,
@@ -239,7 +244,7 @@ export class SurvivalSession {
       }),
       weather: this.weather,
       actedToday: this.actedToday,
-      journalEntries: this.journalSnapshot(),
+      journalEntries: journalSnapshot(this.journalEntries),
       inventory: this.inventory.snapshot(),
       savedItems: this.savedItems,
       carlitos: this.carlitos === null
@@ -1148,7 +1153,7 @@ export class SurvivalSession {
       ...(outcome.eventPresentationKey === undefined
         ? {}
         : { eventPresentationKey: outcome.eventPresentationKey }),
-      inventoryMutations: this.cloneInventoryMutations(inventoryMutations),
+      inventoryMutations: cloneJournalInventoryMutations(inventoryMutations),
     };
     if (event.phase === 'day') {
       this.pendingJournalDaytime = record;
@@ -1164,49 +1169,10 @@ export class SurvivalSession {
     this.journalEntries.push({
       day: this.day,
       weather: this.weather,
-      actions: this.cloneJournalActions(this.pendingJournalActions),
+      actions: cloneJournalActions(this.pendingJournalActions),
       daytime: this.pendingJournalDaytime,
       nighttime: this.pendingJournalNighttime,
     });
-  }
-
-  private cloneJournalNight(record: JournalNightRecord): JournalNightRecord {
-    return record.kind === 'quiet'
-      ? { kind: 'quiet' }
-      : { kind: 'event', event: this.cloneJournalRecord(record.event) };
-  }
-
-  private journalSnapshot(): readonly JournalEntry[] {
-    return Object.freeze(this.journalEntries.map((entry) => Object.freeze({
-      ...entry,
-      actions: this.cloneJournalActions(entry.actions),
-      daytime: entry.daytime === null
-        ? null
-        : this.cloneJournalDaytime(entry.daytime),
-      nighttime: Object.freeze(this.cloneJournalNight(entry.nighttime)),
-    })));
-  }
-
-  private cloneJournalRecord(record: JournalEventRecord): JournalEventRecord {
-    return Object.freeze({
-      ...record,
-      inventoryMutations: this.cloneInventoryMutations(record.inventoryMutations),
-    });
-  }
-
-  private cloneJournalActions(
-    actions: readonly JournalDayActionRecord[],
-  ): readonly JournalDayActionRecord[] {
-    return Object.freeze(actions.map((action) => Object.freeze({ ...action })));
-  }
-
-  private cloneInventoryMutations(
-    mutations: readonly JournalInventoryMutation[],
-  ): readonly JournalInventoryMutation[] {
-    return Object.freeze(mutations.map((mutation) => Object.freeze({
-      kind: mutation.kind,
-      instanceIds: Object.freeze([...mutation.instanceIds]),
-    })));
   }
 
   private openEvent(event: SurvivalEventDefinition): void {
@@ -1497,7 +1463,7 @@ export class SurvivalSession {
     const entry = this.journalEntries[entryIndex]!;
     this.journalEntries[entryIndex] = {
       ...entry,
-      actions: this.cloneJournalActions([
+      actions: cloneJournalActions([
         ...entry.actions,
         Object.freeze({
           kind: 'carlitosDawn',
@@ -1541,12 +1507,6 @@ export class SurvivalSession {
     }
     this.applyDeltas({ food: fallbackFood });
     return true;
-  }
-
-  private cloneJournalDaytime(record: JournalDaytimeRecord): JournalDaytimeRecord {
-    return 'kind' in record
-      ? Object.freeze({ kind: 'sinkingShip' })
-      : this.cloneJournalRecord(record);
   }
 
   private applyChestEffect(effect: WeightedEventOutcome['effects']['chest']): void {
