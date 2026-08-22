@@ -1,90 +1,22 @@
 import {
   ITEM_IDS,
   ITEM_LABELS,
-  type ItemId,
   type ItemInstanceId,
 } from '../game/ItemState';
-import type { FishingCatchId } from './fishingCatalog';
-import type { CarlitosDeathCause } from './CarlitosState';
-import type { EventPresentationKey, WeatherId } from './survivalTypes';
-
-export interface JournalInventoryMutation {
-  readonly kind: 'consume' | 'break' | 'lose' | 'gain' | 'repair';
-  readonly instanceIds: readonly ItemInstanceId[];
-}
-
-export interface JournalEventRecord {
-  phase: 'day' | 'night';
-  eventId: string;
-  title: string;
-  prompt: string;
-  attemptedChoiceId: string | null;
-  readonly choiceLabel: string;
-  attemptedItemId: ItemId | null;
-  outcomeCode: string;
-  outcomeMessage: string;
-  eventPresentationKey?: EventPresentationKey;
-  readonly inventoryMutations: readonly JournalInventoryMutation[];
-}
-
-export interface JournalSinkingShipRecord {
-  readonly kind: 'sinkingShip';
-}
-
-export type JournalDaytimeRecord =
-  | JournalEventRecord
-  | JournalSinkingShipRecord;
+import type {
+  JournalCarlitosCareRecord,
+  JournalCarlitosDawnRecord,
+  JournalDaytimeRecord,
+  JournalEntry,
+  JournalEventRecord,
+  JournalFishingRecord,
+  JournalInventoryMutation,
+  JournalNightRecord,
+} from './journalRecords';
+import type { WeatherId } from './survivalTypes';
 
 export const SINKING_SHIP_DAYTIME_TEXT =
   'Dorothy struck something and began to sink. I reached the lifeboat with the supplies I could save.';
-
-export type JournalNightRecord =
-  | { kind: 'event'; event: JournalEventRecord }
-  | { kind: 'quiet' };
-
-export interface JournalFishingRecord {
-  readonly kind: 'fishing';
-  readonly attemptId: string;
-  readonly result: 'fish' | 'utility' | 'junk' | 'miss';
-  readonly catchId: FishingCatchId | null;
-  readonly catchLabel: string | null;
-  readonly food: 0 | 1 | 2;
-  readonly baitConsumed: boolean;
-}
-
-export interface JournalCarlitosCareRecord {
-  readonly kind: 'carlitosCare';
-  readonly action: 'pet' | 'feed' | 'treat';
-}
-
-export interface JournalCarlitosDawnRecord {
-  readonly kind: 'carlitosDawn';
-  readonly before: JournalCarlitosDawnState;
-  readonly after: JournalCarlitosDawnState;
-}
-
-export interface JournalCarlitosDawnState {
-  readonly alive: boolean;
-  readonly energy: number;
-  readonly hunger: number;
-  readonly sickness: number;
-  readonly unhappiness: number;
-  readonly pettedToday: boolean;
-  readonly deathCause: CarlitosDeathCause | null;
-}
-
-export type JournalDayActionRecord =
-  | JournalFishingRecord
-  | JournalCarlitosCareRecord
-  | JournalCarlitosDawnRecord;
-
-export interface JournalEntry {
-  day: number;
-  weather: WeatherId;
-  readonly actions: readonly JournalDayActionRecord[];
-  daytime: JournalDaytimeRecord | null;
-  nighttime: JournalNightRecord;
-}
 
 export interface JournalPageCopy {
   heading: string;

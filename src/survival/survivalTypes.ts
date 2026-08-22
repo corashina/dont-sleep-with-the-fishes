@@ -1,6 +1,6 @@
 import type { ItemId, ItemInstance, ItemInstanceId } from '../game/ItemState';
 import type { FishingSession } from './FishingSession';
-import type { JournalEntry } from './journal';
+import type { JournalEntry } from './journalRecords';
 import type { CarlitosSnapshot } from './CarlitosState';
 
 export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dead' | 'sunk';

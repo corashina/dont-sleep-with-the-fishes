@@ -4,7 +4,8 @@ import {
   type ItemId,
   type ItemInstanceId,
 } from '../game/ItemState';
-import { formatJournalEntry, type JournalEntry } from '../survival/journal';
+import { formatJournalEntry } from '../survival/journal';
+import type { JournalEntry } from '../survival/journalRecords';
 import { carlitosStatus } from '../survival/CarlitosState';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import { repairEnergyCost, SURVIVAL_BALANCE } from '../survival/survivalBalance';

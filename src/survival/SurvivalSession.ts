@@ -14,19 +14,24 @@ import { resolveWeightedOutcome } from './eventResolver';
 import { FishingSession, type FishingTerminalResult } from './FishingSession';
 import { fishingSettlement } from './fishingSettlementRules';
 import { SurvivalInventoryState } from './inventory';
-import type {
-  JournalDayActionRecord,
-  JournalDaytimeRecord,
-  JournalEntry,
-  JournalEventRecord,
-  JournalCarlitosDawnRecord,
-  JournalNightRecord,
-  JournalInventoryMutation,
-} from './journal';
 import {
   cloneJournalActions,
-  cloneJournalInventoryMutations,
+  createJournalCarlitosCareRecord,
+  createJournalCarlitosDawnRecord,
+  createJournalCarlitosDawnState,
+  createJournalEntry,
+  createJournalEventRecord,
+  createJournalFishingRecord,
+  createJournalNightEventRecord,
+  createJournalSinkingShipRecord,
+  createQuietJournalNightRecord,
   journalSnapshot,
+  type JournalCarlitosDawnRecord,
+  type JournalDayActionRecord,
+  type JournalDaytimeRecord,
+  type JournalEntry,
+  type JournalInventoryMutation,
+  type JournalNightRecord,
 } from './journalRecords';
 import { mulberry32 } from './random';
 import {
@@ -209,7 +214,7 @@ export class SurvivalSession {
     this.weather = options.weather ?? 'calm';
     this.day = options.initial?.day ?? 1;
     this.pendingJournalDaytime = this.day === 1
-      ? Object.freeze({ kind: 'sinkingShip' })
+      ? createJournalSinkingShipRecord()
       : null;
     this.pressure = options.initial?.pressure ?? pressureForDay(this.day);
     this.health = options.initial?.health ?? SURVIVAL_BALANCE.start.health;
@@ -467,15 +472,12 @@ export class SurvivalSession {
       }
     }
     const outcome = this.commit(settlement.code, settlement.message, settlement.deltas, 'none');
-    this.pendingJournalActions.push(Object.freeze({
-      kind: 'fishing',
+    this.pendingJournalActions.push(createJournalFishingRecord(
       attemptId,
-      result: result.kind === 'miss' ? 'miss' : result.catch.kind,
-      catchId: result.kind === 'miss' ? null : result.catch.id,
-      catchLabel: result.kind === 'miss' ? null : result.catch.label,
-      food: settlement.food,
-      baitConsumed: settlement.baitConsumed,
-    }));
+      result,
+      settlement.food,
+      settlement.baitConsumed,
+    ));
     this.activeFishing = null;
     return outcome;
   }
@@ -510,7 +512,7 @@ export class SurvivalSession {
 
     if (this.random.next() < SURVIVAL_BALANCE.night.quietChance) {
       this.state = 'nightEvent';
-      this.pendingJournalNighttime = { kind: 'quiet' };
+      this.pendingJournalNighttime = createQuietJournalNightRecord();
       this.finalizeJournalDay();
       return this.commit('quiet-night', 'The night passes without incident.', {}, 'nightfall');
     }
@@ -897,7 +899,7 @@ export class SurvivalSession {
       throw new Error('Carlitos pet action was not available.');
     }
     const outcome = this.commit('carlitos-petted', 'You pet Carlitos.', {}, 'none');
-    this.pendingJournalActions.push(Object.freeze({ kind: 'carlitosCare', action: 'pet' }));
+    this.pendingJournalActions.push(createJournalCarlitosCareRecord('pet'));
     return outcome;
   }
 
@@ -906,7 +908,7 @@ export class SurvivalSession {
       throw new Error('Carlitos feed action was not available.');
     }
     const outcome = this.commit('carlitos-fed', 'You feed Carlitos.', { food: -1 }, 'none');
-    this.pendingJournalActions.push(Object.freeze({ kind: 'carlitosCare', action: 'feed' }));
+    this.pendingJournalActions.push(createJournalCarlitosCareRecord('feed'));
     return outcome;
   }
 
@@ -916,7 +918,7 @@ export class SurvivalSession {
     }
     this.inventory.consume('medicalKit', 1);
     const outcome = this.commit('carlitos-treated', 'You treat Carlitos.', {}, 'none');
-    this.pendingJournalActions.push(Object.freeze({ kind: 'carlitosCare', action: 'treat' }));
+    this.pendingJournalActions.push(createJournalCarlitosCareRecord('treat'));
     return outcome;
   }
 
@@ -1037,39 +1039,32 @@ export class SurvivalSession {
     outcome: ActionOutcome,
     inventoryMutations: readonly JournalInventoryMutation[],
   ): void {
-    const record: JournalEventRecord = {
-      phase: event.phase,
-      eventId: event.id,
-      title: event.title,
-      prompt: event.prompt,
+    const record = createJournalEventRecord(
+      event,
       attemptedChoiceId,
       choiceLabel,
       attemptedItemId,
-      outcomeCode: outcome.code,
-      outcomeMessage: outcome.message,
-      ...(outcome.eventPresentationKey === undefined
-        ? {}
-        : { eventPresentationKey: outcome.eventPresentationKey }),
-      inventoryMutations: cloneJournalInventoryMutations(inventoryMutations),
-    };
+      outcome,
+      inventoryMutations,
+    );
     if (event.phase === 'day') {
       this.pendingJournalDaytime = record;
       return;
     }
-    this.pendingJournalNighttime = { kind: 'event', event: record };
+    this.pendingJournalNighttime = createJournalNightEventRecord(record);
     this.finalizeJournalDay();
   }
 
   private finalizeJournalDay(): void {
     if (this.pendingJournalNighttime === null) return;
     if (this.journalEntries.some((entry) => entry.day === this.day)) return;
-    this.journalEntries.push({
-      day: this.day,
-      weather: this.weather,
-      actions: cloneJournalActions(this.pendingJournalActions),
-      daytime: this.pendingJournalDaytime,
-      nighttime: this.pendingJournalNighttime,
-    });
+    this.journalEntries.push(createJournalEntry(
+      this.day,
+      this.weather,
+      this.pendingJournalActions,
+      this.pendingJournalDaytime,
+      this.pendingJournalNighttime,
+    ));
   }
 
   private openEvent(event: SurvivalEventDefinition): void {
@@ -1362,26 +1357,14 @@ export class SurvivalSession {
       ...entry,
       actions: cloneJournalActions([
         ...entry.actions,
-        Object.freeze({
-          kind: 'carlitosDawn',
-          before,
-          after,
-        }),
+        createJournalCarlitosDawnRecord(before, after),
       ]),
     };
   }
 
   private carlitosDawnState(): JournalCarlitosDawnRecord['before'] {
     if (this.carlitos === null) throw new Error('Carlitos is not aboard.');
-    return Object.freeze({
-      alive: this.carlitos.alive,
-      energy: this.carlitos.energy,
-      hunger: this.carlitos.hunger,
-      sickness: this.carlitos.sickness,
-      unhappiness: this.carlitos.unhappiness,
-      pettedToday: this.carlitos.pettedToday,
-      deathCause: this.carlitos.deathCause,
-    });
+    return createJournalCarlitosDawnState(this.carlitos);
   }
 
   private carlitosDawnChanged(

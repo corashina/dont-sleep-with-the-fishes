@@ -14,7 +14,7 @@ import type { EventPresentationCue } from '../src/survival/midnightTourAudioCue'
 import { SURVIVAL_EVENTS, type DriftingItemEventId } from '../src/survival/eventCatalog';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import type { FishingCastPoint } from '../src/survival/FishingSession';
-import type { JournalEntry, JournalNightRecord } from '../src/survival/journal';
+import type { JournalEntry, JournalNightRecord } from '../src/survival/journalRecords';
 import {
   formatDiveResult,
   formatFishingResult,
