@@ -1,9 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import type { JournalEntry } from '../src/survival/journal';
+import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import {
   cloneJournalEntry,
   cloneJournalNight,
+  createJournalCarlitosCareRecord,
+  createJournalCarlitosDawnRecord,
+  createJournalCarlitosDawnState,
+  createJournalEntry,
+  createJournalEventRecord,
+  createJournalFishingRecord,
+  createJournalNightEventRecord,
+  createJournalSinkingShipRecord,
+  createQuietJournalNightRecord,
   journalSnapshot,
+} from '../src/survival/journalRecords';
+import type {
+  JournalEntry,
+  JournalInventoryMutation,
 } from '../src/survival/journalRecords';
 
 const entryFixture: JournalEntry = {
@@ -96,5 +109,70 @@ describe('journal records', () => {
 
     expect(Object.isFrozen(snapshot)).toBe(true);
     expect(Object.isFrozen(snapshot[0])).toBe(true);
+  });
+
+  it('constructs independent immutable journal records', () => {
+    const sourceMutation: JournalInventoryMutation = {
+      kind: 'consume',
+      instanceIds: ['baitTin-1'],
+    };
+    const event = createJournalEventRecord({
+      phase: 'night',
+      id: 'night-trader',
+      title: 'Night Trader',
+      prompt: 'A boat appears nearby.',
+    }, 'trade', 'Trade', null, {
+      code: 'event-resolved',
+      message: 'The trade succeeds.',
+    }, [sourceMutation]);
+    const before = entryFixture.actions[0]!.kind === 'carlitosDawn'
+      ? entryFixture.actions[0]!.before
+      : undefined;
+    const after = entryFixture.actions[0]!.kind === 'carlitosDawn'
+      ? entryFixture.actions[0]!.after
+      : undefined;
+    if (before === undefined || after === undefined) throw new Error('Expected Carlitos dawn states.');
+
+    const dawnState = createJournalCarlitosDawnState(before);
+    const dawn = createJournalCarlitosDawnRecord(dawnState, after);
+    const night = createJournalNightEventRecord(event);
+    const fishing = createJournalFishingRecord('fish-2', {
+      kind: 'catch',
+      catch: FISHING_CATCHES[0]!,
+    }, 1, true);
+    const care = createJournalCarlitosCareRecord('pet');
+    const sinkingShip = createJournalSinkingShipRecord();
+    const actions = [fishing, care, dawn];
+    const entry = createJournalEntry(
+      2,
+      'overcast',
+      actions,
+      sinkingShip,
+      night,
+    );
+
+    expect(event).toMatchObject({ eventId: 'night-trader', inventoryMutations: [sourceMutation] });
+    expect(event.inventoryMutations[0]).not.toBe(sourceMutation);
+    expect(event.inventoryMutations[0]!.instanceIds).not.toBe(sourceMutation.instanceIds);
+    expect(Object.isFrozen(event.inventoryMutations)).toBe(true);
+    expect(Object.isFrozen(event.inventoryMutations[0]!.instanceIds)).toBe(true);
+    expect(night).toEqual({ kind: 'event', event });
+    expect(createQuietJournalNightRecord()).toEqual({ kind: 'quiet' });
+    expect(fishing).toMatchObject({ kind: 'fishing', attemptId: 'fish-2', food: 1, baitConsumed: true });
+    expect(care).toEqual({ kind: 'carlitosCare', action: 'pet' });
+    expect(Object.isFrozen(fishing)).toBe(true);
+    expect(Object.isFrozen(care)).toBe(true);
+    expect(Object.isFrozen(sinkingShip)).toBe(true);
+    expect(Object.isFrozen(entry.actions)).toBe(true);
+    expect(entry.actions).not.toBe(actions);
+    expect(entry.actions[0]).not.toBe(fishing);
+    expect(Object.isFrozen(entry.actions[0]!)).toBe(true);
+    expect(dawnState).not.toBe(before);
+    expect(Object.isFrozen(dawnState)).toBe(true);
+    expect(dawn.before).not.toBe(dawnState);
+    expect(dawn.after).not.toBe(after);
+    expect(Object.isFrozen(dawn.before)).toBe(true);
+    expect(Object.isFrozen(dawn.after)).toBe(true);
+    expect(Object.isFrozen(entry.daytime)).toBe(true);
   });
 });

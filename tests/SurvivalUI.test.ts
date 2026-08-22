@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
-import type { JournalEntry } from '../src/survival/journal';
+import type { JournalEntry } from '../src/survival/journalRecords';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { sequenceRandom } from './helpers/random';
 import type { SurvivalEventDefinition, SurvivalSnapshot } from '../src/survival/survivalTypes';
