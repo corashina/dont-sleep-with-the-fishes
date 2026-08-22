@@ -33,7 +33,9 @@ const FLASHLIGHT_MORSE_CUE_PROGRESSES = Object.freeze([
 ]);
 const SHOTGUN_ACTION_CUE_PROGRESSES = Object.freeze([0.46]);
 const FLARE_GUN_ACTION_CUE_PROGRESSES = Object.freeze([0.46, 0.54]);
-const FLARE_GUN_READY_YAW = -Math.PI / 2 + 0.22;
+const FLARE_GUN_READY_YAW = Math.PI / 2 + 0.22;
+const FLARE_GUN_READY_PITCH = -1.25;
+const FLARE_GUN_READY_ROLL = -Math.PI / 2;
 const UMBRELLA_OVERHEAD_ROTATION = Object.freeze({
   pitch: -0.7361036000458032,
   yaw: 1.3933992747114876,
@@ -465,9 +467,9 @@ function sampleFlare(
   const launched = progress >= FLARE_GUN_ACTION_CUE_PROGRESSES[0]!;
   const travel = clamp01((progress - FLARE_GUN_ACTION_CUE_PROGRESSES[0]!) / 0.46);
 
-  output.pitch = -1.25 * ready + 0.16 * recoil;
+  output.pitch = FLARE_GUN_READY_PITCH * ready + 0.16 * recoil;
   output.yaw = FLARE_GUN_READY_YAW * ready - 0.16 * recoil;
-  output.roll = Math.PI / 2 * ready - 0.06 * recoil;
+  output.roll = FLARE_GUN_READY_ROLL * ready - 0.06 * recoil;
   output.viewZ += 0.28 * recoil;
   output.effectKind = launched && travel < 1 ? 'flare' : 'none';
   output.primaryEffect = launched && travel < 1 ? 1 : 0;
