@@ -11,7 +11,7 @@ import type { SceneRenderer } from '../src/rendering/SceneRenderer';
 import type { ProjectedBoatBounds } from '../src/survival/BoatInteraction';
 import { BoatWorld } from '../src/survival/BoatWorld';
 import type { EventPresentationCue } from '../src/survival/midnightTourAudioCue';
-import { SURVIVAL_EVENTS, type DriftingItemEventId } from '../src/survival/events';
+import { SURVIVAL_EVENTS, type DriftingItemEventId } from '../src/survival/eventCatalog';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import type { FishingCastPoint } from '../src/survival/FishingSession';
 import type { JournalEntry, JournalNightRecord } from '../src/survival/journal';

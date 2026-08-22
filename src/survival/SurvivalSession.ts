@@ -6,11 +6,10 @@ import {
 } from '../game/ItemState';
 import {
   SURVIVAL_EVENTS,
-  drawWeightedEvent,
-  eligibleEvents,
   isDriftingItemEventId,
   survivalEventById,
-} from './events';
+} from './eventCatalog';
+import { drawWeightedEvent } from './eventSelection';
 import { resolveWeightedOutcome } from './eventResolver';
 import { FishingSession, type FishingTerminalResult } from './FishingSession';
 import { SurvivalInventoryState } from './inventory';
@@ -1074,7 +1073,10 @@ export class SurvivalSession {
     phase: 'day' | 'night',
     excludedIds: ReadonlySet<string> = NO_EVENT_EXCLUSIONS,
   ): SurvivalEventDefinition {
-    const pool = eligibleEvents(SURVIVAL_EVENTS, {
+    const eventExclusions = this.rescueMessageSent
+      ? new Set([...excludedIds, 'drifting-bottle'])
+      : excludedIds;
+    return drawWeightedEvent(this.random, SURVIVAL_EVENTS, {
       phase,
       day: this.day,
       weather: this.weather,
@@ -1087,11 +1089,8 @@ export class SurvivalSession {
       pressure: this.pressure,
       chestState: this.chestState,
       hasLivingCompanion: this.carlitos?.alive === true,
-    }).filter(({ id }) => (
-      !excludedIds.has(id)
-      && !(id === 'drifting-bottle' && this.rescueMessageSent)
-    ));
-    return drawWeightedEvent(pool, this.random, phase);
+      excludedIds: eventExclusions,
+    });
   }
 
   private openDayEventAfterDawn(): void {

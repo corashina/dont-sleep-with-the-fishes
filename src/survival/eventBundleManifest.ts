@@ -4,7 +4,7 @@ import {
   EVENT_PRESENTATION_ROUTES,
 } from './eventPresentationRoutes';
 import type { SurvivalEventModelId } from './eventModelManifest';
-import { SURVIVAL_EVENTS, type SurvivalEventId } from './events';
+import { SURVIVAL_EVENTS, type SurvivalEventId } from './eventCatalog';
 
 export type EventBundleModelId = EventModelId | SurvivalEventModelId;
 
