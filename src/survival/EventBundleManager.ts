@@ -1,5 +1,6 @@
 import type { EventBundle } from './EventBundle';
 import type { SurvivalEventId } from './eventCatalog';
+import { ignoreCleanupError } from '../world/SceneResources';
 
 export interface EventBundleLoaderLike {
   load(eventId: SurvivalEventId): Promise<EventBundle>;
@@ -51,7 +52,12 @@ export class EventBundleManager {
         bundle.dispose();
         throw new Error(`Event bundle activation was cancelled: ${eventId}`);
       }
-      bundle.attach();
+      try {
+        bundle.attach();
+      } catch (error) {
+        ignoreCleanupError(() => bundle.dispose());
+        throw error;
+      }
       this.active = bundle;
       return bundle;
     } finally {

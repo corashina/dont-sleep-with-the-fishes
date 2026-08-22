@@ -247,6 +247,38 @@ describe('EventBundleManager', () => {
     expect(log).toEqual(['load:leak', 'attach:leak', 'dispose:leak']);
   });
 
+  it('disposes every bundle resource when attachment fails', async () => {
+    const attachmentError = new Error('attachment failed');
+    const cleanupError = new Error('detach cleanup failed');
+    const presentation = adapter('leak');
+    const featuredDispose = vi.fn();
+    const dedicatedDispose = vi.fn();
+    const audioDispose = vi.fn();
+    const host = {
+      createEventPresentation: vi.fn(() => presentation),
+      attach: vi.fn(() => { throw attachmentError; }),
+      detach: vi.fn(() => { throw cleanupError; }),
+    };
+    const eventBundle = new EventBundle(
+      'leak',
+      host,
+      presentation,
+      { dispose: featuredDispose } as unknown as SurvivalEventModelLibrary,
+      { dispose: dedicatedDispose } as unknown as EventModelLibrary,
+      { sounds: [], dispose: audioDispose },
+    );
+    const manager = new EventBundleManager({ load: async () => eventBundle });
+
+    manager.beginLoad('leak');
+    await expect(manager.activate('leak')).rejects.toBe(attachmentError);
+
+    expect(host.detach).toHaveBeenCalledWith(presentation);
+    expect(presentation.dispose).toHaveBeenCalledOnce();
+    expect(featuredDispose).toHaveBeenCalledOnce();
+    expect(dedicatedDispose).toHaveBeenCalledOnce();
+    expect(audioDispose).toHaveBeenCalledOnce();
+  });
+
   it('reuses the same pending event and rejects a conflicting event', () => {
     const pending = deferred<EventBundle>();
     const loader: EventBundleLoaderLike = { load: vi.fn(() => pending.promise) };

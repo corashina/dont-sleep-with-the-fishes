@@ -11,6 +11,7 @@ import type { EventChoicePresentation } from './FocusedEventPresentation';
 
 export class EventPresentationHost {
   private active: EventPresentationAdapter | null = null;
+  private activeCleared = false;
   private disposed = false;
 
   attach(adapter: EventPresentationAdapter): void {
@@ -51,6 +52,7 @@ export class EventPresentationHost {
     }
 
     this.active = adapter;
+    this.activeCleared = false;
   }
 
   detach(adapter: EventPresentationAdapter): void {
@@ -67,7 +69,10 @@ export class EventPresentationHost {
   }
 
   stage(context: EventPresentationContext): void {
-    this.active?.stage(context);
+    const active = this.active;
+    if (active === null) return;
+    this.activeCleared = false;
+    active.stage(context);
   }
 
   reveal(): Promise<void> {
@@ -107,7 +112,10 @@ export class EventPresentationHost {
   }
 
   clear(): void {
-    this.active?.clear();
+    const active = this.active;
+    if (active === null || this.activeCleared) return;
+    this.activeCleared = true;
+    active.clear();
   }
 
   dispose(): void {
@@ -117,8 +125,10 @@ export class EventPresentationHost {
     const active = this.active;
     this.active = null;
     if (active === null) return;
+    const clearPending = !this.activeCleared;
+    this.activeCleared = true;
     runCleanupSteps([
-      () => active.clear(),
+      ...(clearPending ? [() => active.clear()] : []),
       ...this.detachSteps(active),
     ]);
   }
