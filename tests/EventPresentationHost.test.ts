@@ -27,8 +27,17 @@ function createAdapter(
 
 describe('EventPresentationHost', () => {
   it('attaches roots and delegates the normalized lifecycle', async () => {
+    const attachmentOrder: string[] = [];
     const first = { parent: new Group(), root: new Group() };
     const second = { parent: new Group(), root: new Group() };
+    vi.spyOn(first.parent, 'add').mockImplementation((root) => {
+      attachmentOrder.push('first');
+      return Group.prototype.add.call(first.parent, root);
+    });
+    vi.spyOn(second.parent, 'add').mockImplementation((root) => {
+      attachmentOrder.push('second');
+      return Group.prototype.add.call(second.parent, root);
+    });
     const adapter = createAdapter('leak', [first, second]);
     const host = new EventPresentationHost();
     const context = { eventId: 'leak' as const, targetInstanceId: null, variantSeed: 3 };
@@ -36,6 +45,7 @@ describe('EventPresentationHost', () => {
     const reaction = {} as never;
 
     host.attach(adapter);
+    expect(attachmentOrder).toEqual(['first', 'second']);
     expect(first.parent.children).toEqual([first.root]);
     expect(second.parent.children).toEqual([second.root]);
     expect(host.activeEventId()).toBe('leak');
@@ -119,6 +129,24 @@ describe('EventPresentationHost', () => {
     expect(host.activeEventId()).toBeNull();
   });
 
+  it('rolls back a root when its parent attaches it and then throws', () => {
+    const parent = new Group();
+    const root = new Group();
+    const attachmentError = new Error('attach failed');
+    const add = parent.add.bind(parent);
+    vi.spyOn(parent, 'add').mockImplementation((object) => {
+      add(object);
+      throw attachmentError;
+    });
+    const host = new EventPresentationHost();
+    const adapter = createAdapter('leak', [{ parent, root }]);
+
+    expect(() => host.attach(adapter)).toThrow(attachmentError);
+
+    expect(root.parent).toBeNull();
+    expect(host.activeEventId()).toBeNull();
+  });
+
   it('rolls back all attached roots in reverse order', () => {
     const order: string[] = [];
     const first = { parent: new Group(), root: new Group() };
@@ -170,22 +198,47 @@ describe('EventPresentationHost', () => {
     host.attach(adapter);
     order.length = 0;
     host.detach(adapter);
+    host.detach(adapter);
 
     expect(order).toEqual(['second', 'first']);
   });
 
-  it('clears and detaches once when disposed', () => {
-    const root = new Group();
-    const adapter = createAdapter('leak', [{ parent: new Group(), root }]);
+  it('cleans up after a clear failure and preserves that error', () => {
+    const order: string[] = [];
+    const first = new Group();
+    const second = new Group();
+    const clearError = new Error('clear failed');
+    const adapter = createAdapter('leak', [
+      { parent: new Group(), root: first },
+      { parent: new Group(), root: second },
+    ]);
+    vi.mocked(adapter.clear).mockImplementation(() => {
+      order.push('clear');
+      throw clearError;
+    });
+    vi.spyOn(first, 'removeFromParent').mockImplementation(() => {
+      order.push('first');
+      return Group.prototype.removeFromParent.call(first);
+    });
+    vi.spyOn(second, 'removeFromParent').mockImplementation(() => {
+      order.push('second');
+      return Group.prototype.removeFromParent.call(second);
+    });
+    vi.mocked(adapter.dispose).mockImplementation(() => {
+      order.push('dispose');
+    });
     const host = new EventPresentationHost();
 
     host.attach(adapter);
-    host.dispose();
+    order.length = 0;
+    expect(() => host.dispose()).toThrow(clearError);
     host.dispose();
 
     expect(adapter.clear).toHaveBeenCalledOnce();
-    expect(adapter.dispose).not.toHaveBeenCalled();
-    expect(root.parent).toBeNull();
+    expect(adapter.dispose).toHaveBeenCalledOnce();
+    expect(order).toEqual(['clear', 'second', 'first', 'dispose']);
+    expect(first.parent).toBeNull();
+    expect(second.parent).toBeNull();
     expect(() => host.attach(createAdapter())).toThrow('Event presentation host is disposed.');
   });
 });
