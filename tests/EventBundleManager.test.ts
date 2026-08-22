@@ -1,18 +1,18 @@
 // Importance: 9/10. Protects event loading, activation, concurrency, failure cleanup, and shutdown.
 import { describe, expect, it, vi } from 'vitest';
 import { AnimationClip, Group, PerspectiveCamera } from 'three';
-import { ActiveEventPresenter } from '../src/survival/ActiveEventPresenter';
 import {
+  EventBundle,
   EventBundleLoader,
-  type EventBundle,
 } from '../src/survival/EventBundle';
+import type { EventPresentationAdapter } from '../src/survival/EventPresentationAdapter';
 import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
-import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
 import type { SurvivalEventModelLibrary } from '../src/survival/SurvivalEventModelLibrary';
 import {
   EventBundleManager,
   type EventBundleLoaderLike,
 } from '../src/survival/EventBundleManager';
+import { createFocusedAdapter } from '../src/survival/eventPresentationAdapters';
 import { createTestPropModels } from './helpers/propModels';
 
 function deferred<T>(): {
@@ -32,6 +32,25 @@ function bundle(eventId: EventBundle['eventId'], log: string[]): EventBundle {
     attach: vi.fn(() => log.push(`attach:${eventId}`)),
     dispose: vi.fn(() => log.push(`dispose:${eventId}`)),
   } as unknown as EventBundle;
+}
+
+function adapter(eventId: EventPresentationAdapter['eventId']): EventPresentationAdapter {
+  return {
+    eventId,
+    roots: [],
+    stage: vi.fn(),
+    reveal: vi.fn(async () => undefined),
+    playChoice: vi.fn(async () => undefined),
+    playItemUse: vi.fn(async () => false),
+    itemAimTarget: vi.fn(() => null),
+    interactionRoot: vi.fn(() => null),
+    resultRoot: vi.fn(() => null),
+    react: vi.fn(async () => undefined),
+    update: vi.fn(),
+    settleForVisibilityChange: vi.fn(),
+    clear: vi.fn(),
+    dispose: vi.fn(),
+  };
 }
 
 describe('EventBundleManager', () => {
@@ -96,27 +115,28 @@ describe('EventBundleManager', () => {
           })),
         },
         host: {
-          createEventPresenter: () => {
-            const layer = new EventPresentationLayer({
-              propModels,
-              waves: [],
-              cameraRig,
-              camera,
-              supplyDisplay: {} as never,
-              chestDisplay: {} as never,
-              emitCue: () => undefined,
-            }, {}, 'midnight-tour');
-            return new ActiveEventPresenter('midnight-tour', {
-              dedicated: null,
-              layer,
-              featured: null,
-              weather: null,
-              supernatural: null,
-              roots: [{ parent: scene, root: layer.root }],
-            });
+          createEventPresentation: () => createFocusedAdapter(
+            'midnight-tour',
+            {
+              worldParent: scene,
+              focusedDependencies: {
+                propModels,
+                waves: [],
+                cameraRig,
+                camera,
+                supplyDisplay: {} as never,
+                chestDisplay: {} as never,
+                emitCue: () => undefined,
+              },
+              focusedFactories: {},
+            } as never,
+          ),
+          attach: (presentation) => {
+            for (const root of presentation.roots) root.parent.add(root.root);
           },
-          attachEventPresenter: (presenter) => presenter.attach(),
-          detachEventPresenter: (presenter) => presenter.detach(),
+          detach: (presentation) => {
+            for (const root of presentation.roots) root.root.removeFromParent();
+          },
         },
         loadDedicatedModels: vi.fn(async () => ({
           dispose: vi.fn(),
@@ -161,9 +181,9 @@ describe('EventBundleManager', () => {
         })),
       },
       host: {
-        createEventPresenter: vi.fn(),
-        attachEventPresenter: vi.fn(),
-        detachEventPresenter: vi.fn(),
+        createEventPresentation: vi.fn(),
+        attach: vi.fn(),
+        detach: vi.fn(),
       },
       loadDedicatedModels: vi.fn(async () => {
         throw new Error('model failed');
@@ -179,6 +199,31 @@ describe('EventBundleManager', () => {
     });
     expect(audioDispose).toHaveBeenCalledOnce();
     expect(featuredDispose).toHaveBeenCalledOnce();
+  });
+
+  it('attaches through the host and disposes the adapter once', () => {
+    const presentation = adapter('leak');
+    const host = {
+      createEventPresentation: vi.fn(() => presentation),
+      attach: vi.fn(),
+      detach: vi.fn(),
+    };
+    const eventBundle = new EventBundle(
+      'leak',
+      host,
+      presentation,
+      { dispose: vi.fn() } as unknown as SurvivalEventModelLibrary,
+      { dispose: vi.fn() } as unknown as EventModelLibrary,
+      { sounds: [], dispose: vi.fn() },
+    );
+
+    eventBundle.attach();
+    eventBundle.dispose();
+    eventBundle.dispose();
+
+    expect(host.attach).toHaveBeenCalledWith(presentation);
+    expect(host.detach).toHaveBeenCalledWith(presentation);
+    expect(presentation.dispose).toHaveBeenCalledOnce();
   });
 
   it('loads, activates, and releases one event bundle', async () => {
