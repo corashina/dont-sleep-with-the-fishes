@@ -564,9 +564,11 @@ describe('Game menu lifecycle', () => {
       completeMenu();
       completeScavenge({ savedItems: [], elapsedSeconds: 3 });
       restartSurvival();
+      restartSurvival();
 
       expect(createMenu).toHaveBeenCalledOnce();
       expect(createScavenge).toHaveBeenCalledTimes(2);
+      expect(survival.dispose).toHaveBeenCalledOnce();
       expect(scavenges[1]!.start).toHaveBeenCalledOnce();
     } finally {
       game.dispose();

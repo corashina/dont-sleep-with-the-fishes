@@ -228,6 +228,13 @@ loading and keeps the seven obstacle visuals static.
 - `src/survival` — deterministic survival rules, inventory, events, orchestration, and lifeboat world.
 - `src/survival/eventCatalog`, `eventCatalogValidation`, `eventSelection`, `eventOutcomeRules`, `journalRecords`, `dayActionRules`, and `fishingSettlementRules` — focused survival domain rules.
 - `src/survival/SurvivalSession` — owns mutable survival state.
+- `src/survival/SurvivalPhase` — owns the survival phase lifecycle, global pause, restart, overrides, flow wiring, rendering, and top-level errors.
+- `src/survival/SurvivalDayActionFlow` — owns accepted day actions, chest actions, repairs, dives, sleep, and dawn requests.
+- `src/survival/SurvivalFishingFlow` — owns each fishing attempt and its view, timing, result, and return state.
+- `src/survival/SurvivalEventFlow` — owns event loading, reveal, choices, outcomes, dawn, and event cleanup.
+- `src/survival/DriftingItemFlow` — owns drifting-item focus, contextual choices, camera return, and target projection.
+- `src/survival/ItemAnimationLabFlow` — owns lab selection, item animation, repair-tool animation, cues, and lab bundles.
+- `src/survival/SurvivalVisibilityController` — owns document visibility listeners and resume waiters.
 - `src/survival/BoatWorld` — builds the lifeboat scene and coordinates frames, atmosphere, buoyancy, and top-level cleanup.
 - `src/survival/BoatCameraController` — owns rear, event, and drifting-item camera motion.
 - `src/survival/FishingPresentation` — owns fishing state, animation, particles, projection, and visual resources.

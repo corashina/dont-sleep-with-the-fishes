@@ -19,6 +19,7 @@ import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../world/SkyAssets';
 import type { LifeboatAssets } from '../world/LifeboatAssets';
 import type { ShipAssets } from '../world/ShipAssets';
+import { runCleanupSteps } from '../world/SceneResources';
 import type { SkyPhase } from '../world/skyPalette';
 import {
   presentationWeatherForEvent,
@@ -325,13 +326,13 @@ export class SurvivalPhase implements GamePhase {
       : time;
     this.simulationTimeInitialized = true;
     this.world.update?.(this.elapsedSeconds, deltaSeconds);
+    if (this.started) this.fishingFlow.update(deltaSeconds);
     const snapshot = this.session.snapshot();
     this.syncCameraTurnControl(snapshot);
     const presentationSnapshot = this.eventFlow.presentationSnapshot(snapshot);
     this.audio.update(deltaSeconds);
     this.syncVisualState(presentationSnapshot);
     this.eventFlow.sync(snapshot);
-    if (this.started) this.fishingFlow.update(deltaSeconds);
     this.presentTerminalOnce(snapshot);
   }
 
@@ -436,37 +437,41 @@ export class SurvivalPhase implements GamePhase {
 
   requestRestart(): void {
     if (this.disposed || this.restartRequested) return;
-    this.itemAnimationLabFlow.dispose();
-    this.eventFlow.clear();
-    this.driftingItemFlow.dispose();
-    this.dayActionFlow.settleForVisibilityChange();
-    this.dayActionFlow.dispose();
     this.restartRequested = true;
     this.lifecycleGeneration += 1;
-    this.visibilityController?.cancelResumeWaiters();
-    this.onRestart();
+    runCleanupSteps([
+      () => this.itemAnimationLabFlow.dispose(),
+      () => this.eventFlow.clear(),
+      () => this.driftingItemFlow.dispose(),
+      () => this.dayActionFlow.settleForVisibilityChange(),
+      () => this.dayActionFlow.dispose(),
+      () => this.visibilityController?.cancelResumeWaiters(),
+      () => this.onRestart(),
+    ]);
   }
 
   dispose(): void {
     if (this.disposed) return;
-    this.itemAnimationLabFlow.dispose();
-    this.eventFlow.dispose();
-    this.driftingItemFlow.dispose();
-    this.dayActionFlow.dispose();
     this.disposed = true;
     this.lifecycleGeneration += 1;
-    this.visibilityController?.cancelResumeWaiters();
-    this.fishingFlow.dispose();
-    this.ui.onFishingResultContinue = null;
-    this.ui.onFishingViewExit = null;
-    this.ui.onDriftingItemSelect = null;
-    this.ui.onDriftingItemBack = null;
-    this.visibilityController?.dispose();
-    this.visibilityController = null;
-    this.eventBundles.dispose();
-    this.audio.dispose();
-    this.world.dispose?.();
-    this.ui.dispose?.();
+    runCleanupSteps([
+      () => this.itemAnimationLabFlow.dispose(),
+      () => this.eventFlow.dispose(),
+      () => this.driftingItemFlow.dispose(),
+      () => this.dayActionFlow.dispose(),
+      () => this.visibilityController?.cancelResumeWaiters(),
+      () => this.fishingFlow.dispose(),
+      () => { this.ui.onFishingResultContinue = null; },
+      () => { this.ui.onFishingViewExit = null; },
+      () => { this.ui.onDriftingItemSelect = null; },
+      () => { this.ui.onDriftingItemBack = null; },
+      () => this.visibilityController?.dispose(),
+      () => { this.visibilityController = null; },
+      () => this.eventBundles.dispose(),
+      () => this.audio.dispose(),
+      () => this.world.dispose?.(),
+      () => this.ui.dispose?.(),
+    ]);
   }
 
   private initialize(

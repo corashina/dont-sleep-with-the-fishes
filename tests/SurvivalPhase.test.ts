@@ -7061,4 +7061,167 @@ describe('SurvivalPhase orchestration', () => {
     expect(stageEvent).not.toHaveBeenCalled();
     expect(eventBundles.dispose).toHaveBeenCalledOnce();
   });
+
+  it('updates active flows before projecting the current snapshot', () => {
+    const calls: string[] = [];
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => {
+          calls.push('snapshot');
+          return snapshot();
+        }),
+      },
+      world: {
+        update: vi.fn(() => calls.push('world')),
+        dispose: vi.fn(),
+      },
+      ui: { render: vi.fn(), dispose: vi.fn() },
+    });
+    phase.start();
+    const internals = phase as unknown as {
+      fishingFlow: { update(deltaSeconds: number): void };
+      eventFlow: {
+        presentationSnapshot(value: SurvivalSnapshot): SurvivalSnapshot;
+        sync(value: SurvivalSnapshot): void;
+      };
+      audio: { update(deltaSeconds: number): void };
+    };
+    vi.spyOn(internals.fishingFlow, 'update').mockImplementation(() => {
+      calls.push('fishing');
+    });
+    vi.spyOn(internals.eventFlow, 'presentationSnapshot').mockImplementation((value) => {
+      calls.push('presentation');
+      return value;
+    });
+    vi.spyOn(internals.eventFlow, 'sync').mockImplementation(() => {
+      calls.push('projection');
+    });
+    vi.spyOn(internals.audio, 'update').mockImplementation(() => {
+      calls.push('audio');
+    });
+    calls.length = 0;
+
+    phase.update(4, 1 / 60);
+
+    expect(calls).toEqual([
+      'world',
+      'fishing',
+      'snapshot',
+      'presentation',
+      'audio',
+      'projection',
+    ]);
+    phase.dispose();
+  });
+
+  it('disposes every phase owner once and keeps the first cleanup error', () => {
+    const fakeDocument = {
+      hidden: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+    vi.stubGlobal('document', fakeDocument);
+    const order: string[] = [];
+    const firstError = new Error('event flow cleanup failed');
+    const laterError = new Error('bundle cleanup failed');
+    const eventBundles = {
+      beginLoad: vi.fn(() => undefined),
+      activate: vi.fn(() => undefined),
+      cancelPendingActivation: vi.fn(),
+      releaseActive: vi.fn(),
+      dispose: vi.fn(() => {
+        order.push('bundles');
+        throw laterError;
+      }),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world: {
+        dispose: vi.fn(() => {
+          order.push('world');
+          throw new Error('world cleanup failed');
+        }),
+      },
+      ui: {
+        render: vi.fn(),
+        dispose: vi.fn(() => order.push('ui')),
+      },
+      eventBundles,
+    });
+    phase.start();
+    const internals = phase as unknown as {
+      itemAnimationLabFlow: { dispose(): void };
+      eventFlow: { dispose(): void };
+      driftingItemFlow: { dispose(): void };
+      dayActionFlow: { dispose(): void };
+      fishingFlow: { dispose(): void };
+      visibilityController: { dispose(): void };
+      audio: { dispose(): void };
+    };
+    const recordDispose = (
+      owner: { dispose(): void },
+      label: string,
+      error?: Error,
+    ) => {
+      const original = owner.dispose.bind(owner);
+      return vi.spyOn(owner, 'dispose').mockImplementation(() => {
+        order.push(label);
+        original();
+        if (error !== undefined) throw error;
+      });
+    };
+    const disposals = [
+      recordDispose(internals.itemAnimationLabFlow, 'lab'),
+      recordDispose(internals.eventFlow, 'event', firstError),
+      recordDispose(internals.driftingItemFlow, 'drifting'),
+      recordDispose(internals.dayActionFlow, 'day'),
+      recordDispose(internals.fishingFlow, 'fishing'),
+      recordDispose(internals.visibilityController, 'visibility'),
+      recordDispose(internals.audio, 'audio'),
+    ];
+
+    expect(() => phase.dispose()).toThrow(firstError);
+    expect(order).toEqual([
+      'lab',
+      'event',
+      'drifting',
+      'day',
+      'fishing',
+      'visibility',
+      'bundles',
+      'audio',
+      'world',
+      'ui',
+    ]);
+    expect(() => phase.dispose()).not.toThrow();
+    for (const dispose of disposals) expect(dispose).toHaveBeenCalledOnce();
+    expect(eventBundles.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('invalidates pending phase work before a guarded restart', async () => {
+    const cue = deferred();
+    const render = vi.fn();
+    const setBusy = vi.fn();
+    const onRestart = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => snapshot()),
+        perform: vi.fn(() => accepted()),
+      },
+      world: { play: vi.fn(() => cue.promise), dispose: vi.fn() },
+      ui: { render, setBusy, dispose: vi.fn() },
+      onRestart,
+    });
+
+    phase.handleAction('sendMessage');
+    phase.requestRestart();
+    phase.requestRestart();
+    cue.resolve();
+    await flushPromises();
+
+    expect(onRestart).toHaveBeenCalledOnce();
+    expect(render).not.toHaveBeenCalled();
+    expect(setBusy.mock.calls).toEqual([[true]]);
+    phase.dispose();
+  });
 });
