@@ -6201,6 +6201,23 @@ describe('SurvivalPhase orchestration', () => {
     expect(beginDawn).not.toHaveBeenCalled();
   });
 
+  it('routes each real journal page move to journal audio', () => {
+    const ui: Partial<SurvivalUI> = { render: vi.fn(), dispose: vi.fn() };
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world: { dispose: vi.fn() },
+      ui,
+    });
+    const phaseAudio = (phase as unknown as { audio: SurvivalAudio }).audio;
+    const journal = vi.spyOn(phaseAudio, 'journal');
+
+    ui.onJournalPage?.();
+    ui.onJournalPage?.();
+
+    expect(journal).toHaveBeenCalledTimes(2);
+    phase.dispose();
+  });
+
   it('resumes updates when a visibility-owned pause ends', () => {
     const listeners = new Map<string, EventListener>();
     const fakeDocument = {

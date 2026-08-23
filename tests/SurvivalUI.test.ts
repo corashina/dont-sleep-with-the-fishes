@@ -16,6 +16,8 @@ import { BoatAnchorView } from '../src/ui/BoatAnchorView';
 import { SurvivalCoverView } from '../src/ui/SurvivalCoverView';
 import { SurvivalFishingView } from '../src/ui/SurvivalFishingView';
 import { SurvivalHudView } from '../src/ui/SurvivalHudView';
+import { SurvivalJournalView } from '../src/ui/SurvivalJournalView';
+import { SurvivalModalViews } from '../src/ui/SurvivalModalViews';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 import { DAY_ACTION_IDS } from '../src/ui/SurvivalUiViewModel';
 
@@ -1429,6 +1431,32 @@ describe('SurvivalUI', () => {
     expect(action).toHaveBeenCalledWith('repairItem', { kind: 'itemRepair', target: 'bucket-2' });
   });
 
+  it('cancels repair locally and restores the command origin without an action', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = new SurvivalUI(mount);
+    activeUIs.push(ui);
+    const state = new SurvivalSession(saved('ductTape', 'bucket'), {
+      seed: 2,
+      initialConditions: { 'bucket-2': 'broken' },
+    }).snapshot();
+    const action = vi.fn();
+    ui.onAction = action;
+    ui.render(state, () => null);
+    ui.setAnchors([{
+      id: 'ductTape-1', itemType: 'ductTape', toolId: null, action: 'repairItem',
+      remainingUses: 1, x: 100, y: 100, visible: true, depleted: false,
+    }]);
+    const origin = mount.querySelector<HTMLButtonElement>('[data-action="repairItem"]')!;
+
+    origin.click();
+    mount.querySelector<HTMLButtonElement>('[data-repair-cancel]')!.click();
+
+    expect(action).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(origin);
+    expect(mount.querySelector('[data-repair-options]')?.hasAttribute('inert')).toBe(true);
+  });
+
   it('shows event feedback and routes only eligible physical anchors', async () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');
@@ -1931,6 +1959,40 @@ describe('SurvivalUI', () => {
     expect(close).toHaveBeenCalledOnce();
     expect(layer.hasAttribute('inert')).toBe(true);
     ui.dispose();
+  });
+
+  it('forwards journal page callbacks only after real page moves', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const page = vi.fn();
+    ui.onJournalPage = page;
+    ui.showJournal(journalEntries);
+    const previous = mount.querySelector<HTMLButtonElement>('[data-journal-previous]')!;
+    const next = mount.querySelector<HTMLButtonElement>('[data-journal-next]')!;
+
+    next.click();
+    previous.click();
+    previous.click();
+    next.click();
+
+    expect(page).toHaveBeenCalledTimes(2);
+    expect(mount.querySelector('[data-journal-page-count]')?.textContent).toBe('PAGE 2 OF 2');
+  });
+
+  it('keeps journal and static modal roots owned by their named views', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const internals = ui as unknown as {
+      readonly journalView: SurvivalJournalView;
+      readonly modalViews: SurvivalModalViews;
+    };
+
+    expect(internals.journalView.root).toBe(mount.querySelector('[data-journal]'));
+    expect(internals.modalViews.repairRoot).toBe(mount.querySelector('[data-repair-options]'));
+    expect(internals.modalViews.pauseRoot).toBe(mount.querySelector('[data-pause]'));
+    expect(internals.modalViews.endingRoot).toBe(mount.querySelector('[data-ending]'));
+    expect(internals.modalViews).not.toHaveProperty('roots');
   });
 
   it('publishes item, repair-toolbox, and lantern hover and focus', () => {
@@ -3587,6 +3649,48 @@ describe('SurvivalUI', () => {
     expect(hudDispose).toHaveBeenCalledOnce();
     expect(rootRemove).toHaveBeenCalledOnce();
   });
+
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['Error', new Error('journal listener cleanup failed')],
+  ] as const)(
+    'continues static listener and facade cleanup after a %s journal listener failure',
+    (_label, firstError) => {
+      const mount = document.createElement('main');
+      document.body.append(mount);
+      const ui = createUI(mount);
+      const internals = ui as unknown as {
+        readonly root: HTMLElement;
+        readonly journalView: SurvivalJournalView;
+        readonly modalViews: SurvivalModalViews;
+      };
+      const journalRemove = vi.spyOn(internals.journalView.root, 'removeEventListener')
+        .mockImplementationOnce(() => { throw firstError; });
+      const repairRemove = vi.spyOn(internals.modalViews.repairRoot, 'removeEventListener');
+      const pauseRemove = vi.spyOn(internals.modalViews.pauseRoot, 'removeEventListener');
+      const endingRemove = vi.spyOn(internals.modalViews.endingRoot, 'removeEventListener');
+      const documentRemove = vi.spyOn(document, 'removeEventListener');
+      const rootRemove = vi.spyOn(internals.root, 'remove');
+      let thrown: unknown = Symbol('not thrown');
+
+      try {
+        ui.dispose();
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBe(firstError);
+      expect(journalRemove).toHaveBeenCalledWith('click', expect.any(Function));
+      expect(repairRemove).toHaveBeenCalledWith('click', expect.any(Function));
+      expect(pauseRemove).toHaveBeenCalledWith('click', expect.any(Function));
+      expect(endingRemove).toHaveBeenCalledWith('click', expect.any(Function));
+      expect(documentRemove.mock.calls.some(([type]) => type === 'keydown')).toBe(true);
+      expect(rootRemove).toHaveBeenCalledOnce();
+      expect(mount.children).toHaveLength(0);
+      expect(() => ui.dispose()).not.toThrow();
+    },
+  );
 
   it('keeps one document keydown listener in the facade owner', () => {
     const add = vi.spyOn(document, 'addEventListener');
