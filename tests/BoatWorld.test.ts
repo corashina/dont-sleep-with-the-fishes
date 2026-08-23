@@ -2350,6 +2350,164 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('updates the event presentation before advancing the drifting camera', async () => {
+    const propModels = createTestPropModels();
+    const featuredModels = await createTestFeaturedModels(['driftingBottle']);
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      featuredModels,
+    );
+    world.stageEvent('drifting-bottle', 8);
+    const entered = world.enterDriftingItemView('drifting-bottle');
+    const internals = world as unknown as {
+      eventPresentationHost: { update(time: number, delta: number): void };
+      cameraController: {
+        updateDriftingItemView(delta: number, target: Object3D | null): void;
+      };
+    };
+    const order: string[] = [];
+    const originalEventUpdate = internals.eventPresentationHost.update
+      .bind(internals.eventPresentationHost);
+    vi.spyOn(internals.eventPresentationHost, 'update').mockImplementation((time, delta) => {
+      originalEventUpdate(time, delta);
+      order.push('event');
+    });
+    const originalCameraUpdate = internals.cameraController.updateDriftingItemView
+      .bind(internals.cameraController);
+    vi.spyOn(internals.cameraController, 'updateDriftingItemView')
+      .mockImplementation((delta, target) => {
+        order.push('camera');
+        originalCameraUpdate(delta, target);
+      });
+
+    world.update(0.3, 0.3);
+
+    expect(order).toEqual(['event', 'camera']);
+    world.dispose();
+    await entered;
+    featuredModels.dispose();
+    propModels.dispose();
+  });
+
+  it('uses a replacement presentation target for the active drifting view', async () => {
+    const propModels = createTestPropModels();
+    const featuredModels = await createTestFeaturedModels([
+      'driftingBottle',
+      'driftingBarrel',
+    ]);
+    const camera = new PerspectiveCamera(65, 4 / 3, 0.08, 220);
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      featuredModels,
+    );
+    world.stageEvent('drifting-bottle', 8);
+    const entered = world.enterDriftingItemView('drifting-bottle');
+    world.update(1.1, 1.1);
+    await entered;
+
+    world.stageEvent('drifting-barrel', 9);
+    world.update(1.2, 0.1);
+
+    const barrel = world.scene.getObjectByName('drifting-barrel:model')!;
+    const direction = camera.getWorldDirection(new Vector3());
+    const directionToBarrel = barrel.getWorldPosition(new Vector3())
+      .sub(camera.getWorldPosition(new Vector3()))
+      .normalize();
+    expect(direction.dot(directionToBarrel)).toBeGreaterThan(0.995);
+    world.dispose();
+    featuredModels.dispose();
+    propModels.dispose();
+  });
+
+  it('restores the base pose when the current presentation has no aim target', async () => {
+    const propModels = createTestPropModels();
+    const featuredModels = await createTestFeaturedModels(['driftingBottle']);
+    const camera = new PerspectiveCamera(65, 4 / 3, 0.08, 220);
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      featuredModels,
+    );
+    const basePosition = camera.position.clone();
+    const baseQuaternion = camera.quaternion.clone();
+    world.stageEvent('drifting-bottle', 8);
+    const entered = world.enterDriftingItemView('drifting-bottle');
+    world.update(1.1, 1.1);
+    await entered;
+
+    const internals = world as unknown as {
+      eventPresentationHost: { itemAimTarget(): Object3D | null };
+    };
+    vi.spyOn(internals.eventPresentationHost, 'itemAimTarget').mockReturnValue(null);
+    world.update(1.2, 0.1);
+
+    expect(camera.position.toArray()).toEqual(basePosition.toArray());
+    expect(camera.quaternion.toArray()).toEqual(baseQuaternion.toArray());
+    world.dispose();
+    featuredModels.dispose();
+    propModels.dispose();
+  });
+
+  it('samples the sky from the base camera before drifting advancement', async () => {
+    const propModels = createTestPropModels();
+    const featuredModels = await createTestFeaturedModels(['driftingBottle']);
+    const camera = new PerspectiveCamera(65, 4 / 3, 0.08, 220);
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      featuredModels,
+    );
+    const basePosition = camera.position.clone();
+    const skyCameraPosition = new Vector3();
+    const internals = world as unknown as {
+      sky: {
+        update(delta: number, state: unknown, cameraPosition: Readonly<Vector3>): void;
+      };
+    };
+    const originalSkyUpdate = internals.sky.update.bind(internals.sky);
+    vi.spyOn(internals.sky, 'update').mockImplementation((delta, state, position) => {
+      skyCameraPosition.copy(position);
+      originalSkyUpdate(delta, state, position);
+    });
+    world.stageEvent('drifting-bottle', 8);
+    const entered = world.enterDriftingItemView('drifting-bottle');
+
+    world.update(0.55, 0.55);
+
+    world.scene.updateMatrixWorld(true);
+    const skyLocalPosition = camera.parent!.worldToLocal(skyCameraPosition.clone());
+    expect(skyLocalPosition.x).toBeCloseTo(basePosition.x, 6);
+    expect(skyLocalPosition.y).toBeCloseTo(basePosition.y, 6);
+    expect(skyLocalPosition.z).toBeCloseTo(basePosition.z, 6);
+    expect(camera.position.toArray()).not.toEqual(basePosition.toArray());
+    world.dispose();
+    await entered;
+    featuredModels.dispose();
+    propModels.dispose();
+  });
+
   it.each([
     'drifting-barrel',
     'drifting-chest',

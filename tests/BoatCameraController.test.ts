@@ -88,7 +88,8 @@ describe('BoatCameraController', () => {
     scene.add(target);
 
     const entered = controller.beginDriftingItemView(target);
-    controller.update(1.1);
+    controller.update(0);
+    controller.updateDriftingItemView(1.1, target);
     await entered;
 
     expect(camera.position.toArray()).toEqual(DRIFTING_POSITION.toArray());
@@ -99,7 +100,7 @@ describe('BoatCameraController', () => {
     expect(direction.dot(directionToTarget)).toBeGreaterThan(0.9999);
 
     target.position.x = -1.2;
-    controller.refreshDriftingItemView();
+    controller.applyDriftingItemView(target);
     expect(camera.getWorldDirection(direction).dot(
       target.getWorldPosition(directionToTarget)
         .sub(camera.getWorldPosition(new Vector3()))
@@ -107,7 +108,8 @@ describe('BoatCameraController', () => {
     )).toBeGreaterThan(0.9999);
 
     const returned = controller.endDriftingItemView();
-    controller.update(1.1);
+    controller.update(0);
+    controller.updateDriftingItemView(1.1, target);
     await returned;
     expect(camera.position.toArray()).toEqual(BASE_POSITION.toArray());
     expect(camera.quaternion.angleTo(baseQuaternion)).toBeLessThan(0.0001);
