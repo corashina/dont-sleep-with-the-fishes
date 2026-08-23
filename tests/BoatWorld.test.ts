@@ -6933,7 +6933,19 @@ describe('BoatWorld helpers', () => {
       toolHoverOutline: { dispose(): void };
       hangingLantern: { dispose(): void };
       lantern: { dispose(): void };
-      fishingPresentation: { dispose(): void };
+      fishingPresentation: {
+        disposeAnimation(): void;
+        disposeCatches(): void;
+        disposeParticles(): void;
+        detach(): void;
+        disposeVisualResources(): void;
+        dependencies: {
+          catches: { dispose(): void };
+          biteParticles: { dispose(): void };
+        };
+        ownedGeometries: Set<BufferGeometry>;
+        ownedMaterials: Set<Material>;
+      };
       ocean: { dispose(): void };
       weatherEffects: { dispose(): void };
       sky: { dispose(): void };
@@ -6956,24 +6968,40 @@ describe('BoatWorld helpers', () => {
       vi.spyOn(internals.toolHoverOutline, 'dispose'),
       vi.spyOn(internals.hangingLantern, 'dispose'),
       vi.spyOn(internals.lantern, 'dispose'),
-      vi.spyOn(internals.fishingPresentation, 'dispose'),
+      vi.spyOn(internals.fishingPresentation.dependencies.catches, 'dispose'),
+      vi.spyOn(internals.fishingPresentation.dependencies.biteParticles, 'dispose'),
       vi.spyOn(internals.ocean, 'dispose'),
       vi.spyOn(internals.weatherEffects, 'dispose'),
       vi.spyOn(internals.sky, 'dispose'),
+    ];
+    const fishingPhaseDisposals = [
+      vi.spyOn(internals.fishingPresentation, 'disposeAnimation'),
+      vi.spyOn(internals.fishingPresentation, 'disposeCatches'),
+      vi.spyOn(internals.fishingPresentation, 'disposeParticles'),
+      vi.spyOn(internals.fishingPresentation, 'detach'),
+      vi.spyOn(internals.fishingPresentation, 'disposeVisualResources'),
     ];
     const repairCancel = vi.spyOn(internals.repairToolboxAnimation, 'cancel');
     const resources = [
       ...internals.ownedGeometries,
       ...internals.ownedMaterials,
       ...internals.ownedTextures,
+      ...internals.fishingPresentation.ownedGeometries,
+      ...internals.fishingPresentation.ownedMaterials,
     ];
     const resourceDisposals = resources.map((resource) => vi.spyOn(resource, 'dispose'));
 
     world.dispose();
     world.dispose();
+    internals.fishingPresentation.disposeAnimation();
+    internals.fishingPresentation.disposeCatches();
+    internals.fishingPresentation.disposeParticles();
+    internals.fishingPresentation.detach();
+    internals.fishingPresentation.disposeVisualResources();
 
     expect(resources).toHaveLength(new Set(resources).size);
     ownerDisposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+    fishingPhaseDisposals.forEach((dispose) => expect(dispose).toHaveBeenCalledTimes(2));
     resourceDisposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
     expect(repairCancel).toHaveBeenCalledOnce();
     propModels.dispose();
@@ -6997,7 +7025,6 @@ describe('BoatWorld helpers', () => {
     const internals = world as unknown as {
       ocean: { dispose(): void };
       fishingPresentation: {
-        dispose(): void;
         disposeAnimation(): void;
         disposeCatches(): void;
         disposeParticles(): void;
@@ -7023,11 +7050,6 @@ describe('BoatWorld helpers', () => {
       throw firstError;
     });
     const fishing = internals.fishingPresentation;
-    const originalFishingDispose = fishing.dispose.bind(fishing);
-    const fishingDispose = vi.spyOn(fishing, 'dispose').mockImplementation(() => {
-      calls.push('fishing');
-      originalFishingDispose();
-    });
     const originalAnimationDispose = fishing.disposeAnimation.bind(fishing);
     const animationDispose = vi.spyOn(fishing, 'disposeAnimation').mockImplementation(() => {
       calls.push('fishing-animation');
@@ -7099,19 +7121,18 @@ describe('BoatWorld helpers', () => {
     expect(() => world.dispose()).toThrow(firstError);
 
     expect(calls).toEqual([
-      'fishing',
       'fishing-animation',
       'fishing-catches',
-      'fishing-particles',
-      'fishing-detach',
-      'fishing-visuals',
       'ocean',
+      'fishing-particles',
       'sky',
+      'fishing-detach',
       'scene',
       'camera',
       'geometry',
       'material',
       'texture',
+      'fishing-visuals',
     ]);
     expect(world.scene.children).toEqual([]);
     expect(camera.parent).toBe(originalParent);
@@ -7123,7 +7144,6 @@ describe('BoatWorld helpers', () => {
     expect(() => world.dispose()).not.toThrow();
     [
       oceanDispose,
-      fishingDispose,
       animationDispose,
       catchDispose,
       particleDispose,
@@ -7290,69 +7310,116 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps fishing and atmosphere disposal error priority', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-    const internals = world as unknown as {
-      fishingPresentation: FishingPresentation;
-      ocean: { dispose(): void };
-      weatherEffects: { dispose(): void };
-      sky: { dispose(): void };
-      ownedGeometries: Set<BufferGeometry>;
-    };
-    const calls: string[] = [];
-    const firstError = new Error('catch cleanup failed');
-    const oceanError = new Error('ocean cleanup failed');
-    const weatherError = new Error('weather cleanup failed');
-    const particleError = new Error('particle cleanup failed');
-    const presentationInternals = internals.fishingPresentation as unknown as {
-      dependencies: {
-        catches: { dispose(): void };
-        biteParticles: { dispose(): void };
+  it('preserves phased cleanup order and every simultaneous-failure priority', () => {
+    type CleanupStep =
+      | 'animation'
+      | 'catches'
+      | 'ocean'
+      | 'weather'
+      | 'particles'
+      | 'sky'
+      | 'detach'
+      | 'world-resources'
+      | 'fishing-visuals';
+    const cleanupOrder = [
+      'animation',
+      'catches',
+      'ocean',
+      'weather',
+      'particles',
+      'sky',
+      'detach',
+      'world-resources',
+      'fishing-visuals',
+    ] as const satisfies readonly CleanupStep[];
+    const failureCases = cleanupOrder.slice(1).map((first, index) => ({
+      first,
+      failures: new Set<CleanupStep>(cleanupOrder.slice(index + 1)),
+    }));
+
+    for (const { first, failures } of failureCases) {
+      const propModels = createTestPropModels();
+      const world = new BoatWorld(
+        new PerspectiveCamera(),
+        propModels,
+        createTestMoonTexture(),
+      );
+      const internals = world as unknown as {
+        fishingPresentation: FishingPresentation;
+        ocean: { dispose(): void };
+        weatherEffects: { dispose(): void };
+        sky: { dispose(): void };
+        ownedGeometries: Set<BufferGeometry>;
       };
-    };
-    const catches = presentationInternals.dependencies.catches;
-    const originalCatchDispose = catches.dispose.bind(catches);
-    vi.spyOn(catches, 'dispose').mockImplementation(() => {
-      calls.push('catches');
-      originalCatchDispose();
-      throw firstError;
-    });
-    const originalOceanDispose = internals.ocean.dispose.bind(internals.ocean);
-    vi.spyOn(internals.ocean, 'dispose').mockImplementation(() => {
-      calls.push('ocean');
-      originalOceanDispose();
-      throw oceanError;
-    });
-    const originalWeatherDispose = internals.weatherEffects.dispose
-      .bind(internals.weatherEffects);
-    vi.spyOn(internals.weatherEffects, 'dispose').mockImplementation(() => {
-      calls.push('weather');
-      originalWeatherDispose();
-      throw weatherError;
-    });
-    const particles = presentationInternals.dependencies.biteParticles;
-    const originalParticleDispose = particles.dispose.bind(particles);
-    vi.spyOn(particles, 'dispose').mockImplementation(() => {
-      calls.push('particles');
-      originalParticleDispose();
-      throw particleError;
-    });
-    const skyDispose = vi.spyOn(internals.sky, 'dispose');
-    const geometry = internals.ownedGeometries.values().next().value!;
-    const geometryDispose = vi.spyOn(geometry, 'dispose');
+      const errors = new Map<CleanupStep, Error>(cleanupOrder.map((step) => [
+        step,
+        new Error(`${step} cleanup failed`),
+      ]));
+      const order: CleanupStep[] = [];
+      const throwIfFailed = (step: CleanupStep): void => {
+        if (failures.has(step)) throw errors.get(step)!;
+      };
+      const presentation = internals.fishingPresentation;
+      const disposeAnimation = presentation.disposeAnimation.bind(presentation);
+      vi.spyOn(presentation, 'disposeAnimation').mockImplementation(() => {
+        order.push('animation');
+        disposeAnimation();
+      });
+      const disposeCatches = presentation.disposeCatches.bind(presentation);
+      vi.spyOn(presentation, 'disposeCatches').mockImplementation(() => {
+        order.push('catches');
+        disposeCatches();
+        throwIfFailed('catches');
+      });
+      const disposeOcean = internals.ocean.dispose.bind(internals.ocean);
+      vi.spyOn(internals.ocean, 'dispose').mockImplementation(() => {
+        order.push('ocean');
+        disposeOcean();
+        throwIfFailed('ocean');
+      });
+      const disposeWeather = internals.weatherEffects.dispose.bind(internals.weatherEffects);
+      vi.spyOn(internals.weatherEffects, 'dispose').mockImplementation(() => {
+        order.push('weather');
+        disposeWeather();
+        throwIfFailed('weather');
+      });
+      const disposeParticles = presentation.disposeParticles.bind(presentation);
+      vi.spyOn(presentation, 'disposeParticles').mockImplementation(() => {
+        order.push('particles');
+        disposeParticles();
+        throwIfFailed('particles');
+      });
+      const disposeSky = internals.sky.dispose.bind(internals.sky);
+      vi.spyOn(internals.sky, 'dispose').mockImplementation(() => {
+        order.push('sky');
+        disposeSky();
+        throwIfFailed('sky');
+      });
+      const detach = presentation.detach.bind(presentation);
+      vi.spyOn(presentation, 'detach').mockImplementation(() => {
+        order.push('detach');
+        detach();
+        throwIfFailed('detach');
+      });
+      const geometry = internals.ownedGeometries.values().next().value!;
+      const disposeGeometry = geometry.dispose.bind(geometry);
+      vi.spyOn(geometry, 'dispose').mockImplementation(() => {
+        order.push('world-resources');
+        disposeGeometry();
+        throwIfFailed('world-resources');
+      });
+      const disposeFishingVisuals = presentation.disposeVisualResources.bind(presentation);
+      vi.spyOn(presentation, 'disposeVisualResources').mockImplementation(() => {
+        order.push('fishing-visuals');
+        disposeFishingVisuals();
+        throwIfFailed('fishing-visuals');
+      });
 
-    expect(() => world.dispose()).toThrow(firstError);
-    expect(calls).toEqual(['catches', 'particles', 'ocean', 'weather']);
-    expect(skyDispose).toHaveBeenCalledOnce();
-    expect(geometryDispose).toHaveBeenCalledOnce();
-    expect(() => world.dispose()).not.toThrow();
-
-    propModels.dispose();
+      expect(() => world.dispose()).toThrow(errors.get(first));
+      expect(order).toEqual(cleanupOrder);
+      expect(() => world.dispose()).not.toThrow();
+      propModels.dispose();
+    }
   });
 
   it('resets base lighting, motion, cue, and rescue state on ready entry and clear', async () => {
