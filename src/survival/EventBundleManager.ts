@@ -113,17 +113,22 @@ export class EventBundleManager {
     this.pending = null;
     if (pending !== null) pending.cancelled = true;
     let firstError: unknown;
+    let failed = false;
     try {
       if (pending !== null) this.disposePendingBundle(pending);
     } catch (error) {
       firstError = error;
+      failed = true;
     }
     try {
       this.releaseActive();
     } catch (error) {
-      firstError ??= error;
+      if (!failed) {
+        firstError = error;
+        failed = true;
+      }
     }
-    if (firstError !== undefined) throw firstError;
+    if (failed) throw firstError;
   }
 
   private disposePendingBundle(pending: PendingBundle): void {

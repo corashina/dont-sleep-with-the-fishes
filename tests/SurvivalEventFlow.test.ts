@@ -117,7 +117,6 @@ function createRig(
       calls.push(`use:${eventId}/${choiceId}`);
       onAction?.(0);
     }),
-    returnEventItemUse: vi.fn(async () => undefined),
     playEventChoice: vi.fn(async (_eventId: string, choice: unknown) => {
       const choiceId = typeof choice === 'string'
         ? choice
@@ -597,6 +596,24 @@ describe('SurvivalEventFlow', () => {
     expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
     expect(rig.calls).toContain('weather:calm');
   });
+
+  it.each([undefined, null])(
+    'preserves a first cleanup failure thrown as %s',
+    (firstError) => {
+      const rig = createRig(snapshot());
+      rig.audio.clearEvent.mockImplementationOnce(() => { throw firstError; });
+      rig.world.clearEvent.mockImplementationOnce(() => {
+        throw new Error('later world cleanup failed');
+      });
+
+      rig.flow.clear();
+
+      expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(firstError);
+      expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
+      expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
+      expect(rig.calls).toContain('weather:calm');
+    },
+  );
 
   it('keeps disposal idempotent when the fatal reporter throws', () => {
     const cleanupError = new Error('audio cleanup failed');

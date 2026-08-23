@@ -44,7 +44,6 @@ export type EventWorldPort = Pick<
   | 'stageEvent'
   | 'revealEvent'
   | 'playEventItemUse'
-  | 'returnEventItemUse'
   | 'playEventChoice'
   | 'reactToEventOutcome'
   | 'clearEvent'
@@ -1502,14 +1501,18 @@ export class SurvivalEventFlow {
       () => this.dependencies.setAutomaticWeather(null),
     ];
     let firstError: unknown;
+    let failed = false;
     for (const step of steps) {
       try {
         step();
       } catch (error) {
-        firstError ??= error;
+        if (!failed) {
+          firstError = error;
+          failed = true;
+        }
       }
     }
-    if (reportCleanupErrors && firstError !== undefined) {
+    if (reportCleanupErrors && failed) {
       this.dependencies.onFatalError(firstError);
     }
   }
