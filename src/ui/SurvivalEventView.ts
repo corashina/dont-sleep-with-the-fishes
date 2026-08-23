@@ -273,10 +273,6 @@ export class SurvivalEventView {
     return [...this.choices.querySelectorAll<HTMLButtonElement>('[data-event-choice]')];
   }
 
-  contains(target: Node): boolean {
-    return this.roots.some((root) => root.contains(target));
-  }
-
   containsChoice(target: EventTarget | null): boolean {
     return target instanceof Node && this.choices.contains(target);
   }

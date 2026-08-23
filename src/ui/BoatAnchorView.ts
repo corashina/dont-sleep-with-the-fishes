@@ -466,14 +466,6 @@ export class BoatAnchorView {
     return anchorId === undefined ? null : this.anchorButtons.get(anchorId) ?? null;
   }
 
-  contains(target: Node): boolean {
-    return this.anchorLayer.contains(target) || this.carlitosCard.contains(target);
-  }
-
-  containsAnchor(target: Node): boolean {
-    return this.anchorLayer.contains(target);
-  }
-
   isCarlitosCardOpen(): boolean {
     return !this.carlitosCard.hidden;
   }

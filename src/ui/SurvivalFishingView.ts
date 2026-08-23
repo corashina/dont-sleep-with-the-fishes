@@ -241,10 +241,6 @@ export class SurvivalFishingView {
     return this.interactionRoot;
   }
 
-  contains(target: Node): boolean {
-    return this.roots.some((root) => root.contains(target));
-  }
-
   beginDispose(): boolean {
     if (this.disposed) return false;
     this.disposed = true;
