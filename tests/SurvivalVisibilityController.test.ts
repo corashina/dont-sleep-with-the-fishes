@@ -199,4 +199,43 @@ describe('SurvivalVisibilityController', () => {
     expect(() => controller.dispose()).not.toThrow();
     expect(fake.document.removeEventListener).toHaveBeenCalledOnce();
   });
+
+  it.each([undefined, null])(
+    'preserves a first disposal failure thrown as %s',
+    async (firstError) => {
+      const fake = fakeDocument(true);
+      vi.mocked(fake.document.removeEventListener).mockImplementationOnce(() => {
+        throw firstError;
+      });
+      const controller = new SurvivalVisibilityController(
+        fake.document,
+        vi.fn(),
+        vi.fn(),
+      );
+      const first = controller.waitForResume(() => true);
+      const second = controller.waitForResume(() => true);
+      const cancelWaiters = controller.cancelResumeWaiters.bind(controller);
+      vi.spyOn(controller, 'cancelResumeWaiters').mockImplementationOnce(() => {
+        cancelWaiters();
+        throw new Error('later waiter cleanup failed');
+      });
+
+      let thrown = false;
+      let received: unknown;
+      try {
+        controller.dispose();
+      } catch (error) {
+        thrown = true;
+        received = error;
+      }
+
+      expect(thrown).toBe(true);
+      expect(received).toBe(firstError);
+      await expect(first).resolves.toBe(false);
+      await expect(second).resolves.toBe(false);
+      expect(() => controller.dispose()).not.toThrow();
+      expect(fake.document.removeEventListener).toHaveBeenCalledOnce();
+      expect(controller.cancelResumeWaiters).toHaveBeenCalledOnce();
+    },
+  );
 });

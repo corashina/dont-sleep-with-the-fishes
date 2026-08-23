@@ -335,6 +335,46 @@ describe('ItemAnimationLabFlow', () => {
     await play;
   });
 
+  it.each([undefined, null])(
+    'preserves a first disposal failure thrown as %s',
+    (firstError) => {
+      const rig = createRig();
+      vi.mocked(rig.world.cancelRepairToolboxAnimation).mockImplementationOnce(() => {
+        throw firstError;
+      });
+      vi.mocked(rig.audio.clearEvent).mockImplementationOnce(() => {
+        throw new Error('later audio cleanup failed');
+      });
+      rig.flow.enter(rig.session.snapshot());
+
+      rig.flow.dispose();
+
+      expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(firstError);
+      expect(rig.world.clearEvent).toHaveBeenCalledOnce();
+      expect(rig.bundles.cancelPendingActivation).toHaveBeenCalledOnce();
+      expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
+      expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
+      expect(rig.setAutomaticWeather).toHaveBeenLastCalledWith(null);
+      expect(rig.setBusy).toHaveBeenLastCalledWith(false);
+    },
+  );
+
+  it('reports a lone undefined cleanup failure', () => {
+    const rig = createRig();
+    vi.mocked(rig.world.clearEvent).mockImplementationOnce(() => {
+      throw undefined;
+    });
+    rig.flow.enter(rig.session.snapshot());
+
+    rig.flow.dispose();
+
+    expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(undefined);
+    expect(rig.bundles.cancelPendingActivation).toHaveBeenCalledOnce();
+    expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
+    expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
+    expect(rig.setBusy).toHaveBeenLastCalledWith(false);
+  });
+
   it('cancels pending activation before releasing its active bundle', async () => {
     const rig = createRig();
     const activation = deferred();
