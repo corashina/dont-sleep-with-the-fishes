@@ -140,7 +140,7 @@ function createRig() {
     }),
     revealPending: vi.fn(async () => { calls.push('events:reveal'); }),
     finishQuietNight: vi.fn(() => calls.push('events:finish-night')),
-    clear: vi.fn(() => calls.push('events:clear')),
+    clearAfterFailure: vi.fn(() => calls.push('events:clear-failure')),
   } as unknown as DayActionEventPort;
   const renderSnapshot = vi.fn(() => {
     calls.push(`render:${current.state}`);
@@ -530,6 +530,35 @@ describe('SurvivalDayActionFlow', () => {
 
     expect(rig.onFatalError).toHaveBeenCalledTimes(1);
     expect(rig.onFatalError).toHaveBeenCalledWith(primary);
+  });
+
+  it('runs dive audio cleanup when presentation cleanup fails', async () => {
+    const rig = createRig();
+    const primary = new Error('dive failed');
+    vi.mocked(rig.world.playDive).mockRejectedValueOnce(primary);
+    vi.mocked(rig.world.clearDivePresentation).mockImplementationOnce(() => {
+      throw new Error('dive presentation cleanup failed');
+    });
+
+    await rig.flow.run('dive');
+
+    expect(rig.audio.cancelDive).toHaveBeenCalledOnce();
+    expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(primary);
+  });
+
+  it('keeps an end-day error primary when event cleanup fails', async () => {
+    const rig = createRig();
+    const primary = new Error('night cue failed');
+    vi.mocked(rig.world.play).mockRejectedValueOnce(primary);
+    vi.mocked(rig.events.clearAfterFailure).mockImplementationOnce(() => {
+      throw new Error('event cleanup failed');
+    });
+
+    await rig.flow.run('endDay');
+
+    expect(rig.events.clearAfterFailure).toHaveBeenCalledOnce();
+    expect(rig.events.finishQuietNight).toHaveBeenCalledOnce();
+    expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(primary);
   });
 
   it('cancels dive audio when visibility settles', () => {

@@ -495,6 +495,19 @@ describe('SurvivalEventFlow', () => {
     expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
   });
 
+  it('suppresses cleanup errors when another flow owns the primary failure', () => {
+    const rig = createRig(snapshot());
+    rig.world.clearEvent.mockImplementationOnce(() => {
+      throw new Error('secondary world cleanup failed');
+    });
+
+    rig.flow.clearAfterFailure();
+
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+    expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
+    expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
+  });
+
   it('cleans and unlocks when night-transition UI setup throws', () => {
     const pending = snapshot({ state: 'nightEvent', pendingEventId: 'shower-night' });
     const rig = createRig(pending);
