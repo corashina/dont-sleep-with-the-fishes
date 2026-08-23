@@ -1,9 +1,10 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it, vi } from 'vitest';
 import type { ProjectedBoatBounds } from '../src/survival/BoatInteraction';
-import type {
-  DriftingItemFocusView,
-} from '../src/ui/SurvivalUI';
+import type { DriftingItemFocusView } from '../src/ui/DriftingItemView';
 import type { EventContextChoice } from '../src/ui/SurvivalUiViewModel';
+import { SurvivalUI } from '../src/ui/SurvivalUI';
 import {
   DriftingItemFlow,
   type DriftingItemChoiceResolution,
@@ -439,5 +440,60 @@ describe('DriftingItemFlow', () => {
     await enter(rig);
 
     expect(rig.world.enterDriftingItemView).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'first available choice',
+      [
+        { id: 'retrieve', label: 'Retrieve', unavailableReason: null },
+        { id: 'sleep', label: 'Leave', unavailableReason: 'NO' },
+      ],
+      '[data-event-choice="retrieve"]',
+    ],
+    [
+      'Back when no choice is available',
+      [
+        { id: 'retrieve', label: 'Retrieve', unavailableReason: 'NO' },
+        { id: 'sleep', label: 'Leave', unavailableReason: 'NO' },
+      ],
+      '[data-drifting-item-back]',
+    ],
+  ] as const)('focuses the %s after real flow entry clears busy', async (
+    _label,
+    focusChoices,
+    expectedSelector,
+  ) => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = new SurvivalUI(mount);
+    const flow = new DriftingItemFlow({
+      world: {
+        enterDriftingItemView: vi.fn(async () => undefined),
+        exitDriftingItemView: vi.fn(async () => undefined),
+        retrieveDriftingItem: vi.fn(async () => undefined),
+        delegateDriftingItem: vi.fn(async () => undefined),
+        recedeDriftingItem: vi.fn(async () => undefined),
+        projectEventInteractionBounds: vi.fn(() => ({
+          x: 420, y: 260, width: 64, height: 64, depth: 2, visible: true,
+        })),
+      },
+      ui,
+      audio: { confirm: vi.fn() },
+      setBusy: (busy) => ui.setBusy(busy),
+      setEventResolutionActive: vi.fn(),
+      isPendingEvent: () => true,
+      resolveChoice: vi.fn(),
+      waitForVisibilityResume: vi.fn(async () => true),
+      captureLifecycleGeneration: () => 1,
+      isLifecycleGenerationCurrent: (generation) => generation === 1,
+    });
+
+    await flow.enter('drifting-bottle', focusChoices);
+
+    expect(document.activeElement).toBe(mount.querySelector(expectedSelector));
+    flow.dispose();
+    ui.dispose();
+    mount.remove();
   });
 });

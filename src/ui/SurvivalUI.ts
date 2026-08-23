@@ -19,18 +19,22 @@ import type {
 } from '../survival/survivalTypes';
 import { createElementRequirement } from './dom';
 import { BoatAnchorView } from './BoatAnchorView';
+import { DriftingItemView, type DriftingItemFocusView } from './DriftingItemView';
 import { ModalFocusManager, type ModalInitialFocus } from './ModalFocusManager';
 import { SurvivalCoverView } from './SurvivalCoverView';
 import type { RewardResultView, SleepCoverProfile } from './SurvivalCoverViewModel';
 import { SurvivalEventView } from './SurvivalEventView';
+import {
+  SurvivalFishingView,
+  type FishingResultView,
+  type FishingUiState,
+} from './SurvivalFishingView';
 import { SurvivalHudView } from './SurvivalHudView';
 import { DAY_ACTION_IDS, type EventContextChoice } from './SurvivalUiViewModel';
-import { runCleanupSteps, settleAfterCleanup } from './UiCleanup';
+import { runCleanupSteps } from './UiCleanup';
 
-const FISHING_FADE_MS = 180;
 const ROUTINE_DIALOG_MARGIN = 20;
 const ROUTINE_DIALOG_GAP = 22;
-const DRIFTING_FOCUS_BOTTOM_RESERVE = 128;
 
 interface RoutineDialogPlacement {
   readonly anchorId: string;
@@ -40,50 +44,15 @@ interface RoutineDialogPlacement {
   readonly height: number;
 }
 
-const ROUTINE_DIALOG_PLACEMENTS: Readonly<Record<'fishing' | 'repair', RoutineDialogPlacement>> = {
-  fishing: {
-    anchorId: 'fishing-tools',
-    fallbackX: 0.7,
-    fallbackY: 0.55,
-    width: 360,
-    height: 250,
-  },
-  repair: {
-    anchorId: 'repair-tools',
-    fallbackX: 0.32,
-    fallbackY: 0.6,
-    width: 430,
-    height: 360,
-  },
+const REPAIR_DIALOG_PLACEMENT: RoutineDialogPlacement = {
+  anchorId: 'repair-tools',
+  fallbackX: 0.32,
+  fallbackY: 0.6,
+  width: 430,
+  height: 360,
 };
 
 const requireElement = createElementRequirement('survival UI');
-
-export type FishingUiMode = 'hidden' | 'aiming' | 'waiting' | 'bite' | 'result' | 'ready';
-
-export interface FishingUiState {
-  readonly mode: FishingUiMode;
-  readonly message: string;
-  readonly biteTarget: ProjectedBoatBounds | null;
-}
-
-export interface FishingResultView {
-  readonly caption: string;
-  readonly title: string;
-  readonly detail: string;
-  readonly catchTarget: ProjectedBoatBounds | null;
-}
-
-export interface DriftingItemFocusView {
-  readonly eventId: DriftingItemEventId;
-  readonly title: string;
-  readonly choices: readonly EventContextChoice[];
-  readonly target: ProjectedBoatBounds | null;
-}
-
-interface PendingFade {
-  readonly finish: () => void;
-}
 
 export class SurvivalUI {
   onAction: (action: DayActionId, option?: DayActionOption) => void = () => undefined;
@@ -108,22 +77,9 @@ export class SurvivalUI {
   private readonly anchorView: BoatAnchorView;
   private readonly eventView: SurvivalEventView;
   private readonly coverView: SurvivalCoverView;
+  private readonly fishingView: SurvivalFishingView;
+  private readonly driftingView: DriftingItemView;
   private readonly announcer: HTMLElement;
-  private readonly fishingLayer: HTMLElement;
-  private readonly fishingLive: HTMLElement;
-  private readonly fishingBiteTarget: HTMLButtonElement;
-  private readonly fishingFade: HTMLElement;
-  private readonly fishingResultLayer: HTMLElement;
-  private readonly fishingResultCaption: HTMLElement;
-  private readonly fishingResultTitle: HTMLElement;
-  private readonly fishingResultDetail: HTMLElement;
-  private readonly fishingResultContinue: HTMLButtonElement;
-  private readonly driftingItemFocusLayer: HTMLElement;
-  private readonly driftingItemFocusCard: HTMLElement;
-  private readonly driftingItemFocusBack: HTMLButtonElement;
-  private readonly driftingItemFocusTitle: HTMLElement;
-  private readonly driftingItemFocusChoices: HTMLElement;
-  private readonly fishingViewExit: HTMLButtonElement;
   private readonly repairOptionsLayer: HTMLElement;
   private readonly repairOptionsTitle: HTMLElement;
   private readonly repairTargets: HTMLElement;
@@ -155,26 +111,6 @@ export class SurvivalUI {
   private currentSnapshot: SurvivalSnapshot | null = null;
   private journalEntries: readonly JournalEntry[] = [];
   private journalIndex = 0;
-  private fishingMode: FishingUiMode = 'hidden';
-  private fishingMessage = '';
-  private readonly fishingTarget = {
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0,
-    depth: 0,
-    visible: false,
-  };
-  private hasFishingTarget = false;
-  private fishingCastIssued = false;
-  private fishingReelIssued = false;
-  private suppressFishingClick = false;
-  private fishingAnnouncementVersion = 0;
-  private pendingFishingFade: PendingFade | null = null;
-  private fishingResultContinueIssued = false;
-  private fishingResultTarget: ProjectedBoatBounds | null = null;
-  private driftingItemFocusTarget: ProjectedBoatBounds | null = null;
-  private driftingItemFocusChoicesView: readonly EventContextChoice[] = [];
 
   constructor(private readonly mount: HTMLElement) {
     this.root = document.createElement('div');
@@ -182,35 +118,6 @@ export class SurvivalUI {
     this.root.innerHTML = `
       <div class="ui-treatment" aria-hidden="true"></div>
       <div class="survival-announcer" data-survival-announcer aria-live="polite" aria-atomic="true"></div>
-      <section class="fishing-layer" data-fishing role="region" aria-label="Fishing interaction" aria-hidden="true" inert tabindex="-1">
-        <div class="survival-announcer" data-fishing-live aria-live="polite" aria-atomic="true"></div>
-        <button type="button" class="fishing-bite-target" data-fishing-bite aria-label="BITE - REEL NOW" hidden></button>
-        <button type="button" class="fishing-view-exit ui-role-context" data-fishing-view-exit aria-label="Return to boat view" hidden>
-          <span class="fishing-view-exit__arrow" aria-hidden="true"></span>
-        </button>
-      </section>
-      <div class="fishing-fade" data-fishing-fade aria-hidden="true"></div>
-      <section class="routine-dialog routine-dialog--fishing" data-fishing-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="fishing-result-title" inert>
-        <div class="routine-dialog__card fishing-result-card scuba-popup-paper">
-          <p class="eyebrow ui-role-context" data-fishing-result-caption></p>
-          <h2 class="scuba-popup-title ui-role-display" id="fishing-result-title" data-fishing-result-title></h2>
-          <p class="fishing-result-detail ui-role-narrative" data-fishing-result-detail></p>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-fishing-result-continue aria-label="Continue">
-            CONTINUE
-          </button>
-        </div>
-      </section>
-      <section class="drifting-item-focus" data-drifting-item-focus role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="drifting-item-focus-title" inert>
-        <div class="dive-result__paper drifting-item-focus__card scuba-popup-paper">
-          <h2 class="dive-result__title scuba-popup-title ui-role-display" id="drifting-item-focus-title" data-drifting-item-title></h2>
-          <nav data-drifting-item-choices aria-label="Pickup choices"></nav>
-        </div>
-        <button type="button" class="drifting-item-focus__back" data-drifting-item-back aria-label="Return to boat">
-          <svg class="drifting-item-focus__back-icon" data-drifting-item-back-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M9 3h6v10h5l-8 8-8-8h5z" />
-          </svg>
-        </button>
-      </section>
       <section class="routine-dialog routine-dialog--repair" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Repair target" inert>
         <div class="routine-dialog__card scuba-popup-paper">
           <p class="eyebrow ui-role-context">DUCT TAPE</p>
@@ -268,36 +175,29 @@ export class SurvivalUI {
     this.coverView = new SurvivalCoverView();
     this.hudView = new SurvivalHudView();
     this.anchorView = new BoatAnchorView(this.root);
+    this.fishingView = new SurvivalFishingView(
+      this.mount,
+      this.root,
+      () => this.anchorView.anchor('fishing-tools'),
+    );
+    this.driftingView = new DriftingItemView(this.root);
     const announcer = requireElement<HTMLElement>(this.root, '[data-survival-announcer]');
     announcer.after(
       this.eventView.feedback,
       ...this.coverView.roots,
       this.eventView.sleepMask,
     );
-    const firstFollowingView = requireElement(this.root, '[data-fishing]');
-    firstFollowingView.before(...this.hudView.roots, ...this.anchorView.roots);
+    const firstFollowingView = requireElement(this.root, '[data-repair-options]');
+    firstFollowingView.before(
+      ...this.hudView.roots,
+      ...this.anchorView.roots,
+      ...this.fishingView.roots,
+      this.driftingView.root,
+    );
     const journal = requireElement(this.root, '[data-journal]');
     journal.before(this.eventView.caption);
 
     this.announcer = announcer;
-    this.fishingLayer = requireElement(this.root, '[data-fishing]');
-    this.fishingLive = requireElement(this.root, '[data-fishing-live]');
-    this.fishingBiteTarget = requireElement(this.root, '[data-fishing-bite]');
-    this.fishingFade = requireElement(this.root, '[data-fishing-fade]');
-    this.fishingResultLayer = requireElement(this.root, '[data-fishing-result]');
-    this.fishingResultCaption = requireElement(this.root, '[data-fishing-result-caption]');
-    this.fishingResultTitle = requireElement(this.root, '[data-fishing-result-title]');
-    this.fishingResultDetail = requireElement(this.root, '[data-fishing-result-detail]');
-    this.fishingResultContinue = requireElement(this.root, '[data-fishing-result-continue]');
-    this.driftingItemFocusLayer = requireElement(this.root, '[data-drifting-item-focus]');
-    this.driftingItemFocusCard = requireElement(
-      this.driftingItemFocusLayer,
-      '.drifting-item-focus__card',
-    );
-    this.driftingItemFocusBack = requireElement(this.root, '[data-drifting-item-back]');
-    this.driftingItemFocusTitle = requireElement(this.root, '[data-drifting-item-title]');
-    this.driftingItemFocusChoices = requireElement(this.root, '[data-drifting-item-choices]');
-    this.fishingViewExit = requireElement(this.root, '[data-fishing-view-exit]');
     this.repairOptionsLayer = requireElement(this.root, '[data-repair-options]');
     this.repairOptionsTitle = requireElement(this.root, '[data-repair-options-title]');
     this.repairTargets = requireElement(this.root, '[data-repair-targets]');
@@ -322,9 +222,9 @@ export class SurvivalUI {
       this.repairOptionsLayer,
       this.endingLayer,
       this.coverView.resultRoot,
-      this.driftingItemFocusLayer,
-      this.fishingResultLayer,
-      this.fishingLayer,
+      this.driftingView.root,
+      this.fishingView.resultRoot,
+      this.fishingView.interactionRoot,
     ];
     this.modalFocus = new ModalFocusManager(
       [this.hudView.topControls, this.anchorView.anchorLayer],
@@ -335,21 +235,9 @@ export class SurvivalUI {
         [this.repairOptionsLayer, this.repairOptionsTitle],
         [this.endingLayer, this.endingTitle],
         [this.coverView.resultRoot, this.coverView.resultClose],
-        [this.driftingItemFocusLayer, () => (
-          this.driftingItemFocusChoices.querySelector<HTMLButtonElement>(
-            '[data-event-choice][aria-disabled="false"]',
-          ) ?? this.driftingItemFocusBack
-        )],
-        [this.fishingResultLayer, this.fishingResultContinue],
-        [this.fishingLayer, () => {
-          if (this.fishingMode === 'bite' && !this.fishingBiteTarget.hidden) {
-            return this.fishingBiteTarget;
-          }
-          if (this.fishingMode === 'ready' && !this.fishingViewExit.hidden) {
-            return this.fishingViewExit;
-          }
-          return this.fishingLayer;
-        }],
+        [this.driftingView.root, () => this.driftingView.initialFocus()],
+        [this.fishingView.resultRoot, this.fishingView.resultContinue],
+        [this.fishingView.interactionRoot, () => this.fishingView.initialFocus()],
       ]),
     );
     this.modalFocus.sync();
@@ -375,9 +263,27 @@ export class SurvivalUI {
         this.coverView.confirmRewardResult();
       }
     };
+    this.fishingView.onCast = (point) => this.onFishingCast?.(point) ?? false;
+    this.fishingView.onReel = () => this.onFishingReel?.() ?? false;
+    this.fishingView.onContinue = () => this.onFishingResultContinue?.();
+    this.fishingView.onExit = () => this.onFishingViewExit?.();
+    this.fishingView.canUseInteraction = () => (
+      this.modalFocus.topmostModal() === this.fishingView.interactionRoot
+    );
+    this.fishingView.canUseResult = () => (
+      this.modalFocus.topmostModal() === this.fishingView.resultRoot
+    );
+    this.fishingView.onInteractionShow = () => this.showLayer(this.fishingView.interactionRoot);
+    this.fishingView.onInteractionHide = () => this.hideLayer(this.fishingView.interactionRoot);
+    this.fishingView.onResultShow = () => this.showLayer(this.fishingView.resultRoot);
+    this.fishingView.onResultHide = () => this.hideLayer(this.fishingView.resultRoot);
+    this.driftingView.onChoice = (choiceId) => this.onEventChoice(choiceId);
+    this.driftingView.onBack = () => this.onDriftingItemBack?.();
+    this.driftingView.canUse = () => this.modalFocus.topmostModal() === this.driftingView.root;
+    this.driftingView.onShow = () => this.showLayer(this.driftingView.root);
+    this.driftingView.onHide = () => this.hideLayer(this.driftingView.root);
 
     this.root.addEventListener('click', this.handleClick);
-    this.root.addEventListener('pointerup', this.handleFishingPointerUp);
     document.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('resize', this.handleWindowResize);
   }
@@ -453,11 +359,14 @@ export class SurvivalUI {
   playEventChoiceBeat(choiceId: EventResponseId): Promise<void> {
     if (this.disposed || !this.eventView.isActive()) return Promise.resolve();
     const button = this.eventView.choiceButton(choiceId)
-      ?? this.driftingItemChoiceButton(choiceId)
+      ?? this.driftingView.choiceButton(choiceId)
       ?? this.anchorView.eventChoiceButton(choiceId)
       ?? null;
     const beat = this.eventView.playChoiceBeat(choiceId, button);
     if (this.eventView.selectedChoice() === choiceId) {
+      if (button !== null && this.driftingView.containsChoice(button)) {
+        this.driftingView.setSelectedChoice(choiceId);
+      }
       this.anchorView.setEventChoiceSelection(choiceId);
     }
     this.syncCommandState();
@@ -522,100 +431,45 @@ export class SurvivalUI {
 
   setFishingState(state: FishingUiState): void {
     if (this.disposed) return;
-    const previousMode = this.fishingMode;
+    const previousMode = this.fishingView.mode();
     const modeChanged = state.mode !== previousMode;
-    const messageChanged = state.message !== this.fishingMessage;
-    const targetChanged = !this.sameFishingTarget(state.biteTarget);
-    if (!modeChanged && !messageChanged && !targetChanged) return;
-
-    if (modeChanged) {
-      if (previousMode === 'hidden' && state.mode !== 'hidden') {
-        this.fishingReturnTarget = this.latestCommandOrigin ?? this.resolveCommandOrigin();
-      }
-      this.fishingCastIssued = false;
-      this.fishingReelIssued = false;
-      this.suppressFishingClick = false;
+    if (modeChanged && previousMode === 'hidden' && state.mode !== 'hidden') {
+      this.fishingReturnTarget = this.latestCommandOrigin ?? this.resolveCommandOrigin();
     }
-
-    this.fishingMode = state.mode;
-    this.fishingLayer.dataset.mode = state.mode;
-    if (messageChanged || modeChanged) {
-      this.fishingMessage = state.message;
-      this.fishingLive.setAttribute('aria-live', state.mode === 'bite' ? 'assertive' : 'polite');
-      if (state.mode === 'hidden') {
-        this.fishingAnnouncementVersion += 1;
-        this.fishingLive.textContent = '';
-      } else {
-        this.publishFishingAnnouncement(state.message);
-      }
-    }
-    if (targetChanged || modeChanged) this.renderFishingTarget(state.biteTarget);
+    if (!this.fishingView.setState(state)) return;
 
     if (state.mode === 'hidden') {
-      this.hideLayer(this.fishingLayer);
       const target = this.fishingReturnTarget;
       this.fishingReturnTarget = null;
       if (this.modalFocus.topmostModal() === null && !this.busy) this.restoreFishingFocus(target);
       return;
     }
-
-    this.showLayer(this.fishingLayer);
-    if (modeChanged) this.modalFocus.focusInitial(this.fishingLayer);
+    if (modeChanged) this.modalFocus.focusInitial(this.fishingView.interactionRoot);
   }
 
   showFishingResult(view: FishingResultView): void {
-    if (this.disposed) return;
-    this.fishingResultContinueIssued = false;
-    this.fishingResultCaption.textContent = view.caption;
-    this.fishingResultTitle.textContent = view.title;
-    this.fishingResultDetail.textContent = view.detail;
-    this.fishingResultTarget = view.catchTarget === null
-      ? null
-      : Object.freeze({ ...view.catchTarget });
-    this.showLayer(this.fishingResultLayer);
+    if (!this.disposed) this.fishingView.showResult(view);
   }
 
   hideFishingResult(): void {
-    if (this.disposed) return;
-    this.hideLayer(this.fishingResultLayer);
-    this.fishingResultTarget = null;
+    if (!this.disposed) this.fishingView.hideResult();
   }
 
   showDriftingItemFocus(view: DriftingItemFocusView): void {
-    if (this.disposed) return;
-    this.driftingItemFocusBack.setAttribute('aria-label', 'Return to boat');
-    this.driftingItemFocusTitle.textContent = view.title;
-    this.driftingItemFocusTarget = view.target === null
-      ? null
-      : Object.freeze({ ...view.target });
-    this.driftingItemFocusChoicesView = [...view.choices];
-    this.renderDriftingItemFocusChoices();
-    this.positionDriftingItemFocus();
-    this.syncCommandState();
-    this.showLayer(this.driftingItemFocusLayer);
+    if (!this.disposed) this.driftingView.show(view);
   }
 
   hideDriftingItemFocus(): void {
-    if (this.disposed) return;
-    this.hideLayer(this.driftingItemFocusLayer);
-    this.driftingItemFocusChoicesView = [];
-    this.driftingItemFocusChoices.replaceChildren();
-    this.driftingItemFocusChoices.hidden = false;
-    this.driftingItemFocusTitle.textContent = '';
-    this.driftingItemFocusTarget = null;
+    if (!this.disposed) this.driftingView.hide();
   }
 
   updateDriftingItemFocusTarget(target: ProjectedBoatBounds | null): void {
-    if (this.disposed || !this.driftingItemFocusLayer.classList.contains('is-visible')) return;
-    this.driftingItemFocusTarget = target === null
-      ? null
-      : Object.freeze({ ...target });
-    this.positionDriftingItemFocus();
+    if (!this.disposed) this.driftingView.updateTarget(target);
   }
 
   setFishingViewExitVisible(visible: boolean): void {
     if (this.disposed) return;
-    this.fishingViewExit.hidden = !visible;
+    this.fishingView.setExitVisible(visible);
     this.root.dataset.fishingExitVisible = String(visible);
     if (visible) this.anchorView.clearHighlight();
   }
@@ -626,40 +480,11 @@ export class SurvivalUI {
   }
 
   updateFishingBiteTarget(target: ProjectedBoatBounds | null): void {
-    if (
-      this.disposed
-      || this.fishingMode !== 'bite'
-      || this.sameFishingTarget(target)
-    ) return;
-    this.renderFishingTarget(target);
+    if (!this.disposed) this.fishingView.updateBiteTarget(target);
   }
 
   setFishingFade(covered: boolean): Promise<void> {
-    if (this.disposed) return Promise.resolve();
-    this.pendingFishingFade?.finish();
-    this.fishingFade.classList.toggle('is-covered', covered);
-    const delay = FISHING_FADE_MS;
-    return new Promise((resolve) => {
-      let settled = false;
-      let timer = 0;
-      const finish = (): void => {
-        if (settled) return;
-        settled = true;
-        settleAfterCleanup(resolve, [
-          () => window.clearTimeout(timer),
-          () => this.fishingFade.removeEventListener('transitionend', handleTransitionEnd),
-          () => {
-            if (this.pendingFishingFade?.finish === finish) this.pendingFishingFade = null;
-          },
-        ]);
-      };
-      const handleTransitionEnd = (event: TransitionEvent): void => {
-        if (event.target === this.fishingFade && event.propertyName === 'opacity') finish();
-      };
-      this.fishingFade.addEventListener('transitionend', handleTransitionEnd);
-      timer = window.setTimeout(finish, delay);
-      this.pendingFishingFade = { finish };
-    });
+    return this.disposed ? Promise.resolve() : this.fishingView.setFade(covered);
   }
 
   holdSleep(): Promise<void> {
@@ -675,6 +500,7 @@ export class SurvivalUI {
     const result = runCleanupSteps([
       () => this.eventView.settleForVisibilityChange(),
       () => this.coverView.settleForVisibilityChange(),
+      () => this.fishingView.settleForVisibilityChange(),
     ]);
     if (result.failed) throw result.firstError;
   }
@@ -710,7 +536,11 @@ export class SurvivalUI {
     this.hudView.setBusy(busy);
     this.anchorView.setBusy(busy);
     this.eventView.setBusy(busy);
+    this.driftingView.setBusy(busy);
     this.syncCommandState();
+    if (!busy && this.modalFocus.topmostModal() === this.driftingView.root) {
+      this.modalFocus.focusInitial(this.driftingView.root);
+    }
   }
 
   setPaused(paused: boolean): void {
@@ -720,6 +550,7 @@ export class SurvivalUI {
       this.pauseReturnTarget = this.resolveCommandOrigin();
     }
     this.paused = paused;
+    this.fishingView.setPaused(paused);
     this.hudView.setPaused(paused);
     if (!paused) this.anchorView.setPaused(false);
     if (paused) {
@@ -759,28 +590,31 @@ export class SurvivalUI {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    const fishingWasVisible = this.fishingView.mode() !== 'hidden';
     const cleanupSteps: (() => void)[] = [
       () => { this.eventView.beginDispose(); },
       () => {
         this.coverView.beginDispose();
         this.coverView.clearBadSleepCueForCleanup();
       },
+      () => { this.fishingView.beginDispose(); },
+      () => { this.driftingView.beginDispose(); },
       () => this.eventView.clearChoicesForDispose(),
       () => this.coverView.settleCoverTransition(),
       () => this.coverView.settleDiveHold(),
       () => this.coverView.settleRewardConfirmation(),
-      () => this.pendingFishingFade?.finish(),
+      () => this.fishingView.settleFade(),
       () => this.eventView.settleChoiceBeat(),
       () => this.coverView.settleEventOutcomeHold(),
       () => this.coverView.settleCoveredSceneWait(),
       () => this.coverView.settleSleepHold(),
-      () => { this.fishingAnnouncementVersion += 1; },
-      () => this.hideLayer(this.driftingItemFocusLayer),
+      () => this.fishingView.cancelAnnouncementForDispose(),
+      () => this.hideLayer(this.driftingView.root),
     ];
-    if (this.fishingMode !== 'hidden') {
+    if (fishingWasVisible) {
       cleanupSteps.push(
-        () => this.hideLayer(this.fishingLayer),
-        () => { this.fishingMode = 'hidden'; },
+        () => this.hideLayer(this.fishingView.interactionRoot),
+        () => this.fishingView.clearInteractionForDispose(),
         () => { this.fishingReturnTarget = null; },
       );
     }
@@ -792,8 +626,9 @@ export class SurvivalUI {
       () => this.eventView.clearFeedbackTimerForDispose(),
       () => this.eventView.removeListenersForDispose(),
       () => this.coverView.removeListenersForDispose(),
+      () => this.fishingView.removeListenersForDispose(),
+      () => this.driftingView.removeListenersForDispose(),
       () => this.root.removeEventListener('click', this.handleClick),
-      () => this.root.removeEventListener('pointerup', this.handleFishingPointerUp),
       () => document.removeEventListener('keydown', this.handleKeyDown),
       () => window.removeEventListener('resize', this.handleWindowResize),
       () => { this.onAction = () => undefined; },
@@ -814,6 +649,8 @@ export class SurvivalUI {
       () => { this.onCameraTurn = null; },
       () => this.eventView.resetCallbacksForDispose(),
       () => this.coverView.resetCallbacksForDispose(),
+      () => this.fishingView.resetCallbacksForDispose(),
+      () => this.driftingView.resetCallbacksForDispose(),
       () => this.root.remove(),
     );
     const result = runCleanupSteps(cleanupSteps);
@@ -875,69 +712,16 @@ export class SurvivalUI {
     this.repairTargets.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
       button.disabled = this.busy;
     });
-    this.driftingItemFocusChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]').forEach((button) => {
-      const unavailable = button.dataset.unavailableReason !== undefined;
-      button.dataset.eventState = 'idle';
-      button.setAttribute('aria-pressed', 'false');
-      button.disabled = false;
-      button.setAttribute('aria-disabled', unavailable || this.busy ? 'true' : 'false');
-    });
-  }
-
-  private renderDriftingItemFocusChoices(): void {
-    const choices = this.driftingItemFocusChoicesView.map((choice) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'event-choice ui-role-context';
-      button.dataset.eventChoice = choice.id;
-      button.dataset.eventState = 'idle';
-      button.setAttribute('aria-pressed', 'false');
-      const main = document.createElement('span');
-      main.className = 'drifting-item-focus__choice-main';
-      main.append(document.createTextNode(choice.label));
-      const energyCost = choice.energyCost ?? 0;
-      if (energyCost > 0) {
-        const cost = document.createElement('span');
-        cost.className = 'drifting-item-focus__cost';
-        cost.setAttribute('aria-label', `${energyCost} energy`);
-        cost.textContent = '⚡️'.repeat(energyCost);
-        main.append(cost);
-      }
-      button.append(main);
-
-      if (choice.unavailableReason !== null) {
-        button.dataset.unavailableReason = choice.unavailableReason;
-        button.setAttribute('aria-description', choice.unavailableReason);
-        const reason = document.createElement('span');
-        reason.className = 'event-choice__reason ui-role-narrative';
-        reason.textContent = choice.unavailableReason;
-        button.append(reason);
-      }
-      return button;
-    });
-    this.driftingItemFocusChoices.replaceChildren(...choices);
-    this.driftingItemFocusChoices.hidden = false;
   }
 
   private readonly handleWindowResize = (): void => {
     if (this.disposed) return;
     this.positionOpenRoutineDialogs();
-    if (this.driftingItemFocusLayer.classList.contains('is-visible')) {
-      this.positionDriftingItemFocus();
-    }
   };
 
   private showLayer(layer: HTMLElement, origin: HTMLElement | null = null): void {
     this.anchorView.clearHighlight();
-    if (layer === this.fishingResultLayer) {
-      this.positionRoutineDialog(
-        layer,
-        ROUTINE_DIALOG_PLACEMENTS.fishing,
-        this.fishingResultTarget,
-      );
-    } else if (layer === this.repairOptionsLayer) {
-      this.positionRoutineDialog(layer, ROUTINE_DIALOG_PLACEMENTS.repair);
-    }
+    if (layer === this.repairOptionsLayer) this.positionRoutineDialog(layer, REPAIR_DIALOG_PLACEMENT);
     this.modalFocus.activate(layer, origin);
     this.syncViewModalState();
   }
@@ -954,106 +738,9 @@ export class SurvivalUI {
   }
 
   private positionOpenRoutineDialogs(): void {
-    if (this.fishingResultLayer.classList.contains('is-visible')) {
-      this.positionRoutineDialog(
-        this.fishingResultLayer,
-        ROUTINE_DIALOG_PLACEMENTS.fishing,
-        this.fishingResultTarget,
-      );
-    }
     if (this.repairOptionsLayer.classList.contains('is-visible')) {
-      this.positionRoutineDialog(this.repairOptionsLayer, ROUTINE_DIALOG_PLACEMENTS.repair);
+      this.positionRoutineDialog(this.repairOptionsLayer, REPAIR_DIALOG_PLACEMENT);
     }
-  }
-
-  private positionDriftingItemFocus(): void {
-    const rootBounds = this.root.getBoundingClientRect();
-    const viewportWidth = Math.max(
-      1,
-      rootBounds.width || this.root.clientWidth || window.innerWidth,
-    );
-    const viewportHeight = Math.max(
-      1,
-      rootBounds.height || this.root.clientHeight || window.innerHeight,
-    );
-    const margin = ROUTINE_DIALOG_MARGIN;
-    const gap = ROUTINE_DIALOG_GAP;
-    const popupBottom = Math.max(margin, viewportHeight - DRIFTING_FOCUS_BOTTOM_RESERVE);
-    const target = this.driftingItemFocusTarget?.visible === true
-      ? this.driftingItemFocusTarget
-      : null;
-
-    if (target === null) {
-      const width = Math.min(420, viewportWidth - margin * 2);
-      this.driftingItemFocusLayer.style.setProperty('--drifting-width', `${Math.round(width)}px`);
-      this.driftingItemFocusLayer.style.setProperty(
-        '--drifting-max-height',
-        `${Math.round(Math.max(1, popupBottom - margin))}px`,
-      );
-      const height = Math.min(
-        Math.max(1, popupBottom - margin),
-        this.driftingItemFocusCard.getBoundingClientRect().height || 360,
-      );
-      this.driftingItemFocusLayer.style.setProperty(
-        '--drifting-x',
-        `${Math.round((viewportWidth - width) / 2)}px`,
-      );
-      this.driftingItemFocusLayer.style.setProperty(
-        '--drifting-y',
-        `${Math.round(Math.max(margin, (popupBottom - height) / 2))}px`,
-      );
-      this.driftingItemFocusLayer.dataset.placement = 'center';
-      this.driftingItemFocusLayer.dataset.anchorState = 'fallback';
-      return;
-    }
-
-    const targetLeft = target.x - target.width / 2;
-    const targetRight = target.x + target.width / 2;
-    const leftWidth = Math.max(0, targetLeft - gap - margin);
-    const rightWidth = Math.max(0, viewportWidth - margin - targetRight - gap);
-    const preferredWidth = 420;
-    const minimumWidth = 240;
-    const horizontal = [
-      { placement: 'left', available: leftWidth, edge: targetLeft - gap },
-      { placement: 'right', available: rightWidth, edge: targetRight + gap },
-    ] as const;
-    const usable = horizontal.filter(({ available }) => available >= minimumWidth);
-    const candidates = usable.length > 0 ? usable : horizontal;
-    const placement = candidates.reduce((best, candidate) => {
-      const bestWidth = Math.min(preferredWidth, best.available);
-      const candidateWidth = Math.min(preferredWidth, candidate.available);
-      const bestCenter = best.placement === 'left'
-        ? best.edge - bestWidth / 2
-        : best.edge + bestWidth / 2;
-      const candidateCenter = candidate.placement === 'left'
-        ? candidate.edge - candidateWidth / 2
-        : candidate.edge + candidateWidth / 2;
-      const bestDistance = Math.abs(bestCenter - viewportWidth / 2);
-      const candidateDistance = Math.abs(candidateCenter - viewportWidth / 2);
-      return candidateDistance < bestDistance ? candidate : best;
-    });
-    const width = Math.max(1, Math.min(preferredWidth, placement.available));
-    const maximumHeight = Math.max(1, popupBottom - margin);
-    this.driftingItemFocusLayer.style.setProperty('--drifting-width', `${Math.round(width)}px`);
-    this.driftingItemFocusLayer.style.setProperty(
-      '--drifting-max-height',
-      `${Math.round(maximumHeight)}px`,
-    );
-    const cardHeight = Math.min(
-      maximumHeight,
-      this.driftingItemFocusCard.getBoundingClientRect().height || 360,
-    );
-    const x = placement.placement === 'left'
-      ? placement.edge - width
-      : placement.edge;
-    const y = Math.min(
-      popupBottom - cardHeight,
-      Math.max(margin, target.y - cardHeight / 2),
-    );
-    this.driftingItemFocusLayer.style.setProperty('--drifting-x', `${Math.round(x)}px`);
-    this.driftingItemFocusLayer.style.setProperty('--drifting-y', `${Math.round(y)}px`);
-    this.driftingItemFocusLayer.dataset.placement = placement.placement;
-    this.driftingItemFocusLayer.dataset.anchorState = 'projected';
   }
 
   private positionRoutineDialog(
@@ -1251,25 +938,6 @@ export class SurvivalUI {
     return false;
   }
 
-  private activateEventChoice(button: HTMLButtonElement): void {
-    const choiceId = button.dataset.eventChoice as EventResponseId | undefined;
-    const focusActive = this.driftingItemFocusLayer.classList.contains('is-visible');
-    if (
-      choiceId === undefined
-      || (!this.eventView.isActive() && !focusActive)
-      || this.busy
-      || (this.eventView.isActive() && this.eventView.selectedChoice() !== null)
-      || button.getAttribute('aria-disabled') === 'true'
-    ) return;
-    this.onEventChoice(choiceId);
-  }
-
-  private driftingItemChoiceButton(choiceId: EventResponseId): HTMLButtonElement | null {
-    return [...this.driftingItemFocusChoices.querySelectorAll<HTMLButtonElement>(
-      '[data-event-choice]',
-    )].find((button) => button.dataset.eventChoice === choiceId) ?? null;
-  }
-
   private readonly handleClick = (event: MouseEvent): void => {
     const target = event.target;
     if (!(target instanceof Element)) return;
@@ -1278,6 +946,8 @@ export class SurvivalUI {
       || this.anchorView.contains(target)
       || this.eventView.contains(target)
       || this.coverView.contains(target)
+      || this.fishingView.contains(target)
+      || this.driftingView.root.contains(target)
     ) return;
     const topmostModal = this.modalFocus.topmostModal();
     if (
@@ -1288,30 +958,9 @@ export class SurvivalUI {
       this.onJournalClose();
       return;
     }
-    if (this.fishingLayer.contains(target) && topmostModal === this.fishingLayer) {
-      if (target.closest('[data-fishing-view-exit]') !== null) {
-        this.onFishingViewExit?.();
-        return;
-      }
-      if (target.closest('[data-fishing-bite]') !== null) {
-        this.issueFishingReel();
-        return;
-      }
-      if (this.suppressFishingClick) {
-        this.suppressFishingClick = false;
-        return;
-      }
-      this.issueFishingCast(event.clientX, event.clientY);
-      return;
-    }
     const button = target.closest<HTMLButtonElement>('button');
     if (!button || !this.root.contains(button) || button.disabled) return;
     if (topmostModal !== null && !topmostModal.contains(button)) return;
-
-    if (button.hasAttribute('data-event-choice')) {
-      this.activateEventChoice(button);
-      return;
-    }
 
     if (button.hasAttribute('data-journal-previous')) {
       this.moveJournalPage(-1);
@@ -1323,21 +972,6 @@ export class SurvivalUI {
     }
     if (button.hasAttribute('data-journal-close')) {
       this.onJournalClose();
-      return;
-    }
-    if (button.hasAttribute('data-fishing-result-continue')) {
-      if (this.fishingResultContinueIssued) return;
-      this.fishingResultContinueIssued = true;
-      this.onFishingResultContinue?.();
-      return;
-    }
-    if (button.hasAttribute('data-drifting-item-back')) {
-      if (topmostModal !== this.driftingItemFocusLayer) return;
-      this.onDriftingItemBack?.();
-      return;
-    }
-    if (button.hasAttribute('data-fishing-view-exit')) {
-      this.onFishingViewExit?.();
       return;
     }
     const repairTarget = button.dataset.repairTarget as ItemInstanceId | undefined;
@@ -1376,18 +1010,14 @@ export class SurvivalUI {
       }
       return;
     }
-    if (topmostModal === this.fishingLayer) {
-      if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
-        event.preventDefault();
-        if (this.fishingMode === 'aiming') this.issueFishingCast();
-        else if (this.fishingMode === 'bite') this.issueFishingReel();
-      }
+    if (topmostModal === this.fishingView.interactionRoot) {
+      this.fishingView.handleKeyDown(event);
       return;
     }
     if (this.anchorView.handleCommandKeyDown(event)) return;
     const target = event.target;
     if (
-      (this.eventView.isActive() || topmostModal === this.driftingItemFocusLayer)
+      (this.eventView.isActive() || topmostModal === this.driftingView.root)
       && target instanceof Element
       && (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar')
     ) {
@@ -1397,88 +1027,11 @@ export class SurvivalUI {
         this.eventView.activateChoice(choice);
         return;
       }
-      if (choice !== null && this.driftingItemFocusChoices.contains(choice)) {
+      if (choice !== null && this.driftingView.containsChoice(choice)) {
         event.preventDefault();
-        this.activateEventChoice(choice);
+        this.driftingView.activateChoice(choice);
         return;
       }
     }
-  };
-
-  private sameFishingTarget(target: ProjectedBoatBounds | null): boolean {
-    if (target === null) return !this.hasFishingTarget;
-    if (!this.hasFishingTarget) return false;
-    return target.x === this.fishingTarget.x
-      && target.y === this.fishingTarget.y
-      && target.width === this.fishingTarget.width
-      && target.height === this.fishingTarget.height
-      && target.depth === this.fishingTarget.depth
-      && target.visible === this.fishingTarget.visible;
-  }
-
-  private renderFishingTarget(target: ProjectedBoatBounds | null): void {
-    this.hasFishingTarget = target !== null;
-    if (target !== null) {
-      this.fishingTarget.x = target.x;
-      this.fishingTarget.y = target.y;
-      this.fishingTarget.width = target.width;
-      this.fishingTarget.height = target.height;
-      this.fishingTarget.depth = target.depth;
-      this.fishingTarget.visible = target.visible;
-    }
-    const visible = this.fishingMode === 'bite'
-      && this.hasFishingTarget
-      && this.fishingTarget.visible;
-    this.fishingBiteTarget.hidden = !visible;
-    if (!visible) return;
-    const width = Math.max(44, Math.round(this.fishingTarget.width));
-    const height = Math.max(44, Math.round(this.fishingTarget.height));
-    this.fishingBiteTarget.style.transform = `translate(${Math.round(this.fishingTarget.x)}px, ${Math.round(this.fishingTarget.y)}px)`;
-    this.fishingBiteTarget.style.width = `${width}px`;
-    this.fishingBiteTarget.style.height = `${height}px`;
-    this.fishingBiteTarget.style.marginLeft = `${-width / 2}px`;
-    this.fishingBiteTarget.style.marginTop = `${-height / 2}px`;
-  }
-
-  private publishFishingAnnouncement(message: string): void {
-    const version = ++this.fishingAnnouncementVersion;
-    this.fishingLive.textContent = '';
-    queueMicrotask(() => {
-      if (this.disposed || version !== this.fishingAnnouncementVersion) return;
-      this.fishingLive.textContent = message;
-    });
-  }
-
-  private issueFishingCast(clientX?: number, clientY?: number): void {
-    if (this.fishingMode !== 'aiming' || this.fishingCastIssued || this.paused) return;
-    this.fishingCastIssued = true;
-    let accepted = false;
-    if (clientX === undefined || clientY === undefined) {
-      accepted = this.onFishingCast?.(null) ?? false;
-    } else {
-      const bounds = this.mount.getBoundingClientRect();
-      accepted = this.onFishingCast?.({ x: clientX - bounds.left, y: clientY - bounds.top }) ?? false;
-    }
-    if (!accepted) this.fishingCastIssued = false;
-  }
-
-  private issueFishingReel(): void {
-    if (this.fishingMode !== 'bite' || this.fishingReelIssued || this.paused) return;
-    this.fishingReelIssued = true;
-    const accepted = this.onFishingReel?.() ?? false;
-    if (!accepted) this.fishingReelIssued = false;
-  }
-
-  private readonly handleFishingPointerUp = (event: PointerEvent): void => {
-    const target = event.target;
-    if (!(target instanceof Element)
-      || !this.fishingLayer.contains(target)
-      || target.closest('[data-fishing-bite]') !== null
-      || target.closest('[data-fishing-view-exit]') !== null
-      || this.modalFocus.topmostModal() !== this.fishingLayer
-      || this.fishingMode !== 'aiming') return;
-    this.suppressFishingClick = true;
-    this.issueFishingCast(event.clientX, event.clientY);
-    queueMicrotask(() => { this.suppressFishingClick = false; });
   };
 }
