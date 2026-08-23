@@ -7,8 +7,15 @@ import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState
 import type { JournalEntry } from '../src/survival/journalRecords';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { sequenceRandom } from './helpers/random';
-import type { SurvivalEventDefinition, SurvivalSnapshot } from '../src/survival/survivalTypes';
+import type {
+  DayActionId,
+  SurvivalEventDefinition,
+  SurvivalSnapshot,
+} from '../src/survival/survivalTypes';
+import { BoatAnchorView } from '../src/ui/BoatAnchorView';
+import { SurvivalHudView } from '../src/ui/SurvivalHudView';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
+import { DAY_ACTION_IDS } from '../src/ui/SurvivalUiViewModel';
 
 const activeUIs: SurvivalUI[] = [];
 const mainStyles = readFileSync('src/styles/main.css', 'utf8') as string;
@@ -297,6 +304,52 @@ const carlitosAnchor = (x = 720, y = 360) => ({
 });
 
 describe('SurvivalUI', () => {
+  it('preserves the exact twenty direct-child nodes and order', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const root = mount.querySelector<HTMLElement>('.survival-ui')!;
+
+    expect([...root.children].map((child) => (
+      child.className
+    ))).toEqual([
+      'ui-treatment',
+      'survival-announcer',
+      'survival-feedback',
+      'sleep-cover',
+      'bad-sleep-cue',
+      'dive-result',
+      'event-sleep-mask',
+      'survival-top',
+      'survival-meters',
+      'boat-anchors',
+      'carlitos-card scuba-popup-paper',
+      'fishing-layer',
+      'fishing-fade',
+      'routine-dialog routine-dialog--fishing',
+      'drifting-item-focus',
+      'routine-dialog routine-dialog--repair',
+      'event-caption',
+      'survival-overlay journal-overlay',
+      'survival-overlay pause-overlay cinematic-overlay scuba-popup-overlay',
+      'survival-overlay ending-overlay cinematic-overlay scuba-popup-overlay',
+    ]);
+    ui.dispose();
+  });
+
+  it('resolves each day-action reason once and shares one map between both views', () => {
+    const hudRender = vi.spyOn(SurvivalHudView.prototype, 'render');
+    const anchorRender = vi.spyOn(BoatAnchorView.prototype, 'render');
+    const unavailable = vi.fn((_action: DayActionId) => null);
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    ui.render(snapshot(), unavailable);
+
+    expect(unavailable.mock.calls.map(([action]) => action)).toEqual(DAY_ACTION_IDS);
+    expect(hudRender.mock.calls.at(-1)?.[1]).toBe(anchorRender.mock.calls.at(-1)?.[1]);
+    ui.dispose();
+  });
+
   it('uses the scuba parchment material on the selected popups', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
@@ -564,6 +617,7 @@ describe('SurvivalUI', () => {
     ui.setPaused(true);
     expect(card.hidden).toBe(true);
     ui.setPaused(false);
+    expect(document.activeElement).toBe(anchor);
 
     anchor.click();
     ui.setAnchors([]);
@@ -3128,6 +3182,21 @@ describe('SurvivalUI', () => {
     expect(action).not.toHaveBeenCalled();
     expect(pause).not.toHaveBeenCalled();
     expect(mount.children).toHaveLength(0);
+  });
+
+  it('continues facade cleanup after a view fails and preserves the first error', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.render(snapshot(), () => null);
+    mount.querySelector<HTMLButtonElement>('[data-anchor-id="repair-tools"]')!
+      .dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    const error = new Error('anchor cleanup failed');
+    ui.onAnchorHighlight = () => { throw error; };
+
+    expect(() => ui.dispose()).toThrow(error);
+    expect(mount.children).toHaveLength(0);
+    expect(() => ui.dispose()).not.toThrow();
   });
 
   it('keeps one document keydown listener in the facade owner', () => {

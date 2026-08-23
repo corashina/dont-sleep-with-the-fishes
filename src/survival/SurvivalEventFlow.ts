@@ -1,6 +1,7 @@
 import type { SurvivalAudio } from '../audio/SurvivalAudio';
 import type { ItemId, ItemInstanceId } from '../game/ItemState';
-import type { EventContextChoice, SurvivalUI } from '../ui/SurvivalUI';
+import type { SurvivalUI } from '../ui/SurvivalUI';
+import type { EventContextChoice } from '../ui/SurvivalUiViewModel';
 import type { BoatWorld } from './BoatWorld';
 import type {
   DriftingItemChoiceResolution,
