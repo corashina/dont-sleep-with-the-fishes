@@ -1028,7 +1028,7 @@ describe('BoatWorld helpers', () => {
         eventId,
         outcome,
         choice,
-        family === 'dedicated' ? result : undefined,
+        family === 'dedicated' || family === 'moon' ? result : undefined,
       );
       world.update(1, 0.1);
       world.setDocumentHidden(true);
@@ -1053,6 +1053,28 @@ describe('BoatWorld helpers', () => {
     }
     expect(adapter.clear).toHaveBeenCalledOnce();
     expect(adapter.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('reapplies the active moon presenter without advancing it during ambient pause', () => {
+    const propModels = createTestPropModels();
+    const adapter = eventAdapterTestDouble('face-on-the-moon');
+    const create = vi.spyOn(EventPresentationRegistry.prototype, 'create')
+      .mockReturnValue(adapter);
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    try {
+      world.stageEvent('face-on-the-moon');
+      world.updateAmbient(21.9, 20);
+      expect(adapter.update).toHaveBeenCalledWith(21.9, 0);
+    } finally {
+      world.dispose();
+      create.mockRestore();
+      propModels.dispose();
+    }
   });
 
   it('clears the rescue callback when adapter detachment fails after deactivation', () => {
@@ -4886,158 +4908,6 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('reveals the moon face after a normal-moon hold and clears every sky transient', async () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
-      propModels,
-      createTestMoonTexture(),
-    );
-    const sky = world.scene.getObjectByName('procedural-skybox') as Mesh<
-      BufferGeometry,
-      ShaderMaterial
-    >;
-
-    expect(sky.material.fragmentShader).toContain('zigzagGrinShape');
-    expect(sky.material.fragmentShader).toContain('hookedEyeMasks');
-    expect(sky.material.fragmentShader).toContain('eyeSlits');
-    expect(sky.material.fragmentShader).toContain('zigzagGrin');
-    expect(sky.material.fragmentShader).toContain('noseCut');
-    expect(sky.material.fragmentShader).toContain('stareReveal');
-    expect(sky.material.fragmentShader).not.toContain('grinTeeth');
-
-    world.stageEvent('face-on-the-moon');
-    const reveal = world.revealEvent('face-on-the-moon');
-    world.update(0.76, 0.76);
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
-    expect(await remainsPending(reveal)).toBe(true);
-
-    world.update(3.7, 2.94);
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
-    expect(sky.material.uniforms.uMoonStarScale?.value).toBeLessThan(1);
-    expect(sky.material.uniforms.uMoonScale?.value).toBeGreaterThan(1.5);
-
-    world.update(4.3, 0.6);
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBeGreaterThan(0);
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBeLessThan(1);
-
-    world.update(5.8, 1.5);
-    await reveal;
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(1);
-    expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(0.7);
-    expect(sky.material.uniforms.uMoonEventDim?.value).toBeGreaterThan(0.15);
-    expect(sky.material.uniforms.uMoonScale?.value).toBeCloseTo(4.15);
-    const firstPulse = sky.material.uniforms.uMoonGrin?.value as number;
-    world.update(0.7, 0.7);
-    expect(sky.material.uniforms.uMoonGrin?.value).not.toBeCloseTo(firstPulse, 4);
-
-    world.clearEvent();
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
-    expect(sky.material.uniforms.uMoonGrin?.value).toBe(0);
-    expect(sky.material.uniforms.uMoonStarScale?.value).toBe(1);
-    expect(sky.material.uniforms.uMoonEventDim?.value).toBe(0);
-    expect(sky.material.uniforms.uMoonScale?.value).toBe(1);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('widens the moon grin for Pressure and dims a lowered view for Energy loss', async () => {
-    const propModels = createTestPropModels();
-    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
-    const world = new BoatWorld(camera, propModels, createTestMoonTexture());
-    const sky = world.scene.getObjectByName('procedural-skybox') as Mesh<
-      BufferGeometry,
-      ShaderMaterial
-    >;
-    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
-    const baseCameraPosition = camera.position.toArray();
-    const baseCameraQuaternion = camera.quaternion.toArray();
-
-    world.stageEvent('face-on-the-moon');
-    const reveal = world.revealEvent('face-on-the-moon');
-    world.update(5.8, 5.8);
-    await reveal;
-    const baseGrin = sky.material.uniforms.uMoonGrin?.value as number;
-
-    const pressureReaction = world.reactToEventOutcome('face-on-the-moon', {
-      accepted: true,
-      code: 'event-resolved',
-      message: 'The grin grows.',
-      deltas: { pressure: 1 },
-      cue: 'none',
-    });
-    world.update(4.9, 1.1);
-    await pressureReaction;
-    expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(baseGrin);
-    expect(sky.material.uniforms.uMoonGrin?.value).toBeLessThanOrEqual(0.96);
-
-    const energyReaction = world.reactToEventOutcome('face-on-the-moon', {
-      accepted: true,
-      code: 'event-resolved',
-      message: 'You cannot keep your eyes open.',
-      deltas: { energy: -80 },
-      cue: 'none',
-    });
-    world.update(5.45, 0.55);
-    expect(sky.material.uniforms.uMoonEventDim?.value).toBeGreaterThan(0);
-    expect(camera.position.toArray()).toEqual(baseCameraPosition);
-    expect(camera.quaternion.toArray()).not.toEqual(baseCameraQuaternion);
-    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
-    world.update(6, 0.55);
-    await energyReaction;
-
-    world.setDocumentHidden(true);
-    world.clearEvent();
-    expect(sky.material.uniforms.uMoonEventDim?.value).toBe(0);
-    expect(cameraRig.position.y).toBe(0);
-    expect(camera.position.toArray()).toEqual(baseCameraPosition);
-    expect(camera.quaternion.toArray()).toEqual(baseCameraQuaternion);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('snaps broken Binoculars back during the Face on the Moon result', async () => {
-    const binoculars = savedItem('spyglass');
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
-      propModels,
-      createTestMoonTexture(),
-      [binoculars],
-    );
-    world.syncInventory(snapshot([binoculars]));
-    const binocularsRoot = world.scene.getObjectByName('boat-supply:spyglass')!;
-
-    world.stageEvent('face-on-the-moon');
-    const reaction = world.reactToEventOutcome(
-      'face-on-the-moon',
-      {
-        accepted: true,
-        code: 'event-resolved',
-        message: 'The binoculars break.',
-        deltas: { energy: -79 },
-        cue: 'none',
-      },
-      {
-        choiceId: 'spyglass',
-        actors: [{ instanceId: binoculars.instanceId, condition: 'broken' }],
-      },
-    );
-    world.update(0.24, 0.24);
-
-    expect(binocularsRoot.position.z).toBeGreaterThan(0.3);
-    expect(Math.abs(binocularsRoot.rotation.x)).toBeGreaterThan(0.3);
-
-    world.update(1.1, 0.86);
-    await reaction;
-    expect(binocularsRoot.position.toArray()).toEqual([0, 0, 0]);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('uses shared supply motion for the Moon Umbrella and Telescope choices', async () => {
     const umbrella = savedItem('umbrella');
     const telescope = savedItem('spyglass');
@@ -5086,85 +4956,6 @@ describe('BoatWorld helpers', () => {
     world.dispose();
     propModels.dispose();
     borrowActor.mockRestore();
-  });
-
-  it('holds active moon state during ambient pause updates without advancing it', async () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
-      propModels,
-      createTestMoonTexture(),
-    );
-    const sky = world.scene.getObjectByName('procedural-skybox') as Mesh<
-      BufferGeometry,
-      ShaderMaterial
-    >;
-
-    world.stageEvent('face-on-the-moon');
-    const reveal = world.revealEvent('face-on-the-moon');
-    world.update(1.9, 1.9);
-    const heldReveal = sky.material.uniforms.uMoonFaceReveal?.value as number;
-    const heldStars = sky.material.uniforms.uMoonStarScale?.value as number;
-
-    world.updateAmbient(21.9, 20);
-
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(heldReveal);
-    expect(sky.material.uniforms.uMoonStarScale?.value).toBe(heldStars);
-    expect(await remainsPending(reveal)).toBe(true);
-
-    world.update(25.8, 3.9);
-    await reveal;
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('restores the camera before replacement animators stage after Moon Energy loss', async () => {
-    const propModels = createTestPropModels();
-    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
-    const world = new BoatWorld(
-      camera,
-      propModels,
-      createTestMoonTexture(),
-    );
-    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
-    const baseCameraPosition = camera.position.toArray();
-    const baseCameraQuaternion = camera.quaternion.toArray();
-
-    world.stageEvent('face-on-the-moon');
-    const reveal = world.revealEvent('face-on-the-moon');
-    world.update(5.8, 5.8);
-    await reveal;
-    const reaction = world.reactToEventOutcome('face-on-the-moon', {
-      accepted: true,
-      code: 'event-resolved',
-      message: 'You cannot keep your eyes open.',
-      deltas: { energy: -80 },
-      cue: 'none',
-    });
-    world.update(4.9, 1.1);
-    await reaction;
-    expect(camera.position.toArray()).toEqual(baseCameraPosition);
-    expect(camera.quaternion.toArray()).not.toEqual(baseCameraQuaternion);
-    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
-
-    const originalStage = SupernaturalEventAnimator.prototype.stage;
-    let cameraQuaternionWhenStaged: number[] = [];
-    const stage = vi.spyOn(SupernaturalEventAnimator.prototype, 'stage')
-      .mockImplementation(function stageReplacement(
-        this: SupernaturalEventAnimator,
-        eventId: string,
-      ) {
-        cameraQuaternionWhenStaged = camera.quaternion.toArray();
-        return originalStage.call(this, eventId);
-      });
-
-    world.stageEvent('ghosts');
-
-    expect(cameraQuaternionWhenStaged).toEqual(baseCameraQuaternion);
-    expect(cameraRig.position.y).toBe(0);
-    stage.mockRestore();
-    world.dispose();
-    propModels.dispose();
   });
 
   it('keeps Restless Waves supplies fixed while the camera shows hull impacts', async () => {
