@@ -83,6 +83,7 @@ describe('DiveUI', () => {
     expect(result.getAttribute('aria-hidden')).toBe('true');
     expect(result.querySelector('[data-dive-result-title]')?.textContent).toBe('');
     expect(result.querySelector('[data-dive-result-lines]')?.textContent).toBe('');
+    expect(document.activeElement).toBe(close);
   });
 
   it('settles a superseded result and waits for confirmation of the later result', async () => {
