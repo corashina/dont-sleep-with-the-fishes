@@ -10,7 +10,6 @@ import type {
   DayActionId,
   DayActionOption,
   EventResponseId,
-  ResourceDelta,
   SurvivalEventDefinition,
   SurvivalEndingReason,
   SurvivalItemState,
@@ -159,19 +158,29 @@ export class SurvivalUI {
     );
     this.modalFocus.sync();
 
-    this.hudView.onJournal = () => this.onJournalOpen();
-    this.hudView.onCameraTurn = () => this.onCameraTurn?.();
+    this.hudView.onJournal = () => {
+      if (!this.disposed) this.onJournalOpen();
+    };
+    this.hudView.onCameraTurn = () => {
+      if (!this.disposed) this.onCameraTurn?.();
+    };
     this.anchorView.onAction = (action, origin) => this.activateDayAction(action, origin);
     this.anchorView.onUnavailableAction = (_action, reason) => {
-      this.showFeedback({ accepted: false, message: reason });
+      if (!this.disposed) this.showFeedback({ accepted: false, message: reason });
     };
     this.anchorView.onEventItem = (choiceId, instanceId) => {
-      this.onEventItem(choiceId, instanceId);
+      if (!this.disposed) this.onEventItem(choiceId, instanceId);
     };
-    this.anchorView.onEventChoice = (choiceId) => this.onEventChoice(choiceId);
-    this.anchorView.onEventFocus = (eventId) => this.onDriftingItemSelect?.(eventId);
+    this.anchorView.onEventChoice = (choiceId) => {
+      if (!this.disposed) this.onEventChoice(choiceId);
+    };
+    this.anchorView.onEventFocus = (eventId) => {
+      if (!this.disposed) this.onDriftingItemSelect?.(eventId);
+    };
     this.anchorView.onHighlight = (anchorId) => this.onAnchorHighlight(anchorId);
-    this.eventView.onChoice = (choiceId) => this.onEventChoice(choiceId);
+    this.eventView.onChoice = (choiceId) => {
+      if (!this.disposed) this.onEventChoice(choiceId);
+    };
     this.eventView.onAnnouncement = (message) => this.publishAnnouncement(message);
     this.coverView.onResultShow = () => this.showLayer(this.coverView.resultRoot);
     this.coverView.onResultHide = () => this.hideLayer(this.coverView.resultRoot);
@@ -180,10 +189,18 @@ export class SurvivalUI {
         this.coverView.confirmRewardResult();
       }
     };
-    this.fishingView.onCast = (point) => this.onFishingCast?.(point) ?? false;
-    this.fishingView.onReel = () => this.onFishingReel?.() ?? false;
-    this.fishingView.onContinue = () => this.onFishingResultContinue?.();
-    this.fishingView.onExit = () => this.onFishingViewExit?.();
+    this.fishingView.onCast = (point) => (
+      this.disposed ? false : this.onFishingCast?.(point) ?? false
+    );
+    this.fishingView.onReel = () => (
+      this.disposed ? false : this.onFishingReel?.() ?? false
+    );
+    this.fishingView.onContinue = () => {
+      if (!this.disposed) this.onFishingResultContinue?.();
+    };
+    this.fishingView.onExit = () => {
+      if (!this.disposed) this.onFishingViewExit?.();
+    };
     this.fishingView.canUseInteraction = () => (
       this.modalFocus.topmostModal() === this.fishingView.interactionRoot
     );
@@ -194,17 +211,29 @@ export class SurvivalUI {
     this.fishingView.onInteractionHide = () => this.hideLayer(this.fishingView.interactionRoot);
     this.fishingView.onResultShow = () => this.showLayer(this.fishingView.resultRoot);
     this.fishingView.onResultHide = () => this.hideLayer(this.fishingView.resultRoot);
-    this.driftingView.onChoice = (choiceId) => this.onEventChoice(choiceId);
-    this.driftingView.onBack = () => this.onDriftingItemBack?.();
+    this.driftingView.onChoice = (choiceId) => {
+      if (!this.disposed) this.onEventChoice(choiceId);
+    };
+    this.driftingView.onBack = () => {
+      if (!this.disposed) this.onDriftingItemBack?.();
+    };
     this.driftingView.canUse = () => this.modalFocus.topmostModal() === this.driftingView.root;
     this.driftingView.onShow = () => this.showLayer(this.driftingView.root);
     this.driftingView.onHide = () => this.hideLayer(this.driftingView.root);
-    this.journalView.onClose = () => this.onJournalClose();
-    this.journalView.onPage = () => this.onJournalPage();
+    this.journalView.onClose = () => {
+      if (!this.disposed) this.onJournalClose();
+    };
+    this.journalView.onPage = () => {
+      if (!this.disposed) this.onJournalPage();
+    };
     this.modalViews.onRepairTarget = (instanceId) => this.chooseRepairTarget(instanceId);
     this.modalViews.onRepairCancel = () => this.closeRepairOptions();
-    this.modalViews.onResume = () => this.onPauseChange(false);
-    this.modalViews.onRestart = () => this.onRestart();
+    this.modalViews.onResume = () => {
+      if (!this.disposed) this.onPauseChange(false);
+    };
+    this.modalViews.onRestart = () => {
+      if (!this.disposed) this.onRestart();
+    };
 
     document.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('resize', this.handleWindowResize);
@@ -567,6 +596,7 @@ export class SurvivalUI {
   }
 
   private publishAnnouncement(message: string): void {
+    if (this.disposed) return;
     const version = ++this.announcementVersion;
     this.announcer.textContent = '';
     queueMicrotask(() => {
@@ -602,6 +632,7 @@ export class SurvivalUI {
     const open = this.modalFocus.topmostModal() !== null;
     this.hudView.setModalOpen(open);
     this.anchorView.setModalOpen(open);
+    this.eventView.setModalOpen(open);
   }
 
   private positionOpenRoutineDialogs(): void {
@@ -687,6 +718,7 @@ export class SurvivalUI {
   }
 
   private activateDayAction(action: DayActionId, origin: HTMLButtonElement | null): void {
+    if (this.disposed) return;
     this.latestCommandOrigin = origin;
     if (action === 'repairItem') {
       this.openRepairOptions();
@@ -710,12 +742,14 @@ export class SurvivalUI {
   }
 
   private chooseRepairTarget(target: ItemInstanceId): void {
+    if (this.disposed) return;
     this.hideLayer(this.modalViews.repairRoot);
     this.onAction('repairItem', { kind: 'itemRepair', target });
     if (this.modalFocus.topmostModal() === null) this.restoreCommandFocus(this.latestCommandOrigin);
   }
 
   private closeRepairOptions(): void {
+    if (this.disposed) return;
     this.hideLayer(this.modalViews.repairRoot);
     this.restoreCommandFocus(this.latestCommandOrigin);
   }
@@ -825,23 +859,7 @@ export class SurvivalUI {
       return;
     }
     if (this.anchorView.handleCommandKeyDown(event)) return;
-    const target = event.target;
-    if (
-      (this.eventView.isActive() || topmostModal === this.driftingView.root)
-      && target instanceof Element
-      && (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar')
-    ) {
-      const choice = target.closest<HTMLButtonElement>('[data-event-choice]');
-      if (choice !== null && this.eventView.containsChoice(choice)) {
-        event.preventDefault();
-        this.eventView.activateChoice(choice);
-        return;
-      }
-      if (choice !== null && this.driftingView.containsChoice(choice)) {
-        event.preventDefault();
-        this.driftingView.activateChoice(choice);
-        return;
-      }
-    }
+    if (this.eventView.handleKeyDown(event)) return;
+    if (topmostModal === this.driftingView.root) this.driftingView.handleKeyDown(event);
   };
 }

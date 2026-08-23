@@ -112,6 +112,21 @@ export class DriftingItemView {
     return target instanceof Node && this.choicesRoot.contains(target);
   }
 
+  handleKeyDown(event: KeyboardEvent): boolean {
+    if (
+      this.disposed
+      || !this.visible
+      || (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar')
+    ) return false;
+    const target = event.target;
+    if (!(target instanceof Element)) return false;
+    const button = target.closest<HTMLButtonElement>('[data-event-choice]');
+    if (button === null || !this.choicesRoot.contains(button)) return false;
+    event.preventDefault();
+    this.activateChoice(button);
+    return true;
+  }
+
   activateChoice(button: HTMLButtonElement): void {
     if (
       this.disposed
