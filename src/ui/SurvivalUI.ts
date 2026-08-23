@@ -436,7 +436,6 @@ export class SurvivalUI {
 
   hideJournal(): void {
     if (this.disposed) return;
-    this.journalView.hide();
     this.hideLayer(this.journalView.root, true);
   }
 
@@ -465,7 +464,6 @@ export class SurvivalUI {
       this.pauseReturnTarget = this.resolveCommandOrigin();
     }
     this.paused = paused;
-    this.modalViews.setPaused(paused);
     this.fishingView.setPaused(paused);
     this.hudView.setPaused(paused);
     if (!paused) this.anchorView.setPaused(false);
@@ -712,14 +710,12 @@ export class SurvivalUI {
   }
 
   private chooseRepairTarget(target: ItemInstanceId): void {
-    this.modalViews.hideRepairOptions();
     this.hideLayer(this.modalViews.repairRoot);
     this.onAction('repairItem', { kind: 'itemRepair', target });
     if (this.modalFocus.topmostModal() === null) this.restoreCommandFocus(this.latestCommandOrigin);
   }
 
   private closeRepairOptions(): void {
-    this.modalViews.hideRepairOptions();
     this.hideLayer(this.modalViews.repairRoot);
     this.restoreCommandFocus(this.latestCommandOrigin);
   }
