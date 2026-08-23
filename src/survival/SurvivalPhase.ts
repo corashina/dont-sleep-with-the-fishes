@@ -196,7 +196,6 @@ export class SurvivalPhase implements GamePhase {
   private started = false;
   private restartRequested = false;
   private presentedTerminalState: SurvivalState | null = null;
-  private presentedInventorySnapshot: SurvivalSnapshot | null = null;
   private lastReadJournalDay = 0;
   private visibilityDocument: Document | null = null;
   private viewportWidth = 1;

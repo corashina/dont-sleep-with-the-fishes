@@ -152,6 +152,10 @@ export class SurvivalEventFlow {
   private preparedEventId: SurvivalEventId | null = null;
   private initialEventResultId: string | undefined;
   private operationGeneration = 0;
+  private activeDriftingOperation: {
+    readonly generation: number;
+    readonly operation: number;
+  } | null = null;
   private ownsBusyState = false;
   private disposed = false;
 
@@ -214,12 +218,19 @@ export class SurvivalEventFlow {
     if (this.presentation !== 'choosing' || !this.isLifecycleCurrent(generation)) return;
     const pending = this.dependencies.session.snapshot();
     if (pending.pendingEventId !== null && isDriftingItemEventId(pending.pendingEventId)) {
-      void this.dependencies.drifting.choose(choiceId).catch((error) => {
-        if (!this.isLifecycleCurrent(generation)) return;
-        this.dependencies.onFatalError(error);
-        this.setDriftingResolutionActive(false);
-        this.setBusy(false);
-      });
+      const operation = this.beginOperation();
+      this.activeDriftingOperation = { generation, operation };
+      try {
+        void this.dependencies.drifting.choose(choiceId).then(
+          () => {
+            if (!this.isCurrent(generation, operation)) return;
+            this.activeDriftingOperation = null;
+          },
+          (error) => this.handleDriftingFailure(error, generation, operation),
+        );
+      } catch (error) {
+        this.handleDriftingFailure(error, generation, operation);
+      }
       return;
     }
     const operation = this.beginOperation();
@@ -231,7 +242,9 @@ export class SurvivalEventFlow {
   }
 
   async focusDriftingItem(eventId: DriftingItemEventId): Promise<void> {
-    if (!this.isPendingEvent(eventId)) return;
+    const generation = this.dependencies.captureLifecycleGeneration();
+    if (!this.isPendingEvent(eventId) || !this.isLifecycleCurrent(generation)) return;
+    const operation = this.beginOperation();
     const snapshot = this.dependencies.session.snapshot();
     const event = survivalEventById(eventId);
     if (event === undefined) return;
@@ -241,17 +254,34 @@ export class SurvivalEventFlow {
         this.contextualChoicesFor(event, snapshot),
       );
     } catch (error) {
-      if (this.isPendingEvent(eventId)) this.dependencies.onFatalError(error);
+      if (!this.isCurrent(generation, operation)) return;
+      try {
+        this.dependencies.onFatalError(error);
+      } finally {
+        this.releaseBusyDuringRecovery(generation, operation);
+      }
     }
   }
 
   beginNightTransition(snapshot: SurvivalSnapshot, opensEvent: boolean): boolean {
-    if (this.disposed) return false;
-    this.operationGeneration += 1;
-    this.presentation = opensEvent ? 'transitioning' : 'sleeping';
-    this.setBusy(true);
-    if (!opensEvent) return true;
-    this.dependencies.ui.beginEventPresentation?.();
+    const generation = this.dependencies.captureLifecycleGeneration();
+    if (!this.isLifecycleCurrent(generation)) return false;
+    const operation = this.beginOperation();
+    try {
+      this.presentation = opensEvent ? 'transitioning' : 'sleeping';
+      this.setBusy(true);
+      if (!opensEvent) return true;
+      this.dependencies.ui.beginEventPresentation?.();
+    } catch (error) {
+      if (!this.isCurrent(generation, operation)) return false;
+      this.clearPresentation(false, false);
+      try {
+        this.dependencies.onFatalError(error);
+      } finally {
+        this.releaseBusyDuringRecovery(generation, operation);
+      }
+      return false;
+    }
     if (snapshot.pendingEventId === null || !this.beginEventBundleLoad(snapshot.pendingEventId)) {
       this.preparedEventId = null;
       this.presentation = 'idle';
@@ -331,24 +361,36 @@ export class SurvivalEventFlow {
   }
 
   setDriftingResolutionActive(active: boolean): void {
-    if (this.disposed) return;
+    const drifting = this.activeDriftingOperation;
+    if (
+      drifting === null
+      || !this.isCurrent(drifting.generation, drifting.operation)
+    ) return;
     if (active && this.presentation === 'choosing') this.presentation = 'resolving';
-    else if (!active && this.presentation === 'resolving') this.presentation = 'choosing';
+    else if (!active && this.presentation === 'resolving') {
+      this.presentation = 'choosing';
+      this.activeDriftingOperation = null;
+    }
   }
 
   resolveDriftingItemChoice(
     choiceId: EventResponseId,
   ): DriftingItemChoiceResolution | undefined {
-    const generation = this.dependencies.captureLifecycleGeneration();
-    if (this.presentation !== 'resolving' || !this.isLifecycleCurrent(generation)) {
+    const drifting = this.activeDriftingOperation;
+    if (
+      drifting === null
+      || this.presentation !== 'resolving'
+      || !this.isCurrent(drifting.generation, drifting.operation)
+    ) {
       return undefined;
     }
+    const { generation, operation } = drifting;
     const pending = this.dependencies.session.snapshot();
     const eventId = pending.pendingEventId;
     if (eventId === null || !isDriftingItemEventId(eventId)) return undefined;
 
     const outcome = this.dependencies.session.resolveEvent?.({ kind: 'choice', choiceId });
-    if (outcome === undefined || !this.isLifecycleCurrent(generation)) return undefined;
+    if (outcome === undefined || !this.isCurrent(generation, operation)) return undefined;
     if (!outcome.accepted) {
       this.dependencies.audio.deny();
       this.dependencies.ui.showFeedback?.(outcome);
@@ -356,6 +398,7 @@ export class SurvivalEventFlow {
     }
 
     this.dependencies.renderSnapshot();
+    if (!this.isCurrent(generation, operation)) return undefined;
     this.eligibility.clear();
     this.dependencies.world.setEventSelectedItem?.(null);
     this.dependencies.world.setEventEligibleItems?.(null);
@@ -381,16 +424,17 @@ export class SurvivalEventFlow {
       accepted: true,
       animate,
       clearEvent: () => {
-        if (this.isLifecycleCurrent(generation)) this.clear();
+        if (this.isCurrent(generation, operation)) this.clearPresentation();
       },
       renderSnapshot: () => {
-        if (!this.isLifecycleCurrent(generation)) return false;
+        if (!this.isCurrent(generation, operation)) return false;
         const snapshot = this.dependencies.renderSnapshot();
+        if (!this.isCurrent(generation, operation)) return false;
         if (isTerminal(snapshot.state)) terminalSnapshot = snapshot;
         return terminalSnapshot !== null;
       },
       presentTerminal: () => {
-        if (terminalSnapshot !== null && this.isLifecycleCurrent(generation)) {
+        if (terminalSnapshot !== null && this.isCurrent(generation, operation)) {
           this.dependencies.presentTerminal(terminalSnapshot);
         }
       },
@@ -426,6 +470,21 @@ export class SurvivalEventFlow {
       if (this.isCurrent(generation, operation)) this.dependencies.onFatalError(error);
     } finally {
       this.releaseOwnedBusyAfterFailure(generation, operation);
+    }
+  }
+
+  private handleDriftingFailure(
+    error: unknown,
+    generation: number,
+    operation: number,
+  ): void {
+    if (!this.isCurrent(generation, operation)) return;
+    if (this.presentation === 'resolving') this.presentation = 'choosing';
+    this.activeDriftingOperation = null;
+    try {
+      this.dependencies.onFatalError(error);
+    } finally {
+      this.releaseBusyDuringRecovery(generation, operation);
     }
   }
 
@@ -535,6 +594,15 @@ export class SurvivalEventFlow {
     );
   }
 
+  private releaseBusyDuringRecovery(generation: number, operation: number): void {
+    if (!this.isCurrent(generation, operation)) return;
+    try {
+      this.setBusy(false);
+    } catch {
+      // Keep the primary recovery error.
+    }
+  }
+
   private async resolveContextualChoice(
     choiceId: EventResponseId,
     generation: number,
@@ -626,6 +694,7 @@ export class SurvivalEventFlow {
     generation: number,
     operation: number,
   ): Promise<void> {
+    let recoveryStarted = false;
     const pending = this.dependencies.session.snapshot();
     if (
       pending.pendingEventId !== 'midnight-tour'
@@ -669,11 +738,13 @@ export class SurvivalEventFlow {
         throw new Error('Midnight Tour visit did not return an outcome.');
       }
       if (!outcome.accepted) {
+        recoveryStarted = true;
         await this.recoverMidnightTourVisit(generation, operation, { rejection: outcome });
         return;
       }
       const invariantError = this.focusedEventResultError(eventId, 'visit', outcome);
       if (invariantError !== null) {
+        recoveryStarted = true;
         await this.recoverMidnightTourVisit(generation, operation, { invariantError });
         return;
       }
@@ -688,7 +759,8 @@ export class SurvivalEventFlow {
         presentation,
       );
     } catch (error) {
-      if (this.isCurrent(generation, operation)) {
+      if (!recoveryStarted && this.isCurrent(generation, operation)) {
+        recoveryStarted = true;
         await this.recoverMidnightTourVisit(generation, operation, { fatalError: error });
       }
     }
@@ -771,7 +843,7 @@ export class SurvivalEventFlow {
       // Keep the original error.
     }
     if (!this.isCurrent(generation, operation)) return;
-    this.tryCleanup(() => this.clearPresentation());
+    this.clearPresentation(false, false);
     if (!this.isCurrent(generation, operation)) return;
     try {
       await (this.dependencies.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
@@ -779,7 +851,7 @@ export class SurvivalEventFlow {
       // Continue cleanup.
     }
     if (!this.isCurrent(generation, operation)) return;
-    this.tryCleanup(() => { this.dependencies.renderSnapshot(); });
+    this.tryCleanup(() => { this.dependencies.renderSnapshot(); }, false);
     if (!this.isCurrent(generation, operation)) return;
     try {
       await this.dependencies.renderAndSettleCoveredScene(generation);
@@ -805,9 +877,14 @@ export class SurvivalEventFlow {
         this.dependencies.onFatalError(reason.fatalError);
       }
     } finally {
-      if (this.isCurrent(generation, operation)) this.setBusy(false);
+      this.releaseBusyDuringRecovery(generation, operation);
     }
-    if (this.isCurrent(generation, operation)) this.dependencies.ui.restoreCommandFocus?.();
+    if (!this.isCurrent(generation, operation)) return;
+    try {
+      this.dependencies.ui.restoreCommandFocus?.();
+    } catch {
+      // Keep the primary recovery result.
+    }
   }
 
   private async resolveEndureOperation(
@@ -1300,29 +1377,74 @@ export class SurvivalEventFlow {
   ): Promise<void> {
     this.cancelDeferredPresentationSync(generation);
     if (!this.isCurrent(generation, operation)) return;
-    this.clearPresentation();
+    this.clearPresentation(false, false);
     this.dependencies.onInvariantError(error);
-    const resolved = this.dependencies.session.snapshot();
-    if (isTerminal(resolved.state)) {
-      const snapshot = this.dependencies.renderSnapshot();
-      this.setBusy(false);
-      this.dependencies.presentTerminal(snapshot);
+    if (!this.isCurrent(generation, operation)) return;
+    let resolved: SurvivalSnapshot;
+    try {
+      resolved = this.dependencies.session.snapshot();
+    } catch {
+      this.releaseBusyDuringRecovery(generation, operation);
       return;
     }
-    await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    if (isTerminal(resolved.state)) {
+      let snapshot: SurvivalSnapshot | null = null;
+      try {
+        snapshot = this.dependencies.renderSnapshot();
+      } catch {
+        // Keep the invariant as the primary error.
+      }
+      if (!this.isCurrent(generation, operation)) return;
+      this.releaseBusyDuringRecovery(generation, operation);
+      if (snapshot !== null) {
+        try {
+          this.dependencies.presentTerminal(snapshot);
+        } catch {
+          // Keep the invariant as the primary error.
+        }
+      }
+      return;
+    }
+    try {
+      await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    } catch {
+      // Continue recovery with the invariant as the primary error.
+    }
     if (!this.isCurrent(generation, operation)) return;
-    const snapshot = eventState === 'nightEvent'
-      ? await this.runDawn(generation, operation)
-      : this.dependencies.renderSnapshot();
+    let snapshot: SurvivalSnapshot;
+    try {
+      snapshot = eventState === 'nightEvent'
+        ? await this.runDawn(generation, operation)
+        : this.dependencies.renderSnapshot();
+    } catch {
+      try {
+        snapshot = this.dependencies.session.snapshot();
+      } catch {
+        this.releaseBusyDuringRecovery(generation, operation);
+        return;
+      }
+    }
     if (!this.isCurrent(generation, operation)) return;
-    if (!await this.dependencies.renderAndSettleCoveredScene(generation)) return;
+    try {
+      await this.dependencies.renderAndSettleCoveredScene(generation);
+    } catch {
+      // Continue recovery with the invariant as the primary error.
+    }
     if (!this.isCurrent(generation, operation)) return;
-    await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    try {
+      await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    } catch {
+      // Continue recovery with the invariant as the primary error.
+    }
     if (!this.isCurrent(generation, operation)) return;
     this.presentation = 'idle';
-    this.setBusy(false);
-    this.dependencies.presentTerminal(snapshot);
-    this.dependencies.ui.restoreCommandFocus?.();
+    this.releaseBusyDuringRecovery(generation, operation);
+    try {
+      this.dependencies.presentTerminal(snapshot);
+      this.dependencies.ui.restoreCommandFocus?.();
+    } catch {
+      // Keep the invariant as the primary error.
+    }
   }
 
   private retainTerminalEventTableau(): void {
@@ -1334,9 +1456,13 @@ export class SurvivalEventFlow {
     this.dependencies.ui.clearEventPresentation?.();
   }
 
-  private clearPresentation(preserveDeferredSync = false): void {
+  private clearPresentation(
+    preserveDeferredSync = false,
+    reportCleanupErrors = true,
+  ): void {
     if (!preserveDeferredSync) this.cancelDeferredPresentationSync();
     this.preparedEventId = null;
+    this.activeDriftingOperation = null;
     const steps: readonly (() => void)[] = [
       () => this.dependencies.drifting.clear(),
       () => this.dependencies.audio.clearEvent(),
@@ -1349,14 +1475,14 @@ export class SurvivalEventFlow {
       () => this.dependencies.ui.clearEventPresentation?.(),
       () => this.dependencies.setAutomaticWeather(null),
     ];
-    for (const step of steps) this.tryCleanup(step);
+    for (const step of steps) this.tryCleanup(step, reportCleanupErrors);
   }
 
-  private tryCleanup(step: () => void): void {
+  private tryCleanup(step: () => void, reportError = true): void {
     try {
       step();
     } catch (error) {
-      this.dependencies.onFatalError(error);
+      if (reportError) this.dependencies.onFatalError(error);
     }
   }
 

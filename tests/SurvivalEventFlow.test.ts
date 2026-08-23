@@ -4,6 +4,7 @@ import {
   SurvivalEventFlow,
   type SurvivalEventFlowDependencies,
 } from '../src/survival/SurvivalEventFlow';
+import type { DriftingItemChoiceResolution } from '../src/survival/DriftingItemFlow';
 import type {
   ActionOutcome,
   SurvivalInventorySnapshot,
@@ -13,8 +14,12 @@ import type {
 
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
-  return { promise, resolve };
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
 }
 
 function inventory(
@@ -163,8 +168,8 @@ function createRig(initial: SurvivalSnapshot) {
     dispose: vi.fn(),
   };
   const drifting = {
-    enter: vi.fn(async () => undefined),
-    choose: vi.fn(async () => undefined),
+    enter: vi.fn(async (_eventId?: string): Promise<void> => undefined),
+    choose: vi.fn(async (_choiceId?: string): Promise<void> => undefined),
     clear: vi.fn(() => calls.push('clear-drifting')),
     settleForVisibilityChange: vi.fn(),
   };
@@ -364,5 +369,145 @@ describe('SurvivalEventFlow', () => {
 
     expect(presenterRig.onFatalError).toHaveBeenCalledWith(presenterError);
     expect(presenterRig.calls.at(-1)).toBe('ready');
+  });
+
+  it('ignores a stale drifting choice rejection after a same-lifecycle replacement', async () => {
+    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-barrel' });
+    const rig = createRig(pending);
+    const choice = deferred();
+    rig.drifting.choose.mockReturnValueOnce(choice.promise);
+    await rig.flow.revealPending(pending);
+
+    rig.flow.resolveContextual('sleep');
+    await vi.waitFor(() => expect(rig.drifting.choose).toHaveBeenCalledOnce());
+    rig.flow.clear();
+    await rig.flow.revealPending(pending);
+    rig.onFatalError.mockClear();
+    rig.setBusy.mockClear();
+
+    choice.reject(new Error('stale drifting choice failed'));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+    expect(rig.setBusy).not.toHaveBeenCalled();
+  });
+
+  it('ignores a stale drifting focus rejection after a same-lifecycle replacement', async () => {
+    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-bottle' });
+    const rig = createRig(pending);
+    const firstEntry = deferred();
+    rig.drifting.enter.mockReturnValueOnce(firstEntry.promise);
+    await rig.flow.revealPending(pending);
+
+    const first = rig.flow.focusDriftingItem('drifting-bottle');
+    await vi.waitFor(() => expect(rig.drifting.enter).toHaveBeenCalledOnce());
+    await rig.flow.focusDriftingItem('drifting-bottle');
+    rig.onFatalError.mockClear();
+    rig.setBusy.mockClear();
+
+    firstEntry.reject(new Error('stale drifting focus failed'));
+    await first;
+
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+    expect(rig.setBusy).not.toHaveBeenCalled();
+  });
+
+  it('makes returned drifting callbacks inert after a same-lifecycle replacement', async () => {
+    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-barrel' });
+    const rig = createRig(pending);
+    let resolution: DriftingItemChoiceResolution | undefined;
+    rig.drifting.choose.mockImplementationOnce(async (choiceId?: string) => {
+      if (choiceId === undefined) throw new Error('Expected a choice.');
+      rig.flow.setDriftingResolutionActive(true);
+      resolution = rig.flow.resolveDriftingItemChoice(choiceId);
+    });
+    await rig.flow.revealPending(pending);
+
+    rig.flow.resolveContextual('sleep');
+    await vi.waitFor(() => expect(resolution).toBeDefined());
+    if (resolution === undefined || !resolution.accepted) throw new Error('Expected resolution.');
+    const staleResolution = resolution;
+    rig.flow.clear();
+    await rig.flow.revealPending(pending);
+    rig.world.clearEvent.mockClear();
+    rig.renderSnapshot.mockClear();
+    rig.presentTerminal.mockClear();
+
+    staleResolution.clearEvent();
+    staleResolution.renderSnapshot();
+    staleResolution.presentTerminal();
+
+    expect(rig.world.clearEvent).not.toHaveBeenCalled();
+    expect(rig.renderSnapshot).not.toHaveBeenCalled();
+    expect(rig.presentTerminal).not.toHaveBeenCalled();
+  });
+
+  it('keeps a focused invariant primary when synchronous cleanup fails', async () => {
+    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'handyman' });
+    const rig = createRig(pending);
+    const cleanupError = new Error('world cleanup failed');
+    rig.setResolveEvent(() => {
+      rig.setSnapshot(snapshot());
+      return accepted();
+    });
+    await rig.flow.revealPending(pending);
+    rig.world.clearEvent.mockImplementationOnce(() => { throw cleanupError; });
+
+    rig.flow.resolveContextual('touch');
+    await vi.waitFor(() => expect(rig.onInvariantError).toHaveBeenCalledOnce());
+
+    expect(rig.onInvariantError.mock.calls[0]![0].message).toContain(
+      'requires result handyman/touch; received missing',
+    );
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+    expect(rig.bundles.releaseActive).toHaveBeenCalled();
+    expect(rig.ui.clearEventPresentation).toHaveBeenCalled();
+  });
+
+  it('keeps a Midnight Tour fatal error primary when synchronous cleanup fails', async () => {
+    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'midnight-tour' });
+    const rig = createRig(pending);
+    const primaryError = new Error('visit presenter failed');
+    rig.world.playEventChoice.mockRejectedValueOnce(primaryError);
+    await rig.flow.revealPending(pending);
+    rig.world.clearEvent.mockImplementationOnce(() => {
+      throw new Error('world cleanup failed');
+    });
+
+    rig.flow.resolveContextual('visit');
+    await vi.waitFor(() => expect(rig.onFatalError).toHaveBeenCalledOnce());
+
+    expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(primaryError);
+    expect(rig.bundles.releaseActive).toHaveBeenCalled();
+    expect(rig.calls).toContain('ready');
+  });
+
+  it('keeps normal cleanup failure reporting and continues later cleanup', () => {
+    const cleanupError = new Error('normal world cleanup failed');
+    const rig = createRig(snapshot());
+    rig.world.clearEvent.mockImplementationOnce(() => { throw cleanupError; });
+
+    rig.flow.clear();
+
+    expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(cleanupError);
+    expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
+    expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
+  });
+
+  it('cleans and unlocks when night-transition UI setup throws', () => {
+    const pending = snapshot({ state: 'nightEvent', pendingEventId: 'shower-night' });
+    const rig = createRig(pending);
+    const primaryError = new Error('event UI setup failed');
+    rig.ui.beginEventPresentation.mockImplementationOnce(() => { throw primaryError; });
+
+    const acceptedTransition = rig.flow.beginNightTransition(pending, true);
+
+    expect(acceptedTransition).toBe(false);
+    expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(primaryError);
+    expect(rig.bundles.beginLoad).not.toHaveBeenCalled();
+    expect(rig.world.clearEvent).toHaveBeenCalled();
+    expect(rig.bundles.releaseActive).toHaveBeenCalled();
+    expect(rig.setBusy.mock.calls.map(([busy]) => busy)).toEqual([true, false]);
   });
 });
