@@ -1443,10 +1443,13 @@ export class BoatWorld {
       () => this.toolHoverOutline.dispose(),
       () => this.hangingLantern.dispose(),
       () => this.lantern.dispose(),
-      () => this.fishingPresentation.dispose(),
+      () => this.fishingPresentation.disposeAnimation(),
+      () => this.fishingPresentation.disposeCatches(),
       () => this.ocean.dispose(),
       () => this.weatherEffects.dispose(),
+      () => this.fishingPresentation.disposeParticles(),
       () => this.sky.dispose(),
+      () => this.fishingPresentation.detach(),
       () => this.scene.remove(
         this.motionRig,
         this.ocean.mesh,
@@ -1468,6 +1471,7 @@ export class BoatWorld {
         this.ownedMaterials,
         this.ownedTextures,
       ),
+      () => this.fishingPresentation.disposeVisualResources(),
     ]);
   }
 
