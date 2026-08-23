@@ -530,21 +530,23 @@ export class BoatAnchorView {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    let failed = false;
     let firstError: unknown;
     const clean = (cleanup: () => void): void => {
       try {
         cleanup();
       } catch (error) {
-        firstError ??= error;
+        if (!failed) {
+          failed = true;
+          firstError = error;
+        }
       }
     };
     clean(() => this.clearHighlight());
-    clean(() => {
-      this.carlitosCard.hidden = true;
-      this.carlitosCard.setAttribute('aria-hidden', 'true');
-      this.carlitosCard.classList.remove('is-visible');
-      this.carlitosReturnTarget = null;
-    });
+    clean(() => { this.carlitosCard.hidden = true; });
+    clean(() => this.carlitosCard.setAttribute('aria-hidden', 'true'));
+    clean(() => this.carlitosCard.classList.remove('is-visible'));
+    clean(() => { this.carlitosReturnTarget = null; });
     clean(() => this.anchorLayer.removeEventListener('click', this.handleAnchorClick));
     clean(() => this.carlitosCard.removeEventListener('click', this.handleCarlitosClick));
     clean(() => this.anchorLayer.removeEventListener('pointerover', this.handleAnchorPointerOver));
@@ -553,14 +555,14 @@ export class BoatAnchorView {
     clean(() => this.anchorLayer.removeEventListener('focusout', this.handleAnchorFocusOut));
     clean(() => document.removeEventListener('click', this.handleDocumentClick));
     clean(() => window.removeEventListener('resize', this.handleWindowResize));
-    this.onAction = () => undefined;
-    this.onUnavailableAction = () => undefined;
-    this.onEventItem = () => undefined;
-    this.onEventChoice = () => undefined;
-    this.onEventFocus = () => undefined;
-    this.onHighlight = () => undefined;
-    this.anchorLayouts.clear();
-    if (firstError !== undefined) throw firstError;
+    clean(() => { this.onAction = () => undefined; });
+    clean(() => { this.onUnavailableAction = () => undefined; });
+    clean(() => { this.onEventItem = () => undefined; });
+    clean(() => { this.onEventChoice = () => undefined; });
+    clean(() => { this.onEventFocus = () => undefined; });
+    clean(() => { this.onHighlight = () => undefined; });
+    clean(() => this.anchorLayouts.clear());
+    if (failed) throw firstError;
   }
 
   private createAnchorButton(anchor: BoatInteractionAnchor): HTMLButtonElement {

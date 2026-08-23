@@ -134,18 +134,50 @@ describe('SurvivalHudView', () => {
     expect(camera).not.toHaveBeenCalled();
   });
 
-  it('resets callbacks and preserves a listener cleanup error', () => {
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+  ] as const)('preserves a %s cleanup error and continues all cleanup', (_label, firstError) => {
     const { mount, view } = mountView();
     const journal = vi.fn();
+    const camera = vi.fn();
     view.onJournal = journal;
-    const error = new Error('HUD listener cleanup failed');
-    vi.spyOn(view.topControls, 'removeEventListener').mockImplementation(() => {
-      throw error;
+    view.onCameraTurn = camera;
+    view.setCameraTurnState(true, false);
+    const remove = vi.spyOn(view.topControls, 'removeEventListener');
+    let storedJournal = view.onJournal;
+    let storedCamera = view.onCameraTurn;
+    Object.defineProperty(view, 'onJournal', {
+      configurable: true,
+      get: () => storedJournal,
+      set: (callback: typeof storedJournal) => {
+        storedJournal = callback;
+        throw firstError;
+      },
     });
+    Object.defineProperty(view, 'onCameraTurn', {
+      configurable: true,
+      get: () => storedCamera,
+      set: (callback: typeof storedCamera) => {
+        storedCamera = callback;
+        throw new Error('later callback cleanup failed');
+      },
+    });
+    const notThrown = Symbol('not thrown');
+    let thrown: unknown = notThrown;
 
-    expect(() => view.dispose()).toThrow(error);
+    try {
+      view.dispose();
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBe(firstError);
+    expect(remove).toHaveBeenCalledOnce();
     expect(() => view.dispose()).not.toThrow();
     mount.querySelector<HTMLButtonElement>('[data-journal-open]')!.click();
+    mount.querySelector<HTMLButtonElement>('[data-camera-turn]')!.click();
     expect(journal).not.toHaveBeenCalled();
+    expect(camera).not.toHaveBeenCalled();
   });
 });

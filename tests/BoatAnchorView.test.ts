@@ -304,4 +304,45 @@ describe('BoatAnchorView', () => {
     expect(action).not.toHaveBeenCalled();
     expect(document.activeElement).not.toBe(repair);
   });
+
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+  ] as const)('preserves a %s cleanup error and continues all cleanup', (_label, firstError) => {
+    const { view } = mountView();
+    const action = vi.fn();
+    view.onAction = action;
+    view.setAnchors([repairAnchor()]);
+    view.render(snapshot(), new Map([['repair', null]]));
+    const repair = view.anchorButton('repair-tools')!;
+    repair.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    view.onHighlight = () => { throw firstError; };
+    const internals = view as unknown as {
+      readonly anchorLayouts: Map<string, unknown>;
+    };
+    const originalClear = internals.anchorLayouts.clear.bind(internals.anchorLayouts);
+    const cacheClear = vi.spyOn(internals.anchorLayouts, 'clear').mockImplementation(() => {
+      originalClear();
+      throw new Error('later cache cleanup failed');
+    });
+    const listenerCleanup = vi.spyOn(view.anchorLayer, 'removeEventListener');
+    const notThrown = Symbol('not thrown');
+    let thrown: unknown = notThrown;
+
+    try {
+      view.dispose();
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBe(firstError);
+    expect(listenerCleanup).toHaveBeenCalled();
+    expect(cacheClear).toHaveBeenCalledOnce();
+    expect(internals.anchorLayouts.size).toBe(0);
+    expect(() => view.onHighlight(null)).not.toThrow();
+    view.onAction('repair', repair);
+    expect(action).not.toHaveBeenCalled();
+    expect(() => view.dispose()).not.toThrow();
+    expect(cacheClear).toHaveBeenCalledOnce();
+  });
 });

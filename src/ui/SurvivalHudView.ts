@@ -210,15 +210,22 @@ export class SurvivalHudView {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    let failed = false;
     let firstError: unknown;
-    try {
-      this.topControls.removeEventListener('click', this.handleClick);
-    } catch (error) {
-      firstError = error;
-    }
-    this.onJournal = () => undefined;
-    this.onCameraTurn = () => undefined;
-    if (firstError !== undefined) throw firstError;
+    const clean = (cleanup: () => void): void => {
+      try {
+        cleanup();
+      } catch (error) {
+        if (!failed) {
+          failed = true;
+          firstError = error;
+        }
+      }
+    };
+    clean(() => this.topControls.removeEventListener('click', this.handleClick));
+    clean(() => { this.onJournal = () => undefined; });
+    clean(() => { this.onCameraTurn = () => undefined; });
+    if (failed) throw firstError;
   }
 
   private updateMeter(id: MeterId, value: number): void {

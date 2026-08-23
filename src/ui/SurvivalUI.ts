@@ -108,6 +108,40 @@ interface PendingFade {
   readonly finish: () => void;
 }
 
+interface CleanupResult {
+  readonly failed: boolean;
+  readonly firstError: unknown;
+}
+
+function runCleanupSteps(cleanups: readonly (() => void)[]): CleanupResult {
+  let failed = false;
+  let firstError: unknown;
+  cleanups.forEach((cleanup) => {
+    try {
+      cleanup();
+    } catch (error) {
+      if (!failed) {
+        failed = true;
+        firstError = error;
+      }
+    }
+  });
+  return { failed, firstError };
+}
+
+function settleAfterCleanup(
+  resolve: () => void,
+  cleanups: readonly (() => void)[],
+): void {
+  const result = runCleanupSteps(cleanups);
+  resolve();
+  if (result.failed) throw result.firstError;
+}
+
+function throwCleanupFailure(result: CleanupResult): void {
+  if (result.failed) throw result.firstError;
+}
+
 export class SurvivalUI {
   onAction: (action: DayActionId, option?: DayActionOption) => void = () => undefined;
   onEventItem: (choiceId: EventResponseId, instanceId: ItemInstanceId) => void = () => undefined;
@@ -588,10 +622,15 @@ export class SurvivalUI {
       const finish = (): void => {
         if (settled) return;
         settled = true;
-        window.clearTimeout(timer);
-        button.removeEventListener('animationend', handleAnimationEnd);
-        if (this.pendingEventChoiceBeat?.finish === finish) this.pendingEventChoiceBeat = null;
-        resolve();
+        settleAfterCleanup(resolve, [
+          () => window.clearTimeout(timer),
+          () => button.removeEventListener('animationend', handleAnimationEnd),
+          () => {
+            if (this.pendingEventChoiceBeat?.finish === finish) {
+              this.pendingEventChoiceBeat = null;
+            }
+          },
+        ]);
       };
       const handleAnimationEnd = (event: AnimationEvent): void => {
         if (event.target === button) finish();
@@ -678,10 +717,15 @@ export class SurvivalUI {
       const finish = (): void => {
         if (settled) return;
         settled = true;
-        window.clearTimeout(timer);
-        this.sleepCover.removeEventListener('transitionend', handleTransitionEnd);
-        if (this.pendingSleepTransition?.finish === finish) this.pendingSleepTransition = null;
-        resolve();
+        settleAfterCleanup(resolve, [
+          () => window.clearTimeout(timer),
+          () => this.sleepCover.removeEventListener('transitionend', handleTransitionEnd),
+          () => {
+            if (this.pendingSleepTransition?.finish === finish) {
+              this.pendingSleepTransition = null;
+            }
+          },
+        ]);
       };
       const handleTransitionEnd = (event: TransitionEvent): void => {
         if (event.target === this.sleepCover && event.propertyName === 'opacity') finish();
@@ -727,11 +771,15 @@ export class SurvivalUI {
       const finish = (): void => {
         if (settled) return;
         settled = true;
-        if (this.pendingRewardResultConfirmation?.finish === finish) {
-          this.pendingRewardResultConfirmation = null;
-          this.clearRewardResultView();
-        }
-        resolve();
+        const current = this.pendingRewardResultConfirmation?.finish === finish;
+        settleAfterCleanup(resolve, [
+          () => {
+            if (current) this.pendingRewardResultConfirmation = null;
+          },
+          () => {
+            if (current) this.clearRewardResultView();
+          },
+        ]);
       };
       this.pendingRewardResultConfirmation = { finish };
     });
@@ -746,13 +794,15 @@ export class SurvivalUI {
   }
 
   private clearRewardResultView(): void {
-    this.hideLayer(this.diveResultLayer);
-    this.diveResultLayer.classList.remove('is-chest-reward');
-    this.diveResultTitle.textContent = '';
-    this.diveResultRewards.hidden = true;
-    this.diveResultRewards.replaceChildren();
-    this.diveResultLines.hidden = true;
-    this.diveResultLines.replaceChildren();
+    throwCleanupFailure(runCleanupSteps([
+      () => this.hideLayer(this.diveResultLayer),
+      () => this.diveResultLayer.classList.remove('is-chest-reward'),
+      () => { this.diveResultTitle.textContent = ''; },
+      () => { this.diveResultRewards.hidden = true; },
+      () => this.diveResultRewards.replaceChildren(),
+      () => { this.diveResultLines.hidden = true; },
+      () => this.diveResultLines.replaceChildren(),
+    ]));
   }
 
   private renderDiveReward(reward: RewardSummary | null): void {
@@ -805,12 +855,13 @@ export class SurvivalUI {
       const finish = (): void => {
         if (settled) return;
         settled = true;
-        window.clearTimeout(timer);
-        if (getPending()?.finish === finish) {
-          clearPending();
-          onCurrentFinish?.();
-        }
-        resolve();
+        let current = false;
+        settleAfterCleanup(resolve, [
+          () => window.clearTimeout(timer),
+          () => { current = getPending()?.finish === finish; },
+          () => { if (current) clearPending(); },
+          () => { if (current) onCurrentFinish?.(); },
+        ]);
       };
       timer = window.setTimeout(finish, delay);
       setPending({ finish });
@@ -827,11 +878,12 @@ export class SurvivalUI {
       const finish = (): void => {
         if (settled) return;
         settled = true;
-        if (frame !== 0) window.cancelAnimationFrame(frame);
-        if (this.pendingCoveredSceneSettle?.finish === finish) {
-          this.pendingCoveredSceneSettle = null;
-        }
-        resolve();
+        let current = false;
+        settleAfterCleanup(resolve, [
+          () => { if (frame !== 0) window.cancelAnimationFrame(frame); },
+          () => { current = this.pendingCoveredSceneSettle?.finish === finish; },
+          () => { if (current) this.pendingCoveredSceneSettle = null; },
+        ]);
       };
       const advance = (): void => {
         frame = 0;
@@ -972,10 +1024,13 @@ export class SurvivalUI {
       const finish = (): void => {
         if (settled) return;
         settled = true;
-        window.clearTimeout(timer);
-        this.fishingFade.removeEventListener('transitionend', handleTransitionEnd);
-        if (this.pendingFishingFade?.finish === finish) this.pendingFishingFade = null;
-        resolve();
+        settleAfterCleanup(resolve, [
+          () => window.clearTimeout(timer),
+          () => this.fishingFade.removeEventListener('transitionend', handleTransitionEnd),
+          () => {
+            if (this.pendingFishingFade?.finish === finish) this.pendingFishingFade = null;
+          },
+        ]);
       };
       const handleTransitionEnd = (event: TransitionEvent): void => {
         if (event.target === this.fishingFade && event.propertyName === 'opacity') finish();
@@ -1001,11 +1056,14 @@ export class SurvivalUI {
       const finish = (): void => {
         if (settled) return;
         settled = true;
-        window.clearTimeout(timer);
-        if (this.pendingEventOutcomeHold?.finish === finish) {
-          this.pendingEventOutcomeHold = null;
-        }
-        resolve();
+        settleAfterCleanup(resolve, [
+          () => window.clearTimeout(timer),
+          () => {
+            if (this.pendingEventOutcomeHold?.finish === finish) {
+              this.pendingEventOutcomeHold = null;
+            }
+          },
+        ]);
       };
       timer = window.setTimeout(finish, delay);
       this.pendingEventOutcomeHold = { finish };

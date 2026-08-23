@@ -186,4 +186,71 @@ describe('DiveUI', () => {
     ui.dispose();
     await Promise.all([cover, coveredHold, result]);
   });
+
+  it('settles reward confirmation after all result cleanup attempts fail', async () => {
+    const { mount, ui } = createUI();
+    const confirmation = ui.showRewardResult({
+      title: 'DIVE RESULT',
+      reward: { kind: 'resource', id: 'food', quantity: 1 },
+      lines: ['FOOD +1'],
+    });
+    const internals = ui as unknown as {
+      readonly diveResultRewards: HTMLElement;
+      readonly diveResultLines: HTMLElement;
+      readonly pendingRewardResultConfirmation: { finish(): void } | null;
+    };
+    const finish = internals.pendingRewardResultConfirmation!.finish;
+    const laterError = new Error('line cleanup failed');
+    const rewardCleanup = vi.spyOn(internals.diveResultRewards, 'replaceChildren')
+      .mockImplementation(() => { throw undefined; });
+    const lineCleanup = vi.spyOn(internals.diveResultLines, 'replaceChildren')
+      .mockImplementation(() => { throw laterError; });
+    const notThrown = Symbol('not thrown');
+    let thrown: unknown = notThrown;
+
+    try {
+      ui.dispose();
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeUndefined();
+    await confirmation;
+    expect(lineCleanup).toHaveBeenCalledOnce();
+    expect(mount.children).toHaveLength(0);
+    expect(() => finish()).not.toThrow();
+    expect(rewardCleanup).toHaveBeenCalledOnce();
+    expect(lineCleanup).toHaveBeenCalledOnce();
+  });
+
+  it('settles a cover transition when listener removal fails during disposal', async () => {
+    const { mount, ui } = createUI();
+    const transition = ui.setSleepCovered(true);
+    const internals = ui as unknown as {
+      readonly sleepCover: HTMLElement;
+      readonly modalFocus: { dispose(): void };
+      readonly pendingSleepTransition: { finish(): void } | null;
+    };
+    const finish = internals.pendingSleepTransition!.finish;
+    const transitionError = new Error('transition listener cleanup failed');
+    const remove = vi.spyOn(internals.sleepCover, 'removeEventListener')
+      .mockImplementation(() => { throw transitionError; });
+    vi.spyOn(internals.modalFocus, 'dispose').mockImplementation(() => {
+      throw new Error('later modal cleanup failed');
+    });
+    let thrown: unknown;
+
+    try {
+      ui.dispose();
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBe(transitionError);
+    await transition;
+    expect(internals.pendingSleepTransition).toBeNull();
+    expect(mount.children).toHaveLength(0);
+    expect(() => finish()).not.toThrow();
+    expect(remove).toHaveBeenCalledOnce();
+  });
 });
