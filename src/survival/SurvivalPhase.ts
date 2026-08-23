@@ -2070,6 +2070,7 @@ export class SurvivalPhase implements GamePhase {
 
   private clearEventPresentation(preserveDeferredPresentationSync = false): void {
     if (!preserveDeferredPresentationSync) this.cancelDeferredPresentationSync();
+    this.driftingItemFlow.clear();
     this.audio.clearEvent();
     this.eventEligibility.clear();
     this.eventPresentation = 'idle';

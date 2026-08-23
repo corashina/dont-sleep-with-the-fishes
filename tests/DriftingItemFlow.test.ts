@@ -147,8 +147,8 @@ describe('DriftingItemFlow', () => {
       animationCall,
       'busy',
       'exit',
-      'clear-event',
       'hide-focus',
+      'clear-event',
       'render',
       'ready',
       'restore-focus',
@@ -202,6 +202,43 @@ describe('DriftingItemFlow', () => {
       'ready',
       'restore-focus',
     ]);
+    await enter(rig);
+    expect(rig.world.enterDriftingItemView).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears an open focus before external cleanup and allows another entry', async () => {
+    const rig = createRig();
+    await enter(rig);
+    rig.calls.length = 0;
+    rig.world.projectEventInteractionBounds.mockClear();
+
+    rig.flow.clear();
+    rig.flow.syncTarget(1280, 720);
+
+    expect(rig.calls).toEqual(['hide-focus']);
+    expect(rig.world.projectEventInteractionBounds).not.toHaveBeenCalled();
+    await enter(rig);
+    expect(rig.world.enterDriftingItemView).toHaveBeenCalledTimes(2);
+    expect(rig.ui.showDriftingItemFocus).toHaveBeenCalledTimes(2);
+  });
+
+  it('makes an in-flight choice inert when generic cleanup clears the focus', async () => {
+    const rig = createRig();
+    const retrieval = deferred();
+    rig.world.retrieveDriftingItem.mockReturnValueOnce(retrieval.promise);
+    await enter(rig);
+    rig.calls.length = 0;
+
+    const work = rig.flow.choose('retrieve');
+    await Promise.resolve();
+    await Promise.resolve();
+    rig.flow.clear();
+    retrieval.resolve();
+    await work;
+
+    expect(rig.calls).toContain('hide-focus');
+    expect(rig.world.exitDriftingItemView).not.toHaveBeenCalled();
+    expect(rig.calls).not.toContain('clear-event');
     await enter(rig);
     expect(rig.world.enterDriftingItemView).toHaveBeenCalledTimes(2);
   });
