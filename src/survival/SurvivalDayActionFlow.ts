@@ -54,7 +54,7 @@ export type DayActionEventPort = Pick<
   | 'beginDawn'
   | 'revealPending'
   | 'finishQuietNight'
-  | 'clear'
+  | 'clearAfterFailure'
 >;
 
 export interface SurvivalDayActionFlowDependencies {
@@ -357,8 +357,16 @@ export class SurvivalDayActionFlow {
       else this.dependencies.ui.restoreCommandFocus?.();
     } catch (error) {
       this.handleFailure(error, generation, operation, () => {
-        this.dependencies.world.clearDivePresentation?.();
-        this.dependencies.audio.cancelDive?.();
+        try {
+          this.dependencies.world.clearDivePresentation?.();
+        } catch {
+          // Keep the action error as the primary failure.
+        }
+        try {
+          this.dependencies.audio.cancelDive?.();
+        } catch {
+          // Keep the action error as the primary failure.
+        }
       });
     }
   }
@@ -408,9 +416,14 @@ export class SurvivalDayActionFlow {
       this.handleFailure(error, generation, operation, transitionStarted
         ? () => {
             try {
-              this.dependencies.events.clear();
-            } finally {
+              this.dependencies.events.clearAfterFailure();
+            } catch {
+              // Keep the action error as the primary failure.
+            }
+            try {
               this.dependencies.events.finishQuietNight();
+            } catch {
+              // Keep the action error as the primary failure.
             }
           }
         : undefined);

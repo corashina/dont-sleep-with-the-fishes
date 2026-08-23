@@ -452,6 +452,12 @@ export class SurvivalEventFlow {
     this.clearPresentation(preserveDeferredSync);
   }
 
+  clearAfterFailure(): void {
+    if (this.disposed) return;
+    this.operationGeneration += 1;
+    this.clearPresentation(false, false);
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.operationGeneration += 1;
