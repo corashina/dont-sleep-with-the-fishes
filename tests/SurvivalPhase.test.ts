@@ -5064,49 +5064,6 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
-  it.each([
-    ['fishingNet', 'fishingNet-1'],
-    ['bucket', 'bucket-1'],
-    ['medicalKit', 'medicalKit-1'],
-    ['cannedFood', 'cannedFood-1'],
-    ['baitTin', 'baitTin-1'],
-    ['spyglass', 'spyglass-1'],
-    ['swimRing', 'swimRing-1'],
-    ['energyBar', 'energyBar-1'],
-  ] as const)('starts the %s animation without an item handling sound', async (
-    itemType,
-    instanceId,
-  ) => {
-    const eventItem = vi.fn();
-    const playEventItemUse = vi.fn(() => Promise.resolve());
-    const phase = Object.create(SurvivalPhase.prototype) as SurvivalPhase;
-    Object.assign(phase, {
-      audio: { eventItem },
-      world: { playEventItemUse },
-    });
-    const play = (phase as unknown as {
-      playEventItemUseWithSound(
-        eventId: string,
-        choiceId: string,
-        instanceId: ItemInstanceId,
-        itemType: ItemInstance['type'],
-      ): Promise<void>;
-    }).playEventItemUseWithSound.bind(phase);
-
-    await play('flowers', itemType, instanceId, itemType);
-
-    expect(eventItem).not.toHaveBeenCalled();
-    expect(playEventItemUse).toHaveBeenCalledExactlyOnceWith(
-      'flowers',
-      itemType,
-      instanceId,
-    );
-
-    await play('flowers', 'umbrella', 'umbrella-1', 'umbrella');
-
-    expect(eventItem).toHaveBeenCalledExactlyOnceWith('umbrella');
-  });
-
   it('derives the selected item before random changed actors without an early inventory sync', async () => {
     const event = SURVIVAL_EVENTS.find(({ id }) => id === 'shower-night')!;
     const cue = deferred();

@@ -3,7 +3,6 @@ import type { PhaseContext, GamePhase } from '../app/GamePhase';
 import { AudioSystem } from '../audio/AudioSystem';
 import { SurvivalAudio } from '../audio/SurvivalAudio';
 import {
-  type ItemId,
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
@@ -28,15 +27,16 @@ import {
 } from '../weather/presentationWeather';
 import { BoatWorld } from './BoatWorld';
 import {
-  CARLITOS_LAB_CHOICE_ID,
-  CARLITOS_LAB_INSTANCE_ID,
   ITEM_ANIMATION_LAB_INITIAL_CHEST,
   ITEM_ANIMATION_LAB_INITIAL_RESOURCES,
-  ITEM_ANIMATION_LAB_USES,
-  REPAIR_TOOLBOX_LAB_CHOICE_ID,
-  REPAIR_TOOLBOX_LAB_INSTANCE_ID,
   isItemAnimationLabId,
 } from './ItemAnimationLab';
+import {
+  ItemAnimationLabFlow,
+  type ItemAnimationLabSessionPort,
+  type ItemAnimationLabUiPort,
+  type ItemAnimationLabWorldPort,
+} from './ItemAnimationLabFlow';
 import {
   DriftingItemFlow,
   type DriftingItemUiPort,
@@ -58,7 +58,6 @@ import {
 import { SurvivalSession } from './SurvivalSession';
 import { EventBundleLoader } from './EventBundle';
 import { EventBundleManager } from './EventBundleManager';
-import type { SurvivalEventId } from './eventCatalog';
 import {
   SurvivalEventFlow,
   type EventBundleManagerLike,
@@ -66,6 +65,7 @@ import {
   type EventUiPort,
   type EventWorldPort,
 } from './SurvivalEventFlow';
+import { SurvivalVisibilityController } from './SurvivalVisibilityController';
 import type {
   DayActionId,
   DayActionOption,
@@ -165,21 +165,19 @@ export class SurvivalPhase implements GamePhase {
   private restartRequested = false;
   private presentedTerminalState: SurvivalState | null = null;
   private lastReadJournalDay = 0;
-  private visibilityDocument: Document | null = null;
   private viewportWidth = 1;
   private viewportHeight = 1;
   private fishingFlow!: SurvivalFishingFlow;
   private dayActionFlow!: SurvivalDayActionFlow;
   private driftingItemFlow!: DriftingItemFlow;
   private eventFlow!: SurvivalEventFlow;
-  private itemAnimationLabEligibilityMap = new Map<ItemInstanceId, EventResponseId>();
-  private itemAnimationLabUsing = false;
+  private itemAnimationLabFlow!: ItemAnimationLabFlow;
+  private visibilityController: SurvivalVisibilityController | null = null;
   private automaticWeather: PresentationWeatherId | null = null;
   private forcedWeather: PresentationWeatherId | null = null;
   private forcedPresentationPhase: SkyPhase | null = null;
   private effectivePresentationWeather: PresentationWeatherId = 'calm';
   private lifecycleGeneration = 0;
-  private readonly visibilityResumeWaiters = new Set<() => void>();
   private audio!: SurvivalAudio;
   private onInvariantError: (error: Error) => void = reportInvariantError;
   private onFatalError: (error: unknown) => void = (error) => reportInvariantError(
@@ -300,21 +298,18 @@ export class SurvivalPhase implements GamePhase {
     this.audio.setWeather(this.effectivePresentationWeather, 0);
     const snapshot = this.renderSnapshot(false);
     if (this.itemAnimationLab) {
-      this.enterItemAnimationLab(snapshot);
+      this.itemAnimationLabFlow.enter(snapshot);
     } else if (snapshot.pendingEventId !== null && !isTerminal(snapshot.state)) {
       void this.eventFlow.revealPending(snapshot);
     }
 
     if (typeof document !== 'undefined') {
-      this.visibilityDocument = document;
-      document.addEventListener('visibilitychange', this.handleVisibilityChange);
-      if (document.hidden) {
-        if (!this.paused) {
-          this.visibilityPauseActive = true;
-          this.setPaused(true);
-        }
-        this.world.setDocumentHidden?.(true);
-      }
+      this.visibilityController = new SurvivalVisibilityController(
+        document,
+        this.handleDocumentHidden,
+        this.handleDocumentVisible,
+        () => !this.paused,
+      );
     }
   }
 
@@ -376,11 +371,7 @@ export class SurvivalPhase implements GamePhase {
 
   handleEventItem(choiceId: EventResponseId, instanceId: ItemInstanceId): void {
     if (this.itemAnimationLab) {
-      if (
-        this.itemAnimationLabUsing
-        || this.itemAnimationLabEligibilityMap.get(instanceId) !== choiceId
-      ) return;
-      void this.playItemAnimationLab(instanceId, this.lifecycleGeneration);
+      void this.itemAnimationLabFlow.play(instanceId, choiceId);
       return;
     }
     this.eventFlow.resolveItem(choiceId, instanceId);
@@ -412,7 +403,7 @@ export class SurvivalPhase implements GamePhase {
     if (!paused) this.visibilityPauseActive = false;
     this.ui.setPaused?.(paused);
     this.syncCameraTurnControl(this.session.snapshot());
-    if (!paused) this.releaseVisibilityResumeWaiters();
+    if (!paused) this.visibilityController?.releaseResumeWaiters();
   }
 
   setWeatherOverride(id: PresentationWeatherId | null): void {
@@ -445,9 +436,10 @@ export class SurvivalPhase implements GamePhase {
     this.driftingItemFlow.dispose();
     this.dayActionFlow.settleForVisibilityChange();
     this.dayActionFlow.dispose();
+    this.itemAnimationLabFlow.dispose();
     this.restartRequested = true;
     this.lifecycleGeneration += 1;
-    this.releaseVisibilityResumeWaiters();
+    this.visibilityController?.cancelResumeWaiters();
     this.onRestart();
   }
 
@@ -456,18 +448,17 @@ export class SurvivalPhase implements GamePhase {
     this.eventFlow.dispose();
     this.driftingItemFlow.dispose();
     this.dayActionFlow.dispose();
+    this.itemAnimationLabFlow.dispose();
     this.disposed = true;
     this.lifecycleGeneration += 1;
-    this.releaseVisibilityResumeWaiters();
+    this.visibilityController?.cancelResumeWaiters();
     this.fishingFlow.dispose();
     this.ui.onFishingResultContinue = null;
     this.ui.onFishingViewExit = null;
     this.ui.onDriftingItemSelect = null;
     this.ui.onDriftingItemBack = null;
-    if (this.visibilityDocument !== null) {
-      this.visibilityDocument.removeEventListener('visibilitychange', this.handleVisibilityChange);
-      this.visibilityDocument = null;
-    }
+    this.visibilityController?.dispose();
+    this.visibilityController = null;
     this.eventBundles.dispose();
     this.audio.dispose();
     this.world.dispose?.();
@@ -574,163 +565,26 @@ export class SurvivalPhase implements GamePhase {
       onInvariantError: (error) => this.onInvariantError(error),
       onFatalError: (error) => this.onFatalError(error),
     });
+    this.itemAnimationLabFlow = new ItemAnimationLabFlow({
+      session: session as ItemAnimationLabSessionPort,
+      world: world as ItemAnimationLabWorldPort,
+      ui: ui as ItemAnimationLabUiPort,
+      audio: this.audio,
+      bundles: eventBundles,
+      setBusy: (busy) => this.setBusy(busy),
+      setAutomaticWeather: (eventId) => this.setAutomaticWeather(
+        eventId === null ? null : presentationWeatherForEvent(eventId),
+      ),
+      captureLifecycleGeneration: () => this.lifecycleGeneration,
+      isLifecycleGenerationCurrent: (generation) => this.isContinuationActive(generation),
+      onInvariantError: (error) => this.onInvariantError(error),
+      onFatalError: (error) => this.onFatalError(error),
+    });
     this.world.setEventCueHandler?.(({ eventId, cue }) => {
       if (eventId === 'midnight-tour') this.audio.midnightTourCue(cue);
     });
     this.world.setLightningStrikeListener?.(() => this.audio.thunder());
     this.wireUI();
-  }
-
-  private enterItemAnimationLab(snapshot: SurvivalSnapshot): void {
-    this.itemAnimationLabEligibilityMap = this.itemAnimationLabEligibility(snapshot);
-    this.itemAnimationLabUsing = false;
-    this.ui.beginEventPresentation?.();
-    this.ui.showItemAnimationLab?.();
-    this.world.setEventSelectedItem?.(null);
-    this.world.setEventEligibleItems?.(new Set(this.itemAnimationLabEligibilityMap.keys()));
-    this.ui.setEventSelection?.(this.itemAnimationLabEligibilityMap);
-    this.setBusy(false);
-  }
-
-  private itemAnimationLabEligibility(
-    snapshot: SurvivalSnapshot,
-  ): Map<ItemInstanceId, EventResponseId> {
-    const eligibility = new Map<ItemInstanceId, EventResponseId>();
-    for (const item of Object.values(snapshot.inventory)) {
-      if (item === undefined || item.condition !== 'usable') continue;
-      const use = ITEM_ANIMATION_LAB_USES[item.type];
-      if (use !== undefined) eligibility.set(item.instanceId, use.choiceId);
-    }
-    if (snapshot.carlitos?.alive) {
-      eligibility.set(
-        CARLITOS_LAB_INSTANCE_ID,
-        CARLITOS_LAB_CHOICE_ID,
-      );
-    }
-    eligibility.set(
-      REPAIR_TOOLBOX_LAB_INSTANCE_ID,
-      REPAIR_TOOLBOX_LAB_CHOICE_ID,
-    );
-    return eligibility;
-  }
-
-  private async playItemAnimationLab(
-    instanceId: ItemInstanceId,
-    generation: number,
-  ): Promise<void> {
-    if (instanceId === REPAIR_TOOLBOX_LAB_INSTANCE_ID) {
-      await this.playRepairToolboxLab(generation);
-      return;
-    }
-    const snapshot = this.session.snapshot();
-    const inventoryItem = snapshot.inventory[instanceId];
-    if (
-      inventoryItem === undefined
-      || inventoryItem.condition !== 'usable'
-      || this.itemAnimationLabUsing
-      || !this.isContinuationActive(generation)
-    ) return;
-
-    const itemType = inventoryItem.type;
-    const use = ITEM_ANIMATION_LAB_USES[itemType];
-    if (use === undefined) return;
-    this.itemAnimationLabUsing = true;
-    this.setBusy(true);
-    this.ui.setEventUsing?.(instanceId);
-    this.world.setEventEligibleItems?.(new Set());
-    this.world.setEventSelectedItem?.(instanceId);
-    this.setAutomaticWeather(presentationWeatherForEvent(use.eventId));
-    if (!this.beginEventBundleLoad(use.eventId)) return;
-    try {
-      const activation = this.eventBundles.activate(use.eventId as SurvivalEventId);
-      if (activation !== undefined) await activation;
-    } catch (error) {
-      this.onFatalError(error);
-      return;
-    }
-    if (!this.isContinuationActive(generation)) return;
-    this.world.stageEvent?.(use.eventId);
-
-    try {
-      await this.playEventItemUseWithSound(
-        use.eventId,
-        use.choiceId,
-        instanceId,
-        itemType,
-      );
-      await this.world.returnEventItemUse?.();
-    } catch (error) {
-      this.onInvariantError(
-        error instanceof Error ? error : new Error(String(error)),
-      );
-    } finally {
-      if (!this.isContinuationActive(generation)) return;
-      this.world.clearEvent?.();
-      this.eventBundles.releaseActive();
-      this.setAutomaticWeather(null);
-      this.world.setEventSelectedItem?.(null);
-      this.world.setEventEligibleItems?.(new Set(this.itemAnimationLabEligibilityMap.keys()));
-      this.ui.setEventSelection?.(this.itemAnimationLabEligibilityMap);
-      this.itemAnimationLabUsing = false;
-      this.setBusy(false);
-    }
-  }
-
-  private async playRepairToolboxLab(generation: number): Promise<void> {
-    if (
-      this.itemAnimationLabUsing
-      || !this.isContinuationActive(generation)
-    ) return;
-    this.itemAnimationLabUsing = true;
-    this.setBusy(true);
-    this.ui.setEventUsing?.(REPAIR_TOOLBOX_LAB_INSTANCE_ID);
-    this.world.setEventEligibleItems?.(new Set());
-    this.world.setEventSelectedItem?.(REPAIR_TOOLBOX_LAB_INSTANCE_ID);
-    try {
-      await (this.world.playRepairToolboxAnimation?.(
-        () => this.audio.repairToolbox(),
-      ) ?? Promise.resolve());
-    } catch (error) {
-      this.onInvariantError(
-        error instanceof Error ? error : new Error(String(error)),
-      );
-    } finally {
-      if (!this.isContinuationActive(generation)) return;
-      this.world.setEventSelectedItem?.(null);
-      this.world.setEventEligibleItems?.(new Set(this.itemAnimationLabEligibilityMap.keys()));
-      this.ui.setEventSelection?.(this.itemAnimationLabEligibilityMap);
-      this.itemAnimationLabUsing = false;
-      this.setBusy(false);
-    }
-  }
-
-  private playEventItemUseWithSound(
-    eventId: string,
-    choiceId: string,
-    instanceId: ItemInstanceId,
-    itemType: ItemId | undefined,
-  ): Promise<void> {
-    if (
-      itemType === 'shotgun'
-      || itemType === 'flashlight'
-      || itemType === 'flareGun'
-      || itemType === 'anchor'
-      || itemType === 'ductTape'
-    ) {
-      if (itemType === 'anchor') this.audio.eventItem(itemType);
-      return this.world.playEventItemUse?.(
-        eventId,
-        choiceId,
-        instanceId,
-        (cueIndex) => this.audio.eventItemCue(itemType, cueIndex),
-      ) ?? Promise.resolve();
-    }
-    if (itemType === 'umbrella') this.audio.eventItem(itemType);
-    return this.world.playEventItemUse?.(
-      eventId,
-      choiceId,
-      instanceId,
-    ) ?? Promise.resolve();
   }
 
   private wireUI(): void {
@@ -850,17 +704,6 @@ export class SurvivalPhase implements GamePhase {
     );
   }
 
-  private beginEventBundleLoad(eventId: string): boolean {
-    try {
-      const loading = this.eventBundles.beginLoad(eventId as SurvivalEventId);
-      if (loading !== undefined) void loading.catch(() => undefined);
-      return true;
-    } catch (error) {
-      this.onFatalError(error);
-      return false;
-    }
-  }
-
   private setAutomaticWeather(id: PresentationWeatherId | null): void {
     this.automaticWeather = id;
     this.syncPresentationWeather();
@@ -893,49 +736,34 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private documentIsHidden(): boolean {
-    return typeof document !== 'undefined' && document.hidden;
+    return this.visibilityController?.isHidden()
+      ?? (typeof document !== 'undefined' && document.hidden);
   }
 
-  private readonly handleVisibilityChange = (): void => {
-    const hidden = this.visibilityDocument?.hidden === true;
-    if (hidden) {
-      this.dayActionFlow.settleForVisibilityChange();
-      if (!this.paused) {
-        this.visibilityPauseActive = true;
-        this.setPaused(true);
-      }
-    } else if (this.visibilityPauseActive) {
-      this.setPaused(false);
+  private readonly handleDocumentHidden = (): void => {
+    this.dayActionFlow.settleForVisibilityChange();
+    if (!this.paused) {
+      this.visibilityPauseActive = true;
+      this.setPaused(true);
     }
-    this.world.setDocumentHidden?.(hidden);
-    if (hidden) {
-      this.fishingFlow.settleForVisibilityChange();
-      this.eventFlow.settleForVisibilityChange();
-    }
+    this.world.setDocumentHidden?.(true);
+    this.fishingFlow.settleForVisibilityChange();
+    this.eventFlow.settleForVisibilityChange();
+    this.itemAnimationLabFlow.settleForVisibilityChange();
+  };
+
+  private readonly handleDocumentVisible = (): void => {
+    if (this.visibilityPauseActive) this.setPaused(false);
+    this.world.setDocumentHidden?.(false);
   };
 
   private waitForVisibilityResume(generation: number): Promise<boolean> {
     if (!this.isContinuationActive(generation)) return Promise.resolve(false);
-    if (!this.visibilityPauseActive && !this.documentIsHidden()) {
-      return Promise.resolve(true);
+    if (this.visibilityController === null) {
+      return Promise.resolve(!this.documentIsHidden());
     }
-    return new Promise((resolve) => {
-      const resume = () => {
-        this.visibilityResumeWaiters.delete(resume);
-        resolve(
-          this.isContinuationActive(generation)
-          && !this.visibilityPauseActive
-          && !this.documentIsHidden()
-        );
-      };
-      this.visibilityResumeWaiters.add(resume);
-    });
-  }
-
-  private releaseVisibilityResumeWaiters(): void {
-    if (this.visibilityResumeWaiters.size === 0) return;
-    const waiters = [...this.visibilityResumeWaiters];
-    this.visibilityResumeWaiters.clear();
-    for (const resume of waiters) resume();
+    return this.visibilityController.waitForResume(
+      () => this.isContinuationActive(generation),
+    );
   }
 }
