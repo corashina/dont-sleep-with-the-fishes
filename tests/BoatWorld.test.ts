@@ -60,6 +60,7 @@ import {
   GENERIC_EVENT_ITEM_USE_DURATION,
   type BorrowedSupplyActor,
 } from '../src/survival/BoatSupplyDisplay';
+import { CarlitosDelegationPresentation } from '../src/survival/CarlitosDelegationPresentation';
 import { CarlitosPresentation } from '../src/survival/CarlitosPresentation';
 import {
   CHEST_DISAPPEAR_DURATION,
@@ -68,6 +69,7 @@ import {
 } from '../src/survival/ChestDisplay';
 import { DANGEROUS_WATERS_ITEM_DURATION } from '../src/survival/DangerousWatersPresentation';
 import { DivePresentation } from '../src/survival/DivePresentation';
+import { DivePresentationController } from '../src/survival/DivePresentationController';
 import {
   HANGING_LANTERN_DAY_INTENSITY,
   HANGING_LANTERN_NIGHT_INTENSITY,
@@ -6346,17 +6348,9 @@ describe('BoatWorld helpers', () => {
     const initialPosition = camera.position.clone();
     const initialQuaternion = camera.quaternion.clone();
     const internals = world as unknown as {
-      divePresentation: DivePresentation;
-      sampleWorldWaveInto: (
-        output: ReturnType<typeof sampleWaveField>,
-        time: number,
-        x: number,
-        z: number,
-        amplitudeScale: number,
-      ) => void;
+      diveController: DivePresentationController;
     };
-    const updateDive = vi.spyOn(internals.divePresentation, 'update');
-    const sampleDiveWave = vi.spyOn(internals, 'sampleWorldWaveInto');
+    const updateDive = vi.spyOn(internals.diveController, 'update');
     const impact = vi.fn();
 
     const pending = world.playDive(scuba.instanceId, impact);
@@ -6364,31 +6358,13 @@ describe('BoatWorld helpers', () => {
     expect(world.scene.getObjectByName('glasses25.001')).not.toBeUndefined();
 
     world.update(81.1, 1.1);
-    expect(updateDive).toHaveBeenCalledWith(1.1, 1.1, expect.any(Number));
+    expect(updateDive).toHaveBeenCalledWith(81.1, 1.1);
     const seatedX = camera.position.x;
     expect(seatedX).toBeGreaterThan(1.6);
     expect(camera.position.z).toBeLessThan(-1.1);
     const initialDirection = new Vector3(0, 0, -1).applyQuaternion(initialQuaternion);
     const seatedDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
     expect(initialDirection.angleTo(seatedDirection)).toBeCloseTo(Math.PI / 2);
-    const entryPosition = internals.divePresentation.copyWaterEntryWorldPosition(
-      new Vector3(),
-    );
-    expect(sampleDiveWave).toHaveBeenCalledWith(
-      expect.any(Object),
-      81.1,
-      entryPosition.x,
-      entryPosition.z,
-      presentationWeatherProfile('calm').waveScale,
-    );
-    const entryWaveHeight = sampleWaveField(
-      DEFAULT_WAVES,
-      81.1,
-      entryPosition.x,
-      entryPosition.z,
-      presentationWeatherProfile('calm').waveScale,
-    ).height;
-    expect(updateDive.mock.calls[0]![2]).toBeCloseTo(entryWaveHeight);
     expect(camera.position.toArray()).not.toEqual(initialPosition.toArray());
     world.update(83.6, 2.5);
     expect(camera.position.x).toBeGreaterThan(seatedX + 0.85);
@@ -7424,6 +7400,57 @@ describe('BoatWorld helpers', () => {
       'fishing-surface',
       'scene-matrix',
       'fishing-line',
+    ]);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps dive and delegation in their authored frame slots', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const internals = world as unknown as {
+      diveController: DivePresentationController;
+      eventPresentationHost: { update(time: number, delta: number): void };
+      cameraController: { updateDriftingItemView(delta: number, target: Object3D | null): void };
+      carlitosDelegation: CarlitosDelegationPresentation;
+    };
+    const calls: string[] = [];
+    const diveUpdate = internals.diveController.update.bind(internals.diveController);
+    vi.spyOn(internals.diveController, 'update').mockImplementation((time, delta) => {
+      calls.push('dive');
+      diveUpdate(time, delta);
+    });
+    const eventUpdate = internals.eventPresentationHost.update
+      .bind(internals.eventPresentationHost);
+    vi.spyOn(internals.eventPresentationHost, 'update').mockImplementation((time, delta) => {
+      calls.push('event');
+      eventUpdate(time, delta);
+    });
+    const driftingUpdate = internals.cameraController.updateDriftingItemView
+      .bind(internals.cameraController);
+    vi.spyOn(internals.cameraController, 'updateDriftingItemView')
+      .mockImplementation((delta, target) => {
+        calls.push('drifting-camera');
+        driftingUpdate(delta, target);
+      });
+    const delegationUpdate = internals.carlitosDelegation.update
+      .bind(internals.carlitosDelegation);
+    vi.spyOn(internals.carlitosDelegation, 'update').mockImplementation((delta) => {
+      calls.push('carlitos-delegation');
+      delegationUpdate(delta);
+    });
+
+    world.update(1, 1 / 60);
+
+    expect(calls).toEqual([
+      'dive',
+      'event',
+      'drifting-camera',
+      'carlitos-delegation',
     ]);
     world.dispose();
     propModels.dispose();
