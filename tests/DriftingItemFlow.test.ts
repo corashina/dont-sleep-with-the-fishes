@@ -243,6 +243,84 @@ describe('DriftingItemFlow', () => {
     expect(rig.world.enterDriftingItemView).toHaveBeenCalledTimes(2);
   });
 
+  it('does not let an old same-event entry complete the new entry', async () => {
+    const rig = createRig();
+    const oldEntry = deferred();
+    const newEntry = deferred();
+    rig.world.enterDriftingItemView
+      .mockReturnValueOnce(oldEntry.promise)
+      .mockReturnValueOnce(newEntry.promise);
+
+    const oldWork = rig.flow.enter('drifting-barrel', choices);
+    await Promise.resolve();
+    rig.flow.clear();
+    const newWork = rig.flow.enter('drifting-barrel', choices);
+    await Promise.resolve();
+
+    oldEntry.resolve();
+    await oldWork;
+    expect(rig.ui.showDriftingItemFocus).not.toHaveBeenCalled();
+
+    newEntry.resolve();
+    await newWork;
+    expect(rig.ui.showDriftingItemFocus).toHaveBeenCalledOnce();
+    await rig.flow.back();
+    expect(rig.world.exitDriftingItemView).toHaveBeenCalledOnce();
+  });
+
+  it('does not let an old same-event choice animation mutate the new choice', async () => {
+    const rig = createRig();
+    const oldRetrieval = deferred();
+    const newRetrieval = deferred();
+    rig.world.retrieveDriftingItem
+      .mockReturnValueOnce(oldRetrieval.promise)
+      .mockReturnValueOnce(newRetrieval.promise);
+    await enter(rig);
+
+    const oldWork = rig.flow.choose('retrieve');
+    await vi.waitFor(() => expect(rig.world.retrieveDriftingItem).toHaveBeenCalledOnce());
+    rig.flow.clear();
+    await enter(rig);
+    const newWork = rig.flow.choose('retrieve');
+    await vi.waitFor(() => expect(rig.world.retrieveDriftingItem).toHaveBeenCalledTimes(2));
+
+    oldRetrieval.resolve();
+    await oldWork;
+    expect(rig.world.exitDriftingItemView).not.toHaveBeenCalled();
+    expect(rig.calls.filter((call) => call === 'clear-event')).toHaveLength(0);
+
+    newRetrieval.resolve();
+    await newWork;
+    expect(rig.world.exitDriftingItemView).toHaveBeenCalledOnce();
+    expect(rig.calls.filter((call) => call === 'clear-event')).toHaveLength(1);
+  });
+
+  it('does not let an old same-event camera return clear the new return', async () => {
+    const rig = createRig();
+    const oldReturn = deferred();
+    const newReturn = deferred();
+    rig.world.exitDriftingItemView
+      .mockReturnValueOnce(oldReturn.promise)
+      .mockReturnValueOnce(newReturn.promise);
+    await enter(rig);
+
+    const oldWork = rig.flow.choose('retrieve');
+    await vi.waitFor(() => expect(rig.world.exitDriftingItemView).toHaveBeenCalledOnce());
+    rig.flow.clear();
+    await enter(rig);
+    const newWork = rig.flow.choose('retrieve');
+    await vi.waitFor(() => expect(rig.world.exitDriftingItemView).toHaveBeenCalledTimes(2));
+
+    oldReturn.resolve();
+    await oldWork;
+    expect(rig.calls.filter((call) => call === 'clear-event')).toHaveLength(0);
+
+    newReturn.resolve();
+    await newWork;
+    expect(rig.calls.filter((call) => call === 'clear-event')).toHaveLength(1);
+    expect(rig.ui.restoreCommandFocus).toHaveBeenCalledOnce();
+  });
+
   it('syncs the projected target on entry and resize', async () => {
     const rig = createRig();
     rig.flow.syncTarget(640, 360);
