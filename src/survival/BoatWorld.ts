@@ -120,10 +120,6 @@ import {
   type FishingCastPoint,
 } from './FishingPresentation';
 import {
-  sampleEventPhysicalResponsePose,
-  type EventPhysicalResponsePose,
-} from './eventPhysicalResponseChoreography';
-import {
   createHangingLantern,
   HANGING_LANTERN_DAY_INTENSITY,
   HANGING_LANTERN_NIGHT_INTENSITY,
@@ -203,26 +199,6 @@ interface ActiveSequence {
   resolve: () => void;
 }
 
-interface ActiveMoonAnimation {
-  readonly kind: 'reveal' | 'reaction';
-  elapsed: number;
-  readonly duration: number;
-  readonly fromReveal: number;
-  readonly fromGrin: number;
-  readonly fromStarScale: number;
-  readonly fromDim: number;
-  readonly fromMoonScale: number;
-  readonly fromCameraLower: number;
-  readonly targetReveal: number;
-  readonly targetGrin: number;
-  readonly targetStarScale: number;
-  readonly targetDim: number;
-  readonly targetMoonScale: number;
-  readonly targetCameraLower: number;
-  readonly response: EventPhysicalResponsePresentation | null;
-  readonly resolve: () => void;
-}
-
 interface ActiveCarlitosDelegation {
   elapsed: number;
   readonly duration: number;
@@ -272,21 +248,6 @@ const clamp = (value: number, minimum: number, maximum: number): number =>
 
 const easeOut = (value: number): number => 1 - (1 - value) ** 3;
 const easeInOut = (value: number): number => value * value * (3 - 2 * value);
-const smootherStep = (value: number): number =>
-  value * value * value * (value * (value * 6 - 15) + 10);
-
-const MOON_FACE_REVEAL_DURATION = 5.8;
-const MOON_FACE_REACTION_DURATION = 1.1;
-const MOON_FACE_HOLD_FRACTION = 0.2;
-const MOON_FACE_SHOCK_START = 0.7;
-const MOON_FACE_SHOCK_END = 0.84;
-const MOON_FACE_BASE_GRIN = 0.74;
-const MOON_FACE_STAR_SCALE = 0.16;
-const MOON_FACE_MOON_SCALE = 4.15;
-const MOON_FACE_BASE_DIM = 0.18;
-const MOON_FACE_PRESSURE_GRIN = 0.96;
-const MOON_FACE_ENERGY_DIM = 0.48;
-const MOON_FACE_CAMERA_LOWER = 0.2;
 const DRIFTING_ITEM_BOW_REST = Object.freeze({
   x: 0.72,
   y: 0.58,
@@ -478,55 +439,7 @@ export class BoatWorld {
   private readonly boatPose: BoatPose = { ...INITIAL_BOAT_POSE };
   private readonly boatTargetPose: BoatPose = { ...INITIAL_BOAT_POSE };
   private readonly worldCameraPosition = new Vector3();
-  private activeMoonAnimation: ActiveMoonAnimation | null = null;
-  private readonly moonFace: {
-    reveal: number;
-    grin: number;
-    starScale: number;
-    dim: number;
-    scale: number;
-  } = {
-    reveal: 0,
-    grin: 0,
-    starScale: 1,
-    dim: 0,
-    scale: 1,
-  };
-  private readonly moonFaceDisplay = {
-    reveal: 0,
-    grin: 0,
-    starScale: 1,
-    dim: 0,
-    scale: 1,
-  };
-  private moonPulseElapsed = 0;
-  private moonCameraLower = 0;
-  private moonEventStaged = false;
   private readonly moonItemAimTarget = new Object3D();
-  private readonly moonPhysicalResponsePose: EventPhysicalResponsePose = {
-    x: 0,
-    y: 0,
-    z: 0,
-    yaw: 0,
-    pitch: 0,
-    roll: 0,
-    scaleX: 1,
-    scaleY: 1,
-    scaleZ: 1,
-  };
-  private readonly moonEventPresentation = {
-    itemAimTarget: this.moonItemAimTarget,
-    stage: (eventId: SurvivalEventId): void => this.stageMoonEvent(eventId),
-    reveal: (eventId: SurvivalEventId): Promise<void> => this.revealMoonEvent(eventId),
-    react: (
-      eventId: SurvivalEventId,
-      outcome: ActionOutcome,
-      response: EventPhysicalResponsePresentation,
-    ): Promise<void> => this.reactMoonEvent(eventId, outcome, response),
-    update: (delta: number): void => this.updateMoonEvent(delta),
-    settleForVisibilityChange: (): void => this.settleMoonForVisibilityChange(),
-    clear: (): void => this.clearMoonEvent(),
-  };
   private readonly skyState: SkyState = {
     weather: 'calm',
     phase: 'day',
@@ -581,11 +494,6 @@ export class BoatWorld {
     this.focusedEventFactories = resolvedFocusedFactories;
     this.scene = new Scene();
     this.camera = camera;
-    this.moonItemAimTarget.name = 'moon-event-item-aim-target';
-    this.moonItemAimTarget.position
-      .set(...SURVIVAL_CELESTIAL_DIRECTION)
-      .normalize()
-      .multiplyScalar(60);
     this.originalCameraParent = camera.parent;
     this.originalCameraPosition = camera.position.clone();
     this.originalCameraQuaternion = camera.quaternion.clone();
@@ -766,7 +674,6 @@ export class BoatWorld {
 
       this.scene.add(
         this.motionRig,
-        this.moonItemAimTarget,
         this.ocean.mesh,
         this.ambient,
         this.key,
@@ -864,7 +771,13 @@ export class BoatWorld {
         sampleWaveInto: this.sampleWorldWaveInto,
         readAmplitudeScale: this.readWorldWaveAmplitudeScale,
       },
-      moon: this.moonEventPresentation,
+      moon: {
+        sky: this.sky,
+        camera: this.camera,
+        cameraControl: this.cameraController,
+        supplies: this.supplyDisplay,
+        itemAimTarget: this.moonItemAimTarget,
+      },
       registerRescueCueCallback: (callback) => {
         rescueCueCallback = callback;
       },
@@ -1865,7 +1778,10 @@ export class BoatWorld {
       this.repairToolboxAnimation.update(delta);
       this.fishingPresentation.updateParticles(delta);
     } else {
-      if (this.moonEventStaged) this.applyMoonPresentation();
+      const activeEventId = this.eventPresentationHost.activeEventId();
+      if (activeEventId !== null && eventPresentationRoute(activeEventId) === 'moon') {
+        this.eventPresentationHost.update(time, 0);
+      }
       this.cameraController.applyDriftingItemView(
         this.currentDriftingItemAimTarget(),
       );
@@ -1957,7 +1873,6 @@ export class BoatWorld {
       () => this.fishingPresentation.detach(),
       () => this.scene.remove(
         this.motionRig,
-        this.moonItemAimTarget,
         this.ocean.mesh,
         this.ambient,
         this.key,
@@ -2113,246 +2028,6 @@ export class BoatWorld {
     if (isDriftingCargoEventId(eventId)) return 'retrieve';
     if (eventId === 'drifting-bottle') return 'retrieve';
     return null;
-  }
-
-  private stageMoonEvent(eventId: string): void {
-    this.cancelMoonAnimation();
-    this.moonEventStaged = eventId === 'face-on-the-moon';
-    this.resetMoonValues();
-    this.sky.resetTransient();
-    this.cameraController.restoreBasePose();
-  }
-
-  private revealMoonEvent(eventId: string): Promise<void> {
-    if (eventId !== 'face-on-the-moon') return Promise.resolve();
-    if (!this.moonEventStaged) this.stageMoonEvent(eventId);
-    this.cancelMoonAnimation();
-    this.resetMoonValues();
-    return new Promise((resolve) => {
-      this.activeMoonAnimation = {
-        kind: 'reveal',
-        elapsed: 0,
-        duration: MOON_FACE_REVEAL_DURATION,
-        fromReveal: 0,
-        fromGrin: 0,
-        fromStarScale: 1,
-        fromDim: 0,
-        fromMoonScale: 1,
-        fromCameraLower: 0,
-        targetReveal: 1,
-        targetGrin: MOON_FACE_BASE_GRIN,
-        targetStarScale: MOON_FACE_STAR_SCALE,
-        targetDim: MOON_FACE_BASE_DIM,
-        targetMoonScale: MOON_FACE_MOON_SCALE,
-        targetCameraLower: 0,
-        response: null,
-        resolve,
-      };
-    });
-  }
-
-  private reactMoonEvent(
-    eventId: string,
-    outcome: ActionOutcome,
-    response: EventPhysicalResponsePresentation | null,
-  ): Promise<void> {
-    if (eventId !== 'face-on-the-moon') return Promise.resolve();
-    if (!this.moonEventStaged) this.stageMoonEvent(eventId);
-    this.cancelMoonAnimation();
-    const pressureGain = (outcome.deltas.pressure ?? 0) > 0;
-    const energyLoss = (outcome.deltas.energy ?? 0) < 0;
-    const responseActor = response?.actors[0];
-    const hasPhysicalResponse = responseActor !== undefined
-      && sampleEventPhysicalResponsePose(
-        eventId,
-        { choiceId: response?.choiceId ?? '', condition: responseActor.condition },
-        0,
-        this.moonPhysicalResponsePose,
-      );
-    let activeResponse: EventPhysicalResponsePresentation | null = null;
-    if (hasPhysicalResponse && response !== null && responseActor !== undefined) {
-      this.supplyDisplay.clearEventPose();
-      if (this.supplyDisplay.pinEventActor(responseActor.instanceId)) {
-        activeResponse = response;
-      }
-    }
-    if (!pressureGain && !energyLoss && activeResponse === null) {
-      return Promise.resolve();
-    }
-    return new Promise((resolve) => {
-      this.activeMoonAnimation = {
-        kind: 'reaction',
-        elapsed: 0,
-        duration: MOON_FACE_REACTION_DURATION,
-        fromReveal: this.moonFace.reveal,
-        fromGrin: this.moonFace.grin,
-        fromStarScale: this.moonFace.starScale,
-        fromDim: this.moonFace.dim,
-        fromMoonScale: this.moonFace.scale,
-        fromCameraLower: this.moonCameraLower,
-        targetReveal: 1,
-        targetGrin: pressureGain
-          ? Math.max(this.moonFace.grin, MOON_FACE_PRESSURE_GRIN)
-          : this.moonFace.grin,
-        targetStarScale: this.moonFace.starScale,
-        targetDim: energyLoss
-          ? Math.max(this.moonFace.dim, MOON_FACE_ENERGY_DIM)
-          : this.moonFace.dim,
-        targetMoonScale: this.moonFace.scale,
-        targetCameraLower: energyLoss
-          ? Math.max(this.moonCameraLower, MOON_FACE_CAMERA_LOWER)
-          : this.moonCameraLower,
-        response: activeResponse,
-        resolve,
-      };
-    });
-  }
-
-  private updateMoonEvent(delta: number): void {
-    if (!this.moonEventStaged) return;
-    this.moonPulseElapsed += Math.max(0, Number.isFinite(delta) ? delta : 0);
-    const animation = this.activeMoonAnimation;
-    if (animation !== null) {
-      animation.elapsed = Math.min(
-        animation.duration,
-        animation.elapsed + Math.max(0, Number.isFinite(delta) ? delta : 0),
-      );
-      const progress = animation.elapsed / animation.duration;
-      if (animation.kind === 'reveal') {
-        const revealProgress = smootherStep(clamp(
-          (progress - MOON_FACE_HOLD_FRACTION) / (1 - MOON_FACE_HOLD_FRACTION),
-          0,
-          1,
-        ));
-        const faceProgress = smootherStep(clamp(
-          (revealProgress - MOON_FACE_SHOCK_START)
-            / (MOON_FACE_SHOCK_END - MOON_FACE_SHOCK_START),
-          0,
-          1,
-        ));
-        const grinProgress = smootherStep(clamp(
-          (faceProgress - 0.52) / 0.48,
-          0,
-          1,
-        ));
-        this.moonFace.reveal = faceProgress;
-        this.moonFace.grin = MOON_FACE_BASE_GRIN * grinProgress;
-        this.moonFace.starScale = 1
-          - (1 - MOON_FACE_STAR_SCALE) * easeInOut(revealProgress);
-        this.moonFace.dim = MOON_FACE_BASE_DIM * easeInOut(revealProgress);
-        this.moonFace.scale = 1
-          + (MOON_FACE_MOON_SCALE - 1) * easeInOut(revealProgress);
-      } else {
-        const eased = easeInOut(progress);
-        this.moonFace.reveal = animation.fromReveal
-          + (animation.targetReveal - animation.fromReveal) * eased;
-        this.moonFace.grin = animation.fromGrin
-          + (animation.targetGrin - animation.fromGrin) * eased;
-        this.moonFace.starScale = animation.fromStarScale
-          + (animation.targetStarScale - animation.fromStarScale) * eased;
-        this.moonFace.dim = animation.fromDim
-          + (animation.targetDim - animation.fromDim) * eased;
-        this.moonFace.scale = animation.fromMoonScale
-          + (animation.targetMoonScale - animation.fromMoonScale) * eased;
-        this.moonCameraLower = animation.fromCameraLower
-          + (animation.targetCameraLower - animation.fromCameraLower) * eased;
-        const responseActor = animation.response?.actors[0];
-        if (
-          responseActor !== undefined
-          && sampleEventPhysicalResponsePose(
-            'face-on-the-moon',
-            {
-              choiceId: animation.response!.choiceId,
-              condition: responseActor.condition,
-            },
-            progress,
-            this.moonPhysicalResponsePose,
-          )
-        ) {
-          this.supplyDisplay.applyEventItemPose(
-            responseActor.instanceId,
-            this.moonPhysicalResponsePose,
-          );
-        }
-      }
-      if (progress >= 1) this.finishMoonAnimation();
-    }
-    this.applyMoonPresentation();
-  }
-
-  private settleMoonForVisibilityChange(): void {
-    if (this.activeMoonAnimation === null) return;
-    this.finishMoonAnimation();
-    this.applyMoonPresentation();
-  }
-
-  private finishMoonAnimation(): void {
-    const animation = this.activeMoonAnimation;
-    if (animation === null) return;
-    this.activeMoonAnimation = null;
-    this.moonFace.reveal = animation.targetReveal;
-    this.moonFace.grin = animation.targetGrin;
-    this.moonFace.starScale = animation.targetStarScale;
-    this.moonFace.dim = animation.targetDim;
-    this.moonFace.scale = animation.targetMoonScale;
-    this.moonCameraLower = animation.targetCameraLower;
-    this.releaseMoonPhysicalResponse(animation);
-    animation.resolve();
-  }
-
-  private clearMoonEvent(): void {
-    this.cancelMoonAnimation();
-    this.moonEventStaged = false;
-    this.resetMoonValues();
-    this.sky.resetTransient();
-    this.cameraController.restoreBasePose();
-  }
-
-  private resetMoonValues(): void {
-    this.moonFace.reveal = 0;
-    this.moonFace.grin = 0;
-    this.moonFace.starScale = 1;
-    this.moonFace.dim = 0;
-    this.moonFace.scale = 1;
-    this.moonCameraLower = 0;
-    this.moonPulseElapsed = 0;
-  }
-
-  private applyMoonPresentation(): void {
-    const twitchGate = Math.max(
-      0,
-      Math.sin(this.moonPulseElapsed * 0.61 - 1.1),
-    );
-    const pulse = this.moonFace.reveal * (
-      Math.sin(this.moonPulseElapsed * 1.13) * 0.018
-      + Math.sin(this.moonPulseElapsed * 4.73 + 1.1) * 0.01
-      + Math.pow(twitchGate, 18) * 0.055
-    );
-    this.moonFaceDisplay.reveal = this.moonFace.reveal;
-    this.moonFaceDisplay.grin = clamp(
-      this.moonFace.grin + pulse,
-      0,
-      MOON_FACE_PRESSURE_GRIN,
-    );
-    this.moonFaceDisplay.starScale = this.moonFace.starScale;
-    this.moonFaceDisplay.dim = this.moonFace.dim;
-    this.moonFaceDisplay.scale = this.moonFace.scale;
-    this.sky.setMoonFace(this.moonFaceDisplay);
-    this.camera.rotateX(this.moonCameraLower);
-  }
-
-  private cancelMoonAnimation(): void {
-    const animation = this.activeMoonAnimation;
-    this.activeMoonAnimation = null;
-    if (animation === null) return;
-    this.releaseMoonPhysicalResponse(animation);
-    animation.resolve();
-  }
-
-  private releaseMoonPhysicalResponse(animation: ActiveMoonAnimation): void {
-    if (animation.response === null) return;
-    this.supplyDisplay.clearEventPose();
-    this.supplyDisplay.releaseEventActor();
   }
 
   private cancelActiveSequence(): void {

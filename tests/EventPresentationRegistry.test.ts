@@ -28,6 +28,7 @@ const constructors = vi.hoisted(() => ({
   featured: vi.fn(),
   weather: vi.fn(),
   supernatural: vi.fn(),
+  moon: vi.fn(),
   leak: vi.fn(),
   schoolOfFish: vi.fn(),
   snatcher: vi.fn(),
@@ -51,6 +52,9 @@ vi.mock('../src/survival/WeatherEventAnimator', () => ({
 }));
 vi.mock('../src/survival/SupernaturalEventAnimator', () => ({
   SupernaturalEventAnimator: constructors.supernatural,
+}));
+vi.mock('../src/survival/MoonEventPresentation', () => ({
+  MoonEventPresentation: constructors.moon,
 }));
 vi.mock('../src/survival/events/LeakPresentation', () => ({
   LeakPresentation: constructors.leak,
@@ -163,6 +167,19 @@ function createSupernatural() {
   };
 }
 
+function createMoon() {
+  return {
+    itemAimTarget: new Group(),
+    stage: vi.fn(),
+    reveal: asyncVoid(),
+    react: asyncVoid(),
+    update: vi.fn(),
+    settleForVisibilityChange: vi.fn(),
+    clear: vi.fn(),
+    dispose: vi.fn(),
+  };
+}
+
 function createDedicatedPresentation() {
   return {
     eventId: 'leak',
@@ -177,17 +194,9 @@ let coordinator = createCoordinator();
 let featured = createFeatured();
 let weather = createWeather();
 let supernatural = createSupernatural();
+let moon = createMoon();
 
 function createDependencies() {
-  const moon = {
-    itemAimTarget: new Group(),
-    stage: vi.fn(),
-    reveal: asyncVoid(),
-    react: asyncVoid(),
-    update: vi.fn(),
-    settleForVisibilityChange: vi.fn(),
-    clear: vi.fn(),
-  };
   return {
     dependencies: {
       worldParent: new Group(),
@@ -207,11 +216,10 @@ function createDependencies() {
         checkBackStern: new Group(),
       },
       driftingWater: {},
-      moon,
+      moon: {},
       registerRescueCueCallback: vi.fn(),
       applyDangerousWatersReaction: vi.fn(),
     } as unknown as EventPresentationAdapterDependencies,
-    moon,
   };
 }
 
@@ -252,11 +260,13 @@ beforeEach(() => {
   featured = createFeatured();
   weather = createWeather();
   supernatural = createSupernatural();
+  moon = createMoon();
   constructors.layer.mockImplementation(() => layer);
   constructors.coordinator.mockImplementation(() => coordinator);
   constructors.featured.mockImplementation(() => featured);
   constructors.weather.mockImplementation(() => weather);
   constructors.supernatural.mockImplementation(() => supernatural);
+  constructors.moon.mockImplementation(() => moon);
   const presentation = createDedicatedPresentation();
   constructors.leak.mockImplementation(() => presentation);
   constructors.schoolOfFish.mockImplementation(() => presentation);
@@ -338,7 +348,7 @@ describe('EventPresentationRegistry', () => {
     ['drifting-barrel', ['featured']],
     ['shower-night', ['layer', 'weather']],
     ['ghosts', ['layer', 'supernatural']],
-    ['face-on-the-moon', []],
+    ['face-on-the-moon', ['moon']],
   ] as const)(
     'constructs only the %s route families',
     (eventId, expectedConstructors) => {
@@ -356,7 +366,7 @@ describe('EventPresentationRegistry', () => {
     ['drifting-barrel', ['world:featured']],
     ['shower-night', ['world:layer', 'world:weatherWorld', 'boat:weatherBoat']],
     ['ghosts', ['world:layer', 'world:supernaturalWorld']],
-    ['face-on-the-moon', []],
+    ['face-on-the-moon', ['world:moonTarget']],
   ] as const)('keeps exact root order for %s', (eventId, expectedRoots) => {
     const { dependencies } = createDependencies();
     const adapter = new EventPresentationRegistry().create(eventId, dependencies);
@@ -370,6 +380,7 @@ describe('EventPresentationRegistry', () => {
       [weather.worldRoot, 'weatherWorld'],
       [weather.boatRoot, 'weatherBoat'],
       [supernatural.worldRoot, 'supernaturalWorld'],
+      [moon.itemAimTarget, 'moonTarget'],
     ]);
     expect(adapter.roots.map(({ parent, root }) => (
       `${names.get(parent)}:${names.get(root)}`
@@ -563,25 +574,29 @@ describe('EventPresentationRegistry', () => {
     expect(supernatural.playItemUse).not.toHaveBeenCalled();
   });
 
-  it('delegates the moon lifecycle only to the moon callbacks', async () => {
-    const { dependencies, moon } = createDependencies();
+  it('owns one moon presenter and delegates its normalized lifecycle directly', async () => {
+    const { dependencies } = createDependencies();
     const adapter = new EventPresentationRegistry().create('face-on-the-moon', dependencies);
-    adapter.stage({ ...context, eventId: 'face-on-the-moon' });
+    const moonContext = { ...context, eventId: 'face-on-the-moon' } as const;
+    adapter.stage(moonContext);
     await adapter.reveal();
     await adapter.playChoice(choice);
     await adapter.playItemUse('umbrella', 'umbrella-1' as ItemInstanceId);
     await adapter.react(reaction);
+    adapter.update(9, 0.25);
+    adapter.settleForVisibilityChange();
     adapter.clear();
     adapter.dispose();
-    expect(moon.stage).toHaveBeenCalledWith('face-on-the-moon');
-    expect(moon.reveal).toHaveBeenCalledWith('face-on-the-moon');
-    expect(moon.react).toHaveBeenCalledWith(
-      'face-on-the-moon',
-      reaction.outcome,
-      reaction.physicalResponse,
-    );
-    expect(moon.clear).toHaveBeenCalledTimes(2);
-    expect(calledFamilyConstructors()).toEqual([]);
+    expect(constructors.moon).toHaveBeenCalledOnce();
+    expect(constructors.moon).toHaveBeenCalledWith(dependencies.moon);
+    expect(moon.stage).toHaveBeenCalledWith(moonContext);
+    expect(moon.reveal).toHaveBeenCalledWith();
+    expect(moon.react).toHaveBeenCalledWith(reaction.result, reaction.outcome);
+    expect(moon.update).toHaveBeenCalledWith(9, 0.25);
+    expect(moon.settleForVisibilityChange).toHaveBeenCalledOnce();
+    expect(moon.clear).toHaveBeenCalledOnce();
+    expect(moon.dispose).toHaveBeenCalledOnce();
+    expect(calledFamilyConstructors()).toEqual(['moon']);
   });
 
   it('preserves a construction error while rollback cleanup continues', () => {

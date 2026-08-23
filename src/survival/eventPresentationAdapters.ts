@@ -39,28 +39,16 @@ import { LeakPresentation } from './events/LeakPresentation';
 import { SchoolOfFishPresentation } from './events/SchoolOfFishPresentation';
 import { SnatcherPresentation } from './events/SnatcherPresentation';
 import { TornadoPresentation } from './events/TornadoPresentation';
-import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
-import type { ActionOutcome } from './survivalTypes';
+import {
+  MoonEventPresentation,
+  type MoonEventPresentationEnvironment,
+} from './MoonEventPresentation';
 
 export interface FeaturedEventPresentationTargets {
   readonly driftingItemBow: Object3D;
   readonly driftingChest: Object3D;
   readonly flowersDeck: Object3D;
   readonly checkBackStern: Object3D;
-}
-
-export interface MoonEventPresentationCallbacks {
-  readonly itemAimTarget: Object3D;
-  stage(eventId: SurvivalEventId): void;
-  reveal(eventId: SurvivalEventId): Promise<void>;
-  react(
-    eventId: SurvivalEventId,
-    outcome: ActionOutcome,
-    response: EventPhysicalResponsePresentation,
-  ): Promise<void>;
-  update(delta: number): void;
-  settleForVisibilityChange(): void;
-  clear(): void;
 }
 
 export interface EventPresentationAdapterDependencies {
@@ -72,7 +60,7 @@ export interface EventPresentationAdapterDependencies {
   readonly featuredModels: SurvivalEventModels;
   readonly featuredTargets: FeaturedEventPresentationTargets;
   readonly driftingWater: DriftingWater;
-  readonly moon: MoonEventPresentationCallbacks;
+  readonly moon: MoonEventPresentationEnvironment;
   readonly registerRescueCueCallback: (
     callback: (progress: number | null) => void,
   ) => void;
@@ -552,20 +540,25 @@ export const createMoonAdapter: EventPresentationAdapterFactory = (
   dependencies,
 ) => {
   assertRoute(eventId, 'moon');
-  const moon = dependencies.moon;
-  return createAdapter(eventId, [], {
-    stage: () => moon.stage(eventId),
-    reveal: () => moon.reveal(eventId),
+  const moon = new MoonEventPresentation(dependencies.moon);
+  return createAdapter(eventId, [
+    { parent: dependencies.worldParent, root: moon.itemAimTarget },
+  ], {
+    stage: (context) => moon.stage(context),
+    reveal: () => moon.reveal(),
     playChoice: noChoice,
     playItemUse: noItemUse,
     itemAimTarget: () => moon.itemAimTarget,
     interactionRoot: noRoot,
     resultRoot: noRoot,
-    react: ({ outcome, physicalResponse }) => (
-      moon.react(eventId, outcome, physicalResponse)
-    ),
-    update: (_time, delta) => moon.update(delta),
+    react: ({ outcome, result }) => {
+      if (result === null) {
+        throw new Error('Moon event reaction requires exact result data.');
+      }
+      return moon.react(result, outcome);
+    },
+    update: (time, delta) => moon.update(time, delta),
     settleForVisibilityChange: () => moon.settleForVisibilityChange(),
     clear: () => moon.clear(),
-  }, [() => moon.clear()]);
+  }, [() => moon.dispose()]);
 };
