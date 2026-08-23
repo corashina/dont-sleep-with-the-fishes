@@ -796,6 +796,188 @@ describe('SurvivalPhase orchestration', () => {
     expect(current).toMatchObject({ state: 'day', day: 4 });
   });
 
+  it('resets drifting focus before generic event cleanup and permits a later event entry', async () => {
+    const calls: string[] = [];
+    let current = snapshot({
+      state: 'dayEvent',
+      day: 3,
+      pendingEventId: 'drifting-barrel',
+    });
+    const projectEventInteractionBounds = vi.fn(() => null);
+    const enterDriftingItemView = vi.fn(async (eventId: string) => {
+      calls.push(`enter:${eventId}`);
+    });
+    const showDriftingItemFocus = vi.fn(() => { calls.push('show-focus'); });
+    const hideDriftingItemFocus = vi.fn(() => { calls.push('hide-focus'); });
+    const clearEvent = vi.fn(() => { calls.push('clear-world'); });
+    const releaseActive = vi.fn(() => { calls.push('release-bundle'); });
+    const clearEventPresentation = vi.fn(() => { calls.push('clear-ui'); });
+    const session = {
+      snapshot: vi.fn(() => current),
+      resolveEvent: vi.fn(() => {
+        current = snapshot({ state: 'day', day: 3 });
+        return accepted({ code: 'event-resolved', cue: 'none', deltas: {} });
+      }),
+      perform: vi.fn((action: string) => {
+        if (action !== 'endDay') return accepted({ accepted: false });
+        current = snapshot({
+          state: 'dayEvent',
+          day: 4,
+          pendingEventId: 'drifting-chest',
+        });
+        return accepted({ code: 'event-opened', cue: 'nightfall', deltas: {} });
+      }),
+    };
+    const ui: Partial<SurvivalUI> = {
+      beginEventPresentation: vi.fn(),
+      setSleepCovered: vi.fn(async () => undefined),
+      settleCoveredScene: vi.fn(async () => undefined),
+      showEventReveal: vi.fn(async () => undefined),
+      setEventSelection: vi.fn(),
+      showDriftingItemFocus,
+      hideDriftingItemFocus,
+      holdEventOutcome: vi.fn(async () => undefined),
+      clearEventPresentation,
+      setBusy: vi.fn(),
+      render: vi.fn(),
+      setJournalUnread: vi.fn(),
+      setAnchors: vi.fn(),
+      restoreCommandFocus: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session,
+      world: {
+        play: vi.fn(async () => undefined),
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(async () => undefined),
+        reactToEventOutcome: vi.fn(async () => undefined),
+        enterDriftingItemView,
+        projectEventInteractionBounds,
+        projectInteractionAnchors: vi.fn(() => []),
+        clearEvent,
+        dispose: vi.fn(),
+      },
+      ui,
+      eventBundles: {
+        beginLoad: vi.fn(() => undefined),
+        activate: vi.fn(async () => undefined),
+        releaseActive,
+        dispose: vi.fn(),
+      },
+    });
+
+    phase.start();
+    await flushPromises();
+    ui.onDriftingItemSelect?.('drifting-barrel');
+    await flushPromises();
+    calls.length = 0;
+
+    phase.handleEndure();
+    await flushPromises();
+    await flushPromises();
+
+    expect(calls.indexOf('hide-focus')).toBeLessThan(calls.indexOf('clear-world'));
+    expect(calls.indexOf('clear-world')).toBeLessThan(calls.indexOf('release-bundle'));
+    expect(calls.indexOf('release-bundle')).toBeLessThan(calls.indexOf('clear-ui'));
+    const projectionsAfterClear = projectEventInteractionBounds.mock.calls.length;
+    phase.resize(1280, 720);
+    expect(projectEventInteractionBounds).toHaveBeenCalledTimes(projectionsAfterClear);
+
+    phase.handleAction('endDay');
+    await flushPromises();
+    await flushPromises();
+    ui.onDriftingItemSelect?.('drifting-chest');
+    await flushPromises();
+
+    expect(enterDriftingItemView).toHaveBeenCalledTimes(2);
+    expect(showDriftingItemFocus).toHaveBeenCalledTimes(2);
+    phase.dispose();
+  });
+
+  it.each([
+    ['retrieve', 'pickup'],
+    ['sleep', 'recede'],
+  ] as const)('settles hidden drifting-item %s work and returns after resume', async (
+    choiceId,
+    expectedAnimation,
+  ) => {
+    const listeners = new Map<string, EventListener>();
+    const fakeDocument = {
+      hidden: false,
+      addEventListener: vi.fn((type: string, listener: EventListener) => {
+        listeners.set(type, listener);
+      }),
+      removeEventListener: vi.fn((type: string) => listeners.delete(type)),
+    };
+    vi.stubGlobal('document', fakeDocument);
+    const animation = deferred();
+    const session = new SurvivalSession([], {
+      seed: 81,
+      random: sequenceRandom([0]),
+      initial: { day: 3, energy: 2 },
+      initialEventId: 'drifting-bottle',
+    });
+    const retrieveDriftingItem = vi.fn(() => animation.promise);
+    const recedeDriftingItem = vi.fn(() => animation.promise);
+    const exitDriftingItemView = vi.fn(async () => undefined);
+    const ui: Partial<SurvivalUI> = {
+      beginEventPresentation: vi.fn(),
+      setSleepCovered: vi.fn(async () => undefined),
+      settleCoveredScene: vi.fn(async () => undefined),
+      showEventReveal: vi.fn(async () => undefined),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(async () => undefined),
+      showDriftingItemFocus: vi.fn(),
+      hideDriftingItemFocus: vi.fn(),
+      clearEventPresentation: vi.fn(),
+      setBusy: vi.fn(),
+      setPaused: vi.fn(),
+      render: vi.fn(),
+      setJournalUnread: vi.fn(),
+      restoreCommandFocus: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session,
+      world: {
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(async () => undefined),
+        enterDriftingItemView: vi.fn(async () => undefined),
+        exitDriftingItemView,
+        retrieveDriftingItem,
+        recedeDriftingItem,
+        setDocumentHidden: vi.fn((hidden: boolean) => {
+          if (hidden) animation.resolve();
+        }),
+        clearEvent: vi.fn(),
+        dispose: vi.fn(() => animation.resolve()),
+      },
+      ui,
+    });
+
+    phase.start();
+    await flushPromises();
+    ui.onDriftingItemSelect?.('drifting-bottle');
+    await flushPromises();
+    ui.onEventChoice?.(choiceId);
+    await flushPromises();
+
+    expect(expectedAnimation === 'pickup'
+      ? retrieveDriftingItem
+      : recedeDriftingItem).toHaveBeenCalledOnce();
+    fakeDocument.hidden = true;
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
+    await flushPromises();
+    expect(exitDriftingItemView).not.toHaveBeenCalled();
+
+    fakeDocument.hidden = false;
+    listeners.get('visibilitychange')!(new Event('visibilitychange'));
+    await flushPromises();
+    expect(exitDriftingItemView).toHaveBeenCalledOnce();
+    phase.dispose();
+  });
+
   it('keeps a real insufficient-energy Drifting Cargo encounter choosing without mutation', async () => {
     const realSession = new SurvivalSession([], {
       seed: 28,

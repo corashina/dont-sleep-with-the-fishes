@@ -189,13 +189,25 @@ export class DriftingItemFlow {
     // BoatWorld settles its camera and item promises when document visibility changes.
   }
 
-  dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
+  clear(): void {
+    if (
+      this.disposed
+      || (
+        this.activeEventId === null
+        && this.choices.length === 0
+        && this.focusState === 'idle'
+      )
+    ) return;
     this.activeEventId = null;
     this.choices = [];
     this.focusState = 'idle';
     this.dependencies.ui.hideDriftingItemFocus?.();
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.clear();
+    this.disposed = true;
   }
 
   private showFocus(): void {
@@ -240,12 +252,9 @@ export class DriftingItemFlow {
     await (this.dependencies.world.exitDriftingItemView?.() ?? Promise.resolve());
     if (!this.isCurrentFocus(eventId, 'returning', generation)) return;
 
-    this.activeEventId = null;
-    this.choices = [];
-    this.focusState = 'idle';
+    this.clear();
     resolution.clearEvent();
     if (!this.isCurrent(generation)) return;
-    this.dependencies.ui.hideDriftingItemFocus?.();
     const terminal = resolution.renderSnapshot();
     if (!this.isCurrent(generation)) return;
     this.dependencies.setBusy(false);
