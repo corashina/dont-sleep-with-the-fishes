@@ -13,6 +13,7 @@ import type {
   SurvivalSnapshot,
 } from '../src/survival/survivalTypes';
 import { BoatAnchorView } from '../src/ui/BoatAnchorView';
+import { SurvivalCoverView } from '../src/ui/SurvivalCoverView';
 import { SurvivalHudView } from '../src/ui/SurvivalHudView';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 import { DAY_ACTION_IDS } from '../src/ui/SurvivalUiViewModel';
@@ -784,6 +785,66 @@ describe('SurvivalUI', () => {
     press('[data-event-choice="retrieve"]', ' ');
     expect(onEventChoice).toHaveBeenCalledWith('retrieve');
     expect(onEventChoice).toHaveBeenCalledTimes(2);
+  });
+
+  it('wraps event Tab focus at both boundaries and from outside controls', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    const ui = createUI(mount);
+    openContextualEvent(ui);
+    const controls = [
+      ...mount.querySelectorAll<HTMLButtonElement>(
+        '[data-boat-anchors] button, [data-event-choices] button',
+      ),
+    ].filter((button) => (
+      !button.hidden && button.closest('[hidden], [inert], [aria-hidden="true"]') === null
+    ));
+    const first = controls[0]!;
+    const last = controls.at(-1)!;
+
+    last.focus();
+    last.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Tab', bubbles: true, cancelable: true,
+    }));
+    expect(document.activeElement).toBe(first);
+
+    first.focus();
+    first.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Tab', shiftKey: true, bubbles: true, cancelable: true,
+    }));
+    expect(document.activeElement).toBe(last);
+
+    outside.focus();
+    outside.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Tab', bubbles: true, cancelable: true,
+    }));
+    expect(document.activeElement).toBe(first);
+
+    outside.focus();
+    outside.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Tab', shiftKey: true, bubbles: true, cancelable: true,
+    }));
+    expect(document.activeElement).toBe(last);
+  });
+
+  it('restores event focus to the first usable command during clear', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    openContextualEvent(ui);
+    const choice = mount.querySelector<HTMLButtonElement>(
+      '[data-event-choice="retrieve"]',
+    )!;
+    const expected = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="fishing-tools"]',
+    )!;
+    choice.focus();
+
+    ui.clearEventPresentation();
+
+    expect(document.activeElement).toBe(expected);
   });
 
   it.each(['Enter', ' '] as const)(
@@ -3273,6 +3334,88 @@ describe('SurvivalUI', () => {
     expect(mount.children).toHaveLength(0);
     expect(() => ui.dispose()).not.toThrow();
   });
+
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['Error', new Error('bad cue cleanup failed')],
+  ] as const)(
+    'keeps a %s cover error ahead of a later event error during clear',
+    (_label, firstError) => {
+      const mount = document.createElement('main');
+      document.body.append(mount);
+      const ui = createUI(mount);
+      openContextualEvent(ui);
+      ui.setBadSleepCue(true);
+      const internals = ui as unknown as {
+        readonly coverView: SurvivalCoverView;
+        readonly eventView: {
+          readonly choices: HTMLElement;
+          readonly caption: HTMLElement;
+        };
+      };
+      const coverCleanup = vi.spyOn(internals.coverView.badSleepCue.classList, 'remove')
+        .mockImplementation(() => { throw firstError; });
+      const eventCleanup = vi.spyOn(internals.eventView.choices, 'replaceChildren')
+        .mockImplementation(() => { throw new Error('later event cleanup failed'); });
+      const notThrown = Symbol('not thrown');
+      let thrown: unknown = notThrown;
+
+      try {
+        ui.clearEventPresentation();
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBe(firstError);
+      expect(coverCleanup).toHaveBeenCalledOnce();
+      expect(eventCleanup).toHaveBeenCalledOnce();
+      expect(internals.eventView.caption.getAttribute('aria-hidden')).toBe('true');
+      coverCleanup.mockRestore();
+      eventCleanup.mockRestore();
+      ui.dispose();
+    },
+  );
+
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['Error', new Error('cover transition cleanup failed')],
+  ] as const)(
+    'keeps a %s cover transition error ahead of a later event beat error during disposal',
+    async (_label, firstError) => {
+      vi.useFakeTimers();
+      const mount = document.createElement('main');
+      document.body.append(mount);
+      const ui = createUI(mount);
+      openContextualEvent(ui);
+      const choice = mount.querySelector<HTMLButtonElement>(
+        '[data-event-choice="retrieve"]',
+      )!;
+      const cover = ui.setSleepCovered(true);
+      const beat = ui.playEventChoiceBeat('retrieve');
+      const internals = ui as unknown as { readonly coverView: SurvivalCoverView };
+      const coverCleanup = vi.spyOn(internals.coverView.sleepCover, 'removeEventListener')
+        .mockImplementation(() => { throw firstError; });
+      const eventCleanup = vi.spyOn(choice, 'removeEventListener')
+        .mockImplementation(() => { throw new Error('later event beat cleanup failed'); });
+      const notThrown = Symbol('not thrown');
+      let thrown: unknown = notThrown;
+
+      try {
+        ui.dispose();
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBe(firstError);
+      await Promise.all([cover, beat]);
+      expect(coverCleanup).toHaveBeenCalledOnce();
+      expect(eventCleanup).toHaveBeenCalledOnce();
+      expect(mount.children).toHaveLength(0);
+      expect(() => ui.dispose()).not.toThrow();
+    },
+  );
 
   it('continues all disposal after early DOM cleanup fails and preserves undefined', () => {
     const mount = document.createElement('main');

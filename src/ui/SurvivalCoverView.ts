@@ -250,12 +250,12 @@ export class SurvivalCoverView {
   settleForVisibilityChange(): void {
     if (this.disposed) return;
     throwCleanupFailure(runCleanupSteps([
-      () => this.pendingCoverTransition?.finish(),
-      () => this.pendingDiveHold?.finish(),
-      () => this.pendingRewardConfirmation?.finish(),
-      () => this.pendingCoveredSceneSettle?.finish(),
-      () => this.pendingSleepHold?.finish(),
-      () => this.pendingEventOutcomeHold?.finish(),
+      () => this.settleCoverTransition(),
+      () => this.settleDiveHold(),
+      () => this.settleRewardConfirmation(),
+      () => this.settleCoveredSceneWait(),
+      () => this.settleSleepHold(),
+      () => this.settleEventOutcomeHold(),
     ]));
   }
 
@@ -264,22 +264,65 @@ export class SurvivalCoverView {
   }
 
   dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
+    if (!this.beginDispose()) return;
     const result = runCleanupSteps([
-      () => this.pendingCoverTransition?.finish(),
-      () => this.pendingDiveHold?.finish(),
-      () => this.pendingRewardConfirmation?.finish(),
-      () => this.pendingCoveredSceneSettle?.finish(),
-      () => this.pendingSleepHold?.finish(),
-      () => this.pendingEventOutcomeHold?.finish(),
-      () => this.badSleepCue.classList.remove('is-visible'),
-      () => this.resultClose.removeEventListener('click', this.handleResultClose),
+      () => this.settleCoverTransition(),
+      () => this.settleDiveHold(),
+      () => this.settleRewardConfirmation(),
+      () => this.settleCoveredSceneWait(),
+      () => this.settleSleepHold(),
+      () => this.settleEventOutcomeHold(),
+      () => this.clearBadSleepCueForCleanup(),
+      () => this.removeListenersForDispose(),
+      () => this.resetCallbacksForDispose(),
+    ]);
+    throwCleanupFailure(result);
+  }
+
+  beginDispose(): boolean {
+    if (this.disposed) return false;
+    this.disposed = true;
+    return true;
+  }
+
+  clearBadSleepCueForCleanup(): void {
+    this.badSleepCue.classList.remove('is-visible');
+  }
+
+  settleCoverTransition(): void {
+    this.pendingCoverTransition?.finish();
+  }
+
+  settleDiveHold(): void {
+    this.pendingDiveHold?.finish();
+  }
+
+  settleRewardConfirmation(): void {
+    this.pendingRewardConfirmation?.finish();
+  }
+
+  settleCoveredSceneWait(): void {
+    this.pendingCoveredSceneSettle?.finish();
+  }
+
+  settleSleepHold(): void {
+    this.pendingSleepHold?.finish();
+  }
+
+  settleEventOutcomeHold(): void {
+    this.pendingEventOutcomeHold?.finish();
+  }
+
+  removeListenersForDispose(): void {
+    this.resultClose.removeEventListener('click', this.handleResultClose);
+  }
+
+  resetCallbacksForDispose(): void {
+    throwCleanupFailure(runCleanupSteps([
       () => { this.onResultShow = () => undefined; },
       () => { this.onResultHide = () => undefined; },
       () => { this.onResultClose = () => undefined; },
-    ]);
-    throwCleanupFailure(result);
+    ]));
   }
 
   private clearRewardResult(): void {

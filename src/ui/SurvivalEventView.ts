@@ -211,8 +211,22 @@ export class SurvivalEventView {
   clear(): void {
     if (this.disposed) return;
     throwCleanupFailure(runCleanupSteps([
-      () => this.pendingChoiceBeat?.finish(),
-      () => this.sleepMask.classList.remove('is-visible'),
+      () => this.settleChoiceBeat(),
+      () => this.clearSleepMask(),
+      () => this.clearPresentationState(),
+    ]));
+  }
+
+  settleChoiceBeat(): void {
+    this.pendingChoiceBeat?.finish();
+  }
+
+  clearSleepMask(): void {
+    this.sleepMask.classList.remove('is-visible');
+  }
+
+  clearPresentationState(): void {
+    throwCleanupFailure(runCleanupSteps([
       () => { this.selectedChoiceId = null; },
       () => { this.active = false; },
       () => this.caption.classList.remove('is-visible'),
@@ -233,7 +247,7 @@ export class SurvivalEventView {
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
-    this.pendingChoiceBeat?.finish();
+    this.settleChoiceBeat();
   }
 
   isActive(): boolean {
@@ -275,21 +289,45 @@ export class SurvivalEventView {
   }
 
   dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
+    if (!this.beginDispose()) return;
     const result = runCleanupSteps([
-      () => this.pendingChoiceBeat?.finish(),
-      () => { this.pendingChoiceBeat = null; },
-      () => window.clearTimeout(this.feedbackTimer),
-      () => this.caption.removeEventListener('click', this.handleClick),
-      () => { this.active = false; },
-      () => { this.selectedChoiceId = null; },
-      () => this.choices.replaceChildren(),
-      () => { this.choices.hidden = true; },
-      () => { this.onChoice = () => undefined; },
-      () => { this.onAnnouncement = () => undefined; },
+      () => this.clearChoicesForDispose(),
+      () => this.settleChoiceBeat(),
+      () => this.clearFeedbackTimerForDispose(),
+      () => this.removeListenersForDispose(),
+      () => this.resetCallbacksForDispose(),
     ]);
     throwCleanupFailure(result);
+  }
+
+  beginDispose(): boolean {
+    if (this.disposed) return false;
+    this.disposed = true;
+    this.selectedChoiceId = null;
+    this.active = false;
+    return true;
+  }
+
+  clearChoicesForDispose(): void {
+    throwCleanupFailure(runCleanupSteps([
+      () => this.choices.replaceChildren(),
+      () => { this.choices.hidden = true; },
+    ]));
+  }
+
+  clearFeedbackTimerForDispose(): void {
+    window.clearTimeout(this.feedbackTimer);
+  }
+
+  removeListenersForDispose(): void {
+    this.caption.removeEventListener('click', this.handleClick);
+  }
+
+  resetCallbacksForDispose(): void {
+    throwCleanupFailure(runCleanupSteps([
+      () => { this.onChoice = () => undefined; },
+      () => { this.onAnnouncement = () => undefined; },
+    ]));
   }
 
   private createChoice(choice: EventContextChoice): HTMLButtonElement {

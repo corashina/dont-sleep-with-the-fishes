@@ -121,19 +121,54 @@ describe('SurvivalEventView', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('settles replaced, hidden, cleared, and disposed beats once', async () => {
+  it('settles a pending beat when a later beat replaces it', async () => {
     vi.useFakeTimers();
     const view = mountView();
     view.begin();
     view.setSelection([{ id: 'accept', label: 'Accept', unavailableReason: null }]);
-    const target = view.choiceButton('accept')!;
-    const first = view.playChoiceBeat('accept', target);
+    let firstSettled = false;
+    const first = view.playChoiceBeat('accept', view.choiceButton('accept'))
+      .then(() => { firstSettled = true; });
+    view.setSelection([{ id: 'again', label: 'Again', unavailableReason: null }]);
+    await Promise.resolve();
+    expect(firstSettled).toBe(false);
+
+    let secondSettled = false;
+    const second = view.playChoiceBeat('again', view.choiceButton('again'))
+      .then(() => { secondSettled = true; });
+    await first;
+    expect(firstSettled).toBe(true);
+    expect(secondSettled).toBe(false);
+    expect(vi.getTimerCount()).toBe(1);
+    await vi.advanceTimersByTimeAsync(240);
+    await second;
+  });
+
+  it('settles a pending beat during event clear', async () => {
+    vi.useFakeTimers();
+    const view = mountView();
+    view.begin();
+    view.setSelection([{ id: 'accept', label: 'Accept', unavailableReason: null }]);
+    const beat = view.playChoiceBeat('accept', view.choiceButton('accept'));
+
+    view.clear();
+    await beat;
+
+    expect(vi.getTimerCount()).toBe(0);
+    expect(view.choiceButtonsInOrder()).toHaveLength(0);
+    expect(view.caption.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('settles hidden and disposed beats once', async () => {
+    vi.useFakeTimers();
+    const view = mountView();
+    view.begin();
+    view.setSelection([{ id: 'accept', label: 'Accept', unavailableReason: null }]);
+    const first = view.playChoiceBeat('accept', view.choiceButton('accept'));
     view.settleForVisibilityChange();
     await first;
     expect(vi.getTimerCount()).toBe(0);
 
-    view.clear();
-    view.begin();
     view.setSelection([{ id: 'again', label: 'Again', unavailableReason: null }]);
     const second = view.playChoiceBeat('again', view.choiceButton('again'));
     view.dispose();
