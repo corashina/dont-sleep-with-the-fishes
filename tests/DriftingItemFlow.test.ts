@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ProjectedBoatBounds } from '../src/survival/BoatInteraction';
 import type {
   DriftingItemFocusView,
-  EventContextChoice,
 } from '../src/ui/SurvivalUI';
+import type { EventContextChoice } from '../src/ui/SurvivalUiViewModel';
 import {
   DriftingItemFlow,
   type DriftingItemChoiceResolution,

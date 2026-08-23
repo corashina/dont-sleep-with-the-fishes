@@ -6,10 +6,7 @@ import {
 } from '../game/ItemState';
 import { formatJournalEntry } from '../survival/journal';
 import type { JournalEntry } from '../survival/journalRecords';
-import { carlitosStatus } from '../survival/CarlitosState';
-import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
-import { repairEnergyCost, SURVIVAL_BALANCE } from '../survival/survivalBalance';
-import type { BoatInteractionAnchor, BoatToolId, ProjectedBoatBounds } from '../survival/BoatInteraction';
+import type { BoatInteractionAnchor, ProjectedBoatBounds } from '../survival/BoatInteraction';
 import type { DriftingItemEventId } from '../survival/eventCatalog';
 import type {
   ActionOutcome,
@@ -23,178 +20,17 @@ import type {
   SurvivalSnapshot,
 } from '../survival/survivalTypes';
 import { createElementRequirement } from './dom';
+import { BoatAnchorView } from './BoatAnchorView';
 import { itemThumbnailUrl } from './itemThumbnailManifest';
 import { ModalFocusManager, type ModalInitialFocus } from './ModalFocusManager';
-import { uiArtwork, type UiArtworkId } from './uiArtwork';
-
-interface ActionDefinition {
-  id: DayActionId;
-  label: string;
-  cost: string;
-  energyCost: number;
-  effect: string;
-  risk: 'safe' | 'uncertain' | 'dangerous';
-}
-
-interface ActionPreview {
-  cost: string;
-  energyCost: number;
-  effect: string;
-  risk: ActionDefinition['risk'];
-}
-
-interface BoatToolCopy {
-  label: string;
-  description: string;
-}
-
-const BOAT_TOOL_COPY: Readonly<Record<BoatToolId, BoatToolCopy>> = Object.freeze({
-  repairTools: {
-    label: 'REPAIR',
-    description: 'Use the open repair toolbox to repair the lifeboat.',
-  },
-  fishingRod: {
-    label: 'FISH',
-    description: 'Cast from the bow to find food or drifting junk. Bait is used automatically when available.',
-  },
-  lantern: {
-    label: 'END DAY',
-    description: 'Douse the lantern to end the current day. Energy is restored at dawn.',
-  },
-  chest: {
-    label: 'CHEST',
-    description: 'Open the recovered chest. The task costs three energy.',
-  },
-});
-
-type MeterId = 'health' | 'hunger' | 'energy' | 'hull';
-
-const METER_ARTWORK: Record<MeterId, UiArtworkId> = {
-  health: 'health',
-  hunger: 'hunger',
-  energy: 'energy',
-  hull: 'hull',
-};
-
-interface MeterDefinition {
-  id: MeterId;
-  label: string;
-  min: number;
-  max: number;
-  fillBoundary?: (percentage: number) => number;
-  dangerLabel: 'LOW' | 'HIGH';
-  displayValue: (value: number) => number;
-  isDanger: (value: number) => boolean;
-}
-
-const ACTIONS: readonly ActionDefinition[] = [
-  { id: 'fish', label: 'FISH', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.actions.fishEnergy, effect: 'Chance to gain food', risk: 'uncertain' },
-  { id: 'dive', label: 'DIVE', cost: '3 ENERGY', energyCost: SURVIVAL_BALANCE.actions.diveEnergy, effect: 'May recover supplies; injury risk', risk: 'dangerous' },
-  { id: 'eat', label: 'EAT', cost: '1 FOOD', energyCost: 0, effect: 'HUNGER -35', risk: 'safe' },
-  { id: 'repair', label: 'REPAIR', cost: '1 ENERGY + MATERIAL', energyCost: SURVIVAL_BALANCE.actions.repairEnergy, effect: 'HULL +25 (tape +15)', risk: 'safe' },
-  { id: 'treat', label: 'TREAT', cost: '1 MEDKIT', energyCost: 0, effect: 'HEALTH +30', risk: 'safe' },
-  { id: 'endDay', label: 'END DAY', cost: 'REST', energyCost: 0, effect: 'RESTORE ENERGY AT DAWN', risk: 'safe' },
-  { id: 'repairItem', label: 'REPAIR ITEM', cost: '1 DUCT TAPE', energyCost: 0, effect: 'Restore one broken item', risk: 'safe' },
-  { id: 'sendMessage', label: 'SEND MESSAGE', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.actions.bottledPaperEnergy, effect: 'RESCUE +15', risk: 'safe' },
-  { id: 'useEnergyBar', label: 'EAT ENERGY BAR', cost: '1 ENERGY BAR', energyCost: 0, effect: 'ENERGY TO 3', risk: 'safe' },
-  { id: 'openChest', label: 'OPEN CHEST', cost: '3 ENERGY', energyCost: 3, effect: 'RECOVER A SUPPLY', risk: 'uncertain' },
-  { id: 'petCarlitos', label: 'PET', cost: 'FREE', energyCost: 0, effect: 'EASE LONELINESS', risk: 'safe' },
-  { id: 'feedCarlitos', label: 'FEED', cost: '1 FOOD', energyCost: 0, effect: 'RESTORE HUNGER', risk: 'safe' },
-  { id: 'treatCarlitos', label: 'TREAT', cost: '1 MEDKIT', energyCost: 0, effect: 'CURE SICKNESS', risk: 'safe' },
-];
-
-const CARLITOS_ACTIONS = [
-  'petCarlitos',
-  'feedCarlitos',
-  'treatCarlitos',
-] as const satisfies readonly DayActionId[];
-
-const ENERGY_WORDS = ['', 'one', 'two', 'three'] as const;
-
-function spokenEnergyCost(cost: number): string | null {
-  if (cost <= 0) return null;
-  return `${ENERGY_WORDS[cost] ?? String(cost)} energy`;
-}
+import { SurvivalHudView } from './SurvivalHudView';
+import { DAY_ACTION_IDS, type EventContextChoice } from './SurvivalUiViewModel';
 
 function driftingCargoRewardItemId(reward: RewardSummary): ItemId {
   if (reward.kind === 'item') return reward.id;
   if (reward.id === 'food') return 'cannedFood';
   if (reward.id === 'bait') return 'baitTin';
   return 'ductTape';
-}
-
-function quantityLabel(label: string, quantity: number): string {
-  return quantity > 1 ? `${label} ×${quantity}` : label;
-}
-
-function actionPreview(definition: ActionDefinition, snapshot: SurvivalSnapshot): ActionPreview {
-  const missingHull = Math.max(0, 100 - snapshot.hull);
-  switch (definition.id) {
-    case 'eat': return { ...definition, effect: `HUNGER -${Math.min(35, snapshot.hunger)}` };
-    case 'treat': return { ...definition, effect: `HEALTH +${Math.min(30, Math.max(0, 100 - snapshot.health))}` };
-    case 'repair': {
-      const energyCost = repairEnergyCost(snapshot.hull);
-      const useTape = snapshot.repairMaterial < 1
-        && Object.values(snapshot.inventory).some(
-          (item) => item?.type === 'ductTape' && item.condition === 'usable',
-        );
-      return {
-        ...definition,
-        cost: `${energyCost} ENERGY + ${useTape ? 'TAPE' : 'MATERIAL'}`,
-        energyCost,
-        effect: `HULL +${Math.min(useTape ? 15 : 25, missingHull)}`,
-      };
-    }
-    default: return definition;
-  }
-}
-
-const identity = (value: number): number => value;
-
-const CONDITION_ARTWORK_HEIGHT = 72;
-const HUNGER_FILL_BOUNDARIES = [
-  [0, 65],
-  [10, 58.4],
-  [20, 54.8],
-  [25, 53.2],
-  [30, 51.8],
-  [40, 48.8],
-  [50, 45.7],
-  [60, 42.2],
-  [70, 38.3],
-  [75, 36.4],
-  [80, 34.3],
-  [90, 28.1],
-  [100, 11],
-] as const;
-
-function hungerFillBoundary(percentage: number): number {
-  for (let index = 1; index < HUNGER_FILL_BOUNDARIES.length; index += 1) {
-    const [upperPercentage, upperBoundary] = HUNGER_FILL_BOUNDARIES[index]!;
-    if (percentage > upperPercentage) continue;
-    const [lowerPercentage, lowerBoundary] = HUNGER_FILL_BOUNDARIES[index - 1]!;
-    const progress = (percentage - lowerPercentage) / (upperPercentage - lowerPercentage);
-    return lowerBoundary + (upperBoundary - lowerBoundary) * progress;
-  }
-  return HUNGER_FILL_BOUNDARIES.at(-1)![1];
-}
-
-function hullFillBoundary(percentage: number): number {
-  const progress = (percentage / 100) ** 1.4;
-  return 61 - (61 - 29) * progress;
-}
-
-const METERS: readonly MeterDefinition[] = [
-  { id: 'health', label: 'HEALTH', min: 0, max: 100, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 20 },
-  { id: 'hunger', label: 'FOOD', min: 0, max: 100, fillBoundary: hungerFillBoundary, dangerLabel: 'LOW', displayValue: (value) => 100 - value, isDanger: (value) => value <= 30 },
-  { id: 'energy', label: 'ENERGY', min: 0, max: SURVIVAL_BALANCE.actions.maximumEnergy, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 1 },
-  { id: 'hull', label: 'HULL', min: 0, max: 100, fillBoundary: hullFillBoundary, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 20 },
-];
-
-function meterFillHeight(definition: MeterDefinition, percentage: number): number {
-  if (definition.fillBoundary === undefined) return percentage;
-  const boundary = definition.fillBoundary(percentage);
-  return (CONDITION_ARTWORK_HEIGHT - boundary) / CONDITION_ARTWORK_HEIGHT * 100;
 }
 
 const SLEEP_TRANSITION_MS = 2_500;
@@ -235,24 +71,6 @@ const ROUTINE_DIALOG_PLACEMENTS: Readonly<Record<'fishing' | 'repair', RoutineDi
 
 const requireElement = createElementRequirement('survival UI');
 
-function meterMarkup(meter: MeterDefinition): string {
-  const artwork = METER_ARTWORK[meter.id];
-  const tooltipId = `survival-meter-${meter.id}-tooltip`;
-  return `
-    <div class="survival-meter survival-condition survival-meter--${meter.id}" data-meter="${meter.id}" role="meter"
-      aria-label="${meter.label}" aria-describedby="${tooltipId}" aria-valuemin="${meter.min}" aria-valuemax="${meter.max}" aria-valuenow="${meter.min}" tabindex="0">
-      <span class="survival-condition__icon" aria-hidden="true">
-        <span class="survival-condition__fill" data-meter-fill>
-          ${uiArtwork(artwork, 'survival-condition__art survival-condition__fill-art')}
-        </span>
-        <span class="survival-condition__outline" data-meter-outline>
-          ${uiArtwork(artwork, 'survival-condition__art survival-condition__outline-art')}
-        </span>
-      </span>
-      <span class="survival-meter__tooltip ui-role-numeral" data-meter-tooltip id="${tooltipId}" role="tooltip">${meter.min} / ${meter.max}</span>
-    </div>`;
-}
-
 export type FishingUiMode = 'hidden' | 'aiming' | 'waiting' | 'bite' | 'result' | 'ready';
 export type SleepCoverProfile = 'solid' | 'dive' | 'midnight-tour';
 
@@ -286,49 +104,9 @@ export interface DriftingItemFocusView {
   readonly target: ProjectedBoatBounds | null;
 }
 
-export interface EventContextChoice {
-  readonly id: EventResponseId;
-  readonly label: string;
-  readonly unavailableReason: string | null;
-  readonly anchorId?: string;
-  readonly energyCost?: number;
-  readonly energyOwner?: 'player' | 'carlitos';
-}
-
-type AnchorInteractionState =
-  | 'ordinary'
-  | 'eventLocked'
-  | 'eventAvailable'
-  | 'eventUnavailable'
-  | 'selected';
-
 interface PendingFade {
   readonly finish: () => void;
 }
-
-interface AnchorTooltipNodes {
-  readonly tooltip: HTMLElement;
-  readonly label: Text;
-  readonly separator: Text;
-  readonly energy: HTMLElement;
-}
-
-interface AnchorLayoutState {
-  readonly visible: boolean;
-  readonly x: number;
-  readonly y: number;
-  readonly targetKind: 'item' | 'tool' | 'event';
-  readonly width: number;
-  readonly height: number;
-  readonly zIndex: number;
-  readonly depleted: boolean;
-}
-
-const DEFAULT_ANCHOR_HIT_AREA = Object.freeze({
-  width: 54,
-  height: 54,
-  depth: 0,
-});
 
 export class SurvivalUI {
   onAction: (action: DayActionId, option?: DayActionOption) => void = () => undefined;
@@ -349,10 +127,8 @@ export class SurvivalUI {
   onCameraTurn: (() => void) | null = null;
 
   private readonly root: HTMLDivElement;
-  private readonly day: HTMLElement;
-  private readonly topControls: HTMLElement;
-  private readonly journalMarker: HTMLButtonElement;
-  private readonly journalUnread: HTMLElement;
+  private readonly hudView: SurvivalHudView;
+  private readonly anchorView: BoatAnchorView;
   private readonly announcer: HTMLElement;
   private readonly feedback: HTMLElement;
   private readonly sleepCover: HTMLElement;
@@ -363,11 +139,6 @@ export class SurvivalUI {
   private readonly diveResultLines: HTMLElement;
   private readonly diveResultClose: HTMLButtonElement;
   private readonly eventSleepMask: HTMLElement;
-  private readonly anchorLayer: HTMLElement;
-  private readonly cameraTurn: HTMLButtonElement;
-  private readonly cameraTurnTooltip: HTMLElement;
-  private readonly carlitosCard: HTMLElement;
-  private readonly carlitosPet: HTMLButtonElement;
   private readonly eventCaption: HTMLElement;
   private readonly eventTitle: HTMLElement;
   private readonly eventDetail: HTMLElement;
@@ -407,12 +178,6 @@ export class SurvivalUI {
   private readonly endingTitle: HTMLElement;
   private readonly restartButton: HTMLButtonElement;
   private readonly modalFocus: ModalFocusManager;
-  private readonly anchorButtons = new Map<string, HTMLButtonElement>();
-  private readonly anchorTooltipNodes = new WeakMap<HTMLButtonElement, AnchorTooltipNodes>();
-  private readonly anchors = new Map<string, BoatInteractionAnchor>();
-  private readonly anchorLayouts = new Map<string, AnchorLayoutState>();
-  private readonly meterElements = new Map<MeterId, HTMLElement>();
-  private readonly actionReasons = new Map<DayActionId, string | null>();
   private readonly lastValues = new Map<string, string | number | boolean | null>();
   private busy = false;
   private paused = false;
@@ -426,9 +191,6 @@ export class SurvivalUI {
   private currentSnapshot: SurvivalSnapshot | null = null;
   private journalEntries: readonly JournalEntry[] = [];
   private journalIndex = 0;
-  private hoveredAnchorId: string | null = null;
-  private focusedAnchorId: string | null = null;
-  private publishedAnchorId: string | null = null;
   private fishingMode: FishingUiMode = 'hidden';
   private fishingMessage = '';
   private readonly fishingTarget = {
@@ -460,7 +222,6 @@ export class SurvivalUI {
   private eventSelectedInstanceId: ItemInstanceId | null = null;
   private eventSelectedChoiceId: EventResponseId | null = null;
   private eventPresentationActive = false;
-  private carlitosReturnTarget: HTMLButtonElement | null = null;
 
   constructor(private readonly mount: HTMLElement) {
     this.root = document.createElement('div');
@@ -491,55 +252,6 @@ export class SurvivalUI {
       <div class="event-sleep-mask" data-event-sleep-mask aria-hidden="true">
         <i></i><i></i><i></i>
       </div>
-      <div class="survival-top" data-survival-top>
-        <div class="survival-top__status-row">
-          <button type="button" class="journal-marker" data-journal-open aria-label="Open journal">
-            ${uiArtwork('journal', 'journal-marker__art')}
-            <span class="journal-marker__unread ui-role-context" data-journal-unread hidden>NEW</span>
-          </button>
-          <section class="survival-status" data-survival-status aria-label="Current survival day">
-            <strong class="ui-role-numeral" data-day>DAY 1</strong>
-          </section>
-        </div>
-        <button type="button" class="chest-camera-turn" data-camera-turn aria-label="Look behind at the chest" aria-describedby="camera-turn-tooltip" aria-pressed="false" hidden>
-          ${uiArtwork('chest', 'chest-camera-turn__art')}
-          <span class="chest-camera-turn__tooltip ui-role-context" data-camera-turn-tooltip id="camera-turn-tooltip" role="tooltip">LOOK BACK</span>
-        </button>
-      </div>
-      <section class="survival-meters" aria-label="Condition meters">
-        ${METERS.map(meterMarkup).join('')}
-      </section>
-      <div class="boat-anchors" data-boat-anchors aria-label="Boat interaction points"></div>
-      <section class="carlitos-card scuba-popup-paper" data-carlitos-card aria-label="Cat status" aria-hidden="true" hidden>
-        <button type="button" class="carlitos-card__close ui-role-context" data-carlitos-close aria-label="Close cat status">&times;</button>
-        <div class="carlitos-card__statuses">
-          <div class="carlitos-status" data-carlitos-energy-row>
-            <span class="carlitos-status__icon carlitos-status__icon--energy" aria-hidden="true">${uiArtwork('energy')}</span>
-            <strong class="ui-role-numeral" data-carlitos-energy-label></strong>
-          </div>
-          <div class="carlitos-status" data-carlitos-hunger-row>
-            <span class="carlitos-status__icon carlitos-status__icon--hunger" aria-hidden="true">${uiArtwork('hunger')}</span>
-            <strong class="ui-role-context" data-carlitos-hunger-label></strong>
-            <button type="button" class="carlitos-status__action ui-role-context" data-action="feedCarlitos" aria-disabled="false">
-              <span>FEED</span>
-            </button>
-          </div>
-          <div class="carlitos-status" data-carlitos-happiness-row>
-            <span class="carlitos-status__icon carlitos-status__icon--mood" aria-hidden="true">${uiArtwork('mood')}</span>
-            <strong class="ui-role-context" data-carlitos-happiness></strong>
-            <button type="button" class="carlitos-status__action ui-role-context" data-action="petCarlitos" aria-disabled="false">
-              <span>PET</span>
-            </button>
-          </div>
-          <div class="carlitos-status" data-carlitos-health-row>
-            <span class="carlitos-status__icon carlitos-status__icon--health" aria-hidden="true">${uiArtwork('health')}</span>
-            <strong class="ui-role-context" data-carlitos-health></strong>
-            <button type="button" class="carlitos-status__action ui-role-context" data-action="treatCarlitos" aria-disabled="false">
-              <span>TREAT</span>
-            </button>
-          </div>
-        </div>
-      </section>
       <section class="fishing-layer" data-fishing role="region" aria-label="Fishing interaction" aria-hidden="true" inert tabindex="-1">
         <div class="survival-announcer" data-fishing-live aria-live="polite" aria-atomic="true"></div>
         <button type="button" class="fishing-bite-target" data-fishing-bite aria-label="BITE - REEL NOW" hidden></button>
@@ -628,10 +340,11 @@ export class SurvivalUI {
     `;
     mount.append(this.root);
 
-    this.day = requireElement(this.root, '[data-day]');
-    this.topControls = requireElement(this.root, '[data-survival-top]');
-    this.journalMarker = requireElement(this.root, '[data-journal-open]');
-    this.journalUnread = requireElement(this.root, '[data-journal-unread]');
+    this.hudView = new SurvivalHudView();
+    this.anchorView = new BoatAnchorView(this.root);
+    const firstFollowingView = requireElement(this.root, '[data-fishing]');
+    firstFollowingView.before(...this.hudView.roots, ...this.anchorView.roots);
+
     this.announcer = requireElement(this.root, '[data-survival-announcer]');
     this.feedback = requireElement(this.root, '[data-survival-feedback]');
     this.sleepCover = requireElement(this.root, '[data-sleep-cover]');
@@ -642,11 +355,6 @@ export class SurvivalUI {
     this.diveResultLines = requireElement(this.root, '[data-dive-result-lines]');
     this.diveResultClose = requireElement(this.root, '[data-dive-result-close]');
     this.eventSleepMask = requireElement(this.root, '[data-event-sleep-mask]');
-    this.anchorLayer = requireElement(this.root, '[data-boat-anchors]');
-    this.cameraTurn = requireElement(this.root, '[data-camera-turn]');
-    this.cameraTurnTooltip = requireElement(this.root, '[data-camera-turn-tooltip]');
-    this.carlitosCard = requireElement(this.root, '[data-carlitos-card]');
-    this.carlitosPet = requireElement(this.carlitosCard, '[data-action="petCarlitos"]');
     this.eventCaption = requireElement(this.root, '[data-event-caption]');
     this.eventTitle = requireElement(this.root, '[data-event-title]');
     this.eventDetail = requireElement(this.root, '[data-event-detail]');
@@ -699,7 +407,7 @@ export class SurvivalUI {
       this.fishingLayer,
     ];
     this.modalFocus = new ModalFocusManager(
-      [this.topControls, this.anchorLayer],
+      [this.hudView.topControls, this.anchorView.anchorLayer],
       modalLayers,
       new Map<HTMLElement, ModalInitialFocus>([
         [this.pauseLayer, this.resumeButton],
@@ -726,128 +434,50 @@ export class SurvivalUI {
     );
     this.modalFocus.sync();
 
-    ACTIONS.forEach(({ id }) => this.actionReasons.set(id, null));
-    METERS.forEach(({ id }) => this.meterElements.set(id, requireElement(this.root, `[data-meter="${id}"]`)));
+    this.hudView.onJournal = () => this.onJournalOpen();
+    this.hudView.onCameraTurn = () => this.onCameraTurn?.();
+    this.anchorView.onAction = (action, origin) => this.activateDayAction(action, origin);
+    this.anchorView.onUnavailableAction = (_action, reason) => {
+      this.showFeedback({ accepted: false, message: reason });
+    };
+    this.anchorView.onEventItem = (choiceId, instanceId) => {
+      this.onEventItem(choiceId, instanceId);
+    };
+    this.anchorView.onEventChoice = (choiceId) => this.onEventChoice(choiceId);
+    this.anchorView.onEventFocus = (eventId) => this.onDriftingItemSelect?.(eventId);
+    this.anchorView.onHighlight = (anchorId) => this.onAnchorHighlight(anchorId);
 
     this.root.addEventListener('click', this.handleClick);
     this.root.addEventListener('pointerup', this.handleFishingPointerUp);
-    this.root.addEventListener('pointerover', this.handleAnchorPointerOver);
-    this.root.addEventListener('pointerout', this.handleAnchorPointerOut);
-    this.root.addEventListener('focusin', this.handleAnchorFocusIn);
-    this.root.addEventListener('focusout', this.handleAnchorFocusOut);
     document.addEventListener('keydown', this.handleKeyDown);
-    document.addEventListener('click', this.handleDocumentClick);
     window.addEventListener('resize', this.handleWindowResize);
   }
 
   render(snapshot: SurvivalSnapshot, unavailable: (action: DayActionId) => string | null): void {
     if (this.disposed) return;
     this.currentSnapshot = snapshot;
-    this.updateText('day', this.day, `DAY ${snapshot.day}`);
-
-    METERS.forEach(({ id }) => this.updateMeter(id, snapshot[id]));
-    ACTIONS.forEach(({ id }) => {
-      const reason = unavailable(id);
-      this.actionReasons.set(id, reason);
-    });
-    this.renderCarlitos(snapshot);
-    this.anchors.forEach((anchor, id) => this.refreshAnchorTooltip(this.anchorButtons.get(id)!, anchor));
+    const reasons = new Map<DayActionId, string | null>();
+    DAY_ACTION_IDS.forEach((action) => reasons.set(action, unavailable(action)));
+    this.hudView.render(snapshot, reasons);
+    this.anchorView.render(snapshot, reasons);
     this.syncCommandState();
   }
 
   setAnchors(anchors: readonly BoatInteractionAnchor[]): void {
     if (this.disposed) return;
-    const seen = new Set<string>();
-    let highlightInvalidated = false;
-    for (const anchor of anchors) {
-      seen.add(anchor.id);
-      if (!anchor.visible || !this.isHighlightableAnchor(anchor)) {
-        highlightInvalidated = this.invalidateAnchorHighlight(anchor.id) || highlightInvalidated;
-      }
-      this.anchors.set(anchor.id, anchor);
-      const button = this.anchorButtons.get(anchor.id) ?? this.createAnchorButton(anchor);
-      if (anchor.eventFocusId === undefined) delete button.dataset.eventFocusId;
-      else button.dataset.eventFocusId = anchor.eventFocusId;
-      const itemTarget = anchor.itemType !== null;
-      const targetKind = itemTarget
-        ? 'item'
-        : anchor.eventChoiceId === undefined && anchor.eventFocusId === undefined ? 'tool' : 'event';
-      const hitArea = anchor.hitArea ?? DEFAULT_ANCHOR_HIT_AREA;
-      const x = Math.round(anchor.x);
-      const y = Math.round(anchor.y);
-      const targetWidth = Math.round(hitArea.width);
-      const targetHeight = Math.round(hitArea.height);
-      const zIndex = Math.max(1, 100000 - Math.round(hitArea.depth * 100));
-      const previous = this.anchorLayouts.get(anchor.id);
-      if (
-        previous === undefined
-        || previous.visible !== anchor.visible
-        || previous.x !== x
-        || previous.y !== y
-        || previous.targetKind !== targetKind
-        || previous.width !== targetWidth
-        || previous.height !== targetHeight
-        || previous.zIndex !== zIndex
-        || previous.depleted !== anchor.depleted
-      ) {
-        this.anchorLayouts.set(anchor.id, {
-          visible: anchor.visible,
-          x,
-          y,
-          targetKind,
-          width: targetWidth,
-          height: targetHeight,
-          zIndex,
-          depleted: anchor.depleted,
-        });
-        button.hidden = !anchor.visible;
-        button.style.transform = `translate(${x}px, ${y}px)`;
-        button.dataset.targetKind = targetKind;
-        button.style.width = `${targetWidth}px`;
-        button.style.height = `${targetHeight}px`;
-        button.style.marginLeft = `${-targetWidth / 2}px`;
-        button.style.marginTop = `${-targetHeight / 2}px`;
-        button.style.zIndex = String(zIndex);
-        this.placeAnchorTooltip(button, x, y);
-        button.classList.toggle('is-depleted', anchor.depleted);
-      }
-      this.refreshAnchorTooltip(button, anchor);
-    }
-    this.anchorButtons.forEach((button, id) => {
-      if (seen.has(id)) return;
-      highlightInvalidated = this.invalidateAnchorHighlight(id) || highlightInvalidated;
-      button.remove();
-      this.anchorButtons.delete(id);
-      this.anchors.delete(id);
-      this.anchorLayouts.delete(id);
-    });
-    const companionAnchor = anchors.find(
-      (anchor) => anchor.companionId === 'carlitos' && anchor.visible,
-    );
-    if (companionAnchor === undefined) this.closeCarlitosCard(false);
-    else if (!this.carlitosCard.hidden) {
-      this.carlitosReturnTarget = this.anchorButtons.get(companionAnchor.id) ?? null;
-      this.positionCarlitosCard(companionAnchor);
-    }
-    if (highlightInvalidated) this.publishAnchorHighlight();
+    this.anchorView.setAnchors(anchors);
     this.positionOpenRoutineDialogs();
     this.syncCommandState();
   }
 
   setJournalUnread(unread: boolean): void {
     if (this.disposed) return;
-    this.journalUnread.hidden = !unread;
-    this.journalMarker.dataset.unread = String(unread);
-    this.journalMarker.setAttribute(
-      'aria-label',
-      unread ? 'Open journal, new entry available' : 'Open journal',
-    );
+    this.hudView.setJournalUnread(unread);
   }
 
   beginEventPresentation(): void {
     if (this.disposed) return;
-    this.closeCarlitosCard(false);
-    this.clearAnchorHighlight();
+    this.anchorView.beginEventPresentation();
     this.eventPresentationActive = true;
     this.syncCommandState();
   }
@@ -867,6 +497,7 @@ export class SurvivalUI {
     this.eventCaption.dataset.eventId = 'item-animation-lab';
     delete this.eventCaption.dataset.danger;
     this.eventPresentationActive = true;
+    this.anchorView.setItemAnimationLabActive(true);
     this.eventCaption.setAttribute(
       'aria-label',
       'Item Animation Lab. Select an item. Carlitos opens his stats.',
@@ -883,7 +514,8 @@ export class SurvivalUI {
     event: Pick<SurvivalEventDefinition, 'id' | 'revealText' | 'danger'>,
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    this.closeCarlitosCard(false);
+    this.anchorView.setItemAnimationLabActive(false);
+    this.anchorView.setEventPresentationActive(true);
     const risk = event.danger.toLocaleUpperCase('en-US');
     this.updateText('event:title', this.eventTitle, '');
     this.eventTitle.hidden = true;
@@ -919,16 +551,15 @@ export class SurvivalUI {
     this.contextualEventChoices = [...contextualChoices];
     this.eventSelectedInstanceId = null;
     this.eventSelectedChoiceId = null;
+    this.anchorView.setEventSelection(eligible, contextualChoices);
     this.renderContextualEventChoices();
-    this.anchors.forEach((anchor, id) => {
-      this.refreshAnchorTooltip(this.anchorButtons.get(id)!, anchor);
-    });
     this.syncCommandState();
   }
 
   setEventUsing(instanceId: ItemInstanceId): void {
     if (this.disposed || this.eventEligibility === null) return;
     this.eventSelectedInstanceId = instanceId;
+    this.anchorView.setEventUsing(instanceId);
     this.syncCommandState();
   }
 
@@ -937,7 +568,7 @@ export class SurvivalUI {
     const button = [
       ...this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]'),
       ...this.driftingItemFocusChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]'),
-      ...this.anchorButtons.values(),
+      ...this.anchorView.anchorButtonsInOrder(),
     ].find((candidate) => candidate.dataset.eventChoice === choiceId);
     if (
       button === undefined
@@ -948,6 +579,7 @@ export class SurvivalUI {
     }
     this.pendingEventChoiceBeat?.finish();
     this.eventSelectedChoiceId = choiceId;
+    this.anchorView.setEventChoiceSelection(choiceId);
     this.syncCommandState();
     const delay = EVENT_CHOICE_BEAT_MS;
     return new Promise((resolve) => {
@@ -972,7 +604,7 @@ export class SurvivalUI {
 
   clearEventPresentation(): void {
     if (this.disposed) return;
-    this.closeCarlitosCard(false);
+    this.anchorView.clearEventPresentation();
     this.pendingEventChoiceBeat?.finish();
     this.eventSleepMask.classList.remove('is-visible');
     this.badSleepCue.classList.remove('is-visible');
@@ -996,9 +628,6 @@ export class SurvivalUI {
     this.eventRisk.hidden = true;
     this.eventChoices.replaceChildren();
     this.eventChoices.hidden = true;
-    this.anchors.forEach((anchor, id) => {
-      this.refreshAnchorTooltip(this.anchorButtons.get(id)!, anchor);
-    });
     this.syncCommandState();
     if (focusedContextualChoice) this.firstUsableAction()?.focus();
   }
@@ -1315,18 +944,12 @@ export class SurvivalUI {
     if (this.disposed) return;
     this.fishingViewExit.hidden = !visible;
     this.root.dataset.fishingExitVisible = String(visible);
-    if (visible) this.clearAnchorHighlight();
+    if (visible) this.anchorView.clearHighlight();
   }
 
   setCameraTurnState(visible: boolean, rear: boolean): void {
     if (this.disposed) return;
-    this.cameraTurn.hidden = !visible;
-    this.cameraTurn.setAttribute('aria-pressed', String(rear));
-    this.cameraTurn.setAttribute(
-      'aria-label',
-      rear ? 'Look forward from the chest' : 'Look behind at the chest',
-    );
-    this.cameraTurnTooltip.textContent = rear ? 'LOOK FORWARD' : 'LOOK BACK';
+    this.hudView.setCameraTurnState(visible, rear);
   }
 
   updateFishingBiteTarget(target: ProjectedBoatBounds | null): void {
@@ -1401,7 +1024,7 @@ export class SurvivalUI {
     }));
     this.journalIndex = Math.max(0, this.journalEntries.length - 1);
     this.renderJournalPage();
-    this.showLayer(this.journalLayer, this.journalMarker);
+    this.showLayer(this.journalLayer, this.hudView.journalControl());
   }
 
   hideJournal(): void {
@@ -1413,21 +1036,24 @@ export class SurvivalUI {
     if (this.disposed || this.busy === busy) return;
     this.busy = busy;
     if (busy) {
-      this.clearAnchorHighlight();
       this.root.setAttribute('aria-busy', 'true');
     } else {
       this.root.removeAttribute('aria-busy');
     }
+    this.hudView.setBusy(busy);
+    this.anchorView.setBusy(busy);
     this.syncCommandState();
   }
 
   setPaused(paused: boolean): void {
     if (this.disposed || paused === this.paused) return;
-    if (paused) this.closeCarlitosCard(true);
+    if (paused) this.anchorView.setPaused(true);
     if (paused && !this.paused) {
       this.pauseReturnTarget = this.resolveCommandOrigin();
     }
     this.paused = paused;
+    this.hudView.setPaused(paused);
+    if (!paused) this.anchorView.setPaused(false);
     if (paused) {
       this.showLayer(this.pauseLayer);
     } else {
@@ -1453,7 +1079,6 @@ export class SurvivalUI {
       : state === 'dead'
         ? 'The sea outlasted you.'
         : 'Boat is gone.';
-    this.closeCarlitosCard(false);
     this.clearEventPresentation();
     this.setPaused(false);
     this.updateText('ending:title', this.endingTitle, title);
@@ -1465,7 +1090,15 @@ export class SurvivalUI {
 
   dispose(): void {
     if (this.disposed) return;
-    this.clearAnchorHighlight();
+    this.disposed = true;
+    let firstError: unknown;
+    const clean = (cleanup: () => void): void => {
+      try {
+        cleanup();
+      } catch (error) {
+        firstError ??= error;
+      }
+    };
     this.eventEligibility = null;
     this.contextualEventChoices = [];
     this.eventSelectedInstanceId = null;
@@ -1474,34 +1107,29 @@ export class SurvivalUI {
     this.badSleepCue.classList.remove('is-visible');
     this.eventChoices.replaceChildren();
     this.eventChoices.hidden = true;
-    this.pendingSleepTransition?.finish();
-    this.pendingDiveCoveredHold?.finish();
-    this.pendingRewardResultConfirmation?.finish();
-    this.pendingFishingFade?.finish();
-    this.pendingEventChoiceBeat?.finish();
-    this.pendingEventOutcomeHold?.finish();
-    this.pendingCoveredSceneSettle?.finish();
+    clean(() => this.pendingSleepTransition?.finish());
+    clean(() => this.pendingDiveCoveredHold?.finish());
+    clean(() => this.pendingRewardResultConfirmation?.finish());
+    clean(() => this.pendingFishingFade?.finish());
+    clean(() => this.pendingEventChoiceBeat?.finish());
+    clean(() => this.pendingEventOutcomeHold?.finish());
+    clean(() => this.pendingCoveredSceneSettle?.finish());
     this.fishingAnnouncementVersion += 1;
-    this.anchorLayouts.clear();
-    this.hideLayer(this.driftingItemFocusLayer);
+    clean(() => this.hideLayer(this.driftingItemFocusLayer));
     if (this.fishingMode !== 'hidden') {
-      this.hideLayer(this.fishingLayer);
+      clean(() => this.hideLayer(this.fishingLayer));
       this.fishingMode = 'hidden';
       this.fishingReturnTarget = null;
     }
-    this.modalFocus.dispose();
-    this.disposed = true;
+    clean(() => this.anchorView.dispose());
+    clean(() => this.hudView.dispose());
+    clean(() => this.modalFocus.dispose());
     this.announcementVersion += 1;
     window.clearTimeout(this.feedbackTimer);
-    this.root.removeEventListener('click', this.handleClick);
-    this.root.removeEventListener('pointerup', this.handleFishingPointerUp);
-    this.root.removeEventListener('pointerover', this.handleAnchorPointerOver);
-    this.root.removeEventListener('pointerout', this.handleAnchorPointerOut);
-    this.root.removeEventListener('focusin', this.handleAnchorFocusIn);
-    this.root.removeEventListener('focusout', this.handleAnchorFocusOut);
-    document.removeEventListener('keydown', this.handleKeyDown);
-    document.removeEventListener('click', this.handleDocumentClick);
-    window.removeEventListener('resize', this.handleWindowResize);
+    clean(() => this.root.removeEventListener('click', this.handleClick));
+    clean(() => this.root.removeEventListener('pointerup', this.handleFishingPointerUp));
+    clean(() => document.removeEventListener('keydown', this.handleKeyDown));
+    clean(() => window.removeEventListener('resize', this.handleWindowResize));
     this.onAction = () => undefined;
     this.onEventItem = () => undefined;
     this.onEventChoice = () => undefined;
@@ -1518,7 +1146,8 @@ export class SurvivalUI {
     this.onDriftingItemSelect = null;
     this.onDriftingItemBack = null;
     this.onCameraTurn = null;
-    this.root.remove();
+    clean(() => this.root.remove());
+    if (firstError !== undefined) throw firstError;
   }
 
   private renderJournalPage(): void {
@@ -1557,337 +1186,6 @@ export class SurvivalUI {
     (requested.disabled ? available : requested).focus();
   }
 
-  private createAnchorButton(anchor: BoatInteractionAnchor): HTMLButtonElement {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'boat-anchor';
-    button.dataset.anchorId = anchor.id;
-    if (anchor.tooltip !== false) {
-      const tooltip = document.createElement('span');
-      tooltip.className = 'boat-tooltip ui-role-context';
-      tooltip.role = 'tooltip';
-      const label = document.createTextNode('');
-      const separator = document.createTextNode('');
-      const energy = document.createElement('span');
-      energy.className = 'boat-tooltip__energy ui-role-numeral';
-      energy.setAttribute('aria-hidden', 'true');
-      tooltip.append(label, separator, energy);
-      button.append(tooltip);
-      this.anchorTooltipNodes.set(button, { tooltip, label, separator, energy });
-    }
-    this.anchorLayer.append(button);
-    this.anchorButtons.set(anchor.id, button);
-    return button;
-  }
-
-  private refreshAnchorTooltip(button: HTMLButtonElement, anchor: BoatInteractionAnchor): void {
-    const backingInstanceId = anchor.backingInstanceId !== undefined
-      ? anchor.backingInstanceId
-      : anchor.id.startsWith('supply:') || anchor.eventChoiceId !== undefined
-        ? null
-        : anchor.id as ItemInstanceId;
-    const item = backingInstanceId === null
-      ? undefined
-      : this.currentSnapshot?.inventory[backingInstanceId];
-    const fallbackQuantity = anchor.itemType === 'cannedFood' ? this.currentSnapshot?.food
-      : anchor.itemType === 'baitTin' ? this.currentSnapshot?.bait : undefined;
-    const quantity = anchor.quantity ?? fallbackQuantity ?? 1;
-    const usableQuantity = anchor.usableQuantity ?? (
-      item?.condition === 'broken' ? 0 : quantity
-    );
-    const brokenQuantity = anchor.brokenQuantity ?? (
-      item?.condition === 'broken' ? quantity : 0
-    );
-    const lanternSleep = anchor.toolId === 'lantern'
-      ? this.eventLanternChoice()
-      : undefined;
-    const anchoredChoice = this.eventPresentationActive
-      ? this.eventChoiceForAnchor(anchor.id, anchor)
-      : undefined;
-    const eventItemEligible = this.eventPresentationActive
-      && backingInstanceId !== null
-      && this.eventEligibility?.has(backingInstanceId) === true;
-    const toolCopy = lanternSleep === undefined
-      ? anchor.toolId === null ? undefined : BOAT_TOOL_COPY[anchor.toolId]
-      : {
-          label: 'SLEEP',
-          description: 'Douse the lantern to sleep through the current event.',
-        };
-    const itemLabel = anchor.label ?? (anchor.itemType === null
-      ? anchor.supplyGroupId === 'repairMaterial'
-        ? quantityLabel('REPAIR MATERIAL', quantity)
-        : toolCopy?.label ?? 'UNKNOWN TOOL'
-      : quantityLabel(ITEM_LABELS[anchor.itemType], quantity));
-    const itemDescription = anchor.description ?? (anchor.itemType === null
-      ? anchor.supplyGroupId === 'repairMaterial'
-        ? 'Recovered timber, fasteners, and rope for hull repairs.'
-        : toolCopy?.description ?? 'Permanent lifeboat equipment.'
-      : SURVIVAL_ITEM_DESCRIPTIONS[anchor.itemType]);
-    const action = lanternSleep !== undefined
-      || anchoredChoice !== undefined
-      || eventItemEligible
-      || anchor.action === null
-      ? null
-      : ACTIONS.find(({ id }) => id === anchor.action) ?? null;
-    const reason = eventItemEligible
-      ? null
-      : anchoredChoice !== undefined
-      ? anchoredChoice.unavailableReason
-      : lanternSleep === undefined
-        ? this.anchorUnavailableReason(anchor)
-        : lanternSleep.unavailableReason;
-    const state = brokenQuantity > 0 && usableQuantity > 0
-      ? `${usableQuantity} USABLE, ${brokenQuantity} BROKEN`
-      : brokenQuantity > 0 ? 'BROKEN'
-      : item?.condition === 'broken' ? 'BROKEN'
-      : item?.condition === 'consumed' ? 'USED'
-        : item?.condition === 'lost' ? 'LOST' : null;
-    const preview = action !== null && this.currentSnapshot !== null
-      ? actionPreview(action, this.currentSnapshot)
-      : action;
-    const stateText = state === null ? '' : ` — ${state}`;
-    const text = action === null || preview === null
-      ? `${itemLabel}${stateText} — ${itemDescription}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`
-      : `${itemLabel}${stateText}${itemLabel === action.label ? '' : ` — ${action.label}`} — ${itemDescription} — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
-    const visibleLabel = anchor.companionId === 'carlitos'
-      ? anchoredChoice?.label.toLocaleUpperCase('en-US')
-        ?? (eventItemEligible ? 'CARLITOS' : 'CARLITOS: CHECK STATUS')
-      : anchor.label ?? (anchor.itemType !== null
-      ? quantityLabel(ITEM_LABELS[anchor.itemType], quantity)
-      : anchor.supplyGroupId === 'repairMaterial'
-        ? quantityLabel('REPAIR MATERIAL', quantity)
-        : anchor.toolId === 'fishingRod'
-          ? 'Fishing rod'
-          : anchor.toolId === 'repairTools'
-            ? 'REPAIR'
-            : itemLabel);
-    const energyCost = eventItemEligible
-      ? 0
-      : anchoredChoice?.energyCost ?? preview?.energyCost ?? 0;
-    const energyIndicator = anchoredChoice === undefined
-      ? '⚡'.repeat(energyCost)
-      : energyCost <= 0
-        ? reason === null ? '' : 'UNAVAILABLE'
-        : anchoredChoice.energyOwner === 'carlitos'
-          ? `CARLITOS: ${energyCost} ENERGY${reason === null ? '' : ' — UNAVAILABLE'}`
-          : `${'⚡'.repeat(energyCost)}${reason === null ? '' : ' — INSUFFICIENT ENERGY'}`;
-    const tooltipNodes = this.anchorTooltipNodes.get(button);
-    if (tooltipNodes !== undefined) {
-      tooltipNodes.tooltip.hidden = this.itemAnimationLabActive()
-        && anchor.companionId === 'carlitos';
-      if (tooltipNodes.label.data !== visibleLabel) tooltipNodes.label.data = visibleLabel;
-      const separator = energyIndicator === ''
-        ? ''
-        : anchoredChoice === undefined ? ' ' : ' — ';
-      if (tooltipNodes.separator.data !== separator) tooltipNodes.separator.data = separator;
-      if (tooltipNodes.energy.textContent !== energyIndicator) {
-        tooltipNodes.energy.textContent = energyIndicator;
-      }
-    }
-    const spokenCost = anchoredChoice?.energyOwner === 'carlitos'
-      ? `${spokenEnergyCost(energyCost) ?? 'no energy'} from Carlitos`
-      : spokenEnergyCost(energyCost);
-    button.dataset.action = anchor.action ?? '';
-    if (anchor.companionId === undefined) delete button.dataset.companion;
-    else button.dataset.companion = anchor.companionId;
-    if (anchor.itemType === null) delete button.dataset.item;
-    else button.dataset.item = anchor.itemType;
-    if (anchor.toolId === null) delete button.dataset.tool;
-    else button.dataset.tool = anchor.toolId;
-    if (backingInstanceId === null) delete button.dataset.backingInstanceId;
-    else button.dataset.backingInstanceId = backingInstanceId;
-    if (item === undefined) delete button.dataset.condition;
-    else button.dataset.condition = item.condition;
-    const spokenUnavailable = anchoredChoice !== undefined && reason !== null
-      ? ', insufficient energy'
-      : '';
-    button.setAttribute(
-      'aria-label',
-      spokenCost === null
-        ? `${visibleLabel}${spokenUnavailable}`
-        : `${visibleLabel}, ${spokenCost}${spokenUnavailable}`,
-    );
-    button.setAttribute('aria-description', text);
-    button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
-    button.removeAttribute('aria-keyshortcuts');
-  }
-
-  private anchorUnavailableReason(anchor: BoatInteractionAnchor): string | null {
-    if (anchor.depleted) return 'This recovered item is depleted.';
-    return anchor.action === null ? null : this.actionReasons.get(anchor.action) ?? null;
-  }
-
-  private placeAnchorTooltip(button: HTMLButtonElement, x: number, y: number): void {
-    const bounds = this.root.getBoundingClientRect();
-    const viewportWidth = bounds.width || this.root.clientWidth || window.innerWidth;
-    const edgeGutter = 160;
-    button.dataset.tooltipX = x < edgeGutter
-      ? 'left'
-      : x > viewportWidth - edgeGutter ? 'right' : 'center';
-    button.dataset.tooltipY = y < 96 ? 'below' : 'above';
-  }
-
-  private renderCarlitos(snapshot: SurvivalSnapshot): void {
-    const carlitos = snapshot.carlitos;
-    if (carlitos === null || !carlitos.alive) {
-      this.closeCarlitosCard(false);
-      return;
-    }
-    const status = carlitosStatus(carlitos);
-    requireElement(this.carlitosCard, '[data-carlitos-hunger-label]').textContent =
-      status.hunger.toLocaleUpperCase('en-US');
-    requireElement(this.carlitosCard, '[data-carlitos-happiness]').textContent =
-      status.happiness.toLocaleUpperCase('en-US');
-    requireElement(this.carlitosCard, '[data-carlitos-health]').textContent =
-      status.health.toLocaleUpperCase('en-US');
-    requireElement(this.carlitosCard, '[data-carlitos-energy-label]').textContent =
-      `${carlitos.energy} / 3`;
-    this.setCarlitosDanger(
-      '[data-carlitos-hunger-row]',
-      status.hunger === 'Starving',
-    );
-    this.setCarlitosDanger(
-      '[data-carlitos-happiness-row]',
-      status.happiness === 'Depressed' || status.happiness === 'Miserable',
-    );
-    this.setCarlitosDanger(
-      '[data-carlitos-health-row]',
-      status.health === 'Sick' || status.health === 'Dying',
-    );
-    this.syncCarlitosActions();
-    const anchor = [...this.anchors.values()].find(
-      (candidate) => candidate.companionId === 'carlitos' && candidate.visible,
-    );
-    if (!this.carlitosCard.hidden && anchor !== undefined) this.positionCarlitosCard(anchor);
-  }
-
-  private setCarlitosDanger(rowSelector: string, danger: boolean): void {
-    const row = requireElement<HTMLElement>(this.carlitosCard, rowSelector);
-    row.dataset.state = danger ? 'danger' : 'stable';
-  }
-
-  private syncCarlitosActions(): void {
-    CARLITOS_ACTIONS.forEach((action) => {
-      const button = requireElement<HTMLButtonElement>(
-        this.carlitosCard,
-        `[data-action="${action}"]`,
-      );
-      const reason = this.actionReasons.get(action) ?? null;
-      button.disabled = this.busy;
-      button.setAttribute('aria-disabled', String(this.busy || reason !== null));
-      button.setAttribute(
-        'aria-description',
-        reason ?? (
-          action === 'petCarlitos'
-            ? 'Pet Carlitos.'
-            : action === 'feedCarlitos'
-              ? 'Feed Carlitos one food.'
-              : 'Treat Carlitos with one medical kit.'
-        ),
-      );
-    });
-  }
-
-  private openCarlitosCard(anchorButton: HTMLButtonElement): void {
-    const snapshot = this.currentSnapshot;
-    if (
-      snapshot?.carlitos?.alive !== true
-      || this.busy
-      || this.paused
-      || (this.eventPresentationActive && !this.itemAnimationLabActive())
-      || this.overlayOpen()
-      || anchorButton.disabled
-      || anchorButton.getAttribute('aria-hidden') === 'true'
-    ) return;
-    const anchorId = anchorButton.dataset.anchorId;
-    const anchor = anchorId === undefined ? undefined : this.anchors.get(anchorId);
-    if (anchor?.companionId !== 'carlitos' || !anchor.visible) return;
-    this.carlitosReturnTarget = anchorButton;
-    this.carlitosCard.hidden = false;
-    this.carlitosCard.setAttribute('aria-hidden', 'false');
-    this.carlitosCard.classList.add('is-visible');
-    this.positionCarlitosCard(anchor);
-    this.carlitosPet.focus();
-  }
-
-  private itemAnimationLabActive(): boolean {
-    return this.eventPresentationActive
-      && this.eventCaption.dataset.eventId === 'item-animation-lab';
-  }
-
-  private closeCarlitosCard(restoreFocus: boolean): void {
-    if (this.carlitosCard.hidden) return;
-    this.carlitosCard.hidden = true;
-    this.carlitosCard.setAttribute('aria-hidden', 'true');
-    this.carlitosCard.classList.remove('is-visible');
-    const target = this.carlitosReturnTarget;
-    this.carlitosReturnTarget = null;
-    if (!restoreFocus || target === null) return;
-    const anchorId = target.dataset.anchorId;
-    const anchor = anchorId === undefined ? undefined : this.anchors.get(anchorId);
-    if (
-      anchor?.companionId === 'carlitos'
-      && anchor.visible
-      && target.isConnected
-      && !target.hidden
-    ) target.focus();
-  }
-
-  private positionCarlitosCard(anchor: BoatInteractionAnchor): void {
-    const rootBounds = this.root.getBoundingClientRect();
-    const viewportWidth = rootBounds.width || this.root.clientWidth || window.innerWidth;
-    const viewportHeight = rootBounds.height || this.root.clientHeight || window.innerHeight;
-    const cardBounds = this.carlitosCard.getBoundingClientRect();
-    const cardWidth = cardBounds.width || 312;
-    const cardHeight = cardBounds.height || 344;
-    const anchorWidth = anchor.hitArea?.width ?? DEFAULT_ANCHOR_HIT_AREA.width;
-    const gutter = 16;
-    const gap = 18;
-    const right = anchor.x + anchorWidth / 2 + gap;
-    const placeLeft = right + cardWidth > viewportWidth - gutter;
-    const unclampedX = placeLeft
-      ? anchor.x - anchorWidth / 2 - gap - cardWidth
-      : right;
-    const maximumX = Math.max(gutter, viewportWidth - gutter - cardWidth);
-    const maximumY = Math.max(gutter, viewportHeight - gutter - cardHeight);
-    const x = Math.min(
-      maximumX,
-      Math.max(gutter, unclampedX),
-    );
-    const y = Math.min(
-      maximumY,
-      Math.max(gutter, anchor.y - cardHeight / 2),
-    );
-    this.carlitosCard.style.setProperty('--carlitos-card-x', `${Math.round(x)}px`);
-    this.carlitosCard.style.setProperty('--carlitos-card-y', `${Math.round(y)}px`);
-    this.carlitosCard.dataset.placement = placeLeft ? 'left' : 'right';
-  }
-
-  private updateMeter(id: MeterId, value: number): void {
-    if (this.lastValues.get(`meter:${id}`) === value) return;
-    this.lastValues.set(`meter:${id}`, value);
-    const definition = METERS.find((meter) => meter.id === id)!;
-    const meter = this.meterElements.get(id)!;
-    const displayed = definition.displayValue(value);
-    const safe = Math.min(definition.max, Math.max(definition.min, displayed));
-    const danger = definition.isDanger(safe);
-    const percentage = ((safe - definition.min) / (definition.max - definition.min)) * 100;
-    meter.setAttribute('aria-valuenow', String(safe));
-    meter.classList.toggle('is-danger', danger);
-    if (danger) meter.setAttribute('aria-valuetext', `${safe}, ${definition.dangerLabel.toLowerCase()}`);
-    else meter.removeAttribute('aria-valuetext');
-    meter.style.setProperty('--meter-value', `${percentage}%`);
-    meter.style.setProperty('--meter-fill-height', `${meterFillHeight(definition, percentage)}%`);
-    requireElement<HTMLElement>(meter, '[data-meter-tooltip]').textContent = `${safe} / ${definition.max}`;
-  }
-
-  private showUnavailableActionFeedback(action: DayActionId): boolean {
-    const reason = this.actionReasons.get(action);
-    if (reason === null || reason === undefined) return false;
-    this.showFeedback({ accepted: false, message: reason });
-    return true;
-  }
-
   private publishAnnouncement(message: string): void {
     const version = ++this.announcementVersion;
     this.announcer.textContent = '';
@@ -1904,61 +1202,6 @@ export class SurvivalUI {
   }
 
   private syncCommandState(): void {
-    this.journalMarker.disabled = this.busy;
-    this.cameraTurn.disabled = this.busy;
-    let highlightInvalidated = false;
-    this.anchorButtons.forEach((button, id) => {
-      const anchor = this.anchors.get(id);
-      const reason = anchor === undefined ? null : this.anchorUnavailableReason(anchor);
-      const choice = anchor === undefined ? undefined : this.eventChoiceForAnchor(id, anchor);
-      const state = anchor === undefined ? 'ordinary' : this.anchorInteractionState(id, anchor);
-      const eventState = state === 'eventLocked'
-        ? 'locked'
-        : state === 'eventAvailable'
-          ? 'available'
-          : state === 'eventUnavailable'
-            ? 'unavailable'
-            : state === 'selected'
-              ? 'selected'
-              : null;
-
-      if (choice === undefined) {
-        delete button.dataset.eventChoice;
-        delete button.dataset.unavailableReason;
-      } else {
-        button.dataset.eventChoice = choice.id;
-        if (choice.unavailableReason === null) delete button.dataset.unavailableReason;
-        else button.dataset.unavailableReason = choice.unavailableReason;
-      }
-      if (eventState === null) delete button.dataset.eventState;
-      else button.dataset.eventState = eventState;
-
-      if (state === 'eventLocked') {
-        button.disabled = true;
-        button.tabIndex = -1;
-        button.setAttribute('aria-hidden', 'true');
-        button.setAttribute('aria-disabled', 'true');
-        highlightInvalidated = this.invalidateAnchorHighlight(id) || highlightInvalidated;
-        return;
-      }
-
-      button.tabIndex = 0;
-      button.removeAttribute('aria-hidden');
-      if (state === 'eventAvailable') {
-        button.disabled = false;
-        button.setAttribute('aria-disabled', 'false');
-        return;
-      }
-      if (state === 'eventUnavailable' || state === 'selected') {
-        button.disabled = false;
-        button.setAttribute('aria-disabled', 'true');
-        return;
-      }
-
-      button.disabled = this.busy;
-      button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
-    });
-    if (highlightInvalidated) this.publishAnchorHighlight();
     this.repairTargets.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
       button.disabled = this.busy;
     });
@@ -1980,7 +1223,6 @@ export class SurvivalUI {
       button.disabled = false;
       button.setAttribute('aria-disabled', unavailable || this.busy ? 'true' : 'false');
     });
-    this.syncCarlitosActions();
   }
 
   private renderContextualEventChoices(): void {
@@ -2051,179 +1293,16 @@ export class SurvivalUI {
     this.driftingItemFocusChoices.hidden = false;
   }
 
-  private eventLanternChoice(): EventContextChoice | undefined {
-    if (!this.eventPresentationActive) return undefined;
-    return this.contextualEventChoices.find((choice) => choice.id === 'sleep');
-  }
-
-  private eventChoiceForAnchor(
-    id: string,
-    anchor: BoatInteractionAnchor,
-  ): EventContextChoice | undefined {
-    if (anchor.eventChoiceId !== undefined) {
-      const direct = this.contextualEventChoices.find(
-        (choice) => choice.id === anchor.eventChoiceId,
-      );
-      if (direct !== undefined) return direct;
-    }
-    const projected = this.contextualEventChoices.find(
-      (choice) => choice.anchorId === id,
-    );
-    if (projected !== undefined) return projected;
-    return anchor.toolId === 'lantern'
-      ? this.eventLanternChoice()
-      : undefined;
-  }
-
-  private anchorInteractionState(
-    id: string,
-    anchor: BoatInteractionAnchor,
-  ): AnchorInteractionState {
-    if (!this.eventPresentationActive) return 'ordinary';
-    if (this.itemAnimationLabActive() && anchor.action === 'openChest') {
-      return this.busy ? 'eventLocked' : 'ordinary';
-    }
-
-    if (anchor.eventFocusId !== undefined) {
-      return this.busy || this.eventEligibility === null
-        ? 'eventLocked'
-        : 'eventAvailable';
-    }
-
-    const choice = this.eventChoiceForAnchor(id, anchor);
-    if (choice !== undefined) {
-      if (this.eventSelectedChoiceId === choice.id) return 'selected';
-      if (this.busy || this.eventSelectedChoiceId !== null) return 'eventLocked';
-      if (choice.unavailableReason !== null) return 'eventUnavailable';
-      return 'eventAvailable';
-    }
-
-    const instanceId = anchor.backingInstanceId
-      ?? (id.startsWith('supply:') ? null : id as ItemInstanceId);
-    if (
-      instanceId !== null
-      && this.eventEligibility?.has(instanceId) === true
-    ) {
-      if (instanceId !== null && this.eventSelectedInstanceId === instanceId) {
-        return 'selected';
-      }
-      if (
-        this.busy
-        || this.eventSelectedInstanceId !== null
-        || this.eventEligibility === null
-      ) return 'eventLocked';
-      return 'eventAvailable';
-    }
-
-    if (anchor.itemType !== null) {
-      if (instanceId !== null && this.eventSelectedInstanceId === instanceId) {
-        return 'selected';
-      }
-      if (
-        this.busy
-        || this.eventSelectedInstanceId !== null
-        || this.eventEligibility === null
-      ) return 'eventLocked';
-      return 'eventUnavailable';
-    }
-
-    return 'eventLocked';
-  }
-
-  private isHighlightableAnchor(anchor: BoatInteractionAnchor): boolean {
-    return anchor.itemType !== null
-      || anchor.toolId === 'repairTools'
-      || anchor.toolId === 'lantern'
-      || anchor.toolId === 'chest'
-      || anchor.eventChoiceId !== undefined
-      || anchor.eventFocusId !== undefined;
-  }
-
-  private highlightAnchorId(target: EventTarget | null): string | null {
-    if (!(target instanceof Element)) return null;
-    const button = target.closest<HTMLButtonElement>('.boat-anchor');
-    if (
-      button === null
-      || !this.root.contains(button)
-      || button.disabled
-      || button.dataset.eventState === 'locked'
-    ) return null;
-    const anchorId = button.dataset.anchorId;
-    const anchor = anchorId === undefined ? undefined : this.anchors.get(anchorId);
-    return anchor !== undefined && this.isHighlightableAnchor(anchor) ? anchorId! : null;
-  }
-
-  private publishAnchorHighlight(): void {
-    const next = this.focusedAnchorId ?? this.hoveredAnchorId;
-    if (next === this.publishedAnchorId) return;
-    this.publishedAnchorId = next;
-    const anchor = next === null ? undefined : this.anchors.get(next);
-    this.onAnchorHighlight(anchor?.backingInstanceId ?? next);
-  }
-
-  private invalidateAnchorHighlight(anchorId: string): boolean {
-    let invalidated = false;
-    if (this.hoveredAnchorId === anchorId) {
-      this.hoveredAnchorId = null;
-      invalidated = true;
-    }
-    if (this.focusedAnchorId === anchorId) {
-      this.focusedAnchorId = null;
-      invalidated = true;
-    }
-    return invalidated;
-  }
-
-  private clearAnchorHighlight(): void {
-    this.hoveredAnchorId = null;
-    this.focusedAnchorId = null;
-    this.publishAnchorHighlight();
-  }
-
   private readonly handleWindowResize = (): void => {
     if (this.disposed) return;
     this.positionOpenRoutineDialogs();
     if (this.driftingItemFocusLayer.classList.contains('is-visible')) {
       this.positionDriftingItemFocus();
     }
-    const anchor = [...this.anchors.values()].find(
-      (candidate) => candidate.companionId === 'carlitos' && candidate.visible,
-    );
-    if (!this.carlitosCard.hidden && anchor !== undefined) this.positionCarlitosCard(anchor);
-  };
-
-  private readonly handleAnchorPointerOver = (event: Event): void => {
-    this.hoveredAnchorId = this.highlightAnchorId(event.target);
-    this.publishAnchorHighlight();
-  };
-
-  private readonly handleAnchorPointerOut = (event: Event): void => {
-    const pointerEvent = event as MouseEvent;
-    const current = this.highlightAnchorId(event.target);
-    if (current === null || this.highlightAnchorId(pointerEvent.relatedTarget) === current) return;
-    if (this.hoveredAnchorId === current) this.hoveredAnchorId = null;
-    this.publishAnchorHighlight();
-  };
-
-  private readonly handleAnchorFocusIn = (event: FocusEvent): void => {
-    const anchorId = this.highlightAnchorId(event.target);
-    if (anchorId === null && event.target instanceof Element) {
-      const button = event.target.closest<HTMLButtonElement>('.boat-anchor');
-      if (button?.disabled || button?.dataset.eventState === 'locked') button?.blur();
-    }
-    this.focusedAnchorId = anchorId;
-    this.publishAnchorHighlight();
-  };
-
-  private readonly handleAnchorFocusOut = (event: FocusEvent): void => {
-    const current = this.highlightAnchorId(event.target);
-    if (current === null || this.highlightAnchorId(event.relatedTarget) === current) return;
-    if (this.focusedAnchorId === current) this.focusedAnchorId = null;
-    this.publishAnchorHighlight();
   };
 
   private showLayer(layer: HTMLElement, origin: HTMLElement | null = null): void {
-    this.clearAnchorHighlight();
+    this.anchorView.clearHighlight();
     if (layer === this.fishingResultLayer) {
       this.positionRoutineDialog(
         layer,
@@ -2234,10 +1313,18 @@ export class SurvivalUI {
       this.positionRoutineDialog(layer, ROUTINE_DIALOG_PLACEMENTS.repair);
     }
     this.modalFocus.activate(layer, origin);
+    this.syncViewModalState();
   }
 
   private hideLayer(layer: HTMLElement, restore = false): void {
     this.modalFocus.deactivate(layer, restore);
+    this.syncViewModalState();
+  }
+
+  private syncViewModalState(): void {
+    const open = this.modalFocus.topmostModal() !== null;
+    this.hudView.setModalOpen(open);
+    this.anchorView.setModalOpen(open);
   }
 
   private positionOpenRoutineDialogs(): void {
@@ -2363,7 +1450,7 @@ export class SurvivalUI {
     const cardHeight = Math.min(placement.height, maximumHeight);
     const projectedTarget = target?.visible === true ? target : null;
     const projectedAnchor = projectedTarget
-      ?? this.anchors.get(placement.anchorId);
+      ?? this.anchorView.anchor(placement.anchorId);
     const isProjected = projectedAnchor?.visible === true;
     const hitArea = isProjected
       ? projectedTarget ?? (
@@ -2475,16 +1562,7 @@ export class SurvivalUI {
   }
 
   private firstUsableAction(): HTMLButtonElement | null {
-    return [...this.anchorButtons.values()].find((button) => (
-      (
-        button.dataset.action !== ''
-        || button.dataset.eventChoice !== undefined
-        || this.eventEligibility?.has(
-          button.dataset.backingInstanceId as ItemInstanceId,
-        ) === true
-      )
-      && this.isUsableCommand(button)
-    ))
+    return this.anchorView.firstUsableCommand()
       ?? (this.eventPresentationActive
         ? [...this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]')]
           .find((button) => this.isUsableCommand(button))
@@ -2501,9 +1579,7 @@ export class SurvivalUI {
 
   restoreCommandFocus(target: HTMLElement | null = this.latestCommandOrigin): void {
     if (this.disposed) return;
-    const replacementAnchor = target?.dataset.anchorId === undefined
-      ? null
-      : this.anchorButtons.get(target.dataset.anchorId) ?? null;
+    const replacementAnchor = this.anchorView.replacementButton(target);
     const destination = this.isUsableCommand(target)
       ? target
       : this.isUsableCommand(replacementAnchor)
@@ -2515,9 +1591,7 @@ export class SurvivalUI {
 
   private restoreFishingFocus(target: HTMLElement | null): void {
     if (this.disposed) return;
-    const replacementAnchor = target?.dataset.anchorId === undefined
-      ? null
-      : this.anchorButtons.get(target.dataset.anchorId) ?? null;
+    const replacementAnchor = this.anchorView.replacementButton(target);
     const destination = this.isFocusableCommand(target)
       ? target
       : this.isFocusableCommand(replacementAnchor)
@@ -2530,7 +1604,7 @@ export class SurvivalUI {
   private trapEventFocus(event: KeyboardEvent): boolean {
     if (event.key !== 'Tab' || !this.eventPresentationActive) return false;
     const controls = [
-      ...this.anchorButtons.values(),
+      ...this.anchorView.anchorButtonsInOrder(),
       ...this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]'),
     ].filter((element) => this.isFocusableCommand(element));
     if (controls.length === 0) return false;
@@ -2567,6 +1641,7 @@ export class SurvivalUI {
   private readonly handleClick = (event: MouseEvent): void => {
     const target = event.target;
     if (!(target instanceof Element)) return;
+    if (this.hudView.contains(target) || this.anchorView.contains(target)) return;
     const topmostModal = this.modalFocus.topmostModal();
     if (
       topmostModal === this.journalLayer
@@ -2595,65 +1670,12 @@ export class SurvivalUI {
     const button = target.closest<HTMLButtonElement>('button');
     if (!button || !this.root.contains(button) || button.disabled) return;
     if (topmostModal !== null && !topmostModal.contains(button)) return;
-    if (button.hasAttribute('data-carlitos-close')) {
-      this.closeCarlitosCard(true);
-      return;
-    }
-    if (
-      button.dataset.companion === 'carlitos'
-      && !button.hasAttribute('data-event-choice')
-      && (
-        button.dataset.eventState === undefined
-        || this.itemAnimationLabActive()
-      )
-    ) {
-      this.openCarlitosCard(button);
-      return;
-    }
-    const eventFocusId = button.dataset.eventFocusId as DriftingItemEventId | undefined;
-    if (eventFocusId !== undefined) {
-      this.onDriftingItemSelect?.(eventFocusId);
-      return;
-    }
-    const eventInstanceId = button.dataset.backingInstanceId as ItemInstanceId | undefined
-      ?? (
-        button.dataset.anchorId?.startsWith('supply:')
-          ? undefined
-          : button.dataset.anchorId as ItemInstanceId | undefined
-      );
-    if (
-      this.eventPresentationActive
-      && eventInstanceId !== undefined
-      && (
-        button.dataset.targetKind === 'item'
-        || this.eventEligibility?.has(eventInstanceId) === true
-      )
-    ) {
-      const choiceId = this.eventEligibility?.get(eventInstanceId);
-      if (
-        choiceId !== undefined
-        && !this.busy
-        && this.eventSelectedInstanceId === null
-      ) {
-        this.onEventItem(choiceId, eventInstanceId);
-      }
-      return;
-    }
-    const action = ACTIONS.find(({ id }) => id === button.dataset.action);
-    if (button.getAttribute('aria-disabled') === 'true') {
-      if (action !== undefined && !this.overlayOpen()) this.showUnavailableActionFeedback(action.id);
-      return;
-    }
 
     if (button.hasAttribute('data-event-choice')) {
       this.activateEventChoice(button);
       return;
     }
 
-    if (button.hasAttribute('data-journal-open')) {
-      this.onJournalOpen();
-      return;
-    }
     if (button.hasAttribute('data-journal-previous')) {
       this.moveJournalPage(-1);
       return;
@@ -2682,23 +1704,8 @@ export class SurvivalUI {
       this.onDriftingItemBack?.();
       return;
     }
-    if (button.hasAttribute('data-camera-turn')) {
-      if (this.busy || this.paused || this.overlayOpen()) return;
-      this.onCameraTurn?.();
-      return;
-    }
     if (button.hasAttribute('data-fishing-view-exit')) {
       this.onFishingViewExit?.();
-      return;
-    }
-    if (action !== undefined) {
-      const itemAnimationLabAction = this.itemAnimationLabActive()
-        && (
-          this.carlitosCard.contains(button)
-          || action.id === 'openChest'
-        );
-      if (this.overlayOpen() || (this.eventPresentationActive && !itemAnimationLabAction)) return;
-      this.activateDayAction(action.id, button);
       return;
     }
     const repairTarget = button.dataset.repairTarget as ItemInstanceId | undefined;
@@ -2720,11 +1727,7 @@ export class SurvivalUI {
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.disposed || event.defaultPrevented || event.repeat) return;
-    if (event.key === 'Escape' && !this.carlitosCard.hidden) {
-      event.preventDefault();
-      this.closeCarlitosCard(true);
-      return;
-    }
+    if (this.anchorView.handleCarlitosEscape(event)) return;
     const topmostModal = this.modalFocus.topmostModal();
     if (this.modalFocus.handleKeyDown(event)) return;
     if (this.trapEventFocus(event)) return;
@@ -2749,21 +1752,8 @@ export class SurvivalUI {
       }
       return;
     }
+    if (this.anchorView.handleCommandKeyDown(event)) return;
     const target = event.target;
-    if (
-      target instanceof HTMLButtonElement
-      && target.dataset.companion === 'carlitos'
-      && !target.hasAttribute('data-event-choice')
-      && (
-        target.dataset.eventState === undefined
-        || this.itemAnimationLabActive()
-      )
-      && (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar')
-    ) {
-      event.preventDefault();
-      this.openCarlitosCard(target);
-      return;
-    }
     if (
       (this.eventPresentationActive || topmostModal === this.driftingItemFocusLayer)
       && target instanceof Element
@@ -2775,51 +1765,13 @@ export class SurvivalUI {
         && (
           this.eventChoices.contains(choice)
           || this.driftingItemFocusChoices.contains(choice)
-          || this.anchorLayer.contains(choice)
         )
       ) {
         event.preventDefault();
         this.activateEventChoice(choice);
         return;
       }
-      const itemAnchor = target.closest<HTMLButtonElement>(
-        'button[data-event-state="available"]',
-      );
-      const instanceId = itemAnchor?.dataset.backingInstanceId as ItemInstanceId | undefined
-        ?? (
-          itemAnchor?.dataset.anchorId?.startsWith('supply:')
-            ? undefined
-            : itemAnchor?.dataset.anchorId as ItemInstanceId | undefined
-        );
-      const choiceId = instanceId === undefined
-        ? undefined
-        : this.eventEligibility?.get(instanceId);
-      if (
-        itemAnchor !== null
-        && this.anchorLayer.contains(itemAnchor)
-        && !itemAnchor.disabled
-        && itemAnchor.getAttribute('aria-disabled') !== 'true'
-        && instanceId !== undefined
-        && choiceId !== undefined
-        && !this.busy
-        && this.eventSelectedInstanceId === null
-      ) {
-        event.preventDefault();
-        this.onEventItem(choiceId, instanceId);
-      }
     }
-  };
-
-  private readonly handleDocumentClick = (event: MouseEvent): void => {
-    if (this.disposed || this.carlitosCard.hidden) return;
-    const target = event.target;
-    if (!(target instanceof Node)) return;
-    if (this.carlitosCard.contains(target) || this.carlitosReturnTarget?.contains(target)) return;
-    const restoreFocus = !this.busy
-      && !this.eventPresentationActive
-      && !this.paused
-      && this.modalFocus.topmostModal() === null;
-    this.closeCarlitosCard(restoreFocus);
   };
 
   private sameFishingTarget(target: ProjectedBoatBounds | null): boolean {
