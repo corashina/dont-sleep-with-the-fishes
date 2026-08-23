@@ -2393,6 +2393,11 @@ describe('SurvivalUI', () => {
     expect(highlighted).toHaveBeenLastCalledWith('event:drifting-bottle');
     anchor.click();
     expect(selected).toHaveBeenCalledWith('drifting-bottle');
+    const focus = mount.querySelector<HTMLElement>('[data-drifting-item-focus]')!;
+    const focusOrder: HTMLElement[] = [];
+    focus.addEventListener('focusin', (event) => {
+      if (event.target instanceof HTMLElement) focusOrder.push(event.target);
+    });
 
     ui.showDriftingItemFocus({
       eventId: 'drifting-bottle',
@@ -2417,7 +2422,6 @@ describe('SurvivalUI', () => {
       ],
     });
 
-    const focus = mount.querySelector<HTMLElement>('[data-drifting-item-focus]')!;
     const focusCard = focus.querySelector<HTMLElement>('.drifting-item-focus__card')!;
     const focusTitle = focus.querySelector<HTMLElement>('[data-drifting-item-title]')!;
     expect(focusCard.classList).toContain('dive-result__paper');
@@ -2443,9 +2447,9 @@ describe('SurvivalUI', () => {
     expect(focus.textContent).toContain('LET IT DRIFT');
     expect(focus.querySelector('.event-choice__reason')?.textContent)
       .toBe('Carlitos needs more energy.');
-    expect(document.activeElement).toBe(
-      focus.querySelector<HTMLButtonElement>('[data-event-choice="retrieve"]'),
-    );
+    const retrieve = focus.querySelector<HTMLButtonElement>('[data-event-choice="retrieve"]')!;
+    expect(document.activeElement).toBe(retrieve);
+    expect(focusOrder).toEqual([retrieve]);
 
     const back = focus.querySelector<HTMLButtonElement>('[data-drifting-item-back]')!;
     expect(back.parentElement).toBe(focus);
@@ -2520,6 +2524,11 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
+    const focus = mount.querySelector<HTMLElement>('[data-drifting-item-focus]')!;
+    const focusOrder: HTMLElement[] = [];
+    focus.addEventListener('focusin', (event) => {
+      if (event.target instanceof HTMLElement) focusOrder.push(event.target);
+    });
 
     ui.showDriftingItemFocus({
       eventId: 'drifting-bottle',
@@ -2543,9 +2552,9 @@ describe('SurvivalUI', () => {
       ],
     });
 
-    expect(document.activeElement).toBe(
-      mount.querySelector<HTMLButtonElement>('[data-drifting-item-back]'),
-    );
+    const back = mount.querySelector<HTMLButtonElement>('[data-drifting-item-back]')!;
+    expect(document.activeElement).toBe(back);
+    expect(focusOrder).toEqual([back]);
   });
 
   it('keeps the fishing Back control wide, transparent, and above fishing input', () => {
@@ -2659,6 +2668,26 @@ describe('SurvivalUI', () => {
     expect(cast).not.toHaveBeenCalled();
     expect(reel).not.toHaveBeenCalled();
     expect(mount.querySelector('.survival-ui')).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('does not focus an underlying modal while disposing', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.setFishingState({ mode: 'aiming', message: 'CAST', biteTarget: null });
+    ui.showDriftingItemFocus({
+      eventId: 'drifting-bottle',
+      title: 'DRIFTING BOTTLE',
+      target: null,
+      choices: [],
+    });
+    const fishing = mount.querySelector<HTMLElement>('[data-fishing]')!;
+    const fishingFocus = vi.spyOn(fishing, 'focus');
+
+    ui.dispose();
+
+    expect(fishingFocus).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(document.body);
   });
 

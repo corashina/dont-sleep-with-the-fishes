@@ -86,6 +86,25 @@ describe('DiveUI', () => {
     expect(document.activeElement).toBe(close);
   });
 
+  it('does not focus an underlying modal when a result closes', async () => {
+    const { mount, ui } = createUI();
+    ui.setFishingState({ mode: 'aiming', message: 'CAST', biteTarget: null });
+    const fishing = mount.querySelector<HTMLElement>('[data-fishing]')!;
+    const confirmation = ui.showRewardResult({
+      title: 'DIVE RESULT',
+      reward: null,
+      lines: ['NOTHING FOUND'],
+    });
+    const close = mount.querySelector<HTMLButtonElement>('[data-dive-result-close]')!;
+    const fishingFocus = vi.spyOn(fishing, 'focus');
+
+    close.click();
+    await confirmation;
+
+    expect(fishingFocus).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(close);
+  });
+
   it('settles a superseded result and waits for confirmation of the later result', async () => {
     const { mount, ui } = createUI();
     const first = ui.showRewardResult({ title: 'DIVE RESULT', reward: null, lines: ['FOOD +1'] });
