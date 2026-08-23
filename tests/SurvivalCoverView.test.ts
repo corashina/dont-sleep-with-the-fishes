@@ -90,6 +90,62 @@ describe('SurvivalCoverView', () => {
     expect(view.resultRoot.querySelector('[data-dive-result-title]')?.textContent).toBe('');
   });
 
+  it('removes each reward thumbnail error listener before replacement and clear', async () => {
+    const view = mountView();
+    view.onResultShow = () => undefined;
+    view.onResultHide = () => undefined;
+    const first = view.showRewardResult({
+      title: 'DIVE RESULT',
+      reward: { kind: 'resource', id: 'food', quantity: 1 },
+      lines: [],
+    });
+    const firstThumbnail = view.resultRoot.querySelector<HTMLImageElement>(
+      '.weight-circle__thumbnail',
+    )!;
+    const firstRemove = vi.spyOn(firstThumbnail, 'removeEventListener');
+
+    const second = view.showRewardResult({
+      title: 'CHEST REWARD',
+      reward: { kind: 'resource', id: 'bait', quantity: 2 },
+      lines: [],
+    });
+    await first;
+    expect(firstRemove).toHaveBeenCalledOnce();
+    expect(firstRemove).toHaveBeenCalledWith('error', expect.any(Function));
+
+    const secondThumbnail = view.resultRoot.querySelector<HTMLImageElement>(
+      '.weight-circle__thumbnail',
+    )!;
+    const secondRemove = vi.spyOn(secondThumbnail, 'removeEventListener');
+    view.confirmRewardResult();
+    await second;
+
+    expect(secondRemove).toHaveBeenCalledOnce();
+    expect(secondRemove).toHaveBeenCalledWith('error', expect.any(Function));
+  });
+
+  it('removes the active reward thumbnail error listener during disposal', async () => {
+    const view = mountView();
+    view.onResultShow = () => undefined;
+    view.onResultHide = () => undefined;
+    const confirmation = view.showRewardResult({
+      title: 'DIVE RESULT',
+      reward: { kind: 'item', id: 'ductTape', quantity: 1 },
+      lines: [],
+    });
+    const thumbnail = view.resultRoot.querySelector<HTMLImageElement>(
+      '.weight-circle__thumbnail',
+    )!;
+    const remove = vi.spyOn(thumbnail, 'removeEventListener');
+
+    view.dispose();
+    await confirmation;
+    view.dispose();
+
+    expect(remove).toHaveBeenCalledOnce();
+    expect(remove).toHaveBeenCalledWith('error', expect.any(Function));
+  });
+
   it('settles a stale result without clearing its replacement', async () => {
     const view = mountView();
     view.onResultShow = () => undefined;
