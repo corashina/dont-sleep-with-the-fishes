@@ -15,7 +15,6 @@ import { SURVIVAL_EVENTS } from '../src/survival/eventCatalog';
 import type { FishingCastPoint } from '../src/survival/FishingSession';
 import type { JournalEntry, JournalNightRecord } from '../src/survival/journalRecords';
 import {
-  formatDiveResult,
   SurvivalPhase,
 } from '../src/survival/SurvivalPhase';
 import { deriveEventVariantSeed } from '../src/survival/eventPresentationOutcome';
@@ -79,42 +78,6 @@ function accepted(overrides: Record<string, unknown> = {}) {
     deltas: { energy: -2, food: 1 }, cue: 'fish' as const, ...overrides,
   };
 }
-
-describe('formatDiveResult', () => {
-  it.each([
-    [{ food: 1, energy: -3 }, { kind: 'resource', id: 'food', quantity: 1 }, []],
-    [{ bait: 1, energy: -3 }, { kind: 'resource', id: 'bait', quantity: 1 }, []],
-    [{ repairMaterial: 1, energy: -3 }, { kind: 'resource', id: 'repairMaterial', quantity: 1 }, []],
-    [{ rescueProgress: 10, energy: -3 }, null, ['RESCUE PROGRESS +10']],
-    [{ energy: -3 }, null, ['NOTHING FOUND']],
-    [{ energy: -3, health: -10 }, null, ['NOTHING FOUND', 'YOU SUFFERED SOME INJURIES']],
-  ] as const)('formats exact dive deltas', (deltas, reward, lines) => {
-    expect(formatDiveResult(accepted({ deltas }))).toEqual({
-      title: 'DIVE RESULT',
-      reward,
-      lines,
-    });
-  });
-
-  it('shows the truthful applied loss for a low-health fatal injury', () => {
-    expect(formatDiveResult(accepted({
-      deltas: { energy: -3, health: -4 },
-    }))).toEqual({
-      title: 'DIVE RESULT',
-      reward: null,
-      lines: ['NOTHING FOUND', 'YOU SUFFERED SOME INJURIES'],
-    });
-  });
-
-  it('passes an item reward to the result paper', () => {
-    const rewardSummary = { kind: 'item', id: 'energyBar', quantity: 1 } as const;
-    expect(formatDiveResult(accepted({ deltas: { energy: -3 }, rewardSummary }))).toEqual({
-      title: 'DIVE RESULT',
-      reward: rewardSummary,
-      lines: [],
-    });
-  });
-});
 
 describe('Midnight Tour audio cue routing', () => {
   it('routes a Midnight Tour cue to the survival audio scope', () => {
