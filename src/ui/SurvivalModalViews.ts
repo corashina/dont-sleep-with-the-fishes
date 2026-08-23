@@ -94,20 +94,12 @@ export class SurvivalModalViews {
     this.repairTargets.replaceChildren(...targets);
   }
 
-  hideRepairOptions(): void {
-    if (this.disposed) return;
-  }
-
   setRepairBusy(busy: boolean): void {
     if (this.disposed || this.repairBusy === busy) return;
     this.repairBusy = busy;
     this.repairTargets.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
       button.disabled = busy;
     });
-  }
-
-  setPaused(_paused: boolean): void {
-    if (this.disposed) return;
   }
 
   showEnding(state: TerminalState, reason: SurvivalEndingReason): void {

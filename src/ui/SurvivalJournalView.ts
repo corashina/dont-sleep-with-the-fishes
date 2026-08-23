@@ -68,10 +68,6 @@ export class SurvivalJournalView {
     this.renderPage();
   }
 
-  hide(): void {
-    if (this.disposed) return;
-  }
-
   previous(): void {
     if (!this.disposed) this.movePage(-1);
   }
