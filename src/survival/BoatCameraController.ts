@@ -149,22 +149,25 @@ export class BoatCameraController {
     this.cameraRig.position.set(0, 0, 0);
     this.cameraRig.rotation.set(0, 0, 0);
     this.applyBasePresentationPose();
+  }
+
+  updateDriftingItemView(delta: number, target: Object3D | null): void {
+    if (this.disposed) return;
+    if (!this.prepareCurrentDriftingTarget(target)) return;
     this.advanceDriftingAnimation(delta);
   }
 
-  refreshDriftingItemView(): void {
+  applyDriftingItemView(target: Object3D | null): void {
     if (this.disposed) return;
-    const animation = this.activeDriftingAnimation;
-    if (animation?.kind === 'enter') {
-      if (!this.updateDriftingTarget()) {
-        this.cancelDriftingItemView();
-        return;
-      }
-      const progress = animation.duration <= 0 ? 1 : animation.elapsed / animation.duration;
-      this.applyDriftingAnimation('enter', progress);
-      return;
-    }
+    if (!this.prepareCurrentDriftingTarget(target)) return;
     this.applyDriftingPose();
+  }
+
+  requiresDriftingItemTarget(): boolean {
+    return !this.disposed && (
+      this.driftingPhase === 'entering'
+      || this.driftingPhase === 'focused'
+    );
   }
 
   interpolateToBasePose(
@@ -244,10 +247,6 @@ export class BoatCameraController {
 
   private applyDriftingPose(): void {
     if (this.driftingPhase !== 'focused') return;
-    if (!this.updateDriftingTarget()) {
-      this.cancelDriftingItemView();
-      return;
-    }
     this.camera.position.copy(this.driftingPosition);
     this.camera.quaternion.copy(this.driftingTargetQuaternion);
   }
@@ -300,6 +299,19 @@ export class BoatCameraController {
       this.driftingTargetQuaternion.premultiply(this.parentQuaternion);
     }
     return true;
+  }
+
+  private prepareCurrentDriftingTarget(target: Object3D | null): boolean {
+    if (
+      this.driftingPhase !== 'entering'
+      && this.driftingPhase !== 'focused'
+    ) {
+      return true;
+    }
+    this.driftingTarget = target;
+    if (this.updateDriftingTarget()) return true;
+    this.cancelDriftingItemView();
+    return false;
   }
 
   private cancelDriftingAnimation(): void {

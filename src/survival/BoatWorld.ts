@@ -2271,15 +2271,21 @@ export class BoatWorld {
       this.advanceFishingPresentation(delta);
       this.supplyDisplay.resetEventPoseForFrame();
       this.eventPresentationHost.update(time, delta);
+      this.cameraController.updateDriftingItemView(
+        delta,
+        this.currentDriftingItemAimTarget(),
+      );
       this.updateCarlitosDelegation(delta);
       this.supplyDisplay.update(delta);
       this.itemUseController.update(delta);
       this.repairToolboxAnimation.update(delta);
       this.updateFishingBiteParticles(delta);
-    } else if (this.moonEventStaged) {
-      this.applyMoonPresentation();
+    } else {
+      if (this.moonEventStaged) this.applyMoonPresentation();
+      this.cameraController.applyDriftingItemView(
+        this.currentDriftingItemAimTarget(),
+      );
     }
-    this.cameraController.refreshDriftingItemView();
     setSceneBinocularMaskStrength(
       this.scene,
       this.itemEffects.binocularMaskStrength,
@@ -2313,6 +2319,12 @@ export class BoatWorld {
       this.lightningStrikeListener?.();
     }
     this.ocean.follow(this.worldCameraPosition.x, this.worldCameraPosition.z);
+  }
+
+  private currentDriftingItemAimTarget(): Object3D | null {
+    return this.cameraController.requiresDriftingItemTarget()
+      ? this.eventPresentationHost.itemAimTarget()
+      : null;
   }
 
   dispose(): void {
