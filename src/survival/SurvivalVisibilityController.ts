@@ -55,6 +55,7 @@ export class SurvivalVisibilityController {
     if (this.disposed) return;
     this.disposed = true;
     let firstError: unknown;
+    let failed = false;
     try {
       this.visibilityDocument.removeEventListener(
         'visibilitychange',
@@ -62,13 +63,17 @@ export class SurvivalVisibilityController {
       );
     } catch (error) {
       firstError = error;
+      failed = true;
     }
     try {
       this.cancelResumeWaiters();
     } catch (error) {
-      firstError ??= error;
+      if (!failed) {
+        firstError = error;
+        failed = true;
+      }
     }
-    if (firstError !== undefined) throw firstError;
+    if (failed) throw firstError;
   }
 
   private readonly handleVisibilityChange = (): void => {

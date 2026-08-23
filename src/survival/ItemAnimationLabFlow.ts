@@ -337,14 +337,18 @@ export class ItemAnimationLabFlow {
 
   private runCleanup(steps: readonly (() => void)[], suppressErrors: boolean): void {
     let firstError: unknown;
+    let failed = false;
     for (const step of steps) {
       try {
         step();
       } catch (error) {
-        firstError ??= error;
+        if (!failed) {
+          firstError = error;
+          failed = true;
+        }
       }
     }
-    if (!suppressErrors && firstError !== undefined) {
+    if (!suppressErrors && failed) {
       this.dependencies.onFatalError(firstError);
     }
   }
