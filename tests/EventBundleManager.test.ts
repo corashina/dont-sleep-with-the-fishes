@@ -247,6 +247,21 @@ describe('EventBundleManager', () => {
     expect(log).toEqual(['load:leak', 'attach:leak', 'dispose:leak']);
   });
 
+  it('releases an active bundle exactly once across repeated flow cleanup', async () => {
+    const log: string[] = [];
+    const manager = new EventBundleManager({
+      load: async (eventId) => bundle(eventId, log),
+    });
+
+    await manager.beginLoad('leak');
+    await manager.activate('leak');
+    manager.releaseActive();
+    manager.releaseActive();
+    manager.dispose();
+
+    expect(log).toEqual(['attach:leak', 'dispose:leak']);
+  });
+
   it('disposes every bundle resource when attachment fails', async () => {
     const attachmentError = new Error('attachment failed');
     const cleanupError = new Error('detach cleanup failed');

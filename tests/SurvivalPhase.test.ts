@@ -7101,4 +7101,39 @@ describe('SurvivalPhase orchestration', () => {
     expect(worldDispose).toHaveBeenCalledOnce();
     expect(uiDispose).toHaveBeenCalledOnce();
   });
+
+  it('keeps an extracted event activation inert after phase disposal', async () => {
+    const activation = deferred();
+    const stageEvent = vi.fn();
+    const eventBundles = {
+      beginLoad: vi.fn(() => undefined),
+      activate: vi.fn(() => activation.promise),
+      releaseActive: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => snapshot({
+          state: 'dayEvent',
+          pendingEventId: 'shower-night',
+        })),
+      },
+      world: { stageEvent, dispose: vi.fn() },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(async () => undefined),
+        dispose: vi.fn(),
+      },
+      eventBundles,
+    });
+
+    phase.start();
+    await vi.waitFor(() => expect(eventBundles.activate).toHaveBeenCalledOnce());
+    phase.dispose();
+    activation.resolve();
+    await flushPromises();
+
+    expect(stageEvent).not.toHaveBeenCalled();
+    expect(eventBundles.dispose).toHaveBeenCalledOnce();
+  });
 });
