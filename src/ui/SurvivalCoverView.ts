@@ -259,10 +259,6 @@ export class SurvivalCoverView {
     ]));
   }
 
-  contains(target: Node): boolean {
-    return this.roots.some((root) => root.contains(target));
-  }
-
   dispose(): void {
     if (!this.beginDispose()) return;
     const result = runCleanupSteps([

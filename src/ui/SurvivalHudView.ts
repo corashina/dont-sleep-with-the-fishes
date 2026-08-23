@@ -199,14 +199,6 @@ export class SurvivalHudView {
     return this.journalMarker;
   }
 
-  cameraTurnControl(): HTMLButtonElement {
-    return this.cameraTurn;
-  }
-
-  contains(target: Node): boolean {
-    return this.topControls.contains(target) || this.meters.contains(target);
-  }
-
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;

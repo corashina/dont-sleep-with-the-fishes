@@ -3531,11 +3531,13 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
-    ui.render(snapshot(), () => null);
-    mount.querySelector<HTMLButtonElement>('[data-anchor-id="repair-tools"]')!
-      .dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    const internals = ui as unknown as { readonly anchorView: BoatAnchorView };
+    const anchorDispose = internals.anchorView.dispose.bind(internals.anchorView);
     const error = new Error('anchor cleanup failed');
-    ui.onAnchorHighlight = () => { throw error; };
+    vi.spyOn(internals.anchorView, 'dispose').mockImplementation(() => {
+      anchorDispose();
+      throw error;
+    });
 
     expect(() => ui.dispose()).toThrow(error);
     expect(mount.children).toHaveLength(0);
@@ -3719,10 +3721,13 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
     const action = vi.fn();
     const journal = vi.fn();
+    const highlight = vi.fn();
     ui.onAction = action;
     ui.onJournalOpen = journal;
+    ui.onAnchorHighlight = highlight;
     const actionButton = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
     const journalButton = mount.querySelector<HTMLButtonElement>('[data-journal-open]')!;
+    const anchorButton = mount.querySelector<HTMLButtonElement>('[data-anchor-id="repair-tools"]')!;
     const internals = ui as unknown as {
       readonly eventView: { clearChoicesForDispose(): void };
     };
@@ -3731,6 +3736,7 @@ describe('SurvivalUI', () => {
     vi.spyOn(internals.eventView, 'clearChoicesForDispose').mockImplementation(() => {
       actionButton.click();
       journalButton.click();
+      anchorButton.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
       clearChoices();
     });
 
@@ -3738,6 +3744,7 @@ describe('SurvivalUI', () => {
 
     expect(action).not.toHaveBeenCalled();
     expect(journal).not.toHaveBeenCalled();
+    expect(highlight).not.toHaveBeenCalled();
   });
 
   it('removes each owned listener once and removes the root last', () => {

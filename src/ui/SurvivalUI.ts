@@ -92,7 +92,7 @@ export class SurvivalUI {
   private latestCommandOrigin: HTMLButtonElement | null = null;
   private currentSnapshot: SurvivalSnapshot | null = null;
 
-  constructor(private readonly mount: HTMLElement) {
+  constructor(mount: HTMLElement) {
     this.root = document.createElement('div');
     this.root.className = 'survival-ui';
     this.root.innerHTML = `
@@ -106,7 +106,7 @@ export class SurvivalUI {
     this.hudView = new SurvivalHudView();
     this.anchorView = new BoatAnchorView(this.root);
     this.fishingView = new SurvivalFishingView(
-      this.mount,
+      mount,
       this.root,
       () => this.anchorView.anchor('fishing-tools'),
     );
@@ -177,7 +177,9 @@ export class SurvivalUI {
     this.anchorView.onEventFocus = (eventId) => {
       if (!this.disposed) this.onDriftingItemSelect?.(eventId);
     };
-    this.anchorView.onHighlight = (anchorId) => this.onAnchorHighlight(anchorId);
+    this.anchorView.onHighlight = (anchorId) => {
+      if (!this.disposed) this.onAnchorHighlight(anchorId);
+    };
     this.eventView.onChoice = (choiceId) => {
       if (!this.disposed) this.onEventChoice(choiceId);
     };
@@ -711,10 +713,6 @@ export class SurvivalUI {
     layer.dataset.placement = horizontalPlacement;
     layer.dataset.verticalPlacement = verticalPlacement;
     layer.dataset.anchorState = isProjected ? 'projected' : 'fallback';
-  }
-
-  private overlayOpen(): boolean {
-    return this.modalFocus.topmostModal() !== null;
   }
 
   private activateDayAction(action: DayActionId, origin: HTMLButtonElement | null): void {
