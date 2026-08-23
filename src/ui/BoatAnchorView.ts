@@ -439,6 +439,11 @@ export class BoatAnchorView {
     return [...this.anchorButtons.values()];
   }
 
+  eventChoiceButton(choiceId: EventResponseId): HTMLButtonElement | null {
+    return [...this.anchorButtons.values()]
+      .find((button) => button.dataset.eventChoice === choiceId) ?? null;
+  }
+
   anchor(anchorId: string): BoatInteractionAnchor | null {
     return this.anchors.get(anchorId) ?? null;
   }
