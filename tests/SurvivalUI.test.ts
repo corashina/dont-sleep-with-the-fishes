@@ -312,6 +312,44 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     const root = mount.querySelector<HTMLElement>('.survival-ui')!;
+    const internals = ui as unknown as {
+      readonly announcer: HTMLElement;
+      readonly eventView: {
+        readonly feedback: HTMLElement;
+        readonly sleepMask: HTMLElement;
+        readonly caption: HTMLElement;
+      };
+      readonly coverView: SurvivalCoverView;
+      readonly hudView: SurvivalHudView;
+      readonly anchorView: BoatAnchorView;
+      readonly fishingView: SurvivalFishingView;
+      readonly driftingView: { readonly root: HTMLElement };
+      readonly journalView: SurvivalJournalView;
+      readonly modalViews: SurvivalModalViews;
+    };
+
+    expect([...root.children]).toEqual([
+      root.querySelector('.ui-treatment'),
+      internals.announcer,
+      internals.eventView.feedback,
+      internals.coverView.sleepCover,
+      internals.coverView.badSleepCue,
+      internals.coverView.resultRoot,
+      internals.eventView.sleepMask,
+      internals.hudView.topControls,
+      internals.hudView.meters,
+      internals.anchorView.anchorLayer,
+      internals.anchorView.carlitosCard,
+      internals.fishingView.interactionRoot,
+      internals.fishingView.fadeRoot,
+      internals.fishingView.resultRoot,
+      internals.driftingView.root,
+      internals.modalViews.repairRoot,
+      internals.eventView.caption,
+      internals.journalView.root,
+      internals.modalViews.pauseRoot,
+      internals.modalViews.endingRoot,
+    ]);
 
     expect([...root.children].map((child) => (
       child.className
@@ -339,6 +377,31 @@ describe('SurvivalUI', () => {
     ]);
     ui.dispose();
   });
+
+  it.each(['pause', 'journal'] as const)(
+    'blocks synthetic event-choice clicks behind the %s modal',
+    (modal) => {
+      const mount = document.createElement('main');
+      document.body.append(mount);
+      const ui = createUI(mount);
+      const choice = vi.fn();
+      ui.onEventChoice = choice;
+      openContextualEvent(ui);
+      const button = mount.querySelector<HTMLButtonElement>(
+        '[data-event-choice="retrieve"]',
+      )!;
+
+      if (modal === 'pause') ui.setPaused(true);
+      else ui.showJournal(journalEntries);
+      button.click();
+      expect(choice).not.toHaveBeenCalled();
+
+      if (modal === 'pause') ui.setPaused(false);
+      else ui.hideJournal();
+      button.click();
+      expect(choice).toHaveBeenCalledOnce();
+    },
+  );
 
   it('resolves each day-action reason once and shares one map between both views', () => {
     const hudRender = vi.spyOn(SurvivalHudView.prototype, 'render');
@@ -3648,6 +3711,92 @@ describe('SurvivalUI', () => {
     expect(anchorDispose).toHaveBeenCalledOnce();
     expect(hudDispose).toHaveBeenCalledOnce();
     expect(rootRemove).toHaveBeenCalledOnce();
+  });
+
+  it('blocks semantic commands during partial disposal', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const action = vi.fn();
+    const journal = vi.fn();
+    ui.onAction = action;
+    ui.onJournalOpen = journal;
+    const actionButton = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
+    const journalButton = mount.querySelector<HTMLButtonElement>('[data-journal-open]')!;
+    const internals = ui as unknown as {
+      readonly eventView: { clearChoicesForDispose(): void };
+    };
+    const clearChoices = internals.eventView.clearChoicesForDispose
+      .bind(internals.eventView);
+    vi.spyOn(internals.eventView, 'clearChoicesForDispose').mockImplementation(() => {
+      actionButton.click();
+      journalButton.click();
+      clearChoices();
+    });
+
+    ui.dispose();
+
+    expect(action).not.toHaveBeenCalled();
+    expect(journal).not.toHaveBeenCalled();
+  });
+
+  it('removes each owned listener once and removes the root last', () => {
+    vi.restoreAllMocks();
+    const cleanupOrder: string[] = [];
+    const nativeRemove = EventTarget.prototype.removeEventListener;
+    const add = vi.spyOn(EventTarget.prototype, 'addEventListener');
+    const remove = vi.spyOn(EventTarget.prototype, 'removeEventListener')
+      .mockImplementation(function (
+        this: EventTarget,
+        type: string,
+        listener: EventListenerOrEventListenerObject | null,
+        options?: boolean | EventListenerOptions,
+      ): void {
+        cleanupOrder.push('listener');
+        nativeRemove.call(this, type, listener, options);
+      });
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const addStart = add.mock.calls.length;
+    const ui = createUI(mount);
+    const root = mount.querySelector<HTMLElement>('.survival-ui')!;
+    const ownedAdds = add.mock.calls.slice(addStart).map((args, index) => ({
+      args,
+      target: add.mock.contexts[addStart + index],
+    })).filter(({ args: [type], target }) => (
+      (target === document && (type === 'click' || type === 'keydown'))
+      || (target === window && type === 'resize')
+      || (target instanceof Node && root.contains(target))
+    ));
+    const originalRootRemove = root.remove.bind(root);
+    const rootRemove = vi.spyOn(root, 'remove').mockImplementation(() => {
+      cleanupOrder.push('root');
+      originalRootRemove();
+    });
+
+    ui.dispose();
+    ui.dispose();
+
+    const ownedRemovals = remove.mock.calls.map((args, index) => ({
+      args,
+      target: remove.mock.contexts[index],
+    }));
+    ownedAdds.forEach(({ args: [type, listener], target }) => {
+      const matches = ownedRemovals.filter(({ args, target: removedTarget }) => (
+        removedTarget === target
+        && args[0] === type
+        && args[1] === listener
+      ));
+      const owner = target instanceof Element
+        ? target.className || target.tagName
+        : target === document ? 'document' : 'window';
+      const listenerName = typeof listener === 'function' ? listener.name : 'object';
+      expect(matches, `${String(type)} on ${owner} for ${listenerName}`).toHaveLength(1);
+    });
+    expect(rootRemove).toHaveBeenCalledOnce();
+    expect(cleanupOrder.at(-1)).toBe('root');
+    expect(mount.querySelector('.survival-ui')).toBeNull();
+    vi.restoreAllMocks();
   });
 
   it.each([

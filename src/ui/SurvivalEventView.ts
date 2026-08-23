@@ -37,6 +37,7 @@ export class SurvivalEventView {
   private selectedChoiceId: EventResponseId | null = null;
   private active = false;
   private busy = false;
+  private modalOpen = false;
   private feedbackTimer: number | undefined;
   private pendingChoiceBeat: PendingWork | null = null;
   private disposed = false;
@@ -150,6 +151,11 @@ export class SurvivalEventView {
     if (this.disposed || this.busy === busy) return;
     this.busy = busy;
     this.syncChoiceState();
+  }
+
+  setModalOpen(open: boolean): void {
+    if (this.disposed) return;
+    this.modalOpen = open;
   }
 
   playChoiceBeat(
@@ -275,10 +281,26 @@ export class SurvivalEventView {
     return target instanceof Node && this.choices.contains(target);
   }
 
+  handleKeyDown(event: KeyboardEvent): boolean {
+    if (
+      this.disposed
+      || !this.active
+      || (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar')
+    ) return false;
+    const target = event.target;
+    if (!(target instanceof Element)) return false;
+    const button = target.closest<HTMLButtonElement>('[data-event-choice]');
+    if (button === null || !this.choices.contains(button)) return false;
+    event.preventDefault();
+    this.activateChoice(button);
+    return true;
+  }
+
   activateChoice(button: HTMLButtonElement): void {
     if (
       this.disposed
       || !this.active
+      || this.modalOpen
       || !this.choices.contains(button)
       || this.busy
       || this.selectedChoiceId !== null

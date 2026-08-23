@@ -251,6 +251,17 @@ loading and keeps the seven obstacle visuals static.
 - `src/world/Skybox`, `src/world/SkyAssets`, and `src/world/skyPalette` — shared cloudless atmosphere rendering, app-owned moon art, grounded weather and day/night palettes, celestial bodies, and ocean/fog color synchronization.
 - `src/player`, `src/input`, and `src/interaction` — pointer-lock movement, collision, raycast prompts, carrying, drops, and throws.
 - `src/ui` — scavenging HUD, pause and result screens, plus the accessible survival overlay.
+- `src/ui/SurvivalUI` — mounts 20 ordered roots and forwards semantic commands to survival flows.
+- `SurvivalUI` owns the global treatment, live announcer, busy state, pause state, and event forwarding.
+- `src/ui/SurvivalHudView` — owns status controls, day status, camera turn, and condition meters.
+- `src/ui/BoatAnchorView` — owns projected boat commands, tooltips, highlights, and Carlitos controls.
+- `src/ui/SurvivalEventView` — owns event captions, contextual choices, sleep masks, feedback, and choice beats.
+- `src/ui/SurvivalCoverView` — owns sleep covers, bad-sleep cues, dive results, and covered-scene timing.
+- `src/ui/SurvivalFishingView` — owns fishing input, bite targets, fades, results, and fishing announcements.
+- `src/ui/DriftingItemView` — owns drifting-item placement, choices, selection, and back navigation.
+- `src/ui/SurvivalJournalView` — owns journal pages, history text, navigation, and close input.
+- `src/ui/SurvivalModalViews` — owns repair, pause, and ending markup and local input.
+- `src/ui/ModalFocusManager` — owns modal priority, background inert state, focus traps, and focus restoration.
 
 The scavenging ocean mesh and lifeboat sample the same four-wave field. In survival, the ocean and boat remain synchronized while the camera stays fixed to the boat rig; reduced-motion preference removes parallax, lurch, tooltip movement, and nonessential UI transitions.
 

@@ -41,6 +41,7 @@ import { ScavengePhase } from '../src/phases/ScavengePhase';
 import type { ScavengeVisualState, SceneRenderer } from '../src/rendering/SceneRenderer';
 import type { PostProcessingControls } from '../src/rendering/postProcessingControls';
 import { createVisualQualityPreference } from '../src/rendering/visualQuality';
+import { SurvivalUI } from '../src/ui/SurvivalUI';
 import type { PresentationWeatherId } from '../src/weather/presentationWeather';
 import { World } from '../src/world/World';
 import { createTestPropModels } from './helpers/propModels';
@@ -532,10 +533,11 @@ describe('Game menu lifecycle', () => {
   it('starts scavenging directly when survival requests a restart', () => {
     const menu = gamePhase();
     const scavenges = [gamePhase(), gamePhase()];
-    const survival = gamePhase();
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const survivalDispose = vi.fn();
     let completeMenu: () => void = () => undefined;
     let completeScavenge: (result: Readonly<ScavengeResult>) => void = () => undefined;
-    let restartSurvival: () => void = () => undefined;
     const createMenu = vi.fn((_context, onComplete) => {
       completeMenu = onComplete;
       return menu;
@@ -547,11 +549,17 @@ describe('Game menu lifecycle', () => {
     const game = Game.forTest({
       createMenu,
       createScavenge,
-      createSurvival: (_context, _result, _seed, onRestart) => {
-        restartSurvival = onRestart;
-        return survival;
+      createSurvival: (context, _result, _seed, onRestart) => {
+        const ui = new SurvivalUI(context.mount);
+        ui.onRestart = onRestart;
+        ui.showEnding('dead', 1, 1, 0);
+        return {
+          ...gamePhase(),
+          dispose: survivalDispose.mockImplementation(() => ui.dispose()),
+        };
       },
     }, {
+      mount,
       propModels: createTestPropModels(),
       menuModels: EMPTY_MENU_MODELS,
       shipFurniture: createTestShipFurniture(),
@@ -563,15 +571,18 @@ describe('Game menu lifecycle', () => {
       game.start();
       completeMenu();
       completeScavenge({ savedItems: [], elapsedSeconds: 3 });
-      restartSurvival();
-      restartSurvival();
+      const restart = mount.querySelector<HTMLButtonElement>('[data-restart]')!;
+      restart.click();
+      restart.click();
 
       expect(createMenu).toHaveBeenCalledOnce();
       expect(createScavenge).toHaveBeenCalledTimes(2);
-      expect(survival.dispose).toHaveBeenCalledOnce();
+      expect(survivalDispose).toHaveBeenCalledOnce();
       expect(scavenges[1]!.start).toHaveBeenCalledOnce();
+      expect(mount.querySelector('.survival-ui')).toBeNull();
     } finally {
       game.dispose();
+      mount.remove();
     }
   });
 });
