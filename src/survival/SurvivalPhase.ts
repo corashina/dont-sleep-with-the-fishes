@@ -754,6 +754,7 @@ export class SurvivalPhase implements GamePhase {
 
   private readonly handleDocumentHidden = (): void => {
     this.dayActionFlow.settleForVisibilityChange();
+    this.ui.settleForVisibilityChange?.();
     if (!this.paused) {
       this.visibilityPauseActive = true;
       this.setPaused(true);

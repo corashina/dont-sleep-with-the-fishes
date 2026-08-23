@@ -1,7 +1,6 @@
 import {
   ITEM_DEFINITIONS,
   ITEM_LABELS,
-  type ItemId,
   type ItemInstanceId,
 } from '../game/ItemState';
 import { formatJournalEntry } from '../survival/journal';
@@ -14,32 +13,21 @@ import type {
   DayActionOption,
   EventResponseId,
   ResourceDelta,
-  RewardSummary,
   SurvivalEventDefinition,
   SurvivalEndingReason,
   SurvivalSnapshot,
 } from '../survival/survivalTypes';
 import { createElementRequirement } from './dom';
 import { BoatAnchorView } from './BoatAnchorView';
-import { itemThumbnailUrl } from './itemThumbnailManifest';
 import { ModalFocusManager, type ModalInitialFocus } from './ModalFocusManager';
+import { SurvivalCoverView } from './SurvivalCoverView';
+import type { RewardResultView, SleepCoverProfile } from './SurvivalCoverViewModel';
+import { SurvivalEventView } from './SurvivalEventView';
 import { SurvivalHudView } from './SurvivalHudView';
 import { DAY_ACTION_IDS, type EventContextChoice } from './SurvivalUiViewModel';
+import { runCleanupSteps, settleAfterCleanup } from './UiCleanup';
 
-function driftingCargoRewardItemId(reward: RewardSummary): ItemId {
-  if (reward.kind === 'item') return reward.id;
-  if (reward.id === 'food') return 'cannedFood';
-  if (reward.id === 'bait') return 'baitTin';
-  return 'ductTape';
-}
-
-const SLEEP_TRANSITION_MS = 2_500;
-const SLEEP_HOLD_MS = 450;
-const DIVE_TRANSITION_MS = 750;
-const DIVE_COVERED_HOLD_MS = 250;
 const FISHING_FADE_MS = 180;
-const EVENT_CHOICE_BEAT_MS = 240;
-const EVENT_OUTCOME_HOLD_MS = 2_000;
 const ROUTINE_DIALOG_MARGIN = 20;
 const ROUTINE_DIALOG_GAP = 22;
 const DRIFTING_FOCUS_BOTTOM_RESERVE = 128;
@@ -72,17 +60,6 @@ const ROUTINE_DIALOG_PLACEMENTS: Readonly<Record<'fishing' | 'repair', RoutineDi
 const requireElement = createElementRequirement('survival UI');
 
 export type FishingUiMode = 'hidden' | 'aiming' | 'waiting' | 'bite' | 'result' | 'ready';
-export type SleepCoverProfile = 'solid' | 'dive' | 'midnight-tour';
-
-export interface RewardResultView {
-  readonly title: 'DIVE RESULT' | 'CHEST REWARD';
-  readonly reward: RewardSummary | null;
-  readonly lines: readonly string[];
-}
-
-function diveRewardName(reward: RewardSummary): string {
-  return ITEM_DEFINITIONS[driftingCargoRewardItemId(reward)].label;
-}
 
 export interface FishingUiState {
   readonly mode: FishingUiMode;
@@ -108,40 +85,6 @@ interface PendingFade {
   readonly finish: () => void;
 }
 
-interface CleanupResult {
-  readonly failed: boolean;
-  readonly firstError: unknown;
-}
-
-function runCleanupSteps(cleanups: readonly (() => void)[]): CleanupResult {
-  let failed = false;
-  let firstError: unknown;
-  cleanups.forEach((cleanup) => {
-    try {
-      cleanup();
-    } catch (error) {
-      if (!failed) {
-        failed = true;
-        firstError = error;
-      }
-    }
-  });
-  return { failed, firstError };
-}
-
-function settleAfterCleanup(
-  resolve: () => void,
-  cleanups: readonly (() => void)[],
-): void {
-  const result = runCleanupSteps(cleanups);
-  resolve();
-  if (result.failed) throw result.firstError;
-}
-
-function throwCleanupFailure(result: CleanupResult): void {
-  if (result.failed) throw result.firstError;
-}
-
 export class SurvivalUI {
   onAction: (action: DayActionId, option?: DayActionOption) => void = () => undefined;
   onEventItem: (choiceId: EventResponseId, instanceId: ItemInstanceId) => void = () => undefined;
@@ -163,21 +106,9 @@ export class SurvivalUI {
   private readonly root: HTMLDivElement;
   private readonly hudView: SurvivalHudView;
   private readonly anchorView: BoatAnchorView;
+  private readonly eventView: SurvivalEventView;
+  private readonly coverView: SurvivalCoverView;
   private readonly announcer: HTMLElement;
-  private readonly feedback: HTMLElement;
-  private readonly sleepCover: HTMLElement;
-  private readonly badSleepCue: HTMLElement;
-  private readonly diveResultLayer: HTMLElement;
-  private readonly diveResultTitle: HTMLElement;
-  private readonly diveResultRewards: HTMLElement;
-  private readonly diveResultLines: HTMLElement;
-  private readonly diveResultClose: HTMLButtonElement;
-  private readonly eventSleepMask: HTMLElement;
-  private readonly eventCaption: HTMLElement;
-  private readonly eventTitle: HTMLElement;
-  private readonly eventDetail: HTMLElement;
-  private readonly eventRisk: HTMLElement;
-  private readonly eventChoices: HTMLElement;
   private readonly fishingLayer: HTMLElement;
   private readonly fishingLive: HTMLElement;
   private readonly fishingBiteTarget: HTMLButtonElement;
@@ -217,7 +148,6 @@ export class SurvivalUI {
   private paused = false;
   private disposed = false;
   private announcementVersion = 0;
-  private feedbackTimer: number | undefined;
   private restartIssued = false;
   private pauseReturnTarget: HTMLElement | null = null;
   private fishingReturnTarget: HTMLElement | null = null;
@@ -241,21 +171,10 @@ export class SurvivalUI {
   private suppressFishingClick = false;
   private fishingAnnouncementVersion = 0;
   private pendingFishingFade: PendingFade | null = null;
-  private pendingSleepTransition: PendingFade | null = null;
-  private pendingDiveCoveredHold: PendingFade | null = null;
-  private pendingRewardResultConfirmation: PendingFade | null = null;
-  private pendingEventChoiceBeat: PendingFade | null = null;
-  private pendingEventOutcomeHold: PendingFade | null = null;
-  private pendingCoveredSceneSettle: PendingFade | null = null;
   private fishingResultContinueIssued = false;
   private fishingResultTarget: ProjectedBoatBounds | null = null;
   private driftingItemFocusTarget: ProjectedBoatBounds | null = null;
   private driftingItemFocusChoicesView: readonly EventContextChoice[] = [];
-  private eventEligibility: ReadonlyMap<ItemInstanceId, EventResponseId> | null = null;
-  private contextualEventChoices: readonly EventContextChoice[] = [];
-  private eventSelectedInstanceId: ItemInstanceId | null = null;
-  private eventSelectedChoiceId: EventResponseId | null = null;
-  private eventPresentationActive = false;
 
   constructor(private readonly mount: HTMLElement) {
     this.root = document.createElement('div');
@@ -263,29 +182,6 @@ export class SurvivalUI {
     this.root.innerHTML = `
       <div class="ui-treatment" aria-hidden="true"></div>
       <div class="survival-announcer" data-survival-announcer aria-live="polite" aria-atomic="true"></div>
-      <div class="survival-feedback" data-survival-feedback aria-hidden="true"></div>
-      <div class="sleep-cover" data-sleep-cover data-profile="solid" aria-hidden="true"></div>
-      <div class="bad-sleep-cue" data-bad-sleep-cue aria-hidden="true">
-        <span class="bad-sleep-cue__eye bad-sleep-cue__eye--left">
-          <i class="bad-sleep-cue__eyelid bad-sleep-cue__eyelid--top"></i>
-          <i class="bad-sleep-cue__eyelid bad-sleep-cue__eyelid--bottom"></i>
-        </span>
-        <span class="bad-sleep-cue__eye bad-sleep-cue__eye--right">
-          <i class="bad-sleep-cue__eyelid bad-sleep-cue__eyelid--top"></i>
-          <i class="bad-sleep-cue__eyelid bad-sleep-cue__eyelid--bottom"></i>
-        </span>
-      </div>
-      <section class="dive-result" data-dive-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="dive-result-title" inert>
-        <div class="dive-result__paper scuba-popup-paper">
-          <button type="button" class="dive-result__close ui-role-context" data-dive-result-close aria-label="Close dive result">&times;</button>
-          <h2 class="dive-result__title scuba-popup-title ui-role-display" id="dive-result-title" data-dive-result-title></h2>
-          <ul class="dive-result__lines ui-role-numeral" data-dive-result-lines></ul>
-          <div class="dive-result__rewards" data-dive-result-rewards hidden></div>
-        </div>
-      </section>
-      <div class="event-sleep-mask" data-event-sleep-mask aria-hidden="true">
-        <i></i><i></i><i></i>
-      </div>
       <section class="fishing-layer" data-fishing role="region" aria-label="Fishing interaction" aria-hidden="true" inert tabindex="-1">
         <div class="survival-announcer" data-fishing-live aria-live="polite" aria-atomic="true"></div>
         <button type="button" class="fishing-bite-target" data-fishing-bite aria-label="BITE - REEL NOW" hidden></button>
@@ -325,12 +221,6 @@ export class SurvivalUI {
             CANCEL
           </button>
         </div>
-      </section>
-      <section class="event-caption" data-event-caption aria-hidden="true" aria-live="polite">
-        <h2 class="ui-role-display" data-event-title hidden></h2>
-        <p class="event-caption__detail ui-role-narrative" data-event-detail hidden></p>
-        <p class="event-caption__risk ui-role-context" data-event-risk hidden></p>
-        <nav class="event-choices" data-event-choices aria-label="Event choices" hidden></nav>
       </section>
       <section class="survival-overlay journal-overlay" data-journal role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival journal" inert>
         <div class="journal-book" data-journal-book>
@@ -374,26 +264,22 @@ export class SurvivalUI {
     `;
     mount.append(this.root);
 
+    this.eventView = new SurvivalEventView();
+    this.coverView = new SurvivalCoverView();
     this.hudView = new SurvivalHudView();
     this.anchorView = new BoatAnchorView(this.root);
+    const announcer = requireElement<HTMLElement>(this.root, '[data-survival-announcer]');
+    announcer.after(
+      this.eventView.feedback,
+      ...this.coverView.roots,
+      this.eventView.sleepMask,
+    );
     const firstFollowingView = requireElement(this.root, '[data-fishing]');
     firstFollowingView.before(...this.hudView.roots, ...this.anchorView.roots);
+    const journal = requireElement(this.root, '[data-journal]');
+    journal.before(this.eventView.caption);
 
-    this.announcer = requireElement(this.root, '[data-survival-announcer]');
-    this.feedback = requireElement(this.root, '[data-survival-feedback]');
-    this.sleepCover = requireElement(this.root, '[data-sleep-cover]');
-    this.badSleepCue = requireElement(this.root, '[data-bad-sleep-cue]');
-    this.diveResultLayer = requireElement(this.root, '[data-dive-result]');
-    this.diveResultTitle = requireElement(this.root, '[data-dive-result-title]');
-    this.diveResultRewards = requireElement(this.root, '[data-dive-result-rewards]');
-    this.diveResultLines = requireElement(this.root, '[data-dive-result-lines]');
-    this.diveResultClose = requireElement(this.root, '[data-dive-result-close]');
-    this.eventSleepMask = requireElement(this.root, '[data-event-sleep-mask]');
-    this.eventCaption = requireElement(this.root, '[data-event-caption]');
-    this.eventTitle = requireElement(this.root, '[data-event-title]');
-    this.eventDetail = requireElement(this.root, '[data-event-detail]');
-    this.eventRisk = requireElement(this.root, '[data-event-risk]');
-    this.eventChoices = requireElement(this.root, '[data-event-choices]');
+    this.announcer = announcer;
     this.fishingLayer = requireElement(this.root, '[data-fishing]');
     this.fishingLive = requireElement(this.root, '[data-fishing-live]');
     this.fishingBiteTarget = requireElement(this.root, '[data-fishing-bite]');
@@ -435,7 +321,7 @@ export class SurvivalUI {
       this.journalLayer,
       this.repairOptionsLayer,
       this.endingLayer,
-      this.diveResultLayer,
+      this.coverView.resultRoot,
       this.driftingItemFocusLayer,
       this.fishingResultLayer,
       this.fishingLayer,
@@ -448,7 +334,7 @@ export class SurvivalUI {
         [this.journalLayer, this.journalTitle],
         [this.repairOptionsLayer, this.repairOptionsTitle],
         [this.endingLayer, this.endingTitle],
-        [this.diveResultLayer, this.diveResultClose],
+        [this.coverView.resultRoot, this.coverView.resultClose],
         [this.driftingItemFocusLayer, () => (
           this.driftingItemFocusChoices.querySelector<HTMLButtonElement>(
             '[data-event-choice][aria-disabled="false"]',
@@ -480,6 +366,15 @@ export class SurvivalUI {
     this.anchorView.onEventChoice = (choiceId) => this.onEventChoice(choiceId);
     this.anchorView.onEventFocus = (eventId) => this.onDriftingItemSelect?.(eventId);
     this.anchorView.onHighlight = (anchorId) => this.onAnchorHighlight(anchorId);
+    this.eventView.onChoice = (choiceId) => this.onEventChoice(choiceId);
+    this.eventView.onAnnouncement = (message) => this.publishAnnouncement(message);
+    this.coverView.onResultShow = () => this.showLayer(this.coverView.resultRoot);
+    this.coverView.onResultHide = () => this.hideLayer(this.coverView.resultRoot);
+    this.coverView.onResultClose = () => {
+      if (this.modalFocus.topmostModal() === this.coverView.resultRoot) {
+        this.coverView.confirmRewardResult();
+      }
+    };
 
     this.root.addEventListener('click', this.handleClick);
     this.root.addEventListener('pointerup', this.handleFishingPointerUp);
@@ -512,36 +407,15 @@ export class SurvivalUI {
   beginEventPresentation(): void {
     if (this.disposed) return;
     this.anchorView.beginEventPresentation();
-    this.eventPresentationActive = true;
+    this.eventView.begin();
     this.syncCommandState();
   }
 
   showItemAnimationLab(): void {
     if (this.disposed) return;
-    this.updateText('event:title', this.eventTitle, 'ITEM ANIMATION LAB');
-    this.eventTitle.hidden = false;
-    this.updateText(
-      'event:detail',
-      this.eventDetail,
-      'SELECT AN ITEM OR TOOL. CARLITOS OPENS HIS STATS.',
-    );
-    this.eventDetail.hidden = false;
-    this.eventRisk.textContent = '';
-    this.eventRisk.hidden = true;
-    this.eventCaption.dataset.eventId = 'item-animation-lab';
-    delete this.eventCaption.dataset.danger;
-    this.eventPresentationActive = true;
     this.anchorView.setItemAnimationLabActive(true);
-    this.eventCaption.setAttribute(
-      'aria-label',
-      'Item Animation Lab. Select an item. Carlitos opens his stats.',
-    );
-    this.eventCaption.classList.add('is-visible');
-    this.eventCaption.setAttribute('aria-hidden', 'false');
+    this.eventView.showItemAnimationLab();
     this.syncCommandState();
-    this.publishAnnouncement(
-      'Item Animation Lab. Select an item. Carlitos opens his stats.',
-    );
   }
 
   showEventReveal(
@@ -550,30 +424,14 @@ export class SurvivalUI {
     if (this.disposed) return Promise.resolve();
     this.anchorView.setItemAnimationLabActive(false);
     this.anchorView.setEventPresentationActive(true);
-    const risk = event.danger.toLocaleUpperCase('en-US');
-    this.updateText('event:title', this.eventTitle, '');
-    this.eventTitle.hidden = true;
-    this.updateText('event:detail', this.eventDetail, event.revealText);
-    this.updateText('event:risk', this.eventRisk, risk);
-    this.eventDetail.hidden = true;
-    this.eventRisk.hidden = true;
-    this.eventCaption.dataset.eventId = event.id;
-    this.eventCaption.dataset.danger = event.danger;
-    this.eventPresentationActive = true;
-    this.eventCaption.classList.remove('is-visible');
-    this.eventCaption.setAttribute('aria-hidden', 'true');
-    this.eventCaption.removeAttribute('aria-label');
+    const reveal = this.eventView.showReveal(event);
     this.syncCommandState();
-    this.publishAnnouncement(
-      `${event.danger[0]!.toUpperCase()}${event.danger.slice(1)} event. ${event.revealText}`,
-    );
-    return Promise.resolve();
+    return reveal;
   }
 
   hideEventReveal(): void {
     if (this.disposed) return;
-    this.eventCaption.classList.remove('is-visible');
-    this.eventCaption.setAttribute('aria-hidden', 'true');
+    this.eventView.hideReveal();
   }
 
   setEventSelection(
@@ -581,322 +439,82 @@ export class SurvivalUI {
     contextualChoices: readonly EventContextChoice[] = [],
   ): void {
     if (this.disposed) return;
-    this.eventEligibility = new Map(eligible);
-    this.contextualEventChoices = [...contextualChoices];
-    this.eventSelectedInstanceId = null;
-    this.eventSelectedChoiceId = null;
     this.anchorView.setEventSelection(eligible, contextualChoices);
-    this.renderContextualEventChoices();
+    this.eventView.setSelection(contextualChoices);
     this.syncCommandState();
   }
 
   setEventUsing(instanceId: ItemInstanceId): void {
-    if (this.disposed || this.eventEligibility === null) return;
-    this.eventSelectedInstanceId = instanceId;
+    if (this.disposed) return;
     this.anchorView.setEventUsing(instanceId);
     this.syncCommandState();
   }
 
   playEventChoiceBeat(choiceId: EventResponseId): Promise<void> {
-    if (this.disposed || !this.eventPresentationActive) return Promise.resolve();
-    const button = [
-      ...this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]'),
-      ...this.driftingItemFocusChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]'),
-      ...this.anchorView.anchorButtonsInOrder(),
-    ].find((candidate) => candidate.dataset.eventChoice === choiceId);
-    if (
-      button === undefined
-      || button.dataset.unavailableReason !== undefined
-      || this.eventSelectedChoiceId !== null
-    ) {
-      return Promise.resolve();
+    if (this.disposed || !this.eventView.isActive()) return Promise.resolve();
+    const button = this.eventView.choiceButton(choiceId)
+      ?? this.driftingItemChoiceButton(choiceId)
+      ?? this.anchorView.eventChoiceButton(choiceId)
+      ?? null;
+    const beat = this.eventView.playChoiceBeat(choiceId, button);
+    if (this.eventView.selectedChoice() === choiceId) {
+      this.anchorView.setEventChoiceSelection(choiceId);
     }
-    this.pendingEventChoiceBeat?.finish();
-    this.eventSelectedChoiceId = choiceId;
-    this.anchorView.setEventChoiceSelection(choiceId);
     this.syncCommandState();
-    const delay = EVENT_CHOICE_BEAT_MS;
-    return new Promise((resolve) => {
-      let settled = false;
-      let timer = 0;
-      const finish = (): void => {
-        if (settled) return;
-        settled = true;
-        settleAfterCleanup(resolve, [
-          () => window.clearTimeout(timer),
-          () => button.removeEventListener('animationend', handleAnimationEnd),
-          () => {
-            if (this.pendingEventChoiceBeat?.finish === finish) {
-              this.pendingEventChoiceBeat = null;
-            }
-          },
-        ]);
-      };
-      const handleAnimationEnd = (event: AnimationEvent): void => {
-        if (event.target === button) finish();
-      };
-      button.addEventListener('animationend', handleAnimationEnd);
-      timer = window.setTimeout(finish, delay);
-      this.pendingEventChoiceBeat = { finish };
-    });
+    return beat;
   }
 
   clearEventPresentation(): void {
     if (this.disposed) return;
-    this.anchorView.clearEventPresentation();
-    this.pendingEventChoiceBeat?.finish();
-    this.eventSleepMask.classList.remove('is-visible');
-    this.badSleepCue.classList.remove('is-visible');
-    const focusedContextualChoice = document.activeElement !== null
-      && this.eventChoices.contains(document.activeElement);
-    this.eventEligibility = null;
-    this.contextualEventChoices = [];
-    this.eventSelectedInstanceId = null;
-    this.eventSelectedChoiceId = null;
-    this.eventPresentationActive = false;
-    this.eventCaption.classList.remove('is-visible');
-    this.eventCaption.setAttribute('aria-hidden', 'true');
-    this.eventCaption.removeAttribute('aria-label');
-    delete this.eventCaption.dataset.eventId;
-    delete this.eventCaption.dataset.danger;
-    this.updateText('event:title', this.eventTitle, '');
-    this.eventTitle.hidden = true;
-    this.eventDetail.textContent = '';
-    this.eventDetail.hidden = true;
-    this.eventRisk.textContent = '';
-    this.eventRisk.hidden = true;
-    this.eventChoices.replaceChildren();
-    this.eventChoices.hidden = true;
-    this.syncCommandState();
-    if (focusedContextualChoice) this.firstUsableAction()?.focus();
+    const focusedContextualChoice = this.eventView.containsChoice(document.activeElement);
+    const result = runCleanupSteps([
+      () => this.anchorView.clearEventPresentation(),
+      () => this.eventView.clear(),
+      () => this.coverView.setBadSleepCue(false),
+      () => this.syncCommandState(),
+      () => { if (focusedContextualChoice) this.firstUsableAction()?.focus(); },
+    ]);
+    if (result.failed) throw result.firstError;
   }
 
   setEventSleepMask(eventId: string, visible: boolean): void {
     if (this.disposed) return;
-    this.eventSleepMask.classList.toggle(
-      'is-visible',
-      eventId === 'ghosts' && visible,
-    );
+    this.eventView.setSleepMask(eventId, visible);
   }
 
   showFeedback(outcome: Pick<ActionOutcome, 'accepted' | 'message'>): void {
     if (this.disposed) return;
-    window.clearTimeout(this.feedbackTimer);
-    this.feedback.dataset.accepted = String(outcome.accepted);
-    this.feedback.textContent = outcome.message;
-    this.feedback.classList.remove('is-visible');
-    void this.feedback.offsetWidth;
-    this.feedback.classList.add('is-visible');
-    this.publishAnnouncement(outcome.message);
-    this.feedbackTimer = window.setTimeout(() => {
-      if (!this.disposed) this.feedback.classList.remove('is-visible');
-    }, 2600);
+    this.eventView.showFeedback(outcome);
   }
 
   setSleepCoverProfile(profile: SleepCoverProfile): Promise<void> {
-    if (this.disposed) return Promise.resolve();
-    this.sleepCover.dataset.profile = profile;
-    return Promise.resolve();
+    return this.disposed ? Promise.resolve() : this.coverView.setProfile(profile);
   }
 
   setBadSleepCue(visible: boolean): void {
     if (this.disposed) return;
-    this.badSleepCue.classList.toggle('is-visible', visible);
+    this.coverView.setBadSleepCue(visible);
   }
 
   setSleepCovered(covered: boolean): Promise<void> {
-    if (this.disposed) return Promise.resolve();
-    this.pendingSleepTransition?.finish();
-    this.sleepCover.classList.toggle('is-covered', covered);
-    const delay = this.sleepCover.dataset.profile === 'dive'
-      ? DIVE_TRANSITION_MS
-      : SLEEP_TRANSITION_MS;
-    return new Promise((resolve) => {
-      let settled = false;
-      let timer = 0;
-      const finish = (): void => {
-        if (settled) return;
-        settled = true;
-        settleAfterCleanup(resolve, [
-          () => window.clearTimeout(timer),
-          () => this.sleepCover.removeEventListener('transitionend', handleTransitionEnd),
-          () => {
-            if (this.pendingSleepTransition?.finish === finish) {
-              this.pendingSleepTransition = null;
-            }
-          },
-        ]);
-      };
-      const handleTransitionEnd = (event: TransitionEvent): void => {
-        if (event.target === this.sleepCover && event.propertyName === 'opacity') finish();
-      };
-      this.sleepCover.addEventListener('transitionend', handleTransitionEnd);
-      timer = window.setTimeout(finish, delay);
-      this.pendingSleepTransition = { finish };
-    });
+    return this.disposed ? Promise.resolve() : this.coverView.setCovered(covered);
   }
 
   holdDiveCovered(): Promise<void> {
-    if (this.disposed) return Promise.resolve();
-    this.pendingDiveCoveredHold?.finish();
-    return this.createDiveHold(
-      DIVE_COVERED_HOLD_MS,
-      (pending) => { this.pendingDiveCoveredHold = pending; },
-      () => this.pendingDiveCoveredHold,
-      () => { this.pendingDiveCoveredHold = null; },
-    );
+    return this.disposed ? Promise.resolve() : this.coverView.holdDiveCovered();
   }
 
   showRewardResult(view: RewardResultView): Promise<void> {
-    if (this.disposed) return Promise.resolve();
-    this.pendingRewardResultConfirmation?.finish();
-    this.diveResultLayer.classList.toggle(
-      'is-chest-reward',
-      view.title === 'CHEST REWARD',
-    );
-    this.diveResultTitle.textContent = view.title;
-    this.diveResultClose.setAttribute(
-      'aria-label',
-      view.title === 'CHEST REWARD' ? 'Close chest reward' : 'Close dive result',
-    );
-    this.renderDiveReward(view.reward);
-    this.diveResultLines.hidden = view.lines.length === 0;
-    this.diveResultLines.replaceChildren(...view.lines.map((line) => {
-      const item = document.createElement('li');
-      item.textContent = line;
-      return item;
-    }));
-    const confirmation = new Promise<void>((resolve) => {
-      let settled = false;
-      const finish = (): void => {
-        if (settled) return;
-        settled = true;
-        const current = this.pendingRewardResultConfirmation?.finish === finish;
-        settleAfterCleanup(resolve, [
-          () => {
-            if (current) this.pendingRewardResultConfirmation = null;
-          },
-          () => {
-            if (current) this.clearRewardResultView();
-          },
-        ]);
-      };
-      this.pendingRewardResultConfirmation = { finish };
-    });
-    this.showLayer(this.diveResultLayer);
-    return confirmation;
+    return this.disposed ? Promise.resolve() : this.coverView.showRewardResult(view);
   }
 
   hideRewardResult(): void {
     if (this.disposed) return;
-    this.pendingRewardResultConfirmation?.finish();
-    this.clearRewardResultView();
-  }
-
-  private clearRewardResultView(): void {
-    throwCleanupFailure(runCleanupSteps([
-      () => this.hideLayer(this.diveResultLayer),
-      () => this.diveResultLayer.classList.remove('is-chest-reward'),
-      () => { this.diveResultTitle.textContent = ''; },
-      () => { this.diveResultRewards.hidden = true; },
-      () => this.diveResultRewards.replaceChildren(),
-      () => { this.diveResultLines.hidden = true; },
-      () => this.diveResultLines.replaceChildren(),
-    ]));
-  }
-
-  private renderDiveReward(reward: RewardSummary | null): void {
-    this.diveResultRewards.replaceChildren();
-    this.diveResultRewards.hidden = reward === null;
-    if (reward === null) return;
-    const itemId = driftingCargoRewardItemId(reward);
-    const entry = document.createElement('span');
-    entry.className = 'dive-result__reward-entry';
-    const circle = document.createElement('span');
-    circle.className = 'weight-circle is-filled dive-result__reward';
-    circle.dataset.itemType = itemId;
-    circle.setAttribute('aria-hidden', 'true');
-    const thumbnail = document.createElement('img');
-    thumbnail.className = 'weight-circle__thumbnail';
-    thumbnail.src = itemThumbnailUrl(itemId);
-    thumbnail.alt = '';
-    thumbnail.decoding = 'async';
-    thumbnail.draggable = false;
-    thumbnail.addEventListener('error', () => {
-      thumbnail.hidden = true;
-      circle.classList.add('has-image-error');
-    }, { once: true });
-    circle.append(thumbnail);
-    const copy = document.createElement('span');
-    copy.className = 'dive-result__reward-copy';
-    const name = document.createElement('strong');
-    name.className = 'dive-result__reward-name ui-role-context';
-    name.dataset.diveResultRewardName = '';
-    name.textContent = diveRewardName(reward);
-    const quantity = document.createElement('span');
-    quantity.className = 'dive-result__reward-quantity ui-role-numeral';
-    quantity.dataset.diveResultRewardQuantity = '';
-    quantity.textContent = `×${reward.quantity}`;
-    copy.append(name, quantity);
-    entry.append(circle, copy);
-    this.diveResultRewards.replaceChildren(entry);
-  }
-
-  private createDiveHold(
-    delay: number,
-    setPending: (pending: PendingFade) => void,
-    getPending: () => PendingFade | null,
-    clearPending: () => void,
-    onCurrentFinish?: () => void,
-  ): Promise<void> {
-    return new Promise((resolve) => {
-      let settled = false;
-      let timer = 0;
-      const finish = (): void => {
-        if (settled) return;
-        settled = true;
-        let current = false;
-        settleAfterCleanup(resolve, [
-          () => window.clearTimeout(timer),
-          () => { current = getPending()?.finish === finish; },
-          () => { if (current) clearPending(); },
-          () => { if (current) onCurrentFinish?.(); },
-        ]);
-      };
-      timer = window.setTimeout(finish, delay);
-      setPending({ finish });
-    });
+    this.coverView.hideRewardResult();
   }
 
   settleCoveredScene(): Promise<void> {
-    if (this.disposed) return Promise.resolve();
-    this.pendingCoveredSceneSettle?.finish();
-    return new Promise((resolve) => {
-      let settled = false;
-      let frame = 0;
-      let completedFrames = 0;
-      const finish = (): void => {
-        if (settled) return;
-        settled = true;
-        let current = false;
-        settleAfterCleanup(resolve, [
-          () => { if (frame !== 0) window.cancelAnimationFrame(frame); },
-          () => { current = this.pendingCoveredSceneSettle?.finish === finish; },
-          () => { if (current) this.pendingCoveredSceneSettle = null; },
-        ]);
-      };
-      const advance = (): void => {
-        frame = 0;
-        completedFrames += 1;
-        if (completedFrames >= 2) {
-          finish();
-          return;
-        }
-        frame = window.requestAnimationFrame(advance);
-      };
-      frame = window.requestAnimationFrame(advance);
-      this.pendingCoveredSceneSettle = { finish };
-    });
+    return this.disposed ? Promise.resolve() : this.coverView.settleCoveredScene();
   }
 
   setFishingState(state: FishingUiState): void {
@@ -1042,32 +660,20 @@ export class SurvivalUI {
   }
 
   holdSleep(): Promise<void> {
-    const delay = SLEEP_HOLD_MS;
-    return new Promise((resolve) => window.setTimeout(resolve, delay));
+    return this.disposed ? Promise.resolve() : this.coverView.holdSleep();
   }
 
   holdEventOutcome(): Promise<void> {
-    if (this.disposed) return Promise.resolve();
-    this.pendingEventOutcomeHold?.finish();
-    const delay = EVENT_OUTCOME_HOLD_MS;
-    return new Promise((resolve) => {
-      let settled = false;
-      let timer = 0;
-      const finish = (): void => {
-        if (settled) return;
-        settled = true;
-        settleAfterCleanup(resolve, [
-          () => window.clearTimeout(timer),
-          () => {
-            if (this.pendingEventOutcomeHold?.finish === finish) {
-              this.pendingEventOutcomeHold = null;
-            }
-          },
-        ]);
-      };
-      timer = window.setTimeout(finish, delay);
-      this.pendingEventOutcomeHold = { finish };
-    });
+    return this.disposed ? Promise.resolve() : this.coverView.holdEventOutcome();
+  }
+
+  settleForVisibilityChange(): void {
+    if (this.disposed) return;
+    const result = runCleanupSteps([
+      () => this.eventView.settleForVisibilityChange(),
+      () => this.coverView.settleForVisibilityChange(),
+    ]);
+    if (result.failed) throw result.firstError;
   }
 
   showJournal(entries: readonly JournalEntry[]): void {
@@ -1100,6 +706,7 @@ export class SurvivalUI {
     }
     this.hudView.setBusy(busy);
     this.anchorView.setBusy(busy);
+    this.eventView.setBusy(busy);
     this.syncCommandState();
   }
 
@@ -1161,21 +768,9 @@ export class SurvivalUI {
         }
       }
     };
-    clean(() => { this.eventEligibility = null; });
-    clean(() => { this.contextualEventChoices = []; });
-    clean(() => { this.eventSelectedInstanceId = null; });
-    clean(() => { this.eventSelectedChoiceId = null; });
-    clean(() => { this.eventPresentationActive = false; });
-    clean(() => this.badSleepCue.classList.remove('is-visible'));
-    clean(() => this.eventChoices.replaceChildren());
-    clean(() => { this.eventChoices.hidden = true; });
-    clean(() => this.pendingSleepTransition?.finish());
-    clean(() => this.pendingDiveCoveredHold?.finish());
-    clean(() => this.pendingRewardResultConfirmation?.finish());
+    clean(() => this.eventView.dispose());
+    clean(() => this.coverView.dispose());
     clean(() => this.pendingFishingFade?.finish());
-    clean(() => this.pendingEventChoiceBeat?.finish());
-    clean(() => this.pendingEventOutcomeHold?.finish());
-    clean(() => this.pendingCoveredSceneSettle?.finish());
     clean(() => { this.fishingAnnouncementVersion += 1; });
     clean(() => this.hideLayer(this.driftingItemFocusLayer));
     if (this.fishingMode !== 'hidden') {
@@ -1187,7 +782,6 @@ export class SurvivalUI {
     clean(() => this.hudView.dispose());
     clean(() => this.modalFocus.dispose());
     clean(() => { this.announcementVersion += 1; });
-    clean(() => window.clearTimeout(this.feedbackTimer));
     clean(() => this.root.removeEventListener('click', this.handleClick));
     clean(() => this.root.removeEventListener('pointerup', this.handleFishingPointerUp));
     clean(() => document.removeEventListener('keydown', this.handleKeyDown));
@@ -1267,17 +861,6 @@ export class SurvivalUI {
     this.repairTargets.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
       button.disabled = this.busy;
     });
-    this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]').forEach((button) => {
-      const unavailable = button.dataset.unavailableReason !== undefined;
-      const selected = button.dataset.eventChoice === this.eventSelectedChoiceId;
-      button.dataset.eventState = selected ? 'selected' : 'idle';
-      button.setAttribute('aria-pressed', String(selected));
-      button.disabled = false;
-      button.setAttribute(
-        'aria-disabled',
-        unavailable || this.busy || this.eventSelectedChoiceId !== null ? 'true' : 'false',
-      );
-    });
     this.driftingItemFocusChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]').forEach((button) => {
       const unavailable = button.dataset.unavailableReason !== undefined;
       button.dataset.eventState = 'idle';
@@ -1285,39 +868,6 @@ export class SurvivalUI {
       button.disabled = false;
       button.setAttribute('aria-disabled', unavailable || this.busy ? 'true' : 'false');
     });
-  }
-
-  private renderContextualEventChoices(): void {
-    const choices = this.contextualEventChoices
-      .filter((choice) => choice.id !== 'sleep' && choice.anchorId === undefined)
-      .map((choice) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'event-choice ui-role-context';
-        button.dataset.eventChoice = choice.id;
-        button.dataset.eventState = 'idle';
-        button.setAttribute('aria-pressed', 'false');
-        button.textContent = choice.label;
-        if (choice.unavailableReason !== null) {
-          button.dataset.unavailableReason = choice.unavailableReason;
-          button.setAttribute('aria-description', choice.unavailableReason);
-          const reason = document.createElement('span');
-          reason.className = 'event-choice__reason ui-role-narrative';
-          reason.textContent = choice.unavailableReason;
-          button.append(reason);
-        }
-        return button;
-      });
-    this.eventChoices.replaceChildren(...choices);
-    this.eventChoices.hidden = choices.length === 0;
-    const showCaption = this.eventPresentationActive && (
-      !this.eventTitle.hidden
-      || !this.eventDetail.hidden
-      || !this.eventRisk.hidden
-      || choices.length > 0
-    );
-    this.eventCaption.classList.toggle('is-visible', showCaption);
-    this.eventCaption.setAttribute('aria-hidden', showCaption ? 'false' : 'true');
   }
 
   private renderDriftingItemFocusChoices(): void {
@@ -1625,8 +1175,8 @@ export class SurvivalUI {
 
   private firstUsableAction(): HTMLButtonElement | null {
     return this.anchorView.firstUsableCommand()
-      ?? (this.eventPresentationActive
-        ? [...this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]')]
+      ?? (this.eventView.isActive()
+        ? this.eventView.choiceButtonsInOrder()
           .find((button) => this.isUsableCommand(button))
         : null)
       ?? null;
@@ -1664,10 +1214,10 @@ export class SurvivalUI {
   }
 
   private trapEventFocus(event: KeyboardEvent): boolean {
-    if (event.key !== 'Tab' || !this.eventPresentationActive) return false;
+    if (event.key !== 'Tab' || !this.eventView.isActive()) return false;
     const controls = [
       ...this.anchorView.anchorButtonsInOrder(),
-      ...this.eventChoices.querySelectorAll<HTMLButtonElement>('[data-event-choice]'),
+      ...this.eventView.choiceButtonsInOrder(),
     ].filter((element) => this.isFocusableCommand(element));
     if (controls.length === 0) return false;
     const first = controls[0]!;
@@ -1692,18 +1242,29 @@ export class SurvivalUI {
     const focusActive = this.driftingItemFocusLayer.classList.contains('is-visible');
     if (
       choiceId === undefined
-      || (!this.eventPresentationActive && !focusActive)
+      || (!this.eventView.isActive() && !focusActive)
       || this.busy
-      || (this.eventPresentationActive && this.eventSelectedChoiceId !== null)
+      || (this.eventView.isActive() && this.eventView.selectedChoice() !== null)
       || button.getAttribute('aria-disabled') === 'true'
     ) return;
     this.onEventChoice(choiceId);
   }
 
+  private driftingItemChoiceButton(choiceId: EventResponseId): HTMLButtonElement | null {
+    return [...this.driftingItemFocusChoices.querySelectorAll<HTMLButtonElement>(
+      '[data-event-choice]',
+    )].find((button) => button.dataset.eventChoice === choiceId) ?? null;
+  }
+
   private readonly handleClick = (event: MouseEvent): void => {
     const target = event.target;
     if (!(target instanceof Element)) return;
-    if (this.hudView.contains(target) || this.anchorView.contains(target)) return;
+    if (
+      this.hudView.contains(target)
+      || this.anchorView.contains(target)
+      || this.eventView.contains(target)
+      || this.coverView.contains(target)
+    ) return;
     const topmostModal = this.modalFocus.topmostModal();
     if (
       topmostModal === this.journalLayer
@@ -1748,11 +1309,6 @@ export class SurvivalUI {
     }
     if (button.hasAttribute('data-journal-close')) {
       this.onJournalClose();
-      return;
-    }
-    if (button.hasAttribute('data-dive-result-close')) {
-      if (topmostModal !== this.diveResultLayer) return;
-      this.pendingRewardResultConfirmation?.finish();
       return;
     }
     if (button.hasAttribute('data-fishing-result-continue')) {
@@ -1817,18 +1373,17 @@ export class SurvivalUI {
     if (this.anchorView.handleCommandKeyDown(event)) return;
     const target = event.target;
     if (
-      (this.eventPresentationActive || topmostModal === this.driftingItemFocusLayer)
+      (this.eventView.isActive() || topmostModal === this.driftingItemFocusLayer)
       && target instanceof Element
       && (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar')
     ) {
       const choice = target.closest<HTMLButtonElement>('[data-event-choice]');
-      if (
-        choice !== null
-        && (
-          this.eventChoices.contains(choice)
-          || this.driftingItemFocusChoices.contains(choice)
-        )
-      ) {
+      if (choice !== null && this.eventView.containsChoice(choice)) {
+        event.preventDefault();
+        this.eventView.activateChoice(choice);
+        return;
+      }
+      if (choice !== null && this.driftingItemFocusChoices.contains(choice)) {
         event.preventDefault();
         this.activateEventChoice(choice);
         return;

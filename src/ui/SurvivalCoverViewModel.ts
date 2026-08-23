@@ -1,0 +1,9 @@
+import type { RewardSummary } from '../survival/survivalTypes';
+
+export type SleepCoverProfile = 'solid' | 'dive' | 'midnight-tour';
+
+export interface RewardResultView {
+  readonly title: 'DIVE RESULT' | 'CHEST REWARD';
+  readonly reward: RewardSummary | null;
+  readonly lines: readonly string[];
+}

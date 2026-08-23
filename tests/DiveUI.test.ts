@@ -105,6 +105,29 @@ describe('DiveUI', () => {
     expect(document.activeElement).toBe(close);
   });
 
+  it('ignores result closure while a higher-priority modal is topmost', async () => {
+    const { mount, ui } = createUI();
+    let settled = false;
+    const confirmation = ui.showRewardResult({
+      title: 'DIVE RESULT',
+      reward: null,
+      lines: ['NOTHING FOUND'],
+    }).then(() => { settled = true; });
+    const result = mount.querySelector<HTMLElement>('[data-dive-result]')!;
+    const close = result.querySelector<HTMLButtonElement>('[data-dive-result-close]')!;
+
+    ui.setPaused(true);
+    close.click();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(result.classList).toContain('is-visible');
+
+    ui.setPaused(false);
+    close.click();
+    await confirmation;
+    expect(settled).toBe(true);
+  });
+
   it('settles a superseded result and waits for confirmation of the later result', async () => {
     const { mount, ui } = createUI();
     const first = ui.showRewardResult({ title: 'DIVE RESULT', reward: null, lines: ['FOOD +1'] });
@@ -195,15 +218,17 @@ describe('DiveUI', () => {
       lines: ['FOOD +1'],
     });
     const internals = ui as unknown as {
-      readonly diveResultRewards: HTMLElement;
-      readonly diveResultLines: HTMLElement;
-      readonly pendingRewardResultConfirmation: { finish(): void } | null;
+      readonly coverView: {
+        readonly resultRewards: HTMLElement;
+        readonly resultLines: HTMLElement;
+        readonly pendingRewardConfirmation: { finish(): void } | null;
+      };
     };
-    const finish = internals.pendingRewardResultConfirmation!.finish;
+    const finish = internals.coverView.pendingRewardConfirmation!.finish;
     const laterError = new Error('line cleanup failed');
-    const rewardCleanup = vi.spyOn(internals.diveResultRewards, 'replaceChildren')
+    const rewardCleanup = vi.spyOn(internals.coverView.resultRewards, 'replaceChildren')
       .mockImplementation(() => { throw undefined; });
-    const lineCleanup = vi.spyOn(internals.diveResultLines, 'replaceChildren')
+    const lineCleanup = vi.spyOn(internals.coverView.resultLines, 'replaceChildren')
       .mockImplementation(() => { throw laterError; });
     const notThrown = Symbol('not thrown');
     let thrown: unknown = notThrown;
@@ -227,13 +252,15 @@ describe('DiveUI', () => {
     const { mount, ui } = createUI();
     const transition = ui.setSleepCovered(true);
     const internals = ui as unknown as {
-      readonly sleepCover: HTMLElement;
+      readonly coverView: {
+        readonly sleepCover: HTMLElement;
+        readonly pendingCoverTransition: { finish(): void } | null;
+      };
       readonly modalFocus: { dispose(): void };
-      readonly pendingSleepTransition: { finish(): void } | null;
     };
-    const finish = internals.pendingSleepTransition!.finish;
+    const finish = internals.coverView.pendingCoverTransition!.finish;
     const transitionError = new Error('transition listener cleanup failed');
-    const remove = vi.spyOn(internals.sleepCover, 'removeEventListener')
+    const remove = vi.spyOn(internals.coverView.sleepCover, 'removeEventListener')
       .mockImplementation(() => { throw transitionError; });
     vi.spyOn(internals.modalFocus, 'dispose').mockImplementation(() => {
       throw new Error('later modal cleanup failed');
@@ -248,7 +275,7 @@ describe('DiveUI', () => {
 
     expect(thrown).toBe(transitionError);
     await transition;
-    expect(internals.pendingSleepTransition).toBeNull();
+    expect(internals.coverView.pendingCoverTransition).toBeNull();
     expect(mount.children).toHaveLength(0);
     expect(() => finish()).not.toThrow();
     expect(remove).toHaveBeenCalledOnce();

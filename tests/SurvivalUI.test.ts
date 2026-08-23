@@ -1120,6 +1120,61 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector<HTMLElement>('[data-event-choices]')?.hidden).toBe(true);
   });
 
+  it('targets choice beats by caption, drifting control, then boat anchor', async () => {
+    vi.useFakeTimers();
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.beginEventPresentation();
+    ui.setEventSelection(new Map(), [
+      { id: 'same', label: 'Caption', unavailableReason: null },
+      { id: 'same', label: 'Anchor', unavailableReason: null, anchorId: 'bucket-test' },
+    ]);
+    const caption = mount.querySelector<HTMLButtonElement>(
+      '[data-event-choices] [data-event-choice="same"]',
+    )!;
+    const anchor = mount.querySelector<HTMLButtonElement>('[data-anchor-id="bucket-test"]')!;
+    const captionListen = vi.spyOn(caption, 'addEventListener');
+    const anchorListen = vi.spyOn(anchor, 'addEventListener');
+
+    const captionBeat = ui.playEventChoiceBeat('same');
+    expect(captionListen.mock.calls.some(([type]) => type === 'animationend')).toBe(true);
+    expect(anchorListen.mock.calls.some(([type]) => type === 'animationend')).toBe(false);
+    ui.clearEventPresentation();
+    await captionBeat;
+
+    ui.beginEventPresentation();
+    ui.setEventSelection(new Map(), [
+      { id: 'same', label: 'Anchor', unavailableReason: null, anchorId: 'bucket-test' },
+    ]);
+    ui.showDriftingItemFocus({
+      eventId: 'drifting-barrel',
+      title: 'DRIFTING BARREL',
+      choices: [{ id: 'same', label: 'Drifting', unavailableReason: null }],
+      target: null,
+    });
+    const drifting = mount.querySelector<HTMLButtonElement>(
+      '[data-drifting-item-choices] [data-event-choice="same"]',
+    )!;
+    const driftingListen = vi.spyOn(drifting, 'addEventListener');
+    const driftingBeat = ui.playEventChoiceBeat('same');
+
+    expect(driftingListen.mock.calls.some(([type]) => type === 'animationend')).toBe(true);
+    expect(anchorListen.mock.calls.some(([type]) => type === 'animationend')).toBe(false);
+    ui.clearEventPresentation();
+    await driftingBeat;
+
+    ui.hideDriftingItemFocus();
+    ui.beginEventPresentation();
+    ui.setEventSelection(new Map(), [
+      { id: 'same', label: 'Anchor', unavailableReason: null, anchorId: 'bucket-test' },
+    ]);
+    const anchorBeat = ui.playEventChoiceBeat('same');
+    expect(anchorListen.mock.calls.some(([type]) => type === 'animationend')).toBe(true);
+    ui.clearEventPresentation();
+    await anchorBeat;
+  });
+
   it('holds a completed event outcome for two seconds and settles on dispose', async () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');
@@ -1161,6 +1216,26 @@ describe('SurvivalUI', () => {
     expect(replacementSettled).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
     ui.dispose();
+  });
+
+  it('settles event and cover work for visibility changes and accepts later work', async () => {
+    vi.useFakeTimers();
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    openContextualEvent(ui);
+    const beat = ui.playEventChoiceBeat('retrieve');
+    const cover = ui.setSleepCovered(true);
+    const sleep = ui.holdSleep();
+    const outcome = ui.holdEventOutcome();
+
+    ui.settleForVisibilityChange();
+    await Promise.all([beat, cover, sleep, outcome]);
+    expect(vi.getTimerCount()).toBe(0);
+
+    const later = ui.holdSleep();
+    await vi.advanceTimersByTimeAsync(450);
+    await later;
   });
 
   it('keeps unavailable contextual choices focusable while explaining and suppressing them', () => {
@@ -3205,7 +3280,7 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
     const internals = ui as unknown as {
       readonly root: HTMLElement;
-      readonly eventChoices: HTMLElement;
+      readonly eventView: { readonly choices: HTMLElement };
       readonly anchorView: BoatAnchorView;
       readonly hudView: SurvivalHudView;
       readonly modalFocus: { dispose(): void };
@@ -3221,7 +3296,7 @@ describe('SurvivalUI', () => {
     const rootRemove = vi.spyOn(internals.root, 'remove');
     const documentRemove = vi.spyOn(document, 'removeEventListener');
     const windowRemove = vi.spyOn(window, 'removeEventListener');
-    vi.spyOn(internals.eventChoices, 'replaceChildren').mockImplementation(() => {
+    vi.spyOn(internals.eventView.choices, 'replaceChildren').mockImplementation(() => {
       throw undefined;
     });
     const laterError = new Error('later modal cleanup failed');

@@ -1,6 +1,7 @@
 import type { SurvivalAudio } from '../audio/SurvivalAudio';
 import { ITEM_DEFINITIONS } from '../game/ItemState';
-import type { SurvivalUI, RewardResultView } from '../ui/SurvivalUI';
+import type { SurvivalUI } from '../ui/SurvivalUI';
+import type { RewardResultView } from '../ui/SurvivalCoverViewModel';
 import type { BoatWorld } from './BoatWorld';
 import type { SurvivalEventFlow } from './SurvivalEventFlow';
 import type { SurvivalSession } from './SurvivalSession';

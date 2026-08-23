@@ -29,11 +29,11 @@ import type {
   SurvivalState,
 } from '../src/survival/survivalTypes';
 import type {
-  RewardResultView,
   FishingResultView,
   FishingUiState,
   SurvivalUI,
 } from '../src/ui/SurvivalUI';
+import type { RewardResultView } from '../src/ui/SurvivalCoverViewModel';
 import type { PresentationWeatherId } from '../src/weather/presentationWeather';
 import { createTestPropModels } from './helpers/propModels';
 import { sequenceRandom } from './helpers/random';
@@ -6214,7 +6214,14 @@ describe('SurvivalPhase orchestration', () => {
     vi.stubGlobal('document', fakeDocument);
     const update = vi.fn();
     const setPaused = vi.fn();
-    const ui: Record<string, unknown> = { render: vi.fn(), setPaused, setJournalUnread: vi.fn(), dispose: vi.fn() };
+    const settleForVisibilityChange = vi.fn();
+    const ui: Record<string, unknown> = {
+      render: vi.fn(),
+      setPaused,
+      setJournalUnread: vi.fn(),
+      settleForVisibilityChange,
+      dispose: vi.fn(),
+    };
     const phase = SurvivalPhase.forTest({
       session: { snapshot: vi.fn(() => snapshot()) },
       world: { update, setPhase: vi.fn(), setWeather: vi.fn(), dispose: vi.fn() }, ui,
@@ -6225,10 +6232,12 @@ describe('SurvivalPhase orchestration', () => {
     fakeDocument.hidden = true;
     listeners.get('visibilitychange')!(new Event('visibilitychange'));
     phase.update(2, 0.016);
+    expect(settleForVisibilityChange).toHaveBeenCalledOnce();
     expect(setPaused).toHaveBeenCalledWith(true);
     expect(update).toHaveBeenCalledOnce();
     fakeDocument.hidden = false;
     listeners.get('visibilitychange')!(new Event('visibilitychange'));
+    expect(settleForVisibilityChange).toHaveBeenCalledOnce();
     phase.update(3, 0.016);
     expect(setPaused).toHaveBeenLastCalledWith(false);
     expect(update).toHaveBeenCalledTimes(2);
