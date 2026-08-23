@@ -406,4 +406,45 @@ describe('EventBundleManager', () => {
     expect(loaded.attach).not.toHaveBeenCalled();
     expect(loaded.dispose).toHaveBeenCalledOnce();
   });
+
+  it.each([undefined, null])(
+    'preserves a first disposal failure thrown as %s',
+    async (firstError) => {
+      const log: string[] = [];
+      const active = bundle('leak', log);
+      const pending = bundle('ghosts', log);
+      vi.mocked(pending.dispose).mockImplementationOnce(() => {
+        log.push('dispose:ghosts');
+        throw firstError;
+      });
+      vi.mocked(active.dispose).mockImplementationOnce(() => {
+        log.push('dispose:leak');
+        throw new Error('later active disposal failed');
+      });
+      const loader = {
+        load: vi.fn()
+          .mockResolvedValueOnce(active)
+          .mockResolvedValueOnce(pending),
+      };
+      const manager = new EventBundleManager(loader);
+      await manager.beginLoad('leak');
+      await manager.activate('leak');
+      await manager.beginLoad('ghosts');
+
+      let thrown = false;
+      let received: unknown;
+      try {
+        manager.dispose();
+      } catch (error) {
+        thrown = true;
+        received = error;
+      }
+
+      expect(thrown).toBe(true);
+      expect(received).toBe(firstError);
+      expect(pending.dispose).toHaveBeenCalledOnce();
+      expect(active.dispose).toHaveBeenCalledOnce();
+      expect(() => manager.dispose()).not.toThrow();
+    },
+  );
 });
