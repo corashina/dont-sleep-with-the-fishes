@@ -235,4 +235,50 @@ describe('SurvivalFishingView', () => {
     expect(cleanup).toHaveBeenCalledOnce();
     expect(() => view.dispose()).not.toThrow();
   });
+
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['Error', new Error('interaction listener cleanup failed')],
+  ] as const)(
+    'continues after a first %s listener failure and preserves that value',
+    (_label, firstError) => {
+      const { view } = createView();
+      const interactionRemove = vi.spyOn(view.interactionRoot, 'removeEventListener')
+        .mockImplementationOnce(() => { throw firstError; });
+      const resultRemove = vi.spyOn(view.resultRoot, 'removeEventListener');
+      const windowRemove = vi.spyOn(window, 'removeEventListener');
+      const notThrown = Symbol('not thrown');
+      let thrown: unknown = notThrown;
+
+      try {
+        view.dispose();
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBe(firstError);
+      expect(interactionRemove.mock.calls.map(([type]) => type))
+        .toEqual(['click', 'pointerup']);
+      expect(resultRemove.mock.calls.map(([type]) => type)).toEqual(['click']);
+      expect(windowRemove.mock.calls.some(([type]) => type === 'resize')).toBe(true);
+      expect(() => view.dispose()).not.toThrow();
+    },
+  );
+
+  it('continues to resize cleanup after a middle listener failure', () => {
+    const { view } = createView();
+    const middleError = new Error('result listener cleanup failed');
+    const interactionRemove = vi.spyOn(view.interactionRoot, 'removeEventListener');
+    const resultRemove = vi.spyOn(view.resultRoot, 'removeEventListener')
+      .mockImplementationOnce(() => { throw middleError; });
+    const windowRemove = vi.spyOn(window, 'removeEventListener');
+
+    expect(() => view.dispose()).toThrow(middleError);
+    expect(interactionRemove.mock.calls.map(([type]) => type))
+      .toEqual(['click', 'pointerup']);
+    expect(resultRemove).toHaveBeenCalledWith('click', expect.any(Function));
+    expect(windowRemove.mock.calls.some(([type]) => type === 'resize')).toBe(true);
+    expect(() => view.dispose()).not.toThrow();
+  });
 });

@@ -2582,6 +2582,45 @@ describe('SurvivalUI', () => {
     );
   });
 
+  it('refreshes fallback fishing result placement from a moved reused rod anchor', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const root = mount.querySelector<HTMLElement>('.survival-ui')!;
+    vi.spyOn(root, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, left: 0, top: 0, right: 800, bottom: 600,
+      width: 800, height: 600, toJSON: () => ({}),
+    });
+    const rod = {
+      id: 'fishing-tools', itemType: null, toolId: 'fishingRod' as const,
+      action: 'fish' as const, remainingUses: null, x: 90, y: 240,
+      visible: true, depleted: false,
+      hitArea: { width: 54, height: 54, depth: 1 },
+    };
+    ui.setAnchors([rod]);
+    ui.showFishingResult({
+      caption: 'EMPTY HOOK', title: 'IT GOT AWAY', detail: 'NO CATCH', catchTarget: null,
+    });
+    const result = mount.querySelector<HTMLElement>('[data-fishing-result]')!;
+    const firstX = result.style.getPropertyValue('--routine-x');
+
+    rod.x = 700;
+    rod.y = 360;
+    ui.setAnchors([rod]);
+
+    expect(result.style.getPropertyValue('--routine-x')).not.toBe(firstX);
+    expect(result.dataset.anchorState).toBe('projected');
+
+    ui.showFishingResult({
+      caption: 'LARGE CATCH', title: 'TUNA', detail: '+2 FOOD',
+      catchTarget: { x: 260, y: 240, width: 110, height: 70, depth: 2, visible: true },
+    });
+    const catchX = result.style.getPropertyValue('--routine-x');
+    rod.x = 100;
+    ui.setAnchors([rod]);
+    expect(result.style.getPropertyValue('--routine-x')).toBe(catchX);
+  });
+
   it('opens drifting item focus from an initial anchor and returns to the boat', () => {
     const style = document.createElement('style');
     style.textContent = mainStyles.match(

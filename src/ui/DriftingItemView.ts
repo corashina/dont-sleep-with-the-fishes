@@ -139,8 +139,10 @@ export class DriftingItemView {
   }
 
   removeListenersForDispose(): void {
-    this.root.removeEventListener('click', this.handleClick);
-    window.removeEventListener('resize', this.handleWindowResize);
+    throwCleanupFailure(runCleanupSteps([
+      () => this.root.removeEventListener('click', this.handleClick),
+      () => window.removeEventListener('resize', this.handleWindowResize),
+    ]));
   }
 
   resetCallbacksForDispose(): void {
