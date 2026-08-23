@@ -908,6 +908,51 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('does not reset an active Other People reaction during rescue progress', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    try {
+      world.stageEvent('other-people');
+      const reveal = world.revealEvent('other-people');
+      world.setDocumentHidden(true);
+      await reveal;
+      const presentation = world.scene.getObjectByName('focused-event:other-people')!;
+      const reaction = world.reactToEventOutcome('other-people', {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The ship answers the signal.',
+        deltas: {},
+        cue: 'none',
+        eventResult: {
+          eventId: 'other-people',
+          choiceId: 'flashlight',
+          resultId: 'people-rescue',
+        },
+      }, {
+        choiceId: 'flashlight',
+        instanceId: null,
+        condition: null,
+      });
+      const rescue = world.play('rescue');
+
+      world.update(0.2, 0.2);
+
+      expect(presentation.userData.state).toBe('answering');
+      expect(await remainsPending(reaction)).toBe(true);
+
+      world.update(4.2, 4);
+      await Promise.all([reaction, rescue]);
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
   it.each([
     ['dedicated', 'leak'],
     ['focused', 'other-people'],
@@ -2165,6 +2210,31 @@ describe('BoatWorld helpers', () => {
       propModels.dispose();
     },
   );
+
+  it('ignores stale drifting-item retrieve and recede commands', async () => {
+    const propModels = createTestPropModels();
+    const adapter = eventAdapterTestDouble('drifting-barrel');
+    const create = vi.spyOn(EventPresentationRegistry.prototype, 'create')
+      .mockReturnValue(adapter);
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    try {
+      world.stageEvent('drifting-barrel');
+
+      await world.retrieveDriftingItem('drifting-chest');
+      await world.recedeDriftingItem('drifting-bottle');
+
+      expect(adapter.react).not.toHaveBeenCalled();
+    } finally {
+      world.dispose();
+      create.mockRestore();
+      propModels.dispose();
+    }
+  });
 
   it('does not dispose drifting barrel resources borrowed from the furniture library', () => {
     const propModels = createTestPropModels();

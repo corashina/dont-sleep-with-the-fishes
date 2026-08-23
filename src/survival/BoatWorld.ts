@@ -91,7 +91,6 @@ import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse'
 import type { EventPresentationAdapter } from './EventPresentationAdapter';
 import { EventPresentationHost } from './EventPresentationHost';
 import { EventPresentationRegistry } from './EventPresentationRegistry';
-import { AUTHORED_EVENT_PRESENTATION_FACTORIES } from './EventPresentationLayer';
 import { EventItemEffects } from './EventItemEffects';
 import { EventItemUseAdapter } from './EventItemUseAdapter';
 import {
@@ -104,7 +103,6 @@ import {
 import type { EventModelLibrary } from './EventModelLibrary';
 import {
   type EventChoicePresentation,
-  type FocusedEventPresentation,
   type FocusedEventPresentationFactories,
 } from './FocusedEventPresentation';
 import type { EventPresentationCue } from './midnightTourAudioCue';
@@ -319,17 +317,6 @@ const FOCUSED_INTERACTION_SPECS: readonly FocusedInteractionSpec[] = Object.free
     minimumHitHeight: 78,
   }),
 ]);
-
-interface RescueCuePresentation extends FocusedEventPresentation {
-  setRescueCue(progress: number | null): void;
-}
-
-function isRescueCuePresentation(
-  presentation: FocusedEventPresentation,
-): presentation is RescueCuePresentation {
-  return typeof (presentation as Partial<RescueCuePresentation>).setRescueCue
-    === 'function';
-}
 
 const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.min(maximum, Math.max(minimum, value));
@@ -1137,20 +1124,6 @@ export class BoatWorld {
   ): EventPresentationAdapter {
     if (this.disposed) throw new Error('Boat world is disposed.');
     let rescueCueCallback: ((progress: number | null) => void) | null = null;
-    const otherPeopleFactory = this.focusedEventFactories['other-people']
-      ?? AUTHORED_EVENT_PRESENTATION_FACTORIES['other-people']!;
-    const focusedFactories = eventId === 'other-people'
-      ? {
-          ...this.focusedEventFactories,
-          'other-people': (dependencies) => {
-            const presentation = otherPeopleFactory(dependencies);
-            if (presentation !== null && isRescueCuePresentation(presentation)) {
-              rescueCueCallback = (progress) => presentation.setRescueCue(progress);
-            }
-            return presentation;
-          },
-        } satisfies FocusedEventPresentationFactories
-      : this.focusedEventFactories;
     const adapter = this.eventPresentationRegistry.create(eventId, {
       worldParent: this.scene,
       boatParent: this.boat,
@@ -1175,7 +1148,7 @@ export class BoatWorld {
         chestDisplay: this.chestDisplay,
         emitCue: (cue) => this.eventCueHandler(cue),
       },
-      focusedFactories,
+      focusedFactories: this.focusedEventFactories,
       featuredModels,
       featuredTargets: {
         driftingItemBow: this.driftingItemBowRest,
@@ -1188,6 +1161,9 @@ export class BoatWorld {
         readAmplitudeScale: this.readWorldWaveAmplitudeScale,
       },
       moon: this.moonEventPresentation,
+      registerRescueCueCallback: (callback) => {
+        rescueCueCallback = callback;
+      },
       applyDangerousWatersReaction: this.applyDangerousWatersReaction,
     });
     if (rescueCueCallback !== null) {
@@ -1574,7 +1550,9 @@ export class BoatWorld {
   }
 
   retrieveDriftingItem(eventId: DriftingItemEventId): Promise<void> {
-    if (this.disposed) return Promise.resolve();
+    if (this.disposed || this.activeFeaturedEventId !== eventId) {
+      return Promise.resolve();
+    }
     this.toolHoverOutline.setTarget(null);
     return this.retrieveFeaturedDriftingItem(eventId);
   }
@@ -1598,7 +1576,9 @@ export class BoatWorld {
   }
 
   recedeDriftingItem(eventId: DriftingItemEventId): Promise<void> {
-    if (this.disposed) return Promise.resolve();
+    if (this.disposed || this.activeFeaturedEventId !== eventId) {
+      return Promise.resolve();
+    }
     this.toolHoverOutline.setTarget(null);
     return this.playFeaturedPresentation(driftingItemLeaveKey(eventId));
   }

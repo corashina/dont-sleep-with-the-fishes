@@ -91,6 +91,7 @@ function createLayer() {
     copyDangerousWatersBoatReaction: vi.fn(() => false),
     update: vi.fn(),
     settleForVisibilityChange: vi.fn(),
+    setRescueCue: vi.fn(),
     clear: vi.fn(),
     dispose: vi.fn(),
   };
@@ -207,6 +208,7 @@ function createDependencies() {
       },
       driftingWater: {},
       moon,
+      registerRescueCueCallback: vi.fn(),
       applyDangerousWatersReaction: vi.fn(),
     } as unknown as EventPresentationAdapterDependencies,
     moon,
@@ -395,6 +397,22 @@ describe('EventPresentationRegistry', () => {
     expect(layer.react).toHaveBeenCalledWith('dangerous-waters', reaction.outcome);
     expect(layer.clear).toHaveBeenCalledOnce();
     expect(layer.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('does not replay a dangerous-waters item choice after its item motion', async () => {
+    const { dependencies } = createDependencies();
+    const adapter = new EventPresentationRegistry().create('dangerous-waters', dependencies);
+    const itemChoice = {
+      choiceId: 'map',
+      instanceId: 'map-1' as ItemInstanceId,
+      condition: 'usable',
+    } as const;
+
+    await adapter.playItemUse(itemChoice.choiceId, itemChoice.instanceId);
+    await adapter.playChoice(itemChoice);
+
+    expect(layer.playDangerousWatersItemUse).toHaveBeenCalledOnce();
+    expect(layer.playChoice).not.toHaveBeenCalled();
   });
 
   it('delegates the dedicated lifecycle to its coordinator', async () => {
