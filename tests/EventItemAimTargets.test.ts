@@ -255,20 +255,20 @@ describe('event item aim targets', () => {
     layer.dispose();
   });
 
-  it('resolves the active event target through the presentation host', () => {
+  it('delegates active event targets to the interaction projector', () => {
     const target = new Group();
-    const itemAimTarget = vi.fn(() => target as Object3D | null);
+    const eventItemAimTarget = vi.fn(() => target as Object3D | null);
     const resolver = (
       BoatWorld.prototype as unknown as {
         eventItemAimTarget(eventId: string): Object3D | null;
       }
     ).eventItemAimTarget;
     const world = {
-      eventPresentationHost: { itemAimTarget },
+      interactionProjector: { eventItemAimTarget },
     };
 
     expect(resolver.call(world, 'dangerous-waters')).toBe(target);
-    expect(itemAimTarget).toHaveBeenCalledOnce();
+    expect(eventItemAimTarget).toHaveBeenCalledWith('dangerous-waters');
   });
 
   it('keeps featured and chest targets on their visible receiving entities', () => {

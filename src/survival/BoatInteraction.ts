@@ -1,8 +1,9 @@
 import { Box3, type Object3D, type PerspectiveCamera, Vector3 } from 'three';
-import { ITEM_DEFINITIONS, ITEM_IDS, type ItemId } from '../game/ItemState';
+import type { ItemId } from '../game/ItemState';
 import {
   createObjectScreenBoundsCache,
   projectCachedObjectScreenBounds,
+  projectCachedObjectScreenBoundsInto,
   projectObjectScreenBounds,
   projectObjectScreenBoundsInto,
   projectScreenBounds,
@@ -12,13 +13,6 @@ import {
 import type { DayActionId, EventResponseId } from './survivalTypes';
 import type { BoatSupplyGroupId } from '../world/BoatStorage';
 import type { DriftingItemEventId } from './eventCatalog';
-
-export const ACTION_FOR_ITEM = Object.freeze(Object.fromEntries(
-  ITEM_IDS.flatMap((id) => {
-    const action = ITEM_DEFINITIONS[id].dayAction;
-    return action === null ? [] : [[id, action]];
-  }),
-) as Readonly<Partial<Record<ItemId, DayActionId>>>);
 
 export interface BoatInteractionHitArea {
   width: number;
@@ -103,6 +97,24 @@ export function projectCachedBoatObjectBounds(
   viewportHeight: number,
 ): ProjectedBoatBounds {
   return projectCachedObjectScreenBounds(
+    root,
+    cache,
+    camera,
+    viewportWidth,
+    viewportHeight,
+  );
+}
+
+export function projectCachedBoatObjectBoundsInto(
+  output: ProjectedBoatBounds,
+  root: Object3D,
+  cache: BoatObjectBoundsCache | null,
+  camera: PerspectiveCamera,
+  viewportWidth: number,
+  viewportHeight: number,
+): ProjectedBoatBounds {
+  return projectCachedObjectScreenBoundsInto(
+    output,
     root,
     cache,
     camera,

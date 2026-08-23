@@ -10,13 +10,14 @@ import {
   Vector3,
 } from 'three';
 import {
-  ACTION_FOR_ITEM,
   createBoatObjectBoundsCache,
   projectBoatAnchor,
   projectBoatBounds,
   projectCachedBoatObjectBounds,
+  projectCachedBoatObjectBoundsInto,
   projectBoatObjectBounds,
 } from '../src/survival/BoatInteraction';
+import { ACTION_FOR_ITEM } from '../src/survival/BoatInteractionProjector';
 
 describe('BoatInteraction', () => {
   it('maps recovered tools to approved actions', () => {
@@ -118,6 +119,51 @@ describe('BoatInteraction', () => {
     expect(cached.width).toBeCloseTo(live.width);
     expect(cached.height).toBeCloseTo(live.height);
     expect(cached.depth).toBeCloseTo(live.depth);
+
+    item.geometry.dispose();
+    item.material.dispose();
+  });
+
+  it('writes cached projections into one result object', () => {
+    const camera = new PerspectiveCamera(65, 2, 0.1, 100);
+    camera.updateProjectionMatrix();
+    const root = new Group();
+    root.position.z = -4;
+    const item = new Mesh(
+      new BoxGeometry(0.4, 0.3, 0.2),
+      new MeshBasicMaterial(),
+    );
+    root.add(item);
+    const cache = createBoatObjectBoundsCache(root);
+    const output = { x: 0, y: 0, width: 0, height: 0, depth: 0, visible: false };
+
+    expect(projectCachedBoatObjectBoundsInto(
+      output,
+      root,
+      cache,
+      camera,
+      1280,
+      720,
+    )).toBe(output);
+    expect(output.visible).toBe(true);
+
+    root.visible = false;
+    expect(projectCachedBoatObjectBoundsInto(
+      output,
+      root,
+      cache,
+      camera,
+      1280,
+      720,
+    )).toBe(output);
+    expect(output).toEqual({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      depth: 0,
+      visible: false,
+    });
 
     item.geometry.dispose();
     item.material.dispose();
