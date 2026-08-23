@@ -432,11 +432,11 @@ export class SurvivalPhase implements GamePhase {
 
   requestRestart(): void {
     if (this.disposed || this.restartRequested) return;
+    this.itemAnimationLabFlow.dispose();
     this.eventFlow.clear();
     this.driftingItemFlow.dispose();
     this.dayActionFlow.settleForVisibilityChange();
     this.dayActionFlow.dispose();
-    this.itemAnimationLabFlow.dispose();
     this.restartRequested = true;
     this.lifecycleGeneration += 1;
     this.visibilityController?.cancelResumeWaiters();
@@ -445,10 +445,10 @@ export class SurvivalPhase implements GamePhase {
 
   dispose(): void {
     if (this.disposed) return;
+    this.itemAnimationLabFlow.dispose();
     this.eventFlow.dispose();
     this.driftingItemFlow.dispose();
     this.dayActionFlow.dispose();
-    this.itemAnimationLabFlow.dispose();
     this.disposed = true;
     this.lifecycleGeneration += 1;
     this.visibilityController?.cancelResumeWaiters();

@@ -32,6 +32,7 @@ export type ItemAnimationLabWorldPort = Pick<
 export type ItemAnimationLabUiPort = Pick<
   SurvivalUI,
   | 'beginEventPresentation'
+  | 'clearEventPresentation'
   | 'showItemAnimationLab'
   | 'setEventSelection'
   | 'setEventUsing'
@@ -39,7 +40,7 @@ export type ItemAnimationLabUiPort = Pick<
 
 export type ItemAnimationLabAudioPort = Pick<
   SurvivalAudio,
-  'eventItem' | 'eventItemCue' | 'repairToolbox'
+  'clearEvent' | 'eventItem' | 'eventItemCue' | 'repairToolbox'
 >;
 
 export interface ItemAnimationLabBundlePort {
@@ -129,11 +130,23 @@ export class ItemAnimationLabFlow {
 
   dispose(): void {
     if (this.disposed) return;
-    this.disposed = true;
     this.operationGeneration += 1;
+    this.disposed = true;
+    const cleanExternalState = this.entered;
     this.entered = false;
     this.using = false;
     this.eligibility = new Map();
+    if (!cleanExternalState) return;
+    this.runCleanup([
+      () => this.dependencies.audio.clearEvent?.(),
+      () => this.dependencies.world.setEventSelectedItem?.(null),
+      () => this.dependencies.world.setEventEligibleItems?.(null),
+      () => this.dependencies.world.clearEvent?.(),
+      () => this.dependencies.bundles.releaseActive(),
+      () => this.dependencies.ui.clearEventPresentation?.(),
+      () => this.dependencies.setAutomaticWeather(null),
+      () => this.dependencies.setBusy(false),
+    ], false);
   }
 
   private async playItem(

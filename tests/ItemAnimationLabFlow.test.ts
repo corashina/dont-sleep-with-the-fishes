@@ -41,11 +41,13 @@ function createRig(savedItems: readonly ItemInstance[] = [
   } as unknown as ItemAnimationLabWorldPort;
   const ui = {
     beginEventPresentation: vi.fn(),
+    clearEventPresentation: vi.fn(),
     showItemAnimationLab: vi.fn(),
     setEventSelection: vi.fn(),
     setEventUsing: vi.fn(),
   } as unknown as ItemAnimationLabUiPort;
   const audio = {
+    clearEvent: vi.fn(),
     eventItem: vi.fn(),
     eventItemCue: vi.fn(),
     repairToolbox: vi.fn(),
@@ -264,20 +266,63 @@ describe('ItemAnimationLabFlow', () => {
     expect(rig.setBusy).toHaveBeenLastCalledWith(false);
   });
 
-  it('makes disposed repair work inert', async () => {
+  it('cleans active external state before pending item work becomes inert', async () => {
     const rig = createRig();
     const animation = deferred();
-    vi.mocked(rig.world.playRepairToolboxAnimation).mockReturnValueOnce(animation.promise);
+    vi.mocked(rig.world.playEventItemUse).mockReturnValueOnce(animation.promise);
     rig.flow.enter(rig.session.snapshot());
 
-    const play = rig.flow.play(REPAIR_TOOLBOX_LAB_INSTANCE_ID);
-    const selectedCalls = vi.mocked(rig.world.setEventSelectedItem).mock.calls.length;
-    const busyCalls = rig.setBusy.mock.calls.length;
+    const play = rig.flow.play('anchor-1' as ItemInstanceId);
     rig.flow.dispose();
+
+    expect(rig.audio.clearEvent).toHaveBeenCalledOnce();
+    expect(rig.world.setEventSelectedItem).toHaveBeenLastCalledWith(null);
+    expect(rig.world.setEventEligibleItems).toHaveBeenLastCalledWith(null);
+    expect(rig.world.clearEvent).toHaveBeenCalledOnce();
+    expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
+    expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
+    expect(rig.setAutomaticWeather).toHaveBeenLastCalledWith(null);
+    expect(rig.setBusy).toHaveBeenLastCalledWith(false);
+
+    rig.flow.dispose();
+    expect(rig.audio.clearEvent).toHaveBeenCalledOnce();
+    expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
+
     animation.resolve();
     await play;
 
-    expect(rig.world.setEventSelectedItem).toHaveBeenCalledTimes(selectedCalls);
-    expect(rig.setBusy).toHaveBeenCalledTimes(busyCalls);
+    expect(rig.world.returnEventItemUse).not.toHaveBeenCalled();
+    expect(rig.world.clearEvent).toHaveBeenCalledOnce();
+  });
+
+  it('continues disposal cleanup and reports only its first failure', async () => {
+    const rig = createRig();
+    const animation = deferred();
+    const first = new Error('audio cleanup failed');
+    vi.mocked(rig.world.playEventItemUse).mockReturnValueOnce(animation.promise);
+    vi.mocked(rig.audio.clearEvent).mockImplementationOnce(() => { throw first; });
+    vi.mocked(rig.world.clearEvent).mockImplementationOnce(() => {
+      throw new Error('presentation cleanup failed');
+    });
+    vi.mocked(rig.bundles.releaseActive).mockImplementationOnce(() => {
+      throw new Error('bundle cleanup failed');
+    });
+    rig.flow.enter(rig.session.snapshot());
+    const play = rig.flow.play('anchor-1' as ItemInstanceId);
+
+    rig.flow.dispose();
+
+    expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(first);
+    expect(rig.world.setEventSelectedItem).toHaveBeenLastCalledWith(null);
+    expect(rig.world.setEventEligibleItems).toHaveBeenLastCalledWith(null);
+    expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
+    expect(rig.setAutomaticWeather).toHaveBeenLastCalledWith(null);
+    expect(rig.setBusy).toHaveBeenLastCalledWith(false);
+
+    rig.flow.dispose();
+    expect(rig.onFatalError).toHaveBeenCalledOnce();
+
+    animation.resolve();
+    await play;
   });
 });
