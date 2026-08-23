@@ -10,7 +10,7 @@ import {
   type FishingWorldPort,
 } from '../src/survival/SurvivalFishingFlow';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import type { FishingResultView, FishingUiState } from '../src/ui/SurvivalUI';
+import type { FishingResultView, FishingUiState } from '../src/ui/SurvivalFishingView';
 import type { ProjectedBoatBounds } from '../src/survival/BoatInteraction';
 import { sequenceRandom } from './helpers/random';
 

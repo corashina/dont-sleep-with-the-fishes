@@ -28,11 +28,8 @@ import type {
   SurvivalSnapshot,
   SurvivalState,
 } from '../src/survival/survivalTypes';
-import type {
-  FishingResultView,
-  FishingUiState,
-  SurvivalUI,
-} from '../src/ui/SurvivalUI';
+import type { FishingResultView, FishingUiState } from '../src/ui/SurvivalFishingView';
+import type { SurvivalUI } from '../src/ui/SurvivalUI';
 import type { RewardResultView } from '../src/ui/SurvivalCoverViewModel';
 import type { PresentationWeatherId } from '../src/weather/presentationWeather';
 import { createTestPropModels } from './helpers/propModels';

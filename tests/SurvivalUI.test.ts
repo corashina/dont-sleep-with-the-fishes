@@ -14,6 +14,7 @@ import type {
 } from '../src/survival/survivalTypes';
 import { BoatAnchorView } from '../src/ui/BoatAnchorView';
 import { SurvivalCoverView } from '../src/ui/SurvivalCoverView';
+import { SurvivalFishingView } from '../src/ui/SurvivalFishingView';
 import { SurvivalHudView } from '../src/ui/SurvivalHudView';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 import { DAY_ACTION_IDS } from '../src/ui/SurvivalUiViewModel';
@@ -1222,6 +1223,8 @@ describe('SurvivalUI', () => {
 
     expect(driftingListen.mock.calls.some(([type]) => type === 'animationend')).toBe(true);
     expect(anchorListen.mock.calls.some(([type]) => type === 'animationend')).toBe(false);
+    expect(drifting.dataset.eventState).toBe('selected');
+    expect(drifting.getAttribute('aria-pressed')).toBe('true');
     ui.clearEventPresentation();
     await driftingBeat;
 
@@ -1289,9 +1292,34 @@ describe('SurvivalUI', () => {
     const cover = ui.setSleepCovered(true);
     const sleep = ui.holdSleep();
     const outcome = ui.holdEventOutcome();
+    const fade = ui.setFishingFade(true);
+    const internals = ui as unknown as {
+      readonly eventView: { settleForVisibilityChange(): void };
+      readonly coverView: { settleForVisibilityChange(): void };
+      readonly fishingView: { settleForVisibilityChange(): void };
+    };
+    const order: string[] = [];
+    const eventSettle = internals.eventView.settleForVisibilityChange.bind(internals.eventView);
+    const coverSettle = internals.coverView.settleForVisibilityChange.bind(internals.coverView);
+    const fishingSettle = internals.fishingView.settleForVisibilityChange.bind(
+      internals.fishingView,
+    );
+    vi.spyOn(internals.eventView, 'settleForVisibilityChange').mockImplementation(() => {
+      order.push('event');
+      eventSettle();
+    });
+    vi.spyOn(internals.coverView, 'settleForVisibilityChange').mockImplementation(() => {
+      order.push('cover');
+      coverSettle();
+    });
+    vi.spyOn(internals.fishingView, 'settleForVisibilityChange').mockImplementation(() => {
+      order.push('fishing');
+      fishingSettle();
+    });
 
     ui.settleForVisibilityChange();
-    await Promise.all([beat, cover, sleep, outcome]);
+    await Promise.all([beat, cover, sleep, outcome, fade]);
+    expect(order).toEqual(['event', 'cover', 'fishing']);
     expect(vi.getTimerCount()).toBe(0);
 
     const later = ui.holdSleep();
@@ -2433,6 +2461,21 @@ describe('SurvivalUI', () => {
     expect(reel).toHaveBeenCalledOnce();
   });
 
+  it('keeps fishing input active while the outer UI is busy', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const cast = vi.fn(() => false);
+    ui.onFishingCast = cast;
+    ui.setBusy(true);
+    ui.setFishingState({ mode: 'aiming', message: 'CAST', biteTarget: null });
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+    expect(mount.querySelector('.survival-ui')?.getAttribute('aria-busy')).toBe('true');
+    expect(cast).toHaveBeenCalledWith(null);
+  });
+
   it('uses mode-specific initial focus throughout fishing', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -3376,6 +3419,37 @@ describe('SurvivalUI', () => {
       ui.dispose();
     },
   );
+
+  it('settles fishing fade before event choice beat and preserves its null error', async () => {
+    vi.useFakeTimers();
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    openContextualEvent(ui);
+    const choice = mount.querySelector<HTMLButtonElement>('[data-event-choice="retrieve"]')!;
+    const fade = ui.setFishingFade(true);
+    const beat = ui.playEventChoiceBeat('retrieve');
+    const internals = ui as unknown as { readonly fishingView: SurvivalFishingView };
+    const order: string[] = [];
+    const fadeCleanup = vi.spyOn(internals.fishingView.fadeRoot, 'removeEventListener')
+      .mockImplementation(() => { order.push('fishing'); throw null; });
+    const beatCleanup = vi.spyOn(choice, 'removeEventListener')
+      .mockImplementation(() => { order.push('event'); throw new Error('later event error'); });
+    let thrown: unknown = Symbol('not thrown');
+
+    try {
+      ui.dispose();
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeNull();
+    await Promise.all([fade, beat]);
+    expect(order).toEqual(['fishing', 'event']);
+    expect(fadeCleanup).toHaveBeenCalledOnce();
+    expect(beatCleanup).toHaveBeenCalledOnce();
+    expect(mount.children).toHaveLength(0);
+  });
 
   it.each([
     ['null', null],

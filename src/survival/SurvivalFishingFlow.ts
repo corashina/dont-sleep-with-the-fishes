@@ -1,5 +1,6 @@
 import type { SurvivalAudio } from '../audio/SurvivalAudio';
-import type { SurvivalUI, FishingResultView } from '../ui/SurvivalUI';
+import type { FishingResultView } from '../ui/SurvivalFishingView';
+import type { SurvivalUI } from '../ui/SurvivalUI';
 import type { BoatWorld } from './BoatWorld';
 import { fishingCatchFood } from './fishingCatalog';
 import type {
