@@ -6243,6 +6243,83 @@ describe('SurvivalPhase orchestration', () => {
     expect(update).toHaveBeenCalledTimes(2);
   });
 
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['Error', new Error('UI visibility settlement failed')],
+  ] as const)(
+    'preserves a %s UI visibility error and completes later hidden steps',
+    (_label, firstError) => {
+      const listeners = new Map<string, EventListener>();
+      const fakeDocument = {
+        hidden: false,
+        addEventListener: vi.fn((type: string, listener: EventListener) => {
+          listeners.set(type, listener);
+        }),
+        removeEventListener: vi.fn((type: string) => listeners.delete(type)),
+      };
+      vi.stubGlobal('document', fakeDocument);
+      const calls: string[] = [];
+      const ui: Partial<SurvivalUI> = {
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        setPaused: vi.fn(() => { calls.push('pause'); }),
+        settleForVisibilityChange: vi.fn(() => {
+          calls.push('ui');
+          throw firstError;
+        }),
+        dispose: vi.fn(),
+      };
+      const world = {
+        update: vi.fn(),
+        setPhase: vi.fn(),
+        setWeather: vi.fn(),
+        setDocumentHidden: vi.fn(() => {
+          calls.push('world');
+          throw new Error('later world failure');
+        }),
+        dispose: vi.fn(),
+      };
+      const phase = SurvivalPhase.forTest({
+        session: { snapshot: vi.fn(() => snapshot()) },
+        world,
+        ui,
+      });
+      const internals = phase as unknown as {
+        readonly dayActionFlow: { settleForVisibilityChange(): void };
+        readonly fishingFlow: { settleForVisibilityChange(): void };
+        readonly eventFlow: { settleForVisibilityChange(): void };
+        readonly itemAnimationLabFlow: { settleForVisibilityChange(): void };
+      };
+      vi.spyOn(internals.dayActionFlow, 'settleForVisibilityChange')
+        .mockImplementation(() => { calls.push('day'); });
+      vi.spyOn(internals.fishingFlow, 'settleForVisibilityChange')
+        .mockImplementation(() => {
+          calls.push('fishing');
+          throw new Error('later fishing failure');
+        });
+      vi.spyOn(internals.eventFlow, 'settleForVisibilityChange')
+        .mockImplementation(() => { calls.push('event'); });
+      vi.spyOn(internals.itemAnimationLabFlow, 'settleForVisibilityChange')
+        .mockImplementation(() => { calls.push('lab'); });
+      phase.start();
+      fakeDocument.hidden = true;
+      const notThrown = Symbol('not thrown');
+      let thrown: unknown = notThrown;
+
+      try {
+        listeners.get('visibilitychange')!(new Event('visibilitychange'));
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBe(firstError);
+      expect(calls).toEqual(['day', 'ui', 'pause', 'world', 'fishing', 'event', 'lab']);
+      expect(world.setDocumentHidden).toHaveBeenCalledWith(true);
+      phase.dispose();
+    },
+  );
+
   it('keeps a manual pause across hide and restore', () => {
     const listeners = new Map<string, EventListener>();
     const fakeDocument = {

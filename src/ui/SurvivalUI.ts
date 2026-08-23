@@ -466,11 +466,14 @@ export class SurvivalUI {
 
   clearEventPresentation(): void {
     if (this.disposed) return;
-    const focusedContextualChoice = this.eventView.containsChoice(document.activeElement);
+    let focusedContextualChoice = false;
     const result = runCleanupSteps([
       () => this.anchorView.clearEventPresentation(),
-      () => this.eventView.clear(),
-      () => this.coverView.setBadSleepCue(false),
+      () => this.eventView.settleChoiceBeat(),
+      () => this.eventView.clearSleepMask(),
+      () => this.coverView.clearBadSleepCueForCleanup(),
+      () => { focusedContextualChoice = this.eventView.containsChoice(document.activeElement); },
+      () => this.eventView.clearPresentationState(),
       () => this.syncCommandState(),
       () => { if (focusedContextualChoice) this.firstUsableAction()?.focus(); },
     ]);
@@ -756,54 +759,65 @@ export class SurvivalUI {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    let failed = false;
-    let firstError: unknown;
-    const clean = (cleanup: () => void): void => {
-      try {
-        cleanup();
-      } catch (error) {
-        if (!failed) {
-          failed = true;
-          firstError = error;
-        }
-      }
-    };
-    clean(() => this.eventView.dispose());
-    clean(() => this.coverView.dispose());
-    clean(() => this.pendingFishingFade?.finish());
-    clean(() => { this.fishingAnnouncementVersion += 1; });
-    clean(() => this.hideLayer(this.driftingItemFocusLayer));
+    const cleanupSteps: (() => void)[] = [
+      () => { this.eventView.beginDispose(); },
+      () => {
+        this.coverView.beginDispose();
+        this.coverView.clearBadSleepCueForCleanup();
+      },
+      () => this.eventView.clearChoicesForDispose(),
+      () => this.coverView.settleCoverTransition(),
+      () => this.coverView.settleDiveHold(),
+      () => this.coverView.settleRewardConfirmation(),
+      () => this.pendingFishingFade?.finish(),
+      () => this.eventView.settleChoiceBeat(),
+      () => this.coverView.settleEventOutcomeHold(),
+      () => this.coverView.settleCoveredSceneWait(),
+      () => this.coverView.settleSleepHold(),
+      () => { this.fishingAnnouncementVersion += 1; },
+      () => this.hideLayer(this.driftingItemFocusLayer),
+    ];
     if (this.fishingMode !== 'hidden') {
-      clean(() => this.hideLayer(this.fishingLayer));
-      clean(() => { this.fishingMode = 'hidden'; });
-      clean(() => { this.fishingReturnTarget = null; });
+      cleanupSteps.push(
+        () => this.hideLayer(this.fishingLayer),
+        () => { this.fishingMode = 'hidden'; },
+        () => { this.fishingReturnTarget = null; },
+      );
     }
-    clean(() => this.anchorView.dispose());
-    clean(() => this.hudView.dispose());
-    clean(() => this.modalFocus.dispose());
-    clean(() => { this.announcementVersion += 1; });
-    clean(() => this.root.removeEventListener('click', this.handleClick));
-    clean(() => this.root.removeEventListener('pointerup', this.handleFishingPointerUp));
-    clean(() => document.removeEventListener('keydown', this.handleKeyDown));
-    clean(() => window.removeEventListener('resize', this.handleWindowResize));
-    clean(() => { this.onAction = () => undefined; });
-    clean(() => { this.onEventItem = () => undefined; });
-    clean(() => { this.onEventChoice = () => undefined; });
-    clean(() => { this.onRestart = () => undefined; });
-    clean(() => { this.onAnchorHighlight = () => undefined; });
-    clean(() => { this.onPauseChange = () => undefined; });
-    clean(() => { this.onJournalOpen = () => undefined; });
-    clean(() => { this.onJournalClose = () => undefined; });
-    clean(() => { this.onJournalPage = () => undefined; });
-    clean(() => { this.onFishingCast = null; });
-    clean(() => { this.onFishingReel = null; });
-    clean(() => { this.onFishingResultContinue = null; });
-    clean(() => { this.onFishingViewExit = null; });
-    clean(() => { this.onDriftingItemSelect = null; });
-    clean(() => { this.onDriftingItemBack = null; });
-    clean(() => { this.onCameraTurn = null; });
-    clean(() => this.root.remove());
-    if (failed) throw firstError;
+    cleanupSteps.push(
+      () => this.anchorView.dispose(),
+      () => this.hudView.dispose(),
+      () => this.modalFocus.dispose(),
+      () => { this.announcementVersion += 1; },
+      () => this.eventView.clearFeedbackTimerForDispose(),
+      () => this.eventView.removeListenersForDispose(),
+      () => this.coverView.removeListenersForDispose(),
+      () => this.root.removeEventListener('click', this.handleClick),
+      () => this.root.removeEventListener('pointerup', this.handleFishingPointerUp),
+      () => document.removeEventListener('keydown', this.handleKeyDown),
+      () => window.removeEventListener('resize', this.handleWindowResize),
+      () => { this.onAction = () => undefined; },
+      () => { this.onEventItem = () => undefined; },
+      () => { this.onEventChoice = () => undefined; },
+      () => { this.onRestart = () => undefined; },
+      () => { this.onAnchorHighlight = () => undefined; },
+      () => { this.onPauseChange = () => undefined; },
+      () => { this.onJournalOpen = () => undefined; },
+      () => { this.onJournalClose = () => undefined; },
+      () => { this.onJournalPage = () => undefined; },
+      () => { this.onFishingCast = null; },
+      () => { this.onFishingReel = null; },
+      () => { this.onFishingResultContinue = null; },
+      () => { this.onFishingViewExit = null; },
+      () => { this.onDriftingItemSelect = null; },
+      () => { this.onDriftingItemBack = null; },
+      () => { this.onCameraTurn = null; },
+      () => this.eventView.resetCallbacksForDispose(),
+      () => this.coverView.resetCallbacksForDispose(),
+      () => this.root.remove(),
+    );
+    const result = runCleanupSteps(cleanupSteps);
+    if (result.failed) throw result.firstError;
   }
 
   private renderJournalPage(): void {

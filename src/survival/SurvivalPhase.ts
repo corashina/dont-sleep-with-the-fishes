@@ -753,16 +753,19 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private readonly handleDocumentHidden = (): void => {
-    this.dayActionFlow.settleForVisibilityChange();
-    this.ui.settleForVisibilityChange?.();
-    if (!this.paused) {
-      this.visibilityPauseActive = true;
-      this.setPaused(true);
-    }
-    this.world.setDocumentHidden?.(true);
-    this.fishingFlow.settleForVisibilityChange();
-    this.eventFlow.settleForVisibilityChange();
-    this.itemAnimationLabFlow.settleForVisibilityChange();
+    runCleanupSteps([
+      () => this.dayActionFlow.settleForVisibilityChange(),
+      () => this.ui.settleForVisibilityChange?.(),
+      () => {
+        if (this.paused) return;
+        this.visibilityPauseActive = true;
+        this.setPaused(true);
+      },
+      () => this.world.setDocumentHidden?.(true),
+      () => this.fishingFlow.settleForVisibilityChange(),
+      () => this.eventFlow.settleForVisibilityChange(),
+      () => this.itemAnimationLabFlow.settleForVisibilityChange(),
+    ]);
   };
 
   private readonly handleDocumentVisible = (): void => {
