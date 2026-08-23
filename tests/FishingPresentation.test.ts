@@ -55,6 +55,7 @@ function createRig() {
       camera.quaternion.copy(startQuaternion).slerp(baseQuaternion, progress);
     }),
   };
+  const resetBasePresentation = vi.fn();
   const rodPivot = new Group();
   rodPivot.position.set(0, 0.56, -2.28);
   rodPivot.rotation.x = -0.38;
@@ -84,11 +85,11 @@ function createRig() {
     output.normal.x = 0;
     output.normal.y = 1;
     output.normal.z = 0;
-    expect(amplitudeScale).toBe(0.75);
   });
   const presentation = new FishingPresentation({
     camera,
     cameraControl,
+    resetBasePresentation,
     sampleWaveInto,
     waveAmplitudeScale: () => 0.75,
     rodPivot,
@@ -104,6 +105,7 @@ function createRig() {
     boatRoot,
     camera,
     cameraControl,
+    resetBasePresentation,
     rodPivot,
     catches,
     biteParticles,
@@ -126,6 +128,7 @@ describe('FishingPresentation', () => {
     expect(rig.camera.position).toEqual(expect.objectContaining(FISHING_PLAYER_SEAT));
     await expect(rig.presentation.enterView()).resolves.toBeUndefined();
     expect(rig.presentation.phaseForTest()).toBe('ready');
+    expect(rig.resetBasePresentation).toHaveBeenCalledOnce();
     rig.presentation.dispose();
   });
 
@@ -225,7 +228,11 @@ describe('FishingPresentation', () => {
     expect(catchDisplay.parent).toBe(catchRest);
     expect(catchDisplay.position.toArray()).toEqual([0, 0, 0]);
     expect(catchRest.position.toArray()).toEqual([0, 0.43, -2.52]);
-    expect(rig.presentation.projectCatch(800, 600)).toMatchObject({ visible: true });
+    const firstProjection = rig.presentation.projectCatch(800, 600);
+    const secondProjection = rig.presentation.projectCatch(1280, 720);
+    expect(firstProjection).not.toBeNull();
+    expect(secondProjection).toBe(firstProjection);
+    expect(secondProjection).toMatchObject({ visible: true });
     rig.presentation.dispose();
   });
 
@@ -259,6 +266,7 @@ describe('FishingPresentation', () => {
     rig.presentation.clear();
     await cast;
     expect(rig.presentation.phaseForTest()).toBe('ready');
+    expect(rig.resetBasePresentation).toHaveBeenCalledOnce();
     expect(rig.camera.position).toEqual(bowPosition);
     for (const name of [
       'fishing-line',
@@ -282,6 +290,23 @@ describe('FishingPresentation', () => {
     await exit;
     expect(rig.presentation.phaseForTest()).toBe('idle');
     expect(rig.camera.position).toEqual(rig.basePosition);
+    rig.presentation.dispose();
+  });
+
+  it('uses the frame-captured wave scale for surface updates', () => {
+    const rig = createRig();
+    rig.presentation.showWaiting(rig.presentation.centeredCast());
+    rig.sampleWaveInto.mockClear();
+
+    rig.presentation.updateSurface(2, 0.42);
+
+    expect(rig.sampleWaveInto).toHaveBeenCalledWith(
+      expect.any(Object),
+      2,
+      0,
+      -6.4,
+      0.42,
+    );
     rig.presentation.dispose();
   });
 
@@ -385,24 +410,57 @@ describe('FishingPresentation', () => {
     const biteParticles = new FishingBiteParticles();
     const particleDispose = vi.spyOn(biteParticles, 'dispose');
 
-    expect(() => new FishingPresentation({
+    expect(() => FishingPresentation.create({
       camera,
       cameraControl: {
         restoreBasePose: vi.fn(),
         interpolateToBasePose: vi.fn(),
       },
+      resetBasePresentation: vi.fn(),
       sampleWaveInto: vi.fn(),
       waveAmplitudeScale: () => 1,
       rodPivot,
       rod: rodWithoutGeometry,
-      catches,
-      biteParticles,
       boatRoot,
       worldRoot,
+    }, {
+      createCatches: () => catches,
+      createBiteParticles: () => biteParticles,
     })).toThrow('Fishing rod model has no position data.');
     expect(catches.dispose).toHaveBeenCalledOnce();
     expect(particleDispose).toHaveBeenCalledOnce();
     expect(worldRoot.getObjectByName('fishing-presentation')).toBeUndefined();
     expect(worldRoot.getObjectByName('fishing-bite-particles')).toBeUndefined();
+  });
+
+  it('disposes a completed catch owner when particle construction fails', () => {
+    const worldRoot = new Scene();
+    const boatRoot = new Group();
+    const rodPivot = new Group();
+    const rod = new Group();
+    rodPivot.add(rod);
+    boatRoot.add(rodPivot);
+    worldRoot.add(boatRoot);
+    const catches = new TestCatchLibrary();
+    const failure = new Error('particle construction failed');
+
+    expect(() => FishingPresentation.create({
+      camera: new PerspectiveCamera(),
+      cameraControl: {
+        restoreBasePose: vi.fn(),
+        interpolateToBasePose: vi.fn(),
+      },
+      resetBasePresentation: vi.fn(),
+      sampleWaveInto: vi.fn(),
+      waveAmplitudeScale: () => 1,
+      rodPivot,
+      rod,
+      boatRoot,
+      worldRoot,
+    }, {
+      createCatches: () => catches,
+      createBiteParticles: () => { throw failure; },
+    })).toThrow(failure);
+    expect(catches.dispose).toHaveBeenCalledOnce();
   });
 });

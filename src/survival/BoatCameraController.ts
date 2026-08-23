@@ -8,8 +8,7 @@ import {
 } from 'three';
 import type { TimedAnimation } from './animationMath';
 
-export const FISHING_CAMERA_DURATION = 1.1;
-
+const DRIFTING_ITEM_CAMERA_DURATION = 1.1;
 const REAR_CAMERA_TURN_DURATION = 0.65;
 const REAR_CAMERA_PITCH = -0.75;
 const BASE_CAMERA_POSITION = Object.freeze({ x: 0, y: 0.88, z: 1.56 });
@@ -222,7 +221,7 @@ export class BoatCameraController {
     return new Promise<void>((resolve) => {
       this.activeDriftingAnimation = {
         kind,
-        duration: FISHING_CAMERA_DURATION,
+        duration: DRIFTING_ITEM_CAMERA_DURATION,
         elapsed: 0,
         resolve,
       };

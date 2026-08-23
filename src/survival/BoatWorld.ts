@@ -113,8 +113,6 @@ import type {
   EventOutcomePresentation,
   EventSceneContext,
 } from './eventPresentationTypes';
-import { FishingCatchLibrary } from './FishingCatchLibrary';
-import { FishingBiteParticles } from './FishingBiteParticles';
 import type { FishingCatchId } from './fishingCatalog';
 import {
   FISHING_ROD_LEAN,
@@ -741,15 +739,14 @@ export class BoatWorld {
         }),
       });
       this.divePresentation = divePresentation;
-      fishingPresentation = new FishingPresentation({
+      fishingPresentation = FishingPresentation.create({
         camera,
         cameraControl: this.cameraController,
+        resetBasePresentation: () => this.applyBasePresentation(),
         sampleWaveInto: this.sampleWorldWaveInto,
         waveAmplitudeScale: this.readWorldWaveAmplitudeScale,
         rodPivot: this.rodPivot,
         rod: this.rod,
-        catches: new FishingCatchLibrary(),
-        biteParticles: new FishingBiteParticles(),
         boatRoot: this.boat,
         worldRoot: this.scene,
       });
@@ -1877,7 +1874,7 @@ export class BoatWorld {
       this.scene,
       this.itemEffects.binocularMaskStrength,
     );
-    this.fishingPresentation.updateSurface(time);
+    this.fishingPresentation.updateSurface(time, amplitudeScale);
     const fog = this.scene.fog as FogExp2;
     const atmosphere = this.sky.palette;
     this.oceanAtmosphere.fogColor.copy(fog.color);
@@ -1951,10 +1948,13 @@ export class BoatWorld {
       () => this.toolHoverOutline.dispose(),
       () => this.hangingLantern.dispose(),
       () => this.lantern.dispose(),
-      () => this.fishingPresentation.dispose(),
+      () => this.fishingPresentation.disposeAnimation(),
+      () => this.fishingPresentation.disposeCatches(),
       () => this.ocean.dispose(),
       () => this.weatherEffects.dispose(),
+      () => this.fishingPresentation.disposeParticles(),
       () => this.sky.dispose(),
+      () => this.fishingPresentation.detach(),
       () => this.scene.remove(
         this.motionRig,
         this.moonItemAimTarget,
@@ -1977,6 +1977,7 @@ export class BoatWorld {
         this.ownedMaterials,
         this.ownedTextures,
       ),
+      () => this.fishingPresentation.disposeVisualResources(),
     ]);
   }
 

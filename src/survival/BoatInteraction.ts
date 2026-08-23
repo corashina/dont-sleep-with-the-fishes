@@ -4,6 +4,7 @@ import {
   createObjectScreenBoundsCache,
   projectCachedObjectScreenBounds,
   projectObjectScreenBounds,
+  projectObjectScreenBoundsInto,
   projectScreenBounds,
   type ObjectScreenBoundsCache,
   type ProjectedScreenBounds,
@@ -70,6 +71,22 @@ export function projectBoatObjectBounds(
   viewportHeight: number,
 ): ProjectedBoatBounds {
   return projectObjectScreenBounds(root, camera, viewportWidth, viewportHeight);
+}
+
+export function projectBoatObjectBoundsInto(
+  output: ProjectedBoatBounds,
+  root: Object3D,
+  camera: PerspectiveCamera,
+  viewportWidth: number,
+  viewportHeight: number,
+): ProjectedBoatBounds {
+  return projectObjectScreenBoundsInto(
+    output,
+    root,
+    camera,
+    viewportWidth,
+    viewportHeight,
+  );
 }
 
 export function createBoatObjectBoundsCache(
