@@ -228,6 +228,13 @@ loading and keeps the seven obstacle visuals static.
 - `src/survival` — deterministic survival rules, inventory, events, orchestration, and lifeboat world.
 - `src/survival/eventCatalog`, `eventCatalogValidation`, `eventSelection`, `eventOutcomeRules`, `journalRecords`, `dayActionRules`, and `fishingSettlementRules` — focused survival domain rules.
 - `src/survival/SurvivalSession` — owns mutable survival state.
+- `src/survival/BoatWorld` — builds the lifeboat scene and coordinates frames, atmosphere, buoyancy, and top-level cleanup.
+- `src/survival/BoatCameraController` — owns rear, event, and drifting-item camera motion.
+- `src/survival/FishingPresentation` — owns fishing state, animation, particles, projection, and visual resources.
+- `src/survival/MoonEventPresentation` — owns the moon event lifecycle and reaction animation.
+- `src/survival/BoatInteractionProjector` — projects boat and event interaction targets.
+- `src/survival/DivePresentationController` — owns the active dive lifecycle and camera pose.
+- `src/survival/CarlitosDelegationPresentation` — owns Carlitos delegation motion and completion.
 - `src/world` and `src/ocean` — procedural ship and boat geometry, shared wave field, ocean shader, weather, and buoyancy.
 - `src/world/ShipItemPlacement` — physical-fit item profiles, anchor validation, and randomized assignment to authored surfaces.
 - `src/world/ShipAssets` and `src/world/ShipMaterials` — locally committed PBR timber maps, procedural secondary surfaces, ship materials, and explicit texture ownership.

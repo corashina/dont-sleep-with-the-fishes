@@ -23,7 +23,10 @@ import {
 } from '../game/ItemState';
 import { OceanRenderer } from '../ocean/OceanRenderer';
 import type { WaterQuality } from '../rendering/waterQuality';
-import { createWaterExclusion } from '../ocean/WaterExclusion';
+import {
+  createWaterExclusion,
+  type WaterExclusionRegion,
+} from '../ocean/WaterExclusion';
 import { HoverOutline } from '../rendering/HoverOutline';
 import { setSceneBinocularMaskStrength } from '../rendering/BinocularMaskPass';
 import {
@@ -43,7 +46,7 @@ import {
   type PresentationWeatherId,
   type PresentationWeatherProfile,
 } from '../weather/presentationWeather';
-import { createLifeboat, type LifeboatBuild } from '../world/Lifeboat';
+import { createLifeboat } from '../world/Lifeboat';
 import { LifeboatAssets } from '../world/LifeboatAssets';
 import { createRepairToolbox } from '../world/RepairToolbox';
 import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
@@ -251,7 +254,8 @@ export class BoatWorld {
     sunColor: new Color(0xfff1cf),
     sunVisibility: 1,
   };
-  private readonly waterExclusion: LifeboatBuild['waterExclusion'];
+  private readonly oceanExclusion: WaterExclusionRegion;
+  private readonly oceanExclusions: readonly WaterExclusionRegion[];
   private readonly originalCameraParent: Object3D | null;
   private readonly originalCameraPosition: Vector3;
   private readonly originalCameraQuaternion: Quaternion;
@@ -443,7 +447,14 @@ export class BoatWorld {
       }
       const build = createLifeboat(resolvedLifeboatAssets);
       this.boat = build.root;
-      this.waterExclusion = build.waterExclusion;
+      this.oceanExclusion = createWaterExclusion(
+        this.boat,
+        build.waterExclusion.halfWidth,
+        build.waterExclusion.halfLength,
+        build.waterExclusion.taperStart,
+        build.waterExclusion.minimumLocalY,
+      );
+      this.oceanExclusions = [this.oceanExclusion];
       collectMeshResources(this.boat, this.ownedGeometries, this.ownedMaterials);
       this.driftingItemBowRest.name = 'drifting-item-bow-rest';
       this.driftingItemBowRest.position.set(
@@ -1376,15 +1387,8 @@ export class BoatWorld {
     this.ocean.update(time, amplitudeScale, fog.density, this.oceanAtmosphere);
     this.scene.updateMatrixWorld(true);
     this.fishingPresentation.updateLineGeometry();
-    this.ocean.setExclusions([
-      createWaterExclusion(
-        this.boat,
-        this.waterExclusion.halfWidth,
-        this.waterExclusion.halfLength,
-        this.waterExclusion.taperStart,
-        this.waterExclusion.minimumLocalY,
-      ),
-    ]);
+    this.oceanExclusion.worldToLocal.copy(this.boat.matrixWorld).invert();
+    this.ocean.setExclusions(this.oceanExclusions);
     this.camera.getWorldPosition(this.worldCameraPosition);
     this.weatherEffects.update(time, delta, this.worldCameraPosition);
     if (this.lightningStrikePending) {
@@ -1439,13 +1443,10 @@ export class BoatWorld {
       () => this.toolHoverOutline.dispose(),
       () => this.hangingLantern.dispose(),
       () => this.lantern.dispose(),
-      () => this.fishingPresentation.disposeAnimation(),
-      () => this.fishingPresentation.disposeCatches(),
+      () => this.fishingPresentation.dispose(),
       () => this.ocean.dispose(),
       () => this.weatherEffects.dispose(),
-      () => this.fishingPresentation.disposeParticles(),
       () => this.sky.dispose(),
-      () => this.fishingPresentation.detach(),
       () => this.scene.remove(
         this.motionRig,
         this.ocean.mesh,
@@ -1467,7 +1468,6 @@ export class BoatWorld {
         this.ownedMaterials,
         this.ownedTextures,
       ),
-      () => this.fishingPresentation.disposeVisualResources(),
     ]);
   }
 
