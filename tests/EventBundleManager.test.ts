@@ -305,6 +305,24 @@ describe('EventBundleManager', () => {
     );
   });
 
+  it('cancels pending activation before a late bundle can attach', async () => {
+    const log: string[] = [];
+    const pending = deferred<EventBundle>();
+    const manager = new EventBundleManager({ load: () => pending.promise });
+    manager.beginLoad('leak');
+    const activation = manager.activate('leak');
+
+    manager.cancelPendingActivation();
+    pending.resolve(bundle('leak', log));
+
+    await expect(activation).rejects.toThrow(
+      'Event bundle activation was cancelled: leak',
+    );
+    expect(log).toEqual(['dispose:leak']);
+    manager.releaseActive();
+    expect(log).toEqual(['dispose:leak']);
+  });
+
   it('disposes a late bundle after manager shutdown', async () => {
     const log: string[] = [];
     const pending = deferred<EventBundle>();

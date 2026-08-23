@@ -825,6 +825,7 @@ describe('SurvivalPhase orchestration', () => {
       eventBundles: {
         beginLoad: vi.fn(() => undefined),
         activate: vi.fn(async () => undefined),
+        cancelPendingActivation: vi.fn(),
         releaseActive,
         dispose: vi.fn(),
       },
@@ -1859,6 +1860,7 @@ describe('SurvivalPhase orchestration', () => {
           await loading.promise;
           calls.push('active');
         }),
+        cancelPendingActivation: vi.fn(),
         releaseActive: vi.fn(),
         dispose: vi.fn(),
       },
@@ -1911,6 +1913,7 @@ describe('SurvivalPhase orchestration', () => {
       eventBundles: {
         beginLoad: vi.fn(() => Promise.reject(failure)),
         activate: vi.fn(() => Promise.reject(failure)),
+        cancelPendingActivation: vi.fn(),
         releaseActive: vi.fn(),
         dispose: vi.fn(),
       },
@@ -1947,6 +1950,7 @@ describe('SurvivalPhase orchestration', () => {
       eventBundles: {
         beginLoad: vi.fn(() => undefined),
         activate: vi.fn(() => undefined),
+        cancelPendingActivation: vi.fn(),
         releaseActive,
         dispose: vi.fn(),
       },
@@ -7028,6 +7032,7 @@ describe('SurvivalPhase orchestration', () => {
     const eventBundles = {
       beginLoad: vi.fn(() => undefined),
       activate: vi.fn(() => activation.promise),
+      cancelPendingActivation: vi.fn(),
       releaseActive: vi.fn(),
       dispose: vi.fn(),
     };

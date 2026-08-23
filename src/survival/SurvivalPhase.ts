@@ -33,6 +33,7 @@ import {
 } from './ItemAnimationLab';
 import {
   ItemAnimationLabFlow,
+  type ItemAnimationLabBundlePort,
   type ItemAnimationLabSessionPort,
   type ItemAnimationLabUiPort,
   type ItemAnimationLabWorldPort,
@@ -84,14 +85,17 @@ export interface SurvivalPhaseTestDependencies {
   onRestart?: () => void;
   onInvariantError?: (error: Error) => void;
   onFatalError?: (error: unknown) => void;
-  eventBundles?: EventBundleManagerLike;
+  eventBundles?: SurvivalPhaseBundleManager;
   sceneRenderer?: SceneRenderer;
 }
 
-function createTestEventBundleManager(): EventBundleManagerLike {
+type SurvivalPhaseBundleManager = EventBundleManagerLike & ItemAnimationLabBundlePort;
+
+function createTestEventBundleManager(): SurvivalPhaseBundleManager {
   return {
     beginLoad: () => undefined,
     activate: () => undefined,
+    cancelPendingActivation: () => undefined,
     releaseActive: () => undefined,
     dispose: () => undefined,
   };
@@ -183,7 +187,7 @@ export class SurvivalPhase implements GamePhase {
   private onFatalError: (error: unknown) => void = (error) => reportInvariantError(
     error instanceof Error ? error : new Error(String(error)),
   );
-  private eventBundles!: EventBundleManagerLike;
+  private eventBundles!: SurvivalPhaseBundleManager;
   private itemAnimationLab = false;
   private rearCameraView = false;
 
@@ -474,7 +478,7 @@ export class SurvivalPhase implements GamePhase {
     onRestart: () => void,
     onInvariantError: (error: Error) => void = reportInvariantError,
     itemAnimationLab = false,
-    eventBundles: EventBundleManagerLike = createTestEventBundleManager(),
+    eventBundles: SurvivalPhaseBundleManager = createTestEventBundleManager(),
     onFatalError: (error: unknown) => void = (error) => reportInvariantError(
       error instanceof Error ? error : new Error(String(error)),
     ),

@@ -33,6 +33,7 @@ function createRig(savedItems: readonly ItemInstance[] = [
     playEventItemUse: vi.fn(async () => undefined),
     returnEventItemUse: vi.fn(async () => undefined),
     clearEvent: vi.fn(),
+    cancelRepairToolboxAnimation: vi.fn(),
     playRepairToolboxAnimation: vi.fn(async (onAudioStart?: () => void) => {
       onAudioStart?.();
     }),
@@ -55,6 +56,7 @@ function createRig(savedItems: readonly ItemInstance[] = [
   const bundles: ItemAnimationLabBundlePort = {
     beginLoad: vi.fn(),
     activate: vi.fn(),
+    cancelPendingActivation: vi.fn(),
     releaseActive: vi.fn(),
   };
   const setBusy = vi.fn();
@@ -279,6 +281,7 @@ describe('ItemAnimationLabFlow', () => {
     expect(rig.world.setEventSelectedItem).toHaveBeenLastCalledWith(null);
     expect(rig.world.setEventEligibleItems).toHaveBeenLastCalledWith(null);
     expect(rig.world.clearEvent).toHaveBeenCalledOnce();
+    expect(rig.bundles.cancelPendingActivation).toHaveBeenCalledOnce();
     expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
     expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
     expect(rig.setAutomaticWeather).toHaveBeenLastCalledWith(null);
@@ -286,6 +289,7 @@ describe('ItemAnimationLabFlow', () => {
 
     rig.flow.dispose();
     expect(rig.audio.clearEvent).toHaveBeenCalledOnce();
+    expect(rig.bundles.cancelPendingActivation).toHaveBeenCalledOnce();
     expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
 
     animation.resolve();
@@ -298,9 +302,14 @@ describe('ItemAnimationLabFlow', () => {
   it('continues disposal cleanup and reports only its first failure', async () => {
     const rig = createRig();
     const animation = deferred();
-    const first = new Error('audio cleanup failed');
+    const first = new Error('repair cancellation failed');
     vi.mocked(rig.world.playEventItemUse).mockReturnValueOnce(animation.promise);
-    vi.mocked(rig.audio.clearEvent).mockImplementationOnce(() => { throw first; });
+    vi.mocked(rig.world.cancelRepairToolboxAnimation).mockImplementationOnce(() => {
+      throw first;
+    });
+    vi.mocked(rig.audio.clearEvent).mockImplementationOnce(() => {
+      throw new Error('audio cleanup failed');
+    });
     vi.mocked(rig.world.clearEvent).mockImplementationOnce(() => {
       throw new Error('presentation cleanup failed');
     });
@@ -324,5 +333,47 @@ describe('ItemAnimationLabFlow', () => {
 
     animation.resolve();
     await play;
+  });
+
+  it('cancels pending activation before releasing its active bundle', async () => {
+    const rig = createRig();
+    const activation = deferred();
+    const cleanupOrder: string[] = [];
+    vi.mocked(rig.bundles.activate).mockReturnValueOnce(activation.promise);
+    vi.mocked(rig.bundles.cancelPendingActivation).mockImplementationOnce(() => {
+      cleanupOrder.push('cancel-pending');
+    });
+    vi.mocked(rig.bundles.releaseActive).mockImplementationOnce(() => {
+      cleanupOrder.push('release-active');
+    });
+    rig.flow.enter(rig.session.snapshot());
+
+    const play = rig.flow.play('anchor-1' as ItemInstanceId);
+    rig.flow.dispose();
+
+    expect(cleanupOrder).toEqual(['cancel-pending', 'release-active']);
+    activation.resolve();
+    await play;
+    expect(rig.world.stageEvent).not.toHaveBeenCalled();
+  });
+
+  it('cancels pending repair animation before late completion becomes inert', async () => {
+    const rig = createRig();
+    const animation = deferred();
+    vi.mocked(rig.world.playRepairToolboxAnimation).mockReturnValueOnce(animation.promise);
+    vi.mocked(rig.world.cancelRepairToolboxAnimation).mockImplementationOnce(() => {
+      animation.resolve();
+    });
+    rig.flow.enter(rig.session.snapshot());
+
+    const play = rig.flow.play(REPAIR_TOOLBOX_LAB_INSTANCE_ID);
+    rig.flow.dispose();
+
+    expect(rig.world.cancelRepairToolboxAnimation).toHaveBeenCalledOnce();
+    expect(rig.world.setEventSelectedItem).toHaveBeenLastCalledWith(null);
+    expect(rig.world.setEventEligibleItems).toHaveBeenLastCalledWith(null);
+    await play;
+    expect(rig.world.setEventEligibleItems).toHaveBeenLastCalledWith(null);
+    expect(rig.setBusy).toHaveBeenLastCalledWith(false);
   });
 });
