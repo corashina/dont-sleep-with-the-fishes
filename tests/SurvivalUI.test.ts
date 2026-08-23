@@ -3199,6 +3199,64 @@ describe('SurvivalUI', () => {
     expect(() => ui.dispose()).not.toThrow();
   });
 
+  it('continues all disposal after early DOM cleanup fails and preserves undefined', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const internals = ui as unknown as {
+      readonly root: HTMLElement;
+      readonly eventChoices: HTMLElement;
+      readonly anchorView: BoatAnchorView;
+      readonly hudView: SurvivalHudView;
+      readonly modalFocus: { dispose(): void };
+    };
+    const action = vi.fn();
+    const journal = vi.fn();
+    const camera = vi.fn();
+    ui.onAction = action;
+    ui.onJournalOpen = journal;
+    ui.onCameraTurn = camera;
+    const anchorDispose = vi.spyOn(internals.anchorView, 'dispose');
+    const hudDispose = vi.spyOn(internals.hudView, 'dispose');
+    const rootRemove = vi.spyOn(internals.root, 'remove');
+    const documentRemove = vi.spyOn(document, 'removeEventListener');
+    const windowRemove = vi.spyOn(window, 'removeEventListener');
+    vi.spyOn(internals.eventChoices, 'replaceChildren').mockImplementation(() => {
+      throw undefined;
+    });
+    const laterError = new Error('later modal cleanup failed');
+    vi.spyOn(internals.modalFocus, 'dispose').mockImplementation(() => {
+      throw laterError;
+    });
+
+    const notThrown = Symbol('not thrown');
+    let thrown: unknown = notThrown;
+    try {
+      ui.dispose();
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeUndefined();
+    expect(anchorDispose).toHaveBeenCalledOnce();
+    expect(hudDispose).toHaveBeenCalledOnce();
+    expect(documentRemove.mock.calls.some(([type]) => type === 'keydown')).toBe(true);
+    expect(windowRemove.mock.calls.some(([type]) => type === 'resize')).toBe(true);
+    expect(rootRemove).toHaveBeenCalledOnce();
+    expect(mount.children).toHaveLength(0);
+    ui.onAction('fish');
+    ui.onJournalOpen();
+    ui.onCameraTurn?.();
+    expect(action).not.toHaveBeenCalled();
+    expect(journal).not.toHaveBeenCalled();
+    expect(camera).not.toHaveBeenCalled();
+
+    expect(() => ui.dispose()).not.toThrow();
+    expect(anchorDispose).toHaveBeenCalledOnce();
+    expect(hudDispose).toHaveBeenCalledOnce();
+    expect(rootRemove).toHaveBeenCalledOnce();
+  });
+
   it('keeps one document keydown listener in the facade owner', () => {
     const add = vi.spyOn(document, 'addEventListener');
     const remove = vi.spyOn(document, 'removeEventListener');

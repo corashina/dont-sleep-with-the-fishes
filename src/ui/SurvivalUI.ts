@@ -1091,22 +1091,26 @@ export class SurvivalUI {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    let failed = false;
     let firstError: unknown;
     const clean = (cleanup: () => void): void => {
       try {
         cleanup();
       } catch (error) {
-        firstError ??= error;
+        if (!failed) {
+          failed = true;
+          firstError = error;
+        }
       }
     };
-    this.eventEligibility = null;
-    this.contextualEventChoices = [];
-    this.eventSelectedInstanceId = null;
-    this.eventSelectedChoiceId = null;
-    this.eventPresentationActive = false;
-    this.badSleepCue.classList.remove('is-visible');
-    this.eventChoices.replaceChildren();
-    this.eventChoices.hidden = true;
+    clean(() => { this.eventEligibility = null; });
+    clean(() => { this.contextualEventChoices = []; });
+    clean(() => { this.eventSelectedInstanceId = null; });
+    clean(() => { this.eventSelectedChoiceId = null; });
+    clean(() => { this.eventPresentationActive = false; });
+    clean(() => this.badSleepCue.classList.remove('is-visible'));
+    clean(() => this.eventChoices.replaceChildren());
+    clean(() => { this.eventChoices.hidden = true; });
     clean(() => this.pendingSleepTransition?.finish());
     clean(() => this.pendingDiveCoveredHold?.finish());
     clean(() => this.pendingRewardResultConfirmation?.finish());
@@ -1114,40 +1118,40 @@ export class SurvivalUI {
     clean(() => this.pendingEventChoiceBeat?.finish());
     clean(() => this.pendingEventOutcomeHold?.finish());
     clean(() => this.pendingCoveredSceneSettle?.finish());
-    this.fishingAnnouncementVersion += 1;
+    clean(() => { this.fishingAnnouncementVersion += 1; });
     clean(() => this.hideLayer(this.driftingItemFocusLayer));
     if (this.fishingMode !== 'hidden') {
       clean(() => this.hideLayer(this.fishingLayer));
-      this.fishingMode = 'hidden';
-      this.fishingReturnTarget = null;
+      clean(() => { this.fishingMode = 'hidden'; });
+      clean(() => { this.fishingReturnTarget = null; });
     }
     clean(() => this.anchorView.dispose());
     clean(() => this.hudView.dispose());
     clean(() => this.modalFocus.dispose());
-    this.announcementVersion += 1;
-    window.clearTimeout(this.feedbackTimer);
+    clean(() => { this.announcementVersion += 1; });
+    clean(() => window.clearTimeout(this.feedbackTimer));
     clean(() => this.root.removeEventListener('click', this.handleClick));
     clean(() => this.root.removeEventListener('pointerup', this.handleFishingPointerUp));
     clean(() => document.removeEventListener('keydown', this.handleKeyDown));
     clean(() => window.removeEventListener('resize', this.handleWindowResize));
-    this.onAction = () => undefined;
-    this.onEventItem = () => undefined;
-    this.onEventChoice = () => undefined;
-    this.onRestart = () => undefined;
-    this.onAnchorHighlight = () => undefined;
-    this.onPauseChange = () => undefined;
-    this.onJournalOpen = () => undefined;
-    this.onJournalClose = () => undefined;
-    this.onJournalPage = () => undefined;
-    this.onFishingCast = null;
-    this.onFishingReel = null;
-    this.onFishingResultContinue = null;
-    this.onFishingViewExit = null;
-    this.onDriftingItemSelect = null;
-    this.onDriftingItemBack = null;
-    this.onCameraTurn = null;
+    clean(() => { this.onAction = () => undefined; });
+    clean(() => { this.onEventItem = () => undefined; });
+    clean(() => { this.onEventChoice = () => undefined; });
+    clean(() => { this.onRestart = () => undefined; });
+    clean(() => { this.onAnchorHighlight = () => undefined; });
+    clean(() => { this.onPauseChange = () => undefined; });
+    clean(() => { this.onJournalOpen = () => undefined; });
+    clean(() => { this.onJournalClose = () => undefined; });
+    clean(() => { this.onJournalPage = () => undefined; });
+    clean(() => { this.onFishingCast = null; });
+    clean(() => { this.onFishingReel = null; });
+    clean(() => { this.onFishingResultContinue = null; });
+    clean(() => { this.onFishingViewExit = null; });
+    clean(() => { this.onDriftingItemSelect = null; });
+    clean(() => { this.onDriftingItemBack = null; });
+    clean(() => { this.onCameraTurn = null; });
     clean(() => this.root.remove());
-    if (firstError !== undefined) throw firstError;
+    if (failed) throw firstError;
   }
 
   private renderJournalPage(): void {
