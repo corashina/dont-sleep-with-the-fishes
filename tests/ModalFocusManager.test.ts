@@ -240,6 +240,23 @@ describe('ModalFocusManager', () => {
     expect(document.activeElement).toBe(laterOrigin);
   });
 
+  it('preserves valid interior focus during repeated topmost activation', () => {
+    const fixture = createFixture();
+    const journal = fixture.modals.get('journal')!;
+    const initial = fixture.targets.get('journal')!;
+    const interior = document.createElement('button');
+    journal.append(interior);
+    const initialFocus = vi.spyOn(initial, 'focus');
+    fixture.manager.activate(journal);
+    initialFocus.mockClear();
+    interior.focus();
+
+    fixture.manager.activate(journal);
+
+    expect(initialFocus).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(interior);
+  });
+
   it('deactivates a result without focusing its origin or the exposed modal', () => {
     const fixture = createFixture();
     const fishing = fixture.modals.get('fishing-layer')!;

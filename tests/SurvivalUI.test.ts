@@ -2474,6 +2474,73 @@ describe('SurvivalUI', () => {
     expect(returned).toHaveBeenCalledOnce();
   });
 
+  it('focuses a replaced available choice during repeated drifting activation', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.showDriftingItemFocus({
+      eventId: 'drifting-bottle',
+      title: 'DRIFTING BOTTLE',
+      target: null,
+      choices: [{ id: 'retrieve', label: 'RETRIEVE', unavailableReason: null }],
+    });
+    const focus = mount.querySelector<HTMLElement>('[data-drifting-item-focus]')!;
+    const oldChoice = focus.querySelector<HTMLButtonElement>('[data-event-choice="retrieve"]')!;
+    const back = focus.querySelector<HTMLButtonElement>('[data-drifting-item-back]')!;
+    const backFocus = vi.spyOn(back, 'focus');
+    const focusOrder: HTMLElement[] = [];
+    focus.addEventListener('focusin', (event) => {
+      if (event.target instanceof HTMLElement) focusOrder.push(event.target);
+    });
+
+    ui.showDriftingItemFocus({
+      eventId: 'drifting-bottle',
+      title: 'DRIFTING BOTTLE',
+      target: null,
+      choices: [{ id: 'sleep', label: 'LET IT DRIFT', unavailableReason: null }],
+    });
+
+    const replacement = focus.querySelector<HTMLButtonElement>('[data-event-choice="sleep"]')!;
+    expect(oldChoice.isConnected).toBe(false);
+    expect(document.activeElement).toBe(replacement);
+    expect(focusOrder).toEqual([replacement]);
+    expect(backFocus).not.toHaveBeenCalled();
+  });
+
+  it('falls back to Back when repeated drifting choices are unavailable', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.showDriftingItemFocus({
+      eventId: 'drifting-bottle',
+      title: 'DRIFTING BOTTLE',
+      target: null,
+      choices: [{ id: 'retrieve', label: 'RETRIEVE', unavailableReason: null }],
+    });
+    const focus = mount.querySelector<HTMLElement>('[data-drifting-item-focus]')!;
+    const oldChoice = focus.querySelector<HTMLButtonElement>('[data-event-choice="retrieve"]')!;
+    const back = focus.querySelector<HTMLButtonElement>('[data-drifting-item-back]')!;
+    const focusOrder: HTMLElement[] = [];
+    focus.addEventListener('focusin', (event) => {
+      if (event.target instanceof HTMLElement) focusOrder.push(event.target);
+    });
+
+    ui.showDriftingItemFocus({
+      eventId: 'drifting-bottle',
+      title: 'DRIFTING BOTTLE',
+      target: null,
+      choices: [{
+        id: 'retrieve',
+        label: 'RETRIEVE',
+        unavailableReason: 'You need more energy.',
+      }],
+    });
+
+    expect(oldChoice.isConnected).toBe(false);
+    expect(document.activeElement).toBe(back);
+    expect(focusOrder).toEqual([back]);
+  });
+
   it('uses a top-left chest icon to switch between front and rear camera views', () => {
     const mount = document.createElement('main');
     document.body.append(mount);

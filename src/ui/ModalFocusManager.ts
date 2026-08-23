@@ -24,7 +24,13 @@ export class ModalFocusManager {
     if (!wasActive) this.origins.set(modal, origin);
     modal.classList.add('is-visible');
     this.sync();
-    if (!wasActive && this.topmostModal() === modal) this.focusInitial(modal);
+    if (this.topmostModal() !== modal) return;
+    const active = document.activeElement;
+    const hasValidInteriorFocus = wasActive
+      && active instanceof HTMLElement
+      && active.isConnected
+      && modal.contains(active);
+    if (!hasValidInteriorFocus) this.focusInitial(modal);
   }
 
   deactivate(modal: HTMLElement, restore = true): void {
