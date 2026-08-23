@@ -1,6 +1,7 @@
 // Importance: 8/10 (scaled from 4/5). Protects survival world integration and cleanup.
 import { describe, expect, it, vi } from 'vitest';
 import {
+  AmbientLight,
   AnimationClip,
   Bone,
   Box3,
@@ -40,7 +41,11 @@ import {
 } from '../src/game/ItemState';
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
-import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
+import {
+  DEFAULT_WAVES,
+  sampleWaveField,
+  type WaveSample,
+} from '../src/ocean/WaveField';
 import { UNBOUNDED_MINIMUM_LOCAL_Y } from '../src/ocean/WaterExclusion';
 import {
   BoatWorld,
@@ -7156,7 +7161,13 @@ describe('BoatWorld helpers', () => {
     );
     const internals = world as unknown as {
       ocean: { dispose(): void };
-      fishingPresentation: { dispose(): void };
+      fishingPresentation: {
+        disposeAnimation(): void;
+        disposeCatches(): void;
+        disposeParticles(): void;
+        detach(): void;
+        disposeVisualResources(): void;
+      };
       sky: { dispose(): void };
       ownedGeometries: Set<BufferGeometry>;
       ownedMaterials: Set<Material>;
@@ -7175,13 +7186,32 @@ describe('BoatWorld helpers', () => {
       originalOceanDispose();
       throw firstError;
     });
-    const originalFishingPresentationDispose =
-      internals.fishingPresentation.dispose.bind(internals.fishingPresentation);
-    const fishingPresentationDispose = vi.spyOn(internals.fishingPresentation, 'dispose')
-      .mockImplementation(() => {
-        calls.push('fishing');
-        originalFishingPresentationDispose();
-      });
+    const fishing = internals.fishingPresentation;
+    const originalAnimationDispose = fishing.disposeAnimation.bind(fishing);
+    const animationDispose = vi.spyOn(fishing, 'disposeAnimation').mockImplementation(() => {
+      calls.push('fishing-animation');
+      originalAnimationDispose();
+    });
+    const originalCatchDispose = fishing.disposeCatches.bind(fishing);
+    const catchDispose = vi.spyOn(fishing, 'disposeCatches').mockImplementation(() => {
+      calls.push('fishing-catches');
+      originalCatchDispose();
+    });
+    const originalParticleDispose = fishing.disposeParticles.bind(fishing);
+    const particleDispose = vi.spyOn(fishing, 'disposeParticles').mockImplementation(() => {
+      calls.push('fishing-particles');
+      originalParticleDispose();
+    });
+    const originalDetach = fishing.detach.bind(fishing);
+    const fishingDetach = vi.spyOn(fishing, 'detach').mockImplementation(() => {
+      calls.push('fishing-detach');
+      originalDetach();
+    });
+    const originalVisualDispose = fishing.disposeVisualResources.bind(fishing);
+    const visualDispose = vi.spyOn(fishing, 'disposeVisualResources').mockImplementation(() => {
+      calls.push('fishing-visuals');
+      originalVisualDispose();
+    });
     const originalSkyDispose = internals.sky.dispose.bind(internals.sky);
     const skyDispose = vi.spyOn(internals.sky, 'dispose').mockImplementation(() => {
       calls.push('sky');
@@ -7228,14 +7258,18 @@ describe('BoatWorld helpers', () => {
     expect(() => world.dispose()).toThrow(firstError);
 
     expect(calls).toEqual([
-      'fishing',
+      'fishing-animation',
+      'fishing-catches',
       'ocean',
+      'fishing-particles',
       'sky',
+      'fishing-detach',
       'scene',
       'camera',
       'geometry',
       'material',
       'texture',
+      'fishing-visuals',
     ]);
     expect(world.scene.children).toEqual([]);
     expect(camera.parent).toBe(originalParent);
@@ -7247,7 +7281,11 @@ describe('BoatWorld helpers', () => {
     expect(() => world.dispose()).not.toThrow();
     [
       oceanDispose,
-      fishingPresentationDispose,
+      animationDispose,
+      catchDispose,
+      particleDispose,
+      fishingDetach,
+      visualDispose,
       skyDispose,
       geometryDispose,
       materialDispose,
@@ -7409,6 +7447,123 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('keeps catch, ocean, weather, and particle disposal error priority', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const internals = world as unknown as {
+      fishingPresentation: FishingPresentation;
+      ocean: { dispose(): void };
+      weatherEffects: { dispose(): void };
+      sky: { dispose(): void };
+      ownedGeometries: Set<BufferGeometry>;
+    };
+    const calls: string[] = [];
+    const firstError = new Error('catch cleanup failed');
+    const oceanError = new Error('ocean cleanup failed');
+    const weatherError = new Error('weather cleanup failed');
+    const particleError = new Error('particle cleanup failed');
+    const presentationInternals = internals.fishingPresentation as unknown as {
+      dependencies: {
+        catches: { dispose(): void };
+        biteParticles: { dispose(): void };
+      };
+    };
+    const catches = presentationInternals.dependencies.catches;
+    const originalCatchDispose = catches.dispose.bind(catches);
+    vi.spyOn(catches, 'dispose').mockImplementation(() => {
+      calls.push('catches');
+      originalCatchDispose();
+      throw firstError;
+    });
+    const originalOceanDispose = internals.ocean.dispose.bind(internals.ocean);
+    vi.spyOn(internals.ocean, 'dispose').mockImplementation(() => {
+      calls.push('ocean');
+      originalOceanDispose();
+      throw oceanError;
+    });
+    const originalWeatherDispose = internals.weatherEffects.dispose
+      .bind(internals.weatherEffects);
+    vi.spyOn(internals.weatherEffects, 'dispose').mockImplementation(() => {
+      calls.push('weather');
+      originalWeatherDispose();
+      throw weatherError;
+    });
+    const particles = presentationInternals.dependencies.biteParticles;
+    const originalParticleDispose = particles.dispose.bind(particles);
+    vi.spyOn(particles, 'dispose').mockImplementation(() => {
+      calls.push('particles');
+      originalParticleDispose();
+      throw particleError;
+    });
+    const skyDispose = vi.spyOn(internals.sky, 'dispose');
+    const geometry = internals.ownedGeometries.values().next().value!;
+    const geometryDispose = vi.spyOn(geometry, 'dispose');
+
+    expect(() => world.dispose()).toThrow(firstError);
+    expect(calls).toEqual(['catches', 'ocean', 'weather', 'particles']);
+    expect(skyDispose).toHaveBeenCalledOnce();
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(() => world.dispose()).not.toThrow();
+
+    propModels.dispose();
+  });
+
+  it('resets base lighting, motion, cue, and rescue state on ready entry and clear', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const internals = world as unknown as {
+      ambient: AmbientLight;
+      motionRig: Group;
+      cueCameraRig: Group;
+      boatPose: { y: number; pitch: number; roll: number; driftX: number; driftZ: number };
+      activeRescueCueCallback: ((progress: number | null) => void) | null;
+    };
+    const entry = world.enterFishingView();
+    world.update(1.1, 1.1);
+    await entry;
+
+    const expectImmediateBaseReset = async (action: () => void | Promise<void>) => {
+      internals.ambient.intensity = -1;
+      internals.motionRig.position.set(9, 9, 9);
+      internals.motionRig.rotation.set(1, 1, 1);
+      internals.cueCameraRig.position.set(8, 8, 8);
+      internals.cueCameraRig.rotation.set(2, 2, 2);
+      const rescue = vi.fn();
+      internals.activeRescueCueCallback = rescue;
+
+      await action();
+
+      expect(internals.ambient.intensity).toBeGreaterThan(0);
+      expect(internals.motionRig.position.toArray()).toEqual([
+        internals.boatPose.driftX,
+        0.22 + internals.boatPose.y,
+        internals.boatPose.driftZ,
+      ]);
+      expect(internals.motionRig.rotation.toArray().slice(0, 3)).toEqual([
+        internals.boatPose.pitch,
+        0,
+        -internals.boatPose.roll,
+      ]);
+      expect(internals.cueCameraRig.position.toArray()).toEqual([0, 0, 0]);
+      expect(internals.cueCameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+      expect(rescue).toHaveBeenCalledWith(null);
+    };
+
+    await expectImmediateBaseReset(() => world.enterFishingView());
+    await expectImmediateBaseReset(() => world.clearFishingPresentation());
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('runs fishing frame substeps in their authored world slots', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -7452,9 +7607,9 @@ describe('BoatWorld helpers', () => {
       particles(delta);
     });
     const surface = presentation.updateSurface.bind(presentation);
-    vi.spyOn(presentation, 'updateSurface').mockImplementation((time) => {
+    vi.spyOn(presentation, 'updateSurface').mockImplementation((time, amplitudeScale) => {
       calls.push('fishing-surface');
-      surface(time);
+      surface(time, amplitudeScale);
     });
     const updateMatrixWorld = world.scene.updateMatrixWorld.bind(world.scene);
     vi.spyOn(world.scene, 'updateMatrixWorld').mockImplementation((force) => {
@@ -7479,6 +7634,48 @@ describe('BoatWorld helpers', () => {
       'scene-matrix',
       'fishing-line',
     ]);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps the frame-captured wave scale when an event update changes weather', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const internals = world as unknown as {
+      fishingPresentation: FishingPresentation;
+      eventPresentationHost: { update(time: number, delta: number): void };
+    };
+    world.setPresentationWeather('calm');
+    world.showFishingWaiting(world.centeredFishingCast());
+    const presentationDependencies = internals.fishingPresentation as unknown as {
+      dependencies: {
+        sampleWaveInto: (
+          output: WaveSample,
+          time: number,
+          x: number,
+          z: number,
+          amplitudeScale: number,
+        ) => void;
+      };
+    };
+    const sampleWave = vi.spyOn(presentationDependencies.dependencies, 'sampleWaveInto');
+    sampleWave.mockClear();
+    const eventUpdate = internals.eventPresentationHost.update
+      .bind(internals.eventPresentationHost);
+    vi.spyOn(internals.eventPresentationHost, 'update').mockImplementation((time, delta) => {
+      eventUpdate(time, delta);
+      world.setPresentationWeather('waves');
+    });
+
+    world.update(2, 1 / 60);
+
+    expect(sampleWave.mock.calls.at(-1)?.[4]).toBe(
+      presentationWeatherProfile('calm').waveScale,
+    );
     world.dispose();
     propModels.dispose();
   });

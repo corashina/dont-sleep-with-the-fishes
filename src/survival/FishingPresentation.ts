@@ -20,10 +20,11 @@ import {
 } from 'three';
 import type { WaveSample } from '../ocean/WaveField';
 import {
-  projectBoatObjectBounds,
+  projectBoatObjectBoundsInto,
   type ProjectedBoatBounds,
 } from './BoatInteraction';
-import { FISHING_CAMERA_DURATION } from './BoatCameraController';
+import { FishingBiteParticles } from './FishingBiteParticles';
+import { FishingCatchLibrary } from './FishingCatchLibrary';
 import type { FishingCatchId } from './fishingCatalog';
 import type { FishingCastPoint } from './FishingSession';
 import {
@@ -42,6 +43,7 @@ export const FISHING_ROD_LEAN = -22 * Math.PI / 180;
 
 const FISHING_CAMERA_ANGLE_ORIGIN = Object.freeze({ x: 0, y: 1.38, z: -1.42 });
 const FISHING_CAMERA_LOOK_TARGET = Object.freeze({ x: 0, y: -0.42, z: -7.4 });
+const FISHING_CAMERA_DURATION = 1.1;
 const FISHING_CAST_DURATION = 0.8;
 const FISHING_REEL_DURATION = 1;
 const FISHING_MISS_DURATION = 0.8;
@@ -82,6 +84,7 @@ export interface FishingBiteParticlePresentation {
 export interface FishingPresentationDependencies {
   readonly camera: PerspectiveCamera;
   readonly cameraControl: FishingCameraControl;
+  readonly resetBasePresentation: () => void;
   readonly sampleWaveInto: (
     output: WaveSample,
     time: number,
@@ -97,6 +100,21 @@ export interface FishingPresentationDependencies {
   readonly boatRoot: Object3D;
   readonly worldRoot: Object3D;
 }
+
+export type FishingPresentationHostDependencies = Omit<
+  FishingPresentationDependencies,
+  'catches' | 'biteParticles'
+>;
+
+export interface FishingPresentationResourceFactories {
+  createCatches(): FishingCatchPresentationLibrary;
+  createBiteParticles(): FishingBiteParticlePresentation;
+}
+
+const DEFAULT_FISHING_RESOURCE_FACTORIES: FishingPresentationResourceFactories = {
+  createCatches: () => new FishingCatchLibrary(),
+  createBiteParticles: () => new FishingBiteParticles(),
+};
 
 type FishingPresentationPhase =
   | 'idle'
@@ -334,6 +352,14 @@ export class FishingPresentation {
     depth: 0,
     visible: false,
   };
+  private readonly catchProjection: ProjectedBoatBounds = {
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+    depth: 0,
+    visible: false,
+  };
   private activeAnimation: ActiveFishingAnimation | null = null;
   private phase: FishingPresentationPhase = 'idle';
   private activeCatch: Object3D | null = null;
@@ -345,6 +371,44 @@ export class FishingPresentation {
   private biteParticlesActive = false;
   private currentTime = 0;
   private disposed = false;
+  private animationDisposed = false;
+  private catchesDisposed = false;
+  private particlesDisposed = false;
+  private detached = false;
+  private visualResourcesDisposed = false;
+  private cleanupComplete = false;
+
+  static create(
+    dependencies: FishingPresentationHostDependencies,
+    factories: FishingPresentationResourceFactories = DEFAULT_FISHING_RESOURCE_FACTORIES,
+  ): FishingPresentation {
+    let catches: FishingCatchPresentationLibrary | null = null;
+    let biteParticles: FishingBiteParticlePresentation | null = null;
+    let ownershipTransferred = false;
+    try {
+      catches = factories.createCatches();
+      biteParticles = factories.createBiteParticles();
+      const completeDependencies: FishingPresentationDependencies = {
+        ...dependencies,
+        catches,
+        biteParticles,
+      };
+      ownershipTransferred = true;
+      return new FishingPresentation(completeDependencies);
+    } catch (error) {
+      if (!ownershipTransferred) {
+        try {
+          runCleanupSteps([
+            () => catches?.dispose(),
+            () => biteParticles?.dispose(),
+          ]);
+        } catch {
+          // Preserve the construction error after every completed owner runs.
+        }
+      }
+      throw error;
+    }
+  }
 
   constructor(private readonly dependencies: FishingPresentationDependencies) {
     this.root.name = 'fishing-presentation';
@@ -393,6 +457,7 @@ export class FishingPresentation {
   enterView(): Promise<void> {
     if (this.disposed) return Promise.resolve();
     if (this.phase === 'ready') {
+      this.dependencies.resetBasePresentation();
       this.applyPhasePresentation();
       return Promise.resolve();
     }
@@ -535,7 +600,8 @@ export class FishingPresentation {
       || height <= 0
     ) return null;
     this.dependencies.worldRoot.updateMatrixWorld(true);
-    return projectBoatObjectBounds(
+    return projectBoatObjectBoundsInto(
+      this.catchProjection,
       this.fishing.catchDisplay,
       this.dependencies.camera,
       width,
@@ -565,6 +631,7 @@ export class FishingPresentation {
     const keepBowView = this.phase !== 'idle' && this.phase !== 'returning';
     this.resetVisuals();
     this.phase = keepBowView ? 'ready' : 'idle';
+    this.dependencies.resetBasePresentation();
     this.applyPhasePresentation();
   }
 
@@ -590,10 +657,10 @@ export class FishingPresentation {
     this.updateBiteParticles(delta);
   }
 
-  updateSurface(time: number): void {
+  updateSurface(time: number, amplitudeScale = this.dependencies.waveAmplitudeScale()): void {
     if (this.disposed) return;
     this.currentTime = time;
-    this.updateWave(time);
+    this.updateWave(time, amplitudeScale);
     this.updateEffects();
   }
 
@@ -602,12 +669,16 @@ export class FishingPresentation {
     this.updateLine();
   }
 
-  update(time: number, delta: number): void {
+  update(
+    time: number,
+    delta: number,
+    amplitudeScale = this.dependencies.waveAmplitudeScale(),
+  ): void {
     this.advance(time, delta);
     if (delta > 0) {
       this.updateParticles(delta);
     }
-    this.updateSurface(time);
+    this.updateSurface(time, amplitudeScale);
     this.updateLineGeometry();
   }
 
@@ -615,19 +686,59 @@ export class FishingPresentation {
     return this.phase;
   }
 
-  dispose(): void {
-    if (this.disposed) return;
+  disposeAnimation(): void {
+    if (this.animationDisposed) return;
+    this.animationDisposed = true;
+    this.disposed = true;
+    this.cancelActiveAnimation();
+  }
+
+  disposeCatches(): void {
+    if (this.catchesDisposed) return;
+    this.catchesDisposed = true;
+    this.disposed = true;
+    this.dependencies.catches.dispose();
+  }
+
+  disposeParticles(): void {
+    if (this.particlesDisposed) return;
+    this.particlesDisposed = true;
+    this.disposed = true;
+    this.dependencies.biteParticles.dispose();
+  }
+
+  detach(): void {
+    if (this.detached) return;
+    this.detached = true;
     this.disposed = true;
     runCleanupSteps([
-      () => this.cancelActiveAnimation(),
-      () => this.dependencies.catches.dispose(),
-      () => this.dependencies.biteParticles.dispose(),
       () => this.lineOrigin.removeFromParent(),
       () => this.catchRest.removeFromParent(),
       () => this.root.removeFromParent(),
       () => this.dependencies.biteParticles.points.removeFromParent(),
-      () => disposeResourceSets(this.ownedGeometries, this.ownedMaterials),
     ]);
+  }
+
+  disposeVisualResources(): void {
+    if (this.visualResourcesDisposed) return;
+    this.visualResourcesDisposed = true;
+    this.disposed = true;
+    disposeResourceSets(this.ownedGeometries, this.ownedMaterials);
+  }
+
+  dispose(): void {
+    if (this.cleanupComplete) return;
+    try {
+      runCleanupSteps([
+        () => this.disposeAnimation(),
+        () => this.disposeCatches(),
+        () => this.disposeParticles(),
+        () => this.detach(),
+        () => this.disposeVisualResources(),
+      ]);
+    } finally {
+      this.cleanupComplete = true;
+    }
   }
 
   private startAnimation(
@@ -818,14 +929,17 @@ export class FishingPresentation {
       && z <= FISHING_CAST_MAX_Z;
   }
 
-  private updateWave(time: number): void {
+  private updateWave(
+    time: number,
+    amplitudeScale = this.dependencies.waveAmplitudeScale(),
+  ): void {
     if (!this.hasCast) return;
     this.dependencies.sampleWaveInto(
       this.waveSample,
       time,
       this.castPosition.x,
       this.castPosition.z,
-      this.dependencies.waveAmplitudeScale(),
+      amplitudeScale,
     );
     this.waveHeight = this.waveSample.height;
     if (this.phase === 'casting') {
