@@ -14,7 +14,20 @@ export class SurvivalVisibilityController {
     private readonly canResume: () => boolean = () => true,
   ) {
     visibilityDocument.addEventListener('visibilitychange', this.handleVisibilityChange);
-    if (this.isHidden()) this.onHidden();
+    try {
+      if (this.isHidden()) this.onHidden();
+    } catch (error) {
+      this.disposed = true;
+      try {
+        visibilityDocument.removeEventListener(
+          'visibilitychange',
+          this.handleVisibilityChange,
+        );
+      } catch {
+        // Keep the initial hidden callback error as the primary failure.
+      }
+      throw error;
+    }
   }
 
   isHidden(): boolean {
@@ -41,11 +54,21 @@ export class SurvivalVisibilityController {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.visibilityDocument.removeEventListener(
-      'visibilitychange',
-      this.handleVisibilityChange,
-    );
-    this.cancelResumeWaiters();
+    let firstError: unknown;
+    try {
+      this.visibilityDocument.removeEventListener(
+        'visibilitychange',
+        this.handleVisibilityChange,
+      );
+    } catch (error) {
+      firstError = error;
+    }
+    try {
+      this.cancelResumeWaiters();
+    } catch (error) {
+      firstError ??= error;
+    }
+    if (firstError !== undefined) throw firstError;
   }
 
   private readonly handleVisibilityChange = (): void => {

@@ -40,6 +40,43 @@ describe('SurvivalVisibilityController', () => {
     expect(onHidden).toHaveBeenCalledOnce();
   });
 
+  it('removes the listener when the initial hidden callback fails', () => {
+    const fake = fakeDocument(true);
+    const primary = new Error('initial hidden failed');
+
+    expect(() => new SurvivalVisibilityController(
+      fake.document,
+      () => { throw primary; },
+      vi.fn(),
+    )).toThrow(primary);
+
+    expect(fake.document.removeEventListener).toHaveBeenCalledWith(
+      'visibilitychange',
+      expect.any(Function),
+    );
+    expect(fake.listeners.has('visibilitychange')).toBe(false);
+  });
+
+  it('keeps the initial callback error when listener rollback fails', () => {
+    const fake = fakeDocument(true);
+    const primary = new Error('initial hidden failed');
+    const onHidden = vi.fn(() => { throw primary; });
+    const onVisible = vi.fn();
+    vi.mocked(fake.document.removeEventListener).mockImplementationOnce(() => {
+      throw new Error('rollback failed');
+    });
+
+    expect(() => new SurvivalVisibilityController(
+      fake.document,
+      onHidden,
+      onVisible,
+    )).toThrow(primary);
+
+    fake.setHidden(false);
+    expect(onHidden).toHaveBeenCalledOnce();
+    expect(onVisible).not.toHaveBeenCalled();
+  });
+
   it('calls hidden and visible effects for visibility changes', () => {
     const fake = fakeDocument();
     const onHidden = vi.fn();
@@ -136,5 +173,30 @@ describe('SurvivalVisibilityController', () => {
     );
     expect(fake.listeners.has('visibilitychange')).toBe(false);
     expect(onVisible).not.toHaveBeenCalled();
+  });
+
+  it('resolves every waiter when listener removal fails during disposal', async () => {
+    const fake = fakeDocument(true);
+    const removalError = new Error('listener removal failed');
+    const onVisible = vi.fn();
+    vi.mocked(fake.document.removeEventListener).mockImplementationOnce(() => {
+      throw removalError;
+    });
+    const controller = new SurvivalVisibilityController(
+      fake.document,
+      vi.fn(),
+      onVisible,
+    );
+    const first = controller.waitForResume(() => true);
+    const second = controller.waitForResume(() => true);
+
+    expect(() => controller.dispose()).toThrow(removalError);
+
+    await expect(first).resolves.toBe(false);
+    await expect(second).resolves.toBe(false);
+    fake.setHidden(false);
+    expect(onVisible).not.toHaveBeenCalled();
+    expect(() => controller.dispose()).not.toThrow();
+    expect(fake.document.removeEventListener).toHaveBeenCalledOnce();
   });
 });
