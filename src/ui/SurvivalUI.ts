@@ -301,6 +301,7 @@ export class SurvivalUI {
   setAnchors(anchors: readonly BoatInteractionAnchor[]): void {
     if (this.disposed) return;
     this.anchorView.setAnchors(anchors);
+    this.fishingView.refreshResultPlacement();
     this.positionOpenRoutineDialogs();
     this.syncCommandState();
   }

@@ -188,6 +188,10 @@ export class SurvivalFishingView {
     this.resultTarget = null;
   }
 
+  refreshResultPlacement(): void {
+    if (!this.disposed && this.resultVisible) this.positionResult();
+  }
+
   setFade(covered: boolean): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.pendingFade?.finish();
@@ -260,10 +264,12 @@ export class SurvivalFishingView {
   }
 
   removeListenersForDispose(): void {
-    this.interactionRoot.removeEventListener('click', this.handleInteractionClick);
-    this.interactionRoot.removeEventListener('pointerup', this.handlePointerUp);
-    this.resultRoot.removeEventListener('click', this.handleResultClick);
-    window.removeEventListener('resize', this.handleWindowResize);
+    throwCleanupFailure(runCleanupSteps([
+      () => this.interactionRoot.removeEventListener('click', this.handleInteractionClick),
+      () => this.interactionRoot.removeEventListener('pointerup', this.handlePointerUp),
+      () => this.resultRoot.removeEventListener('click', this.handleResultClick),
+      () => window.removeEventListener('resize', this.handleWindowResize),
+    ]));
   }
 
   resetCallbacksForDispose(): void {
@@ -471,6 +477,6 @@ export class SurvivalFishingView {
   };
 
   private readonly handleWindowResize = (): void => {
-    if (!this.disposed && this.resultVisible) this.positionResult();
+    this.refreshResultPlacement();
   };
 }

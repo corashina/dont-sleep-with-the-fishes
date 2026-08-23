@@ -200,4 +200,17 @@ describe('DriftingItemView', () => {
     expect(back).not.toHaveBeenCalled();
     expect(view.root.style.getPropertyValue('--drifting-x')).toBe(x);
   });
+
+  it('continues to resize cleanup after the root listener removal fails', () => {
+    const { view } = createView();
+    const firstError = new Error('root listener cleanup failed');
+    const rootRemove = vi.spyOn(view.root, 'removeEventListener')
+      .mockImplementationOnce(() => { throw firstError; });
+    const windowRemove = vi.spyOn(window, 'removeEventListener');
+
+    expect(() => view.dispose()).toThrow(firstError);
+    expect(rootRemove).toHaveBeenCalledWith('click', expect.any(Function));
+    expect(windowRemove.mock.calls.some(([type]) => type === 'resize')).toBe(true);
+    expect(() => view.dispose()).not.toThrow();
+  });
 });
