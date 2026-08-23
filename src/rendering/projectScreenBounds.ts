@@ -217,13 +217,6 @@ function beginObjectProjection(
   objectProjectionHasPoint = false;
 }
 
-function finishObjectProjection(
-  viewportWidth: number,
-  viewportHeight: number,
-): ProjectedScreenBounds {
-  return finishObjectProjectionInto(hiddenBounds(), viewportWidth, viewportHeight);
-}
-
 function finishObjectProjectionInto(
   output: ProjectedScreenBounds,
   viewportWidth: number,
@@ -319,10 +312,36 @@ export function projectCachedObjectScreenBounds(
   viewportWidth: number,
   viewportHeight: number,
 ): ProjectedScreenBounds {
+  return projectCachedObjectScreenBoundsInto(
+    hiddenBounds(),
+    root,
+    cache,
+    camera,
+    viewportWidth,
+    viewportHeight,
+  );
+}
+
+export function projectCachedObjectScreenBoundsInto(
+  output: ProjectedScreenBounds,
+  root: Object3D,
+  cache: ObjectScreenBoundsCache | null,
+  camera: PerspectiveCamera,
+  viewportWidth: number,
+  viewportHeight: number,
+): ProjectedScreenBounds {
   if (cache === null) {
-    return projectObjectScreenBounds(root, camera, viewportWidth, viewportHeight);
+    return projectObjectScreenBoundsInto(
+      output,
+      root,
+      camera,
+      viewportWidth,
+      viewportHeight,
+    );
   }
-  if (viewportWidth <= 0 || viewportHeight <= 0 || !root.visible) return hiddenBounds();
+  if (viewportWidth <= 0 || viewportHeight <= 0 || !root.visible) {
+    return writeHiddenBounds(output);
+  }
   camera.updateWorldMatrix(true, false);
   root.updateWorldMatrix(true, false);
 
@@ -332,5 +351,5 @@ export function projectCachedObjectScreenBounds(
     objectCachedWorldMatrix.multiplyMatrices(root.matrixWorld, entry.rootFromMesh);
     projectMeshBounds(entry.bounds, objectCachedWorldMatrix);
   }
-  return finishObjectProjection(viewportWidth, viewportHeight);
+  return finishObjectProjectionInto(output, viewportWidth, viewportHeight);
 }

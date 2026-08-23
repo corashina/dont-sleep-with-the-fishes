@@ -18,7 +18,6 @@ import {
 import {
   DAY_ACTION_ONLY_ITEM_IDS,
   ITEM_DEFINITIONS,
-  type ItemId,
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
@@ -48,10 +47,6 @@ import { createLifeboat, type LifeboatBuild } from '../world/Lifeboat';
 import { LifeboatAssets } from '../world/LifeboatAssets';
 import { createRepairToolbox } from '../world/RepairToolbox';
 import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
-import {
-  BOAT_SUPPLY_GROUP_IDS,
-  type BoatSupplyGroupId,
-} from '../world/BoatStorage';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import {
   collectMeshResources,
@@ -63,18 +58,13 @@ import { Skybox } from '../world/Skybox';
 import { WeatherEffects } from '../world/WeatherEffects';
 import type { SkyPalette, SkyState } from '../world/skyPalette';
 import {
-  ACTION_FOR_ITEM,
-  createBoatObjectBoundsCache,
-  projectBoatObjectBounds,
-  projectCachedBoatObjectBounds,
-  type BoatObjectBoundsCache,
   type BoatInteractionAnchor,
   type ProjectedBoatBounds,
 } from './BoatInteraction';
+import { BoatInteractionProjector } from './BoatInteractionProjector';
 import { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import { BoatCameraController } from './BoatCameraController';
 import { CarlitosPresentation } from './CarlitosPresentation';
-import { CARLITOS_LAB_INSTANCE_ID } from './ItemAnimationLab';
 import { ChestDisplay } from './ChestDisplay';
 import { DivePresentation } from './DivePresentation';
 import type { DangerousWatersBoatReaction } from './DangerousWatersPresentation';
@@ -100,8 +90,6 @@ import type { EventPresentationCue } from './midnightTourAudioCue';
 import {
   driftingItemLeaveKey,
   driftingItemRetrieveKey,
-  isDriftingCargoEventId,
-  isDriftingItemEventId,
   type DriftingItemEventId,
 } from './eventCatalog';
 import {
@@ -204,44 +192,6 @@ interface ActiveCarlitosDelegation {
   readonly duration: number;
   readonly resolve: () => void;
 }
-
-interface FocusedInteractionSpec {
-  readonly id: string;
-  readonly label: string;
-  readonly description: string;
-  readonly choiceId: string;
-  readonly tooltip?: boolean;
-  readonly minimumHitWidth: number;
-  readonly minimumHitHeight: number;
-}
-
-const FOCUSED_INTERACTION_SPECS: readonly FocusedInteractionSpec[] = Object.freeze([
-  Object.freeze({
-    id: 'handyman:hand',
-    label: 'HAND',
-    description: 'Touch the waiting hand.',
-    choiceId: 'touch',
-    tooltip: false,
-    minimumHitWidth: 82,
-    minimumHitHeight: 82,
-  }),
-  Object.freeze({
-    id: 'persistent-chest',
-    label: 'CHEST',
-    description: 'Offer the closed chest to the hand.',
-    choiceId: 'chest',
-    minimumHitWidth: 54,
-    minimumHitHeight: 54,
-  }),
-  Object.freeze({
-    id: 'midnight-tour:island',
-    label: 'ISLAND',
-    description: 'Turn the boat toward the small island.',
-    choiceId: 'visit',
-    minimumHitWidth: 96,
-    minimumHitHeight: 78,
-  }),
-]);
 
 const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.min(maximum, Math.max(minimum, value));
@@ -348,6 +298,7 @@ export class BoatWorld {
   private readonly itemUseAdapter: EventItemUseAdapter;
   private readonly itemUseController: EventItemUseController;
   private readonly eventPresentationHost = new EventPresentationHost();
+  private readonly interactionProjector: BoatInteractionProjector;
   private readonly eventPresentationRegistry = new EventPresentationRegistry();
   private fallbackEventPresentation: EventPresentationAdapter | null = null;
   private readonly rescueCueCallbacks = new WeakMap<
@@ -383,19 +334,6 @@ export class BoatWorld {
   private activeFeaturedEventId: FeaturedEventId | null = null;
   private readonly repairTools: Object3D;
   private readonly repairToolboxAnimation: RepairToolboxAnimation;
-  private readonly supplyAnchorBounds = new Map<
-    BoatSupplyGroupId,
-    BoatObjectBoundsCache | null
-  >();
-  private readonly fishingAnchorBounds: BoatObjectBoundsCache | null;
-  private readonly repairAnchorBounds: BoatObjectBoundsCache | null;
-  private readonly lanternAnchorBounds: BoatObjectBoundsCache | null;
-  private readonly chestAnchorBounds: BoatObjectBoundsCache | null;
-  private readonly carlitosAnchorBounds: BoatObjectBoundsCache | null;
-  private readonly eventInteractionBounds = new WeakMap<
-    Object3D,
-    BoatObjectBoundsCache | null
-  >();
   private readonly rodPivot = new Group();
   private readonly rod: Object3D;
   private readonly fishingPresentation: FishingPresentation;
@@ -680,18 +618,22 @@ export class BoatWorld {
         this.key.target,
         this.itemEffects.root,
       );
-      for (const record of this.supplyDisplay.records()) {
-        this.supplyAnchorBounds.set(
-          record.groupId,
-          createBoatObjectBoundsCache(record.root),
-        );
-      }
-      this.fishingAnchorBounds = createBoatObjectBoundsCache(this.rodPivot);
-      this.repairAnchorBounds = createBoatObjectBoundsCache(this.repairTools);
-      this.lanternAnchorBounds = createBoatObjectBoundsCache(this.lantern.root);
-      this.chestAnchorBounds = createBoatObjectBoundsCache(this.chestDisplay.root);
-      this.carlitosAnchorBounds = createBoatObjectBoundsCache(
-        this.carlitos.interactionRoot,
+      this.interactionProjector = new BoatInteractionProjector(
+        this.scene,
+        this.camera,
+        {
+          supplyRecords: this.supplyDisplay.records(),
+          carlitosRoot: this.carlitos.root,
+          carlitosInteractionRoot: this.carlitos.interactionRoot,
+          fishingRoot: this.rodPivot,
+          fishingVisibilityRoot: this.rod,
+          repairRoot: this.repairTools,
+          lanternRoot: this.lantern.root,
+          chestRoot: this.chestDisplay.root,
+          chestState: () => this.chestState,
+          activeFeaturedEventId: () => this.activeFeaturedEventId,
+        },
+        this.eventPresentationHost,
       );
       this.applyBasePresentation();
     } catch (error) {
@@ -1200,15 +1142,7 @@ export class BoatWorld {
     width: number,
     height: number,
   ): ProjectedBoatBounds | null {
-    if (
-      this.disposed
-      || this.eventPresentationHost.activeEventId() === null
-      || width <= 0
-      || height <= 0
-    ) return null;
-    this.scene.updateMatrixWorld(true);
-    const root = this.eventPresentationHost.interactionRoot(eventId);
-    return root === null ? null : projectBoatObjectBounds(root, this.camera, width, height);
+    return this.interactionProjector.projectEventInteraction(eventId, width, height);
   }
 
   projectEventResultBounds(
@@ -1216,15 +1150,7 @@ export class BoatWorld {
     width: number,
     height: number,
   ): ProjectedBoatBounds | null {
-    if (
-      this.disposed
-      || this.eventPresentationHost.activeEventId() === null
-      || width <= 0
-      || height <= 0
-    ) return null;
-    this.scene.updateMatrixWorld(true);
-    const root = this.eventPresentationHost.resultRoot(eventId);
-    return root === null ? null : projectBoatObjectBounds(root, this.camera, width, height);
+    return this.interactionProjector.projectEventResult(eventId, width, height);
   }
 
   async reactToEventOutcome(
@@ -1316,294 +1242,14 @@ export class BoatWorld {
   }
 
   private eventItemAimTarget(_eventId: string): Object3D | null {
-    return this.eventPresentationHost.itemAimTarget();
+    return this.interactionProjector.eventItemAimTarget(_eventId);
   }
 
-  projectInteractionAnchors(width: number, height: number): BoatInteractionAnchor[] {
-    if (this.disposed || width <= 0 || height <= 0) return [];
-    this.scene.updateMatrixWorld(true);
-
-    const itemAnchors = this.supplyDisplay.records()
-      .filter((record) => record.visibleCopies > 0)
-      .map((record) => {
-      const projection = projectCachedBoatObjectBounds(
-        record.root,
-        this.supplyAnchorBounds.get(record.groupId) ?? null,
-        this.camera,
-        width,
-        height,
-      );
-      const { width: hitWidth, height: hitHeight, depth, ...point } = projection;
-      const itemType = record.groupId === 'repairMaterial' ? null : record.groupId;
-      return {
-        id: `supply:${record.groupId}`,
-        itemType,
-        supplyGroupId: record.groupId,
-        toolId: null,
-        action: itemType !== null && record.usableQuantity > 0
-          ? ACTION_FOR_ITEM[itemType] ?? null
-          : null,
-        ...point,
-        visible: record.visibleCopies > 0 && record.root.visible && point.visible,
-        depleted: false,
-        remainingUses: itemType === null || record.usableQuantity === 0
-          ? null
-          : ITEM_DEFINITIONS[itemType].charges,
-        quantity: record.quantity,
-        usableQuantity: record.usableQuantity,
-        brokenQuantity: record.brokenQuantity,
-        backingInstanceId: record.backingInstanceId,
-        hitArea: {
-          width: Math.max(44, hitWidth),
-          height: Math.max(44, hitHeight),
-          depth,
-        },
-      } satisfies BoatInteractionAnchor;
-      });
-    const companionProjection = this.carlitos.root.visible
-      ? projectCachedBoatObjectBounds(
-          this.carlitos.interactionRoot,
-          this.carlitosAnchorBounds,
-          this.camera,
-          width,
-          height,
-        )
-      : null;
-    const companionAnchor = companionProjection === null
-      ? null
-      : {
-          id: 'carlitos',
-          companionId: 'carlitos',
-          label: 'CARLITOS',
-          description: 'Check his hunger, happiness, and health.',
-          itemType: null,
-          toolId: null,
-          action: null,
-          x: companionProjection.x,
-          y: companionProjection.y,
-          visible: companionProjection.visible,
-          depleted: false,
-          remainingUses: null,
-          quantity: 1,
-          usableQuantity: 1,
-          brokenQuantity: 0,
-          backingInstanceId: CARLITOS_LAB_INSTANCE_ID,
-          hitArea: {
-            width: Math.max(54, companionProjection.width),
-            height: Math.max(54, companionProjection.height),
-            depth: companionProjection.depth,
-          },
-        } satisfies BoatInteractionAnchor;
-    const fishingProjection = projectCachedBoatObjectBounds(
-      this.rodPivot,
-      this.fishingAnchorBounds,
-      this.camera,
-      width,
-      height,
-    );
-    const {
-      width: fishingHitWidth,
-      height: fishingHitHeight,
-      depth: fishingDepth,
-      ...fishingPoint
-    } = fishingProjection;
-    const fishingAnchor = {
-      id: 'fishing-tools',
-      itemType: null,
-      toolId: 'fishingRod',
-      action: 'fish',
-      ...fishingPoint,
-      visible: this.rod.visible && fishingPoint.visible,
-      depleted: false,
-      remainingUses: null,
-      quantity: 1,
-      usableQuantity: 1,
-      brokenQuantity: 0,
-      backingInstanceId: null,
-      hitArea: {
-        width: fishingHitWidth,
-        height: fishingHitHeight,
-        depth: fishingDepth,
-      },
-    } satisfies BoatInteractionAnchor;
-    const repairProjection = projectCachedBoatObjectBounds(
-      this.repairTools,
-      this.repairAnchorBounds,
-      this.camera,
-      width,
-      height,
-    );
-    const { width: hitWidth, height: hitHeight, depth, ...point } = repairProjection;
-    const repairAnchor = {
-      id: 'repair-tools',
-      itemType: null,
-      toolId: 'repairTools',
-      action: 'repair',
-      ...point,
-      visible: this.repairTools.visible && point.visible,
-      depleted: false,
-      remainingUses: null,
-      quantity: 1,
-      usableQuantity: 1,
-      brokenQuantity: 0,
-      backingInstanceId: null,
-      hitArea: { width: hitWidth, height: hitHeight, depth },
-    } satisfies BoatInteractionAnchor;
-    const lanternProjection = projectCachedBoatObjectBounds(
-      this.lantern.root,
-      this.lanternAnchorBounds,
-      this.camera,
-      width,
-      height,
-    );
-    const {
-      width: lanternHitWidth,
-      height: lanternHitHeight,
-      depth: lanternDepth,
-      ...lanternPoint
-    } = lanternProjection;
-    const lanternAnchor = {
-      id: 'end-day-lantern',
-      itemType: null,
-      toolId: 'lantern',
-      action: 'endDay',
-      ...lanternPoint,
-      visible: this.lantern.root.visible && lanternPoint.visible,
-      depleted: false,
-      remainingUses: null,
-      quantity: 1,
-      usableQuantity: 1,
-      brokenQuantity: 0,
-      backingInstanceId: null,
-      hitArea: {
-        width: lanternHitWidth,
-        height: lanternHitHeight,
-        depth: lanternDepth,
-      },
-    } satisfies BoatInteractionAnchor;
-    const featuredRoot = this.activeFeaturedEventId === null
-      ? null
-      : this.eventPresentationHost.interactionRoot(this.activeFeaturedEventId);
-    const featuredProjection = featuredRoot === null
-      ? null
-      : projectBoatObjectBounds(featuredRoot, this.camera, width, height);
-    const featuredAnchor = featuredProjection === null || this.activeFeaturedEventId === null
-      ? null
-      : {
-          id: `event:${this.activeFeaturedEventId}`,
-          label: this.featuredAnchorLabel(this.activeFeaturedEventId),
-          description: this.featuredAnchorDescription(this.activeFeaturedEventId),
-          ...(isDriftingItemEventId(this.activeFeaturedEventId)
-            ? {
-                tooltip: false,
-                eventFocusId: this.activeFeaturedEventId,
-              }
-            : this.featuredAnchorChoice(this.activeFeaturedEventId) === null
-              ? {}
-              : { eventChoiceId: this.featuredAnchorChoice(this.activeFeaturedEventId)! }),
-          itemType: null,
-          toolId: null,
-          action: null,
-          x: featuredProjection.x,
-          y: featuredProjection.y,
-          visible: featuredProjection.visible,
-          depleted: false,
-          remainingUses: null,
-          quantity: 1,
-          usableQuantity: 1,
-          brokenQuantity: 0,
-          backingInstanceId: null,
-          hitArea: {
-            width: Math.max(64, featuredProjection.width),
-            height: Math.max(64, featuredProjection.height),
-            depth: featuredProjection.depth,
-          },
-        } satisfies BoatInteractionAnchor;
-    const chestProjection = projectCachedBoatObjectBounds(
-      this.chestDisplay.root,
-      this.chestAnchorBounds,
-      this.camera,
-      width,
-      height,
-    );
-    const {
-      width: chestWidth,
-      height: chestHeight,
-      depth: chestDepth,
-      ...chestPoint
-    } = chestProjection;
-    const chestAnchor = {
-      id: 'persistent-chest',
-      label: 'OPEN',
-      description: 'A closed chest. Opening it costs three energy.',
-      itemType: null,
-      toolId: 'chest',
-      action: this.chestState === 'closed' ? 'openChest' : null,
-      ...chestPoint,
-      visible: this.chestState === 'closed'
-        && this.chestDisplay.root.visible
-        && chestPoint.visible,
-      depleted: false,
-      remainingUses: null,
-      quantity: 1,
-      usableQuantity: 1,
-      brokenQuantity: 0,
-      backingInstanceId: null,
-      hitArea: {
-        width: Math.max(54, chestWidth),
-        height: Math.max(54, chestHeight),
-        depth: chestDepth,
-      },
-    } satisfies BoatInteractionAnchor;
-    const focusedEventAnchors = FOCUSED_INTERACTION_SPECS.flatMap((spec) => {
-      const root = this.eventPresentationHost.interactionRoot(spec.id);
-      if (root === null) return [];
-      if (!this.eventInteractionBounds.has(root)) {
-        this.eventInteractionBounds.set(root, createBoatObjectBoundsCache(root));
-      }
-      const projection = projectCachedBoatObjectBounds(
-        root,
-        this.eventInteractionBounds.get(root) ?? null,
-        this.camera,
-        width,
-        height,
-      );
-      const { width: hitWidth, height: hitHeight, depth, ...point } = projection;
-      return [{
-        id: spec.id,
-        label: spec.label,
-        description: spec.description,
-        tooltip: spec.tooltip,
-        eventChoiceId: spec.choiceId,
-        itemType: null,
-        toolId: null,
-        action: null,
-        ...point,
-        visible: root.visible && point.visible,
-        depleted: false,
-        remainingUses: null,
-        quantity: 1,
-        usableQuantity: 1,
-        brokenQuantity: 0,
-        backingInstanceId: null,
-        hitArea: {
-          width: Math.max(spec.minimumHitWidth, hitWidth),
-          height: Math.max(spec.minimumHitHeight, hitHeight),
-          depth,
-        },
-      } satisfies BoatInteractionAnchor];
-    });
-    const focusedIds = new Set(focusedEventAnchors.map(({ id }) => id));
-    return [
-      ...itemAnchors,
-      ...(companionAnchor === null ? [] : [companionAnchor]),
-      fishingAnchor,
-      repairAnchor,
-      lanternAnchor,
-      ...(focusedIds.has(chestAnchor.id) ? [] : [chestAnchor]),
-      ...(featuredAnchor === null ? [] : [featuredAnchor]),
-      ...focusedEventAnchors,
-    ];
+  projectInteractionAnchors(
+    width: number,
+    height: number,
+  ): readonly BoatInteractionAnchor[] {
+    return this.interactionProjector.projectAnchors(width, height);
   }
 
   enterFishingView(): Promise<void> {
@@ -1837,6 +1483,7 @@ export class BoatWorld {
         this.lightningStrikePending = false;
         this.lightningStrikeListener = null;
       },
+      () => this.interactionProjector.dispose(),
       () => this.cancelActiveSequence(),
       () => this.finishCarlitosDelegation(),
       () => this.itemUseController.dispose(),
@@ -2009,25 +1656,6 @@ export class BoatWorld {
         (this.scene.fog as FogExp2).density += eased * 0.02;
         break;
     }
-  }
-
-  private featuredAnchorLabel(eventId: FeaturedEventId): string {
-    if (eventId === 'drifting-barrel') return 'BARREL';
-    if (eventId === 'drifting-chest') return 'CHEST';
-    if (eventId === 'drifting-bottle') return 'BOTTLE';
-    return 'FLOWERS';
-  }
-
-  private featuredAnchorDescription(eventId: FeaturedEventId): string {
-    if (isDriftingCargoEventId(eventId)) return 'Floating salvage within reach.';
-    if (eventId === 'drifting-bottle') return 'A sealed bottle taps the hull.';
-    return 'Pale blooms pass in the dark water.';
-  }
-
-  private featuredAnchorChoice(eventId: FeaturedEventId): string | null {
-    if (isDriftingCargoEventId(eventId)) return 'retrieve';
-    if (eventId === 'drifting-bottle') return 'retrieve';
-    return null;
   }
 
   private cancelActiveSequence(): void {
