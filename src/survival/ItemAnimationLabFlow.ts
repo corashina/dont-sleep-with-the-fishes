@@ -24,6 +24,7 @@ export type ItemAnimationLabWorldPort = Pick<
   | 'playEventItemUse'
   | 'returnEventItemUse'
   | 'clearEvent'
+  | 'cancelRepairToolboxAnimation'
   | 'playRepairToolboxAnimation'
   | 'setEventEligibleItems'
   | 'setEventSelectedItem'
@@ -46,6 +47,7 @@ export type ItemAnimationLabAudioPort = Pick<
 export interface ItemAnimationLabBundlePort {
   beginLoad(eventId: SurvivalEventId): Promise<unknown> | undefined;
   activate(eventId: SurvivalEventId): Promise<unknown> | undefined;
+  cancelPendingActivation(): void;
   releaseActive(): void;
 }
 
@@ -138,10 +140,12 @@ export class ItemAnimationLabFlow {
     this.eligibility = new Map();
     if (!cleanExternalState) return;
     this.runCleanup([
+      () => this.dependencies.world.cancelRepairToolboxAnimation?.(),
       () => this.dependencies.audio.clearEvent?.(),
       () => this.dependencies.world.setEventSelectedItem?.(null),
       () => this.dependencies.world.setEventEligibleItems?.(null),
       () => this.dependencies.world.clearEvent?.(),
+      () => this.dependencies.bundles.cancelPendingActivation(),
       () => this.dependencies.bundles.releaseActive(),
       () => this.dependencies.ui.clearEventPresentation?.(),
       () => this.dependencies.setAutomaticWeather(null),

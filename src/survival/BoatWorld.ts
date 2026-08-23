@@ -925,6 +925,11 @@ export class BoatWorld {
     return this.repairToolboxAnimation.play(onAudioStart);
   }
 
+  cancelRepairToolboxAnimation(): void {
+    if (this.disposed) return;
+    this.repairToolboxAnimation.cancel();
+  }
+
   private playEventSceneItemUse(
     eventId: string,
     choiceId: string,

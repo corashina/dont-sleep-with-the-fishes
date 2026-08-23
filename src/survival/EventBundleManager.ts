@@ -49,7 +49,9 @@ export class EventBundleManager {
         || pending.generation !== this.generation
         || this.pending !== pending
       ) {
-        bundle.dispose();
+        if (!this.disposed && pending.generation === this.generation) {
+          bundle.dispose();
+        }
         throw new Error(`Event bundle activation was cancelled: ${eventId}`);
       }
       try {
@@ -69,6 +71,12 @@ export class EventBundleManager {
     const active = this.active;
     this.active = null;
     active?.dispose();
+  }
+
+  cancelPendingActivation(): void {
+    if (this.pending === null) return;
+    this.generation += 1;
+    this.pending = null;
   }
 
   dispose(): void {
