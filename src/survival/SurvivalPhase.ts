@@ -3,7 +3,6 @@ import type { PhaseContext, GamePhase } from '../app/GamePhase';
 import { AudioSystem } from '../audio/AudioSystem';
 import { SurvivalAudio } from '../audio/SurvivalAudio';
 import {
-  ITEM_DEFINITIONS,
   type ItemId,
   type ItemInstance,
   type ItemInstanceId,
@@ -15,10 +14,7 @@ import {
   type WaterQuality,
 } from '../rendering/waterQuality';
 import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
-import {
-  SurvivalUI,
-  type RewardResultView,
-} from '../ui/SurvivalUI';
+import { SurvivalUI } from '../ui/SurvivalUI';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
 import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../world/SkyAssets';
@@ -52,6 +48,13 @@ import {
   type FishingUiPort,
   type FishingWorldPort,
 } from './SurvivalFishingFlow';
+import {
+  SurvivalDayActionFlow,
+  type DayActionEventPort,
+  type DayActionSessionPort,
+  type DayActionUiPort,
+  type DayActionWorldPort,
+} from './SurvivalDayActionFlow';
 import { SurvivalSession } from './SurvivalSession';
 import { EventBundleLoader } from './EventBundle';
 import { EventBundleManager } from './EventBundleManager';
@@ -64,7 +67,6 @@ import {
   type EventWorldPort,
 } from './SurvivalEventFlow';
 import type {
-  ActionOutcome,
   DayActionId,
   DayActionOption,
   EventResponseId,
@@ -103,40 +105,6 @@ function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' 
 
 function reportInvariantError(error: Error): void {
   console.error(error);
-}
-
-export function formatDiveResult(outcome: ActionOutcome): RewardResultView {
-  const lines: string[] = [];
-  let reward = outcome.rewardSummary ?? null;
-  const itemRewards = [
-    ['food', 'food'],
-    ['bait', 'bait'],
-    ['repairMaterial', 'repairMaterial'],
-  ] as const;
-  if (reward === null) {
-    for (const [resource, id] of itemRewards) {
-      const delta = outcome.deltas[resource];
-      if (delta !== undefined && delta > 0) {
-        reward = { kind: 'resource', id, quantity: delta };
-        break;
-      }
-    }
-  }
-  const textRewards = [
-    ['rescueProgress', 'RESCUE PROGRESS'],
-  ] as const;
-  for (const [resource, label] of textRewards) {
-    const delta = outcome.deltas[resource];
-    if (delta !== undefined && delta !== 0) {
-      lines.push(`${label} ${delta > 0 ? '+' : ''}${delta}`);
-    }
-  }
-  if (reward === null && lines.length === 0) lines.push('NOTHING FOUND');
-  const appliedHealthDelta = outcome.deltas.health;
-  if (appliedHealthDelta !== undefined && appliedHealthDelta < 0) {
-    lines.push('YOU SUFFERED SOME INJURIES');
-  }
-  return { title: 'DIVE RESULT', reward, lines };
 }
 
 function testContext(
@@ -201,6 +169,7 @@ export class SurvivalPhase implements GamePhase {
   private viewportWidth = 1;
   private viewportHeight = 1;
   private fishingFlow!: SurvivalFishingFlow;
+  private dayActionFlow!: SurvivalDayActionFlow;
   private driftingItemFlow!: DriftingItemFlow;
   private eventFlow!: SurvivalEventFlow;
   private itemAnimationLabEligibilityMap = new Map<ItemInstanceId, EventResponseId>();
@@ -398,39 +367,11 @@ export class SurvivalPhase implements GamePhase {
       this.audio.deny();
       return;
     }
-    const beforeAction = this.session.snapshot();
     if (action === 'fish') {
       void this.fishingFlow.begin();
       return;
     }
-    const selectedOption = action === 'repair' ? this.repairOption(this.session.snapshot()) : option;
-    const outcome = this.session.perform?.(action, selectedOption);
-    if (outcome === undefined) return;
-    if (!outcome.accepted) {
-      this.audio.deny();
-      this.ui.showFeedback?.(outcome);
-      return;
-    }
-    if (action === 'endDay') {
-      this.audio.sleep();
-      void this.runEndDay(outcome);
-      return;
-    }
-    if (action === 'dive') {
-      void this.runDiveAction(outcome);
-      return;
-    }
-    this.audio.action(action, selectedOption);
-    if (action === 'petCarlitos' || action === 'feedCarlitos') {
-      this.eventFlow.sync(this.session.snapshot());
-      void this.runCarlitosAction(action);
-      return;
-    }
-    if (action === 'openChest') {
-      void this.runChestAction(outcome, beforeAction);
-      return;
-    }
-    void this.runDayAction(outcome);
+    void this.dayActionFlow.run(action, option);
   }
 
   handleEventItem(choiceId: EventResponseId, instanceId: ItemInstanceId): void {
@@ -502,7 +443,8 @@ export class SurvivalPhase implements GamePhase {
     if (this.disposed || this.restartRequested) return;
     this.eventFlow.clear();
     this.driftingItemFlow.dispose();
-    this.audio.cancelDive();
+    this.dayActionFlow.settleForVisibilityChange();
+    this.dayActionFlow.dispose();
     this.restartRequested = true;
     this.lifecycleGeneration += 1;
     this.releaseVisibilityResumeWaiters();
@@ -513,6 +455,7 @@ export class SurvivalPhase implements GamePhase {
     if (this.disposed) return;
     this.eventFlow.dispose();
     this.driftingItemFlow.dispose();
+    this.dayActionFlow.dispose();
     this.disposed = true;
     this.lifecycleGeneration += 1;
     this.releaseVisibilityResumeWaiters();
@@ -611,6 +554,25 @@ export class SurvivalPhase implements GamePhase {
       onInvariantError: (error) => this.onInvariantError(error),
       onFatalError: (error) => this.onFatalError(error),
       initialEventResultId,
+    });
+    this.dayActionFlow = new SurvivalDayActionFlow({
+      session: session as DayActionSessionPort,
+      world: world as DayActionWorldPort,
+      ui: ui as DayActionUiPort,
+      audio: this.audio,
+      events: this.eventFlow as DayActionEventPort,
+      renderSnapshot: () => this.renderSnapshot(false, false),
+      renderAndSettleCoveredScene: (generation) => (
+        this.renderAndSettleCoveredScene(generation)
+      ),
+      presentTerminal: (snapshot) => this.presentTerminalOnce(snapshot),
+      setBusy: (busy) => this.setBusy(busy),
+      waitForVisibilityResume: (generation) => this.waitForVisibilityResume(generation),
+      captureLifecycleGeneration: () => this.lifecycleGeneration,
+      advanceLifecycleGeneration: () => ++this.lifecycleGeneration,
+      isLifecycleGenerationCurrent: (generation) => this.isContinuationActive(generation),
+      onInvariantError: (error) => this.onInvariantError(error),
+      onFatalError: (error) => this.onFatalError(error),
     });
     this.world.setEventCueHandler?.(({ eventId, cue }) => {
       if (eventId === 'midnight-tour') this.audio.midnightTourCue(cue);
@@ -799,31 +761,10 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onCameraTurn = () => this.handleCameraTurn();
   }
 
-  private repairOption(snapshot: SurvivalSnapshot): DayActionOption | undefined {
-    if (snapshot.repairMaterial > 0) {
-      return { kind: 'hullRepair', material: 'repairMaterial' };
-    }
-    const hasDuctTape = Object.values(snapshot.inventory).some(
-      (item) => item?.type === 'ductTape' && item.condition === 'usable',
-    );
-    if (hasDuctTape) return { kind: 'hullRepair', material: 'ductTape' };
-    return undefined;
-  }
-
-  private repairItemReason(snapshot: SurvivalSnapshot): string | null {
-    const target = Object.values(snapshot.inventory).find(
-      (item) => item?.condition === 'broken' && ITEM_DEFINITIONS[item.type].breakable,
-    );
-    if (target === undefined) return 'No broken repairable item remains.';
-    return this.session.availableReason?.('repairItem', {
-      kind: 'itemRepair',
-      target: target.instanceId,
-    }) ?? null;
-  }
-
   private canAcceptCommand(): boolean {
     if (
       this.disposed
+      || this.restartRequested
       || this.busy
       || this.paused
       || this.documentIsHidden()
@@ -853,128 +794,6 @@ export class SurvivalPhase implements GamePhase {
       && (generation === undefined || generation === this.lifecycleGeneration);
   }
 
-  private async runDayAction(outcome: ActionOutcome): Promise<void> {
-    this.setBusy(true);
-    await (this.world.play?.(outcome.cue) ?? Promise.resolve());
-    if (this.disposed) return;
-    const snapshot = this.renderSnapshot(false, false);
-    if (isTerminal(snapshot.state)) {
-      this.setBusy(false);
-      this.presentTerminalOnce(snapshot);
-      return;
-    }
-    this.setBusy(false);
-    this.ui.restoreCommandFocus?.();
-  }
-
-  private async runChestAction(
-    outcome: ActionOutcome,
-    beforeAction: SurvivalSnapshot,
-  ): Promise<void> {
-    const generation = ++this.lifecycleGeneration;
-    this.eventFlow.beginDeferredSync(beforeAction, generation);
-    this.setBusy(true);
-    await (this.world.play?.(outcome.cue) ?? Promise.resolve());
-    if (!this.isContinuationActive(generation)) return;
-    const resultHold = this.ui.showRewardResult?.({
-      title: 'CHEST REWARD',
-      reward: outcome.rewardSummary ?? null,
-      lines: [],
-    }) ?? Promise.resolve();
-    await resultHold;
-    if (!this.isContinuationActive(generation)) return;
-    this.eventFlow.cancelDeferredSync(generation);
-    const snapshot = this.renderSnapshot(false, false);
-    this.setBusy(false);
-    if (isTerminal(snapshot.state)) this.presentTerminalOnce(snapshot);
-    else this.ui.restoreCommandFocus?.();
-  }
-
-  private async runCarlitosAction(
-    action: 'petCarlitos' | 'feedCarlitos',
-  ): Promise<void> {
-    this.setBusy(true);
-    await (this.world.playCarlitosAction?.(action) ?? Promise.resolve());
-    if (this.disposed) return;
-    this.renderSnapshot(false, false);
-    this.setBusy(false);
-    this.ui.restoreCommandFocus?.();
-  }
-
-  private async runDiveAction(outcome: ActionOutcome): Promise<void> {
-    const generation = ++this.lifecycleGeneration;
-    const scuba = Object.values(this.session.snapshot().inventory).find(
-      (item) => item?.type === 'scubaSet' && item.condition === 'usable',
-    );
-    const instanceId = scuba?.instanceId ?? 'scubaSet-1';
-    this.setBusy(true);
-
-    await (this.world.playDive?.(instanceId, () => {
-      if (this.isContinuationActive(generation)) this.audio.beginDive();
-    }) ?? Promise.resolve());
-    if (!await this.waitForVisibilityResume(generation)) return;
-
-    await (this.ui.setSleepCoverProfile?.('dive') ?? Promise.resolve());
-    if (!await this.waitForVisibilityResume(generation)) return;
-    await (this.ui.setSleepCovered?.(true) ?? Promise.resolve());
-    if (!await this.waitForVisibilityResume(generation)) return;
-
-    this.world.clearDivePresentation?.();
-    this.audio.finishDive();
-    const snapshot = this.renderSnapshot(false, false);
-    const [coveredSceneSettled] = await Promise.all([
-      this.renderAndSettleCoveredScene(generation),
-      this.ui.holdDiveCovered?.() ?? Promise.resolve(),
-    ]);
-    if (!coveredSceneSettled) return;
-    if (!await this.waitForVisibilityResume(generation)) return;
-    await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
-    if (!await this.waitForVisibilityResume(generation)) return;
-    await (this.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
-    if (!await this.waitForVisibilityResume(generation)) return;
-
-    const resultHold = this.ui.showRewardResult?.(formatDiveResult(outcome)) ?? Promise.resolve();
-    await resultHold;
-    if (!await this.waitForVisibilityResume(generation)) return;
-    this.setBusy(false);
-    if (isTerminal(snapshot.state)) this.presentTerminalOnce(snapshot);
-    else this.ui.restoreCommandFocus?.();
-  }
-
-  private async runEndDay(outcome: ActionOutcome): Promise<void> {
-    const generation = this.lifecycleGeneration;
-    const opensEvent = outcome.code !== 'quiet-night';
-    if (!this.eventFlow.beginNightTransition(this.session.snapshot(), opensEvent)) return;
-    await Promise.all([
-      this.world.play?.(outcome.cue) ?? Promise.resolve(),
-      this.ui.setSleepCovered?.(true) ?? Promise.resolve(),
-    ]);
-    if (!this.isContinuationActive(generation)) return;
-    this.audio.nightfall();
-    let snapshot = this.renderSnapshot(false, false);
-
-    if (outcome.code === 'quiet-night') {
-      await (this.ui.holdSleep?.() ?? Promise.resolve());
-      if (!this.isContinuationActive(generation)) return;
-      snapshot = await this.eventFlow.beginDawn();
-      if (!this.isContinuationActive(generation)) return;
-      if (snapshot.state === 'dayEvent' && snapshot.pendingEventId !== null) {
-        this.ui.beginEventPresentation?.();
-        await this.eventFlow.revealPending(snapshot, true);
-        return;
-      }
-      if (!await this.renderAndSettleCoveredScene(generation)) return;
-      await (this.ui.setSleepCovered?.(false) ?? Promise.resolve());
-      if (!this.isContinuationActive(generation)) return;
-      this.eventFlow.finishQuietNight();
-      this.presentTerminalOnce(snapshot);
-      this.ui.restoreCommandFocus?.();
-      return;
-    }
-
-    await this.eventFlow.revealPending(snapshot, true);
-  }
-
   private latestJournalDay(snapshot: SurvivalSnapshot): number {
     return snapshot.journalEntries.at(-1)?.day ?? 0;
   }
@@ -987,13 +806,9 @@ export class SurvivalPhase implements GamePhase {
     const snapshot = this.session.snapshot();
     this.syncVisualState(snapshot);
     this.world.setPhase?.(snapshot.state === 'nightEvent' ? 'night' : 'day');
-    this.ui.render?.(snapshot, (action) => {
-      if (action === 'repairItem') return this.repairItemReason(snapshot);
-      return this.session.availableReason?.(
-        action,
-        action === 'repair' ? this.repairOption(snapshot) : undefined,
-      ) ?? null;
-    });
+    this.ui.render?.(snapshot, (action) => (
+      this.dayActionFlow.unavailableReason(snapshot, action)
+    ));
     this.syncCameraTurnControl(snapshot);
     this.syncJournalUnread(snapshot);
     this.eventFlow.sync(snapshot);
@@ -1084,7 +899,7 @@ export class SurvivalPhase implements GamePhase {
   private readonly handleVisibilityChange = (): void => {
     const hidden = this.visibilityDocument?.hidden === true;
     if (hidden) {
-      this.audio.cancelDive();
+      this.dayActionFlow.settleForVisibilityChange();
       if (!this.paused) {
         this.visibilityPauseActive = true;
         this.setPaused(true);
