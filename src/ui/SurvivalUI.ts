@@ -24,6 +24,7 @@ import type {
 } from '../survival/survivalTypes';
 import { createElementRequirement } from './dom';
 import { itemThumbnailUrl } from './itemThumbnailManifest';
+import { ModalFocusManager, type ModalInitialFocus } from './ModalFocusManager';
 import { uiArtwork, type UiArtworkId } from './uiArtwork';
 
 interface ActionDefinition {
@@ -405,8 +406,7 @@ export class SurvivalUI {
   private readonly endingLayer: HTMLElement;
   private readonly endingTitle: HTMLElement;
   private readonly restartButton: HTMLButtonElement;
-  private readonly backgroundRegions: HTMLElement[];
-  private readonly modalLayers: HTMLElement[];
+  private readonly modalFocus: ModalFocusManager;
   private readonly anchorButtons = new Map<string, HTMLButtonElement>();
   private readonly anchorTooltipNodes = new WeakMap<HTMLButtonElement, AnchorTooltipNodes>();
   private readonly anchors = new Map<string, BoatInteractionAnchor>();
@@ -420,7 +420,6 @@ export class SurvivalUI {
   private announcementVersion = 0;
   private feedbackTimer: number | undefined;
   private restartIssued = false;
-  private focusReturnTarget: HTMLElement | null = null;
   private pauseReturnTarget: HTMLElement | null = null;
   private fishingReturnTarget: HTMLElement | null = null;
   private latestCommandOrigin: HTMLButtonElement | null = null;
@@ -689,8 +688,7 @@ export class SurvivalUI {
     this.endingLayer = requireElement(this.root, '[data-ending]');
     this.endingTitle = requireElement(this.root, '[data-ending-title]');
     this.restartButton = requireElement(this.root, '[data-restart]');
-    this.backgroundRegions = [this.topControls, this.anchorLayer];
-    this.modalLayers = [
+    const modalLayers = [
       this.pauseLayer,
       this.journalLayer,
       this.repairOptionsLayer,
@@ -700,6 +698,33 @@ export class SurvivalUI {
       this.fishingResultLayer,
       this.fishingLayer,
     ];
+    this.modalFocus = new ModalFocusManager(
+      [this.topControls, this.anchorLayer],
+      modalLayers,
+      new Map<HTMLElement, ModalInitialFocus>([
+        [this.pauseLayer, this.resumeButton],
+        [this.journalLayer, this.journalTitle],
+        [this.repairOptionsLayer, this.repairOptionsTitle],
+        [this.endingLayer, this.endingTitle],
+        [this.diveResultLayer, this.diveResultClose],
+        [this.driftingItemFocusLayer, () => (
+          this.driftingItemFocusChoices.querySelector<HTMLButtonElement>(
+            '[data-event-choice][aria-disabled="false"]',
+          ) ?? this.driftingItemFocusBack
+        )],
+        [this.fishingResultLayer, this.fishingResultContinue],
+        [this.fishingLayer, () => {
+          if (this.fishingMode === 'bite' && !this.fishingBiteTarget.hidden) {
+            return this.fishingBiteTarget;
+          }
+          if (this.fishingMode === 'ready' && !this.fishingViewExit.hidden) {
+            return this.fishingViewExit;
+          }
+          return this.fishingLayer;
+        }],
+      ]),
+    );
+    this.modalFocus.sync();
 
     ACTIONS.forEach(({ id }) => this.actionReasons.set(id, null));
     METERS.forEach(({ id }) => this.meterElements.set(id, requireElement(this.root, `[data-meter="${id}"]`)));
@@ -1082,7 +1107,6 @@ export class SurvivalUI {
       this.pendingRewardResultConfirmation = { finish };
     });
     this.showLayer(this.diveResultLayer);
-    this.diveResultClose.focus();
     return confirmation;
   }
 
@@ -1229,12 +1253,12 @@ export class SurvivalUI {
       this.hideLayer(this.fishingLayer);
       const target = this.fishingReturnTarget;
       this.fishingReturnTarget = null;
-      if (this.topmostModal() === null && !this.busy) this.restoreFishingFocus(target);
+      if (this.modalFocus.topmostModal() === null && !this.busy) this.restoreFishingFocus(target);
       return;
     }
 
     this.showLayer(this.fishingLayer);
-    if (this.topmostModal() === this.fishingLayer && modeChanged) this.focusModal(this.fishingLayer);
+    if (modeChanged) this.modalFocus.focusInitial(this.fishingLayer);
   }
 
   showFishingResult(view: FishingResultView): void {
@@ -1247,7 +1271,6 @@ export class SurvivalUI {
       ? null
       : Object.freeze({ ...view.catchTarget });
     this.showLayer(this.fishingResultLayer);
-    this.fishingResultContinue.focus();
   }
 
   hideFishingResult(): void {
@@ -1268,10 +1291,7 @@ export class SurvivalUI {
     this.positionDriftingItemFocus();
     this.showLayer(this.driftingItemFocusLayer);
     this.syncCommandState();
-    const firstAvailableChoice = this.driftingItemFocusChoices.querySelector<HTMLButtonElement>(
-      '[data-event-choice][aria-disabled="false"]',
-    );
-    (firstAvailableChoice ?? this.driftingItemFocusBack).focus();
+    this.modalFocus.focusInitial(this.driftingItemFocusLayer);
   }
 
   hideDriftingItemFocus(): void {
@@ -1372,7 +1392,6 @@ export class SurvivalUI {
 
   showJournal(entries: readonly JournalEntry[]): void {
     if (this.disposed) return;
-    this.focusReturnTarget = this.journalMarker;
     this.journalEntries = entries.map((entry) => ({
       ...entry,
       actions: entry.actions.map((action) => ({ ...action })),
@@ -1383,14 +1402,12 @@ export class SurvivalUI {
     }));
     this.journalIndex = Math.max(0, this.journalEntries.length - 1);
     this.renderJournalPage();
-    this.showLayer(this.journalLayer);
-    this.journalTitle.focus();
+    this.showLayer(this.journalLayer, this.journalMarker);
   }
 
   hideJournal(): void {
     if (this.disposed) return;
-    this.hideLayer(this.journalLayer);
-    this.restoreFocus();
+    this.hideLayer(this.journalLayer, true);
   }
 
   setBusy(busy: boolean): void {
@@ -1414,14 +1431,11 @@ export class SurvivalUI {
     this.paused = paused;
     if (paused) {
       this.showLayer(this.pauseLayer);
-      this.resumeButton.focus();
     } else {
       this.hideLayer(this.pauseLayer);
       const target = this.pauseReturnTarget;
       this.pauseReturnTarget = null;
-      const underlyingModal = this.topmostModal();
-      if (underlyingModal !== null) this.focusModal(underlyingModal);
-      else this.restoreCommandFocus(target);
+      if (this.modalFocus.topmostModal() === null) this.restoreCommandFocus(target);
     }
   }
 
@@ -1448,7 +1462,6 @@ export class SurvivalUI {
     this.restartIssued = false;
     this.restartButton.disabled = false;
     this.showLayer(this.endingLayer);
-    this.endingTitle.focus();
   }
 
   dispose(): void {
@@ -1473,11 +1486,11 @@ export class SurvivalUI {
     this.anchorLayouts.clear();
     this.hideLayer(this.driftingItemFocusLayer);
     if (this.fishingMode !== 'hidden') {
-      this.fishingLayer.classList.remove('is-visible');
+      this.hideLayer(this.fishingLayer);
       this.fishingMode = 'hidden';
-      this.syncBackgroundInteraction();
       this.fishingReturnTarget = null;
     }
+    this.modalFocus.dispose();
     this.disposed = true;
     this.announcementVersion += 1;
     window.clearTimeout(this.feedbackTimer);
@@ -2210,7 +2223,7 @@ export class SurvivalUI {
     this.publishAnchorHighlight();
   };
 
-  private showLayer(layer: HTMLElement): void {
+  private showLayer(layer: HTMLElement, origin: HTMLElement | null = null): void {
     this.clearAnchorHighlight();
     if (layer === this.fishingResultLayer) {
       this.positionRoutineDialog(
@@ -2221,13 +2234,11 @@ export class SurvivalUI {
     } else if (layer === this.repairOptionsLayer) {
       this.positionRoutineDialog(layer, ROUTINE_DIALOG_PLACEMENTS.repair);
     }
-    layer.classList.add('is-visible');
-    this.syncBackgroundInteraction();
+    this.modalFocus.activate(layer, origin);
   }
 
-  private hideLayer(layer: HTMLElement): void {
-    layer.classList.remove('is-visible');
-    this.syncBackgroundInteraction();
+  private hideLayer(layer: HTMLElement, restore = false): void {
+    this.modalFocus.deactivate(layer, restore);
   }
 
   private positionOpenRoutineDialogs(): void {
@@ -2406,36 +2417,7 @@ export class SurvivalUI {
   }
 
   private overlayOpen(): boolean {
-    return this.topmostModal() !== null;
-  }
-
-  private topmostModal(): HTMLElement | null {
-    return this.modalLayers.find((layer) => layer.classList.contains('is-visible')) ?? null;
-  }
-
-  private syncBackgroundInteraction(): void {
-    const topmostModal = this.topmostModal();
-    this.modalLayers.forEach((layer) => {
-      const isTopmost = layer === topmostModal;
-      layer.toggleAttribute('inert', !isTopmost);
-      layer.setAttribute('aria-hidden', isTopmost ? 'false' : 'true');
-    });
-    const modalOpen = topmostModal !== null;
-    this.backgroundRegions.forEach((region) => region.toggleAttribute('inert', modalOpen));
-  }
-
-  private focusModal(layer: HTMLElement): void {
-    if (layer === this.endingLayer) this.endingTitle.focus();
-    else if (layer === this.fishingResultLayer) this.fishingResultContinue.focus();
-    else if (layer === this.driftingItemFocusLayer) this.driftingItemFocusBack.focus();
-    else if (layer === this.repairOptionsLayer) this.repairOptionsTitle.focus();
-    else if (layer === this.journalLayer) this.journalTitle.focus();
-    else if (layer === this.pauseLayer) this.resumeButton.focus();
-    else if (layer === this.fishingLayer) {
-      if (this.fishingMode === 'bite' && !this.fishingBiteTarget.hidden) this.fishingBiteTarget.focus();
-      else if (this.fishingMode === 'ready' && !this.fishingViewExit.hidden) this.fishingViewExit.focus();
-      else this.fishingLayer.focus();
-    }
+    return this.modalFocus.topmostModal() !== null;
   }
 
   private activateDayAction(action: DayActionId, origin: HTMLButtonElement | null): void {
@@ -2463,13 +2445,12 @@ export class SurvivalUI {
       return button;
     }));
     this.showLayer(this.repairOptionsLayer);
-    this.repairOptionsTitle.focus();
   }
 
   private chooseRepairTarget(target: ItemInstanceId): void {
     this.hideLayer(this.repairOptionsLayer);
     this.onAction('repairItem', { kind: 'itemRepair', target });
-    if (this.topmostModal() === null) this.restoreCommandFocus(this.latestCommandOrigin);
+    if (this.modalFocus.topmostModal() === null) this.restoreCommandFocus(this.latestCommandOrigin);
   }
 
   private closeRepairOptions(): void {
@@ -2547,43 +2528,6 @@ export class SurvivalUI {
     destination?.focus();
   }
 
-  private restoreFocus(): void {
-    const target = this.focusReturnTarget;
-    this.focusReturnTarget = null;
-    this.restoreCommandFocus(target);
-  }
-
-  private trapModalFocus(event: KeyboardEvent, modal: HTMLElement): boolean {
-    if (event.key !== 'Tab') return false;
-    const controls = [...modal.querySelectorAll<HTMLElement>(
-      'button:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
-    )].filter((element) => (
-      element.closest('[hidden]') === null
-      && !element.hasAttribute('inert')
-      && element.getAttribute('aria-hidden') !== 'true'
-    ));
-    if (controls.length === 0) {
-      event.preventDefault();
-      this.focusModal(modal);
-      return true;
-    }
-    const first = controls[0]!;
-    const last = controls[controls.length - 1]!;
-    const active = document.activeElement;
-    const activeIsControl = active instanceof HTMLElement && controls.includes(active);
-    if (event.shiftKey && (active === first || !activeIsControl)) {
-      event.preventDefault();
-      last.focus();
-      return true;
-    }
-    if (!event.shiftKey && (active === last || !activeIsControl)) {
-      event.preventDefault();
-      first.focus();
-      return true;
-    }
-    return false;
-  }
-
   private trapEventFocus(event: KeyboardEvent): boolean {
     if (event.key !== 'Tab' || !this.eventPresentationActive) return false;
     const controls = [
@@ -2624,7 +2568,7 @@ export class SurvivalUI {
   private readonly handleClick = (event: MouseEvent): void => {
     const target = event.target;
     if (!(target instanceof Element)) return;
-    const topmostModal = this.topmostModal();
+    const topmostModal = this.modalFocus.topmostModal();
     if (
       topmostModal === this.journalLayer
       && this.journalLayer.contains(target)
@@ -2782,8 +2726,8 @@ export class SurvivalUI {
       this.closeCarlitosCard(true);
       return;
     }
-    const topmostModal = this.topmostModal();
-    if (topmostModal !== null && this.trapModalFocus(event, topmostModal)) return;
+    const topmostModal = this.modalFocus.topmostModal();
+    if (this.modalFocus.handleKeyDown(event)) return;
     if (this.trapEventFocus(event)) return;
     if (event.key === 'Escape') {
       if (topmostModal === this.journalLayer) {
@@ -2875,7 +2819,7 @@ export class SurvivalUI {
     const restoreFocus = !this.busy
       && !this.eventPresentationActive
       && !this.paused
-      && this.topmostModal() === null;
+      && this.modalFocus.topmostModal() === null;
     this.closeCarlitosCard(restoreFocus);
   };
 
@@ -2949,7 +2893,7 @@ export class SurvivalUI {
       || !this.fishingLayer.contains(target)
       || target.closest('[data-fishing-bite]') !== null
       || target.closest('[data-fishing-view-exit]') !== null
-      || this.topmostModal() !== this.fishingLayer
+      || this.modalFocus.topmostModal() !== this.fishingLayer
       || this.fishingMode !== 'aiming') return;
     this.suppressFishingClick = true;
     this.issueFishingCast(event.clientX, event.clientY);

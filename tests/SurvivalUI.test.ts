@@ -1180,6 +1180,9 @@ describe('SurvivalUI', () => {
     ui.setAnchors([{ id: 'ductTape-1', itemType: 'ductTape', toolId: null, action: 'repairItem', remainingUses: 1, x: 100, y: 100, visible: true, depleted: false }]);
     mount.querySelector<HTMLButtonElement>('[data-action="repairItem"]')!.click();
     const dialog = mount.querySelector<HTMLElement>('[data-repair-options]')!;
+    const title = mount.querySelector<HTMLElement>('[data-repair-options-title]')!;
+    expect(title.tabIndex).toBe(-1);
+    expect(document.activeElement).toBe(title);
     expect(dialog.classList).toContain('routine-dialog');
     expect(dialog.classList).not.toContain('survival-overlay');
     expect(dialog.classList).not.toContain('cinematic-overlay');
@@ -1656,11 +1659,15 @@ describe('SurvivalUI', () => {
 
   it('uses a top-right journal close icon and omits the empty title', () => {
     const mount = document.createElement('main');
+    document.body.append(mount);
     const ui = createUI(mount);
 
     ui.showJournal([]);
 
     const close = mount.querySelector<HTMLButtonElement>('[data-journal-close]')!;
+    const title = mount.querySelector<HTMLElement>('[data-journal-title]')!;
+    expect(title.tabIndex).toBe(-1);
+    expect(document.activeElement).toBe(title);
     expect(close.textContent).toBe('×');
     expect(close.getAttribute('aria-label')).toBe('Close journal');
     expect(close.classList).toContain('journal-page__close');
@@ -2234,6 +2241,29 @@ describe('SurvivalUI', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', repeat: true }));
     bite.click();
     expect(reel).toHaveBeenCalledOnce();
+  });
+
+  it('uses mode-specific initial focus throughout fishing', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const fishing = mount.querySelector<HTMLElement>('[data-fishing]')!;
+    const bite = mount.querySelector<HTMLButtonElement>('[data-fishing-bite]')!;
+    const exit = mount.querySelector<HTMLButtonElement>('[data-fishing-view-exit]')!;
+
+    ui.setFishingState({ mode: 'aiming', message: 'CAST', biteTarget: null });
+    expect(document.activeElement).toBe(fishing);
+
+    ui.setFishingState({
+      mode: 'bite',
+      message: 'BITE',
+      biteTarget: { x: 1, y: 2, width: 3, height: 4, depth: 5, visible: true },
+    });
+    expect(document.activeElement).toBe(bite);
+
+    ui.setFishingViewExitVisible(true);
+    ui.setFishingState({ mode: 'ready', message: '', biteTarget: null });
+    expect(document.activeElement).toBe(exit);
   });
 
   it('isolates background actions during fishing while Escape and pause remain operable', () => {
@@ -2923,6 +2953,7 @@ describe('SurvivalUI', () => {
 
   it('shows only the terminal title and emits full restart once', () => {
     const mount = document.createElement('main');
+    document.body.append(mount);
     const ui = createUI(mount);
     const restart = vi.fn();
     ui.onRestart = restart;
@@ -2930,6 +2961,8 @@ describe('SurvivalUI', () => {
     ui.showEnding('sunk', 8, 1234, 37);
 
     expect(mount.querySelector('[data-ending-title]')?.textContent).toContain('Boat is gone');
+    expect(mount.querySelector<HTMLElement>('[data-ending-title]')?.tabIndex).toBe(-1);
+    expect(document.activeElement).toBe(mount.querySelector('[data-ending-title]'));
     expect(mount.querySelector('[data-ending-body]')).toBeNull();
     expect(mount.querySelector('[data-ending-stats]')).toBeNull();
     mount.querySelector<HTMLButtonElement>('[data-restart]')!.click();
@@ -2999,5 +3032,19 @@ describe('SurvivalUI', () => {
     expect(action).not.toHaveBeenCalled();
     expect(pause).not.toHaveBeenCalled();
     expect(mount.children).toHaveLength(0);
+  });
+
+  it('keeps one document keydown listener in the facade owner', () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    const remove = vi.spyOn(document, 'removeEventListener');
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    expect(add.mock.calls.filter(([type]) => type === 'keydown')).toHaveLength(1);
+
+    ui.dispose();
+    ui.dispose();
+
+    expect(remove.mock.calls.filter(([type]) => type === 'keydown')).toHaveLength(1);
   });
 });
