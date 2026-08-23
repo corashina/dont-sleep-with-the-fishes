@@ -82,6 +82,10 @@ import {
   type ProjectedBoatBounds,
 } from './BoatInteraction';
 import { BoatSupplyDisplay } from './BoatSupplyDisplay';
+import {
+  BoatCameraController,
+  FISHING_CAMERA_DURATION,
+} from './BoatCameraController';
 import { CarlitosPresentation } from './CarlitosPresentation';
 import { CARLITOS_LAB_INSTANCE_ID } from './ItemAnimationLab';
 import { ChestDisplay } from './ChestDisplay';
@@ -113,7 +117,6 @@ import {
   isDriftingItemEventId,
   type DriftingItemEventId,
 } from './eventCatalog';
-import type { TimedAnimation } from './animationMath';
 import {
   eventPresentationRoute,
   isEventPresentationRoute,
@@ -241,9 +244,6 @@ interface ActiveFishingAnimation {
   readonly resolve: () => void;
 }
 
-type DriftingItemCameraPhase = 'idle' | 'entering' | 'focused' | 'returning';
-type DriftingItemCameraAnimation = TimedAnimation<'enter' | 'return'>;
-
 interface ActiveMoonAnimation {
   readonly kind: 'reveal' | 'reaction';
   elapsed: number;
@@ -326,9 +326,6 @@ const easeInOut = (value: number): number => value * value * (3 - 2 * value);
 const smootherStep = (value: number): number =>
   value * value * value * (value * (value * 6 - 15) + 10);
 
-const FISHING_CAMERA_DURATION = 1.1;
-const REAR_CAMERA_TURN_DURATION = 0.65;
-const REAR_CAMERA_PITCH = -0.75;
 const FISHING_CAST_DURATION = 0.8;
 const FISHING_REEL_DURATION = 1;
 const FISHING_MISS_DURATION = 0.8;
@@ -577,15 +574,7 @@ export class BoatWorld {
   private readonly originalCameraParent: Object3D | null;
   private readonly originalCameraPosition: Vector3;
   private readonly originalCameraQuaternion: Quaternion;
-  private readonly baseCameraPosition = new Vector3();
-  private readonly baseCameraQuaternion: Quaternion;
-  private rearCameraYaw = 0;
-  private rearCameraPitch = 0;
-  private rearCameraTurnStartYaw = 0;
-  private rearCameraTurnStartPitch = 0;
-  private rearCameraTurnTargetYaw = 0;
-  private rearCameraTurnTargetPitch = 0;
-  private rearCameraTurnElapsed = REAR_CAMERA_TURN_DURATION;
+  private readonly cameraController: BoatCameraController;
   private readonly baseCameraLookTarget = new Vector3(0, 0.88, -1.55);
   private readonly fishingCameraPosition = new Vector3(
     FISHING_PLAYER_SEAT.x,
@@ -652,16 +641,6 @@ export class BoatWorld {
   };
   private readonly driftingItemBowRest = new Object3D();
   private readonly flowersDeckTarget = new Object3D();
-  private readonly driftingItemCameraStartPosition = new Vector3();
-  private readonly driftingItemCameraStartQuaternion = new Quaternion();
-  private readonly driftingItemCameraTargetQuaternion = new Quaternion();
-  private readonly driftingItemCameraWorldTarget = new Vector3();
-  private readonly driftingItemCameraWorldPosition = new Vector3();
-  private readonly driftingItemCameraParentQuaternion = new Quaternion();
-  private readonly driftingItemCameraLookMatrix = new Matrix4();
-  private activeDriftingItemCameraAnimation: DriftingItemCameraAnimation | null = null;
-  private driftingItemCameraPhase: DriftingItemCameraPhase = 'idle';
-  private focusedDriftingItemEventId: DriftingItemEventId | null = null;
   private readonly checkBackSternFloor = new Object3D();
   private activeFeaturedEventId: FeaturedEventId | null = null;
   private readonly repairTools: Object3D;
@@ -1017,11 +996,12 @@ export class BoatWorld {
       this.featuredEventCameraRig.add(this.cameraEffectsRoot);
       this.cameraEffectsRoot.add(this.cameraRig);
       this.cameraRig.add(camera);
-      camera.position.set(0, 0.88, 1.56);
-      camera.lookAt(this.baseCameraLookTarget);
-      this.baseCameraPosition.copy(camera.position);
-      this.baseCameraQuaternion = camera.quaternion.clone();
-      this.diveStarboardQuaternion.copy(this.baseCameraQuaternion)
+      this.cameraController = new BoatCameraController(
+        camera,
+        this.cameraRig,
+        this.baseCameraLookTarget,
+      );
+      this.cameraController.copyBaseQuaternion(this.diveStarboardQuaternion)
         .multiply(DIVE_LEFT_TURN);
       divePresentation = new DivePresentation({
         camera,
@@ -1243,24 +1223,7 @@ export class BoatWorld {
 
   setRearCameraView(rear: boolean, instant = false): void {
     if (this.disposed) return;
-    const targetYaw = rear ? Math.PI : 0;
-    const targetPitch = rear ? REAR_CAMERA_PITCH : 0;
-    if (instant) {
-      this.rearCameraYaw = targetYaw;
-      this.rearCameraPitch = targetPitch;
-      this.rearCameraTurnStartYaw = targetYaw;
-      this.rearCameraTurnStartPitch = targetPitch;
-      this.rearCameraTurnTargetYaw = targetYaw;
-      this.rearCameraTurnTargetPitch = targetPitch;
-      this.rearCameraTurnElapsed = REAR_CAMERA_TURN_DURATION;
-      return;
-    }
-    if (targetYaw === this.rearCameraTurnTargetYaw) return;
-    this.rearCameraTurnStartYaw = this.rearCameraYaw;
-    this.rearCameraTurnStartPitch = this.rearCameraPitch;
-    this.rearCameraTurnTargetYaw = targetYaw;
-    this.rearCameraTurnTargetPitch = targetPitch;
-    this.rearCameraTurnElapsed = 0;
+    this.cameraController.setRearView(rear, instant);
   }
 
   setWeather(weather: WeatherId): void {
@@ -1517,36 +1480,21 @@ export class BoatWorld {
   }
 
   private restoreEventCameraFront(): void {
-    this.camera.position.copy(this.baseCameraPosition);
-    this.camera.quaternion.copy(this.baseCameraQuaternion);
+    this.cameraController.restoreBasePose();
   }
 
   enterDriftingItemView(eventId: DriftingItemEventId): Promise<void> {
     if (this.disposed) return Promise.resolve();
     if (this.activeFeaturedEventId !== eventId) return Promise.resolve();
-    this.cancelDriftingItemCameraAnimation();
-    this.focusedDriftingItemEventId = eventId;
-    this.driftingItemCameraStartPosition.copy(this.camera.position);
-    this.driftingItemCameraStartQuaternion.copy(this.camera.quaternion);
-    this.updateDriftingItemCameraTarget();
-    this.driftingItemCameraPhase = 'entering';
-    return this.startDriftingItemCameraAnimation('enter');
+    const target = this.eventPresentationHost.itemAimTarget();
+    return target === null
+      ? Promise.resolve()
+      : this.cameraController.beginDriftingItemView(target);
   }
 
   exitDriftingItemView(): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    if (
-      this.driftingItemCameraPhase === 'idle'
-      && this.activeDriftingItemCameraAnimation === null
-    ) {
-      this.restoreDriftingItemBaseCamera();
-      return Promise.resolve();
-    }
-    this.cancelDriftingItemCameraAnimation();
-    this.driftingItemCameraStartPosition.copy(this.camera.position);
-    this.driftingItemCameraStartQuaternion.copy(this.camera.quaternion);
-    this.driftingItemCameraPhase = 'returning';
-    return this.startDriftingItemCameraAnimation('return');
+    return this.cameraController.endDriftingItemView();
   }
 
   retrieveDriftingItem(eventId: DriftingItemEventId): Promise<void> {
@@ -1700,7 +1648,7 @@ export class BoatWorld {
 
   clearEvent(): void {
     if (this.disposed) return;
-    this.cancelDriftingItemView();
+    this.cameraController.cancelDriftingItemView();
     this.weatherEventOperation += 1;
     this.finishCarlitosDelegation();
     this.carlitosSideOverrideActive = false;
@@ -1716,7 +1664,7 @@ export class BoatWorld {
 
   setDocumentHidden(hidden: boolean): void {
     if (this.disposed || !hidden) return;
-    this.settleDriftingItemCameraForVisibilityChange();
+    this.cameraController.settleForVisibilityChange();
     this.weatherEventOperation += 1;
     this.finishCarlitosDelegation();
     this.itemUseController.settleForVisibilityChange(this.phase);
@@ -2269,7 +2217,7 @@ export class BoatWorld {
       amplitudeScale,
     );
     smoothBoatPoseInto(this.boatPose, this.boatPose, this.boatTargetPose, delta, 7);
-    if (advancePresentation) this.advanceRearCameraTurn(delta);
+    this.cameraController.update(advancePresentation ? delta : 0);
     this.applyBasePresentation();
     this.hangingLantern.update(
       this.boatPose,
@@ -2323,7 +2271,6 @@ export class BoatWorld {
       this.advanceFishingPresentation(delta);
       this.supplyDisplay.resetEventPoseForFrame();
       this.eventPresentationHost.update(time, delta);
-      this.advanceDriftingItemCamera(delta);
       this.updateCarlitosDelegation(delta);
       this.supplyDisplay.update(delta);
       this.itemUseController.update(delta);
@@ -2332,7 +2279,7 @@ export class BoatWorld {
     } else if (this.moonEventStaged) {
       this.applyMoonPresentation();
     }
-    if (!advancePresentation) this.applyDriftingItemCameraPose();
+    this.cameraController.refreshDriftingItemView();
     setSceneBinocularMaskStrength(
       this.scene,
       this.itemEffects.binocularMaskStrength,
@@ -2373,7 +2320,7 @@ export class BoatWorld {
     runCleanupSteps([
       () => this.setHighlightedItem(null),
       () => { this.eventCueHandler = () => undefined; },
-      () => this.cancelDriftingItemView(),
+      () => this.cameraController.dispose(),
       () => {
         this.disposed = true;
         this.weatherEventOperation += 1;
@@ -2451,27 +2398,8 @@ export class BoatWorld {
     this.motionRig.rotation.set(this.boatPose.pitch, 0, -this.boatPose.roll);
     this.cueCameraRig.position.set(0, 0, 0);
     this.cueCameraRig.rotation.set(0, 0, 0);
-    this.cameraRig.position.set(0, 0, 0);
-    this.cameraRig.rotation.set(0, 0, 0);
-    this.camera.position.copy(this.baseCameraPosition);
-    this.camera.quaternion.copy(this.baseCameraQuaternion);
-    this.camera.rotateY(this.rearCameraYaw);
-    this.camera.rotateX(this.rearCameraPitch);
     this.rodPivot.rotation.x = this.baseRodPivotRotationX;
     this.activeRescueCueCallback?.(null);
-  }
-
-  private advanceRearCameraTurn(delta: number): void {
-    if (this.rearCameraTurnElapsed >= REAR_CAMERA_TURN_DURATION) return;
-    this.rearCameraTurnElapsed = Math.min(
-      REAR_CAMERA_TURN_DURATION,
-      this.rearCameraTurnElapsed + delta,
-    );
-    const progress = easeInOut(this.rearCameraTurnElapsed / REAR_CAMERA_TURN_DURATION);
-    this.rearCameraYaw = this.rearCameraTurnStartYaw
-      + (this.rearCameraTurnTargetYaw - this.rearCameraTurnStartYaw) * progress;
-    this.rearCameraPitch = this.rearCameraTurnStartPitch
-      + (this.rearCameraTurnTargetPitch - this.rearCameraTurnStartPitch) * progress;
   }
 
   private resetDedicatedEffects(): void {
@@ -2493,130 +2421,6 @@ export class BoatWorld {
       this.applyFishingPhasePresentation();
       this.applyFishingAnimation(kind, 0);
     });
-  }
-
-  private startDriftingItemCameraAnimation(
-    kind: 'enter' | 'return',
-  ): Promise<void> {
-    this.cancelDriftingItemCameraAnimation();
-    return new Promise<void>((resolve) => {
-      this.activeDriftingItemCameraAnimation = {
-        kind,
-        duration: FISHING_CAMERA_DURATION,
-        elapsed: 0,
-        resolve,
-      };
-      this.applyDriftingItemCameraAnimation(kind, 0);
-    });
-  }
-
-  private advanceDriftingItemCamera(delta: number): void {
-    const animation = this.activeDriftingItemCameraAnimation;
-    if (animation === null) {
-      this.applyDriftingItemCameraPose();
-      return;
-    }
-    animation.elapsed = Math.min(animation.duration, animation.elapsed + delta);
-    const progress = animation.duration <= 0 ? 1 : animation.elapsed / animation.duration;
-    this.applyDriftingItemCameraAnimation(animation.kind, progress);
-    if (progress < 1) return;
-    this.activeDriftingItemCameraAnimation = null;
-    this.finishDriftingItemCameraAnimation(animation.kind);
-    animation.resolve();
-  }
-
-  private applyDriftingItemCameraPose(): void {
-    if (this.driftingItemCameraPhase !== 'focused') return;
-    if (!this.updateDriftingItemCameraTarget()) {
-      this.cancelDriftingItemView();
-      return;
-    }
-    this.camera.position.copy(this.fishingCameraPosition);
-    this.camera.quaternion.copy(this.driftingItemCameraTargetQuaternion);
-  }
-
-  private applyDriftingItemCameraAnimation(
-    kind: 'enter' | 'return',
-    progress: number,
-  ): void {
-    const travel = smootherStep(clamp(progress, 0, 1));
-    if (kind === 'enter') {
-      this.camera.position.lerpVectors(
-        this.driftingItemCameraStartPosition,
-        this.fishingCameraPosition,
-        travel,
-      );
-      this.camera.quaternion.copy(this.driftingItemCameraStartQuaternion)
-        .slerp(this.driftingItemCameraTargetQuaternion, travel);
-      return;
-    }
-    this.camera.position.lerpVectors(
-      this.driftingItemCameraStartPosition,
-      this.baseCameraPosition,
-      travel,
-    );
-    this.camera.quaternion.copy(this.driftingItemCameraStartQuaternion)
-      .slerp(this.baseCameraQuaternion, travel);
-  }
-
-  private finishDriftingItemCameraAnimation(kind: 'enter' | 'return'): void {
-    if (kind === 'enter') {
-      this.driftingItemCameraPhase = 'focused';
-      this.applyDriftingItemCameraPose();
-      return;
-    }
-    this.restoreDriftingItemBaseCamera();
-  }
-
-  private updateDriftingItemCameraTarget(): boolean {
-    const eventId = this.focusedDriftingItemEventId;
-    if (eventId === null) return false;
-    const target = this.eventPresentationHost.itemAimTarget();
-    if (target === null) return false;
-    target.getWorldPosition(this.driftingItemCameraWorldTarget);
-    this.driftingItemCameraWorldPosition.copy(this.fishingCameraPosition);
-    const parent = this.camera.parent;
-    if (parent !== null) parent.localToWorld(this.driftingItemCameraWorldPosition);
-    this.driftingItemCameraLookMatrix.lookAt(
-      this.driftingItemCameraWorldPosition,
-      this.driftingItemCameraWorldTarget,
-      this.camera.up,
-    );
-    this.driftingItemCameraTargetQuaternion
-      .setFromRotationMatrix(this.driftingItemCameraLookMatrix);
-    if (parent !== null) {
-      parent.getWorldQuaternion(this.driftingItemCameraParentQuaternion).invert();
-      this.driftingItemCameraTargetQuaternion
-        .premultiply(this.driftingItemCameraParentQuaternion);
-    }
-    return true;
-  }
-
-  private settleDriftingItemCameraForVisibilityChange(): void {
-    const animation = this.activeDriftingItemCameraAnimation;
-    if (animation === null) return;
-    this.activeDriftingItemCameraAnimation = null;
-    this.applyDriftingItemCameraAnimation(animation.kind, 1);
-    this.finishDriftingItemCameraAnimation(animation.kind);
-    animation.resolve();
-  }
-
-  private cancelDriftingItemView(): void {
-    this.cancelDriftingItemCameraAnimation();
-    this.restoreDriftingItemBaseCamera();
-  }
-
-  private restoreDriftingItemBaseCamera(): void {
-    this.driftingItemCameraPhase = 'idle';
-    this.focusedDriftingItemEventId = null;
-    this.camera.position.copy(this.baseCameraPosition);
-    this.camera.quaternion.copy(this.baseCameraQuaternion);
-  }
-
-  private cancelDriftingItemCameraAnimation(): void {
-    const animation = this.activeDriftingItemCameraAnimation;
-    this.activeDriftingItemCameraAnimation = null;
-    animation?.resolve();
   }
 
   private advanceFishingPresentation(delta: number): void {
@@ -2685,16 +2489,13 @@ export class BoatWorld {
         break;
       case 'return':
         if (normalized === 1) {
-          this.camera.position.copy(this.baseCameraPosition);
-          this.camera.quaternion.copy(this.baseCameraQuaternion);
+          this.cameraController.restoreBasePose();
         } else {
-          this.camera.position.lerpVectors(
+          this.cameraController.interpolateToBasePose(
             this.fishingCameraStartPosition,
-            this.baseCameraPosition,
+            this.fishingCameraStartQuaternion,
             smootherStep(normalized),
           );
-          this.camera.quaternion.copy(this.fishingCameraStartQuaternion)
-            .slerp(this.baseCameraQuaternion, smootherStep(normalized));
         }
         break;
       case 'cast': {
@@ -3029,8 +2830,7 @@ export class BoatWorld {
     this.moonEventStaged = eventId === 'face-on-the-moon';
     this.resetMoonValues();
     this.sky.resetTransient();
-    this.camera.position.copy(this.baseCameraPosition);
-    this.camera.quaternion.copy(this.baseCameraQuaternion);
+    this.cameraController.restoreBasePose();
   }
 
   private revealMoonEvent(eventId: string): Promise<void> {
@@ -3215,8 +3015,7 @@ export class BoatWorld {
     this.moonEventStaged = false;
     this.resetMoonValues();
     this.sky.resetTransient();
-    this.camera.position.copy(this.baseCameraPosition);
-    this.camera.quaternion.copy(this.baseCameraQuaternion);
+    this.cameraController.restoreBasePose();
   }
 
   private resetMoonValues(): void {

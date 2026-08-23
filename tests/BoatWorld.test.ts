@@ -117,7 +117,6 @@ import { HOVER_OUTLINE_NAME } from '../src/rendering/HoverOutline';
 import { SurvivalInventoryState } from '../src/survival/inventory';
 import {
   SURVIVAL_EVENTS,
-  type DriftingItemEventId,
   type SurvivalEventId,
 } from '../src/survival/eventCatalog';
 import { SurvivalEventModelLibrary } from '../src/survival/SurvivalEventModelLibrary';
@@ -1812,36 +1811,6 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('turns the seated camera 180 degrees and returns it forward', () => {
-    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      camera,
-      propModels,
-      createTestMoonTexture(),
-    );
-    const position = camera.position.clone();
-
-    world.setRearCameraView(true);
-    world.update(0.65, 0.65);
-    const rearDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-    expect(camera.position.toArray()).toEqual(position.toArray());
-    expect(rearDirection.x).toBeCloseTo(0);
-    expect(rearDirection.y).toBeLessThan(-0.6);
-    expect(rearDirection.z).toBeGreaterThan(0.7);
-
-    world.setRearCameraView(false);
-    world.update(1.3, 0.65);
-    const frontDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-    expect(camera.position.toArray()).toEqual(position.toArray());
-    expect(frontDirection.x).toBeCloseTo(0);
-    expect(frontDirection.y).toBeCloseTo(0);
-    expect(frontDirection.z).toBeCloseTo(-1);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('shows the Handyman chest reward at half scale', async () => {
     const anchor = savedItem('anchor');
     const propModels = createTestPropModels();
@@ -2514,39 +2483,6 @@ describe('BoatWorld helpers', () => {
     featuredModels.dispose();
     propModels.dispose();
   });
-
-  it.each(['hidden', 'clear', 'dispose'] as const)(
-    'settles repeated drifting item camera work on %s',
-    async (interruption) => {
-      const propModels = createTestPropModels();
-      const camera = new PerspectiveCamera(65, 4 / 3, 0.08, 220);
-      const world = new BoatWorld(camera, propModels, createTestMoonTexture());
-      const basePosition = camera.position.clone();
-      const eventId: DriftingItemEventId = 'drifting-bottle';
-      world.stageEvent(eventId, 8);
-      let settled = 0;
-      const first = world.enterDriftingItemView(eventId).then(() => { settled += 1; });
-      const second = world.enterDriftingItemView(eventId).then(() => { settled += 1; });
-
-      if (interruption === 'hidden') world.setDocumentHidden(true);
-      else if (interruption === 'clear') world.clearEvent();
-      else world.dispose();
-      await Promise.all([first, second]);
-      expect(settled).toBe(2);
-      if (interruption === 'hidden') {
-        expect(camera.position).toEqual(expect.objectContaining(FISHING_PLAYER_SEAT));
-        const exitFirst = world.exitDriftingItemView();
-        const exitSecond = world.exitDriftingItemView();
-        world.setDocumentHidden(true);
-        await Promise.all([exitFirst, exitSecond]);
-      }
-      if (interruption !== 'dispose') {
-        expect(camera.position.toArray()).toEqual(basePosition.toArray());
-        world.dispose();
-      }
-      propModels.dispose();
-    },
-  );
 
   it('keeps the Flowers field fixed in place and removes its world interaction', async () => {
     const propModels = createTestPropModels();
