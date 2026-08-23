@@ -51,6 +51,7 @@ export class SurvivalCoverView {
   private pendingCoveredSceneSettle: PendingWork | null = null;
   private pendingSleepHold: PendingWork | null = null;
   private pendingEventOutcomeHold: PendingWork | null = null;
+  private rewardThumbnailErrorCleanup: (() => void) | null = null;
   private resultVisible = false;
   private disposed = false;
 
@@ -310,7 +311,10 @@ export class SurvivalCoverView {
   }
 
   removeListenersForDispose(): void {
-    this.resultClose.removeEventListener('click', this.handleResultClose);
+    throwCleanupFailure(runCleanupSteps([
+      () => this.resultClose.removeEventListener('click', this.handleResultClose),
+      () => this.removeRewardThumbnailErrorListener(),
+    ]));
   }
 
   resetCallbacksForDispose(): void {
@@ -328,6 +332,7 @@ export class SurvivalCoverView {
       () => this.resultRoot.classList.remove('is-chest-reward'),
       () => { this.resultTitle.textContent = ''; },
       () => { this.resultRewards.hidden = true; },
+      () => this.removeRewardThumbnailErrorListener(),
       () => this.resultRewards.replaceChildren(),
       () => { this.resultLines.hidden = true; },
       () => this.resultLines.replaceChildren(),
@@ -335,6 +340,7 @@ export class SurvivalCoverView {
   }
 
   private renderReward(reward: RewardSummary | null): void {
+    this.removeRewardThumbnailErrorListener();
     this.resultRewards.replaceChildren();
     this.resultRewards.hidden = reward === null;
     if (reward === null) return;
@@ -351,10 +357,14 @@ export class SurvivalCoverView {
     thumbnail.alt = '';
     thumbnail.decoding = 'async';
     thumbnail.draggable = false;
-    thumbnail.addEventListener('error', () => {
+    const handleThumbnailError = (): void => {
       thumbnail.hidden = true;
       circle.classList.add('has-image-error');
-    }, { once: true });
+    };
+    thumbnail.addEventListener('error', handleThumbnailError, { once: true });
+    this.rewardThumbnailErrorCleanup = () => {
+      thumbnail.removeEventListener('error', handleThumbnailError);
+    };
     circle.append(thumbnail);
     const copy = document.createElement('span');
     copy.className = 'dive-result__reward-copy';
@@ -369,6 +379,12 @@ export class SurvivalCoverView {
     copy.append(name, quantity);
     entry.append(circle, copy);
     this.resultRewards.replaceChildren(entry);
+  }
+
+  private removeRewardThumbnailErrorListener(): void {
+    const cleanup = this.rewardThumbnailErrorCleanup;
+    this.rewardThumbnailErrorCleanup = null;
+    cleanup?.();
   }
 
   private createTimedHold(
