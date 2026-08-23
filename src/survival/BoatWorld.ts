@@ -64,9 +64,10 @@ import {
 import { BoatInteractionProjector } from './BoatInteractionProjector';
 import { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import { BoatCameraController } from './BoatCameraController';
+import { CarlitosDelegationPresentation } from './CarlitosDelegationPresentation';
 import { CarlitosPresentation } from './CarlitosPresentation';
 import { ChestDisplay } from './ChestDisplay';
-import { DivePresentation } from './DivePresentation';
+import { DivePresentationController } from './DivePresentationController';
 import type { DangerousWatersBoatReaction } from './DangerousWatersPresentation';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
 import type { EventPresentationAdapter } from './EventPresentationAdapter';
@@ -166,11 +167,6 @@ const EMPTY_EVENT_PHYSICAL_RESPONSE: EventPhysicalResponsePresentation = Object.
 });
 
 const DIVE_SKY_TINT = new Color(0x0d5063);
-const DIVE_STARBOARD_POSITION = new Vector3(1.66, 0.76, -1.2);
-const DIVE_LEFT_TURN = new Quaternion().setFromAxisAngle(
-  new Vector3(0, 1, 0),
-  Math.PI / 2,
-);
 const SURVIVAL_BOAT_ANCHOR = new Vector3(0, 0.22, 0);
 const INITIAL_BOAT_POSE: BoatPose = {
   y: 0,
@@ -187,17 +183,10 @@ interface ActiveSequence {
   resolve: () => void;
 }
 
-interface ActiveCarlitosDelegation {
-  elapsed: number;
-  readonly duration: number;
-  readonly resolve: () => void;
-}
-
 const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.min(maximum, Math.max(minimum, value));
 
 const easeOut = (value: number): number => 1 - (1 - value) ** 3;
-const easeInOut = (value: number): number => value * value * (3 - 2 * value);
 const DRIFTING_ITEM_BOW_REST = Object.freeze({
   x: 0.72,
   y: 0.58,
@@ -213,13 +202,6 @@ const CHECK_BACK_STERN_FLOOR = Object.freeze({
   y: -0.16,
   z: 2.3,
 });
-const CARLITOS_DELEGATE_DURATION = 1.45;
-const CARLITOS_DELEGATE_OFFSET = Object.freeze({
-  x: 0.08,
-  y: -0.04,
-  z: 2.08,
-});
-
 export function createEmptyEventModelLibraryForTest(): EventModelLibrary {
   return {
     create: () => new Group(),
@@ -275,24 +257,10 @@ export class BoatWorld {
   private readonly originalCameraQuaternion: Quaternion;
   private readonly cameraController: BoatCameraController;
   private readonly baseCameraLookTarget = new Vector3(0, 0.88, -1.55);
-  private readonly diveStarboardQuaternion = new Quaternion();
-  private readonly divePresentation: DivePresentation;
-  private readonly diveWaveSample: WaveSample = {
-    height: 0,
-    displacementX: 0,
-    displacementZ: 0,
-    normal: { x: 0, y: 1, z: 0 },
-  };
-  private readonly diveWaterEntryWorldPosition = new Vector3();
-  private activeDiveItemId: ItemInstanceId | null = null;
-  private diveElapsed = 0;
+  private readonly diveController: DivePresentationController;
   private readonly supplyDisplay: BoatSupplyDisplay;
   private readonly carlitos: CarlitosPresentation;
-  private readonly carlitosDelegateBasePosition = new Vector3();
-  private readonly carlitosDelegateBaseRotation = new Vector3();
-  private ambientCarlitosSide: EventSide = 1;
-  private carlitosSideOverrideActive = false;
-  private activeCarlitosDelegation: ActiveCarlitosDelegation | null = null;
+  private readonly carlitosDelegation: CarlitosDelegationPresentation;
   private readonly chestDisplay: ChestDisplay;
   private readonly itemEffects: EventItemEffects;
   private readonly itemUseAdapter: EventItemUseAdapter;
@@ -440,11 +408,12 @@ export class BoatWorld {
     let lantern: SurvivalLantern | null = null;
     let hangingLantern: HangingLantern | null = null;
     let carlitos: CarlitosPresentation | null = null;
+    let carlitosDelegation: CarlitosDelegationPresentation | null = null;
     let supplyDisplay: BoatSupplyDisplay | null = null;
     let chestDisplay: ChestDisplay | null = null;
     let itemUseAdapter: EventItemUseAdapter | null = null;
     let itemUseController: EventItemUseController | null = null;
-    let divePresentation: DivePresentation | null = null;
+    let diveController: DivePresentationController | null = null;
     let fishingPresentation: FishingPresentation | null = null;
     let ocean: OceanRenderer | null = null;
     try {
@@ -508,7 +477,8 @@ export class BoatWorld {
 
       carlitos = new CarlitosPresentation(propModels);
       this.carlitos = carlitos;
-      this.captureCarlitosDelegateBase();
+      carlitosDelegation = new CarlitosDelegationPresentation(carlitos);
+      this.carlitosDelegation = carlitosDelegation;
       this.boat.add(carlitos.root);
 
       supplyDisplay = new BoatSupplyDisplay(
@@ -573,18 +543,18 @@ export class BoatWorld {
         this.cameraRig,
         this.baseCameraLookTarget,
       );
-      this.cameraController.copyBaseQuaternion(this.diveStarboardQuaternion)
-        .multiply(DIVE_LEFT_TURN);
-      divePresentation = new DivePresentation({
+      diveController = new DivePresentationController({
         camera,
-        starboardPosition: DIVE_STARBOARD_POSITION,
-        starboardQuaternion: this.diveStarboardQuaternion,
+        cameraControl: this.cameraController,
+        supplies: this.supplyDisplay,
+        sampleWorldWaveInto: this.sampleWorldWaveInto,
+        readWorldWaveAmplitudeScale: this.readWorldWaveAmplitudeScale,
         goggleModel: propModels.create({
           instanceId: 'dive-goggles-model' as ItemInstanceId,
           type: 'scubaSet',
         }),
       });
-      this.divePresentation = divePresentation;
+      this.diveController = diveController;
       fishingPresentation = FishingPresentation.create({
         camera,
         cameraControl: this.cameraController,
@@ -641,11 +611,12 @@ export class BoatWorld {
         runCleanupSteps([
           () => ocean?.dispose(),
           () => fishingPresentation?.dispose(),
-          () => divePresentation?.dispose(),
+          () => diveController?.dispose(),
           () => itemUseController?.dispose(),
           () => itemUseAdapter?.dispose(),
           () => chestDisplay?.dispose(),
           () => supplyDisplay?.dispose(),
+          () => carlitosDelegation?.dispose(),
           () => carlitos?.dispose(),
           () => this.toolHoverOutline.dispose(),
           () => hangingLantern?.dispose(),
@@ -832,10 +803,7 @@ export class BoatWorld {
   syncInventory(snapshot: SurvivalSnapshot): void {
     if (this.disposed) return;
     this.supplyDisplay.sync(snapshot);
-    this.ambientCarlitosSide = eventSideFromSeed(snapshot.seed);
-    if (!this.carlitosSideOverrideActive) {
-      this.setCarlitosSeatSide(this.ambientCarlitosSide);
-    }
+    this.carlitosDelegation.setAmbientSide(eventSideFromSeed(snapshot.seed));
     this.carlitos.sync(snapshot.carlitos);
     this.chestState = snapshot.chest.state;
     this.chestDisplay.sync(snapshot.chest);
@@ -849,20 +817,11 @@ export class BoatWorld {
 
   playDive(instanceId: ItemInstanceId, onWaterImpact: () => void): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    this.clearDivePresentation();
-    this.activeDiveItemId = instanceId;
-    this.diveElapsed = 0;
-    this.supplyDisplay.setPresentationItemHidden(instanceId, true);
-    return this.divePresentation.start(onWaterImpact);
+    return this.diveController.play(instanceId, onWaterImpact);
   }
 
   clearDivePresentation(): void {
-    this.divePresentation.clear();
-    if (this.activeDiveItemId !== null) {
-      this.supplyDisplay.setPresentationItemHidden(this.activeDiveItemId, false);
-      this.activeDiveItemId = null;
-    }
-    this.diveElapsed = 0;
+    this.diveController.clear();
   }
 
   setHighlightedItem(instanceId: string | null): void {
@@ -995,7 +954,7 @@ export class BoatWorld {
     variantSeed?: number,
   ): void {
     if (this.disposed) return;
-    this.finishCarlitosDelegation();
+    this.carlitosDelegation.finish();
     this.weatherEventOperation += 1;
     this.itemUseController.clear(this.phase);
     this.repairToolboxAnimation.cancel();
@@ -1016,10 +975,7 @@ export class BoatWorld {
       eventId,
       resolvedVariantSeed ?? 0,
     );
-    this.carlitosSideOverrideActive = carlitosEventSide !== null;
-    this.setCarlitosSeatSide(
-      carlitosEventSide ?? this.ambientCarlitosSide,
-    );
+    this.carlitosDelegation.setEventSide(carlitosEventSide);
     this.activeFeaturedEventId = route === 'featured'
       ? eventId as FeaturedEventId
       : null;
@@ -1089,17 +1045,9 @@ export class BoatWorld {
       return Promise.resolve();
     }
     this.toolHoverOutline.setTarget(null);
-    this.finishCarlitosDelegation();
-    this.captureCarlitosDelegateBase();
-    const companionMotion = new Promise<void>((resolve) => {
-      this.activeCarlitosDelegation = {
-        elapsed: 0,
-        duration: CARLITOS_DELEGATE_DURATION,
-        resolve,
-    };
-    });
-    const lootMotion = this.retrieveFeaturedDriftingItem(eventId);
-    return Promise.all([companionMotion, lootMotion]).then(() => undefined);
+    return this.carlitosDelegation.delegate(
+      () => this.retrieveFeaturedDriftingItem(eventId),
+    );
   }
 
   recedeDriftingItem(eventId: DriftingItemEventId): Promise<void> {
@@ -1213,9 +1161,7 @@ export class BoatWorld {
     if (this.disposed) return;
     this.cameraController.cancelDriftingItemView();
     this.weatherEventOperation += 1;
-    this.finishCarlitosDelegation();
-    this.carlitosSideOverrideActive = false;
-    this.setCarlitosSeatSide(this.ambientCarlitosSide);
+    this.carlitosDelegation.setEventSide(null);
     this.itemUseController.clear(this.phase);
     this.eventPresentationHost.clear();
     this.resetDedicatedEffects();
@@ -1230,11 +1176,11 @@ export class BoatWorld {
     this.cameraController.settleForVisibilityChange();
     this.fishingPresentation.settleForVisibilityChange();
     this.weatherEventOperation += 1;
-    this.finishCarlitosDelegation();
+    this.carlitosDelegation.finish();
     this.itemUseController.settleForVisibilityChange(this.phase);
     this.repairToolboxAnimation.cancel();
     this.skipSequence();
-    this.clearDivePresentation();
+    this.diveController.settleForVisibilityChange();
     this.supplyDisplay.settleEventItemUse();
     this.supplyDisplay.clearEventMotion();
     this.resetDedicatedEffects();
@@ -1368,24 +1314,7 @@ export class BoatWorld {
       time,
       delta,
     );
-    if (this.activeDiveItemId !== null) {
-      if (advancePresentation) this.diveElapsed += Math.max(0, delta);
-      this.divePresentation.copyWaterEntryWorldPosition(
-        this.diveWaterEntryWorldPosition,
-      );
-      this.sampleWorldWaveInto(
-        this.diveWaveSample,
-        time,
-        this.diveWaterEntryWorldPosition.x,
-        this.diveWaterEntryWorldPosition.z,
-        amplitudeScale,
-      );
-      this.divePresentation.update(
-        this.diveElapsed,
-        delta,
-        this.diveWaveSample.height,
-      );
-    }
+    this.diveController.update(time, advancePresentation ? delta : 0);
     this.camera.getWorldPosition(this.worldCameraPosition);
     this.sky.update(
       delta,
@@ -1418,7 +1347,7 @@ export class BoatWorld {
         delta,
         this.currentDriftingItemAimTarget(),
       );
-      this.updateCarlitosDelegation(delta);
+      this.carlitosDelegation.update(delta);
       this.supplyDisplay.update(delta);
       this.itemUseController.update(delta);
       this.repairToolboxAnimation.update(delta);
@@ -1485,7 +1414,7 @@ export class BoatWorld {
       },
       () => this.interactionProjector.dispose(),
       () => this.cancelActiveSequence(),
-      () => this.finishCarlitosDelegation(),
+      () => this.carlitosDelegation.dispose(),
       () => this.itemUseController.dispose(),
       () => this.repairToolboxAnimation.cancel(),
       () => {
@@ -1503,8 +1432,7 @@ export class BoatWorld {
       () => this.itemUseAdapter.dispose(),
       () => this.resetDedicatedEffects(),
       () => Object.assign(this.vortexWave, createInactiveVortexWaveState()),
-      () => this.clearDivePresentation(),
-      () => this.divePresentation.dispose(),
+      () => this.diveController.dispose(),
       () => this.carlitos.dispose(),
       () => this.supplyDisplay.dispose(),
       () => this.chestDisplay.dispose(),
@@ -1664,20 +1592,6 @@ export class BoatWorld {
     sequence?.resolve();
   }
 
-  private captureCarlitosDelegateBase(): void {
-    this.carlitosDelegateBasePosition.copy(this.carlitos.root.position);
-    this.carlitosDelegateBaseRotation.set(
-      this.carlitos.root.rotation.x,
-      this.carlitos.root.rotation.y,
-      this.carlitos.root.rotation.z,
-    );
-  }
-
-  private setCarlitosSeatSide(side: EventSide): void {
-    this.carlitos.setSeatSide(side);
-    this.captureCarlitosDelegateBase();
-  }
-
   private carlitosSeatSideForEvent(
     eventId: string,
     variantSeed: number,
@@ -1699,72 +1613,6 @@ export class BoatWorld {
       default:
         return null;
     }
-  }
-
-  private updateCarlitosDelegation(delta: number): void {
-    const animation = this.activeCarlitosDelegation;
-    if (animation === null) return;
-    const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
-    animation.elapsed = Math.min(animation.duration, animation.elapsed + safeDelta);
-    const progress = animation.duration === 0 ? 1 : animation.elapsed / animation.duration;
-    let x = 0;
-    let y = 0;
-    let z = 0;
-    let yaw = 0;
-    let roll = 0;
-    if (progress < 0.12) {
-      const travel = easeInOut(progress / 0.12);
-      x = -0.08 * travel;
-      y = -0.025 * travel;
-      z = -0.07 * travel;
-      yaw = -0.08 * travel;
-      roll = 0.1 * travel;
-    } else if (progress < 0.56) {
-      const travel = easeInOut((progress - 0.12) / 0.44);
-      x = -0.08 + (CARLITOS_DELEGATE_OFFSET.x + 0.08) * travel;
-      y = -0.025 + (CARLITOS_DELEGATE_OFFSET.y + 0.025) * travel;
-      z = -0.07 + (CARLITOS_DELEGATE_OFFSET.z + 0.07) * travel;
-      yaw = -0.08 + 0.28 * travel;
-      roll = 0.1 - 0.18 * travel;
-    } else if (progress < 0.74) {
-      const pull = Math.sin((progress - 0.56) / 0.18 * Math.PI);
-      x = CARLITOS_DELEGATE_OFFSET.x - pull * 0.04;
-      y = CARLITOS_DELEGATE_OFFSET.y - pull * 0.025;
-      z = CARLITOS_DELEGATE_OFFSET.z;
-      yaw = 0.2;
-      roll = -0.08 - pull * 0.08;
-    } else {
-      const travel = 1 - easeInOut((progress - 0.74) / 0.26);
-      x = CARLITOS_DELEGATE_OFFSET.x * travel;
-      y = CARLITOS_DELEGATE_OFFSET.y * travel;
-      z = CARLITOS_DELEGATE_OFFSET.z * travel;
-      yaw = 0.2 * travel;
-      roll = -0.08 * travel;
-    }
-    this.carlitos.root.position.set(
-      this.carlitosDelegateBasePosition.x + x,
-      this.carlitosDelegateBasePosition.y + y,
-      this.carlitosDelegateBasePosition.z + z,
-    );
-    this.carlitos.root.rotation.set(
-      this.carlitosDelegateBaseRotation.x,
-      this.carlitosDelegateBaseRotation.y + yaw,
-      this.carlitosDelegateBaseRotation.z + roll,
-    );
-    if (progress === 1) this.finishCarlitosDelegation();
-  }
-
-  private finishCarlitosDelegation(): void {
-    const animation = this.activeCarlitosDelegation;
-    if (animation === null) return;
-    this.activeCarlitosDelegation = null;
-    this.carlitos.root.position.copy(this.carlitosDelegateBasePosition);
-    this.carlitos.root.rotation.set(
-      this.carlitosDelegateBaseRotation.x,
-      this.carlitosDelegateBaseRotation.y,
-      this.carlitosDelegateBaseRotation.z,
-    );
-    animation.resolve();
   }
 
   private isTerminalCue(cue: PresentationCue): boolean {
