@@ -10,6 +10,8 @@ import type { ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import type { SceneRenderer } from '../src/rendering/SceneRenderer';
 import type { ProjectedBoatBounds } from '../src/survival/BoatInteraction';
 import { BoatWorld } from '../src/survival/BoatWorld';
+import type { EventBundle } from '../src/survival/EventBundle';
+import { EventBundleManager } from '../src/survival/EventBundleManager';
 import type { EventPresentationCue } from '../src/survival/midnightTourAudioCue';
 import { SURVIVAL_EVENTS } from '../src/survival/eventCatalog';
 import type { FishingCastPoint } from '../src/survival/FishingSession';
@@ -7024,6 +7026,83 @@ describe('SurvivalPhase orchestration', () => {
     expect(setBusy).toHaveBeenCalledTimes(1);
     expect(worldDispose).toHaveBeenCalledOnce();
     expect(uiDispose).toHaveBeenCalledOnce();
+  });
+
+  it('cancels a failed end-day preload before it loads a later event', async () => {
+    let resolveFirst!: (bundle: EventBundle) => void;
+    const firstLoad = new Promise<EventBundle>((resolve) => { resolveFirst = resolve; });
+    const firstBundle = {
+      eventId: 'shower-night',
+      attach: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as EventBundle;
+    const secondBundle = {
+      eventId: 'flowers',
+      attach: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as EventBundle;
+    const loader = {
+      load: vi.fn()
+        .mockReturnValueOnce(firstLoad)
+        .mockResolvedValueOnce(secondBundle),
+    };
+    const eventBundles = new EventBundleManager(loader);
+    const primaryError = new Error('nightfall failed');
+    const onFatalError = vi.fn();
+    let current = snapshot();
+    const stageEvent = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        perform: vi.fn(() => {
+          current = snapshot({
+            state: 'nightEvent',
+            pendingEventId: 'shower-night',
+          });
+          return accepted({ code: 'event-opened', cue: 'nightfall', deltas: {} });
+        }),
+      },
+      eventBundles,
+      world: {
+        play: vi.fn().mockRejectedValueOnce(primaryError),
+        stageEvent,
+        revealEvent: vi.fn(async () => undefined),
+        clearEvent: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(async () => undefined),
+        showEventReveal: vi.fn(async () => undefined),
+        setEventSelection: vi.fn(),
+        clearEventPresentation: vi.fn(),
+        setBusy: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+      onFatalError,
+    });
+
+    phase.handleAction('endDay');
+    await flushPromises();
+    expect(onFatalError).toHaveBeenCalledExactlyOnceWith(primaryError);
+
+    resolveFirst(firstBundle);
+    await firstLoad;
+    await flushPromises();
+    expect(firstBundle.attach).not.toHaveBeenCalled();
+    expect(firstBundle.dispose).toHaveBeenCalledOnce();
+
+    current = snapshot({ state: 'dayEvent', pendingEventId: 'flowers' });
+    phase.start();
+    await flushPromises();
+    await flushPromises();
+
+    expect(secondBundle.attach).toHaveBeenCalledOnce();
+    expect(stageEvent).toHaveBeenCalledWith('flowers', expect.any(Number));
+    phase.dispose();
+    expect(secondBundle.dispose).toHaveBeenCalledOnce();
   });
 
   it('keeps an extracted event activation inert after phase disposal', async () => {

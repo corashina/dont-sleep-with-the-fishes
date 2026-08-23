@@ -323,6 +323,64 @@ describe('EventBundleManager', () => {
     expect(log).toEqual(['dispose:leak']);
   });
 
+  it('disposes a fulfilled pending bundle when activation is cancelled', async () => {
+    const log: string[] = [];
+    const loaded = bundle('leak', log);
+    const manager = new EventBundleManager({ load: async () => loaded });
+
+    await manager.beginLoad('leak');
+    manager.cancelPendingActivation();
+    manager.cancelPendingActivation();
+
+    expect(loaded.attach).not.toHaveBeenCalled();
+    expect(loaded.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('shares concurrent activation and keeps the active bundle owned', async () => {
+    const log: string[] = [];
+    const pending = deferred<EventBundle>();
+    const manager = new EventBundleManager({ load: () => pending.promise });
+    manager.beginLoad('leak');
+
+    const first = manager.activate('leak');
+    const second = manager.activate('leak');
+    expect(first).toBe(second);
+
+    const loaded = bundle('leak', log);
+    pending.resolve(loaded);
+    await expect(first).resolves.toBe(loaded);
+    await expect(second).resolves.toBe(loaded);
+
+    expect(loaded.attach).toHaveBeenCalledOnce();
+    expect(loaded.dispose).not.toHaveBeenCalled();
+    manager.cancelPendingActivation();
+    expect(loaded.dispose).not.toHaveBeenCalled();
+    manager.releaseActive();
+    expect(loaded.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('keeps cancellation primary when late bundle disposal throws', async () => {
+    const cleanupError = new Error('late disposal failed');
+    const pending = deferred<EventBundle>();
+    const loaded = {
+      eventId: 'leak',
+      attach: vi.fn(),
+      dispose: vi.fn(() => { throw cleanupError; }),
+    } as unknown as EventBundle;
+    const manager = new EventBundleManager({ load: () => pending.promise });
+    manager.beginLoad('leak');
+    const activation = manager.activate('leak');
+
+    manager.cancelPendingActivation();
+    pending.resolve(loaded);
+
+    await expect(activation).rejects.toThrow(
+      'Event bundle activation was cancelled: leak',
+    );
+    expect(loaded.attach).not.toHaveBeenCalled();
+    expect(loaded.dispose).toHaveBeenCalledOnce();
+  });
+
   it('disposes a late bundle after manager shutdown', async () => {
     const log: string[] = [];
     const pending = deferred<EventBundle>();
@@ -334,5 +392,18 @@ describe('EventBundleManager', () => {
     await load;
 
     expect(log).toEqual(['dispose:leak']);
+  });
+
+  it('disposes a fulfilled pending bundle once after manager shutdown', async () => {
+    const log: string[] = [];
+    const loaded = bundle('leak', log);
+    const manager = new EventBundleManager({ load: async () => loaded });
+
+    await manager.beginLoad('leak');
+    manager.dispose();
+    manager.dispose();
+
+    expect(loaded.attach).not.toHaveBeenCalled();
+    expect(loaded.dispose).toHaveBeenCalledOnce();
   });
 });
