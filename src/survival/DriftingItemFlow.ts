@@ -70,6 +70,7 @@ export class DriftingItemFlow {
   private focusState: DriftingItemFocusState = 'idle';
   private viewportWidth = 1;
   private viewportHeight = 1;
+  private operationGeneration = 0;
   private disposed = false;
 
   constructor(private readonly dependencies: DriftingItemFlowDependencies) {}
@@ -86,12 +87,13 @@ export class DriftingItemFlow {
       || survivalEventById(eventId) === undefined
     ) return;
 
+    const operation = this.beginOperation();
     this.activeEventId = eventId;
     this.choices = [...choices];
     this.focusState = 'entering';
     this.dependencies.setBusy(true);
     await (this.dependencies.world.enterDriftingItemView?.(eventId) ?? Promise.resolve());
-    if (!this.isCurrentFocus(eventId, 'entering', generation)) return;
+    if (!this.isCurrentFocus(eventId, 'entering', generation, operation)) return;
     if (!this.dependencies.isPendingEvent(eventId)) return;
 
     this.focusState = 'choosing';
@@ -110,17 +112,21 @@ export class DriftingItemFlow {
       || !this.isSupportedChoice(choiceId)
     ) return;
 
+    const operation = this.beginOperation();
     this.dependencies.audio.confirm();
     this.focusState = 'resolving';
     this.dependencies.setEventResolutionActive(true);
     this.dependencies.setBusy(true);
     await (this.dependencies.ui.playEventChoiceBeat?.(choiceId) ?? Promise.resolve());
-    if (!this.isCurrentFocus(eventId, 'resolving', generation)) return;
+    if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return;
     if (!await this.dependencies.waitForVisibilityResume(generation)) return;
-    if (!this.isCurrentFocus(eventId, 'resolving', generation)) return;
+    if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return;
 
     const resolution = this.dependencies.resolveChoice(choiceId);
-    if (!this.isCurrentFocus(eventId, 'resolving', generation) || resolution === undefined) {
+    if (
+      !this.isCurrentFocus(eventId, 'resolving', generation, operation)
+      || resolution === undefined
+    ) {
       return;
     }
     if (!resolution.accepted) {
@@ -133,12 +139,12 @@ export class DriftingItemFlow {
 
     if (resolution.animate) {
       await this.playChoiceAnimation(eventId, choiceId);
-      if (!this.isCurrentFocus(eventId, 'resolving', generation)) return;
+      if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return;
       if (!await this.dependencies.waitForVisibilityResume(generation)) return;
-      if (!this.isCurrentFocus(eventId, 'resolving', generation)) return;
+      if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return;
     }
 
-    await this.returnAfterResolution(eventId, resolution, generation);
+    await this.returnAfterResolution(eventId, resolution, generation, operation);
   }
 
   async back(): Promise<void> {
@@ -150,10 +156,11 @@ export class DriftingItemFlow {
       || !this.isCurrent(generation)
     ) return;
 
+    const operation = this.beginOperation();
     this.focusState = 'returning';
     this.dependencies.setBusy(true);
     await (this.dependencies.world.exitDriftingItemView?.() ?? Promise.resolve());
-    if (!this.isCurrentFocus(eventId, 'returning', generation)) return;
+    if (!this.isCurrentFocus(eventId, 'returning', generation, operation)) return;
 
     this.activeEventId = null;
     this.choices = [];
@@ -198,6 +205,7 @@ export class DriftingItemFlow {
         && this.focusState === 'idle'
       )
     ) return;
+    this.operationGeneration += 1;
     this.activeEventId = null;
     this.choices = [];
     this.focusState = 'idle';
@@ -245,12 +253,13 @@ export class DriftingItemFlow {
     eventId: DriftingItemEventId,
     resolution: Extract<DriftingItemChoiceResolution, { readonly accepted: true }>,
     generation: number,
+    operation: number,
   ): Promise<void> {
-    if (!this.isCurrentFocus(eventId, 'resolving', generation)) return;
+    if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return;
     this.focusState = 'returning';
     this.dependencies.setBusy(true);
     await (this.dependencies.world.exitDriftingItemView?.() ?? Promise.resolve());
-    if (!this.isCurrentFocus(eventId, 'returning', generation)) return;
+    if (!this.isCurrentFocus(eventId, 'returning', generation, operation)) return;
 
     this.clear();
     resolution.clearEvent();
@@ -272,10 +281,17 @@ export class DriftingItemFlow {
     eventId: DriftingItemEventId,
     state: DriftingItemFocusState,
     generation: number,
+    operation: number,
   ): boolean {
     return this.activeEventId === eventId
       && this.focusState === state
+      && this.operationGeneration === operation
       && this.isCurrent(generation);
+  }
+
+  private beginOperation(): number {
+    this.operationGeneration += 1;
+    return this.operationGeneration;
   }
 
   private isCurrent(generation: number): boolean {
