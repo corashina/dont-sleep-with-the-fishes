@@ -35,7 +35,6 @@ export type EventSessionPort = Pick<
   SurvivalSession,
   | 'snapshot'
   | 'resolveEvent'
-  | 'requestDayEvent'
   | 'beginDawn'
   | 'companionEventActionAvailability'
 >;
@@ -100,8 +99,8 @@ export type EventDriftingItemPort = Pick<
 export interface EventBundleManagerLike {
   beginLoad(eventId: SurvivalEventId): Promise<unknown> | undefined;
   activate(eventId: SurvivalEventId): Promise<unknown> | undefined;
+  cancelPendingActivation(): void;
   releaseActive(): void;
-  dispose(): void;
 }
 
 export interface SurvivalEventFlowDependencies {
@@ -118,7 +117,8 @@ export interface SurvivalEventFlowDependencies {
   readonly setAutomaticWeather: (eventId: SurvivalEventId | null) => void;
   readonly isVisibilityBlocked: () => boolean;
   readonly waitForVisibilityResume: (generation: number) => Promise<boolean>;
-  readonly getViewport: () => { readonly width: number; readonly height: number };
+  readonly getViewportWidth: () => number;
+  readonly getViewportHeight: () => number;
   readonly captureLifecycleGeneration: () => number;
   readonly isLifecycleGenerationCurrent: (generation: number) => boolean;
   readonly onInvariantError: (error: Error) => void;
@@ -318,11 +318,10 @@ export class SurvivalEventFlow {
         this.presentedInventorySnapshot = presentationSnapshot;
         this.dependencies.world.syncInventory?.(presentationSnapshot);
       }
-      const viewport = this.dependencies.getViewport();
       this.dependencies.ui.setAnchors?.(
         this.dependencies.world.projectInteractionAnchors?.(
-          viewport.width,
-          viewport.height,
+          this.dependencies.getViewportWidth(),
+          this.dependencies.getViewportHeight(),
         ) ?? [],
       );
     } catch (error) {
@@ -449,20 +448,20 @@ export class SurvivalEventFlow {
   clear(preserveDeferredSync = false): void {
     if (this.disposed) return;
     this.operationGeneration += 1;
-    this.clearPresentation(preserveDeferredSync);
+    this.clearPresentation(preserveDeferredSync, true, true);
   }
 
   clearAfterFailure(): void {
     if (this.disposed) return;
     this.operationGeneration += 1;
-    this.clearPresentation(false, false);
+    this.clearPresentation(false, false, true);
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.operationGeneration += 1;
-    this.clearPresentation();
     this.disposed = true;
+    this.clearPresentation(false, true, true);
   }
 
   private async runOwnedOperation(
@@ -516,7 +515,14 @@ export class SurvivalEventFlow {
     this.dependencies.ui.setEventUsing?.(instanceId);
     this.dependencies.world.setEventEligibleItems?.(new Set());
     this.dependencies.world.setEventSelectedItem?.(instanceId);
-    await this.playEventItemUseWithSound(eventId, choiceId, instanceId, itemType);
+    await this.playEventItemUseWithSound(
+      eventId,
+      choiceId,
+      instanceId,
+      itemType,
+      generation,
+      operation,
+    );
     if (!this.isCurrent(generation, operation)) return;
     if (this.dependencies.isVisibilityBlocked()) {
       if (!await this.dependencies.waitForVisibilityResume(generation)) return;
@@ -1211,6 +1217,8 @@ export class SurvivalEventFlow {
     choiceId: string,
     instanceId: ItemInstanceId,
     itemType: ItemId | undefined,
+    generation: number,
+    operation: number,
   ): Promise<void> {
     if (
       itemType === 'shotgun'
@@ -1224,7 +1232,11 @@ export class SurvivalEventFlow {
         eventId,
         choiceId,
         instanceId,
-        (cueIndex) => this.dependencies.audio.eventItemCue(itemType, cueIndex),
+        (cueIndex) => {
+          if (this.isCurrent(generation, operation)) {
+            this.dependencies.audio.eventItemCue(itemType, cueIndex);
+          }
+        },
       ) ?? Promise.resolve();
     }
     if (itemType === 'umbrella') this.dependencies.audio.eventItem(itemType);
@@ -1384,7 +1396,11 @@ export class SurvivalEventFlow {
     this.cancelDeferredPresentationSync(generation);
     if (!this.isCurrent(generation, operation)) return;
     this.clearPresentation(false, false);
-    this.dependencies.onInvariantError(error);
+    try {
+      this.dependencies.onInvariantError(error);
+    } catch {
+      // Keep the invariant as the primary error and continue recovery.
+    }
     if (!this.isCurrent(generation, operation)) return;
     let resolved: SurvivalSnapshot;
     try {
@@ -1465,23 +1481,37 @@ export class SurvivalEventFlow {
   private clearPresentation(
     preserveDeferredSync = false,
     reportCleanupErrors = true,
+    cancelPendingActivation = false,
   ): void {
     if (!preserveDeferredSync) this.cancelDeferredPresentationSync();
     this.preparedEventId = null;
     this.activeDriftingOperation = null;
+    this.eligibility.clear();
+    this.presentation = 'idle';
     const steps: readonly (() => void)[] = [
       () => this.dependencies.drifting.clear(),
       () => this.dependencies.audio.clearEvent(),
-      () => { this.eligibility.clear(); },
-      () => { this.presentation = 'idle'; },
       () => this.dependencies.world.setEventSelectedItem?.(null),
       () => this.dependencies.world.setEventEligibleItems?.(null),
       () => this.dependencies.world.clearEvent?.(),
+      ...(cancelPendingActivation
+        ? [() => this.dependencies.bundles.cancelPendingActivation()]
+        : []),
       () => this.dependencies.bundles.releaseActive(),
       () => this.dependencies.ui.clearEventPresentation?.(),
       () => this.dependencies.setAutomaticWeather(null),
     ];
-    for (const step of steps) this.tryCleanup(step, reportCleanupErrors);
+    let firstError: unknown;
+    for (const step of steps) {
+      try {
+        step();
+      } catch (error) {
+        firstError ??= error;
+      }
+    }
+    if (reportCleanupErrors && firstError !== undefined) {
+      this.dependencies.onFatalError(firstError);
+    }
   }
 
   private tryCleanup(step: () => void, reportError = true): void {

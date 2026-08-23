@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ItemInstanceId } from '../src/game/ItemState';
+import type { EventBundle } from '../src/survival/EventBundle';
+import { EventBundleManager } from '../src/survival/EventBundleManager';
 import {
   SurvivalEventFlow,
   type SurvivalEventFlowDependencies,
@@ -70,7 +72,18 @@ function accepted(overrides: Partial<ActionOutcome> = {}): ActionOutcome {
   };
 }
 
-function createRig(initial: SurvivalSnapshot) {
+function testBundle(eventId: EventBundle['eventId'], calls: string[]): EventBundle {
+  return {
+    eventId,
+    attach: vi.fn(() => calls.push(`bundle-attach:${eventId}`)),
+    dispose: vi.fn(() => calls.push(`bundle-dispose:${eventId}`)),
+  } as unknown as EventBundle;
+}
+
+function createRig(
+  initial: SurvivalSnapshot,
+  bundleManager?: EventBundleManager,
+) {
   let current = initial;
   let generation = 3;
   const calls: string[] = [];
@@ -78,7 +91,6 @@ function createRig(initial: SurvivalSnapshot) {
   const session = {
     snapshot: vi.fn(() => current),
     resolveEvent: vi.fn((response: unknown) => resolveEvent(response)),
-    requestDayEvent: vi.fn(),
     beginDawn: vi.fn(() => {
       calls.push('begin-dawn');
       current = snapshot({ day: current.day + 1 });
@@ -158,15 +170,16 @@ function createRig(initial: SurvivalSnapshot) {
     clearEvent: vi.fn(() => calls.push('clear-audio')),
     dawn: vi.fn(() => calls.push('audio-dawn')),
   };
-  const bundles = {
+  const defaultBundles = {
     beginLoad: vi.fn((eventId: string) => {
       calls.push(`load:${eventId}`);
       return undefined;
     }),
     activate: vi.fn(async (eventId: string) => { calls.push(`activate:${eventId}`); }),
+    cancelPendingActivation: vi.fn(() => calls.push('cancel-bundle')),
     releaseActive: vi.fn(() => calls.push('release-bundle')),
-    dispose: vi.fn(),
   };
+  const bundles = (bundleManager ?? defaultBundles) as typeof defaultBundles;
   const drifting = {
     enter: vi.fn(async (_eventId?: string): Promise<void> => undefined),
     choose: vi.fn(async (_choiceId?: string): Promise<void> => undefined),
@@ -198,7 +211,8 @@ function createRig(initial: SurvivalSnapshot) {
     setAutomaticWeather: vi.fn((eventId) => calls.push(`weather:${eventId ?? 'calm'}`)),
     isVisibilityBlocked: vi.fn(() => false),
     waitForVisibilityResume: vi.fn(async () => true),
-    getViewport: () => ({ width: 1280, height: 720 }),
+    getViewportWidth: () => 1280,
+    getViewportHeight: () => 720,
     captureLifecycleGeneration: () => generation,
     isLifecycleGenerationCurrent: (captured: number) => captured === generation,
     onInvariantError,
@@ -371,6 +385,50 @@ describe('SurvivalEventFlow', () => {
     expect(presenterRig.calls.at(-1)).toBe('ready');
   });
 
+  it.each([
+    'clear',
+    'restart',
+    'dispose',
+    'replacement',
+  ] as const)('ignores a keyed item cue after %s invalidates its operation', async (reason) => {
+    const itemUse = deferred();
+    let cue: ((cueIndex: number) => void) | undefined;
+    const pending = snapshot({
+      state: 'dayEvent',
+      pendingEventId: 'leak',
+      inventory: inventory({
+        'ductTape-1': {
+          instanceId: 'ductTape-1',
+          type: 'ductTape',
+          condition: 'usable',
+        },
+      }),
+    });
+    const rig = createRig(pending);
+    rig.world.playEventItemUse.mockImplementationOnce((
+      _eventId: string,
+      _choiceId: string,
+      _instanceId: string,
+      onAction?: (cueIndex: number) => void,
+    ) => {
+      cue = onAction;
+      return itemUse.promise;
+    });
+    await rig.flow.revealPending(pending);
+    rig.flow.resolveItem('ductTape', 'ductTape-1');
+    await vi.waitFor(() => expect(cue).toEqual(expect.any(Function)));
+
+    if (reason === 'clear') rig.flow.clear();
+    else if (reason === 'restart') rig.advanceGeneration();
+    else if (reason === 'dispose') rig.flow.dispose();
+    else await rig.flow.revealPending(pending);
+
+    cue?.(0);
+    expect(rig.audio.eventItemCue).not.toHaveBeenCalled();
+    itemUse.resolve();
+    await Promise.resolve();
+  });
+
   it('ignores a stale drifting choice rejection after a same-lifecycle replacement', async () => {
     const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-barrel' });
     const rig = createRig(pending);
@@ -465,6 +523,31 @@ describe('SurvivalEventFlow', () => {
     expect(rig.ui.clearEventPresentation).toHaveBeenCalled();
   });
 
+  it('finishes focused recovery when the invariant reporter throws', async () => {
+    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'handyman' });
+    const rig = createRig(pending);
+    const reporterFailure = new Error('invariant reporter failed');
+    rig.setResolveEvent(() => {
+      rig.setSnapshot(snapshot());
+      return accepted();
+    });
+    rig.onInvariantError.mockImplementationOnce(() => { throw reporterFailure; });
+    await rig.flow.revealPending(pending);
+    rig.setBusy.mockClear();
+
+    rig.flow.resolveContextual('touch');
+    await vi.waitFor(() => expect(rig.ui.restoreCommandFocus).toHaveBeenCalledOnce());
+
+    expect(rig.onInvariantError).toHaveBeenCalledOnce();
+    expect(rig.onInvariantError.mock.calls[0]![0].message).toContain(
+      'requires result handyman/touch; received missing',
+    );
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+    expect(rig.ui.setSleepCovered).toHaveBeenCalledWith(true);
+    expect(rig.ui.setSleepCovered).toHaveBeenLastCalledWith(false);
+    expect(rig.setBusy).toHaveBeenLastCalledWith(false);
+  });
+
   it('keeps a Midnight Tour fatal error primary when synchronous cleanup fails', async () => {
     const pending = snapshot({ state: 'dayEvent', pendingEventId: 'midnight-tour' });
     const rig = createRig(pending);
@@ -491,6 +574,43 @@ describe('SurvivalEventFlow', () => {
     rig.flow.clear();
 
     expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(cleanupError);
+    expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
+    expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
+  });
+
+  it('reports only the first cleanup error after every cleanup step', () => {
+    const firstError = new Error('audio cleanup failed');
+    const rig = createRig(snapshot());
+    rig.audio.clearEvent.mockImplementationOnce(() => { throw firstError; });
+    rig.world.clearEvent.mockImplementationOnce(() => {
+      throw new Error('world cleanup failed');
+    });
+    rig.bundles.releaseActive.mockImplementationOnce(() => {
+      throw new Error('bundle cleanup failed');
+    });
+
+    rig.flow.clear();
+
+    expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(firstError);
+    expect(rig.drifting.clear).toHaveBeenCalledOnce();
+    expect(rig.bundles.cancelPendingActivation).toHaveBeenCalledOnce();
+    expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
+    expect(rig.calls).toContain('weather:calm');
+  });
+
+  it('keeps disposal idempotent when the fatal reporter throws', () => {
+    const cleanupError = new Error('audio cleanup failed');
+    const reporterError = new Error('fatal reporter failed');
+    const rig = createRig(snapshot());
+    rig.audio.clearEvent.mockImplementationOnce(() => { throw cleanupError; });
+    rig.onFatalError.mockImplementationOnce(() => { throw reporterError; });
+
+    expect(() => rig.flow.dispose()).toThrow(reporterError);
+    expect(() => rig.flow.dispose()).not.toThrow();
+
+    expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(cleanupError);
+    expect(rig.drifting.clear).toHaveBeenCalledOnce();
+    expect(rig.bundles.cancelPendingActivation).toHaveBeenCalledOnce();
     expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
     expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
   });
@@ -522,5 +642,75 @@ describe('SurvivalEventFlow', () => {
     expect(rig.world.clearEvent).toHaveBeenCalled();
     expect(rig.bundles.releaseActive).toHaveBeenCalled();
     expect(rig.setBusy.mock.calls.map(([busy]) => busy)).toEqual([true, false]);
+  });
+
+  it.each(['clear', 'dispose'] as const)(
+    '%s cancels a real pending bundle before fulfillment',
+    async (cleanup) => {
+      const loading = deferred<EventBundle>();
+      const bundleCalls: string[] = [];
+      const manager = new EventBundleManager({ load: () => loading.promise });
+      const pending = snapshot({ state: 'nightEvent', pendingEventId: 'shower-night' });
+      const rig = createRig(pending, manager);
+
+      expect(rig.flow.beginNightTransition(pending, true)).toBe(true);
+      if (cleanup === 'clear') rig.flow.clear();
+      else rig.flow.dispose();
+      const loaded = testBundle('shower-night', bundleCalls);
+      loading.resolve(loaded);
+      await loading.promise;
+      await Promise.resolve();
+
+      expect(loaded.attach).not.toHaveBeenCalled();
+      expect(loaded.dispose).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('clear cancels a real pending bundle after fulfillment', async () => {
+    const bundleCalls: string[] = [];
+    const loaded = testBundle('shower-night', bundleCalls);
+    const manager = new EventBundleManager({ load: async () => loaded });
+    const pending = snapshot({ state: 'nightEvent', pendingEventId: 'shower-night' });
+    const rig = createRig(pending, manager);
+
+    expect(rig.flow.beginNightTransition(pending, true)).toBe(true);
+    await Promise.resolve();
+    rig.flow.clear();
+
+    expect(loaded.attach).not.toHaveBeenCalled();
+    expect(loaded.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('failure cleanup cancels a late bundle and permits a later event load', async () => {
+    const firstLoad = deferred<EventBundle>();
+    const bundleCalls: string[] = [];
+    const first = testBundle('shower-night', bundleCalls);
+    const second = testBundle('flowers', bundleCalls);
+    const load = vi.fn()
+      .mockReturnValueOnce(firstLoad.promise)
+      .mockResolvedValueOnce(second);
+    const manager = new EventBundleManager({ load });
+    const pending = snapshot({ state: 'nightEvent', pendingEventId: 'shower-night' });
+    const rig = createRig(pending, manager);
+
+    expect(rig.flow.beginNightTransition(pending, true)).toBe(true);
+    rig.flow.clearAfterFailure();
+    firstLoad.resolve(first);
+    await firstLoad.promise;
+    await Promise.resolve();
+
+    const later = snapshot({ state: 'dayEvent', pendingEventId: 'flowers' });
+    rig.setSnapshot(later);
+    await rig.flow.revealPending(later);
+
+    expect(first.attach).not.toHaveBeenCalled();
+    expect(first.dispose).toHaveBeenCalledOnce();
+    expect(second.attach).toHaveBeenCalledOnce();
+    expect(rig.world.stageEvent).toHaveBeenLastCalledWith(
+      'flowers',
+      expect.any(Number),
+    );
+    rig.flow.clear();
+    expect(second.dispose).toHaveBeenCalledOnce();
   });
 });

@@ -90,7 +90,9 @@ export interface SurvivalPhaseTestDependencies {
   sceneRenderer?: SceneRenderer;
 }
 
-type SurvivalPhaseBundleManager = EventBundleManagerLike & ItemAnimationLabBundlePort;
+type SurvivalPhaseBundleManager = EventBundleManagerLike
+  & ItemAnimationLabBundlePort
+  & Pick<EventBundleManager, 'dispose'>;
 
 function createTestEventBundleManager(): SurvivalPhaseBundleManager {
   return {
@@ -548,7 +550,8 @@ export class SurvivalPhase implements GamePhase {
         this.visibilityPauseActive || this.documentIsHidden()
       ),
       waitForVisibilityResume: (generation) => this.waitForVisibilityResume(generation),
-      getViewport: () => ({ width: this.viewportWidth, height: this.viewportHeight }),
+      getViewportWidth: () => this.viewportWidth,
+      getViewportHeight: () => this.viewportHeight,
       captureLifecycleGeneration: () => this.lifecycleGeneration,
       isLifecycleGenerationCurrent: (generation) => this.isContinuationActive(generation),
       onInvariantError: (error) => this.onInvariantError(error),
