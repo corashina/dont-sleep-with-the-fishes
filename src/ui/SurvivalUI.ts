@@ -1,9 +1,7 @@
 import {
   ITEM_DEFINITIONS,
-  ITEM_LABELS,
   type ItemInstanceId,
 } from '../game/ItemState';
-import { formatJournalEntry } from '../survival/journal';
 import type { JournalEntry } from '../survival/journalRecords';
 import type { BoatInteractionAnchor, ProjectedBoatBounds } from '../survival/BoatInteraction';
 import type { DriftingItemEventId } from '../survival/eventCatalog';
@@ -15,6 +13,7 @@ import type {
   ResourceDelta,
   SurvivalEventDefinition,
   SurvivalEndingReason,
+  SurvivalItemState,
   SurvivalSnapshot,
 } from '../survival/survivalTypes';
 import { createElementRequirement } from './dom';
@@ -30,6 +29,8 @@ import {
   type FishingUiState,
 } from './SurvivalFishingView';
 import { SurvivalHudView } from './SurvivalHudView';
+import { SurvivalJournalView } from './SurvivalJournalView';
+import { SurvivalModalViews } from './SurvivalModalViews';
 import { DAY_ACTION_IDS, type EventContextChoice } from './SurvivalUiViewModel';
 import { runCleanupSteps } from './UiCleanup';
 
@@ -79,38 +80,18 @@ export class SurvivalUI {
   private readonly coverView: SurvivalCoverView;
   private readonly fishingView: SurvivalFishingView;
   private readonly driftingView: DriftingItemView;
+  private readonly journalView: SurvivalJournalView;
+  private readonly modalViews: SurvivalModalViews;
   private readonly announcer: HTMLElement;
-  private readonly repairOptionsLayer: HTMLElement;
-  private readonly repairOptionsTitle: HTMLElement;
-  private readonly repairTargets: HTMLElement;
-  private readonly pauseLayer: HTMLElement;
-  private readonly resumeButton: HTMLButtonElement;
-  private readonly journalLayer: HTMLElement;
-  private readonly journalTitle: HTMLElement;
-  private readonly journalWeather: HTMLElement;
-  private readonly journalStory: HTMLElement;
-  private readonly journalDay: HTMLElement;
-  private readonly journalNight: HTMLElement;
-  private readonly journalPageCount: HTMLElement;
-  private readonly journalPrevious: HTMLButtonElement;
-  private readonly journalNext: HTMLButtonElement;
-  private readonly journalClose: HTMLButtonElement;
-  private readonly endingLayer: HTMLElement;
-  private readonly endingTitle: HTMLElement;
-  private readonly restartButton: HTMLButtonElement;
   private readonly modalFocus: ModalFocusManager;
-  private readonly lastValues = new Map<string, string | number | boolean | null>();
   private busy = false;
   private paused = false;
   private disposed = false;
   private announcementVersion = 0;
-  private restartIssued = false;
   private pauseReturnTarget: HTMLElement | null = null;
   private fishingReturnTarget: HTMLElement | null = null;
   private latestCommandOrigin: HTMLButtonElement | null = null;
   private currentSnapshot: SurvivalSnapshot | null = null;
-  private journalEntries: readonly JournalEntry[] = [];
-  private journalIndex = 0;
 
   constructor(private readonly mount: HTMLElement) {
     this.root = document.createElement('div');
@@ -118,56 +99,6 @@ export class SurvivalUI {
     this.root.innerHTML = `
       <div class="ui-treatment" aria-hidden="true"></div>
       <div class="survival-announcer" data-survival-announcer aria-live="polite" aria-atomic="true"></div>
-      <section class="routine-dialog routine-dialog--repair" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Repair target" inert>
-        <div class="routine-dialog__card scuba-popup-paper">
-          <p class="eyebrow ui-role-context">DUCT TAPE</p>
-          <h2 class="scuba-popup-title ui-role-display" data-repair-options-title tabindex="-1">Choose an item to repair</h2>
-          <p class="ui-role-narrative">One emergency repair restores one broken item.</p>
-          <div class="repair-targets" data-repair-targets></div>
-          <button type="button" class="secondary-action salvage-action ui-role-context" data-repair-cancel aria-label="Cancel repair">
-            CANCEL
-          </button>
-        </div>
-      </section>
-      <section class="survival-overlay journal-overlay" data-journal role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival journal" inert>
-        <div class="journal-book" data-journal-book>
-          <div class="journal-book__cover" aria-hidden="true"></div>
-          <div class="journal-book__rings" data-journal-rings aria-hidden="true"><i data-journal-ring></i><i data-journal-ring></i><i data-journal-ring></i></div>
-          <div class="journal-book__tabs" data-journal-tabs aria-hidden="true"><i data-journal-tab></i><i data-journal-tab></i><i data-journal-tab></i><i data-journal-tab></i></div>
-          <article class="journal-page">
-            <button type="button" class="journal-page__close ui-role-context" data-journal-close aria-label="Close journal">&times;</button>
-            <p class="journal-page__weather ui-role-context" data-journal-weather></p>
-            <h2 class="ui-role-display" data-journal-title tabindex="-1"></h2>
-            <div class="journal-page__story ui-role-narrative" data-journal-story>
-              <section aria-labelledby="journal-day-label"><h3 id="journal-day-label">DAY</h3><p data-journal-day></p></section>
-              <section aria-labelledby="journal-night-label"><h3 id="journal-night-label">NIGHT</h3><p data-journal-night></p></section>
-            </div>
-            <nav class="journal-page__navigation ui-role-context" aria-label="Journal pages">
-              <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--previous ui-role-context" data-journal-previous aria-label="Previous journal page">&lsaquo;</button>
-              <span class="journal-page__folio ui-role-numeral" data-journal-page-count>PAGE 0 OF 0</span>
-              <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--next ui-role-context" data-journal-next aria-label="Next journal page">&rsaquo;</button>
-            </nav>
-          </article>
-        </div>
-      </section>
-      <section class="survival-overlay pause-overlay cinematic-overlay scuba-popup-overlay" data-pause role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival paused" inert>
-        <div class="cinematic-overlay__content scuba-popup-paper scuba-popup-panel">
-          <p class="eyebrow ui-role-context">PAUSED</p>
-          <h2 class="scuba-popup-title ui-role-display">Hold Fast</h2>
-          <p class="ui-role-narrative">The sea will wait until you return.</p>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-resume aria-label="Resume">
-            RESUME
-          </button>
-        </div>
-      </section>
-      <section class="survival-overlay ending-overlay cinematic-overlay scuba-popup-overlay" data-ending role="dialog" aria-modal="true" aria-hidden="true" aria-label="Journey ended" inert>
-        <div class="cinematic-overlay__content scuba-popup-paper scuba-popup-panel">
-          <h2 class="scuba-popup-title ui-role-display" data-ending-title tabindex="-1" role="alert"></h2>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-restart aria-label="Start from the ship">
-            START FROM THE SHIP
-          </button>
-        </div>
-      </section>
     `;
     mount.append(this.root);
 
@@ -181,46 +112,32 @@ export class SurvivalUI {
       () => this.anchorView.anchor('fishing-tools'),
     );
     this.driftingView = new DriftingItemView(this.root);
+    this.journalView = new SurvivalJournalView();
+    this.modalViews = new SurvivalModalViews();
     const announcer = requireElement<HTMLElement>(this.root, '[data-survival-announcer]');
     announcer.after(
       this.eventView.feedback,
       ...this.coverView.roots,
       this.eventView.sleepMask,
     );
-    const firstFollowingView = requireElement(this.root, '[data-repair-options]');
-    firstFollowingView.before(
+    this.root.append(
       ...this.hudView.roots,
       ...this.anchorView.roots,
       ...this.fishingView.roots,
       this.driftingView.root,
+      this.modalViews.repairRoot,
+      this.eventView.caption,
+      this.journalView.root,
+      this.modalViews.pauseRoot,
+      this.modalViews.endingRoot,
     );
-    const journal = requireElement(this.root, '[data-journal]');
-    journal.before(this.eventView.caption);
 
     this.announcer = announcer;
-    this.repairOptionsLayer = requireElement(this.root, '[data-repair-options]');
-    this.repairOptionsTitle = requireElement(this.root, '[data-repair-options-title]');
-    this.repairTargets = requireElement(this.root, '[data-repair-targets]');
-    this.pauseLayer = requireElement(this.root, '[data-pause]');
-    this.resumeButton = requireElement(this.root, '[data-resume]');
-    this.journalLayer = requireElement(this.root, '[data-journal]');
-    this.journalTitle = requireElement(this.root, '[data-journal-title]');
-    this.journalWeather = requireElement(this.root, '[data-journal-weather]');
-    this.journalStory = requireElement(this.root, '[data-journal-story]');
-    this.journalDay = requireElement(this.root, '[data-journal-day]');
-    this.journalNight = requireElement(this.root, '[data-journal-night]');
-    this.journalPageCount = requireElement(this.root, '[data-journal-page-count]');
-    this.journalPrevious = requireElement(this.root, '[data-journal-previous]');
-    this.journalNext = requireElement(this.root, '[data-journal-next]');
-    this.journalClose = requireElement(this.root, '[data-journal-close]');
-    this.endingLayer = requireElement(this.root, '[data-ending]');
-    this.endingTitle = requireElement(this.root, '[data-ending-title]');
-    this.restartButton = requireElement(this.root, '[data-restart]');
     const modalLayers = [
-      this.pauseLayer,
-      this.journalLayer,
-      this.repairOptionsLayer,
-      this.endingLayer,
+      this.modalViews.pauseRoot,
+      this.journalView.root,
+      this.modalViews.repairRoot,
+      this.modalViews.endingRoot,
       this.coverView.resultRoot,
       this.driftingView.root,
       this.fishingView.resultRoot,
@@ -230,10 +147,10 @@ export class SurvivalUI {
       [this.hudView.topControls, this.anchorView.anchorLayer],
       modalLayers,
       new Map<HTMLElement, ModalInitialFocus>([
-        [this.pauseLayer, this.resumeButton],
-        [this.journalLayer, this.journalTitle],
-        [this.repairOptionsLayer, this.repairOptionsTitle],
-        [this.endingLayer, this.endingTitle],
+        [this.modalViews.pauseRoot, this.modalViews.resumeButton],
+        [this.journalView.root, this.journalView.title],
+        [this.modalViews.repairRoot, this.modalViews.repairTitle],
+        [this.modalViews.endingRoot, this.modalViews.endingTitle],
         [this.coverView.resultRoot, this.coverView.resultClose],
         [this.driftingView.root, () => this.driftingView.initialFocus()],
         [this.fishingView.resultRoot, this.fishingView.resultContinue],
@@ -282,8 +199,13 @@ export class SurvivalUI {
     this.driftingView.canUse = () => this.modalFocus.topmostModal() === this.driftingView.root;
     this.driftingView.onShow = () => this.showLayer(this.driftingView.root);
     this.driftingView.onHide = () => this.hideLayer(this.driftingView.root);
+    this.journalView.onClose = () => this.onJournalClose();
+    this.journalView.onPage = () => this.onJournalPage();
+    this.modalViews.onRepairTarget = (instanceId) => this.chooseRepairTarget(instanceId);
+    this.modalViews.onRepairCancel = () => this.closeRepairOptions();
+    this.modalViews.onResume = () => this.onPauseChange(false);
+    this.modalViews.onRestart = () => this.onRestart();
 
-    this.root.addEventListener('click', this.handleClick);
     document.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('resize', this.handleWindowResize);
   }
@@ -508,22 +430,14 @@ export class SurvivalUI {
 
   showJournal(entries: readonly JournalEntry[]): void {
     if (this.disposed) return;
-    this.journalEntries = entries.map((entry) => ({
-      ...entry,
-      actions: entry.actions.map((action) => ({ ...action })),
-      daytime: entry.daytime === null ? null : { ...entry.daytime },
-      nighttime: entry.nighttime.kind === 'quiet'
-        ? { kind: 'quiet' }
-        : { kind: 'event', event: { ...entry.nighttime.event } },
-    }));
-    this.journalIndex = Math.max(0, this.journalEntries.length - 1);
-    this.renderJournalPage();
-    this.showLayer(this.journalLayer, this.hudView.journalControl());
+    this.journalView.show(entries);
+    this.showLayer(this.journalView.root, this.hudView.journalControl());
   }
 
   hideJournal(): void {
     if (this.disposed) return;
-    this.hideLayer(this.journalLayer, true);
+    this.journalView.hide();
+    this.hideLayer(this.journalView.root, true);
   }
 
   setBusy(busy: boolean): void {
@@ -551,13 +465,14 @@ export class SurvivalUI {
       this.pauseReturnTarget = this.resolveCommandOrigin();
     }
     this.paused = paused;
+    this.modalViews.setPaused(paused);
     this.fishingView.setPaused(paused);
     this.hudView.setPaused(paused);
     if (!paused) this.anchorView.setPaused(false);
     if (paused) {
-      this.showLayer(this.pauseLayer);
+      this.showLayer(this.modalViews.pauseRoot);
     } else {
-      this.hideLayer(this.pauseLayer, true);
+      this.hideLayer(this.modalViews.pauseRoot, true);
       const target = this.pauseReturnTarget;
       this.pauseReturnTarget = null;
       if (this.modalFocus.topmostModal() === null) this.restoreCommandFocus(target);
@@ -572,20 +487,10 @@ export class SurvivalUI {
     endingReason: SurvivalEndingReason = 'standard',
   ): void {
     if (this.disposed) return;
-    const title = endingReason === 'kidnapped'
-      ? 'Taken in the dark.'
-      : state === 'rescued'
-      ? 'Rescue found you.'
-      : state === 'dead'
-        ? 'The sea outlasted you.'
-        : 'Boat is gone.';
     this.clearEventPresentation();
     this.setPaused(false);
-    this.updateText('ending:title', this.endingTitle, title);
-    this.endingLayer.dataset.ending = state;
-    this.restartIssued = false;
-    this.restartButton.disabled = false;
-    this.showLayer(this.endingLayer);
+    this.modalViews.showEnding(state, endingReason);
+    this.showLayer(this.modalViews.endingRoot);
   }
 
   dispose(): void {
@@ -600,6 +505,8 @@ export class SurvivalUI {
       },
       () => { this.fishingView.beginDispose(); },
       () => { this.driftingView.beginDispose(); },
+      () => { this.journalView.beginDispose(); },
+      () => { this.modalViews.beginDispose(); },
       () => this.eventView.clearChoicesForDispose(),
       () => this.coverView.settleCoverTransition(),
       () => this.coverView.settleDiveHold(),
@@ -629,7 +536,8 @@ export class SurvivalUI {
       () => this.coverView.removeListenersForDispose(),
       () => this.fishingView.removeListenersForDispose(),
       () => this.driftingView.removeListenersForDispose(),
-      () => this.root.removeEventListener('click', this.handleClick),
+      () => this.journalView.removeListenersForDispose(),
+      () => this.modalViews.removeListenersForDispose(),
       () => document.removeEventListener('keydown', this.handleKeyDown),
       () => window.removeEventListener('resize', this.handleWindowResize),
       () => { this.onAction = () => undefined; },
@@ -652,46 +560,12 @@ export class SurvivalUI {
       () => this.coverView.resetCallbacksForDispose(),
       () => this.fishingView.resetCallbacksForDispose(),
       () => this.driftingView.resetCallbacksForDispose(),
+      () => this.journalView.resetCallbacksForDispose(),
+      () => this.modalViews.resetCallbacksForDispose(),
       () => this.root.remove(),
     );
     const result = runCleanupSteps(cleanupSteps);
     if (result.failed) throw result.firstError;
-  }
-
-  private renderJournalPage(): void {
-    const entry = this.journalEntries[this.journalIndex];
-    if (entry === undefined) {
-      this.journalTitle.textContent = 'The journal is still waiting for its first completed day.';
-      this.journalTitle.dataset.empty = 'true';
-      this.journalWeather.textContent = '';
-      this.journalStory.hidden = true;
-      this.journalDay.textContent = '';
-      this.journalNight.textContent = '';
-      this.journalPageCount.textContent = 'PAGE 0 OF 0';
-    } else {
-      const page = formatJournalEntry(entry);
-      this.journalTitle.textContent = page.heading;
-      delete this.journalTitle.dataset.empty;
-      this.journalWeather.textContent = page.weather;
-      this.journalStory.hidden = false;
-      this.journalDay.textContent = page.daytime;
-      this.journalNight.textContent = page.nighttime;
-      this.journalPageCount.textContent = `PAGE ${this.journalIndex + 1} OF ${this.journalEntries.length}`;
-    }
-    this.journalPrevious.disabled = this.journalIndex <= 0;
-    this.journalNext.disabled = this.journalEntries.length === 0
-      || this.journalIndex >= this.journalEntries.length - 1;
-  }
-
-  private moveJournalPage(delta: -1 | 1): void {
-    const maximum = Math.max(0, this.journalEntries.length - 1);
-    const previousIndex = this.journalIndex;
-    this.journalIndex = Math.min(maximum, Math.max(0, this.journalIndex + delta));
-    if (this.journalIndex !== previousIndex) this.onJournalPage();
-    this.renderJournalPage();
-    const requested = delta < 0 ? this.journalPrevious : this.journalNext;
-    const available = delta < 0 ? this.journalNext : this.journalPrevious;
-    (requested.disabled ? available : requested).focus();
   }
 
   private publishAnnouncement(message: string): void {
@@ -703,16 +577,8 @@ export class SurvivalUI {
     });
   }
 
-  private updateText(key: string, element: HTMLElement, value: string): void {
-    if (this.lastValues.get(key) === value) return;
-    this.lastValues.set(key, value);
-    element.textContent = value;
-  }
-
   private syncCommandState(): void {
-    this.repairTargets.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
-      button.disabled = this.busy;
-    });
+    this.modalViews.setRepairBusy(this.busy);
   }
 
   private readonly handleWindowResize = (): void => {
@@ -722,7 +588,9 @@ export class SurvivalUI {
 
   private showLayer(layer: HTMLElement, origin: HTMLElement | null = null): void {
     this.anchorView.clearHighlight();
-    if (layer === this.repairOptionsLayer) this.positionRoutineDialog(layer, REPAIR_DIALOG_PLACEMENT);
+    if (layer === this.modalViews.repairRoot) {
+      this.positionRoutineDialog(layer, REPAIR_DIALOG_PLACEMENT);
+    }
     this.modalFocus.activate(layer, origin);
     this.syncViewModalState();
   }
@@ -739,8 +607,8 @@ export class SurvivalUI {
   }
 
   private positionOpenRoutineDialogs(): void {
-    if (this.repairOptionsLayer.classList.contains('is-visible')) {
-      this.positionRoutineDialog(this.repairOptionsLayer, REPAIR_DIALOG_PLACEMENT);
+    if (this.modalViews.repairRoot.classList.contains('is-visible')) {
+      this.positionRoutineDialog(this.modalViews.repairRoot, REPAIR_DIALOG_PLACEMENT);
     }
   }
 
@@ -832,29 +700,27 @@ export class SurvivalUI {
   private openRepairOptions(): void {
     const snapshot = this.currentSnapshot;
     if (snapshot === null) return;
-    const targets = Object.values(snapshot.inventory).filter((item) => (
-      item?.condition === 'broken' && ITEM_DEFINITIONS[item.type].breakable
+    const targets = Object.values(snapshot.inventory).filter((
+      item,
+    ): item is Readonly<SurvivalItemState> => (
+      item !== undefined
+      && item.condition === 'broken'
+      && ITEM_DEFINITIONS[item.type].breakable
     ));
-    this.repairTargets.replaceChildren(...targets.map((item) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'event-item repair-target ui-role-context';
-      button.dataset.repairTarget = item!.instanceId;
-      button.textContent = `${ITEM_LABELS[item!.type]} — BROKEN`;
-      button.setAttribute('aria-description', `Repair ${ITEM_LABELS[item!.type]} with Duct Tape.`);
-      return button;
-    }));
-    this.showLayer(this.repairOptionsLayer);
+    this.modalViews.showRepairOptions(targets);
+    this.showLayer(this.modalViews.repairRoot);
   }
 
   private chooseRepairTarget(target: ItemInstanceId): void {
-    this.hideLayer(this.repairOptionsLayer);
+    this.modalViews.hideRepairOptions();
+    this.hideLayer(this.modalViews.repairRoot);
     this.onAction('repairItem', { kind: 'itemRepair', target });
     if (this.modalFocus.topmostModal() === null) this.restoreCommandFocus(this.latestCommandOrigin);
   }
 
   private closeRepairOptions(): void {
-    this.hideLayer(this.repairOptionsLayer);
+    this.modalViews.hideRepairOptions();
+    this.hideLayer(this.modalViews.repairRoot);
     this.restoreCommandFocus(this.latestCommandOrigin);
   }
 
@@ -939,59 +805,6 @@ export class SurvivalUI {
     return false;
   }
 
-  private readonly handleClick = (event: MouseEvent): void => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    if (
-      this.hudView.contains(target)
-      || this.anchorView.contains(target)
-      || this.eventView.contains(target)
-      || this.coverView.contains(target)
-      || this.fishingView.contains(target)
-      || this.driftingView.root.contains(target)
-    ) return;
-    const topmostModal = this.modalFocus.topmostModal();
-    if (
-      topmostModal === this.journalLayer
-      && this.journalLayer.contains(target)
-      && target.closest('[data-journal-book]') === null
-    ) {
-      this.onJournalClose();
-      return;
-    }
-    const button = target.closest<HTMLButtonElement>('button');
-    if (!button || !this.root.contains(button) || button.disabled) return;
-    if (topmostModal !== null && !topmostModal.contains(button)) return;
-
-    if (button.hasAttribute('data-journal-previous')) {
-      this.moveJournalPage(-1);
-      return;
-    }
-    if (button.hasAttribute('data-journal-next')) {
-      this.moveJournalPage(1);
-      return;
-    }
-    if (button.hasAttribute('data-journal-close')) {
-      this.onJournalClose();
-      return;
-    }
-    const repairTarget = button.dataset.repairTarget as ItemInstanceId | undefined;
-    if (repairTarget !== undefined && this.repairTargets.contains(button)) {
-      this.chooseRepairTarget(repairTarget);
-      return;
-    }
-    if (button.hasAttribute('data-repair-cancel')) {
-      this.closeRepairOptions();
-      return;
-    }
-    if (button.hasAttribute('data-resume')) this.onPauseChange(false);
-    else if (button.hasAttribute('data-restart') && !this.restartIssued) {
-      this.restartIssued = true;
-      button.disabled = true;
-      this.onRestart();
-    }
-  };
-
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.disposed || event.defaultPrevented || event.repeat) return;
     if (this.anchorView.handleCarlitosEscape(event)) return;
@@ -999,10 +812,10 @@ export class SurvivalUI {
     if (this.modalFocus.handleKeyDown(event)) return;
     if (this.trapEventFocus(event)) return;
     if (event.key === 'Escape') {
-      if (topmostModal === this.journalLayer) {
+      if (topmostModal === this.journalView.root) {
         event.preventDefault();
         this.onJournalClose();
-      } else if (topmostModal === this.repairOptionsLayer) {
+      } else if (topmostModal === this.modalViews.repairRoot) {
         event.preventDefault();
         this.closeRepairOptions();
       } else {
