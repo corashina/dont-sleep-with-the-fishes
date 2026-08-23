@@ -1289,9 +1289,8 @@ export class SurvivalUI {
     this.driftingItemFocusChoicesView = [...view.choices];
     this.renderDriftingItemFocusChoices();
     this.positionDriftingItemFocus();
-    this.showLayer(this.driftingItemFocusLayer);
     this.syncCommandState();
-    this.modalFocus.focusInitial(this.driftingItemFocusLayer);
+    this.showLayer(this.driftingItemFocusLayer);
   }
 
   hideDriftingItemFocus(): void {
@@ -1432,7 +1431,7 @@ export class SurvivalUI {
     if (paused) {
       this.showLayer(this.pauseLayer);
     } else {
-      this.hideLayer(this.pauseLayer);
+      this.hideLayer(this.pauseLayer, true);
       const target = this.pauseReturnTarget;
       this.pauseReturnTarget = null;
       if (this.modalFocus.topmostModal() === null) this.restoreCommandFocus(target);

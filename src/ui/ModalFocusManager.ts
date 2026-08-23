@@ -34,11 +34,11 @@ export class ModalFocusManager {
     this.origins.delete(modal);
     modal.classList.remove('is-visible');
     this.sync();
-    if (!wasTopmost) return;
+    if (!wasTopmost || !restore) return;
     const topmost = this.topmostModal();
     if (topmost !== null) {
       this.focusInitial(topmost);
-    } else if (restore) {
+    } else {
       this.restore(origin);
     }
   }

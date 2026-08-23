@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Importance: 8/10. Protects modal priority, focus isolation, trapping, and restoration.
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ModalFocusManager,
   type ModalInitialFocus,
@@ -138,7 +138,7 @@ describe('ModalFocusManager', () => {
     fixture.manager.activate(pause);
     expect(document.activeElement).toBe(fixture.targets.get('pause'));
 
-    fixture.manager.deactivate(pause, false);
+    fixture.manager.deactivate(pause);
 
     expect(fixture.manager.topmostModal()).toBe(dive);
     expect(document.activeElement).toBe(fixture.targets.get('dive-result'));
@@ -240,19 +240,25 @@ describe('ModalFocusManager', () => {
     expect(document.activeElement).toBe(laterOrigin);
   });
 
-  it('can deactivate a result without immediate origin restoration', () => {
+  it('deactivates a result without focusing its origin or the exposed modal', () => {
     const fixture = createFixture();
+    const fishing = fixture.modals.get('fishing-layer')!;
     const result = fixture.modals.get('fishing-result')!;
     const origin = document.createElement('button');
     document.body.prepend(origin);
     origin.focus();
+    fixture.manager.activate(fishing);
+    const exposedFocus = vi.spyOn(fixture.targets.get('fishing-layer')!, 'focus');
     fixture.manager.activate(result, origin);
+    exposedFocus.mockClear();
 
     fixture.manager.deactivate(result, false);
 
+    expect(exposedFocus).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(fixture.targets.get('fishing-result'));
     expect(result.classList.contains('is-visible')).toBe(false);
-    expect(fixture.topControls.hasAttribute('inert')).toBe(false);
+    expect(fixture.manager.topmostModal()).toBe(fishing);
+    expect(fixture.topControls.hasAttribute('inert')).toBe(true);
   });
 
   it('does not restore on double disposal and stays inert after disposal', () => {
@@ -263,6 +269,7 @@ describe('ModalFocusManager', () => {
     document.body.prepend(origin);
     origin.focus();
     fixture.manager.activate(journal, origin);
+    const restoreFocus = vi.spyOn(origin, 'focus');
 
     fixture.manager.dispose();
     fixture.manager.dispose();
@@ -270,6 +277,7 @@ describe('ModalFocusManager', () => {
     fixture.manager.activate(fishing);
     fixture.manager.sync();
 
+    expect(restoreFocus).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(fixture.targets.get('journal'));
     expect(journal.classList.contains('is-visible')).toBe(true);
     expect(fishing.classList.contains('is-visible')).toBe(false);
