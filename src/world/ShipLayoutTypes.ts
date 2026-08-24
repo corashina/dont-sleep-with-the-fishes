@@ -6,6 +6,11 @@ export const SHIP_ROOM_WALL_HEIGHT = 3.4;
 export const SHIP_ROOM_WALL_THICKNESS = 0.22;
 export const SHIP_ROOM_ROOF_THICKNESS = 0.24;
 export const SHIP_TRANSVERSE_PORTHOLE_CENTER_X = 2.2;
+export const SHIP_BOW_DEPTH = 8.5;
+export const SHIP_BOW_NOSE_CONTROL_WIDTH_SCALE = 0.5;
+export const SHIP_BOW_SHOULDER_CONTROL_DEPTH_SCALE = 0.38;
+export const SHIP_DECK_LENGTH = FREIGHTER_DIMENSIONS.length - 0.8;
+export const SHIP_STRUCTURAL_DECK_TOP_Y = 2.18;
 
 export type ShipZoneId =
   | 'crewCabin' | 'wheelhouse' | 'cargoDeck'
@@ -228,6 +233,18 @@ export interface ShipLayoutSpec {
     };
   };
   readonly evacuationRect: Rect2;
+}
+
+export function requiredShipZone(layout: ShipLayoutSpec, id: ShipZoneId): ShipZoneSpec {
+  const zone = layout.zones.find((candidate) => candidate.id === id);
+  if (!zone) throw new Error(`Ship geometry requires zone ${id}`);
+  return zone;
+}
+
+export function shipRoomRoofTopY(_zoneId: ShipZoneId): number {
+  return FREIGHTER_DIMENSIONS.deckY
+    + SHIP_ROOM_WALL_HEIGHT
+    + SHIP_ROOM_ROOF_THICKNESS;
 }
 
 export interface ShipNavigationAnalysis {

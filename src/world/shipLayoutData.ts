@@ -154,7 +154,7 @@ export const SHIP_ROOF_ENGINE = {
   stayHeightRatio: 0.72,
 } as const;
 export const SHIP_STERN_CHAMFER = 0.35;
-export const SHIP_STERN_DECK_DEPTH = CARGO_SIDE_X - storageBounds.maxX;
+const SHIP_STERN_DECK_DEPTH = CARGO_SIDE_X - storageBounds.maxX;
 export const SHIP_STERN_Z = storageBounds.minZ - SHIP_STERN_DECK_DEPTH;
 const INNER_LADDER_WALL_OFFSET = 0.18;
 const MAINMAST_Z = -3.075;

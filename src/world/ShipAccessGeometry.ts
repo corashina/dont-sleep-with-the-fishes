@@ -7,21 +7,17 @@ import type { LadderClimbZone, LadderEntryArea } from '../player/LadderTraversal
 import {
   FREIGHTER_DIMENSIONS,
   PLAYER_LAYOUT_RADIUS,
-  SHIP_ROOM_ROOF_THICKNESS,
-  SHIP_ROOM_WALL_HEIGHT,
+  requiredShipZone,
+  shipRoomRoofTopY,
   type ShipBalconySpec,
   type ShipLadderSpec,
   type ShipLayoutSpec,
-  type ShipZoneId,
-  type ShipZoneSpec,
 } from './ShipLayoutTypes';
 import type { ShipMaterials } from './ShipMaterials';
 import {
   addBlock,
   type ShipGeometryBuildContext,
 } from './ShipGeometryPrimitives';
-
-const ROOM_WALL_HEIGHT = SHIP_ROOM_WALL_HEIGHT;
 
 const LADDER_RAIL_WIDTH = 0.08;
 const LADDER_RAIL_DEPTH = 0.1;
@@ -31,22 +27,6 @@ const LADDER_CLIMB_CLEARANCE = PLAYER_LAYOUT_RADIUS + LADDER_RUNG_DEPTH / 2 + 0.
 const LADDER_GRAB_RISE = 0.72;
 const LADDER_ENTRY_DEPTH = 0.9;
 const LADDER_DISMOUNT_DISTANCE = 0.75;
-
-function requiredZone(layout: ShipLayoutSpec, id: ShipZoneId): ShipZoneSpec {
-  const zone = layout.zones.find((candidate) => candidate.id === id);
-  if (!zone) throw new Error(`Ship geometry requires zone ${id}`);
-  return zone;
-}
-
-function roomWallHeight(_zoneId: ShipZoneId): number {
-  return ROOM_WALL_HEIGHT;
-}
-
-function balconyDeckTopY(zoneId: ShipZoneId): number {
-  return FREIGHTER_DIMENSIONS.deckY
-    + roomWallHeight(zoneId)
-    + SHIP_ROOM_ROOF_THICKNESS;
-}
 
 function orderedEntryArea(
   centerX: number,
@@ -119,14 +99,14 @@ function addLadders(
   layout: ShipLayoutSpec,
 ): readonly LadderClimbZone[] {
   const climbZones = layout.ladders.map((ladderSpec) => {
-    const zone = requiredZone(layout, ladderSpec.zoneId);
+    const zone = requiredShipZone(layout, ladderSpec.zoneId);
     const balcony = layout.balconies.find(({ ladderId }) => ladderId === ladderSpec.id);
     if (!balcony) throw new Error(`Ship geometry requires balcony for ${ladderSpec.id}`);
     const outwardZ = ladderSpec.edge === 'aft' ? -1 : 1;
     const wallZ = ladderSpec.edge === 'aft' ? zone.bounds.minZ : zone.bounds.maxZ;
     const ladderZ = wallZ + outwardZ * ladderSpec.wallOffset;
     const bottomFloorY = FREIGHTER_DIMENSIONS.deckY;
-    const topFloorY = balconyDeckTopY(zone.id);
+    const topFloorY = shipRoomRoofTopY(zone.id);
     const ladderHeight = topFloorY - bottomFloorY;
     const ladder = new Group();
     ladder.name = `ladder:${ladderSpec.id}`;

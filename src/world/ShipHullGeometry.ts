@@ -1,4 +1,5 @@
 import {
+  ExtrudeGeometry,
   Material,
   Mesh,
   Path,
@@ -15,15 +16,16 @@ import {
 } from './shipLayoutData';
 import {
   FREIGHTER_DIMENSIONS,
+  requiredShipZone,
+  SHIP_BOW_DEPTH,
+  SHIP_BOW_NOSE_CONTROL_WIDTH_SCALE,
+  SHIP_BOW_SHOULDER_CONTROL_DEPTH_SCALE,
+  SHIP_DECK_LENGTH,
+  SHIP_STRUCTURAL_DECK_TOP_Y,
   type ShipLayoutSpec,
-  type ShipZoneId,
   type ShipZoneSpec,
 } from './ShipLayoutTypes';
-import {
-  addRoundedPrism,
-  appendRoundedBow,
-  type ShipGeometryBuildContext,
-} from './ShipGeometryPrimitives';
+import type { ShipGeometryBuildContext } from './ShipGeometryPrimitives';
 
 export interface ShipHullWaterExclusion {
   halfWidth: number;
@@ -41,10 +43,8 @@ export interface ShipHullBuild {
 const HALF_WIDTH = FREIGHTER_DIMENSIONS.width / 2;
 const HALF_LENGTH = FREIGHTER_DIMENSIONS.length / 2;
 const DECK_WIDTH = FREIGHTER_DIMENSIONS.width - 0.5;
-const DECK_LENGTH = FREIGHTER_DIMENSIONS.length - 0.8;
 const DECK_HALF_WIDTH = DECK_WIDTH / 2;
 const END_CAP_DEPTH = 5.2;
-const BOW_DEPTH = 8.5;
 const HULL_HEIGHT = 4.6;
 const HULL_TOP_Y = 1.98;
 const HULL_BOTTOM_TAPER = {
@@ -59,14 +59,114 @@ const HULL_BOTTOM_TAPER = {
 const HULL_EXCLUSION_LOWER_SCALE = { width: 0.4, length: 0.58 } as const;
 const UPPER_HULL_BOTTOM_TAPER = { widthScale: 0.96, lengthScale: 0.94 } as const;
 const DECK_THICKNESS = 0.28;
-const STRUCTURAL_DECK_TOP_Y = 2.18;
 const FINISHED_FLOOR_Y = FREIGHTER_DIMENSIONS.deckY;
 const UPPER_HULL_BASE_HEIGHT = 0.9;
 const UPPER_HULL_TOP_GAP = 0.03;
 const UPPER_HULL_HEIGHT = UPPER_HULL_BASE_HEIGHT - UPPER_HULL_TOP_GAP;
-const UPPER_HULL_TOP_Y = STRUCTURAL_DECK_TOP_Y - UPPER_HULL_TOP_GAP;
+const UPPER_HULL_TOP_Y = SHIP_STRUCTURAL_DECK_TOP_Y - UPPER_HULL_TOP_GAP;
 const WATERLINE_HEIGHT = 0.14;
-const WATERLINE_TOP_Y = STRUCTURAL_DECK_TOP_Y - UPPER_HULL_BASE_HEIGHT + 0.03;
+const WATERLINE_TOP_Y = SHIP_STRUCTURAL_DECK_TOP_Y - UPPER_HULL_BASE_HEIGHT + 0.03;
+
+interface ShipRoundedPrismBottomTaper {
+  widthScale: number;
+  lengthScale: number;
+  chine?: {
+    depthFraction: number;
+    widthScale: number;
+    lengthScale: number;
+  };
+}
+
+function appendRoundedBow(
+  shape: Shape,
+  halfWidth: number,
+  shoulderZ: number,
+  tipZ: number,
+): void {
+  const bowDepth = tipZ - shoulderZ;
+  const shoulderControlZ = shoulderZ
+    + bowDepth * SHIP_BOW_SHOULDER_CONTROL_DEPTH_SCALE;
+  const noseControlX = halfWidth * SHIP_BOW_NOSE_CONTROL_WIDTH_SCALE;
+  shape.bezierCurveTo(halfWidth, shoulderControlZ, noseControlX, tipZ, 0, tipZ);
+  shape.bezierCurveTo(-noseControlX, tipZ, -halfWidth, shoulderControlZ, -halfWidth, shoulderZ);
+}
+
+function shipPlanShape(width: number, length: number): Shape {
+  const radius = width / 2;
+  const sternOverhang = Math.max(0, (length - SHIP_DECK_LENGTH) / 2);
+  const sternZ = SHIP_STERN_Z - sternOverhang;
+  const sternChamfer = Math.min(SHIP_STERN_CHAMFER, radius);
+  const bowDepth = Math.min(SHIP_BOW_DEPTH, length / 2);
+  const bowShoulderZ = length / 2 - bowDepth;
+  const shape = new Shape();
+  shape.moveTo(-radius + sternChamfer, sternZ);
+  shape.lineTo(radius - sternChamfer, sternZ);
+  shape.lineTo(radius, sternZ + sternChamfer);
+  shape.lineTo(radius, bowShoulderZ);
+  appendRoundedBow(shape, radius, bowShoulderZ, length / 2);
+  shape.lineTo(-radius, sternZ + sternChamfer);
+  shape.closePath();
+  return shape;
+}
+
+function addRoundedPrism(
+  context: ShipGeometryBuildContext,
+  name: string,
+  width: number,
+  length: number,
+  height: number,
+  topY: number,
+  material: Material,
+  bottomTaper?: ShipRoundedPrismBottomTaper,
+): Mesh {
+  const geometry = new ExtrudeGeometry(shipPlanShape(width, length), {
+    depth: height,
+    bevelEnabled: false,
+    curveSegments: 24,
+    steps: bottomTaper?.chine ? 2 : 1,
+  });
+  geometry.rotateX(Math.PI / 2);
+  if (bottomTaper) {
+    const positions = geometry.getAttribute('position');
+    for (let index = 0; index < positions.count; index += 1) {
+      const depthFraction = Math.min(1, Math.max(0, -positions.getY(index) / height));
+      if (depthFraction === 0) continue;
+      const chine = bottomTaper.chine;
+      let widthScale: number;
+      let lengthScale: number;
+      if (chine && depthFraction <= chine.depthFraction) {
+        const progress = depthFraction / chine.depthFraction;
+        widthScale = 1 + (chine.widthScale - 1) * progress;
+        lengthScale = 1 + (chine.lengthScale - 1) * progress;
+      } else if (chine) {
+        const progress = (depthFraction - chine.depthFraction) / (1 - chine.depthFraction);
+        widthScale = chine.widthScale
+          + (bottomTaper.widthScale - chine.widthScale) * progress;
+        lengthScale = chine.lengthScale
+          + (bottomTaper.lengthScale - chine.lengthScale) * progress;
+      } else {
+        widthScale = 1 + (bottomTaper.widthScale - 1) * depthFraction;
+        lengthScale = 1 + (bottomTaper.lengthScale - 1) * depthFraction;
+      }
+      positions.setXYZ(
+        index,
+        positions.getX(index) * widthScale,
+        positions.getY(index),
+        positions.getZ(index) * lengthScale,
+      );
+    }
+    positions.needsUpdate = true;
+    geometry.computeVertexNormals();
+  }
+  const mesh = new Mesh(geometry, material);
+  mesh.name = name;
+  mesh.position.y = topY;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  context.root.add(mesh);
+  context.geometries.add(geometry);
+  return mesh;
+}
 
 function rectangularFloorShape(
   minX: number,
@@ -102,17 +202,11 @@ function rectangularFloorHole(
   return path;
 }
 
-function requiredZone(layout: ShipLayoutSpec, id: ShipZoneId): ShipZoneSpec {
-  const zone = layout.zones.find((candidate) => candidate.id === id);
-  if (!zone) throw new Error(`Ship geometry requires zone ${id}`);
-  return zone;
-}
-
 function cargoFloorShape(layout: ShipLayoutSpec): Shape {
-  const station = requiredZone(layout, 'lifeboatStation').bounds;
-  const cargo = requiredZone(layout, 'cargoDeck').bounds;
+  const station = requiredShipZone(layout, 'lifeboatStation').bounds;
+  const cargo = requiredShipZone(layout, 'cargoDeck').bounds;
   const radius = DECK_HALF_WIDTH;
-  const bowShoulderZ = DECK_LENGTH / 2 - BOW_DEPTH;
+  const bowShoulderZ = SHIP_DECK_LENGTH / 2 - SHIP_BOW_DEPTH;
   const shape = new Shape();
   shape.moveTo(-radius + SHIP_STERN_CHAMFER, -cargo.minZ);
   shape.lineTo(radius - SHIP_STERN_CHAMFER, -cargo.minZ);
@@ -122,12 +216,12 @@ function cargoFloorShape(layout: ShipLayoutSpec): Shape {
   shape.lineTo(station.minX, -station.maxZ);
   shape.lineTo(radius, -station.maxZ);
   shape.lineTo(radius, -bowShoulderZ);
-  appendRoundedBow(shape, radius, -bowShoulderZ, -DECK_LENGTH / 2);
+  appendRoundedBow(shape, radius, -bowShoulderZ, -SHIP_DECK_LENGTH / 2);
   shape.lineTo(-radius, -(cargo.minZ + SHIP_STERN_CHAMFER));
   shape.closePath();
-  const crew = requiredZone(layout, 'crewCabin').bounds;
-  const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
-  const storage = requiredZone(layout, 'storageWorkroom').bounds;
+  const crew = requiredShipZone(layout, 'crewCabin').bounds;
+  const wheelhouse = requiredShipZone(layout, 'wheelhouse').bounds;
+  const storage = requiredShipZone(layout, 'storageWorkroom').bounds;
   shape.holes.push(
     rectangularFloorHole(crew.minX, crew.maxX, crew.minZ, crew.maxZ),
     rectangularFloorHole(wheelhouse.minX, wheelhouse.maxX, wheelhouse.minZ, wheelhouse.maxZ),
@@ -195,10 +289,10 @@ function addFinishedFloors(
   context: ShipGeometryBuildContext,
   layout: ShipLayoutSpec,
 ): void {
-  const crew = requiredZone(layout, 'crewCabin').bounds;
-  const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
-  const storage = requiredZone(layout, 'storageWorkroom').bounds;
-  const lifeboat = requiredZone(layout, 'lifeboatStation').bounds;
+  const crew = requiredShipZone(layout, 'crewCabin').bounds;
+  const wheelhouse = requiredShipZone(layout, 'wheelhouse').bounds;
+  const storage = requiredShipZone(layout, 'storageWorkroom').bounds;
+  const lifeboat = requiredShipZone(layout, 'lifeboatStation').bounds;
   addFloorSurface(
     context,
     'floor-crewCabin',
@@ -244,7 +338,6 @@ export function addShipHull(
     HULL_HEIGHT,
     HULL_TOP_Y,
     context.materials.darkHull,
-    false,
     HULL_BOTTOM_TAPER,
   );
   addRoundedPrism(
@@ -255,7 +348,6 @@ export function addShipHull(
     UPPER_HULL_HEIGHT,
     UPPER_HULL_TOP_Y,
     context.materials.upperHull,
-    false,
     UPPER_HULL_BOTTOM_TAPER,
   );
   addRoundedPrism(
@@ -266,54 +358,53 @@ export function addShipHull(
     WATERLINE_HEIGHT,
     WATERLINE_TOP_Y,
     context.materials.waterline,
-    false,
   );
   addRoundedPrism(
     context,
     'timber-deck',
     DECK_WIDTH,
-    DECK_LENGTH,
+    SHIP_DECK_LENGTH,
     DECK_THICKNESS,
-    STRUCTURAL_DECK_TOP_Y,
+    SHIP_STRUCTURAL_DECK_TOP_Y,
     context.materials.timberFloor,
-    false,
   );
   addFinishedFloors(context, layout);
 
   return {
     waterExclusion: {
       halfWidth: DECK_WIDTH / 2,
-      halfLength: DECK_LENGTH / 2,
-      taperStart: DECK_LENGTH / 2 - END_CAP_DEPTH,
+      halfLength: SHIP_DECK_LENGTH / 2,
+      taperStart: SHIP_DECK_LENGTH / 2 - END_CAP_DEPTH,
       minimumLocalY: HULL_TOP_Y - HULL_HEIGHT,
       heightProfile: {
         lowerHalfWidth: DECK_WIDTH / 2 * HULL_EXCLUSION_LOWER_SCALE.width,
         lowerHalfLength: Math.round(
-          DECK_LENGTH / 2 * HULL_EXCLUSION_LOWER_SCALE.length * 1000,
+          SHIP_DECK_LENGTH / 2 * HULL_EXCLUSION_LOWER_SCALE.length * 1000,
         ) / 1000,
         lowerTaperStart: Math.round(
-          (DECK_LENGTH / 2 - END_CAP_DEPTH) * HULL_EXCLUSION_LOWER_SCALE.length * 1000,
+          (SHIP_DECK_LENGTH / 2 - END_CAP_DEPTH)
+            * HULL_EXCLUSION_LOWER_SCALE.length * 1000,
         ) / 1000,
         upperLocalY: HULL_TOP_Y,
       },
       longitudinalProfile: {
         minZ: SHIP_STERN_Z,
-        maxZ: DECK_LENGTH / 2,
+        maxZ: SHIP_DECK_LENGTH / 2,
         taperStartMinZ: SHIP_STERN_Z,
-        taperStartMaxZ: DECK_LENGTH / 2 - BOW_DEPTH,
+        taperStartMaxZ: SHIP_DECK_LENGTH / 2 - SHIP_BOW_DEPTH,
         lowerMinZ: Math.round(
-          (SHIP_STERN_Z - (FREIGHTER_DIMENSIONS.length - DECK_LENGTH) / 2)
+          (SHIP_STERN_Z - (FREIGHTER_DIMENSIONS.length - SHIP_DECK_LENGTH) / 2)
             * HULL_EXCLUSION_LOWER_SCALE.length * 1000,
         ) / 1000,
         lowerMaxZ: Math.round(
           HALF_LENGTH * HULL_EXCLUSION_LOWER_SCALE.length * 1000,
         ) / 1000,
         lowerTaperStartMinZ: Math.round(
-          (SHIP_STERN_Z - (FREIGHTER_DIMENSIONS.length - DECK_LENGTH) / 2)
+          (SHIP_STERN_Z - (FREIGHTER_DIMENSIONS.length - SHIP_DECK_LENGTH) / 2)
             * HULL_EXCLUSION_LOWER_SCALE.length * 1000,
         ) / 1000,
         lowerTaperStartMaxZ: Math.round(
-          (HALF_LENGTH - BOW_DEPTH) * HULL_EXCLUSION_LOWER_SCALE.length * 1000,
+          (HALF_LENGTH - SHIP_BOW_DEPTH) * HULL_EXCLUSION_LOWER_SCALE.length * 1000,
         ) / 1000,
       },
     },
