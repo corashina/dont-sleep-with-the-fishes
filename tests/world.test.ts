@@ -6,6 +6,7 @@ import {
   Color,
   DirectionalLight,
   FogExp2,
+  Group,
   HemisphereLight,
   Material,
   Matrix4,
@@ -167,6 +168,7 @@ const createTestWorld = (
 
 describe('world builders', () => {
   it('preserves ship composition and idempotent geometry ownership', () => {
+    const updateMatrixWorld = vi.spyOn(Group.prototype, 'updateMatrixWorld');
     const materials = createShipMaterials();
     const ship = createShipGeometry(materials);
     const resources = collectRenderResources(ship.root);
@@ -196,6 +198,9 @@ describe('world builders', () => {
         ] : []),
       ])).toEqual(SHIP_SHELL_COLLIDERS_BASE);
       expect(ship.arcColliders).toHaveLength(0);
+      expect(updateMatrixWorld.mock.contexts.some((context, index) =>
+        context === ship.root
+        && updateMatrixWorld.mock.calls[index]?.[0] === true)).toBe(true);
       expect(ship.root.children.slice(0, 11).map(({ name }) => name)).toEqual([
         'main-hull-body',
         'upper-hull',
@@ -209,6 +214,33 @@ describe('world builders', () => {
         'lifeboat-station-footprint-left',
         'lifeboat-station-footprint-right',
       ]);
+      expect(ship.root.children.slice(11, 58)).toHaveLength(47);
+      expect(ship.root.children[11]!.name).toBe('crew-cabin-wall-port-0');
+      expect(ship.root.children[57]!.name)
+        .toBe('balcony:crew-balcony:coaming:aft:1');
+      expect(ship.root.children[58]!.name).toBe('ladder:crew-ladder');
+      expect(ship.root.children.slice(59, 76).map(({ name }) => name)).toEqual([
+        'bow-stem',
+        'stern-transom',
+        'stern-transom-waterline',
+        'deck-hatch',
+        'deck-hatch-timber-panel',
+        'anchor-hawse-port',
+        'anchor-hawse-starboard',
+        'roof-engine-body',
+        'roof-engine-service-panel',
+        'roof-engine-vent-1',
+        'roof-engine-vent-2',
+        'roof-engine-vent-3',
+        'roof-engine-crank',
+        'smokestack-port',
+        'smokestack-port-collar',
+        'smokestack-starboard',
+        'smokestack-starboard-collar',
+      ]);
+      expect(ship.root.children.slice(76)).toHaveLength(67);
+      expect(ship.root.children.slice(76).every(({ name }) => name.startsWith('rail-')))
+        .toBe(true);
 
       ship.disposeGeometry();
       ship.disposeGeometry();
@@ -218,6 +250,7 @@ describe('world builders', () => {
     } finally {
       ship.disposeGeometry();
       materials.dispose();
+      updateMatrixWorld.mockRestore();
     }
   });
 
