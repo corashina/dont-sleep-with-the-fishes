@@ -167,22 +167,35 @@ function isKnownAsset(specifier: string): boolean {
   return ASSET_EXTENSIONS.has(specifierExtension(specifier));
 }
 
-function resolveRelativeModule(specifier: string, containingFile: string): string | null {
+function resolvedModuleTarget(
+  specifier: string,
+  containingFile: string,
+  compilerOptions: ts.CompilerOptions = COMPILER_OPTIONS,
+): string | null {
   const resolution = ts.resolveModuleName(
     specifier,
     containingFile,
-    COMPILER_OPTIONS,
+    compilerOptions,
     ts.sys,
   ).resolvedModule;
-  if (!resolution) {
+  if (resolution) return resolve(resolution.resolvedFileName);
+  if (isRelativeSpecifier(specifier) && isKnownAsset(specifier)) {
+    return resolve(dirname(containingFile), specifier.replace(/[?#].*$/, ''));
+  }
+  return null;
+}
+
+function resolveRelativeModule(specifier: string, containingFile: string): string | null {
+  const target = resolvedModuleTarget(specifier, containingFile);
+  if (target === null) {
     if (isKnownAsset(specifier)) return null;
     throw new Error(
       `Unresolved relative module ${specifier} from ${relative(PROJECT_DIRECTORY, containingFile)}`,
     );
   }
-  if (isKnownAsset(resolution.resolvedFileName) || isKnownAsset(specifier)) return null;
-  return TYPESCRIPT_FILE.test(resolution.resolvedFileName)
-    ? resolve(resolution.resolvedFileName)
+  if (isKnownAsset(target) || isKnownAsset(specifier)) return null;
+  return TYPESCRIPT_FILE.test(target)
+    ? target
     : null;
 }
 
@@ -236,17 +249,28 @@ function pathIsWithin(parent: string, candidate: string): boolean {
   return path === '' || (!path.startsWith('..') && !isAbsolute(path));
 }
 
-function boundaryModuleViolations(file: string): readonly string[] {
-  return moduleReferences(readFileSync(file, 'utf8'), file).flatMap(({ kind, specifier }) => {
+function boundaryModuleViolations(
+  file: string,
+  source = readFileSync(file, 'utf8'),
+  compilerOptions: ts.CompilerOptions = COMPILER_OPTIONS,
+): readonly string[] {
+  return moduleReferences(source, file).flatMap(({ kind, specifier }) => {
+    const target = resolvedModuleTarget(specifier, file, compilerOptions);
     if (specifier === 'three' || specifier.startsWith('three/')) {
       return [`${kind} uses ${specifier}`];
     }
-    if (!isRelativeSpecifier(specifier)) return [];
-    const resolvedModule = resolveRelativeModule(specifier, file);
-    return resolvedModule !== null && pathIsWithin(UI_DIRECTORY, resolvedModule)
-      ? [`${kind} uses ${relative(SOURCE_DIRECTORY, resolvedModule).replaceAll('\\', '/')}`]
-      : [];
+    if (target !== null && pathIsWithin(UI_DIRECTORY, target)) {
+      return [`${kind} uses ${relative(SOURCE_DIRECTORY, target).replaceAll('\\', '/')}`];
+    }
+    if (isRelativeSpecifier(specifier) && target === null && !isKnownAsset(specifier)) {
+      resolveRelativeModule(specifier, file);
+    }
+    return [];
   });
+}
+
+function isDomLibraryFile(fileName: string): boolean {
+  return /\/lib\.dom(?:\.[^/]+)?\.d\.ts$/i.test(fileName.replaceAll('\\', '/'));
 }
 
 function domGlobalNames(program: ts.Program, file: string): readonly string[] {
@@ -261,8 +285,7 @@ function domGlobalNames(program: ts.Program, file: string): readonly string[] {
         ? checker.getAliasedSymbol(symbol)
         : symbol;
       if (target?.declarations?.some((declaration) =>
-        declaration.getSourceFile().fileName.replaceAll('\\', '/').toLowerCase()
-          .endsWith('/lib.dom.d.ts'))) {
+        isDomLibraryFile(declaration.getSourceFile().fileName))) {
         names.add(node.text);
       }
     }
@@ -329,10 +352,37 @@ describe('source reference helpers', () => {
     );
   });
 
+  it('rejects tsconfig aliases and relative assets that target UI', () => {
+    const aliasSource = readFileSync(resolve(FIXTURE_DIRECTORY, 'aliasIntoUi.fixture.txt'), 'utf8');
+    const aliasOptions: ts.CompilerOptions = {
+      ...COMPILER_OPTIONS,
+      baseUrl: PROJECT_DIRECTORY,
+      paths: { '@ui/*': ['src/ui/*'] },
+    };
+    expect(boundaryModuleViolations(
+      resolve(SOURCE_DIRECTORY, 'survival/aliasFixture.ts'),
+      aliasSource,
+      aliasOptions,
+    )).toEqual(['import uses ui/dom.ts']);
+
+    const assetSource = readFileSync(
+      resolve(FIXTURE_DIRECTORY, 'relativeUiAsset.fixture.txt'),
+      'utf8',
+    );
+    expect(boundaryModuleViolations(
+      resolve(SOURCE_DIRECTORY, 'survival/assetFixture.ts'),
+      assetSource,
+    )).toEqual(['import uses ui/reviewerFixture.svg']);
+  });
+
   it('uses symbols instead of comments and strings for DOM checks', () => {
     const program = projectProgram();
+    expect(isDomLibraryFile('typescript/lib/lib.dom.iterable.d.ts')).toBe(true);
+    expect(isDomLibraryFile('typescript/lib/lib.dom.asynciterable.d.ts')).toBe(true);
     expect(domGlobalNames(program, resolve(FIXTURE_DIRECTORY, 'domClean.ts'))).toEqual([]);
     expect(domGlobalNames(program, resolve(FIXTURE_DIRECTORY, 'domGlobal.ts'))).toContain('document');
+    expect(domGlobalNames(program, resolve(FIXTURE_DIRECTORY, 'domIterable.ts')))
+      .toContain('FormDataIterator');
   });
 });
 
