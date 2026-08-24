@@ -28,8 +28,39 @@ import {
 import {
   createOceanHorizonGeometry,
   createOceanSurfaceGeometry,
-  OCEAN_SURFACE_QUALITY,
 } from './oceanGeometry';
+
+interface OceanSurfaceQuality {
+  readonly segments: number;
+  readonly surfaceExtent: number;
+  readonly horizonHalfExtent: number;
+  readonly horizonRadialSegments: number;
+  readonly horizonRadialExponent: number;
+}
+
+const OCEAN_SURFACE_QUALITY = Object.freeze({
+  low: Object.freeze({
+    segments: 192,
+    surfaceExtent: 180,
+    horizonHalfExtent: 1100,
+    horizonRadialSegments: 48,
+    horizonRadialExponent: 1.75,
+  }),
+  high: Object.freeze({
+    segments: 288,
+    surfaceExtent: 180,
+    horizonHalfExtent: 1100,
+    horizonRadialSegments: 72,
+    horizonRadialExponent: 1.75,
+  }),
+  ultra: Object.freeze({
+    segments: 384,
+    surfaceExtent: 180,
+    horizonHalfExtent: 1100,
+    horizonRadialSegments: 96,
+    horizonRadialExponent: 1.75,
+  }),
+}) satisfies Readonly<Record<WaterQuality, Readonly<OceanSurfaceQuality>>>;
 
 const finiteOrZero = (value: number): number => Number.isFinite(value) ? value : 0;
 

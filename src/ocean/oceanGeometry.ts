@@ -3,43 +3,18 @@ import {
   PlaneGeometry,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import type { WaterQuality } from '../rendering/waterQuality';
 import {
   ignoreCleanupError,
   runCleanupSteps,
 } from '../world/SceneResources';
 
-export interface OceanSurfaceQuality {
+interface OceanSurfaceQuality {
   readonly segments: number;
   readonly surfaceExtent: number;
   readonly horizonHalfExtent: number;
   readonly horizonRadialSegments: number;
   readonly horizonRadialExponent: number;
 }
-
-export const OCEAN_SURFACE_QUALITY = Object.freeze({
-  low: Object.freeze({
-    segments: 192,
-    surfaceExtent: 180,
-    horizonHalfExtent: 1100,
-    horizonRadialSegments: 48,
-    horizonRadialExponent: 1.75,
-  }),
-  high: Object.freeze({
-    segments: 288,
-    surfaceExtent: 180,
-    horizonHalfExtent: 1100,
-    horizonRadialSegments: 72,
-    horizonRadialExponent: 1.75,
-  }),
-  ultra: Object.freeze({
-    segments: 384,
-    surfaceExtent: 180,
-    horizonHalfExtent: 1100,
-    horizonRadialSegments: 96,
-    horizonRadialExponent: 1.75,
-  }),
-}) satisfies Readonly<Record<WaterQuality, Readonly<OceanSurfaceQuality>>>;
 
 function createOceanPanel(
   width: number,
