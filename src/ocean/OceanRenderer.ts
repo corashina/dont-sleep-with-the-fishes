@@ -1,11 +1,9 @@
 import {
   BufferGeometry,
   Mesh,
-  PlaneGeometry,
   ShaderMaterial,
   type Color,
 } from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { VortexWaveState } from './WaveField';
 import {
   UNBOUNDED_MAXIMUM_LOCAL_Y,
@@ -27,40 +25,13 @@ import {
   createOceanShaderDefinition,
   type OceanShaderUniforms,
 } from './oceanShader';
+import {
+  createOceanHorizonGeometry,
+  createOceanSurfaceGeometry,
+  OCEAN_SURFACE_QUALITY,
+} from './oceanGeometry';
 
 const finiteOrZero = (value: number): number => Number.isFinite(value) ? value : 0;
-
-export interface OceanSurfaceQuality {
-  segments: number;
-  surfaceExtent: number;
-  horizonHalfExtent: number;
-  horizonRadialSegments: number;
-  horizonRadialExponent: number;
-}
-
-export const OCEAN_SURFACE_QUALITY = Object.freeze({
-  low: Object.freeze({
-    segments: 192,
-    surfaceExtent: 180,
-    horizonHalfExtent: 1100,
-    horizonRadialSegments: 48,
-    horizonRadialExponent: 1.75,
-  }),
-  high: Object.freeze({
-    segments: 288,
-    surfaceExtent: 180,
-    horizonHalfExtent: 1100,
-    horizonRadialSegments: 72,
-    horizonRadialExponent: 1.75,
-  }),
-  ultra: Object.freeze({
-    segments: 384,
-    surfaceExtent: 180,
-    horizonHalfExtent: 1100,
-    horizonRadialSegments: 96,
-    horizonRadialExponent: 1.75,
-  }),
-}) satisfies Readonly<Record<WaterQuality, Readonly<OceanSurfaceQuality>>>;
 
 export interface OceanAtmosphere {
   fogColor: Color;
@@ -70,157 +41,9 @@ export interface OceanAtmosphere {
   sunVisibility: number;
 }
 
-function createOceanPanel(
-  width: number,
-  depth: number,
-  widthSegments: number,
-  depthSegments: number,
-  centerX: number,
-  centerZ: number,
-  grading?: Readonly<{
-    xDirection?: -1 | 1;
-    zDirection?: -1 | 1;
-    innerHalfExtent: number;
-    outerHalfExtent: number;
-    exponent: number;
-  }>,
-): PlaneGeometry {
-  const panel = new PlaneGeometry(width, depth, widthSegments, depthSegments);
-  try {
-    panel.rotateX(-Math.PI / 2);
-    panel.translate(centerX, 0, centerZ);
-    if (grading) {
-      const positions = panel.getAttribute('position');
-      const span = grading.outerHalfExtent - grading.innerHalfExtent;
-      const grade = (value: number, direction: -1 | 1): number => {
-        const distance = direction * value;
-        const progress = Math.min(
-          1,
-          Math.max(0, (distance - grading.innerHalfExtent) / span),
-        );
-        return direction * (
-          grading.innerHalfExtent
-          + span * Math.pow(progress, grading.exponent)
-        );
-      };
-      for (let index = 0; index < positions.count; index += 1) {
-        if (grading.xDirection) {
-          positions.setX(
-            index,
-            grade(positions.getX(index), grading.xDirection),
-          );
-        }
-        if (grading.zDirection) {
-          positions.setZ(
-            index,
-            grade(positions.getZ(index), grading.zDirection),
-          );
-        }
-      }
-      positions.needsUpdate = true;
-    }
-  } catch (error) {
-    ignoreCleanupError(() => panel.dispose());
-    throw error;
-  }
-  return panel;
-}
-
-function createSurfaceGeometry(
-  quality: Readonly<OceanSurfaceQuality>,
-): PlaneGeometry {
-  const geometry = new PlaneGeometry(
-    quality.surfaceExtent,
-    quality.surfaceExtent,
-    quality.segments,
-    quality.segments,
-  );
-  try {
-    geometry.rotateX(-Math.PI / 2);
-  } catch (error) {
-    ignoreCleanupError(() => geometry.dispose());
-    throw error;
-  }
-  return geometry;
-}
-
-function createHorizonGeometry(
-  quality: Readonly<OceanSurfaceQuality>,
-): BufferGeometry {
-  const innerHalfExtent = quality.surfaceExtent / 2;
-  const outerHalfExtent = quality.horizonHalfExtent;
-  const ringSpan = outerHalfExtent - innerHalfExtent;
-  const ringCenter = innerHalfExtent + ringSpan / 2;
-  const edgeSegments = quality.segments;
-  const radialSegments = quality.horizonRadialSegments;
-  const grade = (
-    xDirection?: -1 | 1,
-    zDirection?: -1 | 1,
-  ) => ({
-    xDirection,
-    zDirection,
-    innerHalfExtent,
-    outerHalfExtent,
-    exponent: quality.horizonRadialExponent,
-  });
-  const panels: PlaneGeometry[] = [];
-  let geometry: BufferGeometry;
-  try {
-    panels.push(createOceanPanel(
-      quality.surfaceExtent, ringSpan, edgeSegments, radialSegments,
-      0, ringCenter, grade(undefined, 1),
-    ));
-    panels.push(createOceanPanel(
-      quality.surfaceExtent, ringSpan, edgeSegments, radialSegments,
-      0, -ringCenter, grade(undefined, -1),
-    ));
-    panels.push(createOceanPanel(
-      ringSpan, quality.surfaceExtent, radialSegments, edgeSegments,
-      ringCenter, 0, grade(1),
-    ));
-    panels.push(createOceanPanel(
-      ringSpan, quality.surfaceExtent, radialSegments, edgeSegments,
-      -ringCenter, 0, grade(-1),
-    ));
-    panels.push(createOceanPanel(
-      ringSpan, ringSpan, radialSegments, radialSegments,
-      ringCenter, ringCenter, grade(1, 1),
-    ));
-    panels.push(createOceanPanel(
-      ringSpan, ringSpan, radialSegments, radialSegments,
-      ringCenter, -ringCenter, grade(1, -1),
-    ));
-    panels.push(createOceanPanel(
-      ringSpan, ringSpan, radialSegments, radialSegments,
-      -ringCenter, ringCenter, grade(-1, 1),
-    ));
-    panels.push(createOceanPanel(
-      ringSpan, ringSpan, radialSegments, radialSegments,
-      -ringCenter, -ringCenter, grade(-1, -1),
-    ));
-    const mergedGeometry = mergeGeometries(panels);
-    if (!mergedGeometry) {
-      throw new Error('Unable to build ocean horizon geometry.');
-    }
-    geometry = mergedGeometry;
-  } catch (error) {
-    ignoreCleanupError(() => runCleanupSteps(
-      panels.map((panel) => () => panel.dispose()),
-    ));
-    throw error;
-  }
-  try {
-    runCleanupSteps(panels.map((panel) => () => panel.dispose()));
-  } catch (error) {
-    ignoreCleanupError(() => geometry.dispose());
-    throw error;
-  }
-  return geometry;
-}
-
 export class OceanRenderer {
   readonly material: ShaderMaterial;
-  readonly mesh: Mesh<PlaneGeometry, ShaderMaterial>;
+  readonly mesh: Mesh<BufferGeometry, ShaderMaterial>;
   readonly horizonMesh: Mesh<BufferGeometry, ShaderMaterial>;
   private readonly uniforms: OceanShaderUniforms;
   private quality: WaterQuality;
@@ -243,15 +66,15 @@ export class OceanRenderer {
       defines: definition.defines,
       uniforms: definition.uniforms,
     });
-    let surface: PlaneGeometry | undefined;
+    let surface: BufferGeometry | undefined;
     let horizon: BufferGeometry | undefined;
     try {
-      surface = createSurfaceGeometry(surfaceQuality);
+      surface = createOceanSurfaceGeometry(surfaceQuality);
       const mesh = new Mesh(surface, material);
       mesh.name = 'procedural-ocean';
       mesh.frustumCulled = false;
       mesh.receiveShadow = true;
-      horizon = createHorizonGeometry(surfaceQuality);
+      horizon = createOceanHorizonGeometry(surfaceQuality);
       const horizonMesh = new Mesh(horizon, material);
       horizonMesh.name = 'procedural-ocean-horizon';
       horizonMesh.frustumCulled = false;
@@ -273,10 +96,10 @@ export class OceanRenderer {
   setQuality(value: WaterQuality): void {
     if (this.disposed || value === this.quality) return;
     const surfaceQuality = OCEAN_SURFACE_QUALITY[value];
-    const nextSurface = createSurfaceGeometry(surfaceQuality);
+    const nextSurface = createOceanSurfaceGeometry(surfaceQuality);
     let nextHorizon: BufferGeometry;
     try {
-      nextHorizon = createHorizonGeometry(surfaceQuality);
+      nextHorizon = createOceanHorizonGeometry(surfaceQuality);
     } catch (error) {
       ignoreCleanupError(() => nextSurface.dispose());
       throw error;

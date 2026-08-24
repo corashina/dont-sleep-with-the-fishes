@@ -11,10 +11,12 @@ import {
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  OCEAN_SURFACE_QUALITY,
   OceanRenderer,
-  type OceanSurfaceQuality,
 } from '../src/ocean/OceanRenderer';
+import {
+  OCEAN_SURFACE_QUALITY,
+  type OceanSurfaceQuality,
+} from '../src/ocean/oceanGeometry';
 import {
   createInactiveVortexWaveState,
   type VortexWaveState,
@@ -300,6 +302,8 @@ describe('OceanRenderer', () => {
 
   it('rebuilds geometry and state across Low, Ultra, and High', () => {
     const ocean = new OceanRenderer('low');
+    const mesh = ocean.mesh;
+    const horizonMesh = ocean.horizonMesh;
     const lowSurface = ocean.mesh.geometry;
     const lowHorizon = ocean.horizonMesh.geometry;
     const lowSurfaceDispose = vi.spyOn(lowSurface, 'dispose');
@@ -312,6 +316,12 @@ describe('OceanRenderer', () => {
     ocean.setQuality('ultra');
 
     expect(ocean.mesh.geometry).not.toBe(lowSurface);
+    expect(ocean.mesh).toBe(mesh);
+    expect(ocean.horizonMesh).toBe(horizonMesh);
+    expect(ocean.mesh.children).toEqual([horizonMesh]);
+    expect(horizonMesh.parent).toBe(mesh);
+    expect(mesh.frustumCulled).toBe(false);
+    expect(horizonMesh.frustumCulled).toBe(false);
     expect(lowSurfaceDispose).toHaveBeenCalledOnce();
     expect(lowHorizonDispose).toHaveBeenCalledOnce();
     expect(ocean.material.version).toBe(lowMaterialVersion + 1);
@@ -495,6 +505,7 @@ describe('OceanRenderer', () => {
     const defines = ocean.material.defines;
     const materialVersion = ocean.material.version;
     const failure = new Error('horizon build failed');
+    const partialDispose = vi.spyOn(PlaneGeometry.prototype, 'dispose');
 
     vi.mocked(mergeGeometries).mockImplementationOnce(() => {
       throw failure;
@@ -505,6 +516,7 @@ describe('OceanRenderer', () => {
     expect(ocean.horizonMesh.geometry).toBe(horizon);
     expect(surfaceDispose).not.toHaveBeenCalled();
     expect(horizonDispose).not.toHaveBeenCalled();
+    expect(partialDispose).toHaveBeenCalledTimes(9);
     expect((ocean as unknown as { quality: string }).quality).toBe('low');
     expect(ocean.material.defines).toBe(defines);
     expect(ocean.material.version).toBe(materialVersion);
@@ -514,6 +526,42 @@ describe('OceanRenderer', () => {
     expect(ocean.material.uniforms.uShallowColor!.value).toEqual(shallowColor);
     expect(ocean.material.uniforms.uFoamColor!.value).toEqual(foamColor);
 
+    partialDispose.mockRestore();
+    ocean.dispose();
+  });
+
+  it('rolls back a failed surface replacement and cleans the partial surface', () => {
+    const ocean = new OceanRenderer('low');
+    const surface = ocean.mesh.geometry;
+    const horizon = ocean.horizonMesh.geometry;
+    const material = ocean.material;
+    const defines = material.defines;
+    const version = material.version;
+    const failure = { source: 'surface build' };
+    const partialDispose = vi.spyOn(PlaneGeometry.prototype, 'dispose');
+    const rotate = vi.spyOn(PlaneGeometry.prototype, 'rotateX')
+      .mockImplementationOnce(() => {
+        throw failure;
+      });
+    let thrown: unknown;
+
+    try {
+      ocean.setQuality('ultra');
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBe(failure);
+    expect(partialDispose).toHaveBeenCalledOnce();
+    expect(ocean.mesh.geometry).toBe(surface);
+    expect(ocean.horizonMesh.geometry).toBe(horizon);
+    expect(ocean.material).toBe(material);
+    expect(ocean.material.defines).toBe(defines);
+    expect(ocean.material.version).toBe(version);
+    expect((ocean as unknown as { quality: string }).quality).toBe('low');
+
+    rotate.mockRestore();
+    partialDispose.mockRestore();
     ocean.dispose();
   });
 
@@ -530,11 +578,17 @@ describe('OceanRenderer', () => {
     const previousSurface = ocean.mesh.geometry;
     const previousHorizon = ocean.horizonMesh.geometry;
     const firstFailure = { source: 'old surface cleanup' };
+    const secondFailure = { source: 'old horizon cleanup' };
     const previousSurfaceDispose = vi.spyOn(previousSurface, 'dispose')
       .mockImplementationOnce(() => {
+        expect(ocean.mesh.geometry).not.toBe(previousSurface);
+        expect(ocean.horizonMesh.geometry).not.toBe(previousHorizon);
         throw firstFailure;
       });
-    const previousHorizonDispose = vi.spyOn(previousHorizon, 'dispose');
+    const previousHorizonDispose = vi.spyOn(previousHorizon, 'dispose')
+      .mockImplementationOnce(() => {
+        throw secondFailure;
+      });
     let thrown: unknown;
 
     try {
@@ -603,6 +657,34 @@ describe('OceanRenderer', () => {
     expect(thrown).toBe(primaryError);
     expect(planeDispose).toHaveBeenCalledTimes(9);
     expect(materialDispose).toHaveBeenCalledOnce();
+    planeDispose.mockRestore();
+    materialDispose.mockRestore();
+  });
+
+  it('cleans the material and partial surface after surface construction fails', () => {
+    const primaryError = { source: 'surface construction' };
+    const cleanupError = new Error('surface cleanup failed');
+    const planeDispose = vi.spyOn(PlaneGeometry.prototype, 'dispose')
+      .mockImplementationOnce(() => {
+        throw cleanupError;
+      });
+    const materialDispose = vi.spyOn(ShaderMaterial.prototype, 'dispose');
+    const rotate = vi.spyOn(PlaneGeometry.prototype, 'rotateX')
+      .mockImplementationOnce(() => {
+        throw primaryError;
+      });
+    let thrown: unknown;
+
+    try {
+      new OceanRenderer('low');
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBe(primaryError);
+    expect(planeDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
+    rotate.mockRestore();
     planeDispose.mockRestore();
     materialDispose.mockRestore();
   });
