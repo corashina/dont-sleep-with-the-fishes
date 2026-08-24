@@ -243,6 +243,9 @@ loading and keeps the seven obstacle visuals static.
 - `src/survival/DivePresentationController` — owns the active dive lifecycle and camera pose.
 - `src/survival/CarlitosDelegationPresentation` — owns Carlitos delegation motion and completion.
 - `src/world` and `src/ocean` — procedural ship and boat geometry, shared wave field, ocean shader, weather, and buoyancy.
+- `src/ocean/oceanShader` — owns shader bytes, quality defines, and quality uniforms.
+- `src/ocean/oceanGeometry` — owns stateless surface and horizon geometry builders.
+- `src/ocean/OceanRenderer` — owns runtime quality, state, follow, update, and disposal.
 - `src/world/ShipItemPlacement` — physical-fit item profiles, anchor validation, and randomized assignment to authored surfaces.
 - `src/world/ShipAssets` and `src/world/ShipMaterials` — locally committed PBR timber maps, procedural secondary surfaces, ship materials, and explicit texture ownership.
 - `src/world/ShipLayoutTypes` — shared ship layout types and constants.

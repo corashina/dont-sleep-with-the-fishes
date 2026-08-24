@@ -1,18 +1,22 @@
 // Importance: 8/10 (scaled from 4/5). Protects the low-cost graded ocean horizon geometry.
+import { readFileSync } from 'node:fs';
 import {
   type BufferAttribute,
   type BufferGeometry,
   Color,
+  Matrix4,
   PlaneGeometry,
   ShaderMaterial,
   Vector2,
   Vector3,
   Vector4,
 } from 'three';
+import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import {
   OceanRenderer,
 } from '../src/ocean/OceanRenderer';
+import type { WaterExclusionRegion } from '../src/ocean/WaterExclusion';
 import {
   createInactiveVortexWaveState,
   type VortexWaveState,
@@ -26,6 +30,103 @@ vi.mock('three/addons/utils/BufferGeometryUtils.js', async (importOriginal) => {
     mergeGeometries: vi.fn(actual.mergeGeometries),
   };
 });
+
+const OCEAN_RENDERER_SOURCE = readFileSync(
+  new URL('../src/ocean/OceanRenderer.ts', import.meta.url),
+  'utf8',
+);
+
+function parseSource(source: string): ts.SourceFile {
+  return ts.createSourceFile(
+    'OceanRenderer.ts',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+}
+
+function oceanRendererClass(source = OCEAN_RENDERER_SOURCE): ts.ClassDeclaration {
+  const declaration = parseSource(source).statements.find(
+    (statement): statement is ts.ClassDeclaration => (
+      ts.isClassDeclaration(statement)
+      && statement.name?.text === 'OceanRenderer'
+    ),
+  );
+  expect(declaration).toBeDefined();
+  return declaration as ts.ClassDeclaration;
+}
+
+function namedMethod(
+  declaration: ts.ClassDeclaration,
+  name: string,
+): ts.MethodDeclaration {
+  const method = declaration.members.find(
+    (member): member is ts.MethodDeclaration => (
+      ts.isMethodDeclaration(member)
+      && ts.isIdentifier(member.name)
+      && member.name.text === name
+    ),
+  );
+  expect(method, name).toBeDefined();
+  expect(method?.body, name).toBeDefined();
+  return method as ts.MethodDeclaration;
+}
+
+function allocationSites(method: ts.MethodDeclaration): readonly string[] {
+  const sites: string[] = [];
+  const allocationMethods = new Set([
+    'bind',
+    'clone',
+    'concat',
+    'filter',
+    'flatMap',
+    'map',
+    'slice',
+    'toArray',
+  ]);
+  const allocationFactories = new Set([
+    'createOceanHorizonGeometry',
+    'createOceanShaderDefinition',
+    'createOceanSurfaceGeometry',
+    'structuredClone',
+  ]);
+  const allocationStaticMethods = new Set([
+    'Array.from',
+    'Array.of',
+    'Object.entries',
+    'Object.keys',
+    'Object.values',
+    'Reflect.ownKeys',
+  ]);
+  const visit = (node: ts.Node): void => {
+    const isLiteralAllocation = ts.isArrayLiteralExpression(node)
+      || ts.isObjectLiteralExpression(node);
+    const isNestedFunction = node !== method
+      && (ts.isArrowFunction(node)
+        || ts.isFunctionExpression(node)
+        || ts.isFunctionDeclaration(node));
+    let isFactoryCall = false;
+    if (ts.isCallExpression(node)) {
+      const expression = node.expression;
+      isFactoryCall = ts.isIdentifier(expression)
+        ? allocationFactories.has(expression.text)
+          || expression.text.startsWith('create')
+        : ts.isPropertyAccessExpression(expression)
+          && (allocationMethods.has(expression.name.text)
+            || allocationStaticMethods.has(expression.getText()));
+    }
+    if (ts.isNewExpression(node)
+      || isLiteralAllocation
+      || isNestedFunction
+      || isFactoryCall) {
+      sites.push(node.getText());
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(method);
+  return sites;
+}
 
 interface OceanSurfaceQuality {
   readonly segments: number;
@@ -92,6 +193,101 @@ function triangleCount(geometry: BufferGeometry): number {
 }
 
 describe('OceanRenderer', () => {
+  it('keeps the exact runtime controller API and update argument order', () => {
+    const declaration = oceanRendererClass();
+    const constructors = declaration.members.filter(ts.isConstructorDeclaration);
+    const publicMethods = declaration.members.filter(
+      (member): member is ts.MethodDeclaration => (
+        ts.isMethodDeclaration(member)
+        && !member.modifiers?.some((modifier) => (
+          modifier.kind === ts.SyntaxKind.PrivateKeyword
+          || modifier.kind === ts.SyntaxKind.ProtectedKeyword
+        ))
+      ),
+    );
+
+    expect(constructors).toHaveLength(1);
+    expect(constructors[0]?.parameters.map((parameter) => parameter.name.getText()))
+      .toEqual(['quality', 'lightDirection']);
+    expect(publicMethods.map((method) => method.name.getText())).toEqual([
+      'setQuality',
+      'update',
+      'setVortex',
+      'vortexStateForTest',
+      'setExclusions',
+      'follow',
+      'dispose',
+    ]);
+    const update = namedMethod(declaration, 'update');
+    expect(update.parameters.map((parameter) => parameter.name.getText())).toEqual([
+      'timeSeconds',
+      'amplitudeScale',
+      'fogDensity',
+      'atmosphere',
+    ]);
+    expect(update.parameters[3]?.questionToken).toBeDefined();
+  });
+
+  it('imports shader and geometry owners without obsolete helper residue', () => {
+    const sourceFile = parseSource(OCEAN_RENDERER_SOURCE);
+    const imports = sourceFile.statements
+      .filter(ts.isImportDeclaration)
+      .map((declaration) => (
+        ts.isStringLiteral(declaration.moduleSpecifier)
+          ? declaration.moduleSpecifier.text
+          : ''
+      ));
+
+    expect(imports).toContain('./oceanShader');
+    expect(imports).toContain('./oceanGeometry');
+    for (const residue of [
+      'gl_Position',
+      'gl_FragColor',
+      'createOceanPanel',
+      'createSurfaceGeometry',
+      'createHorizonGeometry',
+    ]) {
+      expect(OCEAN_RENDERER_SOURCE, residue).not.toContain(residue);
+    }
+  });
+
+  it('keeps runtime paths free of shader, geometry, and scratch allocations', () => {
+    const declaration = oceanRendererClass();
+    const runtimeMethods = [
+      'update',
+      'setVortex',
+      'setExclusions',
+      'follow',
+    ];
+
+    for (const name of runtimeMethods) {
+      expect(allocationSites(namedMethod(declaration, name)), name).toEqual([]);
+    }
+  });
+
+  it('detects runtime allocation syntax without matching cached mutations', () => {
+    const declaration = oceanRendererClass(`
+      class OceanRenderer {
+        update(): void {
+          const vector = new Vector2();
+          const array = [];
+          const object = {};
+          const copy = this.cached.clone();
+          const build = () => this.cached;
+          createOceanSurfaceGeometry(this.quality);
+          Object.values(this.cached);
+        }
+        follow(): void {
+          this.position.set(1, 2, 3);
+          this.color.copy(this.cachedColor);
+        }
+      }
+    `);
+
+    expect(allocationSites(namedMethod(declaration, 'update'))).toHaveLength(7);
+    expect(allocationSites(namedMethod(declaration, 'follow'))).toEqual([]);
+  });
+
   it('keeps wave shading independent from horizon mesh density', () => {
     const ocean = new OceanRenderer('low');
 
@@ -445,6 +641,134 @@ describe('OceanRenderer', () => {
     expect(ocean.mesh.position.toArray()).toEqual([30, 0, -30]);
 
     ocean.dispose();
+  });
+
+  it('owns runtime state and disposes every geometry exactly once', () => {
+    const ocean = new OceanRenderer('low', [3, 0, 4]);
+    const material = ocean.material;
+    const uniformMap = ocean.material.uniforms;
+    const mesh = ocean.mesh;
+    const horizonMesh = ocean.horizonMesh;
+    const rootChildren = [...mesh.children];
+    const exclusions = [0, 1, 2].map((index): WaterExclusionRegion => ({
+      worldToLocal: new Matrix4().makeTranslation(index + 1, index + 2, index + 3),
+      bounds: new Vector4(-index - 1, index + 1, -index - 2, index + 2),
+      taperStarts: new Vector2(-index - 0.5, index + 0.5),
+      minimumLocalY: -index - 3,
+      lowerBounds: new Vector4(-index - 0.8, index + 0.8, -index - 1.5, index + 1.5),
+      lowerTaperStarts: new Vector2(-index - 0.25, index + 0.25),
+      upperLocalY: index + 4,
+    }));
+    const exclusionSlots = [
+      ...(uniformMap.uExclusionWorldToLocal!.value as Matrix4[]),
+      ...(uniformMap.uExclusionBounds!.value as Vector4[]),
+      ...(uniformMap.uExclusionLowerBounds!.value as Vector4[]),
+      ...(uniformMap.uExclusionTaperStarts!.value as Vector2[]),
+      ...(uniformMap.uExclusionLowerTaperStarts!.value as Vector2[]),
+    ];
+    const vortex: VortexWaveState = {
+      centerX: -3,
+      centerZ: 4,
+      radius: -9,
+      depression: -1.2,
+      tangentStrength: -0.6,
+      phase: -0.8,
+      strength: -0.9,
+    };
+    const atmosphere = {
+      fogColor: new Color(0x102030),
+      horizonColor: new Color(0x405060),
+      skyColor: new Color(0x708090),
+      sunColor: new Color(0xa0b0c0),
+      sunVisibility: 0.8,
+    };
+    const geometries: BufferGeometry[] = [];
+    const geometryDispose = new Map<BufferGeometry, ReturnType<typeof vi.spyOn>>();
+    const trackGeometry = (): void => {
+      for (const geometry of [ocean.mesh.geometry, ocean.horizonMesh.geometry]) {
+        geometries.push(geometry);
+        geometryDispose.set(geometry, vi.spyOn(geometry, 'dispose'));
+      }
+    };
+    trackGeometry();
+
+    ocean.setVortex(vortex);
+    ocean.setExclusions(exclusions);
+    ocean.follow(12, -8);
+    ocean.update(4, 0.8, 0.02, atmosphere);
+
+    expect(ocean.vortexStateForTest()).toEqual(vortex);
+    expect(ocean.material.uniforms.uExclusionCount!.value).toBe(2);
+    expect(ocean.material.uniforms.uExclusionWorldToLocal!.value[0])
+      .not.toBe(exclusions[0]!.worldToLocal);
+    expect(ocean.material.uniforms.uExclusionBounds!.value[1])
+      .not.toBe(exclusions[1]!.bounds);
+    expect(ocean.mesh.position.toArray()).toEqual([10, 0, -10]);
+    const horizonWorldPosition = new Vector3();
+    ocean.horizonMesh.getWorldPosition(horizonWorldPosition);
+    expect(horizonWorldPosition.toArray()).toEqual([10, 0, -10]);
+    expect((uniformMap.uOrigin!.value as Vector2).toArray()).toEqual([10, -10]);
+
+    vortex.strength = 0.25;
+    exclusions[0]!.worldToLocal.identity();
+    exclusions[1]!.bounds.set(0, 0, 0, 0);
+    exclusions.splice(0, exclusions.length);
+    atmosphere.fogColor.set(0xffffff);
+    expect(ocean.vortexStateForTest().strength).toBe(-0.9);
+    expect((uniformMap.uExclusionWorldToLocal!.value[0] as Matrix4).elements[12])
+      .toBe(1);
+    expect((uniformMap.uExclusionBounds!.value[1] as Vector4).toArray())
+      .toEqual([-2, 2, -3, 3]);
+    expect((uniformMap.uFogColor!.value as Color).getHex()).toBe(0x102030);
+
+    ocean.setQuality('high');
+    trackGeometry();
+    ocean.setQuality('ultra');
+    trackGeometry();
+
+    expect(ocean.material).toBe(material);
+    expect(ocean.material.uniforms).toBe(uniformMap);
+    expect(ocean.mesh).toBe(mesh);
+    expect(ocean.horizonMesh).toBe(horizonMesh);
+    expect(ocean.mesh.material).toBe(material);
+    expect(ocean.horizonMesh.material).toBe(material);
+    expect(ocean.mesh.children).toEqual(rootChildren);
+    const currentExclusionSlots = [
+      ...(uniformMap.uExclusionWorldToLocal!.value as Matrix4[]),
+      ...(uniformMap.uExclusionBounds!.value as Vector4[]),
+      ...(uniformMap.uExclusionLowerBounds!.value as Vector4[]),
+      ...(uniformMap.uExclusionTaperStarts!.value as Vector2[]),
+      ...(uniformMap.uExclusionLowerTaperStarts!.value as Vector2[]),
+    ];
+    expect(currentExclusionSlots).toHaveLength(exclusionSlots.length);
+    currentExclusionSlots.forEach((slot, index) => {
+      expect(slot).toBe(exclusionSlots[index]);
+    });
+    expect(ocean.vortexStateForTest()).toEqual({ ...vortex, strength: -0.9 });
+    expect(ocean.mesh.position.toArray()).toEqual([10, 0, -10]);
+    expect((uniformMap.uOrigin!.value as Vector2).toArray()).toEqual([10, -10]);
+    expect(uniformMap.uTime!.value).toBe(4);
+    expect(uniformMap.uAmplitudeScale!.value).toBe(0.8);
+    expect(uniformMap.uFogDensity!.value).toBe(0.02);
+    expect(uniformMap.uDirectLightStrength!.value).toBe(0.8);
+    const lightDirection = uniformMap.uLightDirection!.value as Vector3;
+    expect(lightDirection.x).toBeCloseTo(0.6);
+    expect(lightDirection.y).toBe(0);
+    expect(lightDirection.z).toBeCloseTo(0.8);
+    expect((uniformMap.uFogColor!.value as Color).getHex()).toBe(0x102030);
+    expect((uniformMap.uHorizonColor!.value as Color).getHex()).toBe(0x405060);
+    expect((uniformMap.uSkyColor!.value as Color).getHex()).toBe(0x708090);
+    expect((uniformMap.uSunColor!.value as Color).getHex()).toBe(0xa0b0c0);
+
+    const materialDispose = vi.spyOn(material, 'dispose');
+    ocean.dispose();
+    ocean.dispose();
+
+    expect(geometries).toHaveLength(6);
+    for (const geometry of geometries) {
+      expect(geometryDispose.get(geometry)).toHaveBeenCalledOnce();
+    }
+    expect(materialDispose).toHaveBeenCalledOnce();
   });
 
   it('copies atmosphere values and sanitizes sun visibility', () => {
