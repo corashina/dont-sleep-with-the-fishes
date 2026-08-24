@@ -19,6 +19,7 @@ import {
 import type { ShipItemSurface } from './ShipItemPlacement';
 import type { ShipMaterials } from './ShipMaterials';
 import { SHIP_FURNITURE_MODEL_SPECS } from './shipFurnitureManifest';
+import { disposeResourceSets } from './SceneResources';
 
 export interface ShipFurnitureCollider extends CollisionBox {
   readonly furnitureId: string;
@@ -36,7 +37,7 @@ export interface ShipFurnitureBuild {
 
 interface GeneratedGeometry {
   readonly box: BoxGeometry;
-  readonly owned: ReadonlySet<BufferGeometry>;
+  readonly owned: Set<BufferGeometry>;
 }
 
 function createGeneratedGeometry(): GeneratedGeometry {
@@ -326,7 +327,7 @@ export function createShipFurniture(
     disposeGeometry: () => {
       if (disposed) return;
       disposed = true;
-      geometry.owned.forEach((ownedGeometry) => ownedGeometry.dispose());
+      disposeResourceSets(geometry.owned);
     },
   };
 }

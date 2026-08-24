@@ -14,6 +14,7 @@ import {
   Vector2,
 } from 'three';
 import type { ShipAssets } from './ShipAssets';
+import { disposeResourceSets } from './SceneResources';
 
 export interface ShipMaterials {
   timber: MeshStandardMaterial;
@@ -396,7 +397,7 @@ export function createShipMaterials(
     canvas,
     canvasEdge,
   ]);
-  const ownedTextures = [
+  const ownedTextures = new Set<Texture>([
     warmWood.color,
     warmWood.roughness,
     warmWood.bump,
@@ -409,7 +410,7 @@ export function createShipMaterials(
     paintedPanelTextures.color,
     paintedPanelTextures.roughness,
     paintedPanelTextures.bump,
-  ] as const;
+  ]);
   let disposed = false;
 
   return {
@@ -440,13 +441,12 @@ export function createShipMaterials(
     canvasEdge,
     ownedMaterialsForTest: () => [...ownedMaterials],
     ownedTexturesForTest: () => [...ownedTextures],
-    textureBytesForTest: () => ownedTextures.map((texture) =>
+    textureBytesForTest: () => [...ownedTextures].map((texture) =>
       Array.from(texture.image.data as Uint8Array)),
     dispose: () => {
       if (disposed) return;
       disposed = true;
-      ownedMaterials.forEach((material) => material.dispose());
-      ownedTextures.forEach((texture) => texture.dispose());
+      disposeResourceSets(ownedMaterials, ownedTextures);
     },
   };
 }
