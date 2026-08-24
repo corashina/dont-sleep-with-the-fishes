@@ -14,10 +14,6 @@ import {
   OceanRenderer,
 } from '../src/ocean/OceanRenderer';
 import {
-  OCEAN_SURFACE_QUALITY,
-  type OceanSurfaceQuality,
-} from '../src/ocean/oceanGeometry';
-import {
   createInactiveVortexWaveState,
   type VortexWaveState,
 } from '../src/ocean/WaveField';
@@ -30,6 +26,38 @@ vi.mock('three/addons/utils/BufferGeometryUtils.js', async (importOriginal) => {
     mergeGeometries: vi.fn(actual.mergeGeometries),
   };
 });
+
+interface OceanSurfaceQuality {
+  readonly segments: number;
+  readonly surfaceExtent: number;
+  readonly horizonHalfExtent: number;
+  readonly horizonRadialSegments: number;
+  readonly horizonRadialExponent: number;
+}
+
+const OCEAN_SURFACE_QUALITY = Object.freeze({
+  low: Object.freeze({
+    segments: 192,
+    surfaceExtent: 180,
+    horizonHalfExtent: 1100,
+    horizonRadialSegments: 48,
+    horizonRadialExponent: 1.75,
+  }),
+  high: Object.freeze({
+    segments: 288,
+    surfaceExtent: 180,
+    horizonHalfExtent: 1100,
+    horizonRadialSegments: 72,
+    horizonRadialExponent: 1.75,
+  }),
+  ultra: Object.freeze({
+    segments: 384,
+    surfaceExtent: 180,
+    horizonHalfExtent: 1100,
+    horizonRadialSegments: 96,
+    horizonRadialExponent: 1.75,
+  }),
+}) satisfies Readonly<Record<string, Readonly<OceanSurfaceQuality>>>;
 
 function centerlineRadialDistances(ocean: OceanRenderer): number[] {
   const positions = ocean.horizonMesh.geometry.getAttribute(

@@ -6,11 +6,10 @@ import {
 } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import * as oceanGeometry from '../src/ocean/oceanGeometry';
 import {
   createOceanHorizonGeometry,
   createOceanSurfaceGeometry,
-  OCEAN_SURFACE_QUALITY,
-  type OceanSurfaceQuality,
 } from '../src/ocean/oceanGeometry';
 
 vi.mock('three/addons/utils/BufferGeometryUtils.js', async (importOriginal) => {
@@ -22,6 +21,38 @@ vi.mock('three/addons/utils/BufferGeometryUtils.js', async (importOriginal) => {
     mergeGeometries: vi.fn(actual.mergeGeometries),
   };
 });
+
+interface OceanSurfaceQuality {
+  readonly segments: number;
+  readonly surfaceExtent: number;
+  readonly horizonHalfExtent: number;
+  readonly horizonRadialSegments: number;
+  readonly horizonRadialExponent: number;
+}
+
+const OCEAN_SURFACE_QUALITY = Object.freeze({
+  low: Object.freeze({
+    segments: 192,
+    surfaceExtent: 180,
+    horizonHalfExtent: 1100,
+    horizonRadialSegments: 48,
+    horizonRadialExponent: 1.75,
+  }),
+  high: Object.freeze({
+    segments: 288,
+    surfaceExtent: 180,
+    horizonHalfExtent: 1100,
+    horizonRadialSegments: 72,
+    horizonRadialExponent: 1.75,
+  }),
+  ultra: Object.freeze({
+    segments: 384,
+    surfaceExtent: 180,
+    horizonHalfExtent: 1100,
+    horizonRadialSegments: 96,
+    horizonRadialExponent: 1.75,
+  }),
+}) satisfies Readonly<Record<string, Readonly<OceanSurfaceQuality>>>;
 
 const QUALITY_FIXTURES = [
   ['low', 192, 48, 37_249, 221_184, 47_432, 276_480, Uint16Array],
@@ -129,34 +160,11 @@ afterEach(() => {
 });
 
 describe('oceanGeometry', () => {
-  it('owns the exact immutable quality values', () => {
-    expect(OCEAN_SURFACE_QUALITY).toEqual({
-      low: {
-        segments: 192,
-        surfaceExtent: 180,
-        horizonHalfExtent: 1100,
-        horizonRadialSegments: 48,
-        horizonRadialExponent: 1.75,
-      },
-      high: {
-        segments: 288,
-        surfaceExtent: 180,
-        horizonHalfExtent: 1100,
-        horizonRadialSegments: 72,
-        horizonRadialExponent: 1.75,
-      },
-      ultra: {
-        segments: 384,
-        surfaceExtent: 180,
-        horizonHalfExtent: 1100,
-        horizonRadialSegments: 96,
-        horizonRadialExponent: 1.75,
-      },
-    });
-    expect(Object.isFrozen(OCEAN_SURFACE_QUALITY)).toBe(true);
-    Object.values(OCEAN_SURFACE_QUALITY).forEach((quality) => {
-      expect(Object.isFrozen(quality)).toBe(true);
-    });
+  it('exports only the two public geometry builders', () => {
+    expect(Object.keys(oceanGeometry).sort()).toEqual([
+      'createOceanHorizonGeometry',
+      'createOceanSurfaceGeometry',
+    ]);
   });
 
   it.each(QUALITY_FIXTURES)(
