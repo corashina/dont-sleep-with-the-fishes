@@ -21,7 +21,7 @@ import {
   SHIP_LAYOUT,
   SHIP_STERN_Z,
 } from './shipLayoutData';
-import { validateShipLayout } from './ShipLayout';
+import { validateShipLayout } from './ShipLayoutValidation';
 import { FREIGHTER_DIMENSIONS } from './ShipLayoutTypes';
 import { createShipMaterials } from './ShipMaterials';
 import { createShipRigging } from './ShipRigging';
