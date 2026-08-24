@@ -83,12 +83,12 @@ import { ShipDangerEffects } from './ShipDangerEffects';
 import type { ShipAssets } from './ShipAssets';
 import { assignShipItems, shipItemTransformBounds } from './ShipItemPlacement';
 import type { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
+import { SHIP_LAYOUT } from './shipLayoutData';
+import { createShipRouteMetric } from './ShipLayout';
 import {
-  createShipRouteMetric,
   FREIGHTER_DIMENSIONS,
-  SHIP_LAYOUT,
   type Rect2,
-} from './ShipLayout';
+} from './ShipLayoutTypes';
 
 export type WorldConstructionStage =
   | 'physics'

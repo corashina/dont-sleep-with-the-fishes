@@ -10,12 +10,12 @@ import {
 } from 'three';
 import type { CollisionBox } from '../player/collisions';
 import { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
+import { SHIP_LAYOUT } from './shipLayoutData';
+import { analyzeShipNavigation } from './ShipLayout';
 import {
-  SHIP_LAYOUT,
-  analyzeShipNavigation,
   type ShipFurniturePlacementSpec,
   type ShipLayoutSpec,
-} from './ShipLayout';
+} from './ShipLayoutTypes';
 import type { ShipItemSurface } from './ShipItemPlacement';
 import type { ShipMaterials } from './ShipMaterials';
 import { SHIP_FURNITURE_MODEL_SPECS } from './shipFurnitureManifest';

@@ -11,7 +11,7 @@ import {
   type ScavengeRegionId,
   type ShipFurnitureKind,
   type ShipRouteMetric,
-} from './ShipLayout';
+} from './ShipLayoutTypes';
 import { ITEM_MODEL_SPECS } from './itemModelManifest';
 
 export interface ShipItemSurface {
