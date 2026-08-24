@@ -165,6 +165,46 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
+  it('preserves ship composition and idempotent geometry ownership', () => {
+    const materials = createShipMaterials();
+    const ship = createShipGeometry(materials);
+    const resources = collectRenderResources(ship.root);
+    const geometryDisposals = observeDisposals(resources.geometries);
+    const materialDisposals = observeDisposals(materials.ownedMaterialsForTest());
+    const childCount = ship.root.children.length;
+
+    try {
+      expect(ship.root.name).toBe('coastal-freighter');
+      expect(ship.root.children).toHaveLength(143);
+      expect(meshCount(ship.root)).toBe(392);
+      expect(resources.geometries).toHaveLength(85);
+      expect(ship.shellColliders).toHaveLength(37);
+      expect(ship.arcColliders).toHaveLength(0);
+      expect(ship.root.children.slice(0, 11).map(({ name }) => name)).toEqual([
+        'main-hull-body',
+        'upper-hull',
+        'waterline-band',
+        'timber-deck',
+        'floor-crewCabin',
+        'floor-wheelhouse',
+        'floor-cargoDeck',
+        'floor-storageWorkroom',
+        'floor-lifeboatStation',
+        'lifeboat-station-footprint-left',
+        'lifeboat-station-footprint-right',
+      ]);
+
+      ship.disposeGeometry();
+      ship.disposeGeometry();
+      expect(ship.root.children).toHaveLength(childCount);
+      geometryDisposals.forEach((count) => expect(count).toBe(1));
+      materialDisposals.forEach((count) => expect(count).toBe(0));
+    } finally {
+      ship.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
   it('uses a compact chamfered stern and a roof engine beneath the stacks', () => {
     const materials = createShipMaterials();
     const ship = createShipGeometry(materials);
