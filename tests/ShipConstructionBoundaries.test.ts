@@ -44,6 +44,14 @@ const SHARED_GEOMETRY_VALUES = [
   'SHIP_STRUCTURAL_DECK_TOP_Y',
 ] as const;
 
+const OBSOLETE_SHARED_GEOMETRY_VALUES = [
+  'BOW_DEPTH',
+  'BOW_NOSE_CONTROL_WIDTH_SCALE',
+  'BOW_SHOULDER_CONTROL_DEPTH_SCALE',
+  'DECK_LENGTH',
+  'STRUCTURAL_DECK_TOP_Y',
+] as const;
+
 interface BuilderComposition {
   readonly name: string;
   readonly module: string;
@@ -137,6 +145,14 @@ function exportedCreateShipGeometry(sourceFile: ts.SourceFile): ts.FunctionDecla
 
 function exportedDeclarationNames(sourceFile: ts.SourceFile): readonly string[] {
   return sourceFile.statements.flatMap((statement) => {
+    if (ts.isExportDeclaration(statement)) {
+      if (!statement.exportClause) return ['*'];
+      if (ts.isNamedExports(statement.exportClause)) {
+        return statement.exportClause.elements.map((element) => element.name.text);
+      }
+      return [statement.exportClause.name.text];
+    }
+    if (ts.isExportAssignment(statement)) return ['default'];
     if (!ts.canHaveModifiers(statement)
       || !ts.getModifiers(statement)?.some((modifier) =>
         modifier.kind === ts.SyntaxKind.ExportKeyword)) return [];
@@ -151,6 +167,14 @@ function exportedDeclarationNames(sourceFile: ts.SourceFile): readonly string[] 
       || ts.isEnumDeclaration(statement)) && statement.name) return [statement.name.text];
     return [];
   }).sort();
+}
+
+function topLevelVariableNames(sourceFile: ts.SourceFile): readonly string[] {
+  return sourceFile.statements.flatMap((statement) => {
+    if (!ts.isVariableStatement(statement)) return [];
+    return statement.declarationList.declarations.flatMap((declaration) =>
+      ts.isIdentifier(declaration.name) ? [declaration.name.text] : []);
+  });
 }
 
 function topLevelFunctionNames(sourceFile: ts.SourceFile): readonly string[] {
@@ -210,6 +234,19 @@ function directBuilderCalls(body: ts.Block): readonly ts.CallExpression[] {
     const call = callFromStatement(statement);
     return call && ts.isIdentifier(call.expression) && names.has(call.expression.text) ? [call] : [];
   });
+}
+
+function allBuilderCalls(node: ts.Node): readonly ts.CallExpression[] {
+  const names = new Set<string>(BUILDER_COMPOSITION.map((builder) => builder.name));
+  const calls: ts.CallExpression[] = [];
+  const visit = (candidate: ts.Node): void => {
+    if (ts.isCallExpression(candidate)
+      && ts.isIdentifier(candidate.expression)
+      && names.has(candidate.expression.text)) calls.push(candidate);
+    ts.forEachChild(candidate, visit);
+  };
+  visit(node);
+  return calls;
 }
 
 function hasFunctionBodyParent(call: ts.CallExpression, body: ts.Block): boolean {
@@ -352,13 +389,14 @@ it('keeps shared ship values and geometry lookups in one neutral owner', () => {
   expect(typeExports).toContain('requiredShipZone');
   expect(typeExports).toContain('shipRoomRoofTopY');
 
-  for (const builder of FOCUSED_BUILDERS) {
-    const functions = topLevelFunctionNames(
-      parseSource(sourceFile(`${builder}.ts`), `${builder}.ts`),
-    );
+  for (const builder of ['ShipGeometryPrimitives', ...FOCUSED_BUILDERS]) {
+    const builderSource = parseSource(sourceFile(`${builder}.ts`), `${builder}.ts`);
+    const functions = topLevelFunctionNames(builderSource);
+    const variables = topLevelVariableNames(builderSource);
     expect(functions).not.toContain('requiredZone');
     expect(functions).not.toContain('roomWallHeight');
     expect(functions).not.toContain('balconyDeckTopY');
+    OBSOLETE_SHARED_GEOMETRY_VALUES.forEach((name) => expect(variables).not.toContain(name));
   }
 
   const dataExports = exportedDeclarationNames(
@@ -394,6 +432,8 @@ it('rejects nested composition calls and non-value builder imports', () => {
 
   expect(directBuilderCalls(nestedFunction)).toEqual([]);
   expect(directBuilderCalls(nestedBlock)).toEqual([]);
+  expect(allBuilderCalls(nestedFunction)).toHaveLength(1);
+  expect(allBuilderCalls(nestedBlock)).toHaveLength(1);
   expect(hasOneValueNamedImport(typeOnlyClause, 'ShipHullGeometry', 'addShipHull')).toBe(false);
   expect(hasOneValueNamedImport(typeOnlyElement, 'ShipHullGeometry', 'addShipHull')).toBe(false);
   expect(hasOneValueNamedImport(duplicateValueAlias, 'ShipHullGeometry', 'addShipHull')).toBe(false);
@@ -410,8 +450,10 @@ it('keeps final geometry composition direct and ordered', () => {
   }
 
   const calls = directBuilderCalls(body);
+  const allCalls = allBuilderCalls(composition.body as ts.Block);
   expect(calls.map((call) => (call.expression as ts.Identifier).text))
     .toEqual(BUILDER_COMPOSITION.map((builder) => builder.name));
+  expect(allCalls.map((call) => call.pos)).toEqual(calls.map((call) => call.pos));
   expect(calls.every((call) => hasFunctionBodyParent(call, body))).toBe(true);
 
   for (const [index, builder] of BUILDER_COMPOSITION.entries()) {
