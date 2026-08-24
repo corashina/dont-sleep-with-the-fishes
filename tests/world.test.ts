@@ -514,6 +514,52 @@ describe('world builders', () => {
     }
   });
 
+  it('reuses two water exclusion regions and updates their transforms across frames', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+    const internals = world as unknown as {
+      boatAnchor: Vector3;
+      ocean: OceanRenderer;
+    };
+    const exclusions: Parameters<OceanRenderer['setExclusions']>[0][] = [];
+    const setExclusions = internals.ocean.setExclusions.bind(internals.ocean);
+    const exclusionSpy = vi.spyOn(internals.ocean, 'setExclusions')
+      .mockImplementation((regions) => {
+        exclusions.push(regions);
+        setExclusions(regions);
+      });
+
+    try {
+      world.update(1, 1 / 60, getSinkingState(30, 120), new Vector3(), false);
+      const firstList = exclusions[0]!;
+      const firstShipMatrix = firstList[0]!.worldToLocal.clone();
+      const firstLifeboatMatrix = firstList[1]!.worldToLocal.clone();
+
+      internals.boatAnchor.x += 3;
+      internals.boatAnchor.z -= 2;
+      world.update(2, 1 / 60, {
+        ...getSinkingState(30, 120),
+        pitchRadians: 0.15,
+        rollRadians: -0.12,
+        sinkOffset: -4,
+      }, new Vector3(), false);
+
+      expect(exclusions).toHaveLength(2);
+      expect(exclusions[1]).toBe(firstList);
+      expect(exclusions[1]![0]).toBe(firstList[0]);
+      expect(exclusions[1]![1]).toBe(firstList[1]);
+      expect(firstList[0]!.worldToLocal).not.toEqual(firstShipMatrix);
+      expect(firstList[1]!.worldToLocal).not.toEqual(firstLifeboatMatrix);
+      expect(firstList[0]!.worldToLocal).toEqual(world.ship.matrixWorld.clone().invert());
+      expect(firstList[1]!.worldToLocal).toEqual(world.lifeboat.matrixWorld.clone().invert());
+    } finally {
+      exclusionSpy.mockRestore();
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
   it('scales copied fog and light values and restores the calm atmosphere', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();

@@ -30,7 +30,10 @@ import {
 import { OceanRenderer } from '../ocean/OceanRenderer';
 import type { WaterQuality } from '../rendering/waterQuality';
 import { enableItemAmbientOcclusionOccluder } from '../rendering/ItemAmbientOcclusion';
-import { createWaterExclusion } from '../ocean/WaterExclusion';
+import {
+  createWaterExclusion,
+  type WaterExclusionRegion,
+} from '../ocean/WaterExclusion';
 import {
   DEFAULT_WAVES,
   sampleWaveField,
@@ -57,7 +60,7 @@ import type { PresentationWeatherId } from '../weather/presentationWeather';
 import { boatStorageTransform } from './BoatStorage';
 import { BoatDepositSmoke } from './BoatDepositSmoke';
 import { Environment } from './Environment';
-import { createLifeboat, type LifeboatBuild } from './Lifeboat';
+import { createLifeboat } from './Lifeboat';
 import { LifeboatAssets } from './LifeboatAssets';
 import { ITEM_MODEL_SPECS } from './itemModelManifest';
 import { createProp } from './PropFactory';
@@ -226,7 +229,9 @@ export class World {
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
   private readonly ownedTextures = new Set<Texture>();
-  private readonly waterExclusion: LifeboatBuild['waterExclusion'];
+  private readonly shipWaterExclusion!: WaterExclusionRegion;
+  private readonly lifeboatWaterExclusion!: WaterExclusionRegion;
+  private readonly oceanExclusions!: readonly WaterExclusionRegion[];
   private readonly oceanAtmosphere = {
     fogColor: new Color(),
     horizonColor: new Color(),
@@ -525,7 +530,6 @@ export class World {
       this.lifeboat.position.copy(this.boatAnchor);
       this.boatStorage = boatBuild.storageRoot;
       this.lifeboatAcceptance = boatBuild.acceptanceBox;
-      this.waterExclusion = boatBuild.waterExclusion;
       collectMeshResources(
         this.lifeboat,
         this.ownedGeometries,
@@ -550,6 +554,26 @@ export class World {
       });
       scene.add(this.lifeboat);
       rollback.push(() => scene.remove(this.lifeboat));
+      this.shipWaterExclusion = createWaterExclusion(
+        this.ship,
+        this.shipBuild.waterExclusion.halfWidth,
+        this.shipBuild.waterExclusion.halfLength,
+        this.shipBuild.waterExclusion.taperStart,
+        this.shipBuild.waterExclusion.minimumLocalY,
+        this.shipBuild.waterExclusion.heightProfile,
+        this.shipBuild.waterExclusion.longitudinalProfile,
+      );
+      this.lifeboatWaterExclusion = createWaterExclusion(
+        this.lifeboat,
+        boatBuild.waterExclusion.halfWidth,
+        boatBuild.waterExclusion.halfLength,
+        boatBuild.waterExclusion.taperStart,
+        boatBuild.waterExclusion.minimumLocalY,
+      );
+      this.oceanExclusions = [
+        this.shipWaterExclusion,
+        this.lifeboatWaterExclusion,
+      ];
       construction.checkpoint?.('lifeboat');
 
       this.ocean = new OceanRenderer(waterQuality);
@@ -665,24 +689,11 @@ export class World {
       this.oceanAtmosphere,
     );
     this.ocean.follow(cameraPosition.x, cameraPosition.z);
-    this.ocean.setExclusions([
-      createWaterExclusion(
-        this.ship,
-        this.shipBuild.waterExclusion.halfWidth,
-        this.shipBuild.waterExclusion.halfLength,
-        this.shipBuild.waterExclusion.taperStart,
-        this.shipBuild.waterExclusion.minimumLocalY,
-        this.shipBuild.waterExclusion.heightProfile,
-        this.shipBuild.waterExclusion.longitudinalProfile,
-      ),
-      createWaterExclusion(
-        this.lifeboat,
-        this.waterExclusion.halfWidth,
-        this.waterExclusion.halfLength,
-        this.waterExclusion.taperStart,
-        this.waterExclusion.minimumLocalY,
-      ),
-    ]);
+    this.ship.updateWorldMatrix(true, false);
+    this.lifeboat.updateWorldMatrix(true, false);
+    this.shipWaterExclusion.worldToLocal.copy(this.ship.matrixWorld).invert();
+    this.lifeboatWaterExclusion.worldToLocal.copy(this.lifeboat.matrixWorld).invert();
+    this.ocean.setExclusions(this.oceanExclusions);
   }
 
   setPresentationWeather(id: PresentationWeatherId): void {
