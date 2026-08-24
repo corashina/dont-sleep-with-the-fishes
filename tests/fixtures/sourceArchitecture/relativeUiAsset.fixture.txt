@@ -1,1 +1,0 @@
-import '../ui/reviewerFixture.svg';
