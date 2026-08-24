@@ -17,7 +17,7 @@ import {
   type ShipRiggingSpec,
   type ShipSailSpec,
   type ShipStaySpec,
-} from './ShipLayout';
+} from './ShipLayoutTypes';
 import type { ShipMaterials } from './ShipMaterials';
 
 export interface ShipRiggingBuild {

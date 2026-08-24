@@ -6,11 +6,11 @@ import type { MovementAxes } from '../src/player/collisions';
 import { circleOverlapsCollisionFootprint } from '../src/player/collisions';
 import { PlayerController, type PlayerNavigationBounds } from '../src/player/PlayerController';
 import { createCrowsNest } from '../src/world/CrowsNest';
+import { SHIP_LAYOUT } from '../src/world/shipLayoutData';
 import {
   FREIGHTER_DIMENSIONS,
   PLAYER_LAYOUT_RADIUS,
-  SHIP_LAYOUT,
-} from '../src/world/ShipLayout';
+} from '../src/world/ShipLayoutTypes';
 import { createShipMaterials } from '../src/world/ShipMaterials';
 import { createShipRigging } from '../src/world/ShipRigging';
 

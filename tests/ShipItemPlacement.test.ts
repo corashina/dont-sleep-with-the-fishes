@@ -18,9 +18,9 @@ import {
 } from '../src/world/ShipItemPlacement';
 import {
   createShipRouteMetric,
-  FREIGHTER_DIMENSIONS,
-  SHIP_LAYOUT,
 } from '../src/world/ShipLayout';
+import { SHIP_LAYOUT } from '../src/world/shipLayoutData';
+import { FREIGHTER_DIMENSIONS } from '../src/world/ShipLayoutTypes';
 import { createTestShipFurniture } from './helpers/shipFurniture';
 import { loadProductionPropModels } from './helpers/productionPropModels';
 

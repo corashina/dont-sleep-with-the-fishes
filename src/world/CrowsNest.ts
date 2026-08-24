@@ -12,7 +12,7 @@ import {
   PLAYER_LAYOUT_RADIUS,
   type ShipCrowsNestSpec,
   type ShipMastSpec,
-} from './ShipLayout';
+} from './ShipLayoutTypes';
 import type { ShipMaterials } from './ShipMaterials';
 
 export interface CrowsNestBuild {

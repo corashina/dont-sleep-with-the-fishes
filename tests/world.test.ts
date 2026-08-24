@@ -48,12 +48,14 @@ import { createShipFurniture } from '../src/world/ShipFurniture';
 import { createShipGeometry } from '../src/world/ShipGeometry';
 import { assignShipItems, shipItemTransformBounds } from '../src/world/ShipItemPlacement';
 import {
-  FREIGHTER_DIMENSIONS,
   SHIP_LAYOUT,
   SHIP_ROOF_ENGINE,
+} from '../src/world/shipLayoutData';
+import {
+  FREIGHTER_DIMENSIONS,
   SHIP_ROOM_ROOF_THICKNESS,
   SHIP_ROOM_WALL_HEIGHT,
-} from '../src/world/ShipLayout';
+} from '../src/world/ShipLayoutTypes';
 import { createShipMaterials } from '../src/world/ShipMaterials';
 import { createShipRigging } from '../src/world/ShipRigging';
 import { skyPaletteFor } from '../src/world/skyPalette';

@@ -1,20 +1,21 @@
 // Importance: 8/10 (scaled from 4/5). Protects reachable ship layout constraints.
 import { describe, expect, it } from 'vitest';
+import { SHIP_LAYOUT, SHIP_ROOF_ENGINE } from '../src/world/shipLayoutData';
 import {
   FREIGHTER_DIMENSIONS,
   PLAYER_LAYOUT_RADIUS,
-  SHIP_LAYOUT,
-  SHIP_ROOF_ENGINE,
   SHIP_ROOM_ROOF_THICKNESS,
   SHIP_ROOM_WALL_HEIGHT,
   SHIP_ROOM_WALL_THICKNESS,
   SHIP_TRANSVERSE_PORTHOLE_CENTER_X,
+  type ShipZoneId,
+} from '../src/world/ShipLayoutTypes';
+import {
   analyzeShipNavigation,
   createShipRouteMetric,
   furnitureRect,
   validateShipLayout,
 } from '../src/world/ShipLayout';
-import type { ShipZoneId } from '../src/world/ShipLayout';
 
 interface TestRect {
   readonly minX: number;

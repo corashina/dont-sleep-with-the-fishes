@@ -5,7 +5,7 @@ import {
   SCAVENGE_PHYSICS_OBJECT_SPECS,
   type ScavengePhysicsObjectId,
 } from './ScavengePhysicsObjectCatalog';
-import { FREIGHTER_DIMENSIONS } from './ShipLayout';
+import { FREIGHTER_DIMENSIONS } from './ShipLayoutTypes';
 
 const REQUIRED_COUNTS = {
   door: 2,

@@ -10,7 +10,8 @@ import {
   type PlayerNavigationBounds,
 } from '../src/player/PlayerController';
 import { SCAVENGE_SPRINT_SPEED, SCAVENGE_WALK_SPEED } from '../src/game/scavengeMovement';
-import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from '../src/world/ShipLayout';
+import { SHIP_LAYOUT } from '../src/world/shipLayoutData';
+import { FREIGHTER_DIMENSIONS } from '../src/world/ShipLayoutTypes';
 import { createTestShip } from './helpers/shipFurniture';
 
 const TEST_NAVIGATION_BOUNDS: PlayerNavigationBounds = {

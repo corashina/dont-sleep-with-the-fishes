@@ -18,11 +18,11 @@ import { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
 import { createShipGeometry } from './ShipGeometry';
 import { validateShipItemSurfaces, type ShipItemSurface } from './ShipItemPlacement';
 import {
-  FREIGHTER_DIMENSIONS,
   SHIP_LAYOUT,
   SHIP_STERN_Z,
-  validateShipLayout,
-} from './ShipLayout';
+} from './shipLayoutData';
+import { validateShipLayout } from './ShipLayout';
+import { FREIGHTER_DIMENSIONS } from './ShipLayoutTypes';
 import { createShipMaterials } from './ShipMaterials';
 import { createShipRigging } from './ShipRigging';
 import { ShipSmoke } from './ShipSmoke';

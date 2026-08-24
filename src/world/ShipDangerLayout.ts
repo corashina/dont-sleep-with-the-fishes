@@ -1,11 +1,13 @@
 import {
-  FREIGHTER_DIMENSIONS,
   SHIP_LAYOUT,
+} from './shipLayoutData';
+import {
+  FREIGHTER_DIMENSIONS,
   SHIP_ROOM_WALL_HEIGHT,
   SHIP_ROOM_WALL_THICKNESS,
   type Rect2,
   type ShipLayoutSpec,
-} from './ShipLayout';
+} from './ShipLayoutTypes';
 
 export type DangerRoomId = 'crewCabin' | 'wheelhouse' | 'storageWorkroom';
 export type DangerZoneId = DangerRoomId | 'cargoDeck';

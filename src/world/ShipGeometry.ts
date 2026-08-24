@@ -24,31 +24,28 @@ import type {
   WaterExclusionLongitudinalProfile,
 } from '../ocean/WaterExclusion';
 import {
-  FREIGHTER_DIMENSIONS,
-  PLAYER_LAYOUT_RADIUS,
   SHIP_LAYOUT,
   SHIP_ROOF_ENGINE,
+  SHIP_STERN_CHAMFER,
+  SHIP_STERN_Z,
+  SHIP_WHEELHOUSE_CHAMFER_SIZE,
+} from './shipLayoutData';
+import {
+  FREIGHTER_DIMENSIONS,
+  PLAYER_LAYOUT_RADIUS,
   SHIP_ROOM_ROOF_THICKNESS,
   SHIP_ROOM_WALL_HEIGHT,
   SHIP_ROOM_WALL_THICKNESS,
-  SHIP_STERN_CHAMFER,
-  SHIP_STERN_Z,
   SHIP_TRANSVERSE_PORTHOLE_CENTER_X,
-  SHIP_WHEELHOUSE_CHAMFER_SIZE,
-} from './ShipLayout';
-import type {
-  ShipBalconySpec,
-  ShipDoorSpec,
-  ShipLadderSpec,
-  ShipLayoutSpec,
-  ShipTransverseEdge,
-  ShipZoneId,
-  ShipZoneSpec,
-} from './ShipLayout';
+  type ShipBalconySpec,
+  type ShipDoorSpec,
+  type ShipLadderSpec,
+  type ShipLayoutSpec,
+  type ShipTransverseEdge,
+  type ShipZoneId,
+  type ShipZoneSpec,
+} from './ShipLayoutTypes';
 import type { ShipMaterials } from './ShipMaterials';
-
-export { FREIGHTER_DIMENSIONS } from './ShipLayout';
-export type { ShipZoneId } from './ShipLayout';
 
 export interface ShipGeometryBuild {
   root: Group;
