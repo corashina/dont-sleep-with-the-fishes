@@ -16,7 +16,7 @@ import {
   Uint16BufferAttribute,
 } from 'three';
 import type { ItemId } from '../src/game/ItemState';
-import type { EventModelId } from '../src/world/eventModelManifest';
+import type { EventModelId } from '../src/world/eventModelIds';
 import { CARLITOS_SITTING_IDLE_CLIP } from '../src/world/PropAnimation';
 import {
   ItemModelLoadError,

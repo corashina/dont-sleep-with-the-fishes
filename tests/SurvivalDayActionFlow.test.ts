@@ -13,8 +13,8 @@ import type {
   ActionOutcome,
   DayActionId,
   DayActionOption,
-  SurvivalSnapshot,
 } from '../src/survival/survivalTypes';
+import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
 
 interface Deferred {
   readonly promise: Promise<void>;

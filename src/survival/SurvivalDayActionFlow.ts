@@ -9,9 +9,9 @@ import type {
   ActionOutcome,
   DayActionId,
   DayActionOption,
-  SurvivalSnapshot,
   SurvivalState,
 } from './survivalTypes';
+import type { SurvivalSnapshot } from './survivalSnapshot';
 
 export type DayActionSessionPort = Pick<
   SurvivalSession,

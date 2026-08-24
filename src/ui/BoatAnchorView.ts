@@ -10,8 +10,8 @@ import { repairEnergyCost, SURVIVAL_BALANCE } from '../survival/survivalBalance'
 import type {
   DayActionId,
   EventResponseId,
-  SurvivalSnapshot,
 } from '../survival/survivalTypes';
+import type { SurvivalSnapshot } from '../survival/survivalSnapshot';
 import { createElementRequirement } from './dom';
 import type { EventContextChoice } from './SurvivalUiViewModel';
 import { uiArtwork } from './uiArtwork';

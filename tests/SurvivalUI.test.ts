@@ -10,8 +10,8 @@ import { sequenceRandom } from './helpers/random';
 import type {
   DayActionId,
   SurvivalEventDefinition,
-  SurvivalSnapshot,
 } from '../src/survival/survivalTypes';
+import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
 import { BoatAnchorView } from '../src/ui/BoatAnchorView';
 import { SurvivalCoverView } from '../src/ui/SurvivalCoverView';
 import { SurvivalFishingView } from '../src/ui/SurvivalFishingView';

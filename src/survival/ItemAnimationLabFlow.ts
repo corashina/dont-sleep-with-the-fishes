@@ -13,8 +13,8 @@ import type { SurvivalSession } from './SurvivalSession';
 import type { SurvivalEventId } from './eventCatalog';
 import type {
   EventResponseId,
-  SurvivalSnapshot,
 } from './survivalTypes';
+import type { SurvivalSnapshot } from './survivalSnapshot';
 
 export type ItemAnimationLabSessionPort = Pick<SurvivalSession, 'snapshot'>;
 

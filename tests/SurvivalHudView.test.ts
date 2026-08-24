@@ -2,7 +2,8 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import type { DayActionId, SurvivalSnapshot } from '../src/survival/survivalTypes';
+import type { DayActionId } from '../src/survival/survivalTypes';
+import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
 import { SurvivalHudView } from '../src/ui/SurvivalHudView';
 import { sequenceRandom } from './helpers/random';
 

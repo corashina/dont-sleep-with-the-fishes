@@ -35,8 +35,8 @@ import {
 } from '../world/SceneResources';
 import type {
   ItemCondition,
-  SurvivalSnapshot,
 } from './survivalTypes';
+import type { SurvivalSnapshot } from './survivalSnapshot';
 import { scaleEventItemDuration } from './eventItemTiming';
 import { applyBrokenMaterialTreatment } from './itemConditionAppearance';
 

@@ -1,5 +1,6 @@
 import { SURVIVAL_BALANCE } from '../survival/survivalBalance';
-import type { DayActionId, SurvivalSnapshot } from '../survival/survivalTypes';
+import type { DayActionId } from '../survival/survivalTypes';
+import type { SurvivalSnapshot } from '../survival/survivalSnapshot';
 import { createElementRequirement } from './dom';
 import { uiArtwork, type UiArtworkId } from './uiArtwork';
 

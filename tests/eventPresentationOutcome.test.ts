@@ -1,6 +1,6 @@
 // Importance: 8/10 (scaled from 4/5). Protects stable event change summaries and presentation seeds.
 import { describe, expect, it } from 'vitest';
-import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
+import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
 import {
   deriveEventOutcomePresentation,
   deriveEventVariantSeed,

@@ -25,9 +25,9 @@ import { SurvivalSession } from '../src/survival/SurvivalSession';
 import type {
   SurvivalInventorySnapshot,
   SurvivalItemState,
-  SurvivalSnapshot,
   SurvivalState,
 } from '../src/survival/survivalTypes';
+import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
 import type { FishingResultView, FishingUiState } from '../src/ui/SurvivalFishingView';
 import type { SurvivalUI } from '../src/ui/SurvivalUI';
 import type { RewardResultView } from '../src/ui/SurvivalCoverViewModel';

@@ -125,9 +125,9 @@ import type {
   ActionOutcome,
   EventPresentationKey,
   PresentationCue,
-  SurvivalSnapshot,
   WeatherId,
 } from './survivalTypes';
+import type { SurvivalSnapshot } from './survivalSnapshot';
 import type { SurvivalEventId } from './eventCatalog';
 import {
   eventSideFromSeed,

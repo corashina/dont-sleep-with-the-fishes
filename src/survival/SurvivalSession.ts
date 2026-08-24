@@ -11,7 +11,11 @@ import {
 } from './eventCatalog';
 import { drawWeightedEvent } from './eventSelection';
 import { resolveWeightedOutcome } from './eventResolver';
-import { FishingSession, type FishingTerminalResult } from './FishingSession';
+import {
+  FishingSession,
+  type BeginFishingResult,
+  type FishingTerminalResult,
+} from './FishingSession';
 import { fishingSettlement } from './fishingSettlementRules';
 import { SurvivalInventoryState } from './inventory';
 import {
@@ -62,7 +66,6 @@ import {
 } from './CarlitosState';
 import type {
   ActionOutcome,
-  BeginFishingResult,
   DayActionOption,
   DayActionId,
   DawnEnergy,
@@ -74,7 +77,6 @@ import type {
   RandomSource,
   ResourceDelta,
   SurvivalEventDefinition,
-  SurvivalSnapshot,
   SurvivalState,
   ResourceEffect,
   RewardSummary,
@@ -86,6 +88,7 @@ import type {
   WeatherId,
   WeightedEventOutcome,
 } from './survivalTypes';
+import type { SurvivalSnapshot } from './survivalSnapshot';
 
 const NO_EVENT_EXCLUSIONS: ReadonlySet<string> = new Set();
 
@@ -119,8 +122,6 @@ export interface SurvivalSessionOptions {
 }
 
 export type { DayActionOption } from './survivalTypes';
-export type { BeginFishingResult } from './survivalTypes';
-
 interface Rejection {
   code: string;
   message: string;

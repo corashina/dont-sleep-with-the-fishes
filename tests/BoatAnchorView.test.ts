@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ItemInstanceId } from '../src/game/ItemState';
 import type { BoatInteractionAnchor } from '../src/survival/BoatInteraction';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import type { DayActionId, SurvivalSnapshot } from '../src/survival/survivalTypes';
+import type { DayActionId } from '../src/survival/survivalTypes';
+import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
 import { BoatAnchorView } from '../src/ui/BoatAnchorView';
 import { sequenceRandom } from './helpers/random';
 
