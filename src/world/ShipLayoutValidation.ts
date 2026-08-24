@@ -1,0 +1,767 @@
+import {
+  EXACT_FURNITURE_MODEL_BY_ID,
+  SHIP_FURNITURE_MODEL_IDS,
+  SHIP_LAYOUT,
+} from './shipLayoutData';
+import {
+  FREIGHTER_DIMENSIONS,
+  PLAYER_LAYOUT_RADIUS,
+  SCAVENGE_REGION_IDS,
+  SHIP_ROOM_WALL_HEIGHT,
+  SHIP_SAIL_CLOTH_MIN_Y,
+  SHIP_SAIL_TOP_OFFSET,
+  type Rect2,
+  type ScavengeRegionId,
+  type ShipBalconyZoneId,
+  type ShipDoorSpec,
+  type ShipFurniturePlacementSpec,
+  type ShipItemSurfaceSpec,
+  type ShipLaneSpec,
+  type ShipLayoutSpec,
+  type ShipNavigationTargetSpec,
+  type ShipSecondaryAccessRectangle,
+  type ShipStayId,
+  type ShipTransverseEdge,
+} from './ShipLayoutTypes';
+import {
+  analyzeShipNavigation,
+  deckHatchRect,
+  furnitureRect,
+  mastRect,
+} from './ShipNavigation';
+import type { ShipFurnitureAssetId } from './shipFurnitureManifest';
+
+const PI_OVER_TWO = 1.5707963267948966;
+const PI = 3.141592653589793;
+const WALL_THICKNESS = 0.2;
+
+const crewBounds = SHIP_LAYOUT.zones.find(({ id }) => id === 'crewCabin')!.bounds;
+const wheelhouseBounds = SHIP_LAYOUT.zones.find(({ id }) => id === 'wheelhouse')!.bounds;
+const storageBounds = SHIP_LAYOUT.zones.find(({ id }) => id === 'storageWorkroom')!.bounds;
+const lifeboatBounds = SHIP_LAYOUT.zones.find(({ id }) => id === 'lifeboatStation')!.bounds;
+
+function rect(minX: number, maxX: number, minZ: number, maxZ: number): Rect2 {
+  return { minX, maxX, minZ, maxZ };
+}
+
+function transformLocalPoint(
+  furnitureSpec: ShipFurniturePlacementSpec,
+  point: readonly [number, number, number],
+): readonly [number, number] {
+  const cosine = Math.cos(furnitureSpec.rotationY);
+  const sine = Math.sin(furnitureSpec.rotationY);
+  const localX = point[0] * furnitureSpec.scale[0];
+  const localZ = point[2] * furnitureSpec.scale[2];
+  return [
+    furnitureSpec.position[0] + localX * cosine + localZ * sine,
+    furnitureSpec.position[2] - localX * sine + localZ * cosine,
+  ];
+}
+
+function doorNavigationTargets(
+  doorSpecs: readonly ShipDoorSpec[],
+): ShipNavigationTargetSpec[] {
+  const result: ShipNavigationTargetSpec[] = [];
+  doorSpecs.forEach((door) => {
+    const [x, z] = door.center;
+    if (door.orientation === 'side') {
+      const direction = door.side === 'port' ? -1 : 1;
+      result.push(
+        { id: `${door.id}-inside`, position: [x - direction * 0.5, z], kind: 'door' },
+        { id: `${door.id}-outside`, position: [x + direction * 0.5, z], kind: 'door' },
+      );
+    } else {
+      result.push(
+        { id: `${door.id}-inside`, position: [x, z + 0.5], kind: 'door' },
+        { id: `${door.id}-outside`, position: [x, z - 0.5], kind: 'door' },
+      );
+    }
+  });
+  return result;
+}
+
+function surfaceNavigationTargets(
+  furnitureSpecs: readonly ShipFurniturePlacementSpec[],
+): ShipNavigationTargetSpec[] {
+  const result: ShipNavigationTargetSpec[] = [];
+  furnitureSpecs.forEach((owner) => owner.surfaces.forEach((surface) => {
+    surface.standingPoints.forEach((point, index) => result.push({
+      id: `${surface.id}-standing-${index}`,
+      position: transformLocalPoint(owner, point),
+      kind: 'surface',
+    }));
+  }));
+  return result;
+}
+
+function positive(value: number): boolean {
+  return Number.isFinite(value) && value > 0;
+}
+
+function validRect(bounds: Rect2): boolean {
+  return [bounds.minX, bounds.maxX, bounds.minZ, bounds.maxZ].every(Number.isFinite)
+    && bounds.maxX > bounds.minX && bounds.maxZ > bounds.minZ;
+}
+
+function finiteTuple(values: readonly number[]): boolean {
+  return values.every(Number.isFinite);
+}
+
+function overlaps(left: Rect2, right: Rect2): boolean {
+  return left.minX < right.maxX && left.maxX > right.minX
+    && left.minZ < right.maxZ && left.maxZ > right.minZ;
+}
+
+function inflate(bounds: Rect2, amount: number): Rect2 {
+  return rect(
+    bounds.minX - amount,
+    bounds.maxX + amount,
+    bounds.minZ - amount,
+    bounds.maxZ + amount,
+  );
+}
+
+function segmentIntersectsRect(
+  start: readonly [number, number],
+  end: readonly [number, number],
+  bounds: Rect2,
+): boolean {
+  let minimumTime = 0;
+  let maximumTime = 1;
+  const clipAxis = (origin: number, destination: number, min: number, max: number): boolean => {
+    const delta = destination - origin;
+    if (Math.abs(delta) < 1e-9) return origin >= min && origin <= max;
+    const first = (min - origin) / delta;
+    const second = (max - origin) / delta;
+    minimumTime = Math.max(minimumTime, Math.min(first, second));
+    maximumTime = Math.min(maximumTime, Math.max(first, second));
+    return minimumTime <= maximumTime;
+  };
+  return clipAxis(start[0], end[0], bounds.minX, bounds.maxX)
+    && clipAxis(start[1], end[1], bounds.minZ, bounds.maxZ);
+}
+
+function pointInPolygon(
+  point: readonly [number, number],
+  polygon: readonly (readonly [number, number])[],
+): boolean {
+  let inside = false;
+  for (let current = 0, previous = polygon.length - 1; current < polygon.length; previous = current++) {
+    const [currentX, currentZ] = polygon[current]!;
+    const [previousX, previousZ] = polygon[previous]!;
+    const crosses = (currentZ > point[1]) !== (previousZ > point[1])
+      && point[0] < ((previousX - currentX) * (point[1] - currentZ))
+        / (previousZ - currentZ) + currentX;
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
+function measuredLaneWidth(lane: ShipLaneSpec): number {
+  return Number(Math.min(
+    lane.bounds.maxX - lane.bounds.minX,
+    lane.bounds.maxZ - lane.bounds.minZ,
+  ).toFixed(9));
+}
+
+function secondaryAccessRectangles(
+  furnitureSpecs: readonly ShipFurniturePlacementSpec[],
+): ShipSecondaryAccessRectangle[] {
+  const result: ShipSecondaryAccessRectangle[] = [];
+  furnitureSpecs.forEach((owner) => owner.surfaces.forEach((surface) => {
+    const center = transformLocalPoint(owner, surface.localPosition);
+    surface.standingPoints.forEach((point, index) => {
+      const standing = transformLocalPoint(owner, point);
+      result.push({
+        id: `${surface.id}-access-${index}`,
+        bounds: rect(
+          Math.min(center[0], standing[0]) - PLAYER_LAYOUT_RADIUS,
+          Math.max(center[0], standing[0]) + PLAYER_LAYOUT_RADIUS,
+          Math.min(center[1], standing[1]) - PLAYER_LAYOUT_RADIUS,
+          Math.max(center[1], standing[1]) + PLAYER_LAYOUT_RADIUS,
+        ),
+      });
+    });
+  }));
+  return result;
+}
+
+function measuredAccessClearance(access: ShipSecondaryAccessRectangle): number {
+  const sweptCenterWidth = Math.min(
+    access.bounds.maxX - access.bounds.minX,
+    access.bounds.maxZ - access.bounds.minZ,
+  );
+  return Number((sweptCenterWidth + PLAYER_LAYOUT_RADIUS * 2).toFixed(9));
+}
+
+function assertUnique(label: string, ids: readonly string[]): void {
+  const seen = new Set<string>();
+  ids.forEach((id) => {
+    if (seen.has(id)) throw new Error(`Duplicate ${label} id: ${id}`);
+    seen.add(id);
+  });
+}
+
+function wallRectangles(layout: ShipLayoutSpec): Rect2[] {
+  const walls: Rect2[] = [];
+  const enclosedZones = layout.zones.filter(({ id }) =>
+    id === 'crewCabin' || id === 'wheelhouse' || id === 'storageWorkroom');
+  enclosedZones.forEach((zone) => {
+    const zoneDoors = layout.doors.filter(({ zoneId }) => zoneId === zone.id);
+    const portDoor = zoneDoors.find(({ orientation, side }) => orientation === 'side' && side === 'port');
+    const starboardDoor = zoneDoors.find(({ orientation, side }) => orientation === 'side' && side === 'starboard');
+    const aft = zoneDoors.find(({ orientation }) => orientation === 'aft');
+    const addSide = (x: number, door: ShipDoorSpec | undefined): void => {
+      if (!door) {
+        walls.push(rect(x - WALL_THICKNESS / 2, x + WALL_THICKNESS / 2, zone.bounds.minZ, zone.bounds.maxZ));
+        return;
+      }
+      const gapMin = door.center[1] - door.width / 2;
+      const gapMax = door.center[1] + door.width / 2;
+      walls.push(rect(x - WALL_THICKNESS / 2, x + WALL_THICKNESS / 2, zone.bounds.minZ, gapMin));
+      walls.push(rect(x - WALL_THICKNESS / 2, x + WALL_THICKNESS / 2, gapMax, zone.bounds.maxZ));
+    };
+    addSide(zone.bounds.minX, portDoor);
+    addSide(zone.bounds.maxX, starboardDoor);
+    if (aft) {
+      const gapMin = aft.center[0] - aft.width / 2;
+      const gapMax = aft.center[0] + aft.width / 2;
+      walls.push(rect(zone.bounds.minX, gapMin, zone.bounds.minZ - WALL_THICKNESS / 2, zone.bounds.minZ + WALL_THICKNESS / 2));
+      walls.push(rect(gapMax, zone.bounds.maxX, zone.bounds.minZ - WALL_THICKNESS / 2, zone.bounds.minZ + WALL_THICKNESS / 2));
+    } else {
+      walls.push(rect(zone.bounds.minX, zone.bounds.maxX, zone.bounds.minZ - WALL_THICKNESS / 2, zone.bounds.minZ + WALL_THICKNESS / 2));
+    }
+    walls.push(rect(zone.bounds.minX, zone.bounds.maxX, zone.bounds.maxZ - WALL_THICKNESS / 2, zone.bounds.maxZ + WALL_THICKNESS / 2));
+  });
+  return walls.filter(validRect);
+}
+
+function rectWithin(inner: Rect2, outer: Rect2): boolean {
+  return inner.minX >= outer.minX - 1e-6
+    && inner.maxX <= outer.maxX + 1e-6
+    && inner.minZ >= outer.minZ - 1e-6
+    && inner.maxZ <= outer.maxZ + 1e-6;
+}
+
+function physicalScavengeRegion(
+  spec: ShipFurniturePlacementSpec,
+  bounds: Rect2,
+): ScavengeRegionId | undefined {
+  if (spec.zoneId === 'crewCabin' && rectWithin(bounds, crewBounds)) return 'crewCabin';
+  if (spec.zoneId === 'wheelhouse' && rectWithin(bounds, wheelhouseBounds)) return 'wheelhouse';
+  if (spec.zoneId === 'storageWorkroom' && rectWithin(bounds, storageBounds)) {
+    return 'storageWorkroom';
+  }
+  if (spec.zoneId !== 'cargoDeck') return undefined;
+  if (bounds.minZ >= wheelhouseBounds.maxZ - 1e-6) return 'bow';
+  if (bounds.maxZ <= storageBounds.minZ + 1e-6) return 'stern';
+  if (bounds.minZ >= storageBounds.minZ - 1e-6
+    && bounds.maxZ <= wheelhouseBounds.maxZ + 1e-6
+    && !overlaps(bounds, crewBounds)
+    && !overlaps(bounds, wheelhouseBounds)
+    && !overlaps(bounds, storageBounds)) return 'centralCargo';
+  return undefined;
+}
+
+export function validateShipLayout(layout: ShipLayoutSpec): void {
+  assertUnique('zone', layout.zones.map(({ id }) => id));
+  assertUnique('door', layout.doors.map(({ id }) => id));
+  assertUnique('furniture', layout.furniture.map(({ id }) => id));
+  assertUnique('decoration', layout.decorations.map(({ id }) => id));
+  assertUnique('balcony', layout.balconies.map(({ id }) => id));
+  assertUnique('ladder', layout.ladders.map(({ id }) => id));
+  assertUnique('mast', layout.rigging.masts.map(({ id }) => id));
+  assertUnique('surface', layout.furniture.flatMap(({ surfaces }) => surfaces.map(({ id }) => id)));
+  assertUnique('lane', layout.lanes.map(({ id }) => id));
+  assertUnique('target', layout.targets.map(({ id }) => id));
+
+  layout.zones.forEach((zone) => {
+    if (!validRect(zone.bounds) || zone.polygon.length < 3
+      || zone.polygon.some((point) => !finiteTuple(point))) {
+      throw new Error(`Zone ${zone.id} must have positive dimensions`);
+    }
+    if (!Number.isInteger(zone.furniturePolicy.maxFixtures)
+      || zone.furniturePolicy.maxFixtures < 0
+      || zone.furniturePolicy.clearCenter && !validRect(zone.furniturePolicy.clearCenter)) {
+      throw new Error(`Zone ${zone.id} has an invalid furniture policy`);
+    }
+  });
+  const furnitureAssetIds = new Set<ShipFurnitureAssetId>(SHIP_FURNITURE_MODEL_IDS);
+  layout.decorations.forEach((decoration) => {
+    const ownerZone = layout.zones.find(({ id }) => id === decoration.zoneId);
+    if (!ownerZone) {
+      throw new Error(`Decoration ${decoration.id} has no owning zone ${decoration.zoneId}`);
+    }
+    if (!furnitureAssetIds.has(decoration.modelId)
+      || !finiteTuple(decoration.position)
+      || !finiteTuple(decoration.rotation)
+      || decoration.scale.some((value) => !positive(value))) {
+      throw new Error(`Decoration ${decoration.id} has an invalid model or transform`);
+    }
+    const [x, y, z] = decoration.position;
+    if (x < ownerZone.bounds.minX || x > ownerZone.bounds.maxX
+      || z < ownerZone.bounds.minZ || z > ownerZone.bounds.maxZ
+      || y < FREIGHTER_DIMENSIONS.deckY
+      || y > FREIGHTER_DIMENSIONS.deckY + SHIP_ROOM_WALL_HEIGHT + 1e-6) {
+      throw new Error(`Decoration ${decoration.id} crosses owning zone ${decoration.zoneId} bounds`);
+    }
+  });
+  const crewCabin = layout.zones.find(({ id }) => id === 'crewCabin');
+  const wheelhouse = layout.zones.find(({ id }) => id === 'wheelhouse');
+  const storageWorkroom = layout.zones.find(({ id }) => id === 'storageWorkroom');
+  if (!crewCabin || !wheelhouse || !storageWorkroom
+    || Math.abs(wheelhouse.bounds.minZ - crewCabin.bounds.maxZ - 3.5) > 1e-9) {
+    throw new Error('Forward-room gap between crewCabin and wheelhouse must be exactly 3.5');
+  }
+  if (layout.balconies.length !== 1 || layout.ladders.length !== 1) {
+    throw new Error('Layout must define exactly one crew balcony and ladder');
+  }
+  const balconyZoneEdges: Readonly<Record<ShipBalconyZoneId, ShipTransverseEdge>> = {
+    crewCabin: 'aft',
+  };
+  layout.ladders.forEach((ladder) => {
+    if (!Number.isFinite(ladder.centerX) || !positive(ladder.width)
+      || !positive(ladder.wallOffset) || !positive(ladder.rungSpacing)) {
+      throw new Error(`Ladder ${ladder.id} must have positive finite dimensions`);
+    }
+    if (ladder.centerX !== 0) {
+      throw new Error(`Ladder ${ladder.id} must be centered at x = 0`);
+    }
+    if (ladder.zoneId !== 'crewCabin') {
+      throw new Error(`Ladder ${ladder.id} cannot be assigned to ${ladder.zoneId}`);
+    }
+    if (balconyZoneEdges[ladder.zoneId] !== ladder.edge) {
+      throw new Error(`Ladder ${ladder.id} must use the mast-facing ${balconyZoneEdges[ladder.zoneId]} edge`);
+    }
+  });
+  const balconyLadderIds = new Set<string>();
+  layout.balconies.forEach((balcony) => {
+    if (!positive(balcony.coamingHeight) || !positive(balcony.openingWidth)) {
+      throw new Error(`Balcony ${balcony.id} must have positive finite dimensions`);
+    }
+    if (balcony.zoneId !== 'crewCabin') {
+      throw new Error(`Balcony ${balcony.id} cannot be assigned to ${balcony.zoneId}`);
+    }
+    if (balconyZoneEdges[balcony.zoneId] !== balcony.edge) {
+      throw new Error(`Balcony ${balcony.id} must use the mast-facing ${balconyZoneEdges[balcony.zoneId]} edge`);
+    }
+    const ladder = layout.ladders.find(({ id }) => id === balcony.ladderId);
+    if (!ladder) {
+      throw new Error(`Balcony ${balcony.id} references missing ladder ${balcony.ladderId}`);
+    }
+    if (ladder.zoneId !== balcony.zoneId || ladder.edge !== balcony.edge) {
+      throw new Error(`Balcony ${balcony.id} ladder ${ladder.id} must share its zone and edge`);
+    }
+    if (balcony.openingWidth < ladder.width + 2 * PLAYER_LAYOUT_RADIUS) {
+      throw new Error(`Balcony ${balcony.id} opening must fit its ladder and player clearance`);
+    }
+    balconyLadderIds.add(balcony.ladderId);
+  });
+  if (balconyLadderIds.size !== layout.balconies.length
+    || balconyLadderIds.size !== layout.ladders.length) {
+    throw new Error('Each balcony must reference one unique ladder');
+  }
+  layout.doors.forEach((door) => {
+    if (!finiteTuple(door.center) || !validRect(door.approach)) {
+      throw new Error(`Door ${door.id} must use finite rectangle coordinates`);
+    }
+    if (!Number.isFinite(door.width) || door.width < 2.4 || door.width > 2.6) {
+      throw new Error(`Door ${door.id} width ${door.width} must be between 2.4 and 2.6`);
+    }
+  });
+  layout.lanes.forEach((lane) => {
+    if (!validRect(lane.bounds)) {
+      throw new Error(`Lane ${lane.id} must use finite rectangle coordinates`);
+    }
+    if (!positive(lane.clearWidth)) {
+      throw new Error(`Lane ${lane.id} must have positive dimensions`);
+    }
+    const required = lane.className === 'primary' ? 2.2 : 1.4;
+    const measured = measuredLaneWidth(lane);
+    if (lane.clearWidth < required || measured < required - 1e-6) {
+      throw new Error(`Lane ${lane.id} measured ${measured} is below ${lane.className} clearance ${required}`);
+    }
+  });
+  if (!positive(layout.rail.innerFaceX)
+    || !Number.isFinite(layout.rail.starboardOpening.centerZ)) {
+    throw new Error('Rail dimensions must be positive');
+  }
+  if (!Number.isFinite(layout.rail.height)
+    || layout.rail.height < 1 || layout.rail.height > 1.1) {
+    throw new Error(`Rail height ${layout.rail.height} must be between 1.0 and 1.1`);
+  }
+  if (!positive(layout.rail.starboardOpening.width)
+    || layout.rail.starboardOpening.width < 3) {
+    throw new Error(`Rail opening width ${layout.rail.starboardOpening.width} must be at least 3.0`);
+  }
+  if (!validRect(layout.evacuationRect)) {
+    throw new Error('Evacuation rectangle must use finite coordinates');
+  }
+  layout.targets.forEach((target) => {
+    if (!finiteTuple(target.position)) throw new Error(`Target ${target.id} must use finite coordinates`);
+  });
+
+  const cargoZone = layout.zones.find(({ id }) => id === 'cargoDeck');
+  if (!cargoZone) throw new Error('Layout must define the cargoDeck zone');
+  const rectCorners = (bounds: Rect2): readonly (readonly [number, number])[] => [
+    [bounds.minX, bounds.minZ], [bounds.maxX, bounds.minZ],
+    [bounds.maxX, bounds.maxZ], [bounds.minX, bounds.maxZ],
+  ];
+  const hatch = layout.deckHatch;
+  if (hatch.id !== 'deck-hatch' || !finiteTuple(hatch.position)
+    || !Number.isFinite(hatch.rotationY) || hatch.size.some((value) => !positive(value))
+    || hatch.colliderSize.some((value) => !positive(value))) {
+    throw new Error('Deck hatch must have finite transforms and positive dimensions');
+  }
+  const hatchBounds = deckHatchRect(hatch);
+  if (!validRect(hatchBounds)
+    || rectCorners(hatchBounds).some((corner) => !pointInPolygon(corner, cargoZone.polygon))) {
+    throw new Error('Deck hatch collider crosses the cargoDeck hull polygon');
+  }
+  if (layout.rigging.masts.length !== 1 || layout.rigging.masts[0]?.id !== 'mainmast') {
+    throw new Error('Layout must define exactly one mainmast');
+  }
+  const mastBounds = layout.rigging.masts.map((spec) => {
+    if (!finiteTuple(spec.position) || !positive(spec.height) || !positive(spec.baseDiameter)
+      || !positive(spec.boomLength)) {
+      throw new Error(`Mast ${spec.id} has invalid dimensions or stay anchors`);
+    }
+    const requiredStayIds: readonly ShipStayId[] = [
+      'fore-port', 'fore-starboard', 'aft-port', 'aft-starboard',
+    ];
+    if (spec.stays.length !== requiredStayIds.length
+      || requiredStayIds.some((id) => !spec.stays.some((stay) => stay.id === id))) {
+      throw new Error(`Mast ${spec.id} must define four roof-corner stays`);
+    }
+    assertUnique(`stay on mast ${spec.id}`, spec.stays.map(({ id }) => id));
+    spec.stays.forEach(({ id, anchor }) => {
+      const fore = id.startsWith('fore-');
+      const port = id.endsWith('-port');
+      const worldAnchorX = spec.position[0] + anchor[0];
+      const worldAnchorZ = spec.position[2] + anchor[2];
+      if (!finiteTuple(anchor) || anchor[1] < 0 || anchor[1] >= spec.height
+        || (fore ? anchor[2] <= 0 : anchor[2] >= 0)
+        || (port ? anchor[0] >= 0 : anchor[0] <= 0)) {
+        throw new Error(`Mast ${spec.id} stay ${id} has an invalid roof anchor`);
+      }
+      const roomBounds = fore ? crewCabin.bounds : storageWorkroom.bounds;
+      const sideInset = port
+        ? worldAnchorX - roomBounds.minX
+        : roomBounds.maxX - worldAnchorX;
+      const nearEdgeInset = worldAnchorZ - roomBounds.minZ;
+      if (sideInset < 0.3 || nearEdgeInset < 0.3) {
+        throw new Error(`Mast ${spec.id} stay ${id} is too close to a roof edge`);
+      }
+    });
+    if (spec.sails.length !== 2
+      || !spec.sails.some(({ id }) => id === 'mainsail')
+      || !spec.sails.some(({ id }) => id === 'staysail')) {
+      throw new Error(`Mast ${spec.id} must define mainsail and staysail`);
+    }
+    assertUnique(`sail on mast ${spec.id}`, spec.sails.map(({ id }) => id));
+    spec.sails.forEach((sail) => {
+      const requiredKind = sail.id === 'mainsail' ? 'boom' : 'stay';
+      if (sail.kind !== requiredKind) {
+        throw new Error(`Mast ${spec.id} sail ${sail.id} must use ${requiredKind} rig kind`);
+      }
+      if (!Number.isFinite(sail.topY) || !Number.isFinite(sail.footY)
+        || !Number.isFinite(sail.clewZ) || !Number.isFinite(sail.billow)
+        || !Number.isFinite(sail.rotationY)
+        || typeof sail.furled !== 'boolean'
+        || sail.topY <= sail.footY || sail.clewZ === 0 || !positive(sail.billow)) {
+        throw new Error(`Mast ${spec.id} sail ${sail.id} has invalid dimensions`);
+      }
+      if (sail.footY < SHIP_SAIL_CLOTH_MIN_Y) {
+        throw new Error(`Mast ${spec.id} sail ${sail.id} violates cloth clearance`);
+      }
+      if (sail.topY > spec.height - SHIP_SAIL_TOP_OFFSET) {
+        throw new Error(`Mast ${spec.id} sail ${sail.id} exceeds mast height bounds`);
+      }
+    });
+    const bounds = mastRect(spec);
+    if (rectCorners(bounds).some((corner) => !pointInPolygon(corner, cargoZone.polygon))) {
+      throw new Error(`Mast ${spec.id} base crosses the cargoDeck hull polygon`);
+    }
+    if (spec.stays.some(({ anchor }) => !pointInPolygon(
+      [spec.position[0] + anchor[0], spec.position[2] + anchor[2]],
+      cargoZone.polygon,
+    ))) {
+      throw new Error(`Mast ${spec.id} stay anchors must lie inside the cargoDeck hull polygon`);
+    }
+    return { id: spec.id, bounds };
+  });
+  const crowsNest = layout.rigging.crowsNest;
+  const crowsNestMast = layout.rigging.masts.find(({ id }) => id === crowsNest.mastId);
+  if (!crowsNestMast) {
+    throw new Error(`Crow's nest ${crowsNest.id} references missing mast ${crowsNest.mastId}`);
+  }
+  if (!positive(crowsNest.floorOffsetY) || !positive(crowsNest.outerWidth)
+    || !positive(crowsNest.openingSize) || !positive(crowsNest.guardHeight)
+    || !positive(crowsNest.ladder.width) || !positive(crowsNest.ladder.mastOffset)
+    || !positive(crowsNest.ladder.rungSpacing)) {
+    throw new Error(`Crow's nest ${crowsNest.id} must have positive finite dimensions`);
+  }
+  if (crowsNest.openingSize < 0.9) {
+    throw new Error(`Crow's nest ${crowsNest.id} opening must be at least 0.9 metres`);
+  }
+  if (crowsNest.floorOffsetY > crowsNestMast.height) {
+    throw new Error(`Crow's nest ${crowsNest.id} floor exceeds mast height`);
+  }
+
+  const physicalSlots = new Map<string, {
+    readonly ownerId: string;
+    readonly surface: ShipItemSurfaceSpec;
+  }[]>();
+  const furnitureBounds = layout.furniture.map((spec) => {
+    if (![0, PI_OVER_TWO, PI].includes(spec.rotationY)) {
+      throw new Error(`Furniture ${spec.id} has unsupported rotation ${spec.rotationY}`);
+    }
+    if (!finiteTuple(spec.position) || spec.colliderSize.some((value) => !positive(value))
+      || spec.scale.some((value) => !positive(value))) {
+      throw new Error(`Furniture ${spec.id} must have positive dimensions`);
+    }
+    const ownerZone = layout.zones.find(({ id }) => id === spec.zoneId);
+    if (!ownerZone) {
+      throw new Error(`Furniture ${spec.id} has no owning zone ${spec.zoneId}`);
+    }
+    if (!ownerZone.furniturePolicy.allowedModelIds.includes(spec.modelId)) {
+      throw new Error(
+        `Furniture ${spec.id} model ${spec.modelId} is in the wrong room ${spec.zoneId}`,
+      );
+    }
+    const bounds = furnitureRect(spec);
+    if (bounds.minX < ownerZone.bounds.minX - 1e-6
+      || bounds.maxX > ownerZone.bounds.maxX + 1e-6
+      || bounds.minZ < ownerZone.bounds.minZ - 1e-6
+      || bounds.maxZ > ownerZone.bounds.maxZ + 1e-6) {
+      throw new Error(`Furniture ${spec.id} crosses owning zone ${spec.zoneId} bounds`);
+    }
+    if (spec.zoneId === 'cargoDeck') {
+      const corners: readonly (readonly [number, number])[] = [
+        [bounds.minX, bounds.minZ], [bounds.maxX, bounds.minZ],
+        [bounds.maxX, bounds.maxZ], [bounds.minX, bounds.maxZ],
+      ];
+      if (corners.some((corner) => !pointInPolygon(corner, ownerZone.polygon))) {
+        throw new Error(`Furniture ${spec.id} crosses owning zone ${spec.zoneId} hull polygon`);
+      }
+    }
+    const physicalRegion = physicalScavengeRegion(spec, bounds);
+    spec.surfaces.forEach((surface) => {
+      if (!SCAVENGE_REGION_IDS.has(surface.regionId)) {
+        throw new Error(`Surface ${surface.id} has an unknown scavenge region`);
+      }
+      if (!physicalRegion) {
+        throw new Error(`Surface ${surface.id} has no approved physical owner placement`);
+      }
+      if (surface.regionId !== physicalRegion) {
+        throw new Error(
+          `Surface ${surface.id} physical owner ${spec.id} belongs to ${physicalRegion}, not ${surface.regionId}`,
+        );
+      }
+      if (physicalRegion === 'bow' || physicalRegion === 'stern') {
+        if (spec.modelId !== 'cargoCrate'
+          && spec.modelId !== 'barrel') {
+          throw new Error(
+            `Furniture ${spec.id} in ${physicalRegion} must be a raised cargoCrate or barrel owner`,
+          );
+        }
+        if (Math.abs(surface.localPosition[1] - spec.colliderSize[1]) > 1e-6) {
+          throw new Error(`Surface ${surface.id} in ${physicalRegion} must use its owner's raised top`);
+        }
+      }
+      if (!positive(surface.footprint.width)
+        || !positive(surface.footprint.depth) || !positive(surface.clearanceHeight)
+        || surface.standingPoints.length === 0 || !finiteTuple(surface.localPosition)
+        || !finiteTuple(surface.localRotation)
+        || surface.standingPoints.some((point) => !finiteTuple(point))) {
+        throw new Error(`Surface ${surface.id} owned by ${spec.id} is incomplete`);
+      }
+      if (!surface.id.startsWith(`${spec.id}:`)) {
+        throw new Error(`Surface ${surface.id} does not belong to furniture ${spec.id}`);
+      }
+      if (!surface.physicalSlotId.startsWith(`${spec.id}:`)) {
+        throw new Error(`Physical slot ${surface.physicalSlotId} does not belong to furniture ${spec.id}`);
+      }
+      if (Math.abs(surface.localPosition[0]) + surface.footprint.width / 2
+          > spec.colliderSize[0] / 2 + 1e-6
+        || Math.abs(surface.localPosition[2]) + surface.footprint.depth / 2
+          > spec.colliderSize[2] / 2 + 1e-6
+        || surface.localPosition[1] <= 0
+        || surface.localPosition[1] > spec.colliderSize[1] + 1e-6) {
+        throw new Error(`Surface ${surface.id} exceeds furniture ${spec.id} top bounds`);
+      }
+      const aliases = physicalSlots.get(surface.physicalSlotId) ?? [];
+      aliases.push({ ownerId: spec.id, surface });
+      physicalSlots.set(surface.physicalSlotId, aliases);
+    });
+    const exactModel = EXACT_FURNITURE_MODEL_BY_ID[spec.id];
+    if (exactModel && spec.modelId !== exactModel) {
+      throw new Error(
+        `Furniture ${spec.id} model ${spec.modelId} violates exact role ${exactModel}`,
+      );
+    }
+    return { spec, bounds };
+  });
+  physicalSlots.forEach((aliases, physicalSlotId) => {
+    if (aliases.length !== 1) {
+      throw new Error(`Physical slot ${physicalSlotId} has invalid ownership aliases`);
+    }
+  });
+  const accessBounds = secondaryAccessRectangles(layout.furniture);
+  const authoredObstacles = [
+    { id: hatch.id, bounds: hatchBounds },
+    ...mastBounds,
+  ];
+  authoredObstacles.forEach((obstacle, index) => {
+    layout.lanes.forEach((lane) => {
+      if (overlaps(obstacle.bounds, lane.bounds)) {
+        throw new Error(`${obstacle.id} overlaps ${lane.className} lane ${lane.id}`);
+      }
+    });
+    layout.doors.forEach((door) => {
+      if (overlaps(obstacle.bounds, door.approach)) {
+        throw new Error(`${obstacle.id} overlaps protected approach for ${door.id}`);
+      }
+    });
+    if (overlaps(obstacle.bounds, layout.evacuationRect)) {
+      throw new Error(`${obstacle.id} overlaps evacuation rectangle`);
+    }
+    furnitureBounds.forEach((furnitureObstacle) => {
+      if (overlaps(obstacle.bounds, furnitureObstacle.bounds)) {
+        throw new Error(`${obstacle.id} overlaps ${furnitureObstacle.spec.id}`);
+      }
+    });
+    if (obstacle.id === hatch.id) {
+      accessBounds.forEach((access) => {
+        if (overlaps(obstacle.bounds, access.bounds)) {
+          throw new Error(`${obstacle.id} overlaps item access ${access.id}`);
+        }
+      });
+    }
+    authoredObstacles.slice(index + 1).forEach((other) => {
+      if (overlaps(obstacle.bounds, other.bounds)) {
+        throw new Error(`${obstacle.id} overlaps ${other.id}`);
+      }
+    });
+  });
+  furnitureBounds.forEach((left, index) => {
+    furnitureBounds.slice(index + 1).forEach((right) => {
+      if (overlaps(left.bounds, right.bounds)) {
+        throw new Error(`${left.spec.id} overlaps ${right.spec.id}`);
+      }
+    });
+    layout.doors.forEach((door) => {
+      if (overlaps(left.bounds, door.approach)) {
+        throw new Error(`${left.spec.id} overlaps protected approach for ${door.id}`);
+      }
+    });
+    const ownerZone = layout.zones.find(({ id }) => id === left.spec.zoneId)!;
+    if (ownerZone.furniturePolicy.clearCenter
+      && overlaps(left.bounds, ownerZone.furniturePolicy.clearCenter)) {
+      throw new Error(`Furniture ${left.spec.id} overlaps clear center for ${left.spec.zoneId}`);
+    }
+    layout.lanes.filter((lane) => lane.className === 'primary' || lane.id.includes('-loop-'))
+      .forEach((lane) => {
+      if (overlaps(left.bounds, lane.bounds)) {
+        throw new Error(`${left.spec.id} overlaps ${lane.className} lane ${lane.id}`);
+      }
+    });
+    if (overlaps(left.bounds, layout.evacuationRect)) {
+      throw new Error(`${left.spec.id} overlaps evacuation rectangle`);
+    }
+  });
+  layout.zones.forEach((zone) => {
+    const fixtureCount = layout.furniture.filter(({ zoneId }) => zoneId === zone.id).length;
+    if (fixtureCount > zone.furniturePolicy.maxFixtures) {
+      throw new Error(
+        `Zone ${zone.id} has ${fixtureCount} fixtures above maximum ${zone.furniturePolicy.maxFixtures}`,
+      );
+    }
+  });
+
+  const walls = wallRectangles(layout).map((bounds, index) => ({
+    id: `wall-${index}`,
+    bounds,
+  }));
+  const fixedAccessObstacles = [
+    ...walls,
+    { id: hatch.id, bounds: hatchBounds },
+    ...mastBounds,
+  ];
+  layout.furniture.forEach((owner) => owner.surfaces.forEach((surface) => {
+    const center = transformLocalPoint(owner, surface.localPosition);
+    let hasClearAccessPath = false;
+    let firstBlockingObstacle: string | undefined;
+    surface.standingPoints.forEach((point) => {
+      const standing = transformLocalPoint(owner, point);
+      const ownerBounds = furnitureRect(owner);
+      const deltaX = center[0] - standing[0];
+      const deltaZ = center[1] - standing[1];
+      let entry = 0;
+      const updateEntry = (start: number, delta: number, min: number, max: number): void => {
+        if (Math.abs(delta) < 1e-9) return;
+        const first = (min - start) / delta;
+        const second = (max - start) / delta;
+        entry = Math.max(entry, Math.min(first, second));
+      };
+      updateEntry(standing[0], deltaX, ownerBounds.minX, ownerBounds.maxX);
+      updateEntry(standing[1], deltaZ, ownerBounds.minZ, ownerBounds.maxZ);
+      const reach: readonly [number, number] = [
+        standing[0] + deltaX * Math.min(1, Math.max(0, entry)),
+        standing[1] + deltaZ * Math.min(1, Math.max(0, entry)),
+      ];
+      const accessPathHalfWidth = 0.01;
+      const obstacle = [
+        ...fixedAccessObstacles,
+        ...furnitureBounds
+          .filter(({ spec }) => spec.id !== owner.id)
+          .map(({ spec, bounds }) => ({ id: spec.id, bounds })),
+      ].find(({ bounds }) => segmentIntersectsRect(
+        standing,
+        reach,
+        inflate(bounds, accessPathHalfWidth),
+      ));
+      if (!obstacle) hasClearAccessPath = true;
+      else firstBlockingObstacle ??= obstacle.id;
+    });
+    if (!hasClearAccessPath) {
+      throw new Error(
+        `Surface ${surface.id} has no clear access path; crosses ${firstBlockingObstacle}`,
+      );
+    }
+  }));
+
+  const currentTargets = [
+    ...layout.targets.filter(({ kind }) => kind !== 'door' && kind !== 'surface'),
+    ...doorNavigationTargets(layout.doors),
+    ...surfaceNavigationTargets(layout.furniture),
+  ];
+  assertUnique('navigation target', currentTargets.map(({ id }) => id));
+
+  const opening = layout.rail.starboardOpening;
+  const openingMinZ = opening.centerZ - opening.width / 2;
+  const openingMaxZ = opening.centerZ + opening.width / 2;
+  const evacuation = layout.targets.find(({ kind }) => kind === 'evacuation');
+  if (openingMinZ > lifeboatBounds.minZ || openingMaxZ < lifeboatBounds.maxZ || !evacuation
+    || evacuation.position[1] < openingMinZ || evacuation.position[1] > openingMaxZ) {
+    throw new Error('Starboard rail opening must cover the lifeboat station and evacuation target');
+  }
+
+  const analysis = analyzeShipNavigation(layout);
+  const reachableStandingPoints = new Set(analysis.reachableSurfaceStandingPointIds);
+  layout.furniture.forEach((owner) => owner.surfaces.forEach((surface) => {
+    const reachable = surface.standingPoints.some((_point, index) =>
+      reachableStandingPoints.has(`${surface.id}-standing-${index}`));
+    if (!reachable) {
+      throw new Error(`Surface ${surface.id} has no reachable standing point`);
+    }
+  }));
+  analysis.secondaryAccessRectangles.forEach((access) => {
+    if (!validRect(access.bounds) || measuredAccessClearance(access) < 1.4 - 1e-6) {
+      throw new Error(`Secondary access lane ${access.id} is invalid`);
+    }
+  });
+  if (analysis.unreachableTargetIds.length > 0) {
+    throw new Error(`Unreachable navigation targets: ${analysis.unreachableTargetIds.join(', ')}`);
+  }
+}

@@ -12,7 +12,7 @@ import type { SurvivalEventModels } from './SurvivalEventModelLibrary';
 import {
   driftingCargoKindForEvent,
   isDriftingCargoEventId,
-} from './events';
+} from './eventCatalog';
 import type { EventPresentationKey } from './survivalTypes';
 import type { EventPresentationCue } from './eventPresentationCue';
 

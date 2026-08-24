@@ -19,7 +19,7 @@ import {
   clamp01Unchecked as clamp01,
   smoothstepUnchecked as smoothstep,
 } from './animationMath';
-import { PLANE_CHOICE_WINDOW_SECONDS } from './events';
+import { PLANE_CHOICE_WINDOW_SECONDS } from './eventCatalog';
 import type {
   EventChoicePresentation,
   FocusedEventPresentation,

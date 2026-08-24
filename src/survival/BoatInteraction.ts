@@ -1,23 +1,18 @@
 import { Box3, type Object3D, type PerspectiveCamera, Vector3 } from 'three';
-import { ITEM_DEFINITIONS, ITEM_IDS, type ItemId } from '../game/ItemState';
+import type { ItemId } from '../game/ItemState';
 import {
   createObjectScreenBoundsCache,
   projectCachedObjectScreenBounds,
+  projectCachedObjectScreenBoundsInto,
   projectObjectScreenBounds,
+  projectObjectScreenBoundsInto,
   projectScreenBounds,
   type ObjectScreenBoundsCache,
   type ProjectedScreenBounds,
 } from '../rendering/projectScreenBounds';
 import type { DayActionId, EventResponseId } from './survivalTypes';
 import type { BoatSupplyGroupId } from '../world/BoatStorage';
-import type { DriftingItemEventId } from './events';
-
-export const ACTION_FOR_ITEM = Object.freeze(Object.fromEntries(
-  ITEM_IDS.flatMap((id) => {
-    const action = ITEM_DEFINITIONS[id].dayAction;
-    return action === null ? [] : [[id, action]];
-  }),
-) as Readonly<Partial<Record<ItemId, DayActionId>>>);
+import type { DriftingItemEventId } from './eventCatalog';
 
 export interface BoatInteractionHitArea {
   width: number;
@@ -72,6 +67,22 @@ export function projectBoatObjectBounds(
   return projectObjectScreenBounds(root, camera, viewportWidth, viewportHeight);
 }
 
+export function projectBoatObjectBoundsInto(
+  output: ProjectedBoatBounds,
+  root: Object3D,
+  camera: PerspectiveCamera,
+  viewportWidth: number,
+  viewportHeight: number,
+): ProjectedBoatBounds {
+  return projectObjectScreenBoundsInto(
+    output,
+    root,
+    camera,
+    viewportWidth,
+    viewportHeight,
+  );
+}
+
 export function createBoatObjectBoundsCache(
   root: Object3D,
 ): BoatObjectBoundsCache | null {
@@ -86,6 +97,24 @@ export function projectCachedBoatObjectBounds(
   viewportHeight: number,
 ): ProjectedBoatBounds {
   return projectCachedObjectScreenBounds(
+    root,
+    cache,
+    camera,
+    viewportWidth,
+    viewportHeight,
+  );
+}
+
+export function projectCachedBoatObjectBoundsInto(
+  output: ProjectedBoatBounds,
+  root: Object3D,
+  cache: BoatObjectBoundsCache | null,
+  camera: PerspectiveCamera,
+  viewportWidth: number,
+  viewportHeight: number,
+): ProjectedBoatBounds {
+  return projectCachedObjectScreenBoundsInto(
+    output,
     root,
     cache,
     camera,

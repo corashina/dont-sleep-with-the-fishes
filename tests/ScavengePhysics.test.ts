@@ -21,7 +21,8 @@ import {
 } from '../src/physics/ScavengePhysics';
 import type { PhysicsRuntime } from '../src/physics/PhysicsRuntime';
 import { createShipGeometry } from '../src/world/ShipGeometry';
-import { FREIGHTER_DIMENSIONS, SHIP_LAYOUT } from '../src/world/ShipLayout';
+import { SHIP_LAYOUT } from '../src/world/shipLayoutData';
+import { FREIGHTER_DIMENSIONS } from '../src/world/ShipLayoutTypes';
 import { createShipMaterials } from '../src/world/ShipMaterials';
 import { testPhysicsRuntime } from './helpers/physics';
 

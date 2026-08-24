@@ -211,6 +211,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   private staged = false;
   private terminalRescue = false;
   private naturalRescueCue = false;
+  private resultRescueActive = false;
   private disposed = false;
 
   constructor(
@@ -260,6 +261,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.releaseSupply();
     this.captureCamera();
     this.naturalRescueCue = false;
+    this.resultRescueActive = false;
     this.terminalRescue = false;
     this.configureSide(variantSeed);
     this.staged = true;
@@ -337,6 +339,16 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
         this.setPlayerSignalsDark();
         this.root.userData.state = 'signal-sent';
         return Promise.resolve();
+      case 'people-rescue': {
+        this.setPlayerSignalsDark();
+        this.root.userData.state = 'answering';
+        this.resultRescueActive = true;
+        const reaction = this.startAnimation('result-rescue', RESCUE_DURATION);
+        this.root.userData.state = 'answering';
+        return reaction.then(() => {
+          this.resultRescueActive = false;
+        });
+      }
       case 'people-pass':
         this.setPlayerSignalsDark();
         this.root.userData.signalPulses = 0;
@@ -357,6 +369,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.setPlayerSignalsDark();
     this.staged = false;
     this.naturalRescueCue = false;
+    this.resultRescueActive = false;
     if (this.terminalRescue) {
       this.root.visible = true;
       this.ship.visible = true;
@@ -397,6 +410,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.staged = false;
     this.terminalRescue = false;
     this.naturalRescueCue = false;
+    this.resultRescueActive = false;
     this.root.userData.holdOnClear = false;
     this.root.removeFromParent();
     disposeResourceSets(
@@ -408,6 +422,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
 
   setRescueCue(progress: number | null): void {
     if (this.disposed) return;
+    if (this.resultRescueActive) return;
     if (progress === null) {
       if (!this.naturalRescueCue) return;
       this.terminalRescue = false;

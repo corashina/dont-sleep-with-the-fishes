@@ -18,15 +18,16 @@ import { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
 import { createShipGeometry } from './ShipGeometry';
 import { validateShipItemSurfaces, type ShipItemSurface } from './ShipItemPlacement';
 import {
-  FREIGHTER_DIMENSIONS,
   SHIP_LAYOUT,
   SHIP_STERN_Z,
-  validateShipLayout,
-} from './ShipLayout';
+} from './shipLayoutData';
+import { validateShipLayout } from './ShipLayoutValidation';
+import { FREIGHTER_DIMENSIONS } from './ShipLayoutTypes';
 import { createShipMaterials } from './ShipMaterials';
 import { createShipRigging } from './ShipRigging';
 import { ShipSmoke } from './ShipSmoke';
 import type { ShipAssets } from './ShipAssets';
+import { ignoreCleanupError, runCleanupSteps } from './SceneResources';
 
 export interface ShipBuild {
   root: Group;
@@ -201,11 +202,13 @@ export function createShip(
     root.add(geometry.root);
     enableItemAmbientOcclusionOccluder(root);
   } catch (error) {
-    smoke?.dispose();
-    rigging?.disposeGeometry();
-    furniture?.disposeGeometry();
-    geometry?.disposeGeometry();
-    materials.dispose();
+    ignoreCleanupError(() => runCleanupSteps([
+      () => smoke?.dispose(),
+      () => rigging?.disposeGeometry(),
+      () => furniture?.disposeGeometry(),
+      () => geometry?.disposeGeometry(),
+      () => materials.dispose(),
+    ]));
     throw error;
   }
 
@@ -263,11 +266,13 @@ export function createShip(
     dispose: () => {
       if (disposed) return;
       disposed = true;
-      assembledSmoke.dispose();
-      assembledRigging.disposeGeometry();
-      assembledFurniture.disposeGeometry();
-      assembledGeometry.disposeGeometry();
-      materials.dispose();
+      runCleanupSteps([
+        () => assembledSmoke.dispose(),
+        () => assembledRigging.disposeGeometry(),
+        () => assembledFurniture.disposeGeometry(),
+        () => assembledGeometry.disposeGeometry(),
+        () => materials.dispose(),
+      ]);
     },
   };
 }

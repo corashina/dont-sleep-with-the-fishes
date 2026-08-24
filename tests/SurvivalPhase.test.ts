@@ -16,32 +16,27 @@ import {
   PLANE_CHOICE_WINDOW_SECONDS,
   SURVIVAL_EVENTS,
   type DriftingItemEventId,
-} from '../src/survival/events';
+} from '../src/survival/eventCatalog';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import type { FishingCastPoint } from '../src/survival/FishingSession';
-import type { JournalEntry, JournalNightRecord } from '../src/survival/journal';
-import {
-  formatDiveResult,
-  formatFishingResult,
-  SurvivalPhase,
-} from '../src/survival/SurvivalPhase';
+import type { JournalEntry, JournalNightRecord } from '../src/survival/journalRecords';
+import { formatDiveResult } from '../src/survival/SurvivalDayActionFlow';
+import { formatFishingResult } from '../src/survival/SurvivalFishingFlow';
+import { SurvivalPhase } from '../src/survival/SurvivalPhase';
 import { deriveEventVariantSeed } from '../src/survival/eventPresentationOutcome';
 import type { EventOutcomePresentation } from '../src/survival/eventPresentationTypes';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import type {
   SurvivalInventorySnapshot,
   SurvivalItemState,
-  SurvivalSnapshot,
   SurvivalState,
 } from '../src/survival/survivalTypes';
-import type {
-  RewardResultView,
-  DriftingItemFocusView,
-  EventContextChoice,
-  FishingResultView,
-  FishingUiState,
-  SurvivalUI,
-} from '../src/ui/SurvivalUI';
+import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
+import type { RewardResultView } from '../src/ui/SurvivalCoverViewModel';
+import type { DriftingItemFocusView } from '../src/ui/DriftingItemView';
+import type { FishingResultView, FishingUiState } from '../src/ui/SurvivalFishingView';
+import type { EventContextChoice } from '../src/ui/SurvivalUiViewModel';
+import type { SurvivalUI } from '../src/ui/SurvivalUI';
 import type { PresentationWeatherId } from '../src/weather/presentationWeather';
 import { createTestPropModels } from './helpers/propModels';
 import { sequenceRandom } from './helpers/random';
@@ -361,6 +356,7 @@ function createDriftingItemRig(
   const eventBundles = {
     beginLoad: vi.fn(() => undefined),
     activate: vi.fn(() => Promise.resolve()),
+    cancelPendingActivation: vi.fn(),
     releaseActive: vi.fn(() => calls.push('release-bundle')),
     dispose: vi.fn(),
   };
@@ -813,8 +809,10 @@ describe('SurvivalPhase orchestration', () => {
     });
 
     await (phase as unknown as {
-      runDawn(generation: number): Promise<SurvivalSnapshot>;
-    }).runDawn(0);
+      eventFlow: {
+        runDawn(generation: number, operation: number): Promise<SurvivalSnapshot>;
+      };
+    }).eventFlow.runDawn(0, 0);
 
     expect(beginRadioSignal).toHaveBeenCalledOnce();
     expect(current.radioSignalAvailable).toBe(true);
@@ -2707,6 +2705,7 @@ describe('SurvivalPhase orchestration', () => {
           await loading.promise;
           calls.push('active');
         }),
+        cancelPendingActivation: vi.fn(),
         releaseActive: vi.fn(),
         dispose: vi.fn(),
       },
@@ -2759,6 +2758,7 @@ describe('SurvivalPhase orchestration', () => {
       eventBundles: {
         beginLoad: vi.fn(() => Promise.reject(failure)),
         activate: vi.fn(() => Promise.reject(failure)),
+        cancelPendingActivation: vi.fn(),
         releaseActive: vi.fn(),
         dispose: vi.fn(),
       },
@@ -2795,6 +2795,7 @@ describe('SurvivalPhase orchestration', () => {
       eventBundles: {
         beginLoad: vi.fn(() => undefined),
         activate: vi.fn(() => undefined),
+        cancelPendingActivation: vi.fn(),
         releaseActive,
         dispose: vi.fn(),
       },
@@ -5841,49 +5842,6 @@ describe('SurvivalPhase orchestration', () => {
     itemUse.resolve();
     await flushPromises();
     phase.dispose();
-  });
-
-  it.each([
-    ['fishingNet', 'fishingNet-1'],
-    ['bucket', 'bucket-1'],
-    ['medicalKit', 'medicalKit-1'],
-    ['cannedFood', 'cannedFood-1'],
-    ['baitTin', 'baitTin-1'],
-    ['spyglass', 'spyglass-1'],
-    ['swimRing', 'swimRing-1'],
-    ['energyBar', 'energyBar-1'],
-  ] as const)('starts the %s animation without an item handling sound', async (
-    itemType,
-    instanceId,
-  ) => {
-    const eventItem = vi.fn();
-    const playEventItemUse = vi.fn(() => Promise.resolve());
-    const phase = Object.create(SurvivalPhase.prototype) as SurvivalPhase;
-    Object.assign(phase, {
-      audio: { eventItem },
-      world: { playEventItemUse },
-    });
-    const play = (phase as unknown as {
-      playEventItemUseWithSound(
-        eventId: string,
-        choiceId: string,
-        instanceId: ItemInstanceId,
-        itemType: ItemInstance['type'],
-      ): Promise<void>;
-    }).playEventItemUseWithSound.bind(phase);
-
-    await play('flowers', itemType, instanceId, itemType);
-
-    expect(eventItem).not.toHaveBeenCalled();
-    expect(playEventItemUse).toHaveBeenCalledExactlyOnceWith(
-      'flowers',
-      itemType,
-      instanceId,
-    );
-
-    await play('flowers', 'umbrella', 'umbrella-1', 'umbrella');
-
-    expect(eventItem).toHaveBeenCalledExactlyOnceWith('umbrella');
   });
 
   it('derives the selected item before random changed actors without an early inventory sync', async () => {

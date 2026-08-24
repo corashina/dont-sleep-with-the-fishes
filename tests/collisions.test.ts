@@ -11,11 +11,11 @@ import {
 } from '../src/player/collisions';
 import type { CollisionArc, CollisionBox } from '../src/player/collisions';
 import { createTestShip } from './helpers/shipFurniture';
+import { SHIP_LAYOUT } from '../src/world/shipLayoutData';
 import {
   FREIGHTER_DIMENSIONS,
   PLAYER_LAYOUT_RADIUS,
-  SHIP_LAYOUT,
-} from '../src/world/ShipLayout';
+} from '../src/world/ShipLayoutTypes';
 
 const PLAYER_Y = FREIGHTER_DIMENSIONS.deckY + 1.5;
 const RAIL_SAMPLE_Y = FREIGHTER_DIMENSIONS.deckY + SHIP_LAYOUT.rail.height / 2;

@@ -1,8 +1,4 @@
 import type { ItemId, ItemInstance, ItemInstanceId } from '../game/ItemState';
-import type { EndingRecord } from '../game/ending';
-import type { FishingSession } from './FishingSession';
-import type { JournalEntry } from './journal';
-import type { CarlitosSnapshot } from './CarlitosState';
 
 export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dead' | 'sunk';
 /** Gameplay weather remains separate from renderer-only presentation weather. */
@@ -92,17 +88,6 @@ export interface ActionOutcome {
   readonly eventResult?: EventResultPresentation;
   readonly eventPresentationKey?: EventPresentationKey;
 }
-
-export type BeginFishingResult =
-  | {
-      readonly accepted: true;
-      readonly outcome: ActionOutcome;
-      readonly attempt: FishingSession;
-    }
-  | {
-      readonly accepted: false;
-      readonly outcome: ActionOutcome;
-    };
 
 export type EventResource =
   | 'pressure' | 'health' | 'hull' | 'energy'
@@ -197,37 +182,6 @@ export interface SurvivalEventDefinition {
   readonly requiresLivingCompanion?: boolean;
   choices: readonly [EventChoiceDefinition, ...EventChoiceDefinition[]];
   cue: PresentationCue;
-}
-
-export interface SurvivalSnapshot {
-  state: SurvivalState;
-  readonly ending: EndingRecord | null;
-  day: number;
-  pressure: number;
-  health: number;
-  hunger: number;
-  energy: number;
-  hull: number;
-  food: number;
-  bait: number;
-  recoveredFood: number;
-  recoveredBait: number;
-  repairMaterial: number;
-  rescueLead: number;
-  readonly rescueTraceFinds: number;
-  radioSignalAvailable: boolean;
-  radioSignalsSent: number;
-  readonly chest: ChestSnapshot;
-  weather: WeatherId;
-  actedToday: boolean;
-  readonly journalEntries: readonly JournalEntry[];
-  inventory: SurvivalInventorySnapshot;
-  savedItems: readonly ItemInstance[];
-  readonly carlitos: Readonly<CarlitosSnapshot> | null;
-  pendingEventId: string | null;
-  readonly pendingEventTargetId: ItemInstanceId | null;
-  lastOutcome: ActionOutcome | null;
-  seed: number;
 }
 
 export interface RandomSource { next(): number; }

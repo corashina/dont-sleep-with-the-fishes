@@ -4,7 +4,7 @@ import {
   isSignalSightingEventId,
   survivalEventById,
   type SurvivalEventId,
-} from './events';
+} from './eventCatalog';
 import { mulberry32 } from './random';
 import { SurvivalSession } from './SurvivalSession';
 import type { RandomSource } from './survivalTypes';

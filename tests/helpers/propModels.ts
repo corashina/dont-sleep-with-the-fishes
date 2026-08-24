@@ -13,7 +13,7 @@ import type { PracticalLightModelId } from '../../src/world/practicalLightModelM
 import {
   EVENT_MODEL_IDS,
   type EventModelId,
-} from '../../src/world/eventModelManifest';
+} from '../../src/world/eventModelIds';
 import { PropModelLibrary } from '../../src/world/PropModelLibrary';
 
 export function createTestPropModels(): PropModelLibrary {

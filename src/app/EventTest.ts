@@ -4,7 +4,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import type { ScavengeResult } from '../game/ScavengeSession';
-import { SURVIVAL_EVENTS } from '../survival/events';
+import { SURVIVAL_EVENTS } from '../survival/eventCatalog';
 import {
   ITEM_ANIMATION_LAB_ID,
   ITEM_ANIMATION_LAB_TITLE,

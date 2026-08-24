@@ -6,6 +6,7 @@ import {
   Color,
   DirectionalLight,
   FogExp2,
+  Group,
   HemisphereLight,
   Material,
   Matrix4,
@@ -48,12 +49,14 @@ import { createShipFurniture } from '../src/world/ShipFurniture';
 import { createShipGeometry } from '../src/world/ShipGeometry';
 import { assignShipItems, shipItemTransformBounds } from '../src/world/ShipItemPlacement';
 import {
-  FREIGHTER_DIMENSIONS,
   SHIP_LAYOUT,
   SHIP_ROOF_ENGINE,
+} from '../src/world/shipLayoutData';
+import {
+  FREIGHTER_DIMENSIONS,
   SHIP_ROOM_ROOF_THICKNESS,
   SHIP_ROOM_WALL_HEIGHT,
-} from '../src/world/ShipLayout';
+} from '../src/world/ShipLayoutTypes';
 import { createShipMaterials } from '../src/world/ShipMaterials';
 import { createShipRigging } from '../src/world/ShipRigging';
 import { skyPaletteFor } from '../src/world/skyPalette';
@@ -69,6 +72,7 @@ import {
 import { createTestMoonTexture } from './helpers/skyAssets';
 import { createTestShip, createTestShipFurniture } from './helpers/shipFurniture';
 import { testPhysicsRuntime } from './helpers/physics';
+import { SHIP_SHELL_COLLIDERS_BASE } from './fixtures/shipGeometryBase';
 
 const physicsRuntime = await testPhysicsRuntime();
 
@@ -163,6 +167,93 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
+  it('preserves ship composition and idempotent geometry ownership', () => {
+    const updateMatrixWorld = vi.spyOn(Group.prototype, 'updateMatrixWorld');
+    const materials = createShipMaterials();
+    const ship = createShipGeometry(materials);
+    const resources = collectRenderResources(ship.root);
+    const geometryDisposals = observeDisposals(resources.geometries);
+    const materialDisposals = observeDisposals(materials.ownedMaterialsForTest());
+    const childCount = ship.root.children.length;
+
+    try {
+      expect(ship.root.name).toBe('coastal-freighter');
+      expect(ship.root.children).toHaveLength(143);
+      expect(meshCount(ship.root)).toBe(392);
+      expect(resources.geometries).toHaveLength(85);
+      expect(ship.shellColliders).toHaveLength(37);
+      expect(ship.shellColliders.map((collider) => [
+        collider.minX,
+        collider.maxX,
+        collider.minY,
+        collider.maxY,
+        collider.minZ,
+        collider.maxZ,
+        ...(collider.orientedFootprint ? [
+          collider.orientedFootprint.centerX,
+          collider.orientedFootprint.centerZ,
+          collider.orientedFootprint.halfWidth,
+          collider.orientedFootprint.halfDepth,
+          collider.orientedFootprint.rotationY,
+        ] : []),
+      ])).toEqual(SHIP_SHELL_COLLIDERS_BASE);
+      expect(ship.arcColliders).toHaveLength(0);
+      expect(updateMatrixWorld.mock.contexts.some((context, index) =>
+        context === ship.root
+        && updateMatrixWorld.mock.calls[index]?.[0] === true)).toBe(true);
+      expect(ship.root.children.slice(0, 11).map(({ name }) => name)).toEqual([
+        'main-hull-body',
+        'upper-hull',
+        'waterline-band',
+        'timber-deck',
+        'floor-crewCabin',
+        'floor-wheelhouse',
+        'floor-cargoDeck',
+        'floor-storageWorkroom',
+        'floor-lifeboatStation',
+        'lifeboat-station-footprint-left',
+        'lifeboat-station-footprint-right',
+      ]);
+      expect(ship.root.children.slice(11, 58)).toHaveLength(47);
+      expect(ship.root.children[11]!.name).toBe('crew-cabin-wall-port-0');
+      expect(ship.root.children[57]!.name)
+        .toBe('balcony:crew-balcony:coaming:aft:1');
+      expect(ship.root.children[58]!.name).toBe('ladder:crew-ladder');
+      expect(ship.root.children.slice(59, 76).map(({ name }) => name)).toEqual([
+        'bow-stem',
+        'stern-transom',
+        'stern-transom-waterline',
+        'deck-hatch',
+        'deck-hatch-timber-panel',
+        'anchor-hawse-port',
+        'anchor-hawse-starboard',
+        'roof-engine-body',
+        'roof-engine-service-panel',
+        'roof-engine-vent-1',
+        'roof-engine-vent-2',
+        'roof-engine-vent-3',
+        'roof-engine-crank',
+        'smokestack-port',
+        'smokestack-port-collar',
+        'smokestack-starboard',
+        'smokestack-starboard-collar',
+      ]);
+      expect(ship.root.children.slice(76)).toHaveLength(67);
+      expect(ship.root.children.slice(76).every(({ name }) => name.startsWith('rail-')))
+        .toBe(true);
+
+      ship.disposeGeometry();
+      ship.disposeGeometry();
+      expect(ship.root.children).toHaveLength(childCount);
+      geometryDisposals.forEach((count) => expect(count).toBe(1));
+      materialDisposals.forEach((count) => expect(count).toBe(0));
+    } finally {
+      ship.disposeGeometry();
+      materials.dispose();
+      updateMatrixWorld.mockRestore();
+    }
+  });
+
   it('uses a compact chamfered stern and a roof engine beneath the stacks', () => {
     const materials = createShipMaterials();
     const ship = createShipGeometry(materials);
@@ -418,6 +509,52 @@ describe('world builders', () => {
     } finally {
       buoyancySample.mockRestore();
       oceanUpdate.mockRestore();
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
+  it('reuses two water exclusion regions and updates their transforms across frames', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+    const internals = world as unknown as {
+      boatAnchor: Vector3;
+      ocean: OceanRenderer;
+    };
+    const exclusions: Parameters<OceanRenderer['setExclusions']>[0][] = [];
+    const setExclusions = internals.ocean.setExclusions.bind(internals.ocean);
+    const exclusionSpy = vi.spyOn(internals.ocean, 'setExclusions')
+      .mockImplementation((regions) => {
+        exclusions.push(regions);
+        setExclusions(regions);
+      });
+
+    try {
+      world.update(1, 1 / 60, getSinkingState(30, 120), new Vector3(), false);
+      const firstList = exclusions[0]!;
+      const firstShipMatrix = firstList[0]!.worldToLocal.clone();
+      const firstLifeboatMatrix = firstList[1]!.worldToLocal.clone();
+
+      internals.boatAnchor.x += 3;
+      internals.boatAnchor.z -= 2;
+      world.update(2, 1 / 60, {
+        ...getSinkingState(30, 120),
+        pitchRadians: 0.15,
+        rollRadians: -0.12,
+        sinkOffset: -4,
+      }, new Vector3(), false);
+
+      expect(exclusions).toHaveLength(2);
+      expect(exclusions[1]).toBe(firstList);
+      expect(exclusions[1]![0]).toBe(firstList[0]);
+      expect(exclusions[1]![1]).toBe(firstList[1]);
+      expect(firstList[0]!.worldToLocal).not.toEqual(firstShipMatrix);
+      expect(firstList[1]!.worldToLocal).not.toEqual(firstLifeboatMatrix);
+      expect(firstList[0]!.worldToLocal).toEqual(world.ship.matrixWorld.clone().invert());
+      expect(firstList[1]!.worldToLocal).toEqual(world.lifeboat.matrixWorld.clone().invert());
+    } finally {
+      exclusionSpy.mockRestore();
       world.dispose();
       propModels.dispose();
     }

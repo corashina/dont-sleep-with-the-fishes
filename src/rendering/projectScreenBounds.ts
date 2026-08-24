@@ -54,7 +54,18 @@ function hiddenBounds(): ProjectedScreenBounds {
   return { x: 0, y: 0, width: 0, height: 0, depth: 0, visible: false };
 }
 
-function boundsFromExtents(
+function writeHiddenBounds(output: ProjectedScreenBounds): ProjectedScreenBounds {
+  output.x = 0;
+  output.y = 0;
+  output.width = 0;
+  output.height = 0;
+  output.depth = 0;
+  output.visible = false;
+  return output;
+}
+
+function boundsFromExtentsInto(
+  output: ProjectedScreenBounds,
   rawLeft: number,
   rawRight: number,
   rawTop: number,
@@ -64,7 +75,7 @@ function boundsFromExtents(
   viewportHeight: number,
 ): ProjectedScreenBounds {
   if (rawRight < 0 || rawLeft > viewportWidth || rawBottom < 0 || rawTop > viewportHeight) {
-    return hiddenBounds();
+    return writeHiddenBounds(output);
   }
 
   const clippedLeft = clamp(rawLeft - TARGET_PADDING, 0, viewportWidth);
@@ -76,14 +87,34 @@ function boundsFromExtents(
   const rawX = (clippedLeft + clippedRight) / 2;
   const rawY = (clippedTop + clippedBottom) / 2;
 
-  return {
-    x: clamp(rawX, width / 2, viewportWidth - width / 2),
-    y: clamp(rawY, height / 2, viewportHeight - height / 2),
-    width,
-    height,
+  output.x = clamp(rawX, width / 2, viewportWidth - width / 2);
+  output.y = clamp(rawY, height / 2, viewportHeight - height / 2);
+  output.width = width;
+  output.height = height;
+  output.depth = depth;
+  output.visible = true;
+  return output;
+}
+
+function boundsFromExtents(
+  rawLeft: number,
+  rawRight: number,
+  rawTop: number,
+  rawBottom: number,
+  depth: number,
+  viewportWidth: number,
+  viewportHeight: number,
+): ProjectedScreenBounds {
+  return boundsFromExtentsInto(
+    hiddenBounds(),
+    rawLeft,
+    rawRight,
+    rawTop,
+    rawBottom,
     depth,
-    visible: true,
-  };
+    viewportWidth,
+    viewportHeight,
+  );
 }
 
 export function projectScreenBounds(
@@ -186,13 +217,17 @@ function beginObjectProjection(
   objectProjectionHasPoint = false;
 }
 
-function finishObjectProjection(
+function finishObjectProjectionInto(
+  output: ProjectedScreenBounds,
   viewportWidth: number,
   viewportHeight: number,
 ): ProjectedScreenBounds {
   objectProjectionCamera = null;
-  if (!objectProjectionHasPoint || objectProjectionCrossesCamera) return hiddenBounds();
-  return boundsFromExtents(
+  if (!objectProjectionHasPoint || objectProjectionCrossesCamera) {
+    return writeHiddenBounds(output);
+  }
+  return boundsFromExtentsInto(
+    output,
     objectRawLeft,
     objectRawRight,
     objectRawTop,
@@ -209,13 +244,31 @@ export function projectObjectScreenBounds(
   viewportWidth: number,
   viewportHeight: number,
 ): ProjectedScreenBounds {
-  if (viewportWidth <= 0 || viewportHeight <= 0 || !root.visible) return hiddenBounds();
+  return projectObjectScreenBoundsInto(
+    hiddenBounds(),
+    root,
+    camera,
+    viewportWidth,
+    viewportHeight,
+  );
+}
+
+export function projectObjectScreenBoundsInto(
+  output: ProjectedScreenBounds,
+  root: Object3D,
+  camera: PerspectiveCamera,
+  viewportWidth: number,
+  viewportHeight: number,
+): ProjectedScreenBounds {
+  if (viewportWidth <= 0 || viewportHeight <= 0 || !root.visible) {
+    return writeHiddenBounds(output);
+  }
   camera.updateWorldMatrix(true, false);
   root.updateWorldMatrix(true, true);
 
   beginObjectProjection(camera, viewportWidth, viewportHeight);
   root.traverseVisible(projectVisibleMeshBounds);
-  return finishObjectProjection(viewportWidth, viewportHeight);
+  return finishObjectProjectionInto(output, viewportWidth, viewportHeight);
 }
 
 export function createObjectScreenBoundsCache(
@@ -259,10 +312,36 @@ export function projectCachedObjectScreenBounds(
   viewportWidth: number,
   viewportHeight: number,
 ): ProjectedScreenBounds {
+  return projectCachedObjectScreenBoundsInto(
+    hiddenBounds(),
+    root,
+    cache,
+    camera,
+    viewportWidth,
+    viewportHeight,
+  );
+}
+
+export function projectCachedObjectScreenBoundsInto(
+  output: ProjectedScreenBounds,
+  root: Object3D,
+  cache: ObjectScreenBoundsCache | null,
+  camera: PerspectiveCamera,
+  viewportWidth: number,
+  viewportHeight: number,
+): ProjectedScreenBounds {
   if (cache === null) {
-    return projectObjectScreenBounds(root, camera, viewportWidth, viewportHeight);
+    return projectObjectScreenBoundsInto(
+      output,
+      root,
+      camera,
+      viewportWidth,
+      viewportHeight,
+    );
   }
-  if (viewportWidth <= 0 || viewportHeight <= 0 || !root.visible) return hiddenBounds();
+  if (viewportWidth <= 0 || viewportHeight <= 0 || !root.visible) {
+    return writeHiddenBounds(output);
+  }
   camera.updateWorldMatrix(true, false);
   root.updateWorldMatrix(true, false);
 
@@ -272,5 +351,5 @@ export function projectCachedObjectScreenBounds(
     objectCachedWorldMatrix.multiplyMatrices(root.matrixWorld, entry.rootFromMesh);
     projectMeshBounds(entry.bounds, objectCachedWorldMatrix);
   }
-  return finishObjectProjection(viewportWidth, viewportHeight);
+  return finishObjectProjectionInto(output, viewportWidth, viewportHeight);
 }
