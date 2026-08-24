@@ -118,8 +118,8 @@ function hasOneValueNamedImport(
   module: string,
   name: string,
 ): boolean {
-  let valueImports = 0;
-  let typeImports = 0;
+  let unaliasedValueImports = 0;
+  let otherImports = 0;
   sourceFile.statements.forEach((statement) => {
     if (
       !ts.isImportDeclaration(statement)
@@ -130,12 +130,13 @@ function hasOneValueNamedImport(
     const bindings = clause?.namedBindings;
     if (!bindings || !ts.isNamedImports(bindings)) return;
     bindings.elements.forEach((element) => {
-      if (element.name.text !== name || element.propertyName) return;
-      if (clause?.isTypeOnly || element.isTypeOnly) typeImports += 1;
-      else valueImports += 1;
+      const exportedName = element.propertyName?.text ?? element.name.text;
+      if (exportedName !== name) return;
+      if (clause?.isTypeOnly || element.isTypeOnly || element.propertyName) otherImports += 1;
+      else unaliasedValueImports += 1;
     });
   });
-  return valueImports === 1 && typeImports === 0;
+  return unaliasedValueImports === 1 && otherImports === 0;
 }
 
 function directBuilderCalls(body: ts.Block): readonly ts.CallExpression[] {
@@ -271,7 +272,7 @@ it('keeps focused builders independent from the final and peer builders', () => 
     isForbiddenBuilderReference(reference.specifier, new Set(['ShipRoomGeometry'])))).toBe(true);
 });
 
-it('rejects nested composition calls and type-only builder imports', () => {
+it('rejects nested composition calls and non-value builder imports', () => {
   const nestedFunction = functionBody(`
     function createShipGeometry(): void {
       const composeHull = (): void => { addShipHull(context, layout); };
@@ -289,11 +290,19 @@ it('rejects nested composition calls and type-only builder imports', () => {
   const typeOnlyElement = parseSource(
     "import { type addShipHull } from './ShipHullGeometry';",
   );
+  const duplicateValueAlias = parseSource(
+    "import { addShipHull, addShipHull as hullAgain } from './ShipHullGeometry';",
+  );
+  const typeOnlyAlias = parseSource(
+    "import { addShipHull, type addShipHull as hullType } from './ShipHullGeometry';",
+  );
 
   expect(directBuilderCalls(nestedFunction)).toEqual([]);
   expect(directBuilderCalls(nestedBlock)).toEqual([]);
   expect(hasOneValueNamedImport(typeOnlyClause, 'ShipHullGeometry', 'addShipHull')).toBe(false);
   expect(hasOneValueNamedImport(typeOnlyElement, 'ShipHullGeometry', 'addShipHull')).toBe(false);
+  expect(hasOneValueNamedImport(duplicateValueAlias, 'ShipHullGeometry', 'addShipHull')).toBe(false);
+  expect(hasOneValueNamedImport(typeOnlyAlias, 'ShipHullGeometry', 'addShipHull')).toBe(false);
 });
 
 it('keeps final geometry composition direct and ordered', () => {
