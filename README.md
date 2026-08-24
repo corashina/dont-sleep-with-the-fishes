@@ -232,6 +232,8 @@ loading and keeps the seven obstacle visuals static.
 - `src/survival/SurvivalDayActionFlow` — owns accepted day actions, chest actions, repairs, dives, sleep, and dawn requests.
 - `src/survival/SurvivalFishingFlow` — owns each fishing attempt and its view, timing, result, and return state.
 - `src/survival/SurvivalEventFlow` — owns event loading, reveal, choices, outcomes, dawn, and event cleanup.
+- `src/survival/EventPresentationHost` — owns the active event adapter, roots, lifecycle, and replacement.
+- `src/survival/EventPresentationRegistry` — maps event IDs to normalized adapter factories.
 - `src/survival/DriftingItemFlow` — owns drifting-item focus, contextual choices, camera return, and target projection.
 - `src/survival/ItemAnimationLabFlow` — owns lab selection, item animation, repair-tool animation, cues, and lab bundles.
 - `src/survival/SurvivalVisibilityController` — owns document visibility listeners and resume waiters.
