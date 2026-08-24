@@ -28,9 +28,9 @@ import type { SurvivalSession } from './SurvivalSession';
 import type {
   ActionOutcome,
   EventResponseId,
-  SurvivalSnapshot,
   SurvivalState,
 } from './survivalTypes';
+import type { SurvivalSnapshot } from './survivalSnapshot';
 
 export type EventSessionPort = Pick<
   SurvivalSession,

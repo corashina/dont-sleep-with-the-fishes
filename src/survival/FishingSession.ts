@@ -4,7 +4,18 @@ import {
 } from './fishingCatalog';
 import type { ItemId } from '../game/ItemState';
 import { SURVIVAL_BALANCE } from './survivalBalance';
-import type { RandomSource } from './survivalTypes';
+import type { ActionOutcome, RandomSource } from './survivalTypes';
+
+export type BeginFishingResult =
+  | {
+      readonly accepted: true;
+      readonly outcome: ActionOutcome;
+      readonly attempt: FishingSession;
+    }
+  | {
+      readonly accepted: false;
+      readonly outcome: ActionOutcome;
+    };
 
 export interface FishingCastPoint {
   readonly x: number;

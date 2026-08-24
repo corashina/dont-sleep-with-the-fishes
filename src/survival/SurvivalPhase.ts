@@ -72,9 +72,9 @@ import type {
   DayActionId,
   DayActionOption,
   EventResponseId,
-  SurvivalSnapshot,
   SurvivalState,
 } from './survivalTypes';
+import type { SurvivalSnapshot } from './survivalSnapshot';
 
 export interface SurvivalPhaseTestDependencies {
   session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;

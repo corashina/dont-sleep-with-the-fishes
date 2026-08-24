@@ -1,5 +1,5 @@
 import type { GeneratedRuntimeModelMetadata } from './itemModelManifest';
-import type { EventModelId } from './eventModelManifest';
+import type { EventModelId } from './eventModelIds';
 
 const metadata = {
   chestClosed: { triangles: 1676, rawBounds: { min: [-0.590267411316745, -0.0013262077843175972, -0.39044927677546604], max: [0.5890504858689383, 0.8971703973006975, 0.43332122828381514] } },

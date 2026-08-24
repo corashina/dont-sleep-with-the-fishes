@@ -4,23 +4,9 @@ import type {
   GeneratedRuntimeModelMetadata,
   RuntimeModelSpec,
 } from './itemModelManifest';
+import { EVENT_MODEL_IDS, type EventModelId } from './eventModelIds';
 import { FOCUSED_EVENT_MODEL_METADATA } from './focusedEventModelMetadata';
 import { normalizeGeneratedBounds } from './modelNormalization';
-
-export const EVENT_MODEL_IDS = [
-  'chestClosed',
-  'midnightIsland',
-  'deadTree',
-  'traderRowboat',
-  'traderOctopus',
-  'riggedHand',
-  'containerShip',
-  'midnightPalmTrees',
-  'midnightShovel',
-  'midnightMonster',
-] as const;
-
-export type EventModelId = typeof EVENT_MODEL_IDS[number];
 
 export interface EventModelSpec extends RuntimeModelSpec {
   readonly sourceUrl: string;

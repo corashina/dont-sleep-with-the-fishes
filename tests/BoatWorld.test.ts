@@ -130,8 +130,8 @@ import {
 import { SurvivalEventModelLibrary } from '../src/survival/SurvivalEventModelLibrary';
 import type {
   ActionOutcome,
-  SurvivalSnapshot,
 } from '../src/survival/survivalTypes';
+import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
 import { presentationWeatherProfile } from '../src/weather/presentationWeather';
 import type { SkyPalette } from '../src/world/skyPalette';
 import {

@@ -2,8 +2,8 @@ import type { ItemInstanceId } from '../game/ItemState';
 import type {
   ActionOutcome,
   ItemCondition,
-  SurvivalSnapshot,
 } from './survivalTypes';
+import type { SurvivalSnapshot } from './survivalSnapshot';
 import type { EventOutcomePresentation } from './eventPresentationTypes';
 
 function eventIdHash(eventId: string): number {

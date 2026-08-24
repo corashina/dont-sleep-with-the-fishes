@@ -27,10 +27,9 @@ import {
   type PracticalLightModelId,
 } from './practicalLightModelManifest';
 import {
-  EVENT_MODEL_IDS,
   EVENT_MODEL_SPECS,
-  type EventModelId,
 } from './eventModelManifest';
+import { EVENT_MODEL_IDS, type EventModelId } from './eventModelIds';
 import {
   collectMeshResources,
   disposeResourceSets,

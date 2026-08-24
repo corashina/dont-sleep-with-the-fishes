@@ -13,8 +13,8 @@ import type {
   SurvivalEventDefinition,
   SurvivalEndingReason,
   SurvivalItemState,
-  SurvivalSnapshot,
 } from '../survival/survivalTypes';
+import type { SurvivalSnapshot } from '../survival/survivalSnapshot';
 import { createElementRequirement } from './dom';
 import { BoatAnchorView } from './BoatAnchorView';
 import { DriftingItemView, type DriftingItemFocusView } from './DriftingItemView';

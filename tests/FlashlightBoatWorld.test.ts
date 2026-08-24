@@ -7,7 +7,7 @@ import { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
 import { BoatWorld } from '../src/survival/BoatWorld';
 import { eventItemUseDuration } from '../src/survival/eventItemUseChoreography';
 import { SurvivalInventoryState } from '../src/survival/inventory';
-import type { SurvivalSnapshot } from '../src/survival/survivalTypes';
+import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
 import { createTestPropModels } from './helpers/propModels';
 import { createTestMoonTexture } from './helpers/skyAssets';
 

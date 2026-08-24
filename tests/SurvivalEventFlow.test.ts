@@ -11,8 +11,8 @@ import type {
   ActionOutcome,
   SurvivalInventorySnapshot,
   SurvivalItemState,
-  SurvivalSnapshot,
 } from '../src/survival/survivalTypes';
+import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
 
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
