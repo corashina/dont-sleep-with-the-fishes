@@ -517,6 +517,70 @@ describe('OceanRenderer', () => {
     ocean.dispose();
   });
 
+  it('keeps new quality state when old geometry cleanup fails', () => {
+    const ocean = new OceanRenderer('low');
+    const material = ocean.material;
+    const uniformMap = material.uniforms;
+    const uniformObjects = Object.fromEntries(
+      Object.entries(uniformMap).map(([name, uniform]) => [name, uniform]),
+    );
+    const uniformValues = Object.fromEntries(
+      Object.entries(uniformMap).map(([name, uniform]) => [name, uniform.value]),
+    );
+    const previousSurface = ocean.mesh.geometry;
+    const previousHorizon = ocean.horizonMesh.geometry;
+    const firstFailure = { source: 'old surface cleanup' };
+    const previousSurfaceDispose = vi.spyOn(previousSurface, 'dispose')
+      .mockImplementationOnce(() => {
+        throw firstFailure;
+      });
+    const previousHorizonDispose = vi.spyOn(previousHorizon, 'dispose');
+    let thrown: unknown;
+
+    try {
+      ocean.setQuality('ultra');
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBe(firstFailure);
+    expect(previousSurfaceDispose).toHaveBeenCalledOnce();
+    expect(previousHorizonDispose).toHaveBeenCalledOnce();
+    expect(ocean.mesh.geometry).not.toBe(previousSurface);
+    expect(ocean.horizonMesh.geometry).not.toBe(previousHorizon);
+    expect((ocean as unknown as { quality: string }).quality).toBe('ultra');
+    expect(ocean.material).toBe(material);
+    expect(ocean.material.uniforms).toBe(uniformMap);
+    expect(ocean.mesh.material).toBe(material);
+    expect(ocean.horizonMesh.material).toBe(material);
+    expect(ocean.material.defines).toEqual({
+      HIGH_QUALITY_WATER: 1,
+      ULTRA_QUALITY_WATER: 1,
+    });
+    expect((uniformMap.uDetailFade!.value as Vector2).toArray())
+      .toEqual([52, 160]);
+    expect((uniformMap.uHorizonFog!.value as Vector3).toArray())
+      .toEqual([210, 820, 0.78]);
+    expect((uniformMap.uDeepColor!.value as Color).getHex()).toBe(0x062932);
+    expect((uniformMap.uShallowColor!.value as Color).getHex()).toBe(0x2f7377);
+    expect((uniformMap.uFoamColor!.value as Color).getHex()).toBe(0xc6cdc4);
+    for (const [name, uniform] of Object.entries(uniformMap)) {
+      expect(uniform).toBe(uniformObjects[name]);
+      expect(uniform.value).toBe(uniformValues[name]);
+    }
+
+    const nextSurfaceDispose = vi.spyOn(ocean.mesh.geometry, 'dispose');
+    const nextHorizonDispose = vi.spyOn(ocean.horizonMesh.geometry, 'dispose');
+    const materialDispose = vi.spyOn(ocean.material, 'dispose');
+    expect(() => ocean.dispose()).not.toThrow();
+    expect(() => ocean.dispose()).not.toThrow();
+    expect(nextSurfaceDispose).toHaveBeenCalledOnce();
+    expect(nextHorizonDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
+    expect(previousSurfaceDispose).toHaveBeenCalledOnce();
+    expect(previousHorizonDispose).toHaveBeenCalledOnce();
+  });
+
   it('cleans all partial construction resources and keeps the primary error', () => {
     const primaryError = new Error('horizon merge failed');
     const cleanupError = new Error('panel cleanup failed');
