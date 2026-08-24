@@ -113,38 +113,65 @@ function exportedCreateShipGeometry(sourceFile: ts.SourceFile): ts.FunctionDecla
   return declaration as ts.FunctionDeclaration;
 }
 
-function hasNamedImport(
+function hasOneValueNamedImport(
   sourceFile: ts.SourceFile,
   module: string,
   name: string,
 ): boolean {
-  return sourceFile.statements.some((statement) => {
+  let valueImports = 0;
+  let typeImports = 0;
+  sourceFile.statements.forEach((statement) => {
     if (
       !ts.isImportDeclaration(statement)
       || !ts.isStringLiteral(statement.moduleSpecifier)
       || statement.moduleSpecifier.text !== `./${module}`
-    ) return false;
-    const bindings = statement.importClause?.namedBindings;
-    return Boolean(
-      bindings
-      && ts.isNamedImports(bindings)
-      && bindings.elements.some((element) => element.name.text === name && !element.propertyName),
-    );
+    ) return;
+    const clause = statement.importClause;
+    const bindings = clause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) return;
+    bindings.elements.forEach((element) => {
+      if (element.name.text !== name || element.propertyName) return;
+      if (clause?.isTypeOnly || element.isTypeOnly) typeImports += 1;
+      else valueImports += 1;
+    });
   });
+  return valueImports === 1 && typeImports === 0;
 }
 
 function directBuilderCalls(body: ts.Block): readonly ts.CallExpression[] {
-  const calls: ts.CallExpression[] = [];
   const names = new Set<string>(BUILDER_COMPOSITION.map((builder) => builder.name));
-  const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && names.has(node.expression.text)) {
-      calls.push(node);
+  const callFromStatement = (statement: ts.Statement): ts.CallExpression | undefined => {
+    if (ts.isExpressionStatement(statement) && ts.isCallExpression(statement.expression)) {
+      return statement.expression;
     }
-    ts.forEachChild(node, visit);
+    if (!ts.isVariableStatement(statement)) return undefined;
+    const [declaration] = statement.declarationList.declarations;
+    return statement.declarationList.declarations.length === 1
+      && declaration?.initializer
+      && ts.isCallExpression(declaration.initializer)
+      ? declaration.initializer
+      : undefined;
   };
+  return body.statements.flatMap((statement) => {
+    const call = callFromStatement(statement);
+    return call && ts.isIdentifier(call.expression) && names.has(call.expression.text) ? [call] : [];
+  });
+}
 
-  visit(body);
-  return calls;
+function hasFunctionBodyParent(call: ts.CallExpression, body: ts.Block): boolean {
+  if (ts.isExpressionStatement(call.parent)) return call.parent.parent === body;
+  if (!ts.isVariableDeclaration(call.parent)) return false;
+  const declarationList = call.parent.parent;
+  return ts.isVariableDeclarationList(declarationList)
+    && ts.isVariableStatement(declarationList.parent)
+    && declarationList.parent.parent === body;
+}
+
+function functionBody(source: string): ts.Block {
+  const sourceFile = parseSource(source);
+  const declaration = sourceFile.statements.find(ts.isFunctionDeclaration);
+  expect(declaration?.body).toBeDefined();
+  return declaration?.body as ts.Block;
 }
 
 function hasExactArguments(call: ts.CallExpression): boolean {
@@ -244,18 +271,44 @@ it('keeps focused builders independent from the final and peer builders', () => 
     isForbiddenBuilderReference(reference.specifier, new Set(['ShipRoomGeometry'])))).toBe(true);
 });
 
+it('rejects nested composition calls and type-only builder imports', () => {
+  const nestedFunction = functionBody(`
+    function createShipGeometry(): void {
+      const composeHull = (): void => { addShipHull(context, layout); };
+      composeHull();
+    }
+  `);
+  const nestedBlock = functionBody(`
+    function createShipGeometry(): void {
+      if (true) { addShipHull(context, layout); }
+    }
+  `);
+  const typeOnlyClause = parseSource(
+    "import type { addShipHull } from './ShipHullGeometry';",
+  );
+  const typeOnlyElement = parseSource(
+    "import { type addShipHull } from './ShipHullGeometry';",
+  );
+
+  expect(directBuilderCalls(nestedFunction)).toEqual([]);
+  expect(directBuilderCalls(nestedBlock)).toEqual([]);
+  expect(hasOneValueNamedImport(typeOnlyClause, 'ShipHullGeometry', 'addShipHull')).toBe(false);
+  expect(hasOneValueNamedImport(typeOnlyElement, 'ShipHullGeometry', 'addShipHull')).toBe(false);
+});
+
 it('keeps final geometry composition direct and ordered', () => {
   const geometrySource = parseSource(sourceFile('ShipGeometry.ts'), 'ShipGeometry.ts');
   const composition = exportedCreateShipGeometry(geometrySource);
   const body = composition.body as ts.Block;
 
   for (const builder of BUILDER_COMPOSITION) {
-    expect(hasNamedImport(geometrySource, builder.module, builder.name)).toBe(true);
+    expect(hasOneValueNamedImport(geometrySource, builder.module, builder.name)).toBe(true);
   }
 
   const calls = directBuilderCalls(body);
   expect(calls.map((call) => (call.expression as ts.Identifier).text))
     .toEqual(BUILDER_COMPOSITION.map((builder) => builder.name));
+  expect(calls.every((call) => hasFunctionBodyParent(call, body))).toBe(true);
 
   for (const [index, builder] of BUILDER_COMPOSITION.entries()) {
     const call = calls[index];
