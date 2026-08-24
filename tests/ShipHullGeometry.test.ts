@@ -72,6 +72,70 @@ describe('ship hull geometry', () => {
         .toBe(context.materials.storageFloor);
       expect((context.root.getObjectByName('floor-lifeboatStation') as Mesh).material)
         .toBe(context.materials.dropoffArea);
+      const mainHull = context.root.getObjectByName('main-hull-body') as Mesh;
+      const hullPositions = mainHull.geometry.getAttribute('position');
+      const hullUvs = mainHull.geometry.getAttribute('uv');
+      const hullSampleIndexes = [0, 1, 2, 50, 100, 150, 200, 250, 300, 939, 940, 941];
+      expect(hullPositions.count).toBe(942);
+      expect(hullUvs.count).toBe(942);
+      expect(hullSampleIndexes.map((index) => [
+        index,
+        hullPositions.getX(index),
+        hullPositions.getY(index),
+        hullPositions.getZ(index),
+      ])).toEqual([
+        [0, -7.775000095367432, -1.2108694911211622e-15, -19.774999618530273],
+        [1, -8.125, -1.1894381811270891e-15, -19.424999237060547],
+        [2, -8.125, 1.16341447025124e-15, 19],
+        [50, -1.5155029296875, 1.6696372525515498e-15, 27.26724624633789],
+        [100, 0.5075186491012573, 1.6822411028066938e-15, 27.473081588745117],
+        [150, -5.955923557281494, 1.4709878035088007e-15, 24.023054122924805],
+        [200, -0.15155033767223358, -4.599999904632568, 15.815003395080566],
+        [250, 0.25023290514945984, -4.599999904632568, 15.59034252166748],
+        [300, -0.5955924987792969, -4.599999904632568, 13.933371543884277],
+        [939, -5.442500114440918, -2.299999952316284, -15.42449951171875],
+        [940, -0.7775002121925354, -4.599999904632568, -11.469499588012695],
+        [941, -0.8125001788139343, -4.599999904632568, -11.266499519348145],
+      ]);
+      expect(hullSampleIndexes.map((index) => [
+        index,
+        hullUvs.getX(index),
+        hullUvs.getY(index),
+      ])).toEqual([
+        [0, -7.775000095367432, -19.774999618530273],
+        [1, -8.125, -19.424999237060547],
+        [2, -8.125, 19],
+        [50, -1.5155029296875, 27.26724624633789],
+        [100, 0.5075186491012573, 27.473081588745117],
+        [150, -5.955923557281494, 24.023054122924805],
+        [200, -1.5155029296875, 27.26724624633789],
+        [250, 2.502328395843506, 26.879899978637695],
+        [300, -5.955923557281494, 24.023054122924805],
+        [939, -19.774999618530273, -1.2999999523162842],
+        [940, -19.774999618530273, -3.5999999046325684],
+        [941, -19.424999237060547, -3.5999999046325684],
+      ]);
+      const hullLayerBounds = (y: number): readonly number[] => {
+        const indexes = Array.from(
+          { length: hullPositions.count },
+          (_, index) => index,
+        ).filter((index) => hullPositions.getY(index) === y);
+        const x = indexes.map((index) => hullPositions.getX(index));
+        const z = indexes.map((index) => hullPositions.getZ(index));
+        return [Math.min(...x), Math.max(...x), Math.min(...z), Math.max(...z)];
+      };
+      expect(hullLayerBounds(-2.299999952316284)).toEqual([
+        -5.6875,
+        5.6875,
+        -15.42449951171875,
+        21.450000762939453,
+      ]);
+      expect(hullLayerBounds(-4.599999904632568)).toEqual([
+        -0.8125001788139343,
+        0.8125001788139343,
+        -11.469499588012695,
+        15.949999809265137,
+      ]);
       const leftFootprint = context.root.getObjectByName(
         'lifeboat-station-footprint-left',
       ) as Mesh;

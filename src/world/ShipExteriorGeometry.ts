@@ -2,6 +2,7 @@ import {
   BufferGeometry,
   CylinderGeometry,
   Group,
+  Material,
   Mesh,
   RingGeometry,
   Vector3,
@@ -13,27 +14,22 @@ import {
 } from './shipLayoutData';
 import {
   FREIGHTER_DIMENSIONS,
-  SHIP_ROOM_ROOF_THICKNESS,
-  SHIP_ROOM_WALL_HEIGHT,
+  requiredShipZone,
+  SHIP_BOW_DEPTH,
+  SHIP_BOW_NOSE_CONTROL_WIDTH_SCALE,
+  SHIP_BOW_SHOULDER_CONTROL_DEPTH_SCALE,
+  SHIP_STRUCTURAL_DECK_TOP_Y,
+  shipRoomRoofTopY,
   type ShipLayoutSpec,
-  type ShipZoneId,
-  type ShipZoneSpec,
 } from './ShipLayoutTypes';
 import type { ShipMaterials } from './ShipMaterials';
 import {
   addBlock,
-  addCylinder,
-  addRotatedBlock,
-  roundedBowPoint,
   toCollisionBox,
   toOrientedCollisionBox,
+  type ShipBlockOptions,
   type ShipGeometryBuildContext,
 } from './ShipGeometryPrimitives';
-
-const ROOM_WALL_HEIGHT = SHIP_ROOM_WALL_HEIGHT;
-
-const BOW_DEPTH = 8.5;
-const STRUCTURAL_DECK_TOP_Y = 2.18;
 const STACK_X = 1.35;
 const STACK_SHAFT_HEIGHT = 3.5;
 const STACK_RADIUS = 0.58;
@@ -46,20 +42,74 @@ const RAIL_TOP_THICKNESS = 0.14;
 const RAIL_POST_WIDTH = 0.12;
 const RAIL_POST_SPACING = 2.4;
 const RAIL_END_SEGMENTS = 12;
-function requiredZone(layout: ShipLayoutSpec, id: ShipZoneId): ShipZoneSpec {
-  const zone = layout.zones.find((candidate) => candidate.id === id);
-  if (!zone) throw new Error(`Ship geometry requires zone ${id}`);
-  return zone;
+
+function addRotatedBlock(
+  context: ShipGeometryBuildContext,
+  parent: Group,
+  options: ShipBlockOptions,
+  rotationY: number,
+): Mesh {
+  const mesh = addBlock(context, parent, options);
+  mesh.rotation.y = rotationY;
+  return mesh;
 }
 
-function roomWallHeight(_zoneId: ShipZoneId): number {
-  return ROOM_WALL_HEIGHT;
+function addCylinder(
+  context: ShipGeometryBuildContext,
+  parent: Group,
+  name: string,
+  radius: number,
+  height: number,
+  position: readonly [number, number, number],
+  material: Material,
+): Mesh {
+  const geometry = new CylinderGeometry(radius, radius * 1.08, height, 12);
+  const mesh = new Mesh(geometry, material);
+  mesh.name = name;
+  mesh.position.set(...position);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  parent.add(mesh);
+  context.geometries.add(geometry);
+  return mesh;
 }
 
-function balconyDeckTopY(zoneId: ShipZoneId): number {
-  return FREIGHTER_DIMENSIONS.deckY
-    + roomWallHeight(zoneId)
-    + SHIP_ROOM_ROOF_THICKNESS;
+function roundedBowPoint(
+  halfWidth: number,
+  shoulderZ: number,
+  tipZ: number,
+  progress: number,
+): { x: number; z: number } {
+  const firstSide = progress <= 0.5;
+  const t = firstSide ? progress * 2 : (progress - 0.5) * 2;
+  const inverseT = 1 - t;
+  const bowDepth = tipZ - shoulderZ;
+  const startX = firstSide ? halfWidth : 0;
+  const startZ = firstSide ? shoulderZ : tipZ;
+  const firstControlX = firstSide
+    ? halfWidth
+    : -halfWidth * SHIP_BOW_NOSE_CONTROL_WIDTH_SCALE;
+  const firstControlZ = firstSide
+    ? shoulderZ + bowDepth * SHIP_BOW_SHOULDER_CONTROL_DEPTH_SCALE
+    : tipZ;
+  const secondControlX = firstSide
+    ? halfWidth * SHIP_BOW_NOSE_CONTROL_WIDTH_SCALE
+    : -halfWidth;
+  const secondControlZ = firstSide
+    ? tipZ
+    : shoulderZ + bowDepth * SHIP_BOW_SHOULDER_CONTROL_DEPTH_SCALE;
+  const endX = firstSide ? 0 : -halfWidth;
+  const endZ = firstSide ? tipZ : shoulderZ;
+  return {
+    x: inverseT ** 3 * startX
+      + 3 * inverseT ** 2 * t * firstControlX
+      + 3 * inverseT * t ** 2 * secondControlX
+      + t ** 3 * endX,
+    z: inverseT ** 3 * startZ
+      + 3 * inverseT ** 2 * t * firstControlZ
+      + 3 * inverseT * t ** 2 * secondControlZ
+      + t ** 3 * endZ,
+  };
 }
 
 function addExteriorConstructionDetails(
@@ -70,14 +120,14 @@ function addExteriorConstructionDetails(
   materials: ShipMaterials,
   layout: ShipLayoutSpec,
 ): void {
-  const cargo = requiredZone(layout, 'cargoDeck').bounds;
-  const bowShoulderZ = cargo.maxZ - BOW_DEPTH;
+  const cargo = requiredShipZone(layout, 'cargoDeck').bounds;
+  const bowShoulderZ = cargo.maxZ - SHIP_BOW_DEPTH;
 
   const stemHeight = 1.4;
   const stemGeometry = new CylinderGeometry(0.2, 0.46, stemHeight, 4);
   const stem = new Mesh(stemGeometry, materials.exposedMetal);
   stem.name = 'bow-stem';
-  stem.position.set(0, STRUCTURAL_DECK_TOP_Y - stemHeight / 2, cargo.maxZ - 0.18);
+  stem.position.set(0, SHIP_STRUCTURAL_DECK_TOP_Y - stemHeight / 2, cargo.maxZ - 0.18);
   stem.rotation.y = Math.PI / 4;
   stem.castShadow = true;
   stem.receiveShadow = true;
@@ -126,7 +176,7 @@ function addExteriorConstructionDetails(
   const hawseGeometry = new RingGeometry(0.24, 0.38, 16);
   geometries.add(hawseGeometry);
   const hawseX = (cargo.maxX - cargo.minX) * 0.18;
-  const hawseZ = bowShoulderZ + BOW_DEPTH * 0.9 - 0.08;
+  const hawseZ = bowShoulderZ + SHIP_BOW_DEPTH * 0.9 - 0.08;
   ([
     ['port', -hawseX],
     ['starboard', hawseX],
@@ -149,9 +199,9 @@ function addRoofEngine(
   materials: ShipMaterials,
   layout: ShipLayoutSpec,
 ): readonly [Vector3, Vector3] {
-  const storage = requiredZone(layout, 'storageWorkroom');
+  const storage = requiredShipZone(layout, 'storageWorkroom');
   const engineZ = (storage.bounds.minZ + storage.bounds.maxZ) / 2;
-  const roofY = balconyDeckTopY(storage.id);
+  const roofY = shipRoomRoofTopY(storage.id);
   const engineCenterY = roofY + SHIP_ROOF_ENGINE.height / 2;
   const engineTopY = roofY + SHIP_ROOF_ENGINE.height;
   const engineFrontZ = engineZ + SHIP_ROOF_ENGINE.depth / 2;
@@ -322,7 +372,7 @@ function addRoundedBowRail(
 ): void {
   const railTopY = FREIGHTER_DIMENSIONS.deckY + layout.rail.height;
   const railX = layout.rail.innerFaceX + RAIL_COLLIDER_THICKNESS / 2;
-  const tipZ = shoulderZ + BOW_DEPTH + RAIL_COLLIDER_THICKNESS / 2;
+  const tipZ = shoulderZ + SHIP_BOW_DEPTH + RAIL_COLLIDER_THICKNESS / 2;
   const pointAt = (index: number): { x: number; z: number } => roundedBowPoint(
     railX,
     shoulderZ,
@@ -372,9 +422,9 @@ function addRails(
   materials: ShipMaterials,
   layout: ShipLayoutSpec,
 ): void {
-  const cargo = requiredZone(layout, 'cargoDeck').bounds;
+  const cargo = requiredShipZone(layout, 'cargoDeck').bounds;
   const minZ = cargo.minZ + SHIP_STERN_CHAMFER;
-  const maxZ = cargo.maxZ - BOW_DEPTH;
+  const maxZ = cargo.maxZ - SHIP_BOW_DEPTH;
   const opening = layout.rail.starboardOpening;
   const gapMinZ = opening.centerZ - opening.width / 2;
   const gapMaxZ = opening.centerZ + opening.width / 2;

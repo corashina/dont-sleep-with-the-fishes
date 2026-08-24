@@ -51,42 +51,39 @@ export function createShipGeometry(
     materials,
   };
 
-  let waterExclusion!: ShipHullWaterExclusion;
-  let climbZones!: readonly LadderClimbZone[];
-  let stackOutlets!: readonly [Vector3, Vector3];
   try {
-    ({ waterExclusion } = addShipHull(context, layout));
+    const { waterExclusion } = addShipHull(context, layout);
     addShipRooms(context, layout);
-    climbZones = addShipAccess(context, layout);
-    stackOutlets = addShipExterior(context, layout);
+    const climbZones = addShipAccess(context, layout);
+    const stackOutlets = addShipExterior(context, layout);
+
+    const zoneCenters = new Map<ShipZoneId, Vector3>(layout.zones.map((zone) => [
+      zone.id,
+      new Vector3(
+        (zone.bounds.minX + zone.bounds.maxX) / 2,
+        FREIGHTER_DIMENSIONS.deckY + 1.5,
+        (zone.bounds.minZ + zone.bounds.maxZ) / 2,
+      ),
+    ]));
+    root.updateMatrixWorld(true);
+    let disposed = false;
+
+    return {
+      root,
+      shellColliders,
+      arcColliders,
+      zoneCenters,
+      waterExclusion,
+      stackOutlets,
+      climbZones,
+      disposeGeometry: () => {
+        if (disposed) return;
+        disposed = true;
+        disposeResourceSets(geometries);
+      },
+    };
   } catch (error) {
     ignoreCleanupError(() => disposeResourceSets(geometries));
     throw error;
   }
-
-  const zoneCenters = new Map<ShipZoneId, Vector3>(layout.zones.map((zone) => [
-    zone.id,
-    new Vector3(
-      (zone.bounds.minX + zone.bounds.maxX) / 2,
-      FREIGHTER_DIMENSIONS.deckY + 1.5,
-      (zone.bounds.minZ + zone.bounds.maxZ) / 2,
-    ),
-  ]));
-  root.updateMatrixWorld(true);
-  let disposed = false;
-
-  return {
-    root,
-    shellColliders,
-    arcColliders,
-    zoneCenters,
-    waterExclusion,
-    stackOutlets,
-    climbZones,
-    disposeGeometry: () => {
-      if (disposed) return;
-      disposed = true;
-      disposeResourceSets(geometries);
-    },
-  };
 }

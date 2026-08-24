@@ -22,6 +22,28 @@ const FOCUSED_BUILDERS = [
   'ShipExteriorGeometry',
 ];
 
+const SHARED_GEOMETRY_EXPORTS = [
+  'ShipBlockOptions',
+  'ShipGeometryBuildContext',
+  'addBlock',
+  'toCollisionBox',
+  'toOrientedCollisionBox',
+] as const;
+
+const OWNER_HELPERS = {
+  ShipHullGeometry: ['addRoundedPrism', 'appendRoundedBow', 'shipPlanShape'],
+  ShipRoomGeometry: ['applyRoofPlanarUvs', 'applyWallPlanarUvs', 'createWallBoxGeometry'],
+  ShipExteriorGeometry: ['addCylinder', 'addRotatedBlock', 'roundedBowPoint'],
+} as const;
+
+const SHARED_GEOMETRY_VALUES = [
+  'SHIP_BOW_DEPTH',
+  'SHIP_BOW_NOSE_CONTROL_WIDTH_SCALE',
+  'SHIP_BOW_SHOULDER_CONTROL_DEPTH_SCALE',
+  'SHIP_DECK_LENGTH',
+  'SHIP_STRUCTURAL_DECK_TOP_Y',
+] as const;
+
 interface BuilderComposition {
   readonly name: string;
   readonly module: string;
@@ -111,6 +133,37 @@ function exportedCreateShipGeometry(sourceFile: ts.SourceFile): ts.FunctionDecla
   expect(declaration).toBeDefined();
   expect(declaration?.body).toBeDefined();
   return declaration as ts.FunctionDeclaration;
+}
+
+function exportedDeclarationNames(sourceFile: ts.SourceFile): readonly string[] {
+  return sourceFile.statements.flatMap((statement) => {
+    if (!ts.canHaveModifiers(statement)
+      || !ts.getModifiers(statement)?.some((modifier) =>
+        modifier.kind === ts.SyntaxKind.ExportKeyword)) return [];
+    if (ts.isVariableStatement(statement)) {
+      return statement.declarationList.declarations.flatMap((declaration) =>
+        ts.isIdentifier(declaration.name) ? [declaration.name.text] : []);
+    }
+    if ((ts.isFunctionDeclaration(statement)
+      || ts.isClassDeclaration(statement)
+      || ts.isInterfaceDeclaration(statement)
+      || ts.isTypeAliasDeclaration(statement)
+      || ts.isEnumDeclaration(statement)) && statement.name) return [statement.name.text];
+    return [];
+  }).sort();
+}
+
+function topLevelFunctionNames(sourceFile: ts.SourceFile): readonly string[] {
+  return sourceFile.statements.flatMap((statement) =>
+    ts.isFunctionDeclaration(statement) && statement.name ? [statement.name.text] : []);
+}
+
+function constructionBlock(body: ts.Block): ts.Block {
+  const tries = body.statements.filter(ts.isTryStatement);
+  expect(tries).toHaveLength(1);
+  expect(tries[0]?.catchClause).toBeDefined();
+  expect(tries[0]?.finallyBlock).toBeUndefined();
+  return tries[0]!.tryBlock;
 }
 
 function hasOneValueNamedImport(
@@ -272,6 +325,48 @@ it('keeps focused builders independent from the final and peer builders', () => 
     isForbiddenBuilderReference(reference.specifier, new Set(['ShipRoomGeometry'])))).toBe(true);
 });
 
+it('keeps shared geometry APIs narrow and private helpers with their owners', () => {
+  const primitives = parseSource(
+    sourceFile('ShipGeometryPrimitives.ts'),
+    'ShipGeometryPrimitives.ts',
+  );
+  expect(exportedDeclarationNames(primitives)).toEqual([...SHARED_GEOMETRY_EXPORTS].sort());
+  expect(moduleReferences(primitives.text, 'ShipGeometryPrimitives.ts')
+    .some(({ specifier }) => normalizedModuleName(specifier) === 'shipLayoutData')).toBe(false);
+
+  for (const [owner, helpers] of Object.entries(OWNER_HELPERS)) {
+    const ownerSource = parseSource(sourceFile(`${owner}.ts`), `${owner}.ts`);
+    const functions = topLevelFunctionNames(ownerSource);
+    const exports = exportedDeclarationNames(ownerSource);
+    helpers.forEach((helper) => {
+      expect(functions, `${owner}.${helper}`).toContain(helper);
+      expect(exports, `${owner}.${helper}`).not.toContain(helper);
+    });
+  }
+});
+
+it('keeps shared ship values and geometry lookups in one neutral owner', () => {
+  const types = parseSource(sourceFile('ShipLayoutTypes.ts'), 'ShipLayoutTypes.ts');
+  const typeExports = exportedDeclarationNames(types);
+  SHARED_GEOMETRY_VALUES.forEach((name) => expect(typeExports).toContain(name));
+  expect(typeExports).toContain('requiredShipZone');
+  expect(typeExports).toContain('shipRoomRoofTopY');
+
+  for (const builder of FOCUSED_BUILDERS) {
+    const functions = topLevelFunctionNames(
+      parseSource(sourceFile(`${builder}.ts`), `${builder}.ts`),
+    );
+    expect(functions).not.toContain('requiredZone');
+    expect(functions).not.toContain('roomWallHeight');
+    expect(functions).not.toContain('balconyDeckTopY');
+  }
+
+  const dataExports = exportedDeclarationNames(
+    parseSource(sourceFile('shipLayoutData.ts'), 'shipLayoutData.ts'),
+  );
+  expect(dataExports).not.toContain('SHIP_STERN_DECK_DEPTH');
+});
+
 it('rejects nested composition calls and non-value builder imports', () => {
   const nestedFunction = functionBody(`
     function createShipGeometry(): void {
@@ -308,7 +403,7 @@ it('rejects nested composition calls and non-value builder imports', () => {
 it('keeps final geometry composition direct and ordered', () => {
   const geometrySource = parseSource(sourceFile('ShipGeometry.ts'), 'ShipGeometry.ts');
   const composition = exportedCreateShipGeometry(geometrySource);
-  const body = composition.body as ts.Block;
+  const body = constructionBlock(composition.body as ts.Block);
 
   for (const builder of BUILDER_COMPOSITION) {
     expect(hasOneValueNamedImport(geometrySource, builder.module, builder.name)).toBe(true);

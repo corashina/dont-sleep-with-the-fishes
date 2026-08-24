@@ -20,10 +20,12 @@ import {
 } from './shipLayoutData';
 import {
   FREIGHTER_DIMENSIONS,
+  requiredShipZone,
   SHIP_ROOM_ROOF_THICKNESS,
   SHIP_ROOM_WALL_HEIGHT,
   SHIP_ROOM_WALL_THICKNESS,
   SHIP_TRANSVERSE_PORTHOLE_CENTER_X,
+  shipRoomRoofTopY,
   type ShipBalconySpec,
   type ShipDoorSpec,
   type ShipLayoutSpec,
@@ -34,16 +36,11 @@ import {
 import type { ShipMaterials } from './ShipMaterials';
 import {
   addBlock,
-  applyRoofPlanarUvs,
-  applyWallPlanarUvs,
-  createWallBoxGeometry,
   toCollisionBox,
   toOrientedCollisionBox,
   type ShipBlockOptions,
   type ShipGeometryBuildContext,
 } from './ShipGeometryPrimitives';
-
-const ROOM_WALL_HEIGHT = SHIP_ROOM_WALL_HEIGHT;
 
 const FINISHED_FLOOR_Y = FREIGHTER_DIMENSIONS.deckY;
 const WALL_THICKNESS = SHIP_ROOM_WALL_THICKNESS;
@@ -67,10 +64,63 @@ const PORTHOLE_BOLT_ORBIT = 0.575;
 const PORTHOLE_SEGMENTS = 24;
 const BALCONY_RAIL_MEMBER_THICKNESS = 0.12;
 
-function requiredZone(layout: ShipLayoutSpec, id: ShipZoneId): ShipZoneSpec {
-  const zone = layout.zones.find((candidate) => candidate.id === id);
-  if (!zone) throw new Error(`Ship geometry requires zone ${id}`);
-  return zone;
+function applyWallPlanarUvs(
+  geometry: BufferGeometry,
+  horizontalOffset: number,
+  verticalOffset: number,
+): void {
+  const positions = geometry.getAttribute('position');
+  const normals = geometry.getAttribute('normal');
+  const uvs = geometry.getAttribute('uv');
+  for (let index = 0; index < positions.count; index += 1) {
+    const normalX = Math.abs(normals.getX(index));
+    const normalZ = Math.abs(normals.getZ(index));
+    const u = normalZ >= normalX ? positions.getX(index) : positions.getZ(index);
+    const v = positions.getY(index);
+    uvs.setXY(index, u + horizontalOffset, v + verticalOffset);
+  }
+  uvs.needsUpdate = true;
+}
+
+function applyRoofPlanarUvs(
+  geometry: BufferGeometry,
+  xOffset: number,
+  zOffset: number,
+): void {
+  const positions = geometry.getAttribute('position');
+  const normals = geometry.getAttribute('normal');
+  const uvs = geometry.getAttribute('uv');
+  for (let index = 0; index < positions.count; index += 1) {
+    const normalX = Math.abs(normals.getX(index));
+    const normalY = Math.abs(normals.getY(index));
+    const normalZ = Math.abs(normals.getZ(index));
+    if (normalY >= normalX && normalY >= normalZ) {
+      uvs.setXY(
+        index,
+        positions.getX(index) + xOffset,
+        positions.getZ(index) + zOffset,
+      );
+    } else if (normalZ >= normalX) {
+      uvs.setXY(index, positions.getX(index) + xOffset, positions.getY(index));
+    } else {
+      uvs.setXY(index, positions.getZ(index) + zOffset, positions.getY(index));
+    }
+  }
+  uvs.needsUpdate = true;
+}
+
+function createWallBoxGeometry(
+  context: ShipGeometryBuildContext,
+  width: number,
+  height: number,
+  depth: number,
+  horizontalOffset: number,
+  verticalOffset: number,
+): BoxGeometry {
+  const geometry = new BoxGeometry(width, height, depth);
+  applyWallPlanarUvs(geometry, horizontalOffset, verticalOffset);
+  context.geometries.add(geometry);
+  return geometry;
 }
 
 type WallEdge = 'port' | 'starboard' | 'aft' | 'forward';
@@ -130,7 +180,7 @@ function subtractDoorIntervals(
 function buildWallSegments(layout: ShipLayoutSpec): readonly WallSegmentSpec[] {
   const result: WallSegmentSpec[] = [];
   (['crewCabin', 'wheelhouse', 'storageWorkroom'] as const).forEach((zoneId) => {
-    const bounds = requiredZone(layout, zoneId).bounds;
+    const bounds = requiredShipZone(layout, zoneId).bounds;
     const doors = layout.doors.filter((door) => door.zoneId === zoneId);
     const edges = [
       { edge: 'port' as const, orientation: 'z' as const, fixed: bounds.minX, min: bounds.minZ, max: bounds.maxZ, doors: doors.filter((door) => door.orientation === 'side' && door.side === 'port'), axis: 1 as const },
@@ -178,10 +228,6 @@ function segmentColliderTransform(
   return segmentTransform(segment, height, centerY);
 }
 
-function roomWallHeight(_zoneId: ShipZoneId): number {
-  return ROOM_WALL_HEIGHT;
-}
-
 function roomSurfaceMaterial(
   materials: ShipMaterials,
   zoneId: ShipZoneId,
@@ -220,7 +266,7 @@ function addPortholeWallPanel(
   wallBottomY: number,
   material: Material,
 ): void {
-  const height = roomWallHeight(segment.zoneId);
+  const height = SHIP_ROOM_WALL_HEIGHT;
   const sealBefore = segment.sealMin ? ROOM_SEAM_OVERLAP : 0;
   const sealAfter = segment.sealMax ? ROOM_SEAM_OVERLAP : 0;
   const renderHeight = height + ROOM_SEAM_OVERLAP * 2;
@@ -306,7 +352,7 @@ function addPortholeDetails(
   ].forEach((geometry) => geometries.add(geometry));
 
   PORTHOLE_SPECS.forEach((spec) => {
-    const bounds = requiredZone(layout, spec.zoneId).bounds;
+    const bounds = requiredShipZone(layout, spec.zoneId).bounds;
     const wallZ = spec.edge === 'aft'
       ? bounds.minZ + WALL_HALF_THICKNESS
       : bounds.maxZ - WALL_HALF_THICKNESS;
@@ -388,7 +434,7 @@ function addWallSegments(
     if (segment.zoneId === 'wheelhouse') {
       return;
     }
-    const height = roomWallHeight(segment.zoneId);
+    const height = SHIP_ROOM_WALL_HEIGHT;
     const material = roomSurfaceMaterial(materials, segment.zoneId);
     const portholes = portholesForSegment(segment);
     if (portholes.length > 0) {
@@ -497,7 +543,7 @@ function addDoorFrames(
     const infillBottomY = FINISHED_FLOOR_Y
       + DOOR_FRAME_CLEAR_HEIGHT
       + (hasFrame ? DOOR_FRAME_WIDTH : 0);
-    const wallTopY = FINISHED_FLOOR_Y + roomWallHeight(door.zoneId);
+    const wallTopY = FINISHED_FLOOR_Y + SHIP_ROOM_WALL_HEIGHT;
     const infillHeight = wallTopY - infillBottomY;
     const infillCenterY = infillBottomY + infillHeight / 2;
     const geometry = createWallBoxGeometry(
@@ -534,7 +580,7 @@ interface WheelhousePaneSpec {
 }
 
 function wheelhousePaneSpecs(layout: ShipLayoutSpec): readonly WheelhousePaneSpec[] {
-  const wheelhouse = requiredZone(layout, 'wheelhouse').bounds;
+  const wheelhouse = requiredShipZone(layout, 'wheelhouse').bounds;
   const portDoor = layout.doors.find((door) =>
     door.zoneId === 'wheelhouse' && door.orientation === 'side' && door.side === 'port')!;
   const aftDoor = layout.doors.find((door) =>
@@ -613,15 +659,15 @@ function addWheelhousePaneColliders(
   const normalZ = Math.cos(rotationY);
   const position = [
     (spec.start[0] + spec.end[0]) / 2 - normalX * WALL_HALF_THICKNESS,
-    wallBottomY + ROOM_WALL_HEIGHT / 2,
+    wallBottomY + SHIP_ROOM_WALL_HEIGHT / 2,
     (spec.start[1] + spec.end[1]) / 2 - normalZ * WALL_HALF_THICKNESS,
   ] as const;
-  const size = [length, ROOM_WALL_HEIGHT, WALL_THICKNESS] as const;
+  const size = [length, SHIP_ROOM_WALL_HEIGHT, WALL_THICKNESS] as const;
   shellColliders.push(isDiagonal
     ? toOrientedCollisionBox(position, size, rotationY)
     : toCollisionBox(position, [
       Math.abs(dx) + Math.abs(normalX) * WALL_THICKNESS,
-      ROOM_WALL_HEIGHT,
+      SHIP_ROOM_WALL_HEIGHT,
       Math.abs(dz) + Math.abs(normalZ) * WALL_THICKNESS,
     ]));
 }
@@ -636,7 +682,7 @@ function addWheelhousePane(
   const dx = spec.end[0] - spec.start[0];
   const dz = spec.end[1] - spec.start[1];
   const width = Math.hypot(dx, dz);
-  const windowHeight = ROOM_WALL_HEIGHT - WINDOW_SILL_HEIGHT - WINDOW_HEADER_HEIGHT;
+  const windowHeight = SHIP_ROOM_WALL_HEIGHT - WINDOW_SILL_HEIGHT - WINDOW_HEADER_HEIGHT;
   const openingWidth = width - WHEELHOUSE_FRAME_WIDTH * 2;
   const pane = new Group();
   pane.name = `wheelhouse-pane:${spec.id}`;
@@ -654,7 +700,7 @@ function addWheelhousePane(
 
   ([
     ['sill', WINDOW_SILL_HEIGHT + ROOM_SEAM_OVERLAP, WINDOW_SILL_HEIGHT / 2 - ROOM_SEAM_OVERLAP / 2],
-    ['header', WINDOW_HEADER_HEIGHT + ROOM_SEAM_OVERLAP, ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT / 2 + ROOM_SEAM_OVERLAP / 2],
+    ['header', WINDOW_HEADER_HEIGHT + ROOM_SEAM_OVERLAP, SHIP_ROOM_WALL_HEIGHT - WINDOW_HEADER_HEIGHT / 2 + ROOM_SEAM_OVERLAP / 2],
   ] as const).forEach(([part, height, centerY]) => {
     const geometry = createWallBoxGeometry(
       context,
@@ -749,7 +795,7 @@ function addRoomRoofs(
   layout.zones.filter(({ enclosed }) => enclosed).forEach((zone) => {
     const width = zone.bounds.maxX - zone.bounds.minX;
     const length = zone.bounds.maxZ - zone.bounds.minZ;
-    const wallTopY = FREIGHTER_DIMENSIONS.deckY + roomWallHeight(zone.id);
+    const wallTopY = FREIGHTER_DIMENSIONS.deckY + SHIP_ROOM_WALL_HEIGHT;
     if (zone.id === 'wheelhouse') {
       const frontSideZ = zone.bounds.maxZ - SHIP_WHEELHOUSE_CHAMFER_SIZE;
       const frontCenterMinX = zone.bounds.minX + SHIP_WHEELHOUSE_CHAMFER_SIZE;
@@ -822,12 +868,6 @@ interface BalconyRun {
   readonly position: readonly [number, number];
 }
 
-function balconyDeckTopY(zoneId: ShipZoneId): number {
-  return FREIGHTER_DIMENSIONS.deckY
-    + roomWallHeight(zoneId)
-    + SHIP_ROOM_ROOF_THICKNESS;
-}
-
 function balconyRuns(
   balcony: ShipBalconySpec,
   zone: ShipZoneSpec,
@@ -896,8 +936,8 @@ function addRoofBalconies(
   layout: ShipLayoutSpec,
 ): void {
   layout.balconies.forEach((balcony) => {
-    const zone = requiredZone(layout, balcony.zoneId);
-    const deckTopY = balconyDeckTopY(zone.id);
+    const zone = requiredShipZone(layout, balcony.zoneId);
+    const deckTopY = shipRoomRoofTopY(zone.id);
 
     const runs = balconyRuns(balcony, zone);
     runs.forEach((run) => {
