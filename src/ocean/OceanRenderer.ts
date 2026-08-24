@@ -285,12 +285,13 @@ export class OceanRenderer {
     const previousHorizon = this.horizonMesh.geometry;
     this.mesh.geometry = nextSurface;
     this.horizonMesh.geometry = nextHorizon;
-    previousSurface.dispose();
-    previousHorizon.dispose();
-
     this.material.defines = applyOceanShaderQuality(this.uniforms, value);
     this.material.needsUpdate = true;
     this.quality = value;
+    runCleanupSteps([
+      () => previousSurface.dispose(),
+      () => previousHorizon.dispose(),
+    ]);
   }
 
   update(
