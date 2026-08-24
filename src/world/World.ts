@@ -84,7 +84,7 @@ import type { ShipAssets } from './ShipAssets';
 import { assignShipItems, shipItemTransformBounds } from './ShipItemPlacement';
 import type { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
 import { SHIP_LAYOUT } from './shipLayoutData';
-import { createShipRouteMetric } from './ShipLayout';
+import { createShipRouteMetric } from './ShipNavigation';
 import {
   FREIGHTER_DIMENSIONS,
   type Rect2,

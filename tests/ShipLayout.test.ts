@@ -11,11 +11,9 @@ import {
   type ShipZoneId,
 } from '../src/world/ShipLayoutTypes';
 import {
-  analyzeShipNavigation,
-  createShipRouteMetric,
   furnitureRect,
-  validateShipLayout,
-} from '../src/world/ShipLayout';
+} from '../src/world/ShipNavigation';
+import { validateShipLayout } from '../src/world/ShipLayout';
 
 interface TestRect {
   readonly minX: number;
@@ -101,7 +99,6 @@ describe('scavenging ship layout', () => {
     ]));
 
     expect(() => validateShipLayout(SHIP_LAYOUT)).not.toThrow();
-    expect(analyzeShipNavigation(SHIP_LAYOUT).unreachableTargetIds).toEqual([]);
     expect(SHIP_LAYOUT.targets.map(({ id }) => id)).toEqual(expect.arrayContaining([
       'crew-ladder-route',
       'deck-hatch-route',
@@ -676,43 +673,6 @@ describe('scavenging ship layout', () => {
     ]);
   });
 
-  it('connects start, both sides of every door, both loop directions, surfaces, and evacuation', () => {
-    expect(() => validateShipLayout(SHIP_LAYOUT)).not.toThrow();
-    const result = analyzeShipNavigation(SHIP_LAYOUT);
-    expect(result.unreachableTargetIds).toEqual([]);
-    expect(result.minimumPrimaryClearance).toBeGreaterThanOrEqual(2.2);
-    expect(result.minimumSecondaryClearance).toBeGreaterThanOrEqual(1.4);
-    expect(result.secondaryAccessLaneCount).toBeGreaterThan(0);
-  });
-
-  it('measures the shortest navigable route around furniture', () => {
-    const metric = createShipRouteMetric(SHIP_LAYOUT);
-    expect(metric.stable).toBe(true);
-    const direct = Math.hypot(7.025, 9.6);
-    const routed = metric.distance([0, 9.6], [7.025, 0]);
-    expect(routed).not.toBeNull();
-    expect(routed!).toBeGreaterThan(direct);
-  });
-
-  it('returns null when either point has no reachable grid cell', () => {
-    const metric = createShipRouteMetric(SHIP_LAYOUT);
-    expect(metric.distance([0, 0], [99, 99])).toBeNull();
-  });
-
-  it('returns null for non-finite route coordinates', () => {
-    const metric = createShipRouteMetric(SHIP_LAYOUT);
-    expect(metric.distance([Number.NaN, 0], [0, 0])).toBeNull();
-    expect(metric.distance([0, Number.POSITIVE_INFINITY], [0, 0])).toBeNull();
-    expect(metric.distance([0, 0], [Number.NEGATIVE_INFINITY, 0])).toBeNull();
-  });
-
-  it('reuses one exact symmetric route distance', () => {
-    const metric = createShipRouteMetric(SHIP_LAYOUT);
-    const forward = metric.distance([0, 11], [7.025, 0]);
-    expect(metric.distance([7.025, 0], [0, 11])).toBe(forward);
-    expect(metric.distance([0, 11], [7.025, 0])).toBe(forward);
-  });
-
   it('aligns crates exactly against exterior wall faces', () => {
     const crew = SHIP_LAYOUT.zones.find(({ id }) => id === 'crewCabin')!.bounds;
     const storage = SHIP_LAYOUT.zones.find(({ id }) => id === 'storageWorkroom')!.bounds;
@@ -916,8 +876,6 @@ describe('scavenging ship layout', () => {
       ({ id }) => id === 'workroom-box-shelf-top',
     )).toBeUndefined();
 
-    const unreachable = analyzeShipNavigation(SHIP_LAYOUT).unreachableTargetIds;
-    expect(unreachable.filter((id) => id.startsWith(`${sideShelf.id}:`))).toEqual([]);
   });
 
   it('centers one loose storage crate and groups the other with the stack', () => {
@@ -1212,9 +1170,6 @@ describe('scavenging ship layout', () => {
           }
         : door),
     };
-    expect(analyzeShipNavigation(movedDoor).unreachableTargetIds).toEqual([
-      'cabin-port-door-inside', 'cabin-port-door-outside',
-    ]);
     expect(() => validateShipLayout(movedDoor)).toThrow(
       /cabin-port-door-inside.*cabin-port-door-outside/i,
     );
@@ -1250,14 +1205,6 @@ describe('scavenging ship layout', () => {
         kind: 'surface' as const,
       }],
     };
-    const result = analyzeShipNavigation(fixture);
-    expect(result.unreachableTargetIds).toEqual([]);
-    expect(result.secondaryAccessLaneCount).toBe(1);
-    expect(result.minimumSecondaryClearance).toBeCloseTo(1.4);
-    expect(result.secondaryAccessRectangles).toEqual([{
-      id: `${surfaceId}-access-0`,
-      bounds: { minX: -0.35, maxX: 2.35, minZ: -13.35, maxZ: -12.65 },
-    }]);
     expect(() => validateShipLayout(fixture)).not.toThrow();
   });
 

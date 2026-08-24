@@ -11,7 +11,7 @@ import {
 import type { CollisionBox } from '../player/collisions';
 import { ShipFurnitureLibrary } from './ShipFurnitureLibrary';
 import { SHIP_LAYOUT } from './shipLayoutData';
-import { analyzeShipNavigation } from './ShipLayout';
+import { analyzeShipNavigation } from './ShipNavigation';
 import {
   type ShipFurniturePlacementSpec,
   type ShipLayoutSpec,
