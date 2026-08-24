@@ -5,6 +5,7 @@ import {
   ShaderMaterial,
   Vector3,
 } from 'three';
+import { runCleanupSteps } from './SceneResources';
 
 export interface ShipSmokeSnapshot {
   capacity: number;
@@ -114,8 +115,10 @@ export class ShipSmoke {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.points.geometry.dispose();
-    this.points.material.dispose();
+    runCleanupSteps([
+      () => this.points.geometry.dispose(),
+      () => this.points.material.dispose(),
+    ]);
   }
 
   private updateActivePuffs(delta: number, sinkingProgress: number): void {

@@ -15,6 +15,7 @@ import {
   type ShipZoneId,
 } from './ShipLayoutTypes';
 import type { ShipMaterials } from './ShipMaterials';
+import { disposeResourceSets, ignoreCleanupError } from './SceneResources';
 import { addShipAccess } from './ShipAccessGeometry';
 import { addShipExterior } from './ShipExteriorGeometry';
 import {
@@ -50,10 +51,18 @@ export function createShipGeometry(
     materials,
   };
 
-  const { waterExclusion } = addShipHull(context, layout);
-  addShipRooms(context, layout);
-  const climbZones = addShipAccess(context, layout);
-  const stackOutlets = addShipExterior(context, layout);
+  let waterExclusion!: ShipHullWaterExclusion;
+  let climbZones!: readonly LadderClimbZone[];
+  let stackOutlets!: readonly [Vector3, Vector3];
+  try {
+    ({ waterExclusion } = addShipHull(context, layout));
+    addShipRooms(context, layout);
+    climbZones = addShipAccess(context, layout);
+    stackOutlets = addShipExterior(context, layout);
+  } catch (error) {
+    ignoreCleanupError(() => disposeResourceSets(geometries));
+    throw error;
+  }
 
   const zoneCenters = new Map<ShipZoneId, Vector3>(layout.zones.map((zone) => [
     zone.id,
@@ -77,7 +86,7 @@ export function createShipGeometry(
     disposeGeometry: () => {
       if (disposed) return;
       disposed = true;
-      geometries.forEach((geometry) => geometry.dispose());
+      disposeResourceSets(geometries);
     },
   };
 }

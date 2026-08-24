@@ -14,6 +14,7 @@ import {
   type ShipMastSpec,
 } from './ShipLayoutTypes';
 import type { ShipMaterials } from './ShipMaterials';
+import { disposeResourceSets } from './SceneResources';
 
 export interface CrowsNestBuild {
   readonly root: Group;
@@ -247,7 +248,7 @@ export function createCrowsNest(
     disposeGeometry: () => {
       if (disposed) return;
       disposed = true;
-      geometries.forEach((geometry) => geometry.dispose());
+      disposeResourceSets(geometries);
     },
   };
 }
