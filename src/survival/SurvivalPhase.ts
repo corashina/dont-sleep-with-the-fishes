@@ -38,6 +38,8 @@ import {
 } from './FocusedEventPresentation';
 import {
   isDriftingItemEventId,
+  isSignalSightingEventId,
+  PLANE_CHOICE_WINDOW_SECONDS,
   survivalEventById,
   type DriftingItemEventId,
 } from './events';
@@ -54,6 +56,7 @@ import {
   ITEM_ANIMATION_LAB_INITIAL_CHEST,
   ITEM_ANIMATION_LAB_INITIAL_RESOURCES,
   ITEM_ANIMATION_LAB_USES,
+  type ItemAnimationLabUse,
   REPAIR_TOOLBOX_LAB_CHOICE_ID,
   REPAIR_TOOLBOX_LAB_INSTANCE_ID,
   isItemAnimationLabId,
@@ -286,6 +289,7 @@ export class SurvivalPhase implements GamePhase {
   private fishingPresentation: FishingPresentationState = 'idle';
   private fishingSettlementInProgress = false;
   private eventPresentation: EventPresentationState = 'idle';
+  private planeChoiceWindowRemaining: number | null = null;
   private deferredPresentationSync: {
     readonly generation: number;
     readonly before: SurvivalSnapshot;
@@ -307,6 +311,7 @@ export class SurvivalPhase implements GamePhase {
   private eventBundles!: EventBundleManagerLike;
   private itemAnimationLab = false;
   private itemAnimationLabCameraControls: ItemAnimationLabCameraControls | null = null;
+  private pendingItemAnimationLabInstanceId: ItemInstanceId | null = null;
   private rearCameraView = false;
   private initialEventResultId: string | undefined;
 
@@ -458,6 +463,7 @@ export class SurvivalPhase implements GamePhase {
     this.audio.update(deltaSeconds);
     this.syncVisualState(presentationSnapshot);
     this.syncPresentation(snapshot);
+    this.advancePlaneChoiceWindow(deltaSeconds);
     if (this.started) this.advanceFishing(deltaSeconds);
     this.presentTerminalOnce(snapshot);
   }
@@ -543,7 +549,7 @@ export class SurvivalPhase implements GamePhase {
       || this.eventEligibility.get(instanceId) !== choiceId
     ) return;
     if (this.itemAnimationLab) {
-      void this.playItemAnimationLab(instanceId, this.lifecycleGeneration);
+      this.handleItemAnimationLabItem(instanceId);
       return;
     }
     void this.resolveEventWithItem(choiceId, instanceId, this.lifecycleGeneration);
@@ -553,7 +559,7 @@ export class SurvivalPhase implements GamePhase {
     if (this.eventPresentation !== 'choosing') return;
     if (
       this.eventEligibility.size !== 0
-      && this.session.snapshot().pendingEventId !== 'other-people'
+      && !isSignalSightingEventId(this.session.snapshot().pendingEventId ?? '')
     ) return;
     void this.resolveEndure(this.lifecycleGeneration);
   }
@@ -680,6 +686,7 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private enterItemAnimationLab(snapshot: SurvivalSnapshot): void {
+    this.pendingItemAnimationLabInstanceId = null;
     this.eventEligibility = this.itemAnimationLabEligibility(snapshot);
     this.eventPresentation = 'choosing';
     this.ui.beginEventPresentation?.();
@@ -697,8 +704,9 @@ export class SurvivalPhase implements GamePhase {
     const eligibility = new Map<ItemInstanceId, EventResponseId>();
     for (const item of Object.values(snapshot.inventory)) {
       if (item === undefined || item.condition !== 'usable') continue;
-      const use = ITEM_ANIMATION_LAB_USES[item.type];
-      if (use !== undefined) eligibility.set(item.instanceId, use.choiceId);
+      const itemUses = ITEM_ANIMATION_LAB_USES[item.type];
+      const firstUse = itemUses?.[0];
+      if (firstUse !== undefined) eligibility.set(item.instanceId, firstUse.choiceId);
     }
     if (snapshot.carlitos?.alive) {
       eligibility.set(
@@ -713,9 +721,48 @@ export class SurvivalPhase implements GamePhase {
     return eligibility;
   }
 
+  private handleItemAnimationLabItem(instanceId: ItemInstanceId): void {
+    if (instanceId === REPAIR_TOOLBOX_LAB_INSTANCE_ID) {
+      this.pendingItemAnimationLabInstanceId = null;
+      this.ui.hideItemAnimationLabChoices?.();
+      void this.playItemAnimationLab(instanceId, this.lifecycleGeneration);
+      return;
+    }
+    const inventoryItem = this.session.snapshot().inventory[instanceId];
+    const itemUses = inventoryItem === undefined
+      ? undefined
+      : ITEM_ANIMATION_LAB_USES[inventoryItem.type];
+    if (inventoryItem === undefined || itemUses === undefined || itemUses.length === 0) return;
+    if (itemUses.length === 1) {
+      this.pendingItemAnimationLabInstanceId = null;
+      this.ui.hideItemAnimationLabChoices?.();
+      void this.playItemAnimationLab(instanceId, this.lifecycleGeneration, itemUses[0]);
+      return;
+    }
+    this.pendingItemAnimationLabInstanceId = instanceId;
+    this.ui.showItemAnimationLabChoices?.(
+      ITEM_DEFINITIONS[inventoryItem.type].label,
+      itemUses.map(({ id, label }) => ({ id, label, unavailableReason: null })),
+    );
+  }
+
+  private handleItemAnimationLabChoice(choiceId: EventResponseId): void {
+    const instanceId = this.pendingItemAnimationLabInstanceId;
+    if (instanceId === null || this.eventPresentation !== 'choosing') return;
+    const inventoryItem = this.session.snapshot().inventory[instanceId];
+    const selectedUse = inventoryItem === undefined
+      ? undefined
+      : ITEM_ANIMATION_LAB_USES[inventoryItem.type]?.find(({ id }) => id === choiceId);
+    if (selectedUse === undefined) return;
+    this.pendingItemAnimationLabInstanceId = null;
+    this.ui.hideItemAnimationLabChoices?.();
+    void this.playItemAnimationLab(instanceId, this.lifecycleGeneration, selectedUse);
+  }
+
   private async playItemAnimationLab(
     instanceId: ItemInstanceId,
     generation: number,
+    selectedUse?: ItemAnimationLabUse,
   ): Promise<void> {
     if (instanceId === REPAIR_TOOLBOX_LAB_INSTANCE_ID) {
       await this.playRepairToolboxLab(generation);
@@ -731,7 +778,7 @@ export class SurvivalPhase implements GamePhase {
     ) return;
 
     const itemType = inventoryItem.type;
-    const use = ITEM_ANIMATION_LAB_USES[itemType];
+    const use = selectedUse ?? ITEM_ANIMATION_LAB_USES[itemType]?.[0];
     if (use === undefined) return;
     this.eventPresentation = 'using';
     this.setBusy(true);
@@ -835,9 +882,17 @@ export class SurvivalPhase implements GamePhase {
   private wireUI(): void {
     this.ui.onAction = (action, option) => this.handleAction(action, option);
     this.ui.onEventItem = (choiceId, instanceId) => this.handleEventItem(choiceId, instanceId);
-    this.ui.onEventChoice = (choiceId) =>
+    this.ui.onEventChoice = (choiceId) => {
+      if (this.itemAnimationLab) {
+        this.handleItemAnimationLabChoice(choiceId);
+        return;
+      }
       void this.resolveContextualChoice(choiceId, this.lifecycleGeneration);
+    };
     this.ui.onRestart = () => this.requestRestart();
+    this.ui.onAnchorHighlight = (anchorId) => {
+      if (!this.disposed) this.world.setHighlightedItem?.(anchorId);
+    };
     this.ui.onPauseChange = (paused) => this.setPaused(paused);
     this.ui.onJournalOpen = () => this.handleJournalOpen();
     this.ui.onJournalClose = () => this.handleJournalClose();
@@ -1231,7 +1286,10 @@ export class SurvivalPhase implements GamePhase {
     action: 'petCarlitos' | 'feedCarlitos',
   ): Promise<void> {
     this.setBusy(true);
-    await (this.world.playCarlitosAction?.(action) ?? Promise.resolve());
+    const presentation = action === 'petCarlitos'
+      ? this.world.playCarlitosAction?.(action, () => this.audio.petCarlitos())
+      : this.world.playCarlitosAction?.(action);
+    await (presentation ?? Promise.resolve());
     if (this.disposed) return;
     this.renderSnapshot(false, false);
     this.setBusy(false);
@@ -1470,7 +1528,6 @@ export class SurvivalPhase implements GamePhase {
     this.ui.setEventSelection?.(this.eventEligibility, []);
     this.ui.showDriftingItemFocus?.({
       eventId,
-      title: event.title.toLocaleUpperCase('en-US'),
       choices: this.contextualChoicesFor(event, snapshot),
       target: this.world.projectEventInteractionBounds?.(
         eventId,
@@ -1927,6 +1984,7 @@ export class SurvivalPhase implements GamePhase {
       return;
     }
 
+    this.ui.hideDriftingItemFocus?.();
     this.renderSnapshot(false, false);
     this.eventEligibility.clear();
     this.world.setEventSelectedItem?.(null);
@@ -1934,7 +1992,7 @@ export class SurvivalPhase implements GamePhase {
     this.ui.setEventSelection?.(this.eventEligibility, []);
 
     if (choiceId === 'retrieve' || choiceId === 'delegate-carlitos') {
-      if (outcome.rewardSummary === undefined) {
+      if (eventId === 'drifting-barrel' && outcome.rewardSummary === undefined) {
         this.onInvariantError(new Error(
           `Drifting item ${eventId}/${choiceId} requires a reward summary.`,
         ));
@@ -1960,6 +2018,19 @@ export class SurvivalPhase implements GamePhase {
         this.activeDriftingItemEventId !== eventId
         || this.driftingItemFocus !== 'resolving'
       ) return;
+      if (eventId === 'drifting-barrel') {
+        this.audio.action('openChest');
+        await (this.ui.showRewardResult?.({
+          title: 'CHEST REWARD',
+          reward: outcome.rewardSummary!,
+          lines: [],
+        }) ?? Promise.resolve());
+        if (
+          !this.isContinuationActive(generation)
+          || this.activeDriftingItemEventId !== eventId
+          || this.driftingItemFocus !== 'resolving'
+        ) return;
+      }
       await this.returnFromDriftingItemView(eventId, generation);
       return;
     }
@@ -1992,7 +2063,7 @@ export class SurvivalPhase implements GamePhase {
       instanceId: null,
       condition: null,
     };
-    if (eventId === 'other-people') {
+    if (isSignalSightingEventId(eventId)) {
       await (this.world.playEventChoice?.(eventId, choice) ?? Promise.resolve());
       if (!this.isContinuationActive(generation)) return;
     }
@@ -2081,34 +2152,37 @@ export class SurvivalPhase implements GamePhase {
     const response = isEventPresentationRoute(eventId, 'dedicated')
       ? physicalResponse
       : focusedResult ? choice : physicalResponse;
-    if (revealFromCover) {
-      const reaction = this.world.reactToEventOutcome?.(
-        eventId,
-        outcome,
-        response,
-        presentation,
-      ) ?? Promise.resolve();
-      await Promise.all([
-        stationaryHandymanTouch
-          ? Promise.resolve()
-          : this.world.play?.(outcome.cue) ?? Promise.resolve(),
-        reaction,
-        this.ui.setSleepCovered?.(false) ?? Promise.resolve(),
-      ]);
-    } else {
-      await Promise.all([
-        stationaryHandymanTouch
-          ? Promise.resolve()
-          : this.world.play?.(outcome.cue) ?? Promise.resolve(),
-        this.world.reactToEventOutcome?.(
+    try {
+      if (revealFromCover) {
+        const reaction = this.world.reactToEventOutcome?.(
           eventId,
           outcome,
           response,
           presentation,
-        ) ?? Promise.resolve(),
-      ]);
+        ) ?? Promise.resolve();
+        await Promise.all([
+          stationaryHandymanTouch
+            ? Promise.resolve()
+            : this.world.play?.(outcome.cue) ?? Promise.resolve(),
+          reaction,
+          this.ui.setSleepCovered?.(false) ?? Promise.resolve(),
+        ]);
+      } else {
+        await Promise.all([
+          stationaryHandymanTouch
+            ? Promise.resolve()
+            : this.world.play?.(outcome.cue) ?? Promise.resolve(),
+          this.world.reactToEventOutcome?.(
+            eventId,
+            outcome,
+            response,
+            presentation,
+          ) ?? Promise.resolve(),
+        ]);
+      }
+    } finally {
+      this.audio.finishEventReaction(eventId);
     }
-    this.audio.finishEventReaction(eventId);
     if (!this.isContinuationActive(generation)) return;
     if (
       (this.visibilityPauseActive || this.documentIsHidden())
@@ -2384,6 +2458,27 @@ export class SurvivalPhase implements GamePhase {
     void this.runPendingEventReveal(snapshot, this.lifecycleGeneration);
   }
 
+  private advancePlaneChoiceWindow(deltaSeconds: number): void {
+    const snapshot = this.session.snapshot();
+    if (
+      this.eventPresentation !== 'choosing'
+      || snapshot.pendingEventId !== 'plane'
+    ) {
+      this.planeChoiceWindowRemaining = null;
+      return;
+    }
+    if (this.planeChoiceWindowRemaining === null) {
+      this.planeChoiceWindowRemaining = PLANE_CHOICE_WINDOW_SECONDS;
+    }
+    this.planeChoiceWindowRemaining -= Math.max(0, deltaSeconds);
+    if (this.planeChoiceWindowRemaining > 0) return;
+
+    this.planeChoiceWindowRemaining = null;
+    this.ui.setEventSelection?.(new Map(), []);
+    this.world.setEventEligibleItems?.(new Set());
+    void this.resolveEndure(this.lifecycleGeneration);
+  }
+
   private async runPendingEventReveal(
     snapshot: SurvivalSnapshot,
     generation: number,
@@ -2580,7 +2675,6 @@ export class SurvivalPhase implements GamePhase {
       && choiceId === 'retrieve') {
       return `event:${eventId}`;
     }
-    if (eventId === 'guarded-sleep' && choiceId === 'watch') return 'carlitos';
     if (eventId === 'midnight-tour' && choiceId === 'visit') return 'midnight-tour:island';
     if (eventId === 'handyman' && choiceId === 'touch') return 'handyman:hand';
     if (eventId === 'handyman' && choiceId === 'chest') return 'persistent-chest';
@@ -2602,6 +2696,7 @@ export class SurvivalPhase implements GamePhase {
   private retainTerminalEventTableau(): void {
     this.cancelDeferredPresentationSync();
     this.eventEligibility.clear();
+    this.planeChoiceWindowRemaining = null;
     this.eventPresentation = 'idle';
     this.world.setEventSelectedItem?.(null);
     this.world.setEventEligibleItems?.(null);
@@ -2612,6 +2707,8 @@ export class SurvivalPhase implements GamePhase {
     if (!preserveDeferredPresentationSync) this.cancelDeferredPresentationSync();
     this.audio.clearEvent();
     this.eventEligibility.clear();
+    this.pendingItemAnimationLabInstanceId = null;
+    this.planeChoiceWindowRemaining = null;
     this.eventPresentation = 'idle';
     this.activeDriftingItemEventId = null;
     this.driftingItemFocus = 'idle';

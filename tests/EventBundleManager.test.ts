@@ -57,14 +57,14 @@ describe('EventBundleManager', () => {
       'Missing required Midnight Tour monster model.',
     ],
     [
-      'monster run clip',
-      { missingClip: 'CharacterArmature|Run' },
-      'Missing required Midnight Tour monster clip: CharacterArmature|Run.',
+      'monster idle clip',
+      { missingClip: 'CharacterArmature|Idle' },
+      'Missing required Midnight Tour monster clip: CharacterArmature|Idle.',
     ],
     [
       'monster attack clip',
-      { missingClip: 'CharacterArmature|Run_Attack' },
-      'Missing required Midnight Tour monster clip: CharacterArmature|Run_Attack.',
+      { missingClip: 'CharacterArmature|Idle_Attack' },
+      'Missing required Midnight Tour monster clip: CharacterArmature|Idle_Attack.',
     ],
   ] as const)(
     'rejects Midnight Tour activation when the required %s is missing',
@@ -76,8 +76,8 @@ describe('EventBundleManager', () => {
         const selected = createEventModel(id);
         if (id !== 'midnightMonster' || selected === null) return selected;
         const clipNames = [
-          'CharacterArmature|Run',
-          'CharacterArmature|Run_Attack',
+          'CharacterArmature|Idle',
+          'CharacterArmature|Idle_Attack',
         ].filter((name) => !('missingClip' in missing && name === missing.missingClip));
         return {
           root: selected.root,

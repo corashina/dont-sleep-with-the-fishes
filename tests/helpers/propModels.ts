@@ -81,8 +81,8 @@ export function createTestPropModels(): PropModelLibrary {
   const eventAnimations = new Map<EventModelId, readonly AnimationClip[]>([[
     'midnightMonster',
     [
-      new AnimationClip('CharacterArmature|Run', 1),
-      new AnimationClip('CharacterArmature|Run_Attack', 1),
+      new AnimationClip('CharacterArmature|Idle', 1),
+      new AnimationClip('CharacterArmature|Idle_Attack', 1),
     ],
   ]]);
 

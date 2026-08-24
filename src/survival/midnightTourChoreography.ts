@@ -7,8 +7,8 @@ export const CHEST_STROKE_SECONDS = 2;
 export const MONSTER_SCAN_LEFT_END_SECONDS = 1.2;
 export const MONSTER_SCAN_RIGHT_END_SECONDS = 2.4;
 export const MONSTER_TURN_BACK_END_SECONDS = 3.6;
-export const MONSTER_RUN_END_SECONDS = 7.6;
-export const MONSTER_ATTACK_END_SECONDS = 8.6;
+export const MONSTER_IMPACT_SECONDS = 4.6;
+export const MONSTER_ATTACK_END_SECONDS = 5;
 export const MONSTER_RESULT_DURATION_SECONDS = MONSTER_ATTACK_END_SECONDS;
 
 const CHEST_DIG_DURATION_SECONDS = CHEST_DIG_END_SECONDS
@@ -27,7 +27,7 @@ export type MidnightChestStageSample =
   | Readonly<{ stage: 'hold'; progress: number }>;
 
 export type MidnightMonsterStageSample = Readonly<{
-  stage: 'scan-left' | 'scan-right' | 'turn-back' | 'run' | 'attack';
+  stage: 'scan-left' | 'scan-right' | 'turn-back' | 'attack';
   progress: number;
 }>;
 
@@ -69,18 +69,10 @@ export function monsterTurnBackProgress(elapsedSeconds: number): number {
   );
 }
 
-export function monsterRunProgress(elapsedSeconds: number): number {
-  return progressBetween(
-    elapsedSeconds,
-    MONSTER_TURN_BACK_END_SECONDS,
-    MONSTER_RUN_END_SECONDS,
-  );
-}
-
 export function monsterAttackProgress(elapsedSeconds: number): number {
   return progressBetween(
     elapsedSeconds,
-    MONSTER_RUN_END_SECONDS,
+    MONSTER_TURN_BACK_END_SECONDS,
     MONSTER_ATTACK_END_SECONDS,
   );
 }
@@ -97,9 +89,6 @@ export function sampleMonsterStage(
   }
   if (elapsed < MONSTER_TURN_BACK_END_SECONDS) {
     return { stage: 'turn-back', progress: monsterTurnBackProgress(elapsed) };
-  }
-  if (elapsed < MONSTER_RUN_END_SECONDS) {
-    return { stage: 'run', progress: monsterRunProgress(elapsed) };
   }
   return { stage: 'attack', progress: monsterAttackProgress(elapsed) };
 }

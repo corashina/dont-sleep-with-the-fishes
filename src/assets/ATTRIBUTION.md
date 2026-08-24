@@ -62,7 +62,7 @@ repository at commit `1fdb61d90d0e5a234f14b562aebf3e2a7addf374`.
 
 ## Optional five-night event model ledger
 
-These six individual Poly Pizza models support five-night event tableaus.
+These Poly Pizza models support focused event tableaus.
 No model pack or kit is used. Event load failures keep the game playable.
 The existing Lantern model remains the event lantern source.
 
@@ -75,6 +75,7 @@ The existing Lantern model remains the event lantern source.
 | traderOctopus | `traderOctopus.glb` | Octopus / Poly by Google | https://poly.pizza/m/9F8QJKUT77V | `poly-pizza:81286501-750b-4d4b-9c41-2e3bbadcc9ae` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 3150 | 3150 | Source GLB SHA-256 `1FCDB4451FB1FD2B9F9EE6B75D929322BA0084DBE104683EF4D43593F434491F`; output GLB SHA-256 `2D241056973BF43445A2991F7A5C59CE1AC46531BA170EBF10E9E885F8070600`; removed unused accessors and deduplicated the static model. | 2026-08-03 |
 | riggedHand | `riggedHand.glb` | Rigged Hand / J-Toastie | https://poly.pizza/m/BEy8jbxm6A | `poly-pizza:a36ea2d8-8437-4215-98d3-2fa53be67d85` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 1518 | 1518 | Source GLB SHA-256 `32705E2EE2BADC9DF04886CC0705545D6640C34E927D4DB67AFFF2802AEC945E`; output GLB SHA-256 `C63A08C01D86DD26C5260BD17BCC026BB60C0843A04D94DC52CD199DFCFD13B1`; retained the skin, 20 named joints, and 19-channel source animation; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-30 |
 | containerShip | `containerShip.glb` | Container Ship / Alex Safayan | https://poly.pizza/m/3AmDGcCu6Ll | `poly-pizza:df197d9f-5d8c-4744-bc03-75ee514e8df3` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 1620 | 1620 | Source GLB SHA-256 `A6F5E74082C8DFE8D251B7D70AF5C2BD8570D108B3CA2A97C3D55F38871FCB4B`; output GLB SHA-256 `B969EF01204841B4E09965740BEE30E7B5227576E4921253F3AFA0D306E2404D`; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-07-30 |
+| airplane | `airplane.glb` | Airplane / Poly by Google | https://poly.pizza/m/8VysVKMXN2J | `poly-pizza:13293400-c90f-4cc0-966a-7e07d38f7565` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 1770 | 1770 | Source GLB SHA-256 `2F9A5382E70BDBEF5D54024C6846A3A53389B889D73121159FB335352D311388`; output GLB SHA-256 `B64E73F3127A636F336F769235A5BCB30F215C8C59F98E4841612A92BE94C171`; pruned unused data, deduplicated, welded, unpartitioned, renamed, and embedded all resources. | 2026-08-23 |
 | midnightPalmTrees | `midnightPalmTrees.glb` | Palm Trees / Quaternius | https://poly.pizza/m/VYslw9DEi6 | `poly-pizza:88fb0209-5e1e-4cb0-9d11-112e6140ab13` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 1920 | 1920 | Source GLB SHA-256 `70275B7159F1790E2997113CE1373A6ABC93DD609A2FA778E6EDD5C0D4BA2904`; output GLB SHA-256 `7D66BAC6B02803C6ECA2E0C3B37CCAB7BE8593ECD10B5C211A6270CACD91F9BC`; verified zero skins and zero animations; pruned unused data, deduplicated, unpartitioned, renamed, and embedded all resources. | 2026-08-19 |
 
 ## Runtime ship-furniture and deck-detail model ledger
@@ -282,6 +283,7 @@ The Midnight shovel runtime cue uses a six-second cutoff. The MP3 remains unenco
 | radioSignal | `radioSignal.mp3` | [Radio tuner.wav / Mart1001](https://freesound.org/people/Mart1001/sounds/61386/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | radioReply | `radioReply.mp3` | [radio noise 2.wav / ERH](https://freesound.org/people/ERH/sounds/30335/), [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | eating | `eating.mp3` | [Eating Sound / User391915396](https://freesound.org/people/User391915396/sounds/570336/) |
+| catMeow1–7 | `catMeow1.mp3` through `catMeow7.mp3` | [Cat Meows 7x / Kinoton](https://freesound.org/people/Kinoton/sounds/584895/); split at the seven source silence gaps. |
 | medkit | `medkit.mp3` | [Tape Bandage Rip / SecureSubset](https://freesound.org/people/SecureSubset/sounds/800275/) |
 | hullRepair | `hullRepair.mp3` | [hammer pounding on wood / Ryujin95](https://freesound.org/people/Ryujin95/sounds/394891/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | tapeRepair | `tapeRepair.mp3` | [Duct Tape Rip / baidonovan](https://freesound.org/people/baidonovan/sounds/187338/) |
@@ -308,6 +310,8 @@ The Midnight shovel runtime cue uses a six-second cutoff. The MP3 remains unenco
 | nightfall | `nightfall.mp3` | [Transition Sound Effect / DeVern](https://freesound.org/people/DeVern/sounds/427533/) |
 | dawn | `dawn.wav` | [First Light Particles / Yoiyami](https://opengameart.org/content/first-light-particles-%E2%80%93-cc0-atmospheric-pianoambient-track) |
 | eventReveal | `eventReveal.mp3` | [Dissonant Sting / nomiqbomi](https://freesound.org/people/nomiqbomi/sounds/578362/) |
+| planeFlyby | `planeFlyby.mp3` | [A small propeller plane.wav / straget](https://freesound.org/people/straget/sounds/403316/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| ghostSpiritBreath | `ghostSpiritBreath.mp3` | [Spirit-Breath1.aif / timgormly](https://freesound.org/people/timgormly/sounds/152721/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | tornadoWind | `tornadoWind.mp3` | [JM_NATURAL ELEMENTS_Wind 01 - Tornado - Inside a metalic squeaking building.wav / Julien_Matthey](https://freesound.org/people/Julien_Matthey/sounds/557188/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | leak | `leak.mp3` | [Water - Leak, small / colinpoh](https://freesound.org/people/colinpoh/sounds/146346/) |
 | tentacleMovement | `tentacleMovement.mp3` | [Slimy flesh / iampagan](https://freesound.org/people/iampagan/sounds/177017/) |

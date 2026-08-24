@@ -36,7 +36,6 @@ describe('event bundle manifest', () => {
   it('bundles Midnight Tour sounds', () => {
     expect(EVENT_BUNDLE_SPECS['midnight-tour'].sounds).toEqual([
       'midnightShovel',
-      'midnightMonsterRun',
       'midnightMonsterAttack',
     ]);
   });
@@ -52,6 +51,18 @@ describe('event bundle manifest', () => {
     expect(EVENT_BUNDLE_SPECS['check-the-back']).toEqual({
       models: ['checkBackFish', 'checkBackAnglerfish'],
       sounds: ['checkBackFish', 'checkBackAnglerfish'],
+    });
+  });
+
+  it('bundles the Ghosts model and spirit breath', () => {
+    expect(EVENT_BUNDLE_SPECS.ghosts.models).toEqual(['ghost']);
+    expect(EVENT_BUNDLE_SPECS.ghosts.sounds).toContain('ghostSpiritBreath');
+  });
+
+  it('bundles Plane signal item sounds', () => {
+    expect(EVENT_BUNDLE_SPECS.plane).toEqual({
+      models: [],
+      sounds: ['planeFlyby', 'flareGunShot', 'flareGun', 'flashlight'],
     });
   });
 });

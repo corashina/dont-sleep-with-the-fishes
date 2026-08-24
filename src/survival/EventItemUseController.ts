@@ -244,7 +244,9 @@ export class EventItemUseController {
     request: EventItemUseRequest,
     stow: boolean,
   ): void {
-    if (stow) this.supplies.stowEventItemUntilDay(request.instanceId);
+    if (stow && request.itemId !== 'bucket') {
+      this.supplies.stowEventItemUntilDay(request.instanceId);
+    }
     this.adapter.clear();
     actor.release();
   }

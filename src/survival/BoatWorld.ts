@@ -37,6 +37,7 @@ import { OceanRenderer } from '../ocean/OceanRenderer';
 import type { WaterQuality } from '../rendering/waterQuality';
 import { createWaterExclusion } from '../ocean/WaterExclusion';
 import { setSceneBinocularMaskStrength } from '../rendering/BinocularMaskPass';
+import { HoverOutline } from '../rendering/HoverOutline';
 import {
   BoatBuoyancy,
   smoothBoatPoseInto,
@@ -389,11 +390,6 @@ const FISHING_CATCH_BOW_REST = Object.freeze({
   y: 0.43,
   z: -2.52,
 });
-const DRIFTING_ITEM_BOW_REST = Object.freeze({
-  x: 0.72,
-  y: 0.58,
-  z: -2.52,
-});
 const FLOWERS_DECK_TARGET = Object.freeze({
   x: 0.72,
   y: 0.58,
@@ -659,6 +655,7 @@ export class BoatWorld {
   private readonly fallbackFeaturedEventModels: SurvivalEventModels | null;
   private readonly focusedEventFactories: FocusedEventPresentationFactories;
   private chestState: SurvivalSnapshot['chest']['state'] = 'none';
+  private readonly toolHoverOutline = new HoverOutline();
   private radioSignalAvailable = false;
   private readonly dangerousWatersBoatReaction: DangerousWatersBoatReaction = {
     driftX: 0,
@@ -671,7 +668,6 @@ export class BoatWorld {
     supplyRoll: 0,
     supplyLift: 0,
   };
-  private readonly driftingItemBowRest = new Object3D();
   private readonly flowersDeckTarget = new Object3D();
   private readonly driftingItemCameraStartPosition = new Vector3();
   private readonly driftingItemCameraStartQuaternion = new Quaternion();
@@ -926,13 +922,6 @@ export class BoatWorld {
         FISHING_CATCH_BOW_REST.z,
       );
       this.boat.add(this.fishingCatchRest);
-      this.driftingItemBowRest.name = 'drifting-item-bow-rest';
-      this.driftingItemBowRest.position.set(
-        DRIFTING_ITEM_BOW_REST.x,
-        DRIFTING_ITEM_BOW_REST.y,
-        DRIFTING_ITEM_BOW_REST.z,
-      );
-      this.boat.add(this.driftingItemBowRest);
       this.flowersDeckTarget.name = 'flowers-deck-target';
       this.flowersDeckTarget.position.set(
         FLOWERS_DECK_TARGET.x,
@@ -1186,7 +1175,6 @@ export class BoatWorld {
       featured = new FeaturedEventPresentations(
           featuredModels,
           this.camera,
-          this.driftingItemBowRest,
           this.chestDisplay.root,
           this.flowersDeckTarget,
           this.checkBackSternFloor,
@@ -1369,8 +1357,12 @@ export class BoatWorld {
 
   playCarlitosAction(
     action: 'petCarlitos' | 'feedCarlitos',
+    onContact?: () => void,
   ): Promise<void> {
-    return this.carlitos.play(action === 'petCarlitos' ? 'pet' : 'feed');
+    return this.carlitos.play(
+      action === 'petCarlitos' ? 'pet' : 'feed',
+      onContact,
+    );
   }
 
   playDive(instanceId: ItemInstanceId, onWaterImpact: () => void): Promise<void> {
@@ -1389,6 +1381,16 @@ export class BoatWorld {
       this.activeDiveItemId = null;
     }
     this.diveElapsed = 0;
+  }
+
+  setHighlightedItem(anchorId: string | null): void {
+    if (this.disposed) return;
+    const focusedRoot = anchorId === null || this.activeEventPresenter === null
+      ? null
+      : this.eventPresentation.interactionRoot(anchorId);
+    this.toolHoverOutline.setTarget(
+      focusedRoot?.userData.disableHoverOutline === true ? null : focusedRoot,
+    );
   }
 
   setEventEligibleItems(instanceIds: ReadonlySet<ItemInstanceId> | null): void {
@@ -1709,17 +1711,17 @@ export class BoatWorld {
   }
 
   private retrieveFeaturedDriftingItem(eventId: DriftingItemEventId): Promise<void> {
-    const handOffChest = eventId === 'drifting-chest' && this.chestState !== 'none';
+    const coverPersistentChest = this.chestState !== 'none';
     const featuredEvents = this.featuredEvents;
-    if (handOffChest) this.chestDisplay.root.visible = false;
+    if (coverPersistentChest) this.chestDisplay.root.visible = false;
     return featuredEvents.react(
       eventId,
       driftingItemRetrieveKey(eventId),
     ).then(() => {
-      if (!handOffChest || this.disposed) return;
-      const eventChest = featuredEvents.resultRoot(eventId);
-      if (eventChest !== null) eventChest.visible = false;
-      this.chestDisplay.restorePose();
+      if (this.disposed) return;
+      const eventCargo = featuredEvents.resultRoot(eventId);
+      if (eventCargo !== null) eventCargo.visible = false;
+      if (coverPersistentChest) this.chestDisplay.restorePose();
     });
   }
 
@@ -2511,6 +2513,8 @@ export class BoatWorld {
   dispose(): void {
     if (this.disposed) return;
     runCleanupSteps([
+      () => this.setHighlightedItem(null),
+      () => this.toolHoverOutline.dispose(),
       () => { this.eventCueHandler = () => undefined; },
       () => this.cancelDriftingItemView(),
       () => {
@@ -3448,8 +3452,10 @@ export class BoatWorld {
       case 'drifting-chest':
         return oppositeEventSide(eventSideFromSeed(variantSeed));
       case 'eerie-melody':
-      case 'other-people':
+      case 'plane':
         return 1;
+      case 'other-people':
+        return oppositeEventSide(eventSideFromSeed(variantSeed));
       case 'school-of-fish':
       case 'tornado':
         return -1;

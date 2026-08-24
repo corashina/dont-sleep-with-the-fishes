@@ -280,8 +280,7 @@ export function sampleWeatherReveal(
       output.lightningEmphasis = pulse(t, 0.44, 0.55, 0.68);
       break;
     case 'restless-waves':
-      output.cameraYaw = 0.25 * Math.sin(2 * Math.PI * t) * sweep;
-      break;
+      return true;
     case 'man-in-the-fog':
       output.figureVisibility = smoothstep((t - 0.2) / 0.18);
       output.figureDistance = 0;

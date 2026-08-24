@@ -68,7 +68,7 @@ describe('flashlight in BoatWorld', () => {
       'flashlight',
       FLASHLIGHT.instanceId,
     );
-    const duration = eventItemUseDuration('flashlight-flash');
+    const duration = eventItemUseDuration('flashlight-threat-beam');
     world.update(duration, duration);
     await use;
 

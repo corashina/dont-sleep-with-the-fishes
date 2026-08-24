@@ -30,6 +30,16 @@ describe('event model audit contract', () => {
     expect(existsSync('src/assets/models/events/midnightPalmTrees.glb')).toBe(true);
   });
 
+  it('registers the supplied Plane event model', () => {
+    expect(EVENT_MODEL_IDS).toContain('airplane');
+    expect(EVENT_MODEL_SPECS.airplane).toMatchObject({
+      sourceUrl: 'https://poly.pizza/m/8VysVKMXN2J',
+      sourceModelId: 'poly-pizza:13293400-c90f-4cc0-966a-7e07d38f7565',
+      license: 'CC-BY 3.0',
+    });
+    expect(existsSync('src/assets/models/events/airplane.glb')).toBe(true);
+  });
+
   it('registers the required Midnight Tour action models', () => {
     expect(EVENT_MODEL_IDS).toEqual(expect.arrayContaining([
       'midnightShovel',
@@ -49,8 +59,8 @@ describe('event model audit contract', () => {
     expect(existsSync('src/assets/models/events/midnightMonster.glb')).toBe(true);
     expect(eventMetadata().midnightMonster?.animations).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: 'CharacterArmature|Run' }),
-        expect.objectContaining({ name: 'CharacterArmature|Run_Attack' }),
+        expect.objectContaining({ name: 'CharacterArmature|Idle' }),
+        expect.objectContaining({ name: 'CharacterArmature|Idle_Attack' }),
       ]),
     );
   });

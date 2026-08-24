@@ -17,6 +17,7 @@ import {
 } from '../src/survival/ItemAnimationLab';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
+import { resolveEventItemUseContext } from '../src/survival/eventItemUseChoreography';
 import type { SurvivalUI } from '../src/ui/SurvivalUI';
 
 function allItems(): readonly ItemInstance[] {
@@ -44,11 +45,27 @@ describe('Item Animation Lab', () => {
     itemId !== 'scubaSet' && itemId !== 'radio' && itemId !== 'carlitos'
   ));
 
-  it('defines one canonical route for every event-use item', () => {
+  it('defines animation routes for every event-use item', () => {
     expect(Object.keys(ITEM_ANIMATION_LAB_USES)).toEqual(animatedItemIds);
+    expect(ITEM_ANIMATION_LAB_USES.bucket?.map(({ id }) => id)).toEqual([
+      'bucket-scoop',
+      'bucket-helmet',
+      'base',
+      'trade-handover',
+    ]);
+    expect(ITEM_ANIMATION_LAB_USES.compass).toHaveLength(1);
     expect(ITEM_ANIMATION_LAB_USES.scubaSet).toBeUndefined();
     expect(ITEM_ANIMATION_LAB_USES.radio).toBeUndefined();
     expect(ITEM_ANIMATION_LAB_USES.carlitos).toBeUndefined();
+  });
+
+  it('maps each prompt option to its named animation context', () => {
+    for (const itemId of animatedItemIds) {
+      for (const route of ITEM_ANIMATION_LAB_USES[itemId]!) {
+        expect(resolveEventItemUseContext(route.eventId, route.choiceId, itemId))
+          .toBe(route.id);
+      }
+    }
   });
 
   it('starts with three food and bait supplies without duplicate actions', () => {
@@ -193,10 +210,10 @@ describe('Item Animation Lab', () => {
     expect(initialEligibility.get(CARLITOS_LAB_INSTANCE_ID))
       .toBe(CARLITOS_LAB_CHOICE_ID);
 
-    const first = current.inventory['cannedFood-1']!;
-    const second = current.inventory['flashlight-1']!;
-    const firstUse = ITEM_ANIMATION_LAB_USES[first.type]!;
-    const secondUse = ITEM_ANIMATION_LAB_USES[second.type]!;
+    const first = current.inventory['compass-1']!;
+    const second = current.inventory['swimRing-1']!;
+    const firstUse = ITEM_ANIMATION_LAB_USES[first.type]![0]!;
+    const secondUse = ITEM_ANIMATION_LAB_USES[second.type]![0]!;
     phase.handleEventItem(firstUse.choiceId, first.instanceId);
     phase.handleEventItem(secondUse.choiceId, second.instanceId);
 
@@ -227,6 +244,67 @@ describe('Item Animation Lab', () => {
 
     phase.handleEventItem(firstUse.choiceId, first.instanceId);
     expect(playEventItemUse).toHaveBeenCalledTimes(2);
+    phase.dispose();
+  });
+
+  it('prompts for a multi-animation item and plays the selected route', async () => {
+    const current = new SurvivalSession(allItems(), { seed: 19 }).snapshot();
+    const showItemAnimationLabChoices = vi.fn();
+    const hideItemAnimationLabChoices = vi.fn();
+    const stageEvent = vi.fn();
+    const playEventItemUse = vi.fn(() => Promise.resolve());
+    const ui: Partial<SurvivalUI> = {
+      beginEventPresentation: vi.fn(),
+      showItemAnimationLab: vi.fn(),
+      showItemAnimationLabChoices,
+      hideItemAnimationLabChoices,
+      setEventSelection: vi.fn(),
+      setEventUsing: vi.fn(),
+      setBusy: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => current) },
+      world: {
+        stageEvent,
+        playEventItemUse,
+        returnEventItemUse: vi.fn(() => Promise.resolve()),
+        clearEvent: vi.fn(),
+        setEventEligibleItems: vi.fn(),
+        setEventSelectedItem: vi.fn(),
+        syncInventory: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui,
+    }, ITEM_ANIMATION_LAB_ID);
+
+    phase.start();
+    const bucket = current.inventory['bucket-1']!;
+    phase.handleEventItem(
+      ITEM_ANIMATION_LAB_USES.bucket![0]!.choiceId,
+      bucket.instanceId,
+    );
+
+    expect(showItemAnimationLabChoices).toHaveBeenCalledExactlyOnceWith(
+      'BUCKET',
+      ITEM_ANIMATION_LAB_USES.bucket!.map(({ id, label }) => ({
+        id,
+        label,
+        unavailableReason: null,
+      })),
+    );
+    expect(playEventItemUse).not.toHaveBeenCalled();
+
+    ui.onEventChoice?.('bucket-helmet');
+    expect(hideItemAnimationLabChoices).toHaveBeenCalledOnce();
+    expect(stageEvent).toHaveBeenCalledExactlyOnceWith('shower-night');
+    expect(playEventItemUse).toHaveBeenCalledExactlyOnceWith(
+      'shower-night',
+      'bucket',
+      bucket.instanceId,
+    );
+
+    await flushPromises();
     phase.dispose();
   });
 

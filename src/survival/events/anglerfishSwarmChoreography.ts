@@ -77,10 +77,10 @@ export interface SwarmFishPose {
 const GROUP_SIZES = [2, 2, 1, 1] as const;
 const GROUP_REVEAL = [0.06, 0.24, 0.38, 0.52] as const;
 const SWARM_ANGLES = [
-  0.72 * Math.PI,
-  0.28 * Math.PI,
-  -0.72 * Math.PI,
-  -0.28 * Math.PI,
+  (2 / 3) * Math.PI,
+  (1 / 3) * Math.PI,
+  (-2 / 3) * Math.PI,
+  (-1 / 3) * Math.PI,
   Math.PI,
   0,
 ] as const;
@@ -124,13 +124,13 @@ export function createSwarmVariants(
   for (let index = 0; index < count; index += 1) {
     const group = groupForIndex(index);
     const angle = SWARM_ANGLES[index]!
-      + (variantUnit(seed, index, 0) - 0.5) * 0.14;
+      + (variantUnit(seed, index, 0) - 0.5) * 0.06;
     variants.push({
       scale: 0.54 + variantUnit(seed, index, 1) * 0.32,
       hullAngle: angle,
-      radiusX: 3.2 + variantUnit(seed, index, 2) * 0.6,
-      radiusZ: 4.6 + variantUnit(seed, index, 3) * 0.7,
-      approachDistance: 1.4 + variantUnit(seed, index, 4) * 0.8,
+      radiusX: 4.6 + variantUnit(seed, index, 2) * 0.8,
+      radiusZ: 6.3 + variantUnit(seed, index, 3),
+      approachDistance: 2 + variantUnit(seed, index, 4) * 0.8,
       depth: 0.22 + variantUnit(seed, index, 5) * 0.48,
       speed: 0.68 + variantUnit(seed, index, 6) * 0.62,
       roll: (variantUnit(seed, index, 7) - 0.5) * 0.2,
@@ -330,7 +330,7 @@ export function sampleSwarmFishPose(
   output: SwarmFishPose,
 ): void {
   const safeTime = Number.isFinite(time) ? time : 0;
-  const orbitAngle = variant.hullAngle + safeTime * variant.speed * ORBIT_SPEED_SCALE;
+  const orbitAngle = variant.hullAngle + safeTime * ORBIT_SPEED_SCALE;
   const localClose = smoothstep(
     (swarm.revealProgress - variant.revealAt - 0.04)
     / Math.max(0.18, 0.88 - variant.revealAt),

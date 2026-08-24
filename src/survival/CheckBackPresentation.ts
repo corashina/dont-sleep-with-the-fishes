@@ -9,11 +9,9 @@ import { StationaryEventCamera } from './StationaryEventCamera';
 import type { EventPresentationCue } from './eventPresentationCue';
 import type { EventPresentationKey } from './survivalTypes';
 
-const STERN_YAW = Math.PI;
-const STERN_LOOK_DOWN_PITCH = -0.74;
-const REVEAL_DURATION = 3.8;
+const REVEAL_DURATION = 0.25;
 const REACTION_DURATION = 4.2;
-const ACTOR_REVEAL_PROGRESS = 0.72;
+const ACTOR_CUE_PROGRESS = 0.55;
 
 function smoothstep(value: number): number {
   const clamped = Math.min(1, Math.max(0, value));
@@ -69,14 +67,14 @@ export class CheckBackPresentation extends KeyedEventPresentation {
   protected applyIdle(_time: number): void {
     this.placeSubjectInsideStern();
     if (this.settledKind === 'check-the-back.fish') {
-      this.applySternView();
       this.fish.visible = true;
       this.fish.rotation.z = -0.12;
       this.anglerfish.visible = false;
+      this.cameraLook.applyLookAt(this.fish);
     } else if (this.settledKind === 'check-the-back.bad') {
-      this.applySternView();
       this.fish.visible = false;
       this.anglerfish.visible = true;
+      this.cameraLook.applyLookAt(this.anglerfish);
     } else {
       this.cameraLook.apply(0, 0);
       this.fish.visible = false;
@@ -93,36 +91,26 @@ export class CheckBackPresentation extends KeyedEventPresentation {
   protected applyAnimation(kind: string, _time: number, progress: number): void {
     this.placeSubjectInsideStern();
     if (kind === 'reveal') {
-      const sweep = Math.sin(Math.PI * progress);
-      const ingress = smoothstep(progress / 0.12);
-      const returnToCenter = 1 - smoothstep((progress - 0.72) / 0.28);
-      const yaw = 0.25 * Math.sin(2 * Math.PI * progress)
-        * sweep * ingress * returnToCenter;
-      this.cameraLook.apply(yaw, 0);
+      this.cameraLook.apply(0, 0);
       return;
     }
     if (kind === 'check-the-back.ignore') {
       this.cameraLook.apply(0, 0);
       return;
     }
-    const turn = smoothstep(progress / 0.68);
-    const lookDown = smoothstep((progress - 0.42) / 0.3);
-    this.cameraLook.apply(turn * STERN_YAW, lookDown * STERN_LOOK_DOWN_PITCH);
     if (kind !== 'check-the-back.fish' && kind !== 'check-the-back.bad') return;
-    if (progress <= ACTOR_REVEAL_PROGRESS) return;
-
-    const actorProgress = smoothstep(
-      (progress - ACTOR_REVEAL_PROGRESS) / (1 - ACTOR_REVEAL_PROGRESS),
-    );
     const actor = kind === 'check-the-back.fish' ? this.fish : this.anglerfish;
     actor.visible = true;
-    if (!this.cueEmitted) {
+    const turn = smoothstep(progress / 0.68);
+    this.cameraLook.applyLookAt(actor, turn);
+    if (!this.cueEmitted && progress >= ACTOR_CUE_PROGRESS) {
       this.cueEmitted = true;
       this.emitCue({
         eventId: 'check-the-back',
         cue: kind === 'check-the-back.fish' ? 'fish' : 'anglerfish',
       });
     }
+    const actorProgress = smoothstep(progress);
     if (kind === 'check-the-back.fish') {
       actor.rotation.z = Math.sin(actorProgress * Math.PI * 5)
         * (1 - actorProgress) * 0.7;
@@ -155,10 +143,6 @@ export class CheckBackPresentation extends KeyedEventPresentation {
 
   interactionRoot(): Object3D | null {
     return null;
-  }
-
-  private applySternView(): void {
-    this.cameraLook.apply(STERN_YAW, STERN_LOOK_DOWN_PITCH);
   }
 
   private placeSubjectInsideStern(): void {

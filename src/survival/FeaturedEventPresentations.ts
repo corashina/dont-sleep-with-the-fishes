@@ -27,8 +27,7 @@ export class FeaturedEventPresentations {
   constructor(
     models: SurvivalEventModels,
     camera: PerspectiveCamera,
-    driftingItemBowTarget: Object3D,
-    driftingChestTarget: Object3D,
+    driftingCargoSternTarget: Object3D,
     flowersDeckTarget: Object3D,
     checkBackSternTarget: Object3D,
     emitCue: (cue: EventPresentationCue) => void,
@@ -48,10 +47,7 @@ export class FeaturedEventPresentations {
       ? new DriftingCargoPresentation({
           barrel: include('drifting-barrel') ? models.clone('driftingBarrel') : new Group(),
           chest: include('drifting-chest') ? models.clone('mysteryChest') : new Group(),
-        }, {
-          barrel: driftingItemBowTarget,
-          chest: driftingChestTarget,
-        }, driftingWater)
+        }, driftingCargoSternTarget, driftingWater)
       : null;
     if (include('check-the-back')) {
       this.presentations.set('check-the-back', new CheckBackPresentation(

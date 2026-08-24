@@ -97,13 +97,13 @@ Supplies are repeatable physical instances rather than one slot per item type. T
 | Top-center journal button | Open completed entries; `NEW` marks unread history |
 | Boat lantern | End the day and fade into an event or quiet night |
 | Closed chest | Spend three energy to open the chest |
-| Carlitos | Select **Check Status** to open his scene-linked care card |
+| Carlitos | Select **Carlitos** to open his scene-linked care card |
 
 ### Carlitos
 
 Carlitos is the only crewmate. Save him on Dorothy to bring him into the lifeboat.
 
-Select **Check Status** beside him to see his Hunger, Happiness, and Health. The card offers **Pet**, **Feed**, and **Treat**.
+Select **Carlitos** to see his Hunger, Happiness, and Health. The card offers **Pet**, **Feed**, and **Treat**.
 
 Pet eases loneliness once each day. Feed uses one Food. Treat uses one Medkit when he is sick.
 
@@ -197,6 +197,8 @@ Source pages, licenses, resource IDs, hashes, and processing records are listed
 in [the asset ledger](src/assets/ATTRIBUTION.md).
 
 The ship alarm uses [Klaxon by InfamousLazure](https://freesound.org/people/InfamousLazure/sounds/584001/) from Freesound under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+
+Carlitos uses seven clips split from [Cat Meows 7x by Kinoton](https://freesound.org/people/Kinoton/sounds/584895/) under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
 
 Dorothy's main cargo deck uses [Poly Haven — Dark Wooden Planks](https://polyhaven.com/a/dark_wooden_planks). All room floors use [Poly Haven — Blue Painted Planks](https://polyhaven.com/a/blue_painted_planks), interior and exterior room walls use [ambientCG — Painted Wood 006C](https://ambientcg.com/view?id=PaintedWood006C), and the exterior hull sides and waterline use [ambientCG — Painted Metal 006](https://ambientcg.com/view?id=PaintedMetal006). Windows, roofs, machinery, rails, ropes, safety markings, canvas, and small hardware retain distinct authored materials for readability.
 

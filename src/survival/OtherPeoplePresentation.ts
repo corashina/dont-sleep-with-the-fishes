@@ -25,6 +25,7 @@ import {
   disposeResourceSets,
 } from '../world/SceneResources';
 import type { MutableSupplyPose } from './BoatSupplyDisplay';
+import { eventSideFromSeed, type EventSide } from './eventVariant';
 import {
   clamp01Unchecked as clamp01,
   smoothstepUnchecked as smoothstep,
@@ -179,6 +180,9 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   private readonly staticGeometries = new Set<BufferGeometry>();
   private readonly staticMaterials = new Set<Material>();
   private readonly shipStartPosition = new Vector3();
+  private readonly shipBase = SHIP_BASE.clone();
+  private readonly shipApproach = SHIP_APPROACH.clone();
+  private readonly shipExit = SHIP_EXIT.clone();
   private readonly cameraLook: StationaryEventCamera;
   private readonly supplyPose: MutableSupplyPose = {
     x: 0,
@@ -196,6 +200,9 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     (kind) => this.finishAnimation(kind),
   );
   private selectedInstanceId: ItemInstanceId | null = null;
+  private side: EventSide = -1;
+  private shipYaw = SHIP_YAW;
+  private rescueYaw = RESCUE_YAW;
   private shipStartYaw = SHIP_YAW;
   private supplyPinned = false;
   private portRevealed = false;
@@ -246,7 +253,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.resetActors();
   }
 
-  stage(): void {
+  stage(variantSeed = 0): void {
     if (this.disposed) return;
     this.animation.cancel();
     this.restoreCamera();
@@ -254,13 +261,14 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.captureCamera();
     this.naturalRescueCue = false;
     this.terminalRescue = false;
+    this.configureSide(variantSeed);
     this.staged = true;
     this.root.visible = true;
     this.root.userData.holdOnClear = false;
     this.resetActors();
     this.ship.visible = true;
-    this.ship.position.copy(SHIP_BASE);
-    this.ship.rotation.y = SHIP_YAW;
+    this.ship.position.copy(this.shipBase);
+    this.ship.rotation.y = this.shipYaw;
     this.updateBeaconPose();
     this.updateOpenWaterDistance();
     this.root.userData.state = 'staged';
@@ -427,12 +435,12 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     const normalized = clamp01(progress);
     const approach = keyedTravel(normalized);
     this.ship.position.lerpVectors(
-      SHIP_BASE,
-      SHIP_APPROACH,
+      this.shipBase,
+      this.shipApproach,
       approach,
     );
-    this.ship.rotation.y = SHIP_YAW
-      + (RESCUE_YAW - SHIP_YAW) * smoothstep(normalized);
+    this.ship.rotation.y = this.shipYaw
+      + (this.rescueYaw - this.shipYaw) * smoothstep(normalized);
     this.root.userData.answerPulses = normalized > 0 ? 1 : 0;
     this.root.userData.courseTurns = normalized > 0 ? 1 : 0;
     const answer = Math.sin(Math.PI * clamp01(normalized / 0.34));
@@ -589,11 +597,11 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     const approach = keyedTravel((progress - 0.28) / 0.72);
     this.ship.position.lerpVectors(
       this.shipStartPosition,
-      SHIP_APPROACH,
+      this.shipApproach,
       approach,
     );
     this.ship.rotation.y = this.shipStartYaw
-      + (RESCUE_YAW - this.shipStartYaw) * turn;
+      + (this.rescueYaw - this.shipStartYaw) * turn;
     this.root.userData.courseTurns = turn > 0 ? 1 : 0;
     this.beamVisual.visible = false;
     this.updateBeaconPose();
@@ -608,7 +616,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     const travel = clamp01(progress);
     this.ship.position.lerpVectors(
       this.shipStartPosition,
-      SHIP_EXIT,
+      this.shipExit,
       travel,
     );
     this.ship.rotation.y = this.shipStartYaw;
@@ -624,7 +632,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
 
   private advanceCruise(delta: number): void {
     const travel = Math.max(0, delta) * CRUISE_SPEED;
-    this.ship.position.x += travel;
+    this.ship.position.x -= travel * this.side;
     this.ship.position.z += travel * 0.05;
     this.updateBeaconPose();
     this.updateOpenWaterDistance();
@@ -640,12 +648,13 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
 
   private applySupplyAim(progress: number): void {
     if (!this.supplyPinned || this.selectedInstanceId === null) return;
-    this.supplyPose.x = 0.42 * progress;
+    const mirror = -this.side;
+    this.supplyPose.x = 0.42 * progress * mirror;
     this.supplyPose.y = 0.34 * progress;
     this.supplyPose.z = -0.72 * progress;
-    this.supplyPose.yaw = -0.18 * progress;
+    this.supplyPose.yaw = -0.18 * progress * mirror;
     this.supplyPose.pitch = -0.32 * progress;
-    this.supplyPose.roll = -0.06 * progress;
+    this.supplyPose.roll = -0.06 * progress * mirror;
     this.dependencies.supplyDisplay.applyEventItemPose(
       this.selectedInstanceId,
       this.supplyPose,
@@ -675,8 +684,8 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   private ensureShipPresented(): void {
     if (this.ship.visible) return;
     this.ship.visible = true;
-    this.ship.position.copy(SHIP_BASE);
-    this.ship.rotation.y = SHIP_YAW;
+    this.ship.position.copy(this.shipBase);
+    this.ship.rotation.y = this.shipYaw;
     this.portBeacon.visible = true;
     this.starboardBeacon.visible = true;
     this.setBeaconIntensity(HORIZON_LIGHT_INTENSITY);
@@ -727,7 +736,7 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   }
 
   private applyCameraPose(yaw: number, pitch: number): void {
-    this.cameraLook.apply(yaw, pitch);
+    this.cameraLook.apply(yaw * -this.side, pitch);
   }
 
   private captureCamera(): void {
@@ -740,8 +749,8 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
 
   private resetActors(): void {
     this.ship.visible = false;
-    this.ship.position.copy(SHIP_BASE);
-    this.ship.rotation.set(0, SHIP_YAW, 0);
+    this.ship.position.copy(this.shipBase);
+    this.ship.rotation.set(0, this.shipYaw, 0);
     this.portBeacon.visible = false;
     this.starboardBeacon.visible = false;
     this.setBeaconIntensity(0);
@@ -751,6 +760,21 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.shipRevealed = false;
     this.updateBeaconPose();
     this.updateOpenWaterDistance();
+  }
+
+  private configureSide(variantSeed: number): void {
+    this.side = eventSideFromSeed(variantSeed);
+    const mirror = -this.side;
+    this.shipBase.copy(SHIP_BASE);
+    this.shipBase.x *= mirror;
+    this.shipApproach.copy(SHIP_APPROACH);
+    this.shipApproach.x *= mirror;
+    this.shipExit.copy(SHIP_EXIT);
+    this.shipExit.x *= mirror;
+    this.shipYaw = this.side === -1 ? SHIP_YAW : Math.PI - SHIP_YAW;
+    this.rescueYaw = this.side === -1 ? RESCUE_YAW : Math.PI - RESCUE_YAW;
+    this.beamVisual.scale.x = mirror;
+    this.root.userData.eventSide = this.side === -1 ? 'left' : 'right';
   }
 
   private buildShip(): void {

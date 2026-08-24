@@ -39,8 +39,8 @@ describe('flashlight item-use animation', () => {
     const lit = createEventItemUseSample();
     const unlit = createEventItemUseSample();
 
-    sampleEventItemUse('flashlight-flash', 'flashlight', 0.43, lit);
-    sampleEventItemUse('flashlight-flash', 'flashlight', 0.447, unlit);
+    sampleEventItemUse('flashlight-signal', 'flashlight', 0.43, lit);
+    sampleEventItemUse('flashlight-signal', 'flashlight', 0.447, unlit);
 
     expect([lit.viewX, lit.viewY, lit.viewZ]).toEqual([
       unlit.viewX,
@@ -52,16 +52,16 @@ describe('flashlight item-use animation', () => {
 
   it('signals SOS with nine keyed light and sound cues', () => {
     const sample = createEventItemUseSample();
-    const cueProgresses = eventItemActionCueProgresses('flashlight-flash');
+    const cueProgresses = eventItemActionCueProgresses('flashlight-signal');
 
     expect(cueProgresses).toHaveLength(9);
     for (const progress of cueProgresses) {
-      sampleEventItemUse('flashlight-flash', 'flashlight', progress + 0.006, sample);
+      sampleEventItemUse('flashlight-signal', 'flashlight', progress + 0.006, sample);
       expect(sample.effectKind).toBe('flashlight');
       expect(sample.primaryEffect).toBeGreaterThan(0);
     }
 
-    sampleEventItemUse('flashlight-flash', 'flashlight', 0.447, sample);
+    sampleEventItemUse('flashlight-signal', 'flashlight', 0.447, sample);
     expect(sample.effectKind).toBe('none');
     expect(sample.primaryEffect).toBe(0);
   });
@@ -71,7 +71,7 @@ describe('flashlight item-use animation', () => {
     const actor = new Object3D();
     const beam = effects.root.getObjectByName('event-item-flashlight-cone') as Mesh;
     const sample = createEventItemUseSample();
-    sampleEventItemUse('flashlight-flash', 'flashlight', 0.43, sample);
+    sampleEventItemUse('flashlight-signal', 'flashlight', 0.43, sample);
 
     effects.apply(sample, actor);
     beam.geometry.computeBoundingBox();
@@ -87,16 +87,16 @@ describe('flashlight item-use animation', () => {
     const returning = createEventItemUseSample();
     const stowed = createEventItemUseSample();
 
-    sampleEventItemUse('flashlight-flash', 'flashlight', 1, raised);
+    sampleEventItemUse('flashlight-signal', 'flashlight', 1, raised);
     sampleEventItemOutcome(
-      'flashlight-flash',
+      'flashlight-signal',
       'flashlight',
       'recover',
       0,
       returning,
     );
     sampleEventItemOutcome(
-      'flashlight-flash',
+      'flashlight-signal',
       'flashlight',
       'recover',
       1,
@@ -117,6 +117,6 @@ describe('flashlight item-use animation', () => {
     expect(stowed.aimBlend).toBe(0);
     expect(stowed.itemVisible).toBe(false);
     expect(eventItemOutcomeDuration('flashlight', 'recover'))
-      .toBeLessThan(eventItemUseDuration('flashlight-flash'));
+      .toBeLessThan(eventItemUseDuration('flashlight-signal'));
   });
 });

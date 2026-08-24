@@ -37,6 +37,7 @@ export const EVENT_PRESENTATION_ROUTES = Object.freeze({
   'night-trader': 'focused',
   handyman: 'focused',
   'other-people': 'focused',
+  plane: 'focused',
 } as const satisfies Readonly<Record<SurvivalEventId, EventPresentationRoute>>);
 
 export type EventIdForRoute<Route extends EventPresentationRoute> = {

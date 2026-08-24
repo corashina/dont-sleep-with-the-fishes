@@ -5,14 +5,17 @@ import { scaleEventItemDuration, scaleThrownItemDuration } from './eventItemTimi
 
 export type EventItemUseContext =
   | 'base' | 'throw-target' | 'tape-stretch' | 'compass-search' | 'map-read'
-  | 'binocular-look' | 'net-scoop' | 'bucket-scoop' | 'bucket-cover'
+  | 'binocular-look' | 'net-scoop' | 'bucket-scoop' | 'bucket-helmet'
+  | 'trade-handover' | 'cover-supplies' | 'net-spread' | 'map-leak-patch'
   | 'flare-target' | 'flare-sky' | 'anchor-drop'
   | 'umbrella-overhead' | 'umbrella-shield'
-  | 'flashlight-flash' | 'shotgun-fire';
+  | 'flashlight-threat-beam' | 'flashlight-signal' | 'shotgun-fire';
 
 export type EventItemEffectKind =
-  | 'none' | 'tape' | 'binocular-mask' | 'bucket-cover'
+  | 'none' | 'tape' | 'binocular-mask'
   | 'flare' | 'chain' | 'flashlight' | 'shotgun-smoke';
+
+export type EventItemSurfaceFacing = 'default' | 'none' | 'target';
 
 export type EventItemFlightTarget = 'event' | 'starboard-water' | 'bucket-water';
 
@@ -31,6 +34,7 @@ const FLASHLIGHT_MORSE_INTERVALS = Object.freeze([
 const FLASHLIGHT_MORSE_CUE_PROGRESSES = Object.freeze([
   0.42, 0.456, 0.492, 0.564, 0.636, 0.708, 0.816, 0.852, 0.888,
 ]);
+const FLASHLIGHT_THREAT_CUE_PROGRESSES = Object.freeze([0.42]);
 const SHOTGUN_ACTION_CUE_PROGRESSES = Object.freeze([0.46]);
 const FLARE_GUN_ACTION_CUE_PROGRESSES = Object.freeze([0.46, 0.54]);
 const FLARE_GUN_READY_YAW = -Math.PI / 2 + 0.22;
@@ -87,25 +91,35 @@ export interface EventItemUseSample {
   effectTravel: number;
   effectArc: number;
   itemVisible: boolean;
+  surfaceFacing: EventItemSurfaceFacing;
 }
 
 const BUCKET_SCOOP_EVENTS: ReadonlySet<string> = new Set([
-  'leak', 'school-of-fish', 'shower-night', 'thunderstorm',
+  'leak', 'school-of-fish', 'thunderstorm',
 ]);
-const BUCKET_COVER_EVENTS: ReadonlySet<string> = new Set([
-  'bad-sleep', 'eerie-melody',
+const BUCKET_HELMET_EVENTS: ReadonlySet<string> = new Set([
+  'shower-night', 'bad-sleep', 'eerie-melody',
 ]);
 const UMBRELLA_OVERHEAD_EVENTS: ReadonlySet<string> = new Set([
-  'shower-night', 'windy-night', 'thunderstorm',
+  'shower-night', 'thunderstorm',
 ]);
 const UMBRELLA_SHIELD_EVENTS: ReadonlySet<string> = new Set([
   'bad-sleep', 'death-stare', 'eerie-melody', 'face-on-the-moon',
 ]);
-const FLARE_SKY_EVENTS: ReadonlySet<string> = new Set(['other-people']);
+const FLARE_SKY_EVENTS: ReadonlySet<string> = new Set(['other-people', 'plane']);
 const FLARE_TARGET_EVENTS: ReadonlySet<string> = new Set(['ghosts']);
-const BASE_BUCKET_EVENTS: ReadonlySet<string> = new Set(['flowers', 'handyman']);
-const BASE_UMBRELLA_EVENTS: ReadonlySet<string> = new Set(['night-trader']);
-const BASE_FLARE_EVENTS: ReadonlySet<string> = new Set(['shadow-figure', 'handyman']);
+const BASE_BUCKET_EVENTS: ReadonlySet<string> = new Set(['flowers']);
+const BASE_FLARE_EVENTS: ReadonlySet<string> = new Set(['shadow-figure']);
+const TRADE_EVENTS: ReadonlySet<string> = new Set(['night-trader', 'handyman']);
+const COVER_SUPPLY_MAP_EVENTS: ReadonlySet<string> = new Set([
+  'shower-night', 'windy-night',
+]);
+const NET_SPREAD_EVENTS: ReadonlySet<string> = new Set([
+  'windy-night', 'swarm-of-anglerfish',
+]);
+const FLASHLIGHT_SIGNAL_EVENTS: ReadonlySet<string> = new Set([
+  'other-people', 'plane',
+]);
 
 export function createEventItemUseSample(): EventItemUseSample {
   return {
@@ -135,6 +149,7 @@ export function createEventItemUseSample(): EventItemUseSample {
     effectTravel: 0,
     effectArc: 0,
     itemVisible: true,
+    surfaceFacing: 'default',
   };
 }
 
@@ -143,15 +158,17 @@ export function resolveEventItemUseContext(
   choiceId: string,
   itemId: ItemId,
 ): EventItemUseContext | null {
+  if (TRADE_EVENTS.has(eventId)) return 'trade-handover';
   if (itemId === 'bucket' && choiceId === 'bucket') {
     if (BUCKET_SCOOP_EVENTS.has(eventId)) return 'bucket-scoop';
-    if (BUCKET_COVER_EVENTS.has(eventId)) return 'bucket-cover';
+    if (BUCKET_HELMET_EVENTS.has(eventId)) return 'bucket-helmet';
     return BASE_BUCKET_EVENTS.has(eventId) ? 'base' : null;
   }
   if (itemId === 'umbrella' && choiceId === 'umbrella') {
+    if (eventId === 'windy-night') return 'cover-supplies';
     if (UMBRELLA_OVERHEAD_EVENTS.has(eventId)) return 'umbrella-overhead';
     if (UMBRELLA_SHIELD_EVENTS.has(eventId)) return 'umbrella-shield';
-    return BASE_UMBRELLA_EVENTS.has(eventId) ? 'base' : null;
+    return null;
   }
   if (itemId === 'flareGun' && choiceId === 'flareGun') {
     if (FLARE_SKY_EVENTS.has(eventId)) return 'flare-sky';
@@ -185,10 +202,20 @@ export function resolveEventItemUseContext(
   if (itemId === 'swimRing' && choiceId === 'swimRing') return 'throw-target';
   if (itemId === 'ductTape' && choiceId === 'ductTape') return 'tape-stretch';
   if (itemId === 'compass' && choiceId === 'compass') return 'compass-search';
-  if (itemId === 'map' && choiceId === 'map') return 'map-read';
+  if (itemId === 'map' && choiceId === 'map') {
+    if (eventId === 'leak') return 'map-leak-patch';
+    if (COVER_SUPPLY_MAP_EVENTS.has(eventId)) return 'cover-supplies';
+    return 'map-read';
+  }
   if (itemId === 'spyglass' && choiceId === 'spyglass') return 'binocular-look';
-  if (itemId === 'fishingNet' && choiceId === 'fishingNet') return 'net-scoop';
-  if (itemId === 'flashlight' && choiceId === 'flashlight') return 'flashlight-flash';
+  if (itemId === 'fishingNet' && choiceId === 'fishingNet') {
+    return NET_SPREAD_EVENTS.has(eventId) ? 'net-spread' : 'net-scoop';
+  }
+  if (itemId === 'flashlight' && choiceId === 'flashlight') {
+    return FLASHLIGHT_SIGNAL_EVENTS.has(eventId)
+      ? 'flashlight-signal'
+      : 'flashlight-threat-beam';
+  }
   if (itemId === 'shotgun' && choiceId === 'shotgun') return 'shotgun-fire';
   return null;
 }
@@ -203,13 +230,18 @@ export function eventItemUseDuration(context: EventItemUseContext): number {
     case 'binocular-look': return scaleEventItemDuration(1.7);
     case 'net-scoop': return scaleEventItemDuration(SCOOP_DURATION);
     case 'bucket-scoop': return scaleEventItemDuration(SCOOP_DURATION);
-    case 'bucket-cover': return scaleEventItemDuration(1.35);
+    case 'bucket-helmet': return scaleEventItemDuration(1.45);
+    case 'trade-handover': return scaleEventItemDuration(1.35);
+    case 'cover-supplies': return scaleEventItemDuration(1.5);
+    case 'net-spread': return scaleEventItemDuration(1.55);
+    case 'map-leak-patch': return scaleEventItemDuration(1.5);
     case 'flare-target': return scaleEventItemDuration(1.5);
     case 'flare-sky': return scaleEventItemDuration(1.65);
     case 'anchor-drop': return scaleEventItemDuration(1.6);
     case 'umbrella-overhead': return scaleEventItemDuration(1.45);
     case 'umbrella-shield': return scaleEventItemDuration(1.35);
-    case 'flashlight-flash': return scaleEventItemDuration(1.35);
+    case 'flashlight-threat-beam': return scaleEventItemDuration(1.45);
+    case 'flashlight-signal': return scaleEventItemDuration(1.7);
     case 'shotgun-fire': return scaleEventItemDuration(1.2);
   }
 }
@@ -253,6 +285,7 @@ function resetSample(output: EventItemUseSample): void {
   output.effectTravel = 0;
   output.effectArc = 0;
   output.itemVisible = true;
+  output.surfaceFacing = 'default';
 }
 
 function samplePickupAndHold(
@@ -442,15 +475,90 @@ function sampleBucketScoop(
   output.primaryEffect = scoop;
 }
 
-function sampleBucketCover(
+function sampleBucketHelmet(
   output: EventItemUseSample, pickup: number, hold: number, action: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  output.effectKind = action > 0 ? 'bucket-cover' : 'none';
-  output.viewY += 0.5 * action;
-  output.viewZ -= 0.18 * action;
-  output.pitch = -0.42 * action;
+  applyBucketBenchClearance(output, pickup);
+  output.viewX *= 1 - action;
+  output.viewY += 0.68 * action;
+  output.viewZ += 0.68 * action;
+  output.yaw = 0.08 * action;
+  output.pitch = -Math.PI * 0.78 * action;
+  output.roll = -0.08 * action;
   output.primaryEffect = action;
+}
+
+function sampleTradeHandover(
+  output: EventItemUseSample,
+  pickup: number,
+  hold: number,
+  progress: number,
+): void {
+  samplePickupAndHold(output, pickup, hold);
+  const offer = smoothstep((progress - 0.48) / 0.28);
+  output.viewY += 0.12 * offer;
+  output.viewZ -= 0.08 * offer;
+  output.yaw += 0.08 * offer;
+  output.pitch += 0.06 * offer;
+  output.targetBlend = 0.88 * offer;
+  output.cameraTargetBlend = 0.12 * offer;
+  output.ballisticFlight = false;
+}
+
+function sampleCoverSupplies(
+  output: EventItemUseSample,
+  pickup: number,
+  hold: number,
+  action: number,
+  itemId: ItemId | undefined,
+): void {
+  samplePickupAndHold(output, pickup, hold);
+  output.viewX += (0.52 - output.viewX) * action;
+  output.viewY += (-0.58 - output.viewY) * action;
+  output.viewZ += (-1.02 - output.viewZ) * action;
+  output.yaw = 0.24 * action;
+  output.pitch = (itemId === 'umbrella' ? -0.28 : -0.16) * action;
+  output.roll = (itemId === 'umbrella' ? -1.28 : -0.92) * action;
+  output.surfaceFacing = 'none';
+}
+
+function sampleNetSpread(
+  output: EventItemUseSample,
+  pickup: number,
+  hold: number,
+  action: number,
+): void {
+  samplePickupAndHold(output, pickup, hold);
+  output.viewX -= 0.22 * action;
+  output.viewY += 0.44 * action;
+  output.viewZ += 0.08 * action;
+  output.yaw = 0.22 * action;
+  output.pitch = -1.08 * action;
+  output.roll = -0.34 * action;
+  output.aimBlend = 0;
+}
+
+function sampleMapLeakPatch(
+  output: EventItemUseSample,
+  pickup: number,
+  hold: number,
+  progress: number,
+): void {
+  samplePickupAndHold(output, pickup, hold);
+  const open = smoothstep((progress - 0.34) / 0.16);
+  const press = smoothstep((progress - 0.5) / 0.22);
+  output.viewX -= 0.12 * open;
+  output.viewY += 0.08 * open;
+  output.roll = -0.68 * open;
+  output.scaleX = 1 + 0.28 * open;
+  output.scaleY = 1 + 0.28 * open;
+  output.scaleZ = 1 + 0.28 * open;
+  output.targetBlend = 0.94 * press;
+  output.aimBlend = press;
+  output.cameraTargetBlend = 0.24 * press;
+  output.ballisticFlight = false;
+  output.surfaceFacing = 'target';
 }
 
 function sampleFlare(
@@ -539,7 +647,7 @@ function sampleFlashlightMorse(progress: number): number {
   return 0;
 }
 
-function sampleFlashlightFlash(
+function sampleFlashlightSignal(
   output: EventItemUseSample,
   pickup: number,
   hold: number,
@@ -552,6 +660,22 @@ function sampleFlashlightFlash(
   output.roll = -0.1 * ready - 0.025 * signal;
   output.primaryEffect = signal;
   output.secondaryEffect = signal;
+}
+
+function sampleFlashlightThreatBeam(
+  output: EventItemUseSample,
+  pickup: number,
+  hold: number,
+  progress: number,
+): void {
+  samplePickupAndHold(output, pickup, hold);
+  const ready = smoothstep((progress - 0.34) / 0.08) * hold;
+  const fade = 1 - smoothstep((progress - 0.9) / 0.08);
+  const beam = ready * fade;
+  output.effectKind = beam > 0 ? 'flashlight' : 'none';
+  output.roll = -0.1 * ready + 0.025 * Math.sin(progress * Math.PI * 2) * ready;
+  output.primaryEffect = beam;
+  output.secondaryEffect = beam;
 }
 
 function sampleShotgunFire(
@@ -616,13 +740,20 @@ export function sampleEventItemUse(
     case 'binocular-look': sampleBinocularLook(output, pickup, hold, t); break;
     case 'net-scoop': sampleNetScoop(output, pickup, hold, t); break;
     case 'bucket-scoop': sampleBucketScoop(output, pickup, hold, t); break;
-    case 'bucket-cover': sampleBucketCover(output, pickup, hold, action); break;
+    case 'bucket-helmet': sampleBucketHelmet(output, pickup, hold, action); break;
+    case 'trade-handover': sampleTradeHandover(output, pickup, hold, t); break;
+    case 'cover-supplies': sampleCoverSupplies(output, pickup, hold, action, itemId); break;
+    case 'net-spread': sampleNetSpread(output, pickup, hold, action); break;
+    case 'map-leak-patch': sampleMapLeakPatch(output, pickup, hold, t); break;
     case 'flare-target': sampleFlare(output, pickup, hold, t); break;
     case 'flare-sky': sampleFlare(output, pickup, hold, t); break;
     case 'anchor-drop': sampleAnchorDrop(output, pickup, hold, t); break;
     case 'umbrella-overhead': sampleUmbrella(output, pickup, hold, false); break;
     case 'umbrella-shield': sampleUmbrella(output, pickup, hold, true); break;
-    case 'flashlight-flash': sampleFlashlightFlash(output, pickup, hold, t); break;
+    case 'flashlight-threat-beam':
+      sampleFlashlightThreatBeam(output, pickup, hold, t);
+      break;
+    case 'flashlight-signal': sampleFlashlightSignal(output, pickup, hold, t); break;
     case 'shotgun-fire':
       sampleShotgunFire(
         output,
@@ -635,7 +766,11 @@ export function sampleEventItemUse(
       break;
   }
 
-  if (context !== 'map-read' && context !== 'net-scoop') {
+  if (
+    context !== 'map-read'
+    && context !== 'net-scoop'
+    && context !== 'map-leak-patch'
+  ) {
     output.roll += 0.03 * settle;
   }
 }
@@ -663,7 +798,8 @@ export function eventItemActionCueProgresses(
   if (context === 'flare-target' || context === 'flare-sky') {
     return FLARE_GUN_ACTION_CUE_PROGRESSES;
   }
-  if (context === 'flashlight-flash') return FLASHLIGHT_MORSE_CUE_PROGRESSES;
+  if (context === 'flashlight-threat-beam') return FLASHLIGHT_THREAT_CUE_PROGRESSES;
+  if (context === 'flashlight-signal') return FLASHLIGHT_MORSE_CUE_PROGRESSES;
   return NO_ACTION_CUE_PROGRESSES;
 }
 
@@ -680,6 +816,19 @@ export function sampleEventItemOutcome(
 
   if (context === 'throw-target') {
     output.itemVisible = false;
+    return;
+  }
+
+  if (context === 'trade-handover' && disposition === 'depart') {
+    output.targetBlend = 0.88 + 0.12 * smoothstep(t);
+    output.cameraTargetBlend = 0.12 * (1 - smoothstep(t));
+    output.itemVisible = t < 1;
+    return;
+  }
+
+  if (context === 'trade-handover' || context === 'map-leak-patch') {
+    sampleEventItemUse(context, itemId, 1 - smoothstep(t), output);
+    output.itemVisible = t < 1;
     return;
   }
 
@@ -756,10 +905,14 @@ export function sampleEventItemOutcome(
     return;
   }
 
-  if (context === 'flashlight-flash') {
+  if (context === 'flashlight-threat-beam' || context === 'flashlight-signal') {
     resetSample(output);
     const pickup = 1 - smoothstep(t);
-    sampleFlashlightFlash(output, pickup, pickup, 1);
+    if (context === 'flashlight-signal') {
+      sampleFlashlightSignal(output, pickup, pickup, 1);
+    } else {
+      sampleFlashlightThreatBeam(output, pickup, pickup, 1);
+    }
     output.itemVisible = t < 1;
     return;
   }
@@ -820,7 +973,7 @@ export function eventItemOutcomeDuration(
   }
   if (itemId === 'spyglass') return scaleEventItemDuration(0.45);
   if (itemId === 'flashlight' && disposition !== 'depart') {
-    return eventItemUseDuration('flashlight-flash')
+    return eventItemUseDuration('flashlight-signal')
       * (MAP_LIFT_COMPLETION - ITEM_LIFT_START);
   }
   if (itemId === 'ductTape') {
@@ -828,7 +981,7 @@ export function eventItemOutcomeDuration(
       * (liftCompletionForItem(itemId) - ITEM_LIFT_START);
   }
   if (itemId === 'bucket' && disposition !== 'depart') {
-    return eventItemUseDuration('flashlight-flash')
+    return eventItemUseDuration('flashlight-signal')
       * (MAP_LIFT_COMPLETION - ITEM_LIFT_START);
   }
   if (itemId === 'fishingNet' && disposition !== 'depart') {

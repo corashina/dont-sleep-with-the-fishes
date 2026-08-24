@@ -10,6 +10,7 @@ import {
   drawWeightedEvent,
   eligibleEvents,
   isDriftingItemEventId,
+  isSignalSightingEventId,
   survivalEventById,
 } from './events';
 import { resolveWeightedOutcome } from './eventResolver';
@@ -529,7 +530,7 @@ export class SurvivalSession {
 
     if (response.kind === 'endure') {
       if (
-        this.pendingEvent.id !== 'other-people'
+        !isSignalSightingEventId(this.pendingEvent.id)
         && this.hasUsableEventChoice(this.pendingEvent)
       ) {
         return this.reject('endure-unavailable', 'Use one of the highlighted items to face this event.');
@@ -1165,7 +1166,7 @@ export class SurvivalSession {
     resolved: WeightedEventOutcome,
     fallbackFoodGranted: boolean,
   ): RewardSummary | undefined {
-    if (!isDriftingItemEventId(eventId)
+    if (eventId !== 'drifting-barrel'
       || (choiceId !== 'retrieve' && choiceId !== 'delegate-carlitos')) return undefined;
     if (fallbackFoodGranted) return Object.freeze({ kind: 'resource', id: 'food', quantity: 1 });
     const added = resolved.effects.resources?.find(

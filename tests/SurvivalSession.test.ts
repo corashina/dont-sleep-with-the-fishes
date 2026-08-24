@@ -236,7 +236,7 @@ it('records the final event for death and sinking', () => {
 });
 
 describe('SurvivalSession Carlitos events', () => {
-  it('uses exact Shadow Figure taken boundaries', () => {
+  it('uses exact Shadow Figure damage boundaries', () => {
     const pressure = new SurvivalSession(saved('carlitos', 'flashlight'), {
       seed: 1,
       random: sequenceRandom([0.499999]),
@@ -247,14 +247,14 @@ describe('SurvivalSession Carlitos events', () => {
       state: 'nightEvent', pressure: 1, ending: null,
     });
 
-    const taken = new SurvivalSession(saved('carlitos', 'flashlight'), {
+    const injured = new SurvivalSession(saved('carlitos', 'flashlight'), {
       seed: 1,
       random: sequenceRandom([0.5]),
       initialEventId: 'shadow-figure',
     });
-    taken.resolveEvent({ kind: 'item', choiceId: 'flashlight', instanceId: 'flashlight-1' });
-    expect(taken.snapshot()).toMatchObject({
-      state: 'dead', ending: { id: 'taken', day: 1, savedPickupCount: 2 },
+    injured.resolveEvent({ kind: 'item', choiceId: 'flashlight', instanceId: 'flashlight-1' });
+    expect(injured.snapshot()).toMatchObject({
+      state: 'nightEvent', health: 50, ending: null,
     });
 
     const flare = new SurvivalSession(saved('carlitos', 'flareGun'), {
@@ -264,7 +264,7 @@ describe('SurvivalSession Carlitos events', () => {
     });
     flare.resolveEvent({ kind: 'item', choiceId: 'flareGun', instanceId: 'flareGun-1' });
     expect(flare.snapshot()).toMatchObject({
-      state: 'dead', ending: { id: 'taken', day: 1, savedPickupCount: 2 },
+      state: 'nightEvent', health: 50, ending: null,
       inventory: { 'flareGun-1': { condition: 'consumed' } },
     });
 
@@ -938,6 +938,61 @@ describe('SurvivalSession daytime actions', () => {
     });
   });
 
+  it('turns Plane signals into smaller rescue leads', () => {
+    const flashlight = new SurvivalSession(saved('flashlight'), {
+      seed: 1110,
+      random: sequenceRandom([0]),
+      initial: { day: 15, rescueLead: 2 },
+      initialEventId: 'plane',
+    });
+    expect(flashlight.resolveEvent(itemResponse('flashlight'))).toMatchObject({
+      accepted: true,
+      deltas: { rescueLead: 2 },
+      eventResult: { resultId: 'plane-signaled' },
+    });
+    expect(flashlight.snapshot()).toMatchObject({
+      state: 'nightEvent',
+      rescueLead: 4,
+      inventory: { 'flashlight-1': { condition: 'usable' } },
+    });
+
+    const flare = new SurvivalSession(saved('flareGun'), {
+      seed: 1111,
+      random: sequenceRandom([0]),
+      initial: { day: 15, rescueLead: 2 },
+      initialEventId: 'plane',
+    });
+    expect(flare.resolveEvent(itemResponse('flareGun'))).toMatchObject({
+      accepted: true,
+      deltas: { rescueLead: 4 },
+      eventResult: { resultId: 'plane-signaled' },
+    });
+    expect(flare.snapshot()).toMatchObject({
+      state: 'nightEvent',
+      rescueLead: 6,
+      inventory: { 'flareGun-1': { condition: 'consumed' } },
+    });
+
+    const pass = new SurvivalSession(saved('flashlight'), {
+      seed: 1112,
+      random: sequenceRandom([0]),
+      initial: { day: 15, rescueLead: 2 },
+      initialEventId: 'plane',
+    });
+    expect(pass.resolveEvent({ kind: 'endure' })).toMatchObject({
+      accepted: true,
+      eventResult: {
+        eventId: 'plane',
+        choiceId: 'sleep',
+        resultId: 'plane-pass',
+      },
+    });
+    expect(pass.snapshot()).toMatchObject({
+      rescueLead: 2,
+      inventory: { 'flashlight-1': { condition: 'usable' } },
+    });
+  });
+
   it.each([
     ['without a signal item', []],
     ['with a Flashlight', ['flashlight']],
@@ -1425,6 +1480,59 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot()).toMatchObject({
       state: 'dayEvent',
       pendingEventId: 'drifting-chest',
+    });
+  });
+
+  it('acquires a closed chest from a directly launched Drifting Chest event', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initial: { day: 3, energy: 3 },
+      initialEventId: 'drifting-chest',
+    });
+
+    expect(session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' })).toMatchObject({
+      accepted: true,
+      deltas: { energy: -3 },
+    });
+    expect(session.snapshot().chest).toEqual({ state: 'closed', acquiredDay: 3 });
+  });
+
+  it('acquires a closed chest from Drifting Chest during a normal run', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 1,
+      random: sequenceRandom([0, 0.249, 0.999, 0]),
+      initial: { day: 2 },
+    });
+
+    expect(session.perform('endDay').accepted).toBe(true);
+    expect(session.beginDawn().accepted).toBe(true);
+    expect(session.snapshot().pendingEventId).toBe('drifting-chest');
+    expect(session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' }).accepted).toBe(true);
+    expect(session.snapshot().chest).toEqual({ state: 'closed', acquiredDay: 3 });
+  });
+
+  it('does not open or grant the contents of a retrieved Drifting Chest', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initial: { day: 3, energy: 3 },
+      initialEventId: 'drifting-chest',
+    });
+
+    const outcome = session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' });
+
+    expect(outcome).toMatchObject({
+      accepted: true,
+      deltas: { energy: -3 },
+      eventPresentationKey: 'drifting-chest.retrieve',
+    });
+    expect(outcome.rewardSummary).toBeUndefined();
+    expect(session.snapshot()).toMatchObject({
+      food: 0,
+      bait: 0,
+      repairMaterial: 0,
+      chest: { state: 'closed', acquiredDay: 3 },
     });
   });
 

@@ -40,7 +40,7 @@ const CASES = [
   ['man-in-the-fog', 'compass', 'compass', 'compass-search'],
   ['man-in-the-fog', 'spyglass', 'spyglass', 'binocular-look'],
   ['ghosts', 'flareGun', 'flareGun', 'flare-target'],
-  ['eerie-melody', 'bucket', 'bucket', 'bucket-cover'],
+  ['eerie-melody', 'bucket', 'bucket', 'bucket-helmet'],
   ['eerie-melody', 'ductTape', 'ductTape', 'tape-stretch'],
   ['face-on-the-moon', 'umbrella', 'umbrella', 'umbrella-shield'],
 ] as const satisfies readonly (

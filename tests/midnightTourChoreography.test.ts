@@ -5,8 +5,8 @@ import {
   CHEST_SEARCH_END_SECONDS,
   CHEST_STROKE_SECONDS,
   MONSTER_ATTACK_END_SECONDS,
+  MONSTER_IMPACT_SECONDS,
   MONSTER_RESULT_DURATION_SECONDS,
-  MONSTER_RUN_END_SECONDS,
   MONSTER_SCAN_LEFT_END_SECONDS,
   MONSTER_SCAN_RIGHT_END_SECONDS,
   MONSTER_TURN_BACK_END_SECONDS,
@@ -45,19 +45,18 @@ describe('Midnight Tour chest choreography', () => {
 });
 
 describe('Midnight Tour monster choreography', () => {
-  it('uses exact scan, rear turn, run, and attack boundaries', () => {
+  it('uses exact scan, rear turn, and attack boundaries', () => {
     expect(MONSTER_SCAN_LEFT_END_SECONDS).toBe(1.2);
     expect(MONSTER_SCAN_RIGHT_END_SECONDS).toBe(2.4);
     expect(MONSTER_TURN_BACK_END_SECONDS).toBe(3.6);
-    expect(MONSTER_RUN_END_SECONDS).toBe(7.6);
-    expect(MONSTER_ATTACK_END_SECONDS).toBe(8.6);
-    expect(MONSTER_RESULT_DURATION_SECONDS).toBe(8.6);
+    expect(MONSTER_IMPACT_SECONDS - MONSTER_TURN_BACK_END_SECONDS).toBeCloseTo(1);
+    expect(MONSTER_ATTACK_END_SECONDS).toBe(5);
+    expect(MONSTER_RESULT_DURATION_SECONDS).toBe(5);
     expect(sampleMonsterStage(0)).toMatchObject({ stage: 'scan-left', progress: 0 });
     expect(sampleMonsterStage(1.2)).toMatchObject({ stage: 'scan-right', progress: 0 });
     expect(sampleMonsterStage(2.4)).toMatchObject({ stage: 'turn-back', progress: 0 });
-    expect(sampleMonsterStage(3.6)).toMatchObject({ stage: 'run', progress: 0 });
-    expect(sampleMonsterStage(7.6)).toMatchObject({ stage: 'attack', progress: 0 });
-    expect(sampleMonsterStage(8.6)).toMatchObject({ stage: 'attack', progress: 1 });
+    expect(sampleMonsterStage(3.6)).toMatchObject({ stage: 'attack', progress: 0 });
+    expect(sampleMonsterStage(5)).toMatchObject({ stage: 'attack', progress: 1 });
   });
 
   it('clamps public samples to the result duration', () => {

@@ -46,10 +46,11 @@ interface MutableChestEventPose {
   overboard: number;
 }
 
-const REVEAL_DURATION = 2.4;
-const NET_CHOICE_DURATION = 1.45;
-const ATTACK_CHOICE_DURATION = 1.15;
-const RESULT_DURATION = 0.65;
+const DURATION_SCALE = 1.15;
+const REVEAL_DURATION = 2.4 * DURATION_SCALE;
+const NET_CHOICE_DURATION = 1.45 * DURATION_SCALE;
+const ATTACK_CHOICE_DURATION = 1.15 * DURATION_SCALE;
+const RESULT_DURATION = 0.65 * DURATION_SCALE;
 function createMaterial(color: number, roughness: number, metalness = 0): MeshStandardMaterial {
   return new MeshStandardMaterial({
     color,
@@ -106,8 +107,6 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     this.root.visible = false;
     this.root.userData.revealRattles = 0;
     this.root.userData.bites = 0;
-    this.root.userData.searchLeft = 0;
-    this.root.userData.searchRight = 0;
 
     this.buildNet();
     this.root.add(this.net);
@@ -136,8 +135,6 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
     this.root.userData.state = 'staged';
     this.root.userData.revealRattles = 0;
     this.root.userData.bites = 0;
-    this.root.userData.searchLeft = 0;
-    this.root.userData.searchRight = 0;
     this.woodCueEmitted = false;
     this.attackCueEmitted = false;
   }
@@ -279,17 +276,7 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
 
   private applyReveal(progress: number): void {
     this.resetPose();
-    if (progress < 0.34) {
-      const search = progress / 0.34;
-      this.applyCameraLook(Math.sin(search * Math.PI) * 0.62, 0);
-      if (progress >= 0.12) this.root.userData.searchLeft = 1;
-    } else if (progress < 0.74) {
-      const search = (progress - 0.34) / 0.4;
-      this.applyCameraLook(-Math.sin(search * Math.PI) * 0.72, 0);
-      if (progress >= 0.46) this.root.userData.searchRight = 1;
-    } else {
-      this.applyCameraLook(0, 0);
-    }
+    this.applyCameraLook(0, 0);
     this.pose.rattle = Math.sin(progress * Math.PI * 10) * 0.42;
     this.root.userData.revealRattles = Math.min(3, Math.floor(progress * 4));
     this.dependencies.chestDisplay.applyEventPose(this.pose as ChestEventPose);
@@ -298,7 +285,7 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
   private applyNetChoice(progress: number): void {
     const turn = smoothstep(progress / 0.5);
     const travel = smoothstep((progress - 0.42) / 0.58);
-    this.applyCameraLook(Math.PI * turn, -0.08 * turn);
+    this.cameraLook.applyLookAt(this.dependencies.chestDisplay.root, turn);
     if (this.usingSupplyNet && this.netInstanceId !== null) {
       this.supplyNetPose.x = 0.96 * travel;
       this.supplyNetPose.y = 0.5 * travel;
@@ -327,7 +314,7 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
 
   private applyAttackChoice(progress: number): void {
     const turn = smoothstep(progress / 0.54);
-    this.applyCameraLook(Math.PI * turn, -0.07 * turn);
+    this.cameraLook.applyLookAt(this.dependencies.chestDisplay.root, turn);
     this.resetPose();
     this.pose.rattle = Math.sin(progress * Math.PI * 10)
       * (1 - smoothstep((progress - 0.7) / 0.2));

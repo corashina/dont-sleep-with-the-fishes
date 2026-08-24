@@ -23,7 +23,6 @@ const effectNames: Readonly<Record<EventItemEffectKind, string | null>> = {
   none: null,
   tape: 'event-item-tape',
   'binocular-mask': null,
-  'bucket-cover': null,
   flare: 'event-item-flare',
   chain: 'event-item-chain',
   flashlight: 'event-item-flashlight-beam',
@@ -33,7 +32,7 @@ const effectNames: Readonly<Record<EventItemEffectKind, string | null>> = {
 const actionEffects = [
   ['tape-stretch', 'event-item-tape'],
   ['flare-target', 'event-item-flare'],
-  ['flashlight-flash', 'event-item-flashlight-beam'],
+  ['flashlight-signal', 'event-item-flashlight-beam'],
   ['shotgun-fire', 'event-item-shotgun-smoke'],
 ] as const satisfies readonly (readonly [EventItemUseContext, string])[];
 
