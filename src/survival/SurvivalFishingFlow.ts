@@ -1,6 +1,7 @@
 import type { SurvivalAudio } from '../audio/SurvivalAudio';
 import type { FishingResultView } from '../ui/SurvivalFishingView';
 import type { SurvivalUI } from '../ui/SurvivalUI';
+import { runCleanupSteps } from '../world/SceneResources';
 import type { BoatWorld } from './BoatWorld';
 import { fishingCatchFood } from './fishingCatalog';
 import type {
@@ -326,8 +327,10 @@ export class SurvivalFishingFlow {
     this.activeFishing = null;
     this.presentation = 'idle';
     this.settlementInProgress = false;
-    this.dependencies.ui.hideFishingResult?.();
-    this.dependencies.ui.setFishingViewExitVisible?.(false);
+    runCleanupSteps([
+      () => this.dependencies.ui.hideFishingResult?.(),
+      () => this.dependencies.ui.setFishingViewExitVisible?.(false),
+    ]);
   }
 
   private async completeCast(

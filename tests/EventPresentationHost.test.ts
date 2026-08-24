@@ -15,6 +15,7 @@ function createAdapter(
     playChoice: vi.fn(async () => undefined),
     playItemUse: vi.fn(async () => false),
     itemAimTarget: vi.fn(() => null),
+    interactionTargets: vi.fn(() => []),
     interactionRoot: vi.fn(() => null),
     resultRoot: vi.fn(() => null),
     react: vi.fn(async () => undefined),
@@ -50,12 +51,21 @@ describe('EventPresentationHost', () => {
     expect(second.parent.children).toEqual([second.root]);
     expect(host.activeEventId()).toBe('leak');
     const aimTarget = new Group();
+    const interactionTargets = [{
+      id: 'custom-target',
+      label: 'CUSTOM',
+      description: 'Custom target.',
+      choiceId: 'inspect',
+      root: new Group(),
+    }];
     const interactionRoot = new Group();
     const resultRoot = new Group();
     vi.mocked(adapter.itemAimTarget).mockReturnValue(aimTarget);
+    vi.mocked(adapter.interactionTargets).mockReturnValue(interactionTargets);
     vi.mocked(adapter.interactionRoot).mockReturnValue(interactionRoot);
     vi.mocked(adapter.resultRoot).mockReturnValue(resultRoot);
     expect(host.itemAimTarget()).toBe(aimTarget);
+    expect(host.interactionTargets()).toBe(interactionTargets);
     expect(host.interactionRoot('seal')).toBe(interactionRoot);
     expect(host.resultRoot('seal')).toBe(resultRoot);
 
@@ -92,6 +102,7 @@ describe('EventPresentationHost', () => {
     await expect(host.playItemUse('seal', 'cannedFood-1')).resolves.toBe(false);
     await expect(host.react({} as never)).resolves.toBeUndefined();
     expect(host.itemAimTarget()).toBeNull();
+    expect(host.interactionTargets()).toEqual([]);
     expect(host.interactionRoot('seal')).toBeNull();
     expect(host.resultRoot('seal')).toBeNull();
   });

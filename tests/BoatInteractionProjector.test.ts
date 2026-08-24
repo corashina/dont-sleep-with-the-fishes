@@ -73,6 +73,7 @@ function createFixture(): ProjectorFixture {
   let chestState: 'none' | 'closed' | 'mimic' = 'closed';
   const eventHost: EventInteractionProjectionHost = {
     activeEventId: vi.fn(() => activeEventId),
+    interactionTargets: vi.fn(() => []),
     interactionRoot: vi.fn(() => null),
     resultRoot: vi.fn(() => null),
     itemAimTarget: vi.fn(() => null),
@@ -178,37 +179,124 @@ describe('BoatInteractionProjector', () => {
       .toBeNull();
   });
 
-  it('uses host roots for featured and focused targets', () => {
+  it('uses featured roots and installed presenter metadata without frame rebuilds', () => {
     const fixture = createFixture();
     const featuredRoot = meshRoot('barrel', -0.5);
-    const handRoot = meshRoot('hand', 0.5);
-    (fixture.roots.carlitosRoot.parent as Scene).add(featuredRoot, handRoot);
+    const customRoot = meshRoot('custom', 0.5);
+    const chestRoot = fixture.roots.chestRoot;
+    const targets = Object.freeze([
+      Object.freeze({
+        id: 'custom:signal',
+        label: 'SIGNAL',
+        description: 'Answer the custom signal.',
+        choiceId: 'answer',
+        root: customRoot,
+        tooltip: true,
+        minimumHitWidth: 91,
+        minimumHitHeight: 73,
+      }),
+      Object.freeze({
+        id: 'persistent-chest',
+        label: 'OFFER',
+        description: 'Offer this exact chest.',
+        choiceId: 'offer',
+        root: chestRoot,
+      }),
+    ]);
+    (fixture.roots.carlitosRoot.parent as Scene).add(featuredRoot, customRoot);
     fixture.setActiveEventId('drifting-barrel');
     vi.mocked(fixture.eventHost.interactionRoot).mockImplementation((id) => {
       if (id === 'drifting-barrel') return featuredRoot;
-      if (id === 'handyman:hand') return handRoot;
       return null;
     });
+    vi.mocked(fixture.eventHost.interactionTargets).mockReturnValue(targets);
+    fixture.projector.installFocusedInteractionTargets(
+      fixture.eventHost.interactionTargets(),
+    );
 
     const anchors = fixture.projector.projectAnchors(1280, 720);
 
-    expect(anchors.map(({ id }) => id).slice(-2)).toEqual([
+    expect(anchors.map(({ id }) => id).slice(-3)).toEqual([
       'event:drifting-barrel',
-      'handyman:hand',
+      'custom:signal',
+      'persistent-chest',
     ]);
-    expect(anchors.at(-2)).toMatchObject({
+    expect(anchors.at(-3)).toMatchObject({
       label: 'BARREL',
       description: 'Floating salvage within reach.',
       tooltip: false,
       eventFocusId: 'drifting-barrel',
       hitArea: { width: 64, height: 64 },
     });
-    expect(anchors.at(-1)).toMatchObject({
-      label: 'HAND',
-      eventChoiceId: 'touch',
-      tooltip: false,
-      hitArea: { width: 82, height: 82 },
+    expect(anchors.at(-2)).toMatchObject({
+      label: 'SIGNAL',
+      description: 'Answer the custom signal.',
+      eventChoiceId: 'answer',
+      tooltip: true,
+      hitArea: { width: 91, height: 73 },
     });
+    expect(anchors.at(-1)).toMatchObject({
+      label: 'OFFER',
+      description: 'Offer this exact chest.',
+      eventChoiceId: 'offer',
+      hitArea: { width: 64, height: 64 },
+    });
+
+    const repeated = fixture.projector.projectAnchors(1280, 720);
+    expect(repeated).toBe(anchors);
+    expect(repeated.at(-2)).toBe(anchors.at(-2));
+    expect(fixture.eventHost.interactionTargets).toHaveBeenCalledOnce();
+    expect(fixture.eventHost.interactionRoot).toHaveBeenCalledTimes(2);
+
+    fixture.projector.clearFocusedInteractionTargets();
+    const cleared = fixture.projector.projectAnchors(1280, 720);
+    expect(cleared.find(({ id }) => id === 'custom:signal')).toBeUndefined();
+    expect(cleared.find(({ id }) => id === 'persistent-chest')).toMatchObject({
+      label: 'OPEN',
+      action: 'openChest',
+    });
+  });
+
+  it('keeps installed targets when a replacement cache build fails', () => {
+    const fixture = createFixture();
+    const stableRoot = meshRoot('stable', 0.4);
+    const replacementRoot = meshRoot('replacement', 0.6);
+    const failingRoot = meshRoot('failing', 0.8);
+    (fixture.roots.carlitosRoot.parent as Scene).add(
+      stableRoot,
+      replacementRoot,
+      failingRoot,
+    );
+    fixture.projector.installFocusedInteractionTargets([{
+      id: 'custom:stable',
+      label: 'STABLE',
+      description: 'Stable target.',
+      choiceId: 'stable',
+      root: stableRoot,
+    }]);
+    const failure = new Error('cache failure');
+    vi.spyOn(failingRoot, 'updateWorldMatrix').mockImplementation(() => { throw failure; });
+
+    expect(() => fixture.projector.installFocusedInteractionTargets([
+      {
+        id: 'custom:replacement',
+        label: 'REPLACEMENT',
+        description: 'Replacement target.',
+        choiceId: 'replacement',
+        root: replacementRoot,
+      },
+      {
+        id: 'custom:failing',
+        label: 'FAILING',
+        description: 'Failing target.',
+        choiceId: 'failing',
+        root: failingRoot,
+      },
+    ])).toThrow(failure);
+
+    const anchors = fixture.projector.projectAnchors(1280, 720);
+    expect(anchors.find(({ id }) => id === 'custom:stable')).toBeDefined();
+    expect(anchors.find(({ id }) => id === 'custom:replacement')).toBeUndefined();
   });
 
   it('reuses outputs until anchor membership changes', () => {

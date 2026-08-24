@@ -215,8 +215,12 @@ export class DriftingItemFlow {
 
   dispose(): void {
     if (this.disposed) return;
-    this.clear();
     this.disposed = true;
+    this.operationGeneration += 1;
+    this.activeEventId = null;
+    this.choices = [];
+    this.focusState = 'idle';
+    this.dependencies.ui.hideDriftingItemFocus?.();
   }
 
   private showFocus(): void {

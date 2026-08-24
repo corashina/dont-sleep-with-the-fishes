@@ -75,6 +75,7 @@ import {
   HANGING_LANTERN_NIGHT_INTENSITY,
 } from '../src/survival/HangingLantern';
 import {
+  type FocusedEventInteractionTarget,
   type FocusedEventPresentation,
   type FocusedEventPresentationDependencies,
   type FocusedEventPresentationFactories,
@@ -440,6 +441,7 @@ function eventAdapterTestDouble(eventId: SurvivalEventId): EventPresentationAdap
     playChoice: vi.fn(async () => undefined),
     playItemUse: vi.fn(async () => false),
     itemAimTarget: vi.fn(() => null),
+    interactionTargets: vi.fn(() => []),
     interactionRoot: vi.fn(() => null),
     resultRoot: vi.fn(() => null),
     react: vi.fn(async () => undefined),
@@ -1042,6 +1044,7 @@ describe('BoatWorld helpers', () => {
       expect(adapter.playChoice).toHaveBeenCalledOnce();
       expect(adapter.playItemUse).toHaveBeenCalledOnce();
       expect(adapter.itemAimTarget).toHaveBeenCalledOnce();
+      expect(adapter.interactionTargets).toHaveBeenCalledOnce();
       expect(adapter.interactionRoot).toHaveBeenCalledOnce();
       expect(adapter.resultRoot).toHaveBeenCalledOnce();
       expect(adapter.react).toHaveBeenCalledOnce();
@@ -1082,7 +1085,19 @@ describe('BoatWorld helpers', () => {
   it('clears the rescue callback when adapter detachment fails after deactivation', () => {
     const propModels = createTestPropModels();
     const focused = focusedPresenterTestDouble('other-people');
-    const presenter = Object.assign(focused.presenter, { setRescueCue: vi.fn() });
+    const targetRoot = new Group();
+    targetRoot.add(new Mesh(new BoxGeometry(0.2, 0.2, 0.2), new MeshBasicMaterial()));
+    focused.presenter.root.add(targetRoot);
+    const presenter = Object.assign(focused.presenter, {
+      setRescueCue: vi.fn(),
+      interactionTargets: () => [{
+        id: 'custom:rescue',
+        label: 'RESCUE',
+        description: 'Custom rescue target.',
+        choiceId: 'signal',
+        root: targetRoot,
+      }],
+    });
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
@@ -1108,10 +1123,106 @@ describe('BoatWorld helpers', () => {
     });
 
     expect(internals.activeRescueCueCallback).not.toBeNull();
+    expect(world.projectInteractionAnchors(800, 600)
+      .find(({ id }) => id === 'custom:rescue')).toBeDefined();
     expect(() => world.detach(adapter)).toThrow(detachError);
     expect(internals.activeRescueCueCallback).toBeNull();
+    expect(world.projectInteractionAnchors(800, 600)
+      .find(({ id }) => id === 'custom:rescue')).toBeUndefined();
+    expect(() => world.detach(adapter)).not.toThrow();
+    expect(remove).toHaveBeenCalledOnce();
 
     remove.mockRestore();
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('rolls back host roots when focused target installation fails', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const parent = new Group();
+    const root = new Group();
+    const adapter: EventPresentationAdapter = {
+      ...eventAdapterTestDouble('handyman'),
+      roots: [{ parent, root }],
+    };
+    const internals = world as unknown as {
+      interactionProjector: {
+        installFocusedInteractionTargets(
+          targets: readonly FocusedEventInteractionTarget[],
+        ): void;
+      };
+    };
+    const installError = new Error('target install failed');
+    const rollbackError = new Error('root rollback failed');
+    const install = vi.spyOn(
+      internals.interactionProjector,
+      'installFocusedInteractionTargets',
+    ).mockImplementationOnce(() => { throw installError; });
+    const removeFromParent = root.removeFromParent.bind(root);
+    let rollbackCalls = 0;
+    const remove = vi.spyOn(root, 'removeFromParent').mockImplementation(() => {
+      const attached = root.parent === parent;
+      const result = removeFromParent();
+      if (attached) {
+        rollbackCalls += 1;
+        throw rollbackError;
+      }
+      return result;
+    });
+
+    expect(() => world.attach(adapter)).toThrow(installError);
+    expect(root.parent).toBeNull();
+    expect(rollbackCalls).toBe(1);
+
+    install.mockRestore();
+    remove.mockRestore();
+    world.attach(adapter);
+    expect(root.parent).toBe(parent);
+    world.detach(adapter);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps active focused targets when the wrong adapter detach is rejected', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const root = new Group();
+    const targetRoot = new Group();
+    targetRoot.position.z = -4;
+    targetRoot.add(new Mesh(new BoxGeometry(0.2, 0.2, 0.2), new MeshBasicMaterial()));
+    root.add(targetRoot);
+    const active: EventPresentationAdapter = {
+      ...eventAdapterTestDouble('handyman'),
+      roots: [{ parent: world.scene, root }],
+      interactionTargets: vi.fn(() => [{
+        id: 'custom:active',
+        label: 'ACTIVE',
+        description: 'Active target.',
+        choiceId: 'keep',
+        root: targetRoot,
+      }]),
+    };
+    const other = eventAdapterTestDouble('night-trader');
+
+    world.attach(active);
+    expect(world.projectInteractionAnchors(800, 600)
+      .find(({ id }) => id === 'custom:active')).toBeDefined();
+    expect(() => world.detach(other)).toThrow(
+      'Cannot detach an inactive event presentation.',
+    );
+    expect(world.projectInteractionAnchors(800, 600)
+      .find(({ id }) => id === 'custom:active')).toBeDefined();
+
+    world.detach(active);
     world.dispose();
     propModels.dispose();
   });
@@ -6908,6 +7019,62 @@ describe('BoatWorld helpers', () => {
     expect(materialDispose).toHaveBeenCalledOnce();
     expect(textureDispose).toHaveBeenCalledOnce();
 
+    propModels.dispose();
+  });
+
+  it('projects stable metadata from a custom focused presenter', () => {
+    const propModels = createTestPropModels();
+    const focused = focusedPresenterTestDouble('handyman');
+    const targetRoot = new Group();
+    targetRoot.position.set(0.4, 0, -4);
+    targetRoot.add(new Mesh(
+      new BoxGeometry(0.25, 0.25, 0.25),
+      new MeshBasicMaterial(),
+    ));
+    focused.presenter.root.add(targetRoot);
+    const targets = Object.freeze([Object.freeze({
+      id: 'custom:bell',
+      label: 'BELL',
+      description: 'Ring the custom bell.',
+      choiceId: 'ring',
+      root: targetRoot,
+      tooltip: true,
+      minimumHitWidth: 107,
+      minimumHitHeight: 83,
+    })]);
+    const interactionTargets = vi.fn(() => targets);
+    const presenter = Object.assign(focused.presenter, { interactionTargets });
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      { handyman: () => presenter },
+    );
+
+    world.stageEvent('handyman');
+    const first = world.projectInteractionAnchors(800, 600);
+    const firstTarget = first.find(({ id }) => id === 'custom:bell');
+    expect(firstTarget).toMatchObject({
+      label: 'BELL',
+      description: 'Ring the custom bell.',
+      eventChoiceId: 'ring',
+      tooltip: true,
+      hitArea: { width: 107, height: 83 },
+    });
+    const second = world.projectInteractionAnchors(800, 600);
+    expect(second).toBe(first);
+    expect(second.find(({ id }) => id === 'custom:bell')).toBe(firstTarget);
+    expect(interactionTargets).toHaveBeenCalledOnce();
+
+    world.stageEvent('night-trader');
+    expect(world.projectInteractionAnchors(800, 600)
+      .find(({ id }) => id === 'custom:bell')).toBeUndefined();
+
+    world.dispose();
     propModels.dispose();
   });
 

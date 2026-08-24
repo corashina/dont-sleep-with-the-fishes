@@ -20,7 +20,10 @@ import type {
   EventPresentationContext,
   EventPresentationReaction,
 } from '../src/survival/eventPresentationTypes';
-import type { EventChoicePresentation } from '../src/survival/FocusedEventPresentation';
+import type {
+  EventChoicePresentation,
+  FocusedEventInteractionTarget,
+} from '../src/survival/FocusedEventPresentation';
 
 const constructors = vi.hoisted(() => ({
   layer: vi.fn(),
@@ -90,6 +93,7 @@ function createLayer() {
     playChoice: asyncVoid(),
     playDangerousWatersItemUse: vi.fn(async () => true),
     itemAimTarget: vi.fn(() => null),
+    interactionTargets: vi.fn((): readonly FocusedEventInteractionTarget[] => []),
     interactionRoot: vi.fn(() => null),
     react: asyncVoid(),
     copyDangerousWatersBoatReaction: vi.fn(() => false),
@@ -286,6 +290,7 @@ function createAdapter(eventId: SurvivalEventId): EventPresentationAdapter {
     playChoice: vi.fn(async () => undefined),
     playItemUse: vi.fn(async () => false),
     itemAimTarget: vi.fn(() => null),
+    interactionTargets: vi.fn(() => []),
     interactionRoot: vi.fn(() => null),
     resultRoot: vi.fn(() => null),
     react: vi.fn(async () => undefined),
@@ -447,7 +452,16 @@ describe('EventPresentationRegistry', () => {
 
   it('delegates the focused lifecycle to its layer', async () => {
     const { dependencies } = createDependencies();
+    const targets = [{
+      id: 'custom:focused',
+      label: 'FOCUSED',
+      description: 'Focused target.',
+      choiceId: 'focus',
+      root: new Group(),
+    }];
+    layer.interactionTargets.mockReturnValue(targets);
     const adapter = new EventPresentationRegistry().create('chest-attack', dependencies);
+    expect(adapter.interactionTargets()).toBe(targets);
     adapter.stage({ ...context, eventId: 'chest-attack' });
     await adapter.reveal();
     await adapter.playChoice(choice);
@@ -456,6 +470,7 @@ describe('EventPresentationRegistry', () => {
     adapter.clear();
     adapter.dispose();
     expect(layer.stage).toHaveBeenCalledWith('chest-attack', 17);
+    expect(layer.interactionTargets).toHaveBeenCalledWith('chest-attack');
     expect(layer.reveal).toHaveBeenCalledWith('chest-attack');
     expect(layer.playChoice).toHaveBeenCalledWith('chest-attack', choice);
     expect(layer.react).toHaveBeenCalledWith('chest-attack', reaction.outcome);
