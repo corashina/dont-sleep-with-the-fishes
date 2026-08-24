@@ -1,7 +1,19 @@
 // Importance: 8/10 (scaled from 4/5). Protects ship layout validation constraints.
 import { describe, expect, it } from 'vitest';
 import { SHIP_LAYOUT } from '../src/world/shipLayoutData';
+import { type ShipLayoutSpec } from '../src/world/ShipLayoutTypes';
 import { validateShipLayout } from '../src/world/ShipLayoutValidation';
+
+function expectValidationError(layout: ShipLayoutSpec, expected: string): void {
+  try {
+    validateShipLayout(layout);
+  } catch (error) {
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(expected);
+    return;
+  }
+  throw new Error(`Expected validation error: ${expected}`);
+}
 
 describe('ship layout validation', () => {
   it('accepts the canonical ship layout', () => {
@@ -16,7 +28,8 @@ describe('ship layout validation', () => {
         crowsNest: { ...SHIP_LAYOUT.rigging.crowsNest, mastId: 'missing-mast' as never },
       },
     };
-    expect(() => validateShipLayout(missingMast)).toThrow(
+    expectValidationError(
+      missingMast,
       "Crow's nest mainmast-lookout references missing mast missing-mast",
     );
 
@@ -30,7 +43,8 @@ describe('ship layout validation', () => {
         } },
       },
     };
-    expect(() => validateShipLayout(invalidDimension)).toThrow(
+    expectValidationError(
+      invalidDimension,
       "Crow's nest mainmast-lookout must have positive finite dimensions",
     );
 
@@ -41,7 +55,8 @@ describe('ship layout validation', () => {
         crowsNest: { ...SHIP_LAYOUT.rigging.crowsNest, openingSize: 0.89 },
       },
     };
-    expect(() => validateShipLayout(narrowOpening)).toThrow(
+    expectValidationError(
+      narrowOpening,
       "Crow's nest mainmast-lookout opening must be at least 0.9 metres",
     );
 
@@ -52,7 +67,8 @@ describe('ship layout validation', () => {
         crowsNest: { ...SHIP_LAYOUT.rigging.crowsNest, floorOffsetY: 14.6 },
       },
     };
-    expect(() => validateShipLayout(highFloor)).toThrow(
+    expectValidationError(
+      highFloor,
       "Crow's nest mainmast-lookout floor exceeds mast height",
     );
   });
@@ -64,7 +80,8 @@ describe('ship layout validation', () => {
         ? { ...balcony, openingWidth: 0.4 }
         : balcony),
     };
-    expect(() => validateShipLayout(narrowerOpening)).toThrow(
+    expectValidationError(
+      narrowerOpening,
       'Balcony crew-balcony opening must fit its ladder and player clearance',
     );
 
@@ -72,7 +89,8 @@ describe('ship layout validation', () => {
       ...SHIP_LAYOUT,
       ladders: [...SHIP_LAYOUT.ladders, { ...SHIP_LAYOUT.ladders[0]! }],
     };
-    expect(() => validateShipLayout(duplicateLadder)).toThrow(
+    expectValidationError(
+      duplicateLadder,
       'Duplicate ladder id: crew-ladder',
     );
 
@@ -82,7 +100,8 @@ describe('ship layout validation', () => {
         ? { ...balcony, ladderId: 'missing-ladder' as never }
         : balcony),
     };
-    expect(() => validateShipLayout(missingLadder)).toThrow(
+    expectValidationError(
+      missingLadder,
       'Balcony crew-balcony references missing ladder missing-ladder',
     );
 
@@ -92,7 +111,8 @@ describe('ship layout validation', () => {
         ? { ...ladder, edge: 'forward' as const }
         : ladder),
     };
-    expect(() => validateShipLayout(mismatchedEdge)).toThrow(
+    expectValidationError(
+      mismatchedEdge,
       'Ladder crew-ladder must use the mast-facing aft edge',
     );
 
@@ -102,7 +122,8 @@ describe('ship layout validation', () => {
         ? { ...ladder, centerX: 0.1 }
         : ladder),
     };
-    expect(() => validateShipLayout(offCenter)).toThrow(
+    expectValidationError(
+      offCenter,
       'Ladder crew-ladder must be centered at x = 0',
     );
 
@@ -120,7 +141,8 @@ describe('ship layout validation', () => {
         ? { ...balcony, zoneId: 'wheelhouse' as never }
         : balcony),
     };
-    expect(() => validateShipLayout(wheelhouseBalcony)).toThrow(
+    expectValidationError(
+      wheelhouseBalcony,
       'Balcony crew-balcony cannot be assigned to wheelhouse',
     );
   });
@@ -136,7 +158,8 @@ describe('ship layout validation', () => {
         })),
       },
     };
-    expect(() => validateShipLayout(missingStay)).toThrow(
+    expectValidationError(
+      missingStay,
       'Mast mainmast must define four roof-corner stays',
     );
 
@@ -156,7 +179,8 @@ describe('ship layout validation', () => {
         })),
       },
     };
-    expect(() => validateShipLayout(railingOverlap)).toThrow(
+    expectValidationError(
+      railingOverlap,
       'Mast mainmast stay fore-port is too close to a roof edge',
     );
   });
@@ -187,7 +211,7 @@ describe('ship layout validation', () => {
       },
     };
 
-    expect(() => validateShipLayout(mismatchedSail)).toThrow(message);
+    expectValidationError(mismatchedSail, message);
   });
 
   it('rejects sail cloth above the authored mast-height bound', () => {
@@ -204,7 +228,8 @@ describe('ship layout validation', () => {
       },
     };
 
-    expect(() => validateShipLayout(overHeightSail)).toThrow(
+    expectValidationError(
+      overHeightSail,
       'Mast mainmast sail mainsail exceeds mast height bounds',
     );
   });
@@ -239,7 +264,8 @@ describe('ship layout validation', () => {
           : mast),
       },
     };
-    expect(() => validateShipLayout(zeroHeightMast)).toThrow(
+    expectValidationError(
+      zeroHeightMast,
       'Mast mainmast has invalid dimensions or stay anchors',
     );
 
@@ -263,7 +289,8 @@ describe('ship layout validation', () => {
           : mast),
       },
     };
-    expect(() => validateShipLayout(wideMast)).toThrow(
+    expectValidationError(
+      wideMast,
       'Mast mainmast base crosses the cargoDeck hull polygon',
     );
   });
@@ -287,7 +314,8 @@ describe('ship layout validation', () => {
       },
     };
 
-    expect(() => validateShipLayout(invalidMast)).toThrow(
+    expectValidationError(
+      invalidMast,
       'Mast mainmast sail mainsail violates cloth clearance',
     );
   });
@@ -384,7 +412,8 @@ describe('ship layout validation', () => {
             }
           : placement),
     };
-    expect(() => validateShipLayout(mislabeledCabin)).toThrow(
+    expectValidationError(
+      mislabeledCabin,
       'Surface cabin-desk-aft:top-left physical owner cabin-desk-aft belongs to crewCabin, not wheelhouse',
     );
 
@@ -422,7 +451,8 @@ describe('ship layout validation', () => {
           ? { ...placement, modelId: 'cargoRack' as const }
           : placement),
     };
-    expect(() => validateShipLayout(invalidBowOwner)).toThrow(
+    expectValidationError(
+      invalidBowOwner,
       'Furniture bow-crate-starboard in bow must be a raised cargoCrate or barrel owner',
     );
 
@@ -439,7 +469,8 @@ describe('ship layout validation', () => {
             }
           : placement),
     };
-    expect(() => validateShipLayout(lowSternSurface)).toThrow(
+    expectValidationError(
+      lowSternSurface,
       "Surface stern-crate-port:top in stern must use its owner's raised top",
     );
   });
@@ -456,7 +487,8 @@ describe('ship layout validation', () => {
           }
         : door),
     };
-    expect(() => validateShipLayout(movedDoor)).toThrow(
+    expectValidationError(
+      movedDoor,
       'Unreachable navigation targets: cabin-port-door-inside, cabin-port-door-outside',
     );
   });
@@ -508,7 +540,8 @@ describe('ship layout validation', () => {
           : placement),
     };
 
-    expect(() => validateShipLayout(blocked)).toThrow(
+    expectValidationError(
+      blocked,
       'Surface cabin-desk-aft:top-left has no reachable standing point',
     );
   });
@@ -518,7 +551,8 @@ describe('ship layout validation', () => {
       ...SHIP_LAYOUT,
       rail: { ...SHIP_LAYOUT.rail, starboardOpening: { ...SHIP_LAYOUT.rail.starboardOpening, width: 2.9 } },
     };
-    expect(() => validateShipLayout(narrowOpening)).toThrow(
+    expectValidationError(
+      narrowOpening,
       'Rail opening width 2.9 must be at least 3.0',
     );
 
@@ -528,7 +562,8 @@ describe('ship layout validation', () => {
         ? { ...lane, bounds: { ...lane.bounds, maxZ: Number.POSITIVE_INFINITY } }
         : lane),
     };
-    expect(() => validateShipLayout(infiniteLane)).toThrow(
+    expectValidationError(
+      infiniteLane,
       'Lane port-exterior-main must use finite rectangle coordinates',
     );
 
@@ -538,7 +573,8 @@ describe('ship layout validation', () => {
         ? { ...door, width: Number.NaN }
         : door),
     };
-    expect(() => validateShipLayout(nonFiniteDoor)).toThrow(
+    expectValidationError(
+      nonFiniteDoor,
       'Door cabin-port-door width NaN must be between 2.4 and 2.6',
     );
   });
