@@ -245,7 +245,16 @@ loading and keeps the seven obstacle visuals static.
 - `src/world` and `src/ocean` — procedural ship and boat geometry, shared wave field, ocean shader, weather, and buoyancy.
 - `src/world/ShipItemPlacement` — physical-fit item profiles, anchor validation, and randomized assignment to authored surfaces.
 - `src/world/ShipAssets` and `src/world/ShipMaterials` — locally committed PBR timber maps, procedural secondary surfaces, ship materials, and explicit texture ownership.
-- `src/world/ShipGeometry` — freighter hull, rooms, decks, railings, stacks, shell colliders, zone centers, and water-exclusion bounds.
+- `src/world/ShipLayoutTypes` — shared ship layout types and constants.
+- `src/world/shipLayoutData` — authored ship layout data.
+- `src/world/ShipNavigation` — navigation grids and route metrics.
+- `src/world/ShipLayoutValidation` — layout validation.
+- `src/world/ShipGeometryPrimitives` — shared geometry primitives and build context.
+- `src/world/ShipHullGeometry` — hull, deck, floors, and water-exclusion bounds.
+- `src/world/ShipRoomGeometry` — room walls, windows, doors, and roofs.
+- `src/world/ShipAccessGeometry` — ladders and access structures.
+- `src/world/ShipExteriorGeometry` — exterior details, engines, and rails.
+- `src/world/ShipGeometry` — final builder composition. It owns zone centers, arc colliders, and idempotent geometry disposal.
 - `src/world/ShipFurniture` — furnished room and working-deck layouts, furniture colliders, item anchors, and route-clearance samples.
 - `src/world/ShipSmoke` — fixed-pool twin-stack smoke whose density and drift respond to sinking and reduced-motion preference.
 - `src/world/Skybox`, `src/world/SkyAssets`, and `src/world/skyPalette` — shared cloudless atmosphere rendering, app-owned moon art, grounded weather and day/night palettes, celestial bodies, and ocean/fog color synchronization.
