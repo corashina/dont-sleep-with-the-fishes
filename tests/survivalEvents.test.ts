@@ -1,4 +1,5 @@
 // Importance: 10/10 (scaled from 5/5). Protects event eligibility and schema rules.
+import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { ItemId } from '../src/game/ItemState';
 import {
@@ -6,12 +7,11 @@ import {
   SURVIVAL_EVENTS,
   driftingItemLeaveKey,
   driftingItemRetrieveKey,
-  drawWeightedEvent,
-  eligibleEvents,
   isDriftingItemEventId,
   survivalEventById,
-  validateSurvivalEventCatalog,
-} from '../src/survival/events';
+} from '../src/survival/eventCatalog';
+import { validateSurvivalEventCatalog } from '../src/survival/eventCatalogValidation';
+import { drawWeightedEvent, eligibleEvents } from '../src/survival/eventSelection';
 import { sequenceRandom } from './helpers/random';
 import type {
   IntegerValue,
@@ -168,6 +168,9 @@ describe('survival events', () => {
     },
   );
 
+  it('uses focused event modules', () => {
+    expect(existsSync(new URL('../src/survival/events.ts', import.meta.url))).toBe(false);
+  });
   it('uses the approved phase, risk, weight, and cooldown rules', () => {
     const byId = Object.fromEntries(SURVIVAL_EVENTS.map((event) => [event.id, event]));
     expect(SURVIVAL_EVENTS.map(({ id }) => id)).toEqual(SURVIVAL_EVENT_IDS);
@@ -748,6 +751,12 @@ describe('survival events', () => {
     expect(events.map((event) => event.id)).not.toContain('death-stare');
     expect(events.map((event) => event.id)).toContain('leak');
     expect(eligibleEvents(SURVIVAL_EVENTS, {
+      phase: 'night', day: 9, weather: 'calm', lastEventId: null,
+      lastSeenDay: new Map(), targetableItemIds: new Set(['anchor']),
+      appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueLead: 0,
+      excludedIds: new Set(['leak']),
+    }).map((event) => event.id)).not.toContain('leak');
+    expect(eligibleEvents(SURVIVAL_EVENTS, {
       phase: 'night', day: 31, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
       targetableItemIds: new Set(['anchor']),
       appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueLead: 0,
@@ -789,18 +798,47 @@ describe('survival events', () => {
 
   it('draws by stable weighted boundaries and returns a quiet fallback for an empty pool', () => {
     const pool = SURVIVAL_EVENTS.filter((event) => event.phase === 'night').slice(0, 2);
-    expect(drawWeightedEvent(pool, sequenceRandom([0])).id).toBe(pool[0]!.id);
-    expect(drawWeightedEvent(pool, sequenceRandom([pool[0]!.weight / (pool[0]!.weight + pool[1]!.weight)])).id).toBe(pool[1]!.id);
-    expect(drawWeightedEvent([], sequenceRandom([0]), 'day').id).toBe('day-calm-fallback');
-    expect(drawWeightedEvent([], sequenceRandom([0]), 'night').id).toBe('night-calm-fallback');
+    const eligibility = (phase: 'day' | 'night') => ({
+      phase,
+      day: 10,
+      weather: 'calm' as const,
+      lastEventId: null,
+      lastSeenDay: new Map<string, number>(),
+      targetableItemIds: new Set<ItemId>(),
+      appearanceCounts: new Map<string, number>(),
+      inventoryItemIds: new Set<ItemId>(),
+      rescueLead: 0,
+    });
+    expect(drawWeightedEvent(sequenceRandom([0]), pool, eligibility('night')).id).toBe(pool[0]!.id);
+    expect(drawWeightedEvent(
+      sequenceRandom([pool[0]!.weight / (pool[0]!.weight + pool[1]!.weight)]),
+      pool,
+      eligibility('night'),
+    ).id).toBe(pool[1]!.id);
+    expect(drawWeightedEvent(sequenceRandom([0]), [], eligibility('day')).id)
+      .toBe('day-calm-fallback');
+    expect(drawWeightedEvent(sequenceRandom([0]), [], eligibility('night')).id)
+      .toBe('night-calm-fallback');
   });
 
   it('uses pressure-adjusted dangerous weights', () => {
     const safe = weightedTestEvent('safe-test', 'safe');
     const dangerous = weightedTestEvent('danger-test', 'dangerous');
-    expect(drawWeightedEvent([safe, dangerous], sequenceRandom([0.4]), 'night', 0).id)
+    const eligibility = (pressure: number) => ({
+      phase: 'night' as const,
+      day: 10,
+      weather: 'calm' as const,
+      lastEventId: null,
+      lastSeenDay: new Map<string, number>(),
+      targetableItemIds: new Set<ItemId>(),
+      appearanceCounts: new Map<string, number>(),
+      inventoryItemIds: new Set<ItemId>(),
+      rescueLead: 0,
+      pressure,
+    });
+    expect(drawWeightedEvent(sequenceRandom([0.4]), [safe, dangerous], eligibility(0)).id)
       .toBe('safe-test');
-    expect(drawWeightedEvent([safe, dangerous], sequenceRandom([0.4]), 'night', 4).id)
+    expect(drawWeightedEvent(sequenceRandom([0.4]), [safe, dangerous], eligibility(4)).id)
       .toBe('danger-test');
   });
 
@@ -811,7 +849,7 @@ describe('survival events', () => {
       expect(() => validateSurvivalEventCatalog(catalog)).toThrow(expected);
     };
 
-    expect(() => validateSurvivalEventCatalog()).not.toThrow();
+    expect(() => validateSurvivalEventCatalog(SURVIVAL_EVENTS)).not.toThrow();
     rejects((catalog) => { catalog[1].id = catalog[0].id; }, /event ID.*duplicated/i);
     rejects((catalog) => { catalog[0].id = ' '; }, /event ID.*blank/i);
     rejects((catalog) => { catalog[0].revealText = ' '; }, /reveal text.*blank/i);

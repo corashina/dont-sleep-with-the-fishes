@@ -11,7 +11,7 @@ import {
   type ScavengeRegionId,
   type ShipFurnitureKind,
   type ShipRouteMetric,
-} from './ShipLayout';
+} from './ShipLayoutTypes';
 import {
   COMPASS_CASE_SUPPORT_POINT,
   COMPASS_REST_ROTATION,

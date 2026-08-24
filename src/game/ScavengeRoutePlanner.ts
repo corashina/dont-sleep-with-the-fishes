@@ -1,4 +1,4 @@
-import { type ShipRouteMetric } from '../world/ShipLayout';
+import { type ShipRouteMetric } from '../world/ShipLayoutTypes';
 import {
   SCAVENGE_SPRINT_SPEED,
   scavengeSpeedMultiplier,

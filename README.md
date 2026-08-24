@@ -239,15 +239,56 @@ loading and keeps the seven obstacle visuals static.
 - `src/phases` — scavenging phase lifecycle and its handoff into survival.
 - `src/game` — scavenging timer, item state, score, and sinking progression.
 - `src/survival` — deterministic survival rules, inventory, events, orchestration, and lifeboat world.
+- `src/survival/eventCatalog`, `eventCatalogValidation`, `eventSelection`, `eventOutcomeRules`, `journalRecords`, `dayActionRules`, and `fishingSettlementRules` — focused survival domain rules.
+- `src/survival/SurvivalSession` — owns mutable survival state.
+- `src/survival/SurvivalPhase` — owns the survival phase lifecycle, global pause, restart, overrides, flow wiring, rendering, and top-level errors.
+- `src/survival/SurvivalDayActionFlow` — owns accepted day actions, chest actions, repairs, dives, sleep, and dawn requests.
+- `src/survival/SurvivalFishingFlow` — owns each fishing attempt and its view, timing, result, and return state.
+- `src/survival/SurvivalEventFlow` — owns event loading, reveal, choices, outcomes, dawn, and event cleanup.
+- `src/survival/EventPresentationHost` — owns the active event adapter, roots, lifecycle, and replacement.
+- `src/survival/EventPresentationRegistry` — maps event IDs to normalized adapter factories.
+- `src/survival/DriftingItemFlow` — owns drifting-item focus, contextual choices, camera return, and target projection.
+- `src/survival/ItemAnimationLabFlow` — owns lab selection, item animation, repair-tool animation, cues, and lab bundles.
+- `src/survival/SurvivalVisibilityController` — owns document visibility listeners and resume waiters.
+- `src/survival/BoatWorld` — builds the lifeboat scene and coordinates frames, atmosphere, buoyancy, and top-level cleanup.
+- `src/survival/BoatCameraController` — owns rear, event, and drifting-item camera motion.
+- `src/survival/FishingPresentation` — owns fishing state, animation, particles, projection, and visual resources.
+- `src/survival/MoonEventPresentation` — owns the moon event lifecycle and reaction animation.
+- `src/survival/BoatInteractionProjector` — projects boat and event interaction targets.
+- `src/survival/DivePresentationController` — owns the active dive lifecycle and camera pose.
+- `src/survival/CarlitosDelegationPresentation` — owns Carlitos delegation motion and completion.
 - `src/world` and `src/ocean` — procedural ship and boat geometry, shared wave field, ocean shader, weather, and buoyancy.
+- `src/ocean/oceanShader` — owns shader bytes, quality defines, and quality uniforms.
+- `src/ocean/oceanGeometry` — owns stateless surface and horizon geometry builders.
+- `src/ocean/OceanRenderer` — owns runtime quality, state, follow, update, and disposal.
 - `src/world/ShipItemPlacement` — physical-fit item profiles, anchor validation, and randomized assignment to authored surfaces.
 - `src/world/ShipAssets` and `src/world/ShipMaterials` — locally committed PBR timber maps, procedural secondary surfaces, ship materials, and explicit texture ownership.
-- `src/world/ShipGeometry` — freighter hull, rooms, decks, railings, stacks, shell colliders, zone centers, and water-exclusion bounds.
+- `src/world/ShipLayoutTypes` — shared ship layout types and constants.
+- `src/world/shipLayoutData` — authored ship layout data.
+- `src/world/ShipNavigation` — navigation grids and route metrics.
+- `src/world/ShipLayoutValidation` — layout validation.
+- `src/world/ShipGeometryPrimitives` — shared geometry primitives and build context.
+- `src/world/ShipHullGeometry` — hull, deck, floors, and water-exclusion bounds.
+- `src/world/ShipRoomGeometry` — room walls, windows, doors, and roofs.
+- `src/world/ShipAccessGeometry` — ladders and access structures.
+- `src/world/ShipExteriorGeometry` — exterior details, engines, and rails.
+- `src/world/ShipGeometry` — final builder composition. It owns zone centers, arc colliders, and idempotent geometry disposal.
 - `src/world/ShipFurniture` — furnished room and working-deck layouts, furniture colliders, item anchors, and route-clearance samples.
 - `src/world/ShipSmoke` — fixed-pool twin-stack smoke whose density and drift respond to sinking and reduced-motion preference.
 - `src/world/Skybox`, `src/world/SkyAssets`, and `src/world/skyPalette` — shared cloudless atmosphere rendering, app-owned moon art, grounded weather and day/night palettes, celestial bodies, and ocean/fog color synchronization.
 - `src/player`, `src/input`, and `src/interaction` — pointer-lock movement, collision, raycast prompts, carrying, drops, and throws.
 - `src/ui` — scavenging HUD, pause and result screens, plus the accessible survival overlay.
+- `src/ui/SurvivalUI` — mounts 20 ordered roots and forwards semantic commands to survival flows.
+- `SurvivalUI` owns the global treatment, live announcer, busy state, pause state, and event forwarding.
+- `src/ui/SurvivalHudView` — owns status controls, day status, camera turn, and condition meters.
+- `src/ui/BoatAnchorView` — owns projected boat commands, tooltips, highlights, and Carlitos controls.
+- `src/ui/SurvivalEventView` — owns event captions, contextual choices, sleep masks, feedback, and choice beats.
+- `src/ui/SurvivalCoverView` — owns sleep covers, bad-sleep cues, dive results, and covered-scene timing.
+- `src/ui/SurvivalFishingView` — owns fishing input, bite targets, fades, results, and fishing announcements.
+- `src/ui/DriftingItemView` — owns drifting-item placement, choices, selection, and back navigation.
+- `src/ui/SurvivalJournalView` — owns journal pages, history text, navigation, and close input.
+- `src/ui/SurvivalModalViews` — owns repair, pause, and ending markup and local input.
+- `src/ui/ModalFocusManager` — owns modal priority, background inert state, focus traps, and focus restoration.
 
 The scavenging ocean mesh and lifeboat sample the same four-wave field. In survival, the ocean and boat remain synchronized while the camera stays fixed to the boat rig; reduced-motion preference removes parallax, lurch, tooltip movement, and nonessential UI transitions.
 

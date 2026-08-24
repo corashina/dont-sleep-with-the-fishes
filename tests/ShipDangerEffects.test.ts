@@ -12,7 +12,7 @@ import {
   type ShipDangerOwnedResource,
 } from '../src/world/ShipDangerEffects';
 import { SHIP_DANGER_LAYOUT } from '../src/world/ShipDangerLayout';
-import { FREIGHTER_DIMENSIONS } from '../src/world/ShipLayout';
+import { FREIGHTER_DIMENSIONS } from '../src/world/ShipLayoutTypes';
 
 describe('ship danger effects', () => {
   function dangerAt(elapsed: number, duration = 60) {

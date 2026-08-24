@@ -17,8 +17,9 @@ import {
   type ShipRiggingSpec,
   type ShipSailSpec,
   type ShipStaySpec,
-} from './ShipLayout';
+} from './ShipLayoutTypes';
 import type { ShipMaterials } from './ShipMaterials';
+import { disposeResourceSets, runCleanupSteps } from './SceneResources';
 
 export interface ShipRiggingBuild {
   readonly root: Group;
@@ -448,8 +449,10 @@ export function createShipRigging(
     disposeGeometry: () => {
       if (disposed) return;
       disposed = true;
-      crowsNest.disposeGeometry();
-      ownedGeometries.forEach((geometry) => geometry.dispose());
+      runCleanupSteps([
+        () => crowsNest.disposeGeometry(),
+        () => disposeResourceSets(ownedGeometries),
+      ]);
     },
   };
 }

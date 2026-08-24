@@ -214,8 +214,9 @@ describe('Item Animation Lab', () => {
     const second = current.inventory['swimRing-1']!;
     const firstUse = ITEM_ANIMATION_LAB_USES[first.type]![0]!;
     const secondUse = ITEM_ANIMATION_LAB_USES[second.type]![0]!;
-    phase.handleEventItem(firstUse.choiceId, first.instanceId);
-    phase.handleEventItem(secondUse.choiceId, second.instanceId);
+    phase.handleEventItem(firstUse.id, first.instanceId);
+    phase.handleEventItem(secondUse.id, second.instanceId);
+    await flushPromises();
 
     expect(stageEvent).toHaveBeenCalledExactlyOnceWith(firstUse.eventId);
     expect(playEventItemUse).toHaveBeenCalledExactlyOnceWith(
@@ -242,7 +243,8 @@ describe('Item Animation Lab', () => {
     expect(setEventEligibleItems).toHaveBeenCalledTimes(3);
     expect(current.inventory[first.instanceId]).toBe(first);
 
-    phase.handleEventItem(firstUse.choiceId, first.instanceId);
+    phase.handleEventItem(firstUse.id, first.instanceId);
+    await flushPromises();
     expect(playEventItemUse).toHaveBeenCalledTimes(2);
     phase.dispose();
   });
@@ -281,7 +283,7 @@ describe('Item Animation Lab', () => {
     phase.start();
     const bucket = current.inventory['bucket-1']!;
     phase.handleEventItem(
-      ITEM_ANIMATION_LAB_USES.bucket![0]!.choiceId,
+      ITEM_ANIMATION_LAB_USES.bucket![0]!.id,
       bucket.instanceId,
     );
 
@@ -296,6 +298,7 @@ describe('Item Animation Lab', () => {
     expect(playEventItemUse).not.toHaveBeenCalled();
 
     ui.onEventChoice?.('bucket-helmet');
+    await flushPromises();
     expect(hideItemAnimationLabChoices).toHaveBeenCalledOnce();
     expect(stageEvent).toHaveBeenCalledExactlyOnceWith('shower-night');
     expect(playEventItemUse).toHaveBeenCalledExactlyOnceWith(

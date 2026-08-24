@@ -3,7 +3,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { validateEventModelMetadata } from '../scripts/check-event-models.mjs';
 import { SURVIVAL_EVENT_MODEL_SPECS } from '../src/survival/eventModelManifest';
-import { EVENT_MODEL_IDS, EVENT_MODEL_SPECS } from '../src/world/eventModelManifest';
+import { EVENT_MODEL_IDS } from '../src/world/eventModelIds';
+import { EVENT_MODEL_SPECS } from '../src/world/eventModelManifest';
 
 function eventMetadata(): Record<string, Record<string, unknown>> {
   return JSON.parse(

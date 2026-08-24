@@ -1,3 +1,4 @@
+import { resolveIntegerValue } from './eventOutcomeRules';
 import type {
   EventChoiceDefinition,
   RandomSource,
@@ -6,11 +7,9 @@ import type {
 } from './survivalTypes';
 
 function resolveEffect(effect: ResourceEffect, random: RandomSource): ResourceEffect {
-  const value = effect.value;
-  if (typeof value === 'number') return { ...effect };
   return {
     ...effect,
-    value: value.min + Math.floor(random.next() * (value.max - value.min + 1)),
+    value: resolveIntegerValue(effect.value, random),
   };
 }
 

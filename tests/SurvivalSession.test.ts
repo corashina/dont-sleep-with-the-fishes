@@ -1709,9 +1709,12 @@ describe('SurvivalSession daytime actions', () => {
     const attempt = beginFishing(session);
     const result = reelCatch(attempt);
     expect(result).toMatchObject({ kind: 'catch', catch: { id: catchId, kind: 'utility' } });
-    expect(session.finishFishing(attempt.snapshot().id, result)).toMatchObject({
+    const outcome = session.finishFishing(attempt.snapshot().id, result);
+    expect(outcome).toMatchObject({
       accepted: true, code: 'utility-caught', deltas,
     });
+    if (result.kind !== 'catch') throw new Error('Expected utility fishing catch.');
+    expect(outcome.message).toBe(`You reeled in ${result.catch.label.toLocaleLowerCase('en-US')}.`);
     expect(session.snapshot()).toMatchObject(snapshotMatch);
     if (item) {
       expect(session.snapshot().inventory[item[0]]?.condition).toBe(item[1]);
@@ -1907,6 +1910,39 @@ describe('SurvivalSession daytime actions', () => {
     expect(new SurvivalSession(saved(), { seed: 1 }).perform('dive')).toMatchObject({ code: 'no-scuba-set' });
     expect(new SurvivalSession(saved('scubaSet'), { seed: 1, random: sequenceRandom([0, 0, 0]) })
       .perform('dive').accepted).toBe(true);
+  });
+
+  it.each([
+    ['eat', undefined, 'No food remains.'],
+    ['repair', { kind: 'hullRepair', material: 'repairMaterial' }, 'No repair material remains.'],
+    ['treat', undefined, 'No medical-kit charges remain.'],
+    ['answerRadio', undefined, 'The radio has no active signal.'],
+    ['useEnergyBar', undefined, 'No energy bar remains.'],
+    ['openChest', undefined, 'There is no closed chest to open.'],
+  ] satisfies ReadonlyArray<readonly [Exclude<DayActionId, 'fish'>, DayActionOption | undefined, string]>) (
+    'uses the delegated %s rejection in availability and performance',
+    (action, option, message) => {
+      const session = new SurvivalSession(saved(), {
+        seed: 1,
+        initial: { hunger: 50, health: 50, hull: 50, energy: 2 },
+      });
+
+      expect(session.availableReason(action, option)).toBe(message);
+      expect(session.perform(action, option)).toMatchObject({ accepted: false, message });
+    },
+  );
+
+  it('keeps public fishing and end-day daytime rejection messages', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 1,
+      initialEventId: 'bad-sleep',
+    });
+
+    const fishing = session.beginFishing();
+    expect(fishing.accepted).toBe(false);
+    if (fishing.accepted) throw new Error('Expected fishing to be unavailable.');
+    expect(fishing.outcome.message).toBe('Fishing is only available during the day.');
+    expect(session.endDay().message).toBe('The day cannot end while an event is unresolved.');
   });
 
   it('applies diving risk and blocks diving in a squall', () => {

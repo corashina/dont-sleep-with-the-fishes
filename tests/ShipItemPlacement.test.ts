@@ -18,9 +18,9 @@ import {
 } from '../src/world/ShipItemPlacement';
 import {
   createShipRouteMetric,
-  FREIGHTER_DIMENSIONS,
-  SHIP_LAYOUT,
-} from '../src/world/ShipLayout';
+} from '../src/world/ShipNavigation';
+import { SHIP_LAYOUT } from '../src/world/shipLayoutData';
+import { FREIGHTER_DIMENSIONS } from '../src/world/ShipLayoutTypes';
 import {
   COMPASS_CASE_SUPPORT_POINT,
   COMPASS_REST_ROTATION,

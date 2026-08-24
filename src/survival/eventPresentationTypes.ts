@@ -4,6 +4,9 @@ import type { WaveSample, VortexWaveState } from '../ocean/WaveField';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { CarlitosPresentation } from './CarlitosPresentation';
 import type { EventModelLibrary } from './EventModelLibrary';
+import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
+import type { EventChoicePresentation } from './FocusedEventPresentation';
+import type { SurvivalEventId } from './eventCatalog';
 import type { DedicatedEventId } from './eventPresentationRoutes';
 import type {
   ActionOutcome,
@@ -13,6 +16,12 @@ import type {
 
 export interface EventSceneContext {
   readonly eventId: DedicatedEventId;
+  readonly targetInstanceId: ItemInstanceId | null;
+  readonly variantSeed: number;
+}
+
+export interface EventPresentationContext {
+  readonly eventId: SurvivalEventId;
   readonly targetInstanceId: ItemInstanceId | null;
   readonly variantSeed: number;
 }
@@ -27,6 +36,13 @@ export interface EventOutcomePresentation {
   readonly selectedInstanceId: ItemInstanceId | null;
   readonly selectedCondition: ItemCondition | null;
   readonly targetInstanceId: ItemInstanceId | null;
+}
+
+export interface EventPresentationReaction {
+  readonly outcome: ActionOutcome;
+  readonly physicalResponse: EventPhysicalResponsePresentation;
+  readonly result: EventOutcomePresentation | null;
+  readonly choice: EventChoicePresentation | null;
 }
 
 export type WorldWaveSampler = (

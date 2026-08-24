@@ -1,6 +1,7 @@
 // Importance: 8/10 (scaled from 4/5). Protects survival world integration and cleanup.
 import { describe, expect, it, vi } from 'vitest';
 import {
+  AmbientLight,
   AnimationClip,
   Bone,
   Box3,
@@ -41,20 +42,28 @@ import {
 } from '../src/game/ItemState';
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
-import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
+import {
+  DEFAULT_WAVES,
+  sampleWaveField,
+  type WaveSample,
+} from '../src/ocean/WaveField';
 import { UNBOUNDED_MINIMUM_LOCAL_Y } from '../src/ocean/WaterExclusion';
 import { HOVER_OUTLINE_NAME } from '../src/rendering/HoverOutline';
 import {
   BoatWorld,
   DAY_CLOUD_BOUNCE_INTENSITY,
-  FISHING_PLAYER_SEAT,
   SURVIVAL_CELESTIAL_DIRECTION,
 } from '../src/survival/BoatWorld';
+import {
+  FISHING_PLAYER_SEAT,
+  FishingPresentation,
+} from '../src/survival/FishingPresentation';
 import {
   BoatSupplyDisplay,
   GENERIC_EVENT_ITEM_USE_DURATION,
   type BorrowedSupplyActor,
 } from '../src/survival/BoatSupplyDisplay';
+import { CarlitosDelegationPresentation } from '../src/survival/CarlitosDelegationPresentation';
 import { CarlitosPresentation } from '../src/survival/CarlitosPresentation';
 import {
   CHEST_DISAPPEAR_DURATION,
@@ -63,11 +72,13 @@ import {
 } from '../src/survival/ChestDisplay';
 import { DANGEROUS_WATERS_ITEM_DURATION } from '../src/survival/DangerousWatersPresentation';
 import { DivePresentation } from '../src/survival/DivePresentation';
+import { DivePresentationController } from '../src/survival/DivePresentationController';
 import {
   HANGING_LANTERN_DAY_INTENSITY,
   HANGING_LANTERN_NIGHT_INTENSITY,
 } from '../src/survival/HangingLantern';
 import {
+  type FocusedEventInteractionTarget,
   type FocusedEventPresentation,
   type FocusedEventPresentationDependencies,
   type FocusedEventPresentationFactories,
@@ -76,6 +87,9 @@ import type { EventPresentationCue } from '../src/survival/eventPresentationCue'
 import { FOCUSED_EVENT_IDS } from '../src/survival/eventPresentationRoutes';
 import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
 import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
+import type { EventPresentationAdapter } from '../src/survival/EventPresentationAdapter';
+import { EventPresentationRegistry } from '../src/survival/EventPresentationRegistry';
+import type { EventOutcomePresentation } from '../src/survival/eventPresentationTypes';
 import { EventItemEffects } from '../src/survival/EventItemEffects';
 import { EventItemUseAdapter } from '../src/survival/EventItemUseAdapter';
 import { EventItemUseController } from '../src/survival/EventItemUseController';
@@ -100,9 +114,7 @@ import {
 import type {
   EventModelInstance,
 } from '../src/survival/EventModelLibrary';
-import type { EventPresentationCoordinator } from '../src/survival/EventPresentationCoordinator';
-import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
-import { FishingBiteParticles } from '../src/survival/FishingBiteParticles';
+import { EventPresentationCoordinator } from '../src/survival/EventPresentationCoordinator';
 import type { EventModelLibrary } from '../src/survival/EventModelLibrary';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import { WeatherEventAnimator } from '../src/survival/WeatherEventAnimator';
@@ -119,12 +131,14 @@ import { SurvivalInventoryState } from '../src/survival/inventory';
 import {
   SURVIVAL_EVENTS,
   type DriftingItemEventId,
-} from '../src/survival/events';
+  type SurvivalEventId,
+} from '../src/survival/eventCatalog';
 import { SurvivalEventModelLibrary } from '../src/survival/SurvivalEventModelLibrary';
 import type {
   ActionOutcome,
-  SurvivalSnapshot,
+  ItemCondition,
 } from '../src/survival/survivalTypes';
+import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
 import { presentationWeatherProfile } from '../src/weather/presentationWeather';
 import type { SkyPalette } from '../src/world/skyPalette';
 import {
@@ -303,22 +317,24 @@ function firstMesh(root: Object3D): Mesh {
 }
 
 function expectEventEffectRootsCleared(scene: Object3D): void {
+  const itemEffects = scene.getObjectByName('event-item-effects');
+  expect(itemEffects, 'event-item-effects exists').toBeDefined();
+  itemEffects!.children.forEach((effect) => {
+    expect(effect.visible, `event-item-effects/${effect.name} hidden`).toBe(false);
+  });
   for (const name of [
-    'event-item-effects',
     'weather-event-world',
     'weather-event-boat',
     'supernatural-event-world',
   ]) {
     const root = scene.getObjectByName(name);
-    expect(root, `${name} exists`).toBeDefined();
-    root!.children.forEach((effect) => {
+    root?.children.forEach((effect) => {
       expect(effect.visible, `${name}/${effect.name} hidden`).toBe(false);
     });
   }
   for (const name of ['dedicated-event-world', 'dedicated-event-boat']) {
     const root = scene.getObjectByName(name);
-    expect(root, `${name} exists`).toBeDefined();
-    root!.children.forEach((effect) => {
+    root?.children.forEach((effect) => {
       const hasRenderableContent = effect.children.length > 0
         || effect instanceof Mesh
         || effect instanceof Line
@@ -328,7 +344,7 @@ function expectEventEffectRootsCleared(scene: Object3D): void {
       }
     });
   }
-  scene.getObjectByName('event-item-effects')!.traverse((object) => {
+  itemEffects!.traverse((object) => {
     if (object instanceof PointLight) expect(object.intensity).toBe(0);
   });
   for (const name of [
@@ -413,6 +429,26 @@ function snapshot(
   };
 }
 
+function exactEventResult(
+  outcome: ActionOutcome,
+  selectedInstanceId: ItemInstanceId | null = null,
+  selectedCondition: ItemCondition | null = null,
+): EventOutcomePresentation {
+  return {
+    outcome,
+    resourceDeltas: outcome.deltas,
+    gainedInstanceIds: [],
+    brokenInstanceIds: selectedCondition === 'broken' && selectedInstanceId !== null
+      ? [selectedInstanceId]
+      : [],
+    lostInstanceIds: [],
+    consumedInstanceIds: [],
+    selectedInstanceId,
+    selectedCondition,
+    targetInstanceId: null,
+  };
+}
+
 async function remainsPending(promise: Promise<unknown>): Promise<boolean> {
   let settled = false;
   void promise.then(() => {
@@ -420,6 +456,26 @@ async function remainsPending(promise: Promise<unknown>): Promise<boolean> {
   });
   await Promise.resolve();
   return !settled;
+}
+
+function eventAdapterTestDouble(eventId: SurvivalEventId): EventPresentationAdapter {
+  return {
+    eventId,
+    roots: [],
+    stage: vi.fn(),
+    reveal: vi.fn(async () => undefined),
+    playChoice: vi.fn(async () => undefined),
+    playItemUse: vi.fn(async () => false),
+    itemAimTarget: vi.fn(() => null),
+    interactionTargets: vi.fn(() => []),
+    interactionRoot: vi.fn(() => null),
+    resultRoot: vi.fn(() => null),
+    react: vi.fn(async () => undefined),
+    update: vi.fn(),
+    settleForVisibilityChange: vi.fn(),
+    clear: vi.fn(),
+    dispose: vi.fn(),
+  };
 }
 
 interface FocusedPresenterTestDouble {
@@ -891,7 +947,353 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps weather reveal choreography for focused and featured routes', async () => {
+  it('does not reset an active Other People reaction during rescue progress', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    try {
+      world.stageEvent('other-people');
+      const reveal = world.revealEvent('other-people');
+      world.setDocumentHidden(true);
+      await reveal;
+      const presentation = world.scene.getObjectByName('focused-event:other-people')!;
+      const reaction = world.reactToEventOutcome('other-people', {
+        accepted: true,
+        code: 'event-resolved',
+        message: 'The ship answers the signal.',
+        deltas: {},
+        cue: 'none',
+        eventResult: {
+          eventId: 'other-people',
+          choiceId: 'flashlight',
+          resultId: 'people-rescue',
+        },
+      }, {
+        choiceId: 'flashlight',
+        instanceId: null,
+        condition: null,
+      });
+      const rescue = world.play('rescue');
+
+      world.update(0.2, 0.2);
+
+      expect(presentation.userData.state).toBe('answering');
+      expect(await remainsPending(reaction)).toBe(true);
+
+      world.update(4.2, 4);
+      await Promise.all([reaction, rescue]);
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
+  it.each([
+    ['dedicated', 'leak'],
+    ['focused', 'other-people'],
+    ['featured', 'flowers'],
+    ['weather', 'windy-night'],
+    ['supernatural', 'ghosts'],
+    ['moon', 'face-on-the-moon'],
+  ] as const)('delegates one %s event lifecycle to one adapter', async (family, eventId) => {
+    const propModels = createTestPropModels();
+    const adapter = eventAdapterTestDouble(eventId);
+    const create = vi.spyOn(EventPresentationRegistry.prototype, 'create')
+      .mockReturnValue(adapter);
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const choice = {
+      choiceId: 'test-choice',
+      instanceId: null,
+      condition: null,
+    } as const;
+    const outcome: ActionOutcome = {
+      accepted: true,
+      code: 'event-resolved',
+      message: `${eventId} resolved.`,
+      deltas: {},
+      cue: 'none',
+      ...(family === 'focused'
+        ? {
+            eventResult: {
+              eventId,
+              choiceId: choice.choiceId,
+              resultId: 'test-result',
+            },
+          }
+        : {}),
+    };
+    const result = {
+      outcome,
+      resourceDeltas: {},
+      gainedInstanceIds: [],
+      brokenInstanceIds: [],
+      lostInstanceIds: [],
+      consumedInstanceIds: [],
+      selectedInstanceId: null,
+      selectedCondition: null,
+      targetInstanceId: null,
+    };
+
+    try {
+      world.stageEvent(eventId, 17);
+      await world.revealEvent(eventId);
+      await world.playEventChoice(eventId, choice);
+      await (world as unknown as {
+        playEventSceneItemUse(
+          activeEventId: string,
+          choiceId: string,
+          instanceId: ItemInstanceId,
+        ): Promise<boolean>;
+      }).playEventSceneItemUse(eventId, choice.choiceId, 'bucket-1');
+      (world as unknown as {
+        eventItemAimTarget(activeEventId: string): Object3D | null;
+      }).eventItemAimTarget(eventId);
+      world.projectEventInteractionBounds(eventId, 800, 600);
+      world.projectEventResultBounds(eventId, 800, 600);
+      await world.reactToEventOutcome(
+        eventId,
+        outcome,
+        choice,
+        family === 'dedicated' || family === 'moon' ? result : undefined,
+      );
+      world.update(1, 0.1);
+      world.setDocumentHidden(true);
+      world.clearEvent();
+
+      expect(create).toHaveBeenCalledWith(eventId, expect.any(Object));
+      expect(adapter.stage).toHaveBeenCalledOnce();
+      expect(adapter.reveal).toHaveBeenCalledOnce();
+      expect(adapter.playChoice).toHaveBeenCalledOnce();
+      expect(adapter.playItemUse).toHaveBeenCalledOnce();
+      expect(adapter.itemAimTarget).toHaveBeenCalledOnce();
+      expect(adapter.interactionTargets).toHaveBeenCalledOnce();
+      expect(adapter.interactionRoot).toHaveBeenCalledOnce();
+      expect(adapter.resultRoot).toHaveBeenCalledOnce();
+      expect(adapter.react).toHaveBeenCalledOnce();
+      expect(adapter.update).toHaveBeenCalledOnce();
+      expect(adapter.settleForVisibilityChange).toHaveBeenCalledOnce();
+      expect(adapter.clear).toHaveBeenCalledOnce();
+    } finally {
+      world.dispose();
+      create.mockRestore();
+      propModels.dispose();
+    }
+    expect(adapter.clear).toHaveBeenCalledOnce();
+    expect(adapter.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('reapplies the active moon presenter without advancing it during ambient pause', () => {
+    const propModels = createTestPropModels();
+    const adapter = eventAdapterTestDouble('face-on-the-moon');
+    const create = vi.spyOn(EventPresentationRegistry.prototype, 'create')
+      .mockReturnValue(adapter);
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    try {
+      world.stageEvent('face-on-the-moon');
+      world.updateAmbient(21.9, 20);
+      expect(adapter.update).toHaveBeenCalledWith(21.9, 0);
+    } finally {
+      world.dispose();
+      create.mockRestore();
+      propModels.dispose();
+    }
+  });
+
+  it('clears the rescue callback when adapter detachment fails after deactivation', () => {
+    const propModels = createTestPropModels();
+    const focused = focusedPresenterTestDouble('other-people');
+    const targetRoot = new Group();
+    targetRoot.add(new Mesh(new BoxGeometry(0.2, 0.2, 0.2), new MeshBasicMaterial()));
+    focused.presenter.root.add(targetRoot);
+    const presenter = Object.assign(focused.presenter, {
+      setRescueCue: vi.fn(),
+      interactionTargets: () => [{
+        id: 'custom:rescue',
+        label: 'RESCUE',
+        description: 'Custom rescue target.',
+        choiceId: 'signal',
+        root: targetRoot,
+      }],
+    });
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      { 'other-people': () => presenter },
+    );
+    const internals = world as unknown as {
+      fallbackEventPresentation: EventPresentationAdapter | null;
+      activeRescueCueCallback: ((progress: number | null) => void) | null;
+    };
+    world.stageEvent('other-people');
+    const adapter = internals.fallbackEventPresentation!;
+    const adapterRoot = adapter.roots[0]!.root;
+    const detachError = new Error('root detach failed');
+    const removeFromParent = adapterRoot.removeFromParent.bind(adapterRoot);
+    const remove = vi.spyOn(adapterRoot, 'removeFromParent').mockImplementation(() => {
+      removeFromParent();
+      throw detachError;
+    });
+
+    expect(internals.activeRescueCueCallback).not.toBeNull();
+    expect(world.projectInteractionAnchors(800, 600)
+      .find(({ id }) => id === 'custom:rescue')).toBeDefined();
+    expect(() => world.detach(adapter)).toThrow(detachError);
+    expect(internals.activeRescueCueCallback).toBeNull();
+    expect(world.projectInteractionAnchors(800, 600)
+      .find(({ id }) => id === 'custom:rescue')).toBeUndefined();
+    expect(() => world.detach(adapter)).not.toThrow();
+    expect(remove).toHaveBeenCalledOnce();
+
+    remove.mockRestore();
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('rolls back host roots when focused target installation fails', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const parent = new Group();
+    const root = new Group();
+    const adapter: EventPresentationAdapter = {
+      ...eventAdapterTestDouble('handyman'),
+      roots: [{ parent, root }],
+    };
+    const internals = world as unknown as {
+      interactionProjector: {
+        installFocusedInteractionTargets(
+          targets: readonly FocusedEventInteractionTarget[],
+        ): void;
+      };
+    };
+    const installError = new Error('target install failed');
+    const rollbackError = new Error('root rollback failed');
+    const install = vi.spyOn(
+      internals.interactionProjector,
+      'installFocusedInteractionTargets',
+    ).mockImplementationOnce(() => { throw installError; });
+    const removeFromParent = root.removeFromParent.bind(root);
+    let rollbackCalls = 0;
+    const remove = vi.spyOn(root, 'removeFromParent').mockImplementation(() => {
+      const attached = root.parent === parent;
+      const result = removeFromParent();
+      if (attached) {
+        rollbackCalls += 1;
+        throw rollbackError;
+      }
+      return result;
+    });
+
+    expect(() => world.attach(adapter)).toThrow(installError);
+    expect(root.parent).toBeNull();
+    expect(rollbackCalls).toBe(1);
+
+    install.mockRestore();
+    remove.mockRestore();
+    world.attach(adapter);
+    expect(root.parent).toBe(parent);
+    world.detach(adapter);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('keeps active focused targets when the wrong adapter detach is rejected', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const root = new Group();
+    const targetRoot = new Group();
+    targetRoot.position.z = -4;
+    targetRoot.add(new Mesh(new BoxGeometry(0.2, 0.2, 0.2), new MeshBasicMaterial()));
+    root.add(targetRoot);
+    const active: EventPresentationAdapter = {
+      ...eventAdapterTestDouble('handyman'),
+      roots: [{ parent: world.scene, root }],
+      interactionTargets: vi.fn(() => [{
+        id: 'custom:active',
+        label: 'ACTIVE',
+        description: 'Active target.',
+        choiceId: 'keep',
+        root: targetRoot,
+      }]),
+    };
+    const other = eventAdapterTestDouble('night-trader');
+
+    world.attach(active);
+    expect(world.projectInteractionAnchors(800, 600)
+      .find(({ id }) => id === 'custom:active')).toBeDefined();
+    expect(() => world.detach(other)).toThrow(
+      'Cannot detach an inactive event presentation.',
+    );
+    expect(world.projectInteractionAnchors(800, 600)
+      .find(({ id }) => id === 'custom:active')).toBeDefined();
+
+    world.detach(active);
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('clears the rescue callback when host disposal fails', () => {
+    const propModels = createTestPropModels();
+    const focused = focusedPresenterTestDouble('other-people');
+    const presenter = Object.assign(focused.presenter, { setRescueCue: vi.fn() });
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      { 'other-people': () => presenter },
+    );
+    const internals = world as unknown as {
+      fallbackEventPresentation: EventPresentationAdapter | null;
+      activeRescueCueCallback: ((progress: number | null) => void) | null;
+    };
+    world.stageEvent('other-people');
+    const adapterRoot = internals.fallbackEventPresentation!.roots[0]!.root;
+    const detachError = new Error('root detach failed');
+    const removeFromParent = adapterRoot.removeFromParent.bind(adapterRoot);
+    const remove = vi.spyOn(adapterRoot, 'removeFromParent').mockImplementation(() => {
+      removeFromParent();
+      throw detachError;
+    });
+
+    expect(internals.activeRescueCueCallback).not.toBeNull();
+    expect(() => world.dispose()).toThrow(detachError);
+    expect(internals.activeRescueCueCallback).toBeNull();
+    expect(remove).toHaveBeenCalled();
+
+    remove.mockRestore();
+    propModels.dispose();
+  });
+
+  it('does not construct inactive weather choreography for focused and featured routes', async () => {
     const propModels = createTestPropModels();
     const focused = focusedPresenterTestDouble('handyman');
     const weatherReveal = vi.spyOn(WeatherEventAnimator.prototype, 'reveal');
@@ -909,13 +1311,12 @@ describe('BoatWorld helpers', () => {
     try {
       world.stageEvent('handyman');
       await world.revealEvent('handyman');
-      expect(weatherReveal).toHaveBeenNthCalledWith(1, 'handyman');
 
       world.stageEvent('flowers');
       const featuredReveal = world.revealEvent('flowers');
-      expect(weatherReveal).toHaveBeenNthCalledWith(2, 'flowers');
       world.setDocumentHidden(true);
       await featuredReveal;
+      expect(weatherReveal).not.toHaveBeenCalled();
     } finally {
       weatherReveal.mockRestore();
       world.dispose();
@@ -1047,7 +1448,7 @@ describe('BoatWorld helpers', () => {
     await reveal;
     world.scene.updateMatrixWorld(true);
     const palm = world.scene.getObjectByName('handyman-palm')!;
-    const palmSurface = world.scene.getObjectByName(
+    const palmSurface = palm.getObjectByName(
       'handyman-imported-palm-surface',
     )!;
     const faceNormal = new Vector3(0, 1, 0)
@@ -2079,6 +2480,31 @@ describe('BoatWorld helpers', () => {
       propModels.dispose();
     },
   );
+
+  it('ignores stale drifting-item retrieve and recede commands', async () => {
+    const propModels = createTestPropModels();
+    const adapter = eventAdapterTestDouble('drifting-barrel');
+    const create = vi.spyOn(EventPresentationRegistry.prototype, 'create')
+      .mockReturnValue(adapter);
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    try {
+      world.stageEvent('drifting-barrel');
+
+      await world.retrieveDriftingItem('drifting-chest');
+      await world.recedeDriftingItem('drifting-chest');
+
+      expect(adapter.react).not.toHaveBeenCalled();
+    } finally {
+      world.dispose();
+      create.mockRestore();
+      propModels.dispose();
+    }
+  });
 
   it('does not dispose drifting barrel resources borrowed from the furniture library', () => {
     const propModels = createTestPropModels();
@@ -4486,11 +4912,8 @@ describe('BoatWorld helpers', () => {
     expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(false);
 
     const itemUse = world.playEventItemUse('ghosts', 'flareGun', flare.instanceId);
-    expect(weatherSupport).toHaveBeenCalledWith('ghosts', 'flareGun');
+    expect(weatherSupport).not.toHaveBeenCalled();
     expect(supernaturalSupport).toHaveBeenCalledWith('ghosts', 'flareGun');
-    expect(weatherSupport.mock.invocationCallOrder[0]).toBeLessThan(
-      supernaturalSupport.mock.invocationCallOrder[0]!,
-    );
     const flarePeak = supernaturalItemUseDuration('ghosts', 'flareGun')! * 0.47;
     world.update(flarePeak, flarePeak);
     const flareFlash = world.scene.getObjectByName('supernatural-flare-flash')!;
@@ -4639,25 +5062,37 @@ describe('BoatWorld helpers', () => {
     await reveal;
     const baseGrin = sky.material.uniforms.uMoonGrin?.value as number;
 
-    const pressureReaction = world.reactToEventOutcome('face-on-the-moon', {
+    const pressureOutcome: ActionOutcome = {
       accepted: true,
       code: 'event-resolved',
       message: 'The grin grows.',
       deltas: { pressure: 1 },
       cue: 'none',
-    });
+    };
+    const pressureReaction = world.reactToEventOutcome(
+      'face-on-the-moon',
+      pressureOutcome,
+      { choiceId: 'sleep', actors: [] },
+      exactEventResult(pressureOutcome),
+    );
     world.update(4.9, 1.1);
     await pressureReaction;
     expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(baseGrin);
     expect(sky.material.uniforms.uMoonGrin?.value).toBeLessThanOrEqual(0.96);
 
-    const energyReaction = world.reactToEventOutcome('face-on-the-moon', {
+    const energyOutcome: ActionOutcome = {
       accepted: true,
       code: 'event-resolved',
       message: 'You cannot keep your eyes open.',
       deltas: { energy: -80 },
       cue: 'none',
-    });
+    };
+    const energyReaction = world.reactToEventOutcome(
+      'face-on-the-moon',
+      energyOutcome,
+      { choiceId: 'sleep', actors: [] },
+      exactEventResult(energyOutcome),
+    );
     world.update(5.45, 0.55);
     expect(sky.material.uniforms.uMoonEventDim?.value).toBeGreaterThan(0);
     expect(camera.position.toArray()).toEqual(baseCameraPosition);
@@ -4690,19 +5125,26 @@ describe('BoatWorld helpers', () => {
     const binocularsRoot = world.scene.getObjectByName('boat-supply:spyglass')!;
 
     world.stageEvent('face-on-the-moon');
+    const binocularOutcome: ActionOutcome = {
+      accepted: true,
+      code: 'event-resolved',
+      message: 'The binoculars break.',
+      deltas: { energy: -79 },
+      cue: 'none',
+      eventResult: {
+        eventId: 'face-on-the-moon',
+        choiceId: 'spyglass',
+        resultId: 'moon-binoculars-broken',
+      },
+    };
     const reaction = world.reactToEventOutcome(
       'face-on-the-moon',
-      {
-        accepted: true,
-        code: 'event-resolved',
-        message: 'The binoculars break.',
-        deltas: { energy: -79 },
-        cue: 'none',
-      },
+      binocularOutcome,
       {
         choiceId: 'spyglass',
         actors: [{ instanceId: binoculars.instanceId, condition: 'broken' }],
       },
+      exactEventResult(binocularOutcome, binoculars.instanceId, 'broken'),
     );
     world.update(0.24, 0.24);
 
@@ -4767,85 +5209,6 @@ describe('BoatWorld helpers', () => {
     borrowActor.mockRestore();
   });
 
-  it('holds active moon state during ambient pause updates without advancing it', async () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
-      propModels,
-      createTestMoonTexture(),
-    );
-    const sky = world.scene.getObjectByName('procedural-skybox') as Mesh<
-      BufferGeometry,
-      ShaderMaterial
-    >;
-
-    world.stageEvent('face-on-the-moon');
-    const reveal = world.revealEvent('face-on-the-moon');
-    world.update(1.9, 1.9);
-    const heldReveal = sky.material.uniforms.uMoonFaceReveal?.value as number;
-    const heldStars = sky.material.uniforms.uMoonStarScale?.value as number;
-
-    world.updateAmbient(21.9, 20);
-
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(heldReveal);
-    expect(sky.material.uniforms.uMoonStarScale?.value).toBe(heldStars);
-    expect(await remainsPending(reveal)).toBe(true);
-
-    world.update(25.8, 3.9);
-    await reveal;
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('restores the camera before replacement animators stage after Moon Energy loss', async () => {
-    const propModels = createTestPropModels();
-    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
-    const world = new BoatWorld(
-      camera,
-      propModels,
-      createTestMoonTexture(),
-    );
-    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
-    const baseCameraPosition = camera.position.toArray();
-    const baseCameraQuaternion = camera.quaternion.toArray();
-
-    world.stageEvent('face-on-the-moon');
-    const reveal = world.revealEvent('face-on-the-moon');
-    world.update(5.8, 5.8);
-    await reveal;
-    const reaction = world.reactToEventOutcome('face-on-the-moon', {
-      accepted: true,
-      code: 'event-resolved',
-      message: 'You cannot keep your eyes open.',
-      deltas: { energy: -80 },
-      cue: 'none',
-    });
-    world.update(4.9, 1.1);
-    await reaction;
-    expect(camera.position.toArray()).toEqual(baseCameraPosition);
-    expect(camera.quaternion.toArray()).not.toEqual(baseCameraQuaternion);
-    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
-
-    const originalStage = SupernaturalEventAnimator.prototype.stage;
-    let cameraQuaternionWhenStaged: number[] = [];
-    const stage = vi.spyOn(SupernaturalEventAnimator.prototype, 'stage')
-      .mockImplementation(function stageReplacement(
-        this: SupernaturalEventAnimator,
-        eventId: string,
-      ) {
-        cameraQuaternionWhenStaged = camera.quaternion.toArray();
-        return originalStage.call(this, eventId);
-      });
-
-    world.stageEvent('ghosts');
-
-    expect(cameraQuaternionWhenStaged).toEqual(baseCameraQuaternion);
-    expect(cameraRig.position.y).toBe(0);
-    stage.mockRestore();
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('keeps Restless Waves supplies fixed while the camera shows hull impacts', async () => {
     const ring = savedItem('swimRing');
     const propModels = createTestPropModels();
@@ -4883,6 +5246,7 @@ describe('BoatWorld helpers', () => {
     world.clearEvent();
     await lost;
 
+    world.stageEvent('restless-waves');
     const broken = world.reactToEventOutcome(
       'restless-waves',
       {
@@ -5775,7 +6139,6 @@ describe('BoatWorld helpers', () => {
       return originalCreate(instance);
     });
     const disposeCompanion = vi.spyOn(CarlitosPresentation.prototype, 'dispose');
-    const disposeParticles = vi.spyOn(FishingBiteParticles.prototype, 'dispose');
 
     expect(() => new BoatWorld(
       new PerspectiveCamera(),
@@ -5783,7 +6146,6 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
     )).toThrow(failure);
     expect(disposeCompanion).toHaveBeenCalledOnce();
-    expect(disposeParticles).toHaveBeenCalledOnce();
     expect(hangingGeometryDispose).not.toBeNull();
     expect(hangingGeometryDispose!).toHaveBeenCalledOnce();
     expect(hangingMaterialDispose!).toHaveBeenCalledOnce();
@@ -5791,7 +6153,6 @@ describe('BoatWorld helpers', () => {
     createPracticalLight.mockRestore();
     create.mockRestore();
     disposeCompanion.mockRestore();
-    disposeParticles.mockRestore();
     propModels.dispose();
   });
 
@@ -5806,7 +6167,6 @@ describe('BoatWorld helpers', () => {
       });
     const disposeSupplies = vi.spyOn(BoatSupplyDisplay.prototype, 'dispose');
     const disposeCompanion = vi.spyOn(CarlitosPresentation.prototype, 'dispose');
-    const disposeParticles = vi.spyOn(FishingBiteParticles.prototype, 'dispose');
 
     expect(() => new BoatWorld(
       new PerspectiveCamera(),
@@ -5815,12 +6175,10 @@ describe('BoatWorld helpers', () => {
     )).toThrow(failure);
     expect(disposeSupplies).toHaveBeenCalledOnce();
     expect(disposeCompanion).toHaveBeenCalledOnce();
-    expect(disposeParticles).toHaveBeenCalledOnce();
 
     createEventModel.mockRestore();
     disposeSupplies.mockRestore();
     disposeCompanion.mockRestore();
-    disposeParticles.mockRestore();
     propModels.dispose();
   });
 
@@ -5852,7 +6210,6 @@ describe('BoatWorld helpers', () => {
     const disposeCompanion = vi.spyOn(CarlitosPresentation.prototype, 'dispose');
     const disposeSupplies = vi.spyOn(BoatSupplyDisplay.prototype, 'dispose');
     const disposeChest = vi.spyOn(ChestDisplay.prototype, 'dispose');
-    const disposeParticles = vi.spyOn(FishingBiteParticles.prototype, 'dispose');
 
     expect(() => new BoatWorld(
       camera,
@@ -5863,7 +6220,6 @@ describe('BoatWorld helpers', () => {
     expect(disposeCompanion).toHaveBeenCalledOnce();
     expect(disposeSupplies).toHaveBeenCalledOnce();
     expect(disposeChest).toHaveBeenCalledOnce();
-    expect(disposeParticles).toHaveBeenCalledOnce();
     expect(rodGeometryDispose).not.toBeNull();
     expect(rodGeometryDispose!).toHaveBeenCalledOnce();
     expect(rodMaterialDispose!).toHaveBeenCalledOnce();
@@ -5876,13 +6232,18 @@ describe('BoatWorld helpers', () => {
     disposeCompanion.mockRestore();
     disposeSupplies.mockRestore();
     disposeChest.mockRestore();
-    disposeParticles.mockRestore();
     propModels.dispose();
   });
 
   it('routes dedicated events before generic and weather paths', async () => {
     const propModels = createTestPropModels();
     const eventModels = createTestEventModels();
+    const dedicatedStage = vi.spyOn(EventPresentationCoordinator.prototype, 'stage');
+    const dedicatedDispose = vi.spyOn(EventPresentationCoordinator.prototype, 'dispose');
+    const dedicatedItem = vi.spyOn(EventPresentationCoordinator.prototype, 'playItemUse')
+      .mockResolvedValue(false);
+    const dedicatedReact = vi.spyOn(EventPresentationCoordinator.prototype, 'react')
+      .mockResolvedValue();
     const genericStage = vi.spyOn(EventPresentationLayer.prototype, 'stage');
     const genericClear = vi.spyOn(EventPresentationLayer.prototype, 'clear');
     const genericReact = vi.spyOn(EventPresentationLayer.prototype, 'react');
@@ -5904,15 +6265,6 @@ describe('BoatWorld helpers', () => {
     (world as unknown as {
       ensureEventPresenter(eventId: 'leak'): void;
     }).ensureEventPresenter('leak');
-    const coordinator = (
-      world as unknown as { dedicatedEvents: EventPresentationCoordinator }
-    ).dedicatedEvents;
-    const dedicatedStage = vi.spyOn(coordinator, 'stage');
-    const dedicatedDispose = vi.spyOn(coordinator, 'dispose');
-    const dedicatedItem = vi.spyOn(coordinator, 'playItemUse')
-      .mockResolvedValue(false);
-    const dedicatedReact = vi.spyOn(coordinator, 'react')
-      .mockResolvedValue();
     const context = {
       eventId: 'leak' as const,
       targetInstanceId: null,
@@ -5950,20 +6302,24 @@ describe('BoatWorld helpers', () => {
     expect(dedicatedItem).toHaveBeenCalledWith('bucket', 'bucket-1');
     expect(dedicatedReact).toHaveBeenCalledWith(presentation);
     expect(genericStage).not.toHaveBeenCalled();
-    expect(genericClear).toHaveBeenCalled();
+    expect(genericClear).not.toHaveBeenCalled();
     expect(genericReact).not.toHaveBeenCalled();
     expect(weatherStage).not.toHaveBeenCalled();
-    expect(weatherClear).toHaveBeenCalled();
+    expect(weatherClear).not.toHaveBeenCalled();
     expect(weatherItem).not.toHaveBeenCalled();
     expect(weatherReact).not.toHaveBeenCalled();
     expect(supplyItem).toHaveBeenCalledWith('bucket-1');
 
     world.stageEvent('windy-night');
-    expect(genericStage).toHaveBeenCalledWith('windy-night');
-    expect(weatherStage).toHaveBeenCalledWith('windy-night');
+    expect(genericStage).toHaveBeenCalledWith('windy-night', 0);
+    expect(weatherStage).toHaveBeenCalledWith('windy-night', 0);
     expect(dedicatedDispose).toHaveBeenCalledOnce();
 
     world.dispose();
+    dedicatedStage.mockRestore();
+    dedicatedDispose.mockRestore();
+    dedicatedItem.mockRestore();
+    dedicatedReact.mockRestore();
     genericStage.mockRestore();
     genericClear.mockRestore();
     genericReact.mockRestore();
@@ -5978,6 +6334,7 @@ describe('BoatWorld helpers', () => {
   it('clears the coordinator, supplies, pose roots, and shared vortex', () => {
     const propModels = createTestPropModels();
     const eventModels = createTestEventModels();
+    const clearCoordinator = vi.spyOn(EventPresentationCoordinator.prototype, 'clear');
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
@@ -5990,7 +6347,6 @@ describe('BoatWorld helpers', () => {
     );
     world.stageEvent('tornado');
     const internals = world as unknown as {
-      dedicatedEvents: EventPresentationCoordinator;
       supplyDisplay: BoatSupplyDisplay;
       cameraEffectsRoot: Group;
       boatEffectsRoot: Group;
@@ -6004,7 +6360,6 @@ describe('BoatWorld helpers', () => {
         strength: number;
       };
     };
-    const clearCoordinator = vi.spyOn(internals.dedicatedEvents, 'clear');
     const clearSupplies = vi.spyOn(internals.supplyDisplay, 'clearEventMotion');
     internals.cameraEffectsRoot.rotation.z = 0.4;
     internals.boatEffectsRoot.rotation.y = 0.7;
@@ -6037,6 +6392,7 @@ describe('BoatWorld helpers', () => {
     });
 
     world.dispose();
+    clearCoordinator.mockRestore();
     propModels.dispose();
   });
 
@@ -6241,17 +6597,9 @@ describe('BoatWorld helpers', () => {
     const initialPosition = camera.position.clone();
     const initialQuaternion = camera.quaternion.clone();
     const internals = world as unknown as {
-      divePresentation: DivePresentation;
-      sampleWorldWaveInto: (
-        output: ReturnType<typeof sampleWaveField>,
-        time: number,
-        x: number,
-        z: number,
-        amplitudeScale: number,
-      ) => void;
+      diveController: DivePresentationController;
     };
-    const updateDive = vi.spyOn(internals.divePresentation, 'update');
-    const sampleDiveWave = vi.spyOn(internals, 'sampleWorldWaveInto');
+    const updateDive = vi.spyOn(internals.diveController, 'update');
     const impact = vi.fn();
 
     const pending = world.playDive(scuba.instanceId, impact);
@@ -6259,31 +6607,13 @@ describe('BoatWorld helpers', () => {
     expect(world.scene.getObjectByName('glasses25.001')).not.toBeUndefined();
 
     world.update(81.1, 1.1);
-    expect(updateDive).toHaveBeenCalledWith(1.1, 1.1, expect.any(Number));
+    expect(updateDive).toHaveBeenCalledWith(81.1, 1.1);
     const seatedX = camera.position.x;
     expect(seatedX).toBeGreaterThan(1.6);
     expect(camera.position.z).toBeLessThan(-1.1);
     const initialDirection = new Vector3(0, 0, -1).applyQuaternion(initialQuaternion);
     const seatedDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
     expect(initialDirection.angleTo(seatedDirection)).toBeCloseTo(Math.PI / 2);
-    const entryPosition = internals.divePresentation.copyWaterEntryWorldPosition(
-      new Vector3(),
-    );
-    expect(sampleDiveWave).toHaveBeenCalledWith(
-      expect.any(Object),
-      81.1,
-      entryPosition.x,
-      entryPosition.z,
-      presentationWeatherProfile('calm').waveScale,
-    );
-    const entryWaveHeight = sampleWaveField(
-      DEFAULT_WAVES,
-      81.1,
-      entryPosition.x,
-      entryPosition.z,
-      presentationWeatherProfile('calm').waveScale,
-    ).height;
-    expect(updateDive.mock.calls[0]![2]).toBeCloseTo(entryWaveHeight);
     expect(camera.position.toArray()).not.toEqual(initialPosition.toArray());
     world.update(83.6, 2.5);
     expect(camera.position.x).toBeGreaterThan(seatedX + 0.85);
@@ -6794,6 +7124,158 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('projects stable metadata from a custom focused presenter', () => {
+    const propModels = createTestPropModels();
+    const focused = focusedPresenterTestDouble('handyman');
+    const targetRoot = new Group();
+    targetRoot.position.set(0.4, 0, -4);
+    targetRoot.add(new Mesh(
+      new BoxGeometry(0.25, 0.25, 0.25),
+      new MeshBasicMaterial(),
+    ));
+    focused.presenter.root.add(targetRoot);
+    const targets = Object.freeze([Object.freeze({
+      id: 'custom:bell',
+      label: 'BELL',
+      description: 'Ring the custom bell.',
+      choiceId: 'ring',
+      root: targetRoot,
+      tooltip: true,
+      minimumHitWidth: 107,
+      minimumHitHeight: 83,
+    })]);
+    const interactionTargets = vi.fn(() => targets);
+    const presenter = Object.assign(focused.presenter, { interactionTargets });
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      { handyman: () => presenter },
+    );
+
+    world.stageEvent('handyman');
+    const first = world.projectInteractionAnchors(800, 600);
+    const firstTarget = first.find(({ id }) => id === 'custom:bell');
+    expect(firstTarget).toMatchObject({
+      label: 'BELL',
+      description: 'Ring the custom bell.',
+      eventChoiceId: 'ring',
+      tooltip: true,
+      hitArea: { width: 107, height: 83 },
+    });
+    const second = world.projectInteractionAnchors(800, 600);
+    expect(second).toBe(first);
+    expect(second.find(({ id }) => id === 'custom:bell')).toBe(firstTarget);
+    expect(interactionTargets).toHaveBeenCalledOnce();
+
+    world.stageEvent('night-trader');
+    expect(world.projectInteractionAnchors(800, 600)
+      .find(({ id }) => id === 'custom:bell')).toBeUndefined();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('disposes each top-level owner and unique scene resource once', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [savedItem('medicalKit')],
+    );
+    const internals = world as unknown as {
+      cameraController: { dispose(): void };
+      interactionProjector: { dispose(): void };
+      carlitosDelegation: { dispose(): void };
+      itemUseController: { dispose(): void };
+      eventPresentationHost: { dispose(): void };
+      itemUseAdapter: { dispose(): void };
+      diveController: { dispose(): void };
+      carlitos: { dispose(): void };
+      supplyDisplay: { dispose(): void };
+      chestDisplay: { dispose(): void };
+      toolHoverOutline: { dispose(): void };
+      hangingLantern: { dispose(): void };
+      sleepPillow: { dispose(): void };
+      fishingPresentation: {
+        disposeAnimation(): void;
+        disposeCatches(): void;
+        disposeParticles(): void;
+        detach(): void;
+        disposeVisualResources(): void;
+        dependencies: {
+          catches: { dispose(): void };
+          biteParticles: { dispose(): void };
+        };
+        ownedGeometries: Set<BufferGeometry>;
+        ownedMaterials: Set<Material>;
+      };
+      ocean: { dispose(): void };
+      weatherEffects: { dispose(): void };
+      sky: { dispose(): void };
+      repairToolboxAnimation: { cancel(): void };
+      ownedGeometries: Set<BufferGeometry>;
+      ownedMaterials: Set<Material>;
+      ownedTextures: Set<Texture>;
+    };
+    const ownerDisposals = [
+      vi.spyOn(internals.cameraController, 'dispose'),
+      vi.spyOn(internals.interactionProjector, 'dispose'),
+      vi.spyOn(internals.carlitosDelegation, 'dispose'),
+      vi.spyOn(internals.itemUseController, 'dispose'),
+      vi.spyOn(internals.eventPresentationHost, 'dispose'),
+      vi.spyOn(internals.itemUseAdapter, 'dispose'),
+      vi.spyOn(internals.diveController, 'dispose'),
+      vi.spyOn(internals.carlitos, 'dispose'),
+      vi.spyOn(internals.supplyDisplay, 'dispose'),
+      vi.spyOn(internals.chestDisplay, 'dispose'),
+      vi.spyOn(internals.toolHoverOutline, 'dispose'),
+      vi.spyOn(internals.hangingLantern, 'dispose'),
+      vi.spyOn(internals.sleepPillow, 'dispose'),
+      vi.spyOn(internals.fishingPresentation.dependencies.catches, 'dispose'),
+      vi.spyOn(internals.fishingPresentation.dependencies.biteParticles, 'dispose'),
+      vi.spyOn(internals.ocean, 'dispose'),
+      vi.spyOn(internals.weatherEffects, 'dispose'),
+      vi.spyOn(internals.sky, 'dispose'),
+    ];
+    const fishingPhaseDisposals = [
+      vi.spyOn(internals.fishingPresentation, 'disposeAnimation'),
+      vi.spyOn(internals.fishingPresentation, 'disposeCatches'),
+      vi.spyOn(internals.fishingPresentation, 'disposeParticles'),
+      vi.spyOn(internals.fishingPresentation, 'detach'),
+      vi.spyOn(internals.fishingPresentation, 'disposeVisualResources'),
+    ];
+    const repairCancel = vi.spyOn(internals.repairToolboxAnimation, 'cancel');
+    const resources = [
+      ...internals.ownedGeometries,
+      ...internals.ownedMaterials,
+      ...internals.ownedTextures,
+      ...internals.fishingPresentation.ownedGeometries,
+      ...internals.fishingPresentation.ownedMaterials,
+    ];
+    const resourceDisposals = resources.map((resource) => vi.spyOn(resource, 'dispose'));
+
+    world.dispose();
+    world.dispose();
+    internals.fishingPresentation.disposeAnimation();
+    internals.fishingPresentation.disposeCatches();
+    internals.fishingPresentation.disposeParticles();
+    internals.fishingPresentation.detach();
+    internals.fishingPresentation.disposeVisualResources();
+
+    expect(resources).toHaveLength(new Set(resources).size);
+    ownerDisposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+    fishingPhaseDisposals.forEach((dispose) => expect(dispose).toHaveBeenCalledTimes(2));
+    resourceDisposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+    expect(repairCancel).toHaveBeenCalledOnce();
+    propModels.dispose();
+  });
+
   it('continues every owner and camera cleanup step after early failures', () => {
     const originalParent = new Group();
     const camera = new PerspectiveCamera();
@@ -6811,7 +7293,13 @@ describe('BoatWorld helpers', () => {
     );
     const internals = world as unknown as {
       ocean: { dispose(): void };
-      fishingBiteParticles: { dispose(): void };
+      fishingPresentation: {
+        disposeAnimation(): void;
+        disposeCatches(): void;
+        disposeParticles(): void;
+        detach(): void;
+        disposeVisualResources(): void;
+      };
       sky: { dispose(): void };
       ownedGeometries: Set<BufferGeometry>;
       ownedMaterials: Set<Material>;
@@ -6830,13 +7318,32 @@ describe('BoatWorld helpers', () => {
       originalOceanDispose();
       throw firstError;
     });
-    const originalFishingBiteParticlesDispose =
-      internals.fishingBiteParticles.dispose.bind(internals.fishingBiteParticles);
-    const fishingBiteParticlesDispose = vi.spyOn(internals.fishingBiteParticles, 'dispose')
-      .mockImplementation(() => {
-        calls.push('bite-particles');
-        originalFishingBiteParticlesDispose();
-      });
+    const fishing = internals.fishingPresentation;
+    const originalAnimationDispose = fishing.disposeAnimation.bind(fishing);
+    const animationDispose = vi.spyOn(fishing, 'disposeAnimation').mockImplementation(() => {
+      calls.push('fishing-animation');
+      originalAnimationDispose();
+    });
+    const originalCatchDispose = fishing.disposeCatches.bind(fishing);
+    const catchDispose = vi.spyOn(fishing, 'disposeCatches').mockImplementation(() => {
+      calls.push('fishing-catches');
+      originalCatchDispose();
+    });
+    const originalParticleDispose = fishing.disposeParticles.bind(fishing);
+    const particleDispose = vi.spyOn(fishing, 'disposeParticles').mockImplementation(() => {
+      calls.push('fishing-particles');
+      originalParticleDispose();
+    });
+    const originalDetach = fishing.detach.bind(fishing);
+    const fishingDetach = vi.spyOn(fishing, 'detach').mockImplementation(() => {
+      calls.push('fishing-detach');
+      originalDetach();
+    });
+    const originalVisualDispose = fishing.disposeVisualResources.bind(fishing);
+    const visualDispose = vi.spyOn(fishing, 'disposeVisualResources').mockImplementation(() => {
+      calls.push('fishing-visuals');
+      originalVisualDispose();
+    });
     const originalSkyDispose = internals.sky.dispose.bind(internals.sky);
     const skyDispose = vi.spyOn(internals.sky, 'dispose').mockImplementation(() => {
       calls.push('sky');
@@ -6883,14 +7390,18 @@ describe('BoatWorld helpers', () => {
     expect(() => world.dispose()).toThrow(firstError);
 
     expect(calls).toEqual([
+      'fishing-animation',
+      'fishing-catches',
       'ocean',
-      'bite-particles',
+      'fishing-particles',
       'sky',
+      'fishing-detach',
       'scene',
       'camera',
       'geometry',
       'material',
       'texture',
+      'fishing-visuals',
     ]);
     expect(world.scene.children).toEqual([]);
     expect(camera.parent).toBe(originalParent);
@@ -6902,7 +7413,11 @@ describe('BoatWorld helpers', () => {
     expect(() => world.dispose()).not.toThrow();
     [
       oceanDispose,
-      fishingBiteParticlesDispose,
+      animationDispose,
+      catchDispose,
+      particleDispose,
+      fishingDetach,
+      visualDispose,
       skyDispose,
       geometryDispose,
       materialDispose,
@@ -7089,7 +7604,119 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('uses point particles only during the fishing bite window', () => {
+  it('preserves phased cleanup order and every simultaneous-failure priority', () => {
+    type CleanupStep =
+      | 'animation'
+      | 'catches'
+      | 'ocean'
+      | 'weather'
+      | 'particles'
+      | 'sky'
+      | 'detach'
+      | 'world-resources'
+      | 'fishing-visuals';
+    const cleanupOrder = [
+      'animation',
+      'catches',
+      'ocean',
+      'weather',
+      'particles',
+      'sky',
+      'detach',
+      'world-resources',
+      'fishing-visuals',
+    ] as const satisfies readonly CleanupStep[];
+    const failureCases = cleanupOrder.slice(1).map((first, index) => ({
+      first,
+      failures: new Set<CleanupStep>(cleanupOrder.slice(index + 1)),
+    }));
+
+    for (const { first, failures } of failureCases) {
+      const propModels = createTestPropModels();
+      const world = new BoatWorld(
+        new PerspectiveCamera(),
+        propModels,
+        createTestMoonTexture(),
+      );
+      const internals = world as unknown as {
+        fishingPresentation: FishingPresentation;
+        ocean: { dispose(): void };
+        weatherEffects: { dispose(): void };
+        sky: { dispose(): void };
+        ownedGeometries: Set<BufferGeometry>;
+      };
+      const errors = new Map<CleanupStep, Error>(cleanupOrder.map((step) => [
+        step,
+        new Error(`${step} cleanup failed`),
+      ]));
+      const order: CleanupStep[] = [];
+      const throwIfFailed = (step: CleanupStep): void => {
+        if (failures.has(step)) throw errors.get(step)!;
+      };
+      const presentation = internals.fishingPresentation;
+      const disposeAnimation = presentation.disposeAnimation.bind(presentation);
+      vi.spyOn(presentation, 'disposeAnimation').mockImplementation(() => {
+        order.push('animation');
+        disposeAnimation();
+      });
+      const disposeCatches = presentation.disposeCatches.bind(presentation);
+      vi.spyOn(presentation, 'disposeCatches').mockImplementation(() => {
+        order.push('catches');
+        disposeCatches();
+        throwIfFailed('catches');
+      });
+      const disposeOcean = internals.ocean.dispose.bind(internals.ocean);
+      vi.spyOn(internals.ocean, 'dispose').mockImplementation(() => {
+        order.push('ocean');
+        disposeOcean();
+        throwIfFailed('ocean');
+      });
+      const disposeWeather = internals.weatherEffects.dispose.bind(internals.weatherEffects);
+      vi.spyOn(internals.weatherEffects, 'dispose').mockImplementation(() => {
+        order.push('weather');
+        disposeWeather();
+        throwIfFailed('weather');
+      });
+      const disposeParticles = presentation.disposeParticles.bind(presentation);
+      vi.spyOn(presentation, 'disposeParticles').mockImplementation(() => {
+        order.push('particles');
+        disposeParticles();
+        throwIfFailed('particles');
+      });
+      const disposeSky = internals.sky.dispose.bind(internals.sky);
+      vi.spyOn(internals.sky, 'dispose').mockImplementation(() => {
+        order.push('sky');
+        disposeSky();
+        throwIfFailed('sky');
+      });
+      const detach = presentation.detach.bind(presentation);
+      vi.spyOn(presentation, 'detach').mockImplementation(() => {
+        order.push('detach');
+        detach();
+        throwIfFailed('detach');
+      });
+      const geometry = internals.ownedGeometries.values().next().value!;
+      const disposeGeometry = geometry.dispose.bind(geometry);
+      vi.spyOn(geometry, 'dispose').mockImplementation(() => {
+        order.push('world-resources');
+        disposeGeometry();
+        throwIfFailed('world-resources');
+      });
+      const disposeFishingVisuals = presentation.disposeVisualResources.bind(presentation);
+      vi.spyOn(presentation, 'disposeVisualResources').mockImplementation(() => {
+        order.push('fishing-visuals');
+        disposeFishingVisuals();
+        throwIfFailed('fishing-visuals');
+      });
+
+      expect(() => world.dispose()).toThrow(errors.get(first));
+      expect(order).toEqual(cleanupOrder);
+      expect(() => world.dispose()).not.toThrow();
+      propModels.dispose();
+    }
+  });
+
+  it('resets base lighting, motion, cue, and rescue state on ready entry and clear', async () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(65, 16 / 9, 0.08, 220),
@@ -7097,212 +7724,312 @@ describe('BoatWorld helpers', () => {
       createTestMoonTexture(),
     );
     const internals = world as unknown as {
-      fishingBiteParticles: FishingBiteParticles;
+      ambient: AmbientLight;
+      motionRig: Group;
+      cueCameraRig: Group;
+      boatPose: { y: number; pitch: number; roll: number; driftX: number; driftZ: number };
+      activeRescueCueCallback: ((progress: number | null) => void) | null;
+    };
+    const entry = world.enterFishingView();
+    world.update(1.1, 1.1);
+    await entry;
+
+    const expectImmediateBaseReset = async (action: () => void | Promise<void>) => {
+      internals.ambient.intensity = -1;
+      internals.motionRig.position.set(9, 9, 9);
+      internals.motionRig.rotation.set(1, 1, 1);
+      internals.cueCameraRig.position.set(8, 8, 8);
+      internals.cueCameraRig.rotation.set(2, 2, 2);
+      const rescue = vi.fn();
+      internals.activeRescueCueCallback = rescue;
+
+      await action();
+
+      expect(internals.ambient.intensity).toBeGreaterThan(0);
+      expect(internals.motionRig.position.toArray()).toEqual([
+        internals.boatPose.driftX,
+        0.22 + internals.boatPose.y,
+        internals.boatPose.driftZ,
+      ]);
+      expect(internals.motionRig.rotation.toArray().slice(0, 3)).toEqual([
+        internals.boatPose.pitch,
+        0,
+        -internals.boatPose.roll,
+      ]);
+      expect(internals.cueCameraRig.position.toArray()).toEqual([0, 0, 0]);
+      expect(internals.cueCameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+      expect(rescue).toHaveBeenCalledWith(null);
     };
 
-    expect(world.scene.getObjectByName('fishing-bubbles')).toBeUndefined();
-    expect(world.scene.getObjectByName('fishing-ripples')).toBeUndefined();
-    expect(world.scene.getObjectByName('scavenge-lifeboat-bow-spray')).toBeUndefined();
-    expect(internals.fishingBiteParticles.activeCount()).toBe(0);
-
-    world.showFishingBite(world.centeredFishingCast());
-    expect(internals.fishingBiteParticles.activeCount()).toBeGreaterThan(0);
-
-    world.showFishingWaiting(world.centeredFishingCast());
-    expect(internals.fishingBiteParticles.activeCount()).toBe(0);
+    await expectImmediateBaseReset(() => world.enterFishingView());
+    await expectImmediateBaseReset(() => world.clearFishingPresentation());
 
     world.dispose();
     propModels.dispose();
   });
 
-  it('hides the bobber while reeling in a reward', async () => {
+  it('preserves the complete effective frame order', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(65, 16 / 9, 0.08, 220),
       propModels,
       createTestMoonTexture(),
     );
-    const point = world.centeredFishingCast();
-    const bobber = world.scene.getObjectByName('fishing-bobber')!;
-
-    world.showFishingBite(point);
-    expect(bobber.visible).toBe(true);
-
-    const reel = world.playFishingReel('cod');
-    await vi.waitFor(() => {
-      expect(bobber.visible).toBe(false);
+    const internals = world as unknown as {
+      ocean: OceanRenderer;
+      buoyancy: BoatBuoyancy;
+      cameraController: {
+        update(delta: number): void;
+        updateDriftingItemView(delta: number, target: Object3D | null): void;
+      };
+      hangingLantern: { update(...args: unknown[]): void };
+      diveController: DivePresentationController;
+      sky: { update(...args: unknown[]): void };
+      supplyDisplay: {
+        updatePropAnimations(delta: number): void;
+        resetEventPoseForFrame(): void;
+        update(delta: number): void;
+      };
+      carlitos: { update(delta: number): void };
+      chestDisplay: { update(delta: number): void };
+      fishingPresentation: FishingPresentation;
+      eventPresentationHost: { update(time: number, delta: number): void };
+      carlitosDelegation: CarlitosDelegationPresentation;
+      itemUseController: { update(delta: number): void };
+      repairToolboxAnimation: { update(delta: number): void };
+      weatherEffects: { update(...args: unknown[]): void };
+    };
+    const order: string[] = [];
+    vi.spyOn(internals.ocean, 'setVortex').mockImplementation(() => {
+      order.push('ocean-vortex');
+    });
+    vi.spyOn(internals.buoyancy, 'sampleTargetInto').mockImplementation(() => {
+      order.push('buoyancy');
+    });
+    vi.spyOn(internals.cameraController, 'update').mockImplementation(() => {
+      order.push('camera');
+    });
+    vi.spyOn(internals.hangingLantern, 'update').mockImplementation(() => {
+      order.push('lantern');
+    });
+    vi.spyOn(internals.diveController, 'update').mockImplementation(() => {
+      order.push('dive');
+    });
+    vi.spyOn(internals.sky, 'update').mockImplementation(() => {
+      order.push('sky');
+    });
+    vi.spyOn(internals.supplyDisplay, 'updatePropAnimations').mockImplementation(() => {
+      order.push('supply-props');
+    });
+    vi.spyOn(internals.carlitos, 'update').mockImplementation(() => {
+      order.push('carlitos');
+    });
+    vi.spyOn(internals.chestDisplay, 'update').mockImplementation(() => {
+      order.push('chest');
+    });
+    vi.spyOn(internals.fishingPresentation, 'advance').mockImplementation(() => {
+      order.push('fishing-animation');
+    });
+    vi.spyOn(internals.supplyDisplay, 'resetEventPoseForFrame').mockImplementation(() => {
+      order.push('supply-event-reset');
+    });
+    vi.spyOn(internals.eventPresentationHost, 'update').mockImplementation(() => {
+      order.push('event');
+    });
+    vi.spyOn(internals.cameraController, 'updateDriftingItemView').mockImplementation(() => {
+      order.push('drifting-camera');
+    });
+    vi.spyOn(internals.carlitosDelegation, 'update').mockImplementation(() => {
+      order.push('carlitos-delegation');
+    });
+    vi.spyOn(internals.supplyDisplay, 'update').mockImplementation(() => {
+      order.push('supply');
+    });
+    vi.spyOn(internals.itemUseController, 'update').mockImplementation(() => {
+      order.push('item');
+    });
+    vi.spyOn(internals.repairToolboxAnimation, 'update').mockImplementation(() => {
+      order.push('repair');
+    });
+    vi.spyOn(internals.fishingPresentation, 'updateParticles').mockImplementation(() => {
+      order.push('fishing-particles');
+    });
+    vi.spyOn(internals.fishingPresentation, 'updateSurface').mockImplementation(() => {
+      order.push('fishing-surface');
+    });
+    vi.spyOn(internals.ocean, 'update').mockImplementation(() => {
+      order.push('ocean');
+    });
+    vi.spyOn(world.scene, 'updateMatrixWorld').mockImplementation(() => {
+      order.push('scene-matrix');
+    });
+    vi.spyOn(internals.fishingPresentation, 'updateLineGeometry').mockImplementation(() => {
+      order.push('fishing-line');
+    });
+    vi.spyOn(internals.ocean, 'setExclusions').mockImplementation(() => {
+      order.push('ocean-exclusion');
+    });
+    vi.spyOn(internals.weatherEffects, 'update').mockImplementation(() => {
+      order.push('weather');
+    });
+    vi.spyOn(internals.ocean, 'follow').mockImplementation(() => {
+      order.push('ocean-follow');
     });
 
-    world.update(1, 1);
-    await reel;
-    expect(bobber.visible).toBe(false);
-    const catchDisplay = world.scene.getObjectByName('fishing-catch-display')!;
-    const catchRest = world.scene.getObjectByName('fishing-catch-bow-rest')!;
-    expect(catchDisplay.visible).toBe(true);
-    expect(catchDisplay.parent).toBe(catchRest);
-    expect(catchDisplay.position.toArray()).toEqual([0, 0, 0]);
-    expect(catchRest.position.toArray()).toEqual([0, 0.43, -2.52]);
-    expect(world.scene.getObjectByName('fishing-line')?.visible).toBe(false);
-    expect(world.projectFishingCatch(800, 600)).toMatchObject({ visible: true });
+    world.update(4, 1 / 60);
 
+    expect(order).toEqual([
+      'ocean-vortex',
+      'buoyancy',
+      'camera',
+      'lantern',
+      'dive',
+      'sky',
+      'supply-props',
+      'carlitos',
+      'chest',
+      'fishing-animation',
+      'supply-event-reset',
+      'event',
+      'drifting-camera',
+      'carlitos-delegation',
+      'supply',
+      'item',
+      'repair',
+      'fishing-particles',
+      'fishing-surface',
+      'ocean',
+      'scene-matrix',
+      'fishing-line',
+      'ocean-exclusion',
+      'weather',
+      'ocean-follow',
+    ]);
     world.dispose();
     propModels.dispose();
   });
 
-  it('settles the active fishing handle and preserves bow view when presentation is cleared', async () => {
-    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+  it('reuses one water exclusion region and list across frames', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
-      camera,
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
       propModels,
       createTestMoonTexture(),
     );
-    const normalPosition = camera.position.clone();
-    const pending = world.playFishingCast(world.centeredFishingCast());
-    const bowPosition = camera.position.clone();
-    expect(bowPosition.toArray()).not.toEqual(normalPosition.toArray());
+    const ocean = (world as unknown as { ocean: OceanRenderer }).ocean;
+    const exclusions: Parameters<OceanRenderer['setExclusions']>[0][] = [];
+    const setExclusions = ocean.setExclusions.bind(ocean);
+    vi.spyOn(ocean, 'setExclusions').mockImplementation((regions) => {
+      exclusions.push(regions);
+      setExclusions(regions);
+    });
 
-    world.clearFishingPresentation();
-    await pending;
+    world.update(1, 1 / 60);
+    world.update(2, 1 / 60);
 
-    expect(camera.position.toArray()).toEqual(bowPosition.toArray());
-    for (const name of ['fishing-line', 'fishing-bobber', 'fishing-splash', 'fishing-catch-display']) {
-      expect(world.scene.getObjectByName(name)?.visible).toBe(false);
-    }
-    let repeatEntrySettled = false;
-    void world.enterFishingView().then(() => { repeatEntrySettled = true; });
-    await Promise.resolve();
-    expect(repeatEntrySettled).toBe(true);
-    expect(camera.position.toArray()).toEqual(bowPosition.toArray());
-
+    expect(exclusions).toHaveLength(2);
+    expect(exclusions[1]).toBe(exclusions[0]);
+    expect(exclusions[1]![0]).toBe(exclusions[0]![0]);
     world.dispose();
     propModels.dispose();
   });
 
-  it('settles dedicated fishing handles on dispose from every active stage', async () => {
-    const stages: Array<(world: BoatWorld) => Promise<void> | void> = [
-      (world) => world.enterFishingView(),
-      (world) => world.playFishingCast(world.centeredFishingCast()),
-      (world) => { world.showFishingWaiting(world.centeredFishingCast()); },
-      (world) => { world.showFishingBite(world.centeredFishingCast()); },
-      (world) => world.playFishingReel('cod'),
-      (world) => world.playFishingMiss(),
-      (world) => world.exitFishingView(),
-    ];
+  it('keeps the frame-captured wave scale when an event update changes weather', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const internals = world as unknown as {
+      fishingPresentation: FishingPresentation;
+      eventPresentationHost: { update(time: number, delta: number): void };
+    };
+    world.setPresentationWeather('calm');
+    world.showFishingWaiting(world.centeredFishingCast());
+    const presentationDependencies = internals.fishingPresentation as unknown as {
+      dependencies: {
+        sampleWaveInto: (
+          output: WaveSample,
+          time: number,
+          x: number,
+          z: number,
+          amplitudeScale: number,
+        ) => void;
+      };
+    };
+    const sampleWave = vi.spyOn(presentationDependencies.dependencies, 'sampleWaveInto');
+    sampleWave.mockClear();
+    const eventUpdate = internals.eventPresentationHost.update
+      .bind(internals.eventPresentationHost);
+    vi.spyOn(internals.eventPresentationHost, 'update').mockImplementation((time, delta) => {
+      eventUpdate(time, delta);
+      world.setPresentationWeather('waves');
+    });
 
-    for (const enterStage of stages) {
-      const propModels = createTestPropModels();
-      const world = new BoatWorld(
-        new PerspectiveCamera(65, 16 / 9, 0.08, 220),
-        propModels,
-        createTestMoonTexture(),
-      );
-      const pending = enterStage(world);
-      world.dispose();
-      world.dispose();
-      await pending;
-      propModels.dispose();
-    }
+    world.update(2, 1 / 60);
+
+    expect(sampleWave.mock.calls.at(-1)?.[4]).toBe(
+      presentationWeatherProfile('calm').waveScale,
+    );
+    world.dispose();
+    propModels.dispose();
   });
 
-  it('disposes presentation and catch-library resources exactly once from every fishing stage', async () => {
-    const stages: ReadonlyArray<{
-      readonly name: string;
-      readonly arrange: (world: BoatWorld) => Promise<void> | void;
-    }> = [
-      { name: 'idle', arrange: () => {} },
-      { name: 'entering', arrange: (world) => { void world.enterFishingView(); } },
-      {
-        name: 'ready',
-        arrange: (world) => {
-          void world.enterFishingView();
-          world.update(1, 1);
-        },
-      },
-      { name: 'casting', arrange: (world) => { void world.playFishingCast(world.centeredFishingCast()); } },
-      { name: 'waiting', arrange: (world) => { world.showFishingWaiting(world.centeredFishingCast()); } },
-      { name: 'bite', arrange: (world) => { world.showFishingBite(world.centeredFishingCast()); } },
-      { name: 'reeling', arrange: (world) => world.playFishingReel('cod') },
-      { name: 'missing', arrange: (world) => { void world.playFishingMiss(); } },
-      { name: 'returning', arrange: (world) => { void world.exitFishingView(); } },
-    ];
+  it('delegates the public fishing facade to one presentation owner', async () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const internals = world as unknown as {
+      fishingPresentation: FishingPresentation;
+    };
+    const presentation = internals.fishingPresentation;
+    const point = Object.freeze({ x: 0, z: -6.4 });
+    const bounds = { x: 1, y: 2, width: 3, height: 4, depth: 5, visible: true };
+    const enter = vi.spyOn(presentation, 'enterView').mockResolvedValue();
+    const castAt = vi.spyOn(presentation, 'castPointFromScreen').mockReturnValue(point);
+    const centered = vi.spyOn(presentation, 'centeredCast').mockReturnValue(point);
+    const cast = vi.spyOn(presentation, 'playCast').mockResolvedValue();
+    const waiting = vi.spyOn(presentation, 'showWaiting').mockReturnValue();
+    const bite = vi.spyOn(presentation, 'showBite').mockReturnValue();
+    const projectBite = vi.spyOn(presentation, 'projectBite').mockReturnValue(bounds);
+    const reel = vi.spyOn(presentation, 'playReel').mockResolvedValue();
+    const projectCatch = vi.spyOn(presentation, 'projectCatch').mockReturnValue(bounds);
+    const miss = vi.spyOn(presentation, 'playMiss').mockResolvedValue();
+    const exit = vi.spyOn(presentation, 'exitView').mockResolvedValue();
+    const clear = vi.spyOn(presentation, 'clear').mockReturnValue();
 
-    for (const stage of stages) {
-      const propModels = createTestPropModels();
-      const world = new BoatWorld(
-        new PerspectiveCamera(65, 16 / 9, 0.08, 220),
-        propModels,
-        createTestMoonTexture(),
-      );
-      const internals = world as unknown as {
-        fishingCatches: FishingCatchLibrary;
-        fishingBiteParticles: FishingBiteParticles;
-        ownedGeometries: Set<BufferGeometry>;
-        ownedMaterials: Set<Material>;
-      };
-      const preparedCatch = await internals.fishingCatches.prepare('cod');
-      expect(preparedCatch).not.toBeNull();
-      const catchGeometries = new Set<BufferGeometry>();
-      const catchMaterials = new Set<Material>();
-      collectMeshResources(preparedCatch!, catchGeometries, catchMaterials);
-      const line = world.scene.getObjectByName('fishing-line') as Line<BufferGeometry, Material>;
-      const pooledMeshes = [
-        firstMesh(world.scene.getObjectByName('fishing-bobber')!),
-        firstMesh(world.scene.getObjectByName('fishing-splash')!),
-      ];
-      const biteParticleGeometry = internals.fishingBiteParticles.points.geometry;
-      const biteParticleMaterial = internals.fishingBiteParticles.points.material;
-      const presentationGeometries = new Set<BufferGeometry>([
-        line.geometry,
-        ...pooledMeshes.map(({ geometry }) => geometry),
-      ]);
-      const presentationMaterials = new Set<Material>([
-        line.material,
-        ...pooledMeshes.flatMap(({ material }) => Array.isArray(material) ? material : [material]),
-      ]);
-      const catchGeometry = catchGeometries.values().next().value!;
-      const catchMaterial = catchMaterials.values().next().value!;
+    await world.enterFishingView();
+    expect(world.castFishingAtScreenPoint(1, 2, 3, 4)).toBe(point);
+    expect(world.centeredFishingCast()).toBe(point);
+    await world.playFishingCast(point);
+    world.showFishingWaiting(point);
+    world.showFishingBite(point);
+    expect(world.projectFishingBite(800, 600)).toBe(bounds);
+    await world.playFishingReel('cod');
+    expect(world.projectFishingCatch(800, 600)).toBe(bounds);
+    await world.playFishingMiss();
+    await world.exitFishingView();
+    world.clearFishingPresentation();
 
-      presentationGeometries.forEach((geometry) => {
-        expect(internals.ownedGeometries.has(geometry), stage.name).toBe(true);
-      });
-      presentationMaterials.forEach((material) => {
-        expect(internals.ownedMaterials.has(material), stage.name).toBe(true);
-      });
-      expect(internals.ownedGeometries.has(biteParticleGeometry), stage.name).toBe(false);
-      expect(internals.ownedMaterials.has(biteParticleMaterial), stage.name).toBe(false);
-      expect(
-        [...catchGeometries].some((geometry) => internals.ownedGeometries.has(geometry)),
-        stage.name,
-      ).toBe(false);
-      expect(
-        [...catchMaterials].some((material) => internals.ownedMaterials.has(material)),
-        stage.name,
-      ).toBe(false);
+    expect(enter).toHaveBeenCalledOnce();
+    expect(castAt).toHaveBeenCalledWith(1, 2, 3, 4);
+    expect(centered).toHaveBeenCalledOnce();
+    expect(cast).toHaveBeenCalledWith(point);
+    expect(waiting).toHaveBeenCalledWith(point);
+    expect(bite).toHaveBeenCalledWith(point);
+    expect(projectBite).toHaveBeenCalledWith(800, 600);
+    expect(reel).toHaveBeenCalledWith('cod');
+    expect(projectCatch).toHaveBeenCalledWith(800, 600);
+    expect(miss).toHaveBeenCalledOnce();
+    expect(exit).toHaveBeenCalledOnce();
+    expect(clear).toHaveBeenCalledOnce();
 
-      const presentationDisposeSpies = [
-        ...presentationGeometries,
-        ...presentationMaterials,
-      ].map((resource) => vi.spyOn(resource, 'dispose'));
-      const catchGeometryDispose = vi.spyOn(catchGeometry, 'dispose');
-      const catchMaterialDispose = vi.spyOn(catchMaterial, 'dispose');
-      const biteParticleGeometryDispose = vi.spyOn(biteParticleGeometry, 'dispose');
-      const biteParticleMaterialDispose = vi.spyOn(biteParticleMaterial, 'dispose');
-
-      const pending = stage.arrange(world);
-      world.dispose();
-      world.dispose();
-      await pending;
-
-      presentationDisposeSpies.forEach((dispose) => {
-        expect(dispose, stage.name).toHaveBeenCalledOnce();
-      });
-      expect(catchGeometryDispose, stage.name).toHaveBeenCalledOnce();
-      expect(catchMaterialDispose, stage.name).toHaveBeenCalledOnce();
-      expect(biteParticleGeometryDispose, stage.name).toHaveBeenCalledOnce();
-      expect(biteParticleMaterialDispose, stage.name).toHaveBeenCalledOnce();
-      propModels.dispose();
-    }
+    world.dispose();
+    propModels.dispose();
   });
 
 });

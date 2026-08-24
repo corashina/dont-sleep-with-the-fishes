@@ -1,6 +1,6 @@
 import type { AudioSystem, EventAudioLease } from '../audio/AudioSystem';
 import { runCleanupSteps } from '../world/SceneResources';
-import { ActiveEventPresenter } from './ActiveEventPresenter';
+import type { EventPresentationAdapter } from './EventPresentationAdapter';
 import { EventModelLibrary } from './EventModelLibrary';
 import {
   EVENT_MODEL_IDS,
@@ -13,7 +13,7 @@ import {
   SurvivalEventModelLibrary,
   type SurvivalEventModels,
 } from './SurvivalEventModelLibrary';
-import type { SurvivalEventId } from './events';
+import type { SurvivalEventId } from './eventCatalog';
 
 function preservePrimaryErrorCleanup(steps: Array<() => void>): void {
   try {
@@ -24,13 +24,13 @@ function preservePrimaryErrorCleanup(steps: Array<() => void>): void {
 }
 
 export interface EventPresenterHost {
-  createEventPresenter(
+  createEventPresentation(
     eventId: SurvivalEventId,
     dedicatedModels: EventModelLibrary,
     featuredModels: SurvivalEventModels,
-  ): ActiveEventPresenter;
-  attachEventPresenter(presenter: ActiveEventPresenter): void;
-  detachEventPresenter(presenter: ActiveEventPresenter): void;
+  ): EventPresentationAdapter;
+  attach(adapter: EventPresentationAdapter): void;
+  detach(adapter: EventPresentationAdapter): void;
 }
 
 export interface EventBundleLoaderDependencies {
@@ -61,7 +61,7 @@ export class EventBundle {
   constructor(
     readonly eventId: SurvivalEventId,
     private readonly host: EventPresenterHost,
-    private readonly presenter: ActiveEventPresenter,
+    private readonly adapter: EventPresentationAdapter,
     private readonly featuredModels: SurvivalEventModelLibrary,
     private readonly dedicatedModels: EventModelLibrary,
     private readonly audio: EventAudioLease,
@@ -69,15 +69,15 @@ export class EventBundle {
 
   attach(): void {
     if (this.disposed) throw new Error(`Event bundle is disposed: ${this.eventId}`);
-    this.host.attachEventPresenter(this.presenter);
+    this.host.attach(this.adapter);
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     runCleanupSteps([
-      () => this.host.detachEventPresenter(this.presenter),
-      () => this.presenter.dispose(),
+      () => this.host.detach(this.adapter),
+      () => this.adapter.dispose(),
       () => this.featuredModels.dispose(),
       () => this.dedicatedModels.dispose(),
       () => this.audio.dispose(),
@@ -153,9 +153,9 @@ export class EventBundleLoader {
     const featured = (
       featuredResult as PromiseFulfilledResult<SurvivalEventModelLibrary>
     ).value;
-    let presenter: ActiveEventPresenter;
+    let adapter: EventPresentationAdapter;
     try {
-      presenter = this.dependencies.host.createEventPresenter(
+      adapter = this.dependencies.host.createEventPresentation(
         eventId,
         dedicated,
         featured,
@@ -172,7 +172,7 @@ export class EventBundleLoader {
     return new EventBundle(
       eventId,
       this.dependencies.host,
-      presenter,
+      adapter,
       featured,
       dedicated,
       audio,
