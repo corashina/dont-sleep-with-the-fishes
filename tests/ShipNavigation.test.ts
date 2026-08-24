@@ -30,6 +30,13 @@ describe('ship navigation', () => {
     expect(metric.distance([0, 0], [99, 99])).toBeNull();
   });
 
+  it('caches one symmetric null route for a blocked in-grid endpoint', () => {
+    const metric = createShipRouteMetric(SHIP_LAYOUT);
+    expect(metric.distance([0, 9.6], [0, -7])).toBeNull();
+    expect(metric.distance([0, -7], [0, 9.6])).toBeNull();
+    expect(metric.distance([0, 9.6], [0, -7])).toBeNull();
+  });
+
   it('returns null for non-finite route coordinates', () => {
     const metric = createShipRouteMetric(SHIP_LAYOUT);
     expect(metric.distance([Number.NaN, 0], [0, 0])).toBeNull();
