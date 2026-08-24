@@ -423,6 +423,31 @@ describe('DriftingItemFlow', () => {
     expect(rig.resolveChoice).not.toHaveBeenCalled();
   });
 
+  it('commits disposal before a focus cleanup failure and never retries it', async () => {
+    const rig = createRig();
+    await enter(rig);
+    const cleanupFailure = { kind: 'focus-cleanup-failure' };
+    rig.ui.hideDriftingItemFocus.mockImplementation(() => { throw cleanupFailure; });
+
+    let thrown: unknown;
+    try {
+      rig.flow.dispose();
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBe(cleanupFailure);
+    expect(rig.ui.hideDriftingItemFocus).toHaveBeenCalledOnce();
+    expect(() => rig.flow.dispose()).not.toThrow();
+    await rig.flow.enter('drifting-barrel', choices);
+    await rig.flow.choose('retrieve');
+    await rig.flow.back();
+    rig.flow.syncTarget(800, 600);
+    expect(rig.ui.hideDriftingItemFocus).toHaveBeenCalledOnce();
+    expect(rig.world.enterDriftingItemView).toHaveBeenCalledOnce();
+    expect(rig.resolveChoice).not.toHaveBeenCalled();
+  });
+
   it('does not restore command focus after a terminal result', async () => {
     const rig = createRig();
     rig.setTerminal(true);

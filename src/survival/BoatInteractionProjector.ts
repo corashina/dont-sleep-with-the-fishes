@@ -19,6 +19,7 @@ import {
   type ProjectedBoatBounds,
 } from './BoatInteraction';
 import type { BoatSupplyPresentationRecord } from './BoatSupplyDisplay';
+import type { FocusedEventInteractionTarget } from './FocusedEventPresentation';
 import { CARLITOS_LAB_INSTANCE_ID } from './ItemAnimationLab';
 import {
   isDriftingCargoEventId,
@@ -39,6 +40,7 @@ export const ACTION_FOR_ITEM = Object.freeze(Object.fromEntries(
 
 export interface EventInteractionProjectionHost {
   activeEventId(): string | null;
+  interactionTargets(): readonly FocusedEventInteractionTarget[];
   interactionRoot(id: string): Object3D | null;
   resultRoot(id: string): Object3D | null;
   itemAimTarget(): Object3D | null;
@@ -57,44 +59,6 @@ export interface BoatInteractionProjectorRoots {
   readonly activeFeaturedEventId: () => FeaturedEventId | null;
 }
 
-interface FocusedInteractionSpec {
-  readonly id: string;
-  readonly label: string;
-  readonly description: string;
-  readonly choiceId: string;
-  readonly tooltip?: boolean;
-  readonly minimumHitWidth: number;
-  readonly minimumHitHeight: number;
-}
-
-const FOCUSED_INTERACTION_SPECS: readonly FocusedInteractionSpec[] = Object.freeze([
-  Object.freeze({
-    id: 'handyman:hand',
-    label: 'HAND',
-    description: 'Touch the waiting hand.',
-    choiceId: 'touch',
-    tooltip: false,
-    minimumHitWidth: 82,
-    minimumHitHeight: 82,
-  }),
-  Object.freeze({
-    id: 'persistent-chest',
-    label: 'CHEST',
-    description: 'Offer the closed chest to the hand.',
-    choiceId: 'chest',
-    minimumHitWidth: 54,
-    minimumHitHeight: 54,
-  }),
-  Object.freeze({
-    id: 'midnight-tour:island',
-    label: 'ISLAND',
-    description: 'Turn the boat toward the small island.',
-    choiceId: 'visit',
-    minimumHitWidth: 96,
-    minimumHitHeight: 78,
-  }),
-]);
-
 type MutableAnchor = {
   -readonly [Property in keyof BoatInteractionAnchor]: BoatInteractionAnchor[Property];
 };
@@ -107,11 +71,13 @@ interface SupplyProjectionEntry {
 }
 
 interface FocusedProjectionEntry {
-  readonly spec: FocusedInteractionSpec;
+  readonly target: FocusedEventInteractionTarget;
+  readonly cache: BoatObjectBoundsCache | null;
   readonly projection: ProjectedBoatBounds;
   readonly anchor: MutableAnchor;
-  root: Object3D | null;
 }
+
+const EMPTY_FOCUSED_ENTRIES: readonly FocusedProjectionEntry[] = Object.freeze([]);
 
 interface FeaturedProjectionEntry {
   readonly eventId: FeaturedEventId;
@@ -175,8 +141,8 @@ export class BoatInteractionProjector {
   private readonly lanternCache: BoatObjectBoundsCache | null;
   private readonly chestCache: BoatObjectBoundsCache | null;
   private readonly carlitosCache: BoatObjectBoundsCache | null;
-  private readonly focusedCaches = new WeakMap<Object3D, BoatObjectBoundsCache | null>();
-  private readonly focusedEntries: readonly FocusedProjectionEntry[];
+  private focusedEntries: readonly FocusedProjectionEntry[] = EMPTY_FOCUSED_ENTRIES;
+  private hasFocusedChestTarget = false;
   private readonly featuredEntries: readonly FeaturedProjectionEntry[];
   private readonly fishingProjection = projectionOutput();
   private readonly repairProjection = projectionOutput();
@@ -316,31 +282,6 @@ export class BoatInteractionProjector {
       backingInstanceId: CARLITOS_LAB_INSTANCE_ID,
       hitArea: hitArea(),
     };
-    this.focusedEntries = FOCUSED_INTERACTION_SPECS.map((spec) => ({
-      spec,
-      projection: projectionOutput(),
-      root: null,
-      anchor: {
-        id: spec.id,
-        label: spec.label,
-        description: spec.description,
-        tooltip: spec.tooltip,
-        eventChoiceId: spec.choiceId,
-        itemType: null,
-        toolId: null,
-        action: null,
-        x: 0,
-        y: 0,
-        visible: false,
-        depleted: false,
-        remainingUses: null,
-        quantity: 1,
-        usableQuantity: 1,
-        brokenQuantity: 0,
-        backingInstanceId: null,
-        hitArea: hitArea(),
-      },
-    }));
     this.featuredEntries = FEATURED_EVENT_IDS.map((eventId) => {
       const anchor: MutableAnchor = {
         id: `event:${eventId}`,
@@ -369,6 +310,47 @@ export class BoatInteractionProjector {
       }
       return { eventId, projection: projectionOutput(), anchor };
     });
+  }
+
+  installFocusedInteractionTargets(
+    targets: readonly FocusedEventInteractionTarget[],
+  ): void {
+    if (this.disposed) return;
+    const entries = targets.map((target): FocusedProjectionEntry => ({
+      target,
+      cache: createBoatObjectBoundsCache(target.root),
+      projection: projectionOutput(),
+      anchor: {
+        id: target.id,
+        label: target.label,
+        description: target.description,
+        tooltip: target.tooltip,
+        eventChoiceId: target.choiceId,
+        itemType: null,
+        toolId: null,
+        action: null,
+        x: 0,
+        y: 0,
+        visible: false,
+        depleted: false,
+        remainingUses: null,
+        quantity: 1,
+        usableQuantity: 1,
+        brokenQuantity: 0,
+        backingInstanceId: null,
+        hitArea: hitArea(),
+      },
+    }));
+    const hasChestTarget = entries.some(({ target }) => target.id === 'persistent-chest');
+    this.focusedEntries = Object.freeze(entries);
+    this.hasFocusedChestTarget = hasChestTarget;
+  }
+
+  clearFocusedInteractionTargets(): void {
+    if (this.focusedEntries.length === 0) return;
+    for (const entry of this.focusedEntries) entry.anchor.visible = false;
+    this.focusedEntries = EMPTY_FOCUSED_ENTRIES;
+    this.hasFocusedChestTarget = false;
   }
 
   projectAnchors(width: number, height: number): readonly BoatInteractionAnchor[] {
@@ -508,13 +490,11 @@ export class BoatInteractionProjector {
     updateHitArea(this.chestAnchor, this.chestProjection, 54, 54);
 
     for (const entry of this.focusedEntries) {
-      const root = this.eventHost.interactionRoot(entry.spec.id);
-      entry.root = root;
-      if (root === null) continue;
+      const root = entry.target.root;
       projectCachedBoatObjectBoundsInto(
         entry.projection,
         root,
-        this.focusedCache(root),
+        entry.cache,
         this.camera,
         width,
         height,
@@ -523,19 +503,18 @@ export class BoatInteractionProjector {
       updateHitArea(
         entry.anchor,
         entry.projection,
-        entry.spec.minimumHitWidth,
-        entry.spec.minimumHitHeight,
+        entry.target.minimumHitWidth ?? 64,
+        entry.target.minimumHitHeight ?? 64,
       );
     }
 
-    if (this.focusedEntries[1]!.root === null) {
+    if (!this.hasFocusedChestTarget) {
       this.nextAnchors.push(this.chestAnchor);
     }
     if (activeFeaturedEntry !== null) {
       this.nextAnchors.push(activeFeaturedEntry.anchor);
     }
     for (const entry of this.focusedEntries) {
-      if (entry.root === null) continue;
       this.nextAnchors.push(entry.anchor);
     }
 
@@ -589,10 +568,10 @@ export class BoatInteractionProjector {
 
   dispose(): void {
     if (this.disposed) return;
+    this.clearFocusedInteractionTargets();
     this.disposed = true;
     this.nextAnchors.length = 0;
     this.outputAnchors = this.emptyAnchors;
-    for (const entry of this.focusedEntries) entry.root = null;
   }
 
   private canProjectEvent(width: number, height: number): boolean {
@@ -607,13 +586,6 @@ export class BoatInteractionProjector {
       if (entry.eventId === eventId) return entry;
     }
     return null;
-  }
-
-  private focusedCache(root: Object3D): BoatObjectBoundsCache | null {
-    if (!this.focusedCaches.has(root)) {
-      this.focusedCaches.set(root, createBoatObjectBoundsCache(root));
-    }
-    return this.focusedCaches.get(root) ?? null;
   }
 
   private sameMembership(): boolean {

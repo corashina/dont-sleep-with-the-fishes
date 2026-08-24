@@ -13,6 +13,7 @@ import type { EventModelInstance, EventModelLibrary } from './EventModelLibrary'
 import { FeaturedEventPresentations } from './FeaturedEventPresentations';
 import type {
   EventChoicePresentation,
+  FocusedEventInteractionTarget,
   FocusedEventPresentationDependencies,
   FocusedEventPresentationFactories,
 } from './FocusedEventPresentation';
@@ -80,6 +81,7 @@ interface AdapterOperations {
   playChoice(choice: EventChoicePresentation): Promise<void>;
   playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean>;
   itemAimTarget(): Object3D | null;
+  interactionTargets(): readonly FocusedEventInteractionTarget[];
   interactionRoot(id: string): Object3D | null;
   resultRoot(id: string): Object3D | null;
   react(reaction: EventPresentationReaction): Promise<void>;
@@ -115,6 +117,9 @@ function createAdapter(
     },
     itemAimTarget(): Object3D | null {
       return disposed ? null : operations.itemAimTarget();
+    },
+    interactionTargets(): readonly FocusedEventInteractionTarget[] {
+      return disposed ? EMPTY_INTERACTION_TARGETS : operations.interactionTargets();
     },
     interactionRoot(id): Object3D | null {
       return disposed ? null : operations.interactionRoot(id);
@@ -229,6 +234,10 @@ function createDedicatedCoordinator(
 const noChoice = (): Promise<void> => Promise.resolve();
 const noItemUse = (): Promise<boolean> => Promise.resolve(false);
 const noRoot = (): null => null;
+const EMPTY_INTERACTION_TARGETS: readonly FocusedEventInteractionTarget[] = Object.freeze([]);
+const noInteractionTargets = (): readonly FocusedEventInteractionTarget[] => (
+  EMPTY_INTERACTION_TARGETS
+);
 
 export const createDangerousWatersAdapter: EventPresentationAdapterFactory = (
   eventId,
@@ -263,6 +272,7 @@ export const createDangerousWatersAdapter: EventPresentationAdapterFactory = (
       layer.playDangerousWatersItemUse(choiceId, instanceId)
     ),
     itemAimTarget: () => layer.itemAimTarget(eventId),
+    interactionTargets: noInteractionTargets,
     interactionRoot: noRoot,
     resultRoot: noRoot,
     react: ({ outcome }) => layer.react(eventId, outcome),
@@ -299,6 +309,7 @@ export const createDedicatedAdapter: EventPresentationAdapterFactory = (
     playChoice: (choice) => coordinator.playChoice(choice.choiceId),
     playItemUse: (choiceId, instanceId) => coordinator.playItemUse(choiceId, instanceId),
     itemAimTarget: () => coordinator.itemAimTarget(),
+    interactionTargets: noInteractionTargets,
     interactionRoot: noRoot,
     resultRoot: noRoot,
     react: ({ result }) => {
@@ -334,6 +345,7 @@ export const createFocusedAdapter: EventPresentationAdapterFactory = (
     playChoice: (choice) => layer.playChoice(eventId, choice),
     playItemUse: noItemUse,
     itemAimTarget: () => layer.itemAimTarget(eventId),
+    interactionTargets: () => layer.interactionTargets(eventId),
     interactionRoot: (id) => layer.interactionRoot(id),
     resultRoot: noRoot,
     react: ({ outcome }) => layer.react(eventId, outcome),
@@ -367,6 +379,7 @@ export const createFeaturedAdapter: EventPresentationAdapterFactory = (
     playChoice: noChoice,
     playItemUse: noItemUse,
     itemAimTarget: () => featured.itemAimTarget(eventId),
+    interactionTargets: noInteractionTargets,
     interactionRoot: (id) => featured.interactionRoot(id),
     resultRoot: (id) => featured.resultRoot(id),
     react: ({ outcome }) => outcome.eventPresentationKey === undefined
@@ -422,6 +435,7 @@ export const createWeatherAdapter: EventPresentationAdapterFactory = (
       itemAimTarget: () => (
         ownedWeather.itemAimTarget(eventId) ?? ownedLayer.itemAimTarget(eventId)
       ),
+      interactionTargets: noInteractionTargets,
       interactionRoot: (id) => ownedLayer.interactionRoot(id),
       resultRoot: noRoot,
       react: (reaction) => Promise.all([
@@ -500,6 +514,7 @@ export const createSupernaturalAdapter: EventPresentationAdapterFactory = (
       itemAimTarget: () => (
         ownedSupernatural.itemAimTarget(eventId) ?? ownedLayer.itemAimTarget(eventId)
       ),
+      interactionTargets: noInteractionTargets,
       interactionRoot: (id) => ownedLayer.interactionRoot(id),
       resultRoot: noRoot,
       react: (reaction) => Promise.all([
@@ -549,6 +564,7 @@ export const createMoonAdapter: EventPresentationAdapterFactory = (
     playChoice: noChoice,
     playItemUse: noItemUse,
     itemAimTarget: () => moon.itemAimTarget,
+    interactionTargets: noInteractionTargets,
     interactionRoot: noRoot,
     resultRoot: noRoot,
     react: ({ outcome, result }) => {

@@ -310,6 +310,8 @@ function projectProgram(): ts.Program {
   return ts.createProgram(parsed.fileNames, parsed.options);
 }
 
+const PROJECT_PROGRAM = projectProgram();
+
 describe('source reference helpers', () => {
   it('parses module syntax without matching comments or strings', () => {
     const source = [
@@ -376,12 +378,12 @@ describe('source reference helpers', () => {
   });
 
   it('uses symbols instead of comments and strings for DOM checks', () => {
-    const program = projectProgram();
     expect(isDomLibraryFile('typescript/lib/lib.dom.iterable.d.ts')).toBe(true);
     expect(isDomLibraryFile('typescript/lib/lib.dom.asynciterable.d.ts')).toBe(true);
-    expect(domGlobalNames(program, resolve(FIXTURE_DIRECTORY, 'domClean.ts'))).toEqual([]);
-    expect(domGlobalNames(program, resolve(FIXTURE_DIRECTORY, 'domGlobal.ts'))).toContain('document');
-    expect(domGlobalNames(program, resolve(FIXTURE_DIRECTORY, 'domIterable.ts')))
+    expect(domGlobalNames(PROJECT_PROGRAM, resolve(FIXTURE_DIRECTORY, 'domClean.ts'))).toEqual([]);
+    expect(domGlobalNames(PROJECT_PROGRAM, resolve(FIXTURE_DIRECTORY, 'domGlobal.ts')))
+      .toContain('document');
+    expect(domGlobalNames(PROJECT_PROGRAM, resolve(FIXTURE_DIRECTORY, 'domIterable.ts')))
       .toContain('FormDataIterator');
   });
 });
@@ -393,11 +395,10 @@ it('does not keep obsolete source paths', () => {
 });
 
 it('keeps domain and layout modules independent from UI, DOM, and Three.js', () => {
-  const program = projectProgram();
   for (const relativeFile of BOUNDARY_FILES) {
     const file = resolve(SOURCE_DIRECTORY, relativeFile);
     expect(boundaryModuleViolations(file), relativeFile).toEqual([]);
-    expect(domGlobalNames(program, file), relativeFile).toEqual([]);
+    expect(domGlobalNames(PROJECT_PROGRAM, file), relativeFile).toEqual([]);
   }
 });
 

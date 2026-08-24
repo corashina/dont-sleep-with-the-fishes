@@ -716,12 +716,34 @@ export class BoatWorld {
   attach(adapter: EventPresentationAdapter): void {
     if (this.disposed) throw new Error('Boat world is disposed.');
     this.eventPresentationHost.attach(adapter);
+    try {
+      this.interactionProjector.installFocusedInteractionTargets(
+        this.eventPresentationHost.interactionTargets(),
+      );
+    } catch (error) {
+      try {
+        runCleanupSteps([
+          () => this.interactionProjector.clearFocusedInteractionTargets(),
+          () => this.eventPresentationHost.detach(adapter),
+        ]);
+      } catch {
+        // Preserve the projector installation error after rollback.
+      }
+      throw error;
+    }
     this.activeRescueCueCallback = this.rescueCueCallbacks.get(adapter) ?? null;
   }
 
   detach(adapter: EventPresentationAdapter): void {
     try {
-      this.eventPresentationHost.detach(adapter);
+      runCleanupSteps([
+        () => this.eventPresentationHost.detach(adapter),
+        () => {
+          if (this.eventPresentationHost.activeEventId() === null) {
+            this.interactionProjector.clearFocusedInteractionTargets();
+          }
+        },
+      ]);
     } finally {
       if (this.eventPresentationHost.activeEventId() === null) {
         this.activeRescueCueCallback = null;

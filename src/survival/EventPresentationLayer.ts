@@ -8,7 +8,6 @@ import {
   Mesh,
   MeshStandardMaterial,
   Object3D,
-  PerspectiveCamera,
   Quaternion,
   SphereGeometry,
   TorusGeometry,
@@ -31,12 +30,6 @@ import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
-import {
-  createBoatObjectBoundsCache,
-  projectCachedBoatObjectBounds,
-  type BoatInteractionAnchor,
-  type BoatObjectBoundsCache,
-} from './BoatInteraction';
 import {
   DangerousWatersPresentation,
   type DangerousWatersBoatReaction,
@@ -87,6 +80,8 @@ interface MaritimeMaterials {
   readonly earth: MeshStandardMaterial;
   readonly foliage: MeshStandardMaterial;
 }
+
+const EMPTY_INTERACTION_TARGETS: readonly FocusedEventInteractionTarget[] = Object.freeze([]);
 
 interface RescueCuePresentation extends FocusedEventPresentation {
   setRescueCue(progress: number | null): void;
@@ -293,11 +288,10 @@ export class EventPresentationLayer {
   private readonly ownedFocused = new Set<FocusedEventPresentation>();
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
-  private readonly interactionTargets = new Map<
+  private readonly focusedInteractionTargets = new Map<
     FocusedEventPresentation,
     readonly FocusedEventInteractionTarget[]
   >();
-  private readonly interactionBounds = new Map<Object3D, BoatObjectBoundsCache | null>();
   private readonly positionScratch = new Vector3();
   private readonly quaternionScratch = new Quaternion();
   private readonly waveSample: WaveSample = {
@@ -372,62 +366,23 @@ export class EventPresentationLayer {
     presenter.root.visible = false;
     this.focused.set(eventId, presenter);
     this.ownedFocused.add(presenter);
-    const interactionTargets = presenter.interactionTargets?.() ?? [];
-    this.interactionTargets.set(presenter, interactionTargets);
-    for (const target of interactionTargets) {
-      this.interactionBounds.set(
-        target.root,
-        createBoatObjectBoundsCache(target.root),
-      );
-    }
+    const interactionTargets = presenter.interactionTargets?.() ?? EMPTY_INTERACTION_TARGETS;
+    this.focusedInteractionTargets.set(presenter, interactionTargets);
     this.root.add(presenter.root);
     return true;
   }
 
-  projectInteractionAnchors(
-    camera: PerspectiveCamera,
-    width: number,
-    height: number,
-  ): BoatInteractionAnchor[] {
-    if (this.disposed || this.activeFocused === null) return [];
-    return (this.interactionTargets.get(this.activeFocused) ?? []).map((target) => {
-      const projection = projectCachedBoatObjectBounds(
-        target.root,
-        this.interactionBounds.get(target.root) ?? null,
-        camera,
-        width,
-        height,
-      );
-      const { width: hitWidth, height: hitHeight, depth, ...point } = projection;
-      return {
-        id: target.id,
-        label: target.label,
-        description: target.description,
-        tooltip: target.tooltip,
-        eventChoiceId: target.choiceId,
-        itemType: null,
-        toolId: null,
-        action: null,
-        ...point,
-        visible: target.root.visible && point.visible,
-        depleted: false,
-        remainingUses: null,
-        quantity: 1,
-        usableQuantity: 1,
-        brokenQuantity: 0,
-        backingInstanceId: null,
-        hitArea: {
-          width: Math.max(target.minimumHitWidth ?? 64, hitWidth),
-          height: Math.max(target.minimumHitHeight ?? 64, hitHeight),
-          depth,
-        },
-      } satisfies BoatInteractionAnchor;
-    });
+  interactionTargets(eventId: string): readonly FocusedEventInteractionTarget[] {
+    if (this.disposed) return EMPTY_INTERACTION_TARGETS;
+    const presenter = this.focused.get(eventId);
+    return presenter === undefined
+      ? EMPTY_INTERACTION_TARGETS
+      : this.focusedInteractionTargets.get(presenter) ?? EMPTY_INTERACTION_TARGETS;
   }
 
   interactionRoot(anchorId: string): Object3D | null {
     if (this.disposed || this.activeFocused === null) return null;
-    return (this.interactionTargets.get(this.activeFocused) ?? [])
+    return (this.focusedInteractionTargets.get(this.activeFocused) ?? [])
       .find(({ id }) => id === anchorId)?.root ?? null;
   }
 
@@ -640,8 +595,7 @@ export class EventPresentationLayer {
     for (const presenter of this.ownedFocused) presenter.dispose();
     this.focused.clear();
     this.ownedFocused.clear();
-    this.interactionTargets.clear();
-    this.interactionBounds.clear();
+    this.focusedInteractionTargets.clear();
     this.root.removeFromParent();
     disposeResourceSets(this.ownedGeometries, this.ownedMaterials);
   }

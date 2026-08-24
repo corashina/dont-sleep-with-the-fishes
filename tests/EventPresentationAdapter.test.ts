@@ -11,6 +11,7 @@ describe('EventPresentationAdapter', () => {
       playChoice: vi.fn(async () => undefined),
       playItemUse: vi.fn(async () => false),
       itemAimTarget: vi.fn(() => null),
+      interactionTargets: vi.fn(() => []),
       interactionRoot: vi.fn(() => null),
       resultRoot: vi.fn(() => null),
       react: vi.fn(async () => undefined),

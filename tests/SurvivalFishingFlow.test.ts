@@ -485,6 +485,45 @@ describe('SurvivalFishingFlow', () => {
     expect(rig.flow.reel()).toBe(false);
   });
 
+  it.each([
+    ['the result cleanup', true, false],
+    ['the exit cleanup', false, true],
+    ['both UI cleanups', true, true],
+  ] as const)('commits disposal and continues after %s fails', (
+    _label,
+    failResult,
+    failExit,
+  ) => {
+    const rig = createRig();
+    const resultFailure = { kind: 'result-cleanup-failure' };
+    const exitFailure = { kind: 'exit-cleanup-failure' };
+    if (failResult) {
+      vi.mocked(rig.ui.hideFishingResult).mockImplementation(() => { throw resultFailure; });
+    }
+    if (failExit) {
+      vi.mocked(rig.ui.setFishingViewExitVisible).mockImplementation(() => {
+        throw exitFailure;
+      });
+    }
+
+    let thrown: unknown;
+    try {
+      rig.flow.dispose();
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBe(failResult ? resultFailure : exitFailure);
+    expect(rig.ui.hideFishingResult).toHaveBeenCalledOnce();
+    expect(rig.ui.setFishingViewExitVisible).toHaveBeenCalledExactlyOnceWith(false);
+    expect(() => rig.flow.dispose()).not.toThrow();
+    expect(rig.ui.hideFishingResult).toHaveBeenCalledOnce();
+    expect(rig.ui.setFishingViewExitVisible).toHaveBeenCalledOnce();
+    expect(rig.flow.hasActiveAttempt()).toBe(false);
+    expect(rig.flow.cast(null, null, 800, 600)).toBe(false);
+    expect(rig.flow.reel()).toBe(false);
+  });
+
   it('blocks result and focus mutations after restart invalidates lifecycle', async () => {
     const rig = createRig();
     await enter(rig);

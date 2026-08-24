@@ -1,6 +1,9 @@
 import type { Object3D } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
-import type { EventChoicePresentation } from './FocusedEventPresentation';
+import type {
+  EventChoicePresentation,
+  FocusedEventInteractionTarget,
+} from './FocusedEventPresentation';
 import type { SurvivalEventId } from './eventCatalog';
 import type {
   EventPresentationContext,
@@ -25,6 +28,7 @@ export interface EventPresentationAdapter {
   playChoice(choice: EventChoicePresentation): Promise<void>;
   playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean>;
   itemAimTarget(): Object3D | null;
+  interactionTargets(): readonly FocusedEventInteractionTarget[];
   interactionRoot(id: string): Object3D | null;
   resultRoot(id: string): Object3D | null;
   react(reaction: EventPresentationReaction): Promise<void>;

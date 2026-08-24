@@ -7,7 +7,12 @@ import type {
   EventPresentationReaction,
 } from './EventPresentationAdapter';
 import type { SurvivalEventId } from './eventCatalog';
-import type { EventChoicePresentation } from './FocusedEventPresentation';
+import type {
+  EventChoicePresentation,
+  FocusedEventInteractionTarget,
+} from './FocusedEventPresentation';
+
+const EMPTY_INTERACTION_TARGETS: readonly FocusedEventInteractionTarget[] = Object.freeze([]);
 
 export class EventPresentationHost {
   private active: EventPresentationAdapter | null = null;
@@ -89,6 +94,10 @@ export class EventPresentationHost {
 
   itemAimTarget(): Object3D | null {
     return this.active?.itemAimTarget() ?? null;
+  }
+
+  interactionTargets(): readonly FocusedEventInteractionTarget[] {
+    return this.active?.interactionTargets() ?? EMPTY_INTERACTION_TARGETS;
   }
 
   interactionRoot(id: string): Object3D | null {
