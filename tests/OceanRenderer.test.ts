@@ -3,6 +3,8 @@ import {
   type BufferAttribute,
   type BufferGeometry,
   Color,
+  PlaneGeometry,
+  ShaderMaterial,
   Vector2,
   Vector3,
   Vector4,
@@ -59,7 +61,7 @@ function triangleCount(geometry: BufferGeometry): number {
   return index.count / 3;
 }
 
-describe('OceanRenderer horizon geometry', () => {
+describe('OceanRenderer', () => {
   it('keeps wave shading independent from horizon mesh density', () => {
     const ocean = new OceanRenderer('low');
 
@@ -102,6 +104,15 @@ describe('OceanRenderer horizon geometry', () => {
       strength: Number.NEGATIVE_INFINITY,
     });
     expect(Object.values(ocean.vortexStateForTest()).every(Number.isFinite)).toBe(true);
+    expect(ocean.vortexStateForTest()).toEqual({
+      centerX: 0,
+      centerZ: 0,
+      radius: 0,
+      depression: 0,
+      tangentStrength: 0,
+      phase: 0,
+      strength: 0,
+    });
 
     ocean.setVortex(createInactiveVortexWaveState());
     expect(ocean.vortexStateForTest()!.strength).toBe(0);
@@ -341,6 +352,133 @@ describe('OceanRenderer horizon geometry', () => {
     ocean.dispose();
   });
 
+  it('keeps the material and complete uniform graph across quality changes', () => {
+    const ocean = new OceanRenderer('low');
+    const material = ocean.material;
+    const uniformMap = material.uniforms;
+
+    ocean.update(8, 0.75, 0.024);
+    ocean.follow(26, -34);
+    ocean.setVortex({
+      centerX: 3,
+      centerZ: -4,
+      radius: 9,
+      depression: 1.2,
+      tangentStrength: 0.6,
+      phase: 0.8,
+      strength: 0.9,
+    });
+    const uniformObjects = Object.fromEntries(
+      Object.entries(uniformMap).map(([name, uniform]) => [name, uniform]),
+    );
+    const uniformValues = Object.fromEntries(
+      Object.entries(uniformMap).map(([name, uniform]) => [name, uniform.value]),
+    );
+    const nestedValues = Object.fromEntries(
+      Object.entries(uniformMap).map(([name, uniform]) => [
+        name,
+        Array.isArray(uniform.value) ? [...uniform.value] : null,
+      ]),
+    );
+    ocean.setQuality('ultra');
+
+    expect(ocean.material).toBe(material);
+    expect(ocean.material.uniforms).toBe(uniformMap);
+    expect(ocean.mesh.material).toBe(material);
+    expect(ocean.horizonMesh.material).toBe(material);
+    for (const [name, uniform] of Object.entries(uniformMap)) {
+      expect(uniform).toBe(uniformObjects[name]);
+      expect(uniform.value).toBe(uniformValues[name]);
+      if (Array.isArray(uniform.value)) {
+        uniform.value.forEach((value, index) => {
+          expect(value).toBe(nestedValues[name]![index]);
+        });
+      }
+    }
+    expect(ocean.vortexStateForTest()).toEqual({
+      centerX: 3,
+      centerZ: -4,
+      radius: 9,
+      depression: 1.2,
+      tangentStrength: 0.6,
+      phase: 0.8,
+      strength: 0.9,
+    });
+    expect(ocean.mesh.position.toArray()).toEqual([30, 0, -30]);
+
+    ocean.dispose();
+  });
+
+  it('copies atmosphere values and sanitizes sun visibility', () => {
+    const ocean = new OceanRenderer('low');
+    const fog = ocean.material.uniforms.uFogColor!.value as Color;
+    const horizon = ocean.material.uniforms.uHorizonColor!.value as Color;
+    const sky = ocean.material.uniforms.uSkyColor!.value as Color;
+    const sun = ocean.material.uniforms.uSunColor!.value as Color;
+    const atmosphere = {
+      fogColor: new Color(0x102030),
+      horizonColor: new Color(0x405060),
+      skyColor: new Color(0x708090),
+      sunColor: new Color(0xa0b0c0),
+      sunVisibility: 2,
+    };
+
+    ocean.update(12, 0.65, 0.031, atmosphere);
+
+    expect(ocean.material.uniforms.uTime!.value).toBe(12);
+    expect(ocean.material.uniforms.uAmplitudeScale!.value).toBe(0.65);
+    expect(ocean.material.uniforms.uFogDensity!.value).toBe(0.031);
+    expect(fog).toEqual(atmosphere.fogColor);
+    expect(horizon).toEqual(atmosphere.horizonColor);
+    expect(sky).toEqual(atmosphere.skyColor);
+    expect(sun).toEqual(atmosphere.sunColor);
+    expect(fog).not.toBe(atmosphere.fogColor);
+    expect(horizon).not.toBe(atmosphere.horizonColor);
+    expect(sky).not.toBe(atmosphere.skyColor);
+    expect(sun).not.toBe(atmosphere.sunColor);
+    expect(ocean.material.uniforms.uDirectLightStrength!.value).toBe(1);
+
+    for (const [visibility, expected] of [
+      [-2, 0],
+      [0.4, 0.4],
+      [Number.NaN, 0],
+      [Number.POSITIVE_INFINITY, 0],
+      [Number.NEGATIVE_INFINITY, 0],
+    ] as const) {
+      atmosphere.sunVisibility = visibility;
+      ocean.update(12, 0.65, 0.031, atmosphere);
+      expect(ocean.material.uniforms.uDirectLightStrength!.value).toBe(expected);
+    }
+
+    ocean.dispose();
+  });
+
+  it('normalizes the constructor light override after uniform creation', () => {
+    const ocean = new OceanRenderer('low', [3, 0, 4]);
+    const lightDirection = (
+      ocean.material.uniforms.uLightDirection!.value as Vector3
+    );
+
+    expect(lightDirection.x).toBeCloseTo(0.6);
+    expect(lightDirection.y).toBe(0);
+    expect(lightDirection.z).toBeCloseTo(0.8);
+
+    ocean.dispose();
+  });
+
+  it('uses exact ten-unit follow snapping', () => {
+    const ocean = new OceanRenderer('low');
+
+    ocean.follow(14.9, -15);
+
+    expect(ocean.mesh.position.toArray()).toEqual([10, 0, -10]);
+    expect(
+      (ocean.material.uniforms.uOrigin!.value as Vector2).toArray(),
+    ).toEqual([10, -10]);
+
+    ocean.dispose();
+  });
+
   it('rolls back a failed horizon replacement without changing renderer state', () => {
     const ocean = new OceanRenderer('low');
     const surface = ocean.mesh.geometry;
@@ -377,6 +515,59 @@ describe('OceanRenderer horizon geometry', () => {
     expect(ocean.material.uniforms.uFoamColor!.value).toEqual(foamColor);
 
     ocean.dispose();
+  });
+
+  it('cleans all partial construction resources and keeps the primary error', () => {
+    const primaryError = new Error('horizon merge failed');
+    const cleanupError = new Error('panel cleanup failed');
+    const planeDispose = vi.spyOn(PlaneGeometry.prototype, 'dispose')
+      .mockImplementationOnce(() => {
+        throw cleanupError;
+      });
+    const materialDispose = vi.spyOn(ShaderMaterial.prototype, 'dispose');
+    vi.mocked(mergeGeometries).mockImplementationOnce(() => {
+      throw primaryError;
+    });
+    let thrown: unknown;
+
+    try {
+      new OceanRenderer('low');
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBe(primaryError);
+    expect(planeDispose).toHaveBeenCalledTimes(9);
+    expect(materialDispose).toHaveBeenCalledOnce();
+    planeDispose.mockRestore();
+    materialDispose.mockRestore();
+  });
+
+  it('continues disposal and rethrows the first value once', () => {
+    const ocean = new OceanRenderer('low');
+    const firstFailure = { source: 'surface' };
+    const surfaceDispose = vi.spyOn(ocean.mesh.geometry, 'dispose')
+      .mockImplementationOnce(() => {
+        throw firstFailure;
+      });
+    const horizonDispose = vi.spyOn(ocean.horizonMesh.geometry, 'dispose');
+    const materialDispose = vi.spyOn(ocean.material, 'dispose');
+    let thrown: unknown;
+
+    try {
+      ocean.dispose();
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBe(firstFailure);
+    expect(surfaceDispose).toHaveBeenCalledOnce();
+    expect(horizonDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
+    expect(() => ocean.dispose()).not.toThrow();
+    expect(surfaceDispose).toHaveBeenCalledOnce();
+    expect(horizonDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
   });
 
   it('disposes safely after a quality change', () => {
