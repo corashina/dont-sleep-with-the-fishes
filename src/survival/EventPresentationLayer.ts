@@ -60,6 +60,7 @@ import { HandymanPresentation } from './HandymanPresentation';
 import { MidnightTourPresentation } from './MidnightTourPresentation';
 import { NightTraderPresentation } from './NightTraderPresentation';
 import { OtherPeoplePresentation } from './OtherPeoplePresentation';
+import { PlanePresentation } from './PlanePresentation';
 
 type ActiveEventAnimation = TimedAnimation<'reveal' | 'react', {
   readonly eventId: string;
@@ -101,6 +102,7 @@ export const AUTHORED_EVENT_PRESENTATION_FACTORIES: FocusedEventPresentationFact
   'night-trader': (dependencies) => new NightTraderPresentation(dependencies),
   handyman: (dependencies) => new HandymanPresentation(dependencies),
   'other-people': (dependencies) => new OtherPeoplePresentation(dependencies),
+  plane: (dependencies) => new PlanePresentation(dependencies),
 };
 
 function createMaterial(

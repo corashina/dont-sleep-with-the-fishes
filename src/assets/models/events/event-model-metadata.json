@@ -490,5 +490,27 @@
       }
     ],
     "processing": "welded, simplified, normals regenerated, pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data"
+  },
+  "airplane": {
+    "triangles": 1770,
+    "rawBounds": {
+      "min": [
+        -1.2133740186691284,
+        -0.6046370267868042,
+        -1.8883689641952515
+      ],
+      "max": [
+        1.2133740186691284,
+        0.6046370267868042,
+        1.8883689641952515
+      ]
+    },
+    "sourceSha256": "2F9A5382E70BDBEF5D54024C6846A3A53389B889D73121159FB335352D311388",
+    "sourceTriangles": 1770,
+    "outputSha256": "B64E73F3127A636F336F769235A5BCB30F215C8C59F98E4841612A92BE94C171",
+    "hasSkins": false,
+    "animationCount": 0,
+    "animations": [],
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
   }
 }

@@ -18,6 +18,11 @@ export interface MutableCarlitosPose {
   headYaw: number;
   actionLean: number;
   handReach: number;
+  handStroke: number;
+  handLift: number;
+  handContact: number;
+  handCurl: number;
+  tailSway: number;
   foodReach: number;
 }
 
@@ -37,6 +42,11 @@ export function createCarlitosPose(): MutableCarlitosPose {
     headYaw: 0,
     actionLean: 0,
     handReach: 0,
+    handStroke: 0,
+    handLift: 0,
+    handContact: 0,
+    handCurl: 0,
+    tailSway: 0,
     foodReach: 0,
   };
 }
@@ -60,14 +70,57 @@ export function sampleCarlitosPoseInto(
 
   const progress = clamp01Unchecked(sample.elapsed / sample.duration);
   if (progress >= 1) return output;
-  const weight = actionWeight(progress);
   if (sample.action === 'pet') {
-    output.headPitch -= 0.18 * weight;
-    output.headYaw *= 1 - 0.72 * weight;
-    output.actionLean = 0.16 * weight;
-    output.bodyLift += 0.018 * weight;
-    output.handReach = weight;
+    let reach = 1;
+    let contact = 0;
+    let stroke = 0;
+    let lift = 0;
+    let tailPhase = 0;
+    if (progress < 0.18) {
+      const approachProgress = progress / 0.18;
+      reach = smoothstepUnchecked(approachProgress);
+      contact = smoothstepUnchecked(clamp01Unchecked(
+        (approachProgress - 0.72) / 0.28,
+      ));
+      lift = (1 - reach) * 0.45;
+    } else if (progress < 0.82) {
+      const petPhase = ((progress - 0.18) / 0.64) * 2;
+      const cycle = petPhase - Math.floor(petPhase);
+      tailPhase = petPhase * Math.PI;
+      if (cycle < 0.56) {
+        contact = 1;
+        stroke = smoothstepUnchecked(cycle / 0.56);
+      } else if (cycle < 0.68) {
+        lift = smoothstepUnchecked((cycle - 0.56) / 0.12);
+        contact = 1 - lift;
+        stroke = 1;
+      } else if (cycle < 0.9) {
+        lift = 1;
+        stroke = 1 - smoothstepUnchecked((cycle - 0.68) / 0.22);
+      } else {
+        contact = smoothstepUnchecked((cycle - 0.9) / 0.1);
+        lift = 1 - contact;
+      }
+    } else {
+      const withdrawal = smoothstepUnchecked((progress - 0.82) / 0.18);
+      reach = 1 - withdrawal;
+      contact = 1 - withdrawal;
+      lift = withdrawal * 0.45;
+      tailPhase = Math.PI * 2;
+    }
+    const response = Math.max(contact, reach * 0.18);
+    output.headPitch -= (0.09 + stroke * 0.085) * response;
+    output.headYaw *= 1 - 0.86 * response;
+    output.actionLean = (0.07 + stroke * 0.05) * response;
+    output.bodyLift += (0.01 + stroke * 0.012) * response;
+    output.handReach = reach;
+    output.handStroke = stroke;
+    output.handLift = lift;
+    output.handContact = contact;
+    output.handCurl = 0.12 + contact * 0.18;
+    output.tailSway = Math.sin(tailPhase) * contact * 0.13;
   } else {
+    const weight = actionWeight(progress);
     output.headPitch -= 0.28 * weight;
     output.headYaw *= 1 - 0.9 * weight;
     output.actionLean = 0.24 * weight;
@@ -83,6 +136,11 @@ function setBasePose(
 ): void {
   output.actionLean = 0;
   output.handReach = 0;
+  output.handStroke = 0;
+  output.handLift = 0;
+  output.handContact = 0;
+  output.handCurl = 0;
+  output.tailSway = 0;
   output.foodReach = 0;
   if (status === 'sick') {
     output.bodyPitch = 0.16;

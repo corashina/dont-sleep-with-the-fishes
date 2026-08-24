@@ -29,7 +29,7 @@ const EXPECTED_WEIGHTS = {
   'drifting-barrel': 1, 'drifting-chest': 1,
   'check-the-back': 3, flowers: 1,
   'chest-attack': 1, 'midnight-tour': 2, 'night-trader': 2,
-  handyman: 2, 'other-people': 2,
+  handyman: 2, 'other-people': 2, plane: 2,
 } as const;
 
 const EXPECTED_RISK = {
@@ -46,7 +46,7 @@ const EXPECTED_RISK = {
   'check-the-back': 'safe',
   flowers: 'safe', 'chest-attack': 'dangerous',
   'midnight-tour': 'dangerous', 'night-trader': 'safe',
-  handyman: 'dangerous', 'other-people': 'safe',
+  handyman: 'dangerous', 'other-people': 'safe', plane: 'safe',
 } as const;
 
 const resource = (resourceName: string, operation: string, value: unknown) => ({
@@ -256,17 +256,16 @@ describe('survival events', () => {
       .toEqual(['flashlight', 'flareGun', 'sleep']);
 
     const flashlight = shadow.choices[0]!;
-    const flashlightTotal = flashlight.outcomes
-      .reduce((sum, outcome) => sum + outcome.weight, 0);
-    expect(flashlight.outcomes
-      .filter(({ effects }) => effects.ending === 'taken')
-      .reduce((sum, outcome) => sum + outcome.weight, 0) / flashlightTotal)
-      .toBe(0.5);
+    expect(flashlight.outcomes[1]!.effects).toEqual({
+      resources: [subtract('health', 50)],
+    });
     expect(shadow.choices[1]!.outcomes[0]!.effects).toMatchObject({
-      ending: 'taken',
+      resources: [subtract('health', 50)],
       items: [{ kind: 'consume', itemId: 'flareGun', quantity: 1 }],
     });
-    expect(shadow.choices[2]!.outcomes[0]!.effects).not.toHaveProperty('ending');
+    for (const choice of shadow.choices) {
+      expect(choice.outcomes.every(({ effects }) => effects.ending === undefined)).toBe(true);
+    }
   });
 
   it('defines exact Carlitos choices and delegated loot weights', () => {
@@ -409,7 +408,7 @@ describe('survival events', () => {
   it('contains the approved non-story expansion', () => {
     expect(SURVIVAL_EVENTS.map(({ id }) => id)).toEqual(expect.arrayContaining([
       'drifting-barrel', 'drifting-chest', 'check-the-back',
-      'midnight-tour', 'night-trader', 'handyman', 'other-people',
+      'midnight-tour', 'night-trader', 'handyman', 'other-people', 'plane',
       'flowers', 'chest-attack',
     ]));
   });
@@ -432,6 +431,13 @@ describe('survival events', () => {
       cooldownDays: 50,
     });
     expect(event('other-people')).toMatchObject({
+      weight: 2,
+      earliestDay: 15,
+      cooldownDays: 20,
+      minimumRescueLead: 2,
+      maximumAppearances: 2,
+    });
+    expect(event('plane')).toMatchObject({
       weight: 2,
       earliestDay: 15,
       cooldownDays: 20,
@@ -502,6 +508,23 @@ describe('survival events', () => {
     expect(resultIds('other-people', 'flashlight')).toEqual(['people-signaled']);
     expect(resultIds('other-people', 'sleep')).toEqual(['people-pass']);
     expect(event('other-people').choices.map(({ id }) => id)).not.toContain('pass');
+    expect(resultIds('plane', 'flareGun')).toEqual(['plane-signaled']);
+    expect(event('plane').choices.find(({ id }) => id === 'flareGun')).toMatchObject({
+      outcomes: [{
+        effects: {
+          resources: [{ resource: 'rescueLead', operation: 'add', value: 4 }],
+          items: [{ kind: 'consume', itemId: 'flareGun', quantity: 1 }],
+        },
+      }],
+    });
+    expect(event('plane').choices.find(({ id }) => id === 'flashlight')).toMatchObject({
+      outcomes: [{
+        effects: {
+          resources: [{ resource: 'rescueLead', operation: 'add', value: 2 }],
+        },
+      }],
+    });
+    expect(resultIds('plane', 'sleep')).toEqual(['plane-pass']);
   });
 
   it('keeps Scuba Gear and Radio out of event choices', () => {
@@ -578,7 +601,7 @@ describe('survival events', () => {
       driftingItemLeaveKey(eventId as 'drifting-barrel' | 'drifting-chest'),
     ])).toEqual([
       ['drifting-barrel.food', 'drifting-barrel.drift'],
-      ['drifting-chest.food', 'drifting-chest.drift'],
+      ['drifting-chest.retrieve', 'drifting-chest.drift'],
     ]);
   });
 
@@ -616,7 +639,7 @@ describe('survival events', () => {
   });
 
   it.each(['drifting-barrel', 'drifting-chest'] as const)(
-    'keeps %s in the catalog as a dawn-only reward event',
+    'keeps %s in the catalog as a dawn-only cargo event',
     (eventId) => {
     const loot = SURVIVAL_EVENTS.find(({ id }) => id === eventId);
 
@@ -628,7 +651,9 @@ describe('survival events', () => {
     const retrieve = loot?.choices.find(({ id }) => id === 'retrieve');
     expect(retrieve?.label).toBe('Retrieve It');
     expect(retrieve?.requirements).toEqual([{ resource: 'energy', minimum: 3 }]);
-    expect(retrieve?.outcomes.map(({ weight }) => weight)).toEqual([45, 25, 20, 10]);
+    expect(retrieve?.outcomes.map(({ weight }) => weight)).toEqual(
+      eventId === 'drifting-barrel' ? [45, 25, 20, 10] : [1],
+    );
     },
   );
 
@@ -636,7 +661,18 @@ describe('survival events', () => {
     const event = (id: string) => SURVIVAL_EVENTS.find((candidate) => candidate.id === id)!;
 
     expect(event('drifting-barrel')).toMatchObject({ phase: 'day', weight: 1, earliestDay: 3 });
-    expect(event('drifting-chest')).toMatchObject({ phase: 'day', weight: 1, earliestDay: 3 });
+    expect(event('drifting-chest')).toMatchObject({
+      phase: 'day',
+      weight: 1,
+      earliestDay: 3,
+      allowedChestStates: ['none'],
+    });
+    for (const choiceId of ['retrieve', 'delegate-carlitos']) {
+      const choice = event('drifting-chest').choices.find(({ id }) => id === choiceId)!;
+      expect(choice.outcomes.every(({ effects }) => effects.items?.some(
+        ({ kind }) => kind === 'gainChest',
+      ) === true)).toBe(true);
+    }
     expect(event('check-the-back')).toMatchObject({
       allowedChestStates: ['none'],
     });

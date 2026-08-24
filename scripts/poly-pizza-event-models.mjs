@@ -26,6 +26,7 @@ export const POLY_PIZZA_EVENT_MODEL_PAGES = Object.freeze({
   tornadoCore: 'https://poly.pizza/m/2TBzV_5N0ci',
   midnightShovel: 'https://poly.pizza/m/oNBQSf87ZJ',
   midnightMonster: 'https://poly.pizza/m/22K0aSZkHV',
+  airplane: 'https://poly.pizza/m/8VysVKMXN2J',
 });
 
 export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
@@ -37,6 +38,7 @@ export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
   tornadoCore: 3_000,
   midnightShovel: 1_000,
   midnightMonster: 6_000,
+  airplane: 2_500,
 });
 
 export const EVENT_MODEL_TOTAL_TRIANGLE_LIMIT = 20_000;
@@ -59,7 +61,9 @@ export const POLY_PIZZA_EVENT_MODEL_SOURCES = Object.freeze(Object.fromEntries(
                 ? 'A3060A591DE5B796C495FD7B329CE83766D2DFE39F9387B2DE44CF620FB3A24F'
                 : id === 'midnightShovel'
                   ? '1D482586A319E0C176BACE1EBFEB618F903187F36C91755E6CE061874B19F6D5'
-                  : '76599ABFADB3629F435165418BFCF02FB8FAC2C34A71B913106663655E6C41D0',
+              : id === 'midnightMonster'
+                ? '76599ABFADB3629F435165418BFCF02FB8FAC2C34A71B913106663655E6C41D0'
+                : 'B64E73F3127A636F336F769235A5BCB30F215C8C59F98E4841612A92BE94C171',
   })]),
 ));
 

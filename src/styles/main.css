@@ -1238,7 +1238,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   opacity: 1;
   transform: translate(-50%, 0);
 }
-.event-caption.check-back-dialog {
+.event-caption.confirmation-dialog {
   top: 50%;
   bottom: auto;
   width: min(480px, calc(100vw - 40px));
@@ -1248,17 +1248,17 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   text-shadow: none;
   transform: translate(-50%, calc(-50% + 12px));
 }
-.event-caption.check-back-dialog.is-visible {
+.event-caption.confirmation-dialog.is-visible {
   transform: translate(-50%, -50%);
 }
-.event-caption.check-back-dialog h2 {
+.event-caption.confirmation-dialog h2 {
   color: #342219;
   text-shadow: none;
 }
-.event-caption.check-back-dialog .event-choices {
+.event-caption.confirmation-dialog .event-choices {
   margin-top: 0;
 }
-.event-caption.check-back-dialog .event-choice {
+.event-caption.confirmation-dialog .event-choice {
   min-width: min(160px, 100%);
   text-align: center;
 }
@@ -2125,14 +2125,14 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 }
 @keyframes bad-sleep-cue-top {
   0% { transform: translateY(-102%); }
-  38% { transform: translateY(0); }
-  62% { transform: translateY(0); }
+  38% { transform: translateY(-60%); }
+  62% { transform: translateY(-60%); }
   100% { transform: translateY(-102%); }
 }
 @keyframes bad-sleep-cue-bottom {
   0% { transform: translateY(102%); }
-  38% { transform: translateY(0); }
-  62% { transform: translateY(0); }
+  38% { transform: translateY(60%); }
+  62% { transform: translateY(60%); }
   100% { transform: translateY(102%); }
 }
 .event-sleep-mask {

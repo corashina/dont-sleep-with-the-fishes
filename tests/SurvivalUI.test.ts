@@ -97,6 +97,40 @@ describe('item animation lab caption', () => {
     ).toBe('SCUBA GEAR');
   });
 
+  it('shows and selects animations for an item with multiple routes', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const onEventChoice = vi.fn();
+    ui.onEventChoice = onEventChoice;
+    ui.beginEventPresentation();
+    ui.showItemAnimationLab();
+    ui.setEventSelection(new Map([['bucket-1' as ItemInstanceId, 'bucket']]));
+
+    ui.showItemAnimationLabChoices('BUCKET', [
+      { id: 'bucket-scoop', label: 'Scoop from water', unavailableReason: null },
+      { id: 'bucket-helmet', label: 'Wear as helmet', unavailableReason: null },
+    ]);
+
+    const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
+    expect(caption.classList.contains('is-visible')).toBe(true);
+    expect(caption.querySelector('[data-event-title]')?.textContent)
+      .toBe('Choose BUCKET animation');
+    expect([...caption.querySelectorAll<HTMLButtonElement>('[data-event-choice]')]
+      .map((button) => button.textContent)).toEqual([
+      'Scoop from water',
+      'Wear as helmet',
+    ]);
+
+    caption.querySelector<HTMLButtonElement>('[data-event-choice="bucket-helmet"]')!.click();
+    expect(onEventChoice).toHaveBeenCalledExactlyOnceWith('bucket-helmet');
+
+    ui.hideItemAnimationLabChoices();
+    expect(caption.classList.contains('is-visible')).toBe(false);
+    expect(caption.querySelector('[data-event-title]')?.textContent).toBe('');
+    expect(caption.querySelector('[data-event-choice]')).toBeNull();
+  });
+
   it('activates the fixed repair toolbox as a lab item', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -466,6 +500,7 @@ describe('SurvivalUI', () => {
     const anchor = mount.querySelector<HTMLButtonElement>(
       '[data-anchor-id="carlitos"]',
     )!;
+    expect(anchor.getAttribute('aria-label')).toBe('CARLITOS');
     anchor.focus();
     press('[data-anchor-id="carlitos"]', 'Enter');
 
@@ -745,6 +780,40 @@ describe('SurvivalUI', () => {
 
     hand.click();
     expect(onEventChoice).toHaveBeenCalledExactlyOnceWith('touch');
+  });
+
+  it('publishes the Midnight Tour island hover target', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const highlight = vi.fn();
+    ui.onAnchorHighlight = highlight;
+    ui.setAnchors([{
+      id: 'midnight-tour:island',
+      label: 'ISLAND',
+      description: 'Turn the boat toward the small island.',
+      eventChoiceId: 'visit',
+      itemType: null,
+      toolId: null,
+      action: null,
+      remainingUses: null,
+      x: 400,
+      y: 260,
+      visible: true,
+      depleted: false,
+    }]);
+    const island = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="midnight-tour:island"]',
+    )!;
+
+    island.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    expect(highlight).toHaveBeenLastCalledWith('midnight-tour:island');
+
+    island.dispatchEvent(new MouseEvent('pointerout', {
+      bubbles: true,
+      relatedTarget: mount,
+    }));
+    expect(highlight).toHaveBeenLastCalledWith(null);
   });
 
   it('activates a focused contextual choice with the keyboard', () => {
@@ -1315,8 +1384,9 @@ describe('SurvivalUI', () => {
     expect(pillow.hasAttribute('data-event-choice')).toBe(false);
   });
 
-  it('routes Guarded Sleep watch through a Carlitos paper prompt', () => {
+  it('shows Guarded Sleep watch in the centered confirmation popup', () => {
     const mount = document.createElement('main');
+    document.body.append(mount);
     const ui = createUI(mount);
     const choose = vi.fn();
     ui.onEventChoice = choose;
@@ -1347,23 +1417,30 @@ describe('SurvivalUI', () => {
     }]);
 
     ui.beginEventPresentation();
-    ui.setEventSelection(new Map(), [{
-      id: 'watch',
-      label: 'Let Carlitos Watch',
-      unavailableReason: null,
-      anchorId: 'carlitos',
-    }]);
+    void ui.showEventReveal({
+      id: 'guarded-sleep',
+      revealText: 'Carlitos sits alert while the night presses close.',
+      danger: 'uncertain',
+    });
+    ui.setEventSelection(new Map(), [
+      { id: 'watch', label: 'Let Carlitos Watch', unavailableReason: null },
+      { id: 'sleep', label: 'Sleep Normally', unavailableReason: null },
+    ]);
 
-    const prompt = mount.querySelector<HTMLButtonElement>('[data-anchor-id="carlitos"]')!;
-    expect(prompt.dataset.eventChoice).toBe('watch');
-    expect(prompt.dataset.eventState).toBe('available');
-    expect(prompt.querySelector('[role="tooltip"]')?.textContent)
-      .toBe('LET CARLITOS WATCH');
-    prompt.click();
+    const popup = mount.querySelector<HTMLElement>('[data-event-caption]')!;
+    expect(popup.classList).toContain('confirmation-dialog');
+    expect(popup.classList).toContain('scuba-popup-paper');
+    expect(popup.getAttribute('role')).toBe('dialog');
+    expect(popup.getAttribute('aria-modal')).toBe('true');
+    expect(popup.querySelector('[data-event-title]')?.textContent)
+      .toBe('Let Carlitos watch?');
+    expect(labels('[data-event-choices] [data-event-choice]')).toEqual(['Yes']);
+    expect(mount.querySelector('[data-anchor-id="carlitos"]')?.hasAttribute('data-event-choice'))
+      .toBe(false);
+    popup.querySelector<HTMLButtonElement>('[data-event-choice="watch"]')!.click();
     expect(choose).toHaveBeenCalledWith('watch');
-    expect(mount.querySelector<HTMLElement>('[data-carlitos-card]')?.hidden).toBe(true);
     expect(mainStyles).toMatch(
-      /data-companion="carlitos"\]\[data-event-state="available"\] \.boat-tooltip/,
+      /\.event-caption\.confirmation-dialog\s*\{[^}]*top:\s*50%;[^}]*width:\s*min\(480px,/s,
     );
   });
 
@@ -1420,7 +1497,7 @@ describe('SurvivalUI', () => {
     )).toBe('sleep');
   });
 
-  it('shows and clears two gradual Bad Sleep eye closures', () => {
+  it('shows and clears two gradual Bad Sleep half closures', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -1448,7 +1525,11 @@ describe('SurvivalUI', () => {
     expect(mainStyles).toMatch(
       /\.bad-sleep-cue__eyelid--bottom\s*\{[^}]*clip-path:[^;}]*50% 20%/s,
     );
-    expect(mainStyles.match(/38% \{ transform: translateY\(0\); \}/g)).toHaveLength(2);
+    expect(mainStyles.match(/(?:38|62)% \{ transform: translateY\(-60%\); \}/g))
+      .toHaveLength(2);
+    expect(mainStyles.match(/(?:38|62)% \{ transform: translateY\(60%\); \}/g))
+      .toHaveLength(2);
+    expect(mainStyles).not.toMatch(/(?:38|62)% \{ transform: translateY\(0\); \}/);
   });
 
   it('shows the pale sleep mask only for Ghosts and clears it with the event', () => {
@@ -1805,14 +1886,14 @@ describe('SurvivalUI', () => {
     ]);
 
     const popup = mount.querySelector<HTMLElement>('[data-event-caption]')!;
-    expect(popup.classList).toContain('check-back-dialog');
+    expect(popup.classList).toContain('confirmation-dialog');
     expect(popup.classList).toContain('scuba-popup-paper');
     expect(popup.getAttribute('role')).toBe('dialog');
     expect(popup.getAttribute('aria-modal')).toBe('true');
     expect(popup.querySelector('[data-event-title]')?.textContent).toBe('Check the back?');
     expect(labels('[data-event-choices] [data-event-choice]')).toEqual(['Yes', 'No']);
     expect(mainStyles).toMatch(
-      /\.event-caption\.check-back-dialog\s*\{[^}]*top:\s*50%;[^}]*width:\s*min\(480px,/s,
+      /\.event-caption\.confirmation-dialog\s*\{[^}]*top:\s*50%;[^}]*width:\s*min\(480px,/s,
     );
   });
 
@@ -2309,7 +2390,6 @@ describe('SurvivalUI', () => {
 
     ui.showDriftingItemFocus({
       eventId: 'drifting-barrel',
-      title: 'DRIFTING BARREL',
       target: { x: 420, y: 260, width: 64, height: 64, depth: 2, visible: true },
       choices: [
         {
@@ -2332,11 +2412,11 @@ describe('SurvivalUI', () => {
 
     const focus = mount.querySelector<HTMLElement>('[data-drifting-item-focus]')!;
     const focusCard = focus.querySelector<HTMLElement>('.drifting-item-focus__card')!;
-    const focusTitle = focus.querySelector<HTMLElement>('[data-drifting-item-title]')!;
     expect(focusCard.classList).toContain('dive-result__paper');
-    expect(focusTitle.classList).toContain('dive-result__title');
-    expect(focus.getAttribute('aria-labelledby')).toBe(focusTitle.id);
-    expect(focusTitle.textContent).toBe('DRIFTING BARREL');
+    expect(focus.querySelector('[data-drifting-item-title]')).toBeNull();
+    expect(focus.getAttribute('aria-labelledby')).toBeNull();
+    expect(focus.getAttribute('aria-label')).toBe('Pickup choices');
+    expect(focus.textContent).not.toContain('DRIFTING BARREL');
     expect(focus.dataset.anchorState).toBe('projected');
     const popupX = Number.parseFloat(focus.style.getPropertyValue('--drifting-x'));
     const popupWidth = Number.parseFloat(focus.style.getPropertyValue('--drifting-width'));
@@ -2442,7 +2522,6 @@ describe('SurvivalUI', () => {
 
     ui.showDriftingItemFocus({
       eventId: 'drifting-barrel',
-      title: 'DRIFTING BARREL',
       target: null,
       choices: [
         {

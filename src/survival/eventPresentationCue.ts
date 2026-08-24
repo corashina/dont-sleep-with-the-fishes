@@ -1,7 +1,5 @@
 export const MIDNIGHT_TOUR_AUDIO_CUES = Object.freeze([
   'dig-start',
-  'run-start',
-  'run-stop',
   'attack',
 ] as const);
 

@@ -6,10 +6,22 @@ import {
   Material,
   Mesh,
   MeshStandardMaterial,
+  Object3D,
+  Quaternion,
+  Skeleton,
   SphereGeometry,
 } from 'three';
 import type { ItemInstance, ItemInstanceId } from '../game/ItemState';
 import { enableItemAmbientOcclusion } from '../rendering/ItemAmbientOcclusion';
+import {
+  collectOwnedSkeletons,
+  disposeSkeletons,
+} from '../rendering/modelPresentation';
+import {
+  applyHandJointCurl,
+  findImportedHandRig,
+  type HandJoint,
+} from '../rendering/RiggedHandRig';
 import { boatStorageTransform } from '../world/BoatStorage';
 import type {
   PropModelLibrary,
@@ -37,12 +49,16 @@ const CARLITOS_INSTANCE = Object.freeze({
   type: 'carlitos',
 } satisfies ItemInstance);
 
-const ACTION_DURATION = 0.8;
+export const CARLITOS_PET_DURATION = 2.4;
+const CARLITOS_FEED_DURATION = 0.8;
+const PET_CONTACT_PROGRESS = 0.18;
 
 interface ActiveAction {
   readonly id: CarlitosAction;
   readonly duration: number;
   elapsed: number;
+  contactSignaled: boolean;
+  readonly onContact?: () => void;
   readonly resolve: () => void;
 }
 
@@ -65,18 +81,22 @@ export class CarlitosPresentation {
   private readonly poseRoot = new Group();
   private readonly headPoseRoot = new Group();
   private readonly hand: Group;
+  private readonly handJoints: readonly HandJoint[];
   private readonly food: Group;
+  private readonly tailTip: Object3D | null;
+  private readonly tailAnimationQuaternion = new Quaternion();
   private readonly modelPresentation: PropPresentation;
   private readonly seatPositionX: number;
   private readonly seatRotationY: number;
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
+  private readonly ownedSkeletons = new Set<Skeleton>();
   private readonly pose: MutableCarlitosPose = createCarlitosPose();
   private readonly poseSample: CarlitosPoseSample = {
     status: 'healthy',
     action: null,
     elapsed: 0,
-    duration: ACTION_DURATION,
+    duration: CARLITOS_PET_DURATION,
   };
   private status: CarlitosPoseState = 'healthy';
   private activeAction: ActiveAction | null = null;
@@ -84,7 +104,7 @@ export class CarlitosPresentation {
   private disposed = false;
 
   constructor(
-    propModels: Pick<PropModelLibrary, 'createPresentation'>,
+    propModels: Pick<PropModelLibrary, 'createPresentation' | 'createEventModel'>,
     hooks: CarlitosPresentationConstructionHooks = {},
   ) {
     this.root.name = 'carlitos-companion';
@@ -107,14 +127,35 @@ export class CarlitosPresentation {
         this.ownedMaterials,
       );
       this.modelPresentation.root.name = 'carlitos-model';
+      this.tailTip = this.modelPresentation.root.getObjectByName('TailTip_8') ?? null;
+      if (this.tailTip !== null) {
+        this.tailAnimationQuaternion.copy(this.tailTip.quaternion);
+      }
       this.headPoseRoot.add(this.modelPresentation.root);
       this.poseRoot.add(this.headPoseRoot);
       this.interactionRoot.add(this.poseRoot);
       this.root.add(this.interactionRoot);
 
-      const hand = createPettingHand(hooks.onPropPartCreated);
-      this.hand = hand.root;
-      this.takePropOwnership(hand);
+      const handModel = propModels.createEventModel('riggedHand');
+      this.hand = new Group();
+      this.hand.name = 'carlitos-petting-hand';
+      this.hand.scale.setScalar(0.32);
+      if (handModel === null) {
+        this.handJoints = [];
+        this.hand.userData.modelKind = 'unavailable';
+      } else {
+        this.hand.add(handModel.root);
+        const handRig = findImportedHandRig(handModel.root);
+        this.handJoints = handRig?.joints ?? [];
+        this.hand.userData.modelKind = handRig === null ? 'model' : 'rigged';
+        preparePettingHand(handModel.root);
+        collectMeshResources(
+          handModel.root,
+          this.ownedGeometries,
+          this.ownedMaterials,
+        );
+        collectOwnedSkeletons(handModel.root, this.ownedSkeletons);
+      }
       const food = createFoodProp(hooks.onPropPartCreated);
       this.food = food.root;
       this.takePropOwnership(food);
@@ -126,6 +167,7 @@ export class CarlitosPresentation {
         runCleanupSteps([
           () => this.modelPresentation.dispose(),
           () => this.root.removeFromParent(),
+          () => disposeSkeletons(this.ownedSkeletons),
           () => disposeResourceSets(
             this.ownedGeometries,
             this.ownedMaterials,
@@ -147,14 +189,17 @@ export class CarlitosPresentation {
     this.applyPose();
   }
 
-  play(action: CarlitosAction, duration = ACTION_DURATION): Promise<void> {
+  play(action: CarlitosAction, onContact?: () => void): Promise<void> {
     if (this.disposed || !this.living) return Promise.resolve();
     this.finishAction();
+    const duration = action === 'pet' ? CARLITOS_PET_DURATION : CARLITOS_FEED_DURATION;
     return new Promise((resolve) => {
       this.activeAction = {
         id: action,
-        duration: Math.max(0, duration),
+        duration,
         elapsed: 0,
+        contactSignaled: false,
+        onContact,
         resolve,
       };
       this.samplePose();
@@ -164,13 +209,27 @@ export class CarlitosPresentation {
 
   update(deltaSeconds: number): void {
     if (this.disposed) return;
+    if (this.tailTip !== null) {
+      this.tailTip.quaternion.copy(this.tailAnimationQuaternion);
+    }
     this.modelPresentation.update(deltaSeconds);
+    if (this.tailTip !== null) {
+      this.tailAnimationQuaternion.copy(this.tailTip.quaternion);
+    }
     const action = this.activeAction;
     if (action === null) return;
     action.elapsed = Math.min(
       action.duration,
       action.elapsed + Math.max(0, deltaSeconds),
     );
+    if (
+      action.id === 'pet'
+      && !action.contactSignaled
+      && action.elapsed >= action.duration * PET_CONTACT_PROGRESS
+    ) {
+      action.contactSignaled = true;
+      action.onContact?.();
+    }
     this.samplePose();
     this.applyPose();
     if (action.elapsed < action.duration) return;
@@ -185,6 +244,7 @@ export class CarlitosPresentation {
     runCleanupSteps([
       () => this.modelPresentation.dispose(),
       () => this.root.removeFromParent(),
+      () => disposeSkeletons(this.ownedSkeletons),
       () => disposeResourceSets(
         this.ownedGeometries,
         this.ownedMaterials,
@@ -217,7 +277,7 @@ export class CarlitosPresentation {
     this.poseSample.status = this.status;
     this.poseSample.action = action?.id ?? null;
     this.poseSample.elapsed = action?.elapsed ?? 0;
-    this.poseSample.duration = action?.duration ?? ACTION_DURATION;
+    this.poseSample.duration = action?.duration ?? CARLITOS_PET_DURATION;
     sampleCarlitosPoseInto(this.pose, this.poseSample);
   }
 
@@ -235,12 +295,24 @@ export class CarlitosPresentation {
     this.poseRoot.rotation.y = pose.bodyYaw;
     this.headPoseRoot.rotation.x = pose.headPitch;
     this.headPoseRoot.rotation.y = pose.headYaw;
+    if (this.tailTip !== null) {
+      this.tailTip.quaternion.copy(this.tailAnimationQuaternion);
+      if (pose.tailSway !== 0) this.tailTip.rotateY(pose.tailSway);
+    }
 
     this.hand.visible = this.living && pose.handReach !== 0;
-    this.hand.position.x = 0.62 - pose.handReach * 0.34;
-    this.hand.position.y = 0.78 - pose.handReach * 0.24;
-    this.hand.position.z = 0.1 + pose.handReach * 0.03;
-    this.hand.rotation.z = -0.28 + pose.handReach * 0.18;
+    this.hand.position.x = -0.04;
+    this.hand.position.y = 0.46
+      + (1 - pose.handReach) * 0.07
+      - pose.handStroke * 0.1
+      + pose.handLift * 0.1;
+    this.hand.position.z = -0.36;
+    this.hand.rotation.set(
+      0.08 + pose.handStroke * 0.04 - pose.handLift * 0.03,
+      -Math.PI / 2 + 0.06 + pose.handReach * 0.02,
+      0.04 + pose.handStroke * 0.03 - pose.handLift * 0.02,
+    );
+    applyHandJointCurl(this.handJoints, pose.handCurl);
 
     this.food.visible = this.living && pose.foodReach !== 0;
     this.food.position.x = 0.5 - pose.foodReach * 0.3;
@@ -250,76 +322,24 @@ export class CarlitosPresentation {
   }
 }
 
-function createPettingHand(
-  onPartCreated?: CarlitosPresentationConstructionHooks['onPropPartCreated'],
-): OwnedCompanionProp {
-  const root = new Group();
-  root.name = 'carlitos-petting-hand';
-  const geometries = new Set<BufferGeometry>();
-  const materials = new Set<Material>();
-  try {
-    const skin = new MeshStandardMaterial({
-      color: 0xa77658,
-      roughness: 0.88,
-      flatShading: true,
-    });
-    materials.add(skin);
-    const cloth = new MeshStandardMaterial({
-      color: 0x263f46,
-      roughness: 0.96,
-      flatShading: true,
-    });
-    materials.add(cloth);
-    const palmGeometry = new BoxGeometry(0.24, 0.075, 0.2, 1, 1, 1);
-    geometries.add(palmGeometry);
-    const palm = new Mesh(palmGeometry, skin);
-    palm.name = 'carlitos-hand:palm';
-    palm.rotation.y = -0.08;
-    root.add(palm);
-    onPartCreated?.('hand', palm);
-
-    const thumbGeometry = new CylinderGeometry(0.025, 0.035, 0.14, 5);
-    geometries.add(thumbGeometry);
-    const thumb = new Mesh(thumbGeometry, skin);
-    thumb.name = 'carlitos-hand:thumb';
-    thumb.position.set(-0.12, -0.005, 0.035);
-    thumb.rotation.z = 1.08;
-    root.add(thumb);
-    onPartCreated?.('hand', thumb);
-
-    for (let index = 0; index < 3; index += 1) {
-      const fingerGeometry = new BoxGeometry(
-        0.055,
-        0.045,
-        0.2 - index * 0.012,
-        1,
-        1,
-        1,
-      );
-      geometries.add(fingerGeometry);
-      const finger = new Mesh(fingerGeometry, skin);
-      finger.name = `carlitos-hand:finger-${index + 1}`;
-      finger.position.set(-0.064 + index * 0.066, -0.045, -0.17);
-      finger.rotation.x = 0.08 + index * 0.025;
-      finger.rotation.y = (index - 1) * 0.035;
-      root.add(finger);
-      onPartCreated?.('hand', finger);
+function preparePettingHand(root: Group): void {
+  root.traverse((object) => {
+    if (!(object instanceof Mesh)) return;
+    object.castShadow = false;
+    object.receiveShadow = false;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const material of materials) {
+      if (!(material instanceof MeshStandardMaterial)) continue;
+      material.color.multiplyScalar(0.82);
+      material.roughness = Math.max(material.roughness, 0.92);
+      material.metalness = 0;
+      material.emissive.setHex(0x241812);
+      material.emissiveIntensity = 0.2;
+      material.flatShading = true;
+      material.needsUpdate = true;
     }
-
-    const cuffGeometry = new CylinderGeometry(0.13, 0.155, 0.16, 7);
-    geometries.add(cuffGeometry);
-    const cuff = new Mesh(cuffGeometry, cloth);
-    cuff.name = 'carlitos-hand:cuff';
-    cuff.position.z = 0.19;
-    cuff.rotation.x = Math.PI / 2;
-    root.add(cuff);
-    onPartCreated?.('hand', cuff);
-    enableItemAmbientOcclusion(root);
-    return { root, geometries, materials };
-  } catch (error) {
-    cleanupFailedProp(root, geometries, materials);
-    throw error;
-  }
+  });
+  enableItemAmbientOcclusion(root);
 }
 
 function createFoodProp(

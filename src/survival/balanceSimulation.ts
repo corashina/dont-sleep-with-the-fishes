@@ -1,6 +1,10 @@
 import type { ItemInstance } from '../game/ItemState';
 import { createScavengeItemInstances } from '../game/scavengeCatalog';
-import { survivalEventById, type SurvivalEventId } from './events';
+import {
+  isSignalSightingEventId,
+  survivalEventById,
+  type SurvivalEventId,
+} from './events';
 import { mulberry32 } from './random';
 import { SurvivalSession } from './SurvivalSession';
 import type { RandomSource } from './survivalTypes';
@@ -81,11 +85,12 @@ const EVENT_CHOICE_PRIORITY = Object.freeze({
   'drifting-chest': ['retrieve', 'delegate-carlitos', 'sleep'],
   'check-the-back': ['check', 'sleep'],
   flowers: ['fishingNet', 'bucket', 'sleep'],
-  'chest-attack': ['fishingNet', 'sleep'],
+  'chest-attack': ['fishingNet', 'attack'],
   'midnight-tour': ['sleep'],
   'night-trader': ['sleep'],
   handyman: ['sleep'],
   'other-people': ['flareGun', 'flashlight', 'sleep'],
+  plane: ['flareGun', 'flashlight', 'sleep'],
 } as const satisfies Readonly<Record<SurvivalEventId, readonly string[]>>);
 
 function resolvePendingEvent(session: SurvivalSession, signalsEnabled: boolean): void {
@@ -94,7 +99,7 @@ function resolvePendingEvent(session: SurvivalSession, signalsEnabled: boolean):
   const event = survivalEventById(eventId);
   if (event === undefined) throw new Error(`Unknown active event: ${eventId}`);
   const priorities = !signalsEnabled
-    && eventId === 'other-people'
+    && isSignalSightingEventId(eventId)
     ? ['sleep']
     : eventId in EVENT_CHOICE_PRIORITY
       ? EVENT_CHOICE_PRIORITY[eventId as SurvivalEventId]

@@ -30,10 +30,23 @@ export const SURVIVAL_EVENT_IDS = Object.freeze([
   'shadow-figure', 'guarded-sleep',
   'drifting-barrel', 'drifting-chest', 'check-the-back',
   'flowers', 'chest-attack', 'midnight-tour', 'night-trader',
-  'handyman', 'other-people',
+  'handyman', 'other-people', 'plane',
 ] as const);
 
 export type SurvivalEventId = typeof SURVIVAL_EVENT_IDS[number];
+export type SignalSightingEventId = Extract<
+  SurvivalEventId,
+  'other-people' | 'plane'
+>;
+
+export const PLANE_CHOICE_WINDOW_SECONDS = 10;
+
+export function isSignalSightingEventId(
+  eventId: string,
+): eventId is SignalSightingEventId {
+  return eventId === 'other-people' || eventId === 'plane';
+}
+
 export type DriftingCargoEventId = Extract<
   SurvivalEventId,
   'drifting-barrel' | 'drifting-chest'
@@ -54,7 +67,9 @@ export function isDriftingItemEventId(
 }
 
 export function driftingItemRetrieveKey(eventId: DriftingItemEventId): EventPresentationKey {
-  return eventId === 'drifting-barrel' ? 'drifting-barrel.food' : 'drifting-chest.food';
+  return eventId === 'drifting-barrel'
+    ? 'drifting-barrel.food'
+    : 'drifting-chest.retrieve';
 }
 
 export function driftingItemLeaveKey(eventId: DriftingItemEventId): EventPresentationKey {
@@ -95,6 +110,7 @@ const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.free
   'night-trader': 'A trader waits beside the boat with an open case.',
   handyman: 'A handyman offers to swap whatever you have on hand.',
   'other-people': 'A distant boat carries other people through the dark.',
+  plane: 'A small plane crosses the dark horizon.',
 });
 
 const resource = (
@@ -418,11 +434,11 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
   event('shadow-figure', 'night', 'Shadow Figure', 'dangerous', 'darkness', 1, 20, 30, [
     choice('flashlight', 'Use Flashlight', 'flashlight',
       outcome(50, 'The false shape remains beyond the light.', effects([add('pressure', 1)])),
-      outcome(50, 'The false shape carries you into the dark.', { ending: 'taken' })),
+      outcome(50, 'The false shape claws you before retreating.', effects([subtract('health', 50)]))),
     choice('flareGun', 'Use Flare Gun', 'flareGun', outcome(
       1,
-      'The false shape carries you into the dark.',
-      { items: [consume('flareGun')], ending: 'taken' },
+      'The false shape claws you before retreating.',
+      effects([subtract('health', 50)], [consume('flareGun')]),
     )),
     contextualChoice('sleep', 'Sleep', outcome(1, 'The shadow leaves before dawn.')),
   ], undefined, { minimumPressure: 3, requiresLivingCompanion: true }),
@@ -460,24 +476,28 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
   event('drifting-chest', 'day', 'Drifting Chest', 'safe', 'fish', 1, 3, 3, [
     {
       ...contextualChoice('retrieve', 'Retrieve It',
-        featuredOutcome('drifting-chest.food', 45, 'You recover two food.', effects([subtract('energy', 3), add('food', 2)])),
-        featuredOutcome('drifting-chest.bait', 25, 'You recover two bait.', effects([subtract('energy', 3), add('bait', 2)])),
-        featuredOutcome('drifting-chest.repair', 20, 'You recover repair timber.', effects([subtract('energy', 3), add('repairMaterial', 2)])),
-        featuredOutcome('drifting-chest.energy-bar', 10, 'You recover an energy bar.', effects([subtract('energy', 3)], [gain('energyBar')])),
+        featuredOutcome(
+          'drifting-chest.retrieve',
+          1,
+          'You recover the closed chest.',
+          effects([subtract('energy', 3)], [gainChest()]),
+        ),
       ),
       requirements: [{ resource: 'energy', minimum: 3 }],
     },
     {
       ...contextualChoice('delegate-carlitos', 'Send Carlitos',
-        featuredOutcome('drifting-chest.food', 45, 'Carlitos recovers two food.', effects([add('food', 2)])),
-        featuredOutcome('drifting-chest.bait', 25, 'Carlitos recovers two bait.', effects([add('bait', 2)])),
-        featuredOutcome('drifting-chest.repair', 20, 'Carlitos recovers repair timber.', effects([add('repairMaterial', 2)])),
-        featuredOutcome('drifting-chest.energy-bar', 10, 'Carlitos recovers an energy bar.', effects(undefined, [gain('energyBar')]))),
+        featuredOutcome(
+          'drifting-chest.retrieve',
+          1,
+          'Carlitos recovers the closed chest.',
+          effects(undefined, [gainChest()]),
+        )),
       companionAction: 'delegateCarlitos',
     },
     contextualChoice('sleep', 'Let It Drift',
       featuredOutcome('drifting-chest.drift', 1, 'The chest drifts out of reach.')),
-  ]),
+  ], undefined, { allowedChestStates: ['none'] }),
   event('check-the-back', 'night', 'Check the Back', 'safe', 'fish', 3, 2, 35, [
     contextualChoice('check', 'Yes',
       {
@@ -571,6 +591,26 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       'You let the other boat pass.',
       {},
       'people-pass',
+    )),
+  ], undefined, { minimumRescueLead: 2, maximumAppearances: 2 }),
+  event('plane', 'night', 'Plane', 'safe', 'sighting', 2, 15, 20, [
+    choice('flareGun', 'Use Flare Gun', 'flareGun', outcome(
+      1,
+      'The plane banks after seeing your flare.',
+      effects([add('rescueLead', 4)], [consume('flareGun')]),
+      'plane-signaled',
+    )),
+    choice('flashlight', 'Use Flashlight', 'flashlight', outcome(
+      1,
+      'The plane answers your light with a wing dip.',
+      effects([add('rescueLead', 2)]),
+      'plane-signaled',
+    )),
+    contextualChoice('sleep', 'Let It Pass', outcome(
+      1,
+      'You let the plane pass into the dark.',
+      {},
+      'plane-pass',
     )),
   ], undefined, { minimumRescueLead: 2, maximumAppearances: 2 }),
 ]);

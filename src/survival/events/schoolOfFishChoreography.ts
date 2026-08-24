@@ -83,16 +83,16 @@ export function createSchoolVariants(count: number, seed: number): readonly Scho
   for (let index = 0; index < safeCount; index += 1) {
     const lane = index % 4;
     const orbitAngle = (index / Math.max(1, safeCount)) * Math.PI * 2
-      + (variantUnit(safeSeed, index, 1) - 0.5) * 0.22;
+      + (variantUnit(safeSeed, index, 1) - 0.5) * 0.34;
     variants.push({
       scale: 0.78 + variantUnit(safeSeed, index, 0) * 0.46,
       orbitAngle,
-      orbitRadiusX: 2.65 + lane * 0.22 + variantUnit(safeSeed, index, 2) * 0.25,
-      orbitRadiusZ: 4.4 + lane * 0.28 + variantUnit(safeSeed, index, 3) * 0.3,
+      orbitRadiusX: 2.95 + lane * 0.48 + variantUnit(safeSeed, index, 2) * 0.38,
+      orbitRadiusZ: 4.95 + lane * 0.72 + variantUnit(safeSeed, index, 3) * 0.55,
       depth: 0.04 + variantUnit(safeSeed, index, 4) * 0.16,
       approachScale: 0.45 + variantUnit(safeSeed, index, 5) * 0.45,
       scatterScale: 0.7 + variantUnit(safeSeed, index, 6) * 0.5,
-      speed: 0.72 + variantUnit(safeSeed, index, 8) * 0.48,
+      speed: 0.34 + variantUnit(safeSeed, index, 8) * 0.26,
       bank: (variantUnit(safeSeed, index, 9) - 0.5) * 0.26,
       flashOffset: variantUnit(safeSeed, index, 10),
     });

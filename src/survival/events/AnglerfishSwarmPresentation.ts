@@ -46,7 +46,7 @@ import {
 
 interface AnglerActor {
   readonly root: Group;
-  readonly bodyMidY: number;
+  readonly waterlineLocalY: number;
   readonly lure: PointLight | null;
   readonly lureMarker: Mesh;
   readonly wave: WaveSample;
@@ -60,16 +60,18 @@ interface AnglerActor {
 
 const WATERLINE = 0.04;
 const BODY_PRESENTATION_SCALE = 1.25;
+const BODY_WATERLINE_FRACTION = 0.38;
 const SWARM_BODY_TINT = new Color(0x31535b);
 const CATCH_COUNT = 2;
 const SPLASH_COUNT = 2;
 const LURE_LIGHT_COUNT = 2;
+const COVERED_PREWARM_SCALE = 0.001;
 const DEFAULT_VARIANT: SwarmVariant = {
   scale: 0.54,
   hullAngle: 0,
-  radiusX: 3.5,
-  radiusZ: 4.95,
-  approachDistance: 1.8,
+  radiusX: 5,
+  radiusZ: 6.8,
+  approachDistance: 2.4,
   depth: 0.3,
   speed: 0.8,
   roll: 0,
@@ -198,18 +200,19 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     this.ownedGeometries.add(swarmLureGeometry);
     this.modelInstance = environment.eventModels.create('anglerFish');
     styleAngler(this.modelInstance.root);
+    this.modelInstance.root.updateMatrixWorld(true);
+    const bodyBounds = new Box3().setFromObject(this.modelInstance.root);
+    const waterlineLocalY = bodyBounds.isEmpty()
+      ? 0
+      : bodyBounds.min.y
+        + (bodyBounds.max.y - bodyBounds.min.y) * BODY_WATERLINE_FRACTION;
     for (let index = 0; index < SWARM_FISH_COUNT; index += 1) {
       const root = index === 0
         ? this.modelInstance.root
         : this.modelInstance.root.clone(true);
       root.name = `swarm-angler-${index + 1}`;
       root.userData.presentationScaleMaximum = 1.08;
-      root.updateMatrixWorld(true);
-      const bounds = new Box3().setFromObject(root);
-      const bodyMidY = bounds.isEmpty()
-        ? 0
-        : (bounds.min.y + bounds.max.y) * 0.5;
-      root.userData.bodyMidY = bodyMidY;
+      root.userData.waterlineLocalY = waterlineLocalY;
       const lure = index < LURE_LIGHT_COUNT
         ? new PointLight(0x67cde4, 0, 4.2, 1.8)
         : null;
@@ -222,7 +225,7 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
       lureMarker.renderOrder = 3;
       this.anglers.push({
         root,
-        bodyMidY,
+        waterlineLocalY,
         lure,
         lureMarker,
         wave: waveSample(),
@@ -311,6 +314,7 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     this.boatRoot.visible = true;
     sampleSwarmReveal(0, variants, this.sample);
     this.applySample(0);
+    this.prewarmCoveredFrame();
   }
 
   reveal(): Promise<void> {
@@ -452,7 +456,7 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
       fish.root.scale.setScalar(presentationScale);
       fish.root.position.set(
         positionX,
-        surfaceY - fish.bodyMidY * presentationScale,
+        surfaceY - fish.waterlineLocalY * presentationScale,
         positionZ,
       );
       fish.root.userData.surfaceY = surfaceY;
@@ -482,8 +486,8 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
         lurePulse * (0.82 + this.sample.lureStrength * 0.28),
       );
       if (fish.lure !== null) {
-        fish.lure.visible = fish.lureMarker.visible;
-        fish.lure.intensity = fish.lure.visible
+        fish.lure.visible = this.staged;
+        fish.lure.intensity = fish.lureMarker.visible
           ? this.sample.lureStrength * (1 - this.sample.lureDim) * lurePulse
           : 0;
       }
@@ -519,6 +523,15 @@ export class AnglerfishSwarmPresentation implements DedicatedEventPresentation {
     }
 
     this.boatRoot.rotation.z = this.sample.hullRoll;
+  }
+
+  private prewarmCoveredFrame(): void {
+    const firstFish = this.anglers[0];
+    if (firstFish === undefined) return;
+    firstFish.root.visible = true;
+    firstFish.root.scale.setScalar(COVERED_PREWARM_SCALE);
+    firstFish.lureMarker.visible = true;
+    firstFish.lureMarker.scale.setScalar(COVERED_PREWARM_SCALE);
   }
 
   private hideScene(): void {

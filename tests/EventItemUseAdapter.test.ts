@@ -22,7 +22,6 @@ const EFFECT_KINDS: readonly EventItemEffectKind[] = [
   'none',
   'tape',
   'binocular-mask',
-  'bucket-cover',
   'flare',
   'chain',
   'flashlight',
@@ -346,6 +345,62 @@ describe('EventItemUseAdapter', () => {
       .normalize();
     expect(mapNormal.dot(cameraBackward)).toBeGreaterThan(0.999);
 
+    adapter.dispose();
+  });
+
+  it('faces a leak patch map into its event target', () => {
+    const scene = new Group();
+    const camera = new PerspectiveCamera(62, 1.6, 0.1, 100);
+    camera.position.set(0.4, 1.7, 0.8);
+    scene.add(camera);
+    const actorParent = new Group();
+    scene.add(actorParent);
+    const { actor } = createActor(
+      actorParent,
+      'map-1' as ItemInstanceId,
+      new Vector3(-0.3, 0.2, -0.5),
+    );
+    const target = new Group();
+    target.position.set(2.4, 0.5, -3.2);
+    scene.add(target);
+    const adapter = new EventItemUseAdapter(camera, new EventItemEffects());
+    const sample = createEventItemUseSample();
+    sampleEventItemUse('map-leak-patch', 'map', 0.76, sample);
+
+    adapter.begin(actor, 'map', target);
+    adapter.apply(sample);
+
+    const mapNormal = new Vector3(0, 1, 0)
+      .applyQuaternion(actor.root.getWorldQuaternion(new Quaternion()))
+      .normalize();
+    const toTarget = target.getWorldPosition(new Vector3())
+      .sub(actor.root.getWorldPosition(new Vector3()))
+      .normalize();
+    expect(mapNormal.dot(toTarget)).toBeGreaterThan(0.999);
+    adapter.dispose();
+  });
+
+  it('keeps the authored cover rotation instead of facing a map toward the camera', () => {
+    const scene = new Group();
+    const camera = new PerspectiveCamera(62, 1.6, 0.1, 100);
+    scene.add(camera);
+    const actorParent = new Group();
+    scene.add(actorParent);
+    const { actor } = createActor(
+      actorParent,
+      'map-1' as ItemInstanceId,
+      new Vector3(-0.3, 0.2, -0.5),
+    );
+    const adapter = new EventItemUseAdapter(camera, new EventItemEffects());
+    const sample = createEventItemUseSample();
+    sampleEventItemUse('cover-supplies', 'map', 0.7, sample);
+
+    adapter.begin(actor, 'map', null);
+    adapter.apply(sample);
+
+    expect(actor.root.rotation.x).toBeCloseTo(sample.pitch);
+    expect(actor.root.rotation.y).toBeCloseTo(sample.yaw);
+    expect(actor.root.rotation.z).toBeCloseTo(sample.roll);
     adapter.dispose();
   });
 

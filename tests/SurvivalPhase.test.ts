@@ -12,7 +12,11 @@ import type { ProjectedBoatBounds } from '../src/survival/BoatInteraction';
 import { BoatWorld } from '../src/survival/BoatWorld';
 import type { EventPresentationCue } from '../src/survival/eventPresentationCue';
 import type { EventChoicePresentation } from '../src/survival/FocusedEventPresentation';
-import { SURVIVAL_EVENTS, type DriftingItemEventId } from '../src/survival/events';
+import {
+  PLANE_CHOICE_WINDOW_SECONDS,
+  SURVIVAL_EVENTS,
+  type DriftingItemEventId,
+} from '../src/survival/events';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import type { FishingCastPoint } from '../src/survival/FishingSession';
 import type { JournalEntry, JournalNightRecord } from '../src/survival/journal';
@@ -171,9 +175,9 @@ describe('event presentation audio cue routing', () => {
       ui: {},
     });
 
-    handler!({ eventId: 'midnight-tour', cue: 'run-start' });
+    handler!({ eventId: 'midnight-tour', cue: 'attack' });
 
-    expect(play).toHaveBeenCalledExactlyOnceWith('midnightMonsterRun');
+    expect(play).toHaveBeenCalledExactlyOnceWith('midnightMonsterAttack');
   });
 
   it('routes Check the Back result cues to the survival audio scope', () => {
@@ -216,6 +220,27 @@ describe('event presentation audio cue routing', () => {
   });
 });
 
+describe('event anchor highlighting', () => {
+  it('forwards the Midnight Tour island hover target to the world', () => {
+    const setHighlightedItem = vi.fn();
+    const ui: Record<string, unknown> = {};
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world: { setHighlightedItem, dispose: vi.fn() },
+      ui,
+    });
+
+    (ui.onAnchorHighlight as (anchorId: string | null) => void)(
+      'midnight-tour:island',
+    );
+
+    expect(setHighlightedItem).toHaveBeenCalledExactlyOnceWith(
+      'midnight-tour:island',
+    );
+    phase.dispose();
+  });
+});
+
 function deferred() {
   let complete!: () => void;
   let settled = false;
@@ -231,6 +256,7 @@ function deferred() {
 type Deferred = ReturnType<typeof deferred>;
 
 interface DriftingItemRigOptions {
+  readonly audio?: AudioSystem;
   readonly rejectChoice?: boolean;
   readonly onRestart?: () => void;
 }
@@ -312,6 +338,7 @@ function createDriftingItemRig(
     _eligible: ReadonlyMap<ItemInstanceId, string>,
     choices: readonly EventContextChoice[] = [],
   ) => calls.push(`selection:${choices.map(({ id }) => id).join(',')}`));
+  const setCameraTurnState = vi.fn();
   const ui: Partial<SurvivalUI> = {
     beginEventPresentation: vi.fn(),
     setSleepCovered: vi.fn(() => Promise.resolve()),
@@ -324,6 +351,7 @@ function createDriftingItemRig(
     showFeedback: vi.fn(),
     clearEventPresentation: vi.fn(() => calls.push('clear-ui')),
     setBusy: vi.fn((value: boolean) => calls.push(value ? 'busy' : 'ready')),
+    setCameraTurnState,
     render: vi.fn(),
     setJournalUnread: vi.fn(),
     setAnchors: vi.fn(),
@@ -337,6 +365,7 @@ function createDriftingItemRig(
     dispose: vi.fn(),
   };
   const phase = SurvivalPhase.forTest({
+    audio: options.audio,
     session,
     world,
     ui,
@@ -358,6 +387,7 @@ function createDriftingItemRig(
     hideDriftingItemFocus,
     restoreCommandFocus,
     setEventSelection,
+    setCameraTurnState,
   };
 }
 
@@ -996,13 +1026,78 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.showDriftingItemFocus).toHaveBeenCalledOnce();
     expect(rig.showDriftingItemFocus.mock.calls[0]![0]).toMatchObject({
       eventId,
-      title: `DRIFTING ${eventId.replace('drifting-', '').toLocaleUpperCase('en-US')}`,
       choices: expect.arrayContaining([
         expect.objectContaining({ id: 'retrieve' }),
         expect.objectContaining({ id: 'delegate-carlitos' }),
         expect.objectContaining({ id: 'sleep' }),
       ]),
     });
+    expect(rig.showDriftingItemFocus.mock.calls[0]![0]).not.toHaveProperty('title');
+    rig.phase.dispose();
+  });
+
+  it('opens the recovered barrel before showing its reward', async () => {
+    const played: SoundId[] = [];
+    const backend: AudioBackend = {
+      acquire: vi.fn(() => Promise.resolve()),
+      release: vi.fn(),
+      unlock: vi.fn(() => Promise.resolve()),
+      play: vi.fn((id: SoundId): AudioVoice => {
+        played.push(id);
+        return {
+          id,
+          setGain: vi.fn(),
+          setPaused: vi.fn(),
+          stop: vi.fn(),
+          onEnded: vi.fn(),
+        };
+      }),
+      playSpatialLoop: vi.fn(() => null),
+      setListenerPose: vi.fn(),
+      setBusGain: vi.fn(),
+      setMasterGain: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const rig = createDriftingItemRig('drifting-barrel', {
+      audio: AudioSystem.forTest(backend),
+    });
+    const rewardHold = deferred();
+    const rewardSummary = {
+      kind: 'resource',
+      id: 'food',
+      quantity: 2,
+    } as const;
+    const showRewardResult = vi.fn(() => {
+      rig.calls.push('show-reward');
+      return rewardHold.promise;
+    });
+    rig.ui.showRewardResult = showRewardResult;
+    await revealDriftingItem(rig);
+    await enterDriftingItemFocus(rig);
+
+    rig.ui.onEventChoice?.('retrieve');
+    await flushPromises();
+    expect(rig.hideDriftingItemFocus).toHaveBeenCalledOnce();
+    rig.animations.retrieve.resolve();
+    await flushPromises();
+
+    expect(played).toContain('chest');
+    expect(showRewardResult).toHaveBeenCalledExactlyOnceWith({
+      title: 'CHEST REWARD',
+      reward: rewardSummary,
+      lines: [],
+    });
+    expect(rig.world.exitDriftingItemView).not.toHaveBeenCalled();
+    expect(rig.calls.indexOf('retrieve:drifting-barrel'))
+      .toBeLessThan(rig.calls.indexOf('show-reward'));
+    expect(rig.calls.indexOf('hide-focus'))
+      .toBeLessThan(rig.calls.indexOf('show-reward'));
+
+    rewardHold.resolve();
+    await flushPromises();
+    expect(rig.world.exitDriftingItemView).toHaveBeenCalledOnce();
+    rig.animations.exit.resolve();
+    await flushPromises();
     rig.phase.dispose();
   });
 
@@ -1032,6 +1127,27 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.calls.indexOf('exit')).toBeLessThan(rig.calls.indexOf('clear-world'));
     expect(rig.calls.indexOf('clear-world')).toBeLessThan(rig.calls.indexOf('release-bundle'));
     expect(rig.calls.indexOf('release-bundle')).toBeLessThan(rig.calls.indexOf('restore-focus'));
+    rig.phase.dispose();
+  });
+
+  it('shows the chest icon after a menu-launched Drifting Chest pickup', async () => {
+    const rig = createDriftingItemRig('drifting-chest');
+    const showRewardResult = vi.fn(() => Promise.resolve());
+    rig.ui.showRewardResult = showRewardResult;
+    await revealDriftingItem(rig);
+    await enterDriftingItemFocus(rig);
+
+    rig.ui.onEventChoice?.('retrieve');
+    await flushPromises();
+    expect(rig.realSession.snapshot().chest).toMatchObject({ state: 'closed' });
+
+    rig.animations.retrieve.resolve();
+    await flushPromises();
+    rig.animations.exit.resolve();
+    await flushPromises();
+
+    expect(rig.setCameraTurnState).toHaveBeenLastCalledWith(true, false);
+    expect(showRewardResult).not.toHaveBeenCalled();
     rig.phase.dispose();
   });
 
@@ -6525,7 +6641,10 @@ describe('SurvivalPhase orchestration', () => {
       });
       const beginDawn = vi.spyOn(session, 'beginDawn');
       const calls: string[] = [];
-      const setEventSelection = vi.fn(() => {
+      const setEventSelection = vi.fn((
+        _eligible: ReadonlyMap<ItemInstanceId, string>,
+        _choices: readonly EventContextChoice[],
+      ) => {
         calls.push(`select:${session.snapshot().pendingEventId}`);
       });
       const ui: Partial<SurvivalUI> = {
@@ -6570,12 +6689,12 @@ describe('SurvivalPhase orchestration', () => {
 
       phase.start();
       await flushPromises();
-      expect(setEventSelection).toHaveBeenCalledWith(
-        expect.any(Map),
-        expect.arrayContaining([
-          expect.objectContaining({ id: 'watch', anchorId: 'carlitos' }),
-        ]),
-      );
+      const guardedChoices = setEventSelection.mock.calls.at(-1)?.[1] ?? [];
+      expect(guardedChoices).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'watch' }),
+      ]));
+      expect(guardedChoices.find(({ id }) => id === 'watch'))
+        .not.toHaveProperty('anchorId');
       calls.length = 0;
 
       ui.onEventChoice?.(choiceId);
@@ -6731,8 +6850,12 @@ describe('SurvivalPhase orchestration', () => {
           pettedToday: false, deathCause: null,
         },
       });
-      const playCarlitosAction = vi.fn(() => {
+      const playCarlitosAction = vi.fn((
+        _action: 'petCarlitos' | 'feedCarlitos',
+        onContact?: () => void,
+      ) => {
         calls.push('play');
+        onContact?.();
         return Promise.resolve();
       });
       const showFeedback = vi.fn();
@@ -6772,7 +6895,11 @@ describe('SurvivalPhase orchestration', () => {
       await flushPromises();
 
       expect(calls).toEqual(['sync', 'play', 'render']);
-      expect(playCarlitosAction).toHaveBeenCalledWith(action);
+      if (action === 'petCarlitos') {
+        expect(playCarlitosAction).toHaveBeenCalledWith(action, expect.any(Function));
+      } else {
+        expect(playCarlitosAction).toHaveBeenCalledWith(action);
+      }
       expect(showFeedback).not.toHaveBeenCalled();
       phase.dispose();
     },
@@ -7078,14 +7205,20 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
-  it('routes Other People lantern Sleep with a usable signal item', async () => {
+  it.each([
+    ['other-people', 'people-pass'],
+    ['plane', 'plane-pass'],
+  ] as const)('routes %s Let It Pass with a usable signal item', async (
+    eventId,
+    resultId,
+  ) => {
     const session = new SurvivalSession(
       [{ instanceId: 'flashlight-1', type: 'flashlight' }],
       {
         seed: 204,
         random: sequenceRandom([0, 0.99, 0.99]),
         initial: { day: 15, rescueLead: 2 },
-        initialEventId: 'other-people',
+        initialEventId: eventId,
       },
     );
     const playEventChoice = vi.fn(() => Promise.resolve());
@@ -7129,18 +7262,18 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
     await flushPromises();
 
-    expect(playEventChoice).toHaveBeenCalledWith('other-people', {
+    expect(playEventChoice).toHaveBeenCalledWith(eventId, {
       choiceId: 'sleep',
       instanceId: null,
       condition: null,
     });
     expect(reactToEventOutcome).toHaveBeenCalledWith(
-      'other-people',
+      eventId,
       expect.objectContaining({
         eventResult: {
-          eventId: 'other-people',
+          eventId,
           choiceId: 'sleep',
-          resultId: 'people-pass',
+          resultId,
         },
       }),
       expect.anything(),
@@ -7151,6 +7284,74 @@ describe('SurvivalPhase orchestration', () => {
       pendingEventId: null,
       inventory: { 'flashlight-1': { condition: 'usable' } },
     });
+    phase.dispose();
+  });
+
+  it('lets the Plane pass when its item window expires', async () => {
+    const session = new SurvivalSession([], {
+      seed: 206,
+      random: sequenceRandom([0.99]),
+      initial: { day: 15, rescueLead: 2 },
+      initialEventId: 'plane',
+    });
+    const resolveEvent = vi.spyOn(session, 'resolveEvent');
+    const playEventChoice = vi.fn(() => Promise.resolve());
+    const reactToEventOutcome = vi.fn(() => Promise.resolve());
+    const phase = SurvivalPhase.forTest({
+      session,
+      world: {
+        play: vi.fn(() => Promise.resolve()),
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        playEventChoice,
+        reactToEventOutcome,
+        clearEvent: vi.fn(),
+        dispose: vi.fn(),
+      },
+      ui: {
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        settleCoveredScene: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        setBusy: vi.fn(),
+        holdEventOutcome: vi.fn(() => Promise.resolve()),
+        clearEventPresentation: vi.fn(),
+        render: vi.fn(),
+        setJournalUnread: vi.fn(),
+        dispose: vi.fn(),
+      },
+    });
+    phase.start();
+    await flushPromises();
+
+    phase.update(0, 0);
+    phase.update(PLANE_CHOICE_WINDOW_SECONDS - 0.1, PLANE_CHOICE_WINDOW_SECONDS - 0.1);
+    await flushPromises();
+    expect(resolveEvent).not.toHaveBeenCalled();
+
+    phase.update(PLANE_CHOICE_WINDOW_SECONDS, 0.1);
+    await flushPromises();
+    await flushPromises();
+    expect(resolveEvent).toHaveBeenCalledOnce();
+    expect(resolveEvent).toHaveBeenCalledWith({ kind: 'endure' });
+    expect(playEventChoice).toHaveBeenCalledWith('plane', {
+      choiceId: 'sleep',
+      instanceId: null,
+      condition: null,
+    });
+    expect(reactToEventOutcome).toHaveBeenCalledWith(
+      'plane',
+      expect.objectContaining({
+        eventResult: {
+          eventId: 'plane',
+          choiceId: 'sleep',
+          resultId: 'plane-pass',
+        },
+      }),
+      expect.anything(),
+      expect.anything(),
+    );
     phase.dispose();
   });
 
@@ -7590,6 +7791,91 @@ describe('SurvivalPhase orchestration', () => {
 
       phase.dispose();
       expect(melodyVoice.stop).toHaveBeenCalledOnce();
+      hold.resolve();
+    },
+  );
+
+  it.each([
+    ['leak', 'leak'],
+    ['snatcher', 'tentacleMovement'],
+    ['tornado', 'tornadoWind'],
+  ] as const)(
+    'stops the %s loop when its result reaction ends',
+    async (eventId, soundId) => {
+      const reaction = deferred();
+      const hold = deferred();
+      const eventVoice: AudioVoice = {
+        id: soundId,
+        setGain: vi.fn(),
+        setPaused: vi.fn(),
+        stop: vi.fn(),
+        onEnded: vi.fn(),
+      };
+      const backend: AudioBackend = {
+        acquire: vi.fn(() => Promise.resolve()),
+        release: vi.fn(),
+        unlock: vi.fn(() => Promise.resolve()),
+        play: vi.fn((id: SoundId) => id === soundId
+          ? eventVoice
+          : {
+              id,
+              setGain: vi.fn(),
+              setPaused: vi.fn(),
+              stop: vi.fn(),
+              onEnded: vi.fn(),
+            }),
+        playSpatialLoop: vi.fn(() => null),
+        setListenerPose: vi.fn(),
+        setBusGain: vi.fn(),
+        setMasterGain: vi.fn(),
+        dispose: vi.fn(),
+      };
+      let current = snapshot({
+        state: 'nightEvent',
+        pendingEventId: eventId,
+      });
+      const holdEventOutcome = vi.fn(() => hold.promise);
+      const phase = SurvivalPhase.forTest({
+        audio: AudioSystem.forTest(backend),
+        session: {
+          snapshot: vi.fn(() => current),
+          resolveEvent: vi.fn(() => {
+            current = snapshot({ state: 'nightEvent', pendingEventId: null });
+            return accepted({
+              code: 'event-resolved',
+              cue: 'impact',
+              deltas: {},
+            });
+          }),
+        },
+        world: {
+          revealEvent: vi.fn(() => Promise.resolve()),
+          play: vi.fn(() => Promise.resolve()),
+          reactToEventOutcome: vi.fn(() => reaction.promise),
+          dispose: vi.fn(),
+        },
+        ui: {
+          setSleepCovered: vi.fn(() => Promise.resolve()),
+          settleCoveredScene: vi.fn(() => Promise.resolve()),
+          showEventReveal: vi.fn(() => Promise.resolve()),
+          setEventSelection: vi.fn(),
+          holdEventOutcome,
+          dispose: vi.fn(),
+        },
+      });
+
+      phase.start();
+      await flushPromises();
+      phase.handleEndure();
+      await flushPromises();
+      expect(eventVoice.stop).not.toHaveBeenCalled();
+
+      reaction.resolve();
+      await flushPromises();
+      expect(eventVoice.stop).toHaveBeenCalledExactlyOnceWith(0.08);
+      expect(holdEventOutcome).toHaveBeenCalledOnce();
+
+      phase.dispose();
       hold.resolve();
     },
   );

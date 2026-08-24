@@ -286,7 +286,6 @@ export interface FishingResultView {
 
 export interface DriftingItemFocusView {
   readonly eventId: DriftingItemEventId;
-  readonly title: string;
   readonly choices: readonly EventContextChoice[];
   readonly target: ProjectedBoatBounds | null;
 }
@@ -340,6 +339,7 @@ export class SurvivalUI {
   onEventItem: (choiceId: EventResponseId, instanceId: ItemInstanceId) => void = () => undefined;
   onEventChoice: (choiceId: EventResponseId) => void = () => undefined;
   onRestart: () => void = () => undefined;
+  onAnchorHighlight: (anchorId: string | null) => void = () => undefined;
   onPauseChange: (paused: boolean) => void = () => undefined;
   onJournalOpen: () => void = () => undefined;
   onJournalClose: () => void = () => undefined;
@@ -389,7 +389,6 @@ export class SurvivalUI {
   private readonly driftingItemFocusLayer: HTMLElement;
   private readonly driftingItemFocusCard: HTMLElement;
   private readonly driftingItemFocusBack: HTMLButtonElement;
-  private readonly driftingItemFocusTitle: HTMLElement;
   private readonly driftingItemFocusChoices: HTMLElement;
   private readonly fishingViewExit: HTMLButtonElement;
   private readonly repairOptionsLayer: HTMLElement;
@@ -433,6 +432,9 @@ export class SurvivalUI {
   private fishingReturnTarget: HTMLElement | null = null;
   private latestCommandOrigin: HTMLButtonElement | null = null;
   private currentSnapshot: SurvivalSnapshot | null = null;
+  private hoveredAnchorId: string | null = null;
+  private focusedAnchorId: string | null = null;
+  private publishedAnchorId: string | null = null;
   private journalEntries: readonly JournalEntry[] = [];
   private journalIndex = 0;
   private fishingMode: FishingUiMode = 'hidden';
@@ -564,9 +566,8 @@ export class SurvivalUI {
           </button>
         </div>
       </section>
-      <section class="drifting-item-focus" data-drifting-item-focus role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="drifting-item-focus-title" inert>
+      <section class="drifting-item-focus" data-drifting-item-focus role="dialog" aria-modal="true" aria-hidden="true" aria-label="Pickup choices" inert>
         <div class="dive-result__paper drifting-item-focus__card scuba-popup-paper">
-          <h2 class="dive-result__title scuba-popup-title ui-role-display" id="drifting-item-focus-title" data-drifting-item-title></h2>
           <nav data-drifting-item-choices aria-label="Pickup choices"></nav>
         </div>
         <button type="button" class="drifting-item-focus__back" data-drifting-item-back aria-label="Return to boat">
@@ -676,7 +677,6 @@ export class SurvivalUI {
       '.drifting-item-focus__card',
     );
     this.driftingItemFocusBack = requireElement(this.root, '[data-drifting-item-back]');
-    this.driftingItemFocusTitle = requireElement(this.root, '[data-drifting-item-title]');
     this.driftingItemFocusChoices = requireElement(this.root, '[data-drifting-item-choices]');
     this.fishingViewExit = requireElement(this.root, '[data-fishing-view-exit]');
     this.repairOptionsLayer = requireElement(this.root, '[data-repair-options]');
@@ -717,7 +717,10 @@ export class SurvivalUI {
 
     this.root.addEventListener('click', this.handleClick);
     this.root.addEventListener('pointerup', this.handleFishingPointerUp);
+    this.root.addEventListener('pointerover', this.handleAnchorPointerOver);
+    this.root.addEventListener('pointerout', this.handleAnchorPointerOut);
     this.root.addEventListener('focusin', this.handleAnchorFocusIn);
+    this.root.addEventListener('focusout', this.handleAnchorFocusOut);
     document.addEventListener('keydown', this.handleKeyDown);
     document.addEventListener('click', this.handleDocumentClick);
     window.addEventListener('resize', this.handleWindowResize);
@@ -799,6 +802,10 @@ export class SurvivalUI {
       this.anchors.delete(id);
       this.anchorLayouts.delete(id);
     });
+    if (
+      (this.hoveredAnchorId !== null && !seen.has(this.hoveredAnchorId))
+      || (this.focusedAnchorId !== null && !seen.has(this.focusedAnchorId))
+    ) this.clearAnchorHighlight();
     const companionAnchor = anchors.find(
       (anchor) => anchor.companionId === 'carlitos' && anchor.visible,
     );
@@ -845,6 +852,33 @@ export class SurvivalUI {
     this.syncCommandState();
   }
 
+  showItemAnimationLabChoices(
+    itemLabel: string,
+    choices: readonly EventContextChoice[],
+  ): void {
+    if (this.disposed || !this.itemAnimationLabActive()) return;
+    this.updateText('event:title', this.eventTitle, `Choose ${itemLabel} animation`);
+    this.eventTitle.hidden = false;
+    this.contextualEventChoices = [...choices];
+    this.eventSelectedChoiceId = null;
+    this.renderContextualEventChoices();
+    this.syncCommandState();
+    this.eventChoices.querySelector<HTMLButtonElement>('[data-event-choice]')?.focus();
+  }
+
+  hideItemAnimationLabChoices(): void {
+    if (this.disposed || !this.itemAnimationLabActive()) return;
+    const focusedChoice = document.activeElement !== null
+      && this.eventChoices.contains(document.activeElement);
+    this.updateText('event:title', this.eventTitle, '');
+    this.eventTitle.hidden = true;
+    this.contextualEventChoices = [];
+    this.eventSelectedChoiceId = null;
+    this.renderContextualEventChoices();
+    this.syncCommandState();
+    if (focusedChoice) this.firstUsableAction()?.focus();
+  }
+
   showEventReveal(
     event: Pick<SurvivalEventDefinition, 'id' | 'revealText' | 'danger'>,
   ): Promise<void> {
@@ -860,9 +894,10 @@ export class SurvivalUI {
     this.eventCaption.dataset.eventId = event.id;
     this.eventCaption.dataset.danger = event.danger;
     const checkBack = event.id === 'check-the-back';
-    this.eventCaption.classList.toggle('check-back-dialog', checkBack);
-    this.eventCaption.classList.toggle('scuba-popup-paper', checkBack);
-    if (checkBack) {
+    const confirmationDialog = checkBack || event.id === 'guarded-sleep';
+    this.eventCaption.classList.toggle('confirmation-dialog', confirmationDialog);
+    this.eventCaption.classList.toggle('scuba-popup-paper', confirmationDialog);
+    if (confirmationDialog) {
       this.eventCaption.setAttribute('role', 'dialog');
       this.eventCaption.setAttribute('aria-modal', 'true');
     } else {
@@ -960,7 +995,7 @@ export class SurvivalUI {
     this.eventSelectedChoiceId = null;
     this.eventPresentationActive = false;
     this.eventCaption.classList.remove('is-visible');
-    this.eventCaption.classList.remove('check-back-dialog', 'scuba-popup-paper');
+    this.eventCaption.classList.remove('confirmation-dialog', 'scuba-popup-paper');
     this.eventCaption.setAttribute('aria-hidden', 'true');
     this.eventCaption.removeAttribute('aria-label');
     this.eventCaption.removeAttribute('role');
@@ -1265,7 +1300,6 @@ export class SurvivalUI {
   showDriftingItemFocus(view: DriftingItemFocusView): void {
     if (this.disposed) return;
     this.driftingItemFocusBack.setAttribute('aria-label', 'Return to boat');
-    this.driftingItemFocusTitle.textContent = view.title;
     this.driftingItemFocusTarget = view.target === null
       ? null
       : Object.freeze({ ...view.target });
@@ -1286,7 +1320,6 @@ export class SurvivalUI {
     this.driftingItemFocusChoicesView = [];
     this.driftingItemFocusChoices.replaceChildren();
     this.driftingItemFocusChoices.hidden = false;
-    this.driftingItemFocusTitle.textContent = '';
     this.driftingItemFocusTarget = null;
   }
 
@@ -1402,6 +1435,7 @@ export class SurvivalUI {
     if (this.disposed || this.busy === busy) return;
     this.busy = busy;
     if (busy) {
+      this.clearAnchorHighlight();
       this.root.setAttribute('aria-busy', 'true');
     } else {
       this.root.removeAttribute('aria-busy');
@@ -1481,7 +1515,10 @@ export class SurvivalUI {
     window.clearTimeout(this.feedbackTimer);
     this.root.removeEventListener('click', this.handleClick);
     this.root.removeEventListener('pointerup', this.handleFishingPointerUp);
+    this.root.removeEventListener('pointerover', this.handleAnchorPointerOver);
+    this.root.removeEventListener('pointerout', this.handleAnchorPointerOut);
     this.root.removeEventListener('focusin', this.handleAnchorFocusIn);
+    this.root.removeEventListener('focusout', this.handleAnchorFocusOut);
     document.removeEventListener('keydown', this.handleKeyDown);
     document.removeEventListener('click', this.handleDocumentClick);
     window.removeEventListener('resize', this.handleWindowResize);
@@ -1489,6 +1526,7 @@ export class SurvivalUI {
     this.onEventItem = () => undefined;
     this.onEventChoice = () => undefined;
     this.onRestart = () => undefined;
+    this.onAnchorHighlight = () => undefined;
     this.onPauseChange = () => undefined;
     this.onJournalOpen = () => undefined;
     this.onJournalClose = () => undefined;
@@ -1633,7 +1671,7 @@ export class SurvivalUI {
       : `${itemLabel}${stateText}${itemLabel === action.label ? '' : ` — ${action.label}`} — ${itemDescription} — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
     const visibleLabel = anchor.companionId === 'carlitos'
       ? anchoredChoice?.label.toLocaleUpperCase('en-US')
-        ?? (eventItemEligible ? 'CARLITOS' : 'CARLITOS: CHECK STATUS')
+        ?? 'CARLITOS'
       : anchor.label ?? (anchor.itemType !== null
       ? quantityLabel(ITEM_LABELS[anchor.itemType], quantity)
       : anchor.supplyGroupId === 'repairMaterial'
@@ -1972,8 +2010,12 @@ export class SurvivalUI {
 
   private renderContextualEventChoices(): void {
     const checkBack = this.eventCaption.dataset.eventId === 'check-the-back';
+    const guardedSleep = this.eventCaption.dataset.eventId === 'guarded-sleep';
     if (checkBack) {
       this.updateText('event:title', this.eventTitle, 'Check the back?');
+      this.eventTitle.hidden = false;
+    } else if (guardedSleep) {
+      this.updateText('event:title', this.eventTitle, 'Let Carlitos watch?');
       this.eventTitle.hidden = false;
     }
     const choices = this.contextualEventChoices
@@ -1987,7 +2029,9 @@ export class SurvivalUI {
         button.dataset.eventChoice = choice.id;
         button.dataset.eventState = 'idle';
         button.setAttribute('aria-pressed', 'false');
-        button.textContent = choice.label;
+        button.textContent = guardedSleep && choice.id === 'watch'
+          ? 'Yes'
+          : choice.label;
         if (choice.unavailableReason !== null) {
           button.dataset.unavailableReason = choice.unavailableReason;
           button.setAttribute('aria-description', choice.unavailableReason);
@@ -2136,16 +2180,62 @@ export class SurvivalUI {
     if (!this.carlitosCard.hidden && anchor !== undefined) this.positionCarlitosCard(anchor);
   };
 
-  private readonly handleAnchorFocusIn = (event: FocusEvent): void => {
-    if (!(event.target instanceof Element)) return;
-    const button = event.target.closest<HTMLButtonElement>('.boat-anchor');
+  private highlightAnchorId(target: EventTarget | null): string | null {
+    if (!(target instanceof Element)) return null;
+    const button = target.closest<HTMLButtonElement>('.boat-anchor');
     if (
-      button !== null
-      && this.root.contains(button)
-      && (button.disabled || button.dataset.eventState === 'locked')
-    ) {
-      button.blur();
+      button === null
+      || !this.root.contains(button)
+      || button.hidden
+      || button.disabled
+      || button.dataset.eventState === 'locked'
+    ) return null;
+    return button.dataset.anchorId ?? null;
+  }
+
+  private publishAnchorHighlight(): void {
+    const next = this.focusedAnchorId ?? this.hoveredAnchorId;
+    if (next === this.publishedAnchorId) return;
+    this.publishedAnchorId = next;
+    const anchor = next === null ? undefined : this.anchors.get(next);
+    this.onAnchorHighlight(anchor?.backingInstanceId ?? next);
+  }
+
+  private clearAnchorHighlight(): void {
+    this.hoveredAnchorId = null;
+    this.focusedAnchorId = null;
+    this.publishAnchorHighlight();
+  }
+
+  private readonly handleAnchorPointerOver = (event: Event): void => {
+    this.hoveredAnchorId = this.highlightAnchorId(event.target);
+    this.publishAnchorHighlight();
+  };
+
+  private readonly handleAnchorPointerOut = (event: Event): void => {
+    const current = this.highlightAnchorId(event.target);
+    const related = this.highlightAnchorId((event as MouseEvent).relatedTarget);
+    if (current === null || related === current) return;
+    if (this.hoveredAnchorId === current) this.hoveredAnchorId = null;
+    this.publishAnchorHighlight();
+  };
+
+  private readonly handleAnchorFocusIn = (event: FocusEvent): void => {
+    const anchorId = this.highlightAnchorId(event.target);
+    if (anchorId === null && event.target instanceof Element) {
+      const button = event.target.closest<HTMLButtonElement>('.boat-anchor');
+      if (button?.disabled || button?.dataset.eventState === 'locked') button.blur();
     }
+    this.focusedAnchorId = anchorId;
+    this.publishAnchorHighlight();
+  };
+
+  private readonly handleAnchorFocusOut = (event: FocusEvent): void => {
+    const current = this.highlightAnchorId(event.target);
+    const related = this.highlightAnchorId(event.relatedTarget);
+    if (current === null || related === current) return;
+    if (this.focusedAnchorId === current) this.focusedAnchorId = null;
+    this.publishAnchorHighlight();
   };
 
   private showLayer(layer: HTMLElement): void {

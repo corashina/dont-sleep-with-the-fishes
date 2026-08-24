@@ -95,6 +95,18 @@ const THUNDER_SOUNDS = Object.freeze([
   'thunderLightningDry',
 ] as const satisfies readonly SoundId[]);
 
+const CAT_MEOW_SOUNDS = Object.freeze([
+  'catMeow1',
+  'catMeow2',
+  'catMeow3',
+  'catMeow4',
+  'catMeow5',
+  'catMeow6',
+  'catMeow7',
+] as const satisfies readonly SoundId[]);
+
+const SHADOW_MEOW_DELAY_SECONDS = 0.12;
+
 export class SurvivalAudio {
   private weather: PresentationWeatherId = 'calm';
   private waveClock = 0;
@@ -103,12 +115,19 @@ export class SurvivalAudio {
   private eventMelodyActive = false;
   private midnightDigVoice: AudioVoice | null = null;
   private midnightDigRemaining = 0;
-  private midnightRunActive = false;
   private midnightAttackPlayed = false;
+  private planeFlybyVoice: AudioVoice | null = null;
   private radioSignalVoice: AudioVoice | null = null;
+  private readonly meowBag: SoundId[] = [];
+  private lastMeow: SoundId | null = null;
+  private pendingShadowMeow: SoundId | null = null;
+  private shadowMeowDelay = 0;
   private disposed = false;
 
-  constructor(private readonly scope: AudioScope) {}
+  constructor(
+    private readonly scope: AudioScope,
+    private readonly random: () => number = Math.random,
+  ) {}
 
   start(): void {
     if (this.disposed) return;
@@ -126,6 +145,14 @@ export class SurvivalAudio {
         this.midnightDigVoice.stop(0.05);
         this.midnightDigVoice = null;
         this.midnightDigRemaining = 0;
+      }
+    }
+    if (this.pendingShadowMeow !== null) {
+      this.shadowMeowDelay -= elapsed;
+      if (this.shadowMeowDelay <= 0) {
+        this.scope.play(this.pendingShadowMeow);
+        this.pendingShadowMeow = null;
+        this.shadowMeowDelay = 0;
       }
     }
     const rough = ROUGH_WEATHER.has(this.weather);
@@ -165,6 +192,12 @@ export class SurvivalAudio {
       this.clearRadioSignal();
       this.scope.play('radioReply');
     }
+  }
+
+  petCarlitos(): void {
+    if (this.disposed) return;
+    const meow = this.drawMeow();
+    if (meow !== null) this.scope.play(meow);
   }
 
   beginRadioSignal(onEnded: () => void): boolean {
@@ -276,6 +309,18 @@ export class SurvivalAudio {
       this.scope.play('yawn');
       return;
     }
+    if (eventId === 'ghosts') {
+      this.scope.play('ghostSpiritBreath');
+      return;
+    }
+    if (eventId === 'shadow-figure') {
+      this.scope.play('eventReveal');
+      const firstMeow = this.drawMeow();
+      if (firstMeow !== null) this.scope.play(firstMeow);
+      this.pendingShadowMeow = this.drawMeow();
+      this.shadowMeowDelay = SHADOW_MEOW_DELAY_SECONDS;
+      return;
+    }
     this.scope.play('eventReveal');
   }
 
@@ -294,6 +339,14 @@ export class SurvivalAudio {
       this.scope.startLoop('tornadoWind');
       return;
     }
+    if (eventId === 'plane') {
+      const voice = this.scope.play('planeFlyby');
+      this.planeFlybyVoice = voice;
+      voice?.onEnded(() => {
+        if (this.planeFlybyVoice === voice) this.planeFlybyVoice = null;
+      });
+      return;
+    }
     if (eventId !== 'eerie-melody') return;
     this.eventMelodyActive = true;
     this.scope.startLoop('eerieMelody');
@@ -310,8 +363,8 @@ export class SurvivalAudio {
     if (!attack) this.stopEventMelody(0.02);
   }
 
-  finishEventReaction(eventId: string): void {
-    if (this.disposed || eventId !== 'eerie-melody') return;
+  finishEventReaction(_eventId: string): void {
+    if (this.disposed) return;
     this.clearEvent();
   }
 
@@ -320,12 +373,6 @@ export class SurvivalAudio {
     if (cue === 'dig-start' && this.midnightDigVoice === null) {
       this.midnightDigVoice = this.scope.play('midnightShovel');
       this.midnightDigRemaining = 6;
-    } else if (cue === 'run-start' && !this.midnightRunActive) {
-      this.midnightRunActive = true;
-      this.scope.startLoop('midnightMonsterRun');
-    } else if (cue === 'run-stop') {
-      this.midnightRunActive = false;
-      this.scope.stopLoop('midnightMonsterRun', 0.05);
     } else if (cue === 'attack' && !this.midnightAttackPlayed) {
       this.midnightAttackPlayed = true;
       this.scope.play('midnightMonsterAttack');
@@ -346,12 +393,14 @@ export class SurvivalAudio {
     this.midnightDigVoice?.stop(0.05);
     this.midnightDigVoice = null;
     this.midnightDigRemaining = 0;
-    this.midnightRunActive = false;
     this.midnightAttackPlayed = false;
-    this.scope.stopLoop('midnightMonsterRun', 0.05);
   }
 
   clearEvent(): void {
+    this.pendingShadowMeow = null;
+    this.shadowMeowDelay = 0;
+    this.planeFlybyVoice?.stop(0.08);
+    this.planeFlybyVoice = null;
     this.clearMidnightTour();
     this.scope.stopLoop('leak', 0.08);
     this.scope.stopLoop('tentacleMovement', 0.08);
@@ -421,5 +470,29 @@ export class SurvivalAudio {
     if (!this.eventMelodyActive) return;
     this.eventMelodyActive = false;
     this.scope.stopLoop('eerieMelody', fadeSeconds);
+  }
+
+  private drawMeow(): SoundId | null {
+    if (this.meowBag.length === 0) this.refillMeowBag();
+    const id = this.meowBag.pop() ?? null;
+    if (id !== null) this.lastMeow = id;
+    return id;
+  }
+
+  private refillMeowBag(): void {
+    this.meowBag.push(...CAT_MEOW_SOUNDS);
+    for (let index = this.meowBag.length - 1; index > 0; index -= 1) {
+      const unit = Math.min(0.999999, Math.max(0, this.random()));
+      const swapIndex = Math.floor(unit * (index + 1));
+      const selected = this.meowBag[index]!;
+      this.meowBag[index] = this.meowBag[swapIndex]!;
+      this.meowBag[swapIndex] = selected;
+    }
+    const nextIndex = this.meowBag.length - 1;
+    if (this.lastMeow === this.meowBag[nextIndex]) {
+      const replacement = this.meowBag[0]!;
+      this.meowBag[0] = this.meowBag[nextIndex]!;
+      this.meowBag[nextIndex] = replacement;
+    }
   }
 }

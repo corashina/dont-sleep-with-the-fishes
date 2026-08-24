@@ -169,11 +169,34 @@ const fragmentShader = `
     return 1.0 - smoothstep(0.72, 1.0, dot(p, p));
   }
 
-  float zigzagGrinShape(vec2 uv, float grin) {
-    vec2 p = uv - vec2(0.505 + grin * 0.008, 0.285);
-    p.y += p.x * 0.04;
-    float normalizedX = abs(p.x) / mix(0.345, 0.395, grin);
-    return 1.0 - smoothstep(0.86, 1.0, normalizedX);
+  float curvedFaceStroke(
+    vec2 uv,
+    vec2 center,
+    vec2 scale,
+    float skew,
+    float upperHalf
+  ) {
+    vec2 p = (uv - center) / scale;
+    p.x += p.y * skew;
+    float ring = 1.0 - smoothstep(0.055, 0.115, abs(length(p) - 0.84));
+    float halfMask = upperHalf > 0.5
+      ? smoothstep(-0.08, 0.16, p.y)
+      : smoothstep(-0.08, 0.16, -p.y);
+    return ring * halfMask;
+  }
+
+  float referenceGrinShape(vec2 uv, float grin) {
+    vec2 p = uv - vec2(0.505 + grin * 0.008, 0.27);
+    p.y += p.x * 0.025;
+    float normalizedX = abs(p.x) / mix(0.335, 0.39, grin);
+    float grinWidth = 1.0 - smoothstep(0.93, 1.0, normalizedX);
+    float edgeRise = pow(clamp(normalizedX, 0.0, 1.0), 2.4);
+    float upperEdge = 0.025 + edgeRise * 0.17;
+    float lowerEdge = -0.105 + edgeRise * 0.07
+      + sin((p.x + 0.43) * 38.0) * 0.008;
+    float aboveLower = smoothstep(lowerEdge - 0.008, lowerEdge + 0.008, p.y);
+    float belowUpper = 1.0 - smoothstep(upperEdge - 0.008, upperEdge + 0.008, p.y);
+    return grinWidth * aboveLower * belowUpper;
   }
 
   vec4 sampleMoon(
@@ -250,98 +273,72 @@ const fragmentShader = `
     );
     float moonClarity = 1.0 - uHaze * 0.72;
     float faceReveal = smoothstep(0.08, 0.28, uMoonFaceReveal);
-    float stareReveal = smoothstep(0.36, 0.43, uMoonFaceReveal);
     vec2 faceUv = moonUv;
-    float leftHookOuter = eyeShape(
+    float leftBrow = curvedFaceStroke(
       faceUv,
-      vec2(0.29, 0.7),
-      vec2(0.205, 0.105),
-      0.48
+      vec2(0.3, 0.7),
+      vec2(0.17, 0.18),
+      0.22,
+      1.0
     );
-    float leftHookCut = eyeShape(
+    float rightBrow = curvedFaceStroke(
       faceUv,
-      vec2(0.325, 0.66),
-      vec2(0.17, 0.075),
-      0.48
+      vec2(0.705, 0.7),
+      vec2(0.17, 0.18),
+      -0.22,
+      1.0
     );
-    float leftHook = max(0.0, leftHookOuter - leftHookCut);
-    float leftEyeCore = eyeShape(
+    float archedBrowShape = max(leftBrow, rightBrow);
+    float leftEyeSocket = eyeShape(
       faceUv,
-      vec2(0.325, 0.61),
-      vec2(0.155, 0.105),
-      0.72
+      vec2(0.305, 0.565),
+      vec2(0.17, 0.125),
+      0.82
     );
-    float rightHookOuter = eyeShape(
+    leftEyeSocket = max(leftEyeSocket, eyeShape(
       faceUv,
-      vec2(0.72, 0.69),
-      vec2(0.2, 0.102),
-      -0.5
+      vec2(0.39, 0.535),
+      vec2(0.085, 0.065),
+      0.92
+    ));
+    float rightEyeSocket = eyeShape(
+      faceUv,
+      vec2(0.7, 0.565),
+      vec2(0.17, 0.125),
+      -0.82
     );
-    float rightHookCut = eyeShape(
+    rightEyeSocket = max(rightEyeSocket, eyeShape(
       faceUv,
-      vec2(0.685, 0.65),
-      vec2(0.165, 0.072),
-      -0.5
+      vec2(0.615, 0.535),
+      vec2(0.085, 0.065),
+      -0.92
+    ));
+    float slantedEyeSockets = max(leftEyeSocket, rightEyeSocket);
+    float leftLowerLid = curvedFaceStroke(
+      faceUv,
+      vec2(0.31, 0.505),
+      vec2(0.145, 0.065),
+      0.08,
+      0.0
     );
-    float rightHook = max(0.0, rightHookOuter - rightHookCut);
-    float rightEyeCore = eyeShape(
+    float rightLowerLid = curvedFaceStroke(
       faceUv,
-      vec2(0.685, 0.6),
-      vec2(0.15, 0.1),
-      -0.76
+      vec2(0.695, 0.505),
+      vec2(0.145, 0.065),
+      -0.08,
+      0.0
     );
-    float hookedEyeMasks = max(
-      max(leftEyeCore, leftHook),
-      max(rightEyeCore, rightHook)
-    ) * faceReveal;
-    float eyeSlits = max(
-      eyeShape(
-        faceUv,
-        vec2(0.36, 0.61),
-        vec2(0.045, 0.021),
-        0.72
-      ),
-      eyeShape(
-        faceUv,
-        vec2(0.65, 0.6),
-        vec2(0.043, 0.02),
-        -0.76
-      )
-    ) * hookedEyeMasks * stareReveal;
-    float noseCut = eyeShape(
-      faceUv,
-      vec2(0.505, 0.485),
-      vec2(0.021, 0.057),
-      0.18
-    ) * faceReveal;
-    float grinWidth = zigzagGrinShape(faceUv, uMoonGrin);
-    vec2 grinUv = faceUv - vec2(0.505 + uMoonGrin * 0.008, 0.285);
-    grinUv.y += grinUv.x * 0.04;
-    float grinX = abs(grinUv.x) / mix(0.345, 0.395, uMoonGrin);
-    float grinLocalY = grinUv.y - grinX * grinX * 0.14;
-    float upperCellPosition = fract((faceUv.x + 0.02) * 10.0);
-    float upperPeak = 1.0 - abs(upperCellPosition - 0.5) * 2.0;
-    float upperSpikeEdge = 0.02 - upperPeak * 0.12;
-    float upperSpikes = smoothstep(
-      upperSpikeEdge - 0.008,
-      upperSpikeEdge + 0.008,
-      grinLocalY
-    ) * (1.0 - smoothstep(0.014, 0.024, grinLocalY));
-    float lowerCellPosition = fract((faceUv.x + 0.07) * 10.0);
-    float lowerPeak = 1.0 - abs(lowerCellPosition - 0.5) * 2.0;
-    float lowerSpikeEdge = -0.02 + lowerPeak * 0.12;
-    float lowerSpikes = smoothstep(-0.024, -0.014, grinLocalY)
-      * (1.0 - smoothstep(
-        lowerSpikeEdge - 0.008,
-        lowerSpikeEdge + 0.008,
-        grinLocalY
-      ));
-    float grinBridge = 1.0 - smoothstep(0.012, 0.022, abs(grinLocalY));
-    float zigzagGrin = grinWidth
-      * max(max(upperSpikes, lowerSpikes), grinBridge)
-      * faceReveal;
+    float lowerEyeArcs = max(leftLowerLid, rightLowerLid);
+    float splitNose = max(
+      eyeShape(faceUv, vec2(0.489, 0.43), vec2(0.032, 0.052), -0.45),
+      eyeShape(faceUv, vec2(0.521, 0.43), vec2(0.032, 0.052), 0.45)
+    );
+    float wideJaggedGrin = referenceGrinShape(faceUv, uMoonGrin);
     float faceInk = clamp(
-      max(max(hookedEyeMasks, noseCut), zigzagGrin),
+      max(
+        max(archedBrowShape, slantedEyeSockets),
+        max(max(lowerEyeArcs, splitNose), wideJaggedGrin)
+      ) * faceReveal,
       0.0,
       1.0
     );
@@ -349,11 +346,6 @@ const fragmentShader = `
       uMoonColor * moonSample.rgb,
       vec3(0.002, 0.003, 0.004),
       faceInk * 0.997
-    );
-    moonDisc = mix(
-      moonDisc,
-      uMoonColor * moonSample.rgb * 1.3,
-      eyeSlits * 0.96
     );
     color += moonDisc
       * moonSample.a

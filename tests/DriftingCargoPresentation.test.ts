@@ -19,7 +19,7 @@ function createPresentation(): DriftingCargoPresentation {
   };
   return new DriftingCargoPresentation(
     { barrel: new Group(), chest: new Group() },
-    { barrel: new Group(), chest: new Group() },
+    new Group(),
     water,
   );
 }

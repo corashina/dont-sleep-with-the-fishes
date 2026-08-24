@@ -33,11 +33,6 @@ export interface DriftingCargoModels {
   readonly chest: Group;
 }
 
-export interface DriftingCargoTargets {
-  readonly barrel: Object3D;
-  readonly chest: Object3D;
-}
-
 export interface DriftingCargoInteractionProjection {
   readonly variant: DriftingCargoKind;
   readonly bounds: ProjectedBoatBounds;
@@ -85,7 +80,7 @@ export class DriftingCargoPresentation {
 
   constructor(
     models: DriftingCargoModels,
-    private readonly targets: DriftingCargoTargets,
+    private readonly sternTarget: Object3D,
     private readonly water: DriftingWater,
   ) {
     this.root.name = 'drifting-cargo-presentation';
@@ -329,9 +324,8 @@ export class DriftingCargoPresentation {
   }
 
   private readTargetPose(variant: DriftingCargoKind): void {
-    const target = this.targets[variant];
-    target.getWorldPosition(this.targetPositionScratch);
-    target.getWorldQuaternion(this.targetQuaternionScratch);
+    this.sternTarget.getWorldPosition(this.targetPositionScratch);
+    this.sternTarget.getWorldQuaternion(this.targetQuaternionScratch);
     this.root.worldToLocal(this.targetPositionScratch);
     this.root.getWorldQuaternion(this.quaternionScratch).invert();
     this.targetQuaternionScratch.premultiply(this.quaternionScratch);

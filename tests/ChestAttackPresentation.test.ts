@@ -14,6 +14,7 @@ function createFixture() {
   cameraRig.add(camera);
   const originalQuaternion = camera.quaternion.clone();
   const chestRoot = new Group();
+  chestRoot.position.set(0, 0.22, 2.15);
   const chestPoses: ChestEventPose[] = [];
   const netPoses: MutableSupplyPose[] = [];
   const emitCue = vi.fn();
@@ -55,7 +56,7 @@ function createFixture() {
 }
 
 describe('ChestAttackPresentation', () => {
-  it('plays wood movement while the player searches left and right', async () => {
+  it('plays wood movement without moving the camera', async () => {
     const fixture = createFixture();
     fixture.presentation.stage();
     const reveal = fixture.presentation.reveal();
@@ -65,13 +66,16 @@ describe('ChestAttackPresentation', () => {
       cue: 'wood',
     });
     fixture.presentation.update(0.6, 0.6);
-    expect(fixture.presentation.root.userData.searchLeft).toBe(1);
-    expect(fixture.camera.quaternion.toArray()).not.toEqual(
+    expect(fixture.camera.quaternion.toArray()).toEqual(
       fixture.originalQuaternion.toArray(),
     );
     fixture.presentation.update(1.4, 0.8);
-    expect(fixture.presentation.root.userData.searchRight).toBe(1);
+    expect(fixture.camera.quaternion.toArray()).toEqual(
+      fixture.originalQuaternion.toArray(),
+    );
     fixture.presentation.update(2.4, 1);
+    expect(fixture.presentation.root.userData.state).toBe('warning');
+    fixture.presentation.update(2.8, 0.4);
     await reveal;
 
     expect(fixture.camera.quaternion.toArray()).toEqual(
@@ -90,10 +94,16 @@ describe('ChestAttackPresentation', () => {
     });
     fixture.presentation.update(0.6, 0.6);
     fixture.presentation.update(1.15, 0.55);
+    expect(fixture.presentation.root.userData.state).toBe('turning-to-attack');
+    fixture.presentation.update(1.33, 0.18);
     await attack;
 
     const direction = fixture.camera.getWorldDirection(new Vector3());
-    expect(direction.z).toBeGreaterThan(0.9);
+    const directionToChest = new Vector3(0, 0.22, 2.15)
+      .sub(fixture.camera.getWorldPosition(new Vector3()))
+      .normalize();
+    expect(direction.dot(directionToChest)).toBeGreaterThan(0.999);
+    expect(direction.y).toBeLessThan(-0.5);
     expect(fixture.chestPoses.at(-1)).toMatchObject({ mouthOpen: 1, bite: 1 });
     expect(fixture.presentation.root.userData.state).toBe('impact');
     expect(fixture.emitCue).toHaveBeenCalledExactlyOnceWith({
@@ -113,10 +123,16 @@ describe('ChestAttackPresentation', () => {
     });
     fixture.presentation.update(0.75, 0.75);
     fixture.presentation.update(1.45, 0.7);
+    expect(fixture.presentation.root.userData.state).toBe('binding');
+    fixture.presentation.update(1.67, 0.22);
     await binding;
 
     const direction = fixture.camera.getWorldDirection(new Vector3());
-    expect(direction.z).toBeGreaterThan(0.9);
+    const directionToChest = new Vector3(0, 0.22, 2.15)
+      .sub(fixture.camera.getWorldPosition(new Vector3()))
+      .normalize();
+    expect(direction.dot(directionToChest)).toBeGreaterThan(0.999);
+    expect(direction.y).toBeLessThan(-0.5);
     expect(fixture.pinEventActor).toHaveBeenCalledWith('fishingNet-1');
     expect(fixture.netPoses.at(-1)).toMatchObject({ x: 0.96, z: 3.24 });
     expect(fixture.chestPoses.at(-1)).toMatchObject({ bound: 1, bite: 0 });

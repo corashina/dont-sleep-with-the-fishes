@@ -127,7 +127,7 @@ export class EventItemEffects {
       ? clamp01Unchecked(sample.cameraSpaceBlend) * 3.4
       : 0;
 
-    if (sample.effectKind === 'none' || sample.effectKind === 'bucket-cover') return;
+    if (sample.effectKind === 'none') return;
 
     const primary = clamp01Unchecked(sample.primaryEffect);
     const secondary = clamp01Unchecked(sample.secondaryEffect);

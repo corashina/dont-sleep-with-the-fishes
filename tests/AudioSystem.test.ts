@@ -82,13 +82,29 @@ class FakeAudioBackend implements AudioBackend {
 }
 
 describe('AudioSystem', () => {
-  it('registers Midnight Tour sounds with the required loop settings', () => {
+  it('plays every pet meow once before reshuffling without an adjacent repeat', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(
+      AudioSystem.forTest(backend).createScope(),
+      () => 0,
+    );
+
+    for (let index = 0; index < 14; index += 1) audio.petCarlitos();
+
+    const ids = backend.voices.map(({ id }) => id);
+    expect(new Set(ids.slice(0, 7))).toHaveLength(7);
+    expect(new Set(ids.slice(7, 14))).toHaveLength(7);
+    for (let index = 1; index < ids.length; index += 1) {
+      expect(ids[index]).not.toBe(ids[index - 1]);
+    }
+    expect(ids.every((id) => id.startsWith('catMeow'))).toBe(true);
+  });
+
+  it('registers Midnight Tour sounds with the required settings', () => {
     expect(EVENT_ONLY_SOUND_IDS).toEqual(expect.arrayContaining([
       'midnightShovel',
-      'midnightMonsterRun',
       'midnightMonsterAttack',
     ]));
-    expect(AUDIO_MANIFEST.midnightMonsterRun.loop).toBe(true);
     expect(AUDIO_MANIFEST.midnightShovel.loop).toBe(false);
     expect(AUDIO_MANIFEST.midnightMonsterAttack.loop).toBe(false);
   });
@@ -100,18 +116,12 @@ describe('AudioSystem', () => {
     audio.midnightTourCue('dig-start');
     audio.midnightTourCue('dig-start');
     audio.update(6);
-    audio.midnightTourCue('run-start');
-    audio.midnightTourCue('run-start');
-    audio.midnightTourCue('run-stop');
     audio.midnightTourCue('attack');
     audio.clearMidnightTour();
 
     expect(backend.voices.filter(({ id }) => id === 'midnightShovel')).toHaveLength(1);
-    expect(backend.voices.filter(({ id }) => id === 'midnightMonsterRun')).toHaveLength(1);
     expect(backend.voices.filter(({ id }) => id === 'midnightMonsterAttack')).toHaveLength(1);
     expect(backend.voices.find(({ id }) => id === 'midnightShovel')?.stop)
-      .toHaveBeenCalledExactlyOnceWith(0.05);
-    expect(backend.voices.find(({ id }) => id === 'midnightMonsterRun')?.stop)
       .toHaveBeenCalledExactlyOnceWith(0.05);
   });
 
@@ -186,7 +196,7 @@ describe('AudioSystem', () => {
     const movement = backend.voices.at(-1)!;
     expect(movement.id).toBe('tentacleMovement');
 
-    audio.beginEvent('school-of-fish');
+    audio.finishEventReaction('snatcher');
     expect(movement.stop).toHaveBeenCalledExactlyOnceWith(0.08);
   });
 
@@ -198,7 +208,7 @@ describe('AudioSystem', () => {
     const leak = backend.voices.at(-1)!;
     expect(leak.id).toBe('leak');
 
-    audio.clearEvent();
+    audio.finishEventReaction('leak');
     expect(leak.stop).toHaveBeenCalledExactlyOnceWith(0.08);
   });
 
@@ -210,8 +220,21 @@ describe('AudioSystem', () => {
     const tornadoWind = backend.voices.at(-1)!;
     expect(tornadoWind.id).toBe('tornadoWind');
 
-    audio.clearEvent();
+    audio.finishEventReaction('tornado');
     expect(tornadoWind.stop).toHaveBeenCalledExactlyOnceWith(0.08);
+  });
+
+  it('plays and owns the Plane flyby sound', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.beginEvent('plane');
+    const flyby = backend.voices.at(-1)!;
+    expect(flyby.id).toBe('planeFlyby');
+    expect(AUDIO_MANIFEST.planeFlyby.loop).toBe(false);
+
+    audio.clearEvent();
+    expect(flyby.stop).toHaveBeenCalledExactlyOnceWith(0.08);
   });
 
   it('uses a yawn instead of the event sting for Bad Sleep', () => {
@@ -221,6 +244,45 @@ describe('AudioSystem', () => {
     audio.eventReveal('bad-sleep');
 
     expect(backend.voices.map(({ id }) => id)).toEqual(['yawn']);
+  });
+
+  it('uses the spirit breath instead of the event sting for Ghosts', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.eventReveal('ghosts');
+
+    expect(backend.voices.map(({ id }) => id)).toEqual(['ghostSpiritBreath']);
+  });
+
+  it('starts two distinct overlapping meows for Shadow Figure', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(
+      AudioSystem.forTest(backend).createScope(),
+      () => 0,
+    );
+
+    audio.eventReveal('shadow-figure');
+
+    expect(backend.voices[0]?.id).toBe('eventReveal');
+    expect(backend.voices[1]?.id).toMatch(/^catMeow/);
+    audio.update(0.1);
+    expect(backend.voices).toHaveLength(2);
+    audio.update(0.03);
+    expect(backend.voices[2]?.id).toMatch(/^catMeow/);
+    expect(backend.voices[2]?.id).not.toBe(backend.voices[1]?.id);
+    expect(backend.voices[1]?.stop).not.toHaveBeenCalled();
+  });
+
+  it('cancels the second Shadow Figure meow when the event clears', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.eventReveal('shadow-figure');
+    audio.clearEvent();
+    audio.update(1);
+
+    expect(backend.voices.filter(({ id }) => id.startsWith('catMeow'))).toHaveLength(1);
   });
 
   it('plays the recovered chest sound when the chest opens', () => {

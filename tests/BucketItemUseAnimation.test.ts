@@ -15,7 +15,7 @@ function bucketSample(progress: number) {
 
 function flashlightSample(progress: number) {
   const sample = createEventItemUseSample();
-  sampleEventItemUse('flashlight-flash', 'flashlight', progress, sample);
+  sampleEventItemUse('flashlight-signal', 'flashlight', progress, sample);
   return sample;
 }
 

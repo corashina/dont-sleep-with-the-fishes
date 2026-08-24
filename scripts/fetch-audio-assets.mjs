@@ -3,11 +3,21 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { splitMp3ByWindows } from './split-mp3.mjs';
 
 const scriptRoot = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(scriptRoot, '..');
 const assetRoot = join(projectRoot, 'src', 'assets', 'audio');
 const force = process.argv.includes('--force');
+const catMeowWindows = [
+  [0.25, 1.22],
+  [1.95, 3.05],
+  [3.88, 4.93],
+  [5.66, 7.02],
+  [7.5, 8.9],
+  [9.45, 11.02],
+  [11.32, 12.68],
+];
 
 const freesoundSources = [
   ['menuAmbient', 'Tim_Verberne', '482167'],
@@ -58,6 +68,8 @@ const freesoundSources = [
   ['yawn', 'spookymodem', '202105'],
   ['nightfall', 'DeVern', '427533'],
   ['eventReveal', 'nomiqbomi', '578362'],
+  ['planeFlyby', 'straget', '403316'],
+  ['ghostSpiritBreath', 'timgormly', '152721'],
   ['tornadoWind', 'Julien_Matthey', '557188'],
   ['leak', 'colinpoh', '146346'],
   ['tentacleMovement', 'iampagan', '177017'],
@@ -126,6 +138,30 @@ async function fetchFreesound([id, user, number, license = 'cc0']) {
   process.stdout.write(`Downloaded ${basename(destination)}\n`);
 }
 
+async function fetchCatMeows() {
+  const destinations = catMeowWindows.map((_, index) => (
+    join(assetRoot, `catMeow${index + 1}.mp3`)
+  ));
+  if (!force && (await Promise.all(destinations.map(hasFile))).every(Boolean)) {
+    return destinations;
+  }
+  const pageUrl = 'https://freesound.org/people/Kinoton/sounds/584895/';
+  const page = (await fetchBuffer(pageUrl)).toString('utf8');
+  if (!page.includes('Creative Commons 0')) {
+    throw new Error(`The page did not return its cc0 record: ${pageUrl}`);
+  }
+  const previewUrl = page.match(
+    /https:\/\/cdn\.freesound\.org\/previews\/[^"']+-hq\.mp3/,
+  )?.[0];
+  if (previewUrl === undefined) throw new Error(`No HQ MP3 preview: ${pageUrl}`);
+  const clips = splitMp3ByWindows(await fetchBuffer(previewUrl), catMeowWindows);
+  await Promise.all(clips.map(async (clip, index) => {
+    await writeFile(destinations[index], clip);
+    process.stdout.write(`Downloaded ${basename(destinations[index])}\n`);
+  }));
+  return destinations;
+}
+
 async function runPool(entries, worker, width) {
   let cursor = 0;
   const runners = Array.from({ length: width }, async () => {
@@ -139,7 +175,10 @@ async function runPool(entries, worker, width) {
 }
 
 await mkdir(assetRoot, { recursive: true });
-await runPool(freesoundSources, fetchFreesound, 4);
+const [, catMeowDestinations] = await Promise.all([
+  runPool(freesoundSources, fetchFreesound, 4),
+  fetchCatMeows(),
+]);
 
 const dawnDestination = join(assetRoot, 'dawn.wav');
 if (!await hasFile(dawnDestination)) {
@@ -163,6 +202,7 @@ if (!await hasFile(dawnDestination)) {
 
 const results = await Promise.all([
   ...freesoundSources.map(([id]) => stat(join(assetRoot, `${id}.mp3`))),
+  ...catMeowDestinations.map((path) => stat(path)),
   stat(dawnDestination),
 ]);
 if (results.some(({ size }) => size <= 0)) throw new Error('An audio asset is empty');

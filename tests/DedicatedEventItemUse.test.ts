@@ -142,6 +142,45 @@ function createActor(parent: Group, instanceId: ItemInstanceId): BorrowedSupplyA
 }
 
 describe('dedicated event item use', () => {
+  it('warms Anglerfish shaders while the event cover is still closed', () => {
+    const environment: DedicatedEventEnvironment = {
+      eventModels: createEventModels(),
+      supplies: {} as DedicatedEventEnvironment['supplies'],
+      carlitos: {} as DedicatedEventEnvironment['carlitos'],
+      vortexWave: createInactiveVortexWaveState(),
+      sampleWorldWaveInto: (output) => Object.assign(output, createWaveSample()),
+      readWorldWaveAmplitudeScale: () => 1,
+    };
+    const presentation = new AnglerfishSwarmPresentation(environment);
+
+    presentation.stage({
+      eventId: 'swarm-of-anglerfish',
+      targetInstanceId: null,
+      variantSeed: 11,
+    });
+
+    const firstFish = presentation.worldRoot.getObjectByName('swarm-angler-1')!;
+    const firstMarker = presentation.worldRoot.getObjectByName('swarm-lure-marker-1')!;
+    const lights = presentation.worldRoot.children.filter(({ name }) => (
+      name.startsWith('swarm-lure-light-')
+    ));
+    expect(firstFish.visible).toBe(true);
+    expect(firstFish.scale.x).toBe(0.001);
+    expect(firstMarker.visible).toBe(true);
+    expect(firstMarker.scale.x).toBe(0.001);
+    expect(lights).toHaveLength(2);
+    expect(lights.every(({ visible }) => visible)).toBe(true);
+    expect(lights.every((light) => light.type === 'PointLight')).toBe(true);
+    expect(lights.every((light) => (light as { intensity?: number }).intensity === 0))
+      .toBe(true);
+
+    void presentation.reveal();
+    expect(firstFish.visible).toBe(false);
+    expect(firstMarker.visible).toBe(false);
+    expect(lights.every(({ visible }) => visible)).toBe(true);
+    presentation.dispose();
+  });
+
   it('pours Leak arcs from each spray point into the interior puddle', async () => {
     const environment: DedicatedEventEnvironment = {
       eventModels: createEventModels(),

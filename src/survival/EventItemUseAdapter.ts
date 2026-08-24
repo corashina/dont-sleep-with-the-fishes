@@ -398,12 +398,25 @@ export class EventItemUseAdapter {
     sample: Readonly<EventItemUseSample>,
     actor: BorrowedSupplyActor,
   ): void {
-    if (this.cameraFacingSurface === 'none' || sample.cameraSpaceBlend <= 0) return;
+    if (
+      this.cameraFacingSurface === 'none'
+      || sample.surfaceFacing === 'none'
+      || sample.cameraSpaceBlend <= 0
+    ) return;
 
     actor.root.updateWorldMatrix(true, false);
     actor.root.getWorldQuaternion(this.facingWorldQuaternion);
     actor.root.getWorldPosition(this.actorWorldPosition);
-    if (this.lockItemToHeldCamera) {
+    if (sample.surfaceFacing === 'target') {
+      const aimTarget = this.aimTarget;
+      if (aimTarget === null) return;
+      aimTarget.updateWorldMatrix(true, false);
+      aimTarget.getWorldPosition(this.targetWorldPosition);
+      this.facingNormal.subVectors(
+        this.targetWorldPosition,
+        this.actorWorldPosition,
+      );
+    } else if (this.lockItemToHeldCamera) {
       this.facingNormal.set(0, 0, 1)
         .applyQuaternion(this.heldCameraWorldQuaternion);
     } else {

@@ -24,7 +24,7 @@ function request(
     choiceId: 'flashlight',
     instanceId,
     itemId: 'flashlight',
-    context: 'flashlight-flash',
+    context: 'flashlight-signal',
     aimTarget,
   };
 }
@@ -101,6 +101,27 @@ describe('EventItemUseController', () => {
     expect(stowedPose.z).toBeCloseTo(0);
     expect(supplies.stowEventItemUntilDay).toHaveBeenCalledExactlyOnceWith(actor.instanceId);
     expect(clear).toHaveBeenCalledBefore(actor.release as ReturnType<typeof vi.fn>);
+    expect(actor.release).toHaveBeenCalledOnce();
+    adapter.dispose();
+  });
+
+  it('returns a recovered bucket to the boat instead of stowing it', async () => {
+    const { actor, adapter, controller, supplies } = setup();
+    const use = controller.play({
+      ...request(actor.instanceId),
+      eventId: 'leak',
+      choiceId: 'bucket',
+      itemId: 'bucket',
+      context: 'bucket-scoop',
+    });
+
+    controller.update(10);
+    await expect(use).resolves.toBe(true);
+    const reaction = controller.react(result(actor.instanceId));
+    controller.update(10);
+    await reaction;
+
+    expect(supplies.stowEventItemUntilDay).not.toHaveBeenCalled();
     expect(actor.release).toHaveBeenCalledOnce();
     adapter.dispose();
   });
@@ -193,7 +214,7 @@ describe('EventItemUseController', () => {
       onAction,
     });
 
-    controller.update(eventItemUseDuration('flashlight-flash'));
+    controller.update(eventItemUseDuration('flashlight-signal'));
     await use;
 
     expect(onAction).toHaveBeenCalledTimes(9);

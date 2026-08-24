@@ -145,6 +145,24 @@
       "sourceHasSkins": true,
       "sourceAnimationCount": 16,
       "downloadedOn": "2026-08-20"
+    },
+    "airplane": {
+      "id": "airplane",
+      "pageUrl": "https://poly.pizza/m/8VysVKMXN2J",
+      "publicId": "8VysVKMXN2J",
+      "resourceId": "13293400-c90f-4cc0-966a-7e07d38f7565",
+      "downloadUrl": "https://static.poly.pizza/13293400-c90f-4cc0-966a-7e07d38f7565.glb",
+      "sourceAssetId": "poly-pizza:13293400-c90f-4cc0-966a-7e07d38f7565",
+      "modelName": "Airplane",
+      "author": "Poly by Google",
+      "license": "CC-BY 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+      "pageAnimated": false,
+      "sha256": "2F9A5382E70BDBEF5D54024C6846A3A53389B889D73121159FB335352D311388",
+      "sourceTriangles": 1770,
+      "sourceHasSkins": false,
+      "sourceAnimationCount": 0,
+      "downloadedOn": "2026-08-23"
     }
   }
 }

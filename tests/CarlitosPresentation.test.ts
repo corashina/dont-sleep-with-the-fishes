@@ -1,11 +1,17 @@
 // Importance: 8/10 (scaled from 4/5). Protects companion pose, ownership, and action restoration.
 import {
+  Bone,
   BoxGeometry,
   BufferGeometry,
+  Float32BufferAttribute,
   Group,
   Material,
   Mesh,
   MeshStandardMaterial,
+  Skeleton,
+  SkinnedMesh,
+  Uint16BufferAttribute,
+  Vector3,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -13,7 +19,10 @@ import {
   carlitosPoseState,
   sampleCarlitosPoseInto,
 } from '../src/survival/carlitosMotion';
-import { CarlitosPresentation } from '../src/survival/CarlitosPresentation';
+import {
+  CARLITOS_PET_DURATION,
+  CarlitosPresentation,
+} from '../src/survival/CarlitosPresentation';
 import type { CarlitosSnapshot } from '../src/survival/CarlitosState';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 import { createTestPropModels } from './helpers/propModels';
@@ -33,6 +42,42 @@ function snapshot(
   };
 }
 
+const HAND_CHAINS = [
+  ['ThumbRoot', 'ThumbMiddle', 'ThumbTop'],
+  ['IndexF_lower', 'IndexF_middle', 'IndexF_tip'],
+  ['MiddleF_lower', 'MiddleF_middle', 'MiddleF_tip'],
+  ['RingF_lower', 'RingF_middle', 'RingF_tip'],
+  ['PinkyF_lower', 'PinkyF_middle', 'PinkyF_tip'],
+] as const;
+
+function riggedHand(): Group {
+  const root = new Group();
+  const bones: Bone[] = [];
+  for (const chain of HAND_CHAINS) {
+    let parent: Bone | null = null;
+    for (const name of chain) {
+      const bone = new Bone();
+      bone.name = name;
+      if (parent === null) root.add(bone);
+      else parent.add(bone);
+      bones.push(bone);
+      parent = bone;
+    }
+  }
+  const geometry = new BoxGeometry(1, 1, 1);
+  const vertexCount = geometry.getAttribute('position').count;
+  geometry.setAttribute('skinIndex', new Uint16BufferAttribute(
+    new Uint16Array(vertexCount * 4), 4,
+  ));
+  const weights = new Float32Array(vertexCount * 4);
+  for (let index = 0; index < vertexCount; index += 1) weights[index * 4] = 1;
+  geometry.setAttribute('skinWeight', new Float32BufferAttribute(weights, 4));
+  const mesh = new SkinnedMesh(geometry, new MeshStandardMaterial());
+  mesh.bind(new Skeleton(bones));
+  root.add(mesh);
+  return root;
+}
+
 describe('Carlitos motion', () => {
   it('uses the same mutable pose for a tactile pet beat', () => {
     const pose = createCarlitosPose();
@@ -41,13 +86,39 @@ describe('Carlitos motion', () => {
       status: 'hungry',
       action: 'pet',
       elapsed: 0.25,
-      duration: 0.8,
+      duration: CARLITOS_PET_DURATION,
     });
 
     expect(result).toBe(pose);
     expect(pose.headPitch).toBeLessThan(0);
     expect(pose.actionLean).toBeGreaterThan(0);
     expect(pose.handReach).toBeGreaterThan(0);
+    expect(pose.handCurl).toBeGreaterThan(0);
+  });
+
+  it('lifts and resets the hand between two one-way pet strokes', () => {
+    const pose = createCarlitosPose();
+    const sample = (progress: number) => sampleCarlitosPoseInto(pose, {
+      status: 'healthy',
+      action: 'pet',
+      elapsed: CARLITOS_PET_DURATION * progress,
+      duration: CARLITOS_PET_DURATION,
+    });
+
+    sample(0.27);
+    expect(pose.handContact).toBeGreaterThan(0.9);
+    expect(pose.handLift).toBeCloseTo(0);
+    const firstStroke = pose.handStroke;
+
+    sample(0.44);
+    expect(pose.handContact).toBeCloseTo(0);
+    expect(pose.handLift).toBeGreaterThan(0.9);
+    expect(pose.handStroke).toBeLessThan(firstStroke);
+
+    sample(0.58);
+    expect(pose.handContact).toBeGreaterThan(0.9);
+    expect(pose.handLift).toBeCloseTo(0);
+    expect(pose.handStroke).toBeGreaterThan(0);
   });
 
   it('selects sick, starving, unhappy, hungry, then healthy state priority', () => {
@@ -136,7 +207,52 @@ describe('CarlitosPresentation', () => {
     propModels.dispose();
   });
 
-  it('plays Pet and Feed, then hides props and restores the base pose', async () => {
+  it('uses the rigged hand for two smooth pet strokes and one contact cue', async () => {
+    const propModels = createTestPropModels();
+    const createEventModel = vi.spyOn(propModels, 'createEventModel')
+      .mockReturnValue({ root: riggedHand(), animations: [] });
+    const companion = new CarlitosPresentation(propModels);
+    companion.sync(snapshot({ hunger: 1 }));
+    const poseRoot = companion.root.getObjectByName('carlitos-pose')!;
+    const hand = companion.root.getObjectByName('carlitos-petting-hand')!;
+    const food = companion.root.getObjectByName('carlitos-food')!;
+    const baseRotationX = poseRoot.rotation.x;
+    const onContact = vi.fn();
+
+    const pet = companion.play('pet', onContact);
+    companion.update(CARLITOS_PET_DURATION * 0.24);
+    expect(hand.visible).toBe(true);
+    expect(food.visible).toBe(false);
+    expect(poseRoot.rotation.x).not.toBe(baseRotationX);
+    expect(hand.userData.modelKind).toBe('rigged');
+    expect(hand.scale.toArray()).toEqual([0.32, 0.32, 0.32]);
+    const palmNormal = new Vector3(0, 1, 0).applyQuaternion(hand.quaternion);
+    expect(palmNormal.dot(new Vector3(0, 1, 0))).toBeGreaterThan(0.97);
+    expect(onContact).toHaveBeenCalledOnce();
+    expect(hand.position.x).toBeCloseTo(-0.04);
+    expect(hand.position.z).toBeCloseTo(-0.36);
+    const firstStrokeY = hand.position.y;
+    companion.update(CARLITOS_PET_DURATION * 0.1);
+    expect(hand.position.y).toBeLessThan(firstStrokeY - 0.04);
+    expect(hand.position.y).toBeLessThan(0.38);
+    expect(hand.position.x).toBeCloseTo(-0.04);
+    expect(hand.position.z).toBeCloseTo(-0.36);
+    const contactY = hand.position.y;
+    companion.update(CARLITOS_PET_DURATION * 0.12);
+    expect(hand.position.y).toBeGreaterThan(contactY + 0.1);
+    expect(onContact).toHaveBeenCalledOnce();
+    companion.update(CARLITOS_PET_DURATION * 0.54);
+    await pet;
+    expect(hand.visible).toBe(false);
+    expect(poseRoot.rotation.x).toBeCloseTo(baseRotationX);
+
+    expect(createEventModel).toHaveBeenCalledWith('riggedHand');
+
+    companion.dispose();
+    propModels.dispose();
+  });
+
+  it('plays Feed, then hides its prop and restores the base pose', async () => {
     const propModels = createTestPropModels();
     const companion = new CarlitosPresentation(propModels);
     companion.sync(snapshot({ hunger: 1 }));
@@ -144,16 +260,6 @@ describe('CarlitosPresentation', () => {
     const hand = companion.root.getObjectByName('carlitos-petting-hand')!;
     const food = companion.root.getObjectByName('carlitos-food')!;
     const baseRotationX = poseRoot.rotation.x;
-
-    const pet = companion.play('pet');
-    companion.update(0.3);
-    expect(hand.visible).toBe(true);
-    expect(food.visible).toBe(false);
-    expect(poseRoot.rotation.x).not.toBe(baseRotationX);
-    companion.update(0.5);
-    await pet;
-    expect(hand.visible).toBe(false);
-    expect(poseRoot.rotation.x).toBeCloseTo(baseRotationX);
 
     const feed = companion.play('feed');
     companion.update(0.3);
@@ -188,6 +294,7 @@ describe('CarlitosPresentation', () => {
         update: vi.fn(),
         dispose: modelDispose,
       }),
+      createEventModel: () => null,
     })).toThrow(failure);
 
     expect(modelDispose).toHaveBeenCalledOnce();
@@ -195,28 +302,20 @@ describe('CarlitosPresentation', () => {
     expect(materialDispose).toHaveBeenCalledOnce();
   });
 
-  it('disposes partial hand resources when hand construction fails', () => {
+  it('keeps the obsolete block hand removed when the rigged model is absent', () => {
     const propModels = createTestPropModels();
-    const failure = new Error('petting hand construction failed');
-    const geometryDispose = vi.spyOn(BufferGeometry.prototype, 'dispose');
-    const materialDispose = vi.spyOn(Material.prototype, 'dispose');
+    vi.spyOn(propModels, 'createEventModel').mockReturnValue(null);
 
-    expect(() => new CarlitosPresentation(propModels, {
-      onPropPartCreated: (prop, part) => {
-        if (prop === 'hand' && part.name === 'carlitos-hand:thumb') {
-          throw failure;
-        }
-      },
-    })).toThrow(failure);
+    const companion = new CarlitosPresentation(propModels);
+    const hand = companion.root.getObjectByName('carlitos-petting-hand')!;
+    expect(hand.userData.modelKind).toBe('unavailable');
+    expect(hand.children).toHaveLength(0);
 
-    expect(geometryDispose).toHaveBeenCalledTimes(3);
-    expect(materialDispose).toHaveBeenCalledTimes(3);
-    geometryDispose.mockRestore();
-    materialDispose.mockRestore();
+    companion.dispose();
     propModels.dispose();
   });
 
-  it('disposes the completed hand and partial food when food construction fails', () => {
+  it('disposes the rigged hand and partial food when food construction fails', () => {
     const propModels = createTestPropModels();
     const failure = new Error('food construction failed');
     const geometryDispose = vi.spyOn(BufferGeometry.prototype, 'dispose');
@@ -230,8 +329,8 @@ describe('CarlitosPresentation', () => {
       },
     })).toThrow(failure);
 
-    expect(geometryDispose).toHaveBeenCalledTimes(8);
-    expect(materialDispose).toHaveBeenCalledTimes(5);
+    expect(geometryDispose).toHaveBeenCalledTimes(3);
+    expect(materialDispose).toHaveBeenCalledTimes(4);
     geometryDispose.mockRestore();
     materialDispose.mockRestore();
     propModels.dispose();
@@ -258,7 +357,7 @@ describe('CarlitosPresentation', () => {
       vi.spyOn(material, 'dispose')
     ));
 
-    expect(companion.root.getObjectByName('carlitos-hand:palm')).toBeDefined();
+    expect(companion.root.getObjectByName('event-model:riggedHand')).toBeDefined();
     expect(companion.root.getObjectByName('carlitos-food:bowl')).toBeDefined();
 
     companion.dispose();

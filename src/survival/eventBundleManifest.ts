@@ -21,7 +21,8 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
   'swarm-of-anglerfish': { models: ['anglerFish'], sounds: [] },
   tornado: { models: ['tornadoCore'], sounds: ['tornadoWind'] },
   'man-in-the-fog': { models: ['fogMan'], sounds: [] },
-  ghosts: { models: ['ghost'], sounds: [] },
+  plane: { models: [], sounds: ['planeFlyby'] },
+  ghosts: { models: ['ghost'], sounds: ['ghostSpiritBreath'] },
   'eerie-melody': {
     models: ['siren'],
     sounds: ['eerieMelody'],
@@ -52,7 +53,6 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
     models: [],
     sounds: [
       'midnightShovel',
-      'midnightMonsterRun',
       'midnightMonsterAttack',
     ],
   },
