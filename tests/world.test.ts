@@ -71,6 +71,7 @@ import {
 import { createTestMoonTexture } from './helpers/skyAssets';
 import { createTestShip, createTestShipFurniture } from './helpers/shipFurniture';
 import { testPhysicsRuntime } from './helpers/physics';
+import { SHIP_SHELL_COLLIDERS_BASE } from './fixtures/shipGeometryBase';
 
 const physicsRuntime = await testPhysicsRuntime();
 
@@ -179,6 +180,21 @@ describe('world builders', () => {
       expect(meshCount(ship.root)).toBe(392);
       expect(resources.geometries).toHaveLength(85);
       expect(ship.shellColliders).toHaveLength(37);
+      expect(ship.shellColliders.map((collider) => [
+        collider.minX,
+        collider.maxX,
+        collider.minY,
+        collider.maxY,
+        collider.minZ,
+        collider.maxZ,
+        ...(collider.orientedFootprint ? [
+          collider.orientedFootprint.centerX,
+          collider.orientedFootprint.centerZ,
+          collider.orientedFootprint.halfWidth,
+          collider.orientedFootprint.halfDepth,
+          collider.orientedFootprint.rotationY,
+        ] : []),
+      ])).toEqual(SHIP_SHELL_COLLIDERS_BASE);
       expect(ship.arcColliders).toHaveLength(0);
       expect(ship.root.children.slice(0, 11).map(({ name }) => name)).toEqual([
         'main-hull-body',

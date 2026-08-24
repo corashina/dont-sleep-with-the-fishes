@@ -72,13 +72,63 @@ describe('ship hull geometry', () => {
         .toBe(context.materials.storageFloor);
       expect((context.root.getObjectByName('floor-lifeboatStation') as Mesh).material)
         .toBe(context.materials.dropoffArea);
+      const leftFootprint = context.root.getObjectByName(
+        'lifeboat-station-footprint-left',
+      ) as Mesh;
+      const rightFootprint = context.root.getObjectByName(
+        'lifeboat-station-footprint-right',
+      ) as Mesh;
+      expect(leftFootprint.material).toBe(context.materials.emergencyFootprint);
+      expect(rightFootprint.material).toBe(context.materials.emergencyFootprint);
+      expect(leftFootprint.position.toArray()).toEqual([6.220000000000001, 2.232, -0.38]);
+      expect(rightFootprint.position.toArray()).toEqual([6.380000000000001, 2.232, 0.38]);
+      expect(leftFootprint.rotation.toArray()).toEqual([0, 0.06, 0, 'XYZ']);
+      expect(rightFootprint.rotation.toArray()).toEqual([0, -0.06, 0, 'XYZ']);
+      expect(leftFootprint.scale.toArray()).toEqual([1, 1, 1]);
+      expect(rightFootprint.scale.toArray()).toEqual([1, 1, 1]);
+
+      const leftPositions = leftFootprint.geometry.getAttribute('position');
+      const rightPositions = rightFootprint.geometry.getAttribute('position');
+      expect(leftPositions.count).toBe(121);
+      expect(rightPositions.count).toBe(121);
+      expect(Array.from(rightPositions.array)).toEqual(Array.from(leftPositions.array));
+      const footprintSampleIndexes = [0, 1, 2, 10, 20, 30, 40, 50, 118, 119, 120];
+      expect(footprintSampleIndexes.map((index) => [
+        index,
+        leftPositions.getX(index),
+        leftPositions.getY(index),
+        leftPositions.getZ(index),
+      ])).toEqual([
+        [0, -0.6600000262260437, -8.57252763722393e-18, 0.14000000059604645],
+        [1, -0.6600000262260437, 8.57252763722393e-18, -0.14000000059604645],
+        [2, -0.6601700186729431, 9.367016417607637e-18, -0.15297499299049377],
+        [10, -0.5787299871444702, 1.3408351229662038e-17, -0.2189749926328659],
+        [20, -0.3383300006389618, 1.2673563382808733e-17, -0.20697499811649323],
+        [30, -0.06534624844789505, 1.20005435938366e-17, -0.19598375260829926],
+        [40, 0.21029125154018402, 1.614826954909696e-17, -0.2637212574481964],
+        [50, 0.5467875003814697, 1.4389676949364322e-17, -0.23500125110149384],
+        [118, -0.6528900265693665, -1.0763115311862386e-17, 0.17577500641345978],
+        [119, -0.6577600240707397, -1.0097213412061272e-17, 0.164900004863739],
+        [120, -0.6601700186729431, -9.367016417607637e-18, 0.15297499299049377],
+      ]);
+      leftFootprint.geometry.computeBoundingBox();
+      expect(leftFootprint.geometry.boundingBox!.min.toArray()).toEqual([
+        -0.6601700186729431,
+        -1.6992203877776636e-17,
+        -0.27750375866889954,
+      ]);
+      expect(leftFootprint.geometry.boundingBox!.max.toArray()).toEqual([
+        0.7099999785423279,
+        1.6992203877776636e-17,
+        0.27750375866889954,
+      ]);
       Object.entries(expectedBounds).forEach(([name, expected]) => {
         const bounds = new Box3().setFromObject(context.root.getObjectByName(name)!);
         bounds.min.toArray().forEach((value, index) => {
-          expect(value).toBeCloseTo(expected[index * 2]!);
+          expect(Math.abs(value - expected[index * 2]!)).toBeLessThanOrEqual(0.000001);
         });
         bounds.max.toArray().forEach((value, index) => {
-          expect(value).toBeCloseTo(expected[index * 2 + 1]!);
+          expect(Math.abs(value - expected[index * 2 + 1]!)).toBeLessThanOrEqual(0.000001);
         });
       });
       expect(result.waterExclusion).toEqual({
