@@ -68,7 +68,10 @@ import { BoatCameraController } from './BoatCameraController';
 import { CarlitosDelegationPresentation } from './CarlitosDelegationPresentation';
 import { CarlitosPresentation } from './CarlitosPresentation';
 import { ChestDisplay } from './ChestDisplay';
-import { DivePresentationController } from './DivePresentationController';
+import {
+  DivePresentationController,
+  type DivePlayOptions,
+} from './DivePresentationController';
 import type { DangerousWatersBoatReaction } from './DangerousWatersPresentation';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
 import type { EventPresentationAdapter } from './EventPresentationAdapter';
@@ -850,9 +853,9 @@ export class BoatWorld {
     );
   }
 
-  playDive(instanceId: ItemInstanceId, onWaterImpact: () => void): Promise<void> {
+  playDive(instanceId: ItemInstanceId, options: DivePlayOptions): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    return this.diveController.play(instanceId, onWaterImpact);
+    return this.diveController.play(instanceId, options);
   }
 
   clearDivePresentation(): void {

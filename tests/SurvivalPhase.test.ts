@@ -708,9 +708,12 @@ function createDiveRig(options: {
     return outcome;
   });
   let impact: () => void = () => undefined;
-  const playDive = vi.fn((instanceId: ItemInstanceId, onWaterImpact: () => void) => {
+  const playDive = vi.fn((instanceId: ItemInstanceId, options: {
+    readonly onWaterImpact: () => void;
+    readonly revealUnderwaterScene: boolean;
+  }) => {
     calls.push(`playDive:${instanceId}`);
-    impact = onWaterImpact;
+    impact = options.onWaterImpact;
     return sequence.promise;
   });
   const world = {
@@ -925,7 +928,10 @@ describe('SurvivalPhase orchestration', () => {
 
     rig.phase.handleAction('dive');
 
-    expect(rig.world.playDive).toHaveBeenCalledWith('scubaSet-1', expect.any(Function));
+    expect(rig.world.playDive).toHaveBeenCalledWith('scubaSet-1', {
+      onWaterImpact: expect.any(Function),
+      revealUnderwaterScene: false,
+    });
     rig.phase.dispose();
   });
 

@@ -3,7 +3,9 @@ import {
   BoxGeometry,
   Group,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
+  PlaneGeometry,
   PerspectiveCamera,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
@@ -87,7 +89,10 @@ describe('DivePresentationController', () => {
       controller,
     } = createHarness();
     const impact = vi.fn();
-    const dive = controller.play(FIRST_SCUBA, impact);
+    const dive = controller.play(FIRST_SCUBA, {
+      onWaterImpact: impact,
+      revealUnderwaterScene: false,
+    });
 
     expect(supplies.setPresentationItemHidden).toHaveBeenCalledWith(FIRST_SCUBA, true);
     controller.update(81.1, 1.1);
@@ -102,6 +107,12 @@ describe('DivePresentationController', () => {
     controller.update(85.8, 2.2);
     await dive;
 
+    const veil = camera.getObjectByName('dive-water-veil') as Mesh<
+      PlaneGeometry,
+      MeshBasicMaterial
+    >;
+    expect(veil.material.opacity).toBeCloseTo(1);
+
     controller.clear();
     expect(supplies.setPresentationItemHidden).toHaveBeenLastCalledWith(
       FIRST_SCUBA,
@@ -115,8 +126,14 @@ describe('DivePresentationController', () => {
   it('restores the old item before a replacement hides the new item', async () => {
     const { supplies, controller } = createHarness();
 
-    const first = controller.play(FIRST_SCUBA, () => undefined);
-    const second = controller.play(SECOND_SCUBA, () => undefined);
+    const first = controller.play(FIRST_SCUBA, {
+      onWaterImpact: () => undefined,
+      revealUnderwaterScene: false,
+    });
+    const second = controller.play(SECOND_SCUBA, {
+      onWaterImpact: () => undefined,
+      revealUnderwaterScene: false,
+    });
     await first;
 
     expect(supplies.setPresentationItemHidden.mock.calls.slice(0, 3)).toEqual([
@@ -131,7 +148,10 @@ describe('DivePresentationController', () => {
 
   it('settles active work for visibility and disposes once', async () => {
     const { supplies, controller } = createHarness();
-    const dive = controller.play(FIRST_SCUBA, () => undefined);
+    const dive = controller.play(FIRST_SCUBA, {
+      onWaterImpact: () => undefined,
+      revealUnderwaterScene: false,
+    });
     controller.update(1.1, 1.1);
 
     controller.settleForVisibilityChange();
@@ -144,7 +164,10 @@ describe('DivePresentationController', () => {
 
     controller.dispose();
     controller.dispose();
-    await expect(controller.play(SECOND_SCUBA, () => undefined)).resolves.toBeUndefined();
+    await expect(controller.play(SECOND_SCUBA, {
+      onWaterImpact: () => undefined,
+      revealUnderwaterScene: false,
+    })).resolves.toBeUndefined();
     expect(supplies.setPresentationItemHidden).not.toHaveBeenCalledWith(
       SECOND_SCUBA,
       true,
@@ -154,7 +177,10 @@ describe('DivePresentationController', () => {
   it('settles the dive before rethrowing the first item cleanup error', async () => {
     const { camera, initialPosition, supplies, controller } = createHarness();
     const cleanupError = new Error('item restore failed');
-    const dive = controller.play(FIRST_SCUBA, () => undefined);
+    const dive = controller.play(FIRST_SCUBA, {
+      onWaterImpact: () => undefined,
+      revealUnderwaterScene: false,
+    });
     controller.update(1.1, 1.1);
     supplies.setPresentationItemHidden.mockImplementationOnce(() => {
       throw cleanupError;
@@ -164,6 +190,28 @@ describe('DivePresentationController', () => {
     await dive;
     expect(camera.position.toArray()).toEqual(initialPosition.toArray());
     expect(() => controller.clear()).not.toThrow();
+    controller.dispose();
+  });
+
+  it('reveals the underwater scene until clear restores the camera', async () => {
+    const { camera, initialPosition, controller } = createHarness();
+    const impact = vi.fn();
+    const dive = controller.play(FIRST_SCUBA, {
+      onWaterImpact: impact,
+      revealUnderwaterScene: true,
+    });
+
+    controller.update(83.6, 3.6);
+    controller.update(85.8, 2.2);
+    await dive;
+
+    const veil = camera.getObjectByName('dive-water-veil') as Mesh<
+      PlaneGeometry,
+      MeshBasicMaterial
+    >;
+    expect(veil.material.opacity).toBeCloseTo(0.28);
+    controller.clear();
+    expect(camera.position.toArray()).toEqual(initialPosition.toArray());
     controller.dispose();
   });
 });

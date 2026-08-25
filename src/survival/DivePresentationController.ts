@@ -8,8 +8,13 @@ import type { ItemInstanceId } from '../game/ItemState';
 import type { WaveSample } from '../ocean/WaveField';
 import { ignoreCleanupError, runCleanupSteps } from '../world/SceneResources';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
-import { DivePresentation } from './DivePresentation';
+import {
+  DivePresentation,
+  type DivePlayOptions,
+} from './DivePresentation';
 import type { WorldWaveSampler } from './eventPresentationTypes';
+
+export type { DivePlayOptions } from './DivePresentation';
 
 const DIVE_STARBOARD_POSITION = new Vector3(1.66, 0.76, -1.2);
 const DIVE_LEFT_TURN = new Quaternion().setFromAxisAngle(
@@ -53,14 +58,14 @@ export class DivePresentationController {
     });
   }
 
-  play(instanceId: ItemInstanceId, onWaterImpact: () => void): Promise<void> {
+  play(instanceId: ItemInstanceId, options: DivePlayOptions): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.clear();
     this.activeItemId = instanceId;
     this.elapsed = 0;
     try {
       this.environment.supplies.setPresentationItemHidden(instanceId, true);
-      return this.presentation.start(onWaterImpact);
+      return this.presentation.start(options);
     } catch (error) {
       ignoreCleanupError(() => this.clear());
       throw error;
