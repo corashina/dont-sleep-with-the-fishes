@@ -535,6 +535,7 @@ describe('DriftingItemFlow', () => {
         enterDriftingItemView: vi.fn(async () => undefined),
         exitDriftingItemView: vi.fn(async () => undefined),
         retrieveDriftingItem: vi.fn(async () => undefined),
+        searchDriftingItem: vi.fn(async () => undefined),
         delegateDriftingItem: vi.fn(async () => undefined),
         recedeDriftingItem: vi.fn(async () => undefined),
         projectEventInteractionBounds: vi.fn(() => ({
