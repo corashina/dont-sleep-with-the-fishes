@@ -51,6 +51,9 @@ function createRig() {
     delegateDriftingItem: vi.fn(async (eventId: string) => {
       calls.push(`delegate:${eventId}`);
     }),
+    searchDriftingItem: vi.fn(async (eventId: string) => {
+      calls.push(`search:${eventId}`);
+    }),
     recedeDriftingItem: vi.fn(async (eventId: string) => {
       calls.push(`recede:${eventId}`);
     }),
@@ -150,6 +153,35 @@ describe('DriftingItemFlow', () => {
       `resolve:${choiceId}`,
       'hide-focus',
       animationCall,
+      'after-animation',
+      'busy',
+      'exit',
+      'hide-focus',
+      'clear-event',
+      'render',
+      'ready',
+      'restore-focus',
+    ]);
+  });
+
+  it('uses the shared focus flow for Empty Lifeboat search', async () => {
+    const rig = createRig();
+    await rig.flow.enter('empty-lifeboat', [
+      { id: 'search', label: 'Search It', unavailableReason: null },
+      { id: 'sleep', label: 'Let It Drift', unavailableReason: null },
+    ]);
+    rig.calls.length = 0;
+
+    await rig.flow.choose('search');
+
+    expect(rig.calls).toEqual([
+      'confirm',
+      'event-resolving',
+      'busy',
+      'beat:search',
+      'resolve:search',
+      'hide-focus',
+      'search:empty-lifeboat',
       'after-animation',
       'busy',
       'exit',

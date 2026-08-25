@@ -295,6 +295,7 @@ function createDriftingItemRig(
     exit: deferred(),
     retrieve: deferred(),
     delegate: deferred(),
+    search: deferred(),
     recede: deferred(),
   };
   const world = {
@@ -315,6 +316,10 @@ function createDriftingItemRig(
     delegateDriftingItem: vi.fn((selectedEventId: DriftingItemEventId) => {
       calls.push(`delegate:${selectedEventId}`);
       return animations.delegate.promise;
+    }),
+    searchDriftingItem: vi.fn((selectedEventId: DriftingItemEventId) => {
+      calls.push(`search:${selectedEventId}`);
+      return animations.search.promise;
     }),
     recedeDriftingItem: vi.fn((selectedEventId: DriftingItemEventId) => {
       calls.push(`recede:${selectedEventId}`);
@@ -1003,6 +1008,53 @@ describe('SurvivalPhase orchestration', () => {
     rig.phase.requestRestart();
 
     expect(rig.cancelDive).toHaveBeenCalledOnce();
+    rig.phase.dispose();
+  });
+
+  it('shows one Empty Lifeboat supply before it returns from focus', async () => {
+    const rig = createDriftingItemRig('empty-lifeboat');
+    const rewardHold = deferred();
+    const showRewardResult = vi.fn(() => {
+      rig.calls.push('show-reward');
+      return rewardHold.promise;
+    });
+    rig.ui.showRewardResult = showRewardResult;
+    await revealDriftingItem(rig);
+    await enterDriftingItemFocus(rig);
+
+    expect(rig.showDriftingItemFocus.mock.calls[0]![0].choices).toEqual([
+      {
+        id: 'search',
+        label: 'Search It',
+        unavailableReason: null,
+        anchorId: 'event:empty-lifeboat',
+        energyCost: 1,
+        energyOwner: 'player',
+      },
+      { id: 'sleep', label: 'Let It Drift', unavailableReason: null },
+    ]);
+
+    rig.ui.onEventChoice?.('search');
+    await flushPromises();
+    expect(rig.world.searchDriftingItem).toHaveBeenCalledExactlyOnceWith('empty-lifeboat');
+    expect(showRewardResult).not.toHaveBeenCalled();
+
+    rig.animations.search.resolve();
+    await flushPromises();
+    expect(showRewardResult).toHaveBeenCalledExactlyOnceWith({
+      title: 'LIFEBOAT SUPPLY',
+      reward: { kind: 'resource', id: 'food', quantity: 1 },
+      lines: [],
+    });
+    expect(rig.world.exitDriftingItemView).not.toHaveBeenCalled();
+    expect(rig.calls.indexOf('search:empty-lifeboat'))
+      .toBeLessThan(rig.calls.indexOf('show-reward'));
+
+    rewardHold.resolve();
+    await flushPromises();
+    expect(rig.world.exitDriftingItemView).toHaveBeenCalledOnce();
+    rig.animations.exit.resolve();
+    await flushPromises();
     rig.phase.dispose();
   });
 

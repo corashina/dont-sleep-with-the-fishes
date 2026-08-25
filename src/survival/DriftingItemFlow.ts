@@ -17,7 +17,9 @@ export type DriftingItemWorldPort = Pick<
   | 'delegateDriftingItem'
   | 'recedeDriftingItem'
   | 'projectEventInteractionBounds'
->;
+> & {
+  readonly searchDriftingItem?: (eventId: DriftingItemEventId) => Promise<void>;
+};
 
 export type DriftingItemUiPort = Pick<
   SurvivalUI,
@@ -259,6 +261,9 @@ export class DriftingItemFlow {
     if (choiceId === 'delegate-carlitos') {
       return this.dependencies.world.delegateDriftingItem?.(eventId) ?? Promise.resolve();
     }
+    if (choiceId === 'search') {
+      return this.dependencies.world.searchDriftingItem?.(eventId) ?? Promise.resolve();
+    }
     return this.dependencies.world.recedeDriftingItem?.(eventId) ?? Promise.resolve();
   }
 
@@ -287,6 +292,7 @@ export class DriftingItemFlow {
   private isSupportedChoice(choiceId: EventResponseId): boolean {
     return choiceId === 'retrieve'
       || choiceId === 'delegate-carlitos'
+      || choiceId === 'search'
       || choiceId === 'sleep';
   }
 

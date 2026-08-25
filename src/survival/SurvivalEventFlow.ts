@@ -426,6 +426,7 @@ export class SurvivalEventFlow {
     this.dependencies.world.setEventEligibleItems?.(null);
     this.dependencies.ui.setEventSelection?.(this.eligibility, []);
 
+    const lifeboatSearch = eventId === 'empty-lifeboat' && choiceId === 'search';
     let animate = true;
     if (
       eventId === 'drifting-barrel'
@@ -442,6 +443,11 @@ export class SurvivalEventFlow {
       });
       animate = false;
     }
+    if (lifeboatSearch && outcome.rewardSummary === undefined) {
+      this.dependencies.onInvariantError(new Error(
+        'Empty Lifeboat search requires a reward summary.',
+      ));
+    }
 
     let terminalSnapshot: SurvivalSnapshot | null = null;
     return {
@@ -457,6 +463,13 @@ export class SurvivalEventFlow {
           this.dependencies.audio.action('openChest');
           await (this.dependencies.ui.showRewardResult?.({
             title: 'CHEST REWARD',
+            reward: outcome.rewardSummary,
+            lines: [],
+          }) ?? Promise.resolve());
+        }
+        if (lifeboatSearch && outcome.rewardSummary !== undefined) {
+          await (this.dependencies.ui.showRewardResult?.({
+            title: 'LIFEBOAT SUPPLY',
             reward: outcome.rewardSummary,
             lines: [],
           }) ?? Promise.resolve());
@@ -1428,6 +1441,9 @@ export class SurvivalEventFlow {
         if (choice.companionAction !== undefined && companionAvailability?.visible !== true) {
           return [];
         }
+        const playerEnergyCost = isDriftingItemEventId(event.id)
+          ? choice.requirements?.find(({ resource }) => resource === 'energy')?.minimum
+          : undefined;
         const anchorId = this.contextualEventAnchorId(event.id, choice.id);
         const unmet = choice.requirements?.filter(
           ({ resource, minimum }) => snapshot[resource] < minimum,
@@ -1454,14 +1470,10 @@ export class SurvivalEventFlow {
             ? null
             : unavailableReasons.join(' '),
           ...(anchorId === null ? {} : { anchorId }),
-          ...(isDriftingItemEventId(event.id) && choice.id === 'retrieve'
-            ? {
-                energyCost: choice.requirements?.find(
-                  ({ resource }) => resource === 'energy',
-                )?.minimum ?? 0,
-                energyOwner: 'player' as const,
-              }
-            : {}),
+          ...(playerEnergyCost === undefined ? {} : {
+            energyCost: playerEnergyCost,
+            energyOwner: 'player' as const,
+          }),
           ...(choice.companionAction !== undefined && companionAvailability !== undefined
             ? {
                 energyCost: companionAvailability.energyCost,
@@ -1474,7 +1486,9 @@ export class SurvivalEventFlow {
 
   private contextualEventAnchorId(eventId: string, choiceId: string): string | null {
     if (choiceId === 'delegate-carlitos') return 'carlitos';
-    if (isDriftingItemEventId(eventId) && choiceId === 'retrieve') return `event:${eventId}`;
+    if (isDriftingItemEventId(eventId) && (choiceId === 'retrieve' || choiceId === 'search')) {
+      return `event:${eventId}`;
+    }
     if (eventId === 'midnight-tour' && choiceId === 'visit') return 'midnight-tour:island';
     if (eventId === 'handyman' && choiceId === 'touch') return 'handyman:hand';
     if (eventId === 'handyman' && choiceId === 'chest') return 'persistent-chest';
