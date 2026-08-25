@@ -92,6 +92,8 @@ import type { EventPresentationCue } from './eventPresentationCue';
 import {
   driftingItemLeaveKey,
   driftingItemRetrieveKey,
+  isDriftingCargoEventId,
+  type DriftingCargoEventId,
   type DriftingItemEventId,
 } from './eventCatalog';
 import {
@@ -1051,7 +1053,11 @@ export class BoatWorld {
   }
 
   retrieveDriftingItem(eventId: DriftingItemEventId): Promise<void> {
-    if (this.disposed || this.activeFeaturedEventId !== eventId) {
+    if (
+      this.disposed
+      || !isDriftingCargoEventId(eventId)
+      || this.activeFeaturedEventId !== eventId
+    ) {
       return Promise.resolve();
     }
     this.toolHoverOutline.setTarget(null);
@@ -1059,7 +1065,11 @@ export class BoatWorld {
   }
 
   delegateDriftingItem(eventId: DriftingItemEventId): Promise<void> {
-    if (this.disposed || this.activeFeaturedEventId !== eventId) {
+    if (
+      this.disposed
+      || !isDriftingCargoEventId(eventId)
+      || this.activeFeaturedEventId !== eventId
+    ) {
       return Promise.resolve();
     }
     this.toolHoverOutline.setTarget(null);
@@ -1076,7 +1086,7 @@ export class BoatWorld {
     return this.playFeaturedPresentation(driftingItemLeaveKey(eventId));
   }
 
-  private retrieveFeaturedDriftingItem(eventId: DriftingItemEventId): Promise<void> {
+  private retrieveFeaturedDriftingItem(eventId: DriftingCargoEventId): Promise<void> {
     const coverPersistentChest = this.chestState !== 'none';
     if (coverPersistentChest) this.chestDisplay.root.visible = false;
     return this.playFeaturedPresentation(driftingItemRetrieveKey(eventId)).then(() => {

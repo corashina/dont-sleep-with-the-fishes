@@ -51,22 +51,27 @@ export function isDriftingCargoEventId(
   return eventId === 'drifting-barrel' || eventId === 'drifting-chest';
 }
 
-export type DriftingItemEventId = DriftingCargoEventId;
+export type DriftingItemEventId = DriftingCargoEventId | Extract<
+  SurvivalEventId,
+  'empty-lifeboat'
+>;
 
 export function isDriftingItemEventId(
   eventId: string,
 ): eventId is DriftingItemEventId {
-  return isDriftingCargoEventId(eventId);
+  return isDriftingCargoEventId(eventId) || eventId === 'empty-lifeboat';
 }
 
-export function driftingItemRetrieveKey(eventId: DriftingItemEventId): EventPresentationKey {
+export function driftingItemRetrieveKey(eventId: DriftingCargoEventId): EventPresentationKey {
   return eventId === 'drifting-barrel'
     ? 'drifting-barrel.food'
     : 'drifting-chest.retrieve';
 }
 
 export function driftingItemLeaveKey(eventId: DriftingItemEventId): EventPresentationKey {
-  return eventId === 'drifting-barrel' ? 'drifting-barrel.drift' : 'drifting-chest.drift';
+  if (eventId === 'drifting-barrel') return 'drifting-barrel.drift';
+  if (eventId === 'drifting-chest') return 'drifting-chest.drift';
+  return 'empty-lifeboat.drift';
 }
 
 export function driftingCargoKindForEvent(

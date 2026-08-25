@@ -155,7 +155,11 @@ export class SurvivalCoverView {
     this.resultTitle.textContent = view.title;
     this.resultClose.setAttribute(
       'aria-label',
-      view.title === 'CHEST REWARD' ? 'Close chest reward' : 'Close dive result',
+      view.title === 'CHEST REWARD'
+        ? 'Close chest reward'
+        : view.title === 'LIFEBOAT SUPPLY'
+          ? 'Close lifeboat supply'
+          : 'Close dive result',
     );
     this.renderReward(view.reward);
     this.resultLines.hidden = view.lines.length === 0;
