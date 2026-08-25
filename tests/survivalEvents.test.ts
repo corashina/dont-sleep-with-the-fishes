@@ -26,7 +26,7 @@ const EXPECTED_WEIGHTS = {
   thunderstorm: 1, 'restless-waves': 1, 'man-in-the-fog': 1,
   ghosts: 3, 'eerie-melody': 1, 'face-on-the-moon': 1,
   'shadow-figure': 1, 'guarded-sleep': 4,
-  'drifting-barrel': 1, 'drifting-chest': 1,
+  'drifting-barrel': 1, 'drifting-chest': 1, 'empty-lifeboat': 1,
   'check-the-back': 3, flowers: 1,
   'chest-attack': 1, 'midnight-tour': 2, 'night-trader': 2,
   handyman: 2, 'other-people': 2, plane: 2,
@@ -42,7 +42,7 @@ const EXPECTED_RISK = {
   'man-in-the-fog': 'dangerous', ghosts: 'uncertain',
   'eerie-melody': 'dangerous', 'face-on-the-moon': 'uncertain',
   'shadow-figure': 'dangerous', 'guarded-sleep': 'uncertain',
-  'drifting-barrel': 'safe', 'drifting-chest': 'safe',
+  'drifting-barrel': 'safe', 'drifting-chest': 'safe', 'empty-lifeboat': 'safe',
   'check-the-back': 'safe',
   flowers: 'safe', 'chest-attack': 'dangerous',
   'midnight-tour': 'dangerous', 'night-trader': 'safe',
@@ -179,7 +179,7 @@ describe('survival events', () => {
     expect(Object.fromEntries(SURVIVAL_EVENTS.map(({ id, danger }) => [id, danger])))
       .toEqual(EXPECTED_RISK);
     expect(SURVIVAL_EVENTS.filter(({ phase }) => phase === 'day').map(({ id }) => id))
-      .toEqual(['drifting-barrel', 'drifting-chest']);
+      .toEqual(['drifting-barrel', 'drifting-chest', 'empty-lifeboat']);
     expect(byId['school-of-fish']!.phase).toBe('night');
     expect(byId.flowers!.phase).toBe('night');
     expect(byId['drifting-barrel']!.cooldownDays).toBe(3);
@@ -659,6 +659,51 @@ describe('survival events', () => {
     );
     },
   );
+
+  it('defines Empty Lifeboat as a guaranteed one-supply search from day ten', () => {
+    const lifeboat = event('empty-lifeboat');
+
+    expect(lifeboat).toMatchObject({
+      phase: 'day',
+      title: 'Empty Lifeboat',
+      danger: 'safe',
+      cue: 'sighting',
+      weight: 1,
+      earliestDay: 10,
+      cooldownDays: 3,
+    });
+    expect(lifeboat.choices).toEqual([
+      {
+        id: 'search',
+        label: 'Search It',
+        requirements: [{ resource: 'energy', minimum: 1 }],
+        outcomes: [
+          {
+            weight: 1,
+            message: 'You find one food in the empty lifeboat.',
+            presentationKey: 'empty-lifeboat.search',
+            effects: { resources: [subtract('energy', 1), add('food', 1)] },
+          },
+          {
+            weight: 1,
+            message: 'You find one bait in the empty lifeboat.',
+            presentationKey: 'empty-lifeboat.search',
+            effects: { resources: [subtract('energy', 1), add('bait', 1)] },
+          },
+        ],
+      },
+      {
+        id: 'sleep',
+        label: 'Let It Drift',
+        outcomes: [{
+          weight: 1,
+          message: 'The empty lifeboat drifts away.',
+          presentationKey: 'empty-lifeboat.drift',
+          effects: {},
+        }],
+      },
+    ]);
+  });
 
   it('encodes the exact rules and presentation keys for featured events', () => {
     const event = (id: string) => SURVIVAL_EVENTS.find((candidate) => candidate.id === id)!;

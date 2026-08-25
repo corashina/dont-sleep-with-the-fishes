@@ -21,7 +21,7 @@ export const SURVIVAL_EVENT_IDS = Object.freeze([
   'windy-night', 'bad-sleep', 'thunderstorm', 'restless-waves',
   'man-in-the-fog', 'ghosts', 'eerie-melody', 'face-on-the-moon',
   'shadow-figure', 'guarded-sleep',
-  'drifting-barrel', 'drifting-chest', 'check-the-back',
+  'drifting-barrel', 'drifting-chest', 'empty-lifeboat', 'check-the-back',
   'flowers', 'chest-attack', 'midnight-tour', 'night-trader',
   'handyman', 'other-people', 'plane',
 ] as const);
@@ -96,6 +96,7 @@ const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.free
   'guarded-sleep': 'Carlitos sits alert while the night presses close.',
   'drifting-barrel': 'A sealed barrel drifts within reach of the boat.',
   'drifting-chest': 'A small chest drifts within reach of the boat.',
+  'empty-lifeboat': 'An empty lifeboat drifts close enough to search.',
   'check-the-back': 'Something thumps against the back of the boat.',
   flowers: 'A small patch of flowers drifts beside the boat.',
   'chest-attack': 'The chest shudders and opens a row of wet teeth.',
@@ -491,6 +492,31 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     contextualChoice('sleep', 'Let It Drift',
       featuredOutcome('drifting-chest.drift', 1, 'The chest drifts out of reach.')),
   ], undefined, { allowedChestStates: ['none'] }),
+  event('empty-lifeboat', 'day', 'Empty Lifeboat', 'safe', 'sighting', 1, 10, 3, [
+    {
+      ...contextualChoice('search', 'Search It',
+        featuredOutcome(
+          'empty-lifeboat.search',
+          1,
+          'You find one food in the empty lifeboat.',
+          effects([subtract('energy', 1), add('food', 1)]),
+        ),
+        featuredOutcome(
+          'empty-lifeboat.search',
+          1,
+          'You find one bait in the empty lifeboat.',
+          effects([subtract('energy', 1), add('bait', 1)]),
+        ),
+      ),
+      requirements: [{ resource: 'energy', minimum: 1 }],
+    },
+    contextualChoice('sleep', 'Let It Drift',
+      featuredOutcome(
+        'empty-lifeboat.drift',
+        1,
+        'The empty lifeboat drifts away.',
+      )),
+  ]),
   event('check-the-back', 'night', 'Check the Back', 'safe', 'fish', 3, 2, 35, [
     contextualChoice('check', 'Yes',
       {

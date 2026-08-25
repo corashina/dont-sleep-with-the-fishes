@@ -57,6 +57,8 @@ export type EventPresentationKey =
   | 'drifting-barrel.drift'
   | 'drifting-chest.retrieve'
   | 'drifting-chest.drift'
+  | 'empty-lifeboat.search'
+  | 'empty-lifeboat.drift'
   | 'check-the-back.fish'
   | 'check-the-back.bad'
   | 'check-the-back.ignore'
