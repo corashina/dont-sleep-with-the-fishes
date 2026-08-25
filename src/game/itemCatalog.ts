@@ -7,8 +7,7 @@ export const ITEM_IDS = [
 
 export type ItemId = typeof ITEM_IDS[number];
 export type ItemInstanceId = `${ItemId}-${number}`;
-export const DAY_ACTION_ONLY_ITEM_IDS: readonly ItemId[] = Object.freeze([
-  'scubaSet',
+export const EVENT_CHOICE_EXCLUDED_ITEM_IDS: readonly ItemId[] = Object.freeze([
   'radio',
 ]);
 export type ItemDayAction =

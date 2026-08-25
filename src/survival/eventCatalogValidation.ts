@@ -1,5 +1,5 @@
 import {
-  DAY_ACTION_ONLY_ITEM_IDS,
+  EVENT_CHOICE_EXCLUDED_ITEM_IDS,
   ITEM_DEFINITIONS,
   ITEM_IDS,
   type ItemId,
@@ -365,8 +365,8 @@ export function validateSurvivalEventCatalog(
       choiceIds.add(eventChoice.id);
       if (eventChoice.itemId !== undefined && !isItemId(eventChoice.itemId)) throw new Error(`${eventEntry.id}.${eventChoice.id} contains unknown item`);
       if (eventChoice.itemId !== undefined
-        && DAY_ACTION_ONLY_ITEM_IDS.includes(eventChoice.itemId)) {
-        throw new Error(`${eventEntry.id}.${eventChoice.id} uses a day-action-only item`);
+        && EVENT_CHOICE_EXCLUDED_ITEM_IDS.includes(eventChoice.itemId)) {
+        throw new Error(`${eventEntry.id}.${eventChoice.id} uses an event-choice-excluded item`);
       }
       if (Object.hasOwn(eventChoice, 'companionAction')
         && eventChoice.companionAction !== 'delegateCarlitos') {

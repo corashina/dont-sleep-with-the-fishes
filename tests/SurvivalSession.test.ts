@@ -328,6 +328,50 @@ describe('SurvivalSession Carlitos events', () => {
     expect(session.snapshot().carlitos?.energy).toBe(0);
   });
 
+  it('resolves Wreckage surface costs without scuba gear', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 71,
+      random: sequenceRandom([0]),
+      initial: { day: 4, energy: 3 },
+      initialEventId: 'wreckage',
+    });
+    expect(session.resolveEvent({ kind: 'choice', choiceId: 'search' }))
+      .toMatchObject({ accepted: true, deltas: { energy: -2, repairMaterial: 2 } });
+  });
+
+  it('requires usable scuba gear and three energy for the Wreckage dive', () => {
+    const noScuba = new SurvivalSession(saved(), {
+      seed: 72, initial: { day: 4, energy: 3 }, initialEventId: 'wreckage',
+    });
+    expect(noScuba.resolveEvent({
+      kind: 'item', choiceId: 'dive', instanceId: 'scubaSet-1',
+    })).toMatchObject({ accepted: false, code: 'item-unavailable' });
+
+    const collapse = new SurvivalSession(saved('scubaSet'), {
+      seed: 73,
+      random: sequenceRandom([0.55, 0.5]),
+      initial: { day: 4, energy: 3, health: 100 },
+      initialEventId: 'wreckage',
+    });
+    expect(collapse.resolveEvent({
+      kind: 'item', choiceId: 'dive', instanceId: 'scubaSet-1',
+    })).toMatchObject({ accepted: true, deltas: { energy: -3 } });
+    expect(collapse.snapshot().inventory['scubaSet-1']?.condition).toBe('broken');
+  });
+
+  it('lets Carlitos search Wreckage for three Carlitos energy', () => {
+    const session = new SurvivalSession(saved('carlitos'), {
+      seed: 74,
+      random: sequenceRandom([0]),
+      initial: { day: 4, energy: 1 },
+      initialCarlitos: { hunger: 5, energy: 3 },
+      initialEventId: 'wreckage',
+    });
+    expect(session.resolveEvent({ kind: 'choice', choiceId: 'delegate-carlitos' }))
+      .toMatchObject({ accepted: true, deltas: { repairMaterial: 2 } });
+    expect(session.snapshot()).toMatchObject({ energy: 1, carlitos: { energy: 0 } });
+  });
+
   it('rejects Drifting Cargo delegation without Carlitos energy', () => {
     const session = new SurvivalSession(saved('carlitos'), {
       seed: 7,

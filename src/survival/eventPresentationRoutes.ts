@@ -36,6 +36,7 @@ export const EVENT_PRESENTATION_ROUTES = Object.freeze({
   'drifting-barrel': 'featured',
   'drifting-chest': 'featured',
   'empty-lifeboat': 'featured',
+  wreckage: 'focused',
   'check-the-back': 'featured',
   flowers: 'featured',
   'chest-attack': 'focused',

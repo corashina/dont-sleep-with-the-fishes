@@ -27,6 +27,7 @@ const EXPECTED_WEIGHTS = {
   ghosts: 3, 'eerie-melody': 1, 'face-on-the-moon': 1,
   'shadow-figure': 1, 'guarded-sleep': 4,
   'drifting-barrel': 1, 'drifting-chest': 1, 'empty-lifeboat': 1,
+  wreckage: 1,
   'check-the-back': 3, flowers: 1,
   'chest-attack': 1, 'midnight-tour': 2, 'night-trader': 2,
   handyman: 2, 'other-people': 2, plane: 2,
@@ -43,6 +44,7 @@ const EXPECTED_RISK = {
   'eerie-melody': 'dangerous', 'face-on-the-moon': 'uncertain',
   'shadow-figure': 'dangerous', 'guarded-sleep': 'uncertain',
   'drifting-barrel': 'safe', 'drifting-chest': 'safe', 'empty-lifeboat': 'safe',
+  wreckage: 'uncertain',
   'check-the-back': 'safe',
   flowers: 'safe', 'chest-attack': 'dangerous',
   'midnight-tour': 'dangerous', 'night-trader': 'safe',
@@ -181,7 +183,7 @@ describe('survival events', () => {
     expect(Object.fromEntries(SURVIVAL_EVENTS.map(({ id, danger }) => [id, danger])))
       .toEqual(EXPECTED_RISK);
     expect(SURVIVAL_EVENTS.filter(({ phase }) => phase === 'day').map(({ id }) => id))
-      .toEqual(['drifting-barrel', 'drifting-chest', 'empty-lifeboat']);
+      .toEqual(['drifting-barrel', 'drifting-chest', 'empty-lifeboat', 'wreckage']);
     expect(byId['school-of-fish']!.phase).toBe('night');
     expect(byId.flowers!.phase).toBe('night');
     expect(byId['drifting-barrel']!.cooldownDays).toBe(3);
@@ -293,6 +295,39 @@ describe('survival events', () => {
     expect(delegate?.outcomes.map(({ weight }) => weight)).toEqual([45, 25, 20, 10]);
     expect(delegate?.outcomes.flatMap(({ effects }) => effects.resources ?? [])
       .some(({ resource }) => resource === 'energy')).toBe(false);
+  });
+
+  it('defines the exact recurring Wreckage rules', () => {
+    const wreckage = event('wreckage');
+    expect(wreckage).toMatchObject({
+      phase: 'day', title: 'Wreckage', danger: 'uncertain', cue: 'dive',
+      weight: 1, earliestDay: 4, cooldownDays: 5,
+      revealText: 'Broken cargo and timber drift above a wreck resting below.',
+    });
+    expect(wreckage.maximumAppearances).toBeUndefined();
+    expect(wreckage.choices.map(({ id, label, itemId, requirements, companionAction }) => ({
+      id, label, itemId, requirements, companionAction,
+    }))).toEqual([
+      {
+        id: 'search', label: 'Search Debris', itemId: undefined,
+        requirements: [{ resource: 'energy', minimum: 2 }], companionAction: undefined,
+      },
+      {
+        id: 'delegate-carlitos', label: 'Send Carlitos', itemId: undefined,
+        requirements: undefined, companionAction: 'delegateCarlitos',
+      },
+      {
+        id: 'dive', label: 'Dive Into Wreck', itemId: 'scubaSet',
+        requirements: [{ resource: 'energy', minimum: 3 }], companionAction: undefined,
+      },
+      {
+        id: 'leave', label: 'Leave', itemId: undefined,
+        requirements: undefined, companionAction: undefined,
+      },
+    ]);
+    expect(wreckage.choices.map(({ outcomes }) => outcomes.map(({ weight }) => weight)))
+      .toEqual([[35, 25, 20, 20], [35, 25, 20, 20],
+        [10, 10, 10, 10, 10, 10, 20, 20], [1]]);
   });
 
   it('sets the six night-event rule constraints', () => {
@@ -532,12 +567,12 @@ describe('survival events', () => {
     expect(resultIds('plane', 'sleep')).toEqual(['plane-pass']);
   });
 
-  it('keeps Scuba Gear and Radio out of event choices', () => {
+  it('permits Scuba Gear and excludes Radio from event choices', () => {
     const itemChoices = SURVIVAL_EVENTS.flatMap(({ choices }) => (
       choices.flatMap(({ itemId }) => itemId === undefined ? [] : [itemId])
     ));
 
-    expect(itemChoices).not.toContain('scubaSet');
+    expect(itemChoices).toContain('scubaSet');
     expect(itemChoices).not.toContain('radio');
   });
 
@@ -907,8 +942,7 @@ describe('survival events', () => {
     rejects((catalog) => { catalog[0].weight = 0; }, /event.*weight/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].weight = 0; }, /outcome.*weight/i);
     rejects((catalog) => { catalog[0].choices[0].itemId = 'telescope'; }, /unknown item/i);
-    rejects((catalog) => { catalog[0].choices[0].itemId = 'scubaSet'; }, /day-action-only item/i);
-    rejects((catalog) => { catalog[0].choices[0].itemId = 'radio'; }, /day-action-only item/i);
+    rejects((catalog) => { catalog[0].choices[0].itemId = 'radio'; }, /event-choice-excluded item/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.resources = [add('danger', 1)]; }, /unknown resource/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.resources = [subtract('hull', { min: 4, max: 3 })]; }, /invalid range/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects = null; }, /effects/i);
@@ -943,6 +977,17 @@ describe('survival events', () => {
     rejects((catalog) => {
       catalog[0].choices[0].outcomes[0].effects.companion = [];
     }, /unsupported effect key companion/i);
+  });
+
+  it('allows scuba gear in events and keeps radio excluded', () => {
+    const scubaCatalog = structuredClone(SURVIVAL_EVENTS) as any[];
+    scubaCatalog[0].choices[0].itemId = 'scubaSet';
+    expect(() => validateSurvivalEventCatalog(scubaCatalog)).not.toThrow();
+
+    const radioCatalog = structuredClone(SURVIVAL_EVENTS) as any[];
+    radioCatalog[0].choices[0].itemId = 'radio';
+    expect(() => validateSurvivalEventCatalog(radioCatalog))
+      .toThrow(/event-choice-excluded item/i);
   });
 
   it.each([

@@ -1,5 +1,5 @@
 export {
-  DAY_ACTION_ONLY_ITEM_IDS, ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS, createItemInstances,
+  EVENT_CHOICE_EXCLUDED_ITEM_IDS, ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS, createItemInstances,
   itemDefinition, validateItemCatalog,
 } from './itemCatalog';
 export type { ItemDefinition, ItemId, ItemInstanceId } from './itemCatalog';
