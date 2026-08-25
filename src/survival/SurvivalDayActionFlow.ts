@@ -327,8 +327,11 @@ export class SurvivalDayActionFlow {
       const instanceId = scuba?.instanceId ?? 'scubaSet-1';
       this.setBusy(true);
 
-      await (this.dependencies.world.playDive?.(instanceId, () => {
-        if (this.isCurrent(generation, operation)) this.dependencies.audio.beginDive?.();
+      await (this.dependencies.world.playDive?.(instanceId, {
+        onWaterImpact: () => {
+          if (this.isCurrent(generation, operation)) this.dependencies.audio.beginDive?.();
+        },
+        revealUnderwaterScene: false,
       }) ?? Promise.resolve());
       if (!await this.resumeCurrent(generation, operation)) return;
 

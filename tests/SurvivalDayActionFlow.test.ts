@@ -97,9 +97,12 @@ function createRig() {
     playCarlitosAction: vi.fn(async (action: string) => {
       calls.push(`world:carlitos:${action}`);
     }),
-    playDive: vi.fn(async (instanceId: string, onWaterImpact: () => void) => {
+    playDive: vi.fn(async (instanceId: string, options: {
+      readonly onWaterImpact: () => void;
+      readonly revealUnderwaterScene: boolean;
+    }) => {
       calls.push(`world:dive:${instanceId}`);
-      onWaterImpact();
+      options.onWaterImpact();
     }),
     clearDivePresentation: vi.fn(() => calls.push('world:clear-dive')),
   } as unknown as DayActionWorldPort;
@@ -362,7 +365,10 @@ describe('SurvivalDayActionFlow', () => {
 
     expect(rig.world.playDive).toHaveBeenCalledWith(
       'scubaSet-1',
-      expect.any(Function),
+      {
+        onWaterImpact: expect.any(Function),
+        revealUnderwaterScene: false,
+      },
     );
     expect(rig.calls).toEqual([
       'perform:dive:none',

@@ -6630,7 +6630,10 @@ describe('BoatWorld helpers', () => {
     const updateDive = vi.spyOn(internals.diveController, 'update');
     const impact = vi.fn();
 
-    const pending = world.playDive(scuba.instanceId, impact);
+    const pending = world.playDive(scuba.instanceId, {
+      onWaterImpact: impact,
+      revealUnderwaterScene: false,
+    });
     expect(world.scene.getObjectByName('boat-supply:scubaSet')?.visible).toBe(false);
     expect(world.scene.getObjectByName('glasses25.001')).not.toBeUndefined();
 
@@ -6681,8 +6684,14 @@ describe('BoatWorld helpers', () => {
     );
     const secondId = secondScuba.instanceId;
 
-    const first = world.playDive(scuba.instanceId, () => undefined);
-    const second = world.playDive(secondId, () => undefined);
+    const first = world.playDive(scuba.instanceId, {
+      onWaterImpact: () => undefined,
+      revealUnderwaterScene: false,
+    });
+    const second = world.playDive(secondId, {
+      onWaterImpact: () => undefined,
+      revealUnderwaterScene: false,
+    });
     await first;
 
     expect(setHidden.mock.calls.slice(0, 3)).toEqual([
@@ -6710,7 +6719,10 @@ describe('BoatWorld helpers', () => {
     );
     world.syncInventory(snapshot([scuba]));
     const initialPosition = camera.position.clone();
-    const pending = world.playDive(scuba.instanceId, () => undefined);
+    const pending = world.playDive(scuba.instanceId, {
+      onWaterImpact: () => undefined,
+      revealUnderwaterScene: false,
+    });
     world.update(1.1, 1.1);
 
     world.setDocumentHidden(true);
@@ -6735,7 +6747,10 @@ describe('BoatWorld helpers', () => {
         [scuba],
       );
       world.syncInventory(snapshot([scuba]));
-      const pending = world.playDive(scuba.instanceId, () => undefined);
+      const pending = world.playDive(scuba.instanceId, {
+        onWaterImpact: () => undefined,
+        revealUnderwaterScene: false,
+      });
 
       world.dispose();
       world.dispose();
