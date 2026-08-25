@@ -224,6 +224,31 @@ describe('AudioSystem', () => {
     expect(tornadoWind.stop).toHaveBeenCalledExactlyOnceWith(0.08);
   });
 
+  it('finishes Wreckage dive audio after its reaction', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.beginDive();
+    const movement = backend.voices.find(({ id }) => id === 'underwaterMovement')!;
+    audio.finishEventReaction('wreckage');
+
+    expect(movement.stop).toHaveBeenCalledExactlyOnceWith(0.2);
+    expect(backend.voices.at(-1)?.id).toBe('diveSurface');
+  });
+
+  it('cancels Wreckage dive audio when the event clears', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.beginDive();
+    const movement = backend.voices.find(({ id }) => id === 'underwaterMovement')!;
+    audio.clearEvent();
+    audio.clearEvent();
+
+    expect(movement.stop).toHaveBeenCalledExactlyOnceWith(0.2);
+    expect(backend.voices.some(({ id }) => id === 'diveSurface')).toBe(false);
+  });
+
   it('plays and owns the Plane flyby sound', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());

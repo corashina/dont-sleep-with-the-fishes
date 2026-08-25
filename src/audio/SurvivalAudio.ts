@@ -363,8 +363,9 @@ export class SurvivalAudio {
     if (!attack) this.stopEventMelody(0.02);
   }
 
-  finishEventReaction(_eventId: string): void {
+  finishEventReaction(eventId: string): void {
     if (this.disposed) return;
+    if (eventId === 'wreckage') this.finishDive();
     this.clearEvent();
   }
 
@@ -397,6 +398,7 @@ export class SurvivalAudio {
   }
 
   clearEvent(): void {
+    if (this.diveActive) this.cancelDive();
     this.pendingShadowMeow = null;
     this.shadowMeowDelay = 0;
     this.planeFlybyVoice?.stop(0.08);

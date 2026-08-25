@@ -36,9 +36,10 @@ const constructors = vi.hoisted(() => ({
   schoolOfFish: vi.fn(),
   snatcher: vi.fn(),
   deathStare: vi.fn(),
-  anglerfish: vi.fn(),
+  sharks: vi.fn(),
   tornado: vi.fn(),
   carlitos: vi.fn(),
+  wreckage: vi.fn(),
 }));
 
 vi.mock('../src/survival/EventPresentationLayer', () => ({
@@ -71,14 +72,17 @@ vi.mock('../src/survival/events/SnatcherPresentation', () => ({
 vi.mock('../src/survival/events/DeathStarePresentation', () => ({
   DeathStarePresentation: constructors.deathStare,
 }));
-vi.mock('../src/survival/events/AnglerfishSwarmPresentation', () => ({
-  AnglerfishSwarmPresentation: constructors.anglerfish,
+vi.mock('../src/survival/events/SharkSwarmPresentation', () => ({
+  SharkSwarmPresentation: constructors.sharks,
 }));
 vi.mock('../src/survival/events/TornadoPresentation', () => ({
   TornadoPresentation: constructors.tornado,
 }));
 vi.mock('../src/survival/events/CarlitosEventPresentation', () => ({
   CarlitosEventPresentation: constructors.carlitos,
+}));
+vi.mock('../src/survival/events/WreckagePresentation', () => ({
+  WreckagePresentation: constructors.wreckage,
 }));
 
 function asyncVoid() {
@@ -205,7 +209,16 @@ function createDependencies() {
     dependencies: {
       worldParent: new Group(),
       boatParent: new Group(),
-      dedicatedEnvironment: { eventModels: {} },
+      dedicatedEnvironment: {
+        eventModels: {},
+        featuredModels: {},
+        dive: {
+          play: asyncVoid(),
+          clear: vi.fn(),
+          settleForVisibilityChange: vi.fn(),
+        },
+        delegateCarlitos: async (retrieve: () => Promise<void>) => retrieve(),
+      },
       focusedDependencies: {
         camera: new Group(),
         cameraRig: new Group(),
@@ -275,9 +288,13 @@ beforeEach(() => {
   constructors.schoolOfFish.mockImplementation(() => presentation);
   constructors.snatcher.mockImplementation(() => presentation);
   constructors.deathStare.mockImplementation(() => presentation);
-  constructors.anglerfish.mockImplementation(() => presentation);
+  constructors.sharks.mockImplementation(() => presentation);
   constructors.tornado.mockImplementation(() => presentation);
   constructors.carlitos.mockImplementation(() => presentation);
+  constructors.wreckage.mockImplementation(() => ({
+    ...presentation,
+    eventId: 'wreckage',
+  }));
 });
 
 function createAdapter(eventId: SurvivalEventId): EventPresentationAdapter {
@@ -390,6 +407,7 @@ describe('EventPresentationRegistry', () => {
   it.each([
     ['dangerous-waters', ['layer']],
     ['leak', ['coordinator', 'leak']],
+    ['wreckage', ['coordinator', 'wreckage']],
     ['chest-attack', ['layer']],
     ['drifting-barrel', ['featured']],
     ['shower-night', ['layer', 'weather']],
