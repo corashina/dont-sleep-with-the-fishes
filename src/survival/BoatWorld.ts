@@ -201,7 +201,19 @@ const CHECK_BACK_STERN_FLOOR = Object.freeze({
 });
 export function createEmptyEventModelLibraryForTest(): EventModelLibrary {
   return {
-    create: () => new Group(),
+    create: (id: string) => {
+      const root = new Group();
+      if (id === 'fogMan' || id === 'ghost' || id === 'siren' || id === 'sirenRock') {
+        return root;
+      }
+      return {
+        root,
+        dispose: () => {
+          root.clear();
+          root.removeFromParent();
+        },
+      };
+    },
     animations: () => [],
     dispose: () => undefined,
   } as unknown as EventModelLibrary;
@@ -656,15 +668,18 @@ export class BoatWorld {
       worldParent: this.scene,
       boatParent: this.boat,
       dedicatedEnvironment: {
-          eventModels: dedicatedModels,
-          supplies: this.supplyDisplay,
-          carlitos: this.carlitos,
-          vortexWave: this.vortexWave,
-          sampleWorldWaveInto: this.sampleWorldWaveInto,
-          readWorldWaveAmplitudeScale: this.readWorldWaveAmplitudeScale,
-          cameraEffectsRoot: this.cameraEffectsRoot,
-          boatEffectsRoot: this.boatEffectsRoot,
-          camera: this.camera,
+        eventModels: dedicatedModels,
+        featuredModels,
+        dive: this.diveController,
+        delegateCarlitos: (retrieve) => this.carlitosDelegation.delegate(retrieve),
+        supplies: this.supplyDisplay,
+        carlitos: this.carlitos,
+        vortexWave: this.vortexWave,
+        sampleWorldWaveInto: this.sampleWorldWaveInto,
+        readWorldWaveAmplitudeScale: this.readWorldWaveAmplitudeScale,
+        cameraEffectsRoot: this.cameraEffectsRoot,
+        boatEffectsRoot: this.boatEffectsRoot,
+        camera: this.camera,
       },
       focusedDependencies: {
         propModels: this.propModels,
@@ -887,7 +902,7 @@ export class BoatWorld {
     choiceId: string,
     instanceId: ItemInstanceId,
     onAction?: (cueIndex: number) => void,
-    allowDayActionItem = false,
+    allowExcludedEventChoiceItem = false,
   ): Promise<void> {
     if (this.disposed) return;
     if (eventPresentationRoute(eventId) !== null) {
@@ -899,7 +914,7 @@ export class BoatWorld {
     if (
       itemId !== null
       && EVENT_CHOICE_EXCLUDED_ITEM_IDS.includes(itemId)
-      && !allowDayActionItem
+      && !allowExcludedEventChoiceItem
     ) return;
     if (eventId === 'flowers' && choiceId === 'bucket' && itemId === 'bucket') return;
     const context = itemId === null

@@ -9,7 +9,8 @@ import type {
 } from './EventPresentationAdapter';
 import { EventPresentationCoordinator } from './EventPresentationCoordinator';
 import { EventPresentationLayer } from './EventPresentationLayer';
-import type { EventModelInstance, EventModelLibrary } from './EventModelLibrary';
+import type { EventModelLibrary } from './EventModelLibrary';
+import type { EventModelId } from './eventModelManifest';
 import { FeaturedEventPresentations } from './FeaturedEventPresentations';
 import type {
   EventChoicePresentation,
@@ -40,6 +41,7 @@ import { LeakPresentation } from './events/LeakPresentation';
 import { SchoolOfFishPresentation } from './events/SchoolOfFishPresentation';
 import { SnatcherPresentation } from './events/SnatcherPresentation';
 import { TornadoPresentation } from './events/TornadoPresentation';
+import { WreckagePresentation } from './events/WreckagePresentation';
 import {
   MoonEventPresentation,
   type MoonEventPresentationEnvironment,
@@ -175,14 +177,10 @@ function createBorrowedDedicatedEnvironment(
   environment: DedicatedEventEnvironment,
 ): DedicatedEventEnvironment {
   const eventModels = {
-    create: ((id: string): EventModelInstance => {
-      const model = environment.eventModels.create(id as never) as Group | EventModelInstance;
-      if (!(model instanceof Group)) return model;
-      return { root: model, dispose: () => undefined };
-    }),
+    create: (id: EventModelId) => environment.eventModels.create(id),
     animations: (id: never) => environment.eventModels.animations(id),
     dispose: () => undefined,
-  } as unknown as EventModelLibrary;
+  } as EventModelLibrary;
   return { ...environment, eventModels };
 }
 
@@ -211,6 +209,9 @@ function createDedicatedCoordinator(
         break;
       case 'tornado':
         presentations.push(new TornadoPresentation(dedicatedEnvironment));
+        break;
+      case 'wreckage':
+        presentations.push(new WreckagePresentation(dedicatedEnvironment));
         break;
       case 'shadow-figure':
       case 'guarded-sleep':

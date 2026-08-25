@@ -28,6 +28,7 @@ import {
 import type { SurvivalSession } from './SurvivalSession';
 import type {
   ActionOutcome,
+  EventChoiceRequirement,
   EventResponseId,
   SurvivalState,
 } from './survivalTypes';
@@ -90,6 +91,9 @@ export type EventAudioPort = Pick<
   | 'eventAction'
   | 'clearMidnightTour'
   | 'clearEvent'
+  | 'beginDive'
+  | 'finishDive'
+  | 'cancelDive'
   | 'dawn'
   | 'action'
 >;
@@ -1378,6 +1382,14 @@ export class SurvivalEventFlow {
     generation: number,
     operation: number,
   ): Promise<void> {
+    if (eventId === 'wreckage' && itemType === 'scubaSet') {
+      this.dependencies.audio.beginDive();
+      return this.dependencies.world.playEventItemUse?.(
+        eventId,
+        choiceId,
+        instanceId,
+      ) ?? Promise.resolve();
+    }
     if (
       itemType === 'shotgun'
       || itemType === 'flashlight'
@@ -1412,6 +1424,7 @@ export class SurvivalEventFlow {
     const choiceByItem = new Map(
       event.choices
         .filter((choice) => choice.itemId !== undefined
+          && this.meetsRequirements(choice.requirements, snapshot)
           && (choice.requiredChestState === undefined
             || choice.requiredChestState === snapshot.chest.state))
         .map((choice) => [choice.itemId!, choice.id] as const),
@@ -1441,10 +1454,10 @@ export class SurvivalEventFlow {
         if (choice.companionAction !== undefined && companionAvailability?.visible !== true) {
           return [];
         }
-        const playerEnergyCost = isDriftingItemEventId(event.id)
-          ? choice.requirements?.find(({ resource }) => resource === 'energy')?.minimum
-          : undefined;
         const anchorId = this.contextualEventAnchorId(event.id, choice.id);
+        const playerEnergyCost = choice.requirements?.find(
+          ({ resource }) => resource === 'energy',
+        )?.minimum;
         const unmet = choice.requirements?.filter(
           ({ resource, minimum }) => snapshot[resource] < minimum,
         ) ?? [];
@@ -1482,6 +1495,15 @@ export class SurvivalEventFlow {
             : {}),
         }];
       });
+  }
+
+  private meetsRequirements(
+    requirements: readonly EventChoiceRequirement[] | undefined,
+    snapshot: SurvivalSnapshot,
+  ): boolean {
+    return requirements?.every(
+      ({ resource, minimum }) => snapshot[resource] >= minimum,
+    ) ?? true;
   }
 
   private contextualEventAnchorId(eventId: string, choiceId: string): string | null {

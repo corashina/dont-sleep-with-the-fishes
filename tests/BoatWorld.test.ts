@@ -89,6 +89,7 @@ import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
 import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
 import type { EventPresentationAdapter } from '../src/survival/EventPresentationAdapter';
 import { EventPresentationRegistry } from '../src/survival/EventPresentationRegistry';
+import type { EventPresentationAdapterDependencies } from '../src/survival/eventPresentationAdapters';
 import type { EventOutcomePresentation } from '../src/survival/eventPresentationTypes';
 import { EventItemEffects } from '../src/survival/EventItemEffects';
 import { EventItemUseAdapter } from '../src/survival/EventItemUseAdapter';
@@ -898,7 +899,6 @@ describe('BoatWorld helpers', () => {
         || eventId === 'handyman'
         || eventId === 'other-people'
         || eventId === 'plane'
-        || eventId === 'wreckage'
       ) {
         expect(generic).toBeUndefined();
       } else {
@@ -1109,6 +1109,48 @@ describe('BoatWorld helpers', () => {
     } finally {
       world.dispose();
       create.mockRestore();
+      propModels.dispose();
+    }
+  });
+
+  it('supplies Wreckage with world-owned dedicated services', async () => {
+    const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera();
+    const world = new BoatWorld(camera, propModels, createTestMoonTexture());
+    const dedicatedModels = createTestEventModels();
+    const featuredModels = { clone: vi.fn(() => new Group()) };
+    let dependencies: EventPresentationAdapterDependencies | undefined;
+    const create = vi.spyOn(EventPresentationRegistry.prototype, 'create')
+      .mockImplementation((eventId, value) => {
+        dependencies = value;
+        return eventAdapterTestDouble(eventId);
+      });
+    const delegate = vi.spyOn(CarlitosDelegationPresentation.prototype, 'delegate')
+      .mockImplementation(async (retrieve) => retrieve());
+
+    try {
+      world.createEventPresentation('wreckage', dedicatedModels, featuredModels);
+      const environment = dependencies?.dedicatedEnvironment;
+      const internals = world as unknown as {
+        diveController: DivePresentationController;
+        supplyDisplay: BoatSupplyDisplay;
+        carlitos: CarlitosPresentation;
+      };
+      expect(environment).toMatchObject({
+        eventModels: dedicatedModels,
+        featuredModels,
+        dive: internals.diveController,
+        supplies: internals.supplyDisplay,
+        carlitos: internals.carlitos,
+        camera,
+      });
+      const retrieve = vi.fn(async () => undefined);
+      await environment?.delegateCarlitos(retrieve);
+      expect(delegate).toHaveBeenCalledWith(retrieve);
+    } finally {
+      delegate.mockRestore();
+      create.mockRestore();
+      world.dispose();
       propModels.dispose();
     }
   });

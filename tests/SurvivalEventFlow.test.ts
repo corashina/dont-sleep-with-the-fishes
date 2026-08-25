@@ -157,6 +157,7 @@ function createRig(
     setAnchors: vi.fn(),
     restoreCommandFocus: vi.fn(() => calls.push('focus')),
   };
+  const finishDive = vi.fn();
   const audio = {
     beginEvent: vi.fn((eventId: string) => calls.push(`audio-begin:${eventId}`)),
     eventReveal: vi.fn(),
@@ -166,7 +167,12 @@ function createRig(
     confirm: vi.fn(),
     deny: vi.fn(),
     beginEventReaction: vi.fn(),
-    finishEventReaction: vi.fn(),
+    finishEventReaction: vi.fn((eventId: string) => {
+      if (eventId === 'wreckage') finishDive();
+    }),
+    beginDive: vi.fn(),
+    finishDive,
+    cancelDive: vi.fn(),
     eventAction: vi.fn(),
     clearMidnightTour: vi.fn(),
     clearEvent: vi.fn(() => calls.push('clear-audio')),
@@ -243,6 +249,88 @@ function createRig(
 }
 
 describe('SurvivalEventFlow', () => {
+  it('hides the Wreckage scuba choice without three energy', async () => {
+    const rig = createRig(snapshot({
+      state: 'dayEvent',
+      pendingEventId: 'wreckage',
+      energy: 2,
+      inventory: inventory({
+        'scubaSet-1': {
+          instanceId: 'scubaSet-1',
+          type: 'scubaSet',
+          condition: 'usable',
+        },
+      }),
+    }));
+
+    await rig.flow.revealPending(rig.session.snapshot());
+
+    expect(rig.ui.setEventSelection).toHaveBeenLastCalledWith(
+      new Map(),
+      expect.arrayContaining([expect.objectContaining({
+        id: 'search',
+        energyCost: 2,
+        energyOwner: 'player',
+      })]),
+    );
+  });
+
+  it('runs dive audio through Wreckage item use and reaction', async () => {
+    const pending = snapshot({
+      state: 'dayEvent',
+      pendingEventId: 'wreckage',
+      energy: 3,
+      inventory: inventory({
+        'scubaSet-1': {
+          instanceId: 'scubaSet-1',
+          type: 'scubaSet',
+          condition: 'usable',
+        },
+      }),
+    });
+    const rig = createRig(pending);
+    rig.setResolveEvent(() => {
+      rig.setSnapshot(snapshot({
+        state: 'day',
+        energy: 0,
+        inventory: pending.inventory,
+      }));
+      return accepted({ eventPresentationKey: 'wreckage.dive-loot' });
+    });
+    await rig.flow.revealPending(pending);
+
+    rig.flow.resolveItem('dive', 'scubaSet-1');
+    await vi.waitFor(() => expect(rig.audio.finishDive).toHaveBeenCalledOnce());
+
+    expect(rig.audio.beginDive).toHaveBeenCalledOnce();
+  });
+
+  it('clears active Wreckage dive audio after failure', async () => {
+    const itemUse = deferred();
+    const pending = snapshot({
+      state: 'dayEvent',
+      pendingEventId: 'wreckage',
+      energy: 3,
+      inventory: inventory({
+        'scubaSet-1': {
+          instanceId: 'scubaSet-1',
+          type: 'scubaSet',
+          condition: 'usable',
+        },
+      }),
+    });
+    const rig = createRig(pending);
+    rig.world.playEventItemUse.mockReturnValueOnce(itemUse.promise);
+    rig.audio.clearEvent.mockImplementation(() => rig.audio.cancelDive());
+    await rig.flow.revealPending(pending);
+
+    rig.flow.resolveItem('dive', 'scubaSet-1');
+    await vi.waitFor(() => expect(rig.audio.beginDive).toHaveBeenCalledOnce());
+    rig.flow.clearAfterFailure();
+
+    expect(rig.audio.cancelDive).toHaveBeenCalledOnce();
+    itemUse.resolve();
+  });
   it('loads, activates, stages, and reveals before it enables eligible items', async () => {
     const umbrella = {
       instanceId: 'umbrella-1',
