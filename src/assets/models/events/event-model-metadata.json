@@ -512,5 +512,27 @@
     "animationCount": 0,
     "animations": [],
     "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "emptyLifeboat": {
+    "triangles": 1036,
+    "rawBounds": {
+      "min": [
+        -5.982048436999321,
+        -1.3680828266957712,
+        -11.822548350211868
+      ],
+      "max": [
+        5.982048436999321,
+        2.933963276900919,
+        11.822547857738986
+      ]
+    },
+    "sourceSha256": "722C09E839EDB2A300208CCCB324A11F4D93F8946F7270E2DAED54DF306CC77D",
+    "sourceTriangles": 1036,
+    "outputSha256": "99FA2EDD3431AC0D9D3AB975F0AB3170AE0549D0F0B31D34FCC47D3622F870ED",
+    "hasSkins": false,
+    "animationCount": 0,
+    "animations": [],
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
   }
 }

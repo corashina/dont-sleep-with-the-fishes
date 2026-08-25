@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedOn": "2026-08-20",
+  "generatedOn": "2026-08-25",
   "sources": {
     "leakPlanks": {
       "id": "leakPlanks",
@@ -18,7 +18,7 @@
       "sourceTriangles": 150,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-20"
+      "downloadedOn": "2026-08-25"
     },
     "schoolFish": {
       "id": "schoolFish",
@@ -36,7 +36,7 @@
       "sourceTriangles": 233,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-20"
+      "downloadedOn": "2026-08-25"
     },
     "snatcher": {
       "id": "snatcher",
@@ -54,7 +54,7 @@
       "sourceTriangles": 3874,
       "sourceHasSkins": true,
       "sourceAnimationCount": 4,
-      "downloadedOn": "2026-08-20"
+      "downloadedOn": "2026-08-25"
     },
     "anglerFish": {
       "id": "anglerFish",
@@ -72,7 +72,7 @@
       "sourceTriangles": 2150,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-20"
+      "downloadedOn": "2026-08-25"
     },
     "deathStareBlob": {
       "id": "deathStareBlob",
@@ -90,7 +90,7 @@
       "sourceTriangles": 4888,
       "sourceHasSkins": true,
       "sourceAnimationCount": 9,
-      "downloadedOn": "2026-08-20"
+      "downloadedOn": "2026-08-25"
     },
     "tornadoCore": {
       "id": "tornadoCore",
@@ -108,7 +108,7 @@
       "sourceTriangles": 324,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-20"
+      "downloadedOn": "2026-08-25"
     },
     "midnightShovel": {
       "id": "midnightShovel",
@@ -126,7 +126,7 @@
       "sourceTriangles": 322,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-20"
+      "downloadedOn": "2026-08-25"
     },
     "midnightMonster": {
       "id": "midnightMonster",
@@ -144,7 +144,7 @@
       "sourceTriangles": 6174,
       "sourceHasSkins": true,
       "sourceAnimationCount": 16,
-      "downloadedOn": "2026-08-20"
+      "downloadedOn": "2026-08-25"
     },
     "airplane": {
       "id": "airplane",
@@ -162,7 +162,25 @@
       "sourceTriangles": 1770,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-23"
+      "downloadedOn": "2026-08-25"
+    },
+    "emptyLifeboat": {
+      "id": "emptyLifeboat",
+      "pageUrl": "https://poly.pizza/m/Hgf0R8s4Uo",
+      "publicId": "Hgf0R8s4Uo",
+      "resourceId": "9c276a46-9174-48ee-9624-3944d5b0d3ef",
+      "downloadUrl": "https://static.poly.pizza/9c276a46-9174-48ee-9624-3944d5b0d3ef.glb",
+      "sourceAssetId": "poly-pizza:9c276a46-9174-48ee-9624-3944d5b0d3ef",
+      "modelName": "Raft",
+      "author": "Quaternius",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "pageAnimated": false,
+      "sha256": "722C09E839EDB2A300208CCCB324A11F4D93F8946F7270E2DAED54DF306CC77D",
+      "sourceTriangles": 1036,
+      "sourceHasSkins": false,
+      "sourceAnimationCount": 0,
+      "downloadedOn": "2026-08-25"
     }
   }
 }

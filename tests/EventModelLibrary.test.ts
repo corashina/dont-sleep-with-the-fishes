@@ -22,8 +22,11 @@ import {
 import {
   EVENT_MODEL_IDS,
   EVENT_MODEL_SPECS,
+  SURVIVAL_EVENT_MODEL_IDS,
+  SURVIVAL_EVENT_MODEL_SPECS,
   type EventModelId,
 } from '../src/survival/eventModelManifest';
+import { EVENT_BUNDLE_SPECS } from '../src/survival/eventBundleManifest';
 
 function modelRoot(
   geometry: BufferGeometry = new BoxGeometry(2, 1, 1),
@@ -49,6 +52,18 @@ function completeRoots(): Record<EventModelId, Group> {
 }
 
 describe('EventModelLibrary', () => {
+  it('wires the pinned Empty Lifeboat model into its event bundle', () => {
+    expect(SURVIVAL_EVENT_MODEL_IDS).toContain('emptyLifeboat');
+    expect(SURVIVAL_EVENT_MODEL_SPECS.emptyLifeboat).toMatchObject({
+      targetLongestDimension: 4.6,
+      rotation: [0, 0, 0],
+    });
+    expect(EVENT_BUNDLE_SPECS['empty-lifeboat']).toEqual({
+      models: ['emptyLifeboat'],
+      sounds: [],
+    });
+  });
+
   it('loads only requested templates', async () => {
     const roots = completeRoots();
     const loader: EventModelLoader = {

@@ -27,6 +27,7 @@ export const POLY_PIZZA_EVENT_MODEL_PAGES = Object.freeze({
   midnightShovel: 'https://poly.pizza/m/oNBQSf87ZJ',
   midnightMonster: 'https://poly.pizza/m/22K0aSZkHV',
   airplane: 'https://poly.pizza/m/8VysVKMXN2J',
+  emptyLifeboat: 'https://poly.pizza/m/Hgf0R8s4Uo',
 });
 
 export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
@@ -39,9 +40,10 @@ export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
   midnightShovel: 1_000,
   midnightMonster: 6_000,
   airplane: 2_500,
+  emptyLifeboat: 2_000,
 });
 
-export const EVENT_MODEL_TOTAL_TRIANGLE_LIMIT = 20_000;
+export const EVENT_MODEL_TOTAL_TRIANGLE_LIMIT = 22_000;
 export const EVENT_MODEL_IDS = Object.freeze(Object.keys(POLY_PIZZA_EVENT_MODEL_PAGES));
 export const POLY_PIZZA_EVENT_MODEL_IDS = EVENT_MODEL_IDS;
 export const POLY_PIZZA_EVENT_MODEL_SOURCES = Object.freeze(Object.fromEntries(
@@ -63,7 +65,9 @@ export const POLY_PIZZA_EVENT_MODEL_SOURCES = Object.freeze(Object.fromEntries(
                   ? '1D482586A319E0C176BACE1EBFEB618F903187F36C91755E6CE061874B19F6D5'
               : id === 'midnightMonster'
                 ? '76599ABFADB3629F435165418BFCF02FB8FAC2C34A71B913106663655E6C41D0'
-                : 'B64E73F3127A636F336F769235A5BCB30F215C8C59F98E4841612A92BE94C171',
+                : id === 'airplane'
+                  ? 'B64E73F3127A636F336F769235A5BCB30F215C8C59F98E4841612A92BE94C171'
+                  : '99FA2EDD3431AC0D9D3AB975F0AB3170AE0549D0F0B31D34FCC47D3622F870ED',
   })]),
 ));
 
