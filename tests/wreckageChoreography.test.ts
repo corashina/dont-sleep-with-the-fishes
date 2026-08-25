@@ -16,6 +16,8 @@ describe('wreckage choreography', () => {
 
   it('samples every threat into one reused object', () => {
     const output = createWreckageSample();
+    sampleWreckageBeat('search', 0.7, output);
+    expect(output.debrisApproach).toBeGreaterThan(0);
     expect(sampleWreckageBeat('collapse', 0.75, output)).toBe(true);
     expect(output.fallingDebris).toBeGreaterThan(0);
     expect(output.silt).toBeGreaterThan(0);
