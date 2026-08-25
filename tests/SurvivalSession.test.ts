@@ -1597,6 +1597,41 @@ describe('SurvivalSession daytime actions', () => {
     expect(outcome.rewardSummary).toBeUndefined();
   });
 
+  it.each([
+    [0, { energy: 0, food: 1, bait: 0 }],
+    [0.999, { energy: 0, food: 0, bait: 1 }],
+  ] as const)('searches Empty Lifeboat with roll %s', (roll, resources) => {
+    const session = new SurvivalSession(saved(), {
+      seed: 1,
+      random: sequenceRandom([roll]),
+      initial: { energy: 1 },
+      initialEventId: 'empty-lifeboat',
+    });
+
+    expect(session.resolveEvent({ kind: 'choice', choiceId: 'search' })).toMatchObject({
+      accepted: true,
+      deltas: roll === 0 ? { energy: -1, food: 1 } : { energy: -1, bait: 1 },
+      rewardSummary: roll === 0
+        ? { kind: 'resource', id: 'food', quantity: 1 }
+        : { kind: 'resource', id: 'bait', quantity: 1 },
+      eventPresentationKey: 'empty-lifeboat.search',
+    });
+    expect(session.snapshot()).toMatchObject(resources);
+  });
+
+  it('rejects Empty Lifeboat search without changing resources', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 1,
+      initialEventId: 'empty-lifeboat',
+      initial: { energy: 0 },
+    });
+    const before = session.snapshot();
+
+    expect(session.resolveEvent({ kind: 'choice', choiceId: 'search' }))
+      .toMatchObject({ accepted: false });
+    expect(session.snapshot()).toEqual(before);
+  });
+
   it('rejects insufficient-energy Drifting Cargo retrieval atomically', () => {
     const session = driftingCargoSession([0], 2);
     const before = session.snapshot();

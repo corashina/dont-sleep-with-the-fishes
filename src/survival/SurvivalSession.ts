@@ -1074,20 +1074,25 @@ export class SurvivalSession {
     resolved: WeightedEventOutcome,
     fallbackFoodGranted: boolean,
   ): RewardSummary | undefined {
-    if (eventId !== 'drifting-barrel'
-      || (choiceId !== 'retrieve' && choiceId !== 'delegate-carlitos')) return undefined;
+    const driftingCargo = eventId === 'drifting-barrel'
+      && (choiceId === 'retrieve' || choiceId === 'delegate-carlitos');
+    const emptyLifeboat = eventId === 'empty-lifeboat' && choiceId === 'search';
+    if (!driftingCargo && !emptyLifeboat) return undefined;
     if (fallbackFoodGranted) return Object.freeze({ kind: 'resource', id: 'food', quantity: 1 });
     const added = resolved.effects.resources?.find(
       ({ operation, resource }) => operation === 'add'
-        && (resource === 'food' || resource === 'bait' || resource === 'repairMaterial'),
+        && (resource === 'food' || resource === 'bait'
+          || (driftingCargo && resource === 'repairMaterial')),
     );
     if (added !== undefined && typeof added.value === 'number') {
       const id = added.resource;
-      if (id === 'food' || id === 'bait' || id === 'repairMaterial') {
+      if (id === 'food' || id === 'bait' || (driftingCargo && id === 'repairMaterial')) {
         return Object.freeze({ kind: 'resource', id, quantity: added.value });
       }
     }
-    return Object.freeze({ kind: 'item', id: 'energyBar', quantity: 1 });
+    return driftingCargo
+      ? Object.freeze({ kind: 'item', id: 'energyBar', quantity: 1 })
+      : undefined;
   }
 
   private recordJournalEvent(
