@@ -185,13 +185,51 @@ const urls = import.meta.glob<string>(
   '../assets/models/events/*.glb',
   { eager: true, query: '?url', import: 'default' },
 );
+
+interface GeneratedEventModelMetadataSource {
+  readonly triangles: number;
+  readonly rawBounds: {
+    readonly min: readonly number[];
+    readonly max: readonly number[];
+  };
+  readonly animations?: readonly {
+    readonly name: string;
+    readonly duration: number;
+    readonly channels: number;
+  }[];
+}
+
+function checkedMetadata(
+  id: EventModelId,
+  source: GeneratedEventModelMetadataSource,
+): EventModelMetadata {
+  const { min, max } = source.rawBounds;
+  if (min.length !== 3 || max.length !== 3) {
+    throw new Error(`Event model ${id}: generated bounds metadata is invalid`);
+  }
+  return {
+    triangles: source.triangles,
+    rawBounds: {
+      min: [min[0]!, min[1]!, min[2]!],
+      max: [max[0]!, max[1]!, max[2]!],
+    },
+    ...(source.animations === undefined ? {} : { animations: source.animations }),
+  };
+}
+
 const generatedMetadata = {
-  ...generatedMetadataJson,
+  fogMan: checkedMetadata('fogMan', generatedMetadataJson.fogMan),
+  ghost: checkedMetadata('ghost', generatedMetadataJson.ghost),
+  siren: checkedMetadata('siren', generatedMetadataJson.siren),
+  sirenRock: checkedMetadata('sirenRock', generatedMetadataJson.sirenRock),
+  leakPlanks: checkedMetadata('leakPlanks', generatedMetadataJson.leakPlanks),
+  schoolFish: checkedMetadata('schoolFish', generatedMetadataJson.schoolFish),
+  snatcher: checkedMetadata('snatcher', generatedMetadataJson.snatcher),
+  shark: checkedMetadata('shark', generatedMetadataJson.shark),
+  deathStareBlob: checkedMetadata('deathStareBlob', generatedMetadataJson.deathStareBlob),
+  tornadoCore: checkedMetadata('tornadoCore', generatedMetadataJson.tornadoCore),
   containerShip: FOCUSED_EVENT_MODEL_METADATA.containerShip,
-} as unknown as Readonly<Record<
-  EventModelId,
-  EventModelMetadata
->>;
+} satisfies Readonly<Record<EventModelId, EventModelMetadata>>;
 
 function modelUrl(id: EventModelId): string {
   const url = urls[`../assets/models/events/${id}.glb`];

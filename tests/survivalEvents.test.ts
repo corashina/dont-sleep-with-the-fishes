@@ -325,9 +325,97 @@ describe('survival events', () => {
         requirements: undefined, companionAction: undefined,
       },
     ]);
-    expect(wreckage.choices.map(({ outcomes }) => outcomes.map(({ weight }) => weight)))
-      .toEqual([[35, 25, 20, 20], [35, 25, 20, 20],
-        [10, 10, 10, 10, 10, 10, 20, 20], [1]]);
+    const expectedOutcomes = [
+      ['search', [
+        ['wreckage-search-repair', 35, 'wreckage.search-repair', {
+          resources: [
+            { resource: 'energy', operation: 'subtract', value: 2 },
+            { resource: 'repairMaterial', operation: 'add', value: 2 },
+          ],
+        }],
+        ['wreckage-search-food', 25, 'wreckage.search-food', {
+          resources: [
+            { resource: 'energy', operation: 'subtract', value: 2 },
+            { resource: 'food', operation: 'add', value: 1 },
+          ],
+        }],
+        ['wreckage-search-bait', 20, 'wreckage.search-bait', {
+          resources: [
+            { resource: 'energy', operation: 'subtract', value: 2 },
+            { resource: 'bait', operation: 'add', value: 1 },
+          ],
+        }],
+        ['wreckage-search-injury', 20, 'wreckage.search-injury', {
+          resources: [
+            { resource: 'energy', operation: 'subtract', value: 2 },
+            { resource: 'health', operation: 'subtract', value: { min: 15, max: 25 } },
+          ],
+        }],
+      ]],
+      ['delegate-carlitos', [
+        ['wreckage-carlitos-repair', 35, 'wreckage.search-repair', {
+          resources: [{ resource: 'repairMaterial', operation: 'add', value: 2 }],
+        }],
+        ['wreckage-carlitos-food', 25, 'wreckage.search-food', {
+          resources: [{ resource: 'food', operation: 'add', value: 1 }],
+        }],
+        ['wreckage-carlitos-bait', 20, 'wreckage.search-bait', {
+          resources: [{ resource: 'bait', operation: 'add', value: 1 }],
+        }],
+        ['wreckage-carlitos-empty', 20, 'wreckage.carlitos-empty', {}],
+      ]],
+      ['dive', [
+        ['wreckage-dive-medkit', 10, 'wreckage.dive-loot', {
+          resources: [{ resource: 'energy', operation: 'subtract', value: 3 }],
+          items: [{ kind: 'gain', itemId: 'medicalKit', quantity: 1, fallbackFood: 1 }],
+        }],
+        ['wreckage-dive-flare-gun', 10, 'wreckage.dive-loot', {
+          resources: [{ resource: 'energy', operation: 'subtract', value: 3 }],
+          items: [{ kind: 'gain', itemId: 'flareGun', quantity: 1, fallbackFood: 1 }],
+        }],
+        ['wreckage-dive-duct-tape', 10, 'wreckage.dive-loot', {
+          resources: [{ resource: 'energy', operation: 'subtract', value: 3 }],
+          items: [{ kind: 'gain', itemId: 'ductTape', quantity: 1, fallbackFood: 1 }],
+        }],
+        ['wreckage-dive-energy-bar', 10, 'wreckage.dive-loot', {
+          resources: [{ resource: 'energy', operation: 'subtract', value: 3 }],
+          items: [{ kind: 'gain', itemId: 'energyBar', quantity: 1, fallbackFood: 1 }],
+        }],
+        ['wreckage-dive-collapse', 10, 'wreckage.dive-collapse', {
+          resources: [
+            { resource: 'energy', operation: 'subtract', value: 3 },
+            { resource: 'health', operation: 'subtract', value: { min: 25, max: 35 } },
+          ],
+        }],
+        ['wreckage-dive-collapse-scuba', 10, 'wreckage.dive-collapse', {
+          resources: [
+            { resource: 'energy', operation: 'subtract', value: 3 },
+            { resource: 'health', operation: 'subtract', value: { min: 25, max: 35 } },
+          ],
+          items: [{ kind: 'break', itemId: 'scubaSet', quantity: 1 }],
+        }],
+        ['wreckage-dive-creature', 20, 'wreckage.dive-creature', {
+          resources: [
+            { resource: 'energy', operation: 'subtract', value: 3 },
+            { resource: 'health', operation: 'subtract', value: { min: 30, max: 40 } },
+          ],
+        }],
+        ['wreckage-dive-ghost', 20, 'wreckage.dive-ghost', {
+          resources: [
+            { resource: 'energy', operation: 'subtract', value: 3 },
+            { resource: 'health', operation: 'subtract', value: { min: 20, max: 30 } },
+            { resource: 'pressure', operation: 'add', value: 1 },
+          ],
+        }],
+      ]],
+      ['leave', [['wreckage-leave', 1, 'wreckage.leave', {}]]],
+    ] as const;
+    for (const [choiceId, outcomes] of expectedOutcomes) {
+      const choice = wreckage.choices.find(({ id }) => id === choiceId);
+      expect(choice?.outcomes.map(({ resultId, weight, presentationKey, effects }) => [
+        resultId, weight, presentationKey, effects,
+      ])).toEqual(outcomes);
+    }
   });
 
   it('sets the six night-event rule constraints', () => {

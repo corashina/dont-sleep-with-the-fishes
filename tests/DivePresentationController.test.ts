@@ -214,4 +214,61 @@ describe('DivePresentationController', () => {
     expect(camera.position.toArray()).toEqual(initialPosition.toArray());
     controller.dispose();
   });
+
+  it('settles a revealed dive and restores its camera and item', async () => {
+    const { camera, initialPosition, supplies, controller } = createHarness();
+    const dive = controller.play(FIRST_SCUBA, {
+      onWaterImpact: () => undefined,
+      revealUnderwaterScene: true,
+    });
+    controller.update(83.6, 3.6);
+
+    controller.settleForVisibilityChange();
+    await dive;
+    expect(camera.position.toArray()).toEqual(initialPosition.toArray());
+    expect(supplies.setPresentationItemHidden).toHaveBeenLastCalledWith(
+      FIRST_SCUBA,
+      false,
+    );
+    controller.dispose();
+  });
+
+  it('restores a revealed dive before its replacement starts', async () => {
+    const { supplies, controller } = createHarness();
+    const first = controller.play(FIRST_SCUBA, {
+      onWaterImpact: () => undefined,
+      revealUnderwaterScene: true,
+    });
+    controller.update(85.8, 5.8);
+    await first;
+
+    const second = controller.play(SECOND_SCUBA, {
+      onWaterImpact: () => undefined,
+      revealUnderwaterScene: true,
+    });
+    expect(supplies.setPresentationItemHidden.mock.calls.slice(-2)).toEqual([
+      [FIRST_SCUBA, false],
+      [SECOND_SCUBA, true],
+    ]);
+    controller.clear();
+    await second;
+    controller.dispose();
+  });
+
+  it('disposes a revealed dive and restores its camera and item', async () => {
+    const { camera, initialPosition, supplies, controller } = createHarness();
+    const dive = controller.play(FIRST_SCUBA, {
+      onWaterImpact: () => undefined,
+      revealUnderwaterScene: true,
+    });
+    controller.update(85.8, 5.8);
+    await dive;
+
+    controller.dispose();
+    expect(camera.position.toArray()).toEqual(initialPosition.toArray());
+    expect(supplies.setPresentationItemHidden).toHaveBeenLastCalledWith(
+      FIRST_SCUBA,
+      false,
+    );
+  });
 });
