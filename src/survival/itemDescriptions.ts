@@ -10,6 +10,7 @@ export const SURVIVAL_ITEM_DESCRIPTIONS: Readonly<Record<ItemId, string>> = {
   medicalKit: 'Treats injuries once.',
   spyglass: 'Reveals distant movement and threats.',
   fishingNet: 'Collects fish and floating supplies.',
+  rope: 'Secures loose supplies and keeps them within reach.',
   bucket: 'Bails water and catches loose supplies.',
   flareGun: 'Fires one signal flare.',
   scubaSet: 'Enables dives beneath the lifeboat.',

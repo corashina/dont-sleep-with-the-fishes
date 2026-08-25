@@ -17,7 +17,9 @@ import {
 import { PropModelLibrary } from '../../src/world/PropModelLibrary';
 
 export function createTestPropModels(): PropModelLibrary {
-  const staticItemCount = ITEM_IDS.filter((id) => id !== 'carlitos').length;
+  const equipmentTemplateIndex = 18;
+  const practicalLightTemplateIndex = 19;
+  const eventTemplateIndex = 21;
   const template = (id: string, index: number): Group => {
     const root = new Group();
     const model = new Group();
@@ -66,17 +68,17 @@ export function createTestPropModels(): PropModelLibrary {
     template(id, index),
   ]));
   const equipmentTemplates = new Map<LifeboatEquipmentId, Group>([
-    ['fishingRod', template('fishingRod', staticItemCount)],
-    ['hammer', template('hammer', staticItemCount)],
-    ['pillow', template('pillow', staticItemCount)],
+    ['fishingRod', template('fishingRod', equipmentTemplateIndex)],
+    ['hammer', template('hammer', equipmentTemplateIndex)],
+    ['pillow', template('pillow', equipmentTemplateIndex)],
   ]);
   const practicalLightTemplates = new Map<PracticalLightModelId, Group>([
-    ['lantern', template('lantern', staticItemCount + 1)],
-    ['ceilingLight', template('ceilingLight', staticItemCount + 2)],
+    ['lantern', template('lantern', practicalLightTemplateIndex)],
+    ['ceilingLight', template('ceilingLight', practicalLightTemplateIndex + 1)],
   ]);
   const eventTemplates = new Map<EventModelId, Group>(EVENT_MODEL_IDS.map((id, index) => [
     id,
-    template(id, staticItemCount + 3 + index),
+    template(id, eventTemplateIndex + index),
   ]));
   const eventAnimations = new Map<EventModelId, readonly AnimationClip[]>([[
     'midnightMonster',

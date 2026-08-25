@@ -32,7 +32,7 @@ const ENTITY_AIMED: ReadonlySet<ItemId> = new Set([
 
 const HEAVY_ITEMS: ReadonlySet<ItemId> = new Set(['anchor', 'scubaSet']);
 const MEDIUM_ITEMS: ReadonlySet<ItemId> = new Set([
-  'medicalKit', 'fishingNet', 'bucket', 'umbrella', 'swimRing',
+  'medicalKit', 'fishingNet', 'rope', 'bucket', 'umbrella', 'swimRing',
   'shotgun', 'carlitos',
 ]);
 
@@ -69,6 +69,7 @@ const PROFILES: Readonly<Record<ItemId, EventItemMotionProfile>> = Object.freeze
     view: [0.3, -0.34, -0.92] as const,
     actionOrigin: [0, 0, -0.82] as const,
   }),
+  rope: createProfile('large', 'rope'),
   bucket: createProfile('large', 'bucket'),
   flareGun: Object.freeze({
     ...createProfile('one-hand', 'flareGun'),
