@@ -1064,6 +1064,18 @@ export class BoatWorld {
     return this.retrieveFeaturedDriftingItem(eventId);
   }
 
+  searchDriftingItem(eventId: DriftingItemEventId): Promise<void> {
+    if (
+      this.disposed
+      || eventId !== 'empty-lifeboat'
+      || this.activeFeaturedEventId !== eventId
+    ) {
+      return Promise.resolve();
+    }
+    this.toolHoverOutline.setTarget(null);
+    return this.playFeaturedPresentation('empty-lifeboat.search');
+  }
+
   delegateDriftingItem(eventId: DriftingItemEventId): Promise<void> {
     if (
       this.disposed

@@ -2506,6 +2506,35 @@ describe('BoatWorld helpers', () => {
     }
   });
 
+  it('routes search only to the active Empty Lifeboat presentation', async () => {
+    const propModels = createTestPropModels();
+    const adapter = eventAdapterTestDouble('empty-lifeboat');
+    const create = vi.spyOn(EventPresentationRegistry.prototype, 'create')
+      .mockReturnValue(adapter);
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+
+    try {
+      world.stageEvent('empty-lifeboat');
+
+      await world.searchDriftingItem('empty-lifeboat');
+      await world.searchDriftingItem('drifting-barrel');
+
+      expect(adapter.react).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+        outcome: expect.objectContaining({
+          eventPresentationKey: 'empty-lifeboat.search',
+        }),
+      }));
+    } finally {
+      world.dispose();
+      create.mockRestore();
+      propModels.dispose();
+    }
+  });
+
   it('does not dispose drifting barrel resources borrowed from the furniture library', () => {
     const propModels = createTestPropModels();
     const furniture = createTestShipFurniture();
