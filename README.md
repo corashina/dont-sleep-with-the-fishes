@@ -165,6 +165,8 @@ Day and night events fade to black before each reveal.
 
 Event tableaus now include drifting flowers and the chest mimic.
 
+- **Empty Lifeboat:** From day 10, spend one energy to search a drifting raft. Every search grants one food or one bait.
+
 Pressure, flags, chest state, day bounds, cooldowns, and inventory can gate events.
 
 Clicking the physical boat lantern ends the day and uses the same slow cover before sleep. Most nights open an event decision; some nights pass quietly under the black cover before dawn fades back in over 2.5 seconds. Resolving a nighttime event or completing a quiet night advances to dawn. Each completed night adds an unread journal entry, and the player can open the journal later without advancing time.
