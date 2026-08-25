@@ -78,6 +78,20 @@ describe('EventModelLibrary', () => {
     library.dispose();
   });
 
+  it('loads the existing container ship as a dedicated event model', async () => {
+    const roots = completeRoots();
+    const loader: EventModelLoader = {
+      load: vi.fn(async () => roots.containerShip),
+    };
+    const library = await EventModelLibrary.load(['containerShip'], loader);
+    const instance = library.create('containerShip');
+
+    expect(instance.root.userData.eventModelId).toBe('containerShip');
+
+    instance.dispose();
+    library.dispose();
+  });
+
   it('defines the approved event model IDs', () => {
     expect(EVENT_MODEL_IDS).toEqual([
       'fogMan',
@@ -90,6 +104,7 @@ describe('EventModelLibrary', () => {
       'anglerFish',
       'deathStareBlob',
       'tornadoCore',
+      'containerShip',
     ]);
   });
 
