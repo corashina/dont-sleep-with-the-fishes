@@ -25,6 +25,7 @@ $modelIds = @(
   'midnightShovel'
   'midnightMonster'
   'airplane'
+  'emptyLifeboat'
 )
 $expectedFiles = @(
   $modelIds | ForEach-Object { "$_.glb" }

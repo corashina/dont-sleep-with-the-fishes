@@ -212,12 +212,13 @@ one-food catches. All current fishing outcomes have mapped Poly Pizza models.
 
 ## Runtime featured-event model ledger
 
-These individual low-poly models show the five featured survival events.
+These individual low-poly models support featured survival events.
 Runtime setup normalizes their scale and applies the game palette.
 
 | Runtime ID | File | Model / creator | Permanent source | Source asset ID | License | Source triangles | Committed triangles | Modifications | Downloaded |
 |---|---|---|---|---|---|---:|---:|---|---|
 | driftingBarrel | `driftingBarrel.glb` | Barrel / Don Carson | https://poly.pizza/m/cu9GJ0j13fj | `poly-pizza:2244f3ae-5583-4ea0-b980-6fdd0084cee7` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 282 | 282 | Source GLB SHA-256 `89031BAAA180FD8040C8C2A27F56AC479BD6FE8A7C4EC5495D1433D185840EF5`; committed without geometry changes. | 2026-07-30 |
+| emptyLifeboat | `emptyLifeboat.glb` | Raft / Quaternius | https://poly.pizza/m/Hgf0R8s4Uo | `poly-pizza:9c276a46-9174-48ee-9624-3944d5b0d3ef` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 1036 | 1036 | Source GLB SHA-256 `722C09E839EDB2A300208CCCB324A11F4D93F8946F7270E2DAED54DF306CC77D`; output GLB SHA-256 `99FA2EDD3431AC0D9D3AB975F0AB3170AE0549D0F0B31D34FCC47D3622F870ED`; pruned, deduplicated, welded, unpartitioned, renamed, and embedded. | 2026-08-25 |
 | mysteryChest | `mysteryChest.glb` | Chest / Quaternius | https://poly.pizza/m/O72u4Drp8k | `poly-pizza:803af4ae-433f-4b05-b1f1-c6a2da02d768` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | 1676 | 1676 | Source GLB SHA-256 `07193221A749D5DCF2B0A3D82D4EE9831DA2E2C4CA71B395050A88BB2BABE75B`; committed without geometry changes. | 2026-07-30 |
 | flowers | `flowers.glb` | Anemone / Poly by Google | https://poly.pizza/m/1FMGb52XdD- | `poly-pizza:e038aa13-5138-4504-9737-a9e90539275f` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | 1024 | 1024 | Source GLB SHA-256 `7CB57FE979D7D6FD71DED0787C91C1EC61B75B9EF2C28F32F9C5034E18E292E0`; committed without geometry changes. | 2026-08-01 |
 

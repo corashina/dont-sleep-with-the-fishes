@@ -36,6 +36,10 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
     models: ['driftingBarrel'],
     sounds: [],
   },
+  'empty-lifeboat': {
+    models: ['emptyLifeboat'],
+    sounds: [],
+  },
   'drifting-chest': {
     models: ['mysteryChest'],
     sounds: [],
