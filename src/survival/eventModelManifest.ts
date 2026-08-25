@@ -1,12 +1,14 @@
 /// <reference types="vite/client" />
 
 import generatedMetadataJson from '../assets/models/events/event-model-metadata.json';
+import { FOCUSED_EVENT_MODEL_METADATA } from '../world/focusedEventModelMetadata';
 
 export const SURVIVAL_EVENT_MODEL_IDS = [
   'driftingBarrel',
   'emptyLifeboat',
   'checkBackFish',
   'checkBackAnglerfish',
+  'anglerFish',
   'mysteryChest',
   'flowers',
 ] as const;
@@ -51,6 +53,12 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
     rotation: [0, -Math.PI / 2, 0] as const,
     maxTriangles: generatedMetadataJson.anglerFish.triangles,
   }),
+  anglerFish: Object.freeze({
+    url: new URL('../assets/models/events/anglerFish.glb', import.meta.url).href,
+    targetLongestDimension: 1.4,
+    rotation: [0, -Math.PI / 2, 0] as const,
+    maxTriangles: generatedMetadataJson.anglerFish.triangles,
+  }),
   mysteryChest: Object.freeze({
     url: new URL('../assets/models/events/mysteryChest.glb', import.meta.url).href,
     targetLongestDimension: 1.35,
@@ -69,6 +77,7 @@ export const EVENT_MODEL_IDS = Object.freeze([
   'fogMan', 'ghost', 'siren', 'sirenRock',
   'leakPlanks', 'schoolFish', 'snatcher', 'anglerFish', 'deathStareBlob',
   'tornadoCore',
+  'containerShip',
 ] as const);
 
 export type EventModelId = typeof EVENT_MODEL_IDS[number];
@@ -158,6 +167,12 @@ const PRESENTATION = {
     offset: [0, 0, 0],
     maxTriangles: 3_000,
   },
+  containerShip: {
+    targetLongestDimension: 18,
+    rotation: [0, 0, 0],
+    offset: [0, 0, 0],
+    maxTriangles: 2_500,
+  },
 } as const satisfies Readonly<Record<
   EventModelId,
   Pick<
@@ -170,7 +185,10 @@ const urls = import.meta.glob<string>(
   '../assets/models/events/*.glb',
   { eager: true, query: '?url', import: 'default' },
 );
-const generatedMetadata = generatedMetadataJson as unknown as Readonly<Record<
+const generatedMetadata = {
+  ...generatedMetadataJson,
+  containerShip: FOCUSED_EVENT_MODEL_METADATA.containerShip,
+} as unknown as Readonly<Record<
   EventModelId,
   EventModelMetadata
 >>;
