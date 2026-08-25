@@ -15,7 +15,7 @@ import {
   Vector3,
 } from 'three';
 import {
-  DAY_ACTION_ONLY_ITEM_IDS,
+  EVENT_CHOICE_EXCLUDED_ITEM_IDS,
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
@@ -691,6 +691,9 @@ export class BoatWorld {
         supplies: this.supplyDisplay,
         itemAimTarget: this.moonItemAimTarget,
       },
+      starry: {
+        sky: this.sky,
+      },
       registerRescueCueCallback: (callback) => {
         rescueCueCallback = callback;
       },
@@ -881,6 +884,7 @@ export class BoatWorld {
     choiceId: string,
     instanceId: ItemInstanceId,
     onAction?: (cueIndex: number) => void,
+    allowDayActionItem = false,
   ): Promise<void> {
     if (this.disposed) return;
     if (eventPresentationRoute(eventId) !== null) {
@@ -889,7 +893,12 @@ export class BoatWorld {
     const operation = ++this.weatherEventOperation;
     this.itemUseController.clear(this.phase);
     const itemId = this.supplyDisplay.itemType(instanceId);
-    if (itemId !== null && DAY_ACTION_ONLY_ITEM_IDS.includes(itemId)) return;
+    if (
+      itemId !== null
+      && EVENT_CHOICE_EXCLUDED_ITEM_IDS.includes(itemId)
+      && !allowDayActionItem
+    ) return;
+    if (eventId === 'flowers' && choiceId === 'bucket' && itemId === 'bucket') return;
     const context = itemId === null
       ? null
       : resolveEventItemUseContext(eventId, choiceId, itemId);

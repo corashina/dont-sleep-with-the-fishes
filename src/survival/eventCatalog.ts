@@ -21,12 +21,23 @@ export const SURVIVAL_EVENT_IDS = Object.freeze([
   'windy-night', 'bad-sleep', 'thunderstorm', 'restless-waves',
   'man-in-the-fog', 'ghosts', 'eerie-melody', 'face-on-the-moon',
   'shadow-figure', 'guarded-sleep',
-  'drifting-barrel', 'drifting-chest', 'empty-lifeboat', 'check-the-back',
+  'drifting-barrel', 'drifting-chest', 'empty-lifeboat', 'wreckage',
+  'check-the-back',
   'flowers', 'chest-attack', 'midnight-tour', 'night-trader',
   'handyman', 'other-people', 'plane',
 ] as const);
 
 export type SurvivalEventId = typeof SURVIVAL_EVENT_IDS[number];
+export const WRECKAGE_RESULT_IDS = Object.freeze([
+  'wreckage-search-repair', 'wreckage-search-food', 'wreckage-search-bait',
+  'wreckage-search-injury', 'wreckage-carlitos-repair',
+  'wreckage-carlitos-food', 'wreckage-carlitos-bait', 'wreckage-carlitos-empty',
+  'wreckage-dive-medkit', 'wreckage-dive-flare-gun', 'wreckage-dive-duct-tape',
+  'wreckage-dive-energy-bar', 'wreckage-dive-collapse',
+  'wreckage-dive-collapse-scuba', 'wreckage-dive-creature',
+  'wreckage-dive-ghost', 'wreckage-leave',
+] as const);
+export type WreckageResultId = typeof WRECKAGE_RESULT_IDS[number];
 export type SignalSightingEventId = Extract<
   SurvivalEventId,
   'other-people' | 'plane'
@@ -102,6 +113,7 @@ const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.free
   'drifting-barrel': 'A sealed barrel drifts within reach of the boat.',
   'drifting-chest': 'A small chest drifts within reach of the boat.',
   'empty-lifeboat': 'An empty lifeboat drifts close enough to search.',
+  wreckage: 'Broken cargo and timber drift above a wreck resting below.',
   'check-the-back': 'Something thumps against the back of the boat.',
   flowers: 'A small patch of flowers drifts beside the boat.',
   'chest-attack': 'The chest shudders and opens a row of wet teeth.',
@@ -181,6 +193,20 @@ const featuredOutcome = (
   message,
   presentationKey,
   ...(minimumPriorAppearances === undefined ? {} : { minimumPriorAppearances }),
+  effects: outcomeEffects,
+});
+
+const wreckageOutcome = (
+  presentationKey: EventPresentationKey,
+  weight: number,
+  message: string,
+  outcomeEffects: WeightedEventOutcome['effects'],
+  resultId: WreckageResultId,
+): WeightedEventOutcome => ({
+  resultId,
+  weight,
+  message,
+  presentationKey,
   effects: outcomeEffects,
 });
 
@@ -529,6 +555,64 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
         1,
         'The empty lifeboat drifts away.',
       )),
+  ]),
+  event('wreckage', 'day', 'Wreckage', 'uncertain', 'dive', 1, 4, 5, [
+    {
+      ...contextualChoice('search', 'Search Debris',
+        wreckageOutcome('wreckage.search-repair', 35, 'You recover repair timber.',
+          effects([subtract('energy', 2), add('repairMaterial', 2)]),
+          'wreckage-search-repair'),
+        wreckageOutcome('wreckage.search-food', 25, 'You recover one food.',
+          effects([subtract('energy', 2), add('food', 1)]), 'wreckage-search-food'),
+        wreckageOutcome('wreckage.search-bait', 20, 'You recover one bait.',
+          effects([subtract('energy', 2), add('bait', 1)]), 'wreckage-search-bait'),
+        wreckageOutcome('wreckage.search-injury', 20, 'Sharp debris cuts you.',
+          effects([subtract('energy', 2), subtract('health', { min: 15, max: 25 })]),
+          'wreckage-search-injury')),
+      requirements: [{ resource: 'energy', minimum: 2 }],
+    },
+    {
+      ...contextualChoice('delegate-carlitos', 'Send Carlitos',
+        wreckageOutcome('wreckage.search-repair', 35, 'Carlitos recovers repair timber.',
+          effects([add('repairMaterial', 2)]), 'wreckage-carlitos-repair'),
+        wreckageOutcome('wreckage.search-food', 25, 'Carlitos recovers one food.',
+          effects([add('food', 1)]), 'wreckage-carlitos-food'),
+        wreckageOutcome('wreckage.search-bait', 20, 'Carlitos recovers one bait.',
+          effects([add('bait', 1)]), 'wreckage-carlitos-bait'),
+        wreckageOutcome('wreckage.carlitos-empty', 20, 'Carlitos returns empty.',
+          {}, 'wreckage-carlitos-empty')),
+      companionAction: 'delegateCarlitos',
+    },
+    {
+      ...choice('dive', 'Dive Into Wreck', 'scubaSet',
+        wreckageOutcome('wreckage.dive-loot', 10, 'You recover a medkit.',
+          effects([subtract('energy', 3)], [gain('medicalKit')]), 'wreckage-dive-medkit'),
+        wreckageOutcome('wreckage.dive-loot', 10, 'You recover a flare gun.',
+          effects([subtract('energy', 3)], [gain('flareGun')]), 'wreckage-dive-flare-gun'),
+        wreckageOutcome('wreckage.dive-loot', 10, 'You recover duct tape.',
+          effects([subtract('energy', 3)], [gain('ductTape')]), 'wreckage-dive-duct-tape'),
+        wreckageOutcome('wreckage.dive-loot', 10, 'You recover an energy bar.',
+          effects([subtract('energy', 3)], [gain('energyBar')]), 'wreckage-dive-energy-bar'),
+        wreckageOutcome('wreckage.dive-collapse', 10, 'The wreck collapses around you.',
+          effects([subtract('energy', 3), subtract('health', { min: 25, max: 35 })]),
+          'wreckage-dive-collapse'),
+        wreckageOutcome('wreckage.dive-collapse', 10,
+          'The wreck collapses and damages your gear.',
+          effects([subtract('energy', 3), subtract('health', { min: 25, max: 35 })],
+            [breakItem('scubaSet')]), 'wreckage-dive-collapse-scuba'),
+        wreckageOutcome('wreckage.dive-creature', 20,
+          'A creature attacks inside the wreck.',
+          effects([subtract('energy', 3), subtract('health', { min: 30, max: 40 })]),
+          'wreckage-dive-creature'),
+        wreckageOutcome('wreckage.dive-ghost', 20,
+          'A presence follows you through the wreck.',
+          effects([subtract('energy', 3), subtract('health', { min: 20, max: 30 }),
+            add('pressure', 1)]), 'wreckage-dive-ghost')),
+      requirements: [{ resource: 'energy', minimum: 3 }],
+    },
+    contextualChoice('leave', 'Leave',
+      wreckageOutcome('wreckage.leave', 1, 'You leave the wreckage behind.',
+        {}, 'wreckage-leave')),
   ]),
   event('check-the-back', 'night', 'Check the Back', 'safe', 'fish', 3, 2, 35, [
     contextualChoice('check', 'Yes',

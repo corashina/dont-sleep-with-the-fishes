@@ -898,6 +898,7 @@ describe('BoatWorld helpers', () => {
         || eventId === 'handyman'
         || eventId === 'other-people'
         || eventId === 'plane'
+        || eventId === 'wreckage'
       ) {
         expect(generic).toBeUndefined();
       } else {
@@ -3894,10 +3895,8 @@ describe('BoatWorld helpers', () => {
     },
   );
 
-  it.each([
-    ['scubaSet'],
-    ['radio'],
-  ] as const)('does not animate day-action-only item %s for events', async (itemId) => {
+  it('does not animate the event-choice-excluded Radio for events', async () => {
+    const itemId = 'radio';
     const item = savedItem(itemId);
     const propModels = createTestPropModels();
     const supplyItem = vi.spyOn(BoatSupplyDisplay.prototype, 'playEventItemUse');
