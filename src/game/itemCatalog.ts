@@ -1,6 +1,6 @@
 export const ITEM_IDS = [
   'cannedFood', 'baitTin', 'ductTape', 'compass', 'map', 'medicalKit',
-  'spyglass', 'fishingNet', 'bucket', 'flareGun', 'scubaSet', 'anchor',
+  'spyglass', 'fishingNet', 'rope', 'bucket', 'flareGun', 'scubaSet', 'anchor',
   'radio', 'umbrella', 'swimRing', 'flashlight', 'shotgun',
   'energyBar', 'carlitos',
 ] as const;
@@ -48,6 +48,7 @@ const rawDefinitions = {
   medicalKit: define('MEDKIT', 2, 1, 1, false, false, 'treat'),
   spyglass: define('BINOCULARS', 1, 1, null, true, true, null),
   fishingNet: define('FISHING NET', 2, 1, null, true, true, null),
+  rope: define('ROPE', 2, 1, null, true, true, null),
   bucket: define('BUCKET', 2, 1, null, true, true, null),
   flareGun: define('FLARE GUN', 1, 1, 1, false, false, null),
   scubaSet: define('SCUBA GEAR', 3, 1, null, true, true, 'dive'),
@@ -79,6 +80,7 @@ const APPROVED_SPAWN_COUNTS = {
   medicalKit: 1,
   spyglass: 1,
   fishingNet: 1,
+  rope: 1,
   bucket: 1,
   flareGun: 1,
   scubaSet: 1,
@@ -152,7 +154,7 @@ export function validateItemCatalog(
     (sum, id) => sum + (definitions[id]?.spawnCount ?? 0),
     0,
   );
-  if (total !== 22) errors.push(`catalog must create exactly 22 instances, received ${total}`);
+  if (total !== 23) errors.push(`catalog must create exactly 23 instances, received ${total}`);
   if (errors.length > 0) throw new Error(`Invalid item catalog: ${errors.join('; ')}`);
 }
 
