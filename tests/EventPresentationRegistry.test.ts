@@ -345,6 +345,48 @@ describe('EventPresentationRegistry', () => {
     }
   });
 
+  it('constructs Wreckage only through the dedicated family', () => {
+    const registry = new EventPresentationRegistry();
+    const { dependencies } = createDependencies();
+
+    const adapter = registry.create('wreckage', dependencies);
+
+    expect(adapter.eventId).toBe('wreckage');
+    expect(adapter.roots).toHaveLength(2);
+    expect(calledFamilyConstructors()).toEqual(['coordinator', 'wreckage']);
+    adapter.dispose();
+  });
+
+  it('passes owned model results through the borrowed library', () => {
+    const containerShip = {
+      root: new Group(),
+      dispose: vi.fn(),
+    };
+    const create = vi.fn(() => containerShip);
+    const { dependencies: defaults } = createDependencies();
+    const dependencies = {
+      ...defaults,
+      dedicatedEnvironment: {
+        ...defaults.dedicatedEnvironment,
+        eventModels: {
+          create,
+          animations: vi.fn(() => []),
+          dispose: vi.fn(),
+        },
+      },
+    } as unknown as EventPresentationAdapterDependencies;
+
+    const adapter = new EventPresentationRegistry().create('wreckage', dependencies);
+
+    const environment = constructors.wreckage.mock.calls[0]![0];
+    const forwarded = environment.eventModels.create('containerShip');
+    expect(forwarded).toBe(containerShip);
+    forwarded.dispose();
+    expect(create).toHaveBeenCalledWith('containerShip');
+    expect(containerShip.dispose).toHaveBeenCalledOnce();
+    adapter.dispose();
+  });
+
   it.each([
     ['dangerous-waters', ['layer']],
     ['leak', ['coordinator', 'leak']],

@@ -18,6 +18,7 @@ import { collectMaterialTextures } from '../../rendering/modelPresentation';
 import {
   collectMeshResources,
   disposeResourceSets,
+  ignoreCleanupError,
   runCleanupSteps,
 } from '../../world/SceneResources';
 import type { EventModelInstance } from '../EventModelLibrary';
@@ -85,6 +86,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   private readonly sample: WreckageSample = createWreckageSample();
   private readonly scratchObject = new Object3D();
   private readonly scratchMatrix = new Matrix4();
+  private readonly baseDebrisMatrices = SURFACE_DEBRIS.map(() => new Matrix4());
   private readonly ship: EventModelInstance;
   private readonly anglerfish: Group;
   private readonly ghost: Group;
@@ -98,6 +100,11 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   private readonly ghostGeometries = new Set<BufferGeometry>();
   private readonly ghostMaterials = new Set<Material>();
   private readonly ghostTextures = new Set<Texture>();
+  private readonly completeActiveSteps: readonly (() => void)[] = [
+    () => this.restoreCompletedSearchDebris(),
+    () => this.releaseCompletedDive(),
+    () => this.resolveCompletedBeat(),
+  ];
   private readonly debrisMaterial = new MeshStandardMaterial({
     color: 0x5f4a37,
     emissive: 0x16100b,
@@ -124,8 +131,11 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     side: DoubleSide,
   });
   private active: ActiveWreckageBeat | null = null;
+  private completingActive: ActiveWreckageBeat | null = null;
   private result: WreckageResult = null;
-  private surfaceSeed = 0;
+  private surfaceSeedOffset = 0;
+  private selectedDebrisIndex = 0;
+  private debrisMotionApplied = false;
   private staged = false;
   private operation = 0;
   private diveOwned = false;
@@ -227,10 +237,14 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.releaseDive();
     this.staged = true;
     this.result = null;
-    this.surfaceSeed = context.variantSeed;
+    const seed = Number.isFinite(context.variantSeed) ? Math.trunc(context.variantSeed) : 0;
+    this.surfaceSeedOffset = seed % 7;
+    this.selectedDebrisIndex = ((seed % SURFACE_DEBRIS.length) + SURFACE_DEBRIS.length)
+      % SURFACE_DEBRIS.length;
+    this.debrisMotionApplied = false;
     this.worldRoot.visible = true;
     this.boatRoot.visible = true;
-    this.applySurfaceDebris(context.variantSeed, 0, 0, 0);
+    this.cacheSurfaceDebris();
     sampleWreckageBeat('reveal', 0, this.sample);
     this.applySample();
   }
@@ -269,7 +283,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
       });
     } catch (error) {
       if (!this.ownsOperation(operation)) return false;
-      this.releaseDive();
+      ignoreCleanupError(() => this.releaseDive());
       throw error;
     }
     if (!this.ownsOperation(operation)) return false;
@@ -288,7 +302,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     }
     if (key === 'wreckage.search-injury') {
       this.result = null;
-      return this.startBeat('search');
+      return this.startBeat('injury');
     }
     if (
       key === 'wreckage.search-repair'
@@ -330,27 +344,33 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   settleForVisibilityChange(): void {
     if (this.disposed) return;
     this.beginOperation();
-    this.settleDive();
-    this.settleActive();
+    runCleanupSteps([
+      () => this.settleDive(),
+      () => this.settleActive(),
+    ]);
   }
 
   clear(): void {
     if (this.disposed) return;
     this.beginOperation();
-    this.cancelActive();
-    this.releaseDive();
-    this.staged = false;
-    this.result = null;
-    this.hideScene();
+    runCleanupSteps([
+      () => this.cancelActive(),
+      () => this.releaseDive(),
+      () => {
+        this.staged = false;
+        this.result = null;
+      },
+      () => this.hideScene(),
+    ]);
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.beginOperation();
-    this.cancelActive();
-    this.releaseDive();
     runCleanupSteps([
+      () => this.cancelActive(),
+      () => this.releaseDive(),
       () => this.hideScene(),
       () => this.boatRoot.clear(),
       () => this.worldRoot.clear(),
@@ -389,8 +409,26 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     if (this.active !== active) return;
     if (this.advanceActive(active)) return;
     this.active = null;
-    if (active.releaseDiveOnFinish) this.releaseDive();
-    active.resolve();
+    this.completingActive = active;
+    try {
+      runCleanupSteps(this.completeActiveSteps);
+    } finally {
+      this.completingActive = null;
+    }
+  }
+
+  private restoreCompletedSearchDebris(): void {
+    if (this.completingActive?.beat === 'search' && this.debrisMotionApplied) {
+      this.restoreSurfaceDebris();
+    }
+  }
+
+  private releaseCompletedDive(): void {
+    if (this.completingActive?.releaseDiveOnFinish) this.releaseDive();
+  }
+
+  private resolveCompletedBeat(): void {
+    this.completingActive?.resolve();
   }
 
   private advanceActive(active: ActiveWreckageBeat): boolean {
@@ -408,7 +446,14 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     const active = this.active;
     if (active === null) return;
     this.active = null;
-    active.resolve();
+    runCleanupSteps([
+      () => {
+        if (active.beat === 'search' && this.debrisMotionApplied) {
+          this.restoreSurfaceDebris();
+        }
+      },
+      () => active.resolve(),
+    ]);
   }
 
   private releaseDive(): void {
@@ -448,32 +493,58 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.applySample();
   }
 
-  private applySurfaceDebris(
-    seed: number,
-    alpha: number,
+  private writeSurfaceDebrisMatrix(
+    index: number,
     approach: number,
     falling: number,
   ): void {
-    const seedOffset = Number.isFinite(seed) ? Math.trunc(seed) % 7 : 0;
+    const placement = SURFACE_DEBRIS[index]!;
+    this.scratchObject.position.set(
+      placement.x + ((this.surfaceSeedOffset + index * 3) % 5 - 2) * 0.08,
+      placement.y + approach * 0.06 - falling * (1.5 + index * 0.18),
+      placement.z + approach * (2.1 + index * 0.2),
+    );
+    this.scratchObject.rotation.set(
+      0.08 * (index - 1) + falling * (0.42 + index * 0.06),
+      placement.yaw,
+      0.1 * (index % 2) + falling * 0.18,
+    );
+    this.scratchObject.scale.set(placement.scale, placement.scale, placement.scale);
+    this.scratchObject.updateMatrix();
+    this.scratchMatrix.copy(this.scratchObject.matrix);
+    this.debris.setMatrixAt(index, this.scratchMatrix);
+  }
+
+  private cacheSurfaceDebris(): void {
     for (let index = 0; index < SURFACE_DEBRIS.length; index += 1) {
-      const placement = SURFACE_DEBRIS[index]!;
-      this.scratchObject.position.set(
-        placement.x + ((seedOffset + index * 3) % 5 - 2) * 0.08,
-        placement.y + approach * 0.06 - falling * (1.5 + index * 0.18),
-        placement.z + approach * (2.1 + index * 0.2),
-      );
-      this.scratchObject.rotation.set(
-        0.08 * (index - 1) + falling * (0.42 + index * 0.06),
-        placement.yaw,
-        0.1 * (index % 2) + falling * 0.18,
-      );
-      this.scratchObject.scale.set(placement.scale, placement.scale, placement.scale);
-      this.scratchObject.updateMatrix();
-      this.scratchMatrix.copy(this.scratchObject.matrix);
-      this.debris.setMatrixAt(index, this.scratchMatrix);
+      this.writeSurfaceDebrisMatrix(index, 0, 0);
+      this.baseDebrisMatrices[index]!.copy(this.scratchMatrix);
     }
     this.debris.instanceMatrix.needsUpdate = true;
-    this.debrisMaterial.opacity = alpha;
+  }
+
+  private applySurfaceDebrisMotion(approach: number, falling: number): void {
+    if (falling > 0) {
+      for (let index = 0; index < SURFACE_DEBRIS.length; index += 1) {
+        this.writeSurfaceDebrisMatrix(
+          index,
+          index === this.selectedDebrisIndex ? approach : 0,
+          falling,
+        );
+      }
+    } else {
+      this.writeSurfaceDebrisMatrix(this.selectedDebrisIndex, approach, 0);
+    }
+    this.debris.instanceMatrix.needsUpdate = true;
+    this.debrisMotionApplied = true;
+  }
+
+  private restoreSurfaceDebris(): void {
+    for (let index = 0; index < this.baseDebrisMatrices.length; index += 1) {
+      this.debris.setMatrixAt(index, this.baseDebrisMatrices[index]!);
+    }
+    this.debris.instanceMatrix.needsUpdate = true;
+    this.debrisMotionApplied = false;
   }
 
   private applySiltInstances(strength: number): void {
@@ -498,12 +569,10 @@ export class WreckagePresentation implements DedicatedEventPresentation {
 
   private applySample(): void {
     const sample = this.sample;
-    this.applySurfaceDebris(
-      this.surfaceSeed,
-      sample.debrisAlpha,
-      sample.debrisApproach,
-      sample.fallingDebris,
-    );
+    if (sample.debrisApproach > 0 || sample.fallingDebris > 0) {
+      this.applySurfaceDebrisMotion(sample.debrisApproach, sample.fallingDebris);
+    }
+    this.debrisMaterial.opacity = sample.debrisAlpha;
     this.applySiltInstances(sample.silt);
     this.siltMaterial.opacity = Math.min(0.68, sample.silt * 0.68);
     this.flashMaterial.opacity = Math.min(0.42, sample.redFlash * 0.42);

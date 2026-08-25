@@ -7,6 +7,7 @@ import {
 export type WreckageBeat =
   | 'reveal'
   | 'search'
+  | 'injury'
   | 'leave'
   | 'underwater-hold'
   | 'loot'
@@ -32,6 +33,7 @@ export interface WreckageSample {
 const DURATIONS: Readonly<Record<WreckageBeat, number>> = Object.freeze({
   reveal: 1.2,
   search: 1.4,
+  injury: 1.4,
   leave: 1.2,
   'underwater-hold': 3,
   loot: 1.2,
@@ -79,9 +81,13 @@ export function sampleWreckageBeat(
   output.debrisApproach = beat === 'search'
     ? smootherstepRange(0.08, 0.82, t)
     : 0;
-  output.wreckAlpha = beat === 'underwater-hold'
-    ? smoothstepRange(0, 0.28, t)
-    : 0;
+  output.wreckAlpha = beat === 'reveal'
+    ? smoothstepRange(0, 0.45, t)
+    : beat === 'search' || beat === 'injury'
+      ? 1
+      : beat === 'underwater-hold'
+        ? smoothstepRange(0, 0.28, t)
+        : 0;
   output.lootGlow = beat === 'loot' ? Math.sin(Math.PI * t) : 0;
   output.fallingDebris = beat === 'collapse'
     ? smootherstepRange(0.08, 0.72, t)
@@ -95,8 +101,10 @@ export function sampleWreckageBeat(
     : 0;
   output.cameraJolt = beat === 'collapse' || beat === 'creature'
     ? Math.sin(t * Math.PI * 8) * (1 - t)
-    : 0;
-  output.redFlash = beat === 'search' ? Math.sin(Math.PI * t) : 0;
+    : beat === 'injury'
+      ? Math.sin(t * Math.PI * 7) * (1 - t)
+      : 0;
+  output.redFlash = beat === 'injury' ? Math.sin(Math.PI * t) : 0;
   output.sceneAlpha = beat === 'leave' || beat === 'return' ? 1 - t : 1;
   return true;
 }
