@@ -2,6 +2,7 @@ import { Group, type Object3D, type PerspectiveCamera } from 'three';
 import { CheckBackPresentation } from './CheckBackPresentation';
 import { DriftingCargoPresentation } from './DriftingCargoPresentation';
 import type { DriftingWater } from './DriftingWaveMotion';
+import { EmptyLifeboatPresentation } from './EmptyLifeboatPresentation';
 import type { FeaturedEventPresentation } from './FeaturedEventPresentation';
 import {
   isEventPresentationRoute,
@@ -40,7 +41,8 @@ export class FeaturedEventPresentations {
     );
     const includeCargo = onlyEventId === undefined
       || (onlyEventId !== null && isDriftingCargoEventId(onlyEventId));
-    if (includeCargo && driftingWater === undefined) {
+    const includeLifeboat = include('empty-lifeboat');
+    if ((includeCargo || includeLifeboat) && driftingWater === undefined) {
       throw new Error('Drifting events require the world wave source.');
     }
     this.driftingCargo = includeCargo && driftingWater !== undefined
@@ -49,6 +51,12 @@ export class FeaturedEventPresentations {
           chest: include('drifting-chest') ? models.clone('mysteryChest') : new Group(),
         }, driftingCargoSternTarget, driftingWater)
       : null;
+    if (includeLifeboat && driftingWater !== undefined) {
+      this.presentations.set('empty-lifeboat', new EmptyLifeboatPresentation(
+        models.clone('emptyLifeboat'),
+        driftingWater,
+      ));
+    }
     if (include('check-the-back')) {
       this.presentations.set('check-the-back', new CheckBackPresentation(
         models.clone('checkBackFish'),

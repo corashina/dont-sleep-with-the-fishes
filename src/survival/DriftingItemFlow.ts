@@ -14,12 +14,11 @@ export type DriftingItemWorldPort = Pick<
   | 'enterDriftingItemView'
   | 'exitDriftingItemView'
   | 'retrieveDriftingItem'
+  | 'searchDriftingItem'
   | 'delegateDriftingItem'
   | 'recedeDriftingItem'
   | 'projectEventInteractionBounds'
-> & {
-  readonly searchDriftingItem?: (eventId: DriftingItemEventId) => Promise<void>;
-};
+>;
 
 export type DriftingItemUiPort = Pick<
   SurvivalUI,
@@ -262,7 +261,7 @@ export class DriftingItemFlow {
       return this.dependencies.world.delegateDriftingItem?.(eventId) ?? Promise.resolve();
     }
     if (choiceId === 'search') {
-      return this.dependencies.world.searchDriftingItem?.(eventId) ?? Promise.resolve();
+      return this.dependencies.world.searchDriftingItem(eventId);
     }
     return this.dependencies.world.recedeDriftingItem?.(eventId) ?? Promise.resolve();
   }
