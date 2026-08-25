@@ -11,9 +11,15 @@ import {
   MeshStandardMaterial,
   Object3D,
   PlaneGeometry,
+  Texture,
 } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
-import { disposeResourceSets, runCleanupSteps } from '../../world/SceneResources';
+import { collectMaterialTextures } from '../../rendering/modelPresentation';
+import {
+  collectMeshResources,
+  disposeResourceSets,
+  runCleanupSteps,
+} from '../../world/SceneResources';
 import type { EventModelInstance } from '../EventModelLibrary';
 import type {
   DedicatedEventEnvironment,
@@ -38,9 +44,11 @@ interface SurfaceDebrisPlacement {
 }
 
 interface ActiveWreckageBeat {
-  readonly beat: WreckageBeat;
+  beat: WreckageBeat;
   elapsed: number;
   readonly resolve: () => void;
+  nextBeat: WreckageBeat | null;
+  readonly releaseDiveOnFinish: boolean;
 }
 
 type WreckageResult = 'loot' | 'collapse' | 'creature' | 'ghost' | 'recovered' | null;
@@ -60,13 +68,6 @@ const REACTION_BEATS = Object.freeze({
   'wreckage.dive-creature': 'creature',
   'wreckage.dive-ghost': 'ghost',
 } as const);
-
-function isDiveReaction(beat: WreckageBeat): boolean {
-  return beat === 'loot'
-    || beat === 'collapse'
-    || beat === 'creature'
-    || beat === 'ghost';
-}
 
 function resultForBeat(beat: WreckageBeat): WreckageResult {
   if (beat === 'loot' || beat === 'collapse' || beat === 'creature' || beat === 'ghost') {
@@ -94,6 +95,9 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   private readonly redFlash: Mesh<PlaneGeometry, MeshBasicMaterial>;
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
+  private readonly ghostGeometries = new Set<BufferGeometry>();
+  private readonly ghostMaterials = new Set<Material>();
+  private readonly ghostTextures = new Set<Texture>();
   private readonly debrisMaterial = new MeshStandardMaterial({
     color: 0x5f4a37,
     emissive: 0x16100b,
@@ -123,8 +127,8 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   private result: WreckageResult = null;
   private surfaceSeed = 0;
   private staged = false;
-  private diveCaptured = false;
-  private diveCleared = false;
+  private operation = 0;
+  private diveOwned = false;
   private disposed = false;
 
   constructor(private readonly environment: DedicatedEventEnvironment) {
@@ -170,6 +174,8 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.anglerfish.scale.setScalar(1.3);
 
     this.ghost = environment.eventModels.create('ghost');
+    collectMeshResources(this.ghost, this.ghostGeometries, this.ghostMaterials);
+    collectMaterialTextures(this.ghostMaterials, this.ghostTextures);
     this.ghost.name = 'wreckage-ghost';
     this.ghost.position.set(-0.62, -2.4, -7.7);
     this.ghost.rotation.set(0, 0.34, 0.08);
@@ -216,22 +222,22 @@ export class WreckagePresentation implements DedicatedEventPresentation {
 
   stage(context: EventSceneContext): void {
     if (this.disposed || context.eventId !== this.eventId) return;
+    this.beginOperation();
     this.cancelActive();
-    if (this.diveCaptured) this.clearDive();
-    this.diveCaptured = false;
-    this.diveCleared = false;
+    this.releaseDive();
     this.staged = true;
     this.result = null;
     this.surfaceSeed = context.variantSeed;
     this.worldRoot.visible = true;
     this.boatRoot.visible = true;
-    this.applySurfaceDebris(context.variantSeed, 0);
+    this.applySurfaceDebris(context.variantSeed, 0, 0, 0);
     sampleWreckageBeat('reveal', 0, this.sample);
     this.applySample();
   }
 
   reveal(): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
+    this.beginOperation();
     return this.startBeat('reveal');
   }
 
@@ -241,9 +247,12 @@ export class WreckagePresentation implements DedicatedEventPresentation {
 
   playChoice(choiceId: string): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
+    const operation = this.beginOperation();
     if (choiceId === 'search') return this.startBeat('search');
     if (choiceId === 'delegate-carlitos') {
-      return this.environment.delegateCarlitos(() => this.startBeat('search'));
+      return this.environment.delegateCarlitos(() => (
+        this.ownsOperation(operation) ? this.startBeat('search') : Promise.resolve()
+      ));
     }
     if (choiceId === 'leave') return this.startBeat('leave');
     return Promise.resolve();
@@ -251,24 +260,31 @@ export class WreckagePresentation implements DedicatedEventPresentation {
 
   async playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean> {
     if (this.disposed || !this.staged || choiceId !== 'dive') return false;
-    this.diveCaptured = true;
-    this.diveCleared = false;
-    await this.environment.dive.play(instanceId, {
-      onWaterImpact: () => undefined,
-      revealUnderwaterScene: true,
-    });
-    if (this.disposed) return false;
+    const operation = this.beginOperation();
+    this.diveOwned = true;
+    try {
+      await this.environment.dive.play(instanceId, {
+        onWaterImpact: () => undefined,
+        revealUnderwaterScene: true,
+      });
+    } catch (error) {
+      if (!this.ownsOperation(operation)) return false;
+      this.releaseDive();
+      throw error;
+    }
+    if (!this.ownsOperation(operation)) return false;
     await this.startBeat('underwater-hold');
-    return !this.disposed;
+    return this.ownsOperation(operation);
   }
 
   react(result: EventOutcomePresentation): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
+    this.beginOperation();
     const key = result.outcome.eventPresentationKey;
     const diveBeat = key === undefined ? undefined : REACTION_BEATS[key as keyof typeof REACTION_BEATS];
     if (diveBeat !== undefined) {
       this.result = resultForBeat(diveBeat);
-      return this.startBeat(diveBeat);
+      return this.startBeat(diveBeat, 'return', true);
     }
     if (key === 'wreckage.search-injury') {
       this.result = null;
@@ -279,12 +295,16 @@ export class WreckagePresentation implements DedicatedEventPresentation {
       || key === 'wreckage.search-food'
       || key === 'wreckage.search-bait'
     ) {
+      this.cancelActive();
       this.result = 'recovered';
-      return this.startBeat('search');
+      this.holdSurfaceScene();
+      return Promise.resolve();
     }
     if (key === 'wreckage.carlitos-empty') {
+      this.cancelActive();
       this.result = null;
-      return this.startBeat('search');
+      this.holdSurfaceScene();
+      return Promise.resolve();
     }
     if (key === 'wreckage.leave') return this.startBeat('leave');
     return Promise.resolve();
@@ -292,35 +312,33 @@ export class WreckagePresentation implements DedicatedEventPresentation {
 
   update(_time: number, delta: number): void {
     if (this.disposed || !this.staged) return;
-    const active = this.active;
-    if (active === null) return;
-    const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
-    active.elapsed = Math.min(wreckageBeatDuration(active.beat), active.elapsed + safeDelta);
-    sampleWreckageBeat(active.beat, active.elapsed, this.sample);
-    this.applySample();
-    if (active.elapsed >= wreckageBeatDuration(active.beat)) {
+    let remaining = Number.isFinite(delta) && delta > 0 ? delta : 0;
+    let active = this.active;
+    while (active !== null && remaining > 0) {
+      const duration = wreckageBeatDuration(active.beat);
+      const advance = Math.min(duration - active.elapsed, remaining);
+      active.elapsed += advance;
+      remaining -= advance;
+      sampleWreckageBeat(active.beat, active.elapsed, this.sample);
+      this.applySample();
+      if (active.elapsed < duration) return;
       this.completeActive(active);
+      active = this.active;
     }
   }
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
-    const active = this.active;
-    if (active !== null) {
-      active.elapsed = wreckageBeatDuration(active.beat);
-      sampleWreckageBeat(active.beat, active.elapsed, this.sample);
-      this.applySample();
-      this.completeActive(active);
-    }
-    this.environment.dive.settleForVisibilityChange();
-    this.diveCaptured = false;
+    this.beginOperation();
+    this.settleDive();
+    this.settleActive();
   }
 
   clear(): void {
     if (this.disposed) return;
+    this.beginOperation();
     this.cancelActive();
-    this.clearDive();
-    this.diveCaptured = false;
+    this.releaseDive();
     this.staged = false;
     this.result = null;
     this.hideScene();
@@ -329,9 +347,9 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.beginOperation();
     this.cancelActive();
-    this.clearDive();
-    this.diveCaptured = false;
+    this.releaseDive();
     runCleanupSteps([
       () => this.hideScene(),
       () => this.boatRoot.clear(),
@@ -339,27 +357,51 @@ export class WreckagePresentation implements DedicatedEventPresentation {
       () => this.boatRoot.removeFromParent(),
       () => this.worldRoot.removeFromParent(),
       () => this.ship.dispose(),
+      () => disposeResourceSets(
+        this.ghostGeometries,
+        this.ghostTextures,
+        this.ghostMaterials,
+      ),
       () => disposeResourceSets(this.ownedGeometries, this.ownedMaterials),
     ]);
   }
 
-  private startBeat(beat: WreckageBeat): Promise<void> {
+  private startBeat(
+    beat: WreckageBeat,
+    nextBeat: WreckageBeat | null = null,
+    releaseDiveOnFinish = false,
+  ): Promise<void> {
     this.cancelActive();
     sampleWreckageBeat(beat, 0, this.sample);
     this.applySample();
     return new Promise((resolve) => {
-      this.active = { beat, elapsed: 0, resolve };
+      this.active = {
+        beat,
+        elapsed: 0,
+        resolve,
+        nextBeat,
+        releaseDiveOnFinish,
+      };
     });
   }
 
   private completeActive(active: ActiveWreckageBeat): void {
     if (this.active !== active) return;
+    if (this.advanceActive(active)) return;
     this.active = null;
-    if (isDiveReaction(active.beat)) {
-      this.clearDive();
-      void this.startBeat('return');
-    }
+    if (active.releaseDiveOnFinish) this.releaseDive();
     active.resolve();
+  }
+
+  private advanceActive(active: ActiveWreckageBeat): boolean {
+    const nextBeat = active.nextBeat;
+    if (nextBeat === null) return false;
+    active.beat = nextBeat;
+    active.nextBeat = null;
+    active.elapsed = 0;
+    sampleWreckageBeat(nextBeat, 0, this.sample);
+    this.applySample();
+    return true;
   }
 
   private cancelActive(): void {
@@ -369,22 +411,62 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     active.resolve();
   }
 
-  private clearDive(): void {
-    if (this.diveCleared) return;
-    this.diveCleared = true;
+  private releaseDive(): void {
+    if (!this.diveOwned) return;
+    this.diveOwned = false;
     this.environment.dive.clear();
   }
 
-  private applySurfaceDebris(seed: number, alpha: number): void {
+  private settleDive(): void {
+    if (!this.diveOwned) return;
+    this.diveOwned = false;
+    this.environment.dive.settleForVisibilityChange();
+  }
+
+  private settleActive(): void {
+    const active = this.active;
+    if (active === null) return;
+    do {
+      active.elapsed = wreckageBeatDuration(active.beat);
+      sampleWreckageBeat(active.beat, active.elapsed, this.sample);
+      this.applySample();
+    } while (this.advanceActive(active));
+    this.completeActive(active);
+  }
+
+  private beginOperation(): number {
+    this.operation += 1;
+    return this.operation;
+  }
+
+  private ownsOperation(operation: number): boolean {
+    return !this.disposed && this.staged && this.operation === operation;
+  }
+
+  private holdSurfaceScene(): void {
+    sampleWreckageBeat('reveal', wreckageBeatDuration('reveal'), this.sample);
+    this.applySample();
+  }
+
+  private applySurfaceDebris(
+    seed: number,
+    alpha: number,
+    approach: number,
+    falling: number,
+  ): void {
     const seedOffset = Number.isFinite(seed) ? Math.trunc(seed) % 7 : 0;
     for (let index = 0; index < SURFACE_DEBRIS.length; index += 1) {
       const placement = SURFACE_DEBRIS[index]!;
       this.scratchObject.position.set(
         placement.x + ((seedOffset + index * 3) % 5 - 2) * 0.08,
-        placement.y,
-        placement.z,
+        placement.y + approach * 0.06 - falling * (1.5 + index * 0.18),
+        placement.z + approach * (2.1 + index * 0.2),
       );
-      this.scratchObject.rotation.set(0.08 * (index - 1), placement.yaw, 0.1 * (index % 2));
+      this.scratchObject.rotation.set(
+        0.08 * (index - 1) + falling * (0.42 + index * 0.06),
+        placement.yaw,
+        0.1 * (index % 2) + falling * 0.18,
+      );
       this.scratchObject.scale.set(placement.scale, placement.scale, placement.scale);
       this.scratchObject.updateMatrix();
       this.scratchMatrix.copy(this.scratchObject.matrix);
@@ -416,7 +498,12 @@ export class WreckagePresentation implements DedicatedEventPresentation {
 
   private applySample(): void {
     const sample = this.sample;
-    this.applySurfaceDebris(this.surfaceSeed, sample.debrisAlpha);
+    this.applySurfaceDebris(
+      this.surfaceSeed,
+      sample.debrisAlpha,
+      sample.debrisApproach,
+      sample.fallingDebris,
+    );
     this.applySiltInstances(sample.silt);
     this.siltMaterial.opacity = Math.min(0.68, sample.silt * 0.68);
     this.flashMaterial.opacity = Math.min(0.42, sample.redFlash * 0.42);
