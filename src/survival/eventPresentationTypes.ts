@@ -3,9 +3,11 @@ import type { ItemInstanceId } from '../game/ItemState';
 import type { WaveSample, VortexWaveState } from '../ocean/WaveField';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { CarlitosPresentation } from './CarlitosPresentation';
+import type { DivePresentationController } from './DivePresentationController';
 import type { EventModelLibrary } from './EventModelLibrary';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
 import type { EventChoicePresentation } from './FocusedEventPresentation';
+import type { SurvivalEventModels } from './SurvivalEventModelLibrary';
 import type { SurvivalEventId } from './eventCatalog';
 import type { DedicatedEventId } from './eventPresentationRoutes';
 import type {
@@ -55,6 +57,12 @@ export type WorldWaveSampler = (
 
 export interface DedicatedEventEnvironment {
   readonly eventModels: EventModelLibrary;
+  readonly featuredModels: SurvivalEventModels;
+  readonly dive: Pick<
+    DivePresentationController,
+    'play' | 'clear' | 'settleForVisibilityChange'
+  >;
+  readonly delegateCarlitos: (retrieve: () => Promise<void>) => Promise<void>;
   readonly supplies: BoatSupplyDisplay;
   readonly carlitos: CarlitosPresentation;
   readonly vortexWave: VortexWaveState;
