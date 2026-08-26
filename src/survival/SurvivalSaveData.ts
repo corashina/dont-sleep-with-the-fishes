@@ -439,14 +439,16 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const lastHealthCause = parseDeathCause(value.lastHealthCause);
   const lastHullEventId = parseEventIdOrNull(value.lastHullEventId);
   const pendingJournalDaytime = parseJournalDaytime(value.pendingJournalDaytime);
-  const pendingJournalNighttime = value.pendingJournalNighttime === null ? null : parseJournalNight(value.pendingJournalNighttime);
+  const pendingJournalNighttime = value.pendingJournalNighttime === null
+    ? null
+    : parseJournalNight(value.pendingJournalNighttime) ?? undefined;
   const pendingJournalActions = parseJournalActions(value.pendingJournalActions);
   const journalEntries = parseJournalEntries(value.journalEntries);
   if (chest === null || inventory === null || savedItems === null || carlitos === undefined
     || pendingDawnBreaks === null || nextDawnEnergyOverride === null && value.nextDawnEnergyOverride !== null
     || lastEventId === undefined || lastSeenDays === null || appearanceCounts === null
     || lastOutcome === undefined || lastHealthCause === null || lastHullEventId === undefined
-    || pendingJournalDaytime === undefined || pendingJournalNighttime === null
+    || pendingJournalDaytime === undefined || pendingJournalNighttime === undefined
     || pendingJournalActions === null || journalEntries === null) return null;
   const pendingEventId = parseEventIdOrNull(value.pendingEventId);
   const pendingEventTargetId = value.pendingEventTargetId === null ? null : parseKnownInventoryId(value.pendingEventTargetId, inventory);

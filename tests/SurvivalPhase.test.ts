@@ -6,7 +6,7 @@ import type { PhaseContext } from '../src/app/GamePhase';
 import type { AudioBackend, AudioVoice } from '../src/audio/AudioBackend';
 import { AudioSystem } from '../src/audio/AudioSystem';
 import type { SoundId } from '../src/audio/audioManifest';
-import type { ItemInstance, ItemInstanceId } from '../src/game/ItemState';
+import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import type { SceneRenderer } from '../src/rendering/SceneRenderer';
 import type { ProjectedBoatBounds } from '../src/survival/BoatInteraction';
 import { BoatWorld } from '../src/survival/BoatWorld';
@@ -60,6 +60,94 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     lastOutcome: null, seed: 8, ...overrides,
   };
 }
+
+function saved(...types: ItemId[]): ItemInstance[] {
+  return types.map((type, index) => ({
+    instanceId: `${type}-${index + 1}` as ItemInstanceId,
+    type,
+  }));
+}
+
+function stablePhaseRig() {
+  const onCheckpointChange = vi.fn();
+  const session = new SurvivalSession(saved(), { seed: 41 });
+  const phase = SurvivalPhase.forTest({
+    session,
+    world: {},
+    ui: {},
+    onCheckpointChange,
+  });
+  phase.start();
+  onCheckpointChange.mockClear();
+  return { phase, session, onCheckpointChange };
+}
+
+function stablePhase(): SurvivalPhase {
+  return stablePhaseRig().phase;
+}
+
+describe('survival checkpoints', () => {
+  it('emits an initial stable survival checkpoint', () => {
+    const onCheckpointChange = vi.fn();
+    const session = new SurvivalSession(saved(), { seed: 41 });
+    const phase = SurvivalPhase.forTest({
+      session,
+      world: {},
+      ui: {},
+      onCheckpointChange,
+      scavengeElapsedSeconds: 12,
+    });
+
+    phase.start();
+
+    expect(onCheckpointChange).toHaveBeenLastCalledWith({
+      scavengeElapsedSeconds: 12,
+      session: session.exportCheckpoint(),
+    });
+  });
+
+  it('does not expose a checkpoint while presentation is busy', () => {
+    const phase = stablePhase();
+    const internals = phase as unknown as { setBusy(value: boolean): void };
+    internals.setBusy(true);
+
+    expect(phase.getSurvivalCheckpoint()).toBeNull();
+  });
+
+  it('does not expose a checkpoint while fishing is active', () => {
+    const phase = stablePhase();
+    const internals = phase as unknown as {
+      fishingFlow: { hasActiveAttempt(): boolean };
+    };
+    vi.spyOn(internals.fishingFlow, 'hasActiveAttempt').mockReturnValue(true);
+
+    expect(phase.getSurvivalCheckpoint()).toBeNull();
+  });
+
+  it('emits after busy presentation settles', () => {
+    const { phase, onCheckpointChange } = stablePhaseRig();
+    const internals = phase as unknown as { setBusy(value: boolean): void };
+    internals.setBusy(true);
+    internals.setBusy(false);
+
+    expect(onCheckpointChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the checkpoint for a terminal snapshot', () => {
+    const onCheckpointChange = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot({ state: 'dead' })) },
+      world: {},
+      ui: {},
+      onCheckpointChange,
+    });
+
+    phase.start();
+
+    expect(onCheckpointChange).toHaveBeenCalledOnce();
+    expect(onCheckpointChange).toHaveBeenLastCalledWith(null);
+  });
+});
 
 function completedEntry(
   day: number,
