@@ -360,7 +360,7 @@ describe('SurvivalUI', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
     const panels = [
-      '[data-drifting-item-focus] > div',
+      '[data-focused-event-view] > div',
       '[data-fishing-result] > div',
       '[data-repair-options] > div',
       '[data-pause] > div',
@@ -2427,57 +2427,60 @@ describe('SurvivalUI', () => {
     );
   });
 
-  it('opens drifting item focus from an initial anchor and returns to the boat', () => {
+  it('opens a shared wreckage focus and returns the chosen item instance', () => {
     const style = document.createElement('style');
     style.textContent = mainStyles.match(
-      /\.drifting-item-focus__card nav(?:\[hidden\])?\s*\{[^}]*\}/g,
+      /\.focused-event-view__card nav(?:\[hidden\])?\s*\{[^}]*\}/g,
     )?.join('\n') ?? '';
     const mount = document.createElement('main');
     document.body.append(style, mount);
     const ui = createUI(mount);
     const selected = vi.fn();
     const returned = vi.fn();
-    ui.onDriftingItemSelect = selected;
-    ui.onDriftingItemBack = returned;
+    const choice = vi.fn();
+    ui.onFocusedEventSelect = selected;
+    ui.onFocusedEventChoice = choice;
+    ui.onFocusedEventBack = returned;
     ui.setAnchors([{
-      id: 'event:drifting-barrel',
-      eventFocusId: 'drifting-barrel',
+      id: 'event:wreckage',
+      eventFocusId: 'wreckage',
       tooltip: false,
-      label: 'BARREL',
-      description: 'A sealed barrel drifts beside the boat.',
+      label: 'WRECKAGE',
+      description: 'Inspect the floating debris.',
       itemType: null,
       toolId: null,
       action: null,
       remainingUses: null,
-      x: 420,
-      y: 260,
+      x: 850,
+      y: 360,
       visible: true,
       depleted: false,
-      hitArea: { width: 64, height: 64, depth: 2 },
+      hitArea: { width: 180, height: 110, depth: 2 },
     }]);
     ui.beginEventPresentation();
     ui.setEventSelection(new Map());
 
     const anchor = mount.querySelector<HTMLButtonElement>(
-      '[data-anchor-id="event:drifting-barrel"]',
+      '[data-anchor-id="event:wreckage"]',
     )!;
     expect(anchor.querySelector('.boat-tooltip')).toBeNull();
     expect(anchor.dataset.eventState).toBe('available');
     expect(anchor.disabled).toBe(false);
     expect(anchor.tabIndex).toBe(0);
     anchor.click();
-    expect(selected).toHaveBeenCalledWith('drifting-barrel');
+    expect(selected).toHaveBeenCalledWith('wreckage');
 
-    ui.showDriftingItemFocus({
-      eventId: 'drifting-barrel',
-      target: { x: 420, y: 260, width: 64, height: 64, depth: 2, visible: true },
+    ui.showFocusedEvent({
+      eventId: 'wreckage',
+      target: { x: 850, y: 360, width: 180, height: 110, depth: 2, visible: true },
       choices: [
         {
-          id: 'retrieve',
-          label: 'RETRIEVE',
+          id: 'dive',
+          label: 'Dive Into Wreck',
           energyCost: 3,
           energyOwner: 'player',
           unavailableReason: null,
+          instanceId: 'scubaSet-1' as ItemInstanceId,
         },
         {
           id: 'delegate-carlitos',
@@ -2485,59 +2488,63 @@ describe('SurvivalUI', () => {
           energyCost: 3,
           energyOwner: 'carlitos',
           unavailableReason: 'Carlitos needs more energy.',
+          instanceId: null,
         },
-        { id: 'sleep', label: 'LET IT DRIFT', unavailableReason: null },
+        { id: 'sleep', label: 'LET IT DRIFT', unavailableReason: null, instanceId: null },
       ],
     });
 
-    const focus = mount.querySelector<HTMLElement>('[data-drifting-item-focus]')!;
-    const focusCard = focus.querySelector<HTMLElement>('.drifting-item-focus__card')!;
+    const focus = mount.querySelector<HTMLElement>('[data-focused-event-view]')!;
+    const focusCard = focus.querySelector<HTMLElement>('.focused-event-view__card')!;
     expect(focusCard.classList).toContain('dive-result__paper');
-    expect(focus.querySelector('[data-drifting-item-title]')).toBeNull();
+    expect(focus.querySelector('[data-focused-event-title]')).toBeNull();
     expect(focus.getAttribute('aria-labelledby')).toBeNull();
-    expect(focus.getAttribute('aria-label')).toBe('Pickup choices');
-    expect(focus.textContent).not.toContain('DRIFTING BARREL');
+    expect(focus.getAttribute('aria-label')).toBe('Event choices');
+    expect(focus.textContent).not.toContain('WRECKAGE');
     expect(focus.dataset.anchorState).toBe('projected');
-    const popupX = Number.parseFloat(focus.style.getPropertyValue('--drifting-x'));
-    const popupWidth = Number.parseFloat(focus.style.getPropertyValue('--drifting-width'));
-    const targetLeft = 420 - 64 / 2;
-    const targetRight = 420 + 64 / 2;
+    const popupX = Number.parseFloat(focus.style.getPropertyValue('--focused-event-x'));
+    const popupWidth = Number.parseFloat(focus.style.getPropertyValue('--focused-event-width'));
+    const targetLeft = 850 - 180 / 2;
+    const targetRight = 850 + 180 / 2;
     expect(popupX + popupWidth <= targetLeft || popupX >= targetRight).toBe(true);
     expect(focus.textContent).not.toContain('DRIFTING ITEM');
-    const energyCosts = [...focus.querySelectorAll<HTMLElement>('.drifting-item-focus__cost')];
+    const energyCosts = [...focus.querySelectorAll<HTMLElement>('.focused-event-view__cost')];
     expect(energyCosts.map(({ textContent }) => textContent)).toEqual(['⚡️⚡️⚡️', '⚡️⚡️⚡️']);
     expect(energyCosts.map((cost) => cost.getAttribute('aria-label')))
       .toEqual(['3 energy', '3 energy']);
     expect(focus.textContent).not.toContain('PLAYER');
     expect(focus.textContent).not.toContain('CARLITOS —');
     expect(mainStyles).toMatch(
-      /\.drifting-item-focus__choice-main\s*\{[^}]*font-size:\s*1rem;/s,
+      /\.focused-event-view__choice-main\s*\{[^}]*font-size:\s*1rem;/s,
     );
     expect(focus.textContent).toContain('LET IT DRIFT');
     expect(focus.querySelector('.event-choice__reason')?.textContent)
       .toBe('Carlitos needs more energy.');
     expect(document.activeElement).toBe(
-      focus.querySelector<HTMLButtonElement>('[data-event-choice="retrieve"]'),
+      focus.querySelector<HTMLButtonElement>('[data-event-choice="dive"]'),
     );
 
-    const back = focus.querySelector<HTMLButtonElement>('[data-drifting-item-back]')!;
+    focus.querySelector<HTMLButtonElement>('[data-event-choice="dive"]')!.click();
+    expect(choice).toHaveBeenCalledExactlyOnceWith({ id: 'dive', instanceId: 'scubaSet-1' });
+
+    const back = focus.querySelector<HTMLButtonElement>('[data-focused-event-back]')!;
     expect(back.parentElement).toBe(focus);
     expect(back.parentElement).not.toBe(focusCard);
     expect(back.textContent?.trim()).toBe('');
-    expect(back.querySelector('[data-drifting-item-back-icon] path')?.getAttribute('d'))
+    expect(back.querySelector('[data-focused-event-back-icon] path')?.getAttribute('d'))
       .toBe('M9 3h6v10h5l-8 8-8-8h5z');
     expect(back.getAttribute('aria-label')).toBe('Return to boat');
     expect(mainStyles).toMatch(
-      /\.drifting-item-focus__back-icon\s*\{[^}]*width:\s*82px;[^}]*height:\s*82px;/s,
+      /\.focused-event-view__back-icon\s*\{[^}]*width:\s*82px;[^}]*height:\s*82px;/s,
     );
     expect(mainStyles).toMatch(
-      /\.drifting-item-focus__back:hover\s*\{[^}]*color:\s*#ead4a5;[^}]*\}/s,
+      /\.focused-event-view__back:hover\s*\{[^}]*color:\s*#ead4a5;[^}]*\}/s,
     );
     expect(mainStyles).not.toMatch(
-      /\.drifting-item-focus__back:hover\s*,\s*\.drifting-item-focus__back:focus-visible/,
+      /\.focused-event-view__back:hover\s*,\s*\.focused-event-view__back:focus-visible/,
     );
     expect(mainStyles).toMatch(
-      /\.drifting-item-focus__back:focus-visible\s*\{[^}]*outline:\s*none;/s,
+      /\.focused-event-view__back:focus-visible\s*\{[^}]*outline:\s*none;/s,
     );
     back.click();
     expect(returned).toHaveBeenCalledOnce();
@@ -2553,7 +2560,7 @@ describe('SurvivalUI', () => {
 
     expect(button.hidden).toBe(true);
     expect(button.classList).toContain('chest-camera-turn');
-    expect(button.classList).not.toContain('drifting-item-focus__back');
+    expect(button.classList).not.toContain('focused-event-view__back');
     expect(button.parentElement).toBe(mount.querySelector('[data-survival-top]'));
     const chestArtwork = button.querySelector('[data-ui-artwork="chest"]');
     expect(chestArtwork).not.toBeNull();
@@ -2595,12 +2602,12 @@ describe('SurvivalUI', () => {
     ui.dispose();
   });
 
-  it('focuses the back control when no drifting item choice is available', () => {
+  it('focuses the back control when no focused event choice is available', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
 
-    ui.showDriftingItemFocus({
+    ui.showFocusedEvent({
       eventId: 'drifting-barrel',
       target: null,
       choices: [
@@ -2610,6 +2617,7 @@ describe('SurvivalUI', () => {
           energyCost: 3,
           energyOwner: 'player',
           unavailableReason: 'You need more energy.',
+          instanceId: null,
         },
         {
           id: 'delegate-carlitos',
@@ -2617,12 +2625,13 @@ describe('SurvivalUI', () => {
           energyCost: 3,
           energyOwner: 'carlitos',
           unavailableReason: 'Carlitos needs more energy.',
+          instanceId: null,
         },
       ],
     });
 
     expect(document.activeElement).toBe(
-      mount.querySelector<HTMLButtonElement>('[data-drifting-item-back]'),
+      mount.querySelector<HTMLButtonElement>('[data-focused-event-back]'),
     );
   });
 
