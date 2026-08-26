@@ -139,6 +139,10 @@ const fragmentShader = `
 
     vec3 rayStart = uCameraPosition;
     float stepLength = max((cloudDistance - travel) / uMaxSteps, 0.5);
+    float rayJitter = fract(
+      52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))
+    );
+    travel += rayJitter * stepLength;
     float transmittance = 1.0;
     vec3 accumulated = vec3(0.0);
     float sunAmount = clamp(dot(rayDirection, normalize(uSunDirection)), 0.0, 1.0);

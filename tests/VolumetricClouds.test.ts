@@ -228,6 +228,10 @@ describe('VolumetricClouds', () => {
     expect(clouds.material.fragmentShader).toContain('float cloudDistance');
     expect(clouds.material.fragmentShader).toContain('float distanceFade');
     expect(clouds.material.fragmentShader).toContain('float edgeOpacity');
+    expect(clouds.material.fragmentShader).toContain('float rayJitter');
+    expect(clouds.material.fragmentShader).toContain(
+      'travel += rayJitter * stepLength;',
+    );
     expect(clouds.material.fragmentShader).toContain('travel += stepLength;');
     expect(clouds.material.fragmentShader).not.toContain('stepLength * 1.8');
     expect(clouds.material.fragmentShader).toContain('threshold + 0.1,');
