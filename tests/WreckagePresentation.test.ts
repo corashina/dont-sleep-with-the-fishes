@@ -1,8 +1,6 @@
 import {
   BoxGeometry,
   Group,
-  type InstancedMesh,
-  Matrix4,
   Mesh,
   MeshBasicMaterial,
   PerspectiveCamera,
@@ -70,7 +68,10 @@ function createEnvironment(options: EnvironmentOptions = {}) {
       create: vi.fn((id: string) => {
         created.push(id);
         if (id === 'ghost') return options.ghost ?? namedGroup('model:ghost');
-        return { root: namedGroup(`model:${id}`), dispose: ownedModelDispose };
+        return {
+          root: namedGroup(`model:${id}`),
+          dispose: () => ownedModelDispose(id),
+        };
       }),
       animations: vi.fn(() => []),
       dispose: vi.fn(),
@@ -114,26 +115,43 @@ describe('WreckagePresentation', () => {
       onWaterImpact: expect.any(Function),
       revealUnderwaterScene: true,
     });
-    expect(created).toEqual(['containerShip', 'ghost']);
+    expect(created).toEqual(['containerShip', 'leakPlanks', 'ghost']);
     expect(cloned).toEqual(['anglerFish', 'driftingBarrel']);
+    expect(presentation.worldRoot.getObjectByName('wreckage-surface-debris')?.children)
+      .toHaveLength(4);
     expect(presentation.worldRoot.getObjectByName('wreckage-wreck')?.visible).toBe(true);
     expect(environment.dive.clear).not.toHaveBeenCalled();
     presentation.dispose();
   });
 
-  it('shows the submerged wreck during reveal and the surface hold', async () => {
+  it('keeps every underwater actor hidden until scuba entry completes', async () => {
     const { environment } = createEnvironment();
     const presentation = new WreckagePresentation(environment);
     presentation.stage({ eventId: 'wreckage', targetInstanceId: null, variantSeed: 17 });
 
     const reveal = presentation.reveal();
     presentation.update(0, 0.6);
-    expect(presentation.worldRoot.getObjectByName('wreckage-wreck')?.visible).toBe(true);
+    expect(presentation.worldRoot.getObjectByName('wreckage-wreck')?.visible).toBe(false);
     presentation.update(0.6, 0.6);
     await reveal;
     await presentation.react(outcomePresentation('wreckage.search-food'));
 
+    for (const name of [
+      'wreckage-wreck',
+      'wreckage-loot',
+      'wreckage-silt',
+      'wreckage-creature',
+      'wreckage-ghost',
+    ]) {
+      expect(presentation.worldRoot.getObjectByName(name)?.visible).toBe(false);
+    }
+
+    const dive = presentation.playItemUse('dive', 'scubaSet-1');
+    await Promise.resolve();
+    presentation.update(1.2, 0.9);
     expect(presentation.worldRoot.getObjectByName('wreckage-wreck')?.visible).toBe(true);
+    presentation.update(2.1, 2.1);
+    await dive;
     presentation.dispose();
   });
 
@@ -146,11 +164,15 @@ describe('WreckagePresentation', () => {
     const { environment } = createEnvironment();
     const presentation = new WreckagePresentation(environment);
     presentation.stage({ eventId: 'wreckage', targetInstanceId: null, variantSeed: 17 });
+    const dive = presentation.playItemUse('dive', 'scubaSet-1');
+    await Promise.resolve();
+    presentation.update(0, 3);
+    await dive;
     const reaction = presentation.react(outcomePresentation(key));
     presentation.update(0, 3);
     await reaction;
     expect(presentation.worldRoot.getObjectByName(visibleName)?.visible).toBe(true);
-    expect(environment.dive.clear).not.toHaveBeenCalled();
+    expect(environment.dive.clear).toHaveBeenCalledOnce();
     presentation.dispose();
   });
 
@@ -315,26 +337,25 @@ describe('WreckagePresentation', () => {
     await expect(dive).resolves.toBe(false);
     expect(presentation.worldRoot.children).toHaveLength(0);
     expect(presentation.boatRoot.children).toHaveLength(0);
-    expect(ownedModelDispose).toHaveBeenCalledOnce();
+    expect(ownedModelDispose.mock.calls.map(([id]) => id)).toEqual([
+      'containerShip',
+      'leakPlanks',
+    ]);
   });
 
   it('moves only the seeded debris piece during Carlitos retrieval', async () => {
     const { environment } = createEnvironment();
     const presentation = new WreckagePresentation(environment);
-    const before = [new Matrix4(), new Matrix4(), new Matrix4(), new Matrix4()];
-    const after = [new Matrix4(), new Matrix4(), new Matrix4(), new Matrix4()];
     presentation.stage({ eventId: 'wreckage', targetInstanceId: null, variantSeed: 5 });
     const debris = presentation.worldRoot.getObjectByName(
       'wreckage-surface-debris',
-    ) as InstancedMesh;
-    before.forEach((matrix, index) => debris.getMatrixAt(index, matrix));
+    ) as Group;
+    const before = debris.children.map((plank) => plank.position.z);
 
     const retrieve = presentation.playChoice('delegate-carlitos');
     presentation.update(0, 0.8);
-    after.forEach((matrix, index) => debris.getMatrixAt(index, matrix));
-
-    const movedIndices = after.flatMap((matrix, index) => (
-      matrix.equals(before[index]!) ? [] : [index]
+    const movedIndices = debris.children.flatMap((plank, index) => (
+      plank.position.z === before[index] ? [] : [index]
     ));
     expect(movedIndices).toEqual([1]);
     presentation.update(0.8, 0.6);
@@ -342,40 +363,43 @@ describe('WreckagePresentation', () => {
     presentation.dispose();
   });
 
-  it('updates debris matrices only while search or collapse moves them', () => {
+  it('floats every plank at the waterline during reveal and surface hold', async () => {
     const { environment } = createEnvironment();
     const presentation = new WreckagePresentation(environment);
     presentation.stage({ eventId: 'wreckage', targetInstanceId: null, variantSeed: 4 });
     const debris = presentation.worldRoot.getObjectByName(
       'wreckage-surface-debris',
-    ) as InstancedMesh;
-    const setMatrixAt = vi.spyOn(debris, 'setMatrixAt');
+    ) as Group;
 
-    presentation.reveal();
+    const reveal = presentation.reveal();
     presentation.update(0, 0.6);
-    expect(setMatrixAt).not.toHaveBeenCalled();
-
-    presentation.playChoice('search');
-    presentation.update(0.6, 0.8);
-    expect(setMatrixAt).toHaveBeenCalledOnce();
+    const firstFrame = debris.children.map((plank) => plank.position.y);
+    presentation.update(0.6, 0.6);
+    await reveal;
+    presentation.update(1.4, 0);
+    const secondFrame = debris.children.map((plank) => plank.position.y);
+    expect(secondFrame).not.toEqual(firstFrame);
+    expect(secondFrame.every((y) => y >= -0.08 && y <= 0.18)).toBe(true);
     presentation.dispose();
   });
 
-  it('drops all debris during the collapse reaction', () => {
+  it('keeps the surface planks at the waterline during a collapse', async () => {
     const { environment } = createEnvironment();
     const presentation = new WreckagePresentation(environment);
-    const matrix = new Matrix4();
     presentation.stage({ eventId: 'wreckage', targetInstanceId: null, variantSeed: 4 });
     const debris = presentation.worldRoot.getObjectByName(
       'wreckage-surface-debris',
-    ) as InstancedMesh;
-    debris.getMatrixAt(0, matrix);
-    const startingY = matrix.elements[13]!;
+    ) as Group;
+    const dive = presentation.playItemUse('dive', 'scubaSet-1');
+    await Promise.resolve();
+    presentation.update(0, 3);
+    await dive;
 
     presentation.react(outcomePresentation('wreckage.dive-collapse'));
     presentation.update(0, 0.9);
-    debris.getMatrixAt(0, matrix);
-    expect(matrix.elements[13]).toBeLessThan(startingY);
+    expect(debris.children.every((plank) => (
+      plank.position.y >= -0.08 && plank.position.y <= 0.18
+    ))).toBe(true);
     presentation.dispose();
   });
 

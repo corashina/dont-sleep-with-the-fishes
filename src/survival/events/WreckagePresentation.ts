@@ -1,5 +1,4 @@
 import {
-  BoxGeometry,
   BufferGeometry,
   DoubleSide,
   Group,
@@ -8,7 +7,6 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
-  MeshStandardMaterial,
   Object3D,
   PlaneGeometry,
   Texture,
@@ -86,12 +84,13 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   private readonly sample: WreckageSample = createWreckageSample();
   private readonly scratchObject = new Object3D();
   private readonly scratchMatrix = new Matrix4();
-  private readonly baseDebrisMatrices = SURFACE_DEBRIS.map(() => new Matrix4());
   private readonly ship: EventModelInstance;
+  private readonly planks: EventModelInstance;
   private readonly anglerfish: Group;
   private readonly ghost: Group;
   private readonly barrel: Group;
-  private readonly debris: InstancedMesh<BoxGeometry, MeshStandardMaterial>;
+  private readonly debris = new Group();
+  private readonly surfacePlanks: Group[];
   private readonly silt: InstancedMesh<PlaneGeometry, MeshBasicMaterial>;
   private readonly recoveredDebris: Group;
   private readonly redFlash: Mesh<PlaneGeometry, MeshBasicMaterial>;
@@ -105,16 +104,6 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     () => this.releaseCompletedDive(),
     () => this.resolveCompletedBeat(),
   ];
-  private readonly debrisMaterial = new MeshStandardMaterial({
-    color: 0x5f4a37,
-    emissive: 0x16100b,
-    emissiveIntensity: 0.18,
-    roughness: 0.94,
-    metalness: 0.04,
-    transparent: true,
-    opacity: 0,
-    flatShading: true,
-  });
   private readonly siltMaterial = new MeshBasicMaterial({
     color: 0x9ab9ad,
     transparent: true,
@@ -135,7 +124,10 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   private result: WreckageResult = null;
   private surfaceSeedOffset = 0;
   private selectedDebrisIndex = 0;
+  private surfaceTime = 0;
+  private debrisApproach = 0;
   private debrisMotionApplied = false;
+  private underwaterRevealed = false;
   private staged = false;
   private operation = 0;
   private diveOwned = false;
@@ -147,15 +139,10 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.itemAimTarget.name = 'wreckage-item-aim-target';
     this.itemAimTarget.position.set(0, -2.35, -6.3);
 
-    this.ownedMaterials.add(this.debrisMaterial);
     this.ownedMaterials.add(this.siltMaterial);
     this.ownedMaterials.add(this.flashMaterial);
 
-    const debrisGeometry = new BoxGeometry(0.68, 0.14, 0.24, 1, 1, 1);
-    this.ownedGeometries.add(debrisGeometry);
-    this.debris = new InstancedMesh(debrisGeometry, this.debrisMaterial, SURFACE_DEBRIS.length);
     this.debris.name = 'wreckage-surface-debris';
-    this.debris.count = SURFACE_DEBRIS.length;
     this.debris.renderOrder = 1;
 
     const siltGeometry = new PlaneGeometry(1, 1, 1, 1);
@@ -177,6 +164,14 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.ship.root.position.set(0, -3.1, -8.5);
     this.ship.root.rotation.set(0.18, -0.42, -0.12);
 
+    this.planks = environment.eventModels.create('leakPlanks');
+    this.surfacePlanks = SURFACE_DEBRIS.map((_placement, index) => {
+      const plank = this.planks.root.clone(true);
+      plank.name = `wreckage-surface-plank-${index}`;
+      this.debris.add(plank);
+      return plank;
+    });
+
     this.anglerfish = environment.featuredModels.clone('anglerFish');
     this.anglerfish.name = 'wreckage-creature';
     this.anglerfish.position.set(0.9, -3.5, -7.2);
@@ -196,24 +191,11 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.barrel.rotation.set(0.28, -0.34, 0.46);
     this.barrel.scale.setScalar(0.82);
 
-    this.recoveredDebris = new Group();
+    this.recoveredDebris = this.planks.root.clone(true);
     this.recoveredDebris.name = 'wreckage-recovered-debris';
-    const recoveredGeometry = new BoxGeometry(0.62, 0.1, 0.2, 1, 1, 1);
-    const recoveredMaterial = new MeshStandardMaterial({
-      color: 0x8d6744,
-      emissive: 0x2a180b,
-      emissiveIntensity: 0.22,
-      roughness: 0.9,
-      flatShading: true,
-    });
-    this.ownedGeometries.add(recoveredGeometry);
-    this.ownedMaterials.add(recoveredMaterial);
-    const timber = new Mesh(recoveredGeometry, recoveredMaterial);
-    timber.name = 'wreckage-recovered-timber';
-    timber.position.set(0.5, 0.12, 0);
-    timber.rotation.set(0.1, 0.28, -0.16);
-    this.recoveredDebris.add(timber);
     this.recoveredDebris.position.set(-0.56, 0.2, -3.4);
+    this.recoveredDebris.rotation.set(0.1, 0.28, -0.16);
+    this.recoveredDebris.scale.setScalar(0.62);
 
     this.worldRoot.add(
       this.debris,
@@ -237,10 +219,13 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.releaseDive();
     this.staged = true;
     this.result = null;
+    this.underwaterRevealed = false;
     const seed = Number.isFinite(context.variantSeed) ? Math.trunc(context.variantSeed) : 0;
     this.surfaceSeedOffset = seed % 7;
     this.selectedDebrisIndex = ((seed % SURFACE_DEBRIS.length) + SURFACE_DEBRIS.length)
       % SURFACE_DEBRIS.length;
+    this.surfaceTime = 0;
+    this.debrisApproach = 0;
     this.debrisMotionApplied = false;
     this.worldRoot.visible = true;
     this.boatRoot.visible = true;
@@ -287,6 +272,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
       throw error;
     }
     if (!this.ownsOperation(operation)) return false;
+    this.underwaterRevealed = true;
     await this.startBeat('underwater-hold');
     return this.ownsOperation(operation);
   }
@@ -324,8 +310,10 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     return Promise.resolve();
   }
 
-  update(_time: number, delta: number): void {
+  update(time: number, delta: number): void {
     if (this.disposed || !this.staged) return;
+    if (Number.isFinite(time)) this.surfaceTime = time;
+    this.updateFloatingPlanks();
     let remaining = Number.isFinite(delta) && delta > 0 ? delta : 0;
     let active = this.active;
     while (active !== null && remaining > 0) {
@@ -377,6 +365,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
       () => this.boatRoot.removeFromParent(),
       () => this.worldRoot.removeFromParent(),
       () => this.ship.dispose(),
+      () => this.planks.dispose(),
       () => disposeResourceSets(
         this.ghostGeometries,
         this.ghostTextures,
@@ -459,12 +448,14 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   private releaseDive(): void {
     if (!this.diveOwned) return;
     this.diveOwned = false;
+    this.underwaterRevealed = false;
     this.environment.dive.clear();
   }
 
   private settleDive(): void {
     if (!this.diveOwned) return;
     this.diveOwned = false;
+    this.underwaterRevealed = false;
     this.environment.dive.settleForVisibilityChange();
   }
 
@@ -493,58 +484,45 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.applySample();
   }
 
-  private writeSurfaceDebrisMatrix(
-    index: number,
-    approach: number,
-    falling: number,
-  ): void {
+  private updateFloatingPlank(index: number): void {
     const placement = SURFACE_DEBRIS[index]!;
-    this.scratchObject.position.set(
+    const plank = this.surfacePlanks[index]!;
+    const phase = this.surfaceTime * 0.9 + index * 1.47 + this.surfaceSeedOffset * 0.23;
+    const approach = index === this.selectedDebrisIndex ? this.debrisApproach : 0;
+    plank.position.set(
       placement.x + ((this.surfaceSeedOffset + index * 3) % 5 - 2) * 0.08,
-      placement.y + approach * 0.06 - falling * (1.5 + index * 0.18),
+      placement.y + Math.sin(phase) * 0.045 + approach * 0.03,
       placement.z + approach * (2.1 + index * 0.2),
     );
-    this.scratchObject.rotation.set(
-      0.08 * (index - 1) + falling * (0.42 + index * 0.06),
+    plank.rotation.set(
+      0.04 * (index - 1) + Math.cos(phase * 0.8) * 0.025,
       placement.yaw,
-      0.1 * (index % 2) + falling * 0.18,
+      0.06 * (index % 2) + Math.sin(phase * 0.72) * 0.035,
     );
-    this.scratchObject.scale.set(placement.scale, placement.scale, placement.scale);
-    this.scratchObject.updateMatrix();
-    this.scratchMatrix.copy(this.scratchObject.matrix);
-    this.debris.setMatrixAt(index, this.scratchMatrix);
+    plank.scale.setScalar(placement.scale);
   }
 
   private cacheSurfaceDebris(): void {
-    for (let index = 0; index < SURFACE_DEBRIS.length; index += 1) {
-      this.writeSurfaceDebrisMatrix(index, 0, 0);
-      this.baseDebrisMatrices[index]!.copy(this.scratchMatrix);
-    }
-    this.debris.instanceMatrix.needsUpdate = true;
+    this.debrisApproach = 0;
+    this.updateFloatingPlanks();
   }
 
-  private applySurfaceDebrisMotion(approach: number, falling: number): void {
-    if (falling > 0) {
-      for (let index = 0; index < SURFACE_DEBRIS.length; index += 1) {
-        this.writeSurfaceDebrisMatrix(
-          index,
-          index === this.selectedDebrisIndex ? approach : 0,
-          falling,
-        );
-      }
-    } else {
-      this.writeSurfaceDebrisMatrix(this.selectedDebrisIndex, approach, 0);
-    }
-    this.debris.instanceMatrix.needsUpdate = true;
+  private applySurfaceDebrisMotion(approach: number): void {
+    this.debrisApproach = approach;
+    this.updateFloatingPlanks();
     this.debrisMotionApplied = true;
   }
 
   private restoreSurfaceDebris(): void {
-    for (let index = 0; index < this.baseDebrisMatrices.length; index += 1) {
-      this.debris.setMatrixAt(index, this.baseDebrisMatrices[index]!);
-    }
-    this.debris.instanceMatrix.needsUpdate = true;
+    this.debrisApproach = 0;
+    this.updateFloatingPlanks();
     this.debrisMotionApplied = false;
+  }
+
+  private updateFloatingPlanks(): void {
+    for (let index = 0; index < this.surfacePlanks.length; index += 1) {
+      this.updateFloatingPlank(index);
+    }
   }
 
   private applySiltInstances(strength: number): void {
@@ -569,20 +547,25 @@ export class WreckagePresentation implements DedicatedEventPresentation {
 
   private applySample(): void {
     const sample = this.sample;
-    if (sample.debrisApproach > 0 || sample.fallingDebris > 0) {
-      this.applySurfaceDebrisMotion(sample.debrisApproach, sample.fallingDebris);
+    if (sample.debrisApproach > 0) {
+      this.applySurfaceDebrisMotion(sample.debrisApproach);
     }
-    this.debrisMaterial.opacity = sample.debrisAlpha;
+    this.debris.visible = sample.debrisAlpha > 0.008;
     this.applySiltInstances(sample.silt);
     this.siltMaterial.opacity = Math.min(0.68, sample.silt * 0.68);
     this.flashMaterial.opacity = Math.min(0.42, sample.redFlash * 0.42);
     this.redFlash.visible = sample.redFlash > 0.008;
 
-    this.ship.root.visible = sample.wreckAlpha > 0.008 || this.result !== null;
-    this.barrel.visible = sample.lootGlow > 0.008 || this.result === 'loot';
-    this.silt.visible = sample.silt > 0.008 || this.result === 'collapse';
-    this.anglerfish.visible = sample.creatureAdvance > 0.008 || this.result === 'creature';
-    this.ghost.visible = sample.ghostDrift > 0.008 || this.result === 'ghost';
+    this.ship.root.visible = this.underwaterRevealed
+      && (sample.wreckAlpha > 0.008 || this.result !== null);
+    this.barrel.visible = this.underwaterRevealed
+      && (sample.lootGlow > 0.008 || this.result === 'loot');
+    this.silt.visible = this.underwaterRevealed
+      && (sample.silt > 0.008 || this.result === 'collapse');
+    this.anglerfish.visible = this.underwaterRevealed
+      && (sample.creatureAdvance > 0.008 || this.result === 'creature');
+    this.ghost.visible = this.underwaterRevealed
+      && (sample.ghostDrift > 0.008 || this.result === 'ghost');
     this.recoveredDebris.visible = this.result === 'recovered';
 
     const creatureAdvance = sample.creatureAdvance;
@@ -607,6 +590,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   private hideScene(): void {
     this.worldRoot.visible = false;
     this.boatRoot.visible = false;
+    this.underwaterRevealed = false;
     this.ship.root.visible = false;
     this.anglerfish.visible = false;
     this.ghost.visible = false;
@@ -614,7 +598,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.silt.visible = false;
     this.redFlash.visible = false;
     this.recoveredDebris.visible = false;
-    this.debrisMaterial.opacity = 0;
+    this.debris.visible = false;
     this.siltMaterial.opacity = 0;
     this.flashMaterial.opacity = 0;
     this.environment.cameraEffectsRoot?.rotation.set(0, 0, 0);
