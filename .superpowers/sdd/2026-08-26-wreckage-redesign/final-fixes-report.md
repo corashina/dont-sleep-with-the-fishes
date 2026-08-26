@@ -88,3 +88,31 @@ The production build passed after transforming 501 modules.
 The build kept the existing large-chunk warning.
 
 `git diff --check` passed with zero errors.
+
+## Fix Round 3
+
+### Result
+
+- The newer-work test now reaches the guard after stale camera exit starts.
+- It keeps newer camera entry pending while stale exit completes.
+- It verifies stale cleanup does not release busy state or hide newer work.
+- It completes and resolves the newer focus to prove that work stays valid.
+- The existing runtime guard passed the stronger test. No runtime change was needed.
+
+### RED Evidence
+
+A controlled guard-removal run selected the strengthened test.
+
+- 1 test failed.
+- 25 tests were skipped.
+- Stale cleanup called `setBusy(false)` during the newer entry.
+
+### GREEN Evidence
+
+The restored-guard run passed the strengthened test with 25 tests skipped.
+
+The focused flow, event, and phase run passed 3 files and 293 tests.
+
+The full suite passed 50 files and 1,610 tests.
+
+TypeScript passed with zero errors.
