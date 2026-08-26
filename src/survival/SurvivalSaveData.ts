@@ -453,8 +453,12 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const pendingEventId = parseEventIdOrNull(value.pendingEventId);
   const pendingEventTargetId = value.pendingEventTargetId === null ? null : parseKnownInventoryId(value.pendingEventTargetId, inventory);
   if (pendingEventId === undefined || pendingEventTargetId === undefined
-    || (state === 'day' && pendingEventId !== null) || (state === 'dayEvent' && pendingEventId === null)
+    || (state === 'day' && pendingEventId !== null)
+    || ((state === 'dayEvent' || state === 'nightEvent') && pendingEventId === null)
     || (pendingEventId === null && pendingEventTargetId !== null)
+    || Object.values(inventory).some((item) => item?.type === 'carlitos')
+    || savedItems.some((item) => item.type === 'carlitos')
+    || savedPickupCount !== savedItems.length + (carlitos === null ? 0 : 1)
     || !inventoryContainsIds(inventory, savedItems.map((item) => item.instanceId))
     || !inventoryContainsIds(inventory, pendingDawnBreaks)) return null;
   if (pendingEventId !== null) {

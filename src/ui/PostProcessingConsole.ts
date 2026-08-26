@@ -520,7 +520,10 @@ export class PostProcessingConsole {
     const target = event.target as Element | null;
     const continueButton = target?.closest<HTMLButtonElement>('[data-save-continue]');
     if (continueButton !== null && continueButton !== undefined) {
-      if (!continueButton.disabled) this.saveControls?.continueSavedRun();
+      if (!continueButton.disabled) {
+        this.setOpen(false);
+        this.saveControls?.continueSavedRun();
+      }
       return;
     }
     if (target?.closest('[data-event-test-enter]')) {

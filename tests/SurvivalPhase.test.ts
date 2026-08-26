@@ -124,26 +124,6 @@ describe('survival checkpoints', () => {
     expect(phase.getSurvivalCheckpoint()).toBeNull();
   });
 
-  it('does not expose or emit a checkpoint while an event choice is pending', () => {
-    const onCheckpointChange = vi.fn();
-    const session = new SurvivalSession([], {
-      seed: 41,
-      initialEventId: 'bad-sleep',
-    });
-    const phase = SurvivalPhase.forTest({
-      session,
-      world: {},
-      ui: {},
-      onCheckpointChange,
-    });
-    const internals = phase as unknown as { setBusy(value: boolean): void };
-
-    internals.setBusy(false);
-
-    expect(phase.getSurvivalCheckpoint()).toBeNull();
-    expect(onCheckpointChange).not.toHaveBeenCalled();
-  });
-
   it('emits after busy presentation settles', () => {
     const { phase, onCheckpointChange } = stablePhaseRig();
     const internals = phase as unknown as { setBusy(value: boolean): void };
@@ -205,46 +185,59 @@ describe('survival checkpoints', () => {
     }
   });
 
-  it('restores a pending event into choice startup without emitting a checkpoint', async () => {
-    const source = new SurvivalSession([], {
-      seed: 41,
-      initial: { day: 3 },
-      initialEventId: 'bad-sleep',
-    });
-    const checkpoint = {
-      scavengeElapsedSeconds: 18,
-      session: source.exportCheckpoint(),
-    };
-    const setEventSelection = vi.fn();
-    const onCheckpointChange = vi.fn();
-    const phase = SurvivalPhase.forTestStart({
-      world: {
-        syncInventory: vi.fn(),
-        stageEvent: vi.fn(),
-        revealEvent: vi.fn(() => Promise.resolve()),
-      },
-      ui: {
-        render: vi.fn(),
-        beginEventPresentation: vi.fn(),
-        setSleepCovered: vi.fn(() => Promise.resolve()),
-        showEventReveal: vi.fn(() => Promise.resolve()),
-        setEventSelection,
-        setBusy: vi.fn(),
-      },
-      onCheckpointChange,
-    }, { kind: 'restored', checkpoint });
+  it.each([
+    ['day event', 'drifting-barrel'],
+    ['night event', 'bad-sleep'],
+  ] as const)(
+    'restores a %s without emitting until its reveal settles',
+    async (_label, eventId) => {
+      const source = new SurvivalSession([], {
+        seed: 41,
+        initial: { day: 3 },
+        initialEventId: eventId,
+      });
+      const checkpoint = {
+        scavengeElapsedSeconds: 18,
+        session: source.exportCheckpoint(),
+      };
+      const reveal = deferred();
+      const setEventSelection = vi.fn();
+      const onCheckpointChange = vi.fn();
+      const phase = SurvivalPhase.forTestStart({
+        world: {
+          syncInventory: vi.fn(),
+          stageEvent: vi.fn(),
+          revealEvent: vi.fn(() => reveal.promise),
+        },
+        ui: {
+          render: vi.fn(),
+          beginEventPresentation: vi.fn(),
+          setSleepCovered: vi.fn(() => Promise.resolve()),
+          showEventReveal: vi.fn(() => Promise.resolve()),
+          setEventSelection,
+          setBusy: vi.fn(),
+        },
+        onCheckpointChange,
+      }, { kind: 'restored', checkpoint });
 
-    try {
-      phase.start();
-      await flushPromises();
+      try {
+        phase.start();
+        await flushPromises();
 
-      expect(setEventSelection).toHaveBeenCalledOnce();
-      expect(phase.getSurvivalCheckpoint()).toBeNull();
-      expect(onCheckpointChange).not.toHaveBeenCalled();
-    } finally {
-      phase.dispose();
-    }
-  });
+        expect(phase.getSurvivalCheckpoint()).toBeNull();
+        expect(onCheckpointChange).not.toHaveBeenCalled();
+
+        reveal.resolve();
+        await flushPromises();
+
+        expect(setEventSelection).toHaveBeenCalledOnce();
+        expect(phase.getSurvivalCheckpoint()).toEqual(checkpoint);
+        expect(onCheckpointChange).toHaveBeenLastCalledWith(checkpoint);
+      } finally {
+        phase.dispose();
+      }
+    },
+  );
 });
 
 function completedEntry(

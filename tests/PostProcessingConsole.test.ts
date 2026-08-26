@@ -26,7 +26,10 @@ function saveControls(
   };
 }
 
-function createConsole(save: SaveControls): PostProcessingConsole {
+function createConsole(
+  save: SaveControls,
+  onOpenChange: (open: boolean) => void = () => undefined,
+): PostProcessingConsole {
   const mount = document.createElement('main');
   document.body.append(mount);
   const console = new PostProcessingConsole(mount, {
@@ -38,7 +41,7 @@ function createConsole(save: SaveControls): PostProcessingConsole {
     }),
     setAmbientOcclusionMode: vi.fn(),
     setNumeric: vi.fn(),
-  }, undefined, undefined, undefined, undefined, undefined, undefined,
+  }, onOpenChange, undefined, undefined, undefined, undefined, undefined,
   undefined, undefined, undefined, undefined, undefined, undefined, save);
   consoles.push(console);
   return console;
@@ -84,6 +87,22 @@ describe('PostProcessingConsole save controls', () => {
     console.element.querySelector<HTMLButtonElement>('[data-save-continue]')!.click();
 
     expect(controls.continueSavedRun).toHaveBeenCalledOnce();
+  });
+
+  it('closes before it reports an enabled Continue action', () => {
+    const calls: string[] = [];
+    const controls = saveControls({ enabled: true, savedDay: 8 });
+    controls.continueSavedRun.mockImplementation(() => calls.push('continue'));
+    const console = createConsole(
+      controls,
+      (open) => calls.push(open ? 'open' : 'close'),
+    );
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backquote', key: '`' }));
+
+    console.element.querySelector<HTMLButtonElement>('[data-save-continue]')!.click();
+
+    expect(console.element.dataset.open).toBe('false');
+    expect(calls).toEqual(['open', 'close', 'continue']);
   });
 
   it('updates the visible day without rebuilding the console', () => {
