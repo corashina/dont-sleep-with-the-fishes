@@ -12,7 +12,7 @@ import { eventSideFromSeed, type EventSide } from './eventVariant';
 import { KeyedEventPresentation } from './KeyedEventPresentation';
 import type { EventPresentationKey } from './survivalTypes';
 
-const FLOAT_POSITION = Object.freeze({ x: 4.8, y: 0.06, z: -5.2 });
+const FLOAT_POSITION = Object.freeze({ x: 4.8, y: 0.24, z: -5.2 });
 const SEARCH_DURATION = 1.8;
 const DRIFT_DURATION = 1.1;
 
