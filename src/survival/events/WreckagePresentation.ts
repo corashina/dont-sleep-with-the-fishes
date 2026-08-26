@@ -217,6 +217,9 @@ export class WreckagePresentation implements DedicatedEventPresentation {
 
   playChoice(choiceId: string): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
+    if (choiceId === 'delegate-carlitos') {
+      return this.environment.delegateCarlitos(async () => undefined);
+    }
     return choiceId === 'leave' ? this.startBeat('leave') : Promise.resolve();
   }
 

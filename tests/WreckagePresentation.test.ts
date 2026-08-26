@@ -283,6 +283,17 @@ describe('WreckagePresentation', () => {
     presentation.dispose();
   });
 
+  it('delegates the Carlitos visit for Send Carlitos', async () => {
+    const { environment } = createEnvironment();
+    const presentation = new WreckagePresentation(environment);
+    stage(presentation);
+
+    await presentation.playChoice('delegate-carlitos');
+
+    expect(environment.delegateCarlitos).toHaveBeenCalledOnce();
+    presentation.dispose();
+  });
+
   it('resolves results without restoring obsolete Wreckage actors', async () => {
     const { environment, ownedModelDispose } = createEnvironment();
     const presentation = new WreckagePresentation(environment);
