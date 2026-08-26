@@ -224,13 +224,13 @@ describe('AudioSystem', () => {
     expect(tornadoWind.stop).toHaveBeenCalledExactlyOnceWith(0.08);
   });
 
-  it('finishes Wreckage dive audio after its reaction', () => {
+  it('finishes Wreckage dive audio after its focused animation', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
 
     audio.beginDive();
     const movement = backend.voices.find(({ id }) => id === 'underwaterMovement')!;
-    audio.finishEventReaction('wreckage');
+    audio.finishDive();
 
     expect(movement.stop).toHaveBeenCalledExactlyOnceWith(0.2);
     expect(backend.voices.at(-1)?.id).toBe('diveSurface');

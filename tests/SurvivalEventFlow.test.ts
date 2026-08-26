@@ -101,7 +101,7 @@ function createRig(
     }),
     companionEventActionAvailability: vi.fn(() => ({
       visible: true,
-      energyCost: 1,
+      energyCost: 3,
       availableEnergy: 3,
       unavailableReason: null,
     })),
@@ -157,6 +157,7 @@ function createRig(
     setBadSleepCue: vi.fn(),
     holdEventOutcome: vi.fn(async () => { calls.push('hold'); }),
     showFeedback: vi.fn(),
+    showRewardResult: vi.fn(async () => { calls.push('show-result'); }),
     clearEventPresentation: vi.fn(() => calls.push('clear-ui')),
     setAnchors: vi.fn(),
     restoreCommandFocus: vi.fn(() => calls.push('focus')),
@@ -193,7 +194,10 @@ function createRig(
   };
   const bundles = (bundleManager ?? defaultBundles) as typeof defaultBundles;
   const focused = {
-    enter: vi.fn(async (_eventId?: string): Promise<void> => undefined),
+    enter: vi.fn(async (
+      _eventId?: string,
+      _choices?: readonly unknown[],
+    ): Promise<void> => undefined),
     choose: vi.fn(async (_choiceId?: string): Promise<void> => undefined),
     clear: vi.fn(() => calls.push('clear-drifting')),
     settleForVisibilityChange: vi.fn(),
@@ -253,6 +257,214 @@ function createRig(
 }
 
 describe('SurvivalEventFlow', () => {
+  it('builds the four exact Wreckage choices with independent requirements', async () => {
+    const rig = createRig(snapshot({
+      state: 'dayEvent',
+      pendingEventId: 'wreckage',
+      energy: 2,
+      carlitos: {
+        alive: true, energy: 3, hunger: 5, sickness: 0,
+        unhappiness: 0, pettedToday: false, deathCause: null,
+      },
+      inventory: inventory({
+        'scubaSet-2': {
+          instanceId: 'scubaSet-2', type: 'scubaSet', condition: 'usable',
+        },
+        'scubaSet-1': {
+          instanceId: 'scubaSet-1', type: 'scubaSet', condition: 'usable',
+        },
+      }),
+    }));
+    await rig.flow.revealPending(rig.session.snapshot());
+    await rig.flow.focusEvent('wreckage');
+
+    expect(rig.focused.enter).toHaveBeenCalledWith('wreckage', [
+      {
+        id: 'search', label: 'Search Debris', unavailableReason: null,
+        energyCost: 2, energyOwner: 'player', instanceId: null,
+      },
+      {
+        id: 'delegate-carlitos', label: 'Send Carlitos', unavailableReason: null,
+        energyCost: 3, energyOwner: 'carlitos', instanceId: null,
+      },
+      {
+        id: 'dive', label: 'Dive Into Wreck',
+        unavailableReason: 'Requires 3 energy; you have 2.',
+        energyCost: 3, energyOwner: 'player', instanceId: 'scubaSet-1',
+      },
+      { id: 'leave', label: 'Leave', unavailableReason: null, instanceId: null },
+    ]);
+  });
+
+  it.each([
+    ['missing', inventory(), 'Requires usable scuba gear.'],
+    ['broken', inventory({
+      'scubaSet-1': {
+        instanceId: 'scubaSet-1', type: 'scubaSet', condition: 'broken',
+      },
+    }), 'Requires usable scuba gear.'],
+  ])('keeps Dive visible with %s scuba gear', async (_label, carried, reason) => {
+    const rig = createRig(snapshot({
+      state: 'dayEvent', pendingEventId: 'wreckage', energy: 3, inventory: carried,
+    }));
+    await rig.flow.revealPending(rig.session.snapshot());
+    await rig.flow.focusEvent('wreckage');
+
+    expect(rig.focused.enter).toHaveBeenCalledWith('wreckage', expect.arrayContaining([
+      expect.objectContaining({
+        id: 'dive', instanceId: null, unavailableReason: reason,
+      }),
+    ]));
+  });
+
+  it('hides absent Carlitos and shows his unavailable reason when aboard', async () => {
+    const hidden = createRig(snapshot({ state: 'dayEvent', pendingEventId: 'wreckage' }));
+    await hidden.flow.revealPending(hidden.session.snapshot());
+    await hidden.flow.focusEvent('wreckage');
+    expect(hidden.focused.enter.mock.calls[0]![1]).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'delegate-carlitos' }),
+    ]));
+
+    const tired = createRig(snapshot({
+      state: 'dayEvent',
+      pendingEventId: 'wreckage',
+      carlitos: {
+        alive: true, energy: 1, hunger: 5, sickness: 0,
+        unhappiness: 0, pettedToday: false, deathCause: null,
+      },
+    }));
+    await tired.flow.revealPending(tired.session.snapshot());
+    await tired.flow.focusEvent('wreckage');
+    expect(tired.focused.enter).toHaveBeenCalledWith('wreckage', expect.arrayContaining([
+      expect.objectContaining({
+        id: 'delegate-carlitos', energyCost: 3, energyOwner: 'carlitos',
+        unavailableReason: 'Carlitos needs 3 energy; he has 1.',
+      }),
+    ]));
+  });
+
+  it.each([
+    ['search', null, { kind: 'resource', id: 'repairMaterial', quantity: 2 }],
+    ['delegate-carlitos', null, { kind: 'resource', id: 'food', quantity: 1 }],
+    ['dive', 'scubaSet-1', { kind: 'item', id: 'medicalKit', quantity: 1 }],
+  ] as const)('returns before showing the %s Wreckage result', async (
+    choiceId,
+    instanceId,
+    rewardSummary,
+  ) => {
+    const pending = snapshot({
+      state: 'dayEvent', pendingEventId: 'wreckage', energy: 3,
+      inventory: inventory({
+        'scubaSet-1': {
+          instanceId: 'scubaSet-1', type: 'scubaSet', condition: 'usable',
+        },
+      }),
+    });
+    const rig = createRig(pending);
+    rig.setResolveEvent(() => {
+      rig.calls.push('action-complete');
+      rig.setSnapshot(snapshot({ state: 'day', inventory: pending.inventory }));
+      return accepted({ rewardSummary });
+    });
+    await rig.flow.revealPending(pending);
+    await rig.flow.focusEvent('wreckage');
+    rig.flow.setFocusedResolutionActive(true);
+    const actionStart = rig.calls.length;
+    const resolution = rig.flow.resolveFocusedEventChoice({ id: choiceId, instanceId });
+    if (resolution === undefined || !resolution.accepted) throw new Error('Expected Wreckage choice.');
+
+    await resolution.playAnimation();
+    if (choiceId === 'search') {
+      expect(rig.world.playEventChoice).not.toHaveBeenCalled();
+      expect(rig.world.reactToEventOutcome).not.toHaveBeenCalled();
+    }
+    await resolution.afterAnimation();
+    await resolution.beforeReturn();
+    rig.calls.push('exit-focus');
+    resolution.clearEvent();
+    rig.calls.push('render-default');
+    resolution.renderSnapshot();
+    await resolution.afterReturn();
+
+    const orderedCalls = rig.calls.slice(actionStart).filter((call) => [
+      'action-complete', 'cover', 'exit-focus', 'clear-world',
+      'render-default', 'settle', 'uncover', 'show-result',
+    ].includes(call));
+    expect(orderedCalls).toEqual([
+      'action-complete', 'cover', 'exit-focus', 'clear-world',
+      'render-default', 'settle', 'uncover', 'show-result',
+    ]);
+    expect(rig.ui.showRewardResult).toHaveBeenCalledWith({
+      title: 'WRECKAGE', reward: rewardSummary, lines: [],
+    });
+  });
+
+  it('leaves Wreckage without cost or a result paper', async () => {
+    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'wreckage', energy: 2 });
+    const rig = createRig(pending);
+    rig.setResolveEvent(() => {
+      rig.setSnapshot(snapshot({ state: 'day', energy: 2 }));
+      return accepted({ message: 'You leave the wreckage behind.' });
+    });
+    await rig.flow.revealPending(pending);
+    await rig.flow.focusEvent('wreckage');
+    rig.flow.setFocusedResolutionActive(true);
+    const resolution = rig.flow.resolveFocusedEventChoice({ id: 'leave', instanceId: null });
+    if (resolution === undefined || !resolution.accepted) throw new Error('Expected Leave choice.');
+    await resolution.playAnimation();
+    await resolution.beforeReturn();
+    resolution.clearEvent();
+    resolution.renderSnapshot();
+    await resolution.afterReturn();
+
+    expect(rig.session.snapshot().energy).toBe(2);
+    expect(rig.ui.showRewardResult).not.toHaveBeenCalled();
+  });
+
+  it('reports a broken selected scuba instance after the Wreckage return', async () => {
+    const pending = snapshot({
+      state: 'dayEvent', pendingEventId: 'wreckage', energy: 3,
+      inventory: inventory({
+        'scubaSet-1': {
+          instanceId: 'scubaSet-1', type: 'scubaSet', condition: 'usable',
+        },
+      }),
+    });
+    const rig = createRig(pending);
+    rig.setResolveEvent(() => {
+      rig.setSnapshot(snapshot({
+        state: 'day',
+        inventory: inventory({
+          'scubaSet-1': {
+            instanceId: 'scubaSet-1', type: 'scubaSet', condition: 'broken',
+          },
+        }),
+      }));
+      return accepted({ message: 'The wreck collapses and damages your gear.' });
+    });
+    await rig.flow.revealPending(pending);
+    await rig.flow.focusEvent('wreckage');
+    rig.flow.setFocusedResolutionActive(true);
+    const resolution = rig.flow.resolveFocusedEventChoice({
+      id: 'dive', instanceId: 'scubaSet-1',
+    });
+    if (resolution === undefined || !resolution.accepted) throw new Error('Expected Dive choice.');
+    await resolution.playAnimation();
+    await resolution.beforeReturn();
+    resolution.clearEvent();
+    resolution.renderSnapshot();
+    await resolution.afterReturn();
+
+    expect(rig.ui.showRewardResult).toHaveBeenCalledWith({
+      title: 'WRECKAGE',
+      reward: null,
+      lines: [
+        'The wreck collapses and damages your gear.',
+        'Your scuba gear broke.',
+      ],
+    });
+  });
+
   it('keeps Wreckage controls inside the shared focused flow', async () => {
     const rig = createRig(snapshot({
       state: 'dayEvent',
@@ -280,7 +492,7 @@ describe('SurvivalEventFlow', () => {
     ]));
   });
 
-  it('runs dive audio through Wreckage item use and reaction', async () => {
+  it('runs dive audio through the Wreckage focused item use', async () => {
     const pending = snapshot({
       state: 'dayEvent',
       pendingEventId: 'wreckage',
