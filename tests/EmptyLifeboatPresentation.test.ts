@@ -22,6 +22,21 @@ function createWater(): DriftingWater {
   };
 }
 
+function createFlatWater(): DriftingWater {
+  return {
+    sampleWaveInto: vi.fn((sample) => {
+      sample.height = 0;
+      sample.displacementX = 0;
+      sample.displacementZ = 0;
+      sample.normal.x = 0;
+      sample.normal.y = 1;
+      sample.normal.z = 0;
+      return sample;
+    }),
+    readAmplitudeScale: vi.fn(() => 1),
+  };
+}
+
 describe('EmptyLifeboatPresentation', () => {
   it('loads its pinned model through the featured event family', () => {
     const clone = vi.fn(() => new Group());
@@ -60,6 +75,25 @@ describe('EmptyLifeboatPresentation', () => {
     presentation.update(3, 0);
     expect(subject.position.x).toBeGreaterThan(0);
     expect(presentation.root.userData.eventSide).toBe('right');
+  });
+
+  it('starts at its distant rotated pose without sliding during reveal', async () => {
+    const presentation = new EmptyLifeboatPresentation(new Group(), createFlatWater());
+    presentation.stage(1);
+    const subject = presentation.root.getObjectByName('empty-lifeboat:subject')!;
+
+    expect(subject.position.toArray()).toEqual([5.8, 0.24, -7.2]);
+    expect(subject.rotation.y).toBeCloseTo(Math.PI / 4);
+    const stagedPosition = subject.position.clone();
+    const stagedQuaternion = subject.quaternion.clone();
+
+    const reveal = presentation.reveal();
+    presentation.update(1, 0.4);
+
+    expect(subject.position.toArray()).toEqual(stagedPosition.toArray());
+    expect(subject.quaternion.angleTo(stagedQuaternion)).toBeCloseTo(0);
+    presentation.update(2, 1);
+    await reveal;
   });
 
   it('pulls close and leaves after the search', async () => {
