@@ -97,7 +97,7 @@ export type SurvivalCheckpointChange = (
 ) => void;
 
 export interface SurvivalPhaseTestDependencies {
-  session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
+  session?: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
   world: Partial<Omit<BoatWorld, 'stageEvent'>> & {
     stageEvent?: (...args: any[]) => void;
   };
@@ -134,6 +134,28 @@ function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' 
 
 function reportInvariantError(error: Error): void {
   console.error(error);
+}
+
+function createSession(
+  start: SurvivalPhaseStart,
+  itemAnimationLab: boolean,
+  initialEventId: string | undefined,
+): SurvivalSession {
+  if (start.kind === 'restored') return SurvivalSession.restore(start.checkpoint.session);
+  return new SurvivalSession(start.savedItems, {
+    seed: start.seed,
+    ...(itemAnimationLab
+      ? {
+          initial: ITEM_ANIMATION_LAB_INITIAL_RESOURCES,
+          initialChest: ITEM_ANIMATION_LAB_INITIAL_CHEST,
+        }
+      : {}),
+    ...(
+      initialEventId === undefined || itemAnimationLab
+        ? {}
+        : { initialEventId }
+    ),
+  });
 }
 
 function testContext(
@@ -238,23 +260,9 @@ export class SurvivalPhase implements GamePhase {
       ? start.initialEventResultId
       : undefined;
     const itemAnimationLab = isItemAnimationLabId(initialEventId);
+    const session = testDependencies?.session
+      ?? createSession(start, itemAnimationLab, initialEventId);
     if (testDependencies === undefined) {
-      const session = start.kind === 'restored'
-        ? SurvivalSession.restore(start.checkpoint.session)
-        : new SurvivalSession(start.savedItems, {
-            seed: start.seed,
-            ...(itemAnimationLab
-              ? {
-                  initial: ITEM_ANIMATION_LAB_INITIAL_RESOURCES,
-                  initialChest: ITEM_ANIMATION_LAB_INITIAL_CHEST,
-                }
-              : {}),
-            ...(
-              initialEventId === undefined || itemAnimationLab
-                ? {}
-                : { initialEventId }
-            ),
-          });
       const world = new BoatWorld(
         context.camera,
         context.propModels,
@@ -287,7 +295,7 @@ export class SurvivalPhase implements GamePhase {
     }
     this.initialize(
       context,
-      testDependencies.session,
+      session,
       testDependencies.world,
       testDependencies.ui,
       testDependencies.scavengeElapsedSeconds ?? (
@@ -310,6 +318,20 @@ export class SurvivalPhase implements GamePhase {
     initialEventId?: string,
     initialEventResultId?: string,
   ): SurvivalPhase {
+    return SurvivalPhase.forTestStart(dependencies, {
+      kind: 'fresh',
+      savedItems: [],
+      seed: 0,
+      scavengeElapsedSeconds: dependencies.scavengeElapsedSeconds ?? 0,
+      ...(initialEventId === undefined ? {} : { initialEventId }),
+      ...(initialEventResultId === undefined ? {} : { initialEventResultId }),
+    });
+  }
+
+  static forTestStart(
+    dependencies: SurvivalPhaseTestDependencies,
+    start: SurvivalPhaseStart,
+  ): SurvivalPhase {
     const TestConstructor = SurvivalPhase as unknown as new (
       context: PhaseContext,
       start: SurvivalPhaseStart,
@@ -319,14 +341,7 @@ export class SurvivalPhase implements GamePhase {
     ) => SurvivalPhase;
     return new TestConstructor(
       testContext(dependencies.sceneRenderer, dependencies.audio),
-      {
-        kind: 'fresh',
-        savedItems: [],
-        seed: 0,
-        scavengeElapsedSeconds: dependencies.scavengeElapsedSeconds ?? 0,
-        ...(initialEventId === undefined ? {} : { initialEventId }),
-        ...(initialEventResultId === undefined ? {} : { initialEventResultId }),
-      },
+      start,
       dependencies.onRestart ?? (() => undefined),
       dependencies.onCheckpointChange,
       dependencies,
@@ -489,6 +504,7 @@ export class SurvivalPhase implements GamePhase {
       || this.busy
       || this.itemAnimationLab
       || isTerminal(snapshot.state)
+      || snapshot.pendingEventId !== null
       || this.fishingFlow.hasActiveAttempt()
       || this.session.exportCheckpoint === undefined
     ) return null;
