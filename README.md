@@ -123,12 +123,16 @@ Utility catches neither consume bait nor receive bait's fish-weight bonus.
 ### System tuning
 
 Press <code>`</code> (backquote) in either phase to open **System Tuning**.
-Use **Master Volume** and **Mute** to control all audio. The setting persists
-between sessions.
+All System Tuning settings persist between sessions.
+
+Use **Master Volume** and **Mute** to control all audio.
 
 The menu also offers **Calm**, **Overcast**, **Squall**, **Rain**, **Wind**,
 **Thunderstorm**, **Waves**, and **Fog**. A selection overrides event weather,
-carries across the phase handoff, and remains active until the page reloads.
+carries across the phase handoff, and persists between sessions.
+
+Volumetric clouds start off. Turn them on in the **Weather** group. They render
+only by day and adapt to the active weather.
 
 Normal gameplay is **Calm** outside events. Night events can use authored presentation weather while staged and resolved. The event weather includes **Overcast**, **Squall**, **Rain**, **Wind**, **Thunderstorm**, **Waves**, and **Fog**. Calm returns after each event ends.
 

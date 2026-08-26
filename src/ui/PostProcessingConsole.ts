@@ -77,6 +77,12 @@ export interface CameraControls {
   setFieldOfView(fieldOfView: number): void;
 }
 
+export interface VolumetricCloudControls {
+  readonly enabled: boolean;
+  readonly available: boolean;
+  setEnabled(enabled: boolean): void;
+}
+
 const DEFAULT_WEATHER_CONTROLS: WeatherControls = {
   selected: 'calm',
   source: 'normal',
@@ -119,6 +125,7 @@ export class PostProcessingConsole {
       createAntiAliasingQualityPreference(() => undefined, null),
     shadowQuality: ShadowQualityPreference =
       createShadowQualityPreference(() => undefined, null),
+    private readonly volumetricCloudControls?: VolumetricCloudControls,
   ) {
     const state = controls.getState();
     this.weatherId = weatherControls.selected;
@@ -313,6 +320,21 @@ export class PostProcessingConsole {
                     `).join('')}
                   </select>
                 </label>
+                ${volumetricCloudControls === undefined
+                  ? ''
+                  : `<label class="post-processing-console__toggle">
+                      <span>Volumetric clouds</span>
+                      <input
+                        type="checkbox"
+                        role="switch"
+                        data-volumetric-clouds
+                        ${volumetricCloudControls.enabled ? 'checked' : ''}
+                        ${volumetricCloudControls.available ? '' : 'disabled'}
+                      >
+                      <output data-volumetric-clouds-state>${volumetricCloudControls.available
+                        ? (volumetricCloudControls.enabled ? 'ON' : 'OFF')
+                        : 'UNAVAILABLE'}</output>
+                    </label>`}
               </div>
             </section>
           </div>
@@ -375,6 +397,17 @@ export class PostProcessingConsole {
     if (input !== null) input.checked = phase === 'night';
     if (label !== null) label.textContent = phase === 'night' ? 'Night' : 'Day';
     if (output !== null) output.value = phase.toUpperCase();
+  }
+
+  setVolumetricCloudAvailability(available: boolean): void {
+    if (this.disposed) return;
+    const input = this.element.querySelector<HTMLInputElement>('[data-volumetric-clouds]');
+    const output = this.element.querySelector<HTMLOutputElement>(
+      '[data-volumetric-clouds-state]',
+    );
+    if (input === null || output === null) return;
+    input.disabled = !available;
+    output.value = available ? (input.checked ? 'ON' : 'OFF') : 'UNAVAILABLE';
   }
 
   dispose(): void {
@@ -482,6 +515,17 @@ export class PostProcessingConsole {
 
   private readonly handleChange = (event: Event): void => {
     const target = event.target;
+    if (
+      target instanceof HTMLInputElement
+      && target.matches('[data-volumetric-clouds]')
+    ) {
+      const output = this.element.querySelector<HTMLOutputElement>(
+        '[data-volumetric-clouds-state]',
+      );
+      if (output !== null) output.value = target.checked ? 'ON' : 'OFF';
+      this.volumetricCloudControls?.setEnabled(target.checked);
+      return;
+    }
     if (
       target instanceof HTMLInputElement
       && target.matches('[data-presentation-night]')

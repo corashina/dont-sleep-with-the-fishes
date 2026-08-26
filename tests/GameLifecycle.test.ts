@@ -415,10 +415,12 @@ describe('Game menu lifecycle', () => {
     systemTuning.set('cameraFieldOfView', 92);
     systemTuning.set('weatherOverride', 'rain');
     systemTuning.set('phaseOverride', 'night');
+    systemTuning.set('volumetricCloudsEnabled', true);
     const phase = {
       ...gamePhase(),
       setWeatherOverride: vi.fn(),
       setTimeOfDayOverride: vi.fn(),
+      setVolumetricCloudsEnabled: vi.fn(),
     };
     const postProcessingControls: PostProcessingControls = {
       getState: vi.fn(() => ({
@@ -467,6 +469,83 @@ describe('Game menu lifecycle', () => {
         .toBe(false);
       expect(phase.setWeatherOverride).toHaveBeenCalledWith('rain');
       expect(phase.setTimeOfDayOverride).toHaveBeenCalledWith('night');
+      expect(phase.setVolumetricCloudsEnabled).toHaveBeenCalledWith(true);
+    } finally {
+      game.dispose();
+    }
+  });
+
+  it('keeps volumetric clouds off until enabled through system tuning', () => {
+    const phase = {
+      ...gamePhase(),
+      setVolumetricCloudsEnabled: vi.fn(),
+    };
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const game = Game.forTest({
+      createMenu: () => phase,
+      createScavenge: () => gamePhase(),
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      sceneRenderer: postProcessingSceneRenderer(),
+      systemTuning: createSystemTuningPreference(null),
+      mount,
+    });
+
+    try {
+      const clouds = mount.querySelector<HTMLInputElement>('[data-volumetric-clouds]')!;
+      const state = mount.querySelector<HTMLOutputElement>(
+        '[data-volumetric-clouds-state]',
+      )!;
+      expect(clouds.checked).toBe(false);
+      expect(clouds.disabled).toBe(false);
+      expect(state.value).toBe('OFF');
+
+      clouds.checked = true;
+      clouds.dispatchEvent(new Event('change', { bubbles: true }));
+
+      expect(state.value).toBe('ON');
+      expect(phase.setVolumetricCloudsEnabled).toHaveBeenCalledWith(true);
+    } finally {
+      game.dispose();
+    }
+  });
+
+  it('marks volumetric clouds unavailable when the active phase cannot render them', () => {
+    const phase = {
+      ...gamePhase(),
+      setVolumetricCloudsEnabled: vi.fn(),
+      getVolumetricCloudsAvailable: vi.fn(() => false),
+    };
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const game = Game.forTest({
+      createMenu: () => phase,
+      createScavenge: () => gamePhase(),
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      sceneRenderer: postProcessingSceneRenderer(),
+      systemTuning: createSystemTuningPreference(null),
+      mount,
+    });
+
+    try {
+      const clouds = mount.querySelector<HTMLInputElement>('[data-volumetric-clouds]')!;
+      const state = mount.querySelector<HTMLOutputElement>(
+        '[data-volumetric-clouds-state]',
+      )!;
+      expect(clouds.disabled).toBe(true);
+      expect(state.value).toBe('UNAVAILABLE');
     } finally {
       game.dispose();
     }
@@ -544,6 +623,7 @@ describe('Game menu lifecycle', () => {
         '[data-presentation-weather]',
       )!;
       const night = firstMount.querySelector<HTMLInputElement>('[data-presentation-night]')!;
+      const clouds = firstMount.querySelector<HTMLInputElement>('[data-volumetric-clouds]')!;
 
       aoMode.value = 'off';
       aoMode.dispatchEvent(new Event('change', { bubbles: true }));
@@ -559,6 +639,8 @@ describe('Game menu lifecycle', () => {
       weather.dispatchEvent(new Event('change', { bubbles: true }));
       night.checked = true;
       night.dispatchEvent(new Event('change', { bubbles: true }));
+      clouds.checked = true;
+      clouds.dispatchEvent(new Event('change', { bubbles: true }));
     } finally {
       firstGame.dispose();
     }
@@ -569,6 +651,7 @@ describe('Game menu lifecycle', () => {
       ...gamePhase(),
       setWeatherOverride: vi.fn(),
       setTimeOfDayOverride: vi.fn(),
+      setVolumetricCloudsEnabled: vi.fn(),
     };
     const secondMount = document.createElement('main');
     document.body.append(secondMount);
@@ -609,6 +692,8 @@ describe('Game menu lifecycle', () => {
       )?.value).toBe('rain');
       expect(secondMount.querySelector<HTMLInputElement>('[data-presentation-night]')?.checked)
         .toBe(true);
+      expect(secondMount.querySelector<HTMLInputElement>('[data-volumetric-clouds]')?.checked)
+        .toBe(true);
       expect(secondRenderer.controls.setAmbientOcclusionMode).toHaveBeenCalledWith('off');
       expect(secondRenderer.controls.setNumeric).toHaveBeenCalledWith(
         'ambientOcclusionIntensity',
@@ -620,6 +705,7 @@ describe('Game menu lifecycle', () => {
       );
       expect(phase.setWeatherOverride).toHaveBeenCalledWith('rain');
       expect(phase.setTimeOfDayOverride).toHaveBeenCalledWith('night');
+      expect(phase.setVolumetricCloudsEnabled).toHaveBeenCalledWith(true);
     } finally {
       secondGame.dispose();
     }
@@ -2256,6 +2342,12 @@ describe('ScavengePhase lifecycle integration', () => {
     const survivalSetTimeOfDay = vi.fn((phase: 'day' | 'night' | null) => {
       order.push(`survival-time:${phase}`);
     });
+    const scavengeSetClouds = vi.fn((enabled: boolean) => {
+      order.push(`scavenge-clouds:${enabled}`);
+    });
+    const survivalSetClouds = vi.fn((enabled: boolean) => {
+      order.push(`survival-clouds:${enabled}`);
+    });
     const scavenge = {
       ...gamePhase(),
       update: vi.fn(() => order.push('scavenge-update')),
@@ -2264,6 +2356,7 @@ describe('ScavengePhase lifecycle integration', () => {
       getPresentationWeather: vi.fn(() => scavengeWeather),
       setTimeOfDayOverride: scavengeSetTimeOfDay,
       getPresentationPhase: vi.fn(() => 'day' as const),
+      setVolumetricCloudsEnabled: scavengeSetClouds,
     };
     const survival = {
       ...gamePhase(),
@@ -2274,6 +2367,7 @@ describe('ScavengePhase lifecycle integration', () => {
       getPresentationWeather: vi.fn(() => 'rain' as const),
       setTimeOfDayOverride: survivalSetTimeOfDay,
       getPresentationPhase: vi.fn(() => 'night' as const),
+      setVolumetricCloudsEnabled: survivalSetClouds,
     };
     const postProcessingControls: PostProcessingControls = {
       getState: vi.fn(() => ({
@@ -2333,6 +2427,10 @@ describe('ScavengePhase lifecycle integration', () => {
       const fieldOfViewOutput = mount.querySelector<HTMLOutputElement>(
         '[data-camera-fov-output]',
       )!;
+      const clouds = mount.querySelector<HTMLInputElement>('[data-volumetric-clouds]')!;
+      const cloudsState = mount.querySelector<HTMLOutputElement>(
+        '[data-volumetric-clouds-state]',
+      )!;
       expect((game as unknown as { weatherOverride: unknown }).weatherOverride).toBeNull();
       expect((game as unknown as { timeOfDayOverride: unknown }).timeOfDayOverride).toBeNull();
       expect(weather.value).toBe('calm');
@@ -2342,6 +2440,8 @@ describe('ScavengePhase lifecycle integration', () => {
       expect(timeOfDay.value).toBe('DAY');
       expect(fieldOfView.value).toBe('80');
       expect(fieldOfViewOutput.value).toBe('80°');
+      expect(clouds.checked).toBe(false);
+      expect(cloudsState.value).toBe('OFF');
       expect(scavengeSetWeather).not.toHaveBeenCalled();
       expect(scavengeSetTimeOfDay).not.toHaveBeenCalled();
 
@@ -2369,6 +2469,11 @@ describe('ScavengePhase lifecycle integration', () => {
       expect(scavengeSetWeather).toHaveBeenLastCalledWith('rain');
       expect(source.value).toBe('FORCED');
 
+      clouds.checked = true;
+      clouds.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(cloudsState.value).toBe('ON');
+      expect(scavengeSetClouds).toHaveBeenLastCalledWith(true);
+
       order.length = 0;
       complete({ savedItems: [], elapsedSeconds: 2 });
       expect(survivalSetWeather).toHaveBeenCalledOnce();
@@ -2376,11 +2481,14 @@ describe('ScavengePhase lifecycle integration', () => {
       expect(order).toEqual([
         'survival-weather:rain',
         'survival-time:night',
+        'survival-clouds:true',
         'survival-resize',
         'survival-start',
       ]);
       expect(night.checked).toBe(true);
       expect(timeOfDay.value).toBe('NIGHT');
+      expect(clouds.checked).toBe(true);
+      expect(survivalSetClouds).toHaveBeenCalledOnce();
 
       weather.value = 'fog';
       weather.dispatchEvent(new Event('change', { bubbles: true }));
