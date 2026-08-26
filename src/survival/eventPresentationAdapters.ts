@@ -34,7 +34,7 @@ import type {
   DedicatedEventEnvironment,
   DedicatedEventPresentation,
 } from './eventPresentationTypes';
-import { AnglerfishSwarmPresentation } from './events/AnglerfishSwarmPresentation';
+import { SharkSwarmPresentation } from './events/SharkSwarmPresentation';
 import { CarlitosEventPresentation } from './events/CarlitosEventPresentation';
 import { DeathStarePresentation } from './events/DeathStarePresentation';
 import { LeakPresentation } from './events/LeakPresentation';
@@ -204,8 +204,8 @@ function createDedicatedCoordinator(
       case 'death-stare':
         presentations.push(new DeathStarePresentation(dedicatedEnvironment));
         break;
-      case 'swarm-of-anglerfish':
-        presentations.push(new AnglerfishSwarmPresentation(dedicatedEnvironment));
+      case 'swarm-of-sharks':
+        presentations.push(new SharkSwarmPresentation(dedicatedEnvironment));
         break;
       case 'tornado':
         presentations.push(new TornadoPresentation(dedicatedEnvironment));

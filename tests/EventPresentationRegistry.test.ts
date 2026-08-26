@@ -409,7 +409,7 @@ describe('EventPresentationRegistry', () => {
     ['leak', ['coordinator', 'leak']],
     ['wreckage', ['coordinator', 'wreckage']],
     ['chest-attack', ['layer']],
-    ['drifting-barrel', ['featured']],
+    ['drifting-supplies', ['featured']],
     ['shower-night', ['layer', 'weather']],
     ['ghosts', ['layer', 'supernatural']],
     ['face-on-the-moon', ['moon']],
@@ -427,7 +427,7 @@ describe('EventPresentationRegistry', () => {
     ['dangerous-waters', ['world:layer']],
     ['leak', ['world:coordinatorWorld', 'boat:coordinatorBoat']],
     ['chest-attack', ['world:layer']],
-    ['drifting-barrel', ['world:featured']],
+    ['drifting-supplies', ['world:featured']],
     ['shower-night', ['world:layer', 'world:weatherWorld', 'boat:weatherBoat']],
     ['ghosts', ['world:layer', 'world:supernaturalWorld']],
     ['face-on-the-moon', ['world:moonTarget']],
@@ -539,18 +539,18 @@ describe('EventPresentationRegistry', () => {
 
   it('delegates the featured lifecycle to its family', async () => {
     const { dependencies } = createDependencies();
-    const adapter = new EventPresentationRegistry().create('drifting-barrel', dependencies);
-    adapter.stage({ ...context, eventId: 'drifting-barrel' });
+    const adapter = new EventPresentationRegistry().create('drifting-supplies', dependencies);
+    adapter.stage({ ...context, eventId: 'drifting-supplies' });
     await adapter.reveal();
     await adapter.playChoice(choice);
     await adapter.playItemUse('choice', 'map-1' as ItemInstanceId);
     await adapter.react(reaction);
     adapter.clear();
     adapter.dispose();
-    expect(featured.stage).toHaveBeenCalledWith('drifting-barrel', 17);
-    expect(featured.reveal).toHaveBeenCalledWith('drifting-barrel');
+    expect(featured.stage).toHaveBeenCalledWith('drifting-supplies', 17);
+    expect(featured.reveal).toHaveBeenCalledWith('drifting-supplies');
     expect(featured.react).toHaveBeenCalledWith(
-      'drifting-barrel',
+      'drifting-supplies',
       reaction.outcome.eventPresentationKey,
     );
     expect(featured.clear).toHaveBeenCalledOnce();

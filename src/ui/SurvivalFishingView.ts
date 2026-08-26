@@ -87,7 +87,11 @@ export class SurvivalFishingView {
         <div class="survival-announcer" data-fishing-live aria-live="polite" aria-atomic="true"></div>
         <button type="button" class="fishing-bite-target" data-fishing-bite aria-label="BITE - REEL NOW" hidden></button>
         <button type="button" class="fishing-view-exit ui-role-context" data-fishing-view-exit aria-label="Return to boat view" hidden>
-          <span class="fishing-view-exit__arrow" aria-hidden="true"></span>
+          <!-- Lucide Arrow Down. ISC license: https://lucide.dev/icons/arrow-down -->
+          <svg class="fishing-view-exit__arrow" viewBox="4 4 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 5v14"></path>
+            <path d="m19 12-7 7-7-7"></path>
+          </svg>
         </button>
       </section>
       <div class="fishing-fade" data-fishing-fade aria-hidden="true"></div>

@@ -53,7 +53,7 @@ function withoutItem(instanceId: ItemInstanceId): DayActionRuleState['inventory'
 
 describe('day action availability rules', () => {
   it.each([
-    ['fish', { energy: 0 }, undefined, 'Fishing requires two energy.'],
+    ['fish', { energy: 0 }, undefined, 'Fishing requires one energy.'],
     ['dive', { inventory: withoutItem('scubaSet-1') }, undefined, 'Diving requires a recovered scuba set.'],
     ['dive', { weather: 'squall' }, undefined, 'Diving is too dangerous during a squall.'],
     ['dive', { energy: 2 }, undefined, 'Diving requires three energy.'],
@@ -78,6 +78,7 @@ describe('day action availability rules', () => {
     ['petCarlitos', { carlitos: null }, undefined, 'Carlitos is not aboard.'],
     ['petCarlitos', { carlitos: Object.freeze({ ...baseRuleState.carlitos!, alive: false }) }, undefined, 'Carlitos cannot respond.'],
     ['petCarlitos', { carlitos: Object.freeze({ ...baseRuleState.carlitos!, pettedToday: true }) }, undefined, 'Carlitos has already been petted today.'],
+    ['petCarlitos', {}, undefined, 'Carlitos is already happy.'],
     ['feedCarlitos', { carlitos: Object.freeze({ ...baseRuleState.carlitos!, hunger: 5 }) }, undefined, 'Carlitos is already satiated.'],
     ['feedCarlitos', { food: 0 }, undefined, 'No food remains.'],
     ['treatCarlitos', { carlitos: Object.freeze({ ...baseRuleState.carlitos!, sickness: 0 }) }, undefined, 'Carlitos needs no treatment.'],
@@ -124,7 +125,9 @@ describe('day action availability rules', () => {
       ['answerRadio', undefined],
       ['useEnergyBar', undefined, { energy: 1 }],
       ['openChest', undefined],
-      ['petCarlitos', undefined],
+      ['petCarlitos', undefined, {
+        carlitos: Object.freeze({ ...baseRuleState.carlitos!, unhappiness: 3 }),
+      }],
       ['feedCarlitos', undefined],
       ['treatCarlitos', undefined],
       ['endDay', undefined],

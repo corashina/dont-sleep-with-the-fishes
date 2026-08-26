@@ -248,9 +248,6 @@ function renderSystemScreen(
 function renderLoading(mount: HTMLElement): HTMLElement {
   return renderSystemScreen(mount, {
     kind: 'loading',
-    kicker: 'RECOVERING SUPPLIES',
-    title: 'Preparing the ship',
-    lead: 'Loading the equipment you will need to survive.',
   });
 }
 

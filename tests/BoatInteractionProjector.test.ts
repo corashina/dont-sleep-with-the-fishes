@@ -88,7 +88,7 @@ function createFixture(): ProjectorFixture {
     pillowRoot,
     chestRoot,
     chestState: () => chestState,
-    radioSignalAvailable: () => true,
+    radioInteractionAvailable: () => true,
     activeFeaturedEventId: () => activeEventId,
   };
   return {
@@ -160,26 +160,26 @@ describe('BoatInteractionProjector', () => {
     const interactionRoot = meshRoot('interaction', -0.4);
     const resultRoot = meshRoot('result', 0.4);
     (fixture.roots.carlitosRoot.parent as Scene).add(interactionRoot, resultRoot);
-    fixture.setActiveEventId('drifting-barrel');
+    fixture.setActiveEventId('drifting-supplies');
     vi.mocked(fixture.eventHost.interactionRoot).mockReturnValue(interactionRoot);
     vi.mocked(fixture.eventHost.resultRoot).mockReturnValue(resultRoot);
 
     const interaction = fixture.projector.projectEventInteraction(
-      'drifting-barrel',
+      'drifting-supplies',
       1280,
       720,
     );
-    const result = fixture.projector.projectEventResult('drifting-barrel', 1280, 720);
+    const result = fixture.projector.projectEventResult('drifting-supplies', 1280, 720);
 
     expect(interaction).toMatchObject({ visible: true });
     expect(result).toMatchObject({ visible: true });
-    expect(fixture.eventHost.interactionRoot).toHaveBeenCalledWith('drifting-barrel');
-    expect(fixture.eventHost.resultRoot).toHaveBeenCalledWith('drifting-barrel');
-    expect(fixture.projector.projectEventInteraction('drifting-barrel', 1280, 720))
+    expect(fixture.eventHost.interactionRoot).toHaveBeenCalledWith('drifting-supplies');
+    expect(fixture.eventHost.resultRoot).toHaveBeenCalledWith('drifting-supplies');
+    expect(fixture.projector.projectEventInteraction('drifting-supplies', 1280, 720))
       .toBe(interaction);
-    expect(fixture.projector.projectEventResult('drifting-barrel', 1280, 720))
+    expect(fixture.projector.projectEventResult('drifting-supplies', 1280, 720))
       .toBe(result);
-    expect(fixture.projector.projectEventInteraction('drifting-barrel', 0, 720))
+    expect(fixture.projector.projectEventInteraction('drifting-supplies', 0, 720))
       .toBeNull();
   });
 
@@ -208,9 +208,9 @@ describe('BoatInteractionProjector', () => {
       }),
     ]);
     (fixture.roots.carlitosRoot.parent as Scene).add(featuredRoot, customRoot);
-    fixture.setActiveEventId('drifting-barrel');
+    fixture.setActiveEventId('drifting-supplies');
     vi.mocked(fixture.eventHost.interactionRoot).mockImplementation((id) => {
-      if (id === 'drifting-barrel') return featuredRoot;
+      if (id === 'drifting-supplies') return featuredRoot;
       return null;
     });
     vi.mocked(fixture.eventHost.interactionTargets).mockReturnValue(targets);
@@ -221,15 +221,15 @@ describe('BoatInteractionProjector', () => {
     const anchors = fixture.projector.projectAnchors(1280, 720);
 
     expect(anchors.map(({ id }) => id).slice(-3)).toEqual([
-      'event:drifting-barrel',
+      'event:drifting-supplies',
       'custom:signal',
       'persistent-chest',
     ]);
     expect(anchors.at(-3)).toMatchObject({
-      label: 'BARREL',
+      label: 'SALVAGE',
       description: 'Floating salvage within reach.',
       tooltip: false,
-      eventFocusId: 'drifting-barrel',
+      eventFocusId: 'drifting-supplies',
       hitArea: { width: 64, height: 64 },
     });
     expect(anchors.at(-2)).toMatchObject({

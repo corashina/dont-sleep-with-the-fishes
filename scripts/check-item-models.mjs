@@ -16,7 +16,7 @@ export const MODEL_LIMIT = 3_000;
 export const LIBRARY_LIMIT = 40_000;
 export const COLLECTIBLE_ITEM_IDS = [
   'cannedFood', 'baitTin', 'ductTape', 'compass', 'map', 'medicalKit',
-  'spyglass', 'fishingNet', 'rope', 'bucket', 'flareGun', 'scubaSet', 'anchor',
+  'spyglass', 'fishingNet', 'knife', 'bucket', 'flareGun', 'scubaSet', 'anchor',
   'radio', 'umbrella', 'swimRing', 'flashlight', 'shotgun',
   'energyBar', 'carlitos',
 ];

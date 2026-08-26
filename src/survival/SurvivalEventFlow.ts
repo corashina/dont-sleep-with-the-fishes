@@ -83,6 +83,7 @@ export type EventAudioPort = Pick<
   | 'eventReveal'
   | 'eventItem'
   | 'eventItemCue'
+  | 'bucketHelmetRain'
   | 'sleep'
   | 'confirm'
   | 'deny'
@@ -430,10 +431,9 @@ export class SurvivalEventFlow {
     this.dependencies.world.setEventEligibleItems?.(null);
     this.dependencies.ui.setEventSelection?.(this.eligibility, []);
 
-    const lifeboatSearch = eventId === 'empty-lifeboat' && choiceId === 'search';
     let animate = true;
     if (
-      eventId === 'drifting-barrel'
+      eventId === 'drifting-supplies'
       &&
       (choiceId === 'retrieve' || choiceId === 'delegate-carlitos')
       && outcome.rewardSummary === undefined
@@ -447,12 +447,6 @@ export class SurvivalEventFlow {
       });
       animate = false;
     }
-    if (lifeboatSearch && outcome.rewardSummary === undefined) {
-      this.dependencies.onInvariantError(new Error(
-        'Empty Lifeboat search requires a reward summary.',
-      ));
-    }
-
     let terminalSnapshot: SurvivalSnapshot | null = null;
     return {
       accepted: true,
@@ -460,20 +454,13 @@ export class SurvivalEventFlow {
       afterAnimation: async () => {
         if (!this.isCurrent(generation, operation)) return;
         if (
-          eventId === 'drifting-barrel'
+          eventId === 'drifting-supplies'
           && (choiceId === 'retrieve' || choiceId === 'delegate-carlitos')
           && outcome.rewardSummary !== undefined
         ) {
           this.dependencies.audio.action('openChest');
           await (this.dependencies.ui.showRewardResult?.({
-            title: 'CHEST REWARD',
-            reward: outcome.rewardSummary,
-            lines: [],
-          }) ?? Promise.resolve());
-        }
-        if (lifeboatSearch && outcome.rewardSummary !== undefined) {
-          await (this.dependencies.ui.showRewardResult?.({
-            title: 'LIFEBOAT SUPPLY',
+            title: 'SALVAGE',
             reward: outcome.rewardSummary,
             lines: [],
           }) ?? Promise.resolve());
@@ -1256,6 +1243,9 @@ export class SurvivalEventFlow {
       this.dependencies.audio.dawn();
       await (this.dependencies.world.play?.(dawn.cue) ?? Promise.resolve());
       if (!this.isCurrent(generation, operation)) return this.dependencies.session.snapshot();
+      if ((dawn.deltas.hull ?? 0) < 0) {
+        this.dependencies.ui.showFeedback?.(dawn);
+      }
     }
     const snapshot = this.dependencies.renderSnapshot();
     this.dependencies.onDawnSnapshot?.(snapshot, generation);
@@ -1396,6 +1386,8 @@ export class SurvivalEventFlow {
       || itemType === 'flareGun'
       || itemType === 'anchor'
       || itemType === 'ductTape'
+      || itemType === 'map'
+      || itemType === 'bucket'
     ) {
       if (itemType === 'anchor') this.dependencies.audio.eventItem(itemType);
       return this.dependencies.world.playEventItemUse?.(
@@ -1404,7 +1396,13 @@ export class SurvivalEventFlow {
         instanceId,
         (cueIndex) => {
           if (this.isCurrent(generation, operation)) {
-            this.dependencies.audio.eventItemCue(itemType, cueIndex);
+            if (itemType === 'bucket') {
+              if (eventId === 'shower-night') {
+                this.dependencies.audio.bucketHelmetRain();
+              }
+            } else {
+              this.dependencies.audio.eventItemCue(itemType, cueIndex);
+            }
           }
         },
       ) ?? Promise.resolve();
@@ -1508,7 +1506,7 @@ export class SurvivalEventFlow {
 
   private contextualEventAnchorId(eventId: string, choiceId: string): string | null {
     if (choiceId === 'delegate-carlitos') return 'carlitos';
-    if (isDriftingItemEventId(eventId) && (choiceId === 'retrieve' || choiceId === 'search')) {
+    if (isDriftingItemEventId(eventId) && choiceId === 'retrieve') {
       return `event:${eventId}`;
     }
     if (eventId === 'midnight-tour' && choiceId === 'visit') return 'midnight-tour:island';

@@ -126,12 +126,14 @@ describe('launchGame', () => {
 
     const handle = launchGame(mount, dependencies(() => pending.promise));
 
-    expect(mount.textContent).toContain('RECOVERING SUPPLIES');
+    expect(mount.textContent).not.toContain('RECOVERING SUPPLIES');
+    expect(mount.textContent).not.toContain('Preparing the ship');
+    expect(mount.textContent).not.toContain('Loading the equipment');
     expect(mount.querySelector('[data-start]')).toBeNull();
     expect(mount.querySelector('.system-screen--loading')).not.toBeNull();
-    expect(mount.querySelector('.system-screen h1')?.classList)
-      .toContain('ui-role-display');
     const progress = mount.querySelector<HTMLProgressElement>('.system-loading-progress');
+    expect(mount.textContent).toBe('');
+    expect(progress?.nextElementSibling).toBeNull();
     expect(progress?.value).toBe(0);
     expect(progress?.max).toBe(9);
     await Promise.resolve();

@@ -128,12 +128,12 @@ export const POLY_PIZZA_MODEL_SOURCES = Object.freeze({
     sha256: 'E258EBFF8154998105AE9E66B0BCC978C9A4B7E352E2E30C89229BF6DE06DAD5',
     sourceTriangles: 1_864, downloadedOn: '2026-08-20',
   }),
-  rope: source({
-    id: 'rope', publicId: 'dkNzi6oDQj',
-    resourceId: '79c58249-2b9e-41ca-89f5-b7ff4e7a58c5',
-    title: 'Rope', creator: 'J-Toastie', license: 'CC-BY 3.0',
-    sha256: '8C751143E4A65026184C20C61CAD80FAD75E73B3063FA50D5F07EF433147B845',
-    sourceTriangles: 630, downloadedOn: '2026-08-25',
+  knife: source({
+    id: 'knife', publicId: 'N9bfPFP1hr',
+    resourceId: 'db1c8b42-5e15-47c3-99dc-0d19b1ee5115',
+    title: 'Knife', creator: 'Quaternius', license: 'CC0 1.0',
+    sha256: '0B211BC51A86DF64193D738B1AC13AD8F1BDA3D03E2009FBF9C60203AF247425',
+    sourceTriangles: 450, downloadedOn: '2026-08-26',
   }),
   bucket: source({
     id: 'bucket', publicId: '5HPoa3eX0Jb',

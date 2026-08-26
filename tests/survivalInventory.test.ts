@@ -96,7 +96,7 @@ describe('survival foundations', () => {
     expect(
       ITEM_IDS.filter((id) => ITEM_DEFINITIONS[id].breakable),
     ).toEqual([
-      'compass', 'map', 'spyglass', 'fishingNet', 'rope', 'bucket',
+      'compass', 'map', 'spyglass', 'fishingNet', 'knife', 'bucket',
       'scubaSet', 'anchor', 'umbrella', 'swimRing',
     ]);
   });
@@ -197,6 +197,7 @@ describe('survival foundations', () => {
     expect(SURVIVAL_BALANCE.start).toEqual({ health: 100, hunger: 0, energy: 3, hull: 100 });
     expect(SURVIVAL_BALANCE.dawn.normalEnergy).toBe(3);
     expect(SURVIVAL_BALANCE.actions.maximumEnergy).toBe(3);
+    expect(SURVIVAL_BALANCE.actions.maximumStoredEnergy).toBe(4);
     expect(SURVIVAL_BALANCE.dawn.hungerIncrease).toBe(18);
     expect(SURVIVAL_BALANCE.rescue.firstDay).toBe(24);
   });

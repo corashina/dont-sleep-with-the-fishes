@@ -95,8 +95,7 @@ import type { EventPresentationCue } from './eventPresentationCue';
 import {
   driftingItemLeaveKey,
   driftingItemRetrieveKey,
-  isDriftingCargoEventId,
-  type DriftingCargoEventId,
+  isDriftingItemEventId,
   type DriftingItemEventId,
 } from './eventCatalog';
 import {
@@ -616,7 +615,10 @@ export class BoatWorld {
           pillowRoot: this.sleepPillow.root,
           chestRoot: this.chestDisplay.root,
           chestState: () => this.chestState,
-          radioSignalAvailable: () => this.radioSignalAvailable,
+          radioInteractionAvailable: () => (
+            this.radioSignalAvailable
+            || this.supplyDisplay.isEventGroupEligible('radio')
+          ),
           activeFeaturedEventId: () => this.activeFeaturedEventId,
         },
         this.eventPresentationHost,
@@ -708,9 +710,6 @@ export class BoatWorld {
         cameraControl: this.cameraController,
         supplies: this.supplyDisplay,
         itemAimTarget: this.moonItemAimTarget,
-      },
-      starry: {
-        sky: this.sky,
       },
       registerRescueCueCallback: (callback) => {
         rescueCueCallback = callback;
@@ -881,7 +880,9 @@ export class BoatWorld {
     if (this.disposed) return;
     const focusedRoot = anchorId === null
       ? null
-      : this.eventPresentationHost.interactionRoot(anchorId);
+      : anchorId === 'repair-tools'
+        ? this.repairTools
+        : this.eventPresentationHost.interactionRoot(anchorId);
     this.toolHoverOutline.setTarget(
       focusedRoot?.userData.disableHoverOutline === true ? null : focusedRoot,
     );
@@ -1082,7 +1083,7 @@ export class BoatWorld {
   retrieveDriftingItem(eventId: DriftingItemEventId): Promise<void> {
     if (
       this.disposed
-      || !isDriftingCargoEventId(eventId)
+      || !isDriftingItemEventId(eventId)
       || this.activeFeaturedEventId !== eventId
     ) {
       return Promise.resolve();
@@ -1091,22 +1092,10 @@ export class BoatWorld {
     return this.retrieveFeaturedDriftingItem(eventId);
   }
 
-  searchDriftingItem(eventId: DriftingItemEventId): Promise<void> {
-    if (
-      this.disposed
-      || eventId !== 'empty-lifeboat'
-      || this.activeFeaturedEventId !== eventId
-    ) {
-      return Promise.resolve();
-    }
-    this.toolHoverOutline.setTarget(null);
-    return this.playFeaturedPresentation('empty-lifeboat.search');
-  }
-
   delegateDriftingItem(eventId: DriftingItemEventId): Promise<void> {
     if (
       this.disposed
-      || !isDriftingCargoEventId(eventId)
+      || !isDriftingItemEventId(eventId)
       || this.activeFeaturedEventId !== eventId
     ) {
       return Promise.resolve();
@@ -1125,7 +1114,7 @@ export class BoatWorld {
     return this.playFeaturedPresentation(driftingItemLeaveKey(eventId));
   }
 
-  private retrieveFeaturedDriftingItem(eventId: DriftingCargoEventId): Promise<void> {
+  private retrieveFeaturedDriftingItem(eventId: DriftingItemEventId): Promise<void> {
     const coverPersistentChest = this.chestState !== 'none';
     if (coverPersistentChest) this.chestDisplay.root.visible = false;
     return this.playFeaturedPresentation(driftingItemRetrieveKey(eventId)).then(() => {
@@ -1663,7 +1652,7 @@ export class BoatWorld {
       case 'man-in-the-fog':
       case 'midnight-tour':
         return oppositeEventSide(eventSideFromSeed(variantSeed));
-      case 'drifting-barrel':
+      case 'drifting-supplies':
       case 'drifting-chest':
         return oppositeEventSide(eventSideFromSeed(variantSeed));
       case 'eerie-melody':

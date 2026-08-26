@@ -52,14 +52,29 @@ function completeRoots(): Record<EventModelId, Group> {
 }
 
 describe('EventModelLibrary', () => {
-  it('wires the pinned Empty Lifeboat model into its event bundle', () => {
+  it('wires all pinned drifting-supply models into one event bundle', () => {
     expect(SURVIVAL_EVENT_MODEL_IDS).toContain('emptyLifeboat');
+    expect(SURVIVAL_EVENT_MODEL_IDS).toContain('emptyLifeboatContainer');
+    expect(SURVIVAL_EVENT_MODEL_IDS).toContain('shippingContainer');
     expect(SURVIVAL_EVENT_MODEL_SPECS.emptyLifeboat).toMatchObject({
       targetLongestDimension: 4.6,
       rotation: [0, 0, 0],
     });
-    expect(EVENT_BUNDLE_SPECS['empty-lifeboat']).toEqual({
-      models: ['emptyLifeboat'],
+    expect(SURVIVAL_EVENT_MODEL_SPECS.emptyLifeboatContainer).toMatchObject({
+      targetLongestDimension: 0.8,
+      rotation: [0, 0, 0],
+    });
+    expect(SURVIVAL_EVENT_MODEL_SPECS.shippingContainer).toMatchObject({
+      targetLongestDimension: 5.2,
+      rotation: [0, 0, 0],
+    });
+    expect(EVENT_BUNDLE_SPECS['drifting-supplies']).toEqual({
+      models: [
+        'driftingBarrel',
+        'emptyLifeboat',
+        'emptyLifeboatContainer',
+        'shippingContainer',
+      ],
       sounds: [],
     });
   });
@@ -101,19 +116,23 @@ describe('EventModelLibrary', () => {
       'leakPlanks',
       'schoolFish',
       'snatcher',
-      'anglerFish',
+      'shark',
       'deathStareBlob',
       'tornadoCore',
       'containerShip',
     ]);
   });
 
-  it('turns the Anglerfish nose toward presentation forward', () => {
-    const sourceNose = new Vector3(1, 0, 0);
-    sourceNose.applyEuler(new Euler(...EVENT_MODEL_SPECS.anglerFish.rotation));
-
-    expect(sourceNose.x).toBeCloseTo(0);
-    expect(sourceNose.z).toBeCloseTo(1);
+  it('uses the static fin-only model for the Shark Swarm', () => {
+    expect(EVENT_MODEL_SPECS.shark).toMatchObject({
+      targetLongestDimension: 1.2,
+      rotation: [0, 0, 0],
+      maxTriangles: 200,
+      generatedMetadata: {
+        triangles: 88,
+        animations: [],
+      },
+    });
   });
 
   it('turns the school fish nose toward its choreography forward', () => {
@@ -150,7 +169,7 @@ describe('EventModelLibrary', () => {
       'leakPlanks',
       'schoolFish',
       'snatcher',
-      'anglerFish',
+      'shark',
       'deathStareBlob',
       'tornadoCore',
     ] as const) {
@@ -166,8 +185,8 @@ describe('EventModelLibrary', () => {
       instance.dispose();
     }
 
-    const first = library.create('anglerFish');
-    const second = library.create('anglerFish');
+    const first = library.create('shark');
+    const second = library.create('shark');
     const firstMesh = first.root.children[0]!.children[0] as Mesh;
     const secondMesh = second.root.children[0]!.children[0] as Mesh;
     expect(first.root).not.toBe(second.root);
@@ -206,7 +225,7 @@ describe('EventModelLibrary', () => {
 
   it('wraps loader failures and rolls back all loaded templates once', async () => {
     const roots = completeRoots();
-    const disposeSpies = EVENT_MODEL_IDS.filter((id) => id !== 'anglerFish').flatMap((id) => {
+    const disposeSpies = EVENT_MODEL_IDS.filter((id) => id !== 'shark').flatMap((id) => {
       const mesh = roots[id].children[0] as Mesh;
       return [
         vi.spyOn(mesh.geometry, 'dispose'),
@@ -217,7 +236,7 @@ describe('EventModelLibrary', () => {
     const loader: EventModelLoader = {
       load: vi.fn(async () => {
         const id = EVENT_MODEL_IDS[index++]!;
-        if (id === 'anglerFish') throw new Error('network failed');
+        if (id === 'shark') throw new Error('network failed');
         return roots[id];
       }),
     };
@@ -225,7 +244,7 @@ describe('EventModelLibrary', () => {
     await expect(EventModelLibrary.load(EVENT_MODEL_IDS, loader)).rejects.toEqual(
       expect.objectContaining<EventModelLoadError>({
         name: 'EventModelLoadError',
-        eventModelId: 'anglerFish',
+        eventModelId: 'shark',
         message: expect.stringContaining('network failed'),
       }),
     );
@@ -242,8 +261,8 @@ describe('EventModelLibrary', () => {
       ];
     });
     const library = await EventModelLibrary.load(EVENT_MODEL_IDS, loaderFrom(roots));
-    const first = library.create('anglerFish');
-    const second = library.create('anglerFish');
+    const first = library.create('shark');
+    const second = library.create('shark');
     const ownedMeshes = [first, second].map(
       (instance) => instance.root.children[0]!.children[0] as Mesh,
     );
@@ -266,14 +285,14 @@ describe('EventModelLibrary', () => {
   it('deep-clones and disposes instance textures once', async () => {
     const sourceTexture = new Texture();
     const roots = completeRoots();
-    roots.anglerFish = modelRoot(
+    roots.shark = modelRoot(
       new BoxGeometry(2, 1, 1),
       new MeshStandardMaterial({ map: sourceTexture }),
     );
     const sourceDispose = vi.spyOn(sourceTexture, 'dispose');
     const library = await EventModelLibrary.load(EVENT_MODEL_IDS, loaderFrom(roots));
-    const first = library.create('anglerFish');
-    const second = library.create('anglerFish');
+    const first = library.create('shark');
+    const second = library.create('shark');
     const firstTexture = (
       (first.root.children[0]!.children[0] as Mesh).material as MeshStandardMaterial
     ).map!;

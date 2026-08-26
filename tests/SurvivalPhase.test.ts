@@ -81,7 +81,7 @@ function completedEntry(
 function accepted(overrides: Record<string, unknown> = {}) {
   return {
     accepted: true, code: 'fish-caught', message: 'Caught one.',
-    deltas: { energy: -2, food: 1 }, cue: 'fish' as const, ...overrides,
+    deltas: { energy: -1, food: 1 }, cue: 'fish' as const, ...overrides,
   };
 }
 
@@ -295,7 +295,6 @@ function createDriftingItemRig(
     exit: deferred(),
     retrieve: deferred(),
     delegate: deferred(),
-    search: deferred(),
     recede: deferred(),
   };
   const world = {
@@ -316,10 +315,6 @@ function createDriftingItemRig(
     delegateDriftingItem: vi.fn((selectedEventId: DriftingItemEventId) => {
       calls.push(`delegate:${selectedEventId}`);
       return animations.delegate.promise;
-    }),
-    searchDriftingItem: vi.fn((selectedEventId: DriftingItemEventId) => {
-      calls.push(`search:${selectedEventId}`);
-      return animations.search.promise;
     }),
     recedeDriftingItem: vi.fn((selectedEventId: DriftingItemEventId) => {
       calls.push(`recede:${selectedEventId}`);
@@ -1017,55 +1012,8 @@ describe('SurvivalPhase orchestration', () => {
     rig.phase.dispose();
   });
 
-  it('shows one Empty Lifeboat supply before it returns from focus', async () => {
-    const rig = createDriftingItemRig('empty-lifeboat');
-    const rewardHold = deferred();
-    const showRewardResult = vi.fn(() => {
-      rig.calls.push('show-reward');
-      return rewardHold.promise;
-    });
-    rig.ui.showRewardResult = showRewardResult;
-    await revealDriftingItem(rig);
-    await enterDriftingItemFocus(rig);
-
-    expect(rig.showDriftingItemFocus.mock.calls[0]![0].choices).toEqual([
-      {
-        id: 'search',
-        label: 'Search It',
-        unavailableReason: null,
-        anchorId: 'event:empty-lifeboat',
-        energyCost: 1,
-        energyOwner: 'player',
-      },
-      { id: 'sleep', label: 'Let It Drift', unavailableReason: null },
-    ]);
-
-    rig.ui.onEventChoice?.('search');
-    await flushPromises();
-    expect(rig.world.searchDriftingItem).toHaveBeenCalledExactlyOnceWith('empty-lifeboat');
-    expect(showRewardResult).not.toHaveBeenCalled();
-
-    rig.animations.search.resolve();
-    await flushPromises();
-    expect(showRewardResult).toHaveBeenCalledExactlyOnceWith({
-      title: 'LIFEBOAT SUPPLY',
-      reward: { kind: 'resource', id: 'food', quantity: 1 },
-      lines: [],
-    });
-    expect(rig.world.exitDriftingItemView).not.toHaveBeenCalled();
-    expect(rig.calls.indexOf('search:empty-lifeboat'))
-      .toBeLessThan(rig.calls.indexOf('show-reward'));
-
-    rewardHold.resolve();
-    await flushPromises();
-    expect(rig.world.exitDriftingItemView).toHaveBeenCalledOnce();
-    rig.animations.exit.resolve();
-    await flushPromises();
-    rig.phase.dispose();
-  });
-
   it.each([
-    'drifting-barrel',
+    'drifting-supplies',
     'drifting-chest',
   ] as const)('withholds %s choices until one camera entry settles', async (eventId) => {
     const rig = createDriftingItemRig(eventId);
@@ -1114,14 +1062,14 @@ describe('SurvivalPhase orchestration', () => {
       setMasterGain: vi.fn(),
       dispose: vi.fn(),
     };
-    const rig = createDriftingItemRig('drifting-barrel', {
+    const rig = createDriftingItemRig('drifting-supplies', {
       audio: AudioSystem.forTest(backend),
     });
     const rewardHold = deferred();
     const rewardSummary = {
       kind: 'resource',
       id: 'food',
-      quantity: 2,
+      quantity: 1,
     } as const;
     const showRewardResult = vi.fn(() => {
       rig.calls.push('show-reward');
@@ -1139,12 +1087,12 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(played).toContain('chest');
     expect(showRewardResult).toHaveBeenCalledExactlyOnceWith({
-      title: 'CHEST REWARD',
+      title: 'SALVAGE',
       reward: rewardSummary,
       lines: [],
     });
     expect(rig.world.exitDriftingItemView).not.toHaveBeenCalled();
-    expect(rig.calls.indexOf('retrieve:drifting-barrel'))
+    expect(rig.calls.indexOf('retrieve:drifting-supplies'))
       .toBeLessThan(rig.calls.indexOf('show-reward'));
     expect(rig.calls.indexOf('hide-focus'))
       .toBeLessThan(rig.calls.indexOf('show-reward'));
@@ -1158,7 +1106,7 @@ describe('SurvivalPhase orchestration', () => {
   });
 
   it.each([
-    'drifting-barrel',
+    'drifting-supplies',
     'drifting-chest',
   ] as const)('returns from %s automatically after pickup', async (eventId) => {
     const rig = createDriftingItemRig(eventId);
@@ -1208,7 +1156,7 @@ describe('SurvivalPhase orchestration', () => {
   });
 
   it.each([
-    'drifting-barrel',
+    'drifting-supplies',
     'drifting-chest',
   ] as const)('returns from %s focus without resolving or removing it', async (eventId) => {
     const rig = createDriftingItemRig(eventId);
@@ -1237,7 +1185,7 @@ describe('SurvivalPhase orchestration', () => {
   });
 
   it('restores the same focused choices after session rejection', async () => {
-    const rig = createDriftingItemRig('drifting-barrel', { rejectChoice: true });
+    const rig = createDriftingItemRig('drifting-supplies', { rejectChoice: true });
     await revealDriftingItem(rig);
     await enterDriftingItemFocus(rig);
     const initialFocus = rig.showDriftingItemFocus.mock.calls[0]![0];
@@ -1263,7 +1211,7 @@ describe('SurvivalPhase orchestration', () => {
     ['returning', 'restart'],
   ] as const)('ignores late drifting item %s completion after %s', async (stage, teardown) => {
     const onRestart = vi.fn();
-    const rig = createDriftingItemRig('drifting-barrel', { onRestart });
+    const rig = createDriftingItemRig('drifting-supplies', { onRestart });
     await revealDriftingItem(rig);
     rig.ui.onDriftingItemSelect?.(rig.eventId);
     if (stage !== 'entering') {
@@ -1309,7 +1257,7 @@ describe('SurvivalPhase orchestration', () => {
     };
     vi.stubGlobal('document', fakeDocument);
     const choiceBeat = deferred();
-    const rig = createDriftingItemRig('drifting-barrel');
+    const rig = createDriftingItemRig('drifting-supplies');
     rig.ui.playEventChoiceBeat = vi.fn(() => choiceBeat.promise);
     await revealDriftingItem(rig);
     await enterDriftingItemFocus(rig);
@@ -1337,7 +1285,7 @@ describe('SurvivalPhase orchestration', () => {
       removeEventListener: vi.fn((type: string) => listeners.delete(type)),
     };
     vi.stubGlobal('document', fakeDocument);
-    const rig = createDriftingItemRig('drifting-barrel');
+    const rig = createDriftingItemRig('drifting-supplies');
     rig.world.setDocumentHidden.mockImplementation((hidden: boolean) => {
       if (hidden) rig.animations.retrieve.resolve();
     });
@@ -1367,7 +1315,7 @@ describe('SurvivalPhase orchestration', () => {
       removeEventListener: vi.fn((type: string) => listeners.delete(type)),
     };
     vi.stubGlobal('document', fakeDocument);
-    const rig = createDriftingItemRig('drifting-barrel');
+    const rig = createDriftingItemRig('drifting-supplies');
     rig.world.setDocumentHidden.mockImplementation((hidden: boolean) => {
       if (hidden) rig.animations.recede.resolve();
     });
@@ -1396,7 +1344,7 @@ describe('SurvivalPhase orchestration', () => {
     let current = snapshot({
       state: 'dayEvent',
       day: 4,
-      pendingEventId: 'drifting-barrel',
+      pendingEventId: 'drifting-supplies',
     });
     const recedeDriftingItem = vi.fn(() => Promise.resolve());
     const clearEvent = vi.fn();
@@ -1435,7 +1383,7 @@ describe('SurvivalPhase orchestration', () => {
 
     phase.start();
     await flushPromises();
-    ui.onDriftingItemSelect?.('drifting-barrel');
+    ui.onDriftingItemSelect?.('drifting-supplies');
     await flushPromises();
     ui.onEventChoice?.('sleep');
     await flushPromises();
@@ -1451,7 +1399,7 @@ describe('SurvivalPhase orchestration', () => {
       seed: 28,
       random: sequenceRandom([0]),
       initial: { day: 3, energy: 2 },
-      initialEventId: 'drifting-barrel',
+      initialEventId: 'drifting-supplies',
     });
     const before = realSession.snapshot();
     const retrieveDriftingItem = vi.fn(() => Promise.resolve());
@@ -1482,7 +1430,7 @@ describe('SurvivalPhase orchestration', () => {
 
     phase.start();
     await flushPromises();
-    ui.onDriftingItemSelect?.('drifting-barrel');
+    ui.onDriftingItemSelect?.('drifting-supplies');
     await flushPromises();
     ui.onEventChoice?.('retrieve');
     await flushPromises();
@@ -1495,7 +1443,7 @@ describe('SurvivalPhase orchestration', () => {
       bait: before.bait,
       repairMaterial: before.repairMaterial,
       inventory: before.inventory,
-      pendingEventId: 'drifting-barrel',
+      pendingEventId: 'drifting-supplies',
     });
     expect(setEventSelection).toHaveBeenCalledTimes(3);
     expect(retrieveDriftingItem).not.toHaveBeenCalled();
@@ -1505,7 +1453,7 @@ describe('SurvivalPhase orchestration', () => {
     let current = snapshot({
       state: 'nightEvent',
       day: 2,
-      pendingEventId: 'drifting-barrel',
+      pendingEventId: 'drifting-supplies',
     });
     const stageEvent = vi.fn();
     const phase = SurvivalPhase.forTest({
@@ -1519,7 +1467,7 @@ describe('SurvivalPhase orchestration', () => {
           current = snapshot({
             state: 'dayEvent',
             day: 3,
-            pendingEventId: 'drifting-barrel',
+            pendingEventId: 'drifting-supplies',
           });
           return accepted({ code: 'dawn', cue: 'dawn' });
         }),
@@ -1555,7 +1503,7 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
     await flushPromises();
 
-    expect(stageEvent).toHaveBeenCalledWith('drifting-barrel', expect.any(Number));
+    expect(stageEvent).toHaveBeenCalledWith('drifting-supplies', expect.any(Number));
     expect(current).toMatchObject({ state: 'dayEvent', day: 3 });
   });
 
@@ -1566,7 +1514,7 @@ describe('SurvivalPhase orchestration', () => {
         state: 'dayEvent',
         day: 3,
         energy: 3,
-        pendingEventId: 'drifting-barrel',
+        pendingEventId: 'drifting-supplies',
       });
       const retrieval = deferred();
       const restoreCommandFocus = vi.fn();
@@ -1610,7 +1558,7 @@ describe('SurvivalPhase orchestration', () => {
 
       phase.start();
       await flushPromises();
-      ui.onDriftingItemSelect?.('drifting-barrel');
+      ui.onDriftingItemSelect?.('drifting-supplies');
       await flushPromises();
       ui.onEventChoice?.('retrieve');
       await flushPromises();
@@ -1674,7 +1622,7 @@ describe('SurvivalPhase orchestration', () => {
       expect(realSession.snapshot()).toMatchObject({
         state: 'dayEvent',
         day: 3,
-        pendingEventId: 'drifting-barrel',
+        pendingEventId: 'drifting-supplies',
       });
       expect(reveal.isSettled()).toBe(false);
       setSleepCovered.mockClear();
@@ -1706,7 +1654,7 @@ describe('SurvivalPhase orchestration', () => {
         seed: 30,
         random: sequenceRandom([0]),
         initial: { day: 3, energy: 3 },
-        initialEventId: 'drifting-barrel',
+        initialEventId: 'drifting-supplies',
       });
       const recession = deferred();
       const clearEvent = vi.fn(() => recession.resolve());
@@ -1745,7 +1693,7 @@ describe('SurvivalPhase orchestration', () => {
 
       phase.start();
       await flushPromises();
-      ui.onDriftingItemSelect?.('drifting-barrel');
+      ui.onDriftingItemSelect?.('drifting-supplies');
       await flushPromises();
       setBusy.mockClear();
       restoreCommandFocus.mockClear();
@@ -1977,7 +1925,7 @@ describe('SurvivalPhase orchestration', () => {
     const rejection = {
       accepted: false,
       code: 'not-enough-energy',
-      message: 'Fishing requires two energy.',
+      message: 'Fishing requires one energy.',
       deltas: {},
       cue: 'none' as const,
     };
@@ -2011,9 +1959,9 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(rig.session.beginFishing).toHaveBeenCalledOnce();
     expect(rig.session.perform).not.toHaveBeenCalled();
-    expect(rig.realSession.snapshot()).toMatchObject({ energy: 1, actedToday: true });
+    expect(rig.realSession.snapshot()).toMatchObject({ energy: 2, actedToday: true });
     expect(rig.calls.indexOf('lock')).toBeLessThan(rig.calls.indexOf('play:enter'));
-    expect(rig.calls.indexOf('render:1:0:0')).toBeLessThan(rig.calls.indexOf('play:enter'));
+    expect(rig.calls.indexOf('render:2:0:0')).toBeLessThan(rig.calls.indexOf('play:enter'));
     expect(rig.calls.some((call) => call.startsWith('ui:aiming:'))).toBe(false);
     rig.phase.handleAction('dive');
     rig.phase.handleAction('repair');
@@ -2266,7 +2214,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.realSession.snapshot()).toMatchObject({ food: 1, bait: 0 });
     expect(rig.session.requestDayEvent).not.toHaveBeenCalled();
     const finishIndex = rig.calls.indexOf('finishFishing');
-    const renderIndex = rig.calls.indexOf('render:1:1:0');
+    const renderIndex = rig.calls.indexOf('render:2:1:0');
     const presentationIndex = rig.calls.indexOf('playFishingReel:cod');
     expect(finishIndex).toBeLessThan(renderIndex);
     expect(renderIndex).toBeLessThan(presentationIndex);
@@ -2471,7 +2419,7 @@ describe('SurvivalPhase orchestration', () => {
       expect(attempt.snapshot().state).toBe('bite');
       expect(attempt.snapshot().biteSeconds).toBeCloseTo(0, 12);
       fishingReelCallback(rig)();
-      expect(rig.realSession.snapshot()).toMatchObject({ food: 1, energy: 1 });
+      expect(rig.realSession.snapshot()).toMatchObject({ food: 1, energy: 2 });
       await settleFishingReturn(rig, 'reel');
 
       expect(rig.session.requestDayEvent).not.toHaveBeenCalled();
@@ -3275,7 +3223,7 @@ describe('SurvivalPhase orchestration', () => {
   });
 
   it('restores contextual choices when session resolution rejects the choice', async () => {
-    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-barrel')!;
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-supplies')!;
     const current = snapshot({
       state: 'dayEvent',
       pendingEventId: event.id,
@@ -3309,7 +3257,7 @@ describe('SurvivalPhase orchestration', () => {
     phase.start();
     await flushPromises();
 
-    ui.onDriftingItemSelect?.('drifting-barrel');
+    ui.onDriftingItemSelect?.('drifting-supplies');
     await flushPromises();
     ui.onEventChoice?.('retrieve');
     await flushPromises();
@@ -3321,9 +3269,9 @@ describe('SurvivalPhase orchestration', () => {
     expect(showDriftingItemFocus.mock.calls[1]![0].choices).toEqual([
       {
         id: 'retrieve',
-        label: 'Retrieve It',
+        label: 'Retrieve Supplies',
         unavailableReason: null,
-        anchorId: 'event:drifting-barrel',
+        anchorId: 'event:drifting-supplies',
         energyCost: 3,
         energyOwner: 'player',
       },
@@ -4947,7 +4895,7 @@ describe('SurvivalPhase orchestration', () => {
   );
 
   it('does not resolve after disposal cancels a pending contextual press beat', async () => {
-    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-barrel')!;
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-supplies')!;
     const beat = deferred();
     const resolveEvent = vi.fn();
     const ui: Partial<SurvivalUI> = {
@@ -4978,7 +4926,7 @@ describe('SurvivalPhase orchestration', () => {
     });
     phase.start();
     await flushPromises();
-    ui.onDriftingItemSelect?.('drifting-barrel');
+    ui.onDriftingItemSelect?.('drifting-supplies');
     await flushPromises();
     ui.onEventChoice?.('retrieve');
     await flushPromises();
@@ -4991,7 +4939,7 @@ describe('SurvivalPhase orchestration', () => {
   });
 
   it('explains unmet resource requirements in contextual choice view models', async () => {
-    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-barrel')!;
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-supplies')!;
     const setEventSelection = vi.fn();
     const showDriftingItemFocus = vi.fn();
     const focusUi: Partial<SurvivalUI> = {
@@ -5022,15 +4970,15 @@ describe('SurvivalPhase orchestration', () => {
     phase.start();
     await flushPromises();
     expect(setEventSelection.mock.calls[0]![1]).toEqual([]);
-    focusUi.onDriftingItemSelect?.('drifting-barrel');
+    focusUi.onDriftingItemSelect?.('drifting-supplies');
     await flushPromises();
 
     expect(showDriftingItemFocus.mock.calls[0]![0].choices).toEqual([
       {
         id: 'retrieve',
-        label: 'Retrieve It',
+        label: 'Retrieve Supplies',
         unavailableReason: 'Requires 3 energy; you have 2.',
-        anchorId: 'event:drifting-barrel',
+        anchorId: 'event:drifting-supplies',
         energyCost: 3,
         energyOwner: 'player',
       },
@@ -5356,7 +5304,7 @@ describe('SurvivalPhase orchestration', () => {
   ] as const)(
     'does not continue a resolved event after %s supersedes its pending %s',
     async (teardown, pendingStep) => {
-      const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-barrel')!;
+      const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-supplies')!;
       let current = snapshot({ state: 'nightEvent', pendingEventId: event.id });
       const outcomeHold = deferred();
       const cover = deferred();
@@ -5468,7 +5416,7 @@ describe('SurvivalPhase orchestration', () => {
   );
 
   it('does not render stale dawn state when restart supersedes its pending cue', async () => {
-    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-barrel')!;
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-supplies')!;
     let current = snapshot({ state: 'nightEvent', pendingEventId: event.id });
     const dawnCue = deferred();
     const render = vi.fn();
@@ -5845,6 +5793,7 @@ describe('SurvivalPhase orchestration', () => {
     ['flareGun', 'flareGun-1', 'other-people'],
     ['anchor', 'anchor-1', 'thunderstorm'],
     ['ductTape', 'ductTape-1', 'leak'],
+    ['bucket', 'bucket-1', 'shower-night'],
   ] as const)('defers the %s action sound until its keyed cue', async (
     itemType,
     instanceId,
@@ -5887,15 +5836,23 @@ describe('SurvivalPhase orchestration', () => {
     });
     const audio = (phase as unknown as { audio: SurvivalAudio }).audio;
     const eventItemCue = vi.spyOn(audio, 'eventItemCue');
+    const bucketHelmetRain = vi.spyOn(audio, 'bucketHelmetRain');
 
     phase.start();
     await flushPromises();
     phase.handleEventItem(itemType, instanceId);
 
     expect(eventItemCue).not.toHaveBeenCalled();
+    expect(bucketHelmetRain).not.toHaveBeenCalled();
     expect(actionCue).toEqual(expect.any(Function));
     actionCue!(0);
-    expect(eventItemCue).toHaveBeenCalledExactlyOnceWith(itemType, 0);
+    if (itemType === 'bucket') {
+      expect(bucketHelmetRain).toHaveBeenCalledOnce();
+      expect(eventItemCue).not.toHaveBeenCalled();
+    } else {
+      expect(eventItemCue).toHaveBeenCalledExactlyOnceWith(itemType, 0);
+      expect(bucketHelmetRain).not.toHaveBeenCalled();
+    }
 
     itemUse.resolve();
     await flushPromises();
@@ -5960,6 +5917,7 @@ describe('SurvivalPhase orchestration', () => {
       'shower-night',
       'bucket',
       'bucket-1',
+      expect.any(Function),
     );
     expect(resolveEvent).not.toHaveBeenCalled();
 
@@ -6347,7 +6305,7 @@ describe('SurvivalPhase orchestration', () => {
   );
 
   it('keeps the Sleep response free of physical item animation', async () => {
-    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-barrel')!;
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'drifting-supplies')!;
     let current = snapshot({
       state: 'dayEvent',
       pendingEventId: event.id,
@@ -6536,7 +6494,7 @@ describe('SurvivalPhase orchestration', () => {
     let current = snapshot({
       state: 'dayEvent',
       day: 3,
-      pendingEventId: 'drifting-barrel',
+      pendingEventId: 'drifting-supplies',
       carlitos: {
         alive: true, energy: 3, hunger: 5, sickness: 0, unhappiness: 0,
         pettedToday: false, deathCause: null,
@@ -6582,7 +6540,7 @@ describe('SurvivalPhase orchestration', () => {
 
     phase.start();
     await flushPromises();
-    ui.onDriftingItemSelect?.('drifting-barrel');
+    ui.onDriftingItemSelect?.('drifting-supplies');
     await flushPromises();
     ui.onEventChoice?.('delegate-carlitos');
     await flushPromises();
@@ -6595,7 +6553,7 @@ describe('SurvivalPhase orchestration', () => {
   it('does not animate Carlitos when Drifting Cargo delegation is rejected', async () => {
     const current = snapshot({
       state: 'dayEvent',
-      pendingEventId: 'drifting-barrel',
+      pendingEventId: 'drifting-supplies',
     });
     const rejected = accepted({
       accepted: false,
@@ -6630,7 +6588,7 @@ describe('SurvivalPhase orchestration', () => {
 
     phase.start();
     await flushPromises();
-    ui.onDriftingItemSelect?.('drifting-barrel');
+    ui.onDriftingItemSelect?.('drifting-supplies');
     await flushPromises();
     ui.onEventChoice?.('delegate-carlitos');
     await flushPromises();
@@ -6782,7 +6740,7 @@ describe('SurvivalPhase orchestration', () => {
     const session = new SurvivalSession(savedItems, {
       seed: 92,
       initialCarlitos: state,
-      initialEventId: 'drifting-barrel',
+      initialEventId: 'drifting-supplies',
     });
     const setEventSelection = vi.fn();
     const showDriftingItemFocus = vi.fn();
@@ -6817,7 +6775,7 @@ describe('SurvivalPhase orchestration', () => {
 
     phase.start();
     await flushPromises();
-    focusUi.onDriftingItemSelect?.('drifting-barrel');
+    focusUi.onDriftingItemSelect?.('drifting-supplies');
     await flushPromises();
 
     const choices = showDriftingItemFocus.mock.calls.at(-1)?.[0].choices ?? [];
@@ -7898,8 +7856,8 @@ describe('SurvivalPhase orchestration', () => {
 
   it.each([
     ['death-stare', 'flashlight', 'flashlight-1', 'flashlight'],
-    ['swarm-of-anglerfish', 'flashlight', 'flashlight-1', 'flashlight'],
-    ['swarm-of-anglerfish', 'baitTin', 'baitTin-1', 'baitTin'],
+    ['swarm-of-sharks', 'flashlight', 'flashlight-1', 'flashlight'],
+    ['swarm-of-sharks', 'baitTin', 'baitTin-1', 'baitTin'],
     ['tornado', 'swimRing', 'swimRing-1', 'swimRing'],
   ] as const)(
     'resolves %s %s only after hide and restore',

@@ -33,11 +33,13 @@ The carry limit is three weight points, not three objects. Weight-one Dorothy su
 
 Food, Bait, Duct Tape, Medkit, Flare Gun, and Shotgun are one-use Dorothy supplies; each recovered Food or Bait instance contributes one unit to its aggregate resource. Compass, Map, Binoculars, Fishing Net, Bucket, Scuba Gear, Anchor, Radio, Umbrella, Swim Ring, and Flashlight are durable items used by actions or events. Carlitos changes from a saved Dorothy item to the living companion when survival starts. He then leaves the item inventory. Generic durable loss, breakage, and consumption rules do not apply to living Carlitos. A repairable durable item can become broken, and a durable item can be lost; a one-use supply becomes consumed when spent. Broken props remain aboard, while consumed and lost props no longer offer usable interactions. One recovered Duct Tape can repair a selected broken, repairable item.
 
-The repair toolbox and starboard-mounted Fishing Rod are permanent lifeboat equipment rather than Dorothy collectibles. The rod is never picked up or recovered. It is available for fishing in every survival run, while the toolbox uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. Rest never requires an item: it restores two energy once per day. From day five, a saved Radio has a 20% chance to receive a signal at dawn. The signal remains actionable while its incoming audio plays. Answering costs one energy, keeps the Radio, and adds diminishing hidden rescue lead. Energy Bar restores energy to the maximum of three and is consumed.
+The repair toolbox and starboard-mounted Fishing Rod are permanent lifeboat equipment rather than Dorothy collectibles. The rod is never picked up or recovered. It is available for fishing in every survival run, while the toolbox uses recovered repair material for ordinary hull work; Duct Tape can instead make an emergency hull patch. End Day starts the night sequence. Energy becomes one to three at dawn, based on hunger and night outcomes. From day five, a saved Radio has a 20% chance to receive a signal at dawn. The signal remains actionable while its incoming audio plays. Answering costs one energy, keeps the Radio, and adds diminishing hidden rescue lead. Energy Bar restores energy to the maximum of three and is consumed.
 
-The event catalog contains 29 live events. The day pool contains Drifting Barrel and
-Drifting Chest. Event selection relies on the scene and response prompts.
+The event catalog contains 29 live events. The day pool contains Drifting Supplies,
+Drifting Chest, and Wreckage. Event selection relies on the scene and response prompts.
 It does not show event titles.
+
+All night events use the bright, glowy star field when weather and haze allow it.
 
 An old chest can become a mimic. Fishing Net binds it shut.
 
@@ -147,12 +149,12 @@ The ship sinks in one minute. Search the cabin, wheelhouse, cargo deck, and stor
 
 In the lifeboat, each day gives three energy for daytime actions:
 
-- **Fish** costs two energy and uses the lifeboat's permanent bow rod. Click valid water to cast, or press `Enter`/`Space` for the centered cast; when bubbles appear, click them or press `Enter`/`Space` within the 1.5-second reel window. Available bait improves the catch automatically and is consumed only when a fish lands, never for junk or a miss. Pausing with `Escape` freezes the attempt but does not cancel it, and an accepted attempt's energy remains spent.
+- **Fish** costs one energy and uses the lifeboat's permanent bow rod. Click valid water to cast, or press `Enter`/`Space` for the centered cast; when bubbles appear, click them or press `Enter`/`Space` within the 1.5-second reel window. Available bait improves the catch automatically and is consumed only when a fish lands, never for junk or a miss. Pausing with `Escape` freezes the attempt but does not cancel it, and an accepted attempt's energy remains spent.
 - **Dive** requires rescued scuba gear and searches for food, bait, repair material, or hidden rescue traces, with weather-dependent risk.
 - **Eat** spends one food to reduce hunger.
 - **Repair** uses the lifeboat's fixed repair toolbox and recovered material to restore hull; Duct Tape can make a smaller emergency patch.
 - **Treat** consumes the recovered Medkit to restore health.
-- **Rest** requires no item, restores two energy, and is available once per day.
+- **End Day** starts the night sequence. Energy becomes one to three at dawn, based on hunger and night outcomes.
 - **Repair item** consumes Duct Tape to restore one selected broken, repairable supply.
 - **Answer signal** costs one energy while the Radio signal audio plays. Each answer adds diminishing hidden rescue lead.
 - **Eat Energy Bar** consumes the bar and restores energy to three.
@@ -161,11 +163,13 @@ In the lifeboat, each day gives three energy for daytime actions:
 
 Health, Food, Energy, and Hull remain visible as condition meters. Food is the inverse of internal hunger, so it drains toward zero as the survivor becomes hungry. Food, bait, and repair material remain separate stores used by actions and outcomes, but they are not persistently tallied in the HUD.
 
+The sea wears three Hull from the lifeboat on four of every five nights. Recovered repair material keeps the fixed toolbox useful during long runs.
+
 Day and night events fade to black before each reveal.
 
-Event tableaus now include drifting flowers and the chest mimic.
+Event tableaus include drifting flowers, the chest mimic, and drifting supplies.
 
-- **Empty Lifeboat:** From day 10, spend one energy to search a drifting raft. Every search grants one food or one bait.
+- **Drifting Supplies:** From day 3, spend three energy to retrieve a barrel, lifeboat cooler, or shipping container. Barrel loot grants one resource. Cooler loot grants two. Container loot grants three or an Energy Bar.
 
 Pressure, flags, chest state, day bounds, cooldowns, and inventory can gate events.
 

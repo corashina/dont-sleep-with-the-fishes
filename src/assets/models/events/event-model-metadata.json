@@ -513,6 +513,28 @@
     "animations": [],
     "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
   },
+  "shark": {
+    "triangles": 88,
+    "rawBounds": {
+      "min": [
+        -0.15119999647140503,
+        -0.09842400252819061,
+        -0.7206019759178162
+      ],
+      "max": [
+        0.15119999647140503,
+        1.3986090421676636,
+        0.7214679718017578
+      ]
+    },
+    "sourceSha256": "B1CAB021EAF289C1402261309D92D6900415E5C8CFD87BE4DA82B16DD74DC4B6",
+    "sourceTriangles": 88,
+    "outputSha256": "FDA903C2DB7FD4BBE7A95D5A63E98DC6649A7F022A67ED94A7B92B269BD189BC",
+    "hasSkins": false,
+    "animationCount": 0,
+    "animations": [],
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
   "emptyLifeboat": {
     "triangles": 1036,
     "rawBounds": {
@@ -530,6 +552,50 @@
     "sourceSha256": "722C09E839EDB2A300208CCCB324A11F4D93F8946F7270E2DAED54DF306CC77D",
     "sourceTriangles": 1036,
     "outputSha256": "99FA2EDD3431AC0D9D3AB975F0AB3170AE0549D0F0B31D34FCC47D3622F870ED",
+    "hasSkins": false,
+    "animationCount": 0,
+    "animations": [],
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "emptyLifeboatContainer": {
+    "triangles": 368,
+    "rawBounds": {
+      "min": [
+        -642713.5,
+        -155912.25,
+        -6396896
+      ],
+      "max": [
+        1651643.5,
+        1668156.375,
+        -4422896
+      ]
+    },
+    "sourceSha256": "62DF8E859AF87EA6CF6324EC0CF74679CA37BE82D299589F9647D4EEBB9814C4",
+    "sourceTriangles": 368,
+    "outputSha256": "56630098F09950C8643982E65895F55257ADBC9F1F668C9A889F6DFE4D7957A8",
+    "hasSkins": false,
+    "animationCount": 0,
+    "animations": [],
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "shippingContainer": {
+    "triangles": 2396,
+    "rawBounds": {
+      "min": [
+        -0.6840484142303467,
+        -0.580656111240387,
+        -0.8869621753692627
+      ],
+      "max": [
+        0.6587191224098206,
+        0.6993449926376343,
+        2.2685739994049072
+      ]
+    },
+    "sourceSha256": "A847805B62C19FBB2B8A9D4D5AADB2F0831BAADEA8F96CDCE6F23197AC425A1A",
+    "sourceTriangles": 2396,
+    "outputSha256": "6DF575590888973250E7B4A53ECA9BCC304CE52EFCF3E729318CAD0FC7399CB6",
     "hasSkins": false,
     "animationCount": 0,
     "animations": [],

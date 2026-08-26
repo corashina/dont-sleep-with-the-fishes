@@ -1,10 +1,13 @@
 import type { SurvivalAudio } from '../audio/SurvivalAudio';
-import { ITEM_DEFINITIONS, type ItemId, type ItemInstanceId } from '../game/ItemState';
+import type { ItemId, ItemInstanceId } from '../game/ItemState';
 import type { SurvivalUI } from '../ui/SurvivalUI';
 import type { BoatWorld } from './BoatWorld';
 import {
   CARLITOS_LAB_CHOICE_ID,
   CARLITOS_LAB_INSTANCE_ID,
+  FISHING_ROD_LAB_CHOICE_ID,
+  FISHING_ROD_LAB_INSTANCE_ID,
+  ITEM_ANIMATION_LAB_ID,
   ITEM_ANIMATION_LAB_USES,
   type ItemAnimationLabUse,
   REPAIR_TOOLBOX_LAB_CHOICE_ID,
@@ -22,6 +25,7 @@ export type ItemAnimationLabSessionPort = Pick<SurvivalSession, 'snapshot'>;
 export type ItemAnimationLabWorldPort = Pick<
   BoatWorld,
   | 'stageEvent'
+  | 'revealEvent'
   | 'playEventItemUse'
   | 'returnEventItemUse'
   | 'clearEvent'
@@ -45,7 +49,11 @@ export type ItemAnimationLabUiPort = Pick<
 
 export type ItemAnimationLabAudioPort = Pick<
   SurvivalAudio,
-  'clearEvent' | 'eventItem' | 'eventItemCue' | 'repairToolbox'
+  | 'clearEvent'
+  | 'clearRadioSignal'
+  | 'eventItem'
+  | 'eventItemCue'
+  | 'repairToolbox'
 >;
 
 export interface ItemAnimationLabBundlePort {
@@ -62,6 +70,7 @@ export interface ItemAnimationLabFlowDependencies {
   readonly audio: ItemAnimationLabAudioPort;
   readonly bundles: ItemAnimationLabBundlePort;
   readonly setBusy: (busy: boolean) => void;
+  readonly playFishing: () => Promise<void> | void;
   readonly setAutomaticWeather: (eventId: SurvivalEventId | null) => void;
   readonly captureLifecycleGeneration: () => number;
   readonly isLifecycleGenerationCurrent: (generation: number) => boolean;
@@ -107,6 +116,11 @@ export class ItemAnimationLabFlow {
       || !this.isLifecycleCurrent(generation)
     ) return;
 
+    if (instanceId === FISHING_ROD_LAB_INSTANCE_ID) {
+      await this.dependencies.playFishing();
+      return;
+    }
+
     const operation = this.beginOperation();
     if (instanceId === REPAIR_TOOLBOX_LAB_INSTANCE_ID) {
       await this.playRepairToolbox(generation, operation);
@@ -120,7 +134,6 @@ export class ItemAnimationLabFlow {
     if (uses.length > 1) {
       this.pendingInstanceId = instanceId;
       this.dependencies.ui.showItemAnimationLabChoices?.(
-        ITEM_DEFINITIONS[item.type].label,
         uses.map(({ id, label }) => ({ id, label, unavailableReason: null })),
       );
       return;
@@ -131,7 +144,7 @@ export class ItemAnimationLabFlow {
     await this.playItem(
       instanceId,
       item.type,
-      use.eventId as SurvivalEventId,
+      use.eventId,
       use.choiceId,
       generation,
       operation,
@@ -174,6 +187,7 @@ export class ItemAnimationLabFlow {
     if (!cleanExternalState) return;
     this.runCleanup([
       () => this.dependencies.world.cancelRepairToolboxAnimation?.(),
+      () => this.dependencies.audio.clearRadioSignal?.(),
       () => this.dependencies.audio.clearEvent?.(),
       () => this.dependencies.world.setEventSelectedItem?.(null),
       () => this.dependencies.world.setEventEligibleItems?.(null),
@@ -189,18 +203,22 @@ export class ItemAnimationLabFlow {
   private async playItem(
     instanceId: ItemInstanceId,
     itemType: ItemId,
-    eventId: SurvivalEventId,
+    eventId: string,
     choiceId: string,
     generation: number,
     operation: number,
   ): Promise<void> {
+    const labOnlyUse = eventId === ITEM_ANIMATION_LAB_ID;
+    const stagedEventId = eventId as SurvivalEventId;
     try {
       this.beginUse(instanceId);
-      this.dependencies.setAutomaticWeather(eventId);
-      const loading = this.dependencies.bundles.beginLoad(eventId);
-      if (loading !== undefined) void loading.catch(() => undefined);
-      const activation = this.dependencies.bundles.activate(eventId);
-      if (activation !== undefined) await activation;
+      if (!labOnlyUse) {
+        this.dependencies.setAutomaticWeather(stagedEventId);
+        const loading = this.dependencies.bundles.beginLoad(stagedEventId);
+        if (loading !== undefined) void loading.catch(() => undefined);
+        const activation = this.dependencies.bundles.activate(stagedEventId);
+        if (activation !== undefined) await activation;
+      }
     } catch (error) {
       this.handleFailure('fatal', error, generation, operation, true);
       return;
@@ -208,11 +226,17 @@ export class ItemAnimationLabFlow {
     if (!this.isCurrent(generation, operation)) return;
 
     try {
-      this.dependencies.world.stageEvent?.(eventId);
+      if (!labOnlyUse) {
+        this.dependencies.world.stageEvent?.(stagedEventId);
+        if (eventId === 'handyman') {
+          await (this.dependencies.world.revealEvent?.(stagedEventId) ?? Promise.resolve());
+        }
+      }
     } catch (error) {
       this.handleFailure('fatal', error, generation, operation, true);
       return;
     }
+    if (!this.isCurrent(generation, operation)) return;
 
     try {
       await this.playEventItemUseWithSound(
@@ -243,7 +267,7 @@ export class ItemAnimationLabFlow {
     return this.playItem(
       instanceId,
       itemType,
-      use.eventId as SurvivalEventId,
+      use.eventId,
       use.choiceId,
       generation,
       operation,
@@ -278,6 +302,7 @@ export class ItemAnimationLabFlow {
   }
 
   private beginUse(instanceId: ItemInstanceId): void {
+    this.dependencies.audio.clearRadioSignal?.();
     this.using = true;
     this.dependencies.setBusy(true);
     this.dependencies.ui.setEventUsing?.(instanceId);
@@ -299,6 +324,7 @@ export class ItemAnimationLabFlow {
       || itemType === 'flareGun'
       || itemType === 'anchor'
       || itemType === 'ductTape'
+      || itemType === 'radio'
     ) {
       if (itemType === 'anchor') this.dependencies.audio.eventItem?.(itemType);
       return this.dependencies.world.playEventItemUse?.(
@@ -310,6 +336,7 @@ export class ItemAnimationLabFlow {
             this.dependencies.audio.eventItemCue?.(itemType, cueIndex);
           }
         },
+        itemType === 'radio',
       ) ?? Promise.resolve();
     }
     if (itemType === 'umbrella') this.dependencies.audio.eventItem?.(itemType);
@@ -334,6 +361,7 @@ export class ItemAnimationLabFlow {
     if (snapshot.carlitos?.alive) {
       eligibility.set(CARLITOS_LAB_INSTANCE_ID, CARLITOS_LAB_CHOICE_ID);
     }
+    eligibility.set(FISHING_ROD_LAB_INSTANCE_ID, FISHING_ROD_LAB_CHOICE_ID);
     eligibility.set(REPAIR_TOOLBOX_LAB_INSTANCE_ID, REPAIR_TOOLBOX_LAB_CHOICE_ID);
     return eligibility;
   }
@@ -366,6 +394,7 @@ export class ItemAnimationLabFlow {
 
   private cleanupItemUse(suppressErrors: boolean): void {
     this.runCleanup([
+      () => this.dependencies.audio.clearRadioSignal?.(),
       () => this.dependencies.world.clearEvent?.(),
       () => this.dependencies.bundles.releaseActive(),
       () => this.dependencies.setAutomaticWeather(null),

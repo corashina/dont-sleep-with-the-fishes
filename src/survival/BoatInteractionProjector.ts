@@ -21,10 +21,7 @@ import {
 import type { BoatSupplyPresentationRecord } from './BoatSupplyDisplay';
 import type { FocusedEventInteractionTarget } from './FocusedEventPresentation';
 import { CARLITOS_LAB_INSTANCE_ID } from './ItemAnimationLab';
-import {
-  isDriftingCargoEventId,
-  isDriftingItemEventId,
-} from './eventCatalog';
+import { isDriftingItemEventId } from './eventCatalog';
 import {
   FEATURED_EVENT_IDS,
   type FeaturedEventId,
@@ -56,7 +53,7 @@ export interface BoatInteractionProjectorRoots {
   readonly pillowRoot: Object3D;
   readonly chestRoot: Object3D;
   readonly chestState: () => ChestState;
-  readonly radioSignalAvailable: () => boolean;
+  readonly radioInteractionAvailable: () => boolean;
   readonly activeFeaturedEventId: () => FeaturedEventId | null;
 }
 
@@ -95,18 +92,18 @@ function hitArea(width = 0, height = 0, depth = 0): BoatInteractionHitArea {
 }
 
 function featuredAnchorLabel(eventId: FeaturedEventId): string {
-  if (eventId === 'drifting-barrel') return 'BARREL';
+  if (eventId === 'drifting-supplies') return 'SALVAGE';
   if (eventId === 'drifting-chest') return 'CHEST';
   return 'FLOWERS';
 }
 
 function featuredAnchorDescription(eventId: FeaturedEventId): string {
-  if (isDriftingCargoEventId(eventId)) return 'Floating salvage within reach.';
+  if (isDriftingItemEventId(eventId)) return 'Floating salvage within reach.';
   return 'Pale blooms pass in the dark water.';
 }
 
 function featuredAnchorChoice(eventId: FeaturedEventId): string | null {
-  if (isDriftingCargoEventId(eventId)) return 'retrieve';
+  if (isDriftingItemEventId(eventId)) return 'retrieve';
   return null;
 }
 
@@ -361,7 +358,7 @@ export class BoatInteractionProjector {
       const record = entry.record;
       if (
         record.visibleCopies <= 0
-        || (record.groupId === 'radio' && !this.roots.radioSignalAvailable())
+        || (record.groupId === 'radio' && !this.roots.radioInteractionAvailable())
       ) continue;
       projectCachedBoatObjectBoundsInto(
         entry.projection,
