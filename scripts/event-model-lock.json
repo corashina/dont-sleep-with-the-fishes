@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedOn": "2026-08-25",
+  "generatedOn": "2026-08-26",
   "sources": {
     "leakPlanks": {
       "id": "leakPlanks",
@@ -18,7 +18,7 @@
       "sourceTriangles": 150,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
     },
     "schoolFish": {
       "id": "schoolFish",
@@ -36,7 +36,7 @@
       "sourceTriangles": 233,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
     },
     "snatcher": {
       "id": "snatcher",
@@ -54,7 +54,7 @@
       "sourceTriangles": 3874,
       "sourceHasSkins": true,
       "sourceAnimationCount": 4,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
     },
     "anglerFish": {
       "id": "anglerFish",
@@ -72,7 +72,7 @@
       "sourceTriangles": 2150,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
     },
     "deathStareBlob": {
       "id": "deathStareBlob",
@@ -90,7 +90,7 @@
       "sourceTriangles": 4888,
       "sourceHasSkins": true,
       "sourceAnimationCount": 9,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
     },
     "tornadoCore": {
       "id": "tornadoCore",
@@ -108,7 +108,7 @@
       "sourceTriangles": 324,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
     },
     "midnightShovel": {
       "id": "midnightShovel",
@@ -126,7 +126,7 @@
       "sourceTriangles": 322,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
     },
     "midnightMonster": {
       "id": "midnightMonster",
@@ -144,7 +144,7 @@
       "sourceTriangles": 6174,
       "sourceHasSkins": true,
       "sourceAnimationCount": 16,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
     },
     "airplane": {
       "id": "airplane",
@@ -162,7 +162,7 @@
       "sourceTriangles": 1770,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
     },
     "emptyLifeboat": {
       "id": "emptyLifeboat",
@@ -180,7 +180,61 @@
       "sourceTriangles": 1036,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
+    },
+    "wreckageBox": {
+      "id": "wreckageBox",
+      "pageUrl": "https://poly.pizza/m/ykZ23x9d6p",
+      "publicId": "ykZ23x9d6p",
+      "resourceId": "f54e45d1-81ed-4323-9e35-8acd46533702",
+      "downloadUrl": "https://static.poly.pizza/f54e45d1-81ed-4323-9e35-8acd46533702.glb",
+      "sourceAssetId": "poly-pizza:f54e45d1-81ed-4323-9e35-8acd46533702",
+      "modelName": "Box",
+      "author": "Kay Lousberg",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "pageAnimated": false,
+      "sha256": "4B6F7B2D17997F75192C706B28E2F894B6DFF691BCED17963470D2B2CEDDBFF9",
+      "sourceTriangles": 32,
+      "sourceHasSkins": false,
+      "sourceAnimationCount": 0,
+      "downloadedOn": "2026-08-26"
+    },
+    "wreckageCrate": {
+      "id": "wreckageCrate",
+      "pageUrl": "https://poly.pizza/m/3VGWnZPXmG",
+      "publicId": "3VGWnZPXmG",
+      "resourceId": "720097e2-63ed-4e5f-9b66-eb416942eea0",
+      "downloadUrl": "https://static.poly.pizza/720097e2-63ed-4e5f-9b66-eb416942eea0.glb",
+      "sourceAssetId": "poly-pizza:720097e2-63ed-4e5f-9b66-eb416942eea0",
+      "modelName": "Crate",
+      "author": "Quaternius",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "pageAnimated": false,
+      "sha256": "4FB00BA01EEFEA3F1A335A6D3ACC67E8F4E093B9FC227673B82F67E12E098D6E",
+      "sourceTriangles": 784,
+      "sourceHasSkins": false,
+      "sourceAnimationCount": 0,
+      "downloadedOn": "2026-08-26"
+    },
+    "wreckagePallet": {
+      "id": "wreckagePallet",
+      "pageUrl": "https://poly.pizza/m/cUAsYHDqfD",
+      "publicId": "cUAsYHDqfD",
+      "resourceId": "e2109848-da3e-41c0-a96f-4471e91f78d9",
+      "downloadUrl": "https://static.poly.pizza/e2109848-da3e-41c0-a96f-4471e91f78d9.glb",
+      "sourceAssetId": "poly-pizza:e2109848-da3e-41c0-a96f-4471e91f78d9",
+      "modelName": "Pallet",
+      "author": "Quaternius",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "pageAnimated": false,
+      "sha256": "B773BBFE85743CD14CCB95B46219D99781B6F402BABCC4A7A25F4179232BA1D5",
+      "sourceTriangles": 176,
+      "sourceHasSkins": false,
+      "sourceAnimationCount": 0,
+      "downloadedOn": "2026-08-26"
     }
   }
 }

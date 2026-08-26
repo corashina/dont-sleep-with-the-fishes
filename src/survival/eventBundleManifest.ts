@@ -49,7 +49,7 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
     sounds: ['checkBackFish', 'checkBackAnglerfish'],
   },
   wreckage: {
-    models: ['containerShip', 'leakPlanks', 'anglerFish', 'ghost', 'driftingBarrel'],
+    models: ['containerShip', 'wreckageBox', 'wreckageCrate', 'wreckagePallet'],
     sounds: ['diveEntry', 'underwaterMovement', 'diveSurface'],
   },
   flowers: { models: ['flowers'], sounds: [] },
