@@ -397,7 +397,7 @@ describe('SurvivalEventFlow', () => {
     await resolution.afterAnimation();
     await resolution.beforeReturn();
     rig.calls.push('exit-focus');
-    resolution.clearEvent();
+    resolution.clearEvent(true);
     rig.calls.push('render-default');
     resolution.renderSnapshot();
     await resolution.afterReturn();
@@ -429,7 +429,7 @@ describe('SurvivalEventFlow', () => {
     if (resolution === undefined || !resolution.accepted) throw new Error('Expected Leave choice.');
     await resolution.playAnimation();
     await resolution.beforeReturn();
-    resolution.clearEvent();
+    resolution.clearEvent(true);
     resolution.renderSnapshot();
     await resolution.afterReturn();
 
@@ -467,7 +467,7 @@ describe('SurvivalEventFlow', () => {
     if (resolution === undefined || !resolution.accepted) throw new Error('Expected Dive choice.');
     await resolution.playAnimation();
     await resolution.beforeReturn();
-    resolution.clearEvent();
+    resolution.clearEvent(true);
     resolution.renderSnapshot();
     await resolution.afterReturn();
 
@@ -840,7 +840,7 @@ describe('SurvivalEventFlow', () => {
     rig.renderSnapshot.mockClear();
     rig.presentTerminal.mockClear();
 
-    staleResolution.clearEvent();
+    staleResolution.clearEvent(true);
     staleResolution.renderSnapshot();
     staleResolution.presentTerminal();
 

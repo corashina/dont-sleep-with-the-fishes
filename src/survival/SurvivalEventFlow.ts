@@ -702,8 +702,10 @@ export class SurvivalEventFlow {
           lines,
         }) ?? Promise.resolve());
       },
-      clearEvent: () => {
-        if (this.isCurrent(generation, operation)) this.clearPresentation();
+      clearEvent: (reportCleanupErrors) => {
+        if (this.isCurrent(generation, operation)) {
+          this.clearPresentation(false, reportCleanupErrors);
+        }
       },
       renderSnapshot: () => {
         if (!this.isCurrent(generation, operation)) return false;

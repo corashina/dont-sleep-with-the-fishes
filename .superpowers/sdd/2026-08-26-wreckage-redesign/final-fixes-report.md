@@ -54,3 +54,37 @@ The production build passed after transforming 501 modules.
 The build kept the existing large-chunk warning.
 
 `git diff --check` passed with zero errors.
+
+## Fix Round 2
+
+### Result
+
+- Stale focus entry now exits its camera view and releases its busy state.
+- Superseded entry cleanup cannot unlock newer work.
+- Choice recovery reports the action error before cleanup errors.
+- Normal choice cleanup keeps its existing error reporting.
+
+### RED Evidence
+
+The focused RED run used two files and 250 tests.
+
+- 2 tests failed.
+- 248 tests passed.
+- Stale entry did not exit its camera view or release its busy state.
+- Cleanup reported its error before the action error.
+
+### GREEN Evidence
+
+The focused flow, event, and phase run passed 3 files and 293 tests.
+
+The full suite passed 50 files and 1,610 tests.
+
+TypeScript passed with zero errors.
+
+The model check passed all 20 event models.
+
+The production build passed after transforming 501 modules.
+
+The build kept the existing large-chunk warning.
+
+`git diff --check` passed with zero errors.
