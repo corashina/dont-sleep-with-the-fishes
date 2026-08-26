@@ -73,6 +73,12 @@ export function isDriftingItemEventId(
   return isDriftingCargoEventId(eventId) || eventId === 'empty-lifeboat';
 }
 
+export type InspectableEventId = DriftingItemEventId | 'wreckage';
+
+export function isInspectableEventId(eventId: string): eventId is InspectableEventId {
+  return eventId === 'wreckage' || isDriftingItemEventId(eventId);
+}
+
 export function driftingItemRetrieveKey(eventId: DriftingCargoEventId): EventPresentationKey {
   return eventId === 'drifting-barrel'
     ? 'drifting-barrel.food'

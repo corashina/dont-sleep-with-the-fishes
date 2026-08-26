@@ -9,6 +9,7 @@ import type { PropModelLibrary } from '../world/PropModelLibrary';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { ChestDisplay } from './ChestDisplay';
 import type { FocusedEventId } from './eventPresentationRoutes';
+import type { InspectableEventId } from './eventCatalog';
 import type { EventPresentationCue } from './eventPresentationCue';
 import type {
   ActionOutcome,
@@ -22,16 +23,18 @@ export interface EventChoicePresentation {
   readonly condition: ItemCondition | null;
 }
 
-export interface FocusedEventInteractionTarget {
+export type FocusedEventInteractionTarget = {
   readonly id: string;
   readonly label: string;
   readonly description: string;
-  readonly choiceId: string;
   readonly root: Object3D;
   readonly tooltip?: boolean;
   readonly minimumHitWidth?: number;
   readonly minimumHitHeight?: number;
-}
+} & (
+  | { readonly choiceId: string; readonly focusEventId?: never }
+  | { readonly focusEventId: InspectableEventId; readonly choiceId?: never }
+);
 
 export interface FocusedEventPresentation {
   readonly root: Group;
