@@ -128,7 +128,7 @@ describe('BoatInteractionProjector', () => {
       brokenQuantity: 1,
       backingInstanceId: 'cannedFood-1',
     });
-    expect(anchors[0]!.hitArea).toMatchObject({ width: 44, height: 44 });
+    expect(anchors[0]!.hitArea).toMatchObject({ width: 36, height: 36 });
     expect(anchors.find(({ id }) => id === 'carlitos')).toMatchObject({
       label: 'CARLITOS',
       description: 'Check his hunger, happiness, and health.',

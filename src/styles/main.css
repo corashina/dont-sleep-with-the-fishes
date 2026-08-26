@@ -990,6 +990,13 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   transition: transform 160ms ease, opacity 160ms ease;
 }
 
+.boat-tooltip__cycle {
+  display: block;
+  margin-top: 4px;
+  color: #d5b56a;
+  font-size: .52rem;
+}
+
 .boat-anchor:not([data-event-state="locked"]):hover .boat-tooltip,
 .boat-anchor:not([data-event-state="locked"]):focus-visible .boat-tooltip {
   opacity: 1;
