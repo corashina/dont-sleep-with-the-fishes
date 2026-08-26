@@ -192,9 +192,9 @@ describe('VolumetricClouds', () => {
   });
 
   it.each([
-    ['low', 10],
-    ['medium', 16],
-    ['high', 24],
+    ['low', 12],
+    ['medium', 20],
+    ['high', 28],
   ] as const)('uses %s quality step limits', (quality, steps) => {
     const clouds = new VolumetricClouds(new Scene(), quality);
     expect(clouds.material.uniforms.uMaxSteps!.value).toBe(steps);
@@ -227,7 +227,13 @@ describe('VolumetricClouds', () => {
     expect(clouds.material.fragmentShader).toContain('float heightLight');
     expect(clouds.material.fragmentShader).toContain('float cloudDistance');
     expect(clouds.material.fragmentShader).toContain('float distanceFade');
+    expect(clouds.material.fragmentShader).toContain('float edgeOpacity');
+    expect(clouds.material.fragmentShader).toContain('travel += stepLength;');
+    expect(clouds.material.fragmentShader).not.toContain('stepLength * 1.8');
     expect(clouds.material.fragmentShader).toContain('threshold + 0.1,');
+    expect(clouds.material.fragmentShader).toContain(
+      'smoothstep(0.0, 0.12, erodedBody)',
+    );
     expect(clouds.material.uniforms.uLightStep!.value).toBeGreaterThanOrEqual(40);
     clouds.dispose();
   });
