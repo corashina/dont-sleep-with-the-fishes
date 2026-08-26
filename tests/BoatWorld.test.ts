@@ -99,6 +99,7 @@ import {
   eventItemOutcomeDuration,
   eventItemUseDuration,
   eventItemUseDurationForItem,
+  resolveEventItemUseContext,
   sampleEventItemUse,
   type EventItemUseContext,
 } from '../src/survival/eventItemUseChoreography';
@@ -1144,6 +1145,7 @@ describe('BoatWorld helpers', () => {
         carlitos: internals.carlitos,
         camera,
       });
+      expect(dependencies).not.toHaveProperty('starry');
       const retrieve = vi.fn(async () => undefined);
       await environment?.delegateCarlitos(retrieve);
       expect(delegate).toHaveBeenCalledWith(retrieve);
@@ -3960,7 +3962,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('routes every catalog item choice into shared ownership exactly once', async () => {
+  it('routes each catalog item choice into its shared or dedicated owner once', async () => {
     const itemIds = [...new Set(SURVIVAL_EVENTS.flatMap(({ choices }) => (
       choices.flatMap(({ itemId }) => itemId === undefined ? [] : [itemId])
     )))];
@@ -3970,11 +3972,16 @@ describe('BoatWorld helpers', () => {
     const controllerPlay = vi.spyOn(EventItemUseController.prototype, 'play');
     const borrowActor = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
     const begin = vi.spyOn(EventItemUseAdapter.prototype, 'begin');
+    const dedicatedPlay = vi.spyOn(EventPresentationCoordinator.prototype, 'playItemUse');
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
       createTestMoonTexture(),
       items,
+      undefined,
+      undefined,
+      'low',
+      createTestEventModels(),
     );
     world.syncInventory(snapshot(items, { food: 99, bait: 99 }));
 
@@ -3986,11 +3993,23 @@ describe('BoatWorld helpers', () => {
         const playCount = controllerPlay.mock.calls.length;
         const borrowCount = borrowActor.mock.calls.length;
         const beginCount = begin.mock.calls.length;
+        const dedicatedCount = dedicatedPlay.mock.calls.length;
         const use = world.playEventItemUse(
           event.id,
           choice.id,
           item.instanceId,
         );
+
+        if (event.id === 'wreckage' && choice.id === 'dive') {
+          expect(controllerPlay).toHaveBeenCalledTimes(playCount);
+          expect(borrowActor).toHaveBeenCalledTimes(borrowCount);
+          expect(begin).toHaveBeenCalledTimes(beginCount);
+          expect(dedicatedPlay).toHaveBeenCalledTimes(dedicatedCount + 1);
+          world.update(10, 10);
+          world.clearEvent();
+          await use;
+          continue;
+        }
 
         expect(controllerPlay).toHaveBeenCalledTimes(playCount + 1);
         expect(borrowActor).toHaveBeenCalledTimes(borrowCount + 1);
@@ -4008,6 +4027,7 @@ describe('BoatWorld helpers', () => {
     }
 
     world.dispose();
+    dedicatedPlay.mockRestore();
     begin.mockRestore();
     borrowActor.mockRestore();
     controllerPlay.mockRestore();
@@ -4033,6 +4053,7 @@ describe('BoatWorld helpers', () => {
       itemUseController: { held: { request: { context: string } } | null };
     }).itemUseController.held;
 
+    expect(resolveEventItemUseContext('flowers', 'bucket', 'bucket')).toBe('base');
     expect(active?.request.context).toBe('base');
     expect(supplyItem).not.toHaveBeenCalled();
     const duration = eventItemUseDuration('base');
