@@ -1371,6 +1371,27 @@ describe('SurvivalPhase orchestration', () => {
     },
   );
 
+  it('reports an action error before a cleanup port error', async () => {
+    const actionError = new Error('retrieval failed');
+    const cleanupError = new Error('event cleanup failed');
+    const reported: unknown[] = [];
+    const rig = createDriftingItemRig('drifting-barrel', {
+      onFatalError: (error) => { reported.push(error); },
+    });
+    await revealDriftingItem(rig);
+    await enterDriftingItemFocus(rig);
+    rig.world.retrieveDriftingItem.mockRejectedValueOnce(actionError);
+    rig.world.exitFocusedEventView.mockResolvedValueOnce(undefined);
+    rig.world.clearEvent.mockImplementationOnce(() => { throw cleanupError; });
+
+    rig.ui.onFocusedEventChoice?.({ id: 'retrieve', instanceId: null });
+    await vi.waitFor(() => expect(reported.length).toBeGreaterThan(0));
+
+    expect(reported).toEqual([actionError]);
+    expect(rig.ui.setBusy).toHaveBeenLastCalledWith(false);
+    rig.phase.dispose();
+  });
+
   it('restores the same focused choices after session rejection', async () => {
     const rig = createDriftingItemRig('drifting-barrel', { rejectChoice: true });
     await revealDriftingItem(rig);

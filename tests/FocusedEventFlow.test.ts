@@ -230,6 +230,50 @@ describe('FocusedEventFlow', () => {
     expect(rig.ui.showFocusedEvent).not.toHaveBeenCalled();
   });
 
+  it('releases busy when the pending event changes after camera entry', async () => {
+    const rig = createRig();
+    const entry = deferred();
+    const exit = deferred();
+    rig.world.enterFocusedEventView.mockReturnValueOnce(entry.promise);
+    rig.world.exitFocusedEventView.mockReturnValueOnce(exit.promise);
+    const work = rig.flow.enter('drifting-barrel', driftingChoices);
+    await Promise.resolve();
+
+    rig.setPending(false);
+    entry.resolve();
+    await Promise.resolve();
+
+    expect(rig.world.exitFocusedEventView).toHaveBeenCalledOnce();
+    expect(rig.ui.showFocusedEvent).not.toHaveBeenCalled();
+    expect(rig.setBusy).toHaveBeenLastCalledWith(true);
+
+    exit.resolve();
+    await work;
+
+    expect(rig.setBusy).toHaveBeenLastCalledWith(false);
+    rig.setPending(true);
+    await rig.flow.enter('drifting-barrel', driftingChoices);
+    expect(rig.ui.showFocusedEvent).toHaveBeenCalledOnce();
+  });
+
+  it('does not unlock newer work after cleanup supersedes an entry', async () => {
+    const rig = createRig();
+    const entry = deferred();
+    rig.world.enterFocusedEventView.mockReturnValueOnce(entry.promise);
+    const work = rig.flow.enter('drifting-barrel', driftingChoices);
+    await Promise.resolve();
+
+    rig.setPending(false);
+    rig.flow.clear();
+    rig.setBusy.mockClear();
+    rig.setBusy(true);
+    entry.resolve();
+    await work;
+
+    expect(rig.setBusy).toHaveBeenCalledExactlyOnceWith(true);
+    expect(rig.ui.showFocusedEvent).not.toHaveBeenCalled();
+  });
+
   it('makes stale lifecycle work inert', async () => {
     const rig = createRig();
     const pending = deferred();

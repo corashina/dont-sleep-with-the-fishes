@@ -36,7 +36,7 @@ export type FocusedEventChoiceResolution =
       readonly afterAnimation: () => Promise<void>;
       readonly beforeReturn: () => Promise<void>;
       readonly afterReturn: () => Promise<void>;
-      readonly clearEvent: () => void;
+      readonly clearEvent: (reportCleanupErrors: boolean) => void;
       readonly renderSnapshot: () => boolean;
       readonly presentTerminal: () => void;
     };
@@ -99,7 +99,10 @@ export class FocusedEventFlow {
       throw error;
     }
     if (!this.isCurrentFocus(eventId, 'entering', generation, operation)) return;
-    if (!this.dependencies.isPendingEvent(eventId)) return;
+    if (!this.dependencies.isPendingEvent(eventId)) {
+      await this.releaseStaleEntry(eventId, generation, operation);
+      return;
+    }
 
     this.focusState = 'choosing';
     this.showFocus();
@@ -319,6 +322,36 @@ export class FocusedEventFlow {
     this.ignoreSecondary(() => this.dependencies.setBusy(false));
   }
 
+  private async releaseStaleEntry(
+    eventId: InspectableEventId,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
+    if (!this.isCurrentFocus(eventId, 'entering', generation, operation)) return;
+    this.focusState = 'returning';
+    try {
+      await (this.dependencies.world.exitFocusedEventView?.() ?? Promise.resolve());
+    } catch (error) {
+      if (!this.isCurrentFocus(eventId, 'returning', generation, operation)) return;
+      this.finishStaleEntry(eventId, generation, operation);
+      throw error;
+    }
+    this.finishStaleEntry(eventId, generation, operation);
+  }
+
+  private finishStaleEntry(
+    eventId: InspectableEventId,
+    generation: number,
+    operation: number,
+  ): void {
+    if (!this.isCurrentFocus(eventId, 'returning', generation, operation)) return;
+    this.operationGeneration += 1;
+    this.activeEventId = null;
+    this.choices = [];
+    this.focusState = 'idle';
+    this.ignoreSecondary(() => this.dependencies.setBusy(false));
+  }
+
   private async recoverResolvedChoice(
     eventId: InspectableEventId,
     resolution: Extract<FocusedEventChoiceResolution, { readonly accepted: true }>,
@@ -348,7 +381,7 @@ export class FocusedEventFlow {
     this.activeEventId = null;
     this.choices = [];
     this.focusState = 'idle';
-    this.ignoreSecondary(() => resolution.clearEvent());
+    this.ignoreSecondary(() => resolution.clearEvent(false));
     if (!this.isCurrent(generation)) return;
     let terminal = false;
     let rendered = false;
@@ -390,7 +423,7 @@ export class FocusedEventFlow {
     this.focusState = 'idle';
     let terminal = false;
     try {
-      resolution.clearEvent();
+      resolution.clearEvent(true);
       if (!this.isCurrent(generation)) return;
       terminal = resolution.renderSnapshot();
       if (!this.isCurrent(generation)) return;
