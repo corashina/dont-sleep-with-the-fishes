@@ -259,19 +259,37 @@ describe('FocusedEventFlow', () => {
   it('does not unlock newer work after cleanup supersedes an entry', async () => {
     const rig = createRig();
     const entry = deferred();
+    const staleExit = deferred();
+    const newerEntry = deferred();
     rig.world.enterFocusedEventView.mockReturnValueOnce(entry.promise);
-    const work = rig.flow.enter('drifting-barrel', driftingChoices);
+    rig.world.exitFocusedEventView.mockReturnValueOnce(staleExit.promise);
+    const staleWork = rig.flow.enter('drifting-barrel', driftingChoices);
     await Promise.resolve();
 
     rig.setPending(false);
-    rig.flow.clear();
-    rig.setBusy.mockClear();
-    rig.setBusy(true);
     entry.resolve();
-    await work;
+    await vi.waitFor(() => expect(rig.world.exitFocusedEventView).toHaveBeenCalledOnce());
+
+    rig.flow.clear();
+    rig.setPending(true);
+    rig.setBusy.mockClear();
+    rig.ui.hideFocusedEvent.mockClear();
+    rig.world.enterFocusedEventView.mockReturnValueOnce(newerEntry.promise);
+    const newerWork = rig.flow.enter('drifting-barrel', driftingChoices);
+    await Promise.resolve();
+
+    staleExit.resolve();
+    await staleWork;
 
     expect(rig.setBusy).toHaveBeenCalledExactlyOnceWith(true);
+    expect(rig.ui.hideFocusedEvent).not.toHaveBeenCalled();
     expect(rig.ui.showFocusedEvent).not.toHaveBeenCalled();
+
+    newerEntry.resolve();
+    await newerWork;
+    expect(rig.ui.showFocusedEvent).toHaveBeenCalledOnce();
+    await rig.flow.choose({ id: 'retrieve', instanceId: null });
+    expect(rig.resolveChoice).toHaveBeenCalledOnce();
   });
 
   it('makes stale lifecycle work inert', async () => {
