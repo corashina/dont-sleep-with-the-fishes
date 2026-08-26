@@ -645,9 +645,23 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onFishingResultContinue = () => this.fishingFlow.continueResult();
     this.ui.onFishingViewExit = () => this.fishingFlow.exitReadyView();
     this.ui.onFocusedEventSelect = (eventId) => { void this.eventFlow.focusEvent(eventId); };
-    this.ui.onFocusedEventChoice = (choice) => { void this.focusedEventFlow.choose(choice); };
-    this.ui.onFocusedEventBack = () => { void this.focusedEventFlow.back(); };
+    this.ui.onFocusedEventChoice = (choice) => {
+      this.reportFocusedError(this.focusedEventFlow.choose(choice));
+    };
+    this.ui.onFocusedEventBack = () => {
+      this.reportFocusedError(this.focusedEventFlow.back());
+    };
     this.ui.onCameraTurn = () => this.handleCameraTurn();
+  }
+
+  private reportFocusedError(work: Promise<void>): void {
+    void work.catch((error) => {
+      try {
+        this.onFatalError(error);
+      } catch {
+        // The focused action error stays primary.
+      }
+    });
   }
 
   private canAcceptCommand(): boolean {

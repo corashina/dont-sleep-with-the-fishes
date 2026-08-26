@@ -13,6 +13,7 @@ import type {
   SurvivalItemState,
 } from '../src/survival/survivalTypes';
 import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
+import type { FocusedEventChoiceView } from '../src/ui/SurvivalUiViewModel';
 
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -317,28 +318,43 @@ describe('SurvivalEventFlow', () => {
     ]));
   });
 
-  it('hides absent Carlitos and shows his unavailable reason when aboard', async () => {
-    const hidden = createRig(snapshot({ state: 'dayEvent', pendingEventId: 'wreckage' }));
-    await hidden.flow.revealPending(hidden.session.snapshot());
-    await hidden.flow.focusEvent('wreckage');
-    expect(hidden.focused.enter.mock.calls[0]![1]).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'delegate-carlitos' }),
-    ]));
-
-    const tired = createRig(snapshot({
+  it.each([
+    ['absent', null, 'Carlitos is not aboard.'],
+    ['dead', {
+      alive: false, energy: 3, hunger: 5, sickness: 0,
+      unhappiness: 0, pettedToday: false, deathCause: 'sickness' as const,
+    }, 'Carlitos cannot retrieve the loot.'],
+    ['tired', {
+      alive: true, energy: 1, hunger: 5, sickness: 0,
+      unhappiness: 0, pettedToday: false, deathCause: null,
+    }, 'Carlitos needs 3 energy; he has 1.'],
+    ['hungry', {
+      alive: true, energy: 3, hunger: 3, sickness: 0,
+      unhappiness: 0, pettedToday: false, deathCause: null,
+    }, 'Carlitos is Hungry and cannot retrieve the loot.'],
+  ] as const)('keeps all four Wreckage choices visible when Carlitos is %s', async (
+    _label,
+    carlitos,
+    unavailableReason,
+  ) => {
+    const rig = createRig(snapshot({
       state: 'dayEvent',
       pendingEventId: 'wreckage',
-      carlitos: {
-        alive: true, energy: 1, hunger: 5, sickness: 0,
-        unhappiness: 0, pettedToday: false, deathCause: null,
-      },
+      carlitos,
     }));
-    await tired.flow.revealPending(tired.session.snapshot());
-    await tired.flow.focusEvent('wreckage');
-    expect(tired.focused.enter).toHaveBeenCalledWith('wreckage', expect.arrayContaining([
+    await rig.flow.revealPending(rig.session.snapshot());
+    await rig.flow.focusEvent('wreckage');
+
+    const choices = rig.focused.enter.mock.calls[0]![1] as readonly FocusedEventChoiceView[];
+    expect(choices.map(({ id }) => id)).toEqual([
+      'search', 'delegate-carlitos', 'dive', 'leave',
+    ]);
+    expect(choices).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        id: 'delegate-carlitos', energyCost: 3, energyOwner: 'carlitos',
-        unavailableReason: 'Carlitos needs 3 energy; he has 1.',
+        id: 'delegate-carlitos',
+        energyCost: 3,
+        energyOwner: 'carlitos',
+        unavailableReason,
       }),
     ]));
   });

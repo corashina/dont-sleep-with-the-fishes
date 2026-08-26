@@ -44,13 +44,13 @@ interface ActiveWreckageBeat {
 
 const SURFACE_DEBRIS = Object.freeze([
   { kind: 'box', x: 2.65, y: 0.04, z: -4.10, yaw: 0.34, scale: 0.82 },
-  { kind: 'crate', x: 4.15, y: 0.07, z: -5.25, yaw: -0.46, scale: 0.88 },
-  { kind: 'pallet', x: 5.55, y: 0.02, z: -6.75, yaw: 0.72, scale: 0.92 },
-  { kind: 'plank', x: 3.05, y: 0.10, z: -5.65, yaw: 0.18, scale: 0.95 },
-  { kind: 'plank', x: 4.85, y: 0.06, z: -7.55, yaw: -0.62, scale: 0.78 },
-  { kind: 'plank', x: 2.75, y: 0.08, z: -7.95, yaw: 1.02, scale: 0.70 },
-  { kind: 'plank', x: 5.95, y: 0.03, z: -8.65, yaw: -0.20, scale: 0.62 },
-  { kind: 'plank', x: 3.95, y: 0.12, z: -9.20, yaw: 0.58, scale: 0.56 },
+  { kind: 'crate', x: 4.25, y: 0.07, z: -4.20, yaw: -0.46, scale: 0.88 },
+  { kind: 'pallet', x: 5.75, y: 0.02, z: -6.15, yaw: 0.72, scale: 0.92 },
+  { kind: 'plank', x: 2.55, y: 0.10, z: -5.65, yaw: 0.18, scale: 0.95 },
+  { kind: 'plank', x: 3.35, y: 0.06, z: -7.35, yaw: -0.62, scale: 0.78 },
+  { kind: 'plank', x: 6.25, y: 0.08, z: -8.15, yaw: 1.02, scale: 0.70 },
+  { kind: 'plank', x: 2.65, y: 0.03, z: -9.25, yaw: -0.20, scale: 0.62 },
+  { kind: 'plank', x: 5.15, y: 0.12, z: -10.05, yaw: 0.58, scale: 0.56 },
 ] as const satisfies readonly SurfaceDebrisPlacement[]);
 
 const SURFACE_TILT = Object.freeze([
@@ -68,6 +68,8 @@ const PLANK_START_INDEX = 3;
 const TARGET_ID = 'event:wreckage';
 const WRECK_CAMERA_POSITION = new Vector3(4.2, -3.4, -4.3);
 const WRECK_CAMERA_TARGET = new Vector3(0, -7.2, -11.5);
+const SEABED_Y = -12.25;
+const SEABED_Z = -11.5;
 
 function createPlankGeometry(): BufferGeometry {
   const geometry = new BufferGeometry();
@@ -91,6 +93,29 @@ function createPlankGeometry(): BufferGeometry {
   ]);
   geometry.addGroup(0, 6, 0);
   geometry.addGroup(6, 30, 1);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function createSeabedGeometry(): BufferGeometry {
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute([
+    -10, -0.20, -10,
+    0, 0.06, -10,
+    10, -0.12, -10,
+    -10, 0.08, 0,
+    0, -0.16, 0,
+    10, 0.10, 0,
+    -10, -0.14, 10,
+    0, 0.12, 10,
+    10, -0.06, 10,
+  ], 3));
+  geometry.setIndex([
+    0, 3, 1, 1, 3, 4,
+    1, 4, 2, 2, 4, 5,
+    3, 6, 4, 4, 6, 7,
+    4, 7, 5, 5, 7, 8,
+  ]);
   geometry.computeVertexNormals();
   return geometry;
 }
@@ -122,6 +147,14 @@ export class WreckagePresentation implements DedicatedEventPresentation {
       flatShading: true,
     }),
   ];
+  private readonly seabedGeometry = createSeabedGeometry();
+  private readonly seabedMaterial = new MeshStandardMaterial({
+    color: 0x46534c,
+    roughness: 1,
+    metalness: 0,
+    flatShading: true,
+  });
+  private readonly seabed = new Mesh(this.seabedGeometry, this.seabedMaterial);
   private readonly surfaceObjects: Object3D[] = [];
   private readonly sample: WreckageSample = createWreckageSample();
   private readonly targets: readonly FocusedEventInteractionTarget[];
@@ -151,6 +184,11 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.shipPlacement.visible = false;
     this.shipPlacement.add(this.ship.root);
 
+    this.seabed.name = 'wreckage-seabed';
+    this.seabed.position.set(0, SEABED_Y, SEABED_Z);
+    this.seabed.receiveShadow = true;
+    this.seabed.visible = false;
+
     this.addModelDebris(this.box.root, 'wreckage-box');
     this.addModelDebris(this.crate.root, 'wreckage-crate');
     this.addModelDebris(this.pallet.root, 'wreckage-pallet');
@@ -176,7 +214,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
       minimumHitHeight: 72,
     })]);
 
-    this.worldRoot.add(this.debris, this.shipPlacement, this.itemAimTarget);
+    this.worldRoot.add(this.debris, this.seabed, this.shipPlacement, this.itemAimTarget);
     this.updateFloatingDebris();
     this.hideScene();
   }
@@ -242,7 +280,9 @@ export class WreckagePresentation implements DedicatedEventPresentation {
       ignoreCleanupError(() => this.releaseDive());
       throw error;
     }
-    return this.ownsOperation(operation);
+    const completed = this.ownsOperation(operation);
+    if (completed) this.seabed.visible = false;
+    return completed;
   }
 
   react(_result: EventOutcomePresentation): Promise<void> {
@@ -322,6 +362,8 @@ export class WreckagePresentation implements DedicatedEventPresentation {
       () => this.pallet.dispose(),
       () => this.plankGeometry.dispose(),
       ...this.plankMaterials.map((material) => () => material.dispose()),
+      () => this.seabedGeometry.dispose(),
+      () => this.seabedMaterial.dispose(),
     ]);
   }
 
@@ -372,6 +414,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   private applySample(): void {
     if (this.underwaterVisible) {
       this.debris.visible = false;
+      this.seabed.visible = this.staged;
       this.shipPlacement.visible = this.staged;
       this.worldRoot.visible = this.staged;
       this.boatRoot.visible = false;
@@ -380,12 +423,14 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.debris.visible = this.staged && this.sample.debrisAlpha > 0;
     this.worldRoot.visible = this.staged && this.sample.sceneAlpha > 0;
     this.boatRoot.visible = this.worldRoot.visible;
+    this.seabed.visible = false;
     this.shipPlacement.visible = false;
   }
 
   private hideScene(): void {
     this.underwaterVisible = false;
     this.debris.visible = false;
+    this.seabed.visible = false;
     this.shipPlacement.visible = false;
     this.worldRoot.visible = false;
     this.boatRoot.visible = false;

@@ -254,6 +254,7 @@ interface DriftingItemRigOptions {
   readonly audio?: AudioSystem;
   readonly rejectChoice?: boolean;
   readonly onRestart?: () => void;
+  readonly onFatalError?: (error: unknown) => void;
 }
 
 function createDriftingItemRig(
@@ -365,6 +366,7 @@ function createDriftingItemRig(
     releaseActive: vi.fn(() => calls.push('release-bundle')),
     dispose: vi.fn(),
   };
+  const onFatalError = options.onFatalError ?? vi.fn();
   const phase = SurvivalPhase.forTest({
     audio: options.audio,
     session,
@@ -372,6 +374,7 @@ function createDriftingItemRig(
     ui,
     eventBundles,
     onRestart: options.onRestart,
+    onFatalError,
   }, eventId);
   return {
     eventId,
@@ -389,6 +392,7 @@ function createDriftingItemRig(
     restoreCommandFocus,
     setEventSelection,
     setCameraTurnState,
+    onFatalError,
   };
 }
 
@@ -1342,6 +1346,30 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.world.enterFocusedEventView).toHaveBeenCalledTimes(2);
     rig.phase.dispose();
   });
+
+  it.each(['choice', 'Back'] as const)(
+    'reports a focused %s rejection from the UI callback',
+    async (source) => {
+      const failure = new Error(`${source} failed`);
+      const onFatalError = vi.fn();
+      const rig = createDriftingItemRig('drifting-barrel', { onFatalError });
+      await revealDriftingItem(rig);
+      await enterDriftingItemFocus(rig);
+
+      if (source === 'choice') {
+        rig.ui.playEventChoiceBeat = vi.fn(() => Promise.reject(failure));
+        rig.ui.onFocusedEventChoice?.({ id: 'retrieve', instanceId: null });
+      } else {
+        rig.world.exitFocusedEventView.mockRejectedValueOnce(failure);
+        rig.ui.onFocusedEventBack?.();
+      }
+      await flushPromises();
+
+      expect(onFatalError).toHaveBeenCalledExactlyOnceWith(failure);
+      expect(rig.ui.setBusy).toHaveBeenLastCalledWith(false);
+      rig.phase.dispose();
+    },
+  );
 
   it('restores the same focused choices after session rejection', async () => {
     const rig = createDriftingItemRig('drifting-barrel', { rejectChoice: true });

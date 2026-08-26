@@ -3076,6 +3076,22 @@ describe('SurvivalUI', () => {
     ui.dispose();
   });
 
+  it.each([
+    ['DIVE RESULT', 'Close dive result'],
+    ['CHEST REWARD', 'Close chest reward'],
+    ['LIFEBOAT SUPPLY', 'Close lifeboat supply'],
+    ['WRECKAGE', 'Close Wreckage result'],
+  ] as const)('uses the specific close label for %s', (title, closeLabel) => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+
+    void ui.showRewardResult({ title, reward: null, lines: [] });
+
+    expect(mount.querySelector('[data-dive-result-close]')?.getAttribute('aria-label'))
+      .toBe(closeLabel);
+  });
+
   it('removes document and button listeners exactly once on dispose', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
