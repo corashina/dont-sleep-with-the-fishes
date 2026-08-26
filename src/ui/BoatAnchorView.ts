@@ -123,6 +123,7 @@ interface AnchorTooltipNodes {
   readonly label: Text;
   readonly separator: Text;
   readonly energy: HTMLElement;
+  readonly cycle: HTMLElement;
 }
 
 interface AnchorLayoutState {
@@ -178,6 +179,7 @@ export class BoatAnchorView {
   private hoveredAnchorId: string | null = null;
   private focusedAnchorId: string | null = null;
   private publishedAnchorId: string | null = null;
+  private cycledAnchorId: string | null = null;
   private carlitosReturnTarget: HTMLButtonElement | null = null;
   private busy = false;
   private paused = false;
@@ -244,6 +246,7 @@ export class BoatAnchorView {
     this.anchorLayer.addEventListener('pointerout', this.handleAnchorPointerOut);
     this.anchorLayer.addEventListener('focusin', this.handleAnchorFocusIn);
     this.anchorLayer.addEventListener('focusout', this.handleAnchorFocusOut);
+    this.anchorLayer.addEventListener('wheel', this.handleAnchorWheel, { passive: false });
     document.addEventListener('click', this.handleDocumentClick);
     window.addEventListener('resize', this.handleWindowResize);
   }
@@ -480,6 +483,16 @@ export class BoatAnchorView {
   handleCommandKeyDown(event: KeyboardEvent): boolean {
     const target = event.target;
     if (!(target instanceof Element) || !this.anchorLayer.contains(target)) return false;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      const button = target.closest<HTMLButtonElement>('.boat-anchor');
+      if (
+        button !== null
+        && this.cycleOverlappingAnchor(button, event.key === 'ArrowRight' ? 1 : -1)
+      ) {
+        event.preventDefault();
+        return true;
+      }
+    }
     if (
       target instanceof HTMLButtonElement
       && target.dataset.companion === 'carlitos'
@@ -550,6 +563,7 @@ export class BoatAnchorView {
     clean(() => this.anchorLayer.removeEventListener('pointerout', this.handleAnchorPointerOut));
     clean(() => this.anchorLayer.removeEventListener('focusin', this.handleAnchorFocusIn));
     clean(() => this.anchorLayer.removeEventListener('focusout', this.handleAnchorFocusOut));
+    clean(() => this.anchorLayer.removeEventListener('wheel', this.handleAnchorWheel));
     clean(() => document.removeEventListener('click', this.handleDocumentClick));
     clean(() => window.removeEventListener('resize', this.handleWindowResize));
     clean(() => { this.onAction = () => undefined; });
@@ -576,9 +590,13 @@ export class BoatAnchorView {
       const energy = document.createElement('span');
       energy.className = 'boat-tooltip__energy ui-role-numeral';
       energy.setAttribute('aria-hidden', 'true');
-      tooltip.append(label, separator, energy);
+      const cycle = document.createElement('span');
+      cycle.className = 'boat-tooltip__cycle';
+      cycle.dataset.overlapCycle = '';
+      cycle.hidden = true;
+      tooltip.append(label, separator, energy, cycle);
       button.append(tooltip);
-      this.anchorTooltipNodes.set(button, { tooltip, label, separator, energy });
+      this.anchorTooltipNodes.set(button, { tooltip, label, separator, energy, cycle });
     }
     this.anchorLayer.append(button);
     this.anchorButtons.set(anchor.id, button);
@@ -899,6 +917,7 @@ export class BoatAnchorView {
     });
     if (highlightInvalidated) this.publishAnchorHighlight();
     this.syncCarlitosActions();
+    this.syncOverlapState();
   }
 
   private eventPillowChoice(): EventContextChoice | undefined {
@@ -1174,4 +1193,119 @@ export class BoatAnchorView {
     if (this.focusedAnchorId === current) this.focusedAnchorId = null;
     this.publishAnchorHighlight();
   };
+
+  private readonly handleAnchorWheel = (event: WheelEvent): void => {
+    if (event.deltaY === 0 || this.busy || this.modalOpen || this.paused) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const button = target.closest<HTMLButtonElement>('.boat-anchor');
+    if (button === null || !this.anchorLayer.contains(button)) return;
+    if (!this.cycleOverlappingAnchor(button, event.deltaY > 0 ? 1 : -1)) return;
+    event.preventDefault();
+  };
+
+  private cycleOverlappingAnchor(
+    current: HTMLButtonElement,
+    direction: -1 | 1,
+  ): boolean {
+    const currentId = current.dataset.anchorId;
+    if (currentId === undefined) return false;
+    const candidates = [...this.anchorButtons.values()]
+      .filter((button) => {
+        const id = button.dataset.anchorId;
+        return id !== undefined
+          && this.isCycleCandidate(button, this.anchors.get(id))
+          && this.anchorIdsOverlap(currentId, id);
+      })
+      .sort((left, right) => {
+        const leftDepth = this.anchors.get(left.dataset.anchorId!)?.hitArea?.depth ?? 0;
+        const rightDepth = this.anchors.get(right.dataset.anchorId!)?.hitArea?.depth ?? 0;
+        return leftDepth - rightDepth;
+      });
+    if (candidates.length < 2) return false;
+    const currentIndex = candidates.indexOf(current);
+    const nextIndex = (Math.max(0, currentIndex) + direction + candidates.length)
+      % candidates.length;
+    this.selectCycledAnchor(candidates[nextIndex]!);
+    return true;
+  }
+
+  private isCycleCandidate(
+    button: HTMLButtonElement,
+    anchor: BoatInteractionAnchor | undefined,
+  ): anchor is BoatInteractionAnchor {
+    return anchor !== undefined
+      && anchor.visible
+      && this.isHighlightableAnchor(anchor)
+      && this.isFocusableCommand(button)
+      && button.dataset.eventState !== 'locked';
+  }
+
+  private anchorIdsOverlap(firstId: string, secondId: string): boolean {
+    const first = this.anchors.get(firstId);
+    const second = this.anchors.get(secondId);
+    if (first === undefined || second === undefined) return false;
+    const firstArea = first.hitArea ?? DEFAULT_ANCHOR_HIT_AREA;
+    const secondArea = second.hitArea ?? DEFAULT_ANCHOR_HIT_AREA;
+    return Math.abs(first.x - second.x) * 2 < firstArea.width + secondArea.width
+      && Math.abs(first.y - second.y) * 2 < firstArea.height + secondArea.height;
+  }
+
+  private selectCycledAnchor(button: HTMLButtonElement): void {
+    if (this.cycledAnchorId !== null) this.restoreAnchorDepth(this.cycledAnchorId);
+    this.cycledAnchorId = button.dataset.anchorId ?? null;
+    button.style.zIndex = '100001';
+    button.focus({ preventScroll: true });
+    this.focusedAnchorId = this.cycledAnchorId;
+    this.publishAnchorHighlight();
+  }
+
+  private restoreAnchorDepth(anchorId: string): void {
+    const button = this.anchorButtons.get(anchorId);
+    const layout = this.anchorLayouts.get(anchorId);
+    if (button !== undefined && layout !== undefined) {
+      button.style.zIndex = String(layout.zIndex);
+    }
+  }
+
+  private syncOverlapState(): void {
+    let cycleIsValid = false;
+    this.anchorButtons.forEach((button, id) => {
+      const anchor = this.anchors.get(id);
+      let count = 0;
+      if (this.isCycleCandidate(button, anchor)) {
+        this.anchorButtons.forEach((candidate, candidateId) => {
+          if (
+            this.isCycleCandidate(candidate, this.anchors.get(candidateId))
+            && this.anchorIdsOverlap(id, candidateId)
+          ) count += 1;
+        });
+      }
+      const cycle = this.anchorTooltipNodes.get(button)?.cycle;
+      if (count > 1) {
+        button.dataset.overlapCount = String(count);
+        button.setAttribute('aria-keyshortcuts', 'ArrowLeft ArrowRight');
+        if (cycle !== undefined) {
+          cycle.hidden = false;
+          cycle.textContent = 'SCROLL OR ← → TO SELECT';
+        }
+        if (id === this.cycledAnchorId) cycleIsValid = true;
+      } else {
+        delete button.dataset.overlapCount;
+        button.removeAttribute('aria-keyshortcuts');
+        if (cycle !== undefined) {
+          cycle.hidden = true;
+          cycle.textContent = '';
+        }
+      }
+    });
+    if (this.cycledAnchorId !== null && !cycleIsValid) {
+      this.restoreAnchorDepth(this.cycledAnchorId);
+      this.cycledAnchorId = null;
+    }
+    if (this.cycledAnchorId !== null) {
+      const selected = this.anchorButtons.get(this.cycledAnchorId);
+      if (selected !== undefined) selected.style.zIndex = '100001';
+    }
+  }
 }

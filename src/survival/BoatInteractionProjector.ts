@@ -125,10 +125,11 @@ function updateHitArea(
   projection: ProjectedBoatBounds,
   minimumWidth = 0,
   minimumHeight = 0,
+  scale = 1,
 ): void {
   const area = anchor.hitArea!;
-  area.width = Math.max(minimumWidth, projection.width);
-  area.height = Math.max(minimumHeight, projection.height);
+  area.width = Math.max(minimumWidth, projection.width * scale);
+  area.height = Math.max(minimumHeight, projection.height * scale);
   area.depth = projection.depth;
 }
 
@@ -386,7 +387,7 @@ export class BoatInteractionProjector {
         entry.projection,
         record.root.visible && entry.projection.visible,
       );
-      updateHitArea(entry.anchor, entry.projection, 44, 44);
+      updateHitArea(entry.anchor, entry.projection, 36, 36, 0.72);
       this.nextAnchors.push(entry.anchor);
     }
 

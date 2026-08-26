@@ -817,6 +817,85 @@ describe('SurvivalUI', () => {
     expect(highlight).toHaveBeenLastCalledWith(null);
   });
 
+  it('cycles overlapping boat items with the wheel and arrow keys', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const highlight = vi.fn();
+    ui.onAnchorHighlight = highlight;
+    ui.setAnchors([
+      {
+        id: 'bucket-overlap',
+        itemType: 'bucket',
+        toolId: null,
+        action: null,
+        remainingUses: null,
+        x: 300,
+        y: 220,
+        visible: true,
+        depleted: false,
+        hitArea: { width: 40, height: 40, depth: 1 },
+      },
+      {
+        id: 'scuba-overlap',
+        itemType: 'scubaSet',
+        toolId: null,
+        action: 'dive',
+        remainingUses: null,
+        x: 310,
+        y: 220,
+        visible: true,
+        depleted: false,
+        hitArea: { width: 40, height: 40, depth: 2 },
+      },
+      {
+        id: 'map-clear',
+        itemType: 'map',
+        toolId: null,
+        action: null,
+        remainingUses: null,
+        x: 500,
+        y: 220,
+        visible: true,
+        depleted: false,
+        hitArea: { width: 40, height: 40, depth: 1 },
+      },
+    ]);
+
+    const bucket = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="bucket-overlap"]',
+    )!;
+    const scuba = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="scuba-overlap"]',
+    )!;
+    const map = mount.querySelector<HTMLButtonElement>('[data-anchor-id="map-clear"]')!;
+
+    expect(bucket.dataset.overlapCount).toBe('2');
+    expect(scuba.dataset.overlapCount).toBe('2');
+    expect(map.dataset.overlapCount).toBeUndefined();
+    expect(bucket.getAttribute('aria-keyshortcuts')).toBe('ArrowLeft ArrowRight');
+    expect(bucket.querySelector('[data-overlap-cycle]')?.textContent)
+      .toBe('SCROLL OR ← → TO SELECT');
+
+    bucket.focus();
+    press('[data-anchor-id="bucket-overlap"]', 'ArrowRight');
+
+    expect(document.activeElement).toBe(scuba);
+    expect(scuba.style.zIndex).toBe('100001');
+    expect(highlight).toHaveBeenLastCalledWith('scuba-overlap');
+
+    scuba.dispatchEvent(new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      deltaY: 1,
+    }));
+
+    expect(document.activeElement).toBe(bucket);
+    expect(bucket.style.zIndex).toBe('100001');
+    expect(scuba.style.zIndex).toBe('99800');
+    expect(highlight).toHaveBeenLastCalledWith('bucket-overlap');
+  });
+
   it('activates a focused contextual choice with the keyboard', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
