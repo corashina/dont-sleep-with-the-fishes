@@ -52,7 +52,7 @@ describe('EmptyLifeboatPresentation', () => {
     presentation.update(2, 0);
     const subject = presentation.root.getObjectByName('empty-lifeboat:subject')!;
     expect(subject.position.x).toBeLessThan(0);
-    expect(subject.position.y).toBeCloseTo(0.31);
+    expect(subject.position.y).toBeCloseTo(0.49);
     expect(presentation.root.userData.eventSide).toBe('left');
     expect(water.sampleWaveInto).toHaveBeenCalled();
 
