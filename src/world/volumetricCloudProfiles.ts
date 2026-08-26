@@ -26,7 +26,7 @@ function profile(
 const PROFILES: Readonly<Record<SkyWeather, Readonly<VolumetricCloudProfile>>> =
   Object.freeze({
     calm: profile({
-      coverage: 0.42,
+      coverage: 0.34,
       density: 1,
       baseHeight: 90,
       topHeight: 420,

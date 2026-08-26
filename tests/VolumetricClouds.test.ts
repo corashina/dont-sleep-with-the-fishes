@@ -27,6 +27,7 @@ describe('volumetricCloudProfile', () => {
 
     expect(overcast.coverage).toBeGreaterThan(calm.coverage);
     expect(squall.coverage).toBeGreaterThan(overcast.coverage);
+    expect(calm.coverage).toBeLessThanOrEqual(0.36);
     expect(squall.baseHeight).toBeLessThan(calm.baseHeight);
     expect(squall.wind.length()).toBeGreaterThan(calm.wind.length());
   });
@@ -224,6 +225,20 @@ describe('VolumetricClouds', () => {
     );
     expect(clouds.material.fragmentShader).toContain('rayDirection.y <= 0.0');
     expect(clouds.material.fragmentShader).toContain('float crownTop');
+    expect(clouds.material.fragmentShader).toContain('float cloudGroup');
+    expect(clouds.material.fragmentShader).toContain(
+      'vec2(190.0, -310.0)',
+    );
+    expect(clouds.material.fragmentShader).toContain('float towerShape');
+    expect(clouds.material.fragmentShader).toContain('float smallLobes');
+    expect(clouds.material.fragmentShader).toContain(
+      'pow(cloudGroup, 0.55)',
+    );
+    expect(clouds.material.fragmentShader).toContain('float solidBody');
+    expect(clouds.material.fragmentShader).toContain('float topField');
+    expect(clouds.material.fragmentShader).toContain('float billowedTop');
+    expect(clouds.material.fragmentShader).toContain('float billowedSides');
+    expect(clouds.material.fragmentShader).toContain('float boundaryErosion');
     expect(clouds.material.fragmentShader).toContain('float heightLight');
     expect(clouds.material.fragmentShader).toContain('float cloudDistance');
     expect(clouds.material.fragmentShader).toContain('float distanceFade');
@@ -234,9 +249,9 @@ describe('VolumetricClouds', () => {
     );
     expect(clouds.material.fragmentShader).toContain('travel += stepLength;');
     expect(clouds.material.fragmentShader).not.toContain('stepLength * 1.8');
-    expect(clouds.material.fragmentShader).toContain('threshold + 0.1,');
-    expect(clouds.material.fragmentShader).toContain(
-      'smoothstep(0.0, 0.12, erodedBody)',
+    expect(clouds.material.fragmentShader).toContain('threshold + 0.12,');
+    expect(clouds.material.fragmentShader).not.toContain(
+      'float erodedBody = body -',
     );
     expect(clouds.material.uniforms.uLightStep!.value).toBeGreaterThanOrEqual(40);
     clouds.dispose();

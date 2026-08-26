@@ -84,37 +84,68 @@ const fragmentShader = `
       1.0
     );
     vec3 wind = vec3(uWindOffset.x, 0.0, uWindOffset.y);
-    vec2 crownCoordinates = (
-      samplePosition.xz + uWindOffset
-    ) * uShapeScale * 0.58;
+    vec2 shapeCoordinates = (
+      samplePosition.xz + uWindOffset + vec2(190.0, -310.0)
+    ) * uShapeScale;
+    float groupNoise = texture(
+      uNoiseTexture,
+      vec3(shapeCoordinates * 0.46, 0.17)
+    ).r;
+    float lobeNoise = texture(
+      uNoiseTexture,
+      vec3(shapeCoordinates * 1.32 + vec2(0.31, -0.27), 0.59)
+    ).r;
     float crownNoise = texture(
       uNoiseTexture,
-      vec3(crownCoordinates, 0.37)
+      vec3(shapeCoordinates * 2.75 + vec2(-0.19, 0.41), 0.83)
     ).r;
-    float crownTop = mix(
-      0.46,
-      1.04,
-      smoothstep(0.3, 0.76, crownNoise)
+    float threshold = mix(0.66, 0.31, uCoverage);
+    float groupShape = groupNoise * 0.78 + lobeNoise * 0.22;
+    float cloudGroup = smoothstep(
+      threshold,
+      threshold + 0.12,
+      groupShape
     );
-    float lowerEdge = smoothstep(0.0, 0.06, heightFraction);
-    float upperEdge = 1.0 - smoothstep(
-      max(0.16, crownTop - 0.22),
-      crownTop,
-      heightFraction
+    float towerCore = smoothstep(
+      threshold + 0.02,
+      threshold + 0.16,
+      groupNoise * 0.84 + lobeNoise * 0.16
     );
-    float shape = texture(
-      uNoiseTexture,
-      samplePosition * uShapeScale + wind * uShapeScale
-    ).r;
+    float towerShape = smoothstep(0.3, 0.72, lobeNoise)
+      * cloudGroup;
+    float smallLobes = smoothstep(0.3, 0.72, crownNoise)
+      * cloudGroup;
+    float crownTop = clamp(
+      0.18
+        + pow(cloudGroup, 0.55) * 0.28
+        + towerCore * 0.2
+        + towerShape * 0.12
+        + smallLobes * 0.06,
+      0.16,
+      0.86
+    );
+    float lowerEdge = smoothstep(0.0, 0.045, heightFraction);
     float detail = texture(
       uNoiseTexture,
       samplePosition.zyx * uDetailScale - wind * uDetailScale * 1.37
     ).r;
-    float threshold = mix(0.68, 0.32, uCoverage);
-    float body = smoothstep(threshold, threshold + 0.1, shape);
-    float erodedBody = body - (1.0 - detail) * uErosion;
-    float cloud = smoothstep(0.0, 0.12, erodedBody);
-    return cloud * uDensity * lowerEdge * upperEdge;
+    float sideField = cloudGroup + (detail - 0.5) * 0.28;
+    float billowedSides = smoothstep(0.08, 0.38, sideField)
+      * smoothstep(0.0, 0.18, cloudGroup);
+    float topField = crownTop - heightFraction + (detail - 0.5) * 0.24;
+    float billowedTop = smoothstep(-0.04, 0.12, topField);
+    float solidBody = billowedSides * lowerEdge * billowedTop;
+    float sideBoundary = 1.0 - smoothstep(0.18, 0.72, cloudGroup);
+    float topBoundary = smoothstep(
+      max(0.0, crownTop - 0.3),
+      crownTop,
+      heightFraction
+    );
+    float boundaryErosion = max(sideBoundary, topBoundary);
+    float erodedBoundary = solidBody
+      - (1.0 - detail) * uErosion * boundaryErosion * 0.42;
+    float cloud = smoothstep(0.03, 0.2, erodedBoundary);
+    return cloud * uDensity;
   }
 
   void main() {
