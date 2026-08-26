@@ -778,6 +778,28 @@ function createDiveRig(options: {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('SurvivalPhase orchestration', () => {
+  it('forwards volumetric cloud controls to the world', () => {
+    const setVolumetricCloudsEnabled = vi.fn();
+    const setVisualQuality = vi.fn();
+    const volumetricCloudsAvailable = vi.fn(() => true);
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world: {
+        setVolumetricCloudsEnabled,
+        setVisualQuality,
+        volumetricCloudsAvailable,
+      },
+      ui: {},
+    });
+
+    phase.setVolumetricCloudsEnabled(true);
+    phase.setVisualQuality('high');
+
+    expect(setVolumetricCloudsEnabled).toHaveBeenCalledWith(true);
+    expect(setVisualQuality).toHaveBeenCalledWith('high');
+    expect(phase.getVolumetricCloudsAvailable()).toBe(true);
+  });
+
   it('keeps the radio action available until the incoming sound ends', async () => {
     let current = snapshot({ state: 'nightEvent', day: 4 });
     const signal = { finish: null as (() => void) | null };
