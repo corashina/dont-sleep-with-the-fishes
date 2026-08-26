@@ -130,6 +130,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   private surfaceTime = 0;
   private operation = 0;
   private diveOwned = false;
+  private underwaterViewOwned = false;
   private underwaterVisible = false;
   private staged = false;
   private disposed = false;
@@ -291,6 +292,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     runCleanupSteps([
       () => this.cancelActive(),
       () => this.releaseDive(),
+      () => this.restoreUnderwaterView(),
       () => {
         this.staged = false;
         this.hideScene();
@@ -305,6 +307,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     runCleanupSteps([
       () => this.cancelActive(),
       () => this.releaseDive(),
+      () => this.restoreUnderwaterView(),
       () => this.hideScene(),
       () => this.boatRoot.clear(),
       () => this.worldRoot.clear(),
@@ -387,6 +390,13 @@ export class WreckagePresentation implements DedicatedEventPresentation {
 
   private showUnderwaterWreck(): void {
     if (this.disposed || !this.staged || !this.diveOwned) return;
+    this.underwaterViewOwned = true;
+    try {
+      this.environment.underwaterView.enter();
+    } catch (error) {
+      ignoreCleanupError(() => this.restoreUnderwaterView());
+      throw error;
+    }
     this.underwaterVisible = true;
     this.applySample();
   }
@@ -406,6 +416,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.underwaterVisible = false;
     runCleanupSteps([
       () => this.environment.dive.clear(),
+      () => this.restoreUnderwaterView(),
       () => this.applySample(),
     ]);
   }
@@ -416,8 +427,15 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.underwaterVisible = false;
     runCleanupSteps([
       () => this.environment.dive.settleForVisibilityChange(),
+      () => this.restoreUnderwaterView(),
       () => this.applySample(),
     ]);
+  }
+
+  private restoreUnderwaterView(): void {
+    if (!this.underwaterViewOwned) return;
+    this.environment.underwaterView.exit();
+    this.underwaterViewOwned = false;
   }
 }
 

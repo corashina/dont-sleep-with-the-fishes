@@ -277,6 +277,14 @@ export class BoatWorld {
   private readonly itemEffects: EventItemEffects;
   private readonly itemUseAdapter: EventItemUseAdapter;
   private readonly itemUseController: EventItemUseController;
+  private underwaterViewActive = false;
+  private underwaterBoatVisible = true;
+  private underwaterCameraEffectsVisible = true;
+  private underwaterItemEffectsVisible = true;
+  private readonly underwaterView = {
+    enter: (): void => this.enterUnderwaterView(),
+    exit: (): void => this.exitUnderwaterView(),
+  };
   private readonly eventPresentationHost = new EventPresentationHost();
   private readonly interactionProjector: BoatInteractionProjector;
   private readonly eventPresentationRegistry = new EventPresentationRegistry();
@@ -678,6 +686,7 @@ export class BoatWorld {
         vortexWave: this.vortexWave,
         sampleWorldWaveInto: this.sampleWorldWaveInto,
         readWorldWaveAmplitudeScale: this.readWorldWaveAmplitudeScale,
+        underwaterView: this.underwaterView,
         cameraEffectsRoot: this.cameraEffectsRoot,
         boatEffectsRoot: this.boatEffectsRoot,
         camera: this.camera,
@@ -1431,6 +1440,7 @@ export class BoatWorld {
         this.currentFocusedEventAimTarget(),
       );
     }
+    this.diveController.applyPostEntryHoldCamera();
     setSceneBinocularMaskStrength(
       this.scene,
       this.itemEffects.binocularMaskStrength,
@@ -1557,6 +1567,25 @@ export class BoatWorld {
     this.boatEffectsRoot.position.set(0, 0, 0);
     this.boatEffectsRoot.rotation.set(0, 0, 0);
     this.boatEffectsRoot.scale.set(1, 1, 1);
+  }
+
+  private enterUnderwaterView(): void {
+    if (this.underwaterViewActive) return;
+    this.underwaterViewActive = true;
+    this.underwaterBoatVisible = this.boatEffectsRoot.visible;
+    this.underwaterCameraEffectsVisible = this.cameraEffectsRoot.visible;
+    this.underwaterItemEffectsVisible = this.itemEffects.root.visible;
+    this.boatEffectsRoot.visible = false;
+    this.cameraEffectsRoot.visible = false;
+    this.itemEffects.root.visible = false;
+  }
+
+  private exitUnderwaterView(): void {
+    if (!this.underwaterViewActive) return;
+    this.underwaterViewActive = false;
+    this.boatEffectsRoot.visible = this.underwaterBoatVisible;
+    this.cameraEffectsRoot.visible = this.underwaterCameraEffectsVisible;
+    this.itemEffects.root.visible = this.underwaterItemEffectsVisible;
   }
 
   private applyBaseLighting(atmosphere: Readonly<SkyPalette>): void {

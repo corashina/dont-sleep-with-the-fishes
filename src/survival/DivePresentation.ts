@@ -91,6 +91,7 @@ export class DivePresentation {
   private readonly waterSurfaceWorldPosition = new Vector3();
   private readonly waterSurfaceLocalPosition = new Vector3();
   private active: ActiveDive | null = null;
+  private postEntryHold: DivePostEntryHold | null = null;
   private entryElapsed = 0;
   private holdElapsed = 0;
   private holdStarted = false;
@@ -191,6 +192,7 @@ export class DivePresentation {
     this.entryElapsed = 0;
     this.holdElapsed = 0;
     this.holdStarted = false;
+    this.postEntryHold = options.postEntryHold ?? null;
     sampleDivePose(0, this.pose);
     this.applyPose(0);
     return new Promise<void>((resolve) => {
@@ -230,6 +232,7 @@ export class DivePresentation {
     }
 
     const hold = active.options.postEntryHold!;
+    this.applyHoldCamera(hold);
     this.holdElapsed = Math.min(
       hold.durationSeconds,
       this.holdElapsed + remainingDelta,
@@ -249,6 +252,7 @@ export class DivePresentation {
     this.entryElapsed = 0;
     this.holdElapsed = 0;
     this.holdStarted = false;
+    this.postEntryHold = null;
     active?.resolve();
   }
 
@@ -410,7 +414,15 @@ export class DivePresentation {
     this.goggles.visible = false;
     this.waterVeil.visible = false;
     this.bubbleMesh.visible = false;
+  }
 
+  applyPostEntryHoldCamera(): void {
+    const hold = this.postEntryHold;
+    if (!this.cameraCaptured || !this.holdStarted || hold === null) return;
+    this.applyHoldCamera(hold);
+  }
+
+  private applyHoldCamera(hold: DivePostEntryHold): void {
     this.scratchPosition.set(
       hold.cameraWorldPosition.x,
       hold.cameraWorldPosition.y,

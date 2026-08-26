@@ -6812,6 +6812,55 @@ describe('BoatWorld helpers', () => {
     }
   });
 
+  it('keeps the Wreckage hold camera and restores real roots when hidden', async () => {
+    const scuba = savedItem('scubaSet');
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+      [scuba],
+      undefined,
+      undefined,
+      'low',
+      createTestEventModels(),
+    );
+    world.syncInventory(snapshot([scuba]));
+    world.stageEvent({ eventId: 'wreckage', targetInstanceId: null, variantSeed: 17 });
+    const focus = world.enterFocusedEventView('wreckage');
+    world.update(1.1, 1.1);
+    await focus;
+
+    const dive = world.playEventItemUse('wreckage', 'dive', scuba.instanceId);
+    world.update(6.9, 5.8);
+
+    const holdPosition = camera.getWorldPosition(new Vector3());
+    expect(holdPosition.x).toBeCloseTo(4.2);
+    expect(holdPosition.y).toBeCloseTo(-3.4);
+    expect(holdPosition.z).toBeCloseTo(-4.3);
+    expect(world.scene.getObjectByName('dedicated-event-boat-effects')?.visible).toBe(false);
+    expect(world.scene.getObjectByName('dedicated-event-camera-effects')?.visible).toBe(false);
+    expect(world.scene.getObjectByName('event-item-effects')?.visible).toBe(false);
+    expect(world.scene.getObjectByName('wreckage-wreck')?.visible).toBe(true);
+
+    world.update(7, 0.1);
+    const nextHoldPosition = camera.getWorldPosition(new Vector3());
+    expect(nextHoldPosition.x).toBeCloseTo(4.2);
+    expect(nextHoldPosition.y).toBeCloseTo(-3.4);
+    expect(nextHoldPosition.z).toBeCloseTo(-4.3);
+
+    world.setDocumentHidden(true);
+    await dive;
+    expect(world.scene.getObjectByName('dedicated-event-boat-effects')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('dedicated-event-camera-effects')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('event-item-effects')?.visible).toBe(true);
+
+    world.clearEvent();
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('drives two exact same-group actors until each owner releases it', () => {
     const firstMap = savedItem('map', 3);
     const secondMap = savedItem('map', 6);

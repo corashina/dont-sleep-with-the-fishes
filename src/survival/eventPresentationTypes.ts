@@ -58,6 +58,11 @@ export type WorldWaveSampler = (
   amplitudeScale: number,
 ) => void;
 
+export interface UnderwaterViewEnvironment {
+  readonly enter: () => void;
+  readonly exit: () => void;
+}
+
 export interface DedicatedEventEnvironment {
   readonly eventModels: EventModelLibrary;
   readonly featuredModels: SurvivalEventModels;
@@ -71,6 +76,7 @@ export interface DedicatedEventEnvironment {
   readonly vortexWave: VortexWaveState;
   readonly sampleWorldWaveInto: WorldWaveSampler;
   readonly readWorldWaveAmplitudeScale: () => number;
+  readonly underwaterView: UnderwaterViewEnvironment;
   readonly cameraEffectsRoot?: Group;
   readonly camera?: PerspectiveCamera;
   readonly boatEffectsRoot?: Group;

@@ -111,10 +111,16 @@ export class DivePresentationController {
     );
     try {
       this.presentation.update(delta, this.waveSample.height);
+      this.presentation.applyPostEntryHoldCamera();
     } catch (error) {
       ignoreCleanupError(() => this.clear());
       throw error;
     }
+  }
+
+  applyPostEntryHoldCamera(): void {
+    if (this.disposed || this.activeItemId === null) return;
+    this.presentation.applyPostEntryHoldCamera();
   }
 
   dispose(): void {
