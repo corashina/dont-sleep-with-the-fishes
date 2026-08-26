@@ -6,6 +6,7 @@ import {
 } from '../src/game/ItemState';
 import { survivalEventById } from '../src/survival/eventCatalog';
 import { resolveEventItemUseContext } from '../src/survival/eventItemUseChoreography';
+import { ITEM_ANIMATION_LAB_USES } from '../src/survival/ItemAnimationLab';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../src/survival/itemDescriptions';
 import { itemArtwork } from '../src/ui/uiArtwork';
 import { boatStorageSurface, boatStorageTransform } from '../src/world/BoatStorage';
@@ -89,12 +90,23 @@ describe('Rope survival item', () => {
     expect(resolveEventItemUseContext('snatcher', 'rope', 'rope')).toBe('base');
   });
 
+  it('is selectable in Item Animation Lab', () => {
+    expect(ITEM_ANIMATION_LAB_USES.rope).toEqual([{
+      id: 'base',
+      label: 'Lift rope',
+      eventId: 'windy-night',
+      choiceId: 'rope',
+    }]);
+  });
+
   it('has boat storage and illustrated UI artwork', () => {
     const rope = { instanceId: 'rope-1', type: 'rope' } as const;
     const transform = boatStorageTransform(rope);
 
     expect(boatStorageSurface(rope)).toBe('floor');
     expect(transform.position.toArray().every(Number.isFinite)).toBe(true);
+    expect(transform.position.x).toBeCloseTo(0.25);
+    expect(transform.position.z).toBeCloseTo(-0.55);
     expect(itemArtwork('rope')).toContain('data-item-artwork="rope"');
   });
 });
