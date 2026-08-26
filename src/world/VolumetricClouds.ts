@@ -24,7 +24,7 @@ const CLOUD_RADIUS = 900;
 const QUALITY_STEPS: Readonly<Record<VisualQuality, number>> = Object.freeze({
   low: 12,
   medium: 20,
-  high: 20,
+  high: 16,
 });
 
 export interface VolumetricCloudUpdate {
