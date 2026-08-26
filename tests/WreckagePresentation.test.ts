@@ -4,6 +4,7 @@ import {
   Group,
   Mesh,
   MeshStandardMaterial,
+  Object3D,
   PerspectiveCamera,
   Vector3,
 } from 'three';
@@ -15,9 +16,20 @@ import type {
   EventOutcomePresentation,
 } from '../src/survival/eventPresentationTypes';
 
-function modelGroup(id: string): Group {
+const NORMALIZED_DEBRIS_DIMENSIONS: Readonly<Record<string, readonly [number, number, number]>> = {
+  wreckageBox: [0.886, 0.782, 0.9],
+  wreckageCrate: [1.05, 1.05, 1.05],
+  wreckagePallet: [1.8, 0.205, 1.546],
+};
+
+function modelGroup(id: string, normalizedDebrisBounds = false): Group {
   const root = new Group();
   root.name = `model:${id}`;
+  const normalizedDimensions = NORMALIZED_DEBRIS_DIMENSIONS[id];
+  if (normalizedDebrisBounds && normalizedDimensions !== undefined) {
+    root.add(new Mesh(new BoxGeometry(...normalizedDimensions), new MeshStandardMaterial()));
+    return root;
+  }
   root.position.set(0.31, -0.22, 0.14);
   root.scale.setScalar(0.27);
   const dimensions = id === 'containerShip' ? [6, 3, 16] : [1, 0.8, 1.2];
@@ -25,7 +37,7 @@ function modelGroup(id: string): Group {
   return root;
 }
 
-function createEnvironment() {
+function createEnvironment(options: { readonly normalizedDebrisBounds?: boolean } = {}) {
   const created: string[] = [];
   const cloned: string[] = [];
   const ownedModelDispose = vi.fn();
@@ -34,7 +46,7 @@ function createEnvironment() {
       create: vi.fn((id: string) => {
         created.push(id);
         return {
-          root: modelGroup(id),
+          root: modelGroup(id, options.normalizedDebrisBounds ?? false),
           dispose: () => ownedModelDispose(id),
         };
       }),
@@ -66,6 +78,22 @@ function createEnvironment() {
     delegateCarlitos: vi.fn(async (retrieve: () => Promise<void>) => retrieve()),
   } as unknown as DedicatedEventEnvironment;
   return { environment, created, cloned, ownedModelDispose };
+}
+
+function horizontalBoundsGap(first: Object3D, second: Object3D): number {
+  const firstBounds = new Box3().setFromObject(first);
+  const secondBounds = new Box3().setFromObject(second);
+  const xGap = Math.max(
+    0,
+    firstBounds.min.x - secondBounds.max.x,
+    secondBounds.min.x - firstBounds.max.x,
+  );
+  const zGap = Math.max(
+    0,
+    firstBounds.min.z - secondBounds.max.z,
+    secondBounds.min.z - firstBounds.max.z,
+  );
+  return Math.hypot(xGap, zGap);
 }
 
 function outcomePresentation(): EventOutcomePresentation {
@@ -109,6 +137,29 @@ describe('WreckagePresentation', () => {
     expect(cloned).toEqual([]);
     expect(debris.children).toHaveLength(8);
     expect(debris.children.every((child) => child.position.x > 0)).toBe(true);
+    presentation.dispose();
+  });
+
+  it('keeps clear water between every normalized debris bound', () => {
+    const { environment } = createEnvironment({ normalizedDebrisBounds: true });
+    const presentation = new WreckagePresentation(environment);
+    const debris = stage(presentation);
+    const minimumGap = 0.18;
+
+    for (const object of debris.children) {
+      expect(new Box3().setFromObject(object).min.x, object.name).toBeGreaterThan(0);
+      expect(Math.abs(object.position.y), object.name).toBeLessThan(0.2);
+    }
+    for (let first = 0; first < debris.children.length; first += 1) {
+      for (let second = first + 1; second < debris.children.length; second += 1) {
+        const firstObject = debris.children[first]!;
+        const secondObject = debris.children[second]!;
+        expect(
+          horizontalBoundsGap(firstObject, secondObject),
+          `${firstObject.name} and ${secondObject.name}`,
+        ).toBeGreaterThan(minimumGap);
+      }
+    }
     presentation.dispose();
   });
 
@@ -167,11 +218,32 @@ describe('WreckagePresentation', () => {
     presentation.dispose();
   });
 
+  it('keeps the seabed submerged and hidden outside the underwater hold', async () => {
+    const { environment } = createEnvironment();
+    const presentation = new WreckagePresentation(environment);
+    stage(presentation);
+    const seabed = presentation.worldRoot.getObjectByName('wreckage-seabed')!;
+
+    expect(seabed.visible).toBe(false);
+    expect(new Box3().setFromObject(seabed).max.y).toBeLessThan(-0.5);
+
+    const dive = presentation.playItemUse('dive', 'scubaSet-1');
+    const options = vi.mocked(environment.dive.play).mock.calls[0]![1];
+    options.postEntryHold!.onStart();
+    expect(seabed.visible).toBe(true);
+
+    presentation.clear();
+    expect(seabed.visible).toBe(false);
+    await dive;
+    presentation.dispose();
+  });
+
   it('uses the normal dive entry then shows only the wreck for three seconds', async () => {
     const { environment } = createEnvironment();
     const presentation = new WreckagePresentation(environment);
     const debris = stage(presentation);
     const wreck = presentation.worldRoot.getObjectByName('wreckage-wreck')!;
+    const seabed = presentation.worldRoot.getObjectByName('wreckage-seabed')!;
 
     const dive = presentation.playItemUse('dive', 'scubaSet-1');
     const options = vi.mocked(environment.dive.play).mock.calls[0]![1];
@@ -190,9 +262,11 @@ describe('WreckagePresentation', () => {
     presentation.update(2.4, 0.2);
     expect(debris.visible).toBe(false);
     expect(wreck.visible).toBe(true);
+    expect(seabed.visible).toBe(true);
     expect(presentation.boatRoot.visible).toBe(false);
     expect(environment.underwaterView.enter).toHaveBeenCalledOnce();
     await expect(dive).resolves.toBe(true);
+    expect(seabed.visible).toBe(false);
 
     presentation.clear();
     expect(environment.dive.clear).toHaveBeenCalledOnce();
@@ -274,12 +348,17 @@ describe('WreckagePresentation', () => {
     const debris = stage(presentation);
     const children = [...debris.children];
     const firstY = children.map((child) => child.position.y);
+    const seabed = presentation.worldRoot.getObjectByName('wreckage-seabed') as Mesh;
+    const seabedGeometry = seabed.geometry;
+    const seabedMaterial = seabed.material;
 
     presentation.update(2.4, 0.2);
 
     expect(debris.children).toEqual(children);
     expect(children.map((child) => child.position.y)).not.toEqual(firstY);
     expect(children.every((child) => child.position.x > 0)).toBe(true);
+    expect(seabed.geometry).toBe(seabedGeometry);
+    expect(seabed.material).toBe(seabedMaterial);
     presentation.dispose();
   });
 
@@ -312,6 +391,10 @@ describe('WreckagePresentation', () => {
       expect(presentation.boatRoot.getObjectByName(name)).toBeUndefined();
     }
 
+    const seabed = presentation.worldRoot.getObjectByName('wreckage-seabed') as Mesh;
+    const disposeSeabedGeometry = vi.spyOn(seabed.geometry, 'dispose');
+    const disposeSeabedMaterial = vi.spyOn(seabed.material as MeshStandardMaterial, 'dispose');
+
     presentation.dispose();
     presentation.dispose();
     expect(presentation.worldRoot.children).toHaveLength(0);
@@ -321,5 +404,7 @@ describe('WreckagePresentation', () => {
       'wreckageCrate',
       'wreckagePallet',
     ]);
+    expect(disposeSeabedGeometry).toHaveBeenCalledOnce();
+    expect(disposeSeabedMaterial).toHaveBeenCalledOnce();
   });
 });

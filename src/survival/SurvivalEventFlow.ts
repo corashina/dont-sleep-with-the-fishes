@@ -184,8 +184,11 @@ function carlitosChoiceAvailability(snapshot: SurvivalSnapshot): {
   readonly unavailableReason: string | null;
 } {
   const carlitos = snapshot.carlitos;
-  if (carlitos === null || !carlitos.alive) {
-    return { visible: false, unavailableReason: null };
+  if (carlitos === null) {
+    return { visible: false, unavailableReason: 'Carlitos is not aboard.' };
+  }
+  if (!carlitos.alive) {
+    return { visible: false, unavailableReason: 'Carlitos cannot retrieve the loot.' };
   }
   if (carlitos.energy < CARLITOS_EVENT_ENERGY_COST) {
     return {
@@ -214,7 +217,11 @@ export function focusedChoicesFor(
 ): readonly FocusedEventChoiceView[] {
   const companionAvailability = carlitosChoiceAvailability(snapshot);
   return event.choices.flatMap((choice): FocusedEventChoiceView[] => {
-    if (choice.companionAction !== undefined && !companionAvailability.visible) return [];
+    if (
+      choice.companionAction !== undefined
+      && !companionAvailability.visible
+      && event.id !== 'wreckage'
+    ) return [];
     const unmet = choice.requirements?.filter(
       ({ resource, minimum }) => snapshot[resource] < minimum,
     ) ?? [];

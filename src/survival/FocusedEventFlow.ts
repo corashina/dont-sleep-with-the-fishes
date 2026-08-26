@@ -92,7 +92,12 @@ export class FocusedEventFlow {
     this.choices = [...choices];
     this.focusState = 'entering';
     this.dependencies.setBusy(true);
-    await (this.dependencies.world.enterFocusedEventView?.(eventId) ?? Promise.resolve());
+    try {
+      await (this.dependencies.world.enterFocusedEventView?.(eventId) ?? Promise.resolve());
+    } catch (error) {
+      await this.recoverEntryFailure(eventId, generation, operation);
+      throw error;
+    }
     if (!this.isCurrentFocus(eventId, 'entering', generation, operation)) return;
     if (!this.dependencies.isPendingEvent(eventId)) return;
 
@@ -150,12 +155,13 @@ export class FocusedEventFlow {
       await resolution.beforeReturn();
       if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return;
       await this.returnAfterResolution(eventId, resolution, generation, operation);
-    } catch {
+    } catch (error) {
       if (resolution?.accepted) {
         await this.recoverResolvedChoice(eventId, resolution, generation, operation);
       } else {
-        this.restoreChoice(eventId, generation, operation);
+        this.recoverUnresolvedChoice(eventId, generation, operation);
       }
+      throw error;
     }
   }
 
@@ -171,7 +177,12 @@ export class FocusedEventFlow {
     const operation = this.beginOperation();
     this.focusState = 'returning';
     this.dependencies.setBusy(true);
-    await (this.dependencies.world.exitFocusedEventView?.() ?? Promise.resolve());
+    try {
+      await (this.dependencies.world.exitFocusedEventView?.() ?? Promise.resolve());
+    } catch (error) {
+      this.recoverBackFailure(eventId, generation, operation);
+      throw error;
+    }
     if (!this.isCurrentFocus(eventId, 'returning', generation, operation)) return;
 
     this.activeEventId = null;
@@ -261,13 +272,70 @@ export class FocusedEventFlow {
     this.dependencies.setBusy(false);
   }
 
+  private recoverUnresolvedChoice(
+    eventId: InspectableEventId,
+    generation: number,
+    operation: number,
+  ): void {
+    if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return;
+    this.focusState = 'choosing';
+    this.ignoreSecondary(() => this.dependencies.setEventResolutionActive(false));
+    this.ignoreSecondary(() => this.showFocus());
+    this.ignoreSecondary(() => this.dependencies.setBusy(false));
+  }
+
+  private async recoverEntryFailure(
+    eventId: InspectableEventId,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
+    if (!this.isCurrentFocus(eventId, 'entering', generation, operation)) return;
+    try {
+      await (this.dependencies.world.exitFocusedEventView?.() ?? Promise.resolve());
+    } catch {
+      // The entry error stays primary.
+    }
+    if (!this.isCurrentFocus(eventId, 'entering', generation, operation)) return;
+    this.operationGeneration += 1;
+    this.activeEventId = null;
+    this.choices = [];
+    this.focusState = 'idle';
+    this.ignoreSecondary(() => this.dependencies.ui.hideFocusedEvent?.());
+    this.ignoreSecondary(() => (
+      this.dependencies.ui.setEventSelection?.(EMPTY_ELIGIBILITY, [])
+    ));
+    this.ignoreSecondary(() => this.dependencies.setBusy(false));
+    this.ignoreSecondary(() => this.dependencies.ui.restoreCommandFocus?.());
+  }
+
+  private recoverBackFailure(
+    eventId: InspectableEventId,
+    generation: number,
+    operation: number,
+  ): void {
+    if (!this.isCurrentFocus(eventId, 'returning', generation, operation)) return;
+    this.focusState = 'choosing';
+    this.ignoreSecondary(() => this.showFocus());
+    this.ignoreSecondary(() => this.dependencies.setBusy(false));
+  }
+
   private async recoverResolvedChoice(
     eventId: InspectableEventId,
     resolution: Extract<FocusedEventChoiceResolution, { readonly accepted: true }>,
     generation: number,
     operation: number,
   ): Promise<void> {
-    if (!this.isCurrentResolution(eventId, generation, operation)) return;
+    if (!this.isCurrentResolution(eventId, generation, operation)) {
+      if (
+        this.activeEventId === null
+        && this.focusState === 'idle'
+        && this.isCurrent(generation)
+      ) {
+        this.ignoreSecondary(() => this.dependencies.setEventResolutionActive(false));
+        this.ignoreSecondary(() => this.dependencies.setBusy(false));
+      }
+      return;
+    }
     this.focusState = 'returning';
     try {
       await (this.dependencies.world.exitFocusedEventView?.() ?? Promise.resolve());
@@ -280,22 +348,29 @@ export class FocusedEventFlow {
     this.activeEventId = null;
     this.choices = [];
     this.focusState = 'idle';
+    this.ignoreSecondary(() => resolution.clearEvent());
+    if (!this.isCurrent(generation)) return;
+    let terminal = false;
+    let rendered = false;
     try {
-      resolution.clearEvent();
+      terminal = resolution.renderSnapshot();
+      rendered = true;
     } catch {
-      // Event cleanup owns its error reporting.
+      // The action error stays primary.
+    }
+    let returned = false;
+    try {
+      await resolution.afterReturn();
+      returned = true;
+    } catch {
+      // The action error stays primary.
     }
     if (!this.isCurrent(generation)) return;
-    try {
-      const terminal = resolution.renderSnapshot();
-      await resolution.afterReturn();
-      if (!this.isCurrent(generation)) return;
-      this.dependencies.setBusy(false);
-      if (terminal) resolution.presentTerminal();
-      else this.dependencies.ui.restoreCommandFocus?.();
-    } catch {
-      if (this.isCurrent(generation)) this.dependencies.setBusy(false);
-    }
+    this.ignoreSecondary(() => this.dependencies.setEventResolutionActive(false));
+    this.ignoreSecondary(() => this.dependencies.setBusy(false));
+    if (!rendered || !returned) return;
+    if (terminal) this.ignoreSecondary(() => resolution.presentTerminal());
+    else this.ignoreSecondary(() => this.dependencies.ui.restoreCommandFocus?.());
   }
 
   private async returnAfterResolution(
@@ -376,5 +451,13 @@ export class FocusedEventFlow {
   private isCurrent(generation: number): boolean {
     return !this.disposed
       && this.dependencies.isLifecycleGenerationCurrent(generation);
+  }
+
+  private ignoreSecondary(cleanup: () => void): void {
+    try {
+      cleanup();
+    } catch {
+      // A prior action or camera error stays primary.
+    }
   }
 }

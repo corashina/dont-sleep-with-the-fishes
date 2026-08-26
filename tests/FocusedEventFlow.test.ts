@@ -52,14 +52,16 @@ function createRig(eventId: 'drifting-barrel' | 'wreckage' = 'drifting-barrel') 
     return resolution;
   });
   const waitForVisibilityResume = vi.fn(async () => true);
+  const setBusy = vi.fn((busy: boolean) => { calls.push(busy ? 'busy' : 'ready'); });
+  const setEventResolutionActive = vi.fn((active: boolean) => {
+    calls.push(active ? 'event-resolving' : 'event-choosing');
+  });
   const flow = new FocusedEventFlow({
     world,
     ui,
     audio: { confirm: vi.fn(() => { calls.push('confirm'); }) },
-    setBusy: vi.fn((busy: boolean) => { calls.push(busy ? 'busy' : 'ready'); }),
-    setEventResolutionActive: vi.fn((active: boolean) => {
-      calls.push(active ? 'event-resolving' : 'event-choosing');
-    }),
+    setBusy,
+    setEventResolutionActive,
     isPendingEvent: vi.fn((id: string) => pending && id === eventId),
     resolveChoice,
     waitForVisibilityResume,
@@ -68,6 +70,7 @@ function createRig(eventId: 'drifting-barrel' | 'wreckage' = 'drifting-barrel') 
   } as unknown as FocusedEventFlowDependencies);
   return {
     flow, calls, world, ui, resolveChoice, waitForVisibilityResume,
+    setBusy, setEventResolutionActive,
     setResolution: (value: FocusedEventChoiceResolution) => { resolution = value; },
     advanceGeneration: () => { generation += 1; },
     setPending: (value: boolean) => { pending = value; },
@@ -120,25 +123,77 @@ describe('FocusedEventFlow', () => {
     expect(rig.ui.showFocusedEvent).toHaveBeenCalledTimes(2);
   });
 
-  it('recovers from a rejected animation promise', async () => {
+  it('rejects a camera entry error after cleanup restores the idle state', async () => {
+    const rig = createRig();
+    const entryError = new Error('camera entry failed');
+    rig.world.enterFocusedEventView.mockRejectedValueOnce(entryError);
+    rig.world.exitFocusedEventView.mockRejectedValueOnce(new Error('camera cleanup failed'));
+
+    await expect(rig.flow.enter('drifting-barrel', driftingChoices)).rejects.toBe(entryError);
+
+    expect(rig.world.exitFocusedEventView).toHaveBeenCalledOnce();
+    expect(rig.setBusy).toHaveBeenLastCalledWith(false);
+    rig.world.exitFocusedEventView.mockResolvedValue(undefined);
+    await rig.flow.enter('drifting-barrel', driftingChoices);
+    expect(rig.world.enterFocusedEventView).toHaveBeenCalledTimes(2);
+    expect(rig.ui.showFocusedEvent).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a Back camera error after restoring the focused choices', async () => {
+    const rig = createRig();
+    const backError = new Error('camera return failed');
+    await rig.flow.enter('drifting-barrel', driftingChoices);
+    rig.world.exitFocusedEventView.mockRejectedValueOnce(backError);
+
+    await expect(rig.flow.back()).rejects.toBe(backError);
+
+    expect(rig.ui.showFocusedEvent).toHaveBeenCalledTimes(2);
+    expect(rig.setBusy).toHaveBeenLastCalledWith(false);
+    rig.world.exitFocusedEventView.mockResolvedValue(undefined);
+    await expect(rig.flow.back()).resolves.toBeUndefined();
+    expect(rig.ui.hideFocusedEvent).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a choice beat error primary while focus cleanup errors stay secondary', async () => {
+    const rig = createRig();
+    const choiceError = new Error('choice beat failed');
+    await rig.flow.enter('drifting-barrel', driftingChoices);
+    rig.ui.playEventChoiceBeat.mockRejectedValueOnce(choiceError);
+    rig.ui.showFocusedEvent.mockImplementationOnce(() => {
+      throw new Error('focus restore failed');
+    });
+
+    await expect(rig.flow.choose({ id: 'retrieve', instanceId: null })).rejects.toBe(choiceError);
+
+    expect(rig.setBusy).toHaveBeenLastCalledWith(false);
+    rig.ui.showFocusedEvent.mockImplementation(() => undefined);
+    await expect(rig.flow.choose({ id: 'retrieve', instanceId: null })).resolves.toBeUndefined();
+    expect(rig.resolveChoice).toHaveBeenCalledOnce();
+  });
+
+  it('reports a rejected resolution animation after all cleanup attempts', async () => {
     const rig = createRig();
     const failure = new Error('animation failed');
+    const clearEvent = vi.fn(() => { throw new Error('event cleanup failed'); });
     rig.setResolution({
       accepted: true,
       playAnimation: async () => { throw failure; },
       afterAnimation: async () => undefined,
       beforeReturn: async () => undefined,
-      afterReturn: async () => undefined,
-      clearEvent: vi.fn(),
+      afterReturn: async () => { throw new Error('return cleanup failed'); },
+      clearEvent,
       renderSnapshot: () => false,
       presentTerminal: vi.fn(),
     });
     await rig.flow.enter('drifting-barrel', driftingChoices);
+    rig.world.exitFocusedEventView.mockRejectedValueOnce(new Error('camera cleanup failed'));
 
-    await expect(rig.flow.choose({ id: 'retrieve', instanceId: null })).resolves.toBeUndefined();
+    await expect(rig.flow.choose({ id: 'retrieve', instanceId: null })).rejects.toBe(failure);
 
     expect(rig.world.exitFocusedEventView).toHaveBeenCalledOnce();
-    expect(rig.calls).toContain('ready');
+    expect(clearEvent).toHaveBeenCalledOnce();
+    expect(rig.setEventResolutionActive).toHaveBeenLastCalledWith(false);
+    expect(rig.setBusy).toHaveBeenLastCalledWith(false);
   });
 
   it('releases busy after an after-return failure without reviving focus', async () => {
@@ -156,7 +211,8 @@ describe('FocusedEventFlow', () => {
     await rig.flow.enter('drifting-barrel', driftingChoices);
     rig.calls.length = 0;
 
-    await expect(rig.flow.choose({ id: 'retrieve', instanceId: null })).resolves.toBeUndefined();
+    await expect(rig.flow.choose({ id: 'retrieve', instanceId: null })).rejects
+      .toThrow('after return failed');
 
     expect(rig.calls).toContain('ready');
     expect(rig.ui.showFocusedEvent).toHaveBeenCalledOnce();
