@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
+import { mulberry32, restoreMulberry32 } from '../src/survival/random';
 import {
   nightlyHullWearDamage,
   radioRescueLeadForSignal,
@@ -24,6 +25,46 @@ const saved = (...types: ItemId[]): ItemInstance[] => {
     return { instanceId: `${type}-${number}` as ItemInstanceId, type };
   });
 };
+
+it('restores the next Mulberry32 value', () => {
+  const random = mulberry32(41);
+  random.next();
+  const restored = restoreMulberry32(random.exportState());
+
+  expect(restored.next()).toBe(random.next());
+});
+
+it('round-trips a stable pending event checkpoint', () => {
+  const source = new SurvivalSession(saved('carlitos', 'compass', 'cannedFood'), {
+    seed: 41,
+    initial: { day: 8, pressure: 2, energy: 2 },
+    initialEventId: 'man-in-the-fog',
+  });
+
+  const restored = SurvivalSession.restore(source.exportCheckpoint());
+
+  expect(restored.snapshot()).toEqual(source.snapshot());
+  expect(restored.exportCheckpoint()).toEqual(source.exportCheckpoint());
+});
+
+it('keeps future random outcomes after restore', () => {
+  const source = new SurvivalSession(saved(), {
+    seed: 77,
+    initialEventId: 'bad-sleep',
+  });
+  const restored = SurvivalSession.restore(source.exportCheckpoint());
+
+  expect(restored.resolveEvent({ kind: 'endure' }))
+    .toEqual(source.resolveEvent({ kind: 'endure' }));
+});
+
+it('refuses a checkpoint during fishing', () => {
+  const session = new SurvivalSession(saved(), { seed: 12 });
+  session.beginFishing();
+
+  expect(() => session.exportCheckpoint())
+    .toThrow('Cannot checkpoint active fishing.');
+});
 
 function stateAfterRescueDawn(day: number, rescueLead: number, roll: number) {
   const session = new SurvivalSession(saved(), {
