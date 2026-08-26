@@ -15,6 +15,11 @@ import type { MenuModelLibrary } from '../src/menu/MenuModelLibrary';
 import type { ScavengeAudio } from '../src/audio/ScavengeAudio';
 import { AudioSystem } from '../src/audio/AudioSystem';
 import { Game, type GameFactories } from '../src/Game';
+import {
+  SURVIVAL_SAVE_DATA_KEY,
+  SURVIVAL_SAVE_ENABLED_KEY,
+  type SurvivalSaveStorage,
+} from '../src/browser/SurvivalSaveStore';
 import { ScavengeSession, type ScavengeResult } from '../src/game/ScavengeSession';
 import {
   createScavengeCinematicFrame,
@@ -44,6 +49,13 @@ import { createAntiAliasingQualityPreference } from '../src/rendering/antiAliasi
 import { createShadowQualityPreference } from '../src/rendering/shadowQuality';
 import { createVisualQualityPreference } from '../src/rendering/visualQuality';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
+import type { SurvivalRunCheckpoint } from '../src/survival/SurvivalCheckpoint';
+import { createSurvivalSaveDocument } from '../src/survival/SurvivalSaveData';
+import {
+  type SurvivalCheckpointChange,
+  type SurvivalPhaseStart,
+} from '../src/survival/SurvivalPhase';
+import { SurvivalSession } from '../src/survival/SurvivalSession';
 import type { PresentationWeatherId } from '../src/weather/presentationWeather';
 import { World } from '../src/world/World';
 import { createTestPropModels } from './helpers/propModels';
@@ -110,6 +122,260 @@ function gamePhase(): GamePhase {
     dispose: vi.fn(),
   };
 }
+
+function memoryStorage(initial: Record<string, string> = {}): SurvivalSaveStorage {
+  const values = new Map(Object.entries(initial));
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => { values.set(key, value); },
+    removeItem: (key) => { values.delete(key); },
+  };
+}
+
+function validRunCheckpoint(day = 3): SurvivalRunCheckpoint {
+  return {
+    scavengeElapsedSeconds: 8,
+    session: new SurvivalSession([], { seed: 41, initial: { day } }).exportCheckpoint(),
+  };
+}
+
+function enabledStorageWith(checkpoint: SurvivalRunCheckpoint): SurvivalSaveStorage {
+  return memoryStorage({
+    [SURVIVAL_SAVE_ENABLED_KEY]: 'true',
+    [SURVIVAL_SAVE_DATA_KEY]: JSON.stringify(createSurvivalSaveDocument(checkpoint)),
+  });
+}
+
+function openSystemTuning(): void {
+  window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backquote', key: '`' }));
+}
+
+function saveLifecycleGame(
+  storage: SurvivalSaveStorage,
+  freshSurvival: GamePhase,
+  createSurvivalOverride?: GameFactories['createSurvival'],
+) {
+  const mount = document.createElement('main');
+  document.body.append(mount);
+  const menu = gamePhase();
+  const scavenge = gamePhase();
+  let completeMenu = (): void => undefined;
+  let completeScavenge = (_result: Readonly<ScavengeResult>): void => undefined;
+  const createSurvival = vi.fn(createSurvivalOverride ?? (() => freshSurvival));
+  const game = Game.forTest({
+    createMenu: (_context, complete) => {
+      completeMenu = complete;
+      return menu;
+    },
+    createScavenge: (_context, complete) => {
+      completeScavenge = complete;
+      return scavenge;
+    },
+    createSurvival,
+  }, {
+    mount,
+    propModels: createTestPropModels(),
+    menuModels: EMPTY_MENU_MODELS,
+    shipFurniture: createTestShipFurniture(),
+    skyAssets: createTestSkyAssets(),
+    physicsRuntime,
+    sceneRenderer: postProcessingSceneRenderer(),
+    saveStorage: storage,
+  });
+  const enterScavenge = (): void => {
+    game.start();
+    completeMenu();
+  };
+  const enterSurvival = (): void => {
+    enterScavenge();
+    completeScavenge({ savedItems: [], elapsedSeconds: 3 });
+  };
+  return {
+    game,
+    mount,
+    menu,
+    scavenge,
+    freshSurvival,
+    createSurvival,
+    enterScavenge,
+    enterSurvival,
+  };
+}
+
+describe('Game survival save lifecycle', () => {
+  it('keeps saving off by default and persists the enabled preference', () => {
+    const storage = memoryStorage();
+    const rig = saveLifecycleGame(storage, gamePhase());
+    try {
+      openSystemTuning();
+      const toggle = rig.mount.querySelector<HTMLInputElement>('[data-save-enabled]')!;
+      expect(toggle.checked).toBe(false);
+
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+
+      expect(storage.getItem(SURVIVAL_SAVE_ENABLED_KEY)).toBe('true');
+    } finally {
+      rig.game.dispose();
+      rig.mount.remove();
+    }
+  });
+
+  it('enables saving and writes the active stable checkpoint', () => {
+    const storage = memoryStorage();
+    const checkpoint = validRunCheckpoint(5);
+    const survival = { ...gamePhase(), getSurvivalCheckpoint: () => checkpoint };
+    const rig = saveLifecycleGame(storage, survival);
+    try {
+      rig.enterSurvival();
+      openSystemTuning();
+
+      const toggle = rig.mount.querySelector<HTMLInputElement>('[data-save-enabled]')!;
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+
+      expect(JSON.parse(storage.getItem(SURVIVAL_SAVE_DATA_KEY)!))
+        .toMatchObject({ version: 1, checkpoint });
+      expect(rig.mount.querySelector('[data-save-status]')?.textContent).toBe('DAY 5');
+    } finally {
+      rig.game.dispose();
+      rig.mount.remove();
+    }
+  });
+
+  it('clears the checkpoint when saving is disabled', () => {
+    const checkpoint = validRunCheckpoint(5);
+    const storage = enabledStorageWith(checkpoint);
+    const rig = saveLifecycleGame(storage, gamePhase());
+    try {
+      openSystemTuning();
+      const toggle = rig.mount.querySelector<HTMLInputElement>('[data-save-enabled]')!;
+      toggle.checked = false;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+
+      expect(storage.getItem(SURVIVAL_SAVE_ENABLED_KEY)).toBe('false');
+      expect(storage.getItem(SURVIVAL_SAVE_DATA_KEY)).toBeNull();
+    } finally {
+      rig.game.dispose();
+      rig.mount.remove();
+    }
+  });
+
+  it('continues a save by replacing the active phase', () => {
+    const checkpoint = validRunCheckpoint(9);
+    const storage = enabledStorageWith(checkpoint);
+    const outgoing = gamePhase();
+    const restored = gamePhase();
+    const createSurvival = vi.fn((_context, start: SurvivalPhaseStart) => (
+      start.kind === 'restored' ? restored : outgoing
+    ));
+    const rig = saveLifecycleGame(storage, outgoing, createSurvival);
+    try {
+      rig.enterSurvival();
+      openSystemTuning();
+
+      const continueButton = rig.mount.querySelector<HTMLButtonElement>('[data-save-continue]')!;
+      expect(continueButton.disabled).toBe(false);
+      continueButton.click();
+
+      expect(outgoing.dispose).toHaveBeenCalledOnce();
+      expect(createSurvival).toHaveBeenLastCalledWith(
+        expect.anything(),
+        { kind: 'restored', checkpoint },
+        expect.any(Function),
+        expect.any(Function),
+      );
+      expect(restored.resize).toHaveBeenCalledWith(window.innerWidth, window.innerHeight);
+      expect(restored.start).toHaveBeenCalledOnce();
+    } finally {
+      rig.game.dispose();
+      rig.mount.remove();
+    }
+  });
+
+  it('deletes the checkpoint when the phase reports a terminal run', () => {
+    const storage = enabledStorageWith(validRunCheckpoint(4));
+    let report!: SurvivalCheckpointChange;
+    const rig = saveLifecycleGame(storage, gamePhase(), (_context, _start, _restart, change) => {
+      report = change;
+      return gamePhase();
+    });
+    try {
+      rig.enterSurvival();
+
+      report(null);
+
+      expect(storage.getItem(SURVIVAL_SAVE_DATA_KEY)).toBeNull();
+    } finally {
+      rig.game.dispose();
+      rig.mount.remove();
+    }
+  });
+
+  it.each(['menu', 'scavenge', 'survival'] as const)(
+    'continues from the %s phase and disposes it',
+    (source) => {
+      const checkpoint = validRunCheckpoint(9);
+      const fresh = gamePhase();
+      const restored = gamePhase();
+      let restoredCameraPosition: Vector3 | null = null;
+      const createSurvival: GameFactories['createSurvival'] = (context, start) => {
+        if (start.kind === 'restored') restoredCameraPosition = context.camera.position.clone();
+        return start.kind === 'restored' ? restored : fresh;
+      };
+      const rig = saveLifecycleGame(enabledStorageWith(checkpoint), fresh, createSurvival);
+      const exitPointerLock = vi.fn();
+      const originalPointerLock = Object.getOwnPropertyDescriptor(document, 'pointerLockElement');
+      const originalExitPointerLock = Object.getOwnPropertyDescriptor(document, 'exitPointerLock');
+      try {
+        if (source === 'menu') rig.game.start();
+        if (source === 'scavenge') rig.enterScavenge();
+        if (source === 'survival') {
+          rig.enterSurvival();
+          const context = rig.createSurvival.mock.calls[0]![0] as PhaseContext;
+          context.camera.position.set(3, 4, 5);
+        }
+        const outgoing = source === 'menu'
+          ? rig.menu
+          : source === 'scavenge' ? rig.scavenge : rig.freshSurvival;
+
+        openSystemTuning();
+        if (source === 'survival') {
+          Object.defineProperty(document, 'pointerLockElement', {
+            configurable: true,
+            value: document.createElement('canvas'),
+          });
+          Object.defineProperty(document, 'exitPointerLock', {
+            configurable: true,
+            value: exitPointerLock,
+          });
+        }
+        rig.mount.querySelector<HTMLButtonElement>('[data-save-continue]')!.click();
+
+        expect(outgoing.dispose).toHaveBeenCalledOnce();
+        expect(restored.resize).toHaveBeenCalledWith(window.innerWidth, window.innerHeight);
+        expect(restored.start).toHaveBeenCalledOnce();
+        if (source === 'survival') {
+          expect(restoredCameraPosition).toEqual(new Vector3(0, 0, 0));
+          expect(exitPointerLock).toHaveBeenCalledOnce();
+        }
+      } finally {
+        rig.game.dispose();
+        rig.mount.remove();
+        if (originalPointerLock) {
+          Object.defineProperty(document, 'pointerLockElement', originalPointerLock);
+        } else {
+          delete (document as { pointerLockElement?: Element | null }).pointerLockElement;
+        }
+        if (originalExitPointerLock) {
+          Object.defineProperty(document, 'exitPointerLock', originalExitPointerLock);
+        } else {
+          delete (document as { exitPointerLock?: () => void }).exitPointerLock;
+        }
+      }
+    },
+  );
+});
 
 function scavengeAudioStub(): ScavengeAudio {
   return {
@@ -570,7 +836,7 @@ describe('Game menu lifecycle', () => {
     const game = Game.forTest({
       createMenu,
       createScavenge,
-      createSurvival: (context, _result, _seed, onRestart) => {
+      createSurvival: (context, _start, onRestart) => {
         const ui = new SurvivalUI(context.mount);
         ui.onRestart = onRestart;
         ui.showEnding({
@@ -2153,12 +2419,11 @@ describe('ScavengePhase lifecycle integration', () => {
     const initialEventIds: Array<string | undefined> = [];
     const createSurvival = vi.fn((
       _context: PhaseContext,
-      _result: Readonly<ScavengeResult>,
-      _seed: number,
+      start: SurvivalPhaseStart,
       _onRestart: () => void,
-      initialEventId?: string,
+      _onCheckpointChange: SurvivalCheckpointChange,
     ) => {
-      initialEventIds.push(initialEventId);
+      initialEventIds.push(start.kind === 'fresh' ? start.initialEventId : undefined);
       return survivalPhases[initialEventIds.length - 1]!;
     });
     const game = Game.forTest({
@@ -2188,13 +2453,15 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(createSurvival).toHaveBeenLastCalledWith(
       expect.anything(),
       {
+        kind: 'fresh',
         savedItems: ITEM_IDS.map((type) => ({ instanceId: `${type}-1`, type })),
-        elapsedSeconds: 0,
+        seed: 22,
+        scavengeElapsedSeconds: 0,
+        initialEventId: 'shower-night',
+        initialEventResultId: undefined,
       },
-      22,
       expect.any(Function),
-      'shower-night',
-      undefined,
+      expect.any(Function),
     );
     expect(firstSurvival.resize).toHaveBeenCalledWith(
       window.innerWidth,
@@ -2225,13 +2492,14 @@ describe('ScavengePhase lifecycle integration', () => {
     const survivalPhases = [gamePhase(), gamePhase()];
     const createSurvival = vi.fn((
       _context: PhaseContext,
-      _result: Readonly<ScavengeResult>,
-      _seed: number,
+      start: SurvivalPhaseStart,
       _onRestart: () => void,
-      eventId?: string,
-      resultId?: string,
+      _onCheckpointChange: SurvivalCheckpointChange,
     ) => {
-      launches.push({ eventId, resultId });
+      launches.push({
+        eventId: start.kind === 'fresh' ? start.initialEventId : undefined,
+        resultId: start.kind === 'fresh' ? start.initialEventResultId : undefined,
+      });
       return survivalPhases[launches.length - 1]!;
     });
     const game = Game.forTest({

@@ -17,6 +17,7 @@ import type { AudioSystem } from '../audio/AudioSystem';
 import type { MenuModelLibrary } from '../menu/MenuModelLibrary';
 import type { MenuSandAssets } from '../menu/MenuSandAssets';
 import type { SkyPhase } from '../world/skyPalette';
+import type { SurvivalRunCheckpoint } from '../survival/SurvivalCheckpoint';
 
 export interface PhaseContext {
   mount: HTMLElement;
@@ -50,5 +51,6 @@ export interface GamePhase {
   getPresentationWeather?(): PresentationWeatherId;
   setTimeOfDayOverride?(phase: SkyPhase | null): void;
   getPresentationPhase?(): SkyPhase;
+  getSurvivalCheckpoint?(): SurvivalRunCheckpoint | null;
   dispose(): void;
 }

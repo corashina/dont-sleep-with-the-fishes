@@ -6,6 +6,7 @@ import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
 import { Game, type GameTestOptions } from '../src/Game';
 import type { ScavengeResult } from '../src/game/ScavengeSession';
 import type { MenuModelLibrary } from '../src/menu/MenuModelLibrary';
+import type { SurvivalPhaseStart } from '../src/survival/SurvivalPhase';
 import { testPhysicsRuntime } from './helpers/physics';
 import { createTestPropModels } from './helpers/propModels';
 import { createTestShipFurniture } from './helpers/shipFurniture';
@@ -135,15 +136,15 @@ describe('Game director', () => {
       { instanceId: 'cannedFood-2', type: 'cannedFood' },
     ] as const;
     const sourceResult: ScavengeResult = { savedItems: sourceItems, elapsedSeconds: 8 };
-    let receivedResult: Readonly<ScavengeResult> | undefined;
+    let receivedStart: SurvivalPhaseStart | undefined;
     const game = Game.forTest({
       createMenu: createImmediateMenu,
       createScavenge: (_context, onComplete) => {
         complete = onComplete;
         return scavenge;
       },
-      createSurvival: (_context, result) => {
-        receivedResult = result;
+      createSurvival: (_context, start) => {
+        receivedStart = start;
         return survival;
       },
     }, testOptions());
@@ -152,18 +153,21 @@ describe('Game director', () => {
     complete(sourceResult);
 
     expect(calls).toEqual(['dispose-scavenge', 'start-survival']);
-    expect(receivedResult).toEqual({
+    expect(receivedStart).toEqual({
+      kind: 'fresh',
       savedItems: sourceItems,
-      elapsedSeconds: 8,
+      seed: expect.any(Number),
+      scavengeElapsedSeconds: 8,
     });
-    expect(receivedResult).not.toBe(sourceResult);
-    expect(receivedResult?.savedItems).not.toBe(sourceItems);
-    expect(Object.isFrozen(receivedResult)).toBe(true);
-    expect(Object.isFrozen(receivedResult?.savedItems)).toBe(true);
-    expect(receivedResult?.savedItems[0]).not.toBe(sourceItems[0]);
-    expect(receivedResult?.savedItems[1]).not.toBe(sourceItems[1]);
-    expect(Object.isFrozen(receivedResult?.savedItems[0])).toBe(true);
-    expect(Object.isFrozen(receivedResult?.savedItems[1])).toBe(true);
+    expect(receivedStart).not.toBe(sourceResult);
+    expect(Object.isFrozen(receivedStart)).toBe(true);
+    if (receivedStart?.kind !== 'fresh') throw new Error('Expected a fresh survival start.');
+    expect(receivedStart.savedItems).not.toBe(sourceItems);
+    expect(Object.isFrozen(receivedStart.savedItems)).toBe(true);
+    expect(receivedStart.savedItems[0]).not.toBe(sourceItems[0]);
+    expect(receivedStart.savedItems[1]).not.toBe(sourceItems[1]);
+    expect(Object.isFrozen(receivedStart.savedItems[0])).toBe(true);
+    expect(Object.isFrozen(receivedStart.savedItems[1])).toBe(true);
   });
 
   it('ignores a stale return-to-menu callback after survival takes ownership', () => {
@@ -204,7 +208,7 @@ describe('Game director', () => {
     const game = Game.forTest({
       createMenu: createImmediateMenu,
       createScavenge,
-      createSurvival: (_context, _result, _seed, onRestart) => {
+      createSurvival: (_context, _start, onRestart) => {
         onRestart();
         return staleSurvival;
       },
@@ -242,7 +246,7 @@ describe('Game director', () => {
     const game = Game.forTest({
       createMenu: createImmediateMenu,
       createScavenge,
-      createSurvival: (_context, _result, _seed, onRestart) => {
+      createSurvival: (_context, _start, onRestart) => {
         restartSurvival = onRestart;
         return survival;
       },
@@ -275,8 +279,8 @@ describe('Game director', () => {
       calls.push(`create-scavenge-${index + 1}`);
       return scavenges[index]!;
     });
-    const createSurvival = vi.fn((_context, _result, seed: number) => {
-      receivedSeeds.push(seed);
+    const createSurvival = vi.fn((_context, start: SurvivalPhaseStart) => {
+      if (start.kind === 'fresh') receivedSeeds.push(start.seed);
       return survivals[createSurvival.mock.calls.length - 1]!;
     });
     const createSeed = vi.fn()

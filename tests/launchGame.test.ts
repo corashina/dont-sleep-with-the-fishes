@@ -20,7 +20,12 @@ import { PhysicsLoadError } from '../src/physics/PhysicsRuntime';
 import { BoatWorld } from '../src/survival/BoatWorld';
 import { CarlitosPresentation } from '../src/survival/CarlitosPresentation';
 import { selectFishingCatch } from '../src/survival/fishingCatalog';
-import { SurvivalPhase, type SurvivalPhaseTestDependencies } from '../src/survival/SurvivalPhase';
+import {
+  SurvivalPhase,
+  type SurvivalCheckpointChange,
+  type SurvivalPhaseStart,
+  type SurvivalPhaseTestDependencies,
+} from '../src/survival/SurvivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 import { ItemModelLoadError, type PropModelLibrary } from '../src/world/PropModelLibrary';
@@ -314,9 +319,10 @@ describe('launchGame', () => {
         render: vi.fn(),
         dispose: vi.fn(),
       }),
-      createSurvival: (context, result, seed, onRestart) => {
-        session = new SurvivalSession(result.savedItems, {
-          seed,
+      createSurvival: (context, start, onRestart, onCheckpointChange) => {
+        if (start.kind !== 'fresh') throw new Error('Expected a fresh survival start.');
+        session = new SurvivalSession(start.savedItems, {
+          seed: start.seed,
           random: sequenceRandom([
             0,
             livingFishRoll,
@@ -338,25 +344,25 @@ describe('launchGame', () => {
           context.waterQuality?.get() ?? 'low',
         );
         ui = new SurvivalUI(context.mount);
-        const dependencies: SurvivalPhaseTestDependencies = { session, world, ui, onRestart };
+        const dependencies: SurvivalPhaseTestDependencies = {
+          session,
+          world,
+          ui,
+          onRestart,
+          onCheckpointChange,
+        };
         const TestConstructor = SurvivalPhase as unknown as new (
           phaseContext: typeof context,
-          phaseSavedItems: readonly ItemInstance[],
-          phaseSeed: number,
-          elapsedSeconds: number,
+          phaseStart: SurvivalPhaseStart,
           restart: () => void,
-          initialEventId: string | undefined,
-          initialEventResultId: string | undefined,
+          checkpointChange: SurvivalCheckpointChange,
           testDependencies: SurvivalPhaseTestDependencies,
         ) => SurvivalPhase;
         return new TestConstructor(
           context,
-          result.savedItems,
-          seed,
-          result.elapsedSeconds,
+          start,
           onRestart,
-          undefined,
-          undefined,
+          onCheckpointChange,
           dependencies,
         );
       },
