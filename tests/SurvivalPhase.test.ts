@@ -238,6 +238,53 @@ describe('survival checkpoints', () => {
       }
     },
   );
+
+  it('waits for the Chest Attack reveal before it emits the choice checkpoint', async () => {
+    const source = new SurvivalSession([], {
+      seed: 41,
+      initialChest: { state: 'mimic', acquiredDay: 1 },
+      initialEventId: 'chest-attack',
+    });
+    const checkpoint = {
+      scavengeElapsedSeconds: 18,
+      session: source.exportCheckpoint(),
+    };
+    const reveal = deferred();
+    const choice = deferred();
+    const onCheckpointChange = vi.fn();
+    const phase = SurvivalPhase.forTestStart({
+      world: {
+        syncInventory: vi.fn(),
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => reveal.promise),
+        playEventChoice: vi.fn(() => choice.promise),
+      },
+      ui: {
+        render: vi.fn(),
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        setBusy: vi.fn(),
+      },
+      onCheckpointChange,
+    }, { kind: 'restored', checkpoint });
+
+    try {
+      phase.start();
+      await flushPromises();
+
+      expect(onCheckpointChange).not.toHaveBeenCalled();
+
+      reveal.resolve();
+      await flushPromises();
+
+      expect(onCheckpointChange).toHaveBeenCalledExactlyOnceWith(checkpoint);
+    } finally {
+      phase.dispose();
+      choice.resolve();
+    }
+  });
 });
 
 function completedEntry(

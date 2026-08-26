@@ -501,7 +501,7 @@ export class SurvivalPhase implements GamePhase {
     const snapshot = this.session.snapshot();
     const stablePresentation = snapshot.pendingEventId === null
       ? this.eventFlow.isIdle()
-      : this.eventFlow.isChoosing();
+      : this.eventFlow.isStableChoice();
     if (
       this.disposed
       || this.busy
