@@ -719,9 +719,6 @@ export class BoatWorld {
         supplies: this.supplyDisplay,
         itemAimTarget: this.moonItemAimTarget,
       },
-      starry: {
-        sky: this.sky,
-      },
       registerRescueCueCallback: (callback) => {
         rescueCueCallback = callback;
       },
@@ -926,7 +923,6 @@ export class BoatWorld {
       && EVENT_CHOICE_EXCLUDED_ITEM_IDS.includes(itemId)
       && !allowExcludedEventChoiceItem
     ) return;
-    if (eventId === 'flowers' && choiceId === 'bucket' && itemId === 'bucket') return;
     const context = itemId === null
       ? null
       : resolveEventItemUseContext(eventId, choiceId, itemId);
