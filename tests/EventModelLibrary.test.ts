@@ -105,7 +105,34 @@ describe('EventModelLibrary', () => {
       'deathStareBlob',
       'tornadoCore',
       'containerShip',
+      'wreckageBox',
+      'wreckageCrate',
+      'wreckagePallet',
     ]);
+  });
+
+  it('defines the approved Wreckage debris models', () => {
+    expect(EVENT_MODEL_IDS).toEqual(expect.arrayContaining([
+      'wreckageBox',
+      'wreckageCrate',
+      'wreckagePallet',
+    ]));
+
+    expect(EVENT_MODEL_SPECS.wreckageBox).toMatchObject({
+      targetLongestDimension: 0.9,
+      rotation: [0, 0, 0],
+      offset: [0, 0, 0],
+    });
+    expect(EVENT_MODEL_SPECS.wreckageCrate).toMatchObject({
+      targetLongestDimension: 1.05,
+      rotation: [0, 0, 0],
+      offset: [0, 0, 0],
+    });
+    expect(EVENT_MODEL_SPECS.wreckagePallet).toMatchObject({
+      targetLongestDimension: 1.8,
+      rotation: [0, 0, 0],
+      offset: [0, 0, 0],
+    });
   });
 
   it('turns the Anglerfish nose toward presentation forward', () => {

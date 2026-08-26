@@ -534,5 +534,71 @@
     "animationCount": 0,
     "animations": [],
     "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "wreckageBox": {
+    "triangles": 32,
+    "rawBounds": {
+      "min": [
+        -0.10000001639127731,
+        -4.301494993530497e-8,
+        -0.10000006295740604
+      ],
+      "max": [
+        0.10000001639127731,
+        0.1764011336490512,
+        0.10307698976248503
+      ]
+    },
+    "sourceSha256": "4B6F7B2D17997F75192C706B28E2F894B6DFF691BCED17963470D2B2CEDDBFF9",
+    "sourceTriangles": 32,
+    "outputSha256": "F565D9FF4C0408280E6F45BF0B129469615C0B264E8466930489D92FA8EAD442",
+    "hasSkins": false,
+    "animationCount": 0,
+    "animations": [],
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "wreckageCrate": {
+    "triangles": 784,
+    "rawBounds": {
+      "min": [
+        -0.4119724858223675,
+        -0.010161532882865146,
+        -0.4120703385973515
+      ],
+      "max": [
+        0.41197694567342663,
+        0.8137905468445634,
+        0.4119462826859072
+      ]
+    },
+    "sourceSha256": "4FB00BA01EEFEA3F1A335A6D3ACC67E8F4E093B9FC227673B82F67E12E098D6E",
+    "sourceTriangles": 784,
+    "outputSha256": "52A28C88A7CE88FD3F4404186A5E7F543ABAE0B8D76322976CF2DBF14392996C",
+    "hasSkins": false,
+    "animationCount": 0,
+    "animations": [],
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "wreckagePallet": {
+    "triangles": 176,
+    "rawBounds": {
+      "min": [
+        -0.8480099901384577,
+        -0.006177084143217449,
+        -0.7282920152311898
+      ],
+      "max": [
+        0.8480099901384577,
+        0.18704483339959965,
+        0.7282919957364354
+      ]
+    },
+    "sourceSha256": "B773BBFE85743CD14CCB95B46219D99781B6F402BABCC4A7A25F4179232BA1D5",
+    "sourceTriangles": 176,
+    "outputSha256": "B4807E34A9B6FEF8EAE9DE50A5989719D0999C4477D660A69586EDBCA0E8BE3B",
+    "hasSkins": false,
+    "animationCount": 0,
+    "animations": [],
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
   }
 }
