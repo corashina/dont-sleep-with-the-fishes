@@ -14,6 +14,7 @@ import type {
 import type { EventChoicePresentation } from './FocusedEventPresentation';
 import {
   isDriftingItemEventId,
+  isInspectableEventId,
   PLANE_CHOICE_WINDOW_SECONDS,
   survivalEventById,
   type DriftingItemEventId,
@@ -203,6 +204,7 @@ export class SurvivalEventFlow {
 
   resolveItem(choiceId: EventResponseId, instanceId: ItemInstanceId): void {
     const generation = this.dependencies.captureLifecycleGeneration();
+    if (isInspectableEventId(this.dependencies.session.snapshot().pendingEventId ?? '')) return;
     if (
       this.presentation !== 'choosing'
       || this.eligibility.get(instanceId) !== choiceId
@@ -233,6 +235,7 @@ export class SurvivalEventFlow {
 
   resolveContextual(choiceId: EventResponseId): void {
     const generation = this.dependencies.captureLifecycleGeneration();
+    if (isInspectableEventId(this.dependencies.session.snapshot().pendingEventId ?? '')) return;
     if (this.presentation !== 'choosing' || !this.isLifecycleCurrent(generation)) return;
     const operation = this.beginOperation();
     void this.runOwnedOperation(
@@ -388,7 +391,6 @@ export class SurvivalEventFlow {
     if (active && this.presentation === 'choosing') this.presentation = 'resolving';
     else if (!active && this.presentation === 'resolving') {
       this.presentation = 'choosing';
-      this.activeFocusedOperation = null;
     }
   }
 
@@ -406,7 +408,7 @@ export class SurvivalEventFlow {
     const { generation, operation } = focused;
     const pending = this.dependencies.session.snapshot();
     const eventId = pending.pendingEventId;
-    if (eventId === null || !this.isInspectableEvent(eventId)) return undefined;
+    if (eventId === null || !isInspectableEventId(eventId)) return undefined;
 
     const outcome = choice.instanceId === null
       ? this.dependencies.session.resolveEvent?.({ kind: 'choice', choiceId: choice.id })
@@ -426,12 +428,12 @@ export class SurvivalEventFlow {
     this.dependencies.ui.setEventSelection?.(this.eligibility, []);
 
     const lifeboatSearch = eventId === 'empty-lifeboat' && choice.id === 'search';
-    if (
+    const skipDriftingAnimation = (
       eventId === 'drifting-barrel'
-      &&
-      (choice.id === 'retrieve' || choice.id === 'delegate-carlitos')
+      && (choice.id === 'retrieve' || choice.id === 'delegate-carlitos')
       && outcome.rewardSummary === undefined
-    ) {
+    );
+    if (skipDriftingAnimation) {
       this.dependencies.onInvariantError(new Error(
         `Drifting item ${eventId}/${choice.id} requires a reward summary.`,
       ));
@@ -451,6 +453,7 @@ export class SurvivalEventFlow {
       accepted: true,
       playAnimation: async () => {
         if (!this.isCurrent(generation, operation)) return;
+        if (skipDriftingAnimation) return;
         if (isDriftingItemEventId(eventId)) {
           if (choice.id === 'retrieve') {
             await (this.dependencies.world.retrieveDriftingItem?.(eventId) ?? Promise.resolve());
@@ -1399,11 +1402,14 @@ export class SurvivalEventFlow {
     const revealed = this.dependencies.session.snapshot();
     if (revealed.pendingEventId !== event.id || isTerminal(revealed.state)) return;
     this.eligibility = this.eventEligibilityFor(event, revealed);
-    this.dependencies.world.setEventEligibleItems?.(new Set(this.eligibility.keys()));
+    const visibleEligibility = isInspectableEventId(event.id)
+      ? new Map<ItemInstanceId, EventResponseId>()
+      : this.eligibility;
+    this.dependencies.world.setEventEligibleItems?.(new Set(visibleEligibility.keys()));
     this.sync(revealed);
     this.dependencies.ui.setEventSelection?.(
-      this.eligibility,
-      isDriftingItemEventId(event.id) ? [] : this.contextualChoicesFor(event, revealed),
+      visibleEligibility,
+      isInspectableEventId(event.id) ? [] : this.contextualChoicesFor(event, revealed),
     );
     this.presentation = 'choosing';
     this.setBusy(false);
@@ -1496,10 +1502,6 @@ export class SurvivalEventFlow {
       }];
     });
     return [...contextual, ...itemChoices];
-  }
-
-  private isInspectableEvent(eventId: string): eventId is InspectableEventId {
-    return isDriftingItemEventId(eventId) || eventId === 'wreckage';
   }
 
   private contextualChoicesFor(
