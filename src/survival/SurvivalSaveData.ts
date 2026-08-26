@@ -237,6 +237,10 @@ function parseRewardSummary(value: unknown): ActionOutcome['rewardSummary'] | un
 function parseEventResult(value: unknown): ActionOutcome['eventResult'] | undefined {
   if (!isRecord(value) || typeof value.eventId !== 'string' || !EVENT_ID_SET.has(value.eventId)
     || typeof value.choiceId !== 'string' || typeof value.resultId !== 'string') return undefined;
+  const event = eventById(value.eventId);
+  if (event === undefined) return undefined;
+  const choice = event.choices.find(({ id }) => id === value.choiceId);
+  if (choice === undefined || !matchesResultId(event, choice, value.resultId)) return undefined;
   return Object.freeze({ eventId: value.eventId, choiceId: value.choiceId, resultId: value.resultId });
 }
 
@@ -284,6 +288,15 @@ function parseJournalEvent(value: unknown): Exclude<JournalDaytimeRecord, { read
     || !Array.isArray(value.inventoryMutations)) return null;
   if ('eventPresentationKey' in value && (typeof value.eventPresentationKey !== 'string'
     || !isEventPresentationKey(value.eventPresentationKey))) return null;
+  const event = eventById(value.eventId);
+  const choice = value.attemptedChoiceId === null
+    ? undefined
+    : event?.choices.find(({ id }) => id === value.attemptedChoiceId);
+  if (event === undefined || choice === undefined || event.phase !== value.phase
+    || event.title !== value.title || event.prompt !== value.prompt
+    || choice.label !== value.choiceLabel || (choice.itemId ?? null) !== value.attemptedItemId
+    || value.outcomeCode !== 'event-resolved'
+    || !matchesJournalOutcome(event, choice, value.outcomeMessage, value.eventPresentationKey)) return null;
   const inventoryMutations = value.inventoryMutations.map(parseJournalMutation);
   if (inventoryMutations.some((mutation) => mutation === null)) return null;
   const record = {
@@ -300,6 +313,53 @@ function parseJournalEvent(value: unknown): Exclude<JournalDaytimeRecord, { read
     inventoryMutations: Object.freeze(inventoryMutations as JournalInventoryMutation[]),
   };
   return Object.freeze(record);
+}
+
+function eventById(eventId: string) {
+  return SURVIVAL_EVENTS.find(({ id }) => id === eventId);
+}
+
+function matchesResultId(
+  event: (typeof SURVIVAL_EVENTS)[number],
+  choice: (typeof SURVIVAL_EVENTS)[number]['choices'][number],
+  resultId: string,
+): boolean {
+  return choice.outcomes.some((outcome) => outcome.resultId === resultId)
+    || (resultId === fallbackResultId(event.id) && choiceMayFallbackToFood(choice));
+}
+
+function matchesJournalOutcome(
+  event: (typeof SURVIVAL_EVENTS)[number],
+  choice: (typeof SURVIVAL_EVENTS)[number]['choices'][number],
+  message: string,
+  presentationKey: unknown,
+): boolean {
+  if (message === fallbackMessage(event.id) && choiceMayFallbackToFood(choice)) {
+    return presentationKey === undefined;
+  }
+  return choice.outcomes.some((outcome) => (
+    outcome.message === message && outcome.presentationKey === presentationKey
+  ));
+}
+
+function fallbackResultId(eventId: string): string | undefined {
+  if (eventId === 'night-trader') return 'trader-food-fallback';
+  if (eventId === 'handyman') return 'handyman-food-fallback';
+  return undefined;
+}
+
+function fallbackMessage(eventId: string): string | undefined {
+  return fallbackResultId(eventId) === undefined
+    ? undefined
+    : 'The item slot is occupied, so you receive one food instead.';
+}
+
+function choiceMayFallbackToFood(
+  choice: (typeof SURVIVAL_EVENTS)[number]['choices'][number],
+): boolean {
+  return choice.outcomes.some((outcome) => outcome.effects.items?.some((item) => (
+    item.kind === 'gain' || item.kind === 'gainChest'
+  )) === true);
 }
 
 function parseJournalMutation(value: unknown): JournalInventoryMutation | null {
@@ -391,7 +451,8 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const pendingEventId = parseEventIdOrNull(value.pendingEventId);
   const pendingEventTargetId = value.pendingEventTargetId === null ? null : parseKnownInventoryId(value.pendingEventTargetId, inventory);
   if (pendingEventId === undefined || pendingEventTargetId === undefined
-    || (state === 'day') !== (pendingEventId === null) || (pendingEventId === null && pendingEventTargetId !== null)
+    || (state === 'day' && pendingEventId !== null) || (state === 'dayEvent' && pendingEventId === null)
+    || (pendingEventId === null && pendingEventTargetId !== null)
     || !inventoryContainsIds(inventory, savedItems.map((item) => item.instanceId))
     || !inventoryContainsIds(inventory, pendingDawnBreaks)) return null;
   if (pendingEventId !== null) {

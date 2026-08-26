@@ -32,6 +32,26 @@ function validRunCheckpoint(day = 3): SurvivalRunCheckpoint {
   return { scavengeElapsedSeconds: 8, session: session.exportCheckpoint() };
 }
 
+function eventResultRunCheckpoint(): SurvivalRunCheckpoint {
+  const session = new SurvivalSession([], {
+    seed: 41,
+    initial: { day: 3 },
+    initialEventId: 'check-the-back',
+  });
+  session.resolveEvent({ kind: 'choice', choiceId: 'check' });
+  return { scavengeElapsedSeconds: 8, session: session.exportCheckpoint() };
+}
+
+function journalRunCheckpoint(): SurvivalRunCheckpoint {
+  const session = new SurvivalSession([], { seed: 41, initialEventId: 'bad-sleep' });
+  session.resolveEvent({ kind: 'choice', choiceId: 'sleep' });
+  return { scavengeElapsedSeconds: 8, session: session.exportCheckpoint() };
+}
+
+function mutableSave(checkpoint: SurvivalRunCheckpoint): any {
+  return JSON.parse(JSON.stringify(createSurvivalSaveDocument(checkpoint)));
+}
+
 describe('SurvivalSaveStore', () => {
   it('defaults to disabled with no checkpoint', () => {
     const store = new SurvivalSaveStore(memoryStorage());
@@ -68,6 +88,13 @@ describe('SurvivalSaveStore', () => {
     expect(() => store.clearCheckpoint()).not.toThrow();
   });
 
+  it('parses valid event result and journal checkpoints', () => {
+    const eventResult = mutableSave(eventResultRunCheckpoint());
+    const journal = mutableSave(journalRunCheckpoint());
+    expect(parseSurvivalSaveDocument(eventResult)).not.toBeNull();
+    expect(parseSurvivalSaveDocument(journal)).not.toBeNull();
+  });
+
   it.each([
     ['terminal state', (value: any) => { value.checkpoint.session.state = 'dead'; }],
     ['meter', (value: any) => { value.checkpoint.session.health = Number.NaN; }],
@@ -80,6 +107,31 @@ describe('SurvivalSaveStore', () => {
       createSurvivalSaveDocument(validRunCheckpoint()),
     ));
     corrupt(value);
+    expect(parseSurvivalSaveDocument(value)).toBeNull();
+  });
+
+  it.each([
+    ['choice', (value: any) => { value.checkpoint.session.lastOutcome.eventResult.choiceId = 'sleep'; }],
+    ['result', (value: any) => { value.checkpoint.session.lastOutcome.eventResult.resultId = 'not-a-result'; }],
+  ] as const)('rejects an event result with an invalid %s', (_name, corrupt) => {
+    const value = mutableSave(eventResultRunCheckpoint());
+    corrupt(value);
+    expect(parseSurvivalSaveDocument(value)).toBeNull();
+  });
+
+  it.each([
+    ['phase', (event: any) => { event.phase = 'day'; }],
+    ['title', (event: any) => { event.title = 'Wrong title'; }],
+    ['prompt', (event: any) => { event.prompt = 'Wrong prompt'; }],
+    ['choice', (event: any) => { event.attemptedChoiceId = 'check'; }],
+    ['choice label', (event: any) => { event.choiceLabel = 'Check'; }],
+    ['item', (event: any) => { event.attemptedItemId = 'compass'; }],
+    ['presentation key', (event: any) => { event.eventPresentationKey = 'drifting-barrel.food'; }],
+    ['outcome code', (event: any) => { event.outcomeCode = 'wrong-code'; }],
+    ['outcome', (event: any) => { event.outcomeMessage = 'Wrong outcome'; }],
+  ] as const)('rejects a journal event with a mismatched %s', (_name, corrupt) => {
+    const value = mutableSave(journalRunCheckpoint());
+    corrupt(value.checkpoint.session.journalEntries[0].nighttime.event);
     expect(parseSurvivalSaveDocument(value)).toBeNull();
   });
 });
