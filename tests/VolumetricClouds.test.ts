@@ -5,7 +5,10 @@ import {
   RedFormat,
   RepeatWrapping,
   Scene,
+  ShaderMaterial,
+  SphereGeometry,
   UnsignedByteType,
+  Vector2,
   Vector3,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
@@ -52,6 +55,22 @@ function updateClouds(
   });
 }
 
+function updateCloudWeather(
+  clouds: VolumetricClouds,
+  weather: 'calm' | 'overcast' | 'squall',
+  time: number,
+  delta: number,
+): number {
+  const state = { weather, phase: 'day' as const, severity: 0 };
+  return clouds.update({
+    time,
+    delta,
+    cameraPosition: new Vector3(3, 5, 7),
+    state,
+    palette: skyPaletteFor(state),
+  });
+}
+
 describe('VolumetricClouds', () => {
   it('starts hidden, updates enabled state, and removes itself on disposal', () => {
     const scene = new Scene();
@@ -73,6 +92,55 @@ describe('VolumetricClouds', () => {
 
     expect(updateClouds(clouds, 'night')).toBe(0);
     expect(clouds.mesh.visible).toBe(false);
+    clouds.dispose();
+  });
+
+  it('fades between day and night without a visibility pop', () => {
+    const clouds = new VolumetricClouds(new Scene(), 'low');
+    clouds.setEnabled(true);
+    expect(updateClouds(clouds, 'day', 1)).toBe(1);
+
+    expect(updateClouds(clouds, 'night', 0.25)).toBeCloseTo(0.75);
+    expect(clouds.material.uniforms.uOpacity!.value).toBeCloseTo(0.75);
+    expect(clouds.mesh.visible).toBe(true);
+
+    expect(updateClouds(clouds, 'night', 1)).toBe(0);
+    expect(clouds.mesh.visible).toBe(false);
+    clouds.dispose();
+  });
+
+  it('blends weather profile uniforms during a transition', () => {
+    const clouds = new VolumetricClouds(new Scene(), 'low');
+    const calm = volumetricCloudProfile('calm');
+    const squall = volumetricCloudProfile('squall');
+    clouds.setEnabled(true);
+    updateCloudWeather(clouds, 'calm', 1, 1);
+
+    updateCloudWeather(clouds, 'squall', 1.25, 0.25);
+
+    const coverage = clouds.material.uniforms.uCoverage!.value as number;
+    const baseHeight = clouds.material.uniforms.uBaseHeight!.value as number;
+    expect(coverage).toBeGreaterThan(calm.coverage);
+    expect(coverage).toBeLessThan(squall.coverage);
+    expect(baseHeight).toBeLessThan(calm.baseHeight);
+    expect(baseHeight).toBeGreaterThan(squall.baseHeight);
+    clouds.dispose();
+  });
+
+  it('integrates wind by delta when weather and absolute time change', () => {
+    const clouds = new VolumetricClouds(new Scene(), 'low');
+    clouds.setEnabled(true);
+    updateCloudWeather(clouds, 'calm', 1, 1);
+    const windOffset = clouds.material.uniforms.uWindOffset!.value as Vector2;
+    const before = windOffset.clone();
+
+    updateCloudWeather(clouds, 'squall', 1_000_000, 0.25);
+
+    const travel = windOffset.distanceTo(before);
+    expect(travel).toBeGreaterThan(0);
+    expect(travel).toBeLessThanOrEqual(
+      volumetricCloudProfile('squall').wind.length() * 0.25,
+    );
     clouds.dispose();
   });
 
@@ -109,8 +177,8 @@ describe('VolumetricClouds', () => {
   });
 
   it.each([
-    ['low', 12],
-    ['medium', 20],
+    ['low', 8],
+    ['medium', 12],
     ['high', 16],
   ] as const)('uses %s quality step limits', (quality, steps) => {
     const clouds = new VolumetricClouds(new Scene(), quality);
@@ -157,6 +225,24 @@ describe('VolumetricClouds', () => {
     expect(materialDispose).toHaveBeenCalledTimes(1);
     expect(textureDispose).toHaveBeenCalledTimes(1);
   });
+
+  it('continues cleanup after a disposal throws and rethrows the first error', () => {
+    const scene = new Scene();
+    const clouds = new VolumetricClouds(scene, 'low');
+    const texture = clouds.material.uniforms.uNoiseTexture!.value as Data3DTexture;
+    const firstError = new Error('geometry disposal failed');
+    const geometryDispose = vi.spyOn(clouds.mesh.geometry, 'dispose')
+      .mockImplementation(() => { throw firstError; });
+    const materialDispose = vi.spyOn(clouds.material, 'dispose');
+    const textureDispose = vi.spyOn(texture, 'dispose');
+
+    expect(() => clouds.dispose()).toThrow(firstError);
+    expect(scene.getObjectByName('volumetric-clouds')).toBeUndefined();
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
+    expect(textureDispose).toHaveBeenCalledOnce();
+    expect(() => clouds.dispose()).not.toThrow();
+  });
 });
 
 describe('tryCreateVolumetricClouds', () => {
@@ -174,5 +260,30 @@ describe('tryCreateVolumetricClouds', () => {
     expect(reportFallback).toHaveBeenCalledOnce();
     expect(reportFallback).toHaveBeenCalledWith(error);
     expect(create).toHaveBeenCalledOnce();
+  });
+
+  it('rolls back default construction resources before returning fallback', () => {
+    const scene = new Scene();
+    const constructionError = new Error('scene add failed');
+    const originalAdd = scene.add.bind(scene);
+    vi.spyOn(scene, 'add').mockImplementation((...objects) => {
+      originalAdd(...objects);
+      throw constructionError;
+    });
+    const geometryDispose = vi.spyOn(SphereGeometry.prototype, 'dispose');
+    const materialDispose = vi.spyOn(ShaderMaterial.prototype, 'dispose');
+    const textureDispose = vi.spyOn(Data3DTexture.prototype, 'dispose');
+    const reportFallback = vi.fn();
+
+    try {
+      expect(tryCreateVolumetricClouds(scene, 'low', reportFallback)).toBeNull();
+      expect(reportFallback).toHaveBeenCalledWith(constructionError);
+      expect(scene.getObjectByName('volumetric-clouds')).toBeUndefined();
+      expect(geometryDispose).toHaveBeenCalledOnce();
+      expect(materialDispose).toHaveBeenCalledOnce();
+      expect(textureDispose).toHaveBeenCalledOnce();
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });

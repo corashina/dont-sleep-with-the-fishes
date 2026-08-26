@@ -152,6 +152,52 @@ describe('volumetric scavenging clouds', () => {
     }
   });
 
+  it('continues environment cleanup and restores scene state after failures', () => {
+    const scene = new Scene();
+    const originalBackground = new Color(0x112233);
+    const originalFog = new FogExp2(0x112233, 0.004);
+    scene.background = originalBackground;
+    scene.fog = originalFog;
+    const environment = new Environment(scene, createTestMoonTexture());
+    const internals = environment as unknown as {
+      weatherEffects: { dispose(): void };
+      volumetricClouds: { dispose(): void };
+      sky: { dispose(): void };
+    };
+    const firstError = new Error('weather cleanup failed');
+    const calls: string[] = [];
+    const originalWeatherDispose = internals.weatherEffects.dispose.bind(
+      internals.weatherEffects,
+    );
+    vi.spyOn(internals.weatherEffects, 'dispose').mockImplementation(() => {
+      calls.push('weather');
+      originalWeatherDispose();
+      throw firstError;
+    });
+    const originalCloudDispose = internals.volumetricClouds.dispose.bind(
+      internals.volumetricClouds,
+    );
+    vi.spyOn(internals.volumetricClouds, 'dispose').mockImplementation(() => {
+      calls.push('clouds');
+      originalCloudDispose();
+      throw new Error('cloud cleanup failed');
+    });
+    const originalSkyDispose = internals.sky.dispose.bind(internals.sky);
+    vi.spyOn(internals.sky, 'dispose').mockImplementation(() => {
+      calls.push('sky');
+      originalSkyDispose();
+      throw new Error('sky cleanup failed');
+    });
+
+    expect(() => environment.dispose()).toThrow(firstError);
+    expect(calls).toEqual(['weather', 'clouds', 'sky']);
+    expect(scene.children.some((object) =>
+      object instanceof DirectionalLight || object instanceof HemisphereLight)).toBe(false);
+    expect(scene.background).toBe(originalBackground);
+    expect(scene.fog).toBe(originalFog);
+    expect(() => environment.dispose()).not.toThrow();
+  });
+
   it('forwards cloud controls through World', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
