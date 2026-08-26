@@ -27,3 +27,24 @@ Commit: `e55d9a8` (`feat: continue saved survival runs`).
 Concern: The full-suite failure is pre-existing in `SurvivalUI.test.ts`.
 It rejects the save-button focus outline added by commit `de533302`.
 This gate did not change CSS or that test.
+
+## Fix Round 1
+
+Status: Complete.
+
+Behavior:
+
+- Pending event choices now block checkpoint reads and emissions.
+- Restored test starts use the same `SurvivalSession.restore` path as production.
+- Restore coverage checks elapsed time, restored world data, and pending-event choice startup.
+
+Tests:
+
+- Required focus: 3 files passed, 315 tests passed, 0 failed.
+- Related save consumers: 3 files passed, 69 tests passed, 0 failed.
+- Typecheck: passed with 0 errors.
+- Full suite: 60 files passed, 1714 tests passed, 0 failed.
+
+Commit: `b38bb66` (`fix: reject pending survival checkpoints`).
+
+Concerns: None.
