@@ -6,7 +6,10 @@ import type { CarlitosPresentation } from './CarlitosPresentation';
 import type { DivePresentationController } from './DivePresentationController';
 import type { EventModelLibrary } from './EventModelLibrary';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
-import type { EventChoicePresentation } from './FocusedEventPresentation';
+import type {
+  EventChoicePresentation,
+  FocusedEventInteractionTarget,
+} from './FocusedEventPresentation';
 import type { SurvivalEventModels } from './SurvivalEventModelLibrary';
 import type { SurvivalEventId } from './eventCatalog';
 import type { DedicatedEventId } from './eventPresentationRoutes';
@@ -78,6 +81,8 @@ export interface DedicatedEventPresentation {
   readonly worldRoot: Group;
   readonly boatRoot: Group;
   readonly itemAimTarget: Object3D;
+  interactionTargets?(): readonly FocusedEventInteractionTarget[];
+  interactionRoot?(id: string): Object3D | null;
   stage(context: EventSceneContext): void;
   reveal(): Promise<void>;
   skip(): void;
