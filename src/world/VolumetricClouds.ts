@@ -26,9 +26,9 @@ import {
 const NOISE_SIZE = 64;
 const CLOUD_RADIUS = 900;
 const QUALITY_STEPS: Readonly<Record<VisualQuality, number>> = Object.freeze({
-  low: 10,
-  medium: 16,
-  high: 24,
+  low: 12,
+  medium: 20,
+  high: 28,
 });
 
 export interface VolumetricCloudUpdate {
@@ -98,7 +98,7 @@ const fragmentShader = `
     );
     float lowerEdge = smoothstep(0.0, 0.06, heightFraction);
     float upperEdge = 1.0 - smoothstep(
-      max(0.18, crownTop - 0.16),
+      max(0.16, crownTop - 0.22),
       crownTop,
       heightFraction
     );
@@ -112,7 +112,8 @@ const fragmentShader = `
     ).r;
     float threshold = mix(0.68, 0.32, uCoverage);
     float body = smoothstep(threshold, threshold + 0.1, shape);
-    float cloud = max(body - (1.0 - detail) * uErosion, 0.0);
+    float erodedBody = body - (1.0 - detail) * uErosion;
+    float cloud = smoothstep(0.0, 0.12, erodedBody);
     return cloud * uDensity * lowerEdge * upperEdge;
   }
 
@@ -174,11 +175,13 @@ const fragmentShader = `
         accumulated += transmittance * alpha * light;
         transmittance *= 1.0 - alpha;
       }
-      travel += density > 0.001 ? stepLength : stepLength * 1.8;
+      travel += stepLength;
     }
 
-    float alpha = (1.0 - transmittance) * uOpacity;
-    outputColor = vec4(accumulated * uOpacity, alpha);
+    float rawAlpha = (1.0 - transmittance) * uOpacity;
+    float edgeOpacity = smoothstep(0.0, 0.22, rawAlpha);
+    float alpha = rawAlpha * edgeOpacity;
+    outputColor = vec4(accumulated * uOpacity * edgeOpacity, alpha);
   }
 `;
 
