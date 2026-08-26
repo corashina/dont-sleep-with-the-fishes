@@ -2848,8 +2848,8 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .post-processing-console__event-test button:hover,
 .post-processing-console__save button:hover { background: #182522; }
 .post-processing-console__save button:focus-visible {
-  outline: 1px solid #e7ba56;
-  outline-offset: 2px;
+  background: #182522;
+  box-shadow: inset 0 0 0 1px #e7ba56;
 }
 .post-processing-console__save button:disabled {
   cursor: not-allowed;
