@@ -710,7 +710,6 @@ function createDiveRig(options: {
   let impact: () => void = () => undefined;
   const playDive = vi.fn((instanceId: ItemInstanceId, options: {
     readonly onWaterImpact: () => void;
-    readonly revealUnderwaterScene: boolean;
   }) => {
     calls.push(`playDive:${instanceId}`);
     impact = options.onWaterImpact;
@@ -930,7 +929,6 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(rig.world.playDive).toHaveBeenCalledWith('scubaSet-1', {
       onWaterImpact: expect.any(Function),
-      revealUnderwaterScene: false,
     });
     rig.phase.dispose();
   });

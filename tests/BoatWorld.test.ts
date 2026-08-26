@@ -6674,7 +6674,6 @@ describe('BoatWorld helpers', () => {
 
     const pending = world.playDive(scuba.instanceId, {
       onWaterImpact: impact,
-      revealUnderwaterScene: false,
     });
     expect(world.scene.getObjectByName('boat-supply:scubaSet')?.visible).toBe(false);
     expect(world.scene.getObjectByName('glasses25.001')).not.toBeUndefined();
@@ -6728,11 +6727,9 @@ describe('BoatWorld helpers', () => {
 
     const first = world.playDive(scuba.instanceId, {
       onWaterImpact: () => undefined,
-      revealUnderwaterScene: false,
     });
     const second = world.playDive(secondId, {
       onWaterImpact: () => undefined,
-      revealUnderwaterScene: false,
     });
     await first;
 
@@ -6763,9 +6760,14 @@ describe('BoatWorld helpers', () => {
     const initialPosition = camera.position.clone();
     const pending = world.playDive(scuba.instanceId, {
       onWaterImpact: () => undefined,
-      revealUnderwaterScene: false,
+      postEntryHold: {
+        durationSeconds: 3,
+        cameraWorldPosition: new Vector3(4.2, -3.4, -4.3),
+        cameraWorldTarget: new Vector3(0, -7.2, -11.5),
+        onStart: () => undefined,
+      },
     });
-    world.update(1.1, 1.1);
+    world.update(5.8, 5.8);
 
     world.setDocumentHidden(true);
     await pending;
@@ -6791,7 +6793,6 @@ describe('BoatWorld helpers', () => {
       world.syncInventory(snapshot([scuba]));
       const pending = world.playDive(scuba.instanceId, {
         onWaterImpact: () => undefined,
-        revealUnderwaterScene: false,
       });
 
       world.dispose();

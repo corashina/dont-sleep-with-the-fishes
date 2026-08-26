@@ -331,7 +331,6 @@ export class SurvivalDayActionFlow {
         onWaterImpact: () => {
           if (this.isCurrent(generation, operation)) this.dependencies.audio.beginDive?.();
         },
-        revealUnderwaterScene: false,
       }) ?? Promise.resolve());
       if (!await this.resumeCurrent(generation, operation)) return;
 
