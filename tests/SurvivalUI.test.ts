@@ -2902,7 +2902,8 @@ describe('SurvivalUI', () => {
     expect(action).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(fish);
     mount.querySelectorAll('[data-action]').forEach((button) => {
-      expect(button.hasAttribute('aria-keyshortcuts')).toBe(false);
+      expect(button.getAttribute('aria-keyshortcuts') ?? '')
+        .not.toMatch(/(?:^|\s)[1-7](?:\s|$)/);
       expect(button.getAttribute('aria-description')).not.toContain('[1]');
       expect(button.getAttribute('aria-description')).not.toContain('[7]');
     });

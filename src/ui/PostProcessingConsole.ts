@@ -77,6 +77,13 @@ export interface CameraControls {
   setFieldOfView(fieldOfView: number): void;
 }
 
+export interface SaveControls {
+  readonly enabled: boolean;
+  readonly savedDay: number | null;
+  setEnabled(enabled: boolean): void;
+  continueSavedRun(): void;
+}
+
 const DEFAULT_WEATHER_CONTROLS: WeatherControls = {
   selected: 'calm',
   source: 'normal',
@@ -94,6 +101,7 @@ export class PostProcessingConsole {
   private readonly weatherSource: HTMLOutputElement;
   private weatherId: PresentationWeatherId;
   private weatherControlSource: WeatherControlSource;
+  private saveDay: number | null = null;
   private disposed = false;
 
   constructor(
@@ -119,6 +127,7 @@ export class PostProcessingConsole {
       createAntiAliasingQualityPreference(() => undefined, null),
     shadowQuality: ShadowQualityPreference =
       createShadowQualityPreference(() => undefined, null),
+    private readonly saveControls?: SaveControls,
   ) {
     const state = controls.getState();
     this.weatherId = weatherControls.selected;
@@ -224,6 +233,26 @@ export class PostProcessingConsole {
           </label>
         </div>
       `;
+    const saveControl = saveControls === undefined
+      ? ''
+      : `
+        <div class="post-processing-console__group post-processing-console__save">
+          <strong>SAVE SYSTEM</strong>
+          <label class="post-processing-console__toggle">
+            <span>Auto-save</span>
+            <input
+              type="checkbox"
+              role="switch"
+              data-save-enabled
+              aria-label="Enable survival auto-save"
+              ${saveControls.enabled ? 'checked' : ''}
+            >
+            <output data-save-status>OFF</output>
+          </label>
+          <button type="button" data-save-continue>CONTINUE</button>
+          <small data-save-reason>Enable auto-save to create a checkpoint.</small>
+        </div>
+      `;
     this.element.className = 'post-processing-console';
     this.element.dataset.open = 'false';
     this.element.innerHTML = `
@@ -285,6 +314,7 @@ export class PostProcessingConsole {
               <h2>GAMEPLAY</h2>
               ${cameraControl}
               ${gameplayPhysicsControl}
+              ${saveControl}
               ${timeOfDayControls === undefined
                 ? ''
                 : `<div class="post-processing-console__group">
@@ -346,6 +376,9 @@ export class PostProcessingConsole {
     aoMode.value = state.ambientOcclusionMode;
     aoMode.disabled = !state.ambientOcclusionAvailable;
     this.buildSliders(state);
+    if (saveControls !== undefined) {
+      this.setSaveState(saveControls.enabled, saveControls.savedDay);
+    }
     this.element.addEventListener('click', this.handleClick);
     this.element.addEventListener('change', this.handleChange);
     this.element.addEventListener('input', this.handleInput);
@@ -375,6 +408,28 @@ export class PostProcessingConsole {
     if (input !== null) input.checked = phase === 'night';
     if (label !== null) label.textContent = phase === 'night' ? 'Night' : 'Day';
     if (output !== null) output.value = phase.toUpperCase();
+  }
+
+  setSaveState(enabled: boolean, savedDay: number | null): void {
+    if (this.disposed) return;
+    this.saveDay = savedDay;
+    const input = this.element.querySelector<HTMLInputElement>('[data-save-enabled]');
+    const status = this.element.querySelector<HTMLOutputElement>('[data-save-status]');
+    const continueButton = this.element.querySelector<HTMLButtonElement>(
+      '[data-save-continue]',
+    );
+    const reason = this.element.querySelector<HTMLElement>('[data-save-reason]');
+    if (input !== null) input.checked = enabled;
+    if (status !== null) {
+      status.value = !enabled ? 'OFF' : savedDay === null ? 'NO SAVE' : `DAY ${savedDay}`;
+    }
+    if (continueButton !== null) continueButton.disabled = !enabled || savedDay === null;
+    if (reason !== null) {
+      reason.hidden = enabled && savedDay !== null;
+      reason.textContent = !enabled
+        ? 'Enable auto-save to create a checkpoint.'
+        : savedDay === null ? 'A checkpoint starts in survival.' : '';
+    }
   }
 
   dispose(): void {
@@ -463,6 +518,14 @@ export class PostProcessingConsole {
 
   private readonly handleClick = (event: Event): void => {
     const target = event.target as Element | null;
+    const continueButton = target?.closest<HTMLButtonElement>('[data-save-continue]');
+    if (continueButton !== null && continueButton !== undefined) {
+      if (!continueButton.disabled) {
+        this.setOpen(false);
+        this.saveControls?.continueSavedRun();
+      }
+      return;
+    }
     if (target?.closest('[data-event-test-enter]')) {
       const select = this.element.querySelector<HTMLSelectElement>('[data-event-test-select]');
       const id = select?.value;
@@ -482,6 +545,14 @@ export class PostProcessingConsole {
 
   private readonly handleChange = (event: Event): void => {
     const target = event.target;
+    if (
+      target instanceof HTMLInputElement
+      && target.matches('[data-save-enabled]')
+    ) {
+      this.saveControls?.setEnabled(target.checked);
+      this.setSaveState(target.checked, this.saveDay);
+      return;
+    }
     if (
       target instanceof HTMLInputElement
       && target.matches('[data-presentation-night]')

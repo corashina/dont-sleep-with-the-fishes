@@ -6,7 +6,7 @@ import type { PhaseContext } from '../src/app/GamePhase';
 import type { AudioBackend, AudioVoice } from '../src/audio/AudioBackend';
 import { AudioSystem } from '../src/audio/AudioSystem';
 import type { SoundId } from '../src/audio/audioManifest';
-import type { ItemInstance, ItemInstanceId } from '../src/game/ItemState';
+import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import type { SceneRenderer } from '../src/rendering/SceneRenderer';
 import type { ProjectedBoatBounds } from '../src/survival/BoatInteraction';
 import { BoatWorld } from '../src/survival/BoatWorld';
@@ -22,7 +22,7 @@ import type { FishingCastPoint } from '../src/survival/FishingSession';
 import type { JournalEntry, JournalNightRecord } from '../src/survival/journalRecords';
 import { formatDiveResult } from '../src/survival/SurvivalDayActionFlow';
 import { formatFishingResult } from '../src/survival/SurvivalFishingFlow';
-import { SurvivalPhase } from '../src/survival/SurvivalPhase';
+import { SurvivalPhase, type SurvivalPhaseStart } from '../src/survival/SurvivalPhase';
 import { deriveEventVariantSeed } from '../src/survival/eventPresentationOutcome';
 import type { EventOutcomePresentation } from '../src/survival/eventPresentationTypes';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
@@ -60,6 +60,232 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     lastOutcome: null, seed: 8, ...overrides,
   };
 }
+
+function saved(...types: ItemId[]): ItemInstance[] {
+  return types.map((type, index) => ({
+    instanceId: `${type}-${index + 1}` as ItemInstanceId,
+    type,
+  }));
+}
+
+function stablePhaseRig() {
+  const onCheckpointChange = vi.fn();
+  const session = new SurvivalSession(saved(), { seed: 41 });
+  const phase = SurvivalPhase.forTest({
+    session,
+    world: {},
+    ui: {},
+    onCheckpointChange,
+  });
+  phase.start();
+  onCheckpointChange.mockClear();
+  return { phase, session, onCheckpointChange };
+}
+
+function stablePhase(): SurvivalPhase {
+  return stablePhaseRig().phase;
+}
+
+describe('survival checkpoints', () => {
+  it('emits an initial stable survival checkpoint', () => {
+    const onCheckpointChange = vi.fn();
+    const session = new SurvivalSession(saved(), { seed: 41 });
+    const phase = SurvivalPhase.forTest({
+      session,
+      world: {},
+      ui: {},
+      onCheckpointChange,
+      scavengeElapsedSeconds: 12,
+    });
+
+    phase.start();
+
+    expect(onCheckpointChange).toHaveBeenLastCalledWith({
+      scavengeElapsedSeconds: 12,
+      session: session.exportCheckpoint(),
+    });
+  });
+
+  it('does not expose a checkpoint while presentation is busy', () => {
+    const phase = stablePhase();
+    const internals = phase as unknown as { setBusy(value: boolean): void };
+    internals.setBusy(true);
+
+    expect(phase.getSurvivalCheckpoint()).toBeNull();
+  });
+
+  it('does not expose a checkpoint while fishing is active', () => {
+    const phase = stablePhase();
+    const internals = phase as unknown as {
+      fishingFlow: { hasActiveAttempt(): boolean };
+    };
+    vi.spyOn(internals.fishingFlow, 'hasActiveAttempt').mockReturnValue(true);
+
+    expect(phase.getSurvivalCheckpoint()).toBeNull();
+  });
+
+  it('emits after busy presentation settles', () => {
+    const { phase, onCheckpointChange } = stablePhaseRig();
+    const internals = phase as unknown as { setBusy(value: boolean): void };
+    internals.setBusy(true);
+    internals.setBusy(false);
+
+    expect(onCheckpointChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the checkpoint for a terminal snapshot', () => {
+    const onCheckpointChange = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot({ state: 'dead' })) },
+      world: {},
+      ui: {},
+      onCheckpointChange,
+    });
+
+    phase.start();
+
+    expect(onCheckpointChange).toHaveBeenCalledOnce();
+    expect(onCheckpointChange).toHaveBeenLastCalledWith(null);
+  });
+
+  it('restores elapsed time and world data through SurvivalSession.restore', () => {
+    const source = new SurvivalSession(saved('cannedFood'), {
+      seed: 41,
+      initial: { day: 6 },
+    });
+    const checkpoint = {
+      scavengeElapsedSeconds: 27,
+      session: source.exportCheckpoint(),
+    };
+    const start: SurvivalPhaseStart = { kind: 'restored', checkpoint };
+    const syncInventory = vi.fn();
+    const render = vi.fn();
+    const onCheckpointChange = vi.fn();
+    const restore = vi.spyOn(SurvivalSession, 'restore');
+    const phase = SurvivalPhase.forTestStart({
+      world: { syncInventory },
+      ui: { render },
+      onCheckpointChange,
+    }, start);
+
+    try {
+      phase.start();
+
+      expect(restore).toHaveBeenCalledExactlyOnceWith(checkpoint.session);
+      expect(syncInventory).toHaveBeenCalledWith(expect.objectContaining({
+        day: 6,
+        savedItems: saved('cannedFood'),
+      }));
+      expect(render).toHaveBeenCalledWith(expect.objectContaining({ day: 6 }), expect.any(Function));
+      expect(phase.getSurvivalCheckpoint()).toEqual(checkpoint);
+      expect(onCheckpointChange).toHaveBeenLastCalledWith(checkpoint);
+    } finally {
+      phase.dispose();
+      restore.mockRestore();
+    }
+  });
+
+  it.each([
+    ['day event', 'wreckage'],
+    ['night event', 'bad-sleep'],
+  ] as const)(
+    'restores a %s without emitting until its reveal settles',
+    async (_label, eventId) => {
+      const source = new SurvivalSession([], {
+        seed: 41,
+        initial: { day: 3 },
+        initialEventId: eventId,
+      });
+      const checkpoint = {
+        scavengeElapsedSeconds: 18,
+        session: source.exportCheckpoint(),
+      };
+      const reveal = deferred();
+      const setEventSelection = vi.fn();
+      const onCheckpointChange = vi.fn();
+      const phase = SurvivalPhase.forTestStart({
+        world: {
+          syncInventory: vi.fn(),
+          stageEvent: vi.fn(),
+          revealEvent: vi.fn(() => reveal.promise),
+        },
+        ui: {
+          render: vi.fn(),
+          beginEventPresentation: vi.fn(),
+          setSleepCovered: vi.fn(() => Promise.resolve()),
+          showEventReveal: vi.fn(() => Promise.resolve()),
+          setEventSelection,
+          setBusy: vi.fn(),
+        },
+        onCheckpointChange,
+      }, { kind: 'restored', checkpoint });
+
+      try {
+        phase.start();
+        await flushPromises();
+
+        expect(phase.getSurvivalCheckpoint()).toBeNull();
+        expect(onCheckpointChange).not.toHaveBeenCalled();
+
+        reveal.resolve();
+        await flushPromises();
+
+        expect(setEventSelection).toHaveBeenCalledOnce();
+        expect(phase.getSurvivalCheckpoint()).toEqual(checkpoint);
+        expect(onCheckpointChange).toHaveBeenLastCalledWith(checkpoint);
+      } finally {
+        phase.dispose();
+      }
+    },
+  );
+
+  it('waits for the Chest Attack reveal before it emits the choice checkpoint', async () => {
+    const source = new SurvivalSession([], {
+      seed: 41,
+      initialChest: { state: 'mimic', acquiredDay: 1 },
+      initialEventId: 'chest-attack',
+    });
+    const checkpoint = {
+      scavengeElapsedSeconds: 18,
+      session: source.exportCheckpoint(),
+    };
+    const reveal = deferred();
+    const choice = deferred();
+    const onCheckpointChange = vi.fn();
+    const phase = SurvivalPhase.forTestStart({
+      world: {
+        syncInventory: vi.fn(),
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => reveal.promise),
+        playEventChoice: vi.fn(() => choice.promise),
+      },
+      ui: {
+        render: vi.fn(),
+        beginEventPresentation: vi.fn(),
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+        setEventSelection: vi.fn(),
+        setBusy: vi.fn(),
+      },
+      onCheckpointChange,
+    }, { kind: 'restored', checkpoint });
+
+    try {
+      phase.start();
+      await flushPromises();
+
+      expect(onCheckpointChange).not.toHaveBeenCalled();
+
+      reveal.resolve();
+      await flushPromises();
+
+      expect(onCheckpointChange).toHaveBeenCalledExactlyOnceWith(checkpoint);
+    } finally {
+      phase.dispose();
+      choice.resolve();
+    }
+  });
+});
 
 function completedEntry(
   day: number,
