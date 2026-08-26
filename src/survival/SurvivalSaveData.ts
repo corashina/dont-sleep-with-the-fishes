@@ -457,7 +457,6 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
     || ((state === 'dayEvent' || state === 'nightEvent') && pendingEventId === null)
     || (pendingEventId === null && pendingEventTargetId !== null)
     || Object.values(inventory).some((item) => item?.type === 'carlitos')
-    || savedItems.some((item) => item.type === 'carlitos')
     || savedPickupCount !== savedItems.length + (carlitos === null ? 0 : 1)
     || !inventoryContainsIds(inventory, savedItems.map((item) => item.instanceId))
     || !inventoryContainsIds(inventory, pendingDawnBreaks)) return null;
