@@ -108,8 +108,10 @@ export class AudioSystem {
     return new AudioSystem(backend, storage, false, false);
   }
 
-  static silent(): AudioSystem {
-    return new AudioSystem(new SilentAudioBackend(), null, false, false);
+  static silent(
+    storage: Pick<Storage, 'getItem' | 'setItem'> | null | undefined = undefined,
+  ): AudioSystem {
+    return new AudioSystem(new SilentAudioBackend(), storage, false, false);
   }
 
   createScope(): AudioScope {
