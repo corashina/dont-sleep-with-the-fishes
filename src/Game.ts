@@ -188,6 +188,7 @@ export class Game {
   private postProcessingConsole: PostProcessingConsole | null = null;
   private weatherOverride: PresentationWeatherId | null = null;
   private timeOfDayOverride: SkyPhase | null = null;
+  private volumetricCloudsEnabled = false;
   private animationFrame = 0;
   private started = false;
   private disposed = false;
@@ -495,6 +496,7 @@ export class Game {
       const tuningState = systemTuning.get();
       this.weatherOverride = tuningState.weatherOverride;
       this.timeOfDayOverride = tuningState.phaseOverride;
+      this.volumetricCloudsEnabled = tuningState.volumetricCloudsEnabled;
       this.animationFrame = 0;
       this.started = false;
       this.disposed = false;
@@ -587,6 +589,11 @@ export class Game {
           },
           antiAliasingQuality,
           shadowQuality,
+          {
+            enabled: this.volumetricCloudsEnabled,
+            available: true,
+            setEnabled: (enabled) => this.setVolumetricCloudsEnabled(enabled),
+          },
         );
       }
       this.onResize = () => this.handleResize();
@@ -820,8 +827,13 @@ export class Game {
     this.activePhase?.setTimeOfDayOverride?.(phase);
   }
 
+  private setVolumetricCloudsEnabled(enabled: boolean): void {
+    this.volumetricCloudsEnabled = enabled;
+    this.systemTuning.set('volumetricCloudsEnabled', enabled);
+    this.activePhase?.setVolumetricCloudsEnabled?.(enabled);
+  }
+
   private applyPresentationOverridesOrDispose(phase: GamePhase): void {
-    if (this.weatherOverride === null && this.timeOfDayOverride === null) return;
     try {
       if (this.weatherOverride !== null) {
         phase.setWeatherOverride?.(this.weatherOverride);
@@ -829,6 +841,7 @@ export class Game {
       if (this.timeOfDayOverride !== null) {
         phase.setTimeOfDayOverride?.(this.timeOfDayOverride);
       }
+      phase.setVolumetricCloudsEnabled?.(this.volumetricCloudsEnabled);
     } catch (error) {
       try {
         phase.dispose();
@@ -841,6 +854,9 @@ export class Game {
 
   private synchronizePresentationControls(): void {
     if (this.postProcessingConsole === null) return;
+    this.postProcessingConsole.setVolumetricCloudAvailability(
+      this.activePhase?.getVolumetricCloudsAvailable?.() ?? true,
+    );
     const effectivePhase = this.activePhase?.getPresentationPhase?.() ?? 'day';
     this.postProcessingConsole.setTimeOfDayState(
       this.timeOfDayOverride ?? effectivePhase,
