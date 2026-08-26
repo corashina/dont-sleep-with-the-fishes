@@ -5,9 +5,10 @@ import {
   Mesh,
   MeshStandardMaterial,
   Object3D,
+  Vector3,
 } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
-import { runCleanupSteps } from '../../world/SceneResources';
+import { ignoreCleanupError, runCleanupSteps } from '../../world/SceneResources';
 import type { EventModelInstance } from '../EventModelLibrary';
 import type { FocusedEventInteractionTarget } from '../FocusedEventPresentation';
 import type {
@@ -65,6 +66,8 @@ const SURFACE_TILT = Object.freeze([
 
 const PLANK_START_INDEX = 3;
 const TARGET_ID = 'event:wreckage';
+const WRECK_CAMERA_POSITION = new Vector3(4.2, -3.4, -4.3);
+const WRECK_CAMERA_TARGET = new Vector3(0, -7.2, -11.5);
 
 function createPlankGeometry(): BufferGeometry {
   const geometry = new BufferGeometry();
@@ -125,10 +128,13 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   private active: ActiveWreckageBeat | null = null;
   private surfaceSeedOffset = 0;
   private surfaceTime = 0;
+  private operation = 0;
+  private diveOwned = false;
+  private underwaterVisible = false;
   private staged = false;
   private disposed = false;
 
-  constructor(environment: DedicatedEventEnvironment) {
+  constructor(private readonly environment: DedicatedEventEnvironment) {
     this.worldRoot.name = 'wreckage-world';
     this.boatRoot.name = 'wreckage-boat';
     this.debris.name = 'wreckage-surface-debris';
@@ -184,7 +190,9 @@ export class WreckagePresentation implements DedicatedEventPresentation {
 
   stage(context: EventSceneContext): void {
     if (this.disposed || context.eventId !== this.eventId) return;
+    this.beginOperation();
     this.cancelActive();
+    this.releaseDive();
     const seed = Number.isFinite(context.variantSeed) ? Math.trunc(context.variantSeed) : 0;
     this.surfaceSeedOffset = seed % 7;
     this.surfaceTime = 0;
@@ -211,8 +219,26 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     return choiceId === 'leave' ? this.startBeat('leave') : Promise.resolve();
   }
 
-  playItemUse(_choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
-    return Promise.resolve(false);
+  async playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean> {
+    if (this.disposed || !this.staged || choiceId !== 'dive') return false;
+    const operation = this.beginOperation();
+    this.diveOwned = true;
+    try {
+      await this.environment.dive.play(instanceId, {
+        onWaterImpact: () => undefined,
+        postEntryHold: {
+          durationSeconds: 3,
+          cameraWorldPosition: WRECK_CAMERA_POSITION,
+          cameraWorldTarget: WRECK_CAMERA_TARGET,
+          onStart: () => this.showUnderwaterWreck(),
+        },
+      });
+    } catch (error) {
+      if (!this.ownsOperation(operation)) return false;
+      ignoreCleanupError(() => this.releaseDive());
+      throw error;
+    }
+    return this.ownsOperation(operation);
   }
 
   react(_result: EventOutcomePresentation): Promise<void> {
@@ -240,31 +266,45 @@ export class WreckagePresentation implements DedicatedEventPresentation {
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
+    this.beginOperation();
     const active = this.active;
-    if (active === null) return;
-    active.elapsed = wreckageBeatDuration(active.beat);
-    sampleWreckageBeat(active.beat, active.elapsed, this.sample);
-    this.applySample();
-    this.active = null;
-    if (active.beat === 'reveal') {
-      sampleWreckageBeat('surface-hold', 0, this.sample);
-      this.applySample();
-    }
-    active.resolve();
+    runCleanupSteps([
+      () => this.settleDive(),
+      () => {
+        if (active === null) return;
+        active.elapsed = wreckageBeatDuration(active.beat);
+        sampleWreckageBeat(active.beat, active.elapsed, this.sample);
+        this.applySample();
+        this.active = null;
+        if (active.beat === 'reveal') {
+          sampleWreckageBeat('surface-hold', 0, this.sample);
+          this.applySample();
+        }
+        active.resolve();
+      },
+    ]);
   }
 
   clear(): void {
     if (this.disposed) return;
-    this.cancelActive();
-    this.staged = false;
-    this.hideScene();
+    this.beginOperation();
+    runCleanupSteps([
+      () => this.cancelActive(),
+      () => this.releaseDive(),
+      () => {
+        this.staged = false;
+        this.hideScene();
+      },
+    ]);
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.beginOperation();
     runCleanupSteps([
       () => this.cancelActive(),
+      () => this.releaseDive(),
       () => this.hideScene(),
       () => this.boatRoot.clear(),
       () => this.worldRoot.clear(),
@@ -324,6 +364,13 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   }
 
   private applySample(): void {
+    if (this.underwaterVisible) {
+      this.debris.visible = false;
+      this.shipPlacement.visible = this.staged;
+      this.worldRoot.visible = this.staged;
+      this.boatRoot.visible = false;
+      return;
+    }
     this.debris.visible = this.staged && this.sample.debrisAlpha > 0;
     this.worldRoot.visible = this.staged && this.sample.sceneAlpha > 0;
     this.boatRoot.visible = this.worldRoot.visible;
@@ -331,10 +378,46 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   }
 
   private hideScene(): void {
+    this.underwaterVisible = false;
     this.debris.visible = false;
     this.shipPlacement.visible = false;
     this.worldRoot.visible = false;
     this.boatRoot.visible = false;
+  }
+
+  private showUnderwaterWreck(): void {
+    if (this.disposed || !this.staged || !this.diveOwned) return;
+    this.underwaterVisible = true;
+    this.applySample();
+  }
+
+  private beginOperation(): number {
+    this.operation += 1;
+    return this.operation;
+  }
+
+  private ownsOperation(operation: number): boolean {
+    return !this.disposed && this.operation === operation;
+  }
+
+  private releaseDive(): void {
+    if (!this.diveOwned) return;
+    this.diveOwned = false;
+    this.underwaterVisible = false;
+    runCleanupSteps([
+      () => this.environment.dive.clear(),
+      () => this.applySample(),
+    ]);
+  }
+
+  private settleDive(): void {
+    if (!this.diveOwned) return;
+    this.diveOwned = false;
+    this.underwaterVisible = false;
+    runCleanupSteps([
+      () => this.environment.dive.settleForVisibilityChange(),
+      () => this.applySample(),
+    ]);
   }
 }
 

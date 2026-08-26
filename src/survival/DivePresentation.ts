@@ -47,9 +47,16 @@ export interface DivePresentationOptions {
   readonly goggleModel: Group;
 }
 
+export interface DivePostEntryHold {
+  readonly durationSeconds: number;
+  readonly cameraWorldPosition: Readonly<Vector3>;
+  readonly cameraWorldTarget: Readonly<Vector3>;
+  readonly onStart: () => void;
+}
+
 export interface DivePlayOptions {
   readonly onWaterImpact: () => void;
-  readonly revealUnderwaterScene: boolean;
+  readonly postEntryHold?: DivePostEntryHold;
 }
 
 interface ActiveDive {
@@ -84,7 +91,9 @@ export class DivePresentation {
   private readonly waterSurfaceWorldPosition = new Vector3();
   private readonly waterSurfaceLocalPosition = new Vector3();
   private active: ActiveDive | null = null;
-  private revealUnderwaterScene = false;
+  private entryElapsed = 0;
+  private holdElapsed = 0;
+  private holdStarted = false;
   private wasSubmerged = false;
   private impactEmitted = false;
   private cameraCaptured = false;
@@ -179,7 +188,9 @@ export class DivePresentation {
     this.bubbleMesh.visible = false;
     this.wasSubmerged = false;
     this.impactEmitted = false;
-    this.revealUnderwaterScene = options.revealUnderwaterScene;
+    this.entryElapsed = 0;
+    this.holdElapsed = 0;
+    this.holdStarted = false;
     sampleDivePose(0, this.pose);
     this.applyPose(0);
     return new Promise<void>((resolve) => {
@@ -187,24 +198,43 @@ export class DivePresentation {
     });
   }
 
-  update(timeSeconds: number, _deltaSeconds: number, waterHeight: number): void {
+  update(deltaSeconds: number, waterHeight: number): void {
     const active = this.active;
     if (this.disposed || active === null) return;
-    sampleDivePose(timeSeconds, this.pose);
-    this.applyPose(waterHeight);
+    if (!Number.isFinite(deltaSeconds) || deltaSeconds <= 0) return;
 
-    const enteredWater = this.pose.submerged && !this.wasSubmerged;
-    this.wasSubmerged = this.pose.submerged;
-    if (enteredWater && !this.impactEmitted) {
-      this.impactEmitted = true;
-      active.options.onWaterImpact();
+    let remainingDelta = deltaSeconds;
+    if (!this.holdStarted) {
+      const nextEntryElapsed = this.entryElapsed + remainingDelta;
+      this.entryElapsed = Math.min(nextEntryElapsed, DIVE_ENTRY_DURATION_SECONDS);
+      remainingDelta = Math.max(0, nextEntryElapsed - DIVE_ENTRY_DURATION_SECONDS);
+      sampleDivePose(Math.min(this.entryElapsed, DIVE_ENTRY_DURATION_SECONDS), this.pose);
+      this.applyPose(waterHeight);
+
+      const enteredWater = this.pose.submerged && !this.wasSubmerged;
+      this.wasSubmerged = this.pose.submerged;
+      if (enteredWater && !this.impactEmitted) {
+        this.impactEmitted = true;
+        active.options.onWaterImpact();
+        if (this.disposed || this.active !== active) return;
+      }
+
+      if (this.entryElapsed < DIVE_ENTRY_DURATION_SECONDS) return;
+      const hold = active.options.postEntryHold;
+      if (hold === undefined) {
+        this.finish(active);
+        return;
+      }
+      this.startHold(hold);
       if (this.disposed || this.active !== active) return;
     }
 
-    if (this.pose.elapsed >= DIVE_ENTRY_DURATION_SECONDS) {
-      this.active = null;
-      active.resolve();
-    }
+    const hold = active.options.postEntryHold!;
+    this.holdElapsed = Math.min(
+      hold.durationSeconds,
+      this.holdElapsed + remainingDelta,
+    );
+    if (this.holdElapsed >= hold.durationSeconds) this.finish(active);
   }
 
   clear(): void {
@@ -216,7 +246,9 @@ export class DivePresentation {
     this.resetLayers();
     this.wasSubmerged = false;
     this.impactEmitted = false;
-    this.revealUnderwaterScene = false;
+    this.entryElapsed = 0;
+    this.holdElapsed = 0;
+    this.holdStarted = false;
     active?.resolve();
   }
 
@@ -338,11 +370,7 @@ export class DivePresentation {
       state.material.opacity = state.opacity * this.pose.goggleLift;
     }
     this.waterVeil.visible = this.pose.waterCoverage > 0.008;
-    const underwaterReveal = this.revealUnderwaterScene
-      ? this.pose.bubbleStrength
-      : 0;
-    this.waterVeil.material.opacity = this.pose.waterCoverage
-      * (1 - underwaterReveal * 0.72);
+    this.waterVeil.material.opacity = this.pose.waterCoverage;
     this.bubbleMesh.visible = this.pose.bubbleStrength > 0.008;
     this.applyBubbles(this.pose.elapsed, this.pose.bubbleStrength);
   }
@@ -374,6 +402,37 @@ export class DivePresentation {
   private restoreCamera(): void {
     this.options.camera.position.copy(this.savedPosition);
     this.options.camera.quaternion.copy(this.savedQuaternion);
+  }
+
+  private startHold(hold: DivePostEntryHold): void {
+    this.holdStarted = true;
+    hold.onStart();
+    this.goggles.visible = false;
+    this.waterVeil.visible = false;
+    this.bubbleMesh.visible = false;
+
+    this.scratchPosition.set(
+      hold.cameraWorldPosition.x,
+      hold.cameraWorldPosition.y,
+      hold.cameraWorldPosition.z,
+    );
+    const parent = this.options.camera.parent;
+    if (parent !== null) {
+      parent.updateWorldMatrix(true, false);
+      parent.worldToLocal(this.scratchPosition);
+    }
+    this.options.camera.position.copy(this.scratchPosition);
+    this.options.camera.lookAt(
+      hold.cameraWorldTarget.x,
+      hold.cameraWorldTarget.y,
+      hold.cameraWorldTarget.z,
+    );
+  }
+
+  private finish(active: ActiveDive): void {
+    if (this.active !== active) return;
+    this.active = null;
+    active.resolve();
   }
 
   private resetLayers(): void {

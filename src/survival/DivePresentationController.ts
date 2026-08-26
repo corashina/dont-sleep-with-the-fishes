@@ -44,7 +44,6 @@ export class DivePresentationController {
   private readonly waterEntryWorldPosition = new Vector3();
   private readonly presentation: DivePresentation;
   private activeItemId: ItemInstanceId | null = null;
-  private elapsed = 0;
   private disposed = false;
 
   constructor(private readonly environment: DivePresentationControllerEnvironment) {
@@ -62,7 +61,6 @@ export class DivePresentationController {
     if (this.disposed) return Promise.resolve();
     this.clear();
     this.activeItemId = instanceId;
-    this.elapsed = 0;
     try {
       this.environment.supplies.setPresentationItemHidden(instanceId, true);
       return this.presentation.start(options);
@@ -76,7 +74,6 @@ export class DivePresentationController {
     if (this.disposed) return;
     const itemId = this.activeItemId;
     this.activeItemId = null;
-    this.elapsed = 0;
     runCleanupSteps([
       () => this.presentation.clear(),
       () => {
@@ -91,7 +88,6 @@ export class DivePresentationController {
     if (this.disposed) return;
     const itemId = this.activeItemId;
     this.activeItemId = null;
-    this.elapsed = 0;
     runCleanupSteps([
       () => this.presentation.settleForVisibilityChange(),
       () => {
@@ -104,7 +100,7 @@ export class DivePresentationController {
 
   update(time: number, delta: number): void {
     if (this.disposed || this.activeItemId === null) return;
-    if (Number.isFinite(delta) && delta > 0) this.elapsed += delta;
+    if (!Number.isFinite(delta) || delta <= 0) return;
     this.presentation.copyWaterEntryWorldPosition(this.waterEntryWorldPosition);
     this.environment.sampleWorldWaveInto(
       this.waveSample,
@@ -113,7 +109,12 @@ export class DivePresentationController {
       this.waterEntryWorldPosition.z,
       this.environment.readWorldWaveAmplitudeScale(),
     );
-    this.presentation.update(this.elapsed, delta, this.waveSample.height);
+    try {
+      this.presentation.update(delta, this.waveSample.height);
+    } catch (error) {
+      ignoreCleanupError(() => this.clear());
+      throw error;
+    }
   }
 
   dispose(): void {
@@ -121,7 +122,6 @@ export class DivePresentationController {
     this.disposed = true;
     const itemId = this.activeItemId;
     this.activeItemId = null;
-    this.elapsed = 0;
     runCleanupSteps([
       () => this.presentation.clear(),
       () => {

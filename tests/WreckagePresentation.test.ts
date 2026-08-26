@@ -5,6 +5,7 @@ import {
   Mesh,
   MeshStandardMaterial,
   PerspectiveCamera,
+  Vector3,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { createInactiveVortexWaveState } from '../src/ocean/WaveField';
@@ -159,6 +160,37 @@ describe('WreckagePresentation', () => {
     expect(wreck.visible).toBe(false);
     expect(presentation.interactionTargets()).toHaveLength(1);
     expect(wreck.visible).toBe(false);
+    presentation.dispose();
+  });
+
+  it('uses the normal dive entry then shows only the wreck for three seconds', async () => {
+    const { environment } = createEnvironment();
+    const presentation = new WreckagePresentation(environment);
+    const debris = stage(presentation);
+    const wreck = presentation.worldRoot.getObjectByName('wreckage-wreck')!;
+
+    const dive = presentation.playItemUse('dive', 'scubaSet-1');
+    const options = vi.mocked(environment.dive.play).mock.calls[0]![1];
+    expect(options).toEqual({
+      onWaterImpact: expect.any(Function),
+      postEntryHold: {
+        durationSeconds: 3,
+        cameraWorldPosition: new Vector3(4.2, -3.4, -4.3),
+        cameraWorldTarget: new Vector3(0, -7.2, -11.5),
+        onStart: expect.any(Function),
+      },
+    });
+    expect(wreck.visible).toBe(false);
+
+    options.postEntryHold!.onStart();
+    presentation.update(2.4, 0.2);
+    expect(debris.visible).toBe(false);
+    expect(wreck.visible).toBe(true);
+    expect(presentation.boatRoot.visible).toBe(false);
+    await expect(dive).resolves.toBe(true);
+
+    presentation.clear();
+    expect(environment.dive.clear).toHaveBeenCalledOnce();
     presentation.dispose();
   });
 

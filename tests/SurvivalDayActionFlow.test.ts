@@ -99,7 +99,6 @@ function createRig() {
     }),
     playDive: vi.fn(async (instanceId: string, options: {
       readonly onWaterImpact: () => void;
-      readonly revealUnderwaterScene: boolean;
     }) => {
       calls.push(`world:dive:${instanceId}`);
       options.onWaterImpact();
@@ -367,7 +366,6 @@ describe('SurvivalDayActionFlow', () => {
       'scubaSet-1',
       {
         onWaterImpact: expect.any(Function),
-        revealUnderwaterScene: false,
       },
     );
     expect(rig.calls).toEqual([
