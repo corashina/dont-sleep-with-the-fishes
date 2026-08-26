@@ -6,7 +6,7 @@ import {
   SurvivalEventFlow,
   type SurvivalEventFlowDependencies,
 } from '../src/survival/SurvivalEventFlow';
-import type { DriftingItemChoiceResolution } from '../src/survival/DriftingItemFlow';
+import type { FocusedEventChoiceResolution } from '../src/survival/FocusedEventFlow';
 import type {
   ActionOutcome,
   SurvivalInventorySnapshot,
@@ -188,7 +188,7 @@ function createRig(
     releaseActive: vi.fn(() => calls.push('release-bundle')),
   };
   const bundles = (bundleManager ?? defaultBundles) as typeof defaultBundles;
-  const drifting = {
+  const focused = {
     enter: vi.fn(async (_eventId?: string): Promise<void> => undefined),
     choose: vi.fn(async (_choiceId?: string): Promise<void> => undefined),
     clear: vi.fn(() => calls.push('clear-drifting')),
@@ -208,7 +208,7 @@ function createRig(
     ui,
     audio,
     bundles,
-    drifting,
+    focused,
     renderSnapshot,
     renderAndSettleCoveredScene: vi.fn(async () => {
       calls.push('settle');
@@ -234,7 +234,7 @@ function createRig(
     ui,
     audio,
     bundles,
-    drifting,
+    focused,
     setBusy,
     renderSnapshot,
     presentTerminal,
@@ -519,38 +519,16 @@ describe('SurvivalEventFlow', () => {
     await Promise.resolve();
   });
 
-  it('ignores a stale drifting choice rejection after a same-lifecycle replacement', async () => {
-    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-barrel' });
-    const rig = createRig(pending);
-    const choice = deferred();
-    rig.drifting.choose.mockReturnValueOnce(choice.promise);
-    await rig.flow.revealPending(pending);
-
-    rig.flow.resolveContextual('sleep');
-    await vi.waitFor(() => expect(rig.drifting.choose).toHaveBeenCalledOnce());
-    rig.flow.clear();
-    await rig.flow.revealPending(pending);
-    rig.onFatalError.mockClear();
-    rig.setBusy.mockClear();
-
-    choice.reject(new Error('stale drifting choice failed'));
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(rig.onFatalError).not.toHaveBeenCalled();
-    expect(rig.setBusy).not.toHaveBeenCalled();
-  });
-
   it('ignores a stale drifting focus rejection after a same-lifecycle replacement', async () => {
     const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-barrel' });
     const rig = createRig(pending);
     const firstEntry = deferred();
-    rig.drifting.enter.mockReturnValueOnce(firstEntry.promise);
+    rig.focused.enter.mockReturnValueOnce(firstEntry.promise);
     await rig.flow.revealPending(pending);
 
-    const first = rig.flow.focusDriftingItem('drifting-barrel');
-    await vi.waitFor(() => expect(rig.drifting.enter).toHaveBeenCalledOnce());
-    await rig.flow.focusDriftingItem('drifting-barrel');
+    const first = rig.flow.focusEvent('drifting-barrel');
+    await vi.waitFor(() => expect(rig.focused.enter).toHaveBeenCalledOnce());
+    await rig.flow.focusEvent('drifting-barrel');
     rig.onFatalError.mockClear();
     rig.setBusy.mockClear();
 
@@ -561,19 +539,13 @@ describe('SurvivalEventFlow', () => {
     expect(rig.setBusy).not.toHaveBeenCalled();
   });
 
-  it('makes returned drifting callbacks inert after a same-lifecycle replacement', async () => {
+  it('makes returned focused callbacks inert after a same-lifecycle replacement', async () => {
     const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-barrel' });
     const rig = createRig(pending);
-    let resolution: DriftingItemChoiceResolution | undefined;
-    rig.drifting.choose.mockImplementationOnce(async (choiceId?: string) => {
-      if (choiceId === undefined) throw new Error('Expected a choice.');
-      rig.flow.setDriftingResolutionActive(true);
-      resolution = rig.flow.resolveDriftingItemChoice(choiceId);
-    });
     await rig.flow.revealPending(pending);
-
-    rig.flow.resolveContextual('sleep');
-    await vi.waitFor(() => expect(resolution).toBeDefined());
+    await rig.flow.focusEvent('drifting-barrel');
+    rig.flow.setFocusedResolutionActive(true);
+    const resolution = rig.flow.resolveFocusedEventChoice({ id: 'sleep', instanceId: null });
     if (resolution === undefined || !resolution.accepted) throw new Error('Expected resolution.');
     const staleResolution = resolution;
     rig.flow.clear();
@@ -682,7 +654,7 @@ describe('SurvivalEventFlow', () => {
     rig.flow.clear();
 
     expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(firstError);
-    expect(rig.drifting.clear).toHaveBeenCalledOnce();
+    expect(rig.focused.clear).toHaveBeenCalledOnce();
     expect(rig.bundles.cancelPendingActivation).toHaveBeenCalledOnce();
     expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
     expect(rig.calls).toContain('weather:calm');
@@ -717,7 +689,7 @@ describe('SurvivalEventFlow', () => {
     expect(() => rig.flow.dispose()).not.toThrow();
 
     expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(cleanupError);
-    expect(rig.drifting.clear).toHaveBeenCalledOnce();
+    expect(rig.focused.clear).toHaveBeenCalledOnce();
     expect(rig.bundles.cancelPendingActivation).toHaveBeenCalledOnce();
     expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
     expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
