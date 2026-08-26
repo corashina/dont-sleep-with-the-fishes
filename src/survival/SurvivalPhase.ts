@@ -76,9 +76,28 @@ import type {
   SurvivalState,
 } from './survivalTypes';
 import type { SurvivalSnapshot } from './survivalSnapshot';
+import type { SurvivalRunCheckpoint } from './SurvivalCheckpoint';
+
+export type SurvivalPhaseStart =
+  | {
+      readonly kind: 'fresh';
+      readonly savedItems: readonly ItemInstance[];
+      readonly seed: number;
+      readonly scavengeElapsedSeconds: number;
+      readonly initialEventId?: string;
+      readonly initialEventResultId?: string;
+    }
+  | {
+      readonly kind: 'restored';
+      readonly checkpoint: SurvivalRunCheckpoint;
+    };
+
+export type SurvivalCheckpointChange = (
+  checkpoint: SurvivalRunCheckpoint | null,
+) => void;
 
 export interface SurvivalPhaseTestDependencies {
-  session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
+  session?: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
   world: Partial<Omit<BoatWorld, 'stageEvent'>> & {
     stageEvent?: (...args: any[]) => void;
   };
@@ -89,6 +108,8 @@ export interface SurvivalPhaseTestDependencies {
   onFatalError?: (error: unknown) => void;
   eventBundles?: SurvivalPhaseBundleManager;
   sceneRenderer?: SceneRenderer;
+  onCheckpointChange?: SurvivalCheckpointChange;
+  scavengeElapsedSeconds?: number;
 }
 
 type SurvivalPhaseBundleManager = EventBundleManagerLike
@@ -113,6 +134,28 @@ function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' 
 
 function reportInvariantError(error: Error): void {
   console.error(error);
+}
+
+function createSession(
+  start: SurvivalPhaseStart,
+  itemAnimationLab: boolean,
+  initialEventId: string | undefined,
+): SurvivalSession {
+  if (start.kind === 'restored') return SurvivalSession.restore(start.checkpoint.session);
+  return new SurvivalSession(start.savedItems, {
+    seed: start.seed,
+    ...(itemAnimationLab
+      ? {
+          initial: ITEM_ANIMATION_LAB_INITIAL_RESOURCES,
+          initialChest: ITEM_ANIMATION_LAB_INITIAL_CHEST,
+        }
+      : {}),
+    ...(
+      initialEventId === undefined || itemAnimationLab
+        ? {}
+        : { initialEventId }
+    ),
+  });
 }
 
 function testContext(
@@ -156,6 +199,8 @@ export class SurvivalPhase implements GamePhase {
   private world!: SurvivalPhaseTestDependencies['world'];
   private ui!: Partial<SurvivalUI>;
   private onRestart!: () => void;
+  private onCheckpointChange!: SurvivalCheckpointChange;
+  private checkpointingEnabled = false;
   private scavengeElapsedSeconds = 0;
   private elapsedSeconds = 0;
   private simulationTimeInitialized = false;
@@ -172,6 +217,7 @@ export class SurvivalPhase implements GamePhase {
   private started = false;
   private restartRequested = false;
   private presentedTerminalState: SurvivalState | null = null;
+  private terminalCheckpointCleared = false;
   private lastReadJournalDay = 0;
   private viewportWidth = 1;
   private viewportHeight = 1;
@@ -198,39 +244,25 @@ export class SurvivalPhase implements GamePhase {
 
   constructor(
     context: PhaseContext,
-    savedItems: readonly ItemInstance[],
-    seed: number,
-    scavengeElapsedSeconds: number,
+    start: SurvivalPhaseStart,
     onRestart: () => void,
-    initialEventId?: string,
-    initialEventResultId?: string,
+    onCheckpointChange: SurvivalCheckpointChange,
   );
   constructor(
     context: PhaseContext,
-    savedItems: readonly ItemInstance[],
-    seed: number,
-    scavengeElapsedSeconds: number,
+    start: SurvivalPhaseStart,
     onRestart: () => void,
-    initialEventId: string | undefined,
-    initialEventResultId: string | undefined,
+    onCheckpointChange: SurvivalCheckpointChange,
     testDependencies?: SurvivalPhaseTestDependencies,
   ) {
+    const initialEventId = start.kind === 'fresh' ? start.initialEventId : undefined;
+    const initialEventResultId = start.kind === 'fresh'
+      ? start.initialEventResultId
+      : undefined;
     const itemAnimationLab = isItemAnimationLabId(initialEventId);
+    const session = testDependencies?.session
+      ?? createSession(start, itemAnimationLab, initialEventId);
     if (testDependencies === undefined) {
-      const session = new SurvivalSession(savedItems, {
-        seed,
-        ...(itemAnimationLab
-          ? {
-              initial: ITEM_ANIMATION_LAB_INITIAL_RESOURCES,
-              initialChest: ITEM_ANIMATION_LAB_INITIAL_CHEST,
-            }
-          : {}),
-        ...(
-          initialEventId === undefined || itemAnimationLab
-            ? {}
-            : { initialEventId }
-        ),
-      });
       const world = new BoatWorld(
         context.camera,
         context.propModels,
@@ -245,8 +277,11 @@ export class SurvivalPhase implements GamePhase {
         session,
         world,
         new SurvivalUI(context.mount),
-        scavengeElapsedSeconds,
+        start.kind === 'restored'
+          ? start.checkpoint.scavengeElapsedSeconds
+          : start.scavengeElapsedSeconds,
         onRestart,
+        onCheckpointChange,
         reportInvariantError,
         itemAnimationLab,
         new EventBundleManager(new EventBundleLoader({
@@ -260,11 +295,16 @@ export class SurvivalPhase implements GamePhase {
     }
     this.initialize(
       context,
-      testDependencies.session,
+      session,
       testDependencies.world,
       testDependencies.ui,
-      scavengeElapsedSeconds,
+      testDependencies.scavengeElapsedSeconds ?? (
+        start.kind === 'restored'
+          ? start.checkpoint.scavengeElapsedSeconds
+          : start.scavengeElapsedSeconds
+      ),
       testDependencies.onRestart ?? onRestart,
+      testDependencies.onCheckpointChange ?? onCheckpointChange,
       testDependencies.onInvariantError,
       itemAnimationLab,
       testDependencies.eventBundles ?? createTestEventBundleManager(),
@@ -278,24 +318,32 @@ export class SurvivalPhase implements GamePhase {
     initialEventId?: string,
     initialEventResultId?: string,
   ): SurvivalPhase {
+    return SurvivalPhase.forTestStart(dependencies, {
+      kind: 'fresh',
+      savedItems: [],
+      seed: 0,
+      scavengeElapsedSeconds: dependencies.scavengeElapsedSeconds ?? 0,
+      ...(initialEventId === undefined ? {} : { initialEventId }),
+      ...(initialEventResultId === undefined ? {} : { initialEventResultId }),
+    });
+  }
+
+  static forTestStart(
+    dependencies: SurvivalPhaseTestDependencies,
+    start: SurvivalPhaseStart,
+  ): SurvivalPhase {
     const TestConstructor = SurvivalPhase as unknown as new (
       context: PhaseContext,
-      savedItems: readonly ItemInstance[],
-      seed: number,
-      scavengeElapsedSeconds: number,
+      start: SurvivalPhaseStart,
       onRestart: () => void,
-      initialEventId: string | undefined,
-      initialEventResultId: string | undefined,
+      onCheckpointChange: SurvivalCheckpointChange | undefined,
       dependencies: SurvivalPhaseTestDependencies,
     ) => SurvivalPhase;
     return new TestConstructor(
       testContext(dependencies.sceneRenderer, dependencies.audio),
-      [],
-      0,
-      0,
+      start,
       dependencies.onRestart ?? (() => undefined),
-      initialEventId,
-      initialEventResultId,
+      dependencies.onCheckpointChange,
       dependencies,
     );
   }
@@ -316,6 +364,8 @@ export class SurvivalPhase implements GamePhase {
       }
     } else if (snapshot.pendingEventId !== null && !isTerminal(snapshot.state)) {
       void this.eventFlow.revealPending(snapshot);
+    } else if (!isTerminal(snapshot.state)) {
+      this.emitStableCheckpoint();
     }
 
     if (typeof document !== 'undefined') {
@@ -447,6 +497,30 @@ export class SurvivalPhase implements GamePhase {
     return this.forcedPresentationPhase ?? this.visualState.phase;
   }
 
+  getSurvivalCheckpoint(): SurvivalRunCheckpoint | null {
+    const snapshot = this.session.snapshot();
+    const stablePresentation = snapshot.pendingEventId === null
+      ? this.eventFlow.isIdle()
+      : this.eventFlow.isStableChoice();
+    if (
+      this.disposed
+      || this.busy
+      || this.itemAnimationLab
+      || isTerminal(snapshot.state)
+      || !stablePresentation
+      || this.fishingFlow.hasActiveAttempt()
+      || this.session.exportCheckpoint === undefined
+    ) return null;
+    try {
+      return Object.freeze({
+        scavengeElapsedSeconds: this.scavengeElapsedSeconds,
+        session: this.session.exportCheckpoint(),
+      });
+    } catch {
+      return null;
+    }
+  }
+
   requestRestart(): void {
     if (this.disposed || this.restartRequested) return;
     this.restartRequested = true;
@@ -495,6 +569,7 @@ export class SurvivalPhase implements GamePhase {
     ui: Partial<SurvivalUI>,
     scavengeElapsedSeconds: number,
     onRestart: () => void,
+    onCheckpointChange: SurvivalCheckpointChange | undefined,
     onInvariantError: (error: Error) => void = reportInvariantError,
     itemAnimationLab = false,
     eventBundles: SurvivalPhaseBundleManager = createTestEventBundleManager(),
@@ -509,6 +584,8 @@ export class SurvivalPhase implements GamePhase {
     this.ui = ui;
     this.scavengeElapsedSeconds = scavengeElapsedSeconds;
     this.onRestart = onRestart;
+    this.checkpointingEnabled = onCheckpointChange !== undefined;
+    this.onCheckpointChange = onCheckpointChange ?? (() => undefined);
     this.onInvariantError = onInvariantError;
     this.onFatalError = onFatalError;
     this.eventBundles = eventBundles;
@@ -661,6 +738,18 @@ export class SurvivalPhase implements GamePhase {
     this.busy = busy;
     this.ui.setBusy?.(busy);
     this.syncCameraTurnControl(this.session.snapshot());
+    if (!busy) this.emitStableCheckpoint();
+  }
+
+  private emitStableCheckpoint(): void {
+    if (!this.checkpointingEnabled) return;
+    const snapshot = this.session.snapshot();
+    if (isTerminal(snapshot.state)) {
+      this.clearTerminalCheckpoint();
+      return;
+    }
+    const checkpoint = this.getSurvivalCheckpoint();
+    if (checkpoint !== null) this.onCheckpointChange(checkpoint);
   }
 
   private handleCameraTurn(): void {
@@ -756,6 +845,7 @@ export class SurvivalPhase implements GamePhase {
       || this.presentedTerminalState !== null
     ) return;
     this.presentedTerminalState = snapshot.state;
+    this.clearTerminalCheckpoint();
     if (snapshot.ending !== null && snapshot.ending.id !== 'dorothy') {
       this.audio.ending(snapshot.ending.id);
       this.ui.showEnding?.(snapshot.ending);
@@ -771,6 +861,12 @@ export class SurvivalPhase implements GamePhase {
     });
     if (started) return;
     if (this.session.expireRadioSignal?.() === true) this.renderSnapshot(false, false);
+  }
+
+  private clearTerminalCheckpoint(): void {
+    if (!this.checkpointingEnabled || this.terminalCheckpointCleared) return;
+    this.terminalCheckpointCleared = true;
+    this.onCheckpointChange(null);
   }
 
   private documentIsHidden(): boolean {

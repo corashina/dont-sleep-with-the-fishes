@@ -4,6 +4,7 @@ import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { driftingSupplyKindFromSeed } from '../src/survival/driftingSupplies';
 import { deriveEventVariantSeed } from '../src/survival/eventPresentationOutcome';
+import { mulberry32, restoreMulberry32 } from '../src/survival/random';
 import {
   nightlyHullWearDamage,
   radioRescueLeadForSignal,
@@ -26,6 +27,74 @@ const saved = (...types: ItemId[]): ItemInstance[] => {
     return { instanceId: `${type}-${number}` as ItemInstanceId, type };
   });
 };
+
+it('restores the next Mulberry32 value', () => {
+  const random = mulberry32(41);
+  random.next();
+  const restored = restoreMulberry32(random.exportState());
+
+  expect(restored.next()).toBe(random.next());
+});
+
+it('round-trips a stable pending event checkpoint', () => {
+  const source = new SurvivalSession(saved('carlitos', 'compass', 'cannedFood'), {
+    seed: 41,
+    initial: { day: 8, pressure: 2, energy: 2 },
+    initialEventId: 'man-in-the-fog',
+  });
+
+  const restored = SurvivalSession.restore(source.exportCheckpoint());
+
+  expect(restored.snapshot()).toEqual(source.snapshot());
+  expect(restored.exportCheckpoint()).toEqual(source.exportCheckpoint());
+});
+
+it('keeps future random outcomes after restore', () => {
+  const source = new SurvivalSession(saved(), {
+    seed: 77,
+    initialEventId: 'bad-sleep',
+  });
+  const restored = SurvivalSession.restore(source.exportCheckpoint());
+
+  expect(restored.resolveEvent({ kind: 'endure' }))
+    .toEqual(source.resolveEvent({ kind: 'endure' }));
+});
+
+it('refuses a checkpoint during fishing', () => {
+  const session = new SurvivalSession(saved(), { seed: 12 });
+  session.beginFishing();
+
+  expect(() => session.exportCheckpoint())
+    .toThrow('Cannot checkpoint active fishing.');
+});
+
+it.each([
+  ['rescued', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 13,
+      random: sequenceRandom([0, 0, 0.99]),
+      initial: { day: 23, rescueLead: 8 },
+      initialEventId: 'night-calm-fallback',
+    });
+    session.resolveEvent(choiceResponse('sleep'));
+    session.beginDawn();
+    return session;
+  }],
+  ['dead', () => new SurvivalSession(saved(), {
+    seed: 14,
+    initial: { health: 0 },
+  })],
+  ['sunk', () => new SurvivalSession(saved(), {
+    seed: 15,
+    initial: { hull: 0 },
+  })],
+] as const)('refuses a checkpoint for a %s run', (state, createSession) => {
+  const session = createSession();
+
+  expect(session.snapshot().state).toBe(state);
+  expect(() => session.exportCheckpoint())
+    .toThrow('Cannot checkpoint terminal state.');
+});
 
 function stateAfterRescueDawn(day: number, rescueLead: number, roll: number) {
   const session = new SurvivalSession(saved(), {

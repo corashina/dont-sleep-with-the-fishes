@@ -55,6 +55,15 @@ import type { MenuModelLibrary } from './menu/MenuModelLibrary';
 import { MenuSandAssets } from './menu/MenuSandAssets';
 import { MainMenuPhase } from './phases/MainMenuPhase';
 import type { SkyPhase } from './world/skyPalette';
+import { browserStorage } from './browser/storage';
+import {
+  SurvivalSaveStore,
+  type SurvivalSaveStorage,
+} from './browser/SurvivalSaveStore';
+import type {
+  SurvivalCheckpointChange,
+  SurvivalPhaseStart,
+} from './survival/SurvivalPhase';
 
 export interface GameFactories {
   createMenu(
@@ -68,11 +77,9 @@ export interface GameFactories {
   ): GamePhase;
   createSurvival(
     context: PhaseContext,
-    result: Readonly<ScavengeResult>,
-    seed: number,
+    start: SurvivalPhaseStart,
     onRestart: () => void,
-    initialEventId?: string,
-    initialEventResultId?: string,
+    onCheckpointChange: SurvivalCheckpointChange,
   ): GamePhase;
 }
 
@@ -85,20 +92,15 @@ const PRODUCTION_FACTORIES: GameFactories = {
   ),
   createSurvival: (
     context,
-    result,
-    seed,
+    start,
     onRestart,
-    initialEventId,
-    initialEventResultId,
+    onCheckpointChange,
   ) => (
     new SurvivalPhase(
       context,
-      result.savedItems,
-      seed,
-      result.elapsedSeconds,
+      start,
       onRestart,
-      initialEventId,
-      initialEventResultId,
+      onCheckpointChange,
     )
   ),
 };
@@ -140,6 +142,7 @@ export interface GameTestOptions {
   waterQuality?: WaterQualityPreference;
   audioSystem?: AudioSystem;
   onFatalError?: (error: unknown) => void;
+  saveStorage?: SurvivalSaveStorage | null;
 }
 
 function rethrowFatalError(error: unknown): never {
@@ -174,6 +177,7 @@ export class Game {
   private activePhase: GamePhase | null = null;
   private performanceStats: PerformanceStats | null = null;
   private postProcessingConsole: PostProcessingConsole | null = null;
+  private saveStore!: SurvivalSaveStore;
   private weatherOverride: PresentationWeatherId | null = null;
   private timeOfDayOverride: SkyPhase | null = null;
   private animationFrame = 0;
@@ -258,6 +262,7 @@ export class Game {
         physicsRuntime,
         physicsMode,
         audioSystem,
+        browserStorage() as SurvivalSaveStorage | null,
         PRODUCTION_FACTORIES,
         createRandomSeed,
         onFatalError,
@@ -347,6 +352,7 @@ export class Game {
       options.physicsRuntime,
       options.physicsMode ?? 'enabled',
       options.audioSystem ?? AudioSystem.silent(),
+      options.saveStorage ?? null,
       factories,
       options.createSeed ?? createRandomSeed,
       options.onFatalError ?? rethrowFatalError,
@@ -416,6 +422,7 @@ export class Game {
     physicsRuntime: PhysicsRuntime | null,
     physicsMode: PhysicsMode,
     audioSystem: AudioSystem,
+    saveStorage: SurvivalSaveStorage | null,
     factories: GameFactories,
     createSeed: () => number,
     onFatalError: (error: unknown) => void,
@@ -432,6 +439,7 @@ export class Game {
     this.menuModels = menuModels;
     this.menuSandAssets = menuSandAssets;
     this.audio = audioSystem;
+    this.saveStore = new SurvivalSaveStore(saveStorage);
     this.factories = factories;
     this.createSeed = createSeed;
     this.onFatalError = onFatalError;
@@ -533,6 +541,12 @@ export class Game {
           },
           antiAliasingQuality,
           shadowQuality,
+          {
+            enabled: this.saveStore.getState().enabled,
+            savedDay: this.saveStore.getState().checkpoint?.session.day ?? null,
+            setEnabled: (enabled) => this.setSaveEnabled(enabled),
+            continueSavedRun: () => this.continueSavedRun(),
+          },
         );
       }
       this.onResize = () => this.handleResize();
@@ -668,22 +682,27 @@ export class Game {
       ),
       elapsedSeconds: result.elapsedSeconds,
     });
-    this.activateSurvival(copiedResult);
+    this.activateSurvival(Object.freeze({
+      kind: 'fresh',
+      savedItems: copiedResult.savedItems,
+      seed: this.seed,
+      scavengeElapsedSeconds: copiedResult.elapsedSeconds,
+    }));
   }
 
-  private activateSurvival(
-    result: Readonly<ScavengeResult>,
-    initialEventId?: string,
-    initialEventResultId?: string,
-  ): void {
+  private activateSurvival(start: SurvivalPhaseStart): void {
     const generation = ++this.phaseGeneration;
+    const onCheckpointChange: SurvivalCheckpointChange = (checkpoint) => {
+      if (!this.ownsGeneration(generation)) return;
+      if (checkpoint === null) this.saveStore.clearCheckpoint();
+      else this.saveStore.writeCheckpoint(checkpoint);
+      this.syncSaveControls();
+    };
     const survival = this.factories.createSurvival(
       this.context,
-      result,
-      this.seed,
+      start,
       () => this.restartFrom(generation),
-      initialEventId,
-      initialEventResultId,
+      onCheckpointChange,
     );
     if (!this.ownsGeneration(generation)) {
       survival.dispose();
@@ -706,7 +725,15 @@ export class Game {
     this.resetCamera();
     this.elapsed = 0;
     this.seed = this.createSeed();
-    this.activateSurvival(createEventTestResult(), option.eventId, option.resultId);
+    const result = createEventTestResult();
+    this.activateSurvival({
+      kind: 'fresh',
+      savedItems: result.savedItems,
+      seed: this.seed,
+      scavengeElapsedSeconds: result.elapsedSeconds,
+      initialEventId: option.eventId,
+      initialEventResultId: option.resultId,
+    });
   }
 
   private restartFrom(generation: number): void {
@@ -750,6 +777,39 @@ export class Game {
 
   private exitPointerLock(): void {
     if (document.pointerLockElement) document.exitPointerLock();
+  }
+
+  private setSaveEnabled(enabled: boolean): void {
+    this.saveStore.setEnabled(enabled);
+    if (enabled) {
+      const checkpoint = this.activePhase?.getSurvivalCheckpoint?.() ?? null;
+      if (checkpoint !== null) this.saveStore.writeCheckpoint(checkpoint);
+    }
+    this.syncSaveControls();
+  }
+
+  private continueSavedRun(): void {
+    const checkpoint = this.saveStore.getState().checkpoint;
+    if (this.disposed || checkpoint === null) return;
+    const outgoing = this.detachActivePhase();
+    try {
+      this.exitPointerLock();
+      outgoing?.dispose();
+      this.resetCamera();
+      this.elapsed = 0;
+      this.seed = checkpoint.session.seed;
+      this.activateSurvival({ kind: 'restored', checkpoint });
+    } catch (error) {
+      this.reportFatalError(error);
+    }
+  }
+
+  private syncSaveControls(): void {
+    const state = this.saveStore.getState();
+    this.postProcessingConsole?.setSaveState(
+      state.enabled,
+      state.checkpoint?.session.day ?? null,
+    );
   }
 
   private setWeatherOverride(id: PresentationWeatherId): void {

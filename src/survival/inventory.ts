@@ -20,6 +20,14 @@ export class SurvivalInventoryState {
     }
   }
 
+  static restore(snapshot: SurvivalInventorySnapshot): SurvivalInventoryState {
+    const inventory = new SurvivalInventoryState([]);
+    for (const item of Object.values(snapshot)) {
+      if (item !== undefined) inventory.items.set(item.instanceId, { ...item });
+    }
+    return inventory;
+  }
+
   hasUsable(type: ItemId): boolean {
     return this.count(type, 'usable') > 0;
   }

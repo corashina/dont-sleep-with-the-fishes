@@ -152,6 +152,7 @@ function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' 
 
 export class SurvivalEventFlow {
   private presentation: EventPresentationState = 'idle';
+  private choiceCheckpointReady = false;
   private eligibility = new Map<ItemInstanceId, EventResponseId>();
   private deferredSync: {
     readonly generation: number;
@@ -361,6 +362,10 @@ export class SurvivalEventFlow {
 
   isChoosing(): boolean {
     return this.presentation === 'choosing';
+  }
+
+  isStableChoice(): boolean {
+    return this.presentation === 'choosing' && this.choiceCheckpointReady;
   }
 
   update(deltaSeconds: number): void {
@@ -1273,6 +1278,7 @@ export class SurvivalEventFlow {
     if (snapshot.pendingEventId === null || isTerminal(snapshot.state)) return;
     const event = survivalEventById(snapshot.pendingEventId);
     if (event === undefined) return;
+    this.choiceCheckpointReady = false;
     if (this.preparedEventId !== event.id && !this.beginEventBundleLoad(event.id)) return;
     this.preparedEventId = null;
     this.presentation = 'transitioning';
@@ -1346,6 +1352,8 @@ export class SurvivalEventFlow {
       if (!this.isCurrent(generation, operation)) return;
     }
     if (isChestAttack) {
+      this.choiceCheckpointReady = this.presentation === 'choosing';
+      if (this.choiceCheckpointReady) this.setBusy(false);
       if (this.presentation === 'choosing') {
         await this.resolveChestAttack(generation, operation);
       }
@@ -1361,6 +1369,7 @@ export class SurvivalEventFlow {
       isDriftingItemEventId(event.id) ? [] : this.contextualChoicesFor(event, revealed),
     );
     this.presentation = 'choosing';
+    this.choiceCheckpointReady = true;
     this.setBusy(false);
   }
 
@@ -1652,6 +1661,7 @@ export class SurvivalEventFlow {
     this.cancelDeferredPresentationSync();
     this.eligibility.clear();
     this.presentation = 'idle';
+    this.choiceCheckpointReady = false;
     this.dependencies.world.setEventSelectedItem?.(null);
     this.dependencies.world.setEventEligibleItems?.(null);
     this.dependencies.ui.clearEventPresentation?.();
@@ -1667,6 +1677,7 @@ export class SurvivalEventFlow {
     this.activeDriftingOperation = null;
     this.eligibility.clear();
     this.presentation = 'idle';
+    this.choiceCheckpointReady = false;
     const steps: readonly (() => void)[] = [
       () => this.dependencies.drifting.clear(),
       () => this.dependencies.audio.clearEvent(),

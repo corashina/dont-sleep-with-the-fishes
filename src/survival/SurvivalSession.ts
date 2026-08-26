@@ -27,6 +27,7 @@ import { fishingSettlement } from './fishingSettlementRules';
 import { SurvivalInventoryState } from './inventory';
 import {
   cloneJournalActions,
+  cloneJournalNight,
   createJournalCarlitosCareRecord,
   createJournalCarlitosDawnRecord,
   createJournalCarlitosDawnState,
@@ -44,7 +45,11 @@ import {
   type JournalInventoryMutation,
   type JournalNightRecord,
 } from './journalRecords';
-import { mulberry32 } from './random';
+import {
+  createSurvivalSessionCheckpoint,
+  type SurvivalSessionCheckpoint,
+} from './SurvivalCheckpoint';
+import { Mulberry32Random, mulberry32, restoreMulberry32 } from './random';
 import {
   CHEST_OPEN_ENERGY,
   drawChestReward,
@@ -208,6 +213,17 @@ interface ActiveFishingTransaction {
   readonly previousActedToday: boolean;
 }
 
+interface SurvivalSessionCheckpointSource {
+  readonly kind: 'checkpoint';
+  readonly checkpoint: SurvivalSessionCheckpoint;
+}
+
+function isCheckpointSource(
+  source: readonly ItemInstance[] | SurvivalSessionCheckpointSource,
+): source is SurvivalSessionCheckpointSource {
+  return !Array.isArray(source);
+}
+
 export class SurvivalSession {
   private state: SurvivalState = 'day';
   private readonly savedPickupCount: number;
@@ -250,13 +266,94 @@ export class SurvivalSession {
   private pendingJournalActions: JournalDayActionRecord[] = [];
   private readonly journalEntries: JournalEntry[] = [];
   private readonly seed: number;
-  private readonly random: RandomSource;
+  private readonly random: RandomSource | Mulberry32Random;
   private readonly radioSignalsEnabled: boolean;
   private fishingCounter = 0;
   private activeFishing: ActiveFishingTransaction | null = null;
   private cachedSnapshot: Readonly<SurvivalSnapshot> | null = null;
 
-  constructor(savedItems: readonly ItemInstance[], options: SurvivalSessionOptions) {
+  constructor(savedItems: readonly ItemInstance[], options: SurvivalSessionOptions);
+  constructor(source: SurvivalSessionCheckpointSource);
+  constructor(
+    savedItemsOrSource: readonly ItemInstance[] | SurvivalSessionCheckpointSource,
+    options?: SurvivalSessionOptions,
+  ) {
+    if (isCheckpointSource(savedItemsOrSource)) {
+      const checkpoint = createSurvivalSessionCheckpoint(savedItemsOrSource.checkpoint);
+      this.state = checkpoint.state;
+      this.seed = checkpoint.seed;
+      this.random = restoreMulberry32(checkpoint.randomState);
+      this.radioSignalsEnabled = checkpoint.radioSignalsEnabled;
+      this.weather = checkpoint.weather;
+      this.day = checkpoint.day;
+      this.pressure = checkpoint.pressure;
+      this.health = checkpoint.health;
+      this.hunger = checkpoint.hunger;
+      this.energy = checkpoint.energy;
+      this.hull = checkpoint.hull;
+      this.food = checkpoint.food;
+      this.bait = checkpoint.bait;
+      this.recoveredFood = checkpoint.recoveredFood;
+      this.recoveredBait = checkpoint.recoveredBait;
+      this.repairMaterial = checkpoint.repairMaterial;
+      this.rescueLead = checkpoint.rescueLead;
+      this.rescueTraceFinds = checkpoint.rescueTraceFinds;
+      this.radioSignalAvailable = checkpoint.radioSignalAvailable;
+      this.radioSignalsSent = checkpoint.radioSignalsSent;
+      this.chestState = checkpoint.chest.state;
+      this.chestAcquiredDay = checkpoint.chest.acquiredDay;
+      this.actedToday = checkpoint.actedToday;
+      this.inventory = SurvivalInventoryState.restore(checkpoint.inventory);
+      this.savedItems = Object.freeze(checkpoint.savedItems.map((item) => Object.freeze({ ...item })));
+      this.savedPickupCount = checkpoint.savedPickupCount;
+      this.carlitos = checkpoint.carlitos === null ? null : { ...checkpoint.carlitos };
+      this.pendingEventId = checkpoint.pendingEventId;
+      this.pendingEvent = checkpoint.pendingEventId === null
+        ? null
+        : survivalEventById(checkpoint.pendingEventId) ?? null;
+      this.pendingEventTargetId = checkpoint.pendingEventTargetId;
+      for (const instanceId of checkpoint.pendingDawnBreaks) this.pendingDawnBreaks.add(instanceId);
+      this.nextDawnEnergyOverride = checkpoint.nextDawnEnergyOverride;
+      this.lastEventId = checkpoint.lastEventId;
+      for (const [eventId, day] of Object.entries(checkpoint.lastSeenDays)) {
+        this.lastSeenDay.set(eventId, day);
+      }
+      for (const [eventId, count] of Object.entries(checkpoint.appearanceCounts)) {
+        this.appearanceCounts.set(eventId, count);
+      }
+      this.lastOutcome = checkpoint.lastOutcome === null ? null : this.cloneOutcome(checkpoint.lastOutcome);
+      this.lastHealthCause = { ...checkpoint.lastHealthCause };
+      this.lastHullEventId = checkpoint.lastHullEventId;
+      if (checkpoint.pendingJournalDaytime === null) {
+        this.pendingJournalDaytime = null;
+      } else if ('kind' in checkpoint.pendingJournalDaytime) {
+        this.pendingJournalDaytime = createJournalSinkingShipRecord();
+      } else {
+        const clonedNight = createJournalNightEventRecord(checkpoint.pendingJournalDaytime);
+        this.pendingJournalDaytime = clonedNight.kind === 'event'
+          ? clonedNight.event
+          : createJournalSinkingShipRecord();
+      }
+      this.pendingJournalNighttime = checkpoint.pendingJournalNighttime === null
+        ? null
+        : cloneJournalNight(checkpoint.pendingJournalNighttime);
+      this.pendingJournalActions = [...cloneJournalActions(checkpoint.pendingJournalActions)];
+      for (const entry of checkpoint.journalEntries) this.journalEntries.push(createJournalEntry(
+        entry.day,
+        entry.weather,
+        entry.actions,
+        entry.daytime,
+        entry.nighttime,
+      ));
+      this.fishingCounter = checkpoint.fishingCounter;
+      this.activeFishing = null;
+      this.ending = null;
+      this.cachedSnapshot = null;
+      return;
+    }
+
+    if (options === undefined) throw new Error('Survival session options are required.');
+    const savedItems = savedItemsOrSource;
     this.seed = options.seed;
     this.random = options.random ?? mulberry32(options.seed);
     this.radioSignalsEnabled = options.radioSignalsEnabled ?? true;
@@ -310,6 +407,61 @@ export class SurvivalSession {
 
     this.clampMeters();
     this.resolveTerminal();
+  }
+
+  exportCheckpoint(): SurvivalSessionCheckpoint {
+    if (this.activeFishing !== null) throw new Error('Cannot checkpoint active fishing.');
+    if (this.isTerminal()) throw new Error('Cannot checkpoint terminal state.');
+    if (!(this.random instanceof Mulberry32Random)) {
+      throw new Error('Cannot checkpoint a non-restorable random source.');
+    }
+    return createSurvivalSessionCheckpoint({
+      state: this.state as SurvivalSessionCheckpoint['state'],
+      day: this.day,
+      pressure: this.pressure,
+      health: this.health,
+      hunger: this.hunger,
+      energy: this.energy,
+      hull: this.hull,
+      food: this.food,
+      bait: this.bait,
+      recoveredFood: this.recoveredFood,
+      recoveredBait: this.recoveredBait,
+      repairMaterial: this.repairMaterial,
+      rescueLead: this.rescueLead,
+      rescueTraceFinds: this.rescueTraceFinds,
+      radioSignalAvailable: this.radioSignalAvailable,
+      radioSignalsSent: this.radioSignalsSent,
+      radioSignalsEnabled: this.radioSignalsEnabled,
+      chest: { state: this.chestState, acquiredDay: this.chestAcquiredDay },
+      weather: this.weather,
+      actedToday: this.actedToday,
+      inventory: this.inventory.snapshot(),
+      savedItems: this.savedItems,
+      savedPickupCount: this.savedPickupCount,
+      carlitos: this.carlitos,
+      pendingEventId: this.pendingEventId,
+      pendingEventTargetId: this.pendingEventTargetId,
+      pendingDawnBreaks: [...this.pendingDawnBreaks].sort(),
+      nextDawnEnergyOverride: this.nextDawnEnergyOverride,
+      lastEventId: this.lastEventId,
+      lastSeenDays: Object.fromEntries([...this.lastSeenDay].sort()),
+      appearanceCounts: Object.fromEntries([...this.appearanceCounts].sort()),
+      lastOutcome: this.lastOutcome,
+      lastHealthCause: this.lastHealthCause,
+      lastHullEventId: this.lastHullEventId,
+      pendingJournalDaytime: this.pendingJournalDaytime,
+      pendingJournalNighttime: this.pendingJournalNighttime,
+      pendingJournalActions: this.pendingJournalActions,
+      journalEntries: this.journalEntries,
+      fishingCounter: this.fishingCounter,
+      seed: this.seed,
+      randomState: this.random.exportState(),
+    });
+  }
+
+  static restore(checkpoint: SurvivalSessionCheckpoint): SurvivalSession {
+    return new SurvivalSession({ kind: 'checkpoint', checkpoint });
   }
 
   snapshot(): SurvivalSnapshot {

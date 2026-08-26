@@ -128,6 +128,16 @@ Press <code>`</code> (backquote) in either phase to open **System Tuning**.
 Use **Master Volume** and **Mute** to control all audio. The setting persists
 between sessions.
 
+### Survival auto-save
+
+Open **System Tuning** with <code>`</code>. Turn on **Auto-save** to keep one
+local lifeboat survival checkpoint. Auto-save is off by default. The choice
+persists between sessions.
+
+Select **Continue** in System Tuning to restore the last stable checkpoint.
+Scavenging progress is not saved. Turning auto-save off or reaching an ending
+deletes the checkpoint.
+
 The menu also offers **Calm**, **Overcast**, **Squall**, **Rain**, **Wind**,
 **Thunderstorm**, **Waves**, and **Fog**. A selection overrides event weather,
 carries across the phase handoff, and remains active until the page reloads.

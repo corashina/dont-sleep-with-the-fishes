@@ -2837,7 +2837,8 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   gap: 8px;
 }
 .post-processing-console__event-test select,
-.post-processing-console__event-test button {
+.post-processing-console__event-test button,
+.post-processing-console__save button {
   min-height: 32px;
   border: 1px solid #526c62;
   background: #101b19;
@@ -2845,12 +2846,22 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   font: inherit;
 }
 .post-processing-console__event-test select { min-width: 0; padding: 5px 7px; }
-.post-processing-console__event-test button {
+.post-processing-console__event-test button,
+.post-processing-console__save button {
   padding: 5px 10px;
   color: #e7ba56;
   cursor: pointer;
 }
-.post-processing-console__event-test button:hover { background: #182522; }
+.post-processing-console__event-test button:hover,
+.post-processing-console__save button:hover { background: #182522; }
+.post-processing-console__save button:focus-visible {
+  background: #182522;
+  box-shadow: inset 0 0 0 1px #e7ba56;
+}
+.post-processing-console__save button:disabled {
+  cursor: not-allowed;
+  opacity: .42;
+}
 .post-processing-console__sliders {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
