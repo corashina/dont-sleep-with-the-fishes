@@ -31,6 +31,21 @@ describe('volumetricCloudProfile', () => {
     expect(squall.wind.length()).toBeGreaterThan(calm.wind.length());
   });
 
+  it('uses deep vertical volumes with the tallest squall towers', () => {
+    const calm = volumetricCloudProfile('calm');
+    const overcast = volumetricCloudProfile('overcast');
+    const squall = volumetricCloudProfile('squall');
+
+    expect(calm.baseHeight).toBeLessThanOrEqual(100);
+    expect(calm.topHeight).toBeGreaterThanOrEqual(400);
+    expect(overcast.topHeight - overcast.baseHeight).toBeGreaterThanOrEqual(260);
+    expect(squall.topHeight).toBeGreaterThan(calm.topHeight);
+    expect(squall.topHeight - squall.baseHeight)
+      .toBeGreaterThan(calm.topHeight - calm.baseHeight);
+    expect(calm.density).toBeGreaterThanOrEqual(1);
+    expect(squall.extinction).toBeGreaterThan(calm.extinction);
+  });
+
   it('returns frozen profiles and wind vectors', () => {
     const profile = volumetricCloudProfile('calm');
 
@@ -177,9 +192,9 @@ describe('VolumetricClouds', () => {
   });
 
   it.each([
-    ['low', 8],
-    ['medium', 12],
-    ['high', 16],
+    ['low', 10],
+    ['medium', 16],
+    ['high', 24],
   ] as const)('uses %s quality step limits', (quality, steps) => {
     const clouds = new VolumetricClouds(new Scene(), quality);
     expect(clouds.material.uniforms.uMaxSteps!.value).toBe(steps);
@@ -208,7 +223,47 @@ describe('VolumetricClouds', () => {
       'for (int stepIndex = 0; stepIndex < 28; stepIndex++)',
     );
     expect(clouds.material.fragmentShader).toContain('rayDirection.y <= 0.0');
+    expect(clouds.material.fragmentShader).toContain('float crownTop');
+    expect(clouds.material.fragmentShader).toContain('float heightLight');
+    expect(clouds.material.fragmentShader).toContain('float cloudDistance');
+    expect(clouds.material.fragmentShader).toContain('float distanceFade');
+    expect(clouds.material.fragmentShader).toContain('threshold + 0.1,');
+    expect(clouds.material.uniforms.uLightStep!.value).toBeGreaterThanOrEqual(40);
     clouds.dispose();
+  });
+
+  it('builds coherent noise instead of independent static voxels', () => {
+    const first = new VolumetricClouds(new Scene(), 'low');
+    const second = new VolumetricClouds(new Scene(), 'low');
+    const firstData = (first.material.uniforms.uNoiseTexture!.value as Data3DTexture)
+      .image.data as Uint8Array;
+    const secondData = (second.material.uniforms.uNoiseTexture!.value as Data3DTexture)
+      .image.data as Uint8Array;
+    let totalNeighborDelta = 0;
+    let neighborCount = 0;
+    let minimum = 255;
+    let maximum = 0;
+
+    for (let z = 0; z < 64; z += 1) {
+      for (let y = 0; y < 64; y += 1) {
+        const row = (z * 64 + y) * 64;
+        for (let x = 0; x < 64; x += 1) {
+          const value = firstData[row + x]!;
+          minimum = Math.min(minimum, value);
+          maximum = Math.max(maximum, value);
+          if (x < 63) {
+            totalNeighborDelta += Math.abs(value - firstData[row + x + 1]!);
+            neighborCount += 1;
+          }
+        }
+      }
+    }
+
+    expect(totalNeighborDelta / neighborCount).toBeLessThan(24);
+    expect(maximum - minimum).toBeGreaterThan(120);
+    expect(firstData).toEqual(secondData);
+    first.dispose();
+    second.dispose();
   });
 
   it('disposes geometry, material, and texture once', () => {
