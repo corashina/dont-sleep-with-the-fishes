@@ -1016,6 +1016,7 @@ describe('SurvivalPhase orchestration', () => {
   });
 
   it('routes Wreckage choices through the shared focused controls', async () => {
+    const calls: string[] = [];
     let current = snapshot({
       state: 'dayEvent',
       pendingEventId: 'wreckage',
@@ -1029,22 +1030,39 @@ describe('SurvivalPhase orchestration', () => {
       },
     });
     const resolveEvent = vi.fn(() => {
+      calls.push('action-complete');
       current = snapshot({ state: 'day' });
-      return accepted({ code: 'event-resolved', cue: 'none', deltas: {} });
+      return accepted({
+        code: 'event-resolved',
+        cue: 'none',
+        deltas: {},
+        rewardSummary: { kind: 'item', id: 'medicalKit', quantity: 1 },
+      });
     });
     const setEventSelection = vi.fn();
     const showFocusedEvent = vi.fn();
     const playEventItemUse = vi.fn(() => Promise.resolve());
     const ui: Partial<SurvivalUI> = {
-      setSleepCovered: vi.fn(() => Promise.resolve()),
+      setSleepCovered: vi.fn((covered: boolean) => {
+        calls.push(`cover:${covered}`);
+        return Promise.resolve();
+      }),
+      settleCoveredScene: vi.fn(() => {
+        calls.push('settle-covered');
+        return Promise.resolve();
+      }),
+      showRewardResult: vi.fn(() => {
+        calls.push('show-result');
+        return Promise.resolve();
+      }),
       showEventReveal: vi.fn(() => Promise.resolve()),
       setEventSelection,
       showFocusedEvent,
       hideFocusedEvent: vi.fn(),
       playEventChoiceBeat: vi.fn(() => Promise.resolve()),
       setBusy: vi.fn(),
-      clearEventPresentation: vi.fn(),
-      render: vi.fn(),
+      clearEventPresentation: vi.fn(() => calls.push('clear-event-ui')),
+      render: vi.fn(() => calls.push('render-default')),
       setJournalUnread: vi.fn(),
       dispose: vi.fn(),
     };
@@ -1054,12 +1072,15 @@ describe('SurvivalPhase orchestration', () => {
         stageEvent: vi.fn(),
         revealEvent: vi.fn(() => Promise.resolve()),
         enterFocusedEventView: vi.fn(() => Promise.resolve()),
-        exitFocusedEventView: vi.fn(() => Promise.resolve()),
+        exitFocusedEventView: vi.fn(() => {
+          calls.push('exit-focus');
+          return Promise.resolve();
+        }),
         playEventItemUse,
         playEventChoice: vi.fn(() => Promise.resolve()),
         reactToEventOutcome: vi.fn(() => Promise.resolve()),
         play: vi.fn(() => Promise.resolve()),
-        clearEvent: vi.fn(),
+        clearEvent: vi.fn(() => calls.push('clear-event')),
         dispose: vi.fn(),
       },
       ui,
@@ -1075,6 +1096,7 @@ describe('SurvivalPhase orchestration', () => {
       expect.objectContaining({ id: 'dive', instanceId: 'scubaSet-1' }),
     ]));
 
+    calls.length = 0;
     ui.onFocusedEventChoice?.({ id: 'dive', instanceId: 'scubaSet-1' });
     await flushPromises();
 
@@ -1082,6 +1104,23 @@ describe('SurvivalPhase orchestration', () => {
       kind: 'item', choiceId: 'dive', instanceId: 'scubaSet-1',
     });
     expect(playEventItemUse).toHaveBeenCalledWith('wreckage', 'dive', 'scubaSet-1');
+    await vi.waitFor(() => expect(ui.showRewardResult).toHaveBeenCalledOnce());
+    expect(calls).toEqual([
+      'action-complete',
+      'cover:true',
+      'exit-focus',
+      'clear-event',
+      'clear-event-ui',
+      'render-default',
+      'settle-covered',
+      'cover:false',
+      'show-result',
+    ]);
+    expect(ui.showRewardResult).toHaveBeenCalledWith({
+      title: 'WRECKAGE',
+      reward: { kind: 'item', id: 'medicalKit', quantity: 1 },
+      lines: [],
+    });
     phase.dispose();
   });
 
@@ -6655,6 +6694,15 @@ describe('SurvivalPhase orchestration', () => {
     const current = snapshot({
       state: 'dayEvent',
       pendingEventId: 'drifting-barrel',
+      carlitos: {
+        alive: true,
+        energy: 3,
+        hunger: 3,
+        sickness: 0,
+        unhappiness: 0,
+        pettedToday: false,
+        deathCause: null,
+      },
     });
     const rejected = accepted({
       accepted: false,
