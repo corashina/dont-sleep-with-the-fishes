@@ -1,18 +1,23 @@
 import type { SurvivalAudio } from '../audio/SurvivalAudio';
 import type { ItemId, ItemInstanceId } from '../game/ItemState';
 import type { SurvivalUI } from '../ui/SurvivalUI';
-import type { EventContextChoice } from '../ui/SurvivalUiViewModel';
+import type {
+  EventContextChoice,
+  FocusedEventChoiceSelection,
+  FocusedEventChoiceView,
+} from '../ui/SurvivalUiViewModel';
 import type { BoatWorld } from './BoatWorld';
 import type {
-  DriftingItemChoiceResolution,
-  DriftingItemFlow,
-} from './DriftingItemFlow';
+  FocusedEventChoiceResolution,
+  FocusedEventFlow,
+} from './FocusedEventFlow';
 import type { EventChoicePresentation } from './FocusedEventPresentation';
 import {
   isDriftingItemEventId,
   PLANE_CHOICE_WINDOW_SECONDS,
   survivalEventById,
   type DriftingItemEventId,
+  type InspectableEventId,
   type SurvivalEventId,
 } from './eventCatalog';
 import {
@@ -54,6 +59,10 @@ export type EventWorldPort = Pick<
   | 'setEventSelectedItem'
   | 'syncInventory'
   | 'projectInteractionAnchors'
+  | 'retrieveDriftingItem'
+  | 'searchDriftingItem'
+  | 'delegateDriftingItem'
+  | 'recedeDriftingItem'
   | 'play'
 >;
 
@@ -98,8 +107,8 @@ export type EventAudioPort = Pick<
   | 'action'
 >;
 
-export type EventDriftingItemPort = Pick<
-  DriftingItemFlow,
+export type EventFocusedEventPort = Pick<
+  FocusedEventFlow,
   'enter' | 'choose' | 'clear' | 'settleForVisibilityChange'
 >;
 
@@ -116,7 +125,7 @@ export interface SurvivalEventFlowDependencies {
   readonly ui: EventUiPort;
   readonly audio: EventAudioPort;
   readonly bundles: EventBundleManagerLike;
-  readonly drifting: EventDriftingItemPort;
+  readonly focused: EventFocusedEventPort;
   readonly renderSnapshot: () => SurvivalSnapshot;
   readonly renderAndSettleCoveredScene: (generation: number) => Promise<boolean>;
   readonly presentTerminal: (snapshot: SurvivalSnapshot, allowBusy?: boolean) => void;
@@ -160,7 +169,7 @@ export class SurvivalEventFlow {
   private preparedEventId: SurvivalEventId | null = null;
   private initialEventResultId: string | undefined;
   private operationGeneration = 0;
-  private activeDriftingOperation: {
+  private activeFocusedOperation: {
     readonly generation: number;
     readonly operation: number;
   } | null = null;
@@ -225,23 +234,6 @@ export class SurvivalEventFlow {
   resolveContextual(choiceId: EventResponseId): void {
     const generation = this.dependencies.captureLifecycleGeneration();
     if (this.presentation !== 'choosing' || !this.isLifecycleCurrent(generation)) return;
-    const pending = this.dependencies.session.snapshot();
-    if (pending.pendingEventId !== null && isDriftingItemEventId(pending.pendingEventId)) {
-      const operation = this.beginOperation();
-      this.activeDriftingOperation = { generation, operation };
-      try {
-        void this.dependencies.drifting.choose(choiceId).then(
-          () => {
-            if (!this.isCurrent(generation, operation)) return;
-            this.activeDriftingOperation = null;
-          },
-          (error) => this.handleDriftingFailure(error, generation, operation),
-        );
-      } catch (error) {
-        this.handleDriftingFailure(error, generation, operation);
-      }
-      return;
-    }
     const operation = this.beginOperation();
     void this.runOwnedOperation(
       generation,
@@ -250,17 +242,18 @@ export class SurvivalEventFlow {
     );
   }
 
-  async focusDriftingItem(eventId: DriftingItemEventId): Promise<void> {
+  async focusEvent(eventId: InspectableEventId): Promise<void> {
     const generation = this.dependencies.captureLifecycleGeneration();
     if (!this.isPendingEvent(eventId) || !this.isLifecycleCurrent(generation)) return;
     const operation = this.beginOperation();
+    this.activeFocusedOperation = { generation, operation };
     const snapshot = this.dependencies.session.snapshot();
     const event = survivalEventById(eventId);
     if (event === undefined) return;
     try {
-      await this.dependencies.drifting.enter(
+      await this.dependencies.focused.enter(
         eventId,
-        this.contextualChoicesFor(event, snapshot),
+        this.focusedEventChoicesFor(event, snapshot),
       );
     } catch (error) {
       if (!this.isCurrent(generation, operation)) return;
@@ -380,42 +373,46 @@ export class SurvivalEventFlow {
     this.resolveEndure();
   }
 
-  isPendingEvent(eventId: DriftingItemEventId): boolean {
+  isPendingEvent(eventId: InspectableEventId): boolean {
     if (this.presentation !== 'choosing' || this.disposed) return false;
     const snapshot = this.dependencies.session.snapshot();
     return snapshot.pendingEventId === eventId && !isTerminal(snapshot.state);
   }
 
-  setDriftingResolutionActive(active: boolean): void {
-    const drifting = this.activeDriftingOperation;
+  setFocusedResolutionActive(active: boolean): void {
+    const focused = this.activeFocusedOperation;
     if (
-      drifting === null
-      || !this.isCurrent(drifting.generation, drifting.operation)
+      focused === null
+      || !this.isCurrent(focused.generation, focused.operation)
     ) return;
     if (active && this.presentation === 'choosing') this.presentation = 'resolving';
     else if (!active && this.presentation === 'resolving') {
       this.presentation = 'choosing';
-      this.activeDriftingOperation = null;
+      this.activeFocusedOperation = null;
     }
   }
 
-  resolveDriftingItemChoice(
-    choiceId: EventResponseId,
-  ): DriftingItemChoiceResolution | undefined {
-    const drifting = this.activeDriftingOperation;
+  resolveFocusedEventChoice(
+    choice: FocusedEventChoiceSelection,
+  ): FocusedEventChoiceResolution | undefined {
+    const focused = this.activeFocusedOperation;
     if (
-      drifting === null
+      focused === null
       || this.presentation !== 'resolving'
-      || !this.isCurrent(drifting.generation, drifting.operation)
+      || !this.isCurrent(focused.generation, focused.operation)
     ) {
       return undefined;
     }
-    const { generation, operation } = drifting;
+    const { generation, operation } = focused;
     const pending = this.dependencies.session.snapshot();
     const eventId = pending.pendingEventId;
-    if (eventId === null || !isDriftingItemEventId(eventId)) return undefined;
+    if (eventId === null || !this.isInspectableEvent(eventId)) return undefined;
 
-    const outcome = this.dependencies.session.resolveEvent?.({ kind: 'choice', choiceId });
+    const outcome = choice.instanceId === null
+      ? this.dependencies.session.resolveEvent?.({ kind: 'choice', choiceId: choice.id })
+      : this.dependencies.session.resolveEvent?.({
+          kind: 'item', choiceId: choice.id, instanceId: choice.instanceId,
+        });
     if (outcome === undefined || !this.isCurrent(generation, operation)) return undefined;
     if (!outcome.accepted) {
       this.dependencies.audio.deny();
@@ -423,29 +420,25 @@ export class SurvivalEventFlow {
       return { accepted: false };
     }
 
-    this.dependencies.renderSnapshot();
-    if (!this.isCurrent(generation, operation)) return undefined;
     this.eligibility.clear();
     this.dependencies.world.setEventSelectedItem?.(null);
     this.dependencies.world.setEventEligibleItems?.(null);
     this.dependencies.ui.setEventSelection?.(this.eligibility, []);
 
-    const lifeboatSearch = eventId === 'empty-lifeboat' && choiceId === 'search';
-    let animate = true;
+    const lifeboatSearch = eventId === 'empty-lifeboat' && choice.id === 'search';
     if (
       eventId === 'drifting-barrel'
       &&
-      (choiceId === 'retrieve' || choiceId === 'delegate-carlitos')
+      (choice.id === 'retrieve' || choice.id === 'delegate-carlitos')
       && outcome.rewardSummary === undefined
     ) {
       this.dependencies.onInvariantError(new Error(
-        `Drifting item ${eventId}/${choiceId} requires a reward summary.`,
+        `Drifting item ${eventId}/${choice.id} requires a reward summary.`,
       ));
       this.dependencies.ui.showFeedback?.({
         accepted: false,
         message: 'The recovered salvage could not be identified.',
       });
-      animate = false;
     }
     if (lifeboatSearch && outcome.rewardSummary === undefined) {
       this.dependencies.onInvariantError(new Error(
@@ -456,12 +449,67 @@ export class SurvivalEventFlow {
     let terminalSnapshot: SurvivalSnapshot | null = null;
     return {
       accepted: true,
-      animate,
+      playAnimation: async () => {
+        if (!this.isCurrent(generation, operation)) return;
+        if (isDriftingItemEventId(eventId)) {
+          if (choice.id === 'retrieve') {
+            await (this.dependencies.world.retrieveDriftingItem?.(eventId) ?? Promise.resolve());
+          } else if (choice.id === 'delegate-carlitos') {
+            await (this.dependencies.world.delegateDriftingItem?.(eventId) ?? Promise.resolve());
+          } else if (choice.id === 'search') {
+            await (this.dependencies.world.searchDriftingItem?.(eventId) ?? Promise.resolve());
+          } else {
+            await (this.dependencies.world.recedeDriftingItem?.(eventId) ?? Promise.resolve());
+          }
+          return;
+        }
+        if (choice.instanceId !== null) {
+          await this.playEventItemUseWithSound(
+            eventId,
+            choice.id,
+            choice.instanceId,
+            pending.inventory[choice.instanceId]?.type,
+            generation,
+            operation,
+          );
+        }
+        if (!this.isCurrent(generation, operation)) return;
+        const playedChoice: EventChoicePresentation = {
+          choiceId: choice.id,
+          instanceId: choice.instanceId,
+          condition: choice.instanceId === null
+            ? null
+            : pending.inventory[choice.instanceId]?.condition ?? null,
+        };
+        await (this.dependencies.world.playEventChoice?.(eventId, playedChoice)
+          ?? Promise.resolve());
+        if (!this.isCurrent(generation, operation)) return;
+        const resolved = this.dependencies.session.snapshot();
+        const presentation = deriveEventOutcomePresentation(
+          pending,
+          resolved,
+          outcome,
+          choice.instanceId,
+        );
+        this.dependencies.audio.beginEventReaction(eventId, outcome);
+        await Promise.all([
+          this.dependencies.world.play?.(outcome.cue) ?? Promise.resolve(),
+          this.dependencies.world.reactToEventOutcome?.(
+            eventId,
+            outcome,
+            playedChoice,
+            presentation,
+          ) ?? Promise.resolve(),
+        ]);
+        if (this.isCurrent(generation, operation)) {
+          this.dependencies.audio.finishEventReaction(eventId);
+        }
+      },
       afterAnimation: async () => {
         if (!this.isCurrent(generation, operation)) return;
         if (
           eventId === 'drifting-barrel'
-          && (choiceId === 'retrieve' || choiceId === 'delegate-carlitos')
+          && (choice.id === 'retrieve' || choice.id === 'delegate-carlitos')
           && outcome.rewardSummary !== undefined
         ) {
           this.dependencies.audio.action('openChest');
@@ -479,6 +527,8 @@ export class SurvivalEventFlow {
           }) ?? Promise.resolve());
         }
       },
+      beforeReturn: async () => undefined,
+      afterReturn: async () => undefined,
       clearEvent: () => {
         if (this.isCurrent(generation, operation)) this.clearPresentation();
       },
@@ -499,7 +549,7 @@ export class SurvivalEventFlow {
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
-    this.dependencies.drifting.settleForVisibilityChange();
+    this.dependencies.focused.settleForVisibilityChange();
   }
 
   clear(preserveDeferredSync = false): void {
@@ -532,21 +582,6 @@ export class SurvivalEventFlow {
       if (this.isCurrent(generation, operation)) this.dependencies.onFatalError(error);
     } finally {
       this.releaseOwnedBusyAfterFailure(generation, operation);
-    }
-  }
-
-  private handleDriftingFailure(
-    error: unknown,
-    generation: number,
-    operation: number,
-  ): void {
-    if (!this.isCurrent(generation, operation)) return;
-    if (this.presentation === 'resolving') this.presentation = 'choosing';
-    this.activeDriftingOperation = null;
-    try {
-      this.dependencies.onFatalError(error);
-    } finally {
-      this.releaseBusyDuringRecovery(generation, operation);
     }
   }
 
@@ -1438,6 +1473,35 @@ export class SurvivalEventFlow {
     return eligibility;
   }
 
+  private focusedEventChoicesFor(
+    event: NonNullable<ReturnType<typeof survivalEventById>>,
+    snapshot: SurvivalSnapshot,
+  ): readonly FocusedEventChoiceView[] {
+    const contextual = this.contextualChoicesFor(event, snapshot).map((choice) => ({
+      ...choice,
+      instanceId: null,
+    }));
+    const eligibility = this.eventEligibilityFor(event, snapshot);
+    const itemChoices = Object.values(snapshot.inventory).flatMap((item) => {
+      if (item === undefined || item.condition !== 'usable') return [];
+      const choiceId = eligibility.get(item.instanceId);
+      if (choiceId === undefined) return [];
+      const definition = event.choices.find((choice) => choice.id === choiceId);
+      if (definition === undefined) return [];
+      return [{
+        id: definition.id,
+        label: definition.label,
+        unavailableReason: null,
+        instanceId: item.instanceId,
+      }];
+    });
+    return [...contextual, ...itemChoices];
+  }
+
+  private isInspectableEvent(eventId: string): eventId is InspectableEventId {
+    return isDriftingItemEventId(eventId) || eventId === 'wreckage';
+  }
+
   private contextualChoicesFor(
     event: NonNullable<ReturnType<typeof survivalEventById>>,
     snapshot: SurvivalSnapshot,
@@ -1451,7 +1515,11 @@ export class SurvivalEventFlow {
           : this.dependencies.session.companionEventActionAvailability?.(
               choice.companionAction,
             );
-        if (choice.companionAction !== undefined && companionAvailability?.visible !== true) {
+        if (
+          choice.companionAction !== undefined
+          && companionAvailability !== undefined
+          && companionAvailability.visible !== true
+        ) {
           return [];
         }
         const anchorId = this.contextualEventAnchorId(event.id, choice.id);
@@ -1666,11 +1734,11 @@ export class SurvivalEventFlow {
   ): void {
     if (!preserveDeferredSync) this.cancelDeferredPresentationSync();
     this.preparedEventId = null;
-    this.activeDriftingOperation = null;
+    this.activeFocusedOperation = null;
     this.eligibility.clear();
     this.presentation = 'idle';
     const steps: readonly (() => void)[] = [
-      () => this.dependencies.drifting.clear(),
+      () => this.dependencies.focused.clear(),
       () => this.dependencies.audio.clearEvent(),
       () => this.dependencies.world.setEventSelectedItem?.(null),
       () => this.dependencies.world.setEventEligibleItems?.(null),

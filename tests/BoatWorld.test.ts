@@ -2634,7 +2634,7 @@ describe('BoatWorld helpers', () => {
     const baseQuaternion = camera.quaternion.clone();
     world.stageEvent(eventId, 8);
 
-    const entered = world.enterDriftingItemView(eventId);
+    const entered = world.enterFocusedEventView(eventId);
     world.update(1.2, 1.2);
     await entered;
 
@@ -2656,7 +2656,7 @@ describe('BoatWorld helpers', () => {
     )).toBeLessThan(0.001);
     expect(item.visible).toBe(false);
 
-    const exited = world.exitDriftingItemView();
+    const exited = world.exitFocusedEventView();
     world.update(4.4, 1.2);
     await exited;
     expect(camera.position.toArray()).toEqual(basePosition.toArray());
@@ -2725,7 +2725,7 @@ describe('BoatWorld helpers', () => {
       featuredModels,
     );
     world.stageEvent('drifting-barrel', 8);
-    const entered = world.enterDriftingItemView('drifting-barrel');
+    const entered = world.enterFocusedEventView('drifting-barrel');
     world.update(1.2, 1.2);
     await entered;
     const updateMatrixWorld = vi.spyOn(world.scene, 'updateMatrixWorld');
@@ -2748,8 +2748,8 @@ describe('BoatWorld helpers', () => {
       const eventId: DriftingItemEventId = 'drifting-barrel';
       world.stageEvent(eventId, 8);
       let settled = 0;
-      const first = world.enterDriftingItemView(eventId).then(() => { settled += 1; });
-      const second = world.enterDriftingItemView(eventId).then(() => { settled += 1; });
+      const first = world.enterFocusedEventView(eventId).then(() => { settled += 1; });
+      const second = world.enterFocusedEventView(eventId).then(() => { settled += 1; });
 
       if (interruption === 'hidden') world.setDocumentHidden(true);
       else if (interruption === 'clear') world.clearEvent();
@@ -2758,8 +2758,8 @@ describe('BoatWorld helpers', () => {
       expect(settled).toBe(2);
       if (interruption === 'hidden') {
         expect(camera.position).toEqual(expect.objectContaining(FISHING_PLAYER_SEAT));
-        const exitFirst = world.exitDriftingItemView();
-        const exitSecond = world.exitDriftingItemView();
+        const exitFirst = world.exitFocusedEventView();
+        const exitSecond = world.exitFocusedEventView();
         world.setDocumentHidden(true);
         await Promise.all([exitFirst, exitSecond]);
       }
@@ -7865,7 +7865,7 @@ describe('BoatWorld helpers', () => {
       buoyancy: BoatBuoyancy;
       cameraController: {
         update(delta: number): void;
-        updateDriftingItemView(delta: number, target: Object3D | null): void;
+        updateFocusedEventView(delta: number, target: Object3D | null): void;
       };
       hangingLantern: { update(...args: unknown[]): void };
       diveController: DivePresentationController;
@@ -7921,7 +7921,7 @@ describe('BoatWorld helpers', () => {
     vi.spyOn(internals.eventPresentationHost, 'update').mockImplementation(() => {
       order.push('event');
     });
-    vi.spyOn(internals.cameraController, 'updateDriftingItemView').mockImplementation(() => {
+    vi.spyOn(internals.cameraController, 'updateFocusedEventView').mockImplementation(() => {
       order.push('drifting-camera');
     });
     vi.spyOn(internals.carlitosDelegation, 'update').mockImplementation(() => {

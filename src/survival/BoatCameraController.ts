@@ -8,14 +8,14 @@ import {
 } from 'three';
 import type { TimedAnimation } from './animationMath';
 
-const DRIFTING_ITEM_CAMERA_DURATION = 1.1;
+const FOCUSED_EVENT_CAMERA_DURATION = 1.1;
 const REAR_CAMERA_TURN_DURATION = 0.65;
 const REAR_CAMERA_PITCH = -0.75;
 const BASE_CAMERA_POSITION = Object.freeze({ x: 0, y: 0.88, z: 1.56 });
-const DRIFTING_ITEM_CAMERA_POSITION = Object.freeze({ x: 0, y: 1.38, z: -1.42 });
+const FOCUSED_EVENT_CAMERA_POSITION = Object.freeze({ x: 0, y: 1.38, z: -1.42 });
 
-type DriftingItemCameraPhase = 'idle' | 'entering' | 'focused' | 'returning';
-type DriftingItemCameraAnimation = TimedAnimation<'enter' | 'return'>;
+type FocusedEventCameraPhase = 'idle' | 'entering' | 'focused' | 'returning';
+type FocusedEventCameraAnimation = TimedAnimation<'enter' | 'return'>;
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
@@ -36,14 +36,14 @@ export class BoatCameraController {
     BASE_CAMERA_POSITION.z,
   );
   private readonly baseQuaternion = new Quaternion();
-  private readonly driftingPosition = new Vector3(
-    DRIFTING_ITEM_CAMERA_POSITION.x,
-    DRIFTING_ITEM_CAMERA_POSITION.y,
-    DRIFTING_ITEM_CAMERA_POSITION.z,
+  private readonly focusedEventPosition = new Vector3(
+    FOCUSED_EVENT_CAMERA_POSITION.x,
+    FOCUSED_EVENT_CAMERA_POSITION.y,
+    FOCUSED_EVENT_CAMERA_POSITION.z,
   );
-  private readonly driftingStartPosition = new Vector3();
-  private readonly driftingStartQuaternion = new Quaternion();
-  private readonly driftingTargetQuaternion = new Quaternion();
+  private readonly focusedEventStartPosition = new Vector3();
+  private readonly focusedEventStartQuaternion = new Quaternion();
+  private readonly focusedEventTargetQuaternion = new Quaternion();
   private readonly worldTarget = new Vector3();
   private readonly worldPosition = new Vector3();
   private readonly parentQuaternion = new Quaternion();
@@ -57,9 +57,9 @@ export class BoatCameraController {
   private rearTurnElapsed = REAR_CAMERA_TURN_DURATION;
   private itemAnimationLabYaw = 0;
   private itemAnimationLabPitch = 0;
-  private driftingTarget: Object3D | null = null;
-  private driftingPhase: DriftingItemCameraPhase = 'idle';
-  private activeDriftingAnimation: DriftingItemCameraAnimation | null = null;
+  private focusedEventTarget: Object3D | null = null;
+  private focusedEventPhase: FocusedEventCameraPhase = 'idle';
+  private activeFocusedEventAnimation: FocusedEventCameraAnimation | null = null;
   private disposed = false;
 
   constructor(
@@ -100,31 +100,31 @@ export class BoatCameraController {
     this.itemAnimationLabPitch = pitch;
   }
 
-  beginDriftingItemView(target: Object3D): Promise<void> {
+  beginFocusedEventView(target: Object3D): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    this.cancelDriftingAnimation();
-    this.driftingTarget = target;
-    this.driftingStartPosition.copy(this.camera.position);
-    this.driftingStartQuaternion.copy(this.camera.quaternion);
-    this.updateDriftingTarget();
-    this.driftingPhase = 'entering';
-    return this.startDriftingAnimation('enter');
+    this.cancelFocusedEventAnimation();
+    this.focusedEventTarget = target;
+    this.focusedEventStartPosition.copy(this.camera.position);
+    this.focusedEventStartQuaternion.copy(this.camera.quaternion);
+    this.updateFocusedEventTarget();
+    this.focusedEventPhase = 'entering';
+    return this.startFocusedEventAnimation('enter');
   }
 
-  endDriftingItemView(): Promise<void> {
+  endFocusedEventView(): Promise<void> {
     if (this.disposed) return Promise.resolve();
     if (
-      this.driftingPhase === 'idle'
-      && this.activeDriftingAnimation === null
+      this.focusedEventPhase === 'idle'
+      && this.activeFocusedEventAnimation === null
     ) {
       this.restoreBasePose();
       return Promise.resolve();
     }
-    this.cancelDriftingAnimation();
-    this.driftingStartPosition.copy(this.camera.position);
-    this.driftingStartQuaternion.copy(this.camera.quaternion);
-    this.driftingPhase = 'returning';
-    return this.startDriftingAnimation('return');
+    this.cancelFocusedEventAnimation();
+    this.focusedEventStartPosition.copy(this.camera.position);
+    this.focusedEventStartQuaternion.copy(this.camera.quaternion);
+    this.focusedEventPhase = 'returning';
+    return this.startFocusedEventAnimation('return');
   }
 
   restoreBasePose(): void {
@@ -132,21 +132,21 @@ export class BoatCameraController {
     this.applyExactBasePose();
   }
 
-  cancelDriftingItemView(): void {
+  cancelFocusedEventView(): void {
     if (this.disposed) return;
-    this.cancelDriftingAnimation();
-    this.driftingPhase = 'idle';
-    this.driftingTarget = null;
+    this.cancelFocusedEventAnimation();
+    this.focusedEventPhase = 'idle';
+    this.focusedEventTarget = null;
     this.applyExactBasePose();
   }
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
-    const animation = this.activeDriftingAnimation;
+    const animation = this.activeFocusedEventAnimation;
     if (animation === null) return;
-    this.activeDriftingAnimation = null;
-    this.applyDriftingAnimation(animation.kind, 1);
-    this.finishDriftingAnimation(animation.kind);
+    this.activeFocusedEventAnimation = null;
+    this.applyFocusedEventAnimation(animation.kind, 1);
+    this.finishFocusedEventAnimation(animation.kind);
     animation.resolve();
   }
 
@@ -158,22 +158,22 @@ export class BoatCameraController {
     this.applyBasePresentationPose();
   }
 
-  updateDriftingItemView(delta: number, target: Object3D | null): void {
+  updateFocusedEventView(delta: number, target: Object3D | null): void {
     if (this.disposed) return;
-    if (!this.prepareCurrentDriftingTarget(target)) return;
-    this.advanceDriftingAnimation(delta);
+    if (!this.prepareCurrentFocusedEventTarget(target)) return;
+    this.advanceFocusedEventAnimation(delta);
   }
 
-  applyDriftingItemView(target: Object3D | null): void {
+  applyFocusedEventView(target: Object3D | null): void {
     if (this.disposed) return;
-    if (!this.prepareCurrentDriftingTarget(target)) return;
-    this.applyDriftingPose();
+    if (!this.prepareCurrentFocusedEventTarget(target)) return;
+    this.applyFocusedEventPose();
   }
 
-  requiresDriftingItemTarget(): boolean {
+  requiresFocusedEventTarget(): boolean {
     return !this.disposed && (
-      this.driftingPhase === 'entering'
-      || this.driftingPhase === 'focused'
+      this.focusedEventPhase === 'entering'
+      || this.focusedEventPhase === 'focused'
     );
   }
 
@@ -193,9 +193,9 @@ export class BoatCameraController {
 
   dispose(): void {
     if (this.disposed) return;
-    this.cancelDriftingAnimation();
-    this.driftingPhase = 'idle';
-    this.driftingTarget = null;
+    this.cancelFocusedEventAnimation();
+    this.focusedEventPhase = 'idle';
+    this.focusedEventTarget = null;
     this.applyExactBasePose();
     this.disposed = true;
   }
@@ -226,75 +226,75 @@ export class BoatCameraController {
     this.camera.quaternion.copy(this.baseQuaternion);
   }
 
-  private startDriftingAnimation(kind: 'enter' | 'return'): Promise<void> {
-    this.cancelDriftingAnimation();
+  private startFocusedEventAnimation(kind: 'enter' | 'return'): Promise<void> {
+    this.cancelFocusedEventAnimation();
     return new Promise<void>((resolve) => {
-      this.activeDriftingAnimation = {
+      this.activeFocusedEventAnimation = {
         kind,
-        duration: DRIFTING_ITEM_CAMERA_DURATION,
+        duration: FOCUSED_EVENT_CAMERA_DURATION,
         elapsed: 0,
         resolve,
       };
-      this.applyDriftingAnimation(kind, 0);
+      this.applyFocusedEventAnimation(kind, 0);
     });
   }
 
-  private advanceDriftingAnimation(delta: number): void {
-    const animation = this.activeDriftingAnimation;
+  private advanceFocusedEventAnimation(delta: number): void {
+    const animation = this.activeFocusedEventAnimation;
     if (animation === null) {
-      this.applyDriftingPose();
+      this.applyFocusedEventPose();
       return;
     }
     animation.elapsed = Math.min(animation.duration, animation.elapsed + delta);
     const progress = animation.duration <= 0 ? 1 : animation.elapsed / animation.duration;
-    this.applyDriftingAnimation(animation.kind, progress);
+    this.applyFocusedEventAnimation(animation.kind, progress);
     if (progress < 1) return;
-    this.activeDriftingAnimation = null;
-    this.finishDriftingAnimation(animation.kind);
+    this.activeFocusedEventAnimation = null;
+    this.finishFocusedEventAnimation(animation.kind);
     animation.resolve();
   }
 
-  private applyDriftingPose(): void {
-    if (this.driftingPhase !== 'focused') return;
-    this.camera.position.copy(this.driftingPosition);
-    this.camera.quaternion.copy(this.driftingTargetQuaternion);
+  private applyFocusedEventPose(): void {
+    if (this.focusedEventPhase !== 'focused') return;
+    this.camera.position.copy(this.focusedEventPosition);
+    this.camera.quaternion.copy(this.focusedEventTargetQuaternion);
   }
 
-  private applyDriftingAnimation(kind: 'enter' | 'return', progress: number): void {
+  private applyFocusedEventAnimation(kind: 'enter' | 'return', progress: number): void {
     const travel = smootherStep(clamp(progress, 0, 1));
     if (kind === 'enter') {
       this.camera.position.lerpVectors(
-        this.driftingStartPosition,
-        this.driftingPosition,
+        this.focusedEventStartPosition,
+        this.focusedEventPosition,
         travel,
       );
-      this.camera.quaternion.copy(this.driftingStartQuaternion)
-        .slerp(this.driftingTargetQuaternion, travel);
+      this.camera.quaternion.copy(this.focusedEventStartQuaternion)
+        .slerp(this.focusedEventTargetQuaternion, travel);
       return;
     }
     this.interpolateToBasePose(
-      this.driftingStartPosition,
-      this.driftingStartQuaternion,
+      this.focusedEventStartPosition,
+      this.focusedEventStartQuaternion,
       travel,
     );
   }
 
-  private finishDriftingAnimation(kind: 'enter' | 'return'): void {
+  private finishFocusedEventAnimation(kind: 'enter' | 'return'): void {
     if (kind === 'enter') {
-      this.driftingPhase = 'focused';
-      this.applyDriftingPose();
+      this.focusedEventPhase = 'focused';
+      this.applyFocusedEventPose();
       return;
     }
-    this.driftingPhase = 'idle';
-    this.driftingTarget = null;
+    this.focusedEventPhase = 'idle';
+    this.focusedEventTarget = null;
     this.applyExactBasePose();
   }
 
-  private updateDriftingTarget(): boolean {
-    const target = this.driftingTarget;
+  private updateFocusedEventTarget(): boolean {
+    const target = this.focusedEventTarget;
     if (target === null) return false;
     target.getWorldPosition(this.worldTarget);
-    this.worldPosition.copy(this.driftingPosition);
+    this.worldPosition.copy(this.focusedEventPosition);
     const parent = this.camera.parent;
     if (parent !== null) parent.localToWorld(this.worldPosition);
     this.lookMatrix.lookAt(
@@ -302,30 +302,30 @@ export class BoatCameraController {
       this.worldTarget,
       this.camera.up,
     );
-    this.driftingTargetQuaternion.setFromRotationMatrix(this.lookMatrix);
+    this.focusedEventTargetQuaternion.setFromRotationMatrix(this.lookMatrix);
     if (parent !== null) {
       parent.getWorldQuaternion(this.parentQuaternion).invert();
-      this.driftingTargetQuaternion.premultiply(this.parentQuaternion);
+      this.focusedEventTargetQuaternion.premultiply(this.parentQuaternion);
     }
     return true;
   }
 
-  private prepareCurrentDriftingTarget(target: Object3D | null): boolean {
+  private prepareCurrentFocusedEventTarget(target: Object3D | null): boolean {
     if (
-      this.driftingPhase !== 'entering'
-      && this.driftingPhase !== 'focused'
+      this.focusedEventPhase !== 'entering'
+      && this.focusedEventPhase !== 'focused'
     ) {
       return true;
     }
-    this.driftingTarget = target;
-    if (this.updateDriftingTarget()) return true;
-    this.cancelDriftingItemView();
+    this.focusedEventTarget = target;
+    if (this.updateFocusedEventTarget()) return true;
+    this.cancelFocusedEventView();
     return false;
   }
 
-  private cancelDriftingAnimation(): void {
-    const animation = this.activeDriftingAnimation;
-    this.activeDriftingAnimation = null;
+  private cancelFocusedEventAnimation(): void {
+    const animation = this.activeFocusedEventAnimation;
+    this.activeFocusedEventAnimation = null;
     animation?.resolve();
   }
 }
