@@ -19,6 +19,7 @@ import {
   type VolumetricClouds,
 } from './VolumetricClouds';
 import { WeatherEffects } from './WeatherEffects';
+import { runCleanupSteps } from './SceneResources';
 import type { SkyPalette, SkyPhase, SkyState } from './skyPalette';
 import type { VisualQuality } from '../rendering/visualQuality';
 
@@ -184,15 +185,21 @@ export class Environment {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.weatherEffects.dispose();
-    this.volumetricClouds?.dispose();
-    this.sky.dispose();
-    this.scene.remove(this.keyLight, this.fillLight);
-    if (this.scene.background === this.fallbackBackground) {
-      this.scene.background = this.previousBackground;
-    }
-    if (this.scene.fog === this.atmosphereFog) {
-      this.scene.fog = this.previousFog;
-    }
+    runCleanupSteps([
+      () => this.weatherEffects.dispose(),
+      () => this.volumetricClouds?.dispose(),
+      () => this.sky.dispose(),
+      () => this.scene.remove(this.keyLight, this.fillLight),
+      () => {
+        if (this.scene.background === this.fallbackBackground) {
+          this.scene.background = this.previousBackground;
+        }
+      },
+      () => {
+        if (this.scene.fog === this.atmosphereFog) {
+          this.scene.fog = this.previousFog;
+        }
+      },
+    ]);
   }
 }

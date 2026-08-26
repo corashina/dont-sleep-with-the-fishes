@@ -16,14 +16,18 @@ import {
 } from 'three';
 import type { VisualQuality } from '../rendering/visualQuality';
 import { SUN_DIRECTION } from './celestialLight';
+import { ignoreCleanupError, runCleanupSteps } from './SceneResources';
 import type { SkyPalette, SkyState } from './skyPalette';
-import { volumetricCloudProfile } from './volumetricCloudProfiles';
+import {
+  volumetricCloudProfile,
+  type VolumetricCloudProfile,
+} from './volumetricCloudProfiles';
 
 const NOISE_SIZE = 64;
 const CLOUD_RADIUS = 900;
 const QUALITY_STEPS: Readonly<Record<VisualQuality, number>> = Object.freeze({
-  low: 12,
-  medium: 20,
+  low: 8,
+  medium: 12,
   high: 16,
 });
 
@@ -166,10 +170,23 @@ function finite(value: number): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+function blend(current: number, target: number, amount: number): number {
+  return current + (target - current) * amount;
+}
+
+function moveToward(current: number, target: number, amount: number): number {
+  return current < target
+    ? Math.min(target, current + amount)
+    : Math.max(target, current - amount);
+}
+
 export class VolumetricClouds {
   readonly material: ShaderMaterial;
   readonly mesh: Mesh<SphereGeometry, ShaderMaterial>;
   private readonly noiseTexture: Data3DTexture;
+  private readonly windVelocity = new Vector2();
+  private targetProfile: Readonly<VolumetricCloudProfile>;
+  private targetStrength = 0;
   private enabled = false;
   private strength = 0;
   private disposed = false;
@@ -178,49 +195,66 @@ export class VolumetricClouds {
     private readonly scene: Scene,
     quality: VisualQuality,
   ) {
-    this.noiseTexture = createNoiseTexture();
     const calm = volumetricCloudProfile('calm');
-    this.material = new ShaderMaterial({
-      glslVersion: GLSL3,
-      vertexShader,
-      fragmentShader,
-      side: BackSide,
-      depthTest: true,
-      depthWrite: false,
-      transparent: true,
-      premultipliedAlpha: true,
-      uniforms: {
-        uNoiseTexture: { value: this.noiseTexture },
-        uCameraPosition: { value: new Vector3() },
-        uSunDirection: { value: new Vector3(...SUN_DIRECTION).normalize() },
-        uAmbientColor: { value: new Color() },
-        uSunColor: { value: new Color() },
-        uWindOffset: { value: new Vector2() },
-        uTime: { value: 0 },
-        uOpacity: { value: 0 },
-        uCoverage: { value: calm.coverage },
-        uDensity: { value: calm.density },
-        uBaseHeight: { value: calm.baseHeight },
-        uTopHeight: { value: calm.topHeight },
-        uShapeScale: { value: calm.shapeScale },
-        uDetailScale: { value: calm.detailScale },
-        uErosion: { value: calm.erosion },
-        uAmbientStrength: { value: calm.ambient },
-        uExtinction: { value: calm.extinction },
-        uLightExtinction: { value: calm.extinction * 24 },
-        uLightStep: { value: 18 },
-        uMaxSteps: { value: QUALITY_STEPS[quality] },
-      },
-    });
-    this.mesh = new Mesh(
-      new SphereGeometry(CLOUD_RADIUS, 32, 16),
-      this.material,
-    );
-    this.mesh.name = 'volumetric-clouds';
-    this.mesh.visible = false;
-    this.mesh.frustumCulled = false;
-    this.mesh.renderOrder = -900;
-    scene.add(this.mesh);
+    this.targetProfile = calm;
+    this.windVelocity.set(calm.wind.x, calm.wind.y);
+    let noiseTexture: Data3DTexture | undefined;
+    let material: ShaderMaterial | undefined;
+    let geometry: SphereGeometry | undefined;
+    let mesh: Mesh<SphereGeometry, ShaderMaterial> | undefined;
+    try {
+      noiseTexture = createNoiseTexture();
+      material = new ShaderMaterial({
+        glslVersion: GLSL3,
+        vertexShader,
+        fragmentShader,
+        side: BackSide,
+        depthTest: true,
+        depthWrite: false,
+        transparent: true,
+        premultipliedAlpha: true,
+        uniforms: {
+          uNoiseTexture: { value: noiseTexture },
+          uCameraPosition: { value: new Vector3() },
+          uSunDirection: { value: new Vector3(...SUN_DIRECTION).normalize() },
+          uAmbientColor: { value: new Color() },
+          uSunColor: { value: new Color() },
+          uWindOffset: { value: new Vector2() },
+          uTime: { value: 0 },
+          uOpacity: { value: 0 },
+          uCoverage: { value: calm.coverage },
+          uDensity: { value: calm.density },
+          uBaseHeight: { value: calm.baseHeight },
+          uTopHeight: { value: calm.topHeight },
+          uShapeScale: { value: calm.shapeScale },
+          uDetailScale: { value: calm.detailScale },
+          uErosion: { value: calm.erosion },
+          uAmbientStrength: { value: calm.ambient },
+          uExtinction: { value: calm.extinction },
+          uLightExtinction: { value: calm.extinction * 24 },
+          uLightStep: { value: 18 },
+          uMaxSteps: { value: QUALITY_STEPS[quality] },
+        },
+      });
+      geometry = new SphereGeometry(CLOUD_RADIUS, 32, 16);
+      mesh = new Mesh(geometry, material);
+      mesh.name = 'volumetric-clouds';
+      mesh.visible = false;
+      mesh.frustumCulled = false;
+      mesh.renderOrder = -900;
+      scene.add(mesh);
+    } catch (error) {
+      ignoreCleanupError(() => runCleanupSteps([
+        () => mesh?.removeFromParent(),
+        () => geometry?.dispose(),
+        () => material?.dispose(),
+        () => noiseTexture?.dispose(),
+      ]));
+      throw error;
+    }
+    this.noiseTexture = noiseTexture;
+    this.material = material;
+    this.mesh = mesh;
   }
 
   setEnabled(value: boolean): void {
@@ -237,41 +271,78 @@ export class VolumetricClouds {
     if (this.disposed) return 0;
 
     const delta = Math.max(0, finite(frame.delta));
-    if (frame.state.phase === 'night') {
-      this.strength = 0;
-    } else if (this.enabled) {
-      this.strength = Math.min(1, this.strength + delta);
-    } else {
-      this.strength = Math.max(0, this.strength - delta);
-    }
+    const transition = Math.min(1, delta);
+    this.targetStrength = this.enabled && frame.state.phase !== 'night' ? 1 : 0;
+    this.strength = moveToward(this.strength, this.targetStrength, delta);
 
     const x = finite(frame.cameraPosition.x);
     const y = finite(frame.cameraPosition.y);
     const z = finite(frame.cameraPosition.z);
     this.mesh.position.set(x, y, z);
 
-    const profile = volumetricCloudProfile(frame.state.weather);
+    this.targetProfile = volumetricCloudProfile(frame.state.weather);
+    const profile = this.targetProfile;
     const time = finite(frame.time);
     const uniforms = this.material.uniforms;
     (uniforms.uCameraPosition!.value as Vector3).set(x, y, z);
-    (uniforms.uAmbientColor!.value as Color).copy(frame.palette.ambientLightColor);
-    (uniforms.uSunColor!.value as Color).copy(frame.palette.sunColor);
-    (uniforms.uWindOffset!.value as Vector2).set(
-      profile.wind.x * time,
-      profile.wind.y * time,
-    );
+    (uniforms.uAmbientColor!.value as Color)
+      .lerp(frame.palette.ambientLightColor, transition);
+    (uniforms.uSunColor!.value as Color).lerp(frame.palette.sunColor, transition);
+    this.windVelocity.lerp(profile.wind, transition);
+    (uniforms.uWindOffset!.value as Vector2)
+      .addScaledVector(this.windVelocity, delta);
     uniforms.uTime!.value = time;
     uniforms.uOpacity!.value = this.strength;
-    uniforms.uCoverage!.value = profile.coverage;
-    uniforms.uDensity!.value = profile.density;
-    uniforms.uBaseHeight!.value = profile.baseHeight;
-    uniforms.uTopHeight!.value = profile.topHeight;
-    uniforms.uShapeScale!.value = profile.shapeScale;
-    uniforms.uDetailScale!.value = profile.detailScale;
-    uniforms.uErosion!.value = profile.erosion;
-    uniforms.uAmbientStrength!.value = profile.ambient;
-    uniforms.uExtinction!.value = profile.extinction;
-    uniforms.uLightExtinction!.value = profile.extinction * 24;
+    uniforms.uCoverage!.value = blend(
+      uniforms.uCoverage!.value as number,
+      profile.coverage,
+      transition,
+    );
+    uniforms.uDensity!.value = blend(
+      uniforms.uDensity!.value as number,
+      profile.density,
+      transition,
+    );
+    uniforms.uBaseHeight!.value = blend(
+      uniforms.uBaseHeight!.value as number,
+      profile.baseHeight,
+      transition,
+    );
+    uniforms.uTopHeight!.value = blend(
+      uniforms.uTopHeight!.value as number,
+      profile.topHeight,
+      transition,
+    );
+    uniforms.uShapeScale!.value = blend(
+      uniforms.uShapeScale!.value as number,
+      profile.shapeScale,
+      transition,
+    );
+    uniforms.uDetailScale!.value = blend(
+      uniforms.uDetailScale!.value as number,
+      profile.detailScale,
+      transition,
+    );
+    uniforms.uErosion!.value = blend(
+      uniforms.uErosion!.value as number,
+      profile.erosion,
+      transition,
+    );
+    uniforms.uAmbientStrength!.value = blend(
+      uniforms.uAmbientStrength!.value as number,
+      profile.ambient,
+      transition,
+    );
+    uniforms.uExtinction!.value = blend(
+      uniforms.uExtinction!.value as number,
+      profile.extinction,
+      transition,
+    );
+    uniforms.uLightExtinction!.value = blend(
+      uniforms.uLightExtinction!.value as number,
+      profile.extinction * 24,
+      transition,
+    );
     this.mesh.visible = this.strength > 0;
     return this.strength;
   }
@@ -282,10 +353,12 @@ export class VolumetricClouds {
     this.enabled = false;
     this.strength = 0;
     this.mesh.visible = false;
-    this.scene.remove(this.mesh);
-    this.mesh.geometry.dispose();
-    this.material.dispose();
-    this.noiseTexture.dispose();
+    runCleanupSteps([
+      () => this.scene.remove(this.mesh),
+      () => this.mesh.geometry.dispose(),
+      () => this.material.dispose(),
+      () => this.noiseTexture.dispose(),
+    ]);
   }
 }
 

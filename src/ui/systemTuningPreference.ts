@@ -66,12 +66,14 @@ function parseState(value: unknown): SystemTuningState {
   const ambientOcclusionIntensity = clampPostProcessingSetting(
     'ambientOcclusionIntensity',
     typeof stored.ambientOcclusionIntensity === 'number'
+      && Number.isFinite(stored.ambientOcclusionIntensity)
       ? stored.ambientOcclusionIntensity
       : DEFAULT_SYSTEM_TUNING_STATE.ambientOcclusionIntensity,
   );
   const ambientOcclusionRadius = clampPostProcessingSetting(
     'ambientOcclusionRadius',
     typeof stored.ambientOcclusionRadius === 'number'
+      && Number.isFinite(stored.ambientOcclusionRadius)
       ? stored.ambientOcclusionRadius
       : DEFAULT_SYSTEM_TUNING_STATE.ambientOcclusionRadius,
   );
