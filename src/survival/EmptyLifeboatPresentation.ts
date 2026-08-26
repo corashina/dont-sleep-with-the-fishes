@@ -12,7 +12,7 @@ import { eventSideFromSeed, type EventSide } from './eventVariant';
 import { KeyedEventPresentation } from './KeyedEventPresentation';
 import type { EventPresentationKey } from './survivalTypes';
 
-const FLOAT_POSITION = Object.freeze({ x: 4.8, y: 0.24, z: -5.2 });
+const FLOAT_POSITION = Object.freeze({ x: 5.8, y: 0.24, z: -7.2 });
 const SEARCH_DURATION = 1.8;
 const DRIFT_DURATION = 1.1;
 
@@ -25,7 +25,12 @@ export class EmptyLifeboatPresentation extends KeyedEventPresentation {
   private readonly model = new Group();
   private readonly basePosition = new Vector3();
   private readonly animatedPosition = new Vector3();
-  private readonly baseQuaternion = new Quaternion();
+  private readonly baseQuaternion = new Quaternion(
+    0,
+    Math.sin(Math.PI / 8),
+    0,
+    Math.cos(Math.PI / 8),
+  );
   private readonly wave: WaveSample = {
     height: 0,
     displacementX: 0,
@@ -76,11 +81,7 @@ export class EmptyLifeboatPresentation extends KeyedEventPresentation {
 
   protected applyAnimation(kind: string, time: number, progress: number): void {
     if (kind === 'reveal') {
-      const reveal = smoothstep(progress);
-      this.animatedPosition.copy(this.basePosition);
-      this.animatedPosition.x += this.side * (1 - reveal) * 1.8;
-      this.animatedPosition.y -= (1 - reveal) * 0.16;
-      this.applyFloatingPose(time, this.animatedPosition);
+      this.applyFloatingPose(time, this.basePosition);
       return;
     }
     if (kind === 'empty-lifeboat.drift') {
