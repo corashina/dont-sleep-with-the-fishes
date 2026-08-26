@@ -39,10 +39,15 @@ import { ScavengePhysics } from '../src/physics/ScavengePhysics';
 import { PlayerController } from '../src/player/PlayerController';
 import { ScavengePhase } from '../src/phases/ScavengePhase';
 import type { ScavengeVisualState, SceneRenderer } from '../src/rendering/SceneRenderer';
-import type { PostProcessingControls } from '../src/rendering/postProcessingControls';
+import type {
+  PostProcessingControls,
+  PostProcessingControlState,
+  PostProcessingNumericSetting,
+} from '../src/rendering/postProcessingControls';
 import { createAntiAliasingQualityPreference } from '../src/rendering/antiAliasingQuality';
 import { createShadowQualityPreference } from '../src/rendering/shadowQuality';
 import { createVisualQualityPreference } from '../src/rendering/visualQuality';
+import { createSystemTuningPreference } from '../src/ui/systemTuningPreference';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 import type { PresentationWeatherId } from '../src/weather/presentationWeather';
 import { World } from '../src/world/World';
@@ -150,6 +155,34 @@ function postProcessingSceneRenderer(): SceneRenderer {
     render: vi.fn(),
     resize: vi.fn(),
     dispose: vi.fn(),
+  };
+}
+
+function persistedPostProcessingSceneRenderer(): {
+  sceneRenderer: SceneRenderer;
+  controls: PostProcessingControls;
+} {
+  const state: PostProcessingControlState = {
+    ambientOcclusionAvailable: true,
+    ambientOcclusionMode: 'composite',
+    ambientOcclusionIntensity: 1,
+    ambientOcclusionRadius: 0.5,
+  };
+  const controls: PostProcessingControls = {
+    getState: vi.fn(() => state),
+    setAmbientOcclusionMode: vi.fn((mode) => {
+      state.ambientOcclusionMode = mode;
+    }),
+    setNumeric: vi.fn((setting: PostProcessingNumericSetting, value: number) => {
+      state[setting] = value;
+    }),
+  };
+  return {
+    sceneRenderer: {
+      postProcessingControls: controls,
+      render: vi.fn(), resize: vi.fn(), dispose: vi.fn(),
+    },
+    controls,
   };
 }
 
@@ -373,6 +406,225 @@ function createImmediateMenu(
 }
 
 describe('Game menu lifecycle', () => {
+  it('applies stored system tuning before the first frame', () => {
+    const systemTuning = createSystemTuningPreference(null);
+    systemTuning.set('ambientOcclusionMode', 'off');
+    systemTuning.set('ambientOcclusionIntensity', 0.7);
+    systemTuning.set('ambientOcclusionRadius', 0.16);
+    systemTuning.set('performanceStatsVisible', true);
+    systemTuning.set('cameraFieldOfView', 92);
+    systemTuning.set('weatherOverride', 'rain');
+    systemTuning.set('phaseOverride', 'night');
+    const phase = {
+      ...gamePhase(),
+      setWeatherOverride: vi.fn(),
+      setTimeOfDayOverride: vi.fn(),
+    };
+    const postProcessingControls: PostProcessingControls = {
+      getState: vi.fn(() => ({
+        ambientOcclusionAvailable: true,
+        ambientOcclusionMode: 'off' as const,
+        ambientOcclusionIntensity: 0.7,
+        ambientOcclusionRadius: 0.16,
+      })),
+      setAmbientOcclusionMode: vi.fn(),
+      setNumeric: vi.fn(),
+    };
+    const sceneRenderer: SceneRenderer = {
+      postProcessingControls,
+      render: vi.fn(), resize: vi.fn(), dispose: vi.fn(),
+    };
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const game = Game.forTest({
+      createMenu: () => phase,
+      createScavenge: () => gamePhase(),
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      sceneRenderer,
+      systemTuning,
+      mount,
+    });
+
+    try {
+      const camera = (game as unknown as { camera: PerspectiveCamera }).camera;
+      expect(camera.fov).toBe(92);
+      expect(postProcessingControls.setAmbientOcclusionMode).toHaveBeenCalledWith('off');
+      expect(postProcessingControls.setNumeric).toHaveBeenCalledWith(
+        'ambientOcclusionIntensity',
+        0.7,
+      );
+      expect(postProcessingControls.setNumeric).toHaveBeenCalledWith(
+        'ambientOcclusionRadius',
+        0.16,
+      );
+      expect(mount.querySelector('[data-performance-stats]')?.hasAttribute('hidden'))
+        .toBe(false);
+      expect(phase.setWeatherOverride).toHaveBeenCalledWith('rain');
+      expect(phase.setTimeOfDayOverride).toHaveBeenCalledWith('night');
+    } finally {
+      game.dispose();
+    }
+  });
+
+  it('does not use the stats query to show performance data', () => {
+    const systemTuning = createSystemTuningPreference(null);
+    const originalUrl = window.location.href;
+    window.history.pushState({}, '', '?stats');
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const game = Game.forTest({
+      createMenu: () => gamePhase(),
+      createScavenge: () => gamePhase(),
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      systemTuning,
+      mount,
+    });
+
+    try {
+      expect(mount.querySelector('[data-performance-stats]')?.hasAttribute('hidden'))
+        .toBe(true);
+    } finally {
+      game.dispose();
+      window.history.pushState({}, '', originalUrl);
+    }
+  });
+
+  it('restores system tuning changed through the menu', () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: vi.fn((key: string) => values.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => values.set(key, value)),
+    };
+    const firstTuning = createSystemTuningPreference(storage);
+    const firstRenderer = persistedPostProcessingSceneRenderer();
+    const firstMount = document.createElement('main');
+    document.body.append(firstMount);
+    const firstGame = Game.forTest({
+      createMenu: () => gamePhase(),
+      createScavenge: () => gamePhase(),
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      sceneRenderer: firstRenderer.sceneRenderer,
+      systemTuning: firstTuning,
+      mount: firstMount,
+    });
+
+    try {
+      const aoMode = firstMount.querySelector<HTMLSelectElement>(
+        '[data-post-processing-ao-mode]',
+      )!;
+      const intensity = firstMount.querySelector<HTMLInputElement>(
+        '[data-post-processing-setting="ambientOcclusionIntensity"]',
+      )!;
+      const radius = firstMount.querySelector<HTMLInputElement>(
+        '[data-post-processing-setting="ambientOcclusionRadius"]',
+      )!;
+      const performance = firstMount.querySelector<HTMLInputElement>(
+        '[data-performance-stats-enabled]',
+      )!;
+      const fieldOfView = firstMount.querySelector<HTMLInputElement>('[data-camera-fov]')!;
+      const weather = firstMount.querySelector<HTMLSelectElement>(
+        '[data-presentation-weather]',
+      )!;
+      const night = firstMount.querySelector<HTMLInputElement>('[data-presentation-night]')!;
+
+      aoMode.value = 'off';
+      aoMode.dispatchEvent(new Event('change', { bubbles: true }));
+      intensity.value = '0.7';
+      intensity.dispatchEvent(new Event('input', { bubbles: true }));
+      radius.value = '0.16';
+      radius.dispatchEvent(new Event('input', { bubbles: true }));
+      performance.checked = true;
+      performance.dispatchEvent(new Event('change', { bubbles: true }));
+      fieldOfView.value = '92';
+      fieldOfView.dispatchEvent(new Event('input', { bubbles: true }));
+      weather.value = 'rain';
+      weather.dispatchEvent(new Event('change', { bubbles: true }));
+      night.checked = true;
+      night.dispatchEvent(new Event('change', { bubbles: true }));
+    } finally {
+      firstGame.dispose();
+    }
+
+    const secondTuning = createSystemTuningPreference(storage);
+    const secondRenderer = persistedPostProcessingSceneRenderer();
+    const phase = {
+      ...gamePhase(),
+      setWeatherOverride: vi.fn(),
+      setTimeOfDayOverride: vi.fn(),
+    };
+    const secondMount = document.createElement('main');
+    document.body.append(secondMount);
+    const secondGame = Game.forTest({
+      createMenu: () => phase,
+      createScavenge: () => gamePhase(),
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      sceneRenderer: secondRenderer.sceneRenderer,
+      systemTuning: secondTuning,
+      mount: secondMount,
+    });
+
+    try {
+      expect(secondMount.querySelector<HTMLSelectElement>(
+        '[data-post-processing-ao-mode]',
+      )?.value).toBe('off');
+      expect(secondMount.querySelector<HTMLInputElement>(
+        '[data-post-processing-setting="ambientOcclusionIntensity"]',
+      )?.value).toBe('0.7');
+      expect(secondMount.querySelector<HTMLInputElement>(
+        '[data-post-processing-setting="ambientOcclusionRadius"]',
+      )?.value).toBe('0.16');
+      expect(secondMount.querySelector<HTMLInputElement>(
+        '[data-performance-stats-enabled]',
+      )?.checked).toBe(true);
+      expect(secondMount.querySelector('[data-performance-stats]')?.hasAttribute('hidden'))
+        .toBe(false);
+      expect(secondMount.querySelector<HTMLInputElement>('[data-camera-fov]')?.value)
+        .toBe('92');
+      expect(secondMount.querySelector<HTMLSelectElement>(
+        '[data-presentation-weather]',
+      )?.value).toBe('rain');
+      expect(secondMount.querySelector<HTMLInputElement>('[data-presentation-night]')?.checked)
+        .toBe(true);
+      expect(secondRenderer.controls.setAmbientOcclusionMode).toHaveBeenCalledWith('off');
+      expect(secondRenderer.controls.setNumeric).toHaveBeenCalledWith(
+        'ambientOcclusionIntensity',
+        0.7,
+      );
+      expect(secondRenderer.controls.setNumeric).toHaveBeenCalledWith(
+        'ambientOcclusionRadius',
+        0.16,
+      );
+      expect(phase.setWeatherOverride).toHaveBeenCalledWith('rain');
+      expect(phase.setTimeOfDayOverride).toHaveBeenCalledWith('night');
+    } finally {
+      secondGame.dispose();
+    }
+  });
+
   it('starts in the menu and preserves pointer lock into scavenging', () => {
     const menu = gamePhase();
     const scavenge = gamePhase();
