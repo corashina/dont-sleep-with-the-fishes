@@ -66,6 +66,34 @@ it('refuses a checkpoint during fishing', () => {
     .toThrow('Cannot checkpoint active fishing.');
 });
 
+it.each([
+  ['rescued', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 13,
+      random: sequenceRandom([0, 0, 0.99]),
+      initial: { day: 23, rescueLead: 8 },
+      initialEventId: 'night-calm-fallback',
+    });
+    session.resolveEvent(choiceResponse('sleep'));
+    session.beginDawn();
+    return session;
+  }],
+  ['dead', () => new SurvivalSession(saved(), {
+    seed: 14,
+    initial: { health: 0 },
+  })],
+  ['sunk', () => new SurvivalSession(saved(), {
+    seed: 15,
+    initial: { hull: 0 },
+  })],
+] as const)('refuses a checkpoint for a %s run', (state, createSession) => {
+  const session = createSession();
+
+  expect(session.snapshot().state).toBe(state);
+  expect(() => session.exportCheckpoint())
+    .toThrow('Cannot checkpoint terminal state.');
+});
+
 function stateAfterRescueDawn(day: number, rescueLead: number, roll: number) {
   const session = new SurvivalSession(saved(), {
     seed: 1,

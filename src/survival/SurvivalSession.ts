@@ -384,6 +384,7 @@ export class SurvivalSession {
 
   exportCheckpoint(): SurvivalSessionCheckpoint {
     if (this.activeFishing !== null) throw new Error('Cannot checkpoint active fishing.');
+    if (this.isTerminal()) throw new Error('Cannot checkpoint terminal state.');
     if (!(this.random instanceof Mulberry32Random)) {
       throw new Error('Cannot checkpoint a non-restorable random source.');
     }
