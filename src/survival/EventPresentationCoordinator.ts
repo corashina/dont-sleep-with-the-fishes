@@ -3,6 +3,7 @@ import type { Object3D } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import { runCleanupSteps } from '../world/SceneResources';
 import type { DedicatedEventId } from './eventPresentationRoutes';
+import type { FocusedEventInteractionTarget } from './FocusedEventPresentation';
 import type {
   DedicatedEventPresentation,
   EventOutcomePresentation,
@@ -69,6 +70,14 @@ export class EventPresentationCoordinator {
     return this.activePresentation?.itemAimTarget ?? null;
   }
 
+  interactionTargets(): readonly FocusedEventInteractionTarget[] {
+    return this.activePresentation?.interactionTargets?.() ?? EMPTY_INTERACTION_TARGETS;
+  }
+
+  interactionRoot(id: string): Object3D | null {
+    return this.activePresentation?.interactionRoot?.(id) ?? null;
+  }
+
   react(result: EventOutcomePresentation): Promise<void> {
     return this.activePresentation?.react(result) ?? Promise.resolve();
   }
@@ -107,3 +116,5 @@ export class EventPresentationCoordinator {
     runCleanupSteps(steps);
   }
 }
+
+const EMPTY_INTERACTION_TARGETS: readonly FocusedEventInteractionTarget[] = Object.freeze([]);

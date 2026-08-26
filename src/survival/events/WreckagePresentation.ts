@@ -1,25 +1,15 @@
 import {
   BufferGeometry,
-  DoubleSide,
+  Float32BufferAttribute,
   Group,
-  InstancedMesh,
-  Material,
-  Matrix4,
   Mesh,
-  MeshBasicMaterial,
+  MeshStandardMaterial,
   Object3D,
-  PlaneGeometry,
-  Texture,
 } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
-import { collectMaterialTextures } from '../../rendering/modelPresentation';
-import {
-  collectMeshResources,
-  disposeResourceSets,
-  ignoreCleanupError,
-  runCleanupSteps,
-} from '../../world/SceneResources';
+import { runCleanupSteps } from '../../world/SceneResources';
 import type { EventModelInstance } from '../EventModelLibrary';
+import type { FocusedEventInteractionTarget } from '../FocusedEventPresentation';
 import type {
   DedicatedEventEnvironment,
   DedicatedEventPresentation,
@@ -34,7 +24,10 @@ import {
   type WreckageSample,
 } from './wreckageChoreography';
 
+type SurfaceDebrisKind = 'box' | 'crate' | 'pallet' | 'plank';
+
 interface SurfaceDebrisPlacement {
+  readonly kind: SurfaceDebrisKind;
   readonly x: number;
   readonly y: number;
   readonly z: number;
@@ -43,36 +36,60 @@ interface SurfaceDebrisPlacement {
 }
 
 interface ActiveWreckageBeat {
-  beat: WreckageBeat;
+  readonly beat: WreckageBeat;
   elapsed: number;
   readonly resolve: () => void;
-  nextBeat: WreckageBeat | null;
-  readonly releaseDiveOnFinish: boolean;
 }
 
-type WreckageResult = 'loot' | 'collapse' | 'creature' | 'ghost' | 'recovered' | null;
+const SURFACE_DEBRIS = Object.freeze([
+  { kind: 'box', x: 2.65, y: 0.04, z: -4.10, yaw: 0.34, scale: 0.82 },
+  { kind: 'crate', x: 4.15, y: 0.07, z: -5.25, yaw: -0.46, scale: 0.88 },
+  { kind: 'pallet', x: 5.55, y: 0.02, z: -6.75, yaw: 0.72, scale: 0.92 },
+  { kind: 'plank', x: 3.05, y: 0.10, z: -5.65, yaw: 0.18, scale: 0.95 },
+  { kind: 'plank', x: 4.85, y: 0.06, z: -7.55, yaw: -0.62, scale: 0.78 },
+  { kind: 'plank', x: 2.75, y: 0.08, z: -7.95, yaw: 1.02, scale: 0.70 },
+  { kind: 'plank', x: 5.95, y: 0.03, z: -8.65, yaw: -0.20, scale: 0.62 },
+  { kind: 'plank', x: 3.95, y: 0.12, z: -9.20, yaw: 0.58, scale: 0.56 },
+] as const satisfies readonly SurfaceDebrisPlacement[]);
 
-const SURFACE_DEBRIS: readonly SurfaceDebrisPlacement[] = Object.freeze([
-  { x: -2.4, y: 0.08, z: -4.2, yaw: 0.36, scale: 0.9 },
-  { x: 1.9, y: 0.02, z: -5.8, yaw: -0.52, scale: 0.72 },
-  { x: -0.72, y: 0.14, z: -7.1, yaw: 0.94, scale: 0.58 },
-  { x: 2.7, y: -0.04, z: -8.2, yaw: -0.21, scale: 0.48 },
-]);
+const SURFACE_TILT = Object.freeze([
+  { pitch: -0.03, roll: -0.04 },
+  { pitch: 0.02, roll: 0.06 },
+  { pitch: -0.01, roll: -0.05 },
+  { pitch: 0.03, roll: 0.07 },
+  { pitch: -0.04, roll: -0.06 },
+  { pitch: 0.05, roll: 0.04 },
+  { pitch: -0.02, roll: -0.03 },
+  { pitch: 0.04, roll: 0.05 },
+] as const);
 
-const SILT_INSTANCES = 14;
+const PLANK_START_INDEX = 3;
+const TARGET_ID = 'event:wreckage';
 
-const REACTION_BEATS = Object.freeze({
-  'wreckage.dive-loot': 'loot',
-  'wreckage.dive-collapse': 'collapse',
-  'wreckage.dive-creature': 'creature',
-  'wreckage.dive-ghost': 'ghost',
-} as const);
-
-function resultForBeat(beat: WreckageBeat): WreckageResult {
-  if (beat === 'loot' || beat === 'collapse' || beat === 'creature' || beat === 'ghost') {
-    return beat;
-  }
-  return null;
+function createPlankGeometry(): BufferGeometry {
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute([
+    -1.00, 0.08, -0.18,
+    1.08, 0.08, -0.13,
+    0.94, 0.08, 0.20,
+    -0.90, 0.08, 0.16,
+    -1.00, -0.08, -0.18,
+    1.08, -0.08, -0.13,
+    0.94, -0.08, 0.20,
+    -0.90, -0.08, 0.16,
+  ], 3));
+  geometry.setIndex([
+    0, 1, 2, 0, 2, 3,
+    7, 6, 5, 7, 5, 4,
+    0, 4, 5, 0, 5, 1,
+    1, 5, 6, 1, 6, 2,
+    2, 6, 7, 2, 7, 3,
+    3, 7, 4, 3, 4, 0,
+  ]);
+  geometry.addGroup(0, 6, 0);
+  geometry.addGroup(6, 30, 1);
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 export class WreckagePresentation implements DedicatedEventPresentation {
@@ -81,162 +98,105 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   readonly boatRoot = new Group();
   readonly itemAimTarget = new Object3D();
 
-  private readonly sample: WreckageSample = createWreckageSample();
-  private readonly scratchObject = new Object3D();
-  private readonly scratchMatrix = new Matrix4();
-  private readonly ship: EventModelInstance;
-  private readonly planks: EventModelInstance;
-  private readonly anglerfish: Group;
-  private readonly ghost: Group;
-  private readonly barrel: Group;
   private readonly debris = new Group();
-  private readonly surfacePlanks: Group[];
-  private readonly silt: InstancedMesh<PlaneGeometry, MeshBasicMaterial>;
-  private readonly recoveredDebris: Group;
-  private readonly redFlash: Mesh<PlaneGeometry, MeshBasicMaterial>;
-  private readonly ownedGeometries = new Set<BufferGeometry>();
-  private readonly ownedMaterials = new Set<Material>();
-  private readonly ghostGeometries = new Set<BufferGeometry>();
-  private readonly ghostMaterials = new Set<Material>();
-  private readonly ghostTextures = new Set<Texture>();
-  private readonly completeActiveSteps: readonly (() => void)[] = [
-    () => this.restoreCompletedSearchDebris(),
-    () => this.releaseCompletedDive(),
-    () => this.resolveCompletedBeat(),
+  private readonly ship: EventModelInstance;
+  private readonly box: EventModelInstance;
+  private readonly crate: EventModelInstance;
+  private readonly pallet: EventModelInstance;
+  private readonly plankGeometry = createPlankGeometry();
+  private readonly plankMaterials = [
+    new MeshStandardMaterial({
+      color: 0x8a5a35,
+      roughness: 0.92,
+      metalness: 0,
+      flatShading: true,
+    }),
+    new MeshStandardMaterial({
+      color: 0x5f3a24,
+      roughness: 0.96,
+      metalness: 0,
+      flatShading: true,
+    }),
   ];
-  private readonly siltMaterial = new MeshBasicMaterial({
-    color: 0x9ab9ad,
-    transparent: true,
-    opacity: 0,
-    depthWrite: false,
-    side: DoubleSide,
-  });
-  private readonly flashMaterial = new MeshBasicMaterial({
-    color: 0xa51f16,
-    transparent: true,
-    opacity: 0,
-    depthWrite: false,
-    depthTest: false,
-    side: DoubleSide,
-  });
+  private readonly surfaceObjects: Object3D[] = [];
+  private readonly sample: WreckageSample = createWreckageSample();
+  private readonly targets: readonly FocusedEventInteractionTarget[];
   private active: ActiveWreckageBeat | null = null;
-  private completingActive: ActiveWreckageBeat | null = null;
-  private result: WreckageResult = null;
   private surfaceSeedOffset = 0;
-  private selectedDebrisIndex = 0;
   private surfaceTime = 0;
-  private debrisApproach = 0;
-  private debrisMotionApplied = false;
-  private underwaterRevealed = false;
   private staged = false;
-  private operation = 0;
-  private diveOwned = false;
   private disposed = false;
 
-  constructor(private readonly environment: DedicatedEventEnvironment) {
+  constructor(environment: DedicatedEventEnvironment) {
     this.worldRoot.name = 'wreckage-world';
     this.boatRoot.name = 'wreckage-boat';
-    this.itemAimTarget.name = 'wreckage-item-aim-target';
-    this.itemAimTarget.position.set(0, -2.35, -6.3);
-
-    this.ownedMaterials.add(this.siltMaterial);
-    this.ownedMaterials.add(this.flashMaterial);
-
     this.debris.name = 'wreckage-surface-debris';
-    this.debris.renderOrder = 1;
-
-    const siltGeometry = new PlaneGeometry(1, 1, 1, 1);
-    this.ownedGeometries.add(siltGeometry);
-    this.silt = new InstancedMesh(siltGeometry, this.siltMaterial, SILT_INSTANCES);
-    this.silt.name = 'wreckage-silt';
-    this.silt.count = SILT_INSTANCES;
-    this.silt.renderOrder = 2;
-
-    const flashGeometry = new PlaneGeometry(3.6, 2.1);
-    this.ownedGeometries.add(flashGeometry);
-    this.redFlash = new Mesh(flashGeometry, this.flashMaterial);
-    this.redFlash.name = 'wreckage-search-injury-flash';
-    this.redFlash.position.set(0, 1.1, -2.4);
-    this.redFlash.renderOrder = 8;
 
     this.ship = environment.eventModels.create('containerShip');
+    this.box = environment.eventModels.create('wreckageBox');
+    this.crate = environment.eventModels.create('wreckageCrate');
+    this.pallet = environment.eventModels.create('wreckagePallet');
+
     this.ship.root.name = 'wreckage-wreck';
-    this.ship.root.position.set(0, -3.1, -8.5);
+    this.ship.root.position.set(0, -7.2, -11.5);
     this.ship.root.rotation.set(0.18, -0.42, -0.12);
+    this.ship.root.visible = false;
 
-    this.planks = environment.eventModels.create('leakPlanks');
-    this.surfacePlanks = SURFACE_DEBRIS.map((_placement, index) => {
-      const plank = this.planks.root.clone(true);
-      plank.name = `wreckage-surface-plank-${index}`;
+    this.addModelDebris(this.box.root, 'wreckage-box');
+    this.addModelDebris(this.crate.root, 'wreckage-crate');
+    this.addModelDebris(this.pallet.root, 'wreckage-pallet');
+    for (let index = PLANK_START_INDEX; index < SURFACE_DEBRIS.length; index += 1) {
+      const plank = new Mesh(this.plankGeometry, this.plankMaterials);
+      plank.name = `wreckage-plank-${index - PLANK_START_INDEX}`;
+      plank.castShadow = true;
+      plank.receiveShadow = true;
+      this.surfaceObjects.push(plank);
       this.debris.add(plank);
-      return plank;
-    });
+    }
 
-    this.anglerfish = environment.featuredModels.clone('anglerFish');
-    this.anglerfish.name = 'wreckage-creature';
-    this.anglerfish.position.set(0.9, -3.5, -7.2);
-    this.anglerfish.rotation.set(0.16, 0.68, -0.08);
-    this.anglerfish.scale.setScalar(1.3);
+    this.itemAimTarget.name = 'wreckage-item-aim-target';
+    this.itemAimTarget.position.set(4.3, 0.08, -6.65);
+    this.targets = Object.freeze([Object.freeze({
+      id: TARGET_ID,
+      label: 'WRECKAGE',
+      description: 'Inspect the floating debris.',
+      focusEventId: 'wreckage' as const,
+      root: this.debris,
+      tooltip: false,
+      minimumHitWidth: 96,
+      minimumHitHeight: 72,
+    })]);
 
-    this.ghost = environment.eventModels.create('ghost');
-    collectMeshResources(this.ghost, this.ghostGeometries, this.ghostMaterials);
-    collectMaterialTextures(this.ghostMaterials, this.ghostTextures);
-    this.ghost.name = 'wreckage-ghost';
-    this.ghost.position.set(-0.62, -2.4, -7.7);
-    this.ghost.rotation.set(0, 0.34, 0.08);
-
-    this.barrel = environment.featuredModels.clone('driftingBarrel');
-    this.barrel.name = 'wreckage-loot';
-    this.barrel.position.set(-0.82, -2.92, -6.75);
-    this.barrel.rotation.set(0.28, -0.34, 0.46);
-    this.barrel.scale.setScalar(0.82);
-
-    this.recoveredDebris = this.planks.root.clone(true);
-    this.recoveredDebris.name = 'wreckage-recovered-debris';
-    this.recoveredDebris.position.set(-0.56, 0.2, -3.4);
-    this.recoveredDebris.rotation.set(0.1, 0.28, -0.16);
-    this.recoveredDebris.scale.setScalar(0.62);
-
-    this.worldRoot.add(
-      this.debris,
-      this.silt,
-      this.ship.root,
-      this.anglerfish,
-      this.ghost,
-      this.barrel,
-      this.redFlash,
-      this.itemAimTarget,
-    );
-    this.boatRoot.add(this.recoveredDebris);
-    this.applySiltInstances(0);
+    this.worldRoot.add(this.debris, this.ship.root, this.itemAimTarget);
+    this.updateFloatingDebris();
     this.hideScene();
+  }
+
+  interactionTargets(): readonly FocusedEventInteractionTarget[] {
+    return this.disposed ? EMPTY_TARGETS : this.targets;
+  }
+
+  interactionRoot(id: string): Object3D | null {
+    return !this.disposed && id === TARGET_ID ? this.debris : null;
   }
 
   stage(context: EventSceneContext): void {
     if (this.disposed || context.eventId !== this.eventId) return;
-    this.beginOperation();
     this.cancelActive();
-    this.releaseDive();
-    this.staged = true;
-    this.result = null;
-    this.underwaterRevealed = false;
     const seed = Number.isFinite(context.variantSeed) ? Math.trunc(context.variantSeed) : 0;
     this.surfaceSeedOffset = seed % 7;
-    this.selectedDebrisIndex = ((seed % SURFACE_DEBRIS.length) + SURFACE_DEBRIS.length)
-      % SURFACE_DEBRIS.length;
     this.surfaceTime = 0;
-    this.debrisApproach = 0;
-    this.debrisMotionApplied = false;
+    this.staged = true;
     this.worldRoot.visible = true;
     this.boatRoot.visible = true;
-    this.cacheSurfaceDebris();
+    this.ship.root.visible = false;
+    this.updateFloatingDebris();
     sampleWreckageBeat('reveal', 0, this.sample);
     this.applySample();
   }
 
   reveal(): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
-    this.beginOperation();
     return this.startBeat('reveal');
   }
 
@@ -246,361 +206,132 @@ export class WreckagePresentation implements DedicatedEventPresentation {
 
   playChoice(choiceId: string): Promise<void> {
     if (this.disposed || !this.staged) return Promise.resolve();
-    const operation = this.beginOperation();
-    if (choiceId === 'search') return this.startBeat('search');
-    if (choiceId === 'delegate-carlitos') {
-      return this.environment.delegateCarlitos(() => (
-        this.ownsOperation(operation) ? this.startBeat('search') : Promise.resolve()
-      ));
-    }
-    if (choiceId === 'leave') return this.startBeat('leave');
-    return Promise.resolve();
+    return choiceId === 'leave' ? this.startBeat('leave') : Promise.resolve();
   }
 
-  async playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean> {
-    if (this.disposed || !this.staged || choiceId !== 'dive') return false;
-    const operation = this.beginOperation();
-    this.diveOwned = true;
-    try {
-      await this.environment.dive.play(instanceId, {
-        onWaterImpact: () => undefined,
-        revealUnderwaterScene: true,
-      });
-    } catch (error) {
-      if (!this.ownsOperation(operation)) return false;
-      ignoreCleanupError(() => this.releaseDive());
-      throw error;
-    }
-    if (!this.ownsOperation(operation)) return false;
-    this.underwaterRevealed = true;
-    await this.startBeat('underwater-hold');
-    return this.ownsOperation(operation);
+  playItemUse(_choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
+    return Promise.resolve(false);
   }
 
-  react(result: EventOutcomePresentation): Promise<void> {
-    if (this.disposed || !this.staged) return Promise.resolve();
-    this.beginOperation();
-    const key = result.outcome.eventPresentationKey;
-    const diveBeat = key === undefined ? undefined : REACTION_BEATS[key as keyof typeof REACTION_BEATS];
-    if (diveBeat !== undefined) {
-      this.result = resultForBeat(diveBeat);
-      return this.startBeat(diveBeat, 'return', true);
-    }
-    if (key === 'wreckage.search-injury') {
-      this.result = null;
-      return this.startBeat('injury');
-    }
-    if (
-      key === 'wreckage.search-repair'
-      || key === 'wreckage.search-food'
-      || key === 'wreckage.search-bait'
-    ) {
-      this.cancelActive();
-      this.result = 'recovered';
-      this.holdSurfaceScene();
-      return Promise.resolve();
-    }
-    if (key === 'wreckage.carlitos-empty') {
-      this.cancelActive();
-      this.result = null;
-      this.holdSurfaceScene();
-      return Promise.resolve();
-    }
-    if (key === 'wreckage.leave') return this.startBeat('leave');
+  react(_result: EventOutcomePresentation): Promise<void> {
     return Promise.resolve();
   }
 
   update(time: number, delta: number): void {
     if (this.disposed || !this.staged) return;
     if (Number.isFinite(time)) this.surfaceTime = time;
-    this.updateFloatingPlanks();
-    let remaining = Number.isFinite(delta) && delta > 0 ? delta : 0;
-    let active = this.active;
-    while (active !== null && remaining > 0) {
-      const duration = wreckageBeatDuration(active.beat);
-      const advance = Math.min(duration - active.elapsed, remaining);
-      active.elapsed += advance;
-      remaining -= advance;
-      sampleWreckageBeat(active.beat, active.elapsed, this.sample);
+    this.updateFloatingDebris();
+    const active = this.active;
+    if (active === null || !Number.isFinite(delta) || delta <= 0) return;
+    const duration = wreckageBeatDuration(active.beat);
+    active.elapsed = Math.min(duration, active.elapsed + delta);
+    sampleWreckageBeat(active.beat, active.elapsed, this.sample);
+    this.applySample();
+    if (active.elapsed < duration) return;
+    this.active = null;
+    if (active.beat === 'reveal') {
+      sampleWreckageBeat('surface-hold', 0, this.sample);
       this.applySample();
-      if (active.elapsed < duration) return;
-      this.completeActive(active);
-      active = this.active;
     }
+    active.resolve();
   }
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
-    this.beginOperation();
-    runCleanupSteps([
-      () => this.settleDive(),
-      () => this.settleActive(),
-    ]);
+    const active = this.active;
+    if (active === null) return;
+    active.elapsed = wreckageBeatDuration(active.beat);
+    sampleWreckageBeat(active.beat, active.elapsed, this.sample);
+    this.applySample();
+    this.active = null;
+    if (active.beat === 'reveal') {
+      sampleWreckageBeat('surface-hold', 0, this.sample);
+      this.applySample();
+    }
+    active.resolve();
   }
 
   clear(): void {
     if (this.disposed) return;
-    this.beginOperation();
-    runCleanupSteps([
-      () => this.cancelActive(),
-      () => this.releaseDive(),
-      () => {
-        this.staged = false;
-        this.result = null;
-      },
-      () => this.hideScene(),
-    ]);
+    this.cancelActive();
+    this.staged = false;
+    this.hideScene();
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.beginOperation();
     runCleanupSteps([
       () => this.cancelActive(),
-      () => this.releaseDive(),
       () => this.hideScene(),
       () => this.boatRoot.clear(),
       () => this.worldRoot.clear(),
       () => this.boatRoot.removeFromParent(),
       () => this.worldRoot.removeFromParent(),
       () => this.ship.dispose(),
-      () => this.planks.dispose(),
-      () => disposeResourceSets(
-        this.ghostGeometries,
-        this.ghostTextures,
-        this.ghostMaterials,
-      ),
-      () => disposeResourceSets(this.ownedGeometries, this.ownedMaterials),
+      () => this.box.dispose(),
+      () => this.crate.dispose(),
+      () => this.pallet.dispose(),
+      () => this.plankGeometry.dispose(),
+      ...this.plankMaterials.map((material) => () => material.dispose()),
     ]);
   }
 
-  private startBeat(
-    beat: WreckageBeat,
-    nextBeat: WreckageBeat | null = null,
-    releaseDiveOnFinish = false,
-  ): Promise<void> {
+  private addModelDebris(root: Group, name: string): void {
+    root.name = name;
+    this.surfaceObjects.push(root);
+    this.debris.add(root);
+  }
+
+  private startBeat(beat: WreckageBeat): Promise<void> {
     this.cancelActive();
     sampleWreckageBeat(beat, 0, this.sample);
     this.applySample();
     return new Promise((resolve) => {
-      this.active = {
-        beat,
-        elapsed: 0,
-        resolve,
-        nextBeat,
-        releaseDiveOnFinish,
-      };
+      this.active = { beat, elapsed: 0, resolve };
     });
-  }
-
-  private completeActive(active: ActiveWreckageBeat): void {
-    if (this.active !== active) return;
-    if (this.advanceActive(active)) return;
-    this.active = null;
-    this.completingActive = active;
-    try {
-      runCleanupSteps(this.completeActiveSteps);
-    } finally {
-      this.completingActive = null;
-    }
-  }
-
-  private restoreCompletedSearchDebris(): void {
-    if (this.completingActive?.beat === 'search' && this.debrisMotionApplied) {
-      this.restoreSurfaceDebris();
-    }
-  }
-
-  private releaseCompletedDive(): void {
-    if (this.completingActive?.releaseDiveOnFinish) this.releaseDive();
-  }
-
-  private resolveCompletedBeat(): void {
-    this.completingActive?.resolve();
-  }
-
-  private advanceActive(active: ActiveWreckageBeat): boolean {
-    const nextBeat = active.nextBeat;
-    if (nextBeat === null) return false;
-    active.beat = nextBeat;
-    active.nextBeat = null;
-    active.elapsed = 0;
-    sampleWreckageBeat(nextBeat, 0, this.sample);
-    this.applySample();
-    return true;
   }
 
   private cancelActive(): void {
     const active = this.active;
     if (active === null) return;
     this.active = null;
-    runCleanupSteps([
-      () => {
-        if (active.beat === 'search' && this.debrisMotionApplied) {
-          this.restoreSurfaceDebris();
-        }
-      },
-      () => active.resolve(),
-    ]);
+    active.resolve();
   }
 
-  private releaseDive(): void {
-    if (!this.diveOwned) return;
-    this.diveOwned = false;
-    this.underwaterRevealed = false;
-    this.environment.dive.clear();
-  }
-
-  private settleDive(): void {
-    if (!this.diveOwned) return;
-    this.diveOwned = false;
-    this.underwaterRevealed = false;
-    this.environment.dive.settleForVisibilityChange();
-  }
-
-  private settleActive(): void {
-    const active = this.active;
-    if (active === null) return;
-    do {
-      active.elapsed = wreckageBeatDuration(active.beat);
-      sampleWreckageBeat(active.beat, active.elapsed, this.sample);
-      this.applySample();
-    } while (this.advanceActive(active));
-    this.completeActive(active);
-  }
-
-  private beginOperation(): number {
-    this.operation += 1;
-    return this.operation;
-  }
-
-  private ownsOperation(operation: number): boolean {
-    return !this.disposed && this.staged && this.operation === operation;
-  }
-
-  private holdSurfaceScene(): void {
-    sampleWreckageBeat('reveal', wreckageBeatDuration('reveal'), this.sample);
-    this.applySample();
-  }
-
-  private updateFloatingPlank(index: number): void {
-    const placement = SURFACE_DEBRIS[index]!;
-    const plank = this.surfacePlanks[index]!;
-    const phase = this.surfaceTime * 0.9 + index * 1.47 + this.surfaceSeedOffset * 0.23;
-    const approach = index === this.selectedDebrisIndex ? this.debrisApproach : 0;
-    plank.position.set(
-      placement.x + ((this.surfaceSeedOffset + index * 3) % 5 - 2) * 0.08,
-      placement.y + Math.sin(phase) * 0.045 + approach * 0.03,
-      placement.z + approach * (2.1 + index * 0.2),
-    );
-    plank.rotation.set(
-      0.04 * (index - 1) + Math.cos(phase * 0.8) * 0.025,
-      placement.yaw,
-      0.06 * (index % 2) + Math.sin(phase * 0.72) * 0.035,
-    );
-    plank.scale.setScalar(placement.scale);
-  }
-
-  private cacheSurfaceDebris(): void {
-    this.debrisApproach = 0;
-    this.updateFloatingPlanks();
-  }
-
-  private applySurfaceDebrisMotion(approach: number): void {
-    this.debrisApproach = approach;
-    this.updateFloatingPlanks();
-    this.debrisMotionApplied = true;
-  }
-
-  private restoreSurfaceDebris(): void {
-    this.debrisApproach = 0;
-    this.updateFloatingPlanks();
-    this.debrisMotionApplied = false;
-  }
-
-  private updateFloatingPlanks(): void {
-    for (let index = 0; index < this.surfacePlanks.length; index += 1) {
-      this.updateFloatingPlank(index);
-    }
-  }
-
-  private applySiltInstances(strength: number): void {
-    for (let index = 0; index < SILT_INSTANCES; index += 1) {
-      const ring = Math.floor(index / 5);
-      const angle = index * 2.41;
-      const spread = 0.52 + ring * 0.3 + strength * 0.34;
-      this.scratchObject.position.set(
-        Math.cos(angle) * spread,
-        -3.05 + (index % 3) * 0.19,
-        -7.6 + Math.sin(angle) * spread,
+  private updateFloatingDebris(): void {
+    for (let index = 0; index < this.surfaceObjects.length; index += 1) {
+      const placement = SURFACE_DEBRIS[index]!;
+      const tilt = SURFACE_TILT[index]!;
+      const object = this.surfaceObjects[index]!;
+      const phase = this.surfaceTime * 0.9 + index * 1.47 + this.surfaceSeedOffset * 0.23;
+      object.position.set(
+        placement.x,
+        placement.y + Math.sin(phase) * 0.045,
+        placement.z,
       );
-      this.scratchObject.rotation.set(-Math.PI / 2, angle, 0);
-      const scale = strength * (0.38 + (index % 4) * 0.11);
-      this.scratchObject.scale.set(scale, scale, scale);
-      this.scratchObject.updateMatrix();
-      this.scratchMatrix.copy(this.scratchObject.matrix);
-      this.silt.setMatrixAt(index, this.scratchMatrix);
+      object.rotation.set(
+        tilt.pitch + Math.cos(phase * 0.8) * 0.025,
+        placement.yaw,
+        tilt.roll + Math.sin(phase * 0.72) * 0.035,
+      );
+      object.scale.setScalar(placement.scale);
     }
-    this.silt.instanceMatrix.needsUpdate = true;
   }
 
   private applySample(): void {
-    const sample = this.sample;
-    if (sample.debrisApproach > 0) {
-      this.applySurfaceDebrisMotion(sample.debrisApproach);
-    }
-    this.debris.visible = sample.debrisAlpha > 0.008;
-    this.applySiltInstances(sample.silt);
-    this.siltMaterial.opacity = Math.min(0.68, sample.silt * 0.68);
-    this.flashMaterial.opacity = Math.min(0.42, sample.redFlash * 0.42);
-    this.redFlash.visible = sample.redFlash > 0.008;
-
-    this.ship.root.visible = this.underwaterRevealed
-      && (sample.wreckAlpha > 0.008 || this.result !== null);
-    this.barrel.visible = this.underwaterRevealed
-      && (sample.lootGlow > 0.008 || this.result === 'loot');
-    this.silt.visible = this.underwaterRevealed
-      && (sample.silt > 0.008 || this.result === 'collapse');
-    this.anglerfish.visible = this.underwaterRevealed
-      && (sample.creatureAdvance > 0.008 || this.result === 'creature');
-    this.ghost.visible = this.underwaterRevealed
-      && (sample.ghostDrift > 0.008 || this.result === 'ghost');
-    this.recoveredDebris.visible = this.result === 'recovered';
-
-    const creatureAdvance = sample.creatureAdvance;
-    this.anglerfish.position.z = -7.2 + creatureAdvance * 2.4;
-    this.anglerfish.position.y = -3.5 + creatureAdvance * 0.34;
-    this.anglerfish.rotation.z = -0.08 + creatureAdvance * 0.18;
-    this.ghost.position.y = -2.4 + sample.ghostDrift * 0.7;
-    this.ghost.position.x = -0.62 + sample.ghostDrift * 0.24;
-
-    const cameraJolt = sample.cameraJolt + sample.redFlash * 0.24;
-    const effects = this.environment.cameraEffectsRoot;
-    if (effects !== undefined) {
-      effects.rotation.set(cameraJolt * 0.025, 0, cameraJolt * -0.035);
-    }
-
-    if (sample.sceneAlpha <= 0.008 && this.active?.beat !== 'underwater-hold') {
-      this.worldRoot.visible = false;
-      this.boatRoot.visible = false;
-    }
+    this.debris.visible = this.staged && this.sample.debrisAlpha > 0;
+    this.worldRoot.visible = this.staged && this.sample.sceneAlpha > 0;
+    this.boatRoot.visible = this.worldRoot.visible;
+    this.ship.root.visible = false;
   }
 
   private hideScene(): void {
+    this.debris.visible = false;
+    this.ship.root.visible = false;
     this.worldRoot.visible = false;
     this.boatRoot.visible = false;
-    this.underwaterRevealed = false;
-    this.ship.root.visible = false;
-    this.anglerfish.visible = false;
-    this.ghost.visible = false;
-    this.barrel.visible = false;
-    this.silt.visible = false;
-    this.redFlash.visible = false;
-    this.recoveredDebris.visible = false;
-    this.debris.visible = false;
-    this.siltMaterial.opacity = 0;
-    this.flashMaterial.opacity = 0;
-    this.environment.cameraEffectsRoot?.rotation.set(0, 0, 0);
   }
 }
+
+const EMPTY_TARGETS: readonly FocusedEventInteractionTarget[] = Object.freeze([]);
