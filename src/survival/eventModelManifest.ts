@@ -225,7 +225,7 @@ const generatedMetadata = {
   leakPlanks: checkedMetadata('leakPlanks', generatedMetadataJson.leakPlanks),
   schoolFish: checkedMetadata('schoolFish', generatedMetadataJson.schoolFish),
   snatcher: checkedMetadata('snatcher', generatedMetadataJson.snatcher),
-  shark: checkedMetadata('shark', generatedMetadataJson.shark),
+  anglerFish: checkedMetadata('anglerFish', generatedMetadataJson.anglerFish),
   deathStareBlob: checkedMetadata('deathStareBlob', generatedMetadataJson.deathStareBlob),
   tornadoCore: checkedMetadata('tornadoCore', generatedMetadataJson.tornadoCore),
   containerShip: FOCUSED_EVENT_MODEL_METADATA.containerShip,
