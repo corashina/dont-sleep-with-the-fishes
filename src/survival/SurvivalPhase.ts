@@ -499,12 +499,15 @@ export class SurvivalPhase implements GamePhase {
 
   getSurvivalCheckpoint(): SurvivalRunCheckpoint | null {
     const snapshot = this.session.snapshot();
+    const stablePresentation = snapshot.pendingEventId === null
+      ? this.eventFlow.isIdle()
+      : this.eventFlow.isChoosing();
     if (
       this.disposed
       || this.busy
       || this.itemAnimationLab
       || isTerminal(snapshot.state)
-      || snapshot.pendingEventId !== null
+      || !stablePresentation
       || this.fishingFlow.hasActiveAttempt()
       || this.session.exportCheckpoint === undefined
     ) return null;

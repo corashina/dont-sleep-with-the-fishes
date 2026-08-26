@@ -36,20 +36,32 @@ function eventResultRunCheckpoint(): SurvivalRunCheckpoint {
   const session = new SurvivalSession([], {
     seed: 41,
     initial: { day: 3 },
-    initialEventId: 'check-the-back',
+    initialEventId: 'wreckage',
   });
-  session.resolveEvent({ kind: 'choice', choiceId: 'check' });
+  session.resolveEvent({ kind: 'choice', choiceId: 'search' });
   return { scavengeElapsedSeconds: 8, session: session.exportCheckpoint() };
 }
 
 function journalRunCheckpoint(): SurvivalRunCheckpoint {
   const session = new SurvivalSession([], { seed: 41, initialEventId: 'bad-sleep' });
   session.resolveEvent({ kind: 'choice', choiceId: 'sleep' });
+  session.beginDawn();
   return { scavengeElapsedSeconds: 8, session: session.exportCheckpoint() };
 }
 
 function mutableSave(checkpoint: SurvivalRunCheckpoint): any {
   return JSON.parse(JSON.stringify(createSurvivalSaveDocument(checkpoint)));
+}
+
+function expectRejectedAndDeleted(value: any): void {
+  expect(parseSurvivalSaveDocument(value)).toBeNull();
+  const storage = memoryStorage({
+    [SURVIVAL_SAVE_ENABLED_KEY]: 'true',
+    [SURVIVAL_SAVE_DATA_KEY]: JSON.stringify(value),
+  });
+  const store = new SurvivalSaveStore(storage);
+  expect(store.getState()).toEqual({ enabled: true, checkpoint: null });
+  expect(storage.getItem(SURVIVAL_SAVE_DATA_KEY)).toBeNull();
 }
 
 describe('SurvivalSaveStore', () => {
@@ -110,8 +122,51 @@ describe('SurvivalSaveStore', () => {
     expect(parseSurvivalSaveDocument(value)).toBeNull();
   });
 
+  it('deletes a night event without a pending event', () => {
+    const source = new SurvivalSession([], {
+      seed: 41,
+      initialEventId: 'bad-sleep',
+    });
+    const value = mutableSave({
+      scavengeElapsedSeconds: 8,
+      session: source.exportCheckpoint(),
+    });
+    value.checkpoint.session.pendingEventId = null;
+
+    expectRejectedAndDeleted(value);
+  });
+
   it.each([
-    ['choice', (value: any) => { value.checkpoint.session.lastOutcome.eventResult.choiceId = 'sleep'; }],
+    ['inventory Carlitos', (value: any) => {
+      value.checkpoint.session.inventory['carlitos-1'] = {
+        instanceId: 'carlitos-1',
+        type: 'carlitos',
+        condition: 'usable',
+      };
+    }],
+    ['savedItems Carlitos', (value: any) => {
+      value.checkpoint.session.inventory['carlitos-1'] = {
+        instanceId: 'carlitos-1',
+        type: 'carlitos',
+        condition: 'usable',
+      };
+      value.checkpoint.session.savedItems.push({
+        instanceId: 'carlitos-1',
+        type: 'carlitos',
+      });
+      value.checkpoint.session.savedPickupCount = 1;
+    }],
+    ['saved pickup count mismatch', (value: any) => {
+      value.checkpoint.session.savedPickupCount = 1;
+    }],
+  ] as const)('deletes a save with %s', (_name, corrupt) => {
+    const value = mutableSave(validRunCheckpoint());
+    corrupt(value);
+    expectRejectedAndDeleted(value);
+  });
+
+  it.each([
+    ['choice', (value: any) => { value.checkpoint.session.lastOutcome.eventResult.choiceId = 'dive'; }],
     ['result', (value: any) => { value.checkpoint.session.lastOutcome.eventResult.resultId = 'not-a-result'; }],
   ] as const)('rejects an event result with an invalid %s', (_name, corrupt) => {
     const value = mutableSave(eventResultRunCheckpoint());
