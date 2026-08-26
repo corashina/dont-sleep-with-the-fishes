@@ -59,6 +59,10 @@ function createEnvironment() {
       clear: vi.fn(),
       settleForVisibilityChange: vi.fn(),
     },
+    underwaterView: {
+      enter: vi.fn(),
+      exit: vi.fn(),
+    },
     delegateCarlitos: vi.fn(async (retrieve: () => Promise<void>) => retrieve()),
   } as unknown as DedicatedEventEnvironment;
   return { environment, created, cloned, ownedModelDispose };
@@ -187,12 +191,64 @@ describe('WreckagePresentation', () => {
     expect(debris.visible).toBe(false);
     expect(wreck.visible).toBe(true);
     expect(presentation.boatRoot.visible).toBe(false);
+    expect(environment.underwaterView.enter).toHaveBeenCalledOnce();
     await expect(dive).resolves.toBe(true);
 
     presentation.clear();
     expect(environment.dive.clear).toHaveBeenCalledOnce();
+    expect(environment.underwaterView.exit).toHaveBeenCalledOnce();
     presentation.dispose();
   });
+
+  it('restores underwater visibility when hold setup fails', async () => {
+    const { environment } = createEnvironment();
+    const presentation = new WreckagePresentation(environment);
+    stage(presentation);
+    const setupError = new Error('underwater visibility failed');
+    vi.mocked(environment.underwaterView.enter).mockImplementationOnce(() => {
+      throw setupError;
+    });
+
+    const dive = presentation.playItemUse('dive', 'scubaSet-1');
+    const options = vi.mocked(environment.dive.play).mock.calls[0]![1];
+
+    expect(() => options.postEntryHold!.onStart()).toThrow(setupError);
+    expect(environment.underwaterView.exit).toHaveBeenCalledOnce();
+    presentation.clear();
+    await dive;
+    presentation.dispose();
+  });
+
+  it.each(['settle', 'replace', 'dispose'] as const)(
+    'restores underwater visibility on %s',
+    async (action) => {
+      const { environment } = createEnvironment();
+      const presentation = new WreckagePresentation(environment);
+      stage(presentation);
+      const dive = presentation.playItemUse('dive', 'scubaSet-1');
+      const options = vi.mocked(environment.dive.play).mock.calls[0]![1];
+      options.postEntryHold!.onStart();
+
+      if (action === 'settle') presentation.settleForVisibilityChange();
+      if (action === 'replace') {
+        presentation.stage({
+          eventId: 'wreckage',
+          targetInstanceId: null,
+          variantSeed: 18,
+        });
+      }
+      if (action === 'dispose') presentation.dispose();
+
+      await expect(dive).resolves.toBe(false);
+      expect(environment.underwaterView.exit).toHaveBeenCalledOnce();
+      if (action === 'settle') {
+        expect(environment.dive.settleForVisibilityChange).toHaveBeenCalledOnce();
+      } else {
+        expect(environment.dive.clear).toHaveBeenCalledOnce();
+      }
+      if (action !== 'dispose') presentation.dispose();
+    },
+  );
 
   it('publishes one focus target rooted at the complete debris group', () => {
     const { environment } = createEnvironment();
