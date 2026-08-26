@@ -439,6 +439,22 @@ describe('AudioSystem', () => {
     expect(system.getPreference()).toEqual({ volume: 0.35, muted: false });
   });
 
+  it('restores volume and mute through the silent fallback', () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    const first = AudioSystem.silent(storage);
+    first.setVolume(0.35);
+    first.setMuted(true);
+    first.dispose();
+
+    const restored = AudioSystem.silent(storage);
+
+    expect(restored.getPreference()).toEqual({ volume: 0.35, muted: true });
+  });
+
   it('silences game audio while paused and keeps interface feedback', () => {
     const backend = new FakeAudioBackend();
     const scope = AudioSystem.forTest(backend).createScope();
