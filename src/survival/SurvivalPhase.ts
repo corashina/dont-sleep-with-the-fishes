@@ -391,6 +391,10 @@ export class SurvivalPhase implements GamePhase {
       void this.itemAnimationLabFlow.play(instanceId, choiceId);
       return;
     }
+    if (isInspectableEventId(this.session.snapshot().pendingEventId ?? '')) {
+      void this.focusedEventFlow.choose({ id: choiceId, instanceId });
+      return;
+    }
     this.eventFlow.resolveItem(choiceId, instanceId);
   }
 
@@ -621,9 +625,7 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onEventItem = (choiceId, instanceId) => this.handleEventItem(choiceId, instanceId);
     this.ui.onEventChoice = (choiceId) => {
       if (this.itemAnimationLab) this.itemAnimationLabFlow.choose(choiceId);
-      else if (isInspectableEventId(this.session.snapshot().pendingEventId ?? '')) {
-        void this.focusedEventFlow.choose({ id: choiceId, instanceId: null });
-      } else this.eventFlow.resolveContextual(choiceId);
+      else this.eventFlow.resolveContextual(choiceId);
     };
     this.ui.onRestart = () => this.requestRestart();
     this.ui.onAnchorHighlight = (anchorId) => {

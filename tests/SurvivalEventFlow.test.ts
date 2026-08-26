@@ -135,6 +135,10 @@ function createRig(
     syncInventory: vi.fn(),
     projectInteractionAnchors: vi.fn(() => []),
     play: vi.fn(async (cue: string) => { calls.push(`play:${cue}`); }),
+    retrieveDriftingItem: vi.fn(async () => undefined),
+    searchDriftingItem: vi.fn(async () => undefined),
+    delegateDriftingItem: vi.fn(async () => undefined),
+    recedeDriftingItem: vi.fn(async () => undefined),
   };
   const ui = {
     beginEventPresentation: vi.fn(() => calls.push('begin-ui')),
@@ -249,7 +253,7 @@ function createRig(
 }
 
 describe('SurvivalEventFlow', () => {
-  it('hides the Wreckage scuba choice without three energy', async () => {
+  it('keeps Wreckage controls inside the shared focused flow', async () => {
     const rig = createRig(snapshot({
       state: 'dayEvent',
       pendingEventId: 'wreckage',
@@ -267,12 +271,13 @@ describe('SurvivalEventFlow', () => {
 
     expect(rig.ui.setEventSelection).toHaveBeenLastCalledWith(
       new Map(),
-      expect.arrayContaining([expect.objectContaining({
-        id: 'search',
-        energyCost: 2,
-        energyOwner: 'player',
-      })]),
+      [],
     );
+    await rig.flow.focusEvent('wreckage');
+    expect(rig.focused.enter).toHaveBeenCalledWith('wreckage', expect.arrayContaining([
+      expect.objectContaining({ id: 'search', instanceId: null }),
+      expect.objectContaining({ id: 'leave', instanceId: null }),
+    ]));
   });
 
   it('runs dive audio through Wreckage item use and reaction', async () => {
@@ -299,10 +304,55 @@ describe('SurvivalEventFlow', () => {
     });
     await rig.flow.revealPending(pending);
 
-    rig.flow.resolveItem('dive', 'scubaSet-1');
-    await vi.waitFor(() => expect(rig.audio.finishDive).toHaveBeenCalledOnce());
+    await rig.flow.focusEvent('wreckage');
+    rig.flow.setFocusedResolutionActive(true);
+    const resolution = rig.flow.resolveFocusedEventChoice({
+      id: 'dive',
+      instanceId: 'scubaSet-1',
+    });
+    if (resolution === undefined || !resolution.accepted) throw new Error('Expected Wreckage choice.');
+    await resolution.playAnimation();
 
     expect(rig.audio.beginDive).toHaveBeenCalledOnce();
+    expect(rig.audio.finishDive).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the focused operation active when a choice is rejected', async () => {
+    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-barrel' });
+    const rig = createRig(pending);
+    rig.setResolveEvent(() => ({
+      accepted: false,
+      code: 'requirements-unmet',
+      message: 'No longer available.',
+      deltas: {},
+      cue: 'none',
+    }));
+    await rig.flow.revealPending(pending);
+    await rig.flow.focusEvent('drifting-barrel');
+    rig.flow.setFocusedResolutionActive(true);
+
+    expect(rig.flow.resolveFocusedEventChoice({ id: 'retrieve', instanceId: null }))
+      .toEqual({ accepted: false });
+    rig.flow.setFocusedResolutionActive(false);
+    rig.flow.setFocusedResolutionActive(true);
+
+    expect(rig.flow.resolveFocusedEventChoice({ id: 'retrieve', instanceId: null }))
+      .toEqual({ accepted: false });
+  });
+
+  it('skips invalid Drifting Loot retrieval animation', async () => {
+    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-barrel' });
+    const rig = createRig(pending);
+    rig.setResolveEvent(() => accepted({ rewardSummary: undefined }));
+    await rig.flow.revealPending(pending);
+    await rig.flow.focusEvent('drifting-barrel');
+    rig.flow.setFocusedResolutionActive(true);
+    const resolution = rig.flow.resolveFocusedEventChoice({ id: 'retrieve', instanceId: null });
+    if (resolution === undefined || !resolution.accepted) throw new Error('Expected accepted result.');
+
+    await resolution.playAnimation();
+
+    expect(rig.world.retrieveDriftingItem).not.toHaveBeenCalled();
   });
 
   it('clears active Wreckage dive audio after failure', async () => {
@@ -324,12 +374,20 @@ describe('SurvivalEventFlow', () => {
     rig.audio.clearEvent.mockImplementation(() => rig.audio.cancelDive());
     await rig.flow.revealPending(pending);
 
-    rig.flow.resolveItem('dive', 'scubaSet-1');
+    await rig.flow.focusEvent('wreckage');
+    rig.flow.setFocusedResolutionActive(true);
+    const resolution = rig.flow.resolveFocusedEventChoice({
+      id: 'dive',
+      instanceId: 'scubaSet-1',
+    });
+    if (resolution === undefined || !resolution.accepted) throw new Error('Expected Wreckage choice.');
+    const work = resolution.playAnimation();
     await vi.waitFor(() => expect(rig.audio.beginDive).toHaveBeenCalledOnce());
     rig.flow.clearAfterFailure();
 
     expect(rig.audio.cancelDive).toHaveBeenCalledOnce();
     itemUse.resolve();
+    await work;
   });
   it('loads, activates, stages, and reveals before it enables eligible items', async () => {
     const umbrella = {
