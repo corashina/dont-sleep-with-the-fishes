@@ -6861,6 +6861,51 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('runs the real Carlitos visit through the Wreckage presentation boundary', async () => {
+    const propModels = createTestPropModels();
+    const furniture = createTestShipFurniture();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      furniture,
+      'low',
+      createTestEventModels(),
+    );
+    try {
+      world.syncInventory(snapshot([], {
+        carlitos: {
+          alive: true, energy: 3, hunger: 5, sickness: 0, unhappiness: 0,
+          pettedToday: false, deathCause: null,
+        },
+      }));
+      world.stageEvent({ eventId: 'wreckage', targetInstanceId: null, variantSeed: 17 });
+      const companion = world.scene.getObjectByName('carlitos-companion')!;
+      const basePosition = companion.position.clone();
+      let finished = false;
+
+      const visit = world.playEventChoice('wreckage', 'delegate-carlitos')
+        .then(() => { finished = true; });
+      await Promise.resolve();
+      expect(finished).toBe(false);
+
+      world.update(0.35, 0.35);
+      expect(companion.position.equals(basePosition)).toBe(false);
+      expect(finished).toBe(false);
+
+      world.update(1.5, 1.15);
+      await visit;
+      expect(finished).toBe(true);
+      expect(companion.position.toArray()).toEqual(basePosition.toArray());
+    } finally {
+      world.dispose();
+      furniture.dispose();
+      propModels.dispose();
+    }
+  });
+
   it('drives two exact same-group actors until each owner releases it', () => {
     const firstMap = savedItem('map', 3);
     const secondMap = savedItem('map', 6);
