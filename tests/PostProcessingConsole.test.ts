@@ -6,7 +6,10 @@ import {
   type SaveControls,
 } from '../src/ui/PostProcessingConsole';
 
+const consoles: PostProcessingConsole[] = [];
+
 afterEach(() => {
+  consoles.splice(0).forEach((console) => console.dispose());
   document.body.innerHTML = '';
 });
 
@@ -26,7 +29,7 @@ function saveControls(
 function createConsole(save: SaveControls): PostProcessingConsole {
   const mount = document.createElement('main');
   document.body.append(mount);
-  return new PostProcessingConsole(mount, {
+  const console = new PostProcessingConsole(mount, {
     getState: () => ({
       ambientOcclusionAvailable: true,
       ambientOcclusionMode: 'composite',
@@ -37,6 +40,8 @@ function createConsole(save: SaveControls): PostProcessingConsole {
     setNumeric: vi.fn(),
   }, undefined, undefined, undefined, undefined, undefined, undefined,
   undefined, undefined, undefined, undefined, undefined, undefined, save);
+  consoles.push(console);
+  return console;
 }
 
 describe('PostProcessingConsole save controls', () => {
@@ -59,6 +64,17 @@ describe('PostProcessingConsole save controls', () => {
     toggle.dispatchEvent(new Event('change', { bubbles: true }));
 
     expect(controls.setEnabled).toHaveBeenCalledWith(false);
+  });
+
+  it('reports enable actions', () => {
+    const controls = saveControls({ enabled: false, savedDay: null });
+    const console = createConsole(controls);
+    const toggle = console.element.querySelector<HTMLInputElement>('[data-save-enabled]')!;
+
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(controls.setEnabled).toHaveBeenCalledWith(true);
   });
 
   it('reports Continue actions', () => {
