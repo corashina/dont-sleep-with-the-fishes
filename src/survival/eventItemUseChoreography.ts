@@ -213,6 +213,7 @@ export function resolveEventItemUseContext(
   if (itemId === 'fishingNet' && choiceId === 'fishingNet') {
     return NET_SPREAD_EVENTS.has(eventId) ? 'net-spread' : 'net-scoop';
   }
+  if (itemId === 'rope' && choiceId === 'rope') return 'base';
   if (itemId === 'flashlight' && choiceId === 'flashlight') {
     return FLASHLIGHT_SIGNAL_EVENTS.has(eventId)
       ? 'flashlight-signal'

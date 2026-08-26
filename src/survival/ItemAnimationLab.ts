@@ -69,6 +69,9 @@ Readonly<Partial<Record<ItemId, readonly ItemAnimationLabUse[]>>> = Object.freez
     use('net-spread', 'Spread net', 'swarm-of-anglerfish', 'fishingNet'),
     use('trade-handover', 'Trade handover', 'handyman', 'fishingNet'),
   ),
+  rope: uses(
+    use('base', 'Lift rope', 'windy-night', 'rope'),
+  ),
   bucket: uses(
     use('bucket-scoop', 'Scoop from water', 'school-of-fish', 'bucket'),
     use('bucket-helmet', 'Wear as helmet', 'shower-night', 'bucket'),

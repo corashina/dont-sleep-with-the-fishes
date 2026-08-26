@@ -96,7 +96,7 @@ describe('survival foundations', () => {
     expect(
       ITEM_IDS.filter((id) => ITEM_DEFINITIONS[id].breakable),
     ).toEqual([
-      'compass', 'map', 'spyglass', 'fishingNet', 'bucket',
+      'compass', 'map', 'spyglass', 'fishingNet', 'rope', 'bucket',
       'scubaSet', 'anchor', 'umbrella', 'swimRing',
     ]);
   });
