@@ -98,8 +98,11 @@ export class PostProcessingConsole {
   private readonly shadowQualityControl: ShadowQualityControl;
   private readonly weatherSelect: HTMLSelectElement;
   private readonly weatherSource: HTMLOutputElement;
+  private readonly volumetricCloudInput: HTMLInputElement | null;
+  private readonly volumetricCloudState: HTMLOutputElement | null;
   private weatherId: PresentationWeatherId;
   private weatherControlSource: WeatherControlSource;
+  private volumetricCloudAvailability: boolean | null;
   private disposed = false;
 
   constructor(
@@ -341,6 +344,13 @@ export class PostProcessingConsole {
         </div>
       </section>
     `;
+    this.volumetricCloudInput = this.element.querySelector<HTMLInputElement>(
+      '[data-volumetric-clouds]',
+    );
+    this.volumetricCloudState = this.element.querySelector<HTMLOutputElement>(
+      '[data-volumetric-clouds-state]',
+    );
+    this.volumetricCloudAvailability = volumetricCloudControls?.available ?? null;
     this.panel = this.requireElement('[data-post-processing-panel]');
     this.visualQualityControl = new VisualQualityControl(visualQuality);
     this.requireElement('[data-ao-quality-control]').append(
@@ -400,14 +410,17 @@ export class PostProcessingConsole {
   }
 
   setVolumetricCloudAvailability(available: boolean): void {
-    if (this.disposed) return;
-    const input = this.element.querySelector<HTMLInputElement>('[data-volumetric-clouds]');
-    const output = this.element.querySelector<HTMLOutputElement>(
-      '[data-volumetric-clouds-state]',
-    );
-    if (input === null || output === null) return;
-    input.disabled = !available;
-    output.value = available ? (input.checked ? 'ON' : 'OFF') : 'UNAVAILABLE';
+    if (
+      this.disposed
+      || available === this.volumetricCloudAvailability
+      || this.volumetricCloudInput === null
+      || this.volumetricCloudState === null
+    ) return;
+    this.volumetricCloudAvailability = available;
+    this.volumetricCloudInput.disabled = !available;
+    this.volumetricCloudState.value = available
+      ? (this.volumetricCloudInput.checked ? 'ON' : 'OFF')
+      : 'UNAVAILABLE';
   }
 
   dispose(): void {
@@ -519,10 +532,9 @@ export class PostProcessingConsole {
       target instanceof HTMLInputElement
       && target.matches('[data-volumetric-clouds]')
     ) {
-      const output = this.element.querySelector<HTMLOutputElement>(
-        '[data-volumetric-clouds-state]',
-      );
-      if (output !== null) output.value = target.checked ? 'ON' : 'OFF';
+      if (this.volumetricCloudState !== null) {
+        this.volumetricCloudState.value = target.checked ? 'ON' : 'OFF';
+      }
       this.volumetricCloudControls?.setEnabled(target.checked);
       return;
     }
