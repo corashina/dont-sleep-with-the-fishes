@@ -26,9 +26,9 @@ import {
 const NOISE_SIZE = 64;
 const CLOUD_RADIUS = 900;
 const QUALITY_STEPS: Readonly<Record<VisualQuality, number>> = Object.freeze({
-  low: 8,
-  medium: 12,
-  high: 16,
+  low: 10,
+  medium: 16,
+  high: 24,
 });
 
 export interface VolumetricCloudUpdate {
@@ -78,10 +78,30 @@ const fragmentShader = `
 
   float sampleCloudDensity(vec3 samplePosition) {
     float layerHeight = max(uTopHeight - uBaseHeight, 0.001);
-    float heightFraction = (samplePosition.y - uBaseHeight) / layerHeight;
-    float lowerEdge = smoothstep(0.0, 0.15, heightFraction);
-    float upperEdge = 1.0 - smoothstep(0.68, 1.0, heightFraction);
+    float heightFraction = clamp(
+      (samplePosition.y - uBaseHeight) / layerHeight,
+      0.0,
+      1.0
+    );
     vec3 wind = vec3(uWindOffset.x, 0.0, uWindOffset.y);
+    vec2 crownCoordinates = (
+      samplePosition.xz + uWindOffset
+    ) * uShapeScale * 0.58;
+    float crownNoise = texture(
+      uNoiseTexture,
+      vec3(crownCoordinates, 0.37)
+    ).r;
+    float crownTop = mix(
+      0.46,
+      1.04,
+      smoothstep(0.3, 0.76, crownNoise)
+    );
+    float lowerEdge = smoothstep(0.0, 0.06, heightFraction);
+    float upperEdge = 1.0 - smoothstep(
+      max(0.18, crownTop - 0.16),
+      crownTop,
+      heightFraction
+    );
     float shape = texture(
       uNoiseTexture,
       samplePosition * uShapeScale + wind * uShapeScale
@@ -90,8 +110,9 @@ const fragmentShader = `
       uNoiseTexture,
       samplePosition.zyx * uDetailScale - wind * uDetailScale * 1.37
     ).r;
-    float threshold = 1.0 - uCoverage;
-    float cloud = max(shape - threshold - detail * uErosion, 0.0);
+    float threshold = mix(0.68, 0.32, uCoverage);
+    float body = smoothstep(threshold, threshold + 0.1, shape);
+    float cloud = max(body - (1.0 - detail) * uErosion, 0.0);
     return cloud * uDensity * lowerEdge * upperEdge;
   }
 
@@ -106,30 +127,49 @@ const fragmentShader = `
       0.0,
       (uBaseHeight - uCameraPosition.y) / rayDirection.y
     );
-    float rayLength = (uTopHeight - uCameraPosition.y) / rayDirection.y;
-    if (travel >= rayLength) {
+    float cloudDistance = min(
+      (uTopHeight - uCameraPosition.y) / rayDirection.y,
+      880.0
+    );
+    if (travel >= cloudDistance) {
       outputColor = vec4(0.0);
       return;
     }
 
     vec3 rayStart = uCameraPosition;
-    float stepLength = max((rayLength - travel) / uMaxSteps, 0.5);
+    float stepLength = max((cloudDistance - travel) / uMaxSteps, 0.5);
     float transmittance = 1.0;
     vec3 accumulated = vec3(0.0);
     float sunAmount = clamp(dot(rayDirection, normalize(uSunDirection)), 0.0, 1.0);
-    float phaseFunction = 0.45 + 0.55 * pow(sunAmount, 6.0);
+    float phaseFunction = 0.7 + 0.9 * pow(sunAmount, 6.0);
 
     for (int stepIndex = 0; stepIndex < 28; stepIndex++) {
-      if (float(stepIndex) >= uMaxSteps || travel >= rayLength || transmittance < 0.02) break;
+      if (float(stepIndex) >= uMaxSteps || travel >= cloudDistance || transmittance < 0.02) break;
       vec3 samplePosition = rayStart + rayDirection * travel;
       float density = sampleCloudDensity(samplePosition);
+      float distanceFade = 1.0 - smoothstep(
+        max(0.0, cloudDistance - 180.0),
+        cloudDistance,
+        travel
+      );
+      density *= distanceFade;
       if (density > 0.001) {
         float lightDensity = sampleCloudDensity(
           samplePosition + normalize(uSunDirection) * uLightStep
         );
         float sunVisibility = exp(-lightDensity * uLightExtinction);
-        vec3 light = uAmbientColor * uAmbientStrength
-          + uSunColor * sunVisibility * phaseFunction;
+        float heightFraction = clamp(
+          (samplePosition.y - uBaseHeight) / max(uTopHeight - uBaseHeight, 0.001),
+          0.0,
+          1.0
+        );
+        float heightLight = mix(
+          0.34,
+          1.28,
+          smoothstep(0.05, 0.9, heightFraction)
+        );
+        vec3 light = uAmbientColor * uAmbientStrength * mix(0.44, 1.0, heightFraction)
+          + uSunColor * sunVisibility * phaseFunction * heightLight;
         float alpha = 1.0 - exp(-density * stepLength * uExtinction);
         accumulated += transmittance * alpha * light;
         transmittance *= 1.0 - alpha;
@@ -142,15 +182,87 @@ const fragmentShader = `
   }
 `;
 
+function hashLattice(x: number, y: number, z: number): number {
+  let value = Math.imul(x, 0x1f123bb5)
+    ^ Math.imul(y, 0x5f356495)
+    ^ Math.imul(z, 0x6c8e9cf5)
+    ^ 0x9e3779b9;
+  value ^= value >>> 15;
+  value = Math.imul(value, 0x2c1b3c6d);
+  value ^= value >>> 12;
+  value = Math.imul(value, 0x297a2d39);
+  value ^= value >>> 15;
+  return (value >>> 0) / 0xffffffff;
+}
+
+function smooth(value: number): number {
+  return value * value * (3 - 2 * value);
+}
+
+function interpolate(start: number, end: number, amount: number): number {
+  return start + (end - start) * amount;
+}
+
+function periodicValueNoise(
+  x: number,
+  y: number,
+  z: number,
+  frequency: number,
+): number {
+  const sampleX = x * frequency / NOISE_SIZE;
+  const sampleY = y * frequency / NOISE_SIZE;
+  const sampleZ = z * frequency / NOISE_SIZE;
+  const x0 = Math.floor(sampleX) % frequency;
+  const y0 = Math.floor(sampleY) % frequency;
+  const z0 = Math.floor(sampleZ) % frequency;
+  const x1 = (x0 + 1) % frequency;
+  const y1 = (y0 + 1) % frequency;
+  const z1 = (z0 + 1) % frequency;
+  const tx = smooth(sampleX - Math.floor(sampleX));
+  const ty = smooth(sampleY - Math.floor(sampleY));
+  const tz = smooth(sampleZ - Math.floor(sampleZ));
+  const bottomNear = interpolate(
+    hashLattice(x0, y0, z0),
+    hashLattice(x1, y0, z0),
+    tx,
+  );
+  const bottomFar = interpolate(
+    hashLattice(x0, y1, z0),
+    hashLattice(x1, y1, z0),
+    tx,
+  );
+  const topNear = interpolate(
+    hashLattice(x0, y0, z1),
+    hashLattice(x1, y0, z1),
+    tx,
+  );
+  const topFar = interpolate(
+    hashLattice(x0, y1, z1),
+    hashLattice(x1, y1, z1),
+    tx,
+  );
+  return interpolate(
+    interpolate(bottomNear, bottomFar, ty),
+    interpolate(topNear, topFar, ty),
+    tz,
+  );
+}
+
 function createNoiseTexture(): Data3DTexture {
   const voxelCount = NOISE_SIZE * NOISE_SIZE * NOISE_SIZE;
   const data = new Uint8Array(voxelCount);
-  let state = 0x9e3779b9;
-  for (let index = 0; index < voxelCount; index += 1) {
-    state ^= state << 13;
-    state ^= state >>> 17;
-    state ^= state << 5;
-    data[index] = state & 0xff;
+  let index = 0;
+  for (let z = 0; z < NOISE_SIZE; z += 1) {
+    for (let y = 0; y < NOISE_SIZE; y += 1) {
+      for (let x = 0; x < NOISE_SIZE; x += 1) {
+        const value = periodicValueNoise(x, y, z, 3) * 0.58
+          + periodicValueNoise(x, y, z, 6) * 0.28
+          + periodicValueNoise(x, y, z, 12) * 0.14;
+        const contrasted = Math.max(0, Math.min(1, (value - 0.2) / 0.62));
+        data[index] = Math.round(contrasted * 255);
+        index += 1;
+      }
+    }
   }
 
   const texture = new Data3DTexture(data, NOISE_SIZE, NOISE_SIZE, NOISE_SIZE);
@@ -231,8 +343,8 @@ export class VolumetricClouds {
           uErosion: { value: calm.erosion },
           uAmbientStrength: { value: calm.ambient },
           uExtinction: { value: calm.extinction },
-          uLightExtinction: { value: calm.extinction * 24 },
-          uLightStep: { value: 18 },
+          uLightExtinction: { value: calm.extinction * 72 },
+          uLightStep: { value: 48 },
           uMaxSteps: { value: QUALITY_STEPS[quality] },
         },
       });
@@ -340,7 +452,7 @@ export class VolumetricClouds {
     );
     uniforms.uLightExtinction!.value = blend(
       uniforms.uLightExtinction!.value as number,
-      profile.extinction * 24,
+      profile.extinction * 72,
       transition,
     );
     this.mesh.visible = this.strength > 0;
