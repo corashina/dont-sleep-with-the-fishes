@@ -106,6 +106,68 @@ describe('sky palettes', () => {
   });
 });
 
+describe('volumetric scavenging clouds', () => {
+  it('blends flat clouds during day and restores them at night', () => {
+    const scene = new Scene();
+    const environment = new Environment(scene, createTestMoonTexture());
+    const internals = environment as unknown as {
+      sky: { material: ShaderMaterial };
+    };
+
+    try {
+      environment.setVolumetricCloudsEnabled(true);
+      environment.setVisualQuality('high');
+      expect(environment.volumetricCloudsAvailable()).toBe(true);
+
+      environment.update(1, 0.25, new Vector3());
+      expect(internals.sky.material.uniforms.uCloudLayerStrength!.value)
+        .toBeCloseTo(0.75);
+
+      environment.setPhase('night');
+      environment.update(2, 0.25, new Vector3());
+      expect(internals.sky.material.uniforms.uCloudLayerStrength!.value).toBe(1);
+    } finally {
+      environment.dispose();
+    }
+  });
+
+  it('keeps flat clouds when cloud creation fails', () => {
+    const scene = new Scene();
+    const environment = new Environment(
+      scene,
+      createTestMoonTexture(),
+      'low',
+      () => null,
+    );
+
+    try {
+      environment.setVolumetricCloudsEnabled(true);
+      environment.setVisualQuality('high');
+      expect(environment.volumetricCloudsAvailable()).toBe(false);
+      environment.update(1, 1, new Vector3());
+      const sky = environment as unknown as { sky: { material: ShaderMaterial } };
+      expect(sky.sky.material.uniforms.uCloudLayerStrength!.value).toBe(1);
+    } finally {
+      environment.dispose();
+    }
+  });
+
+  it('forwards cloud controls through World', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+
+    try {
+      world.setVolumetricCloudsEnabled(true);
+      world.setVisualQuality('high');
+      expect(world.getVolumetricCloudsAvailable()).toBe(true);
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+});
+
 interface RenderResources {
   geometries: Set<BufferGeometry>;
   materials: Set<Material>;

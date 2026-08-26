@@ -221,6 +221,7 @@ export class Game {
     let sceneRenderer: SceneRenderer | null = null;
     const visualQuality = createVisualQualityPreference((quality) => {
       sceneRenderer?.setVisualQuality?.(quality);
+      this.activePhase?.setVisualQuality?.(quality);
     });
     const antiAliasingQuality = createAntiAliasingQualityPreference((quality) => {
       sceneRenderer?.setAntiAliasingQuality?.(quality);
@@ -310,8 +311,12 @@ export class Game {
       getDelta: () => 0.016,
     };
     const sceneRenderer = options.sceneRenderer ?? new DirectSceneRenderer(renderer);
+    const game = Object.create(Game.prototype) as Game;
     const visualQuality = options.visualQuality ?? createVisualQualityPreference(
-      (quality) => sceneRenderer.setVisualQuality?.(quality),
+      (quality) => {
+        sceneRenderer.setVisualQuality?.(quality);
+        game.activePhase?.setVisualQuality?.(quality);
+      },
       null,
     );
     const antiAliasingQuality = options.antiAliasingQuality
@@ -324,7 +329,6 @@ export class Game {
         (quality) => sceneRenderer.setShadowQuality?.(quality),
         null,
       );
-    const game = Object.create(Game.prototype) as Game;
     const waterQuality = options.waterQuality ?? createWaterQualityPreference(
       (quality) => game.activePhase?.setWaterQuality?.(quality),
       null,

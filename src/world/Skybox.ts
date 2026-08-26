@@ -73,6 +73,7 @@ const fragmentShader = `
   uniform float uHaze;
   uniform float uCloudCoverage;
   uniform float uCloudContrast;
+  uniform float uCloudLayerStrength;
   uniform float uHorizonBandStrength;
   uniform float uHorizonBandWidth;
   uniform float uExposure;
@@ -237,7 +238,7 @@ const fragmentShader = `
     color += uHorizonColor * horizonLift;
 
     vec2 cloud = cloudLayer(direction);
-    float clouds = cloud.x;
+    float clouds = cloud.x * uCloudLayerStrength;
     float cloudLight = 1.0 - smoothstep(0.42, 0.86, cloud.y);
     vec3 cloudUnderside = mix(uUpperColor * 0.58, vec3(0.34, 0.40, 0.42), uHaze * 0.56);
     vec3 cloudTop = mix(vec3(0.86, 0.89, 0.88), vec3(0.66, 0.71, 0.71), uHaze);
@@ -435,6 +436,7 @@ export class Skybox {
         uHaze: { value: this.current.haze },
         uCloudCoverage: { value: this.current.cloudCoverage },
         uCloudContrast: { value: this.current.cloudContrast },
+        uCloudLayerStrength: { value: 1 },
         uHorizonBandStrength: { value: this.current.horizonBandStrength },
         uHorizonBandWidth: { value: this.current.horizonBandWidth },
         uExposure: { value: this.current.exposure },
@@ -498,6 +500,11 @@ export class Skybox {
     if (this.disposed) return;
     (this.material.uniforms.uTintColor!.value as Color).copy(color);
     this.material.uniforms.uTintAmount!.value = clamp01(amount);
+  }
+
+  setCloudLayerStrength(value: number): void {
+    if (this.disposed) return;
+    this.material.uniforms.uCloudLayerStrength!.value = clamp01(value);
   }
 
   dispose(): void {

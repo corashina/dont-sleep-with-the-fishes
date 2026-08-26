@@ -2690,6 +2690,60 @@ describe('ScavengePhase lifecycle integration', () => {
     game.dispose();
   });
 
+  it('applies visual quality changes to the active phase', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const setVisualQuality = vi.fn();
+    const phase = {
+      ...gamePhase(),
+      setVisualQuality,
+    };
+    const game = Game.forTest({
+      createMenu: createImmediateMenu,
+      createScavenge: () => phase,
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      mount,
+      sceneRenderer: postProcessingSceneRenderer(),
+    });
+    const high = mount.querySelector<HTMLButtonElement>(
+      '[data-quality-control="visual"] [data-quality="high"]',
+    );
+
+    expect(high).not.toBeNull();
+    high!.click();
+
+    expect(setVisualQuality).toHaveBeenCalledWith('high');
+    game.dispose();
+  });
+
+  it('forwards cloud controls through ScavengePhase', () => {
+    const setVisualQuality = vi.fn();
+    const setVolumetricCloudsEnabled = vi.fn();
+    const getVolumetricCloudsAvailable = vi.fn(() => true);
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(phase, {
+      disposed: false,
+      world: {
+        setVisualQuality,
+        setVolumetricCloudsEnabled,
+        getVolumetricCloudsAvailable,
+      },
+    });
+
+    phase.setVisualQuality('high');
+    phase.setVolumetricCloudsEnabled(true);
+
+    expect(setVisualQuality).toHaveBeenCalledWith('high');
+    expect(setVolumetricCloudsEnabled).toHaveBeenCalledWith(true);
+    expect(phase.getVolumetricCloudsAvailable()).toBe(true);
+  });
+
   it('applies anti-aliasing choices to the shared scene renderer', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
