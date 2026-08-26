@@ -14,6 +14,11 @@ import {
 import { drawWeightedEvent } from './eventSelection';
 import { resolveWeightedOutcome } from './eventResolver';
 import {
+  driftingSupplyKindFromSeed,
+  isDriftingSupplyResult,
+} from './driftingSupplies';
+import { deriveEventVariantSeed } from './eventPresentationOutcome';
+import {
   FishingSession,
   type BeginFishingResult,
   type FishingTerminalResult,
@@ -52,6 +57,7 @@ import {
 } from './RunPressure';
 import {
   clampRescueLead,
+  nightlyHullWearDamage,
   quietNightChance,
   rescueChanceForDay,
   type RescueLead,
@@ -82,6 +88,7 @@ import type {
   DawnEnergy,
   EventResponse,
   EventResponseId,
+  EventChoiceDefinition,
   EventInventoryMutation,
   ItemCondition,
   PresentationCue,
@@ -101,6 +108,27 @@ import type {
 import type { SurvivalSnapshot } from './survivalSnapshot';
 
 const NO_EVENT_EXCLUSIONS: ReadonlySet<string> = new Set();
+
+function choiceForDriftingSupplyVariant(
+  choice: EventChoiceDefinition,
+  seed: number,
+  day: number,
+): EventChoiceDefinition {
+  if (choice.id === 'sleep') return choice;
+  const kind = driftingSupplyKindFromSeed(
+    deriveEventVariantSeed(seed, day, 'drifting-supplies'),
+  );
+  const outcomes = choice.outcomes.filter(({ resultId }) => (
+    isDriftingSupplyResult(resultId, kind)
+  ));
+  if (outcomes.length === 0) {
+    throw new Error(`Drifting supplies have no ${kind} outcomes for ${choice.id}.`);
+  }
+  return {
+    ...choice,
+    outcomes: outcomes as [WeightedEventOutcome, ...WeightedEventOutcome[]],
+  };
+}
 
 function fallbackResultId(eventId: string): string | undefined {
   if (eventId === 'night-trader') return 'trader-food-fallback';
@@ -144,7 +172,7 @@ const DAY_ACTION_REJECTION_CODES: Readonly<Record<string, string>> = Object.free
   'That option cannot be used for this action.': 'invalid-option',
   'The survival journey has already ended.': 'terminal',
   'That action is only available during the day.': 'not-daytime',
-  'Fishing requires two energy.': 'not-enough-energy',
+  'Fishing requires one energy.': 'not-enough-energy',
   'Diving requires a recovered scuba set.': 'no-scuba-set',
   'Diving is too dangerous during a squall.': 'weather-blocked',
   'Diving requires three energy.': 'not-enough-energy',
@@ -168,6 +196,7 @@ const DAY_ACTION_REJECTION_CODES: Readonly<Record<string, string>> = Object.free
   'Carlitos is not aboard.': 'no-carlitos',
   'Carlitos cannot respond.': 'carlitos-dead',
   'Carlitos has already been petted today.': 'already-petted',
+  'Carlitos is already happy.': 'carlitos-happy',
   'Carlitos is already satiated.': 'carlitos-not-hungry',
   'Carlitos needs no treatment.': 'carlitos-healthy',
   'No medical kit remains.': 'no-medical-kit',
@@ -623,8 +652,11 @@ export class SurvivalSession {
 
     const phase = event.phase;
     const before = this.resourceValues();
+    const resolutionChoice = event.id === 'drifting-supplies'
+      ? choiceForDriftingSupplyVariant(choice, this.seed, this.day)
+      : choice;
     const resolved = resolveWeightedOutcome(
-      choice,
+      resolutionChoice,
       this.random,
       this.appearanceCounts.get(event.id) ?? 0,
       resultId,
@@ -746,6 +778,7 @@ export class SurvivalSession {
     if (this.pendingEvent !== null) return this.reject('event-pending', 'Resolve the pending event before dawn.');
     if (this.state !== 'nightEvent') return this.reject('not-nighttime', 'Dawn cannot begin before the night is complete.');
 
+    const hullWear = nightlyHullWearDamage(this.day);
     this.day += 1;
     this.radioSignalAvailable = false;
     this.pendingJournalDaytime = null;
@@ -774,6 +807,10 @@ export class SurvivalSession {
       hunger: SURVIVAL_BALANCE.dawn.hungerIncrease,
       energy: morningEnergy - this.energy,
     };
+    if (hullWear > 0) {
+      this.lastHullEventId = null;
+      deltas.hull = -hullWear;
+    }
     const pressureIncrease = pressureIncreaseForDay(this.day);
     if (pressureIncrease > 0) deltas.pressure = pressureIncrease;
     if (hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.maximum) {
@@ -781,7 +818,14 @@ export class SurvivalSession {
       deltas.health = -SURVIVAL_BALANCE.dawn.starvationDamage;
     }
 
-    const dawn = this.commit('dawn', 'Another dawn breaks over the lifeboat.', deltas, 'dawn');
+    const dawn = this.commit(
+      'dawn',
+      hullWear > 0
+        ? 'The sea wears at the hull overnight. Another dawn breaks.'
+        : 'Another dawn breaks over the lifeboat.',
+      deltas,
+      'dawn',
+    );
     if (this.isTerminal()) return dawn;
 
     const rescueChance = rescueChanceForDay(this.day, this.rescueLead);
@@ -1074,25 +1118,22 @@ export class SurvivalSession {
     resolved: WeightedEventOutcome,
     fallbackFoodGranted: boolean,
   ): RewardSummary | undefined {
-    const driftingCargo = eventId === 'drifting-barrel'
+    const driftingCargo = eventId === 'drifting-supplies'
       && (choiceId === 'retrieve' || choiceId === 'delegate-carlitos');
-    const emptyLifeboat = eventId === 'empty-lifeboat' && choiceId === 'search';
-    if (!driftingCargo && !emptyLifeboat) return undefined;
+    if (!driftingCargo) return undefined;
     if (fallbackFoodGranted) return Object.freeze({ kind: 'resource', id: 'food', quantity: 1 });
     const added = resolved.effects.resources?.find(
       ({ operation, resource }) => operation === 'add'
         && (resource === 'food' || resource === 'bait'
-          || (driftingCargo && resource === 'repairMaterial')),
+          || resource === 'repairMaterial'),
     );
     if (added !== undefined && typeof added.value === 'number') {
       const id = added.resource;
-      if (id === 'food' || id === 'bait' || (driftingCargo && id === 'repairMaterial')) {
+      if (id === 'food' || id === 'bait' || id === 'repairMaterial') {
         return Object.freeze({ kind: 'resource', id, quantity: added.value });
       }
     }
-    return driftingCargo
-      ? Object.freeze({ kind: 'item', id: 'energyBar', quantity: 1 })
-      : undefined;
+    return Object.freeze({ kind: 'item', id: 'energyBar', quantity: 1 });
   }
 
   private recordJournalEvent(

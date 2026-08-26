@@ -157,8 +157,8 @@ export class SurvivalCoverView {
       'aria-label',
       view.title === 'CHEST REWARD'
         ? 'Close chest reward'
-        : view.title === 'LIFEBOAT SUPPLY'
-          ? 'Close lifeboat supply'
+        : view.title === 'SALVAGE'
+          ? 'Close salvage result'
           : 'Close dive result',
     );
     this.renderReward(view.reward);

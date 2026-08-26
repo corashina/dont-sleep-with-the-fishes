@@ -27,12 +27,12 @@ const GRIPS = {
 } as const;
 
 const ENTITY_AIMED: ReadonlySet<ItemId> = new Set([
-  'flashlight', 'shotgun',
+  'knife', 'flashlight', 'shotgun',
 ]);
 
 const HEAVY_ITEMS: ReadonlySet<ItemId> = new Set(['anchor', 'scubaSet']);
 const MEDIUM_ITEMS: ReadonlySet<ItemId> = new Set([
-  'medicalKit', 'fishingNet', 'rope', 'bucket', 'umbrella', 'swimRing',
+  'medicalKit', 'fishingNet', 'bucket', 'umbrella', 'swimRing',
   'shotgun', 'carlitos',
 ]);
 
@@ -59,7 +59,7 @@ const PROFILES: Readonly<Record<ItemId, EventItemMotionProfile>> = Object.freeze
   ductTape: createProfile('one-hand', 'ductTape'),
   compass: Object.freeze({
     ...createProfile('one-hand', 'compass'),
-    view: [-0.06, -0.1, -0.44] as const,
+    view: [0, 0, -0.44] as const,
   }),
   map: createProfile('reading', 'map'),
   medicalKit: createProfile('one-hand', 'medicalKit'),
@@ -69,7 +69,11 @@ const PROFILES: Readonly<Record<ItemId, EventItemMotionProfile>> = Object.freeze
     view: [0.3, -0.34, -0.92] as const,
     actionOrigin: [0, 0, -0.82] as const,
   }),
-  rope: createProfile('large', 'rope'),
+  knife: Object.freeze({
+    ...createProfile('one-hand', 'knife'),
+    view: [0.34, -0.34, -0.66] as const,
+    grip: [0.36, -0.7, -0.72] as const,
+  }),
   bucket: createProfile('large', 'bucket'),
   flareGun: Object.freeze({
     ...createProfile('one-hand', 'flareGun'),

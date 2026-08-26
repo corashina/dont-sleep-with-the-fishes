@@ -47,18 +47,13 @@ export interface ResourceDelta {
   rescueLead?: number;
 }
 
-export type DriftingCargoKind = 'barrel' | 'chest';
+export type DriftingCargoKind = 'barrel' | 'chest' | 'lifeboat' | 'container';
 
 export type EventPresentationKey =
-  | 'drifting-barrel.food'
-  | 'drifting-barrel.bait'
-  | 'drifting-barrel.repair'
-  | 'drifting-barrel.energy-bar'
-  | 'drifting-barrel.drift'
+  | 'drifting-supplies.retrieve'
+  | 'drifting-supplies.drift'
   | 'drifting-chest.retrieve'
   | 'drifting-chest.drift'
-  | 'empty-lifeboat.search'
-  | 'empty-lifeboat.drift'
   | 'wreckage.search-repair'
   | 'wreckage.search-food'
   | 'wreckage.search-bait'
@@ -87,7 +82,7 @@ export type RewardSummary =
       readonly quantity: 1;
     };
 
-export type DawnEnergy = 0 | 1 | 2 | 3;
+export type DawnEnergy = 0 | 1 | 2 | 3 | 4;
 
 export interface ActionOutcome {
   accepted: boolean;

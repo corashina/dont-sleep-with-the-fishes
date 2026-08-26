@@ -331,6 +331,22 @@ describe('SurvivalEventFlow', () => {
     expect(rig.audio.cancelDive).toHaveBeenCalledOnce();
     itemUse.resolve();
   });
+
+  it('reports overnight hull wear at dawn', async () => {
+    const rig = createRig(snapshot({ state: 'nightEvent' }));
+    rig.session.beginDawn.mockReturnValueOnce(accepted({
+      code: 'dawn',
+      message: 'The sea wears at the hull overnight. Another dawn breaks.',
+      deltas: { hull: -3 },
+      cue: 'dawn',
+    }));
+
+    await rig.flow.beginDawn();
+
+    expect(rig.ui.showFeedback).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ deltas: { hull: -3 } }),
+    );
+  });
   it('loads, activates, stages, and reveals before it enables eligible items', async () => {
     const umbrella = {
       instanceId: 'umbrella-1',
@@ -520,7 +536,7 @@ describe('SurvivalEventFlow', () => {
   });
 
   it('ignores a stale drifting choice rejection after a same-lifecycle replacement', async () => {
-    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-barrel' });
+    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-supplies' });
     const rig = createRig(pending);
     const choice = deferred();
     rig.drifting.choose.mockReturnValueOnce(choice.promise);
@@ -542,15 +558,15 @@ describe('SurvivalEventFlow', () => {
   });
 
   it('ignores a stale drifting focus rejection after a same-lifecycle replacement', async () => {
-    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-barrel' });
+    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-supplies' });
     const rig = createRig(pending);
     const firstEntry = deferred();
     rig.drifting.enter.mockReturnValueOnce(firstEntry.promise);
     await rig.flow.revealPending(pending);
 
-    const first = rig.flow.focusDriftingItem('drifting-barrel');
+    const first = rig.flow.focusDriftingItem('drifting-supplies');
     await vi.waitFor(() => expect(rig.drifting.enter).toHaveBeenCalledOnce());
-    await rig.flow.focusDriftingItem('drifting-barrel');
+    await rig.flow.focusDriftingItem('drifting-supplies');
     rig.onFatalError.mockClear();
     rig.setBusy.mockClear();
 
@@ -562,7 +578,7 @@ describe('SurvivalEventFlow', () => {
   });
 
   it('makes returned drifting callbacks inert after a same-lifecycle replacement', async () => {
-    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-barrel' });
+    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-supplies' });
     const rig = createRig(pending);
     let resolution: DriftingItemChoiceResolution | undefined;
     rig.drifting.choose.mockImplementationOnce(async (choiceId?: string) => {

@@ -1,12 +1,12 @@
-export type SystemScreenKind = 'loading' | 'error';
-
-export interface SystemScreenDescription {
-  readonly kind: SystemScreenKind;
+export type SystemScreenDescription = {
+  readonly kind: 'loading';
+} | {
+  readonly kind: 'error';
   readonly kicker: string;
   readonly title: string;
   readonly lead: string;
   readonly detail?: string;
-}
+};
 
 function textElement(
   tagName: 'p' | 'h1',
@@ -43,13 +43,16 @@ export function createSystemScreen(
 
   const content = document.createElement('div');
   content.className = 'screen__content';
-  content.append(
-    textElement('p', 'kicker ui-role-context', description.kicker),
-    textElement('h1', 'ui-role-display', description.title),
-    textElement('p', 'lead ui-role-narrative', description.lead),
-  );
-  if (description.kind === 'loading') content.append(loadingProgress());
-  if (description.detail !== undefined) {
+  if (description.kind === 'loading') {
+    content.append(loadingProgress());
+  } else {
+    content.append(
+      textElement('p', 'kicker ui-role-context', description.kicker),
+      textElement('h1', 'ui-role-display', description.title),
+      textElement('p', 'lead ui-role-narrative', description.lead),
+    );
+  }
+  if (description.kind === 'error' && description.detail !== undefined) {
     content.append(textElement(
       'p',
       'fine-print ui-role-narrative',

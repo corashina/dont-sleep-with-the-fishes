@@ -1,8 +1,14 @@
 import {
+  BackSide,
+  DoubleSide,
+  Euler,
+  Material,
   Matrix4,
+  Mesh,
   Object3D,
   PerspectiveCamera,
   Quaternion,
+  SphereGeometry,
   Vector3,
 } from 'three';
 import type { ItemId } from '../game/ItemState';
@@ -35,8 +41,15 @@ const THROW_FALLBACK_DISTANCE = 6;
 const ANCHOR_WATER_Z = 0.55;
 const ANCHOR_WATER_X = (lifeboatHullHalfWidthAt(ANCHOR_WATER_Z) ?? 1.63) + 0.48;
 const BUCKET_WATER_X = (lifeboatHullHalfWidthAt(ANCHOR_WATER_Z) ?? 1.63) + 0.82;
-const COMPASS_TURN_AXIS = new Vector3(0, 1, 0);
-type CameraFacingSurface = 'none' | 'y' | 'z';
+const BUCKET_HELMET_COVERAGE_RADIUS = 0.48;
+const BUCKET_HELMET_COVERAGE_START = 0.9;
+export const BUCKET_HELMET_COVERAGE_NAME = 'bucket-helmet-interior-coverage';
+type CameraFacingSurface = 'none' | 'x' | 'y' | 'z';
+
+interface InteriorMaterialBinding {
+  readonly mesh: Mesh;
+  readonly original: Material | Material[];
+}
 
 /** Adapts sampled item-use poses to a borrowed supply actor. */
 export class EventItemUseAdapter {
@@ -61,18 +74,22 @@ export class EventItemUseAdapter {
   private readonly cameraTargetWorldQuaternion = new Quaternion();
   private readonly actorParentWorldInverse = new Matrix4();
   private readonly actorWorldQuaternion = new Quaternion();
+  private readonly storedActorWorldQuaternion = new Quaternion();
   private readonly aimDeltaQuaternion = new Quaternion();
   private readonly solvedWorldQuaternion = new Quaternion();
   private readonly actorParentWorldQuaternion = new Quaternion();
   private readonly actorParentQuaternion = new Quaternion();
+  private readonly cameraAlignedEuler = new Euler(0, 0, 0, 'YXZ');
   private readonly facingWorldQuaternion = new Quaternion();
   private readonly facingTargetQuaternion = new Quaternion();
-  private readonly facingAdjustmentQuaternion = new Quaternion();
+  private readonly facingDeltaQuaternion = new Quaternion();
+  private readonly facingStepQuaternion = new Quaternion();
   private readonly facingCameraPosition = new Vector3();
   private readonly facingNormal = new Vector3();
   private readonly facingRight = new Vector3();
   private readonly facingDown = new Vector3();
   private readonly facingUp = new Vector3();
+  private readonly facingAxis = new Vector3();
   private readonly facingBasis = new Matrix4();
   private readonly pose: MutableSupplyPose = {
     x: 0,
@@ -90,6 +107,10 @@ export class EventItemUseAdapter {
   private aimTarget: Object3D | null = null;
   private cameraFacingSurface: CameraFacingSurface = 'none';
   private lockItemToHeldCamera = false;
+  private alignItemToCamera = false;
+  private readonly interiorMaterialBindings: InteriorMaterialBinding[] = [];
+  private readonly interiorMaterials = new Set<Material>();
+  private interiorCoverage: Mesh | null = null;
   private baseFieldOfView: number;
   private active = false;
   private disposed = false;
@@ -106,24 +127,34 @@ export class EventItemUseAdapter {
     actor: BorrowedSupplyActor,
     itemId: ItemId,
     aimTarget: Object3D | null,
+    renderInterior = false,
+    facingSurface: CameraFacingSurface | null = null,
+    alignItemToCamera = false,
   ): void {
     if (this.disposed) return;
     this.clear();
     this.actor = actor;
     this.profile = eventItemMotionProfile(itemId);
     this.aimTarget = aimTarget;
-    this.cameraFacingSurface = itemId === 'map'
+    this.cameraFacingSurface = facingSurface ?? (itemId === 'map'
       ? 'y'
-      : itemId === 'compass' || itemId === 'spyglass' ? 'z' : 'none';
+      : itemId === 'compass' || itemId === 'spyglass' ? 'z' : 'none');
     this.lockItemToHeldCamera = itemId === 'map';
+    this.alignItemToCamera = alignItemToCamera;
     this.heldCameraLocalMatrix.compose(
       this.camera.position,
       this.camera.quaternion,
       this.camera.scale,
     );
     this.storedActorPosition.copy(actor.root.position);
+    actor.root.updateWorldMatrix(true, false);
+    actor.root.getWorldQuaternion(this.storedActorWorldQuaternion);
     this.baseFieldOfView = this.camera.fov;
     this.cameraLook.capture();
+    if (renderInterior) {
+      this.enableInteriorMaterials(actor.root);
+      if (alignItemToCamera) this.enableInteriorCoverage();
+    }
     this.active = true;
   }
 
@@ -160,6 +191,12 @@ export class EventItemUseAdapter {
     }
     this.actorParentPosition.sub(this.storedActorPosition)
       .multiplyScalar(sample.cameraSpaceBlend);
+    if (sample.minimumLiftY > 0) {
+      this.actorParentPosition.y = Math.max(
+        this.actorParentPosition.y,
+        sample.minimumLiftY,
+      );
+    }
 
     this.pose.x = this.actorParentPosition.x;
     this.pose.y = this.actorParentPosition.y;
@@ -171,10 +208,12 @@ export class EventItemUseAdapter {
     this.pose.scaleY = sample.scaleY;
     this.pose.scaleZ = sample.scaleZ;
     actor.applyPose(this.pose);
+    this.applyCameraAlignedRotation(sample, actor);
     this.applyTargetTravel(sample, actor, profile);
     this.applyCameraFacing(sample, actor);
     this.applyAim(sample, actor, profile);
     this.effects.apply(sample, actor.root);
+    this.updateInteriorCoverage(sample.primaryEffect);
     actor.root.visible = sample.itemVisible;
   }
 
@@ -183,6 +222,8 @@ export class EventItemUseAdapter {
     this.effects.clear();
     if (!this.active) return;
     this.actor?.applyPose(IDENTITY_POSE);
+    this.clearInteriorCoverage();
+    this.restoreInteriorMaterials();
     this.cameraLook.restore();
     this.restoreFieldOfView();
     this.actor = null;
@@ -190,6 +231,7 @@ export class EventItemUseAdapter {
     this.aimTarget = null;
     this.cameraFacingSurface = 'none';
     this.lockItemToHeldCamera = false;
+    this.alignItemToCamera = false;
     this.active = false;
   }
 
@@ -205,6 +247,96 @@ export class EventItemUseAdapter {
     if (this.camera.fov === fieldOfView) return;
     this.camera.fov = fieldOfView;
     this.camera.updateProjectionMatrix();
+  }
+
+  private applyCameraAlignedRotation(
+    sample: Readonly<EventItemUseSample>,
+    actor: BorrowedSupplyActor,
+  ): void {
+    if (!this.alignItemToCamera || sample.cameraSpaceBlend <= 0) return;
+    actor.root.updateWorldMatrix(true, false);
+    actor.root.getWorldQuaternion(this.actorWorldQuaternion);
+    this.camera.getWorldQuaternion(this.cameraWorldQuaternion);
+    this.cameraAlignedEuler.set(sample.pitch, sample.yaw, sample.roll, 'YXZ');
+    this.solvedWorldQuaternion
+      .setFromEuler(this.cameraAlignedEuler)
+      .premultiply(this.cameraWorldQuaternion);
+    this.actorWorldQuaternion.slerp(
+      this.solvedWorldQuaternion,
+      sample.cameraSpaceBlend,
+    );
+
+    const parent = actor.root.parent;
+    if (parent === null) {
+      actor.root.quaternion.copy(this.actorWorldQuaternion);
+      return;
+    }
+    parent.updateWorldMatrix(true, false);
+    parent.getWorldQuaternion(this.actorParentWorldQuaternion).invert();
+    actor.root.quaternion
+      .copy(this.actorParentWorldQuaternion)
+      .multiply(this.actorWorldQuaternion);
+  }
+
+  private enableInteriorMaterials(root: Object3D): void {
+    root.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      const original = object.material;
+      const clone = (material: Material): Material => {
+        const interior = material.clone();
+        interior.side = DoubleSide;
+        interior.needsUpdate = true;
+        this.interiorMaterials.add(interior);
+        return interior;
+      };
+      this.interiorMaterialBindings.push({ mesh: object, original });
+      object.material = Array.isArray(original)
+        ? original.map(clone)
+        : clone(original);
+    });
+  }
+
+  private restoreInteriorMaterials(): void {
+    for (const binding of this.interiorMaterialBindings) {
+      binding.mesh.material = binding.original;
+    }
+    this.interiorMaterialBindings.length = 0;
+    for (const material of this.interiorMaterials) material.dispose();
+    this.interiorMaterials.clear();
+  }
+
+  private enableInteriorCoverage(): void {
+    const source = this.interiorMaterials.values().next().value;
+    if (source === undefined) return;
+    const material = source.clone();
+    material.side = BackSide;
+    material.needsUpdate = true;
+    const coverage = new Mesh(
+      new SphereGeometry(BUCKET_HELMET_COVERAGE_RADIUS, 16, 12),
+      material,
+    );
+    coverage.name = BUCKET_HELMET_COVERAGE_NAME;
+    coverage.frustumCulled = false;
+    coverage.visible = false;
+    this.camera.add(coverage);
+    this.interiorCoverage = coverage;
+  }
+
+  private updateInteriorCoverage(strength: number): void {
+    if (this.interiorCoverage === null) return;
+    this.interiorCoverage.visible = strength >= BUCKET_HELMET_COVERAGE_START;
+  }
+
+  private clearInteriorCoverage(): void {
+    const coverage = this.interiorCoverage;
+    if (coverage === null) return;
+    coverage.removeFromParent();
+    coverage.geometry.dispose();
+    const materials = Array.isArray(coverage.material)
+      ? coverage.material
+      : [coverage.material];
+    for (const material of materials) material.dispose();
+    this.interiorCoverage = null;
   }
 
   private applyCameraTarget(
@@ -268,7 +400,7 @@ export class EventItemUseAdapter {
       this.targetWorldPosition.z - this.cameraSpacePosition.z,
     );
     this.cameraSpacePosition.lerp(this.targetWorldPosition, sample.targetBlend);
-    if (sample.ballisticFlight) {
+    if (sample.flightArc > 0) {
       const arcHeight = sample.flightArcHeight > 0
         ? sample.flightArcHeight
         : Math.min(2.2, Math.max(0.5, horizontalDistance * 0.14));
@@ -407,7 +539,19 @@ export class EventItemUseAdapter {
     actor.root.updateWorldMatrix(true, false);
     actor.root.getWorldQuaternion(this.facingWorldQuaternion);
     actor.root.getWorldPosition(this.actorWorldPosition);
-    if (sample.surfaceFacing === 'target') {
+    const targetPlane = sample.surfaceFacing === 'target-plane'
+      || sample.surfaceFacing === 'target-plane-opposite';
+    if (targetPlane) {
+      const aimTarget = this.aimTarget;
+      if (aimTarget === null) return;
+      aimTarget.updateWorldMatrix(true, false);
+      aimTarget.getWorldQuaternion(this.facingTargetQuaternion);
+      this.facingRight.set(1, 0, 0).applyQuaternion(this.facingTargetQuaternion);
+      this.facingNormal.set(0, 0, 1).applyQuaternion(this.facingTargetQuaternion);
+      if (sample.surfaceFacing === 'target-plane-opposite') {
+        this.facingNormal.multiplyScalar(-1);
+      }
+    } else if (sample.surfaceFacing === 'target') {
       const aimTarget = this.aimTarget;
       if (aimTarget === null) return;
       aimTarget.updateWorldMatrix(true, false);
@@ -416,6 +560,10 @@ export class EventItemUseAdapter {
         this.targetWorldPosition,
         this.actorWorldPosition,
       );
+    } else if (this.cameraFacingSurface === 'x') {
+      this.camera.getWorldQuaternion(this.facingTargetQuaternion);
+      this.facingNormal.set(0, 0, 1)
+        .applyQuaternion(this.facingTargetQuaternion);
     } else if (this.lockItemToHeldCamera) {
       this.facingNormal.set(0, 0, 1)
         .applyQuaternion(this.heldCameraWorldQuaternion);
@@ -429,21 +577,29 @@ export class EventItemUseAdapter {
     if (this.facingNormal.lengthSq() === 0) return;
     this.facingNormal.normalize();
 
-    if (this.lockItemToHeldCamera) {
-      this.facingTargetQuaternion.copy(this.heldCameraWorldQuaternion);
-    } else {
-      this.camera.getWorldQuaternion(this.facingTargetQuaternion);
+    if (!targetPlane) {
+      if (this.lockItemToHeldCamera) {
+        this.facingTargetQuaternion.copy(this.heldCameraWorldQuaternion);
+      } else {
+        this.camera.getWorldQuaternion(this.facingTargetQuaternion);
+      }
+      this.facingRight.set(1, 0, 0)
+        .applyQuaternion(this.facingTargetQuaternion)
+        .addScaledVector(
+          this.facingNormal,
+          -this.facingRight.dot(this.facingNormal),
+        );
     }
-    this.facingRight.set(1, 0, 0)
-      .applyQuaternion(this.facingTargetQuaternion)
-      .addScaledVector(
-        this.facingNormal,
-        -this.facingRight.dot(this.facingNormal),
-      );
     if (this.facingRight.lengthSq() === 0) return;
     this.facingRight.normalize();
     this.facingDown.crossVectors(this.facingRight, this.facingNormal).normalize();
-    if (this.cameraFacingSurface === 'y') {
+    if (this.cameraFacingSurface === 'x') {
+      this.facingBasis.makeBasis(
+        this.facingNormal,
+        this.facingDown,
+        this.facingRight,
+      );
+    } else if (this.cameraFacingSurface === 'y') {
       this.facingBasis.makeBasis(
         this.facingRight,
         this.facingNormal,
@@ -458,17 +614,17 @@ export class EventItemUseAdapter {
       );
     }
     this.facingTargetQuaternion.setFromRotationMatrix(this.facingBasis);
-    if (this.cameraFacingSurface === 'z') {
-      this.facingAdjustmentQuaternion.setFromAxisAngle(
-        COMPASS_TURN_AXIS,
-        sample.yaw,
+    const facingBlend = targetPlane || this.cameraFacingSurface === 'x'
+      ? sample.aimBlend
+      : sample.cameraSpaceBlend;
+    if (this.cameraFacingSurface === 'x') {
+      this.applyStableCameraFacingTurn(facingBlend);
+    } else {
+      this.facingWorldQuaternion.slerp(
+        this.facingTargetQuaternion,
+        facingBlend,
       );
-      this.facingTargetQuaternion.multiply(this.facingAdjustmentQuaternion);
     }
-    this.facingWorldQuaternion.slerp(
-      this.facingTargetQuaternion,
-      sample.cameraSpaceBlend,
-    );
 
     const parent = actor.root.parent;
     if (parent === null) {
@@ -481,5 +637,38 @@ export class EventItemUseAdapter {
       .copy(this.actorParentWorldQuaternion)
       .multiply(this.facingWorldQuaternion);
     actor.root.quaternion.copy(this.actorParentQuaternion);
+  }
+
+  private applyStableCameraFacingTurn(blend: number): void {
+    this.actorWorldQuaternion.copy(this.storedActorWorldQuaternion).invert();
+    this.facingDeltaQuaternion
+      .copy(this.facingTargetQuaternion)
+      .multiply(this.actorWorldQuaternion)
+      .normalize();
+
+    const delta = this.facingDeltaQuaternion;
+    const dominantAxisComponent = Math.abs(delta.x) >= Math.abs(delta.y)
+      ? Math.abs(delta.x) >= Math.abs(delta.z) ? delta.x : delta.z
+      : Math.abs(delta.y) >= Math.abs(delta.z) ? delta.y : delta.z;
+    if (dominantAxisComponent < 0) {
+      delta.set(-delta.x, -delta.y, -delta.z, -delta.w);
+    }
+
+    const axisLength = Math.hypot(delta.x, delta.y, delta.z);
+    if (axisLength <= Number.EPSILON) {
+      this.facingWorldQuaternion.copy(this.storedActorWorldQuaternion);
+      return;
+    }
+    this.facingAxis.set(
+      delta.x / axisLength,
+      delta.y / axisLength,
+      delta.z / axisLength,
+    );
+    const angle = 2 * Math.atan2(axisLength, delta.w);
+    this.facingStepQuaternion
+      .setFromAxisAngle(this.facingAxis, angle * blend);
+    this.facingWorldQuaternion
+      .copy(this.facingStepQuaternion)
+      .multiply(this.storedActorWorldQuaternion);
   }
 }

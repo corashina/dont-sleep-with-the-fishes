@@ -51,9 +51,6 @@ function createRig() {
     delegateDriftingItem: vi.fn(async (eventId: string) => {
       calls.push(`delegate:${eventId}`);
     }),
-    searchDriftingItem: vi.fn(async (eventId: string) => {
-      calls.push(`search:${eventId}`);
-    }),
     recedeDriftingItem: vi.fn(async (eventId: string) => {
       calls.push(`recede:${eventId}`);
     }),
@@ -109,7 +106,7 @@ function createRig() {
 }
 
 async function enter(rig: ReturnType<typeof createRig>): Promise<void> {
-  await rig.flow.enter('drifting-barrel', choices);
+  await rig.flow.enter('drifting-supplies', choices);
 }
 
 describe('DriftingItemFlow', () => {
@@ -118,15 +115,15 @@ describe('DriftingItemFlow', () => {
 
     await enter(rig);
 
-    expect(rig.world.enterDriftingItemView).toHaveBeenCalledWith('drifting-barrel');
+    expect(rig.world.enterDriftingItemView).toHaveBeenCalledWith('drifting-supplies');
     expect(rig.ui.showDriftingItemFocus).toHaveBeenCalledWith({
-      eventId: 'drifting-barrel',
+      eventId: 'drifting-supplies',
       choices,
       target: { left: 10, top: 20, width: 30, height: 40 },
     });
     expect(rig.calls).toEqual([
       'busy',
-      'enter:drifting-barrel',
+      'enter:drifting-supplies',
       'selection',
       'show-focus',
       'ready',
@@ -134,9 +131,9 @@ describe('DriftingItemFlow', () => {
   });
 
   it.each([
-    ['retrieve', 'retrieve:drifting-barrel'],
-    ['delegate-carlitos', 'delegate:drifting-barrel'],
-    ['sleep', 'recede:drifting-barrel'],
+    ['retrieve', 'retrieve:drifting-supplies'],
+    ['delegate-carlitos', 'delegate:drifting-supplies'],
+    ['sleep', 'recede:drifting-supplies'],
   ] as const)('resolves and returns after the %s choice', async (choiceId, animationCall) => {
     const rig = createRig();
     await enter(rig);
@@ -153,35 +150,6 @@ describe('DriftingItemFlow', () => {
       `resolve:${choiceId}`,
       'hide-focus',
       animationCall,
-      'after-animation',
-      'busy',
-      'exit',
-      'hide-focus',
-      'clear-event',
-      'render',
-      'ready',
-      'restore-focus',
-    ]);
-  });
-
-  it('uses the shared focus flow for Empty Lifeboat search', async () => {
-    const rig = createRig();
-    await rig.flow.enter('empty-lifeboat', [
-      { id: 'search', label: 'Search It', unavailableReason: null },
-      { id: 'sleep', label: 'Let It Drift', unavailableReason: null },
-    ]);
-    rig.calls.length = 0;
-
-    await rig.flow.choose('search');
-
-    expect(rig.calls).toEqual([
-      'confirm',
-      'event-resolving',
-      'busy',
-      'beat:search',
-      'resolve:search',
-      'hide-focus',
-      'search:empty-lifeboat',
       'after-animation',
       'busy',
       'exit',
@@ -290,10 +258,10 @@ describe('DriftingItemFlow', () => {
       .mockReturnValueOnce(oldEntry.promise)
       .mockReturnValueOnce(newEntry.promise);
 
-    const oldWork = rig.flow.enter('drifting-barrel', choices);
+    const oldWork = rig.flow.enter('drifting-supplies', choices);
     await Promise.resolve();
     rig.flow.clear();
-    const newWork = rig.flow.enter('drifting-barrel', choices);
+    const newWork = rig.flow.enter('drifting-supplies', choices);
     await Promise.resolve();
 
     oldEntry.resolve();
@@ -369,13 +337,13 @@ describe('DriftingItemFlow', () => {
 
     expect(rig.world.projectEventInteractionBounds).toHaveBeenNthCalledWith(
       1,
-      'drifting-barrel',
+      'drifting-supplies',
       640,
       360,
     );
     expect(rig.world.projectEventInteractionBounds).toHaveBeenNthCalledWith(
       2,
-      'drifting-barrel',
+      'drifting-supplies',
       1280,
       720,
     );
@@ -426,7 +394,7 @@ describe('DriftingItemFlow', () => {
       }
 
       const work = stage === 'entering'
-        ? rig.flow.enter('drifting-barrel', choices)
+        ? rig.flow.enter('drifting-supplies', choices)
         : rig.flow.choose('retrieve');
       await Promise.resolve();
       await Promise.resolve();
@@ -443,7 +411,7 @@ describe('DriftingItemFlow', () => {
     const rig = createRig();
     const entry = deferred();
     rig.world.enterDriftingItemView.mockReturnValueOnce(entry.promise);
-    const work = rig.flow.enter('drifting-barrel', choices);
+    const work = rig.flow.enter('drifting-supplies', choices);
     await Promise.resolve();
 
     rig.flow.dispose();
@@ -451,7 +419,7 @@ describe('DriftingItemFlow', () => {
     rig.ui.showDriftingItemFocus.mockClear();
     entry.resolve();
     await work;
-    await rig.flow.enter('drifting-barrel', choices);
+    await rig.flow.enter('drifting-supplies', choices);
     await rig.flow.choose('retrieve');
     await rig.flow.back();
     rig.flow.syncTarget(800, 600);
@@ -477,7 +445,7 @@ describe('DriftingItemFlow', () => {
     expect(thrown).toBe(cleanupFailure);
     expect(rig.ui.hideDriftingItemFocus).toHaveBeenCalledOnce();
     expect(() => rig.flow.dispose()).not.toThrow();
-    await rig.flow.enter('drifting-barrel', choices);
+    await rig.flow.enter('drifting-supplies', choices);
     await rig.flow.choose('retrieve');
     await rig.flow.back();
     rig.flow.syncTarget(800, 600);
@@ -535,7 +503,6 @@ describe('DriftingItemFlow', () => {
         enterDriftingItemView: vi.fn(async () => undefined),
         exitDriftingItemView: vi.fn(async () => undefined),
         retrieveDriftingItem: vi.fn(async () => undefined),
-        searchDriftingItem: vi.fn(async () => undefined),
         delegateDriftingItem: vi.fn(async () => undefined),
         recedeDriftingItem: vi.fn(async () => undefined),
         projectEventInteractionBounds: vi.fn(() => ({
@@ -553,7 +520,7 @@ describe('DriftingItemFlow', () => {
       isLifecycleGenerationCurrent: (generation) => generation === 1,
     });
 
-    await flow.enter('drifting-barrel', focusChoices);
+    await flow.enter('drifting-supplies', focusChoices);
 
     expect(document.activeElement).toBe(mount.querySelector(expectedSelector));
     flow.dispose();

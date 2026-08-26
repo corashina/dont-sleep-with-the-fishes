@@ -94,7 +94,8 @@ const requireElement = createElementRequirement('survival HUD');
 export class SurvivalHudView {
   readonly topControls: HTMLElement;
   readonly meters: HTMLElement;
-  readonly roots: readonly [HTMLElement, HTMLElement];
+  readonly cameraReturn: HTMLButtonElement;
+  readonly roots: readonly [HTMLElement, HTMLElement, HTMLButtonElement];
 
   onJournal: () => void = () => undefined;
   onCameraTurn: () => void = () => undefined;
@@ -132,11 +133,19 @@ export class SurvivalHudView {
       </div>
       <section class="survival-meters" aria-label="Condition meters">
         ${METERS.map(meterMarkup).join('')}
-      </section>`;
+      </section>
+      <button type="button" class="rear-camera-return" data-camera-return-front aria-label="Return to front of boat" hidden>
+        <!-- Lucide Arrow Down. ISC license: https://lucide.dev/icons/arrow-down -->
+        <svg class="rear-camera-return__arrow" viewBox="4 4 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 5v14"></path>
+          <path d="m19 12-7 7-7-7"></path>
+        </svg>
+      </button>`;
     const roots = [...template.content.children];
     this.topControls = roots[0] as HTMLElement;
     this.meters = roots[1] as HTMLElement;
-    this.roots = [this.topControls, this.meters];
+    this.cameraReturn = roots[2] as HTMLButtonElement;
+    this.roots = [this.topControls, this.meters, this.cameraReturn];
     this.day = requireElement(this.topControls, '[data-day]');
     this.journalMarker = requireElement(this.topControls, '[data-journal-open]');
     this.journalUnread = requireElement(this.topControls, '[data-journal-unread]');
@@ -148,6 +157,7 @@ export class SurvivalHudView {
       this.meterTooltips.set(id, requireElement(meter, '[data-meter-tooltip]'));
     });
     this.topControls.addEventListener('click', this.handleClick);
+    this.cameraReturn.addEventListener('click', this.handleClick);
   }
 
   render(
@@ -188,6 +198,7 @@ export class SurvivalHudView {
   setCameraTurnState(visible: boolean, rear: boolean): void {
     if (this.disposed) return;
     this.cameraTurn.hidden = !visible;
+    this.cameraReturn.hidden = !visible || !rear;
     this.cameraTurn.setAttribute('aria-pressed', String(rear));
     this.cameraTurn.setAttribute(
       'aria-label',
@@ -216,6 +227,7 @@ export class SurvivalHudView {
       }
     };
     clean(() => this.topControls.removeEventListener('click', this.handleClick));
+    clean(() => this.cameraReturn.removeEventListener('click', this.handleClick));
     clean(() => { this.onJournal = () => undefined; });
     clean(() => { this.onCameraTurn = () => undefined; });
     if (failed) throw firstError;
@@ -228,15 +240,25 @@ export class SurvivalHudView {
     const meter = this.meterElements.get(id)!;
     const displayed = definition.displayValue(value);
     const safe = Math.min(definition.max, Math.max(definition.min, displayed));
+    const bonusEnergy = id === 'energy' && displayed > definition.max;
+    const accessibleMaximum = bonusEnergy ? displayed : definition.max;
     const danger = definition.isDanger(safe);
     const percentage = ((safe - definition.min) / (definition.max - definition.min)) * 100;
-    meter.setAttribute('aria-valuenow', String(safe));
+    meter.setAttribute('aria-valuemax', String(accessibleMaximum));
+    meter.setAttribute('aria-valuenow', String(bonusEnergy ? displayed : safe));
     meter.classList.toggle('is-danger', danger);
-    if (danger) meter.setAttribute('aria-valuetext', `${safe}, ${definition.dangerLabel.toLowerCase()}`);
+    if (bonusEnergy) {
+      meter.setAttribute(
+        'aria-valuetext',
+        `${definition.max} standard energy and ${displayed - definition.max} bonus energy`,
+      );
+    } else if (danger) {
+      meter.setAttribute('aria-valuetext', `${safe}, ${definition.dangerLabel.toLowerCase()}`);
+    }
     else meter.removeAttribute('aria-valuetext');
     meter.style.setProperty('--meter-value', `${percentage}%`);
     meter.style.setProperty('--meter-fill-height', `${meterFillHeight(definition, percentage)}%`);
-    this.meterTooltips.get(id)!.textContent = `${safe} / ${definition.max}`;
+    this.meterTooltips.get(id)!.textContent = `${displayed} / ${definition.max}`;
   }
 
   private updateText(key: string, element: HTMLElement, value: string): void {
@@ -248,20 +270,24 @@ export class SurvivalHudView {
   private syncControls(): void {
     this.journalMarker.disabled = this.busy;
     this.cameraTurn.disabled = this.busy;
+    this.cameraReturn.disabled = this.busy;
   }
 
   private readonly handleClick = (event: MouseEvent): void => {
     const target = event.target;
     if (!(target instanceof Element)) return;
     const button = target.closest<HTMLButtonElement>('button');
-    if (button === null || !this.topControls.contains(button)) return;
+    if (
+      button === null
+      || (!this.topControls.contains(button) && button !== this.cameraReturn)
+    ) return;
     if (button.disabled) return;
     if (button === this.journalMarker) {
       if (!this.modalOpen) this.onJournal();
       return;
     }
     if (
-      button === this.cameraTurn
+      (button === this.cameraTurn || button === this.cameraReturn)
       && !this.busy
       && !this.paused
       && !this.modalOpen

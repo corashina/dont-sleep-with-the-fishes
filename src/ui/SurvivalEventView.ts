@@ -75,6 +75,8 @@ export class SurvivalEventView {
 
   showItemAnimationLab(): void {
     if (this.disposed) return;
+    this.caption.classList.add('item-animation-dialog');
+    this.caption.classList.remove('confirmation-dialog', 'scuba-popup-paper');
     this.updateText('title', this.title, '');
     this.title.hidden = true;
     this.updateText('detail', this.detail, '');
@@ -91,12 +93,9 @@ export class SurvivalEventView {
   }
 
   showItemAnimationLabChoices(
-    itemLabel: string,
     contextualChoices: readonly EventContextChoice[],
   ): void {
     if (this.disposed || this.caption.dataset.eventId !== 'item-animation-lab') return;
-    this.updateText('title', this.title, `Choose ${itemLabel} animation`);
-    this.title.hidden = false;
     this.setSelection(contextualChoices);
     this.choiceButtonsInOrder()[0]?.focus();
   }
@@ -121,6 +120,7 @@ export class SurvivalEventView {
     this.risk.hidden = true;
     this.caption.dataset.eventId = event.id;
     this.caption.dataset.danger = event.danger;
+    this.caption.classList.remove('item-animation-dialog');
     const confirmationDialog = event.id === 'check-the-back' || event.id === 'guarded-sleep';
     this.caption.classList.toggle('confirmation-dialog', confirmationDialog);
     this.caption.classList.toggle('scuba-popup-paper', confirmationDialog);

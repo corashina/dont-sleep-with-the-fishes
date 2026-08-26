@@ -17,6 +17,7 @@ export class SurvivalModalViews {
   readonly repairTitle: HTMLElement;
   readonly pauseRoot: HTMLElement;
   readonly resumeButton: HTMLButtonElement;
+  readonly pauseRestartButton: HTMLButtonElement;
   readonly endingRoot: HTMLElement;
   readonly endingTitle: HTMLElement;
   readonly restartButton: HTMLButtonElement;
@@ -31,6 +32,7 @@ export class SurvivalModalViews {
   private readonly endingCause: HTMLElement;
   private readonly endingStats: HTMLElement;
   private repairBusy = false;
+  private pauseRestartArmed = false;
   private restartIssued = false;
   private disposed = false;
 
@@ -56,6 +58,9 @@ export class SurvivalModalViews {
           <button type="button" class="primary-action salvage-action ui-role-context" data-resume aria-label="Resume">
             RESUME
           </button>
+          <button type="button" class="secondary-action salvage-action ui-role-context" data-pause-restart aria-label="Start over">
+            START OVER
+          </button>
         </div>
       </section>
       <section class="survival-overlay ending-overlay cinematic-overlay scuba-popup-overlay" data-ending role="dialog" aria-modal="true" aria-hidden="true" aria-label="Journey ended" inert>
@@ -75,6 +80,7 @@ export class SurvivalModalViews {
     this.repairTitle = requireElement(this.repairRoot, '[data-repair-options-title]');
     this.repairTargets = requireElement(this.repairRoot, '[data-repair-targets]');
     this.resumeButton = requireElement(this.pauseRoot, '[data-resume]');
+    this.pauseRestartButton = requireElement(this.pauseRoot, '[data-pause-restart]');
     this.endingTitle = requireElement(this.endingRoot, '[data-ending-title]');
     this.endingBody = requireElement(this.endingRoot, '[data-ending-body]');
     this.endingCause = requireElement(this.endingRoot, '[data-ending-cause]');
@@ -109,6 +115,19 @@ export class SurvivalModalViews {
     this.repairTargets.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
       button.disabled = busy;
     });
+  }
+
+  resetPauseRestartConfirmation(): void {
+    if (this.disposed) return;
+    this.pauseRestartArmed = false;
+    this.pauseRestartButton.disabled = false;
+    this.resumeButton.disabled = false;
+    this.pauseRestartButton.textContent = 'START OVER';
+    this.pauseRestartButton.setAttribute('aria-label', 'Start over');
+    this.pauseRestartButton.setAttribute(
+      'aria-description',
+      'Press once, then confirm to abandon this survival run.',
+    );
   }
 
   showEnding(record: Exclude<EndingRecord, { id: 'dorothy' }>): void {
@@ -179,8 +198,24 @@ export class SurvivalModalViews {
     if (!this.canUseRoot(this.pauseRoot)) return;
     const target = event.target;
     if (!(target instanceof Element)) return;
-    const button = target.closest<HTMLButtonElement>('[data-resume]');
-    if (button !== null && !button.disabled && this.pauseRoot.contains(button)) this.onResume();
+    const button = target.closest<HTMLButtonElement>('button');
+    if (button === null || button.disabled || !this.pauseRoot.contains(button)) return;
+    if (button.hasAttribute('data-resume')) {
+      this.resetPauseRestartConfirmation();
+      this.onResume();
+      return;
+    }
+    if (!button.hasAttribute('data-pause-restart')) return;
+    if (!this.pauseRestartArmed) {
+      this.pauseRestartArmed = true;
+      button.textContent = 'CONFIRM START OVER';
+      button.setAttribute('aria-label', 'Confirm start over');
+      button.setAttribute('aria-description', 'This abandons the current survival run.');
+      return;
+    }
+    button.disabled = true;
+    this.resumeButton.disabled = true;
+    this.onRestart();
   };
 
   private readonly handleEndingClick = (event: MouseEvent): void => {

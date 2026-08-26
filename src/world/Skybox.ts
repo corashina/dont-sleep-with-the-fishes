@@ -82,6 +82,7 @@ const fragmentShader = `
   uniform float uMoonStarScale;
   uniform float uMoonEventDim;
   uniform float uMoonScale;
+  uniform float uStarTime;
   varying vec3 vSkyDirection;
 
   float hash31(vec3 value) {
@@ -161,6 +162,39 @@ const fragmentShader = `
     vec3 cool = vec3(0.88, 0.96, 1.08);
     vec3 tint = mix(warm, cool, hash31(cell + 25.6));
     return tint * point * exists * brightness;
+  }
+
+  vec3 glowingStarLayer(vec3 direction, float scale, float threshold) {
+    vec3 grid = direction * scale;
+    vec3 cell = floor(grid);
+    vec3 local = fract(grid) - 0.5;
+    vec3 offset = (vec3(
+      hash31(cell + 1.7),
+      hash31(cell + 4.1),
+      hash31(cell + 8.3)
+    ) - 0.5) * 0.52;
+    float seed = hash31(cell);
+    float exists = step(threshold, seed);
+    float radius = mix(0.040, 0.092, hash31(cell + 12.8));
+    float distanceToStar = length(local - offset);
+    float distanceToBoundary = 0.5 - max(
+      max(abs(offset.x), abs(offset.y)),
+      abs(offset.z)
+    );
+    float haloRadius = min(radius * 7.5, distanceToBoundary * 0.96);
+    float core = 1.0 - smoothstep(radius, radius * 2.1, distanceToStar);
+    float halo = 1.0 - smoothstep(radius * 1.8, haloRadius, distanceToStar);
+    float speed = mix(0.42, 1.08, hash31(cell + 19.4));
+    float phase = hash31(cell + 25.6) * 6.2831853;
+    float twinkle = mix(0.68, 1.32,
+      sin(uStarTime * speed + phase) * 0.5 + 0.5);
+    vec3 cool = mix(
+      vec3(0.72, 0.86, 1.22),
+      vec3(1.04, 1.08, 1.18),
+      hash31(cell + 31.2)
+    );
+    float brightness = mix(0.65, 1.0, hash31(cell + 37.8));
+    return cool * exists * brightness * twinkle * (core * 2.1 + halo * 0.52);
   }
 
   float eyeShape(vec2 uv, vec2 center, vec2 scale, float skew) {
@@ -358,17 +392,21 @@ const fragmentShader = `
       * uMoonVisibility
       * mix(0.025, 0.07, moonClarity);
     color += uMoonColor * moonHalo;
+    float moonStarOcclusion = 1.0 - moonSample.a;
 
     float starHorizon = smoothstep(0.04, 0.24, direction.y);
     float starClarity = max(0.0, 1.0 - uHaze * 0.94);
-    vec3 stars = starLayer(direction, 210.0, 0.9972)
+    vec3 backgroundStars = starLayer(direction, 210.0, 0.9972)
       + starLayer(direction, 390.0, 0.9986) * 0.7;
-    color += uStarColor
-      * stars
-      * uStarVisibility
+    vec3 glowingStars = glowingStarLayer(direction, 145.0, 0.9948)
+      + glowingStarLayer(direction, 285.0, 0.9975) * 0.72;
+    float nightStars = step(0.001, uStarVisibility);
+    color += (uStarColor * backgroundStars * uStarVisibility
+      + glowingStars * nightStars)
       * starHorizon
       * starClarity
-      * uMoonStarScale;
+      * uMoonStarScale
+      * moonStarOcclusion;
 
     float atmosphericVariation = mix(0.992, 1.008,
       hash31(direction * 173.0));
@@ -391,6 +429,7 @@ export class Skybox {
   private readonly target: SkyPalette;
   private blendKey: string;
   private blendElapsed = TRANSITION_SECONDS;
+  private starElapsed = 0;
   private disposed = false;
 
   get palette(): Readonly<SkyPalette> { return this.current; }
@@ -444,6 +483,7 @@ export class Skybox {
         uMoonStarScale: { value: 1 },
         uMoonEventDim: { value: 0 },
         uMoonScale: { value: 1 },
+        uStarTime: { value: 0 },
       },
     });
     this.mesh = new Mesh(new SphereGeometry(80, 48, 24), this.material);
@@ -455,6 +495,7 @@ export class Skybox {
 
   update(delta: number, state: SkyState, cameraPosition: Vector3): Readonly<SkyPalette> {
     if (this.disposed) return this.current;
+    const safeDelta = Math.max(0, Number.isFinite(delta) ? delta : 0);
     const key = `${state.weather}:${state.phase}`;
     if (key !== this.blendKey) {
       this.blendKey = key;
@@ -464,8 +505,10 @@ export class Skybox {
     skyPaletteFor(state, this.target);
     this.blendElapsed = Math.min(
       TRANSITION_SECONDS,
-      this.blendElapsed + Math.max(0, Number.isFinite(delta) ? delta : 0),
+      this.blendElapsed + safeDelta,
     );
+    this.starElapsed = (this.starElapsed + safeDelta) % 4096;
+    this.material.uniforms.uStarTime!.value = this.starElapsed;
     const alpha = smoothstep(this.blendElapsed / TRANSITION_SECONDS);
     lerpSkyPalette(this.current, this.blendFrom, this.target, alpha);
     this.mesh.position.copy(cameraPosition);

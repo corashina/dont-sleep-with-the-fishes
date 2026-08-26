@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedOn": "2026-08-25",
+  "generatedOn": "2026-08-26",
   "sources": {
     "leakPlanks": {
       "id": "leakPlanks",
@@ -18,7 +18,7 @@
       "sourceTriangles": 150,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
     },
     "schoolFish": {
       "id": "schoolFish",
@@ -36,7 +36,7 @@
       "sourceTriangles": 233,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
     },
     "snatcher": {
       "id": "snatcher",
@@ -54,7 +54,7 @@
       "sourceTriangles": 3874,
       "sourceHasSkins": true,
       "sourceAnimationCount": 4,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
     },
     "anglerFish": {
       "id": "anglerFish",
@@ -72,7 +72,25 @@
       "sourceTriangles": 2150,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
+    },
+    "shark": {
+      "id": "shark",
+      "pageUrl": "https://poly.pizza/m/1L9OjE5KOlC",
+      "publicId": "1L9OjE5KOlC",
+      "resourceId": "f06b710e-2c30-46fe-aa81-44d3292986e9",
+      "downloadUrl": "https://static.poly.pizza/f06b710e-2c30-46fe-aa81-44d3292986e9.glb",
+      "sourceAssetId": "poly-pizza:f06b710e-2c30-46fe-aa81-44d3292986e9",
+      "modelName": "Shark fin",
+      "author": "Poly by Google",
+      "license": "CC-BY 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+      "pageAnimated": false,
+      "sha256": "B1CAB021EAF289C1402261309D92D6900415E5C8CFD87BE4DA82B16DD74DC4B6",
+      "sourceTriangles": 88,
+      "sourceHasSkins": false,
+      "sourceAnimationCount": 0,
+      "downloadedOn": "2026-08-26"
     },
     "deathStareBlob": {
       "id": "deathStareBlob",
@@ -90,7 +108,7 @@
       "sourceTriangles": 4888,
       "sourceHasSkins": true,
       "sourceAnimationCount": 9,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
     },
     "tornadoCore": {
       "id": "tornadoCore",
@@ -108,7 +126,7 @@
       "sourceTriangles": 324,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
     },
     "midnightShovel": {
       "id": "midnightShovel",
@@ -126,7 +144,7 @@
       "sourceTriangles": 322,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
     },
     "midnightMonster": {
       "id": "midnightMonster",
@@ -144,7 +162,7 @@
       "sourceTriangles": 6174,
       "sourceHasSkins": true,
       "sourceAnimationCount": 16,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
     },
     "airplane": {
       "id": "airplane",
@@ -162,7 +180,7 @@
       "sourceTriangles": 1770,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
     },
     "emptyLifeboat": {
       "id": "emptyLifeboat",
@@ -180,7 +198,43 @@
       "sourceTriangles": 1036,
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
-      "downloadedOn": "2026-08-25"
+      "downloadedOn": "2026-08-26"
+    },
+    "emptyLifeboatContainer": {
+      "id": "emptyLifeboatContainer",
+      "pageUrl": "https://poly.pizza/m/dvu1_2Wlhc0",
+      "publicId": "dvu1_2Wlhc0",
+      "resourceId": "352f53a1-a118-422d-a4d2-3667eb480f35",
+      "downloadUrl": "https://static.poly.pizza/352f53a1-a118-422d-a4d2-3667eb480f35.glb",
+      "sourceAssetId": "poly-pizza:352f53a1-a118-422d-a4d2-3667eb480f35",
+      "modelName": "Ice box",
+      "author": "Poly by Google",
+      "license": "CC-BY 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+      "pageAnimated": false,
+      "sha256": "62DF8E859AF87EA6CF6324EC0CF74679CA37BE82D299589F9647D4EEBB9814C4",
+      "sourceTriangles": 368,
+      "sourceHasSkins": false,
+      "sourceAnimationCount": 0,
+      "downloadedOn": "2026-08-26"
+    },
+    "shippingContainer": {
+      "id": "shippingContainer",
+      "pageUrl": "https://poly.pizza/m/dlBoC4Wkzp2",
+      "publicId": "dlBoC4Wkzp2",
+      "resourceId": "6bd1dfdf-9ba0-4b8d-8e96-33d3680fc8b8",
+      "downloadUrl": "https://static.poly.pizza/6bd1dfdf-9ba0-4b8d-8e96-33d3680fc8b8.glb",
+      "sourceAssetId": "poly-pizza:6bd1dfdf-9ba0-4b8d-8e96-33d3680fc8b8",
+      "modelName": "Shipping Container",
+      "author": "Clint Chilcott",
+      "license": "CC-BY 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+      "pageAnimated": false,
+      "sha256": "A847805B62C19FBB2B8A9D4D5AADB2F0831BAADEA8F96CDCE6F23197AC425A1A",
+      "sourceTriangles": 2396,
+      "sourceHasSkins": false,
+      "sourceAnimationCount": 0,
+      "downloadedOn": "2026-08-26"
     }
   }
 }

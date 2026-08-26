@@ -254,9 +254,9 @@ function validateOutcome(
   if (hasNextDawnEnergy && (
     !Number.isInteger(candidateEffects.nextDawnEnergy)
     || (candidateEffects.nextDawnEnergy as number) < 0
-    || (candidateEffects.nextDawnEnergy as number) > 3
+    || (candidateEffects.nextDawnEnergy as number) > 4
   )) {
-    throw new Error(`${path}.nextDawnEnergy must be an integer from zero through three`);
+    throw new Error(`${path}.nextDawnEnergy must be an integer from zero through four`);
   }
   if (hasFollowUpNight && candidateEffects.followUpNight !== true) {
     throw new Error(`${path}.followUpNight must be true`);

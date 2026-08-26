@@ -29,6 +29,10 @@ import type {
 } from '../eventPresentationTypes';
 import { TimedPresentationAnimation } from '../TimedPresentationAnimation';
 import {
+  eventItemUseDuration,
+  MAP_PATCH_CONTACT_PROGRESS,
+} from '../eventItemUseChoreography';
+import {
   identityLeakSample,
   LEAK_ITEM_DURATION,
   LEAK_REACTION_DURATION,
@@ -56,21 +60,18 @@ interface LeakPourStyle {
   readonly growthDelay: number;
 }
 
-const LEAK_SIDES = [-1, 1] as const;
-const LEAK_HOLES: readonly LeakHolePlacement[] = LEAK_SIDES.flatMap((side) => [
-  { side, y: 0.2, z: -0.94, scaleX: 0.2, scaleY: 0.12, rotation: -0.16, streamScale: 1 },
-  { side, y: -0.03, z: -0.34, scaleX: 0.16, scaleY: 0.1, rotation: 0.23, streamScale: 0.55 },
-  { side, y: 0.12, z: 0.18, scaleX: 0.18, scaleY: 0.11, rotation: -0.08, streamScale: 0.84 },
+const LEAK_HOLES: readonly LeakHolePlacement[] = Object.freeze([
+  { side: -1, y: 0.2, z: -0.94, scaleX: 0.2, scaleY: 0.12, rotation: -0.16, streamScale: 1 },
+  { side: -1, y: -0.03, z: -0.34, scaleX: 0.16, scaleY: 0.1, rotation: 0.23, streamScale: 0.55 },
+  { side: -1, y: 0.12, z: 0.18, scaleX: 0.18, scaleY: 0.11, rotation: -0.08, streamScale: 0.84 },
 ]);
 const LEAK_POURS: readonly LeakPourStyle[] = Object.freeze([
   { inset: 0.31, zOffset: 0.22, radius: 0.015, growthDelay: 0 },
   { inset: 0.21, zOffset: 0.36, radius: 0.012, growthDelay: 0.02 },
   { inset: 0.42, zOffset: 0.12, radius: 0.017, growthDelay: 0.05 },
-  { inset: 0.36, zOffset: 0.19, radius: 0.0135, growthDelay: 0.01 },
-  { inset: 0.23, zOffset: 0.38, radius: 0.016, growthDelay: 0.03 },
-  { inset: 0.44, zOffset: 0.14, radius: 0.0115, growthDelay: 0.06 },
 ]);
 const HOLE_X = 1.57;
+const MAP_PATCH_HULL_CLEARANCE = 0.065;
 const STREAM_X = 1.85;
 const STREAM_DROP = 0.21;
 const INTERIOR_WATER_Y = -0.25;
@@ -184,6 +185,7 @@ export class LeakPresentation implements DedicatedEventPresentation {
   private sprayHoleIndex = 0;
   private pourGrowth = 0;
   private staged = false;
+  private mapPatchSealed = false;
   private disposed = false;
 
   constructor(private readonly environment: DedicatedEventEnvironment) {
@@ -279,8 +281,14 @@ export class LeakPresentation implements DedicatedEventPresentation {
     this.holes = holes;
     this.streams = streams;
     this.pourArcs = pourArcs;
+    const patchPlacement = LEAK_HOLES[0]!;
     this.itemAimTarget.name = 'leak-item-aim-target';
-    this.holes[0]!.add(this.itemAimTarget);
+    this.itemAimTarget.position.set(
+      patchPlacement.side * (HOLE_X - MAP_PATCH_HULL_CLEARANCE),
+      patchPlacement.y,
+      patchPlacement.z,
+    );
+    this.itemAimTarget.rotation.set(0, patchPlacement.side * Math.PI / 2, 0);
 
     this.spray.points.name = 'leak-spray-particles';
     this.spray.points.renderOrder = 3;
@@ -296,6 +304,7 @@ export class LeakPresentation implements DedicatedEventPresentation {
       ...this.holes,
       ...this.streams,
       ...this.pourArcs,
+      this.itemAimTarget,
       this.spray.points,
       this.interiorWater,
     );
@@ -306,6 +315,7 @@ export class LeakPresentation implements DedicatedEventPresentation {
     if (this.disposed || context.eventId !== 'leak') return;
     this.clear();
     this.activeChoiceId = null;
+    this.mapPatchSealed = false;
     this.staged = true;
     this.boatRoot.visible = true;
     for (const hole of this.holes) hole.visible = true;
@@ -334,7 +344,10 @@ export class LeakPresentation implements DedicatedEventPresentation {
     this.activeChoiceId = choiceId;
     sampleLeakItemUse(choiceId, 0, this.sample);
     this.applyHeldLeak(0);
-    return this.animation.start('item', LEAK_ITEM_DURATION, {
+    const duration = choiceId === 'map'
+      ? eventItemUseDuration('map-leak-patch')
+      : LEAK_ITEM_DURATION;
+    return this.animation.start('item', duration, {
       complete: true,
       cancel: false,
     });
@@ -451,6 +464,9 @@ export class LeakPresentation implements DedicatedEventPresentation {
       const choiceId = this.activeChoiceId;
       if (choiceId === null) return;
       sampleLeakItemUse(choiceId, progress, this.sample);
+      if (choiceId === 'map' && progress >= MAP_PATCH_CONTACT_PROGRESS) {
+        this.sealMapPatch();
+      }
       this.applySample(time);
       return;
     }
@@ -460,8 +476,21 @@ export class LeakPresentation implements DedicatedEventPresentation {
   }
 
   private finishItemUse(choiceId: string, time: number): void {
+    if (choiceId === 'map') {
+      sampleLeakItemUse(choiceId, 1, this.sample);
+      this.sealMapPatch();
+      this.applySample(time);
+      return;
+    }
     sampleLeakItemUse(choiceId, 1, this.sample);
     this.applyHeldLeak(time);
+  }
+
+  private sealMapPatch(): void {
+    if (this.mapPatchSealed) return;
+    this.mapPatchSealed = true;
+    this.spray.reset();
+    this.sprayElapsed = 0;
   }
 
   private applyHeldLeak(time: number): void {
@@ -473,10 +502,12 @@ export class LeakPresentation implements DedicatedEventPresentation {
     this.boatRoot.position.set(this.sample.boatKick, 0, this.sample.cameraPush * 0.2);
     this.boatRoot.rotation.set(0, 0, this.sample.boatKick * 0.55);
 
-    const streamStrength = Math.max(
-      this.sample.jetStrength,
-      this.sample.dripStrength * 0.42,
-    );
+    const streamStrength = this.mapPatchSealed
+      ? 0
+      : Math.max(
+        this.sample.jetStrength,
+        this.sample.dripStrength * 0.42,
+      );
     this.streamMaterial.opacity = Math.min(
       WATER_OPACITY,
       streamStrength * WATER_OPACITY,
@@ -565,6 +596,7 @@ export class LeakPresentation implements DedicatedEventPresentation {
     for (const stream of this.streams) stream.visible = false;
     for (const pourArc of this.pourArcs) pourArc.visible = false;
     this.spray.points.visible = false;
+    this.mapPatchSealed = false;
     this.spray.reset();
     this.sprayElapsed = 0;
     this.sprayHoleIndex = 0;

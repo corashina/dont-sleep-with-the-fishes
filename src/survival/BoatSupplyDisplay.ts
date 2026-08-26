@@ -440,6 +440,13 @@ export class BoatSupplyDisplay {
     if (this.currentSnapshot !== null) this.sync(this.currentSnapshot);
   }
 
+  isEventGroupEligible(groupId: BoatSupplyGroupId): boolean {
+    for (const instanceId of this.eventEligibleItemIds ?? []) {
+      if (this.groupByInstanceId.get(instanceId) === groupId) return true;
+    }
+    return false;
+  }
+
   private syncEventEligibleOutlines(): void {
     const eligibleGroups = new Set<BoatSupplyGroupId>();
     for (const instanceId of this.eventEligibleItemIds ?? []) {

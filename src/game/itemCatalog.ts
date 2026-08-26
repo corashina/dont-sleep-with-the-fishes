@@ -1,6 +1,6 @@
 export const ITEM_IDS = [
   'cannedFood', 'baitTin', 'ductTape', 'compass', 'map', 'medicalKit',
-  'spyglass', 'fishingNet', 'rope', 'bucket', 'flareGun', 'scubaSet', 'anchor',
+  'spyglass', 'fishingNet', 'knife', 'bucket', 'flareGun', 'scubaSet', 'anchor',
   'radio', 'umbrella', 'swimRing', 'flashlight', 'shotgun',
   'energyBar', 'carlitos',
 ] as const;
@@ -47,7 +47,7 @@ const rawDefinitions = {
   medicalKit: define('MEDKIT', 2, 1, 1, false, false, 'treat'),
   spyglass: define('BINOCULARS', 1, 1, null, true, true, null),
   fishingNet: define('FISHING NET', 2, 1, null, true, true, null),
-  rope: define('ROPE', 2, 1, null, true, true, null),
+  knife: define('KNIFE', 1, 1, null, true, true, null),
   bucket: define('BUCKET', 2, 1, null, true, true, null),
   flareGun: define('FLARE GUN', 1, 1, 1, false, false, null),
   scubaSet: define('SCUBA GEAR', 3, 1, null, true, true, 'dive'),
@@ -79,7 +79,7 @@ const APPROVED_SPAWN_COUNTS = {
   medicalKit: 1,
   spyglass: 1,
   fishingNet: 1,
-  rope: 1,
+  knife: 1,
   bucket: 1,
   flareGun: 1,
   scubaSet: 1,
