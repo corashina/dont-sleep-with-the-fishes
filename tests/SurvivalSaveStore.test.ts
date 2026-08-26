@@ -145,11 +145,6 @@ describe('SurvivalSaveStore', () => {
       };
     }],
     ['savedItems Carlitos', (value: any) => {
-      value.checkpoint.session.inventory['carlitos-1'] = {
-        instanceId: 'carlitos-1',
-        type: 'carlitos',
-        condition: 'usable',
-      };
       value.checkpoint.session.savedItems.push({
         instanceId: 'carlitos-1',
         type: 'carlitos',
