@@ -141,6 +141,27 @@ describe('FocusedEventFlow', () => {
     expect(rig.calls).toContain('ready');
   });
 
+  it('releases busy after an after-return failure without reviving focus', async () => {
+    const rig = createRig();
+    rig.setResolution({
+      accepted: true,
+      playAnimation: async () => undefined,
+      afterAnimation: async () => undefined,
+      beforeReturn: async () => undefined,
+      afterReturn: async () => { throw new Error('after return failed'); },
+      clearEvent: vi.fn(),
+      renderSnapshot: () => false,
+      presentTerminal: vi.fn(),
+    });
+    await rig.flow.enter('drifting-barrel', driftingChoices);
+    rig.calls.length = 0;
+
+    await expect(rig.flow.choose({ id: 'retrieve', instanceId: null })).resolves.toBeUndefined();
+
+    expect(rig.calls).toContain('ready');
+    expect(rig.ui.showFocusedEvent).toHaveBeenCalledOnce();
+  });
+
   it('makes an in-flight entry inert after cleanup', async () => {
     const rig = createRig();
     const pending = deferred();

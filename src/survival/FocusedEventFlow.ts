@@ -313,13 +313,17 @@ export class FocusedEventFlow {
     this.activeEventId = null;
     this.choices = [];
     this.focusState = 'idle';
-    resolution.clearEvent();
-    if (!this.isCurrent(generation)) return;
-    const terminal = resolution.renderSnapshot();
-    if (!this.isCurrent(generation)) return;
-    await resolution.afterReturn();
-    if (!this.isCurrent(generation)) return;
-    this.dependencies.setBusy(false);
+    let terminal = false;
+    try {
+      resolution.clearEvent();
+      if (!this.isCurrent(generation)) return;
+      terminal = resolution.renderSnapshot();
+      if (!this.isCurrent(generation)) return;
+      await resolution.afterReturn();
+      if (!this.isCurrent(generation)) return;
+    } finally {
+      this.releaseSettledBusy(generation, operation);
+    }
     if (terminal) resolution.presentTerminal();
     else this.dependencies.ui.restoreCommandFocus?.();
   }
@@ -351,6 +355,17 @@ export class FocusedEventFlow {
       && (this.focusState === 'resolving' || this.focusState === 'returning')
       && this.operationGeneration === operation
       && this.isCurrent(generation);
+  }
+
+  private releaseSettledBusy(generation: number, operation: number): void {
+    if (
+      this.activeEventId !== null
+      || this.choices.length !== 0
+      || this.focusState !== 'idle'
+      || this.operationGeneration !== operation + 1
+      || !this.isCurrent(generation)
+    ) return;
+    this.dependencies.setBusy(false);
   }
 
   private beginOperation(): number {
