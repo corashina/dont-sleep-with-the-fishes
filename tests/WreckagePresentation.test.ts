@@ -17,6 +17,8 @@ import type {
 function modelGroup(id: string): Group {
   const root = new Group();
   root.name = `model:${id}`;
+  root.position.set(0.31, -0.22, 0.14);
+  root.scale.setScalar(0.27);
   const dimensions = id === 'containerShip' ? [6, 3, 16] : [1, 0.8, 1.2];
   root.add(new Mesh(new BoxGeometry(...dimensions), new MeshStandardMaterial()));
   return root;
@@ -121,6 +123,29 @@ describe('WreckagePresentation', () => {
     presentation.dispose();
   });
 
+  it('preserves normalized model scale and offset while its placement floats', () => {
+    const { environment } = createEnvironment();
+    const presentation = new WreckagePresentation(environment);
+    const debris = stage(presentation);
+    const placement = debris.getObjectByName('wreckage-box')!;
+    const model = placement.children[0]!;
+    const shipPlacement = presentation.worldRoot.getObjectByName('wreckage-wreck')!;
+    const shipModel = shipPlacement.children[0]!;
+
+    presentation.update(2.4, 0.2);
+
+    expect(model.name).toBe('model:wreckageBox');
+    expect(model.position.toArray()).toEqual([0.31, -0.22, 0.14]);
+    expect(model.scale.toArray()).toEqual([0.27, 0.27, 0.27]);
+    expect(placement.position.x).toBe(2.65);
+    expect(placement.scale.toArray()).toEqual([0.82, 0.82, 0.82]);
+    expect(shipModel.name).toBe('model:containerShip');
+    expect(shipModel.position.toArray()).toEqual([0.31, -0.22, 0.14]);
+    expect(shipModel.scale.toArray()).toEqual([0.27, 0.27, 0.27]);
+    expect(shipPlacement.position.toArray()).toEqual([0, -7.2, -11.5]);
+    presentation.dispose();
+  });
+
   it('keeps the complete ship submerged and hidden during surface focus', async () => {
     const { environment } = createEnvironment();
     const presentation = new WreckagePresentation(environment);
@@ -189,6 +214,8 @@ describe('WreckagePresentation', () => {
     }
 
     presentation.dispose();
+    presentation.dispose();
+    expect(presentation.worldRoot.children).toHaveLength(0);
     expect(ownedModelDispose.mock.calls.map(([id]) => id)).toEqual([
       'containerShip',
       'wreckageBox',

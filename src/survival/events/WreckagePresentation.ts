@@ -99,6 +99,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   readonly itemAimTarget = new Object3D();
 
   private readonly debris = new Group();
+  private readonly shipPlacement = new Group();
   private readonly ship: EventModelInstance;
   private readonly box: EventModelInstance;
   private readonly crate: EventModelInstance;
@@ -137,10 +138,11 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.crate = environment.eventModels.create('wreckageCrate');
     this.pallet = environment.eventModels.create('wreckagePallet');
 
-    this.ship.root.name = 'wreckage-wreck';
-    this.ship.root.position.set(0, -7.2, -11.5);
-    this.ship.root.rotation.set(0.18, -0.42, -0.12);
-    this.ship.root.visible = false;
+    this.shipPlacement.name = 'wreckage-wreck';
+    this.shipPlacement.position.set(0, -7.2, -11.5);
+    this.shipPlacement.rotation.set(0.18, -0.42, -0.12);
+    this.shipPlacement.visible = false;
+    this.shipPlacement.add(this.ship.root);
 
     this.addModelDebris(this.box.root, 'wreckage-box');
     this.addModelDebris(this.crate.root, 'wreckage-crate');
@@ -167,7 +169,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
       minimumHitHeight: 72,
     })]);
 
-    this.worldRoot.add(this.debris, this.ship.root, this.itemAimTarget);
+    this.worldRoot.add(this.debris, this.shipPlacement, this.itemAimTarget);
     this.updateFloatingDebris();
     this.hideScene();
   }
@@ -189,7 +191,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.staged = true;
     this.worldRoot.visible = true;
     this.boatRoot.visible = true;
-    this.ship.root.visible = false;
+    this.shipPlacement.visible = false;
     this.updateFloatingDebris();
     sampleWreckageBeat('reveal', 0, this.sample);
     this.applySample();
@@ -278,9 +280,11 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   }
 
   private addModelDebris(root: Group, name: string): void {
-    root.name = name;
-    this.surfaceObjects.push(root);
-    this.debris.add(root);
+    const placement = new Group();
+    placement.name = name;
+    placement.add(root);
+    this.surfaceObjects.push(placement);
+    this.debris.add(placement);
   }
 
   private startBeat(beat: WreckageBeat): Promise<void> {
@@ -323,12 +327,12 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.debris.visible = this.staged && this.sample.debrisAlpha > 0;
     this.worldRoot.visible = this.staged && this.sample.sceneAlpha > 0;
     this.boatRoot.visible = this.worldRoot.visible;
-    this.ship.root.visible = false;
+    this.shipPlacement.visible = false;
   }
 
   private hideScene(): void {
     this.debris.visible = false;
-    this.ship.root.visible = false;
+    this.shipPlacement.visible = false;
     this.worldRoot.visible = false;
     this.boatRoot.visible = false;
   }
