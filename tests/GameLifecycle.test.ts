@@ -546,6 +546,44 @@ describe('Game menu lifecycle', () => {
       )!;
       expect(clouds.disabled).toBe(true);
       expect(state.value).toBe('UNAVAILABLE');
+
+      let disabled = clouds.disabled;
+      let output = state.value;
+      let disabledWrites = 0;
+      let outputWrites = 0;
+      Object.defineProperty(clouds, 'disabled', {
+        configurable: true,
+        get: () => disabled,
+        set: (value: boolean) => {
+          disabled = value;
+          disabledWrites += 1;
+        },
+      });
+      Object.defineProperty(state, 'value', {
+        configurable: true,
+        get: () => output,
+        set: (value: string) => {
+          output = value;
+          outputWrites += 1;
+        },
+      });
+      const console = (game as unknown as {
+        postProcessingConsole: {
+          setVolumetricCloudAvailability(available: boolean): void;
+        };
+      }).postProcessingConsole;
+
+      console.setVolumetricCloudAvailability(false);
+      console.setVolumetricCloudAvailability(false);
+      expect(disabledWrites).toBe(0);
+      expect(outputWrites).toBe(0);
+
+      console.setVolumetricCloudAvailability(true);
+      console.setVolumetricCloudAvailability(true);
+      expect(disabledWrites).toBe(1);
+      expect(outputWrites).toBe(1);
+      expect(disabled).toBe(false);
+      expect(output).toBe('OFF');
     } finally {
       game.dispose();
     }
