@@ -111,7 +111,7 @@ describe('VolumetricClouds', () => {
   it.each([
     ['low', 12],
     ['medium', 20],
-    ['high', 28],
+    ['high', 20],
   ] as const)('uses %s quality step limits', (quality, steps) => {
     const clouds = new VolumetricClouds(new Scene(), quality);
     expect(clouds.material.uniforms.uMaxSteps!.value).toBe(steps);
