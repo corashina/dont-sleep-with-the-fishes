@@ -53,15 +53,38 @@ describe('EmptyLifeboatPresentation', () => {
 
     presentations.stage('empty-lifeboat', 0);
 
-    expect(EVENT_BUNDLE_SPECS['empty-lifeboat'].models).toEqual(['emptyLifeboat']);
-    expect(clone).toHaveBeenCalledExactlyOnceWith('emptyLifeboat');
+    expect(EVENT_BUNDLE_SPECS['empty-lifeboat'].models).toEqual([
+      'emptyLifeboat',
+      'emptyLifeboatContainer',
+    ]);
+    expect(clone).toHaveBeenNthCalledWith(1, 'emptyLifeboat');
+    expect(clone).toHaveBeenNthCalledWith(2, 'emptyLifeboatContainer');
     expect(presentations.root.getObjectByName('empty-lifeboat:subject')).not.toBeNull();
+    expect(
+      presentations.root.getObjectByName('event-prop:empty-lifeboat-container'),
+    ).not.toBeNull();
     presentations.dispose();
+  });
+
+  it('keeps the supply container attached to the raft', () => {
+    const container = new Group();
+    const presentation = new EmptyLifeboatPresentation(
+      new Group(),
+      container,
+      createFlatWater(),
+    );
+
+    presentation.stage(1);
+    presentation.update(2, 0);
+
+    expect(container.name).toBe('event-prop:empty-lifeboat-container');
+    expect(container.position.toArray()).toEqual([0, 0.18, 0.65]);
+    expect(container.parent?.name).toBe('event-prop:empty-lifeboat');
   });
 
   it('stages the empty boat on the seeded side and follows the shared waves', () => {
     const water = createWater();
-    const presentation = new EmptyLifeboatPresentation(new Group(), water);
+    const presentation = new EmptyLifeboatPresentation(new Group(), new Group(), water);
 
     presentation.stage(0);
     presentation.update(2, 0);
@@ -78,7 +101,11 @@ describe('EmptyLifeboatPresentation', () => {
   });
 
   it('starts at its distant rotated pose without sliding during reveal', async () => {
-    const presentation = new EmptyLifeboatPresentation(new Group(), createFlatWater());
+    const presentation = new EmptyLifeboatPresentation(
+      new Group(),
+      new Group(),
+      createFlatWater(),
+    );
     presentation.stage(1);
     const subject = presentation.root.getObjectByName('empty-lifeboat:subject')!;
 
@@ -97,7 +124,7 @@ describe('EmptyLifeboatPresentation', () => {
   });
 
   it('pulls close and leaves after the search', async () => {
-    const presentation = new EmptyLifeboatPresentation(new Group(), createWater());
+    const presentation = new EmptyLifeboatPresentation(new Group(), new Group(), createWater());
     presentation.stage(0);
     const subject = presentation.root.getObjectByName('empty-lifeboat:subject')!;
     const startDistance = Math.abs(subject.position.x);
@@ -113,7 +140,7 @@ describe('EmptyLifeboatPresentation', () => {
   });
 
   it('lets the empty boat drift away and settles hidden', async () => {
-    const presentation = new EmptyLifeboatPresentation(new Group(), createWater());
+    const presentation = new EmptyLifeboatPresentation(new Group(), new Group(), createWater());
     presentation.stage(1);
 
     const reaction = presentation.react('empty-lifeboat.drift');

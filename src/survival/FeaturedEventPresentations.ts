@@ -54,6 +54,7 @@ export class FeaturedEventPresentations {
     if (includeLifeboat && driftingWater !== undefined) {
       this.presentations.set('empty-lifeboat', new EmptyLifeboatPresentation(
         models.clone('emptyLifeboat'),
+        models.clone('emptyLifeboatContainer'),
         driftingWater,
       ));
     }

@@ -70,6 +70,7 @@ const TRADER_REWARDS: Readonly<Partial<Record<string, ItemId>>> = Object.freeze(
   bait: 'energyBar',
   map: 'compass',
   umbrella: 'medicalKit',
+  swimRing: 'radio',
 });
 
 function keyedTravel(progress: number): number {
@@ -112,6 +113,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
   private readonly mist = new Group();
   private readonly paymentActors = new Group();
   private readonly rewardActors = new Group();
+  private readonly handoverTarget = new Group();
   private readonly staticGeometries = new Set<BufferGeometry>();
   private readonly staticMaterials = new Set<Material>();
   private readonly exchangeGeometries = new Set<BufferGeometry>();
@@ -209,11 +211,13 @@ export class NightTraderPresentation implements FocusedEventPresentation {
 
     this.paymentActors.name = 'night-trader-payment-actors';
     this.rewardActors.name = 'night-trader-reward-actors';
+    this.handoverTarget.name = 'night-trader-handover-target';
     this.root.add(
       this.vessel,
       this.mist,
       this.paymentActors,
       this.rewardActors,
+      this.handoverTarget,
     );
     collectMeshResources(
       this.root,
@@ -255,6 +259,10 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     if (!this.staged) this.stage();
     this.root.userData.state = 'revealing';
     return this.startAnimation('reveal', REVEAL_DURATION);
+  }
+
+  itemAimTarget(): Group {
+    return this.handoverTarget;
   }
 
   playChoice(choice: EventChoicePresentation): Promise<void> {
@@ -715,6 +723,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.boatAway.x *= this.side;
     this.caseTarget.copy(CASE_TARGET);
     this.caseTarget.x *= this.side;
+    this.handoverTarget.position.copy(this.caseTarget);
     this.paymentStart.copy(PAYMENT_START);
     this.paymentStart.x *= this.side;
     this.rewardEnd.copy(REWARD_END);

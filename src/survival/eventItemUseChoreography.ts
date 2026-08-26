@@ -6,7 +6,8 @@ import { scaleEventItemDuration, scaleThrownItemDuration } from './eventItemTimi
 export type EventItemUseContext =
   | 'base' | 'throw-target' | 'tape-stretch' | 'compass-search' | 'map-read'
   | 'binocular-look' | 'net-scoop' | 'bucket-scoop' | 'bucket-helmet'
-  | 'trade-handover' | 'cover-supplies' | 'net-spread' | 'map-leak-patch'
+  | 'trade-handover' | 'map-leak-patch'
+  | 'radio-signal-receive'
   | 'flare-target' | 'flare-sky' | 'anchor-drop'
   | 'umbrella-overhead' | 'umbrella-shield'
   | 'flashlight-threat-beam' | 'flashlight-signal' | 'shotgun-fire';
@@ -15,7 +16,8 @@ export type EventItemEffectKind =
   | 'none' | 'tape' | 'binocular-mask'
   | 'flare' | 'chain' | 'flashlight' | 'shotgun-smoke';
 
-export type EventItemSurfaceFacing = 'default' | 'none' | 'target';
+export type EventItemSurfaceFacing =
+  | 'default' | 'none' | 'target' | 'target-plane' | 'target-plane-opposite';
 
 export type EventItemFlightTarget = 'event' | 'starboard-water' | 'bucket-water';
 
@@ -45,21 +47,37 @@ const UMBRELLA_OVERHEAD_ROTATION = Object.freeze({
   yaw: 1.3933992747114876,
   roll: -1.4509371355345577,
 });
-const UMBRELLA_SHIELD_ROTATION = Object.freeze({
-  pitch: 0.04275258056186774,
-  yaw: 0.7154158991967178,
-  roll: 0.25535318456913286,
-});
+const UMBRELLA_SHIELD_VIEW_Z = -0.2;
+const UMBRELLA_SHIELD_VIEW_Y = -0.075;
+const UMBRELLA_SHIELD_SCALE = 1.5;
 const ANCHOR_FLIGHT_START = 0.56;
 const ANCHOR_IMPACT_PROGRESS = 0.84;
 const ANCHOR_ACTION_CUE_PROGRESSES = Object.freeze([ANCHOR_IMPACT_PROGRESS]);
 const TAPE_ACTION_CUE_PROGRESSES = Object.freeze([0.5]);
+export const MAP_PATCH_CONTACT_PROGRESS = 0.78;
+const MAP_PATCH_ACTION_CUE_PROGRESSES = Object.freeze([MAP_PATCH_CONTACT_PROGRESS]);
+const MAP_PATCH_LIFT_START = 0.08;
+const MAP_PATCH_LIFT_END = 0.22;
+const MAP_PATCH_TRAVEL_START = MAP_PATCH_LIFT_END;
+const MAP_PATCH_TRAVEL_END = 0.38;
+const MAP_PATCH_MINIMUM_LIFT_Y = 0.42;
+const MAP_PATCH_TRAVEL_ARC_HEIGHT = 0.52;
+const RADIO_SIGNAL_CUE_PROGRESSES = Object.freeze([0.52]);
+const BUCKET_HELMET_RAIN_CUE_PROGRESSES = Object.freeze([0.65]);
 const WEIGHTED_THROW_DURATION_MULTIPLIER = 1.15;
 const SCOOP_DURATION = 1.65;
 const SCOOP_FLIGHT_ARC_HEIGHT = 0.9;
 const SCOOP_GUNWALE_CLEARANCE = 0.28;
 const NET_PICKUP_DEPTH = 0.14;
 const BUCKET_BENCH_CLEARANCE_X = 0.32;
+const BUCKET_HELMET_RAISE_START = 0;
+const BUCKET_HELMET_OVERHEAD_PROGRESS = 0.36;
+const BUCKET_HELMET_LOWER_START = 0.38;
+const BUCKET_HELMET_LOWER_END = 0.72;
+const BUCKET_HELMET_OVERHEAD_Y = 0.56;
+const BUCKET_HELMET_WORN_Y = -0.04;
+const BUCKET_HELMET_CENTER_X = 0;
+const BUCKET_HELMET_SCALE = 1.35;
 const NO_ACTION_CUE_PROGRESSES: readonly number[] = Object.freeze([]);
 type StagedEventItemUseSample = EventItemUseSample & {
   [MOTION_PROFILE]?: ReturnType<typeof eventItemMotionProfile>;
@@ -94,6 +112,7 @@ export interface EventItemUseSample {
   effectArc: number;
   itemVisible: boolean;
   surfaceFacing: EventItemSurfaceFacing;
+  minimumLiftY: number;
 }
 
 const BUCKET_SCOOP_EVENTS: ReadonlySet<string> = new Set([
@@ -110,15 +129,7 @@ const UMBRELLA_SHIELD_EVENTS: ReadonlySet<string> = new Set([
 ]);
 const FLARE_SKY_EVENTS: ReadonlySet<string> = new Set(['other-people', 'plane']);
 const FLARE_TARGET_EVENTS: ReadonlySet<string> = new Set(['ghosts']);
-const BASE_BUCKET_EVENTS: ReadonlySet<string> = new Set(['flowers']);
-const BASE_FLARE_EVENTS: ReadonlySet<string> = new Set(['shadow-figure']);
 const TRADE_EVENTS: ReadonlySet<string> = new Set(['night-trader', 'handyman']);
-const COVER_SUPPLY_MAP_EVENTS: ReadonlySet<string> = new Set([
-  'shower-night', 'windy-night',
-]);
-const NET_SPREAD_EVENTS: ReadonlySet<string> = new Set([
-  'windy-night', 'swarm-of-anglerfish',
-]);
 const FLASHLIGHT_SIGNAL_EVENTS: ReadonlySet<string> = new Set([
   'other-people', 'plane',
 ]);
@@ -152,6 +163,7 @@ export function createEventItemUseSample(): EventItemUseSample {
     effectArc: 0,
     itemVisible: true,
     surfaceFacing: 'default',
+    minimumLiftY: 0,
   };
 }
 
@@ -161,13 +173,15 @@ export function resolveEventItemUseContext(
   itemId: ItemId,
 ): EventItemUseContext | null {
   if (TRADE_EVENTS.has(eventId)) return 'trade-handover';
+  if (itemId === 'radio' && choiceId === 'radioSignal') {
+    return 'radio-signal-receive';
+  }
   if (itemId === 'bucket' && choiceId === 'bucket') {
     if (BUCKET_SCOOP_EVENTS.has(eventId)) return 'bucket-scoop';
     if (BUCKET_HELMET_EVENTS.has(eventId)) return 'bucket-helmet';
-    return BASE_BUCKET_EVENTS.has(eventId) ? 'base' : null;
+    return null;
   }
   if (itemId === 'umbrella' && choiceId === 'umbrella') {
-    if (eventId === 'windy-night') return 'cover-supplies';
     if (UMBRELLA_OVERHEAD_EVENTS.has(eventId)) return 'umbrella-overhead';
     if (UMBRELLA_SHIELD_EVENTS.has(eventId)) return 'umbrella-shield';
     return null;
@@ -175,7 +189,7 @@ export function resolveEventItemUseContext(
   if (itemId === 'flareGun' && choiceId === 'flareGun') {
     if (FLARE_SKY_EVENTS.has(eventId)) return 'flare-sky';
     if (FLARE_TARGET_EVENTS.has(eventId)) return 'flare-target';
-    return BASE_FLARE_EVENTS.has(eventId) ? 'base' : null;
+    return null;
   }
   if (
     itemId === 'anchor'
@@ -206,12 +220,11 @@ export function resolveEventItemUseContext(
   if (itemId === 'compass' && choiceId === 'compass') return 'compass-search';
   if (itemId === 'map' && choiceId === 'map') {
     if (eventId === 'leak') return 'map-leak-patch';
-    if (COVER_SUPPLY_MAP_EVENTS.has(eventId)) return 'cover-supplies';
     return 'map-read';
   }
   if (itemId === 'spyglass' && choiceId === 'spyglass') return 'binocular-look';
   if (itemId === 'fishingNet' && choiceId === 'fishingNet') {
-    return NET_SPREAD_EVENTS.has(eventId) ? 'net-spread' : 'net-scoop';
+    return 'net-scoop';
   }
   if (itemId === 'rope' && choiceId === 'rope') return 'base';
   if (itemId === 'flashlight' && choiceId === 'flashlight') {
@@ -235,8 +248,7 @@ export function eventItemUseDuration(context: EventItemUseContext): number {
     case 'bucket-scoop': return scaleEventItemDuration(SCOOP_DURATION);
     case 'bucket-helmet': return scaleEventItemDuration(1.45);
     case 'trade-handover': return scaleEventItemDuration(1.35);
-    case 'cover-supplies': return scaleEventItemDuration(1.5);
-    case 'net-spread': return scaleEventItemDuration(1.55);
+    case 'radio-signal-receive': return scaleEventItemDuration(1.65);
     case 'map-leak-patch': return scaleEventItemDuration(1.5);
     case 'flare-target': return scaleEventItemDuration(1.5);
     case 'flare-sky': return scaleEventItemDuration(1.65);
@@ -289,6 +301,7 @@ function resetSample(output: EventItemUseSample): void {
   output.effectArc = 0;
   output.itemVisible = true;
   output.surfaceFacing = 'default';
+  output.minimumLiftY = 0;
 }
 
 function samplePickupAndHold(
@@ -353,13 +366,12 @@ function sampleCompassSearch(
   output: EventItemUseSample,
   pickup: number,
   hold: number,
-  progress: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
   const readingScale = 1 + 0.45 * hold;
-  const turnLeft = pulse(progress, 0.42, 0.55, 0.68);
-  const turnRight = pulse(progress, 0.64, 0.77, 0.9);
-  output.yaw = 0.14 * (turnLeft - turnRight);
+  output.yaw = 0;
+  output.pitch = 0;
+  output.roll = 0;
   output.scaleX = readingScale;
   output.scaleY = readingScale;
   output.scaleZ = readingScale;
@@ -479,17 +491,31 @@ function sampleBucketScoop(
 }
 
 function sampleBucketHelmet(
-  output: EventItemUseSample, pickup: number, hold: number, action: number,
+  output: EventItemUseSample,
+  progress: number,
 ): void {
-  samplePickupAndHold(output, pickup, hold);
-  applyBucketBenchClearance(output, pickup);
-  output.viewX *= 1 - action;
-  output.viewY += 0.68 * action;
-  output.viewZ += 0.68 * action;
-  output.yaw = 0.08 * action;
-  output.pitch = -Math.PI * 0.78 * action;
-  output.roll = -0.08 * action;
-  output.primaryEffect = action;
+  const raise = smoothstep(
+    (progress - BUCKET_HELMET_RAISE_START)
+      / (BUCKET_HELMET_OVERHEAD_PROGRESS - BUCKET_HELMET_RAISE_START),
+  );
+  const lower = smoothstep(
+    (progress - BUCKET_HELMET_LOWER_START)
+      / (BUCKET_HELMET_LOWER_END - BUCKET_HELMET_LOWER_START),
+  );
+  const targetY = BUCKET_HELMET_OVERHEAD_Y
+    + (BUCKET_HELMET_WORN_Y - BUCKET_HELMET_OVERHEAD_Y) * lower;
+  output.cameraSpaceBlend = raise;
+  output.viewX = BUCKET_HELMET_CENTER_X;
+  output.viewY = targetY;
+  output.viewZ = 0;
+  const helmetScale = 1 + (BUCKET_HELMET_SCALE - 1) * raise;
+  output.scaleX = helmetScale;
+  output.scaleY = helmetScale;
+  output.scaleZ = helmetScale;
+  output.yaw = 0.08 * raise * (1 - lower);
+  output.pitch = -Math.PI * raise;
+  output.roll = -0.08 * raise * (1 - lower);
+  output.primaryEffect = lower;
 }
 
 function sampleTradeHandover(
@@ -504,64 +530,62 @@ function sampleTradeHandover(
   output.viewZ -= 0.08 * offer;
   output.yaw += 0.08 * offer;
   output.pitch += 0.06 * offer;
-  output.targetBlend = 0.88 * offer;
-  output.cameraTargetBlend = 0.12 * offer;
+  output.targetBlend = 0.92 * offer;
+  output.cameraTargetBlend = 0.72 * offer;
   output.ballisticFlight = false;
 }
 
-function sampleCoverSupplies(
-  output: EventItemUseSample,
-  pickup: number,
-  hold: number,
-  action: number,
-  itemId: ItemId | undefined,
-): void {
-  samplePickupAndHold(output, pickup, hold);
-  output.viewX += (0.52 - output.viewX) * action;
-  output.viewY += (-0.58 - output.viewY) * action;
-  output.viewZ += (-1.02 - output.viewZ) * action;
-  output.yaw = 0.24 * action;
-  output.pitch = (itemId === 'umbrella' ? -0.28 : -0.16) * action;
-  output.roll = (itemId === 'umbrella' ? -1.28 : -0.92) * action;
-  output.surfaceFacing = 'none';
-}
-
-function sampleNetSpread(
-  output: EventItemUseSample,
-  pickup: number,
-  hold: number,
-  action: number,
-): void {
-  samplePickupAndHold(output, pickup, hold);
-  output.viewX -= 0.22 * action;
-  output.viewY += 0.44 * action;
-  output.viewZ += 0.08 * action;
-  output.yaw = 0.22 * action;
-  output.pitch = -1.08 * action;
-  output.roll = -0.34 * action;
-  output.aimBlend = 0;
-}
-
-function sampleMapLeakPatch(
+function sampleRadioSignalReceive(
   output: EventItemUseSample,
   pickup: number,
   hold: number,
   progress: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
+  const listen = smoothstep((progress - 0.34) / 0.18) * hold;
+  const staticJolt = pulse(progress, 0.5, 0.54, 0.62);
+  const tuning = pulse(progress, 0.62, 0.74, 0.9);
+  output.viewX += 0.1 * listen;
+  output.viewY += 0.42 * listen;
+  output.viewZ += 0.2 * listen;
+  output.yaw = -0.38 * listen + 0.045 * staticJolt;
+  output.pitch = -0.12 * listen;
+  output.roll = -0.18 * listen + 0.035 * Math.sin(progress * Math.PI * 8) * tuning;
+  output.cameraYaw = -0.08 * listen;
+  output.cameraPitch = 0.035 * listen;
+}
+
+function sampleMapLeakPatch(
+  output: EventItemUseSample,
+  progress: number,
+): void {
+  const lift = smoothstep(
+    (progress - MAP_PATCH_LIFT_START)
+      / (MAP_PATCH_LIFT_END - MAP_PATCH_LIFT_START),
+  );
+  const travel = smoothstep(
+    (progress - MAP_PATCH_TRAVEL_START)
+      / (MAP_PATCH_TRAVEL_END - MAP_PATCH_TRAVEL_START),
+  );
+  samplePickupAndHold(output, travel, travel);
   const open = smoothstep((progress - 0.34) / 0.16);
-  const press = smoothstep((progress - 0.5) / 0.22);
+  const align = smoothstep((progress - 0.44) / 0.18);
+  const press = smoothstep((progress - 0.64) / 0.22);
   output.viewX -= 0.12 * open;
   output.viewY += 0.08 * open;
+  output.pitch = 0;
   output.roll = -0.68 * open;
   output.scaleX = 1 + 0.28 * open;
   output.scaleY = 1 + 0.28 * open;
   output.scaleZ = 1 + 0.28 * open;
-  output.targetBlend = 0.94 * press;
-  output.aimBlend = press;
-  output.cameraTargetBlend = 0.24 * press;
+  output.targetBlend = 0.98 * press;
+  output.flightArc = 4 * press * (1 - press);
+  output.flightArcHeight = MAP_PATCH_TRAVEL_ARC_HEIGHT;
+  output.aimBlend = align;
+  output.cameraTargetBlend = 0.3 * align;
   output.ballisticFlight = false;
-  output.surfaceFacing = 'target';
+  output.surfaceFacing = 'target-plane-opposite';
+  output.minimumLiftY = MAP_PATCH_MINIMUM_LIFT_Y * lift;
 }
 
 function sampleFlare(
@@ -626,15 +650,26 @@ function sampleUmbrella(
   pickup: number,
   hold: number,
   shield: boolean,
+  progress: number,
 ): void {
+  if (shield) {
+    const movement = smoothstep(progress);
+    output.cameraSpaceBlend = movement;
+    output.viewX = 0;
+    output.viewY = UMBRELLA_SHIELD_VIEW_Y;
+    output.viewZ = UMBRELLA_SHIELD_VIEW_Z;
+    const scale = 1 + (UMBRELLA_SHIELD_SCALE - 1) * movement;
+    output.scaleX = scale;
+    output.scaleY = scale;
+    output.scaleZ = scale;
+    output.aimBlend = movement;
+    return;
+  }
   samplePickupAndHold(output, pickup, hold);
-  if (!shield) output.viewX = 0;
-  const rotation = shield
-    ? UMBRELLA_SHIELD_ROTATION
-    : UMBRELLA_OVERHEAD_ROTATION;
-  output.pitch = rotation.pitch * pickup;
-  output.yaw = rotation.yaw * pickup;
-  output.roll = rotation.roll * pickup;
+  output.viewX = 0;
+  output.pitch = UMBRELLA_OVERHEAD_ROTATION.pitch * pickup;
+  output.yaw = UMBRELLA_OVERHEAD_ROTATION.yaw * pickup;
+  output.roll = UMBRELLA_OVERHEAD_ROTATION.roll * pickup;
 }
 
 function sampleFlashlightMorse(progress: number): number {
@@ -738,21 +773,22 @@ export function sampleEventItemUse(
     case 'base': samplePickupAndHold(output, pickup, hold); break;
     case 'throw-target': sampleThrowTarget(output, pickup, hold, t, itemId); break;
     case 'tape-stretch': sampleTapeStretch(output, pickup, hold, action); break;
-    case 'compass-search': sampleCompassSearch(output, pickup, hold, t); break;
+    case 'compass-search': sampleCompassSearch(output, pickup, hold); break;
     case 'map-read': sampleMapRead(output, pickup, hold, t); break;
     case 'binocular-look': sampleBinocularLook(output, pickup, hold, t); break;
     case 'net-scoop': sampleNetScoop(output, pickup, hold, t); break;
     case 'bucket-scoop': sampleBucketScoop(output, pickup, hold, t); break;
-    case 'bucket-helmet': sampleBucketHelmet(output, pickup, hold, action); break;
+    case 'bucket-helmet': sampleBucketHelmet(output, t); break;
     case 'trade-handover': sampleTradeHandover(output, pickup, hold, t); break;
-    case 'cover-supplies': sampleCoverSupplies(output, pickup, hold, action, itemId); break;
-    case 'net-spread': sampleNetSpread(output, pickup, hold, action); break;
-    case 'map-leak-patch': sampleMapLeakPatch(output, pickup, hold, t); break;
+    case 'radio-signal-receive':
+      sampleRadioSignalReceive(output, pickup, hold, t);
+      break;
+    case 'map-leak-patch': sampleMapLeakPatch(output, t); break;
     case 'flare-target': sampleFlare(output, pickup, hold, t); break;
     case 'flare-sky': sampleFlare(output, pickup, hold, t); break;
     case 'anchor-drop': sampleAnchorDrop(output, pickup, hold, t); break;
-    case 'umbrella-overhead': sampleUmbrella(output, pickup, hold, false); break;
-    case 'umbrella-shield': sampleUmbrella(output, pickup, hold, true); break;
+    case 'umbrella-overhead': sampleUmbrella(output, pickup, hold, false, t); break;
+    case 'umbrella-shield': sampleUmbrella(output, pickup, hold, true, t); break;
     case 'flashlight-threat-beam':
       sampleFlashlightThreatBeam(output, pickup, hold, t);
       break;
@@ -771,6 +807,7 @@ export function sampleEventItemUse(
 
   if (
     context !== 'map-read'
+    && context !== 'compass-search'
     && context !== 'net-scoop'
     && context !== 'map-leak-patch'
   ) {
@@ -798,11 +835,14 @@ export function eventItemActionCueProgresses(
   if (context === 'shotgun-fire') return SHOTGUN_ACTION_CUE_PROGRESSES;
   if (context === 'anchor-drop') return ANCHOR_ACTION_CUE_PROGRESSES;
   if (context === 'tape-stretch') return TAPE_ACTION_CUE_PROGRESSES;
+  if (context === 'map-leak-patch') return MAP_PATCH_ACTION_CUE_PROGRESSES;
   if (context === 'flare-target' || context === 'flare-sky') {
     return FLARE_GUN_ACTION_CUE_PROGRESSES;
   }
   if (context === 'flashlight-threat-beam') return FLASHLIGHT_THREAT_CUE_PROGRESSES;
   if (context === 'flashlight-signal') return FLASHLIGHT_MORSE_CUE_PROGRESSES;
+  if (context === 'radio-signal-receive') return RADIO_SIGNAL_CUE_PROGRESSES;
+  if (context === 'bucket-helmet') return BUCKET_HELMET_RAIN_CUE_PROGRESSES;
   return NO_ACTION_CUE_PROGRESSES;
 }
 
@@ -822,6 +862,8 @@ export function sampleEventItemOutcome(
     return;
   }
 
+  if (context === 'bucket-helmet' || context === 'umbrella-shield') return;
+
   if (context === 'trade-handover' && disposition === 'depart') {
     output.targetBlend = 0.88 + 0.12 * smoothstep(t);
     output.cameraTargetBlend = 0.12 * (1 - smoothstep(t));
@@ -829,7 +871,7 @@ export function sampleEventItemOutcome(
     return;
   }
 
-  if (context === 'trade-handover' || context === 'map-leak-patch') {
+  if (context === 'trade-handover') {
     sampleEventItemUse(context, itemId, 1 - smoothstep(t), output);
     output.itemVisible = t < 1;
     return;
@@ -862,10 +904,10 @@ export function sampleEventItemOutcome(
     return;
   }
 
-  if (context === 'umbrella-overhead' || context === 'umbrella-shield') {
+  if (context === 'umbrella-overhead') {
     resetSample(output);
     const pickup = 1 - smoothstep(t);
-    sampleUmbrella(output, pickup, pickup, context === 'umbrella-shield');
+    sampleUmbrella(output, pickup, pickup, false, 1);
     output.itemVisible = t < 1;
     return;
   }
@@ -903,8 +945,18 @@ export function sampleEventItemOutcome(
     const pickup = 1 - smoothstep(t);
     const staged = output as StagedEventItemUseSample;
     staged[MOTION_PROFILE] = profile;
-    sampleCompassSearch(output, pickup, pickup, 1);
+    sampleCompassSearch(output, pickup, pickup);
     output.itemVisible = t < 1;
+    return;
+  }
+
+  if (context === 'radio-signal-receive') {
+    resetSample(output);
+    const pickup = 1 - smoothstep(t);
+    const staged = output as StagedEventItemUseSample;
+    staged[MOTION_PROFILE] = profile;
+    sampleRadioSignalReceive(output, pickup, pickup, 1);
+    output.itemVisible = true;
     return;
   }
 

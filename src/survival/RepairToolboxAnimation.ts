@@ -42,7 +42,7 @@ const STARBOARD_CONTACT = hammerOrientation([0, 1, 0], [1, 0, 0]);
 
 const REPAIR_SITES = Object.freeze([
   Object.freeze({
-    position: new Vector3(-1.38, -0.15, 0.08),
+    position: new Vector3(-1.38, 0.12, 0.08),
     contact: PORT_CONTACT,
     raised: raisedOrientation(PORT_CONTACT, -0.48),
     normal: new Vector3(1, 0, 0),
@@ -54,7 +54,7 @@ const REPAIR_SITES = Object.freeze([
     normal: new Vector3(0, 1, 0),
   }),
   Object.freeze({
-    position: new Vector3(1.38, -0.15, 0.08),
+    position: new Vector3(1.38, 0.12, 0.08),
     contact: STARBOARD_CONTACT,
     raised: raisedOrientation(STARBOARD_CONTACT, 0.48),
     normal: new Vector3(-1, 0, 0),

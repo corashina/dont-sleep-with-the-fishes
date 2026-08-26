@@ -1,6 +1,15 @@
 // Importance: 10/10 (scaled from 5/5). Protects the event item use state machine and cancellation cleanup.
 import { describe, expect, it, vi } from 'vitest';
-import { Group, Object3D, PerspectiveCamera, Vector3 } from 'three';
+import {
+  BoxGeometry,
+  DoubleSide,
+  Group,
+  Mesh,
+  MeshStandardMaterial,
+  Object3D,
+  PerspectiveCamera,
+  Vector3,
+} from 'three';
 import type { ItemInstanceId } from '../src/game/ItemState';
 import type {
   BoatSupplyDisplay,
@@ -124,6 +133,89 @@ describe('EventItemUseController', () => {
     expect(supplies.stowEventItemUntilDay).not.toHaveBeenCalled();
     expect(actor.release).toHaveBeenCalledOnce();
     adapter.dispose();
+  });
+
+  it('uses temporary two-sided materials for the bucket helmet interior', () => {
+    const { actor, adapter, controller } = setup();
+    const original = new MeshStandardMaterial();
+    const mesh = new Mesh(new BoxGeometry(1, 1, 1), original);
+    actor.root.add(mesh);
+
+    controller.play({
+      ...request(actor.instanceId),
+      eventId: 'shower-night',
+      choiceId: 'bucket',
+      itemId: 'bucket',
+      context: 'bucket-helmet',
+    });
+
+    expect(mesh.material).not.toBe(original);
+    expect(mesh.material.side).toBe(DoubleSide);
+    const interior = mesh.material;
+    const dispose = vi.spyOn(interior, 'dispose');
+
+    controller.clear('day');
+
+    expect(mesh.material).toBe(original);
+    expect(dispose).toHaveBeenCalledOnce();
+    adapter.dispose();
+    original.dispose();
+    mesh.geometry.dispose();
+  });
+
+  it('keeps the bucket helmet in place until the event is cleared', async () => {
+    const { actor, adapter, controller } = setup();
+    const use = controller.play({
+      ...request(actor.instanceId),
+      eventId: 'shower-night',
+      choiceId: 'bucket',
+      itemId: 'bucket',
+      context: 'bucket-helmet',
+    });
+
+    controller.update(10);
+    await use;
+    const reaction = controller.react(result(actor.instanceId));
+    controller.update(10);
+    await reaction;
+
+    expect(actor.root.visible).toBe(true);
+    expect(actor.release).not.toHaveBeenCalled();
+
+    controller.clear('night');
+
+    expect(actor.release).toHaveBeenCalledOnce();
+    adapter.dispose();
+  });
+
+  it('keeps the map patch on the leak until the event is cleared', async () => {
+    const { actor, adapter, controller } = setup();
+    const material = new MeshStandardMaterial();
+    const mesh = new Mesh(new BoxGeometry(1, 0.02, 1), material);
+    actor.root.add(mesh);
+    const use = controller.play({
+      ...request(actor.instanceId, new Object3D()),
+      eventId: 'leak',
+      choiceId: 'map',
+      itemId: 'map',
+      context: 'map-leak-patch',
+    });
+
+    controller.update(10);
+    await use;
+    await controller.react(result(actor.instanceId));
+    controller.update(10);
+
+    expect(actor.root.visible).toBe(true);
+    expect(mesh.material.side).toBe(DoubleSide);
+    expect(actor.release).not.toHaveBeenCalled();
+
+    controller.clear('night');
+
+    expect(actor.release).toHaveBeenCalledOnce();
+    adapter.dispose();
+    material.dispose();
+    mesh.geometry.dispose();
   });
 
   it('tracks a moving aim target while the completed use remains held', async () => {

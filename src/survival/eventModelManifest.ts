@@ -6,6 +6,7 @@ import { FOCUSED_EVENT_MODEL_METADATA } from '../world/focusedEventModelMetadata
 export const SURVIVAL_EVENT_MODEL_IDS = [
   'driftingBarrel',
   'emptyLifeboat',
+  'emptyLifeboatContainer',
   'checkBackFish',
   'checkBackAnglerfish',
   'anglerFish',
@@ -35,12 +36,6 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
     rotation: [0, 0, Math.PI / 2] as const,
     maxTriangles: generatedMetadataJson.driftingBarrel.triangles,
   }),
-  emptyLifeboat: Object.freeze({
-    url: new URL('../assets/models/events/emptyLifeboat.glb', import.meta.url).href,
-    targetLongestDimension: 4.6,
-    rotation: NO_ROTATION,
-    maxTriangles: generatedMetadataJson.emptyLifeboat.triangles,
-  }),
   checkBackFish: Object.freeze({
     url: new URL('../assets/models/fishing/bass.glb', import.meta.url).href,
     targetLongestDimension: 1.05,
@@ -65,6 +60,18 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
     rotation: NO_ROTATION,
     maxTriangles: generatedMetadataJson.mysteryChest.triangles,
   }),
+  emptyLifeboat: Object.freeze({
+    url: new URL('../assets/models/events/emptyLifeboat.glb', import.meta.url).href,
+    targetLongestDimension: 4.6,
+    rotation: NO_ROTATION,
+    maxTriangles: generatedMetadataJson.emptyLifeboat.triangles,
+  }),
+  emptyLifeboatContainer: Object.freeze({
+    url: new URL('../assets/models/events/emptyLifeboatContainer.glb', import.meta.url).href,
+    targetLongestDimension: 0.8,
+    rotation: NO_ROTATION,
+    maxTriangles: generatedMetadataJson.emptyLifeboatContainer.triangles,
+  }),
   flowers: Object.freeze({
     url: new URL('../assets/models/events/flowers.glb', import.meta.url).href,
     targetLongestDimension: 0.9,
@@ -75,7 +82,7 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
 
 export const EVENT_MODEL_IDS = Object.freeze([
   'fogMan', 'ghost', 'siren', 'sirenRock',
-  'leakPlanks', 'schoolFish', 'snatcher', 'anglerFish', 'deathStareBlob',
+  'leakPlanks', 'schoolFish', 'snatcher', 'shark', 'deathStareBlob',
   'tornadoCore',
   'containerShip',
 ] as const);
@@ -149,11 +156,11 @@ const PRESENTATION = {
     offset: [0, 1.25, 0],
     maxTriangles: 4_000,
   },
-  anglerFish: {
-    targetLongestDimension: 1.0,
-    rotation: [0, -Math.PI / 2, 0],
+  shark: {
+    targetLongestDimension: 2.2,
+    rotation: [0, 0, 0],
     offset: [0, 0, 0],
-    maxTriangles: 4_000,
+    maxTriangles: 2_000,
   },
   deathStareBlob: {
     targetLongestDimension: 1.0,

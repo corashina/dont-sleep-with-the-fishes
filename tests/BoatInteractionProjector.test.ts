@@ -88,7 +88,7 @@ function createFixture(): ProjectorFixture {
     pillowRoot,
     chestRoot,
     chestState: () => chestState,
-    radioSignalAvailable: () => true,
+    radioInteractionAvailable: () => true,
     activeFeaturedEventId: () => activeEventId,
   };
   return {

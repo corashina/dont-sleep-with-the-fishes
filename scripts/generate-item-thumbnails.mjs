@@ -5,6 +5,7 @@ import { createServer as createViteServer } from 'vite';
 
 const ROOT = resolve('.');
 const OUTPUT_DIR = resolve('src', 'assets', 'models', 'item-thumbnails');
+const OUTPUT_WATCH_GLOB = `${OUTPUT_DIR.replaceAll('\\', '/')}/**`;
 const THUMBNAIL_IDS = await runtimeScavengeItemIds();
 const expectedIds = new Set(THUMBNAIL_IDS);
 
@@ -94,7 +95,11 @@ async function main() {
   };
   const vite = await createViteServer({
     root: ROOT,
-    server: { host: '127.0.0.1', port: 0 },
+    server: {
+      host: '127.0.0.1',
+      port: 0,
+      watch: { ignored: [OUTPUT_WATCH_GLOB] },
+    },
     appType: 'spa',
     plugins: [{
       name: 'item-thumbnail-upload',

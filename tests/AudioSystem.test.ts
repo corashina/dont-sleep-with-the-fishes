@@ -416,6 +416,7 @@ describe('AudioSystem', () => {
     audio.eventItem('flashlight');
     audio.eventItem('anchor');
     audio.eventItem('umbrella');
+    audio.bucketHelmetRain();
     audio.eventItem('map');
     audio.eventItem('compass');
 
@@ -426,6 +427,7 @@ describe('AudioSystem', () => {
       'flashlight',
       'anchorChain',
       'umbrella',
+      'bucketRain',
     ]);
   });
 
@@ -482,6 +484,24 @@ describe('AudioSystem', () => {
     audio.eventItemCue('anchor', 0);
 
     expect(backend.voices.map(({ id }) => id)).toEqual(['anchorChain', 'anchorSplash']);
+  });
+
+  it('plays the incoming signal at the Radio reception cue', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.eventItemCue('radio', 0);
+
+    expect(backend.voices.map(({ id }) => id)).toEqual(['radioSignal']);
+  });
+
+  it('plays duct tape when the map seals the leak', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.eventItemCue('map', 0);
+
+    expect(backend.voices.map(({ id }) => id)).toEqual(['tapeRepair']);
   });
 
   it('starts game voices paused when they are created from a paused scope', () => {

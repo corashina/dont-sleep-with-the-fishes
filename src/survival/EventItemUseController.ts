@@ -84,7 +84,16 @@ export class EventItemUseController {
     const actor = this.supplies.borrowEventActor(request.instanceId);
     if (actor === null) return Promise.resolve(false);
     this.held = { request, actor };
-    this.adapter.begin(actor, request.itemId, request.aimTarget);
+    this.adapter.begin(
+      actor,
+      request.itemId,
+      request.aimTarget,
+      request.context === 'bucket-helmet'
+        || request.context === 'umbrella-shield'
+        || request.context === 'map-leak-patch',
+      request.context === 'umbrella-shield' ? 'x' : null,
+      request.context === 'bucket-helmet',
+    );
     sampleEventItemUse(request.context, request.itemId, 0, this.sample);
     this.applyRequestSample(request);
     return new Promise((resolve) => {
@@ -143,6 +152,11 @@ export class EventItemUseController {
       this.sample,
     );
     this.applyRequestSample(held.request);
+    if (
+      held.request.context === 'bucket-helmet'
+      || held.request.context === 'map-leak-patch'
+      || held.request.context === 'umbrella-shield'
+    ) return Promise.resolve();
     return new Promise((resolve) => {
       this.activeReaction = {
         request: held.request,

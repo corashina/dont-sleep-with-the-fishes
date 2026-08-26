@@ -87,7 +87,7 @@ export type RewardSummary =
       readonly quantity: 1;
     };
 
-export type DawnEnergy = 0 | 1 | 2 | 3;
+export type DawnEnergy = 0 | 1 | 2 | 3 | 4;
 
 export interface ActionOutcome {
   accepted: boolean;

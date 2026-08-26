@@ -69,6 +69,9 @@ function carlitosCareUnavailableReason(
   if (action === 'pet' && carlitos.pettedToday) {
     return 'Carlitos has already been petted today.';
   }
+  if (action === 'pet' && carlitos.unhappiness <= 2) {
+    return 'Carlitos is already happy.';
+  }
   if (action === 'feed') {
     if (carlitos.hunger >= 5) return 'Carlitos is already satiated.';
     if (state.food < 1) return 'No food remains.';
@@ -95,7 +98,7 @@ export function dayActionUnavailableReason(
   switch (action) {
     case 'fish':
       return state.energy < SURVIVAL_BALANCE.actions.fishEnergy
-        ? 'Fishing requires two energy.'
+        ? 'Fishing requires one energy.'
         : null;
     case 'dive':
       if (!hasUsable(state.inventory, 'scubaSet')) {

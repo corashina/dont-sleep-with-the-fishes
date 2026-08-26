@@ -97,6 +97,7 @@ const HANDYMAN_REWARDS: Readonly<Partial<Record<string, ItemId | 'chest'>>> =
     bucket: 'fishingNet',
     ductTape: 'energyBar',
     energyBar: 'ductTape',
+    swimRing: 'radio',
     anchor: 'chest',
     chest: 'anchor',
   });
@@ -537,6 +538,10 @@ export class HandymanPresentation implements FocusedEventPresentation {
   private applyTouchResult(progress: number): void {
     const close = smoothstep((progress - 0.18) / 0.58);
     this.setFingerBend(close);
+  }
+
+  itemAimTarget(): Object3D {
+    return this.handVisual;
   }
 
   private applySleepResult(progress: number): void {

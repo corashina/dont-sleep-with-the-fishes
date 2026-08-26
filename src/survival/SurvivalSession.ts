@@ -52,6 +52,7 @@ import {
 } from './RunPressure';
 import {
   clampRescueLead,
+  nightlyHullWearDamage,
   quietNightChance,
   rescueChanceForDay,
   type RescueLead,
@@ -144,7 +145,7 @@ const DAY_ACTION_REJECTION_CODES: Readonly<Record<string, string>> = Object.free
   'That option cannot be used for this action.': 'invalid-option',
   'The survival journey has already ended.': 'terminal',
   'That action is only available during the day.': 'not-daytime',
-  'Fishing requires two energy.': 'not-enough-energy',
+  'Fishing requires one energy.': 'not-enough-energy',
   'Diving requires a recovered scuba set.': 'no-scuba-set',
   'Diving is too dangerous during a squall.': 'weather-blocked',
   'Diving requires three energy.': 'not-enough-energy',
@@ -168,6 +169,7 @@ const DAY_ACTION_REJECTION_CODES: Readonly<Record<string, string>> = Object.free
   'Carlitos is not aboard.': 'no-carlitos',
   'Carlitos cannot respond.': 'carlitos-dead',
   'Carlitos has already been petted today.': 'already-petted',
+  'Carlitos is already happy.': 'carlitos-happy',
   'Carlitos is already satiated.': 'carlitos-not-hungry',
   'Carlitos needs no treatment.': 'carlitos-healthy',
   'No medical kit remains.': 'no-medical-kit',
@@ -746,6 +748,7 @@ export class SurvivalSession {
     if (this.pendingEvent !== null) return this.reject('event-pending', 'Resolve the pending event before dawn.');
     if (this.state !== 'nightEvent') return this.reject('not-nighttime', 'Dawn cannot begin before the night is complete.');
 
+    const hullWear = nightlyHullWearDamage(this.day);
     this.day += 1;
     this.radioSignalAvailable = false;
     this.pendingJournalDaytime = null;
@@ -774,6 +777,10 @@ export class SurvivalSession {
       hunger: SURVIVAL_BALANCE.dawn.hungerIncrease,
       energy: morningEnergy - this.energy,
     };
+    if (hullWear > 0) {
+      this.lastHullEventId = null;
+      deltas.hull = -hullWear;
+    }
     const pressureIncrease = pressureIncreaseForDay(this.day);
     if (pressureIncrease > 0) deltas.pressure = pressureIncrease;
     if (hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.maximum) {
@@ -781,7 +788,14 @@ export class SurvivalSession {
       deltas.health = -SURVIVAL_BALANCE.dawn.starvationDamage;
     }
 
-    const dawn = this.commit('dawn', 'Another dawn breaks over the lifeboat.', deltas, 'dawn');
+    const dawn = this.commit(
+      'dawn',
+      hullWear > 0
+        ? 'The sea wears at the hull overnight. Another dawn breaks.'
+        : 'Another dawn breaks over the lifeboat.',
+      deltas,
+      'dawn',
+    );
     if (this.isTerminal()) return dawn;
 
     const rescueChance = rescueChanceForDay(this.day, this.rescueLead);

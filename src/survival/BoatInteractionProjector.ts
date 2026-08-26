@@ -56,7 +56,7 @@ export interface BoatInteractionProjectorRoots {
   readonly pillowRoot: Object3D;
   readonly chestRoot: Object3D;
   readonly chestState: () => ChestState;
-  readonly radioSignalAvailable: () => boolean;
+  readonly radioInteractionAvailable: () => boolean;
   readonly activeFeaturedEventId: () => FeaturedEventId | null;
 }
 
@@ -360,7 +360,7 @@ export class BoatInteractionProjector {
       const record = entry.record;
       if (
         record.visibleCopies <= 0
-        || (record.groupId === 'radio' && !this.roots.radioSignalAvailable())
+        || (record.groupId === 'radio' && !this.roots.radioInteractionAvailable())
       ) continue;
       projectCachedBoatObjectBoundsInto(
         entry.projection,

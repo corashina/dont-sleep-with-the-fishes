@@ -331,6 +331,22 @@ describe('SurvivalEventFlow', () => {
     expect(rig.audio.cancelDive).toHaveBeenCalledOnce();
     itemUse.resolve();
   });
+
+  it('reports overnight hull wear at dawn', async () => {
+    const rig = createRig(snapshot({ state: 'nightEvent' }));
+    rig.session.beginDawn.mockReturnValueOnce(accepted({
+      code: 'dawn',
+      message: 'The sea wears at the hull overnight. Another dawn breaks.',
+      deltas: { hull: -3 },
+      cue: 'dawn',
+    }));
+
+    await rig.flow.beginDawn();
+
+    expect(rig.ui.showFeedback).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ deltas: { hull: -3 } }),
+    );
+  });
   it('loads, activates, stages, and reveals before it enables eligible items', async () => {
     const umbrella = {
       instanceId: 'umbrella-1',

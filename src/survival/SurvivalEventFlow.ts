@@ -83,6 +83,7 @@ export type EventAudioPort = Pick<
   | 'eventReveal'
   | 'eventItem'
   | 'eventItemCue'
+  | 'bucketHelmetRain'
   | 'sleep'
   | 'confirm'
   | 'deny'
@@ -1256,6 +1257,9 @@ export class SurvivalEventFlow {
       this.dependencies.audio.dawn();
       await (this.dependencies.world.play?.(dawn.cue) ?? Promise.resolve());
       if (!this.isCurrent(generation, operation)) return this.dependencies.session.snapshot();
+      if ((dawn.deltas.hull ?? 0) < 0) {
+        this.dependencies.ui.showFeedback?.(dawn);
+      }
     }
     const snapshot = this.dependencies.renderSnapshot();
     this.dependencies.onDawnSnapshot?.(snapshot, generation);
@@ -1396,6 +1400,8 @@ export class SurvivalEventFlow {
       || itemType === 'flareGun'
       || itemType === 'anchor'
       || itemType === 'ductTape'
+      || itemType === 'map'
+      || itemType === 'bucket'
     ) {
       if (itemType === 'anchor') this.dependencies.audio.eventItem(itemType);
       return this.dependencies.world.playEventItemUse?.(
@@ -1404,7 +1410,13 @@ export class SurvivalEventFlow {
         instanceId,
         (cueIndex) => {
           if (this.isCurrent(generation, operation)) {
-            this.dependencies.audio.eventItemCue(itemType, cueIndex);
+            if (itemType === 'bucket') {
+              if (eventId === 'shower-night') {
+                this.dependencies.audio.bucketHelmetRain();
+              }
+            } else {
+              this.dependencies.audio.eventItemCue(itemType, cueIndex);
+            }
           }
         },
       ) ?? Promise.resolve();

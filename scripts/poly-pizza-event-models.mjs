@@ -22,12 +22,14 @@ export const POLY_PIZZA_EVENT_MODEL_PAGES = Object.freeze({
   schoolFish: 'https://poly.pizza/m/HkUAXudvBt',
   snatcher: 'https://poly.pizza/m/BR1vpIvvvv',
   anglerFish: 'https://poly.pizza/m/85n5_RiSeSf',
+  shark: 'https://poly.pizza/m/1L9OjE5KOlC',
   deathStareBlob: 'https://poly.pizza/m/IoWG5F9WUc',
   tornadoCore: 'https://poly.pizza/m/2TBzV_5N0ci',
   midnightShovel: 'https://poly.pizza/m/oNBQSf87ZJ',
   midnightMonster: 'https://poly.pizza/m/22K0aSZkHV',
   airplane: 'https://poly.pizza/m/8VysVKMXN2J',
   emptyLifeboat: 'https://poly.pizza/m/Hgf0R8s4Uo',
+  emptyLifeboatContainer: 'https://poly.pizza/m/dvu1_2Wlhc0',
 });
 
 export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
@@ -35,15 +37,17 @@ export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
   schoolFish: 2_000,
   snatcher: 4_000,
   anglerFish: 4_000,
+  shark: 2_000,
   deathStareBlob: 5_000,
   tornadoCore: 3_000,
   midnightShovel: 1_000,
   midnightMonster: 6_000,
   airplane: 2_500,
   emptyLifeboat: 2_000,
+  emptyLifeboatContainer: 1_000,
 });
 
-export const EVENT_MODEL_TOTAL_TRIANGLE_LIMIT = 22_000;
+export const EVENT_MODEL_TOTAL_TRIANGLE_LIMIT = 23_000;
 export const EVENT_MODEL_IDS = Object.freeze(Object.keys(POLY_PIZZA_EVENT_MODEL_PAGES));
 export const POLY_PIZZA_EVENT_MODEL_IDS = EVENT_MODEL_IDS;
 export const POLY_PIZZA_EVENT_MODEL_SOURCES = Object.freeze(Object.fromEntries(
@@ -57,8 +61,10 @@ export const POLY_PIZZA_EVENT_MODEL_SOURCES = Object.freeze(Object.fromEntries(
           ? 'F775807D6EB98B8D8DDF95FF8AB158779537A563C8C537A9F6CD9AA26EDD2C3E'
           : id === 'anglerFish'
             ? '6BC94129AE46B671535537A74CE7369A824C3617D9C9FCA32CB7B417BFA72DDF'
-            : id === 'deathStareBlob'
-              ? 'CF870628D467F00FE6FBFE428C948C41FD7180F11D954075DFF998D320593D1F'
+            : id === 'shark'
+              ? '1311D6750FB737669557C45855568E8DD2D8C8D8B5C374704028C656712A4648'
+              : id === 'deathStareBlob'
+                ? 'CF870628D467F00FE6FBFE428C948C41FD7180F11D954075DFF998D320593D1F'
               : id === 'tornadoCore'
                 ? 'A3060A591DE5B796C495FD7B329CE83766D2DFE39F9387B2DE44CF620FB3A24F'
                 : id === 'midnightShovel'
@@ -67,7 +73,9 @@ export const POLY_PIZZA_EVENT_MODEL_SOURCES = Object.freeze(Object.fromEntries(
                 ? '76599ABFADB3629F435165418BFCF02FB8FAC2C34A71B913106663655E6C41D0'
                 : id === 'airplane'
                   ? 'B64E73F3127A636F336F769235A5BCB30F215C8C59F98E4841612A92BE94C171'
-                  : '99FA2EDD3431AC0D9D3AB975F0AB3170AE0549D0F0B31D34FCC47D3622F870ED',
+                  : id === 'emptyLifeboat'
+                    ? '99FA2EDD3431AC0D9D3AB975F0AB3170AE0549D0F0B31D34FCC47D3622F870ED'
+                    : '56630098F09950C8643982E65895F55257ADBC9F1F668C9A889F6DFE4D7957A8',
   })]),
 ));
 

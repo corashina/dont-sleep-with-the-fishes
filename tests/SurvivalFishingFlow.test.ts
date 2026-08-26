@@ -236,8 +236,8 @@ describe('SurvivalFishingFlow', () => {
     rig.flow.resize(1280, 720);
 
     const pendingEntry = rig.flow.begin();
-    expect(rig.calls.indexOf('busy:true')).toBeLessThan(rig.calls.indexOf('render:1:0:0'));
-    expect(rig.calls.indexOf('render:1:0:0')).toBeLessThan(rig.calls.indexOf('world:enter'));
+    expect(rig.calls.indexOf('busy:true')).toBeLessThan(rig.calls.indexOf('render:2:0:0'));
+    expect(rig.calls.indexOf('render:2:0:0')).toBeLessThan(rig.calls.indexOf('world:enter'));
     rig.animations.enter[0]!.resolve();
     await pendingEntry;
     expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({
@@ -264,8 +264,8 @@ describe('SurvivalFishingFlow', () => {
     expect(rig.flow.reel()).toBe(false);
     expect(rig.session.finishFishing).toHaveBeenCalledOnce();
     expect(rig.calls.indexOf('audio:reel')).toBeLessThan(rig.calls.indexOf('finishFishing'));
-    expect(rig.calls.indexOf('finishFishing')).toBeLessThan(rig.calls.indexOf('render:1:1:0'));
-    expect(rig.calls.indexOf('render:1:1:0')).toBeLessThan(rig.calls.indexOf('world:reel'));
+    expect(rig.calls.indexOf('finishFishing')).toBeLessThan(rig.calls.indexOf('render:2:1:0'));
+    expect(rig.calls.indexOf('render:2:1:0')).toBeLessThan(rig.calls.indexOf('world:reel'));
     expect(rig.ui.showFishingResult).not.toHaveBeenCalled();
 
     rig.animations.reel[0]!.resolve();

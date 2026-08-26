@@ -968,6 +968,7 @@ export class BoatAnchorView {
 
   private isHighlightableAnchor(anchor: BoatInteractionAnchor): boolean {
     return anchor.itemType !== null
+      || anchor.toolId === 'fishingRod'
       || anchor.toolId === 'repairTools'
       || anchor.toolId === 'pillow'
       || anchor.toolId === 'chest'
