@@ -34,7 +34,7 @@ import type {
   DedicatedEventEnvironment,
   DedicatedEventPresentation,
 } from './eventPresentationTypes';
-import { AnglerfishSwarmPresentation } from './events/AnglerfishSwarmPresentation';
+import { SharkSwarmPresentation } from './events/SharkSwarmPresentation';
 import { CarlitosEventPresentation } from './events/CarlitosEventPresentation';
 import { DeathStarePresentation } from './events/DeathStarePresentation';
 import { LeakPresentation } from './events/LeakPresentation';
@@ -46,6 +46,10 @@ import {
   MoonEventPresentation,
   type MoonEventPresentationEnvironment,
 } from './MoonEventPresentation';
+import {
+  StarryNightPresentation,
+  type StarryNightPresentationEnvironment,
+} from './StarryNightPresentation';
 
 export interface FeaturedEventPresentationTargets {
   readonly driftingCargoStern: Object3D;
@@ -63,6 +67,7 @@ export interface EventPresentationAdapterDependencies {
   readonly featuredTargets: FeaturedEventPresentationTargets;
   readonly driftingWater: DriftingWater;
   readonly moon: MoonEventPresentationEnvironment;
+  readonly starry: StarryNightPresentationEnvironment;
   readonly registerRescueCueCallback: (
     callback: (progress: number | null) => void,
   ) => void;
@@ -204,8 +209,8 @@ function createDedicatedCoordinator(
       case 'death-stare':
         presentations.push(new DeathStarePresentation(dedicatedEnvironment));
         break;
-      case 'swarm-of-anglerfish':
-        presentations.push(new AnglerfishSwarmPresentation(dedicatedEnvironment));
+      case 'swarm-of-sharks':
+        presentations.push(new SharkSwarmPresentation(dedicatedEnvironment));
         break;
       case 'tornado':
         presentations.push(new TornadoPresentation(dedicatedEnvironment));
@@ -577,4 +582,26 @@ export const createMoonAdapter: EventPresentationAdapterFactory = (
     settleForVisibilityChange: () => moon.settleForVisibilityChange(),
     clear: () => moon.clear(),
   }, [() => moon.dispose()]);
+};
+
+export const createStarryAdapter: EventPresentationAdapterFactory = (
+  eventId,
+  dependencies,
+) => {
+  assertRoute(eventId, 'starry');
+  const starry = new StarryNightPresentation(dependencies.starry);
+  return createAdapter(eventId, [], {
+    stage: (context) => starry.stage(context),
+    reveal: () => starry.reveal(),
+    playChoice: noChoice,
+    playItemUse: noItemUse,
+    itemAimTarget: noRoot,
+    interactionTargets: noInteractionTargets,
+    interactionRoot: noRoot,
+    resultRoot: noRoot,
+    react: () => starry.react(),
+    update: (time, delta) => starry.update(time, delta),
+    settleForVisibilityChange: () => starry.settleForVisibilityChange(),
+    clear: () => starry.clear(),
+  }, [() => starry.dispose()]);
 };

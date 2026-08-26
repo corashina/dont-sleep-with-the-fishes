@@ -597,6 +597,7 @@ export class SurvivalPhase implements GamePhase {
       audio: this.audio,
       bundles: eventBundles,
       setBusy: (busy) => this.setBusy(busy),
+      playFishing: () => this.fishingFlow.begin(),
       setAutomaticWeather: (eventId) => this.setAutomaticWeather(
         eventId === null ? null : presentationWeatherForEvent(eventId),
       ),

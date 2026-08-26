@@ -17,6 +17,7 @@ $modelIds = @(
   'medicalKit'
   'spyglass'
   'fishingNet'
+  'rope'
   'bucket'
   'flareGun'
   'scubaSet'

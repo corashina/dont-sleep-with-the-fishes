@@ -54,12 +54,17 @@ function completeRoots(): Record<EventModelId, Group> {
 describe('EventModelLibrary', () => {
   it('wires the pinned Empty Lifeboat model into its event bundle', () => {
     expect(SURVIVAL_EVENT_MODEL_IDS).toContain('emptyLifeboat');
+    expect(SURVIVAL_EVENT_MODEL_IDS).toContain('emptyLifeboatContainer');
     expect(SURVIVAL_EVENT_MODEL_SPECS.emptyLifeboat).toMatchObject({
       targetLongestDimension: 4.6,
       rotation: [0, 0, 0],
     });
+    expect(SURVIVAL_EVENT_MODEL_SPECS.emptyLifeboatContainer).toMatchObject({
+      targetLongestDimension: 0.8,
+      rotation: [0, 0, 0],
+    });
     expect(EVENT_BUNDLE_SPECS['empty-lifeboat']).toEqual({
-      models: ['emptyLifeboat'],
+      models: ['emptyLifeboat', 'emptyLifeboatContainer'],
       sounds: [],
     });
   });
@@ -101,16 +106,16 @@ describe('EventModelLibrary', () => {
       'leakPlanks',
       'schoolFish',
       'snatcher',
-      'anglerFish',
+      'shark',
       'deathStareBlob',
       'tornadoCore',
       'containerShip',
     ]);
   });
 
-  it('turns the Anglerfish nose toward presentation forward', () => {
-    const sourceNose = new Vector3(1, 0, 0);
-    sourceNose.applyEuler(new Euler(...EVENT_MODEL_SPECS.anglerFish.rotation));
+  it('turns the Shark nose toward presentation forward', () => {
+    const sourceNose = new Vector3(0, 0, 1);
+    sourceNose.applyEuler(new Euler(...EVENT_MODEL_SPECS.shark.rotation));
 
     expect(sourceNose.x).toBeCloseTo(0);
     expect(sourceNose.z).toBeCloseTo(1);
@@ -150,7 +155,7 @@ describe('EventModelLibrary', () => {
       'leakPlanks',
       'schoolFish',
       'snatcher',
-      'anglerFish',
+      'shark',
       'deathStareBlob',
       'tornadoCore',
     ] as const) {
@@ -166,8 +171,8 @@ describe('EventModelLibrary', () => {
       instance.dispose();
     }
 
-    const first = library.create('anglerFish');
-    const second = library.create('anglerFish');
+    const first = library.create('shark');
+    const second = library.create('shark');
     const firstMesh = first.root.children[0]!.children[0] as Mesh;
     const secondMesh = second.root.children[0]!.children[0] as Mesh;
     expect(first.root).not.toBe(second.root);
@@ -206,7 +211,7 @@ describe('EventModelLibrary', () => {
 
   it('wraps loader failures and rolls back all loaded templates once', async () => {
     const roots = completeRoots();
-    const disposeSpies = EVENT_MODEL_IDS.filter((id) => id !== 'anglerFish').flatMap((id) => {
+    const disposeSpies = EVENT_MODEL_IDS.filter((id) => id !== 'shark').flatMap((id) => {
       const mesh = roots[id].children[0] as Mesh;
       return [
         vi.spyOn(mesh.geometry, 'dispose'),
@@ -217,7 +222,7 @@ describe('EventModelLibrary', () => {
     const loader: EventModelLoader = {
       load: vi.fn(async () => {
         const id = EVENT_MODEL_IDS[index++]!;
-        if (id === 'anglerFish') throw new Error('network failed');
+        if (id === 'shark') throw new Error('network failed');
         return roots[id];
       }),
     };
@@ -225,7 +230,7 @@ describe('EventModelLibrary', () => {
     await expect(EventModelLibrary.load(EVENT_MODEL_IDS, loader)).rejects.toEqual(
       expect.objectContaining<EventModelLoadError>({
         name: 'EventModelLoadError',
-        eventModelId: 'anglerFish',
+        eventModelId: 'shark',
         message: expect.stringContaining('network failed'),
       }),
     );
@@ -242,8 +247,8 @@ describe('EventModelLibrary', () => {
       ];
     });
     const library = await EventModelLibrary.load(EVENT_MODEL_IDS, loaderFrom(roots));
-    const first = library.create('anglerFish');
-    const second = library.create('anglerFish');
+    const first = library.create('shark');
+    const second = library.create('shark');
     const ownedMeshes = [first, second].map(
       (instance) => instance.root.children[0]!.children[0] as Mesh,
     );
@@ -266,14 +271,14 @@ describe('EventModelLibrary', () => {
   it('deep-clones and disposes instance textures once', async () => {
     const sourceTexture = new Texture();
     const roots = completeRoots();
-    roots.anglerFish = modelRoot(
+    roots.shark = modelRoot(
       new BoxGeometry(2, 1, 1),
       new MeshStandardMaterial({ map: sourceTexture }),
     );
     const sourceDispose = vi.spyOn(sourceTexture, 'dispose');
     const library = await EventModelLibrary.load(EVENT_MODEL_IDS, loaderFrom(roots));
-    const first = library.create('anglerFish');
-    const second = library.create('anglerFish');
+    const first = library.create('shark');
+    const second = library.create('shark');
     const firstTexture = (
       (first.root.children[0]!.children[0] as Mesh).material as MeshStandardMaterial
     ).map!;

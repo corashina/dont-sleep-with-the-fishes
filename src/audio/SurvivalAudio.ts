@@ -276,6 +276,11 @@ export class SurvivalAudio {
 
   eventItemCue(itemId: ItemId, cueIndex: number): void {
     if (this.disposed) return;
+    if (itemId === 'radio') {
+      this.clearRadioSignal();
+      this.beginRadioSignal(() => undefined);
+      return;
+    }
     if (itemId === 'flareGun') {
       this.scope.play(cueIndex === 0 ? 'flareGunShot' : 'flareGun');
       return;
@@ -284,7 +289,15 @@ export class SurvivalAudio {
       this.scope.play('anchorSplash');
       return;
     }
+    if (itemId === 'map') {
+      this.scope.play('tapeRepair');
+      return;
+    }
     this.eventItem(itemId);
+  }
+
+  bucketHelmetRain(): void {
+    if (!this.disposed) this.scope.play('bucketRain');
   }
 
   sleep(): void {

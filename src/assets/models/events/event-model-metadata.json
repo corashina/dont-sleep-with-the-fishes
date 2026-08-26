@@ -513,6 +513,34 @@
     "animations": [],
     "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
   },
+  "shark": {
+    "triangles": 644,
+    "rawBounds": {
+      "min": [
+        -2.9143331529140757,
+        -1.5444342651615566,
+        -7.981416472056569
+      ],
+      "max": [
+        2.9143331529140757,
+        3.6407129322996097,
+        7.84987340229488
+      ]
+    },
+    "sourceSha256": "6D5CF3CD7EA749583B622A306CFCAE4DE85432EFCC74A1EC6F52E5430CF13AFF",
+    "sourceTriangles": 644,
+    "outputSha256": "1311D6750FB737669557C45855568E8DD2D8C8D8B5C374704028C656712A4648",
+    "hasSkins": true,
+    "animationCount": 1,
+    "animations": [
+      {
+        "name": "Armature|Swim",
+        "duration": 1.25,
+        "channels": 8
+      }
+    ],
+    "processing": "pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data"
+  },
   "emptyLifeboat": {
     "triangles": 1036,
     "rawBounds": {
@@ -530,6 +558,28 @@
     "sourceSha256": "722C09E839EDB2A300208CCCB324A11F4D93F8946F7270E2DAED54DF306CC77D",
     "sourceTriangles": 1036,
     "outputSha256": "99FA2EDD3431AC0D9D3AB975F0AB3170AE0549D0F0B31D34FCC47D3622F870ED",
+    "hasSkins": false,
+    "animationCount": 0,
+    "animations": [],
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "emptyLifeboatContainer": {
+    "triangles": 368,
+    "rawBounds": {
+      "min": [
+        -642713.5,
+        -155912.25,
+        -6396896
+      ],
+      "max": [
+        1651643.5,
+        1668156.375,
+        -4422896
+      ]
+    },
+    "sourceSha256": "62DF8E859AF87EA6CF6324EC0CF74679CA37BE82D299589F9647D4EEBB9814C4",
+    "sourceTriangles": 368,
+    "outputSha256": "56630098F09950C8643982E65895F55257ADBC9F1F668C9A889F6DFE4D7957A8",
     "hasSkins": false,
     "animationCount": 0,
     "animations": [],

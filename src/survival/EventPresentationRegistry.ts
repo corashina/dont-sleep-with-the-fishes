@@ -10,6 +10,7 @@ import {
   createFeaturedAdapter,
   createFocusedAdapter,
   createMoonAdapter,
+  createStarryAdapter,
   createSupernaturalAdapter,
   createWeatherAdapter,
   type EventPresentationAdapterDependencies,
@@ -29,6 +30,7 @@ const DEFAULT_EVENT_PRESENTATION_FACTORIES = Object.freeze({
   weather: createWeatherAdapter,
   supernatural: createSupernaturalAdapter,
   moon: createMoonAdapter,
+  starry: createStarryAdapter,
 } satisfies Readonly<Record<
   EventPresentationRoute,
   EventPresentationAdapterFactory

@@ -59,7 +59,7 @@ const PROFILES: Readonly<Record<ItemId, EventItemMotionProfile>> = Object.freeze
   ductTape: createProfile('one-hand', 'ductTape'),
   compass: Object.freeze({
     ...createProfile('one-hand', 'compass'),
-    view: [-0.06, -0.1, -0.44] as const,
+    view: [0, 0, -0.44] as const,
   }),
   map: createProfile('reading', 'map'),
   medicalKit: createProfile('one-hand', 'medicalKit'),

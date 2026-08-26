@@ -31,7 +31,7 @@ export function clampSurvivalResources(resources: SurvivalResources): SurvivalRe
   return {
     health: Math.min(maximum, Math.max(0, resources.health)),
     hunger: Math.min(maximum, Math.max(0, resources.hunger)),
-    energy: Math.min(SURVIVAL_BALANCE.actions.maximumEnergy, Math.max(0, resources.energy)),
+    energy: Math.min(SURVIVAL_BALANCE.actions.maximumStoredEnergy, Math.max(0, resources.energy)),
     hull: Math.min(maximum, Math.max(0, resources.hull)),
   };
 }

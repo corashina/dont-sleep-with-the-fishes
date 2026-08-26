@@ -36,6 +36,12 @@ export interface MoonFacePresentation {
   readonly scale: number;
 }
 
+export interface StarryNightSkyPresentation {
+  readonly strength: number;
+  readonly time: number;
+  readonly constellationStrength: number;
+}
+
 const clamp01 = (value: number): number => Number.isFinite(value)
   ? Math.min(1, Math.max(0, value))
   : 0;
@@ -82,6 +88,9 @@ const fragmentShader = `
   uniform float uMoonStarScale;
   uniform float uMoonEventDim;
   uniform float uMoonScale;
+  uniform float uStarryNightStrength;
+  uniform float uStarryNightTime;
+  uniform float uConstellationStrength;
   varying vec3 vSkyDirection;
 
   float hash31(vec3 value) {
@@ -161,6 +170,91 @@ const fragmentShader = `
     vec3 cool = vec3(0.88, 0.96, 1.08);
     vec3 tint = mix(warm, cool, hash31(cell + 25.6));
     return tint * point * exists * brightness;
+  }
+
+  vec3 starryNightLayer(vec3 direction, float scale, float threshold) {
+    vec3 grid = direction * scale;
+    vec3 cell = floor(grid);
+    vec3 local = fract(grid) - 0.5;
+    vec3 offset = (vec3(
+      hash31(cell + 1.7),
+      hash31(cell + 4.1),
+      hash31(cell + 8.3)
+    ) - 0.5) * 0.52;
+    float seed = hash31(cell);
+    float exists = step(threshold, seed);
+    float radius = mix(0.040, 0.092, hash31(cell + 12.8));
+    float distanceToStar = length(local - offset);
+    float distanceToBoundary = 0.5 - max(
+      max(abs(offset.x), abs(offset.y)),
+      abs(offset.z)
+    );
+    float haloRadius = min(radius * 7.5, distanceToBoundary * 0.96);
+    float core = 1.0 - smoothstep(radius, radius * 2.1, distanceToStar);
+    float halo = 1.0 - smoothstep(radius * 1.8, haloRadius, distanceToStar);
+    float speed = mix(0.42, 1.08, hash31(cell + 19.4));
+    float phase = hash31(cell + 25.6) * 6.2831853;
+    float twinkle = mix(0.68, 1.32,
+      sin(uStarryNightTime * speed + phase) * 0.5 + 0.5);
+    vec3 cool = mix(
+      vec3(0.72, 0.86, 1.22),
+      vec3(1.04, 1.08, 1.18),
+      hash31(cell + 31.2)
+    );
+    float brightness = mix(0.65, 1.0, hash31(cell + 37.8));
+    return cool * exists * brightness * twinkle * (core * 2.1 + halo * 0.52);
+  }
+
+  float constellationStar(vec2 point, vec2 position, float size, float phase) {
+    vec2 starDelta = point - position;
+    float distanceToStar = length(starDelta);
+    float core = 1.0 - smoothstep(size * 0.18, size * 0.9, distanceToStar);
+    float halo = 1.0 - smoothstep(size * 0.8, size * 3.2, distanceToStar);
+    float horizontalRay = (1.0 - smoothstep(
+      size * 0.1,
+      size * 0.42,
+      abs(starDelta.y)
+    )) * (1.0 - smoothstep(size * 0.7, size * 4.6, abs(starDelta.x)));
+    float verticalRay = (1.0 - smoothstep(
+      size * 0.1,
+      size * 0.42,
+      abs(starDelta.x)
+    )) * (1.0 - smoothstep(size * 0.7, size * 6.0, abs(starDelta.y)));
+    float rays = max(horizontalRay, verticalRay);
+    float twinkle = mix(0.9, 1.1,
+      sin(uStarryNightTime * 0.58 + phase) * 0.5 + 0.5);
+    return (core * 1.15 + halo * 0.08 + rays * 0.82) * twinkle;
+  }
+
+  vec3 orionLayer(vec3 direction) {
+    vec3 center = normalize(vec3(0.52, 0.38, -1.0));
+    vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), center));
+    vec3 up = normalize(cross(center, right));
+    float facing = dot(direction, center);
+    if (facing <= 0.0) return vec3(0.0);
+    vec2 point = vec2(dot(direction, right), dot(direction, up)) / facing;
+
+    vec2 meissa = vec2(0.0, 0.185);
+    vec2 betelgeuse = vec2(-0.09, 0.085);
+    vec2 bellatrix = vec2(0.082, 0.095);
+    vec2 alnitak = vec2(-0.047, 0.006);
+    vec2 alnilam = vec2(0.0, 0.0);
+    vec2 mintaka = vec2(0.048, 0.009);
+    vec2 saiph = vec2(-0.082, -0.145);
+    vec2 rigel = vec2(0.09, -0.155);
+
+    float stars = 0.0;
+    stars += constellationStar(point, meissa, 0.0024, 0.3);
+    stars += constellationStar(point, betelgeuse, 0.0032, 1.2);
+    stars += constellationStar(point, bellatrix, 0.0028, 2.1);
+    stars += constellationStar(point, alnitak, 0.0025, 2.8);
+    stars += constellationStar(point, alnilam, 0.0028, 3.5);
+    stars += constellationStar(point, mintaka, 0.0024, 4.0);
+    stars += constellationStar(point, saiph, 0.0027, 4.8);
+    stars += constellationStar(point, rigel, 0.0034, 5.6);
+
+    vec3 starColor = vec3(0.84, 0.96, 1.24) * stars * 0.72;
+    return starColor;
   }
 
   float eyeShape(vec2 uv, vec2 center, vec2 scale, float skew) {
@@ -358,6 +452,7 @@ const fragmentShader = `
       * uMoonVisibility
       * mix(0.025, 0.07, moonClarity);
     color += uMoonColor * moonHalo;
+    float moonStarOcclusion = 1.0 - moonSample.a;
 
     float starHorizon = smoothstep(0.04, 0.24, direction.y);
     float starClarity = max(0.0, 1.0 - uHaze * 0.94);
@@ -368,7 +463,26 @@ const fragmentShader = `
       * uStarVisibility
       * starHorizon
       * starClarity
-      * uMoonStarScale;
+      * uMoonStarScale
+      * moonStarOcclusion;
+
+    if (uStarryNightStrength > 0.0) {
+      vec3 starryNightStars = starryNightLayer(direction, 145.0, 0.9948)
+        + starryNightLayer(direction, 285.0, 0.9975) * 0.72;
+      color += starryNightStars
+        * starHorizon
+        * starClarity
+        * uMoonStarScale
+        * uStarryNightStrength
+        * moonStarOcclusion;
+    }
+    if (uConstellationStrength > 0.0) {
+      color += orionLayer(direction)
+        * starClarity
+        * uMoonStarScale
+        * uConstellationStrength
+        * moonStarOcclusion;
+    }
 
     float atmosphericVariation = mix(0.992, 1.008,
       hash31(direction * 173.0));
@@ -444,6 +558,9 @@ export class Skybox {
         uMoonStarScale: { value: 1 },
         uMoonEventDim: { value: 0 },
         uMoonScale: { value: 1 },
+        uStarryNightStrength: { value: 0 },
+        uStarryNightTime: { value: 0 },
+        uConstellationStrength: { value: 0 },
       },
     });
     this.mesh = new Mesh(new SphereGeometry(80, 48, 24), this.material);
@@ -482,6 +599,19 @@ export class Skybox {
     uniforms.uMoonStarScale!.value = 1;
     uniforms.uMoonEventDim!.value = 0;
     uniforms.uMoonScale!.value = 1;
+    uniforms.uStarryNightStrength!.value = 0;
+    uniforms.uStarryNightTime!.value = 0;
+    uniforms.uConstellationStrength!.value = 0;
+  }
+
+  setStarryNight(value: StarryNightSkyPresentation): void {
+    if (this.disposed) return;
+    const uniforms = this.material.uniforms;
+    uniforms.uStarryNightStrength!.value = clamp01(value.strength);
+    uniforms.uStarryNightTime!.value = Number.isFinite(value.time)
+      ? Math.max(0, value.time)
+      : 0;
+    uniforms.uConstellationStrength!.value = clamp01(value.constellationStrength);
   }
 
   setMoonFace(value: MoonFacePresentation): void {

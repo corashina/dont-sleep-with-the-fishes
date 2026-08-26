@@ -108,15 +108,16 @@ describe('item animation lab caption', () => {
     ui.showItemAnimationLab();
     ui.setEventSelection(new Map([['bucket-1' as ItemInstanceId, 'bucket']]));
 
-    ui.showItemAnimationLabChoices('BUCKET', [
+    ui.showItemAnimationLabChoices([
       { id: 'bucket-scoop', label: 'Scoop from water', unavailableReason: null },
       { id: 'bucket-helmet', label: 'Wear as helmet', unavailableReason: null },
     ]);
 
     const caption = mount.querySelector<HTMLElement>('[data-event-caption]')!;
     expect(caption.classList.contains('is-visible')).toBe(true);
-    expect(caption.querySelector('[data-event-title]')?.textContent)
-      .toBe('Choose BUCKET animation');
+    expect(caption.classList.contains('item-animation-dialog')).toBe(true);
+    expect(caption.querySelector<HTMLElement>('[data-event-title]')?.hidden).toBe(true);
+    expect(caption.querySelector('[data-event-title]')?.textContent).toBe('');
     expect([...caption.querySelectorAll<HTMLButtonElement>('[data-event-choice]')]
       .map((button) => button.textContent)).toEqual([
       'Scoop from water',
@@ -155,6 +156,32 @@ describe('item animation lab caption', () => {
     expect(onEventItem).toHaveBeenCalledExactlyOnceWith(
       'toolboxRepair',
       'repair-tools',
+    );
+  });
+
+  it('activates fishing from the fixed lab rod', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const onEventItem = vi.fn();
+    ui.onEventItem = onEventItem;
+    ui.beginEventPresentation();
+    ui.showItemAnimationLab();
+    ui.setEventSelection(new Map<ItemInstanceId, string>([
+      ['fishing-tools' as ItemInstanceId, 'fish'],
+    ]));
+
+    const rod = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="fishing-tools"]',
+    )!;
+    expect(rod.dataset.eventState).toBe('available');
+    expect(rod.getAttribute('aria-disabled')).toBe('false');
+
+    rod.click();
+
+    expect(onEventItem).toHaveBeenCalledExactlyOnceWith(
+      'fish',
+      'fishing-tools',
     );
   });
 
@@ -449,6 +476,26 @@ describe('SurvivalUI', () => {
     expect(mainStyles).toMatch(
       /\.survival-meter__tooltip\s*\{[^}]*top:\s*calc\(100% \+ 10px\);[^}]*bottom:\s*auto;/s,
     );
+  });
+
+  it('shows one bonus energy above the standard meter limit', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    ui.render(snapshot({ energy: 4 }), () => null);
+
+    const meter = mount.querySelector<HTMLElement>('[data-meter="energy"]')!;
+    const tooltip = meter.querySelector<HTMLElement>('[data-meter-tooltip]')!;
+
+    expect(tooltip.textContent).toBe('4 / 3');
+    expect(meter.getAttribute('aria-valuenow')).toBe('4');
+    expect(meter.getAttribute('aria-valuemax')).toBe('4');
+    expect(meter.getAttribute('aria-valuetext'))
+      .toBe('3 standard energy and 1 bonus energy');
+    expect(meter.style.getPropertyValue('--meter-value')).toBe('100%');
+
+    ui.render(snapshot({ energy: 3 }), () => null);
+    expect(meter.getAttribute('aria-valuemax')).toBe('3');
+    expect(meter.getAttribute('aria-valuetext')).toBeNull();
   });
 
   it('maps half hull condition to half of the visible hull artwork', () => {
@@ -2471,8 +2518,12 @@ describe('SurvivalUI', () => {
     const turn = vi.fn();
     ui.onCameraTurn = turn;
     const button = mount.querySelector<HTMLButtonElement>('[data-camera-turn]')!;
+    const returnButton = mount.querySelector<HTMLButtonElement>(
+      '[data-camera-return-front]',
+    )!;
 
     expect(button.hidden).toBe(true);
+    expect(returnButton.hidden).toBe(true);
     expect(button.classList).toContain('chest-camera-turn');
     expect(button.classList).not.toContain('drifting-item-focus__back');
     expect(button.parentElement).toBe(mount.querySelector('[data-survival-top]'));
@@ -2492,6 +2543,7 @@ describe('SurvivalUI', () => {
 
     ui.setCameraTurnState(true, false);
     expect(button.hidden).toBe(false);
+    expect(returnButton.hidden).toBe(true);
     expect(button.getAttribute('aria-label')).toBe('Look behind at the chest');
     expect(button.getAttribute('aria-pressed')).toBe('false');
     expect(button.querySelector('[data-camera-turn-tooltip]')?.textContent).toBe('LOOK BACK');
@@ -2499,6 +2551,11 @@ describe('SurvivalUI', () => {
     expect(turn).toHaveBeenCalledOnce();
 
     ui.setCameraTurnState(true, true);
+    expect(returnButton.hidden).toBe(false);
+    expect(returnButton.getAttribute('aria-label')).toBe('Return to front of boat');
+    expect(returnButton.querySelector('svg')?.getAttribute('fill')).toBe('none');
+    expect(returnButton.querySelector('svg')?.getAttribute('stroke')).toBe('currentColor');
+    expect(returnButton.querySelectorAll('path')).toHaveLength(2);
     expect(button.getAttribute('aria-label')).toBe('Look forward from the chest');
     expect(button.getAttribute('aria-pressed')).toBe('true');
     expect(button.querySelector('[data-camera-turn-tooltip]')?.textContent)
@@ -2510,6 +2567,12 @@ describe('SurvivalUI', () => {
       /\.chest-camera-turn\s*\{[^}]*width:\s*114px;[^}]*height:\s*105px;/s,
     );
     expect(mainStyles).not.toContain('#c96d3d');
+
+    returnButton.click();
+    expect(turn).toHaveBeenCalledTimes(2);
+
+    ui.setCameraTurnState(true, false);
+    expect(returnButton.hidden).toBe(true);
 
     ui.setCameraTurnState(false, false);
     expect(button.hidden).toBe(true);
@@ -2558,6 +2621,10 @@ describe('SurvivalUI', () => {
     ui.setFishingViewExitVisible(true);
     const button = mount.querySelector<HTMLButtonElement>('[data-fishing-view-exit]')!;
     const rule = mainStyles.match(/\.fishing-view-exit\s*\{([^}]*)\}/s)?.[1] ?? '';
+    const arrowRule = mainStyles.match(
+      /\.fishing-view-exit__arrow\s*\{([^}]*)\}/s,
+    )?.[1] ?? '';
+    const arrow = button.querySelector<SVGElement>('.fishing-view-exit__arrow')!;
 
     expect(button.hidden).toBe(false);
     expect(button.closest('[data-fishing]')).not.toBeNull();
@@ -2567,10 +2634,20 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('.survival-ui')?.getAttribute('data-fishing-exit-visible')).toBe('true');
     expect(rule).toMatch(/z-index:\s*19/);
     expect(rule).toMatch(/width:\s*min\(36rem,\s*calc\(100% - 32px\)\)/);
-    expect(rule).toMatch(/min-height:\s*84px/);
+    expect(rule).toMatch(/min-height:\s*168px/);
+    expect(rule).toMatch(/padding:\s*12px 24px 24px/);
     expect(rule).toMatch(/border:\s*0/);
     expect(rule).toMatch(/background:\s*transparent/);
     expect(rule).not.toContain('border-radius');
+    expect(arrow.tagName.toLowerCase()).toBe('svg');
+    expect(arrow.getAttribute('viewBox')).toBe('4 4 16 16');
+    expect(arrow.getAttribute('fill')).toBe('none');
+    expect(arrow.getAttribute('stroke')).toBe('currentColor');
+    expect([...arrow.querySelectorAll('path')].map((path) => path.getAttribute('d')))
+      .toEqual(['M12 5v14', 'm19 12-7 7-7-7']);
+    expect(arrowRule).toMatch(/width:\s*132px/);
+    expect(arrowRule).toMatch(/height:\s*132px/);
+    expect(mainStyles).not.toContain('.fishing-view-exit__arrow::before');
     expect(mainStyles).toMatch(
       /\.boat-anchors\s*\{[^}]*z-index:\s*10;/s,
     );
@@ -2832,6 +2909,30 @@ describe('SurvivalUI', () => {
     ui.setPaused(true);
     mount.querySelector<HTMLButtonElement>('[data-resume]')!.click();
     expect(pause).toHaveBeenLastCalledWith(false);
+  });
+
+  it('requires confirmation before restarting from pause', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const restart = vi.fn();
+    ui.onRestart = restart;
+    ui.render(snapshot(), () => null);
+    ui.setPaused(true);
+
+    const button = mount.querySelector<HTMLButtonElement>('[data-pause-restart]')!;
+    expect(button.textContent).toContain('START OVER');
+    button.click();
+    expect(restart).not.toHaveBeenCalled();
+    expect(button.textContent).toContain('CONFIRM START OVER');
+
+    ui.setPaused(false);
+    ui.setPaused(true);
+    expect(button.textContent).toContain('START OVER');
+    button.click();
+    button.click();
+    expect(restart).toHaveBeenCalledOnce();
+    expect(button.disabled).toBe(true);
   });
 
   it('keeps the pause overlay free of scroll containers', () => {

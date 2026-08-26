@@ -18,7 +18,7 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
   'school-of-fish': { models: ['schoolFish'], sounds: [] },
   snatcher: { models: ['snatcher'], sounds: ['tentacleMovement'] },
   'death-stare': { models: ['deathStareBlob'], sounds: [] },
-  'swarm-of-anglerfish': { models: ['anglerFish'], sounds: [] },
+  'swarm-of-sharks': { models: ['shark'], sounds: [] },
   tornado: { models: ['tornadoCore'], sounds: ['tornadoWind'] },
   'man-in-the-fog': { models: ['fogMan'], sounds: [] },
   plane: { models: [], sounds: ['planeFlyby'] },
@@ -37,7 +37,7 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
     sounds: [],
   },
   'empty-lifeboat': {
-    models: ['emptyLifeboat'],
+    models: ['emptyLifeboat', 'emptyLifeboatContainer'],
     sounds: [],
   },
   'drifting-chest': {

@@ -13,6 +13,7 @@ import { KeyedEventPresentation } from './KeyedEventPresentation';
 import type { EventPresentationKey } from './survivalTypes';
 
 const FLOAT_POSITION = Object.freeze({ x: 5.8, y: 0.24, z: -7.2 });
+const CONTAINER_POSITION = Object.freeze({ x: 0, y: 0.18, z: 0.65 });
 const SEARCH_DURATION = 1.8;
 const DRIFT_DURATION = 1.1;
 
@@ -41,12 +42,20 @@ export class EmptyLifeboatPresentation extends KeyedEventPresentation {
 
   constructor(
     source: Group,
+    container: Group,
     private readonly water: DriftingWater,
   ) {
     super('empty-lifeboat-presentation');
     this.subject.name = 'empty-lifeboat:subject';
     this.model.name = 'event-prop:empty-lifeboat';
+    container.name = 'event-prop:empty-lifeboat-container';
+    container.position.set(
+      CONTAINER_POSITION.x,
+      CONTAINER_POSITION.y,
+      CONTAINER_POSITION.z,
+    );
     this.model.add(source);
+    this.model.add(container);
     this.subject.add(this.model);
     this.root.userData.state = 'idle';
     this.root.userData.eventSide = 'left';

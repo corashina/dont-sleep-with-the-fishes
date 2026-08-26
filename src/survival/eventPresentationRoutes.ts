@@ -7,7 +7,8 @@ export type EventPresentationRoute =
   | 'featured'
   | 'weather'
   | 'supernatural'
-  | 'moon';
+  | 'moon'
+  | 'starry';
 
 type EventPresentationRouteMap = Readonly<Record<
   SurvivalEventId,
@@ -20,7 +21,7 @@ export const EVENT_PRESENTATION_ROUTES = Object.freeze({
   'school-of-fish': 'dedicated',
   snatcher: 'dedicated',
   'death-stare': 'dedicated',
-  'swarm-of-anglerfish': 'dedicated',
+  'swarm-of-sharks': 'dedicated',
   tornado: 'dedicated',
   'shower-night': 'weather',
   'windy-night': 'weather',
@@ -31,6 +32,8 @@ export const EVENT_PRESENTATION_ROUTES = Object.freeze({
   ghosts: 'supernatural',
   'eerie-melody': 'supernatural',
   'face-on-the-moon': 'moon',
+  'starry-night': 'starry',
+  'constellation-night': 'starry',
   'shadow-figure': 'dedicated',
   'guarded-sleep': 'dedicated',
   'drifting-barrel': 'featured',

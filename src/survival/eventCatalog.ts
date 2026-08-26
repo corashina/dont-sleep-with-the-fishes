@@ -17,10 +17,10 @@ import type {
 
 export const SURVIVAL_EVENT_IDS = Object.freeze([
   'dangerous-waters', 'leak', 'school-of-fish', 'snatcher',
-  'death-stare', 'swarm-of-anglerfish', 'tornado', 'shower-night',
+  'death-stare', 'swarm-of-sharks', 'tornado', 'shower-night',
   'windy-night', 'bad-sleep', 'thunderstorm', 'restless-waves',
   'man-in-the-fog', 'ghosts', 'eerie-melody', 'face-on-the-moon',
-  'shadow-figure', 'guarded-sleep',
+  'shadow-figure', 'guarded-sleep', 'starry-night', 'constellation-night',
   'drifting-barrel', 'drifting-chest', 'empty-lifeboat', 'wreckage',
   'check-the-back',
   'flowers', 'chest-attack', 'midnight-tour', 'night-trader',
@@ -97,7 +97,7 @@ const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.free
   'school-of-fish': 'A dense school churns the water beside the boat.',
   snatcher: 'A tentacle curls over the gunwale and reaches for one of your supplies.',
   'death-stare': 'A huge shape rises and fixes its gaze on the boat.',
-  'swarm-of-anglerfish': 'Cold lights gather beneath the surface and close in.',
+  'swarm-of-sharks': 'Dark fins cut through the water and close in.',
   tornado: 'A dark wind funnel spins above the sea.',
   'shower-night': 'Rain starts falling over the exposed boat.',
   'windy-night': 'Wind catches every loose object on the boat.',
@@ -110,6 +110,8 @@ const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.free
   'face-on-the-moon': 'A face takes shape across the moon.',
   'shadow-figure': 'A second cat-shaped shadow watches from beyond the lantern light.',
   'guarded-sleep': 'Carlitos sits alert while the night presses close.',
+  'starry-night': 'The clouds part, and clear stars shine over still water.',
+  'constellation-night': 'Orion stands bright above the boat, its stars linked across the clear sky.',
   'drifting-barrel': 'A sealed barrel drifts within reach of the boat.',
   'drifting-chest': 'A small chest drifts within reach of the boat.',
   'empty-lifeboat': 'An empty lifeboat drifts close enough to search.',
@@ -343,7 +345,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The creature attacks.', effects([subtract('hull', { min: 55, max: 60 }), subtract('health', 60)], [breakItem('fishingNet')]))),
     choice('sleep', 'Sleep', undefined, outcome(5, 'The shape loses interest and sinks away.'), outcome(85, 'The creature attacks.', effects([subtract('hull', { min: 44, max: 60 }), subtract('health', 60)]))),
   ], undefined, { minimumPressure: 1 }),
-  event('swarm-of-anglerfish', 'night', 'Swarm of Anglerfish', 'dangerous', 'fish', 1, 10, 38, [
+  event('swarm-of-sharks', 'night', 'Swarm of Sharks', 'dangerous', 'fish', 1, 10, 38, [
     choice('fishingNet', 'Use Fishing Net', 'fishingNet',
       outcome(80, 'The net holds the swarm back.'),
       outcome(20, 'The net tears while holding the swarm back.', effects(undefined, [breakItem('fishingNet')]))),
@@ -351,7 +353,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('flashlight', 'Use Flashlight', 'flashlight', outcome(1, 'The swarm attacks.', effects([subtract('hull', { min: 20, max: 40 }), subtract('health', 50)]))),
     choice('baitTin', 'Use Bait', 'baitTin', outcome(1, 'You lose two bait.', effects([subtract('bait', 2)]))),
     choice('sleep', 'Sleep', undefined,
-      outcome(65, 'The swarm attacks.', effects([subtract('hull', { min: 20, max: 40 }), subtract('health', 50)])), outcome(25, 'The cold lights scatter before reaching the hull.')),
+      outcome(65, 'The swarm attacks.', effects([subtract('hull', { min: 20, max: 40 }), subtract('health', 50)])), outcome(25, 'The fins scatter before reaching the hull.')),
   ], undefined, { minimumPressure: 1 }),
   event('tornado', 'night', 'Tornado', 'dangerous', 'impact', 1, 12, 30, [
     choice('anchor', 'Use Anchor', 'anchor', outcome(90, 'The anchor holds the boat outside the current.'), outcome(10, 'The boat is damaged.', effects([subtract('hull', { min: 5, max: 10 })], [breakItem('anchor')]))),
@@ -485,6 +487,40 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       { followUpNight: true },
     )),
   ], undefined, { requiresLivingCompanion: true }),
+  event('starry-night', 'night', 'Starry Night', 'safe', 'darkness', 2, 3, 12, [
+    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(
+      1,
+      'Through the binoculars, the stars seem close enough to touch.',
+      atNextDawn(4),
+    )),
+    choice('compass', 'Use Compass', 'compass', outcome(
+      1,
+      "The stars confirm your bearing and the boat's drift.",
+      atNextDawn(3, effects([add('rescueLead', 1)])),
+    )),
+    choice('sleep', 'Sleep', undefined, outcome(
+      1,
+      'You sleep beneath the quiet sky and wake rested.',
+      atNextDawn(3),
+    )),
+  ], undefined, { maximumAppearances: 2 }),
+  event('constellation-night', 'night', 'Constellation Night', 'safe', 'darkness', 2, 3, 12, [
+    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(
+      1,
+      "Through the binoculars, Orion's bright stars sharpen into view.",
+      atNextDawn(4),
+    )),
+    choice('compass', 'Use Compass', 'compass', outcome(
+      1,
+      "Orion confirms your bearing and the boat's drift.",
+      atNextDawn(3, effects([add('rescueLead', 1)])),
+    )),
+    choice('sleep', 'Sleep', undefined, outcome(
+      1,
+      'You sleep beneath Orion and wake rested.',
+      atNextDawn(3),
+    )),
+  ], undefined, { maximumAppearances: 2 }),
   event('drifting-barrel', 'day', 'Drifting Barrel', 'safe', 'fish', 1, 3, 3, [
     {
       ...contextualChoice('retrieve', 'Retrieve It',
@@ -662,6 +698,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('bait', 'Offer Bait', 'baitTin', outcome(1, 'The trader gives you an energy bar.', effects([subtract('bait', 1)], [gain('energyBar')]), 'trader-reward')),
     choice('map', 'Offer Map', 'map', outcome(1, 'The trader gives you a compass.', effects(undefined, [lose('map'), gain('compass')]), 'trader-reward')),
     choice('umbrella', 'Offer Umbrella', 'umbrella', outcome(1, 'The trader gives you a medkit.', effects(undefined, [lose('umbrella'), gain('medicalKit')]), 'trader-reward')),
+    choice('swimRing', 'Offer Swim Ring', 'swimRing', outcome(1, 'The trader gives you a radio.', effects(undefined, [lose('swimRing'), gain('radio')]), 'trader-reward')),
     contextualChoice('sleep', 'Refuse', outcome(1, 'The trader rows on into the night.', {}, 'trader-refuse')),
   ]),
   event('handyman', 'night', 'Handyman', 'dangerous', 'repair', 2, 20, 50, [
@@ -674,6 +711,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     choice('bucket', 'Bucket for Fishing Net', 'bucket', outcome(1, 'The handyman gives you a fishing net.', effects(undefined, [lose('bucket'), gain('fishingNet')]), 'handyman-reward')),
     choice('ductTape', 'Duct Tape for Energy Bar', 'ductTape', outcome(1, 'The handyman gives you an energy bar.', effects(undefined, [consume('ductTape'), gain('energyBar')]), 'handyman-reward')),
     choice('energyBar', 'Energy Bar for Duct Tape', 'energyBar', outcome(1, 'The handyman gives you duct tape.', effects(undefined, [consume('energyBar'), gain('ductTape')]), 'handyman-reward')),
+    choice('swimRing', 'Swim Ring for Radio', 'swimRing', outcome(1, 'The handyman gives you a radio.', effects(undefined, [lose('swimRing'), gain('radio')]), 'handyman-reward')),
     choice('anchor', 'Anchor for Chest', 'anchor', outcome(1, 'The handyman gives you a chest.', effects(undefined, [lose('anchor'), gainChest()]), 'handyman-reward')),
     {
       ...contextualChoice('chest', 'Chest for Anchor', outcome(1, 'The handyman gives you an anchor.', {

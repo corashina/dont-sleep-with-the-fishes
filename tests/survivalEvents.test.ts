@@ -21,11 +21,12 @@ import type {
 
 const EXPECTED_WEIGHTS = {
   'dangerous-waters': 1, leak: 1, 'school-of-fish': 4, snatcher: 3,
-  'death-stare': 1, 'swarm-of-anglerfish': 1, tornado: 1,
+  'death-stare': 1, 'swarm-of-sharks': 1, tornado: 1,
   'shower-night': 3, 'windy-night': 1, 'bad-sleep': 4,
   thunderstorm: 1, 'restless-waves': 1, 'man-in-the-fog': 1,
   ghosts: 3, 'eerie-melody': 1, 'face-on-the-moon': 1,
-  'shadow-figure': 1, 'guarded-sleep': 4,
+  'shadow-figure': 1, 'guarded-sleep': 4, 'starry-night': 2,
+  'constellation-night': 2,
   'drifting-barrel': 1, 'drifting-chest': 1, 'empty-lifeboat': 1,
   wreckage: 1,
   'check-the-back': 3, flowers: 1,
@@ -36,13 +37,14 @@ const EXPECTED_WEIGHTS = {
 const EXPECTED_RISK = {
   'dangerous-waters': 'dangerous', leak: 'dangerous',
   'school-of-fish': 'uncertain', snatcher: 'uncertain',
-  'death-stare': 'dangerous', 'swarm-of-anglerfish': 'dangerous',
+  'death-stare': 'dangerous', 'swarm-of-sharks': 'dangerous',
   tornado: 'dangerous', 'shower-night': 'uncertain',
   'windy-night': 'dangerous', 'bad-sleep': 'uncertain',
   thunderstorm: 'dangerous', 'restless-waves': 'dangerous',
   'man-in-the-fog': 'dangerous', ghosts: 'uncertain',
   'eerie-melody': 'dangerous', 'face-on-the-moon': 'uncertain',
-  'shadow-figure': 'dangerous', 'guarded-sleep': 'uncertain',
+  'shadow-figure': 'dangerous', 'guarded-sleep': 'uncertain', 'starry-night': 'safe',
+  'constellation-night': 'safe',
   'drifting-barrel': 'safe', 'drifting-chest': 'safe', 'empty-lifeboat': 'safe',
   wreckage: 'uncertain',
   'check-the-back': 'safe',
@@ -80,7 +82,7 @@ const APPROVED_COUNTER_CHANCES = [
   ['leak', 'map', 0.60],
   ['death-stare', 'flashlight', 0.80],
   ['death-stare', 'umbrella', 0.60],
-  ['swarm-of-anglerfish', 'fishingNet', 0.80],
+  ['swarm-of-sharks', 'fishingNet', 0.80],
   ['tornado', 'anchor', 0.90],
   ['tornado', 'swimRing', 0.60],
   ['windy-night', 'fishingNet', 0.80],
@@ -188,7 +190,135 @@ describe('survival events', () => {
     expect(byId.flowers!.phase).toBe('night');
     expect(byId['drifting-barrel']!.cooldownDays).toBe(3);
     expect(byId['guarded-sleep']!.cooldownDays).toBe(4);
-    expect(byId['swarm-of-anglerfish']!.requiresLivingCompanion).toBeUndefined();
+    expect(byId['swarm-of-sharks']!.requiresLivingCompanion).toBeUndefined();
+  });
+
+  it('defines the approved Starry Night contract', () => {
+    const starry = event('starry-night');
+    expect(starry).toMatchObject({
+      phase: 'night',
+      title: 'Starry Night',
+      revealText: 'The clouds part, and clear stars shine over still water.',
+      danger: 'safe',
+      cue: 'darkness',
+      weight: 2,
+      earliestDay: 3,
+      cooldownDays: 12,
+      maximumAppearances: 2,
+    });
+    expect(starry.choices.map(({ id, label, itemId }) => ({ id, label, itemId })))
+      .toEqual([
+        { id: 'spyglass', label: 'Use Binoculars', itemId: 'spyglass' },
+        { id: 'compass', label: 'Use Compass', itemId: 'compass' },
+        { id: 'sleep', label: 'Sleep', itemId: undefined },
+      ]);
+    expect(starry.choices.map(({ outcomes }) => outcomes)).toEqual([
+      [{
+        weight: 1,
+        message: 'Through the binoculars, the stars seem close enough to touch.',
+        effects: { nextDawnEnergy: 4 },
+      }],
+      [{
+        weight: 1,
+        message: "The stars confirm your bearing and the boat's drift.",
+        effects: {
+          resources: [{ resource: 'rescueLead', operation: 'add', value: 1 }],
+          nextDawnEnergy: 3,
+        },
+      }],
+      [{
+        weight: 1,
+        message: 'You sleep beneath the quiet sky and wake rested.',
+        effects: { nextDawnEnergy: 3 },
+      }],
+    ]);
+  });
+
+  it('limits Starry Night by day, cooldown, and appearance count', () => {
+    const criteria = {
+      phase: 'night' as const,
+      day: 14,
+      weather: 'calm' as const,
+      lastEventId: null,
+      lastSeenDay: new Map([['starry-night', 3]]),
+      targetableItemIds: new Set<ItemId>(),
+      appearanceCounts: new Map([['starry-night', 1]]),
+      inventoryItemIds: new Set<ItemId>(),
+      rescueLead: 0,
+    };
+    expect(eligibleEvents(SURVIVAL_EVENTS, criteria).map(({ id }) => id))
+      .not.toContain('starry-night');
+    expect(eligibleEvents(SURVIVAL_EVENTS, { ...criteria, day: 15 }).map(({ id }) => id))
+      .toContain('starry-night');
+    expect(eligibleEvents(SURVIVAL_EVENTS, {
+      ...criteria,
+      day: 15,
+      appearanceCounts: new Map([['starry-night', 2]]),
+    }).map(({ id }) => id)).not.toContain('starry-night');
+  });
+
+  it('defines the approved Constellation Night contract', () => {
+    const constellation = event('constellation-night');
+    expect(constellation).toMatchObject({
+      phase: 'night',
+      title: 'Constellation Night',
+      revealText: 'Orion stands bright above the boat, its stars linked across the clear sky.',
+      danger: 'safe',
+      cue: 'darkness',
+      weight: 2,
+      earliestDay: 3,
+      cooldownDays: 12,
+      maximumAppearances: 2,
+    });
+    expect(constellation.choices.map(({ id, label, itemId }) => ({ id, label, itemId })))
+      .toEqual([
+        { id: 'spyglass', label: 'Use Binoculars', itemId: 'spyglass' },
+        { id: 'compass', label: 'Use Compass', itemId: 'compass' },
+        { id: 'sleep', label: 'Sleep', itemId: undefined },
+      ]);
+    expect(constellation.choices.map(({ outcomes }) => outcomes)).toEqual([
+      [{
+        weight: 1,
+        message: "Through the binoculars, Orion's bright stars sharpen into view.",
+        effects: { nextDawnEnergy: 4 },
+      }],
+      [{
+        weight: 1,
+        message: "Orion confirms your bearing and the boat's drift.",
+        effects: {
+          resources: [{ resource: 'rescueLead', operation: 'add', value: 1 }],
+          nextDawnEnergy: 3,
+        },
+      }],
+      [{
+        weight: 1,
+        message: 'You sleep beneath Orion and wake rested.',
+        effects: { nextDawnEnergy: 3 },
+      }],
+    ]);
+  });
+
+  it('limits Constellation Night by day, cooldown, and appearance count', () => {
+    const criteria = {
+      phase: 'night' as const,
+      day: 14,
+      weather: 'calm' as const,
+      lastEventId: null,
+      lastSeenDay: new Map([['constellation-night', 3]]),
+      targetableItemIds: new Set<ItemId>(),
+      appearanceCounts: new Map([['constellation-night', 1]]),
+      inventoryItemIds: new Set<ItemId>(),
+      rescueLead: 0,
+    };
+    expect(eligibleEvents(SURVIVAL_EVENTS, criteria).map(({ id }) => id))
+      .not.toContain('constellation-night');
+    expect(eligibleEvents(SURVIVAL_EVENTS, { ...criteria, day: 15 }).map(({ id }) => id))
+      .toContain('constellation-night');
+    expect(eligibleEvents(SURVIVAL_EVENTS, {
+      ...criteria,
+      day: 15,
+      appearanceCounts: new Map([['constellation-night', 2]]),
+    }).map(({ id }) => id)).not.toContain('constellation-night');
   });
 
   it('rejects generic placeholder copy and keeps every live result specific', () => {
@@ -224,7 +354,7 @@ describe('survival events', () => {
     expect(survivalEventById('guarded-sleep')).toMatchObject({
       earliestDay: 7, weight: 4, cooldownDays: 4, requiresLivingCompanion: true,
     });
-    expect(survivalEventById('swarm-of-anglerfish')?.requiresLivingCompanion).toBeUndefined();
+    expect(survivalEventById('swarm-of-sharks')?.requiresLivingCompanion).toBeUndefined();
 
     const criteria = {
       phase: 'night' as const,
@@ -422,7 +552,7 @@ describe('survival events', () => {
     const leak = survivalEventById('leak')!;
     const school = survivalEventById('school-of-fish')!;
     const death = survivalEventById('death-stare')!;
-    const swarm = survivalEventById('swarm-of-anglerfish')!;
+    const swarm = survivalEventById('swarm-of-sharks')!;
     const tornado = survivalEventById('tornado')!;
 
     expect(leak.maximumAppearances).toBe(1);
@@ -434,6 +564,15 @@ describe('survival events', () => {
       title: 'Tornado',
       revealText: 'A dark wind funnel spins above the sea.',
     });
+  });
+
+  it('uses sharks for the dangerous swarm event', () => {
+    expect(survivalEventById('swarm-of-sharks')).toMatchObject({
+      id: 'swarm-of-sharks',
+      title: 'Swarm of Sharks',
+      revealText: 'Dark fins cut through the water and close in.',
+    });
+    expect(survivalEventById('swarm-of-anglerfish')).toBeUndefined();
   });
 
   it('preserves the exact approved Tornado event data', () => {
@@ -602,10 +741,10 @@ describe('survival events', () => {
     ]);
     expect(visit.outcomes.map(({ resultId }) => resultId)).toEqual(['tour-chest', 'tour-attack']);
     expect(resultIds('midnight-tour', 'sleep')).toEqual(['tour-pass']);
-    expect(['food', 'bait', 'map', 'umbrella'].every((choiceId) => (
+    expect(['food', 'bait', 'map', 'umbrella', 'swimRing'].every((choiceId) => (
       resultIds('night-trader', choiceId).every((resultId) => resultId === 'trader-reward')
     ))).toBe(true);
-    expect(event('night-trader').choices.slice(0, 4).map(({ id, itemId, label }) => ({
+    expect(event('night-trader').choices.slice(0, 5).map(({ id, itemId, label }) => ({
       id,
       itemId,
       label,
@@ -614,9 +753,10 @@ describe('survival events', () => {
       { id: 'bait', itemId: 'baitTin', label: 'Offer Bait' },
       { id: 'map', itemId: 'map', label: 'Offer Map' },
       { id: 'umbrella', itemId: 'umbrella', label: 'Offer Umbrella' },
+      { id: 'swimRing', itemId: 'swimRing', label: 'Offer Swim Ring' },
     ]);
     expect(resultIds('night-trader', 'sleep')).toEqual(['trader-refuse']);
-    expect(['spyglass', 'flashlight', 'flareGun', 'shotgun', 'medicalKit', 'fishingNet', 'bucket', 'ductTape', 'energyBar', 'anchor', 'chest']
+    expect(['spyglass', 'flashlight', 'flareGun', 'shotgun', 'medicalKit', 'fishingNet', 'bucket', 'ductTape', 'energyBar', 'swimRing', 'anchor', 'chest']
       .every((choiceId) => resultIds('handyman', choiceId).every((resultId) => resultId === 'handyman-reward'))).toBe(true);
     expect(event('handyman').choices.find(({ id }) => id === 'chest')).toMatchObject({
       requiredChestState: 'closed',
@@ -1097,14 +1237,14 @@ describe('survival events', () => {
       .toThrow(/immediate energy.*night event/i);
   });
 
-  it.each([-1, 1.5, 4])(
-    'rejects next dawn energy outside zero through three: %s',
+  it.each([-1, 1.5, 5])(
+    'rejects next dawn energy outside zero through four: %s',
     (nextDawnEnergy) => {
       const catalog = structuredClone(SURVIVAL_EVENTS) as any[];
       catalog[0].choices[0].outcomes[0].effects.nextDawnEnergy = nextDawnEnergy;
 
       expect(() => validateSurvivalEventCatalog(catalog))
-        .toThrow(/nextDawnEnergy.*integer.*zero through three/i);
+      .toThrow(/nextDawnEnergy.*integer.*zero through four/i);
     },
   );
 

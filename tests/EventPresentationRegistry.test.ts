@@ -32,6 +32,7 @@ const constructors = vi.hoisted(() => ({
   weather: vi.fn(),
   supernatural: vi.fn(),
   moon: vi.fn(),
+  starry: vi.fn(),
   leak: vi.fn(),
   schoolOfFish: vi.fn(),
   snatcher: vi.fn(),
@@ -59,6 +60,9 @@ vi.mock('../src/survival/SupernaturalEventAnimator', () => ({
 }));
 vi.mock('../src/survival/MoonEventPresentation', () => ({
   MoonEventPresentation: constructors.moon,
+}));
+vi.mock('../src/survival/StarryNightPresentation', () => ({
+  StarryNightPresentation: constructors.starry,
 }));
 vi.mock('../src/survival/events/LeakPresentation', () => ({
   LeakPresentation: constructors.leak,
@@ -188,6 +192,18 @@ function createMoon() {
   };
 }
 
+function createStarry() {
+  return {
+    stage: vi.fn(),
+    reveal: asyncVoid(),
+    react: asyncVoid(),
+    update: vi.fn(),
+    settleForVisibilityChange: vi.fn(),
+    clear: vi.fn(),
+    dispose: vi.fn(),
+  };
+}
+
 function createDedicatedPresentation() {
   return {
     eventId: 'leak',
@@ -203,6 +219,7 @@ let featured = createFeatured();
 let weather = createWeather();
 let supernatural = createSupernatural();
 let moon = createMoon();
+let starry = createStarry();
 
 function createDependencies() {
   return {
@@ -233,6 +250,7 @@ function createDependencies() {
       },
       driftingWater: {},
       moon: {},
+      starry: {},
       registerRescueCueCallback: vi.fn(),
       applyDangerousWatersReaction: vi.fn(),
     } as unknown as EventPresentationAdapterDependencies,
@@ -277,12 +295,14 @@ beforeEach(() => {
   weather = createWeather();
   supernatural = createSupernatural();
   moon = createMoon();
+  starry = createStarry();
   constructors.layer.mockImplementation(() => layer);
   constructors.coordinator.mockImplementation(() => coordinator);
   constructors.featured.mockImplementation(() => featured);
   constructors.weather.mockImplementation(() => weather);
   constructors.supernatural.mockImplementation(() => supernatural);
   constructors.moon.mockImplementation(() => moon);
+  constructors.starry.mockImplementation(() => starry);
   const presentation = createDedicatedPresentation();
   constructors.leak.mockImplementation(() => presentation);
   constructors.schoolOfFish.mockImplementation(() => presentation);
@@ -336,6 +356,7 @@ describe('EventPresentationRegistry', () => {
       weather: factory('weather'),
       supernatural: factory('supernatural'),
       moon: factory('moon'),
+      starry: factory('starry'),
     });
     const dependencies = {} as EventPresentationAdapterDependencies;
 
@@ -413,6 +434,8 @@ describe('EventPresentationRegistry', () => {
     ['shower-night', ['layer', 'weather']],
     ['ghosts', ['layer', 'supernatural']],
     ['face-on-the-moon', ['moon']],
+    ['starry-night', ['starry']],
+    ['constellation-night', ['starry']],
   ] as const)(
     'constructs only the %s route families',
     (eventId, expectedConstructors) => {
@@ -431,6 +454,8 @@ describe('EventPresentationRegistry', () => {
     ['shower-night', ['world:layer', 'world:weatherWorld', 'boat:weatherBoat']],
     ['ghosts', ['world:layer', 'world:supernaturalWorld']],
     ['face-on-the-moon', ['world:moonTarget']],
+    ['starry-night', []],
+    ['constellation-night', []],
   ] as const)('keeps exact root order for %s', (eventId, expectedRoots) => {
     const { dependencies } = createDependencies();
     const adapter = new EventPresentationRegistry().create(eventId, dependencies);
@@ -671,6 +696,44 @@ describe('EventPresentationRegistry', () => {
     expect(moon.clear).toHaveBeenCalledOnce();
     expect(moon.dispose).toHaveBeenCalledOnce();
     expect(calledFamilyConstructors()).toEqual(['moon']);
+  });
+
+  it('owns one Starry presenter and keeps item use on the shared path', async () => {
+    const { dependencies } = createDependencies();
+    const adapter = new EventPresentationRegistry().create('starry-night', dependencies);
+    const starryContext = { ...context, eventId: 'starry-night' } as const;
+    adapter.stage(starryContext);
+    await adapter.reveal();
+    await expect(adapter.playItemUse('spyglass', 'spyglass-1' as ItemInstanceId))
+      .resolves.toBe(false);
+    await adapter.react(reaction);
+    adapter.update(9, 0.25);
+    adapter.settleForVisibilityChange();
+    adapter.clear();
+    adapter.dispose();
+    adapter.dispose();
+    expect(constructors.starry).toHaveBeenCalledOnce();
+    expect(constructors.starry).toHaveBeenCalledWith(dependencies.starry);
+    expect(starry.stage).toHaveBeenCalledWith(starryContext);
+    expect(starry.reveal).toHaveBeenCalledWith();
+    expect(starry.react).toHaveBeenCalledWith();
+    expect(starry.update).toHaveBeenCalledWith(9, 0.25);
+    expect(starry.settleForVisibilityChange).toHaveBeenCalledOnce();
+    expect(starry.clear).toHaveBeenCalledOnce();
+    expect(starry.dispose).toHaveBeenCalledOnce();
+    expect(calledFamilyConstructors()).toEqual(['starry']);
+  });
+
+  it('routes Constellation Night through the Starry presenter', () => {
+    const { dependencies } = createDependencies();
+    const adapter = new EventPresentationRegistry().create(
+      'constellation-night',
+      dependencies,
+    );
+    const constellationContext = { ...context, eventId: 'constellation-night' } as const;
+    adapter.stage(constellationContext);
+    expect(starry.stage).toHaveBeenCalledWith(constellationContext);
+    expect(calledFamilyConstructors()).toEqual(['starry']);
   });
 
   it('preserves a construction error while rollback cleanup continues', () => {

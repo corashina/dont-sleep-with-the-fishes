@@ -616,7 +616,10 @@ export class BoatWorld {
           pillowRoot: this.sleepPillow.root,
           chestRoot: this.chestDisplay.root,
           chestState: () => this.chestState,
-          radioSignalAvailable: () => this.radioSignalAvailable,
+          radioInteractionAvailable: () => (
+            this.radioSignalAvailable
+            || this.supplyDisplay.isEventGroupEligible('radio')
+          ),
           activeFeaturedEventId: () => this.activeFeaturedEventId,
         },
         this.eventPresentationHost,
@@ -881,7 +884,9 @@ export class BoatWorld {
     if (this.disposed) return;
     const focusedRoot = anchorId === null
       ? null
-      : this.eventPresentationHost.interactionRoot(anchorId);
+      : anchorId === 'repair-tools'
+        ? this.repairTools
+        : this.eventPresentationHost.interactionRoot(anchorId);
     this.toolHoverOutline.setTarget(
       focusedRoot?.userData.disableHoverOutline === true ? null : focusedRoot,
     );

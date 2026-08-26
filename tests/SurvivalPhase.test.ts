@@ -81,7 +81,7 @@ function completedEntry(
 function accepted(overrides: Record<string, unknown> = {}) {
   return {
     accepted: true, code: 'fish-caught', message: 'Caught one.',
-    deltas: { energy: -2, food: 1 }, cue: 'fish' as const, ...overrides,
+    deltas: { energy: -1, food: 1 }, cue: 'fish' as const, ...overrides,
   };
 }
 
@@ -1977,7 +1977,7 @@ describe('SurvivalPhase orchestration', () => {
     const rejection = {
       accepted: false,
       code: 'not-enough-energy',
-      message: 'Fishing requires two energy.',
+      message: 'Fishing requires one energy.',
       deltas: {},
       cue: 'none' as const,
     };
@@ -2011,9 +2011,9 @@ describe('SurvivalPhase orchestration', () => {
 
     expect(rig.session.beginFishing).toHaveBeenCalledOnce();
     expect(rig.session.perform).not.toHaveBeenCalled();
-    expect(rig.realSession.snapshot()).toMatchObject({ energy: 1, actedToday: true });
+    expect(rig.realSession.snapshot()).toMatchObject({ energy: 2, actedToday: true });
     expect(rig.calls.indexOf('lock')).toBeLessThan(rig.calls.indexOf('play:enter'));
-    expect(rig.calls.indexOf('render:1:0:0')).toBeLessThan(rig.calls.indexOf('play:enter'));
+    expect(rig.calls.indexOf('render:2:0:0')).toBeLessThan(rig.calls.indexOf('play:enter'));
     expect(rig.calls.some((call) => call.startsWith('ui:aiming:'))).toBe(false);
     rig.phase.handleAction('dive');
     rig.phase.handleAction('repair');
@@ -2266,7 +2266,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.realSession.snapshot()).toMatchObject({ food: 1, bait: 0 });
     expect(rig.session.requestDayEvent).not.toHaveBeenCalled();
     const finishIndex = rig.calls.indexOf('finishFishing');
-    const renderIndex = rig.calls.indexOf('render:1:1:0');
+    const renderIndex = rig.calls.indexOf('render:2:1:0');
     const presentationIndex = rig.calls.indexOf('playFishingReel:cod');
     expect(finishIndex).toBeLessThan(renderIndex);
     expect(renderIndex).toBeLessThan(presentationIndex);
@@ -2471,7 +2471,7 @@ describe('SurvivalPhase orchestration', () => {
       expect(attempt.snapshot().state).toBe('bite');
       expect(attempt.snapshot().biteSeconds).toBeCloseTo(0, 12);
       fishingReelCallback(rig)();
-      expect(rig.realSession.snapshot()).toMatchObject({ food: 1, energy: 1 });
+      expect(rig.realSession.snapshot()).toMatchObject({ food: 1, energy: 2 });
       await settleFishingReturn(rig, 'reel');
 
       expect(rig.session.requestDayEvent).not.toHaveBeenCalled();
@@ -5845,6 +5845,7 @@ describe('SurvivalPhase orchestration', () => {
     ['flareGun', 'flareGun-1', 'other-people'],
     ['anchor', 'anchor-1', 'thunderstorm'],
     ['ductTape', 'ductTape-1', 'leak'],
+    ['bucket', 'bucket-1', 'shower-night'],
   ] as const)('defers the %s action sound until its keyed cue', async (
     itemType,
     instanceId,
@@ -5887,15 +5888,23 @@ describe('SurvivalPhase orchestration', () => {
     });
     const audio = (phase as unknown as { audio: SurvivalAudio }).audio;
     const eventItemCue = vi.spyOn(audio, 'eventItemCue');
+    const bucketHelmetRain = vi.spyOn(audio, 'bucketHelmetRain');
 
     phase.start();
     await flushPromises();
     phase.handleEventItem(itemType, instanceId);
 
     expect(eventItemCue).not.toHaveBeenCalled();
+    expect(bucketHelmetRain).not.toHaveBeenCalled();
     expect(actionCue).toEqual(expect.any(Function));
     actionCue!(0);
-    expect(eventItemCue).toHaveBeenCalledExactlyOnceWith(itemType, 0);
+    if (itemType === 'bucket') {
+      expect(bucketHelmetRain).toHaveBeenCalledOnce();
+      expect(eventItemCue).not.toHaveBeenCalled();
+    } else {
+      expect(eventItemCue).toHaveBeenCalledExactlyOnceWith(itemType, 0);
+      expect(bucketHelmetRain).not.toHaveBeenCalled();
+    }
 
     itemUse.resolve();
     await flushPromises();
@@ -5960,6 +5969,7 @@ describe('SurvivalPhase orchestration', () => {
       'shower-night',
       'bucket',
       'bucket-1',
+      expect.any(Function),
     );
     expect(resolveEvent).not.toHaveBeenCalled();
 
@@ -7898,8 +7908,8 @@ describe('SurvivalPhase orchestration', () => {
 
   it.each([
     ['death-stare', 'flashlight', 'flashlight-1', 'flashlight'],
-    ['swarm-of-anglerfish', 'flashlight', 'flashlight-1', 'flashlight'],
-    ['swarm-of-anglerfish', 'baitTin', 'baitTin-1', 'baitTin'],
+    ['swarm-of-sharks', 'flashlight', 'flashlight-1', 'flashlight'],
+    ['swarm-of-sharks', 'baitTin', 'baitTin-1', 'baitTin'],
     ['tornado', 'swimRing', 'swimRing-1', 'swimRing'],
   ] as const)(
     'resolves %s %s only after hide and restore',

@@ -143,7 +143,11 @@ export class SurvivalUI {
       this.fishingView.interactionRoot,
     ];
     this.modalFocus = new ModalFocusManager(
-      [this.hudView.topControls, this.anchorView.anchorLayer],
+      [
+        this.hudView.topControls,
+        this.hudView.cameraReturn,
+        this.anchorView.anchorLayer,
+      ],
       modalLayers,
       new Map<HTMLElement, ModalInitialFocus>([
         [this.modalViews.pauseRoot, this.modalViews.resumeButton],
@@ -279,11 +283,10 @@ export class SurvivalUI {
   }
 
   showItemAnimationLabChoices(
-    itemLabel: string,
     choices: readonly EventContextChoice[],
   ): void {
     if (this.disposed) return;
-    this.eventView.showItemAnimationLabChoices(itemLabel, choices);
+    this.eventView.showItemAnimationLabChoices(choices);
     this.syncCommandState();
   }
 
@@ -507,6 +510,7 @@ export class SurvivalUI {
 
   setPaused(paused: boolean): void {
     if (this.disposed || paused === this.paused) return;
+    this.modalViews.resetPauseRestartConfirmation();
     if (paused) this.anchorView.setPaused(true);
     if (paused && !this.paused) {
       this.pauseReturnTarget = this.resolveCommandOrigin();
