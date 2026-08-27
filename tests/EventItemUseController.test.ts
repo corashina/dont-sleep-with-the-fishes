@@ -158,6 +158,27 @@ describe('EventItemUseController', () => {
     adapter.dispose();
   });
 
+  it('returns a recovered Knife to the boat instead of stowing it', async () => {
+    const { actor, adapter, controller, supplies } = setup();
+    const use = controller.play({
+      ...request(actor.instanceId),
+      eventId: 'snatcher',
+      choiceId: 'knife',
+      itemId: 'knife',
+      context: 'knife-slash',
+    });
+
+    controller.update(10);
+    await use;
+    const reaction = controller.react(result(actor.instanceId));
+    controller.update(10);
+    await reaction;
+
+    expect(supplies.stowEventItemUntilDay).not.toHaveBeenCalled();
+    expect(actor.release).toHaveBeenCalledOnce();
+    adapter.dispose();
+  });
+
   it('uses temporary two-sided materials for the bucket helmet interior', () => {
     const { actor, adapter, controller } = setup();
     const original = new MeshStandardMaterial();
@@ -362,6 +383,29 @@ describe('EventItemUseController', () => {
   it('stows a broken item after its outcome motion', async () => {
     const { actor, adapter, controller, supplies } = setup();
     const use = controller.play(request());
+    controller.update(10);
+    await use;
+
+    const reaction = controller.react(result(actor.instanceId, {
+      brokenInstanceIds: [actor.instanceId],
+    }));
+    controller.update(10);
+    await reaction;
+
+    expect(supplies.stowEventItemUntilDay).toHaveBeenCalledExactlyOnceWith(actor.instanceId);
+    expect(actor.release).toHaveBeenCalledOnce();
+    adapter.dispose();
+  });
+
+  it('stows a broken Knife after its outcome motion', async () => {
+    const { actor, adapter, controller, supplies } = setup();
+    const use = controller.play({
+      ...request(actor.instanceId),
+      eventId: 'snatcher',
+      choiceId: 'knife',
+      itemId: 'knife',
+      context: 'knife-slash',
+    });
     controller.update(10);
     await use;
 
