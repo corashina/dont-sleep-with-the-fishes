@@ -235,6 +235,11 @@ describe('VolumetricClouds', () => {
       'pow(cloudGroup, 0.55)',
     );
     expect(clouds.material.fragmentShader).toContain('float solidBody');
+    expect(clouds.material.fragmentShader).toContain('float baseRipple');
+    expect(clouds.material.fragmentShader).toContain('float baseLift');
+    expect(clouds.material.fragmentShader).toContain('float baseHeight');
+    expect(clouds.material.fragmentShader).toContain('baseHeight - 0.02,');
+    expect(clouds.material.fragmentShader).toContain('baseHeight + 0.04,');
     expect(clouds.material.fragmentShader).toContain('float topField');
     expect(clouds.material.fragmentShader).toContain('float billowedTop');
     expect(clouds.material.fragmentShader).toContain('float billowedSides');
