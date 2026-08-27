@@ -378,7 +378,6 @@ export class SurvivalAudio {
 
   finishEventReaction(eventId: string): void {
     if (this.disposed) return;
-    if (eventId === 'wreckage') this.finishDive();
     this.clearEvent();
   }
 

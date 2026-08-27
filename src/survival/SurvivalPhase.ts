@@ -41,10 +41,10 @@ import {
 } from './ItemAnimationLabFlow';
 import { ItemAnimationLabCameraControls } from './ItemAnimationLabCameraControls';
 import {
-  DriftingItemFlow,
-  type DriftingItemUiPort,
-  type DriftingItemWorldPort,
-} from './DriftingItemFlow';
+  FocusedEventFlow,
+  type FocusedEventUiPort,
+  type FocusedEventWorldPort,
+} from './FocusedEventFlow';
 import {
   SurvivalFishingFlow,
   type FishingSessionPort,
@@ -61,6 +61,7 @@ import {
 import { SurvivalSession } from './SurvivalSession';
 import { EventBundleLoader } from './EventBundle';
 import { EventBundleManager } from './EventBundleManager';
+import { isInspectableEventId } from './eventCatalog';
 import {
   SurvivalEventFlow,
   type EventBundleManagerLike,
@@ -223,7 +224,7 @@ export class SurvivalPhase implements GamePhase {
   private viewportHeight = 1;
   private fishingFlow!: SurvivalFishingFlow;
   private dayActionFlow!: SurvivalDayActionFlow;
-  private driftingItemFlow!: DriftingItemFlow;
+  private focusedEventFlow!: FocusedEventFlow;
   private eventFlow!: SurvivalEventFlow;
   private itemAnimationLabFlow!: ItemAnimationLabFlow;
   private visibilityController: SurvivalVisibilityController | null = null;
@@ -405,7 +406,7 @@ export class SurvivalPhase implements GamePhase {
     this.context.camera.updateProjectionMatrix();
     this.eventFlow.sync(this.session.snapshot());
     this.fishingFlow.resize(width, height);
-    this.driftingItemFlow.syncTarget(width, height);
+    this.focusedEventFlow.syncTarget(width, height);
   }
 
   render(): void {
@@ -438,6 +439,10 @@ export class SurvivalPhase implements GamePhase {
   handleEventItem(choiceId: EventResponseId, instanceId: ItemInstanceId): void {
     if (this.itemAnimationLab) {
       void this.itemAnimationLabFlow.play(instanceId, choiceId);
+      return;
+    }
+    if (isInspectableEventId(this.session.snapshot().pendingEventId ?? '')) {
+      void this.focusedEventFlow.choose({ id: choiceId, instanceId });
       return;
     }
     this.eventFlow.resolveItem(choiceId, instanceId);
@@ -528,7 +533,7 @@ export class SurvivalPhase implements GamePhase {
     runCleanupSteps([
       () => this.itemAnimationLabFlow.dispose(),
       () => this.eventFlow.clear(),
-      () => this.driftingItemFlow.dispose(),
+      () => this.focusedEventFlow.dispose(),
       () => this.dayActionFlow.settleForVisibilityChange(),
       () => this.dayActionFlow.dispose(),
       () => this.visibilityController?.cancelResumeWaiters(),
@@ -543,14 +548,15 @@ export class SurvivalPhase implements GamePhase {
     runCleanupSteps([
       () => this.itemAnimationLabFlow.dispose(),
       () => this.eventFlow.dispose(),
-      () => this.driftingItemFlow.dispose(),
+      () => this.focusedEventFlow.dispose(),
       () => this.dayActionFlow.dispose(),
       () => this.visibilityController?.cancelResumeWaiters(),
       () => this.fishingFlow.dispose(),
       () => { this.ui.onFishingResultContinue = null; },
       () => { this.ui.onFishingViewExit = null; },
-      () => { this.ui.onDriftingItemSelect = null; },
-      () => { this.ui.onDriftingItemBack = null; },
+      () => { this.ui.onFocusedEventSelect = null; },
+      () => { this.ui.onFocusedEventChoice = null; },
+      () => { this.ui.onFocusedEventBack = null; },
       () => this.itemAnimationLabCameraControls?.dispose(),
       () => { this.itemAnimationLabCameraControls = null; },
       () => this.visibilityController?.dispose(),
@@ -605,14 +611,14 @@ export class SurvivalPhase implements GamePhase {
       advanceLifecycleGeneration: () => ++this.lifecycleGeneration,
       isLifecycleGenerationCurrent: (generation) => this.isContinuationActive(generation),
     });
-    this.driftingItemFlow = new DriftingItemFlow({
-      world: world as DriftingItemWorldPort,
-      ui: ui as DriftingItemUiPort,
+    this.focusedEventFlow = new FocusedEventFlow({
+      world: world as FocusedEventWorldPort,
+      ui: ui as FocusedEventUiPort,
       audio: this.audio,
       setBusy: (busy) => this.setBusy(busy),
-      setEventResolutionActive: (active) => this.eventFlow.setDriftingResolutionActive(active),
+      setEventResolutionActive: (active) => this.eventFlow.setFocusedResolutionActive(active),
       isPendingEvent: (eventId) => this.eventFlow.isPendingEvent(eventId),
-      resolveChoice: (choiceId) => this.eventFlow.resolveDriftingItemChoice(choiceId),
+      resolveChoice: (choice) => this.eventFlow.resolveFocusedEventChoice(choice),
       waitForVisibilityResume: (generation) => this.waitForVisibilityResume(generation),
       captureLifecycleGeneration: () => this.lifecycleGeneration,
       isLifecycleGenerationCurrent: (generation) => this.isContinuationActive(generation),
@@ -623,7 +629,7 @@ export class SurvivalPhase implements GamePhase {
       ui: ui as EventUiPort,
       audio: this.audio,
       bundles: eventBundles,
-      drifting: this.driftingItemFlow,
+      focused: this.focusedEventFlow,
       renderSnapshot: () => this.renderSnapshot(false, false),
       renderAndSettleCoveredScene: (generation) => (
         this.renderAndSettleCoveredScene(generation)
@@ -716,11 +722,24 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onFishingReel = () => this.fishingFlow.reel();
     this.ui.onFishingResultContinue = () => this.fishingFlow.continueResult();
     this.ui.onFishingViewExit = () => this.fishingFlow.exitReadyView();
-    this.ui.onDriftingItemSelect = (eventId) => {
-      void this.eventFlow.focusDriftingItem(eventId);
+    this.ui.onFocusedEventSelect = (eventId) => { void this.eventFlow.focusEvent(eventId); };
+    this.ui.onFocusedEventChoice = (choice) => {
+      this.reportFocusedError(this.focusedEventFlow.choose(choice));
     };
-    this.ui.onDriftingItemBack = () => { void this.driftingItemFlow.back(); };
+    this.ui.onFocusedEventBack = () => {
+      this.reportFocusedError(this.focusedEventFlow.back());
+    };
     this.ui.onCameraTurn = () => this.handleCameraTurn();
+  }
+
+  private reportFocusedError(work: Promise<void>): void {
+    void work.catch((error) => {
+      try {
+        this.onFatalError(error);
+      } catch {
+        // The focused action error stays primary.
+      }
+    });
   }
 
   private canAcceptCommand(): boolean {

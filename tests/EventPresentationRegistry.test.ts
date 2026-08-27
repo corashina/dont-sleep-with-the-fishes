@@ -118,6 +118,8 @@ function createCoordinator() {
     playChoice: asyncVoid(),
     playItemUse: vi.fn(async () => true),
     itemAimTarget: vi.fn(() => null),
+    interactionTargets: vi.fn((): readonly FocusedEventInteractionTarget[] => []),
+    interactionRoot: vi.fn((_id: string): Group | null => null),
     react: asyncVoid(),
     update: vi.fn(),
     settleForVisibilityChange: vi.fn(),
@@ -507,6 +509,27 @@ describe('EventPresentationRegistry', () => {
     expect(coordinator.react).toHaveBeenCalledWith(reaction.result);
     expect(coordinator.clear).toHaveBeenCalledOnce();
     expect(coordinator.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('delegates dedicated interaction data to its coordinator', () => {
+    const root = new Group();
+    const targets = [{
+      id: 'event:wreckage',
+      label: 'WRECKAGE',
+      description: 'Inspect the floating debris.',
+      focusEventId: 'wreckage',
+      root,
+    }] as const;
+    coordinator.interactionTargets.mockReturnValue(targets);
+    coordinator.interactionRoot.mockReturnValue(root);
+    const { dependencies } = createDependencies();
+    const adapter = new EventPresentationRegistry().create('wreckage', dependencies);
+
+    expect(adapter.interactionTargets()).toBe(targets);
+    expect(adapter.interactionRoot('event:wreckage')).toBe(root);
+    expect(coordinator.interactionTargets).toHaveBeenCalledOnce();
+    expect(coordinator.interactionRoot).toHaveBeenCalledWith('event:wreckage');
+    adapter.dispose();
   });
 
   it('delegates the focused lifecycle to its layer', async () => {

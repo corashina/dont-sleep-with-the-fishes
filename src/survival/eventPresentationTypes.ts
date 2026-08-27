@@ -6,7 +6,10 @@ import type { CarlitosPresentation } from './CarlitosPresentation';
 import type { DivePresentationController } from './DivePresentationController';
 import type { EventModelLibrary } from './EventModelLibrary';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
-import type { EventChoicePresentation } from './FocusedEventPresentation';
+import type {
+  EventChoicePresentation,
+  FocusedEventInteractionTarget,
+} from './FocusedEventPresentation';
 import type { SurvivalEventModels } from './SurvivalEventModelLibrary';
 import type { SurvivalEventId } from './eventCatalog';
 import type { DedicatedEventId } from './eventPresentationRoutes';
@@ -55,6 +58,11 @@ export type WorldWaveSampler = (
   amplitudeScale: number,
 ) => void;
 
+export interface UnderwaterViewEnvironment {
+  readonly enter: () => void;
+  readonly exit: () => void;
+}
+
 export interface DedicatedEventEnvironment {
   readonly eventModels: EventModelLibrary;
   readonly featuredModels: SurvivalEventModels;
@@ -68,6 +76,7 @@ export interface DedicatedEventEnvironment {
   readonly vortexWave: VortexWaveState;
   readonly sampleWorldWaveInto: WorldWaveSampler;
   readonly readWorldWaveAmplitudeScale: () => number;
+  readonly underwaterView: UnderwaterViewEnvironment;
   readonly cameraEffectsRoot?: Group;
   readonly camera?: PerspectiveCamera;
   readonly boatEffectsRoot?: Group;
@@ -78,6 +87,8 @@ export interface DedicatedEventPresentation {
   readonly worldRoot: Group;
   readonly boatRoot: Group;
   readonly itemAimTarget: Object3D;
+  interactionTargets?(): readonly FocusedEventInteractionTarget[];
+  interactionRoot?(id: string): Object3D | null;
   stage(context: EventSceneContext): void;
   reveal(): Promise<void>;
   skip(): void;

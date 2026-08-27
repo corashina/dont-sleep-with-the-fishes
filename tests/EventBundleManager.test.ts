@@ -58,7 +58,7 @@ function adapter(eventId: EventPresentationAdapter['eventId']): EventPresentatio
 describe('EventBundleManager', () => {
   it('declares every Wreckage bundle resource', () => {
     expect(EVENT_BUNDLE_SPECS.wreckage).toEqual({
-      models: ['containerShip', 'leakPlanks', 'anglerFish', 'ghost', 'driftingBarrel'],
+      models: ['containerShip', 'wreckageBox', 'wreckageCrate', 'wreckagePallet'],
       sounds: ['diveEntry', 'underwaterMovement', 'diveSurface'],
     });
   });

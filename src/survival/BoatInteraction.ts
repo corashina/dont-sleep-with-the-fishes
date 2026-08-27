@@ -12,7 +12,7 @@ import {
 } from '../rendering/projectScreenBounds';
 import type { DayActionId, EventResponseId } from './survivalTypes';
 import type { BoatSupplyGroupId } from '../world/BoatStorage';
-import type { DriftingItemEventId } from './eventCatalog';
+import type { InspectableEventId } from './eventCatalog';
 
 export interface BoatInteractionHitArea {
   width: number;
@@ -32,7 +32,7 @@ export interface BoatInteractionAnchor {
   readonly description?: string;
   readonly tooltip?: boolean;
   readonly eventChoiceId?: EventResponseId;
-  readonly eventFocusId?: DriftingItemEventId;
+  readonly eventFocusId?: InspectableEventId;
   readonly itemType: ItemId | null;
   readonly supplyGroupId?: BoatSupplyGroupId;
   readonly toolId: BoatToolId | null;

@@ -187,6 +187,7 @@ describe('BoatInteractionProjector', () => {
     const fixture = createFixture();
     const featuredRoot = meshRoot('barrel', -0.5);
     const customRoot = meshRoot('custom', 0.5);
+    const wreckageRoot = meshRoot('wreckage', 0.7);
     const chestRoot = fixture.roots.chestRoot;
     const targets = Object.freeze([
       Object.freeze({
@@ -206,8 +207,15 @@ describe('BoatInteractionProjector', () => {
         choiceId: 'offer',
         root: chestRoot,
       }),
+      Object.freeze({
+        id: 'event:wreckage',
+        label: 'WRECKAGE',
+        description: 'Inspect the floating debris.',
+        focusEventId: 'wreckage',
+        root: wreckageRoot,
+      }),
     ]);
-    (fixture.roots.carlitosRoot.parent as Scene).add(featuredRoot, customRoot);
+    (fixture.roots.carlitosRoot.parent as Scene).add(featuredRoot, customRoot, wreckageRoot);
     fixture.setActiveEventId('drifting-supplies');
     vi.mocked(fixture.eventHost.interactionRoot).mockImplementation((id) => {
       if (id === 'drifting-supplies') return featuredRoot;
@@ -220,29 +228,36 @@ describe('BoatInteractionProjector', () => {
 
     const anchors = fixture.projector.projectAnchors(1280, 720);
 
-    expect(anchors.map(({ id }) => id).slice(-3)).toEqual([
+    expect(anchors.map(({ id }) => id).slice(-4)).toEqual([
       'event:drifting-supplies',
       'custom:signal',
       'persistent-chest',
+      'event:wreckage',
     ]);
-    expect(anchors.at(-3)).toMatchObject({
+    expect(anchors.at(-4)).toMatchObject({
       label: 'SALVAGE',
       description: 'Floating salvage within reach.',
       tooltip: false,
       eventFocusId: 'drifting-supplies',
       hitArea: { width: 64, height: 64 },
     });
-    expect(anchors.at(-2)).toMatchObject({
+    expect(anchors.at(-3)).toMatchObject({
       label: 'SIGNAL',
       description: 'Answer the custom signal.',
       eventChoiceId: 'answer',
       tooltip: true,
       hitArea: { width: 91, height: 73 },
     });
-    expect(anchors.at(-1)).toMatchObject({
+    expect(anchors.at(-2)).toMatchObject({
       label: 'OFFER',
       description: 'Offer this exact chest.',
       eventChoiceId: 'offer',
+      hitArea: { width: 64, height: 64 },
+    });
+    expect(anchors.at(-1)).toMatchObject({
+      label: 'WRECKAGE',
+      description: 'Inspect the floating debris.',
+      eventFocusId: 'wreckage',
       hitArea: { width: 64, height: 64 },
     });
 

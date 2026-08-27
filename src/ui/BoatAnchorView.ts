@@ -4,7 +4,7 @@ import {
 } from '../game/ItemState';
 import type { BoatInteractionAnchor, BoatToolId } from '../survival/BoatInteraction';
 import { carlitosStatus } from '../survival/CarlitosState';
-import type { DriftingItemEventId } from '../survival/eventCatalog';
+import type { InspectableEventId } from '../survival/eventCatalog';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import { repairEnergyCost, SURVIVAL_BALANCE } from '../survival/survivalBalance';
 import type {
@@ -154,7 +154,7 @@ export class BoatAnchorView {
   onUnavailableAction: (action: DayActionId, reason: string) => void = () => undefined;
   onEventItem: (choiceId: EventResponseId, instanceId: ItemInstanceId) => void = () => undefined;
   onEventChoice: (choiceId: EventResponseId) => void = () => undefined;
-  onEventFocus: (eventId: DriftingItemEventId) => void = () => undefined;
+  onEventFocus: (eventId: InspectableEventId) => void = () => undefined;
   onHighlight: (anchorId: string | null) => void = () => undefined;
 
   private readonly carlitosPet: HTMLButtonElement;
@@ -1082,7 +1082,7 @@ export class BoatAnchorView {
       this.toggleCarlitosCard(button);
       return;
     }
-    const eventFocusId = button.dataset.eventFocusId as DriftingItemEventId | undefined;
+    const eventFocusId = button.dataset.eventFocusId as InspectableEventId | undefined;
     if (eventFocusId !== undefined) {
       this.onEventFocus(eventFocusId);
       return;

@@ -1078,7 +1078,9 @@ describe('BoatWorld helpers', () => {
       expect(adapter.playChoice).toHaveBeenCalledOnce();
       expect(adapter.playItemUse).toHaveBeenCalledOnce();
       expect(adapter.itemAimTarget).toHaveBeenCalledOnce();
-      expect(adapter.interactionTargets).toHaveBeenCalledOnce();
+      expect(adapter.interactionTargets).toHaveBeenCalledTimes(
+        family === 'dedicated' ? 2 : 1,
+      );
       expect(adapter.interactionRoot).toHaveBeenCalledOnce();
       expect(adapter.resultRoot).toHaveBeenCalledOnce();
       expect(adapter.react).toHaveBeenCalledOnce();
@@ -1147,6 +1149,7 @@ describe('BoatWorld helpers', () => {
         carlitos: internals.carlitos,
         camera,
       });
+      expect(dependencies).not.toHaveProperty('starry');
       const retrieve = vi.fn(async () => undefined);
       await environment?.delegateCarlitos(retrieve);
       expect(delegate).toHaveBeenCalledWith(retrieve);
@@ -2699,7 +2702,7 @@ describe('BoatWorld helpers', () => {
     const baseQuaternion = camera.quaternion.clone();
     world.stageEvent(eventId, eventId === 'drifting-supplies' ? 0 : 8);
 
-    const entered = world.enterDriftingItemView(eventId);
+    const entered = world.enterFocusedEventView(eventId);
     world.update(1.2, 1.2);
     await entered;
 
@@ -2723,7 +2726,7 @@ describe('BoatWorld helpers', () => {
     )).toBeLessThan(0.001);
     expect(item.visible).toBe(false);
 
-    const exited = world.exitDriftingItemView();
+    const exited = world.exitFocusedEventView();
     world.update(4.4, 1.2);
     await exited;
     expect(camera.position.toArray()).toEqual(basePosition.toArray());
@@ -2797,7 +2800,7 @@ describe('BoatWorld helpers', () => {
       featuredModels,
     );
     world.stageEvent('drifting-supplies', 8);
-    const entered = world.enterDriftingItemView('drifting-supplies');
+    const entered = world.enterFocusedEventView('drifting-supplies');
     world.update(1.2, 1.2);
     await entered;
     const updateMatrixWorld = vi.spyOn(world.scene, 'updateMatrixWorld');
@@ -2820,8 +2823,8 @@ describe('BoatWorld helpers', () => {
       const eventId: DriftingItemEventId = 'drifting-supplies';
       world.stageEvent(eventId, 8);
       let settled = 0;
-      const first = world.enterDriftingItemView(eventId).then(() => { settled += 1; });
-      const second = world.enterDriftingItemView(eventId).then(() => { settled += 1; });
+      const first = world.enterFocusedEventView(eventId).then(() => { settled += 1; });
+      const second = world.enterFocusedEventView(eventId).then(() => { settled += 1; });
 
       if (interruption === 'hidden') world.setDocumentHidden(true);
       else if (interruption === 'clear') world.clearEvent();
@@ -2830,8 +2833,8 @@ describe('BoatWorld helpers', () => {
       expect(settled).toBe(2);
       if (interruption === 'hidden') {
         expect(camera.position).toEqual(expect.objectContaining(FISHING_PLAYER_SEAT));
-        const exitFirst = world.exitDriftingItemView();
-        const exitSecond = world.exitDriftingItemView();
+        const exitFirst = world.exitFocusedEventView();
+        const exitSecond = world.exitFocusedEventView();
         world.setDocumentHidden(true);
         await Promise.all([exitFirst, exitSecond]);
       }
@@ -4065,7 +4068,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('routes every animated catalog item choice into shared ownership exactly once', async () => {
+  it('routes each catalog item choice into its shared or dedicated owner once', async () => {
     const itemIds = [...new Set(SURVIVAL_EVENTS.flatMap(({ choices }) => (
       choices.flatMap(({ itemId }) => itemId === undefined ? [] : [itemId])
     )))];
@@ -4075,11 +4078,16 @@ describe('BoatWorld helpers', () => {
     const controllerPlay = vi.spyOn(EventItemUseController.prototype, 'play');
     const borrowActor = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
     const begin = vi.spyOn(EventItemUseAdapter.prototype, 'begin');
+    const dedicatedPlay = vi.spyOn(EventPresentationCoordinator.prototype, 'playItemUse');
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
       createTestMoonTexture(),
       items,
+      undefined,
+      undefined,
+      'low',
+      createTestEventModels(),
     );
     world.syncInventory(snapshot(items, { food: 99, bait: 99 }));
 
@@ -4092,11 +4100,23 @@ describe('BoatWorld helpers', () => {
         const playCount = controllerPlay.mock.calls.length;
         const borrowCount = borrowActor.mock.calls.length;
         const beginCount = begin.mock.calls.length;
+        const dedicatedCount = dedicatedPlay.mock.calls.length;
         const use = world.playEventItemUse(
           event.id,
           choice.id,
           item.instanceId,
         );
+
+        if (event.id === 'wreckage' && choice.id === 'dive') {
+          expect(controllerPlay).toHaveBeenCalledTimes(playCount);
+          expect(borrowActor).toHaveBeenCalledTimes(borrowCount);
+          expect(begin).toHaveBeenCalledTimes(beginCount);
+          expect(dedicatedPlay).toHaveBeenCalledTimes(dedicatedCount + 1);
+          world.update(10, 10);
+          world.clearEvent();
+          await use;
+          continue;
+        }
 
         expect(controllerPlay).toHaveBeenCalledTimes(playCount + 1);
         expect(borrowActor).toHaveBeenCalledTimes(borrowCount + 1);
@@ -4114,6 +4134,7 @@ describe('BoatWorld helpers', () => {
     }
 
     world.dispose();
+    dedicatedPlay.mockRestore();
     begin.mockRestore();
     borrowActor.mockRestore();
     controllerPlay.mockRestore();
@@ -6776,7 +6797,6 @@ describe('BoatWorld helpers', () => {
 
     const pending = world.playDive(scuba.instanceId, {
       onWaterImpact: impact,
-      revealUnderwaterScene: false,
     });
     expect(world.scene.getObjectByName('boat-supply:scubaSet')?.visible).toBe(false);
     expect(world.scene.getObjectByName('glasses25.001')).not.toBeUndefined();
@@ -6830,11 +6850,9 @@ describe('BoatWorld helpers', () => {
 
     const first = world.playDive(scuba.instanceId, {
       onWaterImpact: () => undefined,
-      revealUnderwaterScene: false,
     });
     const second = world.playDive(secondId, {
       onWaterImpact: () => undefined,
-      revealUnderwaterScene: false,
     });
     await first;
 
@@ -6865,9 +6883,14 @@ describe('BoatWorld helpers', () => {
     const initialPosition = camera.position.clone();
     const pending = world.playDive(scuba.instanceId, {
       onWaterImpact: () => undefined,
-      revealUnderwaterScene: false,
+      postEntryHold: {
+        durationSeconds: 3,
+        cameraWorldPosition: new Vector3(4.2, -3.4, -4.3),
+        cameraWorldTarget: new Vector3(0, -7.2, -11.5),
+        onStart: () => undefined,
+      },
     });
-    world.update(1.1, 1.1);
+    world.update(5.8, 5.8);
 
     world.setDocumentHidden(true);
     await pending;
@@ -6893,7 +6916,6 @@ describe('BoatWorld helpers', () => {
       world.syncInventory(snapshot([scuba]));
       const pending = world.playDive(scuba.instanceId, {
         onWaterImpact: () => undefined,
-        revealUnderwaterScene: false,
       });
 
       world.dispose();
@@ -6910,6 +6932,144 @@ describe('BoatWorld helpers', () => {
           propModels.dispose();
         }
       }
+    }
+  });
+
+  it('keeps the Wreckage hold camera and restores real roots when hidden', async () => {
+    const scuba = savedItem('scubaSet');
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+      [scuba],
+      undefined,
+      undefined,
+      'low',
+      createTestEventModels(),
+    );
+    world.syncInventory(snapshot([scuba]));
+    world.stageEvent({ eventId: 'wreckage', targetInstanceId: null, variantSeed: 17 });
+    const focus = world.enterFocusedEventView('wreckage');
+    world.update(1.1, 1.1);
+    await focus;
+
+    const dive = world.playEventItemUse('wreckage', 'dive', scuba.instanceId);
+    world.update(6.9, 5.8);
+
+    const holdPosition = camera.getWorldPosition(new Vector3());
+    expect(holdPosition.x).toBeCloseTo(4.2);
+    expect(holdPosition.y).toBeCloseTo(-3.4);
+    expect(holdPosition.z).toBeCloseTo(-4.3);
+    expect(world.scene.getObjectByName('dedicated-event-boat-effects')?.visible).toBe(false);
+    expect(world.scene.getObjectByName('dedicated-event-camera-effects')?.visible).toBe(false);
+    expect(world.scene.getObjectByName('event-item-effects')?.visible).toBe(false);
+    expect(world.scene.getObjectByName('wreckage-wreck')?.visible).toBe(true);
+
+    world.update(7, 0.1);
+    const nextHoldPosition = camera.getWorldPosition(new Vector3());
+    expect(nextHoldPosition.x).toBeCloseTo(4.2);
+    expect(nextHoldPosition.y).toBeCloseTo(-3.4);
+    expect(nextHoldPosition.z).toBeCloseTo(-4.3);
+
+    world.setDocumentHidden(true);
+    await dive;
+    expect(world.scene.getObjectByName('dedicated-event-boat-effects')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('dedicated-event-camera-effects')?.visible).toBe(true);
+    expect(world.scene.getObjectByName('event-item-effects')?.visible).toBe(true);
+
+    world.clearEvent();
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('projects clickable Wreckage debris on the right side of the default boat view', async () => {
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      createTestEventModels(),
+    );
+    try {
+      world.stageEvent({ eventId: 'wreckage', targetInstanceId: null, variantSeed: 17 });
+      const reveal = world.revealEvent('wreckage');
+      world.update(1.2, 1.2);
+      await reveal;
+
+      const interaction = world.projectInteractionAnchors(1280, 720)
+        .find(({ id }) => id === 'event:wreckage');
+
+      expect(interaction).toEqual(expect.objectContaining({
+        id: 'event:wreckage',
+        eventFocusId: 'wreckage',
+        tooltip: false,
+        visible: true,
+      }));
+      if (interaction?.hitArea === undefined) {
+        throw new Error('Projected Wreckage debris requires a click area.');
+      }
+      expect(interaction).not.toHaveProperty('eventChoiceId');
+      expect(interaction.x).toBeGreaterThan(640);
+      expect(interaction.x).toBeLessThan(1280);
+      expect(interaction.y).toBeGreaterThan(0);
+      expect(interaction.y).toBeLessThan(720);
+      expect(interaction.hitArea.width).toBeGreaterThanOrEqual(96);
+      expect(interaction.hitArea.height).toBeGreaterThanOrEqual(72);
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
+  it('runs the real Carlitos visit through the Wreckage presentation boundary', async () => {
+    const propModels = createTestPropModels();
+    const furniture = createTestShipFurniture();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      furniture,
+      'low',
+      createTestEventModels(),
+    );
+    try {
+      world.syncInventory(snapshot([], {
+        carlitos: {
+          alive: true, energy: 3, hunger: 5, sickness: 0, unhappiness: 0,
+          pettedToday: false, deathCause: null,
+        },
+      }));
+      world.stageEvent({ eventId: 'wreckage', targetInstanceId: null, variantSeed: 17 });
+      const companion = world.scene.getObjectByName('carlitos-companion')!;
+      const basePosition = companion.position.clone();
+      let finished = false;
+
+      const visit = world.playEventChoice('wreckage', 'delegate-carlitos')
+        .then(() => { finished = true; });
+      await Promise.resolve();
+      expect(finished).toBe(false);
+
+      world.update(0.35, 0.35);
+      expect(companion.position.equals(basePosition)).toBe(false);
+      expect(finished).toBe(false);
+
+      world.update(1.5, 1.15);
+      await visit;
+      expect(finished).toBe(true);
+      expect(companion.position.toArray()).toEqual(basePosition.toArray());
+    } finally {
+      world.dispose();
+      furniture.dispose();
+      propModels.dispose();
     }
   });
 
@@ -7977,7 +8137,7 @@ describe('BoatWorld helpers', () => {
       buoyancy: BoatBuoyancy;
       cameraController: {
         update(delta: number): void;
-        updateDriftingItemView(delta: number, target: Object3D | null): void;
+        updateFocusedEventView(delta: number, target: Object3D | null): void;
       };
       hangingLantern: { update(...args: unknown[]): void };
       diveController: DivePresentationController;
@@ -8033,7 +8193,7 @@ describe('BoatWorld helpers', () => {
     vi.spyOn(internals.eventPresentationHost, 'update').mockImplementation(() => {
       order.push('event');
     });
-    vi.spyOn(internals.cameraController, 'updateDriftingItemView').mockImplementation(() => {
+    vi.spyOn(internals.cameraController, 'updateFocusedEventView').mockImplementation(() => {
       order.push('drifting-camera');
     });
     vi.spyOn(internals.carlitosDelegation, 'update').mockImplementation(() => {

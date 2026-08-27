@@ -309,8 +309,8 @@ export const createDedicatedAdapter: EventPresentationAdapterFactory = (
     playChoice: (choice) => coordinator.playChoice(choice.choiceId),
     playItemUse: (choiceId, instanceId) => coordinator.playItemUse(choiceId, instanceId),
     itemAimTarget: () => coordinator.itemAimTarget(),
-    interactionTargets: noInteractionTargets,
-    interactionRoot: noRoot,
+    interactionTargets: () => coordinator.interactionTargets(),
+    interactionRoot: (id) => coordinator.interactionRoot(id),
     resultRoot: noRoot,
     react: ({ result }) => {
       if (result === null) {
