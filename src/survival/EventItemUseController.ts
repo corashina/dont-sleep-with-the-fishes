@@ -216,7 +216,11 @@ export class EventItemUseController {
     this.applyRequestSample(reaction.request);
     if (reaction.elapsed < reaction.duration) return;
     this.activeReaction = null;
-    this.release(reaction.actor, reaction.request, true);
+    this.release(
+      reaction.actor,
+      reaction.request,
+      reaction.disposition !== 'recover' || reaction.request.itemId !== 'knife',
+    );
     this.held = null;
     reaction.resolve();
   }
