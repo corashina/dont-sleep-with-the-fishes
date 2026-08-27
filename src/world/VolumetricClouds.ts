@@ -80,7 +80,7 @@ const fragmentShader = `
     float layerHeight = max(uTopHeight - uBaseHeight, 0.001);
     float heightFraction = clamp(
       (samplePosition.y - uBaseHeight) / layerHeight,
-      0.0,
+      -0.12,
       1.0
     );
     vec3 wind = vec3(uWindOffset.x, 0.0, uWindOffset.y);
@@ -128,15 +128,15 @@ const fragmentShader = `
       uNoiseTexture,
       samplePosition.zyx * uDetailScale - wind * uDetailScale * 1.37
     ).r;
-    float baseRipple = (lobeNoise - 0.5) * 0.035
-      + (detail - 0.5) * 0.015;
+    float baseRipple = (lobeNoise - 0.5) * 0.08
+      + (detail - 0.5) * 0.035;
     float baseLift = (
       1.0 - smoothstep(0.18, 0.72, cloudGroup)
-    ) * 0.055;
-    float baseHeight = clamp(0.018 + baseRipple + baseLift, 0.0, 0.09);
+    ) * 0.075;
+    float baseHeight = clamp(baseRipple + baseLift, -0.055, 0.1);
     float lowerEdge = smoothstep(
-      baseHeight - 0.02,
-      baseHeight + 0.04,
+      baseHeight,
+      baseHeight + 0.035,
       heightFraction
     );
     float sideField = cloudGroup + (detail - 0.5) * 0.28;
@@ -165,9 +165,11 @@ const fragmentShader = `
       return;
     }
 
+    float cloudLayerHeight = max(uTopHeight - uBaseHeight, 0.001);
+    float cloudRayBase = uBaseHeight - cloudLayerHeight * 0.08;
     float travel = max(
       0.0,
-      (uBaseHeight - uCameraPosition.y) / rayDirection.y
+      (cloudRayBase - uCameraPosition.y) / rayDirection.y
     );
     float cloudDistance = min(
       (uTopHeight - uCameraPosition.y) / rayDirection.y,
