@@ -20,6 +20,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import { OceanRenderer } from '../ocean/OceanRenderer';
+import type { VisualQuality } from '../rendering/visualQuality';
 import type { WaterQuality } from '../rendering/waterQuality';
 import {
   createWaterExclusion,
@@ -56,6 +57,10 @@ import {
 } from '../world/SceneResources';
 import { alignDirectionalLightWithSun } from '../world/celestialLight';
 import { Skybox } from '../world/Skybox';
+import {
+  tryCreateVolumetricClouds,
+  type VolumetricClouds,
+} from '../world/VolumetricClouds';
 import { WeatherEffects } from '../world/WeatherEffects';
 import type { SkyPalette, SkyState } from '../world/skyPalette';
 import {
@@ -185,6 +190,14 @@ interface ActiveSequence {
   resolve: () => void;
 }
 
+interface VolumetricCloudFrame {
+  time: number;
+  delta: number;
+  cameraPosition: Readonly<Vector3>;
+  state: Readonly<SkyState>;
+  palette: Readonly<SkyPalette>;
+}
+
 const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.min(maximum, Math.max(minimum, value));
 
@@ -238,6 +251,8 @@ export class BoatWorld {
   private readonly camera: PerspectiveCamera;
   private readonly ocean: OceanRenderer;
   private readonly sky: Skybox;
+  private readonly volumetricClouds!: VolumetricClouds | null;
+  private readonly volumetricCloudFrame!: VolumetricCloudFrame | null;
   private readonly weatherEffects: WeatherEffects;
   private readonly motionRig = new Group();
   private readonly cueCameraRig = new Group();
@@ -394,6 +409,8 @@ export class BoatWorld {
     models?: SurvivalEventModels | EventModelLibrary | FocusedEventPresentationFactories,
     eventModels?: EventModelLibrary,
     focusedEventFactories: FocusedEventPresentationFactories = {},
+    visualQuality: VisualQuality = 'low',
+    createClouds: typeof tryCreateVolumetricClouds = tryCreateVolumetricClouds,
   ) {
     const resolvedFocusedFactories = isFocusedEventFactoryMap(models)
       ? models
@@ -423,6 +440,7 @@ export class BoatWorld {
     this.originalCameraPosition = camera.position.clone();
     this.originalCameraQuaternion = camera.quaternion.clone();
     let sky: Skybox | null = null;
+    let volumetricClouds: VolumetricClouds | null = null;
     let weatherEffects: WeatherEffects | null = null;
     let sleepPillow: SleepPillow | null = null;
     let hangingLantern: HangingLantern | null = null;
@@ -446,6 +464,15 @@ export class BoatWorld {
         },
       );
       this.sky = sky;
+      volumetricClouds = createClouds(this.scene, visualQuality);
+      this.volumetricClouds = volumetricClouds;
+      this.volumetricCloudFrame = volumetricClouds === null ? null : {
+        time: 0,
+        delta: 0,
+        cameraPosition: this.worldCameraPosition,
+        state: this.skyState,
+        palette: sky.palette,
+      };
       weatherEffects = new WeatherEffects(this.scene);
       this.weatherEffects = weatherEffects;
       weatherEffects.setLightningStrikeListener(this.queueLightningStrike);
@@ -649,6 +676,7 @@ export class BoatWorld {
           () => hangingLantern?.dispose(),
           () => sleepPillow?.dispose(),
           () => weatherEffects?.dispose(),
+          () => volumetricClouds?.dispose(),
           () => sky?.dispose(),
           () => this.scene.clear(),
           () => camera.removeFromParent(),
@@ -855,6 +883,20 @@ export class BoatWorld {
   setWaterQuality(value: WaterQuality): void {
     if (this.disposed) return;
     this.ocean.setQuality(value);
+  }
+
+  setVolumetricCloudsEnabled(enabled: boolean): void {
+    if (this.disposed) return;
+    this.volumetricClouds?.setEnabled(enabled);
+  }
+
+  setVisualQuality(value: VisualQuality): void {
+    if (this.disposed) return;
+    this.volumetricClouds?.setQuality(value);
+  }
+
+  volumetricCloudsAvailable(): boolean {
+    return !this.disposed && this.volumetricClouds !== null;
   }
 
   syncInventory(snapshot: SurvivalSnapshot): void {
@@ -1394,6 +1436,15 @@ export class BoatWorld {
       this.skyState,
       this.worldCameraPosition,
     );
+    const cloudFrame = this.volumetricCloudFrame;
+    let cloudStrength = 0;
+    if (cloudFrame !== null && this.volumetricClouds !== null) {
+      cloudFrame.time = time;
+      cloudFrame.delta = delta;
+      cloudFrame.palette = this.sky.palette;
+      cloudStrength = this.volumetricClouds.update(cloudFrame);
+    }
+    this.sky.setCloudLayerStrength(1 - cloudStrength);
     this.applyBaseLighting(this.sky.palette);
     if (this.settledCue) this.applyCue(this.settledCue, 1, time);
     this.supplyDisplay.updatePropAnimations(delta);
@@ -1511,6 +1562,7 @@ export class BoatWorld {
       () => this.ocean.dispose(),
       () => this.weatherEffects.dispose(),
       () => this.fishingPresentation.disposeParticles(),
+      () => this.volumetricClouds?.dispose(),
       () => this.sky.dispose(),
       () => this.fishingPresentation.detach(),
       () => this.scene.remove(

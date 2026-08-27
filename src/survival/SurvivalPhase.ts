@@ -7,7 +7,10 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import type { SceneRenderer, SurvivalVisualState } from '../rendering/SceneRenderer';
-import { createVisualQualityPreference } from '../rendering/visualQuality';
+import {
+  createVisualQualityPreference,
+  type VisualQuality,
+} from '../rendering/visualQuality';
 import {
   createWaterQualityPreference,
   type WaterQuality,
@@ -272,6 +275,10 @@ export class SurvivalPhase implements GamePhase {
         context.lifeboatAssets,
         context.shipFurniture,
         context.waterQuality?.get() ?? 'low',
+        undefined,
+        undefined,
+        {},
+        context.visualQuality.get(),
       );
       this.initialize(
         context,
@@ -492,6 +499,20 @@ export class SurvivalPhase implements GamePhase {
   setWaterQuality(value: WaterQuality): void {
     if (this.disposed) return;
     this.world.setWaterQuality?.(value);
+  }
+
+  setVisualQuality(value: VisualQuality): void {
+    if (this.disposed) return;
+    this.world.setVisualQuality?.(value);
+  }
+
+  setVolumetricCloudsEnabled(enabled: boolean): void {
+    if (this.disposed) return;
+    this.world.setVolumetricCloudsEnabled?.(enabled);
+  }
+
+  getVolumetricCloudsAvailable(): boolean {
+    return !this.disposed && (this.world.volumetricCloudsAvailable?.() ?? false);
   }
 
   getPresentationWeather(): PresentationWeatherId {
