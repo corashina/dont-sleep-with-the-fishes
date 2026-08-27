@@ -321,7 +321,9 @@ export class BoatInteractionProjector {
         label: target.label,
         description: target.description,
         tooltip: target.tooltip,
-        eventChoiceId: target.choiceId,
+        ...(target.choiceId === undefined
+          ? { eventFocusId: target.focusEventId }
+          : { eventChoiceId: target.choiceId }),
         itemType: null,
         toolId: null,
         action: null,

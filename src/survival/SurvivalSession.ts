@@ -866,7 +866,7 @@ export class SurvivalSession {
     const after = this.resourceValues();
     const deltas = this.appliedResourceDelta(before, after);
     const cue = this.presentationCue('none');
-    const rewardSummary = this.driftingItemRewardSummary(
+    const rewardSummary = this.eventRewardSummary(
       event.id,
       choiceId,
       resolved,
@@ -1264,7 +1264,7 @@ export class SurvivalSession {
     this.openEvent(event);
   }
 
-  private driftingItemRewardSummary(
+  private eventRewardSummary(
     eventId: string,
     choiceId: string,
     resolved: WeightedEventOutcome,
@@ -1272,20 +1272,35 @@ export class SurvivalSession {
   ): RewardSummary | undefined {
     const driftingCargo = eventId === 'drifting-supplies'
       && (choiceId === 'retrieve' || choiceId === 'delegate-carlitos');
-    if (!driftingCargo) return undefined;
+    const wreckage = eventId === 'wreckage'
+      && (choiceId === 'search' || choiceId === 'delegate-carlitos' || choiceId === 'dive');
+    if (!driftingCargo && !wreckage) return undefined;
     if (fallbackFoodGranted) return Object.freeze({ kind: 'resource', id: 'food', quantity: 1 });
     const added = resolved.effects.resources?.find(
       ({ operation, resource }) => operation === 'add'
         && (resource === 'food' || resource === 'bait'
-          || resource === 'repairMaterial'),
+          || ((driftingCargo || wreckage) && resource === 'repairMaterial')),
     );
     if (added !== undefined && typeof added.value === 'number') {
       const id = added.resource;
-      if (id === 'food' || id === 'bait' || id === 'repairMaterial') {
+      if (
+        id === 'food'
+        || id === 'bait'
+        || ((driftingCargo || wreckage) && id === 'repairMaterial')
+      ) {
         return Object.freeze({ kind: 'resource', id, quantity: added.value });
       }
     }
-    return Object.freeze({ kind: 'item', id: 'energyBar', quantity: 1 });
+    if (wreckage) {
+      const gained = resolved.effects.items?.find(({ kind }) => kind === 'gain');
+      if (gained?.kind === 'gain') {
+        return Object.freeze({ kind: 'item', id: gained.itemId, quantity: 1 });
+      }
+      return undefined;
+    }
+    return driftingCargo
+      ? Object.freeze({ kind: 'item', id: 'energyBar', quantity: 1 })
+      : undefined;
   }
 
   private recordJournalEvent(

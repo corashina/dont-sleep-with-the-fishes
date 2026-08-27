@@ -89,9 +89,10 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
 
 export const EVENT_MODEL_IDS = Object.freeze([
   'fogMan', 'ghost', 'siren', 'sirenRock',
-  'leakPlanks', 'schoolFish', 'snatcher', 'shark', 'deathStareBlob',
+  'leakPlanks', 'schoolFish', 'snatcher', 'anglerFish', 'shark', 'deathStareBlob',
   'tornadoCore',
   'containerShip',
+  'wreckageBox', 'wreckageCrate', 'wreckagePallet',
 ] as const);
 
 export type EventModelId = typeof EVENT_MODEL_IDS[number];
@@ -163,6 +164,12 @@ const PRESENTATION = {
     offset: [0, 1.25, 0],
     maxTriangles: 4_000,
   },
+  anglerFish: {
+    targetLongestDimension: 1.4,
+    rotation: [0, -Math.PI / 2, 0],
+    offset: [0, 0, 0],
+    maxTriangles: 4_000,
+  },
   shark: {
     targetLongestDimension: 1.2,
     rotation: [0, 0, 0],
@@ -186,6 +193,24 @@ const PRESENTATION = {
     rotation: [0, 0, 0],
     offset: [0, 0, 0],
     maxTriangles: 2_500,
+  },
+  wreckageBox: {
+    targetLongestDimension: 0.9,
+    rotation: [0, 0, 0],
+    offset: [0, 0, 0],
+    maxTriangles: 2_000,
+  },
+  wreckageCrate: {
+    targetLongestDimension: 1.05,
+    rotation: [0, 0, 0],
+    offset: [0, 0, 0],
+    maxTriangles: 2_000,
+  },
+  wreckagePallet: {
+    targetLongestDimension: 1.8,
+    rotation: [0, 0, 0],
+    offset: [0, 0, 0],
+    maxTriangles: 3_000,
   },
 } as const satisfies Readonly<Record<
   EventModelId,
@@ -239,10 +264,14 @@ const generatedMetadata = {
   leakPlanks: checkedMetadata('leakPlanks', generatedMetadataJson.leakPlanks),
   schoolFish: checkedMetadata('schoolFish', generatedMetadataJson.schoolFish),
   snatcher: checkedMetadata('snatcher', generatedMetadataJson.snatcher),
+  anglerFish: checkedMetadata('anglerFish', generatedMetadataJson.anglerFish),
   shark: checkedMetadata('shark', generatedMetadataJson.shark),
   deathStareBlob: checkedMetadata('deathStareBlob', generatedMetadataJson.deathStareBlob),
   tornadoCore: checkedMetadata('tornadoCore', generatedMetadataJson.tornadoCore),
   containerShip: FOCUSED_EVENT_MODEL_METADATA.containerShip,
+  wreckageBox: checkedMetadata('wreckageBox', generatedMetadataJson.wreckageBox),
+  wreckageCrate: checkedMetadata('wreckageCrate', generatedMetadataJson.wreckageCrate),
+  wreckagePallet: checkedMetadata('wreckagePallet', generatedMetadataJson.wreckagePallet),
 } satisfies Readonly<Record<EventModelId, EventModelMetadata>>;
 
 function modelUrl(id: EventModelId): string {

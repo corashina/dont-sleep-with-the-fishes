@@ -116,10 +116,14 @@ describe('EventModelLibrary', () => {
       'leakPlanks',
       'schoolFish',
       'snatcher',
+      'anglerFish',
       'shark',
       'deathStareBlob',
       'tornadoCore',
       'containerShip',
+      'wreckageBox',
+      'wreckageCrate',
+      'wreckagePallet',
     ]);
   });
 
@@ -133,6 +137,38 @@ describe('EventModelLibrary', () => {
         animations: [],
       },
     });
+  });
+
+  it('defines the approved Wreckage debris models', () => {
+    expect(EVENT_MODEL_IDS).toEqual(expect.arrayContaining([
+      'wreckageBox',
+      'wreckageCrate',
+      'wreckagePallet',
+    ]));
+
+    expect(EVENT_MODEL_SPECS.wreckageBox).toMatchObject({
+      targetLongestDimension: 0.9,
+      rotation: [0, 0, 0],
+      offset: [0, 0, 0],
+    });
+    expect(EVENT_MODEL_SPECS.wreckageCrate).toMatchObject({
+      targetLongestDimension: 1.05,
+      rotation: [0, 0, 0],
+      offset: [0, 0, 0],
+    });
+    expect(EVENT_MODEL_SPECS.wreckagePallet).toMatchObject({
+      targetLongestDimension: 1.8,
+      rotation: [0, 0, 0],
+      offset: [0, 0, 0],
+    });
+  });
+
+  it('turns the Anglerfish nose toward presentation forward', () => {
+    const sourceNose = new Vector3(1, 0, 0);
+    sourceNose.applyEuler(new Euler(...EVENT_MODEL_SPECS.anglerFish.rotation));
+
+    expect(sourceNose.x).toBeCloseTo(0);
+    expect(sourceNose.z).toBeCloseTo(1);
   });
 
   it('turns the school fish nose toward its choreography forward', () => {

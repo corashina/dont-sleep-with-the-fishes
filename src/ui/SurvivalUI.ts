@@ -5,7 +5,7 @@ import {
 import type { EndingRecord } from '../game/ending';
 import type { JournalEntry } from '../survival/journalRecords';
 import type { BoatInteractionAnchor, ProjectedBoatBounds } from '../survival/BoatInteraction';
-import type { DriftingItemEventId } from '../survival/eventCatalog';
+import type { InspectableEventId } from '../survival/eventCatalog';
 import type {
   ActionOutcome,
   DayActionId,
@@ -17,7 +17,7 @@ import type {
 import type { SurvivalSnapshot } from '../survival/survivalSnapshot';
 import { createElementRequirement } from './dom';
 import { BoatAnchorView } from './BoatAnchorView';
-import { DriftingItemView, type DriftingItemFocusView } from './DriftingItemView';
+import { FocusedEventView } from './FocusedEventView';
 import { ModalFocusManager, type ModalInitialFocus } from './ModalFocusManager';
 import { SurvivalCoverView } from './SurvivalCoverView';
 import type { RewardResultView, SleepCoverProfile } from './SurvivalCoverViewModel';
@@ -30,7 +30,12 @@ import {
 import { SurvivalHudView } from './SurvivalHudView';
 import { SurvivalJournalView } from './SurvivalJournalView';
 import { SurvivalModalViews } from './SurvivalModalViews';
-import { DAY_ACTION_IDS, type EventContextChoice } from './SurvivalUiViewModel';
+import {
+  DAY_ACTION_IDS,
+  type EventContextChoice,
+  type FocusedEventChoiceSelection,
+  type FocusedEventFocusView,
+} from './SurvivalUiViewModel';
 import { runCleanupSteps } from './UiCleanup';
 
 const ROUTINE_DIALOG_MARGIN = 20;
@@ -68,8 +73,9 @@ export class SurvivalUI {
   onFishingReel: (() => boolean) | null = null;
   onFishingResultContinue: (() => void) | null = null;
   onFishingViewExit: (() => void) | null = null;
-  onDriftingItemSelect: ((eventId: DriftingItemEventId) => void) | null = null;
-  onDriftingItemBack: (() => void) | null = null;
+  onFocusedEventSelect: ((eventId: InspectableEventId) => void) | null = null;
+  onFocusedEventChoice: ((choice: FocusedEventChoiceSelection) => void) | null = null;
+  onFocusedEventBack: (() => void) | null = null;
   onCameraTurn: (() => void) | null = null;
 
   private readonly root: HTMLDivElement;
@@ -78,7 +84,7 @@ export class SurvivalUI {
   private readonly eventView: SurvivalEventView;
   private readonly coverView: SurvivalCoverView;
   private readonly fishingView: SurvivalFishingView;
-  private readonly driftingView: DriftingItemView;
+  private readonly focusedEventView: FocusedEventView;
   private readonly journalView: SurvivalJournalView;
   private readonly modalViews: SurvivalModalViews;
   private readonly announcer: HTMLElement;
@@ -110,7 +116,7 @@ export class SurvivalUI {
       this.root,
       () => this.anchorView.anchor('fishing-tools'),
     );
-    this.driftingView = new DriftingItemView(this.root);
+    this.focusedEventView = new FocusedEventView(this.root);
     this.journalView = new SurvivalJournalView();
     this.modalViews = new SurvivalModalViews();
     const announcer = requireElement<HTMLElement>(this.root, '[data-survival-announcer]');
@@ -123,7 +129,7 @@ export class SurvivalUI {
       ...this.hudView.roots,
       ...this.anchorView.roots,
       ...this.fishingView.roots,
-      this.driftingView.root,
+      this.focusedEventView.root,
       this.modalViews.repairRoot,
       this.eventView.caption,
       this.journalView.root,
@@ -138,7 +144,7 @@ export class SurvivalUI {
       this.modalViews.repairRoot,
       this.modalViews.endingRoot,
       this.coverView.resultRoot,
-      this.driftingView.root,
+      this.focusedEventView.root,
       this.fishingView.resultRoot,
       this.fishingView.interactionRoot,
     ];
@@ -155,7 +161,7 @@ export class SurvivalUI {
         [this.modalViews.repairRoot, this.modalViews.repairTitle],
         [this.modalViews.endingRoot, this.modalViews.endingTitle],
         [this.coverView.resultRoot, this.coverView.resultClose],
-        [this.driftingView.root, () => this.driftingView.initialFocus()],
+        [this.focusedEventView.root, () => this.focusedEventView.initialFocus()],
         [this.fishingView.resultRoot, this.fishingView.resultContinue],
         [this.fishingView.interactionRoot, () => this.fishingView.initialFocus()],
       ]),
@@ -179,7 +185,7 @@ export class SurvivalUI {
       if (!this.disposed) this.onEventChoice(choiceId);
     };
     this.anchorView.onEventFocus = (eventId) => {
-      if (!this.disposed) this.onDriftingItemSelect?.(eventId);
+      if (!this.disposed) this.onFocusedEventSelect?.(eventId);
     };
     this.anchorView.onHighlight = (anchorId) => {
       if (!this.disposed) this.onAnchorHighlight(anchorId);
@@ -217,15 +223,15 @@ export class SurvivalUI {
     this.fishingView.onInteractionHide = () => this.hideLayer(this.fishingView.interactionRoot);
     this.fishingView.onResultShow = () => this.showLayer(this.fishingView.resultRoot);
     this.fishingView.onResultHide = () => this.hideLayer(this.fishingView.resultRoot);
-    this.driftingView.onChoice = (choiceId) => {
-      if (!this.disposed) this.onEventChoice(choiceId);
+    this.focusedEventView.onChoice = (choice) => {
+      if (!this.disposed) this.onFocusedEventChoice?.(choice);
     };
-    this.driftingView.onBack = () => {
-      if (!this.disposed) this.onDriftingItemBack?.();
+    this.focusedEventView.onBack = () => {
+      if (!this.disposed) this.onFocusedEventBack?.();
     };
-    this.driftingView.canUse = () => this.modalFocus.topmostModal() === this.driftingView.root;
-    this.driftingView.onShow = () => this.showLayer(this.driftingView.root);
-    this.driftingView.onHide = () => this.hideLayer(this.driftingView.root);
+    this.focusedEventView.canUse = () => this.modalFocus.topmostModal() === this.focusedEventView.root;
+    this.focusedEventView.onShow = () => this.showLayer(this.focusedEventView.root);
+    this.focusedEventView.onHide = () => this.hideLayer(this.focusedEventView.root);
     this.journalView.onClose = () => {
       if (!this.disposed) this.onJournalClose();
     };
@@ -333,13 +339,13 @@ export class SurvivalUI {
   playEventChoiceBeat(choiceId: EventResponseId): Promise<void> {
     if (this.disposed || !this.eventView.isActive()) return Promise.resolve();
     const button = this.eventView.choiceButton(choiceId)
-      ?? this.driftingView.choiceButton(choiceId)
+      ?? this.focusedEventView.choiceButton(choiceId)
       ?? this.anchorView.eventChoiceButton(choiceId)
       ?? null;
     const beat = this.eventView.playChoiceBeat(choiceId, button);
     if (this.eventView.selectedChoice() === choiceId) {
-      if (button !== null && this.driftingView.containsChoice(button)) {
-        this.driftingView.setSelectedChoice(choiceId);
+      if (button !== null && this.focusedEventView.containsChoice(button)) {
+        this.focusedEventView.setSelectedChoice(choiceId);
       }
       this.anchorView.setEventChoiceSelection(choiceId);
     }
@@ -429,16 +435,16 @@ export class SurvivalUI {
     if (!this.disposed) this.fishingView.hideResult();
   }
 
-  showDriftingItemFocus(view: DriftingItemFocusView): void {
-    if (!this.disposed) this.driftingView.show(view);
+  showFocusedEvent(view: FocusedEventFocusView): void {
+    if (!this.disposed) this.focusedEventView.show(view);
   }
 
-  hideDriftingItemFocus(): void {
-    if (!this.disposed) this.driftingView.hide();
+  hideFocusedEvent(): void {
+    if (!this.disposed) this.focusedEventView.hide();
   }
 
-  updateDriftingItemFocusTarget(target: ProjectedBoatBounds | null): void {
-    if (!this.disposed) this.driftingView.updateTarget(target);
+  updateFocusedEventTarget(target: ProjectedBoatBounds | null): void {
+    if (!this.disposed) this.focusedEventView.updateTarget(target);
   }
 
   setFishingViewExitVisible(visible: boolean): void {
@@ -501,10 +507,10 @@ export class SurvivalUI {
     this.hudView.setBusy(busy);
     this.anchorView.setBusy(busy);
     this.eventView.setBusy(busy);
-    this.driftingView.setBusy(busy);
+    this.focusedEventView.setBusy(busy);
     this.syncCommandState();
-    if (!busy && this.modalFocus.topmostModal() === this.driftingView.root) {
-      this.modalFocus.focusInitial(this.driftingView.root);
+    if (!busy && this.modalFocus.topmostModal() === this.focusedEventView.root) {
+      this.modalFocus.focusInitial(this.focusedEventView.root);
     }
   }
 
@@ -548,7 +554,7 @@ export class SurvivalUI {
         this.coverView.clearBadSleepCueForCleanup();
       },
       () => { this.fishingView.beginDispose(); },
-      () => { this.driftingView.beginDispose(); },
+      () => { this.focusedEventView.beginDispose(); },
       () => { this.journalView.beginDispose(); },
       () => { this.modalViews.beginDispose(); },
       () => this.eventView.clearChoicesForDispose(),
@@ -561,7 +567,7 @@ export class SurvivalUI {
       () => this.coverView.settleCoveredSceneWait(),
       () => this.coverView.settleSleepHold(),
       () => this.fishingView.cancelAnnouncementForDispose(),
-      () => this.hideLayer(this.driftingView.root),
+      () => this.hideLayer(this.focusedEventView.root),
     ];
     if (fishingWasVisible) {
       cleanupSteps.push(
@@ -579,7 +585,7 @@ export class SurvivalUI {
       () => this.eventView.removeListenersForDispose(),
       () => this.coverView.removeListenersForDispose(),
       () => this.fishingView.removeListenersForDispose(),
-      () => this.driftingView.removeListenersForDispose(),
+      () => this.focusedEventView.removeListenersForDispose(),
       () => this.journalView.removeListenersForDispose(),
       () => this.modalViews.removeListenersForDispose(),
       () => document.removeEventListener('keydown', this.handleKeyDown),
@@ -597,13 +603,14 @@ export class SurvivalUI {
       () => { this.onFishingReel = null; },
       () => { this.onFishingResultContinue = null; },
       () => { this.onFishingViewExit = null; },
-      () => { this.onDriftingItemSelect = null; },
-      () => { this.onDriftingItemBack = null; },
+      () => { this.onFocusedEventSelect = null; },
+      () => { this.onFocusedEventChoice = null; },
+      () => { this.onFocusedEventBack = null; },
       () => { this.onCameraTurn = null; },
       () => this.eventView.resetCallbacksForDispose(),
       () => this.coverView.resetCallbacksForDispose(),
       () => this.fishingView.resetCallbacksForDispose(),
-      () => this.driftingView.resetCallbacksForDispose(),
+      () => this.focusedEventView.resetCallbacksForDispose(),
       () => this.journalView.resetCallbacksForDispose(),
       () => this.modalViews.resetCallbacksForDispose(),
       () => this.root.remove(),
@@ -873,6 +880,6 @@ export class SurvivalUI {
     }
     if (this.anchorView.handleCommandKeyDown(event)) return;
     if (this.eventView.handleKeyDown(event)) return;
-    if (topmostModal === this.driftingView.root) this.driftingView.handleKeyDown(event);
+    if (topmostModal === this.focusedEventView.root) this.focusedEventView.handleKeyDown(event);
   };
 }

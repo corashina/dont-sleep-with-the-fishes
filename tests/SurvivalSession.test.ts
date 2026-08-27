@@ -468,7 +468,11 @@ describe('SurvivalSession Carlitos events', () => {
       initialEventId: 'wreckage',
     });
     expect(session.resolveEvent({ kind: 'choice', choiceId: 'search' }))
-      .toMatchObject({ accepted: true, deltas: { energy: -2, repairMaterial: 2 } });
+      .toMatchObject({
+        accepted: true,
+        deltas: { energy: -2, repairMaterial: 2 },
+        rewardSummary: { kind: 'resource', id: 'repairMaterial', quantity: 2 },
+      });
   });
 
   it('requires usable scuba gear and three energy for the Wreckage dive', () => {
@@ -491,6 +495,67 @@ describe('SurvivalSession Carlitos events', () => {
     expect(collapse.snapshot().inventory['scubaSet-1']?.condition).toBe('broken');
   });
 
+  it('summarizes Wreckage item gains and occupied-slot food fallbacks', () => {
+    const gained = new SurvivalSession(saved('scubaSet'), {
+      seed: 75,
+      random: sequenceRandom([0]),
+      initial: { day: 4, energy: 3 },
+      initialEventId: 'wreckage',
+    });
+    expect(gained.resolveEvent({
+      kind: 'item', choiceId: 'dive', instanceId: 'scubaSet-1',
+    })).toMatchObject({
+      rewardSummary: { kind: 'item', id: 'medicalKit', quantity: 1 },
+    });
+
+    const occupied = new SurvivalSession(saved('scubaSet', 'medicalKit'), {
+      seed: 76,
+      random: sequenceRandom([0]),
+      initial: { day: 4, energy: 3 },
+      initialEventId: 'wreckage',
+    });
+    expect(occupied.resolveEvent({
+      kind: 'item', choiceId: 'dive', instanceId: 'scubaSet-1',
+    })).toMatchObject({
+      deltas: { energy: -3, food: 1 },
+      rewardSummary: { kind: 'resource', id: 'food', quantity: 1 },
+    });
+  });
+
+  it('omits Wreckage reward summaries for harm, empty, and Leave outcomes', () => {
+    const injured = new SurvivalSession(saved(), {
+      seed: 77,
+      random: sequenceRandom([0.9, 0]),
+      initial: { day: 4, energy: 3 },
+      initialEventId: 'wreckage',
+    });
+    expect(injured.resolveEvent({ kind: 'choice', choiceId: 'search' }).rewardSummary)
+      .toBeUndefined();
+
+    const empty = new SurvivalSession(saved('carlitos'), {
+      seed: 78,
+      random: sequenceRandom([0.9]),
+      initial: { day: 4 },
+      initialCarlitos: { hunger: 5, energy: 3 },
+      initialEventId: 'wreckage',
+    });
+    expect(empty.resolveEvent({
+      kind: 'choice', choiceId: 'delegate-carlitos',
+    }).rewardSummary).toBeUndefined();
+
+    const left = new SurvivalSession(saved(), {
+      seed: 79,
+      initial: { day: 4, energy: 2 },
+      initialEventId: 'wreckage',
+    });
+    expect(left.resolveEvent({ kind: 'choice', choiceId: 'leave' })).toMatchObject({
+      accepted: true,
+      deltas: {},
+    });
+    expect(left.snapshot().energy).toBe(2);
+    expect(left.snapshot().lastOutcome?.rewardSummary).toBeUndefined();
+  });
+
   it('lets Carlitos search Wreckage for three Carlitos energy', () => {
     const session = new SurvivalSession(saved('carlitos'), {
       seed: 74,
@@ -500,7 +565,11 @@ describe('SurvivalSession Carlitos events', () => {
       initialEventId: 'wreckage',
     });
     expect(session.resolveEvent({ kind: 'choice', choiceId: 'delegate-carlitos' }))
-      .toMatchObject({ accepted: true, deltas: { repairMaterial: 2 } });
+      .toMatchObject({
+        accepted: true,
+        deltas: { repairMaterial: 2 },
+        rewardSummary: { kind: 'resource', id: 'repairMaterial', quantity: 2 },
+      });
     expect(session.snapshot()).toMatchObject({ energy: 1, carlitos: { energy: 0 } });
   });
 

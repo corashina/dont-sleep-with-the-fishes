@@ -159,7 +159,9 @@ export class SurvivalCoverView {
         ? 'Close chest reward'
         : view.title === 'SALVAGE'
           ? 'Close salvage result'
-          : 'Close dive result',
+          : view.title === 'WRECKAGE'
+            ? 'Close Wreckage result'
+            : 'Close dive result',
     );
     this.renderReward(view.reward);
     this.resultLines.hidden = view.lines.length === 0;

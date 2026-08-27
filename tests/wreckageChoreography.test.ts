@@ -7,40 +7,25 @@ import {
 
 describe('wreckage choreography', () => {
   it.each([
-    ['reveal', 1.2], ['search', 1.4], ['injury', 1.4], ['leave', 1.2],
-    ['underwater-hold', 3], ['loot', 1.2], ['collapse', 1.5],
-    ['creature', 1.35], ['ghost', 1.6], ['return', 0.8],
+    ['reveal', 1.2],
+    ['surface-hold', 0],
+    ['leave', 1.2],
   ] as const)('defines %s duration', (beat, duration) => {
     expect(wreckageBeatDuration(beat)).toBe(duration);
   });
 
-  it('samples every threat into one reused object', () => {
+  it('samples reveal, hold, and leave into one reused object', () => {
     const output = createWreckageSample();
-    sampleWreckageBeat('search', 0.7, output);
-    expect(output.debrisApproach).toBeGreaterThan(0);
-    expect(sampleWreckageBeat('collapse', 0.75, output)).toBe(true);
-    expect(output.fallingDebris).toBeGreaterThan(0);
-    expect(output.silt).toBeGreaterThan(0);
-    sampleWreckageBeat('creature', 0.9, output);
-    expect(output.creatureAdvance).toBeGreaterThan(0);
-    sampleWreckageBeat('ghost', 0.8, output);
-    expect(output.ghostDrift).toBeGreaterThan(0);
-  });
 
-  it('uses elapsed seconds and resets inactive cues', () => {
-    const output = createWreckageSample();
-    sampleWreckageBeat('collapse', 0.75, output);
-    sampleWreckageBeat('search', 0.7, output);
+    expect(sampleWreckageBeat('reveal', 0.6, output)).toBe(true);
+    expect(output.debrisAlpha).toBeGreaterThan(0);
+    expect(output.sceneAlpha).toBe(1);
 
-    expect(output.fallingDebris).toBe(0);
-    expect(output.silt).toBe(0);
-    expect(output.redFlash).toBe(0);
-    expect(output.cameraJolt).toBe(0);
-    expect(output.debrisApproach).toBeGreaterThan(0);
+    sampleWreckageBeat('surface-hold', 0, output);
+    expect(output).toEqual({ debrisAlpha: 1, sceneAlpha: 1 });
 
-    sampleWreckageBeat('injury', 0.7, output);
-    expect(output.debrisApproach).toBe(0);
-    expect(output.redFlash).toBeGreaterThan(0);
-    expect(output.cameraJolt).not.toBe(0);
+    sampleWreckageBeat('leave', 0.6, output);
+    expect(output.debrisAlpha).toBe(1);
+    expect(output.sceneAlpha).toBeCloseTo(0.5);
   });
 });
