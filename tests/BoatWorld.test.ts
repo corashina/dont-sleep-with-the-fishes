@@ -1076,7 +1076,9 @@ describe('BoatWorld helpers', () => {
       expect(adapter.playChoice).toHaveBeenCalledOnce();
       expect(adapter.playItemUse).toHaveBeenCalledOnce();
       expect(adapter.itemAimTarget).toHaveBeenCalledOnce();
-      expect(adapter.interactionTargets).toHaveBeenCalledOnce();
+      expect(adapter.interactionTargets).toHaveBeenCalledTimes(
+        family === 'dedicated' ? 2 : 1,
+      );
       expect(adapter.interactionRoot).toHaveBeenCalledOnce();
       expect(adapter.resultRoot).toHaveBeenCalledOnce();
       expect(adapter.react).toHaveBeenCalledOnce();
@@ -6880,6 +6882,50 @@ describe('BoatWorld helpers', () => {
     world.clearEvent();
     world.dispose();
     propModels.dispose();
+  });
+
+  it('projects clickable Wreckage debris on the right side of the default boat view', async () => {
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      createTestEventModels(),
+    );
+    try {
+      world.stageEvent({ eventId: 'wreckage', targetInstanceId: null, variantSeed: 17 });
+      const reveal = world.revealEvent('wreckage');
+      world.update(1.2, 1.2);
+      await reveal;
+
+      const interaction = world.projectInteractionAnchors(1280, 720)
+        .find(({ id }) => id === 'event:wreckage');
+
+      expect(interaction).toEqual(expect.objectContaining({
+        id: 'event:wreckage',
+        eventFocusId: 'wreckage',
+        tooltip: false,
+        visible: true,
+      }));
+      if (interaction?.hitArea === undefined) {
+        throw new Error('Projected Wreckage debris requires a click area.');
+      }
+      expect(interaction).not.toHaveProperty('eventChoiceId');
+      expect(interaction.x).toBeGreaterThan(640);
+      expect(interaction.x).toBeLessThan(1280);
+      expect(interaction.y).toBeGreaterThan(0);
+      expect(interaction.y).toBeLessThan(720);
+      expect(interaction.hitArea.width).toBeGreaterThanOrEqual(96);
+      expect(interaction.hitArea.height).toBeGreaterThanOrEqual(72);
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
   });
 
   it('runs the real Carlitos visit through the Wreckage presentation boundary', async () => {

@@ -2475,22 +2475,30 @@ describe('SurvivalUI', () => {
       target: { x: 850, y: 360, width: 180, height: 110, depth: 2, visible: true },
       choices: [
         {
-          id: 'dive',
-          label: 'Dive Into Wreck',
-          energyCost: 3,
+          id: 'search',
+          label: 'Search Debris',
+          energyCost: 2,
           energyOwner: 'player',
           unavailableReason: null,
-          instanceId: 'scubaSet-1' as ItemInstanceId,
+          instanceId: null,
         },
         {
           id: 'delegate-carlitos',
-          label: 'SEND CARLITOS',
+          label: 'Send Carlitos',
           energyCost: 3,
           energyOwner: 'carlitos',
           unavailableReason: 'Carlitos needs more energy.',
           instanceId: null,
         },
-        { id: 'sleep', label: 'LET IT DRIFT', unavailableReason: null, instanceId: null },
+        {
+          id: 'dive',
+          label: 'Dive',
+          energyCost: 3,
+          energyOwner: 'player',
+          unavailableReason: null,
+          instanceId: 'scubaSet-1' as ItemInstanceId,
+        },
+        { id: 'leave', label: 'Leave', unavailableReason: null, instanceId: null },
       ],
     });
 
@@ -2509,23 +2517,24 @@ describe('SurvivalUI', () => {
     expect(popupX + popupWidth <= targetLeft || popupX >= targetRight).toBe(true);
     expect(focus.textContent).not.toContain('DRIFTING ITEM');
     const energyCosts = [...focus.querySelectorAll<HTMLElement>('.focused-event-view__cost')];
-    expect(energyCosts.map(({ textContent }) => textContent)).toEqual(['⚡️⚡️⚡️', '⚡️⚡️⚡️']);
+    expect(energyCosts.map(({ textContent }) => textContent))
+      .toEqual(['⚡️⚡️', '⚡️⚡️⚡️', '⚡️⚡️⚡️']);
     expect(energyCosts.map((cost) => cost.getAttribute('aria-label')))
-      .toEqual(['3 energy', '3 energy']);
+      .toEqual(['2 energy', '3 energy', '3 energy']);
     expect(focus.textContent).not.toContain('PLAYER');
     expect(focus.textContent).not.toContain('CARLITOS —');
     expect(mainStyles).toMatch(
       /\.focused-event-view__choice-main\s*\{[^}]*font-size:\s*1rem;/s,
     );
-    expect(focus.textContent).toContain('LET IT DRIFT');
+    expect(focus.textContent).toContain('Leave');
     expect(focus.querySelector('.event-choice__reason')?.textContent)
       .toBe('Carlitos needs more energy.');
     expect(document.activeElement).toBe(
-      focus.querySelector<HTMLButtonElement>('[data-event-choice="dive"]'),
+      focus.querySelector<HTMLButtonElement>('[data-event-choice="search"]'),
     );
 
-    focus.querySelector<HTMLButtonElement>('[data-event-choice="dive"]')!.click();
-    expect(choice).toHaveBeenCalledExactlyOnceWith({ id: 'dive', instanceId: 'scubaSet-1' });
+    focus.querySelector<HTMLButtonElement>('[data-event-choice="search"]')!.click();
+    expect(choice).toHaveBeenCalledExactlyOnceWith({ id: 'search', instanceId: null });
 
     const back = focus.querySelector<HTMLButtonElement>('[data-focused-event-back]')!;
     expect(back.parentElement).toBe(focus);
