@@ -14,8 +14,22 @@ import {
 } from '../weather/presentationWeather';
 import { alignDirectionalLightWithSun } from './celestialLight';
 import { Skybox } from './Skybox';
+import {
+  tryCreateVolumetricClouds,
+  type VolumetricClouds,
+} from './VolumetricClouds';
 import { WeatherEffects } from './WeatherEffects';
+import { runCleanupSteps } from './SceneResources';
 import type { SkyPalette, SkyPhase, SkyState } from './skyPalette';
+import type { VisualQuality } from '../rendering/visualQuality';
+
+interface VolumetricCloudFrame {
+  time: number;
+  delta: number;
+  cameraPosition: Readonly<Vector3>;
+  state: Readonly<SkyState>;
+  palette: Readonly<SkyPalette>;
+}
 
 const SCAVENGE_SHADOW_CONFIG = Object.freeze({
   mapSize: 2048,
@@ -36,6 +50,8 @@ export class Environment {
   private readonly fallbackBackground = new Color();
   private readonly atmosphereFog: FogExp2;
   private readonly weatherEffects: WeatherEffects;
+  private readonly volumetricClouds: VolumetricClouds | null;
+  private readonly volumetricCloudFrame: VolumetricCloudFrame | null;
   private readonly previousBackground: Scene['background'];
   private readonly previousFog: Scene['fog'];
   private readonly skyState: SkyState = {
@@ -54,12 +70,22 @@ export class Environment {
   constructor(
     private readonly scene: Scene,
     moonTexture: Texture,
+    visualQuality: VisualQuality = 'low',
+    createClouds: typeof tryCreateVolumetricClouds = tryCreateVolumetricClouds,
   ) {
     this.previousBackground = scene.background;
     this.previousFog = scene.fog;
     this.sky = new Skybox(scene, this.skyState, moonTexture);
     this.weatherEffects = new WeatherEffects(scene);
     const atmosphere = this.sky.palette;
+    this.volumetricClouds = createClouds(scene, visualQuality);
+    this.volumetricCloudFrame = this.volumetricClouds === null ? null : {
+      time: 0,
+      delta: 0,
+      cameraPosition: new Vector3(),
+      state: this.skyState,
+      palette: atmosphere,
+    };
     this.fallbackBackground.copy(atmosphere.horizonColor);
     this.atmosphereFog = new FogExp2(
       atmosphere.fogColor,
@@ -109,6 +135,20 @@ export class Environment {
     this.skyState.phase = phase;
   }
 
+  setVolumetricCloudsEnabled(enabled: boolean): void {
+    if (this.disposed) return;
+    this.volumetricClouds?.setEnabled(enabled);
+  }
+
+  setVisualQuality(value: VisualQuality): void {
+    if (this.disposed) return;
+    this.volumetricClouds?.setQuality(value);
+  }
+
+  volumetricCloudsAvailable(): boolean {
+    return !this.disposed && this.volumetricClouds !== null;
+  }
+
   update(
     time: number,
     delta: number,
@@ -121,6 +161,16 @@ export class Environment {
       this.skyState,
       cameraPosition,
     );
+    const frame = this.volumetricCloudFrame;
+    let cloudStrength = 0;
+    if (frame !== null && this.volumetricClouds !== null) {
+      frame.time = time;
+      frame.delta = delta;
+      frame.cameraPosition = cameraPosition;
+      frame.palette = atmosphere;
+      cloudStrength = this.volumetricClouds.update(frame);
+    }
+    this.sky.setCloudLayerStrength(1 - cloudStrength);
     const profile = this.weatherProfileValue;
     this.fallbackBackground.copy(atmosphere.horizonColor);
     this.atmosphereFog.color.copy(atmosphere.fogColor);
@@ -135,14 +185,21 @@ export class Environment {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.weatherEffects.dispose();
-    this.sky.dispose();
-    this.scene.remove(this.keyLight, this.fillLight);
-    if (this.scene.background === this.fallbackBackground) {
-      this.scene.background = this.previousBackground;
-    }
-    if (this.scene.fog === this.atmosphereFog) {
-      this.scene.fog = this.previousFog;
-    }
+    runCleanupSteps([
+      () => this.weatherEffects.dispose(),
+      () => this.volumetricClouds?.dispose(),
+      () => this.sky.dispose(),
+      () => this.scene.remove(this.keyLight, this.fillLight),
+      () => {
+        if (this.scene.background === this.fallbackBackground) {
+          this.scene.background = this.previousBackground;
+        }
+      },
+      () => {
+        if (this.scene.fog === this.atmosphereFog) {
+          this.scene.fog = this.previousFog;
+        }
+      },
+    ]);
   }
 }
