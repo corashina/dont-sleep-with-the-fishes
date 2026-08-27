@@ -71,6 +71,7 @@ Readonly<Partial<Record<ItemId, readonly ItemAnimationLabUse[]>>> = Object.freez
   ),
   knife: uses(
     use('knife-slash', 'Slash knife', 'snatcher', 'knife'),
+    use('trade-handover', 'Trade handover', 'handyman', 'knife'),
   ),
   bucket: uses(
     use('bucket-scoop', 'Scoop from water', 'school-of-fish', 'bucket'),

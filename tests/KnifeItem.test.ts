@@ -121,6 +121,11 @@ describe('Knife survival item', () => {
       label: 'Slash knife',
       eventId: 'snatcher',
       choiceId: 'knife',
+    }, {
+      id: 'trade-handover',
+      label: 'Trade handover',
+      eventId: 'handyman',
+      choiceId: 'knife',
     }]);
   });
 
