@@ -124,11 +124,21 @@ const fragmentShader = `
       0.16,
       0.86
     );
-    float lowerEdge = smoothstep(0.0, 0.045, heightFraction);
     float detail = texture(
       uNoiseTexture,
       samplePosition.zyx * uDetailScale - wind * uDetailScale * 1.37
     ).r;
+    float baseRipple = (lobeNoise - 0.5) * 0.035
+      + (detail - 0.5) * 0.015;
+    float baseLift = (
+      1.0 - smoothstep(0.18, 0.72, cloudGroup)
+    ) * 0.055;
+    float baseHeight = clamp(0.018 + baseRipple + baseLift, 0.0, 0.09);
+    float lowerEdge = smoothstep(
+      baseHeight - 0.02,
+      baseHeight + 0.04,
+      heightFraction
+    );
     float sideField = cloudGroup + (detail - 0.5) * 0.28;
     float billowedSides = smoothstep(0.08, 0.38, sideField)
       * smoothstep(0.0, 0.18, cloudGroup);
