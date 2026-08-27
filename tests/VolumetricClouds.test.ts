@@ -238,14 +238,23 @@ describe('VolumetricClouds', () => {
     expect(clouds.material.fragmentShader).toContain('float baseRipple');
     expect(clouds.material.fragmentShader).toContain('float baseLift');
     expect(clouds.material.fragmentShader).toContain('float baseHeight');
-    expect(clouds.material.fragmentShader).toContain('baseHeight - 0.02,');
-    expect(clouds.material.fragmentShader).toContain('baseHeight + 0.04,');
+    expect(clouds.material.fragmentShader).toContain(
+      'clamp(baseRipple + baseLift, -0.055, 0.1)',
+    );
+    expect(clouds.material.fragmentShader).toContain('baseHeight + 0.035,');
     expect(clouds.material.fragmentShader).toContain('float topField');
     expect(clouds.material.fragmentShader).toContain('float billowedTop');
     expect(clouds.material.fragmentShader).toContain('float billowedSides');
     expect(clouds.material.fragmentShader).toContain('float boundaryErosion');
     expect(clouds.material.fragmentShader).toContain('float heightLight');
     expect(clouds.material.fragmentShader).toContain('float cloudDistance');
+    expect(clouds.material.fragmentShader).toContain('float cloudRayBase');
+    expect(clouds.material.fragmentShader).toContain(
+      '(cloudRayBase - uCameraPosition.y) / rayDirection.y',
+    );
+    expect(clouds.material.fragmentShader).not.toContain(
+      '(uBaseHeight - uCameraPosition.y) / rayDirection.y',
+    );
     expect(clouds.material.fragmentShader).toContain('float distanceFade');
     expect(clouds.material.fragmentShader).toContain('float edgeOpacity');
     expect(clouds.material.fragmentShader).toContain('float rayJitter');
