@@ -210,7 +210,14 @@ function createDependencies() {
       worldParent: new Group(),
       boatParent: new Group(),
       dedicatedEnvironment: {
-        eventModels: {},
+        eventModels: {
+          create: vi.fn(() => ({
+            root: new Group(),
+            dispose: vi.fn(),
+          })),
+          animations: vi.fn(() => []),
+          dispose: vi.fn(),
+        },
         featuredModels: {},
         dive: {
           play: asyncVoid(),

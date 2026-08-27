@@ -191,6 +191,9 @@ export function resolveEventItemUseContext(
   if (itemId === 'anchor' && choiceId === 'anchor' && eventId === 'handyman') {
     return 'base';
   }
+  if (itemId === 'scubaSet' && choiceId === 'dive' && eventId === 'wreckage') {
+    return 'base';
+  }
   if (
     itemId === 'cannedFood'
     && (choiceId === 'food' || choiceId === 'cannedFood')

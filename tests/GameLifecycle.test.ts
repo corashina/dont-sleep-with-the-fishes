@@ -1063,6 +1063,7 @@ describe('ScavengePhase lifecycle integration', () => {
       physicsRuntime,
       maxTextureAnisotropy: 1,
       audio: AudioSystem.silent(),
+      visualQuality: createVisualQualityPreference(() => undefined, null),
     } as unknown as PhaseContext;
     const revealPhysicsObjects = vi.fn();
     const requestPointerLock = vi.fn().mockResolvedValue(true);
@@ -3330,6 +3331,7 @@ describe('ScavengePhase lifecycle integration', () => {
       physicsRuntime,
       maxTextureAnisotropy: 1,
       audio: AudioSystem.silent(),
+      visualQuality: createVisualQualityPreference(() => undefined, null),
     } as unknown as PhaseContext;
     const phase = new ScavengePhase(context, vi.fn(), vi.fn());
     const internals = phase as unknown as {
