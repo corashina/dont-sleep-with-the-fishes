@@ -1093,6 +1093,7 @@ describe('SurvivalPhase orchestration', () => {
     phase.start();
     await flushPromises();
     expect(setEventSelection).toHaveBeenLastCalledWith(new Map(), []);
+    expect(showFocusedEvent).not.toHaveBeenCalled();
 
     ui.onFocusedEventSelect?.('wreckage');
     await flushPromises();

@@ -1045,6 +1045,11 @@ export class BoatWorld {
           }
         : eventOrContext,
     );
+    if (route === 'dedicated') {
+      this.interactionProjector.installFocusedInteractionTargets(
+        this.eventPresentationHost.interactionTargets(),
+      );
+    }
   }
 
   async revealEvent(eventId: string): Promise<void> {
