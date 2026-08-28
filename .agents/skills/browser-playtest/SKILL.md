@@ -11,6 +11,8 @@ The current chat runs one shared survival batch with collaboration subagents.
 
 Ask for the tester count: "How many testers: 1, 2, or 3? Default: 3." Wait for the answer.
 
+A count in the run request does not answer this question. Always wait for a new answer before setup or browser actions.
+
 | Testers | Profiles |
 |---|---|
 | 1 | balanced |
