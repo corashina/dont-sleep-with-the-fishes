@@ -12,7 +12,7 @@ export const SURVIVAL_BALANCE = {
   fishing: {
     minimumBiteDelaySeconds: 3,
     biteDelayRangeSeconds: 4,
-    reactionSeconds: 4,
+    reactionSeconds: 12,
   },
   diving: {
     success: 0.65, injury: 0.25, flashlightSuccess: 0.80,
