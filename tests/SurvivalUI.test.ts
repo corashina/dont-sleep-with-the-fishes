@@ -2661,6 +2661,9 @@ describe('SurvivalUI', () => {
     expect(mainStyles).toMatch(
       /\.chest-camera-turn\s*\{[^}]*width:\s*114px;[^}]*height:\s*105px;/s,
     );
+    expect(mainStyles).toMatch(
+      /\.rear-camera-return\s*\{[^}]*pointer-events:\s*auto;/s,
+    );
     expect(mainStyles).not.toContain('#c96d3d');
 
     returnButton.click();

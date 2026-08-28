@@ -336,9 +336,11 @@ export class SurvivalEventFlow {
   resolveEndure(): void {
     const generation = this.dependencies.captureLifecycleGeneration();
     if (this.presentation !== 'choosing' || !this.isLifecycleCurrent(generation)) return;
+    const pendingEventId = this.dependencies.session.snapshot().pendingEventId;
     if (
       this.eligibility.size !== 0
-      && this.dependencies.session.snapshot().pendingEventId !== 'other-people'
+      && pendingEventId !== 'other-people'
+      && pendingEventId !== 'plane'
     ) return;
     const operation = this.beginOperation();
     void this.runOwnedOperation(

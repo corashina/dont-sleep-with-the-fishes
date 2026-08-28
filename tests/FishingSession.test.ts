@@ -1,6 +1,7 @@
 // Importance: 10/10 (scaled from 5/5). Protects the fishing state machine.
 import { describe, expect, it } from 'vitest';
 import { FishingSession } from '../src/survival/FishingSession';
+import { SURVIVAL_BALANCE } from '../src/survival/survivalBalance';
 import type { RandomSource } from '../src/survival/survivalTypes';
 import { sequenceRandom } from './helpers/random';
 
@@ -140,14 +141,15 @@ describe('FishingSession', () => {
   });
 
   it('accepts reels strictly before reaction expiry and misses at expiry', () => {
+    expect(SURVIVAL_BALANCE.fishing.reactionSeconds).toBe(4);
     const successful = createSession();
     castToWaiting(successful);
-    successful.advance(3 + 1.499999);
+    successful.advance(3 + SURVIVAL_BALANCE.fishing.reactionSeconds - 0.000001);
     expect(successful.reel()).toMatchObject({ accepted: true, result: { kind: 'catch' } });
 
     const missed = createSession();
     castToWaiting(missed);
-    missed.advance(4.5);
+    missed.advance(3 + SURVIVAL_BALANCE.fishing.reactionSeconds);
     expect(missed.snapshot()).toMatchObject({ state: 'missed', result: { kind: 'miss' } });
     expect(missed.reel().accepted).toBe(false);
   });
@@ -178,7 +180,7 @@ describe('FishingSession', () => {
   it('creates a miss without exposing the discarded catch', () => {
     const session = createSession([0, 0]);
     castToWaiting(session);
-    session.advance(4.5);
+    session.advance(3 + SURVIVAL_BALANCE.fishing.reactionSeconds);
     expect(session.snapshot().result).toEqual({ kind: 'miss' });
     expect(session.snapshot().result).not.toHaveProperty('catch');
   });

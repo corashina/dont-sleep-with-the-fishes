@@ -10,6 +10,7 @@ import {
   type FishingWorldPort,
 } from '../src/survival/SurvivalFishingFlow';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
+import { SURVIVAL_BALANCE } from '../src/survival/survivalBalance';
 import type { FishingResultView, FishingUiState } from '../src/ui/SurvivalFishingView';
 import type { ProjectedBoatBounds } from '../src/survival/BoatInteraction';
 import { sequenceRandom } from './helpers/random';
@@ -306,17 +307,16 @@ describe('SurvivalFishingFlow', () => {
     expect(rig.world.playFishingCast).toHaveBeenCalledWith(rig.castPoint);
   });
 
-  it('rejects an outside-water point and gates a duplicate accepted cast', async () => {
+  it('falls back to a centered cast when the exact water projection fails', async () => {
     const rig = createRig();
     await enter(rig);
     vi.mocked(rig.world.castFishingAtScreenPoint)
-      .mockReturnValueOnce(null)
-      .mockReturnValueOnce(rig.castPoint);
+      .mockReturnValueOnce(null);
 
-    expect(rig.flow.cast(12, 18, 800, 600)).toBe(false);
-    expect(rig.flow.cast(240, 180, 800, 600)).toBe(true);
+    expect(rig.flow.cast(12, 18, 800, 600)).toBe(true);
     expect(rig.flow.cast(240, 180, 800, 600)).toBe(false);
 
+    expect(rig.world.centeredFishingCast).toHaveBeenCalledOnce();
     expect(rig.world.playFishingCast).toHaveBeenCalledOnce();
     expect(rig.session.beginFishing.mock.results[0]!.value.attempt.snapshot().state)
       .toBe('casting');
@@ -413,7 +413,7 @@ describe('SurvivalFishingFlow', () => {
     await cast(rig);
     rig.flow.update(3);
 
-    rig.flow.update(1.5);
+    rig.flow.update(SURVIVAL_BALANCE.fishing.reactionSeconds);
     expect(rig.flow.reel()).toBe(false);
     rig.flow.update(0.5);
 
