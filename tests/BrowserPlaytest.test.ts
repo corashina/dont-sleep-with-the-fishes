@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createItemInstances } from '../src/game/itemCatalog';
 import {
   BrowserPlaytestInputError,
   parseBrowserPlaytest,
@@ -29,7 +30,14 @@ describe('browser playtest input', () => {
     expect(startup?.savedItems.map(({ instanceId }) => instanceId))
       .not.toContain('baitTin-1');
     expect(Object.isFrozen(startup)).toBe(true);
+    expect(Object.isFrozen(startup?.missingItemIds)).toBe(true);
+    expect(Object.isFrozen(startup?.savedItems)).toBe(true);
     expect(startup?.savedItems.every(Object.isFrozen)).toBe(true);
+    expect(startup?.savedItems.map(({ instanceId }) => instanceId)).toEqual(
+      createItemInstances()
+        .filter(({ instanceId }) => !['cannedFood-2', 'baitTin-1'].includes(instanceId))
+        .map(({ instanceId }) => instanceId),
+    );
   });
 
   it.each([
