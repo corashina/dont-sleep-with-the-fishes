@@ -161,6 +161,14 @@ function createRandomSeed(): number {
   }
 }
 
+export class WebGlInitializationError extends Error {
+  constructor(cause: unknown) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    super(message, { cause });
+    this.name = 'WebGlInitializationError';
+  }
+}
+
 export class Game {
   private renderer!: WebGLRenderer;
   private sceneRenderer!: SceneRenderer;
@@ -209,10 +217,15 @@ export class Game {
     onFatalError: (error: unknown) => void = rethrowFatalError,
     browserPlaytest: BrowserPlaytestStartup | null = null,
   ) {
-    const renderer = new WebGLRenderer({
-      antialias: true,
-      powerPreference: 'high-performance',
-    });
+    let renderer: WebGLRenderer;
+    try {
+      renderer = new WebGLRenderer({
+        antialias: true,
+        powerPreference: 'high-performance',
+      });
+    } catch (error) {
+      throw new WebGlInitializationError(error);
+    }
     let sceneRenderer: SceneRenderer | null = null;
     const visualQuality = createVisualQualityPreference((quality) => {
       sceneRenderer?.setVisualQuality?.(quality);

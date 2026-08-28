@@ -2,7 +2,7 @@
 // Importance: 8/10 (scaled from 4/5). Protects startup failure handling and ownership.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Game, type GameTestOptions } from '../src/Game';
+import { Game, WebGlInitializationError, type GameTestOptions } from '../src/Game';
 import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
 import { launchGame, type LaunchDependencies } from '../src/app/launchGame';
 import { AudioSystem } from '../src/audio/AudioSystem';
@@ -887,20 +887,34 @@ describe('launchGame', () => {
     expect(createGame).not.toHaveBeenCalled();
   });
 
-  it('renders WebGL failure UI when game construction throws', async () => {
+  it('shows GAME ERROR for a runtime failure', async () => {
     const mount = connectedMount();
-    const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
+    const error = new Error('event bundle failed');
     const handle = launchGame(mount, dependencies(
-      () => Promise.resolve(models),
-      { createGame: () => { throw new Error('renderer failed'); } },
+      () => Promise.resolve({ dispose: vi.fn() } as unknown as PropModelLibrary),
+      { createGame: () => { throw error; } },
+    ));
+
+    await expect(handle.completion).resolves.toBeNull();
+    expect(mount.textContent).toContain('GAME ERROR');
+    expect(mount.textContent).toContain('event bundle failed');
+    expect(mount.textContent).not.toContain('WEBGL UNAVAILABLE');
+  });
+
+  it('keeps WEBGL UNAVAILABLE for renderer initialization failure', async () => {
+    const mount = connectedMount();
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve({ dispose: vi.fn() } as unknown as PropModelLibrary),
+      {
+        createGame: () => {
+          throw new WebGlInitializationError(new Error('WebGL context failed'));
+        },
+      },
     ));
 
     await expect(handle.completion).resolves.toBeNull();
     expect(mount.textContent).toContain('WEBGL UNAVAILABLE');
-    expect(mount.textContent).toContain('renderer failed');
-    expect(mount.querySelector('.system-screen--error')).not.toBeNull();
-    expect(mount.querySelector('.system-screen .fine-print')?.textContent)
-      .toBe('renderer failed');
+    expect(mount.textContent).not.toContain('GAME ERROR');
   });
 
   it('reports ship placement failures without claiming WebGL is unavailable', async () => {
@@ -1018,7 +1032,7 @@ describe('launchGame', () => {
     ));
 
     await expect(handle.completion).resolves.toBeNull();
-    expect(mount.textContent).toContain('WEBGL UNAVAILABLE');
+    expect(mount.textContent).toContain('GAME ERROR');
     expect(mount.textContent).toContain('initial resize failed');
     expect(disposePhase).toHaveBeenCalledOnce();
     expect(disposeRenderer).toHaveBeenCalledOnce();
@@ -1029,7 +1043,7 @@ describe('launchGame', () => {
     expect(canvas.parentElement).toBeNull();
   });
 
-  it('renders WebGL failure UI when construction throws an item-model error', async () => {
+  it('shows GAME ERROR when construction throws an item-model error', async () => {
     const mount = connectedMount();
     const disposeModels = vi.fn();
     const models = { dispose: disposeModels } as unknown as PropModelLibrary;
@@ -1043,7 +1057,7 @@ describe('launchGame', () => {
     ));
 
     await expect(handle.completion).resolves.toBeNull();
-    expect(mount.textContent).toContain('WEBGL UNAVAILABLE');
+    expect(mount.textContent).toContain('GAME ERROR');
     expect(mount.textContent).not.toContain('SUPPLIES UNAVAILABLE');
     expect(disposeModels).toHaveBeenCalledOnce();
   });
@@ -1159,10 +1173,10 @@ describe('launchGame', () => {
 
     expect(game.dispose).toHaveBeenCalledOnce();
     expect(disposeModels).not.toHaveBeenCalled();
-    expect(mount.textContent).toContain('WEBGL UNAVAILABLE');
+    expect(mount.textContent).toContain('GAME ERROR');
   });
 
-  it('renders WebGL failure UI when start throws an item-model error', async () => {
+  it('shows GAME ERROR when start throws an item-model error', async () => {
     const mount = connectedMount();
     const disposeModels = vi.fn();
     const models = { dispose: disposeModels } as unknown as PropModelLibrary;
@@ -1178,7 +1192,7 @@ describe('launchGame', () => {
     ));
 
     await expect(handle.completion).resolves.toBeNull();
-    expect(mount.textContent).toContain('WEBGL UNAVAILABLE');
+    expect(mount.textContent).toContain('GAME ERROR');
     expect(mount.textContent).not.toContain('SUPPLIES UNAVAILABLE');
     expect(game.dispose).toHaveBeenCalledOnce();
     expect(disposeModels).not.toHaveBeenCalled();
