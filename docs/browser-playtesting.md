@@ -2,19 +2,29 @@
 
 ## Request a Run
 
-Ask for the tester count before each run. Choose one, two, or three. Default: 3. The current chat coordinates all subagents.
+The current chat coordinates all subagents. It asks for the tester count before each run. Choose one, two, or three. Default: 3.
 
 ## Tester Count and Profiles
 
 One tester uses balanced play. Two use cautious and reckless play. Three use cautious, balanced, and reckless play.
 
+Cautious players protect food, medicine, tools, and Energy. They avoid risky dives unless survival needs the reward. Balanced players protect critical resources and accept useful risks. Reckless players seek high rewards, dive often, delay care, and avoid certain death.
+
 ## Shared Game Setup
 
-The coordinator starts one server. It creates one seed, one URL, two distinct missing item IDs, and one loadout. All testers use this setup.
+The coordinator starts one server from the current checkout. It records the commit and checkout path. It creates one unsigned 32-bit seed, two distinct missing item IDs selected uniformly, and a catalog-order loadout from every remaining item.
+
+Every tester uses this development URL:
+
+```text
+/?playtest=survival&seed=<decimal-uint32>&missing=<instance-id>&missing=<instance-id>
+```
+
+Every tester shares the server URL, test URL, seed, missing IDs, loadout, commit, worktree, and maximum day 55.
 
 ## Browser Access Rules
 
-Each tester starts a fresh browser session. Use visible browser controls only. Do not use saved state, prior evidence, page scripts, developer tools, or console access.
+Each tester controls one browser tab. Use visible page controls and visible page state only. Do not inspect browser storage, source, scripts, internals, network data, hidden state, or use developer tools, direct APIs, console commands, DOM injection, or automation scripts.
 
 ## Fishing Controls
 
@@ -22,16 +32,32 @@ Bait is automatic. Do not select it. Select `Fish`. Wait for `CLICK THE WATER TO
 
 ## Result Files
 
-Store each batch at `<main-repository>/.superpowers/browser-playtests/<batch-id>/`. Each tester writes a profile report. The coordinator writes the comparison report.
+Store each batch at `<main-repository>/.superpowers/browser-playtests/<batch-id>/`. The main repository stores artifacts only. The current checkout starts the server.
+
+Create `batch.json` before players start. It records batch ID, created and completed timestamps, commit, source worktree, main repository, server URL, test URL, seed, missing IDs, loadout, maximum day, and every tester's profile, subagent ID, status, report path, and screenshot paths.
+
+Create only selected profile folders. Each selected folder contains `report.md` and `screenshots/`. Each player updates its report after every decision. Preserve partial files after a failure.
+
+Each report records its profile, status, outcome, reached day, final visible resources and inventory, actions with reasons, resource and inventory changes, events and choices, disabled controls, confirmed UI bugs, screenshot paths, and missing screenshot reasons.
+
+Capture start state, the first two event choices, the first visible critical resource state, final state, and every visible game or browser failure.
 
 ## Stop Rules
 
-Play until the day 55 night resolves or the game ends. Do not start day 56.
+Stop on a normal ending or confirmed failure. Otherwise finish day 55 and stop before every day 56 action. If day 56 appears, capture it without another control.
+
+Retry an enabled unchanged control only when its first attempt has no visible result. Retry twice. Do not retry after a focus, highlight, text, value, or presentation change.
+
+One tester failure does not stop the others.
 
 ## Failure Statuses
 
-Use `completed` for day 55. Use `game-failure` for an ending. Use `blocked` when browser work cannot continue.
+- `normal-ending`: A normal ending. It is not a game failure.
+- `day-55-cap`: Day 55 completed without an earlier stop.
+- `game-failure`: A confirmed game failure.
+- `browser-failure`: A confirmed browser failure.
+- `player-task-failure`: The player cannot complete its assigned work.
 
 ## Review the Comparison
 
-Review agreements, profile differences, failures, blocked work, and linked evidence.
+After all testers stop, `comparison.md` compares days, endings, resources, inventory, major choices, failures, UI issues, and profile differences. It names missing tester data. `batch.json` then records final statuses, paths, and completion time.
