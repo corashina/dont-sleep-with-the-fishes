@@ -1125,18 +1125,28 @@ export class BoatAnchorView {
       this.closeCarlitosCard(true);
       return;
     }
+    this.handleCarlitosAction(button);
+  };
+
+  private handleCarlitosAction(button: HTMLButtonElement): void {
     const action = ACTIONS.find(({ id }) => id === button.dataset.action);
     if (action === undefined) return;
     if (button.getAttribute('aria-disabled') === 'true') {
-      const reason = this.actionReasons.get(action.id);
-      if (reason !== null && reason !== undefined && !this.modalOpen) {
-        this.onUnavailableAction(action.id, reason);
-      }
+      this.reportUnavailableCarlitosAction(action.id);
       return;
     }
-    if (this.modalOpen || (this.eventPresentationActive && !this.itemAnimationLab)) return;
+    if (!this.canUseCarlitosAction()) return;
     this.onAction(action.id, button);
-  };
+  }
+
+  private reportUnavailableCarlitosAction(action: DayActionId): void {
+    const reason = this.actionReasons.get(action);
+    if (reason !== null && reason !== undefined && !this.modalOpen) this.onUnavailableAction(action, reason);
+  }
+
+  private canUseCarlitosAction(): boolean {
+    return !this.modalOpen && (!this.eventPresentationActive || this.itemAnimationLab);
+  }
 
   private readonly handleDocumentClick = (event: MouseEvent): void => {
     if (this.disposed || this.carlitosCard.hidden) return;

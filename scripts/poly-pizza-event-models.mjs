@@ -163,40 +163,53 @@ export async function discoverEventModelSources(fetcher = fetch) {
   return Object.freeze(Object.fromEntries(entries));
 }
 
+function validLockIdentity(id, source) {
+  return source.id === id && source.pageUrl === POLY_PIZZA_EVENT_MODEL_PAGES[id];
+}
+
+function validLockLocation(source) {
+  const publicId = pagePublicId(source.pageUrl);
+  const downloadUrl = `https://static.poly.pizza/${source.resourceId}.glb`;
+  return source.publicId === publicId
+    && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(source.resourceId)
+    && source.downloadUrl === downloadUrl
+    && source.sourceAssetId === `poly-pizza:${source.resourceId}`;
+}
+
+function validLockAttribution(source) {
+  return Boolean(source.modelName)
+    && Boolean(source.author)
+    && Boolean(LICENSE_URLS[source.license])
+    && source.licenseUrl === LICENSE_URLS[source.license]
+    && /^[A-F0-9]{64}$/.test(source.sha256)
+    && /^\d{4}-\d{2}-\d{2}$/.test(source.downloadedOn);
+}
+
+function validLockMeasurements(source) {
+  return Number.isInteger(source.sourceTriangles)
+    && source.sourceTriangles > 0
+    && typeof source.pageAnimated === 'boolean'
+    && typeof source.sourceHasSkins === 'boolean'
+    && Number.isInteger(source.sourceAnimationCount)
+    && source.sourceAnimationCount >= 0;
+}
+
+function validateLockSource(id, source) {
+  if (!validLockIdentity(id, source)) {
+    throw new Error(`${id}: event model lock page is invalid`);
+  }
+  if (!validLockLocation(source) || !validLockAttribution(source) || !validLockMeasurements(source)) {
+    throw new Error(`${id}: event model lock metadata is invalid`);
+  }
+}
+
 async function readLock(lockPath = defaultLockPath) {
   const lock = JSON.parse(await readFile(lockPath, 'utf8'));
   if (lock.schemaVersion !== 1) throw new Error('event model lock schema is invalid');
   if (JSON.stringify(Object.keys(lock.sources ?? {})) !== JSON.stringify(EVENT_MODEL_IDS)) {
     throw new Error('event model lock IDs do not match approved page IDs');
   }
-  for (const id of EVENT_MODEL_IDS) {
-    const source = lock.sources[id];
-    if (source.id !== id || source.pageUrl !== POLY_PIZZA_EVENT_MODEL_PAGES[id]) {
-      throw new Error(`${id}: event model lock page is invalid`);
-    }
-    const publicId = pagePublicId(source.pageUrl);
-    const expectedDownloadUrl = `https://static.poly.pizza/${source.resourceId}.glb`;
-    if (
-      source.publicId !== publicId
-      || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(source.resourceId)
-      || source.downloadUrl !== expectedDownloadUrl
-      || source.sourceAssetId !== `poly-pizza:${source.resourceId}`
-      || !source.modelName
-      || !source.author
-      || !LICENSE_URLS[source.license]
-      || source.licenseUrl !== LICENSE_URLS[source.license]
-      || !/^[A-F0-9]{64}$/.test(source.sha256)
-      || !Number.isInteger(source.sourceTriangles)
-      || source.sourceTriangles <= 0
-      || typeof source.pageAnimated !== 'boolean'
-      || typeof source.sourceHasSkins !== 'boolean'
-      || !Number.isInteger(source.sourceAnimationCount)
-      || source.sourceAnimationCount < 0
-      || !/^\d{4}-\d{2}-\d{2}$/.test(source.downloadedOn)
-    ) {
-      throw new Error(`${id}: event model lock metadata is invalid`);
-    }
-  }
+  for (const id of EVENT_MODEL_IDS) validateLockSource(id, lock.sources[id]);
   return lock;
 }
 
@@ -286,15 +299,15 @@ function sceneBounds(id, document) {
   return rawBounds;
 }
 
-async function processEventModel(id, sourcePath, outputPath, descriptor) {
-  const bytes = await readFile(sourcePath);
-  const actualHash = sha256(bytes);
+function validateSourceHash(id, actualHash, descriptor) {
   if (actualHash !== descriptor.sha256) {
     throw new Error(
       `${id}: expected source SHA-256 ${descriptor.sha256}, received ${actualHash}`,
     );
   }
-  const source = await inspectBinary(id, bytes);
+}
+
+function validateSourceMetadata(id, source, descriptor) {
   if (source.triangles !== descriptor.sourceTriangles) {
     throw new Error(
       `${id}: expected ${descriptor.sourceTriangles} source triangles, received ${source.triangles}`,
@@ -306,39 +319,65 @@ async function processEventModel(id, sourcePath, outputPath, descriptor) {
   ) {
     throw new Error(`${id}: source skin or animation metadata changed`);
   }
+}
 
-  const staticSource = !source.hasSkins && source.animationCount === 0;
+async function transformSourceDocument(id, source, staticSource) {
   if (staticSource) {
     await source.document.transform(prune(), dedup(), weld(), prune(), dedup(), unpartition());
-  } else {
-    if (id === 'midnightMonster') {
-      await source.document.transform(
-        weld(),
-        simplify({
-          simplifier: MeshoptSimplifier,
-          ratio: 0.97,
-          error: 0.01,
-          lockBorder: false,
-        }),
-        normals({ overwrite: true }),
-      );
-    }
-    await source.document.transform(prune(), dedup(), unpartition());
+    return;
   }
+  if (id === 'midnightMonster') {
+    await source.document.transform(
+      weld(),
+      simplify({
+        simplifier: MeshoptSimplifier,
+        ratio: 0.97,
+        error: 0.01,
+        lockBorder: false,
+      }),
+      normals({ overwrite: true }),
+    );
+  }
+  await source.document.transform(prune(), dedup(), unpartition());
+}
 
-  const root = source.document.getRoot();
+function renameProcessedScene(id, document) {
+  const root = document.getRoot();
   const scene = root.getDefaultScene() ?? root.listScenes()[0];
   if (!scene) throw new Error(`${id}: processed scene is missing`);
   scene.setName(id);
   scene.listChildren().forEach((node, index) => {
     node.setName(`${id}:${node.getName() || `source-${index + 1}`}`);
   });
+}
 
-  const triangles = countEventModelTriangles(source.document);
+function validateProcessedTriangles(id, document) {
+  const triangles = countEventModelTriangles(document);
   const limit = EVENT_MODEL_TRIANGLE_LIMITS[id];
   if (triangles <= 0 || triangles > limit) {
     throw new Error(`${id}: processed triangle count ${triangles} exceeds ${limit}`);
   }
+}
+
+function processingDescription(id, staticSource) {
+  if (staticSource) return 'pruned, deduplicated, welded, unpartitioned, renamed, and embedded';
+  if (id === 'midnightMonster') {
+    return 'welded, simplified, normals regenerated, pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data';
+  }
+  return 'pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data';
+}
+
+async function processEventModel(id, sourcePath, outputPath, descriptor) {
+  const bytes = await readFile(sourcePath);
+  const actualHash = sha256(bytes);
+  validateSourceHash(id, actualHash, descriptor);
+  const source = await inspectBinary(id, bytes);
+  validateSourceMetadata(id, source, descriptor);
+
+  const staticSource = !source.hasSkins && source.animationCount === 0;
+  await transformSourceDocument(id, source, staticSource);
+  renameProcessedScene(id, source.document);
+  validateProcessedTriangles(id, source.document);
   sceneBounds(id, source.document);
   await mkdir(dirname(outputPath), { recursive: true });
   await io.write(outputPath, source.document);
@@ -353,11 +392,7 @@ async function processEventModel(id, sourcePath, outputPath, descriptor) {
     hasSkins: output.hasSkins,
     animationCount: output.animationCount,
     animations: inspectEventModel(id, output.document).animations,
-    processing: staticSource
-      ? 'pruned, deduplicated, welded, unpartitioned, renamed, and embedded'
-      : id === 'midnightMonster'
-        ? 'welded, simplified, normals regenerated, pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data'
-        : 'pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data',
+    processing: processingDescription(id, staticSource),
   };
 }
 
