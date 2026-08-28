@@ -315,16 +315,49 @@ export function planExpertScavengeRoute(
   input: ScavengeRouteInput,
 ): ScavengeRoutePlan | null {
   const deadline = deadlineFor(input);
-  let cache: Map<string, ScavengeRoutePlan | null> | undefined;
-  if (input.metric.stable === true) {
-    cache = expertPlanCache.get(input.metric);
-    if (!cache) {
-      cache = new Map();
-      expertPlanCache.set(input.metric, cache);
-    }
+  const cache = expertCacheFor(input);
+  const cacheKey = cache === undefined ? undefined : expertCacheKey(input, deadline);
+  const cachedPlan = cachedExpertPlan(cache, cacheKey);
+  if (cachedPlan !== undefined) return cachedPlan;
+  const plan = calculateExpertScavengeRoute(input, deadline);
+  cacheExpertPlan(cache, cacheKey, plan);
+  return plan;
+}
+
+function expertCacheFor(
+  input: ScavengeRouteInput,
+): Map<string, ScavengeRoutePlan | null> | undefined {
+  if (input.metric.stable !== true) return undefined;
+  let cache = expertPlanCache.get(input.metric);
+  if (cache === undefined) {
+    cache = new Map();
+    expertPlanCache.set(input.metric, cache);
   }
-  const cacheKey = cache ? expertCacheKey(input, deadline) : undefined;
-  if (cacheKey !== undefined && cache?.has(cacheKey)) return cache.get(cacheKey)!;
+  return cache;
+}
+
+function cachedExpertPlan(
+  cache: Map<string, ScavengeRoutePlan | null> | undefined,
+  cacheKey: string | undefined,
+): ScavengeRoutePlan | null | undefined {
+  if (cache === undefined || cacheKey === undefined || !cache.has(cacheKey)) return undefined;
+  return cache.get(cacheKey)!;
+}
+
+function cacheExpertPlan(
+  cache: Map<string, ScavengeRoutePlan | null> | undefined,
+  cacheKey: string | undefined,
+  plan: ScavengeRoutePlan | null,
+): void {
+  if (cache === undefined || cacheKey === undefined) return;
+  if (cache.size >= EXPERT_CACHE_LIMIT) cache.clear();
+  cache.set(cacheKey, plan ? immutablePlan(plan) : null);
+}
+
+function calculateExpertScavengeRoute(
+  input: ScavengeRouteInput,
+  deadline: number,
+): ScavengeRoutePlan | null {
   const fullMask = (1n << BigInt(input.assignments.length)) - 1n;
   let beam: readonly ExpertState[] = [{
     remainingMask: fullMask,
@@ -354,12 +387,7 @@ export function planExpertScavengeRoute(
     });
     beam = keepCheapestStates(expanded);
   }
-
-  if (cache === undefined || cacheKey === undefined) return bestPlan;
-  const cachedPlan = bestPlan ? immutablePlan(bestPlan) : null;
-  if (cache.size >= EXPERT_CACHE_LIMIT) cache.clear();
-  cache.set(cacheKey, cachedPlan);
-  return cachedPlan;
+  return bestPlan;
 }
 
 function baselineBranchDetour(
@@ -419,123 +447,118 @@ export function planBaselineScavengeRoute(
   input: ScavengeRouteInput,
 ): ScavengeRoutePlan {
   const deadline = deadlineFor(input);
-  const remaining = new Set(input.assignments.map((_, index) => index));
-  let current = input.start;
-  let carriedIds: readonly string[] = [];
-  let carriedWeight = 0;
-  let seconds = 0;
-  let savedCount = 0;
-  let actions: readonly ScavengeRouteAction[] = [];
-
-  while (remaining.size > 0) {
-    const candidate = findBaselineCandidate(
-      input,
-      remaining,
-      current,
-      carriedWeight,
-    );
-    if (candidate !== null) {
-      const nextSeconds = seconds
-        + moveSeconds(candidate.distance, carriedWeight)
-        + SCAVENGE_PICKUP_ACTION_SECONDS;
-      const finishOptions = [
-        depositedEvacuationFinishSeconds(
-          input,
-          candidate.assignment.position,
-          carriedWeight + candidate.assignment.weight,
-          nextSeconds,
-        ),
-        directEvacuationFinishSeconds(
-          input,
-          candidate.assignment.position,
-          carriedWeight + candidate.assignment.weight,
-          nextSeconds,
-        ),
-      ].filter((value): value is number => value !== null);
-      if (nextSeconds > deadline
-        || finishOptions.length > 0 && Math.min(...finishOptions) > deadline) break;
-      actions = [
-        ...appendMove(actions, candidate.distance, carriedWeight),
-        {
-          type: 'pickup',
-          instanceId: candidate.assignment.instanceId,
-          weight: candidate.assignment.weight,
-        },
-      ];
-      seconds = nextSeconds;
-      current = candidate.assignment.position;
-      carriedIds = [...carriedIds, candidate.assignment.instanceId];
-      carriedWeight += candidate.assignment.weight;
-      remaining.delete(candidate.index);
-      continue;
-    }
-
-    if (carriedWeight === 0) break;
-    const distance = routeDistance(input.metric, current, input.deposit);
-    if (distance === null) break;
-    const nextSeconds = seconds
-      + moveSeconds(distance, carriedWeight)
-      + SCAVENGE_DEPOSIT_ACTION_SECONDS;
-    if (nextSeconds > deadline
-      || !canDepositWithoutBlockingEvacuation(
-        input,
-        current,
-        carriedWeight,
-        seconds,
-        deadline,
-      )) break;
-    actions = [
-      ...appendMove(actions, distance, carriedWeight),
-      { type: 'deposit', instanceIds: carriedIds },
-    ];
-    seconds = nextSeconds;
-    current = input.deposit;
-    savedCount += carriedIds.length;
-    carriedIds = [];
-    carriedWeight = 0;
+  const state = createBaselineRouteState(input);
+  while (state.remaining.size > 0) {
+    const pickup = tryBaselinePickup(input, deadline, state);
+    if (pickup === 'picked') continue;
+    if (pickup === 'stop' || !tryBaselineDeposit(input, deadline, state)) break;
   }
+  if (state.carriedWeight > 0) tryBaselineDeposit(input, deadline, state);
+  tryBaselineEvacuation(input, deadline, state);
+  return state;
+}
 
-  if (carriedWeight > 0) {
-    const distance = routeDistance(input.metric, current, input.deposit);
-    if (distance !== null) {
-      const nextSeconds = seconds
-        + moveSeconds(distance, carriedWeight)
-        + SCAVENGE_DEPOSIT_ACTION_SECONDS;
-      if (nextSeconds <= deadline && canDepositWithoutBlockingEvacuation(
-        input,
-        current,
-        carriedWeight,
-        seconds,
-        deadline,
-      )) {
-        actions = [
-          ...appendMove(actions, distance, carriedWeight),
-          { type: 'deposit', instanceIds: carriedIds },
-        ];
-        seconds = nextSeconds;
-        current = input.deposit;
-        savedCount += carriedIds.length;
-        carriedIds = [];
-        carriedWeight = 0;
-      }
-    }
-  }
+interface BaselineRouteState {
+  readonly remaining: Set<number>;
+  current: Position;
+  carriedIds: readonly string[];
+  carriedWeight: number;
+  seconds: number;
+  savedCount: number;
+  evacuated: boolean;
+  actions: readonly ScavengeRouteAction[];
+}
 
-  let evacuated = false;
-  const evacuationDistance = routeDistance(input.metric, current, input.evacuation);
-  if (evacuationDistance !== null) {
-    const nextSeconds = seconds
-      + moveSeconds(evacuationDistance, carriedWeight)
-      + SCAVENGE_EVACUATE_ACTION_SECONDS;
-    if (nextSeconds <= deadline) {
-      actions = [
-        ...appendMove(actions, evacuationDistance, carriedWeight),
-        { type: 'evacuate' },
-      ];
-      seconds = nextSeconds;
-      evacuated = true;
-    }
-  }
+function createBaselineRouteState(input: ScavengeRouteInput): BaselineRouteState {
+  return {
+    remaining: new Set(input.assignments.map((_, index) => index)),
+    current: input.start,
+    carriedIds: [],
+    carriedWeight: 0,
+    seconds: 0,
+    savedCount: 0,
+    evacuated: false,
+    actions: [],
+  };
+}
 
-  return { seconds, savedCount, evacuated, actions };
+function tryBaselinePickup(
+  input: ScavengeRouteInput,
+  deadline: number,
+  state: BaselineRouteState,
+): 'picked' | 'none' | 'stop' {
+  const candidate = findBaselineCandidate(input, state.remaining, state.current, state.carriedWeight);
+  if (candidate === null) return 'none';
+  const nextSeconds = state.seconds
+    + moveSeconds(candidate.distance, state.carriedWeight)
+    + SCAVENGE_PICKUP_ACTION_SECONDS;
+  if (!canFinishBaselinePickup(input, deadline, state, candidate, nextSeconds)) return 'stop';
+  state.actions = [
+    ...appendMove(state.actions, candidate.distance, state.carriedWeight),
+    { type: 'pickup', instanceId: candidate.assignment.instanceId, weight: candidate.assignment.weight },
+  ];
+  state.seconds = nextSeconds;
+  state.current = candidate.assignment.position;
+  state.carriedIds = [...state.carriedIds, candidate.assignment.instanceId];
+  state.carriedWeight += candidate.assignment.weight;
+  state.remaining.delete(candidate.index);
+  return 'picked';
+}
+
+function canFinishBaselinePickup(
+  input: ScavengeRouteInput,
+  deadline: number,
+  state: BaselineRouteState,
+  candidate: ReachableAssignment,
+  nextSeconds: number,
+): boolean {
+  const carriedWeight = state.carriedWeight + candidate.assignment.weight;
+  const finishOptions = [
+    depositedEvacuationFinishSeconds(input, candidate.assignment.position, carriedWeight, nextSeconds),
+    directEvacuationFinishSeconds(input, candidate.assignment.position, carriedWeight, nextSeconds),
+  ].filter((value): value is number => value !== null);
+  return nextSeconds <= deadline
+    && (finishOptions.length === 0 || Math.min(...finishOptions) <= deadline);
+}
+
+function tryBaselineDeposit(
+  input: ScavengeRouteInput,
+  deadline: number,
+  state: BaselineRouteState,
+): boolean {
+  if (state.carriedWeight === 0) return false;
+  const distance = routeDistance(input.metric, state.current, input.deposit);
+  if (distance === null) return false;
+  const nextSeconds = state.seconds
+    + moveSeconds(distance, state.carriedWeight)
+    + SCAVENGE_DEPOSIT_ACTION_SECONDS;
+  if (nextSeconds > deadline || !canDepositWithoutBlockingEvacuation(
+    input, state.current, state.carriedWeight, state.seconds, deadline,
+  )) return false;
+  state.actions = [
+    ...appendMove(state.actions, distance, state.carriedWeight),
+    { type: 'deposit', instanceIds: state.carriedIds },
+  ];
+  state.seconds = nextSeconds;
+  state.current = input.deposit;
+  state.savedCount += state.carriedIds.length;
+  state.carriedIds = [];
+  state.carriedWeight = 0;
+  return true;
+}
+
+function tryBaselineEvacuation(
+  input: ScavengeRouteInput,
+  deadline: number,
+  state: BaselineRouteState,
+): void {
+  const distance = routeDistance(input.metric, state.current, input.evacuation);
+  if (distance === null) return;
+  const nextSeconds = state.seconds
+    + moveSeconds(distance, state.carriedWeight)
+    + SCAVENGE_EVACUATE_ACTION_SECONDS;
+  if (nextSeconds > deadline) return;
+  state.actions = [...appendMove(state.actions, distance, state.carriedWeight), { type: 'evacuate' }];
+  state.seconds = nextSeconds;
+  state.evacuated = true;
 }

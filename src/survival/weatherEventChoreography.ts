@@ -298,6 +298,98 @@ export function weatherItemUseDuration(eventId: string, choiceId: string): numbe
   return duration === undefined ? null : scaleEventItemDuration(duration);
 }
 
+function sampleWaveItem(
+  choiceId: string,
+  t: number,
+  hold: number,
+  impact: number,
+  output: WeatherItemSample,
+): void {
+  const anchor = choiceId === 'anchor';
+  output.cameraYaw = anchor
+    ? -0.1 * Math.sin(2 * Math.PI * t) * hold
+    : 0.13 * Math.sin(2 * Math.PI * t) * hold;
+  output.cameraPush = anchor
+    ? 0.07 * pulse(t, 0.12, 0.44, 0.8)
+    : 0.12 * impact;
+  output.effect = impact;
+}
+
+function sampleFogItem(
+  choiceId: string,
+  t: number,
+  hold: number,
+  output: WeatherItemSample,
+): void {
+  output.effect = hold;
+  if (choiceId === 'compass') {
+    output.cameraYaw = 0.18 * Math.sin(Math.PI * (t - 0.1)) * hold;
+  } else if (choiceId === 'spyglass') {
+    output.cameraPush = 0.28 * pulse(t, 0.2, 0.54, 0.88);
+  } else {
+    output.effect = pulse(t, 0.08, 0.5, 0.94);
+    output.cameraYaw = 0.3 * Math.sin(Math.PI * (t - 0.1)) * hold;
+  }
+}
+
+function sampleCameraWeatherItem(
+  eventId: string,
+  choiceId: string,
+  t: number,
+  hold: number,
+  impact: number,
+  output: WeatherItemSample,
+): void {
+  const direction = choiceId === 'bucket' || choiceId === 'map' ? 1 : -1;
+  if (eventId === 'windy-night') {
+    output.cameraYaw = direction * 0.14 * Math.sin(Math.PI * t) * hold;
+    output.cameraPush = 0.075 * impact;
+  } else if (eventId === 'thunderstorm') {
+    output.cameraYaw = direction * 0.11 * impact;
+    output.cameraPush = 0.12 * impact;
+  } else if (eventId === 'restless-waves') {
+    sampleWaveItem(choiceId, t, hold, impact, output);
+  } else if (eventId === 'man-in-the-fog') {
+    sampleFogItem(choiceId, t, hold, output);
+  }
+}
+
+function sampleBadSleepItem(
+  choiceId: string,
+  t: number,
+  hold: number,
+  output: WeatherItemSample,
+): void {
+  switch (choiceId) {
+    case 'bucket':
+      output.y = 0.46 * hold;
+      output.roll = 0.16 * Math.sin(2 * Math.PI * t) * hold;
+      output.effect = pulse(t, 0.12, 0.5, 0.86);
+      break;
+    case 'flashlight':
+      output.y = 0.3 * hold;
+      output.pitch = -0.12 * hold;
+      output.effect = pulse(t, 0.08, 0.46, 0.9);
+      output.cameraYaw = 0.08 * Math.sin(Math.PI * t) * hold;
+      break;
+    case 'swimRing':
+      output.x = 0.18 * Math.sin(2 * Math.PI * t) * hold;
+      output.y = 0.16 * hold;
+      output.roll = 0.1 * hold;
+      output.scaleX = 1 + 0.08 * hold;
+      output.scaleZ = 1 + 0.08 * hold;
+      output.effect = hold;
+      break;
+    case 'umbrella':
+      output.y = 0.66 * hold;
+      output.pitch = -0.14 * hold;
+      output.roll = -0.18 * pulse(t, 0.2, 0.58, 0.86);
+      output.scaleY = 1 - 0.1 * pulse(t, 0.28, 0.6, 0.84);
+      output.effect = pulse(t, 0.2, 0.58, 0.86);
+      break;
+  }
+}
+
 export function sampleWeatherItemUse(
   eventId: string,
   choiceId: string,
@@ -317,108 +409,13 @@ export function sampleWeatherItemUse(
   const impact = pulse(t, 0.28, 0.56, 0.84);
 
   if (isCameraOnlyWeatherEvent(eventId)) {
-    const direction = choiceId === 'bucket' || choiceId === 'map' ? 1 : -1;
-    switch (eventId) {
-      case 'shower-night':
-        break;
-      case 'windy-night':
-        output.cameraYaw = direction * 0.14 * Math.sin(Math.PI * t) * hold;
-        output.cameraPush = 0.075 * impact;
-        break;
-      case 'thunderstorm':
-        output.cameraYaw = direction * 0.11 * impact;
-        output.cameraPush = 0.12 * impact;
-        break;
-      case 'restless-waves':
-        output.cameraYaw = choiceId === 'anchor'
-          ? -0.1 * Math.sin(2 * Math.PI * t) * hold
-          : 0.13 * Math.sin(2 * Math.PI * t) * hold;
-        output.cameraPush = choiceId === 'anchor'
-          ? 0.07 * pulse(t, 0.12, 0.44, 0.8)
-          : 0.12 * impact;
-        output.effect = impact;
-        break;
-      case 'man-in-the-fog':
-        if (choiceId === 'compass') {
-          output.effect = hold;
-          output.cameraYaw = 0.18 * Math.sin(Math.PI * (t - 0.1)) * hold;
-        } else if (choiceId === 'spyglass') {
-          output.effect = hold;
-          output.cameraPush = 0.28 * pulse(t, 0.2, 0.54, 0.88);
-        } else {
-          output.effect = pulse(t, 0.08, 0.5, 0.94);
-          output.cameraYaw = 0.3 * Math.sin(Math.PI * (t - 0.1)) * hold;
-        }
-        break;
-    }
+    sampleCameraWeatherItem(eventId, choiceId, t, hold, impact, output);
     const envelope = smoothstep(t / 0.08)
       * (1 - smoothstep((t - 0.76) / 0.24));
     multiplyItem(output, envelope);
     return true;
   }
-
-  switch (eventId) {
-    case 'restless-waves':
-      switch (choiceId) {
-        case 'anchor':
-          output.cameraYaw = -0.1 * Math.sin(2 * Math.PI * t) * hold;
-          output.cameraPush = 0.07 * pulse(t, 0.12, 0.44, 0.8);
-          output.effect = impact;
-          break;
-        case 'swimRing':
-          output.cameraYaw = 0.13 * Math.sin(2 * Math.PI * t) * hold;
-          output.cameraPush = 0.12 * impact;
-          output.effect = impact;
-          break;
-      }
-      break;
-    case 'man-in-the-fog':
-      switch (choiceId) {
-        case 'compass':
-          output.effect = hold;
-          output.cameraYaw = 0.18 * Math.sin(Math.PI * (t - 0.1)) * hold;
-          break;
-        case 'spyglass':
-          output.effect = hold;
-          output.cameraPush = 0.28 * pulse(t, 0.2, 0.54, 0.88);
-          break;
-        case 'flashlight':
-          output.effect = pulse(t, 0.08, 0.5, 0.94);
-          output.cameraYaw = 0.3 * Math.sin(Math.PI * (t - 0.1)) * hold;
-          break;
-      }
-      break;
-    case 'bad-sleep':
-      switch (choiceId) {
-        case 'bucket':
-          output.y = 0.46 * hold;
-          output.roll = 0.16 * Math.sin(2 * Math.PI * t) * hold;
-          output.effect = pulse(t, 0.12, 0.5, 0.86);
-          break;
-        case 'flashlight':
-          output.y = 0.3 * hold;
-          output.pitch = -0.12 * hold;
-          output.effect = pulse(t, 0.08, 0.46, 0.9);
-          output.cameraYaw = 0.08 * Math.sin(Math.PI * t) * hold;
-          break;
-        case 'swimRing':
-          output.x = 0.18 * Math.sin(2 * Math.PI * t) * hold;
-          output.y = 0.16 * hold;
-          output.roll = 0.1 * hold;
-          output.scaleX = 1 + 0.08 * hold;
-          output.scaleZ = 1 + 0.08 * hold;
-          output.effect = hold;
-          break;
-        case 'umbrella':
-          output.y = 0.66 * hold;
-          output.pitch = -0.14 * hold;
-          output.roll = -0.18 * pulse(t, 0.2, 0.58, 0.86);
-          output.scaleY = 1 - 0.1 * pulse(t, 0.28, 0.6, 0.84);
-          output.effect = pulse(t, 0.2, 0.58, 0.86);
-          break;
-      }
-      break;
-  }
+  sampleBadSleepItem(choiceId, t, hold, output);
 
   const ingressEnvelope = smoothstep(t / 0.08);
   const returnEnvelope = 1 - smoothstep((t - 0.76) / 0.24);
@@ -443,6 +440,52 @@ export function weatherReactionDuration(
       return 0.84;
     default: return actors > 0 ? 1.25 : 1.1;
   }
+}
+
+function sampleCameraWeatherReaction(
+  eventId: string,
+  choiceId: string,
+  condition: 'broken' | 'lost' | null,
+  actorBeat: number,
+  hullBeat: number,
+  hullImpact: number,
+  output: WeatherReactionSample,
+): void {
+  const direction = choiceId === 'bucket' || choiceId === 'map' ? 1 : -1;
+  if (eventId === 'windy-night') {
+    output.cameraX = direction * 0.08 * hullBeat;
+    output.cameraYaw = direction * 0.1 * actorBeat;
+    output.cameraRoll = direction * 0.11 * actorBeat;
+  } else if (eventId === 'thunderstorm') {
+    output.cameraX = direction * (0.08 * actorBeat + 0.12 * hullImpact);
+    output.cameraY = -0.09 * hullImpact;
+    output.cameraPitch = 0.07 * hullImpact;
+    output.cameraRoll = direction * (0.1 * actorBeat + 0.12 * hullImpact);
+    if (condition === 'lost') {
+      output.effectKind = 'storm-loss-lightning';
+      output.actorEffect = actorBeat;
+    }
+  }
+}
+
+function sampleBadSleepReaction(
+  choiceId: string,
+  condition: 'broken' | 'lost' | null,
+  actorBeat: number,
+  hullBeat: number,
+  output: WeatherReactionSample,
+): void {
+  if (choiceId === 'umbrella' && condition === 'broken') {
+    output.effectKind = 'bad-sleep-umbrella-collapse';
+    output.actorY = -0.22 * actorBeat;
+    output.actorScaleY = 1 - 0.34 * actorBeat;
+    output.actorRoll = -0.26 * actorBeat;
+  } else {
+    output.effectKind = 'bad-sleep-exhale';
+    output.actorY = -0.06 * actorBeat;
+    output.cameraY = -0.04 * hullBeat;
+  }
+  output.actorEffect = actorBeat;
 }
 
 export function sampleWeatherReaction(
@@ -474,49 +517,21 @@ export function sampleWeatherReaction(
   const hullImpact = clamp01(-hullDelta / 40) * hullBeat;
 
   if (isCameraOnlyWeatherEvent(eventId)) {
-    const direction = choiceId === 'bucket' || choiceId === 'map' ? 1 : -1;
-    switch (eventId) {
-      case 'shower-night':
-        break;
-      case 'windy-night':
-        output.cameraX = direction * 0.08 * hullBeat;
-        output.cameraYaw = direction * 0.1 * actorBeat;
-        output.cameraRoll = direction * 0.11 * actorBeat;
-        break;
-      case 'thunderstorm':
-        output.cameraX = direction * (0.08 * actorBeat + 0.12 * hullImpact);
-        output.cameraY = -0.09 * hullImpact;
-        output.cameraPitch = 0.07 * hullImpact;
-        output.cameraRoll = direction * (0.1 * actorBeat + 0.12 * hullImpact);
-        if (condition === 'lost') {
-          output.effectKind = 'storm-loss-lightning';
-          output.actorEffect = actorBeat;
-        }
-        break;
-    }
+    sampleCameraWeatherReaction(
+      eventId,
+      choiceId,
+      condition,
+      actorBeat,
+      hullBeat,
+      hullImpact,
+      output,
+    );
     const envelope = smoothstep(t / 0.08)
       * (1 - smoothstep((t - 0.76) / 0.24));
     multiplyReactionCamera(output, envelope);
     return true;
   }
-
-  switch (eventId) {
-    case 'bad-sleep':
-      if (choiceId === 'umbrella' && condition === 'broken') {
-        output.effectKind = 'bad-sleep-umbrella-collapse';
-        output.actorY = -0.22 * actorBeat;
-        output.actorScaleY = 1 - 0.34 * actorBeat;
-        output.actorRoll = -0.26 * actorBeat;
-      } else {
-        output.effectKind = 'bad-sleep-exhale';
-        output.actorY = -0.06 * actorBeat;
-        output.cameraY = -0.04 * hullBeat;
-      }
-      output.actorEffect = actorBeat;
-      break;
-    default:
-      return true;
-  }
+  sampleBadSleepReaction(choiceId, condition, actorBeat, hullBeat, output);
 
   const envelope = smoothstep(t / 0.08) * (1 - smoothstep((t - 0.76) / 0.24));
   multiplyReactionCamera(output, envelope);
