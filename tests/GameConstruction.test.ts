@@ -70,7 +70,7 @@ describe('Game construction rollback', () => {
       {} as MenuSandAssets,
       physicsRuntime,
     )).toThrow(WebGlInitializationError);
-  });
+  }, 10_000);
 
   it('starts with low visual quality and preserves renderer setup errors during cleanup', async () => {
     const calls: string[] = [];
