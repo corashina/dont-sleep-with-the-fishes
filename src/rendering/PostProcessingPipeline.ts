@@ -64,6 +64,26 @@ type FallbackReporter = (error: unknown) => void;
 
 const MAX_PIXEL_RATIO = 2;
 const FALLBACK_MAX_TEXTURE_SIZE = 4_096;
+
+function supportedTextureSize(reportedSize: number): number {
+  return Number.isFinite(reportedSize) && reportedSize > 0
+    ? reportedSize
+    : FALLBACK_MAX_TEXTURE_SIZE;
+}
+
+function createComposerTarget(
+  renderer: WebGLRenderer,
+  size: Vector2,
+  antiAliasingQuality: AntiAliasingQuality,
+): WebGLRenderTarget {
+  const target = new WebGLRenderTarget(Math.max(1, size.x), Math.max(1, size.y));
+  target.texture.name = 'ambient-occlusion-composer';
+  target.samples = antiAliasingSamples(
+    antiAliasingQuality,
+    renderer.capabilities.maxSamples,
+  );
+  return target;
+}
 const MENU_AMBIENT_OCCLUSION = {
   low: null,
   medium: { intensity: 1.08, radius: 0.2 },
@@ -346,27 +366,12 @@ export class PostProcessingPipeline implements SceneRenderer {
     let itemAmbientOcclusionPass: ItemAmbientOcclusionPass | null = null;
     try {
       this.size = new Vector2();
-      const reportedMaxTextureSize = renderer.capabilities.maxTextureSize;
-      this.maxTextureSize = Number.isFinite(reportedMaxTextureSize) && reportedMaxTextureSize > 0
-        ? reportedMaxTextureSize : FALLBACK_MAX_TEXTURE_SIZE;
+      this.maxTextureSize = supportedTextureSize(renderer.capabilities.maxTextureSize);
       renderer.getSize(this.size);
-      target = new WebGLRenderTarget(Math.max(1, this.size.x), Math.max(1, this.size.y));
-      target.texture.name = 'ambient-occlusion-composer';
-      target.samples = antiAliasingSamples(
-        antiAliasingQuality,
-        renderer.capabilities.maxSamples,
-      );
+      target = createComposerTarget(renderer, this.size, antiAliasingQuality);
       composer = new EffectComposer(renderer, target);
       this.renderPass = new RenderPass(new Scene(), new Camera());
-
-      try {
-        itemAmbientOcclusionPass = createAmbientOcclusion(
-          this.controlState.ambientOcclusionMode,
-          quality,
-        );
-      } catch (error) {
-        this.reportFallback(error);
-      }
+      itemAmbientOcclusionPass = this.createAmbientOcclusionPass(createAmbientOcclusion, quality);
       outlinePass = new HoverOutlinePass(this.size, new Scene(), new PerspectiveCamera());
       configureHoverOutlinePass(outlinePass);
       bloomPass = new UnrealBloomPass(this.size, 0, 0, 1);
@@ -376,19 +381,7 @@ export class PostProcessingPipeline implements SceneRenderer {
       outputPass = new OutputPass();
 
       composer.addPass(this.renderPass);
-      if (itemAmbientOcclusionPass !== null) {
-        try {
-          composer.addPass(itemAmbientOcclusionPass);
-        } catch (error) {
-          const failedPass = itemAmbientOcclusionPass;
-          itemAmbientOcclusionPass = null;
-          failedPass.enabled = false;
-          composer.removePass(failedPass);
-          this.aoUnavailable = true;
-          failedPass.dispose();
-          this.reportFallback(error);
-        }
-      }
+      itemAmbientOcclusionPass = this.addAmbientOcclusionPass(composer, itemAmbientOcclusionPass);
       composer.addPass(outlinePass);
       composer.addPass(bloomPass);
       composer.addPass(menuAtmospherePass);
@@ -445,37 +438,81 @@ export class PostProcessingPipeline implements SceneRenderer {
   }
 
   resize(width: number, height: number, pixelRatio: number): void {
-    if (
-      this.disposed || !Number.isFinite(width) || !Number.isFinite(height)
-      || !Number.isFinite(pixelRatio) || width <= 0 || height <= 0
-      || pixelRatio <= 0 || pixelRatio > MAX_PIXEL_RATIO
-    ) return;
+    if (!this.validResize(width, height, pixelRatio)) return;
     const physicalWidth = width * pixelRatio;
     const physicalHeight = height * pixelRatio;
-    if (
-      !Number.isFinite(physicalWidth) || !Number.isFinite(physicalHeight)
-      || physicalWidth > this.maxTextureSize || physicalHeight > this.maxTextureSize
-    ) return;
-    const ambientOcclusionPass = this.itemAmbientOcclusionPass;
-    if (ambientOcclusionPass !== null) {
-      try {
-        ambientOcclusionPass.setSize(physicalWidth, physicalHeight);
-      } catch (error) {
-        this.retireAmbientOcclusion(error);
-      }
+    if (!this.validPhysicalSize(physicalWidth, physicalHeight)) return;
+    this.resizeAmbientOcclusion(physicalWidth, physicalHeight);
+    this.resizeComposer(width, height, pixelRatio);
+  }
+
+  private createAmbientOcclusionPass(
+    createAmbientOcclusion: AmbientOcclusionFactory,
+    quality: VisualQuality,
+  ): ItemAmbientOcclusionPass | null {
+    try {
+      return createAmbientOcclusion(this.controlState.ambientOcclusionMode, quality);
+    } catch (error) {
+      this.reportFallback(error);
+      return null;
     }
-    const activeAmbientOcclusionPass = this.itemAmbientOcclusionPass;
-    if (activeAmbientOcclusionPass !== null) {
-      this.composer.removePass(activeAmbientOcclusionPass);
+  }
+
+  private addAmbientOcclusionPass(
+    composer: EffectComposer,
+    pass: ItemAmbientOcclusionPass | null,
+  ): ItemAmbientOcclusionPass | null {
+    if (pass === null) return null;
+    try {
+      composer.addPass(pass);
+      return pass;
+    } catch (error) {
+      pass.enabled = false;
+      composer.removePass(pass);
+      this.aoUnavailable = true;
+      pass.dispose();
+      this.reportFallback(error);
+      return null;
     }
+  }
+
+  private validResize(width: number, height: number, pixelRatio: number): boolean {
+    return !this.disposed
+      && Number.isFinite(width)
+      && Number.isFinite(height)
+      && Number.isFinite(pixelRatio)
+      && width > 0
+      && height > 0
+      && pixelRatio > 0
+      && pixelRatio <= MAX_PIXEL_RATIO;
+  }
+
+  private validPhysicalSize(width: number, height: number): boolean {
+    return Number.isFinite(width)
+      && Number.isFinite(height)
+      && width <= this.maxTextureSize
+      && height <= this.maxTextureSize;
+  }
+
+  private resizeAmbientOcclusion(width: number, height: number): void {
+    const pass = this.itemAmbientOcclusionPass;
+    if (pass === null) return;
+    try {
+      pass.setSize(width, height);
+    } catch (error) {
+      this.retireAmbientOcclusion(error);
+    }
+  }
+
+  private resizeComposer(width: number, height: number, pixelRatio: number): void {
+    const pass = this.itemAmbientOcclusionPass;
+    if (pass !== null) this.composer.removePass(pass);
     try {
       this.composer.setPixelRatio(pixelRatio);
       this.composer.setSize(width, height);
       this.binocularMaskPass.setSize(width, height);
     } finally {
-      if (activeAmbientOcclusionPass !== null) {
-        this.composer.passes.splice(1, 0, activeAmbientOcclusionPass);
-      }
+      if (pass !== null) this.composer.passes.splice(1, 0, pass);
     }
   }
 

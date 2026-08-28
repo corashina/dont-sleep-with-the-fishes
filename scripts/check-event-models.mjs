@@ -140,17 +140,15 @@ function exactKeys(value, expectedKeys, label) {
   }
 }
 
-export function validateEventModelMetadata(metadata) {
-  for (const modelId of CURATED_EVENT_MODEL_IDS) {
+function validateModelPresence(metadata, modelIds) {
+  for (const modelId of modelIds) {
     if (!(modelId in metadata)) {
       throw new Error(`event model metadata is missing ${modelId}`);
     }
   }
-  for (const modelId of PROCESSED_EVENT_MODEL_IDS) {
-    if (!(modelId in metadata)) {
-      throw new Error(`event model metadata is missing ${modelId}`);
-    }
-  }
+}
+
+function validateCuratedMetadata(metadata) {
   for (const modelId of CURATED_EVENT_MODEL_IDS) {
     const model = metadata[modelId];
     exactKeys(model, ['triangles', 'rawBounds', 'animations'], `${modelId} metadata`);
@@ -166,6 +164,35 @@ export function validateEventModelMetadata(metadata) {
       );
     });
   }
+}
+
+function validProcessedBounds(rawBounds) {
+  return isFiniteVector(rawBounds.min)
+    && isFiniteVector(rawBounds.max)
+    && rawBounds.max.some((maximum, axis) => maximum > rawBounds.min[axis]);
+}
+
+function matchesPinnedProcessedSource(model, source) {
+  return model.sourceSha256 === source.sha256
+    && model.sourceTriangles === source.sourceTriangles
+    && model.outputSha256 === source.committedSha256
+    && model.hasSkins === source.sourceHasSkins
+    && model.animationCount === source.sourceAnimationCount;
+}
+
+function validProcessedModel(model, source, triangleLimit) {
+  return validProcessedBounds(model.rawBounds)
+    && Number.isInteger(model.triangles)
+    && model.triangles > 0
+    && model.triangles <= triangleLimit
+    && matchesPinnedProcessedSource(model, source)
+    && Array.isArray(model.animations)
+    && model.animations.length === model.animationCount
+    && typeof model.processing === 'string'
+    && model.processing.length > 0;
+}
+
+function validateProcessedMetadata(metadata) {
   let processedTotal = 0;
   for (const modelId of PROCESSED_EVENT_MODEL_IDS) {
     const model = metadata[modelId];
@@ -179,23 +206,7 @@ export function validateEventModelMetadata(metadata) {
       `${modelId} metadata`,
     );
     exactKeys(model.rawBounds, ['min', 'max'], `${modelId} rawBounds`);
-    if (
-      !isFiniteVector(model.rawBounds.min)
-      || !isFiniteVector(model.rawBounds.max)
-      || !model.rawBounds.max.some((maximum, axis) => maximum > model.rawBounds.min[axis])
-      || !Number.isInteger(model.triangles)
-      || model.triangles <= 0
-      || model.triangles > PROCESSED_EVENT_TRIANGLE_LIMITS[modelId]
-      || model.sourceSha256 !== source.sha256
-      || model.sourceTriangles !== source.sourceTriangles
-      || model.outputSha256 !== source.committedSha256
-      || model.hasSkins !== source.sourceHasSkins
-      || model.animationCount !== source.sourceAnimationCount
-      || !Array.isArray(model.animations)
-      || model.animations.length !== model.animationCount
-      || typeof model.processing !== 'string'
-      || model.processing.length === 0
-    ) {
+    if (!validProcessedModel(model, source, PROCESSED_EVENT_TRIANGLE_LIMITS[modelId])) {
       throw new Error(`${modelId} processed metadata does not match its pinned source`);
     }
     processedTotal += model.triangles;
@@ -205,6 +216,13 @@ export function validateEventModelMetadata(metadata) {
       `processed event model total ${processedTotal} exceeds ${PROCESSED_EVENT_TOTAL_TRIANGLE_LIMIT}`,
     );
   }
+}
+
+export function validateEventModelMetadata(metadata) {
+  validateModelPresence(metadata, CURATED_EVENT_MODEL_IDS);
+  validateModelPresence(metadata, PROCESSED_EVENT_MODEL_IDS);
+  validateCuratedMetadata(metadata);
+  validateProcessedMetadata(metadata);
 }
 
 function expectedAttributionBlock(modelId) {
@@ -307,15 +325,11 @@ async function inspectCommittedEventModel(modelId, modelsDir) {
   };
 }
 
-async function main() {
-  const { assetsOnly, ledgerPath, modelsDir } = parseModelCheckArguments(
-    process.argv.slice(2),
-    ['src', 'assets', 'models', 'events'],
-  );
-  const errors = [];
-  const measurements = {};
-  let metadata;
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
 
+async function validateDirectory(modelsDir, errors) {
   try {
     const expected = new Set([
       ...CURATED_EVENT_MODEL_IDS.map((id) => `${id}.glb`),
@@ -334,82 +348,105 @@ async function main() {
       if (!actual.has(file)) errors.push(`missing event model entry: ${file}`);
     }
   } catch (error) {
-    errors.push(error instanceof Error ? error.message : String(error));
+    errors.push(errorMessage(error));
   }
+}
 
+async function readMetadata(modelsDir, errors) {
   try {
-    metadata = JSON.parse(
+    const metadata = JSON.parse(
       await readFile(resolve(modelsDir, 'event-model-metadata.json'), 'utf8'),
     );
     validateEventModelMetadata(metadata);
+    return metadata;
   } catch (error) {
-    errors.push(error instanceof Error ? error.message : String(error));
+    errors.push(errorMessage(error));
+    return undefined;
   }
+}
 
+function curatedMeasurementMatches(source, expected, measurement) {
+  return expected?.triangles === measurement.triangles
+    && sameNumbers(expected?.rawBounds?.min, measurement.rawBounds.min)
+    && sameNumbers(expected?.rawBounds?.max, measurement.rawBounds.max)
+    && sameAnimations(expected?.animations, measurement.animations);
+}
+
+async function validateCuratedModel(modelId, modelsDir, metadata) {
+  const source = EVENT_SOURCES[modelId];
+  const { actualHash, measurement } = await inspectCommittedEventModel(modelId, modelsDir);
+  if (actualHash !== source.sha256) throw new Error(`${modelId}: source SHA-256 mismatch`);
+  console.log(`${modelId}.glb: ${measurement.triangles} / ${source.maxTriangles} triangles`);
+  if (measurement.triangles !== source.triangles) {
+    throw new Error(
+      `${modelId}: expected ${source.triangles} triangles, received ${measurement.triangles}`,
+    );
+  }
+  if (measurement.triangles > source.maxTriangles) {
+    throw new Error(`${modelId}: triangle count exceeds ${source.maxTriangles}`);
+  }
+  if (!curatedMeasurementMatches(source, metadata?.[modelId], measurement)) {
+    throw new Error(`${modelId}: generated metadata does not match the source model`);
+  }
+  if (!source.publicId || !source.resourceId || !source.sha256) {
+    throw new Error(`${modelId}: pinned source descriptor is incomplete`);
+  }
+  return measurement;
+}
+
+async function measureCuratedModels(modelsDir, metadata, errors) {
+  const measurements = {};
   for (const modelId of CURATED_EVENT_MODEL_IDS) {
-    const source = EVENT_SOURCES[modelId];
     try {
-      const { actualHash, measurement } = await inspectCommittedEventModel(
-        modelId,
-        modelsDir,
-      );
-      if (actualHash !== source.sha256) {
-        throw new Error(`${modelId}: source SHA-256 mismatch`);
-      }
-      measurements[modelId] = measurement;
-      console.log(`${modelId}.glb: ${measurement.triangles} / ${source.maxTriangles} triangles`);
-      if (measurement.triangles !== source.triangles) {
-        throw new Error(
-          `${modelId}: expected ${source.triangles} triangles, received ${measurement.triangles}`,
-        );
-      }
-      if (measurement.triangles > source.maxTriangles) {
-        throw new Error(`${modelId}: triangle count exceeds ${source.maxTriangles}`);
-      }
-      const expected = metadata?.[modelId];
-      if (
-        expected?.triangles !== measurement.triangles
-        || !sameNumbers(expected?.rawBounds?.min, measurement.rawBounds.min)
-        || !sameNumbers(expected?.rawBounds?.max, measurement.rawBounds.max)
-        || !sameAnimations(expected?.animations, measurement.animations)
-      ) {
-        throw new Error(`${modelId}: generated metadata does not match the source model`);
-      }
-      if (!source.publicId || !source.resourceId || !source.sha256) {
-        throw new Error(`${modelId}: pinned source descriptor is incomplete`);
-      }
+      measurements[modelId] = await validateCuratedModel(modelId, modelsDir, metadata);
     } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error));
+      errors.push(errorMessage(error));
     }
   }
+  return measurements;
+}
 
+function processedHashesMatch(actualHash, expected, source) {
+  return actualHash === source.committedSha256
+    && expected?.outputSha256 === actualHash;
+}
+
+function processedMeasurementMatches(expected, measurement) {
+  return expected?.triangles === measurement.triangles
+    && sameNumbers(expected?.rawBounds?.min, measurement.rawBounds.min)
+    && sameNumbers(expected?.rawBounds?.max, measurement.rawBounds.max)
+    && sameAnimations(expected?.animations, measurement.animations);
+}
+
+function processedDocumentMatches(document, expected, measurement) {
+  return expected?.hasSkins === (document.getRoot().listSkins().length > 0)
+    && expected?.animationCount === measurement.animations.length;
+}
+
+async function validateProcessedModel(modelId, modelsDir, metadata) {
+  const source = PROCESSED_EVENT_MODEL_SOURCES[modelId];
+  const expected = metadata?.[modelId];
+  const { actualHash, document, measurement } = await inspectCommittedEventModel(modelId, modelsDir);
+  console.log(
+    `${modelId}.glb: ${measurement.triangles} / ${PROCESSED_EVENT_TRIANGLE_LIMITS[modelId]} triangles`,
+  );
+  if (
+    !processedHashesMatch(actualHash, expected, source)
+    || !processedMeasurementMatches(expected, measurement)
+    || !processedDocumentMatches(document, expected, measurement)
+  ) {
+    throw new Error(`${modelId}: processed model does not match its pinned metadata`);
+  }
+  return measurement.triangles;
+}
+
+async function measureProcessedModels(modelsDir, metadata, errors) {
   let processedTotal = 0;
   for (const modelId of PROCESSED_EVENT_MODEL_IDS) {
-    const source = PROCESSED_EVENT_MODEL_SOURCES[modelId];
-    const expected = metadata?.[modelId];
     try {
-      const { actualHash, document, measurement } = await inspectCommittedEventModel(
-        modelId,
-        modelsDir,
-      );
-      console.log(
-        `${modelId}.glb: ${measurement.triangles} / ${PROCESSED_EVENT_TRIANGLE_LIMITS[modelId]} triangles`,
-      );
-      if (
-        actualHash !== source.committedSha256
-        || expected?.outputSha256 !== actualHash
-        || expected?.triangles !== measurement.triangles
-        || !sameNumbers(expected?.rawBounds?.min, measurement.rawBounds.min)
-        || !sameNumbers(expected?.rawBounds?.max, measurement.rawBounds.max)
-        || expected?.hasSkins !== (document.getRoot().listSkins().length > 0)
-        || expected?.animationCount !== measurement.animations.length
-        || !sameAnimations(expected?.animations, measurement.animations)
-      ) {
-        throw new Error(`${modelId}: processed model does not match its pinned metadata`);
-      }
-      processedTotal += measurement.triangles;
+      processedTotal += await validateProcessedModel(modelId, modelsDir, metadata);
     } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error));
+      errors.push(errorMessage(error));
     }
   }
   if (processedTotal > PROCESSED_EVENT_TOTAL_TRIANGLE_LIMIT) {
@@ -417,19 +454,36 @@ async function main() {
       `processed event model total ${processedTotal} exceeds ${PROCESSED_EVENT_TOTAL_TRIANGLE_LIMIT}`,
     );
   }
+}
 
-  if (!assetsOnly) {
-    try {
-      validateEventModelAttribution(await readFile(ledgerPath, 'utf8'));
-    } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error));
-    }
+async function validateLedger(assetsOnly, ledgerPath, errors) {
+  if (assetsOnly) return;
+  try {
+    validateEventModelAttribution(await readFile(ledgerPath, 'utf8'));
+  } catch (error) {
+    errors.push(errorMessage(error));
   }
+}
 
+function reportErrors(errors) {
   if (errors.length > 0) {
     errors.forEach((error) => console.error(`ERROR: ${error}`));
     process.exitCode = 1;
   }
+}
+
+async function main() {
+  const { assetsOnly, ledgerPath, modelsDir } = parseModelCheckArguments(
+    process.argv.slice(2),
+    ['src', 'assets', 'models', 'events'],
+  );
+  const errors = [];
+  await validateDirectory(modelsDir, errors);
+  const metadata = await readMetadata(modelsDir, errors);
+  await measureCuratedModels(modelsDir, metadata, errors);
+  await measureProcessedModels(modelsDir, metadata, errors);
+  await validateLedger(assetsOnly, ledgerPath, errors);
+  reportErrors(errors);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

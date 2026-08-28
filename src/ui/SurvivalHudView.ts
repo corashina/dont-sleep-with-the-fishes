@@ -278,15 +278,18 @@ export class SurvivalHudView {
       || (!this.topControls.contains(button) && button !== this.cameraReturn)
     ) return;
     if (button.disabled) return;
+    this.handleHudButton(button);
+  };
+
+  private handleHudButton(button: HTMLButtonElement): void {
     if (button === this.journalMarker) {
       if (!this.modalOpen) this.onJournal();
       return;
     }
-    if (
-      (button === this.cameraTurn || button === this.cameraReturn)
-      && !this.busy
-      && !this.paused
-      && !this.modalOpen
-    ) this.onCameraTurn();
-  };
+    if (this.isCameraButton(button) && !this.busy && !this.paused && !this.modalOpen) this.onCameraTurn();
+  }
+
+  private isCameraButton(button: HTMLButtonElement): boolean {
+    return button === this.cameraTurn || button === this.cameraReturn;
+  }
 }

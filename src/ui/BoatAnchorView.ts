@@ -790,16 +790,7 @@ export class BoatAnchorView {
   }
 
   private openCarlitosCard(anchorButton: HTMLButtonElement): void {
-    const snapshot = this.currentSnapshot;
-    if (
-      snapshot?.carlitos?.alive !== true
-      || this.busy
-      || this.paused
-      || (this.eventPresentationActive && !this.itemAnimationLab)
-      || this.modalOpen
-      || anchorButton.disabled
-      || anchorButton.getAttribute('aria-hidden') === 'true'
-    ) return;
+    if (!this.canOpenCarlitosCard(anchorButton)) return;
     const anchorId = anchorButton.dataset.anchorId;
     const anchor = anchorId === undefined ? undefined : this.anchors.get(anchorId);
     if (anchor?.companionId !== 'carlitos' || !anchor.visible) return;
@@ -809,6 +800,13 @@ export class BoatAnchorView {
     this.carlitosCard.classList.add('is-visible');
     this.positionCarlitosCard(anchor);
     this.carlitosPet.focus();
+  }
+
+  private canOpenCarlitosCard(anchorButton: HTMLButtonElement): boolean {
+    const carlitos = this.currentSnapshot?.carlitos;
+    if (carlitos?.alive !== true || this.busy || this.paused || this.modalOpen) return false;
+    if (this.eventPresentationActive && !this.itemAnimationLab) return false;
+    return !anchorButton.disabled && anchorButton.getAttribute('aria-hidden') !== 'true';
   }
 
   private toggleCarlitosCard(anchorButton: HTMLButtonElement): void {

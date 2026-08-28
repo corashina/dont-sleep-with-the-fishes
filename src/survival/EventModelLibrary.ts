@@ -123,8 +123,7 @@ function disposeOwnedEventRoot(root: Group, textures: Set<Texture>): void {
   disposeResourceSets(geometries, textures, materials, collectSkeletons(root));
 }
 
-function validateSpec(id: EventModelId, spec: EventModelSpec | undefined): EventModelSpec {
-  if (!spec) throw new EventModelLoadError(id, 'manifest entry is missing');
+function validateTriangleMetadata(id: EventModelId, spec: EventModelSpec): void {
   const metadata = spec.generatedMetadata;
   if (
     !Number.isInteger(metadata?.triangles)
@@ -133,6 +132,10 @@ function validateSpec(id: EventModelId, spec: EventModelSpec | undefined): Event
   ) {
     throw new EventModelLoadError(id, 'generated triangle metadata is invalid');
   }
+}
+
+function validateBoundsMetadata(id: EventModelId, spec: EventModelSpec): void {
+  const metadata = spec.generatedMetadata;
   const bounds = [metadata.rawBounds?.min, metadata.rawBounds?.max];
   if (
     bounds.some((values) => !Array.isArray(values) || values.length !== 3)
@@ -141,6 +144,9 @@ function validateSpec(id: EventModelId, spec: EventModelSpec | undefined): Event
   ) {
     throw new EventModelLoadError(id, 'generated bounds metadata is invalid');
   }
+}
+
+function validatePresentationMetadata(id: EventModelId, spec: EventModelSpec): void {
   if (
     !Number.isFinite(spec.targetLongestDimension)
     || spec.targetLongestDimension <= 0
@@ -148,6 +154,13 @@ function validateSpec(id: EventModelId, spec: EventModelSpec | undefined): Event
   ) {
     throw new EventModelLoadError(id, 'presentation metadata is invalid');
   }
+}
+
+function validateSpec(id: EventModelId, spec: EventModelSpec | undefined): EventModelSpec {
+  if (!spec) throw new EventModelLoadError(id, 'manifest entry is missing');
+  validateTriangleMetadata(id, spec);
+  validateBoundsMetadata(id, spec);
+  validatePresentationMetadata(id, spec);
   return spec;
 }
 
@@ -165,6 +178,70 @@ interface TextureCloneResult {
   readonly changed: boolean;
 }
 
+function cloneTexture(
+  source: Texture,
+  cloned: unknown,
+  textureClones: Map<Texture, Texture>,
+  discardedTextures: Set<Texture>,
+): TextureCloneResult {
+  const existing = textureClones.get(source);
+  if (existing) {
+    if (cloned instanceof Texture && cloned !== source && cloned !== existing) {
+      discardedTextures.add(cloned);
+    }
+    return { value: existing, changed: cloned !== existing };
+  }
+  const owned = cloned instanceof Texture && cloned !== source ? cloned : source.clone();
+  textureClones.set(source, owned);
+  return { value: owned, changed: cloned !== owned };
+}
+
+function cloneTextureArray(
+  source: readonly unknown[],
+  cloned: unknown,
+  textureClones: Map<Texture, Texture>,
+  discardedTextures: Set<Texture>,
+): TextureCloneResult {
+  const target = Array.isArray(cloned) ? [...cloned] : [...source];
+  let changed = false;
+  source.forEach((value, index) => {
+    const result = cloneTextureValue(value, target[index], textureClones, discardedTextures);
+    if (!result.changed) return;
+    target[index] = result.value;
+    changed = true;
+  });
+  return { value: changed ? target : cloned, changed };
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object'
+    && value !== null
+    && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function cloneTextureRecord(
+  source: Record<string, unknown>,
+  cloned: unknown,
+  textureClones: Map<Texture, Texture>,
+  discardedTextures: Set<Texture>,
+): TextureCloneResult {
+  const clonedRecord = isPlainRecord(cloned) ? cloned : { ...source };
+  const target = { ...clonedRecord };
+  let changed = false;
+  Object.entries(source).forEach(([key, value]) => {
+    const result = cloneTextureValue(
+      value,
+      clonedRecord[key],
+      textureClones,
+      discardedTextures,
+    );
+    if (!result.changed) return;
+    target[key] = result.value;
+    changed = true;
+  });
+  return { value: changed ? target : cloned, changed };
+}
+
 function cloneTextureValue(
   source: unknown,
   cloned: unknown,
@@ -172,58 +249,13 @@ function cloneTextureValue(
   discardedTextures: Set<Texture>,
 ): TextureCloneResult {
   if (source instanceof Texture) {
-    const existing = textureClones.get(source);
-    if (existing) {
-      if (cloned instanceof Texture && cloned !== source && cloned !== existing) {
-        discardedTextures.add(cloned);
-      }
-      return { value: existing, changed: cloned !== existing };
-    }
-    const owned = cloned instanceof Texture && cloned !== source ? cloned : source.clone();
-    textureClones.set(source, owned);
-    return { value: owned, changed: cloned !== owned };
+    return cloneTexture(source, cloned, textureClones, discardedTextures);
   }
   if (Array.isArray(source)) {
-    const target = Array.isArray(cloned) ? [...cloned] : [...source];
-    let changed = false;
-    source.forEach((value, index) => {
-      const result = cloneTextureValue(
-        value,
-        target[index],
-        textureClones,
-        discardedTextures,
-      );
-      if (!result.changed) return;
-      target[index] = result.value;
-      changed = true;
-    });
-    return { value: changed ? target : cloned, changed };
+    return cloneTextureArray(source, cloned, textureClones, discardedTextures);
   }
-  if (
-    typeof source === 'object'
-    && source !== null
-    && Object.getPrototypeOf(source) === Object.prototype
-  ) {
-    const sourceRecord = source as Record<string, unknown>;
-    const clonedRecord = (
-      typeof cloned === 'object'
-      && cloned !== null
-      && Object.getPrototypeOf(cloned) === Object.prototype
-    ) ? cloned as Record<string, unknown> : { ...sourceRecord };
-    const target = { ...clonedRecord };
-    let changed = false;
-    Object.entries(sourceRecord).forEach(([key, value]) => {
-      const result = cloneTextureValue(
-        value,
-        clonedRecord[key],
-        textureClones,
-        discardedTextures,
-      );
-      if (!result.changed) return;
-      target[key] = result.value;
-      changed = true;
-    });
-    return { value: changed ? target : cloned, changed };
+  if (isPlainRecord(source)) {
+    return cloneTextureRecord(source, cloned, textureClones, discardedTextures);
   }
   return { value: cloned, changed: false };
 }

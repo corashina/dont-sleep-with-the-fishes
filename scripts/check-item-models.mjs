@@ -103,9 +103,7 @@ function recordBounds(filePath, state, world) {
   }
 }
 
-function validatePrimitiveBounds(filePath, primitive, matrix, state) {
-  const position = primitive.getAttribute('POSITION');
-  if (!position) return;
+function positionWorldPoints(filePath, position, matrix, state) {
   const point = [0, 0, 0];
   const worldPoints = [];
   for (let index = 0; index < position.getCount(); index += 1) {
@@ -114,7 +112,10 @@ function validatePrimitiveBounds(filePath, primitive, matrix, state) {
     recordBounds(filePath, state, world);
     worldPoints.push(world);
   }
-  const indices = primitive.getIndices();
+  return worldPoints;
+}
+
+function validatePrimitiveTriangles(position, indices, worldPoints, state) {
   const elementCount = indices?.getCount() ?? position.getCount();
   for (let element = 0; element < elementCount; element += 3) {
     const firstIndex = indices?.getScalar(element) ?? element;
@@ -128,6 +129,13 @@ function validatePrimitiveBounds(filePath, primitive, matrix, state) {
       state.hasNonDegenerateTriangle = true;
     }
   }
+}
+
+function validatePrimitiveBounds(filePath, primitive, matrix, state) {
+  const position = primitive.getAttribute('POSITION');
+  if (!position) return;
+  const worldPoints = positionWorldPoints(filePath, position, matrix, state);
+  validatePrimitiveTriangles(position, primitive.getIndices(), worldPoints, state);
 }
 
 function validateNodeBounds(filePath, node, visitedNodes, state) {

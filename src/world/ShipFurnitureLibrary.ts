@@ -51,6 +51,31 @@ function normalizeTemplate(
   spec: ShipFurnitureModelSpec,
 ): number {
   root.updateMatrixWorld(true);
+  const triangles = validateFurnitureMeshes(modelId, root, spec);
+  const sourceBounds = validFurnitureBounds(modelId, root, 'scene has empty or non-finite bounds');
+  const axisLength = sourceBounds.getSize(new Vector3())[spec.scaleAxis];
+  if (!Number.isFinite(axisLength) || axisLength <= 0) {
+    throw new ShipFurnitureLoadError(modelId, `scene has zero-length ${spec.scaleAxis} bounds`);
+  }
+  root.scale.multiplyScalar(spec.targetAxisLength / axisLength);
+  root.updateMatrixWorld(true);
+  const scaledBounds = validFurnitureBounds(modelId, root, 'normalized scene has empty or non-finite bounds');
+  const center = scaledBounds.getCenter(new Vector3());
+  root.position.x -= center.x;
+  root.position.y -= scaledBounds.min.y;
+  root.position.z -= center.z;
+  root.updateMatrixWorld(true);
+  const finalBounds = validFurnitureBounds(modelId, root, 'normalized scene has invalid bounds');
+  validateCanonicalFurnitureBounds(modelId, finalBounds.getSize(new Vector3()), spec);
+  validateFurnitureBase(modelId, finalBounds);
+  return triangles;
+}
+
+function validateFurnitureMeshes(
+  modelId: ShipFurnitureAssetId,
+  root: Group,
+  spec: ShipFurnitureModelSpec,
+): number {
   let meshCount = 0;
   let triangles = 0;
   root.traverse((object) => {
@@ -73,34 +98,20 @@ function normalizeTemplate(
       `triangle count ${triangles} exceeds the ${spec.maxTriangles} limit`,
     );
   }
+  return triangles;
+}
 
-  const sourceBounds = new Box3().setFromObject(root);
-  if (sourceBounds.isEmpty() || !finiteBox(sourceBounds)) {
-    throw new ShipFurnitureLoadError(modelId, 'scene has empty or non-finite bounds');
-  }
-  const sourceSize = sourceBounds.getSize(new Vector3());
-  const axisLength = sourceSize[spec.scaleAxis];
-  if (!Number.isFinite(axisLength) || axisLength <= 0) {
-    throw new ShipFurnitureLoadError(modelId, `scene has zero-length ${spec.scaleAxis} bounds`);
-  }
+function validFurnitureBounds(modelId: ShipFurnitureAssetId, root: Group, message: string): Box3 {
+  const bounds = new Box3().setFromObject(root);
+  if (bounds.isEmpty() || !finiteBox(bounds)) throw new ShipFurnitureLoadError(modelId, message);
+  return bounds;
+}
 
-  root.scale.multiplyScalar(spec.targetAxisLength / axisLength);
-  root.updateMatrixWorld(true);
-  const scaledBounds = new Box3().setFromObject(root);
-  if (scaledBounds.isEmpty() || !finiteBox(scaledBounds)) {
-    throw new ShipFurnitureLoadError(modelId, 'normalized scene has empty or non-finite bounds');
-  }
-  const center = scaledBounds.getCenter(new Vector3());
-  root.position.x -= center.x;
-  root.position.y -= scaledBounds.min.y;
-  root.position.z -= center.z;
-  root.updateMatrixWorld(true);
-
-  const finalBounds = new Box3().setFromObject(root);
-  const finalSize = finalBounds.getSize(new Vector3());
-  if (finalBounds.isEmpty() || !finiteBox(finalBounds)) {
-    throw new ShipFurnitureLoadError(modelId, 'normalized scene has invalid bounds');
-  }
+function validateCanonicalFurnitureBounds(
+  modelId: ShipFurnitureAssetId,
+  finalSize: Vector3,
+  spec: ShipFurnitureModelSpec,
+): void {
   spec.canonicalSize.forEach((expected, axis) => {
     const actual = finalSize.getComponent(axis);
     if (!Number.isFinite(actual) || Math.abs(actual - expected) > spec.boundsTolerance) {
@@ -110,6 +121,9 @@ function normalizeTemplate(
       );
     }
   });
+}
+
+function validateFurnitureBase(modelId: ShipFurnitureAssetId, finalBounds: Box3): void {
   if (
     Math.abs(finalBounds.min.y) > 1e-6
     || Math.abs((finalBounds.min.x + finalBounds.max.x) / 2) > 1e-6
@@ -117,7 +131,6 @@ function normalizeTemplate(
   ) {
     throw new ShipFurnitureLoadError(modelId, 'normalized scene is not centered on its base');
   }
-  return triangles;
 }
 
 function materialTextures(material: Material): readonly Texture[] {
