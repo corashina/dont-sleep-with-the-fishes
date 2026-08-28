@@ -124,6 +124,65 @@ describe('launchGame', () => {
     document.body.replaceChildren();
   });
 
+  it('parses development playtest input before loading assets', async () => {
+    const mount = connectedMount();
+    const createGame = vi.fn(() => ({ start: vi.fn(), dispose: vi.fn() }));
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve({ dispose: vi.fn() } as unknown as PropModelLibrary),
+      { createGame },
+    ), 'enabled', {
+      search: '?playtest=survival&seed=42&missing=map-1&missing=knife-1',
+      development: true,
+    });
+
+    await handle.completion;
+
+    expect(createGame).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.any(Function),
+      expect.objectContaining({ seed: 42 }),
+    );
+  });
+
+  it('rejects invalid playtest input before loading assets', async () => {
+    const mount = connectedMount();
+    const loadModels = vi.fn(() => Promise.resolve(
+      { dispose: vi.fn() } as unknown as PropModelLibrary,
+    ));
+    const handle = launchGame(mount, dependencies(loadModels), 'enabled', {
+      search: '?playtest=survival&seed=42&missing=map-1',
+      development: true,
+    });
+
+    await expect(handle.completion).resolves.toBeNull();
+    expect(loadModels).not.toHaveBeenCalled();
+  });
+
+  it('ignores playtest input in production', async () => {
+    const mount = connectedMount();
+    const createGame = vi.fn(() => ({ start: vi.fn(), dispose: vi.fn() }));
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve({ dispose: vi.fn() } as unknown as PropModelLibrary),
+      { createGame },
+    ), 'enabled', {
+      search: '?playtest=survival&seed=42&missing=map-1&missing=knife-1',
+      development: false,
+    });
+
+    await handle.completion;
+    expect(createGame.mock.calls[0]?.at(-1)).toBeNull();
+  });
+
   it('renders the loading state before model preload resolves', async () => {
     const pending = deferred<PropModelLibrary>();
     const mount = connectedMount();
@@ -191,6 +250,7 @@ describe('launchGame', () => {
       loadedMenuModels,
       loadedMenuSandAssets,
       expect.any(Function),
+      null,
     );
     expect(game.start).toHaveBeenCalledOnce();
   });
@@ -208,9 +268,10 @@ describe('launchGame', () => {
 
     await handle.completion;
     expect(loadMenuModels).toHaveBeenCalledOnce();
-    expect(createGame.mock.calls[0]?.at(-3)).toBe(loadedMenuModels);
-    expect(createGame.mock.calls[0]?.at(-2)).toBeInstanceOf(MenuSandAssets);
-    expect(createGame.mock.calls[0]?.at(-1)).toEqual(expect.any(Function));
+    expect(createGame.mock.calls[0]?.at(-4)).toBe(loadedMenuModels);
+    expect(createGame.mock.calls[0]?.at(-3)).toBeInstanceOf(MenuSandAssets);
+    expect(createGame.mock.calls[0]?.at(-2)).toEqual(expect.any(Function));
+    expect(createGame.mock.calls[0]?.at(-1)).toBeNull();
   });
 
   it('reports the required menu model that could not load', async () => {
@@ -563,6 +624,7 @@ describe('launchGame', () => {
       expect.anything(),
       expect.anything(),
       expect.any(Function),
+      null,
     );
   });
 
@@ -594,6 +656,7 @@ describe('launchGame', () => {
       expect.anything(),
       expect.anything(),
       expect.any(Function),
+      null,
     );
     expect(game.start).toHaveBeenCalledOnce();
   });
