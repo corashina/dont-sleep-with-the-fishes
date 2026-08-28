@@ -26,6 +26,7 @@ import { SurvivalPhase, type SurvivalPhaseStart } from '../src/survival/Survival
 import { deriveEventVariantSeed } from '../src/survival/eventPresentationOutcome';
 import type { EventOutcomePresentation } from '../src/survival/eventPresentationTypes';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
+import { SURVIVAL_BALANCE } from '../src/survival/survivalBalance';
 import type {
   SurvivalInventorySnapshot,
   SurvivalItemState,
@@ -2387,24 +2388,19 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.calls.at(-1)).toBe('restoreCommandFocus');
   });
 
-  it('ignores an outside-water mouse point, accepts the retry, and gates duplicate casts', async () => {
+  it('falls back from an outside-water mouse point and gates duplicate casts', async () => {
     const rig = createFishingRig();
     rig.phase.start();
     rig.phase.handleAction('fish');
     await settleFishingEntry(rig);
     const cast = fishingCastCallback(rig);
-    rig.world.castFishingAtScreenPoint
-      .mockReturnValueOnce(null)
-      .mockReturnValueOnce(rig.castPoint);
+    rig.world.castFishingAtScreenPoint.mockReturnValueOnce(null);
 
-    expect(cast({ x: 12, y: 18 })).toBe(false);
-    expect(rig.session.beginFishing.mock.results[0]!.value.attempt.snapshot().state).toBe('aiming');
-    expect(rig.world.playFishingCast).not.toHaveBeenCalled();
-
-    expect(cast({ x: 240, y: 180 })).toBe(true);
+    expect(cast({ x: 12, y: 18 })).toBe(true);
     expect(cast({ x: 240, y: 180 })).toBe(false);
     expect(rig.ui.setFishingViewExitVisible).toHaveBeenLastCalledWith(false);
-    expect(rig.world.castFishingAtScreenPoint).toHaveBeenCalledWith(240, 180, 1, 1);
+    expect(rig.world.castFishingAtScreenPoint).toHaveBeenCalledWith(12, 18, 1, 1);
+    expect(rig.world.centeredFishingCast).toHaveBeenCalledOnce();
     expect(rig.world.playFishingCast).toHaveBeenCalledOnce();
     expect(rig.world.playFishingCast).toHaveBeenCalledWith(rig.castPoint);
     await completeFishingCast(rig);
@@ -2695,7 +2691,12 @@ describe('SurvivalPhase orchestration', () => {
     rig.phase.update(3, 3);
     rig.calls.length = 0;
 
-    if (resultAnimation === 'miss') rig.phase.update(4.5, 1.5);
+    if (resultAnimation === 'miss') {
+      rig.phase.update(
+        3 + SURVIVAL_BALANCE.fishing.reactionSeconds,
+        SURVIVAL_BALANCE.fishing.reactionSeconds,
+      );
+    }
     else expect(fishingReelCallback(rig)()).toBe(true);
 
     expect(rig.calls).not.toContain(expected);
@@ -2735,9 +2736,12 @@ describe('SurvivalPhase orchestration', () => {
     rig.phase.update(3, 3);
     rig.calls.length = 0;
 
-    rig.phase.update(4.5, 1.5);
+    rig.phase.update(
+      3 + SURVIVAL_BALANCE.fishing.reactionSeconds,
+      SURVIVAL_BALANCE.fishing.reactionSeconds,
+    );
     fishingReelCallback(rig)();
-    rig.phase.update(5, 0.5);
+    rig.phase.update(3.5 + SURVIVAL_BALANCE.fishing.reactionSeconds, 0.5);
 
     expect(rig.session.finishFishing).toHaveBeenCalledOnce();
     expect(rig.realSession.snapshot()).toMatchObject({ food: 0, bait: 1 });
@@ -3216,6 +3220,7 @@ describe('SurvivalPhase orchestration', () => {
 
     phase.start();
     await flushPromises();
+
     calls.length = 0;
 
     phase.handleEndure();
@@ -7645,7 +7650,10 @@ describe('SurvivalPhase orchestration', () => {
   });
 
   it('lets the Plane pass when its item window expires', async () => {
-    const session = new SurvivalSession([], {
+    const session = new SurvivalSession([
+      { instanceId: 'flareGun-1', type: 'flareGun' },
+      { instanceId: 'flashlight-1', type: 'flashlight' },
+    ], {
       seed: 206,
       random: sequenceRandom([0.99]),
       initial: { day: 15, rescueLead: 2 },
@@ -7681,6 +7689,11 @@ describe('SurvivalPhase orchestration', () => {
     });
     phase.start();
     await flushPromises();
+
+    expect(session.snapshot().inventory).toMatchObject({
+      'flareGun-1': { condition: 'usable' },
+      'flashlight-1': { condition: 'usable' },
+    });
 
     phase.update(0, 0);
     phase.update(PLANE_CHOICE_WINDOW_SECONDS - 0.1, PLANE_CHOICE_WINDOW_SECONDS - 0.1);
