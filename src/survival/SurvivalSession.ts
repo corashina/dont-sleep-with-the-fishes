@@ -722,13 +722,11 @@ export class SurvivalSession {
     }
 
     if (this.random.next() < quietNightChance(this.pressure)) {
-      this.state = 'nightEvent';
-      this.pendingJournalNighttime = createQuietJournalNightRecord();
-      this.finalizeJournalDay();
-      return this.commit('quiet-night', 'The night passes without incident.', {}, 'nightfall');
+      return this.beginQuietNight();
     }
 
     const event = this.drawEvent('night');
+    if (event.id === 'night-calm-fallback') return this.beginQuietNight();
     this.openEvent(event);
     return this.commit('event-opened', event.prompt, {}, 'nightfall');
   }
@@ -1337,6 +1335,18 @@ export class SurvivalSession {
       this.pendingJournalDaytime,
       this.pendingJournalNighttime,
     ));
+  }
+
+  private beginQuietNight(): ActionOutcome {
+    this.state = 'nightEvent';
+    this.pendingJournalNighttime = createQuietJournalNightRecord();
+    this.finalizeJournalDay();
+    return this.commit(
+      'quiet-night',
+      'The night passes without incident.',
+      {},
+      'nightfall',
+    );
   }
 
   private openEvent(event: SurvivalEventDefinition): void {
