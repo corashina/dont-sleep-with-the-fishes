@@ -901,6 +901,32 @@ describe('launchGame', () => {
     expect(mount.textContent).not.toContain('WEBGL UNAVAILABLE');
   });
 
+  it('shows GAME ERROR and preserves a thrown string', async () => {
+    const mount = connectedMount();
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve({ dispose: vi.fn() } as unknown as PropModelLibrary),
+      { createGame: () => { throw 'event bundle failed'; } },
+    ));
+
+    await expect(handle.completion).resolves.toBeNull();
+    expect(mount.textContent).toContain('GAME ERROR');
+    expect(mount.textContent).toContain('event bundle failed');
+    expect(mount.textContent).not.toContain('WEBGL');
+  });
+
+  it('shows a generic GAME ERROR detail for undefined', async () => {
+    const mount = connectedMount();
+    const handle = launchGame(mount, dependencies(
+      () => Promise.resolve({ dispose: vi.fn() } as unknown as PropModelLibrary),
+      { createGame: () => { throw undefined; } },
+    ));
+
+    await expect(handle.completion).resolves.toBeNull();
+    expect(mount.textContent).toContain('GAME ERROR');
+    expect(mount.textContent).toContain('Unknown game error');
+    expect(mount.textContent).not.toContain('WEBGL');
+  });
+
   it('keeps WEBGL UNAVAILABLE for renderer initialization failure', async () => {
     const mount = connectedMount();
     const handle = launchGame(mount, dependencies(
