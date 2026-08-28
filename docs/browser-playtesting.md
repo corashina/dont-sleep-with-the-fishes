@@ -4,6 +4,8 @@
 
 The current chat coordinates all subagents. It asks for the tester count before each run. Choose one, two, or three. Default: 3.
 
+A count in the run request does not answer this question. The coordinator waits for a new answer before setup or browser actions.
+
 ## Tester Count and Profiles
 
 One tester uses balanced play. Two use cautious and reckless play. Three use cautious, balanced, and reckless play.
