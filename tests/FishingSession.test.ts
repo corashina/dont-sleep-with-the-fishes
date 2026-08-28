@@ -141,7 +141,7 @@ describe('FishingSession', () => {
   });
 
   it('accepts reels strictly before reaction expiry and misses at expiry', () => {
-    expect(SURVIVAL_BALANCE.fishing.reactionSeconds).toBe(12);
+    expect(SURVIVAL_BALANCE.fishing.reactionSeconds).toBe(6);
     const successful = createSession();
     castToWaiting(successful);
     successful.advance(3 + SURVIVAL_BALANCE.fishing.reactionSeconds - 0.000001);
