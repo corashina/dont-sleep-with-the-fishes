@@ -921,8 +921,7 @@ describe('SurvivalUI', () => {
     expect(scuba.dataset.overlapCount).toBe('2');
     expect(map.dataset.overlapCount).toBeUndefined();
     expect(bucket.getAttribute('aria-keyshortcuts')).toBe('ArrowLeft ArrowRight');
-    expect(bucket.querySelector('[data-overlap-cycle]')?.textContent)
-      .toBe('SCROLL OR ← → TO SELECT');
+    expect(bucket.querySelector('[data-overlap-cycle]')).toBeNull();
 
     bucket.focus();
     press('[data-anchor-id="bucket-overlap"]', 'ArrowRight');
@@ -941,6 +940,45 @@ describe('SurvivalUI', () => {
     expect(bucket.style.zIndex).toBe('100001');
     expect(scuba.style.zIndex).toBe('99800');
     expect(highlight).toHaveBeenLastCalledWith('bucket-overlap');
+  });
+
+  it('shows only the fishing rod label and energy in its tooltip', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.setAnchors([
+      {
+        id: 'fishing-tools',
+        itemType: null,
+        toolId: 'fishingRod',
+        action: 'fish',
+        remainingUses: null,
+        x: 300,
+        y: 220,
+        visible: true,
+        depleted: false,
+        hitArea: { width: 40, height: 40, depth: 2 },
+      },
+      {
+        id: 'knife-overlap',
+        itemType: 'knife',
+        toolId: null,
+        action: null,
+        remainingUses: null,
+        x: 310,
+        y: 220,
+        visible: true,
+        depleted: false,
+        hitArea: { width: 40, height: 40, depth: 1 },
+      },
+    ]);
+
+    const fishingRod = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="fishing-tools"]',
+    )!;
+    expect(fishingRod.querySelector('.boat-tooltip')?.textContent).toBe('Fishing rod ⚡');
+    expect(fishingRod.querySelector('[data-overlap-cycle]')).toBeNull();
+    expect(fishingRod.getAttribute('aria-keyshortcuts')).toBe('ArrowLeft ArrowRight');
   });
 
   it('activates a focused contextual choice with the keyboard', () => {
@@ -2587,11 +2625,11 @@ describe('SurvivalUI', () => {
     expect(back.parentElement).toBe(focus);
     expect(back.parentElement).not.toBe(focusCard);
     expect(back.textContent?.trim()).toBe('');
-    expect(back.querySelector('[data-focused-event-back-icon] path')?.getAttribute('d'))
+    expect(back.querySelector('[data-return-arrow] path')?.getAttribute('d'))
       .toBe('M9 3h6v10h5l-8 8-8-8h5z');
     expect(back.getAttribute('aria-label')).toBe('Return to boat');
     expect(mainStyles).toMatch(
-      /\.focused-event-view__back-icon\s*\{[^}]*width:\s*82px;[^}]*height:\s*82px;/s,
+      /\.return-arrow-artwork\s*\{[^}]*width:\s*82px;[^}]*height:\s*82px;/s,
     );
     expect(mainStyles).toMatch(
       /\.focused-event-view__back:hover\s*\{[^}]*color:\s*#ead4a5;[^}]*\}/s,
@@ -2648,9 +2686,10 @@ describe('SurvivalUI', () => {
     ui.setCameraTurnState(true, true);
     expect(returnButton.hidden).toBe(false);
     expect(returnButton.getAttribute('aria-label')).toBe('Return to front of boat');
-    expect(returnButton.querySelector('svg')?.getAttribute('fill')).toBe('none');
-    expect(returnButton.querySelector('svg')?.getAttribute('stroke')).toBe('currentColor');
-    expect(returnButton.querySelectorAll('path')).toHaveLength(2);
+    expect(returnButton.querySelector('svg')?.matches('[data-return-arrow]')).toBe(true);
+    expect(returnButton.querySelector('svg')?.classList).toContain('return-arrow-artwork');
+    expect(returnButton.querySelector('path')?.getAttribute('d'))
+      .toBe('M9 3h6v10h5l-8 8-8-8h5z');
     expect(button.getAttribute('aria-label')).toBe('Look forward from the chest');
     expect(button.getAttribute('aria-pressed')).toBe('true');
     expect(button.querySelector('[data-camera-turn-tooltip]')?.textContent)
@@ -2740,13 +2779,15 @@ describe('SurvivalUI', () => {
     expect(rule).toMatch(/background:\s*transparent/);
     expect(rule).not.toContain('border-radius');
     expect(arrow.tagName.toLowerCase()).toBe('svg');
-    expect(arrow.getAttribute('viewBox')).toBe('4 4 16 16');
-    expect(arrow.getAttribute('fill')).toBe('none');
-    expect(arrow.getAttribute('stroke')).toBe('currentColor');
+    expect(arrow.getAttribute('viewBox')).toBe('0 0 24 24');
+    expect(arrow.matches('[data-return-arrow]')).toBe(true);
+    expect(arrow.classList).toContain('return-arrow-artwork');
     expect([...arrow.querySelectorAll('path')].map((path) => path.getAttribute('d')))
-      .toEqual(['M12 5v14', 'm19 12-7 7-7-7']);
-    expect(arrowRule).toMatch(/width:\s*132px/);
-    expect(arrowRule).toMatch(/height:\s*132px/);
+      .toEqual(['M9 3h6v10h5l-8 8-8-8h5z']);
+    expect(arrowRule).toBe('');
+    expect(mainStyles).toMatch(
+      /\.return-arrow-artwork\s*\{[^}]*width:\s*82px;[^}]*height:\s*82px;/s,
+    );
     expect(mainStyles).not.toContain('.fishing-view-exit__arrow::before');
     expect(mainStyles).toMatch(
       /\.boat-anchors\s*\{[^}]*z-index:\s*10;/s,

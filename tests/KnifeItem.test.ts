@@ -134,6 +134,8 @@ describe('Knife survival item', () => {
     const transform = boatStorageTransform(knife);
 
     expect(boatStorageSurface(knife)).toBe('floor');
+    expect(transform.rotation.x).toBeCloseTo(Math.PI / 2);
+    expect(transform.rotation.y).toBeCloseTo(0);
     expect(transform.position.toArray().every(Number.isFinite)).toBe(true);
     expect(itemArtwork('knife')).toContain('data-item-artwork="knife"');
   });

@@ -6,6 +6,7 @@ import type {
   FocusedEventFocusView,
 } from './SurvivalUiViewModel';
 import { runCleanupSteps, throwCleanupFailure } from './UiCleanup';
+import { returnArrowArtwork } from './uiArtwork';
 
 const ROUTINE_DIALOG_MARGIN = 20;
 const ROUTINE_DIALOG_GAP = 22;
@@ -39,9 +40,7 @@ export class FocusedEventView {
           <nav data-focused-event-choices aria-label="Event choices"></nav>
         </div>
         <button type="button" class="focused-event-view__back" data-focused-event-back aria-label="Return to boat">
-          <svg class="focused-event-view__back-icon" data-focused-event-back-icon viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M9 3h6v10h5l-8 8-8-8h5z" />
-          </svg>
+          ${returnArrowArtwork('focused-event-view__back-icon')}
         </button>
       </section>`;
     this.root = template.content.firstElementChild as HTMLElement;

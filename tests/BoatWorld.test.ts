@@ -6956,7 +6956,9 @@ describe('BoatWorld helpers', () => {
     await focus;
 
     const dive = world.playEventItemUse('wreckage', 'dive', scuba.instanceId);
-    world.update(6.9, 5.8);
+    world.update(2.2, 1.1);
+    expect(camera.position.x).toBeCloseTo(1.66);
+    world.update(6.9, 4.7);
 
     const holdPosition = camera.getWorldPosition(new Vector3());
     expect(holdPosition.x).toBeCloseTo(4.2);
@@ -6984,7 +6986,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('projects clickable Wreckage debris on the right side of the default boat view', async () => {
+  it('projects clickable Wreckage debris on the right in default and focused views', async () => {
     const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -7022,6 +7024,13 @@ describe('BoatWorld helpers', () => {
       expect(interaction.y).toBeLessThan(720);
       expect(interaction.hitArea.width).toBeGreaterThanOrEqual(96);
       expect(interaction.hitArea.height).toBeGreaterThanOrEqual(72);
+
+      const focus = world.enterFocusedEventView('wreckage');
+      world.update(1.1, 1.1);
+      await focus;
+      const focusedBounds = world.projectEventInteractionBounds('wreckage', 1280, 720);
+      expect(focusedBounds).toEqual(expect.objectContaining({ visible: true }));
+      expect(focusedBounds!.x).toBeGreaterThan(720);
     } finally {
       world.dispose();
       propModels.dispose();

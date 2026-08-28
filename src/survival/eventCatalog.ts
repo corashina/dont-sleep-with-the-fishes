@@ -593,7 +593,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       requirements: [{ resource: 'energy', minimum: 2 }],
     },
     {
-      ...contextualChoice('delegate-carlitos', 'Send Carlitos',
+      ...contextualChoice('delegate-carlitos', 'Send Carlitos to Search Debris',
         wreckageOutcome('wreckage.search-repair', 35, 'Carlitos recovers repair timber.',
           effects([add('repairMaterial', 2)]), 'wreckage-carlitos-repair'),
         wreckageOutcome('wreckage.search-food', 25, 'Carlitos recovers one food.',

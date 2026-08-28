@@ -319,7 +319,7 @@ describe('survival events', () => {
         requirements: [{ resource: 'energy', minimum: 2 }], companionAction: undefined,
       },
       {
-        id: 'delegate-carlitos', label: 'Send Carlitos', itemId: undefined,
+        id: 'delegate-carlitos', label: 'Send Carlitos to Search Debris', itemId: undefined,
         requirements: undefined, companionAction: 'delegateCarlitos',
       },
       {

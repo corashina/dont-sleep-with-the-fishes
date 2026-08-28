@@ -5,6 +5,7 @@ import {
   settleAfterCleanup,
   throwCleanupFailure,
 } from './UiCleanup';
+import { returnArrowArtwork } from './uiArtwork';
 
 const FISHING_FADE_MS = 180;
 const ROUTINE_DIALOG_MARGIN = 20;
@@ -87,11 +88,7 @@ export class SurvivalFishingView {
         <div class="survival-announcer" data-fishing-live aria-live="polite" aria-atomic="true"></div>
         <button type="button" class="fishing-bite-target" data-fishing-bite aria-label="BITE - REEL NOW" hidden></button>
         <button type="button" class="fishing-view-exit ui-role-context" data-fishing-view-exit aria-label="Return to boat view" hidden>
-          <!-- Lucide Arrow Down. ISC license: https://lucide.dev/icons/arrow-down -->
-          <svg class="fishing-view-exit__arrow" viewBox="4 4 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 5v14"></path>
-            <path d="m19 12-7 7-7-7"></path>
-          </svg>
+          ${returnArrowArtwork('fishing-view-exit__arrow')}
         </button>
       </section>
       <div class="fishing-fade" data-fishing-fade aria-hidden="true"></div>

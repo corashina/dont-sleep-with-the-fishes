@@ -233,25 +233,27 @@ export class PostProcessingConsole {
           </label>
         </div>
       `;
-    const saveControl = saveControls === undefined
+    const saveCategory = saveControls === undefined
       ? ''
       : `
-        <div class="post-processing-console__group post-processing-console__save">
-          <strong>SAVE SYSTEM</strong>
-          <label class="post-processing-console__toggle">
-            <span>Auto-save</span>
-            <input
-              type="checkbox"
-              role="switch"
-              data-save-enabled
-              aria-label="Enable survival auto-save"
-              ${saveControls.enabled ? 'checked' : ''}
-            >
-            <output data-save-status>OFF</output>
-          </label>
-          <button type="button" data-save-continue>CONTINUE</button>
-          <small data-save-reason>Enable auto-save to create a checkpoint.</small>
-        </div>
+        <section class="post-processing-console__category">
+          <h2>SAVE SYSTEM</h2>
+          <div class="post-processing-console__group post-processing-console__save">
+            <label class="post-processing-console__toggle">
+              <span>Auto-save</span>
+              <input
+                type="checkbox"
+                role="switch"
+                data-save-enabled
+                aria-label="Enable survival auto-save"
+                ${saveControls.enabled ? 'checked' : ''}
+              >
+              <output data-save-status>OFF</output>
+            </label>
+            <button type="button" data-save-continue>CONTINUE</button>
+            <small data-save-reason>Enable auto-save to create a checkpoint.</small>
+          </div>
+        </section>
       `;
     this.element.className = 'post-processing-console';
     this.element.dataset.open = 'false';
@@ -287,6 +289,7 @@ export class PostProcessingConsole {
                   <h2>SOUND</h2>
                   ${audioControl}
                 </section>`}
+            ${saveCategory}
           </div>
           <div class="post-processing-console__category-column">
             <section class="post-processing-console__category post-processing-console__category--graphics">
@@ -314,7 +317,6 @@ export class PostProcessingConsole {
               <h2>GAMEPLAY</h2>
               ${cameraControl}
               ${gameplayPhysicsControl}
-              ${saveControl}
               ${timeOfDayControls === undefined
                 ? ''
                 : `<div class="post-processing-console__group">

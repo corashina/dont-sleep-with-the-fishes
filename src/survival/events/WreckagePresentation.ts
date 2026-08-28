@@ -5,9 +5,14 @@ import {
   Mesh,
   MeshStandardMaterial,
   Object3D,
+  Quaternion,
   Vector3,
 } from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
+import {
+  createWaveSample,
+  type WaveSample,
+} from '../../ocean/WaveField';
 import { ignoreCleanupError, runCleanupSteps } from '../../world/SceneResources';
 import type { EventModelInstance } from '../EventModelLibrary';
 import type { FocusedEventInteractionTarget } from '../FocusedEventPresentation';
@@ -43,14 +48,14 @@ interface ActiveWreckageBeat {
 }
 
 const SURFACE_DEBRIS = Object.freeze([
-  { kind: 'box', x: 2.65, y: 0.04, z: -4.10, yaw: 0.34, scale: 0.82 },
-  { kind: 'crate', x: 4.25, y: 0.07, z: -4.20, yaw: -0.46, scale: 0.88 },
-  { kind: 'pallet', x: 5.75, y: 0.02, z: -6.15, yaw: 0.72, scale: 0.92 },
-  { kind: 'plank', x: 2.55, y: 0.10, z: -5.65, yaw: 0.18, scale: 0.95 },
-  { kind: 'plank', x: 3.35, y: 0.06, z: -7.35, yaw: -0.62, scale: 0.78 },
-  { kind: 'plank', x: 6.25, y: 0.08, z: -8.15, yaw: 1.02, scale: 0.70 },
-  { kind: 'plank', x: 2.65, y: 0.03, z: -9.25, yaw: -0.20, scale: 0.62 },
-  { kind: 'plank', x: 5.15, y: 0.12, z: -10.05, yaw: 0.58, scale: 0.56 },
+  { kind: 'box', x: 5.60, y: 0.04, z: -7.20, yaw: 0.34, scale: 0.82 },
+  { kind: 'crate', x: 8.10, y: 0.07, z: -7.90, yaw: -0.46, scale: 0.88 },
+  { kind: 'pallet', x: 10.60, y: 0.02, z: -10.40, yaw: 0.72, scale: 0.92 },
+  { kind: 'plank', x: 5.90, y: 0.10, z: -10.00, yaw: 0.18, scale: 0.95 },
+  { kind: 'plank', x: 8.10, y: 0.06, z: -12.70, yaw: -0.62, scale: 0.78 },
+  { kind: 'plank', x: 11.60, y: 0.08, z: -13.30, yaw: 1.02, scale: 0.70 },
+  { kind: 'plank', x: 6.20, y: 0.03, z: -14.70, yaw: -0.20, scale: 0.62 },
+  { kind: 'plank', x: 9.60, y: 0.12, z: -16.20, yaw: 0.58, scale: 0.56 },
 ] as const satisfies readonly SurfaceDebrisPlacement[]);
 
 const SURFACE_TILT = Object.freeze([
@@ -68,6 +73,7 @@ const PLANK_START_INDEX = 3;
 const TARGET_ID = 'event:wreckage';
 const WRECK_CAMERA_POSITION = new Vector3(4.2, -3.4, -4.3);
 const WRECK_CAMERA_TARGET = new Vector3(0, -7.2, -11.5);
+const WORLD_UP = new Vector3(0, 1, 0);
 const SEABED_Y = -12.25;
 const SEABED_Z = -11.5;
 
@@ -156,10 +162,13 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   });
   private readonly seabed = new Mesh(this.seabedGeometry, this.seabedMaterial);
   private readonly surfaceObjects: Object3D[] = [];
+  private readonly surfaceWaves: WaveSample[] = [];
+  private readonly surfaceBaseQuaternions: Quaternion[] = [];
+  private readonly surfaceNormal = new Vector3();
+  private readonly surfaceWaveQuaternion = new Quaternion();
   private readonly sample: WreckageSample = createWreckageSample();
   private readonly targets: readonly FocusedEventInteractionTarget[];
   private active: ActiveWreckageBeat | null = null;
-  private surfaceSeedOffset = 0;
   private surfaceTime = 0;
   private operation = 0;
   private diveOwned = false;
@@ -197,12 +206,11 @@ export class WreckagePresentation implements DedicatedEventPresentation {
       plank.name = `wreckage-plank-${index - PLANK_START_INDEX}`;
       plank.castShadow = true;
       plank.receiveShadow = true;
-      this.surfaceObjects.push(plank);
-      this.debris.add(plank);
+      this.addSurfaceObject(plank);
     }
 
     this.itemAimTarget.name = 'wreckage-item-aim-target';
-    this.itemAimTarget.position.set(4.3, 0.08, -6.65);
+    this.itemAimTarget.position.set(3, 0.08, -11.6);
     this.targets = Object.freeze([Object.freeze({
       id: TARGET_ID,
       label: 'WRECKAGE',
@@ -232,21 +240,18 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.beginOperation();
     this.cancelActive();
     this.releaseDive();
-    const seed = Number.isFinite(context.variantSeed) ? Math.trunc(context.variantSeed) : 0;
-    this.surfaceSeedOffset = seed % 7;
     this.surfaceTime = 0;
     this.staged = true;
     this.worldRoot.visible = true;
     this.boatRoot.visible = true;
     this.shipPlacement.visible = false;
     this.updateFloatingDebris();
-    sampleWreckageBeat('reveal', 0, this.sample);
+    sampleWreckageBeat('surface-hold', 0, this.sample);
     this.applySample();
   }
 
   reveal(): Promise<void> {
-    if (this.disposed || !this.staged) return Promise.resolve();
-    return this.startBeat('reveal');
+    return Promise.resolve();
   }
 
   skip(): void {
@@ -301,10 +306,6 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.applySample();
     if (active.elapsed < duration) return;
     this.active = null;
-    if (active.beat === 'reveal') {
-      sampleWreckageBeat('surface-hold', 0, this.sample);
-      this.applySample();
-    }
     active.resolve();
   }
 
@@ -320,10 +321,6 @@ export class WreckagePresentation implements DedicatedEventPresentation {
         sampleWreckageBeat(active.beat, active.elapsed, this.sample);
         this.applySample();
         this.active = null;
-        if (active.beat === 'reveal') {
-          sampleWreckageBeat('surface-hold', 0, this.sample);
-          this.applySample();
-        }
         active.resolve();
       },
     ]);
@@ -371,8 +368,18 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     const placement = new Group();
     placement.name = name;
     placement.add(root);
-    this.surfaceObjects.push(placement);
-    this.debris.add(placement);
+    this.addSurfaceObject(placement);
+  }
+
+  private addSurfaceObject(object: Object3D): void {
+    const index = this.surfaceObjects.length;
+    const placement = SURFACE_DEBRIS[index]!;
+    const tilt = SURFACE_TILT[index]!;
+    object.rotation.set(tilt.pitch, placement.yaw, tilt.roll);
+    this.surfaceObjects.push(object);
+    this.surfaceWaves.push(createWaveSample());
+    this.surfaceBaseQuaternions.push(object.quaternion.clone());
+    this.debris.add(object);
   }
 
   private startBeat(beat: WreckageBeat): Promise<void> {
@@ -392,21 +399,27 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   }
 
   private updateFloatingDebris(): void {
+    const amplitudeScale = this.environment.readWorldWaveAmplitudeScale();
     for (let index = 0; index < this.surfaceObjects.length; index += 1) {
       const placement = SURFACE_DEBRIS[index]!;
-      const tilt = SURFACE_TILT[index]!;
       const object = this.surfaceObjects[index]!;
-      const phase = this.surfaceTime * 0.9 + index * 1.47 + this.surfaceSeedOffset * 0.23;
-      object.position.set(
+      const wave = this.surfaceWaves[index]!;
+      this.environment.sampleWorldWaveInto(
+        wave,
+        this.surfaceTime,
         placement.x,
-        placement.y + Math.sin(phase) * 0.045,
         placement.z,
+        amplitudeScale,
       );
-      object.rotation.set(
-        tilt.pitch + Math.cos(phase * 0.8) * 0.025,
-        placement.yaw,
-        tilt.roll + Math.sin(phase * 0.72) * 0.035,
+      object.position.set(
+        placement.x + wave.displacementX,
+        placement.y + wave.height,
+        placement.z + wave.displacementZ,
       );
+      this.surfaceNormal.set(wave.normal.x, wave.normal.y, wave.normal.z).normalize();
+      this.surfaceWaveQuaternion.setFromUnitVectors(WORLD_UP, this.surfaceNormal);
+      object.quaternion.copy(this.surfaceWaveQuaternion)
+        .multiply(this.surfaceBaseQuaternions[index]!);
       object.scale.setScalar(placement.scale);
     }
   }

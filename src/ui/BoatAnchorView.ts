@@ -123,7 +123,6 @@ interface AnchorTooltipNodes {
   readonly label: Text;
   readonly separator: Text;
   readonly energy: HTMLElement;
-  readonly cycle: HTMLElement;
 }
 
 interface AnchorLayoutState {
@@ -590,13 +589,9 @@ export class BoatAnchorView {
       const energy = document.createElement('span');
       energy.className = 'boat-tooltip__energy ui-role-numeral';
       energy.setAttribute('aria-hidden', 'true');
-      const cycle = document.createElement('span');
-      cycle.className = 'boat-tooltip__cycle';
-      cycle.dataset.overlapCycle = '';
-      cycle.hidden = true;
-      tooltip.append(label, separator, energy, cycle);
+      tooltip.append(label, separator, energy);
       button.append(tooltip);
-      this.anchorTooltipNodes.set(button, { tooltip, label, separator, energy, cycle });
+      this.anchorTooltipNodes.set(button, { tooltip, label, separator, energy });
     }
     this.anchorLayer.append(button);
     this.anchorButtons.set(anchor.id, button);
@@ -1282,22 +1277,13 @@ export class BoatAnchorView {
           ) count += 1;
         });
       }
-      const cycle = this.anchorTooltipNodes.get(button)?.cycle;
       if (count > 1) {
         button.dataset.overlapCount = String(count);
         button.setAttribute('aria-keyshortcuts', 'ArrowLeft ArrowRight');
-        if (cycle !== undefined) {
-          cycle.hidden = false;
-          cycle.textContent = 'SCROLL OR ← → TO SELECT';
-        }
         if (id === this.cycledAnchorId) cycleIsValid = true;
       } else {
         delete button.dataset.overlapCount;
         button.removeAttribute('aria-keyshortcuts');
-        if (cycle !== undefined) {
-          cycle.hidden = true;
-          cycle.textContent = '';
-        }
       }
     });
     if (this.cycledAnchorId !== null && !cycleIsValid) {

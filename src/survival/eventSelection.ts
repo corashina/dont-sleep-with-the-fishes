@@ -31,34 +31,69 @@ export interface EventEligibility {
   readonly excludedIds?: ReadonlySet<string>;
 }
 
+function matchesEventSchedule(
+  eventEntry: SurvivalEventDefinition,
+  criteria: EventEligibility,
+): boolean {
+  if (eventEntry.phase !== criteria.phase || eventEntry.id === criteria.lastEventId) return false;
+  if (criteria.day < eventEntry.earliestDay) return false;
+  if (eventEntry.latestDay !== undefined && criteria.day > eventEntry.latestDay) return false;
+  if (eventEntry.weather !== undefined && !eventEntry.weather.includes(criteria.weather)) return false;
+  const lastSeen = criteria.lastSeenDay.get(eventEntry.id);
+  return lastSeen === undefined || criteria.day - lastSeen >= eventEntry.cooldownDays;
+}
+
+function matchesEventInventory(
+  eventEntry: SurvivalEventDefinition,
+  criteria: EventEligibility,
+): boolean {
+  if (eventEntry.targetItemIds !== undefined
+    && !eventEntry.targetItemIds.some((itemId) => criteria.targetableItemIds.has(itemId))) return false;
+  if (eventEntry.absentItemIds !== undefined
+    && eventEntry.absentItemIds.some((itemId) => criteria.inventoryItemIds.has(itemId))) return false;
+  return true;
+}
+
+function matchesEventHistory(
+  eventEntry: SurvivalEventDefinition,
+  criteria: EventEligibility,
+): boolean {
+  if (criteria.excludedIds?.has(eventEntry.id)) return false;
+  if (eventEntry.requiresLivingCompanion === true && criteria.hasLivingCompanion !== true) return false;
+  if (eventEntry.maximumAppearances !== undefined
+    && (criteria.appearanceCounts.get(eventEntry.id) ?? 0) >= eventEntry.maximumAppearances) return false;
+  if (eventEntry.minimumRescueLead !== undefined
+    && criteria.rescueLead < eventEntry.minimumRescueLead) return false;
+  return true;
+}
+
+function matchesEventPressure(
+  eventEntry: SurvivalEventDefinition,
+  criteria: EventEligibility,
+): boolean {
+  const pressure = criteria.pressure ?? 0;
+  if (eventEntry.minimumPressure !== undefined && pressure < eventEntry.minimumPressure) return false;
+  if (eventEntry.maximumPressure !== undefined && pressure > eventEntry.maximumPressure) return false;
+  const chestState = criteria.chestState ?? 'none';
+  return eventEntry.allowedChestStates === undefined
+    || eventEntry.allowedChestStates.includes(chestState);
+}
+
+function isEventEligible(
+  eventEntry: SurvivalEventDefinition,
+  criteria: EventEligibility,
+): boolean {
+  return matchesEventSchedule(eventEntry, criteria)
+    && matchesEventInventory(eventEntry, criteria)
+    && matchesEventHistory(eventEntry, criteria)
+    && matchesEventPressure(eventEntry, criteria);
+}
+
 export function eligibleEvents(
   catalog: readonly SurvivalEventDefinition[],
   criteria: EventEligibility,
 ): readonly SurvivalEventDefinition[] {
-  return catalog.filter((eventEntry) => {
-    if (criteria.excludedIds?.has(eventEntry.id)) return false;
-    if (eventEntry.phase !== criteria.phase || eventEntry.id === criteria.lastEventId) return false;
-    if (eventEntry.requiresLivingCompanion === true && criteria.hasLivingCompanion !== true) return false;
-    if (criteria.day < eventEntry.earliestDay
-      || (eventEntry.latestDay !== undefined && criteria.day > eventEntry.latestDay)) return false;
-    if (eventEntry.weather !== undefined && !eventEntry.weather.includes(criteria.weather)) return false;
-    if (eventEntry.targetItemIds !== undefined
-      && !eventEntry.targetItemIds.some((itemId) => criteria.targetableItemIds.has(itemId))) return false;
-    if (eventEntry.maximumAppearances !== undefined
-      && (criteria.appearanceCounts.get(eventEntry.id) ?? 0) >= eventEntry.maximumAppearances) return false;
-    if (eventEntry.absentItemIds !== undefined
-      && eventEntry.absentItemIds.some((itemId) => criteria.inventoryItemIds.has(itemId))) return false;
-    if (eventEntry.minimumRescueLead !== undefined
-      && criteria.rescueLead < eventEntry.minimumRescueLead) return false;
-    const pressure = criteria.pressure ?? 0;
-    if (eventEntry.minimumPressure !== undefined && pressure < eventEntry.minimumPressure) return false;
-    if (eventEntry.maximumPressure !== undefined && pressure > eventEntry.maximumPressure) return false;
-    const chestState = criteria.chestState ?? 'none';
-    if (eventEntry.allowedChestStates !== undefined
-      && !eventEntry.allowedChestStates.includes(chestState)) return false;
-    const lastSeen = criteria.lastSeenDay.get(eventEntry.id);
-    return lastSeen === undefined || criteria.day - lastSeen >= eventEntry.cooldownDays;
-  });
+  return catalog.filter((eventEntry) => isEventEligible(eventEntry, criteria));
 }
 
 const FALLBACKS: Readonly<Record<'day' | 'night', SurvivalEventDefinition>> = deepFreeze({

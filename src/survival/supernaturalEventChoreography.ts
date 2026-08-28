@@ -351,6 +351,53 @@ export function sampleSupernaturalItemUse(
   return true;
 }
 
+function sampleGhostReaction(
+  choiceId: string | undefined,
+  t: number,
+  output: SupernaturalReactionSample,
+): void {
+  const wrongChoice = choiceId !== 'flareGun';
+  output.ghostVisibility = wrongChoice ? 1 : 0;
+  output.ghostAdvance = wrongChoice ? smoothstep((t - 0.08) / 0.68) : 0;
+  output.flareFlash = wrongChoice ? 0 : pulse(t, 0.1, 0.32, 0.6);
+  output.cameraZ = wrongChoice ? 0.12 * output.ghostAdvance : 0;
+  output.cameraRoll = wrongChoice ? 0.1 * pulse(t, 0.22, 0.48, 0.82) : 0;
+}
+
+function sampleSirenReaction(
+  attack: boolean,
+  t: number,
+  output: SupernaturalReactionSample,
+): void {
+  if (attack) {
+    output.sirenLunge = pulse(t, 0.14, 0.48, 0.88);
+    output.sirenStrike = pulse(t, 0.36, 0.52, 0.72);
+    output.cameraZ = 0.18 * output.sirenLunge;
+    output.cameraRoll = 0.09 * output.sirenStrike;
+    return;
+  }
+  output.fogCurtain = pulse(t, 0.08, 0.48, 0.92);
+  output.cameraPitch = -0.06 * output.fogCurtain;
+}
+
+function applyReactionEnvelope(
+  output: SupernaturalReactionSample,
+  envelope: number,
+): void {
+  output.cameraX *= envelope;
+  output.cameraY *= envelope;
+  output.cameraZ *= envelope;
+  output.cameraYaw *= envelope;
+  output.cameraPitch *= envelope;
+  output.cameraRoll *= envelope;
+  output.ghostVisibility *= envelope;
+  output.ghostAdvance *= envelope;
+  output.flareFlash *= envelope;
+  output.fogCurtain *= envelope;
+  output.sirenLunge *= envelope;
+  output.sirenStrike *= envelope;
+}
+
 export function sampleSupernaturalReaction(
   eventId: string,
   outcome: SupernaturalReactionOutcome,
@@ -369,33 +416,10 @@ export function sampleSupernaturalReaction(
   const envelope = smoothstep(t / 0.12) * (1 - smoothstep((t - 0.76) / 0.24));
 
   if (eventId === 'ghosts') {
-    const wrongChoice = response?.choiceId !== 'flareGun';
-    output.ghostVisibility = wrongChoice ? 1 : 0;
-    output.ghostAdvance = wrongChoice ? smoothstep((t - 0.08) / 0.68) : 0;
-    output.flareFlash = response?.choiceId === 'flareGun' ? pulse(t, 0.1, 0.32, 0.6) : 0;
-    output.cameraZ = wrongChoice ? 0.12 * output.ghostAdvance : 0;
-    output.cameraRoll = wrongChoice ? 0.1 * pulse(t, 0.22, 0.48, 0.82) : 0;
-  } else if (attack) {
-    output.sirenLunge = pulse(t, 0.14, 0.48, 0.88);
-    output.sirenStrike = pulse(t, 0.36, 0.52, 0.72);
-    output.cameraZ = 0.18 * output.sirenLunge;
-    output.cameraRoll = 0.09 * output.sirenStrike;
+    sampleGhostReaction(response?.choiceId, t, output);
   } else {
-    output.fogCurtain = pulse(t, 0.08, 0.48, 0.92);
-    output.cameraPitch = -0.06 * output.fogCurtain;
+    sampleSirenReaction(attack, t, output);
   }
-
-  output.cameraX *= envelope;
-  output.cameraY *= envelope;
-  output.cameraZ *= envelope;
-  output.cameraYaw *= envelope;
-  output.cameraPitch *= envelope;
-  output.cameraRoll *= envelope;
-  output.ghostVisibility *= envelope;
-  output.ghostAdvance *= envelope;
-  output.flareFlash *= envelope;
-  output.fogCurtain *= envelope;
-  output.sirenLunge *= envelope;
-  output.sirenStrike *= envelope;
+  applyReactionEnvelope(output, envelope);
   return true;
 }
