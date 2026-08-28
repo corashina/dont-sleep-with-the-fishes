@@ -218,6 +218,55 @@ function multiplyReactionCamera(output: WeatherReactionSample, envelope: number)
   output.cameraRoll *= envelope;
 }
 
+function sampleShowerReveal(t: number, output: WeatherRevealSample): void {
+  const yaw = 0.3;
+  const pitch = 0.52;
+  if (t < 0.298) {
+    output.cameraYaw = yaw * smootherstep((t - 0.135) / 0.163);
+    output.cameraPitch = pitch * smootherstep((t - 0.106) / 0.173);
+  } else if (t < 0.375) {
+    output.cameraYaw = yaw;
+    output.cameraPitch = pitch;
+  } else if (t < 0.683) {
+    const lookAcross = smootherstep((t - 0.375) / 0.308);
+    output.cameraYaw = yaw * (1 - lookAcross * 2);
+    output.cameraPitch = pitch + Math.sin(lookAcross * Math.PI) * 0.06;
+  } else if (t < 0.769) {
+    output.cameraYaw = -yaw;
+    output.cameraPitch = pitch;
+  } else {
+    output.cameraYaw = -yaw * (1 - smootherstep((t - 0.769) / 0.193));
+    output.cameraPitch = pitch * (1 - smootherstep((t - 0.798) / 0.202));
+  }
+}
+
+function sampleWindyReveal(t: number, output: WeatherRevealSample): void {
+  if (t < 0.24) output.cameraYaw = 0.34 * smootherstep(t / 0.24);
+  else if (t < 0.42) output.cameraYaw = 0.34;
+  else if (t < 0.72) output.cameraYaw = 0.34 - 0.68 * smootherstep((t - 0.42) / 0.3);
+  else output.cameraYaw = -0.34;
+  output.cameraPitch = 0.025 * Math.sin(2 * Math.PI * t) * Math.sin(Math.PI * t);
+}
+
+function sampleWeatherRevealMotion(
+  eventId: WeatherAnimationEventId,
+  t: number,
+  output: WeatherRevealSample,
+): boolean {
+  if (eventId === 'shower-night') {
+    sampleShowerReveal(t, output);
+    return false;
+  }
+  if (eventId === 'windy-night') sampleWindyReveal(t, output);
+  if (eventId === 'thunderstorm') output.lightningEmphasis = pulse(t, 0.44, 0.55, 0.68);
+  if (eventId === 'man-in-the-fog') {
+    output.figureVisibility = smoothstep((t - 0.2) / 0.18);
+    output.figureDistance = 0;
+    return false;
+  }
+  return eventId === 'windy-night' || eventId === 'thunderstorm';
+}
+
 export function weatherRevealDuration(eventId: string): number | null {
   return isEventPresentationRoute(eventId, 'weather') ? REVEAL_DURATIONS[eventId] : null;
 }
@@ -236,58 +285,7 @@ export function sampleWeatherReveal(
     if (eventId === 'man-in-the-fog') output.figureVisibility = 1;
     return true;
   }
-  const sweep = Math.sin(Math.PI * t);
-
-  switch (eventId) {
-    case 'shower-night': {
-      const yaw = 0.3;
-      const pitch = 0.52;
-      if (t < 0.298) {
-        output.cameraYaw = yaw * smootherstep((t - 0.135) / 0.163);
-        output.cameraPitch = pitch * smootherstep((t - 0.106) / 0.173);
-      } else if (t < 0.375) {
-        output.cameraYaw = yaw;
-        output.cameraPitch = pitch;
-      } else if (t < 0.683) {
-        const lookAcross = smootherstep((t - 0.375) / 0.308);
-        output.cameraYaw = yaw * (1 - lookAcross * 2);
-        output.cameraPitch = pitch + Math.sin(lookAcross * Math.PI) * 0.06;
-      } else if (t < 0.769) {
-        output.cameraYaw = -yaw;
-        output.cameraPitch = pitch;
-      } else {
-        output.cameraYaw = -yaw
-          * (1 - smootherstep((t - 0.769) / 0.193));
-        output.cameraPitch = pitch
-          * (1 - smootherstep((t - 0.798) / 0.202));
-      }
-      return true;
-    }
-    case 'windy-night': {
-      if (t < 0.24) {
-        output.cameraYaw = 0.34 * smootherstep(t / 0.24);
-      } else if (t < 0.42) {
-        output.cameraYaw = 0.34;
-      } else if (t < 0.72) {
-        output.cameraYaw = 0.34 - 0.68 * smootherstep((t - 0.42) / 0.3);
-      } else {
-        output.cameraYaw = -0.34;
-      }
-      output.cameraPitch = 0.025 * Math.sin(2 * Math.PI * t) * sweep;
-      break;
-    }
-    case 'thunderstorm':
-      output.lightningEmphasis = pulse(t, 0.44, 0.55, 0.68);
-      break;
-    case 'restless-waves':
-      return true;
-    case 'man-in-the-fog':
-      output.figureVisibility = smoothstep((t - 0.2) / 0.18);
-      output.figureDistance = 0;
-      return true;
-    case 'bad-sleep':
-      return true;
-  }
+  if (!sampleWeatherRevealMotion(eventId, t, output)) return true;
 
   const ingressEnvelope = smoothstep(t / 0.12);
   const returnEnvelope = 1 - smoothstep((t - 0.72) / 0.28);
