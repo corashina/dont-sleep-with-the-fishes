@@ -110,3 +110,9 @@ One tester failure does not stop other testers. Preserve every partial report an
 ## Compare
 
 After all players stop, update `batch.json` with final statuses, report paths, screenshot paths, and completion time. Write `comparison.md` with days, endings, visible resources, inventory, major choices, failures, UI issues, profile differences, and explicit missing tester data.
+
+## Change Approval
+
+Do not change game code, tests, balance, UI, assets, configuration, or workflow code without user approval.
+
+After analysis, list each proposed change at the end. Wait for explicit approval before implementation.
