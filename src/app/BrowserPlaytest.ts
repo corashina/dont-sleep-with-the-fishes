@@ -32,10 +32,13 @@ export function parseBrowserPlaytest(
   const params = new URLSearchParams(search);
   const playtest = params.get('playtest');
   if (playtest === null) return null;
+  if (params.getAll('playtest').length !== 1) invalid('playtest');
   if (playtest !== 'survival') invalid('playtest');
 
-  const rawSeed = params.get('seed');
-  if (rawSeed === null || !/^(?:0|[1-9]\d*)$/.test(rawSeed)) invalid('seed');
+  const seedValues = params.getAll('seed');
+  if (seedValues.length !== 1) invalid('seed');
+  const rawSeed = seedValues[0];
+  if (rawSeed === undefined || !/^(?:0|[1-9]\d*)$/.test(rawSeed)) invalid('seed');
   const seed = Number(rawSeed);
   if (!Number.isSafeInteger(seed) || seed > MAX_SEED) invalid('seed');
 
