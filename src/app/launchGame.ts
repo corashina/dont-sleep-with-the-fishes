@@ -1,4 +1,8 @@
-import { disposeMenuModelLibrary, Game } from '../Game';
+import {
+  disposeMenuModelLibrary,
+  Game,
+  WebGlInitializationError,
+} from '../Game';
 import { ITEM_DEFINITIONS } from '../game/ItemState';
 import {
   createSystemScreen,
@@ -277,6 +281,16 @@ function renderWebGlFailure(mount: HTMLElement, error: unknown): void {
   });
 }
 
+function renderRuntimeFailure(mount: HTMLElement, error: unknown): void {
+  renderSystemScreen(mount, {
+    kind: 'error',
+    kicker: 'GAME ERROR',
+    title: 'Unable to continue',
+    lead: 'The game stopped after an unexpected error.',
+    detail: errorMessage(error),
+  });
+}
+
 function renderShipPlacementFailure(
   mount: HTMLElement,
   error: ShipItemPlacementError,
@@ -293,8 +307,10 @@ function renderShipPlacementFailure(
 function renderGameFailure(mount: HTMLElement, error: unknown): void {
   if (error instanceof ShipItemPlacementError) {
     renderShipPlacementFailure(mount, error);
-  } else {
+  } else if (error instanceof WebGlInitializationError) {
     renderWebGlFailure(mount, error);
+  } else {
+    renderRuntimeFailure(mount, error);
   }
 }
 
@@ -428,7 +444,7 @@ function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
     return;
   }
 
-  renderWebGlFailure(mount, error);
+  renderRuntimeFailure(mount, error);
 }
 
 export function launchGame(

@@ -54,6 +54,24 @@ describe('Game construction rollback', () => {
     vi.restoreAllMocks();
   });
 
+  it('classifies renderer construction errors as WebGL initialization failures', async () => {
+    const cause = new Error('WebGL context failed');
+    constructionMocks.WebGLRenderer.mockImplementation(() => { throw cause; });
+    const { Game, WebGlInitializationError } = await import('../src/Game');
+
+    expect(() => new Game(
+      document.createElement('main'),
+      {} as PropModelLibrary,
+      {} as ShipFurnitureLibrary,
+      {} as SkyAssets,
+      {} as LifeboatAssets,
+      {} as ShipAssets,
+      {} as MenuModelLibrary,
+      {} as MenuSandAssets,
+      physicsRuntime,
+    )).toThrow(WebGlInitializationError);
+  });
+
   it('starts with low visual quality and preserves renderer setup errors during cleanup', async () => {
     const calls: string[] = [];
     const canvas = document.createElement('canvas');
