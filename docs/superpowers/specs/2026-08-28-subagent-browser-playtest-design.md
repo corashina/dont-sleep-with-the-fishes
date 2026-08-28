@@ -14,7 +14,7 @@ Recover the approved browser playtest entry and its verified empty-night fix.
 
 Replace the previous chat-based coordinator with current-chat collaboration subagents.
 
-Improve compound fishing guidance and runtime error labels.
+Improve runtime error labels.
 
 Add a project skill and human documentation.
 
@@ -162,19 +162,15 @@ Seek high rewards. Dive often and delay care.
 
 Prefer dangerous choices that do not make death certain.
 
-## Compound Actions
+## Fishing Controls
 
-Some commands start a compound action by focusing compatible items.
+Bait is used automatically when available.
 
-When `Fish` focuses Bait, the UI shows visible `Choose Bait` guidance.
+After selecting `Fish`, wait for the fishing view and `CLICK THE WATER TO CAST` guidance.
 
-The page structure exposes the same guidance as readable status text.
+Cast through a visible water target. Do not select Bait manually.
 
-The player then selects one enabled focused Bait item.
-
-A visible focus or highlight is a result. It is not a blocked control.
-
-Apply the same rule to other compound actions.
+Treat a fishing view, prompt, focus, highlight, or value change as a visible result.
 
 ## Runtime Error Labels
 
@@ -294,7 +290,7 @@ Use focused tests for:
 - Disabled save storage.
 - Normal development and production startup.
 - Empty night fallback behavior.
-- Fishing guidance and readable status.
+- Fishing view and cast guidance.
 - WebGL and general runtime error labels.
 
 Then run:
@@ -320,8 +316,6 @@ Three remains the recommended count.
 The selected collaboration subagents run inside the current chat.
 
 All results survive implementation worktree cleanup.
-
-Fishing exposes the next required item choice.
 
 Non-WebGL errors no longer claim WebGL is unavailable.
 
