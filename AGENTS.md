@@ -13,3 +13,5 @@ Use active voice. Write "Turn the switch", not "The switch must be turned". Writ
 
 Before changing player-facing UI, models, materials, lighting, composition,
 animation, or post-processing, read [`VISUAL_STYLE_GUIDE.md`](VISUAL_STYLE_GUIDE.md).
+
+Before AI browser playtests, read [`docs/browser-playtesting.md`](docs/browser-playtesting.md).
