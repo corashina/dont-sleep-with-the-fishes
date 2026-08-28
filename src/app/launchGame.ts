@@ -137,15 +137,6 @@ async function loadGameAssets(
   physicsMode: PhysicsMode,
   onProgress: (completed: number, total: number) => void,
 ): Promise<LoadedGameAssets> {
-  let completed = 0;
-  onProgress(completed, GAME_ASSET_LOAD_COUNT);
-  const track = <T>(promise: Promise<T>): Promise<T> => promise.finally(() => {
-    completed += 1;
-    onProgress(completed, GAME_ASSET_LOAD_COUNT);
-  });
-  const physicsRuntimePromise = physicsMode === 'off'
-    ? Promise.resolve(null)
-    : dependencies.loadPhysicsRuntime();
   const [
     models,
     shipFurniture,
@@ -156,18 +147,7 @@ async function loadGameAssets(
     audio,
     menuModels,
     menuSandAssets,
-  ] =
-    await Promise.allSettled([
-      track(dependencies.loadModels()),
-      track(dependencies.loadShipFurniture()),
-      track(dependencies.loadSkyAssets()),
-      track(dependencies.loadLifeboatAssets()),
-      track(dependencies.loadShipAssets()),
-      track(physicsRuntimePromise),
-      track(dependencies.loadAudio?.() ?? Promise.resolve(AudioSystem.silent())),
-      track(dependencies.loadMenuModels()),
-      track(dependencies.loadMenuSandAssets()),
-    ]);
+  ] = await settleGameAssets(dependencies, physicsMode, onProgress);
   const assetResults = [
     models,
     shipFurniture,
@@ -179,48 +159,78 @@ async function loadGameAssets(
     menuSandAssets,
   ] as const;
   const results = [...assetResults, physicsRuntime] as const;
-  const firstFailure = results.find(
+  throwFirstAssetFailure(assetResults, results, menuModels);
+  return {
+    models: fulfilledValue(models),
+    menuModels: fulfilledValue(menuModels),
+    menuSandAssets: fulfilledValue(menuSandAssets),
+    shipFurniture: fulfilledValue(shipFurniture),
+    skyAssets: fulfilledValue(skyAssets),
+    lifeboatAssets: fulfilledValue(lifeboatAssets),
+    shipAssets: fulfilledValue(shipAssets),
+    physicsRuntime: fulfilledValue(physicsRuntime),
+    audio: fulfilledValue(audio),
+  };
+}
+
+async function settleGameAssets(
+  dependencies: LaunchDependencies,
+  physicsMode: PhysicsMode,
+  onProgress: (completed: number, total: number) => void,
+) {
+  let completed = 0;
+  onProgress(completed, GAME_ASSET_LOAD_COUNT);
+  const track = <T>(promise: Promise<T>): Promise<T> => promise.finally(() => {
+    completed += 1;
+    onProgress(completed, GAME_ASSET_LOAD_COUNT);
+  });
+  const physics = physicsMode === 'off'
+    ? Promise.resolve(null)
+    : dependencies.loadPhysicsRuntime();
+  return Promise.allSettled([
+    track(dependencies.loadModels()),
+    track(dependencies.loadShipFurniture()),
+    track(dependencies.loadSkyAssets()),
+    track(dependencies.loadLifeboatAssets()),
+    track(dependencies.loadShipAssets()),
+    track(physics),
+    track(dependencies.loadAudio?.() ?? Promise.resolve(AudioSystem.silent())),
+    track(dependencies.loadMenuModels()),
+    track(dependencies.loadMenuSandAssets()),
+  ] as const);
+}
+
+function throwFirstAssetFailure(
+  assetResults: readonly PromiseSettledResult<{ dispose?: () => void }>[],
+  results: readonly PromiseSettledResult<unknown>[],
+  menuModels: PromiseSettledResult<MenuModelLibrary>,
+): void {
+  const failure = results.find(
     (result): result is PromiseRejectedResult => result.status === 'rejected',
   );
-  if (firstFailure) {
-    for (const result of assetResults) {
-      if (result.status !== 'fulfilled') continue;
-      try {
-        if (result === menuModels) {
-          disposeMenuModelLibrary(result.value);
-        } else {
-          result.value?.dispose();
-        }
-      } catch {
-        // Preserve deterministic dependency failure precedence while cleaning every sibling.
-      }
+  if (failure === undefined) return;
+  disposeSettledAssets(assetResults, menuModels);
+  throw failure.reason;
+}
+
+function disposeSettledAssets(
+  assetResults: readonly PromiseSettledResult<{ dispose?: () => void }>[],
+  menuModels: PromiseSettledResult<MenuModelLibrary>,
+): void {
+  for (const result of assetResults) {
+    if (result.status !== 'fulfilled') continue;
+    try {
+      if (result === menuModels) disposeMenuModelLibrary(result.value);
+      else result.value.dispose?.();
+    } catch {
+      // Preserve deterministic dependency failure precedence while cleaning every sibling.
     }
-    throw firstFailure.reason;
   }
-  if (
-    models.status !== 'fulfilled'
-    || shipFurniture.status !== 'fulfilled'
-    || skyAssets.status !== 'fulfilled'
-    || lifeboatAssets.status !== 'fulfilled'
-    || shipAssets.status !== 'fulfilled'
-    || physicsRuntime.status !== 'fulfilled'
-    || audio.status !== 'fulfilled'
-    || menuModels.status !== 'fulfilled'
-    || menuSandAssets.status !== 'fulfilled'
-  ) {
-    throw new Error('Asset preload settled without a result');
-  }
-  return {
-    models: models.value,
-    menuModels: menuModels.value,
-    menuSandAssets: menuSandAssets.value,
-    shipFurniture: shipFurniture.value,
-    skyAssets: skyAssets.value,
-    lifeboatAssets: lifeboatAssets.value,
-    shipAssets: shipAssets.value,
-    physicsRuntime: physicsRuntime.value,
-    audio: audio.value,
-  };
+}
+
+function fulfilledValue<T>(result: PromiseSettledResult<T>): T {
+  if (result.status === 'fulfilled') return result.value;
+  throw new Error('Asset preload settled without a result');
 }
 
 function disposeGameAssets(assets: LoadedGameAssets): void {
