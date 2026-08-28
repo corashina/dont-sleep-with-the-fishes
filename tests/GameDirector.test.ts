@@ -7,6 +7,7 @@ import { Game, type GameTestOptions } from '../src/Game';
 import type { ScavengeResult } from '../src/game/ScavengeSession';
 import type { MenuModelLibrary } from '../src/menu/MenuModelLibrary';
 import type { SurvivalPhaseStart } from '../src/survival/SurvivalPhase';
+import type { SurvivalSaveStorage } from '../src/browser/SurvivalSaveStore';
 import { testPhysicsRuntime } from './helpers/physics';
 import { createTestPropModels } from './helpers/propModels';
 import { createTestShipFurniture } from './helpers/shipFurniture';
@@ -79,6 +80,65 @@ describe('Game director', () => {
     expect(startClock).toHaveBeenCalledOnce();
     expect(requestAnimationFrame).toHaveBeenCalledOnce();
     requestAnimationFrame.mockRestore();
+  });
+
+  it('starts browser playtests in survival without accessing saves', () => {
+    const browserPlaytest = {
+      seed: 42,
+      missingItemIds: ['map-1', 'knife-1'],
+      savedItems: [{ instanceId: 'carlitos-1', type: 'carlitos' }],
+    } as const;
+    const saveStorage: SurvivalSaveStorage = {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    };
+    const createSeed = vi.fn(() => 99);
+    const survival = phase();
+    const factories = {
+      createMenu: vi.fn(() => phase()),
+      createScavenge: vi.fn(() => phase()),
+      createSurvival: vi.fn(() => survival),
+    };
+
+    const game = Game.forTest(factories, testOptions({
+      browserPlaytest,
+      saveStorage,
+      createSeed,
+    }));
+
+    expect(factories.createMenu).not.toHaveBeenCalled();
+    expect(factories.createSurvival).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        kind: 'fresh',
+        savedItems: browserPlaytest.savedItems,
+        seed: 42,
+        scavengeElapsedSeconds: 0,
+      },
+      expect.any(Function),
+      expect.any(Function),
+    );
+    expect(createSeed).not.toHaveBeenCalled();
+    expect(saveStorage.getItem).not.toHaveBeenCalled();
+    expect(saveStorage.setItem).not.toHaveBeenCalled();
+    expect(saveStorage.removeItem).not.toHaveBeenCalled();
+    game.start();
+    expect(survival.start).toHaveBeenCalledOnce();
+    game.dispose();
+  });
+
+  it('creates the menu on normal startup', () => {
+    const createMenu = vi.fn(() => phase());
+
+    const game = Game.forTest({
+      createMenu,
+      createScavenge: () => phase(),
+      createSurvival: () => phase(),
+    }, testOptions());
+
+    expect(createMenu).toHaveBeenCalledOnce();
+    game.dispose();
   });
 
   it('clamps shared frame delta and renders through the active phase boundary', () => {

@@ -64,6 +64,7 @@ import type {
   SurvivalCheckpointChange,
   SurvivalPhaseStart,
 } from './survival/SurvivalPhase';
+import type { BrowserPlaytestStartup } from './app/BrowserPlaytest';
 
 export interface GameFactories {
   createMenu(
@@ -143,6 +144,7 @@ export interface GameTestOptions {
   audioSystem?: AudioSystem;
   onFatalError?: (error: unknown) => void;
   saveStorage?: SurvivalSaveStorage | null;
+  browserPlaytest?: BrowserPlaytestStartup | null;
 }
 
 function rethrowFatalError(error: unknown): never {
@@ -205,6 +207,7 @@ export class Game {
     physicsMode: PhysicsMode = 'enabled',
     audioSystem: AudioSystem = AudioSystem.silent(),
     onFatalError: (error: unknown) => void = rethrowFatalError,
+    browserPlaytest: BrowserPlaytestStartup | null = null,
   ) {
     const renderer = new WebGLRenderer({
       antialias: true,
@@ -262,10 +265,13 @@ export class Game {
         physicsRuntime,
         physicsMode,
         audioSystem,
-        browserStorage() as SurvivalSaveStorage | null,
+        browserPlaytest === null
+          ? browserStorage() as SurvivalSaveStorage | null
+          : null,
         PRODUCTION_FACTORIES,
         createRandomSeed,
         onFatalError,
+        browserPlaytest,
       );
     } catch (error) {
       if (!initializationStarted) {
@@ -352,10 +358,13 @@ export class Game {
       options.physicsRuntime,
       options.physicsMode ?? 'enabled',
       options.audioSystem ?? AudioSystem.silent(),
-      options.saveStorage ?? null,
+      options.browserPlaytest === undefined || options.browserPlaytest === null
+        ? options.saveStorage ?? null
+        : null,
       factories,
       options.createSeed ?? createRandomSeed,
       options.onFatalError ?? rethrowFatalError,
+      options.browserPlaytest ?? null,
     );
     return game;
   }
@@ -426,6 +435,7 @@ export class Game {
     factories: GameFactories,
     createSeed: () => number,
     onFatalError: (error: unknown) => void,
+    browserPlaytest: BrowserPlaytestStartup | null,
   ): void {
     this.renderer = renderer;
     this.sceneRenderer = sceneRenderer;
@@ -553,7 +563,17 @@ export class Game {
       this.animate = () => this.handleAnimationFrame();
       window.addEventListener('resize', this.onResize);
       resizeListenerRegistered = true;
-      this.activateMenu(false);
+      if (browserPlaytest === null) {
+        this.activateMenu(false);
+      } else {
+        this.seed = browserPlaytest.seed;
+        this.activateSurvival(Object.freeze({
+          kind: 'fresh',
+          savedItems: browserPlaytest.savedItems,
+          seed: browserPlaytest.seed,
+          scavengeElapsedSeconds: 0,
+        }), false);
+      }
       this.onResize();
     } catch (error) {
       try {
@@ -690,7 +710,7 @@ export class Game {
     }));
   }
 
-  private activateSurvival(start: SurvivalPhaseStart): void {
+  private activateSurvival(start: SurvivalPhaseStart, begin = true): void {
     const generation = ++this.phaseGeneration;
     const onCheckpointChange: SurvivalCheckpointChange = (checkpoint) => {
       if (!this.ownsGeneration(generation)) return;
@@ -711,8 +731,10 @@ export class Game {
     this.applyPresentationOverridesOrDispose(survival);
     this.activePhase = survival;
     this.synchronizePresentationControls();
-    survival.resize(window.innerWidth, window.innerHeight);
-    survival.start();
+    if (begin) {
+      survival.resize(window.innerWidth, window.innerHeight);
+      survival.start();
+    }
   }
 
   private enterTestEvent(id: string): void {

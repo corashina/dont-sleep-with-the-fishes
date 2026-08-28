@@ -45,10 +45,19 @@ import {
   MenuSandAssetLoadError,
   MenuSandAssets,
 } from '../menu/MenuSandAssets';
+import {
+  parseBrowserPlaytest,
+  type BrowserPlaytestStartup,
+} from './BrowserPlaytest';
 
 export interface LaunchHandle {
   readonly completion: Promise<Game | null>;
   cancel(): void;
+}
+
+export interface LaunchEnvironment {
+  readonly search: string;
+  readonly development: boolean;
 }
 
 export interface LaunchDependencies {
@@ -74,6 +83,7 @@ export interface LaunchDependencies {
     menuModels: MenuModelLibrary,
     menuSandAssets: MenuSandAssets,
     onFatalError: (error: unknown) => void,
+    browserPlaytest: BrowserPlaytestStartup | null,
   ): Pick<Game, 'start' | 'dispose'>;
 }
 
@@ -100,6 +110,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
     menuModels,
     menuSandAssets,
     onFatalError,
+    browserPlaytest,
   ) => (
     new Game(
       mount,
@@ -114,6 +125,7 @@ const PRODUCTION_DEPENDENCIES: LaunchDependencies = {
       physicsMode,
       audio,
       onFatalError,
+      browserPlaytest,
     )
   ),
 };
@@ -423,6 +435,10 @@ export function launchGame(
   mount: HTMLElement,
   dependencies: LaunchDependencies = PRODUCTION_DEPENDENCIES,
   physicsMode: PhysicsMode = configuredPhysicsMode(),
+  environment: LaunchEnvironment = {
+    search: window.location.search,
+    development: import.meta.env.DEV,
+  },
 ): LaunchHandle {
   let cancelled = false;
   let game: Pick<Game, 'start' | 'dispose'> | null = null;
@@ -449,6 +465,19 @@ export function launchGame(
     }
     if (mount.isConnected) renderGameFailure(mount, error);
   };
+
+  let browserPlaytest: BrowserPlaytestStartup | null;
+  try {
+    browserPlaytest = parseBrowserPlaytest(
+      environment.search,
+      environment.development,
+    );
+  } catch (error) {
+    return {
+      completion: Promise.resolve(null),
+      cancel: () => undefined,
+    };
+  }
 
   const loading = renderLoading(mount);
 
@@ -484,6 +513,7 @@ export function launchGame(
         unownedAssets.menuModels,
         unownedAssets.menuSandAssets,
         reportRuntimeError,
+        browserPlaytest,
       );
       game = createdGame;
       unownedAssets = null;
