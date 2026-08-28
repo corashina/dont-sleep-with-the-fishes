@@ -69,3 +69,9 @@ A missing browser after a tester returns is expected cleanup. It does not change
 ## Review the Comparison
 
 After all testers stop, `comparison.md` compares days, endings, resources, inventory, major choices, failures, UI issues, and profile differences. It names missing tester data. `batch.json` then records final statuses, paths, and completion time.
+
+## Change Approval
+
+Do not change game code, tests, balance, UI, assets, configuration, or workflow code without user approval.
+
+After analysis, list each proposed change at the end. Wait for explicit approval before implementation.
