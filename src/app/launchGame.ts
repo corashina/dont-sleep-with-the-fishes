@@ -267,8 +267,14 @@ function renderLoading(mount: HTMLElement): HTMLElement {
   });
 }
 
-function errorMessage(error: unknown): string {
+function webGlErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown WebGL initialization error';
+}
+
+function runtimeErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  return 'Unknown game error';
 }
 
 function renderWebGlFailure(mount: HTMLElement, error: unknown): void {
@@ -277,7 +283,7 @@ function renderWebGlFailure(mount: HTMLElement, error: unknown): void {
     kicker: 'WEBGL UNAVAILABLE',
     title: 'Unable to launch',
     lead: 'This demo needs WebGL 2 in a current desktop browser.',
-    detail: errorMessage(error),
+    detail: webGlErrorMessage(error),
   });
 }
 
@@ -287,7 +293,7 @@ function renderRuntimeFailure(mount: HTMLElement, error: unknown): void {
     kicker: 'GAME ERROR',
     title: 'Unable to continue',
     lead: 'The game stopped after an unexpected error.',
-    detail: errorMessage(error),
+    detail: runtimeErrorMessage(error),
   });
 }
 
