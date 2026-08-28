@@ -74,6 +74,12 @@ Before spawning players, write `batch.json`:
 
 Use collaboration subagents only. Call `collaboration.spawn_agent` once for each selected profile. Save every returned subagent ID in `batch.json`.
 
+Each player owns its browser connection only during that active subagent turn. The player must reach a stop condition before returning its final message.
+
+Do not return an interim result because the run is long. Continue browser actions in the same turn. Keep the report current after every decision.
+
+The coordinator waits with long `collaboration.wait_agent` calls. It does not use `collaboration.followup_task` to resume a player that already returned. A returned player's browser connection is not recoverable.
+
 Give each player its profile, shared inputs, absolute profile folder, and these rules:
 
 - Control one separate browser tab through visible page controls only.
@@ -91,7 +97,9 @@ Capture screenshots for the start state, first two event choice states, first vi
 
 ## Stop and Retry
 
-Stop with `normal-ending` for a normal ending. A normal ending is not a game failure. Stop with `game-failure` for a confirmed game failure. Stop with `browser-failure` for a confirmed browser failure. Stop with `player-task-failure` when the player cannot complete its assigned work.
+Stop with `normal-ending` for a normal ending. A normal ending is not a game failure. Stop with `game-failure` for a confirmed game failure. Stop with `browser-failure` only when the browser fails during the active player turn. Stop with `player-task-failure` when the player returns before an ending or day 55 without an active-turn game or browser failure.
+
+Do not test browser recovery after a player returns. A missing browser after return is expected lifecycle cleanup, not a new browser failure.
 
 Otherwise complete day 55 and stop with `day-55-cap` before any day 56 action. If day 56 appears, capture it without using another control.
 

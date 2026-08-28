@@ -6,6 +6,8 @@ The current chat coordinates all subagents. It asks for the tester count before 
 
 A count in the run request does not answer this question. The coordinator waits for a new answer before setup or browser actions.
 
+Each tester completes its run in one continuous subagent turn. Its browser connection ends when that turn returns.
+
 ## Tester Count and Profiles
 
 One tester uses balanced play. Two use cautious and reckless play. Three use cautious, balanced, and reckless play.
@@ -48,6 +50,8 @@ Capture start state, the first two event choices, the first visible critical res
 
 Stop on a normal ending or confirmed failure. Otherwise finish day 55 and stop before every day 56 action. If day 56 appears, capture it without another control.
 
+Testers do not return interim results. The coordinator waits while each active tester continues. It does not resume a returned tester because that browser connection is no longer available.
+
 Retry an enabled unchanged control only when its first attempt has no visible result. Retry twice. Do not retry after a focus, highlight, text, value, or presentation change.
 
 One tester failure does not stop the others.
@@ -57,8 +61,10 @@ One tester failure does not stop the others.
 - `normal-ending`: A normal ending. It is not a game failure.
 - `day-55-cap`: Day 55 completed without an earlier stop.
 - `game-failure`: A confirmed game failure.
-- `browser-failure`: A confirmed browser failure.
-- `player-task-failure`: The player cannot complete its assigned work.
+- `browser-failure`: The browser fails while the tester turn is active.
+- `player-task-failure`: The tester returns early without an active-turn game or browser failure.
+
+A missing browser after a tester returns is expected cleanup. It does not change the result to `browser-failure`.
 
 ## Review the Comparison
 
