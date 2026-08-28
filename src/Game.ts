@@ -107,6 +107,16 @@ const PRODUCTION_FACTORIES: GameFactories = {
 
 type GameClock = Pick<Clock, 'start' | 'getDelta'>;
 
+interface TestGameBase {
+  readonly mount: HTMLElement;
+  readonly renderer: WebGLRenderer;
+  readonly clock: GameClock;
+  readonly sceneRenderer: SceneRenderer;
+  readonly visualQuality: VisualQualityPreference;
+  readonly antiAliasingQuality: AntiAliasingQualityPreference;
+  readonly shadowQuality: ShadowQualityPreference;
+}
+
 const disposedMenuModelLibraries = new WeakSet<MenuModelLibrary>();
 
 export function disposeMenuModelLibrary(menuModels: MenuModelLibrary): void {
@@ -157,6 +167,51 @@ function createRandomSeed(): number {
   } catch {
     return Date.now() >>> 0;
   }
+}
+
+function createTestGameBase(options: GameTestOptions): TestGameBase {
+  const mount = options.mount ?? document.createElement('main');
+  const renderer = options.renderer ?? createTestRenderer();
+  mount.prepend(renderer.domElement);
+  const sceneRenderer = options.sceneRenderer ?? new DirectSceneRenderer(renderer);
+  return {
+    mount,
+    renderer,
+    clock: options.clock ?? createTestClock(),
+    sceneRenderer,
+    visualQuality: options.visualQuality ?? createVisualQualityPreference(
+      (quality) => sceneRenderer.setVisualQuality?.(quality),
+      null,
+    ),
+    antiAliasingQuality: options.antiAliasingQuality
+      ?? createAntiAliasingQualityPreference(
+        (quality) => sceneRenderer.setAntiAliasingQuality?.(quality),
+        null,
+      ),
+    shadowQuality: options.shadowQuality ?? createShadowQualityPreference(
+      (quality) => sceneRenderer.setShadowQuality?.(quality),
+      null,
+    ),
+  };
+}
+
+function createTestRenderer(): WebGLRenderer {
+  return {
+    domElement: document.createElement('canvas'),
+    setPixelRatio: () => undefined,
+    setSize: () => undefined,
+    render: () => undefined,
+    dispose: () => undefined,
+    shadowMap: { enabled: true, type: 0 },
+    capabilities: { getMaxAnisotropy: () => 1 },
+  } as unknown as WebGLRenderer;
+}
+
+function createTestClock(): GameClock {
+  return {
+    start: () => undefined,
+    getDelta: () => 0.016,
+  };
 }
 
 export class Game {
@@ -284,48 +339,27 @@ export class Game {
   }
 
   static forTest(factories: GameFactories, options: GameTestOptions): Game {
-    const mount = options.mount ?? document.createElement('main');
-    const renderer = options.renderer ?? {
-      domElement: document.createElement('canvas'),
-      setPixelRatio: () => undefined,
-      setSize: () => undefined,
-      render: () => undefined,
-      dispose: () => undefined,
-      shadowMap: { enabled: true, type: 0 },
-      capabilities: { getMaxAnisotropy: () => 1 },
-    } as unknown as WebGLRenderer;
-    mount.prepend(renderer.domElement);
-    const clock: GameClock = options.clock ?? {
-      start: () => undefined,
-      getDelta: () => 0.016,
-    };
-    const sceneRenderer = options.sceneRenderer ?? new DirectSceneRenderer(renderer);
-    const visualQuality = options.visualQuality ?? createVisualQualityPreference(
-      (quality) => sceneRenderer.setVisualQuality?.(quality),
-      null,
-    );
-    const antiAliasingQuality = options.antiAliasingQuality
-      ?? createAntiAliasingQualityPreference(
-        (quality) => sceneRenderer.setAntiAliasingQuality?.(quality),
-        null,
-      );
-    const shadowQuality = options.shadowQuality
-      ?? createShadowQualityPreference(
-        (quality) => sceneRenderer.setShadowQuality?.(quality),
-        null,
-      );
     const game = Object.create(Game.prototype) as Game;
+    game.initializeForTest(factories, options, createTestGameBase(options));
+    return game;
+  }
+
+  private initializeForTest(
+    factories: GameFactories,
+    options: GameTestOptions,
+    base: TestGameBase,
+  ): void {
     const waterQuality = options.waterQuality ?? createWaterQualityPreference(
-      (quality) => game.activePhase?.setWaterQuality?.(quality),
+      (quality) => this.activePhase?.setWaterQuality?.(quality),
       null,
     );
-    game.initialize(
-      mount,
-      renderer,
-      sceneRenderer,
-      antiAliasingQuality,
-      shadowQuality,
-      visualQuality,
+    this.initialize(
+      base.mount,
+      base.renderer,
+      base.sceneRenderer,
+      base.antiAliasingQuality,
+      base.shadowQuality,
+      base.visualQuality,
       waterQuality,
       new PerspectiveCamera(
         GAME_CAMERA.fov,
@@ -333,7 +367,7 @@ export class Game {
         GAME_CAMERA.near,
         GAME_CAMERA.far,
       ),
-      clock,
+      base.clock,
       options.propModels,
       options.shipFurniture,
       options.skyAssets,
@@ -357,7 +391,6 @@ export class Game {
       options.createSeed ?? createRandomSeed,
       options.onFatalError ?? rethrowFatalError,
     );
-    return game;
   }
 
   start(): void {

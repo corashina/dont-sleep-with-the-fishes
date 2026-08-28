@@ -5,6 +5,7 @@ import {
   Raycaster,
   Vector2,
   Vector3,
+  type Intersection,
 } from 'three';
 import {
   ITEM_DEFINITIONS,
@@ -110,6 +111,12 @@ export interface InteractionOcclusion {
   readonly dropFloor?: InteractionDropFloor;
 }
 
+interface RaycastSelection {
+  hit: Intersection<Object3D> | undefined;
+  tagged: Object3D | null;
+  item: ItemInstance | null;
+}
+
 export class InteractionSystem {
   private readonly raycaster = new Raycaster();
   private readonly center = new Vector2(0, 0);
@@ -119,6 +126,11 @@ export class InteractionSystem {
   private readonly localTarget = new Vector3();
   private readonly localDropPoint = new Vector3();
   private readonly worldDropPoint = new Vector3();
+  private readonly selection: RaycastSelection = {
+    hit: undefined,
+    tagged: null,
+    item: null,
+  };
 
   constructor(
     private readonly camera: PerspectiveCamera,
@@ -175,52 +187,82 @@ export class InteractionSystem {
     instances: ReadonlyMap<ItemInstanceId, ItemInstance>,
     canReachLifeboat = true,
   ): InteractionTarget {
+    this.updateWorldMatrices(items, lifeboat, depositTarget);
+    this.raycaster.setFromCamera(this.center, this.camera);
+    const dropPoint = this.aimedDropPoint();
+    this.selectItemTarget(items, depositTarget, instances);
+    this.selectLifeboatTarget(lifeboat, canReachLifeboat);
+    return this.interactionTarget(dropPoint);
+  }
+
+  private updateWorldMatrices(
+    items: readonly Object3D[],
+    lifeboat: Object3D,
+    depositTarget: Object3D,
+  ): void {
     this.camera.updateWorldMatrix(true, false);
     items.forEach((item) => item.updateWorldMatrix(true, true));
     lifeboat.updateWorldMatrix(true, true);
     depositTarget.updateWorldMatrix(true, true);
-    this.raycaster.setFromCamera(this.center, this.camera);
-    const dropPoint = this.aimedDropPoint();
+  }
+
+  private selectItemTarget(
+    items: readonly Object3D[],
+    depositTarget: Object3D,
+    instances: ReadonlyMap<ItemInstanceId, ItemInstance>,
+  ): void {
     const hits = this.raycaster.intersectObjects([...items, depositTarget], true);
-    let selectedHit = hits[0];
-    let tagged = findTaggedAncestor(selectedHit?.object ?? null);
-    if (tagged?.userData.boatDepositTarget === true) {
-      for (let index = 1; index < hits.length; index += 1) {
-        const candidate = findTaggedAncestor(hits[index]!.object);
-        if (candidate?.name === 'lifeboat') break;
-        if (
-          candidate?.userData.instanceId
-          && instances.has(candidate.userData.instanceId as ItemInstanceId)
-        ) {
-          tagged = candidate;
-          selectedHit = hits[index];
-          break;
-        }
-      }
+    const selection = this.selection;
+    selection.hit = hits[0];
+    selection.tagged = findTaggedAncestor(selection.hit?.object ?? null);
+    if (selection.tagged?.userData.boatDepositTarget === true) {
+      this.selectItemBehindDeposit(hits, instances);
     }
-    let targetItem = tagged?.userData.instanceId
-      ? instances.get(tagged.userData.instanceId as ItemInstanceId) ?? null
-      : null;
-    if (targetItem !== null && selectedHit && this.itemIsOccluded(selectedHit.point)) {
-      tagged = null;
-      targetItem = null;
+    selection.item = this.instanceForTaggedObject(instances);
+    if (selection.item !== null && selection.hit && this.itemIsOccluded(selection.hit.point)) {
+      selection.tagged = null;
+      selection.item = null;
     }
-    if (!tagged && canReachLifeboat) {
-      this.raycaster.far = LIFEBOAT_INTERACTION_DISTANCE;
-      selectedHit = this.raycaster.intersectObject(lifeboat, true)[0];
-      this.raycaster.far = STANDARD_INTERACTION_DISTANCE;
-      tagged = findTaggedAncestor(selectedHit?.object ?? null);
+  }
+
+  private selectItemBehindDeposit(
+    hits: readonly Intersection<Object3D>[],
+    instances: ReadonlyMap<ItemInstanceId, ItemInstance>,
+  ): void {
+    for (let index = 1; index < hits.length; index += 1) {
+      const candidate = findTaggedAncestor(hits[index]!.object);
+      if (candidate?.name === 'lifeboat') return;
+      const instanceId = candidate?.userData.instanceId as ItemInstanceId | undefined;
+      if (instanceId === undefined || !instances.has(instanceId)) continue;
+      this.selection.tagged = candidate;
+      this.selection.hit = hits[index];
+      return;
     }
-    if (!tagged) {
-      return dropPoint
-        ? { target: 'none', targetItem: null, dropPoint }
-        : { target: 'none', targetItem: null };
-    }
+  }
+
+  private instanceForTaggedObject(
+    instances: ReadonlyMap<ItemInstanceId, ItemInstance>,
+  ): ItemInstance | null {
+    const instanceId = this.selection.tagged?.userData.instanceId as ItemInstanceId | undefined;
+    return instanceId === undefined ? null : instances.get(instanceId) ?? null;
+  }
+
+  private selectLifeboatTarget(lifeboat: Object3D, canReachLifeboat: boolean): void {
+    if (this.selection.tagged !== null || !canReachLifeboat) return;
+    this.raycaster.far = LIFEBOAT_INTERACTION_DISTANCE;
+    this.selection.hit = this.raycaster.intersectObject(lifeboat, true)[0];
+    this.raycaster.far = STANDARD_INTERACTION_DISTANCE;
+    this.selection.tagged = findTaggedAncestor(this.selection.hit?.object ?? null);
+  }
+
+  private interactionTarget(dropPoint: Vector3 | undefined): InteractionTarget {
+    const { tagged, item } = this.selection;
+    if (tagged === null) return dropPoint
+      ? { target: 'none', targetItem: null, dropPoint }
+      : { target: 'none', targetItem: null };
     if (tagged.name === 'lifeboat' || tagged.userData.boatDepositTarget === true) {
       return { target: 'deposit', targetItem: null };
     }
-    return targetItem
-      ? { target: 'item', targetItem }
-      : { target: 'none', targetItem: null };
+    return item ? { target: 'item', targetItem: item } : { target: 'none', targetItem: null };
   }
 }

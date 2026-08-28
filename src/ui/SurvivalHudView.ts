@@ -2,7 +2,7 @@ import { SURVIVAL_BALANCE } from '../survival/survivalBalance';
 import type { DayActionId } from '../survival/survivalTypes';
 import type { SurvivalSnapshot } from '../survival/survivalSnapshot';
 import { createElementRequirement } from './dom';
-import { uiArtwork, type UiArtworkId } from './uiArtwork';
+import { returnArrowArtwork, uiArtwork, type UiArtworkId } from './uiArtwork';
 
 type MeterId = 'health' | 'hunger' | 'energy' | 'hull';
 
@@ -135,11 +135,7 @@ export class SurvivalHudView {
         ${METERS.map(meterMarkup).join('')}
       </section>
       <button type="button" class="rear-camera-return" data-camera-return-front aria-label="Return to front of boat" hidden>
-        <!-- Lucide Arrow Down. ISC license: https://lucide.dev/icons/arrow-down -->
-        <svg class="rear-camera-return__arrow" viewBox="4 4 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M12 5v14"></path>
-          <path d="m19 12-7 7-7-7"></path>
-        </svg>
+        ${returnArrowArtwork('rear-camera-return__arrow')}
       </button>`;
     const roots = [...template.content.children];
     this.topControls = roots[0] as HTMLElement;

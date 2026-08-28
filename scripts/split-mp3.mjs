@@ -6,6 +6,21 @@ const MPEG_2_LAYER_3_BITRATES = [
 ];
 const MPEG_1_SAMPLE_RATES = [44_100, 48_000, 32_000];
 
+function validFrameHeader(versionBits, layerBits, bitrateIndex, sampleRateIndex) {
+  return versionBits !== 0b01
+    && layerBits === 0b01
+    && bitrateIndex !== 0
+    && bitrateIndex !== 0b1111
+    && sampleRateIndex !== 0b11;
+}
+
+function frameSampleRate(versionBits, sampleRateIndex) {
+  const sampleRate = MPEG_1_SAMPLE_RATES[sampleRateIndex];
+  if (versionBits === 0b10) return sampleRate / 2;
+  if (versionBits === 0b00) return sampleRate / 4;
+  return sampleRate;
+}
+
 function frameAt(source, offset) {
   if (offset + 4 > source.length) return null;
   const header = source.readUInt32BE(offset);
@@ -14,20 +29,12 @@ function frameAt(source, offset) {
   const layerBits = (header >>> 17) & 0b11;
   const bitrateIndex = (header >>> 12) & 0b1111;
   const sampleRateIndex = (header >>> 10) & 0b11;
-  if (
-    versionBits === 0b01
-    || layerBits !== 0b01
-    || bitrateIndex === 0
-    || bitrateIndex === 0b1111
-    || sampleRateIndex === 0b11
-  ) return null;
+  if (!validFrameHeader(versionBits, layerBits, bitrateIndex, sampleRateIndex)) return null;
   const mpeg1 = versionBits === 0b11;
   const bitrate = (mpeg1
     ? MPEG_1_LAYER_3_BITRATES
     : MPEG_2_LAYER_3_BITRATES)[bitrateIndex];
-  let sampleRate = MPEG_1_SAMPLE_RATES[sampleRateIndex];
-  if (versionBits === 0b10) sampleRate /= 2;
-  if (versionBits === 0b00) sampleRate /= 4;
+  const sampleRate = frameSampleRate(versionBits, sampleRateIndex);
   const padding = (header >>> 9) & 1;
   const length = Math.floor(
     (mpeg1 ? 144 : 72) * bitrate * 1000 / sampleRate,

@@ -60,40 +60,63 @@ function nearlyEqual(left: number, right: number): boolean {
   return Math.abs(left - right) <= SURFACE_EPSILON;
 }
 
-function matchesAuthoredApertureSurface(surface: ShipItemSurface): boolean {
+function apertureOwner(surface: ShipItemSurface) {
   const owner = SHIP_LAYOUT.furniture.find(({ id }) => id === surface.furnitureId);
-  if (!owner
-    || (owner.modelId !== 'bookcaseOpen' && owner.modelId !== 'bedBunk')
-    || surface.furnitureModelId !== owner.modelId) return false;
-  const authored = owner.surfaces.find(({ id }) => id === surface.id);
-  if (!authored) return false;
-  const quarterTurn = Math.abs(Math.sin(owner.rotationY)) > 0.5;
+  if (!owner || surface.furnitureModelId !== owner.modelId) return undefined;
+  if (owner.modelId !== 'bookcaseOpen' && owner.modelId !== 'bedBunk') return undefined;
+  return owner;
+}
+
+function authoredSurfacePosition(
+  owner: (typeof SHIP_LAYOUT.furniture)[number],
+  surface: (typeof SHIP_LAYOUT.furniture)[number]['surfaces'][number],
+): Vector3 {
   const cosine = Math.cos(owner.rotationY);
   const sine = Math.sin(owner.rotationY);
-  const localX = authored.localPosition[0] * owner.scale[0];
-  const localY = authored.localPosition[1] * owner.scale[1];
-  const localZ = authored.localPosition[2] * owner.scale[2];
-  const expectedPosition = new Vector3(
+  const localX = surface.localPosition[0] * owner.scale[0];
+  const localY = surface.localPosition[1] * owner.scale[1];
+  const localZ = surface.localPosition[2] * owner.scale[2];
+  return new Vector3(
     owner.position[0] + localX * cosine + localZ * sine,
     owner.position[1] + localY,
     owner.position[2] - localX * sine + localZ * cosine,
   );
-  return surface.position.distanceTo(expectedPosition) <= SURFACE_EPSILON
-    && surface.physicalSlotId === authored.physicalSlotId
-    && nearlyEqual(
-      surface.footprint.width,
-      (quarterTurn ? authored.footprint.depth : authored.footprint.width)
-        * (quarterTurn ? owner.scale[2] : owner.scale[0]),
-    )
-    && nearlyEqual(
-      surface.footprint.depth,
-      (quarterTurn ? authored.footprint.width : authored.footprint.depth)
-        * (quarterTurn ? owner.scale[0] : owner.scale[2]),
-    )
-    && nearlyEqual(surface.clearanceHeight, authored.clearanceHeight * owner.scale[1])
-    && nearlyEqual(surface.rotation.x, authored.localRotation[0])
+}
+
+function matchesAuthoredApertureDimensions(
+  surface: ShipItemSurface,
+  owner: (typeof SHIP_LAYOUT.furniture)[number],
+  authored: (typeof SHIP_LAYOUT.furniture)[number]['surfaces'][number],
+): boolean {
+  const quarterTurn = Math.abs(Math.sin(owner.rotationY)) > 0.5;
+  const width = (quarterTurn ? authored.footprint.depth : authored.footprint.width)
+    * (quarterTurn ? owner.scale[2] : owner.scale[0]);
+  const depth = (quarterTurn ? authored.footprint.width : authored.footprint.depth)
+    * (quarterTurn ? owner.scale[0] : owner.scale[2]);
+  return nearlyEqual(surface.footprint.width, width)
+    && nearlyEqual(surface.footprint.depth, depth)
+    && nearlyEqual(surface.clearanceHeight, authored.clearanceHeight * owner.scale[1]);
+}
+
+function matchesAuthoredApertureRotation(
+  surface: ShipItemSurface,
+  owner: (typeof SHIP_LAYOUT.furniture)[number],
+  authored: (typeof SHIP_LAYOUT.furniture)[number]['surfaces'][number],
+): boolean {
+  return nearlyEqual(surface.rotation.x, authored.localRotation[0])
     && nearlyEqual(surface.rotation.y, authored.localRotation[1] + owner.rotationY)
     && nearlyEqual(surface.rotation.z, authored.localRotation[2]);
+}
+
+function matchesAuthoredApertureSurface(surface: ShipItemSurface): boolean {
+  const owner = apertureOwner(surface);
+  if (!owner) return false;
+  const authored = owner.surfaces.find(({ id }) => id === surface.id);
+  if (!authored) return false;
+  return surface.position.distanceTo(authoredSurfacePosition(owner, authored)) <= SURFACE_EPSILON
+    && surface.physicalSlotId === authored.physicalSlotId
+    && matchesAuthoredApertureDimensions(surface, owner, authored)
+    && matchesAuthoredApertureRotation(surface, owner, authored);
 }
 
 function ownerApertureAllowsRay(

@@ -299,16 +299,29 @@ function forEachNavigableNeighbor(
     if (dx === 0 && dz === 0) continue;
     const nextX = x + dx;
     const nextZ = z + dz;
-    if (nextX < 0 || nextX >= grid.columns || nextZ < 0 || nextZ >= grid.rows) continue;
+    if (!gridContains(grid, nextX, nextZ)) continue;
     const next = nextZ * grid.columns + nextX;
     if (grid.blocked[next]) continue;
-    if (dx !== 0 && dz !== 0) {
-      const horizontal = z * grid.columns + nextX;
-      const vertical = nextZ * grid.columns + x;
-      if (grid.blocked[horizontal] || grid.blocked[vertical]) continue;
-    }
+    if (diagonalStepBlocked(grid, x, z, nextX, nextZ)) continue;
     visit(next, dx !== 0 && dz !== 0 ? GRID_STEP * Math.SQRT2 : GRID_STEP);
   }
+}
+
+function gridContains(grid: ShipNavigationGrid, x: number, z: number): boolean {
+  return x >= 0 && x < grid.columns && z >= 0 && z < grid.rows;
+}
+
+function diagonalStepBlocked(
+  grid: ShipNavigationGrid,
+  x: number,
+  z: number,
+  nextX: number,
+  nextZ: number,
+): boolean {
+  if (x === nextX || z === nextZ) return false;
+  const horizontal = z * grid.columns + nextX;
+  const vertical = nextZ * grid.columns + x;
+  return Boolean(grid.blocked[horizontal] || grid.blocked[vertical]);
 }
 
 function routeDistance(

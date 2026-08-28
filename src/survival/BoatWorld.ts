@@ -931,6 +931,9 @@ export class BoatWorld {
     const context = itemId === null
       ? null
       : resolveEventItemUseContext(eventId, choiceId, itemId);
+    if (eventId === 'wreckage' && choiceId === 'dive') {
+      this.cameraController.cancelFocusedEventView();
+    }
     if (itemId !== null && context !== null) {
       const aimTarget = this.eventItemAimTarget(eventId);
       const request: EventItemUseRequest = {

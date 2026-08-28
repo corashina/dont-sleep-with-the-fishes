@@ -44,25 +44,24 @@ function collectReferencedTextures(value, key, indices) {
 }
 
 function textureSource(texture) {
+  const extensions = texture?.extensions;
   return texture?.source
-    ?? texture?.extensions?.KHR_texture_basisu?.source
-    ?? texture?.extensions?.EXT_texture_webp?.source
-    ?? texture?.extensions?.EXT_texture_avif?.source;
+    ?? extensions?.KHR_texture_basisu?.source
+    ?? extensions?.EXT_texture_webp?.source
+    ?? extensions?.EXT_texture_avif?.source;
 }
 
-function imageHasEmbeddedBytes(json, binaryLength, image) {
-  if (!image) return false;
-  if (typeof image.uri === 'string') {
-    return image.uri.startsWith('data:') && dataUriByteLength(image.uri) > 0;
-  }
-  if (!Number.isInteger(image.bufferView)) return false;
-  const bufferView = json.bufferViews?.[image.bufferView];
+function embeddedUriByteLength(uri) {
+  return uri.startsWith('data:') ? dataUriByteLength(uri) : 0;
+}
+
+function bufferViewHasEmbeddedBytes(json, binaryLength, bufferView) {
   if (!bufferView || !Number.isInteger(bufferView.byteLength) || bufferView.byteLength <= 0) {
     return false;
   }
   const buffer = json.buffers?.[bufferView.buffer];
   const availableBytes = typeof buffer?.uri === 'string'
-    ? (buffer.uri.startsWith('data:') ? dataUriByteLength(buffer.uri) : 0)
+    ? embeddedUriByteLength(buffer.uri)
     : binaryLength;
   const byteOffset = bufferView.byteOffset ?? 0;
   return Number.isInteger(byteOffset)
@@ -70,26 +69,49 @@ function imageHasEmbeddedBytes(json, binaryLength, image) {
     && byteOffset + bufferView.byteLength <= availableBytes;
 }
 
-export function validateEmbeddedResources(filePath, descriptor) {
-  const { binaryLength, json } = descriptor;
-  for (const buffer of json.buffers ?? []) {
+function imageHasEmbeddedBytes(json, binaryLength, image) {
+  if (!image) return false;
+  if (typeof image.uri === 'string') {
+    return embeddedUriByteLength(image.uri) > 0;
+  }
+  if (!Number.isInteger(image.bufferView)) return false;
+  return bufferViewHasEmbeddedBytes(json, binaryLength, json.bufferViews?.[image.bufferView]);
+}
+
+function validateEmbeddedBuffers(filePath, buffers) {
+  for (const buffer of buffers ?? []) {
     if (typeof buffer.uri === 'string' && !buffer.uri.startsWith('data:')) {
       throw new Error(`${filePath}: external buffer URI: ${buffer.uri}`);
     }
   }
-  for (const image of json.images ?? []) {
+}
+
+function validateEmbeddedImages(filePath, images) {
+  for (const image of images ?? []) {
     if (typeof image.uri === 'string' && !image.uri.startsWith('data:')) {
       throw new Error(`${filePath}: external texture URI: ${image.uri}`);
     }
   }
-  const referencedTextures = new Set();
-  for (const material of json.materials ?? []) {
-    collectReferencedTextures(material, '', referencedTextures);
-  }
-  for (const textureIndex of referencedTextures) {
+}
+
+function referencedTextureIndices(materials) {
+  const indices = new Set();
+  for (const material of materials ?? []) collectReferencedTextures(material, '', indices);
+  return indices;
+}
+
+function validateReferencedTextures(filePath, descriptor) {
+  const { binaryLength, json } = descriptor;
+  for (const textureIndex of referencedTextureIndices(json.materials)) {
     const source = textureSource(json.textures?.[textureIndex]);
     if (!Number.isInteger(source) || !imageHasEmbeddedBytes(json, binaryLength, json.images?.[source])) {
       throw new Error(`${filePath}: referenced texture has no embedded image bytes`);
     }
   }
+}
+
+export function validateEmbeddedResources(filePath, descriptor) {
+  validateEmbeddedBuffers(filePath, descriptor.json.buffers);
+  validateEmbeddedImages(filePath, descriptor.json.images);
+  validateReferencedTextures(filePath, descriptor);
 }

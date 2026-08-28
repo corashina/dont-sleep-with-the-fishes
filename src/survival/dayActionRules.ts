@@ -66,22 +66,118 @@ function carlitosCareUnavailableReason(
   const carlitos = state.carlitos;
   if (carlitos === null) return 'Carlitos is not aboard.';
   if (!carlitos.alive) return 'Carlitos cannot respond.';
-  if (action === 'pet' && carlitos.pettedToday) {
-    return 'Carlitos has already been petted today.';
-  }
-  if (action === 'pet' && carlitos.unhappiness <= 2) {
-    return 'Carlitos is already happy.';
+  return carlitosCareRule(state, carlitos, action);
+}
+
+function carlitosCareRule(
+  state: DayActionRuleState,
+  carlitos: Readonly<CarlitosState>,
+  action: 'pet' | 'feed' | 'treat',
+): string | null {
+  if (action === 'pet') {
+    if (carlitos.pettedToday) return 'Carlitos has already been petted today.';
+    return carlitos.unhappiness <= 2 ? 'Carlitos is already happy.' : null;
   }
   if (action === 'feed') {
     if (carlitos.hunger >= 5) return 'Carlitos is already satiated.';
-    if (state.food < 1) return 'No food remains.';
+    return state.food < 1 ? 'No food remains.' : null;
   }
-  if (action === 'treat') {
-    if (carlitos.sickness <= 0) return 'Carlitos needs no treatment.';
-    if (!hasUsable(state.inventory, 'medicalKit')) return 'No medical kit remains.';
-  }
-  return null;
+  if (carlitos.sickness <= 0) return 'Carlitos needs no treatment.';
+  return hasUsable(state.inventory, 'medicalKit') ? null : 'No medical kit remains.';
 }
+
+type DayActionRule = (
+  state: DayActionRuleState,
+  option?: DayActionOption,
+) => string | null;
+
+const fishUnavailable: DayActionRule = (state) => (
+  state.energy < SURVIVAL_BALANCE.actions.fishEnergy
+    ? 'Fishing requires one energy.'
+    : null
+);
+
+const diveUnavailable: DayActionRule = (state) => {
+  if (!hasUsable(state.inventory, 'scubaSet')) {
+    return 'Diving requires a recovered scuba set.';
+  }
+  if (state.weather === 'squall') return 'Diving is too dangerous during a squall.';
+  return state.energy < SURVIVAL_BALANCE.actions.diveEnergy
+    ? 'Diving requires three energy.'
+    : null;
+};
+
+const eatUnavailable: DayActionRule = (state) => {
+  if (state.food < 1) return 'No food remains.';
+  return state.hunger <= 0 ? 'You are not hungry.' : null;
+};
+
+const repairUnavailable: DayActionRule = (state, option) => {
+  if (state.hull >= SURVIVAL_BALANCE.thresholds.maximum) return 'The hull needs no repair.';
+  const energyCost = repairEnergyCost(state.hull);
+  if (state.energy < energyCost) {
+    const energyWord = ['', 'one', 'two', 'three'][energyCost];
+    return `Repairing requires ${energyWord} energy.`;
+  }
+  if (option?.kind === 'hullRepair' && option.material === 'ductTape') {
+    return hasUsable(state.inventory, 'ductTape') ? null : 'No duct tape remains.';
+  }
+  return state.repairMaterial < 1 ? 'No repair material remains.' : null;
+};
+
+const repairItemUnavailable: DayActionRule = (state, option) => {
+  if (!hasUsable(state.inventory, 'ductTape')) return 'No duct tape remains.';
+  if (option?.kind !== 'itemRepair') return 'Choose a broken item to repair.';
+  const target = state.inventory[option.target];
+  return target === undefined
+    || target.condition !== 'broken'
+    || !ITEM_DEFINITIONS[target.type].breakable
+    ? 'That item cannot be repaired.'
+    : null;
+};
+
+const treatUnavailable: DayActionRule = (state) => {
+  if (state.health >= SURVIVAL_BALANCE.thresholds.maximum) return 'No treatment is needed.';
+  return hasUsable(state.inventory, 'medicalKit') ? null : 'No medical-kit charges remain.';
+};
+
+const answerRadioUnavailable: DayActionRule = (state) => {
+  if (!state.radioSignalAvailable) return 'The radio has no active signal.';
+  if (!hasUsable(state.inventory, 'radio')) return 'No working radio remains.';
+  return state.energy < SURVIVAL_BALANCE.radio.energy
+    ? 'Answering the radio requires one energy.'
+    : null;
+};
+
+const useEnergyBarUnavailable: DayActionRule = (state) => {
+  if (!hasUsable(state.inventory, 'energyBar')) return 'No energy bar remains.';
+  return state.energy >= SURVIVAL_BALANCE.actions.maximumEnergy
+    ? 'Your energy is already full.'
+    : null;
+};
+
+const openChestUnavailable: DayActionRule = (state) => {
+  if (state.chestState !== 'closed') return 'There is no closed chest to open.';
+  return state.energy < CHEST_OPEN_ENERGY
+    ? 'Opening the chest requires three energy.'
+    : null;
+};
+
+const ACTION_UNAVAILABLE_RULES: Readonly<Record<DayActionId, DayActionRule>> = {
+  fish: fishUnavailable,
+  dive: diveUnavailable,
+  eat: eatUnavailable,
+  repair: repairUnavailable,
+  repairItem: repairItemUnavailable,
+  treat: treatUnavailable,
+  answerRadio: answerRadioUnavailable,
+  useEnergyBar: useEnergyBarUnavailable,
+  openChest: openChestUnavailable,
+  petCarlitos: (state) => carlitosCareUnavailableReason(state, 'pet'),
+  feedCarlitos: (state) => carlitosCareUnavailableReason(state, 'feed'),
+  treatCarlitos: (state) => carlitosCareUnavailableReason(state, 'treat'),
+  endDay: () => null,
+};
 
 export function dayActionUnavailableReason(
   state: DayActionRuleState,
@@ -94,75 +190,7 @@ export function dayActionUnavailableReason(
     return 'The survival journey has already ended.';
   }
   if (state.state !== 'day') return 'That action is only available during the day.';
-
-  switch (action) {
-    case 'fish':
-      return state.energy < SURVIVAL_BALANCE.actions.fishEnergy
-        ? 'Fishing requires one energy.'
-        : null;
-    case 'dive':
-      if (!hasUsable(state.inventory, 'scubaSet')) {
-        return 'Diving requires a recovered scuba set.';
-      }
-      if (state.weather === 'squall') return 'Diving is too dangerous during a squall.';
-      return state.energy < SURVIVAL_BALANCE.actions.diveEnergy
-        ? 'Diving requires three energy.'
-        : null;
-    case 'eat':
-      if (state.food < 1) return 'No food remains.';
-      return state.hunger <= 0 ? 'You are not hungry.' : null;
-    case 'repair': {
-      if (state.hull >= SURVIVAL_BALANCE.thresholds.maximum) return 'The hull needs no repair.';
-      const energyCost = repairEnergyCost(state.hull);
-      if (state.energy < energyCost) {
-        const energyWord = ['', 'one', 'two', 'three'][energyCost];
-        return `Repairing requires ${energyWord} energy.`;
-      }
-      if (option?.kind === 'hullRepair' && option.material === 'ductTape') {
-        return hasUsable(state.inventory, 'ductTape') ? null : 'No duct tape remains.';
-      }
-      return state.repairMaterial < 1 ? 'No repair material remains.' : null;
-    }
-    case 'repairItem': {
-      if (!hasUsable(state.inventory, 'ductTape')) return 'No duct tape remains.';
-      if (option?.kind !== 'itemRepair') return 'Choose a broken item to repair.';
-      const target = state.inventory[option.target];
-      return target === undefined
-        || target.condition !== 'broken'
-        || !ITEM_DEFINITIONS[target.type].breakable
-        ? 'That item cannot be repaired.'
-        : null;
-    }
-    case 'treat':
-      if (state.health >= SURVIVAL_BALANCE.thresholds.maximum) return 'No treatment is needed.';
-      return hasUsable(state.inventory, 'medicalKit')
-        ? null
-        : 'No medical-kit charges remain.';
-    case 'answerRadio':
-      if (!state.radioSignalAvailable) return 'The radio has no active signal.';
-      if (!hasUsable(state.inventory, 'radio')) return 'No working radio remains.';
-      return state.energy < SURVIVAL_BALANCE.radio.energy
-        ? 'Answering the radio requires one energy.'
-        : null;
-    case 'useEnergyBar':
-      if (!hasUsable(state.inventory, 'energyBar')) return 'No energy bar remains.';
-      return state.energy >= SURVIVAL_BALANCE.actions.maximumEnergy
-        ? 'Your energy is already full.'
-        : null;
-    case 'openChest':
-      if (state.chestState !== 'closed') return 'There is no closed chest to open.';
-      return state.energy < CHEST_OPEN_ENERGY
-        ? 'Opening the chest requires three energy.'
-        : null;
-    case 'petCarlitos':
-      return carlitosCareUnavailableReason(state, 'pet');
-    case 'feedCarlitos':
-      return carlitosCareUnavailableReason(state, 'feed');
-    case 'treatCarlitos':
-      return carlitosCareUnavailableReason(state, 'treat');
-    case 'endDay':
-      return null;
-  }
+  return ACTION_UNAVAILABLE_RULES[action](state, option);
 }
 
 export function dayActionResourceDelta(

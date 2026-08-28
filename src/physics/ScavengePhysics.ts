@@ -98,24 +98,8 @@ export interface PhysicsCuboid {
 
 export function collisionBoxToCuboid(box: CollisionBox): PhysicsCuboid {
   const footprint = box.orientedFootprint;
-  const width = footprint ? footprint.halfWidth * 2 : box.maxX - box.minX;
-  const height = box.maxY - box.minY;
-  const length = footprint ? footprint.halfDepth * 2 : box.maxZ - box.minZ;
-  if (
-    !Number.isFinite(width)
-    || !Number.isFinite(height)
-    || !Number.isFinite(length)
-    || (footprint && (
-      !Number.isFinite(footprint.centerX)
-      || !Number.isFinite(footprint.centerZ)
-      || !Number.isFinite(footprint.rotationY)
-    ))
-    || width <= 0
-    || height <= 0
-    || length <= 0
-  ) {
-    throw new Error('Physics collider must have finite positive extents');
-  }
+  const dimensions = collisionBoxDimensions(box);
+  validateCuboidDimensions(dimensions, footprint);
   const cuboid: PhysicsCuboid = {
     center: {
       x: footprint ? footprint.centerX : (box.minX + box.maxX) / 2,
@@ -123,9 +107,9 @@ export function collisionBoxToCuboid(box: CollisionBox): PhysicsCuboid {
       z: footprint ? footprint.centerZ : (box.minZ + box.maxZ) / 2,
     },
     halfExtents: {
-      x: width / 2,
-      y: height / 2,
-      z: length / 2,
+      x: dimensions.width / 2,
+      y: dimensions.height / 2,
+      z: dimensions.length / 2,
     },
   };
   if (footprint) {
@@ -137,6 +121,41 @@ export function collisionBoxToCuboid(box: CollisionBox): PhysicsCuboid {
     };
   }
   return cuboid;
+}
+
+function collisionBoxDimensions(box: CollisionBox): {
+  readonly width: number;
+  readonly height: number;
+  readonly length: number;
+} {
+  const footprint = box.orientedFootprint;
+  return {
+    width: footprint ? footprint.halfWidth * 2 : box.maxX - box.minX,
+    height: box.maxY - box.minY,
+    length: footprint ? footprint.halfDepth * 2 : box.maxZ - box.minZ,
+  };
+}
+
+function validateCuboidDimensions(
+  dimensions: Readonly<{ width: number; height: number; length: number }>,
+  footprint: CollisionBox['orientedFootprint'],
+): void {
+  const finiteDimensions = Number.isFinite(dimensions.width)
+    && Number.isFinite(dimensions.height)
+    && Number.isFinite(dimensions.length);
+  const positiveDimensions = dimensions.width > 0
+    && dimensions.height > 0
+    && dimensions.length > 0;
+  if (!finiteDimensions || !positiveDimensions || !validFootprint(footprint)) {
+    throw new Error('Physics collider must have finite positive extents');
+  }
+}
+
+function validFootprint(footprint: CollisionBox['orientedFootprint']): boolean {
+  if (footprint === undefined) return true;
+  return Number.isFinite(footprint.centerX)
+    && Number.isFinite(footprint.centerZ)
+    && Number.isFinite(footprint.rotationY);
 }
 
 export function collisionArcToCuboids(arc: CollisionArc): readonly PhysicsCuboid[] {

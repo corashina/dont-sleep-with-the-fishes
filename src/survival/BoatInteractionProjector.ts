@@ -532,7 +532,8 @@ export class BoatInteractionProjector {
   ): ProjectedBoatBounds | null {
     if (!this.canProjectEvent(width, height)) return null;
     this.scene.updateMatrixWorld(true);
-    const root = this.eventHost.interactionRoot(eventId);
+    const root = this.focusedInteractionRoot(eventId)
+      ?? this.eventHost.interactionRoot(eventId);
     return root === null
       ? null
       : projectBoatObjectBoundsInto(
@@ -585,6 +586,13 @@ export class BoatInteractionProjector {
   private featuredEntry(eventId: FeaturedEventId): FeaturedProjectionEntry | null {
     for (const entry of this.featuredEntries) {
       if (entry.eventId === eventId) return entry;
+    }
+    return null;
+  }
+
+  private focusedInteractionRoot(eventId: string): Object3D | null {
+    for (const entry of this.focusedEntries) {
+      if (entry.target.focusEventId === eventId) return entry.target.root;
     }
     return null;
   }
