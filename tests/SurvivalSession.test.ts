@@ -8,6 +8,7 @@ import { mulberry32, restoreMulberry32 } from '../src/survival/random';
 import {
   nightlyHullWearDamage,
   radioRescueLeadForSignal,
+  SURVIVAL_BALANCE,
 } from '../src/survival/survivalBalance';
 import { formatJournalEntry } from '../src/survival/journal';
 import type { FishingSession, FishingTerminalResult } from '../src/survival/FishingSession';
@@ -236,7 +237,9 @@ function reelCatch(attempt: FishingSession): FishingTerminalResult {
 function missCatch(attempt: FishingSession): FishingTerminalResult {
   expect(attempt.cast({ x: 4, z: -2 }).accepted).toBe(true);
   expect(attempt.completeCast().accepted).toBe(true);
-  attempt.advance(attempt.snapshot().biteDelaySeconds + 2);
+  attempt.advance(
+    attempt.snapshot().biteDelaySeconds + SURVIVAL_BALANCE.fishing.reactionSeconds,
+  );
   const result = attempt.snapshot().result;
   if (result === null) throw new Error('Expected a fishing miss result.');
   return result;

@@ -6,6 +6,7 @@ import {
   type SurvivalEventId,
 } from './eventCatalog';
 import { mulberry32 } from './random';
+import { SURVIVAL_BALANCE } from './survivalBalance';
 import { SurvivalSession } from './SurvivalSession';
 import type { RandomSource } from './survivalTypes';
 
@@ -188,7 +189,8 @@ function fishOnceWhenPossible(
   begun.attempt.completeCast();
   const catches = policyRandom.next() < fishingReactionSuccess;
   begun.attempt.advance(
-    begun.attempt.snapshot().biteDelaySeconds + (catches ? 0 : 1.5),
+    begun.attempt.snapshot().biteDelaySeconds
+      + (catches ? 0 : SURVIVAL_BALANCE.fishing.reactionSeconds),
   );
   const terminal = catches
     ? begun.attempt.reel().result!

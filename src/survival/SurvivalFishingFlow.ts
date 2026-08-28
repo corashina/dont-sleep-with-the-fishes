@@ -186,12 +186,16 @@ export class SurvivalFishingFlow {
     this.setViewport(width, height);
     const castPoint = clientX === null || clientY === null
       ? this.dependencies.world.centeredFishingCast?.() ?? null
-      : this.dependencies.world.castFishingAtScreenPoint?.(
-        clientX,
-        clientY,
-        width,
-        height,
-      ) ?? null;
+      : (
+        this.dependencies.world.castFishingAtScreenPoint?.(
+          clientX,
+          clientY,
+          width,
+          height,
+        )
+        ?? this.dependencies.world.centeredFishingCast?.()
+        ?? null
+      );
     if (castPoint === null || !attempt.cast(castPoint).accepted) return false;
 
     const storedPoint = attempt.snapshot().castPoint;
