@@ -36,6 +36,26 @@ it('restores the next Mulberry32 value', () => {
   expect(restored.next()).toBe(random.next());
 });
 
+it('treats a night fallback as a quiet night', () => {
+  const session = new SurvivalSession(saved(
+    'cannedFood', 'cannedFood', 'cannedFood', 'baitTin', 'baitTin',
+    'ductTape', 'compass', 'map', 'spyglass', 'fishingNet', 'knife',
+    'bucket', 'flareGun', 'scubaSet', 'anchor', 'radio', 'umbrella',
+    'swimRing', 'shotgun', 'carlitos',
+  ), { seed: 3051382588 });
+
+  expect(session.endDay()).toMatchObject({
+    accepted: true,
+    code: 'quiet-night',
+    cue: 'nightfall',
+  });
+  expect(session.snapshot()).toMatchObject({
+    state: 'nightEvent',
+    pendingEventId: null,
+    journalEntries: [{ day: 1, nighttime: { kind: 'quiet' } }],
+  });
+});
+
 it('round-trips a stable pending event checkpoint', () => {
   const source = new SurvivalSession(saved('carlitos', 'compass', 'cannedFood'), {
     seed: 41,
@@ -1521,7 +1541,11 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it('guards dawn while an event is pending and exposes nightfall then dawn cues', () => {
-    const session = new SurvivalSession(saved(), { seed: 1, random: sequenceRandom([0.5, 0, 0.99]) });
+    const session = new SurvivalSession(saved(), {
+      seed: 1,
+      random: sequenceRandom([0.5, 0, 0.99]),
+      initial: { day: 2 },
+    });
     expect(session.perform('endDay').cue).toBe('nightfall');
     const pending = session.snapshot();
     expect(session.beginDawn()).toMatchObject({ accepted: false, code: 'event-pending' });
@@ -2865,6 +2889,7 @@ describe('SurvivalSession daytime actions', () => {
     const session = new SurvivalSession(saved(), {
       seed: 22,
       random: sequenceRandom([0.30, 0]),
+      initial: { day: 2 },
     });
 
     expect(session.perform('endDay')).toMatchObject({
