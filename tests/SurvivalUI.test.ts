@@ -2590,10 +2590,10 @@ describe('SurvivalUI', () => {
     const focus = mount.querySelector<HTMLElement>('[data-focused-event-view]')!;
     const focusCard = focus.querySelector<HTMLElement>('.focused-event-view__card')!;
     expect(focusCard.classList).toContain('dive-result__paper');
-    expect(focus.querySelector('[data-focused-event-title]')).toBeNull();
-    expect(focus.getAttribute('aria-labelledby')).toBeNull();
-    expect(focus.getAttribute('aria-label')).toBe('Event choices');
-    expect(focus.textContent).not.toContain('WRECKAGE');
+    expect(focus.querySelector('[data-focused-event-title]')?.textContent)
+      .toBe('Wreckage Debris');
+    expect(focus.getAttribute('aria-labelledby')).toBe('focused-event-title');
+    expect(focus.getAttribute('aria-label')).toBeNull();
     expect(focus.dataset.anchorState).toBe('projected');
     const popupX = Number.parseFloat(focus.style.getPropertyValue('--focused-event-x'));
     const popupWidth = Number.parseFloat(focus.style.getPropertyValue('--focused-event-width'));
@@ -2642,6 +2642,27 @@ describe('SurvivalUI', () => {
     );
     back.click();
     expect(returned).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['drifting-supplies', 'Drifting Supplies'],
+    ['drifting-chest', 'Drifting Chest'],
+  ] as const)('titles the %s focused popup', (eventId, title) => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+
+    ui.showFocusedEvent({
+      eventId,
+      target: null,
+      choices: [
+        { id: 'retrieve', label: 'Retrieve', unavailableReason: null, instanceId: null },
+      ],
+    });
+
+    const focus = mount.querySelector<HTMLElement>('[data-focused-event-view]')!;
+    expect(focus.querySelector('[data-focused-event-title]')?.textContent).toBe(title);
+    expect(focus.getAttribute('aria-labelledby')).toBe('focused-event-title');
   });
 
   it('uses a top-left chest icon to switch between front and rear camera views', () => {

@@ -43,6 +43,11 @@ import {
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import {
+  tryCreateVolumetricClouds,
+  VolumetricClouds,
+} from '../src/world/VolumetricClouds';
+import { volumetricCloudProfile } from '../src/world/volumetricCloudProfiles';
+import {
   DEFAULT_WAVES,
   sampleWaveField,
   type WaveSample,
@@ -545,6 +550,68 @@ function expectedSurvivalPose(
 }
 
 describe('BoatWorld helpers', () => {
+  it('renders day volumetric clouds and restores flat clouds at night', () => {
+    const propModels = createTestPropModels();
+    const disposeClouds = vi.spyOn(VolumetricClouds.prototype, 'dispose');
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const internals = world as unknown as {
+      volumetricClouds: {
+        mesh: { visible: boolean };
+        material: { uniforms: Record<string, { value: unknown }> };
+      };
+      sky: { material: { uniforms: Record<string, { value: unknown }> } };
+    };
+
+    world.setVolumetricCloudsEnabled(true);
+    world.setPresentationWeather('thunderstorm');
+    world.update(2, 2);
+
+    expect(internals.volumetricClouds.material.uniforms.uCoverage!.value).toBe(
+      volumetricCloudProfile('squall').coverage,
+    );
+    expect(internals.volumetricClouds.mesh.visible).toBe(true);
+    expect(internals.sky.material.uniforms.uCloudLayerStrength!.value).toBe(0);
+
+    world.setPresentationPhaseOverride('night');
+    world.update(4, 2);
+
+    expect(internals.volumetricClouds.mesh.visible).toBe(false);
+    expect(internals.sky.material.uniforms.uCloudLayerStrength!.value).toBe(1);
+    world.dispose();
+    expect(disposeClouds).toHaveBeenCalledOnce();
+    disposeClouds.mockRestore();
+    propModels.dispose();
+  });
+
+  it('keeps the skybox active when cloud construction falls back', () => {
+    const propModels = createTestPropModels();
+    const createClouds = vi.fn(() => null) as typeof tryCreateVolumetricClouds;
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      undefined,
+      undefined,
+      {},
+      'low',
+      createClouds,
+    );
+
+    expect(world.volumetricCloudsAvailable()).toBe(false);
+    expect(world.scene.getObjectByName('procedural-skybox')).toBeDefined();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('forwards water quality to its owned ocean', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(

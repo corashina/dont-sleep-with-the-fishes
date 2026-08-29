@@ -174,29 +174,7 @@ export class EventItemUseController {
     const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
     const use = this.activeUse;
     if (use !== null) {
-      use.elapsed = Math.min(use.duration, use.elapsed + safeDelta);
-      const progress = use.elapsed / use.duration;
-      sampleEventItemUse(
-        use.request.context,
-        use.request.itemId,
-        progress,
-        this.sample,
-      );
-      this.applyRequestSample(use.request);
-      const actionCueProgresses = eventItemActionCueProgresses(use.request.context);
-      while (
-        use.request.onAction !== undefined
-        && use.nextActionCueIndex < actionCueProgresses.length
-        && progress >= actionCueProgresses[use.nextActionCueIndex]!
-      ) {
-        const cueIndex = use.nextActionCueIndex;
-        use.nextActionCueIndex += 1;
-        use.request.onAction(cueIndex);
-      }
-      if (use.elapsed >= use.duration) {
-        this.activeUse = null;
-        use.resolve(true);
-      }
+      this.updateUse(use, safeDelta);
       return;
     }
 
@@ -205,6 +183,29 @@ export class EventItemUseController {
       if (this.held !== null) this.applyRequestSample(this.held.request);
       return;
     }
+    this.updateReaction(reaction, safeDelta);
+  }
+
+  private updateUse(use: ActiveItemUse, safeDelta: number): void {
+    use.elapsed = Math.min(use.duration, use.elapsed + safeDelta);
+    const progress = use.elapsed / use.duration;
+    sampleEventItemUse(use.request.context, use.request.itemId, progress, this.sample);
+    this.applyRequestSample(use.request);
+    const actionCueProgresses = eventItemActionCueProgresses(use.request.context);
+    while (use.request.onAction !== undefined
+      && use.nextActionCueIndex < actionCueProgresses.length
+      && progress >= actionCueProgresses[use.nextActionCueIndex]!) {
+      const cueIndex = use.nextActionCueIndex;
+      use.nextActionCueIndex += 1;
+      use.request.onAction(cueIndex);
+    }
+    if (use.elapsed >= use.duration) {
+      this.activeUse = null;
+      use.resolve(true);
+    }
+  }
+
+  private updateReaction(reaction: ActiveItemReaction, safeDelta: number): void {
     reaction.elapsed = Math.min(reaction.duration, reaction.elapsed + safeDelta);
     sampleEventItemOutcome(
       reaction.request.context,

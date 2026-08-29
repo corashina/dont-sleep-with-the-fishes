@@ -84,6 +84,12 @@ export interface SaveControls {
   continueSavedRun(): void;
 }
 
+export interface VolumetricCloudControls {
+  readonly enabled: boolean;
+  readonly available: boolean;
+  setEnabled(enabled: boolean): void;
+}
+
 const DEFAULT_WEATHER_CONTROLS: WeatherControls = {
   selected: 'calm',
   source: 'normal',
@@ -99,9 +105,12 @@ export class PostProcessingConsole {
   private readonly shadowQualityControl: ShadowQualityControl;
   private readonly weatherSelect: HTMLSelectElement;
   private readonly weatherSource: HTMLOutputElement;
+  private readonly volumetricCloudInput: HTMLInputElement | null;
+  private readonly volumetricCloudState: HTMLOutputElement | null;
   private weatherId: PresentationWeatherId;
   private weatherControlSource: WeatherControlSource;
   private saveDay: number | null = null;
+  private volumetricCloudAvailability: boolean | null;
   private disposed = false;
 
   constructor(
@@ -128,6 +137,7 @@ export class PostProcessingConsole {
     shadowQuality: ShadowQualityPreference =
       createShadowQualityPreference(() => undefined, null),
     private readonly saveControls?: SaveControls,
+    private readonly volumetricCloudControls?: VolumetricCloudControls,
   ) {
     const state = controls.getState();
     this.weatherId = weatherControls.selected;
@@ -345,12 +355,34 @@ export class PostProcessingConsole {
                     `).join('')}
                   </select>
                 </label>
+                ${volumetricCloudControls === undefined
+                  ? ''
+                  : `<label class="post-processing-console__toggle">
+                      <span>Volumetric clouds</span>
+                      <input
+                        type="checkbox"
+                        role="switch"
+                        data-volumetric-clouds
+                        ${volumetricCloudControls.enabled ? 'checked' : ''}
+                        ${volumetricCloudControls.available ? '' : 'disabled'}
+                      >
+                      <output data-volumetric-clouds-state>${volumetricCloudControls.available
+                        ? (volumetricCloudControls.enabled ? 'ON' : 'OFF')
+                        : 'UNAVAILABLE'}</output>
+                    </label>`}
               </div>
             </section>
           </div>
         </div>
       </section>
     `;
+    this.volumetricCloudInput = this.element.querySelector<HTMLInputElement>(
+      '[data-volumetric-clouds]',
+    );
+    this.volumetricCloudState = this.element.querySelector<HTMLOutputElement>(
+      '[data-volumetric-clouds-state]',
+    );
+    this.volumetricCloudAvailability = volumetricCloudControls?.available ?? null;
     this.panel = this.requireElement('[data-post-processing-panel]');
     this.visualQualityControl = new VisualQualityControl(visualQuality);
     this.requireElement('[data-ao-quality-control]').append(
@@ -432,6 +464,20 @@ export class PostProcessingConsole {
         ? 'Enable auto-save to create a checkpoint.'
         : savedDay === null ? 'A checkpoint starts in survival.' : '';
     }
+  }
+
+  setVolumetricCloudAvailability(available: boolean): void {
+    if (
+      this.disposed
+      || available === this.volumetricCloudAvailability
+      || this.volumetricCloudInput === null
+      || this.volumetricCloudState === null
+    ) return;
+    this.volumetricCloudAvailability = available;
+    this.volumetricCloudInput.disabled = !available;
+    this.volumetricCloudState.value = available
+      ? (this.volumetricCloudInput.checked ? 'ON' : 'OFF')
+      : 'UNAVAILABLE';
   }
 
   dispose(): void {
@@ -553,6 +599,16 @@ export class PostProcessingConsole {
     ) {
       this.saveControls?.setEnabled(target.checked);
       this.setSaveState(target.checked, this.saveDay);
+      return;
+    }
+    if (
+      target instanceof HTMLInputElement
+      && target.matches('[data-volumetric-clouds]')
+    ) {
+      if (this.volumetricCloudState !== null) {
+        this.volumetricCloudState.value = target.checked ? 'ON' : 'OFF';
+      }
+      this.volumetricCloudControls?.setEnabled(target.checked);
       return;
     }
     if (

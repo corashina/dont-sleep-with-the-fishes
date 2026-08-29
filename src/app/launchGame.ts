@@ -220,8 +220,11 @@ function disposeSettledAssets(
   for (const result of assetResults) {
     if (result.status !== 'fulfilled') continue;
     try {
-      if (result === menuModels) disposeMenuModelLibrary(result.value);
-      else result.value.dispose?.();
+      if (result === menuModels) {
+        if (menuModels.status === 'fulfilled') disposeMenuModelLibrary(menuModels.value);
+      } else {
+        result.value.dispose?.();
+      }
     } catch {
       // Preserve deterministic dependency failure precedence while cleaning every sibling.
     }
@@ -355,12 +358,16 @@ function renderMenuModelFailure(mount: HTMLElement, error: MenuModelLoadError): 
 
 function renderItemModelFailure(mount: HTMLElement, error: ItemModelLoadError): void {
   const equipmentLabel = fixedEquipmentLabel(error.itemId);
-  if (equipmentLabel !== null) {
+  if (
+    error.itemId === 'fishingRod'
+    || error.itemId === 'hammer'
+    || error.itemId === 'pillow'
+  ) {
     renderPreloadError(mount, 'EQUIPMENT UNAVAILABLE', `Unable to prepare the lifeboat ${equipmentLabel}`, 'A required fixed equipment model could not be loaded.', error);
     return;
   }
   const lightingLabel = practicalLightLabel(error.itemId);
-  if (lightingLabel !== null) {
+  if (error.itemId === 'lantern' || error.itemId === 'ceilingLight') {
     renderPreloadError(mount, 'LIGHTING UNAVAILABLE', `Unable to prepare the ${lightingLabel}`, 'A required practical light model could not be loaded.', error);
     return;
   }

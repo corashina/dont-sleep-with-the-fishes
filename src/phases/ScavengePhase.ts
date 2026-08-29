@@ -7,6 +7,7 @@ import {
   type Material,
 } from 'three';
 import type { GamePhase, PhaseContext } from '../app/GamePhase';
+import type { VisualQuality } from '../rendering/visualQuality';
 import { pointerLockTransition } from '../game/GameLoop';
 import {
   advanceScavengeEnding,
@@ -187,6 +188,7 @@ export class ScavengePhase implements GamePhase {
       context.lifeboatAssets,
       context.shipAssets,
       context.waterQuality?.get() ?? 'low',
+      context.visualQuality.get(),
     );
     this.instancesById = new Map(instances.map((instance) => [
       instance.instanceId,
@@ -469,6 +471,20 @@ export class ScavengePhase implements GamePhase {
   setWaterQuality(value: WaterQuality): void {
     if (this.disposed) return;
     this.world.setWaterQuality(value);
+  }
+
+  setVisualQuality(value: VisualQuality): void {
+    if (this.disposed) return;
+    this.world.setVisualQuality(value);
+  }
+
+  setVolumetricCloudsEnabled(enabled: boolean): void {
+    if (this.disposed) return;
+    this.world.setVolumetricCloudsEnabled(enabled);
+  }
+
+  getVolumetricCloudsAvailable(): boolean {
+    return !this.disposed && this.world.getVolumetricCloudsAvailable();
   }
 
   getPresentationWeather(): PresentationWeatherId {
