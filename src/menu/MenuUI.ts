@@ -1,6 +1,44 @@
-import { uiArtwork } from '../ui/uiArtwork';
-
 const POINTER_LOCK_ERROR = 'Mouse look was blocked. Click the button and allow pointer lock to continue.';
+const GUIDE_ASSET_ROOT = `${import.meta.env.BASE_URL}images/how-to-play`;
+
+interface GuidePage {
+  readonly stage: string;
+  readonly title: string;
+  readonly image: string;
+  readonly imageAlt: string;
+  readonly description: string;
+}
+
+const GUIDE_PAGES: readonly GuidePage[] = Object.freeze([
+  {
+    stage: 'STAGE 1 · THE SINKING SHIP',
+    title: 'SCAVENGE DOROTHY',
+    image: `${GUIDE_ASSET_ROOT}/scavenging.png`,
+    imageAlt: 'First-person view on Dorothy with the one-minute timer and three empty carry slots.',
+    description: 'Dorothy sinks in 60 seconds. Search the ship for food, tools, and emergency supplies. Carry up to three weight, throw supplies into the lifeboat, then climb aboard before time ends.',
+  },
+  {
+    stage: 'STAGE 2 · SURVIVAL DAY',
+    title: 'SURVIVE THE DAY',
+    image: `${GUIDE_ASSET_ROOT}/survival-day.png`,
+    imageAlt: 'Daylight view from the lifeboat with recovered supplies, Carlitos, and condition meters.',
+    description: 'Each day gives limited energy. Fish, dive, eat, repair the hull, and use recovered supplies. Protect Health, Food, Energy, and Hull. Use the lantern when you are ready to end the day.',
+  },
+  {
+    stage: 'STAGE 3 · FISHING',
+    title: 'FISH FOR FOOD',
+    image: `${GUIDE_ASSET_ROOT}/survival-fishing.png`,
+    imageAlt: 'Fishing view over the bow after the line has been cast into the sea.',
+    description: 'Fishing costs one energy. Cast into the water, wait for a bite, then reel before the chance passes. Bait improves a fish catch and is used only when a fish lands.',
+  },
+  {
+    stage: 'STAGE 4 · SURVIVAL NIGHT',
+    title: 'FACE THE NIGHT',
+    image: `${GUIDE_ASSET_ROOT}/survival-night-event.png`,
+    imageAlt: 'The lifeboat at night during a rain event with the umbrella and bucket highlighted.',
+    description: 'Night brings uncertain events. Read the situation and choose a response. A saved item can protect you, but each result can change your health, food, hull, or supplies. Dawn records the night in the journal.',
+  },
+]);
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -18,9 +56,17 @@ export class MenuUI {
   private readonly startButton: HTMLButtonElement;
   private readonly guideButton: HTMLButtonElement;
   private readonly guideCloseButton: HTMLButtonElement;
+  private readonly guidePreviousButton: HTMLButtonElement;
+  private readonly guideNextButton: HTMLButtonElement;
+  private readonly guideStage: HTMLElement;
+  private readonly guideTitle: HTMLElement;
+  private readonly guideImage: HTMLImageElement;
+  private readonly guideDescription: HTMLElement;
+  private readonly guidePageCount: HTMLElement;
   private readonly pointerLockError: HTMLElement;
   private transitioning = false;
   private guideOpen = false;
+  private guidePageIndex = 0;
   private disposed = false;
 
   constructor(mount: HTMLElement) {
@@ -40,86 +86,32 @@ export class MenuUI {
       <section class="screen how-to-play-screen poster-screen"
         id="menu-how-to-play-dialog" data-menu-guide role="dialog"
         aria-modal="true" aria-hidden="true" aria-labelledby="menu-how-to-play-title"
-        aria-describedby="menu-how-to-play-intro" inert>
-        <div class="screen__content how-to-play-board scuba-popup-paper">
-          <header class="how-to-play-board__header">
-            <p class="kicker ui-role-context">BEFORE THE WATER WINS</p>
-            <h2 class="scuba-popup-title ui-role-display" id="menu-how-to-play-title">HOW TO PLAY</h2>
-            <p class="lead ui-role-narrative" id="menu-how-to-play-intro">
-              Save what you can. Reach the lifeboat. Survive until rescue.
-            </p>
-          </header>
-          <div class="how-to-play-route">
-            <article class="how-to-play-step">
-              <span class="how-to-play-step__number ui-role-numeral" aria-hidden="true">1</span>
-              <div class="how-to-play-step__body">
-                <h3 class="ui-role-context">ESCAPE DOROTHY</h3>
-                <p class="how-to-play-step__objective ui-role-narrative">Dorothy sinks in 60 seconds.</p>
-                <ul class="how-to-play-actions ui-role-narrative">
-                  <li class="how-to-play-action">
-                    ${uiArtwork('guideSearch', 'how-to-play-action__art')}
-                    <strong class="how-to-play-action__label ui-role-context">SEARCH</strong>
-                    <span>Find food, tools, and emergency supplies.</span>
-                  </li>
-                  <li class="how-to-play-action">
-                    ${uiArtwork('guideCarry', 'how-to-play-action__art')}
-                    <strong class="how-to-play-action__label ui-role-context">CARRY</strong>
-                    <span>Carry items with a total weight of 3.</span>
-                  </li>
-                  <li class="how-to-play-action">
-                    ${uiArtwork('guideSave', 'how-to-play-action__art')}
-                    <strong class="how-to-play-action__label ui-role-context">SAVE</strong>
-                    <span>Throw supplies into the lifeboat. Then get aboard.</span>
-                  </li>
-                </ul>
-              </div>
-            </article>
-            <article class="how-to-play-step">
-              <span class="how-to-play-step__number ui-role-numeral" aria-hidden="true">2</span>
-              <div class="how-to-play-step__body">
-                <h3 class="ui-role-context">SURVIVE THE SEA</h3>
-                <p class="how-to-play-step__objective ui-role-narrative">Stay alive and keep the hull intact until rescue.</p>
-                <ul class="how-to-play-actions ui-role-narrative">
-                  <li class="how-to-play-action">
-                    ${uiArtwork('guidePrepare', 'how-to-play-action__art')}
-                    <strong class="how-to-play-action__label ui-role-context">PREPARE</strong>
-                    <span>Fish, repair the hull, and use saved supplies.</span>
-                  </li>
-                  <li class="how-to-play-action">
-                    ${uiArtwork('guideWatch', 'how-to-play-action__art')}
-                    <strong class="how-to-play-action__label ui-role-context">WATCH</strong>
-                    <span>Protect Health, Food, Energy, and Hull.</span>
-                  </li>
-                  <li class="how-to-play-action">
-                    ${uiArtwork('guideEndDay', 'how-to-play-action__art')}
-                    <strong class="how-to-play-action__label ui-role-context">END DAY</strong>
-                    <span>Use the lantern when ready. Night events follow.</span>
-                  </li>
-                </ul>
-                <p class="how-to-play-rescue-stamp ui-role-context">RESCUE CHANCE RISES EACH DAY</p>
-              </div>
-            </article>
-          </div>
-          <section class="how-to-play-controls" aria-labelledby="menu-how-to-play-controls-title">
-            <h3 class="ui-role-context" id="menu-how-to-play-controls-title">CONTROLS</h3>
-            <dl class="controls how-to-play-controls__grid ui-role-context" aria-label="Game controls">
-              <div>
-                <dt>MOVE</dt>
-                <dd class="control-keys control-keys--move"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dd>
-              </div>
-              <div><dt>LOOK</dt><dd class="control-keys"><kbd>MOUSE</kbd></dd></div>
-              <div><dt>SPRINT</dt><dd class="control-keys"><kbd>SHIFT</kbd></dd></div>
-              <div><dt>JUMP</dt><dd class="control-keys"><kbd>SPACE</kbd></dd></div>
-              <div><dt>USE / TAKE</dt><dd class="control-keys"><kbd>LEFT CLICK</kbd></dd></div>
-              <div><dt>PAUSE</dt><dd class="control-keys"><kbd>ESC</kbd></dd></div>
-            </dl>
-            <p class="how-to-play-note ui-role-narrative">
-              In the lifeboat, use the mouse or <kbd>TAB</kbd>. Press <kbd>ENTER</kbd> or <kbd>SPACE</kbd> to choose.
-            </p>
-          </section>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-menu-guide-close>
-            BACK TO THE TITLE
-          </button>
+        aria-describedby="menu-how-to-play-description" inert>
+        <div class="screen__content how-to-play-book">
+          <div class="how-to-play-book__cover" aria-hidden="true"></div>
+          <div class="how-to-play-book__rings" aria-hidden="true"><i></i><i></i><i></i></div>
+          <div class="how-to-play-book__tabs" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <article class="how-to-play-page">
+            <header class="how-to-play-page__header">
+              <p class="how-to-play-page__stage ui-role-context" data-menu-guide-stage></p>
+              <h2 class="ui-role-display" id="menu-how-to-play-title" data-menu-guide-title tabindex="-1"></h2>
+            </header>
+            <figure class="how-to-play-page__figure">
+              <img data-menu-guide-image width="1280" height="720" draggable="false">
+            </figure>
+            <p class="how-to-play-page__description ui-role-narrative"
+              id="menu-how-to-play-description" data-menu-guide-description></p>
+            <nav class="how-to-play-page__navigation ui-role-context" aria-label="How to play pages">
+              <button type="button" class="how-to-play-page__arrow" data-menu-guide-previous
+                aria-label="Previous how to play page">&lsaquo;</button>
+              <span class="how-to-play-page__folio ui-role-numeral" data-menu-guide-page-count></span>
+              <button type="button" class="how-to-play-page__arrow" data-menu-guide-next
+                aria-label="Next how to play page">&rsaquo;</button>
+            </nav>
+            <button type="button" class="how-to-play-page__close ui-role-context" data-menu-guide-close>
+              BACK TO THE TITLE
+            </button>
+          </article>
         </div>
       </section>
       <div class="underwater-menu-fade" data-menu-fade aria-hidden="true"></div>
@@ -130,6 +122,13 @@ export class MenuUI {
     this.startButton = requireElement(this.root, '[data-menu-start]');
     this.guideButton = requireElement(this.root, '[data-menu-guide-open]');
     this.guideCloseButton = requireElement(this.root, '[data-menu-guide-close]');
+    this.guidePreviousButton = requireElement(this.root, '[data-menu-guide-previous]');
+    this.guideNextButton = requireElement(this.root, '[data-menu-guide-next]');
+    this.guideStage = requireElement(this.root, '[data-menu-guide-stage]');
+    this.guideTitle = requireElement(this.root, '[data-menu-guide-title]');
+    this.guideImage = requireElement(this.root, '[data-menu-guide-image]');
+    this.guideDescription = requireElement(this.root, '[data-menu-guide-description]');
+    this.guidePageCount = requireElement(this.root, '[data-menu-guide-page-count]');
     this.pointerLockError = requireElement(this.root, '[data-menu-pointer-lock-error]');
     this.startButton.addEventListener('click', this.handleStart);
     this.startButton.addEventListener('focus', this.handleStartFocus);
@@ -138,7 +137,10 @@ export class MenuUI {
     this.guideButton.addEventListener('focus', this.handleGuideFocus);
     this.guideButton.addEventListener('blur', this.handleGuideBlur);
     this.guideCloseButton.addEventListener('click', this.handleGuideClose);
+    this.guidePreviousButton.addEventListener('click', this.handleGuidePrevious);
+    this.guideNextButton.addEventListener('click', this.handleGuideNext);
     this.root.addEventListener('keydown', this.handleKeyDown);
+    this.renderGuidePage();
   }
 
   setTransitioning(active: boolean): void {
@@ -179,6 +181,8 @@ export class MenuUI {
     this.guideButton.removeEventListener('focus', this.handleGuideFocus);
     this.guideButton.removeEventListener('blur', this.handleGuideBlur);
     this.guideCloseButton.removeEventListener('click', this.handleGuideClose);
+    this.guidePreviousButton.removeEventListener('click', this.handleGuidePrevious);
+    this.guideNextButton.removeEventListener('click', this.handleGuideNext);
     this.root.removeEventListener('keydown', this.handleKeyDown);
     this.onStart = () => undefined;
     this.onStartFocusChange = () => undefined;
@@ -206,6 +210,10 @@ export class MenuUI {
 
   private readonly handleGuideClose = (): void => this.setGuideOpen(false);
 
+  private readonly handleGuidePrevious = (): void => this.moveGuidePage(-1);
+
+  private readonly handleGuideNext = (): void => this.moveGuidePage(1);
+
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (!this.guideOpen) return;
     if (event.key === 'Escape') {
@@ -213,11 +221,80 @@ export class MenuUI {
       this.setGuideOpen(false);
       return;
     }
-    if (event.key === 'Tab') {
+    if (event.key === 'ArrowLeft') {
       event.preventDefault();
-      this.guideCloseButton.focus();
+      this.moveGuidePage(-1);
+      return;
     }
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      this.moveGuidePage(1);
+      return;
+    }
+    if (event.key === 'Home') {
+      event.preventDefault();
+      this.setGuidePage(0);
+      return;
+    }
+    if (event.key === 'End') {
+      event.preventDefault();
+      this.setGuidePage(GUIDE_PAGES.length - 1);
+      return;
+    }
+    if (event.key === 'Tab') this.trapGuideFocus(event);
   };
+
+  private trapGuideFocus(event: KeyboardEvent): void {
+    const buttons = [
+      this.guidePreviousButton,
+      this.guideNextButton,
+      this.guideCloseButton,
+    ].filter((button) => !button.disabled);
+    const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    if (currentIndex < 0) {
+      event.preventDefault();
+      buttons[0]?.focus();
+      return;
+    }
+    const boundary = event.shiftKey ? currentIndex === 0 : currentIndex === buttons.length - 1;
+    if (!boundary) return;
+    event.preventDefault();
+    buttons[event.shiftKey ? buttons.length - 1 : 0]?.focus();
+  }
+
+  private moveGuidePage(delta: -1 | 1): void {
+    this.setGuidePage(this.guidePageIndex + delta, delta);
+  }
+
+  private setGuidePage(pageIndex: number, direction: -1 | 1 = 1): void {
+    const nextIndex = Math.min(GUIDE_PAGES.length - 1, Math.max(0, pageIndex));
+    if (nextIndex === this.guidePageIndex) return;
+    this.guidePageIndex = nextIndex;
+    this.renderGuidePage();
+    const requested = direction < 0 ? this.guidePreviousButton : this.guideNextButton;
+    const available = direction < 0 ? this.guideNextButton : this.guidePreviousButton;
+    (requested.disabled ? available : requested).focus();
+  }
+
+  private renderGuidePage(): void {
+    const page = GUIDE_PAGES[this.guidePageIndex]!;
+    this.guideStage.textContent = page.stage;
+    this.guideTitle.textContent = page.title;
+    this.guideImage.src = page.image;
+    this.guideImage.alt = page.imageAlt;
+    this.guideDescription.textContent = page.description;
+    this.guidePageCount.textContent = `PAGE ${this.guidePageIndex + 1} OF ${GUIDE_PAGES.length}`;
+    this.guidePreviousButton.disabled = this.guidePageIndex === 0;
+    this.guideNextButton.disabled = this.guidePageIndex === GUIDE_PAGES.length - 1;
+    this.guide.dataset.page = String(this.guidePageIndex + 1);
+  }
+
+  private resetGuide(): void {
+    if (this.guidePageIndex !== 0) {
+      this.guidePageIndex = 0;
+      this.renderGuidePage();
+    }
+  }
 
   private setGuideOpen(open: boolean): void {
     if (this.disposed || this.guideOpen === open) return;
@@ -226,7 +303,10 @@ export class MenuUI {
     this.guide.setAttribute('aria-hidden', String(!open));
     this.guide.toggleAttribute('inert', !open);
     this.menu.toggleAttribute('inert', open);
-    if (open) this.guideCloseButton.focus();
+    if (open) {
+      this.resetGuide();
+      this.guideNextButton.focus();
+    }
     else this.guideButton.focus();
   }
 }

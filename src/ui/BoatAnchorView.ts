@@ -10,6 +10,7 @@ import { repairEnergyCost, SURVIVAL_BALANCE } from '../survival/survivalBalance'
 import type {
   DayActionId,
   EventResponseId,
+  ItemCondition,
 } from '../survival/survivalTypes';
 import type { SurvivalSnapshot } from '../survival/survivalSnapshot';
 import { createElementRequirement } from './dom';
@@ -271,66 +272,9 @@ export class BoatAnchorView {
     let highlightInvalidated = false;
     for (const anchor of nextAnchors) {
       seen.add(anchor.id);
-      if (!anchor.visible || !this.isHighlightableAnchor(anchor)) {
-        highlightInvalidated = this.invalidateAnchorHighlight(anchor.id) || highlightInvalidated;
-      }
-      this.anchors.set(anchor.id, anchor);
-      const button = this.anchorButtons.get(anchor.id) ?? this.createAnchorButton(anchor);
-      if (anchor.eventFocusId === undefined) delete button.dataset.eventFocusId;
-      else button.dataset.eventFocusId = anchor.eventFocusId;
-      const itemTarget = anchor.itemType !== null;
-      const targetKind = itemTarget
-        ? 'item'
-        : anchor.eventChoiceId === undefined && anchor.eventFocusId === undefined ? 'tool' : 'event';
-      const hitArea = anchor.hitArea ?? DEFAULT_ANCHOR_HIT_AREA;
-      const x = Math.round(anchor.x);
-      const y = Math.round(anchor.y);
-      const targetWidth = Math.round(hitArea.width);
-      const targetHeight = Math.round(hitArea.height);
-      const zIndex = Math.max(1, 100000 - Math.round(hitArea.depth * 100));
-      const previous = this.anchorLayouts.get(anchor.id);
-      if (
-        previous === undefined
-        || previous.visible !== anchor.visible
-        || previous.x !== x
-        || previous.y !== y
-        || previous.targetKind !== targetKind
-        || previous.width !== targetWidth
-        || previous.height !== targetHeight
-        || previous.zIndex !== zIndex
-        || previous.depleted !== anchor.depleted
-      ) {
-        this.anchorLayouts.set(anchor.id, {
-          visible: anchor.visible,
-          x,
-          y,
-          targetKind,
-          width: targetWidth,
-          height: targetHeight,
-          zIndex,
-          depleted: anchor.depleted,
-        });
-        button.hidden = !anchor.visible;
-        button.style.transform = `translate(${x}px, ${y}px)`;
-        button.dataset.targetKind = targetKind;
-        button.style.width = `${targetWidth}px`;
-        button.style.height = `${targetHeight}px`;
-        button.style.marginLeft = `${-targetWidth / 2}px`;
-        button.style.marginTop = `${-targetHeight / 2}px`;
-        button.style.zIndex = String(zIndex);
-        this.placeAnchorTooltip(button, x, y);
-        button.classList.toggle('is-depleted', anchor.depleted);
-      }
-      this.refreshAnchorTooltip(button, anchor);
+      highlightInvalidated = this.syncAnchor(anchor) || highlightInvalidated;
     }
-    this.anchorButtons.forEach((button, id) => {
-      if (seen.has(id)) return;
-      highlightInvalidated = this.invalidateAnchorHighlight(id) || highlightInvalidated;
-      button.remove();
-      this.anchorButtons.delete(id);
-      this.anchors.delete(id);
-      this.anchorLayouts.delete(id);
-    });
+    highlightInvalidated = this.removeMissingAnchors(seen) || highlightInvalidated;
     const companionAnchor = nextAnchors.find(
       (anchor) => anchor.companionId === 'carlitos' && anchor.visible,
     );
@@ -341,6 +285,86 @@ export class BoatAnchorView {
     }
     if (highlightInvalidated) this.publishAnchorHighlight();
     this.syncCommandState();
+  }
+
+  private syncAnchor(anchor: BoatInteractionAnchor): boolean {
+    const highlightInvalidated = !anchor.visible || !this.isHighlightableAnchor(anchor)
+      ? this.invalidateAnchorHighlight(anchor.id)
+      : false;
+    this.anchors.set(anchor.id, anchor);
+    const button = this.anchorButtons.get(anchor.id) ?? this.createAnchorButton(anchor);
+    this.setEventFocusId(button, anchor.eventFocusId);
+    this.updateAnchorLayout(button, anchor);
+    this.refreshAnchorTooltip(button, anchor);
+    return highlightInvalidated;
+  }
+
+  private removeMissingAnchors(seen: ReadonlySet<string>): boolean {
+    let highlightInvalidated = false;
+    for (const [id, button] of this.anchorButtons) {
+      if (seen.has(id)) continue;
+      highlightInvalidated = this.invalidateAnchorHighlight(id) || highlightInvalidated;
+      button.remove();
+      this.anchorButtons.delete(id);
+      this.anchors.delete(id);
+      this.anchorLayouts.delete(id);
+    }
+    return highlightInvalidated;
+  }
+
+  private setEventFocusId(button: HTMLButtonElement, eventFocusId: InspectableEventId | undefined): void {
+    if (eventFocusId === undefined) delete button.dataset.eventFocusId;
+    else button.dataset.eventFocusId = eventFocusId;
+  }
+
+  private updateAnchorLayout(button: HTMLButtonElement, anchor: BoatInteractionAnchor): void {
+    const layout = this.anchorLayout(anchor);
+    if (this.sameAnchorLayout(this.anchorLayouts.get(anchor.id), layout)) return;
+    this.anchorLayouts.set(anchor.id, layout);
+    button.hidden = !layout.visible;
+    button.style.transform = `translate(${layout.x}px, ${layout.y}px)`;
+    button.dataset.targetKind = layout.targetKind;
+    button.style.width = `${layout.width}px`;
+    button.style.height = `${layout.height}px`;
+    button.style.marginLeft = `${-layout.width / 2}px`;
+    button.style.marginTop = `${-layout.height / 2}px`;
+    button.style.zIndex = String(layout.zIndex);
+    this.placeAnchorTooltip(button, layout.x, layout.y);
+    button.classList.toggle('is-depleted', layout.depleted);
+  }
+
+  private anchorLayout(anchor: BoatInteractionAnchor): AnchorLayoutState {
+    const hitArea = anchor.hitArea ?? DEFAULT_ANCHOR_HIT_AREA;
+    return {
+      visible: anchor.visible,
+      x: Math.round(anchor.x),
+      y: Math.round(anchor.y),
+      targetKind: this.anchorTargetKind(anchor),
+      width: Math.round(hitArea.width),
+      height: Math.round(hitArea.height),
+      zIndex: Math.max(1, 100000 - Math.round(hitArea.depth * 100)),
+      depleted: anchor.depleted,
+    };
+  }
+
+  private anchorTargetKind(anchor: BoatInteractionAnchor): AnchorLayoutState['targetKind'] {
+    if (anchor.itemType !== null) return 'item';
+    return anchor.eventChoiceId === undefined && anchor.eventFocusId === undefined ? 'tool' : 'event';
+  }
+
+  private sameAnchorLayout(
+    previous: AnchorLayoutState | undefined,
+    next: AnchorLayoutState,
+  ): boolean {
+    if (previous === undefined) return false;
+    return previous.visible === next.visible
+      && previous.x === next.x
+      && previous.y === next.y
+      && previous.targetKind === next.targetKind
+      && previous.width === next.width
+      && previous.height === next.height
+      && previous.zIndex === next.zIndex
+      && previous.depleted === next.depleted;
   }
 
   setBusy(busy: boolean): void {
@@ -482,52 +506,54 @@ export class BoatAnchorView {
   handleCommandKeyDown(event: KeyboardEvent): boolean {
     const target = event.target;
     if (!(target instanceof Element) || !this.anchorLayer.contains(target)) return false;
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-      const button = target.closest<HTMLButtonElement>('.boat-anchor');
-      if (
-        button !== null
-        && this.cycleOverlappingAnchor(button, event.key === 'ArrowRight' ? 1 : -1)
-      ) {
-        event.preventDefault();
-        return true;
-      }
-    }
-    if (
-      target instanceof HTMLButtonElement
-      && target.dataset.companion === 'carlitos'
-      && !target.hasAttribute('data-event-choice')
-      && (target.dataset.eventState === undefined || this.itemAnimationLab)
-      && this.isActivationKey(event.key)
-    ) {
-      event.preventDefault();
-      this.toggleCarlitosCard(target);
-      return true;
-    }
+    if (this.handleOverlapCommand(event, target)) return true;
+    if (this.handleCarlitosCommand(event, target)) return true;
+    if (this.handleEventChoiceCommand(event, target)) return true;
+    return this.handleEventItemCommand(event, target);
+  }
+
+  private handleOverlapCommand(event: KeyboardEvent, target: Element): boolean {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return false;
+    const button = target.closest<HTMLButtonElement>('.boat-anchor');
+    if (button === null) return false;
+    const direction = event.key === 'ArrowRight' ? 1 : -1;
+    if (!this.cycleOverlappingAnchor(button, direction)) return false;
+    event.preventDefault();
+    return true;
+  }
+
+  private handleCarlitosCommand(event: KeyboardEvent, target: Element): boolean {
+    if (!(target instanceof HTMLButtonElement)) return false;
+    if (target.dataset.companion !== 'carlitos') return false;
+    if (target.hasAttribute('data-event-choice')) return false;
+    if (target.dataset.eventState !== undefined && !this.itemAnimationLab) return false;
+    if (!this.isActivationKey(event.key)) return false;
+    event.preventDefault();
+    this.toggleCarlitosCard(target);
+    return true;
+  }
+
+  private handleEventChoiceCommand(event: KeyboardEvent, target: Element): boolean {
     if (!this.eventPresentationActive || !this.isActivationKey(event.key)) return false;
     const choice = target.closest<HTMLButtonElement>('[data-event-choice]');
-    if (choice !== null && this.anchorLayer.contains(choice)) {
-      event.preventDefault();
-      this.activateEventChoice(choice);
-      return true;
-    }
-    const itemAnchor = target.closest<HTMLButtonElement>('button[data-event-state="available"]');
-    const instanceId = this.instanceIdForButton(itemAnchor);
-    const choiceId = instanceId === undefined ? undefined : this.eventEligibility?.get(instanceId);
-    if (
-      itemAnchor !== null
-      && this.anchorLayer.contains(itemAnchor)
-      && !itemAnchor.disabled
-      && itemAnchor.getAttribute('aria-disabled') !== 'true'
-      && instanceId !== undefined
-      && choiceId !== undefined
-      && !this.busy
-      && this.eventSelectedInstanceId === null
-    ) {
-      event.preventDefault();
-      this.onEventItem(choiceId, instanceId);
-      return true;
-    }
-    return false;
+    if (choice === null || !this.anchorLayer.contains(choice)) return false;
+    event.preventDefault();
+    this.activateEventChoice(choice);
+    return true;
+  }
+
+  private handleEventItemCommand(event: KeyboardEvent, target: Element): boolean {
+    if (!this.eventPresentationActive || !this.isActivationKey(event.key)) return false;
+    const button = target.closest<HTMLButtonElement>('button[data-event-state="available"]');
+    if (button === null || !this.anchorLayer.contains(button)) return false;
+    if (button.disabled || button.getAttribute('aria-disabled') === 'true') return false;
+    const instanceId = this.instanceIdForButton(button);
+    if (instanceId === undefined || this.busy || this.eventSelectedInstanceId !== null) return false;
+    const choiceId = this.eventEligibility?.get(instanceId);
+    if (choiceId === undefined) return false;
+    event.preventDefault();
+    this.onEventItem(choiceId, instanceId);
+    return true;
   }
 
   clearHighlight(): void {
@@ -599,135 +625,267 @@ export class BoatAnchorView {
   }
 
   private refreshAnchorTooltip(button: HTMLButtonElement, anchor: BoatInteractionAnchor): void {
-    const backingInstanceId = anchor.backingInstanceId !== undefined
-      ? anchor.backingInstanceId
-      : anchor.id.startsWith('supply:') || anchor.eventChoiceId !== undefined
-        ? null
-        : anchor.id as ItemInstanceId;
-    const item = backingInstanceId === null
-      ? undefined
-      : this.currentSnapshot?.inventory[backingInstanceId];
-    const fallbackQuantity = anchor.itemType === 'cannedFood' ? this.currentSnapshot?.food
+    const backingInstanceId = this.anchorBackingInstanceId(anchor);
+    const item = this.anchorInventoryItem(backingInstanceId);
+    const quantity = this.anchorQuantity(anchor);
+    const usableQuantity = this.usableQuantity(anchor, item?.condition, quantity);
+    const brokenQuantity = this.brokenQuantity(anchor, item?.condition, quantity);
+    const pillowSleep = this.pillowSleepChoice(anchor);
+    const anchoredChoice = this.anchoredEventChoice(anchor);
+    const eventItemEligible = this.eventItemEligible(backingInstanceId);
+    const toolCopy = this.anchorToolCopy(anchor, pillowSleep);
+    const itemLabel = this.anchorLabel(anchor, toolCopy, quantity);
+    const itemDescription = this.anchorDescription(anchor, toolCopy);
+    const action = this.tooltipAction(anchor, pillowSleep, anchoredChoice, eventItemEligible);
+    const reason = this.tooltipReason(anchor, pillowSleep, anchoredChoice, eventItemEligible);
+    const preview = this.tooltipPreview(action);
+    const state = this.anchorState(item?.condition, usableQuantity, brokenQuantity);
+    const visibleLabel = this.visibleAnchorLabel(anchor, anchoredChoice, itemLabel, quantity);
+    const energyCost = this.tooltipEnergyCost(eventItemEligible, anchoredChoice, preview);
+    const energyIndicator = this.energyIndicator(anchoredChoice, energyCost, reason);
+    this.updateTooltipNodes(button, anchor, visibleLabel, energyIndicator, anchoredChoice);
+    this.updateAnchorDataset(button, anchor, backingInstanceId, item?.condition);
+    this.updateAnchorAria(button, visibleLabel, action, preview, itemLabel, itemDescription, state, reason, anchoredChoice, energyCost);
+  }
+
+  private anchorBackingInstanceId(anchor: BoatInteractionAnchor): ItemInstanceId | null {
+    if (anchor.backingInstanceId !== undefined) return anchor.backingInstanceId;
+    if (anchor.id.startsWith('supply:') || anchor.eventChoiceId !== undefined) return null;
+    return anchor.id as ItemInstanceId;
+  }
+
+  private anchorInventoryItem(backingInstanceId: ItemInstanceId | null) {
+    return backingInstanceId === null ? undefined : this.currentSnapshot?.inventory[backingInstanceId];
+  }
+
+  private pillowSleepChoice(anchor: BoatInteractionAnchor): EventContextChoice | undefined {
+    return anchor.toolId === 'pillow' ? this.eventPillowChoice() : undefined;
+  }
+
+  private anchoredEventChoice(anchor: BoatInteractionAnchor): EventContextChoice | undefined {
+    if (!this.eventPresentationActive) return undefined;
+    return this.eventChoiceForAnchor(anchor.id, anchor);
+  }
+
+  private tooltipEnergyCost(
+    eventItemEligible: boolean,
+    anchoredChoice: EventContextChoice | undefined,
+    preview: ActionPreview | ActionDefinition | null,
+  ): number {
+    if (eventItemEligible) return 0;
+    return anchoredChoice?.energyCost ?? preview?.energyCost ?? 0;
+  }
+
+  private anchorQuantity(anchor: BoatInteractionAnchor): number {
+    const fallback = anchor.itemType === 'cannedFood' ? this.currentSnapshot?.food
       : anchor.itemType === 'baitTin' ? this.currentSnapshot?.bait : undefined;
-    const quantity = anchor.quantity ?? fallbackQuantity ?? 1;
-    const usableQuantity = anchor.usableQuantity ?? (
-      item?.condition === 'broken' ? 0 : quantity
-    );
-    const brokenQuantity = anchor.brokenQuantity ?? (
-      item?.condition === 'broken' ? quantity : 0
-    );
-    const pillowSleep = anchor.toolId === 'pillow'
-      ? this.eventPillowChoice()
-      : undefined;
-    const anchoredChoice = this.eventPresentationActive
-      ? this.eventChoiceForAnchor(anchor.id, anchor)
-      : undefined;
-    const eventItemEligible = this.eventPresentationActive
+    return anchor.quantity ?? fallback ?? 1;
+  }
+
+  private usableQuantity(
+    anchor: BoatInteractionAnchor,
+    condition: ItemCondition | undefined,
+    quantity: number,
+  ): number {
+    return anchor.usableQuantity ?? (condition === 'broken' ? 0 : quantity);
+  }
+
+  private brokenQuantity(
+    anchor: BoatInteractionAnchor,
+    condition: ItemCondition | undefined,
+    quantity: number,
+  ): number {
+    return anchor.brokenQuantity ?? (condition === 'broken' ? quantity : 0);
+  }
+
+  private eventItemEligible(backingInstanceId: ItemInstanceId | null): boolean {
+    return this.eventPresentationActive
       && backingInstanceId !== null
       && this.eventEligibility?.has(backingInstanceId) === true;
-    const toolCopy = pillowSleep === undefined
-      ? anchor.toolId === null ? undefined : BOAT_TOOL_COPY[anchor.toolId]
-      : {
-          label: 'SLEEP',
-          description: 'Rest on the pillow to sleep through the current event.',
-        };
-    const itemLabel = anchor.label ?? (anchor.itemType === null
-      ? anchor.supplyGroupId === 'repairMaterial'
-        ? quantityLabel('REPAIR MATERIAL', quantity)
-        : toolCopy?.label ?? 'UNKNOWN TOOL'
-      : quantityLabel(ITEM_LABELS[anchor.itemType], quantity));
-    const itemDescription = anchor.description ?? (anchor.itemType === null
-      ? anchor.supplyGroupId === 'repairMaterial'
-        ? 'Recovered timber, fasteners, and rope for hull repairs.'
-        : toolCopy?.description ?? 'Permanent lifeboat equipment.'
-      : SURVIVAL_ITEM_DESCRIPTIONS[anchor.itemType]);
-    const action = pillowSleep !== undefined
-      || anchoredChoice !== undefined
-      || eventItemEligible
-      || anchor.action === null
-      ? null
-      : ACTIONS.find(({ id }) => id === anchor.action) ?? null;
-    const reason = eventItemEligible
-      ? null
-      : anchoredChoice !== undefined
-      ? anchoredChoice.unavailableReason
-      : pillowSleep === undefined
-        ? this.anchorUnavailableReason(anchor)
-        : pillowSleep.unavailableReason;
-    const state = brokenQuantity > 0 && usableQuantity > 0
-      ? `${usableQuantity} USABLE, ${brokenQuantity} BROKEN`
-      : brokenQuantity > 0 ? 'BROKEN'
-      : item?.condition === 'broken' ? 'BROKEN'
-      : item?.condition === 'consumed' ? 'USED'
-        : item?.condition === 'lost' ? 'LOST' : null;
-    const preview = action !== null && this.currentSnapshot !== null
-      ? actionPreview(action, this.currentSnapshot)
-      : action;
-    const stateText = state === null ? '' : ` — ${state}`;
-    const text = action === null || preview === null
-      ? `${itemLabel}${stateText} — ${itemDescription}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`
-      : `${itemLabel}${stateText}${itemLabel === action.label ? '' : ` — ${action.label}`} — ${itemDescription} — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${reason ? ` — UNAVAILABLE: ${reason}` : ''}`;
-    const visibleLabel = anchor.companionId === 'carlitos'
-      ? anchoredChoice?.label.toLocaleUpperCase('en-US')
-        ?? 'CARLITOS'
-      : anchor.label ?? (anchor.itemType !== null
-      ? quantityLabel(ITEM_LABELS[anchor.itemType], quantity)
-      : anchor.supplyGroupId === 'repairMaterial'
-        ? quantityLabel('REPAIR MATERIAL', quantity)
-        : anchor.toolId === 'fishingRod'
-          ? 'Fishing rod'
-          : anchor.toolId === 'repairTools'
-            ? 'REPAIR'
-            : itemLabel);
-    const energyCost = eventItemEligible
-      ? 0
-      : anchoredChoice?.energyCost ?? preview?.energyCost ?? 0;
-    const energyIndicator = anchoredChoice === undefined
-      ? '⚡'.repeat(energyCost)
-      : energyCost <= 0
-        ? reason === null ? '' : 'UNAVAILABLE'
-        : anchoredChoice.energyOwner === 'carlitos'
-          ? `CARLITOS: ${energyCost} ENERGY${reason === null ? '' : ' — UNAVAILABLE'}`
-          : `${'⚡'.repeat(energyCost)}${reason === null ? '' : ' — INSUFFICIENT ENERGY'}`;
-    const tooltipNodes = this.anchorTooltipNodes.get(button);
-    if (tooltipNodes !== undefined) {
-      tooltipNodes.tooltip.hidden = this.itemAnimationLab
-        && anchor.companionId === 'carlitos';
-      if (tooltipNodes.label.data !== visibleLabel) tooltipNodes.label.data = visibleLabel;
-      const separator = energyIndicator === ''
-        ? ''
-        : anchoredChoice === undefined ? ' ' : ' — ';
-      if (tooltipNodes.separator.data !== separator) tooltipNodes.separator.data = separator;
-      if (tooltipNodes.energy.textContent !== energyIndicator) {
-        tooltipNodes.energy.textContent = energyIndicator;
-      }
+  }
+
+  private anchorToolCopy(
+    anchor: BoatInteractionAnchor,
+    pillowSleep: EventContextChoice | undefined,
+  ): BoatToolCopy | undefined {
+    if (pillowSleep !== undefined) {
+      return { label: 'SLEEP', description: 'Rest on the pillow to sleep through the current event.' };
     }
+    return anchor.toolId === null ? undefined : BOAT_TOOL_COPY[anchor.toolId];
+  }
+
+  private anchorLabel(anchor: BoatInteractionAnchor, toolCopy: BoatToolCopy | undefined, quantity: number): string {
+    if (anchor.label !== undefined) return anchor.label;
+    if (anchor.itemType !== null) return quantityLabel(ITEM_LABELS[anchor.itemType], quantity);
+    if (anchor.supplyGroupId === 'repairMaterial') return quantityLabel('REPAIR MATERIAL', quantity);
+    return toolCopy?.label ?? 'UNKNOWN TOOL';
+  }
+
+  private anchorDescription(anchor: BoatInteractionAnchor, toolCopy: BoatToolCopy | undefined): string {
+    if (anchor.description !== undefined) return anchor.description;
+    if (anchor.itemType !== null) return SURVIVAL_ITEM_DESCRIPTIONS[anchor.itemType];
+    if (anchor.supplyGroupId === 'repairMaterial') {
+      return 'Recovered timber, fasteners, and rope for hull repairs.';
+    }
+    return toolCopy?.description ?? 'Permanent lifeboat equipment.';
+  }
+
+  private tooltipAction(
+    anchor: BoatInteractionAnchor,
+    pillowSleep: EventContextChoice | undefined,
+    anchoredChoice: EventContextChoice | undefined,
+    eventItemEligible: boolean,
+  ): ActionDefinition | null {
+    if (pillowSleep !== undefined || anchoredChoice !== undefined || eventItemEligible) return null;
+    if (anchor.action === null) return null;
+    return ACTIONS.find(({ id }) => id === anchor.action) ?? null;
+  }
+
+  private tooltipReason(
+    anchor: BoatInteractionAnchor,
+    pillowSleep: EventContextChoice | undefined,
+    anchoredChoice: EventContextChoice | undefined,
+    eventItemEligible: boolean,
+  ): string | null {
+    if (eventItemEligible) return null;
+    if (anchoredChoice !== undefined) return anchoredChoice.unavailableReason;
+    if (pillowSleep !== undefined) return pillowSleep.unavailableReason;
+    return this.anchorUnavailableReason(anchor);
+  }
+
+  private tooltipPreview(action: ActionDefinition | null): ActionPreview | ActionDefinition | null {
+    if (action === null || this.currentSnapshot === null) return action;
+    return actionPreview(action, this.currentSnapshot);
+  }
+
+  private anchorState(
+    condition: ItemCondition | undefined,
+    usableQuantity: number,
+    brokenQuantity: number,
+  ): string | null {
+    if (brokenQuantity > 0 && usableQuantity > 0) return `${usableQuantity} USABLE, ${brokenQuantity} BROKEN`;
+    if (brokenQuantity > 0 || condition === 'broken') return 'BROKEN';
+    if (condition === 'consumed') return 'USED';
+    return condition === 'lost' ? 'LOST' : null;
+  }
+
+  private visibleAnchorLabel(
+    anchor: BoatInteractionAnchor,
+    anchoredChoice: EventContextChoice | undefined,
+    itemLabel: string,
+    quantity: number,
+  ): string {
+    if (anchor.companionId === 'carlitos') return anchoredChoice?.label.toLocaleUpperCase('en-US') ?? 'CARLITOS';
+    if (anchor.label !== undefined) return anchor.label;
+    if (anchor.itemType !== null) return quantityLabel(ITEM_LABELS[anchor.itemType], quantity);
+    if (anchor.supplyGroupId === 'repairMaterial') return quantityLabel('REPAIR MATERIAL', quantity);
+    if (anchor.toolId === 'fishingRod') return 'Fishing rod';
+    return anchor.toolId === 'repairTools' ? 'REPAIR' : itemLabel;
+  }
+
+  private energyIndicator(
+    anchoredChoice: EventContextChoice | undefined,
+    energyCost: number,
+    reason: string | null,
+  ): string {
+    if (anchoredChoice === undefined) return '⚡'.repeat(energyCost);
+    if (energyCost <= 0) return reason === null ? '' : 'UNAVAILABLE';
+    if (anchoredChoice.energyOwner === 'carlitos') {
+      return `CARLITOS: ${energyCost} ENERGY${reason === null ? '' : ' — UNAVAILABLE'}`;
+    }
+    return `${'⚡'.repeat(energyCost)}${reason === null ? '' : ' — INSUFFICIENT ENERGY'}`;
+  }
+
+  private updateTooltipNodes(
+    button: HTMLButtonElement,
+    anchor: BoatInteractionAnchor,
+    visibleLabel: string,
+    energyIndicator: string,
+    anchoredChoice: EventContextChoice | undefined,
+  ): void {
+    const nodes = this.anchorTooltipNodes.get(button);
+    if (nodes === undefined) return;
+    nodes.tooltip.hidden = this.itemAnimationLab && anchor.companionId === 'carlitos';
+    if (nodes.label.data !== visibleLabel) nodes.label.data = visibleLabel;
+    const separator = energyIndicator === '' ? '' : anchoredChoice === undefined ? ' ' : ' — ';
+    if (nodes.separator.data !== separator) nodes.separator.data = separator;
+    if (nodes.energy.textContent !== energyIndicator) nodes.energy.textContent = energyIndicator;
+  }
+
+  private updateAnchorDataset(
+    button: HTMLButtonElement,
+    anchor: BoatInteractionAnchor,
+    backingInstanceId: ItemInstanceId | null,
+    condition: ItemCondition | undefined,
+  ): void {
+    button.dataset.action = anchor.action ?? '';
+    this.setOptionalData(button, 'companion', anchor.companionId);
+    this.setOptionalData(button, 'item', anchor.itemType);
+    this.setOptionalData(button, 'tool', anchor.toolId);
+    this.setOptionalData(button, 'backingInstanceId', backingInstanceId);
+    this.setOptionalData(button, 'condition', condition);
+  }
+
+  private setOptionalData(
+    button: HTMLButtonElement,
+    name: string,
+    value: string | null | undefined,
+  ): void {
+    if (value === null || value === undefined) delete button.dataset[name];
+    else button.dataset[name] = value;
+  }
+
+  private updateAnchorAria(
+    button: HTMLButtonElement,
+    visibleLabel: string,
+    action: ActionDefinition | null,
+    preview: ActionPreview | ActionDefinition | null,
+    itemLabel: string,
+    itemDescription: string,
+    state: string | null,
+    reason: string | null,
+    anchoredChoice: EventContextChoice | undefined,
+    energyCost: number,
+  ): void {
+    button.setAttribute('aria-label', this.anchorAriaLabel(visibleLabel, anchoredChoice, energyCost, reason));
+    button.setAttribute('aria-description', this.anchorAriaDescription(
+      action,
+      preview,
+      itemLabel,
+      itemDescription,
+      state,
+      reason,
+    ));
+    button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
+    button.removeAttribute('aria-keyshortcuts');
+  }
+
+  private anchorAriaLabel(
+    visibleLabel: string,
+    anchoredChoice: EventContextChoice | undefined,
+    energyCost: number,
+    reason: string | null,
+  ): string {
     const spokenCost = anchoredChoice?.energyOwner === 'carlitos'
       ? `${spokenEnergyCost(energyCost) ?? 'no energy'} from Carlitos`
       : spokenEnergyCost(energyCost);
-    button.dataset.action = anchor.action ?? '';
-    if (anchor.companionId === undefined) delete button.dataset.companion;
-    else button.dataset.companion = anchor.companionId;
-    if (anchor.itemType === null) delete button.dataset.item;
-    else button.dataset.item = anchor.itemType;
-    if (anchor.toolId === null) delete button.dataset.tool;
-    else button.dataset.tool = anchor.toolId;
-    if (backingInstanceId === null) delete button.dataset.backingInstanceId;
-    else button.dataset.backingInstanceId = backingInstanceId;
-    if (item === undefined) delete button.dataset.condition;
-    else button.dataset.condition = item.condition;
-    const spokenUnavailable = anchoredChoice !== undefined && reason !== null
-      ? ', insufficient energy'
-      : '';
-    button.setAttribute(
-      'aria-label',
-      spokenCost === null
-        ? `${visibleLabel}${spokenUnavailable}`
-        : `${visibleLabel}, ${spokenCost}${spokenUnavailable}`,
-    );
-    button.setAttribute('aria-description', text);
-    button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
-    button.removeAttribute('aria-keyshortcuts');
+    const unavailable = anchoredChoice !== undefined && reason !== null ? ', insufficient energy' : '';
+    return spokenCost === null ? `${visibleLabel}${unavailable}` : `${visibleLabel}, ${spokenCost}${unavailable}`;
+  }
+
+  private anchorAriaDescription(
+    action: ActionDefinition | null,
+    preview: ActionPreview | ActionDefinition | null,
+    itemLabel: string,
+    itemDescription: string,
+    state: string | null,
+    reason: string | null,
+  ): string {
+    const stateText = state === null ? '' : ` — ${state}`;
+    const unavailable = reason ? ` — UNAVAILABLE: ${reason}` : '';
+    if (action === null || preview === null) return `${itemLabel}${stateText} — ${itemDescription}${unavailable}`;
+    const actionText = itemLabel === action.label ? '' : ` — ${action.label}`;
+    return `${itemLabel}${stateText}${actionText} — ${itemDescription} — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${unavailable}`;
   }
 
   private anchorUnavailableReason(anchor: BoatInteractionAnchor): string | null {
@@ -862,55 +1020,83 @@ export class BoatAnchorView {
   private syncCommandState(): void {
     let highlightInvalidated = false;
     this.anchorButtons.forEach((button, id) => {
-      const anchor = this.anchors.get(id);
-      const reason = anchor === undefined ? null : this.anchorUnavailableReason(anchor);
-      const choice = anchor === undefined ? undefined : this.eventChoiceForAnchor(id, anchor);
-      const state = anchor === undefined ? 'ordinary' : this.anchorInteractionState(id, anchor);
-      const eventState = state === 'eventLocked'
-        ? 'locked'
-        : state === 'eventAvailable'
-          ? 'available'
-          : state === 'eventUnavailable'
-            ? 'unavailable'
-            : state === 'selected'
-              ? 'selected'
-              : null;
-      if (choice === undefined) {
-        delete button.dataset.eventChoice;
-        delete button.dataset.unavailableReason;
-      } else {
-        button.dataset.eventChoice = choice.id;
-        if (choice.unavailableReason === null) delete button.dataset.unavailableReason;
-        else button.dataset.unavailableReason = choice.unavailableReason;
-      }
-      if (eventState === null) delete button.dataset.eventState;
-      else button.dataset.eventState = eventState;
-      if (state === 'eventLocked') {
-        button.disabled = true;
-        button.tabIndex = -1;
-        button.setAttribute('aria-hidden', 'true');
-        button.setAttribute('aria-disabled', 'true');
-        highlightInvalidated = this.invalidateAnchorHighlight(id) || highlightInvalidated;
-        return;
-      }
-      button.tabIndex = 0;
-      button.removeAttribute('aria-hidden');
-      if (state === 'eventAvailable') {
-        button.disabled = false;
-        button.setAttribute('aria-disabled', 'false');
-        return;
-      }
-      if (state === 'eventUnavailable' || state === 'selected') {
-        button.disabled = false;
-        button.setAttribute('aria-disabled', 'true');
-        return;
-      }
-      button.disabled = this.busy;
-      button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
+      highlightInvalidated = this.syncAnchorButton(button, id) || highlightInvalidated;
     });
     if (highlightInvalidated) this.publishAnchorHighlight();
     this.syncCarlitosActions();
     this.syncOverlapState();
+  }
+
+  private syncAnchorButton(button: HTMLButtonElement, id: string): boolean {
+    const anchor = this.anchors.get(id);
+    const reason = anchor === undefined ? null : this.anchorUnavailableReason(anchor);
+    const choice = anchor === undefined ? undefined : this.eventChoiceForAnchor(id, anchor);
+    const state = anchor === undefined ? 'ordinary' : this.anchorInteractionState(id, anchor);
+    this.setEventChoiceState(button, choice);
+    this.setAnchorEventState(button, state);
+    if (state === 'eventLocked') return this.lockAnchorButton(button, id);
+    this.unlockAnchorButton(button);
+    this.setAnchorButtonAvailability(button, state, reason);
+    return false;
+  }
+
+  private setEventChoiceState(
+    button: HTMLButtonElement,
+    choice: EventContextChoice | undefined,
+  ): void {
+    if (choice === undefined) {
+      delete button.dataset.eventChoice;
+      delete button.dataset.unavailableReason;
+      return;
+    }
+    button.dataset.eventChoice = choice.id;
+    if (choice.unavailableReason === null) delete button.dataset.unavailableReason;
+    else button.dataset.unavailableReason = choice.unavailableReason;
+  }
+
+  private setAnchorEventState(button: HTMLButtonElement, state: AnchorInteractionState): void {
+    const eventState = this.eventStateName(state);
+    if (eventState === null) delete button.dataset.eventState;
+    else button.dataset.eventState = eventState;
+  }
+
+  private eventStateName(state: AnchorInteractionState): string | null {
+    if (state === 'eventLocked') return 'locked';
+    if (state === 'eventAvailable') return 'available';
+    if (state === 'eventUnavailable') return 'unavailable';
+    return state === 'selected' ? 'selected' : null;
+  }
+
+  private lockAnchorButton(button: HTMLButtonElement, id: string): boolean {
+    button.disabled = true;
+    button.tabIndex = -1;
+    button.setAttribute('aria-hidden', 'true');
+    button.setAttribute('aria-disabled', 'true');
+    return this.invalidateAnchorHighlight(id);
+  }
+
+  private unlockAnchorButton(button: HTMLButtonElement): void {
+    button.tabIndex = 0;
+    button.removeAttribute('aria-hidden');
+  }
+
+  private setAnchorButtonAvailability(
+    button: HTMLButtonElement,
+    state: AnchorInteractionState,
+    reason: string | null,
+  ): void {
+    if (state === 'eventAvailable') {
+      button.disabled = false;
+      button.setAttribute('aria-disabled', 'false');
+      return;
+    }
+    if (state === 'eventUnavailable' || state === 'selected') {
+      button.disabled = false;
+      button.setAttribute('aria-disabled', 'true');
+      return;
+    }
+    button.disabled = this.busy;
+    button.setAttribute('aria-disabled', reason === null ? 'false' : 'true');
   }
 
   private eventPillowChoice(): EventContextChoice | undefined {
@@ -949,33 +1135,44 @@ export class BoatAnchorView {
         : 'eventAvailable';
     }
     const choice = this.eventChoiceForAnchor(id, anchor);
-    if (choice !== undefined) {
-      if (this.eventSelectedChoiceId === choice.id) return 'selected';
-      if (this.busy || this.eventSelectedChoiceId !== null) return 'eventLocked';
-      if (choice.unavailableReason !== null) return 'eventUnavailable';
-      return 'eventAvailable';
-    }
-    const instanceId = anchor.backingInstanceId
-      ?? (id.startsWith('supply:') ? null : id as ItemInstanceId);
+    if (choice !== undefined) return this.eventChoiceState(choice);
+    return this.eventItemState(id, anchor);
+  }
+
+  private eventChoiceState(choice: EventContextChoice): AnchorInteractionState {
+    if (this.eventSelectedChoiceId === choice.id) return 'selected';
+    if (this.busy || this.eventSelectedChoiceId !== null) return 'eventLocked';
+    return choice.unavailableReason === null ? 'eventAvailable' : 'eventUnavailable';
+  }
+
+  private eventItemState(id: string, anchor: BoatInteractionAnchor): AnchorInteractionState {
+    const instanceId = this.anchorInstanceId(id, anchor);
     if (instanceId !== null && this.eventEligibility?.has(instanceId) === true) {
-      if (this.eventSelectedInstanceId === instanceId) return 'selected';
-      if (
-        this.busy
-        || this.eventSelectedInstanceId !== null
-        || this.eventEligibility === null
-      ) return 'eventLocked';
-      return 'eventAvailable';
+      return this.eligibleEventItemState(instanceId);
     }
-    if (anchor.itemType !== null) {
-      if (instanceId !== null && this.eventSelectedInstanceId === instanceId) return 'selected';
-      if (
-        this.busy
-        || this.eventSelectedInstanceId !== null
-        || this.eventEligibility === null
-      ) return 'eventLocked';
-      return 'eventUnavailable';
-    }
+    if (anchor.itemType !== null) return this.unavailableEventItemState(instanceId);
     return 'eventLocked';
+  }
+
+  private anchorInstanceId(id: string, anchor: BoatInteractionAnchor): ItemInstanceId | null {
+    if (anchor.backingInstanceId !== undefined) return anchor.backingInstanceId;
+    return id.startsWith('supply:') ? null : id as ItemInstanceId;
+  }
+
+  private eligibleEventItemState(instanceId: ItemInstanceId): AnchorInteractionState {
+    if (this.eventSelectedInstanceId === instanceId) return 'selected';
+    if (this.busy || this.eventSelectedInstanceId !== null || this.eventEligibility === null) {
+      return 'eventLocked';
+    }
+    return 'eventAvailable';
+  }
+
+  private unavailableEventItemState(instanceId: ItemInstanceId | null): AnchorInteractionState {
+    if (instanceId !== null && this.eventSelectedInstanceId === instanceId) return 'selected';
+    if (this.busy || this.eventSelectedInstanceId !== null || this.eventEligibility === null) {
+      return 'eventLocked';
+    }
+    return 'eventUnavailable';
   }
 
   private isHighlightableAnchor(anchor: BoatInteractionAnchor): boolean {
@@ -1067,53 +1264,63 @@ export class BoatAnchorView {
     const button = target.closest<HTMLButtonElement>('button');
     if (button === null || !this.anchorLayer.contains(button) || button.disabled) return;
     if (this.modalOpen) return;
-    if (
-      button.dataset.companion === 'carlitos'
-      && !button.hasAttribute('data-event-choice')
-      && (button.dataset.eventState === undefined || this.itemAnimationLab)
-    ) {
-      this.toggleCarlitosCard(button);
-      return;
-    }
-    const eventFocusId = button.dataset.eventFocusId as InspectableEventId | undefined;
-    if (eventFocusId !== undefined) {
-      this.onEventFocus(eventFocusId);
-      return;
-    }
-    const eventInstanceId = this.instanceIdForButton(button);
-    if (
-      this.eventPresentationActive
-      && eventInstanceId !== undefined
-      && (
-        button.dataset.targetKind === 'item'
-        || this.eventEligibility?.has(eventInstanceId) === true
-      )
-    ) {
-      const choiceId = this.eventEligibility?.get(eventInstanceId);
-      if (
-        choiceId !== undefined
-        && !this.busy
-        && this.eventSelectedInstanceId === null
-      ) this.onEventItem(choiceId, eventInstanceId);
-      return;
-    }
+    if (this.handleCarlitosAnchorClick(button)) return;
+    if (this.handleEventFocusClick(button)) return;
+    if (this.handleEventItemClick(button)) return;
     const action = ACTIONS.find(({ id }) => id === button.dataset.action);
-    if (button.getAttribute('aria-disabled') === 'true') {
-      if (action !== undefined) {
-        const reason = this.actionReasons.get(action.id);
-        if (reason !== null && reason !== undefined) this.onUnavailableAction(action.id, reason);
-      }
-      return;
-    }
-    if (button.hasAttribute('data-event-choice')) {
-      this.activateEventChoice(button);
-      return;
-    }
-    if (action === undefined) return;
-    const itemAnimationLabAction = this.itemAnimationLab && action.id === 'openChest';
-    if (this.eventPresentationActive && !itemAnimationLabAction) return;
-    this.onAction(action.id, button);
+    if (this.handleUnavailableAnchorClick(button, action)) return;
+    if (button.hasAttribute('data-event-choice')) return this.activateEventChoice(button);
+    this.handleActionClick(button, action);
   };
+
+  private handleCarlitosAnchorClick(button: HTMLButtonElement): boolean {
+    if (button.dataset.companion !== 'carlitos') return false;
+    if (button.hasAttribute('data-event-choice')) return false;
+    if (button.dataset.eventState !== undefined && !this.itemAnimationLab) return false;
+    this.toggleCarlitosCard(button);
+    return true;
+  }
+
+  private handleEventFocusClick(button: HTMLButtonElement): boolean {
+    const eventFocusId = button.dataset.eventFocusId as InspectableEventId | undefined;
+    if (eventFocusId === undefined) return false;
+    this.onEventFocus(eventFocusId);
+    return true;
+  }
+
+  private handleEventItemClick(button: HTMLButtonElement): boolean {
+    if (!this.eventPresentationActive) return false;
+    const instanceId = this.instanceIdForButton(button);
+    if (instanceId === undefined) return false;
+    if (button.dataset.targetKind !== 'item' && this.eventEligibility?.has(instanceId) !== true) {
+      return false;
+    }
+    const choiceId = this.eventEligibility?.get(instanceId);
+    if (choiceId !== undefined && !this.busy && this.eventSelectedInstanceId === null) {
+      this.onEventItem(choiceId, instanceId);
+    }
+    return true;
+  }
+
+  private handleUnavailableAnchorClick(
+    button: HTMLButtonElement,
+    action: ActionDefinition | undefined,
+  ): boolean {
+    if (button.getAttribute('aria-disabled') !== 'true') return false;
+    if (action === undefined) return true;
+    const reason = this.actionReasons.get(action.id);
+    if (reason !== null && reason !== undefined) this.onUnavailableAction(action.id, reason);
+    return true;
+  }
+
+  private handleActionClick(
+    button: HTMLButtonElement,
+    action: ActionDefinition | undefined,
+  ): void {
+    if (action === undefined) return;
+    if (this.eventPresentationActive && !(this.itemAnimationLab && action.id === 'openChest')) return;
+    this.onAction(action.id, button);
+  }
 
   private readonly handleCarlitosClick = (event: MouseEvent): void => {
     const target = event.target;

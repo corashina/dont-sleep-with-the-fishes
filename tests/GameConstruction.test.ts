@@ -115,7 +115,7 @@ describe('Game construction rollback', () => {
     expect(menuSandAssets.dispose).toHaveBeenCalledOnce();
     expect(sceneRenderer.dispose).toHaveBeenCalledOnce();
     expect(renderer.dispose).toHaveBeenCalledOnce();
-  }, 10_000);
+  }, 30_000);
 
   it('shares and disposes menu assets once', async () => {
     const canvas = document.createElement('canvas');

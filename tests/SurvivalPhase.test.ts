@@ -880,12 +880,7 @@ async function reachFishingTeardownStage(
 }
 
 async function flushPromises(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let index = 0; index < 128; index += 1) await Promise.resolve();
 }
 
 function createDiveRig(options: {
@@ -8390,6 +8385,22 @@ describe('SurvivalPhase orchestration', () => {
     expect(ui).not.toHaveProperty('onContinue');
     expect(ui).not.toHaveProperty('onJournalContinue');
     expect(ui).not.toHaveProperty('onSkip');
+  });
+
+  it('wires the return-to-menu callback', () => {
+    const returnToMenu = vi.fn();
+    const ui: Record<string, unknown> = { dispose: vi.fn() };
+    SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world: { dispose: vi.fn() },
+      ui,
+      onReturnToMenu: returnToMenu,
+    });
+
+    (ui.onReturnToMenu as () => void)();
+    (ui.onReturnToMenu as () => void)();
+
+    expect(returnToMenu).toHaveBeenCalledOnce();
   });
 
   it('automatically resolves an unblocked Chest Attack and covers at impact', async () => {

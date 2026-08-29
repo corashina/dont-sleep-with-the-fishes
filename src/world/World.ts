@@ -51,6 +51,7 @@ import type { PlayerNavigationBounds } from '../player/PlayerController';
 import {
   ScavengePhysics,
   createScavengeStaticCuboids,
+  type ScavengePhysicsConfig,
   type PhysicsPose,
 } from '../physics/ScavengePhysics';
 import type { PhysicsObjectCollider } from '../physics/ScavengePhysicsObjectTypes';
@@ -150,6 +151,17 @@ function floorRestingQuaternion(itemId: ItemId, output: Quaternion): Quaternion 
 const FREIGHTER_BUOYANCY_FOOTPRINT: BoatFootprint = { length: 38, width: 13 };
 const FREIGHTER_BUOYANCY_DAMPING = 2.4;
 const FREIGHTER_DRAFT = 0.76;
+type ConstructionRollback = () => void;
+
+function requireLifeboatStation() {
+  const station = SHIP_LAYOUT.zones.find(({ id }) => id === 'lifeboatStation');
+  if (!station) throw new Error('Missing lifeboat station deposit zone');
+  return station;
+}
+
+function resolvePhysicsMode(construction: WorldConstructionDependencies): PhysicsMode {
+  return construction.physicsMode ?? 'enabled';
+}
 
 function copyThreePoseIntoPhysicsPose(
   output: {
@@ -289,8 +301,8 @@ export class World {
     waterQuality: WaterQuality = 'low',
     visualQuality: VisualQuality = 'low',
   ) {
-    this.physicsMode = construction.physicsMode ?? 'enabled';
-    const rollback: (() => void)[] = [];
+    this.physicsMode = resolvePhysicsMode(construction);
+    const rollback: ConstructionRollback[] = [];
     this.shipBuild = createShip(shipFurniture, maxTextureAnisotropy, shipAssets);
     rollback.push(() => this.shipBuild.dispose());
     this.ship = this.shipBuild.root;
@@ -302,8 +314,7 @@ export class World {
     this.climbZones = this.shipBuild.climbZones;
     this.playerStart = this.shipBuild.playerStart.clone();
     this.evacuationPoint = this.shipBuild.evacuationPoint.clone();
-    const lifeboatStation = SHIP_LAYOUT.zones.find(({ id }) => id === 'lifeboatStation');
-    if (!lifeboatStation) throw new Error('Missing lifeboat station deposit zone');
+    const lifeboatStation = requireLifeboatStation();
     this.evacuationBounds = {
       minX: lifeboatStation.bounds.minX,
       maxX: lifeboatStation.bounds.maxX,
@@ -432,9 +443,7 @@ export class World {
         this.physicsObjectsRoot.add(visual);
         return visual;
       });
-      if (this.physicsMode === 'off') this.ship.add(this.physicsObjectsRoot);
-      else this.scene.add(this.physicsObjectsRoot);
-      rollback.push(() => this.physicsObjectsRoot.removeFromParent());
+      this.attachPhysicsObjectsRoot(rollback);
 
       this.ship.updateMatrixWorld(true);
       this.ship.getWorldPosition(this.shipPhysicsTranslation);
@@ -475,23 +484,7 @@ export class World {
           };
         }),
       };
-      if (this.physicsMode !== 'off') {
-        if (physicsRuntime === null) {
-          throw new Error('Physics runtime is required unless physics is disabled');
-        }
-        this.scavengePhysics = new ScavengePhysics(physicsRuntime, physicsConfig);
-        rollback.push(() => this.scavengePhysics?.dispose());
-        if (this.physicsMode === 'debug') {
-          this.physicsDebugView = new ScavengePhysicsDebugView(
-            this.scene,
-            this.ship,
-            createScavengeStaticCuboids(physicsConfig),
-            SCAVENGE_PHYSICS_OBJECT_SPECS.map(({ id, collider }) => ({ id, collider })),
-          );
-          rollback.push(() => this.physicsDebugView?.dispose());
-        }
-        this.syncPhysicsObjects();
-      }
+      this.initializeScavengePhysics(physicsRuntime, physicsConfig, rollback);
       construction.checkpoint?.('physics');
       this.groundDropSmoke = new BoatDepositSmoke('ground-drop-smoke');
       this.ship.add(this.groundDropSmoke.points);
@@ -506,27 +499,7 @@ export class World {
         this.itemPickupSmoke.dispose();
       });
 
-      const resolvedLifeboatAssets = lifeboatAssets ?? LifeboatAssets.fromTextures(
-        new Texture(),
-        new Texture(),
-        new Texture(),
-      );
-      if (lifeboatAssets === undefined) {
-        for (const texture of [
-          resolvedLifeboatAssets.color,
-          resolvedLifeboatAssets.roughness,
-          resolvedLifeboatAssets.normal,
-        ]) {
-          this.ownedTextures.add(texture);
-          rollback.push(() => {
-            try {
-              texture.dispose();
-            } finally {
-              this.ownedTextures.delete(texture);
-            }
-          });
-        }
-      }
+      const resolvedLifeboatAssets = this.resolveLifeboatAssets(lifeboatAssets, rollback);
       const boatBuild = createLifeboat(resolvedLifeboatAssets);
       this.lifeboat = boatBuild.root;
       this.lifeboat.position.copy(this.boatAnchor);
@@ -589,22 +562,94 @@ export class World {
       this.buoyancy = new BoatBuoyancy(sampleDefaultWave, undefined, sampleDefaultWaveInto);
       construction.checkpoint?.('buoyancy');
     } catch (error) {
-      for (let index = rollback.length - 1; index >= 0; index -= 1) {
-        attemptCleanup(rollback[index]!);
-      }
-      [...scene.children].forEach((child) => {
-        if (!initialSceneChildren.has(child)) attemptCleanup(() => scene.remove(child));
-      });
-      attemptCleanup(() => { scene.background = initialBackground; });
-      attemptCleanup(() => { scene.fog = initialFog; });
-      this.ownedGeometries.clear();
-      this.ownedMaterials.clear();
-      this.ownedTextures.clear();
-      this.itemObjects.clear();
-      this.animatedItemPresentations.clear();
-      this.shipItemScales.clear();
-      throw error;
+      this.rollbackConstruction(
+        error,
+        rollback,
+        initialSceneChildren,
+        initialBackground,
+        initialFog,
+      );
     }
+  }
+
+  private attachPhysicsObjectsRoot(rollback: ConstructionRollback[]): void {
+    const parent = this.physicsMode === 'off' ? this.ship : this.scene;
+    parent.add(this.physicsObjectsRoot);
+    rollback.push(() => this.physicsObjectsRoot.removeFromParent());
+  }
+
+  private initializeScavengePhysics(
+    physicsRuntime: PhysicsRuntime | null,
+    physicsConfig: ScavengePhysicsConfig,
+    rollback: ConstructionRollback[],
+  ): void {
+    if (this.physicsMode === 'off') return;
+    if (physicsRuntime === null) {
+      throw new Error('Physics runtime is required unless physics is disabled');
+    }
+    this.scavengePhysics = new ScavengePhysics(physicsRuntime, physicsConfig);
+    rollback.push(() => this.scavengePhysics?.dispose());
+    if (this.physicsMode === 'debug') {
+      this.physicsDebugView = new ScavengePhysicsDebugView(
+        this.scene,
+        this.ship,
+        createScavengeStaticCuboids(physicsConfig),
+        SCAVENGE_PHYSICS_OBJECT_SPECS.map(({ id, collider }) => ({ id, collider })),
+      );
+      rollback.push(() => this.physicsDebugView?.dispose());
+    }
+    this.syncPhysicsObjects();
+  }
+
+  private resolveLifeboatAssets(
+    assets: LifeboatAssets | undefined,
+    rollback: ConstructionRollback[],
+  ): LifeboatAssets {
+    if (assets !== undefined) return assets;
+    const createdAssets = LifeboatAssets.fromTextures(
+      new Texture(),
+      new Texture(),
+      new Texture(),
+    );
+    for (const texture of [
+      createdAssets.color,
+      createdAssets.roughness,
+      createdAssets.normal,
+    ]) {
+      this.ownedTextures.add(texture);
+      rollback.push(() => {
+        try {
+          texture.dispose();
+        } finally {
+          this.ownedTextures.delete(texture);
+        }
+      });
+    }
+    return createdAssets;
+  }
+
+  private rollbackConstruction(
+    error: unknown,
+    rollback: readonly ConstructionRollback[],
+    initialSceneChildren: ReadonlySet<Scene['children'][number]>,
+    initialBackground: Scene['background'],
+    initialFog: Scene['fog'],
+  ): never {
+    for (let index = rollback.length - 1; index >= 0; index -= 1) {
+      attemptCleanup(rollback[index]!);
+    }
+    [...this.scene.children].forEach((child) => {
+      if (!initialSceneChildren.has(child)) attemptCleanup(() => this.scene.remove(child));
+    });
+    attemptCleanup(() => { this.scene.background = initialBackground; });
+    attemptCleanup(() => { this.scene.fog = initialFog; });
+    this.ownedGeometries.clear();
+    this.ownedMaterials.clear();
+    this.ownedTextures.clear();
+    this.itemObjects.clear();
+    this.animatedItemPresentations.clear();
+    this.shipItemScales.clear();
+    throw error;
   }
 
   update(

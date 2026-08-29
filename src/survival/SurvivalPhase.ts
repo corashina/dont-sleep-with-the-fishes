@@ -108,6 +108,7 @@ export interface SurvivalPhaseTestDependencies {
   ui: Partial<SurvivalUI>;
   audio?: AudioSystem;
   onRestart?: () => void;
+  onReturnToMenu?: () => void;
   onInvariantError?: (error: Error) => void;
   onFatalError?: (error: unknown) => void;
   eventBundles?: SurvivalPhaseBundleManager;
@@ -203,6 +204,7 @@ export class SurvivalPhase implements GamePhase {
   private world!: SurvivalPhaseTestDependencies['world'];
   private ui!: Partial<SurvivalUI>;
   private onRestart!: () => void;
+  private onReturnToMenu!: () => void;
   private onCheckpointChange!: SurvivalCheckpointChange;
   private checkpointingEnabled = false;
   private scavengeElapsedSeconds = 0;
@@ -219,7 +221,7 @@ export class SurvivalPhase implements GamePhase {
   private visibilityPauseActive = false;
   private disposed = false;
   private started = false;
-  private restartRequested = false;
+  private transitionRequested = false;
   private presentedTerminalState: SurvivalState | null = null;
   private terminalCheckpointCleared = false;
   private lastReadJournalDay = 0;
@@ -251,12 +253,14 @@ export class SurvivalPhase implements GamePhase {
     start: SurvivalPhaseStart,
     onRestart: () => void,
     onCheckpointChange: SurvivalCheckpointChange,
+    onReturnToMenu: () => void,
   );
   constructor(
     context: PhaseContext,
     start: SurvivalPhaseStart,
     onRestart: () => void,
     onCheckpointChange: SurvivalCheckpointChange,
+    onReturnToMenu: () => void,
     testDependencies?: SurvivalPhaseTestDependencies,
   ) {
     const initialEventId = start.kind === 'fresh' ? start.initialEventId : undefined;
@@ -264,59 +268,106 @@ export class SurvivalPhase implements GamePhase {
       ? start.initialEventResultId
       : undefined;
     const itemAnimationLab = isItemAnimationLabId(initialEventId);
-    const session = testDependencies?.session
-      ?? createSession(start, itemAnimationLab, initialEventId);
     if (testDependencies === undefined) {
-      const world = new BoatWorld(
-        context.camera,
-        context.propModels,
-        context.skyAssets.moonTexture,
-        session.snapshot().savedItems,
-        context.lifeboatAssets,
-        context.shipFurniture,
-        context.waterQuality?.get() ?? 'low',
-        undefined,
-        undefined,
-        {},
-        context.visualQuality.get(),
-      );
-      this.initialize(
+      const session = createSession(start, itemAnimationLab, initialEventId);
+      this.initializeProduction(
         context,
         session,
-        world,
-        new SurvivalUI(context.mount),
-        start.kind === 'restored'
-          ? start.checkpoint.scavengeElapsedSeconds
-          : start.scavengeElapsedSeconds,
+        start,
         onRestart,
         onCheckpointChange,
-        reportInvariantError,
+        onReturnToMenu,
         itemAnimationLab,
-        new EventBundleManager(new EventBundleLoader({
-          audio: context.audio,
-          host: world,
-        })),
-        context.onFatalError,
         initialEventResultId,
       );
       return;
     }
+    const session = testDependencies.session
+      ?? createSession(start, itemAnimationLab, initialEventId);
+    this.initializeTest(
+      context,
+      session,
+      start,
+      onRestart,
+      onCheckpointChange,
+      onReturnToMenu,
+      itemAnimationLab,
+      initialEventResultId,
+      testDependencies,
+    );
+  }
+
+  private initializeProduction(
+    context: PhaseContext,
+    session: SurvivalSession,
+    start: SurvivalPhaseStart,
+    onRestart: () => void,
+    onCheckpointChange: SurvivalCheckpointChange,
+    onReturnToMenu: () => void,
+    itemAnimationLab: boolean,
+    initialEventResultId: string | undefined,
+  ): void {
+    const world = new BoatWorld(
+      context.camera,
+      context.propModels,
+      context.skyAssets.moonTexture,
+      session.snapshot().savedItems,
+      context.lifeboatAssets,
+      context.shipFurniture,
+      context.waterQuality?.get() ?? 'low',
+      undefined,
+      undefined,
+      {},
+      context.visualQuality.get(),
+    );
     this.initialize(
       context,
       session,
-      testDependencies.world,
-      testDependencies.ui,
-      testDependencies.scavengeElapsedSeconds ?? (
-        start.kind === 'restored'
-          ? start.checkpoint.scavengeElapsedSeconds
-          : start.scavengeElapsedSeconds
-      ),
-      testDependencies.onRestart ?? onRestart,
-      testDependencies.onCheckpointChange ?? onCheckpointChange,
-      testDependencies.onInvariantError,
+      world,
+      new SurvivalUI(context.mount),
+      start.kind === 'restored'
+        ? start.checkpoint.scavengeElapsedSeconds
+        : start.scavengeElapsedSeconds,
+      onRestart,
+      onReturnToMenu,
+      onCheckpointChange,
+      reportInvariantError,
       itemAnimationLab,
-      testDependencies.eventBundles ?? createTestEventBundleManager(),
-      testDependencies.onFatalError ?? context.onFatalError,
+      new EventBundleManager(new EventBundleLoader({ audio: context.audio, host: world })),
+      context.onFatalError,
+      initialEventResultId,
+    );
+  }
+
+  private initializeTest(
+    context: PhaseContext,
+    session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>,
+    start: SurvivalPhaseStart,
+    onRestart: () => void,
+    onCheckpointChange: SurvivalCheckpointChange,
+    onReturnToMenu: () => void,
+    itemAnimationLab: boolean,
+    initialEventResultId: string | undefined,
+    dependencies: SurvivalPhaseTestDependencies,
+  ): void {
+    const scavengeElapsedSeconds = dependencies.scavengeElapsedSeconds ?? (
+      start.kind === 'restored'
+        ? start.checkpoint.scavengeElapsedSeconds
+        : start.scavengeElapsedSeconds
+    );
+    this.initialize(
+      context,
+      session,
+      dependencies.world,
+      dependencies.ui,
+      scavengeElapsedSeconds,
+      dependencies.onRestart ?? onRestart,
+      dependencies.onReturnToMenu ?? onReturnToMenu,
+      dependencies.onCheckpointChange ?? onCheckpointChange,
+      dependencies.onInvariantError,
+      itemAnimationLab,
+      dependencies.eventBundles ?? createTestEventBundleManager(),
+      dependencies.onFatalError ?? context.onFatalError,
       initialEventResultId,
     );
   }
@@ -345,6 +396,7 @@ export class SurvivalPhase implements GamePhase {
       start: SurvivalPhaseStart,
       onRestart: () => void,
       onCheckpointChange: SurvivalCheckpointChange | undefined,
+      onReturnToMenu: () => void,
       dependencies: SurvivalPhaseTestDependencies,
     ) => SurvivalPhase;
     return new TestConstructor(
@@ -352,6 +404,7 @@ export class SurvivalPhase implements GamePhase {
       start,
       dependencies.onRestart ?? (() => undefined),
       dependencies.onCheckpointChange,
+      dependencies.onReturnToMenu ?? (() => undefined),
       dependencies,
     );
   }
@@ -548,8 +601,16 @@ export class SurvivalPhase implements GamePhase {
   }
 
   requestRestart(): void {
-    if (this.disposed || this.restartRequested) return;
-    this.restartRequested = true;
+    this.requestTransition(this.onRestart);
+  }
+
+  requestReturnToMenu(): void {
+    this.requestTransition(this.onReturnToMenu);
+  }
+
+  private requestTransition(complete: () => void): void {
+    if (this.disposed || this.transitionRequested) return;
+    this.transitionRequested = true;
     this.lifecycleGeneration += 1;
     runCleanupSteps([
       () => this.itemAnimationLabFlow.dispose(),
@@ -558,7 +619,7 @@ export class SurvivalPhase implements GamePhase {
       () => this.dayActionFlow.settleForVisibilityChange(),
       () => this.dayActionFlow.dispose(),
       () => this.visibilityController?.cancelResumeWaiters(),
-      () => this.onRestart(),
+      complete,
     ]);
   }
 
@@ -596,6 +657,7 @@ export class SurvivalPhase implements GamePhase {
     ui: Partial<SurvivalUI>,
     scavengeElapsedSeconds: number,
     onRestart: () => void,
+    onReturnToMenu: () => void,
     onCheckpointChange: SurvivalCheckpointChange | undefined,
     onInvariantError: (error: Error) => void = reportInvariantError,
     itemAnimationLab = false,
@@ -611,6 +673,7 @@ export class SurvivalPhase implements GamePhase {
     this.ui = ui;
     this.scavengeElapsedSeconds = scavengeElapsedSeconds;
     this.onRestart = onRestart;
+    this.onReturnToMenu = onReturnToMenu;
     this.checkpointingEnabled = onCheckpointChange !== undefined;
     this.onCheckpointChange = onCheckpointChange ?? (() => undefined);
     this.onInvariantError = onInvariantError;
@@ -727,6 +790,7 @@ export class SurvivalPhase implements GamePhase {
       else this.eventFlow.resolveContextual(choiceId);
     };
     this.ui.onRestart = () => this.requestRestart();
+    this.ui.onReturnToMenu = () => this.requestReturnToMenu();
     this.ui.onAnchorHighlight = (anchorId) => {
       if (!this.disposed) this.world.setHighlightedItem?.(anchorId);
     };
@@ -766,7 +830,7 @@ export class SurvivalPhase implements GamePhase {
   private canAcceptCommand(): boolean {
     if (
       this.disposed
-      || this.restartRequested
+      || this.transitionRequested
       || this.busy
       || this.paused
       || this.documentIsHidden()
@@ -804,7 +868,7 @@ export class SurvivalPhase implements GamePhase {
 
   private isContinuationActive(generation?: number): boolean {
     return !this.disposed
-      && !this.restartRequested
+      && !this.transitionRequested
       && (generation === undefined || generation === this.lifecycleGeneration);
   }
 

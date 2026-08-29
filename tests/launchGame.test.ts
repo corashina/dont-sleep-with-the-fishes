@@ -321,7 +321,13 @@ describe('launchGame', () => {
         render: vi.fn(),
         dispose: vi.fn(),
       }),
-      createSurvival: (context, start, onRestart, onCheckpointChange) => {
+      createSurvival: (
+        context,
+        start,
+        onRestart,
+        onCheckpointChange,
+        onReturnToMenu,
+      ) => {
         if (start.kind !== 'fresh') throw new Error('Expected a fresh survival start.');
         session = new SurvivalSession(start.savedItems, {
           seed: start.seed,
@@ -358,6 +364,7 @@ describe('launchGame', () => {
           phaseStart: SurvivalPhaseStart,
           restart: () => void,
           checkpointChange: SurvivalCheckpointChange,
+          returnToMenu: () => void,
           testDependencies: SurvivalPhaseTestDependencies,
         ) => SurvivalPhase;
         return new TestConstructor(
@@ -365,6 +372,7 @@ describe('launchGame', () => {
           start,
           onRestart,
           onCheckpointChange,
+          onReturnToMenu,
           dependencies,
         );
       },

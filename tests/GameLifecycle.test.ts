@@ -289,6 +289,7 @@ describe('Game survival save lifecycle', () => {
         { kind: 'restored', checkpoint },
         expect.any(Function),
         expect.any(Function),
+        expect.any(Function),
       );
       expect(restored.resize).toHaveBeenCalledWith(window.innerWidth, window.innerHeight);
       expect(restored.start).toHaveBeenCalledOnce();
@@ -1333,7 +1334,7 @@ describe('ScavengePhase lifecycle integration', () => {
     } as unknown as PhaseContext;
     const revealPhysicsObjects = vi.fn();
     const requestPointerLock = vi.fn().mockResolvedValue(true);
-    const phase = new ScavengePhase(context, vi.fn(), vi.fn());
+    const phase = new ScavengePhase(context, vi.fn(), vi.fn(), vi.fn());
     const internals = phase as unknown as { world: World };
     vi.spyOn(internals.world, 'revealPhysicsObjects').mockImplementation(revealPhysicsObjects);
     vi.spyOn(phase as unknown as { requestPointerLock(): Promise<boolean> }, 'requestPointerLock')
@@ -2459,8 +2460,8 @@ describe('ScavengePhase lifecycle integration', () => {
     const skyAssets = createTestSkyAssets();
     const game = Game.forTest({
       createMenu: createImmediateMenu,
-      createScavenge: (context, onComplete, onReturnToMenu) => {
-        const phase = new ScavengePhase(context, onComplete, onReturnToMenu);
+      createScavenge: (context, onComplete, onRestart, onReturnToMenu) => {
+        const phase = new ScavengePhase(context, onComplete, onRestart, onReturnToMenu);
         phases.push(phase);
         return phase;
       },
@@ -2513,8 +2514,8 @@ describe('ScavengePhase lifecycle integration', () => {
       onComplete();
       return menu;
     });
-    const createScavenge = vi.fn((context, onComplete, onRestart) => {
-      const phase = new ScavengePhase(context, onComplete, onRestart);
+    const createScavenge = vi.fn((context, onComplete, onRestart, onReturnToMenu) => {
+      const phase = new ScavengePhase(context, onComplete, onRestart, onReturnToMenu);
       phases.push(phase);
       return phase;
     });
@@ -2859,6 +2860,7 @@ describe('ScavengePhase lifecycle integration', () => {
         initialEventId: 'shower-night',
         initialEventResultId: undefined,
       },
+      expect.any(Function),
       expect.any(Function),
       expect.any(Function),
     );
@@ -3601,7 +3603,7 @@ describe('ScavengePhase lifecycle integration', () => {
       audio: AudioSystem.silent(),
       visualQuality: createVisualQualityPreference(() => undefined, null),
     } as unknown as PhaseContext;
-    const phase = new ScavengePhase(context, vi.fn(), vi.fn());
+    const phase = new ScavengePhase(context, vi.fn(), vi.fn(), vi.fn());
     const internals = phase as unknown as {
       interaction: InteractionSystem;
       session: ScavengeSession;

@@ -541,9 +541,19 @@ export class EventItemUseAdapter {
     actor.root.getWorldPosition(this.actorWorldPosition);
     const targetPlane = sample.surfaceFacing === 'target-plane'
       || sample.surfaceFacing === 'target-plane-opposite';
+    if (!this.resolveFacingNormal(sample, targetPlane)) return;
+    if (!this.resolveFacingRight(targetPlane)) return;
+    this.applyFacingRotation(sample, targetPlane);
+    this.writeActorFacing(actor);
+  }
+
+  private resolveFacingNormal(
+    sample: Readonly<EventItemUseSample>,
+    targetPlane: boolean,
+  ): boolean {
     if (targetPlane) {
       const aimTarget = this.aimTarget;
-      if (aimTarget === null) return;
+      if (aimTarget === null) return false;
       aimTarget.updateWorldMatrix(true, false);
       aimTarget.getWorldQuaternion(this.facingTargetQuaternion);
       this.facingRight.set(1, 0, 0).applyQuaternion(this.facingTargetQuaternion);
@@ -553,7 +563,7 @@ export class EventItemUseAdapter {
       }
     } else if (sample.surfaceFacing === 'target') {
       const aimTarget = this.aimTarget;
-      if (aimTarget === null) return;
+      if (aimTarget === null) return false;
       aimTarget.updateWorldMatrix(true, false);
       aimTarget.getWorldPosition(this.targetWorldPosition);
       this.facingNormal.subVectors(
@@ -574,9 +584,12 @@ export class EventItemUseAdapter {
         this.actorWorldPosition,
       );
     }
-    if (this.facingNormal.lengthSq() === 0) return;
+    if (this.facingNormal.lengthSq() === 0) return false;
     this.facingNormal.normalize();
+    return true;
+  }
 
+  private resolveFacingRight(targetPlane: boolean): boolean {
     if (!targetPlane) {
       if (this.lockItemToHeldCamera) {
         this.facingTargetQuaternion.copy(this.heldCameraWorldQuaternion);
@@ -590,9 +603,16 @@ export class EventItemUseAdapter {
           -this.facingRight.dot(this.facingNormal),
         );
     }
-    if (this.facingRight.lengthSq() === 0) return;
+    if (this.facingRight.lengthSq() === 0) return false;
     this.facingRight.normalize();
     this.facingDown.crossVectors(this.facingRight, this.facingNormal).normalize();
+    return true;
+  }
+
+  private applyFacingRotation(
+    sample: Readonly<EventItemUseSample>,
+    targetPlane: boolean,
+  ): void {
     if (this.cameraFacingSurface === 'x') {
       this.facingBasis.makeBasis(
         this.facingNormal,
@@ -625,7 +645,9 @@ export class EventItemUseAdapter {
         facingBlend,
       );
     }
+  }
 
+  private writeActorFacing(actor: BorrowedSupplyActor): void {
     const parent = actor.root.parent;
     if (parent === null) {
       actor.root.quaternion.copy(this.facingWorldQuaternion);

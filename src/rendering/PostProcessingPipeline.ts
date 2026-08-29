@@ -62,6 +62,17 @@ type PipelineFactory = (
 ) => SceneRenderer;
 type FallbackReporter = (error: unknown) => void;
 
+interface PipelineResources {
+  readonly composer: EffectComposer;
+  readonly renderPass: RenderPass;
+  readonly itemAmbientOcclusionPass: ItemAmbientOcclusionPass | null;
+  readonly outlinePass: OutlinePass;
+  readonly bloomPass: UnrealBloomPass;
+  readonly menuAtmospherePass: MenuAtmospherePass;
+  readonly binocularMaskPass: BinocularMaskPass;
+  readonly outputPass: OutputPass;
+}
+
 const MAX_PIXEL_RATIO = 2;
 const FALLBACK_MAX_TEXTURE_SIZE = 4_096;
 
@@ -356,7 +367,31 @@ export class PostProcessingPipeline implements SceneRenderer {
       ambientOcclusionIntensity: ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY,
       ambientOcclusionRadius: ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS,
     };
-    let target: WebGLRenderTarget | undefined;
+    this.size = new Vector2();
+    this.maxTextureSize = supportedTextureSize(renderer.capabilities.maxTextureSize);
+    renderer.getSize(this.size);
+    const resources = this.createPipelineResources(
+      createAmbientOcclusion,
+      quality,
+      antiAliasingQuality,
+    );
+    this.composer = resources.composer;
+    this.renderPass = resources.renderPass;
+    this.itemAmbientOcclusionPass = resources.itemAmbientOcclusionPass;
+    this.outlinePass = resources.outlinePass;
+    this.bloomPass = resources.bloomPass;
+    this.menuAtmospherePass = resources.menuAtmospherePass;
+    this.binocularMaskPass = resources.binocularMaskPass;
+    this.outputPass = resources.outputPass;
+    this.resize(this.size.x, this.size.y, renderer.getPixelRatio());
+  }
+
+  private createPipelineResources(
+    createAmbientOcclusion: AmbientOcclusionFactory,
+    quality: VisualQuality,
+    antiAliasingQuality: AntiAliasingQuality,
+  ): PipelineResources {
+    const target = createComposerTarget(this.renderer, this.size, antiAliasingQuality);
     let composer: EffectComposer | undefined;
     let outlinePass: OutlinePass | undefined;
     let bloomPass: UnrealBloomPass | undefined;
@@ -365,12 +400,8 @@ export class PostProcessingPipeline implements SceneRenderer {
     let outputPass: OutputPass | undefined;
     let itemAmbientOcclusionPass: ItemAmbientOcclusionPass | null = null;
     try {
-      this.size = new Vector2();
-      this.maxTextureSize = supportedTextureSize(renderer.capabilities.maxTextureSize);
-      renderer.getSize(this.size);
-      target = createComposerTarget(renderer, this.size, antiAliasingQuality);
-      composer = new EffectComposer(renderer, target);
-      this.renderPass = new RenderPass(new Scene(), new Camera());
+      composer = new EffectComposer(this.renderer, target);
+      const renderPass = new RenderPass(new Scene(), new Camera());
       itemAmbientOcclusionPass = this.createAmbientOcclusionPass(createAmbientOcclusion, quality);
       outlinePass = new HoverOutlinePass(this.size, new Scene(), new PerspectiveCamera());
       configureHoverOutlinePass(outlinePass);
@@ -380,33 +411,56 @@ export class PostProcessingPipeline implements SceneRenderer {
       binocularMaskPass = new BinocularMaskPass();
       outputPass = new OutputPass();
 
-      composer.addPass(this.renderPass);
+      composer.addPass(renderPass);
       itemAmbientOcclusionPass = this.addAmbientOcclusionPass(composer, itemAmbientOcclusionPass);
       composer.addPass(outlinePass);
       composer.addPass(bloomPass);
       composer.addPass(menuAtmospherePass);
       composer.addPass(binocularMaskPass);
       composer.addPass(outputPass);
-
-      this.composer = composer;
-      this.itemAmbientOcclusionPass = itemAmbientOcclusionPass;
-      this.outlinePass = outlinePass;
-      this.bloomPass = bloomPass;
-      this.menuAtmospherePass = menuAtmospherePass;
-      this.binocularMaskPass = binocularMaskPass;
-      this.outputPass = outputPass;
-      this.resize(this.size.x, this.size.y, renderer.getPixelRatio());
+      return {
+        composer,
+        renderPass,
+        itemAmbientOcclusionPass,
+        outlinePass,
+        bloomPass,
+        menuAtmospherePass,
+        binocularMaskPass,
+        outputPass,
+      };
     } catch (error) {
-      itemAmbientOcclusionPass?.dispose();
-      outlinePass?.dispose();
-      bloomPass?.dispose();
-      menuAtmospherePass?.dispose();
-      binocularMaskPass?.dispose();
-      outputPass?.dispose();
-      if (composer === undefined) target?.dispose();
-      else composer.dispose();
+      this.disposePipelineResources(
+        target,
+        composer,
+        itemAmbientOcclusionPass,
+        outlinePass,
+        bloomPass,
+        menuAtmospherePass,
+        binocularMaskPass,
+        outputPass,
+      );
       throw error;
     }
+  }
+
+  private disposePipelineResources(
+    target: WebGLRenderTarget,
+    composer: EffectComposer | undefined,
+    itemAmbientOcclusionPass: ItemAmbientOcclusionPass | null,
+    outlinePass: OutlinePass | undefined,
+    bloomPass: UnrealBloomPass | undefined,
+    menuAtmospherePass: MenuAtmospherePass | undefined,
+    binocularMaskPass: BinocularMaskPass | undefined,
+    outputPass: OutputPass | undefined,
+  ): void {
+    itemAmbientOcclusionPass?.dispose();
+    outlinePass?.dispose();
+    bloomPass?.dispose();
+    menuAtmospherePass?.dispose();
+    binocularMaskPass?.dispose();
+    outputPass?.dispose();
+    if (composer === undefined) target.dispose();
+    else composer.dispose();
   }
 
   render(

@@ -428,62 +428,62 @@ export function launchGame(
 
   const loading = renderLoading(mount);
 
-  const completion = (async (): Promise<Game | null> => {
+  const launchIsInvalid = (): boolean => cancelled || !mount.isConnected;
+  const createAndStartGame = (assets: LoadedGameAssets): Game | null => {
     try {
-      unownedAssets = await loadGameAssets(
+      loading.remove();
+      const createdGame = dependencies.createGame(
+        mount,
+        assets.models,
+        assets.shipFurniture,
+        assets.skyAssets,
+        assets.lifeboatAssets,
+        assets.shipAssets,
+        assets.physicsRuntime,
+        physicsMode,
+        assets.audio,
+        assets.menuModels,
+        assets.menuSandAssets,
+        reportRuntimeError,
+      );
+      game = createdGame;
+      unownedAssets = null;
+      if (launchIsInvalid()) {
+        disposeCurrentOwnership();
+        return null;
+      }
+      createdGame.start();
+      if (launchIsInvalid()) {
+        disposeCurrentOwnership();
+        return null;
+      }
+      return game as Game;
+    } catch (error) {
+      disposeCurrentOwnership();
+      if (!cancelled && mount.isConnected) renderGameFailure(mount, error);
+      return null;
+    }
+  };
+
+  const completion = (async (): Promise<Game | null> => {
+    let loadedAssets: LoadedGameAssets;
+    try {
+      loadedAssets = await loadGameAssets(
         dependencies,
         physicsMode,
         (completed, total) => updateSystemScreenProgress(loading, completed, total),
       );
+      unownedAssets = loadedAssets;
     } catch (error) {
       if (!cancelled && mount.isConnected) renderPreloadFailure(mount, error);
       return null;
     }
 
-    if (cancelled || !mount.isConnected) {
+    if (launchIsInvalid()) {
       disposeCurrentOwnership();
       return null;
     }
-
-    try {
-      loading.remove();
-      const createdGame = dependencies.createGame(
-        mount,
-        unownedAssets.models,
-        unownedAssets.shipFurniture,
-        unownedAssets.skyAssets,
-        unownedAssets.lifeboatAssets,
-        unownedAssets.shipAssets,
-        unownedAssets.physicsRuntime,
-        physicsMode,
-        unownedAssets.audio,
-        unownedAssets.menuModels,
-        unownedAssets.menuSandAssets,
-        reportRuntimeError,
-      );
-      game = createdGame;
-      unownedAssets = null;
-
-      if (cancelled || !mount.isConnected) {
-        disposeCurrentOwnership();
-        return null;
-      }
-
-      createdGame.start();
-      if (cancelled || !mount.isConnected) {
-        disposeCurrentOwnership();
-        return null;
-      }
-
-      return game as Game;
-    } catch (error) {
-      disposeCurrentOwnership();
-
-      if (!cancelled && mount.isConnected) {
-        renderGameFailure(mount, error);
-      }
-      return null;
-    }
+    return createAndStartGame(loadedAssets);
   })();
 
   return {

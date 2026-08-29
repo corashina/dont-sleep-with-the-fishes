@@ -84,12 +84,14 @@ export interface GameFactories {
     context: PhaseContext,
     onComplete: (result: Readonly<ScavengeResult>) => void,
     onRestart: () => void,
+    onReturnToMenu: () => void,
   ): GamePhase;
   createSurvival(
     context: PhaseContext,
     start: SurvivalPhaseStart,
     onRestart: () => void,
     onCheckpointChange: SurvivalCheckpointChange,
+    onReturnToMenu: () => void,
   ): GamePhase;
 }
 
@@ -97,20 +99,22 @@ const PRODUCTION_FACTORIES: GameFactories = {
   createMenu: (context, onComplete) => (
     new MainMenuPhase(context, onComplete)
   ),
-  createScavenge: (context, onComplete, onRestart) => (
-    new ScavengePhase(context, onComplete, onRestart)
+  createScavenge: (context, onComplete, onRestart, onReturnToMenu) => (
+    new ScavengePhase(context, onComplete, onRestart, onReturnToMenu)
   ),
   createSurvival: (
     context,
     start,
     onRestart,
     onCheckpointChange,
+    onReturnToMenu,
   ) => (
     new SurvivalPhase(
       context,
       start,
       onRestart,
       onCheckpointChange,
+      onReturnToMenu,
     )
   ),
 };
@@ -122,7 +126,6 @@ interface TestGameBase {
   readonly renderer: WebGLRenderer;
   readonly clock: GameClock;
   readonly sceneRenderer: SceneRenderer;
-  readonly visualQuality: VisualQualityPreference;
   readonly antiAliasingQuality: AntiAliasingQualityPreference;
   readonly shadowQuality: ShadowQualityPreference;
 }
@@ -190,10 +193,6 @@ function createTestGameBase(options: GameTestOptions): TestGameBase {
     renderer,
     clock: options.clock ?? createTestClock(),
     sceneRenderer,
-    visualQuality: options.visualQuality ?? createVisualQualityPreference(
-      (quality) => sceneRenderer.setVisualQuality?.(quality),
-      null,
-    ),
     antiAliasingQuality: options.antiAliasingQuality
       ?? createAntiAliasingQualityPreference(
         (quality) => sceneRenderer.setAntiAliasingQuality?.(quality),
@@ -372,13 +371,20 @@ export class Game {
     );
     const systemTuning = options.systemTuning ?? createSystemTuningPreference(null);
     const tuningState = systemTuning.get();
+    const visualQuality = options.visualQuality ?? createVisualQualityPreference(
+      (quality) => {
+        base.sceneRenderer.setVisualQuality?.(quality);
+        this.activePhase?.setVisualQuality?.(quality);
+      },
+      null,
+    );
     this.initialize(
       base.mount,
       base.renderer,
       base.sceneRenderer,
       base.antiAliasingQuality,
       base.shadowQuality,
-      base.visualQuality,
+      visualQuality,
       waterQuality,
       systemTuning,
       new PerspectiveCamera(
@@ -749,6 +755,7 @@ export class Game {
       this.context,
       (result) => this.completeScavenge(generation, result),
       () => this.restartFrom(generation),
+      () => this.returnToMenuFrom(generation),
     );
   }
 
@@ -794,6 +801,7 @@ export class Game {
       start,
       () => this.restartFrom(generation),
       onCheckpointChange,
+      () => this.returnToMenuFrom(generation),
     );
     if (!this.ownsGeneration(generation)) {
       survival.dispose();
@@ -830,6 +838,22 @@ export class Game {
   private restartFrom(generation: number): void {
     if (!this.ownsGeneration(generation)) return;
     this.restartCurrentPhase();
+  }
+
+  private returnToMenuFrom(generation: number): void {
+    if (!this.ownsGeneration(generation)) return;
+    const outgoing = this.detachActivePhase();
+    try {
+      runCleanupSteps([
+        () => this.exitPointerLock(),
+        () => outgoing?.dispose(),
+        () => this.resetCamera(),
+        () => { this.elapsed = 0; },
+        () => this.activateMenu(true),
+      ]);
+    } catch (error) {
+      this.reportFatalError(error);
+    }
   }
 
   private restartCurrentPhase(): void {
@@ -943,22 +967,32 @@ export class Game {
   }
 
   private synchronizePresentationControls(): void {
-    if (this.postProcessingConsole === null) return;
-    this.postProcessingConsole.setVolumetricCloudAvailability(
-      this.activePhase?.getVolumetricCloudsAvailable?.() ?? true,
-    );
-    const effectivePhase = this.activePhase?.getPresentationPhase?.() ?? 'day';
-    this.postProcessingConsole.setTimeOfDayState(
-      this.timeOfDayOverride ?? effectivePhase,
-    );
-    const effectiveWeather = this.activePhase?.getPresentationWeather?.() ?? 'calm';
+    const console = this.postProcessingConsole;
+    if (console === null) return;
+    console.setVolumetricCloudAvailability(this.volumetricCloudsAvailable());
+    console.setTimeOfDayState(this.presentationPhase());
+    this.synchronizeWeatherControl(console);
+  }
+
+  private volumetricCloudsAvailable(): boolean {
+    return this.activePhase?.getVolumetricCloudsAvailable?.() ?? true;
+  }
+
+  private presentationPhase(): SkyPhase {
+    return this.timeOfDayOverride
+      ?? this.activePhase?.getPresentationPhase?.()
+      ?? 'day';
+  }
+
+  private synchronizeWeatherControl(console: PostProcessingConsole): void {
     if (this.weatherOverride !== null) {
-      this.postProcessingConsole.setWeatherState(this.weatherOverride, 'forced');
+      console.setWeatherState(this.weatherOverride, 'forced');
       return;
     }
-    this.postProcessingConsole.setWeatherState(
-      effectiveWeather,
-      effectiveWeather === 'calm' ? 'normal' : 'event',
+    const weather = this.activePhase?.getPresentationWeather?.() ?? 'calm';
+    console.setWeatherState(
+      weather,
+      weather === 'calm' ? 'normal' : 'event',
     );
   }
 

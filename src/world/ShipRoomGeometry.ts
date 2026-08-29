@@ -499,76 +499,144 @@ function addDoorFrames(
     + DOOR_FRAME_CLEAR_HEIGHT
     + DOOR_FRAME_WIDTH / 2;
 
-  layout.doors.forEach((door) => {
-    const framePrefix = `door-frame:${door.id}`;
-    const axisCenter = door.orientation === 'side' ? door.center[1] : door.center[0];
-    const fixed = door.orientation === 'side' ? door.center[0] : door.center[1];
-    const wallFixed = door.orientation === 'side'
-      ? fixed + (door.side === 'port' ? WALL_HALF_THICKNESS : -WALL_HALF_THICKNESS)
-      : fixed + WALL_HALF_THICKNESS;
-    const hasFrame = door.zoneId !== 'wheelhouse';
-    const jambOffsets = [
-      -door.width / 2 + DOOR_FRAME_WIDTH / 2,
-      door.width / 2 - DOOR_FRAME_WIDTH / 2,
-    ] as const;
+  layout.doors.forEach((door) => addDoorFrame(
+    context,
+    root,
+    materials,
+    door,
+    jambHeight,
+    jambCenterY,
+    headerCenterY,
+  ));
+}
 
-    if (hasFrame) {
-      jambOffsets.forEach((offset, index) => {
-        const position = door.orientation === 'side'
-          ? [wallFixed, jambCenterY, axisCenter + offset] as const
-          : [axisCenter + offset, jambCenterY, wallFixed] as const;
-        const size = door.orientation === 'side'
-          ? [DOOR_FRAME_DEPTH, jambHeight, DOOR_FRAME_WIDTH] as const
-          : [DOOR_FRAME_WIDTH, jambHeight, DOOR_FRAME_DEPTH] as const;
-        addBlock(context, root, {
-          name: `${framePrefix}:jamb-${index === 0 ? 'left' : 'right'}`,
-          size,
-          position,
-          material: materials.plainTimber,
-        });
-      });
+type ShipDoor = ShipLayoutSpec['doors'][number];
 
-      addBlock(context, root, {
-        name: `${framePrefix}:header`,
-        size: door.orientation === 'side'
-          ? [DOOR_FRAME_DEPTH, DOOR_FRAME_WIDTH, door.width] as const
-          : [door.width, DOOR_FRAME_WIDTH, DOOR_FRAME_DEPTH] as const,
-        position: door.orientation === 'side'
-          ? [wallFixed, headerCenterY, axisCenter] as const
-          : [axisCenter, headerCenterY, wallFixed] as const,
-        material: materials.plainTimber,
-      });
-    }
+interface DoorFrameCoordinates {
+  readonly axisCenter: number;
+  readonly wallFixed: number;
+}
 
-    const infillBottomY = FINISHED_FLOOR_Y
-      + DOOR_FRAME_CLEAR_HEIGHT
-      + (hasFrame ? DOOR_FRAME_WIDTH : 0);
-    const wallTopY = FINISHED_FLOOR_Y + SHIP_ROOM_WALL_HEIGHT;
-    const infillHeight = wallTopY - infillBottomY;
-    const infillCenterY = infillBottomY + infillHeight / 2;
-    const geometry = createWallBoxGeometry(
-      context,
-      door.width,
-      infillHeight,
-      WALL_THICKNESS,
-      door.orientation === 'side' ? -axisCenter : axisCenter,
-      infillCenterY,
-    );
-    const infill = new Mesh(
-      geometry,
-      roomSurfaceMaterial(materials, door.zoneId),
-    );
-    infill.name = `door-wall:${door.id}:header-infill`;
-    infill.position.set(
-      door.orientation === 'side' ? wallFixed : axisCenter,
-      infillCenterY,
-      door.orientation === 'side' ? axisCenter : wallFixed,
-    );
-    if (door.orientation === 'side') infill.rotation.y = Math.PI / 2;
-    infill.castShadow = true;
-    infill.receiveShadow = true;
-    root.add(infill);
+function doorFrameCoordinates(door: ShipDoor): DoorFrameCoordinates {
+  const axisCenter = door.orientation === 'side' ? door.center[1] : door.center[0];
+  const fixed = door.orientation === 'side' ? door.center[0] : door.center[1];
+  const wallFixed = door.orientation === 'side'
+    ? fixed + (door.side === 'port' ? WALL_HALF_THICKNESS : -WALL_HALF_THICKNESS)
+    : fixed + WALL_HALF_THICKNESS;
+  return { axisCenter, wallFixed };
+}
+
+function addDoorFrame(
+  context: ShipGeometryBuildContext,
+  root: Group,
+  materials: ShipMaterials,
+  door: ShipDoor,
+  jambHeight: number,
+  jambCenterY: number,
+  headerCenterY: number,
+): void {
+  const coordinates = doorFrameCoordinates(door);
+  const hasFrame = door.zoneId !== 'wheelhouse';
+  if (hasFrame) addDoorJambs(context, root, materials, door, coordinates, jambHeight, jambCenterY);
+  if (hasFrame) addDoorHeader(context, root, materials, door, coordinates, headerCenterY);
+  addDoorInfill(context, root, materials, door, coordinates, hasFrame);
+}
+
+function addDoorJambs(
+  context: ShipGeometryBuildContext,
+  root: Group,
+  materials: ShipMaterials,
+  door: ShipDoor,
+  coordinates: DoorFrameCoordinates,
+  jambHeight: number,
+  jambCenterY: number,
+): void {
+  const offsets = [-door.width / 2 + DOOR_FRAME_WIDTH / 2, door.width / 2 - DOOR_FRAME_WIDTH / 2];
+  offsets.forEach((offset, index) => addDoorJamb(
+    context,
+    root,
+    materials,
+    door,
+    coordinates,
+    offset,
+    index,
+    jambHeight,
+    jambCenterY,
+  ));
+}
+
+function addDoorJamb(
+  context: ShipGeometryBuildContext,
+  root: Group,
+  materials: ShipMaterials,
+  door: ShipDoor,
+  coordinates: DoorFrameCoordinates,
+  offset: number,
+  index: number,
+  jambHeight: number,
+  jambCenterY: number,
+): void {
+  const sideDoor = door.orientation === 'side';
+  addBlock(context, root, {
+    name: `door-frame:${door.id}:jamb-${index === 0 ? 'left' : 'right'}`,
+    size: sideDoor ? [DOOR_FRAME_DEPTH, jambHeight, DOOR_FRAME_WIDTH] : [DOOR_FRAME_WIDTH, jambHeight, DOOR_FRAME_DEPTH],
+    position: sideDoor
+      ? [coordinates.wallFixed, jambCenterY, coordinates.axisCenter + offset]
+      : [coordinates.axisCenter + offset, jambCenterY, coordinates.wallFixed],
+    material: materials.plainTimber,
   });
+}
+
+function addDoorHeader(
+  context: ShipGeometryBuildContext,
+  root: Group,
+  materials: ShipMaterials,
+  door: ShipDoor,
+  coordinates: DoorFrameCoordinates,
+  headerCenterY: number,
+): void {
+  const sideDoor = door.orientation === 'side';
+  addBlock(context, root, {
+    name: `door-frame:${door.id}:header`,
+    size: sideDoor ? [DOOR_FRAME_DEPTH, DOOR_FRAME_WIDTH, door.width] : [door.width, DOOR_FRAME_WIDTH, DOOR_FRAME_DEPTH],
+    position: sideDoor
+      ? [coordinates.wallFixed, headerCenterY, coordinates.axisCenter]
+      : [coordinates.axisCenter, headerCenterY, coordinates.wallFixed],
+    material: materials.plainTimber,
+  });
+}
+
+function addDoorInfill(
+  context: ShipGeometryBuildContext,
+  root: Group,
+  materials: ShipMaterials,
+  door: ShipDoor,
+  coordinates: DoorFrameCoordinates,
+  hasFrame: boolean,
+): void {
+  const infillBottomY = FINISHED_FLOOR_Y + DOOR_FRAME_CLEAR_HEIGHT + (hasFrame ? DOOR_FRAME_WIDTH : 0);
+  const infillHeight = FINISHED_FLOOR_Y + SHIP_ROOM_WALL_HEIGHT - infillBottomY;
+  const infillCenterY = infillBottomY + infillHeight / 2;
+  const sideDoor = door.orientation === 'side';
+  const geometry = createWallBoxGeometry(
+    context,
+    door.width,
+    infillHeight,
+    WALL_THICKNESS,
+    sideDoor ? -coordinates.axisCenter : coordinates.axisCenter,
+    infillCenterY,
+  );
+  const infill = new Mesh(geometry, roomSurfaceMaterial(materials, door.zoneId));
+  infill.name = `door-wall:${door.id}:header-infill`;
+  infill.position.set(
+    sideDoor ? coordinates.wallFixed : coordinates.axisCenter,
+    infillCenterY,
+    sideDoor ? coordinates.axisCenter : coordinates.wallFixed,
+  );
+  if (sideDoor) infill.rotation.y = Math.PI / 2;
+  infill.castShadow = true;
+  infill.receiveShadow = true;
+  root.add(infill);
 }
 
 interface WheelhousePaneSpec {

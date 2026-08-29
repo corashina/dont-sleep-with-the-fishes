@@ -680,41 +680,55 @@ describe('survival events', () => {
     expect(itemChoices).not.toContain('radio');
   });
 
-  it('sets supernatural event pressure bounds and effects', () => {
-    const byId = Object.fromEntries(SURVIVAL_EVENTS.map((event) => [event.id, event]));
-    const manInTheFog = byId['man-in-the-fog'];
+  function supernaturalOutcomeResources(
+    event: ReturnType<typeof survivalEventById>,
+    choiceId: string,
+  ) {
+    return event?.choices.find(({ id }) => id === choiceId)?.outcomes
+      .map(({ effects }) => effects.resources ?? []);
+  }
 
+  function expectSupernaturalPressureBounds(
+    byId: Record<string, ReturnType<typeof survivalEventById>>,
+  ): void {
     expect(byId['man-in-the-fog']?.minimumPressure).toBe(1);
     expect(byId.ghosts?.minimumPressure).toBe(1);
     expect(byId['eerie-melody']?.minimumPressure).toBe(2);
     expect(byId['face-on-the-moon']?.minimumPressure).toBe(3);
+  }
 
+  function expectNoSupernaturalRescueLead(
+    byId: Record<string, ReturnType<typeof survivalEventById>>,
+  ): void {
     for (const eventId of ['man-in-the-fog', 'face-on-the-moon'] as const) {
-      const serialized = JSON.stringify(byId[eventId]?.choices);
-      expect(serialized).not.toContain('rescueLead');
+      expect(JSON.stringify(byId[eventId]?.choices)).not.toContain('rescueLead');
     }
+  }
 
-    const outcomeResources = (choiceId: string) => manInTheFog?.choices
-      .find(({ id }) => id === choiceId)?.outcomes.map(({ effects }) => effects.resources ?? []);
-    expect(outcomeResources('spyglass')).toEqual([[add('pressure', 1)]]);
-    expect(outcomeResources('flashlight')).toEqual([
+  function expectManInTheFogOutcomes(event: ReturnType<typeof survivalEventById>): void {
+    expect(supernaturalOutcomeResources(event, 'spyglass')).toEqual([[add('pressure', 1)]]);
+    expect(supernaturalOutcomeResources(event, 'flashlight')).toEqual([
       [],
       [add('pressure', 2), subtract('health', 20)],
     ]);
-    expect(outcomeResources('sleep')).toEqual([
+    expect(supernaturalOutcomeResources(event, 'sleep')).toEqual([
       [add('pressure', 1), subtract('hull', { min: 10, max: 30 })],
       [add('pressure', 1), subtract('health', 20)],
     ]);
-    expect(manInTheFog?.choices.find(({ id }) => id === 'flashlight')?.outcomes[1]?.effects)
+    expect(event?.choices.find(({ id }) => id === 'flashlight')?.outcomes[1]?.effects)
       .toMatchObject({ nextDawnEnergy: 1 });
-    expect(manInTheFog?.choices.find(({ id }) => id === 'sleep')?.outcomes[1]?.effects)
+    expect(event?.choices.find(({ id }) => id === 'sleep')?.outcomes[1]?.effects)
       .toMatchObject({ nextDawnEnergy: 2 });
-
-    expect(manInTheFog?.choices.find(({ id }) => id === 'compass')?.outcomes).toEqual([{
+    expect(event?.choices.find(({ id }) => id === 'compass')?.outcomes).toEqual([{
       weight: 1,
       message: 'The compass keeps the boat on a steady bearing.',
       effects: { resources: [subtract('pressure', 1)] },
     }]);
+  }
+
+  function expectSupernaturalItemOutcomes(
+    byId: Record<string, ReturnType<typeof survivalEventById>>,
+  ): void {
     expect(byId.ghosts?.choices.find(({ id }) => id === 'flareGun')?.outcomes).toEqual([{
       weight: 1,
       message: 'The flare drives the pale shapes into the dark.',
@@ -731,6 +745,17 @@ describe('survival events', () => {
         items: [{ kind: 'consume', itemId: 'ductTape', quantity: 1 }],
       },
     }]);
+  }
+
+  it('sets supernatural event pressure bounds and effects', () => {
+    const byId = Object.fromEntries(SURVIVAL_EVENTS.map((event) => [event.id, event]));
+    const manInTheFog = byId['man-in-the-fog'];
+
+    expectSupernaturalPressureBounds(byId);
+    expectNoSupernaturalRescueLead(byId);
+
+    expectManInTheFogOutcomes(manInTheFog);
+    expectSupernaturalItemOutcomes(byId);
   });
 
   it('maps each drifting item to its retrieve and leave presentation keys', () => {

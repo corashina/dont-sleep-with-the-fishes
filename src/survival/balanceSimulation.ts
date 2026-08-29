@@ -34,6 +34,8 @@ export interface BalanceOutcomeBucket {
 export interface BalanceReport extends BalanceOutcomeBucket {
   readonly rescueRate: number;
   readonly averageRescueDay: number | null;
+  readonly medianRescueDay: number | null;
+  readonly rescueDay30To35Rate: number;
   /** Successful rescue days from the separate signal-disabled control cohort. */
   readonly averageNoSignalRescueDay: number | null;
   readonly blockedLoadouts: readonly string[];
@@ -291,6 +293,17 @@ function freezeBucket(bucket: MutableBucket): BalanceOutcomeBucket {
   return Object.freeze({ ...bucket });
 }
 
+function median(values: readonly number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((left, right) => left - right);
+  return sorted[Math.floor((sorted.length - 1) / 2)]!;
+}
+
+function rateInRange(values: readonly number[], minimum: number, maximum: number): number {
+  if (values.length === 0) return 0;
+  return values.filter((value) => value >= minimum && value <= maximum).length / values.length;
+}
+
 type SessionEnding = ReturnType<SurvivalSession['snapshot']>['ending'];
 
 interface SimulationStats {
@@ -405,6 +418,8 @@ export function runBalanceSimulation(
     ...freezeBucket(totals),
     rescueRate: totalRuns === 0 ? 0 : totals.rescued / totalRuns,
     averageRescueDay: average(rescueDays),
+    medianRescueDay: median(rescueDays),
+    rescueDay30To35Rate: rateInRange(rescueDays, 30, 35),
     averageNoSignalRescueDay: average(noSignalRescueDays),
     blockedLoadouts: Object.freeze([...blockedLoadouts].sort()),
     unrescuedLoadouts: Object.freeze(Object.entries(byMissingPickupSet)
