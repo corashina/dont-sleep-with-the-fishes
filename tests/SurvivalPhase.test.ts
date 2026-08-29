@@ -1267,6 +1267,7 @@ describe('SurvivalPhase orchestration', () => {
     });
     const setEventSelection = vi.fn();
     const showFocusedEvent = vi.fn();
+    const hideFocusedEvent = vi.fn();
     const playEventItemUse = vi.fn(() => Promise.resolve());
     const ui: Partial<SurvivalUI> = {
       setSleepCovered: vi.fn((covered: boolean) => {
@@ -1284,7 +1285,7 @@ describe('SurvivalPhase orchestration', () => {
       showEventReveal: vi.fn(() => Promise.resolve()),
       setEventSelection,
       showFocusedEvent,
-      hideFocusedEvent: vi.fn(),
+      hideFocusedEvent,
       playEventChoiceBeat: vi.fn(() => Promise.resolve()),
       setBusy: vi.fn(),
       clearEventPresentation: vi.fn(() => calls.push('clear-event-ui')),
@@ -1322,6 +1323,15 @@ describe('SurvivalPhase orchestration', () => {
     expect(showFocusedEvent.mock.calls[0]![0].choices).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'dive', instanceId: 'scubaSet-1' }),
     ]));
+
+    ui.onFocusedEventChoice?.({ id: 'leave', instanceId: null });
+    await flushPromises();
+    expect(resolveEvent).not.toHaveBeenCalled();
+    expect(hideFocusedEvent).toHaveBeenCalledOnce();
+    expect(current).toMatchObject({ state: 'dayEvent', pendingEventId: 'wreckage' });
+
+    ui.onFocusedEventSelect?.('wreckage');
+    await flushPromises();
 
     calls.length = 0;
     ui.onFocusedEventChoice?.({ id: 'dive', instanceId: 'scubaSet-1' });
@@ -1508,7 +1518,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.resolveEvent).not.toHaveBeenCalled();
     expect(rig.world.recedeDriftingItem).not.toHaveBeenCalled();
     expect(rig.world.exitFocusedEventView).toHaveBeenCalledOnce();
-    expect(rig.hideFocusedEvent).not.toHaveBeenCalled();
+    expect(rig.hideFocusedEvent).toHaveBeenCalledOnce();
 
     rig.animations.exit.resolve();
     await flushPromises();

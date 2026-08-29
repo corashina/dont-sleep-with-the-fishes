@@ -119,6 +119,11 @@ export class FocusedEventFlow {
       || !this.dependencies.isPendingEvent(eventId)
       || !this.isCurrentChoice(choice)
     ) return;
+    if (eventId === 'wreckage' && choice.id === 'leave') {
+      this.dependencies.audio.confirm();
+      await this.back();
+      return;
+    }
 
     const operation = this.beginOperation();
     let resolution: FocusedEventChoiceResolution | undefined;
@@ -181,6 +186,7 @@ export class FocusedEventFlow {
     this.focusState = 'returning';
     this.dependencies.setBusy(true);
     try {
+      this.dependencies.ui.hideFocusedEvent?.();
       await (this.dependencies.world.exitFocusedEventView?.() ?? Promise.resolve());
     } catch (error) {
       this.recoverBackFailure(eventId, generation, operation);
@@ -191,7 +197,6 @@ export class FocusedEventFlow {
     this.activeEventId = null;
     this.choices = [];
     this.focusState = 'idle';
-    this.dependencies.ui.hideFocusedEvent?.();
     this.dependencies.ui.setEventSelection?.(EMPTY_ELIGIBILITY, []);
     this.dependencies.setBusy(false);
     this.dependencies.ui.restoreCommandFocus?.();

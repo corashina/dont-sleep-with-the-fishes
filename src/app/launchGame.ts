@@ -298,135 +298,94 @@ function renderGameFailure(mount: HTMLElement, error: unknown): void {
 
 function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
   if (error instanceof MenuSandAssetLoadError) {
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'SEABED UNAVAILABLE',
-      title: 'Unable to prepare the underwater sand',
-      lead: 'Required local seabed textures could not be loaded.',
-      detail: error.message,
-    });
+    renderMenuSandFailure(mount, error);
     return;
   }
 
   if (error instanceof MenuModelLoadError) {
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'MENU MODEL UNAVAILABLE',
-      title: 'Unable to prepare ' + error.menuModelId,
-      lead: 'A required underwater menu model could not be loaded.',
-      detail: error.message,
-    });
+    renderMenuModelFailure(mount, error);
     return;
   }
 
   if (error instanceof PhysicsLoadError) {
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'PHYSICS UNAVAILABLE',
-      title: 'Unable to prepare the moving deck',
-      lead: 'The ship simulation could not be initialized.',
-      detail: error.message,
-    });
+    renderPreloadError(mount, 'PHYSICS UNAVAILABLE', 'Unable to prepare the moving deck', 'The ship simulation could not be initialized.', error);
     return;
   }
 
   if (error instanceof AudioLoadError) {
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'AUDIO UNAVAILABLE',
-      title: 'Unable to prepare the soundscape',
-      lead: 'A required local audio file could not be loaded.',
-      detail: error.message,
-    });
+    renderPreloadError(mount, 'AUDIO UNAVAILABLE', 'Unable to prepare the soundscape', 'A required local audio file could not be loaded.', error);
     return;
   }
 
   if (error instanceof ItemModelLoadError) {
-    if (
-      error.itemId === 'fishingRod'
-      || error.itemId === 'hammer'
-      || error.itemId === 'pillow'
-    ) {
-      const label = error.itemId === 'fishingRod'
-        ? 'Fishing Rod'
-        : error.itemId === 'hammer' ? 'repair hammer' : 'sleep pillow';
-      renderSystemScreen(mount, {
-        kind: 'error',
-        kicker: 'EQUIPMENT UNAVAILABLE',
-        title: `Unable to prepare the lifeboat ${label}`,
-        lead: 'A required fixed equipment model could not be loaded.',
-        detail: error.message,
-      });
-      return;
-    }
-    if (error.itemId === 'lantern' || error.itemId === 'ceilingLight') {
-      const label = error.itemId === 'lantern' ? 'lifeboat lantern' : 'ship lighting';
-      renderSystemScreen(mount, {
-        kind: 'error',
-        kicker: 'LIGHTING UNAVAILABLE',
-        title: `Unable to prepare the ${label}`,
-        lead: 'A required practical light model could not be loaded.',
-        detail: error.message,
-      });
-      return;
-    }
-
-    const itemLabel = ITEM_DEFINITIONS[error.itemId].label;
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'SUPPLIES UNAVAILABLE',
-      title: `Unable to recover ${itemLabel}`,
-      lead: 'A required item model could not be loaded.',
-      detail: error.message,
-    });
+    renderItemModelFailure(mount, error);
     return;
   }
 
   if (error instanceof SkyAssetLoadError) {
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'ATMOSPHERE UNAVAILABLE',
-      title: 'Unable to prepare the sky',
-      lead: 'A required local sky texture could not be loaded.',
-      detail: error.message,
-    });
+    renderPreloadError(mount, 'ATMOSPHERE UNAVAILABLE', 'Unable to prepare the sky', 'A required local sky texture could not be loaded.', error);
     return;
   }
 
   if (error instanceof ShipFurnitureLoadError) {
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'FURNITURE UNAVAILABLE',
-      title: `Unable to prepare ${error.modelId}`,
-      lead: 'A required local ship furniture model could not be loaded.',
-      detail: error.message,
-    });
+    renderPreloadError(mount, 'FURNITURE UNAVAILABLE', `Unable to prepare ${error.modelId}`, 'A required local ship furniture model could not be loaded.', error);
     return;
   }
 
   if (error instanceof LifeboatAssetLoadError) {
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'LIFEBOAT UNAVAILABLE',
-      title: 'Unable to prepare the wooden lifeboat',
-      lead: 'Required local wood textures could not be loaded.',
-      detail: error.message,
-    });
+    renderPreloadError(mount, 'LIFEBOAT UNAVAILABLE', 'Unable to prepare the wooden lifeboat', 'Required local wood textures could not be loaded.', error);
     return;
   }
 
   if (error instanceof ShipAssetLoadError) {
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'SHIP UNAVAILABLE',
-      title: 'Unable to prepare Dorothy',
-      lead: 'Required local wood textures could not be loaded.',
-      detail: error.message,
-    });
+    renderPreloadError(mount, 'SHIP UNAVAILABLE', 'Unable to prepare Dorothy', 'Required local wood textures could not be loaded.', error);
     return;
   }
 
   renderWebGlFailure(mount, error);
+}
+
+function renderMenuSandFailure(mount: HTMLElement, error: MenuSandAssetLoadError): void {
+  renderPreloadError(mount, 'SEABED UNAVAILABLE', 'Unable to prepare the underwater sand', 'Required local seabed textures could not be loaded.', error);
+}
+
+function renderMenuModelFailure(mount: HTMLElement, error: MenuModelLoadError): void {
+  renderPreloadError(mount, 'MENU MODEL UNAVAILABLE', 'Unable to prepare ' + error.menuModelId, 'A required underwater menu model could not be loaded.', error);
+}
+
+function renderItemModelFailure(mount: HTMLElement, error: ItemModelLoadError): void {
+  const equipmentLabel = fixedEquipmentLabel(error.itemId);
+  if (equipmentLabel !== null) {
+    renderPreloadError(mount, 'EQUIPMENT UNAVAILABLE', `Unable to prepare the lifeboat ${equipmentLabel}`, 'A required fixed equipment model could not be loaded.', error);
+    return;
+  }
+  const lightingLabel = practicalLightLabel(error.itemId);
+  if (lightingLabel !== null) {
+    renderPreloadError(mount, 'LIGHTING UNAVAILABLE', `Unable to prepare the ${lightingLabel}`, 'A required practical light model could not be loaded.', error);
+    return;
+  }
+  renderPreloadError(mount, 'SUPPLIES UNAVAILABLE', `Unable to recover ${ITEM_DEFINITIONS[error.itemId].label}`, 'A required item model could not be loaded.', error);
+}
+
+function fixedEquipmentLabel(itemId: string): string | null {
+  if (itemId === 'fishingRod') return 'Fishing Rod';
+  if (itemId === 'hammer') return 'repair hammer';
+  return itemId === 'pillow' ? 'sleep pillow' : null;
+}
+
+function practicalLightLabel(itemId: string): string | null {
+  if (itemId === 'lantern') return 'lifeboat lantern';
+  return itemId === 'ceilingLight' ? 'ship lighting' : null;
+}
+
+function renderPreloadError(
+  mount: HTMLElement,
+  kicker: string,
+  title: string,
+  lead: string,
+  error: Error,
+): void {
+  renderSystemScreen(mount, { kind: 'error', kicker, title, lead, detail: error.message });
 }
 
 export function launchGame(
