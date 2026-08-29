@@ -75,6 +75,10 @@ type ActiveSupernaturalAnimation =
       readonly resolve: () => void;
     };
 
+type ActiveSupernaturalReveal = Extract<ActiveSupernaturalAnimation, { kind: 'reveal' }>;
+type ActiveSupernaturalItem = Extract<ActiveSupernaturalAnimation, { kind: 'item' }>;
+type ActiveSupernaturalReaction = Extract<ActiveSupernaturalAnimation, { kind: 'react' }>;
+
 const REACTION_DURATION = 0.84;
 const GHOST_MODEL_FORWARD_YAW_OFFSET = Math.PI / 2;
 
@@ -885,34 +889,41 @@ export class SupernaturalEventAnimator {
     this.restoreCamera();
     switch (active.kind) {
       case 'reveal':
-        if (active.eventId === 'ghosts') {
-          this.ghostLoopVisible = true;
-          this.showGhostLoop(0.56);
-        } else this.restoreStage();
-        active.resolve();
+        this.finishReveal(active);
         break;
       case 'item':
-        if (active.eventId === 'ghosts') this.hideAll();
-        else this.restoreStage();
-        active.resolve(true);
+        this.finishItem(active);
         break;
       case 'react':
-        this.settleReaction(active.eventId, active.response);
-        {
-          const actor = active.response?.actors[0];
-        if (
-          actor?.condition === 'lost'
-          || actor?.condition === 'consumed'
-        ) {
-          this.supplyDisplay.releaseEventActorOnNextSync();
-        } else if (actor !== undefined) {
-          this.supplyDisplay.clearEventPose();
-          this.supplyDisplay.releaseEventActor();
-        }
-        }
-        active.resolve();
+        this.finishReaction(active);
         break;
     }
+  }
+
+  private finishReveal(active: ActiveSupernaturalReveal): void {
+    if (active.eventId === 'ghosts') {
+      this.ghostLoopVisible = true;
+      this.showGhostLoop(0.56);
+    } else this.restoreStage();
+    active.resolve();
+  }
+
+  private finishItem(active: ActiveSupernaturalItem): void {
+    if (active.eventId === 'ghosts') this.hideAll();
+    else this.restoreStage();
+    active.resolve(true);
+  }
+
+  private finishReaction(active: ActiveSupernaturalReaction): void {
+    this.settleReaction(active.eventId, active.response);
+    const actor = active.response?.actors[0];
+    if (actor?.condition === 'lost' || actor?.condition === 'consumed') {
+      this.supplyDisplay.releaseEventActorOnNextSync();
+    } else if (actor !== undefined) {
+      this.supplyDisplay.clearEventPose();
+      this.supplyDisplay.releaseEventActor();
+    }
+    active.resolve();
   }
 
   private settleReaction(

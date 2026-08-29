@@ -36,6 +36,16 @@ import {
 import { SurvivalPhase } from './survival/SurvivalPhase';
 import { PerformanceStats } from './ui/PerformanceStats';
 import { PostProcessingConsole } from './ui/PostProcessingConsole';
+import {
+  createSystemTuningPreference,
+  type SystemTuningPreference,
+} from './ui/systemTuningPreference';
+import {
+  clampPostProcessingSetting,
+  type PostProcessingControls,
+  type PostProcessingNumericSetting,
+} from './rendering/postProcessingControls';
+import type { ItemAmbientOcclusionMode } from './rendering/ItemAmbientOcclusion';
 import type { PropModelLibrary } from './world/PropModelLibrary';
 import { runCleanupSteps } from './world/SceneResources';
 import type { ShipFurnitureLibrary } from './world/ShipFurnitureLibrary';
@@ -150,6 +160,7 @@ export interface GameTestOptions {
   shadowQuality?: ShadowQualityPreference;
   visualQuality?: VisualQualityPreference;
   waterQuality?: WaterQualityPreference;
+  systemTuning?: SystemTuningPreference;
   audioSystem?: AudioSystem;
   onFatalError?: (error: unknown) => void;
   saveStorage?: SurvivalSaveStorage | null;
@@ -227,6 +238,7 @@ export class Game {
   private lifeboatAssets!: LifeboatAssets;
   private shipAssets!: ShipAssets;
   private audio!: AudioSystem;
+  private systemTuning!: SystemTuningPreference;
   private context!: PhaseContext;
   private factories!: GameFactories;
   private activePhase: GamePhase | null = null;
@@ -235,6 +247,7 @@ export class Game {
   private saveStore!: SurvivalSaveStore;
   private weatherOverride: PresentationWeatherId | null = null;
   private timeOfDayOverride: SkyPhase | null = null;
+  private volumetricCloudsEnabled = false;
   private animationFrame = 0;
   private started = false;
   private disposed = false;
@@ -268,6 +281,7 @@ export class Game {
     let sceneRenderer: SceneRenderer | null = null;
     const visualQuality = createVisualQualityPreference((quality) => {
       sceneRenderer?.setVisualQuality?.(quality);
+      this.activePhase?.setVisualQuality?.(quality);
     });
     const antiAliasingQuality = createAntiAliasingQualityPreference((quality) => {
       sceneRenderer?.setAntiAliasingQuality?.(quality);
@@ -278,6 +292,8 @@ export class Game {
     const waterQuality = createWaterQualityPreference((quality) => {
       this.activePhase?.setWaterQuality?.(quality);
     });
+    const systemTuning = createSystemTuningPreference();
+    const tuningState = systemTuning.get();
     let initializationStarted = false;
     try {
       renderer.outputColorSpace = SRGBColorSpace;
@@ -290,7 +306,7 @@ export class Game {
         shadowQuality.get(),
       );
       const camera = new PerspectiveCamera(
-        GAME_CAMERA.fov,
+        tuningState.cameraFieldOfView,
         1,
         GAME_CAMERA.near,
         GAME_CAMERA.far,
@@ -305,6 +321,7 @@ export class Game {
         shadowQuality,
         visualQuality,
         waterQuality,
+        systemTuning,
         camera,
         clock,
         propModels,
@@ -353,6 +370,8 @@ export class Game {
       (quality) => this.activePhase?.setWaterQuality?.(quality),
       null,
     );
+    const systemTuning = options.systemTuning ?? createSystemTuningPreference(null);
+    const tuningState = systemTuning.get();
     this.initialize(
       base.mount,
       base.renderer,
@@ -361,8 +380,9 @@ export class Game {
       base.shadowQuality,
       base.visualQuality,
       waterQuality,
+      systemTuning,
       new PerspectiveCamera(
-        GAME_CAMERA.fov,
+        tuningState.cameraFieldOfView,
         1,
         GAME_CAMERA.near,
         GAME_CAMERA.far,
@@ -443,6 +463,7 @@ export class Game {
     shadowQuality: ShadowQualityPreference,
     visualQuality: VisualQualityPreference,
     waterQuality: WaterQualityPreference,
+    systemTuning: SystemTuningPreference,
     camera: PerspectiveCamera,
     clock: GameClock,
     propModels: PropModelLibrary,
@@ -473,6 +494,7 @@ export class Game {
     this.menuSandAssets = menuSandAssets;
     this.audio = audioSystem;
     this.saveStore = new SurvivalSaveStore(saveStorage);
+    this.systemTuning = systemTuning;
     this.factories = factories;
     this.createSeed = createSeed;
     this.onFatalError = onFatalError;
@@ -509,21 +531,48 @@ export class Game {
       this.activePhase = null;
       this.performanceStats = null;
       this.postProcessingConsole = null;
-      this.weatherOverride = null;
-      this.timeOfDayOverride = null;
+      const tuningState = systemTuning.get();
+      this.weatherOverride = tuningState.weatherOverride;
+      this.timeOfDayOverride = tuningState.phaseOverride;
+      this.volumetricCloudsEnabled = tuningState.volumetricCloudsEnabled;
       this.animationFrame = 0;
       this.started = false;
       this.disposed = false;
       this.elapsed = 0;
       this.phaseGeneration = 0;
       this.fatalErrorReported = false;
-      const showDevelopmentStats = import.meta.env.DEV
-        && new URLSearchParams(window.location.search).has('stats');
-      this.performanceStats = new PerformanceStats(mount, showDevelopmentStats);
+      this.performanceStats = new PerformanceStats(
+        mount,
+        tuningState.performanceStatsVisible,
+      );
       if (sceneRenderer.postProcessingControls !== undefined) {
+        const controls = sceneRenderer.postProcessingControls;
+        controls.setAmbientOcclusionMode(tuningState.ambientOcclusionMode);
+        controls.setNumeric(
+          'ambientOcclusionIntensity',
+          tuningState.ambientOcclusionIntensity,
+        );
+        controls.setNumeric(
+          'ambientOcclusionRadius',
+          tuningState.ambientOcclusionRadius,
+        );
+        const persistedPostProcessingControls: PostProcessingControls = Object.freeze({
+          getState: () => controls.getState(),
+          setAmbientOcclusionMode: (mode: ItemAmbientOcclusionMode) => {
+            this.systemTuning.set('ambientOcclusionMode', mode);
+            controls.setAmbientOcclusionMode(mode);
+          },
+          setNumeric: (setting: PostProcessingNumericSetting, value: number) => {
+            this.systemTuning.set(
+              setting,
+              clampPostProcessingSetting(setting, value),
+            );
+            controls.setNumeric(setting, value);
+          },
+        });
         this.postProcessingConsole = new PostProcessingConsole(
           mount,
-          sceneRenderer.postProcessingControls,
+          persistedPostProcessingControls,
           (open) => this.activePhase?.setOverlayActive?.(open),
           {
             enabled: physicsMode !== 'off',
@@ -541,12 +590,12 @@ export class Game {
           },
           visualQuality,
           {
-            selected: 'calm',
-            source: 'normal',
+            selected: tuningState.weatherOverride ?? 'calm',
+            source: tuningState.weatherOverride === null ? 'normal' : 'forced',
             setWeather: (id) => this.setWeatherOverride(id),
           },
           {
-            selected: 'day',
+            selected: tuningState.phaseOverride ?? 'day',
             setTimeOfDay: (phase) => this.setTimeOfDayOverride(phase),
           },
           {
@@ -556,7 +605,10 @@ export class Game {
           waterQuality,
           {
             visible: this.performanceStats.isVisible(),
-            setVisible: (visible) => this.performanceStats?.setVisible(visible),
+            setVisible: (visible) => {
+              this.systemTuning.set('performanceStatsVisible', visible);
+              this.performanceStats?.setVisible(visible);
+            },
           },
           {
             volume: audioSystem.getPreference().volume,
@@ -567,6 +619,7 @@ export class Game {
           {
             fieldOfView: camera.fov,
             setFieldOfView: (fieldOfView) => {
+              this.systemTuning.set('cameraFieldOfView', fieldOfView);
               if (camera.fov === fieldOfView) return;
               camera.fov = fieldOfView;
               camera.updateProjectionMatrix();
@@ -579,6 +632,11 @@ export class Game {
             savedDay: this.saveStore.getState().checkpoint?.session.day ?? null,
             setEnabled: (enabled) => this.setSaveEnabled(enabled),
             continueSavedRun: () => this.continueSavedRun(),
+          },
+          {
+            enabled: this.volumetricCloudsEnabled,
+            available: true,
+            setEnabled: (enabled) => this.setVolumetricCloudsEnabled(enabled),
           },
         );
       }
@@ -846,19 +904,26 @@ export class Game {
   }
 
   private setWeatherOverride(id: PresentationWeatherId): void {
+    this.systemTuning.set('weatherOverride', id);
     this.weatherOverride = id;
     this.postProcessingConsole?.setWeatherState(id, 'forced');
     this.activePhase?.setWeatherOverride?.(id);
   }
 
   private setTimeOfDayOverride(phase: SkyPhase): void {
+    this.systemTuning.set('phaseOverride', phase);
     this.timeOfDayOverride = phase;
     this.postProcessingConsole?.setTimeOfDayState(phase);
     this.activePhase?.setTimeOfDayOverride?.(phase);
   }
 
+  private setVolumetricCloudsEnabled(enabled: boolean): void {
+    this.volumetricCloudsEnabled = enabled;
+    this.systemTuning.set('volumetricCloudsEnabled', enabled);
+    this.activePhase?.setVolumetricCloudsEnabled?.(enabled);
+  }
+
   private applyPresentationOverridesOrDispose(phase: GamePhase): void {
-    if (this.weatherOverride === null && this.timeOfDayOverride === null) return;
     try {
       if (this.weatherOverride !== null) {
         phase.setWeatherOverride?.(this.weatherOverride);
@@ -866,6 +931,7 @@ export class Game {
       if (this.timeOfDayOverride !== null) {
         phase.setTimeOfDayOverride?.(this.timeOfDayOverride);
       }
+      phase.setVolumetricCloudsEnabled?.(this.volumetricCloudsEnabled);
     } catch (error) {
       try {
         phase.dispose();
@@ -878,6 +944,9 @@ export class Game {
 
   private synchronizePresentationControls(): void {
     if (this.postProcessingConsole === null) return;
+    this.postProcessingConsole.setVolumetricCloudAvailability(
+      this.activePhase?.getVolumetricCloudsAvailable?.() ?? true,
+    );
     const effectivePhase = this.activePhase?.getPresentationPhase?.() ?? 'day';
     this.postProcessingConsole.setTimeOfDayState(
       this.timeOfDayOverride ?? effectivePhase,

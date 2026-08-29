@@ -29,6 +29,7 @@ import {
 } from '../ocean/BoatBuoyancy';
 import { OceanRenderer } from '../ocean/OceanRenderer';
 import type { WaterQuality } from '../rendering/waterQuality';
+import type { VisualQuality } from '../rendering/visualQuality';
 import { enableItemAmbientOcclusionOccluder } from '../rendering/ItemAmbientOcclusion';
 import {
   createWaterExclusion,
@@ -286,6 +287,7 @@ export class World {
     lifeboatAssets?: LifeboatAssets,
     shipAssets?: ShipAssets,
     waterQuality: WaterQuality = 'low',
+    visualQuality: VisualQuality = 'low',
   ) {
     this.physicsMode = construction.physicsMode ?? 'enabled';
     const rollback: (() => void)[] = [];
@@ -581,7 +583,7 @@ export class World {
       scene.add(this.ocean.mesh);
       rollback.push(() => scene.remove(this.ocean.mesh));
       construction.checkpoint?.('ocean');
-      this.environment = new Environment(scene, moonTexture);
+      this.environment = new Environment(scene, moonTexture, visualQuality);
       rollback.push(() => this.environment.dispose());
       construction.checkpoint?.('environment');
       this.buoyancy = new BoatBuoyancy(sampleDefaultWave, undefined, sampleDefaultWaveInto);
@@ -736,6 +738,20 @@ export class World {
   setWaterQuality(value: WaterQuality): void {
     if (this.disposed) return;
     this.ocean.setQuality(value);
+  }
+
+  setVolumetricCloudsEnabled(enabled: boolean): void {
+    if (this.disposed) return;
+    this.environment.setVolumetricCloudsEnabled(enabled);
+  }
+
+  setVisualQuality(value: VisualQuality): void {
+    if (this.disposed) return;
+    this.environment.setVisualQuality(value);
+  }
+
+  getVolumetricCloudsAvailable(): boolean {
+    return !this.disposed && this.environment.volumetricCloudsAvailable();
   }
 
   sampleFlightWaterHeight(

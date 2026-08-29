@@ -1,4 +1,5 @@
 import type { EventResponseId } from '../survival/survivalTypes';
+import type { InspectableEventId } from '../survival/eventCatalog';
 import { createElementRequirement } from './dom';
 import type {
   FocusedEventChoiceSelection,
@@ -12,6 +13,11 @@ const ROUTINE_DIALOG_MARGIN = 20;
 const ROUTINE_DIALOG_GAP = 22;
 const FOCUSED_EVENT_BOTTOM_RESERVE = 128;
 const requireElement = createElementRequirement('focused event view');
+const FOCUSED_EVENT_TITLES: Readonly<Record<InspectableEventId, string>> = Object.freeze({
+  wreckage: 'Wreckage Debris',
+  'drifting-supplies': 'Drifting Supplies',
+  'drifting-chest': 'Drifting Chest',
+});
 
 export class FocusedEventView {
   readonly root: HTMLElement;
@@ -25,6 +31,7 @@ export class FocusedEventView {
   canUse: () => boolean = () => true;
 
   private readonly choicesRoot: HTMLElement;
+  private readonly title: HTMLElement;
   private target: FocusedEventFocusView['target'] = null;
   private readonly choicesById = new Map<EventResponseId, FocusedEventChoiceView>();
   private selectedChoiceId: EventResponseId | null = null;
@@ -35,8 +42,9 @@ export class FocusedEventView {
   constructor(private readonly coordinateRoot: HTMLElement) {
     const template = document.createElement('template');
     template.innerHTML = `
-      <section class="focused-event-view" data-focused-event-view role="dialog" aria-modal="true" aria-hidden="true" aria-label="Event choices" inert>
+      <section class="focused-event-view" data-focused-event-view role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="focused-event-title" inert>
         <div class="dive-result__paper focused-event-view__card scuba-popup-paper">
+          <h2 class="dive-result__title scuba-popup-title ui-role-display" id="focused-event-title" data-focused-event-title></h2>
           <nav data-focused-event-choices aria-label="Event choices"></nav>
         </div>
         <button type="button" class="focused-event-view__back" data-focused-event-back aria-label="Return to boat">
@@ -46,6 +54,7 @@ export class FocusedEventView {
     this.root = template.content.firstElementChild as HTMLElement;
     this.card = requireElement(this.root, '.focused-event-view__card');
     this.backButton = requireElement(this.root, '[data-focused-event-back]');
+    this.title = requireElement(this.root, '[data-focused-event-title]');
     this.choicesRoot = requireElement(this.root, '[data-focused-event-choices]');
     this.root.addEventListener('click', this.handleClick);
     window.addEventListener('resize', this.handleWindowResize);
@@ -54,6 +63,7 @@ export class FocusedEventView {
   show(view: FocusedEventFocusView): void {
     if (this.disposed) return;
     this.backButton.setAttribute('aria-label', 'Return to boat');
+    this.title.textContent = FOCUSED_EVENT_TITLES[view.eventId];
     this.target = view.target === null ? null : Object.freeze({ ...view.target });
     this.choicesById.clear();
     for (const choice of view.choices) this.choicesById.set(choice.id, Object.freeze({ ...choice }));
@@ -70,6 +80,7 @@ export class FocusedEventView {
     this.visible = false;
     this.choicesById.clear();
     this.selectedChoiceId = null;
+    this.title.textContent = '';
     this.choicesRoot.replaceChildren();
     this.choicesRoot.hidden = false;
     this.target = null;

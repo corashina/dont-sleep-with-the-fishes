@@ -285,7 +285,7 @@ describe('SurvivalEventFlow', () => {
         energyCost: 2, energyOwner: 'player', instanceId: null,
       },
       {
-        id: 'delegate-carlitos', label: 'Send Carlitos to Search Debris', unavailableReason: null,
+        id: 'delegate-carlitos', label: 'Send Carlitos', unavailableReason: null,
         energyCost: 3, energyOwner: 'carlitos', instanceId: null,
       },
       {

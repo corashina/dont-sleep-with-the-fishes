@@ -139,23 +139,7 @@ export class EventItemEffects {
         this.tape.scale.set(0.72 + primary * 0.76, 0.9, 1);
         break;
       case 'flare':
-        this.root.quaternion.identity();
-        this.show(this.flare, primary);
-        if (!this.flareLaunched || sample.effectTravel < this.flareTravel) {
-          this.captureFlareTrajectory(actor);
-        }
-        this.flareLaunched = true;
-        this.flareTravel = sample.effectTravel;
-        this.flarePosition
-          .lerpVectors(this.flareMuzzle, this.flareDestination, sample.effectTravel);
-        this.flarePosition.y += sample.effectArc * FLARE_ARC_HEIGHT;
-        this.flare.position.copy(this.flarePosition).sub(this.actorPosition);
-        this.flare.quaternion.setFromUnitVectors(FLARE_FORWARD, this.flareDirection);
-        this.flare.scale.setScalar(
-          0.94 + Math.sin(sample.effectTravel * Math.PI * 32) * 0.06,
-        );
-        this.flareLight.intensity = 7.2
-          + Math.sin(sample.effectTravel * Math.PI * 38) * 1;
+        this.applyFlare(sample, actor, primary);
         break;
       case 'chain':
         this.root.quaternion.identity();
@@ -171,23 +155,47 @@ export class EventItemEffects {
           * (1.1 + primary * 3.2 + secondary * 2.5);
         break;
       case 'shotgun-smoke':
-        this.show(this.shotgunSmoke, primary);
-        this.shotgunSmoke.position.set(0.015, 0.025, -0.54 - secondary * 0.14);
-        this.shotgunSmoke.rotation.set(0.02, -0.04, -0.04);
-        for (let index = 0; index < this.shotgunSmoke.children.length; index += 1) {
-          const puff = this.shotgunSmoke.children[index]!;
-          const side = index % 2 === 0 ? -1 : 1;
-          const spread = secondary * (0.035 + index * 0.012);
-          puff.position.x = side * 0.006;
-          puff.position.y = side * spread + secondary * (0.02 + index * 0.006);
-          puff.position.z = -index * 0.024 - secondary * (0.06 + index * 0.018);
-          puff.rotation.z = side * (0.12 + secondary * (0.22 + index * 0.04));
-          puff.scale.setScalar(0.72 + index * 0.13 + secondary * (0.8 + index * 0.12));
-        }
+        this.applyShotgunSmoke(primary, secondary);
         break;
       case 'binocular-mask':
         this.binocularStrength = primary;
         break;
+    }
+  }
+
+  private applyFlare(
+    sample: Readonly<EventItemUseSample>,
+    actor: Object3D,
+    primary: number,
+  ): void {
+    this.root.quaternion.identity();
+    this.show(this.flare, primary);
+    if (!this.flareLaunched || sample.effectTravel < this.flareTravel) {
+      this.captureFlareTrajectory(actor);
+    }
+    this.flareLaunched = true;
+    this.flareTravel = sample.effectTravel;
+    this.flarePosition.lerpVectors(this.flareMuzzle, this.flareDestination, sample.effectTravel);
+    this.flarePosition.y += sample.effectArc * FLARE_ARC_HEIGHT;
+    this.flare.position.copy(this.flarePosition).sub(this.actorPosition);
+    this.flare.quaternion.setFromUnitVectors(FLARE_FORWARD, this.flareDirection);
+    this.flare.scale.setScalar(0.94 + Math.sin(sample.effectTravel * Math.PI * 32) * 0.06);
+    this.flareLight.intensity = 7.2 + Math.sin(sample.effectTravel * Math.PI * 38);
+  }
+
+  private applyShotgunSmoke(primary: number, secondary: number): void {
+    this.show(this.shotgunSmoke, primary);
+    this.shotgunSmoke.position.set(0.015, 0.025, -0.54 - secondary * 0.14);
+    this.shotgunSmoke.rotation.set(0.02, -0.04, -0.04);
+    for (let index = 0; index < this.shotgunSmoke.children.length; index += 1) {
+      const puff = this.shotgunSmoke.children[index]!;
+      const side = index % 2 === 0 ? -1 : 1;
+      const spread = secondary * (0.035 + index * 0.012);
+      puff.position.x = side * 0.006;
+      puff.position.y = side * spread + secondary * (0.02 + index * 0.006);
+      puff.position.z = -index * 0.024 - secondary * (0.06 + index * 0.018);
+      puff.rotation.z = side * (0.12 + secondary * (0.22 + index * 0.04));
+      puff.scale.setScalar(0.72 + index * 0.13 + secondary * (0.8 + index * 0.12));
     }
   }
 
