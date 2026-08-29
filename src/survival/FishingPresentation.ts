@@ -298,6 +298,24 @@ function createFishingVisuals(
   };
 }
 
+function isValidCastInput(
+  clientX: number,
+  clientY: number,
+  viewportWidth: number,
+  viewportHeight: number,
+): boolean {
+  return Number.isFinite(clientX)
+    && Number.isFinite(clientY)
+    && Number.isFinite(viewportWidth)
+    && Number.isFinite(viewportHeight)
+    && viewportWidth > 0
+    && viewportHeight > 0
+    && clientX >= 0
+    && clientX <= viewportWidth
+    && clientY >= 0
+    && clientY <= viewportHeight;
+}
+
 export class FishingPresentation {
   readonly root = new Group();
   private readonly ownedGeometries = new Set<BufferGeometry>();
@@ -473,19 +491,9 @@ export class FishingPresentation {
     viewportWidth: number,
     viewportHeight: number,
   ): FishingCastPoint | null {
-    if (
-      this.disposed
-      || !Number.isFinite(clientX)
-      || !Number.isFinite(clientY)
-      || !Number.isFinite(viewportWidth)
-      || !Number.isFinite(viewportHeight)
-      || viewportWidth <= 0
-      || viewportHeight <= 0
-      || clientX < 0
-      || clientX > viewportWidth
-      || clientY < 0
-      || clientY > viewportHeight
-    ) return null;
+    if (this.disposed || !isValidCastInput(clientX, clientY, viewportWidth, viewportHeight)) {
+      return null;
+    }
 
     this.dependencies.worldRoot.updateMatrixWorld(true);
     this.ndc.set(
