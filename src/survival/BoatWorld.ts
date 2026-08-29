@@ -16,6 +16,7 @@ import {
 } from 'three';
 import {
   EVENT_CHOICE_EXCLUDED_ITEM_IDS,
+  type ItemId,
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
@@ -198,6 +199,22 @@ interface VolumetricCloudFrame {
   palette: Readonly<SkyPalette>;
 }
 
+function createVolumetricCloudFrame(
+  volumetricClouds: VolumetricClouds | null,
+  cameraPosition: Readonly<Vector3>,
+  state: Readonly<SkyState>,
+  palette: Readonly<SkyPalette>,
+): VolumetricCloudFrame | null {
+  if (volumetricClouds === null) return null;
+  return {
+    time: 0,
+    delta: 0,
+    cameraPosition,
+    state,
+    palette,
+  };
+}
+
 const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.min(maximum, Math.max(minimum, value));
 
@@ -244,6 +261,106 @@ function isFocusedEventFactoryMap(
   return models !== undefined
     && !('clone' in models)
     && !('create' in models);
+}
+
+type EventModelsInput =
+  | SurvivalEventModels
+  | EventModelLibrary
+  | FocusedEventPresentationFactories
+  | undefined;
+
+function resolveFocusedEventFactories(
+  models: EventModelsInput,
+  focusedEventFactories: FocusedEventPresentationFactories,
+): FocusedEventPresentationFactories {
+  return isFocusedEventFactoryMap(models) ? models : focusedEventFactories;
+}
+
+function resolveDedicatedEventModels(
+  models: EventModelsInput,
+  eventModels: EventModelLibrary | undefined,
+): EventModelLibrary | undefined {
+  return eventModels ?? (isEventModelLibrary(models) ? models : undefined);
+}
+
+function resolveFeaturedEventModels(
+  models: EventModelsInput,
+): SurvivalEventModels | undefined {
+  if (isEventModelLibrary(models) || isFocusedEventFactoryMap(models)) return undefined;
+  return models;
+}
+
+function createFurnitureEventModels(
+  shipFurniture: ShipFurnitureLibrary,
+): SurvivalEventModels {
+  return {
+    clone: (id) => {
+      if (id === 'driftingBarrel') return shipFurniture.clone('barrel');
+      return EMPTY_SURVIVAL_EVENT_MODELS.clone(id);
+    },
+  };
+}
+
+function resolveFallbackFeaturedEventModels(
+  models: SurvivalEventModels | undefined,
+  shipFurniture: ShipFurnitureLibrary | undefined,
+): SurvivalEventModels {
+  if (models !== undefined) return models;
+  if (shipFurniture === undefined) return EMPTY_SURVIVAL_EVENT_MODELS;
+  return createFurnitureEventModels(shipFurniture);
+}
+
+function blocksEventItemUse(
+  eventId: string,
+  choiceId: string,
+  itemId: ItemId | null,
+  allowExcludedEventChoiceItem: boolean,
+): boolean {
+  if (
+    itemId !== null
+    && EVENT_CHOICE_EXCLUDED_ITEM_IDS.includes(itemId)
+    && !allowExcludedEventChoiceItem
+  ) return true;
+  return eventId === 'flowers' && choiceId === 'bucket' && itemId === 'bucket';
+}
+
+function focusedChoiceFromResponse(
+  response: EventPhysicalResponsePresentation | EventChoicePresentation,
+): EventChoicePresentation | null {
+  return 'actors' in response ? null : response;
+}
+
+function validateFocusedEventOutcome(
+  eventId: string,
+  outcome: ActionOutcome,
+  focusedChoice: EventChoicePresentation | null,
+): void {
+  if (!isEventPresentationRoute(eventId, 'focused')) return;
+  const result = outcome.eventResult;
+  if (
+    focusedChoice !== null
+    && result !== undefined
+    && result.eventId === eventId
+    && result.choiceId === focusedChoice.choiceId
+  ) return;
+  const received = result === undefined
+    ? 'missing'
+    : `${result.eventId}/${result.choiceId}`;
+  throw new Error(
+    `Focused event ${eventId} requires result ${eventId}/${focusedChoice?.choiceId ?? 'missing-choice'}; received ${received}.`,
+  );
+}
+
+function physicalResponseFromEventChoice(
+  response: EventPhysicalResponsePresentation | EventChoicePresentation,
+): EventPhysicalResponsePresentation {
+  if ('actors' in response) return response;
+  return {
+    choiceId: response.choiceId,
+    actors: response.instanceId === null || response.condition === null
+      ? []
+      : [{ instanceId: response.instanceId, condition: response.condition }],
+  };
 }
 
 export class BoatWorld {
@@ -412,26 +529,17 @@ export class BoatWorld {
     visualQuality: VisualQuality = 'low',
     createClouds: typeof tryCreateVolumetricClouds = tryCreateVolumetricClouds,
   ) {
-    const resolvedFocusedFactories = isFocusedEventFactoryMap(models)
-      ? models
-      : focusedEventFactories;
-    const featuredEventModels = isEventModelLibrary(models)
-      || isFocusedEventFactoryMap(models)
-      ? undefined
-      : models;
-    const dedicatedEventModels = eventModels
-      ?? (isEventModelLibrary(models) ? models : undefined);
+    const resolvedFocusedFactories = resolveFocusedEventFactories(
+      models,
+      focusedEventFactories,
+    );
+    const featuredEventModels = resolveFeaturedEventModels(models);
+    const dedicatedEventModels = resolveDedicatedEventModels(models, eventModels);
     this.fallbackDedicatedEventModels = dedicatedEventModels
       ?? createEmptyEventModelLibraryForTest();
-    this.fallbackFeaturedEventModels = featuredEventModels ?? (
-      shipFurniture === undefined
-        ? EMPTY_SURVIVAL_EVENT_MODELS
-        : {
-            clone: (id) => {
-              if (id === 'driftingBarrel') return shipFurniture.clone('barrel');
-              return EMPTY_SURVIVAL_EVENT_MODELS.clone(id);
-            },
-          } satisfies SurvivalEventModels
+    this.fallbackFeaturedEventModels = resolveFallbackFeaturedEventModels(
+      featuredEventModels,
+      shipFurniture,
     );
     this.focusedEventFactories = resolvedFocusedFactories;
     this.scene = new Scene();
@@ -466,27 +574,17 @@ export class BoatWorld {
       this.sky = sky;
       volumetricClouds = createClouds(this.scene, visualQuality);
       this.volumetricClouds = volumetricClouds;
-      this.volumetricCloudFrame = volumetricClouds === null ? null : {
-        time: 0,
-        delta: 0,
-        cameraPosition: this.worldCameraPosition,
-        state: this.skyState,
-        palette: sky.palette,
-      };
+      this.volumetricCloudFrame = createVolumetricCloudFrame(
+        volumetricClouds,
+        this.worldCameraPosition,
+        this.skyState,
+        sky.palette,
+      );
       weatherEffects = new WeatherEffects(this.scene);
       this.weatherEffects = weatherEffects;
       weatherEffects.setLightningStrikeListener(this.queueLightningStrike);
 
-      const resolvedLifeboatAssets = lifeboatAssets ?? LifeboatAssets.fromTextures(
-        new Texture(),
-        new Texture(),
-        new Texture(),
-      );
-      if (lifeboatAssets === undefined) {
-        this.ownedTextures.add(resolvedLifeboatAssets.color);
-        this.ownedTextures.add(resolvedLifeboatAssets.roughness);
-        this.ownedTextures.add(resolvedLifeboatAssets.normal);
-      }
+      const resolvedLifeboatAssets = this.resolveLifeboatAssets(lifeboatAssets);
       const build = createLifeboat(resolvedLifeboatAssets);
       this.boat = build.root;
       this.oceanExclusion = createWaterExclusion(
@@ -696,6 +794,19 @@ export class BoatWorld {
     }
   }
 
+  private resolveLifeboatAssets(lifeboatAssets: LifeboatAssets | undefined): LifeboatAssets {
+    if (lifeboatAssets !== undefined) return lifeboatAssets;
+    const resolved = LifeboatAssets.fromTextures(
+      new Texture(),
+      new Texture(),
+      new Texture(),
+    );
+    this.ownedTextures.add(resolved.color);
+    this.ownedTextures.add(resolved.roughness);
+    this.ownedTextures.add(resolved.normal);
+    return resolved;
+  }
+
   createEventPresentation(
     eventId: SurvivalEventId,
     dedicatedModels: EventModelLibrary,
@@ -835,6 +946,11 @@ export class BoatWorld {
     this.fallbackEventPresentation = adapter;
   }
 
+  private ensureRoutedEventPresenter(eventId: string): void {
+    if (eventPresentationRoute(eventId) === null) return;
+    this.ensureEventPresenter(eventId as SurvivalEventId);
+  }
+
   setPhase(phase: 'day' | 'night'): void {
     if (this.disposed) return;
     const previous = this.phase;
@@ -958,24 +1074,20 @@ export class BoatWorld {
     allowExcludedEventChoiceItem = false,
   ): Promise<void> {
     if (this.disposed) return;
-    if (eventPresentationRoute(eventId) !== null) {
-      this.ensureEventPresenter(eventId as SurvivalEventId);
-    }
+    this.ensureRoutedEventPresenter(eventId);
     const operation = ++this.weatherEventOperation;
     this.itemUseController.clear(this.phase);
     const itemId = this.supplyDisplay.itemType(instanceId);
-    if (
-      itemId !== null
-      && EVENT_CHOICE_EXCLUDED_ITEM_IDS.includes(itemId)
-      && !allowExcludedEventChoiceItem
-    ) return;
-    if (eventId === 'flowers' && choiceId === 'bucket' && itemId === 'bucket') return;
+    if (blocksEventItemUse(
+      eventId,
+      choiceId,
+      itemId,
+      allowExcludedEventChoiceItem,
+    )) return;
     const context = itemId === null
       ? null
       : resolveEventItemUseContext(eventId, choiceId, itemId);
-    if (eventId === 'wreckage' && choiceId === 'dive') {
-      this.cameraController.cancelFocusedEventView();
-    }
+    this.cancelWreckageFocusedView(eventId, choiceId);
     if (itemId !== null && context !== null) {
       const aimTarget = this.eventItemAimTarget(eventId);
       const request: EventItemUseRequest = {
@@ -991,15 +1103,24 @@ export class BoatWorld {
         this.itemUseController.play(request),
         this.playEventSceneItemUse(eventId, choiceId, instanceId),
       ]);
-      if (this.disposed || operation !== this.weatherEventOperation) return;
+      if (this.eventOperationIsStale(operation)) return;
       if (!played) {
         await this.supplyDisplay.playEventItemUse(instanceId);
       }
       return;
     }
     if (await this.playEventSceneItemUse(eventId, choiceId, instanceId)) return;
-    if (this.disposed || operation !== this.weatherEventOperation) return;
+    if (this.eventOperationIsStale(operation)) return;
     await this.supplyDisplay.playEventItemUse(instanceId);
+  }
+
+  private eventOperationIsStale(operation: number): boolean {
+    return this.disposed || operation !== this.weatherEventOperation;
+  }
+
+  private cancelWreckageFocusedView(eventId: string, choiceId: string): void {
+    if (eventId !== 'wreckage' || choiceId !== 'dive') return;
+    this.cameraController.cancelFocusedEventView();
   }
 
   returnEventItemUse(): Promise<void> {
@@ -1227,31 +1348,9 @@ export class BoatWorld {
     presentation?: EventOutcomePresentation,
   ): Promise<void> {
     if (this.disposed) return;
-    const focusedChoice = 'actors' in response ? null : response;
-    if (isEventPresentationRoute(eventId, 'focused')) {
-      const result = outcome.eventResult;
-      if (
-        focusedChoice === null
-        || result === undefined
-        || result.eventId !== eventId
-        || result.choiceId !== focusedChoice.choiceId
-      ) {
-        const received = result === undefined
-          ? 'missing'
-          : `${result.eventId}/${result.choiceId}`;
-        throw new Error(
-          `Focused event ${eventId} requires result ${eventId}/${focusedChoice?.choiceId ?? 'missing-choice'}; received ${received}.`,
-        );
-      }
-    }
-    const physicalResponse: EventPhysicalResponsePresentation = 'actors' in response
-      ? response
-      : {
-          choiceId: response.choiceId,
-          actors: response.instanceId === null || response.condition === null
-            ? []
-            : [{ instanceId: response.instanceId, condition: response.condition }],
-        };
+    const focusedChoice = focusedChoiceFromResponse(response);
+    validateFocusedEventOutcome(eventId, outcome, focusedChoice);
+    const physicalResponse = physicalResponseFromEventChoice(response);
     if (eventPresentationRoute(eventId) !== null) {
       this.ensureEventPresenter(eventId as SurvivalEventId);
     }
@@ -1411,8 +1510,7 @@ export class BoatWorld {
   }
 
   private updateScene(time: number, delta: number, advancePresentation: boolean): void {
-    if (this.disposed || delta <= 0) return;
-    if (typeof document !== 'undefined' && document.hidden) return;
+    if (this.shouldSkipSceneUpdate(delta)) return;
 
     const amplitudeScale = this.weatherProfile.waveScale;
     this.ocean.setVortex(this.vortexWave);
@@ -1439,14 +1537,7 @@ export class BoatWorld {
       this.skyState,
       this.worldCameraPosition,
     );
-    const cloudFrame = this.volumetricCloudFrame;
-    let cloudStrength = 0;
-    if (cloudFrame !== null && this.volumetricClouds !== null) {
-      cloudFrame.time = time;
-      cloudFrame.delta = delta;
-      cloudFrame.palette = this.sky.palette;
-      cloudStrength = this.volumetricClouds.update(cloudFrame);
-    }
+    const cloudStrength = this.updateVolumetricClouds(time, delta);
     this.sky.setCloudLayerStrength(1 - cloudStrength);
     this.applyBaseLighting(this.sky.palette);
     if (this.settledCue) this.applyCue(this.settledCue, 1, time);
@@ -1454,40 +1545,8 @@ export class BoatWorld {
     this.carlitos.update(delta);
     this.chestDisplay.update(delta);
 
-    if (advancePresentation) {
-      const sequence = this.activeSequence;
-      if (sequence) {
-        sequence.elapsed = Math.min(sequence.duration, sequence.elapsed + delta);
-        const progress = sequence.elapsed / sequence.duration;
-        this.applyCue(sequence.cue, progress, sequence.elapsed);
-        if (progress >= 1) {
-          this.activeSequence = null;
-          this.settledCue = this.isTerminalCue(sequence.cue) ? sequence.cue : null;
-          sequence.resolve();
-        }
-      }
-
-      this.fishingPresentation.advance(time, delta);
-      this.supplyDisplay.resetEventPoseForFrame();
-      this.eventPresentationHost.update(time, delta);
-      this.cameraController.updateFocusedEventView(
-        delta,
-        this.currentFocusedEventAimTarget(),
-      );
-      this.carlitosDelegation.update(delta);
-      this.supplyDisplay.update(delta);
-      this.itemUseController.update(delta);
-      this.repairToolboxAnimation.update(delta);
-      this.fishingPresentation.updateParticles(delta);
-    } else {
-      const activeEventId = this.eventPresentationHost.activeEventId();
-      if (activeEventId !== null && eventPresentationRoute(activeEventId) === 'moon') {
-        this.eventPresentationHost.update(time, 0);
-      }
-      this.cameraController.applyFocusedEventView(
-        this.currentFocusedEventAimTarget(),
-      );
-    }
+    if (advancePresentation) this.advanceScenePresentation(time, delta);
+    else this.updateAmbientScenePresentation(time);
     this.diveController.applyPostEntryHoldCamera();
     setSceneBinocularMaskStrength(
       this.scene,
@@ -1508,11 +1567,66 @@ export class BoatWorld {
     this.ocean.setExclusions(this.oceanExclusions);
     this.camera.getWorldPosition(this.worldCameraPosition);
     this.weatherEffects.update(time, delta, this.worldCameraPosition);
-    if (this.lightningStrikePending) {
-      this.lightningStrikePending = false;
-      this.lightningStrikeListener?.();
-    }
+    this.dispatchPendingLightningStrike();
     this.ocean.follow(this.worldCameraPosition.x, this.worldCameraPosition.z);
+  }
+
+  private shouldSkipSceneUpdate(delta: number): boolean {
+    return this.disposed
+      || delta <= 0
+      || (typeof document !== 'undefined' && document.hidden);
+  }
+
+  private updateVolumetricClouds(time: number, delta: number): number {
+    const cloudFrame = this.volumetricCloudFrame;
+    if (cloudFrame === null || this.volumetricClouds === null) return 0;
+    cloudFrame.time = time;
+    cloudFrame.delta = delta;
+    cloudFrame.palette = this.sky.palette;
+    return this.volumetricClouds.update(cloudFrame);
+  }
+
+  private advanceScenePresentation(time: number, delta: number): void {
+    const sequence = this.activeSequence;
+    if (sequence !== null) {
+      sequence.elapsed = Math.min(sequence.duration, sequence.elapsed + delta);
+      const progress = sequence.elapsed / sequence.duration;
+      this.applyCue(sequence.cue, progress, sequence.elapsed);
+      if (progress >= 1) {
+        this.activeSequence = null;
+        this.settledCue = this.isTerminalCue(sequence.cue) ? sequence.cue : null;
+        sequence.resolve();
+      }
+    }
+
+    this.fishingPresentation.advance(time, delta);
+    this.supplyDisplay.resetEventPoseForFrame();
+    this.eventPresentationHost.update(time, delta);
+    this.cameraController.updateFocusedEventView(
+      delta,
+      this.currentFocusedEventAimTarget(),
+    );
+    this.carlitosDelegation.update(delta);
+    this.supplyDisplay.update(delta);
+    this.itemUseController.update(delta);
+    this.repairToolboxAnimation.update(delta);
+    this.fishingPresentation.updateParticles(delta);
+  }
+
+  private updateAmbientScenePresentation(time: number): void {
+    const activeEventId = this.eventPresentationHost.activeEventId();
+    if (activeEventId !== null && eventPresentationRoute(activeEventId) === 'moon') {
+      this.eventPresentationHost.update(time, 0);
+    }
+    this.cameraController.applyFocusedEventView(
+      this.currentFocusedEventAimTarget(),
+    );
+  }
+
+  private dispatchPendingLightningStrike(): void {
+    if (!this.lightningStrikePending) return;
+    this.lightningStrikePending = false;
+    this.lightningStrikeListener?.();
   }
 
   private currentFocusedEventAimTarget(): Object3D | null {
@@ -1666,11 +1780,21 @@ export class BoatWorld {
   }
 
   private applyCue(cue: PresentationCue, progress: number, elapsed: number): void {
-    const eased = easeOut(clamp(progress, 0, 1));
-    const pulse = Math.sin(Math.PI * clamp(progress, 0, 1));
+    const normalizedProgress = clamp(progress, 0, 1);
+    const eased = easeOut(normalizedProgress);
+    const pulse = Math.sin(Math.PI * normalizedProgress);
+    this.applySpatialCue(cue, progress, elapsed, eased, pulse);
+    this.applyLightingCue(cue, eased, pulse);
+  }
+
+  private applySpatialCue(
+    cue: PresentationCue,
+    progress: number,
+    elapsed: number,
+    eased: number,
+    pulse: number,
+  ): void {
     switch (cue) {
-      case 'none':
-        break;
       case 'fish':
         this.rodPivot.rotation.x = FISHING_ROD_LEAN - eased * 0.12;
         break;
@@ -1685,10 +1809,6 @@ export class BoatWorld {
       case 'repair':
         this.camera.rotateY(-0.18 * eased);
         this.camera.rotateX(-0.035 * eased);
-        this.key.intensity *= 1 + pulse * 0.18;
-        break;
-      case 'treat':
-        this.ambient.intensity *= 1 + pulse * 0.12;
         break;
       case 'storm':
         this.motionRig.rotation.x += Math.sin(elapsed * 18) * 0.025 * (1 - progress);
@@ -1698,11 +1818,33 @@ export class BoatWorld {
         this.motionRig.rotation.x += pulse * 0.075;
         this.camera.rotateX(-pulse * 0.045);
         break;
+      case 'rescue':
+        this.activeRescueCueCallback?.(eased);
+        this.camera.rotateY(-0.12 * eased);
+        break;
+      case 'sinking':
+        this.motionRig.position.y -= eased * 1.05;
+        break;
+      default:
+        break;
+    }
+  }
+
+  private applyLightingCue(
+    cue: PresentationCue,
+    eased: number,
+    pulse: number,
+  ): void {
+    switch (cue) {
+      case 'repair':
+        this.key.intensity *= 1 + pulse * 0.18;
+        break;
+      case 'treat':
+        this.ambient.intensity *= 1 + pulse * 0.12;
+        break;
       case 'darkness':
         this.ambient.intensity *= 1 - eased * 0.68;
         this.key.intensity *= 1 - eased * 0.72;
-        break;
-      case 'sighting':
         break;
       case 'nightfall':
         this.ambient.intensity *= 1 - eased * 0.72;
@@ -1712,19 +1854,16 @@ export class BoatWorld {
         this.ambient.intensity *= 0.35 + eased * 0.65;
         this.key.intensity *= 0.3 + eased * 0.7;
         break;
-      case 'rescue':
-        this.activeRescueCueCallback?.(eased);
-        this.camera.rotateY(-0.12 * eased);
-        break;
       case 'death':
         this.ambient.intensity *= 1 - eased * 0.88;
         this.key.intensity *= 1 - eased * 0.9;
         break;
       case 'sinking':
-        this.motionRig.position.y -= eased * 1.05;
         this.ambient.intensity *= 1 - eased * 0.72;
         this.key.intensity *= 1 - eased * 0.8;
         (this.scene.fog as FogExp2).density += eased * 0.02;
+        break;
+      default:
         break;
     }
   }

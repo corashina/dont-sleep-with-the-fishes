@@ -5202,6 +5202,46 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  function expectMoonFaceShader(sky: Mesh<BufferGeometry, ShaderMaterial>): void {
+    expect(sky.material.fragmentShader).toContain('archedBrowShape');
+    expect(sky.material.fragmentShader).toContain('slantedEyeSockets');
+    expect(sky.material.fragmentShader).toContain('lowerEyeArcs');
+    expect(sky.material.fragmentShader).toContain('splitNose');
+    expect(sky.material.fragmentShader).toContain('wideJaggedGrin');
+    expect(sky.material.fragmentShader).not.toContain('hookedEyeMasks');
+    expect(sky.material.fragmentShader).not.toContain('eyeSlits');
+  }
+
+  async function revealMoonFace(world: BoatWorld, sky: Mesh<BufferGeometry, ShaderMaterial>): Promise<number> {
+    world.stageEvent('face-on-the-moon');
+    const reveal = world.revealEvent('face-on-the-moon');
+    world.update(0.76, 0.76);
+    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
+    expect(await remainsPending(reveal)).toBe(true);
+    world.update(3.7, 2.94);
+    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
+    expect(sky.material.uniforms.uMoonStarScale?.value).toBeLessThan(1);
+    expect(sky.material.uniforms.uMoonScale?.value).toBeGreaterThan(1.5);
+    world.update(4.3, 0.6);
+    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBeGreaterThan(0);
+    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBeLessThan(1);
+    world.update(5.8, 1.5);
+    await reveal;
+    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(1);
+    expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(0.7);
+    expect(sky.material.uniforms.uMoonEventDim?.value).toBeGreaterThan(0.15);
+    expect(sky.material.uniforms.uMoonScale?.value).toBeCloseTo(4.15);
+    return sky.material.uniforms.uMoonGrin?.value as number;
+  }
+
+  function expectMoonFaceReset(sky: Mesh<BufferGeometry, ShaderMaterial>): void {
+    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
+    expect(sky.material.uniforms.uMoonGrin?.value).toBe(0);
+    expect(sky.material.uniforms.uMoonStarScale?.value).toBe(1);
+    expect(sky.material.uniforms.uMoonEventDim?.value).toBe(0);
+    expect(sky.material.uniforms.uMoonScale?.value).toBe(1);
+  }
+
   it('reveals the moon face after a normal-moon hold and clears every sky transient', async () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -5214,45 +5254,13 @@ describe('BoatWorld helpers', () => {
       ShaderMaterial
     >;
 
-    expect(sky.material.fragmentShader).toContain('archedBrowShape');
-    expect(sky.material.fragmentShader).toContain('slantedEyeSockets');
-    expect(sky.material.fragmentShader).toContain('lowerEyeArcs');
-    expect(sky.material.fragmentShader).toContain('splitNose');
-    expect(sky.material.fragmentShader).toContain('wideJaggedGrin');
-    expect(sky.material.fragmentShader).not.toContain('hookedEyeMasks');
-    expect(sky.material.fragmentShader).not.toContain('eyeSlits');
-
-    world.stageEvent('face-on-the-moon');
-    const reveal = world.revealEvent('face-on-the-moon');
-    world.update(0.76, 0.76);
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
-    expect(await remainsPending(reveal)).toBe(true);
-
-    world.update(3.7, 2.94);
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
-    expect(sky.material.uniforms.uMoonStarScale?.value).toBeLessThan(1);
-    expect(sky.material.uniforms.uMoonScale?.value).toBeGreaterThan(1.5);
-
-    world.update(4.3, 0.6);
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBeGreaterThan(0);
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBeLessThan(1);
-
-    world.update(5.8, 1.5);
-    await reveal;
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(1);
-    expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(0.7);
-    expect(sky.material.uniforms.uMoonEventDim?.value).toBeGreaterThan(0.15);
-    expect(sky.material.uniforms.uMoonScale?.value).toBeCloseTo(4.15);
-    const firstPulse = sky.material.uniforms.uMoonGrin?.value as number;
+    expectMoonFaceShader(sky);
+    const firstPulse = await revealMoonFace(world, sky);
     world.update(0.7, 0.7);
     expect(sky.material.uniforms.uMoonGrin?.value).not.toBeCloseTo(firstPulse, 4);
 
     world.clearEvent();
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
-    expect(sky.material.uniforms.uMoonGrin?.value).toBe(0);
-    expect(sky.material.uniforms.uMoonStarScale?.value).toBe(1);
-    expect(sky.material.uniforms.uMoonEventDim?.value).toBe(0);
-    expect(sky.material.uniforms.uMoonScale?.value).toBe(1);
+    expectMoonFaceReset(sky);
 
     world.dispose();
     propModels.dispose();

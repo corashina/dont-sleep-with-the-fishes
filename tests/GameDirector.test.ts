@@ -175,7 +175,7 @@ describe('Game director', () => {
     let returnToMenu!: () => void;
     const scavenge = phase();
     const survival = phase();
-    const createScavenge = vi.fn((_context, onComplete, onReturnToMenu) => {
+    const createScavenge = vi.fn((_context, onComplete, _onRestart, onReturnToMenu) => {
       complete = onComplete;
       returnToMenu = onReturnToMenu;
       return scavenge;
@@ -193,6 +193,68 @@ describe('Game director', () => {
     expect(createScavenge).toHaveBeenCalledOnce();
     expect(survival.dispose).not.toHaveBeenCalled();
     expect((game as unknown as { activePhase: GamePhase }).activePhase).toBe(survival);
+  });
+
+  it('returns from scavenging to the menu', () => {
+    let returnToMenu!: () => void;
+    const initialMenu = phase();
+    const returnedMenu = phase();
+    const scavenge = phase();
+    const createMenu = vi.fn((_context: PhaseContext, onComplete: () => void) => {
+      const menu = createMenu.mock.calls.length === 1 ? initialMenu : returnedMenu;
+      if (createMenu.mock.calls.length === 1) onComplete();
+      return menu;
+    });
+    const game = Game.forTest({
+      createMenu,
+      createScavenge: (_context, _onComplete, _onRestart, onReturn) => {
+        returnToMenu = onReturn;
+        return scavenge;
+      },
+      createSurvival: () => phase(),
+    }, testOptions());
+    game.start();
+
+    returnToMenu();
+
+    expect(scavenge.dispose).toHaveBeenCalledOnce();
+    expect(createMenu).toHaveBeenCalledTimes(2);
+    expect(returnedMenu.start).toHaveBeenCalledOnce();
+    expect((game as unknown as { activePhase: GamePhase }).activePhase).toBe(returnedMenu);
+  });
+
+  it('returns from survival to the menu', () => {
+    let complete!: (result: Readonly<ScavengeResult>) => void;
+    let returnToMenu!: () => void;
+    const initialMenu = phase();
+    const returnedMenu = phase();
+    const scavenge = phase();
+    const survival = phase();
+    const createMenu = vi.fn((_context: PhaseContext, onComplete: () => void) => {
+      const menu = createMenu.mock.calls.length === 1 ? initialMenu : returnedMenu;
+      if (createMenu.mock.calls.length === 1) onComplete();
+      return menu;
+    });
+    const game = Game.forTest({
+      createMenu,
+      createScavenge: (_context, onComplete) => {
+        complete = onComplete;
+        return scavenge;
+      },
+      createSurvival: (_context, _start, _onRestart, _onCheckpointChange, onReturn) => {
+        returnToMenu = onReturn;
+        return survival;
+      },
+    }, testOptions());
+    game.start();
+    complete({ savedItems: [], elapsedSeconds: 4 });
+
+    returnToMenu();
+
+    expect(survival.dispose).toHaveBeenCalledOnce();
+    expect(createMenu).toHaveBeenCalledTimes(2);
+    expect(returnedMenu.start).toHaveBeenCalledOnce();
+    expect((game as unknown as { activePhase: GamePhase }).activePhase).toBe(returnedMenu);
   });
 
   it('keeps a nested restart when survival requests it synchronously during construction', () => {

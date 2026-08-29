@@ -355,7 +355,17 @@ export class BoatInteractionProjector {
     if (this.disposed || width <= 0 || height <= 0) return this.emptyAnchors;
     this.scene.updateMatrixWorld(true);
     this.nextAnchors.length = 0;
+    this.projectSupplyAnchors(width, height);
+    this.projectCarlitosAnchor(width, height);
+    this.projectRoutineAnchors(width, height);
+    const featuredEntry = this.projectFeaturedAnchor(width, height);
+    this.projectChestAnchor(width, height);
+    this.projectFocusedAnchors(width, height);
+    this.collectAnchors(featuredEntry);
+    return this.outputAnchors;
+  }
 
+  private projectSupplyAnchors(width: number, height: number): void {
     for (const entry of this.supplyEntries) {
       const record = entry.record;
       if (
@@ -389,7 +399,9 @@ export class BoatInteractionProjector {
       updateHitArea(entry.anchor, entry.projection, 36, 36, 0.72);
       this.nextAnchors.push(entry.anchor);
     }
+  }
 
+  private projectCarlitosAnchor(width: number, height: number): void {
     if (this.roots.carlitosRoot.visible) {
       projectCachedBoatObjectBoundsInto(
         this.carlitosProjection,
@@ -403,7 +415,9 @@ export class BoatInteractionProjector {
       updateHitArea(this.carlitosAnchor, this.carlitosProjection, 54, 54);
       this.nextAnchors.push(this.carlitosAnchor);
     }
+  }
 
+  private projectRoutineAnchors(width: number, height: number): void {
     projectCachedBoatObjectBoundsInto(
       this.fishingProjection,
       this.roots.fishingRoot,
@@ -451,26 +465,24 @@ export class BoatInteractionProjector {
     );
     updateHitArea(this.pillowAnchor, this.pillowProjection);
     this.nextAnchors.push(this.pillowAnchor);
+  }
 
-    let activeFeaturedEntry: FeaturedProjectionEntry | null = null;
+  private projectFeaturedAnchor(
+    width: number,
+    height: number,
+  ): FeaturedProjectionEntry | null {
     const featuredEventId = this.roots.activeFeaturedEventId();
-    if (featuredEventId !== null) {
-      const root = this.eventHost.interactionRoot(featuredEventId);
-      const entry = root === null ? null : this.featuredEntry(featuredEventId);
-      if (root !== null && entry !== null) {
-        projectBoatObjectBoundsInto(
-          entry.projection,
-          root,
-          this.camera,
-          width,
-          height,
-        );
-        updatePoint(entry.anchor, entry.projection, entry.projection.visible);
-        updateHitArea(entry.anchor, entry.projection, 64, 64);
-        activeFeaturedEntry = entry;
-      }
-    }
+    if (featuredEventId === null) return null;
+    const root = this.eventHost.interactionRoot(featuredEventId);
+    const entry = root === null ? null : this.featuredEntry(featuredEventId);
+    if (root === null || entry === null) return null;
+    projectBoatObjectBoundsInto(entry.projection, root, this.camera, width, height);
+    updatePoint(entry.anchor, entry.projection, entry.projection.visible);
+    updateHitArea(entry.anchor, entry.projection, 64, 64);
+    return entry;
+  }
 
+  private projectChestAnchor(width: number, height: number): void {
     projectCachedBoatObjectBoundsInto(
       this.chestProjection,
       this.roots.chestRoot,
@@ -489,7 +501,9 @@ export class BoatInteractionProjector {
         && this.chestProjection.visible,
     );
     updateHitArea(this.chestAnchor, this.chestProjection, 54, 54);
+  }
 
+  private projectFocusedAnchors(width: number, height: number): void {
     for (const entry of this.focusedEntries) {
       const root = entry.target.root;
       projectCachedBoatObjectBoundsInto(
@@ -508,7 +522,9 @@ export class BoatInteractionProjector {
         entry.target.minimumHitHeight ?? 64,
       );
     }
+  }
 
+  private collectAnchors(activeFeaturedEntry: FeaturedProjectionEntry | null): void {
     if (!this.hasFocusedChestTarget) {
       this.nextAnchors.push(this.chestAnchor);
     }
@@ -522,7 +538,6 @@ export class BoatInteractionProjector {
     if (!this.sameMembership()) {
       this.outputAnchors = Object.freeze(this.nextAnchors.slice());
     }
-    return this.outputAnchors;
   }
 
   projectEventInteraction(

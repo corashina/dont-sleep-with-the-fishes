@@ -264,6 +264,13 @@ function createTableau(
   };
 }
 
+function genericReactionDirection(outcome: ActionOutcome): number {
+  const hasLoss = Object.values(outcome.deltas).some(
+    (value) => typeof value === 'number' && value < 0,
+  );
+  return outcome.accepted && !hasLoss ? 1 : -1;
+}
+
 export class EventPresentationLayer {
   readonly root = new Group();
   private readonly dangerousWaters: DangerousWatersPresentation | null;
@@ -301,6 +308,16 @@ export class EventPresentationLayer {
       ? new DangerousWatersPresentation()
       : null;
     const materials = createMaterials();
+    this.initializeTableaus(materials, onlyEventId);
+    collectMeshResources(this.root, this.ownedGeometries, this.ownedMaterials);
+    this.initializeFocusedPresentations(focusedFactories, onlyEventId);
+    if (this.dangerousWaters !== null) this.root.add(this.dangerousWaters.root);
+  }
+
+  private initializeTableaus(
+    materials: ReturnType<typeof createMaterials>,
+    onlyEventId: string | null | undefined,
+  ): void {
     const tableauFactories: readonly [string, () => EventTableau][] = [
       ['chest-attack', () => createTableau('chest-attack', mimicChestTableau(materials), [-1.45, 0.14, -2.55], [-0.7, -0.32, 0.3])],
       ['flowers', () => createTableau('flowers', flowersTableau(materials), [2.45, -0.08, -3.65], [1.0, -0.26, 0.35])],
@@ -314,7 +331,12 @@ export class EventPresentationLayer {
       this.tableaus.set(tableau.eventId, tableau);
       this.root.add(tableau.root);
     }
-    collectMeshResources(this.root, this.ownedGeometries, this.ownedMaterials);
+  }
+
+  private initializeFocusedPresentations(
+    focusedFactories: FocusedEventPresentationFactories,
+    onlyEventId: string | null | undefined,
+  ): void {
     try {
       for (const eventId of FOCUSED_EVENT_IDS) {
         if (onlyEventId !== undefined && onlyEventId !== eventId) continue;
@@ -330,7 +352,6 @@ export class EventPresentationLayer {
       this.dispose();
       throw error;
     }
-    if (this.dangerousWaters !== null) this.root.add(this.dangerousWaters.root);
   }
 
   registerFocusedFactory(
@@ -378,8 +399,9 @@ export class EventPresentationLayer {
     if (eventId === 'dangerous-waters' && this.stagedEventId === eventId) {
       return this.dangerousWaters?.itemAimTarget ?? null;
     }
-    if (this.activeFocused !== null && this.activeFocused === this.focused.get(eventId)) {
-      return this.activeFocused.itemAimTarget?.() ?? this.activeFocused.root;
+    const activeFocused = this.activeFocusedEvent(eventId);
+    if (activeFocused !== null) {
+      return activeFocused.itemAimTarget?.() ?? activeFocused.root;
     }
     if (this.stagedEventId !== eventId) return null;
     return this.tableaus.get(eventId)?.root ?? null;
@@ -456,27 +478,16 @@ export class EventPresentationLayer {
   react(eventId: string, outcome: ActionOutcome): Promise<void> {
     if (this.disposed) return Promise.resolve();
     const focused = this.focused.get(eventId) ?? null;
-    if (
-      this.activeFocused !== focused
-      || (focused === null && this.stagedEventId !== eventId)
-    ) {
-      this.stage(eventId);
-    }
+    this.ensureEventStaged(eventId, focused);
     if (this.activeFocused !== null) {
-      const result = outcome.eventResult;
-      if (result === undefined || result.eventId !== eventId) {
-        throw new Error(`Focused event ${eventId} requires a matching event result.`);
-      }
-      return this.activeFocused.react(result, outcome);
+      return this.reactFocused(eventId, outcome);
     }
     if (eventId === 'dangerous-waters') {
       return this.dangerousWaters?.react(outcome) ?? Promise.resolve();
     }
     if (this.stagedEventId === null) return Promise.resolve();
     this.held = true;
-    this.reactionDirection = outcome.accepted && !Object.values(outcome.deltas).some(
-      (value) => typeof value === 'number' && value < 0,
-    ) ? 1 : -1;
+    this.reactionDirection = genericReactionDirection(outcome);
     return this.startAnimation('react', eventId);
   }
 
@@ -534,6 +545,10 @@ export class EventPresentationLayer {
       this.activeFocused.update(time, delta);
       return;
     }
+    this.updateGenericTableau(time, delta);
+  }
+
+  private updateGenericTableau(time: number, delta: number): void {
     const staged = this.stagedEventId === null
       ? null
       : this.tableaus.get(this.stagedEventId) ?? null;
@@ -567,6 +582,31 @@ export class EventPresentationLayer {
       : 0;
     this.applyRevealPose(tableau, 1, tableau.heldReactionTilt);
     animation.resolve();
+  }
+
+  private activeFocusedEvent(eventId: string): FocusedEventPresentation | null {
+    const activeFocused = this.activeFocused;
+    return activeFocused !== null && activeFocused === this.focused.get(eventId)
+      ? activeFocused
+      : null;
+  }
+
+  private ensureEventStaged(
+    eventId: string,
+    focused: FocusedEventPresentation | null,
+  ): void {
+    if (this.activeFocused !== focused
+      || (focused === null && this.stagedEventId !== eventId)) {
+      this.stage(eventId);
+    }
+  }
+
+  private reactFocused(eventId: string, outcome: ActionOutcome): Promise<void> {
+    const result = outcome.eventResult;
+    if (result === undefined || result.eventId !== eventId) {
+      throw new Error(`Focused event ${eventId} requires a matching event result.`);
+    }
+    return this.activeFocused!.react(result, outcome);
   }
 
   dispose(): void {

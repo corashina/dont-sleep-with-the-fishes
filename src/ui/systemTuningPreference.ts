@@ -55,6 +55,14 @@ function clampFieldOfView(value: unknown, fallback: number): number {
   return Math.min(110, Math.max(40, value));
 }
 
+function finiteNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function booleanValue(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
 function parseState(value: unknown): SystemTuningState {
   if (typeof value !== 'object' || value === null) return DEFAULT_SYSTEM_TUNING_STATE;
   const stored = value as Record<string, unknown>;
@@ -65,17 +73,17 @@ function parseState(value: unknown): SystemTuningState {
     : DEFAULT_SYSTEM_TUNING_STATE.ambientOcclusionMode;
   const ambientOcclusionIntensity = clampPostProcessingSetting(
     'ambientOcclusionIntensity',
-    typeof stored.ambientOcclusionIntensity === 'number'
-      && Number.isFinite(stored.ambientOcclusionIntensity)
-      ? stored.ambientOcclusionIntensity
-      : DEFAULT_SYSTEM_TUNING_STATE.ambientOcclusionIntensity,
+    finiteNumber(
+      stored.ambientOcclusionIntensity,
+      DEFAULT_SYSTEM_TUNING_STATE.ambientOcclusionIntensity,
+    ),
   );
   const ambientOcclusionRadius = clampPostProcessingSetting(
     'ambientOcclusionRadius',
-    typeof stored.ambientOcclusionRadius === 'number'
-      && Number.isFinite(stored.ambientOcclusionRadius)
-      ? stored.ambientOcclusionRadius
-      : DEFAULT_SYSTEM_TUNING_STATE.ambientOcclusionRadius,
+    finiteNumber(
+      stored.ambientOcclusionRadius,
+      DEFAULT_SYSTEM_TUNING_STATE.ambientOcclusionRadius,
+    ),
   );
   const weatherOverride = PRESENTATION_WEATHER_IDS.includes(
     stored.weatherOverride as PresentationWeatherId,
@@ -90,20 +98,20 @@ function parseState(value: unknown): SystemTuningState {
     ambientOcclusionMode,
     ambientOcclusionIntensity,
     ambientOcclusionRadius,
-    performanceStatsVisible:
-      typeof stored.performanceStatsVisible === 'boolean'
-        ? stored.performanceStatsVisible
-        : DEFAULT_SYSTEM_TUNING_STATE.performanceStatsVisible,
+    performanceStatsVisible: booleanValue(
+      stored.performanceStatsVisible,
+      DEFAULT_SYSTEM_TUNING_STATE.performanceStatsVisible,
+    ),
     cameraFieldOfView: clampFieldOfView(
       stored.cameraFieldOfView,
       DEFAULT_SYSTEM_TUNING_STATE.cameraFieldOfView,
     ),
     weatherOverride,
     phaseOverride,
-    volumetricCloudsEnabled:
-      typeof stored.volumetricCloudsEnabled === 'boolean'
-        ? stored.volumetricCloudsEnabled
-        : DEFAULT_SYSTEM_TUNING_STATE.volumetricCloudsEnabled,
+    volumetricCloudsEnabled: booleanValue(
+      stored.volumetricCloudsEnabled,
+      DEFAULT_SYSTEM_TUNING_STATE.volumetricCloudsEnabled,
+    ),
   });
 }
 

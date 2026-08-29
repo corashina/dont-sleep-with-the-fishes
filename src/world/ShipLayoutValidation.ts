@@ -247,65 +247,75 @@ function physicalScavengeRegion(
   spec: ShipFurniturePlacementSpec,
   bounds: Rect2,
 ): ScavengeRegionId | undefined {
+  const enclosed = enclosedScavengeRegion(spec, bounds);
+  if (enclosed !== undefined) return enclosed;
+  if (spec.zoneId !== 'cargoDeck') return undefined;
+  return cargoScavengeRegion(bounds);
+}
+
+function enclosedScavengeRegion(
+  spec: ShipFurniturePlacementSpec,
+  bounds: Rect2,
+): ScavengeRegionId | undefined {
   if (spec.zoneId === 'crewCabin' && rectWithin(bounds, crewBounds)) return 'crewCabin';
   if (spec.zoneId === 'wheelhouse' && rectWithin(bounds, wheelhouseBounds)) return 'wheelhouse';
-  if (spec.zoneId === 'storageWorkroom' && rectWithin(bounds, storageBounds)) {
-    return 'storageWorkroom';
-  }
-  if (spec.zoneId !== 'cargoDeck') return undefined;
-  if (bounds.minZ >= wheelhouseBounds.maxZ - 1e-6) return 'bow';
-  if (bounds.maxZ <= storageBounds.minZ + 1e-6) return 'stern';
-  if (bounds.minZ >= storageBounds.minZ - 1e-6
-    && bounds.maxZ <= wheelhouseBounds.maxZ + 1e-6
-    && !overlaps(bounds, crewBounds)
-    && !overlaps(bounds, wheelhouseBounds)
-    && !overlaps(bounds, storageBounds)) return 'centralCargo';
+  if (spec.zoneId === 'storageWorkroom' && rectWithin(bounds, storageBounds)) return 'storageWorkroom';
   return undefined;
 }
 
-export function validateShipLayout(layout: ShipLayoutSpec): void {
-  assertUnique('zone', layout.zones.map(({ id }) => id));
-  assertUnique('door', layout.doors.map(({ id }) => id));
-  assertUnique('furniture', layout.furniture.map(({ id }) => id));
-  assertUnique('decoration', layout.decorations.map(({ id }) => id));
-  assertUnique('balcony', layout.balconies.map(({ id }) => id));
-  assertUnique('ladder', layout.ladders.map(({ id }) => id));
-  assertUnique('mast', layout.rigging.masts.map(({ id }) => id));
-  assertUnique('surface', layout.furniture.flatMap(({ surfaces }) => surfaces.map(({ id }) => id)));
-  assertUnique('lane', layout.lanes.map(({ id }) => id));
-  assertUnique('target', layout.targets.map(({ id }) => id));
+function cargoScavengeRegion(bounds: Rect2): ScavengeRegionId | undefined {
+  if (bounds.minZ >= wheelhouseBounds.maxZ - 1e-6) return 'bow';
+  if (bounds.maxZ <= storageBounds.minZ + 1e-6) return 'stern';
+  if (!withinCentralCargoBand(bounds)) return undefined;
+  if (overlaps(bounds, crewBounds)) return undefined;
+  if (overlaps(bounds, wheelhouseBounds)) return undefined;
+  if (overlaps(bounds, storageBounds)) return undefined;
+  return 'centralCargo';
+}
 
-  layout.zones.forEach((zone) => {
-    if (!validRect(zone.bounds) || zone.polygon.length < 3
-      || zone.polygon.some((point) => !finiteTuple(point))) {
-      throw new Error(`Zone ${zone.id} must have positive dimensions`);
-    }
-    if (!Number.isInteger(zone.furniturePolicy.maxFixtures)
-      || zone.furniturePolicy.maxFixtures < 0
-      || zone.furniturePolicy.clearCenter && !validRect(zone.furniturePolicy.clearCenter)) {
-      throw new Error(`Zone ${zone.id} has an invalid furniture policy`);
-    }
-  });
-  const furnitureAssetIds = new Set<ShipFurnitureAssetId>(SHIP_FURNITURE_MODEL_IDS);
-  layout.decorations.forEach((decoration) => {
-    const ownerZone = layout.zones.find(({ id }) => id === decoration.zoneId);
-    if (!ownerZone) {
-      throw new Error(`Decoration ${decoration.id} has no owning zone ${decoration.zoneId}`);
-    }
-    if (!furnitureAssetIds.has(decoration.modelId)
-      || !finiteTuple(decoration.position)
-      || !finiteTuple(decoration.rotation)
-      || decoration.scale.some((value) => !positive(value))) {
-      throw new Error(`Decoration ${decoration.id} has an invalid model or transform`);
-    }
-    const [x, y, z] = decoration.position;
-    if (x < ownerZone.bounds.minX || x > ownerZone.bounds.maxX
-      || z < ownerZone.bounds.minZ || z > ownerZone.bounds.maxZ
-      || y < FREIGHTER_DIMENSIONS.deckY
-      || y > FREIGHTER_DIMENSIONS.deckY + SHIP_ROOM_WALL_HEIGHT + 1e-6) {
-      throw new Error(`Decoration ${decoration.id} crosses owning zone ${decoration.zoneId} bounds`);
-    }
-  });
+function withinCentralCargoBand(bounds: Rect2): boolean {
+  return bounds.minZ >= storageBounds.minZ - 1e-6
+    && bounds.maxZ <= wheelhouseBounds.maxZ + 1e-6;
+}
+
+type ShipZone = ShipLayoutSpec['zones'][number];
+type ShipMast = ShipLayoutSpec['rigging']['masts'][number];
+type ShipSail = ShipMast['sails'][number];
+type FurnitureBound = {
+  readonly spec: ShipFurniturePlacementSpec;
+  readonly bounds: Rect2;
+};
+type PhysicalSlotAliases = Map<string, {
+  readonly ownerId: string;
+  readonly surface: ShipItemSurfaceSpec;
+}[]>;
+
+function rectCorners(bounds: Rect2): readonly (readonly [number, number])[] {
+  return [
+    [bounds.minX, bounds.minZ], [bounds.maxX, bounds.minZ],
+    [bounds.maxX, bounds.maxZ], [bounds.minX, bounds.maxZ],
+  ];
+}
+
+function validateRail(layout: ShipLayoutSpec): void {
+  if (!positive(layout.rail.innerFaceX)
+    || !Number.isFinite(layout.rail.starboardOpening.centerZ)) {
+    throw new Error('Rail dimensions must be positive');
+  }
+  if (!Number.isFinite(layout.rail.height)
+    || layout.rail.height < 1 || layout.rail.height > 1.1) {
+    throw new Error(`Rail height ${layout.rail.height} must be between 1.0 and 1.1`);
+  }
+  if (!positive(layout.rail.starboardOpening.width)
+    || layout.rail.starboardOpening.width < 3) {
+    throw new Error(`Rail opening width ${layout.rail.starboardOpening.width} must be at least 3.0`);
+  }
+}
+
+function requiredForwardRooms(layout: ShipLayoutSpec): {
+  readonly crewCabin: ShipZone;
+  readonly storageWorkroom: ShipZone;
+} {
   const crewCabin = layout.zones.find(({ id }) => id === 'crewCabin');
   const wheelhouse = layout.zones.find(({ id }) => id === 'wheelhouse');
   const storageWorkroom = layout.zones.find(({ id }) => id === 'storageWorkroom');
@@ -313,6 +323,10 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
     || Math.abs(wheelhouse.bounds.minZ - crewCabin.bounds.maxZ - 3.5) > 1e-9) {
     throw new Error('Forward-room gap between crewCabin and wheelhouse must be exactly 3.5');
   }
+  return { crewCabin, storageWorkroom };
+}
+
+function validateBalconyStructure(layout: ShipLayoutSpec): void {
   if (layout.balconies.length !== 1 || layout.ladders.length !== 1) {
     throw new Error('Layout must define exactly one crew balcony and ladder');
   }
@@ -361,6 +375,271 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
     || balconyLadderIds.size !== layout.ladders.length) {
     throw new Error('Each balcony must reference one unique ladder');
   }
+}
+
+function validateCargoHatch(layout: ShipLayoutSpec): {
+  readonly cargoZone: ShipZone;
+  readonly hatchBounds: Rect2;
+} {
+  const cargoZone = layout.zones.find(({ id }) => id === 'cargoDeck');
+  if (!cargoZone) throw new Error('Layout must define the cargoDeck zone');
+  const hatch = layout.deckHatch;
+  if (hatch.id !== 'deck-hatch' || !finiteTuple(hatch.position)
+    || !Number.isFinite(hatch.rotationY) || hatch.size.some((value) => !positive(value))
+    || hatch.colliderSize.some((value) => !positive(value))) {
+    throw new Error('Deck hatch must have finite transforms and positive dimensions');
+  }
+  const hatchBounds = deckHatchRect(hatch);
+  if (!validRect(hatchBounds)
+    || rectCorners(hatchBounds).some((corner) => !pointInPolygon(corner, cargoZone.polygon))) {
+    throw new Error('Deck hatch collider crosses the cargoDeck hull polygon');
+  }
+  return { cargoZone, hatchBounds };
+}
+
+function validateMastSail(spec: ShipMast, sail: ShipSail): void {
+  const requiredKind = sail.id === 'mainsail' ? 'boom' : 'stay';
+  if (sail.kind !== requiredKind) {
+    throw new Error(`Mast ${spec.id} sail ${sail.id} must use ${requiredKind} rig kind`);
+  }
+  if (!finiteTuple([sail.topY, sail.footY, sail.clewZ, sail.billow, sail.rotationY])
+    || typeof sail.furled !== 'boolean'
+    || sail.topY <= sail.footY || sail.clewZ === 0 || !positive(sail.billow)) {
+    throw new Error(`Mast ${spec.id} sail ${sail.id} has invalid dimensions`);
+  }
+  if (sail.footY < SHIP_SAIL_CLOTH_MIN_Y) {
+    throw new Error(`Mast ${spec.id} sail ${sail.id} violates cloth clearance`);
+  }
+  if (sail.topY > spec.height - SHIP_SAIL_TOP_OFFSET) {
+    throw new Error(`Mast ${spec.id} sail ${sail.id} exceeds mast height bounds`);
+  }
+}
+
+function validateCrowsNest(layout: ShipLayoutSpec): void {
+  const crowsNest = layout.rigging.crowsNest;
+  const crowsNestMast = layout.rigging.masts.find(({ id }) => id === crowsNest.mastId);
+  if (!crowsNestMast) {
+    throw new Error(`Crow's nest ${crowsNest.id} references missing mast ${crowsNest.mastId}`);
+  }
+  const dimensions = [
+    crowsNest.floorOffsetY,
+    crowsNest.outerWidth,
+    crowsNest.openingSize,
+    crowsNest.guardHeight,
+    crowsNest.ladder.width,
+    crowsNest.ladder.mastOffset,
+    crowsNest.ladder.rungSpacing,
+  ];
+  if (!dimensions.every(positive)) {
+    throw new Error(`Crow's nest ${crowsNest.id} must have positive finite dimensions`);
+  }
+  if (crowsNest.openingSize < 0.9) {
+    throw new Error(`Crow's nest ${crowsNest.id} opening must be at least 0.9 metres`);
+  }
+  if (crowsNest.floorOffsetY > crowsNestMast.height) {
+    throw new Error(`Crow's nest ${crowsNest.id} floor exceeds mast height`);
+  }
+}
+
+function validateFurnitureModelAndTransform(spec: ShipFurniturePlacementSpec): void {
+  if (![0, PI_OVER_TWO, PI].includes(spec.rotationY)) {
+    throw new Error(`Furniture ${spec.id} has unsupported rotation ${spec.rotationY}`);
+  }
+  if (!finiteTuple(spec.position) || spec.colliderSize.some((value) => !positive(value))
+    || spec.scale.some((value) => !positive(value))) {
+    throw new Error(`Furniture ${spec.id} must have positive dimensions`);
+  }
+}
+
+function furnitureOwnerZone(
+  layout: ShipLayoutSpec,
+  spec: ShipFurniturePlacementSpec,
+): ShipZone {
+  const ownerZone = layout.zones.find(({ id }) => id === spec.zoneId);
+  if (!ownerZone) {
+    throw new Error(`Furniture ${spec.id} has no owning zone ${spec.zoneId}`);
+  }
+  if (!ownerZone.furniturePolicy.allowedModelIds.includes(spec.modelId)) {
+    throw new Error(
+      `Furniture ${spec.id} model ${spec.modelId} is in the wrong room ${spec.zoneId}`,
+    );
+  }
+  return ownerZone;
+}
+
+function validateFurnitureBounds(
+  spec: ShipFurniturePlacementSpec,
+  ownerZone: ShipZone,
+  bounds: Rect2,
+): void {
+  if (bounds.minX < ownerZone.bounds.minX - 1e-6
+    || bounds.maxX > ownerZone.bounds.maxX + 1e-6
+    || bounds.minZ < ownerZone.bounds.minZ - 1e-6
+    || bounds.maxZ > ownerZone.bounds.maxZ + 1e-6) {
+    throw new Error(`Furniture ${spec.id} crosses owning zone ${spec.zoneId} bounds`);
+  }
+  if (spec.zoneId === 'cargoDeck'
+    && rectCorners(bounds).some((corner) => !pointInPolygon(corner, ownerZone.polygon))) {
+    throw new Error(`Furniture ${spec.id} crosses owning zone ${spec.zoneId} hull polygon`);
+  }
+}
+
+function validateSurfaceRegion(
+  spec: ShipFurniturePlacementSpec,
+  surface: ShipItemSurfaceSpec,
+  physicalRegion: ScavengeRegionId | undefined,
+): void {
+  if (!SCAVENGE_REGION_IDS.has(surface.regionId)) {
+    throw new Error(`Surface ${surface.id} has an unknown scavenge region`);
+  }
+  if (!physicalRegion) {
+    throw new Error(`Surface ${surface.id} has no approved physical owner placement`);
+  }
+  if (surface.regionId !== physicalRegion) {
+    throw new Error(
+      `Surface ${surface.id} physical owner ${spec.id} belongs to ${physicalRegion}, not ${surface.regionId}`,
+    );
+  }
+  if (physicalRegion !== 'bow' && physicalRegion !== 'stern') return;
+  if (spec.modelId !== 'cargoCrate' && spec.modelId !== 'barrel') {
+    throw new Error(
+      `Furniture ${spec.id} in ${physicalRegion} must be a raised cargoCrate or barrel owner`,
+    );
+  }
+  if (Math.abs(surface.localPosition[1] - spec.colliderSize[1]) > 1e-6) {
+    throw new Error(`Surface ${surface.id} in ${physicalRegion} must use its owner's raised top`);
+  }
+}
+
+function validateSurfaceShape(
+  spec: ShipFurniturePlacementSpec,
+  surface: ShipItemSurfaceSpec,
+): void {
+  const dimensions = [
+    surface.footprint.width,
+    surface.footprint.depth,
+    surface.clearanceHeight,
+  ];
+  if (!dimensions.every(positive)
+    || surface.standingPoints.length === 0 || !finiteTuple(surface.localPosition)
+    || !finiteTuple(surface.localRotation)
+    || surface.standingPoints.some((point) => !finiteTuple(point))) {
+    throw new Error(`Surface ${surface.id} owned by ${spec.id} is incomplete`);
+  }
+  if (!surface.id.startsWith(`${spec.id}:`)) {
+    throw new Error(`Surface ${surface.id} does not belong to furniture ${spec.id}`);
+  }
+  if (!surface.physicalSlotId.startsWith(`${spec.id}:`)) {
+    throw new Error(`Physical slot ${surface.physicalSlotId} does not belong to furniture ${spec.id}`);
+  }
+}
+
+function validateSurfaceBounds(
+  spec: ShipFurniturePlacementSpec,
+  surface: ShipItemSurfaceSpec,
+): void {
+  if (Math.abs(surface.localPosition[0]) + surface.footprint.width / 2
+      > spec.colliderSize[0] / 2 + 1e-6
+    || Math.abs(surface.localPosition[2]) + surface.footprint.depth / 2
+      > spec.colliderSize[2] / 2 + 1e-6
+    || surface.localPosition[1] <= 0
+    || surface.localPosition[1] > spec.colliderSize[1] + 1e-6) {
+    throw new Error(`Surface ${surface.id} exceeds furniture ${spec.id} top bounds`);
+  }
+}
+
+function validateFurnitureSurface(
+  spec: ShipFurniturePlacementSpec,
+  surface: ShipItemSurfaceSpec,
+  physicalRegion: ScavengeRegionId | undefined,
+  physicalSlots: PhysicalSlotAliases,
+): void {
+  validateSurfaceRegion(spec, surface, physicalRegion);
+  validateSurfaceShape(spec, surface);
+  validateSurfaceBounds(spec, surface);
+  const aliases = physicalSlots.get(surface.physicalSlotId) ?? [];
+  aliases.push({ ownerId: spec.id, surface });
+  physicalSlots.set(surface.physicalSlotId, aliases);
+}
+
+function validateFurniturePlacement(
+  layout: ShipLayoutSpec,
+  spec: ShipFurniturePlacementSpec,
+  physicalSlots: PhysicalSlotAliases,
+): FurnitureBound {
+  validateFurnitureModelAndTransform(spec);
+  const ownerZone = furnitureOwnerZone(layout, spec);
+  const bounds = furnitureRect(spec);
+  validateFurnitureBounds(spec, ownerZone, bounds);
+  const physicalRegion = physicalScavengeRegion(spec, bounds);
+  spec.surfaces.forEach((surface) => {
+    validateFurnitureSurface(spec, surface, physicalRegion, physicalSlots);
+  });
+  const exactModel = EXACT_FURNITURE_MODEL_BY_ID[spec.id];
+  if (exactModel && spec.modelId !== exactModel) {
+    throw new Error(
+      `Furniture ${spec.id} model ${spec.modelId} violates exact role ${exactModel}`,
+    );
+  }
+  return { spec, bounds };
+}
+
+function validateRailOpening(layout: ShipLayoutSpec): void {
+  const opening = layout.rail.starboardOpening;
+  const openingMinZ = opening.centerZ - opening.width / 2;
+  const openingMaxZ = opening.centerZ + opening.width / 2;
+  const evacuation = layout.targets.find(({ kind }) => kind === 'evacuation');
+  if (openingMinZ > lifeboatBounds.minZ || openingMaxZ < lifeboatBounds.maxZ || !evacuation
+    || evacuation.position[1] < openingMinZ || evacuation.position[1] > openingMaxZ) {
+    throw new Error('Starboard rail opening must cover the lifeboat station and evacuation target');
+  }
+}
+
+export function validateShipLayout(layout: ShipLayoutSpec): void {
+  assertUnique('zone', layout.zones.map(({ id }) => id));
+  assertUnique('door', layout.doors.map(({ id }) => id));
+  assertUnique('furniture', layout.furniture.map(({ id }) => id));
+  assertUnique('decoration', layout.decorations.map(({ id }) => id));
+  assertUnique('balcony', layout.balconies.map(({ id }) => id));
+  assertUnique('ladder', layout.ladders.map(({ id }) => id));
+  assertUnique('mast', layout.rigging.masts.map(({ id }) => id));
+  assertUnique('surface', layout.furniture.flatMap(({ surfaces }) => surfaces.map(({ id }) => id)));
+  assertUnique('lane', layout.lanes.map(({ id }) => id));
+  assertUnique('target', layout.targets.map(({ id }) => id));
+
+  layout.zones.forEach((zone) => {
+    if (!validRect(zone.bounds) || zone.polygon.length < 3
+      || zone.polygon.some((point) => !finiteTuple(point))) {
+      throw new Error(`Zone ${zone.id} must have positive dimensions`);
+    }
+    if (!Number.isInteger(zone.furniturePolicy.maxFixtures)
+      || zone.furniturePolicy.maxFixtures < 0
+      || zone.furniturePolicy.clearCenter && !validRect(zone.furniturePolicy.clearCenter)) {
+      throw new Error(`Zone ${zone.id} has an invalid furniture policy`);
+    }
+  });
+  const furnitureAssetIds = new Set<ShipFurnitureAssetId>(SHIP_FURNITURE_MODEL_IDS);
+  layout.decorations.forEach((decoration) => {
+    const ownerZone = layout.zones.find(({ id }) => id === decoration.zoneId);
+    if (!ownerZone) {
+      throw new Error(`Decoration ${decoration.id} has no owning zone ${decoration.zoneId}`);
+    }
+    if (!furnitureAssetIds.has(decoration.modelId)
+      || !finiteTuple(decoration.position)
+      || !finiteTuple(decoration.rotation)
+      || decoration.scale.some((value) => !positive(value))) {
+      throw new Error(`Decoration ${decoration.id} has an invalid model or transform`);
+    }
+    const [x, y, z] = decoration.position;
+    if (x < ownerZone.bounds.minX || x > ownerZone.bounds.maxX
+      || z < ownerZone.bounds.minZ || z > ownerZone.bounds.maxZ
+      || y < FREIGHTER_DIMENSIONS.deckY
+      || y > FREIGHTER_DIMENSIONS.deckY + SHIP_ROOM_WALL_HEIGHT + 1e-6) {
+      throw new Error(`Decoration ${decoration.id} crosses owning zone ${decoration.zoneId} bounds`);
+    }
+  });
+  const { crewCabin, storageWorkroom } = requiredForwardRooms(layout);
+  validateBalconyStructure(layout);
   layout.doors.forEach((door) => {
     if (!finiteTuple(door.center) || !validRect(door.approach)) {
       throw new Error(`Door ${door.id} must use finite rectangle coordinates`);
@@ -382,18 +661,7 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
       throw new Error(`Lane ${lane.id} measured ${measured} is below ${lane.className} clearance ${required}`);
     }
   });
-  if (!positive(layout.rail.innerFaceX)
-    || !Number.isFinite(layout.rail.starboardOpening.centerZ)) {
-    throw new Error('Rail dimensions must be positive');
-  }
-  if (!Number.isFinite(layout.rail.height)
-    || layout.rail.height < 1 || layout.rail.height > 1.1) {
-    throw new Error(`Rail height ${layout.rail.height} must be between 1.0 and 1.1`);
-  }
-  if (!positive(layout.rail.starboardOpening.width)
-    || layout.rail.starboardOpening.width < 3) {
-    throw new Error(`Rail opening width ${layout.rail.starboardOpening.width} must be at least 3.0`);
-  }
+  validateRail(layout);
   if (!validRect(layout.evacuationRect)) {
     throw new Error('Evacuation rectangle must use finite coordinates');
   }
@@ -401,23 +669,8 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
     if (!finiteTuple(target.position)) throw new Error(`Target ${target.id} must use finite coordinates`);
   });
 
-  const cargoZone = layout.zones.find(({ id }) => id === 'cargoDeck');
-  if (!cargoZone) throw new Error('Layout must define the cargoDeck zone');
-  const rectCorners = (bounds: Rect2): readonly (readonly [number, number])[] => [
-    [bounds.minX, bounds.minZ], [bounds.maxX, bounds.minZ],
-    [bounds.maxX, bounds.maxZ], [bounds.minX, bounds.maxZ],
-  ];
   const hatch = layout.deckHatch;
-  if (hatch.id !== 'deck-hatch' || !finiteTuple(hatch.position)
-    || !Number.isFinite(hatch.rotationY) || hatch.size.some((value) => !positive(value))
-    || hatch.colliderSize.some((value) => !positive(value))) {
-    throw new Error('Deck hatch must have finite transforms and positive dimensions');
-  }
-  const hatchBounds = deckHatchRect(hatch);
-  if (!validRect(hatchBounds)
-    || rectCorners(hatchBounds).some((corner) => !pointInPolygon(corner, cargoZone.polygon))) {
-    throw new Error('Deck hatch collider crosses the cargoDeck hull polygon');
-  }
+  const { cargoZone, hatchBounds } = validateCargoHatch(layout);
   if (layout.rigging.masts.length !== 1 || layout.rigging.masts[0]?.id !== 'mainmast') {
     throw new Error('Layout must define exactly one mainmast');
   }
@@ -459,25 +712,7 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
       throw new Error(`Mast ${spec.id} must define mainsail and staysail`);
     }
     assertUnique(`sail on mast ${spec.id}`, spec.sails.map(({ id }) => id));
-    spec.sails.forEach((sail) => {
-      const requiredKind = sail.id === 'mainsail' ? 'boom' : 'stay';
-      if (sail.kind !== requiredKind) {
-        throw new Error(`Mast ${spec.id} sail ${sail.id} must use ${requiredKind} rig kind`);
-      }
-      if (!Number.isFinite(sail.topY) || !Number.isFinite(sail.footY)
-        || !Number.isFinite(sail.clewZ) || !Number.isFinite(sail.billow)
-        || !Number.isFinite(sail.rotationY)
-        || typeof sail.furled !== 'boolean'
-        || sail.topY <= sail.footY || sail.clewZ === 0 || !positive(sail.billow)) {
-        throw new Error(`Mast ${spec.id} sail ${sail.id} has invalid dimensions`);
-      }
-      if (sail.footY < SHIP_SAIL_CLOTH_MIN_Y) {
-        throw new Error(`Mast ${spec.id} sail ${sail.id} violates cloth clearance`);
-      }
-      if (sail.topY > spec.height - SHIP_SAIL_TOP_OFFSET) {
-        throw new Error(`Mast ${spec.id} sail ${sail.id} exceeds mast height bounds`);
-      }
-    });
+    spec.sails.forEach((sail) => validateMastSail(spec, sail));
     const bounds = mastRect(spec);
     if (rectCorners(bounds).some((corner) => !pointInPolygon(corner, cargoZone.polygon))) {
       throw new Error(`Mast ${spec.id} base crosses the cargoDeck hull polygon`);
@@ -490,118 +725,11 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
     }
     return { id: spec.id, bounds };
   });
-  const crowsNest = layout.rigging.crowsNest;
-  const crowsNestMast = layout.rigging.masts.find(({ id }) => id === crowsNest.mastId);
-  if (!crowsNestMast) {
-    throw new Error(`Crow's nest ${crowsNest.id} references missing mast ${crowsNest.mastId}`);
-  }
-  if (!positive(crowsNest.floorOffsetY) || !positive(crowsNest.outerWidth)
-    || !positive(crowsNest.openingSize) || !positive(crowsNest.guardHeight)
-    || !positive(crowsNest.ladder.width) || !positive(crowsNest.ladder.mastOffset)
-    || !positive(crowsNest.ladder.rungSpacing)) {
-    throw new Error(`Crow's nest ${crowsNest.id} must have positive finite dimensions`);
-  }
-  if (crowsNest.openingSize < 0.9) {
-    throw new Error(`Crow's nest ${crowsNest.id} opening must be at least 0.9 metres`);
-  }
-  if (crowsNest.floorOffsetY > crowsNestMast.height) {
-    throw new Error(`Crow's nest ${crowsNest.id} floor exceeds mast height`);
-  }
+  validateCrowsNest(layout);
 
-  const physicalSlots = new Map<string, {
-    readonly ownerId: string;
-    readonly surface: ShipItemSurfaceSpec;
-  }[]>();
-  const furnitureBounds = layout.furniture.map((spec) => {
-    if (![0, PI_OVER_TWO, PI].includes(spec.rotationY)) {
-      throw new Error(`Furniture ${spec.id} has unsupported rotation ${spec.rotationY}`);
-    }
-    if (!finiteTuple(spec.position) || spec.colliderSize.some((value) => !positive(value))
-      || spec.scale.some((value) => !positive(value))) {
-      throw new Error(`Furniture ${spec.id} must have positive dimensions`);
-    }
-    const ownerZone = layout.zones.find(({ id }) => id === spec.zoneId);
-    if (!ownerZone) {
-      throw new Error(`Furniture ${spec.id} has no owning zone ${spec.zoneId}`);
-    }
-    if (!ownerZone.furniturePolicy.allowedModelIds.includes(spec.modelId)) {
-      throw new Error(
-        `Furniture ${spec.id} model ${spec.modelId} is in the wrong room ${spec.zoneId}`,
-      );
-    }
-    const bounds = furnitureRect(spec);
-    if (bounds.minX < ownerZone.bounds.minX - 1e-6
-      || bounds.maxX > ownerZone.bounds.maxX + 1e-6
-      || bounds.minZ < ownerZone.bounds.minZ - 1e-6
-      || bounds.maxZ > ownerZone.bounds.maxZ + 1e-6) {
-      throw new Error(`Furniture ${spec.id} crosses owning zone ${spec.zoneId} bounds`);
-    }
-    if (spec.zoneId === 'cargoDeck') {
-      const corners: readonly (readonly [number, number])[] = [
-        [bounds.minX, bounds.minZ], [bounds.maxX, bounds.minZ],
-        [bounds.maxX, bounds.maxZ], [bounds.minX, bounds.maxZ],
-      ];
-      if (corners.some((corner) => !pointInPolygon(corner, ownerZone.polygon))) {
-        throw new Error(`Furniture ${spec.id} crosses owning zone ${spec.zoneId} hull polygon`);
-      }
-    }
-    const physicalRegion = physicalScavengeRegion(spec, bounds);
-    spec.surfaces.forEach((surface) => {
-      if (!SCAVENGE_REGION_IDS.has(surface.regionId)) {
-        throw new Error(`Surface ${surface.id} has an unknown scavenge region`);
-      }
-      if (!physicalRegion) {
-        throw new Error(`Surface ${surface.id} has no approved physical owner placement`);
-      }
-      if (surface.regionId !== physicalRegion) {
-        throw new Error(
-          `Surface ${surface.id} physical owner ${spec.id} belongs to ${physicalRegion}, not ${surface.regionId}`,
-        );
-      }
-      if (physicalRegion === 'bow' || physicalRegion === 'stern') {
-        if (spec.modelId !== 'cargoCrate'
-          && spec.modelId !== 'barrel') {
-          throw new Error(
-            `Furniture ${spec.id} in ${physicalRegion} must be a raised cargoCrate or barrel owner`,
-          );
-        }
-        if (Math.abs(surface.localPosition[1] - spec.colliderSize[1]) > 1e-6) {
-          throw new Error(`Surface ${surface.id} in ${physicalRegion} must use its owner's raised top`);
-        }
-      }
-      if (!positive(surface.footprint.width)
-        || !positive(surface.footprint.depth) || !positive(surface.clearanceHeight)
-        || surface.standingPoints.length === 0 || !finiteTuple(surface.localPosition)
-        || !finiteTuple(surface.localRotation)
-        || surface.standingPoints.some((point) => !finiteTuple(point))) {
-        throw new Error(`Surface ${surface.id} owned by ${spec.id} is incomplete`);
-      }
-      if (!surface.id.startsWith(`${spec.id}:`)) {
-        throw new Error(`Surface ${surface.id} does not belong to furniture ${spec.id}`);
-      }
-      if (!surface.physicalSlotId.startsWith(`${spec.id}:`)) {
-        throw new Error(`Physical slot ${surface.physicalSlotId} does not belong to furniture ${spec.id}`);
-      }
-      if (Math.abs(surface.localPosition[0]) + surface.footprint.width / 2
-          > spec.colliderSize[0] / 2 + 1e-6
-        || Math.abs(surface.localPosition[2]) + surface.footprint.depth / 2
-          > spec.colliderSize[2] / 2 + 1e-6
-        || surface.localPosition[1] <= 0
-        || surface.localPosition[1] > spec.colliderSize[1] + 1e-6) {
-        throw new Error(`Surface ${surface.id} exceeds furniture ${spec.id} top bounds`);
-      }
-      const aliases = physicalSlots.get(surface.physicalSlotId) ?? [];
-      aliases.push({ ownerId: spec.id, surface });
-      physicalSlots.set(surface.physicalSlotId, aliases);
-    });
-    const exactModel = EXACT_FURNITURE_MODEL_BY_ID[spec.id];
-    if (exactModel && spec.modelId !== exactModel) {
-      throw new Error(
-        `Furniture ${spec.id} model ${spec.modelId} violates exact role ${exactModel}`,
-      );
-    }
-    return { spec, bounds };
-  });
+  const physicalSlots: PhysicalSlotAliases = new Map();
+  const furnitureBounds = layout.furniture.map((spec) =>
+    validateFurniturePlacement(layout, spec, physicalSlots));
   physicalSlots.forEach((aliases, physicalSlotId) => {
     if (aliases.length !== 1) {
       throw new Error(`Physical slot ${physicalSlotId} has invalid ownership aliases`);
@@ -738,14 +866,7 @@ export function validateShipLayout(layout: ShipLayoutSpec): void {
   ];
   assertUnique('navigation target', currentTargets.map(({ id }) => id));
 
-  const opening = layout.rail.starboardOpening;
-  const openingMinZ = opening.centerZ - opening.width / 2;
-  const openingMaxZ = opening.centerZ + opening.width / 2;
-  const evacuation = layout.targets.find(({ kind }) => kind === 'evacuation');
-  if (openingMinZ > lifeboatBounds.minZ || openingMaxZ < lifeboatBounds.maxZ || !evacuation
-    || evacuation.position[1] < openingMinZ || evacuation.position[1] > openingMaxZ) {
-    throw new Error('Starboard rail opening must cover the lifeboat station and evacuation target');
-  }
+  validateRailOpening(layout);
 
   const analysis = analyzeShipNavigation(layout);
   const reachableStandingPoints = new Set(analysis.reachableSurfaceStandingPointIds);

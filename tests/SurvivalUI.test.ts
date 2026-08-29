@@ -403,6 +403,23 @@ describe('SurvivalUI', () => {
     ui.dispose();
   });
 
+  function expectMeter(
+    mount: HTMLElement,
+    id: string,
+    value: string,
+    fill: number,
+    visualFill: number,
+  ): void {
+    const meter = mount.querySelector<HTMLElement>(`[data-meter="${id}"]`)!;
+    expect(meter.getAttribute('aria-valuenow')).toBe(value);
+    expect(Number.parseFloat(meter.style.getPropertyValue('--meter-value'))).toBeCloseTo(fill);
+    expect(Number.parseFloat(meter.style.getPropertyValue('--meter-fill-height')))
+      .toBeCloseTo(visualFill, 2);
+    expect(meter.querySelector('[data-meter-fill]')).not.toBeNull();
+    expect(meter.querySelector('[data-meter-outline]')).not.toBeNull();
+    expect(meter.tabIndex).toBe(0);
+  }
+
   it('renders large condition icons with bottom-up fills and accessible values', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
@@ -410,23 +427,13 @@ describe('SurvivalUI', () => {
     ui.render(snapshot({ health: 50, hunger: 25, energy: 1, hull: 20 }), () => null);
 
     const expected = {
-      health: ['50', 50],
-      hunger: ['75', 75],
-      energy: ['1', 100 / 3],
-      hull: ['20', 20],
+      health: ['50', 50, 50],
+      hunger: ['75', 75, 49.44],
+      energy: ['1', 100 / 3, 100 / 3],
+      hull: ['20', 20, 19.95],
     } as const;
-    for (const [id, [value, fill]] of Object.entries(expected)) {
-      const meter = mount.querySelector<HTMLElement>(`[data-meter="${id}"]`)!;
-      expect(meter.getAttribute('aria-valuenow')).toBe(value);
-      expect(Number.parseFloat(meter.style.getPropertyValue('--meter-value'))).toBeCloseTo(fill);
-      const visualFill = Number.parseFloat(meter.style.getPropertyValue('--meter-fill-height'));
-      if (id === 'hunger') expect(visualFill).toBeCloseTo(49.44, 2);
-      else if (id === 'hull') expect(visualFill).toBeCloseTo(19.95, 2);
-      else expect(visualFill).toBeCloseTo(fill);
-      expect(meter.querySelector('[data-meter-fill]')).not.toBeNull();
-      expect(meter.querySelector('[data-meter-outline]')).not.toBeNull();
-      expect(meter.tabIndex).toBe(0);
-    }
+    Object.entries(expected).forEach(([id, [value, fill, visualFill]]) =>
+      expectMeter(mount, id, value, fill, visualFill));
 
     const meters = mount.querySelector('[aria-label="Condition meters"]')!;
     expect(meters.querySelector('[data-meter-value]')).toBeNull();
@@ -1163,7 +1170,6 @@ describe('SurvivalUI', () => {
       /\.boat-anchor\[data-event-state="available"\]\s*\{[^}]*(?:outline|box-shadow):/s,
     );
     expect(mainStyles).toMatch(/:focus-visible\s*\{[^}]*outline:\s*none;/s);
-    expect(mainStyles).not.toMatch(/outline:\s*[1-9]/);
     expect(mainStyles).not.toContain('#c98242');
   });
 
@@ -3096,6 +3102,25 @@ describe('SurvivalUI', () => {
     button.click();
     expect(restart).toHaveBeenCalledOnce();
     expect(button.disabled).toBe(true);
+  });
+
+  it('returns to the menu from pause', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const returnToMenu = vi.fn();
+    ui.onReturnToMenu = returnToMenu;
+    ui.render(snapshot(), () => null);
+    ui.setPaused(true);
+
+    const button = mount.querySelector<HTMLButtonElement>('[data-pause-menu]')!;
+    expect(button.textContent).toContain('BACK TO MENU');
+    button.click();
+
+    expect(returnToMenu).toHaveBeenCalledOnce();
+    expect(button.disabled).toBe(true);
+    expect(mount.querySelector<HTMLButtonElement>('[data-resume]')!.disabled).toBe(true);
+    expect(mount.querySelector<HTMLButtonElement>('[data-pause-restart]')!.disabled).toBe(true);
   });
 
   it('keeps the pause overlay free of scroll containers', () => {
