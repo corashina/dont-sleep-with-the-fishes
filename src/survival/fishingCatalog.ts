@@ -97,42 +97,108 @@ function isFishingItemCondition(value: unknown): value is FishingItemCondition {
   return value === 'usable' || value === 'broken';
 }
 
-function validateCatchContract(catchDefinition: FishingCatchDefinition): void {
-  const { id, kind, reward, size, presentation } = catchDefinition;
-  if (kind === 'fish') {
-    if (reward.kind !== 'food') throw new Error(`${id} fish must award food`);
-    if (reward.amount !== 1 && reward.amount !== 2) {
-      throw new Error(`${id} fish food reward must be one or two`);
-    }
-    if (size !== 'small' && size !== 'large') {
-      throw new Error(`${id} fish size must be small or large`);
-    }
-    if (presentation.kind !== 'fishing') {
-      throw new Error(`${id} fish must use a fishing presentation`);
-    }
-  } else if (kind === 'junk') {
-    if (reward.kind !== 'none') throw new Error(`${id} junk reward must be none`);
-    if (size !== 'junk') throw new Error(`${id} junk size must be junk`);
-    if (presentation.kind !== 'fishing') {
-      throw new Error(`${id} junk must use a fishing presentation`);
-    }
-  } else if (kind === 'utility') {
-    if (reward.kind !== 'bait' && reward.kind !== 'item') {
-      throw new Error(`${id} utility reward must be bait or item`);
-    }
-    if (reward.kind === 'bait' && reward.amount !== 1) {
-      throw new Error(`${id} utility bait reward must be one`);
-    }
-    if (reward.kind === 'item' && reward.unique !== true) {
-      throw new Error(`${id} item reward unique must be true`);
-    }
-    if (size !== 'utility') throw new Error(`${id} utility size must be utility`);
-    if (presentation.kind !== 'item') {
-      throw new Error(`${id} utility must use an item presentation`);
-    }
-  } else {
-    throw new Error(`Invalid fishing catch kind: ${id}`);
+function validateFishContract(catchDefinition: FishingCatchDefinition): void {
+  const { id, reward, size, presentation } = catchDefinition;
+  if (reward.kind !== 'food') throw new Error(`${id} fish must award food`);
+  if (reward.amount !== 1 && reward.amount !== 2) {
+    throw new Error(`${id} fish food reward must be one or two`);
   }
+  if (size !== 'small' && size !== 'large') {
+    throw new Error(`${id} fish size must be small or large`);
+  }
+  if (presentation.kind !== 'fishing') {
+    throw new Error(`${id} fish must use a fishing presentation`);
+  }
+}
+
+function validateJunkContract(catchDefinition: FishingCatchDefinition): void {
+  const { id, reward, size, presentation } = catchDefinition;
+  if (reward.kind !== 'none') throw new Error(`${id} junk reward must be none`);
+  if (size !== 'junk') throw new Error(`${id} junk size must be junk`);
+  if (presentation.kind !== 'fishing') {
+    throw new Error(`${id} junk must use a fishing presentation`);
+  }
+}
+
+function validateUtilityContract(catchDefinition: FishingCatchDefinition): void {
+  const { id, reward, size, presentation } = catchDefinition;
+  if (reward.kind !== 'bait' && reward.kind !== 'item') {
+    throw new Error(`${id} utility reward must be bait or item`);
+  }
+  if (reward.kind === 'bait' && reward.amount !== 1) {
+    throw new Error(`${id} utility bait reward must be one`);
+  }
+  if (reward.kind === 'item' && reward.unique !== true) {
+    throw new Error(`${id} item reward unique must be true`);
+  }
+  if (size !== 'utility') throw new Error(`${id} utility size must be utility`);
+  if (presentation.kind !== 'item') {
+    throw new Error(`${id} utility must use an item presentation`);
+  }
+}
+
+function validateCatchContract(catchDefinition: FishingCatchDefinition): void {
+  if (catchDefinition.kind === 'fish') return validateFishContract(catchDefinition);
+  if (catchDefinition.kind === 'junk') return validateJunkContract(catchDefinition);
+  if (catchDefinition.kind === 'utility') return validateUtilityContract(catchDefinition);
+  throw new Error(`Invalid fishing catch kind: ${catchDefinition.id}`);
+}
+
+function validatePresentation(catchDefinition: FishingCatchDefinition): void {
+  const { id, presentation, reward } = catchDefinition;
+  if (presentation.kind === 'fishing') {
+    const { length, height, width } = presentation.appearance;
+    if (![length, height, width].every((dimension) => Number.isFinite(dimension) && dimension > 0)) {
+      throw new Error(`Invalid fishing catch dimensions: ${id}`);
+    }
+    return;
+  }
+  if (!isKnownItemId(presentation.itemId)) {
+    throw new Error(`${id} references unknown presentation item ${String(presentation.itemId)}`);
+  }
+  if (!isFishingItemCondition(presentation.condition)) {
+    throw new Error(`${id} has an invalid presentation item condition`);
+  }
+  if (reward.kind === 'bait'
+    && (presentation.itemId !== 'baitTin' || presentation.condition !== 'usable')) {
+    throw new Error(`${id} bait presentation must be usable baitTin`);
+  }
+}
+
+function validateItemReward(catchDefinition: FishingCatchDefinition): void {
+  const { id, reward, presentation } = catchDefinition;
+  if (reward.kind !== 'item') return;
+  const { itemId, condition } = reward;
+  if (!isKnownItemId(itemId)) {
+    throw new Error(`${id} references unknown reward item ${String(itemId)}`);
+  }
+  if (!isFishingItemCondition(condition)) {
+    throw new Error(`${id} has an invalid reward item condition`);
+  }
+  if (presentation.kind !== 'item') {
+    throw new Error(`${id} item reward requires an item presentation`);
+  }
+  if (itemId !== presentation.itemId) {
+    throw new Error(`${id} reward and presentation item IDs must match`);
+  }
+  if (condition !== presentation.condition) {
+    throw new Error(`${id} reward and presentation conditions must match`);
+  }
+  if (condition === 'broken' && !ITEM_DEFINITIONS[itemId].breakable) {
+    throw new Error(`${itemId} fishing reward must reference a breakable item`);
+  }
+}
+
+function validateCatalogRow(catchDefinition: FishingCatchDefinition): void {
+  if (!Number.isFinite(catchDefinition.baseWeight) || catchDefinition.baseWeight <= 0) {
+    throw new Error(`Invalid fishing catch weight: ${catchDefinition.id}`);
+  }
+  if (!Number.isInteger(catchDefinition.minimumDay) || catchDefinition.minimumDay < 0) {
+    throw new Error(`Invalid fishing minimum day: ${catchDefinition.id}`);
+  }
+  validateCatchContract(catchDefinition);
+  validatePresentation(catchDefinition);
+  validateItemReward(catchDefinition);
 }
 
 export function validateCatalog(catches: readonly FishingCatchDefinition[]): void {
@@ -140,56 +206,7 @@ export function validateCatalog(catches: readonly FishingCatchDefinition[]): voi
   for (const catchDefinition of catches) {
     if (ids.has(catchDefinition.id)) throw new Error(`Duplicate fishing catch id: ${catchDefinition.id}`);
     ids.add(catchDefinition.id);
-    if (!Number.isFinite(catchDefinition.baseWeight) || catchDefinition.baseWeight <= 0) throw new Error(`Invalid fishing catch weight: ${catchDefinition.id}`);
-    if (!Number.isInteger(catchDefinition.minimumDay) || catchDefinition.minimumDay < 0) throw new Error(`Invalid fishing minimum day: ${catchDefinition.id}`);
-    validateCatchContract(catchDefinition);
-    if (catchDefinition.presentation.kind === 'fishing') {
-      const { length, height, width } = catchDefinition.presentation.appearance;
-      if (![length, height, width].every((dimension) => Number.isFinite(dimension) && dimension > 0)) throw new Error(`Invalid fishing catch dimensions: ${catchDefinition.id}`);
-    } else {
-      if (!isKnownItemId(catchDefinition.presentation.itemId)) {
-        throw new Error(
-          `${catchDefinition.id} references unknown presentation item ${String(catchDefinition.presentation.itemId)}`,
-        );
-      }
-      if (!isFishingItemCondition(catchDefinition.presentation.condition)) {
-        throw new Error(`${catchDefinition.id} has an invalid presentation item condition`);
-      }
-      if (
-        catchDefinition.reward.kind === 'bait'
-        && (
-          catchDefinition.presentation.itemId !== 'baitTin'
-          || catchDefinition.presentation.condition !== 'usable'
-        )
-      ) {
-        throw new Error(`${catchDefinition.id} bait presentation must be usable baitTin`);
-      }
-    }
-    if (catchDefinition.reward.kind === 'item') {
-      const { itemId, condition } = catchDefinition.reward;
-      if (!isKnownItemId(itemId)) {
-        throw new Error(
-          `${catchDefinition.id} references unknown reward item ${String(itemId)}`,
-        );
-      }
-      if (!isFishingItemCondition(condition)) {
-        throw new Error(`${catchDefinition.id} has an invalid reward item condition`);
-      }
-      if (catchDefinition.presentation.kind !== 'item') {
-        throw new Error(`${catchDefinition.id} item reward requires an item presentation`);
-      }
-      if (itemId !== catchDefinition.presentation.itemId) {
-        throw new Error(`${catchDefinition.id} reward and presentation item IDs must match`);
-      }
-      if (condition !== catchDefinition.presentation.condition) {
-        throw new Error(`${catchDefinition.id} reward and presentation conditions must match`);
-      }
-      if (condition === 'broken' && !ITEM_DEFINITIONS[itemId].breakable) {
-        throw new Error(
-          `${itemId} fishing reward must reference a breakable item`,
-        );
-      }
-    }
+    validateCatalogRow(catchDefinition);
   }
 }
 

@@ -106,6 +106,114 @@ describe('sky palettes', () => {
   });
 });
 
+describe('volumetric scavenging clouds', () => {
+  it('blends flat clouds during day and restores them at night', () => {
+    const scene = new Scene();
+    const environment = new Environment(scene, createTestMoonTexture());
+    const internals = environment as unknown as {
+      sky: { material: ShaderMaterial };
+    };
+
+    try {
+      environment.setVolumetricCloudsEnabled(true);
+      environment.setVisualQuality('high');
+      expect(environment.volumetricCloudsAvailable()).toBe(true);
+
+      environment.update(1, 0.25, new Vector3());
+      expect(internals.sky.material.uniforms.uCloudLayerStrength!.value)
+        .toBeCloseTo(0.75);
+
+      environment.setPhase('night');
+      environment.update(2, 0.25, new Vector3());
+      expect(internals.sky.material.uniforms.uCloudLayerStrength!.value).toBe(1);
+    } finally {
+      environment.dispose();
+    }
+  });
+
+  it('keeps flat clouds when cloud creation fails', () => {
+    const scene = new Scene();
+    const environment = new Environment(
+      scene,
+      createTestMoonTexture(),
+      'low',
+      () => null,
+    );
+
+    try {
+      environment.setVolumetricCloudsEnabled(true);
+      environment.setVisualQuality('high');
+      expect(environment.volumetricCloudsAvailable()).toBe(false);
+      environment.update(1, 1, new Vector3());
+      const sky = environment as unknown as { sky: { material: ShaderMaterial } };
+      expect(sky.sky.material.uniforms.uCloudLayerStrength!.value).toBe(1);
+    } finally {
+      environment.dispose();
+    }
+  });
+
+  it('continues environment cleanup and restores scene state after failures', () => {
+    const scene = new Scene();
+    const originalBackground = new Color(0x112233);
+    const originalFog = new FogExp2(0x112233, 0.004);
+    scene.background = originalBackground;
+    scene.fog = originalFog;
+    const environment = new Environment(scene, createTestMoonTexture());
+    const internals = environment as unknown as {
+      weatherEffects: { dispose(): void };
+      volumetricClouds: { dispose(): void };
+      sky: { dispose(): void };
+    };
+    const firstError = new Error('weather cleanup failed');
+    const calls: string[] = [];
+    const originalWeatherDispose = internals.weatherEffects.dispose.bind(
+      internals.weatherEffects,
+    );
+    vi.spyOn(internals.weatherEffects, 'dispose').mockImplementation(() => {
+      calls.push('weather');
+      originalWeatherDispose();
+      throw firstError;
+    });
+    const originalCloudDispose = internals.volumetricClouds.dispose.bind(
+      internals.volumetricClouds,
+    );
+    vi.spyOn(internals.volumetricClouds, 'dispose').mockImplementation(() => {
+      calls.push('clouds');
+      originalCloudDispose();
+      throw new Error('cloud cleanup failed');
+    });
+    const originalSkyDispose = internals.sky.dispose.bind(internals.sky);
+    vi.spyOn(internals.sky, 'dispose').mockImplementation(() => {
+      calls.push('sky');
+      originalSkyDispose();
+      throw new Error('sky cleanup failed');
+    });
+
+    expect(() => environment.dispose()).toThrow(firstError);
+    expect(calls).toEqual(['weather', 'clouds', 'sky']);
+    expect(scene.children.some((object) =>
+      object instanceof DirectionalLight || object instanceof HemisphereLight)).toBe(false);
+    expect(scene.background).toBe(originalBackground);
+    expect(scene.fog).toBe(originalFog);
+    expect(() => environment.dispose()).not.toThrow();
+  });
+
+  it('forwards cloud controls through World', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+
+    try {
+      world.setVolumetricCloudsEnabled(true);
+      world.setVisualQuality('high');
+      expect(world.getVolumetricCloudsAvailable()).toBe(true);
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+});
+
 interface RenderResources {
   geometries: Set<BufferGeometry>;
   materials: Set<Material>;

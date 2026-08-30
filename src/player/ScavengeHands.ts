@@ -166,38 +166,64 @@ export class ScavengeHands {
       this.hideAndReset();
       return;
     }
-    if (!this.available || this.leftRig === null || this.rightRig === null) {
+    if (!this.rigsAvailable()) {
       this.root.visible = false;
       return;
     }
+    const locomotion = this.locomotionFor(movedDistance, grounded, sprinting);
+    this.advanceAnimation(locomotion, deltaSeconds, movedDistance);
+    this.writeAnimationFrame(locomotion);
+    sampleScavengeHandPoseInto(this.targetPose, this.animationFrame);
+    this.applySampledPose();
+    this.applyPose();
+    this.root.userData.gesture = this.gesture;
+    this.root.visible = true;
+  }
 
-    const moving = grounded && movedDistance > 1e-5;
-    const locomotion = !grounded
-      ? 'steady'
-      : moving
-        ? sprinting ? 'sprint' : 'walk'
-        : 'idle';
+  private rigsAvailable(): boolean {
+    return this.available && this.leftRig !== null && this.rightRig !== null;
+  }
+
+  private locomotionFor(
+    movedDistance: number,
+    grounded: boolean,
+    sprinting: boolean,
+  ): ScavengeHandLocomotion {
+    if (!grounded) return 'steady';
+    if (movedDistance <= 1e-5) return 'idle';
+    return sprinting ? 'sprint' : 'walk';
+  }
+
+  private advanceAnimation(
+    locomotion: ScavengeHandLocomotion,
+    deltaSeconds: number,
+    movedDistance: number,
+  ): void {
     const distance = Number.isFinite(movedDistance) ? movedDistance : 0;
     if (locomotion === 'walk') this.locomotionPhase += distance / 1.3;
     if (locomotion === 'sprint') this.locomotionPhase += distance / 1.8;
-    const delta = Number.isFinite(deltaSeconds) && deltaSeconds > 0
-      ? deltaSeconds
-      : 0;
+    const delta = Number.isFinite(deltaSeconds) && deltaSeconds > 0 ? deltaSeconds : 0;
     if (locomotion === 'idle') this.idleSeconds += delta;
-    if (this.gesture !== null) {
-      this.gestureSeconds += delta;
-      if (this.gestureSeconds >= HAND_GESTURE_DURATIONS[this.gesture]) {
-        this.gesture = null;
-        this.gestureSeconds = 0;
-      }
-    }
+    this.advanceGesture(delta);
+  }
 
+  private advanceGesture(deltaSeconds: number): void {
+    if (this.gesture === null) return;
+    this.gestureSeconds += deltaSeconds;
+    if (this.gestureSeconds < HAND_GESTURE_DURATIONS[this.gesture]) return;
+    this.gesture = null;
+    this.gestureSeconds = 0;
+  }
+
+  private writeAnimationFrame(locomotion: ScavengeHandLocomotion): void {
     this.animationFrame.locomotion = locomotion;
     this.animationFrame.idleSeconds = this.idleSeconds;
     this.animationFrame.locomotionPhase = this.locomotionPhase;
     this.animationFrame.gesture = this.gesture;
     this.animationFrame.gestureSeconds = this.gestureSeconds;
-    sampleScavengeHandPoseInto(this.targetPose, this.animationFrame);
+  }
+
+  private applySampledPose(): void {
     if (this.gesture !== null && this.gestureSeconds < 0.08) {
       blendHandPose(
         this.currentPose,
@@ -205,12 +231,9 @@ export class ScavengeHands {
         this.targetPose,
         this.gestureSeconds / 0.08,
       );
-    } else {
-      copyHandPose(this.currentPose, this.targetPose);
+      return;
     }
-    this.applyPose();
-    this.root.userData.gesture = this.gesture;
-    this.root.visible = true;
+    copyHandPose(this.currentPose, this.targetPose);
   }
 
   playGesture(kind: ScavengeHandGesture): void {

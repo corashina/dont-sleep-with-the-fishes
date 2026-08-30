@@ -7,21 +7,16 @@ import {
 
 describe('wreckage choreography', () => {
   it.each([
-    ['reveal', 1.2],
     ['surface-hold', 0],
     ['leave', 1.2],
   ] as const)('defines %s duration', (beat, duration) => {
     expect(wreckageBeatDuration(beat)).toBe(duration);
   });
 
-  it('samples reveal, hold, and leave into one reused object', () => {
+  it('samples hold and leave into one reused object', () => {
     const output = createWreckageSample();
 
-    expect(sampleWreckageBeat('reveal', 0.6, output)).toBe(true);
-    expect(output.debrisAlpha).toBeGreaterThan(0);
-    expect(output.sceneAlpha).toBe(1);
-
-    sampleWreckageBeat('surface-hold', 0, output);
+    expect(sampleWreckageBeat('surface-hold', 0, output)).toBe(true);
     expect(output).toEqual({ debrisAlpha: 1, sceneAlpha: 1 });
 
     sampleWreckageBeat('leave', 0.6, output);

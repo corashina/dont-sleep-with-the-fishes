@@ -151,7 +151,7 @@ describe('FocusedEventFlow', () => {
     expect(rig.setBusy).toHaveBeenLastCalledWith(false);
     rig.world.exitFocusedEventView.mockResolvedValue(undefined);
     await expect(rig.flow.back()).resolves.toBeUndefined();
-    expect(rig.ui.hideFocusedEvent).toHaveBeenCalledOnce();
+    expect(rig.ui.hideFocusedEvent).toHaveBeenCalledTimes(2);
   });
 
   it('keeps a choice beat error primary while focus cleanup errors stay secondary', async () => {
@@ -346,7 +346,44 @@ describe('FocusedEventFlow', () => {
     rig.calls.length = 0;
     await rig.flow.back();
     expect(rig.resolveChoice).not.toHaveBeenCalled();
-    expect(rig.calls).toEqual(['busy', 'exit', 'hide-focus', 'ready', 'restore-focus']);
+    expect(rig.calls).toEqual(['busy', 'hide-focus', 'exit', 'ready', 'restore-focus']);
+  });
+
+  it('hides the popup before the back camera finishes', async () => {
+    const rig = createRig();
+    const returning = deferred();
+    await rig.flow.enter('drifting-supplies', driftingChoices);
+    rig.calls.length = 0;
+    rig.world.exitFocusedEventView.mockImplementationOnce(() => {
+      rig.calls.push('exit');
+      return returning.promise;
+    });
+
+    const work = rig.flow.back();
+
+    expect(rig.calls).toEqual(['busy', 'hide-focus', 'exit']);
+    returning.resolve();
+    await work;
+    expect(rig.calls).toEqual([
+      'busy', 'hide-focus', 'exit', 'ready', 'restore-focus',
+    ]);
+  });
+
+  it('uses Wreckage Leave as a non-resolving camera return', async () => {
+    const rig = createRig('wreckage');
+    const choices = [
+      { id: 'leave', label: 'Leave', unavailableReason: null, instanceId: null },
+    ] as const;
+    await rig.flow.enter('wreckage', choices);
+    rig.calls.length = 0;
+
+    await rig.flow.choose({ id: 'leave', instanceId: null });
+
+    expect(rig.resolveChoice).not.toHaveBeenCalled();
+    expect(rig.setEventResolutionActive).not.toHaveBeenCalled();
+    expect(rig.calls).toEqual([
+      'confirm', 'busy', 'hide-focus', 'exit', 'ready', 'restore-focus',
+    ]);
   });
 
   it('updates the shown focus target after a resize', async () => {

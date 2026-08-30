@@ -41,32 +41,56 @@ export function createWaterExclusion(
   longitudinalProfile?: WaterExclusionLongitudinalProfile,
 ): WaterExclusionRegion {
   object.updateWorldMatrix(true, false);
-  const lowerHalfWidth = heightProfile?.lowerHalfWidth ?? halfWidth;
-  const lowerHalfLength = heightProfile?.lowerHalfLength ?? halfLength;
-  const lowerTaperStart = heightProfile?.lowerTaperStart ?? taperStart;
   return {
     worldToLocal: object.matrixWorld.clone().invert(),
-    bounds: new Vector4(
-      -halfWidth,
-      halfWidth,
-      longitudinalProfile?.minZ ?? -halfLength,
-      longitudinalProfile?.maxZ ?? halfLength,
-    ),
-    taperStarts: new Vector2(
-      longitudinalProfile?.taperStartMinZ ?? -taperStart,
-      longitudinalProfile?.taperStartMaxZ ?? taperStart,
-    ),
+    bounds: createUpperBounds(halfWidth, halfLength, longitudinalProfile),
+    taperStarts: createUpperTaperStarts(taperStart, longitudinalProfile),
     minimumLocalY,
-    lowerBounds: new Vector4(
-      -lowerHalfWidth,
-      lowerHalfWidth,
-      longitudinalProfile?.lowerMinZ ?? -lowerHalfLength,
-      longitudinalProfile?.lowerMaxZ ?? lowerHalfLength,
-    ),
-    lowerTaperStarts: new Vector2(
-      longitudinalProfile?.lowerTaperStartMinZ ?? -lowerTaperStart,
-      longitudinalProfile?.lowerTaperStartMaxZ ?? lowerTaperStart,
-    ),
+    lowerBounds: createLowerBounds(halfWidth, halfLength, heightProfile, longitudinalProfile),
+    lowerTaperStarts: createLowerTaperStarts(taperStart, heightProfile, longitudinalProfile),
     upperLocalY: heightProfile?.upperLocalY ?? UNBOUNDED_MAXIMUM_LOCAL_Y,
   };
+}
+
+function createUpperBounds(
+  halfWidth: number,
+  halfLength: number,
+  profile: WaterExclusionLongitudinalProfile | undefined,
+): Vector4 {
+  return new Vector4(-halfWidth, halfWidth, profile?.minZ ?? -halfLength, profile?.maxZ ?? halfLength);
+}
+
+function createUpperTaperStarts(
+  taperStart: number,
+  profile: WaterExclusionLongitudinalProfile | undefined,
+): Vector2 {
+  return new Vector2(profile?.taperStartMinZ ?? -taperStart, profile?.taperStartMaxZ ?? taperStart);
+}
+
+function createLowerBounds(
+  halfWidth: number,
+  halfLength: number,
+  heightProfile: WaterExclusionHeightProfile | undefined,
+  longitudinalProfile: WaterExclusionLongitudinalProfile | undefined,
+): Vector4 {
+  const lowerHalfWidth = heightProfile?.lowerHalfWidth ?? halfWidth;
+  const lowerHalfLength = heightProfile?.lowerHalfLength ?? halfLength;
+  return new Vector4(
+    -lowerHalfWidth,
+    lowerHalfWidth,
+    longitudinalProfile?.lowerMinZ ?? -lowerHalfLength,
+    longitudinalProfile?.lowerMaxZ ?? lowerHalfLength,
+  );
+}
+
+function createLowerTaperStarts(
+  taperStart: number,
+  heightProfile: WaterExclusionHeightProfile | undefined,
+  longitudinalProfile: WaterExclusionLongitudinalProfile | undefined,
+): Vector2 {
+  const lowerTaperStart = heightProfile?.lowerTaperStart ?? taperStart;
+  return new Vector2(
+    longitudinalProfile?.lowerTaperStartMinZ ?? -lowerTaperStart,
+    longitudinalProfile?.lowerTaperStartMaxZ ?? lowerTaperStart,
+  );
 }

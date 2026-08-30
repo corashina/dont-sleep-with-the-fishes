@@ -43,6 +43,11 @@ import {
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import {
+  tryCreateVolumetricClouds,
+  VolumetricClouds,
+} from '../src/world/VolumetricClouds';
+import { volumetricCloudProfile } from '../src/world/volumetricCloudProfiles';
+import {
   DEFAULT_WAVES,
   sampleWaveField,
   type WaveSample,
@@ -545,6 +550,68 @@ function expectedSurvivalPose(
 }
 
 describe('BoatWorld helpers', () => {
+  it('renders day volumetric clouds and restores flat clouds at night', () => {
+    const propModels = createTestPropModels();
+    const disposeClouds = vi.spyOn(VolumetricClouds.prototype, 'dispose');
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const internals = world as unknown as {
+      volumetricClouds: {
+        mesh: { visible: boolean };
+        material: { uniforms: Record<string, { value: unknown }> };
+      };
+      sky: { material: { uniforms: Record<string, { value: unknown }> } };
+    };
+
+    world.setVolumetricCloudsEnabled(true);
+    world.setPresentationWeather('thunderstorm');
+    world.update(2, 2);
+
+    expect(internals.volumetricClouds.material.uniforms.uCoverage!.value).toBe(
+      volumetricCloudProfile('squall').coverage,
+    );
+    expect(internals.volumetricClouds.mesh.visible).toBe(true);
+    expect(internals.sky.material.uniforms.uCloudLayerStrength!.value).toBe(0);
+
+    world.setPresentationPhaseOverride('night');
+    world.update(4, 2);
+
+    expect(internals.volumetricClouds.mesh.visible).toBe(false);
+    expect(internals.sky.material.uniforms.uCloudLayerStrength!.value).toBe(1);
+    world.dispose();
+    expect(disposeClouds).toHaveBeenCalledOnce();
+    disposeClouds.mockRestore();
+    propModels.dispose();
+  });
+
+  it('keeps the skybox active when cloud construction falls back', () => {
+    const propModels = createTestPropModels();
+    const createClouds = vi.fn(() => null) as typeof tryCreateVolumetricClouds;
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      undefined,
+      'low',
+      undefined,
+      undefined,
+      {},
+      'low',
+      createClouds,
+    );
+
+    expect(world.volumetricCloudsAvailable()).toBe(false);
+    expect(world.scene.getObjectByName('procedural-skybox')).toBeDefined();
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('forwards water quality to its owned ocean', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -5135,6 +5202,46 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  function expectMoonFaceShader(sky: Mesh<BufferGeometry, ShaderMaterial>): void {
+    expect(sky.material.fragmentShader).toContain('archedBrowShape');
+    expect(sky.material.fragmentShader).toContain('slantedEyeSockets');
+    expect(sky.material.fragmentShader).toContain('lowerEyeArcs');
+    expect(sky.material.fragmentShader).toContain('splitNose');
+    expect(sky.material.fragmentShader).toContain('wideJaggedGrin');
+    expect(sky.material.fragmentShader).not.toContain('hookedEyeMasks');
+    expect(sky.material.fragmentShader).not.toContain('eyeSlits');
+  }
+
+  async function revealMoonFace(world: BoatWorld, sky: Mesh<BufferGeometry, ShaderMaterial>): Promise<number> {
+    world.stageEvent('face-on-the-moon');
+    const reveal = world.revealEvent('face-on-the-moon');
+    world.update(0.76, 0.76);
+    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
+    expect(await remainsPending(reveal)).toBe(true);
+    world.update(3.7, 2.94);
+    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
+    expect(sky.material.uniforms.uMoonStarScale?.value).toBeLessThan(1);
+    expect(sky.material.uniforms.uMoonScale?.value).toBeGreaterThan(1.5);
+    world.update(4.3, 0.6);
+    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBeGreaterThan(0);
+    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBeLessThan(1);
+    world.update(5.8, 1.5);
+    await reveal;
+    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(1);
+    expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(0.7);
+    expect(sky.material.uniforms.uMoonEventDim?.value).toBeGreaterThan(0.15);
+    expect(sky.material.uniforms.uMoonScale?.value).toBeCloseTo(4.15);
+    return sky.material.uniforms.uMoonGrin?.value as number;
+  }
+
+  function expectMoonFaceReset(sky: Mesh<BufferGeometry, ShaderMaterial>): void {
+    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
+    expect(sky.material.uniforms.uMoonGrin?.value).toBe(0);
+    expect(sky.material.uniforms.uMoonStarScale?.value).toBe(1);
+    expect(sky.material.uniforms.uMoonEventDim?.value).toBe(0);
+    expect(sky.material.uniforms.uMoonScale?.value).toBe(1);
+  }
+
   it('reveals the moon face after a normal-moon hold and clears every sky transient', async () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -5147,45 +5254,13 @@ describe('BoatWorld helpers', () => {
       ShaderMaterial
     >;
 
-    expect(sky.material.fragmentShader).toContain('archedBrowShape');
-    expect(sky.material.fragmentShader).toContain('slantedEyeSockets');
-    expect(sky.material.fragmentShader).toContain('lowerEyeArcs');
-    expect(sky.material.fragmentShader).toContain('splitNose');
-    expect(sky.material.fragmentShader).toContain('wideJaggedGrin');
-    expect(sky.material.fragmentShader).not.toContain('hookedEyeMasks');
-    expect(sky.material.fragmentShader).not.toContain('eyeSlits');
-
-    world.stageEvent('face-on-the-moon');
-    const reveal = world.revealEvent('face-on-the-moon');
-    world.update(0.76, 0.76);
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
-    expect(await remainsPending(reveal)).toBe(true);
-
-    world.update(3.7, 2.94);
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
-    expect(sky.material.uniforms.uMoonStarScale?.value).toBeLessThan(1);
-    expect(sky.material.uniforms.uMoonScale?.value).toBeGreaterThan(1.5);
-
-    world.update(4.3, 0.6);
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBeGreaterThan(0);
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBeLessThan(1);
-
-    world.update(5.8, 1.5);
-    await reveal;
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(1);
-    expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(0.7);
-    expect(sky.material.uniforms.uMoonEventDim?.value).toBeGreaterThan(0.15);
-    expect(sky.material.uniforms.uMoonScale?.value).toBeCloseTo(4.15);
-    const firstPulse = sky.material.uniforms.uMoonGrin?.value as number;
+    expectMoonFaceShader(sky);
+    const firstPulse = await revealMoonFace(world, sky);
     world.update(0.7, 0.7);
     expect(sky.material.uniforms.uMoonGrin?.value).not.toBeCloseTo(firstPulse, 4);
 
     world.clearEvent();
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
-    expect(sky.material.uniforms.uMoonGrin?.value).toBe(0);
-    expect(sky.material.uniforms.uMoonStarScale?.value).toBe(1);
-    expect(sky.material.uniforms.uMoonEventDim?.value).toBe(0);
-    expect(sky.material.uniforms.uMoonScale?.value).toBe(1);
+    expectMoonFaceReset(sky);
 
     world.dispose();
     propModels.dispose();
@@ -6956,7 +7031,9 @@ describe('BoatWorld helpers', () => {
     await focus;
 
     const dive = world.playEventItemUse('wreckage', 'dive', scuba.instanceId);
-    world.update(6.9, 5.8);
+    world.update(2.2, 1.1);
+    expect(camera.position.x).toBeCloseTo(1.66);
+    world.update(6.9, 4.7);
 
     const holdPosition = camera.getWorldPosition(new Vector3());
     expect(holdPosition.x).toBeCloseTo(4.2);
@@ -6984,7 +7061,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('projects clickable Wreckage debris on the right side of the default boat view', async () => {
+  it('projects clickable Wreckage debris on the right in default and focused views', async () => {
     const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -7022,6 +7099,13 @@ describe('BoatWorld helpers', () => {
       expect(interaction.y).toBeLessThan(720);
       expect(interaction.hitArea.width).toBeGreaterThanOrEqual(96);
       expect(interaction.hitArea.height).toBeGreaterThanOrEqual(72);
+
+      const focus = world.enterFocusedEventView('wreckage');
+      world.update(1.1, 1.1);
+      await focus;
+      const focusedBounds = world.projectEventInteractionBounds('wreckage', 1280, 720);
+      expect(focusedBounds).toEqual(expect.objectContaining({ visible: true }));
+      expect(focusedBounds!.x).toBeGreaterThan(720);
     } finally {
       world.dispose();
       propModels.dispose();

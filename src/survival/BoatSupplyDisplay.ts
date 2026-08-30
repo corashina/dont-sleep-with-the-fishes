@@ -35,6 +35,7 @@ import {
 } from '../world/SceneResources';
 import type {
   ItemCondition,
+  SurvivalItemState,
 } from './survivalTypes';
 import type { SurvivalSnapshot } from './survivalSnapshot';
 import { scaleEventItemDuration } from './eventItemTiming';
@@ -105,6 +106,23 @@ interface CopyBinding {
   readonly materials: readonly ConditionMaterialBinding[];
   instanceId: ItemInstanceId | null;
   condition: ItemCondition;
+}
+
+interface ActiveSupplyItem {
+  readonly instance: ItemInstance;
+  readonly condition: Extract<ItemCondition, 'usable' | 'broken'>;
+}
+
+type ActiveSupplyState = Readonly<SurvivalItemState> & {
+  readonly condition: ActiveSupplyItem['condition'];
+};
+
+function isActiveSupplyState(
+  instance: Readonly<SurvivalItemState> | undefined,
+  groupId: BoatSupplyGroupId,
+): instance is ActiveSupplyState {
+  return instance?.type === groupId
+    && (instance.condition === 'usable' || instance.condition === 'broken');
 }
 
 interface ConditionMaterialBinding {
@@ -293,6 +311,14 @@ export class BoatSupplyDisplay {
     parent: Group,
     savedItems: readonly ItemInstance[],
   ) {
+    this.registerInstances(savedItems);
+    this.createSupplyGroups(propModels, parent);
+    for (const [instanceId, groupId] of this.groupByInstanceId) {
+      this.prepareEventActor(instanceId, groupId);
+    }
+  }
+
+  private registerInstances(savedItems: readonly ItemInstance[]): void {
     const sortedItems = [
       ...savedItems,
       ...ITEM_IDS
@@ -310,65 +336,81 @@ export class BoatSupplyDisplay {
       this.instancesByType.set(item.type, [...siblings, item]);
       this.groupByInstanceId.set(item.instanceId, item.type);
     }
+  }
 
+  private createSupplyGroups(propModels: PropModelLibrary, parent: Group): void {
     for (const groupId of BOAT_SUPPLY_GROUP_IDS) {
-      const root = new Group();
-      root.name = `boat-supply:${groupId}`;
-      parent.add(root);
-      this.basePositionById.set(groupId, root.position.clone());
-      this.baseQuaternionById.set(groupId, root.quaternion.clone());
-      const poolSize = groupId === 'carlitos'
-        ? 0
-        : groupId === 'repairMaterial'
-        || groupId === 'cannedFood'
-        || groupId === 'baitTin'
-        ? 3
-        : 1;
-      const copies: CopyBinding[] = [];
-      for (let index = 0; index < poolSize; index += 1) {
-        const instance = groupId === 'repairMaterial'
-          ? null
-          : this.instancesByType.get(groupId)?.[index] ?? {
-            instanceId: `${groupId}-${index + 1}` as ItemInstanceId,
-            type: groupId,
-          };
-        const presentation = groupId === 'repairMaterial'
-          ? null
-          : propModels.createPresentation(instance!);
-        const copy = presentation?.root ?? createRepairMaterialBundle(index);
-        enableBoatSupplyShadows(copy);
-        const transform = boatSupplyTransform(groupId, index);
-        copy.name = `boat-supply:${groupId}:copy-${index + 1}`;
-        copy.position.copy(transform.position);
-        copy.rotation.copy(transform.rotation);
-        copy.scale.setScalar(transform.scale);
-        copy.visible = false;
-        root.add(copy);
-        collectMeshResources(copy, this.ownedGeometries, this.ownedMaterials);
-        copies.push({
-          root: copy,
-          presentation,
-          materials: createConditionBindings(copy, this.ownedMaterials),
-          instanceId: instance?.instanceId ?? null,
-          condition: 'lost',
-        });
-      }
-      this.copiesById.set(groupId, copies);
-      const record: MutableRecord = {
-        groupId,
-        root,
-        quantity: 0,
-        usableQuantity: 0,
-        brokenQuantity: 0,
-        visibleCopies: 0,
-        backingInstanceId: null,
-      };
-      this.recordsById.set(groupId, record);
-      this.eventMotionRecords.push(record);
+      this.createSupplyGroup(propModels, parent, groupId);
     }
-    for (const [instanceId, groupId] of this.groupByInstanceId) {
-      this.prepareEventActor(instanceId, groupId);
+  }
+
+  private createSupplyGroup(
+    propModels: PropModelLibrary,
+    parent: Group,
+    groupId: BoatSupplyGroupId,
+  ): void {
+    const root = new Group();
+    root.name = `boat-supply:${groupId}`;
+    parent.add(root);
+    this.basePositionById.set(groupId, root.position.clone());
+    this.baseQuaternionById.set(groupId, root.quaternion.clone());
+    const copies: CopyBinding[] = [];
+    for (let index = 0; index < this.supplyPoolSize(groupId); index += 1) {
+      copies.push(this.createSupplyCopy(propModels, root, groupId, index));
     }
+    this.copiesById.set(groupId, copies);
+    const record: MutableRecord = {
+      groupId,
+      root,
+      quantity: 0,
+      usableQuantity: 0,
+      brokenQuantity: 0,
+      visibleCopies: 0,
+      backingInstanceId: null,
+    };
+    this.recordsById.set(groupId, record);
+    this.eventMotionRecords.push(record);
+  }
+
+  private supplyPoolSize(groupId: BoatSupplyGroupId): number {
+    if (groupId === 'carlitos') return 0;
+    return groupId === 'repairMaterial' || groupId === 'cannedFood' || groupId === 'baitTin'
+      ? 3
+      : 1;
+  }
+
+  private createSupplyCopy(
+    propModels: PropModelLibrary,
+    root: Group,
+    groupId: BoatSupplyGroupId,
+    index: number,
+  ): CopyBinding {
+    const instance = groupId === 'repairMaterial'
+      ? null
+      : this.instancesByType.get(groupId)?.[index] ?? {
+          instanceId: `${groupId}-${index + 1}` as ItemInstanceId,
+          type: groupId,
+        };
+    const presentation = groupId === 'repairMaterial'
+      ? null
+      : propModels.createPresentation(instance!);
+    const copy = presentation?.root ?? createRepairMaterialBundle(index);
+    enableBoatSupplyShadows(copy);
+    const transform = boatSupplyTransform(groupId, index);
+    copy.name = `boat-supply:${groupId}:copy-${index + 1}`;
+    copy.position.copy(transform.position);
+    copy.rotation.copy(transform.rotation);
+    copy.scale.setScalar(transform.scale);
+    copy.visible = false;
+    root.add(copy);
+    collectMeshResources(copy, this.ownedGeometries, this.ownedMaterials);
+    return {
+      root: copy,
+      presentation,
+      materials: createConditionBindings(copy, this.ownedMaterials),
+      instanceId: instance?.instanceId ?? null,
+      condition: 'lost',
+    };
   }
 
   records(): readonly BoatSupplyPresentationRecord[] {
@@ -712,36 +754,12 @@ export class BoatSupplyDisplay {
 
   private syncGroup(groupId: BoatSupplyGroupId, snapshot: SurvivalSnapshot): void {
     const record = this.recordsById.get(groupId)!;
-    const activeItems = groupId === 'repairMaterial'
-      ? []
-      : Object.values(snapshot.inventory)
-        .filter((instance) => instance?.type === groupId)
-        .filter((instance) => instance?.condition === 'usable' || instance?.condition === 'broken')
-        .sort((first, second) => first!.instanceId.localeCompare(second!.instanceId))
-        .map((instance) => ({
-          instance: instance!,
-          condition: instance!.condition,
-        }));
+    const activeItems = this.activeItemsForGroup(groupId, snapshot);
     const usableItems = activeItems.filter(({ condition }) => condition === 'usable');
     const brokenItems = activeItems.filter(({ condition }) => condition === 'broken');
-    const quantity = groupId === 'cannedFood'
-      ? snapshot.food
-      : groupId === 'baitTin'
-        ? snapshot.bait
-        : groupId === 'repairMaterial'
-          ? snapshot.repairMaterial
-          : activeItems.length;
+    const quantity = this.groupQuantity(groupId, snapshot, activeItems.length);
     record.quantity = Math.max(0, Math.floor(quantity));
-    record.usableQuantity = groupId === 'cannedFood'
-      || groupId === 'baitTin'
-      || groupId === 'repairMaterial'
-      ? record.quantity
-      : usableItems.length;
-    record.brokenQuantity = groupId === 'cannedFood'
-      || groupId === 'baitTin'
-      || groupId === 'repairMaterial'
-      ? 0
-      : brokenItems.length;
+    this.updateRecordCounts(record, groupId, usableItems.length, brokenItems.length);
     record.visibleCopies = groupId === 'carlitos'
       ? 0
       : visibleCopyCount(record.quantity);
@@ -750,15 +768,64 @@ export class BoatSupplyDisplay {
       usableItems.map(({ instance }) => instance.instanceId),
       brokenItems.map(({ instance }) => instance.instanceId),
     );
-    if (record.backingInstanceId !== null) {
-      const backingIndex = activeItems.findIndex(
-        ({ instance }) => instance.instanceId === record.backingInstanceId,
-      );
-      if (backingIndex > 0) {
-        const [backing] = activeItems.splice(backingIndex, 1);
-        activeItems.unshift(backing!);
-      }
-    }
+    this.promoteBackingItem(activeItems, record.backingInstanceId);
+    this.syncCopies(groupId, record, activeItems);
+  }
+
+  private activeItemsForGroup(
+    groupId: BoatSupplyGroupId,
+    snapshot: SurvivalSnapshot,
+  ): ActiveSupplyItem[] {
+    if (groupId === 'repairMaterial') return [];
+    return Object.values(snapshot.inventory)
+      .filter((instance): instance is ActiveSupplyState => (
+        isActiveSupplyState(instance, groupId)
+      ))
+      .sort((first, second) => first.instanceId.localeCompare(second.instanceId))
+      .map((instance) => ({ instance, condition: instance.condition }));
+  }
+
+  private groupQuantity(
+    groupId: BoatSupplyGroupId,
+    snapshot: SurvivalSnapshot,
+    itemCount: number,
+  ): number {
+    if (groupId === 'cannedFood') return snapshot.food;
+    if (groupId === 'baitTin') return snapshot.bait;
+    return groupId === 'repairMaterial' ? snapshot.repairMaterial : itemCount;
+  }
+
+  private updateRecordCounts(
+    record: MutableRecord,
+    groupId: BoatSupplyGroupId,
+    usableCount: number,
+    brokenCount: number,
+  ): void {
+    const aggregate = groupId === 'cannedFood'
+      || groupId === 'baitTin'
+      || groupId === 'repairMaterial';
+    record.usableQuantity = aggregate ? record.quantity : usableCount;
+    record.brokenQuantity = aggregate ? 0 : brokenCount;
+  }
+
+  private promoteBackingItem(
+    activeItems: ActiveSupplyItem[],
+    backingInstanceId: ItemInstanceId | null,
+  ): void {
+    if (backingInstanceId === null) return;
+    const backingIndex = activeItems.findIndex(
+      ({ instance }) => instance.instanceId === backingInstanceId,
+    );
+    if (backingIndex <= 0) return;
+    const [backing] = activeItems.splice(backingIndex, 1);
+    activeItems.unshift(backing!);
+  }
+
+  private syncCopies(
+    groupId: BoatSupplyGroupId,
+    record: MutableRecord,
+    activeItems: readonly ActiveSupplyItem[],
+  ): void {
     const copies = this.copiesById.get(groupId)!;
     for (let index = 0; index < copies.length; index += 1) {
       const copy = copies[index]!;
@@ -852,35 +919,25 @@ export class BoatSupplyDisplay {
     instanceId: ItemInstanceId,
   ): BorrowedSupplyBinding | null {
     if (this.disposed || this.currentSnapshot === null) return null;
-    const groupId = this.groupByInstanceId.get(instanceId);
-    if (
-      groupId === undefined
-      || groupId === this.pinnedEventGroupId
-    ) {
-      return null;
-    }
+    const groupId = this.borrowableGroupId(instanceId);
+    if (groupId === null) return null;
 
     const previousSelectedItemId = this.eventSelectedItemId;
     this.eventSelectedItemId = instanceId;
     this.syncGroup(groupId, this.currentSnapshot);
     const record = this.recordsById.get(groupId);
-    if (
-      record === undefined
-      || record.visibleCopies === 0
-      || record.backingInstanceId !== instanceId
-    ) {
-      this.eventSelectedItemId = previousSelectedItemId;
-      this.syncGroup(groupId, this.currentSnapshot);
-      if (record !== undefined && this.hasBorrowedGroup(groupId)) {
-        record.root.visible = false;
+    if (!this.isBorrowableRecord(record, instanceId)) {
+      this.restoreSelectedGroup(groupId, previousSelectedItemId);
+      if (this.hasBorrowedGroup(groupId)) {
+        const restoredRecord = this.recordsById.get(groupId);
+        if (restoredRecord !== undefined) restoredRecord.root.visible = false;
       }
       return null;
     }
 
     const prepared = this.preparedEventActors.get(instanceId);
     if (prepared === undefined) {
-      this.eventSelectedItemId = previousSelectedItemId;
-      this.syncGroup(groupId, this.currentSnapshot);
+      this.restoreSelectedGroup(groupId, previousSelectedItemId);
       return null;
     }
     for (const binding of prepared.materialBindings) {
@@ -890,8 +947,7 @@ export class BoatSupplyDisplay {
     const root = prepared.root;
     record.root.parent!.add(root);
 
-    this.eventSelectedItemId = previousSelectedItemId;
-    this.syncGroup(groupId, this.currentSnapshot);
+    this.restoreSelectedGroup(groupId, previousSelectedItemId);
     record.root.visible = false;
     const binding: BorrowedSupplyBinding = {
       groupId,
@@ -910,6 +966,28 @@ export class BoatSupplyDisplay {
     this.releaseBorrowedOnSync.delete(instanceId);
     this.applyBorrowedEventMotion(binding);
     return binding;
+  }
+
+  private borrowableGroupId(instanceId: ItemInstanceId): BoatSupplyGroupId | null {
+    const groupId = this.groupByInstanceId.get(instanceId);
+    return groupId === undefined || groupId === this.pinnedEventGroupId ? null : groupId;
+  }
+
+  private isBorrowableRecord(
+    record: MutableRecord | undefined,
+    instanceId: ItemInstanceId,
+  ): record is MutableRecord {
+    return record !== undefined
+      && record.visibleCopies > 0
+      && record.backingInstanceId === instanceId;
+  }
+
+  private restoreSelectedGroup(
+    groupId: BoatSupplyGroupId,
+    selectedItemId: ItemInstanceId | null,
+  ): void {
+    this.eventSelectedItemId = selectedItemId;
+    this.syncGroup(groupId, this.currentSnapshot!);
   }
 
   private prepareEventActor(

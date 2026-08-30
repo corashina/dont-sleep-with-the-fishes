@@ -112,58 +112,34 @@ export class FocusedEventFlow {
   async choose(choice: FocusedEventChoiceSelection): Promise<void> {
     const generation = this.dependencies.captureLifecycleGeneration();
     const eventId = this.activeEventId;
-    if (
-      eventId === null
-      || this.focusState !== 'choosing'
-      || !this.isCurrent(generation)
-      || !this.dependencies.isPendingEvent(eventId)
-      || !this.isCurrentChoice(choice)
-    ) return;
-
+    if (!this.canChoose(eventId, choice, generation)) return;
+    if (this.isLeaveChoice(eventId, choice)) {
+      this.dependencies.audio.confirm();
+      await this.back();
+      return;
+    }
     const operation = this.beginOperation();
+    await this.resolveFocusedChoice(eventId, choice, generation, operation);
+  }
+
+  private async resolveFocusedChoice(
+    eventId: InspectableEventId,
+    choice: FocusedEventChoiceSelection,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
     let resolution: FocusedEventChoiceResolution | undefined;
     try {
-      this.dependencies.audio.confirm();
-      this.focusState = 'resolving';
-      this.dependencies.setEventResolutionActive(true);
-      this.dependencies.setBusy(true);
-      await (this.dependencies.ui.playEventChoiceBeat?.(choice.id) ?? Promise.resolve());
-      if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return;
-      if (!await this.dependencies.waitForVisibilityResume(generation)) return;
-      if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return;
-
-      resolution = this.dependencies.resolveChoice(choice);
-      if (
-        !this.isCurrentFocus(eventId, 'resolving', generation, operation)
-        || resolution === undefined
-      ) {
-        return;
-      }
+      this.beginChoiceResolution();
+      resolution = await this.resolveChoiceAfterBeat(eventId, choice, generation, operation);
+      if (resolution === undefined) return;
       if (!resolution.accepted) {
         this.restoreChoice(eventId, generation, operation);
         return;
       }
-
-      this.dependencies.ui.hideFocusedEvent?.();
-      await resolution.playAnimation();
-      if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return;
-      if (!await this.dependencies.waitForVisibilityResume(generation)) return;
-      if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return;
-
-      await resolution.afterAnimation();
-      if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return;
-      if (!await this.dependencies.waitForVisibilityResume(generation)) return;
-      if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return;
-
-      await resolution.beforeReturn();
-      if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return;
-      await this.returnAfterResolution(eventId, resolution, generation, operation);
+      await this.playChoiceResolution(eventId, resolution, generation, operation);
     } catch (error) {
-      if (resolution?.accepted) {
-        await this.recoverResolvedChoice(eventId, resolution, generation, operation);
-      } else {
-        this.recoverUnresolvedChoice(eventId, generation, operation);
-      }
+      await this.recoverChoiceError(eventId, resolution, generation, operation);
       throw error;
     }
   }
@@ -181,6 +157,7 @@ export class FocusedEventFlow {
     this.focusState = 'returning';
     this.dependencies.setBusy(true);
     try {
+      this.dependencies.ui.hideFocusedEvent?.();
       await (this.dependencies.world.exitFocusedEventView?.() ?? Promise.resolve());
     } catch (error) {
       this.recoverBackFailure(eventId, generation, operation);
@@ -191,7 +168,6 @@ export class FocusedEventFlow {
     this.activeEventId = null;
     this.choices = [];
     this.focusState = 'idle';
-    this.dependencies.ui.hideFocusedEvent?.();
     this.dependencies.ui.setEventSelection?.(EMPTY_ELIGIBILITY, []);
     this.dependencies.setBusy(false);
     this.dependencies.ui.restoreCommandFocus?.();
@@ -359,14 +335,7 @@ export class FocusedEventFlow {
     operation: number,
   ): Promise<void> {
     if (!this.isCurrentResolution(eventId, generation, operation)) {
-      if (
-        this.activeEventId === null
-        && this.focusState === 'idle'
-        && this.isCurrent(generation)
-      ) {
-        this.ignoreSecondary(() => this.dependencies.setEventResolutionActive(false));
-        this.ignoreSecondary(() => this.dependencies.setBusy(false));
-      }
+      this.releaseInactiveResolution(generation);
       return;
     }
     this.focusState = 'returning';
@@ -377,12 +346,116 @@ export class FocusedEventFlow {
     }
     if (!this.isCurrentResolution(eventId, generation, operation)) return;
 
+    this.clearRecoveredResolution(resolution);
+    if (!this.isCurrent(generation)) return;
+    const recovered = await this.finishRecoveredResolution(resolution);
+    if (!this.isCurrent(generation)) return;
+    this.ignoreSecondary(() => this.dependencies.setEventResolutionActive(false));
+    this.ignoreSecondary(() => this.dependencies.setBusy(false));
+    if (!recovered.rendered || !recovered.returned) return;
+    if (recovered.terminal) this.ignoreSecondary(() => resolution.presentTerminal());
+    else this.ignoreSecondary(() => this.dependencies.ui.restoreCommandFocus?.());
+  }
+
+  private canChoose(
+    eventId: InspectableEventId | null,
+    choice: FocusedEventChoiceSelection,
+    generation: number,
+  ): eventId is InspectableEventId {
+    return eventId !== null
+      && this.focusState === 'choosing'
+      && this.isCurrent(generation)
+      && this.dependencies.isPendingEvent(eventId)
+      && this.isCurrentChoice(choice);
+  }
+
+  private isLeaveChoice(
+    eventId: InspectableEventId,
+    choice: FocusedEventChoiceSelection,
+  ): boolean {
+    return eventId === 'wreckage' && choice.id === 'leave';
+  }
+
+  private beginChoiceResolution(): void {
+    this.dependencies.audio.confirm();
+    this.focusState = 'resolving';
+    this.dependencies.setEventResolutionActive(true);
+    this.dependencies.setBusy(true);
+  }
+
+  private async resolveChoiceAfterBeat(
+    eventId: InspectableEventId,
+    choice: FocusedEventChoiceSelection,
+    generation: number,
+    operation: number,
+  ): Promise<FocusedEventChoiceResolution | undefined> {
+    await (this.dependencies.ui.playEventChoiceBeat?.(choice.id) ?? Promise.resolve());
+    if (!await this.resumeFocusedResolution(eventId, generation, operation)) return undefined;
+    const resolution = this.dependencies.resolveChoice(choice);
+    if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return undefined;
+    return resolution;
+  }
+
+  private async playChoiceResolution(
+    eventId: InspectableEventId,
+    resolution: Extract<FocusedEventChoiceResolution, { readonly accepted: true }>,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
+    this.dependencies.ui.hideFocusedEvent?.();
+    await resolution.playAnimation();
+    if (!await this.resumeFocusedResolution(eventId, generation, operation)) return;
+    await resolution.afterAnimation();
+    if (!await this.resumeFocusedResolution(eventId, generation, operation)) return;
+    await resolution.beforeReturn();
+    if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return;
+    await this.returnAfterResolution(eventId, resolution, generation, operation);
+  }
+
+  private async resumeFocusedResolution(
+    eventId: InspectableEventId,
+    generation: number,
+    operation: number,
+  ): Promise<boolean> {
+    if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return false;
+    if (!await this.dependencies.waitForVisibilityResume(generation)) return false;
+    return this.isCurrentFocus(eventId, 'resolving', generation, operation);
+  }
+
+  private async recoverChoiceError(
+    eventId: InspectableEventId,
+    resolution: FocusedEventChoiceResolution | undefined,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
+    if (resolution?.accepted) {
+      await this.recoverResolvedChoice(eventId, resolution, generation, operation);
+      return;
+    }
+    this.recoverUnresolvedChoice(eventId, generation, operation);
+  }
+
+  private releaseInactiveResolution(generation: number): void {
+    if (this.activeEventId !== null || this.focusState !== 'idle' || !this.isCurrent(generation)) {
+      return;
+    }
+    this.ignoreSecondary(() => this.dependencies.setEventResolutionActive(false));
+    this.ignoreSecondary(() => this.dependencies.setBusy(false));
+  }
+
+  private clearRecoveredResolution(
+    resolution: Extract<FocusedEventChoiceResolution, { readonly accepted: true }>,
+  ): void {
     this.operationGeneration += 1;
     this.activeEventId = null;
     this.choices = [];
     this.focusState = 'idle';
     this.ignoreSecondary(() => resolution.clearEvent(false));
-    if (!this.isCurrent(generation)) return;
+  }
+
+  private async finishRecoveredResolution(
+    resolution: Extract<FocusedEventChoiceResolution, { readonly accepted: true }>,
+  ): Promise<{ readonly terminal: boolean; readonly rendered: boolean; readonly returned: boolean }> {
     let terminal = false;
     let rendered = false;
     try {
@@ -398,12 +471,7 @@ export class FocusedEventFlow {
     } catch {
       // The action error stays primary.
     }
-    if (!this.isCurrent(generation)) return;
-    this.ignoreSecondary(() => this.dependencies.setEventResolutionActive(false));
-    this.ignoreSecondary(() => this.dependencies.setBusy(false));
-    if (!rendered || !returned) return;
-    if (terminal) this.ignoreSecondary(() => resolution.presentTerminal());
-    else this.ignoreSecondary(() => this.dependencies.ui.restoreCommandFocus?.());
+    return { terminal, rendered, returned };
   }
 
   private async returnAfterResolution(

@@ -34,6 +34,8 @@ export interface BalanceOutcomeBucket {
 export interface BalanceReport extends BalanceOutcomeBucket {
   readonly rescueRate: number;
   readonly averageRescueDay: number | null;
+  readonly medianRescueDay: number | null;
+  readonly rescueDay30To35Rate: number;
   /** Successful rescue days from the separate signal-disabled control cohort. */
   readonly averageNoSignalRescueDay: number | null;
   readonly blockedLoadouts: readonly string[];
@@ -199,22 +201,21 @@ function fishOnceWhenPossible(
   session.finishFishing(begun.attempt.snapshot().id, terminal);
 }
 
-export function runCompetentDay(
-  session: SurvivalSession,
-  policyRandom: RandomSource,
-  fishingReactionSuccess: number,
-  signalsEnabled: boolean,
-): void {
-  resolvePendingDayEvent(session, signalsEnabled);
-  if (session.snapshot().state !== 'day') return;
-
+function recoverDailyResources(session: SurvivalSession): void {
   careForCarlitos(session);
   while (session.snapshot().hunger >= 52 && session.snapshot().food > 0) {
     session.perform('eat');
   }
   if (session.snapshot().health <= 60) session.perform('treat');
   repairHullAtOrBelowSixty(session);
+}
 
+function seekRescueOrFish(
+  session: SurvivalSession,
+  policyRandom: RandomSource,
+  fishingReactionSuccess: number,
+  signalsEnabled: boolean,
+): void {
   const snapshot = session.snapshot();
   const canSeekTrace = signalsEnabled
     && snapshot.rescueTraceFinds < 2
@@ -223,17 +224,35 @@ export function runCompetentDay(
     && session.availableReason('dive') === null;
   if (canSeekTrace) session.perform('dive');
   else fishOnceWhenPossible(session, policyRandom, fishingReactionSuccess);
+}
 
+function answerRadioIfPossible(session: SurvivalSession, signalsEnabled: boolean): void {
   if (signalsEnabled
     && session.snapshot().energy === 1
     && session.availableReason('answerRadio') === null) {
     session.perform('answerRadio');
   }
+}
 
+function completeCompetentDay(session: SurvivalSession, signalsEnabled: boolean): void {
   session.perform('endDay');
   resolvePendingNightEvent(session, signalsEnabled);
   if (session.snapshot().state === 'nightEvent'
     && session.snapshot().pendingEventId === null) session.beginDawn();
+}
+
+export function runCompetentDay(
+  session: SurvivalSession,
+  policyRandom: RandomSource,
+  fishingReactionSuccess: number,
+  signalsEnabled: boolean,
+): void {
+  resolvePendingDayEvent(session, signalsEnabled);
+  if (session.snapshot().state !== 'day') return;
+  recoverDailyResources(session);
+  seekRescueOrFish(session, policyRandom, fishingReactionSuccess, signalsEnabled);
+  answerRadioIfPossible(session, signalsEnabled);
+  completeCompetentDay(session, signalsEnabled);
 }
 
 function runToTerminal(
@@ -274,6 +293,86 @@ function freezeBucket(bucket: MutableBucket): BalanceOutcomeBucket {
   return Object.freeze({ ...bucket });
 }
 
+function median(values: readonly number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((left, right) => left - right);
+  return sorted[Math.floor((sorted.length - 1) / 2)]!;
+}
+
+function rateInRange(values: readonly number[], minimum: number, maximum: number): number {
+  if (values.length === 0) return 0;
+  return values.filter((value) => value >= minimum && value <= maximum).length / values.length;
+}
+
+type SessionEnding = ReturnType<SurvivalSession['snapshot']>['ending'];
+
+interface SimulationStats {
+  readonly rescueDays: number[];
+  readonly noSignalRescueDays: number[];
+  readonly blockedLoadouts: Set<string>;
+  readonly totals: MutableBucket;
+  readonly endingsByDay: Record<string, number>;
+  readonly byRescueLead: Map<number, MutableBucket>;
+}
+
+function outcomeForEnding(ending: SessionEnding): OutcomeKey {
+  if (ending === null) return 'blocked';
+  if (ending.id === 'rescue') return 'rescued';
+  if (ending.id === 'death') return 'dead';
+  return ending.id === 'sinking' ? 'sunk' : 'taken';
+}
+
+function recordSignalRun(
+  session: SurvivalSession,
+  loadoutKey: string,
+  loadoutBucket: MutableBucket,
+  stats: SimulationStats,
+): void {
+  const { ending, rescueLead } = session.snapshot();
+  const leadBucket = stats.byRescueLead.get(rescueLead) ?? emptyBucket();
+  stats.byRescueLead.set(rescueLead, leadBucket);
+  const outcome = outcomeForEnding(ending);
+  recordOutcome(stats.totals, outcome);
+  recordOutcome(loadoutBucket, outcome);
+  recordOutcome(leadBucket, outcome);
+  if (ending === null) stats.blockedLoadouts.add(loadoutKey);
+  else {
+    const dayKey = `${ending.id}:${ending.day}`;
+    stats.endingsByDay[dayKey] = (stats.endingsByDay[dayKey] ?? 0) + 1;
+  }
+  if (ending?.id === 'rescue') stats.rescueDays.push(ending.day);
+}
+
+function simulationSeed(loadoutIndex: number, runIndex: number): number {
+  return (
+    Math.imul(loadoutIndex + 1, 0x045d9f3b)
+    ^ Math.imul(runIndex + 1, 0x27d4eb2d)
+  ) >>> 0;
+}
+
+function simulateLoadout(
+  loadout: MissingPickupSet,
+  loadoutIndex: number,
+  config: BalanceSimulationConfig,
+  stats: SimulationStats,
+): BalanceOutcomeBucket {
+  const loadoutBucket = emptyBucket();
+  for (let runIndex = 0; runIndex < config.seedsPerLoadout; runIndex += 1) {
+    const seed = simulationSeed(loadoutIndex, runIndex);
+    const session = runToTerminal(loadout.saved, seed, config.fishingReactionSuccess, true);
+    recordSignalRun(session, loadout.key, loadoutBucket, stats);
+    const noSignalSession = runToTerminal(
+      loadout.saved,
+      seed,
+      config.fishingReactionSuccess,
+      false,
+    );
+    const noSignalEnding = noSignalSession.snapshot().ending;
+    if (noSignalEnding?.id === 'rescue') stats.noSignalRescueDays.push(noSignalEnding.day);
+  }
+  return freezeBucket(loadoutBucket);
+}
+
 export function runBalanceSimulation(
   config: BalanceSimulationConfig,
 ): BalanceReport {
@@ -301,58 +400,17 @@ export function runBalanceSimulation(
   const endingsByDay: Record<string, number> = {};
   const byMissingPickupSet: Record<string, BalanceOutcomeBucket> = {};
   const byRescueLead = new Map<number, MutableBucket>();
+  const stats: SimulationStats = {
+    rescueDays,
+    noSignalRescueDays,
+    blockedLoadouts,
+    totals,
+    endingsByDay,
+    byRescueLead,
+  };
 
   loadouts.forEach((loadout, loadoutIndex) => {
-    const loadoutBucket = emptyBucket();
-    for (let runIndex = 0; runIndex < config.seedsPerLoadout; runIndex += 1) {
-      const seed = (
-        Math.imul(loadoutIndex + 1, 0x045d9f3b)
-        ^ Math.imul(runIndex + 1, 0x27d4eb2d)
-      ) >>> 0;
-      const session = runToTerminal(
-        loadout.saved,
-        seed,
-        config.fishingReactionSuccess,
-        true,
-      );
-
-      const ending = session.snapshot().ending;
-      const rescueLead = session.snapshot().rescueLead;
-      const leadBucket = byRescueLead.get(rescueLead) ?? emptyBucket();
-      byRescueLead.set(rescueLead, leadBucket);
-      const outcome: OutcomeKey = ending === null
-        ? 'blocked'
-        : ending.id === 'rescue'
-          ? 'rescued'
-          : ending.id === 'death'
-            ? 'dead'
-            : ending.id === 'sinking'
-              ? 'sunk'
-              : 'taken';
-      recordOutcome(totals, outcome);
-      recordOutcome(loadoutBucket, outcome);
-      recordOutcome(leadBucket, outcome);
-
-      if (ending === null) {
-        blockedLoadouts.add(loadout.key);
-      } else {
-        const dayKey = `${ending.id}:${ending.day}`;
-        endingsByDay[dayKey] = (endingsByDay[dayKey] ?? 0) + 1;
-      }
-      if (ending?.id === 'rescue') {
-        rescueDays.push(ending.day);
-      }
-
-      const noSignalSession = runToTerminal(
-        loadout.saved,
-        seed,
-        config.fishingReactionSuccess,
-        false,
-      );
-      const noSignalEnding = noSignalSession.snapshot().ending;
-      if (noSignalEnding?.id === 'rescue') noSignalRescueDays.push(noSignalEnding.day);
-    }
-    byMissingPickupSet[loadout.key] = freezeBucket(loadoutBucket);
+    byMissingPickupSet[loadout.key] = simulateLoadout(loadout, loadoutIndex, config, stats);
   });
 
   const totalRuns = loadouts.length * config.seedsPerLoadout;
@@ -360,6 +418,8 @@ export function runBalanceSimulation(
     ...freezeBucket(totals),
     rescueRate: totalRuns === 0 ? 0 : totals.rescued / totalRuns,
     averageRescueDay: average(rescueDays),
+    medianRescueDay: median(rescueDays),
+    rescueDay30To35Rate: rateInRange(rescueDays, 30, 35),
     averageNoSignalRescueDay: average(noSignalRescueDays),
     blockedLoadouts: Object.freeze([...blockedLoadouts].sort()),
     unrescuedLoadouts: Object.freeze(Object.entries(byMissingPickupSet)

@@ -1,5 +1,6 @@
 import {
   Box3,
+  Group,
   Quaternion,
   Scene,
   Vector3,
@@ -7,6 +8,7 @@ import {
   type Material,
 } from 'three';
 import type { GamePhase, PhaseContext } from '../app/GamePhase';
+import type { VisualQuality } from '../rendering/visualQuality';
 import { pointerLockTransition } from '../game/GameLoop';
 import {
   advanceScavengeEnding,
@@ -49,6 +51,7 @@ import {
   chooseContextAction,
   InteractionSystem,
   type ContextAction,
+  type InteractionTarget,
 } from '../interaction/InteractionSystem';
 import { PlayerController } from '../player/PlayerController';
 import {
@@ -146,6 +149,7 @@ export class ScavengePhase implements GamePhase {
   };
   private ending = createScavengeEndingState();
   private endingStarted = false;
+  private endingBlackout = 0;
   private dorothyEnding: Extract<EndingRecord, { id: 'dorothy' }> | null = null;
   private readonly cinematicFrame = createScavengeCinematicFrame();
   private readonly cinematicCameraTarget = new Vector3();
@@ -169,6 +173,7 @@ export class ScavengePhase implements GamePhase {
     private readonly context: PhaseContext,
     private readonly onComplete: (result: Readonly<ScavengeResult>) => void,
     private readonly onRestart: () => void,
+    private readonly onReturnToMenu: () => void,
   ) {
     this.scene.add(context.camera);
     this.ui = new GameUI(context.mount);
@@ -187,6 +192,7 @@ export class ScavengePhase implements GamePhase {
       context.lifeboatAssets,
       context.shipAssets,
       context.waterQuality?.get() ?? 'low',
+      context.visualQuality.get(),
     );
     this.instancesById = new Map(instances.map((instance) => [
       instance.instanceId,
@@ -232,6 +238,7 @@ export class ScavengePhase implements GamePhase {
       void this.requestPointerLock();
     };
     this.ui.onRestart = this.onRestart;
+    this.ui.onReturnToMenu = this.onReturnToMenu;
     this.ui.setPresentation('intro');
     this.ui.setIntroFadeProgress(1);
   }
@@ -255,20 +262,84 @@ export class ScavengePhase implements GamePhase {
   update(_time: number, deltaSeconds: number): void {
     if (this.disposed) return;
     const before = this.session.snapshot();
-    let current = before;
-    const sessionActive = this.ending.stage === 'playing'
-      && before.status === 'running'
-      && !document.hidden;
-    const directControlActive = sessionActive && this.input.pointerLocked;
-    const overlaySimulationActive = sessionActive && this.overlayActive === true;
+    const directControlActive = this.hasDirectControl(before);
+    const overlaySimulationActive = this.hasOverlaySimulation(before);
     const introFrameStarted = this.presentation === 'intro';
-    const introActive = introFrameStarted
+    const introActive = this.hasActiveIntro(introFrameStarted);
+    const worldDeltaSeconds = this.worldDeltaSeconds(
+      deltaSeconds,
+      introFrameStarted,
+      introActive,
+    );
+    this.advanceWorldTime(
+      deltaSeconds,
+      introActive,
+      directControlActive,
+      overlaySimulationActive,
+    );
+    const motion = this.updateSimulation(
+      deltaSeconds,
+      introActive,
+      directControlActive,
+      overlaySimulationActive,
+    );
+    const next = this.session.snapshot();
+    const sinking = this.updateEnding(deltaSeconds, next);
+    this.syncVisualState(sinking);
+    this.audio.update(
+      motion,
+      directControlActive,
+      this.elapsed,
+      this.updateAudioListenerPose(),
+    );
+    const simulatePhysics = this.shouldSimulatePhysics(
+      next,
+      directControlActive,
+      overlaySimulationActive,
+    );
+    this.updateWorldFrame(worldDeltaSeconds, sinking, simulatePhysics, introFrameStarted);
+    this.updateHands(deltaSeconds, motion, next);
+    this.renderInterface(next);
+    this.reportCompletion(next);
+  }
+
+  private hasDirectControl(snapshot: ScavengeSnapshot): boolean {
+    return this.hasActiveSession(snapshot) && this.input.pointerLocked;
+  }
+
+  private hasOverlaySimulation(snapshot: ScavengeSnapshot): boolean {
+    return this.hasActiveSession(snapshot) && this.overlayActive === true;
+  }
+
+  private hasActiveSession(snapshot: ScavengeSnapshot): boolean {
+    return this.ending.stage === 'playing'
+      && snapshot.status === 'running'
+      && !document.hidden;
+  }
+
+  private hasActiveIntro(introFrameStarted: boolean): boolean {
+    return introFrameStarted
       && !this.introPaused
       && this.input.pointerLocked
       && !document.hidden;
-    const worldDeltaSeconds = (
-      (introFrameStarted && !introActive) || this.pausedIntroExitCarry
-    ) ? 0 : deltaSeconds;
+  }
+
+  private worldDeltaSeconds(
+    deltaSeconds: number,
+    introFrameStarted: boolean,
+    introActive: boolean,
+  ): number {
+    return (introFrameStarted && !introActive) || this.pausedIntroExitCarry
+      ? 0
+      : deltaSeconds;
+  }
+
+  private advanceWorldTime(
+    deltaSeconds: number,
+    introActive: boolean,
+    directControlActive: boolean,
+    overlaySimulationActive: boolean,
+  ): void {
     if (
       introActive
       || directControlActive
@@ -277,112 +348,147 @@ export class ScavengePhase implements GamePhase {
     ) {
       this.worldTime += deltaSeconds;
     }
-    let sinking = getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
-    let motion: PlayerMotionSample | null = null;
+  }
 
-    if (introActive) {
-      this.updateIntro(deltaSeconds);
-      current = this.session.snapshot();
-      this.input.clearLook();
-    } else if (directControlActive) {
-      this.session.tick(deltaSeconds, containsPointXZ(
-        this.world.evacuationBounds,
-        this.player.localPosition,
-      ));
-      current = this.session.snapshot();
-      this.synchronizeElapsed(current);
-      if (current.status === 'running') {
-        motion = this.player.update(
-          deltaSeconds,
-          this.input,
-          scavengeSpeedMultiplier(current.carriedWeight),
-        );
-        current = this.session.snapshot();
-        this.synchronizeElapsed(current);
-        if (current.status === 'running') {
-          this.updateInteraction();
-          current = this.session.snapshot();
-          if (current.status === 'running') {
-            sinking = getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
-            this.updateFlight(deltaSeconds, sinking.waveAmplitudeScale);
-            current = this.session.snapshot();
-          }
-        }
-      }
-    } else if (overlaySimulationActive) {
-      this.session.tick(deltaSeconds, containsPointXZ(
-        this.world.evacuationBounds,
-        this.player.localPosition,
-      ));
-      current = this.session.snapshot();
-      this.synchronizeElapsed(current);
-      if (current.status === 'running') {
-        motion = this.player.updatePassive(deltaSeconds);
-        current = this.session.snapshot();
-        sinking = getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
-        this.updateFlight(deltaSeconds, sinking.waveAmplitudeScale);
-        current = this.session.snapshot();
-      }
-      this.input.clearLook();
-    } else if (this.ending.stage === 'playing') {
-      this.input.clearLook();
-    }
+  private updateSimulation(
+    deltaSeconds: number,
+    introActive: boolean,
+    directControlActive: boolean,
+    overlaySimulationActive: boolean,
+  ): PlayerMotionSample | null {
+    if (introActive) return this.updateIntroSimulation(deltaSeconds);
+    if (directControlActive) return this.updateDirectControl(deltaSeconds);
+    if (overlaySimulationActive) return this.updateOverlaySimulation(deltaSeconds);
+    if (this.ending.stage === 'playing') this.input.clearLook();
+    return null;
+  }
 
-    sinking = getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
-    const next = current;
-    if (next.status === 'failure' && this.dorothyEnding === null) {
-      this.dorothyEnding = Object.freeze({
-        id: 'dorothy', day: 0, savedPickupCount: next.savedCount,
-      });
+  private updateIntroSimulation(deltaSeconds: number): null {
+    this.updateIntro(deltaSeconds);
+    this.input.clearLook();
+    return null;
+  }
+
+  private updateDirectControl(deltaSeconds: number): PlayerMotionSample | null {
+    let snapshot = this.tickSession(deltaSeconds);
+    if (snapshot.status !== 'running') return null;
+    const motion = this.player.update(
+      deltaSeconds,
+      this.input,
+      scavengeSpeedMultiplier(snapshot.carriedWeight),
+    );
+    snapshot = this.session.snapshot();
+    this.synchronizeElapsed(snapshot);
+    if (snapshot.status !== 'running') return motion;
+    this.updateInteraction();
+    snapshot = this.session.snapshot();
+    if (snapshot.status === 'running') {
+      this.updateFlight(
+        deltaSeconds,
+        getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS).waveAmplitudeScale,
+      );
     }
-    const failureStarted = !this.endingStarted && next.status === 'failure';
+    return motion;
+  }
+
+  private updateOverlaySimulation(deltaSeconds: number): PlayerMotionSample | null {
+    const snapshot = this.tickSession(deltaSeconds);
+    if (snapshot.status !== 'running') {
+      this.input.clearLook();
+      return null;
+    }
+    const motion = this.player.updatePassive(deltaSeconds);
+    this.updateFlight(
+      deltaSeconds,
+      getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS).waveAmplitudeScale,
+    );
+    this.input.clearLook();
+    return motion;
+  }
+
+  private tickSession(deltaSeconds: number): ScavengeSnapshot {
+    this.session.tick(deltaSeconds, containsPointXZ(
+      this.world.evacuationBounds,
+      this.player.localPosition,
+    ));
+    const snapshot = this.session.snapshot();
+    this.synchronizeElapsed(snapshot);
+    return snapshot;
+  }
+
+  private updateEnding(
+    deltaSeconds: number,
+    snapshot: ScavengeSnapshot,
+  ): Readonly<ReturnType<typeof getSinkingState>> {
+    this.recordDorothyEnding(snapshot);
+    const failureStarted = !this.endingStarted && snapshot.status === 'failure';
     this.ending = advanceScavengeEnding(
       this.ending,
-      next.status,
+      snapshot.status,
       failureStarted ? 0 : deltaSeconds,
     );
-    if (failureStarted) {
-      this.endingStarted = true;
-      this.hands.hideAndReset();
-      this.audio.sink();
-      this.world.attachPhysicsObjectsToShip();
-      if (this.input.pointerLocked) document.exitPointerLock();
-      this.contextAction = { type: 'none', prompt: '' };
-      this.itemTooltip = null;
+    if (failureStarted) this.startSinking();
+    this.endingBlackout = 0;
+    if (!this.endingStarted) {
+      return getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
     }
+    return this.updateCinematicFrame();
+  }
 
-    let blackout = 0;
-    if (this.endingStarted) {
-      const cinematicElapsed = this.ending.stage === 'sinking'
-        ? this.ending.elapsedSeconds
-        : SINKING_CINEMATIC_SECONDS;
-      sampleScavengeCinematicFrameInto(this.cinematicFrame, cinematicElapsed);
-      sinking = this.cinematicFrame.sinking;
-      blackout = this.cinematicFrame.blackout;
-      this.context.camera.position.set(
-        this.cinematicFrame.cameraPosition[0],
-        this.cinematicFrame.cameraPosition[1],
-        this.cinematicFrame.cameraPosition[2],
-      );
-      this.cinematicCameraTarget.set(
-        this.cinematicFrame.cameraTarget[0],
-        this.cinematicFrame.cameraTarget[1],
-        this.cinematicFrame.cameraTarget[2],
-      );
-      this.context.camera.lookAt(this.cinematicCameraTarget);
-      this.context.camera.updateMatrixWorld(true);
-    }
-    this.syncVisualState(sinking);
-    const audioListenerPose = this.updateAudioListenerPose();
-    this.audio.update(
-      motion,
-      directControlActive,
-      this.elapsed,
-      audioListenerPose,
+  private recordDorothyEnding(snapshot: ScavengeSnapshot): void {
+    if (snapshot.status !== 'failure' || this.dorothyEnding !== null) return;
+    this.dorothyEnding = Object.freeze({
+      id: 'dorothy', day: 0, savedPickupCount: snapshot.savedCount,
+    });
+  }
+
+  private startSinking(): void {
+    this.endingStarted = true;
+    this.hands.hideAndReset();
+    this.audio.sink();
+    this.world.attachPhysicsObjectsToShip();
+    if (this.input.pointerLocked) document.exitPointerLock();
+    this.contextAction = { type: 'none', prompt: '' };
+    this.itemTooltip = null;
+  }
+
+  private updateCinematicFrame(): Readonly<ReturnType<typeof getSinkingState>> {
+    const elapsed = this.ending.stage === 'sinking'
+      ? this.ending.elapsedSeconds
+      : SINKING_CINEMATIC_SECONDS;
+    sampleScavengeCinematicFrameInto(this.cinematicFrame, elapsed);
+    this.endingBlackout = this.cinematicFrame.blackout;
+    this.context.camera.position.set(
+      this.cinematicFrame.cameraPosition[0],
+      this.cinematicFrame.cameraPosition[1],
+      this.cinematicFrame.cameraPosition[2],
     );
-    const simulatePhysics = this.ending.stage === 'playing'
+    this.cinematicCameraTarget.set(
+      this.cinematicFrame.cameraTarget[0],
+      this.cinematicFrame.cameraTarget[1],
+      this.cinematicFrame.cameraTarget[2],
+    );
+    this.context.camera.lookAt(this.cinematicCameraTarget);
+    this.context.camera.updateMatrixWorld(true);
+    return this.cinematicFrame.sinking;
+  }
+
+  private shouldSimulatePhysics(
+    snapshot: ScavengeSnapshot,
+    directControlActive: boolean,
+    overlaySimulationActive: boolean,
+  ): boolean {
+    return this.ending.stage === 'playing'
       && (directControlActive || overlaySimulationActive)
-      && next.status === 'running';
+      && snapshot.status === 'running';
+  }
+
+  private updateWorldFrame(
+    worldDeltaSeconds: number,
+    sinking: Readonly<ReturnType<typeof getSinkingState>>,
+    simulatePhysics: boolean,
+    introFrameStarted: boolean,
+  ): void {
     sampleShipDangerStateInto(
       this.dangerState,
       this.elapsed,
@@ -400,37 +506,50 @@ export class ScavengePhase implements GamePhase {
     if (simulatePhysics || introFrameStarted || this.pausedIntroExitCarry) {
       this.player.placeCamera();
     }
-    const handsVisible = this.ending.stage === 'playing'
-      && next.status === 'running'
-      && this.input.pointerLocked
-      && !this.overlayActive
-      && !document.hidden;
+  }
+
+  private updateHands(
+    deltaSeconds: number,
+    motion: PlayerMotionSample | null,
+    snapshot: ScavengeSnapshot,
+  ): void {
     this.hands.update(
       deltaSeconds,
       motion?.movedDistance ?? 0,
       motion?.grounded ?? false,
       this.input.sprinting,
-      handsVisible,
+      this.isHandsVisible(snapshot),
     );
-    this.ui.render(next);
-    const stillActive = this.ending.stage === 'playing'
-      && next.status === 'running'
+  }
+
+  private isHandsVisible(snapshot: ScavengeSnapshot): boolean {
+    return this.isVisibleSession(snapshot) && !this.overlayActive;
+  }
+
+  private renderInterface(snapshot: ScavengeSnapshot): void {
+    const stillActive = this.isVisibleSession(snapshot);
+    const itemTooltip = stillActive ? this.itemTooltip : null;
+    this.ui.render(snapshot);
+    this.ui.setPrompt(itemTooltip === null && stillActive ? this.contextAction.prompt : '');
+    this.ui.setItemTooltip?.(itemTooltip);
+    this.ui.setPickupPointer?.(stillActive && this.contextAction.type === 'pickUp');
+    this.ui.renderEnding(this.ending.stage, this.endingBlackout, this.dorothyEnding);
+  }
+
+  private isVisibleSession(snapshot: ScavengeSnapshot): boolean {
+    return this.ending.stage === 'playing'
+      && snapshot.status === 'running'
       && this.input.pointerLocked
       && !document.hidden;
-    const visibleItemTooltip = stillActive ? this.itemTooltip : null;
-    this.ui.setPrompt(visibleItemTooltip === null && stillActive ? this.contextAction.prompt : '');
-    this.ui.setItemTooltip?.(visibleItemTooltip);
-    this.ui.setPickupPointer?.(stillActive && this.contextAction.type === 'pickUp');
-    this.ui.renderEnding(this.ending.stage, blackout, this.dorothyEnding);
+  }
 
-    if (next.status === 'success' && !this.completionReported) {
-      const result = this.session.result();
-      if (result !== null) {
-        this.completionReported = true;
-        this.audio.complete();
-        this.onComplete(result);
-      }
-    }
+  private reportCompletion(snapshot: ScavengeSnapshot): void {
+    if (snapshot.status !== 'success' || this.completionReported) return;
+    const result = this.session.result();
+    if (result === null) return;
+    this.completionReported = true;
+    this.audio.complete();
+    this.onComplete(result);
   }
 
   resize(width: number, height: number): void {
@@ -469,6 +588,20 @@ export class ScavengePhase implements GamePhase {
   setWaterQuality(value: WaterQuality): void {
     if (this.disposed) return;
     this.world.setWaterQuality(value);
+  }
+
+  setVisualQuality(value: VisualQuality): void {
+    if (this.disposed) return;
+    this.world.setVisualQuality(value);
+  }
+
+  setVolumetricCloudsEnabled(enabled: boolean): void {
+    if (this.disposed) return;
+    this.world.setVolumetricCloudsEnabled(enabled);
+  }
+
+  getVolumetricCloudsAvailable(): boolean {
+    return !this.disposed && this.world.getVolumetricCloudsAvailable();
   }
 
   getPresentationWeather(): PresentationWeatherId {
@@ -533,20 +666,9 @@ export class ScavengePhase implements GamePhase {
   private updateInteraction(): void {
     this.itemTooltip = null;
     const snapshot = this.session.snapshot();
-    const availableItems = [];
+    const availableItems: Group[] = [];
     const instances = new Map<ItemInstanceId, ItemInstance>();
-    for (const [instanceId, object] of this.world.itemObjects) {
-      const instance = this.instancesById.get(instanceId);
-      if (
-        !instance
-        || object.userData.instanceId !== instanceId
-        || object.userData.itemType !== instance.type
-      ) continue;
-      const state = snapshot.items[instanceId];
-      if (!state || state.status !== 'available') continue;
-      availableItems.push(object);
-      instances.set(instance.instanceId, instance);
-    }
+    this.collectAvailableInteractionItems(snapshot, availableItems, instances);
     const nearEvacuation = containsPointXZ(
       this.world.evacuationBounds,
       this.player.localPosition,
@@ -566,30 +688,48 @@ export class ScavengePhase implements GamePhase {
         remainingCapacity: 3 - snapshot.carriedWeight,
         nearEvacuation,
       });
-    if (target.target === 'item' && target.targetItem !== null) {
-      const object = this.world.itemObjects.get(target.targetItem.instanceId);
-      if (object !== undefined) {
-        this.itemTooltipBounds.setFromObject(object, true);
-        const projected = projectScreenBounds(
-          this.itemTooltipBounds,
-          this.context.camera,
-          this.viewportWidth,
-          this.viewportHeight,
-        );
-        if (projected.visible) {
-          const placement = projected.y - projected.height / 2 >= 96 ? 'above' : 'below';
-          this.itemTooltip = {
-            text: ITEM_LABELS[target.targetItem.type],
-            x: projected.x,
-            y: placement === 'above'
-              ? projected.y - projected.height / 2
-              : projected.y + projected.height / 2,
-            placement,
-          };
-        }
-      }
-    }
+    this.updateItemTooltip(target);
     if (this.input.consumeInteract()) this.performAction(this.contextAction);
+  }
+
+  private collectAvailableInteractionItems(
+    snapshot: ScavengeSnapshot,
+    availableItems: Group[],
+    instances: Map<ItemInstanceId, ItemInstance>,
+  ): void {
+    for (const [instanceId, object] of this.world.itemObjects) {
+      const instance = this.instancesById.get(instanceId);
+      if (instance === undefined) continue;
+      if (object.userData.instanceId !== instanceId) continue;
+      if (object.userData.itemType !== instance.type) continue;
+      const state = snapshot.items[instanceId];
+      if (state?.status !== 'available') continue;
+      availableItems.push(object);
+      instances.set(instance.instanceId, instance);
+    }
+  }
+
+  private updateItemTooltip(target: InteractionTarget): void {
+    if (target.target !== 'item' || target.targetItem === null) return;
+    const object = this.world.itemObjects.get(target.targetItem.instanceId);
+    if (object === undefined) return;
+    this.itemTooltipBounds.setFromObject(object, true);
+    const projected = projectScreenBounds(
+      this.itemTooltipBounds,
+      this.context.camera,
+      this.viewportWidth,
+      this.viewportHeight,
+    );
+    if (!projected.visible) return;
+    const placement = projected.y - projected.height / 2 >= 96 ? 'above' : 'below';
+    this.itemTooltip = {
+      text: ITEM_LABELS[target.targetItem.type],
+      x: projected.x,
+      y: placement === 'above'
+        ? projected.y - projected.height / 2
+        : projected.y + projected.height / 2,
+      placement,
+    };
   }
 
   private performAction(action: ContextAction): void {

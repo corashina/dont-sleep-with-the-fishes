@@ -346,6 +346,56 @@ function mergeComponent(target, component, descriptor, id) {
   mergedScene.dispose();
 }
 
+async function mergeComponents(id, document, componentSourcePaths, descriptors, verifySource) {
+  for (const componentDescriptor of descriptors ?? []) {
+    const componentPath = componentSourcePaths[componentDescriptor.id];
+    if (!componentPath) throw new Error(`${id}: missing source path for ${componentDescriptor.id}`);
+    const component = await readVerifiedSource(
+      componentPath,
+      componentDescriptor,
+      verifySource,
+      `${id}/${componentDescriptor.id}`,
+    );
+    mergeComponent(document, component.document, componentDescriptor, id);
+  }
+}
+
+async function simplifyDocument(document, descriptor) {
+  if (descriptor.simplifyRatio === undefined) return;
+  removeSplitNormals(document);
+  await document.transform(
+    weld(),
+    simplify({
+      simplifier: MeshoptSimplifier,
+      ratio: descriptor.simplifyRatio,
+      error: descriptor.simplifyError,
+      lockBorder: false,
+    }),
+    normals({ overwrite: true }),
+  );
+}
+
+function renameOutputScene(id, document) {
+  const scene = document.getRoot().getDefaultScene()
+    ?? document.getRoot().listScenes()[0];
+  if (!scene) throw new Error(`${id}: source scene is missing`);
+  scene.setName(id);
+  scene.listChildren().forEach((node, index) => {
+    node.setName(`${id}:${node.getName() || `source-${index + 1}`}`);
+  });
+}
+
+function validateOutputTriangles(id, document, descriptor) {
+  const triangles = countDocumentTriangles(document);
+  const maxTriangles = descriptor.maxTriangles ?? 3_000;
+  if (triangles <= 0 || triangles > maxTriangles) {
+    throw new Error(
+      `${id}: processed triangle count ${triangles} exceeds the ${maxTriangles} limit`,
+    );
+  }
+  return triangles;
+}
+
 export async function buildPolyPizzaModel({
   id,
   sourcePath,
@@ -358,48 +408,12 @@ export async function buildPolyPizzaModel({
   const primary = await readVerifiedSource(sourcePath, descriptor, verifySource, id);
   const { document, sha256, sourceTriangles } = primary;
 
-  for (const componentDescriptor of descriptor.components ?? []) {
-    const componentPath = componentSourcePaths[componentDescriptor.id];
-    if (!componentPath) throw new Error(`${id}: missing source path for ${componentDescriptor.id}`);
-    const component = await readVerifiedSource(
-      componentPath,
-      componentDescriptor,
-      verifySource,
-      `${id}/${componentDescriptor.id}`,
-    );
-    mergeComponent(document, component.document, componentDescriptor, id);
-  }
-
-  if (descriptor.simplifyRatio !== undefined) {
-    removeSplitNormals(document);
-    await document.transform(
-      weld(),
-      simplify({
-        simplifier: MeshoptSimplifier,
-        ratio: descriptor.simplifyRatio,
-        error: descriptor.simplifyError,
-        lockBorder: false,
-      }),
-      normals({ overwrite: true }),
-    );
-  }
+  await mergeComponents(id, document, componentSourcePaths, descriptor.components, verifySource);
+  await simplifyDocument(document, descriptor);
   await document.transform(prune(), dedup(), unpartition());
 
-  const scene = document.getRoot().getDefaultScene()
-    ?? document.getRoot().listScenes()[0];
-  if (!scene) throw new Error(`${id}: source scene is missing`);
-  scene.setName(id);
-  scene.listChildren().forEach((node, index) => {
-    node.setName(`${id}:${node.getName() || `source-${index + 1}`}`);
-  });
-
-  const triangles = countDocumentTriangles(document);
-  const maxTriangles = descriptor.maxTriangles ?? 3_000;
-  if (triangles <= 0 || triangles > maxTriangles) {
-    throw new Error(
-      `${id}: processed triangle count ${triangles} exceeds the ${maxTriangles} limit`,
-    );
-  }
+  renameOutputScene(id, document);
+  const triangles = validateOutputTriangles(id, document, descriptor);
 
   await mkdir(dirname(outputPath), { recursive: true });
   await io.write(outputPath, document);

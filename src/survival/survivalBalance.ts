@@ -19,7 +19,7 @@ export const SURVIVAL_BALANCE = {
     flashlightInjury: 0.18, injuryDamage: 50, overcastSuccessDelta: -0.05,
     overcastInjuryDelta: 0.05,
   },
-  rescue: { firstDay: 24, maximumLead: 8 },
+  rescue: { firstEffectiveDay: 33, maximumLead: 8 },
   radio: {
     firstDay: 5,
     signalChance: 0.20,
@@ -47,20 +47,20 @@ export interface RescueChanceStep {
 }
 
 export const RESCUE_CHANCE_STEPS: readonly RescueChanceStep[] = Object.freeze([
-  Object.freeze({ firstDay: 24, chance: 0.01 }),
-  Object.freeze({ firstDay: 28, chance: 0.03 }),
-  Object.freeze({ firstDay: 31, chance: 0.06 }),
-  Object.freeze({ firstDay: 34, chance: 0.10 }),
-  Object.freeze({ firstDay: 37, chance: 0.16 }),
-  Object.freeze({ firstDay: 40, chance: 0.24 }),
-  Object.freeze({ firstDay: 43, chance: 0.38 }),
+  Object.freeze({ firstDay: 33, chance: 0.01 }),
+  Object.freeze({ firstDay: 35, chance: 0.05 }),
+  Object.freeze({ firstDay: 38, chance: 0.15 }),
+  Object.freeze({ firstDay: 41, chance: 0.32 }),
+  Object.freeze({ firstDay: 44, chance: 0.55 }),
+  Object.freeze({ firstDay: 47, chance: 0.72 }),
 ]);
 
 export function validateRescueChanceSteps(
   steps: readonly RescueChanceStep[],
 ): void {
-  if (steps.length === 0 || steps[0]?.firstDay !== 24) {
-    throw new Error('Rescue chance must start on day 24.');
+  if (steps.length === 0
+    || steps[0]?.firstDay !== SURVIVAL_BALANCE.rescue.firstEffectiveDay) {
+    throw new Error('Rescue chance must start on the first effective day.');
   }
   let previousDay = 0;
   let previousChance = 0;
@@ -87,7 +87,6 @@ export function clampRescueLead(value: number): RescueLead {
 }
 
 export function rescueChanceForDay(realDay: number, rescueLead: number): number {
-  if (realDay < 24) return 0;
   const effectiveDay = realDay + clampRescueLead(rescueLead);
   let chance = 0;
   for (const step of RESCUE_CHANCE_STEPS) {

@@ -44,61 +44,87 @@ export interface SegmentBoxInterval {
 export const PLAYER_BODY_HEIGHT = 1.5;
 export const MAX_JUMPABLE_SUPPORT_HEIGHT = 0.6;
 const SUPPORT_EPSILON = 1e-6;
+const segmentInterval = { minimum: 0, maximum: 1 };
 
 export function segmentBoxInterval(
   start: LocalPlayerPosition,
   end: LocalPlayerPosition,
   box: CollisionBox,
 ): SegmentBoxInterval | undefined {
-  const footprint = box.orientedFootprint;
-  const cosine = footprint ? Math.cos(footprint.rotationY) : 1;
-  const sine = footprint ? Math.sin(footprint.rotationY) : 0;
-  const startOffsetX = footprint ? start.x - footprint.centerX : start.x;
-  const startOffsetZ = footprint ? start.z - footprint.centerZ : start.z;
-  const endOffsetX = footprint ? end.x - footprint.centerX : end.x;
-  const endOffsetZ = footprint ? end.z - footprint.centerZ : end.z;
-  const localStartX = footprint
-    ? cosine * startOffsetX - sine * startOffsetZ
-    : start.x;
-  const localStartZ = footprint
-    ? sine * startOffsetX + cosine * startOffsetZ
-    : start.z;
-  const localEndX = footprint
-    ? cosine * endOffsetX - sine * endOffsetZ
-    : end.x;
-  const localEndZ = footprint
-    ? sine * endOffsetX + cosine * endOffsetZ
-    : end.z;
-  let minimum = 0;
-  let maximum = 1;
-  for (const [startValue, delta, min, max] of [
-    [
-      localStartX,
-      localEndX - localStartX,
-      footprint ? -footprint.halfWidth : box.minX,
-      footprint ? footprint.halfWidth : box.maxX,
-    ],
-    [start.y, end.y - start.y, box.minY, box.maxY],
-    [
-      localStartZ,
-      localEndZ - localStartZ,
-      footprint ? -footprint.halfDepth : box.minZ,
-      footprint ? footprint.halfDepth : box.maxZ,
-    ],
-  ] as const) {
-    if (Math.abs(delta) < 1e-9) {
-      if (startValue < min || startValue > max) return undefined;
-      continue;
-    }
-    const first = (min - startValue) / delta;
-    const second = (max - startValue) / delta;
-    minimum = Math.max(minimum, Math.min(first, second));
-    maximum = Math.min(maximum, Math.max(first, second));
-    if (minimum > maximum) return undefined;
-  }
-  return maximum > 1e-6 && minimum < 1 - 1e-6
-    ? { minimum, maximum }
+  if (!clipSegmentToBox(start, end, box)) return undefined;
+  return segmentInterval.maximum > 1e-6 && segmentInterval.minimum < 1 - 1e-6
+    ? { minimum: segmentInterval.minimum, maximum: segmentInterval.maximum }
     : undefined;
+}
+
+function clipSegmentToBox(
+  start: LocalPlayerPosition,
+  end: LocalPlayerPosition,
+  box: CollisionBox,
+): boolean {
+  segmentInterval.minimum = 0;
+  segmentInterval.maximum = 1;
+  const footprint = box.orientedFootprint;
+  if (footprint === undefined) return clipAxisAlignedSegment(start, end, box);
+  return clipOrientedSegment(start, end, box, footprint);
+}
+
+function clipAxisAlignedSegment(
+  start: LocalPlayerPosition,
+  end: LocalPlayerPosition,
+  box: CollisionBox,
+): boolean {
+  return clipSegmentAxis(start.x, end.x - start.x, box.minX, box.maxX)
+    && clipSegmentAxis(start.y, end.y - start.y, box.minY, box.maxY)
+    && clipSegmentAxis(start.z, end.z - start.z, box.minZ, box.maxZ);
+}
+
+function clipOrientedSegment(
+  start: LocalPlayerPosition,
+  end: LocalPlayerPosition,
+  box: CollisionBox,
+  footprint: NonNullable<CollisionBox['orientedFootprint']>,
+): boolean {
+  const cosine = Math.cos(footprint.rotationY);
+  const sine = Math.sin(footprint.rotationY);
+  const startX = localFootprintX(start, footprint, cosine, sine);
+  const startZ = localFootprintZ(start, footprint, cosine, sine);
+  const endX = localFootprintX(end, footprint, cosine, sine);
+  const endZ = localFootprintZ(end, footprint, cosine, sine);
+  return clipSegmentAxis(startX, endX - startX, -footprint.halfWidth, footprint.halfWidth)
+    && clipSegmentAxis(start.y, end.y - start.y, box.minY, box.maxY)
+    && clipSegmentAxis(startZ, endZ - startZ, -footprint.halfDepth, footprint.halfDepth);
+}
+
+function clipSegmentAxis(start: number, delta: number, minimum: number, maximum: number): boolean {
+  if (Math.abs(delta) < 1e-9) return start >= minimum && start <= maximum;
+  const first = (minimum - start) / delta;
+  const second = (maximum - start) / delta;
+  segmentInterval.minimum = Math.max(segmentInterval.minimum, Math.min(first, second));
+  segmentInterval.maximum = Math.min(segmentInterval.maximum, Math.max(first, second));
+  return segmentInterval.minimum <= segmentInterval.maximum;
+}
+
+function localFootprintX(
+  position: Pick<LocalPlayerPosition, 'x' | 'z'>,
+  footprint: NonNullable<CollisionBox['orientedFootprint']>,
+  cosine: number,
+  sine: number,
+): number {
+  const offsetX = position.x - footprint.centerX;
+  const offsetZ = position.z - footprint.centerZ;
+  return cosine * offsetX - sine * offsetZ;
+}
+
+function localFootprintZ(
+  position: Pick<LocalPlayerPosition, 'x' | 'z'>,
+  footprint: NonNullable<CollisionBox['orientedFootprint']>,
+  cosine: number,
+  sine: number,
+): number {
+  const offsetX = position.x - footprint.centerX;
+  const offsetZ = position.z - footprint.centerZ;
+  return sine * offsetX + cosine * offsetZ;
 }
 
 export function circleOverlapsCollisionFootprint(
@@ -291,34 +317,48 @@ function resolveBoxAxisInPlace(
   boxes: readonly CollisionBox[],
   axis: 'x' | 'z',
 ): void {
-  const perpendicularAxis = axis === 'x' ? 'z' : 'x';
   for (const box of boxes) {
     if (box.orientedFootprint) continue;
-    const playerFeetY = result.y - PLAYER_BODY_HEIGHT;
-    const verticallyOverlaps = playerFeetY < box.maxY && result.y > box.minY;
-    if (!verticallyOverlaps) continue;
-    const perpendicular = result[perpendicularAxis];
-    const perpendicularMin = perpendicularAxis === 'x' ? box.minX : box.minZ;
-    const perpendicularMax = perpendicularAxis === 'x' ? box.maxX : box.maxZ;
-    const perpendicularDistance = perpendicular < perpendicularMin
-      ? perpendicularMin - perpendicular
-      : Math.max(0, perpendicular - perpendicularMax);
-    if (perpendicularDistance >= radius) continue;
-
-    const axisMin = axis === 'x' ? box.minX : box.minZ;
-    const axisMax = axis === 'x' ? box.maxX : box.maxZ;
-    const radiusAtAxis = Math.sqrt(radius * radius - perpendicularDistance * perpendicularDistance);
-    const lowerBoundary = axisMin - radiusAtAxis;
-    const upperBoundary = axisMax + radiusAtAxis;
-    const start = current[axis];
-    const target = result[axis];
-
-    if (start <= axisMin && target >= start && target > lowerBoundary) {
-      result[axis] = lowerBoundary;
-    } else if (start >= axisMax && target <= start && target < upperBoundary) {
-      result[axis] = upperBoundary;
-    }
+    resolveAxisAgainstBox(current, result, radius, box, axis);
   }
+}
+
+function resolveAxisAgainstBox(
+  current: LocalPlayerPosition,
+  result: LocalPlayerPosition,
+  radius: number,
+  box: CollisionBox,
+  axis: 'x' | 'z',
+): void {
+  if (!verticallyOverlapsBox(result, box)) return;
+  const perpendicularAxis = axis === 'x' ? 'z' : 'x';
+  const distance = distanceOutsideAxis(result[perpendicularAxis], box, perpendicularAxis);
+  if (distance >= radius) return;
+  const minimum = boxAxisMinimum(box, axis);
+  const maximum = boxAxisMaximum(box, axis);
+  const radiusAtAxis = Math.sqrt(radius * radius - distance * distance);
+  result[axis] = resolveLocalAxisMovement(
+    current[axis], result[axis], 0, minimum, maximum, radiusAtAxis,
+  );
+}
+
+function verticallyOverlapsBox(position: LocalPlayerPosition, box: CollisionBox): boolean {
+  const feetY = position.y - PLAYER_BODY_HEIGHT;
+  return feetY < box.maxY && position.y > box.minY;
+}
+
+function distanceOutsideAxis(value: number, box: CollisionBox, axis: 'x' | 'z'): number {
+  const minimum = boxAxisMinimum(box, axis);
+  const maximum = boxAxisMaximum(box, axis);
+  return value < minimum ? minimum - value : Math.max(0, value - maximum);
+}
+
+function boxAxisMinimum(box: CollisionBox, axis: 'x' | 'z'): number {
+  return axis === 'x' ? box.minX : box.minZ;
+}
+
+function boxAxisMaximum(box: CollisionBox, axis: 'x' | 'z'): number {
+  return axis === 'x' ? box.maxX : box.maxZ;
 }
 
 function resolveOrientedBoxMovementInPlace(
@@ -329,59 +369,50 @@ function resolveOrientedBoxMovementInPlace(
 ): void {
   const footprint = box.orientedFootprint;
   if (!footprint) return;
-  const playerFeetY = result.y - PLAYER_BODY_HEIGHT;
-  if (playerFeetY >= box.maxY || result.y <= box.minY) return;
+  if (!verticallyOverlapsBox(result, box)) return;
 
   const cosine = Math.cos(footprint.rotationY);
   const sine = Math.sin(footprint.rotationY);
-  const currentOffsetX = current.x - footprint.centerX;
-  const currentOffsetZ = current.z - footprint.centerZ;
-  const resultOffsetX = result.x - footprint.centerX;
-  const resultOffsetZ = result.z - footprint.centerZ;
-  const currentLocalX = cosine * currentOffsetX - sine * currentOffsetZ;
-  const currentLocalZ = sine * currentOffsetX + cosine * currentOffsetZ;
-  let resultLocalX = cosine * resultOffsetX - sine * resultOffsetZ;
-  const desiredLocalZ = sine * resultOffsetX + cosine * resultOffsetZ;
-
-  const zDistance = currentLocalZ < -footprint.halfDepth
-    ? -footprint.halfDepth - currentLocalZ
-    : Math.max(0, currentLocalZ - footprint.halfDepth);
-  if (zDistance < radius) {
-    const radiusAtX = Math.sqrt(radius * radius - zDistance * zDistance);
-    const lowerBoundary = -footprint.halfWidth - radiusAtX;
-    const upperBoundary = footprint.halfWidth + radiusAtX;
-    if (currentLocalX <= -footprint.halfWidth
-      && resultLocalX >= currentLocalX
-      && resultLocalX > lowerBoundary) {
-      resultLocalX = lowerBoundary;
-    } else if (currentLocalX >= footprint.halfWidth
-      && resultLocalX <= currentLocalX
-      && resultLocalX < upperBoundary) {
-      resultLocalX = upperBoundary;
-    }
-  }
-
-  let resultLocalZ = desiredLocalZ;
-  const xDistance = resultLocalX < -footprint.halfWidth
-    ? -footprint.halfWidth - resultLocalX
-    : Math.max(0, resultLocalX - footprint.halfWidth);
-  if (xDistance < radius) {
-    const radiusAtZ = Math.sqrt(radius * radius - xDistance * xDistance);
-    const lowerBoundary = -footprint.halfDepth - radiusAtZ;
-    const upperBoundary = footprint.halfDepth + radiusAtZ;
-    if (currentLocalZ <= -footprint.halfDepth
-      && resultLocalZ >= currentLocalZ
-      && resultLocalZ > lowerBoundary) {
-      resultLocalZ = lowerBoundary;
-    } else if (currentLocalZ >= footprint.halfDepth
-      && resultLocalZ <= currentLocalZ
-      && resultLocalZ < upperBoundary) {
-      resultLocalZ = upperBoundary;
-    }
-  }
+  const currentLocalX = localFootprintX(current, footprint, cosine, sine);
+  const currentLocalZ = localFootprintZ(current, footprint, cosine, sine);
+  let resultLocalX = localFootprintX(result, footprint, cosine, sine);
+  const desiredLocalZ = localFootprintZ(result, footprint, cosine, sine);
+  resultLocalX = resolveLocalAxisMovement(
+    currentLocalX, resultLocalX, currentLocalZ,
+    -footprint.halfWidth, footprint.halfWidth, radius, footprint.halfDepth,
+  );
+  const resultLocalZ = resolveLocalAxisMovement(
+    currentLocalZ, desiredLocalZ, resultLocalX,
+    -footprint.halfDepth, footprint.halfDepth, radius, footprint.halfWidth,
+  );
 
   result.x = footprint.centerX + cosine * resultLocalX + sine * resultLocalZ;
   result.z = footprint.centerZ - sine * resultLocalX + cosine * resultLocalZ;
+}
+
+function resolveLocalAxisMovement(
+  start: number,
+  target: number,
+  perpendicular: number,
+  minimum: number,
+  maximum: number,
+  radius: number,
+  perpendicularHalfExtent = 0,
+): number {
+  const distance = perpendicularHalfExtent === 0
+    ? 0
+    : distanceOutsideRange(perpendicular, -perpendicularHalfExtent, perpendicularHalfExtent);
+  if (distance >= radius) return target;
+  const radiusAtAxis = Math.sqrt(radius * radius - distance * distance);
+  const lowerBoundary = minimum - radiusAtAxis;
+  const upperBoundary = maximum + radiusAtAxis;
+  if (start <= minimum && target >= start && target > lowerBoundary) return lowerBoundary;
+  if (start >= maximum && target <= start && target < upperBoundary) return upperBoundary;
+  return target;
+}
+
+function distanceOutsideRange(value: number, minimum: number, maximum: number): number {
+  return value < minimum ? minimum - value : Math.max(0, value - maximum);
 }
 
 function resolveBoxMovementInPlace(

@@ -135,6 +135,67 @@ const TRADE_EVENTS: ReadonlySet<string> = new Set(['night-trader', 'handyman']);
 const FLASHLIGHT_SIGNAL_EVENTS: ReadonlySet<string> = new Set([
   'other-people', 'plane',
 ]);
+const ANCHOR_DROP_EVENTS: ReadonlySet<string> = new Set([
+  'tornado', 'thunderstorm', 'restless-waves',
+]);
+const SETTLE_ROLL_EXCLUDED_CONTEXTS: ReadonlySet<EventItemUseContext> = new Set([
+  'map-read', 'compass-search', 'net-scoop', 'map-leak-patch',
+]);
+const EVENT_ITEM_USE_BASE_DURATIONS: Readonly<Record<EventItemUseContext, number>> = {
+  base: 1.35,
+  'throw-target': 1.35,
+  'tape-stretch': 1.45,
+  'compass-search': 1.6,
+  'map-read': 1.55,
+  'binocular-look': 1.7,
+  'net-scoop': SCOOP_DURATION,
+  'bucket-scoop': SCOOP_DURATION,
+  'bucket-helmet': 1.45,
+  'trade-handover': 1.35,
+  'radio-signal-receive': 1.65,
+  'map-leak-patch': 1.5,
+  'flare-target': 1.5,
+  'flare-sky': 1.65,
+  'anchor-drop': 1.6,
+  'umbrella-overhead': 1.45,
+  'umbrella-shield': 1.35,
+  'flashlight-threat-beam': 1.45,
+  'flashlight-signal': 1.7,
+  'shotgun-fire': 1.2,
+  'knife-slash': 1.15,
+};
+
+type EventItemContextResolver = (
+  eventId: string,
+  choiceId: string,
+) => EventItemUseContext | null;
+
+const EVENT_ITEM_CONTEXT_RESOLVERS: Partial<Record<ItemId, EventItemContextResolver>> = {
+  radio: (_eventId, choiceId) => exactChoiceContext(
+    choiceId, 'radioSignal', 'radio-signal-receive',
+  ),
+  bucket: resolveBucketContext,
+  umbrella: resolveUmbrellaContext,
+  flareGun: resolveFlareContext,
+  anchor: resolveAnchorContext,
+  cannedFood: (_eventId, choiceId) => choiceId === 'food' || choiceId === 'cannedFood'
+    ? 'throw-target'
+    : null,
+  baitTin: (_eventId, choiceId) => choiceId === 'bait' || choiceId === 'baitTin'
+    ? 'throw-target'
+    : null,
+  medicalKit: (_eventId, choiceId) => exactChoiceContext(choiceId, 'medicalKit', 'throw-target'),
+  energyBar: (_eventId, choiceId) => exactChoiceContext(choiceId, 'energyBar', 'throw-target'),
+  swimRing: (_eventId, choiceId) => exactChoiceContext(choiceId, 'swimRing', 'throw-target'),
+  ductTape: (_eventId, choiceId) => exactChoiceContext(choiceId, 'ductTape', 'tape-stretch'),
+  compass: (_eventId, choiceId) => exactChoiceContext(choiceId, 'compass', 'compass-search'),
+  map: resolveMapContext,
+  spyglass: (_eventId, choiceId) => exactChoiceContext(choiceId, 'spyglass', 'binocular-look'),
+  fishingNet: (_eventId, choiceId) => exactChoiceContext(choiceId, 'fishingNet', 'net-scoop'),
+  knife: (_eventId, choiceId) => exactChoiceContext(choiceId, 'knife', 'knife-slash'),
+  flashlight: resolveFlashlightContext,
+  shotgun: (_eventId, choiceId) => exactChoiceContext(choiceId, 'shotgun', 'shotgun-fire'),
+};
 
 export function createEventItemUseSample(): EventItemUseSample {
   return {
@@ -175,93 +236,58 @@ export function resolveEventItemUseContext(
   itemId: ItemId,
 ): EventItemUseContext | null {
   if (TRADE_EVENTS.has(eventId)) return 'trade-handover';
-  if (itemId === 'radio' && choiceId === 'radioSignal') {
-    return 'radio-signal-receive';
-  }
-  if (itemId === 'bucket' && choiceId === 'bucket') {
-    if (BUCKET_SCOOP_EVENTS.has(eventId)) return 'bucket-scoop';
-    if (BUCKET_HELMET_EVENTS.has(eventId)) return 'bucket-helmet';
-    return null;
-  }
-  if (itemId === 'umbrella' && choiceId === 'umbrella') {
-    if (UMBRELLA_OVERHEAD_EVENTS.has(eventId)) return 'umbrella-overhead';
-    if (UMBRELLA_SHIELD_EVENTS.has(eventId)) return 'umbrella-shield';
-    return null;
-  }
-  if (itemId === 'flareGun' && choiceId === 'flareGun') {
-    if (FLARE_SKY_EVENTS.has(eventId)) return 'flare-sky';
-    if (FLARE_TARGET_EVENTS.has(eventId)) return 'flare-target';
-    return null;
-  }
-  if (
-    itemId === 'anchor'
-    && choiceId === 'anchor'
-    && (
-      eventId === 'tornado'
-      || eventId === 'thunderstorm'
-      || eventId === 'restless-waves'
-    )
-  ) {
-    return 'anchor-drop';
-  }
-  if (itemId === 'anchor' && choiceId === 'anchor' && eventId === 'handyman') {
-    return 'base';
-  }
-  if (
-    itemId === 'cannedFood'
-    && (choiceId === 'food' || choiceId === 'cannedFood')
-  ) return 'throw-target';
-  if (
-    itemId === 'baitTin'
-    && (choiceId === 'bait' || choiceId === 'baitTin')
-  ) return 'throw-target';
-  if (itemId === 'medicalKit' && choiceId === 'medicalKit') return 'throw-target';
-  if (itemId === 'energyBar' && choiceId === 'energyBar') return 'throw-target';
-  if (itemId === 'swimRing' && choiceId === 'swimRing') return 'throw-target';
-  if (itemId === 'ductTape' && choiceId === 'ductTape') return 'tape-stretch';
-  if (itemId === 'compass' && choiceId === 'compass') return 'compass-search';
-  if (itemId === 'map' && choiceId === 'map') {
-    if (eventId === 'leak') return 'map-leak-patch';
-    return 'map-read';
-  }
-  if (itemId === 'spyglass' && choiceId === 'spyglass') return 'binocular-look';
-  if (itemId === 'fishingNet' && choiceId === 'fishingNet') {
-    return 'net-scoop';
-  }
-  if (itemId === 'knife' && choiceId === 'knife') return 'knife-slash';
-  if (itemId === 'flashlight' && choiceId === 'flashlight') {
-    return FLASHLIGHT_SIGNAL_EVENTS.has(eventId)
-      ? 'flashlight-signal'
-      : 'flashlight-threat-beam';
-  }
-  if (itemId === 'shotgun' && choiceId === 'shotgun') return 'shotgun-fire';
-  return null;
+  return EVENT_ITEM_CONTEXT_RESOLVERS[itemId]?.(eventId, choiceId) ?? null;
+}
+
+function exactChoiceContext(
+  choiceId: string,
+  expectedChoiceId: string,
+  context: EventItemUseContext,
+): EventItemUseContext | null {
+  return choiceId === expectedChoiceId ? context : null;
+}
+
+function resolveBucketContext(eventId: string, choiceId: string): EventItemUseContext | null {
+  if (choiceId !== 'bucket') return null;
+  if (BUCKET_SCOOP_EVENTS.has(eventId)) return 'bucket-scoop';
+  return BUCKET_HELMET_EVENTS.has(eventId) ? 'bucket-helmet' : null;
+}
+
+function resolveUmbrellaContext(eventId: string, choiceId: string): EventItemUseContext | null {
+  if (choiceId !== 'umbrella') return null;
+  if (UMBRELLA_OVERHEAD_EVENTS.has(eventId)) return 'umbrella-overhead';
+  return UMBRELLA_SHIELD_EVENTS.has(eventId) ? 'umbrella-shield' : null;
+}
+
+function resolveFlareContext(eventId: string, choiceId: string): EventItemUseContext | null {
+  if (choiceId !== 'flareGun') return null;
+  if (FLARE_SKY_EVENTS.has(eventId)) return 'flare-sky';
+  return FLARE_TARGET_EVENTS.has(eventId) ? 'flare-target' : null;
+}
+
+function resolveAnchorContext(eventId: string, choiceId: string): EventItemUseContext | null {
+  if (choiceId !== 'anchor') return null;
+  if (ANCHOR_DROP_EVENTS.has(eventId)) return 'anchor-drop';
+  return eventId === 'handyman' ? 'base' : null;
+}
+
+function resolveMapContext(eventId: string, choiceId: string): EventItemUseContext | null {
+  if (choiceId !== 'map') return null;
+  return eventId === 'leak' ? 'map-leak-patch' : 'map-read';
+}
+
+function resolveFlashlightContext(eventId: string, choiceId: string): EventItemUseContext | null {
+  if (choiceId !== 'flashlight') return null;
+  return FLASHLIGHT_SIGNAL_EVENTS.has(eventId)
+    ? 'flashlight-signal'
+    : 'flashlight-threat-beam';
 }
 
 export function eventItemUseDuration(context: EventItemUseContext): number {
-  switch (context) {
-    case 'base': return scaleEventItemDuration(1.35);
-    case 'throw-target': return scaleThrownItemDuration(1.35);
-    case 'tape-stretch': return scaleEventItemDuration(1.45);
-    case 'compass-search': return scaleEventItemDuration(1.6);
-    case 'map-read': return scaleEventItemDuration(1.55);
-    case 'binocular-look': return scaleEventItemDuration(1.7);
-    case 'net-scoop': return scaleEventItemDuration(SCOOP_DURATION);
-    case 'bucket-scoop': return scaleEventItemDuration(SCOOP_DURATION);
-    case 'bucket-helmet': return scaleEventItemDuration(1.45);
-    case 'trade-handover': return scaleEventItemDuration(1.35);
-    case 'radio-signal-receive': return scaleEventItemDuration(1.65);
-    case 'map-leak-patch': return scaleEventItemDuration(1.5);
-    case 'flare-target': return scaleEventItemDuration(1.5);
-    case 'flare-sky': return scaleEventItemDuration(1.65);
-    case 'anchor-drop': return scaleEventItemDuration(1.6);
-    case 'umbrella-overhead': return scaleEventItemDuration(1.45);
-    case 'umbrella-shield': return scaleEventItemDuration(1.35);
-    case 'flashlight-threat-beam': return scaleEventItemDuration(1.45);
-    case 'flashlight-signal': return scaleEventItemDuration(1.7);
-    case 'shotgun-fire': return scaleEventItemDuration(1.2);
-    case 'knife-slash': return scaleEventItemDuration(1.15);
-  }
+  const duration = EVENT_ITEM_USE_BASE_DURATIONS[context];
+  return context === 'throw-target'
+    ? scaleThrownItemDuration(duration)
+    : scaleEventItemDuration(duration);
 }
 
 export function eventItemUseDurationForItem(
@@ -793,50 +819,65 @@ export function sampleEventItemUse(
   staged[MOTION_PROFILE] = eventItemMotionProfile(itemId ?? 'cannedFood');
   staged[ANTICIPATE] = anticipate;
 
-  switch (context) {
-    case 'base': samplePickupAndHold(output, pickup, hold); break;
-    case 'throw-target': sampleThrowTarget(output, pickup, hold, t, itemId); break;
-    case 'tape-stretch': sampleTapeStretch(output, pickup, hold, action); break;
-    case 'compass-search': sampleCompassSearch(output, pickup, hold); break;
-    case 'map-read': sampleMapRead(output, pickup, hold, t); break;
-    case 'binocular-look': sampleBinocularLook(output, pickup, hold, t); break;
-    case 'net-scoop': sampleNetScoop(output, pickup, hold, t); break;
-    case 'bucket-scoop': sampleBucketScoop(output, pickup, hold, t); break;
-    case 'bucket-helmet': sampleBucketHelmet(output, t); break;
-    case 'trade-handover': sampleTradeHandover(output, pickup, hold, t); break;
-    case 'radio-signal-receive':
-      sampleRadioSignalReceive(output, pickup, hold, t);
-      break;
-    case 'map-leak-patch': sampleMapLeakPatch(output, t); break;
-    case 'flare-target': sampleFlare(output, pickup, hold, t); break;
-    case 'flare-sky': sampleFlare(output, pickup, hold, t); break;
-    case 'anchor-drop': sampleAnchorDrop(output, pickup, hold, t); break;
-    case 'umbrella-overhead': sampleUmbrella(output, pickup, hold, false, t); break;
-    case 'umbrella-shield': sampleUmbrella(output, pickup, hold, true, t); break;
-    case 'flashlight-threat-beam':
-      sampleFlashlightThreatBeam(output, pickup, hold, t);
-      break;
-    case 'flashlight-signal': sampleFlashlightSignal(output, pickup, hold, t); break;
-    case 'shotgun-fire':
-      sampleShotgunFire(
-        output,
-        pickup,
-        hold,
-        pulse(t, 0.42, 0.5, 0.68),
-        pulse(t, 0.46, 0.53, 0.66),
-        smoothstep((t - 0.46) / 0.2),
-      );
-      break;
-    case 'knife-slash': sampleKnifeSlash(output, pickup, hold, t); break;
+  if (!sampleHeldEventItemUse(context, output, pickup, hold, action, t)) {
+    sampleTargetedEventItemUse(context, output, itemId, pickup, hold, t);
   }
 
-  if (
-    context !== 'map-read'
-    && context !== 'compass-search'
-    && context !== 'net-scoop'
-    && context !== 'map-leak-patch'
-  ) {
+  if (!SETTLE_ROLL_EXCLUDED_CONTEXTS.has(context)) {
     output.roll += 0.03 * settle;
+  }
+}
+
+function sampleHeldEventItemUse(
+  context: EventItemUseContext,
+  output: EventItemUseSample,
+  pickup: number,
+  hold: number,
+  action: number,
+  progress: number,
+): boolean {
+  switch (context) {
+    case 'base': samplePickupAndHold(output, pickup, hold); return true;
+    case 'tape-stretch': sampleTapeStretch(output, pickup, hold, action); return true;
+    case 'compass-search': sampleCompassSearch(output, pickup, hold); return true;
+    case 'map-read': sampleMapRead(output, pickup, hold, progress); return true;
+    case 'binocular-look': sampleBinocularLook(output, pickup, hold, progress); return true;
+    case 'bucket-helmet': sampleBucketHelmet(output, progress); return true;
+    case 'trade-handover': sampleTradeHandover(output, pickup, hold, progress); return true;
+    case 'radio-signal-receive': sampleRadioSignalReceive(output, pickup, hold, progress); return true;
+    case 'umbrella-overhead': sampleUmbrella(output, pickup, hold, false, progress); return true;
+    case 'umbrella-shield': sampleUmbrella(output, pickup, hold, true, progress); return true;
+    default: return false;
+  }
+}
+
+function sampleTargetedEventItemUse(
+  context: EventItemUseContext,
+  output: EventItemUseSample,
+  itemId: ItemId | undefined,
+  pickup: number,
+  hold: number,
+  progress: number,
+): void {
+  switch (context) {
+    case 'throw-target': sampleThrowTarget(output, pickup, hold, progress, itemId); break;
+    case 'net-scoop': sampleNetScoop(output, pickup, hold, progress); break;
+    case 'bucket-scoop': sampleBucketScoop(output, pickup, hold, progress); break;
+    case 'map-leak-patch': sampleMapLeakPatch(output, progress); break;
+    case 'flare-target': sampleFlare(output, pickup, hold, progress); break;
+    case 'flare-sky': sampleFlare(output, pickup, hold, progress); break;
+    case 'anchor-drop': sampleAnchorDrop(output, pickup, hold, progress); break;
+    case 'flashlight-threat-beam': sampleFlashlightThreatBeam(output, pickup, hold, progress); break;
+    case 'flashlight-signal': sampleFlashlightSignal(output, pickup, hold, progress); break;
+    case 'shotgun-fire': sampleShotgunFire(
+      output,
+      pickup,
+      hold,
+      pulse(progress, 0.42, 0.5, 0.68),
+      pulse(progress, 0.46, 0.53, 0.66),
+      smoothstep((progress - 0.46) / 0.2),
+    ); break;
+    case 'knife-slash': sampleKnifeSlash(output, pickup, hold, progress); break;
   }
 }
 
@@ -883,71 +924,9 @@ export function sampleEventItemOutcome(
   const t = clamp01(progress);
   const profile = eventItemMotionProfile(itemId);
 
-  if (context === 'throw-target') {
-    output.itemVisible = false;
-    return;
-  }
-
-  if (context === 'bucket-helmet' || context === 'umbrella-shield') return;
-
-  if (context === 'trade-handover' && disposition === 'depart') {
-    output.targetBlend = 0.88 + 0.12 * smoothstep(t);
-    output.cameraTargetBlend = 0.12 * (1 - smoothstep(t));
-    output.itemVisible = t < 1;
-    return;
-  }
-
-  if (context === 'trade-handover') {
-    sampleEventItemUse(context, itemId, 1 - smoothstep(t), output);
-    output.itemVisible = t < 1;
-    return;
-  }
-
-  if (context === 'shotgun-fire') {
-    resetSample(output);
-    const pickup = 1 - smoothstep(t);
-    samplePickupAndHold(output, pickup, pickup);
-    output.itemVisible = t < 1;
-    return;
-  }
-
-  if (context === 'binocular-look') {
-    resetSample(output);
-    const mask = 1 - smoothstep(t);
-    output.effectKind = mask > 0 ? 'binocular-mask' : 'none';
-    output.primaryEffect = mask;
-    output.fovScale = 1 - 0.24 * mask;
-    output.cameraTargetBlend = mask;
-    output.itemVisible = false;
-    return;
-  }
-
-  if (context === 'flare-target' || context === 'flare-sky') {
-    resetSample(output);
-    const pickup = 1 - smoothstep(t);
-    sampleFlare(output, pickup, pickup, 1);
-    output.itemVisible = t < 1;
-    return;
-  }
-
-  if (context === 'umbrella-overhead') {
-    resetSample(output);
-    const pickup = 1 - smoothstep(t);
-    sampleUmbrella(output, pickup, pickup, false, 1);
-    output.itemVisible = t < 1;
-    return;
-  }
-
-  if (context === 'tape-stretch') {
-    resetSample(output);
-    const pickup = 1 - smoothstep(t);
-    const staged = output as StagedEventItemUseSample;
-    staged[MOTION_PROFILE] = profile;
-    staged[ANTICIPATE] = 0;
-    sampleTapeStretch(output, pickup, pickup, 0);
-    output.itemVisible = t < 1;
-    return;
-  }
+  if (sampleImmediateEventItemOutcome(
+    context, itemId, disposition, t, profile, output,
+  )) return;
 
   if (disposition === 'depart') {
     output.targetBlend = t;
@@ -956,121 +935,262 @@ export function sampleEventItemOutcome(
     return;
   }
 
-  if (context === 'map-read') {
-    sampleEventItemUse(
-      context,
-      itemId,
-      MAP_LOOK_COMPLETION * (1 - t),
-      output,
-    );
-    return;
-  }
+  if (sampleRecoveringEventItemOutcome(context, itemId, t, profile, output)) return;
+  sampleDefaultEventItemOutcome(t, profile, output);
+}
 
-  if (context === 'compass-search') {
-    resetSample(output);
-    const pickup = 1 - smoothstep(t);
-    const staged = output as StagedEventItemUseSample;
-    staged[MOTION_PROFILE] = profile;
-    sampleCompassSearch(output, pickup, pickup);
-    output.itemVisible = t < 1;
-    return;
+function sampleImmediateEventItemOutcome(
+  context: EventItemUseContext,
+  itemId: ItemId,
+  disposition: EventItemDisposition,
+  progress: number,
+  profile: ReturnType<typeof eventItemMotionProfile>,
+  output: EventItemUseSample,
+): boolean {
+  switch (context) {
+    case 'throw-target': output.itemVisible = false; return true;
+    case 'bucket-helmet': return true;
+    case 'umbrella-shield': return true;
+    case 'trade-handover': sampleTradeOutcome(itemId, disposition, progress, output); return true;
+    case 'shotgun-fire': sampleShotgunOutcome(progress, output); return true;
+    case 'binocular-look': sampleBinocularOutcome(progress, output); return true;
+    case 'flare-target': sampleFlareOutcome(progress, output); return true;
+    case 'flare-sky': sampleFlareOutcome(progress, output); return true;
+    case 'umbrella-overhead': sampleUmbrellaOutcome(progress, output); return true;
+    case 'tape-stretch': sampleTapeOutcome(progress, profile, output); return true;
+    default: return false;
   }
+}
 
-  if (context === 'radio-signal-receive') {
-    resetSample(output);
-    const pickup = 1 - smoothstep(t);
-    const staged = output as StagedEventItemUseSample;
-    staged[MOTION_PROFILE] = profile;
-    sampleRadioSignalReceive(output, pickup, pickup, 1);
-    output.itemVisible = true;
-    return;
+function sampleTradeOutcome(
+  itemId: ItemId,
+  disposition: EventItemDisposition,
+  progress: number,
+  output: EventItemUseSample,
+): void {
+  if (disposition === 'depart') {
+    output.targetBlend = 0.88 + 0.12 * smoothstep(progress);
+    output.cameraTargetBlend = 0.12 * (1 - smoothstep(progress));
+  } else {
+    sampleEventItemUse('trade-handover', itemId, 1 - smoothstep(progress), output);
   }
+  output.itemVisible = progress < 1;
+}
 
-  if (context === 'flashlight-threat-beam' || context === 'flashlight-signal') {
-    resetSample(output);
-    const pickup = 1 - smoothstep(t);
-    if (context === 'flashlight-signal') {
-      sampleFlashlightSignal(output, pickup, pickup, 1);
-    } else {
-      sampleFlashlightThreatBeam(output, pickup, pickup, 1);
-    }
-    output.itemVisible = t < 1;
-    return;
+function sampleShotgunOutcome(progress: number, output: EventItemUseSample): void {
+  resetSample(output);
+  const pickup = 1 - smoothstep(progress);
+  samplePickupAndHold(output, pickup, pickup);
+  output.itemVisible = progress < 1;
+}
+
+function sampleBinocularOutcome(progress: number, output: EventItemUseSample): void {
+  resetSample(output);
+  const mask = 1 - smoothstep(progress);
+  output.effectKind = mask > 0 ? 'binocular-mask' : 'none';
+  output.primaryEffect = mask;
+  output.fovScale = 1 - 0.24 * mask;
+  output.cameraTargetBlend = mask;
+  output.itemVisible = false;
+}
+
+function sampleFlareOutcome(progress: number, output: EventItemUseSample): void {
+  resetSample(output);
+  const pickup = 1 - smoothstep(progress);
+  sampleFlare(output, pickup, pickup, 1);
+  output.itemVisible = progress < 1;
+}
+
+function sampleUmbrellaOutcome(progress: number, output: EventItemUseSample): void {
+  resetSample(output);
+  const pickup = 1 - smoothstep(progress);
+  sampleUmbrella(output, pickup, pickup, false, 1);
+  output.itemVisible = progress < 1;
+}
+
+function sampleTapeOutcome(
+  progress: number,
+  profile: ReturnType<typeof eventItemMotionProfile>,
+  output: EventItemUseSample,
+): void {
+  resetSample(output);
+  const pickup = 1 - smoothstep(progress);
+  const staged = output as StagedEventItemUseSample;
+  staged[MOTION_PROFILE] = profile;
+  staged[ANTICIPATE] = 0;
+  sampleTapeStretch(output, pickup, pickup, 0);
+  output.itemVisible = progress < 1;
+}
+
+function sampleRecoveringEventItemOutcome(
+  context: EventItemUseContext,
+  itemId: ItemId,
+  progress: number,
+  profile: ReturnType<typeof eventItemMotionProfile>,
+  output: EventItemUseSample,
+): boolean {
+  switch (context) {
+    case 'map-read': sampleMapOutcome(itemId, progress, output); return true;
+    case 'compass-search': sampleCompassOutcome(progress, profile, output); return true;
+    case 'radio-signal-receive': sampleRadioOutcome(progress, profile, output); return true;
+    case 'flashlight-threat-beam': sampleFlashlightOutcome(context, progress, output); return true;
+    case 'flashlight-signal': sampleFlashlightOutcome(context, progress, output); return true;
   }
-
   if (itemId === 'bucket') {
-    resetSample(output);
-    const pickup = 1 - smoothstep(t);
-    const staged = output as StagedEventItemUseSample;
-    staged[MOTION_PROFILE] = eventItemMotionProfile(itemId);
-    samplePickupAndHold(output, pickup, pickup);
-    applyBucketBenchClearance(output, pickup);
-    output.itemVisible = t < 1;
-    return;
+    sampleBucketOutcome(progress, profile, output);
+    return true;
   }
+  if (context !== 'net-scoop') return false;
+  sampleNetOutcome(progress, profile, output);
+  return true;
+}
 
-  if (context === 'net-scoop') {
-    resetSample(output);
-    const pickup = 1 - smoothstep(t);
-    const staged = output as StagedEventItemUseSample;
-    staged[MOTION_PROFILE] = profile;
-    samplePickupAndHold(output, pickup, pickup);
-    output.aimBlend = 0;
-    output.itemVisible = t < 1;
-    return;
+function sampleMapOutcome(
+  itemId: ItemId,
+  progress: number,
+  output: EventItemUseSample,
+): void {
+  sampleEventItemUse('map-read', itemId, MAP_LOOK_COMPLETION * (1 - progress), output);
+}
+
+function sampleCompassOutcome(
+  progress: number,
+  profile: ReturnType<typeof eventItemMotionProfile>,
+  output: EventItemUseSample,
+): void {
+  resetSample(output);
+  const pickup = 1 - smoothstep(progress);
+  const staged = output as StagedEventItemUseSample;
+  staged[MOTION_PROFILE] = profile;
+  sampleCompassSearch(output, pickup, pickup);
+  output.itemVisible = progress < 1;
+}
+
+function sampleRadioOutcome(
+  progress: number,
+  profile: ReturnType<typeof eventItemMotionProfile>,
+  output: EventItemUseSample,
+): void {
+  resetSample(output);
+  const pickup = 1 - smoothstep(progress);
+  const staged = output as StagedEventItemUseSample;
+  staged[MOTION_PROFILE] = profile;
+  sampleRadioSignalReceive(output, pickup, pickup, 1);
+  output.itemVisible = true;
+}
+
+function sampleFlashlightOutcome(
+  context: 'flashlight-threat-beam' | 'flashlight-signal',
+  progress: number,
+  output: EventItemUseSample,
+): void {
+  resetSample(output);
+  const pickup = 1 - smoothstep(progress);
+  if (context === 'flashlight-signal') {
+    sampleFlashlightSignal(output, pickup, pickup, 1);
+  } else {
+    sampleFlashlightThreatBeam(output, pickup, pickup, 1);
   }
+  output.itemVisible = progress < 1;
+}
 
-  const returnToGrip = smoothstep(t / 0.5);
-  if (t <= 0.5) {
+function sampleBucketOutcome(
+  progress: number,
+  profile: ReturnType<typeof eventItemMotionProfile>,
+  output: EventItemUseSample,
+): void {
+  resetSample(output);
+  const pickup = 1 - smoothstep(progress);
+  const staged = output as StagedEventItemUseSample;
+  staged[MOTION_PROFILE] = profile;
+  samplePickupAndHold(output, pickup, pickup);
+  applyBucketBenchClearance(output, pickup);
+  output.itemVisible = progress < 1;
+}
+
+function sampleNetOutcome(
+  progress: number,
+  profile: ReturnType<typeof eventItemMotionProfile>,
+  output: EventItemUseSample,
+): void {
+  resetSample(output);
+  const pickup = 1 - smoothstep(progress);
+  const staged = output as StagedEventItemUseSample;
+  staged[MOTION_PROFILE] = profile;
+  samplePickupAndHold(output, pickup, pickup);
+  output.aimBlend = 0;
+  output.itemVisible = progress < 1;
+}
+
+function sampleDefaultEventItemOutcome(
+  progress: number,
+  profile: ReturnType<typeof eventItemMotionProfile>,
+  output: EventItemUseSample,
+): void {
+  const returnToGrip = smoothstep(progress / 0.5);
+  if (progress <= 0.5) {
     output.viewX += (profile.grip[0] - output.viewX) * returnToGrip;
     output.viewY += (profile.grip[1] - output.viewY) * returnToGrip;
     output.viewZ += (profile.grip[2] - output.viewZ) * returnToGrip;
   } else {
-    const stow = smoothstep((t - 0.5) / 0.5);
+    const stow = smoothstep((progress - 0.5) / 0.5);
     output.viewX = profile.grip[0];
     output.viewY = profile.grip[1] + (-1.35 - profile.grip[1]) * stow;
     output.viewZ = profile.grip[2];
   }
   output.aimBlend = 0;
-  output.itemVisible = t < 1;
+  output.itemVisible = progress < 1;
 }
 
 export function eventItemOutcomeDuration(
   itemId: ItemId,
   disposition: EventItemDisposition,
 ): number {
-  if (itemId === 'compass' && disposition !== 'depart') {
-    return eventItemUseDuration('compass-search')
-      * (MAP_LIFT_COMPLETION - ITEM_LIFT_START);
+  if (disposition !== 'depart') {
+    const recoveryDuration = eventItemRecoveryDuration(itemId);
+    if (recoveryDuration !== null) return recoveryDuration;
   }
-  if (itemId === 'map' && disposition !== 'depart') {
-    return eventItemUseDuration('map-read') * MAP_LOOK_COMPLETION;
-  }
-  if (itemId === 'shotgun') {
-    const liftWindow = liftCompletionForMass(
-      eventItemMotionProfile(itemId).mass,
-    ) - ITEM_LIFT_START;
-    return eventItemUseDuration('shotgun-fire') * liftWindow;
-  }
-  if (itemId === 'spyglass') return scaleEventItemDuration(0.45);
-  if (itemId === 'flashlight' && disposition !== 'depart') {
-    return eventItemUseDuration('flashlight-signal')
-      * (MAP_LIFT_COMPLETION - ITEM_LIFT_START);
-  }
-  if (itemId === 'ductTape') {
-    return eventItemUseDuration('tape-stretch')
-      * (liftCompletionForItem(itemId) - ITEM_LIFT_START);
-  }
-  if (itemId === 'bucket' && disposition !== 'depart') {
-    return eventItemUseDuration('flashlight-signal')
-      * (MAP_LIFT_COMPLETION - ITEM_LIFT_START);
-  }
-  if (itemId === 'fishingNet' && disposition !== 'depart') {
-    return eventItemUseDuration('net-scoop')
-      * (liftCompletionForMass(eventItemMotionProfile(itemId).mass) - ITEM_LIFT_START);
-  }
+  const fixedDuration = fixedEventItemOutcomeDuration(itemId);
+  if (fixedDuration !== null) return fixedDuration;
   const mass = eventItemMotionProfile(itemId).mass;
   const base = disposition === 'depart' ? 0.5 : 0.7;
-  const massOffset = mass === 'heavy' ? 0.18 : mass === 'medium' ? 0.09 : 0;
-  return scaleEventItemDuration(base + massOffset);
+  return scaleEventItemDuration(base + eventItemMassDurationOffset(mass));
+}
+
+function eventItemRecoveryDuration(itemId: ItemId): number | null {
+  switch (itemId) {
+    case 'compass': return eventItemUseDuration('compass-search')
+      * (MAP_LIFT_COMPLETION - ITEM_LIFT_START);
+    case 'map': return eventItemUseDuration('map-read') * MAP_LOOK_COMPLETION;
+    case 'flashlight': return eventItemUseDuration('flashlight-signal')
+      * (MAP_LIFT_COMPLETION - ITEM_LIFT_START);
+    case 'bucket': return eventItemUseDuration('flashlight-signal')
+      * (MAP_LIFT_COMPLETION - ITEM_LIFT_START);
+    case 'fishingNet': return eventItemUseDuration('net-scoop')
+      * (liftCompletionForMass(eventItemMotionProfile(itemId).mass) - ITEM_LIFT_START);
+    default: return null;
+  }
+}
+
+function fixedEventItemOutcomeDuration(itemId: ItemId): number | null {
+  switch (itemId) {
+    case 'shotgun': {
+      const liftWindow = liftCompletionForMass(
+        eventItemMotionProfile(itemId).mass,
+      ) - ITEM_LIFT_START;
+      return eventItemUseDuration('shotgun-fire') * liftWindow;
+    }
+    case 'spyglass': return scaleEventItemDuration(0.45);
+    case 'ductTape': return eventItemUseDuration('tape-stretch')
+      * (liftCompletionForItem(itemId) - ITEM_LIFT_START);
+    default: return null;
+  }
+}
+
+function eventItemMassDurationOffset(mass: EventItemMass): number {
+  switch (mass) {
+    case 'heavy': return 0.18;
+    case 'medium': return 0.09;
+    case 'light': return 0;
+  }
 }

@@ -46,6 +46,10 @@ let objectMinimumCameraZ = Number.POSITIVE_INFINITY;
 let objectMaximumCameraZ = Number.NEGATIVE_INFINITY;
 let objectProjectionCrossesCamera = false;
 let objectProjectionHasPoint = false;
+let screenRawLeft = Number.POSITIVE_INFINITY;
+let screenRawRight = Number.NEGATIVE_INFINITY;
+let screenRawTop = Number.POSITIVE_INFINITY;
+let screenRawBottom = Number.NEGATIVE_INFINITY;
 
 const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.min(maximum, Math.max(minimum, value));
@@ -128,38 +132,51 @@ export function projectScreenBounds(
   bounds.getCenter(center);
   cameraCenter.copy(center).applyMatrix4(camera.matrixWorldInverse);
   if (cameraCenter.z >= 0) return hiddenBounds();
+  if (!projectBoxCorners(bounds, camera, viewportWidth, viewportHeight)) return hiddenBounds();
+  return boundsFromExtents(
+    screenRawLeft,
+    screenRawRight,
+    screenRawTop,
+    screenRawBottom,
+    -cameraCenter.z,
+    viewportWidth,
+    viewportHeight,
+  );
+}
 
-  let rawLeft = Number.POSITIVE_INFINITY;
-  let rawRight = Number.NEGATIVE_INFINITY;
-  let rawTop = Number.POSITIVE_INFINITY;
-  let rawBottom = Number.NEGATIVE_INFINITY;
+function projectBoxCorners(
+  bounds: Box3,
+  camera: PerspectiveCamera,
+  viewportWidth: number,
+  viewportHeight: number,
+): boolean {
+  screenRawLeft = Number.POSITIVE_INFINITY;
+  screenRawRight = Number.NEGATIVE_INFINITY;
+  screenRawTop = Number.POSITIVE_INFINITY;
+  screenRawBottom = Number.NEGATIVE_INFINITY;
   for (let index = 0; index < 8; index += 1) {
     corner.set(
       index & 1 ? bounds.max.x : bounds.min.x,
       index & 2 ? bounds.max.y : bounds.min.y,
       index & 4 ? bounds.max.z : bounds.min.z,
     ).project(camera);
-    const x = (corner.x * 0.5 + 0.5) * viewportWidth;
-    const y = (-corner.y * 0.5 + 0.5) * viewportHeight;
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return hiddenBounds();
-    rawLeft = Math.min(rawLeft, x);
-    rawRight = Math.max(rawRight, x);
-    rawTop = Math.min(rawTop, y);
-    rawBottom = Math.max(rawBottom, y);
+    if (!includeProjectedCorner(viewportWidth, viewportHeight)) return false;
   }
-  if (rawRight < 0 || rawLeft > viewportWidth || rawBottom < 0 || rawTop > viewportHeight) {
-    return hiddenBounds();
-  }
+  return screenRawRight >= 0
+    && screenRawLeft <= viewportWidth
+    && screenRawBottom >= 0
+    && screenRawTop <= viewportHeight;
+}
 
-  return boundsFromExtents(
-    rawLeft,
-    rawRight,
-    rawTop,
-    rawBottom,
-    -cameraCenter.z,
-    viewportWidth,
-    viewportHeight,
-  );
+function includeProjectedCorner(viewportWidth: number, viewportHeight: number): boolean {
+  const x = (corner.x * 0.5 + 0.5) * viewportWidth;
+  const y = (-corner.y * 0.5 + 0.5) * viewportHeight;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  screenRawLeft = Math.min(screenRawLeft, x);
+  screenRawRight = Math.max(screenRawRight, x);
+  screenRawTop = Math.min(screenRawTop, y);
+  screenRawBottom = Math.max(screenRawBottom, y);
+  return true;
 }
 
 function projectVisibleMeshBounds(object: Object3D): void {

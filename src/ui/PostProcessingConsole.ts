@@ -84,11 +84,305 @@ export interface SaveControls {
   continueSavedRun(): void;
 }
 
+export interface VolumetricCloudControls {
+  readonly enabled: boolean;
+  readonly available: boolean;
+  setEnabled(enabled: boolean): void;
+}
+
 const DEFAULT_WEATHER_CONTROLS: WeatherControls = {
   selected: 'calm',
   source: 'normal',
   setWeather: () => undefined,
 };
+
+interface ConsoleMarkupOptions {
+  readonly physicsControls?: PhysicsToggleControls;
+  readonly performanceStatsControls?: PerformanceStatsControls;
+  readonly audioControls?: AudioControls;
+  readonly cameraControls?: CameraControls;
+  readonly saveControls?: SaveControls;
+  readonly timeOfDayControls?: TimeOfDayControls;
+  readonly eventTestControls?: EventTestControls;
+  readonly weatherControls: WeatherControls;
+  readonly volumetricCloudControls?: VolumetricCloudControls;
+}
+
+function onOff(enabled: boolean): 'ON' | 'OFF' {
+  return enabled ? 'ON' : 'OFF';
+}
+
+function checkedAttribute(checked: boolean): string {
+  return checked ? 'checked' : '';
+}
+
+function buildGameplayPhysicsControl(controls?: PhysicsToggleControls): string {
+  if (controls === undefined) return '';
+  return `
+    <div class="post-processing-console__group">
+      <strong>SIMULATION</strong>
+      <label class="post-processing-console__physics">
+        <span>Barrel simulation</span>
+        <input
+          type="checkbox"
+          role="switch"
+          data-physics-enabled
+          ${checkedAttribute(controls.enabled)}
+        >
+        <output data-physics-state>${onOff(controls.enabled)}</output>
+      </label>
+    </div>
+  `;
+}
+
+function buildDiagnosticPhysicsControl(controls?: PhysicsToggleControls): string {
+  if (controls === undefined) return '';
+  const disabled = controls.enabled ? '' : 'disabled';
+  return `
+    <div class="post-processing-console__group">
+      <strong>PHYSICS VIEW</strong>
+      <label class="post-processing-console__physics">
+        <span>Collision meshes</span>
+        <input
+          type="checkbox"
+          role="switch"
+          data-physics-debug
+          ${checkedAttribute(controls.debugMeshes)}
+          ${disabled}
+        >
+        <output data-physics-debug-state>${onOff(controls.debugMeshes)}</output>
+      </label>
+    </div>
+  `;
+}
+
+function buildPerformanceStatsControl(controls?: PerformanceStatsControls): string {
+  if (controls === undefined) return '';
+  return `
+    <div class="post-processing-console__group">
+      <strong>PERFORMANCE</strong>
+      <label class="post-processing-console__toggle">
+        <span>Frame rate</span>
+        <input
+          type="checkbox"
+          role="switch"
+          data-performance-stats-enabled
+          ${checkedAttribute(controls.visible)}
+        >
+        <output data-performance-stats-state>${onOff(controls.visible)}</output>
+      </label>
+    </div>
+  `;
+}
+
+function buildAudioControl(controls?: AudioControls): string {
+  if (controls === undefined) return '';
+  const volume = Math.round(controls.volume * 100);
+  return `
+    <div class="post-processing-console__group">
+      <label class="post-processing-console__slider">
+        <span>Master volume</span>
+        <output data-audio-volume-output>${volume}%</output>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="5"
+          value="${volume}"
+          data-audio-volume
+          aria-label="Master audio volume"
+        >
+      </label>
+      <label class="post-processing-console__toggle">
+        <span>Mute all audio</span>
+        <input
+          type="checkbox"
+          role="switch"
+          data-audio-muted
+          ${checkedAttribute(controls.muted)}
+        >
+        <output data-audio-muted-state>${onOff(controls.muted)}</output>
+      </label>
+    </div>
+  `;
+}
+
+function buildCameraControl(controls?: CameraControls): string {
+  if (controls === undefined) return '';
+  return `
+    <div class="post-processing-console__group">
+      <strong>CAMERA</strong>
+      <label class="post-processing-console__slider">
+        <span>Field of view</span>
+        <output data-camera-fov-output>${Math.round(controls.fieldOfView)}°</output>
+        <input
+          type="range"
+          min="40"
+          max="110"
+          step="1"
+          value="${controls.fieldOfView}"
+          data-camera-fov
+          aria-label="Vertical field of view"
+        >
+      </label>
+    </div>
+  `;
+}
+
+function buildSaveCategory(controls?: SaveControls): string {
+  if (controls === undefined) return '';
+  return `
+    <section class="post-processing-console__category">
+      <h2>SAVE SYSTEM</h2>
+      <div class="post-processing-console__group post-processing-console__save">
+        <label class="post-processing-console__toggle">
+          <span>Auto-save</span>
+          <input
+            type="checkbox"
+            role="switch"
+            data-save-enabled
+            aria-label="Enable survival auto-save"
+            ${checkedAttribute(controls.enabled)}
+          >
+          <output data-save-status>OFF</output>
+        </label>
+        <button type="button" data-save-continue>CONTINUE</button>
+        <small data-save-reason>Enable auto-save to create a checkpoint.</small>
+      </div>
+    </section>
+  `;
+}
+
+function buildEventTestControlHost(controls?: EventTestControls): string {
+  if (controls === undefined) return '';
+  return '<div class="post-processing-console__group" data-event-test-control></div>';
+}
+
+function buildToolsCategory(options: ConsoleMarkupOptions): string {
+  const controls = [
+    buildPerformanceStatsControl(options.performanceStatsControls),
+    buildDiagnosticPhysicsControl(options.physicsControls),
+    buildEventTestControlHost(options.eventTestControls),
+  ].join('');
+  if (controls.length === 0) return '';
+  return `<section class="post-processing-console__category">
+    <h2>TOOLS</h2>
+    ${controls}
+  </section>`;
+}
+
+function buildAudioCategory(controls?: AudioControls): string {
+  if (controls === undefined) return '';
+  return `<section class="post-processing-console__category">
+    <h2>SOUND</h2>
+    ${buildAudioControl(controls)}
+  </section>`;
+}
+
+function buildTimeOfDayControl(controls?: TimeOfDayControls): string {
+  if (controls === undefined) return '';
+  const isNight = controls.selected === 'night';
+  const label = isNight ? 'Night' : 'Day';
+  return `<div class="post-processing-console__group">
+    <strong>TIME OF DAY</strong>
+    <label class="post-processing-console__toggle">
+      <span data-time-of-day-label>${label}</span>
+      <input
+        type="checkbox"
+        role="switch"
+        data-presentation-night
+        ${checkedAttribute(isNight)}
+      >
+      <output data-time-of-day-state>${controls.selected.toUpperCase()}</output>
+    </label>
+  </div>`;
+}
+
+function buildVolumetricCloudControl(controls?: VolumetricCloudControls): string {
+  if (controls === undefined) return '';
+  const disabled = controls.available ? '' : 'disabled';
+  const state = controls.available ? onOff(controls.enabled) : 'UNAVAILABLE';
+  return `<label class="post-processing-console__toggle">
+    <span>Volumetric clouds</span>
+    <input
+      type="checkbox"
+      role="switch"
+      data-volumetric-clouds
+      ${checkedAttribute(controls.enabled)}
+      ${disabled}
+    >
+    <output data-volumetric-clouds-state>${state}</output>
+  </label>`;
+}
+
+function buildConsoleMarkup(options: ConsoleMarkupOptions): string {
+  const weatherOptions = PRESENTATION_WEATHER_IDS.map((id) => `
+    <option value="${id}">${presentationWeatherProfile(id).label}</option>
+  `).join('');
+  return `
+    <section
+      id="${PANEL_ID}"
+      class="post-processing-console__panel"
+      data-post-processing-panel
+      aria-label="System tuning menu"
+      hidden
+    >
+      <header>
+        <strong>SYSTEM TUNING</strong>
+        <button type="button" data-post-processing-close aria-label="Close system tuning menu">×</button>
+      </header>
+      <div class="post-processing-console__columns">
+        <div class="post-processing-console__category-column">
+          ${buildToolsCategory(options)}
+          ${buildAudioCategory(options.audioControls)}
+          ${buildSaveCategory(options.saveControls)}
+        </div>
+        <div class="post-processing-console__category-column">
+          <section class="post-processing-console__category post-processing-console__category--graphics">
+            <h2>GRAPHICS</h2>
+            <div class="post-processing-console__quality-row">
+              <div class="post-processing-console__group" data-ao-quality-control></div>
+              <div class="post-processing-console__group" data-water-quality-control></div>
+              <div class="post-processing-console__group" data-anti-aliasing-quality-control></div>
+              <div class="post-processing-console__group" data-shadow-quality-control></div>
+            </div>
+            <div class="post-processing-console__group post-processing-console__group--ao">
+              <strong>AMBIENT OCCLUSION</strong>
+              <label class="post-processing-console__select">
+                <span>Display</span>
+                <select data-post-processing-ao-mode>
+                  <option value="composite">COMPOSITE</option>
+                  <option value="debug">DEBUG BUFFER</option>
+                  <option value="off">OFF</option>
+                </select>
+              </label>
+              <div class="post-processing-console__sliders" data-post-processing-sliders></div>
+            </div>
+          </section>
+          <section class="post-processing-console__category">
+            <h2>GAMEPLAY</h2>
+            ${buildCameraControl(options.cameraControls)}
+            ${buildGameplayPhysicsControl(options.physicsControls)}
+            ${buildTimeOfDayControl(options.timeOfDayControls)}
+            <div class="post-processing-console__group">
+              <strong>WEATHER</strong>
+              <label class="post-processing-console__select">
+                <span>
+                  Presentation
+                  <output data-weather-source>${options.weatherControls.source.toUpperCase()}</output>
+                </span>
+                <select data-presentation-weather>
+                  ${weatherOptions}
+                </select>
+              </label>
+              ${buildVolumetricCloudControl(options.volumetricCloudControls)}
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+  `;
+}
 
 export class PostProcessingConsole {
   readonly element = document.createElement('aside');
@@ -99,9 +393,12 @@ export class PostProcessingConsole {
   private readonly shadowQualityControl: ShadowQualityControl;
   private readonly weatherSelect: HTMLSelectElement;
   private readonly weatherSource: HTMLOutputElement;
+  private readonly volumetricCloudInput: HTMLInputElement | null;
+  private readonly volumetricCloudState: HTMLOutputElement | null;
   private weatherId: PresentationWeatherId;
   private weatherControlSource: WeatherControlSource;
   private saveDay: number | null = null;
+  private volumetricCloudAvailability: boolean | null;
   private disposed = false;
 
   constructor(
@@ -128,227 +425,31 @@ export class PostProcessingConsole {
     shadowQuality: ShadowQualityPreference =
       createShadowQualityPreference(() => undefined, null),
     private readonly saveControls?: SaveControls,
+    private readonly volumetricCloudControls?: VolumetricCloudControls,
   ) {
     const state = controls.getState();
     this.weatherId = weatherControls.selected;
     this.weatherControlSource = weatherControls.source;
-    const gameplayPhysicsControl = physicsControls === undefined
-      ? ''
-      : `
-        <div class="post-processing-console__group">
-          <strong>SIMULATION</strong>
-          <label class="post-processing-console__physics">
-            <span>Barrel simulation</span>
-            <input
-              type="checkbox"
-              role="switch"
-              data-physics-enabled
-              ${physicsControls.enabled ? 'checked' : ''}
-            >
-            <output data-physics-state>${physicsControls.enabled ? 'ON' : 'OFF'}</output>
-          </label>
-        </div>
-      `;
-    const diagnosticPhysicsControl = physicsControls === undefined
-      ? ''
-      : `
-        <div class="post-processing-console__group">
-          <strong>PHYSICS VIEW</strong>
-          <label class="post-processing-console__physics">
-            <span>Collision meshes</span>
-            <input
-              type="checkbox"
-              role="switch"
-              data-physics-debug
-              ${physicsControls.debugMeshes ? 'checked' : ''}
-              ${physicsControls.enabled ? '' : 'disabled'}
-            >
-            <output data-physics-debug-state>${physicsControls.debugMeshes ? 'ON' : 'OFF'}</output>
-          </label>
-        </div>
-      `;
-    const performanceStatsControl = performanceStatsControls === undefined
-      ? ''
-      : `
-        <div class="post-processing-console__group">
-          <strong>PERFORMANCE</strong>
-          <label class="post-processing-console__toggle">
-            <span>Frame rate</span>
-            <input
-              type="checkbox"
-              role="switch"
-              data-performance-stats-enabled
-              ${performanceStatsControls.visible ? 'checked' : ''}
-            >
-            <output data-performance-stats-state>${performanceStatsControls.visible ? 'ON' : 'OFF'}</output>
-          </label>
-        </div>
-      `;
-    const audioControl = audioControls === undefined
-      ? ''
-      : `
-        <div class="post-processing-console__group">
-          <label class="post-processing-console__slider">
-            <span>Master volume</span>
-            <output data-audio-volume-output>${Math.round(audioControls.volume * 100)}%</output>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="5"
-              value="${Math.round(audioControls.volume * 100)}"
-              data-audio-volume
-              aria-label="Master audio volume"
-            >
-          </label>
-          <label class="post-processing-console__toggle">
-            <span>Mute all audio</span>
-            <input
-              type="checkbox"
-              role="switch"
-              data-audio-muted
-              ${audioControls.muted ? 'checked' : ''}
-            >
-            <output data-audio-muted-state>${audioControls.muted ? 'ON' : 'OFF'}</output>
-          </label>
-        </div>
-      `;
-    const cameraControl = cameraControls === undefined
-      ? ''
-      : `
-        <div class="post-processing-console__group">
-          <strong>CAMERA</strong>
-          <label class="post-processing-console__slider">
-            <span>Field of view</span>
-            <output data-camera-fov-output>${Math.round(cameraControls.fieldOfView)}°</output>
-            <input
-              type="range"
-              min="40"
-              max="110"
-              step="1"
-              value="${cameraControls.fieldOfView}"
-              data-camera-fov
-              aria-label="Vertical field of view"
-            >
-          </label>
-        </div>
-      `;
-    const saveControl = saveControls === undefined
-      ? ''
-      : `
-        <div class="post-processing-console__group post-processing-console__save">
-          <strong>SAVE SYSTEM</strong>
-          <label class="post-processing-console__toggle">
-            <span>Auto-save</span>
-            <input
-              type="checkbox"
-              role="switch"
-              data-save-enabled
-              aria-label="Enable survival auto-save"
-              ${saveControls.enabled ? 'checked' : ''}
-            >
-            <output data-save-status>OFF</output>
-          </label>
-          <button type="button" data-save-continue>CONTINUE</button>
-          <small data-save-reason>Enable auto-save to create a checkpoint.</small>
-        </div>
-      `;
     this.element.className = 'post-processing-console';
     this.element.dataset.open = 'false';
-    this.element.innerHTML = `
-      <section
-        id="${PANEL_ID}"
-        class="post-processing-console__panel"
-        data-post-processing-panel
-        aria-label="System tuning menu"
-        hidden
-      >
-        <header>
-          <strong>SYSTEM TUNING</strong>
-          <button type="button" data-post-processing-close aria-label="Close system tuning menu">×</button>
-        </header>
-        <div class="post-processing-console__columns">
-          <div class="post-processing-console__category-column">
-            ${(performanceStatsControls === undefined
-              && physicsControls === undefined
-              && eventTestControls === undefined)
-              ? ''
-              : `<section class="post-processing-console__category">
-                  <h2>TOOLS</h2>
-                  ${performanceStatsControl}
-                  ${diagnosticPhysicsControl}
-                  ${eventTestControls === undefined
-                    ? ''
-                    : '<div class="post-processing-console__group" data-event-test-control></div>'}
-                </section>`}
-            ${audioControls === undefined
-              ? ''
-              : `<section class="post-processing-console__category">
-                  <h2>SOUND</h2>
-                  ${audioControl}
-                </section>`}
-          </div>
-          <div class="post-processing-console__category-column">
-            <section class="post-processing-console__category post-processing-console__category--graphics">
-              <h2>GRAPHICS</h2>
-              <div class="post-processing-console__quality-row">
-                <div class="post-processing-console__group" data-ao-quality-control></div>
-                <div class="post-processing-console__group" data-water-quality-control></div>
-                <div class="post-processing-console__group" data-anti-aliasing-quality-control></div>
-                <div class="post-processing-console__group" data-shadow-quality-control></div>
-              </div>
-              <div class="post-processing-console__group post-processing-console__group--ao">
-                <strong>AMBIENT OCCLUSION</strong>
-                <label class="post-processing-console__select">
-                  <span>Display</span>
-                  <select data-post-processing-ao-mode>
-                    <option value="composite">COMPOSITE</option>
-                    <option value="debug">DEBUG BUFFER</option>
-                    <option value="off">OFF</option>
-                  </select>
-                </label>
-                <div class="post-processing-console__sliders" data-post-processing-sliders></div>
-              </div>
-            </section>
-            <section class="post-processing-console__category">
-              <h2>GAMEPLAY</h2>
-              ${cameraControl}
-              ${gameplayPhysicsControl}
-              ${saveControl}
-              ${timeOfDayControls === undefined
-                ? ''
-                : `<div class="post-processing-console__group">
-                    <strong>TIME OF DAY</strong>
-                    <label class="post-processing-console__toggle">
-                      <span data-time-of-day-label>${timeOfDayControls.selected === 'night' ? 'Night' : 'Day'}</span>
-                      <input
-                        type="checkbox"
-                        role="switch"
-                        data-presentation-night
-                        ${timeOfDayControls.selected === 'night' ? 'checked' : ''}
-                      >
-                      <output data-time-of-day-state>${timeOfDayControls.selected.toUpperCase()}</output>
-                    </label>
-                  </div>`}
-              <div class="post-processing-console__group">
-                <strong>WEATHER</strong>
-                <label class="post-processing-console__select">
-                  <span>
-                    Presentation
-                    <output data-weather-source>${weatherControls.source.toUpperCase()}</output>
-                  </span>
-                  <select data-presentation-weather>
-                    ${PRESENTATION_WEATHER_IDS.map((id) => `
-                      <option value="${id}">${presentationWeatherProfile(id).label}</option>
-                    `).join('')}
-                  </select>
-                </label>
-              </div>
-            </section>
-          </div>
-        </div>
-      </section>
-    `;
+    this.element.innerHTML = buildConsoleMarkup({
+      physicsControls,
+      performanceStatsControls,
+      audioControls,
+      cameraControls,
+      saveControls,
+      timeOfDayControls,
+      eventTestControls,
+      weatherControls,
+      volumetricCloudControls,
+    });
+    this.volumetricCloudInput = this.element.querySelector<HTMLInputElement>(
+      '[data-volumetric-clouds]',
+    );
+    this.volumetricCloudState = this.element.querySelector<HTMLOutputElement>(
+      '[data-volumetric-clouds-state]',
+    );
+    this.volumetricCloudAvailability = volumetricCloudControls?.available ?? null;
     this.panel = this.requireElement('[data-post-processing-panel]');
     this.visualQualityControl = new VisualQualityControl(visualQuality);
     this.requireElement('[data-ao-quality-control]').append(
@@ -430,6 +531,20 @@ export class PostProcessingConsole {
         ? 'Enable auto-save to create a checkpoint.'
         : savedDay === null ? 'A checkpoint starts in survival.' : '';
     }
+  }
+
+  setVolumetricCloudAvailability(available: boolean): void {
+    if (
+      this.disposed
+      || available === this.volumetricCloudAvailability
+      || this.volumetricCloudInput === null
+      || this.volumetricCloudState === null
+    ) return;
+    this.volumetricCloudAvailability = available;
+    this.volumetricCloudInput.disabled = !available;
+    this.volumetricCloudState.value = available
+      ? (this.volumetricCloudInput.checked ? 'ON' : 'OFF')
+      : 'UNAVAILABLE';
   }
 
   dispose(): void {
@@ -518,111 +633,105 @@ export class PostProcessingConsole {
 
   private readonly handleClick = (event: Event): void => {
     const target = event.target as Element | null;
-    const continueButton = target?.closest<HTMLButtonElement>('[data-save-continue]');
-    if (continueButton !== null && continueButton !== undefined) {
-      if (!continueButton.disabled) {
-        this.setOpen(false);
-        this.saveControls?.continueSavedRun();
-      }
-      return;
-    }
-    if (target?.closest('[data-event-test-enter]')) {
-      const select = this.element.querySelector<HTMLSelectElement>('[data-event-test-select]');
-      const id = select?.value;
-      if (
-        id === undefined
-        || this.eventTestControls === undefined
-        || !this.eventTestControls.options.some((option) => option.id === id)
-      ) return;
-      this.setOpen(false);
-      this.eventTestControls.enterEvent(id);
-      return;
-    }
-    if (target?.closest('[data-post-processing-close]')) {
-      this.setOpen(false);
-    }
+    if (this.handleSaveContinue(target)) return;
+    if (this.handleEventTestEnter(target)) return;
+    if (target?.closest('[data-post-processing-close]')) this.setOpen(false);
   };
 
   private readonly handleChange = (event: Event): void => {
     const target = event.target;
-    if (
-      target instanceof HTMLInputElement
-      && target.matches('[data-save-enabled]')
-    ) {
+    if (target instanceof HTMLInputElement) this.handleInputChange(target);
+    if (target instanceof HTMLSelectElement) this.handleSelectChange(target);
+  };
+
+  private handleSaveContinue(target: Element | null): boolean {
+    const button = target?.closest<HTMLButtonElement>('[data-save-continue]');
+    if (button === null || button === undefined) return false;
+    if (!button.disabled) {
+      this.setOpen(false);
+      this.saveControls?.continueSavedRun();
+    }
+    return true;
+  }
+
+  private handleEventTestEnter(target: Element | null): boolean {
+    if (!target?.closest('[data-event-test-enter]')) return false;
+    const select = this.element.querySelector<HTMLSelectElement>('[data-event-test-select]');
+    const id = select?.value;
+    if (id === undefined || this.eventTestControls === undefined) return true;
+    if (!this.eventTestControls.options.some((option) => option.id === id)) return true;
+    this.setOpen(false);
+    this.eventTestControls.enterEvent(id);
+    return true;
+  }
+
+  private handleInputChange(target: HTMLInputElement): void {
+    if (target.matches('[data-save-enabled]')) {
       this.saveControls?.setEnabled(target.checked);
       this.setSaveState(target.checked, this.saveDay);
       return;
     }
-    if (
-      target instanceof HTMLInputElement
-      && target.matches('[data-presentation-night]')
-    ) {
+    if (target.matches('[data-presentation-night]')) {
       const phase: SkyPhase = target.checked ? 'night' : 'day';
       this.setTimeOfDayState(phase);
       this.timeOfDayControls?.setTimeOfDay(phase);
       return;
     }
-    if (
-      target instanceof HTMLInputElement
-      && target.matches('[data-audio-muted]')
-    ) {
-      const output = this.element.querySelector<HTMLOutputElement>(
-        '[data-audio-muted-state]',
-      );
-      if (output !== null) output.value = target.checked ? 'ON' : 'OFF';
+    this.handleToggleInput(target);
+  }
+
+  private handleToggleInput(target: HTMLInputElement): void {
+    if (target.matches('[data-volumetric-clouds]')) {
+      this.setToggleOutput('[data-volumetric-clouds-state]', target.checked);
+      this.volumetricCloudControls?.setEnabled(target.checked);
+      return;
+    }
+    if (target.matches('[data-audio-muted]')) {
+      this.setToggleOutput('[data-audio-muted-state]', target.checked);
       this.audioControls?.setMuted(target.checked);
       return;
     }
-    if (
-      target instanceof HTMLInputElement
-      && target.matches('[data-performance-stats-enabled]')
-    ) {
-      const output = this.element.querySelector<HTMLOutputElement>(
-        '[data-performance-stats-state]',
-      );
-      if (output !== null) output.value = target.checked ? 'ON' : 'OFF';
+    if (target.matches('[data-performance-stats-enabled]')) {
+      this.setToggleOutput('[data-performance-stats-state]', target.checked);
       this.performanceStatsControls?.setVisible(target.checked);
       return;
     }
-    if (
-      target instanceof HTMLInputElement
-      && target.matches('[data-physics-enabled]')
-    ) {
-      const output = this.element.querySelector<HTMLOutputElement>('[data-physics-state]');
-      if (output !== null) output.value = target.checked ? 'ON' : 'OFF';
-      const debug = this.element.querySelector<HTMLInputElement>('[data-physics-debug]');
-      if (debug !== null) debug.disabled = !target.checked;
-      this.physicsControls?.setEnabled(target.checked);
-      return;
-    }
-    if (
-      target instanceof HTMLInputElement
-      && target.matches('[data-physics-debug]')
-    ) {
-      const output = this.element.querySelector<HTMLOutputElement>(
-        '[data-physics-debug-state]',
-      );
-      if (output !== null) output.value = target.checked ? 'ON' : 'OFF';
-      this.physicsControls?.setDebugMeshes(target.checked);
-      return;
-    }
-    if (
-      target instanceof HTMLSelectElement
-      && target.matches('[data-presentation-weather]')
-    ) {
+    if (target.matches('[data-physics-enabled]')) this.setPhysicsEnabled(target.checked);
+    if (target.matches('[data-physics-debug]')) this.setPhysicsDebug(target.checked);
+  }
+
+  private handleSelectChange(target: HTMLSelectElement): void {
+    if (target.matches('[data-presentation-weather]')) {
       const id = target.value as PresentationWeatherId;
-      if (!PRESENTATION_WEATHER_IDS.includes(id)) return;
-      this.setWeatherState(id, 'forced');
-      this.weatherControls.setWeather(id);
+      if (PRESENTATION_WEATHER_IDS.includes(id)) {
+        this.setWeatherState(id, 'forced');
+        this.weatherControls.setWeather(id);
+      }
       return;
     }
-    if (target instanceof HTMLSelectElement && target.matches('[data-post-processing-ao-mode]')) {
-      const mode = target.value as ItemAmbientOcclusionMode;
-      if (mode === 'composite' || mode === 'debug' || mode === 'off') {
-        this.controls.setAmbientOcclusionMode(mode);
-      }
+    if (!target.matches('[data-post-processing-ao-mode]')) return;
+    const mode = target.value as ItemAmbientOcclusionMode;
+    if (mode === 'composite' || mode === 'debug' || mode === 'off') {
+      this.controls.setAmbientOcclusionMode(mode);
     }
-  };
+  }
+
+  private setToggleOutput(selector: string, checked: boolean): void {
+    const output = this.element.querySelector<HTMLOutputElement>(selector);
+    if (output !== null) output.value = checked ? 'ON' : 'OFF';
+  }
+
+  private setPhysicsEnabled(enabled: boolean): void {
+    this.setToggleOutput('[data-physics-state]', enabled);
+    const debug = this.element.querySelector<HTMLInputElement>('[data-physics-debug]');
+    if (debug !== null) debug.disabled = !enabled;
+    this.physicsControls?.setEnabled(enabled);
+  }
+
+  private setPhysicsDebug(enabled: boolean): void {
+    this.setToggleOutput('[data-physics-debug-state]', enabled);
+    this.physicsControls?.setDebugMeshes(enabled);
+  }
 
   private readonly handleInput = (event: Event): void => {
     const target = event.target;

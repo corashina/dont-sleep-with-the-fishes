@@ -126,27 +126,7 @@ export function validateItemCatalog(
   for (const id of uniqueIds) {
     const definition = definitions[id];
     if (definition === undefined) continue;
-    if (!Number.isInteger(definition.spawnCount) || definition.spawnCount < 1) {
-      errors.push(`${id} spawn count must be at least one`);
-    }
-    if (![1, 2, 3].includes(definition.weight)) {
-      errors.push(`${id} weight must be between one and three`);
-    }
-    if (definition.charges !== null
-      && (!Number.isFinite(definition.charges) || definition.charges < 1)) {
-      errors.push(`${id} non-null charges must be at least one`);
-    }
-    if (definition.durable && definition.charges !== null) {
-      errors.push(`${id} cannot be durable and charged`);
-    }
-    if (definition.breakable && !definition.durable) {
-      errors.push(`${id} cannot be breakable without durability`);
-    }
-    if (definition.modelId !== id) errors.push(`${id} model ID must match its item ID`);
-    if (definition.artworkId !== id) errors.push(`${id} artwork ID must match its item ID`);
-    if (APPROVED_SPAWN_COUNTS[id as ItemId] !== definition.spawnCount) {
-      errors.push(`${id} spawn count differs from the approved contract`);
-    }
+    validateItemDefinition(id, definition, errors);
   }
 
   const total = definitionKeys.reduce(
@@ -155,6 +135,58 @@ export function validateItemCatalog(
   );
   if (total !== 23) errors.push(`catalog must create exactly 23 instances, received ${total}`);
   if (errors.length > 0) throw new Error(`Invalid item catalog: ${errors.join('; ')}`);
+}
+
+function validateItemDefinition(
+  id: string,
+  definition: ItemDefinition,
+  errors: string[],
+): void {
+  validateItemSpawnCount(id, definition, errors);
+  validateItemProperties(id, definition, errors);
+  validateItemIdentifiers(id, definition, errors);
+}
+
+function validateItemSpawnCount(
+  id: string,
+  definition: ItemDefinition,
+  errors: string[],
+): void {
+  if (!Number.isInteger(definition.spawnCount) || definition.spawnCount < 1) {
+    errors.push(`${id} spawn count must be at least one`);
+  }
+  if (APPROVED_SPAWN_COUNTS[id as ItemId] !== definition.spawnCount) {
+    errors.push(`${id} spawn count differs from the approved contract`);
+  }
+}
+
+function validateItemProperties(
+  id: string,
+  definition: ItemDefinition,
+  errors: string[],
+): void {
+  if (![1, 2, 3].includes(definition.weight)) {
+    errors.push(`${id} weight must be between one and three`);
+  }
+  if (definition.charges !== null
+    && (!Number.isFinite(definition.charges) || definition.charges < 1)) {
+    errors.push(`${id} non-null charges must be at least one`);
+  }
+  if (definition.durable && definition.charges !== null) {
+    errors.push(`${id} cannot be durable and charged`);
+  }
+  if (definition.breakable && !definition.durable) {
+    errors.push(`${id} cannot be breakable without durability`);
+  }
+}
+
+function validateItemIdentifiers(
+  id: string,
+  definition: ItemDefinition,
+  errors: string[],
+): void {
+  if (definition.modelId !== id) errors.push(`${id} model ID must match its item ID`);
+  if (definition.artworkId !== id) errors.push(`${id} artwork ID must match its item ID`);
 }
 
 validateItemCatalog();

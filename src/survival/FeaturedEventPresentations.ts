@@ -15,6 +15,41 @@ import {
 import type { EventPresentationKey } from './survivalTypes';
 import type { EventPresentationCue } from './eventPresentationCue';
 
+function includesFeaturedEvent(
+  onlyEventId: FeaturedEventId | null | undefined,
+  eventId: FeaturedEventId,
+): boolean {
+  return onlyEventId === undefined || onlyEventId === eventId;
+}
+
+function createDriftingItems(
+  models: SurvivalEventModels,
+  target: Object3D,
+  onlyEventId: FeaturedEventId | null | undefined,
+  water: DriftingWater | undefined,
+): DriftingItemPresentation | null {
+  const included = onlyEventId === undefined
+    || (onlyEventId !== null && isDriftingItemEventId(onlyEventId));
+  if (included && water === undefined) {
+    throw new Error('Drifting events require the world wave source.');
+  }
+  if (!included || water === undefined) return null;
+  const includeSupplies = includesFeaturedEvent(onlyEventId, 'drifting-supplies');
+  return new DriftingItemPresentation({
+    barrel: includeSupplies ? models.clone('driftingBarrel') : new Group(),
+    chest: includesFeaturedEvent(onlyEventId, 'drifting-chest')
+      ? models.clone('mysteryChest')
+      : new Group(),
+    lifeboat: includeSupplies ? models.clone('emptyLifeboat') : new Group(),
+    lifeboatCooler: includeSupplies
+      ? models.clone('emptyLifeboatContainer')
+      : new Group(),
+    shippingContainer: includeSupplies
+      ? models.clone('shippingContainer')
+      : new Group(),
+  }, target, water);
+}
+
 export class FeaturedEventPresentations {
   readonly root = new Group();
   private readonly driftingItems: DriftingItemPresentation | null;
@@ -34,28 +69,13 @@ export class FeaturedEventPresentations {
     driftingWater?: DriftingWater,
   ) {
     this.root.name = 'featured-event-presentations';
-    const include = (eventId: FeaturedEventId): boolean => (
-      onlyEventId === undefined || onlyEventId === eventId
+    this.driftingItems = createDriftingItems(
+      models,
+      driftingCargoSternTarget,
+      onlyEventId,
+      driftingWater,
     );
-    const includeDriftingItems = onlyEventId === undefined
-      || (onlyEventId !== null && isDriftingItemEventId(onlyEventId));
-    if (includeDriftingItems && driftingWater === undefined) {
-      throw new Error('Drifting events require the world wave source.');
-    }
-    this.driftingItems = includeDriftingItems && driftingWater !== undefined
-      ? new DriftingItemPresentation({
-          barrel: include('drifting-supplies') ? models.clone('driftingBarrel') : new Group(),
-          chest: include('drifting-chest') ? models.clone('mysteryChest') : new Group(),
-          lifeboat: include('drifting-supplies') ? models.clone('emptyLifeboat') : new Group(),
-          lifeboatCooler: include('drifting-supplies')
-            ? models.clone('emptyLifeboatContainer')
-            : new Group(),
-          shippingContainer: include('drifting-supplies')
-            ? models.clone('shippingContainer')
-            : new Group(),
-        }, driftingCargoSternTarget, driftingWater)
-      : null;
-    if (include('check-the-back')) {
+    if (includesFeaturedEvent(onlyEventId, 'check-the-back')) {
       this.presentations.set('check-the-back', new CheckBackPresentation(
         models.clone('checkBackFish'),
         models.clone('checkBackAnglerfish'),
@@ -64,7 +84,7 @@ export class FeaturedEventPresentations {
         emitCue,
       ));
     }
-    if (include('flowers')) {
+    if (includesFeaturedEvent(onlyEventId, 'flowers')) {
       this.presentations.set('flowers', new FlowersPresentation(models, flowersDeckTarget));
     }
     this.presentationList = Object.freeze([...this.presentations.values()]);

@@ -330,11 +330,7 @@ export class DistantSeabed implements MenuSceneComponent {
     const random = deterministicRandom(seed);
     const transform = new Object3D();
     const color = new Color();
-    const palette = kind === 'plant'
-      ? [0x315a4d, 0x466d58, 0x58745c]
-      : kind === 'stone'
-        ? [0x485a57, 0x586963, 0x68756c]
-        : [0x34494b, 0x415558, 0x52635f];
+    const palette = this.seabedPalette(kind);
     const radius = kind === 'plant' ? 0.22 : 0.55;
     const regularCount = count - LEFT_SEABED_INSTANCE_COUNT;
     const foregroundCount = Math.floor(regularCount * FOREGROUND_SHARE[kind]);
@@ -343,19 +339,15 @@ export class DistantSeabed implements MenuSceneComponent {
       const leftCluster = index < LEFT_SEABED_INSTANCE_COUNT;
       const regularIndex = index - LEFT_SEABED_INSTANCE_COUNT;
       const foreground = !leftCluster && regularIndex < foregroundCount;
-      const depthProgress = leftCluster
-        ? (index + 0.5) / LEFT_SEABED_INSTANCE_COUNT
-        : foreground
-          ? (regularIndex + 0.5) / foregroundCount
-          : (regularIndex - foregroundCount + 0.5)
-            / (regularCount - foregroundCount);
-      const z = leftCluster
-        ? 6.2 - depthProgress * 5.8 + (random() - 0.5) * 0.12
-        : foreground
-        ? FOREGROUND_NEAR_Z
-          + (FOREGROUND_FAR_Z - FOREGROUND_NEAR_Z) * depthProgress
-          + (random() - 0.5) * 0.18
-        : 2 - depthProgress * 82 + (random() - 0.5) * 1.6;
+      const depthProgress = this.seabedDepthProgress(
+        index,
+        regularIndex,
+        regularCount,
+        foregroundCount,
+        leftCluster,
+        foreground,
+      );
+      const z = this.seabedScatterZ(depthProgress, leftCluster, foreground, random);
       const limit = Math.max(
         6,
         menuVisibleCenterLimit(menuSeabedHeight(0, z), z, radius)
@@ -377,30 +369,7 @@ export class DistantSeabed implements MenuSceneComponent {
         : 0.78 + depthProgress * 0.9;
       const base = (0.55 + random() * 0.85) * distanceScale;
       transform.position.set(x, menuSeabedHeight(x, z) - 0.035, z);
-      transform.rotation.set(
-        kind === 'plant' ? (random() - 0.5) * 0.16 : (random() - 0.5) * 0.28,
-        random() * Math.PI * 2,
-        (random() - 0.5) * (kind === 'plant' ? 0.18 : 0.3),
-      );
-      if (kind === 'plant') {
-        transform.scale.set(
-          base * (0.72 + random() * 0.7),
-          base * (0.85 + random() * 1.05),
-          base * (0.72 + random() * 0.7),
-        );
-      } else if (kind === 'stone') {
-        transform.scale.set(
-          base * (1.15 + random() * 1.25),
-          base * (0.18 + random() * 0.24),
-          base * (0.8 + random() * 0.9),
-        );
-      } else {
-        transform.scale.set(
-          base * (0.72 + random() * 0.85),
-          base * (0.55 + random() * 0.8),
-          base * (0.72 + random() * 0.85),
-        );
-      }
+      this.setSeabedScatterTransform(transform, kind, base, random);
       transform.updateMatrix();
       batch.setMatrixAt(index, transform.matrix);
       color.set(palette[index % palette.length]!);
@@ -415,6 +384,63 @@ export class DistantSeabed implements MenuSceneComponent {
     batch.instanceMatrix.needsUpdate = true;
     if (batch.instanceColor) batch.instanceColor.needsUpdate = true;
     return batch;
+  }
+
+  private seabedPalette(kind: 'rock' | 'stone' | 'plant'): readonly number[] {
+    if (kind === 'plant') return [0x315a4d, 0x466d58, 0x58745c];
+    if (kind === 'stone') return [0x485a57, 0x586963, 0x68756c];
+    return [0x34494b, 0x415558, 0x52635f];
+  }
+
+  private seabedDepthProgress(
+    index: number,
+    regularIndex: number,
+    regularCount: number,
+    foregroundCount: number,
+    leftCluster: boolean,
+    foreground: boolean,
+  ): number {
+    if (leftCluster) return (index + 0.5) / LEFT_SEABED_INSTANCE_COUNT;
+    if (foreground) return (regularIndex + 0.5) / foregroundCount;
+    return (regularIndex - foregroundCount + 0.5) / (regularCount - foregroundCount);
+  }
+
+  private seabedScatterZ(
+    depthProgress: number,
+    leftCluster: boolean,
+    foreground: boolean,
+    random: () => number,
+  ): number {
+    if (leftCluster) return 6.2 - depthProgress * 5.8 + (random() - 0.5) * 0.12;
+    if (foreground) {
+      return FOREGROUND_NEAR_Z
+        + (FOREGROUND_FAR_Z - FOREGROUND_NEAR_Z) * depthProgress
+        + (random() - 0.5) * 0.18;
+    }
+    return 2 - depthProgress * 82 + (random() - 0.5) * 1.6;
+  }
+
+  private setSeabedScatterTransform(
+    transform: Object3D,
+    kind: 'rock' | 'stone' | 'plant',
+    base: number,
+    random: () => number,
+  ): void {
+    const plant = kind === 'plant';
+    transform.rotation.set(
+      (random() - 0.5) * (plant ? 0.16 : 0.28),
+      random() * Math.PI * 2,
+      (random() - 0.5) * (plant ? 0.18 : 0.3),
+    );
+    if (plant) {
+      transform.scale.set(base * (0.72 + random() * 0.7), base * (0.85 + random() * 1.05), base * (0.72 + random() * 0.7));
+      return;
+    }
+    if (kind === 'stone') {
+      transform.scale.set(base * (1.15 + random() * 1.25), base * (0.18 + random() * 0.24), base * (0.8 + random() * 0.9));
+      return;
+    }
+    transform.scale.set(base * (0.72 + random() * 0.85), base * (0.55 + random() * 0.8), base * (0.72 + random() * 0.85));
   }
 
   private createMountainScatter(
@@ -489,23 +515,38 @@ export class DistantSeabed implements MenuSceneComponent {
     clearBoatSightline = false,
   ): number {
     for (let attempt = 0; attempt < 12; attempt += 1) {
-      const side = leftOnly ? -1 : random() < 0.5 ? -1 : 1;
-      const magnitude = leftOnly
-        ? 0.72 + random() * 0.28
-        : sideBias ? 0.48 + random() * 0.52 : random();
+      const side = this.scatterSide(random, leftOnly);
+      const magnitude = this.scatterMagnitude(random, sideBias, leftOnly);
       const x = side * magnitude * limit;
-      const blocksBoatSightline = clearBoatSightline
-        && Math.abs(x) < 2.4
-        && z > -4.4
-        && z < 1.8;
-      const blocked = blocksBoatSightline
-        || MENU_PROTECTED_FOOTPRINTS.some((footprint) => (
-        Math.abs(x - footprint.position[0]) < footprint.halfSize[0] + radius
-        && Math.abs(z - footprint.position[2]) < footprint.halfSize[1] + radius
-      ));
-      if (!blocked) return x;
+      if (!this.scatterPositionBlocked(x, z, radius, clearBoatSightline)) return x;
     }
     return limit * (leftOnly || random() < 0.5 ? -0.92 : 0.92);
+  }
+
+  private scatterSide(random: () => number, leftOnly: boolean): number {
+    return leftOnly || random() < 0.5 ? -1 : 1;
+  }
+
+  private scatterMagnitude(
+    random: () => number,
+    sideBias: boolean,
+    leftOnly: boolean,
+  ): number {
+    if (leftOnly) return 0.72 + random() * 0.28;
+    return sideBias ? 0.48 + random() * 0.52 : random();
+  }
+
+  private scatterPositionBlocked(
+    x: number,
+    z: number,
+    radius: number,
+    clearBoatSightline: boolean,
+  ): boolean {
+    if (clearBoatSightline && Math.abs(x) < 2.4 && z > -4.4 && z < 1.8) return true;
+    return MENU_PROTECTED_FOOTPRINTS.some((footprint) => (
+      Math.abs(x - footprint.position[0]) < footprint.halfSize[0] + radius
+      && Math.abs(z - footprint.position[2]) < footprint.halfSize[1] + radius
+    ));
   }
 
   private createHorizon(): Mesh<PlaneGeometry, MeshBasicMaterial> {

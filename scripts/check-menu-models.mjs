@@ -96,16 +96,11 @@ export function validateCommittedMenuModel(modelId, bytes) {
   return actualHash;
 }
 
-async function main() {
-  const { assetsOnly, ledgerPath, modelsDir } = parseModelCheckArguments(
-    process.argv.slice(2),
-    ['src', 'assets', 'models', 'menu'],
-  );
-  const errors = [];
-  const measurements = {};
-  let metadata;
-  let total = 0;
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
 
+async function validateDirectory(modelsDir, errors) {
   try {
     const expected = new Set([
       ...POLY_PIZZA_MENU_MODEL_IDS.map((id) => `${id}.glb`),
@@ -122,56 +117,77 @@ async function main() {
       if (!actual.has(file)) errors.push(`missing menu model entry: ${file}`);
     }
   } catch (error) {
-    errors.push(error instanceof Error ? error.message : String(error));
+    errors.push(errorMessage(error));
   }
+}
 
+async function readMetadata(modelsDir, errors) {
   try {
-    metadata = JSON.parse(await readFile(resolve(modelsDir, 'menu-model-metadata.json'), 'utf8'));
+    const metadata = JSON.parse(await readFile(resolve(modelsDir, 'menu-model-metadata.json'), 'utf8'));
     if (JSON.stringify(Object.keys(metadata)) !== JSON.stringify(POLY_PIZZA_MENU_MODEL_IDS)) {
       errors.push('menu-model-metadata.json keys do not match pinned model IDs');
     }
+    return metadata;
   } catch (error) {
-    errors.push(error instanceof Error ? error.message : String(error));
+    errors.push(errorMessage(error));
+    return undefined;
   }
+}
 
+function menuMetadataMatches(expected, measurement) {
+  return expected?.triangles === measurement.triangles
+    && sameNumbers(expected?.rawBounds?.min, measurement.rawBounds.min)
+    && sameNumbers(expected?.rawBounds?.max, measurement.rawBounds.max)
+    && sameAnimations(expected?.animations, measurement.animations);
+}
+
+function validateMenuSource(modelId, source) {
+  if (!/^[A-F0-9]{64}$/.test(source.sha256)) {
+    throw new Error(`${modelId}: pinned source SHA-256 is invalid`);
+  }
+  if (!/^[A-F0-9]{64}$/.test(source.committedSha256)) {
+    throw new Error(`${modelId}: pinned committed SHA-256 is invalid`);
+  }
+}
+
+async function measureModel(modelId, modelsDir, metadata) {
+  const source = POLY_PIZZA_MENU_MODEL_SOURCES[modelId];
+  const filePath = resolve(modelsDir, `${modelId}.glb`);
+  await access(filePath);
+  const bytes = await readFile(filePath);
+  validateCommittedMenuModel(modelId, bytes);
+  validateEmbeddedResources(filePath, parseGlb(filePath, bytes));
+  const measurement = inspectEventModel(modelId, await io.read(filePath));
+  console.log(`${modelId}.glb: ${measurement.triangles} / ${source.maxTriangles} triangles`);
+  if (measurement.triangles !== source.sourceTriangles) {
+    throw new Error(`${modelId}: expected ${source.sourceTriangles} triangles, received ${measurement.triangles}`);
+  }
+  if (measurement.triangles > source.maxTriangles) {
+    throw new Error(`${modelId}: triangle count exceeds ${source.maxTriangles}`);
+  }
+  if (!menuMetadataMatches(metadata?.[modelId], measurement)) {
+    throw new Error(`${modelId}: generated metadata does not match the model`);
+  }
+  validateMenuSource(modelId, source);
+  return measurement;
+}
+
+async function measureModels(modelsDir, metadata, errors) {
+  const measurements = {};
+  let total = 0;
   for (const modelId of POLY_PIZZA_MENU_MODEL_IDS) {
-    const source = POLY_PIZZA_MENU_MODEL_SOURCES[modelId];
-    const filePath = resolve(modelsDir, `${modelId}.glb`);
     try {
-      await access(filePath);
-      const bytes = await readFile(filePath);
-      validateCommittedMenuModel(modelId, bytes);
-      validateEmbeddedResources(filePath, parseGlb(filePath, bytes));
-      const measurement = inspectEventModel(modelId, await io.read(filePath));
+      const measurement = await measureModel(modelId, modelsDir, metadata);
       measurements[modelId] = measurement;
       total += measurement.triangles;
-      console.log(`${modelId}.glb: ${measurement.triangles} / ${source.maxTriangles} triangles`);
-      if (measurement.triangles !== source.sourceTriangles) {
-        throw new Error(`${modelId}: expected ${source.sourceTriangles} triangles, received ${measurement.triangles}`);
-      }
-      if (measurement.triangles > source.maxTriangles) {
-        throw new Error(`${modelId}: triangle count exceeds ${source.maxTriangles}`);
-      }
-      const expected = metadata?.[modelId];
-      if (
-        expected?.triangles !== measurement.triangles
-        || !sameNumbers(expected?.rawBounds?.min, measurement.rawBounds.min)
-        || !sameNumbers(expected?.rawBounds?.max, measurement.rawBounds.max)
-        || !sameAnimations(expected?.animations, measurement.animations)
-      ) {
-        throw new Error(`${modelId}: generated metadata does not match the model`);
-      }
-      if (!/^[A-F0-9]{64}$/.test(source.sha256)) {
-        throw new Error(`${modelId}: pinned source SHA-256 is invalid`);
-      }
-      if (!/^[A-F0-9]{64}$/.test(source.committedSha256)) {
-        throw new Error(`${modelId}: pinned committed SHA-256 is invalid`);
-      }
     } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error));
+      errors.push(errorMessage(error));
     }
   }
+  return { measurements, total };
+}
 
+function validateSharkAnimation(metadata, errors) {
   const sharkAnimations = metadata?.shark?.animations;
   if (
     !Array.isArray(sharkAnimations)
@@ -180,24 +196,44 @@ async function main() {
   ) {
     errors.push('shark: required Armature|Swim animation metadata is missing');
   }
+}
 
+function reportTotal(total, errors) {
   console.log(`total: ${total} / ${TOTAL_TRIANGLE_LIMIT} triangles`);
   if (total > TOTAL_TRIANGLE_LIMIT) {
     errors.push(`menu models: ${total} triangles exceeds ${TOTAL_TRIANGLE_LIMIT}`);
   }
+}
 
-  if (!assetsOnly) {
-    try {
-      validateMenuAttribution(await readFile(ledgerPath, 'utf8'), measurements);
-    } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error));
-    }
+async function validateLedger(assetsOnly, ledgerPath, measurements, errors) {
+  if (assetsOnly) return;
+  try {
+    validateMenuAttribution(await readFile(ledgerPath, 'utf8'), measurements);
+  } catch (error) {
+    errors.push(errorMessage(error));
   }
+}
 
+function reportErrors(errors) {
   if (errors.length > 0) {
     errors.forEach((error) => console.error(`ERROR: ${error}`));
     process.exitCode = 1;
   }
+}
+
+async function main() {
+  const { assetsOnly, ledgerPath, modelsDir } = parseModelCheckArguments(
+    process.argv.slice(2),
+    ['src', 'assets', 'models', 'menu'],
+  );
+  const errors = [];
+  await validateDirectory(modelsDir, errors);
+  const metadata = await readMetadata(modelsDir, errors);
+  const { measurements, total } = await measureModels(modelsDir, metadata, errors);
+  validateSharkAnimation(metadata, errors);
+  reportTotal(total, errors);
+  await validateLedger(assetsOnly, ledgerPath, measurements, errors);
+  reportErrors(errors);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

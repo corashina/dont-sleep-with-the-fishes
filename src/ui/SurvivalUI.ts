@@ -49,6 +49,77 @@ interface RoutineDialogPlacement {
   readonly height: number;
 }
 
+interface RoutineDialogTarget {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly projected: boolean;
+}
+
+function routineDialogViewport(root: HTMLElement): readonly [number, number] {
+  const bounds = root.getBoundingClientRect();
+  const width = Math.max(1, bounds.width || root.clientWidth || window.innerWidth);
+  const height = Math.max(1, bounds.height || root.clientHeight || window.innerHeight);
+  return [width, height];
+}
+
+function routineDialogTarget(
+  target: ProjectedBoatBounds | null,
+  anchor: BoatInteractionAnchor | null | undefined,
+  placement: RoutineDialogPlacement,
+  viewportWidth: number,
+  viewportHeight: number,
+): RoutineDialogTarget {
+  const projectedTarget = target?.visible === true ? target : null;
+  const projectedAnchor = projectedTarget ?? anchor;
+  if (projectedAnchor?.visible !== true) {
+    return {
+      x: viewportWidth * placement.fallbackX,
+      y: viewportHeight * placement.fallbackY,
+      width: 0,
+      height: 0,
+      projected: false,
+    };
+  }
+  const hitArea = projectedTarget ?? (projectedAnchor as BoatInteractionAnchor).hitArea;
+  return {
+    x: projectedAnchor.x,
+    y: projectedAnchor.y,
+    width: hitArea?.width ?? 54,
+    height: hitArea?.height ?? 54,
+    projected: true,
+  };
+}
+
+function routineDialogHorizontal(
+  target: RoutineDialogTarget,
+  cardWidth: number,
+  viewportWidth: number,
+): readonly ['left' | 'right', number] {
+  const right = target.x + target.width / 2 + ROUTINE_DIALOG_GAP;
+  const left = target.x - target.width / 2 - ROUTINE_DIALOG_GAP - cardWidth;
+  const rightFits = right + cardWidth <= viewportWidth - ROUTINE_DIALOG_MARGIN;
+  const leftFits = left >= ROUTINE_DIALOG_MARGIN;
+  return rightFits || !leftFits ? ['right', right] : ['left', left];
+}
+
+function routineDialogVertical(
+  target: RoutineDialogTarget,
+  cardHeight: number,
+  viewportHeight: number,
+): readonly ['above' | 'below' | 'center', number] {
+  const centered = target.y - cardHeight / 2;
+  const below = target.y + target.height / 2 + ROUTINE_DIALOG_GAP;
+  const above = target.y - target.height / 2 - ROUTINE_DIALOG_GAP - cardHeight;
+  const centeredFits = centered >= ROUTINE_DIALOG_MARGIN
+    && centered + cardHeight <= viewportHeight - ROUTINE_DIALOG_MARGIN;
+  if (centeredFits) return ['center', centered];
+  if (below + cardHeight <= viewportHeight - ROUTINE_DIALOG_MARGIN) return ['below', below];
+  if (above >= ROUTINE_DIALOG_MARGIN) return ['above', above];
+  return target.y < viewportHeight / 2 ? ['below', below] : ['above', above];
+}
+
 const REPAIR_DIALOG_PLACEMENT: RoutineDialogPlacement = {
   anchorId: 'repair-tools',
   fallbackX: 0.32,
@@ -64,6 +135,7 @@ export class SurvivalUI {
   onEventItem: (choiceId: EventResponseId, instanceId: ItemInstanceId) => void = () => undefined;
   onEventChoice: (choiceId: EventResponseId) => void = () => undefined;
   onRestart: () => void = () => undefined;
+  onReturnToMenu: () => void = () => undefined;
   onAnchorHighlight: (anchorId: string | null) => void = () => undefined;
   onPauseChange: (paused: boolean) => void = () => undefined;
   onJournalOpen: () => void = () => undefined;
@@ -245,6 +317,9 @@ export class SurvivalUI {
     };
     this.modalViews.onRestart = () => {
       if (!this.disposed) this.onRestart();
+    };
+    this.modalViews.onReturnToMenu = () => {
+      if (!this.disposed) this.onReturnToMenu();
     };
 
     document.addEventListener('keydown', this.handleKeyDown);
@@ -594,6 +669,7 @@ export class SurvivalUI {
       () => { this.onEventItem = () => undefined; },
       () => { this.onEventChoice = () => undefined; },
       () => { this.onRestart = () => undefined; },
+      () => { this.onReturnToMenu = () => undefined; },
       () => { this.onAnchorHighlight = () => undefined; },
       () => { this.onPauseChange = () => undefined; },
       () => { this.onJournalOpen = () => undefined; },
@@ -670,56 +746,28 @@ export class SurvivalUI {
     placement: RoutineDialogPlacement,
     target: ProjectedBoatBounds | null = null,
   ): void {
-    const rootBounds = this.root.getBoundingClientRect();
-    const viewportWidth = Math.max(
-      1,
-      rootBounds.width || this.root.clientWidth || window.innerWidth,
-    );
-    const viewportHeight = Math.max(
-      1,
-      rootBounds.height || this.root.clientHeight || window.innerHeight,
-    );
+    const [viewportWidth, viewportHeight] = routineDialogViewport(this.root);
     const maximumWidth = Math.max(1, viewportWidth - ROUTINE_DIALOG_MARGIN * 2);
     const maximumHeight = Math.max(1, viewportHeight - ROUTINE_DIALOG_MARGIN * 2);
     const cardWidth = Math.min(placement.width, maximumWidth);
     const cardHeight = Math.min(placement.height, maximumHeight);
-    const projectedTarget = target?.visible === true ? target : null;
-    const projectedAnchor = projectedTarget
-      ?? this.anchorView.anchor(placement.anchorId);
-    const isProjected = projectedAnchor?.visible === true;
-    const hitArea = isProjected
-      ? projectedTarget ?? (
-        projectedAnchor as BoatInteractionAnchor
-      ).hitArea ?? { width: 54, height: 54, depth: 0 }
-      : { width: 0, height: 0, depth: 0 };
-    const anchorX = isProjected
-      ? projectedAnchor.x
-      : viewportWidth * placement.fallbackX;
-    const anchorY = isProjected
-      ? projectedAnchor.y
-      : viewportHeight * placement.fallbackY;
-
-    const rightX = anchorX + hitArea.width / 2 + ROUTINE_DIALOG_GAP;
-    const leftX = anchorX - hitArea.width / 2 - ROUTINE_DIALOG_GAP - cardWidth;
-    const fitsRight = rightX + cardWidth <= viewportWidth - ROUTINE_DIALOG_MARGIN;
-    const fitsLeft = leftX >= ROUTINE_DIALOG_MARGIN;
-    const horizontalPlacement = fitsRight || !fitsLeft ? 'right' : 'left';
-    const unclampedX = horizontalPlacement === 'right' ? rightX : leftX;
-
-    const centeredY = anchorY - cardHeight / 2;
-    const belowY = anchorY + hitArea.height / 2 + ROUTINE_DIALOG_GAP;
-    const aboveY = anchorY - hitArea.height / 2 - ROUTINE_DIALOG_GAP - cardHeight;
-    const fitsCentered = centeredY >= ROUTINE_DIALOG_MARGIN
-      && centeredY + cardHeight <= viewportHeight - ROUTINE_DIALOG_MARGIN;
-    const fitsBelow = belowY + cardHeight <= viewportHeight - ROUTINE_DIALOG_MARGIN;
-    const fitsAbove = aboveY >= ROUTINE_DIALOG_MARGIN;
-    const verticalPlacement = fitsCentered
-      ? 'center'
-      : fitsBelow ? 'below'
-        : fitsAbove ? 'above' : anchorY < viewportHeight / 2 ? 'below' : 'above';
-    const unclampedY = verticalPlacement === 'center'
-      ? centeredY
-      : verticalPlacement === 'below' ? belowY : aboveY;
+    const dialogTarget = routineDialogTarget(
+      target,
+      this.anchorView.anchor(placement.anchorId),
+      placement,
+      viewportWidth,
+      viewportHeight,
+    );
+    const [horizontalPlacement, unclampedX] = routineDialogHorizontal(
+      dialogTarget,
+      cardWidth,
+      viewportWidth,
+    );
+    const [verticalPlacement, unclampedY] = routineDialogVertical(
+      dialogTarget,
+      cardHeight,
+      viewportHeight,
+    );
 
     const x = Math.min(
       viewportWidth - ROUTINE_DIALOG_MARGIN - cardWidth,
@@ -734,7 +782,7 @@ export class SurvivalUI {
     layer.style.setProperty('--routine-width', `${Math.round(cardWidth)}px`);
     layer.dataset.placement = horizontalPlacement;
     layer.dataset.verticalPlacement = verticalPlacement;
-    layer.dataset.anchorState = isProjected ? 'projected' : 'fallback';
+    layer.dataset.anchorState = dialogTarget.projected ? 'projected' : 'fallback';
   }
 
   private activateDayAction(action: DayActionId, origin: HTMLButtonElement | null): void {
@@ -861,25 +909,31 @@ export class SurvivalUI {
     const topmostModal = this.modalFocus.topmostModal();
     if (this.modalFocus.handleKeyDown(event)) return;
     if (this.trapEventFocus(event)) return;
-    if (event.key === 'Escape') {
-      if (topmostModal === this.journalView.root) {
-        event.preventDefault();
-        this.onJournalClose();
-      } else if (topmostModal === this.modalViews.repairRoot) {
-        event.preventDefault();
-        this.closeRepairOptions();
-      } else {
-        event.preventDefault();
-        this.onPauseChange(!this.paused);
-      }
-      return;
-    }
-    if (topmostModal === this.fishingView.interactionRoot) {
-      this.fishingView.handleKeyDown(event);
-      return;
-    }
+    if (this.handleEscape(event, topmostModal)) return;
+    if (this.handleFishingKeyDown(event, topmostModal)) return;
     if (this.anchorView.handleCommandKeyDown(event)) return;
     if (this.eventView.handleKeyDown(event)) return;
     if (topmostModal === this.focusedEventView.root) this.focusedEventView.handleKeyDown(event);
   };
+
+  private handleEscape(event: KeyboardEvent, topmostModal: HTMLElement | null): boolean {
+    if (event.key !== 'Escape') return false;
+    event.preventDefault();
+    if (topmostModal === this.journalView.root) {
+      this.onJournalClose();
+      return true;
+    }
+    if (topmostModal === this.modalViews.repairRoot) {
+      this.closeRepairOptions();
+      return true;
+    }
+    this.onPauseChange(!this.paused);
+    return true;
+  }
+
+  private handleFishingKeyDown(event: KeyboardEvent, topmostModal: HTMLElement | null): boolean {
+    if (topmostModal !== this.fishingView.interactionRoot) return false;
+    this.fishingView.handleKeyDown(event);
+    return true;
+  }
 }

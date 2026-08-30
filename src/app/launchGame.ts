@@ -153,15 +153,6 @@ async function loadGameAssets(
   physicsMode: PhysicsMode,
   onProgress: (completed: number, total: number) => void,
 ): Promise<LoadedGameAssets> {
-  let completed = 0;
-  onProgress(completed, GAME_ASSET_LOAD_COUNT);
-  const track = <T>(promise: Promise<T>): Promise<T> => promise.finally(() => {
-    completed += 1;
-    onProgress(completed, GAME_ASSET_LOAD_COUNT);
-  });
-  const physicsRuntimePromise = physicsMode === 'off'
-    ? Promise.resolve(null)
-    : dependencies.loadPhysicsRuntime();
   const [
     models,
     shipFurniture,
@@ -172,18 +163,7 @@ async function loadGameAssets(
     audio,
     menuModels,
     menuSandAssets,
-  ] =
-    await Promise.allSettled([
-      track(dependencies.loadModels()),
-      track(dependencies.loadShipFurniture()),
-      track(dependencies.loadSkyAssets()),
-      track(dependencies.loadLifeboatAssets()),
-      track(dependencies.loadShipAssets()),
-      track(physicsRuntimePromise),
-      track(dependencies.loadAudio?.() ?? Promise.resolve(AudioSystem.silent())),
-      track(dependencies.loadMenuModels()),
-      track(dependencies.loadMenuSandAssets()),
-    ]);
+  ] = await settleGameAssets(dependencies, physicsMode, onProgress);
   const assetResults = [
     models,
     shipFurniture,
@@ -195,48 +175,81 @@ async function loadGameAssets(
     menuSandAssets,
   ] as const;
   const results = [...assetResults, physicsRuntime] as const;
-  const firstFailure = results.find(
+  throwFirstAssetFailure(assetResults, results, menuModels);
+  return {
+    models: fulfilledValue(models),
+    menuModels: fulfilledValue(menuModels),
+    menuSandAssets: fulfilledValue(menuSandAssets),
+    shipFurniture: fulfilledValue(shipFurniture),
+    skyAssets: fulfilledValue(skyAssets),
+    lifeboatAssets: fulfilledValue(lifeboatAssets),
+    shipAssets: fulfilledValue(shipAssets),
+    physicsRuntime: fulfilledValue(physicsRuntime),
+    audio: fulfilledValue(audio),
+  };
+}
+
+async function settleGameAssets(
+  dependencies: LaunchDependencies,
+  physicsMode: PhysicsMode,
+  onProgress: (completed: number, total: number) => void,
+) {
+  let completed = 0;
+  onProgress(completed, GAME_ASSET_LOAD_COUNT);
+  const track = <T>(promise: Promise<T>): Promise<T> => promise.finally(() => {
+    completed += 1;
+    onProgress(completed, GAME_ASSET_LOAD_COUNT);
+  });
+  const physics = physicsMode === 'off'
+    ? Promise.resolve(null)
+    : dependencies.loadPhysicsRuntime();
+  return Promise.allSettled([
+    track(dependencies.loadModels()),
+    track(dependencies.loadShipFurniture()),
+    track(dependencies.loadSkyAssets()),
+    track(dependencies.loadLifeboatAssets()),
+    track(dependencies.loadShipAssets()),
+    track(physics),
+    track(dependencies.loadAudio?.() ?? Promise.resolve(AudioSystem.silent())),
+    track(dependencies.loadMenuModels()),
+    track(dependencies.loadMenuSandAssets()),
+  ] as const);
+}
+
+function throwFirstAssetFailure(
+  assetResults: readonly PromiseSettledResult<{ dispose?: () => void }>[],
+  results: readonly PromiseSettledResult<unknown>[],
+  menuModels: PromiseSettledResult<MenuModelLibrary>,
+): void {
+  const failure = results.find(
     (result): result is PromiseRejectedResult => result.status === 'rejected',
   );
-  if (firstFailure) {
-    for (const result of assetResults) {
-      if (result.status !== 'fulfilled') continue;
-      try {
-        if (result === menuModels) {
-          disposeMenuModelLibrary(result.value);
-        } else {
-          result.value?.dispose();
-        }
-      } catch {
-        // Preserve deterministic dependency failure precedence while cleaning every sibling.
+  if (failure === undefined) return;
+  disposeSettledAssets(assetResults, menuModels);
+  throw failure.reason;
+}
+
+function disposeSettledAssets(
+  assetResults: readonly PromiseSettledResult<{ dispose?: () => void }>[],
+  menuModels: PromiseSettledResult<MenuModelLibrary>,
+): void {
+  for (const result of assetResults) {
+    if (result.status !== 'fulfilled') continue;
+    try {
+      if (result === menuModels) {
+        if (menuModels.status === 'fulfilled') disposeMenuModelLibrary(menuModels.value);
+      } else {
+        result.value.dispose?.();
       }
+    } catch {
+      // Preserve deterministic dependency failure precedence while cleaning every sibling.
     }
-    throw firstFailure.reason;
   }
-  if (
-    models.status !== 'fulfilled'
-    || shipFurniture.status !== 'fulfilled'
-    || skyAssets.status !== 'fulfilled'
-    || lifeboatAssets.status !== 'fulfilled'
-    || shipAssets.status !== 'fulfilled'
-    || physicsRuntime.status !== 'fulfilled'
-    || audio.status !== 'fulfilled'
-    || menuModels.status !== 'fulfilled'
-    || menuSandAssets.status !== 'fulfilled'
-  ) {
-    throw new Error('Asset preload settled without a result');
-  }
-  return {
-    models: models.value,
-    menuModels: menuModels.value,
-    menuSandAssets: menuSandAssets.value,
-    shipFurniture: shipFurniture.value,
-    skyAssets: skyAssets.value,
-    lifeboatAssets: lifeboatAssets.value,
-    shipAssets: shipAssets.value,
-    physicsRuntime: physicsRuntime.value,
-    audio: audio.value,
-  };
+}
+
+function fulfilledValue<T>(result: PromiseSettledResult<T>): T {
+  if (result.status === 'fulfilled') return result.value;
+  throw new Error('Asset preload settled without a result');
 }
 
 function disposeGameAssets(assets: LoadedGameAssets): void {
@@ -322,135 +335,98 @@ function renderGameFailure(mount: HTMLElement, error: unknown): void {
 
 function renderPreloadFailure(mount: HTMLElement, error: unknown): void {
   if (error instanceof MenuSandAssetLoadError) {
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'SEABED UNAVAILABLE',
-      title: 'Unable to prepare the underwater sand',
-      lead: 'Required local seabed textures could not be loaded.',
-      detail: error.message,
-    });
+    renderMenuSandFailure(mount, error);
     return;
   }
 
   if (error instanceof MenuModelLoadError) {
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'MENU MODEL UNAVAILABLE',
-      title: 'Unable to prepare ' + error.menuModelId,
-      lead: 'A required underwater menu model could not be loaded.',
-      detail: error.message,
-    });
+    renderMenuModelFailure(mount, error);
     return;
   }
 
   if (error instanceof PhysicsLoadError) {
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'PHYSICS UNAVAILABLE',
-      title: 'Unable to prepare the moving deck',
-      lead: 'The ship simulation could not be initialized.',
-      detail: error.message,
-    });
+    renderPreloadError(mount, 'PHYSICS UNAVAILABLE', 'Unable to prepare the moving deck', 'The ship simulation could not be initialized.', error);
     return;
   }
 
   if (error instanceof AudioLoadError) {
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'AUDIO UNAVAILABLE',
-      title: 'Unable to prepare the soundscape',
-      lead: 'A required local audio file could not be loaded.',
-      detail: error.message,
-    });
+    renderPreloadError(mount, 'AUDIO UNAVAILABLE', 'Unable to prepare the soundscape', 'A required local audio file could not be loaded.', error);
     return;
   }
 
   if (error instanceof ItemModelLoadError) {
-    if (
-      error.itemId === 'fishingRod'
-      || error.itemId === 'hammer'
-      || error.itemId === 'pillow'
-    ) {
-      const label = error.itemId === 'fishingRod'
-        ? 'Fishing Rod'
-        : error.itemId === 'hammer' ? 'repair hammer' : 'sleep pillow';
-      renderSystemScreen(mount, {
-        kind: 'error',
-        kicker: 'EQUIPMENT UNAVAILABLE',
-        title: `Unable to prepare the lifeboat ${label}`,
-        lead: 'A required fixed equipment model could not be loaded.',
-        detail: error.message,
-      });
-      return;
-    }
-    if (error.itemId === 'lantern' || error.itemId === 'ceilingLight') {
-      const label = error.itemId === 'lantern' ? 'lifeboat lantern' : 'ship lighting';
-      renderSystemScreen(mount, {
-        kind: 'error',
-        kicker: 'LIGHTING UNAVAILABLE',
-        title: `Unable to prepare the ${label}`,
-        lead: 'A required practical light model could not be loaded.',
-        detail: error.message,
-      });
-      return;
-    }
-
-    const itemLabel = ITEM_DEFINITIONS[error.itemId].label;
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'SUPPLIES UNAVAILABLE',
-      title: `Unable to recover ${itemLabel}`,
-      lead: 'A required item model could not be loaded.',
-      detail: error.message,
-    });
+    renderItemModelFailure(mount, error);
     return;
   }
 
   if (error instanceof SkyAssetLoadError) {
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'ATMOSPHERE UNAVAILABLE',
-      title: 'Unable to prepare the sky',
-      lead: 'A required local sky texture could not be loaded.',
-      detail: error.message,
-    });
+    renderPreloadError(mount, 'ATMOSPHERE UNAVAILABLE', 'Unable to prepare the sky', 'A required local sky texture could not be loaded.', error);
     return;
   }
 
   if (error instanceof ShipFurnitureLoadError) {
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'FURNITURE UNAVAILABLE',
-      title: `Unable to prepare ${error.modelId}`,
-      lead: 'A required local ship furniture model could not be loaded.',
-      detail: error.message,
-    });
+    renderPreloadError(mount, 'FURNITURE UNAVAILABLE', `Unable to prepare ${error.modelId}`, 'A required local ship furniture model could not be loaded.', error);
     return;
   }
 
   if (error instanceof LifeboatAssetLoadError) {
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'LIFEBOAT UNAVAILABLE',
-      title: 'Unable to prepare the wooden lifeboat',
-      lead: 'Required local wood textures could not be loaded.',
-      detail: error.message,
-    });
+    renderPreloadError(mount, 'LIFEBOAT UNAVAILABLE', 'Unable to prepare the wooden lifeboat', 'Required local wood textures could not be loaded.', error);
     return;
   }
 
   if (error instanceof ShipAssetLoadError) {
-    renderSystemScreen(mount, {
-      kind: 'error',
-      kicker: 'SHIP UNAVAILABLE',
-      title: 'Unable to prepare Dorothy',
-      lead: 'Required local wood textures could not be loaded.',
-      detail: error.message,
-    });
+    renderPreloadError(mount, 'SHIP UNAVAILABLE', 'Unable to prepare Dorothy', 'Required local wood textures could not be loaded.', error);
     return;
   }
 
   renderRuntimeFailure(mount, error);
+}
+
+function renderMenuSandFailure(mount: HTMLElement, error: MenuSandAssetLoadError): void {
+  renderPreloadError(mount, 'SEABED UNAVAILABLE', 'Unable to prepare the underwater sand', 'Required local seabed textures could not be loaded.', error);
+}
+
+function renderMenuModelFailure(mount: HTMLElement, error: MenuModelLoadError): void {
+  renderPreloadError(mount, 'MENU MODEL UNAVAILABLE', 'Unable to prepare ' + error.menuModelId, 'A required underwater menu model could not be loaded.', error);
+}
+
+function renderItemModelFailure(mount: HTMLElement, error: ItemModelLoadError): void {
+  const equipmentLabel = fixedEquipmentLabel(error.itemId);
+  if (
+    error.itemId === 'fishingRod'
+    || error.itemId === 'hammer'
+    || error.itemId === 'pillow'
+  ) {
+    renderPreloadError(mount, 'EQUIPMENT UNAVAILABLE', `Unable to prepare the lifeboat ${equipmentLabel}`, 'A required fixed equipment model could not be loaded.', error);
+    return;
+  }
+  const lightingLabel = practicalLightLabel(error.itemId);
+  if (error.itemId === 'lantern' || error.itemId === 'ceilingLight') {
+    renderPreloadError(mount, 'LIGHTING UNAVAILABLE', `Unable to prepare the ${lightingLabel}`, 'A required practical light model could not be loaded.', error);
+    return;
+  }
+  renderPreloadError(mount, 'SUPPLIES UNAVAILABLE', `Unable to recover ${ITEM_DEFINITIONS[error.itemId].label}`, 'A required item model could not be loaded.', error);
+}
+
+function fixedEquipmentLabel(itemId: string): string | null {
+  if (itemId === 'fishingRod') return 'Fishing Rod';
+  if (itemId === 'hammer') return 'repair hammer';
+  return itemId === 'pillow' ? 'sleep pillow' : null;
+}
+
+function practicalLightLabel(itemId: string): string | null {
+  if (itemId === 'lantern') return 'lifeboat lantern';
+  return itemId === 'ceilingLight' ? 'ship lighting' : null;
+}
+
+function renderPreloadError(
+  mount: HTMLElement,
+  kicker: string,
+  title: string,
+  lead: string,
+  error: Error,
+): void {
+  renderSystemScreen(mount, { kind: 'error', kicker, title, lead, detail: error.message });
 }
 
 export function launchGame(
@@ -503,63 +479,63 @@ export function launchGame(
 
   const loading = renderLoading(mount);
 
-  const completion = (async (): Promise<Game | null> => {
-    try {
-      unownedAssets = await loadGameAssets(
-        dependencies,
-        physicsMode,
-        (completed, total) => updateSystemScreenProgress(loading, completed, total),
-      );
-    } catch (error) {
-      if (!cancelled && mount.isConnected) renderPreloadFailure(mount, error);
-      return null;
-    }
-
-    if (cancelled || !mount.isConnected) {
-      disposeCurrentOwnership();
-      return null;
-    }
-
+  const launchIsInvalid = (): boolean => cancelled || !mount.isConnected;
+  const createAndStartGame = (assets: LoadedGameAssets): Game | null => {
     try {
       loading.remove();
       const createdGame = dependencies.createGame(
         mount,
-        unownedAssets.models,
-        unownedAssets.shipFurniture,
-        unownedAssets.skyAssets,
-        unownedAssets.lifeboatAssets,
-        unownedAssets.shipAssets,
-        unownedAssets.physicsRuntime,
+        assets.models,
+        assets.shipFurniture,
+        assets.skyAssets,
+        assets.lifeboatAssets,
+        assets.shipAssets,
+        assets.physicsRuntime,
         physicsMode,
-        unownedAssets.audio,
-        unownedAssets.menuModels,
-        unownedAssets.menuSandAssets,
+        assets.audio,
+        assets.menuModels,
+        assets.menuSandAssets,
         reportRuntimeError,
         browserPlaytest,
       );
       game = createdGame;
       unownedAssets = null;
-
-      if (cancelled || !mount.isConnected) {
+      if (launchIsInvalid()) {
         disposeCurrentOwnership();
         return null;
       }
-
       createdGame.start();
-      if (cancelled || !mount.isConnected) {
+      if (launchIsInvalid()) {
         disposeCurrentOwnership();
         return null;
       }
-
       return game as Game;
     } catch (error) {
       disposeCurrentOwnership();
-
-      if (!cancelled && mount.isConnected) {
-        renderGameFailure(mount, error);
-      }
+      if (!cancelled && mount.isConnected) renderGameFailure(mount, error);
       return null;
     }
+  };
+
+  const completion = (async (): Promise<Game | null> => {
+    let loadedAssets: LoadedGameAssets;
+    try {
+      loadedAssets = await loadGameAssets(
+        dependencies,
+        physicsMode,
+        (completed, total) => updateSystemScreenProgress(loading, completed, total),
+      );
+      unownedAssets = loadedAssets;
+    } catch (error) {
+      if (!cancelled && mount.isConnected) renderPreloadFailure(mount, error);
+      return null;
+    }
+
+    if (launchIsInvalid()) {
+      disposeCurrentOwnership();
+      return null;
+    }
+    return createAndStartGame(loadedAssets);
   })();
 
   return {

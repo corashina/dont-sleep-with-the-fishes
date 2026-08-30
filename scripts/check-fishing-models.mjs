@@ -14,27 +14,28 @@ const MODEL_LIMIT = 2_000;
 const LIBRARY_LIMIT = 10_000;
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
-async function inspectModel(filePath) {
-  const document = await io.read(filePath);
-  const root = document.getRoot();
-  const scene = root.getDefaultScene() ?? root.listScenes()[0];
-  if (!scene) throw new Error(`${filePath}: source scene is missing`);
+function validatePrimitive(filePath, primitive) {
+  if (primitive.getMode() !== 4) {
+    throw new Error(`${filePath}: primitive mode ${primitive.getMode()} is not TRIANGLES`);
+  }
+  const position = primitive.getAttribute('POSITION');
+  if (!position || position.getCount() === 0) {
+    throw new Error(`${filePath}: missing or empty POSITION data`);
+  }
+  const elements = primitive.getIndices()?.getCount() ?? position.getCount();
+  if (elements % 3 !== 0) throw new Error(`${filePath}: incomplete triangle data`);
+  return elements / 3;
+}
+
+function countModelTriangles(filePath, root) {
   let triangles = 0;
   for (const mesh of root.listMeshes()) {
-    for (const primitive of mesh.listPrimitives()) {
-      if (primitive.getMode() !== 4) {
-        throw new Error(`${filePath}: primitive mode ${primitive.getMode()} is not TRIANGLES`);
-      }
-      const position = primitive.getAttribute('POSITION');
-      if (!position || position.getCount() === 0) {
-        throw new Error(`${filePath}: missing or empty POSITION data`);
-      }
-      const elements = primitive.getIndices()?.getCount() ?? position.getCount();
-      if (elements % 3 !== 0) throw new Error(`${filePath}: incomplete triangle data`);
-      triangles += elements / 3;
-    }
+    for (const primitive of mesh.listPrimitives()) triangles += validatePrimitive(filePath, primitive);
   }
-  const rawBounds = getBounds(scene);
+  return triangles;
+}
+
+function validateModelMeasurement(filePath, triangles, rawBounds) {
   if (
     triangles <= 0
     || ![...rawBounds.min, ...rawBounds.max].every(Number.isFinite)
@@ -42,6 +43,16 @@ async function inspectModel(filePath) {
   ) {
     throw new Error(`${filePath}: empty or non-finite model`);
   }
+}
+
+async function inspectModel(filePath) {
+  const document = await io.read(filePath);
+  const root = document.getRoot();
+  const scene = root.getDefaultScene() ?? root.listScenes()[0];
+  if (!scene) throw new Error(`${filePath}: source scene is missing`);
+  const triangles = countModelTriangles(filePath, root);
+  const rawBounds = getBounds(scene);
+  validateModelMeasurement(filePath, triangles, rawBounds);
   return { triangles, rawBounds };
 }
 
@@ -75,15 +86,11 @@ function verifyLedgerRow(ledger, modelId, measurement) {
   }
 }
 
-async function main() {
-  const { assetsOnly, ledgerPath, modelsDir } = parseModelCheckArguments(
-    process.argv.slice(2),
-    ['src', 'assets', 'models', 'fishing'],
-  );
-  const errors = [];
-  const measurements = {};
-  let total = 0;
-  let metadata;
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function validateDirectory(modelsDir, errors) {
   try {
     const expected = new Set([
       ...POLY_PIZZA_FISHING_MODEL_IDS.map((id) => `${id}.glb`),
@@ -100,20 +107,28 @@ async function main() {
       if (!actual.has(file)) errors.push(`missing fishing model entry: ${file}`);
     }
   } catch (error) {
-    errors.push(error instanceof Error ? error.message : String(error));
+    errors.push(errorMessage(error));
   }
+}
 
+async function readMetadata(modelsDir, errors) {
   try {
-    metadata = JSON.parse(
+    const metadata = JSON.parse(
       await readFile(resolve(modelsDir, 'fishing-model-metadata.json'), 'utf8'),
     );
     if (JSON.stringify(Object.keys(metadata)) !== JSON.stringify(POLY_PIZZA_FISHING_MODEL_IDS)) {
       errors.push('fishing-model-metadata.json keys do not match pinned model IDs');
     }
+    return metadata;
   } catch (error) {
-    errors.push(error instanceof Error ? error.message : String(error));
+    errors.push(errorMessage(error));
+    return undefined;
   }
+}
 
+async function measureModels(modelsDir, metadata, errors) {
+  const measurements = {};
+  let total = 0;
   for (const modelId of POLY_PIZZA_FISHING_MODEL_IDS) {
     const filePath = resolve(modelsDir, `${modelId}.glb`);
     try {
@@ -135,27 +150,44 @@ async function main() {
         throw new Error(`${modelId}: generated metadata does not match the model`);
       }
     } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error));
+      errors.push(errorMessage(error));
     }
   }
   console.log(`total: ${total} / ${LIBRARY_LIMIT} triangles`);
   if (total > LIBRARY_LIMIT) errors.push(`library: ${total} triangles exceeds ${LIBRARY_LIMIT}`);
+  return measurements;
+}
 
-  if (!assetsOnly) {
-    try {
-      const ledger = await readFile(ledgerPath, 'utf8');
-      for (const modelId of POLY_PIZZA_FISHING_MODEL_IDS) {
-        if (measurements[modelId]) verifyLedgerRow(ledger, modelId, measurements[modelId]);
-      }
-    } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error));
+async function validateLedger(assetsOnly, ledgerPath, measurements, errors) {
+  if (assetsOnly) return;
+  try {
+    const ledger = await readFile(ledgerPath, 'utf8');
+    for (const modelId of POLY_PIZZA_FISHING_MODEL_IDS) {
+      if (measurements[modelId]) verifyLedgerRow(ledger, modelId, measurements[modelId]);
     }
+  } catch (error) {
+    errors.push(errorMessage(error));
   }
+}
 
+function reportErrors(errors) {
   if (errors.length > 0) {
     errors.forEach((error) => console.error(`ERROR: ${error}`));
     process.exitCode = 1;
   }
+}
+
+async function main() {
+  const { assetsOnly, ledgerPath, modelsDir } = parseModelCheckArguments(
+    process.argv.slice(2),
+    ['src', 'assets', 'models', 'fishing'],
+  );
+  const errors = [];
+  await validateDirectory(modelsDir, errors);
+  const metadata = await readMetadata(modelsDir, errors);
+  const measurements = await measureModels(modelsDir, metadata, errors);
+  await validateLedger(assetsOnly, ledgerPath, measurements, errors);
+  reportErrors(errors);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
