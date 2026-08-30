@@ -2,17 +2,23 @@
 
 ## Request a Run
 
-The current chat coordinates all subagents. It asks for the tester count before each run. Choose one, two, or three. Default: 3.
+The current chat coordinates all subagents. It asks for the tester count before each run. Choose one, two, three, four, or five. Default: 5.
 
 A count in the run request does not answer this question. The coordinator waits for a new answer before setup or browser actions.
 
 Each tester completes its run in one continuous subagent turn. Its browser connection ends when that turn returns.
 
+The coordinator starts profiles in the listed order. It uses the current subagent capacity.
+
+When capacity is full, it waits for a tester to stop. It records and closes that tester. Then it starts the next profile.
+
+All waves keep the same server and batch inputs.
+
 ## Tester Count and Profiles
 
-One tester uses balanced play. Two use cautious and reckless play. Three use cautious, balanced, and reckless play.
+One tester uses balanced play. Two use cautious and reckless play. Three use cautious, balanced, and reckless play. Four use cautious, resourceful, bold, and reckless play. Five use cautious, resourceful, balanced, bold, and reckless play.
 
-Cautious players protect food, medicine, tools, and Energy. They avoid risky dives unless survival needs the reward. Balanced players protect critical resources and accept useful risks. Reckless players seek high rewards, dive often, delay care, and avoid certain death.
+Cautious players protect food, medicine, tools, and Energy. They avoid risky dives unless survival needs the reward. Resourceful players seek low-cost gains and time food, care, and repairs to prevent waste. Balanced players protect critical resources and accept useful risks. Bold players pursue high-value rewards, dive often, and spend supplies to stay ready. Reckless players seek high rewards, dive often, delay care, and avoid certain death.
 
 ## Shared Game Setup
 

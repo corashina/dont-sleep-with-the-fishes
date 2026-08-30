@@ -9,7 +9,7 @@ The current chat runs one shared survival batch with collaboration subagents.
 
 ## Before Every Run
 
-Ask for the tester count: "How many testers: 1, 2, or 3? Default: 3." Wait for the answer.
+Ask for the tester count: "How many testers: 1, 2, 3, 4, or 5? Default: 5." Wait for the answer.
 
 A count in the run request does not answer this question. Always wait for a new answer before setup or browser actions.
 
@@ -18,11 +18,15 @@ A count in the run request does not answer this question. Always wait for a new 
 | 1 | balanced |
 | 2 | cautious, reckless |
 | 3 | cautious, balanced, reckless |
+| 4 | cautious, resourceful, bold, reckless |
+| 5 | cautious, resourceful, balanced, bold, reckless |
 
 Use this profile contract:
 
 - Cautious: Protect food, medicine, tools, and Energy. Prefer safe counters. Dive only when survival needs its reward.
+- Resourceful: Seek low-cost gains. Time food, care, and repairs to prevent waste. Avoid risks with weak rewards.
 - Balanced: Protect critical resources. Accept useful risks. Mix eating, fishing, repairs, care, dives, items, and event choices.
+- Bold: Pursue high-value rewards and dive often. Spend supplies to stay ready. Avoid near-certain death.
 - Reckless: Seek high rewards. Dive often and delay care. Prefer dangerous choices that do not make death certain.
 
 Record the tested commit with `git rev-parse HEAD`. Record the current checkout with `git rev-parse --show-toplevel`. Start one Vite server from that current checkout. Do not use the main repository for the server.
@@ -72,7 +76,11 @@ Before spawning players, write `batch.json`:
 
 ## Player Run
 
-Use collaboration subagents only. Call `collaboration.spawn_agent` once for each selected profile. Save every returned subagent ID in `batch.json`.
+Use collaboration subagents only. Start selected profiles in table order. Spawn as many players as current subagent capacity permits. Save every returned subagent ID in `batch.json`.
+
+When capacity is full, wait for an active player to stop. Record its result and close its returned subagent.
+
+Then spawn the next unstarted profile. Keep the shared server and batch inputs unchanged across waves. Preserve the requested tester count.
 
 Each player owns its browser connection only during that active subagent turn. The player must reach a stop condition before returning its final message.
 
