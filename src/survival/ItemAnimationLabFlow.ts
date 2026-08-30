@@ -78,6 +78,15 @@ export interface ItemAnimationLabFlowDependencies {
   readonly onFatalError: (error: unknown) => void;
 }
 
+function usesIndexedItemCue(itemType: ItemId): boolean {
+  return itemType === 'shotgun'
+    || itemType === 'flashlight'
+    || itemType === 'flareGun'
+    || itemType === 'anchor'
+    || itemType === 'ductTape'
+    || itemType === 'radio';
+}
+
 export class ItemAnimationLabFlow {
   private eligibility = new Map<ItemInstanceId, EventResponseId>();
   private operationGeneration = 0;
@@ -108,13 +117,7 @@ export class ItemAnimationLabFlow {
   ): Promise<void> {
     const generation = this.dependencies.captureLifecycleGeneration();
     const expectedChoice = this.eligibility.get(instanceId);
-    if (
-      !this.entered
-      || this.using
-      || expectedChoice === undefined
-      || (choiceId !== undefined && choiceId !== expectedChoice)
-      || !this.isLifecycleCurrent(generation)
-    ) return;
+    if (!this.canPlay(expectedChoice, choiceId, generation)) return;
 
     if (instanceId === FISHING_ROD_LAB_INSTANCE_ID) {
       await this.dependencies.playFishing();
@@ -126,29 +129,7 @@ export class ItemAnimationLabFlow {
       await this.playRepairToolbox(generation, operation);
       return;
     }
-
-    const item = this.dependencies.session.snapshot().inventory[instanceId];
-    if (item === undefined || item.condition !== 'usable') return;
-    const uses = ITEM_ANIMATION_LAB_USES[item.type];
-    if (uses === undefined || uses.length === 0 || uses[0]!.id !== expectedChoice) return;
-    if (uses.length > 1) {
-      this.pendingInstanceId = instanceId;
-      this.dependencies.ui.showItemAnimationLabChoices?.(
-        uses.map(({ id, label }) => ({ id, label, unavailableReason: null })),
-      );
-      return;
-    }
-    this.pendingInstanceId = null;
-    this.dependencies.ui.hideItemAnimationLabChoices?.();
-    const use = uses[0]!;
-    await this.playItem(
-      instanceId,
-      item.type,
-      use.eventId,
-      use.choiceId,
-      generation,
-      operation,
-    );
+    await this.playInventoryItem(instanceId, expectedChoice, generation, operation);
   }
 
   choose(choiceId: EventResponseId): void {
@@ -210,34 +191,27 @@ export class ItemAnimationLabFlow {
   ): Promise<void> {
     const labOnlyUse = eventId === ITEM_ANIMATION_LAB_ID;
     const stagedEventId = eventId as SurvivalEventId;
+    const activation = this.activateItemEvent(
+      instanceId,
+      stagedEventId,
+      labOnlyUse,
+      generation,
+      operation,
+    );
+    const activated = typeof activation === 'boolean' ? activation : await activation;
+    if (!activated) return;
     try {
-      this.beginUse(instanceId);
-      if (!labOnlyUse) {
-        this.dependencies.setAutomaticWeather(stagedEventId);
-        const loading = this.dependencies.bundles.beginLoad(stagedEventId);
-        if (loading !== undefined) void loading.catch(() => undefined);
-        const activation = this.dependencies.bundles.activate(stagedEventId);
-        if (activation !== undefined) await activation;
-      }
+      const reveal = this.stageItemEvent(
+        stagedEventId,
+        eventId === 'handyman',
+        labOnlyUse,
+      );
+      if (reveal !== undefined) await reveal;
     } catch (error) {
       this.handleFailure('fatal', error, generation, operation, true);
       return;
     }
     if (!this.isCurrent(generation, operation)) return;
-
-    try {
-      if (!labOnlyUse) {
-        this.dependencies.world.stageEvent?.(stagedEventId);
-        if (eventId === 'handyman') {
-          await (this.dependencies.world.revealEvent?.(stagedEventId) ?? Promise.resolve());
-        }
-      }
-    } catch (error) {
-      this.handleFailure('fatal', error, generation, operation, true);
-      return;
-    }
-    if (!this.isCurrent(generation, operation)) return;
-
     try {
       await this.playEventItemUseWithSound(
         eventId,
@@ -318,14 +292,7 @@ export class ItemAnimationLabFlow {
     generation: number,
     operation: number,
   ): Promise<void> {
-    if (
-      itemType === 'shotgun'
-      || itemType === 'flashlight'
-      || itemType === 'flareGun'
-      || itemType === 'anchor'
-      || itemType === 'ductTape'
-      || itemType === 'radio'
-    ) {
+    if (usesIndexedItemCue(itemType)) {
       if (itemType === 'anchor') this.dependencies.audio.eventItem?.(itemType);
       return this.dependencies.world.playEventItemUse?.(
         eventId,
@@ -345,6 +312,98 @@ export class ItemAnimationLabFlow {
       choiceId,
       instanceId,
     ) ?? Promise.resolve();
+  }
+
+  private canPlay(
+    expectedChoice: EventResponseId | undefined,
+    choiceId: EventResponseId | undefined,
+    generation: number,
+  ): expectedChoice is EventResponseId {
+    return this.entered
+      && !this.using
+      && expectedChoice !== undefined
+      && (choiceId === undefined || choiceId === expectedChoice)
+      && this.isLifecycleCurrent(generation);
+  }
+
+  private async playInventoryItem(
+    instanceId: ItemInstanceId,
+    expectedChoice: EventResponseId,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
+    const item = this.dependencies.session.snapshot().inventory[instanceId];
+    if (item === undefined || item.condition !== 'usable') return;
+    const uses = ITEM_ANIMATION_LAB_USES[item.type];
+    if (uses === undefined || uses.length === 0 || uses[0]!.id !== expectedChoice) return;
+    if (uses.length > 1) {
+      this.showUseChoices(instanceId, uses);
+      return;
+    }
+    this.pendingInstanceId = null;
+    this.dependencies.ui.hideItemAnimationLabChoices?.();
+    const use = uses[0]!;
+    await this.playItem(
+      instanceId,
+      item.type,
+      use.eventId,
+      use.choiceId,
+      generation,
+      operation,
+    );
+  }
+
+  private showUseChoices(
+    instanceId: ItemInstanceId,
+    uses: readonly ItemAnimationLabUse[],
+  ): void {
+    this.pendingInstanceId = instanceId;
+    this.dependencies.ui.showItemAnimationLabChoices?.(
+      uses.map(({ id, label }) => ({ id, label, unavailableReason: null })),
+    );
+  }
+
+  private activateItemEvent(
+    instanceId: ItemInstanceId,
+    eventId: SurvivalEventId,
+    labOnlyUse: boolean,
+    generation: number,
+    operation: number,
+  ): boolean | Promise<boolean> {
+    try {
+      this.beginUse(instanceId);
+      if (labOnlyUse) return this.isCurrent(generation, operation);
+      const activation = this.activateBundle(eventId);
+      if (activation === undefined) return this.isCurrent(generation, operation);
+      return activation.then(
+        () => this.isCurrent(generation, operation),
+        (error: unknown) => {
+          this.handleFailure('fatal', error, generation, operation, true);
+          return false;
+        },
+      );
+    } catch (error) {
+      this.handleFailure('fatal', error, generation, operation, true);
+      return false;
+    }
+  }
+
+  private activateBundle(eventId: SurvivalEventId): Promise<unknown> | undefined {
+    this.dependencies.setAutomaticWeather(eventId);
+    const loading = this.dependencies.bundles.beginLoad(eventId);
+    if (loading !== undefined) void loading.catch(() => undefined);
+    return this.dependencies.bundles.activate(eventId);
+  }
+
+  private stageItemEvent(
+    eventId: SurvivalEventId,
+    reveal: boolean,
+    labOnlyUse: boolean,
+  ): Promise<unknown> | undefined {
+    if (labOnlyUse) return undefined;
+    this.dependencies.world.stageEvent?.(eventId);
+    if (!reveal) return undefined;
+    return this.dependencies.world.revealEvent?.(eventId) ?? Promise.resolve();
   }
 
   private buildEligibility(

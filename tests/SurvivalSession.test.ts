@@ -8,6 +8,7 @@ import { mulberry32, restoreMulberry32 } from '../src/survival/random';
 import {
   nightlyHullWearDamage,
   radioRescueLeadForSignal,
+  rescueChanceForDay,
   SURVIVAL_BALANCE,
 } from '../src/survival/survivalBalance';
 import { formatJournalEntry } from '../src/survival/journal';
@@ -94,7 +95,7 @@ it.each([
     const session = new SurvivalSession(saved(), {
       seed: 13,
       random: sequenceRandom([0, 0, 0.99]),
-      initial: { day: 23, rescueLead: 8 },
+      initial: { day: 24, rescueLead: 8 },
       initialEventId: 'night-calm-fallback',
     });
     session.resolveEvent(choiceResponse('sleep'));
@@ -322,13 +323,13 @@ it('records signal-assisted rescue once', () => {
   const session = new SurvivalSession(saved('radio'), {
     seed: 20,
     random: sequenceRandom([0, 0]),
-    initial: { day: 23, rescueLead: 8 },
+    initial: { day: 24, rescueLead: 8 },
     initialEventId: 'night-calm-fallback',
   });
   session.resolveEvent(choiceResponse('sleep'));
   session.beginDawn();
   expect(session.snapshot().ending).toEqual({
-    id: 'rescue', day: 24, savedPickupCount: 1, signalAssisted: true,
+    id: 'rescue', day: 25, savedPickupCount: 1, signalAssisted: true,
   });
   const ending = session.snapshot().ending;
   expect(session.beginDawn().accepted).toBe(false);
@@ -2634,16 +2635,19 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot()).toMatchObject({ state: 'nightEvent', pendingEventId: 'shower-night' });
   });
 
-  it('does not rescue before real day 24', () => {
-    expect(stateAfterRescueDawn(22, 8, 0)).not.toBe('rescued');
+  it('only opens rescue on day 25 with maximum lead', () => {
+    expect(stateAfterRescueDawn(23, 8, 0)).not.toBe('rescued');
+    expect(stateAfterRescueDawn(24, 7, 0)).not.toBe('rescued');
+    expect(stateAfterRescueDawn(24, 8, 0.009999)).toBe('rescued');
+    expect(stateAfterRescueDawn(24, 8, 0.010001)).toBe('day');
   });
 
-  it('does not consume a rescue draw before real day 24', () => {
+  it('does not consume a rescue draw before rescue becomes possible', () => {
     const next = vi.fn(() => 0.99);
     const session = new SurvivalSession(saved(), {
       seed: 1,
       random: { next },
-      initial: { day: 22, rescueLead: 8 },
+      initial: { day: 23, rescueLead: 8 },
       initialEventId: 'night-calm-fallback',
     });
     session.resolveEvent(choiceResponse('sleep'));
@@ -2652,14 +2656,35 @@ describe('SurvivalSession daytime actions', () => {
     expect(next).toHaveBeenCalledTimes(beforeDawn + 1);
   });
 
-  it('uses one percent on real day 24 without lead', () => {
-    expect(stateAfterRescueDawn(23, 0, 0.009999)).toBe('rescued');
-    expect(stateAfterRescueDawn(23, 0, 0.010001)).toBe('day');
+  it('opens zero-lead rescue on day 33', () => {
+    expect(stateAfterRescueDawn(31, 0, 0)).not.toBe('rescued');
+    expect(stateAfterRescueDawn(32, 0, 0.009999)).toBe('rescued');
+    expect(stateAfterRescueDawn(32, 0, 0.010001)).toBe('day');
   });
 
-  it('uses six percent on real day 24 with eight lead', () => {
-    expect(stateAfterRescueDawn(23, 8, 0.059999)).toBe('rescued');
-    expect(stateAfterRescueDawn(23, 8, 0.060001)).toBe('day');
+  it('raises maximum-lead rescue chance through days 30 to 35', () => {
+    expect(stateAfterRescueDawn(29, 8, 0.149999)).toBe('rescued');
+    expect(stateAfterRescueDawn(29, 8, 0.150001)).toBe('day');
+    expect(stateAfterRescueDawn(33, 8, 0.319999)).toBe('rescued');
+    expect(stateAfterRescueDawn(33, 8, 0.320001)).toBe('day');
+  });
+
+  it('centers maximum-lead rescue on days 30 through 35', () => {
+    let survivalChance = 1;
+    let cumulativeChance = 0;
+    let usualWindowChance = 0;
+    let medianDay = 0;
+    for (let day = 1; day <= 80; day += 1) {
+      const dayChance = survivalChance * rescueChanceForDay(day, 8);
+      survivalChance -= dayChance;
+      cumulativeChance += dayChance;
+      if (day >= 30 && day <= 35) usualWindowChance += dayChance;
+      if (medianDay === 0 && cumulativeChance >= 0.5) medianDay = day;
+    }
+
+    expect(medianDay).toBe(33);
+    expect(usualWindowChance).toBeGreaterThan(0.6);
+    expect(usualWindowChance).toBeLessThan(0.75);
   });
 
   it('caps rescue-trace dive gains after two finds', () => {

@@ -23,6 +23,36 @@ function invalid(parameter: string): never {
   throw new BrowserPlaytestInputError(parameter);
 }
 
+function readPlaytest(params: URLSearchParams): boolean {
+  const values = params.getAll('playtest');
+  if (values.length === 0) return false;
+  if (values.length !== 1 || values[0] !== 'survival') invalid('playtest');
+  return true;
+}
+
+function readSeed(params: URLSearchParams): number {
+  const values = params.getAll('seed');
+  if (values.length !== 1) invalid('seed');
+  const raw = values[0];
+  if (raw === undefined || !/^(?:0|[1-9]\d*)$/.test(raw)) invalid('seed');
+  const seed = Number(raw);
+  if (!Number.isSafeInteger(seed) || seed > MAX_SEED) invalid('seed');
+  return seed;
+}
+
+function readMissingItemIds(
+  params: URLSearchParams,
+): readonly [ItemInstanceId, ItemInstanceId] {
+  const values = params.getAll('missing');
+  if (values.length !== 2 || values[0] === values[1]) invalid('missing');
+
+  const catalogIds: ReadonlySet<string> = new Set(
+    createItemInstances().map(({ instanceId }) => instanceId),
+  );
+  if (values.some((id) => !catalogIds.has(id))) invalid('missing');
+  return Object.freeze(values as [ItemInstanceId, ItemInstanceId]);
+}
+
 export function parseBrowserPlaytest(
   search: string,
   development: boolean,
@@ -30,28 +60,9 @@ export function parseBrowserPlaytest(
   if (!development) return null;
 
   const params = new URLSearchParams(search);
-  const playtest = params.get('playtest');
-  if (playtest === null) return null;
-  if (params.getAll('playtest').length !== 1) invalid('playtest');
-  if (playtest !== 'survival') invalid('playtest');
-
-  const seedValues = params.getAll('seed');
-  if (seedValues.length !== 1) invalid('seed');
-  const rawSeed = seedValues[0];
-  if (rawSeed === undefined || !/^(?:0|[1-9]\d*)$/.test(rawSeed)) invalid('seed');
-  const seed = Number(rawSeed);
-  if (!Number.isSafeInteger(seed) || seed > MAX_SEED) invalid('seed');
-
-  const missingValues = params.getAll('missing');
-  if (missingValues.length !== 2) invalid('missing');
-  if (missingValues[0] === missingValues[1]) invalid('missing');
-
-  const catalogIds: ReadonlySet<string> = new Set(
-    createItemInstances().map(({ instanceId }) => instanceId),
-  );
-  if (missingValues.some((id) => !catalogIds.has(id))) invalid('missing');
-
-  const missingItemIds = Object.freeze(missingValues as [ItemInstanceId, ItemInstanceId]);
+  if (!readPlaytest(params)) return null;
+  const seed = readSeed(params);
+  const missingItemIds = readMissingItemIds(params);
   const savedItems = Object.freeze(createItemInstances()
     .filter(({ instanceId }) => !missingItemIds.includes(instanceId))
     .map((item) => Object.freeze(item)));

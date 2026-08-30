@@ -87,6 +87,69 @@ function nonDegenerateTriangle(first, second, third) {
   return Math.hypot(...cross) > Number.EPSILON * 16;
 }
 
+function worldPoint(matrix, point) {
+  return [
+    matrix[0] * point[0] + matrix[4] * point[1] + matrix[8] * point[2] + matrix[12],
+    matrix[1] * point[0] + matrix[5] * point[1] + matrix[9] * point[2] + matrix[13],
+    matrix[2] * point[0] + matrix[6] * point[1] + matrix[10] * point[2] + matrix[14],
+  ];
+}
+
+function recordBounds(filePath, state, world) {
+  if (!world.every(Number.isFinite)) throw new Error(`${filePath}: non-finite model bounds`);
+  for (let component = 0; component < 3; component += 1) {
+    state.modelMin[component] = Math.min(state.modelMin[component], world[component]);
+    state.modelMax[component] = Math.max(state.modelMax[component], world[component]);
+  }
+}
+
+function positionWorldPoints(filePath, position, matrix, state) {
+  const point = [0, 0, 0];
+  const worldPoints = [];
+  for (let index = 0; index < position.getCount(); index += 1) {
+    position.getElement(index, point);
+    const world = worldPoint(matrix, point);
+    recordBounds(filePath, state, world);
+    worldPoints.push(world);
+  }
+  return worldPoints;
+}
+
+function validatePrimitiveTriangles(position, indices, worldPoints, state) {
+  const elementCount = indices?.getCount() ?? position.getCount();
+  for (let element = 0; element < elementCount; element += 3) {
+    const firstIndex = indices?.getScalar(element) ?? element;
+    const secondIndex = indices?.getScalar(element + 1) ?? element + 1;
+    const thirdIndex = indices?.getScalar(element + 2) ?? element + 2;
+    if (nonDegenerateTriangle(
+      worldPoints[firstIndex],
+      worldPoints[secondIndex],
+      worldPoints[thirdIndex],
+    )) {
+      state.hasNonDegenerateTriangle = true;
+    }
+  }
+}
+
+function validatePrimitiveBounds(filePath, primitive, matrix, state) {
+  const position = primitive.getAttribute('POSITION');
+  if (!position) return;
+  const worldPoints = positionWorldPoints(filePath, position, matrix, state);
+  validatePrimitiveTriangles(position, primitive.getIndices(), worldPoints, state);
+}
+
+function validateNodeBounds(filePath, node, visitedNodes, state) {
+  if (visitedNodes.has(node)) return;
+  visitedNodes.add(node);
+  const mesh = node.getMesh();
+  if (!mesh) return;
+  const matrix = node.getWorldMatrix();
+  if (!matrix.every(Number.isFinite)) throw new Error(`${filePath}: non-finite model bounds`);
+  for (const primitive of mesh.listPrimitives()) {
+    validatePrimitiveBounds(filePath, primitive, matrix, state);
+  }
+}
+
 function validateModelBounds(filePath, document) {
   const root = document.getRoot();
   const defaultScene = root.getDefaultScene();
@@ -94,76 +157,33 @@ function validateModelBounds(filePath, document) {
   if (scenes.length === 0) throw new Error(`${filePath}: empty model bounds`);
 
   const visitedNodes = new Set();
-  const modelMin = [Infinity, Infinity, Infinity];
-  const modelMax = [-Infinity, -Infinity, -Infinity];
-  let hasNonDegenerateTriangle = false;
+  const state = {
+    modelMin: [Infinity, Infinity, Infinity],
+    modelMax: [-Infinity, -Infinity, -Infinity],
+    hasNonDegenerateTriangle: false,
+  };
   for (const scene of scenes) {
     for (const child of scene.listChildren()) {
-      child.traverse((node) => {
-        if (visitedNodes.has(node)) return;
-        visitedNodes.add(node);
-        const mesh = node.getMesh();
-        if (!mesh) return;
-        const matrix = node.getWorldMatrix();
-        if (!matrix.every(Number.isFinite)) {
-          throw new Error(`${filePath}: non-finite model bounds`);
-        }
-        for (const primitive of mesh.listPrimitives()) {
-          const position = primitive.getAttribute('POSITION');
-          if (!position) continue;
-          const point = [0, 0, 0];
-          const worldPoints = [];
-          for (let index = 0; index < position.getCount(); index += 1) {
-            position.getElement(index, point);
-            const worldPoint = [
-              matrix[0] * point[0] + matrix[4] * point[1] + matrix[8] * point[2] + matrix[12],
-              matrix[1] * point[0] + matrix[5] * point[1] + matrix[9] * point[2] + matrix[13],
-              matrix[2] * point[0] + matrix[6] * point[1] + matrix[10] * point[2] + matrix[14],
-            ];
-            if (!worldPoint.every(Number.isFinite)) {
-              throw new Error(`${filePath}: non-finite model bounds`);
-            }
-            worldPoints.push(worldPoint);
-            for (let component = 0; component < 3; component += 1) {
-              modelMin[component] = Math.min(modelMin[component], worldPoint[component]);
-              modelMax[component] = Math.max(modelMax[component], worldPoint[component]);
-            }
-          }
-          const indices = primitive.getIndices();
-          const elementCount = indices?.getCount() ?? position.getCount();
-          for (let element = 0; element < elementCount; element += 3) {
-            const firstIndex = indices?.getScalar(element) ?? element;
-            const secondIndex = indices?.getScalar(element + 1) ?? element + 1;
-            const thirdIndex = indices?.getScalar(element + 2) ?? element + 2;
-            if (nonDegenerateTriangle(
-              worldPoints[firstIndex],
-              worldPoints[secondIndex],
-              worldPoints[thirdIndex],
-            )) {
-              hasNonDegenerateTriangle = true;
-            }
-          }
-        }
-      });
+      child.traverse((node) => validateNodeBounds(filePath, node, visitedNodes, state));
     }
   }
   if (
-    ![...modelMin, ...modelMax].every(Number.isFinite)
-    || modelMin.some((minimum, index) => minimum > modelMax[index])
+    ![...state.modelMin, ...state.modelMax].every(Number.isFinite)
+    || state.modelMin.some((minimum, index) => minimum > state.modelMax[index])
   ) {
     throw new Error(`${filePath}: empty model bounds`);
   }
-  const extents = modelMax.map((maximum, index) => maximum - modelMin[index]);
+  const extents = state.modelMax.map((maximum, index) => maximum - state.modelMin[index]);
   if (!extents.every(Number.isFinite)) {
     throw new Error(`${filePath}: non-finite model bounds`);
   }
   if (!extents.some((extent) => extent > 0)) {
     throw new Error(`${filePath}: model bounds have no positive extent`);
   }
-  if (!hasNonDegenerateTriangle) {
+  if (!state.hasNonDegenerateTriangle) {
     throw new Error(`${filePath}: contains no non-degenerate world-space triangles`);
   }
-  return { min: modelMin, max: modelMax };
+  return { min: state.modelMin, max: state.modelMax };
 }
 
 async function inspectModel(filePath) {
@@ -205,7 +225,7 @@ function parseLedgerRow(row) {
   return row.slice(1, -1).split('|').map((cell) => cell.trim());
 }
 
-function verifyLedgerRow(ledger, itemId, measurement) {
+function ledgerRow(ledger, itemId) {
   const rows = ledger.split(/\r?\n/).filter((line) => (
     line.startsWith(`| ${itemId} |`)
     && parseLedgerRow(line)[1] === `\`${itemId}.glb\``
@@ -213,34 +233,32 @@ function verifyLedgerRow(ledger, itemId, measurement) {
   if (rows.length !== 1) {
     throw new Error(`ATTRIBUTION.md: expected one ${itemId} row, received ${rows.length}`);
   }
-  const actual = parseLedgerRow(rows[0]);
-  const source = POLY_PIZZA_MODEL_SOURCES[itemId];
-  if (!source) {
-    if (itemId !== 'carlitos') {
-      throw new Error(`ATTRIBUTION.md: no source record for ${itemId}`);
-    }
-    const expected = [
-      'carlitos',
-      '`carlitos.glb`',
-      `${CARLITOS_SOURCE.title} / ${CARLITOS_SOURCE.creator}`,
-      CARLITOS_SOURCE.pageUrl,
-      `\`${CARLITOS_SOURCE.sourceAssetId}\``,
-      `[${CARLITOS_SOURCE.license}](${CARLITOS_SOURCE.licenseUrl})`,
-      String(CARLITOS_SOURCE.sourceTriangles),
-      String(measurement.triangles),
-    ];
-    const actual = parseLedgerRow(rows[0]);
-    if (
-      actual.length !== 10
-      || JSON.stringify(actual.slice(0, 8)) !== JSON.stringify(expected)
-      || !actual[8].includes(CARLITOS_SOURCE.sourceSha256)
-      || !actual[8].includes(CARLITOS_SITTING_IDLE_CLIP)
-      || actual[9] !== CARLITOS_SOURCE.downloadedOn
-    ) {
-      throw new Error('ATTRIBUTION.md: carlitos row does not match the expected record');
-    }
-    return;
+  return parseLedgerRow(rows[0]);
+}
+
+function verifyCarlitosLedgerRow(actual, measurement) {
+  const expected = [
+    'carlitos',
+    '`carlitos.glb`',
+    `${CARLITOS_SOURCE.title} / ${CARLITOS_SOURCE.creator}`,
+    CARLITOS_SOURCE.pageUrl,
+    `\`${CARLITOS_SOURCE.sourceAssetId}\``,
+    `[${CARLITOS_SOURCE.license}](${CARLITOS_SOURCE.licenseUrl})`,
+    String(CARLITOS_SOURCE.sourceTriangles),
+    String(measurement.triangles),
+  ];
+  if (
+    actual.length !== 10
+    || JSON.stringify(actual.slice(0, 8)) !== JSON.stringify(expected)
+    || !actual[8].includes(CARLITOS_SOURCE.sourceSha256)
+    || !actual[8].includes(CARLITOS_SITTING_IDLE_CLIP)
+    || actual[9] !== CARLITOS_SOURCE.downloadedOn
+  ) {
+    throw new Error('ATTRIBUTION.md: carlitos row does not match the expected record');
   }
+}
+
+function verifyPolyPizzaLedgerRow(actual, itemId, measurement, source) {
   const allSources = [source, ...(source.components ?? [])];
   const joinSources = (value) => allSources.map(value).join('<br>');
   const licenseCell = joinSources(
@@ -267,6 +285,14 @@ function verifyLedgerRow(ledger, itemId, measurement) {
   }
 }
 
+function verifyLedgerRow(ledger, itemId, measurement) {
+  const actual = ledgerRow(ledger, itemId);
+  const source = POLY_PIZZA_MODEL_SOURCES[itemId];
+  if (source) return verifyPolyPizzaLedgerRow(actual, itemId, measurement, source);
+  if (itemId !== 'carlitos') throw new Error(`ATTRIBUTION.md: no source record for ${itemId}`);
+  return verifyCarlitosLedgerRow(actual, measurement);
+}
+
 async function runtimeItemIds() {
   const source = await readFile(resolve('src', 'game', 'itemCatalog.ts'), 'utf8');
   const declaration = /export const ITEM_IDS = \[([\s\S]*?)\] as const;/.exec(source)?.[1];
@@ -281,34 +307,35 @@ function sameNumbers(first, second) {
     && first.every((value, index) => Number.isFinite(value) && value === second[index]);
 }
 
-async function main() {
-  let options;
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function parseOptions() {
   try {
-    options = parseModelCheckArguments(
+    return parseModelCheckArguments(
       process.argv.slice(2),
       ['src', 'assets', 'models', 'items'],
     );
   } catch (error) {
-    console.error(`ERROR: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`ERROR: ${errorMessage(error)}`);
     process.exitCode = 1;
-    return;
+    return null;
   }
+}
 
-  const { assetsOnly, ledgerPath, modelsDir } = options;
-  const errors = [];
-  let total = 0;
-  let metadata = null;
-  const measurements = {};
-
+async function validateRuntimeIds(errors) {
   try {
     const runtimeIds = await runtimeItemIds();
     if (JSON.stringify(runtimeIds) !== JSON.stringify(COLLECTIBLE_ITEM_IDS)) {
       errors.push(`audit collectible IDs do not match runtime ITEM_IDS: ${runtimeIds.join(', ')}`);
     }
   } catch (error) {
-    errors.push(error instanceof Error ? error.message : String(error));
+    errors.push(errorMessage(error));
   }
+}
 
+async function validateDirectory(modelsDir, errors) {
   try {
     const expectedEntries = new Set([
       ...MODEL_IDS.map((itemId) => `${itemId}.glb`),
@@ -325,19 +352,27 @@ async function main() {
       if (!actualEntries.has(expectedEntry)) errors.push(`missing model entry: ${expectedEntry}`);
     }
   } catch (error) {
-    errors.push(error instanceof Error ? error.message : String(error));
+    errors.push(errorMessage(error));
   }
+}
 
+async function readMetadata(modelsDir, errors) {
   try {
-    metadata = JSON.parse(await readFile(resolve(modelsDir, 'item-model-metadata.json'), 'utf8'));
+    const metadata = JSON.parse(await readFile(resolve(modelsDir, 'item-model-metadata.json'), 'utf8'));
     const metadataIds = Object.keys(metadata);
     if (JSON.stringify(metadataIds) !== JSON.stringify(MODEL_IDS)) {
       errors.push(`item-model-metadata.json keys do not match audited model IDs: ${metadataIds.join(', ')}`);
     }
+    return metadata;
   } catch (error) {
-    errors.push(error instanceof Error ? error.message : String(error));
+    errors.push(errorMessage(error));
+    return null;
   }
+}
 
+async function measureModels(modelsDir, errors) {
+  const measurements = {};
+  let total = 0;
   for (const itemId of MODEL_IDS) {
     const filePath = resolve(modelsDir, `${itemId}.glb`);
     try {
@@ -353,10 +388,13 @@ async function main() {
         throw new Error(`${filePath}: ${triangles} triangles exceeds ${triangleLimit}`);
       }
     } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error));
+      errors.push(errorMessage(error));
     }
   }
+  return { measurements, total };
+}
 
+function validateMetadata(metadata, measurements, errors) {
   if (metadata) {
     for (const itemId of MODEL_IDS) {
       const expected = metadata[itemId];
@@ -373,25 +411,45 @@ async function main() {
       }
     }
   }
+}
 
+function reportTotal(total, errors) {
   console.log(`total: ${total} / ${LIBRARY_LIMIT} triangles`);
   if (total > LIBRARY_LIMIT) errors.push(`library: ${total} triangles exceeds ${LIBRARY_LIMIT}`);
+}
 
-  if (!assetsOnly) {
-    try {
-      const ledger = await readFile(ledgerPath, 'utf8');
-      for (const itemId of MODEL_IDS) {
-        if (measurements[itemId]) verifyLedgerRow(ledger, itemId, measurements[itemId]);
-      }
-    } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error));
+async function validateLedger(assetsOnly, ledgerPath, measurements, errors) {
+  if (assetsOnly) return;
+  try {
+    const ledger = await readFile(ledgerPath, 'utf8');
+    for (const itemId of MODEL_IDS) {
+      if (measurements[itemId]) verifyLedgerRow(ledger, itemId, measurements[itemId]);
     }
+  } catch (error) {
+    errors.push(errorMessage(error));
   }
+}
 
+function reportErrors(errors) {
   if (errors.length > 0) {
     for (const error of errors) console.error(`ERROR: ${error}`);
     process.exitCode = 1;
   }
+}
+
+async function main() {
+  const options = parseOptions();
+  if (!options) return;
+  const { assetsOnly, ledgerPath, modelsDir } = options;
+  const errors = [];
+  await validateRuntimeIds(errors);
+  await validateDirectory(modelsDir, errors);
+  const metadata = await readMetadata(modelsDir, errors);
+  const { measurements, total } = await measureModels(modelsDir, errors);
+  validateMetadata(metadata, measurements, errors);
+  reportTotal(total, errors);
+  await validateLedger(assetsOnly, ledgerPath, measurements, errors);
+  reportErrors(errors);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

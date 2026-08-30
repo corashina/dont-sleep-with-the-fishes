@@ -52,6 +52,9 @@ const PRESENTATION_CUE_SET = new Set([
   'none', 'fish', 'dive', 'repair', 'treat', 'storm', 'impact', 'darkness', 'sighting',
   'nightfall', 'dawn', 'rescue', 'death', 'sinking',
 ]);
+const ACTION_OUTCOME_DELTA_SET = new Set([
+  'pressure', 'health', 'hunger', 'energy', 'hull', 'food', 'bait', 'repairMaterial', 'rescueLead',
+]);
 const EVENT_PRESENTATION_KEY_SET = new Set(
   SURVIVAL_EVENTS.flatMap((event) => event.choices.flatMap((choice) => (
     choice.outcomes.flatMap((outcome) => (
@@ -141,19 +144,26 @@ function parseInventory(value: unknown): SurvivalInventorySnapshot | null {
   return Object.freeze(inventory);
 }
 
+function allParsedCounters(
+  values: readonly [number | null, number | null, number | null, number | null],
+): values is readonly [number, number, number, number] {
+  return values.every((field) => field !== null);
+}
+
 function parseCarlitos(value: unknown): CarlitosSnapshot | null | undefined {
   if (value === null) return null;
   if (!isRecord(value)) return undefined;
-  const energy = parseInteger(value.energy, 0, 3);
-  const hunger = parseInteger(value.hunger, 0, 5);
-  const sickness = parseInteger(value.sickness, 0, 5);
-  const unhappiness = parseInteger(value.unhappiness, 0, MAX_COUNTER);
-  if (energy === null || hunger === null || sickness === null || unhappiness === null
-    || typeof value.alive !== 'boolean' || typeof value.pettedToday !== 'boolean') return undefined;
+  const counters = [
+    parseInteger(value.energy, 0, 3),
+    parseInteger(value.hunger, 0, 5),
+    parseInteger(value.sickness, 0, 5),
+    parseInteger(value.unhappiness, 0, MAX_COUNTER),
+  ] as const;
+  if (!allParsedCounters(counters)) return undefined;
+  const [energy, hunger, sickness, unhappiness] = counters;
+  if (!hasCarlitosFlags(value)) return undefined;
   const deathCause = value.deathCause;
-  if (deathCause !== null && deathCause !== 'starvation' && deathCause !== 'sickness' && deathCause !== 'misery') {
-    return undefined;
-  }
+  if (!isCarlitosDeathCause(deathCause)) return undefined;
   if (value.alive !== (deathCause === null)) return undefined;
   return Object.freeze({
     alive: value.alive,
@@ -166,60 +176,96 @@ function parseCarlitos(value: unknown): CarlitosSnapshot | null | undefined {
   });
 }
 
+function hasCarlitosFlags(
+  value: Record<string, unknown>,
+): value is Record<string, unknown> & { alive: boolean; pettedToday: boolean } {
+  return typeof value.alive === 'boolean' && typeof value.pettedToday === 'boolean';
+}
+
+function isCarlitosDeathCause(
+  value: unknown,
+): value is CarlitosSnapshot['deathCause'] {
+  return value === null || value === 'starvation' || value === 'sickness' || value === 'misery';
+}
+
+type ActionOutcomeExtensions = {
+  readonly nextDawnEnergy?: DawnEnergy;
+  readonly rewardSummary?: NonNullable<ActionOutcome['rewardSummary']>;
+  readonly eventResult?: NonNullable<ActionOutcome['eventResult']>;
+  readonly eventPresentationKey?: EventPresentationKey;
+};
+
 function parseActionOutcome(value: unknown): ActionOutcome | null | undefined {
   if (value === null) return null;
-  if (!isRecord(value) || typeof value.accepted !== 'boolean' || typeof value.code !== 'string'
+  if (!isRecord(value)) return undefined;
+  const baseOutcome = parseActionOutcomeBase(value);
+  if (baseOutcome === null) return undefined;
+  const nextDawnEnergy = parseNextDawnEnergyExtension(value);
+  const rewardSummary = parseRewardSummaryExtension(value);
+  const eventResult = parseEventResultExtension(value);
+  const eventPresentationKey = parseEventPresentationKeyExtension(value);
+  if (nextDawnEnergy === null || rewardSummary === null
+    || eventResult === null || eventPresentationKey === null) return undefined;
+  return Object.freeze({
+    ...baseOutcome,
+    ...nextDawnEnergy,
+    ...rewardSummary,
+    ...eventResult,
+    ...eventPresentationKey,
+  });
+}
+
+function parseActionOutcomeBase(value: Record<string, unknown>) {
+  if (typeof value.accepted !== 'boolean' || typeof value.code !== 'string'
     || typeof value.message !== 'string' || typeof value.cue !== 'string'
-    || !PRESENTATION_CUE_SET.has(value.cue) || !isRecord(value.deltas)) return undefined;
+    || !PRESENTATION_CUE_SET.has(value.cue) || !isRecord(value.deltas)) return null;
   const deltas: Record<string, number> = {};
-  const allowedDeltas = new Set([
-    'pressure', 'health', 'hunger', 'energy', 'hull', 'food', 'bait', 'repairMaterial', 'rescueLead',
-  ]);
   for (const [key, rawDelta] of Object.entries(value.deltas)) {
-    if (!allowedDeltas.has(key)) return undefined;
+    if (!ACTION_OUTCOME_DELTA_SET.has(key)) return null;
     const delta = parseInteger(rawDelta, -MAX_COUNTER, MAX_COUNTER);
-    if (delta === null) return undefined;
+    if (delta === null) return null;
     deltas[key] = delta;
   }
-  const baseOutcome = {
+  return {
     accepted: value.accepted,
     code: value.code,
     message: value.message,
     deltas: Object.freeze(deltas),
     cue: value.cue as ActionOutcome['cue'],
   };
-  let nextDawnEnergy: DawnEnergy | undefined;
-  let rewardSummary: NonNullable<ActionOutcome['rewardSummary']> | undefined;
-  let eventResult: NonNullable<ActionOutcome['eventResult']> | undefined;
-  let eventPresentationKey: EventPresentationKey | undefined;
-  if ('nextDawnEnergy' in value) {
-    const parsed = parseInteger(value.nextDawnEnergy, 0, 4);
-    if (parsed === null) return undefined;
-    nextDawnEnergy = parsed as DawnEnergy;
-  }
-  if ('rewardSummary' in value) {
-    const reward = parseRewardSummary(value.rewardSummary);
-    if (reward === undefined) return undefined;
-    rewardSummary = reward;
-  }
-  if ('eventResult' in value) {
-    const parsed = parseEventResult(value.eventResult);
-    if (parsed === undefined) return undefined;
-    eventResult = parsed;
-  }
-  if ('eventPresentationKey' in value) {
-    if (typeof value.eventPresentationKey !== 'string' || !isEventPresentationKey(value.eventPresentationKey)) {
-      return undefined;
-    }
-    eventPresentationKey = value.eventPresentationKey;
-  }
-  return Object.freeze({
-    ...baseOutcome,
-    ...(nextDawnEnergy === undefined ? {} : { nextDawnEnergy }),
-    ...(rewardSummary === undefined ? {} : { rewardSummary }),
-    ...(eventResult === undefined ? {} : { eventResult }),
-    ...(eventPresentationKey === undefined ? {} : { eventPresentationKey }),
-  });
+}
+
+function parseNextDawnEnergyExtension(
+  value: Record<string, unknown>,
+): ActionOutcomeExtensions | null {
+  if (!('nextDawnEnergy' in value)) return {};
+  const nextDawnEnergy = parseInteger(value.nextDawnEnergy, 0, 4);
+  return nextDawnEnergy === null ? null : { nextDawnEnergy: nextDawnEnergy as DawnEnergy };
+}
+
+function parseRewardSummaryExtension(
+  value: Record<string, unknown>,
+): ActionOutcomeExtensions | null {
+  if (!('rewardSummary' in value)) return {};
+  const rewardSummary = parseRewardSummary(value.rewardSummary);
+  return rewardSummary === undefined ? null : { rewardSummary };
+}
+
+function parseEventResultExtension(
+  value: Record<string, unknown>,
+): ActionOutcomeExtensions | null {
+  if (!('eventResult' in value)) return {};
+  const eventResult = parseEventResult(value.eventResult);
+  return eventResult === undefined ? null : { eventResult };
+}
+
+function parseEventPresentationKeyExtension(
+  value: Record<string, unknown>,
+): ActionOutcomeExtensions | null {
+  if (!('eventPresentationKey' in value)) return {};
+  if (typeof value.eventPresentationKey !== 'string'
+    || !isEventPresentationKey(value.eventPresentationKey)) return null;
+  return { eventPresentationKey: value.eventPresentationKey };
 }
 
 function parseRewardSummary(value: unknown): ActionOutcome['rewardSummary'] | undefined {
@@ -246,27 +292,67 @@ function parseEventResult(value: unknown): ActionOutcome['eventResult'] | undefi
 
 function parseJournalAction(value: unknown): JournalDayActionRecord | null {
   if (!isRecord(value) || typeof value.kind !== 'string') return null;
-  if (value.kind === 'fishing') {
-    if (typeof value.attemptId !== 'string' || typeof value.result !== 'string'
-      || !['fish', 'utility', 'junk', 'miss'].includes(value.result)
-      || (value.catchId !== null && (typeof value.catchId !== 'string' || !isFishingCatchId(value.catchId)))
-      || (value.catchLabel !== null && typeof value.catchLabel !== 'string')
-      || typeof value.baitConsumed !== 'boolean') return null;
-    const food = parseInteger(value.food, 0, 2);
-    if (food === null || (value.result === 'miss'
-      ? value.catchId !== null || value.catchLabel !== null
-      : value.catchId === null || value.catchLabel === null)) return null;
-    const fishing: Extract<JournalDayActionRecord, { readonly kind: 'fishing' }> = {
-      kind: 'fishing', attemptId: value.attemptId, result: value.result as 'fish' | 'utility' | 'junk' | 'miss',
-      catchId: value.catchId as FishingCatchId | null, catchLabel: value.catchLabel, food: food as 0 | 1 | 2,
-      baitConsumed: value.baitConsumed,
-    };
-    return Object.freeze(fishing);
+  switch (value.kind) {
+    case 'fishing': return parseJournalFishingAction(value);
+    case 'carlitosCare': return parseJournalCarlitosCareAction(value);
+    case 'carlitosDawn': return parseJournalCarlitosDawnAction(value);
+    default: return null;
   }
-  if (value.kind === 'carlitosCare' && (value.action === 'pet' || value.action === 'feed' || value.action === 'treat')) {
-    return Object.freeze({ kind: 'carlitosCare', action: value.action });
-  }
-  if (value.kind !== 'carlitosDawn') return null;
+}
+
+function parseJournalFishingAction(
+  value: Record<string, unknown>,
+): Extract<JournalDayActionRecord, { readonly kind: 'fishing' }> | null {
+  if (!hasJournalFishingFields(value)) return null;
+  const food = parseInteger(value.food, 0, 2);
+  if (food === null || !hasMatchingJournalFishingCatch(value)) return null;
+  return Object.freeze({
+    kind: 'fishing',
+    attemptId: value.attemptId,
+    result: value.result,
+    catchId: value.catchId,
+    catchLabel: value.catchLabel,
+    food: food as 0 | 1 | 2,
+    baitConsumed: value.baitConsumed,
+  });
+}
+
+type JournalFishingFields = Record<string, unknown> & {
+  readonly attemptId: string;
+  readonly result: 'fish' | 'utility' | 'junk' | 'miss';
+  readonly catchId: FishingCatchId | null;
+  readonly catchLabel: string | null;
+  readonly baitConsumed: boolean;
+};
+
+function hasJournalFishingFields(
+  value: Record<string, unknown>,
+): value is JournalFishingFields {
+  return typeof value.attemptId === 'string'
+    && typeof value.result === 'string'
+    && ['fish', 'utility', 'junk', 'miss'].includes(value.result)
+    && (value.catchId === null
+      || typeof value.catchId === 'string' && isFishingCatchId(value.catchId))
+    && (value.catchLabel === null || typeof value.catchLabel === 'string')
+    && typeof value.baitConsumed === 'boolean';
+}
+
+function hasMatchingJournalFishingCatch(value: JournalFishingFields): boolean {
+  return value.result === 'miss'
+    ? value.catchId === null && value.catchLabel === null
+    : value.catchId !== null && value.catchLabel !== null;
+}
+
+function parseJournalCarlitosCareAction(
+  value: Record<string, unknown>,
+): Extract<JournalDayActionRecord, { readonly kind: 'carlitosCare' }> | null {
+  if (value.action !== 'pet' && value.action !== 'feed' && value.action !== 'treat') return null;
+  return Object.freeze({ kind: 'carlitosCare', action: value.action });
+}
+
+function parseJournalCarlitosDawnAction(
+  value: Record<string, unknown>,
+): Extract<JournalDayActionRecord, { readonly kind: 'carlitosDawn' }> | null {
   const before = parseJournalCarlitosState(value.before);
   const after = parseJournalCarlitosState(value.after);
   return before === null || after === null ? null : Object.freeze({ kind: 'carlitosDawn', before, after });
@@ -277,29 +363,64 @@ function parseJournalCarlitosState(value: unknown): Extract<JournalDayActionReco
   return parsed === undefined || parsed === null ? null : parsed;
 }
 
+type JournalEventFields = Record<string, unknown> & {
+  readonly phase: 'day' | 'night';
+  readonly eventId: string;
+  readonly title: string;
+  readonly prompt: string;
+  readonly attemptedChoiceId: string | null;
+  readonly choiceLabel: string;
+  readonly attemptedItemId: ItemId | null;
+  readonly outcomeCode: string;
+  readonly outcomeMessage: string;
+  readonly inventoryMutations: unknown[];
+};
+
 function parseJournalEvent(value: unknown): Exclude<JournalDaytimeRecord, { readonly kind: 'sinkingShip' }> | null {
-  if (!isRecord(value) || (value.phase !== 'day' && value.phase !== 'night')
-    || typeof value.eventId !== 'string' || !EVENT_ID_SET.has(value.eventId)
-    || typeof value.title !== 'string' || typeof value.prompt !== 'string'
-    || (value.attemptedChoiceId !== null && typeof value.attemptedChoiceId !== 'string')
-    || typeof value.choiceLabel !== 'string'
-    || (value.attemptedItemId !== null && (typeof value.attemptedItemId !== 'string' || !ITEM_ID_SET.has(value.attemptedItemId)))
-    || typeof value.outcomeCode !== 'string' || typeof value.outcomeMessage !== 'string'
-    || !Array.isArray(value.inventoryMutations)) return null;
-  if ('eventPresentationKey' in value && (typeof value.eventPresentationKey !== 'string'
-    || !isEventPresentationKey(value.eventPresentationKey))) return null;
+  if (!hasJournalEventFields(value) || !hasValidJournalPresentationKey(value)) return null;
+  const definition = resolveJournalEventDefinition(value);
+  if (definition === null) return null;
+  const inventoryMutations = parseJournalMutations(value.inventoryMutations);
+  if (inventoryMutations === null) return null;
+  return createJournalEventRecord(value, inventoryMutations);
+}
+
+function resolveJournalEventDefinition(value: JournalEventFields) {
   const event = eventById(value.eventId);
-  const choice = value.attemptedChoiceId === null
-    ? undefined
-    : event?.choices.find(({ id }) => id === value.attemptedChoiceId);
-  if (event === undefined || choice === undefined || event.phase !== value.phase
-    || event.title !== value.title || event.prompt !== value.prompt
-    || choice.label !== value.choiceLabel || (choice.itemId ?? null) !== value.attemptedItemId
-    || value.outcomeCode !== 'event-resolved'
-    || !matchesJournalOutcome(event, choice, value.outcomeMessage, value.eventPresentationKey)) return null;
-  const inventoryMutations = value.inventoryMutations.map(parseJournalMutation);
-  if (inventoryMutations.some((mutation) => mutation === null)) return null;
-  const record = {
+  if (event === undefined || value.attemptedChoiceId === null) return null;
+  const choice = event.choices.find(({ id }) => id === value.attemptedChoiceId);
+  if (choice === undefined || !matchesJournalEventDefinition(value, event, choice)) return null;
+  return { event, choice };
+}
+
+function matchesJournalEventDefinition(
+  value: JournalEventFields,
+  event: (typeof SURVIVAL_EVENTS)[number],
+  choice: (typeof SURVIVAL_EVENTS)[number]['choices'][number],
+): boolean {
+  return event.phase === value.phase
+    && event.title === value.title
+    && event.prompt === value.prompt
+    && choice.label === value.choiceLabel
+    && (choice.itemId ?? null) === value.attemptedItemId
+    && value.outcomeCode === 'event-resolved'
+    && matchesJournalOutcome(event, choice, value.outcomeMessage, value.eventPresentationKey);
+}
+
+function parseJournalMutations(
+  values: unknown[],
+): readonly JournalInventoryMutation[] | null {
+  const inventoryMutations = values.map(parseJournalMutation);
+  return inventoryMutations.some((mutation) => mutation === null)
+    ? null
+    : Object.freeze(inventoryMutations as JournalInventoryMutation[]);
+}
+
+function createJournalEventRecord(
+  value: JournalEventFields,
+  inventoryMutations: readonly JournalInventoryMutation[],
+): Exclude<JournalDaytimeRecord, { readonly kind: 'sinkingShip' }> {
+  return Object.freeze({
     phase: value.phase as 'day' | 'night',
     eventId: value.eventId,
     title: value.title,
@@ -310,9 +431,42 @@ function parseJournalEvent(value: unknown): Exclude<JournalDaytimeRecord, { read
     outcomeCode: value.outcomeCode,
     outcomeMessage: value.outcomeMessage,
     ...('eventPresentationKey' in value ? { eventPresentationKey: value.eventPresentationKey as EventPresentationKey } : {}),
-    inventoryMutations: Object.freeze(inventoryMutations as JournalInventoryMutation[]),
-  };
-  return Object.freeze(record);
+    inventoryMutations,
+  });
+}
+
+function hasJournalEventFields(value: unknown): value is JournalEventFields {
+  return isRecord(value)
+    && hasJournalEventIdentity(value)
+    && hasJournalEventAttempt(value)
+    && hasJournalEventOutcome(value);
+}
+
+function hasJournalEventIdentity(value: Record<string, unknown>): boolean {
+  return (value.phase === 'day' || value.phase === 'night')
+    && typeof value.eventId === 'string'
+    && EVENT_ID_SET.has(value.eventId)
+    && typeof value.title === 'string'
+    && typeof value.prompt === 'string';
+}
+
+function hasJournalEventAttempt(value: Record<string, unknown>): boolean {
+  return (value.attemptedChoiceId === null || typeof value.attemptedChoiceId === 'string')
+    && typeof value.choiceLabel === 'string'
+    && (value.attemptedItemId === null
+      || typeof value.attemptedItemId === 'string' && ITEM_ID_SET.has(value.attemptedItemId));
+}
+
+function hasJournalEventOutcome(value: Record<string, unknown>): boolean {
+  return typeof value.outcomeCode === 'string'
+    && typeof value.outcomeMessage === 'string'
+    && Array.isArray(value.inventoryMutations);
+}
+
+function hasValidJournalPresentationKey(value: Record<string, unknown>): boolean {
+  return !('eventPresentationKey' in value)
+    || typeof value.eventPresentationKey === 'string'
+      && isEventPresentationKey(value.eventPresentationKey);
 }
 
 function eventById(eventId: string) {
@@ -409,8 +563,8 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const hull = parseInteger(value.hull, 1, 100);
   const food = parseInteger(value.food, 0, MAX_COUNTER);
   const bait = parseInteger(value.bait, 0, MAX_COUNTER);
-  const recoveredFood = parseInteger(value.recoveredFood, 0, food ?? -1);
-  const recoveredBait = parseInteger(value.recoveredBait, 0, bait ?? -1);
+  const recoveredFood = parseInteger(value.recoveredFood, 0, parsedUpperBound(food));
+  const recoveredBait = parseInteger(value.recoveredBait, 0, parsedUpperBound(bait));
   const repairMaterial = parseInteger(value.repairMaterial, 0, MAX_COUNTER);
   const rescueLead = parseInteger(value.rescueLead, 0, 8);
   const rescueTraceFinds = parseInteger(value.rescueTraceFinds, 0, 2);
@@ -422,16 +576,14 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const scavengeFields = [day, pressure, health, hunger, energy, hull, food, bait, recoveredFood,
     recoveredBait, repairMaterial, rescueLead, rescueTraceFinds, radioSignalsSent, savedPickupCount,
     fishingCounter, seed, randomState];
-  if (!['day', 'dayEvent', 'nightEvent'].includes(String(state)) || scavengeFields.some((field) => field === null)
-    || typeof value.radioSignalAvailable !== 'boolean' || typeof value.radioSignalsEnabled !== 'boolean'
-    || typeof value.actedToday !== 'boolean' || typeof value.weather !== 'string'
-    || !WEATHER_ID_SET.has(value.weather as WeatherId)) return null;
+  if (!hasValidSessionScalars(state, scavengeFields)) return null;
+  if (!hasSessionFlags(value)) return null;
   const chest = parseChest(value.chest, day!);
   const inventory = parseInventory(value.inventory);
   const savedItems = parseItemList(value.savedItems);
   const carlitos = parseCarlitos(value.carlitos);
   const pendingDawnBreaks = parseItemIdList(value.pendingDawnBreaks);
-  const nextDawnEnergyOverride = value.nextDawnEnergyOverride === null ? null : parseInteger(value.nextDawnEnergyOverride, 0, 4);
+  const nextDawnEnergyOverride = parseNextDawnEnergyOverride(value.nextDawnEnergyOverride);
   const lastEventId = parseEventIdOrNull(value.lastEventId);
   const lastSeenDays = parseEventNumberRecord(value.lastSeenDays, 0, day!);
   const appearanceCounts = parseEventNumberRecord(value.appearanceCounts, 0, MAX_COUNTER);
@@ -439,42 +591,118 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const lastHealthCause = parseDeathCause(value.lastHealthCause);
   const lastHullEventId = parseEventIdOrNull(value.lastHullEventId);
   const pendingJournalDaytime = parseJournalDaytime(value.pendingJournalDaytime);
-  const pendingJournalNighttime = value.pendingJournalNighttime === null
-    ? null
-    : parseJournalNight(value.pendingJournalNighttime) ?? undefined;
+  const pendingJournalNighttime = parsePendingJournalNight(value.pendingJournalNighttime);
   const pendingJournalActions = parseJournalActions(value.pendingJournalActions);
   const journalEntries = parseJournalEntries(value.journalEntries);
-  if (chest === null || inventory === null || savedItems === null || carlitos === undefined
-    || pendingDawnBreaks === null || nextDawnEnergyOverride === null && value.nextDawnEnergyOverride !== null
-    || lastEventId === undefined || lastSeenDays === null || appearanceCounts === null
-    || lastOutcome === undefined || lastHealthCause === null || lastHullEventId === undefined
-    || pendingJournalDaytime === undefined || pendingJournalNighttime === undefined
-    || pendingJournalActions === null || journalEntries === null) return null;
+  if ([chest, inventory, savedItems, pendingDawnBreaks, lastSeenDays, appearanceCounts,
+    lastHealthCause, pendingJournalActions, journalEntries].some((field) => field === null)) return null;
+  if ([carlitos, lastEventId, lastOutcome, lastHullEventId, pendingJournalDaytime,
+    pendingJournalNighttime].some((field) => field === undefined)) return null;
+  if (nextDawnEnergyOverride === undefined) return null;
   const pendingEventId = parseEventIdOrNull(value.pendingEventId);
-  const pendingEventTargetId = value.pendingEventTargetId === null ? null : parseKnownInventoryId(value.pendingEventTargetId, inventory);
-  if (pendingEventId === undefined || pendingEventTargetId === undefined
-    || (state === 'day' && pendingEventId !== null)
-    || ((state === 'dayEvent' || state === 'nightEvent') && pendingEventId === null)
-    || (pendingEventId === null && pendingEventTargetId !== null)
-    || Object.values(inventory).some((item) => item?.type === 'carlitos')
-    || savedPickupCount !== savedItems.length + (carlitos === null ? 0 : 1)
-    || !inventoryContainsIds(inventory, savedItems.map((item) => item.instanceId))
-    || !inventoryContainsIds(inventory, pendingDawnBreaks)) return null;
-  if (pendingEventId !== null) {
-    const event = SURVIVAL_EVENTS.find(({ id }) => id === pendingEventId)!;
-    if ((state === 'dayEvent') !== (event.phase === 'day') || (state === 'nightEvent') !== (event.phase === 'night')) return null;
-    if (pendingEventTargetId !== null && !event.targetItemIds?.includes(inventory[pendingEventTargetId]!.type)) return null;
-  }
+  const pendingEventTargetId = parsePendingEventTargetId(value.pendingEventTargetId, inventory!);
+  if (pendingEventId === undefined || pendingEventTargetId === undefined) return null;
+  if (!hasValidPendingEventState(state, pendingEventId, pendingEventTargetId)) return null;
+  if (!hasValidSessionInventory(
+    inventory!, savedItems!, savedPickupCount!, carlitos!, pendingDawnBreaks!,
+  )) return null;
+  if (!hasValidPendingEventDefinition(
+    state, pendingEventId, pendingEventTargetId, inventory!,
+  )) return null;
   return createSurvivalSessionCheckpoint({
     state: state as SurvivalSessionCheckpoint['state'], day: day!, pressure: pressure!, health: health!, hunger: hunger!, energy: energy!, hull: hull!,
     food: food!, bait: bait!, recoveredFood: recoveredFood!, recoveredBait: recoveredBait!, repairMaterial: repairMaterial!, rescueLead: rescueLead! as RescueLead,
     rescueTraceFinds: rescueTraceFinds! as 0 | 1 | 2, radioSignalAvailable: value.radioSignalAvailable, radioSignalsSent: radioSignalsSent!, radioSignalsEnabled: value.radioSignalsEnabled,
-    chest, weather: value.weather as WeatherId, actedToday: value.actedToday, inventory, savedItems, savedPickupCount: savedPickupCount!, carlitos,
-    pendingEventId, pendingEventTargetId, pendingDawnBreaks, nextDawnEnergyOverride: nextDawnEnergyOverride as DawnEnergy | null,
-    lastEventId, lastSeenDays, appearanceCounts, lastOutcome, lastHealthCause, lastHullEventId,
-    pendingJournalDaytime, pendingJournalNighttime, pendingJournalActions, journalEntries,
+    chest: chest!, weather: value.weather, actedToday: value.actedToday, inventory: inventory!, savedItems: savedItems!, savedPickupCount: savedPickupCount!, carlitos: carlitos!,
+    pendingEventId, pendingEventTargetId, pendingDawnBreaks: pendingDawnBreaks!, nextDawnEnergyOverride: nextDawnEnergyOverride as DawnEnergy | null,
+    lastEventId: lastEventId!, lastSeenDays: lastSeenDays!, appearanceCounts: appearanceCounts!, lastOutcome: lastOutcome!, lastHealthCause: lastHealthCause!, lastHullEventId: lastHullEventId!,
+    pendingJournalDaytime: pendingJournalDaytime!, pendingJournalNighttime: pendingJournalNighttime!, pendingJournalActions: pendingJournalActions!, journalEntries: journalEntries!,
     fishingCounter: fishingCounter!, seed: seed!, randomState: randomState!,
   });
+}
+
+function parsedUpperBound(value: number | null): number {
+  return value ?? -1;
+}
+
+function parseNextDawnEnergyOverride(value: unknown): DawnEnergy | null | undefined {
+  if (value === null) return null;
+  const parsed = parseInteger(value, 0, 4);
+  return parsed === null ? undefined : parsed as DawnEnergy;
+}
+
+function parsePendingJournalNight(value: unknown): JournalNightRecord | null | undefined {
+  if (value === null) return null;
+  return parseJournalNight(value) ?? undefined;
+}
+
+function parsePendingEventTargetId(
+  value: unknown,
+  inventory: SurvivalInventorySnapshot,
+): ItemInstanceId | null | undefined {
+  return value === null ? null : parseKnownInventoryId(value, inventory);
+}
+
+function isSessionState(value: unknown): value is SurvivalSessionCheckpoint['state'] {
+  return value === 'day' || value === 'dayEvent' || value === 'nightEvent';
+}
+
+function hasValidSessionScalars(
+  state: unknown,
+  fields: readonly (number | null)[],
+): state is SurvivalSessionCheckpoint['state'] {
+  return isSessionState(state) && fields.every((field) => field !== null);
+}
+
+function hasSessionFlags(
+  value: Record<string, unknown>,
+): value is Record<string, unknown> & {
+  radioSignalAvailable: boolean;
+  radioSignalsEnabled: boolean;
+  actedToday: boolean;
+  weather: WeatherId;
+} {
+  return typeof value.radioSignalAvailable === 'boolean'
+    && typeof value.radioSignalsEnabled === 'boolean'
+    && typeof value.actedToday === 'boolean'
+    && typeof value.weather === 'string'
+    && WEATHER_ID_SET.has(value.weather as WeatherId);
+}
+
+function hasValidPendingEventState(
+  state: SurvivalSessionCheckpoint['state'],
+  pendingEventId: string | null,
+  pendingEventTargetId: ItemInstanceId | null,
+): boolean {
+  if (state === 'day') return pendingEventId === null && pendingEventTargetId === null;
+  return pendingEventId !== null;
+}
+
+function hasValidSessionInventory(
+  inventory: SurvivalInventorySnapshot,
+  savedItems: readonly ItemInstance[],
+  savedPickupCount: number,
+  carlitos: CarlitosSnapshot | null,
+  pendingDawnBreaks: readonly ItemInstanceId[],
+): boolean {
+  if (Object.values(inventory).some((item) => item?.type === 'carlitos')) return false;
+  if (savedPickupCount !== savedItems.length + (carlitos === null ? 0 : 1)) return false;
+  if (!inventoryContainsIds(inventory, savedItems.map((item) => item.instanceId))) return false;
+  return inventoryContainsIds(inventory, pendingDawnBreaks);
+}
+
+function hasValidPendingEventDefinition(
+  state: SurvivalSessionCheckpoint['state'],
+  pendingEventId: string | null,
+  pendingEventTargetId: ItemInstanceId | null,
+  inventory: SurvivalInventorySnapshot,
+): boolean {
+  if (pendingEventId === null) return true;
+  const event = SURVIVAL_EVENTS.find(({ id }) => id === pendingEventId)!;
+  if ((state === 'dayEvent') !== (event.phase === 'day')) return false;
+  if ((state === 'nightEvent') !== (event.phase === 'night')) return false;
+  return pendingEventTargetId === null
+    || event.targetItemIds?.includes(inventory[pendingEventTargetId]!.type) === true;
 }
 
 function parseSurvivalRunCheckpoint(value: unknown): SurvivalRunCheckpoint | null {

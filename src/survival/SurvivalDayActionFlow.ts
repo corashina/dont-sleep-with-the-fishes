@@ -1,5 +1,5 @@
 import type { SurvivalAudio } from '../audio/SurvivalAudio';
-import { ITEM_DEFINITIONS } from '../game/ItemState';
+import { ITEM_DEFINITIONS, type ItemInstanceId } from '../game/ItemState';
 import type { SurvivalUI } from '../ui/SurvivalUI';
 import type { RewardResultView } from '../ui/SurvivalCoverViewModel';
 import type { BoatWorld } from './BoatWorld';
@@ -122,81 +122,22 @@ export class SurvivalDayActionFlow {
 
   async run(action: DayActionId, option?: DayActionOption): Promise<void> {
     const commandGeneration = this.dependencies.captureLifecycleGeneration();
-    if (
-      action === 'fish'
-      || !this.isLifecycleCurrent(commandGeneration)
-    ) return;
+    if (action === 'fish' || !this.isLifecycleCurrent(commandGeneration)) return;
 
-    let beforeAction: SurvivalSnapshot;
-    let selectedOption: DayActionOption | undefined;
-    let outcome: ActionOutcome | undefined;
-    try {
-      beforeAction = this.dependencies.session.snapshot();
-      selectedOption = action === 'repair'
-        ? this.repairOption(this.dependencies.session.snapshot())
-        : option;
-      outcome = this.dependencies.session.perform?.(action, selectedOption);
-    } catch (error) {
-      if (this.isLifecycleCurrent(commandGeneration)) {
-        this.dependencies.onInvariantError(asError(error));
-      }
-      return;
-    }
-    if (outcome === undefined) return;
+    const prepared = this.prepareAction(action, option, commandGeneration);
+    if (prepared === null) return;
+    const { beforeAction, selectedOption, outcome } = prepared;
     if (!outcome.accepted) {
-      try {
-        this.dependencies.audio.deny?.();
-        this.dependencies.ui.showFeedback?.(outcome);
-      } catch (error) {
-        if (this.isLifecycleCurrent(commandGeneration)) {
-          this.dependencies.onFatalError(error);
-        }
-      }
+      this.presentRejection(outcome, commandGeneration);
       return;
     }
-
-    if (action === 'endDay') {
-      try {
-        this.dependencies.audio.sleep?.();
-      } catch (error) {
-        if (this.isLifecycleCurrent(commandGeneration)) {
-          this.dependencies.onFatalError(error);
-        }
-        return;
-      }
-      await this.runEndDay(outcome);
-      return;
-    }
-    if (action === 'dive') {
-      await this.runDiveAction(outcome);
-      return;
-    }
-
-    try {
-      this.dependencies.audio.action?.(action, selectedOption);
-    } catch (error) {
-      if (this.isLifecycleCurrent(commandGeneration)) {
-        this.dependencies.onFatalError(error);
-      }
-      return;
-    }
-    if (action === 'petCarlitos' || action === 'feedCarlitos') {
-      try {
-        this.dependencies.events.sync(this.dependencies.session.snapshot());
-      } catch (error) {
-        if (this.isLifecycleCurrent(commandGeneration)) {
-          this.dependencies.onFatalError(error);
-        }
-        return;
-      }
-      await this.runCarlitosAction(action);
-      return;
-    }
-    if (action === 'openChest') {
-      await this.runChestAction(outcome, beforeAction);
-      return;
-    }
-    await this.runDayAction(outcome);
+    await this.runAcceptedAction(
+      action,
+      selectedOption,
+      outcome,
+      beforeAction,
+      commandGeneration,
+    );
   }
 
   repairOption(snapshot: SurvivalSnapshot): DayActionOption | undefined {
@@ -321,42 +262,14 @@ export class SurvivalDayActionFlow {
     const operation = this.beginOperation();
     try {
       if (!this.isCurrent(generation, operation)) return;
-      const scuba = Object.values(this.dependencies.session.snapshot().inventory).find(
-        (item) => item?.type === 'scubaSet' && item.condition === 'usable',
-      );
-      const instanceId = scuba?.instanceId ?? 'scubaSet-1';
+      const instanceId = this.diveInstanceId();
       this.setBusy(true);
-
-      await (this.dependencies.world.playDive?.(instanceId, {
-        onWaterImpact: () => {
-          if (this.isCurrent(generation, operation)) this.dependencies.audio.beginDive?.();
-        },
-      }) ?? Promise.resolve());
-      if (!await this.resumeCurrent(generation, operation)) return;
-
-      await (this.dependencies.ui.setSleepCoverProfile?.('dive') ?? Promise.resolve());
-      if (!await this.resumeCurrent(generation, operation)) return;
-      await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
-      if (!await this.resumeCurrent(generation, operation)) return;
-
-      this.dependencies.world.clearDivePresentation?.();
-      this.dependencies.audio.finishDive?.();
-      const snapshot = this.dependencies.renderSnapshot();
-      const [coveredSceneSettled] = await Promise.all([
-        this.dependencies.renderAndSettleCoveredScene(generation),
-        this.dependencies.ui.holdDiveCovered?.() ?? Promise.resolve(),
-      ]);
-      if (!coveredSceneSettled || !await this.resumeCurrent(generation, operation)) return;
-      await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
-      if (!await this.resumeCurrent(generation, operation)) return;
-      await (this.dependencies.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
-      if (!await this.resumeCurrent(generation, operation)) return;
-
-      await (this.dependencies.ui.showRewardResult?.(formatDiveResult(outcome)) ?? Promise.resolve());
-      if (!await this.resumeCurrent(generation, operation)) return;
-      this.setBusy(false);
-      if (isTerminal(snapshot.state)) this.dependencies.presentTerminal(snapshot);
-      else this.dependencies.ui.restoreCommandFocus?.();
+      if (!await this.playDiveEntry(instanceId, generation, operation)) return;
+      if (!await this.coverDive(generation, operation)) return;
+      const snapshot = await this.settleCoveredDive(generation, operation);
+      if (snapshot === null) return;
+      if (!await this.uncoverDive(generation, operation)) return;
+      await this.presentDiveResult(outcome, snapshot, generation, operation);
     } catch (error) {
       this.handleFailure(error, generation, operation, () => {
         try {
@@ -385,31 +298,12 @@ export class SurvivalDayActionFlow {
         opensEvent,
       );
       if (!transitionStarted) return;
-      await Promise.all([
-        this.dependencies.world.play?.(outcome.cue) ?? Promise.resolve(),
-        this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve(),
-      ]);
+      await this.playNightTransition(outcome);
       if (!this.isCurrent(generation, operation)) return;
       this.dependencies.audio.nightfall?.();
-      let snapshot = this.dependencies.renderSnapshot();
-
+      const snapshot = this.dependencies.renderSnapshot();
       if (outcome.code === 'quiet-night') {
-        await (this.dependencies.ui.holdSleep?.() ?? Promise.resolve());
-        if (!this.isCurrent(generation, operation)) return;
-        snapshot = await this.dependencies.events.beginDawn();
-        if (!this.isCurrent(generation, operation)) return;
-        if (snapshot.state === 'dayEvent' && snapshot.pendingEventId !== null) {
-          this.dependencies.ui.beginEventPresentation?.();
-          await this.dependencies.events.revealPending(snapshot, true);
-          return;
-        }
-        const settled = await this.dependencies.renderAndSettleCoveredScene(generation);
-        if (!settled || !this.isCurrent(generation, operation)) return;
-        await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
-        if (!this.isCurrent(generation, operation)) return;
-        this.dependencies.events.finishQuietNight();
-        this.dependencies.presentTerminal(snapshot);
-        this.dependencies.ui.restoreCommandFocus?.();
+        await this.runQuietNight(generation, operation);
         return;
       }
 
@@ -430,6 +324,187 @@ export class SurvivalDayActionFlow {
           }
         : undefined);
     }
+  }
+
+  private prepareAction(
+    action: Exclude<DayActionId, 'fish'>,
+    option: DayActionOption | undefined,
+    generation: number,
+  ): {
+    readonly beforeAction: SurvivalSnapshot;
+    readonly selectedOption: DayActionOption | undefined;
+    readonly outcome: ActionOutcome;
+  } | null {
+    try {
+      const beforeAction = this.dependencies.session.snapshot();
+      const selectedOption = action === 'repair'
+        ? this.repairOption(this.dependencies.session.snapshot())
+        : option;
+      const outcome = this.dependencies.session.perform?.(action, selectedOption);
+      return outcome === undefined ? null : { beforeAction, selectedOption, outcome };
+    } catch (error) {
+      if (this.isLifecycleCurrent(generation)) {
+        this.dependencies.onInvariantError(asError(error));
+      }
+      return null;
+    }
+  }
+
+  private presentRejection(outcome: ActionOutcome, generation: number): void {
+    try {
+      this.dependencies.audio.deny?.();
+      this.dependencies.ui.showFeedback?.(outcome);
+    } catch (error) {
+      if (this.isLifecycleCurrent(generation)) this.dependencies.onFatalError(error);
+    }
+  }
+
+  private async runAcceptedAction(
+    action: Exclude<DayActionId, 'fish'>,
+    option: DayActionOption | undefined,
+    outcome: ActionOutcome,
+    beforeAction: SurvivalSnapshot,
+    generation: number,
+  ): Promise<void> {
+    if (action === 'endDay') {
+      if (!this.playActionAudio(() => this.dependencies.audio.sleep?.(), generation)) return;
+      await this.runEndDay(outcome);
+      return;
+    }
+    if (action === 'dive') {
+      await this.runDiveAction(outcome);
+      return;
+    }
+    if (!this.playActionAudio(
+      () => this.dependencies.audio.action?.(action, option),
+      generation,
+    )) return;
+    if (action === 'petCarlitos' || action === 'feedCarlitos') {
+      if (!this.syncCarlitosEvent(generation)) return;
+      await this.runCarlitosAction(action);
+      return;
+    }
+    if (action === 'openChest') await this.runChestAction(outcome, beforeAction);
+    else await this.runDayAction(outcome);
+  }
+
+  private playActionAudio(play: () => void, generation: number): boolean {
+    try {
+      play();
+      return true;
+    } catch (error) {
+      if (this.isLifecycleCurrent(generation)) this.dependencies.onFatalError(error);
+      return false;
+    }
+  }
+
+  private syncCarlitosEvent(generation: number): boolean {
+    try {
+      this.dependencies.events.sync(this.dependencies.session.snapshot());
+      return true;
+    } catch (error) {
+      if (this.isLifecycleCurrent(generation)) this.dependencies.onFatalError(error);
+      return false;
+    }
+  }
+
+  private diveInstanceId(): ItemInstanceId {
+    const scuba = Object.values(this.dependencies.session.snapshot().inventory).find(
+      (item) => item?.type === 'scubaSet' && item.condition === 'usable',
+    );
+    return scuba?.instanceId ?? 'scubaSet-1';
+  }
+
+  private async playDiveEntry(
+    instanceId: ItemInstanceId,
+    generation: number,
+    operation: number,
+  ): Promise<boolean> {
+    await (this.dependencies.world.playDive?.(instanceId, {
+      onWaterImpact: () => {
+        if (this.isCurrent(generation, operation)) this.dependencies.audio.beginDive?.();
+      },
+    }) ?? Promise.resolve());
+    return this.resumeCurrent(generation, operation);
+  }
+
+  private async coverDive(generation: number, operation: number): Promise<boolean> {
+    await (this.dependencies.ui.setSleepCoverProfile?.('dive') ?? Promise.resolve());
+    if (!await this.resumeCurrent(generation, operation)) return false;
+    await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    return this.resumeCurrent(generation, operation);
+  }
+
+  private async settleCoveredDive(
+    generation: number,
+    operation: number,
+  ): Promise<SurvivalSnapshot | null> {
+    this.dependencies.world.clearDivePresentation?.();
+    this.dependencies.audio.finishDive?.();
+    const snapshot = this.dependencies.renderSnapshot();
+    const [settled] = await Promise.all([
+      this.dependencies.renderAndSettleCoveredScene(generation),
+      this.dependencies.ui.holdDiveCovered?.() ?? Promise.resolve(),
+    ]);
+    if (!settled || !await this.resumeCurrent(generation, operation)) return null;
+    return snapshot;
+  }
+
+  private async uncoverDive(generation: number, operation: number): Promise<boolean> {
+    await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    if (!await this.resumeCurrent(generation, operation)) return false;
+    await (this.dependencies.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
+    return this.resumeCurrent(generation, operation);
+  }
+
+  private async presentDiveResult(
+    outcome: ActionOutcome,
+    snapshot: SurvivalSnapshot,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
+    await (this.dependencies.ui.showRewardResult?.(formatDiveResult(outcome)) ?? Promise.resolve());
+    if (!await this.resumeCurrent(generation, operation)) return;
+    this.setBusy(false);
+    if (isTerminal(snapshot.state)) this.dependencies.presentTerminal(snapshot);
+    else this.dependencies.ui.restoreCommandFocus?.();
+  }
+
+  private playNightTransition(outcome: ActionOutcome): Promise<unknown[]> {
+    return Promise.all([
+      this.dependencies.world.play?.(outcome.cue) ?? Promise.resolve(),
+      this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve(),
+    ]);
+  }
+
+  private async runQuietNight(generation: number, operation: number): Promise<void> {
+    await (this.dependencies.ui.holdSleep?.() ?? Promise.resolve());
+    if (!this.isCurrent(generation, operation)) return;
+    const snapshot = await this.dependencies.events.beginDawn();
+    if (!this.isCurrent(generation, operation)) return;
+    if (await this.revealQuietNightDayEvent(snapshot)) return;
+    await this.finishQuietNight(snapshot, generation, operation);
+  }
+
+  private async revealQuietNightDayEvent(snapshot: SurvivalSnapshot): Promise<boolean> {
+    if (snapshot.state !== 'dayEvent' || snapshot.pendingEventId === null) return false;
+    this.dependencies.ui.beginEventPresentation?.();
+    await this.dependencies.events.revealPending(snapshot, true);
+    return true;
+  }
+
+  private async finishQuietNight(
+    snapshot: SurvivalSnapshot,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
+    const settled = await this.dependencies.renderAndSettleCoveredScene(generation);
+    if (!settled || !this.isCurrent(generation, operation)) return;
+    await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    if (!this.isCurrent(generation, operation)) return;
+    this.dependencies.events.finishQuietNight();
+    this.dependencies.presentTerminal(snapshot);
+    this.dependencies.ui.restoreCommandFocus?.();
   }
 
   private async resumeCurrent(generation: number, operation: number): Promise<boolean> {

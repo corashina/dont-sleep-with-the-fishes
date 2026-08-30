@@ -43,14 +43,7 @@ export function finiteBox(box: Box3): boolean {
   return [...box.min.toArray(), ...box.max.toArray()].every(Number.isFinite);
 }
 
-export function normalizeLongestDimensionTemplate(
-  root: Group,
-  spec: LongestDimensionSpec,
-  error: ModelError,
-  finalTolerance?: number,
-): number {
-  root.rotation.set(...spec.rotation);
-  root.updateMatrixWorld(true);
+function validateTemplateMeshes(root: Group, spec: LongestDimensionSpec, error: ModelError): number {
   let meshCount = 0;
   let triangles = 0;
   root.traverse((object) => {
@@ -64,13 +57,33 @@ export function normalizeLongestDimensionTemplate(
   if (triangles > spec.maxTriangles) {
     throw error(`triangle count ${triangles} exceeds the ${spec.maxTriangles} limit`);
   }
+  return triangles;
+}
+
+function validBounds(bounds: Box3): boolean {
+  return !bounds.isEmpty() && finiteBox(bounds);
+}
+
+function longestDimension(bounds: Box3): number {
+  const size = bounds.getSize(new Vector3());
+  return Math.max(size.x, size.y, size.z);
+}
+
+export function normalizeLongestDimensionTemplate(
+  root: Group,
+  spec: LongestDimensionSpec,
+  error: ModelError,
+  finalTolerance?: number,
+): number {
+  root.rotation.set(...spec.rotation);
+  root.updateMatrixWorld(true);
+  const triangles = validateTemplateMeshes(root, spec, error);
 
   const sourceBounds = new Box3().setFromObject(root);
-  if (sourceBounds.isEmpty() || !finiteBox(sourceBounds)) {
+  if (!validBounds(sourceBounds)) {
     throw error('scene has empty or non-finite bounds');
   }
-  const sourceSize = sourceBounds.getSize(new Vector3());
-  const longestSide = Math.max(sourceSize.x, sourceSize.y, sourceSize.z);
+  const longestSide = longestDimension(sourceBounds);
   if (!Number.isFinite(longestSide) || longestSide <= 0) {
     throw error('scene has zero-length bounds');
   }
@@ -78,7 +91,7 @@ export function normalizeLongestDimensionTemplate(
   root.scale.multiplyScalar(spec.targetLongestDimension / longestSide);
   root.updateMatrixWorld(true);
   const scaledBounds = new Box3().setFromObject(root);
-  if (scaledBounds.isEmpty() || !finiteBox(scaledBounds)) {
+  if (!validBounds(scaledBounds)) {
     throw error('normalized scene has empty or non-finite bounds');
   }
   const center = scaledBounds.getCenter(new Vector3());
@@ -86,16 +99,11 @@ export function normalizeLongestDimensionTemplate(
   root.updateMatrixWorld(true);
 
   const finalBounds = new Box3().setFromObject(root);
-  const finalSize = finalBounds.getSize(new Vector3());
-  const finalLongestSide = Math.max(finalSize.x, finalSize.y, finalSize.z);
-  if (
-    finalBounds.isEmpty()
-    || !finiteBox(finalBounds)
-    || !Number.isFinite(finalLongestSide)
-    || finalLongestSide <= 0
-    || (finalTolerance !== undefined
-      && Math.abs(finalLongestSide - spec.targetLongestDimension) > finalTolerance)
-  ) {
+  const finalLongestSide = longestDimension(finalBounds);
+  const invalidLength = !Number.isFinite(finalLongestSide) || finalLongestSide <= 0;
+  const missesTolerance = finalTolerance !== undefined
+    && Math.abs(finalLongestSide - spec.targetLongestDimension) > finalTolerance;
+  if (!validBounds(finalBounds) || invalidLength || missesTolerance) {
     throw error('normalized scene has invalid bounds');
   }
   return triangles;

@@ -125,8 +125,9 @@ Utility catches neither consume bait nor receive bait's fish-weight bonus.
 ### System tuning
 
 Press <code>`</code> (backquote) in either phase to open **System Tuning**.
-Use **Master Volume** and **Mute** to control all audio. The setting persists
-between sessions.
+All System Tuning settings persist between sessions.
+
+Use **Master Volume** and **Mute** to control all audio.
 
 ### Survival auto-save
 
@@ -140,7 +141,10 @@ deletes the checkpoint.
 
 The menu also offers **Calm**, **Overcast**, **Squall**, **Rain**, **Wind**,
 **Thunderstorm**, **Waves**, and **Fog**. A selection overrides event weather,
-carries across the phase handoff, and remains active until the page reloads.
+carries across the phase handoff, and persists between sessions.
+
+Volumetric clouds start off. Turn them on in the **Weather** group. They render
+only by day and adapt to the active weather.
 
 Normal gameplay is **Calm** outside events. Night events can use authored presentation weather while staged and resolved. The event weather includes **Overcast**, **Squall**, **Rain**, **Wind**, **Thunderstorm**, **Waves**, and **Fog**. Calm returns after each event ends.
 
@@ -187,7 +191,7 @@ Clicking the physical boat lantern ends the day and uses the same slow cover bef
 
 Each journal page retells that day's fishing, daytime event, and nighttime event as a short first-person entry. Fishing records name catches or misses and note bait consumption; event entries mention supplies only when they were attempted during an event.
 
-Natural rescue cannot occur before day 24. After day 24, rescue remains random. Radio replies, rescue-trace dives, and the **Other People** event shorten the hidden wait. The Flare Gun is consumed during **Other People**, but **Other People** never ends the run immediately. Exact rescue lead and odds remain hidden. A well-supplied successful run targets about day 30. A no-signal successful run can reach day 40.
+Rescue remains random. Maximum hidden rescue lead opens a small chance on day 25. Lower lead opens rescue later. Radio replies, rescue-trace dives, and the **Other People** event shorten the hidden wait. The Flare Gun is consumed during **Other People**, but **Other People** never ends the run immediately. Exact rescue lead and odds remain hidden. A well-supplied successful run usually ends from day 30 through day 35. A no-signal successful run can pass day 40.
 
 ## Endings
 

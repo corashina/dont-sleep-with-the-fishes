@@ -153,21 +153,21 @@ export function sampleDeathStareReveal(
   return true;
 }
 
+const DEATH_STARE_ITEM_CHOICES = new Set([
+  'flashlight',
+  'umbrella',
+  'cannedFood',
+  'shotgun',
+  'fishingNet',
+]);
+
 export function sampleDeathStareItemUse(
   choiceId: string,
   progress: number,
   output: DeathStareSample,
 ): boolean {
   resetSample(output);
-  if (
-    choiceId !== 'flashlight'
-    && choiceId !== 'umbrella'
-    && choiceId !== 'cannedFood'
-    && choiceId !== 'shotgun'
-    && choiceId !== 'fishingNet'
-  ) {
-    return false;
-  }
+  if (!DEATH_STARE_ITEM_CHOICES.has(choiceId)) return false;
 
   holdGaze(output);
   const t = clamp01(progress);

@@ -207,30 +207,44 @@ export class DivePresentation {
 
     let remainingDelta = deltaSeconds;
     if (!this.holdStarted) {
-      const nextEntryElapsed = this.entryElapsed + remainingDelta;
-      this.entryElapsed = Math.min(nextEntryElapsed, DIVE_ENTRY_DURATION_SECONDS);
-      remainingDelta = Math.max(0, nextEntryElapsed - DIVE_ENTRY_DURATION_SECONDS);
-      sampleDivePose(Math.min(this.entryElapsed, DIVE_ENTRY_DURATION_SECONDS), this.pose);
-      this.applyPose(waterHeight);
-
-      const enteredWater = this.pose.submerged && !this.wasSubmerged;
-      this.wasSubmerged = this.pose.submerged;
-      if (enteredWater && !this.impactEmitted) {
-        this.impactEmitted = true;
-        active.options.onWaterImpact();
-        if (this.disposed || this.active !== active) return;
-      }
-
-      if (this.entryElapsed < DIVE_ENTRY_DURATION_SECONDS) return;
-      const hold = active.options.postEntryHold;
-      if (hold === undefined) {
-        this.finish(active);
-        return;
-      }
-      this.startHold(hold);
-      if (this.disposed || this.active !== active) return;
+      const entryRemainder = this.updateEntry(active, remainingDelta, waterHeight);
+      if (entryRemainder === null) return;
+      remainingDelta = entryRemainder;
     }
 
+    this.updateHold(active, remainingDelta);
+  }
+
+  private updateEntry(
+    active: ActiveDive,
+    deltaSeconds: number,
+    waterHeight: number,
+  ): number | null {
+    const nextEntryElapsed = this.entryElapsed + deltaSeconds;
+    this.entryElapsed = Math.min(nextEntryElapsed, DIVE_ENTRY_DURATION_SECONDS);
+    const remainingDelta = Math.max(0, nextEntryElapsed - DIVE_ENTRY_DURATION_SECONDS);
+    sampleDivePose(Math.min(this.entryElapsed, DIVE_ENTRY_DURATION_SECONDS), this.pose);
+    this.applyPose(waterHeight);
+
+    const enteredWater = this.pose.submerged && !this.wasSubmerged;
+    this.wasSubmerged = this.pose.submerged;
+    if (enteredWater && !this.impactEmitted) {
+      this.impactEmitted = true;
+      active.options.onWaterImpact();
+      if (this.disposed || this.active !== active) return null;
+    }
+
+    if (this.entryElapsed < DIVE_ENTRY_DURATION_SECONDS) return null;
+    const hold = active.options.postEntryHold;
+    if (hold === undefined) {
+      this.finish(active);
+      return null;
+    }
+    this.startHold(hold);
+    return this.disposed || this.active !== active ? null : remainingDelta;
+  }
+
+  private updateHold(active: ActiveDive, remainingDelta: number): void {
     const hold = active.options.postEntryHold!;
     this.applyHoldCamera(hold);
     this.holdElapsed = Math.min(

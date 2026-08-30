@@ -61,6 +61,11 @@ export function uiArtwork(id: UiArtworkId, className = ''): string {
   return `<svg class="${classNames}" data-ui-artwork="${id}" viewBox="0 0 80 72" aria-hidden="true" focusable="false">${ARTWORK[id]}</svg>`;
 }
 
+export function returnArrowArtwork(className = ''): string {
+  const classNames = classes(['return-arrow-artwork'], className);
+  return `<svg class="${classNames}" data-return-arrow viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 3h6v10h5l-8 8-8-8h5z" /></svg>`;
+}
+
 export function itemArtwork(id: ItemId, className = ''): string {
   const classNames = classes(['item-artwork', `item-artwork--${id}`], className);
   return `<svg class="${classNames}" data-item-artwork="${id}" viewBox="0 0 80 72" aria-hidden="true" focusable="false">${ITEM_ARTWORK[id]}</svg>`;

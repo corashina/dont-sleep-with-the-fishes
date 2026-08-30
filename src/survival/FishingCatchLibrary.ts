@@ -373,6 +373,17 @@ function catchModelSpec(
   };
 }
 
+function decorateLoadedItemCatch(
+  active: ActiveCatch,
+  definition: FishingCatchDefinition,
+): void {
+  if (definition.presentation.kind !== 'item') return;
+  active.root.userData.fishingModelSource = 'item-model';
+  active.root.userData.fishingItemId = definition.presentation.itemId;
+  if (definition.presentation.condition !== 'broken') return;
+  for (const material of active.materials) applyBrokenMaterialTreatment(material);
+}
+
 export class FishingCatchLibrary {
   private active: ActiveCatch | null = null;
   private requestId = 0;
@@ -398,13 +409,7 @@ export class FishingCatchLibrary {
           spec,
           definition.presentation.kind === 'item',
         );
-        if (definition.presentation.kind === 'item') {
-          active.root.userData.fishingModelSource = 'item-model';
-          active.root.userData.fishingItemId = definition.presentation.itemId;
-          if (definition.presentation.condition === 'broken') {
-            for (const material of active.materials) applyBrokenMaterialTreatment(material);
-          }
-        }
+        decorateLoadedItemCatch(active, definition);
       } catch {
         if (!this.isCurrent(requestId)) return null;
       }

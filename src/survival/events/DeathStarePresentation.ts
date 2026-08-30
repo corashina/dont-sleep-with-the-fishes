@@ -82,6 +82,18 @@ function isSupportedChoice(choiceId: string): boolean {
     || choiceId === 'fishingNet';
 }
 
+function outcomeAttacked(result: EventOutcomePresentation): boolean {
+  return (result.resourceDeltas.hull ?? 0) < 0
+    || (result.resourceDeltas.health ?? 0) < 0;
+}
+
+function matchesBorrowedActor(
+  instanceId: ItemInstanceId | null,
+  borrowedInstanceId: ItemInstanceId | undefined,
+): boolean {
+  return instanceId !== null && borrowedInstanceId === instanceId;
+}
+
 function sceneChoiceId(choiceId: string): string {
   return choiceId === 'food' ? 'cannedFood' : choiceId;
 }
@@ -396,11 +408,15 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     const lostId = result.lostInstanceIds[0] ?? null;
     if (lostId !== null && lostId !== selectedId) this.borrowActor(lostId);
 
-    this.reactionState.attacked = (result.resourceDeltas.hull ?? 0) < 0
-      || (result.resourceDeltas.health ?? 0) < 0;
-    this.reactionState.lostItem = lostId !== null && this.borrowedActor?.instanceId === lostId;
-    this.reactionState.brokenItem = selectedBroken
-      && this.borrowedActor?.instanceId === selectedId;
+    this.reactionState.attacked = outcomeAttacked(result);
+    this.reactionState.lostItem = matchesBorrowedActor(
+      lostId,
+      this.borrowedActor?.instanceId,
+    );
+    this.reactionState.brokenItem = selectedBroken && matchesBorrowedActor(
+      selectedId,
+      this.borrowedActor?.instanceId,
+    );
     sampleDeathStareReaction(this.reactionState, 0, this.sample);
     this.applySample(0);
     this.applyReactionBorrowedPose();

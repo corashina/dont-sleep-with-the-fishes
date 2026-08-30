@@ -44,10 +44,15 @@ import { ScavengePhysics } from '../src/physics/ScavengePhysics';
 import { PlayerController } from '../src/player/PlayerController';
 import { ScavengePhase } from '../src/phases/ScavengePhase';
 import type { ScavengeVisualState, SceneRenderer } from '../src/rendering/SceneRenderer';
-import type { PostProcessingControls } from '../src/rendering/postProcessingControls';
+import type {
+  PostProcessingControls,
+  PostProcessingControlState,
+  PostProcessingNumericSetting,
+} from '../src/rendering/postProcessingControls';
 import { createAntiAliasingQualityPreference } from '../src/rendering/antiAliasingQuality';
 import { createShadowQualityPreference } from '../src/rendering/shadowQuality';
 import { createVisualQualityPreference } from '../src/rendering/visualQuality';
+import { createSystemTuningPreference } from '../src/ui/systemTuningPreference';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 import type { SurvivalRunCheckpoint } from '../src/survival/SurvivalCheckpoint';
 import { createSurvivalSaveDocument } from '../src/survival/SurvivalSaveData';
@@ -284,6 +289,7 @@ describe('Game survival save lifecycle', () => {
         { kind: 'restored', checkpoint },
         expect.any(Function),
         expect.any(Function),
+        expect.any(Function),
       );
       expect(restored.resize).toHaveBeenCalledWith(window.innerWidth, window.innerHeight);
       expect(restored.start).toHaveBeenCalledOnce();
@@ -416,6 +422,34 @@ function postProcessingSceneRenderer(): SceneRenderer {
     render: vi.fn(),
     resize: vi.fn(),
     dispose: vi.fn(),
+  };
+}
+
+function persistedPostProcessingSceneRenderer(): {
+  sceneRenderer: SceneRenderer;
+  controls: PostProcessingControls;
+} {
+  const state: PostProcessingControlState = {
+    ambientOcclusionAvailable: true,
+    ambientOcclusionMode: 'composite',
+    ambientOcclusionIntensity: 1,
+    ambientOcclusionRadius: 0.5,
+  };
+  const controls: PostProcessingControls = {
+    getState: vi.fn(() => state),
+    setAmbientOcclusionMode: vi.fn((mode) => {
+      state.ambientOcclusionMode = mode;
+    }),
+    setNumeric: vi.fn((setting: PostProcessingNumericSetting, value: number) => {
+      state[setting] = value;
+    }),
+  };
+  return {
+    sceneRenderer: {
+      postProcessingControls: controls,
+      render: vi.fn(), resize: vi.fn(), dispose: vi.fn(),
+    },
+    controls,
   };
 }
 
@@ -639,6 +673,349 @@ function createImmediateMenu(
 }
 
 describe('Game menu lifecycle', () => {
+  it('applies stored system tuning before the first frame', () => {
+    const systemTuning = createSystemTuningPreference(null);
+    systemTuning.set('ambientOcclusionMode', 'off');
+    systemTuning.set('ambientOcclusionIntensity', 0.7);
+    systemTuning.set('ambientOcclusionRadius', 0.16);
+    systemTuning.set('performanceStatsVisible', true);
+    systemTuning.set('cameraFieldOfView', 92);
+    systemTuning.set('weatherOverride', 'rain');
+    systemTuning.set('phaseOverride', 'night');
+    systemTuning.set('volumetricCloudsEnabled', true);
+    const phase = {
+      ...gamePhase(),
+      setWeatherOverride: vi.fn(),
+      setTimeOfDayOverride: vi.fn(),
+      setVolumetricCloudsEnabled: vi.fn(),
+    };
+    const postProcessingControls: PostProcessingControls = {
+      getState: vi.fn(() => ({
+        ambientOcclusionAvailable: true,
+        ambientOcclusionMode: 'off' as const,
+        ambientOcclusionIntensity: 0.7,
+        ambientOcclusionRadius: 0.16,
+      })),
+      setAmbientOcclusionMode: vi.fn(),
+      setNumeric: vi.fn(),
+    };
+    const sceneRenderer: SceneRenderer = {
+      postProcessingControls,
+      render: vi.fn(), resize: vi.fn(), dispose: vi.fn(),
+    };
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const game = Game.forTest({
+      createMenu: () => phase,
+      createScavenge: () => gamePhase(),
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      sceneRenderer,
+      systemTuning,
+      mount,
+    });
+
+    try {
+      const camera = (game as unknown as { camera: PerspectiveCamera }).camera;
+      expect(camera.fov).toBe(92);
+      expect(postProcessingControls.setAmbientOcclusionMode).toHaveBeenCalledWith('off');
+      expect(postProcessingControls.setNumeric).toHaveBeenCalledWith(
+        'ambientOcclusionIntensity',
+        0.7,
+      );
+      expect(postProcessingControls.setNumeric).toHaveBeenCalledWith(
+        'ambientOcclusionRadius',
+        0.16,
+      );
+      expect(mount.querySelector('[data-performance-stats]')?.hasAttribute('hidden'))
+        .toBe(false);
+      expect(phase.setWeatherOverride).toHaveBeenCalledWith('rain');
+      expect(phase.setTimeOfDayOverride).toHaveBeenCalledWith('night');
+      expect(phase.setVolumetricCloudsEnabled).toHaveBeenCalledWith(true);
+    } finally {
+      game.dispose();
+    }
+  });
+
+  it('keeps volumetric clouds off until enabled through system tuning', () => {
+    const phase = {
+      ...gamePhase(),
+      setVolumetricCloudsEnabled: vi.fn(),
+    };
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const game = Game.forTest({
+      createMenu: () => phase,
+      createScavenge: () => gamePhase(),
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      sceneRenderer: postProcessingSceneRenderer(),
+      systemTuning: createSystemTuningPreference(null),
+      mount,
+    });
+
+    try {
+      const clouds = mount.querySelector<HTMLInputElement>('[data-volumetric-clouds]')!;
+      const state = mount.querySelector<HTMLOutputElement>(
+        '[data-volumetric-clouds-state]',
+      )!;
+      expect(clouds.checked).toBe(false);
+      expect(clouds.disabled).toBe(false);
+      expect(state.value).toBe('OFF');
+
+      clouds.checked = true;
+      clouds.dispatchEvent(new Event('change', { bubbles: true }));
+
+      expect(state.value).toBe('ON');
+      expect(phase.setVolumetricCloudsEnabled).toHaveBeenCalledWith(true);
+    } finally {
+      game.dispose();
+    }
+  });
+
+  it('marks volumetric clouds unavailable when the active phase cannot render them', () => {
+    const phase = {
+      ...gamePhase(),
+      setVolumetricCloudsEnabled: vi.fn(),
+      getVolumetricCloudsAvailable: vi.fn(() => false),
+    };
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const game = Game.forTest({
+      createMenu: () => phase,
+      createScavenge: () => gamePhase(),
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      sceneRenderer: postProcessingSceneRenderer(),
+      systemTuning: createSystemTuningPreference(null),
+      mount,
+    });
+
+    try {
+      const clouds = mount.querySelector<HTMLInputElement>('[data-volumetric-clouds]')!;
+      const state = mount.querySelector<HTMLOutputElement>(
+        '[data-volumetric-clouds-state]',
+      )!;
+      expect(clouds.disabled).toBe(true);
+      expect(state.value).toBe('UNAVAILABLE');
+
+      let disabled = clouds.disabled;
+      let output = state.value;
+      let disabledWrites = 0;
+      let outputWrites = 0;
+      Object.defineProperty(clouds, 'disabled', {
+        configurable: true,
+        get: () => disabled,
+        set: (value: boolean) => {
+          disabled = value;
+          disabledWrites += 1;
+        },
+      });
+      Object.defineProperty(state, 'value', {
+        configurable: true,
+        get: () => output,
+        set: (value: string) => {
+          output = value;
+          outputWrites += 1;
+        },
+      });
+      const console = (game as unknown as {
+        postProcessingConsole: {
+          setVolumetricCloudAvailability(available: boolean): void;
+        };
+      }).postProcessingConsole;
+
+      console.setVolumetricCloudAvailability(false);
+      console.setVolumetricCloudAvailability(false);
+      expect(disabledWrites).toBe(0);
+      expect(outputWrites).toBe(0);
+
+      console.setVolumetricCloudAvailability(true);
+      console.setVolumetricCloudAvailability(true);
+      expect(disabledWrites).toBe(1);
+      expect(outputWrites).toBe(1);
+      expect(disabled).toBe(false);
+      expect(output).toBe('OFF');
+    } finally {
+      game.dispose();
+    }
+  });
+
+  it('does not use the stats query to show performance data', () => {
+    const systemTuning = createSystemTuningPreference(null);
+    const originalUrl = window.location.href;
+    window.history.pushState({}, '', '?stats');
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const game = Game.forTest({
+      createMenu: () => gamePhase(),
+      createScavenge: () => gamePhase(),
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      systemTuning,
+      mount,
+    });
+
+    try {
+      expect(mount.querySelector('[data-performance-stats]')?.hasAttribute('hidden'))
+        .toBe(true);
+    } finally {
+      game.dispose();
+      window.history.pushState({}, '', originalUrl);
+    }
+  });
+
+  it('restores system tuning changed through the menu', () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: vi.fn((key: string) => values.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => values.set(key, value)),
+    };
+    const firstTuning = createSystemTuningPreference(storage);
+    const firstRenderer = persistedPostProcessingSceneRenderer();
+    const firstMount = document.createElement('main');
+    document.body.append(firstMount);
+    const firstGame = Game.forTest({
+      createMenu: () => gamePhase(),
+      createScavenge: () => gamePhase(),
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      sceneRenderer: firstRenderer.sceneRenderer,
+      systemTuning: firstTuning,
+      mount: firstMount,
+    });
+
+    try {
+      const aoMode = firstMount.querySelector<HTMLSelectElement>(
+        '[data-post-processing-ao-mode]',
+      )!;
+      const intensity = firstMount.querySelector<HTMLInputElement>(
+        '[data-post-processing-setting="ambientOcclusionIntensity"]',
+      )!;
+      const radius = firstMount.querySelector<HTMLInputElement>(
+        '[data-post-processing-setting="ambientOcclusionRadius"]',
+      )!;
+      const performance = firstMount.querySelector<HTMLInputElement>(
+        '[data-performance-stats-enabled]',
+      )!;
+      const fieldOfView = firstMount.querySelector<HTMLInputElement>('[data-camera-fov]')!;
+      const weather = firstMount.querySelector<HTMLSelectElement>(
+        '[data-presentation-weather]',
+      )!;
+      const night = firstMount.querySelector<HTMLInputElement>('[data-presentation-night]')!;
+      const clouds = firstMount.querySelector<HTMLInputElement>('[data-volumetric-clouds]')!;
+
+      aoMode.value = 'off';
+      aoMode.dispatchEvent(new Event('change', { bubbles: true }));
+      intensity.value = '0.7';
+      intensity.dispatchEvent(new Event('input', { bubbles: true }));
+      radius.value = '0.16';
+      radius.dispatchEvent(new Event('input', { bubbles: true }));
+      performance.checked = true;
+      performance.dispatchEvent(new Event('change', { bubbles: true }));
+      fieldOfView.value = '92';
+      fieldOfView.dispatchEvent(new Event('input', { bubbles: true }));
+      weather.value = 'rain';
+      weather.dispatchEvent(new Event('change', { bubbles: true }));
+      night.checked = true;
+      night.dispatchEvent(new Event('change', { bubbles: true }));
+      clouds.checked = true;
+      clouds.dispatchEvent(new Event('change', { bubbles: true }));
+    } finally {
+      firstGame.dispose();
+    }
+
+    const secondTuning = createSystemTuningPreference(storage);
+    const secondRenderer = persistedPostProcessingSceneRenderer();
+    const phase = {
+      ...gamePhase(),
+      setWeatherOverride: vi.fn(),
+      setTimeOfDayOverride: vi.fn(),
+      setVolumetricCloudsEnabled: vi.fn(),
+    };
+    const secondMount = document.createElement('main');
+    document.body.append(secondMount);
+    const secondGame = Game.forTest({
+      createMenu: () => phase,
+      createScavenge: () => gamePhase(),
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      sceneRenderer: secondRenderer.sceneRenderer,
+      systemTuning: secondTuning,
+      mount: secondMount,
+    });
+
+    try {
+      expect(secondMount.querySelector<HTMLSelectElement>(
+        '[data-post-processing-ao-mode]',
+      )?.value).toBe('off');
+      expect(secondMount.querySelector<HTMLInputElement>(
+        '[data-post-processing-setting="ambientOcclusionIntensity"]',
+      )?.value).toBe('0.7');
+      expect(secondMount.querySelector<HTMLInputElement>(
+        '[data-post-processing-setting="ambientOcclusionRadius"]',
+      )?.value).toBe('0.16');
+      expect(secondMount.querySelector<HTMLInputElement>(
+        '[data-performance-stats-enabled]',
+      )?.checked).toBe(true);
+      expect(secondMount.querySelector('[data-performance-stats]')?.hasAttribute('hidden'))
+        .toBe(false);
+      expect(secondMount.querySelector<HTMLInputElement>('[data-camera-fov]')?.value)
+        .toBe('92');
+      expect(secondMount.querySelector<HTMLSelectElement>(
+        '[data-presentation-weather]',
+      )?.value).toBe('rain');
+      expect(secondMount.querySelector<HTMLInputElement>('[data-presentation-night]')?.checked)
+        .toBe(true);
+      expect(secondMount.querySelector<HTMLInputElement>('[data-volumetric-clouds]')?.checked)
+        .toBe(true);
+      expect(secondRenderer.controls.setAmbientOcclusionMode).toHaveBeenCalledWith('off');
+      expect(secondRenderer.controls.setNumeric).toHaveBeenCalledWith(
+        'ambientOcclusionIntensity',
+        0.7,
+      );
+      expect(secondRenderer.controls.setNumeric).toHaveBeenCalledWith(
+        'ambientOcclusionRadius',
+        0.16,
+      );
+      expect(phase.setWeatherOverride).toHaveBeenCalledWith('rain');
+      expect(phase.setTimeOfDayOverride).toHaveBeenCalledWith('night');
+      expect(phase.setVolumetricCloudsEnabled).toHaveBeenCalledWith(true);
+    } finally {
+      secondGame.dispose();
+    }
+  });
+
   it('starts in the menu and preserves pointer lock into scavenging', () => {
     const menu = gamePhase();
     const scavenge = gamePhase();
@@ -953,10 +1330,11 @@ describe('ScavengePhase lifecycle integration', () => {
       physicsRuntime,
       maxTextureAnisotropy: 1,
       audio: AudioSystem.silent(),
+      visualQuality: createVisualQualityPreference(() => undefined, null),
     } as unknown as PhaseContext;
     const revealPhysicsObjects = vi.fn();
     const requestPointerLock = vi.fn().mockResolvedValue(true);
-    const phase = new ScavengePhase(context, vi.fn(), vi.fn());
+    const phase = new ScavengePhase(context, vi.fn(), vi.fn(), vi.fn());
     const internals = phase as unknown as { world: World };
     vi.spyOn(internals.world, 'revealPhysicsObjects').mockImplementation(revealPhysicsObjects);
     vi.spyOn(phase as unknown as { requestPointerLock(): Promise<boolean> }, 'requestPointerLock')
@@ -2082,8 +2460,8 @@ describe('ScavengePhase lifecycle integration', () => {
     const skyAssets = createTestSkyAssets();
     const game = Game.forTest({
       createMenu: createImmediateMenu,
-      createScavenge: (context, onComplete, onReturnToMenu) => {
-        const phase = new ScavengePhase(context, onComplete, onReturnToMenu);
+      createScavenge: (context, onComplete, onRestart, onReturnToMenu) => {
+        const phase = new ScavengePhase(context, onComplete, onRestart, onReturnToMenu);
         phases.push(phase);
         return phase;
       },
@@ -2136,8 +2514,8 @@ describe('ScavengePhase lifecycle integration', () => {
       onComplete();
       return menu;
     });
-    const createScavenge = vi.fn((context, onComplete, onRestart) => {
-      const phase = new ScavengePhase(context, onComplete, onRestart);
+    const createScavenge = vi.fn((context, onComplete, onRestart, onReturnToMenu) => {
+      const phase = new ScavengePhase(context, onComplete, onRestart, onReturnToMenu);
       phases.push(phase);
       return phase;
     });
@@ -2270,6 +2648,12 @@ describe('ScavengePhase lifecycle integration', () => {
     const survivalSetTimeOfDay = vi.fn((phase: 'day' | 'night' | null) => {
       order.push(`survival-time:${phase}`);
     });
+    const scavengeSetClouds = vi.fn((enabled: boolean) => {
+      order.push(`scavenge-clouds:${enabled}`);
+    });
+    const survivalSetClouds = vi.fn((enabled: boolean) => {
+      order.push(`survival-clouds:${enabled}`);
+    });
     const scavenge = {
       ...gamePhase(),
       update: vi.fn(() => order.push('scavenge-update')),
@@ -2278,6 +2662,7 @@ describe('ScavengePhase lifecycle integration', () => {
       getPresentationWeather: vi.fn(() => scavengeWeather),
       setTimeOfDayOverride: scavengeSetTimeOfDay,
       getPresentationPhase: vi.fn(() => 'day' as const),
+      setVolumetricCloudsEnabled: scavengeSetClouds,
     };
     const survival = {
       ...gamePhase(),
@@ -2288,6 +2673,7 @@ describe('ScavengePhase lifecycle integration', () => {
       getPresentationWeather: vi.fn(() => 'rain' as const),
       setTimeOfDayOverride: survivalSetTimeOfDay,
       getPresentationPhase: vi.fn(() => 'night' as const),
+      setVolumetricCloudsEnabled: survivalSetClouds,
     };
     const postProcessingControls: PostProcessingControls = {
       getState: vi.fn(() => ({
@@ -2347,6 +2733,10 @@ describe('ScavengePhase lifecycle integration', () => {
       const fieldOfViewOutput = mount.querySelector<HTMLOutputElement>(
         '[data-camera-fov-output]',
       )!;
+      const clouds = mount.querySelector<HTMLInputElement>('[data-volumetric-clouds]')!;
+      const cloudsState = mount.querySelector<HTMLOutputElement>(
+        '[data-volumetric-clouds-state]',
+      )!;
       expect((game as unknown as { weatherOverride: unknown }).weatherOverride).toBeNull();
       expect((game as unknown as { timeOfDayOverride: unknown }).timeOfDayOverride).toBeNull();
       expect(weather.value).toBe('calm');
@@ -2356,6 +2746,8 @@ describe('ScavengePhase lifecycle integration', () => {
       expect(timeOfDay.value).toBe('DAY');
       expect(fieldOfView.value).toBe('80');
       expect(fieldOfViewOutput.value).toBe('80°');
+      expect(clouds.checked).toBe(false);
+      expect(cloudsState.value).toBe('OFF');
       expect(scavengeSetWeather).not.toHaveBeenCalled();
       expect(scavengeSetTimeOfDay).not.toHaveBeenCalled();
 
@@ -2383,6 +2775,11 @@ describe('ScavengePhase lifecycle integration', () => {
       expect(scavengeSetWeather).toHaveBeenLastCalledWith('rain');
       expect(source.value).toBe('FORCED');
 
+      clouds.checked = true;
+      clouds.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(cloudsState.value).toBe('ON');
+      expect(scavengeSetClouds).toHaveBeenLastCalledWith(true);
+
       order.length = 0;
       complete({ savedItems: [], elapsedSeconds: 2 });
       expect(survivalSetWeather).toHaveBeenCalledOnce();
@@ -2390,11 +2787,14 @@ describe('ScavengePhase lifecycle integration', () => {
       expect(order).toEqual([
         'survival-weather:rain',
         'survival-time:night',
+        'survival-clouds:true',
         'survival-resize',
         'survival-start',
       ]);
       expect(night.checked).toBe(true);
       expect(timeOfDay.value).toBe('NIGHT');
+      expect(clouds.checked).toBe(true);
+      expect(survivalSetClouds).toHaveBeenCalledOnce();
 
       weather.value = 'fog';
       weather.dispatchEvent(new Event('change', { bubbles: true }));
@@ -2460,6 +2860,7 @@ describe('ScavengePhase lifecycle integration', () => {
         initialEventId: 'shower-night',
         initialEventResultId: undefined,
       },
+      expect.any(Function),
       expect.any(Function),
       expect.any(Function),
     );
@@ -2704,6 +3105,60 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(received.visualQuality).toBe(preference);
     expect(setVisualQuality).toHaveBeenCalledWith('high');
     game.dispose();
+  });
+
+  it('applies visual quality changes to the active phase', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const setVisualQuality = vi.fn();
+    const phase = {
+      ...gamePhase(),
+      setVisualQuality,
+    };
+    const game = Game.forTest({
+      createMenu: createImmediateMenu,
+      createScavenge: () => phase,
+      createSurvival: () => gamePhase(),
+    }, {
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      mount,
+      sceneRenderer: postProcessingSceneRenderer(),
+    });
+    const high = mount.querySelector<HTMLButtonElement>(
+      '[data-quality-control="visual"] [data-quality="high"]',
+    );
+
+    expect(high).not.toBeNull();
+    high!.click();
+
+    expect(setVisualQuality).toHaveBeenCalledWith('high');
+    game.dispose();
+  });
+
+  it('forwards cloud controls through ScavengePhase', () => {
+    const setVisualQuality = vi.fn();
+    const setVolumetricCloudsEnabled = vi.fn();
+    const getVolumetricCloudsAvailable = vi.fn(() => true);
+    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
+    Object.assign(phase, {
+      disposed: false,
+      world: {
+        setVisualQuality,
+        setVolumetricCloudsEnabled,
+        getVolumetricCloudsAvailable,
+      },
+    });
+
+    phase.setVisualQuality('high');
+    phase.setVolumetricCloudsEnabled(true);
+
+    expect(setVisualQuality).toHaveBeenCalledWith('high');
+    expect(setVolumetricCloudsEnabled).toHaveBeenCalledWith(true);
+    expect(phase.getVolumetricCloudsAvailable()).toBe(true);
   });
 
   it('applies anti-aliasing choices to the shared scene renderer', () => {
@@ -3146,8 +3601,9 @@ describe('ScavengePhase lifecycle integration', () => {
       physicsRuntime,
       maxTextureAnisotropy: 1,
       audio: AudioSystem.silent(),
+      visualQuality: createVisualQualityPreference(() => undefined, null),
     } as unknown as PhaseContext;
-    const phase = new ScavengePhase(context, vi.fn(), vi.fn());
+    const phase = new ScavengePhase(context, vi.fn(), vi.fn(), vi.fn());
     const internals = phase as unknown as {
       interaction: InteractionSystem;
       session: ScavengeSession;

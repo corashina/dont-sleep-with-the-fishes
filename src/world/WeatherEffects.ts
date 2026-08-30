@@ -363,32 +363,38 @@ export class WeatherEffects {
     const isCalm = this.profile.id === 'calm';
     const isFog = this.profile.id === 'fog';
     const isWind = this.profile.id === 'wind';
-    this.configurePool(this.rain, this.profile.rainIntensity, this.profile.rainIntensity > 0);
-    this.configurePool(this.farRain, this.profile.rainIntensity, this.profile.rainIntensity > 0);
-    this.configurePool(this.impacts, this.profile.rainIntensity, this.profile.rainIntensity > 0);
-    this.configurePool(this.mist, this.profile.mistIntensity, !isCalm && this.profile.mistIntensity > 0);
-    this.configurePool(this.spray, this.profile.sprayIntensity, !isCalm && this.profile.sprayIntensity > 0);
-    this.setPoolStyle(
-      this.mist,
-      isFog ? 1.08 : isWind ? 0.48 : 0.62,
-      isFog ? 0.55 : isWind ? 0.62 : 0.85,
-      isFog ? 0.9 : isWind ? 3.4 : 1.2,
-    );
-    this.setPoolStyle(
-      this.spray,
-      isWind ? 0.5 : 0.24,
-      isWind ? 0.68 : 1,
-      isWind ? 3.1 : 1,
-    );
+    this.applyRainProfile();
+    this.applyMistProfile(isCalm, isFog, isWind);
+    this.applySprayProfile(isCalm, isWind);
     this.lightningLayer.visible = this.profile.lightning;
+    this.resetProfileLightning();
+  }
+
+  private applyRainProfile(): void {
+    const visible = this.profile.rainIntensity > 0;
+    this.configurePool(this.rain, this.profile.rainIntensity, visible);
+    this.configurePool(this.farRain, this.profile.rainIntensity, visible);
+    this.configurePool(this.impacts, this.profile.rainIntensity, visible);
+  }
+
+  private applyMistProfile(isCalm: boolean, isFog: boolean, isWind: boolean): void {
+    this.configurePool(this.mist, this.profile.mistIntensity, !isCalm && this.profile.mistIntensity > 0);
+    this.setPoolStyle(this.mist, isFog ? 1.08 : isWind ? 0.48 : 0.62,
+      isFog ? 0.55 : isWind ? 0.62 : 0.85, isFog ? 0.9 : isWind ? 3.4 : 1.2);
+  }
+
+  private applySprayProfile(isCalm: boolean, isWind: boolean): void {
+    this.configurePool(this.spray, this.profile.sprayIntensity, !isCalm && this.profile.sprayIntensity > 0);
+    this.setPoolStyle(this.spray, isWind ? 0.5 : 0.24, isWind ? 0.68 : 1, isWind ? 3.1 : 1);
+  }
+
+  private resetProfileLightning(): void {
     if (!this.profile.lightning) {
       this.lightningFlashRemaining = 0;
       this.lightningLight.intensity = 0;
       this.lightningLight.visible = false;
-      this.setLightningBolts(0);
-    } else {
-      this.setLightningBolts(0);
     }
+    this.setLightningBolts(0);
   }
 
   private configurePool(pool: ParticlePool, intensity: number, visible: boolean): void {

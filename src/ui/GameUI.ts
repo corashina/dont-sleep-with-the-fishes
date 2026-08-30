@@ -29,6 +29,7 @@ export interface ScavengeItemTooltip {
 export class GameUI {
   onResume: () => void = () => undefined;
   onRestart: () => void = () => undefined;
+  onReturnToMenu: () => void = () => undefined;
   private readonly root: HTMLDivElement;
   private readonly introFade: HTMLElement;
   private readonly hud: HTMLElement;
@@ -45,6 +46,7 @@ export class GameUI {
   private readonly carryTypes: [ItemId | null, ItemId | null, ItemId | null] =
     [null, null, null];
   private readonly resumeButton: HTMLButtonElement;
+  private readonly returnToMenuButton: HTMLButtonElement;
   private readonly endingTitle: HTMLElement;
   private readonly endingBody: HTMLElement;
   private readonly endingCause: HTMLElement;
@@ -93,6 +95,9 @@ export class GameUI {
           <button type="button" class="primary-action salvage-action ui-role-context" data-resume-button aria-label="Resume">
             RESUME
           </button>
+          <button type="button" class="secondary-action salvage-action ui-role-context" data-return-to-menu aria-label="Back to menu">
+            BACK TO MENU
+          </button>
           <p class="input-error illustrated-warning ui-role-narrative" data-pointer-lock-error aria-live="polite">
             ${uiArtwork('warning', 'illustrated-warning__art')}
             <span data-pointer-lock-error-copy></span>
@@ -127,6 +132,7 @@ export class GameUI {
     this.carrySlots = [...this.root.querySelectorAll<HTMLElement>('[data-weight-circle]')];
     if (this.carrySlots.length !== 3) throw new Error('Carry HUD requires three weight slots');
     this.resumeButton = requireElement(this.root, '[data-resume-button]');
+    this.returnToMenuButton = requireElement(this.root, '[data-return-to-menu]');
     this.endingTitle = requireElement(this.root, '[data-ending-title]');
     this.endingBody = requireElement(this.root, '[data-ending-body]');
     this.endingCause = requireElement(this.root, '[data-ending-cause]');
@@ -134,6 +140,7 @@ export class GameUI {
     this.endingAction = requireElement(this.root, '[data-ending-action]');
     this.pointerLockErrors = [...this.root.querySelectorAll<HTMLElement>('[data-pointer-lock-error]')];
     this.resumeButton.addEventListener('click', this.handleResume);
+    this.returnToMenuButton.addEventListener('click', this.handleReturnToMenu);
     this.endingAction.addEventListener('click', this.handleRestart);
     this.setPresentation('intro');
     this.setIntroFadeProgress(1);
@@ -235,9 +242,11 @@ export class GameUI {
     if (this.disposed) return;
     this.disposed = true;
     this.resumeButton.removeEventListener('click', this.handleResume);
+    this.returnToMenuButton.removeEventListener('click', this.handleReturnToMenu);
     this.endingAction.removeEventListener('click', this.handleRestart);
     this.onResume = () => undefined;
     this.onRestart = () => undefined;
+    this.onReturnToMenu = () => undefined;
     this.root.remove();
   }
 
@@ -281,6 +290,7 @@ export class GameUI {
   }
 
   private readonly handleResume = (): void => this.onResume();
+  private readonly handleReturnToMenu = (): void => this.onReturnToMenu();
   private renderEndingRecord(record: Extract<EndingRecord, { id: 'dorothy' }>): void {
     this.endingTitle.textContent = endingTitle(record);
     this.endingBody.textContent = endingEpilogue(record);

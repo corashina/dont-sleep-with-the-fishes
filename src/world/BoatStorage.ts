@@ -134,7 +134,7 @@ const BOAT_STORAGE_SLOTS = {
   medicalKit: [restingSlot('floor', 'medicalKit', -0.50, -1.27, 0.10)],
   spyglass: [restingSlot('shelf', 'spyglass', -1.08, -1.70, Math.PI + 0.14)],
   fishingNet: [restingSlot('floor', 'fishingNet', -0.96, -1.15, 0.45, 0.5, 11 * Math.PI / 180)],
-  knife: [restingSlot('floor', 'knife', 0.25, -0.55, 0.16)],
+  knife: [restingSlot('floor', 'knife', 0.25, -0.55, 0, 0.5, Math.PI / 2)],
   bucket: [restingSlot('floor', 'bucket', 1.03, -1.00, -0.12)],
   flareGun: [restingSlot(
     'edgeShelf',

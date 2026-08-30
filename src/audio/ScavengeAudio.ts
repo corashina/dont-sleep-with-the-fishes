@@ -57,27 +57,9 @@ export class ScavengeAudio {
     listenerPose: Readonly<AudioListenerPose> | null = null,
   ): void {
     if (this.disposed) return;
-    if (listenerPose !== null) this.scope.setListenerPose(listenerPose);
-    if (!this.countdownStarted && elapsedSeconds >= COUNTDOWN_START_SECONDS) {
-      this.countdownStarted = true;
-      this.chase?.stop(0.08);
-      this.chase = null;
-      this.countdown = this.scope.play('scavengeCountdown');
-      this.countdown?.onEnded(() => {
-        this.countdown = null;
-      });
-    }
-    if (motion === null) return;
-    if (motion.jumped) this.scope.play('jump');
-    if (!movementActive || !motion.grounded) {
-      this.stepDistance = 0;
-      return;
-    }
-    this.stepDistance += motion.movedDistance;
-    while (this.stepDistance >= STEP_DISTANCE) {
-      this.stepDistance -= STEP_DISTANCE;
-      this.scope.play('woodStep');
-    }
+    this.updateListener(listenerPose);
+    this.startCountdown(elapsedSeconds);
+    this.updateFootsteps(motion, movementActive);
   }
 
   itemHandled(): void {
@@ -123,5 +105,37 @@ export class ScavengeAudio {
 
   private stopShipAlarm(): void {
     this.scope.stopLoop('shipAlarm', 0.12);
+  }
+
+  private updateListener(listenerPose: Readonly<AudioListenerPose> | null): void {
+    if (listenerPose !== null) this.scope.setListenerPose(listenerPose);
+  }
+
+  private startCountdown(elapsedSeconds: number): void {
+    if (this.countdownStarted || elapsedSeconds < COUNTDOWN_START_SECONDS) return;
+    this.countdownStarted = true;
+    this.chase?.stop(0.08);
+    this.chase = null;
+    this.countdown = this.scope.play('scavengeCountdown');
+    this.countdown?.onEnded(() => {
+      this.countdown = null;
+    });
+  }
+
+  private updateFootsteps(
+    motion: Readonly<PlayerMotionSample> | null,
+    movementActive: boolean,
+  ): void {
+    if (motion === null) return;
+    if (motion.jumped) this.scope.play('jump');
+    if (!movementActive || !motion.grounded) {
+      this.stepDistance = 0;
+      return;
+    }
+    this.stepDistance += motion.movedDistance;
+    while (this.stepDistance >= STEP_DISTANCE) {
+      this.stepDistance -= STEP_DISTANCE;
+      this.scope.play('woodStep');
+    }
   }
 }

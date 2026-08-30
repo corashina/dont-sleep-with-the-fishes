@@ -880,12 +880,7 @@ async function reachFishingTeardownStage(
 }
 
 async function flushPromises(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let index = 0; index < 128; index += 1) await Promise.resolve();
 }
 
 function createDiveRig(options: {
@@ -1003,6 +998,28 @@ function createDiveRig(options: {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('SurvivalPhase orchestration', () => {
+  it('forwards volumetric cloud controls to the world', () => {
+    const setVolumetricCloudsEnabled = vi.fn();
+    const setVisualQuality = vi.fn();
+    const volumetricCloudsAvailable = vi.fn(() => true);
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world: {
+        setVolumetricCloudsEnabled,
+        setVisualQuality,
+        volumetricCloudsAvailable,
+      },
+      ui: {},
+    });
+
+    phase.setVolumetricCloudsEnabled(true);
+    phase.setVisualQuality('high');
+
+    expect(setVolumetricCloudsEnabled).toHaveBeenCalledWith(true);
+    expect(setVisualQuality).toHaveBeenCalledWith('high');
+    expect(phase.getVolumetricCloudsAvailable()).toBe(true);
+  });
+
   it('keeps the radio action available until the incoming sound ends', async () => {
     let current = snapshot({ state: 'nightEvent', day: 4 });
     const signal = { finish: null as (() => void) | null };
@@ -1267,6 +1284,7 @@ describe('SurvivalPhase orchestration', () => {
     });
     const setEventSelection = vi.fn();
     const showFocusedEvent = vi.fn();
+    const hideFocusedEvent = vi.fn();
     const playEventItemUse = vi.fn(() => Promise.resolve());
     const ui: Partial<SurvivalUI> = {
       setSleepCovered: vi.fn((covered: boolean) => {
@@ -1284,7 +1302,7 @@ describe('SurvivalPhase orchestration', () => {
       showEventReveal: vi.fn(() => Promise.resolve()),
       setEventSelection,
       showFocusedEvent,
-      hideFocusedEvent: vi.fn(),
+      hideFocusedEvent,
       playEventChoiceBeat: vi.fn(() => Promise.resolve()),
       setBusy: vi.fn(),
       clearEventPresentation: vi.fn(() => calls.push('clear-event-ui')),
@@ -1322,6 +1340,15 @@ describe('SurvivalPhase orchestration', () => {
     expect(showFocusedEvent.mock.calls[0]![0].choices).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'dive', instanceId: 'scubaSet-1' }),
     ]));
+
+    ui.onFocusedEventChoice?.({ id: 'leave', instanceId: null });
+    await flushPromises();
+    expect(resolveEvent).not.toHaveBeenCalled();
+    expect(hideFocusedEvent).toHaveBeenCalledOnce();
+    expect(current).toMatchObject({ state: 'dayEvent', pendingEventId: 'wreckage' });
+
+    ui.onFocusedEventSelect?.('wreckage');
+    await flushPromises();
 
     calls.length = 0;
     ui.onFocusedEventChoice?.({ id: 'dive', instanceId: 'scubaSet-1' });
@@ -1508,7 +1535,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.resolveEvent).not.toHaveBeenCalled();
     expect(rig.world.recedeDriftingItem).not.toHaveBeenCalled();
     expect(rig.world.exitFocusedEventView).toHaveBeenCalledOnce();
-    expect(rig.hideFocusedEvent).not.toHaveBeenCalled();
+    expect(rig.hideFocusedEvent).toHaveBeenCalledOnce();
 
     rig.animations.exit.resolve();
     await flushPromises();
@@ -8358,6 +8385,22 @@ describe('SurvivalPhase orchestration', () => {
     expect(ui).not.toHaveProperty('onContinue');
     expect(ui).not.toHaveProperty('onJournalContinue');
     expect(ui).not.toHaveProperty('onSkip');
+  });
+
+  it('wires the return-to-menu callback', () => {
+    const returnToMenu = vi.fn();
+    const ui: Record<string, unknown> = { dispose: vi.fn() };
+    SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world: { dispose: vi.fn() },
+      ui,
+      onReturnToMenu: returnToMenu,
+    });
+
+    (ui.onReturnToMenu as () => void)();
+    (ui.onReturnToMenu as () => void)();
+
+    expect(returnToMenu).toHaveBeenCalledOnce();
   });
 
   it('automatically resolves an unblocked Chest Attack and covers at impact', async () => {

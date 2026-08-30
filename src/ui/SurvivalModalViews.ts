@@ -18,12 +18,14 @@ export class SurvivalModalViews {
   readonly pauseRoot: HTMLElement;
   readonly resumeButton: HTMLButtonElement;
   readonly pauseRestartButton: HTMLButtonElement;
+  readonly pauseMenuButton: HTMLButtonElement;
   readonly endingRoot: HTMLElement;
   readonly endingTitle: HTMLElement;
   readonly restartButton: HTMLButtonElement;
 
   onResume: () => void = () => undefined;
   onRestart: () => void = () => undefined;
+  onReturnToMenu: () => void = () => undefined;
   onRepairTarget: (instanceId: ItemInstanceId) => void = () => undefined;
   onRepairCancel: () => void = () => undefined;
 
@@ -61,6 +63,9 @@ export class SurvivalModalViews {
           <button type="button" class="secondary-action salvage-action ui-role-context" data-pause-restart aria-label="Start over">
             START OVER
           </button>
+          <button type="button" class="secondary-action salvage-action ui-role-context" data-pause-menu aria-label="Back to menu">
+            BACK TO MENU
+          </button>
         </div>
       </section>
       <section class="survival-overlay ending-overlay cinematic-overlay scuba-popup-overlay" data-ending role="dialog" aria-modal="true" aria-hidden="true" aria-label="Journey ended" inert>
@@ -81,6 +86,7 @@ export class SurvivalModalViews {
     this.repairTargets = requireElement(this.repairRoot, '[data-repair-targets]');
     this.resumeButton = requireElement(this.pauseRoot, '[data-resume]');
     this.pauseRestartButton = requireElement(this.pauseRoot, '[data-pause-restart]');
+    this.pauseMenuButton = requireElement(this.pauseRoot, '[data-pause-menu]');
     this.endingTitle = requireElement(this.endingRoot, '[data-ending-title]');
     this.endingBody = requireElement(this.endingRoot, '[data-ending-body]');
     this.endingCause = requireElement(this.endingRoot, '[data-ending-cause]');
@@ -121,6 +127,7 @@ export class SurvivalModalViews {
     if (this.disposed) return;
     this.pauseRestartArmed = false;
     this.pauseRestartButton.disabled = false;
+    this.pauseMenuButton.disabled = false;
     this.resumeButton.disabled = false;
     this.pauseRestartButton.textContent = 'START OVER';
     this.pauseRestartButton.setAttribute('aria-label', 'Start over');
@@ -160,6 +167,7 @@ export class SurvivalModalViews {
     throwCleanupFailure(runCleanupSteps([
       () => { this.onResume = () => undefined; },
       () => { this.onRestart = () => undefined; },
+      () => { this.onReturnToMenu = () => undefined; },
       () => { this.onRepairTarget = () => undefined; },
       () => { this.onRepairCancel = () => undefined; },
     ]));
@@ -205,6 +213,13 @@ export class SurvivalModalViews {
       this.onResume();
       return;
     }
+    if (button.hasAttribute('data-pause-menu')) {
+      button.disabled = true;
+      this.resumeButton.disabled = true;
+      this.pauseRestartButton.disabled = true;
+      this.onReturnToMenu();
+      return;
+    }
     if (!button.hasAttribute('data-pause-restart')) return;
     if (!this.pauseRestartArmed) {
       this.pauseRestartArmed = true;
@@ -215,6 +230,7 @@ export class SurvivalModalViews {
     }
     button.disabled = true;
     this.resumeButton.disabled = true;
+    this.pauseMenuButton.disabled = true;
     this.onRestart();
   };
 

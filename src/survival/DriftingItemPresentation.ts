@@ -289,19 +289,37 @@ export class DriftingItemPresentation {
     const variant = this.activeVariant;
     const animation = this.activeAnimation;
     if (animation === null) {
-      if (this.state === 'floating') this.applyFloatingPose(variant, time);
-      else if (this.state === 'held' && variant !== 'container') this.applyHeldPose(variant);
+      this.updateIdlePose(variant, time);
       return;
     }
 
     animation.elapsed = Math.min(animation.duration, animation.elapsed + Math.max(0, delta));
     const progress = animation.duration <= 0 ? 1 : animation.elapsed / animation.duration;
-    if (animation.kind === 'retrieve' && variant !== 'container') {
-      this.applyRetrievePose(variant, progress);
-    }
-    else this.applyRecedePose(variant, progress);
+    this.updateAnimationPose(animation, variant, progress);
     if (progress < 1) return;
 
+    this.finishAnimation(animation, variant);
+  }
+
+  private updateIdlePose(variant: DriftingCargoKind, time: number): void {
+    if (this.state === 'floating') this.applyFloatingPose(variant, time);
+    else if (this.state === 'held' && variant !== 'container') this.applyHeldPose(variant);
+  }
+
+  private updateAnimationPose(
+    animation: ActiveDriftingItemAnimation,
+    variant: DriftingCargoKind,
+    progress: number,
+  ): void {
+    if (animation.kind === 'retrieve' && variant !== 'container') {
+      this.applyRetrievePose(variant, progress);
+    } else this.applyRecedePose(variant, progress);
+  }
+
+  private finishAnimation(
+    animation: ActiveDriftingItemAnimation,
+    variant: DriftingCargoKind,
+  ): void {
     this.activeAnimation = null;
     if (animation.kind === 'retrieve') {
       if (variant !== 'container') this.finishRetrieve(variant);

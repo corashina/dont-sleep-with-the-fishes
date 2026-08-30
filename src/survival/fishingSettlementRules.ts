@@ -1,4 +1,5 @@
 import type { ItemId } from '../game/ItemState';
+import type { FishingCatchReward } from './fishingCatalog';
 import type { FishingTerminalResult } from './FishingSession';
 import type { ItemCondition, ResourceDelta } from './survivalTypes';
 
@@ -14,6 +15,32 @@ export interface FishingSettlement {
   }> | null;
 }
 
+function settlementCode(result: FishingTerminalResult): FishingSettlement['code'] {
+  if (result.kind === 'miss') return 'fish-missed';
+  if (result.catch.kind === 'fish') return 'fish-caught';
+  return result.catch.kind === 'utility' ? 'utility-caught' : 'junk-caught';
+}
+
+function settlementMessage(result: FishingTerminalResult): string {
+  if (result.kind === 'miss') return 'The fish got away.';
+  const label = result.catch.label.toLocaleLowerCase('en-US');
+  return result.catch.kind === 'fish'
+    ? `You caught a ${label}.`
+    : `You reeled in ${label}.`;
+}
+
+function settlementDeltas(
+  reward: FishingCatchReward,
+  food: number,
+  baitConsumed: boolean,
+): ResourceDelta {
+  const deltas: ResourceDelta = {};
+  if (food > 0) deltas.food = food;
+  if (reward.kind === 'bait') deltas.bait = reward.amount;
+  if (baitConsumed) deltas.bait = -1;
+  return deltas;
+}
+
 export function fishingSettlement(
   result: FishingTerminalResult,
   capturedBait: boolean,
@@ -21,29 +48,14 @@ export function fishingSettlement(
   const reward = result.kind === 'catch' ? result.catch.reward : { kind: 'none' as const };
   const food = reward.kind === 'food' ? reward.amount : 0;
   const baitConsumed = reward.kind === 'food' && capturedBait;
-  const deltas: ResourceDelta = {};
-  if (food > 0) deltas.food = food;
-  if (reward.kind === 'bait') deltas.bait = reward.amount;
-  if (baitConsumed) deltas.bait = -1;
+  const deltas = settlementDeltas(reward, food, baitConsumed);
   const itemReward = reward.kind === 'item'
     ? Object.freeze({ itemId: reward.itemId, condition: reward.condition })
     : null;
-  const code = result.kind === 'miss'
-    ? 'fish-missed'
-    : result.catch.kind === 'fish'
-      ? 'fish-caught'
-      : result.catch.kind === 'utility'
-        ? 'utility-caught'
-        : 'junk-caught';
-  const message = result.kind === 'miss'
-    ? 'The fish got away.'
-    : result.catch.kind === 'fish'
-      ? `You caught a ${result.catch.label.toLocaleLowerCase('en-US')}.`
-      : `You reeled in ${result.catch.label.toLocaleLowerCase('en-US')}.`;
 
   return Object.freeze({
-    code,
-    message,
+    code: settlementCode(result),
+    message: settlementMessage(result),
     deltas: Object.freeze(deltas),
     food,
     baitConsumed,

@@ -161,9 +161,82 @@ type EventPresentationState =
 const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
 
 type SurvivalEventDefinition = NonNullable<ReturnType<typeof survivalEventById>>;
+type SurvivalEventChoice = SurvivalEventDefinition['choices'][number];
+
+type CompanionChoiceAvailability = ReturnType<typeof carlitosChoiceAvailability>;
+type SessionCompanionAvailability = ReturnType<
+  NonNullable<EventSessionPort['companionEventActionAvailability']>
+>;
+
+const EVENT_ITEM_CUE_TYPES: ReadonlySet<ItemId> = new Set([
+  'shotgun',
+  'flashlight',
+  'flareGun',
+  'anchor',
+  'ductTape',
+  'map',
+  'bucket',
+]);
+
+interface FocusedChoiceContext {
+  readonly eventId: InspectableEventId;
+  readonly choice: FocusedEventChoiceSelection;
+  readonly pending: SurvivalSnapshot;
+  readonly outcome: ActionOutcome;
+  readonly generation: number;
+  readonly operation: number;
+  readonly wreckage: boolean;
+  readonly scubaBroke: boolean;
+  readonly skipDriftingAnimation: boolean;
+}
+
+interface FocusedChoiceResolutionState {
+  terminalSnapshot: SurvivalSnapshot | null;
+  returnCovered: boolean;
+}
+
+interface EventResolutionContext {
+  readonly eventId: string;
+  readonly outcome: ActionOutcome;
+  readonly eventState: SurvivalState;
+  readonly generation: number;
+  readonly operation: number;
+  readonly choice: EventChoicePresentation;
+  readonly physicalResponse: EventPhysicalResponsePresentation | EventChoicePresentation;
+  readonly presentation: EventOutcomePresentation;
+  readonly focusedResult: boolean;
+  readonly revealFromCover: boolean;
+}
+
+interface MidnightTourResolutionState {
+  recoveryStarted: boolean;
+}
+
+interface MidnightTourRecoveryReason {
+  readonly rejection?: ActionOutcome;
+  readonly invariantError?: Error;
+  readonly fatalError?: unknown;
+}
+
+const FIXED_CHOICE_ANCHORS: Readonly<Record<string, string>> = {
+  'midnight-tour:visit': 'midnight-tour:island',
+  'handyman:touch': 'handyman:hand',
+  'handyman:chest': 'persistent-chest',
+  'flowers:sleep': 'event:flowers',
+};
 
 function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' {
   return TERMINAL_STATES.includes(state);
+}
+
+function usesEventItemCues(itemType: ItemId | undefined): itemType is ItemId {
+  return itemType !== undefined && EVENT_ITEM_CUE_TYPES.has(itemType);
+}
+
+function pendingEventDefinition(snapshot: SurvivalSnapshot): SurvivalEventDefinition | undefined {
+  if (snapshot.pendingEventId === null) return undefined;
+  if (isTerminal(snapshot.state)) return undefined;
+  return survivalEventById(snapshot.pendingEventId);
 }
 
 function focusedChoiceAnchorId(eventId: string, choiceId: string): string | null {
@@ -172,11 +245,7 @@ function focusedChoiceAnchorId(eventId: string, choiceId: string): string | null
   if (isDriftingItemEventId(eventId) && (choiceId === 'retrieve' || choiceId === 'search')) {
     return `event:${eventId}`;
   }
-  if (eventId === 'midnight-tour' && choiceId === 'visit') return 'midnight-tour:island';
-  if (eventId === 'handyman' && choiceId === 'touch') return 'handyman:hand';
-  if (eventId === 'handyman' && choiceId === 'chest') return 'persistent-chest';
-  if (eventId === 'flowers' && choiceId === 'sleep') return 'event:flowers';
-  return null;
+  return FIXED_CHOICE_ANCHORS[`${eventId}:${choiceId}`] ?? null;
 }
 
 function carlitosChoiceAvailability(snapshot: SurvivalSnapshot): {
@@ -211,65 +280,102 @@ function carlitosChoiceAvailability(snapshot: SurvivalSnapshot): {
   };
 }
 
+function usableChoiceItemInstanceId(
+  choice: SurvivalEventChoice,
+  snapshot: SurvivalSnapshot,
+): ItemInstanceId | null {
+  if (choice.itemId === undefined) return null;
+  return Object.values(snapshot.inventory)
+    .filter((item) => (
+      item !== undefined && item.type === choice.itemId && item.condition === 'usable'
+    ))
+    .map((item) => item!.instanceId)
+    .sort()[0] ?? null;
+}
+
+function requirementUnavailableReason(
+  requirement: EventChoiceRequirement,
+  snapshot: SurvivalSnapshot,
+): string {
+  const { resource, minimum } = requirement;
+  const resourceLabel = resource.replace(/([A-Z])/g, ' $1').toLocaleLowerCase('en-US');
+  return `Requires ${minimum} ${resourceLabel}; you have ${snapshot[resource]}.`;
+}
+
+function focusedChoiceUnavailableReasons(
+  choice: SurvivalEventChoice,
+  snapshot: SurvivalSnapshot,
+  instanceId: ItemInstanceId | null,
+  companionAvailability: CompanionChoiceAvailability,
+): string[] {
+  const reasons = (choice.requirements ?? [])
+    .filter(({ resource, minimum }) => snapshot[resource] < minimum)
+    .map((requirement) => requirementUnavailableReason(requirement, snapshot));
+  if (choice.itemId !== undefined && instanceId === null) {
+    const itemLabel = choice.itemId === 'scubaSet' ? 'scuba gear' : choice.itemId;
+    reasons.push(`Requires usable ${itemLabel}.`);
+  }
+  if (choice.requiredChestState !== undefined
+    && choice.requiredChestState !== snapshot.chest.state) {
+    reasons.push(
+      `Requires a ${choice.requiredChestState} chest; you have ${snapshot.chest.state}.`,
+    );
+  }
+  if (choice.companionAction !== undefined
+    && companionAvailability.unavailableReason !== null) {
+    reasons.push(companionAvailability.unavailableReason);
+  }
+  return reasons;
+}
+
+function focusedChoiceEnergy(
+  choice: SurvivalEventChoice,
+): Partial<Pick<FocusedEventChoiceView, 'energyCost' | 'energyOwner'>> {
+  if (choice.companionAction !== undefined) {
+    return { energyCost: CARLITOS_EVENT_ENERGY_COST, energyOwner: 'carlitos' };
+  }
+  const playerEnergyCost = choice.requirements?.find(
+    ({ resource }) => resource === 'energy',
+  )?.minimum;
+  if (playerEnergyCost === undefined) return {};
+  return { energyCost: playerEnergyCost, energyOwner: 'player' };
+}
+
+function focusedChoiceFor(
+  event: SurvivalEventDefinition,
+  choice: SurvivalEventChoice,
+  snapshot: SurvivalSnapshot,
+  companionAvailability: CompanionChoiceAvailability,
+): FocusedEventChoiceView | null {
+  if (choice.companionAction !== undefined
+    && !companionAvailability.visible
+    && event.id !== 'wreckage') return null;
+  const instanceId = usableChoiceItemInstanceId(choice, snapshot);
+  const reasons = focusedChoiceUnavailableReasons(
+    choice,
+    snapshot,
+    instanceId,
+    companionAvailability,
+  );
+  const anchorId = focusedChoiceAnchorId(event.id, choice.id);
+  return {
+    id: choice.id,
+    label: choice.label,
+    unavailableReason: reasons.length === 0 ? null : reasons.join(' '),
+    instanceId,
+    ...(anchorId === null ? {} : { anchorId }),
+    ...focusedChoiceEnergy(choice),
+  };
+}
+
 export function focusedChoicesFor(
   event: SurvivalEventDefinition,
   snapshot: SurvivalSnapshot,
 ): readonly FocusedEventChoiceView[] {
   const companionAvailability = carlitosChoiceAvailability(snapshot);
-  return event.choices.flatMap((choice): FocusedEventChoiceView[] => {
-    if (
-      choice.companionAction !== undefined
-      && !companionAvailability.visible
-      && event.id !== 'wreckage'
-    ) return [];
-    const unmet = choice.requirements?.filter(
-      ({ resource, minimum }) => snapshot[resource] < minimum,
-    ) ?? [];
-    const instanceId = choice.itemId === undefined
-      ? null
-      : Object.values(snapshot.inventory)
-          .filter((item) => item?.type === choice.itemId && item?.condition === 'usable')
-          .map((item) => item!.instanceId)
-          .sort()[0] ?? null;
-    const chestUnavailable = choice.requiredChestState !== undefined
-      && choice.requiredChestState !== snapshot.chest.state;
-    const unavailableReasons = [
-      ...unmet.map(({ resource, minimum }) => (
-        `Requires ${minimum} ${resource.replace(/([A-Z])/g, ' $1').toLocaleLowerCase('en-US')}; `
-        + `you have ${snapshot[resource]}.`
-      )),
-      ...(choice.itemId !== undefined && instanceId === null
-        ? [`Requires usable ${choice.itemId === 'scubaSet' ? 'scuba gear' : choice.itemId}.`]
-        : []),
-      ...(chestUnavailable
-        ? [`Requires a ${choice.requiredChestState} chest; you have ${snapshot.chest.state}.`]
-        : []),
-      ...(choice.companionAction !== undefined
-        && companionAvailability.unavailableReason !== null
-        ? [companionAvailability.unavailableReason]
-        : []),
-    ];
-    const anchorId = focusedChoiceAnchorId(event.id, choice.id);
-    const playerEnergyCost = choice.requirements?.find(
-      ({ resource }) => resource === 'energy',
-    )?.minimum;
-    return [{
-      id: choice.id,
-      label: choice.label,
-      unavailableReason: unavailableReasons.length === 0
-        ? null
-        : unavailableReasons.join(' '),
-      instanceId,
-      ...(anchorId === null ? {} : { anchorId }),
-      ...(playerEnergyCost === undefined ? {} : {
-        energyCost: playerEnergyCost,
-        energyOwner: 'player' as const,
-      }),
-      ...(choice.companionAction === undefined ? {} : {
-        energyCost: CARLITOS_EVENT_ENERGY_COST,
-        energyOwner: 'carlitos' as const,
-      }),
-    }];
+  return event.choices.flatMap((choice) => {
+    const view = focusedChoiceFor(event, choice, snapshot, companionAvailability);
+    return view === null ? [] : [view];
   });
 }
 
@@ -530,187 +636,313 @@ export class SurvivalEventFlow {
     const pending = this.dependencies.session.snapshot();
     const eventId = pending.pendingEventId;
     if (eventId === null || !isInspectableEventId(eventId)) return undefined;
-
-    const outcome = choice.instanceId === null
-      ? this.dependencies.session.resolveEvent?.({ kind: 'choice', choiceId: choice.id })
-      : this.dependencies.session.resolveEvent?.({
-          kind: 'item', choiceId: choice.id, instanceId: choice.instanceId,
-        });
+    const outcome = this.resolveFocusedChoiceOutcome(choice);
     if (outcome === undefined || !this.isCurrent(generation, operation)) return undefined;
     if (!outcome.accepted) {
-      this.dependencies.audio.deny();
-      this.dependencies.ui.showFeedback?.(outcome);
+      this.rejectFocusedChoice(outcome);
       return { accepted: false };
     }
+    this.clearFocusedChoiceSelection();
+    const context = this.createFocusedChoiceContext(
+      eventId,
+      choice,
+      pending,
+      outcome,
+      generation,
+      operation,
+    );
+    if (context.skipDriftingAnimation) this.reportMissingDriftingReward(context);
+    const state: FocusedChoiceResolutionState = {
+      terminalSnapshot: null,
+      returnCovered: false,
+    };
+    return {
+      accepted: true,
+      playAnimation: () => this.playFocusedChoiceAnimation(context),
+      afterAnimation: () => this.afterFocusedChoiceAnimation(context),
+      beforeReturn: () => this.coverFocusedChoiceReturn(context, state),
+      afterReturn: () => this.finishFocusedChoiceReturn(context, state),
+      clearEvent: (reportCleanupErrors) => this.clearFocusedChoiceEvent(
+        context,
+        reportCleanupErrors,
+      ),
+      renderSnapshot: () => this.renderFocusedChoiceSnapshot(context, state),
+      presentTerminal: () => this.presentFocusedChoiceTerminal(context, state),
+    };
+  }
 
+  private resolveFocusedChoiceOutcome(
+    choice: FocusedEventChoiceSelection,
+  ): ActionOutcome | undefined {
+    if (choice.instanceId === null) {
+      return this.dependencies.session.resolveEvent?.({ kind: 'choice', choiceId: choice.id });
+    }
+    return this.dependencies.session.resolveEvent?.({
+      kind: 'item',
+      choiceId: choice.id,
+      instanceId: choice.instanceId,
+    });
+  }
+
+  private rejectFocusedChoice(outcome: ActionOutcome): void {
+    this.dependencies.audio.deny();
+    this.dependencies.ui.showFeedback?.(outcome);
+  }
+
+  private clearFocusedChoiceSelection(): void {
     this.eligibility.clear();
     this.dependencies.world.setEventSelectedItem?.(null);
     this.dependencies.world.setEventEligibleItems?.(null);
     this.dependencies.ui.setEventSelection?.(this.eligibility, []);
+  }
 
+  private createFocusedChoiceContext(
+    eventId: InspectableEventId,
+    choice: FocusedEventChoiceSelection,
+    pending: SurvivalSnapshot,
+    outcome: ActionOutcome,
+    generation: number,
+    operation: number,
+  ): FocusedChoiceContext {
     const wreckage = eventId === 'wreckage';
-    const scubaBroke = wreckage
-      && choice.id === 'dive'
-      && choice.instanceId !== null
-      && pending.inventory[choice.instanceId]?.condition === 'usable'
-      && this.dependencies.session.snapshot().inventory[choice.instanceId]?.condition === 'broken';
-    const skipDriftingAnimation = (
-      eventId === 'drifting-supplies'
-      && (choice.id === 'retrieve' || choice.id === 'delegate-carlitos')
-      && outcome.rewardSummary === undefined
-    );
-    if (skipDriftingAnimation) {
-      this.dependencies.onInvariantError(new Error(
-        `Drifting item ${eventId}/${choice.id} requires a reward summary.`,
-      ));
-      this.dependencies.ui.showFeedback?.({
-        accepted: false,
-        message: 'The recovered salvage could not be identified.',
-      });
-    }
-    let terminalSnapshot: SurvivalSnapshot | null = null;
-    let returnCovered = false;
     return {
-      accepted: true,
-      playAnimation: async () => {
-        if (!this.isCurrent(generation, operation)) return;
-        if (wreckage) {
-          if (choice.id === 'search') return;
-          if (choice.id === 'delegate-carlitos' || choice.id === 'leave') {
-            await (this.dependencies.world.playEventChoice?.(eventId, choice.id)
-              ?? Promise.resolve());
-            return;
-          }
-          if (choice.id === 'dive' && choice.instanceId !== null) {
-            await this.playEventItemUseWithSound(
-              eventId,
-              choice.id,
-              choice.instanceId,
-              pending.inventory[choice.instanceId]?.type,
-              generation,
-              operation,
-            );
-            if (this.isCurrent(generation, operation)) this.dependencies.audio.finishDive();
-          }
-          return;
-        }
-        if (skipDriftingAnimation) return;
-        if (isDriftingItemEventId(eventId)) {
-          if (choice.id === 'retrieve') {
-            await (this.dependencies.world.retrieveDriftingItem?.(eventId) ?? Promise.resolve());
-          } else if (choice.id === 'delegate-carlitos') {
-            await (this.dependencies.world.delegateDriftingItem?.(eventId) ?? Promise.resolve());
-          } else {
-            await (this.dependencies.world.recedeDriftingItem?.(eventId) ?? Promise.resolve());
-          }
-          return;
-        }
-        if (choice.instanceId !== null) {
-          await this.playEventItemUseWithSound(
-            eventId,
-            choice.id,
-            choice.instanceId,
-            pending.inventory[choice.instanceId]?.type,
-            generation,
-            operation,
-          );
-        }
-        if (!this.isCurrent(generation, operation)) return;
-        const playedChoice: EventChoicePresentation = {
-          choiceId: choice.id,
-          instanceId: choice.instanceId,
-          condition: choice.instanceId === null
-            ? null
-            : pending.inventory[choice.instanceId]?.condition ?? null,
-        };
-        await (this.dependencies.world.playEventChoice?.(eventId, playedChoice)
-          ?? Promise.resolve());
-        if (!this.isCurrent(generation, operation)) return;
-        const resolved = this.dependencies.session.snapshot();
-        const presentation = deriveEventOutcomePresentation(
-          pending,
-          resolved,
-          outcome,
-          choice.instanceId,
-        );
-        this.dependencies.audio.beginEventReaction(eventId, outcome);
-        await Promise.all([
-          this.dependencies.world.play?.(outcome.cue) ?? Promise.resolve(),
-          this.dependencies.world.reactToEventOutcome?.(
-            eventId,
-            outcome,
-            playedChoice,
-            presentation,
-          ) ?? Promise.resolve(),
-        ]);
-        if (this.isCurrent(generation, operation)) {
-          this.dependencies.audio.finishEventReaction(eventId);
-        }
-      },
-      afterAnimation: async () => {
-        if (!this.isCurrent(generation, operation)) return;
-        if (
-          eventId === 'drifting-supplies'
-          && (choice.id === 'retrieve' || choice.id === 'delegate-carlitos')
-          && outcome.rewardSummary !== undefined
-        ) {
-          this.dependencies.audio.action('openChest');
-          await (this.dependencies.ui.showRewardResult?.({
-            title: 'SALVAGE',
-            reward: outcome.rewardSummary,
-            lines: [],
-          }) ?? Promise.resolve());
-        }
-      },
-      beforeReturn: async () => {
-        if (!wreckage || !this.isCurrent(generation, operation)) return;
-        await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
-        returnCovered = true;
-      },
-      afterReturn: async () => {
-        if (!wreckage || !this.isCurrent(generation, operation)) return;
-        if (!returnCovered) {
-          await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
-          if (!this.isCurrent(generation, operation)) return;
-          returnCovered = true;
-        }
-        if (!await this.dependencies.renderAndSettleCoveredScene(generation)) return;
-        if (!this.isCurrent(generation, operation)) return;
-        await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
-        if (
-          !this.isCurrent(generation, operation)
-          || choice.id === 'leave'
-          || terminalSnapshot !== null
-        ) return;
-        const lines = scubaBroke
-          ? [outcome.message, 'Your scuba gear broke.']
-          : outcome.rewardSummary === undefined
-            ? [outcome.message]
-            : [];
-        await (this.dependencies.ui.showRewardResult?.({
-          title: 'WRECKAGE',
-          reward: outcome.rewardSummary ?? null,
-          lines,
-        }) ?? Promise.resolve());
-      },
-      clearEvent: (reportCleanupErrors) => {
-        if (this.isCurrent(generation, operation)) {
-          this.clearPresentation(false, reportCleanupErrors);
-        }
-      },
-      renderSnapshot: () => {
-        if (!this.isCurrent(generation, operation)) return false;
-        const snapshot = this.dependencies.renderSnapshot();
-        if (!this.isCurrent(generation, operation)) return false;
-        if (isTerminal(snapshot.state)) terminalSnapshot = snapshot;
-        return terminalSnapshot !== null;
-      },
-      presentTerminal: () => {
-        if (terminalSnapshot !== null && this.isCurrent(generation, operation)) {
-          this.dependencies.presentTerminal(terminalSnapshot);
-        }
-      },
+      eventId,
+      choice,
+      pending,
+      outcome,
+      generation,
+      operation,
+      wreckage,
+      scubaBroke: this.didFocusedScubaBreak(eventId, choice, pending),
+      skipDriftingAnimation: this.shouldSkipDriftingAnimation(eventId, choice, outcome),
     };
+  }
+
+  private didFocusedScubaBreak(
+    eventId: InspectableEventId,
+    choice: FocusedEventChoiceSelection,
+    pending: SurvivalSnapshot,
+  ): boolean {
+    if (eventId !== 'wreckage' || choice.id !== 'dive' || choice.instanceId === null) {
+      return false;
+    }
+    const beforeCondition = pending.inventory[choice.instanceId]?.condition;
+    const afterCondition = this.dependencies.session.snapshot().inventory[
+      choice.instanceId
+    ]?.condition;
+    return beforeCondition === 'usable' && afterCondition === 'broken';
+  }
+
+  private shouldSkipDriftingAnimation(
+    eventId: InspectableEventId,
+    choice: FocusedEventChoiceSelection,
+    outcome: ActionOutcome,
+  ): boolean {
+    if (eventId !== 'drifting-supplies' || outcome.rewardSummary !== undefined) return false;
+    return choice.id === 'retrieve' || choice.id === 'delegate-carlitos';
+  }
+
+  private reportMissingDriftingReward(context: FocusedChoiceContext): void {
+    this.dependencies.onInvariantError(new Error(
+      `Drifting item ${context.eventId}/${context.choice.id} requires a reward summary.`,
+    ));
+    this.dependencies.ui.showFeedback?.({
+      accepted: false,
+      message: 'The recovered salvage could not be identified.',
+    });
+  }
+
+  private async playFocusedChoiceAnimation(context: FocusedChoiceContext): Promise<void> {
+    if (!this.isCurrent(context.generation, context.operation)) return;
+    if (context.wreckage) {
+      await this.playWreckageChoiceAnimation(context);
+      return;
+    }
+    if (context.skipDriftingAnimation) return;
+    if (isDriftingItemEventId(context.eventId)) {
+      await this.playDriftingChoiceAnimation(context.eventId, context);
+      return;
+    }
+    await this.playStandardFocusedChoiceAnimation(context);
+  }
+
+  private async playWreckageChoiceAnimation(context: FocusedChoiceContext): Promise<void> {
+    const { choice, eventId, pending, generation, operation } = context;
+    if (choice.id === 'search') return;
+    if (choice.id === 'delegate-carlitos' || choice.id === 'leave') {
+      await (this.dependencies.world.playEventChoice?.(eventId, choice.id) ?? Promise.resolve());
+      return;
+    }
+    if (choice.id !== 'dive' || choice.instanceId === null) return;
+    await this.playEventItemUseWithSound(
+      eventId,
+      choice.id,
+      choice.instanceId,
+      pending.inventory[choice.instanceId]?.type,
+      generation,
+      operation,
+    );
+    if (this.isCurrent(generation, operation)) this.dependencies.audio.finishDive();
+  }
+
+  private async playDriftingChoiceAnimation(
+    eventId: DriftingItemEventId,
+    context: FocusedChoiceContext,
+  ): Promise<void> {
+    const { choice } = context;
+    if (choice.id === 'retrieve') {
+      await (this.dependencies.world.retrieveDriftingItem?.(eventId) ?? Promise.resolve());
+      return;
+    }
+    if (choice.id === 'delegate-carlitos') {
+      await (this.dependencies.world.delegateDriftingItem?.(eventId) ?? Promise.resolve());
+      return;
+    }
+    await (this.dependencies.world.recedeDriftingItem?.(eventId) ?? Promise.resolve());
+  }
+
+  private async playStandardFocusedChoiceAnimation(
+    context: FocusedChoiceContext,
+  ): Promise<void> {
+    const { choice, eventId, pending, outcome, generation, operation } = context;
+    if (choice.instanceId !== null) {
+      await this.playEventItemUseWithSound(
+        eventId,
+        choice.id,
+        choice.instanceId,
+        pending.inventory[choice.instanceId]?.type,
+        generation,
+        operation,
+      );
+    }
+    if (!this.isCurrent(generation, operation)) return;
+    const playedChoice = this.focusedChoicePresentation(choice, pending);
+    await (this.dependencies.world.playEventChoice?.(eventId, playedChoice) ?? Promise.resolve());
+    if (!this.isCurrent(generation, operation)) return;
+    const resolved = this.dependencies.session.snapshot();
+    const presentation = deriveEventOutcomePresentation(
+      pending,
+      resolved,
+      outcome,
+      choice.instanceId,
+    );
+    this.dependencies.audio.beginEventReaction(eventId, outcome);
+    await Promise.all([
+      this.dependencies.world.play?.(outcome.cue) ?? Promise.resolve(),
+      this.dependencies.world.reactToEventOutcome?.(
+        eventId,
+        outcome,
+        playedChoice,
+        presentation,
+      ) ?? Promise.resolve(),
+    ]);
+    if (this.isCurrent(generation, operation)) this.dependencies.audio.finishEventReaction(eventId);
+  }
+
+  private focusedChoicePresentation(
+    choice: FocusedEventChoiceSelection,
+    pending: SurvivalSnapshot,
+  ): EventChoicePresentation {
+    const condition = choice.instanceId === null
+      ? null
+      : pending.inventory[choice.instanceId]?.condition ?? null;
+    return { choiceId: choice.id, instanceId: choice.instanceId, condition };
+  }
+
+  private async afterFocusedChoiceAnimation(context: FocusedChoiceContext): Promise<void> {
+    if (!this.isCurrent(context.generation, context.operation)) return;
+    if (!this.shouldShowDriftingReward(context)) return;
+    this.dependencies.audio.action('openChest');
+    await (this.dependencies.ui.showRewardResult?.({
+      title: 'SALVAGE',
+      reward: context.outcome.rewardSummary!,
+      lines: [],
+    }) ?? Promise.resolve());
+  }
+
+  private shouldShowDriftingReward(context: FocusedChoiceContext): boolean {
+    if (context.eventId !== 'drifting-supplies') return false;
+    if (context.outcome.rewardSummary === undefined) return false;
+    return context.choice.id === 'retrieve' || context.choice.id === 'delegate-carlitos';
+  }
+
+  private async coverFocusedChoiceReturn(
+    context: FocusedChoiceContext,
+    state: FocusedChoiceResolutionState,
+  ): Promise<void> {
+    if (!context.wreckage || !this.isCurrent(context.generation, context.operation)) return;
+    await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    state.returnCovered = true;
+  }
+
+  private async finishFocusedChoiceReturn(
+    context: FocusedChoiceContext,
+    state: FocusedChoiceResolutionState,
+  ): Promise<void> {
+    if (!context.wreckage || !this.isCurrent(context.generation, context.operation)) return;
+    if (!await this.ensureFocusedChoiceReturnCovered(context, state)) return;
+    if (!await this.dependencies.renderAndSettleCoveredScene(context.generation)) return;
+    if (!this.isCurrent(context.generation, context.operation)) return;
+    await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    if (!this.canShowWreckageReward(context, state)) return;
+    await (this.dependencies.ui.showRewardResult?.({
+      title: 'WRECKAGE',
+      reward: context.outcome.rewardSummary ?? null,
+      lines: this.wreckageRewardLines(context),
+    }) ?? Promise.resolve());
+  }
+
+  private async ensureFocusedChoiceReturnCovered(
+    context: FocusedChoiceContext,
+    state: FocusedChoiceResolutionState,
+  ): Promise<boolean> {
+    if (state.returnCovered) return true;
+    await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    if (!this.isCurrent(context.generation, context.operation)) return false;
+    state.returnCovered = true;
+    return true;
+  }
+
+  private canShowWreckageReward(
+    context: FocusedChoiceContext,
+    state: FocusedChoiceResolutionState,
+  ): boolean {
+    if (!this.isCurrent(context.generation, context.operation)) return false;
+    return context.choice.id !== 'leave' && state.terminalSnapshot === null;
+  }
+
+  private wreckageRewardLines(context: FocusedChoiceContext): string[] {
+    if (context.scubaBroke) return [context.outcome.message, 'Your scuba gear broke.'];
+    if (context.outcome.rewardSummary === undefined) return [context.outcome.message];
+    return [];
+  }
+
+  private clearFocusedChoiceEvent(
+    context: FocusedChoiceContext,
+    reportCleanupErrors: boolean,
+  ): void {
+    if (!this.isCurrent(context.generation, context.operation)) return;
+    this.clearPresentation(false, reportCleanupErrors);
+  }
+
+  private renderFocusedChoiceSnapshot(
+    context: FocusedChoiceContext,
+    state: FocusedChoiceResolutionState,
+  ): boolean {
+    if (!this.isCurrent(context.generation, context.operation)) return false;
+    const snapshot = this.dependencies.renderSnapshot();
+    if (!this.isCurrent(context.generation, context.operation)) return false;
+    if (isTerminal(snapshot.state)) state.terminalSnapshot = snapshot;
+    return state.terminalSnapshot !== null;
+  }
+
+  private presentFocusedChoiceTerminal(
+    context: FocusedChoiceContext,
+    state: FocusedChoiceResolutionState,
+  ): void {
+    if (state.terminalSnapshot === null) return;
+    if (!this.isCurrent(context.generation, context.operation)) return;
+    this.dependencies.presentTerminal(state.terminalSnapshot);
   }
 
   settleForVisibilityChange(): void {
@@ -767,7 +999,54 @@ export class SurvivalEventFlow {
     const eventId = pending.pendingEventId;
     if (eventId === null || !this.isCurrent(generation, operation)) return;
     const itemType = pending.inventory[instanceId]?.type;
-    const eventState = pending.state;
+    if (!await this.prepareItemChoice(
+      eventId,
+      choiceId,
+      instanceId,
+      itemType,
+      generation,
+      operation,
+    )) return;
+    const choice: EventChoicePresentation = {
+      choiceId,
+      instanceId,
+      condition: pending.inventory[instanceId]?.condition ?? null,
+    };
+    if (!await this.playChoiceAndResume(eventId, choice, generation, operation)) return;
+    this.presentation = 'resolving';
+    this.beginDeferredPresentationSync(pending, generation);
+    const outcome = this.dependencies.session.resolveEvent?.({
+      kind: 'item',
+      choiceId,
+      instanceId,
+    });
+    if (outcome === undefined || !this.isCurrent(generation, operation)) {
+      this.cancelDeferredPresentationSync(generation);
+      return;
+    }
+    if (!outcome.accepted) {
+      this.rejectItemChoice(outcome, generation);
+      return;
+    }
+    await this.completeItemChoice(
+      eventId,
+      choiceId,
+      instanceId,
+      pending,
+      outcome,
+      generation,
+      operation,
+    );
+  }
+
+  private async prepareItemChoice(
+    eventId: string,
+    choiceId: EventResponseId,
+    instanceId: ItemInstanceId,
+    itemType: ItemId | undefined,
+    generation: number,
+    operation: number,
+  ): Promise<boolean> {
     this.presentation = 'using';
     this.setBusy(true);
     this.dependencies.ui.setEventUsing?.(instanceId);
@@ -783,62 +1062,61 @@ export class SurvivalEventFlow {
         operation,
       );
     }
-    if (!this.isCurrent(generation, operation)) return;
-    if (this.dependencies.isVisibilityBlocked()) {
-      if (!await this.dependencies.waitForVisibilityResume(generation)) return;
-      if (!this.isCurrent(generation, operation)) return;
-    }
-    const choice: EventChoicePresentation = {
-      choiceId,
-      instanceId,
-      condition: pending.inventory[instanceId]?.condition ?? null,
-    };
+    if (!this.isCurrent(generation, operation)) return false;
+    return this.resumeAfterVisibility(generation, operation);
+  }
+
+  private async playChoiceAndResume(
+    eventId: string,
+    choice: EventChoicePresentation,
+    generation: number,
+    operation: number,
+  ): Promise<boolean> {
     await (this.dependencies.world.playEventChoice?.(eventId, choice) ?? Promise.resolve());
-    if (!this.isCurrent(generation, operation)) return;
-    if (this.dependencies.isVisibilityBlocked()) {
-      if (!await this.dependencies.waitForVisibilityResume(generation)) return;
-      if (!this.isCurrent(generation, operation)) return;
-    }
-    this.presentation = 'resolving';
-    this.beginDeferredPresentationSync(pending, generation);
-    const outcome = this.dependencies.session.resolveEvent?.({
-      kind: 'item',
-      choiceId,
-      instanceId,
-    });
-    if (outcome === undefined || !this.isCurrent(generation, operation)) {
-      this.cancelDeferredPresentationSync(generation);
-      return;
-    }
-    if (!outcome.accepted) {
-      this.cancelDeferredPresentationSync(generation);
-      this.dependencies.audio.deny();
-      this.dependencies.ui.showFeedback?.(outcome);
-      this.presentation = 'choosing';
-      this.dependencies.world.setEventSelectedItem?.(null);
-      this.dependencies.world.setEventEligibleItems?.(new Set(this.eligibility.keys()));
-      this.restoreEventSelection();
-      this.setBusy(false);
-      return;
-    }
+    if (!this.isCurrent(generation, operation)) return false;
+    return this.resumeAfterVisibility(generation, operation);
+  }
+
+  private async resumeAfterVisibility(generation: number, operation: number): Promise<boolean> {
+    if (!this.dependencies.isVisibilityBlocked()) return true;
+    if (!await this.dependencies.waitForVisibilityResume(generation)) return false;
+    return this.isCurrent(generation, operation);
+  }
+
+  private rejectItemChoice(outcome: ActionOutcome, generation: number): void {
+    this.cancelDeferredPresentationSync(generation);
+    this.dependencies.audio.deny();
+    this.dependencies.ui.showFeedback?.(outcome);
+    this.presentation = 'choosing';
+    this.dependencies.world.setEventSelectedItem?.(null);
+    this.dependencies.world.setEventEligibleItems?.(new Set(this.eligibility.keys()));
+    this.restoreEventSelection();
+    this.setBusy(false);
+  }
+
+  private async completeItemChoice(
+    eventId: string,
+    choiceId: EventResponseId,
+    instanceId: ItemInstanceId,
+    pending: SurvivalSnapshot,
+    outcome: ActionOutcome,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
     const focusedResult = isEventPresentationRoute(eventId, 'focused');
-    const invariantError = focusedResult
-      ? this.focusedEventResultError(eventId, choiceId, outcome)
-      : null;
-    if (invariantError !== null) {
-      await this.recoverInvalidFocusedEventResult(
-        invariantError,
-        eventState,
-        generation,
-        operation,
-      );
-      return;
-    }
+    if (await this.recoverFocusedResultIfInvalid(
+      eventId,
+      choiceId,
+      outcome,
+      pending.state,
+      focusedResult,
+      generation,
+      operation,
+    )) return;
     const resolved = this.dependencies.session.snapshot();
+    this.finishDeferredChoiceSync(focusedResult, resolved, generation);
     const condition = resolved.inventory[instanceId]?.condition ?? 'lost';
     const resolvedChoice: EventChoicePresentation = { choiceId, instanceId, condition };
-    if (!focusedResult) this.cancelDeferredPresentationSync(generation);
-    else if (isTerminal(resolved.state)) this.flushDeferredPresentationSync(resolved, generation);
     const response = isEventPresentationRoute(eventId, 'dedicated')
       ? resolvedChoice
       : deriveEventPhysicalResponse(
@@ -856,7 +1134,7 @@ export class SurvivalEventFlow {
     await this.runEventResolution(
       eventId,
       outcome,
-      eventState,
+      pending.state,
       generation,
       operation,
       resolvedChoice,
@@ -864,6 +1142,39 @@ export class SurvivalEventFlow {
       presentation,
       focusedResult,
     );
+  }
+
+  private async recoverFocusedResultIfInvalid(
+    eventId: string,
+    choiceId: string,
+    outcome: ActionOutcome,
+    eventState: SurvivalState,
+    focusedResult: boolean,
+    generation: number,
+    operation: number,
+  ): Promise<boolean> {
+    if (!focusedResult) return false;
+    const invariantError = this.focusedEventResultError(eventId, choiceId, outcome);
+    if (invariantError === null) return false;
+    await this.recoverInvalidFocusedEventResult(
+      invariantError,
+      eventState,
+      generation,
+      operation,
+    );
+    return true;
+  }
+
+  private finishDeferredChoiceSync(
+    focusedResult: boolean,
+    resolved: SurvivalSnapshot,
+    generation: number,
+  ): void {
+    if (!focusedResult) {
+      this.cancelDeferredPresentationSync(generation);
+      return;
+    }
+    if (isTerminal(resolved.state)) this.flushDeferredPresentationSync(resolved, generation);
   }
 
   private releaseBusyDuringRecovery(generation: number, operation: number): void {
@@ -884,36 +1195,14 @@ export class SurvivalEventFlow {
     const pending = this.dependencies.session.snapshot();
     const eventId = pending.pendingEventId;
     if (eventId === null) return;
-    if (eventId === 'midnight-tour' && choiceId === 'visit') {
-      await this.resolveMidnightTourVisit(generation, operation);
-      return;
-    }
-    if (eventId === 'chest-attack' && choiceId === 'attack') {
-      await this.resolveChestAttack(generation, operation);
-      return;
-    }
-    this.dependencies.ui.setEventSleepMask?.(eventId, choiceId === 'sleep');
-    if (choiceId === 'sleep') this.dependencies.audio.sleep();
-    else this.dependencies.audio.confirm();
-    this.presentation = 'using';
-    this.setBusy(true);
+    if (await this.resolveSpecialContextualChoice(eventId, choiceId, generation, operation)) return;
+    this.beginContextualChoice(eventId, choiceId);
     const choice: EventChoicePresentation = {
       choiceId,
       instanceId: null,
       condition: null,
     };
-    await Promise.all([
-      this.dependencies.ui.playEventChoiceBeat?.(choiceId) ?? Promise.resolve(),
-      this.dependencies.world.playEventChoice?.(
-        eventId,
-        isEventPresentationRoute(eventId, 'focused') ? choice : choiceId,
-      ) ?? Promise.resolve(),
-    ]);
-    if (!this.isCurrent(generation, operation)) return;
-    if (this.dependencies.isVisibilityBlocked()) {
-      if (!await this.dependencies.waitForVisibilityResume(generation)) return;
-      if (!this.isCurrent(generation, operation)) return;
-    }
+    if (!await this.playContextualChoice(eventId, choice, generation, operation)) return;
     this.presentation = 'resolving';
     this.beginDeferredPresentationSync(pending, generation);
     const outcome = this.dependencies.session.resolveEvent?.({ kind: 'choice', choiceId });
@@ -922,31 +1211,97 @@ export class SurvivalEventFlow {
       return;
     }
     if (!outcome.accepted) {
-      this.cancelDeferredPresentationSync(generation);
-      this.dependencies.audio.deny();
-      this.dependencies.ui.setEventSleepMask?.(eventId, false);
-      this.dependencies.ui.showFeedback?.(outcome);
-      this.presentation = 'choosing';
-      this.restoreEventSelection();
-      this.setBusy(false);
+      this.rejectContextualChoice(eventId, outcome, generation);
       return;
     }
+    await this.completeContextualChoice(
+      eventId,
+      choiceId,
+      pending,
+      outcome,
+      choice,
+      generation,
+      operation,
+    );
+  }
+
+  private async resolveSpecialContextualChoice(
+    eventId: string,
+    choiceId: EventResponseId,
+    generation: number,
+    operation: number,
+  ): Promise<boolean> {
+    if (eventId === 'midnight-tour' && choiceId === 'visit') {
+      await this.resolveMidnightTourVisit(generation, operation);
+      return true;
+    }
+    if (eventId === 'chest-attack' && choiceId === 'attack') {
+      await this.resolveChestAttack(generation, operation);
+      return true;
+    }
+    return false;
+  }
+
+  private beginContextualChoice(eventId: string, choiceId: EventResponseId): void {
+    this.dependencies.ui.setEventSleepMask?.(eventId, choiceId === 'sleep');
+    if (choiceId === 'sleep') this.dependencies.audio.sleep();
+    else this.dependencies.audio.confirm();
+    this.presentation = 'using';
+    this.setBusy(true);
+  }
+
+  private async playContextualChoice(
+    eventId: string,
+    choice: EventChoicePresentation,
+    generation: number,
+    operation: number,
+  ): Promise<boolean> {
+    const worldChoice = isEventPresentationRoute(eventId, 'focused')
+      ? choice
+      : choice.choiceId;
+    await Promise.all([
+      this.dependencies.ui.playEventChoiceBeat?.(choice.choiceId) ?? Promise.resolve(),
+      this.dependencies.world.playEventChoice?.(eventId, worldChoice) ?? Promise.resolve(),
+    ]);
+    if (!this.isCurrent(generation, operation)) return false;
+    return this.resumeAfterVisibility(generation, operation);
+  }
+
+  private rejectContextualChoice(
+    eventId: string,
+    outcome: ActionOutcome,
+    generation: number,
+  ): void {
+    this.cancelDeferredPresentationSync(generation);
+    this.dependencies.audio.deny();
+    this.dependencies.ui.setEventSleepMask?.(eventId, false);
+    this.dependencies.ui.showFeedback?.(outcome);
+    this.presentation = 'choosing';
+    this.restoreEventSelection();
+    this.setBusy(false);
+  }
+
+  private async completeContextualChoice(
+    eventId: string,
+    choiceId: EventResponseId,
+    pending: SurvivalSnapshot,
+    outcome: ActionOutcome,
+    choice: EventChoicePresentation,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
     const focusedResult = isEventPresentationRoute(eventId, 'focused');
-    const invariantError = focusedResult
-      ? this.focusedEventResultError(eventId, choiceId, outcome)
-      : null;
-    if (invariantError !== null) {
-      await this.recoverInvalidFocusedEventResult(
-        invariantError,
-        pending.state,
-        generation,
-        operation,
-      );
-      return;
-    }
+    if (await this.recoverFocusedResultIfInvalid(
+      eventId,
+      choiceId,
+      outcome,
+      pending.state,
+      focusedResult,
+      generation,
+      operation,
+    )) return;
     const resolved = this.dependencies.session.snapshot();
-    if (!focusedResult) this.cancelDeferredPresentationSync(generation);
-    else if (isTerminal(resolved.state)) this.flushDeferredPresentationSync(resolved, generation);
+    this.finishDeferredChoiceSync(focusedResult, resolved, generation);
     const presentation = deriveEventOutcomePresentation(pending, resolved, outcome, null);
     await this.runEventResolution(
       eventId,
@@ -970,13 +1325,12 @@ export class SurvivalEventFlow {
     generation: number,
     operation: number,
   ): Promise<void> {
-    let recoveryStarted = false;
+    const state: MidnightTourResolutionState = { recoveryStarted: false };
     const pending = this.dependencies.session.snapshot();
     if (
       pending.pendingEventId !== 'midnight-tour'
       || !this.isCurrent(generation, operation)
     ) return;
-    const eventId = 'midnight-tour';
     const choice: EventChoicePresentation = {
       choiceId: 'visit',
       instanceId: null,
@@ -986,60 +1340,128 @@ export class SurvivalEventFlow {
     this.presentation = 'using';
     this.setBusy(true);
     try {
-      await (this.dependencies.ui.setSleepCoverProfile?.('midnight-tour') ?? Promise.resolve());
-      if (!this.isCurrent(generation, operation)) return;
-      await Promise.all([
-        this.dependencies.ui.playEventChoiceBeat?.('visit') ?? Promise.resolve(),
-        this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve(),
-      ]);
-      if (!this.isCurrent(generation, operation)) return;
-      await (this.dependencies.world.playEventChoice?.(eventId, choice) ?? Promise.resolve());
-      if (!this.isCurrent(generation, operation)) return;
-      if (this.dependencies.isVisibilityBlocked()) {
-        if (!await this.dependencies.waitForVisibilityResume(generation)) return;
-        if (!this.isCurrent(generation, operation)) return;
-      }
+      await this.runMidnightTourVisit(pending, choice, state, generation, operation);
+    } catch (error) {
+      await this.recoverMidnightTourError(error, state, generation, operation);
+    }
+  }
 
-      this.presentation = 'resolving';
-      this.beginDeferredPresentationSync(pending, generation);
-      const resultId = this.initialEventResultId;
-      this.initialEventResultId = undefined;
-      const outcome = this.dependencies.session.resolveEvent?.({
-        kind: 'choice',
-        choiceId: 'visit',
-        ...(resultId === undefined ? {} : { resultId }),
-      });
-      if (!this.isCurrent(generation, operation)) return;
-      if (outcome === undefined) {
-        throw new Error('Midnight Tour visit did not return an outcome.');
-      }
-      if (!outcome.accepted) {
-        recoveryStarted = true;
-        await this.recoverMidnightTourVisit(generation, operation, { rejection: outcome });
-        return;
-      }
-      const invariantError = this.focusedEventResultError(eventId, 'visit', outcome);
-      if (invariantError !== null) {
-        recoveryStarted = true;
-        await this.recoverMidnightTourVisit(generation, operation, { invariantError });
-        return;
-      }
-      const resolved = this.dependencies.session.snapshot();
-      const presentation = deriveEventOutcomePresentation(pending, resolved, outcome, null);
-      await this.completeMidnightTourVisit(
-        eventId,
-        outcome,
+  private async runMidnightTourVisit(
+    pending: SurvivalSnapshot,
+    choice: EventChoicePresentation,
+    state: MidnightTourResolutionState,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
+    if (!await this.prepareMidnightTourVisit(choice, generation, operation)) return;
+    this.presentation = 'resolving';
+    this.beginDeferredPresentationSync(pending, generation);
+    const outcome = this.resolveMidnightTourOutcome();
+    if (!this.isCurrent(generation, operation)) return;
+    await this.processMidnightTourOutcome(
+      pending,
+      outcome,
+      choice,
+      state,
+      generation,
+      operation,
+    );
+  }
+
+  private async prepareMidnightTourVisit(
+    choice: EventChoicePresentation,
+    generation: number,
+    operation: number,
+  ): Promise<boolean> {
+    await (this.dependencies.ui.setSleepCoverProfile?.('midnight-tour') ?? Promise.resolve());
+    if (!this.isCurrent(generation, operation)) return false;
+    await Promise.all([
+      this.dependencies.ui.playEventChoiceBeat?.('visit') ?? Promise.resolve(),
+      this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve(),
+    ]);
+    if (!this.isCurrent(generation, operation)) return false;
+    await (this.dependencies.world.playEventChoice?.('midnight-tour', choice)
+      ?? Promise.resolve());
+    if (!this.isCurrent(generation, operation)) return false;
+    return this.resumeAfterVisibility(generation, operation);
+  }
+
+  private resolveMidnightTourOutcome(): ActionOutcome {
+    const resultId = this.initialEventResultId;
+    this.initialEventResultId = undefined;
+    const outcome = this.dependencies.session.resolveEvent?.({
+      kind: 'choice',
+      choiceId: 'visit',
+      ...(resultId === undefined ? {} : { resultId }),
+    });
+    if (outcome === undefined) {
+      throw new Error('Midnight Tour visit did not return an outcome.');
+    }
+    return outcome;
+  }
+
+  private async processMidnightTourOutcome(
+    pending: SurvivalSnapshot,
+    outcome: ActionOutcome,
+    choice: EventChoicePresentation,
+    state: MidnightTourResolutionState,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
+    if (!outcome.accepted) {
+      await this.startMidnightTourRecovery(
+        state,
         generation,
         operation,
-        choice,
-        presentation,
+        { rejection: outcome },
       );
-    } catch (error) {
-      if (!recoveryStarted && this.isCurrent(generation, operation)) {
-        recoveryStarted = true;
-        await this.recoverMidnightTourVisit(generation, operation, { fatalError: error });
-      }
+      return;
     }
+    const invariantError = this.focusedEventResultError('midnight-tour', 'visit', outcome);
+    if (invariantError !== null) {
+      await this.startMidnightTourRecovery(
+        state,
+        generation,
+        operation,
+        { invariantError },
+      );
+      return;
+    }
+    const resolved = this.dependencies.session.snapshot();
+    const presentation = deriveEventOutcomePresentation(pending, resolved, outcome, null);
+    await this.completeMidnightTourVisit(
+      'midnight-tour',
+      outcome,
+      generation,
+      operation,
+      choice,
+      presentation,
+    );
+  }
+
+  private async startMidnightTourRecovery(
+    state: MidnightTourResolutionState,
+    generation: number,
+    operation: number,
+    reason: MidnightTourRecoveryReason,
+  ): Promise<void> {
+    state.recoveryStarted = true;
+    await this.recoverMidnightTourVisit(generation, operation, reason);
+  }
+
+  private async recoverMidnightTourError(
+    error: unknown,
+    state: MidnightTourResolutionState,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
+    if (state.recoveryStarted || !this.isCurrent(generation, operation)) return;
+    await this.startMidnightTourRecovery(
+      state,
+      generation,
+      operation,
+      { fatalError: error },
+    );
   }
 
   private async resolveChestAttack(generation: number, operation: number): Promise<void> {
@@ -1051,16 +1473,8 @@ export class SurvivalEventFlow {
       instanceId: null,
       condition: null,
     };
-    this.presentation = 'using';
-    this.setBusy(true);
-    this.eligibility.clear();
-    this.dependencies.world.setEventEligibleItems?.(new Set());
-    this.dependencies.ui.setEventSelection?.(this.eligibility, []);
-    await (this.dependencies.world.playEventChoice?.('chest-attack', choice) ?? Promise.resolve());
-    if (!this.isCurrent(generation, operation)) return;
-    if (this.dependencies.isVisibilityBlocked()
-      && !await this.dependencies.waitForVisibilityResume(generation)) return;
-    if (!this.isCurrent(generation, operation)) return;
+    this.beginChestAttack();
+    if (!await this.playChestAttackChoice(choice, generation, operation)) return;
     this.presentation = 'resolving';
     this.beginDeferredPresentationSync(pending, generation);
     const outcome = this.dependencies.session.resolveEvent?.({ kind: 'choice', choiceId: 'attack' });
@@ -1069,42 +1483,86 @@ export class SurvivalEventFlow {
       return;
     }
     if (!outcome.accepted) {
-      this.cancelDeferredPresentationSync(generation);
-      this.dependencies.audio.deny();
-      this.dependencies.ui.showFeedback?.(outcome);
-      this.presentation = 'choosing';
-      this.setBusy(false);
+      this.rejectChestAttack(outcome, generation);
       return;
     }
-    const invariantError = this.focusedEventResultError('chest-attack', 'attack', outcome);
-    if (invariantError !== null) {
-      await this.recoverInvalidFocusedEventResult(
-        invariantError,
-        pending.state,
-        generation,
-        operation,
-      );
-      return;
-    }
+    if (await this.recoverFocusedResultIfInvalid(
+      'chest-attack',
+      'attack',
+      outcome,
+      pending.state,
+      true,
+      generation,
+      operation,
+    )) return;
     await this.completeChestAttack(generation, operation);
   }
 
+  private beginChestAttack(): void {
+    this.presentation = 'using';
+    this.setBusy(true);
+    this.eligibility.clear();
+    this.dependencies.world.setEventEligibleItems?.(new Set());
+    this.dependencies.ui.setEventSelection?.(this.eligibility, []);
+  }
+
+  private async playChestAttackChoice(
+    choice: EventChoicePresentation,
+    generation: number,
+    operation: number,
+  ): Promise<boolean> {
+    await (this.dependencies.world.playEventChoice?.('chest-attack', choice)
+      ?? Promise.resolve());
+    if (!this.isCurrent(generation, operation)) return false;
+    return this.resumeAfterVisibility(generation, operation);
+  }
+
+  private rejectChestAttack(outcome: ActionOutcome, generation: number): void {
+    this.cancelDeferredPresentationSync(generation);
+    this.dependencies.audio.deny();
+    this.dependencies.ui.showFeedback?.(outcome);
+    this.presentation = 'choosing';
+    this.setBusy(false);
+  }
+
   private async completeChestAttack(generation: number, operation: number): Promise<void> {
-    this.dependencies.ui.hideEventReveal?.();
-    await (this.dependencies.ui.setSleepCoverProfile?.('midnight-attack') ?? Promise.resolve());
-    if (!this.isCurrent(generation, operation)) return;
-    await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
-    if (!this.isCurrent(generation, operation)) return;
-    this.clearPresentation(true);
-    await (this.dependencies.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
-    if (!this.isCurrent(generation, operation)) return;
-    const resolved = this.dependencies.session.snapshot();
-    const snapshot = isTerminal(resolved.state)
-      ? this.dependencies.renderSnapshot()
-      : await this.runDawn(generation, operation);
+    if (!await this.prepareChestAttackReturn(generation, operation)) return;
+    const snapshot = await this.chestAttackReturnSnapshot(generation, operation);
     if (!this.isCurrent(generation, operation)) return;
     if (!await this.dependencies.renderAndSettleCoveredScene(generation)) return;
     this.flushDeferredPresentationSync(snapshot, generation);
+    await this.finishChestAttackReturn(snapshot, generation, operation);
+  }
+
+  private async prepareChestAttackReturn(
+    generation: number,
+    operation: number,
+  ): Promise<boolean> {
+    this.dependencies.ui.hideEventReveal?.();
+    await (this.dependencies.ui.setSleepCoverProfile?.('midnight-attack') ?? Promise.resolve());
+    if (!this.isCurrent(generation, operation)) return false;
+    await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    if (!this.isCurrent(generation, operation)) return false;
+    this.clearPresentation(true);
+    await (this.dependencies.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
+    return this.isCurrent(generation, operation);
+  }
+
+  private async chestAttackReturnSnapshot(
+    generation: number,
+    operation: number,
+  ): Promise<SurvivalSnapshot> {
+    const resolved = this.dependencies.session.snapshot();
+    return isTerminal(resolved.state)
+      ? this.dependencies.renderSnapshot()
+      : await this.runDawn(generation, operation);
+  }
+
+  private async finishChestAttackReturn(
+    snapshot: SurvivalSnapshot,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
     if (isTerminal(snapshot.state)) {
       this.dependencies.presentTerminal(snapshot, true);
       this.setBusy(false);
@@ -1126,14 +1584,36 @@ export class SurvivalEventFlow {
     choice: EventChoicePresentation,
     presentation: EventOutcomePresentation,
   ): Promise<void> {
+    if (!await this.playMidnightTourReaction(
+      eventId,
+      outcome,
+      choice,
+      presentation,
+      generation,
+      operation,
+    )) return;
+    if (!await this.prepareMidnightTourReturn(outcome, generation, operation)) return;
+    const snapshot = await this.chestAttackReturnSnapshot(generation, operation);
+    if (!this.isCurrent(generation, operation)) return;
+    if (!await this.dependencies.renderAndSettleCoveredScene(generation)) return;
+    if (!this.isCurrent(generation, operation)) return;
+    this.flushDeferredPresentationSync(snapshot, generation);
+    await this.finishChestAttackReturn(snapshot, generation, operation);
+  }
+
+  private async playMidnightTourReaction(
+    eventId: 'midnight-tour',
+    outcome: ActionOutcome,
+    choice: EventChoicePresentation,
+    presentation: EventOutcomePresentation,
+    generation: number,
+    operation: number,
+  ): Promise<boolean> {
     this.setBusy(true);
     this.dependencies.ui.hideEventReveal?.();
     await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
-    if (!this.isCurrent(generation, operation)) return;
-    if (this.dependencies.isVisibilityBlocked()) {
-      if (!await this.dependencies.waitForVisibilityResume(generation)) return;
-      if (!this.isCurrent(generation, operation)) return;
-    }
+    if (!this.isCurrent(generation, operation)) return false;
+    if (!await this.resumeAfterVisibility(generation, operation)) return false;
     this.dependencies.audio.beginEventReaction(eventId, outcome);
     await Promise.all([
       this.dependencies.world.play?.(outcome.cue) ?? Promise.resolve(),
@@ -1144,83 +1624,64 @@ export class SurvivalEventFlow {
         presentation,
       ) ?? Promise.resolve(),
     ]);
-    if (!this.isCurrent(generation, operation)) return;
+    if (!this.isCurrent(generation, operation)) return false;
     this.dependencies.audio.finishEventReaction(eventId);
-    if (this.dependencies.isVisibilityBlocked()) {
-      if (!await this.dependencies.waitForVisibilityResume(generation)) return;
-      if (!this.isCurrent(generation, operation)) return;
-    }
+    return this.resumeAfterVisibility(generation, operation);
+  }
+
+  private async prepareMidnightTourReturn(
+    outcome: ActionOutcome,
+    generation: number,
+    operation: number,
+  ): Promise<boolean> {
     if (outcome.eventResult?.resultId === 'tour-attack') {
       await (this.dependencies.ui.setSleepCoverProfile?.('midnight-attack') ?? Promise.resolve());
-      if (!this.isCurrent(generation, operation)) return;
+      if (!this.isCurrent(generation, operation)) return false;
     }
     await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
-    if (!this.isCurrent(generation, operation)) return;
+    if (!this.isCurrent(generation, operation)) return false;
     this.dependencies.audio.clearMidnightTour();
     this.clearPresentation(true);
     await (this.dependencies.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
-    if (!this.isCurrent(generation, operation)) return;
-    const resolved = this.dependencies.session.snapshot();
-    const snapshot = isTerminal(resolved.state)
-      ? this.dependencies.renderSnapshot()
-      : await this.runDawn(generation, operation);
-    if (!this.isCurrent(generation, operation)) return;
-    if (!await this.dependencies.renderAndSettleCoveredScene(generation)) return;
-    if (!this.isCurrent(generation, operation)) return;
-    this.flushDeferredPresentationSync(snapshot, generation);
-    if (isTerminal(snapshot.state)) {
-      this.dependencies.presentTerminal(snapshot, true);
-      this.setBusy(false);
-      return;
-    }
-    if (await this.revealDawnEvent(snapshot, generation, operation)) return;
-    if (!this.isCurrent(generation, operation)) return;
-    await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
-    if (!this.isCurrent(generation, operation)) return;
-    this.presentation = 'idle';
-    this.setBusy(false);
-    this.dependencies.ui.restoreCommandFocus?.();
+    return this.isCurrent(generation, operation);
   }
 
   private async recoverMidnightTourVisit(
     generation: number,
     operation: number,
-    reason: {
-      readonly rejection?: ActionOutcome;
-      readonly invariantError?: Error;
-      readonly fatalError?: unknown;
-    },
+    reason: MidnightTourRecoveryReason,
   ): Promise<void> {
     this.cancelDeferredPresentationSync(generation);
+    if (!await this.prepareMidnightTourRecovery(generation, operation)) return;
+    this.reportMidnightTourRecovery(reason, generation, operation);
     if (!this.isCurrent(generation, operation)) return;
-    try {
-      await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
-    } catch {
-      // Keep the original error.
-    }
-    if (!this.isCurrent(generation, operation)) return;
+    this.tryCleanup(() => this.dependencies.ui.restoreCommandFocus?.(), false);
+  }
+
+  private async prepareMidnightTourRecovery(
+    generation: number,
+    operation: number,
+  ): Promise<boolean> {
+    if (!this.isCurrent(generation, operation)) return false;
+    await this.trySetSleepCovered(true);
+    if (!this.isCurrent(generation, operation)) return false;
     this.clearPresentation(false, false);
-    if (!this.isCurrent(generation, operation)) return;
-    try {
-      await (this.dependencies.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
-    } catch {
-      // Continue cleanup.
-    }
-    if (!this.isCurrent(generation, operation)) return;
+    if (!this.isCurrent(generation, operation)) return false;
+    await this.trySetSolidSleepCoverProfile();
+    if (!this.isCurrent(generation, operation)) return false;
     this.tryCleanup(() => { this.dependencies.renderSnapshot(); }, false);
-    if (!this.isCurrent(generation, operation)) return;
-    try {
-      await this.dependencies.renderAndSettleCoveredScene(generation);
-    } catch {
-      // Continue cleanup.
-    }
-    if (!this.isCurrent(generation, operation)) return;
-    try {
-      await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
-    } catch {
-      // Continue error reporting.
-    }
-    if (!this.isCurrent(generation, operation)) return;
+    if (!this.isCurrent(generation, operation)) return false;
+    await this.tryRenderAndSettleCoveredScene(generation);
+    if (!this.isCurrent(generation, operation)) return false;
+    await this.trySetSleepCovered(false);
+    return this.isCurrent(generation, operation);
+  }
+
+  private reportMidnightTourRecovery(
+    reason: MidnightTourRecoveryReason,
+    generation: number,
+    operation: number,
+  ): void {
     try {
       if (reason.rejection !== undefined) {
         this.dependencies.audio.deny();
@@ -1235,11 +1696,29 @@ export class SurvivalEventFlow {
     } finally {
       this.releaseBusyDuringRecovery(generation, operation);
     }
-    if (!this.isCurrent(generation, operation)) return;
+  }
+
+  private async trySetSleepCovered(covered: boolean): Promise<void> {
     try {
-      this.dependencies.ui.restoreCommandFocus?.();
+      await (this.dependencies.ui.setSleepCovered?.(covered) ?? Promise.resolve());
     } catch {
-      // Keep the primary recovery result.
+      // Keep the primary error.
+    }
+  }
+
+  private async trySetSolidSleepCoverProfile(): Promise<void> {
+    try {
+      await (this.dependencies.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
+    } catch {
+      // Keep the primary error.
+    }
+  }
+
+  private async tryRenderAndSettleCoveredScene(generation: number): Promise<void> {
+    try {
+      await this.dependencies.renderAndSettleCoveredScene(generation);
+    } catch {
+      // Keep the primary error.
     }
   }
 
@@ -1251,7 +1730,6 @@ export class SurvivalEventFlow {
     this.presentation = 'resolving';
     this.setBusy(true);
     const pending = this.dependencies.session.snapshot();
-    const eventState = pending.state;
     const eventId = pending.pendingEventId;
     if (eventId === null) return;
     this.dependencies.audio.confirm();
@@ -1260,10 +1738,7 @@ export class SurvivalEventFlow {
       instanceId: null,
       condition: null,
     };
-    if (eventId === 'other-people' || eventId === 'plane') {
-      await (this.dependencies.world.playEventChoice?.(eventId, choice) ?? Promise.resolve());
-      if (!this.isCurrent(generation, operation)) return;
-    }
+    if (!await this.playEndureChoice(eventId, choice, generation, operation)) return;
     this.beginDeferredPresentationSync(pending, generation);
     const outcome = this.dependencies.session.resolveEvent?.({ kind: 'endure' });
     if (outcome === undefined || !this.isCurrent(generation, operation)) {
@@ -1271,34 +1746,63 @@ export class SurvivalEventFlow {
       return;
     }
     if (!outcome.accepted) {
-      this.cancelDeferredPresentationSync(generation);
-      this.dependencies.audio.deny();
-      this.dependencies.ui.showFeedback?.(outcome);
-      this.presentation = 'choosing';
-      this.setBusy(false);
+      this.rejectEndure(outcome, generation);
       return;
     }
+    await this.completeEndure(
+      eventId,
+      pending,
+      outcome,
+      choice,
+      generation,
+      operation,
+    );
+  }
+
+  private async playEndureChoice(
+    eventId: string,
+    choice: EventChoicePresentation,
+    generation: number,
+    operation: number,
+  ): Promise<boolean> {
+    if (eventId !== 'other-people' && eventId !== 'plane') return true;
+    await (this.dependencies.world.playEventChoice?.(eventId, choice) ?? Promise.resolve());
+    return this.isCurrent(generation, operation);
+  }
+
+  private rejectEndure(outcome: ActionOutcome, generation: number): void {
+    this.cancelDeferredPresentationSync(generation);
+    this.dependencies.audio.deny();
+    this.dependencies.ui.showFeedback?.(outcome);
+    this.presentation = 'choosing';
+    this.setBusy(false);
+  }
+
+  private async completeEndure(
+    eventId: string,
+    pending: SurvivalSnapshot,
+    outcome: ActionOutcome,
+    choice: EventChoicePresentation,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
     const focusedResult = isEventPresentationRoute(eventId, 'focused');
-    const invariantError = focusedResult
-      ? this.focusedEventResultError(eventId, choice.choiceId, outcome)
-      : null;
-    if (invariantError !== null) {
-      await this.recoverInvalidFocusedEventResult(
-        invariantError,
-        eventState,
-        generation,
-        operation,
-      );
-      return;
-    }
+    if (await this.recoverFocusedResultIfInvalid(
+      eventId,
+      choice.choiceId,
+      outcome,
+      pending.state,
+      focusedResult,
+      generation,
+      operation,
+    )) return;
     const resolved = this.dependencies.session.snapshot();
-    if (!focusedResult) this.cancelDeferredPresentationSync(generation);
-    else if (isTerminal(resolved.state)) this.flushDeferredPresentationSync(resolved, generation);
+    this.finishDeferredChoiceSync(focusedResult, resolved, generation);
     const presentation = deriveEventOutcomePresentation(pending, resolved, outcome, null);
     await this.runEventResolution(
       eventId,
       outcome,
-      eventState,
+      pending.state,
       generation,
       operation,
       choice,
@@ -1325,126 +1829,207 @@ export class SurvivalEventFlow {
     focusedResult: boolean,
     revealFromCover = false,
   ): Promise<void> {
-    const stationaryHandymanTouch = eventId === 'handyman' && choice.choiceId === 'touch';
-    this.setBusy(true);
-    this.dependencies.ui.hideEventReveal?.();
-    this.dependencies.audio.beginEventReaction(eventId, outcome);
-    if (
-      isEventPresentationRoute(eventId, 'dedicated')
-      && ((presentation.resourceDeltas.hull ?? 0) < 0
-        || (presentation.resourceDeltas.health ?? 0) < 0)
-    ) {
-      this.dependencies.audio.eventAction(eventId, 'damage');
-    }
-    const response = isEventPresentationRoute(eventId, 'dedicated')
-      ? physicalResponse
-      : focusedResult ? choice : physicalResponse;
-    if (revealFromCover) {
-      const reaction = this.dependencies.world.reactToEventOutcome?.(
-        eventId,
-        outcome,
-        response,
-        presentation,
-      ) ?? Promise.resolve();
-      await Promise.all([
-        stationaryHandymanTouch
-          ? Promise.resolve()
-          : this.dependencies.world.play?.(outcome.cue) ?? Promise.resolve(),
-        reaction,
-        this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve(),
-      ]);
-    } else {
-      await Promise.all([
-        stationaryHandymanTouch
-          ? Promise.resolve()
-          : this.dependencies.world.play?.(outcome.cue) ?? Promise.resolve(),
-        this.dependencies.world.reactToEventOutcome?.(
-          eventId,
-          outcome,
-          response,
-          presentation,
-        ) ?? Promise.resolve(),
-      ]);
-    }
+    const context: EventResolutionContext = {
+      eventId,
+      outcome,
+      eventState,
+      generation,
+      operation,
+      choice,
+      physicalResponse,
+      presentation,
+      focusedResult,
+      revealFromCover,
+    };
+    this.beginEventResolution(context);
+    await this.playEventResolutionReaction(context);
     if (!this.isCurrent(generation, operation)) return;
     this.dependencies.audio.finishEventReaction(eventId);
-    if (this.dependencies.isVisibilityBlocked()) {
-      if (!await this.dependencies.waitForVisibilityResume(generation)) return;
-      if (!this.isCurrent(generation, operation)) return;
-    }
+    if (!await this.resumeAfterVisibility(generation, operation)) return;
     const terminal = this.dependencies.session.snapshot();
     if (focusedResult && !isTerminal(terminal.state)) {
       this.flushDeferredPresentationSync(terminal, generation);
     }
-    const isDedicatedEvent = isEventPresentationRoute(eventId, 'dedicated');
     if (isTerminal(terminal.state)) {
-      if (isDedicatedEvent) {
-        await (this.dependencies.ui.holdEventOutcome?.() ?? Promise.resolve());
-        if (!this.isCurrent(generation, operation)) return;
-      }
-      if (revealFromCover) {
-        await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
-        if (!this.isCurrent(generation, operation)) return;
-      }
-      const snapshot = this.dependencies.renderSnapshot();
-      if (snapshot.state === 'rescued') this.retainTerminalEventTableau();
-      else this.clearPresentation();
-      if (revealFromCover) {
-        await (this.dependencies.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
-        if (!this.isCurrent(generation, operation)) return;
-      }
-      this.presentation = 'idle';
-      if (revealFromCover) {
-        this.dependencies.presentTerminal(snapshot, true);
-        this.setBusy(false);
-      } else {
-        this.setBusy(false);
-        this.dependencies.presentTerminal(snapshot);
-      }
+      await this.completeTerminalEventResolution(context);
       return;
     }
+    await this.completeContinuingEventResolution(context, terminal);
+  }
 
-    await (this.dependencies.ui.holdEventOutcome?.() ?? Promise.resolve());
-    if (!this.isCurrent(generation, operation)) return;
-    if (
-      eventState === 'nightEvent'
-      && terminal.state === 'nightEvent'
-      && terminal.pendingEventId !== null
-      && !this.beginEventBundleLoad(terminal.pendingEventId)
-    ) return;
-    await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
-    if (!this.isCurrent(generation, operation)) return;
-    this.clearPresentation();
-    if (revealFromCover) {
-      await (this.dependencies.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
-      if (!this.isCurrent(generation, operation)) return;
-    }
-    if (
-      eventState === 'nightEvent'
-      && terminal.state === 'nightEvent'
-      && terminal.pendingEventId !== null
-    ) {
-      this.preparedEventId = terminal.pendingEventId as SurvivalEventId;
-      await this.runPendingEventReveal(terminal, generation, operation, true);
+  private beginEventResolution(context: EventResolutionContext): void {
+    this.setBusy(true);
+    this.dependencies.ui.hideEventReveal?.();
+    this.dependencies.audio.beginEventReaction(context.eventId, context.outcome);
+    this.playEventResolutionDamageCue(context);
+  }
+
+  private playEventResolutionDamageCue(context: EventResolutionContext): void {
+    if (!isEventPresentationRoute(context.eventId, 'dedicated')) return;
+    const hullDamage = (context.presentation.resourceDeltas.hull ?? 0) < 0;
+    const healthDamage = (context.presentation.resourceDeltas.health ?? 0) < 0;
+    if (!hullDamage && !healthDamage) return;
+    this.dependencies.audio.eventAction(context.eventId, 'damage');
+  }
+
+  private async playEventResolutionReaction(context: EventResolutionContext): Promise<void> {
+    const response = this.eventResolutionResponse(context);
+    if (context.revealFromCover) {
+      const reaction = this.eventOutcomeReaction(context, response);
+      await Promise.all([
+        this.eventResolutionCue(context),
+        reaction,
+        this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve(),
+      ]);
       return;
     }
-    const snapshot = eventState === 'nightEvent'
-      ? await this.runDawn(generation, operation)
+    await Promise.all([
+      this.eventResolutionCue(context),
+      this.eventOutcomeReaction(context, response),
+    ]);
+  }
+
+  private eventOutcomeReaction(
+    context: EventResolutionContext,
+    response: EventPhysicalResponsePresentation | EventChoicePresentation,
+  ): Promise<void> {
+    return this.dependencies.world.reactToEventOutcome?.(
+      context.eventId,
+      context.outcome,
+      response,
+      context.presentation,
+    ) ?? Promise.resolve();
+  }
+
+  private eventResolutionResponse(
+    context: EventResolutionContext,
+  ): EventPhysicalResponsePresentation | EventChoicePresentation {
+    if (isEventPresentationRoute(context.eventId, 'dedicated')) {
+      return context.physicalResponse;
+    }
+    return context.focusedResult ? context.choice : context.physicalResponse;
+  }
+
+  private eventResolutionCue(context: EventResolutionContext): Promise<void> {
+    const stationaryHandymanTouch = context.eventId === 'handyman'
+      && context.choice.choiceId === 'touch';
+    if (stationaryHandymanTouch) return Promise.resolve();
+    return this.dependencies.world.play?.(context.outcome.cue) ?? Promise.resolve();
+  }
+
+  private async completeTerminalEventResolution(
+    context: EventResolutionContext,
+  ): Promise<void> {
+    if (!await this.holdDedicatedEventOutcome(context)) return;
+    if (!await this.coverTerminalEventResolution(context)) return;
+    const snapshot = this.dependencies.renderSnapshot();
+    if (snapshot.state === 'rescued') this.retainTerminalEventTableau();
+    else this.clearPresentation();
+    if (!await this.resetResolutionCoverProfile(context)) return;
+    this.presentation = 'idle';
+    this.presentEventResolutionTerminal(context, snapshot);
+  }
+
+  private async holdDedicatedEventOutcome(context: EventResolutionContext): Promise<boolean> {
+    if (!isEventPresentationRoute(context.eventId, 'dedicated')) return true;
+    await (this.dependencies.ui.holdEventOutcome?.() ?? Promise.resolve());
+    return this.isCurrent(context.generation, context.operation);
+  }
+
+  private async coverTerminalEventResolution(
+    context: EventResolutionContext,
+  ): Promise<boolean> {
+    if (!context.revealFromCover) return true;
+    await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    return this.isCurrent(context.generation, context.operation);
+  }
+
+  private async resetResolutionCoverProfile(
+    context: EventResolutionContext,
+  ): Promise<boolean> {
+    if (!context.revealFromCover) return true;
+    await (this.dependencies.ui.setSleepCoverProfile?.('solid') ?? Promise.resolve());
+    return this.isCurrent(context.generation, context.operation);
+  }
+
+  private presentEventResolutionTerminal(
+    context: EventResolutionContext,
+    snapshot: SurvivalSnapshot,
+  ): void {
+    if (context.revealFromCover) {
+      this.dependencies.presentTerminal(snapshot, true);
+      this.setBusy(false);
+      return;
+    }
+    this.setBusy(false);
+    this.dependencies.presentTerminal(snapshot);
+  }
+
+  private async completeContinuingEventResolution(
+    context: EventResolutionContext,
+    terminal: SurvivalSnapshot,
+  ): Promise<void> {
+    await (this.dependencies.ui.holdEventOutcome?.() ?? Promise.resolve());
+    if (!this.isCurrent(context.generation, context.operation)) return;
+    if (!this.prepareFollowingNightEvent(context.eventState, terminal)) return;
+    await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    if (!this.isCurrent(context.generation, context.operation)) return;
+    this.clearPresentation();
+    if (!await this.resetResolutionCoverProfile(context)) return;
+    if (await this.revealFollowingNightEvent(context, terminal)) return;
+    await this.finishContinuingEventResolution(context);
+  }
+
+  private prepareFollowingNightEvent(
+    eventState: SurvivalState,
+    terminal: SurvivalSnapshot,
+  ): boolean {
+    if (eventState !== 'nightEvent') return true;
+    if (terminal.state !== 'nightEvent') return true;
+    if (terminal.pendingEventId === null) return true;
+    return this.beginEventBundleLoad(terminal.pendingEventId);
+  }
+
+  private async revealFollowingNightEvent(
+    context: EventResolutionContext,
+    terminal: SurvivalSnapshot,
+  ): Promise<boolean> {
+    if (context.eventState !== 'nightEvent') return false;
+    if (terminal.state !== 'nightEvent') return false;
+    if (terminal.pendingEventId === null) return false;
+    this.preparedEventId = terminal.pendingEventId as SurvivalEventId;
+    await this.runPendingEventReveal(
+      terminal,
+      context.generation,
+      context.operation,
+      true,
+    );
+    return true;
+  }
+
+  private async finishContinuingEventResolution(context: EventResolutionContext): Promise<void> {
+    const snapshot = context.eventState === 'nightEvent'
+      ? await this.runDawn(context.generation, context.operation)
       : this.dependencies.renderSnapshot();
-    if (!this.isCurrent(generation, operation)) return;
-    if (
-      eventState === 'nightEvent'
-      && await this.revealDawnEvent(snapshot, generation, operation)
-    ) return;
-    if (!this.isCurrent(generation, operation)) return;
-    if (!await this.dependencies.renderAndSettleCoveredScene(generation)) return;
-    if (!this.isCurrent(generation, operation)) return;
+    if (!this.isCurrent(context.generation, context.operation)) return;
+    if (await this.revealResolutionDawnEvent(context, snapshot)) return;
+    if (!this.isCurrent(context.generation, context.operation)) return;
+    if (!await this.dependencies.renderAndSettleCoveredScene(context.generation)) return;
+    if (!this.isCurrent(context.generation, context.operation)) return;
     await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
-    if (!this.isCurrent(generation, operation)) return;
+    if (!this.isCurrent(context.generation, context.operation)) return;
     this.presentation = 'idle';
     this.setBusy(false);
     this.dependencies.presentTerminal(snapshot);
     this.dependencies.ui.restoreCommandFocus?.();
+  }
+
+  private async revealResolutionDawnEvent(
+    context: EventResolutionContext,
+    snapshot: SurvivalSnapshot,
+  ): Promise<boolean> {
+    if (context.eventState !== 'nightEvent') return false;
+    return this.revealDawnEvent(snapshot, context.generation, context.operation);
   }
 
   private async runDawn(
@@ -1484,11 +2069,38 @@ export class SurvivalEventFlow {
     alreadyCovered: boolean,
   ): Promise<void> {
     if (!this.isCurrent(generation, operation)) return;
-    if (snapshot.pendingEventId === null || isTerminal(snapshot.state)) return;
-    const event = survivalEventById(snapshot.pendingEventId);
+    const event = pendingEventDefinition(snapshot);
     if (event === undefined) return;
+    if (!await this.preparePendingEventReveal(
+      event,
+      generation,
+      operation,
+      alreadyCovered,
+    )) return;
+    if (!await this.activatePendingEvent(event, generation, operation)) return;
+    this.beginPendingEventAudio(event);
+    const current = this.currentPendingEventSnapshot(event.id);
+    if (current === null) return;
+    this.stagePendingEvent(event, current);
+    if (!await this.showEarlyEventReveal(event, generation, operation)) return;
+    if (!await this.uncoverPendingEvent(generation, operation)) return;
+    this.beginBadSleepReveal(event);
+    if (!this.prepareChestAttackWarning(event)) return;
+    await this.revealWorldEvent(event, generation, operation);
+    if (!this.isCurrent(generation, operation)) return;
+    if (!await this.showLateEventReveal(event, generation, operation)) return;
+    if (!await this.resumeAfterVisibility(generation, operation)) return;
+    await this.finishPendingEventReveal(event, generation, operation);
+  }
+
+  private async preparePendingEventReveal(
+    event: SurvivalEventDefinition,
+    generation: number,
+    operation: number,
+    alreadyCovered: boolean,
+  ): Promise<boolean> {
     this.choiceCheckpointReady = false;
-    if (this.preparedEventId !== event.id && !this.beginEventBundleLoad(event.id)) return;
+    if (this.preparedEventId !== event.id && !this.beginEventBundleLoad(event.id)) return false;
     this.preparedEventId = null;
     this.presentation = 'transitioning';
     this.eligibility.clear();
@@ -1496,19 +2108,39 @@ export class SurvivalEventFlow {
     if (!alreadyCovered) this.dependencies.ui.beginEventPresentation?.();
     this.dependencies.world.setEventSelectedItem?.(null);
     this.dependencies.world.setEventEligibleItems?.(new Set());
-    if (!alreadyCovered) {
-      await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
-      if (!this.isCurrent(generation, operation)) return;
-    }
+    if (alreadyCovered) return true;
+    await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    return this.isCurrent(generation, operation);
+  }
+
+  private async activatePendingEvent(
+    event: SurvivalEventDefinition,
+    generation: number,
+    operation: number,
+  ): Promise<boolean> {
     const eventId = event.id as SurvivalEventId;
     const activation = this.dependencies.bundles.activate(eventId);
     if (activation !== undefined) await activation;
-    if (!this.isCurrent(generation, operation)) return;
+    return this.isCurrent(generation, operation);
+  }
+
+  private currentPendingEventSnapshot(eventId: string): SurvivalSnapshot | null {
+    const current = this.dependencies.session.snapshot();
+    if (current.pendingEventId !== eventId) return null;
+    if (isTerminal(current.state)) return null;
+    return current;
+  }
+
+  private beginPendingEventAudio(event: SurvivalEventDefinition): void {
     if (event.id !== 'leak') this.dependencies.audio.beginEvent(event.id);
     if (event.id !== 'bad-sleep') this.dependencies.audio.eventReveal(event.id);
-    const current = this.dependencies.session.snapshot();
-    if (current.pendingEventId !== event.id || isTerminal(current.state)) return;
-    this.dependencies.setAutomaticWeather(eventId);
+  }
+
+  private stagePendingEvent(
+    event: SurvivalEventDefinition,
+    current: SurvivalSnapshot,
+  ): void {
+    this.dependencies.setAutomaticWeather(event.id as SurvivalEventId);
     const variantSeed = deriveEventVariantSeed(current.seed, current.day, event.id);
     if (isEventPresentationRoute(event.id, 'dedicated')) {
       this.dependencies.world.stageEvent?.({
@@ -1520,29 +2152,52 @@ export class SurvivalEventFlow {
       this.dependencies.world.stageEvent?.(event.id, variantSeed);
     }
     this.presentation = 'revealing';
-    const isChestAttack = event.id === 'chest-attack';
-    if (isEventPresentationRoute(event.id, 'dedicated') || isChestAttack) {
-      await (this.dependencies.ui.showEventReveal?.(event) ?? Promise.resolve());
-      if (!this.isCurrent(generation, operation)) return;
-    }
-    if (!await this.dependencies.renderAndSettleCoveredScene(generation)) return;
-    if (!this.isCurrent(generation, operation)) return;
+  }
+
+  private async showEarlyEventReveal(
+    event: SurvivalEventDefinition,
+    generation: number,
+    operation: number,
+  ): Promise<boolean> {
+    const showEarly = isEventPresentationRoute(event.id, 'dedicated')
+      || event.id === 'chest-attack';
+    if (!showEarly) return true;
+    await (this.dependencies.ui.showEventReveal?.(event) ?? Promise.resolve());
+    return this.isCurrent(generation, operation);
+  }
+
+  private async uncoverPendingEvent(generation: number, operation: number): Promise<boolean> {
+    if (!await this.dependencies.renderAndSettleCoveredScene(generation)) return false;
+    if (!this.isCurrent(generation, operation)) return false;
     await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
-    if (!this.isCurrent(generation, operation)) return;
+    return this.isCurrent(generation, operation);
+  }
+
+  private beginBadSleepReveal(event: SurvivalEventDefinition): void {
     if (event.id === 'bad-sleep') {
       this.dependencies.audio.eventReveal(event.id);
       this.dependencies.ui.setBadSleepCue?.(true);
     }
-    if (isChestAttack) {
-      const warned = this.dependencies.session.snapshot();
-      if (warned.pendingEventId !== event.id || isTerminal(warned.state)) return;
-      this.eligibility = this.eventEligibilityFor(event, warned);
-      this.dependencies.world.setEventEligibleItems?.(new Set(this.eligibility.keys()));
-      this.sync(warned);
-      this.dependencies.ui.setEventSelection?.(this.eligibility, []);
-      this.presentation = 'choosing';
-      this.setBusy(false);
-    }
+  }
+
+  private prepareChestAttackWarning(event: SurvivalEventDefinition): boolean {
+    if (event.id !== 'chest-attack') return true;
+    const warned = this.currentPendingEventSnapshot(event.id);
+    if (warned === null) return false;
+    this.eligibility = this.eventEligibilityFor(event, warned);
+    this.dependencies.world.setEventEligibleItems?.(new Set(this.eligibility.keys()));
+    this.sync(warned);
+    this.dependencies.ui.setEventSelection?.(this.eligibility, []);
+    this.presentation = 'choosing';
+    this.setBusy(false);
+    return true;
+  }
+
+  private async revealWorldEvent(
+    event: SurvivalEventDefinition,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
     try {
       await (this.dependencies.world.revealEvent?.(event.id) ?? Promise.resolve());
     } finally {
@@ -1550,26 +2205,42 @@ export class SurvivalEventFlow {
         this.dependencies.ui.setBadSleepCue?.(false);
       }
     }
-    if (!this.isCurrent(generation, operation)) return;
+  }
+
+  private async showLateEventReveal(
+    event: SurvivalEventDefinition,
+    generation: number,
+    operation: number,
+  ): Promise<boolean> {
     if (event.id === 'leak') this.dependencies.audio.beginEvent(event.id);
-    if (!isEventPresentationRoute(event.id, 'dedicated') && !isChestAttack) {
-      await (this.dependencies.ui.showEventReveal?.(event) ?? Promise.resolve());
-      if (!this.isCurrent(generation, operation)) return;
-    }
-    if (this.dependencies.isVisibilityBlocked()) {
-      if (!await this.dependencies.waitForVisibilityResume(generation)) return;
-      if (!this.isCurrent(generation, operation)) return;
-    }
-    if (isChestAttack) {
-      this.choiceCheckpointReady = this.presentation === 'choosing';
-      if (this.choiceCheckpointReady) this.setBusy(false);
-      if (this.presentation === 'choosing') {
-        await this.resolveChestAttack(generation, operation);
-      }
+    const showLate = !isEventPresentationRoute(event.id, 'dedicated')
+      && event.id !== 'chest-attack';
+    if (!showLate) return true;
+    await (this.dependencies.ui.showEventReveal?.(event) ?? Promise.resolve());
+    return this.isCurrent(generation, operation);
+  }
+
+  private async finishPendingEventReveal(
+    event: SurvivalEventDefinition,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
+    if (event.id === 'chest-attack') {
+      await this.finishChestAttackReveal(generation, operation);
       return;
     }
-    const revealed = this.dependencies.session.snapshot();
-    if (revealed.pendingEventId !== event.id || isTerminal(revealed.state)) return;
+    this.finishStandardEventReveal(event);
+  }
+
+  private async finishChestAttackReveal(generation: number, operation: number): Promise<void> {
+    this.choiceCheckpointReady = this.presentation === 'choosing';
+    if (this.choiceCheckpointReady) this.setBusy(false);
+    if (this.presentation === 'choosing') await this.resolveChestAttack(generation, operation);
+  }
+
+  private finishStandardEventReveal(event: SurvivalEventDefinition): void {
+    const revealed = this.currentPendingEventSnapshot(event.id);
+    if (revealed === null) return;
     this.eligibility = this.eventEligibilityFor(event, revealed);
     const visibleEligibility = isInspectableEventId(event.id)
       ? new Map<ItemInstanceId, EventResponseId>()
@@ -1595,45 +2266,70 @@ export class SurvivalEventFlow {
   ): Promise<void> {
     if (eventId === 'wreckage' && itemType === 'scubaSet') {
       this.dependencies.audio.beginDive();
-      return this.dependencies.world.playEventItemUse?.(
-        eventId,
-        choiceId,
-        instanceId,
-      ) ?? Promise.resolve();
+      return this.playEventItemUse(eventId, choiceId, instanceId);
     }
-    if (
-      itemType === 'shotgun'
-      || itemType === 'flashlight'
-      || itemType === 'flareGun'
-      || itemType === 'anchor'
-      || itemType === 'ductTape'
-      || itemType === 'map'
-      || itemType === 'bucket'
-    ) {
-      if (itemType === 'anchor') this.dependencies.audio.eventItem(itemType);
-      return this.dependencies.world.playEventItemUse?.(
+    if (usesEventItemCues(itemType)) {
+      return this.playCuedEventItemUse(
         eventId,
         choiceId,
         instanceId,
-        (cueIndex) => {
-          if (this.isCurrent(generation, operation)) {
-            if (itemType === 'bucket') {
-              if (eventId === 'shower-night') {
-                this.dependencies.audio.bucketHelmetRain();
-              }
-            } else {
-              this.dependencies.audio.eventItemCue(itemType, cueIndex);
-            }
-          }
-        },
-      ) ?? Promise.resolve();
+        itemType,
+        generation,
+        operation,
+      );
     }
     if (itemType === 'umbrella') this.dependencies.audio.eventItem(itemType);
+    return this.playEventItemUse(eventId, choiceId, instanceId);
+  }
+
+  private playEventItemUse(
+    eventId: string,
+    choiceId: string,
+    instanceId: ItemInstanceId,
+  ): Promise<void> {
     return this.dependencies.world.playEventItemUse?.(
       eventId,
       choiceId,
       instanceId,
     ) ?? Promise.resolve();
+  }
+
+  private playCuedEventItemUse(
+    eventId: string,
+    choiceId: string,
+    instanceId: ItemInstanceId,
+    itemType: ItemId,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
+    if (itemType === 'anchor') this.dependencies.audio.eventItem(itemType);
+    return this.dependencies.world.playEventItemUse?.(
+      eventId,
+      choiceId,
+      instanceId,
+      (cueIndex) => this.playEventItemCue(
+        eventId,
+        itemType,
+        cueIndex,
+        generation,
+        operation,
+      ),
+    ) ?? Promise.resolve();
+  }
+
+  private playEventItemCue(
+    eventId: string,
+    itemType: ItemId,
+    cueIndex: number,
+    generation: number,
+    operation: number,
+  ): void {
+    if (!this.isCurrent(generation, operation)) return;
+    if (itemType !== 'bucket') {
+      this.dependencies.audio.eventItemCue(itemType, cueIndex);
+      return;
+    }
+    if (eventId === 'shower-night') this.dependencies.audio.bucketHelmetRain();
   }
 
   private eventEligibilityFor(
@@ -1664,60 +2360,78 @@ export class SurvivalEventFlow {
     return event.choices
       .filter((choice) => choice.itemId === undefined
         && !(event.id === 'chest-attack' && choice.id === 'attack'))
-      .flatMap((choice): EventContextChoice[] => {
-        const companionAvailability = choice.companionAction === undefined
-          ? undefined
-          : this.dependencies.session.companionEventActionAvailability?.(
-              choice.companionAction,
-            );
-        if (
-          choice.companionAction !== undefined
-          && companionAvailability !== undefined
-          && companionAvailability.visible !== true
-        ) {
-          return [];
-        }
-        const anchorId = this.contextualEventAnchorId(event.id, choice.id);
-        const playerEnergyCost = choice.requirements?.find(
-          ({ resource }) => resource === 'energy',
-        )?.minimum;
-        const unmet = choice.requirements?.filter(
-          ({ resource, minimum }) => snapshot[resource] < minimum,
-        ) ?? [];
-        const chestUnavailable = choice.requiredChestState !== undefined
-          && choice.requiredChestState !== snapshot.chest.state;
-        const unavailableReasons = [
-          ...unmet.map(({ resource, minimum }) => (
-            `Requires ${minimum} ${resource.replace(/([A-Z])/g, ' $1').toLocaleLowerCase('en-US')}; `
-            + `you have ${snapshot[resource]}.`
-          )),
-          ...(chestUnavailable
-            ? [`Requires a ${choice.requiredChestState} chest; you have ${snapshot.chest.state}.`]
-            : []),
-          ...(companionAvailability?.unavailableReason === null
-            || companionAvailability?.unavailableReason === undefined
-            ? []
-            : [companionAvailability.unavailableReason]),
-        ];
-        return [{
-          id: choice.id,
-          label: choice.label,
-          unavailableReason: unavailableReasons.length === 0
-            ? null
-            : unavailableReasons.join(' '),
-          ...(anchorId === null ? {} : { anchorId }),
-          ...(playerEnergyCost === undefined ? {} : {
-            energyCost: playerEnergyCost,
-            energyOwner: 'player' as const,
-          }),
-          ...(choice.companionAction !== undefined && companionAvailability !== undefined
-            ? {
-                energyCost: companionAvailability.energyCost,
-                energyOwner: 'carlitos' as const,
-              }
-            : {}),
-        }];
+      .flatMap((choice) => {
+        const view = this.contextualChoiceFor(event, choice, snapshot);
+        return view === null ? [] : [view];
       });
+  }
+
+  private contextualChoiceFor(
+    event: SurvivalEventDefinition,
+    choice: SurvivalEventChoice,
+    snapshot: SurvivalSnapshot,
+  ): EventContextChoice | null {
+    const companionAvailability = choice.companionAction === undefined
+      ? undefined
+      : this.dependencies.session.companionEventActionAvailability?.(
+          choice.companionAction,
+        );
+    if (this.hideContextualChoice(choice, companionAvailability)) return null;
+    const reasons = this.contextualChoiceUnavailableReasons(
+      choice,
+      snapshot,
+      companionAvailability,
+    );
+    const anchorId = this.contextualEventAnchorId(event.id, choice.id);
+    return {
+      id: choice.id,
+      label: choice.label,
+      unavailableReason: reasons.length === 0 ? null : reasons.join(' '),
+      ...(anchorId === null ? {} : { anchorId }),
+      ...this.contextualChoiceEnergy(choice, companionAvailability),
+    };
+  }
+
+  private hideContextualChoice(
+    choice: SurvivalEventChoice,
+    companionAvailability: SessionCompanionAvailability | undefined,
+  ): boolean {
+    if (choice.companionAction === undefined) return false;
+    if (companionAvailability === undefined) return false;
+    return companionAvailability.visible !== true;
+  }
+
+  private contextualChoiceUnavailableReasons(
+    choice: SurvivalEventChoice,
+    snapshot: SurvivalSnapshot,
+    companionAvailability: SessionCompanionAvailability | undefined,
+  ): string[] {
+    const reasons = (choice.requirements ?? [])
+      .filter(({ resource, minimum }) => snapshot[resource] < minimum)
+      .map((requirement) => requirementUnavailableReason(requirement, snapshot));
+    if (choice.requiredChestState !== undefined
+      && choice.requiredChestState !== snapshot.chest.state) {
+      reasons.push(
+        `Requires a ${choice.requiredChestState} chest; you have ${snapshot.chest.state}.`,
+      );
+    }
+    const companionReason = companionAvailability?.unavailableReason;
+    if (companionReason !== null && companionReason !== undefined) reasons.push(companionReason);
+    return reasons;
+  }
+
+  private contextualChoiceEnergy(
+    choice: SurvivalEventChoice,
+    companionAvailability: SessionCompanionAvailability | undefined,
+  ): Partial<Pick<EventContextChoice, 'energyCost' | 'energyOwner'>> {
+    if (choice.companionAction !== undefined && companionAvailability !== undefined) {
+      return { energyCost: companionAvailability.energyCost, energyOwner: 'carlitos' };
+    }
+    const playerEnergyCost = choice.requirements?.find(
+      ({ resource }) => resource === 'energy',
+    )?.minimum;
+    if (playerEnergyCost === undefined) return {};
+    return { energyCost: playerEnergyCost, energyOwner: 'player' };
   }
 
   private meetsRequirements(
@@ -1792,71 +2506,101 @@ export class SurvivalEventFlow {
     this.cancelDeferredPresentationSync(generation);
     if (!this.isCurrent(generation, operation)) return;
     this.clearPresentation(false, false);
+    this.reportInvariantDuringRecovery(error);
+    if (!this.isCurrent(generation, operation)) return;
+    const resolved = this.snapshotDuringRecovery();
+    if (resolved === null) {
+      this.releaseBusyDuringRecovery(generation, operation);
+      return;
+    }
+    if (isTerminal(resolved.state)) {
+      this.recoverTerminalInvalidFocusedResult(generation, operation);
+      return;
+    }
+    await this.recoverNonTerminalInvalidFocusedResult(eventState, generation, operation);
+  }
+
+  private reportInvariantDuringRecovery(error: Error): void {
     try {
       this.dependencies.onInvariantError(error);
     } catch {
       // Keep the invariant as the primary error and continue recovery.
     }
-    if (!this.isCurrent(generation, operation)) return;
-    let resolved: SurvivalSnapshot;
+  }
+
+  private snapshotDuringRecovery(): SurvivalSnapshot | null {
     try {
-      resolved = this.dependencies.session.snapshot();
+      return this.dependencies.session.snapshot();
     } catch {
+      return null;
+    }
+  }
+
+  private recoverTerminalInvalidFocusedResult(generation: number, operation: number): void {
+    const snapshot = this.renderSnapshotDuringRecovery();
+    if (!this.isCurrent(generation, operation)) return;
+    this.releaseBusyDuringRecovery(generation, operation);
+    if (snapshot === null) return;
+    try {
+      this.dependencies.presentTerminal(snapshot);
+    } catch {
+      // Keep the invariant as the primary error.
+    }
+  }
+
+  private renderSnapshotDuringRecovery(): SurvivalSnapshot | null {
+    try {
+      return this.dependencies.renderSnapshot();
+    } catch {
+      return null;
+    }
+  }
+
+  private async recoverNonTerminalInvalidFocusedResult(
+    eventState: SurvivalState,
+    generation: number,
+    operation: number,
+  ): Promise<void> {
+    await this.trySetSleepCovered(true);
+    if (!this.isCurrent(generation, operation)) return;
+    const snapshot = await this.invalidFocusedRecoverySnapshot(
+      eventState,
+      generation,
+      operation,
+    );
+    if (snapshot === null) {
       this.releaseBusyDuringRecovery(generation, operation);
       return;
     }
-    if (isTerminal(resolved.state)) {
-      let snapshot: SurvivalSnapshot | null = null;
-      try {
-        snapshot = this.dependencies.renderSnapshot();
-      } catch {
-        // Keep the invariant as the primary error.
-      }
-      if (!this.isCurrent(generation, operation)) return;
-      this.releaseBusyDuringRecovery(generation, operation);
-      if (snapshot !== null) {
-        try {
-          this.dependencies.presentTerminal(snapshot);
-        } catch {
-          // Keep the invariant as the primary error.
-        }
-      }
-      return;
-    }
-    try {
-      await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
-    } catch {
-      // Continue recovery with the invariant as the primary error.
-    }
     if (!this.isCurrent(generation, operation)) return;
-    let snapshot: SurvivalSnapshot;
+    await this.tryRenderAndSettleCoveredScene(generation);
+    if (!this.isCurrent(generation, operation)) return;
+    await this.trySetSleepCovered(false);
+    if (!this.isCurrent(generation, operation)) return;
+    this.presentation = 'idle';
+    this.releaseBusyDuringRecovery(generation, operation);
+    this.presentInvalidFocusedRecovery(snapshot);
+  }
+
+  private async invalidFocusedRecoverySnapshot(
+    eventState: SurvivalState,
+    generation: number,
+    operation: number,
+  ): Promise<SurvivalSnapshot | null> {
     try {
-      snapshot = eventState === 'nightEvent'
+      return eventState === 'nightEvent'
         ? await this.runDawn(generation, operation)
         : this.dependencies.renderSnapshot();
     } catch {
       try {
-        snapshot = this.dependencies.session.snapshot();
+        return this.dependencies.session.snapshot();
       } catch {
-        this.releaseBusyDuringRecovery(generation, operation);
-        return;
+        return null;
       }
     }
-    if (!this.isCurrent(generation, operation)) return;
-    try {
-      await this.dependencies.renderAndSettleCoveredScene(generation);
-    } catch {
-      // Continue recovery with the invariant as the primary error.
-    }
-    if (!this.isCurrent(generation, operation)) return;
-    try {
-      await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
-    } catch {
-      // Continue recovery with the invariant as the primary error.
-    }
-    if (!this.isCurrent(generation, operation)) return;
-    this.presentation = 'idle';
-    this.releaseBusyDuringRecovery(generation, operation);
+  }
+
+  private presentInvalidFocusedRecovery(snapshot: SurvivalSnapshot): void {
     try {
       this.dependencies.presentTerminal(snapshot);
       this.dependencies.ui.restoreCommandFocus?.();

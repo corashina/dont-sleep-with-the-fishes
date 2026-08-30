@@ -93,26 +93,28 @@ function verifyLedgerRow(ledger, modelId) {
   }
 }
 
-async function main() {
-  let options;
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function parseOptions() {
   try {
-    options = parseModelCheckArguments(
+    return parseModelCheckArguments(
       process.argv.slice(2),
       ['src', 'assets', 'models', 'ship'],
       false,
     );
   } catch (error) {
-    console.error(`ERROR: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`ERROR: ${errorMessage(error)}`);
     process.exitCode = 1;
-    return;
+    return null;
   }
+}
 
-  const errors = [];
-  let total = 0;
+async function validateDirectory(modelsDir, errors) {
   const expectedEntries = new Set(SHIP_FURNITURE_IDS.map((id) => `${id}.glb`));
-
   try {
-    const entries = await readdir(options.modelsDir, { withFileTypes: true });
+    const entries = await readdir(modelsDir, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isFile() || !expectedEntries.has(entry.name)) {
         errors.push(`unexpected model entry: ${entry.name}`);
@@ -123,11 +125,14 @@ async function main() {
       if (!files.has(expectedEntry)) errors.push(`missing model entry: ${expectedEntry}`);
     }
   } catch (error) {
-    errors.push(error instanceof Error ? error.message : String(error));
+    errors.push(errorMessage(error));
   }
+}
 
+async function measureModels(modelsDir, errors) {
+  let total = 0;
   for (const modelId of SHIP_FURNITURE_IDS) {
-    const filePath = resolve(options.modelsDir, `${modelId}.glb`);
+    const filePath = resolve(modelsDir, `${modelId}.glb`);
     try {
       await access(filePath);
       const triangles = await countRenderedTriangles(filePath);
@@ -147,26 +152,43 @@ async function main() {
         );
       }
     } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error));
+      errors.push(errorMessage(error));
     }
   }
+  return total;
+}
 
+function reportTotal(total, errors) {
   console.log(`total: ${total} / ${LIBRARY_LIMIT} triangles`);
   if (total > LIBRARY_LIMIT) errors.push(`library: ${total} triangles exceeds ${LIBRARY_LIMIT}`);
+}
 
-  if (!options.assetsOnly) {
-    try {
-      const ledger = await readFile(resolve('src', 'assets', 'ATTRIBUTION.md'), 'utf8');
-      for (const modelId of SHIP_FURNITURE_IDS) verifyLedgerRow(ledger, modelId);
-    } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error));
-    }
+async function validateLedger(assetsOnly, errors) {
+  if (assetsOnly) return;
+  try {
+    const ledger = await readFile(resolve('src', 'assets', 'ATTRIBUTION.md'), 'utf8');
+    for (const modelId of SHIP_FURNITURE_IDS) verifyLedgerRow(ledger, modelId);
+  } catch (error) {
+    errors.push(errorMessage(error));
   }
+}
 
+function reportErrors(errors) {
   if (errors.length > 0) {
     for (const error of errors) console.error(`ERROR: ${error}`);
     process.exitCode = 1;
   }
+}
+
+async function main() {
+  const options = parseOptions();
+  if (!options) return;
+  const errors = [];
+  await validateDirectory(options.modelsDir, errors);
+  const total = await measureModels(options.modelsDir, errors);
+  reportTotal(total, errors);
+  await validateLedger(options.assetsOnly, errors);
+  reportErrors(errors);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
