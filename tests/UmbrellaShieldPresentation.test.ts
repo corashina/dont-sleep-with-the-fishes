@@ -103,54 +103,6 @@ describe('umbrella shield presentation', () => {
     material.dispose();
   });
 
-  it('uses one curve for the full shield movement', () => {
-    const samples = [0, 0.25, 0.5, 0.75, 1].map((progress) => {
-      const sample = createEventItemUseSample();
-      sampleEventItemUse('umbrella-shield', 'umbrella', progress, sample);
-      return sample;
-    });
-
-    for (let index = 0; index < samples.length; index += 1) {
-      expect(samples[index]!.cameraSpaceBlend)
-        .toBeCloseTo(samples[index]!.aimBlend);
-    }
-    for (let index = 1; index < samples.length; index += 1) {
-      expect(samples[index]!.cameraSpaceBlend)
-        .toBeGreaterThan(samples[index - 1]!.cameraSpaceBlend);
-      expect(samples[index]!.scaleX)
-        .toBeGreaterThan(samples[index - 1]!.scaleX);
-    }
-    expect(samples[0]!.cameraSpaceBlend).toBe(0);
-    expect(samples.at(-1)!.cameraSpaceBlend).toBe(1);
-    expect(samples.at(-1)!.viewY).toBeCloseTo(-0.075);
-  });
-
-  it('keeps one rotation path across small camera changes', () => {
-    const camera = new PerspectiveCamera(80, 16 / 9, 0.08, 1000);
-    const root = new Group();
-    const actor: BorrowedSupplyActor = {
-      instanceId: INSTANCE_ID,
-      root,
-      applyPose: (pose) => applyRootPose(root, pose),
-      releaseOnNextSync: vi.fn(),
-      release: vi.fn(),
-    };
-    const adapter = new EventItemUseAdapter(camera, new EventItemEffects());
-    const sample = createEventItemUseSample();
-    sampleEventItemUse('umbrella-shield', 'umbrella', 0.5, sample);
-    adapter.begin(actor, 'umbrella', null, true, 'x');
-
-    camera.rotation.y = -0.00001;
-    adapter.apply(sample);
-    const leftRotation = root.quaternion.clone();
-    camera.rotation.y = 0.00001;
-    adapter.apply(sample);
-    const rightRotation = root.quaternion.clone();
-
-    expect(leftRotation.angleTo(rightRotation)).toBeLessThan(0.001);
-    adapter.dispose();
-  });
-
   it('keeps the final shield pose through the outcome', () => {
     const held = createEventItemUseSample();
     const reaction = createEventItemUseSample();

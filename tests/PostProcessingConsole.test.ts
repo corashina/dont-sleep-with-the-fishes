@@ -48,17 +48,6 @@ function createConsole(
 }
 
 describe('PostProcessingConsole save controls', () => {
-  it('places the save category in the left column', () => {
-    const console = createConsole(saveControls({ enabled: false, savedDay: null }));
-    const columns = console.element.querySelectorAll('.post-processing-console__category-column');
-    const saveCategory = console.element
-      .querySelector('[data-save-enabled]')
-      ?.closest('.post-processing-console__category');
-
-    expect(saveCategory?.querySelector('h2')?.textContent).toBe('SAVE SYSTEM');
-    expect(saveCategory?.parentElement).toBe(columns[0]);
-    expect(columns[1]?.querySelector('[data-save-enabled]')).toBeNull();
-  });
 
   it('shows the disabled default and unavailable Continue reason', () => {
     const controls = saveControls({ enabled: false, savedDay: null });

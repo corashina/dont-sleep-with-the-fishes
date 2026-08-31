@@ -1,5 +1,6 @@
 import type { ItemInstance, ItemInstanceId } from '../game/ItemState';
 import type { EndingRecord } from '../game/ending';
+import type { SurvivalReading } from '../game/runStatistics';
 import type { CarlitosSnapshot } from './CarlitosState';
 import type { JournalEntry } from './journalRecords';
 import type {
@@ -13,6 +14,7 @@ import type {
 export interface SurvivalSnapshot {
   state: SurvivalState;
   readonly ending: EndingRecord | null;
+  readonly history: readonly SurvivalReading[];
   day: number;
   pressure: number;
   health: number;

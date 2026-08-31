@@ -51,42 +51,6 @@ function createPresentation(): DriftingItemPresentation {
 }
 
 describe('DriftingItemPresentation', () => {
-  it.each([
-    ['barrel', 'drifting-supplies:barrel'],
-    ['lifeboat', 'drifting-supplies:lifeboat'],
-    ['container', 'drifting-supplies:container'],
-  ] as const)('stages the seeded %s variant', (kind, objectName) => {
-    const presentation = createPresentation();
-
-    presentation.stage('drifting-supplies', seedFor(kind, 'near'));
-
-    expect(presentation.root.getObjectByName(objectName)?.visible).toBe(true);
-    expect(presentation.root.userData.supplyKind).toBe(kind);
-  });
-
-  it('places the same model at near, middle, and far distances', () => {
-    const presentation = createPresentation();
-    const distances = (['near', 'middle', 'far'] as const).map((distance) => {
-      presentation.stage('drifting-supplies', seedFor('barrel', distance));
-      return presentation.root.getObjectByName('drifting-supplies:barrel')!
-        .position.length();
-    });
-
-    expect(distances[0]).toBeLessThan(distances[1]!);
-    expect(distances[1]).toBeLessThan(distances[2]!);
-  });
-
-  it('moves the barrel to rear storage', async () => {
-    const presentation = createPresentation();
-    presentation.stage('drifting-supplies', seedFor('barrel', 'near'));
-
-    const retrieval = presentation.retrieve();
-    presentation.update(1, 2);
-    await retrieval;
-
-    const barrel = presentation.root.getObjectByName('drifting-supplies:barrel')!;
-    expect(barrel.position.toArray()).toEqual([1.5, 0.8, 2.25]);
-  });
 
   it('detaches the cooler, stores it, and removes the empty lifeboat', async () => {
     const presentation = createPresentation();

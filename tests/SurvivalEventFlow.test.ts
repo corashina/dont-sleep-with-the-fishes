@@ -35,6 +35,7 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
   return {
     state: 'day',
     ending: null,
+    history: [],
     day: 4,
     pressure: 2,
     health: 100,

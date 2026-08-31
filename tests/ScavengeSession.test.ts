@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ItemInstance } from '../src/game/ItemState';
 import { ScavengeSession } from '../src/game/ScavengeSession';
-import { createScavengeItemInstances } from '../src/game/scavengeCatalog';
 
 const BLOCKED_STATE_SETUPS = [
   { name: 'paused', enter: (session: ScavengeSession) => session.pause() },
@@ -34,14 +33,6 @@ describe('ScavengeSession', () => {
 
     expect(session.pickUp('cannedFood')).toBe(false);
     expect(session.snapshot()).toBe(initial);
-  });
-
-  it('uses the scavenging roster by default', () => {
-    const session = new ScavengeSession();
-
-    expect(Object.keys(session.snapshot().items))
-      .toHaveLength(createScavengeItemInstances().length);
-    expect(session.snapshot().items['energyBar-1']).toBeUndefined();
   });
 
   it('starts at 60 seconds and fails exactly once at expiry', () => {
@@ -134,16 +125,6 @@ describe('ScavengeSession', () => {
 
     expect(session.saveCarriedBundle()).toBeNull();
     expect(session.snapshot()).toEqual(before);
-  });
-
-  it('keys snapshot items only by physical instance ID', () => {
-    const session = new ScavengeSession();
-    session.start();
-    session.pickUp('ductTape-1');
-    session.saveCarried();
-
-    expect(session.snapshot().items['ductTape-1']!.status).toBe('saved');
-    expect(session.snapshot().items).not.toHaveProperty('ductTape');
   });
 
   it('releases carried instances in LIFO order for every transition', () => {

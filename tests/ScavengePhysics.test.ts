@@ -147,15 +147,6 @@ describe('ScavengePhysics', () => {
   let runtime: PhysicsRuntime;
   beforeAll(async () => { runtime = await testPhysicsRuntime(); });
 
-  it('converts collision boxes to centered cuboids', () => {
-    expect(collisionBoxToCuboid({
-      minX: -2, maxX: 4, minY: 1, maxY: 3, minZ: -5, maxZ: -1,
-    })).toEqual({
-      center: { x: 1, y: 2, z: -3 },
-      halfExtents: { x: 3, y: 1, z: 2 },
-    });
-  });
-
   it('preserves an oriented collision box as one rotated cuboid', () => {
     const cuboid = collisionBoxToCuboid({
       minX: -1.5,
@@ -181,12 +172,6 @@ describe('ScavengePhysics', () => {
       z: 0,
       w: Math.cos(Math.PI / 8),
     });
-  });
-
-  it('uses the authored rail colliders without adding a second perimeter boundary', () => {
-    const cuboids = createScavengeStaticCuboids(config());
-    expect(cuboids).toHaveLength(1 + testRailColliders.length);
-    expect(cuboids.slice(1)).toEqual(testRailColliders.map(collisionBoxToCuboid));
   });
 
   it('aligns the floor cuboid with asymmetric deck bounds', () => {

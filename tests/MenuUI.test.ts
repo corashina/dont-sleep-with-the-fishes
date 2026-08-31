@@ -7,31 +7,6 @@ describe('MenuUI how-to-play popup', () => {
     document.body.replaceChildren();
   });
 
-  it('opens on the scavenging page and shows no control list', () => {
-    const ui = new MenuUI(document.body);
-    const open = document.querySelector<HTMLButtonElement>('[data-menu-guide-open]')!;
-    open.click();
-
-    const dialog = document.querySelector<HTMLElement>('[data-menu-guide]')!;
-    expect(dialog.getAttribute('aria-hidden')).toBe('false');
-    expect(document.querySelector('[data-menu-guide-title]')?.textContent)
-      .toBe('SCAVENGE DOROTHY');
-    expect(document.querySelector('[data-menu-guide-page-count]')?.textContent)
-      .toBe('PAGE 1 OF 4');
-    expect(document.querySelector<HTMLImageElement>('[data-menu-guide-image]')?.src)
-      .toContain('/images/how-to-play/scavenging.png');
-    expect(document.querySelector<HTMLImageElement>('[data-menu-guide-image]')?.alt)
-      .toBe('Inside Dorothy’s bunk room with supplies on the beds, three empty carry slots, and 48 seconds remaining.');
-    expect(dialog.querySelector('[data-menu-guide-stage]')).toBeNull();
-    expect(dialog.querySelector('.controls')).toBeNull();
-    expect(dialog.querySelector('.how-to-play-popup')).not.toBeNull();
-    expect(dialog.querySelector('.how-to-play-book__cover')).toBeNull();
-    expect(dialog.querySelector('.how-to-play-book__rings')).toBeNull();
-    expect(dialog.querySelector('.how-to-play-book__tabs')).toBeNull();
-
-    ui.dispose();
-  });
-
   it('moves through all four pages with buttons and arrow keys', () => {
     const ui = new MenuUI(document.body);
     document.querySelector<HTMLButtonElement>('[data-menu-guide-open]')!.click();

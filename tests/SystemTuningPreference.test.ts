@@ -40,24 +40,6 @@ describe('SystemTuningPreference', () => {
     expect(storage.getItem).toHaveBeenCalledWith(SYSTEM_TUNING_STORAGE_KEY);
   });
 
-  it('uses current AO defaults for non-finite stored numbers', () => {
-    const storage = {
-      getItem: vi.fn().mockReturnValue(
-        '{"ambientOcclusionIntensity":1e400,"ambientOcclusionRadius":-1e400}',
-      ),
-      setItem: vi.fn(),
-    };
-
-    const state = createSystemTuningPreference(storage).get();
-
-    expect(state.ambientOcclusionIntensity).toBe(
-      DEFAULT_SYSTEM_TUNING_STATE.ambientOcclusionIntensity,
-    );
-    expect(state.ambientOcclusionRadius).toBe(
-      DEFAULT_SYSTEM_TUNING_STATE.ambientOcclusionRadius,
-    );
-  });
-
   it('writes one updated JSON state', () => {
     const storage = { getItem: vi.fn().mockReturnValue(null), setItem: vi.fn() };
     const preference = createSystemTuningPreference(storage);

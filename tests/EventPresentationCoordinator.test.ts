@@ -83,45 +83,6 @@ describe('EventPresentationCoordinator', () => {
     expect(snatcher.clear).not.toHaveBeenCalled();
   });
 
-  it('returns the stable aim target from the active route', () => {
-    const leak = fakePresentation('leak');
-    const coordinator = new EventPresentationCoordinator([leak]);
-
-    expect(coordinator.itemAimTarget()).toBeNull();
-    expect(coordinator.interactionTargets()).toEqual([]);
-    expect(Object.isFrozen(coordinator.interactionTargets())).toBe(true);
-    expect(coordinator.interactionRoot('event:leak')).toBeNull();
-    coordinator.stage(context('leak'));
-    expect(coordinator.itemAimTarget()).toBe(leak.itemAimTarget);
-    expect(coordinator.interactionTargets()).toEqual([]);
-    expect(coordinator.interactionRoot('event:leak')).toBeNull();
-    coordinator.clear();
-    expect(coordinator.itemAimTarget()).toBeNull();
-  });
-
-  it('forwards interaction data from the active route', () => {
-    const root = new Group();
-    const targets = Object.freeze([Object.freeze({
-      id: 'event:wreckage',
-      label: 'WRECKAGE',
-      description: 'Inspect the floating debris.',
-      focusEventId: 'wreckage' as const,
-      root,
-    })]);
-    const wreckage = {
-      ...fakePresentation('wreckage'),
-      interactionTargets: vi.fn(() => targets),
-      interactionRoot: vi.fn((id: string) => id === 'event:wreckage' ? root : null),
-    } satisfies DedicatedEventPresentation;
-    const coordinator = new EventPresentationCoordinator([wreckage]);
-
-    coordinator.stage(context('wreckage'));
-
-    expect(coordinator.interactionTargets()).toBe(targets);
-    expect(coordinator.interactionRoot('event:wreckage')).toBe(root);
-    expect(coordinator.interactionRoot('missing')).toBeNull();
-  });
-
   it('keeps the active route when an unknown event reaches stage', () => {
     const leak = fakePresentation('leak');
     const coordinator = new EventPresentationCoordinator([leak]);

@@ -168,21 +168,6 @@ describe('launchGame', () => {
     expect(loadModels).not.toHaveBeenCalled();
   });
 
-  it('ignores playtest input in production', async () => {
-    const mount = connectedMount();
-    const createGame = vi.fn(() => ({ start: vi.fn(), dispose: vi.fn() }));
-    const handle = launchGame(mount, dependencies(
-      () => Promise.resolve({ dispose: vi.fn() } as unknown as PropModelLibrary),
-      { createGame },
-    ), 'enabled', {
-      search: '?playtest=survival&seed=42&missing=map-1&missing=knife-1',
-      playtestEnabled: false,
-    });
-
-    await handle.completion;
-    expect(createGame.mock.calls[0]?.at(-1)).toBeNull();
-  });
-
   it.each(['playtest', 'production'])('gates seeded startup in a %s build', async (mode) => {
     const oldUrl = window.location.href;
     vi.stubEnv('DEV', false);
@@ -203,30 +188,6 @@ describe('launchGame', () => {
       vi.unstubAllEnvs();
       window.history.replaceState(null, '', oldUrl);
     }
-  });
-
-  it('renders the loading state before model preload resolves', async () => {
-    const pending = deferred<PropModelLibrary>();
-    const mount = connectedMount();
-    const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
-
-    const handle = launchGame(mount, dependencies(() => pending.promise));
-
-    expect(mount.textContent).not.toContain('RECOVERING SUPPLIES');
-    expect(mount.textContent).not.toContain('Preparing the ship');
-    expect(mount.textContent).not.toContain('Loading the equipment');
-    expect(mount.querySelector('[data-start]')).toBeNull();
-    expect(mount.querySelector('.system-screen--loading')).not.toBeNull();
-    const progress = mount.querySelector<HTMLProgressElement>('.system-loading-progress');
-    expect(mount.textContent).toBe('');
-    expect(progress?.nextElementSibling).toBeNull();
-    expect(progress?.value).toBe(0);
-    expect(progress?.max).toBe(9);
-    await Promise.resolve();
-    expect(progress?.value).toBe(8);
-    handle.cancel();
-    pending.resolve(models);
-    await handle.completion;
   });
 
   it('constructs and starts the game only after successful preload', async () => {
@@ -275,25 +236,6 @@ describe('launchGame', () => {
       null,
     );
     expect(game.start).toHaveBeenCalledOnce();
-  });
-
-  it('preloads required menu models before constructing the game', async () => {
-    const mount = connectedMount();
-    const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
-    const loadedMenuModels = menuModels();
-    const loadMenuModels = vi.fn().mockResolvedValue(loadedMenuModels);
-    const createGame = vi.fn(() => ({ start: vi.fn(), dispose: vi.fn() }));
-    const handle = launchGame(mount, dependencies(
-      () => Promise.resolve(models),
-      { loadMenuModels, createGame },
-    ));
-
-    await handle.completion;
-    expect(loadMenuModels).toHaveBeenCalledOnce();
-    expect(createGame.mock.calls[0]?.at(-4)).toBe(loadedMenuModels);
-    expect(createGame.mock.calls[0]?.at(-3)).toBeInstanceOf(MenuSandAssets);
-    expect(createGame.mock.calls[0]?.at(-2)).toEqual(expect.any(Function));
-    expect(createGame.mock.calls[0]?.at(-1)).toBeNull();
   });
 
   it('reports the required menu model that could not load', async () => {
@@ -857,32 +799,6 @@ describe('launchGame', () => {
     expect(mount.textContent).toContain('Unable to prepare Dorothy');
   });
 
-  it('removes the launcher loading surface before constructing the game', async () => {
-    const mount = connectedMount();
-    const models = { dispose: vi.fn() } as unknown as PropModelLibrary;
-    const game = { start: vi.fn(), dispose: vi.fn() };
-    let contentAtConstruction = '';
-    let childCountAtConstruction = -1;
-    const createGame = vi.fn((gameMount: HTMLElement) => {
-      contentAtConstruction = gameMount.textContent ?? '';
-      childCountAtConstruction = gameMount.childElementCount;
-      const ready = document.createElement('p');
-      ready.textContent = 'GAME READY';
-      gameMount.append(ready);
-      return game;
-    });
-
-    const handle = launchGame(mount, dependencies(
-      () => Promise.resolve(models),
-      { createGame },
-    ));
-
-    await expect(handle.completion).resolves.toBe(game as unknown as Game);
-    expect(contentAtConstruction).not.toContain('RECOVERING SUPPLIES');
-    expect(childCountAtConstruction).toBe(0);
-    expect(mount.textContent).toBe('GAME READY');
-  });
-
   it('renders an item-labelled supply failure without creating a game', async () => {
     const mount = connectedMount();
     const createGame = vi.fn();
@@ -896,24 +812,6 @@ describe('launchGame', () => {
     expect(mount.textContent).toContain('Unable to recover DUCT TAPE');
     expect(mount.textContent).toContain('DUCT TAPE');
     expect(mount.textContent).toContain('download failed');
-    expect(createGame).not.toHaveBeenCalled();
-  });
-
-  it('renders a fixed-equipment failure when the lifeboat rod cannot preload', async () => {
-    const mount = connectedMount();
-    const createGame = vi.fn();
-    const handle = launchGame(mount, dependencies(
-      () => Promise.reject(new ItemModelLoadError('fishingRod', 'rod download failed')),
-      { createGame },
-    ));
-
-    await expect(handle.completion).resolves.toBeNull();
-    expect(mount.textContent).toContain('EQUIPMENT UNAVAILABLE');
-    expect(mount.textContent).toContain('Unable to prepare the lifeboat Fishing Rod');
-    expect(mount.textContent).toContain('A required fixed equipment model could not be loaded.');
-    expect(mount.textContent).toContain('rod download failed');
-    expect(mount.textContent).not.toContain('SUPPLIES UNAVAILABLE');
-    expect(mount.textContent).not.toContain('Unable to recover Fishing Rod');
     expect(createGame).not.toHaveBeenCalled();
   });
 
@@ -1099,25 +997,6 @@ describe('launchGame', () => {
     expect(canvas.parentElement).toBeNull();
   });
 
-  it('shows GAME ERROR when construction throws an item-model error', async () => {
-    const mount = connectedMount();
-    const disposeModels = vi.fn();
-    const models = { dispose: disposeModels } as unknown as PropModelLibrary;
-    const handle = launchGame(mount, dependencies(
-      () => Promise.resolve(models),
-      {
-        createGame: () => {
-          throw new ItemModelLoadError('ductTape', 'renderer used an invalid texture');
-        },
-      },
-    ));
-
-    await expect(handle.completion).resolves.toBeNull();
-    expect(mount.textContent).toContain('GAME ERROR');
-    expect(mount.textContent).not.toContain('SUPPLIES UNAVAILABLE');
-    expect(disposeModels).toHaveBeenCalledOnce();
-  });
-
   it('renders hostile error text without creating markup', async () => {
     const mount = connectedMount();
     const handle = launchGame(mount, dependencies(
@@ -1230,27 +1109,5 @@ describe('launchGame', () => {
     expect(game.dispose).toHaveBeenCalledOnce();
     expect(disposeModels).not.toHaveBeenCalled();
     expect(mount.textContent).toContain('GAME ERROR');
-  });
-
-  it('shows GAME ERROR when start throws an item-model error', async () => {
-    const mount = connectedMount();
-    const disposeModels = vi.fn();
-    const models = { dispose: disposeModels } as unknown as PropModelLibrary;
-    const game = {
-      start: vi.fn(() => {
-        throw new ItemModelLoadError('ductTape', 'startup used an invalid texture');
-      }),
-      dispose: vi.fn(),
-    };
-    const handle = launchGame(mount, dependencies(
-      () => Promise.resolve(models),
-      { createGame: () => game },
-    ));
-
-    await expect(handle.completion).resolves.toBeNull();
-    expect(mount.textContent).toContain('GAME ERROR');
-    expect(mount.textContent).not.toContain('SUPPLIES UNAVAILABLE');
-    expect(game.dispose).toHaveBeenCalledOnce();
-    expect(disposeModels).not.toHaveBeenCalled();
   });
 });

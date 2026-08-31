@@ -7,6 +7,7 @@ import {
 } from './ItemState';
 import { createScavengeItemInstances } from './scavengeCatalog';
 import { SCAVENGE_DURATION_SECONDS } from './scavengeRules';
+import type { ScavengeReading } from './runStatistics';
 
 export type SessionStatus = 'idle' | 'running' | 'paused' | 'success' | 'failure';
 
@@ -15,6 +16,7 @@ export interface ScavengeItemState extends ItemInstance {
 }
 
 export interface ScavengeSnapshot {
+  readonly pickupHistory: readonly ScavengeReading[];
   status: SessionStatus;
   remainingSeconds: number;
   savedCount: number;
@@ -38,6 +40,9 @@ export class ScavengeSession {
   private readonly items: Record<ItemInstanceId, ScavengeItemState>;
   private readonly carriedIds: ItemInstanceId[] = [];
   private savedCount = 0;
+  private pickupHistory: readonly ScavengeReading[] = Object.freeze([
+    Object.freeze({ seconds: 0, savedCount: 0 }),
+  ]);
   private snapshotRevision = 0;
   private cachedSnapshotRevision = -1;
   private cachedSnapshot: Readonly<ScavengeSnapshot> | null = null;
@@ -169,6 +174,7 @@ export class ScavengeSession {
     const carriedItems = this.carriedIds.map((id) => this.cloneInstance(id));
     const carriedItem = carriedItems.at(-1)?.type ?? null;
     this.cachedSnapshot = Object.freeze({
+      pickupHistory: this.pickupHistory,
       status: this.status,
       remainingSeconds: this.remainingSeconds,
       savedCount: this.savedCount,
@@ -226,11 +232,20 @@ export class ScavengeSession {
   private finish(status: 'success' | 'failure'): boolean {
     if (this.status === 'success' || this.status === 'failure') return false;
     this.status = status;
+    this.recordPickups();
     this.changed();
     return true;
   }
 
   private changed(): void {
+    if (this.pickupHistory.at(-1)!.savedCount !== this.savedCount) this.recordPickups();
     this.snapshotRevision += 1;
+  }
+
+  private recordPickups(): void {
+    this.pickupHistory = Object.freeze([...this.pickupHistory, Object.freeze({
+      seconds: SCAVENGE_DURATION_SECONDS - this.remainingSeconds,
+      savedCount: this.savedCount,
+    })]);
   }
 }

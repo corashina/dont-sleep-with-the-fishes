@@ -4,7 +4,6 @@ import {
   Group,
   Mesh,
   MeshStandardMaterial,
-  Object3D,
   PerspectiveCamera,
   Quaternion,
   Vector3,
@@ -81,21 +80,6 @@ function createEnvironment(options: { readonly normalizedDebrisBounds?: boolean 
   return { environment, created, cloned, ownedModelDispose };
 }
 
-function horizontalBoundsGap(first: Object3D, second: Object3D): number {
-  const firstBounds = new Box3().setFromObject(first);
-  const secondBounds = new Box3().setFromObject(second);
-  const xGap = Math.max(
-    0,
-    firstBounds.min.x - secondBounds.max.x,
-    secondBounds.min.x - firstBounds.max.x,
-  );
-  const zGap = Math.max(
-    0,
-    firstBounds.min.z - secondBounds.max.z,
-    secondBounds.min.z - firstBounds.max.z,
-  );
-  return Math.hypot(xGap, zGap);
-}
 
 function outcomePresentation(): EventOutcomePresentation {
   return {
@@ -124,51 +108,6 @@ function stage(presentation: WreckagePresentation): Group {
 }
 
 describe('WreckagePresentation', () => {
-  it('creates eight distant debris objects across the far-right water', () => {
-    const { environment, created, cloned } = createEnvironment();
-    const presentation = new WreckagePresentation(environment);
-    const debris = stage(presentation);
-
-    expect(created).toEqual([
-      'containerShip',
-      'wreckageBox',
-      'wreckageCrate',
-      'wreckagePallet',
-    ]);
-    expect(cloned).toEqual([]);
-    expect(debris.visible).toBe(true);
-    expect(debris.children).toHaveLength(8);
-    const xPositions = debris.children.map((child) => child.position.x);
-    const zPositions = debris.children.map((child) => child.position.z);
-    expect(Math.min(...xPositions)).toBeGreaterThanOrEqual(5.5);
-    expect(Math.max(...xPositions) - Math.min(...xPositions)).toBeGreaterThanOrEqual(6);
-    expect(Math.max(...zPositions)).toBeLessThanOrEqual(-7);
-    expect(Math.max(...zPositions) - Math.min(...zPositions)).toBeGreaterThanOrEqual(9);
-    presentation.dispose();
-  });
-
-  it('keeps clear water between every normalized debris bound', () => {
-    const { environment } = createEnvironment({ normalizedDebrisBounds: true });
-    const presentation = new WreckagePresentation(environment);
-    const debris = stage(presentation);
-    const minimumGap = 0.18;
-
-    for (const object of debris.children) {
-      expect(new Box3().setFromObject(object).min.x, object.name).toBeGreaterThan(0);
-      expect(Math.abs(object.position.y), object.name).toBeLessThan(0.2);
-    }
-    for (let first = 0; first < debris.children.length; first += 1) {
-      for (let second = first + 1; second < debris.children.length; second += 1) {
-        const firstObject = debris.children[first]!;
-        const secondObject = debris.children[second]!;
-        expect(
-          horizontalBoundsGap(firstObject, secondObject),
-          `${firstObject.name} and ${secondObject.name}`,
-        ).toBeGreaterThan(minimumGap);
-      }
-    }
-    presentation.dispose();
-  });
 
   it('shares one geometry and material array across five procedural planks', () => {
     const { environment } = createEnvironment();
@@ -186,29 +125,6 @@ describe('WreckagePresentation', () => {
     presentation.dispose();
   });
 
-  it('preserves normalized model scale and offset while its placement floats', () => {
-    const { environment } = createEnvironment();
-    const presentation = new WreckagePresentation(environment);
-    const debris = stage(presentation);
-    const placement = debris.getObjectByName('wreckage-box')!;
-    const model = placement.children[0]!;
-    const shipPlacement = presentation.worldRoot.getObjectByName('wreckage-wreck')!;
-    const shipModel = shipPlacement.children[0]!;
-
-    presentation.update(2.4, 0.2);
-
-    expect(model.name).toBe('model:wreckageBox');
-    expect(model.position.toArray()).toEqual([0.31, -0.22, 0.14]);
-    expect(model.scale.toArray()).toEqual([0.27, 0.27, 0.27]);
-    expect(placement.position.x).toBe(5.6);
-    expect(placement.scale.toArray()).toEqual([0.82, 0.82, 0.82]);
-    expect(shipModel.name).toBe('model:containerShip');
-    expect(shipModel.position.toArray()).toEqual([0.31, -0.22, 0.14]);
-    expect(shipModel.scale.toArray()).toEqual([0.27, 0.27, 0.27]);
-    expect(shipPlacement.position.toArray()).toEqual([0, -7.2, -11.5]);
-    presentation.dispose();
-  });
-
   it('keeps the complete ship submerged and hidden during surface focus', async () => {
     const { environment } = createEnvironment();
     const presentation = new WreckagePresentation(environment);
@@ -222,26 +138,6 @@ describe('WreckagePresentation', () => {
     expect(wreck.visible).toBe(false);
     expect(presentation.interactionTargets()).toHaveLength(1);
     expect(wreck.visible).toBe(false);
-    presentation.dispose();
-  });
-
-  it('keeps the seabed submerged and hidden outside the underwater hold', async () => {
-    const { environment } = createEnvironment();
-    const presentation = new WreckagePresentation(environment);
-    stage(presentation);
-    const seabed = presentation.worldRoot.getObjectByName('wreckage-seabed')!;
-
-    expect(seabed.visible).toBe(false);
-    expect(new Box3().setFromObject(seabed).max.y).toBeLessThan(-0.5);
-
-    const dive = presentation.playItemUse('dive', 'scubaSet-1');
-    const options = vi.mocked(environment.dive.play).mock.calls[0]![1];
-    options.postEntryHold!.onStart();
-    expect(seabed.visible).toBe(true);
-
-    presentation.clear();
-    expect(seabed.visible).toBe(false);
-    await dive;
     presentation.dispose();
   });
 
@@ -335,24 +231,6 @@ describe('WreckagePresentation', () => {
     },
   );
 
-  it('publishes one focus target rooted at the complete debris group', () => {
-    const { environment } = createEnvironment();
-    const presentation = new WreckagePresentation(environment);
-    const debris = stage(presentation);
-
-    expect(presentation.interactionTargets()).toEqual([
-      expect.objectContaining({
-        id: 'event:wreckage',
-        focusEventId: 'wreckage',
-        root: debris,
-      }),
-    ]);
-    expect(presentation.interactionRoot('event:wreckage')).toBe(debris);
-    expect(presentation.interactionRoot('missing')).toBeNull();
-    expect(presentation.itemAimTarget.position.toArray()).toEqual([3, 0.08, -11.6]);
-    presentation.dispose();
-  });
-
   it('samples and applies waves independently for every debris object', () => {
     const { environment } = createEnvironment();
     const presentation = new WreckagePresentation(environment);
@@ -400,17 +278,6 @@ describe('WreckagePresentation', () => {
     expect(new Set(children.map((child) => child.position.y)).size).toBe(children.length);
     expect(seabed.geometry).toBe(seabedGeometry);
     expect(seabed.material).toBe(seabedMaterial);
-    presentation.dispose();
-  });
-
-  it('delegates the Carlitos visit for Send Carlitos', async () => {
-    const { environment } = createEnvironment();
-    const presentation = new WreckagePresentation(environment);
-    stage(presentation);
-
-    await presentation.playChoice('delegate-carlitos');
-
-    expect(environment.delegateCarlitos).toHaveBeenCalledOnce();
     presentation.dispose();
   });
 

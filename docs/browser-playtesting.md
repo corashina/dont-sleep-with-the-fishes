@@ -87,7 +87,7 @@ Cover all three tasks once in each batch. Assign each task to any active tester.
 - Player action: Select the event target once.
 - Expected visible result: The event opens. Shotgun does not activate, fire, move, or leave inventory.
 - Failure evidence: Record a missed event, any Shotgun action, or any Shotgun inventory change.
-- Screenshot: Capture both targets before selection and the open event afterward.
+- Screenshot: Capture only a missed target, unintended Shotgun action, or other visible problem.
 - Report entry: Record event name, selected target, Shotgun state before and after, and visible result.
 
 ### Wreckage Leave
@@ -96,7 +96,7 @@ Cover all three tasks once in each batch. Assign each task to any active tester.
 - Player action: Choose Leave.
 - Expected visible result: Wreckage resolves, focus closes, and normal day controls return. Energy and inventory stay unchanged.
 - Failure evidence: Record an ignored Leave, a pending Wreckage event, blocked controls, or resource changes.
-- Screenshot: Capture the choices before Leave and normal day controls after return.
+- Screenshot: Capture only an ignored Leave, blocked controls, or unexpected resource changes.
 - Report entry: Record Energy, Carlitos's unavailable reason, enabled choices, visible result, and restored controls.
 
 `Return to boat` also declines the focused encounter without cost. It must restore normal controls for all focused events.
@@ -107,7 +107,7 @@ Cover all three tasks once in each batch. Assign each task to any active tester.
 - Player action: Record Health without selecting a choice. Then select Attack.
 - Expected visible result: Attack appears before damage. Health decreases only after selecting Attack. The event then resolves.
 - Failure evidence: Record missing Attack, damage before selection, automatic resolution, or an unresponsive Attack.
-- Screenshot: Capture visible Attack with pre-selection Health. Capture changed Health after selection.
+- Screenshot: Capture only missing choices, early damage, automatic resolution, or an unresponsive Attack.
 - Report entry: Record Health before waiting, before selection, and after selection. Record when the event resolved.
 
 ## Fishing Controls
@@ -120,6 +120,11 @@ Store each batch at `<main-repository>/.superpowers/browser-playtests/<batch-id>
 
 Create `batch.json` before players start. Record `testerCount` and all selected testers, including queued testers. Each tester records `testerId`, profile, subagent ID, status, report path, and screenshot paths. Use `queued` before dispatch and `running` during play. Replace these statuses with a final status when each tester stops.
 
+Each tester entry also includes `reachedDay` and `outcome`. Set both to null before the run.
+At the stop, write the reached day and a short, specific outcome. Do not use the status as the outcome.
+Leave `reachedDay` null if the tester never started. Explain why it did not start in `outcome`.
+Example: `Rescued on day 25 after a confirmed boat Flare signal and several Radio calls; exact rescue trigger unknown.`
+
 Keep batch ID, created and completed timestamps, commit, source worktree, main repository, server URL, test URL, seed, missing IDs, loadout, and maximum day. Only the coordinator writes `batch.json` and `comparison.md`.
 
 Also record `buildMetadataPath`, `sourceHash`, `buildHash`, `invalidatedAt`, and `invalidationReason`.
@@ -127,13 +132,51 @@ Set `buildMetadataPath` to `build/build.json`. Set both invalidation fields to n
 
 Create one folder per selected tester: `<tester-id>/report.md` and `<tester-id>/screenshots/`. Testers write only inside their own folders. Each player updates its report after every decision. Preserve partial files after a failure.
 
-Each report records its tester ID, profile, status, outcome, reached day, final visible resources and inventory, actions with reasons, resource and inventory changes, events and choices, disabled controls, confirmed UI bugs, screenshot paths, and missing screenshot reasons.
+Each report records its tester ID, profile, status, outcome, reached day, final visible resources and inventory, and decision log.
+Include events, choices, resource changes, disabled controls, UI problems, and the ending details below.
+Keep a chronological log of actions, reasons, and resource or inventory changes.
 
-Capture start state, the first two event choices, the first visible critical resource state, final state, and every visible game or browser failure.
+### Problem Screenshots
+
+Capture screenshots only when a problem occurs. Include wrong targets, blocked controls, unexpected state changes, and visible browser errors.
+Do not capture routine starts, successful events, low resources, normal deaths, rescues, or the day cap.
+Low resources, damage, death, and missed timed actions alone do not prove a problem. Record them in text.
+
+Capture the first useful view of each distinct problem. Add another view only when it shows new diagnostic evidence.
+For example, capture the wrong selection, its journal result, or the state after recovery.
+Do not repeat unchanged screenshots or replay a dangerous action to obtain an earlier view.
+Record the prior state in text if no earlier problem screenshot exists.
+
+For each screenshot, record the day, selected control, expected result, actual result, and resource changes.
+Use a descriptive filename such as `day-23-handyman-wrong-choice.png`.
+Leave `screenshotPaths` empty when no problem required a screenshot. Successful regression checks need written observations only.
+If a problem cannot be captured, state why. Routine states do not need missing-screenshot explanations.
+
+### Ending Details
+
+Start each report's final section with a specific outcome, then give its status.
+Record these details from visible evidence:
+
+- Ending kind: rescued, died, day cap, or stopped without an ending.
+- Reached day and phase; exact ending title and explanation, if shown.
+- Last event, selected control, reason for that choice, and immediate result.
+- Health, Food, Energy, and Hull before and after the last action, when observed.
+- Final inventory and any loss that affected the ending.
+- Confirmed cause, contributing choices, and unknown details. Separate observations from guesses.
+
+For rescue, list observed signals and their results. Do not claim which signal caused rescue without evidence.
+For death, name the visible cause, such as starvation, dive wounds, or hull loss. Quote the ending explanation.
+If the cause is unclear, say so. A normal death is not a game failure.
+
+For a game failure, state the broken control or state and the steps that exposed it.
+Record expected versus actual behavior, permitted retries, recovery attempts, and whether the whole run or one control was blocked.
+State whether the character remained alive. Do not report a stopped test as a death.
+For browser failure, task failure, or invalidation, give the specific interruption and the last known game state.
 
 ## Stop Rules
 
-Stop on a normal ending or confirmed failure. Otherwise finish day 55 and stop before every day 56 action. If day 56 appears, capture it without another control.
+Stop on a normal ending or confirmed failure. Otherwise finish day 55 and stop before every day 56 action.
+If day 56 appears, record it in text without using another control. This alone does not require a screenshot.
 
 Testers do not return interim results. The coordinator waits while each active tester continues. It does not resume a returned tester because that browser connection is no longer available.
 
@@ -153,11 +196,13 @@ An invalidated batch is not evidence of a game failure or a controlled balance r
 
 After all testers stop, stop the runner. A normal shutdown changes build status to `stopped`.
 
-## Failure Statuses
+## Stop Statuses
 
-- `normal-ending`: A normal ending. It is not a game failure.
+Status identifies why testing stopped. It does not replace the specific outcome and ending details.
+
+- `normal-ending`: Rescue or death shown by the game. State which occurred, its day, and the visible cause.
 - `day-55-cap`: Day 55 completed without an earlier stop.
-- `game-failure`: A confirmed game failure.
+- `game-failure`: A confirmed defect stopped testing. Name the defect, its effect, and any known recovery.
 - `browser-failure`: The browser fails while the tester turn is active.
 - `player-task-failure`: The tester returns early without an active-turn game or browser failure.
 - `batch-invalidated`: Source changes, build changes, or runner failure interrupted the batch or prevented a tester from starting.
@@ -167,6 +212,11 @@ A missing browser after a tester returns is expected cleanup. It does not change
 ## Review the Comparison
 
 After all testers stop, `comparison.md` lists every tester ID separately. It compares days, endings, resources, inventory, major choices, failures, UI issues, and profile differences. It names missing tester data and differences between repeated profiles. `batch.json` then records final statuses, paths, and completion time.
+
+Lead each comparison row with the specific outcome and day. Include the last event, action, cause, and final resources.
+Keep status as a separate field. For example, use `Died after a second dive; Health 50 to 0`, not only `normal-ending`.
+Use `Rod ignored three clicks after Continue; boat-return recovery observed elsewhere`, not only `game-failure`.
+Copy each tester's reached day and specific outcome into `batch.json`. List problem screenshots only.
 
 For invalidated batches, report observed results and missing data only. Omit balance and profile comparisons.
 

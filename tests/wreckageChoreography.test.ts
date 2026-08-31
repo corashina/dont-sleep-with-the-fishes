@@ -2,16 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   createWreckageSample,
   sampleWreckageBeat,
-  wreckageBeatDuration,
 } from '../src/survival/events/wreckageChoreography';
 
 describe('wreckage choreography', () => {
-  it.each([
-    ['surface-hold', 0],
-    ['leave', 1.2],
-  ] as const)('defines %s duration', (beat, duration) => {
-    expect(wreckageBeatDuration(beat)).toBe(duration);
-  });
 
   it('samples hold and leave into one reused object', () => {
     const output = createWreckageSample();

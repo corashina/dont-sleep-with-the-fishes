@@ -164,6 +164,7 @@ export class SurvivalUI {
   private busy = false;
   private paused = false;
   private disposed = false;
+  private endingStarted = false;
   private announcementVersion = 0;
   private pauseReturnTarget: HTMLElement | null = null;
   private fishingReturnTarget: HTMLElement | null = null;
@@ -231,7 +232,7 @@ export class SurvivalUI {
         [this.modalViews.pauseRoot, this.modalViews.resumeButton],
         [this.journalView.root, this.journalView.title],
         [this.modalViews.repairRoot, this.modalViews.repairTitle],
-        [this.modalViews.endingRoot, this.modalViews.endingTitle],
+        [this.modalViews.endingRoot, () => this.modalViews.endingInitialFocus()],
         [this.coverView.resultRoot, this.coverView.resultClose],
         [this.focusedEventView.root, () => this.focusedEventView.initialFocus()],
         [this.fishingView.resultRoot, this.fishingView.resultContinue],
@@ -320,6 +321,9 @@ export class SurvivalUI {
     };
     this.modalViews.onReturnToMenu = () => {
       if (!this.disposed) this.onReturnToMenu();
+    };
+    this.modalViews.onEndingReady = () => {
+      if (!this.disposed) this.modalFocus.focusInitial(this.modalViews.endingRoot);
     };
 
     document.addEventListener('click', this.handleDocumentClick, true);
@@ -612,10 +616,13 @@ export class SurvivalUI {
   }
 
   showEnding(record: Exclude<EndingRecord, { id: 'dorothy' }>): void {
-    if (this.disposed) return;
+    if (this.disposed || this.endingStarted) return;
+    this.endingStarted = true;
     this.clearEventPresentation();
     this.setPaused(false);
-    this.modalViews.showEnding(record);
+    this.hideJournal();
+    this.hideLayer(this.modalViews.repairRoot);
+    this.modalViews.showEnding(record, this.currentSnapshot);
     this.showLayer(this.modalViews.endingRoot);
   }
 

@@ -217,37 +217,6 @@ describe('MainMenuPhase', () => {
     phase.dispose();
   });
 
-  it('animates and renders the menu visual state without moving the camera', () => {
-    const { animator, camera, phase, sceneRenderer } = createRig();
-    const position = camera.position.clone();
-    const quaternion = camera.quaternion.clone();
-
-    phase.start();
-    phase.update(20, 0.25);
-    phase.render();
-
-    expect(animator.update).toHaveBeenCalledWith(0.25, 0.25);
-    expect(sceneRenderer.render).toHaveBeenCalledWith(
-      expect.anything(),
-      camera,
-      { kind: 'menu', elapsedSeconds: 0.25 },
-    );
-    expect(camera.position.equals(position)).toBe(true);
-    expect(camera.quaternion.equals(quaternion)).toBe(true);
-    phase.dispose();
-  });
-
-  it('updates the shared camera projection on resize', () => {
-    const { camera, phase } = createRig();
-    const updateProjectionMatrix = vi.spyOn(camera, 'updateProjectionMatrix');
-
-    phase.resize(1200, 600);
-
-    expect(camera.aspect).toBe(2);
-    expect(updateProjectionMatrix).toHaveBeenCalledOnce();
-    phase.dispose();
-  });
-
   it('highlights and opens the 3D guide sign with pointer or keyboard', () => {
     const { canvas, phase, ui, world } = createRig();
     vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({

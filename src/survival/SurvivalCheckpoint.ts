@@ -1,4 +1,5 @@
 import type { DeathCause } from '../game/ending';
+import type { SurvivalReading } from '../game/runStatistics';
 import type { ItemInstance, ItemInstanceId } from '../game/ItemState';
 import type { CarlitosSnapshot } from './CarlitosState';
 import {
@@ -24,6 +25,7 @@ import type {
 } from './survivalTypes';
 
 export interface SurvivalSessionCheckpoint {
+  readonly history: readonly SurvivalReading[];
   readonly state: 'day' | 'dayEvent' | 'nightEvent';
   readonly day: number;
   readonly pressure: number;
@@ -76,6 +78,7 @@ export function createSurvivalSessionCheckpoint(
 ): SurvivalSessionCheckpoint {
   return Object.freeze({
     ...checkpoint,
+    history: Object.freeze(checkpoint.history.map((reading) => Object.freeze({ ...reading }))),
     chest: Object.freeze({ ...checkpoint.chest }),
     inventory: cloneInventory(checkpoint.inventory),
     savedItems: Object.freeze(checkpoint.savedItems.map((item) => Object.freeze({ ...item }))),

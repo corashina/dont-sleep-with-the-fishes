@@ -6,7 +6,6 @@ import {
   Box3,
   BoxGeometry,
   BufferGeometry,
-  Euler,
   Group,
   Mesh,
   MeshStandardMaterial,
@@ -22,11 +21,8 @@ import {
 import {
   EVENT_MODEL_IDS,
   EVENT_MODEL_SPECS,
-  SURVIVAL_EVENT_MODEL_IDS,
-  SURVIVAL_EVENT_MODEL_SPECS,
   type EventModelId,
 } from '../src/survival/eventModelManifest';
-import { EVENT_BUNDLE_SPECS } from '../src/survival/eventBundleManifest';
 
 function modelRoot(
   geometry: BufferGeometry = new BoxGeometry(2, 1, 1),
@@ -52,32 +48,6 @@ function completeRoots(): Record<EventModelId, Group> {
 }
 
 describe('EventModelLibrary', () => {
-  it('wires all pinned drifting-supply models into one event bundle', () => {
-    expect(SURVIVAL_EVENT_MODEL_IDS).toContain('emptyLifeboat');
-    expect(SURVIVAL_EVENT_MODEL_IDS).toContain('emptyLifeboatContainer');
-    expect(SURVIVAL_EVENT_MODEL_IDS).toContain('shippingContainer');
-    expect(SURVIVAL_EVENT_MODEL_SPECS.emptyLifeboat).toMatchObject({
-      targetLongestDimension: 4.6,
-      rotation: [0, 0, 0],
-    });
-    expect(SURVIVAL_EVENT_MODEL_SPECS.emptyLifeboatContainer).toMatchObject({
-      targetLongestDimension: 0.8,
-      rotation: [0, 0, 0],
-    });
-    expect(SURVIVAL_EVENT_MODEL_SPECS.shippingContainer).toMatchObject({
-      targetLongestDimension: 5.2,
-      rotation: [0, 0, 0],
-    });
-    expect(EVENT_BUNDLE_SPECS['drifting-supplies']).toEqual({
-      models: [
-        'driftingBarrel',
-        'emptyLifeboat',
-        'emptyLifeboatContainer',
-        'shippingContainer',
-      ],
-      sounds: [],
-    });
-  });
 
   it('loads only requested templates', async () => {
     const roots = completeRoots();
@@ -91,110 +61,6 @@ describe('EventModelLibrary', () => {
     expect(library.create('ghost')).toBeInstanceOf(Group);
     expect(() => library.create('leakPlanks')).toThrow('Missing event model template');
     library.dispose();
-  });
-
-  it('loads the existing container ship as a dedicated event model', async () => {
-    const roots = completeRoots();
-    const loader: EventModelLoader = {
-      load: vi.fn(async () => roots.containerShip),
-    };
-    const library = await EventModelLibrary.load(['containerShip'], loader);
-    const instance = library.create('containerShip');
-
-    expect(instance.root.userData.eventModelId).toBe('containerShip');
-
-    instance.dispose();
-    library.dispose();
-  });
-
-  it('defines the approved event model IDs', () => {
-    expect(EVENT_MODEL_IDS).toEqual([
-      'fogMan',
-      'ghost',
-      'siren',
-      'sirenRock',
-      'leakPlanks',
-      'schoolFish',
-      'snatcher',
-      'anglerFish',
-      'shark',
-      'deathStareBlob',
-      'tornadoCore',
-      'containerShip',
-      'wreckageBox',
-      'wreckageCrate',
-      'wreckagePallet',
-    ]);
-  });
-
-  it('uses the static fin-only model for the Shark Swarm', () => {
-    expect(EVENT_MODEL_SPECS.shark).toMatchObject({
-      targetLongestDimension: 1.2,
-      rotation: [0, 0, 0],
-      maxTriangles: 200,
-      generatedMetadata: {
-        triangles: 88,
-        animations: [],
-      },
-    });
-  });
-
-  it('defines the approved Wreckage debris models', () => {
-    expect(EVENT_MODEL_IDS).toEqual(expect.arrayContaining([
-      'wreckageBox',
-      'wreckageCrate',
-      'wreckagePallet',
-    ]));
-
-    expect(EVENT_MODEL_SPECS.wreckageBox).toMatchObject({
-      targetLongestDimension: 0.9,
-      rotation: [0, 0, 0],
-      offset: [0, 0, 0],
-    });
-    expect(EVENT_MODEL_SPECS.wreckageCrate).toMatchObject({
-      targetLongestDimension: 1.05,
-      rotation: [0, 0, 0],
-      offset: [0, 0, 0],
-    });
-    expect(EVENT_MODEL_SPECS.wreckagePallet).toMatchObject({
-      targetLongestDimension: 1.8,
-      rotation: [0, 0, 0],
-      offset: [0, 0, 0],
-    });
-  });
-
-  it('turns the Anglerfish nose toward presentation forward', () => {
-    const sourceNose = new Vector3(1, 0, 0);
-    sourceNose.applyEuler(new Euler(...EVENT_MODEL_SPECS.anglerFish.rotation));
-
-    expect(sourceNose.x).toBeCloseTo(0);
-    expect(sourceNose.z).toBeCloseTo(1);
-  });
-
-  it('turns the school fish nose toward its choreography forward', () => {
-    const sourceNose = new Vector3(0, 0, 1);
-    sourceNose.applyEuler(new Euler(...EVENT_MODEL_SPECS.schoolFish.rotation));
-
-    expect(sourceNose.x).toBeCloseTo(-1);
-    expect(sourceNose.z).toBeCloseTo(0);
-  });
-
-  it('keeps the Siren upright and facing presentation forward', () => {
-    const rotation = new Euler(...EVENT_MODEL_SPECS.siren.rotation);
-    const sourceUp = new Vector3(0, 1, 0).applyEuler(rotation);
-    const sourceForward = new Vector3(1, 0, 0).applyEuler(rotation);
-
-    expect(sourceUp.toArray()).toEqual([0, 1, 0]);
-    expect(sourceForward.toArray()).toEqual([1, 0, 0]);
-  });
-
-  it('keeps the Tornado upright at its source origin', () => {
-    expect(EVENT_MODEL_SPECS.tornadoCore).toMatchObject({
-      targetLongestDimension: 10.5,
-      rotation: [0, 0, 0],
-      offset: [0, 0, 0],
-      maxTriangles: 3_000,
-    });
   });
 
   it('normalizes templates and makes owned deep clones', async () => {

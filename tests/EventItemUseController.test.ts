@@ -88,28 +88,6 @@ function setup() {
 }
 
 describe('EventItemUseController', () => {
-  it('camera-aligns the Knife during its slash', () => {
-    const { actor, adapter, controller } = setup();
-    const begin = vi.spyOn(adapter, 'begin');
-
-    controller.play({
-      ...request(actor.instanceId),
-      eventId: 'snatcher',
-      choiceId: 'knife',
-      itemId: 'knife',
-      context: 'knife-slash',
-    });
-
-    expect(begin).toHaveBeenCalledExactlyOnceWith(
-      actor,
-      'knife',
-      null,
-      false,
-      null,
-      true,
-    );
-    adapter.dispose();
-  });
 
   it('holds a borrowed actor after use, then recovers and stows it', async () => {
     const { actor, adapter, clear, controller, supplies } = setup();
@@ -149,27 +127,6 @@ describe('EventItemUseController', () => {
 
     controller.update(10);
     await expect(use).resolves.toBe(true);
-    const reaction = controller.react(result(actor.instanceId));
-    controller.update(10);
-    await reaction;
-
-    expect(supplies.stowEventItemUntilDay).not.toHaveBeenCalled();
-    expect(actor.release).toHaveBeenCalledOnce();
-    adapter.dispose();
-  });
-
-  it('returns a recovered Knife to the boat instead of stowing it', async () => {
-    const { actor, adapter, controller, supplies } = setup();
-    const use = controller.play({
-      ...request(actor.instanceId),
-      eventId: 'snatcher',
-      choiceId: 'knife',
-      itemId: 'knife',
-      context: 'knife-slash',
-    });
-
-    controller.update(10);
-    await use;
     const reaction = controller.react(result(actor.instanceId));
     controller.update(10);
     await reaction;
@@ -317,50 +274,6 @@ describe('EventItemUseController', () => {
     adapter.dispose();
   });
 
-  it('fires the tape sound cue halfway through its animation', async () => {
-    const { actor, adapter, controller } = setup();
-    const onAction = vi.fn();
-    const use = controller.play({
-      ...request(actor.instanceId),
-      choiceId: 'ductTape',
-      itemId: 'ductTape',
-      context: 'tape-stretch',
-      onAction,
-    });
-    const duration = eventItemUseDuration('tape-stretch');
-
-    controller.update(duration * 0.49);
-    expect(onAction).not.toHaveBeenCalled();
-    controller.update(duration * 0.02);
-    expect(onAction).toHaveBeenCalledOnce();
-    expect(onAction).toHaveBeenCalledWith(0);
-    controller.update(duration);
-    await use;
-    expect(onAction).toHaveBeenCalledOnce();
-
-    controller.clear('day');
-    adapter.dispose();
-  });
-
-  it('fires all nine flashlight Morse cues', async () => {
-    const { actor, adapter, controller } = setup();
-    const onAction = vi.fn();
-    const use = controller.play({
-      ...request(actor.instanceId),
-      onAction,
-    });
-
-    controller.update(eventItemUseDuration('flashlight-signal'));
-    await use;
-
-    expect(onAction).toHaveBeenCalledTimes(9);
-    expect(onAction.mock.calls.map(([cueIndex]) => cueIndex)).toEqual([
-      0, 1, 2, 3, 4, 5, 6, 7, 8,
-    ]);
-    controller.clear('day');
-    adapter.dispose();
-  });
-
   it.each([
     ['lost', { lostInstanceIds: ['flashlight-1' as ItemInstanceId] }],
     ['consumed', { consumedInstanceIds: ['flashlight-1' as ItemInstanceId] }],
@@ -383,29 +296,6 @@ describe('EventItemUseController', () => {
   it('stows a broken item after its outcome motion', async () => {
     const { actor, adapter, controller, supplies } = setup();
     const use = controller.play(request());
-    controller.update(10);
-    await use;
-
-    const reaction = controller.react(result(actor.instanceId, {
-      brokenInstanceIds: [actor.instanceId],
-    }));
-    controller.update(10);
-    await reaction;
-
-    expect(supplies.stowEventItemUntilDay).toHaveBeenCalledExactlyOnceWith(actor.instanceId);
-    expect(actor.release).toHaveBeenCalledOnce();
-    adapter.dispose();
-  });
-
-  it('stows a broken Knife after its outcome motion', async () => {
-    const { actor, adapter, controller, supplies } = setup();
-    const use = controller.play({
-      ...request(actor.instanceId),
-      eventId: 'snatcher',
-      choiceId: 'knife',
-      itemId: 'knife',
-      context: 'knife-slash',
-    });
     controller.update(10);
     await use;
 

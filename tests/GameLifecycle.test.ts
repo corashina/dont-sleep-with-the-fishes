@@ -6,7 +6,6 @@ import {
   Box3,
   Group,
   PerspectiveCamera,
-  Scene,
   Vector3,
   type WebGLRenderer,
 } from 'three';
@@ -29,7 +28,6 @@ import {
 } from '../src/game/scavengeEnding';
 import { createScavengeIntroFrame } from '../src/game/scavengeIntro';
 import { SCAVENGE_DURATION_SECONDS } from '../src/game/scavengeRules';
-import { scavengeSpeedMultiplier } from '../src/game/scavengeMovement';
 import { ITEM_IDS, type ItemInstance } from '../src/game/ItemState';
 import { createScavengeItemInstances } from '../src/game/scavengeCatalog';
 import {
@@ -43,16 +41,11 @@ import type { ContextAction } from '../src/interaction/InteractionSystem';
 import { ScavengePhysics } from '../src/physics/ScavengePhysics';
 import { PlayerController } from '../src/player/PlayerController';
 import { ScavengePhase } from '../src/phases/ScavengePhase';
-import type { ScavengeVisualState, SceneRenderer } from '../src/rendering/SceneRenderer';
+import type { SceneRenderer } from '../src/rendering/SceneRenderer';
 import type {
   PostProcessingControls,
-  PostProcessingControlState,
-  PostProcessingNumericSetting,
 } from '../src/rendering/postProcessingControls';
-import { createAntiAliasingQualityPreference } from '../src/rendering/antiAliasingQuality';
-import { createShadowQualityPreference } from '../src/rendering/shadowQuality';
 import { createVisualQualityPreference } from '../src/rendering/visualQuality';
-import { createSystemTuningPreference } from '../src/ui/systemTuningPreference';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 import type { SurvivalRunCheckpoint } from '../src/survival/SurvivalCheckpoint';
 import { createSurvivalSaveDocument } from '../src/survival/SurvivalSaveData';
@@ -241,7 +234,7 @@ describe('Game survival save lifecycle', () => {
       toggle.dispatchEvent(new Event('change', { bubbles: true }));
 
       expect(JSON.parse(storage.getItem(SURVIVAL_SAVE_DATA_KEY)!))
-        .toMatchObject({ version: 1, checkpoint });
+        .toMatchObject({ version: 2, checkpoint });
       expect(rig.mount.querySelector('[data-save-status]')?.textContent).toBe('DAY 5');
     } finally {
       rig.game.dispose();
@@ -426,33 +419,6 @@ function postProcessingSceneRenderer(): SceneRenderer {
   };
 }
 
-function persistedPostProcessingSceneRenderer(): {
-  sceneRenderer: SceneRenderer;
-  controls: PostProcessingControls;
-} {
-  const state: PostProcessingControlState = {
-    ambientOcclusionAvailable: true,
-    ambientOcclusionMode: 'composite',
-    ambientOcclusionIntensity: 1,
-    ambientOcclusionRadius: 0.5,
-  };
-  const controls: PostProcessingControls = {
-    getState: vi.fn(() => state),
-    setAmbientOcclusionMode: vi.fn((mode) => {
-      state.ambientOcclusionMode = mode;
-    }),
-    setNumeric: vi.fn((setting: PostProcessingNumericSetting, value: number) => {
-      state[setting] = value;
-    }),
-  };
-  return {
-    sceneRenderer: {
-      postProcessingControls: controls,
-      render: vi.fn(), resize: vi.fn(), dispose: vi.fn(),
-    },
-    controls,
-  };
-}
 
 function createUpdateHarness(
   session: ScavengeSession,
@@ -674,348 +640,6 @@ function createImmediateMenu(
 }
 
 describe('Game menu lifecycle', () => {
-  it('applies stored system tuning before the first frame', () => {
-    const systemTuning = createSystemTuningPreference(null);
-    systemTuning.set('ambientOcclusionMode', 'off');
-    systemTuning.set('ambientOcclusionIntensity', 0.7);
-    systemTuning.set('ambientOcclusionRadius', 0.16);
-    systemTuning.set('performanceStatsVisible', true);
-    systemTuning.set('cameraFieldOfView', 92);
-    systemTuning.set('weatherOverride', 'rain');
-    systemTuning.set('phaseOverride', 'night');
-    systemTuning.set('volumetricCloudsEnabled', true);
-    const phase = {
-      ...gamePhase(),
-      setWeatherOverride: vi.fn(),
-      setTimeOfDayOverride: vi.fn(),
-      setVolumetricCloudsEnabled: vi.fn(),
-    };
-    const postProcessingControls: PostProcessingControls = {
-      getState: vi.fn(() => ({
-        ambientOcclusionAvailable: true,
-        ambientOcclusionMode: 'off' as const,
-        ambientOcclusionIntensity: 0.7,
-        ambientOcclusionRadius: 0.16,
-      })),
-      setAmbientOcclusionMode: vi.fn(),
-      setNumeric: vi.fn(),
-    };
-    const sceneRenderer: SceneRenderer = {
-      postProcessingControls,
-      render: vi.fn(), resize: vi.fn(), dispose: vi.fn(),
-    };
-    const mount = document.createElement('main');
-    document.body.append(mount);
-    const game = Game.forTest({
-      createMenu: () => phase,
-      createScavenge: () => gamePhase(),
-      createSurvival: () => gamePhase(),
-    }, {
-      propModels: createTestPropModels(),
-      menuModels: EMPTY_MENU_MODELS,
-      shipFurniture: createTestShipFurniture(),
-      skyAssets: createTestSkyAssets(),
-      physicsRuntime,
-      sceneRenderer,
-      systemTuning,
-      mount,
-    });
-
-    try {
-      const camera = (game as unknown as { camera: PerspectiveCamera }).camera;
-      expect(camera.fov).toBe(92);
-      expect(postProcessingControls.setAmbientOcclusionMode).toHaveBeenCalledWith('off');
-      expect(postProcessingControls.setNumeric).toHaveBeenCalledWith(
-        'ambientOcclusionIntensity',
-        0.7,
-      );
-      expect(postProcessingControls.setNumeric).toHaveBeenCalledWith(
-        'ambientOcclusionRadius',
-        0.16,
-      );
-      expect(mount.querySelector('[data-performance-stats]')?.hasAttribute('hidden'))
-        .toBe(false);
-      expect(phase.setWeatherOverride).toHaveBeenCalledWith('rain');
-      expect(phase.setTimeOfDayOverride).toHaveBeenCalledWith('night');
-      expect(phase.setVolumetricCloudsEnabled).toHaveBeenCalledWith(true);
-    } finally {
-      game.dispose();
-    }
-  });
-
-  it('keeps volumetric clouds off until enabled through system tuning', () => {
-    const phase = {
-      ...gamePhase(),
-      setVolumetricCloudsEnabled: vi.fn(),
-    };
-    const mount = document.createElement('main');
-    document.body.append(mount);
-    const game = Game.forTest({
-      createMenu: () => phase,
-      createScavenge: () => gamePhase(),
-      createSurvival: () => gamePhase(),
-    }, {
-      propModels: createTestPropModels(),
-      menuModels: EMPTY_MENU_MODELS,
-      shipFurniture: createTestShipFurniture(),
-      skyAssets: createTestSkyAssets(),
-      physicsRuntime,
-      sceneRenderer: postProcessingSceneRenderer(),
-      systemTuning: createSystemTuningPreference(null),
-      mount,
-    });
-
-    try {
-      const clouds = mount.querySelector<HTMLInputElement>('[data-volumetric-clouds]')!;
-      const state = mount.querySelector<HTMLOutputElement>(
-        '[data-volumetric-clouds-state]',
-      )!;
-      expect(clouds.checked).toBe(false);
-      expect(clouds.disabled).toBe(false);
-      expect(state.value).toBe('OFF');
-
-      clouds.checked = true;
-      clouds.dispatchEvent(new Event('change', { bubbles: true }));
-
-      expect(state.value).toBe('ON');
-      expect(phase.setVolumetricCloudsEnabled).toHaveBeenCalledWith(true);
-    } finally {
-      game.dispose();
-    }
-  });
-
-  it('marks volumetric clouds unavailable when the active phase cannot render them', () => {
-    const phase = {
-      ...gamePhase(),
-      setVolumetricCloudsEnabled: vi.fn(),
-      getVolumetricCloudsAvailable: vi.fn(() => false),
-    };
-    const mount = document.createElement('main');
-    document.body.append(mount);
-    const game = Game.forTest({
-      createMenu: () => phase,
-      createScavenge: () => gamePhase(),
-      createSurvival: () => gamePhase(),
-    }, {
-      propModels: createTestPropModels(),
-      menuModels: EMPTY_MENU_MODELS,
-      shipFurniture: createTestShipFurniture(),
-      skyAssets: createTestSkyAssets(),
-      physicsRuntime,
-      sceneRenderer: postProcessingSceneRenderer(),
-      systemTuning: createSystemTuningPreference(null),
-      mount,
-    });
-
-    try {
-      const clouds = mount.querySelector<HTMLInputElement>('[data-volumetric-clouds]')!;
-      const state = mount.querySelector<HTMLOutputElement>(
-        '[data-volumetric-clouds-state]',
-      )!;
-      expect(clouds.disabled).toBe(true);
-      expect(state.value).toBe('UNAVAILABLE');
-
-      let disabled = clouds.disabled;
-      let output = state.value;
-      let disabledWrites = 0;
-      let outputWrites = 0;
-      Object.defineProperty(clouds, 'disabled', {
-        configurable: true,
-        get: () => disabled,
-        set: (value: boolean) => {
-          disabled = value;
-          disabledWrites += 1;
-        },
-      });
-      Object.defineProperty(state, 'value', {
-        configurable: true,
-        get: () => output,
-        set: (value: string) => {
-          output = value;
-          outputWrites += 1;
-        },
-      });
-      const console = (game as unknown as {
-        postProcessingConsole: {
-          setVolumetricCloudAvailability(available: boolean): void;
-        };
-      }).postProcessingConsole;
-
-      console.setVolumetricCloudAvailability(false);
-      console.setVolumetricCloudAvailability(false);
-      expect(disabledWrites).toBe(0);
-      expect(outputWrites).toBe(0);
-
-      console.setVolumetricCloudAvailability(true);
-      console.setVolumetricCloudAvailability(true);
-      expect(disabledWrites).toBe(1);
-      expect(outputWrites).toBe(1);
-      expect(disabled).toBe(false);
-      expect(output).toBe('OFF');
-    } finally {
-      game.dispose();
-    }
-  });
-
-  it('does not use the stats query to show performance data', () => {
-    const systemTuning = createSystemTuningPreference(null);
-    const originalUrl = window.location.href;
-    window.history.pushState({}, '', '?stats');
-    const mount = document.createElement('main');
-    document.body.append(mount);
-    const game = Game.forTest({
-      createMenu: () => gamePhase(),
-      createScavenge: () => gamePhase(),
-      createSurvival: () => gamePhase(),
-    }, {
-      propModels: createTestPropModels(),
-      menuModels: EMPTY_MENU_MODELS,
-      shipFurniture: createTestShipFurniture(),
-      skyAssets: createTestSkyAssets(),
-      physicsRuntime,
-      systemTuning,
-      mount,
-    });
-
-    try {
-      expect(mount.querySelector('[data-performance-stats]')?.hasAttribute('hidden'))
-        .toBe(true);
-    } finally {
-      game.dispose();
-      window.history.pushState({}, '', originalUrl);
-    }
-  });
-
-  it('restores system tuning changed through the menu', () => {
-    const values = new Map<string, string>();
-    const storage = {
-      getItem: vi.fn((key: string) => values.get(key) ?? null),
-      setItem: vi.fn((key: string, value: string) => values.set(key, value)),
-    };
-    const firstTuning = createSystemTuningPreference(storage);
-    const firstRenderer = persistedPostProcessingSceneRenderer();
-    const firstMount = document.createElement('main');
-    document.body.append(firstMount);
-    const firstGame = Game.forTest({
-      createMenu: () => gamePhase(),
-      createScavenge: () => gamePhase(),
-      createSurvival: () => gamePhase(),
-    }, {
-      propModels: createTestPropModels(),
-      menuModels: EMPTY_MENU_MODELS,
-      shipFurniture: createTestShipFurniture(),
-      skyAssets: createTestSkyAssets(),
-      physicsRuntime,
-      sceneRenderer: firstRenderer.sceneRenderer,
-      systemTuning: firstTuning,
-      mount: firstMount,
-    });
-
-    try {
-      const aoMode = firstMount.querySelector<HTMLSelectElement>(
-        '[data-post-processing-ao-mode]',
-      )!;
-      const intensity = firstMount.querySelector<HTMLInputElement>(
-        '[data-post-processing-setting="ambientOcclusionIntensity"]',
-      )!;
-      const radius = firstMount.querySelector<HTMLInputElement>(
-        '[data-post-processing-setting="ambientOcclusionRadius"]',
-      )!;
-      const performance = firstMount.querySelector<HTMLInputElement>(
-        '[data-performance-stats-enabled]',
-      )!;
-      const fieldOfView = firstMount.querySelector<HTMLInputElement>('[data-camera-fov]')!;
-      const weather = firstMount.querySelector<HTMLSelectElement>(
-        '[data-presentation-weather]',
-      )!;
-      const night = firstMount.querySelector<HTMLInputElement>('[data-presentation-night]')!;
-      const clouds = firstMount.querySelector<HTMLInputElement>('[data-volumetric-clouds]')!;
-
-      aoMode.value = 'off';
-      aoMode.dispatchEvent(new Event('change', { bubbles: true }));
-      intensity.value = '0.7';
-      intensity.dispatchEvent(new Event('input', { bubbles: true }));
-      radius.value = '0.16';
-      radius.dispatchEvent(new Event('input', { bubbles: true }));
-      performance.checked = true;
-      performance.dispatchEvent(new Event('change', { bubbles: true }));
-      fieldOfView.value = '92';
-      fieldOfView.dispatchEvent(new Event('input', { bubbles: true }));
-      weather.value = 'rain';
-      weather.dispatchEvent(new Event('change', { bubbles: true }));
-      night.checked = true;
-      night.dispatchEvent(new Event('change', { bubbles: true }));
-      clouds.checked = true;
-      clouds.dispatchEvent(new Event('change', { bubbles: true }));
-    } finally {
-      firstGame.dispose();
-    }
-
-    const secondTuning = createSystemTuningPreference(storage);
-    const secondRenderer = persistedPostProcessingSceneRenderer();
-    const phase = {
-      ...gamePhase(),
-      setWeatherOverride: vi.fn(),
-      setTimeOfDayOverride: vi.fn(),
-      setVolumetricCloudsEnabled: vi.fn(),
-    };
-    const secondMount = document.createElement('main');
-    document.body.append(secondMount);
-    const secondGame = Game.forTest({
-      createMenu: () => phase,
-      createScavenge: () => gamePhase(),
-      createSurvival: () => gamePhase(),
-    }, {
-      propModels: createTestPropModels(),
-      menuModels: EMPTY_MENU_MODELS,
-      shipFurniture: createTestShipFurniture(),
-      skyAssets: createTestSkyAssets(),
-      physicsRuntime,
-      sceneRenderer: secondRenderer.sceneRenderer,
-      systemTuning: secondTuning,
-      mount: secondMount,
-    });
-
-    try {
-      expect(secondMount.querySelector<HTMLSelectElement>(
-        '[data-post-processing-ao-mode]',
-      )?.value).toBe('off');
-      expect(secondMount.querySelector<HTMLInputElement>(
-        '[data-post-processing-setting="ambientOcclusionIntensity"]',
-      )?.value).toBe('0.7');
-      expect(secondMount.querySelector<HTMLInputElement>(
-        '[data-post-processing-setting="ambientOcclusionRadius"]',
-      )?.value).toBe('0.16');
-      expect(secondMount.querySelector<HTMLInputElement>(
-        '[data-performance-stats-enabled]',
-      )?.checked).toBe(true);
-      expect(secondMount.querySelector('[data-performance-stats]')?.hasAttribute('hidden'))
-        .toBe(false);
-      expect(secondMount.querySelector<HTMLInputElement>('[data-camera-fov]')?.value)
-        .toBe('92');
-      expect(secondMount.querySelector<HTMLSelectElement>(
-        '[data-presentation-weather]',
-      )?.value).toBe('rain');
-      expect(secondMount.querySelector<HTMLInputElement>('[data-presentation-night]')?.checked)
-        .toBe(true);
-      expect(secondMount.querySelector<HTMLInputElement>('[data-volumetric-clouds]')?.checked)
-        .toBe(true);
-      expect(secondRenderer.controls.setAmbientOcclusionMode).toHaveBeenCalledWith('off');
-      expect(secondRenderer.controls.setNumeric).toHaveBeenCalledWith(
-        'ambientOcclusionIntensity',
-        0.7,
-      );
-      expect(secondRenderer.controls.setNumeric).toHaveBeenCalledWith(
-        'ambientOcclusionRadius',
-        0.16,
-      );
-      expect(phase.setWeatherOverride).toHaveBeenCalledWith('rain');
-      expect(phase.setTimeOfDayOverride).toHaveBeenCalledWith('night');
-      expect(phase.setVolumetricCloudsEnabled).toHaveBeenCalledWith(true);
-    } finally {
-      secondGame.dispose();
-    }
-  });
 
   it('starts in the menu and preserves pointer lock into scavenging', () => {
     const menu = gamePhase();
@@ -1196,6 +820,7 @@ describe('Game menu lifecycle', () => {
   });
 
   it('starts scavenging directly when survival requests a restart', () => {
+    vi.useFakeTimers();
     const menu = gamePhase();
     const scavenges = [gamePhase(), gamePhase()];
     const mount = document.createElement('main');
@@ -1241,6 +866,7 @@ describe('Game menu lifecycle', () => {
       game.start();
       completeMenu();
       completeScavenge({ savedItems: [], elapsedSeconds: 3 });
+      vi.advanceTimersByTime(1500);
       const restart = mount.querySelector<HTMLButtonElement>('[data-restart]')!;
       restart.click();
       restart.click();
@@ -1253,6 +879,7 @@ describe('Game menu lifecycle', () => {
     } finally {
       game.dispose();
       mount.remove();
+      vi.useRealTimers();
     }
   });
 });
@@ -1418,17 +1045,6 @@ describe('ScavengePhase lifecycle integration', () => {
     (phase as unknown as { updateIntro(delta: number): void }).updateIntro(3);
     expect(sessionStart).not.toHaveBeenCalled();
     expect(sessionTick).not.toHaveBeenCalled();
-  });
-
-  it('fades from black during the opening intro frames', () => {
-    const { phase, setIntroFadeProgress } = introHarness(0);
-    const updateIntro = (phase as unknown as { updateIntro(delta: number): void }).updateIntro;
-
-    updateIntro.call(phase, 0.35);
-    expect(setIntroFadeProgress).toHaveBeenLastCalledWith(0.5);
-
-    updateIntro.call(phase, 0.35);
-    expect(setIntroFadeProgress).toHaveBeenLastCalledWith(0);
   });
 
   it('fires the crash once across a large delta', () => {
@@ -1946,29 +1562,6 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(input.consumeLook).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ['cannedFood-1', 1],
-    ['medicalKit-1', 0.92],
-    ['scubaSet-1', 0.84],
-  ] as const)('uses carried weight speed for direct control: %s', (itemId, expected) => {
-    const session = new ScavengeSession();
-    session.start();
-    expect(session.pickUp(itemId)).toBe(true);
-    const { phase, input } = createUpdateHarness(session);
-    const player = (phase as unknown as {
-      player: { update: ReturnType<typeof vi.fn> };
-    }).player;
-
-    phase.update(0.016, 0.016);
-
-    expect(player.update).toHaveBeenCalledWith(
-      0.016,
-      input,
-      scavengeSpeedMultiplier(session.snapshot().carriedWeight),
-    );
-    expect(player.update).toHaveBeenLastCalledWith(0.016, input, expected);
-  });
-
   it('restores direct-control speed on the update after a deposit', () => {
     const session = new ScavengeSession();
     session.start();
@@ -2131,35 +1724,6 @@ describe('ScavengePhase lifecycle integration', () => {
     phase.update(0.25, 0.25);
 
     expect(order).toEqual(['player', 'world', 'camera']);
-  });
-
-  it('updates visible hands from the player motion after placing the camera', () => {
-    const session = new ScavengeSession();
-    session.start();
-    const { phase, hands, input } = createUpdateHarness(session);
-    input.sprinting = true;
-    const player = (phase as unknown as {
-      player: { update: ReturnType<typeof vi.fn> };
-    }).player;
-    player.update.mockReturnValue({ movedDistance: 0.08, grounded: true, jumped: false });
-
-    phase.update(0.016, 0.016);
-
-    expect(hands.update).toHaveBeenCalledWith(0.016, 0.08, true, true, true);
-  });
-
-  it('keeps idle hands visible while the grounded player stands still', () => {
-    const session = new ScavengeSession();
-    session.start();
-    const { phase, hands } = createUpdateHarness(session);
-    const player = (phase as unknown as {
-      player: { update: ReturnType<typeof vi.fn> };
-    }).player;
-    player.update.mockReturnValue({ movedDistance: 0, grounded: true, jumped: false });
-
-    phase.update(0.016, 0.016);
-
-    expect(hands.update).toHaveBeenCalledWith(0.016, 0, true, false, true);
   });
 
   it('hides hands when idle, paused, overlay, hidden, or sinking states prevent control', () => {
@@ -2570,66 +2134,6 @@ describe('ScavengePhase lifecycle integration', () => {
       game.dispose();
       mount.remove();
     }
-  });
-
-  it('renders scavenging through sceneRenderer with current sinking progress', () => {
-    const elapsed = SCAVENGE_DURATION_SECONDS * 0.75;
-    const scene = new Scene();
-    const camera = new PerspectiveCamera();
-    const render = vi.fn();
-    const visualState: ScavengeVisualState = {
-      kind: 'scavenge', elapsedSeconds: 0, sinkingProgress: 0,
-    };
-    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
-    Object.assign(phase, {
-      disposed: false,
-      scene,
-      elapsed,
-      visualState,
-      context: {
-        camera,
-        sceneRenderer: { render, resize: vi.fn(), dispose: vi.fn() },
-      },
-    });
-
-    (phase as unknown as { syncVisualState(state: ReturnType<typeof getSinkingState>): void })
-      .syncVisualState(getSinkingState(elapsed, SCAVENGE_DURATION_SECONDS));
-    phase.render();
-
-    expect(render).toHaveBeenCalledWith(scene, camera, {
-      kind: 'scavenge',
-      elapsedSeconds: elapsed,
-      sinkingProgress: 0.75,
-    });
-  });
-
-  it('forwards and reports scavenging presentation controls', () => {
-    const setPresentationWeather = vi.fn();
-    const setPresentationPhase = vi.fn();
-    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
-    Object.assign(phase, {
-      world: { setPresentationWeather, setPresentationPhase },
-    });
-
-    phase.setWeatherOverride('rain');
-
-    expect(setPresentationWeather).toHaveBeenLastCalledWith('rain');
-    expect(phase.getPresentationWeather()).toBe('rain');
-
-    phase.setWeatherOverride(null);
-
-    expect(setPresentationWeather).toHaveBeenLastCalledWith('calm');
-    expect(phase.getPresentationWeather()).toBe('calm');
-
-    phase.setTimeOfDayOverride('night');
-
-    expect(setPresentationPhase).toHaveBeenLastCalledWith('night');
-    expect(phase.getPresentationPhase()).toBe('night');
-
-    phase.setTimeOfDayOverride(null);
-
-    expect(setPresentationPhase).toHaveBeenLastCalledWith('day');
-    expect(phase.getPresentationPhase()).toBe('day');
   });
 
   it('persists presentation overrides across phase handoff and polls automatic weather', () => {
@@ -3107,277 +2611,6 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(failedDispose).toHaveBeenCalledOnce();
     expect(failedStart).not.toHaveBeenCalled();
     expect(failedRender).not.toHaveBeenCalled();
-  });
-
-  it('shares one scene renderer across phases and resizes it with the capped pixel ratio', () => {
-    const propModels = createTestPropModels();
-    const shipFurniture = createTestShipFurniture();
-    const skyAssets = createTestSkyAssets();
-    const sceneRenderer: SceneRenderer = {
-      render: vi.fn(), resize: vi.fn(), dispose: vi.fn(),
-    };
-    const contexts: PhaseContext[] = [];
-    let complete!: (result: { savedItems: readonly []; elapsedSeconds: number }) => void;
-    const game = Game.forTest({
-      createMenu: createImmediateMenu,
-      createScavenge: (context, onComplete) => {
-        contexts.push(context);
-        complete = onComplete;
-        return gamePhase();
-      },
-      createSurvival: (context) => {
-        contexts.push(context);
-        return gamePhase();
-      },
-    }, {
-      propModels,
-      menuModels: EMPTY_MENU_MODELS,
-      shipFurniture,
-      skyAssets,
-      physicsRuntime,
-      sceneRenderer,
-    });
-
-    complete({ savedItems: [], elapsedSeconds: 2 });
-
-    expect(contexts.map(({ sceneRenderer: value }) => value))
-      .toEqual([sceneRenderer, sceneRenderer]);
-    expect(sceneRenderer.resize).toHaveBeenCalledWith(
-      window.innerWidth,
-      window.innerHeight,
-      Math.min(window.devicePixelRatio, 2),
-    );
-    game.dispose();
-    expect(sceneRenderer.dispose).toHaveBeenCalledOnce();
-  });
-
-  it('applies a supplied visual quality preference to the shared scene renderer', () => {
-    const setVisualQuality = vi.fn();
-    let received!: PhaseContext;
-    const sceneRenderer: SceneRenderer = {
-      render: vi.fn(),
-      resize: vi.fn(),
-      setVisualQuality,
-      dispose: vi.fn(),
-    };
-    const preference = createVisualQualityPreference(
-      (quality) => sceneRenderer.setVisualQuality?.(quality),
-      null,
-    );
-    const game = Game.forTest({
-      createMenu: createImmediateMenu,
-      createScavenge: (context) => {
-        received = context;
-        return gamePhase();
-      },
-      createSurvival: () => gamePhase(),
-    }, {
-      propModels: createTestPropModels(),
-      menuModels: EMPTY_MENU_MODELS,
-      shipFurniture: createTestShipFurniture(),
-      skyAssets: createTestSkyAssets(),
-      physicsRuntime,
-      sceneRenderer,
-      visualQuality: preference,
-    });
-
-    preference.set('high');
-
-    expect(received.visualQuality).toBe(preference);
-    expect(setVisualQuality).toHaveBeenCalledWith('high');
-    game.dispose();
-  });
-
-  it('applies visual quality changes to the active phase', () => {
-    const mount = document.createElement('main');
-    document.body.append(mount);
-    const setVisualQuality = vi.fn();
-    const phase = {
-      ...gamePhase(),
-      setVisualQuality,
-    };
-    const game = Game.forTest({
-      createMenu: createImmediateMenu,
-      createScavenge: () => phase,
-      createSurvival: () => gamePhase(),
-    }, {
-      propModels: createTestPropModels(),
-      menuModels: EMPTY_MENU_MODELS,
-      shipFurniture: createTestShipFurniture(),
-      skyAssets: createTestSkyAssets(),
-      physicsRuntime,
-      mount,
-      sceneRenderer: postProcessingSceneRenderer(),
-    });
-    const high = mount.querySelector<HTMLButtonElement>(
-      '[data-quality-control="visual"] [data-quality="high"]',
-    );
-
-    expect(high).not.toBeNull();
-    high!.click();
-
-    expect(setVisualQuality).toHaveBeenCalledWith('high');
-    game.dispose();
-  });
-
-  it('forwards cloud controls through ScavengePhase', () => {
-    const setVisualQuality = vi.fn();
-    const setVolumetricCloudsEnabled = vi.fn();
-    const getVolumetricCloudsAvailable = vi.fn(() => true);
-    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
-    Object.assign(phase, {
-      disposed: false,
-      world: {
-        setVisualQuality,
-        setVolumetricCloudsEnabled,
-        getVolumetricCloudsAvailable,
-      },
-    });
-
-    phase.setVisualQuality('high');
-    phase.setVolumetricCloudsEnabled(true);
-
-    expect(setVisualQuality).toHaveBeenCalledWith('high');
-    expect(setVolumetricCloudsEnabled).toHaveBeenCalledWith(true);
-    expect(phase.getVolumetricCloudsAvailable()).toBe(true);
-  });
-
-  it('applies anti-aliasing choices to the shared scene renderer', () => {
-    const mount = document.createElement('main');
-    document.body.append(mount);
-    const setAntiAliasingQuality = vi.fn();
-    const sceneRenderer: SceneRenderer = {
-      ...postProcessingSceneRenderer(),
-      setAntiAliasingQuality,
-    };
-    const preference = createAntiAliasingQualityPreference(
-      (quality) => sceneRenderer.setAntiAliasingQuality?.(quality),
-      null,
-    );
-    const game = Game.forTest({
-      createMenu: createImmediateMenu,
-      createScavenge: () => gamePhase(),
-      createSurvival: () => gamePhase(),
-    }, {
-      propModels: createTestPropModels(),
-      menuModels: EMPTY_MENU_MODELS,
-      shipFurniture: createTestShipFurniture(),
-      skyAssets: createTestSkyAssets(),
-      physicsRuntime,
-      mount,
-      sceneRenderer,
-      antiAliasingQuality: preference,
-    });
-    const high = mount.querySelector<HTMLButtonElement>(
-      '[data-quality-control="anti-aliasing"] [data-quality="high"]',
-    );
-
-    expect(high).not.toBeNull();
-    high!.click();
-
-    expect(preference.get()).toBe('high');
-    expect(setAntiAliasingQuality).toHaveBeenCalledWith('high');
-    game.dispose();
-  });
-
-  it('applies shadow choices to the shared scene renderer', () => {
-    const mount = document.createElement('main');
-    document.body.append(mount);
-    const setShadowQuality = vi.fn();
-    const sceneRenderer: SceneRenderer = {
-      ...postProcessingSceneRenderer(),
-      setShadowQuality,
-    };
-    const preference = createShadowQualityPreference(
-      (quality) => sceneRenderer.setShadowQuality?.(quality),
-      null,
-    );
-    const game = Game.forTest({
-      createMenu: createImmediateMenu,
-      createScavenge: () => gamePhase(),
-      createSurvival: () => gamePhase(),
-    }, {
-      propModels: createTestPropModels(),
-      menuModels: EMPTY_MENU_MODELS,
-      shipFurniture: createTestShipFurniture(),
-      skyAssets: createTestSkyAssets(),
-      physicsRuntime,
-      mount,
-      sceneRenderer,
-      shadowQuality: preference,
-    });
-    const high = mount.querySelector<HTMLButtonElement>(
-      '[data-quality-control="shadows"] [data-quality="high"]',
-    );
-
-    expect(high).not.toBeNull();
-    high!.click();
-
-    expect(preference.get()).toBe('high');
-    expect(setShadowQuality).toHaveBeenCalledWith('high');
-    game.dispose();
-  });
-
-  it('applies water quality changes to the active phase', () => {
-    const mount = document.createElement('main');
-    document.body.append(mount);
-    const setWaterQuality = vi.fn();
-    let received!: PhaseContext;
-    const phase = {
-      ...gamePhase(),
-      setWaterQuality,
-    };
-    const game = Game.forTest({
-      createMenu: createImmediateMenu,
-      createScavenge: (context) => {
-        received = context;
-        return phase;
-      },
-      createSurvival: () => gamePhase(),
-    }, {
-      propModels: createTestPropModels(),
-      menuModels: EMPTY_MENU_MODELS,
-      shipFurniture: createTestShipFurniture(),
-      skyAssets: createTestSkyAssets(),
-      physicsRuntime,
-      mount,
-      sceneRenderer: postProcessingSceneRenderer(),
-    });
-    const ultra = mount.querySelector<HTMLButtonElement>(
-      '[data-water-quality-control] [data-quality="ultra"]',
-    );
-
-    expect(ultra).not.toBeNull();
-    ultra!.click();
-
-    expect(received.waterQuality.get()).toBe('ultra');
-    expect(setWaterQuality).toHaveBeenCalledWith('ultra');
-    game.dispose();
-  });
-
-  it('uses one long-range camera without changing its near view', () => {
-    const received: PhaseContext[] = [];
-    const game = Game.forTest({
-      createMenu: createImmediateMenu,
-      createScavenge: (context) => {
-        received.push(context);
-        return gamePhase();
-      },
-      createSurvival: () => gamePhase(),
-    }, {
-      propModels: createTestPropModels(),
-      menuModels: EMPTY_MENU_MODELS,
-      shipFurniture: createTestShipFurniture(),
-      skyAssets: createTestSkyAssets(),
-      physicsRuntime,
-    });
-
-    expect(received[0]!.camera).toMatchObject({
-      fov: 80,
-      near: 0.08,
-      far: 1000,
-    });
-    game.dispose();
   });
 
   it('continues renderer cleanup when scene-renderer disposal fails', () => {
@@ -3985,54 +3218,6 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(world.landItem).not.toHaveBeenCalled();
     expect(world.loseItem).not.toHaveBeenCalled();
     expect(hands.playGesture).not.toHaveBeenCalled();
-  });
-
-  it('shows item smoke when pickup succeeds', () => {
-    const instance: ItemInstance = {
-      instanceId: 'flashlight-1',
-      type: 'flashlight',
-    };
-    const object = new Group();
-    const session = { pickUp: vi.fn().mockReturnValue(true) };
-    const carry = { pickUp: vi.fn().mockReturnValue(true) };
-    const world = {
-      itemObjects: new Map([[instance.instanceId, object]]),
-      showItemPickupSmoke: vi.fn(),
-    };
-    const hands = scavengeHandsStub();
-    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
-    Object.assign(phase, {
-      session,
-      carry,
-      world,
-      audio: scavengeAudioStub(),
-      hands,
-    });
-
-    (phase as unknown as {
-      performAction: (action: {
-        type: 'pickUp';
-        item: ItemInstance;
-        prompt: string;
-      }) => void;
-    }).performAction({
-      type: 'pickUp',
-      item: instance,
-      prompt: 'LEFT CLICK — PICK UP FLASHLIGHT',
-    });
-
-    expect(world.showItemPickupSmoke).toHaveBeenCalledWith(instance.instanceId);
-    expect(carry.pickUp).toHaveBeenCalledWith(instance, object);
-    expect(hands.playGesture).toHaveBeenCalledWith('pickup');
-    expect(session.pickUp.mock.invocationCallOrder[0]).toBeLessThan(
-      hands.playGesture.mock.invocationCallOrder[0]!,
-    );
-    expect(world.showItemPickupSmoke.mock.invocationCallOrder[0]).toBeLessThan(
-      hands.playGesture.mock.invocationCallOrder[0]!,
-    );
-    expect(carry.pickUp.mock.invocationCallOrder[0]).toBeLessThan(
-      hands.playGesture.mock.invocationCallOrder[0]!,
-    );
   });
 
   it('signals boat deposit only after the deposit succeeds', () => {

@@ -5,7 +5,6 @@ import { SCAVENGE_DURATION_SECONDS } from '../game/scavengeRules';
 import type { SinkingState } from '../game/sinking';
 import {
   endingCauseLine,
-  endingEpilogue,
   endingSummary,
   endingTitle,
   type EndingRecord,
@@ -14,6 +13,8 @@ import { createElementRequirement } from './dom';
 import { formatDuration } from './formatDuration';
 import { itemThumbnailUrl } from './itemThumbnailManifest';
 import { uiArtwork } from './uiArtwork';
+import { EndingStatisticsView } from './EndingStatisticsView';
+import { scavengeEndingStatistics } from './EndingStatisticsModel';
 
 const requireElement = createElementRequirement('UI');
 
@@ -48,10 +49,11 @@ export class GameUI {
   private readonly resumeButton: HTMLButtonElement;
   private readonly returnToMenuButton: HTMLButtonElement;
   private readonly endingTitle: HTMLElement;
-  private readonly endingBody: HTMLElement;
   private readonly endingCause: HTMLElement;
   private readonly endingStats: HTMLElement;
   private readonly endingAction: HTMLButtonElement;
+  private readonly statisticsView: EndingStatisticsView;
+  private latestSnapshot: ScavengeSnapshot | null = null;
   private readonly pointerLockErrors: HTMLElement[];
   private disposed = false;
   private restartHandled = false;
@@ -108,7 +110,6 @@ export class GameUI {
         data-ending role="dialog" aria-modal="true" aria-hidden="true" inert>
         <div class="screen__content scuba-popup-paper scuba-popup-panel">
           <h2 class="scuba-popup-title ui-role-display" data-ending-title tabindex="-1" role="alert"></h2>
-          <p class="ending-copy ui-role-narrative" data-ending-body></p>
           <p class="ending-cause ui-role-context" data-ending-cause></p>
           <p class="ending-stats ui-role-numeral" data-ending-stats></p>
           <button type="button" class="primary-action salvage-action ui-role-context" data-ending-action hidden>
@@ -134,10 +135,13 @@ export class GameUI {
     this.resumeButton = requireElement(this.root, '[data-resume-button]');
     this.returnToMenuButton = requireElement(this.root, '[data-return-to-menu]');
     this.endingTitle = requireElement(this.root, '[data-ending-title]');
-    this.endingBody = requireElement(this.root, '[data-ending-body]');
     this.endingCause = requireElement(this.root, '[data-ending-cause]');
     this.endingStats = requireElement(this.root, '[data-ending-stats]');
     this.endingAction = requireElement(this.root, '[data-ending-action]');
+    this.statisticsView = new EndingStatisticsView(
+      this.endingLayer, requireElement(this.endingLayer, '.screen__content'),
+    );
+    this.statisticsView.button.hidden = true;
     this.pointerLockErrors = [...this.root.querySelectorAll<HTMLElement>('[data-pointer-lock-error]')];
     this.resumeButton.addEventListener('click', this.handleResume);
     this.returnToMenuButton.addEventListener('click', this.handleReturnToMenu);
@@ -203,6 +207,7 @@ export class GameUI {
   }
 
   render(snapshot: ScavengeSnapshot): void {
+    this.latestSnapshot = snapshot;
     const timerSecond = Math.max(0, Math.ceil(snapshot.remainingSeconds));
     if (timerSecond !== this.renderedTimerSecond) {
       this.renderedTimerSecond = timerSecond;
@@ -234,6 +239,7 @@ export class GameUI {
     this.endingLayer.setAttribute('aria-hidden', String(!visible));
     this.endingLayer.toggleAttribute('inert', !visible);
     this.endingAction.hidden = !revealAction;
+    this.statisticsView.button.hidden = !revealAction;
     if (revealAction && this.endingStage !== 'menuReady') this.endingAction.focus();
     this.endingStage = stage;
   }
@@ -244,6 +250,7 @@ export class GameUI {
     this.resumeButton.removeEventListener('click', this.handleResume);
     this.returnToMenuButton.removeEventListener('click', this.handleReturnToMenu);
     this.endingAction.removeEventListener('click', this.handleRestart);
+    this.statisticsView.dispose();
     this.onResume = () => undefined;
     this.onRestart = () => undefined;
     this.onReturnToMenu = () => undefined;
@@ -292,8 +299,8 @@ export class GameUI {
   private readonly handleResume = (): void => this.onResume();
   private readonly handleReturnToMenu = (): void => this.onReturnToMenu();
   private renderEndingRecord(record: Extract<EndingRecord, { id: 'dorothy' }>): void {
+    this.statisticsView.render(scavengeEndingStatistics(record, this.latestSnapshot));
     this.endingTitle.textContent = endingTitle(record);
-    this.endingBody.textContent = endingEpilogue(record);
     this.endingCause.textContent = endingCauseLine(record) ?? '';
     this.endingCause.hidden = this.endingCause.textContent.length === 0;
     this.endingStats.textContent = endingSummary(record);
@@ -303,6 +310,7 @@ export class GameUI {
   private readonly handleRestart = (): void => {
     if (this.restartHandled) return;
     this.restartHandled = true;
+    this.statisticsView.button.disabled = true;
     this.onRestart();
   };
 }

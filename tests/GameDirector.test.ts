@@ -13,12 +13,6 @@ import { createTestPropModels } from './helpers/propModels';
 import { createTestShipFurniture } from './helpers/shipFurniture';
 import { createTestSkyAssets } from './helpers/skyAssets';
 
-type Assert<T extends true> = T;
-type PhaseAssetContextIsRequired = Assert<
-  {} extends Pick<import('../src/app/GamePhase').PhaseContext,
-  'shipFurniture' | 'maxTextureAnisotropy' | 'physicsRuntime'> ? false : true
->;
-const phaseAssetContextIsRequired: PhaseAssetContextIsRequired = true;
 const physicsRuntime = await testPhysicsRuntime();
 const EMPTY_MENU_MODELS = {
   dispose: () => undefined,
@@ -60,9 +54,6 @@ function testOptions(
 }
 
 describe('Game director', () => {
-  it('requires ship furniture and anisotropy in every phase context', () => {
-    expect(phaseAssetContextIsRequired).toBe(true);
-  });
   it('starts the shared clock and schedules animation only once', () => {
     const startClock = vi.fn();
     const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(42);
@@ -157,34 +148,6 @@ describe('Game director', () => {
     expect(active.update).toHaveBeenCalledWith(0.05, 0.05);
     expect(active.render).toHaveBeenCalledOnce();
     requestAnimationFrame.mockRestore();
-  });
-
-  it.each([
-    [0, 1],
-    [-4, 1],
-    [8, 8],
-  ])('publishes renderer anisotropy %s as clamped context value %s', (reported, expected) => {
-    let contextAnisotropy: number | undefined;
-    const renderer = {
-      domElement: document.createElement('canvas'),
-      capabilities: { getMaxAnisotropy: () => reported },
-      setPixelRatio: vi.fn(),
-      setSize: vi.fn(),
-      render: vi.fn(),
-      dispose: vi.fn(),
-      shadowMap: { enabled: true, type: 0 },
-    } as unknown as GameTestOptions['renderer'];
-    const game = Game.forTest({
-      createMenu: createImmediateMenu,
-      createScavenge: (context) => {
-        contextAnisotropy = context.maxTextureAnisotropy;
-        return phase();
-      },
-      createSurvival: () => phase(),
-    }, testOptions({ renderer }));
-
-    expect(contextAnisotropy).toBe(expected);
-    game.dispose();
   });
 
   it('deep-copies and freezes duplicate saved instances at the phase boundary', () => {

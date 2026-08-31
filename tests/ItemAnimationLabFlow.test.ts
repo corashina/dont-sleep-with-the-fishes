@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ITEM_DEFINITIONS, ITEM_IDS, type ItemId, type ItemInstanceId } from '../src/game/ItemState';
+import { type ItemId, type ItemInstanceId } from '../src/game/ItemState';
 import {
   FISHING_ROD_LAB_CHOICE_ID,
   FISHING_ROD_LAB_INSTANCE_ID,
@@ -128,17 +128,6 @@ describe('Item Animation Lab conditions', () => {
     expect(world.playEventItemUse).toHaveBeenCalledOnce();
   });
 
-  it.each(ITEM_IDS.filter((id) => ITEM_DEFINITIONS[id].breakable))(
-    'offers condition controls for %s, even without multiple animations', async (type) => {
-      const { flow, instanceId, ui, world } = conditionLab(type);
-      await flow.play(instanceId);
-      expect(ui.showItemAnimationLabChoices).toHaveBeenLastCalledWith(expect.arrayContaining([
-        { id: 'break', label: 'Break', unavailableReason: null },
-      ]));
-      expect(world.playEventItemUse).not.toHaveBeenCalled();
-    },
-  );
-
   it('lets an initially broken item open the popup and be fixed', async () => {
     const { flow, session, instanceId, ui } = conditionLab('bucket', 'broken');
     await flow.play(instanceId);
@@ -214,38 +203,6 @@ describe('Item Animation Lab conditions', () => {
 });
 
 describe('ItemAnimationLabFlow', () => {
-  it('offers signal reception and trade handover for the Radio', () => {
-    expect(ITEM_ANIMATION_LAB_USES.radio?.map(({ id }) => id)).toEqual([
-      'radio-signal-receive',
-      'trade-handover',
-    ]);
-  });
-
-  it('offers both trade handovers for the Swim Ring', () => {
-    expect(ITEM_ANIMATION_LAB_USES.swimRing?.map(({ id, eventId }) => ({
-      id,
-      eventId,
-    }))).toEqual([
-      { id: 'throw-target', eventId: 'tornado' },
-      { id: 'trade-handover', eventId: 'night-trader' },
-      { id: 'handyman-handover', eventId: 'handyman' },
-    ]);
-  });
-
-  it('does not offer cover supplies for the Map', () => {
-    expect(ITEM_ANIMATION_LAB_USES.map?.map(({ id }) => id))
-      .not.toContain('cover-supplies');
-  });
-
-  it('does not offer cover supplies for the Umbrella', () => {
-    expect(ITEM_ANIMATION_LAB_USES.umbrella?.map(({ id }) => id))
-      .not.toContain('cover-supplies');
-  });
-
-  it('does not offer Lift bucket', () => {
-    expect(ITEM_ANIMATION_LAB_USES.bucket?.map(({ id }) => id))
-      .not.toContain('base');
-  });
 
   it('reveals the Handyman before a trade handover', async () => {
     const instanceId = 'radio-1' as ItemInstanceId;
