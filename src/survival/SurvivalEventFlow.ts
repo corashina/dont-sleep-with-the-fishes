@@ -1200,7 +1200,12 @@ export class SurvivalEventFlow {
     const pending = this.dependencies.session.snapshot();
     const eventId = pending.pendingEventId;
     if (eventId === null) return;
-    if (await this.resolveSpecialContextualChoice(eventId, choiceId, generation, operation)) return;
+    // Lock ordinary choices before yielding so later input cannot replace them.
+    const specialChoice = this.resolveSpecialContextualChoice(eventId, choiceId, generation, operation);
+    if (specialChoice !== null) {
+      await specialChoice;
+      return;
+    }
     this.beginContextualChoice(eventId, choiceId);
     const choice: EventChoicePresentation = {
       choiceId,
@@ -1230,21 +1235,19 @@ export class SurvivalEventFlow {
     );
   }
 
-  private async resolveSpecialContextualChoice(
+  private resolveSpecialContextualChoice(
     eventId: string,
     choiceId: EventResponseId,
     generation: number,
     operation: number,
-  ): Promise<boolean> {
+  ): Promise<void> | null {
     if (eventId === 'midnight-tour' && choiceId === 'visit') {
-      await this.resolveMidnightTourVisit(generation, operation);
-      return true;
+      return this.resolveMidnightTourVisit(generation, operation);
     }
     if (eventId === 'chest-attack' && choiceId === 'attack') {
-      await this.resolveChestAttack(generation, operation);
-      return true;
+      return this.resolveChestAttack(generation, operation);
     }
-    return false;
+    return null;
   }
 
   private beginContextualChoice(eventId: string, choiceId: EventResponseId): void {

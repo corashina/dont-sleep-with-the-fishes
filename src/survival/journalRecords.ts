@@ -5,6 +5,7 @@ import type { FishingCatchId } from './fishingCatalog';
 import type {
   ActionOutcome,
   EventPresentationKey,
+  ResourceDelta,
   SurvivalEventDefinition,
   WeatherId,
 } from './survivalTypes';
@@ -53,6 +54,13 @@ export interface JournalCarlitosCareRecord {
   readonly action: 'pet' | 'feed' | 'treat';
 }
 
+export interface JournalSurvivalActionRecord {
+  readonly kind: 'dayAction';
+  readonly action: 'treat' | 'dive' | 'repair' | 'repairItem';
+  readonly deltas: Readonly<ResourceDelta>;
+  readonly inventoryMutations: readonly JournalInventoryMutation[];
+}
+
 export interface JournalCarlitosDawnRecord {
   readonly kind: 'carlitosDawn';
   readonly before: JournalCarlitosDawnState;
@@ -71,6 +79,7 @@ export interface JournalCarlitosDawnState {
 
 export type JournalDayActionRecord =
   | JournalFishingRecord
+  | JournalSurvivalActionRecord
   | JournalCarlitosCareRecord
   | JournalCarlitosDawnRecord;
 
@@ -136,6 +145,19 @@ export function createJournalCarlitosCareRecord(
   action: JournalCarlitosCareRecord['action'],
 ): JournalCarlitosCareRecord {
   return Object.freeze({ kind: 'carlitosCare', action });
+}
+
+export function createJournalSurvivalActionRecord(
+  action: JournalSurvivalActionRecord['action'],
+  deltas: Readonly<ResourceDelta>,
+  inventoryMutations: readonly JournalInventoryMutation[],
+): JournalSurvivalActionRecord {
+  return Object.freeze({
+    kind: 'dayAction',
+    action,
+    deltas: Object.freeze({ ...deltas }),
+    inventoryMutations: cloneJournalInventoryMutations(inventoryMutations),
+  });
 }
 
 export function createJournalCarlitosDawnRecord(
@@ -215,15 +237,15 @@ export function cloneJournalNight(record: JournalNightRecord): JournalNightRecor
 export function cloneJournalActions(
   actions: readonly JournalDayActionRecord[],
 ): readonly JournalDayActionRecord[] {
-  return Object.freeze(actions.map((action) => Object.freeze(
-    action.kind === 'carlitosDawn'
-      ? {
-          ...action,
-          before: Object.freeze({ ...action.before }),
-          after: Object.freeze({ ...action.after }),
-        }
-      : { ...action },
-  )));
+  return Object.freeze(actions.map((action) => {
+    if (action.kind === 'dayAction') {
+      return createJournalSurvivalActionRecord(action.action, action.deltas, action.inventoryMutations);
+    }
+    if (action.kind === 'carlitosDawn') {
+      return createJournalCarlitosDawnRecord(action.before, action.after);
+    }
+    return Object.freeze({ ...action });
+  }));
 }
 
 export function cloneJournalInventoryMutations(

@@ -122,7 +122,7 @@ const repairUnavailable: DayActionRule = (state, option) => {
   if (option?.kind === 'hullRepair' && option.material === 'ductTape') {
     return hasUsable(state.inventory, 'ductTape') ? null : 'No duct tape remains.';
   }
-  return state.repairMaterial < 1 ? 'No repair material remains.' : null;
+  return state.repairMaterial < 1 ? 'No duct tape remains.' : null;
 };
 
 const repairItemUnavailable: DayActionRule = (state, option) => {

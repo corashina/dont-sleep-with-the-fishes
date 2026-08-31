@@ -62,7 +62,7 @@ describe('day action availability rules', () => {
     ['repair', { hull: 100 }, { kind: 'hullRepair', material: 'repairMaterial' }, 'The hull needs no repair.'],
     ['repair', { energy: 0 }, { kind: 'hullRepair', material: 'repairMaterial' }, 'Repairing requires one energy.'],
     ['repair', { inventory: withoutItem('ductTape-1') }, { kind: 'hullRepair', material: 'ductTape' }, 'No duct tape remains.'],
-    ['repair', { repairMaterial: 0 }, { kind: 'hullRepair', material: 'repairMaterial' }, 'No repair material remains.'],
+    ['repair', { repairMaterial: 0 }, { kind: 'hullRepair', material: 'repairMaterial' }, 'No duct tape remains.'],
     ['repairItem', { inventory: withoutItem('ductTape-1') }, { kind: 'itemRepair', target: 'compass-1' }, 'No duct tape remains.'],
     ['repairItem', {}, undefined, 'That option cannot be used for this action.'],
     ['repairItem', {}, { kind: 'itemRepair', target: 'compass-2' }, 'That item cannot be repaired.'],

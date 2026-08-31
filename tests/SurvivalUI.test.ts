@@ -672,6 +672,51 @@ describe('SurvivalUI', () => {
     expect(caption.querySelector<HTMLElement>('[data-event-risk]')?.hidden).toBe(true);
   });
 
+  it.each(['click', 'Enter', ' '] as const)(
+    'keeps a Handyman item trade separate from the nearby Hand for %s activation',
+    (activation) => {
+      const mount = document.createElement('main');
+      document.body.append(mount);
+      const ui = createUI(mount);
+      const onEventItem = vi.fn();
+      const onEventChoice = vi.fn();
+      ui.onEventItem = onEventItem;
+      ui.onEventChoice = onEventChoice;
+      ui.render(new SurvivalSession(saved('swimRing'), { seed: 3 }).snapshot(), () => null);
+      ui.setAnchors([
+        {
+          id: 'supply:swimRing', itemType: 'swimRing', supplyGroupId: 'swimRing',
+          backingInstanceId: 'swimRing-1', toolId: null, action: null, remainingUses: null,
+          quantity: 1, x: 240, y: 180, visible: true, depleted: false,
+          hitArea: { width: 60, height: 60, depth: 2 },
+        },
+        {
+          id: 'handyman:hand', itemType: null, toolId: null, action: null,
+          eventChoiceId: 'touch', label: 'HAND', tooltip: false, remainingUses: null,
+          x: 260, y: 180, visible: true, depleted: false,
+          hitArea: { width: 80, height: 80, depth: 3 },
+        },
+      ]);
+      ui.beginEventPresentation();
+      ui.setEventSelection(new Map([['swimRing-1', 'swimRing']]), [{
+        id: 'touch', label: 'Touch the Hand', unavailableReason: null, anchorId: 'handyman:hand',
+      }]);
+      const ring = mount.querySelector<HTMLButtonElement>('[data-anchor-id="supply:swimRing"]')!;
+      const hand = mount.querySelector<HTMLButtonElement>('[data-anchor-id="handyman:hand"]')!;
+      expect(ring.getAttribute('aria-disabled')).toBe('false');
+      expect(Number(ring.style.zIndex)).toBeGreaterThan(Number(hand.style.zIndex));
+
+      if (activation === 'click') ring.querySelector<HTMLElement>('[role="tooltip"]')!.click();
+      else {
+        ring.focus();
+        press('[data-anchor-id="supply:swimRing"]', activation);
+      }
+
+      expect(onEventItem).toHaveBeenCalledExactlyOnceWith('swimRing', 'swimRing-1');
+      expect(onEventChoice).not.toHaveBeenCalled();
+    },
+  );
+
   it('keeps event targets above overlapping inventory targets', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -2107,6 +2152,133 @@ describe('SurvivalUI', () => {
 
     button.click();
     expect(exit).toHaveBeenCalledOnce();
+  });
+
+  it('preserves native Back activation while aiming and keeps Tab inside fishing', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const cast = vi.fn();
+    const exit = vi.fn();
+    ui.onFishingCast = cast;
+    ui.onFishingViewExit = exit;
+    ui.setFishingViewExitVisible(true);
+    ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
+    const back = mount.querySelector<HTMLButtonElement>('[data-fishing-view-exit]')!;
+    back.focus();
+
+    for (const key of ['Enter', ' ']) {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+      back.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    back.dispatchEvent(tab);
+    expect(tab.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(back);
+    expect(cast).not.toHaveBeenCalled();
+    back.click();
+    expect(exit).toHaveBeenCalledOnce();
+  });
+
+  it('releases boat controls and native button keys after fishing Continue', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const action = vi.fn();
+    const cast = vi.fn();
+    const exit = vi.fn();
+    ui.onAction = action;
+    ui.onFishingCast = cast;
+    ui.onFishingViewExit = exit;
+    ui.render(snapshot(), () => null);
+    ui.setBusy(true);
+    ui.setFishingState({ mode: 'result', message: '', biteTarget: null });
+    ui.showFishingResult({ caption: 'SMALL CATCH', title: 'COD', detail: '+1 FOOD', catchTarget: null });
+    ui.onFishingResultContinue = () => {
+      ui.hideFishingResult();
+      ui.setBusy(false);
+      ui.setFishingViewExitVisible(true);
+      ui.setFishingState({ mode: 'ready', message: '', biteTarget: null });
+    };
+    mount.querySelector<HTMLButtonElement>('[data-fishing-result-continue]')!.click();
+
+    const rod = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
+    const back = mount.querySelector<HTMLButtonElement>('[data-fishing-view-exit]')!;
+    expect(rod.closest('[inert]')).toBeNull();
+    expect(mount.querySelector('[data-survival-top]')!.hasAttribute('inert')).toBe(false);
+    rod.click();
+    expect(action).toHaveBeenCalledExactlyOnceWith('fish', undefined);
+    for (const button of [rod, back]) {
+      button.focus();
+      for (const key of ['Enter', ' ', 'Tab']) {
+        const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+        button.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(false);
+      }
+    }
+    back.click();
+    expect(exit).toHaveBeenCalledOnce();
+    expect(cast).not.toHaveBeenCalled();
+  });
+
+  it('blocks ready fishing Back during a busy action but permits aiming cancellation', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const exit = vi.fn();
+    ui.onFishingViewExit = exit;
+    ui.setFishingViewExitVisible(true);
+    ui.setFishingState({ mode: 'ready', message: '', biteTarget: null });
+    const back = mount.querySelector<HTMLButtonElement>('[data-fishing-view-exit]')!;
+
+    ui.setBusy(true);
+    back.click();
+    expect(exit).not.toHaveBeenCalled();
+
+    ui.setBusy(false);
+    back.click();
+    expect(exit).toHaveBeenCalledOnce();
+
+    ui.setBusy(true);
+    ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
+    back.click();
+    expect(exit).toHaveBeenCalledTimes(2);
+  });
+
+  it('blocks ready fishing controls under the Journal and pause, then restores access', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const action = vi.fn();
+    const exit = vi.fn();
+    ui.onAction = action;
+    ui.onFishingViewExit = exit;
+    ui.render(snapshot(), () => null);
+    ui.setFishingViewExitVisible(true);
+    ui.setFishingState({ mode: 'ready', message: '', biteTarget: null });
+    const rod = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
+    const back = mount.querySelector<HTMLButtonElement>('[data-fishing-view-exit]')!;
+
+    for (const modal of ['journal', 'pause']) {
+      if (modal === 'journal') ui.showJournal(journalEntries);
+      else ui.setPaused(true);
+      expect(rod.closest('[inert]')).not.toBeNull();
+      expect(back.closest('[inert]')).not.toBeNull();
+      rod.click();
+      back.click();
+      expect(action).not.toHaveBeenCalled();
+      expect(exit).not.toHaveBeenCalled();
+      if (modal === 'journal') ui.hideJournal();
+      else ui.setPaused(false);
+      expect(rod.closest('[inert]')).toBeNull();
+      expect(back.closest('[inert]')).toBeNull();
+    }
+
+    ui.setBusy(true);
+    ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
+    expect(rod.closest('[inert]')).not.toBeNull();
+    expect(back.closest('[inert]')).toBeNull();
   });
 
   it('disposes fishing listeners, pending fade work, inert state, and focused controls once', async () => {
