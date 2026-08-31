@@ -8,15 +8,15 @@ export type EndingRecord =
   | { readonly id: 'dorothy'; readonly day: 0; readonly savedPickupCount: number }
   | { readonly id: 'rescue'; readonly day: number; readonly savedPickupCount: number; readonly signalAssisted: boolean }
   | { readonly id: 'death'; readonly day: number; readonly savedPickupCount: number; readonly cause: DeathCause }
-  | { readonly id: 'sinking'; readonly day: number; readonly savedPickupCount: number; readonly cause: { readonly eventId: string | null } }
-  | { readonly id: 'taken'; readonly day: number; readonly savedPickupCount: number };
+  | { readonly id: 'sinking'; readonly day: number; readonly savedPickupCount: number; readonly cause: { readonly eventId: string | null } };
+
+export type SurvivalEndingId = Exclude<EndingRecord['id'], 'dorothy'>;
 
 const TITLES = Object.freeze({
   dorothy: 'SUNK WITH DOROTHY',
   rescue: 'RESCUE FOUND YOU',
   death: 'THE SEA OUTLASTED YOU',
   sinking: 'THE BOAT IS GONE',
-  taken: 'TAKEN IN THE DARK',
 } as const);
 
 export function endingTitle(record: EndingRecord): string {
@@ -28,7 +28,6 @@ export function endingEpilogue(record: EndingRecord): string {
   if (record.id === 'rescue') return record.signalAssisted
     ? 'A distant crew followed the signs you left across the sea.'
     : 'At dawn, an engine answered the empty horizon.';
-  if (record.id === 'taken') return 'The light found something that had been waiting for you.';
   if (record.id === 'sinking') return 'The last damage opened the boat to the sea.';
   if (record.cause.kind === 'starvation') return 'Hunger left you too weak to meet another dawn.';
   if (record.cause.kind === 'diving') return 'The water returned you to the boat, but not for long.';

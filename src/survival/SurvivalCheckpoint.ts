@@ -50,7 +50,6 @@ export interface SurvivalSessionCheckpoint {
   readonly carlitos: CarlitosSnapshot | null;
   readonly pendingEventId: string | null;
   readonly pendingEventTargetId: ItemInstanceId | null;
-  readonly pendingDawnBreaks: readonly ItemInstanceId[];
   readonly nextDawnEnergyOverride: DawnEnergy | null;
   readonly lastEventId: string | null;
   readonly lastSeenDays: Readonly<Record<string, number>>;
@@ -81,7 +80,6 @@ export function createSurvivalSessionCheckpoint(
     inventory: cloneInventory(checkpoint.inventory),
     savedItems: Object.freeze(checkpoint.savedItems.map((item) => Object.freeze({ ...item }))),
     carlitos: checkpoint.carlitos === null ? null : Object.freeze({ ...checkpoint.carlitos }),
-    pendingDawnBreaks: Object.freeze([...checkpoint.pendingDawnBreaks]),
     lastSeenDays: cloneRecord(checkpoint.lastSeenDays),
     appearanceCounts: cloneRecord(checkpoint.appearanceCounts),
     lastOutcome: checkpoint.lastOutcome === null ? null : cloneOutcome(checkpoint.lastOutcome),

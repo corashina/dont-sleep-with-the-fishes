@@ -149,22 +149,6 @@ export class SurvivalInventoryState {
     return selected.filter((instanceId) => this.break(instanceId));
   }
 
-  selectRandomBreakable(
-    quantity: number,
-    random: RandomSource,
-    excludedInstanceIds: ReadonlySet<ItemInstanceId> = new Set(),
-  ): ItemInstanceId[] {
-    return this.selectRandom(
-      quantity,
-      random,
-      (item) => (
-        item.condition === 'usable'
-        && ITEM_DEFINITIONS[item.type]?.breakable === true
-        && !excludedInstanceIds.has(item.instanceId)
-      ),
-    );
-  }
-
   loseRandom(
     quantity: number,
     random: RandomSource,

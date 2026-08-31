@@ -598,11 +598,11 @@ export class PostProcessingConsole {
     const select = document.createElement('select');
     select.ariaLabel = 'Event test scene';
     select.dataset.eventTestSelect = '';
-    for (const phase of ['lab', 'day', 'night'] as const) {
+    for (const phase of ['lab', 'day', 'night', 'ending'] as const) {
       const options = controls.options.filter((option) => option.phase === phase);
       if (options.length === 0) continue;
       const group = document.createElement('optgroup');
-      group.label = phase.toUpperCase();
+      group.label = phase === 'ending' ? 'ENDINGS' : phase.toUpperCase();
       for (const option of options) {
         const element = document.createElement('option');
         element.value = option.id;

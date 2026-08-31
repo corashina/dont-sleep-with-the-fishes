@@ -51,12 +51,13 @@ afterEach(() => {
 function createUI(mount: HTMLElement): SurvivalUI {
   const ui = new SurvivalUI(mount);
   ui.setAnchors([
-    { id: 'fishing-tools', itemType: null, toolId: 'fishingRod', action: 'fish', remainingUses: null, x: 90, y: 180, visible: true, depleted: false },
+    { id: 'fishing-tools', itemType: null, toolId: 'fishingRod', action: 'fish', remainingUses: null, backingInstanceId: null, x: 90, y: 180, visible: true, depleted: false },
     { id: 'bucket-test', itemType: 'bucket', toolId: null, action: null, remainingUses: null, x: 140, y: 180, visible: true, depleted: false },
     { id: 'scubaSet-test', itemType: 'scubaSet', toolId: null, action: 'dive', remainingUses: null, x: 240, y: 250, visible: true, depleted: false },
     { id: 'cannedFood-test', itemType: 'cannedFood', toolId: null, action: 'eat', remainingUses: 1, x: 340, y: 300, visible: true, depleted: false },
     {
       id: 'repair-tools', itemType: null, toolId: 'repairTools', action: 'repair', remainingUses: null,
+      backingInstanceId: null,
       x: 440, y: 280, visible: true, depleted: false,
       hitArea: { width: 96, height: 52, depth: 2.4 },
     },
@@ -72,6 +73,62 @@ function createUI(mount: HTMLElement): SurvivalUI {
 }
 
 describe('item animation lab caption', () => {
+  it('keeps broken items selectable for the lab condition popup', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const onEventItem = vi.fn();
+    ui.onEventItem = onEventItem;
+    const session = new SurvivalSession(saved('bucket'), {
+      seed: 19, initialConditions: { 'bucket-1': 'broken' },
+    });
+    ui.render(session.snapshot(), () => null);
+    ui.setAnchors([{
+      id: 'supply:bucket', itemType: 'bucket', toolId: null, action: null,
+      backingInstanceId: 'bucket-1', remainingUses: null,
+      quantity: 1, usableQuantity: 0, brokenQuantity: 1,
+      x: 140, y: 180, visible: true, depleted: false,
+    }]);
+    ui.beginEventPresentation();
+    ui.showItemAnimationLab();
+    ui.setEventSelection(new Map<ItemInstanceId, string>([['bucket-1', 'bucket-scoop']]));
+    const button = mount.querySelector<HTMLButtonElement>('[data-anchor-id="supply:bucket"]')!;
+    expect(button.disabled).toBe(false);
+    expect(button.getAttribute('aria-disabled')).toBe('false');
+    expect(button.querySelector('[role="tooltip"]')?.textContent).toBe('BUCKET — BROKEN');
+    button.click();
+    expect(onEventItem).toHaveBeenCalledExactlyOnceWith('bucket-scoop', 'bucket-1');
+    onEventItem.mockClear();
+    button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(onEventItem).toHaveBeenCalledExactlyOnceWith('bucket-scoop', 'bucket-1');
+  });
+
+  it('focuses Fix and blocks unavailable choices for broken items', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const onEventChoice = vi.fn();
+    ui.onEventChoice = onEventChoice;
+    ui.beginEventPresentation();
+    ui.showItemAnimationLab();
+    ui.showItemAnimationLabChoices([
+      { id: 'bucket-scoop', label: 'Scoop from water', unavailableReason: 'Item is broken.' },
+      { id: 'break', label: 'Break', unavailableReason: 'Item is already broken.' },
+      { id: 'fix', label: 'Fix', unavailableReason: null },
+    ]);
+    const animation = mount.querySelector<HTMLButtonElement>('[data-event-choice="bucket-scoop"]')!;
+    const breakButton = mount.querySelector<HTMLButtonElement>('[data-event-choice="break"]')!;
+    const fixButton = mount.querySelector<HTMLButtonElement>('[data-event-choice="fix"]')!;
+    expect(document.activeElement).toBe(fixButton);
+    expect(animation.getAttribute('aria-disabled')).toBe('true');
+    expect(breakButton.getAttribute('aria-disabled')).toBe('true');
+    animation.click();
+    breakButton.click();
+    expect(onEventChoice).not.toHaveBeenCalled();
+    fixButton.click();
+    expect(onEventChoice).toHaveBeenCalledExactlyOnceWith('fix');
+  });
+
   it('keeps the caption hidden while world items remain selectable', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -754,20 +811,6 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector<HTMLElement>('[data-carlitos-card]')!.hidden).toBe(true);
   });
 
-  it('shows the taken ending record', () => {
-    const mount = document.createElement('main');
-    const ui = createUI(mount);
-
-    ui.showEnding({ id: 'taken', day: 8, savedPickupCount: 4 });
-
-    expect(mount.querySelector('[data-ending-title]')?.textContent).toBe('TAKEN IN THE DARK');
-    expect(mount.querySelector('[data-ending-body]')?.textContent)
-      .toBe('The light found something that had been waiting for you.');
-    expect(mount.querySelector('[data-ending-stats]')?.textContent)
-      .toBe('DAY 8 · 4 PICKUPS SAVED');
-    expect(mount.querySelector('[data-ending]')?.textContent).not.toContain('JOURNEY ENDED');
-  });
-
   it('keeps visual quality controls out of the pause overlay', () => {
     const mount = document.createElement('main');
     const ui = new SurvivalUI(mount);
@@ -869,6 +912,48 @@ describe('SurvivalUI', () => {
       relatedTarget: mount,
     }));
     expect(highlight).toHaveBeenLastCalledWith(null);
+  });
+
+  it('keeps event targets above overlapping inventory targets', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.setAnchors([
+      {
+        id: 'shotgun-overlap',
+        itemType: 'shotgun',
+        toolId: null,
+        action: null,
+        remainingUses: 1,
+        x: 300,
+        y: 220,
+        visible: true,
+        depleted: false,
+        hitArea: { width: 40, height: 40, depth: 1 },
+      },
+      {
+        id: 'event:wreckage',
+        eventFocusId: 'wreckage',
+        itemType: null,
+        toolId: null,
+        action: null,
+        remainingUses: null,
+        x: 300,
+        y: 220,
+        visible: true,
+        depleted: false,
+        hitArea: { width: 40, height: 40, depth: 2 },
+      },
+    ]);
+
+    const shotgun = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="shotgun-overlap"]',
+    )!;
+    const event = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="event:wreckage"]',
+    )!;
+
+    expect(Number(event.style.zIndex)).toBeGreaterThan(Number(shotgun.style.zIndex));
   });
 
   it('cycles overlapping boat items with the wheel and arrow keys', () => {
@@ -2085,24 +2170,28 @@ describe('SurvivalUI', () => {
     expect(onAction).not.toHaveBeenCalled();
   });
 
-  it('keeps a broken item anchor inspectable without exposing a usable action', () => {
+  it.each(['bucket', 'flashlight'] as const)('keeps broken %s inspectable without exposing a usable action', (itemType) => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
-    const state = new SurvivalSession(saved('bucket'), {
+    const instanceId = `${itemType}-1` as ItemInstanceId;
+    const state = new SurvivalSession(saved(itemType), {
       seed: 1,
-      initialConditions: { 'bucket-1': 'broken' },
+      initialConditions: { [instanceId]: 'broken' as const },
     }).snapshot();
     ui.render(state, () => null);
     ui.setAnchors([{
-      id: 'bucket-1', itemType: 'bucket', toolId: null, action: null, remainingUses: 0,
+      id: instanceId, itemType, toolId: null, action: null, remainingUses: 0,
+      quantity: 1, usableQuantity: 0, brokenQuantity: 1,
       x: 320, y: 240, visible: true, depleted: false,
     }]);
 
-    const broken = mount.querySelector<HTMLButtonElement>('[data-anchor-id="bucket-1"]')!;
+    const broken = mount.querySelector<HTMLButtonElement>(`[data-anchor-id="${instanceId}"]`)!;
     expect(broken.disabled).toBe(false);
-    expect(broken.querySelector('[role="tooltip"]')?.textContent).toBe('BUCKET');
+    expect(broken.getAttribute('aria-disabled')).toBe('true');
+    expect(broken.querySelector('[role="tooltip"]')?.textContent).toBe(`${itemType.toUpperCase()} — BROKEN`);
     expect(broken.getAttribute('aria-description')).toContain('BROKEN');
+    expect(broken.getAttribute('aria-description')).toContain('Repair with Duct Tape.');
     expect(broken.dataset.condition).toBe('broken');
     broken.focus();
     expect(document.activeElement).toBe(broken);

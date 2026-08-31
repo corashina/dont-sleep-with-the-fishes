@@ -445,7 +445,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
   ], undefined, { minimumPressure: 1 }),
   event('eerie-melody', 'night', 'Eerie Melody', 'dangerous', 'darkness', 1, 13, 30, [
     choice('bucket', 'Use Bucket', 'bucket', outcome(1, 'You wake with one energy.', atNextDawn(1, effects(undefined, [breakItem('bucket')])))),
-    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'The siren attacks.', effects([subtract('hull', { min: 50, max: 60 }), subtract('health', 50)]))),
+    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'The siren attacks.', effects([subtract('hull', { min: 50, max: 60 }), subtract('health', 30)]))),
     choice('umbrella', 'Use Umbrella', 'umbrella',
       outcome(60, 'The umbrella muffles the melody until it fades.'),
       outcome(40, 'The boat is damaged.', atNextDawn(1, effects([
@@ -456,7 +456,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
         effects([subtract('pressure', 1)], [consume('ductTape')]))),
     choice('sleep', 'Sleep', undefined,
       outcome(60, 'You wake exhausted.', atNextDawn(0)),
-      outcome(40, 'The siren attacks.', atNextDawn(1, effects([subtract('hull', { min: 50, max: 60 }), subtract('health', 50)])))),
+      outcome(40, 'The siren attacks.', atNextDawn(1, effects([subtract('hull', { min: 50, max: 60 }), subtract('health', 30)])))),
   ], undefined, { minimumPressure: 2 }),
   event('face-on-the-moon', 'night', 'Face on the Moon', 'uncertain', 'darkness', 1, 17, 50, [
     choice('umbrella', 'Use Umbrella', 'umbrella', outcome(1, 'You wake with two energy.', atNextDawn(2))),
@@ -605,7 +605,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       companionAction: 'delegateCarlitos',
     },
     {
-      ...choice('dive', 'Dive Into Wreck', 'scubaSet',
+      ...choice('dive', 'Search underwater', 'scubaSet',
         wreckageOutcome('wreckage.dive-loot', 10, 'You recover a medkit.',
           effects([subtract('energy', 3)], [gain('medicalKit')]), 'wreckage-dive-medkit'),
         wreckageOutcome('wreckage.dive-loot', 10, 'You recover a flare gun.',

@@ -225,7 +225,7 @@ function validateEffectRecord(value: unknown, path: string): PlainRecord {
     'effect',
     [
       'resources', 'items', 'chest',
-      'nextDawnEnergy', 'followUpNight', 'ending',
+      'nextDawnEnergy', 'followUpNight',
     ],
   );
   return candidateEffects;
@@ -320,7 +320,6 @@ function validateOptionalEffects(candidateEffects: PlainRecord, path: string): v
   const hasChest = Object.hasOwn(candidateEffects, 'chest');
   const hasNextDawnEnergy = Object.hasOwn(candidateEffects, 'nextDawnEnergy');
   const hasFollowUpNight = Object.hasOwn(candidateEffects, 'followUpNight');
-  const hasEnding = Object.hasOwn(candidateEffects, 'ending');
   const chest = hasChest ? candidateEffects.chest : undefined;
   if (hasChest && !['acquire', 'close', 'destroy'].includes(chest as string)) {
     throw new Error(`${path}.chest has an invalid effect`);
@@ -334,9 +333,6 @@ function validateOptionalEffects(candidateEffects: PlainRecord, path: string): v
   }
   if (hasFollowUpNight && candidateEffects.followUpNight !== true) {
     throw new Error(`${path}.followUpNight must be true`);
-  }
-  if (hasEnding && candidateEffects.ending !== 'taken') {
-    throw new Error(`${path}.ending must be taken`);
   }
 }
 

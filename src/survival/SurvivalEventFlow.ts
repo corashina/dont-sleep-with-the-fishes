@@ -2095,7 +2095,7 @@ export class SurvivalEventFlow {
     if (!this.isCurrent(generation, operation)) return;
     if (!await this.showLateEventReveal(event, generation, operation)) return;
     if (!await this.resumeAfterVisibility(generation, operation)) return;
-    await this.finishPendingEventReveal(event, generation, operation);
+    this.finishPendingEventReveal(event);
   }
 
   private async preparePendingEventReveal(
@@ -2192,7 +2192,10 @@ export class SurvivalEventFlow {
     this.eligibility = this.eventEligibilityFor(event, warned);
     this.dependencies.world.setEventEligibleItems?.(new Set(this.eligibility.keys()));
     this.sync(warned);
-    this.dependencies.ui.setEventSelection?.(this.eligibility, []);
+    this.dependencies.ui.setEventSelection?.(
+      this.eligibility,
+      this.contextualChoicesFor(event, warned),
+    );
     this.presentation = 'choosing';
     this.setBusy(false);
     return true;
@@ -2225,22 +2228,17 @@ export class SurvivalEventFlow {
     return this.isCurrent(generation, operation);
   }
 
-  private async finishPendingEventReveal(
-    event: SurvivalEventDefinition,
-    generation: number,
-    operation: number,
-  ): Promise<void> {
+  private finishPendingEventReveal(event: SurvivalEventDefinition): void {
     if (event.id === 'chest-attack') {
-      await this.finishChestAttackReveal(generation, operation);
+      this.finishChestAttackReveal();
       return;
     }
     this.finishStandardEventReveal(event);
   }
 
-  private async finishChestAttackReveal(generation: number, operation: number): Promise<void> {
+  private finishChestAttackReveal(): void {
     this.choiceCheckpointReady = this.presentation === 'choosing';
     if (this.choiceCheckpointReady) this.setBusy(false);
-    if (this.presentation === 'choosing') await this.resolveChestAttack(generation, operation);
   }
 
   private finishStandardEventReveal(event: SurvivalEventDefinition): void {
@@ -2369,8 +2367,7 @@ export class SurvivalEventFlow {
     snapshot: SurvivalSnapshot,
   ): EventContextChoice[] {
     return event.choices
-      .filter((choice) => choice.itemId === undefined
-        && !(event.id === 'chest-attack' && choice.id === 'attack'))
+      .filter((choice) => choice.itemId === undefined)
       .flatMap((choice) => {
         const view = this.contextualChoiceFor(event, choice, snapshot);
         return view === null ? [] : [view];

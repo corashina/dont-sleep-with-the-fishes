@@ -4,6 +4,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import type { ScavengeResult } from '../game/ScavengeSession';
+import type { EndingRecord } from '../game/ending';
 import { SURVIVAL_EVENTS } from '../survival/eventCatalog';
 import {
   ITEM_ANIMATION_LAB_ID,
@@ -11,13 +12,20 @@ import {
 } from '../survival/ItemAnimationLab';
 import type { PresentationCue } from '../survival/survivalTypes';
 
-export interface EventTestOption {
+interface EventSceneTestOption {
   readonly id: string;
   readonly title: string;
   readonly phase: 'lab' | 'day' | 'night';
   readonly eventId: string;
   readonly resultId?: string;
 }
+
+export type EventTestOption = EventSceneTestOption | {
+  readonly id: string;
+  readonly title: string;
+  readonly phase: 'ending';
+  readonly endingId: EndingRecord['id'];
+};
 
 const NIGHT_EVENT_TYPE_ORDER: readonly PresentationCue[] = Object.freeze([
   'storm',
@@ -88,6 +96,12 @@ export const EVENT_TEST_OPTIONS: readonly EventTestOption[] = Object.freeze([
       ];
     })
     .map((option) => Object.freeze(option)),
+  ...(['dorothy', 'rescue', 'death', 'sinking'] as const).map((endingId) => Object.freeze({
+    id: `ending-${endingId}`,
+    title: endingId.charAt(0).toUpperCase() + endingId.slice(1),
+    phase: 'ending' as const,
+    endingId,
+  })),
 ]);
 
 export function createEventTestResult(): Readonly<ScavengeResult> {

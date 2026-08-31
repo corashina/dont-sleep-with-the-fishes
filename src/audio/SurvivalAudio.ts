@@ -1,5 +1,5 @@
 import type { ItemId } from '../game/ItemState';
-import type { EndingRecord } from '../game/ending';
+import type { SurvivalEndingId } from '../game/ending';
 import type { FishingTerminalResult } from '../survival/FishingSession';
 import type { DedicatedEventId } from '../survival/eventPresentationRoutes';
 import type {
@@ -457,7 +457,7 @@ export class SurvivalAudio {
     this.thunderSoundIndex = (this.thunderSoundIndex + 1) % THUNDER_SOUNDS.length;
   }
 
-  ending(id: Extract<EndingRecord['id'], 'rescue' | 'death' | 'sinking' | 'taken'>): void {
+  ending(id: SurvivalEndingId): void {
     if (this.disposed) return;
     const cue = id === 'rescue'
       ? 'rescueEnding'

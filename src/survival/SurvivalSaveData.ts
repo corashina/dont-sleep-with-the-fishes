@@ -582,7 +582,6 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const inventory = parseInventory(value.inventory);
   const savedItems = parseItemList(value.savedItems);
   const carlitos = parseCarlitos(value.carlitos);
-  const pendingDawnBreaks = parseItemIdList(value.pendingDawnBreaks);
   const nextDawnEnergyOverride = parseNextDawnEnergyOverride(value.nextDawnEnergyOverride);
   const lastEventId = parseEventIdOrNull(value.lastEventId);
   const lastSeenDays = parseEventNumberRecord(value.lastSeenDays, 0, day!);
@@ -594,7 +593,7 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const pendingJournalNighttime = parsePendingJournalNight(value.pendingJournalNighttime);
   const pendingJournalActions = parseJournalActions(value.pendingJournalActions);
   const journalEntries = parseJournalEntries(value.journalEntries);
-  if ([chest, inventory, savedItems, pendingDawnBreaks, lastSeenDays, appearanceCounts,
+  if ([chest, inventory, savedItems, lastSeenDays, appearanceCounts,
     lastHealthCause, pendingJournalActions, journalEntries].some((field) => field === null)) return null;
   if ([carlitos, lastEventId, lastOutcome, lastHullEventId, pendingJournalDaytime,
     pendingJournalNighttime].some((field) => field === undefined)) return null;
@@ -603,9 +602,7 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const pendingEventTargetId = parsePendingEventTargetId(value.pendingEventTargetId, inventory!);
   if (pendingEventId === undefined || pendingEventTargetId === undefined) return null;
   if (!hasValidPendingEventState(state, pendingEventId, pendingEventTargetId)) return null;
-  if (!hasValidSessionInventory(
-    inventory!, savedItems!, savedPickupCount!, carlitos!, pendingDawnBreaks!,
-  )) return null;
+  if (!hasValidSessionInventory(inventory!, savedItems!, savedPickupCount!, carlitos!)) return null;
   if (!hasValidPendingEventDefinition(
     state, pendingEventId, pendingEventTargetId, inventory!,
   )) return null;
@@ -614,7 +611,7 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
     food: food!, bait: bait!, recoveredFood: recoveredFood!, recoveredBait: recoveredBait!, repairMaterial: repairMaterial!, rescueLead: rescueLead! as RescueLead,
     rescueTraceFinds: rescueTraceFinds! as 0 | 1 | 2, radioSignalAvailable: value.radioSignalAvailable, radioSignalsSent: radioSignalsSent!, radioSignalsEnabled: value.radioSignalsEnabled,
     chest: chest!, weather: value.weather, actedToday: value.actedToday, inventory: inventory!, savedItems: savedItems!, savedPickupCount: savedPickupCount!, carlitos: carlitos!,
-    pendingEventId, pendingEventTargetId, pendingDawnBreaks: pendingDawnBreaks!, nextDawnEnergyOverride: nextDawnEnergyOverride as DawnEnergy | null,
+    pendingEventId, pendingEventTargetId, nextDawnEnergyOverride: nextDawnEnergyOverride as DawnEnergy | null,
     lastEventId: lastEventId!, lastSeenDays: lastSeenDays!, appearanceCounts: appearanceCounts!, lastOutcome: lastOutcome!, lastHealthCause: lastHealthCause!, lastHullEventId: lastHullEventId!,
     pendingJournalDaytime: pendingJournalDaytime!, pendingJournalNighttime: pendingJournalNighttime!, pendingJournalActions: pendingJournalActions!, journalEntries: journalEntries!,
     fishingCounter: fishingCounter!, seed: seed!, randomState: randomState!,
@@ -683,12 +680,10 @@ function hasValidSessionInventory(
   savedItems: readonly ItemInstance[],
   savedPickupCount: number,
   carlitos: CarlitosSnapshot | null,
-  pendingDawnBreaks: readonly ItemInstanceId[],
 ): boolean {
   if (Object.values(inventory).some((item) => item?.type === 'carlitos')) return false;
   if (savedPickupCount !== savedItems.length + (carlitos === null ? 0 : 1)) return false;
-  if (!inventoryContainsIds(inventory, savedItems.map((item) => item.instanceId))) return false;
-  return inventoryContainsIds(inventory, pendingDawnBreaks);
+  return inventoryContainsIds(inventory, savedItems.map((item) => item.instanceId));
 }
 
 function hasValidPendingEventDefinition(
@@ -727,12 +722,6 @@ function parseItemList(value: unknown): readonly ItemInstance[] | null {
   return items.some((item) => item === null) || new Set(items.map((item) => item!.instanceId)).size !== items.length
     ? null
     : Object.freeze(items as ItemInstance[]);
-}
-
-function parseItemIdList(value: unknown): readonly ItemInstanceId[] | null {
-  if (!Array.isArray(value)) return null;
-  const ids = value.map(parseItemInstanceId);
-  return ids.some((id) => id === null) || new Set(ids).size !== ids.length ? null : Object.freeze(ids as ItemInstanceId[]);
 }
 
 function parseItemInstanceId(value: unknown): ItemInstanceId | null {

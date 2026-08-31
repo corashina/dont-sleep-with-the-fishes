@@ -335,14 +335,16 @@ export class BoatAnchorView {
 
   private anchorLayout(anchor: BoatInteractionAnchor): AnchorLayoutState {
     const hitArea = anchor.hitArea ?? DEFAULT_ANCHOR_HIT_AREA;
+    const targetKind = this.anchorTargetKind(anchor);
+    const depthZIndex = Math.max(1, 100000 - Math.round(hitArea.depth * 100));
     return {
       visible: anchor.visible,
       x: Math.round(anchor.x),
       y: Math.round(anchor.y),
-      targetKind: this.anchorTargetKind(anchor),
+      targetKind,
       width: Math.round(hitArea.width),
       height: Math.round(hitArea.height),
-      zIndex: Math.max(1, 100000 - Math.round(hitArea.depth * 100)),
+      zIndex: targetKind === 'event' ? 100000 + depthZIndex : depthZIndex,
       depleted: anchor.depleted,
     };
   }
@@ -640,7 +642,7 @@ export class BoatAnchorView {
     const reason = this.tooltipReason(anchor, pillowSleep, anchoredChoice, eventItemEligible);
     const preview = this.tooltipPreview(action);
     const state = this.anchorState(item?.condition, usableQuantity, brokenQuantity);
-    const visibleLabel = this.visibleAnchorLabel(anchor, anchoredChoice, itemLabel, quantity);
+    const visibleLabel = this.visibleAnchorLabel(anchor, anchoredChoice, itemLabel, quantity, state);
     const energyCost = this.tooltipEnergyCost(eventItemEligible, anchoredChoice, preview);
     const energyIndicator = this.energyIndicator(anchoredChoice, energyCost, reason);
     this.updateTooltipNodes(button, anchor, visibleLabel, energyIndicator, anchoredChoice);
@@ -774,10 +776,14 @@ export class BoatAnchorView {
     anchoredChoice: EventContextChoice | undefined,
     itemLabel: string,
     quantity: number,
+    state: string | null,
   ): string {
     if (anchor.companionId === 'carlitos') return anchoredChoice?.label.toLocaleUpperCase('en-US') ?? 'CARLITOS';
     if (anchor.label !== undefined) return anchor.label;
-    if (anchor.itemType !== null) return quantityLabel(ITEM_LABELS[anchor.itemType], quantity);
+    if (anchor.itemType !== null) {
+      const label = quantityLabel(ITEM_LABELS[anchor.itemType], quantity);
+      return state === null ? label : `${label} — ${state}`;
+    }
     if (anchor.supplyGroupId === 'repairMaterial') return quantityLabel('REPAIR MATERIAL', quantity);
     if (anchor.toolId === 'fishingRod') return 'Fishing rod';
     return anchor.toolId === 'repairTools' ? 'REPAIR' : itemLabel;
@@ -890,6 +896,12 @@ export class BoatAnchorView {
 
   private anchorUnavailableReason(anchor: BoatInteractionAnchor): string | null {
     if (anchor.depleted) return 'This recovered item is depleted.';
+    const backingInstanceId = this.anchorBackingInstanceId(anchor);
+    const condition = this.anchorInventoryItem(backingInstanceId)?.condition;
+    const quantity = this.anchorQuantity(anchor);
+    const usableQuantity = this.usableQuantity(anchor, condition, quantity);
+    const brokenQuantity = this.brokenQuantity(anchor, condition, quantity);
+    if (brokenQuantity > 0 && usableQuantity === 0) return 'Repair with Duct Tape.';
     return anchor.action === null ? null : this.actionReasons.get(anchor.action) ?? null;
   }
 
@@ -1155,8 +1167,7 @@ export class BoatAnchorView {
   }
 
   private anchorInstanceId(id: string, anchor: BoatInteractionAnchor): ItemInstanceId | null {
-    if (anchor.backingInstanceId !== undefined) return anchor.backingInstanceId;
-    return id.startsWith('supply:') ? null : id as ItemInstanceId;
+    return anchor.backingInstanceId ?? (id.startsWith('supply:') ? null : id as ItemInstanceId);
   }
 
   private eligibleEventItemState(instanceId: ItemInstanceId): AnchorInteractionState {

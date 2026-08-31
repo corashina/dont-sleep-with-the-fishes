@@ -322,6 +322,7 @@ export class SurvivalUI {
       if (!this.disposed) this.onReturnToMenu();
     };
 
+    document.addEventListener('click', this.handleDocumentClick, true);
     document.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('resize', this.handleWindowResize);
   }
@@ -663,6 +664,7 @@ export class SurvivalUI {
       () => this.focusedEventView.removeListenersForDispose(),
       () => this.journalView.removeListenersForDispose(),
       () => this.modalViews.removeListenersForDispose(),
+      () => document.removeEventListener('click', this.handleDocumentClick, true),
       () => document.removeEventListener('keydown', this.handleKeyDown),
       () => window.removeEventListener('resize', this.handleWindowResize),
       () => { this.onAction = () => undefined; },
@@ -902,6 +904,18 @@ export class SurvivalUI {
     }
     return false;
   }
+
+  private readonly handleDocumentClick = (event: MouseEvent): void => {
+    const caption = this.eventView.caption;
+    if (
+      this.disposed
+      || caption.dataset.eventId !== 'item-animation-lab'
+      || !caption.classList.contains('is-visible')
+      || !(event.target instanceof Node)
+      || caption.contains(event.target)
+    ) return;
+    this.hideItemAnimationLabChoices();
+  };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.disposed || event.defaultPrevented || event.repeat) return;

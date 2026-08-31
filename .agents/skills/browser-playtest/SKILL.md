@@ -9,27 +9,19 @@ The current chat runs one shared survival batch with collaboration subagents.
 
 ## Before Every Run
 
-Ask for the tester count: "How many testers: 1, 2, 3, 4, or 5? Default: 5." Wait for the answer.
+Read `docs/browser-playtesting.md`, including its targeted regression tasks.
+
+Ask for the tester count: "How many testers, from 1 through 10? Default: 5." Wait for the answer.
+
+Accept only an integer from 1 through 10. Ask again for an invalid count.
 
 A count in the run request does not answer this question. Always wait for a new answer before setup or browser actions.
 
-| Testers | Profiles |
-|---|---|
-| 1 | balanced |
-| 2 | cautious, reckless |
-| 3 | cautious, balanced, reckless |
-| 4 | cautious, resourceful, bold, reckless |
-| 5 | cautious, resourceful, balanced, bold, reckless |
+Use the guide's "Tester Count and Profiles" section for roster order, profile behavior, and unique tester IDs.
 
-Use this profile contract:
+Ten testers use each profile twice. Each occurrence is a separate tester, with its own subagent, browser tab, and folder.
 
-- Cautious: Protect food, medicine, tools, and Energy. Prefer safe counters. Dive only when survival needs its reward.
-- Resourceful: Seek low-cost gains. Time food, care, and repairs to prevent waste. Avoid risks with weak rewards.
-- Balanced: Protect critical resources. Accept useful risks. Mix eating, fishing, repairs, care, dives, items, and event choices.
-- Bold: Pursue high-value rewards and dive often. Spend supplies to stay ready. Avoid near-certain death.
-- Reckless: Seek high rewards. Dive often and delay care. Prefer dangerous choices that do not make death certain.
-
-Record the tested commit with `git rev-parse HEAD`. Record the current checkout with `git rev-parse --show-toplevel`. Start one Vite server from that current checkout. Do not use the main repository for the server.
+Record the current checkout with `git rev-parse --show-toplevel`. Build from that checkout, including its current changes.
 
 Find the stable artifact root only with:
 
@@ -38,7 +30,18 @@ $gitCommon = git rev-parse --path-format=absolute --git-common-dir
 $mainRepository = Split-Path -Parent $gitCommon
 ```
 
-Create one UTC timestamp and random suffix for `<batch-id>`. Create `$mainRepository/.superpowers/browser-playtests/<batch-id>/` and only the selected profile folders.
+Create one UTC timestamp and random suffix for `<batch-id>`. Create `$mainRepository/.superpowers/browser-playtests/<batch-id>/` and one folder per selected tester ID.
+
+Start the frozen build runner from the tested checkout:
+
+```powershell
+npm run playtest:serve -- --batch-dir <absolute-batch-folder> --port 4173
+```
+
+Wait for `build/build.json` to report `ready`. Read its commit, source worktree, server URL, source hash, and build hash.
+Serve only this batch's static build. Do not use a development server or shared `dist/` directory.
+Do not overwrite, rebuild, or restart a batch build. Create a new batch if startup fails.
+Keep the runner active for every wave. Source, build, or commit changes invalidate the batch and close the server.
 
 Create one unsigned 32-bit seed. Select two distinct scavenging item instance IDs uniformly without replacement. Build the loadout from every other instance in catalog order. Use this exact URL:
 
@@ -46,9 +49,10 @@ Create one unsigned 32-bit seed. Select two distinct scavenging item instance ID
 /?playtest=survival&seed=<decimal-uint32>&missing=<instance-id>&missing=<instance-id>
 ```
 
-Use one server URL, test URL, seed, missing IDs, loadout, commit, worktree, and maximum day `55` for every player.
+Append the query to the runner's server URL, preserving its base path.
+Share the URL, seed, missing IDs, loadout, commit, hashes, worktree, and maximum day `55` across all players.
 
-Before spawning players, write `batch.json`:
+Before spawning players, write `batch.json` with all selected testers, including queued testers. This example shows one tester. Replace `testerCount` and the tester list with the confirmed roster.
 
 ```json
 {
@@ -58,17 +62,24 @@ Before spawning players, write `batch.json`:
   "commit": "<commit>",
   "sourceWorktree": "<absolute path>",
   "mainRepository": "<absolute path>",
+  "buildMetadataPath": "build/build.json",
+  "sourceHash": "<SHA-256 from build metadata>",
+  "buildHash": "<SHA-256 from build metadata>",
+  "invalidatedAt": null,
+  "invalidationReason": null,
   "serverUrl": "<server URL>",
   "testUrl": "<full test URL>",
   "seed": 0,
   "missingItemIds": ["<id>", "<id>"],
   "loadout": ["<catalog-order IDs>"],
   "maximumDay": 55,
+  "testerCount": 1,
   "testers": [{
-    "profile": "<profile>",
+    "testerId": "balanced_1",
+    "profile": "balanced",
     "subagentId": null,
-    "status": null,
-    "reportPath": "<profile>/report.md",
+    "status": "queued",
+    "reportPath": "balanced_1/report.md",
     "screenshotPaths": []
   }]
 }
@@ -76,11 +87,15 @@ Before spawning players, write `batch.json`:
 
 ## Player Run
 
-Use collaboration subagents only. Start selected profiles in table order. Spawn as many players as current subagent capacity permits. Save every returned subagent ID in `batch.json`.
+Use collaboration subagents only. Start testers in roster order. Use each tester ID as its subagent task name. Spawn as many players as available slots permit, excluding the coordinator and other active agents.
 
-When capacity is full, wait for an active player to stop. Record its result and close its returned subagent.
+Only the coordinator writes `batch.json` and `comparison.md`. Save each returned subagent ID in its tester entry. Set that entry's status to `running`.
 
-Then spawn the next unstarted profile. Keep the shared server and batch inputs unchanged across waves. Preserve the requested tester count.
+When capacity is full, wait for an active player to stop. Record its final status and artifact paths. The runtime releases completed subagents when slots are needed. No close-agent tool is required.
+
+Then spawn the next queued tester with a new subagent. Keep the shared server and batch inputs unchanged across waves. Preserve the requested tester count. Ten testers means ten total runs, even when fewer than ten can run at once.
+
+With three tester slots, start three testers. Start each queued tester when an active tester finishes. Stop only after all requested testers have final statuses.
 
 Each player owns its browser connection only during that active subagent turn. The player must reach a stop condition before returning its final message.
 
@@ -88,7 +103,7 @@ Do not return an interim result because the run is long. Continue browser action
 
 The coordinator waits with long `collaboration.wait_agent` calls. It does not use `collaboration.followup_task` to resume a player that already returned. A returned player's browser connection is not recoverable.
 
-Give each player its profile, shared inputs, absolute profile folder, and these rules:
+Give each player its tester ID, profile, shared inputs, assigned regression tasks, absolute tester folder, and these rules:
 
 - Control one separate browser tab through visible page controls only.
 - Do not inspect source, scripts, page internals, network data, hidden state, or browser storage.
@@ -97,9 +112,11 @@ Give each player its profile, shared inputs, absolute profile folder, and these 
 - Bait is automatic. Do not select it.
 - Select `Fish`. Wait for `CLICK THE WATER TO CAST`. Click visible water.
 - Checkpoint `report.md` after every decision.
-- Save screenshots in `<profile>/screenshots/`.
+- Save screenshots in `<tester-id>/screenshots/`.
+- Write only inside the assigned tester folder. Do not edit another tester's files or shared batch files.
+- Stop controls and finalize the partial report if the coordinator reports batch invalidation.
 
-Each report includes profile, status, outcome, reached day, final visible resources, final inventory, chronological actions with reasons, resource and inventory changes, events and choices, disabled or blocked controls, confirmed UI bugs, screenshot paths, and missing screenshot reasons.
+Each report includes tester ID, profile, status, outcome, reached day, final visible resources, final inventory, chronological actions with reasons, resource and inventory changes, events and choices, disabled or blocked controls, confirmed UI bugs, screenshot paths, and missing screenshot reasons.
 
 Capture screenshots for the start state, first two event choice states, first visible critical resource state, final state, and each visible game or browser failure.
 
@@ -115,9 +132,25 @@ Retry an enabled unchanged control only after its first attempt produces no visi
 
 One tester failure does not stop other testers. Preserve every partial report and screenshot.
 
+## Build Invalidation
+
+Check `build/build.json` before each wave and after each wait. Stop the batch if the runner exits unexpectedly.
+If invalidated, copy its timestamp and reason into `batch.json`.
+If the runner exits without invalidation metadata, record the detection time and `Runner exited unexpectedly` in `batch.json`.
+Apply the same invalidation rules. Do not rewrite build metadata.
+Tell active testers to stop controls and finalize reports. Do not start remaining testers.
+Use `batch-invalidated` for interrupted and unstarted testers. Preserve completed results and all artifacts.
+Do not count build invalidation as a game failure. Do not compare balance across an invalidated batch.
+
 ## Compare
 
-After all players stop, update `batch.json` with final statuses, report paths, screenshot paths, and completion time. Write `comparison.md` with days, endings, visible resources, inventory, major choices, failures, UI issues, profile differences, and explicit missing tester data.
+After all players stop, update `batch.json` with final statuses, report paths, screenshot paths, and completion time. Verify that the tester entry count matches `testerCount` and every entry has a final status.
+
+Write `comparison.md` with one entry per tester ID. Include days, endings, visible resources, inventory, major choices, failures, UI issues, profile differences, and explicit missing tester data. Compare repeated profiles without merging their results.
+
+For invalidated batches, report observed results and missing data only. Omit balance and profile comparisons.
+
+Stop the runner after all players stop. Normal shutdown changes build status to `stopped`.
 
 ## Change Approval
 

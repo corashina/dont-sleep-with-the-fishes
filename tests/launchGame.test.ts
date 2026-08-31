@@ -132,7 +132,7 @@ describe('launchGame', () => {
       { createGame },
     ), 'enabled', {
       search: '?playtest=survival&seed=42&missing=map-1&missing=knife-1',
-      development: true,
+      playtestEnabled: true,
     });
 
     await handle.completion;
@@ -161,7 +161,7 @@ describe('launchGame', () => {
     ));
     const handle = launchGame(mount, dependencies(loadModels), 'enabled', {
       search: '?playtest=survival&seed=42&missing=map-1',
-      development: true,
+      playtestEnabled: true,
     });
 
     await expect(handle.completion).resolves.toBeNull();
@@ -176,11 +176,33 @@ describe('launchGame', () => {
       { createGame },
     ), 'enabled', {
       search: '?playtest=survival&seed=42&missing=map-1&missing=knife-1',
-      development: false,
+      playtestEnabled: false,
     });
 
     await handle.completion;
     expect(createGame.mock.calls[0]?.at(-1)).toBeNull();
+  });
+
+  it.each(['playtest', 'production'])('gates seeded startup in a %s build', async (mode) => {
+    const oldUrl = window.location.href;
+    vi.stubEnv('DEV', false);
+    vi.stubEnv('MODE', mode);
+    window.history.replaceState(null, '', '?playtest=survival&seed=42&missing=map-1&missing=knife-1');
+    try {
+      const createGame = vi.fn(() => ({ start: vi.fn(), dispose: vi.fn() }));
+      const handle = launchGame(connectedMount(), dependencies(
+        () => Promise.resolve({ dispose: vi.fn() } as unknown as PropModelLibrary),
+        { createGame },
+      ));
+      await handle.completion;
+      expect(createGame.mock.calls[0]?.at(-1)).toEqual(
+        mode === 'playtest' ? expect.objectContaining({ seed: 42 }) : null,
+      );
+      handle.cancel();
+    } finally {
+      vi.unstubAllEnvs();
+      window.history.replaceState(null, '', oldUrl);
+    }
   });
 
   it('renders the loading state before model preload resolves', async () => {

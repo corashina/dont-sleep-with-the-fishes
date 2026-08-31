@@ -113,11 +113,6 @@ export class FocusedEventFlow {
     const generation = this.dependencies.captureLifecycleGeneration();
     const eventId = this.activeEventId;
     if (!this.canChoose(eventId, choice, generation)) return;
-    if (this.isLeaveChoice(eventId, choice)) {
-      this.dependencies.audio.confirm();
-      await this.back();
-      return;
-    }
     const operation = this.beginOperation();
     await this.resolveFocusedChoice(eventId, choice, generation, operation);
   }
@@ -145,32 +140,10 @@ export class FocusedEventFlow {
   }
 
   async back(): Promise<void> {
-    const generation = this.dependencies.captureLifecycleGeneration();
     const eventId = this.activeEventId;
-    if (
-      eventId === null
-      || this.focusState !== 'choosing'
-      || !this.isCurrent(generation)
-    ) return;
-
-    const operation = this.beginOperation();
-    this.focusState = 'returning';
-    this.dependencies.setBusy(true);
-    try {
-      this.dependencies.ui.hideFocusedEvent?.();
-      await (this.dependencies.world.exitFocusedEventView?.() ?? Promise.resolve());
-    } catch (error) {
-      this.recoverBackFailure(eventId, generation, operation);
-      throw error;
-    }
-    if (!this.isCurrentFocus(eventId, 'returning', generation, operation)) return;
-
-    this.activeEventId = null;
-    this.choices = [];
-    this.focusState = 'idle';
-    this.dependencies.ui.setEventSelection?.(EMPTY_ELIGIBILITY, []);
-    this.dependencies.setBusy(false);
-    this.dependencies.ui.restoreCommandFocus?.();
+    if (eventId === null) return;
+    // Returning declines the encounter; camera-only exits leave day controls blocked.
+    await this.choose({ id: eventId === 'wreckage' ? 'leave' : 'sleep', instanceId: null });
   }
 
   syncTarget(width: number, height: number): void {
@@ -287,17 +260,6 @@ export class FocusedEventFlow {
     this.ignoreSecondary(() => this.dependencies.ui.restoreCommandFocus?.());
   }
 
-  private recoverBackFailure(
-    eventId: InspectableEventId,
-    generation: number,
-    operation: number,
-  ): void {
-    if (!this.isCurrentFocus(eventId, 'returning', generation, operation)) return;
-    this.focusState = 'choosing';
-    this.ignoreSecondary(() => this.showFocus());
-    this.ignoreSecondary(() => this.dependencies.setBusy(false));
-  }
-
   private async releaseStaleEntry(
     eventId: InspectableEventId,
     generation: number,
@@ -367,13 +329,6 @@ export class FocusedEventFlow {
       && this.isCurrent(generation)
       && this.dependencies.isPendingEvent(eventId)
       && this.isCurrentChoice(choice);
-  }
-
-  private isLeaveChoice(
-    eventId: InspectableEventId,
-    choice: FocusedEventChoiceSelection,
-  ): boolean {
-    return eventId === 'wreckage' && choice.id === 'leave';
   }
 
   private beginChoiceResolution(): void {

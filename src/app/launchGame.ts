@@ -61,7 +61,7 @@ export interface LaunchHandle {
 
 export interface LaunchEnvironment {
   readonly search: string;
-  readonly development: boolean;
+  readonly playtestEnabled: boolean;
 }
 
 export interface LaunchDependencies {
@@ -435,7 +435,7 @@ export function launchGame(
   physicsMode: PhysicsMode = configuredPhysicsMode(),
   environment: LaunchEnvironment = {
     search: window.location.search,
-    development: import.meta.env.DEV,
+    playtestEnabled: import.meta.env.DEV || import.meta.env.MODE === 'playtest',
   },
 ): LaunchHandle {
   let cancelled = false;
@@ -468,7 +468,7 @@ export function launchGame(
   try {
     browserPlaytest = parseBrowserPlaytest(
       environment.search,
-      environment.development,
+      environment.playtestEnabled,
     );
   } catch (error) {
     return {

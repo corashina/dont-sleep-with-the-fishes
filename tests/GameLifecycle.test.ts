@@ -57,6 +57,7 @@ import { SurvivalUI } from '../src/ui/SurvivalUI';
 import type { SurvivalRunCheckpoint } from '../src/survival/SurvivalCheckpoint';
 import { createSurvivalSaveDocument } from '../src/survival/SurvivalSaveData';
 import {
+  SurvivalPhase,
   type SurvivalCheckpointChange,
   type SurvivalPhaseStart,
 } from '../src/survival/SurvivalPhase';
@@ -2884,6 +2885,86 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(secondSurvival.dispose).not.toHaveBeenCalled();
 
     game.dispose();
+  });
+
+  it('plays all ending dropdown entries and preserves the saved run when switching scenes', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const storage = enabledStorageWith(validRunCheckpoint(9));
+    const savedDocument = storage.getItem(SURVIVAL_SAVE_DATA_KEY);
+    const phases: GamePhase[] = [];
+    const createScavenge: GameFactories['createScavenge'] = (
+      context, complete, restart, returnToMenu, start,
+    ) => {
+      const phase = new ScavengePhase(context, complete, restart, returnToMenu, start);
+      phases.push(phase);
+      return phase;
+    };
+    const game = Game.forTest({
+      createMenu: () => gamePhase(),
+      createScavenge,
+      createSurvival: (context, start, onRestart, onCheckpointChange, onReturnToMenu) => {
+        const phase = SurvivalPhase.forTestStart({
+          world: {},
+          ui: new SurvivalUI(context.mount),
+          onRestart,
+          onCheckpointChange,
+          onReturnToMenu,
+        }, start);
+        phases.push(phase);
+        return phase;
+      },
+    }, {
+      mount,
+      propModels: createTestPropModels(),
+      menuModels: EMPTY_MENU_MODELS,
+      shipFurniture: createTestShipFurniture(),
+      skyAssets: createTestSkyAssets(),
+      physicsRuntime,
+      physicsMode: 'off',
+      sceneRenderer: postProcessingSceneRenderer(),
+      saveStorage: storage,
+    });
+
+    const enter = (id: string): void => {
+      openSystemTuning();
+      mount.querySelector<HTMLSelectElement>('[data-event-test-select]')!.value = id;
+      mount.querySelector<HTMLButtonElement>('[data-event-test-enter]')!.click();
+    };
+
+    try {
+      const group = mount.querySelector('optgroup[label="ENDINGS"]');
+      expect(Array.from(group?.querySelectorAll('option') ?? [], (option) => option.value))
+        .toEqual(['ending-dorothy', 'ending-rescue', 'ending-death', 'ending-sinking']);
+      enter('item-animation-lab');
+      for (const endingId of ['dorothy', 'rescue', 'death', 'sinking', 'dorothy']) {
+        const previous = phases.at(-1)!;
+        const dispose = vi.spyOn(previous, 'dispose');
+        enter(`ending-${endingId}`);
+        expect(dispose).toHaveBeenCalledOnce();
+        if (endingId === 'dorothy') {
+          const phase = phases.at(-1)!;
+          const internals = phase as unknown as {
+            session: ScavengeSession;
+            ending: { stage: string; elapsedSeconds: number };
+          };
+          expect(internals.session.snapshot().status).toBe('failure');
+          expect(internals.ending).toEqual({ stage: 'sinking', elapsedSeconds: 0 });
+          phase.update(0, SINKING_CINEMATIC_SECONDS + ENDING_HOLD_SECONDS);
+          expect(internals.ending.stage).toBe('menuReady');
+          expect(mount.querySelector<HTMLButtonElement>('[data-ending-action]')!.hidden).toBe(false);
+        }
+        expect(mount.querySelector<HTMLElement>(`[data-ending="${endingId}"]`)?.hidden).toBe(false);
+        expect(storage.getItem(SURVIVAL_SAVE_DATA_KEY)).toBe(savedDocument);
+      }
+      enter('item-animation-lab');
+      expect(mount.querySelector('[data-event-id="item-animation-lab"]')).not.toBeNull();
+      expect(mount.querySelector('[data-ending="dorothy"]')).toBeNull();
+      expect(storage.getItem(SURVIVAL_SAVE_DATA_KEY)).toBe(savedDocument);
+    } finally {
+      game.dispose();
+      mount.remove();
+    }
   });
 
   it('launches each Midnight Tour test option with its exact result', () => {

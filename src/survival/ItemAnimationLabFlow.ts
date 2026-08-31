@@ -1,6 +1,7 @@
 import type { SurvivalAudio } from '../audio/SurvivalAudio';
-import type { ItemId, ItemInstanceId } from '../game/ItemState';
+import { ITEM_DEFINITIONS, type ItemId, type ItemInstanceId } from '../game/ItemState';
 import type { SurvivalUI } from '../ui/SurvivalUI';
+import type { EventContextChoice } from '../ui/SurvivalUiViewModel';
 import type { BoatWorld } from './BoatWorld';
 import {
   CARLITOS_LAB_CHOICE_ID,
@@ -17,10 +18,15 @@ import type { SurvivalSession } from './SurvivalSession';
 import type { SurvivalEventId } from './eventCatalog';
 import type {
   EventResponseId,
+  SurvivalItemState,
 } from './survivalTypes';
 import type { SurvivalSnapshot } from './survivalSnapshot';
 
-export type ItemAnimationLabSessionPort = Pick<SurvivalSession, 'snapshot'>;
+export type ItemAnimationLabSessionPort = Pick<
+  SurvivalSession, 'snapshot' | 'setItemConditionForLab'
+>;
+
+const ITEM_CONDITION_CHOICE_ID = 'item-condition';
 
 export type ItemAnimationLabWorldPort = Pick<
   BoatWorld,
@@ -70,6 +76,7 @@ export interface ItemAnimationLabFlowDependencies {
   readonly audio: ItemAnimationLabAudioPort;
   readonly bundles: ItemAnimationLabBundlePort;
   readonly setBusy: (busy: boolean) => void;
+  readonly renderSnapshot: () => SurvivalSnapshot;
   readonly playFishing: () => Promise<void> | void;
   readonly setAutomaticWeather: (eventId: SurvivalEventId | null) => void;
   readonly captureLifecycleGeneration: () => number;
@@ -134,15 +141,19 @@ export class ItemAnimationLabFlow {
 
   choose(choiceId: EventResponseId): void {
     const instanceId = this.pendingInstanceId;
-    if (instanceId === null || !this.entered || this.using || this.disposed) return;
+    if (instanceId === null || !this.entered || this.using) return;
+    const generation = this.dependencies.captureLifecycleGeneration();
+    if (!this.isLifecycleCurrent(generation)) return;
     const item = this.dependencies.session.snapshot().inventory[instanceId];
-    const use = item === undefined
-      ? undefined
-      : ITEM_ANIMATION_LAB_USES[item.type]?.find((candidate) => candidate.id === choiceId);
-    if (item === undefined || item.condition !== 'usable' || use === undefined) return;
+    if (item === undefined) return;
+    if (choiceId === 'break' || choiceId === 'fix') {
+      this.changeItemCondition(instanceId, choiceId);
+      return;
+    }
+    const use = ITEM_ANIMATION_LAB_USES[item.type]?.find((candidate) => candidate.id === choiceId);
+    if (item.condition !== 'usable' || use === undefined) return;
     this.pendingInstanceId = null;
     this.dependencies.ui.hideItemAnimationLabChoices?.();
-    const generation = this.dependencies.captureLifecycleGeneration();
     const operation = this.beginOperation();
     void this.playSelectedItem(instanceId, item.type, use, generation, operation);
   }
@@ -333,11 +344,10 @@ export class ItemAnimationLabFlow {
     operation: number,
   ): Promise<void> {
     const item = this.dependencies.session.snapshot().inventory[instanceId];
-    if (item === undefined || item.condition !== 'usable') return;
-    const uses = ITEM_ANIMATION_LAB_USES[item.type];
-    if (uses === undefined || uses.length === 0 || uses[0]!.id !== expectedChoice) return;
-    if (uses.length > 1) {
-      this.showUseChoices(instanceId, uses);
+    if (item === undefined || this.itemChoice(item) !== expectedChoice) return;
+    const uses = ITEM_ANIMATION_LAB_USES[item.type] ?? [];
+    if (ITEM_DEFINITIONS[item.type].breakable || uses.length > 1) {
+      this.showUseChoices(item);
       return;
     }
     this.pendingInstanceId = null;
@@ -353,14 +363,30 @@ export class ItemAnimationLabFlow {
     );
   }
 
-  private showUseChoices(
-    instanceId: ItemInstanceId,
-    uses: readonly ItemAnimationLabUse[],
-  ): void {
-    this.pendingInstanceId = instanceId;
-    this.dependencies.ui.showItemAnimationLabChoices?.(
-      uses.map(({ id, label }) => ({ id, label, unavailableReason: null })),
+  private showUseChoices(item: SurvivalItemState): void {
+    const broken = item.condition === 'broken';
+    const choices: EventContextChoice[] = (ITEM_ANIMATION_LAB_USES[item.type] ?? []).map(
+      ({ id, label }) => ({ id, label, unavailableReason: broken ? 'Item is broken.' : null }),
     );
+    if (ITEM_DEFINITIONS[item.type].breakable) {
+      choices.push(
+        { id: 'break', label: 'Break', unavailableReason: broken ? 'Item is already broken.' : null },
+        { id: 'fix', label: 'Fix', unavailableReason: broken ? null : 'Item is not broken.' },
+      );
+    }
+    this.pendingInstanceId = item.instanceId;
+    this.dependencies.ui.showItemAnimationLabChoices?.(choices);
+  }
+
+  private changeItemCondition(instanceId: ItemInstanceId, choiceId: 'break' | 'fix'): void {
+    const changed = this.dependencies.session.setItemConditionForLab(
+      instanceId, choiceId === 'break' ? 'broken' : 'usable',
+    );
+    if (!changed) return;
+    const snapshot = this.dependencies.renderSnapshot();
+    this.eligibility = this.buildEligibility(snapshot);
+    this.restoreSelection();
+    this.showUseChoices(snapshot.inventory[instanceId]!);
   }
 
   private activateItemEvent(
@@ -411,11 +437,9 @@ export class ItemAnimationLabFlow {
   ): Map<ItemInstanceId, EventResponseId> {
     const eligibility = new Map<ItemInstanceId, EventResponseId>();
     for (const item of Object.values(snapshot.inventory)) {
-      if (item === undefined || item.condition !== 'usable') continue;
-      const use = ITEM_ANIMATION_LAB_USES[item.type]?.[0];
-      if (use !== undefined) {
-        eligibility.set(item.instanceId, use.id);
-      }
+      if (item === undefined) continue;
+      const choice = this.itemChoice(item);
+      if (choice !== undefined) eligibility.set(item.instanceId, choice);
     }
     if (snapshot.carlitos?.alive) {
       eligibility.set(CARLITOS_LAB_INSTANCE_ID, CARLITOS_LAB_CHOICE_ID);
@@ -423,6 +447,13 @@ export class ItemAnimationLabFlow {
     eligibility.set(FISHING_ROD_LAB_INSTANCE_ID, FISHING_ROD_LAB_CHOICE_ID);
     eligibility.set(REPAIR_TOOLBOX_LAB_INSTANCE_ID, REPAIR_TOOLBOX_LAB_CHOICE_ID);
     return eligibility;
+  }
+
+  private itemChoice(item: SurvivalItemState): EventResponseId | undefined {
+    if (item.condition !== 'usable' && item.condition !== 'broken') return undefined;
+    const use = ITEM_ANIMATION_LAB_USES[item.type]?.[0];
+    if (ITEM_DEFINITIONS[item.type].breakable) return use?.id ?? ITEM_CONDITION_CHOICE_ID;
+    return item.condition === 'usable' ? use?.id : undefined;
   }
 
   private restoreSelection(): void {

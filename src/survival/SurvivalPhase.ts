@@ -2,6 +2,7 @@ import { PerspectiveCamera } from 'three';
 import type { PhaseContext, GamePhase } from '../app/GamePhase';
 import { AudioSystem } from '../audio/AudioSystem';
 import { SurvivalAudio } from '../audio/SurvivalAudio';
+import type { SurvivalEndingId } from '../game/ending';
 import {
   type ItemInstance,
   type ItemInstanceId,
@@ -92,6 +93,13 @@ export type SurvivalPhaseStart =
       readonly initialEventResultId?: string;
     }
   | {
+      readonly kind: 'ending-preview';
+      readonly endingId: SurvivalEndingId;
+      readonly savedItems: readonly ItemInstance[];
+      readonly seed: number;
+      readonly scavengeElapsedSeconds: number;
+    }
+  | {
       readonly kind: 'restored';
       readonly checkpoint: SurvivalRunCheckpoint;
     };
@@ -147,6 +155,9 @@ function createSession(
   initialEventId: string | undefined,
 ): SurvivalSession {
   if (start.kind === 'restored') return SurvivalSession.restore(start.checkpoint.session);
+  if (start.kind === 'ending-preview') {
+    return SurvivalSession.createEndingPreview(start.savedItems, start.seed, start.endingId);
+  }
   return new SurvivalSession(start.savedItems, {
     seed: start.seed,
     ...(itemAnimationLab
@@ -330,7 +341,7 @@ export class SurvivalPhase implements GamePhase {
         : start.scavengeElapsedSeconds,
       onRestart,
       onReturnToMenu,
-      onCheckpointChange,
+      start.kind === 'ending-preview' ? undefined : onCheckpointChange,
       reportInvariantError,
       itemAnimationLab,
       new EventBundleManager(new EventBundleLoader({ audio: context.audio, host: world })),
@@ -363,7 +374,9 @@ export class SurvivalPhase implements GamePhase {
       scavengeElapsedSeconds,
       dependencies.onRestart ?? onRestart,
       dependencies.onReturnToMenu ?? onReturnToMenu,
-      dependencies.onCheckpointChange ?? onCheckpointChange,
+      start.kind === 'ending-preview'
+        ? undefined
+        : dependencies.onCheckpointChange ?? onCheckpointChange,
       dependencies.onInvariantError,
       itemAnimationLab,
       dependencies.eventBundles ?? createTestEventBundleManager(),
@@ -764,6 +777,7 @@ export class SurvivalPhase implements GamePhase {
       audio: this.audio,
       bundles: eventBundles,
       setBusy: (busy) => this.setBusy(busy),
+      renderSnapshot: () => this.renderSnapshot(false, false),
       playFishing: () => this.fishingFlow.begin(),
       setAutomaticWeather: (eventId) => this.setAutomaticWeather(
         eventId === null ? null : presentationWeatherForEvent(eventId),

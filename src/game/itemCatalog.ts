@@ -55,7 +55,7 @@ const rawDefinitions = {
   radio: define('RADIO', 1, 1, null, true, false, 'answerRadio'),
   umbrella: define('UMBRELLA', 2, 1, null, true, true, null),
   swimRing: define('SWIM RING', 2, 1, null, true, true, null),
-  flashlight: define('FLASHLIGHT', 1, 1, null, true, false, null),
+  flashlight: define('FLASHLIGHT', 1, 1, null, true, true, null),
   shotgun: define('SHOTGUN', 2, 1, 1, false, false, null),
   energyBar: define('ENERGY BAR', 1, 1, 1, false, false, 'useEnergyBar'),
   carlitos: define(

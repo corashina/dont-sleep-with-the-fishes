@@ -92,12 +92,12 @@ describe('survival foundations', () => {
       .toEqual(expect.arrayContaining(['brokenCompass', 'wetDuctTape']));
   });
 
-  it('keeps the wiki event-breakable roster stable', () => {
+  it('includes Flashlight in the event-breakable roster', () => {
     expect(
       ITEM_IDS.filter((id) => ITEM_DEFINITIONS[id].breakable),
     ).toEqual([
       'compass', 'map', 'spyglass', 'fishingNet', 'knife', 'bucket',
-      'scubaSet', 'anchor', 'umbrella', 'swimRing',
+      'scubaSet', 'anchor', 'umbrella', 'swimRing', 'flashlight',
     ]);
   });
 
@@ -124,7 +124,10 @@ describe('survival foundations', () => {
     ));
     expect(inventory.break('compass-1')).toBe(true);
     expect(inventory.repair('compass-1')).toBe(true);
-    expect(inventory.break('flashlight-1')).toBe(false);
+    expect(inventory.break('flashlight-1')).toBe(true);
+    expect(inventory.hasUsable('flashlight')).toBe(false);
+    expect(inventory.repair('flashlight-1')).toBe(true);
+    expect(inventory.hasUsable('flashlight')).toBe(true);
     expect(inventory.break('carlitos-1')).toBe(false);
     expect(inventory.consume('carlitos')).toEqual([]);
     inventory.consume('ductTape');
@@ -159,7 +162,7 @@ describe('survival foundations', () => {
     expect(inventory.breakRandom(2, sequenceRandom([0.999999, 0]))).toEqual([
       'spyglass-1', 'compass-1',
     ]);
-    expect(inventory.breakRandom(10, sequenceRandom([0]))).toEqual(['map-1']);
+    expect(inventory.breakRandom(10, sequenceRandom([0]))).toEqual(['flashlight-1', 'map-1']);
     expect(inventory.loseRandom(2, sequenceRandom([0, 0.999999]))).toEqual([
       'compass-1', 'spyglass-1',
     ]);

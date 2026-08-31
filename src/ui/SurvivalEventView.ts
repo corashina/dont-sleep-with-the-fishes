@@ -97,7 +97,7 @@ export class SurvivalEventView {
   ): void {
     if (this.disposed || this.caption.dataset.eventId !== 'item-animation-lab') return;
     this.setSelection(contextualChoices);
-    this.choiceButtonsInOrder()[0]?.focus();
+    this.choiceButtonsInOrder().find((button) => button.getAttribute('aria-disabled') !== 'true')?.focus();
   }
 
   hideItemAnimationLabChoices(): void {

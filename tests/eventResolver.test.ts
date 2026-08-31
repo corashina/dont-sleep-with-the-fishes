@@ -85,7 +85,6 @@ describe('resolveWeightedOutcome', () => {
         effects: {
           nextDawnEnergy: 0,
           followUpNight: true,
-          ending: 'taken',
         },
       }],
     });

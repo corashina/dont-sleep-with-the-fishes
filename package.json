@@ -8,6 +8,7 @@
     "build": "bun run lint && tsc --noEmit && vite build",
     "lint": "eslint . --max-warnings 0",
     "preview": "vite preview",
+    "playtest:serve": "vite-node scripts/serve-browser-playtest.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
