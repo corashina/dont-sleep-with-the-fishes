@@ -4,11 +4,24 @@ import { SurvivalSession } from '../src/survival/SurvivalSession';
 import type { SurvivalUI } from '../src/ui/SurvivalUI';
 import type { FocusedEventFocusView } from '../src/ui/SurvivalUiViewModel';
 
+const exitCases = [
+  ...(['drifting-supplies', 'drifting-chest'] as const).map((eventId) => ({
+    eventId, energy: 0, carlitos: 'absent',
+  })),
+  ...[0, 1].flatMap((energy) => ['absent', 'low-energy', 'hungry'].map((carlitos) => ({
+    eventId: 'wreckage' as const, energy, carlitos,
+  }))),
+];
+
 describe('focused event exits with no affordable reward', () => {
-  for (const eventId of ['wreckage', 'drifting-supplies', 'drifting-chest'] as const) {
-    it.each(['choice', 'return'] as const)(`${eventId}: %s restores the day without cost`, async (exit) => {
-      const session = new SurvivalSession([], {
-        seed: 41, initial: { day: 3, energy: 0 }, initialEventId: eventId,
+  for (const { eventId, energy, carlitos } of exitCases) {
+    it.each(['choice', 'return'] as const)(`${eventId}, Energy ${energy}, Carlitos ${carlitos}: %s restores the day without cost`, async (exit) => {
+      const session = new SurvivalSession([
+        ...(eventId === 'wreckage' ? [{ instanceId: 'scubaSet-1' as const, type: 'scubaSet' as const }] : []),
+        ...(carlitos !== 'absent' ? [{ instanceId: 'carlitos-1' as const, type: 'carlitos' as const }] : []),
+      ], {
+        seed: 41, initial: { day: 3, energy }, initialEventId: eventId,
+        initialCarlitos: { energy: carlitos === 'low-energy' ? 2 : 3, hunger: carlitos === 'hungry' ? 0 : 5 },
       });
       const before = session.snapshot();
       const showFocusedEvent = vi.fn();
@@ -50,9 +63,12 @@ describe('focused event exits with no affordable reward', () => {
         expect(session.snapshot()).toMatchObject({
           day: before.day, health: before.health, hunger: before.hunger,
           energy: before.energy, hull: before.hull, inventory: before.inventory,
+          food: before.food, bait: before.bait, repairMaterial: before.repairMaterial,
+          carlitos: before.carlitos,
         });
         expect(ui.setBusy).toHaveBeenLastCalledWith(false);
         expect(ui.clearEventPresentation).toHaveBeenCalled();
+        expect(ui.hideFocusedEvent).toHaveBeenCalled();
       } finally {
         phase.dispose();
       }

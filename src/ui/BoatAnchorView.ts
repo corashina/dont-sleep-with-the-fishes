@@ -61,7 +61,7 @@ const ACTIONS: readonly ActionDefinition[] = [
   { id: 'fish', label: 'FISH', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.actions.fishEnergy, effect: 'Chance to gain food', risk: 'uncertain' },
   { id: 'dive', label: 'DIVE', cost: '3 ENERGY', energyCost: SURVIVAL_BALANCE.actions.diveEnergy, effect: 'May recover supplies; injury risk', risk: 'dangerous' },
   { id: 'eat', label: 'EAT', cost: '1 FOOD', energyCost: 0, effect: 'HUNGER -35', risk: 'safe' },
-  { id: 'repair', label: 'REPAIR', cost: '1 ENERGY + MATERIAL', energyCost: SURVIVAL_BALANCE.actions.repairEnergy, effect: 'HULL +25 (tape +15)', risk: 'safe' },
+  { id: 'repair', label: 'REPAIR', cost: '1 ENERGY + 1 DUCT TAPE', energyCost: SURVIVAL_BALANCE.actions.repairEnergy, effect: 'HULL +15–25', risk: 'safe' },
   { id: 'treat', label: 'TREAT', cost: '1 MEDKIT', energyCost: 0, effect: 'HEALTH +30', risk: 'safe' },
   { id: 'endDay', label: 'END DAY', cost: 'REST', energyCost: 0, effect: 'RESTORE ENERGY AT DAWN', risk: 'safe' },
   { id: 'repairItem', label: 'REPAIR ITEM', cost: '1 DUCT TAPE', energyCost: 0, effect: 'Restore one broken item', risk: 'safe' },
@@ -103,7 +103,7 @@ function actionPreview(definition: ActionDefinition, snapshot: SurvivalSnapshot)
         );
       return {
         ...definition,
-        cost: `${energyCost} ENERGY + ${useTape ? 'TAPE' : 'MATERIAL'}`,
+        cost: `${energyCost} ENERGY + 1 DUCT TAPE`,
         energyCost,
         effect: `HULL +${Math.min(useTape ? 15 : 25, missingHull)}`,
       };
@@ -344,7 +344,8 @@ export class BoatAnchorView {
       targetKind,
       width: Math.round(hitArea.width),
       height: Math.round(hitArea.height),
-      zIndex: targetKind === 'event' ? 100000 + depthZIndex : depthZIndex,
+      // Encounter entry points take priority; world choices keep their physical depth beside eligible items.
+      zIndex: anchor.eventFocusId !== undefined ? 100000 + depthZIndex : depthZIndex,
       depleted: anchor.depleted,
     };
   }
@@ -719,7 +720,7 @@ export class BoatAnchorView {
   private anchorLabel(anchor: BoatInteractionAnchor, toolCopy: BoatToolCopy | undefined, quantity: number): string {
     if (anchor.label !== undefined) return anchor.label;
     if (anchor.itemType !== null) return quantityLabel(ITEM_LABELS[anchor.itemType], quantity);
-    if (anchor.supplyGroupId === 'repairMaterial') return quantityLabel('REPAIR MATERIAL', quantity);
+    if (anchor.supplyGroupId === 'repairMaterial') return quantityLabel('DUCT TAPE', quantity);
     return toolCopy?.label ?? 'UNKNOWN TOOL';
   }
 
@@ -784,7 +785,7 @@ export class BoatAnchorView {
       const label = quantityLabel(ITEM_LABELS[anchor.itemType], quantity);
       return state === null ? label : `${label} — ${state}`;
     }
-    if (anchor.supplyGroupId === 'repairMaterial') return quantityLabel('REPAIR MATERIAL', quantity);
+    if (anchor.supplyGroupId === 'repairMaterial') return quantityLabel('DUCT TAPE', quantity);
     if (anchor.toolId === 'fishingRod') return 'Fishing rod';
     return anchor.toolId === 'repairTools' ? 'REPAIR' : itemLabel;
   }

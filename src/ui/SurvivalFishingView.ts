@@ -229,6 +229,8 @@ export class SurvivalFishingView {
     if (
       this.disposed
       || event.repeat
+      || this.currentMode === 'ready'
+      || (event.target instanceof Node && this.exitButton.contains(event.target))
       || (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar')
     ) return false;
     event.preventDefault();

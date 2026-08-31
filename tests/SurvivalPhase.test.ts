@@ -2690,6 +2690,53 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.realSession.snapshot().journalEntries[0]?.actions).toHaveLength(1);
   });
 
+  it('routes rod activation after Continue and refunds a cancelled new attempt', async () => {
+    const rig = createFishingRig();
+    rig.phase.start();
+    rig.ui.onAction?.('fish');
+    await settleFishingEntry(rig);
+    expect(fishingCastCallback(rig)(null)).toBe(true);
+    await completeFishingCast(rig);
+    rig.phase.update(3, 3);
+    expect(fishingReelCallback(rig)()).toBe(true);
+    rig.animations.reel[0]!.resolve();
+    await flushPromises();
+    rig.ui.onFishingResultContinue?.();
+    rig.ui.onFishingResultContinue?.();
+
+    rig.ui.onAction?.('fish');
+    rig.ui.onAction?.('fish');
+
+    expect(rig.session.beginFishing).toHaveBeenCalledTimes(2);
+    expect(rig.realSession.snapshot()).toMatchObject({ energy: 1, food: 1 });
+    expect(rig.world.exitFishingView).not.toHaveBeenCalled();
+    rig.animations.enter.at(-1)!.resolve();
+    await flushPromises();
+    expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({
+      mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null,
+    });
+
+    rig.ui.onFishingViewExit?.();
+    rig.ui.onFishingViewExit?.();
+
+    expect(rig.session.cancelFishing).toHaveBeenCalledOnce();
+    expect(rig.session.finishFishing).toHaveBeenCalledOnce();
+    expect(rig.realSession.snapshot()).toMatchObject({ energy: 2, food: 1, actedToday: true });
+    expect(rig.world.exitFishingView).toHaveBeenCalledOnce();
+    rig.animations.exit[0]!.resolve();
+    await flushPromises();
+    expect(rig.ui.setBusy).toHaveBeenLastCalledWith(false);
+    expect(rig.ui.restoreCommandFocus).toHaveBeenCalledOnce();
+
+    rig.ui.onAction?.('fish');
+    expect(rig.session.beginFishing).toHaveBeenCalledTimes(3);
+    rig.animations.enter.at(-1)!.resolve();
+    await flushPromises();
+    expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({
+      mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null,
+    });
+  });
+
   it('shows the projected broken compass utility result after reeling', async () => {
     const rig = createFishingRig({ day: 3, catchRoll: 406 / 422 });
     rig.phase.start();
@@ -6185,7 +6232,7 @@ describe('SurvivalPhase orchestration', () => {
     const availableReason = vi.fn((_action: string, option?: unknown) => (
       typeof option === 'object' && option !== null && 'kind' in option
         ? null
-        : 'No repair material remains.'
+        : 'No duct tape remains.'
     ));
     const render = vi.fn();
     const phase = SurvivalPhase.forTest({

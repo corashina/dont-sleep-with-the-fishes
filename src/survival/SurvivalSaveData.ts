@@ -21,6 +21,7 @@ import type {
   JournalInventoryMutation,
   JournalNightRecord,
 } from './journalRecords';
+import { createJournalSurvivalActionRecord } from './journalRecords';
 import type { RescueLead } from './survivalBalance';
 import type {
   ActionOutcome,
@@ -218,21 +219,28 @@ function parseActionOutcome(value: unknown): ActionOutcome | null | undefined {
 function parseActionOutcomeBase(value: Record<string, unknown>) {
   if (typeof value.accepted !== 'boolean' || typeof value.code !== 'string'
     || typeof value.message !== 'string' || typeof value.cue !== 'string'
-    || !PRESENTATION_CUE_SET.has(value.cue) || !isRecord(value.deltas)) return null;
+    || !PRESENTATION_CUE_SET.has(value.cue)) return null;
+  const deltas = parseResourceDeltas(value.deltas);
+  if (deltas === null) return null;
+  return {
+    accepted: value.accepted,
+    code: value.code,
+    message: value.message,
+    deltas,
+    cue: value.cue as ActionOutcome['cue'],
+  };
+}
+
+function parseResourceDeltas(value: unknown): ActionOutcome['deltas'] | null {
+  if (!isRecord(value)) return null;
   const deltas: Record<string, number> = {};
-  for (const [key, rawDelta] of Object.entries(value.deltas)) {
+  for (const [key, rawDelta] of Object.entries(value)) {
     if (!ACTION_OUTCOME_DELTA_SET.has(key)) return null;
     const delta = parseInteger(rawDelta, -MAX_COUNTER, MAX_COUNTER);
     if (delta === null) return null;
     deltas[key] = delta;
   }
-  return {
-    accepted: value.accepted,
-    code: value.code,
-    message: value.message,
-    deltas: Object.freeze(deltas),
-    cue: value.cue as ActionOutcome['cue'],
-  };
+  return Object.freeze(deltas);
 }
 
 function parseNextDawnEnergyExtension(
@@ -294,10 +302,20 @@ function parseJournalAction(value: unknown): JournalDayActionRecord | null {
   if (!isRecord(value) || typeof value.kind !== 'string') return null;
   switch (value.kind) {
     case 'fishing': return parseJournalFishingAction(value);
+    case 'dayAction': return parseJournalSurvivalAction(value);
     case 'carlitosCare': return parseJournalCarlitosCareAction(value);
     case 'carlitosDawn': return parseJournalCarlitosDawnAction(value);
     default: return null;
   }
+}
+
+function parseJournalSurvivalAction(value: Record<string, unknown>): JournalDayActionRecord | null {
+  if (value.action !== 'treat' && value.action !== 'dive'
+    && value.action !== 'repair' && value.action !== 'repairItem') return null;
+  const deltas = parseResourceDeltas(value.deltas);
+  if (deltas === null || !Array.isArray(value.inventoryMutations)) return null;
+  const mutations = parseJournalMutations(value.inventoryMutations);
+  return mutations === null ? null : createJournalSurvivalActionRecord(value.action, deltas, mutations);
 }
 
 function parseJournalFishingAction(
