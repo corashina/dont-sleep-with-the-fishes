@@ -635,7 +635,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       wreckageOutcome('wreckage.leave', 1, 'You leave the wreckage behind.',
         {}, 'wreckage-leave')),
   ]),
-  event('check-the-back', 'night', 'Check the Back', 'safe', 'fish', 3, 2, 35, [
+  event('check-the-back', 'night', 'Check the Back', 'uncertain', 'fish', 3, 2, 35, [
     contextualChoice('check', 'Yes',
       {
         ...featuredOutcome('check-the-back.fish', 80, 'A fish has landed aboard.', effects([add('food', 1)])),
