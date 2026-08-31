@@ -61,9 +61,16 @@ export class EventPresentationCoordinator {
     this.activePresentation?.skip();
   }
 
-  playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean> {
-    return this.activePresentation?.playItemUse(choiceId, instanceId)
-      ?? Promise.resolve(false);
+  playItemUse(
+    choiceId: string,
+    instanceId: ItemInstanceId,
+    onAction?: (cueIndex: number) => void,
+  ): Promise<boolean> {
+    const presentation = this.activePresentation;
+    if (presentation === null) return Promise.resolve(false);
+    return onAction === undefined
+      ? presentation.playItemUse(choiceId, instanceId)
+      : presentation.playItemUse(choiceId, instanceId, onAction);
   }
 
   itemAimTarget(): Object3D | null {

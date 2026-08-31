@@ -80,7 +80,11 @@ interface AdapterOperations {
   stage(context: EventPresentationContext): void;
   reveal(): Promise<void>;
   playChoice(choice: EventChoicePresentation): Promise<void>;
-  playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean>;
+  playItemUse(
+    choiceId: string,
+    instanceId: ItemInstanceId,
+    onAction?: (cueIndex: number) => void,
+  ): Promise<boolean>;
   itemAimTarget(): Object3D | null;
   interactionTargets(): readonly FocusedEventInteractionTarget[];
   interactionRoot(id: string): Object3D | null;
@@ -111,10 +115,11 @@ function createAdapter(
     playChoice(choice): Promise<void> {
       return disposed ? Promise.resolve() : operations.playChoice(choice);
     },
-    playItemUse(choiceId, instanceId): Promise<boolean> {
-      return disposed
-        ? Promise.resolve(false)
-        : operations.playItemUse(choiceId, instanceId);
+    playItemUse(choiceId, instanceId, onAction): Promise<boolean> {
+      if (disposed) return Promise.resolve(false);
+      return onAction === undefined
+        ? operations.playItemUse(choiceId, instanceId)
+        : operations.playItemUse(choiceId, instanceId, onAction);
     },
     itemAimTarget(): Object3D | null {
       return disposed ? null : operations.itemAimTarget();
@@ -307,7 +312,9 @@ export const createDedicatedAdapter: EventPresentationAdapterFactory = (
     },
     reveal: () => coordinator.reveal(),
     playChoice: (choice) => coordinator.playChoice(choice.choiceId),
-    playItemUse: (choiceId, instanceId) => coordinator.playItemUse(choiceId, instanceId),
+    playItemUse: (choiceId, instanceId, onAction) => onAction === undefined
+      ? coordinator.playItemUse(choiceId, instanceId)
+      : coordinator.playItemUse(choiceId, instanceId, onAction),
     itemAimTarget: () => coordinator.itemAimTarget(),
     interactionTargets: () => coordinator.interactionTargets(),
     interactionRoot: (id) => coordinator.interactionRoot(id),

@@ -88,8 +88,16 @@ export class EventPresentationHost {
     return this.active?.playChoice(choice) ?? Promise.resolve();
   }
 
-  playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean> {
-    return this.active?.playItemUse(choiceId, instanceId) ?? Promise.resolve(false);
+  playItemUse(
+    choiceId: string,
+    instanceId: ItemInstanceId,
+    onAction?: (cueIndex: number) => void,
+  ): Promise<boolean> {
+    const active = this.active;
+    if (active === null) return Promise.resolve(false);
+    return onAction === undefined
+      ? active.playItemUse(choiceId, instanceId)
+      : active.playItemUse(choiceId, instanceId, onAction);
   }
 
   itemAimTarget(): Object3D | null {

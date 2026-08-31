@@ -26,7 +26,11 @@ export interface EventPresentationAdapter {
   stage(context: EventPresentationContext): void;
   reveal(): Promise<void>;
   playChoice(choice: EventChoicePresentation): Promise<void>;
-  playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean>;
+  playItemUse(
+    choiceId: string,
+    instanceId: ItemInstanceId,
+    onAction?: (cueIndex: number) => void,
+  ): Promise<boolean>;
   itemAimTarget(): Object3D | null;
   interactionTargets(): readonly FocusedEventInteractionTarget[];
   interactionRoot(id: string): Object3D | null;

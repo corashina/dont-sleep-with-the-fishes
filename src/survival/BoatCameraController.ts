@@ -140,6 +140,13 @@ export class BoatCameraController {
     this.applyExactBasePose();
   }
 
+  handoffFocusedEventView(): void {
+    if (this.disposed) return;
+    this.cancelFocusedEventAnimation();
+    this.focusedEventPhase = 'idle';
+    this.focusedEventTarget = null;
+  }
+
   settleForVisibilityChange(): void {
     if (this.disposed) return;
     const animation = this.activeFocusedEventAnimation;

@@ -1087,7 +1087,7 @@ export class BoatWorld {
     const context = itemId === null
       ? null
       : resolveEventItemUseContext(eventId, choiceId, itemId);
-    this.cancelWreckageFocusedView(eventId, choiceId);
+    this.handoffWreckageFocusedView(eventId, choiceId);
     if (itemId !== null && context !== null) {
       const aimTarget = this.eventItemAimTarget(eventId);
       const request: EventItemUseRequest = {
@@ -1101,7 +1101,7 @@ export class BoatWorld {
       };
       const [played] = await Promise.all([
         this.itemUseController.play(request),
-        this.playEventSceneItemUse(eventId, choiceId, instanceId),
+        this.playEventSceneItemUse(eventId, choiceId, instanceId, onAction),
       ]);
       if (this.eventOperationIsStale(operation)) return;
       if (!played) {
@@ -1109,7 +1109,7 @@ export class BoatWorld {
       }
       return;
     }
-    if (await this.playEventSceneItemUse(eventId, choiceId, instanceId)) return;
+    if (await this.playEventSceneItemUse(eventId, choiceId, instanceId, onAction)) return;
     if (this.eventOperationIsStale(operation)) return;
     await this.supplyDisplay.playEventItemUse(instanceId);
   }
@@ -1118,9 +1118,9 @@ export class BoatWorld {
     return this.disposed || operation !== this.weatherEventOperation;
   }
 
-  private cancelWreckageFocusedView(eventId: string, choiceId: string): void {
+  private handoffWreckageFocusedView(eventId: string, choiceId: string): void {
     if (eventId !== 'wreckage' || choiceId !== 'dive') return;
-    this.cameraController.cancelFocusedEventView();
+    this.cameraController.handoffFocusedEventView();
   }
 
   returnEventItemUse(): Promise<void> {
@@ -1142,11 +1142,14 @@ export class BoatWorld {
     eventId: string,
     choiceId: string,
     instanceId: ItemInstanceId,
+    onAction?: (cueIndex: number) => void,
   ): Promise<boolean> {
     if (this.eventPresentationHost.activeEventId() !== eventId) {
       return Promise.resolve(false);
     }
-    return this.eventPresentationHost.playItemUse(choiceId, instanceId);
+    return onAction === undefined
+      ? this.eventPresentationHost.playItemUse(choiceId, instanceId)
+      : this.eventPresentationHost.playItemUse(choiceId, instanceId, onAction);
   }
 
   playEventChoice(
