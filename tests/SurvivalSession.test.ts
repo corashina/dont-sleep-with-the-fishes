@@ -2224,7 +2224,7 @@ describe('SurvivalSession daytime actions', () => {
 
   it.each([
     ['eat', undefined, 'No food remains.'],
-    ['repair', { kind: 'hullRepair', material: 'repairMaterial' }, 'No repair material remains.'],
+    ['repair', { kind: 'hullRepair', material: 'repairMaterial' }, 'No duct tape remains.'],
     ['treat', undefined, 'No medical-kit charges remain.'],
     ['answerRadio', undefined, 'The radio has no active signal.'],
     ['useEnergyBar', undefined, 'No energy bar remains.'],

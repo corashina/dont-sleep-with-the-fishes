@@ -237,6 +237,7 @@ export class SurvivalUI {
         [this.fishingView.resultRoot, this.fishingView.resultContinue],
         [this.fishingView.interactionRoot, () => this.fishingView.initialFocus()],
       ]),
+      (layer) => layer !== this.fishingView.interactionRoot || this.fishingView.mode() !== 'ready',
     );
     this.modalFocus.sync();
 
@@ -286,7 +287,10 @@ export class SurvivalUI {
       if (!this.disposed) this.onFishingViewExit?.();
     };
     this.fishingView.canUseInteraction = () => (
-      this.modalFocus.topmostModal() === this.fishingView.interactionRoot
+      !(this.fishingView.mode() === 'ready' && this.busy)
+      && this.modalFocus.topmostModal() === (
+        this.fishingView.mode() === 'ready' ? null : this.fishingView.interactionRoot
+      )
     );
     this.fishingView.canUseResult = () => (
       this.modalFocus.topmostModal() === this.fishingView.resultRoot

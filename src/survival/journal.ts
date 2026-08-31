@@ -6,14 +6,16 @@ import {
 import type {
   JournalCarlitosCareRecord,
   JournalCarlitosDawnRecord,
+  JournalDayActionRecord,
   JournalDaytimeRecord,
   JournalEntry,
   JournalEventRecord,
   JournalFishingRecord,
   JournalInventoryMutation,
   JournalNightRecord,
+  JournalSurvivalActionRecord,
 } from './journalRecords';
-import type { WeatherId } from './survivalTypes';
+import type { ResourceDelta, WeatherId } from './survivalTypes';
 
 export const SINKING_SHIP_DAYTIME_TEXT =
   'Dorothy struck something and began to sink. I reached the lifeboat with the supplies I could save.';
@@ -125,15 +127,48 @@ function formatCarlitos(record: JournalCarlitosCareRecord | JournalCarlitosDawnR
   return 'Carlitos changed during the night.';
 }
 
+const RESOURCE_LABELS: Readonly<Record<keyof ResourceDelta, string>> = {
+  pressure: 'Pressure', health: 'Health', hunger: 'Hunger', energy: 'Energy', hull: 'Hull',
+  food: 'Food', bait: 'Bait', repairMaterial: 'Duct Tape', rescueLead: 'Rescue lead',
+};
+
+function formatSurvivalAction(record: JournalSurvivalActionRecord): string {
+  let sentence: string;
+  switch (record.action) {
+    case 'treat': sentence = 'I treated my wounds.'; break;
+    case 'repair': sentence = 'I repaired the hull.'; break;
+    case 'repairItem': sentence = 'I repaired my equipment.'; break;
+    case 'dive': {
+      sentence = 'I dived beneath the boat.';
+      const recovered = Object.values(record.deltas).some((delta) => delta > 0);
+      if (!recovered) sentence += ' I found no supplies.';
+      if ((record.deltas.health ?? 0) < 0) sentence += ' I was injured.';
+      break;
+    }
+  }
+  const changes = Object.entries(record.deltas)
+    .filter(([, delta]) => delta !== 0)
+    .map(([resource, delta]) => `${RESOURCE_LABELS[resource as keyof ResourceDelta]} ${delta > 0 ? '+' : ''}${delta}`);
+  const resources = changes.length === 0 ? '' : ` ${changes.join('; ')}.`;
+  return `${sentence}${resources}${formatMutations(record.inventoryMutations)}`;
+}
+
+function formatDayAction(record: JournalDayActionRecord): string {
+  switch (record.kind) {
+    case 'fishing': return formatFishing(record);
+    case 'dayAction': return formatSurvivalAction(record);
+    case 'carlitosCare':
+    case 'carlitosDawn': return formatCarlitos(record);
+  }
+}
+
 export function formatJournalEntry(entry: JournalEntry): JournalPageCopy {
-  const actions = entry.actions.map((record) => (
-    record.kind === 'fishing' ? formatFishing(record) : formatCarlitos(record)
-  )).join(' ');
-  const daytime = formatDaytime(entry.daytime);
+  const actions = entry.actions.map(formatDayAction).join(' ');
+  const daytime = entry.daytime === null && actions.length > 0 ? '' : formatDaytime(entry.daytime);
   return {
     heading: `DAY ${entry.day}`,
     weather: WEATHER_LABELS[entry.weather],
-    daytime: actions.length === 0 ? daytime : `${actions} ${daytime}`,
+    daytime: [actions, daytime].filter(Boolean).join(' '),
     nighttime: formatNight(entry.nighttime),
   };
 }

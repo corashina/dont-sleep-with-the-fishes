@@ -133,7 +133,7 @@ export class SurvivalFishingFlow {
   constructor(private readonly dependencies: SurvivalFishingFlowDependencies) {}
 
   async begin(): Promise<void> {
-    if (!this.isActive() || this.presentation !== 'idle') return;
+    if (!this.isActive() || (this.presentation !== 'idle' && this.presentation !== 'ready')) return;
     const begun = this.dependencies.session.beginFishing?.();
     if (begun === undefined) return;
     if (!begun.accepted) {
