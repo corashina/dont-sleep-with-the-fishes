@@ -14,6 +14,11 @@ import type {
 } from '../src/survival/survivalTypes';
 import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
 import type { FocusedEventChoiceView } from '../src/ui/SurvivalUiViewModel';
+import { SurvivalSession } from '../src/survival/SurvivalSession';
+import { PLANE_CHOICE_WINDOW_SECONDS } from '../src/survival/eventCatalog';
+import { formatJournalEntry } from '../src/survival/journal';
+import type { EventResponse } from '../src/survival/survivalTypes';
+import { sequenceRandom } from './helpers/random';
 
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -257,6 +262,236 @@ function createRig(
     advanceGeneration: () => { generation += 1; },
   };
 }
+
+function createSessionRig(realSession: SurvivalSession) {
+  const rig = createRig(realSession.snapshot());
+  rig.session.resolveEvent.mockImplementation((response: unknown) => {
+    const outcome = realSession.resolveEvent(response as EventResponse);
+    rig.setSnapshot(realSession.snapshot());
+    return outcome;
+  });
+  rig.session.beginDawn.mockImplementation(() => {
+    const outcome = realSession.beginDawn();
+    rig.setSnapshot(realSession.snapshot());
+    return outcome;
+  });
+  return { ...rig, realSession };
+}
+
+describe('event selection contracts', () => {
+  it.each([
+    ['spyglass', 'flashlight', 'lost'],
+    ['flareGun', 'shotgun', 'consumed'],
+    ['ductTape', 'energyBar', 'consumed'],
+  ] as const)('keeps the selected Handyman %s instance through the result and journal', async (
+    source, reward, condition,
+  ) => {
+    const selectedId = `${source}-2` as ItemInstanceId;
+    const rig = createSessionRig(new SurvivalSession([
+      { instanceId: `${source}-1`, type: source },
+      { instanceId: selectedId, type: source },
+    ], {
+      seed: 105, random: sequenceRandom([0, 0.99, 0.99, 0.99]),
+      initial: { day: 20 }, initialEventId: 'handyman',
+    }));
+    const use = deferred();
+    rig.world.playEventItemUse.mockImplementation(() => use.promise);
+    await rig.flow.revealPending(rig.realSession.snapshot());
+
+    rig.flow.resolveItem(source, selectedId);
+    rig.flow.resolveContextual('touch');
+    rig.flow.resolveItem(source, `${source}-1`);
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+    use.resolve();
+
+    await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
+    expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({
+      kind: 'item', choiceId: source, instanceId: selectedId,
+    });
+    expect(rig.session.resolveEvent.mock.results[0]!.value).toMatchObject({
+      accepted: true,
+      eventResult: { eventId: 'handyman', choiceId: source, resultId: 'handyman-reward' },
+    });
+    const after = rig.realSession.snapshot();
+    expect(after.inventory).toMatchObject({
+      [`${source}-1`]: { condition: 'usable' },
+      [selectedId]: { condition },
+      [`${reward}-1`]: { condition: 'usable' },
+    });
+    expect(after.health).toBe(100);
+    const entry = after.journalEntries.find(({ day }) => day === 20)!;
+    expect(entry.nighttime).toMatchObject({
+      kind: 'event',
+      event: {
+        eventId: 'handyman', attemptedChoiceId: source, attemptedItemId: source,
+        inventoryMutations: expect.arrayContaining([
+          { kind: condition === 'lost' ? 'lose' : 'consume', instanceIds: [selectedId] },
+          { kind: 'gain', instanceIds: [`${reward}-1`] },
+        ]),
+      },
+    });
+    expect(formatJournalEntry(entry).nighttime).not.toContain('Touch the Hand');
+    expect(rig.onInvariantError).not.toHaveBeenCalled();
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+  });
+
+  it('keeps intentional Hand selection when later input arrives in the same turn', async () => {
+    const rig = createSessionRig(new SurvivalSession([
+      { instanceId: 'spyglass-1', type: 'spyglass' },
+    ], {
+      seed: 1061, random: sequenceRandom([0, 0, 0.99, 0.99]),
+      initial: { day: 20 }, initialEventId: 'handyman',
+    }));
+    await rig.flow.revealPending(rig.realSession.snapshot());
+
+    rig.flow.resolveContextual('touch');
+    rig.flow.resolveItem('spyglass', 'spyglass-1');
+    rig.flow.resolveContextual('touch');
+
+    await vi.waitFor(() => expect(rig.session.resolveEvent).toHaveBeenCalledOnce());
+    expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({
+      kind: 'choice', choiceId: 'touch',
+    });
+    await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
+    expect(rig.session.resolveEvent.mock.results[0]!.value).toMatchObject({
+      accepted: true, deltas: { health: -60, hull: -30 },
+      eventResult: { eventId: 'handyman', choiceId: 'touch', resultId: 'handyman-touch' },
+    });
+    const after = rig.realSession.snapshot();
+    expect(after).toMatchObject({ health: 40, inventory: { 'spyglass-1': { condition: 'usable' } } });
+    const entry = after.journalEntries.find(({ day }) => day === 20)!;
+    expect(entry.nighttime).toMatchObject({
+      kind: 'event',
+      event: { attemptedChoiceId: 'touch', attemptedItemId: null, inventoryMutations: [] },
+    });
+    expect(formatJournalEntry(entry).nighttime).toContain('Touch the Hand');
+    expect(rig.onInvariantError).not.toHaveBeenCalled();
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+  });
+
+  it.each(['flareGun', 'flashlight'] as const)(
+    'keeps a Plane %s signal selected before expiry through animation and repeated input',
+    async (itemId) => {
+      const instanceId = `${itemId}-1` as ItemInstanceId;
+      const rig = createSessionRig(new SurvivalSession([{ instanceId, type: itemId }], {
+        seed: 1111, random: sequenceRandom([0, 0.99, 0.99, 0.99]),
+        initial: { day: 15, rescueLead: 2 }, initialEventId: 'plane',
+      }));
+      const use = deferred();
+      rig.world.playEventItemUse.mockImplementation(() => use.promise);
+      await rig.flow.revealPending(rig.realSession.snapshot());
+      rig.flow.update(PLANE_CHOICE_WINDOW_SECONDS - 0.01);
+      rig.flow.resolveItem(itemId, instanceId);
+      rig.flow.update(PLANE_CHOICE_WINDOW_SECONDS);
+      rig.flow.resolveEndure();
+      rig.flow.resolveItem(itemId, instanceId);
+      expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+      use.resolve();
+
+      await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
+      rig.flow.update(PLANE_CHOICE_WINDOW_SECONDS);
+      rig.flow.resolveItem(itemId, instanceId);
+      expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({
+        kind: 'item', choiceId: itemId, instanceId,
+      });
+      expect(rig.session.resolveEvent.mock.results[0]!.value).toMatchObject({
+        accepted: true,
+        eventResult: { eventId: 'plane', choiceId: itemId, resultId: 'plane-signaled' },
+      });
+      const after = rig.realSession.snapshot();
+      expect(after.rescueLead).toBe(itemId === 'flareGun' ? 6 : 4);
+      expect(after.inventory[instanceId]?.condition).toBe(itemId === 'flareGun' ? 'consumed' : 'usable');
+      expect(after.journalEntries).toHaveLength(1);
+      expect(after.journalEntries[0]!.nighttime).toMatchObject({
+        kind: 'event', event: { attemptedChoiceId: itemId, attemptedItemId: itemId },
+      });
+      expect(rig.onInvariantError).not.toHaveBeenCalled();
+      expect(rig.onFatalError).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects late Plane input and records Let It Pass once without consuming either item', async () => {
+    const rig = createSessionRig(new SurvivalSession([
+      { instanceId: 'flareGun-1', type: 'flareGun' },
+      { instanceId: 'flashlight-1', type: 'flashlight' },
+    ], {
+      seed: 1112, random: sequenceRandom([0, 0.99, 0.99, 0.99]),
+      initial: { day: 15, rescueLead: 2 }, initialEventId: 'plane',
+    }));
+    const choice = deferred();
+    rig.world.playEventChoice.mockImplementation(() => choice.promise);
+    await rig.flow.revealPending(rig.realSession.snapshot());
+    rig.flow.update(PLANE_CHOICE_WINDOW_SECONDS);
+    rig.flow.resolveItem('flareGun', 'flareGun-1');
+    rig.flow.resolveItem('flashlight', 'flashlight-1');
+    rig.flow.resolveEndure();
+    rig.flow.update(PLANE_CHOICE_WINDOW_SECONDS);
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+    choice.resolve();
+
+    await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
+    expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({ kind: 'endure' });
+    expect(rig.session.resolveEvent.mock.results[0]!.value).toMatchObject({
+      accepted: true,
+      eventResult: { eventId: 'plane', choiceId: 'sleep', resultId: 'plane-pass' },
+    });
+    const after = rig.realSession.snapshot();
+    expect(after).toMatchObject({
+      rescueLead: 2,
+      inventory: { 'flareGun-1': { condition: 'usable' }, 'flashlight-1': { condition: 'usable' } },
+    });
+    expect(after.journalEntries).toHaveLength(1);
+    expect(after.journalEntries[0]!.nighttime).toMatchObject({
+      kind: 'event',
+      event: { attemptedChoiceId: 'sleep', choiceLabel: 'Let It Pass', attemptedItemId: null },
+    });
+    expect(rig.onInvariantError).not.toHaveBeenCalled();
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+  });
+
+  it('preserves Health during Chest Attack reveal and applies Attack damage once after selection', async () => {
+    const rig = createSessionRig(new SurvivalSession([], {
+      seed: 10, random: sequenceRandom([0, 0.99, 0.99, 0.99]),
+      initial: { day: 3, health: 100 },
+      initialChest: { state: 'mimic', acquiredDay: 1 }, initialEventId: 'chest-attack',
+    }));
+    const reveal = deferred();
+    const attack = deferred();
+    rig.world.revealEvent.mockImplementation(() => reveal.promise);
+    rig.world.playEventChoice.mockImplementation(() => attack.promise);
+    const revealing = rig.flow.revealPending(rig.realSession.snapshot());
+    await vi.waitFor(() => expect(rig.world.revealEvent).toHaveBeenCalled());
+    expect(rig.realSession.snapshot().health).toBe(100);
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+    expect(rig.ui.setEventSelection).toHaveBeenLastCalledWith(expect.any(Map), expect.arrayContaining([
+      expect.objectContaining({ id: 'attack', unavailableReason: null }),
+    ]));
+    reveal.resolve();
+    await revealing;
+    expect(rig.realSession.snapshot().health).toBe(100);
+    expect(rig.flow.isStableChoice()).toBe(true);
+
+    rig.flow.resolveContextual('attack');
+    rig.flow.resolveContextual('attack');
+    expect(rig.realSession.snapshot().health).toBe(100);
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+    attack.resolve();
+    await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
+    rig.flow.resolveContextual('attack');
+    expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({ kind: 'choice', choiceId: 'attack' });
+    expect(rig.session.resolveEvent.mock.results[0]!.value).toMatchObject({
+      accepted: true, deltas: { health: -40 },
+      eventResult: { eventId: 'chest-attack', choiceId: 'attack', resultId: 'chest-attack' },
+    });
+    expect(rig.realSession.snapshot()).toMatchObject({
+      state: 'day', pendingEventId: null, health: 60, chest: { state: 'none', acquiredDay: null },
+    });
+    expect(rig.setBusy).toHaveBeenLastCalledWith(false);
+    expect(rig.ui.restoreCommandFocus).toHaveBeenCalled();
+    expect(rig.onInvariantError).not.toHaveBeenCalled();
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+  });
+});
 
 describe('SurvivalEventFlow', () => {
   it('builds the four exact Wreckage choices with independent requirements', async () => {

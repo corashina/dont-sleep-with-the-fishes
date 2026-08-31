@@ -49,6 +49,14 @@ function journalRunCheckpoint(): SurvivalRunCheckpoint {
   return { scavengeElapsedSeconds: 8, session: session.exportCheckpoint() };
 }
 
+function actionJournalRunCheckpoint(): SurvivalRunCheckpoint {
+  const session = new SurvivalSession([{ type: 'medicalKit', instanceId: 'medicalKit-1' }], {
+    seed: 41, initial: { day: 3, health: 90 },
+  });
+  session.perform('treat');
+  return { scavengeElapsedSeconds: 8, session: session.exportCheckpoint() };
+}
+
 function mutableSave(checkpoint: SurvivalRunCheckpoint): any {
   return JSON.parse(JSON.stringify(createSurvivalSaveDocument(checkpoint)));
 }
@@ -105,6 +113,21 @@ describe('SurvivalSaveStore', () => {
     const journal = mutableSave(journalRunCheckpoint());
     expect(parseSurvivalSaveDocument(eventResult)).not.toBeNull();
     expect(parseSurvivalSaveDocument(journal)).not.toBeNull();
+  });
+
+  it.each([
+    ['action', (record: any) => { record.action = 'unknown'; }],
+    ['missing deltas', (record: any) => { delete record.deltas; }],
+    ['resource', (record: any) => { record.deltas.unknown = 1; }],
+    ['fractional delta', (record: any) => { record.deltas.health = 0.5; }],
+    ['non-finite delta', (record: any) => { record.deltas.health = Number.POSITIVE_INFINITY; }],
+    ['mutations', (record: any) => { record.inventoryMutations = null; }],
+    ['mutation kind', (record: any) => { record.inventoryMutations[0].kind = 'unknown'; }],
+    ['item instance', (record: any) => { record.inventoryMutations[0].instanceIds = ['unknown-1']; }],
+  ])('rejects a day action journal with invalid %s', (_name, corrupt) => {
+    const value = mutableSave(actionJournalRunCheckpoint());
+    corrupt(value.checkpoint.session.pendingJournalActions[0]);
+    expectRejectedAndDeleted(value);
   });
 
   it.each([

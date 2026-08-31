@@ -11,11 +11,14 @@ export class ModalFocusManager {
     private readonly background: readonly HTMLElement[],
     private readonly modals: readonly HTMLElement[],
     private readonly initialFocus: ReadonlyMap<HTMLElement, ModalInitialFocus> = new Map(),
+    private readonly isModal: (layer: HTMLElement) => boolean = () => true,
   ) {}
 
   topmostModal(): HTMLElement | null {
     if (this.disposed) return null;
-    return this.modals.find((modal) => modal.classList.contains('is-visible')) ?? null;
+    return this.modals.find((modal) => (
+      modal.classList.contains('is-visible') && this.isModal(modal)
+    )) ?? null;
   }
 
   activate(modal: HTMLElement, origin: HTMLElement | null = null): void {
@@ -24,7 +27,7 @@ export class ModalFocusManager {
     if (!wasActive) this.origins.set(modal, origin);
     modal.classList.add('is-visible');
     this.sync();
-    if (this.topmostModal() !== modal) return;
+    if (modal.hasAttribute('inert')) return;
     const active = document.activeElement;
     const hasValidInteriorFocus = wasActive
       && active instanceof HTMLElement
@@ -53,16 +56,18 @@ export class ModalFocusManager {
     if (this.disposed) return;
     const topmost = this.topmostModal();
     this.modals.forEach((modal) => {
-      const isTopmost = modal === topmost;
-      modal.toggleAttribute('inert', !isTopmost);
-      modal.setAttribute('aria-hidden', isTopmost ? 'false' : 'true');
+      const accessible = modal === topmost || (
+        topmost === null && modal.classList.contains('is-visible') && !this.isModal(modal)
+      );
+      modal.toggleAttribute('inert', !accessible);
+      modal.setAttribute('aria-hidden', accessible ? 'false' : 'true');
     });
     const modalOpen = topmost !== null;
     this.background.forEach((region) => region.toggleAttribute('inert', modalOpen));
   }
 
   focusInitial(modal: HTMLElement): void {
-    if (this.disposed || this.topmostModal() !== modal) return;
+    if (this.disposed || !modal.classList.contains('is-visible') || modal.hasAttribute('inert')) return;
     const target = this.initialFocus.get(modal);
     const resolved = typeof target === 'function' ? target() : target;
     resolved?.focus();

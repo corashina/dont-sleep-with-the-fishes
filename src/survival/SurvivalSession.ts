@@ -37,6 +37,7 @@ import {
   createJournalFishingRecord,
   createJournalNightEventRecord,
   createJournalSinkingShipRecord,
+  createJournalSurvivalActionRecord,
   createQuietJournalNightRecord,
   journalSnapshot,
   type JournalCarlitosDawnRecord,
@@ -45,6 +46,7 @@ import {
   type JournalEntry,
   type JournalInventoryMutation,
   type JournalNightRecord,
+  type JournalSurvivalActionRecord,
 } from './journalRecords';
 import {
   createSurvivalSessionCheckpoint,
@@ -194,7 +196,6 @@ const DAY_ACTION_REJECTION_CODES: Readonly<Record<string, string>> = Object.free
   'The hull needs no repair.': 'hull-full',
   'Repairing requires one energy.': 'not-enough-energy',
   'No duct tape remains.': 'no-duct-tape',
-  'No repair material remains.': 'no-repair-material',
   'Choose a broken item to repair.': 'no-repair-target',
   'That item cannot be repaired.': 'item-not-repairable',
   'No treatment is needed.': 'health-full',
@@ -1353,12 +1354,12 @@ export class SurvivalSession {
 
     if (recovered) this.applyDiveReward(deltas);
 
-    return this.commit(
+    return this.recordJournalAction('dive', this.commit(
       recovered ? 'dive-recovered' : 'dive-empty',
       recovered ? 'You surfaced with useful salvage.' : 'You found nothing beneath the boat.',
       deltas,
       'dive',
-    );
+    ));
   }
 
   private diveChances(hasFlashlight: boolean): { readonly success: number; readonly injury: number } {
@@ -1401,21 +1402,21 @@ export class SurvivalSession {
   private repair(option?: DayActionOption): ActionOutcome {
     const deltas = dayActionResourceDelta(this.dayActionRuleState(), 'repair', option);
     if (option?.kind === 'hullRepair' && option.material === 'ductTape') {
-      this.inventory.consume('ductTape', 1);
-      return this.commit(
+      const consumed = this.inventory.consume('ductTape', 1);
+      return this.recordJournalAction('repair', this.commit(
         'repaired-with-duct-tape',
         'The emergency patch holds for now.',
         deltas,
         'repair',
-      );
+      ), [{ kind: 'consume', instanceIds: consumed }]);
     }
 
-    return this.commit(
+    return this.recordJournalAction('repair', this.commit(
       'repaired',
       'You reinforce the damaged hull.',
       deltas,
       'repair',
-    );
+    ));
   }
 
   private repairItem(option?: DayActionOption): ActionOutcome {
@@ -1423,19 +1424,35 @@ export class SurvivalSession {
       return this.reject('no-repair-target', 'Choose a broken item to repair.');
     }
     this.inventory.repair(option.target);
-    this.inventory.consume('ductTape', 1);
-    return this.commit('item-repaired', 'The duct tape makes the item usable again.', {}, 'repair');
+    const consumed = this.inventory.consume('ductTape', 1);
+    return this.recordJournalAction('repairItem',
+      this.commit('item-repaired', 'The duct tape makes the item usable again.', {}, 'repair'),
+      [
+        { kind: 'repair', instanceIds: [option.target] },
+        { kind: 'consume', instanceIds: consumed },
+      ]);
   }
 
   private treat(): ActionOutcome {
     const deltas = dayActionResourceDelta(this.dayActionRuleState(), 'treat');
-    this.inventory.consume('medicalKit', 1);
-    return this.commit(
+    const consumed = this.inventory.consume('medicalKit', 1);
+    return this.recordJournalAction('treat', this.commit(
       'treated',
       'You clean and dress your wounds.',
       deltas,
       'treat',
-    );
+    ), [{ kind: 'consume', instanceIds: consumed }]);
+  }
+
+  private recordJournalAction(
+    action: JournalSurvivalActionRecord['action'],
+    outcome: ActionOutcome,
+    inventoryMutations: readonly JournalInventoryMutation[] = [],
+  ): ActionOutcome {
+    this.pendingJournalActions.push(createJournalSurvivalActionRecord(
+      action, outcome.deltas, inventoryMutations,
+    ));
+    return outcome;
   }
 
   private petCarlitos(): ActionOutcome {
