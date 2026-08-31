@@ -289,7 +289,7 @@ describe('SurvivalEventFlow', () => {
         energyCost: 3, energyOwner: 'carlitos', instanceId: null,
       },
       {
-        id: 'dive', label: 'Dive Into Wreck',
+        id: 'dive', label: 'Search underwater',
         unavailableReason: 'Requires 3 energy; you have 2.',
         energyCost: 3, energyOwner: 'player', instanceId: 'scubaSet-1',
       },

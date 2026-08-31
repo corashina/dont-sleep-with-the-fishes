@@ -9,8 +9,7 @@ console.log(JSON.stringify(report, null, 2));
 
 if (report.blockedLoadouts.length > 0) process.exitCode = 1;
 if (report.unrescuedLoadouts.length > 0) process.exitCode = 1;
-if (report.taken !== 0) process.exitCode = 1;
-if (report.rescueRate < 0.33 || report.rescueRate > 0.39) process.exitCode = 1;
+if (report.rescueRate < 0.45 || report.rescueRate > 0.49) process.exitCode = 1;
 if (report.averageRescueDay === null
   || report.averageRescueDay < 33
   || report.averageRescueDay > 36) process.exitCode = 1;

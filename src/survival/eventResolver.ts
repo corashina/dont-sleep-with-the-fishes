@@ -64,7 +64,6 @@ function resolvedEffects(
     ...(selected.effects.followUpNight !== undefined
       ? { followUpNight: selected.effects.followUpNight }
       : {}),
-    ...(selected.effects.ending !== undefined ? { ending: selected.effects.ending } : {}),
   };
 }
 

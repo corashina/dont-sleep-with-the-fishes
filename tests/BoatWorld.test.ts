@@ -7877,8 +7877,9 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps broken props inspectable, hides used and lost props, and restores repaired state', () => {
-    const savedItems = [savedItem('bucket'), savedItem('energyBar'), savedItem('map')];
+  it.each(['bucket', 'flashlight'] as const)('keeps broken %s visible and restores its repaired material', (itemType) => {
+    const item = savedItem(itemType);
+    const savedItems = [item, savedItem('energyBar'), savedItem('map')];
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(65, 4 / 3, 0.1, 100),
@@ -7887,12 +7888,16 @@ describe('BoatWorld helpers', () => {
       savedItems,
     );
     const inventory = new SurvivalInventoryState(savedItems);
-    inventory.break('bucket-1');
+    world.syncInventory(snapshot(savedItems, { inventory: inventory.snapshot() }));
+    const prop = world.scene.getObjectByName(`boat-supply:${itemType}`)!;
+    const usableMaterial = firstMesh(prop).material;
+    expect(inventory.break(item.instanceId)).toBe(true);
     inventory.consumeInstance('energyBar-1');
     inventory.lose('map-1');
     world.syncInventory(snapshot(savedItems, { inventory: inventory.snapshot() }));
-    expect(world.scene.getObjectByName('boat-supply:bucket')?.visible).toBe(true);
-    expect(world.projectInteractionAnchors(800, 600).find(({ id }) => id === 'supply:bucket'))
+    expect(prop.visible).toBe(true);
+    expect(firstMesh(prop).material).not.toBe(usableMaterial);
+    expect(world.projectInteractionAnchors(800, 600).find(({ id }) => id === `supply:${itemType}`))
       .toMatchObject({
         action: null,
         quantity: 1,
@@ -7901,9 +7906,10 @@ describe('BoatWorld helpers', () => {
       });
     expect(world.scene.getObjectByName('boat-supply:energyBar')?.visible).toBe(false);
     expect(world.scene.getObjectByName('boat-supply:map')?.visible).toBe(false);
-    inventory.repair('bucket-1');
+    inventory.repair(item.instanceId);
     world.syncInventory(snapshot(savedItems, { inventory: inventory.snapshot() }));
-    expect(world.scene.getObjectByName('boat-supply:bucket')?.visible).toBe(true);
+    expect(prop.visible).toBe(true);
+    expect(firstMesh(prop).material).toBe(usableMaterial);
     world.dispose();
     propModels.dispose();
   });

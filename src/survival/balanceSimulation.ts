@@ -27,7 +27,6 @@ export interface BalanceOutcomeBucket {
   readonly rescued: number;
   readonly dead: number;
   readonly sunk: number;
-  readonly taken: number;
   readonly blocked: number;
 }
 
@@ -277,11 +276,11 @@ function average(values: readonly number[]): number | null {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-type OutcomeKey = 'rescued' | 'dead' | 'sunk' | 'taken' | 'blocked';
+type OutcomeKey = 'rescued' | 'dead' | 'sunk' | 'blocked';
 type MutableBucket = { -readonly [Key in keyof BalanceOutcomeBucket]: number };
 
 function emptyBucket(): MutableBucket {
-  return { totalRuns: 0, rescued: 0, dead: 0, sunk: 0, taken: 0, blocked: 0 };
+  return { totalRuns: 0, rescued: 0, dead: 0, sunk: 0, blocked: 0 };
 }
 
 function recordOutcome(bucket: MutableBucket, outcome: OutcomeKey): void {
@@ -318,8 +317,8 @@ interface SimulationStats {
 function outcomeForEnding(ending: SessionEnding): OutcomeKey {
   if (ending === null) return 'blocked';
   if (ending.id === 'rescue') return 'rescued';
-  if (ending.id === 'death') return 'dead';
-  return ending.id === 'sinking' ? 'sunk' : 'taken';
+  if (ending.id === 'sinking') return 'sunk';
+  return 'dead';
 }
 
 function recordSignalRun(

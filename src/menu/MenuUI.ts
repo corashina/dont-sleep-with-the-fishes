@@ -2,7 +2,6 @@ const POINTER_LOCK_ERROR = 'Mouse look was blocked. Click the button and allow p
 const GUIDE_ASSET_ROOT = `${import.meta.env.BASE_URL}images/how-to-play`;
 
 interface GuidePage {
-  readonly stage: string;
   readonly title: string;
   readonly image: string;
   readonly imageAlt: string;
@@ -11,28 +10,24 @@ interface GuidePage {
 
 const GUIDE_PAGES: readonly GuidePage[] = Object.freeze([
   {
-    stage: 'STAGE 1 · THE SINKING SHIP',
     title: 'SCAVENGE DOROTHY',
     image: `${GUIDE_ASSET_ROOT}/scavenging.png`,
-    imageAlt: 'First-person view on Dorothy with the one-minute timer and three empty carry slots.',
+    imageAlt: 'Inside Dorothy’s bunk room with supplies on the beds, three empty carry slots, and 48 seconds remaining.',
     description: 'Dorothy sinks in 60 seconds. Search the ship for food, tools, and emergency supplies. Carry up to three weight, throw supplies into the lifeboat, then climb aboard before time ends.',
   },
   {
-    stage: 'STAGE 2 · SURVIVAL DAY',
     title: 'SURVIVE THE DAY',
     image: `${GUIDE_ASSET_ROOT}/survival-day.png`,
     imageAlt: 'Daylight view from the lifeboat with recovered supplies, Carlitos, and condition meters.',
     description: 'Each day gives limited energy. Fish, dive, eat, repair the hull, and use recovered supplies. Protect Health, Food, Energy, and Hull. Use the lantern when you are ready to end the day.',
   },
   {
-    stage: 'STAGE 3 · FISHING',
     title: 'FISH FOR FOOD',
     image: `${GUIDE_ASSET_ROOT}/survival-fishing.png`,
-    imageAlt: 'Fishing view over the bow after the line has been cast into the sea.',
+    imageAlt: 'Fishing view over the lifeboat bow with the red bobber clearly visible to the right of the rod.',
     description: 'Fishing costs one energy. Cast into the water, wait for a bite, then reel before the chance passes. Bait improves a fish catch and is used only when a fish lands.',
   },
   {
-    stage: 'STAGE 4 · SURVIVAL NIGHT',
     title: 'FACE THE NIGHT',
     image: `${GUIDE_ASSET_ROOT}/survival-night-event.png`,
     imageAlt: 'The lifeboat at night during a rain event with the umbrella and bucket highlighted.',
@@ -58,7 +53,6 @@ export class MenuUI {
   private readonly guideCloseButton: HTMLButtonElement;
   private readonly guidePreviousButton: HTMLButtonElement;
   private readonly guideNextButton: HTMLButtonElement;
-  private readonly guideStage: HTMLElement;
   private readonly guideTitle: HTMLElement;
   private readonly guideImage: HTMLImageElement;
   private readonly guideDescription: HTMLElement;
@@ -87,13 +81,11 @@ export class MenuUI {
         id="menu-how-to-play-dialog" data-menu-guide role="dialog"
         aria-modal="true" aria-hidden="true" aria-labelledby="menu-how-to-play-title"
         aria-describedby="menu-how-to-play-description" inert>
-        <div class="screen__content how-to-play-book">
-          <div class="how-to-play-book__cover" aria-hidden="true"></div>
-          <div class="how-to-play-book__rings" aria-hidden="true"><i></i><i></i><i></i></div>
-          <div class="how-to-play-book__tabs" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="screen__content how-to-play-popup">
+          <button type="button" class="how-to-play-page__close ui-role-context"
+            data-menu-guide-close aria-label="Close how to play">&times;</button>
           <article class="how-to-play-page">
             <header class="how-to-play-page__header">
-              <p class="how-to-play-page__stage ui-role-context" data-menu-guide-stage></p>
               <h2 class="ui-role-display" id="menu-how-to-play-title" data-menu-guide-title tabindex="-1"></h2>
             </header>
             <figure class="how-to-play-page__figure">
@@ -108,9 +100,6 @@ export class MenuUI {
               <button type="button" class="how-to-play-page__arrow" data-menu-guide-next
                 aria-label="Next how to play page">&rsaquo;</button>
             </nav>
-            <button type="button" class="how-to-play-page__close ui-role-context" data-menu-guide-close>
-              BACK TO THE TITLE
-            </button>
           </article>
         </div>
       </section>
@@ -124,7 +113,6 @@ export class MenuUI {
     this.guideCloseButton = requireElement(this.root, '[data-menu-guide-close]');
     this.guidePreviousButton = requireElement(this.root, '[data-menu-guide-previous]');
     this.guideNextButton = requireElement(this.root, '[data-menu-guide-next]');
-    this.guideStage = requireElement(this.root, '[data-menu-guide-stage]');
     this.guideTitle = requireElement(this.root, '[data-menu-guide-title]');
     this.guideImage = requireElement(this.root, '[data-menu-guide-image]');
     this.guideDescription = requireElement(this.root, '[data-menu-guide-description]');
@@ -278,7 +266,6 @@ export class MenuUI {
 
   private renderGuidePage(): void {
     const page = GUIDE_PAGES[this.guidePageIndex]!;
-    this.guideStage.textContent = page.stage;
     this.guideTitle.textContent = page.title;
     this.guideImage.src = page.image;
     this.guideImage.alt = page.imageAlt;

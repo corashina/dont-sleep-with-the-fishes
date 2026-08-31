@@ -4,7 +4,7 @@ import {
   type ItemInstance,
   type ItemInstanceId,
 } from '../game/ItemState';
-import type { DeathCause, EndingRecord } from '../game/ending';
+import type { DeathCause, EndingRecord, SurvivalEndingId } from '../game/ending';
 import {
   SURVIVAL_EVENTS,
   isDriftingItemEventId,
@@ -401,7 +401,6 @@ export class SurvivalSession {
   private pendingEventId: string | null;
   private pendingEvent: SurvivalEventDefinition | null = null;
   private pendingEventTargetId: ItemInstanceId | null = null;
-  private readonly pendingDawnBreaks = new Set<ItemInstanceId>();
   private nextDawnEnergyOverride: DawnEnergy | null = null;
   private lastEventId: string | null = null;
   private readonly lastSeenDay = new Map<string, number>();
@@ -453,6 +452,31 @@ export class SurvivalSession {
     }
   }
 
+  static createEndingPreview(
+    savedItems: readonly ItemInstance[],
+    seed: number,
+    endingId: SurvivalEndingId,
+  ): SurvivalSession {
+    const session = new SurvivalSession(savedItems, {
+      seed,
+      radioSignalsEnabled: false,
+      initial: {
+        ...(endingId === 'death' ? { health: 0 } : {}),
+        ...(endingId === 'sinking' ? { hull: 0 } : {}),
+      },
+    });
+    if (endingId === 'rescue') {
+      session.ending = Object.freeze({
+        id: endingId,
+        day: session.day,
+        savedPickupCount: session.savedPickupCount,
+        signalAssisted: false,
+      });
+      session.state = 'rescued';
+    }
+    return session;
+  }
+
   private restoreCheckpointState(checkpoint: SurvivalSessionCheckpoint): void {
     this.food = checkpoint.food;
     this.bait = checkpoint.bait;
@@ -481,7 +505,6 @@ export class SurvivalSession {
       ? null
       : survivalEventById(checkpoint.pendingEventId) ?? null;
     this.pendingEventTargetId = checkpoint.pendingEventTargetId;
-    for (const instanceId of checkpoint.pendingDawnBreaks) this.pendingDawnBreaks.add(instanceId);
     this.nextDawnEnergyOverride = checkpoint.nextDawnEnergyOverride;
     this.lastEventId = checkpoint.lastEventId;
   }
@@ -585,7 +608,6 @@ export class SurvivalSession {
       carlitos: this.carlitos,
       pendingEventId: this.pendingEventId,
       pendingEventTargetId: this.pendingEventTargetId,
-      pendingDawnBreaks: [...this.pendingDawnBreaks].sort(),
       nextDawnEnergyOverride: this.nextDawnEnergyOverride,
       lastEventId: this.lastEventId,
       lastSeenDays: Object.fromEntries([...this.lastSeenDay].sort()),
@@ -657,6 +679,20 @@ export class SurvivalSession {
 
   availableReason(action: DayActionId, option?: DayActionOption): string | null {
     return dayActionUnavailableReason(this.dayActionRuleState(), action, option);
+  }
+
+  setItemConditionForLab(
+    instanceId: ItemInstanceId,
+    condition: Extract<ItemCondition, 'usable' | 'broken'>,
+  ): boolean {
+    if (this.activeFishing !== null || this.isTerminal()) return false;
+    const item = this.snapshot().inventory[instanceId];
+    if (item === undefined || !ITEM_DEFINITIONS[item.type].breakable) return false;
+    const changed = condition === 'broken'
+      ? this.inventory.break(instanceId)
+      : this.inventory.repair(instanceId);
+    if (changed) this.changed();
+    return changed;
   }
 
   companionEventActionAvailability(
@@ -1034,7 +1070,6 @@ export class SurvivalSession {
       ));
     }
     const fallbackFoodGranted = this.applyResolvedItemMutations(
-      event.phase,
       resolved.effects.items ?? [],
       exclusions,
       selectedInstanceId,
@@ -1046,7 +1081,6 @@ export class SurvivalSession {
   }
 
   private applyResolvedItemMutations(
-    phase: SurvivalEventDefinition['phase'],
     mutations: readonly EventInventoryMutation[],
     exclusions: ReadonlySet<ItemInstanceId>,
     selectedInstanceId: ItemInstanceId | null,
@@ -1055,17 +1089,6 @@ export class SurvivalSession {
   ): boolean {
     let fallbackFoodGranted = false;
     for (const mutation of mutations) {
-      const deferred = this.deferNightBreak(
-        phase,
-        mutation,
-        exclusions,
-        selectedInstanceId,
-        attemptedItemId,
-      );
-      if (deferred !== null) {
-        journalMutations.push(deferred);
-        continue;
-      }
       const applied = this.applyEventMutation(
         mutation,
         exclusions,
@@ -1084,14 +1107,6 @@ export class SurvivalSession {
   ): void {
     if (resolved.effects.nextDawnEnergy !== undefined) {
       this.nextDawnEnergyOverride = resolved.effects.nextDawnEnergy;
-    }
-    if (resolved.effects.ending === 'taken') {
-      this.ending = Object.freeze({
-        id: 'taken',
-        day: this.day,
-        savedPickupCount: this.savedPickupCount,
-      });
-      this.state = 'dead';
     }
     this.resolveTerminal();
     this.lastEventId = event.id;
@@ -1216,7 +1231,6 @@ export class SurvivalSession {
     this.actedToday = false;
     this.clearPendingEvent();
     this.state = 'day';
-    this.applyPendingDawnBreaks();
     this.advanceCarlitosDawn();
     this.weather = 'calm';
     return hullWear;
@@ -1477,7 +1491,7 @@ export class SurvivalSession {
   }
 
   private openChest(): ActionOutcome {
-    const activeItemIds = this.targetableItemIds();
+    const activeItemIds = this.presentItemIds();
     const reward = drawChestReward(activeItemIds, this.random);
     this.chestState = 'none';
     this.chestAcquiredDay = null;
@@ -1525,9 +1539,9 @@ export class SurvivalSession {
       weather: this.weather,
       lastEventId: this.lastEventId,
       lastSeenDay: this.lastSeenDay,
-      targetableItemIds: this.targetableItemIds(),
+      targetableItemIds: this.usableItemIds(),
       appearanceCounts: this.appearanceCounts,
-      inventoryItemIds: this.targetableItemIds(),
+      inventoryItemIds: this.presentItemIds(),
       rescueLead: this.rescueLead,
       pressure: this.pressure,
       chestState: this.chestState,
@@ -1665,7 +1679,13 @@ export class SurvivalSession {
     };
   }
 
-  private targetableItemIds(): ReadonlySet<ItemId> {
+  private usableItemIds(): ReadonlySet<ItemId> {
+    return new Set(Object.values(this.inventory.snapshot())
+      .filter((item) => item?.condition === 'usable')
+      .map((item) => item!.type));
+  }
+
+  private presentItemIds(): ReadonlySet<ItemId> {
     return new Set(Object.values(this.inventory.snapshot())
       .filter((item) => item?.condition === 'usable' || item?.condition === 'broken')
       .map((item) => item!.type));
@@ -1674,7 +1694,7 @@ export class SurvivalSession {
   private drawEventTarget(event: SurvivalEventDefinition): ItemInstanceId | null {
     const targetItemIds = new Set(event.targetItemIds ?? []);
     const candidates = Object.values(this.inventory.snapshot())
-      .filter((item) => (item?.condition === 'usable' || item?.condition === 'broken')
+      .filter((item) => item?.condition === 'usable'
         && targetItemIds.has(item.type))
       .map((item) => item!.instanceId)
       .sort();
@@ -1897,54 +1917,6 @@ export class SurvivalSession {
     const target = this.pendingEventTargetId;
     if (target === null || excludedInstanceIds.has(target)) return [];
     return this.inventory.lose(target) ? [target] : [];
-  }
-
-  private deferNightBreak(
-    phase: SurvivalEventDefinition['phase'],
-    mutation: EventInventoryMutation,
-    excludedInstanceIds: ReadonlySet<ItemInstanceId>,
-    selectedInstanceId: ItemInstanceId | null,
-    attemptedItemId: ItemId | null,
-  ): JournalInventoryMutation | null {
-    if (phase !== 'night' || (mutation.kind !== 'break' && mutation.kind !== 'breakRandom')) {
-      return null;
-    }
-    let instanceIds: ItemInstanceId[];
-    if (mutation.kind === 'breakRandom') {
-      const exclusions = new Set(excludedInstanceIds);
-      for (const instanceId of this.pendingDawnBreaks) exclusions.add(instanceId);
-      instanceIds = this.inventory.selectRandomBreakable(
-        mutation.quantity,
-        this.random,
-        exclusions,
-      );
-    } else {
-      if (mutation.kind !== 'break') return null;
-      const preferredInstanceId = mutation.itemId === attemptedItemId
-        ? selectedInstanceId
-        : null;
-      const snapshot = this.inventory.snapshot();
-      instanceIds = this.mutateMatchingInstances(
-        mutation.itemId,
-        mutation.quantity,
-        excludedInstanceIds,
-        preferredInstanceId,
-        (instanceId) => (
-          snapshot[instanceId]?.condition === 'usable'
-          && !this.pendingDawnBreaks.has(instanceId)
-        ),
-      );
-    }
-    if (instanceIds.length === 0) return null;
-    for (const instanceId of instanceIds) this.pendingDawnBreaks.add(instanceId);
-    return { kind: 'break', instanceIds };
-  }
-
-  private applyPendingDawnBreaks(): void {
-    for (const instanceId of [...this.pendingDawnBreaks].sort()) {
-      this.inventory.break(instanceId);
-    }
-    this.pendingDawnBreaks.clear();
   }
 
   private advanceCarlitosDawn(): void {

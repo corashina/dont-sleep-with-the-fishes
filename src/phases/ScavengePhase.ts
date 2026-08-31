@@ -111,6 +111,8 @@ function createScavengeHandModelFactory(
   };
 }
 
+export type ScavengePhaseStart = 'intro' | 'ending-preview';
+
 export class ScavengePhase implements GamePhase {
   private readonly scene = new Scene();
   private readonly session: ScavengeSession;
@@ -174,6 +176,7 @@ export class ScavengePhase implements GamePhase {
     private readonly onComplete: (result: Readonly<ScavengeResult>) => void,
     private readonly onRestart: () => void,
     private readonly onReturnToMenu: () => void,
+    private readonly phaseStart: ScavengePhaseStart = 'intro',
   ) {
     this.scene.add(context.camera);
     this.ui = new GameUI(context.mount);
@@ -252,11 +255,25 @@ export class ScavengePhase implements GamePhase {
     document.addEventListener('keyup', this.onKeyUp);
     this.world.revealPhysicsObjects();
     this.audio.start();
+    if (this.phaseStart === 'ending-preview') {
+      this.startEndingPreview();
+      return;
+    }
     if (this.input.pointerLocked) {
       this.beginIntro();
     } else {
       void this.requestPointerLock();
     }
+  }
+
+  private startEndingPreview(): void {
+    this.presentation = 'playing';
+    this.ui.setPresentation('playing');
+    this.ui.setIntroFadeProgress(0);
+    this.session.start();
+    this.session.tick(SCAVENGE_DURATION_SECONDS);
+    this.synchronizeElapsed(this.session.snapshot());
+    this.update(0, 0);
   }
 
   update(_time: number, deltaSeconds: number): void {

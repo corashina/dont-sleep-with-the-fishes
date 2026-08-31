@@ -55,9 +55,9 @@ function readMissingItemIds(
 
 export function parseBrowserPlaytest(
   search: string,
-  development: boolean,
+  enabled: boolean,
 ): BrowserPlaytestStartup | null {
-  if (!development) return null;
+  if (!enabled) return null;
 
   const params = new URLSearchParams(search);
   if (!readPlaytest(params)) return null;

@@ -71,6 +71,17 @@ it('round-trips a stable pending event checkpoint', () => {
   expect(restored.exportCheckpoint()).toEqual(source.exportCheckpoint());
 });
 
+it('restores broken item conditions from a checkpoint', () => {
+  const source = new SurvivalSession(saved('bucket'), {
+    seed: 42,
+    initialConditions: { 'bucket-1': 'broken' },
+  });
+
+  const restored = SurvivalSession.restore(source.exportCheckpoint());
+
+  expect(restored.snapshot().inventory['bucket-1']?.condition).toBe('broken');
+});
+
 it('keeps future random outcomes after restore', () => {
   const source = new SurvivalSession(saved(), {
     seed: 77,
@@ -339,7 +350,7 @@ it('records signal-assisted rescue once', () => {
 it('records starvation and diving causes', () => {
   const starving = new SurvivalSession(saved(), {
     seed: 21,
-    initial: { day: 10, hunger: 100, health: 15 },
+    initial: { day: 10, hunger: 100, health: 7 },
     initialEventId: 'night-calm-fallback',
   });
   starving.resolveEvent(choiceResponse('sleep'));
@@ -1417,7 +1428,7 @@ describe('SurvivalSession daytime actions', () => {
     expect(random.next).not.toHaveBeenCalled();
   });
 
-  it('breaks anchor-2 at dawn instead of anchor-1', () => {
+  it('breaks anchor-2 during event resolution instead of anchor-1', () => {
     const session = new SurvivalSession(saved('anchor', 'anchor'), {
       seed: 1,
       random: sequenceRandom([0]),
@@ -1433,11 +1444,6 @@ describe('SurvivalSession daytime actions', () => {
       choiceId: 'anchor',
       instanceId: 'anchor-2',
     }).accepted).toBe(true);
-    expect(session.snapshot().inventory).toMatchObject({
-      'anchor-1': { condition: 'usable' },
-      'anchor-2': { condition: 'usable' },
-    });
-    session.beginDawn();
     expect(session.snapshot().inventory).toMatchObject({
       'anchor-1': { condition: 'usable' },
       'anchor-2': { condition: 'broken' },
@@ -1484,7 +1490,7 @@ describe('SurvivalSession daytime actions', () => {
     expect(unowned.snapshot()).toEqual(before);
   });
 
-  it('breaks the exact selected item at dawn', () => {
+  it('breaks the exact selected item during event resolution', () => {
     const session = new SurvivalSession(saved('bucket', 'bucket'), {
       seed: 1,
       random: sequenceRandom([0.99]),
@@ -1496,9 +1502,6 @@ describe('SurvivalSession daytime actions', () => {
       choiceId: 'bucket',
       instanceId: 'bucket-2',
     })).toMatchObject({ accepted: true, cue: 'none' });
-    expect(session.snapshot().inventory['bucket-1']?.condition).toBe('usable');
-    expect(session.snapshot().inventory['bucket-2']?.condition).toBe('usable');
-    session.beginDawn();
     expect(session.snapshot().inventory['bucket-1']?.condition).toBe('usable');
     expect(session.snapshot().inventory['bucket-2']?.condition).toBe('broken');
   });
@@ -1572,6 +1575,32 @@ describe('SurvivalSession daytime actions', () => {
     expect(dead.resolveEvent({ kind: 'endure' }).cue).toBe('death');
     const sunk = new SurvivalSession(saved(), { seed: 1, random: sequenceRandom([0.99, 0]), initial: { hull: 10 }, initialEventId: 'eerie-melody' });
     expect(sunk.resolveEvent({ kind: 'endure' }).cue).toBe('sinking');
+  });
+
+  it('keeps a healthy survivor alive after an Eerie Melody attack', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 1,
+      random: sequenceRandom([0.99, 0]),
+      initial: { health: 50 },
+      initialEventId: 'eerie-melody',
+    });
+
+    session.resolveEvent({ kind: 'endure' });
+
+    expect(session.snapshot()).toMatchObject({ health: 20, ending: null });
+  });
+
+  it('uses the same survivable Eerie Melody damage for Binoculars', () => {
+    const session = new SurvivalSession(saved('spyglass'), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initial: { health: 50 },
+      initialEventId: 'eerie-melody',
+    });
+
+    session.resolveEvent(itemResponse('spyglass'));
+
+    expect(session.snapshot()).toMatchObject({ health: 20, ending: null });
   });
   it('starts day one with frozen cloned supplies and one food per can', () => {
     const savedItems = saved('cannedFood', 'compass');
@@ -2529,12 +2558,15 @@ describe('SurvivalSession daytime actions', () => {
   it('applies dawn hunger, energy tiers, starvation, and terminal states once', () => {
     const session = new SurvivalSession(saved(), {
       seed: 1,
-      random: sequenceRandom([0, 0]),
-      initial: { hunger: 95, health: 20, hull: 5, energy: 0 },
+      random: sequenceRandom([0, 0, 0.99]),
+      initial: { hunger: 95, health: 20, hull: 100, energy: 0 },
     });
     session.perform('endDay');
     session.beginDawn();
-    expect(session.snapshot()).toMatchObject({ day: 2, hunger: 100, energy: 1, health: 5 });
+    expect(session.snapshot()).toMatchObject({ day: 2, hunger: 100, energy: 1, health: 13 });
+    session.perform('endDay');
+    session.beginDawn();
+    expect(session.snapshot()).toMatchObject({ day: 3, health: 6, state: 'day' });
     session.perform('endDay');
     session.beginDawn();
     expect(session.snapshot().state).toBe('dead');
@@ -2614,7 +2646,7 @@ describe('SurvivalSession daytime actions', () => {
       code: 'event-resolved',
       message: 'The bucket keeps the rain under control.',
     });
-    expect(suitable.snapshot().inventory['bucket-1']?.condition).toBe('usable');
+    expect(suitable.snapshot().inventory['bucket-1']?.condition).toBe('broken');
     suitable.beginDawn();
     expect(suitable.snapshot().inventory['bucket-1']?.condition).toBe('broken');
   });
@@ -2939,9 +2971,8 @@ describe('SurvivalSession daytime actions', () => {
       initialEventId: 'shower-night',
     });
     expect(session.resolveEvent(itemResponse('bucket')).accepted).toBe(true);
-    expect(session.snapshot().inventory['bucket-1']?.condition).toBe('usable');
-    session.beginDawn();
     expect(session.snapshot().inventory['bucket-1']?.condition).toBe('broken');
+    session.beginDawn();
     expect(session.perform('repairItem', { kind: 'itemRepair', target: 'bucket-1' }).accepted).toBe(true);
     expect(session.snapshot().inventory['bucket-1']?.condition).toBe('usable');
   });
@@ -2968,19 +2999,13 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().inventory['map-2']?.condition).toBe('usable');
   });
 
-  it('breaks random eligible items without replacement at dawn', () => {
+  it('breaks random eligible items without replacement during event resolution', () => {
     const session = new SurvivalSession(saved('anchor', 'bucket', 'spyglass'), {
       seed: 16,
       random: sequenceRandom([0, 0, 0.99, 0]),
       initialEventId: 'windy-night',
     });
     session.resolveEvent({ kind: 'endure' });
-    expect(session.snapshot().inventory).toMatchObject({
-      'anchor-1': { condition: 'usable' },
-      'bucket-1': { condition: 'usable' },
-      'spyglass-1': { condition: 'usable' },
-    });
-    session.beginDawn();
     expect(session.snapshot().inventory).toMatchObject({
       'anchor-1': { condition: 'broken' },
       'bucket-1': { condition: 'usable' },
@@ -3014,14 +3039,25 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().inventory['fishingNet-1']?.condition).toBe('usable');
   });
 
-  it('targets broken items but excludes consumed and lost Snatcher candidates', () => {
+  it('does not select a broken item as a later event target', () => {
+    const session = new SurvivalSession(saved('anchor'), {
+      seed: 181,
+      random: sequenceRandom([0]),
+      initialConditions: { 'anchor-1': 'broken' },
+      initialEventId: 'snatcher',
+    });
+
+    expect(session.snapshot().pendingEventTargetId).toBeNull();
+  });
+
+  it('excludes broken, consumed, and lost Snatcher candidates', () => {
     const session = new SurvivalSession(saved('anchor', 'map', 'fishingNet'), {
       seed: 19,
       random: sequenceRandom([0]),
       initialConditions: { 'anchor-1': 'broken', 'map-1': 'lost' },
       initialEventId: 'snatcher',
     });
-    expect(session.snapshot().pendingEventTargetId).toBe('anchor-1');
+    expect(session.snapshot().pendingEventTargetId).toBeNull();
   });
 
   it('never targets unsupported Bait or Fishing Net instances', () => {

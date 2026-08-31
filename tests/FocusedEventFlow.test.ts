@@ -139,7 +139,7 @@ describe('FocusedEventFlow', () => {
     expect(rig.ui.showFocusedEvent).toHaveBeenCalledOnce();
   });
 
-  it('rejects a Back camera error after restoring the focused choices', async () => {
+  it('clears a declined event even if the Back camera fails', async () => {
     const rig = createRig();
     const backError = new Error('camera return failed');
     await rig.flow.enter('drifting-supplies', driftingChoices);
@@ -147,11 +147,12 @@ describe('FocusedEventFlow', () => {
 
     await expect(rig.flow.back()).rejects.toBe(backError);
 
-    expect(rig.ui.showFocusedEvent).toHaveBeenCalledTimes(2);
+    expect(rig.ui.showFocusedEvent).toHaveBeenCalledOnce();
+    expect(rig.calls).toContain('clear-event');
     expect(rig.setBusy).toHaveBeenLastCalledWith(false);
     rig.world.exitFocusedEventView.mockResolvedValue(undefined);
     await expect(rig.flow.back()).resolves.toBeUndefined();
-    expect(rig.ui.hideFocusedEvent).toHaveBeenCalledTimes(2);
+    expect(rig.resolveChoice).toHaveBeenCalledOnce();
   });
 
   it('keeps a choice beat error primary while focus cleanup errors stay secondary', async () => {
@@ -340,13 +341,15 @@ describe('FocusedEventFlow', () => {
     expect(rig.resolveChoice).toHaveBeenCalledOnce();
   });
 
-  it('returns without resolving when the player backs out', async () => {
+  it('resolves the no-cost decline when the player returns to the boat', async () => {
     const rig = createRig();
     await rig.flow.enter('drifting-supplies', driftingChoices);
     rig.calls.length = 0;
     await rig.flow.back();
-    expect(rig.resolveChoice).not.toHaveBeenCalled();
-    expect(rig.calls).toEqual(['busy', 'hide-focus', 'exit', 'ready', 'restore-focus']);
+    expect(rig.resolveChoice).toHaveBeenCalledExactlyOnceWith({ id: 'sleep', instanceId: null });
+    expect(rig.calls.indexOf('resolve:sleep:none')).toBeLessThan(rig.calls.indexOf('exit'));
+    expect(rig.calls).toContain('clear-event');
+    expect(rig.calls.at(-1)).toBe('restore-focus');
   });
 
   it('hides the popup before the back camera finishes', async () => {
@@ -361,15 +364,16 @@ describe('FocusedEventFlow', () => {
 
     const work = rig.flow.back();
 
-    expect(rig.calls).toEqual(['busy', 'hide-focus', 'exit']);
+    await vi.waitFor(() => expect(rig.calls).toContain('exit'));
+    expect(rig.calls.indexOf('hide-focus')).toBeLessThan(rig.calls.indexOf('exit'));
+    expect(rig.calls).not.toContain('clear-event');
     returning.resolve();
     await work;
-    expect(rig.calls).toEqual([
-      'busy', 'hide-focus', 'exit', 'ready', 'restore-focus',
-    ]);
+    expect(rig.calls).toContain('clear-event');
+    expect(rig.calls.at(-1)).toBe('restore-focus');
   });
 
-  it('uses Wreckage Leave as a non-resolving camera return', async () => {
+  it('resolves Wreckage Leave before returning to normal controls', async () => {
     const rig = createRig('wreckage');
     const choices = [
       { id: 'leave', label: 'Leave', unavailableReason: null, instanceId: null },
@@ -379,11 +383,10 @@ describe('FocusedEventFlow', () => {
 
     await rig.flow.choose({ id: 'leave', instanceId: null });
 
-    expect(rig.resolveChoice).not.toHaveBeenCalled();
-    expect(rig.setEventResolutionActive).not.toHaveBeenCalled();
-    expect(rig.calls).toEqual([
-      'confirm', 'busy', 'hide-focus', 'exit', 'ready', 'restore-focus',
-    ]);
+    expect(rig.resolveChoice).toHaveBeenCalledOnce();
+    expect(rig.resolveChoice).toHaveBeenCalledWith({ id: 'leave', instanceId: null });
+    expect(rig.setEventResolutionActive).toHaveBeenCalledWith(true);
+    expect(rig.calls).toContain('restore-focus');
   });
 
   it('updates the shown focus target after a resize', async () => {

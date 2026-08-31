@@ -11,7 +11,7 @@ import {
   createEventTestResult,
 } from './app/EventTest';
 import type { ScavengeResult } from './game/ScavengeSession';
-import { ScavengePhase } from './phases/ScavengePhase';
+import { ScavengePhase, type ScavengePhaseStart } from './phases/ScavengePhase';
 import {
   DirectSceneRenderer,
   type SceneRenderer,
@@ -86,6 +86,7 @@ export interface GameFactories {
     onComplete: (result: Readonly<ScavengeResult>) => void,
     onRestart: () => void,
     onReturnToMenu: () => void,
+    start: ScavengePhaseStart,
   ): GamePhase;
   createSurvival(
     context: PhaseContext,
@@ -100,8 +101,8 @@ const PRODUCTION_FACTORIES: GameFactories = {
   createMenu: (context, onComplete) => (
     new MainMenuPhase(context, onComplete)
   ),
-  createScavenge: (context, onComplete, onRestart, onReturnToMenu) => (
-    new ScavengePhase(context, onComplete, onRestart, onReturnToMenu)
+  createScavenge: (context, onComplete, onRestart, onReturnToMenu, start) => (
+    new ScavengePhase(context, onComplete, onRestart, onReturnToMenu, start)
   ),
   createSurvival: (
     context,
@@ -733,9 +734,9 @@ export class Game {
     ]);
   }
 
-  private activateScavenge(start: boolean): void {
+  private activateScavenge(start: boolean, phaseStart: ScavengePhaseStart = 'intro'): void {
     const generation = ++this.phaseGeneration;
-    const phase = this.createScavengePhase(generation);
+    const phase = this.createScavengePhase(generation, phaseStart);
     if (!this.ownsGeneration(generation)) {
       phase.dispose();
       return;
@@ -800,12 +801,13 @@ export class Game {
     }
   }
 
-  private createScavengePhase(generation: number): GamePhase {
+  private createScavengePhase(generation: number, start: ScavengePhaseStart = 'intro'): GamePhase {
     return this.factories.createScavenge(
       this.context,
       (result) => this.completeScavenge(generation, result),
       () => this.restartFrom(generation),
       () => this.returnToMenuFrom(generation),
+      start,
     );
   }
 
@@ -877,6 +879,20 @@ export class Game {
     this.elapsed = 0;
     this.seed = this.createSeed();
     const result = createEventTestResult();
+    if (option.phase === 'ending') {
+      if (option.endingId === 'dorothy') {
+        this.activateScavenge(true, 'ending-preview');
+      } else {
+        this.activateSurvival({
+          kind: 'ending-preview',
+          endingId: option.endingId,
+          savedItems: result.savedItems,
+          seed: this.seed,
+          scavengeElapsedSeconds: result.elapsedSeconds,
+        });
+      }
+      return;
+    }
     this.activateSurvival({
       kind: 'fresh',
       savedItems: result.savedItems,

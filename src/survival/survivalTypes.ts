@@ -123,7 +123,6 @@ export interface EventEffects {
   readonly chest?: ChestEventEffect;
   readonly nextDawnEnergy?: DawnEnergy;
   readonly followUpNight?: true;
-  readonly ending?: 'taken';
 }
 export interface WeightedEventOutcome {
   readonly resultId?: string;

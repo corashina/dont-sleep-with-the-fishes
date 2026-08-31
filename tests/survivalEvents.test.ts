@@ -272,9 +272,6 @@ describe('survival events', () => {
     expect(flare.effects.items).toEqual([
       { kind: 'consume', itemId: 'flareGun', quantity: 1 },
     ]);
-    for (const choice of shadow.choices) {
-      expect(choice.outcomes.every(({ effects }) => effects.ending === undefined)).toBe(true);
-    }
   });
 
   it('defines exact Carlitos choices and delegated loot weights', () => {
@@ -323,7 +320,7 @@ describe('survival events', () => {
         requirements: undefined, companionAction: 'delegateCarlitos',
       },
       {
-        id: 'dive', label: 'Dive Into Wreck', itemId: 'scubaSet',
+        id: 'dive', label: 'Search underwater', itemId: 'scubaSet',
         requirements: [{ resource: 'energy', minimum: 3 }], companionAction: undefined,
       },
       {
@@ -1040,7 +1037,7 @@ describe('survival events', () => {
         { kind: 'loseRandom', quantity: 1 },
       ];
     }, /loseRandom.*one/i);
-    rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [item('break', 'flashlight')]; }, /not breakable/i);
+    rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [item('break', 'radio')]; }, /not breakable/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [{ kind: 'gainChest', quantity: 1, fallbackFood: 2 }]; }, /fallback food/i);
     rejects((catalog) => { catalog[0].choices[0].requiredChestState = 'open'; }, /required chest state/i);
     rejects((catalog) => { catalog[0].latestDay = 1; }, /day bounds/i);

@@ -1260,7 +1260,7 @@ describe('SurvivalPhase orchestration', () => {
 
   it('routes Wreckage choices through the shared focused controls', async () => {
     const calls: string[] = [];
-    let current = snapshot({
+    const pendingWreckage = () => snapshot({
       state: 'dayEvent',
       pendingEventId: 'wreckage',
       energy: 3,
@@ -1272,6 +1272,7 @@ describe('SurvivalPhase orchestration', () => {
         },
       },
     });
+    let current = pendingWreckage();
     const resolveEvent = vi.fn(() => {
       calls.push('action-complete');
       current = snapshot({ state: 'day' });
@@ -1310,7 +1311,7 @@ describe('SurvivalPhase orchestration', () => {
       setJournalUnread: vi.fn(),
       dispose: vi.fn(),
     };
-    const phase = SurvivalPhase.forTest({
+    const createPhase = () => SurvivalPhase.forTest({
       session: { snapshot: vi.fn(() => current), resolveEvent },
       world: {
         stageEvent: vi.fn(),
@@ -1329,6 +1330,7 @@ describe('SurvivalPhase orchestration', () => {
       },
       ui,
     });
+    let phase = createPhase();
 
     phase.start();
     await flushPromises();
@@ -1343,9 +1345,19 @@ describe('SurvivalPhase orchestration', () => {
 
     ui.onFocusedEventChoice?.({ id: 'leave', instanceId: null });
     await flushPromises();
-    expect(resolveEvent).not.toHaveBeenCalled();
+    expect(resolveEvent).toHaveBeenCalledExactlyOnceWith({
+      kind: 'choice', choiceId: 'leave',
+    });
     expect(hideFocusedEvent).toHaveBeenCalledOnce();
-    expect(current).toMatchObject({ state: 'dayEvent', pendingEventId: 'wreckage' });
+    expect(current).toMatchObject({ state: 'day', pendingEventId: null });
+
+    phase.dispose();
+    current = pendingWreckage();
+    vi.clearAllMocks();
+    calls.length = 0;
+    phase = createPhase();
+    phase.start();
+    await flushPromises();
 
     ui.onFocusedEventSelect?.('wreckage');
     await flushPromises();
@@ -1357,7 +1369,9 @@ describe('SurvivalPhase orchestration', () => {
     expect(resolveEvent).toHaveBeenCalledWith({
       kind: 'item', choiceId: 'dive', instanceId: 'scubaSet-1',
     });
-    expect(playEventItemUse).toHaveBeenCalledWith('wreckage', 'dive', 'scubaSet-1');
+    expect(playEventItemUse).toHaveBeenCalledWith(
+      'wreckage', 'dive', 'scubaSet-1', expect.any(Function),
+    );
     await vi.waitFor(() => expect(ui.showRewardResult).toHaveBeenCalledOnce());
     expect(calls).toEqual([
       'action-complete',
@@ -1524,7 +1538,7 @@ describe('SurvivalPhase orchestration', () => {
   it.each([
     'drifting-supplies',
     'drifting-chest',
-  ] as const)('returns from %s focus without resolving or removing it', async (eventId) => {
+  ] as const)('returns from %s focus by declining the reward', async (eventId) => {
     const rig = createDriftingItemRig(eventId);
     await revealDriftingItem(rig);
     await enterDriftingItemFocus(rig);
@@ -1532,21 +1546,23 @@ describe('SurvivalPhase orchestration', () => {
     rig.ui.onFocusedEventBack?.();
     rig.ui.onFocusedEventBack?.();
     await flushPromises();
-    expect(rig.resolveEvent).not.toHaveBeenCalled();
-    expect(rig.world.recedeDriftingItem).not.toHaveBeenCalled();
-    expect(rig.world.exitFocusedEventView).toHaveBeenCalledOnce();
+    expect(rig.resolveEvent).toHaveBeenCalledExactlyOnceWith({ kind: 'choice', choiceId: 'sleep' });
+    expect(rig.world.recedeDriftingItem).toHaveBeenCalledOnce();
     expect(rig.hideFocusedEvent).toHaveBeenCalledOnce();
 
+    rig.animations.recede.resolve();
+    await flushPromises();
+    expect(rig.world.exitFocusedEventView).toHaveBeenCalledOnce();
     rig.animations.exit.resolve();
     await flushPromises();
-    expect(rig.world.clearEvent).not.toHaveBeenCalled();
-    expect(rig.eventBundles.releaseActive).not.toHaveBeenCalled();
+    expect(rig.world.clearEvent).toHaveBeenCalledOnce();
+    expect(rig.eventBundles.releaseActive).toHaveBeenCalledOnce();
     expect(rig.hideFocusedEvent).toHaveBeenCalledOnce();
     expect(rig.setEventSelection).toHaveBeenLastCalledWith(expect.any(Map), []);
-    expect(rig.realSession.snapshot()).toMatchObject({ pendingEventId: eventId });
+    expect(rig.realSession.snapshot()).toMatchObject({ state: 'day', pendingEventId: null });
 
     rig.ui.onFocusedEventSelect?.(eventId);
-    expect(rig.world.enterFocusedEventView).toHaveBeenCalledTimes(2);
+    expect(rig.world.enterFocusedEventView).toHaveBeenCalledOnce();
     rig.phase.dispose();
   });
 
@@ -1563,7 +1579,9 @@ describe('SurvivalPhase orchestration', () => {
         rig.ui.playEventChoiceBeat = vi.fn(() => Promise.reject(failure));
         rig.ui.onFocusedEventChoice?.({ id: 'retrieve', instanceId: null });
       } else {
+        rig.animations.recede.resolve();
         rig.world.exitFocusedEventView.mockRejectedValueOnce(failure);
+        rig.world.exitFocusedEventView.mockResolvedValueOnce(undefined);
         rig.ui.onFocusedEventBack?.();
       }
       await flushPromises();
@@ -7207,28 +7225,6 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
-  it('passes the taken ending record to the UI', () => {
-    const showEnding = vi.fn();
-    const phase = SurvivalPhase.forTest({
-      session: {
-        snapshot: vi.fn(() => snapshot({
-          state: 'dead',
-          ending: { id: 'taken', day: 21, savedPickupCount: 4 },
-          day: 21,
-        })),
-      },
-      world: { update: vi.fn(), dispose: vi.fn() },
-      ui: { render: vi.fn(), showEnding, dispose: vi.fn() },
-    });
-
-    phase.update(1, 0.016);
-
-    expect(showEnding).toHaveBeenCalledWith({
-      id: 'taken', day: 21, savedPickupCount: 4,
-    });
-    phase.dispose();
-  });
-
   it.each(['petCarlitos', 'feedCarlitos'] as const)(
     'syncs and plays accepted %s before rendering the changed companion state',
     async (action) => {
@@ -8403,7 +8399,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(returnToMenu).toHaveBeenCalledOnce();
   });
 
-  it('automatically resolves an unblocked Chest Attack and covers at impact', async () => {
+  it('shows Attack and waits for explicit selection', async () => {
     const calls: string[] = [];
     let current = snapshot({
       state: 'nightEvent',
@@ -8449,6 +8445,21 @@ describe('SurvivalPhase orchestration', () => {
     const setSleepCovered = vi.fn(async (covered: boolean) => {
       calls.push(`cover:${covered}`);
     });
+    const setEventSelection = vi.fn();
+    const ui: Partial<SurvivalUI> = {
+      beginEventPresentation: vi.fn(),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection,
+      setSleepCoverProfile,
+      setSleepCovered,
+      settleCoveredScene: vi.fn(() => Promise.resolve()),
+      setBusy: vi.fn(),
+      render: vi.fn(),
+      setJournalUnread: vi.fn(),
+      clearEventPresentation: vi.fn(),
+      restoreCommandFocus: vi.fn(),
+      dispose: vi.fn(),
+    };
     const phase = SurvivalPhase.forTest({
       session: {
         snapshot: vi.fn(() => current),
@@ -8463,23 +8474,19 @@ describe('SurvivalPhase orchestration', () => {
         clearEvent: vi.fn(() => { calls.push('clear-event'); }),
         dispose: vi.fn(),
       },
-      ui: {
-        beginEventPresentation: vi.fn(),
-        showEventReveal: vi.fn(() => Promise.resolve()),
-        setEventSelection: vi.fn(),
-        setSleepCoverProfile,
-        setSleepCovered,
-        settleCoveredScene: vi.fn(() => Promise.resolve()),
-        setBusy: vi.fn(),
-        render: vi.fn(),
-        setJournalUnread: vi.fn(),
-        clearEventPresentation: vi.fn(),
-        restoreCommandFocus: vi.fn(),
-        dispose: vi.fn(),
-      },
+      ui,
     });
 
     phase.start();
+    for (let index = 0; index < 8; index += 1) await flushPromises();
+
+    expect(setEventSelection).toHaveBeenLastCalledWith(
+      new Map(),
+      [expect.objectContaining({ id: 'attack', label: 'Attack' })],
+    );
+    expect(resolveEvent).not.toHaveBeenCalled();
+
+    ui.onEventChoice?.('attack');
     for (let index = 0; index < 8; index += 1) await flushPromises();
 
     expect(resolveEvent).toHaveBeenCalledExactlyOnceWith({
@@ -8590,7 +8597,7 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
     expect(setEventSelection).toHaveBeenCalledWith(
       new Map([['fishingNet-1', 'fishingNet']]),
-      [],
+      [{ id: 'attack', label: 'Attack', unavailableReason: null }],
     );
 
     phase.handleEventItem('fishingNet', 'fishingNet-1');
