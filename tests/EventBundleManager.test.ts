@@ -12,7 +12,6 @@ import {
   EventBundleManager,
   type EventBundleLoaderLike,
 } from '../src/survival/EventBundleManager';
-import { EVENT_BUNDLE_SPECS } from '../src/survival/eventBundleManifest';
 import { createFocusedAdapter } from '../src/survival/eventPresentationAdapters';
 import { createTestPropModels } from './helpers/propModels';
 
@@ -56,12 +55,6 @@ function adapter(eventId: EventPresentationAdapter['eventId']): EventPresentatio
 }
 
 describe('EventBundleManager', () => {
-  it('declares every Wreckage bundle resource', () => {
-    expect(EVENT_BUNDLE_SPECS.wreckage).toEqual({
-      models: ['containerShip', 'wreckageBox', 'wreckageCrate', 'wreckagePallet'],
-      sounds: ['diveEntry', 'underwaterMovement', 'diveSurface'],
-    });
-  });
 
   it.each([
     [

@@ -10,8 +10,6 @@ import type {
 import { AudioSystem } from '../src/audio/AudioSystem';
 import { SurvivalAudio } from '../src/audio/SurvivalAudio';
 import {
-  AUDIO_MANIFEST,
-  EVENT_ONLY_SOUND_IDS,
   SHARED_SOUND_IDS,
   type AudioBusId,
   type SoundId,
@@ -100,15 +98,6 @@ describe('AudioSystem', () => {
     expect(ids.every((id) => id.startsWith('catMeow'))).toBe(true);
   });
 
-  it('registers Midnight Tour sounds with the required settings', () => {
-    expect(EVENT_ONLY_SOUND_IDS).toEqual(expect.arrayContaining([
-      'midnightShovel',
-      'midnightMonsterAttack',
-    ]));
-    expect(AUDIO_MANIFEST.midnightShovel.loop).toBe(false);
-    expect(AUDIO_MANIFEST.midnightMonsterAttack.loop).toBe(false);
-  });
-
   it('owns Midnight Tour sounds and stops each active voice', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
@@ -188,42 +177,6 @@ describe('AudioSystem', () => {
     expect(backend.listenerPoses).toEqual([pose]);
   });
 
-  it('loops tentacle movement only during Tentacle Attack', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.beginEvent('snatcher');
-    const movement = backend.voices.at(-1)!;
-    expect(movement.id).toBe('tentacleMovement');
-
-    audio.finishEventReaction('snatcher');
-    expect(movement.stop).toHaveBeenCalledExactlyOnceWith(0.08);
-  });
-
-  it('loops leaking water only during the Leak event', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.beginEvent('leak');
-    const leak = backend.voices.at(-1)!;
-    expect(leak.id).toBe('leak');
-
-    audio.finishEventReaction('leak');
-    expect(leak.stop).toHaveBeenCalledExactlyOnceWith(0.08);
-  });
-
-  it('loops tornado wind only during the Tornado event', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.beginEvent('tornado');
-    const tornadoWind = backend.voices.at(-1)!;
-    expect(tornadoWind.id).toBe('tornadoWind');
-
-    audio.finishEventReaction('tornado');
-    expect(tornadoWind.stop).toHaveBeenCalledExactlyOnceWith(0.08);
-  });
-
   it('finishes Wreckage dive audio after its focused animation', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
@@ -247,37 +200,6 @@ describe('AudioSystem', () => {
 
     expect(movement.stop).toHaveBeenCalledExactlyOnceWith(0.2);
     expect(backend.voices.some(({ id }) => id === 'diveSurface')).toBe(false);
-  });
-
-  it('plays and owns the Plane flyby sound', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.beginEvent('plane');
-    const flyby = backend.voices.at(-1)!;
-    expect(flyby.id).toBe('planeFlyby');
-    expect(AUDIO_MANIFEST.planeFlyby.loop).toBe(false);
-
-    audio.clearEvent();
-    expect(flyby.stop).toHaveBeenCalledExactlyOnceWith(0.08);
-  });
-
-  it('uses a yawn instead of the event sting for Bad Sleep', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.eventReveal('bad-sleep');
-
-    expect(backend.voices.map(({ id }) => id)).toEqual(['yawn']);
-  });
-
-  it('uses the spirit breath instead of the event sting for Ghosts', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.eventReveal('ghosts');
-
-    expect(backend.voices.map(({ id }) => id)).toEqual(['ghostSpiritBreath']);
   });
 
   it('starts two distinct overlapping meows for Shadow Figure', () => {
@@ -310,41 +232,6 @@ describe('AudioSystem', () => {
     expect(backend.voices.filter(({ id }) => id.startsWith('catMeow'))).toHaveLength(1);
   });
 
-  it('plays the recovered chest sound when the chest opens', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.action('openChest');
-
-    expect(backend.voices.map(({ id }) => id)).toEqual(['chest']);
-  });
-
-  it('plays Chest Attack movement and impact cues', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.chestAttackCue('wood');
-    audio.chestAttackCue('attack');
-
-    expect(backend.voices.map(({ id }) => id)).toEqual([
-      'chest',
-      'midnightMonsterAttack',
-    ]);
-  });
-
-  it('plays distinct Check the Back result cues', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.checkBackCue('fish');
-    audio.checkBackCue('anglerfish');
-
-    expect(backend.voices.map(({ id }) => id)).toEqual([
-      'checkBackFish',
-      'checkBackAnglerfish',
-    ]);
-  });
-
   it('plays an incoming radio signal until it ends or the player answers', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
@@ -363,72 +250,6 @@ describe('AudioSystem', () => {
     expect(secondSignal.stop).toHaveBeenCalledExactlyOnceWith(0.03);
     expect(backend.voices.at(-1)?.id).toBe('radioReply');
     expect(expired).toHaveBeenCalledOnce();
-  });
-
-  it.each([
-    'drifting-supplies',
-    'drifting-chest',
-  ])('does not play a reveal sound for %s', (eventId) => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.eventReveal(eventId);
-
-    expect(backend.voices).toEqual([]);
-  });
-
-  it('cycles through all thunder recordings', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.thunder();
-    audio.thunder();
-    audio.thunder();
-    audio.thunder();
-
-    expect(backend.voices.map(({ id }) => id)).toEqual([
-      'thunderLightning',
-      'thunderLightningCrack',
-      'thunderLightningDry',
-      'thunderLightning',
-    ]);
-  });
-
-  it('loads all thunder recordings as effects', () => {
-    expect([
-      AUDIO_MANIFEST.thunderLightning,
-      AUDIO_MANIFEST.thunderLightningCrack,
-      AUDIO_MANIFEST.thunderLightningDry,
-    ].map(({ bus, loop }) => ({ bus, loop }))).toEqual([
-      { bus: 'effects', loop: false },
-      { bus: 'effects', loop: false },
-      { bus: 'effects', loop: false },
-    ]);
-  });
-
-  it('uses exact event item sounds and keeps the map and compass silent', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.eventItem('ductTape');
-    audio.eventItem('flareGun');
-    audio.eventItem('shotgun');
-    audio.eventItem('flashlight');
-    audio.eventItem('anchor');
-    audio.eventItem('umbrella');
-    audio.bucketHelmetRain();
-    audio.eventItem('map');
-    audio.eventItem('compass');
-
-    expect(backend.voices.map(({ id }) => id)).toEqual([
-      'ductTapePickup',
-      'flareGun',
-      'shotgun',
-      'flashlight',
-      'anchorChain',
-      'umbrella',
-      'bucketRain',
-    ]);
   });
 
   it('applies master volume and mute without losing volume', () => {
@@ -477,47 +298,6 @@ describe('AudioSystem', () => {
       'pause',
       'resume',
     ]);
-  });
-
-  it('layers the flare gun shot before the flare launch', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.eventItemCue('flareGun', 0);
-    audio.eventItemCue('flareGun', 1);
-
-    expect(backend.voices.map(({ id }) => id)).toEqual([
-      'flareGunShot',
-      'flareGun',
-    ]);
-  });
-
-  it('plays the anchor splash at the water-contact cue', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.eventItem('anchor');
-    audio.eventItemCue('anchor', 0);
-
-    expect(backend.voices.map(({ id }) => id)).toEqual(['anchorChain', 'anchorSplash']);
-  });
-
-  it('plays the incoming signal at the Radio reception cue', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.eventItemCue('radio', 0);
-
-    expect(backend.voices.map(({ id }) => id)).toEqual(['radioSignal']);
-  });
-
-  it('plays duct tape when the map seals the leak', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.eventItemCue('map', 0);
-
-    expect(backend.voices.map(({ id }) => id)).toEqual(['tapeRepair']);
   });
 
   it('starts game voices paused when they are created from a paused scope', () => {

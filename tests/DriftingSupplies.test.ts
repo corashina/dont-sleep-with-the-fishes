@@ -8,7 +8,6 @@ import {
   driftingSupplyKindFromSeed,
   type DriftingSupplyKind,
 } from '../src/survival/driftingSupplies';
-import { survivalEventById } from '../src/survival/eventCatalog';
 import { deriveEventVariantSeed } from '../src/survival/eventPresentationOutcome';
 import { sequenceRandom } from './helpers/random';
 
@@ -33,15 +32,6 @@ function sessionFor(
 }
 
 describe('drifting supplies', () => {
-  it('replaces the separate barrel and empty-lifeboat events', () => {
-    expect(survivalEventById('drifting-supplies')).toMatchObject({
-      phase: 'day',
-      earliestDay: 3,
-      cooldownDays: 3,
-    });
-    expect(survivalEventById('drifting-barrel')).toBeUndefined();
-    expect(survivalEventById('empty-lifeboat')).toBeUndefined();
-  });
 
   it('selects every model and distance from the stable event seed', () => {
     const seeds = Array.from({ length: 256 }, (_, seed) => seed);

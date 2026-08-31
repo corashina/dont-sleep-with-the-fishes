@@ -6,6 +6,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import type { DeathCause } from '../game/ending';
+import type { SurvivalReading } from '../game/runStatistics';
 import { SURVIVAL_EVENTS } from './eventCatalog';
 import { FISHING_CATCHES } from './fishingCatalog';
 import type { CarlitosSnapshot } from './CarlitosState';
@@ -34,7 +35,7 @@ import type {
 } from './survivalTypes';
 import type { FishingCatchId } from './fishingCatalog';
 
-export const SURVIVAL_SAVE_VERSION = 1 as const;
+export const SURVIVAL_SAVE_VERSION = 2 as const;
 
 export interface SurvivalSaveDocument {
   readonly version: typeof SURVIVAL_SAVE_VERSION;
@@ -593,8 +594,9 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const pendingJournalNighttime = parsePendingJournalNight(value.pendingJournalNighttime);
   const pendingJournalActions = parseJournalActions(value.pendingJournalActions);
   const journalEntries = parseJournalEntries(value.journalEntries);
+  const history = parseHistory(value.history, day!);
   if ([chest, inventory, savedItems, lastSeenDays, appearanceCounts,
-    lastHealthCause, pendingJournalActions, journalEntries].some((field) => field === null)) return null;
+    lastHealthCause, pendingJournalActions, journalEntries, history].some((field) => field === null)) return null;
   if ([carlitos, lastEventId, lastOutcome, lastHullEventId, pendingJournalDaytime,
     pendingJournalNighttime].some((field) => field === undefined)) return null;
   if (nextDawnEnergyOverride === undefined) return null;
@@ -607,6 +609,7 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
     state, pendingEventId, pendingEventTargetId, inventory!,
   )) return null;
   return createSurvivalSessionCheckpoint({
+    history: history!,
     state: state as SurvivalSessionCheckpoint['state'], day: day!, pressure: pressure!, health: health!, hunger: hunger!, energy: energy!, hull: hull!,
     food: food!, bait: bait!, recoveredFood: recoveredFood!, recoveredBait: recoveredBait!, repairMaterial: repairMaterial!, rescueLead: rescueLead! as RescueLead,
     rescueTraceFinds: rescueTraceFinds! as 0 | 1 | 2, radioSignalAvailable: value.radioSignalAvailable, radioSignalsSent: radioSignalsSent!, radioSignalsEnabled: value.radioSignalsEnabled,
@@ -620,6 +623,23 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
 
 function parsedUpperBound(value: number | null): number {
   return value ?? -1;
+}
+
+function parseHistory(value: unknown, currentDay: number): readonly SurvivalReading[] | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const readings: SurvivalReading[] = [];
+  let previousDay = 0;
+  for (const raw of value) {
+    if (!isRecord(raw)) return null;
+    const day = parseInteger(raw.day, previousDay + 1, currentDay);
+    const health = parseInteger(raw.health, 0, 100);
+    const hunger = parseInteger(raw.hunger, 0, 100);
+    const hull = parseInteger(raw.hull, 0, 100);
+    if (day === null || health === null || hunger === null || hull === null) return null;
+    readings.push({ day, health, hunger, hull });
+    previousDay = day;
+  }
+  return previousDay === currentDay ? readings : null;
 }
 
 function parseNextDawnEnergyOverride(value: unknown): DawnEnergy | null | undefined {

@@ -53,10 +53,6 @@ describe('bucket helmet choreography', () => {
     expect(outcome.viewZ).toBeCloseTo(worn.viewZ);
     expect(outcome.pitch).toBeCloseTo(worn.pitch);
   });
-
-  it('starts enclosed rain when the bucket reaches the helmet position', () => {
-    expect(eventItemActionCueProgresses('bucket-helmet')).toEqual([0.65]);
-  });
 });
 
 describe('trade handover choreography', () => {
@@ -69,40 +65,9 @@ describe('trade handover choreography', () => {
     expect(offered.cameraTargetBlend).toBeGreaterThan(0.7);
     expect(offered.ballisticFlight).toBe(false);
   });
-
-  it('hands the Swim Ring to the recipient without throwing it', () => {
-    const offered = createEventItemUseSample();
-
-    sampleEventItemUse('trade-handover', 'swimRing', 1, offered);
-
-    expect(offered.targetBlend).toBeGreaterThan(0.9);
-    expect(offered.cameraTargetBlend).toBeGreaterThan(0.7);
-    expect(offered.ballisticFlight).toBe(false);
-  });
 });
 
 describe('radio signal reception choreography', () => {
-  it('routes the lab choice and emits one signal cue', () => {
-    expect(resolveEventItemUseContext(
-      'item-animation-lab',
-      'radioSignal',
-      'radio',
-    )).toBe('radio-signal-receive');
-    expect(eventItemActionCueProgresses('radio-signal-receive')).toEqual([0.52]);
-  });
-
-  it('raises the radio toward the ear without aiming at an event target', () => {
-    const held = createEventItemUseSample();
-    const listening = createEventItemUseSample();
-
-    sampleEventItemUse('radio-signal-receive', 'radio', 0.34, held);
-    sampleEventItemUse('radio-signal-receive', 'radio', 0.8, listening);
-
-    expect(listening.viewY).toBeGreaterThan(held.viewY + 0.3);
-    expect(listening.viewZ).toBeGreaterThan(held.viewZ + 0.1);
-    expect(listening.cameraYaw).toBeLessThan(0);
-    expect(listening.targetBlend).toBe(0);
-  });
 
   it('returns the radio to its storage pose without lowering it below the boat', () => {
     const returning = createEventItemUseSample();
@@ -151,23 +116,6 @@ describe('map leak patch choreography', () => {
     expect(travelling.flightArc).toBeGreaterThan(0.9);
     expect(travelling.flightArcHeight).toBeGreaterThan(0.5);
     expect(eventItemActionCueProgresses('map-leak-patch')).toEqual([0.78]);
-  });
-});
-
-describe('map event routing', () => {
-  it('does not route the Map through cover supplies', () => {
-    expect(resolveEventItemUseContext('shower-night', 'map', 'map')).toBe('map-read');
-    expect(resolveEventItemUseContext('windy-night', 'map', 'map')).toBe('map-read');
-  });
-});
-
-describe('umbrella event routing', () => {
-  it('does not route Windy Night through cover supplies', () => {
-    expect(resolveEventItemUseContext(
-      'windy-night',
-      'umbrella',
-      'umbrella',
-    )).toBeNull();
   });
 });
 

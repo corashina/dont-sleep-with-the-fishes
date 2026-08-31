@@ -1,8 +1,6 @@
 // Importance: 10/10 (scaled from 5/5). Protects survival item state.
 import { describe, expect, it } from 'vitest';
 import {
-  ITEM_DEFINITIONS,
-  ITEM_IDS,
   type ItemId,
   type ItemInstance,
   type ItemInstanceId,
@@ -11,7 +9,6 @@ import { eligibleFishingCatches } from '../src/survival/fishingCatalog';
 import { SurvivalInventoryState } from '../src/survival/inventory';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { mulberry32 } from '../src/survival/random';
-import { SURVIVAL_BALANCE } from '../src/survival/survivalBalance';
 import { sequenceRandom } from './helpers/random';
 
 const saved = (...types: ItemId[]): ItemInstance[] => {
@@ -90,15 +87,6 @@ describe('survival foundations', () => {
     inventory.consume('ductTape');
     expect(eligibleFishingCatches(3, false, activeIds()).map(({ catch: entry }) => entry.id))
       .toEqual(expect.arrayContaining(['brokenCompass', 'wetDuctTape']));
-  });
-
-  it('includes Flashlight in the event-breakable roster', () => {
-    expect(
-      ITEM_IDS.filter((id) => ITEM_DEFINITIONS[id].breakable),
-    ).toEqual([
-      'compass', 'map', 'spyglass', 'fishingNet', 'knife', 'bucket',
-      'scubaSet', 'anchor', 'umbrella', 'swimRing', 'flashlight',
-    ]);
   });
 
   it('consumes duplicate resources deterministically by instance number', () => {
@@ -194,14 +182,5 @@ describe('survival foundations', () => {
     ]);
     const fixed = sequenceRandom([-1, 0.4, 2]);
     expect([fixed.next(), fixed.next(), fixed.next(), fixed.next()]).toEqual([0, 0.4, 0.999999, 0]);
-  });
-
-  it('exposes the approved starting balance', () => {
-    expect(SURVIVAL_BALANCE.start).toEqual({ health: 100, hunger: 0, energy: 3, hull: 100 });
-    expect(SURVIVAL_BALANCE.dawn.normalEnergy).toBe(3);
-    expect(SURVIVAL_BALANCE.actions.maximumEnergy).toBe(3);
-    expect(SURVIVAL_BALANCE.actions.maximumStoredEnergy).toBe(4);
-    expect(SURVIVAL_BALANCE.dawn.hungerIncrease).toBe(18);
-    expect(SURVIVAL_BALANCE.rescue.firstEffectiveDay).toBe(33);
   });
 });

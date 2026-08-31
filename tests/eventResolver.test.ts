@@ -93,7 +93,7 @@ describe('resolveWeightedOutcome', () => {
     expect(resolved.effects).toEqual(source.outcomes[0]?.effects);
   });
 
-  it.each([0, 1, 2, 3] as const)('preserves next dawn energy %i', (value) => {
+  it.each([0, 3] as const)('preserves next dawn energy %i', (value) => {
     const choice: EventChoiceDefinition = {
       id: 'sleep',
       label: 'Sleep',

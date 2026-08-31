@@ -5,6 +5,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import type { DeathCause, EndingRecord, SurvivalEndingId } from '../game/ending';
+import type { SurvivalReading } from '../game/runStatistics';
 import {
   SURVIVAL_EVENTS,
   isDriftingItemEventId,
@@ -374,6 +375,7 @@ export class SurvivalSession {
   private state: SurvivalState = 'day';
   private readonly savedPickupCount: number;
   private ending: EndingRecord | null = null;
+  private history: readonly SurvivalReading[] = Object.freeze([]);
   private lastHealthCause: DeathCause = { kind: 'other' };
   private lastHullEventId: string | null = null;
   private day: number;
@@ -450,6 +452,7 @@ export class SurvivalSession {
     } else {
       this.initializeNewSession(initialization.options!);
     }
+    this.recordHistory();
   }
 
   static createEndingPreview(
@@ -478,6 +481,7 @@ export class SurvivalSession {
   }
 
   private restoreCheckpointState(checkpoint: SurvivalSessionCheckpoint): void {
+    this.history = Object.freeze(checkpoint.history.map((reading) => Object.freeze({ ...reading })));
     this.food = checkpoint.food;
     this.bait = checkpoint.bait;
     this.recoveredFood = checkpoint.recoveredFood;
@@ -582,6 +586,7 @@ export class SurvivalSession {
       throw new Error('Cannot checkpoint a non-restorable random source.');
     }
     return createSurvivalSessionCheckpoint({
+      history: this.history,
       state: this.state as SurvivalSessionCheckpoint['state'],
       day: this.day,
       pressure: this.pressure,
@@ -640,6 +645,7 @@ export class SurvivalSession {
         });
 
     this.cachedSnapshot = Object.freeze({
+      history: this.history,
       state: this.state,
       ending: this.ending,
       day: this.day,
@@ -1769,7 +1775,20 @@ export class SurvivalSession {
   }
 
   private changed(): void {
+    this.recordHistory();
     this.cachedSnapshot = null;
+  }
+
+  private recordHistory(): void {
+    const previous = this.history.at(-1);
+    if (previous?.day === this.day && previous.health === this.health
+      && previous.hunger === this.hunger && previous.hull === this.hull) return;
+    const reading = Object.freeze({
+      day: this.day, health: this.health, hunger: this.hunger, hull: this.hull,
+    });
+    // Keep the last reading of each day, including the terminal action.
+    const earlier = previous?.day === this.day ? this.history.slice(0, -1) : this.history;
+    this.history = Object.freeze([...earlier, reading]);
   }
 
   private resourceValues(): Required<ResourceDelta> {

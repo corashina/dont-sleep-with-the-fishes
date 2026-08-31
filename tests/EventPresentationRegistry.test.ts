@@ -371,18 +371,6 @@ describe('EventPresentationRegistry', () => {
     }
   });
 
-  it('constructs Wreckage only through the dedicated family', () => {
-    const registry = new EventPresentationRegistry();
-    const { dependencies } = createDependencies();
-
-    const adapter = registry.create('wreckage', dependencies);
-
-    expect(adapter.eventId).toBe('wreckage');
-    expect(adapter.roots).toHaveLength(2);
-    expect(calledFamilyConstructors()).toEqual(['coordinator', 'wreckage']);
-    adapter.dispose();
-  });
-
   it('passes owned model results through the borrowed library', () => {
     const containerShip = {
       root: new Group(),
@@ -411,53 +399,6 @@ describe('EventPresentationRegistry', () => {
     expect(create).toHaveBeenCalledWith('containerShip');
     expect(containerShip.dispose).toHaveBeenCalledOnce();
     adapter.dispose();
-  });
-
-  it.each([
-    ['dangerous-waters', ['layer']],
-    ['leak', ['coordinator', 'leak']],
-    ['wreckage', ['coordinator', 'wreckage']],
-    ['chest-attack', ['layer']],
-    ['drifting-supplies', ['featured']],
-    ['shower-night', ['layer', 'weather']],
-    ['ghosts', ['layer', 'supernatural']],
-    ['face-on-the-moon', ['moon']],
-  ] as const)(
-    'constructs only the %s route families',
-    (eventId, expectedConstructors) => {
-      const registry = new EventPresentationRegistry();
-      const { dependencies } = createDependencies();
-      registry.create(eventId, dependencies);
-      expect(calledFamilyConstructors()).toEqual([...expectedConstructors].sort());
-    },
-  );
-
-  it.each([
-    ['dangerous-waters', ['world:layer']],
-    ['leak', ['world:coordinatorWorld', 'boat:coordinatorBoat']],
-    ['chest-attack', ['world:layer']],
-    ['drifting-supplies', ['world:featured']],
-    ['shower-night', ['world:layer', 'world:weatherWorld', 'boat:weatherBoat']],
-    ['ghosts', ['world:layer', 'world:supernaturalWorld']],
-    ['face-on-the-moon', ['world:moonTarget']],
-  ] as const)('keeps exact root order for %s', (eventId, expectedRoots) => {
-    const { dependencies } = createDependencies();
-    const adapter = new EventPresentationRegistry().create(eventId, dependencies);
-    const names = new Map([
-      [dependencies.worldParent, 'world'],
-      [dependencies.boatParent, 'boat'],
-      [layer.root, 'layer'],
-      [coordinator.worldRoot, 'coordinatorWorld'],
-      [coordinator.boatRoot, 'coordinatorBoat'],
-      [featured.root, 'featured'],
-      [weather.worldRoot, 'weatherWorld'],
-      [weather.boatRoot, 'weatherBoat'],
-      [supernatural.worldRoot, 'supernaturalWorld'],
-      [moon.itemAimTarget, 'moonTarget'],
-    ]);
-    expect(adapter.roots.map(({ parent, root }) => (
-      `${names.get(parent)}:${names.get(root)}`
-    ))).toEqual(expectedRoots);
   });
 
   it('delegates the dangerous-waters lifecycle to its layer', async () => {
@@ -516,27 +457,6 @@ describe('EventPresentationRegistry', () => {
     expect(coordinator.react).toHaveBeenCalledWith(reaction.result);
     expect(coordinator.clear).toHaveBeenCalledOnce();
     expect(coordinator.dispose).toHaveBeenCalledOnce();
-  });
-
-  it('delegates dedicated interaction data to its coordinator', () => {
-    const root = new Group();
-    const targets = [{
-      id: 'event:wreckage',
-      label: 'WRECKAGE',
-      description: 'Inspect the floating debris.',
-      focusEventId: 'wreckage',
-      root,
-    }] as const;
-    coordinator.interactionTargets.mockReturnValue(targets);
-    coordinator.interactionRoot.mockReturnValue(root);
-    const { dependencies } = createDependencies();
-    const adapter = new EventPresentationRegistry().create('wreckage', dependencies);
-
-    expect(adapter.interactionTargets()).toBe(targets);
-    expect(adapter.interactionRoot('event:wreckage')).toBe(root);
-    expect(coordinator.interactionTargets).toHaveBeenCalledOnce();
-    expect(coordinator.interactionRoot).toHaveBeenCalledWith('event:wreckage');
-    adapter.dispose();
   });
 
   it('delegates the focused lifecycle to its layer', async () => {

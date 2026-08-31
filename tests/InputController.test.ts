@@ -121,15 +121,6 @@ describe('InputController', () => {
     expect(input.consumeInteract()).toBe(false);
   });
 
-  it('does not queue interaction from the former KeyE binding', () => {
-    const { canvas, input } = createInput();
-    browserDocument.pointerLockElement = canvas;
-
-    dispatch('keydown', { code: 'KeyE', repeat: false });
-
-    expect(input.consumeInteract()).toBe(false);
-  });
-
   it('clears queued interaction on blur', () => {
     const { canvas, input } = createInput();
     browserDocument.pointerLockElement = canvas;

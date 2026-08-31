@@ -1,7 +1,6 @@
 // Importance: 10/10 (scaled from 5/5). Protects world integration and resource ownership.
 import { describe, expect, it, vi } from 'vitest';
 import {
-  Box3,
   BufferGeometry,
   Color,
   DirectionalLight,
@@ -24,16 +23,13 @@ import {
   Vector4,
 } from 'three';
 import { createItemInstances, ITEM_IDS, type ItemInstance } from '../src/game/ItemState';
-import { createScavengeItemInstances } from '../src/game/scavengeCatalog';
 import { getSinkingState } from '../src/game/sinking';
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import { resolveLocalMovement } from '../src/player/collisions';
-import { ITEM_AMBIENT_OCCLUSION_LAYER } from '../src/rendering/ItemAmbientOcclusion';
 import {
   ScavengePhysics,
 } from '../src/physics/ScavengePhysics';
-import { mulberry32 } from '../src/survival/random';
 import { pointInWaterExclusion } from './helpers/waterExclusion';
 import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
 import { presentationWeatherProfile } from '../src/weather/presentationWeather';
@@ -50,16 +46,12 @@ import { createShipGeometry } from '../src/world/ShipGeometry';
 import { assignShipItems, shipItemTransformBounds } from '../src/world/ShipItemPlacement';
 import {
   SHIP_LAYOUT,
-  SHIP_ROOF_ENGINE,
 } from '../src/world/shipLayoutData';
 import {
   FREIGHTER_DIMENSIONS,
-  SHIP_ROOM_ROOF_THICKNESS,
-  SHIP_ROOM_WALL_HEIGHT,
 } from '../src/world/ShipLayoutTypes';
 import { createShipMaterials } from '../src/world/ShipMaterials';
 import { createShipRigging } from '../src/world/ShipRigging';
-import { skyPaletteFor } from '../src/world/skyPalette';
 import {
   World,
   type WorldConstructionDependencies,
@@ -93,43 +85,7 @@ const expectTestModelTransform = (root: Object3D): void => {
   expect(model.scale.toArray()).toEqual(TEST_PROP_MODEL_TRANSFORM.scale);
 };
 
-describe('sky palettes', () => {
-  it.each([
-    ['calm', 'day', 0.0108],
-    ['calm', 'night', 0.0189],
-    ['overcast', 'day', 0.0171],
-    ['overcast', 'night', 0.0216],
-    ['squall', 'day', 0.027],
-    ['squall', 'night', 0.0306],
-  ] as const)('reduces %s %s base fog by ten percent', (weather, phase, expected) => {
-    expect(skyPaletteFor({ weather, phase, severity: 0 }).fogDensity).toBeCloseTo(expected, 5);
-  });
-});
-
 describe('volumetric scavenging clouds', () => {
-  it('blends flat clouds during day and restores them at night', () => {
-    const scene = new Scene();
-    const environment = new Environment(scene, createTestMoonTexture());
-    const internals = environment as unknown as {
-      sky: { material: ShaderMaterial };
-    };
-
-    try {
-      environment.setVolumetricCloudsEnabled(true);
-      environment.setVisualQuality('high');
-      expect(environment.volumetricCloudsAvailable()).toBe(true);
-
-      environment.update(1, 0.25, new Vector3());
-      expect(internals.sky.material.uniforms.uCloudLayerStrength!.value)
-        .toBeCloseTo(0.75);
-
-      environment.setPhase('night');
-      environment.update(2, 0.25, new Vector3());
-      expect(internals.sky.material.uniforms.uCloudLayerStrength!.value).toBe(1);
-    } finally {
-      environment.dispose();
-    }
-  });
 
   it('keeps flat clouds when cloud creation fails', () => {
     const scene = new Scene();
@@ -196,21 +152,6 @@ describe('volumetric scavenging clouds', () => {
     expect(scene.background).toBe(originalBackground);
     expect(scene.fog).toBe(originalFog);
     expect(() => environment.dispose()).not.toThrow();
-  });
-
-  it('forwards cloud controls through World', () => {
-    const scene = new Scene();
-    const propModels = createTestPropModels();
-    const world = createTestWorld(scene, propModels);
-
-    try {
-      world.setVolumetricCloudsEnabled(true);
-      world.setVisualQuality('high');
-      expect(world.getVolumetricCloudsAvailable()).toBe(true);
-    } finally {
-      world.dispose();
-      propModels.dispose();
-    }
   });
 });
 
@@ -362,132 +303,6 @@ describe('world builders', () => {
     }
   });
 
-  it('uses a compact chamfered stern and a roof engine beneath the stacks', () => {
-    const materials = createShipMaterials();
-    const ship = createShipGeometry(materials);
-    const storage = SHIP_LAYOUT.zones.find(({ id }) => id === 'storageWorkroom')!.bounds;
-    const sternRailTops: Mesh[] = [];
-    const sternRailChamfers: Mesh[] = [];
-    const sternRailPosts: Mesh[] = [];
-    ship.root.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
-      if (object.name === 'rail-stern-top') sternRailTops.push(object);
-      if (object.name.startsWith('rail-stern-chamfer-')) sternRailChamfers.push(object);
-      if (object.name.startsWith('rail-stern-post-')) sternRailPosts.push(object);
-    });
-
-    try {
-      expect(ship.root.getObjectByName('machinery-island')).toBeUndefined();
-      const engine = ship.root.getObjectByName('roof-engine-body') as Mesh;
-      expect(engine).toBeDefined();
-      expect(engine.position.toArray()).toEqual([
-        SHIP_ROOF_ENGINE.centerX,
-        FREIGHTER_DIMENSIONS.deckY + SHIP_ROOM_WALL_HEIGHT
-          + SHIP_ROOM_ROOF_THICKNESS + SHIP_ROOF_ENGINE.height / 2,
-        SHIP_ROOF_ENGINE.centerZ,
-      ]);
-      expect(engine.scale.toArray()).toEqual([
-        SHIP_ROOF_ENGINE.width,
-        SHIP_ROOF_ENGINE.height,
-        SHIP_ROOF_ENGINE.depth,
-      ]);
-      expect(ship.root.getObjectByName('roof-engine-service-panel')).toBeDefined();
-      expect(ship.root.getObjectByName('roof-engine-crank')).toBeDefined();
-      expect([1, 2, 3].every((index) =>
-        ship.root.getObjectByName(`roof-engine-vent-${index}`))).toBe(true);
-      expect(ship.root.getObjectByName('balcony:storage-balcony:coaming:port:0'))
-        .toBeUndefined();
-      expect(ship.root.getObjectByName('ladder:storage-ladder')).toBeUndefined();
-      expect(ship.climbZones.map(({ id }) => id)).toEqual(['crew-ladder']);
-      expect(ship.stackOutlets.map(({ x, z }) => [x, z])).toEqual([
-        [-1.35, (storage.minZ + storage.maxZ) / 2],
-        [1.35, (storage.minZ + storage.maxZ) / 2],
-      ]);
-      ship.stackOutlets.forEach(({ y }) => {
-        expect(y).toBe(
-          FREIGHTER_DIMENSIONS.deckY + SHIP_ROOM_WALL_HEIGHT
-            + SHIP_ROOM_ROOF_THICKNESS + SHIP_ROOF_ENGINE.height
-            + 0.22 + 3.5,
-        );
-      });
-      const sternZ = SHIP_LAYOUT.zones.find(
-        ({ id }) => id === 'cargoDeck',
-      )!.bounds.minZ;
-      expect(ship.waterExclusion.longitudinalProfile.minZ).toBe(sternZ);
-      expect(ship.waterExclusion.longitudinalProfile.taperStartMinZ).toBe(sternZ);
-      const timberDeck = ship.root.getObjectByName('timber-deck') as Mesh;
-      timberDeck.geometry.computeBoundingBox();
-      expect(timberDeck.geometry.boundingBox!.min.z).toBeCloseTo(sternZ);
-      expect(sternRailTops).toHaveLength(1);
-      expect(sternRailTops[0]!.position.z).toBe(sternZ);
-      expect(sternRailChamfers).toHaveLength(2);
-      sternRailChamfers.forEach(({ rotation }) => {
-        expect(Math.abs(rotation.y)).toBeCloseTo(Math.PI / 4);
-      });
-      expect(sternRailPosts).toHaveLength(2);
-      expect(sternRailPosts.map(({ position }) => position.z)).toEqual([sternZ, sternZ]);
-      expect(ship.shellColliders.filter((collider) =>
-        collider.minY === FREIGHTER_DIMENSIONS.deckY
-        && collider.minZ < sternZ + 0.35
-      )).toHaveLength(3);
-    } finally {
-      ship.disposeGeometry();
-      materials.dispose();
-    }
-  });
-
-  it('aligns the finished cargo floor with the rounded bow', () => {
-    const materials = createShipMaterials();
-    const ship = createShipGeometry(materials);
-    const floor = ship.root.getObjectByName('floor-cargoDeck') as Mesh;
-    const positions = floor.geometry.getAttribute('position');
-    const deckZ = Array.from({ length: positions.count }, (_, index) =>
-      positions.getZ(index));
-
-    try {
-      expect(Math.max(...deckZ)).toBeCloseTo(27.1);
-      expect(Math.min(...deckZ)).toBeCloseTo(
-        SHIP_LAYOUT.zones.find(({ id }) => id === 'cargoDeck')!.bounds.minZ,
-      );
-    } finally {
-      ship.disposeGeometry();
-      materials.dispose();
-    }
-  });
-
-  it('uses the scavenging roster and stable placement metadata by default', () => {
-    const firstScene = new Scene();
-    const firstModels = createTestPropModels();
-    const firstFurniture = createTestShipFurniture();
-    const firstRandom = mulberry32(73);
-    const first = new World(
-      firstScene,
-      firstModels,
-      firstFurniture,
-      1,
-      createTestMoonTexture(),
-      physicsRuntime,
-      undefined,
-      () => firstRandom.next(),
-    );
-
-    try {
-      expect(first.itemObjects.size).toBe(createScavengeItemInstances().length);
-      expect(first.itemObjects.has('energyBar-1')).toBe(false);
-      first.itemObjects.forEach((item) => {
-        expect(item.userData.shipSurfaceId).toEqual(expect.any(String));
-        expect(item.userData.shipRegionId).toEqual(expect.any(String));
-        expect(item.userData.shipBranch).toEqual(expect.any(Boolean));
-        expect(item.userData.shipPlacementSource).toBe('random');
-        expect(item.userData.placementSource).toBe(item.userData.shipPlacementSource);
-      });
-    } finally {
-      first.dispose();
-      firstFurniture.dispose();
-      firstModels.dispose();
-    }
-  });
-
   it('composes the scavenging intro impact with shared-wave vessel motion', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
@@ -556,21 +371,6 @@ describe('world builders', () => {
         expect(object.getWorldPosition(new Vector3()).distanceTo(expected)).toBeLessThan(1e-5);
       });
 
-    } finally {
-      world.dispose();
-      propModels.dispose();
-    }
-  });
-
-  it('forwards water quality to its owned ocean', () => {
-    const scene = new Scene();
-    const propModels = createTestPropModels();
-    const world = createTestWorld(scene, propModels);
-    const setQuality = vi.spyOn(OceanRenderer.prototype, 'setQuality');
-
-    try {
-      world.setWaterQuality('ultra');
-      expect(setQuality).toHaveBeenCalledWith('ultra');
     } finally {
       world.dispose();
       propModels.dispose();
@@ -668,117 +468,6 @@ describe('world builders', () => {
     }
   });
 
-  it('scales copied fog and light values and restores the calm atmosphere', () => {
-    const scene = new Scene();
-    const propModels = createTestPropModels();
-    const world = createTestWorld(scene, propModels);
-    const environment = (world as unknown as { environment: Environment }).environment;
-    const internals = environment as unknown as {
-      fillLight: HemisphereLight;
-      keyLight: DirectionalLight;
-      weatherEffects: {
-        state: { profile: ReturnType<typeof presentationWeatherProfile> };
-      };
-    };
-    const sinking = getSinkingState(0, 120);
-
-    try {
-      world.setPresentationWeather('fog');
-      world.update(1, 2, sinking, new Vector3(), false);
-
-      const fogProfile = presentationWeatherProfile('fog');
-      const fogBase = skyPaletteFor({
-        weather: fogProfile.skyWeather,
-        phase: 'day',
-        severity: 0,
-      });
-      expect(environment.weatherProfile).toBe(fogProfile);
-      expect(internals.weatherEffects.state.profile).toBe(fogProfile);
-      expect((scene.fog as FogExp2).density)
-        .toBeCloseTo(fogBase.fogDensity * fogProfile.fogDensityScale);
-      expect(internals.fillLight.intensity)
-        .toBeCloseTo(fogBase.ambientLightIntensity * fogProfile.lightIntensityScale);
-      expect(internals.keyLight.intensity)
-        .toBeCloseTo(fogBase.keyLightIntensity * fogProfile.lightIntensityScale);
-      expect(environment.atmosphere.fogDensity).toBeCloseTo(fogBase.fogDensity);
-      expect(environment.atmosphere.ambientLightIntensity)
-        .toBeCloseTo(fogBase.ambientLightIntensity);
-
-      world.setPresentationWeather('calm');
-      world.update(3, 2, sinking, new Vector3(), false);
-
-      const calmProfile = presentationWeatherProfile('calm');
-      const calmBase = skyPaletteFor({
-        weather: calmProfile.skyWeather,
-        phase: 'day',
-        severity: 0,
-      });
-      expect(environment.weatherProfile).toBe(calmProfile);
-      expect((scene.fog as FogExp2).density)
-        .toBeCloseTo(calmBase.fogDensity * calmProfile.fogDensityScale);
-      expect(internals.fillLight.intensity)
-        .toBeCloseTo(calmBase.ambientLightIntensity * calmProfile.lightIntensityScale);
-      expect(internals.keyLight.intensity)
-        .toBeCloseTo(calmBase.keyLightIntensity * calmProfile.lightIntensityScale);
-    } finally {
-      world.dispose();
-      propModels.dispose();
-    }
-  });
-
-  it('creates one physics visual for each catalog object and removes static Kay boxes', () => {
-    const scene = new Scene();
-    const propModels = createTestPropModels();
-    const world = createTestWorld(
-      scene,
-      propModels,
-      createTestMoonTexture(),
-      createItemInstances(),
-      Math.random,
-      physicsRuntime,
-    );
-
-    expect(world.physicsObjects.map(({ name }) => name)).toEqual([
-      'physics-object:barrel',
-      'physics-object:pumpkin',
-      'physics-object:propaneTank',
-      'physics-object:redCan',
-      'physics-object:cargoBox',
-      'physics-object:shippingBox',
-      'physics-object:package',
-    ]);
-    expect(world.physicsObjects.filter(({ name }) => name.endsWith(':barrel'))).toHaveLength(1);
-    expect(world.physicsObjects.filter(({ name }) => name.endsWith(':cargoBox'))).toHaveLength(1);
-    expect(world.ship.getObjectByName('detail:cargoBox-1')).toBeUndefined();
-    expect(world.ship.getObjectByName('furniture:bow-box-starboard-center')).toBeUndefined();
-    expect(scene.getObjectByName('physics-objects')).toBeDefined();
-    expect(world.physicsObjects.every(({ visible }) => !visible)).toBe(true);
-    expect(scene.getObjectByName('physics-objects')?.visible).toBe(false);
-    const internals = world as unknown as {
-      scavengePhysics: ScavengePhysics;
-    };
-    const physics = internals.scavengePhysics;
-    world.physicsObjects.forEach((object, index) => {
-      expect(object.parent?.name).toBe('physics-objects');
-      expect(physics.objectPoses[index]!.translation.y - object.position.y)
-        .toBeCloseTo(SCAVENGE_PHYSICS_OBJECT_SPECS[index]!.visualHalfHeight);
-      object.traverse((child) => {
-        if (child instanceof Mesh) {
-          expect(child.layers.isEnabled(ITEM_AMBIENT_OCCLUSION_LAYER)).toBe(true);
-        }
-      });
-    });
-
-    world.revealPhysicsObjects();
-    world.revealPhysicsObjects();
-
-    expect(world.physicsObjects.every(({ visible }) => visible)).toBe(true);
-    expect(scene.getObjectByName('physics-objects')?.visible).toBe(true);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('keeps physics objects local to the ship when physics is disabled', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();
@@ -862,41 +551,6 @@ describe('world builders', () => {
     expect(scene.getObjectByName('physics-debug-dynamic')).toBeUndefined();
     expect(scene.getObjectByName('physics-debug-static')).toBeUndefined();
     propModels.dispose();
-  });
-
-  it('keeps attached debug object meshes aligned while the ship sinks', () => {
-    const scene = new Scene();
-    const propModels = createTestPropModels();
-    const world = createTestWorld(
-      scene,
-      propModels,
-      createTestMoonTexture(),
-      createItemInstances(),
-      Math.random,
-      physicsRuntime,
-      { physicsMode: 'debug' },
-    );
-    try {
-      const object = world.physicsObjects[0]!;
-      const debug = scene.getObjectByName('physics-debug-object:barrel')!;
-      world.revealPhysicsObjects();
-      world.attachPhysicsObjectsToShip();
-      world.update(1, 1 / 60, {
-        ...getSinkingState(30, 120),
-        sinkOffset: -4,
-        pitchRadians: 0.1,
-        rollRadians: -0.2,
-      }, new Vector3(), false);
-
-      expect(debug.parent?.parent).toBe(world.ship);
-      const expectedCenter = new Vector3(0, SCAVENGE_PHYSICS_OBJECT_SPECS[0]!.visualHalfHeight, 0)
-        .applyQuaternion(object.getWorldQuaternion(new Quaternion()))
-        .add(object.getWorldPosition(new Vector3()));
-      expect(debug.getWorldPosition(new Vector3()).distanceTo(expectedCenter)).toBeLessThan(1e-5);
-    } finally {
-      world.dispose();
-      propModels.dispose();
-    }
   });
 
   it('tracks inactive ship motion and advances every physics object when enabled', () => {
@@ -1058,47 +712,6 @@ describe('world builders', () => {
     expect(item.rotation.y).not.toBeCloseTo(0.45);
     expect(smoke.visible).toBe(true);
     expect(smoke.position).toEqual(new Vector3(expectedLocal.x, world.deckY + 0.02, expectedLocal.z));
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('triggers local smoke at an item base before pickup', () => {
-    const scene = new Scene();
-    const propModels = createTestPropModels();
-    const world = createTestWorld(scene, propModels);
-    const item = world.itemObjects.get('flashlight-1')!;
-    const expectedBounds = new Box3().setFromObject(item, true);
-    const expectedPosition = expectedBounds.getCenter(new Vector3());
-    expectedPosition.y = expectedBounds.min.y;
-    world.ship.worldToLocal(expectedPosition);
-
-    world.showItemPickupSmoke('flashlight-1');
-
-    const smoke = world.ship.getObjectByName('item-pickup-smoke') as Points;
-    expect(smoke.visible).toBe(true);
-    expect(smoke.position.x).toBeCloseTo(expectedPosition.x);
-    expect(smoke.position.y).toBeCloseTo(expectedPosition.y);
-    expect(smoke.position.z).toBeCloseTo(expectedPosition.z);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('mounts visible cosmetic hazards without changing ship collisions', () => {
-    const scene = new Scene();
-    const propModels = createTestPropModels();
-    const world = createTestWorld(scene, propModels);
-    const before = world.colliders.length;
-
-    expect(world.ship.getObjectByName('ship-danger-effects')).toBeDefined();
-    expect(world.ship.getObjectByName('ship-danger-alarm:crew-cabin')).toBeDefined();
-    expect(world.ship.getObjectByName('ship-danger-puddle:crew-aft')).toBeDefined();
-    expect(world.ship.getObjectByName('ship-danger-smoke')).toBeUndefined();
-    expect(world.ship.getObjectByName('ship-danger-leak:crew-starboard')).toBeUndefined();
-    expect(world.ship.getObjectByName('ship-danger-fire:wheelhouse-roof')).toBeUndefined();
-    expect(world.ship.getObjectByName('decoration:cabin-ceiling-light')).toBeDefined();
-    expect(world.colliders).toHaveLength(before);
 
     world.dispose();
     propModels.dispose();

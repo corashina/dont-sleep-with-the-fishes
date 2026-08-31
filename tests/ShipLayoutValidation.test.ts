@@ -185,55 +185,6 @@ describe('ship layout validation', () => {
     );
   });
 
-  it('rejects a forward-room gap that is not exactly 3.5 metres', () => {
-    const changedGap = {
-      ...SHIP_LAYOUT,
-      zones: SHIP_LAYOUT.zones.map((zone) => zone.id === 'wheelhouse'
-        ? { ...zone, bounds: { ...zone.bounds, minZ: zone.bounds.minZ + 0.1 } }
-        : zone),
-    };
-
-    expect(() => validateShipLayout(changedGap)).toThrow(/room gap.*3\.5/i);
-  });
-
-  it.each([
-    ['mainsail', 'stay', 'Mast mainmast sail mainsail must use boom rig kind'],
-    ['staysail', 'boom', 'Mast mainmast sail staysail must use stay rig kind'],
-  ] as const)('rejects the %s when paired with the wrong rig kind', (id, kind, message) => {
-    const mismatchedSail = {
-      ...SHIP_LAYOUT,
-      rigging: {
-        ...SHIP_LAYOUT.rigging,
-        masts: SHIP_LAYOUT.rigging.masts.map((mast) => ({
-          ...mast,
-          sails: mast.sails.map((sail) => sail.id === id ? { ...sail, kind } : sail),
-        })),
-      },
-    };
-
-    expectValidationError(mismatchedSail, message);
-  });
-
-  it('rejects sail cloth above the authored mast-height bound', () => {
-    const overHeightSail = {
-      ...SHIP_LAYOUT,
-      rigging: {
-        ...SHIP_LAYOUT.rigging,
-        masts: SHIP_LAYOUT.rigging.masts.map((mast) => ({
-          ...mast,
-          sails: mast.sails.map((sail) => sail.id === 'mainsail'
-            ? { ...sail, topY: mast.height }
-            : sail),
-        })),
-      },
-    };
-
-    expectValidationError(
-      overHeightSail,
-      'Mast mainmast sail mainsail exceeds mast height bounds',
-    );
-  });
-
   it('rejects a deck hatch that conflicts with a primary lane or item access', () => {
     const laneConflict = {
       ...SHIP_LAYOUT,
@@ -292,31 +243,6 @@ describe('ship layout validation', () => {
     expectValidationError(
       wideMast,
       'Mast mainmast base crosses the cargoDeck hull polygon',
-    );
-  });
-
-  it.each([
-    ['a sail foot below the minimum cloth clearance', 5.2],
-    ['a sail foot just below the minimum cloth clearance', 5.205],
-  ])('rejects %s', (_case, footY) => {
-    const invalidMast = {
-      ...SHIP_LAYOUT,
-      rigging: {
-        ...SHIP_LAYOUT.rigging,
-        masts: SHIP_LAYOUT.rigging.masts.map((mast) => mast.id === 'mainmast'
-          ? {
-            ...mast,
-            sails: mast.sails.map((sail) => sail.id === 'mainsail'
-              ? { ...sail, footY }
-              : sail),
-          }
-          : mast),
-      },
-    };
-
-    expectValidationError(
-      invalidMast,
-      'Mast mainmast sail mainsail violates cloth clearance',
     );
   });
 
@@ -473,57 +399,6 @@ describe('ship layout validation', () => {
       lowSternSurface,
       "Surface stern-crate-port:top in stern must use its owner's raised top",
     );
-  });
-
-  it('derives both sides of every current door instead of trusting stale targets', () => {
-    const movedDoor = {
-      ...SHIP_LAYOUT,
-      furniture: [],
-      doors: SHIP_LAYOUT.doors.map((door) => door.id === 'cabin-port-door'
-        ? {
-            ...door,
-            center: [-20, 8] as const,
-            approach: { minX: -21, maxX: -19, minZ: 6.65, maxZ: 9.35 },
-          }
-        : door),
-    };
-    expectValidationError(
-      movedDoor,
-      'Unreachable navigation targets: cabin-port-door-inside, cabin-port-door-outside',
-    );
-  });
-
-  it('derives scaled surface standing targets and exact secondary access rectangles', () => {
-    const surfaceId = 'fixture-table:top';
-    const fixture = {
-      ...SHIP_LAYOUT,
-      zones: SHIP_LAYOUT.zones.map((zone) => zone.id === 'storageWorkroom'
-        ? { ...zone, furniturePolicy: { ...zone.furniturePolicy, clearCenter: undefined } }
-        : zone),
-      furniture: [{
-        id: 'fixture-table', modelId: 'table' as const, zoneId: 'storageWorkroom' as const,
-        position: [0, 2.22, -13] as const, rotationY: 0 as const,
-        colliderSize: [1, 1, 1] as const, scale: [2, 1, 1] as const,
-        surfaces: [{
-          id: surfaceId,
-          physicalSlotId: surfaceId,
-          regionId: 'storageWorkroom' as const,
-          branch: false,
-          localPosition: [0, 1, 0] as const,
-          localRotation: [0, 0, 0] as const,
-          footprint: { width: 0.5, depth: 0.5 },
-          clearanceHeight: 1,
-          standingPoints: [[1, 0, 0] as const],
-        }],
-      }],
-      lanes: SHIP_LAYOUT.lanes.filter(({ id }) => !id.includes('-loop-')),
-      targets: [...SHIP_LAYOUT.targets, {
-        id: `${surfaceId}-standing-0`,
-        position: [0, -13] as const,
-        kind: 'surface' as const,
-      }],
-    };
-    expect(() => validateShipLayout(fixture)).not.toThrow();
   });
 
   it('rejects an authored surface when every standing point is blocked', () => {

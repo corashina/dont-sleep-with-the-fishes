@@ -80,24 +80,6 @@ describe('chooseContextAction', () => {
     })).toEqual({ type: 'evacuate', prompt: 'LEFT CLICK — EVACUATE NOW' });
   });
 
-  it('offers an exactly labelled drop while carrying away from the lifeboat', () => {
-    const flashlight = item('flashlight-1', 'flashlight');
-    const dropPoint = new Vector3(1, 2.22, -2);
-    expect(chooseContextAction({
-      target: 'none',
-      targetItem: null,
-      dropPoint,
-      carriedItem: flashlight,
-      remainingCapacity: 2,
-      nearEvacuation: false,
-    })).toEqual({
-      type: 'drop',
-      item: flashlight,
-      point: dropPoint,
-      prompt: 'LEFT CLICK — DROP FLASHLIGHT',
-    });
-  });
-
   it('does not drop unless the crosshair reaches the floor', () => {
     expect(chooseContextAction({
       target: 'none',

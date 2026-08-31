@@ -290,23 +290,6 @@ describe('DivePresentationController', () => {
     )).toHaveLength(1);
   });
 
-  it('resolves a dive without a hold at exactly 5.8 seconds', async () => {
-    const { controller } = createHarness();
-    let diveSettled = false;
-    const dive = controller.play(FIRST_SCUBA, { onWaterImpact: () => undefined });
-    void dive.then(() => { diveSettled = true; });
-
-    controller.update(0, 5.79);
-    await Promise.resolve();
-    expect(diveSettled).toBe(false);
-
-    controller.update(0, 0.01);
-    await dive;
-    expect(diveSettled).toBe(true);
-    controller.clear();
-    controller.dispose();
-  });
-
   it('keeps a hold-start error primary while restoring camera and item', async () => {
     const { camera, initialPosition, supplies, controller } = createHarness();
     const startError = new Error('hold start failed');

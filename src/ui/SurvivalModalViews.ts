@@ -1,16 +1,19 @@
 import { ITEM_LABELS, type ItemInstanceId } from '../game/ItemState';
 import {
   endingCauseLine,
-  endingEpilogue,
   endingSummary,
   endingTitle,
   type EndingRecord,
 } from '../game/ending';
 import type { SurvivalItemState } from '../survival/survivalTypes';
+import type { SurvivalSnapshot } from '../survival/survivalSnapshot';
+import { EndingStatisticsView } from './EndingStatisticsView';
+import { survivalEndingStatistics } from './EndingStatisticsModel';
 import { createElementRequirement } from './dom';
 import { runCleanupSteps, throwCleanupFailure } from './UiCleanup';
 
 const requireElement = createElementRequirement('survival modal views');
+const ENDING_FADE_MS = 1_500;
 
 export class SurvivalModalViews {
   readonly repairRoot: HTMLElement;
@@ -26,16 +29,20 @@ export class SurvivalModalViews {
   onResume: () => void = () => undefined;
   onRestart: () => void = () => undefined;
   onReturnToMenu: () => void = () => undefined;
+  onEndingReady: () => void = () => undefined;
   onRepairTarget: (instanceId: ItemInstanceId) => void = () => undefined;
   onRepairCancel: () => void = () => undefined;
 
   private readonly repairTargets: HTMLElement;
-  private readonly endingBody: HTMLElement;
   private readonly endingCause: HTMLElement;
   private readonly endingStats: HTMLElement;
+  private readonly endingPanel: HTMLElement;
+  private readonly endingMenuButton: HTMLButtonElement;
+  private readonly statisticsView: EndingStatisticsView;
+  private endingFadeTimer: number | null = null;
   private repairBusy = false;
   private pauseRestartArmed = false;
-  private restartIssued = false;
+  private endingActionIssued = false;
   private disposed = false;
 
   constructor() {
@@ -68,14 +75,16 @@ export class SurvivalModalViews {
           </button>
         </div>
       </section>
-      <section class="survival-overlay ending-overlay cinematic-overlay scuba-popup-overlay" data-ending role="dialog" aria-modal="true" aria-hidden="true" aria-label="Journey ended" inert>
+      <section class="survival-overlay ending-overlay cinematic-overlay scuba-popup-overlay" data-ending role="dialog" aria-modal="true" aria-hidden="true" aria-label="Journey ended" tabindex="-1" inert>
         <div class="cinematic-overlay__content scuba-popup-paper scuba-popup-panel">
           <h2 class="scuba-popup-title ui-role-display" data-ending-title tabindex="-1" role="alert"></h2>
-          <p class="ending-copy ui-role-narrative" data-ending-body></p>
           <p class="ending-cause ui-role-context" data-ending-cause></p>
           <p class="ending-stats ui-role-numeral" data-ending-stats></p>
           <button type="button" class="primary-action salvage-action ui-role-context" data-restart aria-label="Start from the ship">
             START FROM THE SHIP
+          </button>
+          <button type="button" class="primary-action salvage-action ui-role-context" data-ending-menu aria-label="Back to menu">
+            BACK TO MENU
           </button>
         </div>
       </section>`;
@@ -88,13 +97,18 @@ export class SurvivalModalViews {
     this.pauseRestartButton = requireElement(this.pauseRoot, '[data-pause-restart]');
     this.pauseMenuButton = requireElement(this.pauseRoot, '[data-pause-menu]');
     this.endingTitle = requireElement(this.endingRoot, '[data-ending-title]');
-    this.endingBody = requireElement(this.endingRoot, '[data-ending-body]');
     this.endingCause = requireElement(this.endingRoot, '[data-ending-cause]');
     this.endingStats = requireElement(this.endingRoot, '[data-ending-stats]');
     this.restartButton = requireElement(this.endingRoot, '[data-restart]');
+    this.endingPanel = requireElement(this.endingRoot, '.cinematic-overlay__content');
+    this.endingMenuButton = requireElement(this.endingRoot, '[data-ending-menu]');
+    this.statisticsView = new EndingStatisticsView(this.endingRoot, this.endingPanel);
+    this.endingPanel.insertBefore(this.statisticsView.button, this.endingMenuButton);
+    this.endingRoot.style.setProperty('--ending-fade-duration', `${ENDING_FADE_MS}ms`);
     this.repairRoot.addEventListener('click', this.handleRepairClick);
     this.pauseRoot.addEventListener('click', this.handlePauseClick);
     this.endingRoot.addEventListener('click', this.handleEndingClick);
+    this.endingRoot.addEventListener('transitionend', this.handleEndingTransitionEnd);
   }
 
   showRepairOptions(items: readonly Readonly<SurvivalItemState>[]): void {
@@ -137,21 +151,54 @@ export class SurvivalModalViews {
     );
   }
 
-  showEnding(record: Exclude<EndingRecord, { id: 'dorothy' }>): void {
-    if (this.disposed) return;
+  showEnding(record: Exclude<EndingRecord, { id: 'dorothy' }>, snapshot: SurvivalSnapshot | null): void {
+    if (this.disposed || this.endingRoot.dataset.ending) return;
+    this.statisticsView.render(survivalEndingStatistics(record, snapshot));
     this.endingTitle.textContent = endingTitle(record);
-    this.endingBody.textContent = endingEpilogue(record);
     this.endingCause.textContent = endingCauseLine(record) ?? '';
     this.endingCause.hidden = this.endingCause.textContent.length === 0;
     this.endingStats.textContent = endingSummary(record);
     this.endingRoot.dataset.ending = record.id;
-    this.restartIssued = false;
+    this.endingActionIssued = false;
     this.restartButton.disabled = false;
+    this.endingMenuButton.disabled = false;
+    if (record.id === 'rescue') return;
+    this.endingPanel.hidden = true;
+    this.endingRoot.classList.add('is-fading');
+    // Commit the transparent state before activation, including ending previews.
+    this.endingRoot.getBoundingClientRect();
+    this.endingFadeTimer = window.setTimeout(this.finishEndingFade, ENDING_FADE_MS);
+  }
+
+  endingInitialFocus(): HTMLElement {
+    if (!this.statisticsView.root.hidden) return this.statisticsView.title;
+    return this.endingPanel.hidden ? this.endingRoot : this.endingTitle;
+  }
+
+  private readonly handleEndingTransitionEnd = (event: TransitionEvent): void => {
+    if (event.target === this.endingRoot && event.propertyName === 'opacity') this.finishEndingFade();
+  };
+
+  private readonly finishEndingFade = (): void => {
+    if (this.disposed || this.endingFadeTimer === null) return;
+    window.clearTimeout(this.endingFadeTimer);
+    this.endingFadeTimer = null;
+    this.endingRoot.classList.remove('is-fading');
+    this.endingPanel.hidden = false;
+    this.onEndingReady();
+  };
+
+  private cancelEndingFade(): void {
+    if (this.endingFadeTimer === null) return;
+    window.clearTimeout(this.endingFadeTimer);
+    this.endingFadeTimer = null;
   }
 
   beginDispose(): boolean {
     if (this.disposed) return false;
     this.disposed = true;
+    this.cancelEndingFade();
+    this.statisticsView.dispose();
     return true;
   }
 
@@ -160,6 +207,7 @@ export class SurvivalModalViews {
       () => this.repairRoot.removeEventListener('click', this.handleRepairClick),
       () => this.pauseRoot.removeEventListener('click', this.handlePauseClick),
       () => this.endingRoot.removeEventListener('click', this.handleEndingClick),
+      () => this.endingRoot.removeEventListener('transitionend', this.handleEndingTransitionEnd),
     ]));
   }
 
@@ -168,6 +216,7 @@ export class SurvivalModalViews {
       () => { this.onResume = () => undefined; },
       () => { this.onRestart = () => undefined; },
       () => { this.onReturnToMenu = () => undefined; },
+      () => { this.onEndingReady = () => undefined; },
       () => { this.onRepairTarget = () => undefined; },
       () => { this.onRepairCancel = () => undefined; },
     ]));
@@ -235,13 +284,16 @@ export class SurvivalModalViews {
   };
 
   private readonly handleEndingClick = (event: MouseEvent): void => {
-    if (!this.canUseRoot(this.endingRoot) || this.restartIssued) return;
+    if (!this.canUseRoot(this.endingRoot) || this.endingPanel.hidden || this.endingActionIssued) return;
     const target = event.target;
     if (!(target instanceof Element)) return;
-    const button = target.closest<HTMLButtonElement>('[data-restart]');
+    const button = target.closest<HTMLButtonElement>('[data-restart], [data-ending-menu]');
     if (button === null || button.disabled || !this.endingRoot.contains(button)) return;
-    this.restartIssued = true;
-    button.disabled = true;
-    this.onRestart();
+    this.endingActionIssued = true;
+    this.statisticsView.button.disabled = true;
+    this.restartButton.disabled = true;
+    this.endingMenuButton.disabled = true;
+    if (button === this.endingMenuButton) this.onReturnToMenu();
+    else this.onRestart();
   };
 }

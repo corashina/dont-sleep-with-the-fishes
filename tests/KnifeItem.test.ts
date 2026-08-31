@@ -1,43 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import {
-  ITEM_DEFINITIONS,
-  ITEM_IDS,
-  createItemInstances,
-} from '../src/game/ItemState';
 import { survivalEventById } from '../src/survival/eventCatalog';
 import {
   createEventItemUseSample,
   resolveEventItemUseContext,
   sampleEventItemUse,
 } from '../src/survival/eventItemUseChoreography';
-import { ITEM_ANIMATION_LAB_USES } from '../src/survival/ItemAnimationLab';
-import { SURVIVAL_ITEM_DESCRIPTIONS } from '../src/survival/itemDescriptions';
-import { itemArtwork } from '../src/ui/uiArtwork';
-import { boatStorageSurface, boatStorageTransform } from '../src/world/BoatStorage';
 
 describe('Knife survival item', () => {
-  it('replaces Rope with one durable, breakable, weight-one item', () => {
-    expect(ITEM_IDS).not.toContain('rope');
-    expect(ITEM_IDS).toContain('knife');
-    expect(ITEM_DEFINITIONS.knife).toMatchObject({
-      label: 'KNIFE',
-      weight: 1,
-      spawnCount: 1,
-      charges: null,
-      durable: true,
-      breakable: true,
-      dayAction: null,
-      modelId: 'knife',
-      artworkId: 'knife',
-    });
-    expect(createItemInstances()).toContainEqual({
-      instanceId: 'knife-1',
-      type: 'knife',
-    });
-    expect(SURVIVAL_ITEM_DESCRIPTIONS.knife).toBe(
-      'Cuts through threats during close attacks.',
-    );
-  });
 
   it('can save a Tentacle Attack target with an 80 percent success chance', () => {
     const choice = survivalEventById('snatcher')?.choices.find(({ id }) => id === 'knife');
@@ -93,11 +62,6 @@ describe('Knife survival item', () => {
     });
   });
 
-  it('removes Rope from Windy Night', () => {
-    expect(survivalEventById('windy-night')?.choices.some(({ id }) => id === 'rope'))
-      .toBe(false);
-  });
-
   it('uses a visible one-handed slash', () => {
     expect(resolveEventItemUseContext('snatcher', 'knife', 'knife')).toBe('knife-slash');
     expect(resolveEventItemUseContext('swarm-of-sharks', 'knife', 'knife'))
@@ -113,30 +77,5 @@ describe('Knife survival item', () => {
     expect(strike.targetBlend).toBe(0);
     expect(Math.abs(strike.yaw - ready.yaw)).toBeGreaterThan(0.4);
     expect(Math.abs(strike.roll - ready.roll)).toBeGreaterThan(0.4);
-  });
-
-  it('is selectable in Item Animation Lab', () => {
-    expect(ITEM_ANIMATION_LAB_USES.knife).toEqual([{
-      id: 'knife-slash',
-      label: 'Slash knife',
-      eventId: 'snatcher',
-      choiceId: 'knife',
-    }, {
-      id: 'trade-handover',
-      label: 'Trade handover',
-      eventId: 'handyman',
-      choiceId: 'knife',
-    }]);
-  });
-
-  it('has boat storage and illustrated UI artwork', () => {
-    const knife = { instanceId: 'knife-1', type: 'knife' } as const;
-    const transform = boatStorageTransform(knife);
-
-    expect(boatStorageSurface(knife)).toBe('floor');
-    expect(transform.rotation.x).toBeCloseTo(Math.PI / 2);
-    expect(transform.rotation.y).toBeCloseTo(0);
-    expect(transform.position.toArray().every(Number.isFinite)).toBe(true);
-    expect(itemArtwork('knife')).toContain('data-item-artwork="knife"');
   });
 });

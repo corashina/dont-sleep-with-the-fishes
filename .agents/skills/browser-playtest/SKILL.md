@@ -79,6 +79,8 @@ Before spawning players, write `batch.json` with all selected testers, including
     "profile": "balanced",
     "subagentId": null,
     "status": "queued",
+    "reachedDay": null,
+    "outcome": null,
     "reportPath": "balanced_1/report.md",
     "screenshotPaths": []
   }]
@@ -112,21 +114,37 @@ Give each player its tester ID, profile, shared inputs, assigned regression task
 - Bait is automatic. Do not select it.
 - Select `Fish`. Wait for `CLICK THE WATER TO CAST`. Click visible water.
 - Checkpoint `report.md` after every decision.
-- Save screenshots in `<tester-id>/screenshots/`.
+- Capture only encountered problems. Save useful evidence in `<tester-id>/screenshots/`.
+- Do not capture routine starts, successful events, low resources, normal endings, or the day cap.
 - Write only inside the assigned tester folder. Do not edit another tester's files or shared batch files.
 - Stop controls and finalize the partial report if the coordinator reports batch invalidation.
 
-Each report includes tester ID, profile, status, outcome, reached day, final visible resources, final inventory, chronological actions with reasons, resource and inventory changes, events and choices, disabled or blocked controls, confirmed UI bugs, screenshot paths, and missing screenshot reasons.
+Each report includes tester ID, profile, status, specific outcome, reached day, final resources, inventory, and the decision log.
+Include events, choices, resource changes, blocked controls, and confirmed or suspected problems.
+Keep a chronological log of actions, reasons, and resource or inventory changes.
 
-Capture screenshots for the start state, first two event choice states, first visible critical resource state, final state, and each visible game or browser failure.
+Follow the guide's "Problem Screenshots" and "Ending Details" sections.
+Capture one useful view per distinct problem. Add another only when it shows new diagnostic evidence.
+Record routine states and successful regressions in text. Leave `screenshotPaths` empty when no problem needs a screenshot.
+Explain missing screenshots only for problems that could not be captured.
+
+Lead the final report with rescued, died, day cap, or stopped without an ending, plus its day and cause.
+Include exact ending text, last event and action, resources before and after, final inventory, and cause uncertainty.
+For rescue, list observed signals. For death, name the visible cause. Do not infer hidden ending logic.
+For failure, record the defect, steps, expected and actual behavior, retries, recovery, and whether the character remained alive.
+Distinguish a blocked control from an unrecoverable run. Do not use `normal-ending` or `game-failure` as the entire outcome.
 
 ## Stop and Retry
 
-Stop with `normal-ending` for a normal ending. A normal ending is not a game failure. Stop with `game-failure` for a confirmed game failure. Stop with `browser-failure` only when the browser fails during the active player turn. Stop with `player-task-failure` when the player returns before an ending or day 55 without an active-turn game or browser failure.
+Stop with `normal-ending` for rescue or death shown by the game. Name the ending and visible cause in the outcome.
+A normal death is not a game failure. Stop with `game-failure` when a confirmed defect requires stopping the test.
+Name the defect and its effect. Stop with `browser-failure` only when the browser fails during the active player turn.
+Stop with `player-task-failure` when the player returns before an ending or day 55 without an active-turn failure.
 
 Do not test browser recovery after a player returns. A missing browser after return is expected lifecycle cleanup, not a new browser failure.
 
-Otherwise complete day 55 and stop with `day-55-cap` before any day 56 action. If day 56 appears, capture it without using another control.
+Otherwise complete day 55 and stop with `day-55-cap` before any day 56 action.
+If day 56 appears, record it in text without using another control. Do not take a routine cap screenshot.
 
 Retry an enabled unchanged control only after its first attempt produces no visible result. Retry twice, for three total attempts. Do not retry if focus, highlights, text, values, or presentation changed.
 
@@ -144,9 +162,14 @@ Do not count build invalidation as a game failure. Do not compare balance across
 
 ## Compare
 
-After all players stop, update `batch.json` with final statuses, report paths, screenshot paths, and completion time. Verify that the tester entry count matches `testerCount` and every entry has a final status.
+After all players stop, update `batch.json` with final statuses, reached days, specific outcomes, artifact paths, and completion time.
+Verify that the tester entry count matches `testerCount` and every entry has a final status and specific outcome.
+For unstarted testers, leave `reachedDay` null and explain the interruption in `outcome`.
 
 Write `comparison.md` with one entry per tester ID. Include days, endings, visible resources, inventory, major choices, failures, UI issues, profile differences, and explicit missing tester data. Compare repeated profiles without merging their results.
+
+Lead each row with the specific outcome and day, then give its status, last event, action, cause, and resources.
+Explain why a run ended or stopped. List only screenshots of encountered problems.
 
 For invalidated batches, report observed results and missing data only. Omit balance and profile comparisons.
 

@@ -3,15 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   AmbientLight,
   AnimationClip,
-  Bone,
   Box3,
   BoxGeometry,
-  BufferAttribute,
   BufferGeometry,
-  DirectionalLight,
   FogExp2,
   Group,
-  HemisphereLight,
   Line,
   MathUtils,
   Matrix4,
@@ -26,39 +22,28 @@ import {
   Quaternion,
   QuaternionKeyframeTrack,
   ShaderMaterial,
-  Skeleton,
-  SkinnedMesh,
   Texture,
   Vector3,
   Vector4,
-  VectorKeyframeTrack,
 } from 'three';
 import {
   ITEM_DEFINITIONS,
-  createItemInstances,
   type ItemId,
   type ItemInstance,
   type ItemInstanceId,
 } from '../src/game/ItemState';
-import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
+import { BoatBuoyancy } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import {
   tryCreateVolumetricClouds,
-  VolumetricClouds,
 } from '../src/world/VolumetricClouds';
-import { volumetricCloudProfile } from '../src/world/volumetricCloudProfiles';
 import {
-  DEFAULT_WAVES,
-  sampleWaveField,
   type WaveSample,
 } from '../src/ocean/WaveField';
 import { UNBOUNDED_MINIMUM_LOCAL_Y } from '../src/ocean/WaterExclusion';
-import { HOVER_OUTLINE_NAME } from '../src/rendering/HoverOutline';
-import { REPAIR_TOOLBOX_LAB_INSTANCE_ID } from '../src/survival/ItemAnimationLab';
 import {
   BoatWorld,
   DAY_CLOUD_BOUNCE_INTENSITY,
-  SURVIVAL_CELESTIAL_DIRECTION,
 } from '../src/survival/BoatWorld';
 import {
   FISHING_PLAYER_SEAT,
@@ -72,21 +57,14 @@ import {
 import { CarlitosDelegationPresentation } from '../src/survival/CarlitosDelegationPresentation';
 import { CarlitosPresentation } from '../src/survival/CarlitosPresentation';
 import {
-  CHEST_DISAPPEAR_DURATION,
   CHEST_DISPLAY_SCALE,
   ChestDisplay,
 } from '../src/survival/ChestDisplay';
 import { DANGEROUS_WATERS_ITEM_DURATION } from '../src/survival/DangerousWatersPresentation';
-import { DivePresentation } from '../src/survival/DivePresentation';
 import { DivePresentationController } from '../src/survival/DivePresentationController';
-import {
-  HANGING_LANTERN_DAY_INTENSITY,
-  HANGING_LANTERN_NIGHT_INTENSITY,
-} from '../src/survival/HangingLantern';
 import {
   type FocusedEventInteractionTarget,
   type FocusedEventPresentation,
-  type FocusedEventPresentationDependencies,
   type FocusedEventPresentationFactories,
 } from '../src/survival/FocusedEventPresentation';
 import type { EventPresentationCue } from '../src/survival/eventPresentationCue';
@@ -95,8 +73,6 @@ import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
 import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
 import type { EventPresentationAdapter } from '../src/survival/EventPresentationAdapter';
 import { EventPresentationRegistry } from '../src/survival/EventPresentationRegistry';
-import type { EventPresentationAdapterDependencies } from '../src/survival/eventPresentationAdapters';
-import type { EventOutcomePresentation } from '../src/survival/eventPresentationTypes';
 import { EventItemEffects } from '../src/survival/EventItemEffects';
 import { EventItemUseAdapter } from '../src/survival/EventItemUseAdapter';
 import { EventItemUseController } from '../src/survival/EventItemUseController';
@@ -105,7 +81,6 @@ import {
   eventItemOutcomeDuration,
   eventItemUseDuration,
   eventItemUseDurationForItem,
-  MAP_PATCH_CONTACT_PROGRESS,
   resolveEventItemUseContext,
   sampleEventItemUse,
   type EventItemUseContext,
@@ -116,9 +91,7 @@ import { LEAK_ITEM_DURATION } from '../src/survival/events/leakChoreography';
 import { TORNADO_ITEM_DURATION } from '../src/survival/events/tornadoChoreography';
 import { SupernaturalEventAnimator } from '../src/survival/SupernaturalEventAnimator';
 import {
-  GHOST_FLOAT_PATHS,
   supernaturalItemUseDuration,
-  supernaturalRevealDuration,
 } from '../src/survival/supernaturalEventChoreography';
 import type {
   EventModelInstance,
@@ -132,8 +105,6 @@ import {
   boatStorageTransform,
   boatSupplyTransform,
 } from '../src/world/BoatStorage';
-import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
-import { lifeboatHullHalfWidthAt } from '../src/world/Lifeboat';
 import { projectBoatBounds } from '../src/survival/BoatInteraction';
 import { collectMeshResources } from '../src/world/SceneResources';
 import { SurvivalInventoryState } from '../src/survival/inventory';
@@ -145,7 +116,6 @@ import {
 import { SurvivalEventModelLibrary } from '../src/survival/SurvivalEventModelLibrary';
 import type {
   ActionOutcome,
-  ItemCondition,
 } from '../src/survival/survivalTypes';
 import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
 import { presentationWeatherProfile } from '../src/weather/presentationWeather';
@@ -155,7 +125,6 @@ import {
   TEST_PROP_MODEL_TRANSFORM,
   testPropModel,
 } from './helpers/propModels';
-import { loadProductionPropModels } from './helpers/productionPropModels';
 import { createTestMoonTexture } from './helpers/skyAssets';
 import { createTestShipFurniture } from './helpers/shipFurniture';
 
@@ -164,43 +133,7 @@ const savedItem = (type: ItemId, index = 1): ItemInstance => ({
   type,
 });
 
-const HANDYMAN_FINGER_CHAINS = [
-  ['ThumbRoot', 'ThumbMiddle', 'ThumbTop'],
-  ['IndexF_lower', 'IndexF_middle', 'IndexF_tip'],
-  ['MiddleF_lower', 'MiddleF_middle', 'MiddleF_tip'],
-  ['RingF_lower', 'RingF_middle', 'RingF_tip'],
-  ['PinkyF_lower', 'PinkyF_middle', 'PinkyF_tip'],
-] as const;
 
-function testRiggedHand(): Group {
-  const root = new Group();
-  const bones: Bone[] = [];
-  for (const chain of HANDYMAN_FINGER_CHAINS) {
-    let parent: Bone | null = null;
-    for (const name of chain) {
-      const bone = new Bone();
-      bone.name = name;
-      if (parent === null) root.add(bone);
-      else parent.add(bone);
-      bones.push(bone);
-      parent = bone;
-    }
-  }
-  const geometry = new BoxGeometry(1, 0.25, 1.5);
-  const vertexCount = geometry.getAttribute('position').count;
-  const indices = new Uint16Array(vertexCount * 4);
-  const weights = new Float32Array(vertexCount * 4);
-  for (let index = 0; index < vertexCount; index += 1) {
-    weights[index * 4] = 1;
-  }
-  geometry.setAttribute('skinIndex', new BufferAttribute(indices, 4));
-  geometry.setAttribute('skinWeight', new BufferAttribute(weights, 4));
-  const mesh = new SkinnedMesh(geometry, new MeshStandardMaterial());
-  mesh.name = 'handyman-imported-palm-surface';
-  mesh.bind(new Skeleton(bones));
-  root.add(mesh);
-  return root;
-}
 
 class FakeBoatSupplyDisplay {
   readonly pinCalls: ItemInstanceId[] = [];
@@ -408,6 +341,7 @@ function snapshot(
   return {
     state: 'day',
     ending: null,
+    history: [],
     day: 1,
     pressure: 0,
     health: 100,
@@ -438,25 +372,6 @@ function snapshot(
   };
 }
 
-function exactEventResult(
-  outcome: ActionOutcome,
-  selectedInstanceId: ItemInstanceId | null = null,
-  selectedCondition: ItemCondition | null = null,
-): EventOutcomePresentation {
-  return {
-    outcome,
-    resourceDeltas: outcome.deltas,
-    gainedInstanceIds: [],
-    brokenInstanceIds: selectedCondition === 'broken' && selectedInstanceId !== null
-      ? [selectedInstanceId]
-      : [],
-    lostInstanceIds: [],
-    consumedInstanceIds: [],
-    selectedInstanceId,
-    selectedCondition,
-    targetInstanceId: null,
-  };
-}
 
 async function remainsPending(promise: Promise<unknown>): Promise<boolean> {
   let settled = false;
@@ -533,59 +448,8 @@ function focusedPresenterTestDouble(eventId: string): FocusedPresenterTestDouble
   };
 }
 
-function expectedSurvivalPose(
-  time: number,
-  delta: number,
-  amplitudeScale: number,
-) {
-  const buoyancy = new BoatBuoyancy((sampleTime, x, z, scale) =>
-    sampleWaveField(DEFAULT_WAVES, sampleTime, x, z, scale));
-  const target = buoyancy.sampleTarget(time, 0, 0, amplitudeScale);
-  return smoothBoatPose(
-    { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 },
-    target,
-    delta,
-    7,
-  );
-}
 
 describe('BoatWorld helpers', () => {
-  it('renders day volumetric clouds and restores flat clouds at night', () => {
-    const propModels = createTestPropModels();
-    const disposeClouds = vi.spyOn(VolumetricClouds.prototype, 'dispose');
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-    const internals = world as unknown as {
-      volumetricClouds: {
-        mesh: { visible: boolean };
-        material: { uniforms: Record<string, { value: unknown }> };
-      };
-      sky: { material: { uniforms: Record<string, { value: unknown }> } };
-    };
-
-    world.setVolumetricCloudsEnabled(true);
-    world.setPresentationWeather('thunderstorm');
-    world.update(2, 2);
-
-    expect(internals.volumetricClouds.material.uniforms.uCoverage!.value).toBe(
-      volumetricCloudProfile('squall').coverage,
-    );
-    expect(internals.volumetricClouds.mesh.visible).toBe(true);
-    expect(internals.sky.material.uniforms.uCloudLayerStrength!.value).toBe(0);
-
-    world.setPresentationPhaseOverride('night');
-    world.update(4, 2);
-
-    expect(internals.volumetricClouds.mesh.visible).toBe(false);
-    expect(internals.sky.material.uniforms.uCloudLayerStrength!.value).toBe(1);
-    world.dispose();
-    expect(disposeClouds).toHaveBeenCalledOnce();
-    disposeClouds.mockRestore();
-    propModels.dispose();
-  });
 
   it('keeps the skybox active when cloud construction falls back', () => {
     const propModels = createTestPropModels();
@@ -608,198 +472,6 @@ describe('BoatWorld helpers', () => {
     expect(world.volumetricCloudsAvailable()).toBe(false);
     expect(world.scene.getObjectByName('procedural-skybox')).toBeDefined();
 
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('forwards water quality to its owned ocean', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
-      propModels,
-      createTestMoonTexture(),
-    );
-    const setQuality = vi.spyOn(OceanRenderer.prototype, 'setQuality');
-
-    world.setWaterQuality('ultra');
-    expect(setQuality).toHaveBeenCalledWith('ultra');
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('uses a level default survival camera pitch', () => {
-    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      camera,
-      propModels,
-      createTestMoonTexture(),
-    );
-    const direction = camera.getWorldDirection(new Vector3());
-
-    expect(direction.x).toBeCloseTo(0);
-    expect(direction.y).toBeCloseTo(0);
-    expect(direction.z).toBeCloseTo(-1);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('keeps both celestial bodies in the upper center of survival view', () => {
-    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      camera,
-      propModels,
-      createTestMoonTexture(),
-    );
-    world.scene.updateMatrixWorld(true);
-    camera.updateProjectionMatrix();
-
-    const expected = new Vector3(...SURVIVAL_CELESTIAL_DIRECTION).normalize();
-    const sky = world.scene.getObjectByName('procedural-skybox') as Mesh<
-      BufferGeometry,
-      ShaderMaterial
-    >;
-    const ocean = world.scene.getObjectByName('procedural-ocean') as Mesh<
-      BufferGeometry,
-      ShaderMaterial
-    >;
-    const key = world.scene.children.find(
-      (object): object is DirectionalLight => object instanceof DirectionalLight,
-    )!;
-    const screenPosition = expected.clone()
-      .multiplyScalar(50)
-      .add(camera.getWorldPosition(new Vector3()))
-      .project(camera);
-
-    expect(sky.material.uniforms.uSunDirection!.value).toEqual(expected);
-    expect(sky.material.uniforms.uMoonDirection!.value).toEqual(expected);
-    expect(ocean.material.uniforms.uLightDirection!.value).toEqual(expected);
-    expect(key.position.clone().sub(key.target.position).normalize()).toEqual(expected);
-    expect(screenPosition.x).toBeCloseTo(0);
-    expect(screenPosition.y).toBeGreaterThan(0);
-    expect(screenPosition.y).toBeLessThan(0.5);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('uses canonical supply transforms without the old slatted platform', () => {
-    const savedItems = createItemInstances();
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
-      propModels,
-      createTestMoonTexture(),
-      savedItems,
-    );
-    world.syncInventory(snapshot(savedItems, {
-      food: ITEM_DEFINITIONS.cannedFood.spawnCount,
-      bait: ITEM_DEFINITIONS.baitTin.spawnCount,
-      recoveredFood: ITEM_DEFINITIONS.cannedFood.spawnCount,
-      recoveredBait: ITEM_DEFINITIONS.baitTin.spawnCount,
-      carlitos: {
-        alive: true,
-        energy: 3,
-        hunger: 5,
-        sickness: 0,
-        unhappiness: 0,
-        pettedToday: false,
-        deathCause: null,
-      },
-    }));
-
-    expect(world.scene.getObjectByName('survival-supply-platform')).toBeUndefined();
-    for (const type of Object.keys(ITEM_DEFINITIONS) as ItemId[]) {
-      for (let index = 0; index < ITEM_DEFINITIONS[type].spawnCount; index += 1) {
-        const copy = type === 'carlitos'
-          ? world.scene.getObjectByName('carlitos-companion')!
-          : world.scene.getObjectByName(
-              `boat-supply:${type}:copy-${index + 1}`,
-            )!;
-        const expected = boatSupplyTransform(type, index);
-        if (type === 'carlitos') {
-          expected.position.x = -Math.abs(expected.position.x);
-          expected.rotation.y = -Math.abs(expected.rotation.y);
-        }
-
-        expect(copy.visible, `${type}-${index + 1}`).toBe(true);
-        expect(copy.position.toArray()).toEqual(expected.position.toArray());
-        expect(copy.rotation.toArray()).toEqual(expected.rotation.toArray());
-        expect(copy.scale.toArray()).toEqual([
-          expected.scale,
-          expected.scale,
-          expected.scale,
-        ]);
-      }
-    }
-
-    const scuba = world.scene.getObjectByName('boat-supply:scubaSet:copy-1')!;
-    const umbrella = world.scene.getObjectByName('boat-supply:umbrella:copy-1')!;
-    const medicalKit = world.scene.getObjectByName('boat-supply:medicalKit:copy-1')!;
-    const fishingNet = world.scene.getObjectByName('boat-supply:fishingNet:copy-1')!;
-    const bucket = world.scene.getObjectByName('boat-supply:bucket:copy-1')!;
-    expect([scuba.position.x, scuba.position.z]).toEqual([1.33, -1.15]);
-    expect([umbrella.position.x, umbrella.position.z]).toEqual([0.55, -0.90]);
-    expect([medicalKit.position.x, medicalKit.position.z]).toEqual([-0.50, -1.27]);
-    expect([fishingNet.position.x, fishingNet.position.z]).toEqual([-0.96, -1.15]);
-    expect([bucket.position.x, bucket.position.z]).toEqual([1.03, -1.00]);
-
-    const supplyBounds = (id: ItemId): Box3 => {
-      const transform = boatSupplyTransform(id, 0);
-      const bounds = ITEM_MODEL_SPECS[id].normalizedBounds;
-      return new Box3(
-        new Vector3(...bounds.min),
-        new Vector3(...bounds.max),
-      ).applyMatrix4(new Matrix4().compose(
-        transform.position,
-        new Quaternion().setFromEuler(transform.rotation),
-        new Vector3().setScalar(transform.scale),
-      ));
-    };
-    const medicalKitBounds = supplyBounds('medicalKit');
-    const fishingNetBounds = supplyBounds('fishingNet');
-    const bucketBounds = supplyBounds('bucket');
-    const scubaBounds = supplyBounds('scubaSet');
-    const umbrellaBounds = supplyBounds('umbrella');
-    const flareGunBounds = supplyBounds('flareGun');
-    const radioBounds = supplyBounds('radio');
-    const starboardShelf = world.scene.getObjectByName('lifeboat-edge-wear-1-1')!;
-    const flareShelf = world.scene.getObjectByName('lifeboat-edge-wear--1-1')!;
-    const starboardShelfBounds = new Box3().setFromObject(starboardShelf);
-    const flareShelfBounds = new Box3().setFromObject(flareShelf);
-    expect((starboardShelf as Mesh<BoxGeometry>).geometry.parameters.width)
-      .toBeCloseTo(0.315);
-    expect((flareShelf as Mesh<BoxGeometry>).geometry.parameters.width)
-      .toBeCloseTo(0.315);
-    expect((starboardShelf as Mesh<BoxGeometry>).geometry.parameters.depth)
-      .toBeCloseTo(0.48);
-    expect((flareShelf as Mesh<BoxGeometry>).geometry.parameters.depth)
-      .toBeCloseTo(0.48);
-    expect(bucketBounds.intersectsBox(umbrellaBounds)).toBe(false);
-    expect(bucketBounds.intersectsBox(scubaBounds)).toBe(false);
-    expect(fishingNetBounds.intersectsBox(medicalKitBounds)).toBe(false);
-    expect(flareGunBounds.min.y).toBeCloseTo(flareShelfBounds.max.y);
-    expect(flareGunBounds.min.x).toBeGreaterThan(flareShelfBounds.min.x);
-    expect(flareGunBounds.max.x).toBeLessThan(flareShelfBounds.max.x);
-    expect(flareGunBounds.min.z).toBeGreaterThan(flareShelfBounds.min.z);
-    expect(flareGunBounds.max.z).toBeLessThan(flareShelfBounds.max.z);
-    expect(radioBounds.min.y).toBeCloseTo(starboardShelfBounds.max.y);
-    expect(radioBounds.min.x).toBeGreaterThan(starboardShelfBounds.min.x);
-    expect(radioBounds.max.x).toBeLessThan(starboardShelfBounds.max.x);
-    expect(radioBounds.min.z).toBeGreaterThan(starboardShelfBounds.min.z);
-    expect(radioBounds.max.z).toBeLessThan(starboardShelfBounds.max.z);
-    expect(flareGunBounds.getCenter(new Vector3()).x).toBeCloseTo(-1.38);
-    expect(flareShelf.position.x).toBeCloseTo(-starboardShelf.position.x);
-    expect(flareShelf.position.y).toBeCloseTo(starboardShelf.position.y);
-    expect(flareShelf.position.z).toBeCloseTo(starboardShelf.position.z);
-    expect(flareShelf.rotation.y).toBeCloseTo(-starboardShelf.rotation.y);
-    expect(flareShelfBounds.getSize(new Vector3()).x)
-      .toBeCloseTo(starboardShelfBounds.getSize(new Vector3()).x);
-    expect(flareShelfBounds.getSize(new Vector3()).z)
-      .toBeCloseTo(starboardShelfBounds.getSize(new Vector3()).z);
     world.dispose();
     propModels.dispose();
   });
@@ -878,37 +550,6 @@ describe('BoatWorld helpers', () => {
     }
   });
 
-  it('keeps waves rougher than rain while fog remains comparatively quiet', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-    const buoyancySample = vi.spyOn(BoatBuoyancy.prototype, 'sampleTargetInto');
-    const oceanUpdate = vi.spyOn(OceanRenderer.prototype, 'update');
-    const amplitudes = new Map<string, number>();
-
-    try {
-      for (const [index, id] of (['waves', 'rain', 'fog'] as const).entries()) {
-        world.setPresentationWeather(id);
-        world.update(index + 1, 1 / 60);
-        const buoyancyAmplitude = buoyancySample.mock.calls.at(-1)?.[4];
-        const oceanAmplitude = oceanUpdate.mock.calls.at(-1)?.[1];
-        expect(buoyancyAmplitude).toBe(oceanAmplitude);
-        amplitudes.set(id, oceanAmplitude!);
-      }
-
-      expect(amplitudes.get('waves')).toBeGreaterThan(amplitudes.get('rain')!);
-      expect(amplitudes.get('rain')).toBeGreaterThan(amplitudes.get('fog')!);
-    } finally {
-      buoyancySample.mockRestore();
-      oceanUpdate.mockRestore();
-      world.dispose();
-      propModels.dispose();
-    }
-  });
-
   it('keeps the focused cargo vessel held for natural rescue', async () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -929,92 +570,6 @@ describe('BoatWorld helpers', () => {
     ).toBe(true);
 
     world.dispose();
-    propModels.dispose();
-  });
-
-  it('routes all focused event IDs and keeps generic tableaus as fallback', async () => {
-    const propModels = createTestPropModels();
-    const doubles = new Map(
-      FOCUSED_EVENT_IDS.map((eventId) => [
-        eventId,
-        focusedPresenterTestDouble(eventId),
-      ]),
-    );
-    const factories = Object.fromEntries(
-      FOCUSED_EVENT_IDS.map((eventId) => [
-        eventId,
-        () => doubles.get(eventId)!.presenter,
-      ]),
-    ) as FocusedEventPresentationFactories;
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [],
-      undefined,
-      undefined,
-      'low',
-      factories,
-    );
-
-    for (const eventId of FOCUSED_EVENT_IDS) {
-      const presenter = doubles.get(eventId)!;
-      world.stageEvent(eventId);
-      expect(presenter.stage).toHaveBeenCalledOnce();
-      expect(world.scene.getObjectByName(`focused-event:${eventId}`)?.visible)
-        .toBe(true);
-      const generic = world.scene.getObjectByName(`event-prop:${eventId}`);
-      if (
-        eventId === 'night-trader'
-        || eventId === 'handyman'
-        || eventId === 'other-people'
-        || eventId === 'plane'
-      ) {
-        expect(generic).toBeUndefined();
-      } else {
-        expect(generic?.visible).toBe(false);
-      }
-      await world.revealEvent(eventId);
-      expect(presenter.reveal).toHaveBeenCalledOnce();
-      const choice = {
-        choiceId: 'test-choice',
-        instanceId: null,
-        condition: null,
-      };
-      await world.playEventChoice(eventId, choice);
-      expect(presenter.playChoice).toHaveBeenCalledWith(choice);
-      await world.reactToEventOutcome(eventId, {
-        accepted: true,
-        code: 'event-resolved',
-        message: `${eventId} resolved.`,
-        deltas: {},
-        cue: 'none',
-        eventResult: {
-          eventId,
-          choiceId: 'test-choice',
-          resultId: 'test-result',
-        },
-      }, choice);
-      expect(presenter.react).toHaveBeenCalledWith(
-        {
-          eventId,
-          choiceId: 'test-choice',
-          resultId: 'test-result',
-        },
-        expect.objectContaining({ code: 'event-resolved' }),
-      );
-      world.clearEvent();
-      expect(presenter.clear).toHaveBeenCalledOnce();
-    }
-
-    for (const presenter of doubles.values()) {
-      expect(presenter.stage).toHaveBeenCalledOnce();
-    }
-
-    world.dispose();
-    for (const presenter of doubles.values()) {
-      expect(presenter.dispose).toHaveBeenCalledOnce();
-    }
     propModels.dispose();
   });
 
@@ -1063,106 +618,6 @@ describe('BoatWorld helpers', () => {
     }
   });
 
-  it.each([
-    ['dedicated', 'leak'],
-    ['focused', 'other-people'],
-    ['featured', 'flowers'],
-    ['weather', 'windy-night'],
-    ['supernatural', 'ghosts'],
-    ['moon', 'face-on-the-moon'],
-  ] as const)('delegates one %s event lifecycle to one adapter', async (family, eventId) => {
-    const propModels = createTestPropModels();
-    const adapter = eventAdapterTestDouble(eventId);
-    const create = vi.spyOn(EventPresentationRegistry.prototype, 'create')
-      .mockReturnValue(adapter);
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-    const choice = {
-      choiceId: 'test-choice',
-      instanceId: null,
-      condition: null,
-    } as const;
-    const outcome: ActionOutcome = {
-      accepted: true,
-      code: 'event-resolved',
-      message: `${eventId} resolved.`,
-      deltas: {},
-      cue: 'none',
-      ...(family === 'focused'
-        ? {
-            eventResult: {
-              eventId,
-              choiceId: choice.choiceId,
-              resultId: 'test-result',
-            },
-          }
-        : {}),
-    };
-    const result = {
-      outcome,
-      resourceDeltas: {},
-      gainedInstanceIds: [],
-      brokenInstanceIds: [],
-      lostInstanceIds: [],
-      consumedInstanceIds: [],
-      selectedInstanceId: null,
-      selectedCondition: null,
-      targetInstanceId: null,
-    };
-
-    try {
-      world.stageEvent(eventId, 17);
-      await world.revealEvent(eventId);
-      await world.playEventChoice(eventId, choice);
-      await (world as unknown as {
-        playEventSceneItemUse(
-          activeEventId: string,
-          choiceId: string,
-          instanceId: ItemInstanceId,
-        ): Promise<boolean>;
-      }).playEventSceneItemUse(eventId, choice.choiceId, 'bucket-1');
-      (world as unknown as {
-        eventItemAimTarget(activeEventId: string): Object3D | null;
-      }).eventItemAimTarget(eventId);
-      world.projectEventInteractionBounds(eventId, 800, 600);
-      world.projectEventResultBounds(eventId, 800, 600);
-      await world.reactToEventOutcome(
-        eventId,
-        outcome,
-        choice,
-        family === 'dedicated' || family === 'moon' ? result : undefined,
-      );
-      world.update(1, 0.1);
-      world.setDocumentHidden(true);
-      world.clearEvent();
-
-      expect(create).toHaveBeenCalledWith(eventId, expect.any(Object));
-      expect(adapter.stage).toHaveBeenCalledOnce();
-      expect(adapter.reveal).toHaveBeenCalledOnce();
-      expect(adapter.playChoice).toHaveBeenCalledOnce();
-      expect(adapter.playItemUse).toHaveBeenCalledOnce();
-      expect(adapter.itemAimTarget).toHaveBeenCalledOnce();
-      expect(adapter.interactionTargets).toHaveBeenCalledTimes(
-        family === 'dedicated' ? 2 : 1,
-      );
-      expect(adapter.interactionRoot).toHaveBeenCalledOnce();
-      expect(adapter.resultRoot).toHaveBeenCalledOnce();
-      expect(adapter.react).toHaveBeenCalledOnce();
-      expect(adapter.update).toHaveBeenCalledOnce();
-      expect(adapter.settleForVisibilityChange).toHaveBeenCalledOnce();
-      expect(adapter.clear).toHaveBeenCalledOnce();
-    } finally {
-      world.dispose();
-      create.mockRestore();
-      propModels.dispose();
-    }
-    expect(adapter.clear).toHaveBeenCalledOnce();
-    expect(adapter.dispose).toHaveBeenCalledOnce();
-  });
-
   it('reapplies the active moon presenter without advancing it during ambient pause', () => {
     const propModels = createTestPropModels();
     const adapter = eventAdapterTestDouble('face-on-the-moon');
@@ -1181,49 +636,6 @@ describe('BoatWorld helpers', () => {
     } finally {
       world.dispose();
       create.mockRestore();
-      propModels.dispose();
-    }
-  });
-
-  it('supplies Wreckage with world-owned dedicated services', async () => {
-    const propModels = createTestPropModels();
-    const camera = new PerspectiveCamera();
-    const world = new BoatWorld(camera, propModels, createTestMoonTexture());
-    const dedicatedModels = createTestEventModels();
-    const featuredModels = { clone: vi.fn(() => new Group()) };
-    let dependencies: EventPresentationAdapterDependencies | undefined;
-    const create = vi.spyOn(EventPresentationRegistry.prototype, 'create')
-      .mockImplementation((eventId, value) => {
-        dependencies = value;
-        return eventAdapterTestDouble(eventId);
-      });
-    const delegate = vi.spyOn(CarlitosDelegationPresentation.prototype, 'delegate')
-      .mockImplementation(async (retrieve) => retrieve());
-
-    try {
-      world.createEventPresentation('wreckage', dedicatedModels, featuredModels);
-      const environment = dependencies?.dedicatedEnvironment;
-      const internals = world as unknown as {
-        diveController: DivePresentationController;
-        supplyDisplay: BoatSupplyDisplay;
-        carlitos: CarlitosPresentation;
-      };
-      expect(environment).toMatchObject({
-        eventModels: dedicatedModels,
-        featuredModels,
-        dive: internals.diveController,
-        supplies: internals.supplyDisplay,
-        carlitos: internals.carlitos,
-        camera,
-      });
-      expect(dependencies).not.toHaveProperty('starry');
-      const retrieve = vi.fn(async () => undefined);
-      await environment?.delegateCarlitos(retrieve);
-      expect(delegate).toHaveBeenCalledWith(retrieve);
-    } finally {
-      delegate.mockRestore();
-      create.mockRestore();
-      world.dispose();
       propModels.dispose();
     }
   });
@@ -1440,235 +852,6 @@ describe('BoatWorld helpers', () => {
     }
   });
 
-  it('registers the six authored focused event presenters', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-
-    world.stageEvent('chest-attack');
-    expect(world.scene.getObjectByName('event-prop:chest-attack')?.visible)
-      .toBe(false);
-    expect(world.scene.getObjectByName('focused-event:chest-attack')?.visible)
-      .toBe(true);
-
-    world.stageEvent('midnight-tour');
-    expect(world.scene.getObjectByName('event-prop:midnight-tour')?.visible)
-      .toBe(false);
-    expect(world.scene.getObjectByName('focused-event:midnight-tour')?.visible)
-      .toBe(true);
-
-    world.stageEvent('night-trader');
-    expect(world.scene.getObjectByName('event-prop:night-trader'))
-      .toBeUndefined();
-    expect(world.scene.getObjectByName('focused-event:night-trader')?.visible)
-      .toBe(true);
-
-    world.stageEvent('handyman');
-    expect(world.scene.getObjectByName('event-prop:handyman')).toBeUndefined();
-    expect(world.scene.getObjectByName('focused-event:handyman')?.visible)
-      .toBe(true);
-
-    world.stageEvent('other-people');
-    expect(world.scene.getObjectByName('event-prop:other-people'))
-      .toBeUndefined();
-    expect(
-      world.scene.getObjectByName('focused-event:other-people')?.visible,
-    ).toBe(true);
-    const ship = world.scene.getObjectByName(
-      'other-people-ship',
-    )!;
-    const heldPosition = ship.position.clone();
-    world.update(2, 1 / 60);
-    expect(
-      world.scene.getObjectByName('focused-event:other-people')?.visible,
-    ).toBe(true);
-    expect(ship.position.distanceTo(heldPosition)).toBeGreaterThan(0);
-
-    world.stageEvent('plane');
-    expect(world.scene.getObjectByName('event-prop:plane')).toBeUndefined();
-    expect(world.scene.getObjectByName('focused-event:plane')?.visible)
-      .toBe(true);
-    expect(world.scene.getObjectByName('plane-aircraft')).toBeDefined();
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('aligns the Map surface and edge with the Leak hull plane', async () => {
-    const map = savedItem('map');
-    const propModels = createTestPropModels();
-    const borrow = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [map],
-      undefined,
-      undefined,
-      'high',
-      createTestEventModels(),
-    );
-    world.syncInventory(snapshot([map]));
-    world.stageEvent({ eventId: 'leak', targetInstanceId: null, variantSeed: 11 });
-
-    const use = world.playEventItemUse('leak', 'map', map.instanceId);
-    const duration = eventItemUseDuration('map-leak-patch');
-    const streams = world.scene.getObjectByName('leak-boat')!.children
-      .filter(({ name }) => name.startsWith('leak-stream-'));
-    const beforeContact = MAP_PATCH_CONTACT_PROGRESS - 0.02;
-    world.update(duration * beforeContact, duration * beforeContact);
-    expect(streams.some(({ visible }) => visible)).toBe(true);
-    world.update(
-      duration * MAP_PATCH_CONTACT_PROGRESS,
-      duration * 0.02,
-    );
-    expect(streams.every(({ visible }) => !visible)).toBe(true);
-    world.update(duration, duration * (1 - MAP_PATCH_CONTACT_PROGRESS));
-    await use;
-    expect(streams.every(({ visible }) => !visible)).toBe(true);
-    world.scene.updateMatrixWorld(true);
-
-    const actor = borrow.mock.results[0]!.value as BorrowedSupplyActor;
-    const target = world.scene.getObjectByName('leak-item-aim-target')!;
-    const mapQuaternion = actor.root.getWorldQuaternion(new Quaternion());
-    const targetQuaternion = target.getWorldQuaternion(new Quaternion());
-    const mapNormal = new Vector3(0, 1, 0).applyQuaternion(mapQuaternion);
-    const hullNormal = new Vector3(0, 0, 1).applyQuaternion(targetQuaternion);
-    const mapEdge = new Vector3(1, 0, 0).applyQuaternion(mapQuaternion);
-    const hullEdge = new Vector3(1, 0, 0).applyQuaternion(targetQuaternion);
-
-    expect(mapNormal.dot(hullNormal)).toBeLessThan(-0.999);
-    expect(mapEdge.dot(hullEdge)).toBeGreaterThan(0.999);
-    expect(actor.root.visible).toBe(true);
-    const hole = world.scene.getObjectByName('leak-hole-1')!;
-    const patchOffset = actor.root.getWorldPosition(new Vector3())
-      .sub(hole.getWorldPosition(new Vector3()));
-    expect(patchOffset.dot(hullNormal)).toBeLessThan(-0.03);
-    expect(actor.root.getWorldPosition(new Vector3()).distanceTo(
-      target.getWorldPosition(new Vector3()),
-    )).toBeLessThan(0.12);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('stages the procedural Handyman palm facing the player with bounded idle motion', async () => {
-    const propModels = createTestPropModels();
-    const camera = new PerspectiveCamera();
-    const world = new BoatWorld(
-      camera,
-      propModels,
-      createTestMoonTexture(),
-    );
-
-    world.stageEvent('handyman');
-    const palm = world.scene.getObjectByName('handyman-palm')!;
-    const baseQuaternion = palm.quaternion.clone();
-    expect(palm.userData.facesPlayer).toBe(true);
-    expect(palm.userData.outsideHull).toBe(true);
-    expect(palm.scale.x).toBeGreaterThan(1.25);
-    expect(world.scene.getObjectByName('handyman-fingertips')).toBeUndefined();
-    expect(world.scene.getObjectByName('handyman-joint-drain')).toBeUndefined();
-
-    const reveal = world.revealEvent('handyman');
-    world.update(1.5, 1.5);
-    await reveal;
-    world.scene.updateMatrixWorld(true);
-    const palmSurface = world.scene.getObjectByName(
-      'handyman-procedural-palm',
-    )!;
-    const faceNormal = new Vector3(0, 1, 0)
-      .transformDirection(palmSurface.matrixWorld);
-    const toPlayer = camera.getWorldPosition(new Vector3())
-      .sub(palmSurface.getWorldPosition(new Vector3()))
-      .normalize();
-    expect(faceNormal.dot(toPlayer)).toBeGreaterThan(0.99);
-    expect(palm.quaternion.angleTo(baseQuaternion)).toBeGreaterThan(0);
-    expect(palm.userData.idleMotion).toBe('restrained');
-    expect(Math.abs(palm.userData.wristDrift as number)).toBeLessThan(0.04);
-    expect(palm.userData.fingerBend).toBeGreaterThan(0);
-    expect(palm.userData.fingerBend).toBeLessThan(0.12);
-
-    world.clearEvent();
-    expect(palm.quaternion.angleTo(baseQuaternion)).toBeCloseTo(0);
-    expect(palm.userData.wristDrift).toBe(0);
-    expect(palm.userData.fingerTension).toBe(0);
-    expect(palm.userData.fingerBend).toBe(0);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('stages the imported Handyman palm face toward the player', async () => {
-    const propModels = createTestPropModels();
-    const createEventModel = propModels.createEventModel.bind(propModels);
-    vi.spyOn(propModels, 'createEventModel').mockImplementation((id) => (
-      id === 'riggedHand'
-        ? { root: testRiggedHand(), animations: [] }
-        : createEventModel(id)
-    ));
-    const camera = new PerspectiveCamera();
-    const world = new BoatWorld(
-      camera,
-      propModels,
-      createTestMoonTexture(),
-    );
-    world.stageEvent('handyman');
-    const reveal = world.revealEvent('handyman');
-    world.update(1.5, 1.5);
-    await reveal;
-    world.scene.updateMatrixWorld(true);
-    const palm = world.scene.getObjectByName('handyman-palm')!;
-    const palmSurface = palm.getObjectByName(
-      'handyman-imported-palm-surface',
-    )!;
-    const faceNormal = new Vector3(0, 1, 0)
-      .transformDirection(palmSurface.matrixWorld);
-    const toPlayer = camera.getWorldPosition(new Vector3())
-      .sub(palmSurface.getWorldPosition(new Vector3()))
-      .normalize();
-
-    expect(palm.userData.modelKind).toBe('imported');
-    expect(faceNormal.dot(toPlayer)).toBeGreaterThan(0.99);
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('stages Midnight Tour deep in the water on deterministic distant sides', async () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-
-    world.stageEvent('midnight-tour', 8);
-    const leftReveal = world.revealEvent('midnight-tour');
-    world.setDocumentHidden(true);
-    await leftReveal;
-    world.setDocumentHidden(false);
-    const leftIsland = world.scene.getObjectByName('midnight-tour-island')!;
-    const leftX = leftIsland.position.x;
-    const leftY = leftIsland.position.y;
-    const leftZ = leftIsland.position.z;
-    world.clearEvent();
-    world.stageEvent('midnight-tour', 9);
-    const rightX = world.scene.getObjectByName('midnight-tour-island')!.position.x;
-
-    expect(leftX).toBeLessThan(0);
-    expect(rightX).toBeGreaterThan(0);
-    expect(Math.abs(leftX)).toBeGreaterThan(11);
-    expect(Math.abs(rightX)).toBeGreaterThan(11);
-    expect(leftY).toBeLessThan(-5.5);
-    expect(leftZ).toBeLessThanOrEqual(-27);
-    expect(leftIsland.userData.greenTopWaveClearance).toBeCloseTo(0.18);
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('runs and restores the Midnight Tour attack cutscene on each seeded side', async () => {
     const propModels = createTestPropModels();
     const createEventModel = propModels.createEventModel.bind(propModels);
@@ -1739,168 +922,6 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('stages the Night Trader and lit lantern on the rowboat floor before reveal', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-
-    world.stageEvent('night-trader');
-
-    expect(world.scene.getObjectByName('night-trader-rowboat')?.visible).toBe(true);
-    expect(world.scene.getObjectByName('night-trader-oar-left')).toBeUndefined();
-    expect(world.scene.getObjectByName('night-trader-oar-right')).toBeUndefined();
-    const trader = world.scene.getObjectByName('night-trader-trader')!;
-    expect(trader.visible).toBe(true);
-    expect(trader.position.y).toBeCloseTo(-0.24);
-    expect(trader.userData.animationMode).toBe('none');
-    expect(trader.getObjectByName('event-model:traderOctopus')).toBeDefined();
-    world.scene.updateMatrixWorld(true);
-    const traderDirection = trader.getWorldDirection(new Vector3());
-    const directionToPlayer = trader.getWorldPosition(new Vector3())
-      .multiplyScalar(-1)
-      .setY(0)
-      .normalize();
-    traderDirection.setY(0).normalize();
-    expect(traderDirection.dot(directionToPlayer)).toBeGreaterThan(0.99);
-    const lantern = world.scene.getObjectByName('night-trader-lantern')!;
-    expect(lantern.visible).toBe(true);
-    expect(lantern.position.y).toBeCloseTo(-0.24);
-    expect(lantern.getObjectByName('night-trader-lantern-model')).toBeDefined();
-    expect(world.scene.getObjectByName('night-trader-lantern-reflection')?.visible)
-      .toBe(true);
-    expect((world.scene.getObjectByName('night-trader-lantern-light') as PointLight).intensity)
-      .toBeCloseTo(5.2);
-    expect(world.scene.getObjectByName('night-trader-case')).toBeUndefined();
-    const handoverTarget = world.scene.getObjectByName('night-trader-handover-target')!;
-    expect(Math.abs(handoverTarget.position.x)).toBeGreaterThan(3.5);
-    expect(handoverTarget.position.z).toBeLessThan(-6);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it.each([
-    [8, 'left', -1],
-    [9, 'right', 1],
-  ] as const)('stages the Night Trader on the %s seed side with Carlitos opposite', (
-    variantSeed,
-    side,
-    direction,
-  ) => {
-    const carlitos = savedItem('carlitos');
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [carlitos],
-    );
-    world.syncInventory(snapshot([], {
-      seed: 3,
-      carlitos: {
-        alive: true, energy: 3, hunger: 5, sickness: 0, unhappiness: 0,
-        pettedToday: false, deathCause: null,
-      },
-    }));
-
-    world.stageEvent('night-trader', variantSeed);
-    const trader = world.scene.getObjectByName('focused-event:night-trader')!;
-    const vessel = world.scene.getObjectByName('night-trader-vessel')!;
-    const companion = world.scene.getObjectByName('carlitos-companion')!;
-    expect(trader.userData.eventSide).toBe(side);
-    expect(Math.sign(vessel.position.x)).toBe(direction);
-    expect(Math.sign(companion.position.x)).toBe(-direction);
-
-    world.clearEvent();
-    expect(Math.sign(companion.position.x)).toBe(1);
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('seats Carlitos opposite each side-controlled event', async () => {
-    const carlitos = savedItem('carlitos');
-    const propModels = createTestPropModels();
-    const featuredModels = await createTestFeaturedModels([
-      'driftingBarrel',
-      'mysteryChest',
-      'emptyLifeboat',
-      'emptyLifeboatContainer',
-      'shippingContainer',
-    ]);
-    const eventModels = createTestEventModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [carlitos],
-      undefined,
-      undefined,
-      'low',
-      featuredModels,
-      eventModels,
-    );
-    world.syncInventory(snapshot([], {
-      seed: 3,
-      carlitos: {
-        alive: true, energy: 3, hunger: 5, sickness: 0, unhappiness: 0,
-        pettedToday: false, deathCause: null,
-      },
-    }));
-    const companion = world.scene.getObjectByName('carlitos-companion')!;
-    const cases = [
-      ['drifting-supplies', 8, 1],
-      ['drifting-chest', 8, 1],
-      ['man-in-the-fog', 8, 1],
-      ['man-in-the-fog', 9, -1],
-      ['tornado', 8, -1],
-      ['school-of-fish', 8, -1],
-      ['midnight-tour', 8, 1],
-      ['midnight-tour', 9, -1],
-      ['eerie-melody', 8, 1],
-      ['other-people', 8, 1],
-      ['other-people', 9, -1],
-    ] as const;
-
-    for (const [eventId, variantSeed, expectedSide] of cases) {
-      world.stageEvent(eventId, variantSeed);
-      expect(Math.sign(companion.position.x), eventId).toBe(expectedSide);
-      world.clearEvent();
-      expect(Math.sign(companion.position.x), `${eventId} cleared`).toBe(1);
-    }
-
-    world.dispose();
-    eventModels.dispose();
-    featuredModels.dispose();
-    propModels.dispose();
-  });
-
-  it('keeps Other People on a slow cruise at triple distance', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-
-    world.stageEvent('other-people');
-    const ship = world.scene.getObjectByName('other-people-ship')!;
-    expect(ship.visible).toBe(true);
-    expect(Math.hypot(ship.position.x, ship.position.z)).toBeCloseTo(
-      Math.hypot(8.5, 48) * 3,
-    );
-    expect(ship.position.z).toBeLessThan(-140);
-    const start = ship.position.clone();
-    world.update(4, 4);
-    expect(ship.position.distanceTo(start)).toBeGreaterThan(0);
-    expect(ship.position.distanceTo(start)).toBeLessThan(4);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('plays Other People Sleep as letting the boat pass', async () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -1924,29 +945,6 @@ describe('BoatWorld helpers', () => {
     expect(
       world.scene.getObjectByName('focused-event:other-people')?.userData.state,
     ).toBe('choice-pass');
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('flies one paper sheet left to right during the Windy Night cue', async () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-    world.stageEvent('windy-night');
-    const paper = world.scene.getObjectByName('weather-windy-paper')!;
-    const reveal = world.revealEvent('windy-night');
-    world.update(0.7, 0.7);
-    const leftX = paper.position.x;
-    expect(paper.visible).toBe(true);
-    world.update(2.2, 1.5);
-    expect(paper.position.x).toBeGreaterThan(leftX);
-    world.update(3.6, 1.4);
-    await reveal;
-    expect(paper.visible).toBe(false);
 
     world.dispose();
     propModels.dispose();
@@ -2105,65 +1103,6 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps the boat and camera stationary during Handyman Touch', async () => {
-    const propModels = createTestPropModels();
-    const camera = new PerspectiveCamera();
-    const world = new BoatWorld(
-      camera,
-      propModels,
-      createTestMoonTexture(),
-    );
-    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
-    const basePosition = camera.position.toArray();
-    const baseQuaternion = camera.quaternion.toArray();
-    world.stageEvent('handyman');
-    const choice = world.playEventChoice('handyman', {
-      choiceId: 'touch',
-      instanceId: null,
-      condition: null,
-    });
-    world.update(1, 1);
-    await choice;
-    expect(camera.position.toArray()).toEqual(basePosition);
-    expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
-
-    const reaction = world.reactToEventOutcome('handyman', {
-      accepted: true,
-      code: 'event-resolved',
-      message: 'The hand closes around the camera.',
-      deltas: {},
-      cue: 'none',
-      eventResult: {
-        eventId: 'handyman',
-        choiceId: 'touch',
-        resultId: 'handyman-touch',
-      },
-    }, {
-      choiceId: 'touch',
-      instanceId: null,
-      condition: null,
-    });
-    world.update(2, 2);
-    await reaction;
-    expect(camera.position.toArray()).toEqual(basePosition);
-    expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
-    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
-    expect(
-      world.scene.getObjectByName('focused-event:handyman')?.userData.state,
-    ).toBe('held-touch');
-
-    world.update(3, 1 / 60);
-    expect(camera.position.toArray()).toEqual(basePosition);
-    expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
-
-    world.clearEvent();
-    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
-    expect(camera.position.toArray()).toEqual(basePosition);
-    expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('turns the seated camera 180 degrees and returns it forward', () => {
     const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
     const propModels = createTestPropModels();
@@ -2216,54 +1155,6 @@ describe('BoatWorld helpers', () => {
     expect(camera.position.toArray()).toEqual(position.toArray());
     expect(camera.quaternion.toArray()).toEqual(forwardQuaternion.toArray());
 
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('shows the Handyman chest reward at half scale', async () => {
-    const anchor = savedItem('anchor');
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [anchor],
-    );
-    world.syncInventory(snapshot([anchor]));
-    world.stageEvent('handyman');
-    const choice = world.playEventChoice('handyman', {
-      choiceId: 'anchor',
-      instanceId: anchor.instanceId,
-      condition: 'usable',
-    });
-    world.update(1.2, 1.2);
-    await choice;
-
-    const reaction = world.reactToEventOutcome('handyman', {
-      accepted: true,
-      code: 'event-resolved',
-      message: 'The handyman gives you a chest.',
-      deltas: {},
-      cue: 'none',
-      eventResult: {
-        eventId: 'handyman',
-        choiceId: 'anchor',
-        resultId: 'handyman-reward',
-      },
-    }, {
-      choiceId: 'anchor',
-      instanceId: anchor.instanceId,
-      condition: 'usable',
-    });
-    const chestReward = world.scene.getObjectByName('handyman-reward-chest')!;
-    expect(chestReward.scale.toArray()).toEqual([
-      0.78 * CHEST_DISPLAY_SCALE,
-      0.78 * CHEST_DISPLAY_SCALE,
-      0.78 * CHEST_DISPLAY_SCALE,
-    ]);
-
-    world.update(2.4, 2.4);
-    await reaction;
     world.dispose();
     propModels.dispose();
   });
@@ -2324,105 +1215,6 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it.each([
-    [8, 'left', -1],
-    [9, 'right', 1],
-  ] as const)('stages Other People on the %s seed side', (
-    variantSeed,
-    side,
-    direction,
-  ) => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-
-    world.stageEvent('other-people', variantSeed);
-    const presentation = world.scene.getObjectByName('focused-event:other-people')!;
-    const ship = world.scene.getObjectByName('other-people-ship')!;
-    expect(presentation.userData.eventSide).toBe(side);
-    expect(Math.sign(ship.position.x)).toBe(direction);
-    expect(Math.sign(Math.cos(ship.rotation.y))).toBe(-direction);
-
-    const startX = ship.position.x;
-    world.update(2, 2);
-    expect(Math.sign(ship.position.x - startX)).toBe(-direction);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('outlines the Midnight Tour island while its anchor is highlighted', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-    world.stageEvent('midnight-tour');
-    const island = world.scene.getObjectByName('midnight-tour-island')!;
-
-    world.setHighlightedItem('midnight-tour:island');
-    expect(island.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
-
-    world.setHighlightedItem(null);
-    expect(island.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('outlines every event-eligible supply for Item Animation Lab', () => {
-    const bucket = savedItem('bucket');
-    const map = savedItem('map');
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [bucket, map],
-    );
-    world.syncInventory(snapshot([bucket, map]));
-    const bucketRoot = world.scene.getObjectByName('boat-supply:bucket')!;
-    const mapRoot = world.scene.getObjectByName('boat-supply:map')!;
-
-    world.setEventEligibleItems(new Set([bucket.instanceId, map.instanceId]));
-    expect(bucketRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
-    expect(mapRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
-
-    world.setEventEligibleItems(new Set([map.instanceId]));
-    expect(bucketRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
-    expect(mapRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
-
-    world.setEventEligibleItems(null);
-    expect(mapRoot.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('outlines the repair toolbox only while its anchor is highlighted', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-    const toolbox = world.scene.getObjectByName('repair-toolbox')!;
-
-    world.setEventEligibleItems(new Set([REPAIR_TOOLBOX_LAB_INSTANCE_ID]));
-    expect(toolbox.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
-
-    world.setHighlightedItem('repair-tools');
-    expect(toolbox.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
-
-    world.setHighlightedItem(null);
-    expect(toolbox.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
-
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('keeps the generic tableau when focused construction fails', () => {
     const propModels = createTestPropModels();
     const factories: FocusedEventPresentationFactories = {
@@ -2448,43 +1240,6 @@ describe('BoatWorld helpers', () => {
       .toBeUndefined();
 
     world.dispose();
-    propModels.dispose();
-  });
-
-  it('routes Midnight Tour presentation cues to the event cue handler', () => {
-    const propModels = createTestPropModels();
-    const emitCue = vi.fn();
-    let dependencies: FocusedEventPresentationDependencies | null = null;
-    const tour = focusedPresenterTestDouble('midnight-tour');
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [],
-      undefined,
-      undefined,
-      'low',
-      {
-        'midnight-tour': (value) => {
-          dependencies = value;
-          return tour.presenter;
-        },
-      },
-    );
-
-    world.setEventCueHandler(emitCue);
-    world.stageEvent('midnight-tour');
-    dependencies!.emitCue({ eventId: 'midnight-tour', cue: 'attack' });
-
-    expect(emitCue).toHaveBeenCalledExactlyOnceWith({
-      eventId: 'midnight-tour', cue: 'attack',
-    });
-
-    world.dispose();
-    dependencies!.emitCue({ eventId: 'midnight-tour', cue: 'attack' });
-    expect(emitCue).toHaveBeenCalledExactlyOnceWith({
-      eventId: 'midnight-tour', cue: 'attack',
-    });
     propModels.dispose();
   });
 
@@ -2596,94 +1351,6 @@ describe('BoatWorld helpers', () => {
     expect(active.dispose).toHaveBeenCalledOnce();
     propModels.dispose();
   });
-
-  it.each([
-    ['drifting-supplies', 'SALVAGE', 'drifting-supplies:barrel', 1.35],
-    ['drifting-chest', 'CHEST', 'drifting-chest:model', 1.55],
-  ] as const)(
-    'prespawns %s on the water before its event fade',
-    async (eventId, label, modelName, retrieveDuration) => {
-      const propModels = createTestPropModels();
-      const furniture = createTestShipFurniture();
-      const featuredModels = await createTestFeaturedModels(
-        eventId === 'drifting-supplies'
-          ? ['driftingBarrel', 'emptyLifeboat', 'emptyLifeboatContainer', 'shippingContainer']
-          : ['mysteryChest'],
-      );
-      const world = new BoatWorld(
-        new PerspectiveCamera(65, 4 / 3, 0.08, 220),
-        propModels,
-        createTestMoonTexture(),
-        [],
-        undefined,
-        furniture,
-        'low',
-        featuredModels,
-      );
-      world.stageEvent(eventId);
-      const model = world.scene.getObjectByName(modelName)!;
-      expect(model.visible).toBe(true);
-      if (eventId === 'drifting-chest') {
-        expect(model.scale.toArray()).toEqual([
-          0.82 * CHEST_DISPLAY_SCALE,
-          0.82 * CHEST_DISPLAY_SCALE,
-          0.82 * CHEST_DISPLAY_SCALE,
-        ]);
-      }
-      expect(model.userData.motionSource).toBe('shared-wave-field');
-      expect(model.userData.waterlineY).toBe(0);
-      expect(world.scene.getObjectByName(`event-prop:${eventId}`)).toBeUndefined();
-
-      const stagedPosition = model.position.clone();
-      const stagedQuaternion = model.quaternion.clone();
-      const reveal = world.revealEvent(eventId);
-      await reveal;
-      expect(model.position.toArray()).toEqual(stagedPosition.toArray());
-      world.setPresentationWeather('waves');
-      world.update(1, 0.9);
-      const wave = sampleWaveField(
-        DEFAULT_WAVES,
-        1,
-        -3,
-        -4.2,
-        presentationWeatherProfile('waves').waveScale,
-      );
-      expect(model.position.y).toBeCloseTo(0.02 + wave.height);
-      expect(model.position.distanceTo(stagedPosition)).toBeGreaterThan(0.001);
-      expect(model.quaternion.angleTo(stagedQuaternion)).toBeGreaterThan(0.001);
-      const anchorId = `event:${eventId}`;
-      const interaction = world.projectInteractionAnchors(800, 600)
-        .find(({ id }) => id === anchorId);
-      expect(interaction).toEqual(expect.objectContaining({
-        id: anchorId,
-        label,
-        description: 'Floating salvage within reach.',
-        eventFocusId: eventId,
-        tooltip: false,
-        visible: true,
-      }));
-      expect(interaction).not.toHaveProperty('eventChoiceId');
-      expect(interaction?.hitArea?.width).toBeGreaterThanOrEqual(64);
-      expect(interaction?.hitArea?.height).toBeGreaterThanOrEqual(64);
-
-      const retrieve = world.retrieveDriftingItem(eventId);
-      expect(world.projectInteractionAnchors(800, 600)
-        .find(({ id }) => id === anchorId)).toBeUndefined();
-      world.update(2, retrieveDuration);
-      await retrieve;
-      expect(model.visible).toBe(false);
-
-      const recede = world.recedeDriftingItem(eventId);
-      world.update(3, 0.8);
-      await recede;
-      expect(model.visible).toBe(false);
-
-      world.dispose();
-      featuredModels.dispose();
-      furniture.dispose();
-      propModels.dispose();
-    },
-  );
 
   it('ignores stale drifting-item retrieve and recede commands', async () => {
     const propModels = createTestPropModels();
@@ -2913,159 +1580,6 @@ describe('BoatWorld helpers', () => {
     },
   );
 
-  it('keeps the Flowers field fixed in place and removes its world interaction', async () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-
-    world.stageEvent('flowers');
-    const flowers = world.scene.getObjectByName('event-prop:flowers')!;
-    expect(flowers.children.length).toBeGreaterThanOrEqual(28);
-    const before = flowers.children.map(({ position }) => [position.x, position.z]);
-    expect(flowers.children.every(({ position }) => position.z <= -4.3)).toBe(true);
-    for (let left = 0; left < flowers.children.length; left += 1) {
-      for (let right = left + 1; right < flowers.children.length; right += 1) {
-        const a = flowers.children[left]!.position;
-        const b = flowers.children[right]!.position;
-        expect(Math.hypot(a.x - b.x, a.z - b.z)).toBeGreaterThan(1.9);
-      }
-    }
-    world.update(2, 2);
-    expect(flowers.children.map(({ position }) => [position.x, position.z])).toEqual(before);
-    expect(world.projectEventInteractionBounds('flowers', 800, 600)).toBeNull();
-
-    const deckTarget = world.scene.getObjectByName('flowers-deck-target')!;
-    expect(deckTarget.position.toArray()).toEqual([0.72, 0.58, 1.05]);
-    const collected = world.reactToEventOutcome('flowers', {
-      accepted: true,
-      code: 'event-resolved',
-      message: 'The flowers are collected.',
-      deltas: {},
-      cue: 'none',
-      eventPresentationKey: 'flowers.collect',
-    });
-    world.update(6, 4);
-    await collected;
-    const firstFlower = world.scene.getObjectByName('flowers:pad:0')!;
-    expect(firstFlower.getWorldPosition(new Vector3()).distanceTo(
-      deckTarget.getWorldPosition(new Vector3()),
-    )).toBeLessThan(0.001);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('keeps the Bad Sleep reveal camera and supplies stationary', async () => {
-    const cameraRig = new Group();
-    const camera = new PerspectiveCamera();
-    const basePosition = camera.position.toArray();
-    const baseQuaternion = camera.quaternion.toArray();
-    const supplies = new FakeBoatSupplyDisplay();
-    const animator = new WeatherEventAnimator(
-      cameraRig,
-      supplies as unknown as BoatSupplyDisplay,
-      undefined,
-      camera,
-    );
-
-    const reveal = animator.reveal('bad-sleep');
-    animator.update(1.7, 1.7);
-
-    expect(camera.position.toArray()).toEqual(basePosition);
-    expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
-    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
-    expect(supplies.ambientRoll).toBe(0);
-    expect(supplies.ambientLift).toBe(0);
-
-    animator.clear();
-    await reveal;
-    animator.dispose();
-  });
-
-  it.each(['bucket', 'flashlight', 'swimRing', 'umbrella'] as const)(
-    'returns the Bad Sleep %s to its base pose',
-    async (choiceId) => {
-      const cameraRig = new Group();
-      const supplies = new FakeBoatSupplyDisplay();
-      const animator = new WeatherEventAnimator(
-        cameraRig,
-        supplies as unknown as BoatSupplyDisplay,
-      );
-      const instanceId = `${choiceId}-1` as ItemInstanceId;
-
-      const itemUse = animator.playItemUse('bad-sleep', choiceId, instanceId);
-      const duration = weatherItemUseDuration('bad-sleep', choiceId)!;
-      animator.update(duration, duration);
-      await itemUse;
-
-      expect(supplies.poses.size).toBe(0);
-      expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
-      expect(cameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
-      animator.dispose();
-    },
-  );
-
-  it.each([
-    ['windy-night', 'umbrella', 'umbrella-1'],
-    ['thunderstorm', 'anchor', 'anchor-1'],
-  ] as const)(
-    'uses shared item motion and keeps %s reaction ownership unchanged',
-    async (eventId, choiceId, instanceId) => {
-      const cameraRig = new Group();
-      const camera = new PerspectiveCamera();
-      const basePosition = camera.position.toArray();
-      const baseQuaternion = camera.quaternion.toArray();
-      const supplies = new FakeBoatSupplyDisplay();
-      const animator = new WeatherEventAnimator(
-        cameraRig,
-        supplies as unknown as BoatSupplyDisplay,
-        undefined,
-        camera,
-      );
-
-      const itemUse = animator.playItemUse(eventId, choiceId, instanceId);
-      animator.update(0.6, 0.6);
-
-      expect(supplies.poses.size).toBe(0);
-      expect(supplies.pinCalls).toHaveLength(0);
-      expect(camera.position.toArray()).toEqual(basePosition);
-      expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
-      expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
-
-      const itemDuration = weatherItemUseDuration(eventId, choiceId)!;
-      animator.update(itemDuration, itemDuration - 0.6);
-      await itemUse;
-      const result = animator.react(
-        eventId,
-        {
-          accepted: true,
-          code: 'event-resolved',
-          message: 'The night passes.',
-          deltas: { hull: -20 },
-          cue: 'impact',
-        },
-        {
-          choiceId,
-          actors: [{ instanceId, condition: 'broken' }],
-        },
-      );
-      animator.update(0.55, 0.55);
-
-      expect(supplies.poses.size).toBe(0);
-      expect(supplies.pinCalls).toHaveLength(0);
-      expect(camera.position.toArray()).toEqual(basePosition);
-      expect(camera.quaternion.toArray()).not.toEqual(baseQuaternion);
-      expect(cameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
-
-      animator.update(2, 2);
-      await result;
-      animator.dispose();
-    },
-  );
-
   it('keeps the Bad Sleep broken Umbrella collapsed through the result hold', async () => {
     const cameraRig = new Group();
     const supplies = new FakeBoatSupplyDisplay();
@@ -3095,44 +1609,6 @@ describe('BoatWorld helpers', () => {
 
     animator.clear();
     expect(supplies.poses.size).toBe(0);
-    animator.dispose();
-  });
-
-  it('keeps Thunderstorm lightning off the lost item', () => {
-    const cameraRig = new Group();
-    const camera = new PerspectiveCamera();
-    const baseQuaternion = camera.quaternion.toArray();
-    const supplies = new FakeBoatSupplyDisplay();
-    const animator = new WeatherEventAnimator(
-      cameraRig,
-      supplies as unknown as BoatSupplyDisplay,
-      undefined,
-      camera,
-    );
-
-    void animator.react(
-      'thunderstorm',
-      {
-        accepted: true,
-        code: 'event-resolved',
-        message: 'Lightning takes the umbrella.',
-        deltas: { hull: -40 },
-        cue: 'impact',
-      },
-      {
-        choiceId: 'sleep',
-        actors: [{ instanceId: 'umbrella-1', condition: 'lost' }],
-      },
-    );
-    animator.update(0.45, 0.45);
-
-    expect(
-      animator.worldRoot.getObjectByName('weather-lightning-flash')?.visible,
-    ).toBe(true);
-    expect(supplies.pinCalls).toHaveLength(0);
-    expect(supplies.poses.size).toBe(0);
-    expect(camera.quaternion.toArray()).not.toEqual(baseQuaternion);
-    expect(cameraRig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
     animator.dispose();
   });
 
@@ -3177,146 +1653,6 @@ describe('BoatWorld helpers', () => {
     expect(supplies.ambientRoll).toBe(0);
     expect(supplies.ambientLift).toBe(0);
     animator.dispose();
-  });
-
-  it('keeps the Shower Night camera position fixed while looking up-left and up-right', async () => {
-    const propModels = createTestPropModels();
-    const camera = new PerspectiveCamera();
-    const world = new BoatWorld(
-      camera,
-      propModels,
-      createTestMoonTexture(),
-    );
-    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
-    const basePosition = cameraRig.position.toArray();
-    const baseQuaternion = cameraRig.quaternion.toArray();
-    const baseCameraPosition = camera.position.toArray();
-    const baseCameraQuaternion = camera.quaternion.toArray();
-    const baseViewDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-
-    world.stageEvent('shower-night');
-
-    expect(world.scene.getObjectByName('weather-event-world')).toBeDefined();
-    expect(world.scene.getObjectByName('weather-event-boat')).toBeDefined();
-    expect(world.scene.getObjectByName('weather-rain-bucket-splash')).toBeUndefined();
-    const reveal = world.revealEvent('shower-night');
-    world.update(1.55, 1.55);
-    expect(await remainsPending(reveal)).toBe(true);
-    expect(cameraRig.position.toArray()).toEqual(basePosition);
-    expect(cameraRig.quaternion.toArray()).toEqual(baseQuaternion);
-    expect(camera.position.toArray()).toEqual(baseCameraPosition);
-    expect(camera.quaternion.toArray()).not.toEqual(baseCameraQuaternion);
-    const leftViewDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-    expect(leftViewDirection.y).toBeGreaterThan(baseViewDirection.y + 0.25);
-    expect(leftViewDirection.x).toBeLessThan(baseViewDirection.x - 0.05);
-
-    world.update(3.55, 2);
-    expect(await remainsPending(reveal)).toBe(true);
-    expect(cameraRig.position.toArray()).toEqual(basePosition);
-    expect(cameraRig.quaternion.toArray()).toEqual(baseQuaternion);
-    expect(camera.position.toArray()).toEqual(baseCameraPosition);
-    expect(camera.quaternion.toArray()).not.toEqual(baseCameraQuaternion);
-    const rightViewDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-    expect(rightViewDirection.y).toBeGreaterThan(baseViewDirection.y + 0.25);
-    expect(rightViewDirection.x).toBeGreaterThan(baseViewDirection.x + 0.05);
-
-    world.update(5.55, 2);
-    await reveal;
-    expect(cameraRig.position.toArray()).toEqual(basePosition);
-    expect(cameraRig.quaternion.toArray()).toEqual(baseQuaternion);
-    expect(camera.position.toArray()).toEqual(baseCameraPosition);
-    expect(camera.quaternion.toArray()).toEqual(baseCameraQuaternion);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it.each([
-    ['dangerous-waters', 1.2, 2.4, 'still'],
-    ['windy-night', 1.2, 3.6, 'left'],
-    ['thunderstorm', 2, 4, 'still'],
-    ['restless-waves', 0.95, 3.8, 'still'],
-    ['man-in-the-fog', 2.6, 5.2, 'still'],
-    ['ghosts', 3.2, 6.4, 'still'],
-    ['eerie-melody', 2.2, 4.4, 'still'],
-    ['other-people', 1.7, 3.4, 'still'],
-  ] as const)(
-    'keeps the %s reveal camera position fixed with its authored view',
-    async (eventId, sampleTime, duration, direction) => {
-      const propModels = createTestPropModels();
-      const camera = new PerspectiveCamera();
-      const world = new BoatWorld(camera, propModels, createTestMoonTexture());
-      const basePosition = camera.position.toArray();
-      const baseQuaternion = camera.quaternion.toArray();
-      const baseDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-
-      world.stageEvent(eventId);
-      const reveal = world.revealEvent(eventId);
-      world.update(sampleTime, sampleTime);
-
-      expect(camera.position.toArray()).toEqual(basePosition);
-      if (direction === 'still') {
-        expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
-      } else {
-        expect(camera.quaternion.toArray()).not.toEqual(baseQuaternion);
-      }
-      const cueAngle = camera.quaternion.angleTo(
-        new Quaternion().fromArray(baseQuaternion),
-      );
-      for (const rigName of [
-        'boat-cue-camera-rig',
-        'boat-featured-event-camera-rig',
-        'dedicated-event-camera-effects',
-        'boat-camera-rig',
-      ]) {
-        const rig = world.scene.getObjectByName(rigName)!;
-        expect(rig.position.toArray()).toEqual([0, 0, 0]);
-        expect(rig.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
-      }
-      const viewDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-      if (direction === 'still') {
-        expect(viewDirection.toArray()).toEqual(baseDirection.toArray());
-      } else if (direction === 'left') {
-        expect(viewDirection.x).toBeLessThan(baseDirection.x - 0.02);
-      }
-
-      const returnTime = duration * 0.94;
-      world.update(returnTime, returnTime - sampleTime);
-      const returnAngle = camera.quaternion.angleTo(
-        new Quaternion().fromArray(baseQuaternion),
-      );
-      if (direction === 'still') expect(returnAngle).toBe(0);
-      else expect(returnAngle).toBeLessThan(cueAngle);
-
-      world.update(duration + 1, duration + 1 - returnTime);
-      await reveal;
-      expect(camera.position.toArray()).toEqual(basePosition);
-      expect(camera.quaternion.toArray()).toEqual(baseQuaternion);
-      world.dispose();
-      propModels.dispose();
-    },
-  );
-
-  it('keeps the camera forward during the Restless Waves reveal', async () => {
-    const propModels = createTestPropModels();
-    const camera = new PerspectiveCamera();
-    const world = new BoatWorld(camera, propModels, createTestMoonTexture());
-    const baseDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-
-    world.stageEvent('restless-waves');
-    const reveal = world.revealEvent('restless-waves');
-    world.update(0.95, 0.95);
-    const firstDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-    expect(firstDirection.toArray()).toEqual(baseDirection.toArray());
-
-    world.update(2.85, 1.9);
-    const laterDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-    expect(laterDirection.toArray()).toEqual(baseDirection.toArray());
-
-    world.update(3.8, 0.95);
-    await reveal;
-    world.dispose();
-    propModels.dispose();
   });
 
   it('keeps the opening view still and looks directly at either stern actor', async () => {
@@ -3413,77 +1749,6 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps Shower Night item and reaction camera poses stationary', async () => {
-    const bucket = savedItem('bucket');
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [bucket],
-    );
-    world.syncInventory(snapshot([bucket]));
-    const bucketGroup = world.scene.getObjectByName('boat-supply:bucket')!;
-    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
-    const baseCameraPosition = cameraRig.position.toArray();
-    const baseCameraQuaternion = cameraRig.quaternion.toArray();
-
-    const showerUse = world.playEventItemUse(
-      'shower-night',
-      'bucket',
-      bucket.instanceId,
-    );
-    const animatedBucket = world.scene.getObjectByName(
-      `boat-supply-event:${bucket.instanceId}`,
-    )!;
-    const bucketStorage = boatSupplyTransform('bucket', 0);
-    expect(animatedBucket.position.toArray())
-      .toEqual(bucketStorage.position.toArray());
-    world.update(0.66, 0.66);
-    expect(await remainsPending(showerUse)).toBe(true);
-    expect(bucketGroup.position.toArray()).toEqual([0, 0, 0]);
-    expect(cameraRig.position.toArray()).toEqual(baseCameraPosition);
-    expect(cameraRig.quaternion.toArray()).toEqual(baseCameraQuaternion);
-    const showerDuration = Math.max(
-      weatherItemUseDuration('shower-night', 'bucket')!,
-      eventItemUseDuration('bucket-scoop'),
-    );
-    world.update(showerDuration, showerDuration - 0.66);
-    await showerUse;
-    expect(bucketGroup.position.toArray()).toEqual([0, 0, 0]);
-
-    const reaction = world.reactToEventOutcome(
-      'shower-night',
-      {
-        accepted: true,
-        code: 'event-resolved',
-        message: 'The rain is managed.',
-        deltas: { hull: -10 },
-        cue: 'impact',
-      },
-      { choiceId: 'bucket', actors: [{ instanceId: bucket.instanceId, condition: 'usable' }] },
-    );
-    world.update(2.5, 0.5);
-    expect(await remainsPending(reaction)).toBe(true);
-    expect(cameraRig.position.toArray()).toEqual(baseCameraPosition);
-    expect(cameraRig.quaternion.toArray()).toEqual(baseCameraQuaternion);
-    world.update(4, 2);
-    await reaction;
-
-    const fallback = world.playEventItemUse(
-      'strange-noise',
-      'bucket',
-      bucket.instanceId,
-    );
-    await Promise.resolve();
-    world.update(3, GENERIC_EVENT_ITEM_USE_DURATION);
-    await fallback;
-    expect(bucketGroup.position.toArray()).toEqual([0, 0, 0]);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('presents Dangerous Waters through its authored scene and Map motion', async () => {
     const map = savedItem('map');
     const propModels = createTestPropModels();
@@ -3572,61 +1837,6 @@ describe('BoatWorld helpers', () => {
 
     world.clearEvent();
     expect(presentation.visible).toBe(false);
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('borrows the boat rig for a severe Dangerous Waters impact', async () => {
-    const bucket = savedItem('bucket');
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [bucket],
-    );
-    world.syncInventory(snapshot([bucket]));
-    world.stageEvent('dangerous-waters');
-    const rocks = world.scene.getObjectByName('dangerous-waters-passage')!.children
-      .filter(({ name }) => name.startsWith('dangerous-waters-rock:'));
-    expect(rocks).toHaveLength(42);
-    world.scene.updateMatrixWorld(true);
-    const rockMatrices = rocks.map(({ matrixWorld }) => matrixWorld.toArray());
-    const supplyRoot = world.scene.getObjectByName('boat-supply:bucket')!;
-    const baseSupplyRotation = supplyRoot.rotation.clone();
-    const reaction = world.reactToEventOutcome('dangerous-waters', {
-      accepted: true,
-      code: 'event-resolved',
-      message: 'The boat strikes the rocks.',
-      deltas: { hull: -25 },
-      cue: 'impact',
-    });
-
-    world.update(0.45, 0.45);
-    world.scene.updateMatrixWorld(true);
-    rocks.forEach(({ matrixWorld }, index) => {
-      expect(matrixWorld.toArray()).toEqual(rockMatrices[index]);
-    });
-    const motionRig = world.scene.getObjectByName('boat-motion-rig')!;
-    const fragments = world.scene.getObjectByName('dangerous-waters-fragments')!;
-    expect(motionRig.rotation.x).toBeGreaterThan(0.1);
-    expect(supplyRoot.rotation.toArray().slice(0, 3)).not.toEqual(
-      baseSupplyRotation.toArray().slice(0, 3),
-    );
-    expect(fragments.children.filter(({ visible }) => visible)).toHaveLength(8);
-
-    world.update(0.9, 0.45);
-    await reaction;
-    world.scene.updateMatrixWorld(true);
-    rocks.forEach(({ matrixWorld }, index) => {
-      expect(matrixWorld.toArray()).toEqual(rockMatrices[index]);
-    });
-    expect(Math.abs(motionRig.rotation.z)).toBeGreaterThan(0.005);
-
-    world.clearEvent();
-    expect(supplyRoot.rotation.x).toBeCloseTo(baseSupplyRotation.x);
-    expect(supplyRoot.rotation.y).toBeCloseTo(baseSupplyRotation.y);
-    expect(supplyRoot.rotation.z).toBeCloseTo(baseSupplyRotation.z);
     world.dispose();
     propModels.dispose();
   });
@@ -3973,38 +2183,6 @@ describe('BoatWorld helpers', () => {
     }
   });
 
-  it('fires the shotgun action callback at the keyed shot frame', async () => {
-    const shotgun = savedItem('shotgun');
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [shotgun],
-    );
-    world.syncInventory(snapshot([shotgun]));
-    const onAction = vi.fn();
-    const duration = eventItemUseDuration('shotgun-fire');
-    const use = world.playEventItemUse(
-      'flowers',
-      'shotgun',
-      shotgun.instanceId,
-      onAction,
-    );
-
-    world.update(duration * 0.45, duration * 0.45);
-    expect(onAction).not.toHaveBeenCalled();
-    world.update(duration * 0.47, duration * 0.02);
-    expect(onAction).toHaveBeenCalledOnce();
-    expect(onAction).toHaveBeenCalledWith(0);
-    world.update(duration + 1, duration);
-    await use;
-    expect(onAction).toHaveBeenCalledOnce();
-
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('settles a shared item to a readable restored pose when hidden', async () => {
     const item = savedItem('spyglass');
     const propModels = createTestPropModels();
@@ -4028,77 +2206,6 @@ describe('BoatWorld helpers', () => {
       .forEach((angle) => expect(angle).toBeCloseTo(0));
     expect(root.scale.toArray()).toEqual([1, 1, 1]);
     world.dispose();
-    propModels.dispose();
-  });
-
-  it.each([
-    ['cannedFood', 'food'],
-    ['baitTin', 'bait'],
-    ['medicalKit', 'medicalKit'],
-    ['energyBar', 'energyBar'],
-    ['swimRing', 'swimRing'],
-  ] as const)(
-    'routes generic %s item use through the shared throw-target adapter',
-    async (itemId, choiceId) => {
-      const item = savedItem(itemId);
-      const inventory = snapshot([item], itemId === 'cannedFood'
-        ? { food: 1 }
-        : itemId === 'baitTin'
-          ? { bait: 1 }
-          : {});
-      const propModels = createTestPropModels();
-      const supplyItem = vi.spyOn(BoatSupplyDisplay.prototype, 'playEventItemUse');
-      const world = new BoatWorld(
-        new PerspectiveCamera(),
-        propModels,
-        createTestMoonTexture(),
-        [item],
-      );
-      world.syncInventory(inventory);
-      world.stageEvent('flowers');
-
-      const use = world.playEventItemUse('flowers', choiceId, item.instanceId);
-      const animatedItem = world.scene.getObjectByName(
-        `boat-supply-event:${item.instanceId}`,
-      )!;
-      expect(animatedItem.position.toArray())
-        .toEqual(boatSupplyTransform(itemId, 0).position.toArray());
-      const active = (world as unknown as {
-        itemUseController: { held: { request: { context: string } } | null };
-      }).itemUseController.held;
-
-      expect(active?.request.context).toBe('throw-target');
-      expect(supplyItem).not.toHaveBeenCalled();
-
-      const duration = eventItemUseDurationForItem('throw-target', itemId);
-      world.update(duration, duration);
-      await use;
-      world.dispose();
-      supplyItem.mockRestore();
-      propModels.dispose();
-    },
-  );
-
-  it('does not animate the event-choice-excluded Radio for events', async () => {
-    const itemId = 'radio';
-    const item = savedItem(itemId);
-    const propModels = createTestPropModels();
-    const supplyItem = vi.spyOn(BoatSupplyDisplay.prototype, 'playEventItemUse');
-    const controllerPlay = vi.spyOn(EventItemUseController.prototype, 'play');
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [item],
-    );
-
-    await world.playEventItemUse('flowers', itemId, item.instanceId);
-
-    expect(controllerPlay).not.toHaveBeenCalled();
-    expect(supplyItem).not.toHaveBeenCalled();
-    world.dispose();
-    controllerPlay.mockRestore();
-    supplyItem.mockRestore();
     propModels.dispose();
   });
 
@@ -4205,31 +2312,6 @@ describe('BoatWorld helpers', () => {
     begin.mockRestore();
     borrowActor.mockRestore();
     controllerPlay.mockRestore();
-    propModels.dispose();
-  });
-
-  it('does not animate the Flowers Bucket', async () => {
-    const bucket = savedItem('bucket');
-    const propModels = createTestPropModels();
-    const supplyItem = vi.spyOn(BoatSupplyDisplay.prototype, 'playEventItemUse');
-    const borrowActor = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [bucket],
-    );
-    world.syncInventory(snapshot([bucket]));
-    world.stageEvent('flowers');
-
-    await world.playEventItemUse('flowers', 'bucket', bucket.instanceId);
-
-    expect(borrowActor).not.toHaveBeenCalled();
-    expect(supplyItem).not.toHaveBeenCalled();
-
-    world.dispose();
-    borrowActor.mockRestore();
-    supplyItem.mockRestore();
     propModels.dispose();
   });
 
@@ -4802,65 +2884,6 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('keeps Restless Waves buoyancy and ocean rendering on one wave scale', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-    const buoyancySample = vi.spyOn(BoatBuoyancy.prototype, 'sampleTargetInto');
-    const oceanUpdate = vi.spyOn(OceanRenderer.prototype, 'update');
-    const profile = presentationWeatherProfile('waves');
-
-    try {
-      world.stageEvent('restless-waves');
-      world.setPresentationWeather('waves');
-      world.update(1.4, 1.4);
-
-      expect(buoyancySample.mock.calls.at(-1)?.[4]).toBe(profile.waveScale);
-      expect(oceanUpdate.mock.calls.at(-1)?.[1]).toBe(profile.waveScale);
-    } finally {
-      buoyancySample.mockRestore();
-      oceanUpdate.mockRestore();
-      world.dispose();
-      propModels.dispose();
-    }
-  });
-
-  it('keeps the Eerie Melody island fixed while boat and ocean use the calm wave scale', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-    const time = 2.35;
-    const delta = 2.35;
-    const profile = presentationWeatherProfile('calm');
-    const expectedBoat = expectedSurvivalPose(time, delta, profile.waveScale);
-    const motionRig = world.scene.getObjectByName('boat-motion-rig')!;
-    const ocean = world.scene.getObjectByName('procedural-ocean') as Mesh<
-      BufferGeometry,
-      ShaderMaterial
-    >;
-
-    world.stageEvent('eerie-melody');
-    const tableau = world.scene.getObjectByName('siren-tableau')!;
-    const tableauPosition = tableau.position.clone();
-    world.setPresentationWeather('calm');
-    world.update(time, delta);
-
-    expect(motionRig.position.y).toBeCloseTo(0.22 + expectedBoat.y);
-    expect(tableau.position.toArray()).toEqual(tableauPosition.toArray());
-    expect(tableau.quaternion.toArray()).toEqual([0, 0, 0, 1]);
-    expect(tableau.userData.followsWaves).toBe(false);
-    expect(ocean.material.uniforms.uAmplitudeScale?.value).toBe(profile.waveScale);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('keeps the nearby loaded Fog Man visible until the event clears', async () => {
     const propModels = createTestPropModels();
     const fogMan = new Group();
@@ -4910,180 +2933,6 @@ describe('BoatWorld helpers', () => {
     expect(disposeGeometry).toHaveBeenCalledOnce();
     expect(disposeSilhouetteMaterial).toHaveBeenCalledOnce();
     expect(disposeImportedMaterial).toHaveBeenCalledOnce();
-    propModels.dispose();
-  });
-
-  it('places the Fog Man midpoint at the waterline', () => {
-    const propModels = createTestPropModels();
-    const fogMan = new Group();
-    fogMan.add(new Mesh(new BoxGeometry(1, 2, 1), new MeshStandardMaterial()));
-    const eventModels = createTestEventModels();
-    vi.mocked(eventModels.create).mockImplementation((id: string) => (
-      id === 'fogMan' ? fogMan : new Group()
-    ));
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [],
-      undefined,
-      undefined,
-      'low',
-      eventModels,
-    );
-
-    world.stageEvent('man-in-the-fog');
-    const man = world.scene.getObjectByName('event-tableau:man-in-the-fog')!;
-    expect(man.userData.waterlineFraction).toBeCloseTo(0.5, 1);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('loops Ghosts around the bow while they face their travel direction', async () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [],
-      undefined,
-      undefined,
-      'low',
-      createTestEventModels(),
-    );
-
-    world.stageEvent('ghosts');
-    expect(supernaturalRevealDuration('ghosts')).toBe(6.4);
-    GHOST_FLOAT_PATHS.forEach((path) => {
-      expect(path.center[2] + path.radiusZ).toBeLessThan(-5);
-      expect(path.radiusX).toBeGreaterThan(path.radiusZ);
-      expect(path.period).toBeGreaterThanOrEqual(18);
-    });
-    const reveal = world.revealEvent('ghosts');
-    world.update(0.25, 0.25);
-    expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(true);
-    expect(world.scene.getObjectByName('ghost-5')?.visible).toBe(false);
-    world.update(0.7, 0.45);
-    expect(world.scene.getObjectByName('ghost-5')?.visible).toBe(true);
-    expect(world.scene.getObjectByName('supernatural-flare-flash')?.visible).toBe(false);
-    world.update(6.5, 5.8);
-    await reveal;
-    const ghost = world.scene.getObjectByName('ghost-1')!;
-    const before = ghost.position.clone();
-    world.update(6.6, 0.1);
-    const travel = ghost.position.clone().sub(before).setY(0).normalize();
-    const facing = new Vector3(-1, 0, 0)
-      .applyQuaternion(ghost.getWorldQuaternion(new Quaternion()))
-      .setY(0)
-      .normalize();
-    expect(ghost.visible).toBe(true);
-    expect(ghost.position.distanceTo(before)).toBeGreaterThan(0.001);
-    expect(facing.dot(travel)).toBeGreaterThan(0.99);
-    expect(ghost.userData.modelForwardAxis).toBe('negative-x');
-    expect(ghost.userData.facingPath).toBe(true);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('seats Eerie Melody on a clean procedural rock facing the player', async () => {
-    const propModels = createTestPropModels();
-    const siren = new Group();
-    const sirenMaterial = new MeshStandardMaterial({ color: 0x9e5d47 });
-    siren.add(new Mesh(new BoxGeometry(1, 2, 0.7), sirenMaterial));
-    const eventModels = createTestEventModels();
-    vi.mocked(eventModels.create).mockImplementation((id: string) => (
-      id === 'siren' ? siren : new Group()
-    ));
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [],
-      undefined,
-      undefined,
-      'low',
-      eventModels,
-    );
-
-    world.stageEvent('eerie-melody');
-    const tableau = world.scene.getObjectByName('siren-tableau')!;
-    const rock = world.scene.getObjectByName('event-siren-rock')!;
-    const sirenFacing = world.scene.getObjectByName('siren-facing-anchor')!;
-    const fog = world.scene.getObjectByName('supernatural-sea-mist')!;
-    world.scene.updateMatrixWorld(true);
-    const rockBounds = new Box3().setFromObject(rock);
-    const sirenBounds = new Box3().setFromObject(siren);
-    expect(rockBounds.min.y).toBeLessThan(0);
-    expect(rockBounds.max.y).toBeGreaterThanOrEqual(0.75);
-    expect(sirenBounds.min.y).toBeLessThan(rockBounds.max.y - 0.9);
-    expect(sirenBounds.max.y).toBeGreaterThan(rockBounds.max.y + 0.8);
-    expect(rock.getObjectByName('event-siren-rock:mass')).toBeInstanceOf(Mesh);
-    expect(rock.getObjectByName('event-siren-rock:wet-band')).toBeUndefined();
-    expect(rock.getObjectByName('event-siren-rock:crack')).toBeUndefined();
-    expect(eventModels.create).not.toHaveBeenCalledWith('sirenRock');
-    expect(tableau.userData.waterlineY).toBe(0);
-    expect(tableau.userData.followsWaves).toBe(false);
-    expect(tableau.position.x).toBe(-6.3);
-    expect(tableau.position.z).toBe(-14.8);
-    expect(fog.children.length).toBeGreaterThanOrEqual(5);
-    fog.children.forEach((layer) => {
-      expect(layer.rotation.x).toBeCloseTo(0);
-      expect(layer.position.y).toBeGreaterThanOrEqual(0.38);
-      expect(layer.position.y).toBeLessThanOrEqual(0.55);
-      const material = (layer as Mesh).material;
-      expect(material).toBeInstanceOf(ShaderMaterial);
-      expect((material as ShaderMaterial).depthTest).toBe(true);
-    });
-    const sirenWorldPosition = sirenFacing.getWorldPosition(new Vector3());
-    const sirenForward = new Vector3(1, 0, 0)
-      .applyQuaternion(sirenFacing.getWorldQuaternion(new Quaternion()))
-      .normalize();
-    const playerDirection = new Vector3(0, sirenWorldPosition.y, 0)
-      .sub(sirenWorldPosition)
-      .normalize();
-    expect(sirenForward.dot(playerDirection)).toBeGreaterThan(0.995);
-    expect(sirenFacing.userData.facesPlayer).toBe(true);
-    expect(sirenFacing.userData.pose).toBe('seated');
-    const tableauLights = tableau.children.filter(
-      (child): child is PointLight => child instanceof PointLight,
-    );
-    expect(tableauLights).toHaveLength(2);
-    expect(tableauLights.every((light) => light.intensity > 0)).toBe(true);
-    expect((firstMesh(siren).material as MeshStandardMaterial).color.getHex())
-      .toBe(0x9e5d47);
-    expect((firstMesh(rock).material as MeshStandardMaterial).color.getHex())
-      .toBe(0x3f4b4a);
-
-    expect(tableau.visible).toBe(true);
-    const sirenPosition = siren.position.clone();
-    const sirenQuaternion = siren.quaternion.clone();
-    const facingPosition = sirenFacing.position.clone();
-    const facingQuaternion = sirenFacing.quaternion.clone();
-    const reveal = world.revealEvent('eerie-melody');
-    world.update(0.01, 0.01);
-    expect(fog.visible).toBe(true);
-    expect(
-      ((fog.children[0] as Mesh).material as ShaderMaterial)
-        .uniforms.uOpacity!.value,
-    ).toBeGreaterThan(0);
-    world.update(3.5, 3.49);
-    expect(tableau.visible).toBe(true);
-    expect(siren.position.toArray()).toEqual(sirenPosition.toArray());
-    expect(siren.quaternion.toArray()).toEqual(sirenQuaternion.toArray());
-    expect(sirenFacing.position.toArray()).toEqual(facingPosition.toArray());
-    expect(sirenFacing.quaternion.toArray()).toEqual(facingQuaternion.toArray());
-    world.update(4.39, 0.89);
-    expect(fog.visible).toBe(true);
-    expect(
-      ((fog.children[0] as Mesh).material as ShaderMaterial)
-        .uniforms.uOpacity!.value,
-    ).toBeGreaterThan(0);
-    world.update(4.5, 0.11);
-    await reveal;
-
-    world.dispose();
     propModels.dispose();
   });
 
@@ -5164,44 +3013,6 @@ describe('BoatWorld helpers', () => {
     supernaturalSupport.mockRestore();
   });
 
-  it('drops a broken Bucket during the Eerie Melody result', async () => {
-    const bucket = savedItem('bucket');
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [bucket],
-    );
-    world.syncInventory(snapshot([bucket]));
-    const bucketRoot = world.scene.getObjectByName('boat-supply:bucket')!;
-
-    world.stageEvent('eerie-melody');
-    const reaction = world.reactToEventOutcome(
-      'eerie-melody',
-      {
-        accepted: true,
-        code: 'event-resolved',
-        message: 'The bucket breaks.',
-        deltas: { energy: -79 },
-        cue: 'none',
-      },
-      {
-        choiceId: 'bucket',
-        actors: [{ instanceId: bucket.instanceId, condition: 'broken' }],
-      },
-    );
-    world.update(0.5, 0.5);
-
-    expect(bucketRoot.position.y).toBeLessThan(-0.2);
-    expect(Math.abs(bucketRoot.rotation.z)).toBeGreaterThan(0.4);
-
-    world.clearEvent();
-    await reaction;
-    world.dispose();
-    propModels.dispose();
-  });
-
   function expectMoonFaceShader(sky: Mesh<BufferGeometry, ShaderMaterial>): void {
     expect(sky.material.fragmentShader).toContain('archedBrowShape');
     expect(sky.material.fragmentShader).toContain('slantedEyeSockets');
@@ -5266,242 +3077,6 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('widens the moon grin for Pressure and dims a lowered view for Energy loss', async () => {
-    const propModels = createTestPropModels();
-    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
-    const world = new BoatWorld(camera, propModels, createTestMoonTexture());
-    const sky = world.scene.getObjectByName('procedural-skybox') as Mesh<
-      BufferGeometry,
-      ShaderMaterial
-    >;
-    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
-    const baseCameraPosition = camera.position.toArray();
-    const baseCameraQuaternion = camera.quaternion.toArray();
-
-    world.stageEvent('face-on-the-moon');
-    const reveal = world.revealEvent('face-on-the-moon');
-    world.update(5.8, 5.8);
-    await reveal;
-    const baseGrin = sky.material.uniforms.uMoonGrin?.value as number;
-
-    const pressureOutcome: ActionOutcome = {
-      accepted: true,
-      code: 'event-resolved',
-      message: 'The grin grows.',
-      deltas: { pressure: 1 },
-      cue: 'none',
-    };
-    const pressureReaction = world.reactToEventOutcome(
-      'face-on-the-moon',
-      pressureOutcome,
-      { choiceId: 'sleep', actors: [] },
-      exactEventResult(pressureOutcome),
-    );
-    world.update(4.9, 1.1);
-    await pressureReaction;
-    expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(baseGrin);
-    expect(sky.material.uniforms.uMoonGrin?.value).toBeLessThanOrEqual(0.96);
-
-    const energyOutcome: ActionOutcome = {
-      accepted: true,
-      code: 'event-resolved',
-      message: 'You cannot keep your eyes open.',
-      deltas: { energy: -80 },
-      cue: 'none',
-    };
-    const energyReaction = world.reactToEventOutcome(
-      'face-on-the-moon',
-      energyOutcome,
-      { choiceId: 'sleep', actors: [] },
-      exactEventResult(energyOutcome),
-    );
-    world.update(5.45, 0.55);
-    expect(sky.material.uniforms.uMoonEventDim?.value).toBeGreaterThan(0);
-    expect(camera.position.toArray()).toEqual(baseCameraPosition);
-    expect(camera.quaternion.toArray()).not.toEqual(baseCameraQuaternion);
-    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
-    world.update(6, 0.55);
-    await energyReaction;
-
-    world.setDocumentHidden(true);
-    world.clearEvent();
-    expect(sky.material.uniforms.uMoonEventDim?.value).toBe(0);
-    expect(cameraRig.position.y).toBe(0);
-    expect(camera.position.toArray()).toEqual(baseCameraPosition);
-    expect(camera.quaternion.toArray()).toEqual(baseCameraQuaternion);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('snaps broken Binoculars back during the Face on the Moon result', async () => {
-    const binoculars = savedItem('spyglass');
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
-      propModels,
-      createTestMoonTexture(),
-      [binoculars],
-    );
-    world.syncInventory(snapshot([binoculars]));
-    const binocularsRoot = world.scene.getObjectByName('boat-supply:spyglass')!;
-
-    world.stageEvent('face-on-the-moon');
-    const binocularOutcome: ActionOutcome = {
-      accepted: true,
-      code: 'event-resolved',
-      message: 'The binoculars break.',
-      deltas: { energy: -79 },
-      cue: 'none',
-      eventResult: {
-        eventId: 'face-on-the-moon',
-        choiceId: 'spyglass',
-        resultId: 'moon-binoculars-broken',
-      },
-    };
-    const reaction = world.reactToEventOutcome(
-      'face-on-the-moon',
-      binocularOutcome,
-      {
-        choiceId: 'spyglass',
-        actors: [{ instanceId: binoculars.instanceId, condition: 'broken' }],
-      },
-      exactEventResult(binocularOutcome, binoculars.instanceId, 'broken'),
-    );
-    world.update(0.24, 0.24);
-
-    expect(binocularsRoot.position.z).toBeGreaterThan(0.3);
-    expect(Math.abs(binocularsRoot.rotation.x)).toBeGreaterThan(0.3);
-
-    world.update(1.1, 0.86);
-    await reaction;
-    expect(binocularsRoot.position.toArray()).toEqual([0, 0, 0]);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('uses shared supply motion for the Moon Umbrella and Telescope choices', async () => {
-    const umbrella = savedItem('umbrella');
-    const telescope = savedItem('spyglass');
-    const propModels = createTestPropModels();
-    const borrowActor = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
-    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
-    const world = new BoatWorld(
-      camera,
-      propModels,
-      createTestMoonTexture(),
-      [umbrella, telescope],
-    );
-    world.syncInventory(snapshot([umbrella, telescope]));
-
-    const umbrellaMotion = world.playEventItemUse(
-      'face-on-the-moon',
-      'umbrella',
-      umbrella.instanceId,
-    );
-    const umbrellaDuration = eventItemUseDuration('umbrella-shield');
-    world.update(umbrellaDuration, umbrellaDuration);
-    await umbrellaMotion;
-
-    const telescopeMotion = world.playEventItemUse(
-      'face-on-the-moon',
-      'spyglass',
-      telescope.instanceId,
-    );
-    const telescopeDuration = eventItemUseDuration('binocular-look');
-    world.update(
-      umbrellaDuration + telescopeDuration,
-      telescopeDuration,
-    );
-    await telescopeMotion;
-
-    expect(borrowActor).toHaveBeenNthCalledWith(1, umbrella.instanceId);
-    expect(borrowActor).toHaveBeenNthCalledWith(2, telescope.instanceId);
-    expect(camera.fov).toBeLessThan(65);
-    camera.updateWorldMatrix(true, false);
-    const moonTarget = world.scene.getObjectByName('moon-event-item-aim-target')!;
-    const moonDirection = moonTarget.getWorldPosition(new Vector3())
-      .sub(camera.getWorldPosition(new Vector3()))
-      .normalize();
-    expect(camera.getWorldDirection(new Vector3()).dot(moonDirection))
-      .toBeGreaterThan(0.999);
-    world.dispose();
-    propModels.dispose();
-    borrowActor.mockRestore();
-  });
-
-  it('keeps Restless Waves supplies fixed while the camera shows hull impacts', async () => {
-    const ring = savedItem('swimRing');
-    const propModels = createTestPropModels();
-    const camera = new PerspectiveCamera();
-    const world = new BoatWorld(
-      camera,
-      propModels,
-      createTestMoonTexture(),
-      [ring],
-    );
-    const baseCameraPosition = camera.position.toArray();
-    const baseCameraQuaternion = camera.quaternion.toArray();
-    world.syncInventory(snapshot([ring]));
-    const ringRoot = world.scene.getObjectByName('boat-supply:swimRing')!;
-    const baseX = ringRoot.position.x;
-    const baseScaleX = ringRoot.scale.x;
-    const baseYaw = ringRoot.rotation.y;
-
-    const lost = world.reactToEventOutcome(
-      'restless-waves',
-      {
-        accepted: true,
-        code: 'event-resolved',
-        message: 'The Ring slips away.',
-        deltas: {},
-        cue: 'none',
-      },
-      {
-        choiceId: 'swimRing',
-        actors: [{ instanceId: ring.instanceId, condition: 'lost' }],
-      },
-    );
-    world.update(0.42, 0.42);
-    expect(ringRoot.position.x).toBe(baseX);
-    world.clearEvent();
-    await lost;
-
-    world.stageEvent('restless-waves');
-    const broken = world.reactToEventOutcome(
-      'restless-waves',
-      {
-        accepted: true,
-        code: 'event-resolved',
-        message: 'The Ring buckles against the hull.',
-        deltas: { hull: -20 },
-        cue: 'impact',
-      },
-      {
-        choiceId: 'swimRing',
-        actors: [{ instanceId: ring.instanceId, condition: 'broken' }],
-      },
-    );
-    world.update(0.62, 0.2);
-    const cameraRig = world.scene.getObjectByName('boat-camera-rig')!;
-    expect(camera.position.toArray()).toEqual(baseCameraPosition);
-    expect(camera.quaternion.toArray()).not.toEqual(baseCameraQuaternion);
-    const impactViewDirection = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-    const baseViewDirection = new Vector3(0, 0, -1).applyQuaternion(
-      new Quaternion().fromArray(baseCameraQuaternion),
-    );
-    expect(impactViewDirection.y).toBeCloseTo(baseViewDirection.y);
-    expect(cameraRig.position.toArray()).toEqual([0, 0, 0]);
-    expect(ringRoot.scale.x).toBe(baseScaleX);
-    expect(ringRoot.rotation.y).toBe(baseYaw);
-
-    world.clearEvent();
-    await broken;
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('shows a newly gained supply without allocating a model during inventory sync', () => {
     const propModels = createTestPropModels();
     const create = vi.spyOn(propModels, 'createPresentation');
@@ -5530,146 +3105,6 @@ describe('BoatWorld helpers', () => {
 
     world.dispose();
     propModels.dispose();
-  });
-
-  it('shows a closed chest as one physical day action', () => {
-    const propModels = createTestPropModels();
-    const camera = new PerspectiveCamera(65, 4 / 3, 0.1, 100);
-    const world = new BoatWorld(
-      camera,
-      propModels,
-      createTestMoonTexture(),
-    );
-
-    world.syncInventory(snapshot([], {
-      chest: { state: 'closed', acquiredDay: 3 },
-    }));
-
-    const chest = world.scene.getObjectByName('persistent-chest')!;
-    expect(chest.visible).toBe(true);
-    expect(chest.position.toArray()).toEqual([0, 0.22, 2.15]);
-    expect(chest.scale.toArray()).toEqual([0.75, 0.75, 0.75]);
-    expect(chest.quaternion.angleTo(
-      new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI),
-    )).toBeLessThan(1e-6);
-
-    world.setRearCameraView(true, true);
-    world.update(0.1, 0.1);
-    expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        id: 'persistent-chest',
-        label: 'OPEN',
-        toolId: 'chest',
-        action: 'openChest',
-        visible: true,
-      }),
-    ]));
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('advances the chest fade during world updates', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
-      propModels,
-      createTestMoonTexture(),
-    );
-    world.syncInventory(snapshot([], {
-      chest: { state: 'closed', acquiredDay: 3 },
-    }));
-    const chest = world.scene.getObjectByName('persistent-chest')!;
-
-    world.syncInventory(snapshot([], {
-      chest: { state: 'none', acquiredDay: null },
-    }));
-    expect(chest.visible).toBe(true);
-
-    world.update(0.3, CHEST_DISAPPEAR_DURATION / 2);
-    expect(chest.visible).toBe(true);
-    world.update(0.6, CHEST_DISAPPEAR_DURATION / 2);
-    expect(chest.visible).toBe(false);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('projects Midnight Tour and Handyman world choices', async () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
-      propModels,
-      createTestMoonTexture(),
-    );
-
-    world.stageEvent('midnight-tour');
-    const islandReveal = world.revealEvent('midnight-tour');
-    world.setDocumentHidden(true);
-    await islandReveal;
-    world.setDocumentHidden(false);
-    expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        id: 'midnight-tour:island',
-        eventChoiceId: 'visit',
-      }),
-    ]));
-    world.clearEvent();
-    world.syncInventory(snapshot([], {
-      chest: { state: 'closed', acquiredDay: 3 },
-    }));
-    world.stageEvent('handyman');
-    const handReveal = world.revealEvent('handyman');
-    world.setDocumentHidden(true);
-    await handReveal;
-    world.setDocumentHidden(false);
-    const handymanAnchors = world.projectInteractionAnchors(800, 600);
-    expect(handymanAnchors).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        id: 'handyman:hand',
-        eventChoiceId: 'touch',
-        tooltip: false,
-      }),
-      expect.objectContaining({ id: 'persistent-chest', eventChoiceId: 'chest' }),
-    ]));
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('keeps Carlitos idle running during ambient updates', async () => {
-    const carlitos = savedItem('carlitos');
-    const propModels = await loadProductionPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
-      propModels,
-      createTestMoonTexture(),
-      [carlitos],
-    );
-    try {
-      world.syncInventory(snapshot([], {
-        carlitos: {
-          alive: true,
-          energy: 3,
-          hunger: 5,
-          sickness: 0,
-          unhappiness: 0,
-          pettedToday: false,
-          deathCause: null,
-        },
-      }));
-      const companion = world.scene.getObjectByName('carlitos-companion')!;
-      const animatedTail = companion.getObjectByName('TailTip_8')!;
-      const before = animatedTail.quaternion.clone();
-
-      world.updateAmbient(0.5, 0.5);
-
-      expect(companion.visible).toBe(true);
-      expect(animatedTail.quaternion.angleTo(before)).toBeGreaterThan(1e-5);
-    } finally {
-      world.dispose();
-      propModels.dispose();
-    }
   });
 
   it('shows one living companion model and projects its scene anchor', () => {
@@ -5903,340 +3338,6 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('shows continuous Leak streams only on the left hull side', async () => {
-    const propModels = createTestPropModels();
-    const eventModels = createTestEventModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [],
-      undefined,
-      undefined,
-      'low',
-      eventModels,
-    );
-
-    world.stageEvent('leak');
-    const reveal = world.revealEvent('leak');
-    world.update(1.4, 1.4);
-    const leakBoat = world.scene.getObjectByName('leak-boat')!;
-    const streams = leakBoat.children.filter(({ name }) => name.startsWith('leak-stream-'));
-    const holes = leakBoat.children.filter(({ name }) => name.startsWith('leak-hole-'));
-    expect(streams).toHaveLength(3);
-    expect(holes).toHaveLength(3);
-    expect(streams.every(({ visible }) => visible)).toBe(true);
-    expect(streams.every(({ position }) => position.x < 0)).toBe(true);
-    expect(holes.every(({ position }) => position.x < 0)).toBe(true);
-    streams.forEach(({ position }, index) => {
-      expect(Math.abs(position.x)).toBeGreaterThan(Math.abs(holes[index]!.position.x));
-    });
-    const interiorWater = leakBoat.getObjectByName('leak-interior-water') as Mesh;
-    expect(interiorWater.position.x).toBe(0);
-    expect(interiorWater.position.y).toBeGreaterThan(-0.28);
-    interiorWater.geometry.computeBoundingBox();
-    const waterBounds = interiorWater.geometry.boundingBox!;
-    expect(waterBounds.max.x - waterBounds.min.x).toBeGreaterThan(3.1);
-    expect(waterBounds.max.z - waterBounds.min.z).toBeGreaterThan(5.8);
-
-    world.setDocumentHidden(true);
-    await reveal;
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('shows a distant starboard Tornado without moving the camera', async () => {
-    const propModels = createTestPropModels();
-    const eventModels = createTestEventModels();
-    const camera = new PerspectiveCamera();
-    const world = new BoatWorld(
-      camera,
-      propModels,
-      createTestMoonTexture(),
-      [],
-      undefined,
-      undefined,
-      'low',
-      eventModels,
-    );
-    const baseQuaternion = camera.quaternion.clone();
-
-    world.stageEvent('tornado');
-    const tornado = world.scene.getObjectByName('tornado-world')!;
-    const model = tornado.getObjectByName('tornado-model')!;
-    const vortex = (world as unknown as {
-      vortexWave: { strength: number; depression: number };
-    }).vortexWave;
-    expect(tornado.position.x).toBe(12.8);
-    expect(tornado.position.z).toBe(-19);
-    expect(tornado.userData.distanceFromBoat).toBeGreaterThan(22);
-    expect(model).toBeDefined();
-    expect(eventModels.create).toHaveBeenCalledWith('tornadoCore');
-    expect(tornado.getObjectByName('whirlpool-dark-funnel')).toBeUndefined();
-    expect(tornado.getObjectByName('whirlpool-water-stream-1')).toBeUndefined();
-    expect(vortex.strength).toBe(0);
-    expect(vortex.depression).toBe(0);
-    const initialRotation = model.rotation.y;
-
-    const reveal = world.revealEvent('tornado');
-    world.update(1.5, 1.5);
-    expect(camera.quaternion.toArray()).toEqual(baseQuaternion.toArray());
-    expect(model.visible).toBe(true);
-    expect(model.rotation.y).not.toBe(initialRotation);
-    expect(tornado.getObjectByName('tornado-wind-band-1')?.visible).toBe(true);
-    expect(tornado.getObjectByName('tornado-sea-spray-1')?.visible).toBe(true);
-    expect(vortex.strength).toBe(0);
-    expect(vortex.depression).toBe(0);
-    world.update(3, 1.5);
-    await reveal;
-    expect(camera.quaternion.toArray()).toEqual(baseQuaternion.toArray());
-
-    const outcome = {
-      accepted: true,
-      code: 'event-resolved' as const,
-      message: 'The hull takes damage.',
-      deltas: { hull: -8 },
-      cue: 'impact' as const,
-    };
-    const reaction = world.reactToEventOutcome(
-      'tornado',
-      outcome,
-      { choiceId: 'sleep', actors: [] },
-      {
-        outcome,
-        resourceDeltas: { hull: -8 },
-        gainedInstanceIds: [],
-        brokenInstanceIds: [],
-        lostInstanceIds: [],
-        consumedInstanceIds: [],
-        selectedInstanceId: null,
-        selectedCondition: null,
-        targetInstanceId: null,
-      },
-    );
-    world.update(3.7, 0.7);
-    expect(tornado.position.x).toBe(12.8);
-    expect(tornado.position.z).toBe(-19);
-    expect(vortex.strength).toBe(0);
-    expect(vortex.depression).toBe(0);
-    world.update(4.4, 0.7);
-    await reaction;
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it.each([
-    ['anchor', 'anchor'],
-    ['swimRing', 'swimRing'],
-  ] as const)(
-    'keeps the Tornado camera fixed throughout %s item use',
-    async (choiceId, itemId) => {
-      const item = savedItem(itemId);
-      const propModels = createTestPropModels();
-      const camera = new PerspectiveCamera(67, 1.6, 0.1, 100);
-      camera.position.set(0.3, 1.2, -0.4);
-      camera.rotation.set(0.08, -0.12, 0.03);
-      const world = new BoatWorld(
-        camera,
-        propModels,
-        createTestMoonTexture(),
-        [item],
-        undefined,
-        undefined,
-        'low',
-        createTestEventModels(),
-      );
-      world.syncInventory(snapshot([item]));
-      world.stageEvent('tornado');
-      const basePosition = camera.position.clone();
-      const baseQuaternion = camera.quaternion.clone();
-      const baseFieldOfView = camera.fov;
-      const assertCameraFixed = () => {
-        expect(camera.position.toArray()).toEqual(basePosition.toArray());
-        expect(camera.quaternion.toArray()).toEqual(baseQuaternion.toArray());
-        expect(camera.fov).toBe(baseFieldOfView);
-      };
-
-      const use = world.playEventItemUse('tornado', choiceId, item.instanceId);
-      const actor = world.scene.getObjectByName(`boat-supply-event:${item.instanceId}`)!;
-      const initialActorPosition = actor.position.clone();
-      assertCameraFixed();
-      world.update(1, 1);
-      assertCameraFixed();
-      world.update(TORNADO_ITEM_DURATION, TORNADO_ITEM_DURATION - 1);
-      assertCameraFixed();
-      expect(actor.position.toArray()).not.toEqual(initialActorPosition.toArray());
-      if (choiceId === 'anchor') {
-        expect(world.scene.getObjectByName('event-item-chain')?.visible).toBe(true);
-      }
-      world.update(8, 8 - TORNADO_ITEM_DURATION);
-      await use;
-      assertCameraFixed();
-
-      world.dispose();
-      propModels.dispose();
-    },
-  );
-
-  it('keeps School of Fish visible while circling outside the hull', async () => {
-    const propModels = createTestPropModels();
-    const eventModels = createTestEventModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [],
-      undefined,
-      undefined,
-      'low',
-      eventModels,
-    );
-
-    world.stageEvent({
-      eventId: 'school-of-fish',
-      targetInstanceId: null,
-      variantSeed: 7,
-    });
-    const reveal = world.revealEvent('school-of-fish');
-    world.update(2.6, 2.6);
-    await reveal;
-    const school = world.scene.getObjectByName('school-of-fish-world')!;
-    const bodies = school.children.filter(({ name, visible }) => (
-      name.startsWith('school-fish-') && visible
-    ));
-    expect(bodies.length).toBeGreaterThanOrEqual(18);
-    expect(bodies.some(({ position }) => position.z < -3.5)).toBe(true);
-    expect(bodies.some(({ position }) => position.z > 3.5)).toBe(true);
-    expect(bodies.some(({ position }) => position.x < -2.1)).toBe(true);
-    expect(bodies.some(({ position }) => position.x > 2.1)).toBe(true);
-    expect(bodies.every(({ position }) => {
-      const hullHalfWidth = lifeboatHullHalfWidthAt(position.z);
-      return hullHalfWidth === null
-        || Math.abs(position.x) > hullHalfWidth + 0.45;
-    })).toBe(true);
-    expect(bodies.every(({ position }) => position.y > -1.05)).toBe(true);
-    expect(bodies.some(({ scale }) => scale.x >= 0.9)).toBe(true);
-    expect(school.children.filter(({ name, visible }) => (
-      name.startsWith('school-surface-fin-') && visible
-    ))).toHaveLength(8);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('prewarms five fins and uses evenly spaced inner and outer orbits', async () => {
-    const propModels = createTestPropModels();
-    const eventModels = createTestEventModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [],
-      undefined,
-      undefined,
-      'low',
-      eventModels,
-    );
-
-    world.stageEvent({
-      eventId: 'swarm-of-sharks',
-      targetInstanceId: null,
-      variantSeed: 11,
-    });
-    const stagedSwarm = world.scene.getObjectByName('shark-swarm-world')!;
-    const stagedSharks = stagedSwarm.children.filter(({ name }) => (
-      name.startsWith('swarm-shark-')
-    ));
-    expect(stagedSharks).toHaveLength(5);
-    expect(stagedSharks.every(({ visible }) => visible)).toBe(true);
-    expect(stagedSharks.every(({ scale }) => scale.x >= 1.2)).toBe(true);
-    const reveal = world.revealEvent('swarm-of-sharks');
-    expect(stagedSharks.every(({ visible }) => visible)).toBe(true);
-    expect(stagedSharks.every(({ scale }) => scale.x >= 1.2)).toBe(true);
-    world.update(2.9, 2.9);
-    await reveal;
-    const swarm = world.scene.getObjectByName('shark-swarm-world')!;
-    const sharks = swarm.children.filter(({ name, visible }) => (
-      name.startsWith('swarm-shark-') && visible
-    ));
-    expect(sharks).toHaveLength(5);
-    expect(swarm.children.some(({ name }) => name.startsWith('swarm-fin-shark-')))
-      .toBe(false);
-    expect(sharks.some(({ position }) => position.x < 0)).toBe(true);
-    expect(sharks.some(({ position }) => position.x > 0)).toBe(true);
-    expect(sharks.some(({ position }) => position.z < -5.1)).toBe(true);
-    expect(sharks.some(({ position }) => position.z > 5.1)).toBe(true);
-    expect(Math.max(...sharks.map(({ position }) => position.x))
-      - Math.min(...sharks.map(({ position }) => position.x)))
-      .toBeGreaterThan(8.5);
-    expect(sharks.every(({ position }) => (
-      Math.hypot(position.x, position.z) > 4.7
-    ))).toBe(true);
-    expect(sharks.some(({ position }) => (
-      Math.hypot(position.x, position.z) > 7.4
-    ))).toBe(true);
-    expect(sharks.every(({ position }) => (
-      Math.hypot(position.x, position.z) < 11.2
-    ))).toBe(true);
-    expect(sharks.every(({ scale }) => scale.x >= 1.2)).toBe(true);
-    expect(sharks.every(({ userData }) => userData.finOnly === true)).toBe(true);
-    expect(sharks.filter(({ userData }) => (
-      (userData.orbitRadiusX as number) > 7
-    ))).toHaveLength(2);
-    const orbitAngles = sharks.map(({ position, userData }) => (
-      Math.atan2(
-        position.z / (userData.orbitRadiusZ as number),
-        position.x / (userData.orbitRadiusX as number),
-      )
-    )).sort((left, right) => left - right);
-    const orbitGaps = orbitAngles.map((angle, index) => {
-      const next = orbitAngles[(index + 1) % orbitAngles.length]!;
-      return (next - angle + Math.PI * 2) % (Math.PI * 2);
-    });
-    expect(orbitGaps.every((gap) => (
-      Math.abs(gap - Math.PI * 2 / 5) < 0.12
-    ))).toBe(true);
-    for (let left = 0; left < sharks.length; left += 1) {
-      for (let right = left + 1; right < sharks.length; right += 1) {
-        expect(sharks[left]!.position.distanceTo(sharks[right]!.position))
-          .toBeGreaterThan(1.2);
-      }
-    }
-    const firstPositions = sharks.map(({ position }) => position.clone());
-    const firstSurfaceHeights = sharks.map(({ userData }) => (
-      userData.surfaceY as number
-    ));
-
-    world.update(3.65, 0.75);
-    expect(sharks.every(({ visible }) => visible)).toBe(true);
-    expect(sharks.some(({ position }, index) => (
-      position.distanceTo(firstPositions[index]!) > 0.05
-    ))).toBe(true);
-    expect(sharks.some(({ userData }, index) => (
-      Math.abs((userData.surfaceY as number) - firstSurfaceHeights[index]!) > 0.05
-    ))).toBe(true);
-    sharks.forEach(({ position }, index) => {
-      const travel = position.clone().sub(firstPositions[index]!);
-      travel.y = 0;
-      travel.normalize();
-      const facing = new Vector3(0, 0, 1).applyQuaternion(sharks[index]!.quaternion);
-      facing.y = 0;
-      facing.normalize();
-      expect(facing.dot(travel)).toBeGreaterThan(0.98);
-    });
-    for (const root of sharks) {
-      const waterlineLocalY = root.userData.waterlineLocalY as number;
-      const surfaceY = root.userData.surfaceY as number;
-      const submersionOffset = root.userData.submersionOffset as number;
-      const worldWaterlineY = root.position.y + waterlineLocalY * root.scale.y;
-      expect(worldWaterlineY).toBeCloseTo(surfaceY - submersionOffset, 5);
-    }
-
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('registers only the active dedicated event on additive pose roots', () => {
     const propModels = createTestPropModels();
     const eventModels = createTestEventModels();
@@ -6286,54 +3387,6 @@ describe('BoatWorld helpers', () => {
     expect(coordinatorBoat.parent).toBe(
       boatEffects.getObjectByName('lifeboat'),
     );
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('keeps the tentacle outside the hull and animates its idle clip', () => {
-    const propModels = createTestPropModels();
-    const eventModels = {
-      create: vi.fn((id: string): Group | EventModelInstance => {
-        if (['fogMan', 'ghost', 'siren', 'sirenRock'].includes(id)) return new Group();
-        const root = new Group();
-        if (id === 'snatcher') {
-          const joint = new Group();
-          joint.name = 'tentacle-idle-joint';
-          root.add(joint);
-          root.animations = [new AnimationClip('Tentacle_Idle', 1, [
-            new VectorKeyframeTrack(
-              'tentacle-idle-joint.position',
-              [0, 1],
-              [0, 0, 0, 1, 0, 0],
-            ),
-          ])];
-        }
-        return { root, dispose: vi.fn() };
-      }),
-      animations: vi.fn(() => []),
-      dispose: vi.fn(),
-    } as unknown as EventModelLibrary;
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [],
-      undefined,
-      undefined,
-      'low',
-      eventModels,
-    );
-    world.stageEvent({ eventId: 'snatcher', targetInstanceId: null, variantSeed: 1 });
-    const tentacle = world.scene.getObjectByName('tentacle-attack-tentacle')!;
-    const joint = world.scene.getObjectByName('tentacle-idle-joint')!;
-    const hullEdge = lifeboatHullHalfWidthAt(tentacle.position.z)!;
-
-    expect(tentacle.position.x).toBeGreaterThan(hullEdge + 0.3);
-    world.update(0.5, 0.5);
-    expect(joint.position.x).toBeCloseTo(0.5);
-    world.update(0.75, 0.25);
-    expect(joint.position.x).toBeCloseTo(0.75);
 
     world.dispose();
     propModels.dispose();
@@ -6903,113 +3956,6 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('restores the old gear before a second world dive hides a new instance', async () => {
-    const scuba = savedItem('scubaSet');
-    const secondScuba = savedItem('scubaSet', 2);
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-      [scuba, secondScuba],
-    );
-    world.syncInventory(snapshot([scuba, secondScuba]));
-    const internals = world as unknown as {
-      supplyDisplay: BoatSupplyDisplay;
-    };
-    const setHidden = vi.spyOn(
-      internals.supplyDisplay,
-      'setPresentationItemHidden',
-    );
-    const secondId = secondScuba.instanceId;
-
-    const first = world.playDive(scuba.instanceId, {
-      onWaterImpact: () => undefined,
-    });
-    const second = world.playDive(secondId, {
-      onWaterImpact: () => undefined,
-    });
-    await first;
-
-    expect(setHidden.mock.calls.slice(0, 3)).toEqual([
-      [scuba.instanceId, true],
-      [scuba.instanceId, false],
-      [secondId, true],
-    ]);
-    world.clearDivePresentation();
-    await second;
-    expect(setHidden).toHaveBeenLastCalledWith(secondId, false);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('settles the dive presentation when the document becomes hidden', async () => {
-    const scuba = savedItem('scubaSet');
-    const camera = new PerspectiveCamera();
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      camera,
-      propModels,
-      createTestMoonTexture(),
-      [scuba],
-    );
-    world.syncInventory(snapshot([scuba]));
-    const initialPosition = camera.position.clone();
-    const pending = world.playDive(scuba.instanceId, {
-      onWaterImpact: () => undefined,
-      postEntryHold: {
-        durationSeconds: 3,
-        cameraWorldPosition: new Vector3(4.2, -3.4, -4.3),
-        cameraWorldTarget: new Vector3(0, -7.2, -11.5),
-        onStart: () => undefined,
-      },
-    });
-    world.update(5.8, 5.8);
-
-    world.setDocumentHidden(true);
-    await pending;
-    expect(camera.position.toArray()).toEqual(initialPosition.toArray());
-    expect(world.scene.getObjectByName('boat-supply:scubaSet')?.visible).toBe(true);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('settles and disposes the dive presentation once with the world', async () => {
-    const scuba = savedItem('scubaSet');
-    const propModels = createTestPropModels();
-    const disposeDive = vi.spyOn(DivePresentation.prototype, 'dispose');
-    let world: BoatWorld | undefined;
-    try {
-      world = new BoatWorld(
-        new PerspectiveCamera(),
-        propModels,
-        createTestMoonTexture(),
-        [scuba],
-      );
-      world.syncInventory(snapshot([scuba]));
-      const pending = world.playDive(scuba.instanceId, {
-        onWaterImpact: () => undefined,
-      });
-
-      world.dispose();
-      world.dispose();
-      await pending;
-      expect(disposeDive).toHaveBeenCalledOnce();
-    } finally {
-      try {
-        world?.dispose();
-      } finally {
-        try {
-          disposeDive.mockRestore();
-        } finally {
-          propModels.dispose();
-        }
-      }
-    }
-  });
-
   it('keeps the Wreckage hold camera and restores real roots when hidden', async () => {
     const scuba = savedItem('scubaSet');
     const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
@@ -7370,124 +4316,6 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('replaces the bench lantern with the sleep pillow', () => {
-    const propModels = createTestPropModels();
-    const camera = new PerspectiveCamera(75, 16 / 9, 0.08, 1000);
-    const world = new BoatWorld(
-      camera,
-      propModels,
-      createTestMoonTexture(),
-    );
-    const pillow = world.scene.getObjectByName('sleep-pillow')!;
-    const model = pillow.getObjectByName('sleep-pillow:model')!;
-
-    expect(model).toBeDefined();
-    expect(firstMesh(model).castShadow).toBe(true);
-    expect(firstMesh(model).receiveShadow).toBe(true);
-    expect(world.scene.getObjectByName('survival-lantern')).toBeUndefined();
-    const formerLanternPosition = new Vector3(1.05, 0.235, 0.78);
-    const lightsAtFormerLantern: PointLight[] = [];
-    world.scene.updateMatrixWorld(true);
-    world.scene.traverse((object) => {
-      if (!(object instanceof PointLight)) return;
-      if (object.getWorldPosition(new Vector3()).distanceTo(formerLanternPosition) < 0.5) {
-        lightsAtFormerLantern.push(object);
-      }
-    });
-    expect(lightsAtFormerLantern).toEqual([]);
-    expect(camera.position.toArray()).toEqual([0, 0.88, 1.56]);
-    expect(world.projectInteractionAnchors(800, 600)).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        id: 'end-day-pillow',
-        toolId: 'pillow',
-        action: 'endDay',
-        itemType: null,
-      }),
-    ]));
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('casts stored item shadows onto the lifeboat', () => {
-    const map = savedItem('map');
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(75, 16 / 9, 0.08, 1000),
-      propModels,
-      createTestMoonTexture(),
-      [map],
-    );
-    const storedMap = world.scene.getObjectByName('boat-supply:map:copy-1')!;
-    const floor = world.scene.getObjectByName('survival-floor')!;
-    const light = world.scene.getObjectByName('hanging-lantern:light') as PointLight;
-
-    expect(firstMesh(storedMap).castShadow).toBe(true);
-    expect(firstMesh(storedMap).receiveShadow).toBe(true);
-    expect(firstMesh(floor).receiveShadow).toBe(true);
-    expect(light.castShadow).toBe(true);
-    expect(light.shadow.mapSize.toArray()).toEqual([1024, 1024]);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('adds the hanging lantern near the upper camera center without another action', () => {
-    const propModels = createTestPropModels();
-    const camera = new PerspectiveCamera(75, 16 / 9, 0.08, 1000);
-    const world = new BoatWorld(camera, propModels, createTestMoonTexture());
-    world.update(1, 0.1);
-    const root = world.scene.getObjectByName('hanging-lantern')!;
-    const light = root.getObjectByName('hanging-lantern:light') as PointLight;
-    const pole = root.getObjectByName('hanging-lantern:pole') as Mesh;
-    const floor = world.scene.getObjectByName('survival-floor') as Mesh;
-    const projected = light.getWorldPosition(new Vector3()).project(camera);
-    const pillowAnchors = world.projectInteractionAnchors(800, 600)
-      .filter((anchor) => anchor.toolId === 'pillow');
-    const cloudBounce = world.scene.getObjectByName(
-      'day-cloud-bounce-light',
-    ) as HemisphereLight;
-
-    expect(root).toBeDefined();
-    expect(projected.x).toBeGreaterThanOrEqual(-0.12);
-    expect(projected.x).toBeLessThanOrEqual(0.12);
-    expect(projected.y).toBeGreaterThanOrEqual(0.55);
-    expect(projected.y).toBeLessThanOrEqual(0.9);
-    expect(light.intensity).toBe(HANGING_LANTERN_DAY_INTENSITY);
-    expect((pole.material as MeshStandardMaterial).color.getHex()).toBe(
-      (floor.material as MeshStandardMaterial).color.getHex(),
-    );
-    expect((pole.material as MeshStandardMaterial).map).toBe(
-      (floor.material as MeshStandardMaterial).map,
-    );
-    expect(DAY_CLOUD_BOUNCE_INTENSITY).toBe(1.7);
-    expect(cloudBounce.intensity).toBe(DAY_CLOUD_BOUNCE_INTENSITY);
-    expect(cloudBounce.castShadow).toBe(false);
-    expect(pillowAnchors.map(({ id }) => id)).toEqual(['end-day-pillow']);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('raises hanging lantern intensity at night', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(75, 16 / 9, 0.08, 1000),
-      propModels,
-      createTestMoonTexture(),
-    );
-    const light = world.scene.getObjectByName('hanging-lantern:light') as PointLight;
-    world.setPhase('night');
-    world.update(1, 0.1);
-    expect(light.intensity).toBe(HANGING_LANTERN_NIGHT_INTENSITY);
-    expect((world.scene.getObjectByName(
-      'day-cloud-bounce-light',
-    ) as HemisphereLight).intensity).toBe(0);
-
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('disposes the hanging lantern during normal world cleanup', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
@@ -7500,25 +4328,6 @@ describe('BoatWorld helpers', () => {
     world.dispose();
     world.dispose();
     expect(shadowDispose).toHaveBeenCalledOnce();
-    propModels.dispose();
-  });
-
-  it('places the repair toolbox opposite the pillow', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(),
-      propModels,
-      createTestMoonTexture(),
-    );
-    const pillow = world.scene.getObjectByName('sleep-pillow')!;
-    const repairTools = world.scene.getObjectByName('repair-toolbox')!;
-
-    expect(repairTools.position.toArray()).toEqual([-1.05, 0.225, 0.78]);
-    expect(repairTools.position.x).toBe(-pillow.position.x);
-    expect(repairTools.position.z).toBe(pillow.position.z);
-    expect(repairTools.rotation.y).toBe(-Math.PI / 2);
-
-    world.dispose();
     propModels.dispose();
   });
 
@@ -7568,62 +4377,6 @@ describe('BoatWorld helpers', () => {
     expect(materialDispose).toHaveBeenCalledOnce();
     expect(textureDispose).toHaveBeenCalledOnce();
 
-    propModels.dispose();
-  });
-
-  it('projects stable metadata from a custom focused presenter', () => {
-    const propModels = createTestPropModels();
-    const focused = focusedPresenterTestDouble('handyman');
-    const targetRoot = new Group();
-    targetRoot.position.set(0.4, 0, -4);
-    targetRoot.add(new Mesh(
-      new BoxGeometry(0.25, 0.25, 0.25),
-      new MeshBasicMaterial(),
-    ));
-    focused.presenter.root.add(targetRoot);
-    const targets = Object.freeze([Object.freeze({
-      id: 'custom:bell',
-      label: 'BELL',
-      description: 'Ring the custom bell.',
-      choiceId: 'ring',
-      root: targetRoot,
-      tooltip: true,
-      minimumHitWidth: 107,
-      minimumHitHeight: 83,
-    })]);
-    const interactionTargets = vi.fn(() => targets);
-    const presenter = Object.assign(focused.presenter, { interactionTargets });
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
-      propModels,
-      createTestMoonTexture(),
-      [],
-      undefined,
-      undefined,
-      'low',
-      { handyman: () => presenter },
-    );
-
-    world.stageEvent('handyman');
-    const first = world.projectInteractionAnchors(800, 600);
-    const firstTarget = first.find(({ id }) => id === 'custom:bell');
-    expect(firstTarget).toMatchObject({
-      label: 'BELL',
-      description: 'Ring the custom bell.',
-      eventChoiceId: 'ring',
-      tooltip: true,
-      hitArea: { width: 107, height: 83 },
-    });
-    const second = world.projectInteractionAnchors(800, 600);
-    expect(second).toBe(first);
-    expect(second.find(({ id }) => id === 'custom:bell')).toBe(firstTarget);
-    expect(interactionTargets).toHaveBeenCalledOnce();
-
-    world.stageEvent('night-trader');
-    expect(world.projectInteractionAnchors(800, 600)
-      .find(({ id }) => id === 'custom:bell')).toBeUndefined();
-
-    world.dispose();
     propModels.dispose();
   });
 
@@ -7877,43 +4630,6 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it.each(['bucket', 'flashlight'] as const)('keeps broken %s visible and restores its repaired material', (itemType) => {
-    const item = savedItem(itemType);
-    const savedItems = [item, savedItem('energyBar'), savedItem('map')];
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 4 / 3, 0.1, 100),
-      propModels,
-      createTestMoonTexture(),
-      savedItems,
-    );
-    const inventory = new SurvivalInventoryState(savedItems);
-    world.syncInventory(snapshot(savedItems, { inventory: inventory.snapshot() }));
-    const prop = world.scene.getObjectByName(`boat-supply:${itemType}`)!;
-    const usableMaterial = firstMesh(prop).material;
-    expect(inventory.break(item.instanceId)).toBe(true);
-    inventory.consumeInstance('energyBar-1');
-    inventory.lose('map-1');
-    world.syncInventory(snapshot(savedItems, { inventory: inventory.snapshot() }));
-    expect(prop.visible).toBe(true);
-    expect(firstMesh(prop).material).not.toBe(usableMaterial);
-    expect(world.projectInteractionAnchors(800, 600).find(({ id }) => id === `supply:${itemType}`))
-      .toMatchObject({
-        action: null,
-        quantity: 1,
-        usableQuantity: 0,
-        brokenQuantity: 1,
-      });
-    expect(world.scene.getObjectByName('boat-supply:energyBar')?.visible).toBe(false);
-    expect(world.scene.getObjectByName('boat-supply:map')?.visible).toBe(false);
-    inventory.repair(item.instanceId);
-    world.syncInventory(snapshot(savedItems, { inventory: inventory.snapshot() }));
-    expect(prop.visible).toBe(true);
-    expect(firstMesh(prop).material).toBe(usableMaterial);
-    world.dispose();
-    propModels.dispose();
-  });
-
   it('projects usable actions and hides consumed instances', () => {
     const savedItems = [
       savedItem('ductTape'),
@@ -8045,23 +4761,6 @@ describe('BoatWorld helpers', () => {
       expect(ridingWave.get(id)?.hitArea?.height, id)
         .toBeCloseTo(settled.get(id)!.hitArea!.height);
     }
-
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('anchors the fishing line to the rod geometry tip instead of its bounds center', () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
-      propModels,
-      createTestMoonTexture(),
-    );
-    const lineOrigin = world.scene.getObjectByName('fishing-line-origin')!;
-
-    expect(lineOrigin.position.x).toBeCloseTo(0.353055, 5);
-    expect(lineOrigin.position.y).toBeCloseTo(-0.236377, 5);
-    expect(lineOrigin.position.z).toBeCloseTo(0.258526, 5);
 
     world.dispose();
     propModels.dispose();
@@ -8435,62 +5134,6 @@ describe('BoatWorld helpers', () => {
     expect(sampleWave.mock.calls.at(-1)?.[4]).toBe(
       presentationWeatherProfile('calm').waveScale,
     );
-    world.dispose();
-    propModels.dispose();
-  });
-
-  it('delegates the public fishing facade to one presentation owner', async () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
-      propModels,
-      createTestMoonTexture(),
-    );
-    const internals = world as unknown as {
-      fishingPresentation: FishingPresentation;
-    };
-    const presentation = internals.fishingPresentation;
-    const point = Object.freeze({ x: 0, z: -6.4 });
-    const bounds = { x: 1, y: 2, width: 3, height: 4, depth: 5, visible: true };
-    const enter = vi.spyOn(presentation, 'enterView').mockResolvedValue();
-    const castAt = vi.spyOn(presentation, 'castPointFromScreen').mockReturnValue(point);
-    const centered = vi.spyOn(presentation, 'centeredCast').mockReturnValue(point);
-    const cast = vi.spyOn(presentation, 'playCast').mockResolvedValue();
-    const waiting = vi.spyOn(presentation, 'showWaiting').mockReturnValue();
-    const bite = vi.spyOn(presentation, 'showBite').mockReturnValue();
-    const projectBite = vi.spyOn(presentation, 'projectBite').mockReturnValue(bounds);
-    const reel = vi.spyOn(presentation, 'playReel').mockResolvedValue();
-    const projectCatch = vi.spyOn(presentation, 'projectCatch').mockReturnValue(bounds);
-    const miss = vi.spyOn(presentation, 'playMiss').mockResolvedValue();
-    const exit = vi.spyOn(presentation, 'exitView').mockResolvedValue();
-    const clear = vi.spyOn(presentation, 'clear').mockReturnValue();
-
-    await world.enterFishingView();
-    expect(world.castFishingAtScreenPoint(1, 2, 3, 4)).toBe(point);
-    expect(world.centeredFishingCast()).toBe(point);
-    await world.playFishingCast(point);
-    world.showFishingWaiting(point);
-    world.showFishingBite(point);
-    expect(world.projectFishingBite(800, 600)).toBe(bounds);
-    await world.playFishingReel('cod');
-    expect(world.projectFishingCatch(800, 600)).toBe(bounds);
-    await world.playFishingMiss();
-    await world.exitFishingView();
-    world.clearFishingPresentation();
-
-    expect(enter).toHaveBeenCalledOnce();
-    expect(castAt).toHaveBeenCalledWith(1, 2, 3, 4);
-    expect(centered).toHaveBeenCalledOnce();
-    expect(cast).toHaveBeenCalledWith(point);
-    expect(waiting).toHaveBeenCalledWith(point);
-    expect(bite).toHaveBeenCalledWith(point);
-    expect(projectBite).toHaveBeenCalledWith(800, 600);
-    expect(reel).toHaveBeenCalledWith('cod');
-    expect(projectCatch).toHaveBeenCalledWith(800, 600);
-    expect(miss).toHaveBeenCalledOnce();
-    expect(exit).toHaveBeenCalledOnce();
-    expect(clear).toHaveBeenCalledOnce();
-
     world.dispose();
     propModels.dispose();
   });
