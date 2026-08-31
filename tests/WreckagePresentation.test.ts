@@ -252,7 +252,8 @@ describe('WreckagePresentation', () => {
     const wreck = presentation.worldRoot.getObjectByName('wreckage-wreck')!;
     const seabed = presentation.worldRoot.getObjectByName('wreckage-seabed')!;
 
-    const dive = presentation.playItemUse('dive', 'scubaSet-1');
+    const waterImpact = vi.fn();
+    const dive = presentation.playItemUse('dive', 'scubaSet-1', waterImpact);
     const options = vi.mocked(environment.dive.play).mock.calls[0]![1];
     expect(options).toEqual({
       onWaterImpact: expect.any(Function),
@@ -264,6 +265,9 @@ describe('WreckagePresentation', () => {
       },
     });
     expect(wreck.visible).toBe(false);
+
+    options.onWaterImpact();
+    expect(waterImpact).toHaveBeenCalledExactlyOnceWith(0);
 
     options.postEntryHold!.onStart();
     presentation.update(2.4, 0.2);

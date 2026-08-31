@@ -530,6 +530,15 @@ describe('SurvivalEventFlow', () => {
       }));
       return accepted({ eventPresentationKey: 'wreckage.dive-loot' });
     });
+    let waterImpact: ((cueIndex: number) => void) | undefined;
+    rig.world.playEventItemUse.mockImplementationOnce(async (
+      _eventId,
+      _choiceId,
+      _instanceId,
+      onAction,
+    ) => {
+      waterImpact = onAction;
+    });
     await rig.flow.revealPending(pending);
 
     await rig.flow.focusEvent('wreckage');
@@ -539,10 +548,21 @@ describe('SurvivalEventFlow', () => {
       instanceId: 'scubaSet-1',
     });
     if (resolution === undefined || !resolution.accepted) throw new Error('Expected Wreckage choice.');
-    await resolution.playAnimation();
+    const animation = resolution.playAnimation();
+    await Promise.resolve();
+
+    expect(rig.audio.beginDive).not.toHaveBeenCalled();
+    expect(rig.audio.finishDive).not.toHaveBeenCalled();
+    waterImpact?.(0);
+    await animation;
 
     expect(rig.audio.beginDive).toHaveBeenCalledOnce();
+    expect(rig.audio.finishDive).not.toHaveBeenCalled();
+    await resolution.beforeReturn();
     expect(rig.audio.finishDive).toHaveBeenCalledOnce();
+    expect(rig.ui.setSleepCovered.mock.invocationCallOrder[0]!).toBeLessThan(
+      rig.audio.finishDive.mock.invocationCallOrder[0]!,
+    );
   });
 
   it('keeps the focused operation active when a choice is rejected', async () => {
@@ -598,7 +618,15 @@ describe('SurvivalEventFlow', () => {
       }),
     });
     const rig = createRig(pending);
-    rig.world.playEventItemUse.mockReturnValueOnce(itemUse.promise);
+    rig.world.playEventItemUse.mockImplementationOnce((
+      _eventId,
+      _choiceId,
+      _instanceId,
+      onAction,
+    ) => {
+      onAction?.(0);
+      return itemUse.promise;
+    });
     rig.audio.clearEvent.mockImplementation(() => rig.audio.cancelDive());
     await rig.flow.revealPending(pending);
 

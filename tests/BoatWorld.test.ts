@@ -7029,11 +7029,27 @@ describe('BoatWorld helpers', () => {
     const focus = world.enterFocusedEventView('wreckage');
     world.update(1.1, 1.1);
     await focus;
+    const focusedPosition = camera.position.clone();
+    const waterImpact = vi.fn();
 
-    const dive = world.playEventItemUse('wreckage', 'dive', scuba.instanceId);
-    world.update(2.2, 1.1);
+    const dive = world.playEventItemUse(
+      'wreckage',
+      'dive',
+      scuba.instanceId,
+      waterImpact,
+    );
+    expect(camera.position.toArray()).toEqual(focusedPosition.toArray());
+
+    world.update(1.11, 0.01);
+    expect(camera.position.distanceTo(focusedPosition)).toBeLessThan(0.01);
+    expect(waterImpact).not.toHaveBeenCalled();
+    world.update(2.2, 1.09);
     expect(camera.position.x).toBeCloseTo(1.66);
-    world.update(6.9, 4.7);
+    world.update(4.69, 2.49);
+    expect(waterImpact).not.toHaveBeenCalled();
+    world.update(4.7, 0.01);
+    expect(waterImpact).toHaveBeenCalledExactlyOnceWith(0);
+    world.update(6.9, 2.2);
 
     const holdPosition = camera.getWorldPosition(new Vector3());
     expect(holdPosition.x).toBeCloseTo(4.2);

@@ -782,7 +782,6 @@ export class SurvivalEventFlow {
       generation,
       operation,
     );
-    if (this.isCurrent(generation, operation)) this.dependencies.audio.finishDive();
   }
 
   private async playDriftingChoiceAnimation(
@@ -872,6 +871,12 @@ export class SurvivalEventFlow {
   ): Promise<void> {
     if (!context.wreckage || !this.isCurrent(context.generation, context.operation)) return;
     await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
+    if (
+      context.choice.id === 'dive'
+      && this.isCurrent(context.generation, context.operation)
+    ) {
+      this.dependencies.audio.finishDive();
+    }
     state.returnCovered = true;
   }
 
@@ -2265,8 +2270,14 @@ export class SurvivalEventFlow {
     operation: number,
   ): Promise<void> {
     if (eventId === 'wreckage' && itemType === 'scubaSet') {
-      this.dependencies.audio.beginDive();
-      return this.playEventItemUse(eventId, choiceId, instanceId);
+      return this.dependencies.world.playEventItemUse?.(
+        eventId,
+        choiceId,
+        instanceId,
+        () => {
+          if (this.isCurrent(generation, operation)) this.dependencies.audio.beginDive();
+        },
+      ) ?? Promise.resolve();
     }
     if (usesEventItemCues(itemType)) {
       return this.playCuedEventItemUse(

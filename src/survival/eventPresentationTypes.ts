@@ -93,7 +93,11 @@ export interface DedicatedEventPresentation {
   reveal(): Promise<void>;
   skip(): void;
   playChoice?(choiceId: string): Promise<void>;
-  playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean>;
+  playItemUse(
+    choiceId: string,
+    instanceId: ItemInstanceId,
+    onAction?: (cueIndex: number) => void,
+  ): Promise<boolean>;
   react(result: EventOutcomePresentation): Promise<void>;
   update(time: number, delta: number): void;
   settleForVisibilityChange(): void;

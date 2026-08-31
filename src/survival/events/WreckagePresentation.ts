@@ -266,13 +266,17 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     return choiceId === 'leave' ? this.startBeat('leave') : Promise.resolve();
   }
 
-  async playItemUse(choiceId: string, instanceId: ItemInstanceId): Promise<boolean> {
+  async playItemUse(
+    choiceId: string,
+    instanceId: ItemInstanceId,
+    onAction?: (cueIndex: number) => void,
+  ): Promise<boolean> {
     if (this.disposed || !this.staged || choiceId !== 'dive') return false;
     const operation = this.beginOperation();
     this.diveOwned = true;
     try {
       await this.environment.dive.play(instanceId, {
-        onWaterImpact: () => undefined,
+        onWaterImpact: () => onAction?.(0),
         postEntryHold: {
           durationSeconds: 3,
           cameraWorldPosition: WRECK_CAMERA_POSITION,
