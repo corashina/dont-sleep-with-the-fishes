@@ -145,7 +145,6 @@ function createRig(
     retrieveDriftingItem: vi.fn(async () => undefined),
     searchDriftingItem: vi.fn(async () => undefined),
     delegateDriftingItem: vi.fn(async () => undefined),
-    recedeDriftingItem: vi.fn(async () => undefined),
   };
   const ui = {
     beginEventPresentation: vi.fn(() => calls.push('begin-ui')),
@@ -529,7 +528,10 @@ describe('SurvivalEventFlow', () => {
         unavailableReason: 'Requires 3 energy; you have 2.',
         energyCost: 3, energyOwner: 'player', instanceId: 'scubaSet-1',
       },
-      { id: 'leave', label: 'Leave', unavailableReason: null, instanceId: null },
+      {
+        id: 'leave', label: 'Leave', unavailableReason: null, instanceId: null,
+        dismisses: true,
+      },
     ]);
   });
 
@@ -649,28 +651,6 @@ describe('SurvivalEventFlow', () => {
     expect(rig.ui.showRewardResult).toHaveBeenCalledWith({
       title: 'WRECKAGE', reward: rewardSummary, lines: [],
     });
-  });
-
-  it('leaves Wreckage without cost or a result paper', async () => {
-    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'wreckage', energy: 2 });
-    const rig = createRig(pending);
-    rig.setResolveEvent(() => {
-      rig.setSnapshot(snapshot({ state: 'day', energy: 2 }));
-      return accepted({ message: 'You leave the wreckage behind.' });
-    });
-    await rig.flow.revealPending(pending);
-    await rig.flow.focusEvent('wreckage');
-    rig.flow.setFocusedResolutionActive(true);
-    const resolution = rig.flow.resolveFocusedEventChoice({ id: 'leave', instanceId: null });
-    if (resolution === undefined || !resolution.accepted) throw new Error('Expected Leave choice.');
-    await resolution.playAnimation();
-    await resolution.beforeReturn();
-    resolution.clearEvent(true);
-    resolution.renderSnapshot();
-    await resolution.afterReturn();
-
-    expect(rig.session.snapshot().energy).toBe(2);
-    expect(rig.ui.showRewardResult).not.toHaveBeenCalled();
   });
 
   it('reports a broken selected scuba instance after the Wreckage return', async () => {

@@ -138,9 +138,7 @@ export class FeaturedEventPresentations {
     }
     if (isDriftingItemEventId(eventId)) {
       if (this.driftingItems === null) return Promise.resolve();
-      return key === 'drifting-supplies.drift' || key === 'drifting-chest.drift'
-        ? this.driftingItems.recede()
-        : this.driftingItems.retrieve();
+      return this.driftingItems.retrieve();
     }
     return this.presentations.get(eventId)?.react(key) ?? Promise.resolve();
   }

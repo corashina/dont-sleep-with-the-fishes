@@ -382,7 +382,6 @@ function createDriftingItemRig(
     exit: deferred(),
     retrieve: deferred(),
     delegate: deferred(),
-    recede: deferred(),
   };
   const world = {
     stageEvent: vi.fn(),
@@ -402,10 +401,6 @@ function createDriftingItemRig(
     delegateDriftingItem: vi.fn((selectedEventId: DriftingItemEventId) => {
       calls.push(`delegate:${selectedEventId}`);
       return animations.delegate.promise;
-    }),
-    recedeDriftingItem: vi.fn((selectedEventId: DriftingItemEventId) => {
-      calls.push(`recede:${selectedEventId}`);
-      return animations.recede.promise;
     }),
     clearEvent: vi.fn(() => calls.push('clear-world')),
     setDocumentHidden: vi.fn(),
@@ -1186,94 +1181,6 @@ describe('SurvivalPhase orchestration', () => {
     rig.phase.dispose();
   });
 
-  it('settles hidden explicit drift choice and defers camera return until resume', async () => {
-    const listeners = new Map<string, EventListener>();
-    const fakeDocument = {
-      hidden: false,
-      addEventListener: vi.fn((type: string, listener: EventListener) => listeners.set(type, listener)),
-      removeEventListener: vi.fn((type: string) => listeners.delete(type)),
-    };
-    vi.stubGlobal('document', fakeDocument);
-    const rig = createDriftingItemRig('drifting-supplies');
-    rig.world.setDocumentHidden.mockImplementation((hidden: boolean) => {
-      if (hidden) rig.animations.recede.resolve();
-    });
-    await revealDriftingItem(rig);
-    await enterDriftingItemFocus(rig);
-    rig.ui.onFocusedEventChoice?.({ id: 'sleep', instanceId: null });
-    await flushPromises();
-    expect(rig.resolveEvent).toHaveBeenCalledOnce();
-    expect(rig.world.recedeDriftingItem).toHaveBeenCalledOnce();
-
-    fakeDocument.hidden = true;
-    listeners.get('visibilitychange')!(new Event('visibilitychange'));
-    await flushPromises();
-    expect(rig.world.exitFocusedEventView).not.toHaveBeenCalled();
-
-    fakeDocument.hidden = false;
-    listeners.get('visibilitychange')!(new Event('visibilitychange'));
-    await flushPromises();
-    expect(rig.world.exitFocusedEventView).toHaveBeenCalledOnce();
-    rig.animations.exit.resolve();
-    await flushPromises();
-    rig.phase.dispose();
-  });
-
-  it('lets Drifting Cargo recede without a result and resumes the same day', async () => {
-    let current = snapshot({
-      state: 'dayEvent',
-      day: 4,
-      pendingEventId: 'drifting-supplies',
-    });
-    const recedeDriftingItem = vi.fn(() => Promise.resolve());
-    const clearEvent = vi.fn();
-    const restoreCommandFocus = vi.fn();
-    const ui: Partial<SurvivalUI> = {
-      setSleepCovered: vi.fn(() => Promise.resolve()),
-      showEventReveal: vi.fn(() => Promise.resolve()),
-      setEventSelection: vi.fn(),
-      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
-      clearEventPresentation: vi.fn(),
-      setBusy: vi.fn(),
-      render: vi.fn(),
-      setJournalUnread: vi.fn(),
-      restoreCommandFocus,
-      dispose: vi.fn(),
-    };
-    const phase = SurvivalPhase.forTest({
-      session: {
-        snapshot: vi.fn(() => current),
-        resolveEvent: vi.fn(() => {
-          current = snapshot({ state: 'day', day: 4 });
-          return accepted({ code: 'event-resolved', cue: 'none', deltas: {} });
-        }),
-      },
-      world: {
-        stageEvent: vi.fn(),
-        revealEvent: vi.fn(() => Promise.resolve()),
-        enterFocusedEventView: vi.fn(() => Promise.resolve()),
-        exitFocusedEventView: vi.fn(() => Promise.resolve()),
-        recedeDriftingItem,
-        clearEvent,
-        dispose: vi.fn(),
-      },
-      ui,
-    });
-
-    phase.start();
-    await flushPromises();
-    ui.onFocusedEventSelect?.('drifting-supplies');
-    await flushPromises();
-    ui.onFocusedEventChoice?.({ id: 'sleep', instanceId: null });
-    await flushPromises();
-    await flushPromises();
-
-    expect(recedeDriftingItem).toHaveBeenCalledOnce();
-    expect(clearEvent).toHaveBeenCalledOnce();
-    expect(restoreCommandFocus).toHaveBeenCalledOnce();
-    expect(current).toMatchObject({ state: 'day', day: 4 });
-  });
-
   it('keeps a real insufficient-energy Drifting Cargo encounter choosing without mutation', async () => {
     const realSession = new SurvivalSession([], {
       seed: 28,
@@ -1518,77 +1425,6 @@ describe('SurvivalPhase orchestration', () => {
       expect(clearEvent).toHaveBeenCalledTimes(clearCount);
       expect(setEventSelection).not.toHaveBeenCalled();
       expect(setSleepCovered).not.toHaveBeenCalledWith(false);
-      expect(setBusy).not.toHaveBeenCalledWith(false);
-      expect(restoreCommandFocus).not.toHaveBeenCalled();
-      expect(onRestart).toHaveBeenCalledTimes(teardown === 'restart' ? 1 : 0);
-    },
-  );
-
-  it.each([
-    ['receding', 'dispose'],
-    ['receding', 'restart'],
-  ] as const)(
-    'cancels Drifting Cargo %s wait after %s without stale cleanup',
-    async (stage, teardown) => {
-      const realSession = new SurvivalSession([], {
-        seed: 30,
-        random: sequenceRandom([0]),
-        initial: { day: 3, energy: 3 },
-        initialEventId: 'drifting-supplies',
-      });
-      const recession = deferred();
-      const clearEvent = vi.fn(() => recession.resolve());
-      const setBusy = vi.fn();
-      const restoreCommandFocus = vi.fn();
-      const onRestart = vi.fn();
-      const ui: Partial<SurvivalUI> = {
-        setSleepCovered: vi.fn(() => Promise.resolve()),
-        showEventReveal: vi.fn(() => Promise.resolve()),
-        setEventSelection: vi.fn(),
-        playEventChoiceBeat: vi.fn(() => Promise.resolve()),
-        clearEventPresentation: vi.fn(),
-        setBusy,
-        render: vi.fn(),
-        setJournalUnread: vi.fn(),
-        restoreCommandFocus,
-        dispose: vi.fn(),
-      };
-      const phase = SurvivalPhase.forTest({
-        session: {
-          snapshot: vi.fn(realSession.snapshot.bind(realSession)),
-          resolveEvent: vi.fn(realSession.resolveEvent.bind(realSession)),
-        },
-        world: {
-          stageEvent: vi.fn(),
-          revealEvent: vi.fn(() => Promise.resolve()),
-          enterFocusedEventView: vi.fn(() => Promise.resolve()),
-          retrieveDriftingItem: vi.fn(() => Promise.resolve()),
-          recedeDriftingItem: vi.fn(() => recession.promise),
-          clearEvent,
-          dispose: vi.fn(() => recession.resolve()),
-        },
-        ui,
-        onRestart,
-      });
-
-      phase.start();
-      await flushPromises();
-      ui.onFocusedEventSelect?.('drifting-supplies');
-      await flushPromises();
-      setBusy.mockClear();
-      restoreCommandFocus.mockClear();
-      clearEvent.mockClear();
-      ui.onFocusedEventChoice?.({ id: 'sleep', instanceId: null });
-      await flushPromises();
-      expect(recession.isSettled()).toBe(false);
-
-      if (teardown === 'dispose') phase.dispose();
-      else phase.requestRestart();
-      const clearCount = clearEvent.mock.calls.length;
-      expect(clearCount).toBe(1);
-      await flushPromises();
-
-      expect(clearEvent).toHaveBeenCalledTimes(clearCount);
       expect(setBusy).not.toHaveBeenCalledWith(false);
       expect(restoreCommandFocus).not.toHaveBeenCalled();
       expect(onRestart).toHaveBeenCalledTimes(teardown === 'restart' ? 1 : 0);

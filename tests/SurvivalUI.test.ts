@@ -2412,7 +2412,14 @@ describe('SurvivalUI', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(pause).toHaveBeenCalledWith(true);
     ui.setPaused(true);
-    expect(mount.querySelector('[data-pause]')?.classList).toContain('is-visible');
+    const pauseMenu = mount.querySelector<HTMLElement>('[data-pause]')!;
+    expect(pauseMenu.classList).toContain('is-visible');
+    expect(pauseMenu.textContent).not.toContain('PAUSED');
+    expect(pauseMenu.textContent).not.toContain('The sea will wait until you return.');
+    expect([...pauseMenu.querySelectorAll('button')].every(
+      (button) => button.classList.contains('primary-action'),
+    )).toBe(true);
+    expect(pauseMenu.querySelector('.secondary-action')).toBeNull();
     expect(document.activeElement).toBe(mount.querySelector('[data-resume]'));
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(pause).toHaveBeenLastCalledWith(false);
@@ -2533,6 +2540,17 @@ describe('SurvivalUI', () => {
     ui.setPaused(false);
     expect(endingLayer.hasAttribute('inert')).toBe(false);
     expect(document.activeElement).toBe(endingTitle);
+  });
+
+  it('stacks pause above the focused event menu', () => {
+    const pauseZIndex = Number(mainStyles.match(
+      /\.pause-overlay\s*\{[^}]*z-index:\s*(\d+);/s,
+    )?.[1]);
+    const focusedEventZIndex = Number(mainStyles.match(
+      /\.focused-event-view\s*\{[^}]*z-index:\s*(\d+);/s,
+    )?.[1]);
+
+    expect(pauseZIndex).toBeGreaterThan(focusedEventZIndex);
   });
 
   it('routes projected actions without pointer coordinates', () => {

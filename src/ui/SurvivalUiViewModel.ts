@@ -30,6 +30,7 @@ export interface EventContextChoice {
 
 export interface FocusedEventChoiceView extends EventContextChoice {
   readonly instanceId: ItemInstanceId | null;
+  readonly dismisses?: true;
 }
 
 export type FocusedEventChoiceSelection = Pick<
