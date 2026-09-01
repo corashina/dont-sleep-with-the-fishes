@@ -51,9 +51,7 @@ export type DriftingCargoKind = 'barrel' | 'chest' | 'lifeboat' | 'container';
 
 export type EventPresentationKey =
   | 'drifting-supplies.retrieve'
-  | 'drifting-supplies.drift'
   | 'drifting-chest.retrieve'
-  | 'drifting-chest.drift'
   | 'wreckage.search-repair'
   | 'wreckage.search-food'
   | 'wreckage.search-bait'
@@ -63,7 +61,6 @@ export type EventPresentationKey =
   | 'wreckage.dive-collapse'
   | 'wreckage.dive-creature'
   | 'wreckage.dive-ghost'
-  | 'wreckage.leave'
   | 'check-the-back.fish'
   | 'check-the-back.bad'
   | 'check-the-back.ignore'

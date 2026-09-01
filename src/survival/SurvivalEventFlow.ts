@@ -67,7 +67,6 @@ export type EventWorldPort = Pick<
   | 'projectInteractionAnchors'
   | 'retrieveDriftingItem'
   | 'delegateDriftingItem'
-  | 'recedeDriftingItem'
   | 'play'
 >;
 
@@ -340,6 +339,22 @@ function focusedChoiceEnergy(
   return { energyCost: playerEnergyCost, energyOwner: 'player' };
 }
 
+function focusedDismissChoiceFor(eventId: string): FocusedEventChoiceView | null {
+  if (eventId === 'wreckage') {
+    return {
+      id: 'leave', label: 'Leave', unavailableReason: null,
+      instanceId: null, dismisses: true,
+    };
+  }
+  if (eventId === 'drifting-supplies' || eventId === 'drifting-chest') {
+    return {
+      id: 'sleep', label: 'Let It Drift', unavailableReason: null,
+      instanceId: null, dismisses: true,
+    };
+  }
+  return null;
+}
+
 function focusedChoiceFor(
   event: SurvivalEventDefinition,
   choice: SurvivalEventChoice,
@@ -372,10 +387,12 @@ export function focusedChoicesFor(
   snapshot: SurvivalSnapshot,
 ): readonly FocusedEventChoiceView[] {
   const companionAvailability = carlitosChoiceAvailability(snapshot);
-  return event.choices.flatMap((choice) => {
+  const choices = event.choices.flatMap((choice) => {
     const view = focusedChoiceFor(event, choice, snapshot, companionAvailability);
     return view === null ? [] : [view];
   });
+  const dismiss = focusedDismissChoiceFor(event.id);
+  return dismiss === null ? choices : [...choices, dismiss];
 }
 
 export class SurvivalEventFlow {
@@ -763,7 +780,7 @@ export class SurvivalEventFlow {
   private async playWreckageChoiceAnimation(context: FocusedChoiceContext): Promise<void> {
     const { choice, eventId, pending, generation, operation } = context;
     if (choice.id === 'search') return;
-    if (choice.id === 'delegate-carlitos' || choice.id === 'leave') {
+    if (choice.id === 'delegate-carlitos') {
       await (this.dependencies.world.playEventChoice?.(eventId, choice.id) ?? Promise.resolve());
       return;
     }
@@ -789,9 +806,7 @@ export class SurvivalEventFlow {
     }
     if (choice.id === 'delegate-carlitos') {
       await (this.dependencies.world.delegateDriftingItem?.(eventId) ?? Promise.resolve());
-      return;
     }
-    await (this.dependencies.world.recedeDriftingItem?.(eventId) ?? Promise.resolve());
   }
 
   private async playStandardFocusedChoiceAnimation(
