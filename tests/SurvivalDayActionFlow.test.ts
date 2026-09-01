@@ -107,7 +107,6 @@ function createRig() {
     clearDivePresentation: vi.fn(() => calls.push('world:clear-dive')),
   } as unknown as DayActionWorldPort;
   const ui = {
-    showFeedback: vi.fn(() => calls.push('ui:feedback')),
     showRewardResult: vi.fn(async (view: { title: string }) => {
       calls.push(`ui:reward:${view.title}`);
     }),
@@ -234,7 +233,7 @@ describe('formatDiveResult', () => {
 });
 
 describe('SurvivalDayActionFlow', () => {
-  it('routes a rejected command through deny and feedback without busy state', async () => {
+  it('routes a rejected command through deny without busy state', async () => {
     const rig = createRig();
     const rejection = accepted({
       accepted: false,
@@ -246,7 +245,6 @@ describe('SurvivalDayActionFlow', () => {
     await rig.flow.run('repair');
 
     expect(rig.audio.deny).toHaveBeenCalledOnce();
-    expect(rig.ui.showFeedback).toHaveBeenCalledWith(rejection);
     expect(rig.setBusy).not.toHaveBeenCalled();
     expect(rig.world.play).not.toHaveBeenCalled();
   });

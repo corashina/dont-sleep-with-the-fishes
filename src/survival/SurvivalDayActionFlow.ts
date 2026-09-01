@@ -25,7 +25,6 @@ export type DayActionWorldPort = Pick<
 
 export type DayActionUiPort = Pick<
   SurvivalUI,
-  | 'showFeedback'
   | 'showRewardResult'
   | 'restoreCommandFocus'
   | 'setSleepCoverProfile'
@@ -128,7 +127,7 @@ export class SurvivalDayActionFlow {
     if (prepared === null) return;
     const { beforeAction, selectedOption, outcome } = prepared;
     if (!outcome.accepted) {
-      this.presentRejection(outcome, commandGeneration);
+      this.presentRejection(commandGeneration);
       return;
     }
     await this.runAcceptedAction(
@@ -350,10 +349,9 @@ export class SurvivalDayActionFlow {
     }
   }
 
-  private presentRejection(outcome: ActionOutcome, generation: number): void {
+  private presentRejection(generation: number): void {
     try {
       this.dependencies.audio.deny?.();
-      this.dependencies.ui.showFeedback?.(outcome);
     } catch (error) {
       if (this.isLifecycleCurrent(generation)) this.dependencies.onFatalError(error);
     }

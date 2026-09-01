@@ -1637,47 +1637,6 @@ describe('SurvivalUI', () => {
     expect(callbacks.size).toBe(0);
   });
 
-  it('publishes first and repeated identical outcomes as fresh live mutations', async () => {
-    const mount = document.createElement('main');
-    const ui = createUI(mount);
-    const announcer = mount.querySelector<HTMLElement>('[data-survival-announcer]');
-    expect(announcer).not.toBeNull();
-    if (!announcer) return;
-    const publications: string[] = [];
-    const observer = new MutationObserver(() => {
-      if (announcer.textContent) publications.push(announcer.textContent);
-    });
-    observer.observe(announcer, { childList: true, characterData: true, subtree: true });
-    ui.showFeedback({ accepted: true, message: 'The patch holds.' });
-    await Promise.resolve();
-    await Promise.resolve();
-    ui.showFeedback({ accepted: true, message: 'The patch holds.' });
-    await Promise.resolve();
-    await Promise.resolve();
-
-    observer.disconnect();
-    expect(publications.filter((message) => message === 'The patch holds.')).toHaveLength(2);
-  });
-
-  it('cancels a deferred live announcement when disposed', async () => {
-    const mount = document.createElement('main');
-    const ui = createUI(mount);
-    const announcer = mount.querySelector<HTMLElement>('[data-survival-announcer]');
-    expect(announcer).not.toBeNull();
-    if (!announcer) return;
-    const publications: string[] = [];
-    const observer = new MutationObserver(() => publications.push(announcer.textContent ?? ''));
-    observer.observe(announcer, { childList: true, characterData: true, subtree: true });
-
-    ui.showFeedback({ accepted: true, message: 'Too late.' });
-    ui.dispose();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    observer.disconnect();
-    expect(publications).not.toContain('Too late.');
-  });
-
   it('emits one action and blocks controls while busy', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
@@ -2329,33 +2288,19 @@ describe('SurvivalUI', () => {
     expect(fish.disabled).toBe(true);
   });
 
-  it('shows one visible rejection for an unavailable action click without locking or moving focus', async () => {
+  it('ignores an unavailable action click without locking or moving focus', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
     const action = vi.fn();
-    const reason = 'The line is tangled.';
-    const announcer = mount.querySelector<HTMLElement>('[data-survival-announcer]')!;
-    const publications: string[] = [];
-    const observer = new MutationObserver(() => {
-      if (announcer.textContent) publications.push(announcer.textContent);
-    });
-    observer.observe(announcer, { childList: true, characterData: true, subtree: true });
     ui.onAction = action;
-    ui.render(snapshot(), (id) => id === 'fish' ? reason : null);
+    ui.render(snapshot(), (id) => id === 'fish' ? 'The line is tangled.' : null);
     const fish = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
-    const feedback = mount.querySelector<HTMLElement>('[data-survival-feedback]')!;
 
     fish.focus();
     fish.click();
-    await Promise.resolve();
-    await Promise.resolve();
 
-    observer.disconnect();
-    expect(feedback.textContent).toBe(reason);
-    expect(feedback.classList).toContain('is-visible');
-    expect(feedback.dataset.accepted).toBe('false');
-    expect(publications.filter((message) => message === reason)).toHaveLength(1);
+    expect(mount.querySelector('[data-survival-feedback]')).toBeNull();
     expect(action).not.toHaveBeenCalled();
     expect(mount.querySelector('.survival-ui')?.hasAttribute('aria-busy')).toBe(false);
     expect(fish.disabled).toBe(false);

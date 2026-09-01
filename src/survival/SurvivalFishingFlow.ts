@@ -42,7 +42,6 @@ export type FishingUiPort = Pick<
   | 'setFishingViewExitVisible'
   | 'setFishingFade'
   | 'restoreCommandFocus'
-  | 'showFeedback'
 >;
 
 export type FishingAudioPort = Pick<
@@ -137,7 +136,7 @@ export class SurvivalFishingFlow {
     const begun = this.dependencies.session.beginFishing?.();
     if (begun === undefined) return;
     if (!begun.accepted) {
-      this.presentDeniedOutcome(begun.outcome);
+      this.presentDeniedOutcome();
       return;
     }
     const generation = this.advanceGeneration();
@@ -350,7 +349,6 @@ export class SurvivalFishingFlow {
     const outcome = this.dependencies.session.finishFishing?.(attempt.snapshot().id, result);
     if (outcome === undefined || !outcome.accepted) {
       this.dependencies.audio.deny?.();
-      if (outcome !== undefined) this.dependencies.ui.showFeedback?.(outcome);
       this.settlementInProgress = false;
       this.presentation = 'bite';
       this.syncBiteTarget();
@@ -383,9 +381,8 @@ export class SurvivalFishingFlow {
     this.showResult(result, outcome);
   }
 
-  private presentDeniedOutcome(outcome: ActionOutcome): void {
+  private presentDeniedOutcome(): void {
     this.dependencies.audio.deny?.();
-    this.dependencies.ui.showFeedback?.(outcome);
   }
 
   private canCast(attempt: FishingSession | null): attempt is FishingSession {
@@ -435,7 +432,6 @@ export class SurvivalFishingFlow {
     if (attempt === null) return false;
     const outcome = this.dependencies.session.cancelFishing?.(attempt.snapshot().id);
     if (outcome === undefined || !outcome.accepted) {
-      if (outcome !== undefined) this.dependencies.ui.showFeedback?.(outcome);
       return false;
     }
     this.activeFishing = null;

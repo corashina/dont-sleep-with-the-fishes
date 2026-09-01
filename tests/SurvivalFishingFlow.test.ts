@@ -112,7 +112,6 @@ function createRig(options: FishingRigOptions = {}) {
     }),
     setFishingFade: vi.fn(async () => undefined),
     restoreCommandFocus: vi.fn(() => calls.push('ui:focus')),
-    showFeedback: vi.fn(() => calls.push('ui:feedback')),
   };
   const audio: FishingAudioPort = {
     deny: vi.fn(() => calls.push('audio:deny')),
@@ -226,7 +225,6 @@ describe('SurvivalFishingFlow', () => {
     await rig.flow.begin();
 
     expect(rig.audio.deny).toHaveBeenCalledOnce();
-    expect(rig.ui.showFeedback).toHaveBeenCalledOnce();
     expect(rig.world.enterFishingView).not.toHaveBeenCalled();
     expect(rig.setBusy).not.toHaveBeenCalled();
     expect(rig.flow.hasActiveAttempt()).toBe(false);
@@ -359,9 +357,6 @@ describe('SurvivalFishingFlow', () => {
 
     expect(rig.session.beginFishing).toHaveBeenCalledTimes(2);
     expect(rig.audio.deny).toHaveBeenCalledOnce();
-    expect(rig.ui.showFeedback).toHaveBeenCalledWith(expect.objectContaining({
-      accepted: false, message: 'Fishing requires one energy.',
-    }));
     expect(rig.realSession.snapshot()).toEqual(beforeRetry);
     expect(rig.world.enterFishingView).toHaveBeenCalledOnce();
     expect(rig.flow.hasActiveAttempt()).toBe(false);
@@ -512,7 +507,6 @@ describe('SurvivalFishingFlow', () => {
     expect(rig.flow.reel()).toBe(false);
 
     expect(rig.audio.deny).toHaveBeenCalledOnce();
-    expect(rig.ui.showFeedback).toHaveBeenCalledWith(rejection);
     expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({
       mode: 'bite', message: 'BITE - REEL NOW', biteTarget: rig.biteTarget,
     });

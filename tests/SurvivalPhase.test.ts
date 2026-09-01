@@ -430,7 +430,6 @@ function createDriftingItemRig(
     playEventChoiceBeat: vi.fn(() => Promise.resolve()),
     showFocusedEvent,
     hideFocusedEvent,
-    showFeedback: vi.fn(),
     clearEventPresentation: vi.fn(() => calls.push('clear-ui')),
     setBusy: vi.fn((value: boolean) => calls.push(value ? 'busy' : 'ready')),
     setCameraTurnState,
@@ -621,7 +620,6 @@ function createFishingRig(options: FishingRigOptions = {}) {
       animations.fade.push(handle);
       return handle.promise;
     }),
-    showFeedback: vi.fn(),
     showFishingResult: vi.fn((view: FishingResultView) => {
       calls.push(`result:${view.title}:${view.detail}`);
     }),
@@ -827,7 +825,6 @@ function createDiveRig(options: {
     }),
     restoreCommandFocus: vi.fn(() => calls.push('focus')),
     showEnding: vi.fn(() => calls.push('ending')),
-    showFeedback: vi.fn(),
     dispose: vi.fn(),
   };
   const phase = SurvivalPhase.forTest({
@@ -1289,7 +1286,6 @@ describe('SurvivalPhase orchestration', () => {
       showEventReveal: vi.fn(() => Promise.resolve()),
       setEventSelection,
       playEventChoiceBeat: vi.fn(() => Promise.resolve()),
-      showFeedback: vi.fn(),
       setBusy: vi.fn(),
       dispose: vi.fn(),
     };
@@ -1364,7 +1360,6 @@ describe('SurvivalPhase orchestration', () => {
         setSleepCovered: vi.fn(() => Promise.resolve()),
         showEventReveal: vi.fn(() => Promise.resolve()),
         setEventSelection: vi.fn(),
-        showFeedback: vi.fn(),
         holdEventOutcome: vi.fn(() => Promise.resolve()),
         settleCoveredScene: vi.fn(() => Promise.resolve()),
         beginEventPresentation: vi.fn(),
@@ -1904,7 +1899,6 @@ describe('SurvivalPhase orchestration', () => {
     let current = snapshot();
     const calls: string[] = [];
     const requestDayEvent = vi.fn();
-    const showFeedback = vi.fn();
     const perform = vi.fn(() => {
       current = snapshot({ state: 'day', pendingEventId: null, actedToday: true });
       return accepted();
@@ -1916,7 +1910,7 @@ describe('SurvivalPhase orchestration', () => {
         dispose: vi.fn(),
       },
       ui: {
-        render: vi.fn(), showFeedback, setBusy: vi.fn(), setJournalUnread: vi.fn(),
+        render: vi.fn(), setBusy: vi.fn(), setJournalUnread: vi.fn(),
         beginEventPresentation: vi.fn(),
         setSleepCovered: vi.fn(),
         setEventSelection: vi.fn(),
@@ -1931,7 +1925,6 @@ describe('SurvivalPhase orchestration', () => {
     expect(requestDayEvent).not.toHaveBeenCalled();
     expect(current).toMatchObject({ state: 'day', pendingEventId: null });
     expect(calls).toEqual(['fish']);
-    expect(showFeedback).not.toHaveBeenCalled();
   });
 
   it('does not open Dangerous Waters after eating', async () => {
@@ -1953,7 +1946,6 @@ describe('SurvivalPhase orchestration', () => {
       showEventReveal: vi.fn(() => Promise.resolve()),
       setEventSelection: vi.fn(),
       playEventChoiceBeat: vi.fn(() => Promise.resolve()),
-      showFeedback: vi.fn(),
       clearEventPresentation: vi.fn(),
       restoreCommandFocus: vi.fn(),
       dispose: vi.fn(),
@@ -2422,7 +2414,6 @@ describe('SurvivalPhase orchestration', () => {
         return beat.promise;
       }),
       setBusy: vi.fn(),
-      showFeedback: vi.fn(),
       render: vi.fn(),
       setJournalUnread: vi.fn(),
       clearEventPresentation: vi.fn(),
@@ -2586,7 +2577,6 @@ describe('SurvivalPhase orchestration', () => {
       setEventSelection: vi.fn(),
       playEventChoiceBeat: vi.fn(() => Promise.resolve()),
       setBusy,
-      showFeedback: vi.fn(),
       holdEventOutcome: vi.fn(() => Promise.resolve()),
       render: vi.fn(),
       setJournalUnread: vi.fn(),
@@ -3205,7 +3195,6 @@ describe('SurvivalPhase orchestration', () => {
         resultId: 'trader-reward',
       },
     });
-    const showFeedback = vi.fn();
     const setEventEligibleItems = vi.fn();
     const ui = {
       beginEventPresentation: vi.fn(),
@@ -3220,7 +3209,6 @@ describe('SurvivalPhase orchestration', () => {
           calls.push('unlock');
         }
       }),
-      showFeedback,
       holdEventOutcome: vi.fn(() => {
         calls.push('hold');
         return hold.promise;
@@ -3320,7 +3308,6 @@ describe('SurvivalPhase orchestration', () => {
       'stage', 'reveal', 'unlock', 'choice', 'resolve', 'result',
       'sync', 'hold',
     ]);
-    expect(showFeedback).not.toHaveBeenCalled();
 
     hold.resolve();
     await flushPromises();
@@ -3423,7 +3410,6 @@ describe('SurvivalPhase orchestration', () => {
       setEventSelection: vi.fn(),
       playEventChoiceBeat: vi.fn(() => Promise.resolve()),
       setBusy,
-      showFeedback: vi.fn(),
       clearEventPresentation,
       restoreCommandFocus,
       dispose: vi.fn(),
@@ -3507,7 +3493,6 @@ describe('SurvivalPhase orchestration', () => {
       expect(calls.indexOf('error')).toBeLessThan(calls.indexOf('sync'));
     }
     expect(syncInventory).toHaveBeenCalledWith(current);
-    expect(ui.showFeedback).not.toHaveBeenCalled();
     expect(setBusy).toHaveBeenLastCalledWith(false);
     expect(current.state).toBe(route === 'context' ? 'nightEvent' : 'day');
     phase.dispose();
@@ -3528,7 +3513,6 @@ describe('SurvivalPhase orchestration', () => {
     };
     const calls: string[] = [];
     let trackTour = false;
-    const showFeedback = vi.fn(() => { calls.push('feedback'); });
     const reactToEventOutcome = vi.fn();
     const setBusy = vi.fn((busy: boolean) => {
       if (trackTour) calls.push(busy ? 'busy' : 'ready');
@@ -3547,7 +3531,6 @@ describe('SurvivalPhase orchestration', () => {
       setEventSelection: vi.fn(),
       playEventChoiceBeat: vi.fn(() => Promise.resolve()),
       setBusy,
-      showFeedback,
       render: vi.fn(),
       setJournalUnread: vi.fn(),
       clearEventPresentation: vi.fn(),
@@ -3593,11 +3576,9 @@ describe('SurvivalPhase orchestration', () => {
       'profile:solid',
       'settle',
       'fade:false',
-      'feedback',
       'ready',
       'focus',
     ]);
-    expect(showFeedback).toHaveBeenCalledWith(rejected);
     expect(reactToEventOutcome).not.toHaveBeenCalled();
     expect(beginDawn).not.toHaveBeenCalled();
     expect(setBusy).toHaveBeenLastCalledWith(false);
@@ -3966,7 +3947,6 @@ describe('SurvivalPhase orchestration', () => {
       showEventReveal: vi.fn(() => Promise.resolve()),
       setEventSelection: vi.fn(),
       setBusy,
-      showFeedback: vi.fn(),
       holdEventOutcome: vi.fn(() => {
         calls.push('hold-result');
         return Promise.resolve();
@@ -4110,7 +4090,6 @@ describe('SurvivalPhase orchestration', () => {
           showEventReveal: vi.fn(() => Promise.resolve()),
           setEventSelection: vi.fn(),
           setBusy,
-          showFeedback: vi.fn(),
           holdEventOutcome,
           render,
           setJournalUnread: vi.fn(),
@@ -4188,7 +4167,6 @@ describe('SurvivalPhase orchestration', () => {
       showEventReveal: vi.fn(() => Promise.resolve()),
       setEventSelection: vi.fn(),
       setBusy: vi.fn(),
-      showFeedback: vi.fn(),
       render,
       setJournalUnread: vi.fn(),
       restoreCommandFocus: vi.fn(),
@@ -4300,7 +4278,6 @@ describe('SurvivalPhase orchestration', () => {
       rescueTableauVisible = false;
     });
     const showEnding = vi.fn();
-    const showFeedback = vi.fn();
     const holdEventOutcome = vi.fn(() => Promise.resolve());
     const setSleepCovered = vi.fn(() => Promise.resolve());
     const syncInventory = vi.fn();
@@ -4329,7 +4306,6 @@ describe('SurvivalPhase orchestration', () => {
         setEventSelection: vi.fn(),
         setEventUsing: vi.fn(),
         setBusy: vi.fn(),
-        showFeedback,
         holdEventOutcome,
         render: vi.fn(),
         setJournalUnread: vi.fn(),
@@ -4353,7 +4329,6 @@ describe('SurvivalPhase orchestration', () => {
     });
     expect(session.snapshot().state).not.toBe('rescued');
     expect(showEnding).not.toHaveBeenCalled();
-    expect(showFeedback).not.toHaveBeenCalled();
     expect(rescueTableauVisible).toBe(false);
     expect(clearEvent).toHaveBeenCalledOnce();
     expect(holdEventOutcome).toHaveBeenCalledOnce();
@@ -4489,7 +4464,6 @@ describe('SurvivalPhase orchestration', () => {
       ui: {
         showEventReveal: vi.fn(() => Promise.resolve()),
         setEventSelection: vi.fn(),
-        showFeedback: vi.fn(),
         setBusy: vi.fn(),
         dispose: vi.fn(),
       },
@@ -5116,13 +5090,11 @@ describe('SurvivalPhase orchestration', () => {
       message: 'Carlitos is too hungry to help.',
     });
     const delegateDriftingItem = vi.fn(() => Promise.resolve());
-    const showFeedback = vi.fn();
     const ui: Partial<SurvivalUI> = {
       setSleepCovered: vi.fn(() => Promise.resolve()),
       showEventReveal: vi.fn(() => Promise.resolve()),
       setEventSelection: vi.fn(),
       playEventChoiceBeat: vi.fn(() => Promise.resolve()),
-      showFeedback,
       setBusy: vi.fn(),
       dispose: vi.fn(),
     };
@@ -5148,7 +5120,6 @@ describe('SurvivalPhase orchestration', () => {
     ui.onFocusedEventChoice?.({ id: 'delegate-carlitos', instanceId: null });
     await flushPromises();
 
-    expect(showFeedback).toHaveBeenCalledWith(rejected);
     expect(delegateDriftingItem).not.toHaveBeenCalled();
     phase.dispose();
   });
@@ -5266,7 +5237,7 @@ describe('SurvivalPhase orchestration', () => {
         }),
       },
       world: { play: vi.fn(() => cue.promise), dispose: vi.fn() },
-      ui: { showFeedback: vi.fn(), setBusy: vi.fn(), showEnding, render: vi.fn(), dispose: vi.fn() },
+      ui: { setBusy: vi.fn(), showEnding, render: vi.fn(), dispose: vi.fn() },
     });
 
     phase.handleAction('repair');
@@ -5298,7 +5269,7 @@ describe('SurvivalPhase orchestration', () => {
       world: { play: vi.fn(() => Promise.resolve()), dispose: vi.fn() },
       ui: {
         showEventReveal: vi.fn(() => Promise.resolve()), setEventSelection: vi.fn(),
-        showFeedback: vi.fn(), setBusy: vi.fn(), render: vi.fn(),
+        setBusy: vi.fn(), render: vi.fn(),
         setJournalUnread: vi.fn(), restoreCommandFocus: vi.fn(), dispose: vi.fn(),
       },
     });
@@ -5329,7 +5300,7 @@ describe('SurvivalPhase orchestration', () => {
       world: { play: vi.fn(() => Promise.resolve()), dispose: vi.fn() },
       ui: {
         showEventReveal: vi.fn(() => Promise.resolve()), setEventSelection: vi.fn(),
-        showFeedback: vi.fn(), setBusy: vi.fn(), render: vi.fn(),
+        setBusy: vi.fn(), render: vi.fn(),
         setJournalUnread: vi.fn(), showEnding, dispose: vi.fn(),
       },
     });
@@ -5530,7 +5501,6 @@ describe('SurvivalPhase orchestration', () => {
       showEventReveal: vi.fn(() => Promise.resolve()),
       setEventSelection,
       setBusy: vi.fn(),
-      showFeedback: vi.fn(),
       holdEventOutcome: vi.fn(() => Promise.resolve()),
       clearEventPresentation: vi.fn(),
       render: vi.fn(),
@@ -5692,7 +5662,6 @@ describe('SurvivalPhase orchestration', () => {
         setEventSelection: vi.fn(),
         setEventUsing: vi.fn(),
         setBusy: vi.fn(),
-        showFeedback: vi.fn(),
         holdEventOutcome: vi.fn(() => Promise.resolve()),
         clearEventPresentation: vi.fn(),
         render: vi.fn(),
@@ -5769,7 +5738,6 @@ describe('SurvivalPhase orchestration', () => {
       playEventChoiceBeat: vi.fn(() => Promise.resolve()),
       setBusy: vi.fn(),
       setPaused: vi.fn(),
-      showFeedback: vi.fn(),
       dispose: vi.fn(),
     };
     const phase = SurvivalPhase.forTest({
@@ -6323,7 +6291,7 @@ describe('SurvivalPhase orchestration', () => {
     const phase = SurvivalPhase.forTest({
       session: { snapshot: vi.fn(() => snapshot()), perform: vi.fn(() => accepted()) },
       world: { play: vi.fn(() => cue.promise), dispose: worldDispose },
-      ui: { showFeedback: vi.fn(), setBusy, render: vi.fn(), dispose: uiDispose },
+      ui: { setBusy, render: vi.fn(), dispose: uiDispose },
     });
     phase.handleAction('dive');
     phase.dispose();

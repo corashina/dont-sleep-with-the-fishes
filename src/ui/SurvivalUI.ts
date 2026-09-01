@@ -7,7 +7,6 @@ import type { JournalEntry } from '../survival/journalRecords';
 import type { BoatInteractionAnchor, ProjectedBoatBounds } from '../survival/BoatInteraction';
 import type { InspectableEventId } from '../survival/eventCatalog';
 import type {
-  ActionOutcome,
   DayActionId,
   DayActionOption,
   EventResponseId,
@@ -194,7 +193,6 @@ export class SurvivalUI {
     this.modalViews = new SurvivalModalViews();
     const announcer = requireElement<HTMLElement>(this.root, '[data-survival-announcer]');
     announcer.after(
-      this.eventView.feedback,
       ...this.coverView.roots,
       this.eventView.sleepMask,
     );
@@ -249,9 +247,6 @@ export class SurvivalUI {
       if (!this.disposed) this.onCameraTurn?.();
     };
     this.anchorView.onAction = (action, origin) => this.activateDayAction(action, origin);
-    this.anchorView.onUnavailableAction = (_action, reason) => {
-      if (!this.disposed) this.showFeedback({ accepted: false, message: reason });
-    };
     this.anchorView.onEventItem = (choiceId, instanceId) => {
       if (!this.disposed) this.onEventItem(choiceId, instanceId);
     };
@@ -456,11 +451,6 @@ export class SurvivalUI {
   setEventSleepMask(eventId: string, visible: boolean): void {
     if (this.disposed) return;
     this.eventView.setSleepMask(eventId, visible);
-  }
-
-  showFeedback(outcome: Pick<ActionOutcome, 'accepted' | 'message'>): void {
-    if (this.disposed) return;
-    this.eventView.showFeedback(outcome);
   }
 
   setSleepCoverProfile(profile: SleepCoverProfile): Promise<void> {
@@ -668,7 +658,6 @@ export class SurvivalUI {
       () => this.hudView.dispose(),
       () => this.modalFocus.dispose(),
       () => { this.announcementVersion += 1; },
-      () => this.eventView.clearFeedbackTimerForDispose(),
       () => this.eventView.removeListenersForDispose(),
       () => this.coverView.removeListenersForDispose(),
       () => this.fishingView.removeListenersForDispose(),

@@ -163,7 +163,6 @@ function createRig(
     setSleepCoverProfile: vi.fn(async () => undefined),
     setBadSleepCue: vi.fn(),
     holdEventOutcome: vi.fn(async () => { calls.push('hold'); }),
-    showFeedback: vi.fn(),
     showRewardResult: vi.fn(async () => { calls.push('show-result'); }),
     clearEventPresentation: vi.fn(() => calls.push('clear-ui')),
     setAnchors: vi.fn(),
@@ -882,7 +881,7 @@ describe('SurvivalEventFlow', () => {
     await work;
   });
 
-  it('reports overnight hull wear at dawn', async () => {
+  it('plays dawn after overnight hull wear', async () => {
     const rig = createRig(snapshot({ state: 'nightEvent' }));
     rig.session.beginDawn.mockReturnValueOnce(accepted({
       code: 'dawn',
@@ -893,9 +892,8 @@ describe('SurvivalEventFlow', () => {
 
     await rig.flow.beginDawn();
 
-    expect(rig.ui.showFeedback).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ deltas: { hull: -3 } }),
-    );
+    expect(rig.audio.dawn).toHaveBeenCalledOnce();
+    expect(rig.world.play).toHaveBeenCalledWith('dawn');
   });
   it('loads, activates, stages, and reveals before it enables eligible items', async () => {
     const umbrella = {

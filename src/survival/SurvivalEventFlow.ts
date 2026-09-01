@@ -84,7 +84,6 @@ export type EventUiPort = Pick<
   | 'setSleepCoverProfile'
   | 'setBadSleepCue'
   | 'holdEventOutcome'
-  | 'showFeedback'
   | 'clearEventPresentation'
   | 'setAnchors'
   | 'restoreCommandFocus'
@@ -639,7 +638,7 @@ export class SurvivalEventFlow {
     const outcome = this.resolveFocusedChoiceOutcome(choice);
     if (outcome === undefined || !this.isCurrent(generation, operation)) return undefined;
     if (!outcome.accepted) {
-      this.rejectFocusedChoice(outcome);
+      this.rejectFocusedChoice();
       return { accepted: false };
     }
     this.clearFocusedChoiceSelection();
@@ -684,9 +683,8 @@ export class SurvivalEventFlow {
     });
   }
 
-  private rejectFocusedChoice(outcome: ActionOutcome): void {
+  private rejectFocusedChoice(): void {
     this.dependencies.audio.deny();
-    this.dependencies.ui.showFeedback?.(outcome);
   }
 
   private clearFocusedChoiceSelection(): void {
@@ -746,10 +744,6 @@ export class SurvivalEventFlow {
     this.dependencies.onInvariantError(new Error(
       `Drifting item ${context.eventId}/${context.choice.id} requires a reward summary.`,
     ));
-    this.dependencies.ui.showFeedback?.({
-      accepted: false,
-      message: 'The recovered salvage could not be identified.',
-    });
   }
 
   private async playFocusedChoiceAnimation(context: FocusedChoiceContext): Promise<void> {
@@ -1030,7 +1024,7 @@ export class SurvivalEventFlow {
       return;
     }
     if (!outcome.accepted) {
-      this.rejectItemChoice(outcome, generation);
+      this.rejectItemChoice(generation);
       return;
     }
     await this.completeItemChoice(
@@ -1088,10 +1082,9 @@ export class SurvivalEventFlow {
     return this.isCurrent(generation, operation);
   }
 
-  private rejectItemChoice(outcome: ActionOutcome, generation: number): void {
+  private rejectItemChoice(generation: number): void {
     this.cancelDeferredPresentationSync(generation);
     this.dependencies.audio.deny();
-    this.dependencies.ui.showFeedback?.(outcome);
     this.presentation = 'choosing';
     this.dependencies.world.setEventSelectedItem?.(null);
     this.dependencies.world.setEventEligibleItems?.(new Set(this.eligibility.keys()));
@@ -1221,7 +1214,7 @@ export class SurvivalEventFlow {
       return;
     }
     if (!outcome.accepted) {
-      this.rejectContextualChoice(eventId, outcome, generation);
+      this.rejectContextualChoice(eventId, generation);
       return;
     }
     await this.completeContextualChoice(
@@ -1277,13 +1270,11 @@ export class SurvivalEventFlow {
 
   private rejectContextualChoice(
     eventId: string,
-    outcome: ActionOutcome,
     generation: number,
   ): void {
     this.cancelDeferredPresentationSync(generation);
     this.dependencies.audio.deny();
     this.dependencies.ui.setEventSleepMask?.(eventId, false);
-    this.dependencies.ui.showFeedback?.(outcome);
     this.presentation = 'choosing';
     this.restoreEventSelection();
     this.setBusy(false);
@@ -1491,7 +1482,7 @@ export class SurvivalEventFlow {
       return;
     }
     if (!outcome.accepted) {
-      this.rejectChestAttack(outcome, generation);
+      this.rejectChestAttack(generation);
       return;
     }
     if (await this.recoverFocusedResultIfInvalid(
@@ -1525,10 +1516,9 @@ export class SurvivalEventFlow {
     return this.resumeAfterVisibility(generation, operation);
   }
 
-  private rejectChestAttack(outcome: ActionOutcome, generation: number): void {
+  private rejectChestAttack(generation: number): void {
     this.cancelDeferredPresentationSync(generation);
     this.dependencies.audio.deny();
-    this.dependencies.ui.showFeedback?.(outcome);
     this.presentation = 'choosing';
     this.setBusy(false);
   }
@@ -1693,7 +1683,6 @@ export class SurvivalEventFlow {
     try {
       if (reason.rejection !== undefined) {
         this.dependencies.audio.deny();
-        this.dependencies.ui.showFeedback?.(reason.rejection);
         this.presentation = 'choosing';
         this.restoreEventSelection();
       } else if (reason.invariantError !== undefined) {
@@ -1754,7 +1743,7 @@ export class SurvivalEventFlow {
       return;
     }
     if (!outcome.accepted) {
-      this.rejectEndure(outcome, generation);
+      this.rejectEndure(generation);
       return;
     }
     await this.completeEndure(
@@ -1778,10 +1767,9 @@ export class SurvivalEventFlow {
     return this.isCurrent(generation, operation);
   }
 
-  private rejectEndure(outcome: ActionOutcome, generation: number): void {
+  private rejectEndure(generation: number): void {
     this.cancelDeferredPresentationSync(generation);
     this.dependencies.audio.deny();
-    this.dependencies.ui.showFeedback?.(outcome);
     this.presentation = 'choosing';
     this.setBusy(false);
   }
@@ -2050,9 +2038,6 @@ export class SurvivalEventFlow {
       this.dependencies.audio.dawn();
       await (this.dependencies.world.play?.(dawn.cue) ?? Promise.resolve());
       if (!this.isCurrent(generation, operation)) return this.dependencies.session.snapshot();
-      if ((dawn.deltas.hull ?? 0) < 0) {
-        this.dependencies.ui.showFeedback?.(dawn);
-      }
     }
     const snapshot = this.dependencies.renderSnapshot();
     this.dependencies.onDawnSnapshot?.(snapshot, generation);

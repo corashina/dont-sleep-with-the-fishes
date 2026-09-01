@@ -1,6 +1,5 @@
 import type { ItemInstanceId } from '../game/ItemState';
 import type {
-  ActionOutcome,
   EventResponseId,
   SurvivalEventDefinition,
 } from '../survival/survivalTypes';
@@ -13,7 +12,6 @@ import {
 } from './UiCleanup';
 
 const EVENT_CHOICE_BEAT_MS = 240;
-const FEEDBACK_MS = 2_600;
 const requireElement = createElementRequirement('survival event view');
 
 interface PendingWork {
@@ -21,10 +19,9 @@ interface PendingWork {
 }
 
 export class SurvivalEventView {
-  readonly feedback: HTMLElement;
   readonly sleepMask: HTMLElement;
   readonly caption: HTMLElement;
-  readonly roots: readonly [HTMLElement, HTMLElement, HTMLElement];
+  readonly roots: readonly [HTMLElement, HTMLElement];
 
   onChoice: (choiceId: EventResponseId) => void = () => undefined;
   onAnnouncement: (message: string) => void = () => undefined;
@@ -38,14 +35,12 @@ export class SurvivalEventView {
   private active = false;
   private busy = false;
   private modalOpen = false;
-  private feedbackTimer: number | undefined;
   private pendingChoiceBeat: PendingWork | null = null;
   private disposed = false;
 
   constructor() {
     const template = document.createElement('template');
     template.innerHTML = `
-      <div class="survival-feedback" data-survival-feedback aria-hidden="true"></div>
       <div class="event-sleep-mask" data-event-sleep-mask aria-hidden="true">
         <i></i><i></i><i></i>
       </div>
@@ -56,10 +51,9 @@ export class SurvivalEventView {
         <nav class="event-choices" data-event-choices aria-label="Event choices" hidden></nav>
       </section>`;
     const roots = [...template.content.children] as HTMLElement[];
-    this.feedback = roots[0]!;
-    this.sleepMask = roots[1]!;
-    this.caption = roots[2]!;
-    this.roots = [this.feedback, this.sleepMask, this.caption];
+    this.sleepMask = roots[0]!;
+    this.caption = roots[1]!;
+    this.roots = [this.sleepMask, this.caption];
     this.title = requireElement(this.caption, '[data-event-title]');
     this.detail = requireElement(this.caption, '[data-event-detail]');
     this.risk = requireElement(this.caption, '[data-event-risk]');
@@ -235,20 +229,6 @@ export class SurvivalEventView {
     this.sleepMask.classList.toggle('is-visible', eventId === 'ghosts' && visible);
   }
 
-  showFeedback(outcome: Pick<ActionOutcome, 'accepted' | 'message'>): void {
-    if (this.disposed) return;
-    window.clearTimeout(this.feedbackTimer);
-    this.feedback.dataset.accepted = String(outcome.accepted);
-    this.feedback.textContent = outcome.message;
-    this.feedback.classList.remove('is-visible');
-    void this.feedback.offsetWidth;
-    this.feedback.classList.add('is-visible');
-    this.onAnnouncement(outcome.message);
-    this.feedbackTimer = window.setTimeout(() => {
-      if (!this.disposed) this.feedback.classList.remove('is-visible');
-    }, FEEDBACK_MS);
-  }
-
   clear(): void {
     if (this.disposed) return;
     throwCleanupFailure(runCleanupSteps([
@@ -349,7 +329,6 @@ export class SurvivalEventView {
     const result = runCleanupSteps([
       () => this.clearChoicesForDispose(),
       () => this.settleChoiceBeat(),
-      () => this.clearFeedbackTimerForDispose(),
       () => this.removeListenersForDispose(),
       () => this.resetCallbacksForDispose(),
     ]);
@@ -369,10 +348,6 @@ export class SurvivalEventView {
       () => this.choices.replaceChildren(),
       () => { this.choices.hidden = true; },
     ]));
-  }
-
-  clearFeedbackTimerForDispose(): void {
-    window.clearTimeout(this.feedbackTimer);
   }
 
   removeListenersForDispose(): void {
