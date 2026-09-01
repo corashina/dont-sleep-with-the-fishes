@@ -1424,6 +1424,23 @@ describe('SurvivalUI', () => {
     ui.dispose();
   });
 
+  it('uses straight journal edges and restrained handwritten text', () => {
+    expect(mainStyles).toMatch(
+      /\.journal-book\s*\{[^}]*--font-journal:\s*'Segoe Print'/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.journal-book__cover\s*\{[^}]*border-radius:\s*0;[^}]*clip-path:\s*none;/s,
+    );
+    expect(mainStyles).toMatch(/\.journal-page\s*\{[^}]*clip-path:\s*none;/s);
+    expect(mainStyles).toMatch(/\.journal-page::after\s*\{[^}]*clip-path:\s*none;/s);
+    expect(mainStyles).toMatch(
+      /\.journal-page h2\s*\{[^}]*font-family:\s*var\(--font-journal\)/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.journal-page__story\s*\{[^}]*font-family:\s*var\(--font-journal\)/s,
+    );
+  });
+
   it('locks ordinary anchors until event choices become available', () => {
     const mount = document.createElement('main');
     document.body.append(mount);

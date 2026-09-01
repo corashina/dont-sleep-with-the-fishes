@@ -2478,13 +2478,23 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .journal-overlay.is-visible { transition-delay: 0s; }
 .journal-overlay::before { display: none; }
 .journal-book {
+  --font-journal: 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive;
   isolation: isolate;
   position: relative;
   width: min(620px, calc(100vw - 96px));
   max-height: calc(100dvh - 32px);
   padding: 20px 40px 20px 52px;
 }
-.journal-book__cover { position: absolute; inset: 0; z-index: -3; border: 8px solid #180c08; border-radius: 34px 44px 38px 30px; background: linear-gradient(105deg, #24120c, #5b3824 48%, #26140d); box-shadow: 0 32px 80px #000d, inset 0 0 24px #0a0504cc; clip-path: polygon(2% 1%, 96% 0, 100% 4%, 99% 97%, 94% 100%, 3% 99%, 0 94%, 1% 6%); }
+.journal-book__cover {
+  position: absolute;
+  inset: 0;
+  z-index: -3;
+  border: 8px solid #180c08;
+  border-radius: 0;
+  background: linear-gradient(105deg, #24120c, #5b3824 48%, #26140d);
+  box-shadow: 0 32px 80px #000d, inset 0 0 24px #0a0504cc;
+  clip-path: none;
+}
 .journal-book__rings { position: absolute; left: 32px; top: 19%; bottom: 19%; display: grid; align-content: space-between; z-index: 3; }
 .journal-book__rings i { width: 34px; height: 18px; border: 5px solid #86745c; border-radius: 50%; box-shadow: inset 0 0 0 2px #241a12, 2px 3px 3px #0008; }
 .journal-book__tabs { position: absolute; right: 13px; top: 25%; display: grid; gap: 28px; z-index: -1; }
@@ -2508,7 +2518,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
     linear-gradient(90deg, transparent 0 49.4%, #6a44251f 49.8% 50.2%, transparent 50.6%),
     linear-gradient(145deg, #e8d3a5, #c8a976 72%, #af8a58);
   box-shadow: 0 28px 70px #000b, inset 0 0 34px #71482155;
-  clip-path: polygon(1% 2%, 98% 0, 100% 97%, 3% 100%, 0 53%);
+  clip-path: none;
 }
 .journal-page::before {
   content: '';
@@ -2528,15 +2538,16 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   inset: 10px;
   z-index: -1;
   box-shadow: inset 0 0 28px #5b351e55;
-  clip-path: polygon(1% 2%, 98% 0, 100% 97%, 3% 100%, 0 53%);
+  clip-path: none;
   pointer-events: none;
 }
 .journal-page h2 {
   grid-row: 2;
   color: #342219;
-  font-family: var(--font-display);
+  font-family: var(--font-journal);
   font-weight: 400;
-  font-size: clamp(2rem, 5vw, 3.4rem);
+  font-size: clamp(2rem, 5vw, 3rem);
+  letter-spacing: .015em;
   text-align: center;
   text-shadow: none;
 }
@@ -2544,7 +2555,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   align-self: start;
   margin: 0;
   padding: 8px 52px 0 18px;
-  font-family: var(--font-narrative);
+  font-family: var(--font-journal);
   font-size: clamp(.95rem, 2vw, 1.12rem);
   font-weight: 400;
   line-height: 1.7;
@@ -2560,11 +2571,12 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   min-height: 0;
   padding: 8px 18px;
   overflow-y: auto;
+  font-family: var(--font-journal);
   font-size: clamp(.95rem, 2vw, 1.12rem);
   line-height: 1.7;
 }
 .journal-page__story section + section { margin-top: 24px; }
-.journal-page__story h3 { margin: 0 0 6px; color: #7a3d2f; font-size: .72rem; }
+.journal-page__story h3 { margin: 0 0 6px; color: #7a3d2f; font-family: var(--font-context); font-size: .72rem; font-weight: 700; }
 .journal-page__story p { margin: 0; }
 .journal-page__navigation {
   grid-row: 4;
