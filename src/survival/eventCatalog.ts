@@ -34,7 +34,7 @@ export const WRECKAGE_RESULT_IDS = Object.freeze([
   'wreckage-dive-medkit', 'wreckage-dive-flare-gun', 'wreckage-dive-duct-tape',
   'wreckage-dive-energy-bar', 'wreckage-dive-collapse',
   'wreckage-dive-collapse-scuba', 'wreckage-dive-creature',
-  'wreckage-dive-ghost', 'wreckage-leave',
+  'wreckage-dive-ghost',
 ] as const);
 export type WreckageResultId = typeof WRECKAGE_RESULT_IDS[number];
 export type SignalSightingEventId = Extract<
@@ -71,12 +71,6 @@ export function driftingItemRetrieveKey(eventId: DriftingItemEventId): EventPres
   return eventId === 'drifting-supplies'
     ? 'drifting-supplies.retrieve'
     : 'drifting-chest.retrieve';
-}
-
-export function driftingItemLeaveKey(eventId: DriftingItemEventId): EventPresentationKey {
-  return eventId === 'drifting-supplies'
-    ? 'drifting-supplies.drift'
-    : 'drifting-chest.drift';
 }
 
 const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.freeze({
@@ -549,8 +543,6 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
           effects(undefined, [gain('energyBar')]))),
       companionAction: 'delegateCarlitos',
     },
-    contextualChoice('sleep', 'Let It Drift',
-      featuredOutcome('drifting-supplies.drift', 1, 'The supplies drift out of reach.')),
   ]),
   event('drifting-chest', 'day', 'Drifting Chest', 'safe', 'fish', 1, 3, 3, [
     {
@@ -574,8 +566,6 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
         )),
       companionAction: 'delegateCarlitos',
     },
-    contextualChoice('sleep', 'Let It Drift',
-      featuredOutcome('drifting-chest.drift', 1, 'The chest drifts out of reach.')),
   ], undefined, { allowedChestStates: ['none'] }),
   event('wreckage', 'day', 'Wreckage', 'uncertain', 'dive', 1, 4, 5, [
     {
@@ -631,9 +621,6 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
             add('pressure', 1)]), 'wreckage-dive-ghost')),
       requirements: [{ resource: 'energy', minimum: 3 }],
     },
-    contextualChoice('leave', 'Leave',
-      wreckageOutcome('wreckage.leave', 1, 'You leave the wreckage behind.',
-        {}, 'wreckage-leave')),
   ]),
   event('check-the-back', 'night', 'Check the Back', 'uncertain', 'fish', 3, 2, 35, [
     contextualChoice('check', 'Yes',

@@ -34,6 +34,7 @@ import {
 } from '../src/game/ItemState';
 import { BoatBuoyancy } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
+import { HOVER_OUTLINE_NAME } from '../src/rendering/HoverOutline';
 import {
   tryCreateVolumetricClouds,
 } from '../src/world/VolumetricClouds';
@@ -1133,6 +1134,54 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('outlines the persistent chest in the rear view', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+    );
+    world.syncInventory(snapshot([], {
+      chest: { state: 'closed', acquiredDay: 3 },
+    }));
+    world.setRearCameraView(true, true);
+    const chest = world.scene.getObjectByName('persistent-chest')!;
+
+    world.setHighlightedItem('persistent-chest');
+
+    expect(chest.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+
+    world.setHighlightedItem(null);
+    expect(chest.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+    world.dispose();
+    propModels.dispose();
+  });
+
+  it('outlines the sleep pillow during the day and an event', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      createTestMoonTexture(),
+    );
+    const pillow = world.scene.getObjectByName('sleep-pillow')!;
+
+    world.setHighlightedItem('end-day-pillow');
+    expect(pillow.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+
+    world.setHighlightedItem(null);
+    expect(pillow.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+
+    world.stageEvent('handyman');
+    world.setHighlightedItem('end-day-pillow');
+    expect(pillow.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+
+    world.setHighlightedItem(null);
+    expect(pillow.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('applies the Item Animation Lab free look without moving the camera', () => {
     const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
     const propModels = createTestPropModels();
@@ -1352,7 +1401,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('ignores stale drifting-item retrieve and recede commands', async () => {
+  it('ignores a stale drifting-item retrieve command', async () => {
     const propModels = createTestPropModels();
     const adapter = eventAdapterTestDouble('drifting-supplies');
     const create = vi.spyOn(EventPresentationRegistry.prototype, 'create')
@@ -1367,7 +1416,6 @@ describe('BoatWorld helpers', () => {
       world.stageEvent('drifting-supplies');
 
       await world.retrieveDriftingItem('drifting-chest');
-      await world.recedeDriftingItem('drifting-chest');
 
       expect(adapter.react).not.toHaveBeenCalled();
     } finally {
@@ -1405,6 +1453,38 @@ describe('BoatWorld helpers', () => {
     disposals.forEach((dispose) => expect(dispose).not.toHaveBeenCalled());
     furniture.dispose();
     disposals.forEach((dispose) => expect(dispose).toHaveBeenCalledOnce());
+    propModels.dispose();
+  });
+
+  it.each([
+    ['drifting-supplies', 0, 'drifting-supplies:barrel'],
+    ['drifting-chest', 8, 'drifting-chest:model'],
+  ] as const)('outlines %s while its event anchor is hovered', (
+    eventId,
+    variantSeed,
+    itemName,
+  ) => {
+    const propModels = createTestPropModels();
+    const furniture = createTestShipFurniture();
+    const world = new BoatWorld(
+      new PerspectiveCamera(),
+      propModels,
+      createTestMoonTexture(),
+      [],
+      undefined,
+      furniture,
+    );
+    world.stageEvent(eventId, variantSeed);
+    const item = world.scene.getObjectByName(itemName)!;
+
+    world.setHighlightedItem(`event:${eventId}`);
+
+    expect(item.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+
+    world.setHighlightedItem(null);
+    expect(item.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+    world.dispose();
+    furniture.dispose();
     propModels.dispose();
   });
 

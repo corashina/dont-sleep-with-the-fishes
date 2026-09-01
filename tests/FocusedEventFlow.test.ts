@@ -17,7 +17,10 @@ function deferred<T = void>() {
 
 const driftingChoices = [
   { id: 'retrieve', label: 'Retrieve', unavailableReason: null, instanceId: null },
-  { id: 'sleep', label: 'Leave', unavailableReason: null, instanceId: null },
+  {
+    id: 'sleep', label: 'Leave', unavailableReason: null, instanceId: null,
+    dismisses: true,
+  },
 ] as const;
 
 function createRig(eventId: 'drifting-supplies' | 'wreckage' = 'drifting-supplies') {
@@ -139,7 +142,7 @@ describe('FocusedEventFlow', () => {
     expect(rig.ui.showFocusedEvent).toHaveBeenCalledOnce();
   });
 
-  it('clears a declined event even if the Back camera fails', async () => {
+  it('restores the focused event when the Back camera fails', async () => {
     const rig = createRig();
     const backError = new Error('camera return failed');
     await rig.flow.enter('drifting-supplies', driftingChoices);
@@ -147,12 +150,12 @@ describe('FocusedEventFlow', () => {
 
     await expect(rig.flow.back()).rejects.toBe(backError);
 
-    expect(rig.ui.showFocusedEvent).toHaveBeenCalledOnce();
-    expect(rig.calls).toContain('clear-event');
+    expect(rig.ui.showFocusedEvent).toHaveBeenCalledTimes(2);
+    expect(rig.calls).not.toContain('clear-event');
     expect(rig.setBusy).toHaveBeenLastCalledWith(false);
     rig.world.exitFocusedEventView.mockResolvedValue(undefined);
     await expect(rig.flow.back()).resolves.toBeUndefined();
-    expect(rig.resolveChoice).toHaveBeenCalledOnce();
+    expect(rig.resolveChoice).not.toHaveBeenCalled();
   });
 
   it('keeps a choice beat error primary while focus cleanup errors stay secondary', async () => {
@@ -341,14 +344,14 @@ describe('FocusedEventFlow', () => {
     expect(rig.resolveChoice).toHaveBeenCalledOnce();
   });
 
-  it('resolves the no-cost decline when the player returns to the boat', async () => {
+  it('returns to the boat without resolving the pending event', async () => {
     const rig = createRig();
     await rig.flow.enter('drifting-supplies', driftingChoices);
     rig.calls.length = 0;
     await rig.flow.back();
-    expect(rig.resolveChoice).toHaveBeenCalledExactlyOnceWith({ id: 'sleep', instanceId: null });
-    expect(rig.calls.indexOf('resolve:sleep:none')).toBeLessThan(rig.calls.indexOf('exit'));
-    expect(rig.calls).toContain('clear-event');
+    expect(rig.resolveChoice).not.toHaveBeenCalled();
+    expect(rig.calls).not.toContain('clear-event');
+    expect(rig.calls).toContain('exit');
     expect(rig.calls.at(-1)).toBe('restore-focus');
   });
 
@@ -369,23 +372,27 @@ describe('FocusedEventFlow', () => {
     expect(rig.calls).not.toContain('clear-event');
     returning.resolve();
     await work;
-    expect(rig.calls).toContain('clear-event');
+    expect(rig.calls).not.toContain('clear-event');
     expect(rig.calls.at(-1)).toBe('restore-focus');
   });
 
-  it('resolves Wreckage Leave before returning to normal controls', async () => {
+  it('uses Wreckage Leave to close focus without resolving the event', async () => {
     const rig = createRig('wreckage');
     const choices = [
-      { id: 'leave', label: 'Leave', unavailableReason: null, instanceId: null },
+      {
+        id: 'leave', label: 'Leave', unavailableReason: null, instanceId: null,
+        dismisses: true,
+      },
     ] as const;
     await rig.flow.enter('wreckage', choices);
     rig.calls.length = 0;
 
     await rig.flow.choose({ id: 'leave', instanceId: null });
 
-    expect(rig.resolveChoice).toHaveBeenCalledOnce();
-    expect(rig.resolveChoice).toHaveBeenCalledWith({ id: 'leave', instanceId: null });
-    expect(rig.setEventResolutionActive).toHaveBeenCalledWith(true);
+    expect(rig.resolveChoice).not.toHaveBeenCalled();
+    expect(rig.setEventResolutionActive).not.toHaveBeenCalledWith(true);
+    expect(rig.calls).not.toContain('clear-event');
+    expect(rig.calls).toContain('exit');
     expect(rig.calls).toContain('restore-focus');
   });
 
@@ -471,7 +478,7 @@ describe('FocusedEventFlow', () => {
       presentTerminal: vi.fn(),
     });
     await rig.flow.enter('drifting-supplies', driftingChoices);
-    await rig.flow.choose({ id: 'sleep', instanceId: null });
+    await rig.flow.choose({ id: 'retrieve', instanceId: null });
 
     expect(rig.ui.restoreCommandFocus).not.toHaveBeenCalled();
   });
