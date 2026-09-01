@@ -61,16 +61,14 @@ export class SurvivalModalViews {
       </section>
       <section class="survival-overlay pause-overlay cinematic-overlay scuba-popup-overlay" data-pause role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival paused" inert>
         <div class="cinematic-overlay__content scuba-popup-paper scuba-popup-panel">
-          <p class="eyebrow ui-role-context">PAUSED</p>
           <h2 class="scuba-popup-title ui-role-display">Hold Fast</h2>
-          <p class="ui-role-narrative">The sea will wait until you return.</p>
           <button type="button" class="primary-action salvage-action ui-role-context" data-resume aria-label="Resume">
             RESUME
           </button>
-          <button type="button" class="secondary-action salvage-action ui-role-context" data-pause-restart aria-label="Start over">
+          <button type="button" class="primary-action salvage-action ui-role-context" data-pause-restart aria-label="Start over">
             START OVER
           </button>
-          <button type="button" class="secondary-action salvage-action ui-role-context" data-pause-menu aria-label="Back to menu">
+          <button type="button" class="primary-action salvage-action ui-role-context" data-pause-menu aria-label="Back to menu">
             BACK TO MENU
           </button>
         </div>

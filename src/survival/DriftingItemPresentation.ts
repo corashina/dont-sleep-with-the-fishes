@@ -29,9 +29,9 @@ import type { DriftingItemEventId } from './eventCatalog';
 import { eventSideFromSeed, type EventSide } from './eventVariant';
 import type { DriftingCargoKind } from './survivalTypes';
 
-type DriftingItemAnimationKind = 'retrieve' | 'recede';
+type DriftingItemAnimationKind = 'retrieve';
 type ActiveDriftingItemAnimation = TimedAnimation<DriftingItemAnimationKind>;
-type DriftingItemState = 'idle' | 'floating' | 'retrieving' | 'held' | 'receding';
+type DriftingItemState = 'idle' | 'floating' | 'retrieving' | 'held';
 
 export interface DriftingItemModels {
   readonly barrel: Group;
@@ -64,7 +64,6 @@ const LIFEBOAT_COOLER_POSITION = Object.freeze({ x: 0, y: 0.18, z: 0.65 });
 const RECEDE_OFFSET = Object.freeze({ x: 5.2, y: -0.28, z: -2 });
 const RETRIEVE_DURATIONS: Readonly<Record<Exclude<DriftingCargoKind, 'container'>, number>> =
   Object.freeze({ barrel: 1.35, chest: 1.55, lifeboat: 1.8 });
-const RECEDE_DURATION = 0.8;
 
 function keyedRetrieveProgress(progress: number): number {
   if (progress < 0.14) return -0.045 * smoothstep(progress / 0.14);
@@ -216,16 +215,6 @@ export class DriftingItemPresentation {
     return this.startAnimation('retrieve', RETRIEVE_DURATIONS[variant]);
   }
 
-  recede(): Promise<void> {
-    const variant = this.activeVariant;
-    if (this.disposed || variant === null) return Promise.resolve();
-    const root = this.roots[variant];
-    this.animationStartPosition.copy(root.position);
-    this.animationStartQuaternion.copy(root.quaternion);
-    this.state = 'receding';
-    return this.startAnimation('recede', RECEDE_DURATION);
-  }
-
   projectInteraction(
     camera: PerspectiveCamera,
     width: number,
@@ -265,13 +254,8 @@ export class DriftingItemPresentation {
     if (this.disposed || this.activeAnimation === null || variant === null) return;
     const animation = this.activeAnimation;
     this.activeAnimation = null;
-    if (animation.kind === 'retrieve') {
-      if (variant !== 'container') this.finishRetrieve(variant);
-      else this.state = 'held';
-    } else {
-      this.state = 'idle';
-      this.roots[variant].visible = false;
-    }
+    if (variant !== 'container') this.finishRetrieve(variant);
+    else this.state = 'held';
     animation.resolve();
   }
 
@@ -311,9 +295,7 @@ export class DriftingItemPresentation {
     variant: DriftingCargoKind,
     progress: number,
   ): void {
-    if (animation.kind === 'retrieve' && variant !== 'container') {
-      this.applyRetrievePose(variant, progress);
-    } else this.applyRecedePose(variant, progress);
+    if (variant !== 'container') this.applyRetrievePose(variant, progress);
   }
 
   private finishAnimation(
@@ -321,15 +303,8 @@ export class DriftingItemPresentation {
     variant: DriftingCargoKind,
   ): void {
     this.activeAnimation = null;
-    if (animation.kind === 'retrieve') {
-      if (variant !== 'container') this.finishRetrieve(variant);
-      else this.state = 'held';
-    }
-    else {
-      this.state = 'idle';
-      this.resetPose(variant);
-      this.roots[variant].visible = false;
-    }
+    if (variant !== 'container') this.finishRetrieve(variant);
+    else this.state = 'held';
     animation.resolve();
   }
 
@@ -401,21 +376,6 @@ export class DriftingItemPresentation {
       this.lifeboatExitStartQuaternion,
       this.baseQuaternions.lifeboat,
       progress,
-    );
-  }
-
-  private applyRecedePose(variant: DriftingCargoKind, progress: number): void {
-    const travel = smoothstep(Math.min(1, Math.max(0, progress)));
-    this.targetPositionScratch.copy(this.basePositions[variant]);
-    this.targetPositionScratch.x += RECEDE_OFFSET.x * this.side;
-    this.targetPositionScratch.y += RECEDE_OFFSET.y;
-    this.targetPositionScratch.z += RECEDE_OFFSET.z;
-    const root = this.roots[variant];
-    root.position.lerpVectors(this.animationStartPosition, this.targetPositionScratch, travel);
-    root.quaternion.slerpQuaternions(
-      this.animationStartQuaternion,
-      this.baseQuaternions[variant],
-      travel,
     );
   }
 

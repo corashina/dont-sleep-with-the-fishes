@@ -99,7 +99,6 @@ import {
 } from './FocusedEventPresentation';
 import type { EventPresentationCue } from './eventPresentationCue';
 import {
-  driftingItemLeaveKey,
   driftingItemRetrieveKey,
   isDriftingItemEventId,
   type InspectableEventId,
@@ -1046,11 +1045,21 @@ export class BoatWorld {
 
   setHighlightedItem(anchorId: string | null): void {
     if (this.disposed) return;
-    const focusedRoot = anchorId === null
-      ? null
-      : anchorId === 'repair-tools'
-        ? this.repairTools
-        : this.eventPresentationHost.interactionRoot(anchorId);
+    let focusedRoot: Object3D | null = null;
+    if (anchorId === 'repair-tools') {
+      focusedRoot = this.repairTools;
+    } else if (anchorId === 'persistent-chest') {
+      focusedRoot = this.chestDisplay.root;
+    } else if (anchorId === 'end-day-pillow') {
+      focusedRoot = this.sleepPillow.root;
+    } else if (anchorId !== null) {
+      const featuredEventId = this.activeFeaturedEventId;
+      const interactionId = featuredEventId !== null
+        && anchorId === `event:${featuredEventId}`
+        ? featuredEventId
+        : anchorId;
+      focusedRoot = this.eventPresentationHost.interactionRoot(interactionId);
+    }
     this.toolHoverOutline.setTarget(
       focusedRoot?.userData.disableHoverOutline === true ? null : focusedRoot,
     );
@@ -1290,14 +1299,6 @@ export class BoatWorld {
     return this.carlitosDelegation.delegate(
       () => this.retrieveFeaturedDriftingItem(eventId),
     );
-  }
-
-  recedeDriftingItem(eventId: DriftingItemEventId): Promise<void> {
-    if (this.disposed || this.activeFeaturedEventId !== eventId) {
-      return Promise.resolve();
-    }
-    this.toolHoverOutline.setTarget(null);
-    return this.playFeaturedPresentation(driftingItemLeaveKey(eventId));
   }
 
   private retrieveFeaturedDriftingItem(eventId: DriftingItemEventId): Promise<void> {

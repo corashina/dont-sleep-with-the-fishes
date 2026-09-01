@@ -555,7 +555,7 @@ describe('SurvivalSession Carlitos events', () => {
     });
   });
 
-  it('omits Wreckage reward summaries for harm, empty, and Leave outcomes', () => {
+  it('handles Wreckage harm, empty, and obsolete Leave without rewards', () => {
     const injured = new SurvivalSession(saved(), {
       seed: 77,
       random: sequenceRandom([0.9, 0]),
@@ -582,10 +582,13 @@ describe('SurvivalSession Carlitos events', () => {
       initialEventId: 'wreckage',
     });
     expect(left.resolveEvent({ kind: 'choice', choiceId: 'leave' })).toMatchObject({
-      accepted: true,
-      deltas: {},
+      accepted: false,
+      code: 'choice-unavailable',
     });
     expect(left.snapshot().energy).toBe(2);
+    expect(left.snapshot()).toMatchObject({
+      state: 'dayEvent', pendingEventId: 'wreckage',
+    });
     expect(left.snapshot().lastOutcome?.rewardSummary).toBeUndefined();
   });
 
@@ -2539,7 +2542,7 @@ describe('SurvivalSession daytime actions', () => {
       initial: { day: 2 },
       initialEventId: 'drifting-supplies',
     });
-    session.resolveEvent(choiceResponse('sleep'));
+    session.resolveEvent(choiceResponse('retrieve'));
     session.perform('endDay');
     session.resolveEvent(choiceResponse('sleep'));
 
@@ -2548,8 +2551,8 @@ describe('SurvivalSession daytime actions', () => {
       weather: 'calm',
       daytime: expect.objectContaining({
         eventId: 'drifting-supplies',
-        attemptedChoiceId: 'sleep',
-        outcomeMessage: 'The supplies drift out of reach.',
+        attemptedChoiceId: 'retrieve',
+        outcomeMessage: 'You recover two food from the cooler.',
         inventoryMutations: [],
       }),
       nighttime: {
@@ -2617,7 +2620,7 @@ describe('SurvivalSession daytime actions', () => {
       initial: { day: 2 },
       initialEventId: 'drifting-supplies',
     });
-    session.resolveEvent(choiceResponse('sleep'));
+    session.resolveEvent(choiceResponse('retrieve'));
     session.perform('endDay');
     session.resolveEvent(choiceResponse('sleep'));
     const first = session.snapshot().journalEntries[0]!;
