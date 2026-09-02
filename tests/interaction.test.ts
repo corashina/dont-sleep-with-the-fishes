@@ -14,6 +14,10 @@ import { CarryController } from '../src/interaction/CarryController';
 import { InteractionSystem, chooseContextAction } from '../src/interaction/InteractionSystem';
 import type { ItemInstance } from '../src/game/ItemState';
 import {
+  addScavengePickupTarget,
+  SCAVENGE_PICKUP_TARGET_NAME,
+} from '../src/world/ScavengePickupTarget';
+import {
   createTestPropModels,
   TEST_PROP_MODEL_TRANSFORM,
   testPropModel,
@@ -115,6 +119,38 @@ describe('chooseContextAction', () => {
 });
 
 describe('InteractionSystem', () => {
+  it.each([
+    'fishingNet',
+    'swimRing',
+    'anchor',
+    'ductTape',
+  ] as const)('fills the open pickup area for %s', (type) => {
+    const camera = new PerspectiveCamera(70, 1, 0.1, 100);
+    const instance = item(`${type}-1`, type);
+    const openItem = new Group();
+    openItem.position.z = -2;
+    openItem.userData.instanceId = instance.instanceId;
+    addScavengePickupTarget(openItem, type);
+    expect(openItem.getObjectByName(SCAVENGE_PICKUP_TARGET_NAME)?.visible).toBe(false);
+
+    const result = new InteractionSystem(camera).update(
+      [openItem],
+      new Group(),
+      new Group(),
+      new Map([[instance.instanceId, instance]]),
+    );
+
+    expect(result).toEqual({ target: 'item', targetItem: instance });
+  });
+
+  it('keeps solid items on their model geometry', () => {
+    const solidItem = new Group();
+
+    addScavengePickupTarget(solidItem, 'medicalKit');
+
+    expect(solidItem.getObjectByName(SCAVENGE_PICKUP_TARGET_NAME)).toBeUndefined();
+  });
+
   it('returns the aimed deck point when it is inside interaction range', () => {
     const camera = new PerspectiveCamera(70, 1, 0.1, 100);
     const ship = new Group();

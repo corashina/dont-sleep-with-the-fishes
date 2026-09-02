@@ -41,6 +41,7 @@ import type { ContextAction } from '../src/interaction/InteractionSystem';
 import { ScavengePhysics } from '../src/physics/ScavengePhysics';
 import { PlayerController } from '../src/player/PlayerController';
 import { ScavengePhase } from '../src/phases/ScavengePhase';
+import { HOVER_OUTLINE_NAME } from '../src/rendering/HoverOutline';
 import type { SceneRenderer } from '../src/rendering/SceneRenderer';
 import type {
   PostProcessingControls,
@@ -456,6 +457,7 @@ function createUpdateHarness(
     session,
     input,
     hands,
+    itemHoverOutline: { setTarget: vi.fn() },
     world: {
       update: updateWorld,
       attachPhysicsObjectsToShip,
@@ -562,6 +564,7 @@ function introHarness(elapsed = 0) {
       consumeJump,
       sprinting: false,
     },
+    itemHoverOutline: { setTarget: vi.fn() },
     hands,
     player: {
       setScriptedPose,
@@ -1462,7 +1465,7 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(setPaused).not.toHaveBeenCalled();
   });
 
-  it('continues simulation without player controls while the AO overlay is open', () => {
+  it('freezes scavenging while the tuning menu is open and resumes after it closes', () => {
     const updateWorld = vi.fn();
     const updatePlayer = vi.fn();
     const input = {
@@ -1472,7 +1475,6 @@ describe('ScavengePhase lifecycle integration', () => {
       sprinting: false,
     };
     const tick = vi.fn();
-    const updatePassivePlayer = vi.fn();
     const updateFlight = vi.fn();
     const hands = scavengeHandsStub();
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
@@ -1489,6 +1491,7 @@ describe('ScavengePhase lifecycle integration', () => {
         tick,
       },
       input,
+      itemHoverOutline: { setTarget: vi.fn() },
       hands,
       world: {
         update: updateWorld,
@@ -1496,7 +1499,6 @@ describe('ScavengePhase lifecycle integration', () => {
       },
       player: {
         update: updatePlayer,
-        updatePassive: updatePassivePlayer,
         placeCamera: vi.fn(),
         localPosition: new Vector3(8.9, 0, 0),
       },
@@ -1547,19 +1549,24 @@ describe('ScavengePhase lifecycle integration', () => {
     phase.setOverlayActive(true);
     phase.update(0.75, 0.25);
     expect(updateWorld).toHaveBeenLastCalledWith(
-      1.5,
-      0.25,
+      1.25,
+      0,
       expect.anything(),
       expect.any(Vector3),
-      true,
+      false,
       expect.any(Object),
     );
-    expect(tick).toHaveBeenCalledWith(0.25, true);
+    expect(tick).not.toHaveBeenCalled();
     expect(updatePlayer).not.toHaveBeenCalled();
-    expect(updatePassivePlayer).toHaveBeenCalledWith(0.25);
-    expect(updateFlight).toHaveBeenCalledOnce();
+    expect(updateFlight).not.toHaveBeenCalled();
     expect(input.clearLook).toHaveBeenCalled();
     expect(input.consumeLook).not.toHaveBeenCalled();
+
+    input.pointerLocked = true;
+    phase.setOverlayActive(false);
+    phase.update(1, 0.25);
+    expect(tick).toHaveBeenCalledWith(0.25, true);
+    expect(updatePlayer).toHaveBeenCalledWith(0.25, input, 1);
   });
 
   it('restores direct-control speed on the update after a deposit', () => {
@@ -1790,6 +1797,7 @@ describe('ScavengePhase lifecycle integration', () => {
       audio: scavengeAudioStub(),
       session: { snapshot: () => ({ status: 'running' }) },
       input: { pointerLocked: true },
+      itemHoverOutline: { setTarget: vi.fn() },
     });
     overlay.setOverlayActive(true);
     expect(overlayHands.hideAndReset).toHaveBeenCalledOnce();
@@ -2104,11 +2112,15 @@ describe('ScavengePhase lifecycle integration', () => {
       const firstInternals = first as unknown as {
         session: ScavengeSession;
         player: { localPosition: Vector3 };
+        input: { readonly pointerLocked: boolean };
+        presentation: 'intro' | 'playing';
         ending: { stage: string; elapsedSeconds: number };
       };
       firstInternals.session.start();
+      firstInternals.presentation = 'playing';
       firstInternals.player.localPosition.set(0, firstInternals.player.localPosition.y, 0);
-      first.setOverlayActive(true);
+      const pointerLocked = vi.spyOn(firstInternals.input, 'pointerLocked', 'get')
+        .mockReturnValue(true);
 
       first.update(0, SCAVENGE_DURATION_SECONDS);
       expect(firstInternals.ending).toEqual({ stage: 'sinking', elapsedSeconds: 0 });
@@ -2122,6 +2134,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect(firstInternals.ending).toEqual({ stage: 'menuReady', elapsedSeconds: 0 });
       expect(action.hidden).toBe(false);
 
+      pointerLocked.mockRestore();
       action.click();
       action.click();
 
@@ -2924,10 +2937,13 @@ describe('ScavengePhase lifecycle integration', () => {
       updateInteraction: () => void;
       world: World;
     };
-    const updateInteraction = vi.spyOn(internals.interaction, 'update').mockReturnValue({
-      target: 'none',
-      targetItem: null,
-    });
+    const cannedFood = internals.world.itemObjects.get('cannedFood-1')!;
+    const updateInteraction = vi.spyOn(internals.interaction, 'update')
+      .mockReturnValueOnce({
+        target: 'item',
+        targetItem: { instanceId: 'cannedFood-1', type: 'cannedFood' },
+      })
+      .mockReturnValue({ target: 'none', targetItem: null });
     internals.session.start();
 
     internals.updateInteraction();
@@ -2935,7 +2951,6 @@ describe('ScavengePhase lifecycle integration', () => {
     const firstItems = updateInteraction.mock.calls[0]![0];
     const depositTarget = updateInteraction.mock.calls[0]![2];
     const firstInstances = updateInteraction.mock.calls[0]![3];
-    const cannedFood = internals.world.itemObjects.get('cannedFood-1')!;
     const scavengeItemCount = createScavengeItemInstances().length;
     expect(internals.world.itemObjects.size).toBe(scavengeItemCount);
     expect(internals.world.itemObjects.has('energyBar-1')).toBe(false);
@@ -2947,6 +2962,7 @@ describe('ScavengePhase lifecycle integration', () => {
       instanceId: 'cannedFood-1',
       type: 'cannedFood',
     });
+    expect(cannedFood.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
 
     expect(internals.session.pickUp('cannedFood-1')).toBe(true);
     internals.updateInteraction();
@@ -2956,6 +2972,7 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(nextItems).toHaveLength(scavengeItemCount - 1);
     expect(nextItems).not.toContain(cannedFood);
     expect(nextInstances.has('cannedFood-1')).toBe(false);
+    expect(cannedFood.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
     phase.dispose();
     context.audio.dispose();
     propModels.dispose();
@@ -2981,6 +2998,7 @@ describe('ScavengePhase lifecycle integration', () => {
       hands,
       input: { pointerLocked: true, dispose: disposeInput },
       carry: { reset: resetCarry },
+      itemHoverOutline: { dispose: vi.fn() },
       world: { dispose: disposeWorld },
       ui: { dispose: disposeUI },
       onPointerLockChange: vi.fn(),
@@ -3189,6 +3207,7 @@ describe('ScavengePhase lifecycle integration', () => {
       loseItem: vi.fn(),
     };
     const hands = scavengeHandsStub();
+    const ui = { showHandsFullNotice: vi.fn() };
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
       session,
@@ -3196,6 +3215,7 @@ describe('ScavengePhase lifecycle integration', () => {
       world,
       audio: scavengeAudioStub(),
       hands,
+      ui,
     });
 
     (phase as unknown as {
@@ -3218,6 +3238,7 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(world.landItem).not.toHaveBeenCalled();
     expect(world.loseItem).not.toHaveBeenCalled();
     expect(hands.playGesture).not.toHaveBeenCalled();
+    expect(ui.showHandsFullNotice).toHaveBeenCalledOnce();
   });
 
   it('signals boat deposit only after the deposit succeeds', () => {

@@ -43,6 +43,7 @@ export class GameUI {
   private readonly itemTooltip: HTMLElement;
   private readonly crosshair: HTMLElement;
   private readonly pickupPointer: HTMLElement;
+  private readonly handsFullNotice: HTMLElement;
   private readonly carrySlots: readonly HTMLElement[];
   private readonly carryTypes: [ItemId | null, ItemId | null, ItemId | null] =
     [null, null, null];
@@ -55,6 +56,7 @@ export class GameUI {
   private readonly statisticsView: EndingStatisticsView;
   private latestSnapshot: ScavengeSnapshot | null = null;
   private readonly pointerLockErrors: HTMLElement[];
+  private handsFullNoticeTimer: number | null = null;
   private disposed = false;
   private restartHandled = false;
   private endingStage: ScavengeEndingStage = 'playing';
@@ -77,6 +79,9 @@ export class GameUI {
         </div>
         <div class="prompt brush-label ui-role-context" data-prompt aria-live="polite"></div>
         <div class="boat-tooltip scavenge-tooltip ui-role-context" data-item-tooltip role="tooltip"></div>
+        <p class="hands-full-notice ui-role-display" data-hands-full-notice role="status" aria-live="polite" hidden>
+          HANDS FULL, QUICK TO THE BOAT.
+        </p>
         <div class="scavenge-status" data-scavenge-status>
           <div class="carried" data-carried>
             <div class="weight-circles__row" data-carried-items data-carry-weight aria-hidden="true"><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span><span class="weight-circle" data-weight-circle></span></div>
@@ -97,7 +102,7 @@ export class GameUI {
           <button type="button" class="primary-action salvage-action ui-role-context" data-resume-button aria-label="Resume">
             RESUME
           </button>
-          <button type="button" class="secondary-action salvage-action ui-role-context" data-return-to-menu aria-label="Back to menu">
+          <button type="button" class="primary-action salvage-action ui-role-context" data-return-to-menu aria-label="Back to menu">
             BACK TO MENU
           </button>
           <p class="input-error illustrated-warning ui-role-narrative" data-pointer-lock-error aria-live="polite">
@@ -130,6 +135,7 @@ export class GameUI {
     this.itemTooltip = requireElement(this.root, '[data-item-tooltip]');
     this.crosshair = requireElement(this.root, '[data-crosshair]');
     this.pickupPointer = requireElement(this.root, '[data-pickup-pointer]');
+    this.handsFullNotice = requireElement(this.root, '[data-hands-full-notice]');
     this.carrySlots = [...this.root.querySelectorAll<HTMLElement>('[data-weight-circle]')];
     if (this.carrySlots.length !== 3) throw new Error('Carry HUD requires three weight slots');
     this.resumeButton = requireElement(this.root, '[data-resume-button]');
@@ -206,6 +212,16 @@ export class GameUI {
     this.crosshair.classList.toggle('is-pickup-hidden', visible);
   }
 
+  showHandsFullNotice(): void {
+    if (this.disposed) return;
+    if (this.handsFullNoticeTimer !== null) window.clearTimeout(this.handsFullNoticeTimer);
+    this.handsFullNotice.hidden = false;
+    this.handsFullNoticeTimer = window.setTimeout(() => {
+      this.handsFullNoticeTimer = null;
+      this.handsFullNotice.hidden = true;
+    }, 2_000);
+  }
+
   render(snapshot: ScavengeSnapshot): void {
     this.latestSnapshot = snapshot;
     const timerSecond = Math.max(0, Math.ceil(snapshot.remainingSeconds));
@@ -247,6 +263,8 @@ export class GameUI {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    if (this.handsFullNoticeTimer !== null) window.clearTimeout(this.handsFullNoticeTimer);
+    this.handsFullNoticeTimer = null;
     this.resumeButton.removeEventListener('click', this.handleResume);
     this.returnToMenuButton.removeEventListener('click', this.handleReturnToMenu);
     this.endingAction.removeEventListener('click', this.handleRestart);

@@ -118,6 +118,8 @@ export class SurvivalAudio {
   private midnightAttackPlayed = false;
   private planeFlybyVoice: AudioVoice | null = null;
   private radioSignalVoice: AudioVoice | null = null;
+  private paused = false;
+  private radioSignalPaused = false;
   private readonly meowBag: SoundId[] = [];
   private lastMeow: SoundId | null = null;
   private pendingShadowMeow: SoundId | null = null;
@@ -205,12 +207,19 @@ export class SurvivalAudio {
     const voice = this.scope.play('radioSignal');
     if (voice === null) return false;
     this.radioSignalVoice = voice;
+    voice.setPaused(this.paused || this.radioSignalPaused);
     voice.onEnded(() => {
       if (this.radioSignalVoice !== voice) return;
       this.radioSignalVoice = null;
       onEnded();
     });
     return true;
+  }
+
+  setRadioSignalPaused(paused: boolean): void {
+    if (this.disposed || this.radioSignalPaused === paused) return;
+    this.radioSignalPaused = paused;
+    this.radioSignalVoice?.setPaused(this.paused || paused);
   }
 
   clearRadioSignal(): void {
@@ -468,7 +477,10 @@ export class SurvivalAudio {
   }
 
   setPaused(paused: boolean): void {
-    if (!this.disposed) this.scope.setPaused(paused);
+    if (this.disposed || this.paused === paused) return;
+    this.paused = paused;
+    this.scope.setPaused(paused);
+    if (!paused && this.radioSignalPaused) this.radioSignalVoice?.setPaused(true);
   }
 
   dispose(): void {

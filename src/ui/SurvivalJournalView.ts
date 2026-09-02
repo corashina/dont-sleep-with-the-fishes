@@ -108,7 +108,7 @@ export class SurvivalJournalView {
   private renderPage(): void {
     const entry = this.entries[this.pageIndex];
     if (entry === undefined) {
-      this.title.textContent = 'The journal is still waiting for its first completed day.';
+      this.title.textContent = 'Dorothy went under moments after I reached the lifeboat. I barely escaped with the supplies I could carry.';
       this.title.dataset.empty = 'true';
       this.weather.textContent = '';
       this.story.hidden = true;

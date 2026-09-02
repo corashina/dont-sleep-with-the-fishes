@@ -439,18 +439,18 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
   ], undefined, { minimumPressure: 1 }),
   event('eerie-melody', 'night', 'Eerie Melody', 'dangerous', 'darkness', 1, 13, 30, [
     choice('bucket', 'Use Bucket', 'bucket', outcome(1, 'You wake with one energy.', atNextDawn(1, effects(undefined, [breakItem('bucket')])))),
-    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'The siren attacks.', effects([subtract('hull', { min: 50, max: 60 }), subtract('health', 30)]))),
+    choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'The siren attacks.', effects([subtract('hull', { min: 30, max: 40 }), subtract('health', 20)]))),
     choice('umbrella', 'Use Umbrella', 'umbrella',
       outcome(60, 'The umbrella muffles the melody until it fades.'),
       outcome(40, 'The boat is damaged.', atNextDawn(1, effects([
-        subtract('hull', { min: 40, max: 60 }),
+        subtract('hull', { min: 25, max: 35 }),
       ], [breakItem('umbrella')])))),
     choice('ductTape', 'Use Duct Tape', 'ductTape',
       outcome(1, 'The tape blocks the melody until it fades.',
         effects([subtract('pressure', 1)], [consume('ductTape')]))),
     choice('sleep', 'Sleep', undefined,
       outcome(60, 'You wake exhausted.', atNextDawn(0)),
-      outcome(40, 'The siren attacks.', atNextDawn(1, effects([subtract('hull', { min: 50, max: 60 }), subtract('health', 30)])))),
+      outcome(40, 'The siren attacks.', atNextDawn(1, effects([subtract('hull', { min: 30, max: 40 }), subtract('health', 20)])))),
   ], undefined, { minimumPressure: 2 }),
   event('face-on-the-moon', 'night', 'Face on the Moon', 'uncertain', 'darkness', 1, 17, 50, [
     choice('umbrella', 'Use Umbrella', 'umbrella', outcome(1, 'You wake with two energy.', atNextDawn(2))),
@@ -543,6 +543,10 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
           effects(undefined, [gain('energyBar')]))),
       companionAction: 'delegateCarlitos',
     },
+    contextualChoice('sleep', 'Let It Drift', outcome(
+      1,
+      'The supplies drift out of reach.',
+    )),
   ]),
   event('drifting-chest', 'day', 'Drifting Chest', 'safe', 'fish', 1, 3, 3, [
     {
@@ -566,6 +570,10 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
         )),
       companionAction: 'delegateCarlitos',
     },
+    contextualChoice('sleep', 'Let It Drift', outcome(
+      1,
+      'The chest drifts out of reach.',
+    )),
   ], undefined, { allowedChestStates: ['none'] }),
   event('wreckage', 'day', 'Wreckage', 'uncertain', 'dive', 1, 4, 5, [
     {
@@ -621,6 +629,10 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
             add('pressure', 1)]), 'wreckage-dive-ghost')),
       requirements: [{ resource: 'energy', minimum: 3 }],
     },
+    contextualChoice('leave', 'Leave', outcome(
+      1,
+      'You leave the wreckage behind.',
+    )),
   ]),
   event('check-the-back', 'night', 'Check the Back', 'uncertain', 'fish', 3, 2, 35, [
     contextualChoice('check', 'Yes',
@@ -649,7 +661,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       outcome(1, 'The net binds the chest shut.', { chest: 'close' }, 'chest-bound')),
     contextualChoice('attack', 'Attack',
       outcome(1, 'The chest tears into you before it falls overboard.', {
-        resources: [subtract('health', 40)],
+        resources: [subtract('health', 25)],
         chest: 'destroy',
       }, 'chest-attack')),
   ], undefined, { allowedChestStates: ['mimic'] }),

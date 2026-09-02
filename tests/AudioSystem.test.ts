@@ -252,6 +252,20 @@ describe('AudioSystem', () => {
     expect(expired).toHaveBeenCalledOnce();
   });
 
+  it('pauses only the incoming radio signal for player panels', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.beginRadioSignal(() => undefined);
+    const signal = backend.voices.at(-1)!;
+    signal.setPaused.mockClear();
+
+    audio.setRadioSignalPaused(true);
+    audio.setRadioSignalPaused(false);
+
+    expect(signal.setPaused.mock.calls).toEqual([[true], [false]]);
+  });
+
   it('applies master volume and mute without losing volume', () => {
     const backend = new FakeAudioBackend();
     const system = AudioSystem.forTest(backend);

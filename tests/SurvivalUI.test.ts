@@ -521,8 +521,10 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
     const action = vi.fn();
     const pause = vi.fn();
+    const radioPause = vi.fn();
     ui.onAction = action;
     ui.onPauseChange = pause;
+    ui.onRadioPauseChange = radioPause;
     ui.setAnchors([carlitosAnchor(1000, 760)]);
     ui.render(snapshot({
       carlitos: {
@@ -542,8 +544,10 @@ describe('SurvivalUI', () => {
     const card = mount.querySelector<HTMLElement>('[data-carlitos-card]')!;
     anchor.click();
     expect(card.hidden).toBe(false);
+    expect(radioPause).toHaveBeenLastCalledWith(true);
     anchor.click();
     expect(card.hidden).toBe(true);
+    expect(radioPause).toHaveBeenLastCalledWith(false);
     anchor.click();
     expect(card.hidden).toBe(false);
     expect(Number.parseFloat(card.style.getPropertyValue('--carlitos-card-x'))).toBeGreaterThanOrEqual(16);
@@ -759,6 +763,131 @@ describe('SurvivalUI', () => {
     expect(Number(event.style.zIndex)).toBeGreaterThan(Number(shotgun.style.zIndex));
   });
 
+  it('keeps routine tools above overlapping passive supplies', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.setAnchors([
+      {
+        id: 'bait-overlap',
+        itemType: 'baitTin',
+        toolId: null,
+        action: null,
+        remainingUses: 2,
+        x: 300,
+        y: 220,
+        visible: true,
+        depleted: false,
+        hitArea: { width: 50, height: 36, depth: 1 },
+      },
+      {
+        id: 'fishing-overlap',
+        itemType: null,
+        toolId: 'fishingRod',
+        action: 'fish',
+        remainingUses: null,
+        x: 300,
+        y: 220,
+        visible: true,
+        depleted: false,
+        hitArea: { width: 44, height: 181, depth: 3 },
+      },
+    ]);
+
+    const bait = mount.querySelector<HTMLButtonElement>('[data-anchor-id="bait-overlap"]')!;
+    const fishing = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishing-overlap"]')!;
+
+    expect(Number(fishing.style.zIndex)).toBeGreaterThan(Number(bait.style.zIndex));
+  });
+
+  it('keeps routine tools above overlapping actionable supplies', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.setAnchors([
+      {
+        id: 'food-overlap',
+        itemType: 'cannedFood',
+        toolId: null,
+        action: 'eat',
+        remainingUses: 1,
+        x: 300,
+        y: 220,
+        visible: true,
+        depleted: false,
+        hitArea: { width: 50, height: 50, depth: 3 },
+      },
+      {
+        id: 'fishing-overlap',
+        itemType: null,
+        toolId: 'fishingRod',
+        action: 'fish',
+        remainingUses: null,
+        x: 300,
+        y: 220,
+        visible: true,
+        depleted: false,
+        hitArea: { width: 44, height: 181, depth: 1 },
+      },
+    ]);
+
+    const food = mount.querySelector<HTMLButtonElement>('[data-anchor-id="food-overlap"]')!;
+    const fishing = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishing-overlap"]')!;
+
+    expect(Number(fishing.style.zIndex)).toBeGreaterThan(Number(food.style.zIndex));
+  });
+
+  it('keeps an available Island choice above overlapping unavailable items', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.setAnchors([
+      {
+        id: 'shotgun-overlap',
+        itemType: 'shotgun',
+        toolId: null,
+        action: null,
+        remainingUses: 1,
+        x: 300,
+        y: 220,
+        visible: true,
+        depleted: false,
+        hitArea: { width: 40, height: 40, depth: 1 },
+      },
+      {
+        id: 'midnight-tour:island',
+        eventChoiceId: 'visit',
+        itemType: null,
+        toolId: null,
+        action: null,
+        remainingUses: null,
+        x: 300,
+        y: 220,
+        visible: true,
+        depleted: false,
+        hitArea: { width: 96, height: 78, depth: 3 },
+      },
+    ]);
+    ui.beginEventPresentation();
+    ui.setEventSelection(new Map(), [{
+      id: 'visit',
+      label: 'Visit the island',
+      unavailableReason: null,
+      anchorId: 'midnight-tour:island',
+    }]);
+
+    const shotgun = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="shotgun-overlap"]',
+    )!;
+    const island = mount.querySelector<HTMLButtonElement>(
+      '[data-anchor-id="midnight-tour:island"]',
+    )!;
+
+    expect(shotgun.dataset.eventState).toBe('unavailable');
+    expect(island.dataset.eventState).toBe('available');
+    expect(Number(island.style.zIndex)).toBeGreaterThan(Number(shotgun.style.zIndex));
+  });
+
   it('cycles overlapping boat items with the wheel and arrow keys', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -817,12 +946,13 @@ describe('SurvivalUI', () => {
     expect(map.dataset.overlapCount).toBeUndefined();
     expect(bucket.getAttribute('aria-keyshortcuts')).toBe('ArrowLeft ArrowRight');
     expect(bucket.querySelector('[data-overlap-cycle]')).toBeNull();
+    const scubaDepth = scuba.style.zIndex;
 
     bucket.focus();
     press('[data-anchor-id="bucket-overlap"]', 'ArrowRight');
 
     expect(document.activeElement).toBe(scuba);
-    expect(scuba.style.zIndex).toBe('100001');
+    expect(Number(scuba.style.zIndex)).toBeGreaterThan(Number(bucket.style.zIndex));
     expect(highlight).toHaveBeenLastCalledWith('scuba-overlap');
 
     scuba.dispatchEvent(new WheelEvent('wheel', {
@@ -832,8 +962,8 @@ describe('SurvivalUI', () => {
     }));
 
     expect(document.activeElement).toBe(bucket);
-    expect(bucket.style.zIndex).toBe('100001');
-    expect(scuba.style.zIndex).toBe('99800');
+    expect(Number(bucket.style.zIndex)).toBeGreaterThan(Number(scuba.style.zIndex));
+    expect(scuba.style.zIndex).toBe(scubaDepth);
     expect(highlight).toHaveBeenLastCalledWith('bucket-overlap');
   });
 
@@ -1014,6 +1144,9 @@ describe('SurvivalUI', () => {
     );
     expect(mainStyles).toMatch(
       /\.boat-anchor\[data-event-state="locked"\] \.boat-tooltip\s*\{[^}]*display:\s*none;/s,
+    );
+    expect(mainStyles).toMatch(
+      /\.boat-anchor:not\(:disabled\):not\(\[data-event-state="locked"\]\) \.boat-tooltip\s*\{[^}]*pointer-events:\s*auto;/s,
     );
     expect(mainStyles).not.toMatch(
       /\.boat-anchor\[data-event-state="available"\]\s*\{[^}]*(?:outline|box-shadow):/s,
@@ -1407,6 +1540,32 @@ describe('SurvivalUI', () => {
     expect(mount.querySelector('[data-journal]')?.hasAttribute('inert')).toBe(true);
   });
 
+  it('pauses the radio window while the journal is open', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const radioPause = vi.fn();
+    ui.onRadioPauseChange = radioPause;
+
+    ui.showJournal(journalEntries);
+    ui.hideJournal();
+
+    expect(radioPause.mock.calls).toEqual([[true], [false]]);
+    ui.dispose();
+  });
+
+  it('opens an empty journal with the escape from Dorothy', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+
+    ui.showJournal([]);
+
+    const title = mount.querySelector('[data-journal-title]');
+    expect(title?.textContent).toContain('I barely escaped');
+    expect(title?.textContent).toContain('Dorothy');
+    expect(title?.textContent).not.toContain('waiting for its first completed day');
+    ui.dispose();
+  });
+
   it('closes the journal from its backdrop but not from the book', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
@@ -1713,16 +1872,22 @@ describe('SurvivalUI', () => {
       toJSON: () => ({}),
     });
     const layer = mount.querySelector<HTMLElement>('[data-fishing]')!;
+    const message = mount.querySelector<HTMLElement>('[data-fishing-message]')!;
 
     ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
+    expect(message.hidden).toBe(false);
+    expect(message.textContent).toBe('CLICK THE WATER TO CAST');
     layer.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 190, clientY: 230 }));
     layer.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 190, clientY: 230 }));
     expect(cast).toHaveBeenCalledOnce();
     expect(cast).toHaveBeenCalledWith({ x: 150, y: 160 });
 
     ui.setFishingState({ mode: 'waiting', message: 'WAIT FOR A BITE', biteTarget: null });
+    expect(message.hidden).toBe(false);
+    expect(message.textContent).toBe('WAIT FOR A BITE');
     layer.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 220, clientY: 260 }));
     ui.setFishingState({ mode: 'result', message: 'IT GOT AWAY', biteTarget: null });
+    expect(message.hidden).toBe(true);
     layer.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 220, clientY: 260 }));
     expect(cast).toHaveBeenCalledOnce();
   });

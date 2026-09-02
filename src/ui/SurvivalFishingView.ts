@@ -52,6 +52,7 @@ export class SurvivalFishingView {
   canUseResult: () => boolean = () => true;
 
   private readonly live: HTMLElement;
+  private readonly visibleMessage: HTMLElement;
   private readonly resultCaption: HTMLElement;
   private readonly resultTitle: HTMLElement;
   private readonly resultDetail: HTMLElement;
@@ -86,6 +87,7 @@ export class SurvivalFishingView {
     template.innerHTML = `
       <section class="fishing-layer" data-fishing role="region" aria-label="Fishing interaction" aria-hidden="true" inert tabindex="-1">
         <div class="survival-announcer" data-fishing-live aria-live="polite" aria-atomic="true"></div>
+        <p class="fishing-instruction ui-role-context" data-fishing-message hidden></p>
         <button type="button" class="fishing-bite-target" data-fishing-bite aria-label="BITE - REEL NOW" hidden></button>
         <button type="button" class="fishing-view-exit ui-role-context" data-fishing-view-exit aria-label="Return to boat view" hidden>
           ${returnArrowArtwork('fishing-view-exit__arrow')}
@@ -108,6 +110,7 @@ export class SurvivalFishingView {
     this.resultRoot = roots[2]!;
     this.roots = [this.interactionRoot, this.fadeRoot, this.resultRoot];
     this.live = requireElement(this.interactionRoot, '[data-fishing-live]');
+    this.visibleMessage = requireElement(this.interactionRoot, '[data-fishing-message]');
     this.biteButton = requireElement(this.interactionRoot, '[data-fishing-bite]');
     this.exitButton = requireElement(this.interactionRoot, '[data-fishing-view-exit]');
     this.resultCaption = requireElement(this.resultRoot, '[data-fishing-result-caption]');
@@ -151,6 +154,11 @@ export class SurvivalFishingView {
 
   private applyStateMessage(state: FishingUiState): void {
     this.message = state.message;
+    this.visibleMessage.textContent = state.message;
+    this.visibleMessage.hidden = state.mode === 'hidden'
+      || state.mode === 'ready'
+      || state.mode === 'result'
+      || state.message.length === 0;
     this.live.setAttribute('aria-live', state.mode === 'bite' ? 'assertive' : 'polite');
     if (state.mode === 'hidden') this.cancelAnnouncement();
     else this.publishAnnouncement(state.message);

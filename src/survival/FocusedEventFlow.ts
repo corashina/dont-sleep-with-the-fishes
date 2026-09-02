@@ -114,11 +114,6 @@ export class FocusedEventFlow {
     const eventId = this.activeEventId;
     const currentChoice = this.currentChoice(eventId, choice, generation);
     if (eventId === null || currentChoice === null) return;
-    if (currentChoice.dismisses === true) {
-      this.dependencies.audio.confirm();
-      await this.dismiss(eventId, generation);
-      return;
-    }
     const operation = this.beginOperation();
     await this.resolveFocusedChoice(eventId, choice, generation, operation);
   }
@@ -154,7 +149,11 @@ export class FocusedEventFlow {
       || !this.isCurrent(generation)
       || !this.dependencies.isPendingEvent(eventId)
     ) return;
-    await this.dismiss(eventId, generation);
+    const dismissChoice = this.choices.find((choice) => (
+      choice.dismisses === true && choice.unavailableReason === null
+    ));
+    if (dismissChoice === undefined) return;
+    await this.choose({ id: dismissChoice.id, instanceId: dismissChoice.instanceId });
   }
 
   syncTarget(width: number, height: number): void {
@@ -344,40 +343,6 @@ export class FocusedEventFlow {
     return this.choices.find((current) => (
       current.id === choice.id && current.instanceId === choice.instanceId
     )) ?? null;
-  }
-
-  private async dismiss(
-    eventId: InspectableEventId,
-    generation: number,
-  ): Promise<void> {
-    const operation = this.beginOperation();
-    this.focusState = 'returning';
-    this.dependencies.setBusy(true);
-    try {
-      this.dependencies.ui.hideFocusedEvent?.();
-      await (this.dependencies.world.exitFocusedEventView?.() ?? Promise.resolve());
-    } catch (error) {
-      this.recoverDismissFailure(eventId, generation, operation);
-      throw error;
-    }
-    if (!this.isCurrentFocus(eventId, 'returning', generation, operation)) return;
-    this.operationGeneration += 1;
-    this.activeEventId = null;
-    this.choices = [];
-    this.focusState = 'idle';
-    this.dependencies.setBusy(false);
-    this.dependencies.ui.restoreCommandFocus?.();
-  }
-
-  private recoverDismissFailure(
-    eventId: InspectableEventId,
-    generation: number,
-    operation: number,
-  ): void {
-    if (!this.isCurrentFocus(eventId, 'returning', generation, operation)) return;
-    this.focusState = 'choosing';
-    this.ignoreSecondary(() => this.showFocus());
-    this.ignoreSecondary(() => this.dependencies.setBusy(false));
   }
 
   private beginChoiceResolution(): void {

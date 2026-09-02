@@ -40,6 +40,7 @@ import { createLifeboat } from '../src/world/Lifeboat';
 import { createTestLifeboatAssets } from './helpers/lifeboatAssets';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 import { createProp } from '../src/world/PropFactory';
+import { SCAVENGE_PICKUP_TARGET_NAME } from '../src/world/ScavengePickupTarget';
 import { SCAVENGE_PHYSICS_OBJECT_SPECS } from '../src/world/ScavengePhysicsObjectCatalog';
 import { createShipFurniture } from '../src/world/ShipFurniture';
 import { createShipGeometry } from '../src/world/ShipGeometry';
@@ -216,6 +217,24 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
+  it('adds invisible pickup targets only to the four open scavenging items', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+    const expandedItemIds = new Set(['fishingNet', 'swimRing', 'anchor', 'ductTape']);
+
+    try {
+      world.itemObjects.forEach((itemObject, instanceId) => {
+        const target = itemObject.getObjectByName(SCAVENGE_PICKUP_TARGET_NAME);
+        expect(target !== undefined).toBe(expandedItemIds.has(instanceId.split('-')[0]!));
+        if (target) expect(target.visible).toBe(false);
+      });
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
   it('preserves ship composition and idempotent geometry ownership', () => {
     const updateMatrixWorld = vi.spyOn(Group.prototype, 'updateMatrixWorld');
     const materials = createShipMaterials();

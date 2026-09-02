@@ -59,6 +59,7 @@ import {
   type ScavengeHandModelFactory,
 } from '../player/ScavengeHands';
 import type { ScavengeVisualState } from '../rendering/SceneRenderer';
+import { HoverOutline } from '../rendering/HoverOutline';
 import { sampleMenuFade } from '../menu/menuChoreography';
 import { projectScreenBounds } from '../rendering/projectScreenBounds';
 import {
@@ -121,6 +122,7 @@ export class ScavengePhase implements GamePhase {
   private readonly player: PlayerController;
   private readonly hands: ScavengeHands;
   private readonly interaction: InteractionSystem;
+  private readonly itemHoverOutline = new HoverOutline();
   private readonly carry: CarryController;
   private readonly ui: GameUI;
   private readonly instancesById: ReadonlyMap<ItemInstanceId, ItemInstance>;
@@ -280,7 +282,6 @@ export class ScavengePhase implements GamePhase {
     if (this.disposed) return;
     const before = this.session.snapshot();
     const directControlActive = this.hasDirectControl(before);
-    const overlaySimulationActive = this.hasOverlaySimulation(before);
     const introFrameStarted = this.presentation === 'intro';
     const introActive = this.hasActiveIntro(introFrameStarted);
     const worldDeltaSeconds = this.worldDeltaSeconds(
@@ -292,16 +293,15 @@ export class ScavengePhase implements GamePhase {
       deltaSeconds,
       introActive,
       directControlActive,
-      overlaySimulationActive,
     );
+    if (!directControlActive) this.itemHoverOutline.setTarget(null);
     const motion = this.updateSimulation(
       deltaSeconds,
       introActive,
       directControlActive,
-      overlaySimulationActive,
     );
     const next = this.session.snapshot();
-    const sinking = this.updateEnding(deltaSeconds, next);
+    const sinking = this.updateEnding(this.overlayActive ? 0 : deltaSeconds, next);
     this.syncVisualState(sinking);
     this.audio.update(
       motion,
@@ -309,11 +309,7 @@ export class ScavengePhase implements GamePhase {
       this.elapsed,
       this.updateAudioListenerPose(),
     );
-    const simulatePhysics = this.shouldSimulatePhysics(
-      next,
-      directControlActive,
-      overlaySimulationActive,
-    );
+    const simulatePhysics = this.shouldSimulatePhysics(next, directControlActive);
     this.updateWorldFrame(worldDeltaSeconds, sinking, simulatePhysics, introFrameStarted);
     this.updateHands(deltaSeconds, motion, next);
     this.renderInterface(next);
@@ -324,13 +320,10 @@ export class ScavengePhase implements GamePhase {
     return this.hasActiveSession(snapshot) && this.input.pointerLocked;
   }
 
-  private hasOverlaySimulation(snapshot: ScavengeSnapshot): boolean {
-    return this.hasActiveSession(snapshot) && this.overlayActive === true;
-  }
-
   private hasActiveSession(snapshot: ScavengeSnapshot): boolean {
     return this.ending.stage === 'playing'
       && snapshot.status === 'running'
+      && !this.overlayActive
       && !document.hidden;
   }
 
@@ -338,6 +331,7 @@ export class ScavengePhase implements GamePhase {
     return introFrameStarted
       && !this.introPaused
       && this.input.pointerLocked
+      && !this.overlayActive
       && !document.hidden;
   }
 
@@ -346,7 +340,7 @@ export class ScavengePhase implements GamePhase {
     introFrameStarted: boolean,
     introActive: boolean,
   ): number {
-    return (introFrameStarted && !introActive) || this.pausedIntroExitCarry
+    return this.overlayActive || (introFrameStarted && !introActive) || this.pausedIntroExitCarry
       ? 0
       : deltaSeconds;
   }
@@ -355,12 +349,11 @@ export class ScavengePhase implements GamePhase {
     deltaSeconds: number,
     introActive: boolean,
     directControlActive: boolean,
-    overlaySimulationActive: boolean,
   ): void {
+    if (this.overlayActive) return;
     if (
       introActive
       || directControlActive
-      || overlaySimulationActive
       || this.ending.stage === 'sinking'
     ) {
       this.worldTime += deltaSeconds;
@@ -371,11 +364,9 @@ export class ScavengePhase implements GamePhase {
     deltaSeconds: number,
     introActive: boolean,
     directControlActive: boolean,
-    overlaySimulationActive: boolean,
   ): PlayerMotionSample | null {
     if (introActive) return this.updateIntroSimulation(deltaSeconds);
     if (directControlActive) return this.updateDirectControl(deltaSeconds);
-    if (overlaySimulationActive) return this.updateOverlaySimulation(deltaSeconds);
     if (this.ending.stage === 'playing') this.input.clearLook();
     return null;
   }
@@ -405,21 +396,6 @@ export class ScavengePhase implements GamePhase {
         getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS).waveAmplitudeScale,
       );
     }
-    return motion;
-  }
-
-  private updateOverlaySimulation(deltaSeconds: number): PlayerMotionSample | null {
-    const snapshot = this.tickSession(deltaSeconds);
-    if (snapshot.status !== 'running') {
-      this.input.clearLook();
-      return null;
-    }
-    const motion = this.player.updatePassive(deltaSeconds);
-    this.updateFlight(
-      deltaSeconds,
-      getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS).waveAmplitudeScale,
-    );
-    this.input.clearLook();
     return motion;
   }
 
@@ -464,7 +440,7 @@ export class ScavengePhase implements GamePhase {
     this.hands.hideAndReset();
     this.audio.sink();
     this.world.attachPhysicsObjectsToShip();
-    if (this.input.pointerLocked) document.exitPointerLock();
+    if (this.input.pointerLocked) document.exitPointerLock?.();
     this.contextAction = { type: 'none', prompt: '' };
     this.itemTooltip = null;
   }
@@ -493,10 +469,9 @@ export class ScavengePhase implements GamePhase {
   private shouldSimulatePhysics(
     snapshot: ScavengeSnapshot,
     directControlActive: boolean,
-    overlaySimulationActive: boolean,
   ): boolean {
     return this.ending.stage === 'playing'
-      && (directControlActive || overlaySimulationActive)
+      && directControlActive
       && snapshot.status === 'running';
   }
 
@@ -557,6 +532,7 @@ export class ScavengePhase implements GamePhase {
     return this.ending.stage === 'playing'
       && snapshot.status === 'running'
       && this.input.pointerLocked
+      && !this.overlayActive
       && !document.hidden;
   }
 
@@ -580,16 +556,33 @@ export class ScavengePhase implements GamePhase {
   setOverlayActive(active: boolean): void {
     if (this.disposed || this.overlayActive === active) return;
     this.overlayActive = active;
-    if (active) this.hands.hideAndReset();
-    this.audio.setPaused(active);
-    if (
-      !active
-      && this.session.snapshot().status === 'running'
+    if (active) this.prepareOpenOverlay();
+    const snapshot = this.session.snapshot();
+    this.audio.setPaused(this.overlayPausesAudio(active, snapshot));
+    if (this.shouldRestoreOverlayControl(active, snapshot)) void this.requestPointerLock();
+  }
+
+  private prepareOpenOverlay(): void {
+    this.hands.hideAndReset();
+    this.itemHoverOutline.setTarget(null);
+    if (this.input.pointerLocked) document.exitPointerLock?.();
+  }
+
+  private overlayPausesAudio(active: boolean, snapshot: ScavengeSnapshot): boolean {
+    return active
+      || snapshot.status !== 'running'
+      || document.hidden
+      || (this.presentation === 'intro' && this.introPaused);
+  }
+
+  private shouldRestoreOverlayControl(
+    active: boolean,
+    snapshot: ScavengeSnapshot,
+  ): boolean {
+    return !active
+      && (snapshot.status === 'running' || this.presentation === 'intro')
       && !this.input.pointerLocked
-      && !document.hidden
-    ) {
-      void this.requestPointerLock();
-    }
+      && !document.hidden;
   }
 
   setWeatherOverride(id: PresentationWeatherId | null): void {
@@ -671,11 +664,12 @@ export class ScavengePhase implements GamePhase {
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     document.removeEventListener('keydown', this.onKeyDown);
     document.removeEventListener('keyup', this.onKeyUp);
-    if (this.input.pointerLocked) document.exitPointerLock();
+    if (this.input.pointerLocked) document.exitPointerLock?.();
     this.carry.reset();
     this.audio.dispose();
     this.input.dispose();
     this.hands.dispose();
+    this.itemHoverOutline.dispose();
     this.world.dispose();
     this.ui.dispose();
   }
@@ -696,6 +690,11 @@ export class ScavengePhase implements GamePhase {
       this.world.boatDepositTarget,
       instances,
       nearEvacuation,
+    );
+    this.itemHoverOutline.setTarget(
+      target.targetItem === null
+        ? null
+        : this.world.itemObjects.get(target.targetItem.instanceId) ?? null,
     );
     this.contextAction = this.carry.flightActive
       ? { type: 'none', prompt: '' }
@@ -773,6 +772,7 @@ export class ScavengePhase implements GamePhase {
       this.session.evacuate();
     } else if (action.type === 'capacityFull') {
       this.audio.deny();
+      this.ui.showHandsFullNotice();
       return;
     }
   }
@@ -881,6 +881,7 @@ export class ScavengePhase implements GamePhase {
   }
 
   private handlePointerLockChange(locked: boolean): void {
+    if (this.overlayActive && !locked) return;
     if (this.presentation === 'intro') {
       if (locked && !this.introBegun) this.beginIntro();
       this.introPaused = !locked;
@@ -889,7 +890,6 @@ export class ScavengePhase implements GamePhase {
       this.audio.setPaused(!locked);
       return;
     }
-    if (this.overlayActive && !locked) return;
     const status = this.session.snapshot().status;
     const transition = pointerLockTransition(status, locked);
     if (transition === 'start') {

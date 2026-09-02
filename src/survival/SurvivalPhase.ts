@@ -229,6 +229,7 @@ export class SurvivalPhase implements GamePhase {
   };
   private busy = false;
   private paused = false;
+  private overlayActive = false;
   private visibilityPauseActive = false;
   private disposed = false;
   private started = false;
@@ -447,14 +448,14 @@ export class SurvivalPhase implements GamePhase {
         document,
         this.handleDocumentHidden,
         this.handleDocumentVisible,
-        () => !this.paused,
+        () => !this.gameplayPaused(),
       );
     }
   }
 
   update(time: number, deltaSeconds: number): void {
     if (this.disposed || this.documentIsHidden()) return;
-    if (this.paused) return;
+    if (this.gameplayPaused()) return;
     this.elapsedSeconds = this.simulationTimeInitialized
       ? this.elapsedSeconds + deltaSeconds
       : time;
@@ -526,7 +527,7 @@ export class SurvivalPhase implements GamePhase {
   }
 
   handleJournalOpen(): void {
-    if (this.disposed || this.busy || this.paused || this.documentIsHidden()) return;
+    if (this.disposed || this.busy || this.gameplayPaused() || this.documentIsHidden()) return;
     const snapshot = this.session.snapshot();
     this.lastReadJournalDay = this.latestJournalDay(snapshot);
     this.audio.journal();
@@ -543,12 +544,21 @@ export class SurvivalPhase implements GamePhase {
   setPaused(paused: boolean): void {
     if (this.disposed || (!paused && this.documentIsHidden())) return;
     this.paused = paused;
-    this.audio.setPaused(paused);
+    this.audio.setPaused(this.gameplayPaused());
     if (!paused) this.visibilityPauseActive = false;
     this.ui.setPaused?.(paused);
-    this.itemAnimationLabCameraControls?.setEnabled(!paused);
+    this.itemAnimationLabCameraControls?.setEnabled(!this.gameplayPaused());
     this.syncCameraTurnControl(this.session.snapshot());
-    if (!paused) this.visibilityController?.releaseResumeWaiters();
+    if (!this.gameplayPaused()) this.visibilityController?.releaseResumeWaiters();
+  }
+
+  setOverlayActive(active: boolean): void {
+    if (this.disposed || this.overlayActive === active) return;
+    this.overlayActive = active;
+    this.audio.setPaused(this.gameplayPaused());
+    this.itemAnimationLabCameraControls?.setEnabled(!this.gameplayPaused());
+    this.syncCameraTurnControl(this.session.snapshot());
+    if (!this.gameplayPaused()) this.visibilityController?.releaseResumeWaiters();
   }
 
   setWeatherOverride(id: PresentationWeatherId | null): void {
@@ -701,7 +711,7 @@ export class SurvivalPhase implements GamePhase {
       audio: this.audio,
       renderSnapshot: () => { this.renderSnapshot(false, false); },
       setBusy: (busy) => this.setBusy(busy),
-      isPaused: () => this.paused,
+      isPaused: () => this.gameplayPaused(),
       isHidden: () => this.documentIsHidden(),
       isLifecycleActive: () => this.isContinuationActive(),
       captureLifecycleGeneration: () => this.lifecycleGeneration,
@@ -812,6 +822,7 @@ export class SurvivalPhase implements GamePhase {
     this.ui.onJournalOpen = () => this.handleJournalOpen();
     this.ui.onJournalClose = () => this.handleJournalClose();
     this.ui.onJournalPage = () => this.audio.journal();
+    this.ui.onRadioPauseChange = (paused) => this.audio.setRadioSignalPaused(paused);
     this.ui.onFishingCast = (point) => this.fishingFlow.cast(
       point?.x ?? null,
       point?.y ?? null,
@@ -846,7 +857,7 @@ export class SurvivalPhase implements GamePhase {
       this.disposed
       || this.transitionRequested
       || this.busy
-      || this.paused
+      || this.gameplayPaused()
       || this.documentIsHidden()
     ) return false;
     return !isTerminal(this.session.snapshot().state);
@@ -932,12 +943,12 @@ export class SurvivalPhase implements GamePhase {
 
   private syncCameraTurnControl(snapshot: Readonly<SurvivalSnapshot>): void {
     const available = this.cameraTurnAvailable(snapshot);
-    if (!available && this.rearCameraView && !this.paused) {
+    if (!available && this.rearCameraView && !this.gameplayPaused()) {
       this.rearCameraView = false;
       this.world.setRearCameraView?.(false, true);
     }
     this.ui.setCameraTurnState?.(
-      available && !this.paused,
+      available && !this.gameplayPaused(),
       this.rearCameraView,
     );
   }
@@ -990,6 +1001,10 @@ export class SurvivalPhase implements GamePhase {
   private documentIsHidden(): boolean {
     return this.visibilityController?.isHidden()
       ?? (typeof document !== 'undefined' && document.hidden);
+  }
+
+  private gameplayPaused(): boolean {
+    return this.paused || this.overlayActive;
   }
 
   private readonly handleDocumentHidden = (): void => {

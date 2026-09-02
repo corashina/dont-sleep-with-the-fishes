@@ -555,7 +555,7 @@ describe('SurvivalSession Carlitos events', () => {
     });
   });
 
-  it('handles Wreckage harm, empty, and obsolete Leave without rewards', () => {
+  it('handles Wreckage harm, empty, and Leave without rewards', () => {
     const injured = new SurvivalSession(saved(), {
       seed: 77,
       random: sequenceRandom([0.9, 0]),
@@ -582,12 +582,12 @@ describe('SurvivalSession Carlitos events', () => {
       initialEventId: 'wreckage',
     });
     expect(left.resolveEvent({ kind: 'choice', choiceId: 'leave' })).toMatchObject({
-      accepted: false,
-      code: 'choice-unavailable',
+      accepted: true,
+      code: 'event-resolved',
     });
     expect(left.snapshot().energy).toBe(2);
     expect(left.snapshot()).toMatchObject({
-      state: 'dayEvent', pendingEventId: 'wreckage',
+      state: 'day', pendingEventId: null,
     });
     expect(left.snapshot().lastOutcome?.rewardSummary).toBeUndefined();
   });
@@ -961,7 +961,7 @@ describe('SurvivalSession daytime actions', () => {
       initialEventId: 'chest-attack',
     });
     expect(chestAttacked.resolveEvent(choiceResponse('attack'))).toMatchObject({
-      deltas: { health: -40 },
+      deltas: { health: -25 },
       eventResult: { resultId: 'chest-attack' },
     });
     expect(chestAttacked.snapshot().chest.state).toBe('none');
@@ -1555,7 +1555,7 @@ describe('SurvivalSession daytime actions', () => {
 
     session.resolveEvent({ kind: 'endure' });
 
-    expect(session.snapshot()).toMatchObject({ health: 20, ending: null });
+    expect(session.snapshot()).toMatchObject({ health: 30, ending: null });
   });
   it('starts day one with frozen cloned supplies and one food per can', () => {
     const savedItems = saved('cannedFood', 'compass');

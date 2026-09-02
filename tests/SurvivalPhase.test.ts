@@ -850,6 +850,23 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('SurvivalPhase orchestration', () => {
 
+  it('routes player panel state to the radio signal pause', () => {
+    const setRadioSignalPaused = vi.spyOn(SurvivalAudio.prototype, 'setRadioSignalPaused');
+    const ui: Partial<SurvivalUI> = {};
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world: {},
+      ui,
+    });
+
+    ui.onRadioPauseChange?.(true);
+    ui.onRadioPauseChange?.(false);
+
+    expect(setRadioSignalPaused.mock.calls).toEqual([[true], [false]]);
+    phase.dispose();
+    setRadioSignalPaused.mockRestore();
+  });
+
   it('keeps the radio action available until the incoming sound ends', async () => {
     let current = snapshot({ state: 'nightEvent', day: 4 });
     const signal = { finish: null as (() => void) | null };
@@ -5257,6 +5274,29 @@ describe('SurvivalPhase orchestration', () => {
     expect(update).toHaveBeenNthCalledWith(2, 10.25, 0.25);
     expect(update).toHaveBeenCalledTimes(2);
     expect(updateAmbient).not.toHaveBeenCalled();
+  });
+
+  it('freezes survival time while the tuning menu is open and resumes after it closes', () => {
+    const update = vi.fn();
+    const updateAmbient = vi.fn();
+    const setPaused = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world: { update, updateAmbient, dispose: vi.fn() },
+      ui: { render: vi.fn(), setPaused, dispose: vi.fn() },
+    });
+
+    phase.update(10, 0.1);
+    phase.setOverlayActive(true);
+    phase.update(11, 0.5);
+    phase.setOverlayActive(false);
+    phase.update(12, 0.25);
+
+    expect(update).toHaveBeenNthCalledWith(1, 10, 0.1);
+    expect(update).toHaveBeenNthCalledWith(2, 10.25, 0.25);
+    expect(update).toHaveBeenCalledTimes(2);
+    expect(updateAmbient).not.toHaveBeenCalled();
+    expect(setPaused).not.toHaveBeenCalled();
   });
 
   it('settles a hidden event reveal and restores choices when visible', async () => {
