@@ -42,7 +42,7 @@ foreach ($file in $assetFetchFiles) {
 
 $publicationPath = Join-Path $PSScriptRoot 'texture-publication.ps1'
 $publicationSource = Get-Content -Raw -LiteralPath $publicationPath
-if ($publicationSource.Contains("TrimEnd('\\')") -or $publicationSource.Contains("+ '\\'")) {
+if ($publicationSource.Contains("TrimEnd('\')") -or $publicationSource.Contains("+ '\'")) {
   throw 'texture-publication.ps1 contains a Windows-only path separator.'
 }
 
