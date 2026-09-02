@@ -1,7 +1,12 @@
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$runtimeDirectory = Join-Path $projectRoot 'src\assets\lifeboat'
+$runtimeDirectory = [System.IO.Path]::Combine(
+  $projectRoot,
+  'src',
+  'assets',
+  'lifeboat'
+)
 $temporaryRoot = Join-Path ([IO.Path]::GetTempPath()) (
   'dont-sleep-lifeboat-textures-' + [Guid]::NewGuid().ToString('N')
 )
