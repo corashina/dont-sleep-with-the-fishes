@@ -140,6 +140,7 @@ export class SurvivalUI {
   onJournalOpen: () => void = () => undefined;
   onJournalClose: () => void = () => undefined;
   onJournalPage: () => void = () => undefined;
+  onRadioPauseChange: (paused: boolean) => void = () => undefined;
   onFishingCast: ((point: { readonly x: number; readonly y: number } | null) => boolean) | null = null;
   onFishingReel: (() => boolean) | null = null;
   onFishingResultContinue: (() => void) | null = null;
@@ -165,6 +166,8 @@ export class SurvivalUI {
   private disposed = false;
   private endingStarted = false;
   private announcementVersion = 0;
+  private journalRadioPause = false;
+  private carlitosRadioPause = false;
   private pauseReturnTarget: HTMLElement | null = null;
   private fishingReturnTarget: HTMLElement | null = null;
   private latestCommandOrigin: HTMLButtonElement | null = null;
@@ -258,6 +261,11 @@ export class SurvivalUI {
     };
     this.anchorView.onHighlight = (anchorId) => {
       if (!this.disposed) this.onAnchorHighlight(anchorId);
+    };
+    this.anchorView.onCarlitosCardChange = (open) => {
+      if (this.disposed || this.carlitosRadioPause === open) return;
+      this.carlitosRadioPause = open;
+      this.syncRadioPause();
     };
     this.eventView.onChoice = (choiceId) => {
       if (!this.disposed) this.onEventChoice(choiceId);
@@ -563,11 +571,19 @@ export class SurvivalUI {
     if (this.disposed) return;
     this.journalView.show(entries);
     this.showLayer(this.journalView.root, this.hudView.journalControl());
+    if (!this.journalRadioPause) {
+      this.journalRadioPause = true;
+      this.syncRadioPause();
+    }
   }
 
   hideJournal(): void {
     if (this.disposed) return;
     this.hideLayer(this.journalView.root, true);
+    if (this.journalRadioPause) {
+      this.journalRadioPause = false;
+      this.syncRadioPause();
+    }
   }
 
   setBusy(busy: boolean): void {
@@ -677,6 +693,7 @@ export class SurvivalUI {
       () => { this.onJournalOpen = () => undefined; },
       () => { this.onJournalClose = () => undefined; },
       () => { this.onJournalPage = () => undefined; },
+      () => { this.onRadioPauseChange = () => undefined; },
       () => { this.onFishingCast = null; },
       () => { this.onFishingReel = null; },
       () => { this.onFishingResultContinue = null; },
@@ -735,6 +752,10 @@ export class SurvivalUI {
     this.hudView.setModalOpen(open);
     this.anchorView.setModalOpen(open);
     this.eventView.setModalOpen(open);
+  }
+
+  private syncRadioPause(): void {
+    this.onRadioPauseChange(this.journalRadioPause || this.carlitosRadioPause);
   }
 
   private positionOpenRoutineDialogs(): void {

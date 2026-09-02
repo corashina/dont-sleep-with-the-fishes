@@ -274,6 +274,24 @@ describe('SurvivalDayActionFlow', () => {
     ]);
   });
 
+  it.each(['repair', 'repairItem'] as const)(
+    'renders %s resource changes before its cue settles',
+    async (action) => {
+      const rig = createRig();
+      const cue = deferred();
+      vi.mocked(rig.world.play).mockImplementationOnce(() => cue.promise);
+
+      const pending = rig.flow.run(action);
+
+      expect(rig.renderSnapshot).toHaveBeenCalledOnce();
+      expect(rig.renderSnapshot.mock.invocationCallOrder[0])
+        .toBeLessThan(vi.mocked(rig.world.play).mock.invocationCallOrder[0]!);
+      cue.resolve();
+      await pending;
+      expect(rig.renderSnapshot).toHaveBeenCalledOnce();
+    },
+  );
+
   it('holds chest presentation sync until reward confirmation', async () => {
     const rig = createRig();
     const before = snapshot({ chest: { state: 'closed', acquiredDay: 1 } });

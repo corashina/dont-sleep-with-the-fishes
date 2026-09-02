@@ -16,7 +16,7 @@ const exitCases = [
 
 describe('focused event dismiss actions', () => {
   for (const { eventId, energy, carlitos } of exitCases) {
-    it.each(['choice', 'return'] as const)(`${eventId}, Energy ${energy}, Carlitos ${carlitos}: %s keeps the event pending`, async (exit) => {
+    it.each(['choice', 'return'] as const)(`${eventId}, Energy ${energy}, Carlitos ${carlitos}: %s resolves the event`, async (exit) => {
       const session = new SurvivalSession([
         ...(eventId === 'wreckage' ? [{ instanceId: 'scubaSet-1' as const, type: 'scubaSet' as const }] : []),
         ...(carlitos !== 'absent' ? [{ instanceId: 'carlitos-1' as const, type: 'carlitos' as const }] : []),
@@ -64,24 +64,25 @@ describe('focused event dismiss actions', () => {
         await vi.waitFor(() => expect(exitFocusedEventView).toHaveBeenCalledOnce());
         await vi.waitFor(() => expect(ui.restoreCommandFocus).toHaveBeenCalled());
         expect(session.snapshot()).toMatchObject({
-          state: 'dayEvent', pendingEventId: eventId,
+          state: 'day', pendingEventId: null,
           day: before.day, health: before.health, hunger: before.hunger,
           energy: before.energy, hull: before.hull, inventory: before.inventory,
           food: before.food, bait: before.bait, repairMaterial: before.repairMaterial,
           carlitos: before.carlitos,
         });
         expect(ui.setBusy).toHaveBeenLastCalledWith(false);
-        expect(ui.clearEventPresentation).not.toHaveBeenCalled();
+        expect(ui.clearEventPresentation).toHaveBeenCalled();
         expect(ui.hideFocusedEvent).toHaveBeenCalled();
         ui.onFocusedEventSelect?.(eventId);
-        await vi.waitFor(() => expect(showFocusedEvent).toHaveBeenCalledTimes(2));
+        await Promise.resolve();
+        expect(showFocusedEvent).toHaveBeenCalledOnce();
       } finally {
         phase.dispose();
       }
     });
   }
 
-  it('keeps wreckage pending after the real back arrow returns the camera', async () => {
+  it('resolves wreckage after the real back arrow returns the camera', async () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -135,22 +136,16 @@ describe('focused event dismiss actions', () => {
 
       mount.querySelector<HTMLButtonElement>('[data-focused-event-back]')!.click();
 
-      await Promise.resolve();
-      await Promise.resolve();
+      await vi.runAllTimersAsync();
       expect(exitFocusedEventView).toHaveBeenCalledOnce();
-      expect(debris.disabled).toBe(false);
       expect(session.snapshot()).toMatchObject({
-        state: 'dayEvent',
-        pendingEventId: 'wreckage',
+        state: 'day',
+        pendingEventId: null,
         day: 3,
         energy: 0,
       });
-      expect(debris.dataset.eventState).toBe('available');
-
-      debris.click();
-      await Promise.resolve();
       expect(mount.querySelector('[data-focused-event-view]')?.classList)
-        .toContain('is-visible');
+        .not.toContain('is-visible');
     } finally {
       phase.dispose();
       mount.remove();

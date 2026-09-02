@@ -49,6 +49,21 @@ function createConsole(
 
 describe('PostProcessingConsole save controls', () => {
 
+  it('reports opening and closing from the backtick key and close button', () => {
+    const changes = vi.fn();
+    const console = createConsole(
+      saveControls({ enabled: false, savedDay: null }),
+      changes,
+    );
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backquote', key: '`' }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backquote', key: '`' }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backquote', key: '`' }));
+    console.element.querySelector<HTMLButtonElement>('[data-post-processing-close]')!.click();
+
+    expect(changes.mock.calls).toEqual([[true], [false], [true], [false]]);
+  });
+
   it('shows the disabled default and unavailable Continue reason', () => {
     const controls = saveControls({ enabled: false, savedDay: null });
     const console = createConsole(controls);

@@ -478,11 +478,11 @@ describe('event selection contracts', () => {
     rig.flow.resolveContextual('attack');
     expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({ kind: 'choice', choiceId: 'attack' });
     expect(rig.session.resolveEvent.mock.results[0]!.value).toMatchObject({
-      accepted: true, deltas: { health: -40 },
+      accepted: true, deltas: { health: -25 },
       eventResult: { eventId: 'chest-attack', choiceId: 'attack', resultId: 'chest-attack' },
     });
     expect(rig.realSession.snapshot()).toMatchObject({
-      state: 'day', pendingEventId: null, health: 60, chest: { state: 'none', acquiredDay: null },
+      state: 'day', pendingEventId: null, health: 75, chest: { state: 'none', acquiredDay: null },
     });
     expect(rig.setBusy).toHaveBeenLastCalledWith(false);
     expect(rig.ui.restoreCommandFocus).toHaveBeenCalled();

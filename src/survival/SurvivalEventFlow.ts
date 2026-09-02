@@ -339,20 +339,9 @@ function focusedChoiceEnergy(
   return { energyCost: playerEnergyCost, energyOwner: 'player' };
 }
 
-function focusedDismissChoiceFor(eventId: string): FocusedEventChoiceView | null {
-  if (eventId === 'wreckage') {
-    return {
-      id: 'leave', label: 'Leave', unavailableReason: null,
-      instanceId: null, dismisses: true,
-    };
-  }
-  if (eventId === 'drifting-supplies' || eventId === 'drifting-chest') {
-    return {
-      id: 'sleep', label: 'Let It Drift', unavailableReason: null,
-      instanceId: null, dismisses: true,
-    };
-  }
-  return null;
+function focusedChoiceDismisses(eventId: string, choiceId: string): boolean {
+  if (eventId === 'wreckage') return choiceId === 'leave';
+  return isDriftingItemEventId(eventId) && choiceId === 'sleep';
 }
 
 function focusedChoiceFor(
@@ -379,6 +368,7 @@ function focusedChoiceFor(
     instanceId,
     ...(anchorId === null ? {} : { anchorId }),
     ...focusedChoiceEnergy(choice),
+    ...(focusedChoiceDismisses(event.id, choice.id) ? { dismisses: true } : {}),
   };
 }
 
@@ -391,8 +381,7 @@ export function focusedChoicesFor(
     const view = focusedChoiceFor(event, choice, snapshot, companionAvailability);
     return view === null ? [] : [view];
   });
-  const dismiss = focusedDismissChoiceFor(event.id);
-  return dismiss === null ? choices : [...choices, dismiss];
+  return choices;
 }
 
 export class SurvivalEventFlow {
@@ -780,7 +769,7 @@ export class SurvivalEventFlow {
   private async playWreckageChoiceAnimation(context: FocusedChoiceContext): Promise<void> {
     const { choice, eventId, pending, generation, operation } = context;
     if (choice.id === 'search') return;
-    if (choice.id === 'delegate-carlitos') {
+    if (choice.id === 'delegate-carlitos' || choice.id === 'leave') {
       await (this.dependencies.world.playEventChoice?.(eventId, choice.id) ?? Promise.resolve());
       return;
     }

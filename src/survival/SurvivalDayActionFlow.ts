@@ -185,15 +185,20 @@ export class SurvivalDayActionFlow {
     this.ownsBusyState = false;
   }
 
-  private async runDayAction(outcome: ActionOutcome): Promise<void> {
+  private async runDayAction(
+    action: Exclude<DayActionId, 'fish'>,
+    outcome: ActionOutcome,
+  ): Promise<void> {
     const generation = this.dependencies.captureLifecycleGeneration();
     const operation = this.beginOperation();
     try {
       if (!this.isCurrent(generation, operation)) return;
       this.setBusy(true);
+      const renderBeforeCue = action === 'repair' || action === 'repairItem';
+      let snapshot = renderBeforeCue ? this.dependencies.renderSnapshot() : null;
       await (this.dependencies.world.play?.(outcome.cue) ?? Promise.resolve());
       if (!this.isCurrent(generation, operation)) return;
-      const snapshot = this.dependencies.renderSnapshot();
+      snapshot ??= this.dependencies.renderSnapshot();
       this.setBusy(false);
       if (isTerminal(snapshot.state)) this.dependencies.presentTerminal(snapshot);
       else this.dependencies.ui.restoreCommandFocus?.();
@@ -383,7 +388,7 @@ export class SurvivalDayActionFlow {
       return;
     }
     if (action === 'openChest') await this.runChestAction(outcome, beforeAction);
-    else await this.runDayAction(outcome);
+    else await this.runDayAction(action, outcome);
   }
 
   private playActionAudio(play: () => void, generation: number): boolean {

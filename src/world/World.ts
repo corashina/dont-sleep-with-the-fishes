@@ -76,6 +76,7 @@ import {
   ignoreCleanupError as attemptCleanup,
   runCleanupSteps,
 } from './SceneResources';
+import { addScavengePickupTarget } from './ScavengePickupTarget';
 import { createShip, type ShipBuild } from './Ship';
 import { SCAVENGE_PHYSICS_OBJECT_SPECS } from './ScavengePhysicsObjectCatalog';
 import {
@@ -382,6 +383,7 @@ export class World {
         const presentation = createProp(this.propModels, instance);
         const prop = presentation.root;
         rollback.push(() => presentation.dispose());
+        addScavengePickupTarget(prop, instance.type);
         collectMeshResources(
           prop,
           this.ownedGeometries,

@@ -57,6 +57,12 @@ const BOAT_TOOL_COPY: Readonly<Record<BoatToolId, BoatToolCopy>> = Object.freeze
   },
 });
 
+const ANCHOR_Z_TIER_SIZE = 100000;
+const ACTIONABLE_ITEM_Z_OFFSET = ANCHOR_Z_TIER_SIZE;
+const ROUTINE_TOOL_Z_OFFSET = ANCHOR_Z_TIER_SIZE * 2;
+const EVENT_TARGET_Z_OFFSET = ANCHOR_Z_TIER_SIZE * 3;
+const CYCLED_ANCHOR_Z_INDEX = ANCHOR_Z_TIER_SIZE * 4 + 1;
+
 const ACTIONS: readonly ActionDefinition[] = [
   { id: 'fish', label: 'FISH', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.actions.fishEnergy, effect: 'Chance to gain food', risk: 'uncertain' },
   { id: 'dive', label: 'DIVE', cost: '3 ENERGY', energyCost: SURVIVAL_BALANCE.actions.diveEnergy, effect: 'May recover supplies; injury risk', risk: 'dangerous' },
@@ -156,6 +162,7 @@ export class BoatAnchorView {
   onEventChoice: (choiceId: EventResponseId) => void = () => undefined;
   onEventFocus: (eventId: InspectableEventId) => void = () => undefined;
   onHighlight: (anchorId: string | null) => void = () => undefined;
+  onCarlitosCardChange: (open: boolean) => void = () => undefined;
 
   private readonly carlitosPet: HTMLButtonElement;
   private readonly carlitosHungerLabel: HTMLElement;
@@ -336,7 +343,7 @@ export class BoatAnchorView {
   private anchorLayout(anchor: BoatInteractionAnchor): AnchorLayoutState {
     const hitArea = anchor.hitArea ?? DEFAULT_ANCHOR_HIT_AREA;
     const targetKind = this.anchorTargetKind(anchor);
-    const depthZIndex = Math.max(1, 100000 - Math.round(hitArea.depth * 100));
+    const depthZIndex = this.anchorDepthZIndex(anchor);
     return {
       visible: anchor.visible,
       x: Math.round(anchor.x),
@@ -344,10 +351,33 @@ export class BoatAnchorView {
       targetKind,
       width: Math.round(hitArea.width),
       height: Math.round(hitArea.height),
-      // Encounter entry points take priority; world choices keep their physical depth beside eligible items.
-      zIndex: anchor.eventFocusId !== undefined ? 100000 + depthZIndex : depthZIndex,
+      zIndex: this.anchorZIndex(anchor, 'ordinary', depthZIndex),
       depleted: anchor.depleted,
     };
+  }
+
+  private anchorDepthZIndex(anchor: BoatInteractionAnchor): number {
+    const depth = anchor.hitArea?.depth ?? DEFAULT_ANCHOR_HIT_AREA.depth;
+    return Math.max(1, ANCHOR_Z_TIER_SIZE - Math.round(depth * 100));
+  }
+
+  private anchorZIndex(
+    anchor: BoatInteractionAnchor,
+    state: AnchorInteractionState,
+    depthZIndex = this.anchorDepthZIndex(anchor),
+  ): number {
+    if (
+      state === 'eventAvailable'
+      || state === 'selected'
+      || anchor.eventFocusId !== undefined
+    ) return EVENT_TARGET_Z_OFFSET + depthZIndex;
+    if (anchor.itemType !== null && anchor.action !== null) {
+      return ACTIONABLE_ITEM_Z_OFFSET + depthZIndex;
+    }
+    if (this.anchorTargetKind(anchor) === 'tool') {
+      return ROUTINE_TOOL_Z_OFFSET + depthZIndex;
+    }
+    return depthZIndex;
   }
 
   private anchorTargetKind(anchor: BoatInteractionAnchor): AnchorLayoutState['targetKind'] {
@@ -600,6 +630,7 @@ export class BoatAnchorView {
     clean(() => { this.onEventChoice = () => undefined; });
     clean(() => { this.onEventFocus = () => undefined; });
     clean(() => { this.onHighlight = () => undefined; });
+    clean(() => { this.onCarlitosCardChange = () => undefined; });
     clean(() => this.anchorLayouts.clear());
     if (failed) throw firstError;
   }
@@ -969,6 +1000,7 @@ export class BoatAnchorView {
     this.carlitosCard.hidden = false;
     this.carlitosCard.setAttribute('aria-hidden', 'false');
     this.carlitosCard.classList.add('is-visible');
+    this.onCarlitosCardChange(true);
     this.positionCarlitosCard(anchor);
     this.carlitosPet.focus();
   }
@@ -993,6 +1025,7 @@ export class BoatAnchorView {
     this.carlitosCard.hidden = true;
     this.carlitosCard.setAttribute('aria-hidden', 'true');
     this.carlitosCard.classList.remove('is-visible');
+    this.onCarlitosCardChange(false);
     const target = this.carlitosReturnTarget;
     this.carlitosReturnTarget = null;
     if (!restoreFocus || target === null) return;
@@ -1047,6 +1080,7 @@ export class BoatAnchorView {
     const state = anchor === undefined ? 'ordinary' : this.anchorInteractionState(id, anchor);
     this.setEventChoiceState(button, choice);
     this.setAnchorEventState(button, state);
+    if (anchor !== undefined) button.style.zIndex = String(this.anchorZIndex(anchor, state));
     if (state === 'eventLocked') return this.lockAnchorButton(button, id);
     this.unlockAnchorButton(button);
     this.setAnchorButtonAvailability(button, state, reason);
@@ -1477,7 +1511,7 @@ export class BoatAnchorView {
   private selectCycledAnchor(button: HTMLButtonElement): void {
     if (this.cycledAnchorId !== null) this.restoreAnchorDepth(this.cycledAnchorId);
     this.cycledAnchorId = button.dataset.anchorId ?? null;
-    button.style.zIndex = '100001';
+    button.style.zIndex = String(CYCLED_ANCHOR_Z_INDEX);
     button.focus({ preventScroll: true });
     this.focusedAnchorId = this.cycledAnchorId;
     this.publishAnchorHighlight();
@@ -1485,9 +1519,12 @@ export class BoatAnchorView {
 
   private restoreAnchorDepth(anchorId: string): void {
     const button = this.anchorButtons.get(anchorId);
-    const layout = this.anchorLayouts.get(anchorId);
-    if (button !== undefined && layout !== undefined) {
-      button.style.zIndex = String(layout.zIndex);
+    const anchor = this.anchors.get(anchorId);
+    if (button !== undefined && anchor !== undefined) {
+      button.style.zIndex = String(this.anchorZIndex(
+        anchor,
+        this.anchorInteractionState(anchorId, anchor),
+      ));
     }
   }
 
@@ -1519,7 +1556,7 @@ export class BoatAnchorView {
     }
     if (this.cycledAnchorId !== null) {
       const selected = this.anchorButtons.get(this.cycledAnchorId);
-      if (selected !== undefined) selected.style.zIndex = '100001';
+      if (selected !== undefined) selected.style.zIndex = String(CYCLED_ANCHOR_Z_INDEX);
     }
   }
 }

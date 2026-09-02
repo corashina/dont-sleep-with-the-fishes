@@ -79,6 +79,25 @@ describe('survival events', () => {
     }
   });
 
+  it('uses the reduced Eerie Melody damage ranges', () => {
+    const melody = survivalEventById('eerie-melody')!;
+    const spyglass = melody.choices.find(({ id }) => id === 'spyglass')!.outcomes[0]!;
+    const umbrella = melody.choices.find(({ id }) => id === 'umbrella')!.outcomes[1]!;
+    const sleep = melody.choices.find(({ id }) => id === 'sleep')!.outcomes[1]!;
+
+    expect(spyglass.effects.resources).toEqual([
+      subtract('hull', { min: 30, max: 40 }),
+      subtract('health', 20),
+    ]);
+    expect(umbrella.effects.resources).toEqual([
+      subtract('hull', { min: 25, max: 35 }),
+    ]);
+    expect(sleep.effects.resources).toEqual([
+      subtract('hull', { min: 30, max: 40 }),
+      subtract('health', 20),
+    ]);
+  });
+
   it('keeps one no-item response on every event', () => {
     for (const eventEntry of SURVIVAL_EVENTS) {
       expect(

@@ -142,7 +142,7 @@ describe('FocusedEventFlow', () => {
     expect(rig.ui.showFocusedEvent).toHaveBeenCalledOnce();
   });
 
-  it('restores the focused event when the Back camera fails', async () => {
+  it('clears the resolved event when the Back camera fails', async () => {
     const rig = createRig();
     const backError = new Error('camera return failed');
     await rig.flow.enter('drifting-supplies', driftingChoices);
@@ -150,12 +150,16 @@ describe('FocusedEventFlow', () => {
 
     await expect(rig.flow.back()).rejects.toBe(backError);
 
-    expect(rig.ui.showFocusedEvent).toHaveBeenCalledTimes(2);
-    expect(rig.calls).not.toContain('clear-event');
+    expect(rig.ui.showFocusedEvent).toHaveBeenCalledOnce();
+    expect(rig.resolveChoice).toHaveBeenCalledExactlyOnceWith({
+      id: 'sleep', instanceId: null,
+    });
+    expect(rig.calls).toContain('clear-event');
+    expect(rig.world.exitFocusedEventView).toHaveBeenCalledTimes(2);
     expect(rig.setBusy).toHaveBeenLastCalledWith(false);
     rig.world.exitFocusedEventView.mockResolvedValue(undefined);
     await expect(rig.flow.back()).resolves.toBeUndefined();
-    expect(rig.resolveChoice).not.toHaveBeenCalled();
+    expect(rig.resolveChoice).toHaveBeenCalledOnce();
   });
 
   it('keeps a choice beat error primary while focus cleanup errors stay secondary', async () => {
@@ -344,13 +348,15 @@ describe('FocusedEventFlow', () => {
     expect(rig.resolveChoice).toHaveBeenCalledOnce();
   });
 
-  it('returns to the boat without resolving the pending event', async () => {
+  it('returns to the boat by resolving the decline choice', async () => {
     const rig = createRig();
     await rig.flow.enter('drifting-supplies', driftingChoices);
     rig.calls.length = 0;
     await rig.flow.back();
-    expect(rig.resolveChoice).not.toHaveBeenCalled();
-    expect(rig.calls).not.toContain('clear-event');
+    expect(rig.resolveChoice).toHaveBeenCalledExactlyOnceWith({
+      id: 'sleep', instanceId: null,
+    });
+    expect(rig.calls).toContain('clear-event');
     expect(rig.calls).toContain('exit');
     expect(rig.calls.at(-1)).toBe('restore-focus');
   });
@@ -372,11 +378,11 @@ describe('FocusedEventFlow', () => {
     expect(rig.calls).not.toContain('clear-event');
     returning.resolve();
     await work;
-    expect(rig.calls).not.toContain('clear-event');
+    expect(rig.calls).toContain('clear-event');
     expect(rig.calls.at(-1)).toBe('restore-focus');
   });
 
-  it('uses Wreckage Leave to close focus without resolving the event', async () => {
+  it('uses Wreckage Leave to resolve the event', async () => {
     const rig = createRig('wreckage');
     const choices = [
       {
@@ -389,9 +395,11 @@ describe('FocusedEventFlow', () => {
 
     await rig.flow.choose({ id: 'leave', instanceId: null });
 
-    expect(rig.resolveChoice).not.toHaveBeenCalled();
-    expect(rig.setEventResolutionActive).not.toHaveBeenCalledWith(true);
-    expect(rig.calls).not.toContain('clear-event');
+    expect(rig.resolveChoice).toHaveBeenCalledExactlyOnceWith({
+      id: 'leave', instanceId: null,
+    });
+    expect(rig.setEventResolutionActive).toHaveBeenCalledWith(true);
+    expect(rig.calls).toContain('clear-event');
     expect(rig.calls).toContain('exit');
     expect(rig.calls).toContain('restore-focus');
   });
