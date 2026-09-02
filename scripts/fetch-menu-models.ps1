@@ -1,7 +1,12 @@
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$modelsRoot = Join-Path $repositoryRoot 'src\assets\models'
+$modelsRoot = [System.IO.Path]::Combine(
+  $repositoryRoot,
+  'src',
+  'assets',
+  'models'
+)
 $outputRoot = Join-Path $modelsRoot 'menu'
 $swapId = [guid]::NewGuid().ToString('N')
 $stagedRoot = Join-Path $modelsRoot ".menu-stage-$swapId"

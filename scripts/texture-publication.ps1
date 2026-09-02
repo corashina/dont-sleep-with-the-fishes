@@ -3,7 +3,10 @@ function Assert-ContainedPath {
     [Parameter(Mandatory = $true)][string]$Parent,
     [Parameter(Mandatory = $true)][string]$Child
   )
-  $resolvedParent = [IO.Path]::GetFullPath($Parent).TrimEnd('\') + '\'
+  $resolvedParent = [IO.Path]::GetFullPath($Parent).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar,
+    [IO.Path]::AltDirectorySeparatorChar
+  ) + [IO.Path]::DirectorySeparatorChar
   $resolvedChild = [IO.Path]::GetFullPath($Child)
   if (-not $resolvedChild.StartsWith($resolvedParent, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Refusing path outside guarded directory: $resolvedChild"
@@ -50,7 +53,10 @@ function Remove-GuardedTextureTempDirectory {
     [Parameter(Mandatory = $true)][string]$Prefix
   )
   $resolvedRoot = [IO.Path]::GetFullPath($TemporaryRoot)
-  $resolvedTemp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
+  $resolvedTemp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar,
+    [IO.Path]::AltDirectorySeparatorChar
+  ) + [IO.Path]::DirectorySeparatorChar
   if (
     $resolvedRoot.StartsWith($resolvedTemp, [StringComparison]::OrdinalIgnoreCase) `
     -and (Split-Path -Leaf $resolvedRoot).StartsWith($Prefix)
