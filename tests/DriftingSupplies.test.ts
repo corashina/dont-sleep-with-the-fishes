@@ -1,6 +1,7 @@
 // Importance: 9/10. Protects merged drifting-supply variants, distance, and loot tiers.
 
 import { describe, expect, it } from 'vitest';
+import type { ItemInstance } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import {
   DRIFTING_SUPPLY_KINDS,
@@ -8,6 +9,8 @@ import {
   driftingSupplyKindFromSeed,
   type DriftingSupplyKind,
 } from '../src/survival/driftingSupplies';
+import { focusedChoicesFor } from '../src/survival/SurvivalEventFlow';
+import { survivalEventById } from '../src/survival/eventCatalog';
 import { deriveEventVariantSeed } from '../src/survival/eventPresentationOutcome';
 import { sequenceRandom } from './helpers/random';
 
@@ -15,6 +18,7 @@ function sessionFor(
   kind: DriftingSupplyKind,
   roll: number,
   energy = 3,
+  carlitosEnergy?: number,
 ): SurvivalSession {
   const day = 3;
   const seed = Array.from({ length: 1_000 }, (_, index) => index).find((candidate) => (
@@ -23,10 +27,16 @@ function sessionFor(
     ) === kind
   ));
   if (seed === undefined) throw new Error(`Missing seed for ${kind}.`);
-  return new SurvivalSession([], {
+  const savedItems: readonly ItemInstance[] = carlitosEnergy === undefined
+    ? []
+    : [{ instanceId: 'carlitos-1', type: 'carlitos' }];
+  return new SurvivalSession(savedItems, {
     seed,
     random: sequenceRandom([roll]),
     initial: { day, energy },
+    ...(carlitosEnergy === undefined
+      ? {}
+      : { initialCarlitos: { hunger: 5, energy: carlitosEnergy } }),
     initialEventId: 'drifting-supplies',
   });
 }
@@ -48,10 +58,10 @@ describe('drifting supplies', () => {
   });
 
   it.each([
-    ['barrel', 1],
-    ['lifeboat', 2],
-    ['container', 3],
-  ] as const)('grants the %s food tier', (kind, quantity) => {
+    ['barrel', 1, 3],
+    ['lifeboat', 2, 3],
+    ['container', 3, 2],
+  ] as const)('grants the %s food tier', (kind, quantity, energyCost) => {
     const outcome = sessionFor(kind, 0).resolveEvent({
       kind: 'choice',
       choiceId: 'retrieve',
@@ -59,7 +69,7 @@ describe('drifting supplies', () => {
 
     expect(outcome).toMatchObject({
       accepted: true,
-      deltas: { energy: -3, food: quantity },
+      deltas: { energy: -energyCost, food: quantity },
       rewardSummary: { kind: 'resource', id: 'food', quantity },
       eventPresentationKey: 'drifting-supplies.retrieve',
     });
@@ -84,12 +94,53 @@ describe('drifting supplies', () => {
     });
   });
 
-  it('requires three energy for every player retrieval', () => {
-    const session = sessionFor('lifeboat', 0, 2);
-    const before = session.snapshot();
+  it.each(['barrel', 'lifeboat'] as const)(
+    'requires three player energy for the %s',
+    (kind) => {
+      const session = sessionFor(kind, 0, 2);
+      const before = session.snapshot();
+
+      expect(session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' }))
+        .toMatchObject({ accepted: false, code: 'requirements-unmet' });
+      expect(session.snapshot()).toEqual(before);
+    },
+  );
+
+  it('retrieves the container with two player energy', () => {
+    const session = sessionFor('container', 0, 2);
 
     expect(session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' }))
-      .toMatchObject({ accepted: false, code: 'requirements-unmet' });
-    expect(session.snapshot()).toEqual(before);
+      .toMatchObject({ accepted: true, deltas: { energy: -2, food: 3 } });
+    expect(session.snapshot().energy).toBe(0);
+  });
+
+  it('retrieves the container with two Carlitos energy', () => {
+    const session = sessionFor('container', 0, 0, 2);
+
+    expect(session.resolveEvent({ kind: 'choice', choiceId: 'delegate-carlitos' }))
+      .toMatchObject({ accepted: true, deltas: { food: 3 } });
+    expect(session.snapshot().carlitos?.energy).toBe(0);
+  });
+
+  it('requires three Carlitos energy for the lifeboat', () => {
+    const session = sessionFor('lifeboat', 0, 0, 2);
+
+    expect(session.resolveEvent({ kind: 'choice', choiceId: 'delegate-carlitos' }))
+      .toMatchObject({ accepted: false, code: 'companion-action-unavailable' });
+    expect(session.snapshot().carlitos?.energy).toBe(2);
+  });
+
+  it('shows the container cost for the player and Carlitos', () => {
+    const session = sessionFor('container', 0, 2, 2);
+    const event = survivalEventById('drifting-supplies');
+    if (event === undefined) throw new Error('Missing Drifting Supplies event.');
+
+    expect(focusedChoicesFor(event, session.snapshot())).toEqual([
+      expect.objectContaining({ id: 'retrieve', energyCost: 2, unavailableReason: null }),
+      expect.objectContaining({
+        id: 'delegate-carlitos', energyCost: 2, unavailableReason: null,
+      }),
+      expect.objectContaining({ id: 'sleep' }),
+    ]);
   });
 });

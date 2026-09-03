@@ -9,7 +9,7 @@ const exitCases = [
   ...(['drifting-supplies', 'drifting-chest'] as const).map((eventId) => ({
     eventId, energy: 0, carlitos: 'absent',
   })),
-  ...[0, 1].flatMap((energy) => ['absent', 'low-energy', 'hungry'].map((carlitos) => ({
+  ...[0].flatMap((energy) => ['absent', 'low-energy', 'hungry'].map((carlitos) => ({
     eventId: 'wreckage' as const, energy, carlitos,
   }))),
 ];
@@ -22,7 +22,7 @@ describe('focused event dismiss actions', () => {
         ...(carlitos !== 'absent' ? [{ instanceId: 'carlitos-1' as const, type: 'carlitos' as const }] : []),
       ], {
         seed: 41, initial: { day: 3, energy }, initialEventId: eventId,
-        initialCarlitos: { energy: carlitos === 'low-energy' ? 2 : 3, hunger: carlitos === 'hungry' ? 0 : 5 },
+        initialCarlitos: { energy: carlitos === 'low-energy' ? 1 : 3, hunger: carlitos === 'hungry' ? 0 : 5 },
       });
       const before = session.snapshot();
       const showFocusedEvent = vi.fn();
@@ -81,6 +81,22 @@ describe('focused event dismiss actions', () => {
       }
     });
   }
+
+  it.each(['drifting-supplies', 'drifting-chest'] as const)(
+    '%s: pillow expires the pending loot and starts night',
+    (eventId) => {
+      const session = new SurvivalSession([], {
+        seed: 41,
+        initial: { day: 3, energy: 0 },
+        initialEventId: eventId,
+      });
+
+      expect(session.availableReason('endDay')).toBeNull();
+      expect(session.perform('endDay')).toMatchObject({ accepted: true });
+      expect(session.snapshot()).toMatchObject({ state: 'nightEvent' });
+      expect(session.snapshot().pendingEventId).not.toBe(eventId);
+    },
+  );
 
   it('resolves wreckage after the real back arrow returns the camera', async () => {
     vi.useFakeTimers();

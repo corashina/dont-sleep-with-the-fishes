@@ -8,6 +8,10 @@ export type DayActionId =
   | 'treat' | 'answerRadio' | 'useEnergyBar' | 'openChest' | 'endDay'
   | 'petCarlitos' | 'feedCarlitos' | 'treatCarlitos';
 export type CompanionEventActionId = 'delegateCarlitos';
+export interface CompanionEventActionDefinition {
+  readonly id: CompanionEventActionId;
+  readonly energyCost: number;
+}
 export type CompanionActionId =
   | 'petCarlitos' | 'feedCarlitos' | 'treatCarlitos' | CompanionEventActionId;
 export interface CompanionEventActionAvailability {
@@ -135,7 +139,7 @@ export interface EventChoiceDefinition {
   readonly itemId?: ItemId;
   readonly requirements?: readonly EventChoiceRequirement[];
   readonly requiredChestState?: ChestState;
-  readonly companionAction?: CompanionEventActionId;
+  readonly companionAction?: CompanionEventActionDefinition;
   readonly outcomes: readonly [WeightedEventOutcome, ...WeightedEventOutcome[]];
 }
 

@@ -1,5 +1,6 @@
 import {
   BackSide,
+  Box3,
   DoubleSide,
   Euler,
   Material,
@@ -58,6 +59,7 @@ export class EventItemUseAdapter {
   private readonly cameraSpacePosition = new Vector3();
   private readonly actorParentPosition = new Vector3();
   private readonly targetWorldPosition = new Vector3();
+  private readonly aimTargetBounds = new Box3();
   private readonly actorWorldPosition = new Vector3();
   private readonly actionOriginPosition = new Vector3();
   private readonly actionOriginOffset = new Vector3();
@@ -105,6 +107,8 @@ export class EventItemUseAdapter {
   private actor: BorrowedSupplyActor | null = null;
   private profile: EventItemMotionProfile | null = null;
   private aimTarget: Object3D | null = null;
+  private centerAimTargetHeight = false;
+  private aimTargetCenterYOffset: number | null = null;
   private cameraFacingSurface: CameraFacingSurface = 'none';
   private lockItemToHeldCamera = false;
   private alignItemToCamera = false;
@@ -136,6 +140,8 @@ export class EventItemUseAdapter {
     this.actor = actor;
     this.profile = eventItemMotionProfile(itemId);
     this.aimTarget = aimTarget;
+    this.centerAimTargetHeight = itemId === 'knife';
+    this.captureAimTargetCenterYOffset();
     this.cameraFacingSurface = facingSurface ?? (itemId === 'map'
       ? 'y'
       : itemId === 'compass' || itemId === 'spyglass' ? 'z' : 'none');
@@ -161,6 +167,7 @@ export class EventItemUseAdapter {
   setAimTarget(aimTarget: Object3D | null): void {
     if (this.disposed) return;
     this.aimTarget = aimTarget;
+    this.captureAimTargetCenterYOffset();
   }
 
   apply(sample: Readonly<EventItemUseSample>): void {
@@ -189,8 +196,12 @@ export class EventItemUseAdapter {
       this.actorParentWorldInverse.copy(parent.matrixWorld).invert();
       this.actorParentPosition.applyMatrix4(this.actorParentWorldInverse);
     }
-    this.actorParentPosition.sub(this.storedActorPosition)
-      .multiplyScalar(sample.cameraSpaceBlend);
+    if (sample.cameraSpaceBlend === 0) {
+      this.actorParentPosition.set(0, 0, 0);
+    } else {
+      this.actorParentPosition.sub(this.storedActorPosition)
+        .multiplyScalar(sample.cameraSpaceBlend);
+    }
     if (sample.minimumLiftY > 0) {
       this.actorParentPosition.y = Math.max(
         this.actorParentPosition.y,
@@ -229,6 +240,8 @@ export class EventItemUseAdapter {
     this.actor = null;
     this.profile = null;
     this.aimTarget = null;
+    this.centerAimTargetHeight = false;
+    this.aimTargetCenterYOffset = null;
     this.cameraFacingSurface = 'none';
     this.lockItemToHeldCamera = false;
     this.alignItemToCamera = false;
@@ -247,6 +260,33 @@ export class EventItemUseAdapter {
     if (this.camera.fov === fieldOfView) return;
     this.camera.fov = fieldOfView;
     this.camera.updateProjectionMatrix();
+  }
+
+  private captureAimTargetCenterYOffset(): void {
+    this.aimTargetCenterYOffset = null;
+    const aimTarget = this.aimTarget;
+    if (!this.centerAimTargetHeight || aimTarget === null) return;
+
+    aimTarget.updateWorldMatrix(true, true);
+    this.aimTargetBounds.makeEmpty().setFromObject(aimTarget, true);
+    if (this.aimTargetBounds.isEmpty() && aimTarget.parent !== null) {
+      aimTarget.parent.updateWorldMatrix(true, true);
+      this.aimTargetBounds.setFromObject(aimTarget.parent, true);
+    }
+    if (this.aimTargetBounds.isEmpty()) return;
+
+    aimTarget.getWorldPosition(this.targetWorldPosition);
+    const centerY = (this.aimTargetBounds.min.y + this.aimTargetBounds.max.y) * 0.5;
+    const offset = centerY - this.targetWorldPosition.y;
+    if (Number.isFinite(offset)) this.aimTargetCenterYOffset = offset;
+  }
+
+  private readAimTargetWorldPosition(aimTarget: Object3D): void {
+    aimTarget.updateWorldMatrix(true, false);
+    aimTarget.getWorldPosition(this.targetWorldPosition);
+    if (this.aimTargetCenterYOffset !== null) {
+      this.targetWorldPosition.y += this.aimTargetCenterYOffset;
+    }
   }
 
   private applyCameraAlignedRotation(
@@ -350,8 +390,7 @@ export class EventItemUseAdapter {
     } else {
       const aimTarget = this.aimTarget;
       if (aimTarget === null) return;
-      aimTarget.updateWorldMatrix(true, false);
-      aimTarget.getWorldPosition(this.targetWorldPosition);
+      this.readAimTargetWorldPosition(aimTarget);
     }
     this.cameraWorldQuaternion.copy(this.camera.quaternion);
     this.camera.lookAt(this.targetWorldPosition);
@@ -389,8 +428,7 @@ export class EventItemUseAdapter {
         THROW_FALLBACK_DISTANCE,
       );
     } else {
-      aimTarget.updateWorldMatrix(true, false);
-      aimTarget.getWorldPosition(this.targetWorldPosition);
+      this.readAimTargetWorldPosition(aimTarget);
     }
     if (sample.ballisticFlight) {
       this.targetWorldPosition.y = THROW_WATER_CONTACT_Y;
@@ -433,6 +471,12 @@ export class EventItemUseAdapter {
       this.actorParentPosition.applyMatrix4(this.actorParentWorldInverse);
     }
     this.actorParentPosition.sub(this.storedActorPosition);
+    if (sample.minimumLiftY > 0) {
+      this.actorParentPosition.y = Math.max(
+        this.actorParentPosition.y,
+        sample.minimumLiftY,
+      );
+    }
     this.pose.x = this.actorParentPosition.x;
     this.pose.y = this.actorParentPosition.y;
     this.pose.z = this.actorParentPosition.z;
@@ -468,8 +512,7 @@ export class EventItemUseAdapter {
       || aimTarget === null
     ) return;
 
-    aimTarget.updateWorldMatrix(true, false);
-    aimTarget.getWorldPosition(this.targetWorldPosition);
+    this.readAimTargetWorldPosition(aimTarget);
     actor.root.updateWorldMatrix(true, false);
     actor.root.getWorldPosition(this.actorWorldPosition);
     this.targetDirection.subVectors(

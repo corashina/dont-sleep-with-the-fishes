@@ -75,7 +75,7 @@ export class Environment {
   ) {
     this.previousBackground = scene.background;
     this.previousFog = scene.fog;
-    this.sky = new Skybox(scene, this.skyState, moonTexture);
+    this.sky = new Skybox(scene, this.skyState, moonTexture, moonTexture);
     this.weatherEffects = new WeatherEffects(scene);
     const atmosphere = this.sky.palette;
     this.volumetricClouds = createClouds(scene, visualQuality);

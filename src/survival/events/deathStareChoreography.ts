@@ -6,7 +6,7 @@ export const DEATH_STARE_ITEM_DURATION = scaleEventItemDuration(1.25);
 export const DEATH_STARE_REACTION_DURATION = 1.25;
 
 export function deathStareItemDuration(choiceId: string): number {
-  return choiceId === 'food' || choiceId === 'cannedFood' || choiceId === 'fishingNet'
+  return choiceId === 'food' || choiceId === 'cannedFood'
     ? scaleThrownItemDuration(1.25)
     : DEATH_STARE_ITEM_DURATION;
 }
@@ -17,7 +17,7 @@ export type DeathStareItemEffectKind =
   | 'umbrella-shield'
   | 'food-toss'
   | 'shotgun-fire'
-  | 'net-cast';
+  | 'net-slap';
 
 export interface DeathStareReactionState {
   readonly attacked: boolean;
@@ -229,17 +229,18 @@ export function sampleDeathStareItemUse(
       output.fishZ = -action * 0.08;
       break;
     case 'fishingNet': {
-      const cast = pulse(t, 0.18, 0.64, 0.94);
-      output.itemX = 0.48 * lift + cast * 1.72;
-      output.itemY = 0.52 * lift + cast * 0.4;
-      output.itemZ = -0.18 * lift - cast * 0.72;
+      const contact = pulse(t, 0.5, 0.62, 0.76);
+      output.itemX = 0.48 * lift;
+      output.itemY = 0.52 * lift;
+      output.itemZ = -0.18 * lift;
       output.itemPitch = -0.36 * lift;
-      output.itemRoll = 0.18 * lift - cast * 0.48;
-      output.itemScaleX = 1 + cast * 0.46;
-      output.itemScaleY = 1 + cast * 0.18;
-      output.itemScaleZ = 1 + cast * 0.36;
-      output.effectStrength = cast;
-      output.effectKind = 'net-cast';
+      output.itemRoll = 0.18 * lift;
+      output.effectStrength = contact;
+      output.effectKind = 'net-slap';
+      output.blink = contact;
+      output.eyeTarget = 1 - contact * 0.52;
+      output.fishZ = -contact * 0.18;
+      output.fishPitch = contact * 0.1;
       break;
     }
   }

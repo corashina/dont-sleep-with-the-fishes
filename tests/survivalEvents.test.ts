@@ -276,6 +276,20 @@ describe('survival events', () => {
     expect(eligible(new Set(['cannedFood'])).map(({ id }) => id)).toContain('snatcher');
   });
 
+  it('limits Tentacle Attack responses to weapons and sleep', () => {
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'snatcher');
+
+    expect(event?.choices.map(({ id }) => id)).toEqual([
+      'knife', 'shotgun', 'flareGun', 'sleep',
+    ]);
+  });
+
+  it('limits Chest Attack outcomes to its automatic attack and Knife mitigation', () => {
+    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'chest-attack');
+
+    expect(event?.choices.map(({ id }) => id)).toEqual(['knife', 'attack']);
+  });
+
   it('draws by stable weighted boundaries and returns a quiet fallback for an empty pool', () => {
     const pool = SURVIVAL_EVENTS.filter((event) => event.phase === 'night').slice(0, 2);
     const eligibility = (phase: 'day' | 'night') => ({
@@ -362,6 +376,12 @@ describe('survival events', () => {
     rejects((catalog) => { catalog[0].requiresLivingCompanion = undefined; }, /living companion.*boolean/i);
     rejects((catalog) => { catalog[0].choices[0].companionAction = 'swim'; }, /companion action/i);
     rejects((catalog) => { catalog[0].choices[0].companionAction = undefined; }, /companion action/i);
+    rejects((catalog) => {
+      catalog[0].choices[0].companionAction = { id: 'swim', energyCost: 3 };
+    }, /companion action.*invalid/i);
+    rejects((catalog) => {
+      catalog[0].choices[0].companionAction = { id: 'delegateCarlitos', energyCost: 0 };
+    }, /companion action.*energy cost/i);
     rejects((catalog) => { catalog[0].choices.at(-1).itemId = 'bucket'; }, /no-item response/i);
     rejects((catalog) => {
       catalog[0].choices[0].outcomes[0].effects.resources = [

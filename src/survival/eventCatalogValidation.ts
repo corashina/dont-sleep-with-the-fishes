@@ -499,9 +499,16 @@ function validateChoiceOptions(
   eventEntry: SurvivalEventDefinition,
   eventChoice: SurvivalEventDefinition['choices'][number],
 ): void {
-  if (Object.hasOwn(eventChoice, 'companionAction')
-    && eventChoice.companionAction !== 'delegateCarlitos') {
-    throw new Error(`${eventEntry.id}.${eventChoice.id} has an invalid companion action`);
+  if (Object.hasOwn(eventChoice, 'companionAction')) {
+    const path = `${eventEntry.id}.${eventChoice.id} companion action`;
+    assertPlainObject(eventChoice.companionAction, path);
+    if (eventChoice.companionAction.id !== 'delegateCarlitos') {
+      throw new Error(`${path} is invalid`);
+    }
+    if (!Number.isInteger(eventChoice.companionAction.energyCost)
+      || (eventChoice.companionAction.energyCost as number) <= 0) {
+      throw new Error(`${path} energy cost must be a positive integer`);
+    }
   }
   if (eventChoice.requiredChestState !== undefined
     && !['none', 'closed', 'mimic'].includes(eventChoice.requiredChestState)) {

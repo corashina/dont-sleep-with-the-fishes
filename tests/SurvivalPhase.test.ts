@@ -37,7 +37,7 @@ import type { SurvivalUI } from '../src/ui/SurvivalUI';
 import type { PresentationWeatherId } from '../src/weather/presentationWeather';
 import { createTestPropModels } from './helpers/propModels';
 import { sequenceRandom } from './helpers/random';
-import { createTestMoonTexture } from './helpers/skyAssets';
+import { createTestSkyTextures } from './helpers/skyAssets';
 
 function inventory(
   overrides: Partial<Record<ItemInstanceId, SurvivalItemState>> = {},
@@ -237,7 +237,7 @@ describe('survival checkpoints', () => {
     },
   );
 
-  it('waits for the Chest Attack reveal before it emits the choice checkpoint', async () => {
+  it('does not emit a checkpoint while the automatic Chest Attack runs', async () => {
     const source = new SurvivalSession([], {
       seed: 41,
       initialChest: { state: 'mimic', acquiredDay: 1 },
@@ -277,7 +277,7 @@ describe('survival checkpoints', () => {
       reveal.resolve();
       await flushPromises();
 
-      expect(onCheckpointChange).toHaveBeenCalledExactlyOnceWith(checkpoint);
+      expect(onCheckpointChange).not.toHaveBeenCalled();
     } finally {
       phase.dispose();
       choice.resolve();
@@ -2073,9 +2073,9 @@ describe('SurvivalPhase orchestration', () => {
       pendingEventTargetId: 'map-1',
       inventory: inventory({
         'map-1': { instanceId: 'map-1', type: 'map', condition: 'usable' },
-        'spyglass-1': {
-          instanceId: 'spyglass-1',
-          type: 'spyglass',
+        'shotgun-1': {
+          instanceId: 'shotgun-1',
+          type: 'shotgun',
           condition: 'usable',
         },
       }),
@@ -2127,7 +2127,7 @@ describe('SurvivalPhase orchestration', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(65, 16 / 9, 0.08, 220),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     const setEventSelection = vi.fn();
     const phase = SurvivalPhase.forTest({
@@ -2161,7 +2161,7 @@ describe('SurvivalPhase orchestration', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(65, 16 / 9, 0.08, 220),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     const calls: string[] = [];
     const thunder = vi.spyOn(SurvivalAudio.prototype, 'thunder').mockImplementation(() => {
@@ -4515,17 +4515,17 @@ describe('SurvivalPhase orchestration', () => {
       pendingEventTargetId: 'map-1',
       inventory: inventory({
         'map-1': { instanceId: 'map-1', type: 'map', condition: 'usable' },
-        'spyglass-1': {
-          instanceId: 'spyglass-1',
-          type: 'spyglass',
+        'shotgun-1': {
+          instanceId: 'shotgun-1',
+          type: 'shotgun',
           condition: 'usable',
         },
       }),
     });
     const outcome = accepted({
       code: 'event-resolved',
-      message: 'The spyglass breaks.',
-      deltas: { hull: -12 },
+      message: 'The shot drives the tentacle away. The supply stays aboard.',
+      deltas: {},
       cue: 'impact',
     });
     const reactToEventOutcome = vi.fn(() => Promise.resolve());
@@ -4537,13 +4537,13 @@ describe('SurvivalPhase orchestration', () => {
             state: 'day',
             day: 6,
             seed: 42,
-            hull: 76,
+            hull: 88,
             inventory: inventory({
               'map-1': { instanceId: 'map-1', type: 'map', condition: 'usable' },
-              'spyglass-1': {
-                instanceId: 'spyglass-1',
-                type: 'spyglass',
-                condition: 'broken',
+              'shotgun-1': {
+                instanceId: 'shotgun-1',
+                type: 'shotgun',
+                condition: 'consumed',
               },
             }),
           });
@@ -4577,27 +4577,27 @@ describe('SurvivalPhase orchestration', () => {
 
     phase.start();
     await flushPromises();
-    phase.handleEventItem('spyglass', 'spyglass-1');
+    phase.handleEventItem('shotgun', 'shotgun-1');
     await flushPromises();
 
     const presentation = {
       outcome,
-      resourceDeltas: { hull: -12 },
+      resourceDeltas: {},
       gainedInstanceIds: [],
-      brokenInstanceIds: ['spyglass-1'],
+      brokenInstanceIds: [],
       lostInstanceIds: [],
-      consumedInstanceIds: [],
-      selectedInstanceId: 'spyglass-1',
-      selectedCondition: 'broken',
+      consumedInstanceIds: ['shotgun-1'],
+      selectedInstanceId: 'shotgun-1',
+      selectedCondition: 'consumed',
       targetInstanceId: 'map-1',
     };
     expect(reactToEventOutcome).toHaveBeenCalledWith(
       'snatcher',
       outcome,
       {
-        choiceId: 'spyglass',
-        instanceId: 'spyglass-1',
-        condition: 'broken',
+        choiceId: 'shotgun',
+        instanceId: 'shotgun-1',
+        condition: 'consumed',
       },
       presentation,
     );
@@ -5933,7 +5933,7 @@ describe('SurvivalPhase orchestration', () => {
     },
   );
 
-  it('shows Attack and waits for explicit selection', async () => {
+  it('runs Chest Attack automatically without showing a choice', async () => {
     const calls: string[] = [];
     let current = snapshot({
       state: 'nightEvent',
@@ -6014,15 +6014,7 @@ describe('SurvivalPhase orchestration', () => {
     phase.start();
     for (let index = 0; index < 8; index += 1) await flushPromises();
 
-    expect(setEventSelection).toHaveBeenLastCalledWith(
-      new Map(),
-      [expect.objectContaining({ id: 'attack', label: 'Attack' })],
-    );
-    expect(resolveEvent).not.toHaveBeenCalled();
-
-    ui.onEventChoice?.('attack');
-    for (let index = 0; index < 8; index += 1) await flushPromises();
-
+    expect(setEventSelection).not.toHaveBeenCalled();
     expect(resolveEvent).toHaveBeenCalledExactlyOnceWith({
       kind: 'choice',
       choiceId: 'attack',
@@ -6042,12 +6034,11 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
-  it('accepts Fishing Net during the warning and prevents the automatic bite', async () => {
-    const reveal = deferred();
+  it('applies automatic Knife mitigation without showing or animating the Knife', async () => {
     const inventoryState = inventory({
-      'fishingNet-1': {
-        instanceId: 'fishingNet-1',
-        type: 'fishingNet',
+      'knife-1': {
+        instanceId: 'knife-1',
+        type: 'knife',
         condition: 'usable',
       },
     });
@@ -6061,17 +6052,18 @@ describe('SurvivalPhase orchestration', () => {
       current = snapshot({
         state: 'nightEvent',
         pendingEventId: null,
-        chest: { state: 'closed', acquiredDay: 1 },
+        health: 90,
+        chest: { state: 'none', acquiredDay: null },
         inventory: inventoryState,
       });
       return accepted({
         code: 'event-resolved',
         cue: 'impact',
-        deltas: {},
+        deltas: { health: -10 },
         eventResult: {
           eventId: 'chest-attack',
-          choiceId: 'fishingNet',
-          resultId: 'chest-bound',
+          choiceId: 'knife',
+          resultId: 'chest-attack',
         },
       });
     });
@@ -6079,18 +6071,14 @@ describe('SurvivalPhase orchestration', () => {
       current = snapshot({
         state: 'day',
         day: 2,
-        chest: { state: 'closed', acquiredDay: 1 },
+        health: 90,
+        chest: { state: 'none', acquiredDay: null },
         inventory: inventoryState,
       });
       return accepted({ code: 'dawn', cue: 'dawn', deltas: {} });
     });
     const playEventItemUse = vi.fn(() => Promise.resolve());
-    const playEventChoice = vi.fn(async (
-      _eventId: string,
-      choice: string | EventChoicePresentation,
-    ) => {
-      if (typeof choice !== 'string' && choice.choiceId === 'fishingNet') reveal.resolve();
-    });
+    const playEventChoice = vi.fn(() => Promise.resolve());
     const setEventSelection = vi.fn();
     const reactToEventOutcome = vi.fn(() => Promise.resolve());
     const phase = SurvivalPhase.forTest({
@@ -6101,7 +6089,7 @@ describe('SurvivalPhase orchestration', () => {
       },
       world: {
         stageEvent: vi.fn(),
-        revealEvent: vi.fn(() => reveal.promise),
+        revealEvent: vi.fn(() => Promise.resolve()),
         playEventItemUse,
         playEventChoice,
         reactToEventOutcome,
@@ -6129,32 +6117,26 @@ describe('SurvivalPhase orchestration', () => {
     phase.start();
     await flushPromises();
     await flushPromises();
-    expect(setEventSelection).toHaveBeenCalledWith(
-      new Map([['fishingNet-1', 'fishingNet']]),
-      [{ id: 'attack', label: 'Attack', unavailableReason: null }],
-    );
-
-    phase.handleEventItem('fishingNet', 'fishingNet-1');
     for (let index = 0; index < 8; index += 1) await flushPromises();
-
+    expect(setEventSelection).not.toHaveBeenCalled();
     expect(playEventItemUse).not.toHaveBeenCalled();
     expect(playEventChoice).toHaveBeenCalledExactlyOnceWith('chest-attack', {
-      choiceId: 'fishingNet',
-      instanceId: 'fishingNet-1',
-      condition: 'usable',
+      choiceId: 'attack',
+      instanceId: null,
+      condition: null,
     });
     expect(resolveEvent).toHaveBeenCalledExactlyOnceWith({
       kind: 'item',
-      choiceId: 'fishingNet',
-      instanceId: 'fishingNet-1',
+      choiceId: 'knife',
+      instanceId: 'knife-1',
     });
-    expect(reactToEventOutcome).toHaveBeenCalledOnce();
+    expect(reactToEventOutcome).not.toHaveBeenCalled();
     expect(beginDawn).toHaveBeenCalledOnce();
     expect(current).toMatchObject({
       state: 'day',
       day: 2,
-      health: 100,
-      chest: { state: 'closed' },
+      health: 90,
+      chest: { state: 'none' },
     });
     phase.dispose();
   });

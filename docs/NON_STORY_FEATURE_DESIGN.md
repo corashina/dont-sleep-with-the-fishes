@@ -144,9 +144,11 @@ After two nights, the Chest can become a mimic.
 
 The Chest Attack event handles the mimic.
 
-The Fishing Net restores the closed Chest.
+The mimic attacks automatically and destroys the Chest.
 
-Other choices cause damage or destroy the Chest.
+A usable Knife reduces the damage from 25 to 10 Health. The Knife remains usable.
+
+Show the Knife effect only in the journal.
 
 ## Crew
 

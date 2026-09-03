@@ -1,5 +1,6 @@
 import { ITEM_DEFINITIONS, type ItemId } from '../game/ItemState';
 import { CHEST_OPEN_ENERGY } from './chest';
+import { isDriftingItemEventId } from './eventCatalog';
 import {
   radioRescueLeadForSignal,
   repairEnergyCost,
@@ -18,6 +19,7 @@ import type {
 
 export interface DayActionRuleState {
   readonly state: SurvivalState;
+  readonly pendingEventId?: string | null;
   readonly activeFishing: boolean;
   readonly actedToday: boolean;
   readonly weather: WeatherId;
@@ -189,7 +191,11 @@ export function dayActionUnavailableReason(
   if (state.state === 'rescued' || state.state === 'dead' || state.state === 'sunk') {
     return 'The survival journey has already ended.';
   }
-  if (state.state !== 'day') return 'That action is only available during the day.';
+  const optionalLootEvent = state.state === 'dayEvent'
+    && isDriftingItemEventId(state.pendingEventId ?? '');
+  if (state.state !== 'day' && !optionalLootEvent) {
+    return 'That action is only available during the day.';
+  }
   return ACTION_UNAVAILABLE_RULES[action](state, option);
 }
 

@@ -70,6 +70,7 @@ import {
 } from '../src/survival/FocusedEventPresentation';
 import type { EventPresentationCue } from '../src/survival/eventPresentationCue';
 import { FOCUSED_EVENT_IDS } from '../src/survival/eventPresentationRoutes';
+import { MONSTER_IMPACT_SECONDS } from '../src/survival/midnightTourChoreography';
 import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
 import { EventPresentationLayer } from '../src/survival/EventPresentationLayer';
 import type { EventPresentationAdapter } from '../src/survival/EventPresentationAdapter';
@@ -126,7 +127,7 @@ import {
   TEST_PROP_MODEL_TRANSFORM,
   testPropModel,
 } from './helpers/propModels';
-import { createTestMoonTexture } from './helpers/skyAssets';
+import { createTestSkyTextures } from './helpers/skyAssets';
 import { createTestShipFurniture } from './helpers/shipFurniture';
 
 const savedItem = (type: ItemId, index = 1): ItemInstance => ({
@@ -458,7 +459,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       undefined,
@@ -482,7 +483,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     const buoyancySample = vi.spyOn(BoatBuoyancy.prototype, 'sampleTargetInto');
     const oceanUpdate = vi.spyOn(OceanRenderer.prototype, 'update');
@@ -527,7 +528,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     const buoyancySample = vi.spyOn(BoatBuoyancy.prototype, 'sampleTargetInto');
     const oceanUpdate = vi.spyOn(OceanRenderer.prototype, 'update');
@@ -556,7 +557,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     world.stageEvent('other-people');
     const reveal = world.revealEvent('other-people');
@@ -579,7 +580,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
 
     try {
@@ -627,7 +628,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
 
     try {
@@ -660,7 +661,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       undefined,
@@ -701,7 +702,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     const parent = new Group();
     const root = new Group();
@@ -752,7 +753,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(65, 4 / 3, 0.1, 100),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     const root = new Group();
     const targetRoot = new Group();
@@ -793,7 +794,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       undefined,
@@ -829,7 +830,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       undefined,
@@ -877,7 +878,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       camera,
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     const cameraParent = camera.parent;
     const cameraPosition = camera.position.clone();
@@ -900,9 +901,9 @@ describe('BoatWorld helpers', () => {
         instanceId: null,
         condition: null,
       });
-      for (let frame = 1; frame <= 28; frame += 1) {
-        world.update(frame * 0.4, 0.4);
-      }
+      world.update(MONSTER_IMPACT_SECONDS - 0.01, MONSTER_IMPACT_SECONDS - 0.01);
+      expect(await remainsPending(reaction)).toBe(true);
+      world.update(MONSTER_IMPACT_SECONDS, 0.01);
       await reaction;
       const presentation = world.scene.getObjectByName('focused-event:midnight-tour')!;
       expect(presentation.userData.searchLeft).toBe(1);
@@ -928,7 +929,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
 
     world.stageEvent('other-people');
@@ -985,7 +986,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       undefined,
@@ -1031,7 +1032,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       undefined,
@@ -1039,9 +1040,9 @@ describe('BoatWorld helpers', () => {
       { 'chest-attack': () => active.presenter },
     );
     const choice = {
-      choiceId: 'fishingNet',
-      instanceId: 'fishingNet-1' as ItemInstanceId,
-      condition: 'usable' as const,
+      choiceId: 'attack',
+      instanceId: null,
+      condition: null,
     };
 
     world.stageEvent('chest-attack');
@@ -1070,7 +1071,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       undefined,
@@ -1110,7 +1111,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       camera,
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     const position = camera.position.clone();
 
@@ -1139,7 +1140,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(65, 16 / 9, 0.08, 220),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     world.syncInventory(snapshot([], {
       chest: { state: 'closed', acquiredDay: 3 },
@@ -1162,7 +1163,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(65, 16 / 9, 0.08, 220),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     const pillow = world.scene.getObjectByName('sleep-pillow')!;
 
@@ -1188,7 +1189,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       camera,
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     const position = camera.position.clone();
     const forwardQuaternion = camera.quaternion.clone();
@@ -1214,7 +1215,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [bucket],
     );
     world.syncInventory(snapshot([bucket], {
@@ -1274,7 +1275,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       undefined,
@@ -1303,7 +1304,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       undefined,
@@ -1351,7 +1352,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       undefined,
@@ -1379,7 +1380,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       undefined,
@@ -1409,7 +1410,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
 
     try {
@@ -1431,7 +1432,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       furniture,
@@ -1469,7 +1470,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       furniture,
@@ -1505,7 +1506,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       camera,
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       furniture,
@@ -1559,7 +1560,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(65, 4 / 3, 0.08, 220),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       furniture,
@@ -1606,7 +1607,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(65, 4 / 3, 0.08, 220),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       undefined,
@@ -1632,7 +1633,7 @@ describe('BoatWorld helpers', () => {
     async (interruption) => {
       const propModels = createTestPropModels();
       const camera = new PerspectiveCamera(65, 4 / 3, 0.08, 220);
-      const world = new BoatWorld(camera, propModels, createTestMoonTexture());
+      const world = new BoatWorld(camera, propModels, ...createTestSkyTextures());
       const basePosition = camera.position.clone();
       const eventId: DriftingItemEventId = 'drifting-supplies';
       world.stageEvent(eventId, 8);
@@ -1746,7 +1747,7 @@ describe('BoatWorld helpers', () => {
       ]));
     const propModels = createTestPropModels();
     const camera = new PerspectiveCamera();
-    const world = new BoatWorld(camera, propModels, createTestMoonTexture());
+    const world = new BoatWorld(camera, propModels, ...createTestSkyTextures());
     const cues: EventPresentationCue[] = [];
     world.setEventCueHandler((cue) => cues.push(cue));
     const expectLooksAt = (actorName: string): void => {
@@ -1836,7 +1837,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       camera,
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [map],
     );
     world.syncInventory(snapshot([map]));
@@ -1928,7 +1929,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       camera,
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [anchor],
     );
     const basePosition = camera.position.toArray();
@@ -1971,7 +1972,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [bucket],
     );
     world.syncInventory(snapshot([bucket]));
@@ -2025,7 +2026,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [bucket],
     );
     world.syncInventory(snapshot([bucket]));
@@ -2105,7 +2106,7 @@ describe('BoatWorld helpers', () => {
       const world = new BoatWorld(
         new PerspectiveCamera(),
         propModels,
-        createTestMoonTexture(),
+        ...createTestSkyTextures(),
         [item],
         undefined,
         undefined,
@@ -2151,7 +2152,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [bucket],
     );
     world.syncInventory(snapshot([bucket]));
@@ -2206,7 +2207,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       camera,
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       savedItems,
       undefined,
       undefined,
@@ -2269,7 +2270,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [item],
     );
     world.syncInventory(snapshot([item]));
@@ -2296,7 +2297,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [radio],
     );
     world.syncInventory(snapshot([radio]));
@@ -2336,7 +2337,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       items,
       undefined,
       undefined,
@@ -2404,7 +2405,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [item],
     );
     world.syncInventory(snapshot([item]));
@@ -2442,7 +2443,7 @@ describe('BoatWorld helpers', () => {
       const world = new BoatWorld(
         new PerspectiveCamera(),
         propModels,
-        createTestMoonTexture(),
+        ...createTestSkyTextures(),
         [item],
       );
       world.syncInventory(snapshot([item]));
@@ -2484,7 +2485,7 @@ describe('BoatWorld helpers', () => {
       const world = new BoatWorld(
         camera,
         propModels,
-        createTestMoonTexture(),
+        ...createTestSkyTextures(),
         [item],
       );
       const basePosition = camera.position.clone();
@@ -2570,7 +2571,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [item],
     );
     const outcome = {
@@ -2653,7 +2654,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [item],
     );
     world.syncInventory(snapshot([item]));
@@ -2674,7 +2675,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [item],
     );
     const outcome = {
@@ -2769,7 +2770,7 @@ describe('BoatWorld helpers', () => {
       const world = new BoatWorld(
         new PerspectiveCamera(),
         propModels,
-        createTestMoonTexture(),
+        ...createTestSkyTextures(),
         [item],
         undefined,
         undefined,
@@ -2842,7 +2843,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [umbrella],
     );
     world.syncInventory(snapshot([umbrella]));
@@ -2877,7 +2878,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     updateSupply.mockClear();
 
@@ -2898,7 +2899,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       maps,
     );
     world.syncInventory(snapshot(maps, { inventory: inventory.snapshot() }));
@@ -2982,7 +2983,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       undefined,
@@ -3042,7 +3043,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [flare],
       undefined,
       undefined,
@@ -3094,40 +3095,54 @@ describe('BoatWorld helpers', () => {
   });
 
   function expectMoonFaceShader(sky: Mesh<BufferGeometry, ShaderMaterial>): void {
-    expect(sky.material.fragmentShader).toContain('archedBrowShape');
-    expect(sky.material.fragmentShader).toContain('slantedEyeSockets');
-    expect(sky.material.fragmentShader).toContain('lowerEyeArcs');
-    expect(sky.material.fragmentShader).toContain('splitNose');
-    expect(sky.material.fragmentShader).toContain('wideJaggedGrin');
-    expect(sky.material.fragmentShader).not.toContain('hookedEyeMasks');
-    expect(sky.material.fragmentShader).not.toContain('eyeSlits');
+    expect(sky.material.fragmentShader).toContain('uMoonFaceMap');
+    expect(sky.material.fragmentShader).toContain('authoredFaceMask');
+    expect(sky.material.fragmentShader).toContain('lunarFaceShadow');
+    expect(sky.material.fragmentShader).toContain('lunarFaceSurface');
+    expect(sky.material.fragmentShader).toContain('lunarCraterDetail');
+    expect(sky.material.fragmentShader).toContain('faceContrast');
+    expect(sky.material.fragmentShader).toContain(
+      '(moonUv - vec2(0.5, 0.5)) / 0.58',
+    );
+    expect(sky.material.fragmentShader).not.toContain('authoredFaceColor');
+    expect(sky.material.fragmentShader).not.toContain('coldPupilMask');
+    expect(sky.material.fragmentShader).not.toContain('distortedSocket');
+    expect(sky.material.fragmentShader).not.toContain('tornMouthCavity');
+    expect(sky.material.fragmentShader).toContain('uMoonDread');
+    expect(sky.material.fragmentShader).not.toContain('taperedEyeHollow');
+    expect(sky.material.fragmentShader).not.toContain('thinMouthShape');
   }
 
   async function revealMoonFace(world: BoatWorld, sky: Mesh<BufferGeometry, ShaderMaterial>): Promise<number> {
+    const uniforms = sky.material.uniforms;
     world.stageEvent('face-on-the-moon');
+    expect(uniforms.uMoonScale!.value).toBeCloseTo(2.8);
+    expect(uniforms.uMoonFaceReveal!.value).toBe(0);
     const reveal = world.revealEvent('face-on-the-moon');
-    world.update(0.76, 0.76);
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
+    expect(uniforms.uMoonScale!.value).toBeCloseTo(2.8);
+    world.update(2.4, 2.4);
+    expect(uniforms.uMoonFaceReveal!.value).toBe(0);
+    expect(uniforms.uMoonScale!.value).toBeCloseTo(2.8);
     expect(await remainsPending(reveal)).toBe(true);
-    world.update(3.7, 2.94);
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
-    expect(sky.material.uniforms.uMoonStarScale?.value).toBeLessThan(1);
-    expect(sky.material.uniforms.uMoonScale?.value).toBeGreaterThan(1.5);
-    world.update(4.3, 0.6);
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBeGreaterThan(0);
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBeLessThan(1);
-    world.update(5.8, 1.5);
+    world.update(4.5, 2.1);
+    expect(uniforms.uMoonFaceReveal!.value).toBeGreaterThan(0);
+    expect(uniforms.uMoonFaceReveal!.value).toBeLessThan(1);
+    expect(uniforms.uMoonScale!.value).toBeCloseTo(2.8);
+    world.update(7.6, 3.1);
+    expect(uniforms.uMoonFaceReveal!.value).toBe(1);
+    expect(uniforms.uMoonScale!.value).toBeCloseTo(2.8);
+    world.update(9.2, 1.6);
     await reveal;
-    expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(1);
-    expect(sky.material.uniforms.uMoonGrin?.value).toBeGreaterThan(0.7);
-    expect(sky.material.uniforms.uMoonEventDim?.value).toBeGreaterThan(0.15);
-    expect(sky.material.uniforms.uMoonScale?.value).toBeCloseTo(4.15);
-    return sky.material.uniforms.uMoonGrin?.value as number;
+    expect(uniforms.uMoonFaceReveal!.value).toBe(1);
+    expect(uniforms.uMoonDread!.value).toBeGreaterThan(0.7);
+    expect(uniforms.uMoonEventDim!.value).toBeGreaterThan(0.1);
+    expect(uniforms.uMoonScale!.value).toBeCloseTo(2.8);
+    return uniforms.uMoonDread!.value as number;
   }
 
   function expectMoonFaceReset(sky: Mesh<BufferGeometry, ShaderMaterial>): void {
     expect(sky.material.uniforms.uMoonFaceReveal?.value).toBe(0);
-    expect(sky.material.uniforms.uMoonGrin?.value).toBe(0);
+    expect(sky.material.uniforms.uMoonDread?.value).toBe(0);
     expect(sky.material.uniforms.uMoonStarScale?.value).toBe(1);
     expect(sky.material.uniforms.uMoonEventDim?.value).toBe(0);
     expect(sky.material.uniforms.uMoonScale?.value).toBe(1);
@@ -3138,7 +3153,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(65, 16 / 9, 0.08, 220),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     const sky = world.scene.getObjectByName('procedural-skybox') as Mesh<
       BufferGeometry,
@@ -3148,7 +3163,7 @@ describe('BoatWorld helpers', () => {
     expectMoonFaceShader(sky);
     const firstPulse = await revealMoonFace(world, sky);
     world.update(0.7, 0.7);
-    expect(sky.material.uniforms.uMoonGrin?.value).not.toBeCloseTo(firstPulse, 4);
+    expect(sky.material.uniforms.uMoonDread?.value).not.toBeCloseTo(firstPulse, 4);
 
     world.clearEvent();
     expectMoonFaceReset(sky);
@@ -3163,7 +3178,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(65, 4 / 3, 0.1, 100),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     const createdAtConstruction = create.mock.calls.length;
     const gained = savedItem('energyBar');
@@ -3194,7 +3209,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(65, 4 / 3, 0.1, 100),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [carlitos],
     );
 
@@ -3261,7 +3276,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(65, 4 / 3, 0.08, 220),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       furniture,
@@ -3299,7 +3314,7 @@ describe('BoatWorld helpers', () => {
       const world = new BoatWorld(
         new PerspectiveCamera(65, 4 / 3, 0.08, 220),
         propModels,
-        createTestMoonTexture(),
+        ...createTestSkyTextures(),
         [],
         undefined,
         furniture,
@@ -3342,7 +3357,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       undefined,
@@ -3390,7 +3405,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(65, 4 / 3, 0.1, 100),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [item],
     );
     world.syncInventory(snapshot([item]));
@@ -3424,7 +3439,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       undefined,
@@ -3494,7 +3509,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       undefined,
@@ -3544,7 +3559,7 @@ describe('BoatWorld helpers', () => {
     expect(() => new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     )).toThrow(failure);
     expect(disposeCompanion).toHaveBeenCalledOnce();
     expect(hangingGeometryDispose).not.toBeNull();
@@ -3572,7 +3587,7 @@ describe('BoatWorld helpers', () => {
     expect(() => new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     )).toThrow(failure);
     expect(disposeSupplies).toHaveBeenCalledOnce();
     expect(disposeCompanion).toHaveBeenCalledOnce();
@@ -3615,7 +3630,7 @@ describe('BoatWorld helpers', () => {
     expect(() => new BoatWorld(
       camera,
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     )).toThrow(failure);
 
     expect(disposeCompanion).toHaveBeenCalledOnce();
@@ -3656,7 +3671,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [savedItem('bucket')],
       undefined,
       undefined,
@@ -3739,7 +3754,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       undefined,
@@ -3985,7 +4000,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       camera,
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [scuba],
     );
     world.syncInventory(snapshot([scuba]));
@@ -4043,7 +4058,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       camera,
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [scuba],
       undefined,
       undefined,
@@ -4109,7 +4124,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       camera,
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       undefined,
@@ -4160,7 +4175,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(65, 16 / 9, 0.08, 220),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [],
       undefined,
       furniture,
@@ -4401,7 +4416,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     const light = world.scene.getObjectByName('hanging-lantern:light') as PointLight;
     const shadowDispose = vi.spyOn(light.shadow, 'dispose');
@@ -4416,7 +4431,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [savedItem('medicalKit')],
     );
     world.syncInventory(snapshot([savedItem('medicalKit')]));
@@ -4465,7 +4480,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [savedItem('medicalKit')],
     );
     const internals = world as unknown as {
@@ -4568,7 +4583,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       camera,
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       [savedItem('medicalKit')],
     );
     const internals = world as unknown as {
@@ -4722,7 +4737,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       camera,
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       savedItems,
     );
     const inventory = new SurvivalInventoryState(savedItems);
@@ -4755,7 +4770,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(65, 4 / 3, 0.1, 100),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       savedItems,
     );
 
@@ -4792,7 +4807,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       camera,
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       savedItems,
     );
     world.syncInventory(snapshot(savedItems));
@@ -4814,7 +4829,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       camera,
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
       savedItems,
     );
     world.syncInventory(snapshot(savedItems));
@@ -4878,7 +4893,7 @@ describe('BoatWorld helpers', () => {
       const world = new BoatWorld(
         new PerspectiveCamera(),
         propModels,
-        createTestMoonTexture(),
+        ...createTestSkyTextures(),
       );
       const internals = world as unknown as {
         fishingPresentation: FishingPresentation;
@@ -4963,7 +4978,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(65, 16 / 9, 0.08, 220),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     const internals = world as unknown as {
       ambient: AmbientLight;
@@ -5015,7 +5030,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(65, 16 / 9, 0.08, 220),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     const internals = world as unknown as {
       ocean: OceanRenderer;
@@ -5156,7 +5171,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(65, 16 / 9, 0.08, 220),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     const ocean = (world as unknown as { ocean: OceanRenderer }).ocean;
     const exclusions: Parameters<OceanRenderer['setExclusions']>[0][] = [];
@@ -5181,7 +5196,7 @@ describe('BoatWorld helpers', () => {
     const world = new BoatWorld(
       new PerspectiveCamera(65, 16 / 9, 0.08, 220),
       propModels,
-      createTestMoonTexture(),
+      ...createTestSkyTextures(),
     );
     const internals = world as unknown as {
       fishingPresentation: FishingPresentation;

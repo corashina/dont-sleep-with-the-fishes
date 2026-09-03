@@ -135,6 +135,10 @@ describe('BoatInteractionProjector', () => {
       hitArea: { width: 54, height: 54 },
     });
     expect(anchors.find(({ id }) => id === 'repair-tools')?.visible).toBe(false);
+    expect(anchors.find(({ id }) => id === 'fishing-tools')?.hitArea).toMatchObject({
+      width: 44,
+      height: 72,
+    });
     expect(anchors.find(({ id }) => id === 'end-day-pillow')).toMatchObject({
       toolId: 'pillow',
       visible: false,
@@ -153,6 +157,27 @@ describe('BoatInteractionProjector', () => {
 
     expect(zeroWidth).toEqual([]);
     expect(fixture.projector.projectAnchors(1280, 0)).toBe(zeroWidth);
+  });
+
+  it('places the fishing target on the upper rod section', () => {
+    const fixture = createFixture();
+    fixture.roots.fishingRoot.scale.y = 10;
+    fixture.projector.installFocusedInteractionTargets([{
+      id: 'full-fishing-bounds',
+      label: 'FULL ROD',
+      description: 'Full fishing rod bounds.',
+      choiceId: 'inspect',
+      root: fixture.roots.fishingRoot,
+      minimumHitWidth: 0,
+      minimumHitHeight: 0,
+    }]);
+
+    const anchors = fixture.projector.projectAnchors(1280, 720);
+    const fishing = anchors.find(({ id }) => id === 'fishing-tools')!;
+    const fullBounds = anchors.find(({ id }) => id === 'full-fishing-bounds')!;
+
+    expect(fishing.hitArea!.height).toBeCloseTo(fullBounds.hitArea!.height * 0.44);
+    expect(fishing.y).toBeCloseTo(fullBounds.y - fullBounds.hitArea!.height * 0.28);
   });
 
   it('projects event interaction and result roots through the host', () => {

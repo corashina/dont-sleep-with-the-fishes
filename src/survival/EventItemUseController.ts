@@ -92,7 +92,7 @@ export class EventItemUseController {
         || request.context === 'umbrella-shield'
         || request.context === 'map-leak-patch',
       request.context === 'umbrella-shield' ? 'x' : null,
-      request.context === 'bucket-helmet' || request.context === 'knife-slash',
+      request.context === 'bucket-helmet' || request.context === 'knife-stab',
     );
     sampleEventItemUse(request.context, request.itemId, 0, this.sample);
     this.applyRequestSample(request);
@@ -220,7 +220,7 @@ export class EventItemUseController {
     this.release(
       reaction.actor,
       reaction.request,
-      reaction.disposition !== 'recover' || reaction.request.itemId !== 'knife',
+      reaction.request.itemId !== 'knife' || reaction.disposition === 'depart',
     );
     this.held = null;
     reaction.resolve();

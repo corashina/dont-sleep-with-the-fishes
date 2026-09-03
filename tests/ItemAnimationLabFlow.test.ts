@@ -69,6 +69,19 @@ function conditionLab(type: ItemId = 'bucket', condition: 'usable' | 'broken' | 
 }
 
 describe('Item Animation Lab conditions', () => {
+  it('offers both fishing net slap previews', async () => {
+    const { flow, instanceId, ui } = conditionLab('fishingNet');
+
+    await flow.play(instanceId);
+
+    expect(ui.showItemAnimationLabChoices).toHaveBeenLastCalledWith(
+      expect.arrayContaining([
+        { id: 'net-slap-death-stare', label: 'Slap Death Stare', unavailableReason: null },
+        { id: 'net-slap-shark', label: 'Slap shark', unavailableReason: null },
+      ]),
+    );
+  });
+
   it('breaks Flashlight, blocks each animation, and fixes it without resources', async () => {
     const { flow, session, instanceId, ui, world, renderSnapshot } = conditionLab('flashlight');
     const before = session.snapshot();

@@ -30,7 +30,7 @@ export interface SkyboxCelestialDirections {
 
 export interface MoonFacePresentation {
   readonly reveal: number;
-  readonly grin: number;
+  readonly dread: number;
   readonly starScale: number;
   readonly dim: number;
   readonly scale: number;
@@ -67,6 +67,7 @@ const fragmentShader = `
   uniform vec3 uMoonDirection;
   uniform vec3 uTintColor;
   uniform sampler2D uMoonMap;
+  uniform sampler2D uMoonFaceMap;
   uniform float uSunVisibility;
   uniform float uMoonVisibility;
   uniform float uStarVisibility;
@@ -79,7 +80,7 @@ const fragmentShader = `
   uniform float uExposure;
   uniform float uTintAmount;
   uniform float uMoonFaceReveal;
-  uniform float uMoonGrin;
+  uniform float uMoonDread;
   uniform float uMoonStarScale;
   uniform float uMoonEventDim;
   uniform float uMoonScale;
@@ -198,42 +199,6 @@ const fragmentShader = `
     return cool * exists * brightness * twinkle * (core * 2.1 + halo * 0.52);
   }
 
-  float eyeShape(vec2 uv, vec2 center, vec2 scale, float skew) {
-    vec2 p = (uv - center) / scale;
-    p.x += p.y * skew;
-    return 1.0 - smoothstep(0.72, 1.0, dot(p, p));
-  }
-
-  float curvedFaceStroke(
-    vec2 uv,
-    vec2 center,
-    vec2 scale,
-    float skew,
-    float upperHalf
-  ) {
-    vec2 p = (uv - center) / scale;
-    p.x += p.y * skew;
-    float ring = 1.0 - smoothstep(0.055, 0.115, abs(length(p) - 0.84));
-    float halfMask = upperHalf > 0.5
-      ? smoothstep(-0.08, 0.16, p.y)
-      : smoothstep(-0.08, 0.16, -p.y);
-    return ring * halfMask;
-  }
-
-  float referenceGrinShape(vec2 uv, float grin) {
-    vec2 p = uv - vec2(0.505 + grin * 0.008, 0.27);
-    p.y += p.x * 0.025;
-    float normalizedX = abs(p.x) / mix(0.335, 0.39, grin);
-    float grinWidth = 1.0 - smoothstep(0.93, 1.0, normalizedX);
-    float edgeRise = pow(clamp(normalizedX, 0.0, 1.0), 2.4);
-    float upperEdge = 0.025 + edgeRise * 0.17;
-    float lowerEdge = -0.105 + edgeRise * 0.07
-      + sin((p.x + 0.43) * 38.0) * 0.008;
-    float aboveLower = smoothstep(lowerEdge - 0.008, lowerEdge + 0.008, p.y);
-    float belowUpper = 1.0 - smoothstep(upperEdge - 0.008, upperEdge + 0.008, p.y);
-    return grinWidth * aboveLower * belowUpper;
-  }
-
   vec4 sampleMoon(
     vec3 direction,
     vec3 moonDirection,
@@ -308,80 +273,34 @@ const fragmentShader = `
     );
     float moonClarity = 1.0 - uHaze * 0.72;
     float faceReveal = smoothstep(0.08, 0.28, uMoonFaceReveal);
-    vec2 faceUv = moonUv;
-    float leftBrow = curvedFaceStroke(
-      faceUv,
-      vec2(0.3, 0.7),
-      vec2(0.17, 0.18),
-      0.22,
-      1.0
+    vec2 faceUv = (moonUv - vec2(0.5, 0.5)) / 0.58 + vec2(0.5);
+    float faceInside = step(0.0, faceUv.x)
+      * step(faceUv.x, 1.0)
+      * step(0.0, faceUv.y)
+      * step(faceUv.y, 1.0);
+    vec4 faceSample = texture2D(uMoonFaceMap, faceUv);
+    float authoredFaceMask = faceSample.a
+      * faceInside
+      * faceReveal
+      * mix(0.82, 1.0, uMoonDread);
+    float faceLuminance = dot(faceSample.rgb, vec3(0.2126, 0.7152, 0.0722));
+    float faceContrast = pow(
+      clamp(faceLuminance * 1.45, 0.0, 1.0),
+      0.56
     );
-    float rightBrow = curvedFaceStroke(
-      faceUv,
-      vec2(0.705, 0.7),
-      vec2(0.17, 0.18),
-      -0.22,
-      1.0
-    );
-    float archedBrowShape = max(leftBrow, rightBrow);
-    float leftEyeSocket = eyeShape(
-      faceUv,
-      vec2(0.305, 0.565),
-      vec2(0.17, 0.125),
-      0.82
-    );
-    leftEyeSocket = max(leftEyeSocket, eyeShape(
-      faceUv,
-      vec2(0.39, 0.535),
-      vec2(0.085, 0.065),
-      0.92
-    ));
-    float rightEyeSocket = eyeShape(
-      faceUv,
-      vec2(0.7, 0.565),
-      vec2(0.17, 0.125),
-      -0.82
-    );
-    rightEyeSocket = max(rightEyeSocket, eyeShape(
-      faceUv,
-      vec2(0.615, 0.535),
-      vec2(0.085, 0.065),
-      -0.92
-    ));
-    float slantedEyeSockets = max(leftEyeSocket, rightEyeSocket);
-    float leftLowerLid = curvedFaceStroke(
-      faceUv,
-      vec2(0.31, 0.505),
-      vec2(0.145, 0.065),
-      0.08,
-      0.0
-    );
-    float rightLowerLid = curvedFaceStroke(
-      faceUv,
-      vec2(0.695, 0.505),
-      vec2(0.145, 0.065),
-      -0.08,
-      0.0
-    );
-    float lowerEyeArcs = max(leftLowerLid, rightLowerLid);
-    float splitNose = max(
-      eyeShape(faceUv, vec2(0.489, 0.43), vec2(0.032, 0.052), -0.45),
-      eyeShape(faceUv, vec2(0.521, 0.43), vec2(0.032, 0.052), 0.45)
-    );
-    float wideJaggedGrin = referenceGrinShape(faceUv, uMoonGrin);
-    float faceInk = clamp(
-      max(
-        max(archedBrowShape, slantedEyeSockets),
-        max(max(lowerEyeArcs, splitNose), wideJaggedGrin)
-      ) * faceReveal,
-      0.0,
-      1.0
-    );
+    float lunarFaceShadow = authoredFaceMask
+      * mix(0.55, 0.95, 1.0 - faceContrast);
+    vec3 moonBase = uMoonColor * moonSample.rgb;
+    vec3 lunarCraterDetail = moonBase * 0.12;
+    vec3 lunarFaceSurface = uMoonColor
+      * mix(0.015, 0.9, faceContrast)
+      + lunarCraterDetail;
     vec3 moonDisc = mix(
-      uMoonColor * moonSample.rgb,
-      vec3(0.002, 0.003, 0.004),
-      faceInk * 0.997
+      moonBase,
+      lunarFaceSurface,
+      authoredFaceMask * 0.94
     );
+    moonDisc *= 1.0 - lunarFaceShadow * 0.55;
     color += moonDisc
       * moonSample.a
       * uMoonVisibility
@@ -439,6 +358,7 @@ export class Skybox {
     private readonly scene: Scene,
     initialState: SkyState,
     moonTexture: Texture,
+    moonFaceTexture: Texture,
     celestialDirections: SkyboxCelestialDirections = {
       sun: SUN_DIRECTION,
       moon: MOON_DIRECTION,
@@ -461,6 +381,7 @@ export class Skybox {
         uSunColor: { value: this.current.sunColor.clone() },
         uMoonColor: { value: this.current.moonColor.clone() },
         uMoonMap: { value: moonTexture },
+        uMoonFaceMap: { value: moonFaceTexture },
         uStarColor: { value: this.current.starColor.clone() },
         uSunDirection: {
           value: new Vector3(...celestialDirections.sun).normalize(),
@@ -481,7 +402,7 @@ export class Skybox {
         uExposure: { value: this.current.exposure },
         uTintAmount: { value: 0 },
         uMoonFaceReveal: { value: 0 },
-        uMoonGrin: { value: 0 },
+        uMoonDread: { value: 0 },
         uMoonStarScale: { value: 1 },
         uMoonEventDim: { value: 0 },
         uMoonScale: { value: 1 },
@@ -523,7 +444,7 @@ export class Skybox {
     const uniforms = this.material.uniforms;
     uniforms.uTintAmount!.value = 0;
     uniforms.uMoonFaceReveal!.value = 0;
-    uniforms.uMoonGrin!.value = 0;
+    uniforms.uMoonDread!.value = 0;
     uniforms.uMoonStarScale!.value = 1;
     uniforms.uMoonEventDim!.value = 0;
     uniforms.uMoonScale!.value = 1;
@@ -533,7 +454,7 @@ export class Skybox {
     if (this.disposed) return;
     const uniforms = this.material.uniforms;
     uniforms.uMoonFaceReveal!.value = clamp01(value.reveal);
-    uniforms.uMoonGrin!.value = clamp01(value.grin);
+    uniforms.uMoonDread!.value = clamp01(value.dread);
     uniforms.uMoonStarScale!.value = clamp01(value.starScale);
     uniforms.uMoonEventDim!.value = clamp01(value.dim);
     uniforms.uMoonScale!.value = clamp(value.scale, 1, 5.5);
