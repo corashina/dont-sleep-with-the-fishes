@@ -310,6 +310,91 @@ describe('EventItemUseController', () => {
     adapter.dispose();
   });
 
+  it('returns a broken knife to its slot without stowing it', async () => {
+    const { actor, adapter, controller, supplies } = setup();
+    const use = controller.play({
+      ...request(actor.instanceId, new Object3D()),
+      eventId: 'snatcher',
+      choiceId: 'knife',
+      itemId: 'knife',
+      context: 'knife-stab',
+    });
+    controller.update(10);
+    await use;
+
+    const reaction = controller.react(result(actor.instanceId, {
+      brokenInstanceIds: [actor.instanceId],
+    }));
+    controller.update(10);
+    await reaction;
+    const returnedPose = (actor.applyPose as ReturnType<typeof vi.fn>)
+      .mock.calls.at(-2)![0];
+
+    expect(returnedPose).toMatchObject({
+      x: 0,
+      y: 0,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      roll: 0,
+    });
+    expect(actor.root.visible).toBe(true);
+    expect(supplies.stowEventItemUntilDay).not.toHaveBeenCalled();
+    expect(actor.release).toHaveBeenCalledOnce();
+    adapter.dispose();
+  });
+
+  it('keeps knife target travel above the gunwale clearance', () => {
+    const { actor, adapter, controller } = setup();
+    const target = new Object3D();
+    target.position.set(4, -3, -4);
+    controller.play({
+      ...request(actor.instanceId, target),
+      eventId: 'snatcher',
+      choiceId: 'knife',
+      itemId: 'knife',
+      context: 'knife-stab',
+    });
+
+    controller.update(eventItemUseDuration('knife-stab') * 0.7);
+    const contactPose = (actor.applyPose as ReturnType<typeof vi.fn>)
+      .mock.calls.at(-1)![0];
+
+    expect(contactPose.y).toBeGreaterThan(0.4);
+    controller.clear('day');
+    adapter.dispose();
+  });
+
+  it('targets the vertical center of the knife target owner', () => {
+    const { actor, adapter, controller } = setup();
+    const targetOwner = new Group();
+    const target = new Object3D();
+    const geometry = new BoxGeometry(1, 4, 1);
+    const material = new MeshStandardMaterial();
+    const targetShape = new Mesh(geometry, material);
+    targetOwner.position.set(4, -3, -4);
+    targetShape.position.y = 4;
+    targetOwner.add(targetShape, target);
+
+    controller.play({
+      ...request(actor.instanceId, target),
+      eventId: 'snatcher',
+      choiceId: 'knife',
+      itemId: 'knife',
+      context: 'knife-stab',
+    });
+    controller.update(eventItemUseDuration('knife-stab') * 0.7);
+    const contactPose = (actor.applyPose as ReturnType<typeof vi.fn>)
+      .mock.calls.at(-1)![0];
+
+    expect(contactPose.x).toBeCloseTo(3.78, 1);
+    expect(contactPose.y).toBeGreaterThan(0.9);
+    controller.clear('day');
+    adapter.dispose();
+    geometry.dispose();
+    material.dispose();
+  });
+
   it('stows and releases a night item when use is cancelled', async () => {
     const { actor, adapter, controller, supplies } = setup();
     const use = controller.play(request());

@@ -67,10 +67,12 @@ Readonly<Partial<Record<ItemId, readonly ItemAnimationLabUse[]>>> = Object.freez
   ),
   fishingNet: uses(
     use('net-scoop', 'Scoop from water', 'school-of-fish', 'fishingNet'),
+    use('net-slap-death-stare', 'Slap Death Stare', 'death-stare', 'fishingNet'),
+    use('net-slap-shark', 'Slap shark', 'swarm-of-sharks', 'fishingNet'),
     use('trade-handover', 'Trade handover', 'handyman', 'fishingNet'),
   ),
   knife: uses(
-    use('knife-slash', 'Slash knife', 'snatcher', 'knife'),
+    use('knife-stab', 'Stab knife', 'snatcher', 'knife'),
     use('trade-handover', 'Trade handover', 'handyman', 'knife'),
   ),
   bucket: uses(

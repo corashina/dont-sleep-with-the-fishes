@@ -7,7 +7,7 @@ export const SWARM_ITEM_DURATION = scaleEventItemDuration(1.2);
 export const SWARM_REACTION_DURATION = 1.15;
 
 export function swarmItemDuration(choiceId: string): number {
-  return choiceId === 'bait' || choiceId === 'baitTin' || choiceId === 'fishingNet'
+  return choiceId === 'bait' || choiceId === 'baitTin'
     ? scaleThrownItemDuration(1.2)
     : SWARM_ITEM_DURATION;
 }
@@ -20,7 +20,7 @@ const ORBIT_SPEED = 0.86;
 
 export type SwarmItemEffectKind =
   | 'none'
-  | 'net-pull'
+  | 'net-slap'
   | 'shotgun-opening'
   | 'flashlight-sweep'
   | 'bait-diversion';
@@ -37,6 +37,7 @@ export interface SwarmVariant {
   readonly revealAt: number;
   readonly motionPhase: number;
   readonly group: 0 | 1 | 2 | 3;
+  readonly netSlapWeight: number;
 }
 
 export interface SwarmReactionState {
@@ -51,7 +52,7 @@ export interface SwarmSample extends MutableTransformPose {
   closure: number;
   cameraYaw: number;
   hullRoll: number;
-  netPull: number;
+  netSlap: number;
   opening: number;
   flashlightSweep: number;
   baitDiversion: number;
@@ -130,6 +131,7 @@ export function createSwarmVariants(
         + (variantUnit(seed, index, 9) - 0.5) * 0.018,
       motionPhase: variantUnit(seed, index, 10) * Math.PI * 2,
       group,
+      netSlapWeight: index === 0 ? 1 : 0,
     });
   }
   return variants;
@@ -141,7 +143,7 @@ function resetSample(output: SwarmSample): void {
   output.closure = 1;
   output.cameraYaw = 0;
   output.hullRoll = 0;
-  output.netPull = 0;
+  output.netSlap = 0;
   output.opening = 0;
   output.flashlightSweep = 0;
   output.baitDiversion = 0;
@@ -211,17 +213,17 @@ export function sampleSwarmItemUse(
   output.effect = action;
 
   if (choiceId === 'fishingNet') {
-    output.netPull = action;
-    output.x = 0.58 * lift + 1.18 * action;
-    output.y = 0.48 * lift - 0.18 * action;
-    output.z = -0.24 * lift + 0.52 * action;
+    const contact = pulse(t, 0.5, 0.62, 0.76);
+    output.netSlap = contact;
+    output.x = 0.58 * lift;
+    output.y = 0.48 * lift;
+    output.z = -0.24 * lift;
     output.yaw = -0.26 * lift;
     output.pitch = -0.38 * lift;
-    output.roll = -0.48 * action;
-    output.scaleX = 1 + action * 0.32;
-    output.scaleZ = 1 + action * 0.22;
-    output.splash = action;
-    output.effectKind = 'net-pull';
+    output.roll = -0.48 * contact;
+    output.splash = contact;
+    output.effect = contact;
+    output.effectKind = 'net-slap';
   } else if (choiceId === 'shotgun') {
     output.opening = action;
     output.x = 0.66 * lift - 0.18 * action;
@@ -330,12 +332,12 @@ export function sampleSwarmSharkPose(
   const diversionX = swarm.baitDiversion * (2.8 + diversionSide * 0.48);
   const diversionZ = swarm.baitDiversion * -2.2;
   const lunge = swarm.attack * (0.72 + (variant.group % 2) * 0.18);
-  const pull = swarm.netPull * Math.max(0, 1 - variant.group * 0.22);
+  const netSlap = swarm.netSlap * variant.netSlapWeight;
   const pulseOffset = Math.sin(
     safeTime * variant.speed * 1.7 + variant.motionPhase,
   ) * 0.08;
 
-  const inward = lunge + pull * 0.7;
+  const inward = lunge - netSlap * 0.95;
   output.x = baseX
     + radialX * (outer - inward + opening)
     + diversionX;
@@ -346,6 +348,6 @@ export function sampleSwarmSharkPose(
   const travelZ = cosine * variant.radiusZ;
   output.yaw = Math.atan2(travelX, travelZ);
   output.pitch = pulseOffset * 0.35;
-  output.roll = variant.roll + pulseOffset;
+  output.roll = variant.roll + pulseOffset + netSlap * 0.35;
   output.scale = variant.scale;
 }

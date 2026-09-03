@@ -71,6 +71,7 @@ const DEFAULT_VARIANT: SwarmVariant = {
   revealAt: 0.06,
   motionPhase: 0,
   group: 0,
+  netSlapWeight: 0,
 };
 
 function styleFin(root: Group): void {

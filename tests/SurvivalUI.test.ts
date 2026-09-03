@@ -800,7 +800,7 @@ describe('SurvivalUI', () => {
     expect(Number(fishing.style.zIndex)).toBeGreaterThan(Number(bait.style.zIndex));
   });
 
-  it('keeps routine tools above overlapping actionable supplies', () => {
+  it('keeps actionable supplies above overlapping routine tools', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -834,7 +834,7 @@ describe('SurvivalUI', () => {
     const food = mount.querySelector<HTMLButtonElement>('[data-anchor-id="food-overlap"]')!;
     const fishing = mount.querySelector<HTMLButtonElement>('[data-anchor-id="fishing-overlap"]')!;
 
-    expect(Number(fishing.style.zIndex)).toBeGreaterThan(Number(food.style.zIndex));
+    expect(Number(food.style.zIndex)).toBeGreaterThan(Number(fishing.style.zIndex));
   });
 
   it('keeps an available Island choice above overlapping unavailable items', () => {
@@ -1892,6 +1892,12 @@ describe('SurvivalUI', () => {
     expect(cast).toHaveBeenCalledOnce();
   });
 
+  it('keeps the fishing instruction at the top safe area', () => {
+    expect(mainStyles).toMatch(
+      /^\.fishing-instruction\s*\{[^}]*top:\s*calc\(env\(safe-area-inset-top\) \+ 24px\);[^}]*bottom:\s*auto;/ms,
+    );
+  });
+
   it('rearms aiming after a rejected cast but keeps a synchronously accepted cast gated', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
@@ -2167,6 +2173,15 @@ describe('SurvivalUI', () => {
     );
     back.click();
     expect(returned).toHaveBeenCalledOnce();
+  });
+
+  it('keeps shared event choice buttons rectangular in every state', () => {
+    expect(mainStyles).toMatch(
+      /^\.event-choice\s*\{[^}]*clip-path:\s*none;/ms,
+    );
+    expect(mainStyles).toMatch(
+      /^\.event-choice\[data-event-state="selected"\]\s*\{[^}]*clip-path:\s*none;/ms,
+    );
   });
 
   it('uses a top-left chest icon to switch between front and rear camera views', () => {

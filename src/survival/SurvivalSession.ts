@@ -14,10 +14,7 @@ import {
 } from './eventCatalog';
 import { drawWeightedEvent } from './eventSelection';
 import { resolveWeightedOutcome } from './eventResolver';
-import {
-  driftingSupplyKindFromSeed,
-  isDriftingSupplyResult,
-} from './driftingSupplies';
+import { driftingSupplyChoiceForVariant } from './driftingSupplies';
 import { deriveEventVariantSeed } from './eventPresentationOutcome';
 import {
   FishingSession,
@@ -78,7 +75,6 @@ import {
 } from './dayActionRules';
 import {
   advanceCarlitosDawn,
-  CARLITOS_EVENT_ENERGY_COST,
   carlitosStatus,
   carlitosWellness,
   createCarlitosState,
@@ -109,7 +105,7 @@ import type {
   ChestSnapshot,
   ChestState,
   CompanionEventActionAvailability,
-  CompanionEventActionId,
+  CompanionEventActionDefinition,
   WeatherId,
   WeightedEventOutcome,
 } from './survivalTypes';
@@ -117,27 +113,6 @@ import type { SurvivalSnapshot } from './survivalSnapshot';
 
 const NO_EVENT_EXCLUSIONS: ReadonlySet<string> = new Set();
 const NO_ITEM_EXCLUSIONS: ReadonlySet<ItemInstanceId> = new Set();
-
-function choiceForDriftingSupplyVariant(
-  choice: EventChoiceDefinition,
-  seed: number,
-  day: number,
-): EventChoiceDefinition {
-  if (choice.id === 'sleep') return choice;
-  const kind = driftingSupplyKindFromSeed(
-    deriveEventVariantSeed(seed, day, 'drifting-supplies'),
-  );
-  const outcomes = choice.outcomes.filter(({ resultId }) => (
-    isDriftingSupplyResult(resultId, kind)
-  ));
-  if (outcomes.length === 0) {
-    throw new Error(`Drifting supplies have no ${kind} outcomes for ${choice.id}.`);
-  }
-  return {
-    ...choice,
-    outcomes: outcomes as [WeightedEventOutcome, ...WeightedEventOutcome[]],
-  };
-}
 
 function fallbackResultId(eventId: string): string | undefined {
   if (eventId === 'night-trader') return 'trader-food-fallback';
@@ -703,11 +678,12 @@ export class SurvivalSession {
   }
 
   companionEventActionAvailability(
-    action: CompanionEventActionId,
+    action: CompanionEventActionDefinition,
   ): CompanionEventActionAvailability {
-    if (action !== 'delegateCarlitos') {
-      throw new Error(`Unknown companion event action: ${action}`);
+    if (action.id !== 'delegateCarlitos') {
+      throw new Error(`Unknown companion event action: ${action.id}`);
     }
+    const { energyCost } = action;
     if (this.carlitos === null) {
       return {
         visible: false,
@@ -724,18 +700,18 @@ export class SurvivalSession {
         unavailableReason: 'Carlitos cannot retrieve the loot.',
       };
     }
-    if (this.carlitos.energy < CARLITOS_EVENT_ENERGY_COST) {
+    if (this.carlitos.energy < energyCost) {
       return {
         visible: true,
-        energyCost: CARLITOS_EVENT_ENERGY_COST,
+        energyCost,
         availableEnergy: this.carlitos.energy,
-        unavailableReason: `Carlitos needs 3 energy; he has ${this.carlitos.energy}.`,
+        unavailableReason: `Carlitos needs ${energyCost} energy; he has ${this.carlitos.energy}.`,
       };
     }
     if (carlitosWellness(this.carlitos) >= 4) {
       return {
         visible: true,
-        energyCost: CARLITOS_EVENT_ENERGY_COST,
+        energyCost,
         availableEnergy: this.carlitos.energy,
         unavailableReason: null,
       };
@@ -749,7 +725,7 @@ export class SurvivalSession {
         : status.happiness;
     return {
       visible: true,
-      energyCost: CARLITOS_EVENT_ENERGY_COST,
+      energyCost,
       availableEnergy: this.carlitos.energy,
       unavailableReason: `Carlitos is ${label} and cannot retrieve the loot.`,
     };
@@ -898,6 +874,8 @@ export class SurvivalSession {
       return this.reject(unavailable.code, message);
     }
 
+    this.expirePendingDriftingLoot();
+
     this.radioSignalAvailable = false;
 
     if (this.chestState === 'closed'
@@ -920,6 +898,12 @@ export class SurvivalSession {
     if (event.id === 'night-calm-fallback') return this.beginQuietNight();
     this.openEvent(event);
     return this.commit('event-opened', event.prompt, {}, 'nightfall');
+  }
+
+  private expirePendingDriftingLoot(): void {
+    if (this.state !== 'dayEvent' || !isDriftingItemEventId(this.pendingEventId ?? '')) return;
+    const expired = this.resolveEventChoice('sleep', null, null, undefined);
+    if (!expired.accepted) throw new Error('Pending drifting loot could not expire at nightfall.');
   }
 
   resolveEvent(response: EventResponse): ActionOutcome {
@@ -985,10 +969,16 @@ export class SurvivalSession {
   ): ActionOutcome {
     const event = this.pendingEvent;
     if (event === null) return this.reject('no-event', 'There is no unresolved event.');
-    const choice = event.choices.find((candidate) => candidate.id === choiceId);
-    if (choice === undefined) {
+    const catalogChoice = event.choices.find((candidate) => candidate.id === choiceId);
+    if (catalogChoice === undefined) {
       return this.reject('choice-unavailable', 'That response is not available for this event.');
     }
+    const choice = event.id === 'drifting-supplies'
+      ? driftingSupplyChoiceForVariant(
+          catalogChoice,
+          deriveEventVariantSeed(this.seed, this.day, event.id),
+        )
+      : catalogChoice;
     const rejection = this.eventChoiceRejection(choice);
     if (rejection !== null) return this.reject(rejection.code, rejection.message);
     const mutationExclusions = new Set<ItemInstanceId>();
@@ -1032,7 +1022,8 @@ export class SurvivalSession {
         message: `That response requires a ${choice.requiredChestState} chest.`,
       };
     }
-    if (choice.companionAction === 'delegateCarlitos' && !spendCarlitosEnergy(this.carlitos!)) {
+    if (choice.companionAction?.id === 'delegateCarlitos'
+      && !spendCarlitosEnergy(this.carlitos!, choice.companionAction.energyCost)) {
       return {
         code: 'companion-action-unavailable',
         message: 'Carlitos does not have enough energy.',
@@ -1046,11 +1037,8 @@ export class SurvivalSession {
     choice: EventChoiceDefinition,
     resultId: string | undefined,
   ): WeightedEventOutcome {
-    const resolutionChoice = event.id === 'drifting-supplies'
-      ? choiceForDriftingSupplyVariant(choice, this.seed, this.day)
-      : choice;
     return resolveWeightedOutcome(
-      resolutionChoice,
+      choice,
       this.random,
       this.appearanceCounts.get(event.id) ?? 0,
       resultId,
@@ -1301,6 +1289,7 @@ export class SurvivalSession {
   private dayActionRuleState(): DayActionRuleState {
     return Object.freeze({
       state: this.state,
+      pendingEventId: this.pendingEventId,
       activeFishing: this.activeFishing !== null,
       actedToday: this.actedToday,
       weather: this.weather,
@@ -1330,7 +1319,7 @@ export class SurvivalSession {
   }
 
   private unavailableCompanionEventAction(
-    action: CompanionEventActionId | undefined,
+    action: CompanionEventActionDefinition | undefined,
   ): Rejection | null {
     if (action === undefined) return null;
     const availability = this.companionEventActionAvailability(action);

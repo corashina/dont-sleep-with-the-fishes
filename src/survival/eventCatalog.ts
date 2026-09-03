@@ -1,4 +1,5 @@
 import type { ItemId } from '../game/ItemState';
+import { driftingSupplyEnergyCost } from './driftingSupplies';
 import { survivalEventFallbackById } from './eventSelection';
 import type {
   EventChoiceDefinition,
@@ -306,16 +307,18 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
   ], undefined, { minimumPressure: 1 }),
   {
     ...event('snatcher', 'night', 'Tentacle Attack', 'uncertain', 'impact', 3, 8, 45, [
-      choice('spyglass', 'Use Binoculars', 'spyglass', outcome(1, 'You keep sight of the tentacle.', effects(undefined, [breakItem('spyglass')]))),
-      choice('swimRing', 'Use Swim Ring', 'swimRing', outcome(1, 'The swim ring is lost.', effects(undefined, [lose('swimRing')]))),
-      choice('fishingNet', 'Use Fishing Net', 'fishingNet', outcome(1, 'The snatched item is lost.', effects(undefined, [loseEventTarget()]))),
       choice('knife', 'Use Knife', 'knife',
-        outcome(80, 'You cut the tentacle and save the snatched supply.'),
-        outcome(20, 'The knife breaks and the snatched supply is lost.', effects(undefined, [
-          breakItem('knife'), loseEventTarget(),
-        ]))),
-      choice('shotgun', 'Use Shotgun', 'shotgun', outcome(1, 'You gain two food.', effects([add('food', 2)], [consume('shotgun')]))),
-      choice('sleep', 'Sleep', undefined, outcome(1, 'The snatched item is lost.', effects(undefined, [loseEventTarget()]))),
+        outcome(1, 'You cut the tentacle. The supply stays aboard.')),
+      choice('shotgun', 'Use Shotgun', 'shotgun',
+        outcome(1, 'The shot drives the tentacle away. The supply stays aboard.',
+          effects(undefined, [consume('shotgun')]))),
+      choice('flareGun', 'Use Flare Gun', 'flareGun',
+        outcome(1, 'The flare drives the tentacle away. The supply stays aboard.',
+          effects(undefined, [consume('flareGun')]))),
+      choice('sleep', 'Sleep', undefined,
+        outcome(1, 'The tentacle steals a supply and wounds you.', effects([
+          subtract('health', 30),
+        ], [loseEventTarget()]))),
     ]),
     targetItemIds: [
       'anchor', 'bucket', 'medicalKit', 'flareGun', 'flashlight',
@@ -505,16 +508,21 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
           effects([subtract('energy', 3), add('repairMaterial', 2)])),
         featuredResultOutcome('drifting-supplies-container-food', 'drifting-supplies.retrieve', 45,
           'You recover three food from the shipping container.',
-          effects([subtract('energy', 3), add('food', 3)])),
+          effects([subtract('energy', driftingSupplyEnergyCost('container')), add('food', 3)])),
         featuredResultOutcome('drifting-supplies-container-bait', 'drifting-supplies.retrieve', 25,
           'You recover three bait from the shipping container.',
-          effects([subtract('energy', 3), add('bait', 3)])),
+          effects([subtract('energy', driftingSupplyEnergyCost('container')), add('bait', 3)])),
         featuredResultOutcome('drifting-supplies-container-repair', 'drifting-supplies.retrieve', 20,
           'You recover three rolls of duct tape from the shipping container.',
-          effects([subtract('energy', 3), add('repairMaterial', 3)])),
+          effects([
+            subtract('energy', driftingSupplyEnergyCost('container')),
+            add('repairMaterial', 3),
+          ])),
         featuredResultOutcome('drifting-supplies-container-energy-bar', 'drifting-supplies.retrieve', 10,
           'You recover an energy bar from the shipping container.',
-          effects([subtract('energy', 3)], [gain('energyBar')])),
+          effects([
+            subtract('energy', driftingSupplyEnergyCost('container')),
+          ], [gain('energyBar')])),
       ),
       requirements: [{ resource: 'energy', minimum: 3 }],
     },
@@ -541,7 +549,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
         featuredResultOutcome('drifting-supplies-container-energy-bar', 'drifting-supplies.retrieve', 10,
           'Carlitos recovers an energy bar from the shipping container.',
           effects(undefined, [gain('energyBar')]))),
-      companionAction: 'delegateCarlitos',
+      companionAction: { id: 'delegateCarlitos', energyCost: 3 },
     },
     contextualChoice('sleep', 'Let It Drift', outcome(
       1,
@@ -568,7 +576,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
           'Carlitos recovers the closed chest.',
           effects(undefined, [gainChest()]),
         )),
-      companionAction: 'delegateCarlitos',
+      companionAction: { id: 'delegateCarlitos', energyCost: 3 },
     },
     contextualChoice('sleep', 'Let It Drift', outcome(
       1,
@@ -579,16 +587,16 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     {
       ...contextualChoice('search', 'Search Debris',
         wreckageOutcome('wreckage.search-repair', 35, 'You recover duct tape.',
-          effects([subtract('energy', 2), add('repairMaterial', 2)]),
+          effects([subtract('energy', 1), add('repairMaterial', 2)]),
           'wreckage-search-repair'),
         wreckageOutcome('wreckage.search-food', 25, 'You recover one food.',
-          effects([subtract('energy', 2), add('food', 1)]), 'wreckage-search-food'),
+          effects([subtract('energy', 1), add('food', 1)]), 'wreckage-search-food'),
         wreckageOutcome('wreckage.search-bait', 20, 'You recover one bait.',
-          effects([subtract('energy', 2), add('bait', 1)]), 'wreckage-search-bait'),
+          effects([subtract('energy', 1), add('bait', 1)]), 'wreckage-search-bait'),
         wreckageOutcome('wreckage.search-injury', 20, 'Sharp debris cuts you.',
-          effects([subtract('energy', 2), subtract('health', { min: 15, max: 25 })]),
+          effects([subtract('energy', 1), subtract('health', { min: 15, max: 25 })]),
           'wreckage-search-injury')),
-      requirements: [{ resource: 'energy', minimum: 2 }],
+      requirements: [{ resource: 'energy', minimum: 1 }],
     },
     {
       ...contextualChoice('delegate-carlitos', 'Send Carlitos',
@@ -600,7 +608,7 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
           effects([add('bait', 1)]), 'wreckage-carlitos-bait'),
         wreckageOutcome('wreckage.carlitos-empty', 20, 'Carlitos returns empty.',
           {}, 'wreckage-carlitos-empty')),
-      companionAction: 'delegateCarlitos',
+      companionAction: { id: 'delegateCarlitos', energyCost: 2 },
     },
     {
       ...choice('dive', 'Search underwater', 'scubaSet',
@@ -635,6 +643,19 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
     )),
   ]),
   event('check-the-back', 'night', 'Check the Back', 'uncertain', 'fish', 3, 2, 35, [
+    choice('knife', 'Use Knife', 'knife',
+      {
+        ...featuredOutcome('check-the-back.fish', 80,
+          'You cut up the fish before it flops overboard.', effects([add('food', 1)])),
+        resultId: 'check-the-back.fish',
+      },
+      {
+        ...featuredOutcome('check-the-back.bad', 20,
+          'The anglerfish bites the knife instead. The blade snaps.',
+          effects(undefined, [breakItem('knife')])),
+        resultId: 'check-the-back.bad',
+      },
+    ),
     contextualChoice('check', 'Yes',
       {
         ...featuredOutcome('check-the-back.fish', 80, 'A fish has landed aboard.', effects([add('food', 1)])),
@@ -657,8 +678,11 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       featuredOutcome('flowers.drift', 1, 'The flowers drift into the dark.')),
   ], 13, { maximumAppearances: 1 }),
   event('chest-attack', 'night', 'Chest Attack', 'dangerous', 'impact', 1, 1, 0, [
-    choice('fishingNet', 'Use Fishing Net', 'fishingNet',
-      outcome(1, 'The net binds the chest shut.', { chest: 'close' }, 'chest-bound')),
+    choice('knife', 'Use Knife', 'knife',
+      outcome(1, 'The knife reduced the bite. The chest falls overboard.', {
+        resources: [subtract('health', 10)],
+        chest: 'destroy',
+      }, 'chest-attack')),
     contextualChoice('attack', 'Attack',
       outcome(1, 'The chest tears into you before it falls overboard.', {
         resources: [subtract('health', 25)],

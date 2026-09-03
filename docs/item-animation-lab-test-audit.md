@@ -43,7 +43,7 @@ Sources: [selector options](../src/app/EventTest.ts), [contextual resolution](..
 | Fishing rewards | Day 1 excludes Crab, Tuna, and Squid. Full inventory excludes Wet Duct Tape, Broken Compass, Torn Fishing Net, and Energy Bar. No catch selector exists. |
 | Fishing repetition | Fishing spends real Energy. The lab has no refill control. Three completed attempts exhaust starting Energy. Chest opening also spends all three Energy. |
 | Chest rewards | A fresh full-inventory lab chest always awards two Food. Item, Bait, and duct tape rewards need a missing item slot. No reward selector exists. |
-| Chest state | The lab starts with one closed chest. There is no chest respawn, age, or mimic control. Test delayed mimic conversion, rebinding, and reacquisition in a run. |
+| Chest state | The lab starts with one closed chest. There is no chest respawn, age, or mimic control. Test delayed mimic conversion and automatic attack in a run. |
 | Handyman chest trade | The event selector starts without a chest, so Chest for Anchor is unavailable. The lab chest cannot carry into that fresh event. |
 | Trade and wreckage item gains | Full inventory converts duplicate item rewards to Food. Missing or lost reward items are needed to test actual item acquisition. Broken items still occupy their slot. |
 | Wreckage outcomes | Search has four results, Carlitos has four, and diving has eight. Injury, collapse, broken scuba, creature, ghost, and each loot result cannot be selected. |
@@ -77,7 +77,7 @@ Sources: [lab flow](../src/survival/ItemAnimationLabFlow.ts), [session setup](..
 - [ ] Fish with pointer and keyboard input. Cancel before casting, catch, miss, continue, cast again, and exit.
 - [ ] Test each event response below, including Sleep, refusal, Leave, and Return to boat.
 - [ ] Leave Plane unanswered for its 10-second window. Check timeout and a last-moment signal separately.
-- [ ] Wait through Chest Attack reveal without clicking. Check that damage waits for Attack. Test Fishing Net separately.
+- [ ] Wait through Chest Attack without clicking. Check automatic damage and repeat with a usable Knife.
 - [ ] For Check the Back, record the actual result. Do not trust the Fish/Bad selector label.
 - [ ] For each Midnight Tour entry, visit the island. Test Sail On separately.
 - [ ] Pause and resume. Hide and restore the tab during each presentation stage.
@@ -267,24 +267,17 @@ Selector: School of Fish.
 
 Selector: Tentacle Attack.
 
-- [ ] **Use Binoculars** (`spyglass`) — needs usable BINOCULARS.
-  - [ ] `outcome 1`: You keep sight of the tentacle. Effects: break spyglass ×1.
-
-- [ ] **Use Swim Ring** (`swimRing`) — needs usable SWIM RING.
-  - [ ] `outcome 1`: The swim ring is lost. Effects: lose swimRing ×1.
-
-- [ ] **Use Fishing Net** (`fishingNet`) — needs usable FISHING NET.
-  - [ ] `outcome 1`: The snatched item is lost. Effects: loseEventTarget  ×1.
-
 - [ ] **Use Knife** (`knife`) — needs usable KNIFE.
-  - [ ] `outcome 1`: You cut the tentacle and save the snatched supply.
-  - [ ] `outcome 2`: The knife breaks and the snatched supply is lost. Effects: break knife ×1; loseEventTarget  ×1.
+  - [ ] `outcome 1`: You cut the tentacle. The supply stays aboard.
 
 - [ ] **Use Shotgun** (`shotgun`) — needs usable SHOTGUN.
-  - [ ] `outcome 1`: You gain two food. Effects: add food 2; consume shotgun ×1.
+  - [ ] `outcome 1`: The shot drives the tentacle away. The supply stays aboard. Effects: consume shotgun ×1.
+
+- [ ] **Use Flare Gun** (`flareGun`) — needs usable FLARE GUN.
+  - [ ] `outcome 1`: The flare drives the tentacle away. The supply stays aboard. Effects: consume flareGun ×1.
 
 - [ ] **Sleep** (`sleep`).
-  - [ ] `outcome 1`: The snatched item is lost. Effects: loseEventTarget  ×1.
+  - [ ] `outcome 1`: The tentacle steals a supply and wounds you. Effects: subtract health 30; loseEventTarget ×1.
 
 ### Death Stare (night)
 
@@ -546,19 +539,19 @@ Selector: Guarded Sleep.
 
 Selector: Drifting Supplies.
 
-- [ ] **Retrieve Supplies** (`retrieve`) — needs 3 energy.
+- [ ] **Retrieve Supplies** (`retrieve`) — needs 3 energy for barrels and lifeboats, or 2 for containers.
   - [ ] `drifting-supplies-barrel-food`: You recover one food from the barrel. Effects: subtract energy 3; add food 1.
   - [ ] `drifting-supplies-barrel-bait`: You recover one bait from the barrel. Effects: subtract energy 3; add bait 1.
   - [ ] `drifting-supplies-barrel-repair`: You recover one roll of duct tape from the barrel. Effects: subtract energy 3; add repairMaterial 1.
   - [ ] `drifting-supplies-lifeboat-food`: You recover two food from the cooler. Effects: subtract energy 3; add food 2.
   - [ ] `drifting-supplies-lifeboat-bait`: You recover two bait from the cooler. Effects: subtract energy 3; add bait 2.
   - [ ] `drifting-supplies-lifeboat-repair`: You recover two rolls of duct tape from the cooler. Effects: subtract energy 3; add repairMaterial 2.
-  - [ ] `drifting-supplies-container-food`: You recover three food from the shipping container. Effects: subtract energy 3; add food 3.
-  - [ ] `drifting-supplies-container-bait`: You recover three bait from the shipping container. Effects: subtract energy 3; add bait 3.
-  - [ ] `drifting-supplies-container-repair`: You recover three rolls of duct tape from the shipping container. Effects: subtract energy 3; add repairMaterial 3.
-  - [ ] `drifting-supplies-container-energy-bar`: You recover an energy bar from the shipping container. Effects: subtract energy 3; gain energyBar ×1.
+  - [ ] `drifting-supplies-container-food`: You recover three food from the shipping container. Effects: subtract energy 2; add food 3.
+  - [ ] `drifting-supplies-container-bait`: You recover three bait from the shipping container. Effects: subtract energy 2; add bait 3.
+  - [ ] `drifting-supplies-container-repair`: You recover three rolls of duct tape from the shipping container. Effects: subtract energy 2; add repairMaterial 3.
+  - [ ] `drifting-supplies-container-energy-bar`: You recover an energy bar from the shipping container. Effects: subtract energy 2; gain energyBar ×1.
 
-- [ ] **Send Carlitos** (`delegate-carlitos`) — needs available Carlitos.
+- [ ] **Send Carlitos** (`delegate-carlitos`) — needs available Carlitos with 3 energy, or 2 for containers.
   - [ ] `drifting-supplies-barrel-food`: Carlitos recovers one food from the barrel. Effects: add food 1.
   - [ ] `drifting-supplies-barrel-bait`: Carlitos recovers one bait from the barrel. Effects: add bait 1.
   - [ ] `drifting-supplies-barrel-repair`: Carlitos recovers one roll of duct tape from the barrel. Effects: add repairMaterial 1.
@@ -590,13 +583,13 @@ Selector: Drifting Chest.
 
 Selector: Wreckage.
 
-- [ ] **Search Debris** (`search`) — needs 2 energy.
-  - [ ] `wreckage-search-repair`: You recover duct tape. Effects: subtract energy 2; add repairMaterial 2.
-  - [ ] `wreckage-search-food`: You recover one food. Effects: subtract energy 2; add food 1.
-  - [ ] `wreckage-search-bait`: You recover one bait. Effects: subtract energy 2; add bait 1.
-  - [ ] `wreckage-search-injury`: Sharp debris cuts you. Effects: subtract energy 2; subtract health 15–25.
+- [ ] **Search Debris** (`search`) — needs 1 energy.
+  - [ ] `wreckage-search-repair`: You recover duct tape. Effects: subtract energy 1; add repairMaterial 2.
+  - [ ] `wreckage-search-food`: You recover one food. Effects: subtract energy 1; add food 1.
+  - [ ] `wreckage-search-bait`: You recover one bait. Effects: subtract energy 1; add bait 1.
+  - [ ] `wreckage-search-injury`: Sharp debris cuts you. Effects: subtract energy 1; subtract health 15–25.
 
-- [ ] **Send Carlitos** (`delegate-carlitos`) — needs available Carlitos.
+- [ ] **Send Carlitos** (`delegate-carlitos`) — needs available Carlitos with 2 energy.
   - [ ] `wreckage-carlitos-repair`: Carlitos recovers duct tape. Effects: add repairMaterial 2.
   - [ ] `wreckage-carlitos-food`: Carlitos recovers one food. Effects: add food 1.
   - [ ] `wreckage-carlitos-bait`: Carlitos recovers one bait. Effects: add bait 1.
@@ -643,11 +636,10 @@ Selector: Flowers.
 
 Selector: Chest Attack.
 
-- [ ] **Use Fishing Net** (`fishingNet`) — needs usable FISHING NET.
-  - [ ] `chest-bound`: The net binds the chest shut. Effects: chest close.
-
-- [ ] **Attack** (`attack`).
-  - [ ] `chest-attack`: The chest tears into you before it falls overboard. Effects: subtract health 40; chest destroy.
+- [ ] The attack resolves automatically after the reveal.
+  - [ ] Without a usable Knife: subtract Health 25 and destroy the Chest.
+  - [ ] With a usable Knife: subtract Health 10 and destroy the Chest. Keep the Knife usable.
+  - [ ] Show no choice. Mention Knife mitigation only in the journal.
 
 ### Midnight Tour (night)
 

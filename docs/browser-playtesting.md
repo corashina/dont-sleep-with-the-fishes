@@ -101,14 +101,14 @@ Cover all three tasks once in each batch. Assign each task to any active tester.
 
 `Return to boat` also declines the focused encounter without cost. It must restore normal controls for all focused events.
 
-### Chest Attack Choices
+### Automatic Chest Attack
 
 - Trigger: Reach Chest Attack and wait until its reveal finishes.
-- Player action: Record Health without selecting a choice. Then select Attack.
-- Expected visible result: Attack appears before damage. Health decreases only after selecting Attack. The event then resolves.
-- Failure evidence: Record missing Attack, damage before selection, automatic resolution, or an unresponsive Attack.
-- Screenshot: Capture only missing choices, early damage, automatic resolution, or an unresponsive Attack.
-- Report entry: Record Health before waiting, before selection, and after selection. Record when the event resolved.
+- Player action: Record Health before and after the automatic attack. Repeat with a usable Knife.
+- Expected visible result: No choice appears. Health stays unchanged during the reveal. The attack then deals 25 Health damage, or 10 with a usable Knife.
+- Failure evidence: Record a choice popup, early damage, incorrect damage, or an event that does not resolve.
+- Screenshot: Capture only a choice popup, early damage, or an event that does not resolve.
+- Report entry: Record Health before and after each attack. Confirm that only the journal mentions the Knife mitigation.
 
 ## Fishing Controls
 

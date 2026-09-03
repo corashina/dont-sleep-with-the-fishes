@@ -41,7 +41,7 @@ It does not show event titles.
 
 All night events use the bright, glowy star field when weather and haze allow it.
 
-An old chest can become a mimic. Fishing Net binds it shut.
+An old chest can become a mimic and attack automatically. A usable Knife reduces the damage from 25 to 10 Health.
 
 Flowers accepts Fishing Net or Bucket. It records the choice without a large reward.
 

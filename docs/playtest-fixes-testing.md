@@ -37,7 +37,7 @@ npm.cmd test -- tests/SurvivalUI.test.ts tests/SurvivalFishingFlow.test.ts tests
 ```
 
 The event tests set exact conditions. They cover timing cases that are difficult to repeat manually.
-They include Plane selection 0.01 seconds before expiry and Wreckage exits at Energy 0 and 1.
+They include Plane selection 0.01 seconds before expiry and Wreckage exits at Energy 0.
 
 ## Browser setup
 
@@ -128,15 +128,16 @@ Repair quantities, costs, and repair strength remain unchanged. This change stan
 
 ## 6. Wreckage exits and Chest Attack
 
-These behaviors already worked in controlled tests. New cases protect unavailable choices, free exits, reveal timing, and single damage application.
+These cases protect unavailable choices, free exits, reveal timing, and automatic Chest Attack damage.
 
-1. Use a run where Wreckage is available at Energy 0 or 1.
+1. Use a run where Wreckage is available at Energy 0.
 2. Ensure Carlitos is absent, hungry, or unable to act because of low Energy.
 3. Select **Leave**. Confirm that normal boat controls return and no resource changes.
 4. Repeat with **Return to boat**.
 5. Enter the **Chest Attack** test scene. Record Health before the reveal finishes.
-6. Confirm that Health stays unchanged during the reveal and **Attack** becomes available.
-7. Select **Attack**. Confirm one damage result. Repeated input must not repeat the damage.
+6. Confirm that Health stays unchanged during the reveal and no choice appears.
+7. Confirm that the attack starts after the reveal and removes 25 Health.
+8. Repeat with a usable Knife. Confirm 10 Health damage and a journal-only mitigation note.
 
 Use the focused tests for exact Wreckage conditions and controlled Chest Attack animation boundaries.
 

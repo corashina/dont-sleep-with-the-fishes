@@ -5,13 +5,13 @@ import { scaleEventItemDuration, scaleThrownItemDuration } from './eventItemTimi
 
 export type EventItemUseContext =
   | 'base' | 'throw-target' | 'tape-stretch' | 'compass-search' | 'map-read'
-  | 'binocular-look' | 'net-scoop' | 'bucket-scoop' | 'bucket-helmet'
+  | 'binocular-look' | 'net-scoop' | 'net-slap' | 'bucket-scoop' | 'bucket-helmet'
   | 'trade-handover' | 'map-leak-patch'
   | 'radio-signal-receive'
   | 'flare-target' | 'flare-sky' | 'anchor-drop'
   | 'umbrella-overhead' | 'umbrella-shield'
   | 'flashlight-threat-beam' | 'flashlight-signal' | 'shotgun-fire'
-  | 'knife-slash';
+  | 'knife-stab';
 
 export type EventItemEffectKind =
   | 'none' | 'tape' | 'binocular-mask'
@@ -39,7 +39,14 @@ const FLASHLIGHT_MORSE_CUE_PROGRESSES = Object.freeze([
 ]);
 const FLASHLIGHT_THREAT_CUE_PROGRESSES = Object.freeze([0.42]);
 const SHOTGUN_ACTION_CUE_PROGRESSES = Object.freeze([0.46]);
-const KNIFE_ACTION_CUE_PROGRESSES = Object.freeze([0.63]);
+const KNIFE_ACTION_CUE_PROGRESSES = Object.freeze([0.7]);
+const KNIFE_GUNWALE_CLEARANCE = 0.44;
+const KNIFE_TRAVEL_ARC_HEIGHT = 0.46;
+const KNIFE_READY_YAW = -0.22;
+const KNIFE_READY_PITCH = 0.38;
+const KNIFE_READY_ROLL = -0.55;
+const KNIFE_RETURN_HOLD_PROGRESS = 0.16;
+const NET_SLAP_ACTION_CUE_PROGRESSES = Object.freeze([0.62]);
 const FLARE_GUN_ACTION_CUE_PROGRESSES = Object.freeze([0.46, 0.54]);
 const FLARE_GUN_READY_YAW = -Math.PI / 2 + 0.22;
 const FLARE_GUN_READY_PITCH = 1.25;
@@ -130,8 +137,11 @@ const UMBRELLA_SHIELD_EVENTS: ReadonlySet<string> = new Set([
   'bad-sleep', 'death-stare', 'eerie-melody', 'face-on-the-moon',
 ]);
 const FLARE_SKY_EVENTS: ReadonlySet<string> = new Set(['other-people', 'plane']);
-const FLARE_TARGET_EVENTS: ReadonlySet<string> = new Set(['ghosts']);
+const FLARE_TARGET_EVENTS: ReadonlySet<string> = new Set(['ghosts', 'snatcher']);
 const TRADE_EVENTS: ReadonlySet<string> = new Set(['night-trader', 'handyman']);
+const NET_SLAP_EVENTS: ReadonlySet<string> = new Set([
+  'death-stare', 'swarm-of-sharks',
+]);
 const FLASHLIGHT_SIGNAL_EVENTS: ReadonlySet<string> = new Set([
   'other-people', 'plane',
 ]);
@@ -149,6 +159,7 @@ const EVENT_ITEM_USE_BASE_DURATIONS: Readonly<Record<EventItemUseContext, number
   'map-read': 1.55,
   'binocular-look': 1.7,
   'net-scoop': SCOOP_DURATION,
+  'net-slap': 1.2,
   'bucket-scoop': SCOOP_DURATION,
   'bucket-helmet': 1.45,
   'trade-handover': 1.35,
@@ -162,7 +173,7 @@ const EVENT_ITEM_USE_BASE_DURATIONS: Readonly<Record<EventItemUseContext, number
   'flashlight-threat-beam': 1.45,
   'flashlight-signal': 1.7,
   'shotgun-fire': 1.2,
-  'knife-slash': 1.15,
+  'knife-stab': 1.15,
 };
 
 type EventItemContextResolver = (
@@ -191,8 +202,8 @@ const EVENT_ITEM_CONTEXT_RESOLVERS: Partial<Record<ItemId, EventItemContextResol
   compass: (_eventId, choiceId) => exactChoiceContext(choiceId, 'compass', 'compass-search'),
   map: resolveMapContext,
   spyglass: (_eventId, choiceId) => exactChoiceContext(choiceId, 'spyglass', 'binocular-look'),
-  fishingNet: (_eventId, choiceId) => exactChoiceContext(choiceId, 'fishingNet', 'net-scoop'),
-  knife: (_eventId, choiceId) => exactChoiceContext(choiceId, 'knife', 'knife-slash'),
+  fishingNet: resolveFishingNetContext,
+  knife: (_eventId, choiceId) => exactChoiceContext(choiceId, 'knife', 'knife-stab'),
   flashlight: resolveFlashlightContext,
   shotgun: (_eventId, choiceId) => exactChoiceContext(choiceId, 'shotgun', 'shotgun-fire'),
 };
@@ -274,6 +285,14 @@ function resolveAnchorContext(eventId: string, choiceId: string): EventItemUseCo
 function resolveMapContext(eventId: string, choiceId: string): EventItemUseContext | null {
   if (choiceId !== 'map') return null;
   return eventId === 'leak' ? 'map-leak-patch' : 'map-read';
+}
+
+function resolveFishingNetContext(
+  eventId: string,
+  choiceId: string,
+): EventItemUseContext | null {
+  if (choiceId !== 'fishingNet') return null;
+  return NET_SLAP_EVENTS.has(eventId) ? 'net-slap' : 'net-scoop';
 }
 
 function resolveFlashlightContext(eventId: string, choiceId: string): EventItemUseContext | null {
@@ -479,6 +498,45 @@ function sampleNetScoop(
   output.viewZ += NET_PICKUP_DEPTH * closeHold;
   output.pitch *= -1;
   output.aimBlend = 0;
+}
+
+function sampleNetSlap(
+  output: EventItemUseSample,
+  pickup: number,
+  hold: number,
+  progress: number,
+): void {
+  samplePickupAndHold(output, pickup, hold);
+  const windUp = pulse(progress, 0.36, 0.48, 0.58);
+  const contact = pulse(progress, 0.5, 0.62, 0.76);
+  output.viewX += 0.22 * windUp - 0.14 * contact;
+  output.viewY += 0.18 * windUp - 0.2 * contact;
+  output.viewZ += 0.08 * windUp + 0.1 * contact;
+  output.yaw = -0.42 * windUp + 0.34 * contact;
+  output.pitch = -0.24 * windUp + 0.28 * contact;
+  output.roll = -0.54 * windUp + 1.18 * contact;
+  output.cameraTargetBlend = 0.28 * contact;
+  output.targetBlend = 0.82 * contact;
+  output.ballisticFlight = false;
+  output.primaryEffect = contact;
+}
+
+function sampleNetItemUse(
+  context: EventItemUseContext,
+  output: EventItemUseSample,
+  pickup: number,
+  hold: number,
+  progress: number,
+): boolean {
+  if (context === 'net-scoop') {
+    sampleNetScoop(output, pickup, hold, progress);
+    return true;
+  }
+  if (context === 'net-slap') {
+    sampleNetSlap(output, pickup, hold, progress);
+    return true;
+  }
+  return false;
 }
 
 function applyBucketBenchClearance(
@@ -763,25 +821,27 @@ function sampleShotgunFire(
   output.secondaryEffect = smokeTravel;
 }
 
-function sampleKnifeSlash(
+function sampleKnifeStab(
   output: EventItemUseSample,
   pickup: number,
   hold: number,
   progress: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  const ready = smoothstep((progress - 0.25) / 0.18) * hold;
-  const slash = pulse(progress, 0.48, 0.64, 0.82);
-  output.viewX += 0.12 * ready - 0.34 * slash;
-  output.viewY += 0.08 * ready + 0.16 * slash;
-  output.viewZ += 0.08 * ready - 0.18 * slash;
-  output.yaw = -0.45 * ready + 1.4 * slash;
-  output.pitch = -0.18 * ready - 0.42 * slash;
-  output.roll = -0.35 * ready + 1.5 * slash;
-  output.cameraYaw = -0.08 * slash;
-  output.cameraPitch = 0.035 * slash;
-  output.aimBlend = ready;
-  output.targetBlend = 0;
+  const stab = pulse(progress, 0.52, 0.7, 0.84);
+  const aim = smoothstep((progress - 0.4) / 0.1)
+    * (1 - smoothstep((progress - 0.84) / 0.1));
+  const clearance = smoothstep((progress - 0.5) / 0.02)
+    * (1 - smoothstep((progress - 0.84) / 0.02));
+  output.yaw = KNIFE_READY_YAW * pickup;
+  output.pitch = KNIFE_READY_PITCH * pickup;
+  output.roll = KNIFE_READY_ROLL * pickup;
+  output.aimBlend = aim * hold;
+  output.targetBlend = 0.94 * stab;
+  output.flightArc = 4 * output.targetBlend * (1 - output.targetBlend);
+  output.flightArcHeight = KNIFE_TRAVEL_ARC_HEIGHT;
+  output.minimumLiftY = KNIFE_GUNWALE_CLEARANCE * clearance;
+  output.primaryEffect = stab;
 }
 
 export function sampleEventItemUse(
@@ -859,9 +919,9 @@ function sampleTargetedEventItemUse(
   hold: number,
   progress: number,
 ): void {
+  if (sampleNetItemUse(context, output, pickup, hold, progress)) return;
   switch (context) {
     case 'throw-target': sampleThrowTarget(output, pickup, hold, progress, itemId); break;
-    case 'net-scoop': sampleNetScoop(output, pickup, hold, progress); break;
     case 'bucket-scoop': sampleBucketScoop(output, pickup, hold, progress); break;
     case 'map-leak-patch': sampleMapLeakPatch(output, progress); break;
     case 'flare-target': sampleFlare(output, pickup, hold, progress); break;
@@ -877,7 +937,7 @@ function sampleTargetedEventItemUse(
       pulse(progress, 0.46, 0.53, 0.66),
       smoothstep((progress - 0.46) / 0.2),
     ); break;
-    case 'knife-slash': sampleKnifeSlash(output, pickup, hold, progress); break;
+    case 'knife-stab': sampleKnifeStab(output, pickup, hold, progress); break;
   }
 }
 
@@ -898,8 +958,9 @@ function liftCompletionForItem(itemId: ItemId): number {
 export function eventItemActionCueProgresses(
   context: EventItemUseContext,
 ): readonly number[] {
+  const meleeCues = meleeActionCueProgresses(context);
+  if (meleeCues !== null) return meleeCues;
   if (context === 'shotgun-fire') return SHOTGUN_ACTION_CUE_PROGRESSES;
-  if (context === 'knife-slash') return KNIFE_ACTION_CUE_PROGRESSES;
   if (context === 'anchor-drop') return ANCHOR_ACTION_CUE_PROGRESSES;
   if (context === 'tape-stretch') return TAPE_ACTION_CUE_PROGRESSES;
   if (context === 'map-leak-patch') return MAP_PATCH_ACTION_CUE_PROGRESSES;
@@ -911,6 +972,14 @@ export function eventItemActionCueProgresses(
   if (context === 'radio-signal-receive') return RADIO_SIGNAL_CUE_PROGRESSES;
   if (context === 'bucket-helmet') return BUCKET_HELMET_RAIN_CUE_PROGRESSES;
   return NO_ACTION_CUE_PROGRESSES;
+}
+
+function meleeActionCueProgresses(
+  context: EventItemUseContext,
+): readonly number[] | null {
+  if (context === 'knife-stab') return KNIFE_ACTION_CUE_PROGRESSES;
+  if (context === 'net-slap') return NET_SLAP_ACTION_CUE_PROGRESSES;
+  return null;
 }
 
 export function sampleEventItemOutcome(
@@ -1030,6 +1099,7 @@ function sampleRecoveringEventItemOutcome(
   output: EventItemUseSample,
 ): boolean {
   switch (context) {
+    case 'knife-stab': sampleKnifeOutcome(itemId, progress, output); return true;
     case 'map-read': sampleMapOutcome(itemId, progress, output); return true;
     case 'compass-search': sampleCompassOutcome(progress, profile, output); return true;
     case 'radio-signal-receive': sampleRadioOutcome(progress, profile, output); return true;
@@ -1043,6 +1113,43 @@ function sampleRecoveringEventItemOutcome(
   if (context !== 'net-scoop') return false;
   sampleNetOutcome(progress, profile, output);
   return true;
+}
+
+function sampleKnifeOutcome(
+  itemId: ItemId,
+  progress: number,
+  output: EventItemUseSample,
+): void {
+  sampleEventItemUse('knife-stab', itemId, 1, output);
+  const returnProgress = smoothstep(
+    (progress - KNIFE_RETURN_HOLD_PROGRESS) / (1 - KNIFE_RETURN_HOLD_PROGRESS),
+  );
+  const remaining = 1 - returnProgress;
+  if (remaining === 0) {
+    output.cameraSpaceBlend = 0;
+    output.yaw = 0;
+    output.pitch = 0;
+    output.roll = 0;
+    output.aimBlend = 0;
+    output.cameraYaw = 0;
+    output.cameraPitch = 0;
+    output.cameraTargetBlend = 0;
+    output.targetBlend = 0;
+    output.primaryEffect = 0;
+    output.itemVisible = true;
+    return;
+  }
+  output.cameraSpaceBlend *= remaining;
+  output.yaw *= remaining;
+  output.pitch *= remaining;
+  output.roll *= remaining;
+  output.aimBlend *= remaining;
+  output.cameraYaw *= remaining;
+  output.cameraPitch *= remaining;
+  output.cameraTargetBlend = 0;
+  output.targetBlend = 0;
+  output.primaryEffect = 0;
+  output.itemVisible = true;
 }
 
 function sampleMapOutcome(

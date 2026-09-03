@@ -447,7 +447,7 @@ describe('event selection contracts', () => {
     expect(rig.onFatalError).not.toHaveBeenCalled();
   });
 
-  it('preserves Health during Chest Attack reveal and applies Attack damage once after selection', async () => {
+  it('resolves Chest Attack automatically after the reveal without choice UI', async () => {
     const rig = createSessionRig(new SurvivalSession([], {
       seed: 10, random: sequenceRandom([0, 0.99, 0.99, 0.99]),
       initial: { day: 3, health: 100 },
@@ -461,19 +461,16 @@ describe('event selection contracts', () => {
     await vi.waitFor(() => expect(rig.world.revealEvent).toHaveBeenCalled());
     expect(rig.realSession.snapshot().health).toBe(100);
     expect(rig.session.resolveEvent).not.toHaveBeenCalled();
-    expect(rig.ui.setEventSelection).toHaveBeenLastCalledWith(expect.any(Map), expect.arrayContaining([
-      expect.objectContaining({ id: 'attack', unavailableReason: null }),
-    ]));
+    expect(rig.ui.setEventSelection).not.toHaveBeenCalled();
     reveal.resolve();
-    await revealing;
-    expect(rig.realSession.snapshot().health).toBe(100);
-    expect(rig.flow.isStableChoice()).toBe(true);
-
-    rig.flow.resolveContextual('attack');
-    rig.flow.resolveContextual('attack');
+    await vi.waitFor(() => expect(rig.world.playEventChoice).toHaveBeenCalledWith(
+      'chest-attack',
+      { choiceId: 'attack', instanceId: null, condition: null },
+    ));
     expect(rig.realSession.snapshot().health).toBe(100);
     expect(rig.session.resolveEvent).not.toHaveBeenCalled();
     attack.resolve();
+    await revealing;
     await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
     rig.flow.resolveContextual('attack');
     expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({ kind: 'choice', choiceId: 'attack' });
@@ -496,9 +493,9 @@ describe('SurvivalEventFlow', () => {
     const rig = createRig(snapshot({
       state: 'dayEvent',
       pendingEventId: 'wreckage',
-      energy: 2,
+      energy: 1,
       carlitos: {
-        alive: true, energy: 3, hunger: 5, sickness: 0,
+        alive: true, energy: 2, hunger: 5, sickness: 0,
         unhappiness: 0, pettedToday: false, deathCause: null,
       },
       inventory: inventory({
@@ -516,15 +513,15 @@ describe('SurvivalEventFlow', () => {
     expect(rig.focused.enter).toHaveBeenCalledWith('wreckage', [
       {
         id: 'search', label: 'Search Debris', unavailableReason: null,
-        energyCost: 2, energyOwner: 'player', instanceId: null,
+        energyCost: 1, energyOwner: 'player', instanceId: null,
       },
       {
         id: 'delegate-carlitos', label: 'Send Carlitos', unavailableReason: null,
-        energyCost: 3, energyOwner: 'carlitos', instanceId: null,
+        energyCost: 2, energyOwner: 'carlitos', instanceId: null,
       },
       {
         id: 'dive', label: 'Search underwater',
-        unavailableReason: 'Requires 3 energy; you have 2.',
+        unavailableReason: 'Requires 3 energy; you have 1.',
         energyCost: 3, energyOwner: 'player', instanceId: 'scubaSet-1',
       },
       {
@@ -564,7 +561,7 @@ describe('SurvivalEventFlow', () => {
     ['tired', {
       alive: true, energy: 1, hunger: 5, sickness: 0,
       unhappiness: 0, pettedToday: false, deathCause: null,
-    }, 'Carlitos needs 3 energy; he has 1.'],
+    }, 'Carlitos needs 2 energy; he has 1.'],
     ['hungry', {
       alive: true, energy: 3, hunger: 3, sickness: 0,
       unhappiness: 0, pettedToday: false, deathCause: null,
@@ -589,7 +586,7 @@ describe('SurvivalEventFlow', () => {
     expect(choices).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: 'delegate-carlitos',
-        energyCost: 3,
+        energyCost: 2,
         energyOwner: 'carlitos',
         unavailableReason,
       }),
@@ -1266,6 +1263,23 @@ describe('SurvivalEventFlow', () => {
     expect(rig.world.clearEvent).toHaveBeenCalled();
     expect(rig.bundles.releaseActive).toHaveBeenCalled();
     expect(rig.setBusy.mock.calls.map(([busy]) => busy)).toEqual([true, false]);
+  });
+
+  it('clears deferred daytime loot before a quiet night transition', async () => {
+    const daytime = snapshot({
+      state: 'dayEvent',
+      pendingEventId: 'drifting-supplies',
+    });
+    const rig = createRig(daytime);
+    await rig.flow.revealPending(daytime);
+    rig.world.clearEvent.mockClear();
+    rig.bundles.releaseActive.mockClear();
+
+    const night = snapshot({ state: 'nightEvent', pendingEventId: null });
+    expect(rig.flow.beginNightTransition(night, false)).toBe(true);
+
+    expect(rig.world.clearEvent).toHaveBeenCalledOnce();
+    expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
   });
 
   it.each(['clear', 'dispose'] as const)(

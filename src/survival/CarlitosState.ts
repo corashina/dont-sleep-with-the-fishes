@@ -4,7 +4,6 @@ export type CarlitosDeathCause =
   | 'starvation' | 'sickness' | 'misery';
 
 export const CARLITOS_MAX_ENERGY = 3;
-export const CARLITOS_EVENT_ENERGY_COST = 3;
 
 export interface CarlitosState {
   alive: boolean;
@@ -55,7 +54,7 @@ export function carlitosWellness(state: CarlitosSnapshot): number {
 
 export function spendCarlitosEnergy(
   state: CarlitosState,
-  amount = CARLITOS_EVENT_ENERGY_COST,
+  amount: number,
 ): boolean {
   state.energy = clampCarlitosEnergy(state.energy);
   if (!state.alive || state.energy < amount) return false;

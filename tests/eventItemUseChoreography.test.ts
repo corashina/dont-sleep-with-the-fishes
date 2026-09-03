@@ -6,7 +6,19 @@ import {
   resolveEventItemUseContext,
   sampleEventItemOutcome,
   sampleEventItemUse,
+  type EventItemUseContext,
 } from '../src/survival/eventItemUseChoreography';
+import {
+  identityDeathStareSample,
+  sampleDeathStareItemUse,
+} from '../src/survival/events/deathStareChoreography';
+import {
+  createSwarmSample,
+  createSwarmSharkPose,
+  createSwarmVariants,
+  sampleSwarmItemUse,
+  sampleSwarmSharkPose,
+} from '../src/survival/events/sharkSwarmChoreography';
 
 function bucketHelmetAt(progress: number) {
   const sample = createEventItemUseSample();
@@ -122,5 +134,76 @@ describe('map leak patch choreography', () => {
 describe('bucket event routing', () => {
   it('does not route the Flowers bucket through an item animation', () => {
     expect(resolveEventItemUseContext('flowers', 'bucket', 'bucket')).toBeNull();
+  });
+});
+
+describe('fishing net attack choreography', () => {
+  const combatEvents = ['death-stare', 'swarm-of-sharks'] as const;
+
+  it('routes only combat net choices through the slap', () => {
+    for (const eventId of combatEvents) {
+      expect(resolveEventItemUseContext(eventId, 'fishingNet', 'fishingNet'))
+        .toBe('net-slap');
+    }
+
+    expect(resolveEventItemUseContext('school-of-fish', 'fishingNet', 'fishingNet'))
+      .toBe('net-scoop');
+    expect(resolveEventItemUseContext('snatcher', 'fishingNet', 'fishingNet'))
+      .toBe('net-scoop');
+    expect(resolveEventItemUseContext('windy-night', 'fishingNet', 'fishingNet'))
+      .toBe('net-scoop');
+    expect(resolveEventItemUseContext('flowers', 'fishingNet', 'fishingNet'))
+      .toBe('net-scoop');
+    expect(resolveEventItemUseContext('handyman', 'fishingNet', 'fishingNet'))
+      .toBe('trade-handover');
+  });
+
+  it('winds up, reaches the enemy, and returns to the player', () => {
+    const context = 'net-slap' as EventItemUseContext;
+    const windUp = createEventItemUseSample();
+    const contact = createEventItemUseSample();
+    const recovered = createEventItemUseSample();
+
+    sampleEventItemUse(context, 'fishingNet', 0.48, windUp);
+    sampleEventItemUse(context, 'fishingNet', 0.62, contact);
+    sampleEventItemUse(context, 'fishingNet', 1, recovered);
+
+    expect(windUp.roll).toBeLessThan(-0.2);
+    expect(windUp.targetBlend).toBe(0);
+    expect(contact.targetBlend).toBeGreaterThan(0.75);
+    expect(contact.ballisticFlight).toBe(false);
+    expect(contact.itemVisible).toBe(true);
+    expect(contact.primaryEffect).toBeGreaterThan(0.95);
+    expect(recovered.targetBlend).toBe(0);
+    expect(recovered.itemVisible).toBe(true);
+    expect(eventItemActionCueProgresses(context)).toEqual([0.62]);
+  });
+
+  it('makes the Death Stare creature flinch at contact', () => {
+    const sample = identityDeathStareSample();
+
+    sampleDeathStareItemUse('fishingNet', 0.62, sample);
+
+    expect(sample.effectKind).toBe('net-slap');
+    expect(sample.effectStrength).toBeGreaterThan(0.95);
+    expect(sample.blink).toBeGreaterThan(0.95);
+    expect(sample.fishZ).toBeLessThan(-0.1);
+  });
+
+  it('knocks the nearest shark away at contact', () => {
+    const sample = createSwarmSample();
+    const variants = createSwarmVariants(5, 17);
+    const before = createSwarmSharkPose();
+    const contact = createSwarmSharkPose();
+
+    sampleSwarmSharkPose(variants[0]!, 0, sample, before);
+    sampleSwarmItemUse('fishingNet', 0.62, sample);
+    sampleSwarmSharkPose(variants[0]!, 0, sample, contact);
+
+    expect(sample.effectKind).toBe('net-slap');
+    expect(sample.effect).toBeGreaterThan(0.95);
+    expect(Math.hypot(contact.x, contact.z)).toBeGreaterThan(
+      Math.hypot(before.x, before.z),
+    );
   });
 });

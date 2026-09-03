@@ -14,16 +14,19 @@ import type {
 } from './eventPresentationTypes';
 import type { ActionOutcome, ItemCondition } from './survivalTypes';
 
-const MOON_FACE_REVEAL_DURATION = 5.8;
+const MOON_FACE_REVEAL_DURATION = 9.2;
 const MOON_FACE_REACTION_DURATION = 1.1;
-const MOON_FACE_HOLD_FRACTION = 0.2;
-const MOON_FACE_SHOCK_START = 0.7;
-const MOON_FACE_SHOCK_END = 0.84;
-const MOON_FACE_BASE_GRIN = 0.74;
-const MOON_FACE_STAR_SCALE = 0.16;
-const MOON_FACE_MOON_SCALE = 4.15;
-const MOON_FACE_BASE_DIM = 0.18;
-const MOON_FACE_PRESSURE_GRIN = 0.96;
+const MOON_FACE_HOLD_DURATION = 2.5;
+const MOON_FACE_FADE_DURATION = 5;
+const MOON_FACE_APPEAR_START = MOON_FACE_HOLD_DURATION / MOON_FACE_REVEAL_DURATION;
+const MOON_FACE_APPEAR_END = (
+  MOON_FACE_HOLD_DURATION + MOON_FACE_FADE_DURATION
+) / MOON_FACE_REVEAL_DURATION;
+const MOON_FACE_BASE_DREAD = 0.78;
+const MOON_FACE_STAR_SCALE = 0.34;
+const MOON_FACE_MOON_SCALE = 2.8;
+const MOON_FACE_BASE_DIM = 0.12;
+const MOON_FACE_PRESSURE_DREAD = 1;
 const MOON_FACE_ENERGY_DIM = 0.48;
 const MOON_FACE_CAMERA_LOWER = 0.2;
 const MOON_ITEM_AIM_DISTANCE = 60;
@@ -54,7 +57,7 @@ interface MoonPhysicalResponseActor {
 
 interface MutableMoonFacePresentation {
   reveal: number;
-  grin: number;
+  dread: number;
   starScale: number;
   dim: number;
   scale: number;
@@ -65,13 +68,13 @@ interface ActiveMoonAnimation {
   elapsed: number;
   readonly duration: number;
   readonly fromReveal: number;
-  readonly fromGrin: number;
+  readonly fromDread: number;
   readonly fromStarScale: number;
   readonly fromDim: number;
   readonly fromMoonScale: number;
   readonly fromCameraLower: number;
   readonly targetReveal: number;
-  readonly targetGrin: number;
+  readonly targetDread: number;
   readonly targetStarScale: number;
   readonly targetDim: number;
   readonly targetMoonScale: number;
@@ -85,14 +88,14 @@ export class MoonEventPresentation {
   private activeAnimation: ActiveMoonAnimation | null = null;
   private readonly face: MutableMoonFacePresentation = {
     reveal: 0,
-    grin: 0,
+    dread: 0,
     starScale: 1,
     dim: 0,
     scale: 1,
   };
   private readonly display: MutableMoonFacePresentation = {
     reveal: 0,
-    grin: 0,
+    dread: 0,
     starScale: 1,
     dim: 0,
     scale: 1,
@@ -135,6 +138,9 @@ export class MoonEventPresentation {
         this.resetValues();
       },
       () => this.environment.sky.resetTransient(),
+      () => {
+        if (this.staged) this.applyStagedMoon();
+      },
       () => this.environment.cameraControl.restoreBasePose(),
     ]);
   }
@@ -144,19 +150,20 @@ export class MoonEventPresentation {
     if (!this.staged) this.stageMoon();
     this.cancelAnimation();
     this.resetValues();
+    this.applyStagedMoon();
     return new Promise((resolve) => {
       this.activeAnimation = {
         kind: 'reveal',
         elapsed: 0,
         duration: MOON_FACE_REVEAL_DURATION,
         fromReveal: 0,
-        fromGrin: 0,
+        fromDread: 0,
         fromStarScale: 1,
         fromDim: 0,
-        fromMoonScale: 1,
+        fromMoonScale: MOON_FACE_MOON_SCALE,
         fromCameraLower: 0,
         targetReveal: 1,
-        targetGrin: MOON_FACE_BASE_GRIN,
+        targetDread: MOON_FACE_BASE_DREAD,
         targetStarScale: MOON_FACE_STAR_SCALE,
         targetDim: MOON_FACE_BASE_DIM,
         targetMoonScale: MOON_FACE_MOON_SCALE,
@@ -186,15 +193,15 @@ export class MoonEventPresentation {
         elapsed: 0,
         duration: MOON_FACE_REACTION_DURATION,
         fromReveal: this.face.reveal,
-        fromGrin: this.face.grin,
+        fromDread: this.face.dread,
         fromStarScale: this.face.starScale,
         fromDim: this.face.dim,
         fromMoonScale: this.face.scale,
         fromCameraLower: this.cameraLower,
         targetReveal: 1,
-        targetGrin: pressureGain
-          ? Math.max(this.face.grin, MOON_FACE_PRESSURE_GRIN)
-          : this.face.grin,
+        targetDread: pressureGain
+          ? Math.max(this.face.dread, MOON_FACE_PRESSURE_DREAD)
+          : this.face.dread,
         targetStarScale: this.face.starScale,
         targetDim: energyLoss
           ? Math.max(this.face.dim, MOON_FACE_ENERGY_DIM)
@@ -261,7 +268,13 @@ export class MoonEventPresentation {
     this.staged = true;
     this.resetValues();
     this.environment.sky.resetTransient();
+    this.applyStagedMoon();
     this.environment.cameraControl.restoreBasePose();
+  }
+
+  private applyStagedMoon(): void {
+    this.face.scale = MOON_FACE_MOON_SCALE;
+    this.applyPresentation();
   }
 
   private preparePhysicalResponse(
@@ -284,37 +297,26 @@ export class MoonEventPresentation {
   }
 
   private updateReveal(progress: number): void {
-    const revealProgress = smootherStep(clamp(
-      (progress - MOON_FACE_HOLD_FRACTION) / (1 - MOON_FACE_HOLD_FRACTION),
-      0,
-      1,
-    ));
     const faceProgress = smootherStep(clamp(
-      (revealProgress - MOON_FACE_SHOCK_START)
-        / (MOON_FACE_SHOCK_END - MOON_FACE_SHOCK_START),
-      0,
-      1,
-    ));
-    const grinProgress = smootherStep(clamp(
-      (faceProgress - 0.52) / 0.48,
+      (progress - MOON_FACE_APPEAR_START)
+        / (MOON_FACE_APPEAR_END - MOON_FACE_APPEAR_START),
       0,
       1,
     ));
     this.face.reveal = faceProgress;
-    this.face.grin = MOON_FACE_BASE_GRIN * grinProgress;
+    this.face.dread = MOON_FACE_BASE_DREAD * faceProgress;
     this.face.starScale = 1
-      - (1 - MOON_FACE_STAR_SCALE) * easeInOut(revealProgress);
-    this.face.dim = MOON_FACE_BASE_DIM * easeInOut(revealProgress);
-    this.face.scale = 1
-      + (MOON_FACE_MOON_SCALE - 1) * easeInOut(revealProgress);
+      - (1 - MOON_FACE_STAR_SCALE) * faceProgress;
+    this.face.dim = MOON_FACE_BASE_DIM * faceProgress;
+    this.face.scale = MOON_FACE_MOON_SCALE;
   }
 
   private updateReaction(animation: ActiveMoonAnimation, progress: number): void {
     const eased = easeInOut(progress);
     this.face.reveal = animation.fromReveal
       + (animation.targetReveal - animation.fromReveal) * eased;
-    this.face.grin = animation.fromGrin
-      + (animation.targetGrin - animation.fromGrin) * eased;
+    this.face.dread = animation.fromDread
+      + (animation.targetDread - animation.fromDread) * eased;
     this.face.starScale = animation.fromStarScale
       + (animation.targetStarScale - animation.fromStarScale) * eased;
     this.face.dim = animation.fromDim
@@ -345,7 +347,7 @@ export class MoonEventPresentation {
     if (animation === null) return;
     this.activeAnimation = null;
     this.face.reveal = animation.targetReveal;
-    this.face.grin = animation.targetGrin;
+    this.face.dread = animation.targetDread;
     this.face.starScale = animation.targetStarScale;
     this.face.dim = animation.targetDim;
     this.face.scale = animation.targetMoonScale;
@@ -379,7 +381,7 @@ export class MoonEventPresentation {
 
   private resetValues(): void {
     this.face.reveal = 0;
-    this.face.grin = 0;
+    this.face.dread = 0;
     this.face.starScale = 1;
     this.face.dim = 0;
     this.face.scale = 1;
@@ -395,10 +397,10 @@ export class MoonEventPresentation {
       + Math.pow(twitchGate, 18) * 0.055
     );
     this.display.reveal = this.face.reveal;
-    this.display.grin = clamp(
-      this.face.grin + pulse,
+    this.display.dread = clamp(
+      this.face.dread + pulse,
       0,
-      MOON_FACE_PRESSURE_GRIN,
+      MOON_FACE_PRESSURE_DREAD,
     );
     this.display.starScale = this.face.starScale;
     this.display.dim = this.face.dim;

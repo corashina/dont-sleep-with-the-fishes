@@ -497,13 +497,13 @@ describe('SurvivalSession Carlitos events', () => {
     const session = new SurvivalSession(saved(), {
       seed: 71,
       random: sequenceRandom([0]),
-      initial: { day: 4, energy: 3 },
+      initial: { day: 4, energy: 1 },
       initialEventId: 'wreckage',
     });
     expect(session.resolveEvent({ kind: 'choice', choiceId: 'search' }))
       .toMatchObject({
         accepted: true,
-        deltas: { energy: -2, repairMaterial: 2 },
+        deltas: { energy: -1, repairMaterial: 2 },
         rewardSummary: { kind: 'resource', id: 'repairMaterial', quantity: 2 },
       });
   });
@@ -592,12 +592,12 @@ describe('SurvivalSession Carlitos events', () => {
     expect(left.snapshot().lastOutcome?.rewardSummary).toBeUndefined();
   });
 
-  it('lets Carlitos search Wreckage for three Carlitos energy', () => {
+  it('lets Carlitos search Wreckage for two Carlitos energy', () => {
     const session = new SurvivalSession(saved('carlitos'), {
       seed: 74,
       random: sequenceRandom([0]),
       initial: { day: 4, energy: 1 },
-      initialCarlitos: { hunger: 5, energy: 3 },
+      initialCarlitos: { hunger: 5, energy: 2 },
       initialEventId: 'wreckage',
     });
     expect(session.resolveEvent({ kind: 'choice', choiceId: 'delegate-carlitos' }))
@@ -609,6 +609,22 @@ describe('SurvivalSession Carlitos events', () => {
     expect(session.snapshot()).toMatchObject({ energy: 1, carlitos: { energy: 0 } });
   });
 
+  it('rejects Wreckage delegation with one Carlitos energy', () => {
+    const session = new SurvivalSession(saved('carlitos'), {
+      seed: 74,
+      initialCarlitos: { hunger: 5, energy: 1 },
+      initialEventId: 'wreckage',
+    });
+
+    expect(session.resolveEvent({ kind: 'choice', choiceId: 'delegate-carlitos' }))
+      .toMatchObject({
+        accepted: false,
+        code: 'companion-action-unavailable',
+        message: 'Carlitos needs 2 energy; he has 1.',
+      });
+    expect(session.snapshot().carlitos?.energy).toBe(1);
+  });
+
   it('rejects Drifting Cargo delegation without Carlitos energy', () => {
     const session = new SurvivalSession(saved('carlitos'), {
       seed: 7,
@@ -616,7 +632,9 @@ describe('SurvivalSession Carlitos events', () => {
       initialEventId: 'drifting-supplies',
     });
 
-    expect(session.companionEventActionAvailability('delegateCarlitos')).toEqual({
+    expect(session.companionEventActionAvailability({
+      id: 'delegateCarlitos', energyCost: 3,
+    })).toEqual({
       visible: true,
       energyCost: 3,
       availableEnergy: 0,
@@ -715,7 +733,9 @@ describe('SurvivalSession Carlitos events', () => {
       initialEventId: 'drifting-supplies',
     });
 
-    expect(session.companionEventActionAvailability('delegateCarlitos')).toEqual(expected);
+    expect(session.companionEventActionAvailability({
+      id: 'delegateCarlitos', energyCost: 3,
+    })).toEqual(expected);
   });
 });
 
@@ -925,8 +945,8 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().inventory['compass-1']).toMatchObject({ condition: 'usable' });
   });
 
-  it('turns an old chest into a mimic and lets a net bind it', () => {
-    const session = new SurvivalSession(saved('fishingNet'), {
+  it('turns an old chest into a mimic before the automatic attack', () => {
+    const session = new SurvivalSession(saved(), {
       seed: 10,
       random: sequenceRandom([0, 0]),
       initial: { day: 3 },
@@ -938,22 +958,14 @@ describe('SurvivalSession daytime actions', () => {
       pendingEventId: 'chest-attack',
       chest: { state: 'mimic', acquiredDay: 1 },
     });
-    expect(session.resolveEvent(itemResponse('fishingNet'))).toMatchObject({
+    expect(session.resolveEvent(choiceResponse('attack'))).toMatchObject({
       accepted: true,
-      deltas: {},
+      deltas: { health: -25 },
     });
-    expect(session.snapshot().chest).toEqual({ state: 'closed', acquiredDay: 3 });
+    expect(session.snapshot().chest).toEqual({ state: 'none', acquiredDay: null });
   });
 
   it('publishes stable results for Chest Attack and Midnight Tour', () => {
-    const bound = new SurvivalSession(saved('fishingNet'), {
-      seed: 9,
-      random: sequenceRandom([0]),
-      initialChest: { state: 'mimic', acquiredDay: 1 },
-      initialEventId: 'chest-attack',
-    });
-    expect(bound.resolveEvent(itemResponse('fishingNet')).eventResult?.resultId).toBe('chest-bound');
-
     const chestAttacked = new SurvivalSession(saved(), {
       seed: 10,
       random: sequenceRandom([0]),
@@ -965,6 +977,26 @@ describe('SurvivalSession daytime actions', () => {
       eventResult: { resultId: 'chest-attack' },
     });
     expect(chestAttacked.snapshot().chest.state).toBe('none');
+
+    const knifeMitigated = new SurvivalSession(saved('knife'), {
+      seed: 12,
+      random: sequenceRandom([0]),
+      initialChest: { state: 'mimic', acquiredDay: 1 },
+      initialEventId: 'chest-attack',
+    });
+    expect(knifeMitigated.resolveEvent(itemResponse('knife'))).toMatchObject({
+      deltas: { health: -10 },
+      eventResult: {
+        choiceId: 'knife',
+        resultId: 'chest-attack',
+      },
+    });
+    const mitigatedSnapshot = knifeMitigated.snapshot();
+    expect(mitigatedSnapshot.chest.state).toBe('none');
+    expect(mitigatedSnapshot.inventory['knife-1']?.condition).toBe('usable');
+    expect(formatJournalEntry(mitigatedSnapshot.journalEntries[0]!).nighttime).toContain(
+      'I used the knife. The knife reduced the bite.',
+    );
 
     const tour = new SurvivalSession(saved(), {
       seed: 11,
@@ -1780,7 +1812,7 @@ describe('SurvivalSession daytime actions', () => {
       const outcome = driftingCargoSession([roll]).resolveEvent({ kind: 'choice', choiceId: 'retrieve' });
       expect(outcome).toMatchObject({
         accepted: true,
-        deltas: { energy: -3 },
+        deltas: { energy: -2 },
         rewardSummary,
       });
     }
@@ -1797,7 +1829,7 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it('rejects insufficient-energy Drifting Cargo retrieval atomically', () => {
-    const session = driftingCargoSession([0], 2);
+    const session = driftingCargoSession([0], 1);
     const before = session.snapshot();
 
     expect(session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' })).toMatchObject({
@@ -2779,15 +2811,52 @@ describe('SurvivalSession daytime actions', () => {
     });
   });
 
-  it('selects and loses the concrete Snatcher target while preserving the Fishing Net', () => {
+  it('loses the concrete Snatcher target and 30 Health after sleeping', () => {
     const session = new SurvivalSession(saved('anchor', 'fishingNet'), {
-      seed: 18, random: sequenceRandom([0, 0]), initialEventId: 'snatcher',
+      seed: 18, random: sequenceRandom([0, 0]),
+      initial: { health: 80 },
+      initialEventId: 'snatcher',
     });
     expect(session.snapshot().pendingEventTargetId).toBe('anchor-1');
-    session.resolveEvent(itemResponse('fishingNet'));
+    const outcome = session.resolveEvent({ kind: 'endure' });
     expect(session.snapshot()).toMatchObject({ pendingEventId: null, pendingEventTargetId: null });
+    expect(outcome).toMatchObject({
+      accepted: true,
+      message: 'The tentacle steals a supply and wounds you.',
+      deltas: { health: -30 },
+    });
+    expect(session.snapshot().health).toBe(50);
     expect(session.snapshot().inventory['anchor-1']?.condition).toBe('lost');
     expect(session.snapshot().inventory['fishingNet-1']?.condition).toBe('usable');
+    expect(session.snapshot().journalEntries[0]?.nighttime).toMatchObject({
+      kind: 'event',
+      event: {
+        choiceLabel: 'Sleep',
+        outcomeMessage: 'The tentacle steals a supply and wounds you.',
+        inventoryMutations: [{ kind: 'lose', instanceIds: ['anchor-1'] }],
+      },
+    });
+  });
+
+  it.each([
+    ['knife', 'usable'],
+    ['shotgun', 'consumed'],
+    ['flareGun', 'consumed'],
+  ] as const)('lets %s prevent Snatcher theft and damage', (itemId, condition) => {
+    const session = new SurvivalSession(saved('anchor', itemId), {
+      seed: 180,
+      random: sequenceRandom([0, 0]),
+      initial: { health: 80 },
+      initialEventId: 'snatcher',
+    });
+
+    expect(session.resolveEvent(itemResponse(itemId))).toMatchObject({
+      accepted: true,
+      deltas: {},
+    });
+    expect(session.snapshot().health).toBe(80);
+    expect(session.snapshot().inventory['anchor-1']?.condition).toBe('usable');
+    expect(session.snapshot().inventory[`${itemId}-1`]?.condition).toBe(condition);
   });
 
   it('does not select a broken item as a later event target', () => {
@@ -2842,7 +2911,7 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().inventory['baitTin-1']?.condition).toBe('usable');
   });
 
-  it('protects Fishing Net when Snatcher has no canonical target', () => {
+  it('rejects Fishing Net when Snatcher has no canonical target', () => {
     const session = new SurvivalSession(saved('fishingNet'), {
       seed: 19,
       random: sequenceRandom([0, 0]),
@@ -2850,7 +2919,11 @@ describe('SurvivalSession daytime actions', () => {
     });
 
     expect(session.snapshot().pendingEventTargetId).toBeNull();
-    expect(session.resolveEvent(itemResponse('fishingNet'))).toMatchObject({ accepted: true, deltas: {} });
+    expect(session.resolveEvent(itemResponse('fishingNet'))).toMatchObject({
+      accepted: false,
+      code: 'choice-unavailable',
+      deltas: {},
+    });
     expect(session.snapshot().inventory['fishingNet-1']?.condition).toBe('usable');
   });
 
@@ -2859,7 +2932,10 @@ describe('SurvivalSession daytime actions', () => {
       seed: 20, random: sequenceRandom([0, 0]), initialEventId: 'snatcher',
     });
     const pending = session.snapshot().pendingEventTargetId;
-    expect(session.resolveEvent(itemResponse('fishingNet'))).toMatchObject({ accepted: false, code: 'item-unavailable' });
+    expect(session.resolveEvent(itemResponse('fishingNet'))).toMatchObject({
+      accepted: false,
+      code: 'choice-unavailable',
+    });
     expect(session.snapshot().pendingEventTargetId).toBe(pending);
     session.resolveEvent({ kind: 'endure' });
     expect(session.snapshot().pendingEventTargetId).toBeNull();
@@ -2929,15 +3005,15 @@ describe('SurvivalSession daytime actions', () => {
     ]);
   });
 
-  it('reports Food lost through a concrete Snatcher target in the net outcome deltas', () => {
+  it('reports Food and Health lost through a concrete Snatcher target', () => {
     const session = new SurvivalSession(saved('cannedFood', 'fishingNet'), {
       seed: 26, random: sequenceRandom([0, 0]), initialEventId: 'snatcher',
     });
     expect(session.snapshot()).toMatchObject({ food: 1, pendingEventTargetId: 'cannedFood-1' });
 
-    const outcome = session.resolveEvent(itemResponse('fishingNet'));
+    const outcome = session.resolveEvent({ kind: 'endure' });
 
-    expect(outcome.deltas).toEqual({ food: -1 });
+    expect(outcome.deltas).toEqual({ health: -30, food: -1 });
     expect(session.snapshot()).toMatchObject({ food: 0, recoveredFood: 0 });
     expect(session.snapshot().inventory['cannedFood-1']?.condition).toBe('lost');
   });

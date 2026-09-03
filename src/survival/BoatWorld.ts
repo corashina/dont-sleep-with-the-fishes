@@ -518,6 +518,7 @@ export class BoatWorld {
     camera: PerspectiveCamera,
     private readonly propModels: PropModelLibrary,
     moonTexture: Texture,
+    moonFaceTexture: Texture,
     savedItems: readonly ItemInstance[] = [],
     lifeboatAssets?: LifeboatAssets,
     shipFurniture?: ShipFurnitureLibrary,
@@ -565,6 +566,7 @@ export class BoatWorld {
         this.scene,
         this.skyState,
         moonTexture,
+        moonFaceTexture,
         {
           sun: SURVIVAL_CELESTIAL_DIRECTION,
           moon: SURVIVAL_CELESTIAL_DIRECTION,

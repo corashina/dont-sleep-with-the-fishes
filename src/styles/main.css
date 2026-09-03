@@ -839,7 +839,8 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .fishing-instruction {
   position: absolute;
   left: 50%;
-  bottom: max(164px, calc(env(safe-area-inset-bottom) + 164px));
+  top: calc(env(safe-area-inset-top) + 24px);
+  bottom: auto;
   z-index: 19;
   width: max-content;
   max-width: calc(100% - 32px);
@@ -1363,7 +1364,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   border: 1px solid #b6894f;
   background: linear-gradient(98deg, #211914f4, #4c3423f2 52%, #17110eed);
   box-shadow: 3px 4px 0 #050606bb, inset 0 1px 0 #e9c98b33;
-  clip-path: polygon(2% 6%, 98% 0, 100% 88%, 5% 100%, 0 47%);
+  clip-path: none;
   color: var(--ink-bone);
   cursor: pointer;
   font-size: .72rem;
@@ -1381,7 +1382,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   border: 3px double var(--ink-yellow);
   background: linear-gradient(98deg, #17110eed, #5a4029f4 48%, #211914f4);
   box-shadow: 1px 2px 0 #050606dd, inset 0 0 0 2px #090b0dcc;
-  clip-path: polygon(1% 10%, 96% 2%, 100% 82%, 91% 100%, 6% 96%, 0 55%);
+  clip-path: none;
   transform: translateY(2px);
   animation: event-choice-keyed-press 240ms steps(4, end) both;
 }
@@ -2214,24 +2215,16 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 }
 .dive-result__reward-entry {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 22px;
+  justify-content: center;
+  gap: 12px;
 }
 .dive-result__reward-copy {
   display: grid;
   gap: 5px;
-  min-width: 150px;
-  color: #342219;
-  text-align: left;
-}
-.dive-result.is-chest-reward .dive-result__reward-entry {
-  flex-direction: column;
-  justify-content: center;
-  gap: 12px;
-}
-.dive-result.is-chest-reward .dive-result__reward-copy {
-  min-width: 0;
   justify-items: center;
+  color: #342219;
   text-align: center;
 }
 .dive-result__reward-name {
@@ -2265,10 +2258,10 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   height: 40px;
   padding: 0 0 4px;
   place-items: center;
-  border: 2px solid #5d3d29;
+  border: 0;
   color: #472b1d;
-  background: #d4b881;
-  box-shadow: 2px 3px 0 #57372066;
+  background: transparent;
+  box-shadow: none;
   font-size: 1.75rem;
   line-height: 1;
   cursor: pointer;
@@ -2276,7 +2269,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .dive-result__close:hover,
 .dive-result__close:focus-visible {
   color: #26170f;
-  background: #ead4a5;
+  background: transparent;
 }
 @keyframes bad-sleep-cue-top {
   0% { transform: translateY(-102%); }
