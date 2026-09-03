@@ -90,7 +90,7 @@ describe('Knife survival item', () => {
     });
   });
 
-  it('uses a visible one-handed stab', () => {
+  it('uses a fixed forward FPS grip', () => {
     expect(resolveEventItemUseContext('snatcher', 'knife', 'knife')).toBe('knife-stab');
     expect(resolveEventItemUseContext('swarm-of-sharks', 'knife', 'knife'))
       .toBe('knife-stab');
@@ -98,76 +98,96 @@ describe('Knife survival item', () => {
       .toBe('knife-stab');
 
     const ready = createEventItemUseSample();
-    sampleEventItemUse('knife-stab', 'knife', 0.4, ready);
+    sampleEventItemUse('knife-stab', 'knife', 0.36, ready);
 
     expect(ready.itemVisible).toBe(true);
     expect(ready.viewX).toBeGreaterThan(0.3);
     expect(ready.viewY).toBeLessThan(-0.25);
-    expect(ready.pitch).toBeGreaterThan(0.25);
-    expect(ready.roll).toBeLessThan(-0.4);
+    expect(ready.yaw).toBeCloseTo(Math.PI / 2);
+    expect(ready.pitch).toBe(0);
+    expect(ready.roll).toBeCloseTo(0.28);
     expect(ready.targetBlend).toBe(0);
     expect(ready.aimBlend).toBe(0);
+    expect(ready.cameraYaw).toBe(0);
+    expect(ready.cameraPitch).toBe(0);
   });
 
-  it('uses the point of the knife as its aim direction', () => {
-    expect(eventItemMotionProfile('knife').forward).toEqual([1, 0, 0]);
+  it('uses the blade tip as its aim and contact point', () => {
+    const profile = eventItemMotionProfile('knife');
+
+    expect(profile.forward).toEqual([1, 0, 0]);
+    expect(profile.actionOrigin).toEqual([0.36, 0, 0]);
   });
 
-  it('finishes aiming before moving and stays aimed during retraction', () => {
+  it('runs distinct grip, aim, stab, retract, and grip-return phases', () => {
+    const grip = createEventItemUseSample();
     const pointed = createEventItemUseSample();
-    const moving = createEventItemUseSample();
+    const contact = createEventItemUseSample();
     const retracting = createEventItemUseSample();
     const returnedToGrip = createEventItemUseSample();
 
+    sampleEventItemUse('knife-stab', 'knife', 0.36, grip);
     sampleEventItemUse('knife-stab', 'knife', 0.5, pointed);
-    sampleEventItemUse('knife-stab', 'knife', 0.53, moving);
-    sampleEventItemUse('knife-stab', 'knife', 0.8, retracting);
-    sampleEventItemUse('knife-stab', 'knife', 0.94, returnedToGrip);
+    sampleEventItemUse('knife-stab', 'knife', 0.68, contact);
+    sampleEventItemUse('knife-stab', 'knife', 0.78, retracting);
+    sampleEventItemUse('knife-stab', 'knife', 0.96, returnedToGrip);
 
+    expect(grip.aimBlend).toBe(0);
+    expect(grip.targetBlend).toBe(0);
     expect(pointed.aimBlend).toBe(1);
     expect(pointed.targetBlend).toBe(0);
-    expect(moving.aimBlend).toBe(1);
-    expect(moving.targetBlend).toBeGreaterThan(0);
+    expect(pointed.viewY).toBeGreaterThan(grip.viewY + 0.25);
+    expect(contact.aimBlend).toBe(1);
+    expect(contact.targetBlend).toBe(1);
+    expect(contact.viewY).toBeCloseTo(pointed.viewY);
     expect(retracting.aimBlend).toBe(1);
     expect(retracting.targetBlend).toBeGreaterThan(0);
+    expect(retracting.viewY).toBeCloseTo(pointed.viewY);
     expect(returnedToGrip.aimBlend).toBe(0);
     expect(returnedToGrip.targetBlend).toBe(0);
+    expect(returnedToGrip.viewX).toBe(grip.viewX);
+    expect(returnedToGrip.viewY).toBe(grip.viewY);
+    expect(returnedToGrip.viewZ).toBe(grip.viewZ);
+    expect(returnedToGrip.yaw).toBe(grip.yaw);
+    expect(returnedToGrip.pitch).toBe(grip.pitch);
+    expect(returnedToGrip.roll).toBe(grip.roll);
   });
 
-  it('stabs the active target on a raised arc', () => {
+  it('stabs the active target on a direct path without camera motion', () => {
     const ready = createEventItemUseSample();
     const contact = createEventItemUseSample();
 
-    sampleEventItemUse('knife-stab', 'knife', 0.4, ready);
-    sampleEventItemUse('knife-stab', 'knife', 0.7, contact);
+    sampleEventItemUse('knife-stab', 'knife', 0.36, ready);
+    sampleEventItemUse('knife-stab', 'knife', 0.68, contact);
 
-    expect(contact.targetBlend).toBeGreaterThan(0.9);
+    expect(contact.targetBlend).toBe(1);
     expect(contact.cameraTargetBlend).toBe(0);
     expect(contact.ballisticFlight).toBe(false);
-    expect(contact.flightArc).toBeGreaterThan(0);
-    expect(contact.flightArcHeight).toBeGreaterThan(0.4);
-    expect(contact.minimumLiftY).toBeGreaterThan(0.4);
-    expect(contact.aimBlend).toBeGreaterThan(0.9);
+    expect(contact.flightArc).toBe(0);
+    expect(contact.flightArcHeight).toBe(0);
+    expect(contact.minimumLiftY).toBe(0);
+    expect(contact.aimBlend).toBe(1);
     expect(contact.viewZ).toBeGreaterThan(-0.7);
     expect(contact.itemVisible).toBe(true);
-    expect(Math.abs(contact.yaw - ready.yaw)).toBeLessThan(0.05);
-    expect(Math.abs(contact.pitch - ready.pitch)).toBeLessThan(0.05);
-    expect(Math.abs(contact.roll - ready.roll)).toBeLessThan(0.05);
+    expect(contact.cameraYaw).toBe(0);
+    expect(contact.cameraPitch).toBe(0);
+    expect(contact.yaw).toBe(ready.yaw);
+    expect(contact.pitch).toBe(ready.pitch);
+    expect(contact.roll).toBe(ready.roll);
   });
 
-  it('keeps target travel smooth and above the gunwale', () => {
+  it('keeps every new knife phase continuous', () => {
     let previousTargetBlend = 0;
     let previousAimBlend = 0;
-    for (let frame = 0; frame <= 240; frame += 1) {
+    for (let frame = 0; frame <= 300; frame += 1) {
       const sample = createEventItemUseSample();
-      sampleEventItemUse('knife-stab', 'knife', frame / 240, sample);
+      sampleEventItemUse('knife-stab', 'knife', frame / 300, sample);
 
-      expect(Math.abs(sample.targetBlend - previousTargetBlend)).toBeLessThan(0.08);
-      expect(Math.abs(sample.aimBlend - previousAimBlend)).toBeLessThan(0.08);
-      if (sample.targetBlend > 0) {
-        expect(sample.aimBlend).toBe(1);
-        expect(sample.minimumLiftY).toBeGreaterThan(0.4);
-      }
+      expect(Math.abs(sample.targetBlend - previousTargetBlend)).toBeLessThan(0.05);
+      expect(Math.abs(sample.aimBlend - previousAimBlend)).toBeLessThan(0.05);
+      if (sample.targetBlend > 0) expect(sample.aimBlend).toBe(1);
+      expect(sample.flightArc).toBe(0);
+      expect(sample.minimumLiftY).toBe(0);
       previousTargetBlend = sample.targetBlend;
       previousAimBlend = sample.aimBlend;
     }
@@ -214,7 +234,7 @@ describe('Knife survival item', () => {
   it('makes the tentacle recoil when the knife connects', () => {
     const contact = identitySnatcherSample();
 
-    expect(sampleSnatcherItemUse('knife', 0.7, contact)).toBe(true);
+    expect(sampleSnatcherItemUse('knife', 0.68, contact)).toBe(true);
     expect(contact.recoilStrength).toBeGreaterThan(0.95);
     expect(Math.abs(contact.creatureX)).toBeGreaterThan(0.1);
     expect(Math.abs(contact.creatureRoll)).toBeGreaterThan(0.1);

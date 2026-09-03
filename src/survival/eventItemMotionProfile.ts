@@ -74,6 +74,7 @@ const PROFILES: Readonly<Record<ItemId, EventItemMotionProfile>> = Object.freeze
     view: [0.34, -0.34, -0.66] as const,
     grip: [0.36, -0.7, -0.72] as const,
     forward: [1, 0, 0] as const,
+    actionOrigin: [0.36, 0, 0] as const,
   }),
   bucket: createProfile('large', 'bucket'),
   flareGun: Object.freeze({
