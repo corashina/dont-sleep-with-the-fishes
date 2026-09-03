@@ -39,12 +39,16 @@ const FLASHLIGHT_MORSE_CUE_PROGRESSES = Object.freeze([
 ]);
 const FLASHLIGHT_THREAT_CUE_PROGRESSES = Object.freeze([0.42]);
 const SHOTGUN_ACTION_CUE_PROGRESSES = Object.freeze([0.46]);
-const KNIFE_ACTION_CUE_PROGRESSES = Object.freeze([0.7]);
-const KNIFE_GUNWALE_CLEARANCE = 0.44;
-const KNIFE_TRAVEL_ARC_HEIGHT = 0.46;
-const KNIFE_READY_YAW = -0.22;
-const KNIFE_READY_PITCH = 0.38;
-const KNIFE_READY_ROLL = -0.55;
+const KNIFE_ACTION_CUE_PROGRESSES = Object.freeze([0.68]);
+const KNIFE_GRIP_YAW = Math.PI / 2;
+const KNIFE_GRIP_ROLL = 0.28;
+const KNIFE_AIM_START = 0.36;
+const KNIFE_AIM_END = 0.5;
+const KNIFE_READY_LIFT = 0.34;
+const KNIFE_STAB_START = 0.54;
+const KNIFE_CONTACT_PROGRESS = 0.68;
+const KNIFE_RETRACT_END = 0.82;
+const KNIFE_GRIP_RETURN_END = 0.96;
 const KNIFE_RETURN_HOLD_PROGRESS = 0.16;
 const NET_SLAP_ACTION_CUE_PROGRESSES = Object.freeze([0.62]);
 const FLARE_GUN_ACTION_CUE_PROGRESSES = Object.freeze([0.46, 0.54]);
@@ -149,7 +153,7 @@ const ANCHOR_DROP_EVENTS: ReadonlySet<string> = new Set([
   'tornado', 'thunderstorm', 'restless-waves',
 ]);
 const SETTLE_ROLL_EXCLUDED_CONTEXTS: ReadonlySet<EventItemUseContext> = new Set([
-  'map-read', 'compass-search', 'net-scoop', 'map-leak-patch',
+  'map-read', 'compass-search', 'net-scoop', 'map-leak-patch', 'knife-stab',
 ]);
 const EVENT_ITEM_USE_BASE_DURATIONS: Readonly<Record<EventItemUseContext, number>> = {
   base: 1.35,
@@ -827,20 +831,25 @@ function sampleKnifeStab(
   hold: number,
   progress: number,
 ): void {
-  samplePickupAndHold(output, pickup, hold);
-  const stab = pulse(progress, 0.52, 0.7, 0.84);
-  const aim = smoothstep((progress - 0.4) / 0.1)
-    * (1 - smoothstep((progress - 0.84) / 0.1));
-  const clearance = smoothstep((progress - 0.5) / 0.02)
-    * (1 - smoothstep((progress - 0.84) / 0.02));
-  output.yaw = KNIFE_READY_YAW * pickup;
-  output.pitch = KNIFE_READY_PITCH * pickup;
-  output.roll = KNIFE_READY_ROLL * pickup;
-  output.aimBlend = aim * hold;
-  output.targetBlend = 0.94 * stab;
-  output.flightArc = 4 * output.targetBlend * (1 - output.targetBlend);
-  output.flightArcHeight = KNIFE_TRAVEL_ARC_HEIGHT;
-  output.minimumLiftY = KNIFE_GUNWALE_CLEARANCE * clearance;
+  samplePickupAndHold(output, hold, hold);
+  const aimIn = smoothstep(
+    (progress - KNIFE_AIM_START) / (KNIFE_AIM_END - KNIFE_AIM_START),
+  );
+  const aimOut = 1 - smoothstep(
+    (progress - KNIFE_RETRACT_END) / (KNIFE_GRIP_RETURN_END - KNIFE_RETRACT_END),
+  );
+  const stab = pulse(
+    progress,
+    KNIFE_STAB_START,
+    KNIFE_CONTACT_PROGRESS,
+    KNIFE_RETRACT_END,
+  );
+  output.yaw = KNIFE_GRIP_YAW * hold;
+  output.pitch = 0;
+  output.roll = KNIFE_GRIP_ROLL * hold;
+  output.aimBlend = aimIn * aimOut * hold;
+  output.viewY += KNIFE_READY_LIFT * output.aimBlend;
+  output.targetBlend = stab;
   output.primaryEffect = stab;
 }
 

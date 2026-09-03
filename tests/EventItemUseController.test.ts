@@ -14,6 +14,7 @@ import type { ItemInstanceId } from '../src/game/ItemState';
 import type {
   BoatSupplyDisplay,
   BorrowedSupplyActor,
+  MutableSupplyPose,
 } from '../src/survival/BoatSupplyDisplay';
 import { EventItemEffects } from '../src/survival/EventItemEffects';
 import { EventItemUseAdapter } from '../src/survival/EventItemUseAdapter';
@@ -23,6 +24,10 @@ import {
 } from '../src/survival/EventItemUseController';
 import { eventItemUseDuration } from '../src/survival/eventItemUseChoreography';
 import type { EventOutcomePresentation } from '../src/survival/eventPresentationTypes';
+import {
+  LIFEBOAT_FLOOR_SURFACE_Y,
+  LIFEBOAT_GUNWALE_SURFACE_Y,
+} from '../src/world/Lifeboat';
 
 function request(
   instanceId: ItemInstanceId = 'flashlight-1' as ItemInstanceId,
@@ -67,6 +72,7 @@ function result(
 
 function setup() {
   const root = new Group();
+  const camera = new PerspectiveCamera();
   const actor: BorrowedSupplyActor = {
     instanceId: 'flashlight-1' as ItemInstanceId,
     root,
@@ -79,12 +85,12 @@ function setup() {
     stowEventItemUntilDay: vi.fn(),
   } as unknown as BoatSupplyDisplay;
   const adapter = new EventItemUseAdapter(
-    new PerspectiveCamera(),
+    camera,
     new EventItemEffects(),
   );
   const clear = vi.spyOn(adapter, 'clear');
   const controller = new EventItemUseController(supplies, adapter);
-  return { actor, adapter, clear, controller, supplies };
+  return { actor, adapter, camera, clear, controller, supplies };
 }
 
 describe('EventItemUseController', () => {
@@ -344,28 +350,7 @@ describe('EventItemUseController', () => {
     adapter.dispose();
   });
 
-  it('keeps knife target travel above the gunwale clearance', () => {
-    const { actor, adapter, controller } = setup();
-    const target = new Object3D();
-    target.position.set(4, -3, -4);
-    controller.play({
-      ...request(actor.instanceId, target),
-      eventId: 'snatcher',
-      choiceId: 'knife',
-      itemId: 'knife',
-      context: 'knife-stab',
-    });
-
-    controller.update(eventItemUseDuration('knife-stab') * 0.7);
-    const contactPose = (actor.applyPose as ReturnType<typeof vi.fn>)
-      .mock.calls.at(-1)![0];
-
-    expect(contactPose.y).toBeGreaterThan(0.4);
-    controller.clear('day');
-    adapter.dispose();
-  });
-
-  it('targets the vertical center of the knife target owner', () => {
+  it('keeps the knife tip at half the moving target owner height', () => {
     const { actor, adapter, controller } = setup();
     const targetOwner = new Group();
     const target = new Object3D();
@@ -374,7 +359,18 @@ describe('EventItemUseController', () => {
     const targetShape = new Mesh(geometry, material);
     targetOwner.position.set(4, -3, -4);
     targetShape.position.y = 4;
+    target.position.set(0, -2, 1.25);
     targetOwner.add(targetShape, target);
+    (actor.applyPose as ReturnType<typeof vi.fn>).mockImplementation(
+      (pose: MutableSupplyPose) => {
+        actor.root.position.set(pose.x, pose.y, pose.z);
+        actor.root.quaternion.identity();
+        actor.root.rotateY(pose.yaw);
+        actor.root.rotateX(pose.pitch);
+        actor.root.rotateZ(pose.roll);
+        actor.root.scale.set(pose.scaleX, pose.scaleY, pose.scaleZ);
+      },
+    );
 
     controller.play({
       ...request(actor.instanceId, target),
@@ -383,12 +379,83 @@ describe('EventItemUseController', () => {
       itemId: 'knife',
       context: 'knife-stab',
     });
-    controller.update(eventItemUseDuration('knife-stab') * 0.7);
-    const contactPose = (actor.applyPose as ReturnType<typeof vi.fn>)
-      .mock.calls.at(-1)![0];
+    targetOwner.rotation.set(0.2, -0.1, 0.35);
+    targetOwner.scale.set(0.8, 1.4, 0.9);
+    controller.update(eventItemUseDuration('knife-stab') * 0.68);
+    actor.root.updateWorldMatrix(true, false);
+    targetOwner.updateWorldMatrix(true, false);
+    const bladeTip = new Vector3(0.36, 0, 0).applyMatrix4(actor.root.matrixWorld);
+    const targetHalfHeight = new Vector3(0, 4, 1.25).applyMatrix4(
+      targetOwner.matrixWorld,
+    );
 
-    expect(contactPose.x).toBeCloseTo(3.78, 1);
-    expect(contactPose.y).toBeGreaterThan(0.9);
+    expect(bladeTip.distanceTo(targetHalfHeight)).toBeLessThan(0.01);
+    controller.clear('day');
+    adapter.dispose();
+    geometry.dispose();
+    material.dispose();
+  });
+
+  it('keeps the knife tip above the gunwale during a tentacle stab', () => {
+    const { actor, adapter, camera, controller } = setup();
+    const boat = new Group();
+    const targetOwner = new Group();
+    const target = new Object3D();
+    const geometry = new BoxGeometry(1, 2.5, 1);
+    const material = new MeshStandardMaterial();
+    const targetShape = new Mesh(geometry, material);
+    const targetFocus = new Vector3();
+    const bladeTip = new Vector3();
+
+    boat.position.y = 0.22;
+    actor.root.position.set(0.25, LIFEBOAT_FLOOR_SURFACE_Y, -0.55);
+    boat.add(actor.root, targetOwner);
+    targetOwner.position.set(2.05, -0.62, -0.66);
+    targetOwner.rotation.set(-0.12, -0.32, -0.2);
+    targetOwner.scale.setScalar(0.94);
+    targetShape.position.y = 1.25;
+    target.position.set(0, 0.18, 0.44);
+    targetOwner.add(targetShape, target);
+    target.getWorldPosition(targetFocus);
+    camera.position.set(0, 1.38, -1.42);
+    camera.lookAt(targetFocus);
+
+    const basePosition = actor.root.position.clone();
+    const baseQuaternion = actor.root.quaternion.clone();
+    (actor.applyPose as ReturnType<typeof vi.fn>).mockImplementation(
+      (pose: MutableSupplyPose) => {
+        actor.root.position.set(
+          basePosition.x + pose.x,
+          basePosition.y + pose.y,
+          basePosition.z + pose.z,
+        );
+        actor.root.quaternion.copy(baseQuaternion);
+        actor.root.rotateY(pose.yaw);
+        actor.root.rotateX(pose.pitch);
+        actor.root.rotateZ(pose.roll);
+        actor.root.scale.set(pose.scaleX, pose.scaleY, pose.scaleZ);
+      },
+    );
+
+    controller.play({
+      ...request(actor.instanceId, target),
+      eventId: 'snatcher',
+      choiceId: 'knife',
+      itemId: 'knife',
+      context: 'knife-stab',
+    });
+
+    let previousProgress = 0;
+    for (const progress of [0.5, 0.54, 0.58, 0.62, 0.66, 0.68, 0.74, 0.78, 0.82]) {
+      controller.update(eventItemUseDuration('knife-stab') * (progress - previousProgress));
+      previousProgress = progress;
+      actor.root.updateWorldMatrix(true, false);
+      bladeTip.set(0.36, 0, 0).applyMatrix4(actor.root.matrixWorld);
+      boat.worldToLocal(bladeTip);
+
+      expect(bladeTip.y).toBeGreaterThan(LIFEBOAT_GUNWALE_SURFACE_Y);
+    }
+
     controller.clear('day');
     adapter.dispose();
     geometry.dispose();

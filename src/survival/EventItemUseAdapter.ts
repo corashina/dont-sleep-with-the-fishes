@@ -60,6 +60,7 @@ export class EventItemUseAdapter {
   private readonly actorParentPosition = new Vector3();
   private readonly targetWorldPosition = new Vector3();
   private readonly aimTargetBounds = new Box3();
+  private readonly aimTargetCenterLocal = new Vector3();
   private readonly actorWorldPosition = new Vector3();
   private readonly actionOriginPosition = new Vector3();
   private readonly actionOriginOffset = new Vector3();
@@ -107,8 +108,9 @@ export class EventItemUseAdapter {
   private actor: BorrowedSupplyActor | null = null;
   private profile: EventItemMotionProfile | null = null;
   private aimTarget: Object3D | null = null;
+  private aimTargetOwner: Object3D | null = null;
+  private knifeAttack = false;
   private centerAimTargetHeight = false;
-  private aimTargetCenterYOffset: number | null = null;
   private cameraFacingSurface: CameraFacingSurface = 'none';
   private lockItemToHeldCamera = false;
   private alignItemToCamera = false;
@@ -140,8 +142,9 @@ export class EventItemUseAdapter {
     this.actor = actor;
     this.profile = eventItemMotionProfile(itemId);
     this.aimTarget = aimTarget;
-    this.centerAimTargetHeight = itemId === 'knife';
-    this.captureAimTargetCenterYOffset();
+    this.knifeAttack = itemId === 'knife';
+    this.centerAimTargetHeight = this.knifeAttack;
+    this.captureAimTargetCenter();
     this.cameraFacingSurface = facingSurface ?? (itemId === 'map'
       ? 'y'
       : itemId === 'compass' || itemId === 'spyglass' ? 'z' : 'none');
@@ -167,7 +170,7 @@ export class EventItemUseAdapter {
   setAimTarget(aimTarget: Object3D | null): void {
     if (this.disposed) return;
     this.aimTarget = aimTarget;
-    this.captureAimTargetCenterYOffset();
+    this.captureAimTargetCenter();
   }
 
   apply(sample: Readonly<EventItemUseSample>): void {
@@ -212,14 +215,13 @@ export class EventItemUseAdapter {
     this.pose.x = this.actorParentPosition.x;
     this.pose.y = this.actorParentPosition.y;
     this.pose.z = this.actorParentPosition.z;
-    this.pose.yaw = sample.yaw;
-    this.pose.pitch = sample.pitch;
-    this.pose.roll = sample.roll;
+    this.setPoseRotation(sample);
     this.pose.scaleX = sample.scaleX;
     this.pose.scaleY = sample.scaleY;
     this.pose.scaleZ = sample.scaleZ;
     actor.applyPose(this.pose);
     this.applyCameraAlignedRotation(sample, actor);
+    this.applyKnifeAimBeforeTravel(sample, actor, profile);
     this.applyTargetTravel(sample, actor, profile);
     this.applyCameraFacing(sample, actor);
     this.applyAim(sample, actor, profile);
@@ -240,8 +242,9 @@ export class EventItemUseAdapter {
     this.actor = null;
     this.profile = null;
     this.aimTarget = null;
+    this.aimTargetOwner = null;
+    this.knifeAttack = false;
     this.centerAimTargetHeight = false;
-    this.aimTargetCenterYOffset = null;
     this.cameraFacingSurface = 'none';
     this.lockItemToHeldCamera = false;
     this.alignItemToCamera = false;
@@ -262,31 +265,39 @@ export class EventItemUseAdapter {
     this.camera.updateProjectionMatrix();
   }
 
-  private captureAimTargetCenterYOffset(): void {
-    this.aimTargetCenterYOffset = null;
+  private captureAimTargetCenter(): void {
+    this.aimTargetOwner = null;
     const aimTarget = this.aimTarget;
     if (!this.centerAimTargetHeight || aimTarget === null) return;
 
-    aimTarget.updateWorldMatrix(true, true);
-    this.aimTargetBounds.makeEmpty().setFromObject(aimTarget, true);
-    if (this.aimTargetBounds.isEmpty() && aimTarget.parent !== null) {
-      aimTarget.parent.updateWorldMatrix(true, true);
-      this.aimTargetBounds.setFromObject(aimTarget.parent, true);
+    let owner: Object3D | null = aimTarget;
+    while (owner !== null) {
+      owner.updateWorldMatrix(true, true);
+      this.aimTargetBounds.makeEmpty().setFromObject(owner, true);
+      if (!this.aimTargetBounds.isEmpty()) break;
+      owner = owner.parent;
     }
-    if (this.aimTargetBounds.isEmpty()) return;
+    if (owner === null) return;
 
     aimTarget.getWorldPosition(this.targetWorldPosition);
-    const centerY = (this.aimTargetBounds.min.y + this.aimTargetBounds.max.y) * 0.5;
-    const offset = centerY - this.targetWorldPosition.y;
-    if (Number.isFinite(offset)) this.aimTargetCenterYOffset = offset;
+    this.targetWorldPosition.y = (
+      this.aimTargetBounds.min.y + this.aimTargetBounds.max.y
+    ) * 0.5;
+    this.aimTargetCenterLocal.copy(this.targetWorldPosition);
+    owner.worldToLocal(this.aimTargetCenterLocal);
+    this.aimTargetOwner = owner;
   }
 
   private readAimTargetWorldPosition(aimTarget: Object3D): void {
+    if (this.aimTargetOwner !== null) {
+      this.aimTargetOwner.updateWorldMatrix(true, false);
+      this.targetWorldPosition.copy(this.aimTargetCenterLocal).applyMatrix4(
+        this.aimTargetOwner.matrixWorld,
+      );
+      return;
+    }
     aimTarget.updateWorldMatrix(true, false);
     aimTarget.getWorldPosition(this.targetWorldPosition);
-    if (this.aimTargetCenterYOffset !== null) {
-      this.targetWorldPosition.y += this.aimTargetCenterYOffset;
-    }
   }
 
   private applyCameraAlignedRotation(
@@ -688,6 +699,25 @@ export class EventItemUseAdapter {
         facingBlend,
       );
     }
+  }
+
+  private applyKnifeAimBeforeTravel(
+    sample: Readonly<EventItemUseSample>,
+    actor: BorrowedSupplyActor,
+    profile: EventItemMotionProfile,
+  ): void {
+    if (!this.knifeAttack || sample.targetBlend <= 0) return;
+    this.applyAim(sample, actor, profile);
+  }
+
+  private setPoseRotation(sample: Readonly<EventItemUseSample>): void {
+    this.pose.yaw = sample.yaw;
+    this.pose.pitch = sample.pitch;
+    this.pose.roll = sample.roll;
+    if (!this.knifeAttack) return;
+    this.pose.yaw = 0;
+    this.pose.pitch = 0;
+    this.pose.roll = 0;
   }
 
   private writeActorFacing(actor: BorrowedSupplyActor): void {
