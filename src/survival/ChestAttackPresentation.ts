@@ -3,6 +3,7 @@ import type { ChestEventPose } from './ChestDisplay';
 import {
   clamp01Unchecked as clamp01,
   smoothstepUnchecked as smoothstep,
+  smootherstep,
 } from './animationMath';
 import type {
   EventChoicePresentation,
@@ -31,7 +32,11 @@ interface MutableChestEventPose {
 
 const DURATION_SCALE = 1.15;
 const REVEAL_DURATION = 2.4 * DURATION_SCALE;
-const ATTACK_CHOICE_DURATION = 1.15 * DURATION_SCALE;
+const ATTACK_TURN_DURATION = 1.8;
+const ATTACK_MOTION_DURATION = 0.75;
+const ATTACK_CHOICE_DURATION = ATTACK_TURN_DURATION + ATTACK_MOTION_DURATION;
+const ATTACK_CAMERA_YAW = Math.PI;
+const ATTACK_CAMERA_PITCH = -0.75;
 
 export class ChestAttackPresentation implements FocusedEventPresentation {
   readonly root = new Group();
@@ -184,17 +189,28 @@ export class ChestAttackPresentation implements FocusedEventPresentation {
   }
 
   private applyAttackChoice(progress: number): void {
-    const turn = smoothstep(progress / 0.54);
-    this.cameraLook.applyLookAt(this.dependencies.chestDisplay.root, turn);
+    const elapsed = progress * ATTACK_CHOICE_DURATION;
+    const turn = smootherstep(elapsed / ATTACK_TURN_DURATION);
+    this.applyCameraLook(
+      ATTACK_CAMERA_YAW * turn,
+      ATTACK_CAMERA_PITCH * turn,
+    );
     this.resetPose();
-    this.pose.rattle = Math.sin(progress * Math.PI * 10)
-      * (1 - smoothstep((progress - 0.7) / 0.2));
-    this.pose.mouthOpen = smoothstep((progress - 0.46) / 0.28);
-    this.pose.bite = smoothstep((progress - 0.74) / 0.24);
+    if (elapsed <= ATTACK_TURN_DURATION) {
+      this.dependencies.chestDisplay.applyEventPose(this.pose as ChestEventPose);
+      return;
+    }
+    this.emitAttackCue();
+    const attackProgress = clamp01(
+      (elapsed - ATTACK_TURN_DURATION) / ATTACK_MOTION_DURATION,
+    );
+    this.pose.rattle = Math.sin(attackProgress * Math.PI * 10)
+      * (1 - smoothstep((attackProgress - 0.7) / 0.2));
+    this.pose.mouthOpen = smoothstep((attackProgress - 0.46) / 0.28);
+    this.pose.bite = smoothstep((attackProgress - 0.74) / 0.24);
     this.dependencies.chestDisplay.applyEventPose(this.pose as ChestEventPose);
-    if (progress >= 0.98) {
+    if (attackProgress >= 0.98) {
       this.root.userData.bites = 1;
-      this.emitAttackCue();
     }
   }
 

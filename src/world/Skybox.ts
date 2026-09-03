@@ -67,7 +67,6 @@ const fragmentShader = `
   uniform vec3 uMoonDirection;
   uniform vec3 uTintColor;
   uniform sampler2D uMoonMap;
-  uniform sampler2D uMoonFaceMap;
   uniform float uSunVisibility;
   uniform float uMoonVisibility;
   uniform float uStarVisibility;
@@ -125,6 +124,161 @@ const fragmentShader = `
       amplitude *= 0.5;
     }
     return sum / 0.9375;
+  }
+
+  float softReliefEllipse(
+    vec2 point,
+    vec2 center,
+    vec2 radius,
+    float angle,
+    float softness
+  ) {
+    vec2 offset = point - center;
+    float angleCos = cos(angle);
+    float angleSin = sin(angle);
+    vec2 rotated = vec2(
+      offset.x * angleCos - offset.y * angleSin,
+      offset.x * angleSin + offset.y * angleCos
+    );
+    float distanceToEdge = length(rotated / radius);
+    return 1.0 - smoothstep(
+      1.0 - softness,
+      1.0 + softness,
+      distanceToEdge
+    );
+  }
+
+  float lunarFaceRelief(vec2 facePoint, float moonTextureLuma) {
+    float warpX = cloudValueNoise3D(vec3(facePoint * 9.0, 4.7)) - 0.5;
+    float warpY = cloudValueNoise3D(vec3(facePoint.yx * 11.0, 8.3)) - 0.5;
+    vec2 wornPoint = facePoint + vec2(warpX, warpY) * 0.018;
+
+    float leftEye = softReliefEllipse(
+      wornPoint,
+      vec2(-0.17, 0.105),
+      vec2(0.11, 0.052),
+      0.08,
+      0.32
+    );
+    float rightEye = softReliefEllipse(
+      wornPoint,
+      vec2(0.18, 0.09),
+      vec2(0.102, 0.048),
+      -0.12,
+      0.34
+    );
+    float eyeSocketRelief = max(leftEye, rightEye);
+    float leftPupil = softReliefEllipse(
+      wornPoint,
+      vec2(-0.16, 0.1),
+      vec2(0.025, 0.03),
+      0.02,
+      0.42
+    );
+    float rightPupil = softReliefEllipse(
+      wornPoint,
+      vec2(0.17, 0.085),
+      vec2(0.023, 0.028),
+      -0.04,
+      0.42
+    );
+    float pupilPitRelief = max(leftPupil, rightPupil);
+    float leftBrowRidge = softReliefEllipse(
+      wornPoint,
+      vec2(-0.17, 0.17),
+      vec2(0.13, 0.025),
+      0.08,
+      0.48
+    );
+    float rightBrowRidge = softReliefEllipse(
+      wornPoint,
+      vec2(0.18, 0.155),
+      vec2(0.12, 0.024),
+      -0.1,
+      0.5
+    );
+    float browRidgeRelief = max(leftBrowRidge, rightBrowRidge);
+
+    float leftCheek = softReliefEllipse(
+      wornPoint,
+      vec2(-0.19, -0.07),
+      vec2(0.16, 0.18),
+      -0.14,
+      0.48
+    );
+    float rightCheek = softReliefEllipse(
+      wornPoint,
+      vec2(0.19, -0.055),
+      vec2(0.15, 0.17),
+      0.12,
+      0.5
+    );
+    float cheekRelief = max(leftCheek, rightCheek);
+
+    float noseRidgeRelief = softReliefEllipse(
+      wornPoint,
+      vec2(-0.005, -0.015),
+      vec2(0.048, 0.205),
+      -0.035,
+      0.38
+    );
+    float noseSideHollow = softReliefEllipse(
+      wornPoint,
+      vec2(0.055, -0.045),
+      vec2(0.052, 0.16),
+      -0.08,
+      0.46
+    );
+
+    float mouthCraterRelief = softReliefEllipse(
+      wornPoint,
+      vec2(0.005, -0.255),
+      vec2(0.225, 0.16),
+      -0.025,
+      0.22
+    );
+    float mouthCore = softReliefEllipse(
+      wornPoint,
+      vec2(0.008, -0.258),
+      vec2(0.18, 0.12),
+      -0.025,
+      0.3
+    );
+    float lipRimRelief = max(mouthCraterRelief - mouthCore, 0.0);
+
+    float upperToothA = softReliefEllipse(
+      wornPoint, vec2(-0.105, -0.19), vec2(0.022, 0.027), 0.1, 0.42
+    );
+    float upperToothB = softReliefEllipse(
+      wornPoint, vec2(-0.038, -0.184), vec2(0.024, 0.031), 0.03, 0.38
+    );
+    float upperToothC = softReliefEllipse(
+      wornPoint, vec2(0.036, -0.186), vec2(0.024, 0.03), -0.04, 0.38
+    );
+    float upperToothD = softReliefEllipse(
+      wornPoint, vec2(0.105, -0.195), vec2(0.021, 0.026), -0.12, 0.44
+    );
+    float toothRidgeRelief = max(
+      max(upperToothA, upperToothB),
+      max(upperToothC, upperToothD)
+    ) * mouthCore;
+
+    float surfaceWear = mix(0.76, 1.08, cloudValueNoise3D(
+      vec3(wornPoint * 23.0, 12.6)
+    ));
+    surfaceWear *= mix(0.9, 1.08, moonTextureLuma);
+
+    return (
+      cheekRelief * 0.1
+      + noseRidgeRelief * 0.38
+      + browRidgeRelief * 0.11
+      + lipRimRelief * 0.18
+      + toothRidgeRelief * 1.04
+      - eyeSocketRelief * 0.34
+      - pupilPitRelief * 0.34
+      - noseSideHollow * 0.12
+      - mouthCraterRelief * 0.78
+    ) * surfaceWear;
   }
 
   vec2 cloudLayer(vec3 direction) {
@@ -272,35 +426,53 @@ const fragmentShader = `
       moonUv
     );
     float moonClarity = 1.0 - uHaze * 0.72;
-    float faceReveal = smoothstep(0.08, 0.28, uMoonFaceReveal);
-    vec2 faceUv = (moonUv - vec2(0.5, 0.5)) / 0.58 + vec2(0.5);
-    float faceInside = step(0.0, faceUv.x)
-      * step(faceUv.x, 1.0)
-      * step(0.0, faceUv.y)
-      * step(faceUv.y, 1.0);
-    vec4 faceSample = texture2D(uMoonFaceMap, faceUv);
-    float authoredFaceMask = faceSample.a
-      * faceInside
-      * faceReveal
-      * mix(0.82, 1.0, uMoonDread);
-    float faceLuminance = dot(faceSample.rgb, vec3(0.2126, 0.7152, 0.0722));
-    float faceContrast = pow(
-      clamp(faceLuminance * 1.45, 0.0, 1.0),
-      0.56
-    );
-    float lunarFaceShadow = authoredFaceMask
-      * mix(0.55, 0.95, 1.0 - faceContrast);
+    float faceReveal = smoothstep(0.02, 0.18, uMoonFaceReveal);
     vec3 moonBase = uMoonColor * moonSample.rgb;
-    vec3 lunarCraterDetail = moonBase * 0.12;
-    vec3 lunarFaceSurface = uMoonColor
-      * mix(0.015, 0.9, faceContrast)
-      + lunarCraterDetail;
-    vec3 moonDisc = mix(
-      moonBase,
-      lunarFaceSurface,
-      authoredFaceMask * 0.94
+    vec3 moonDisc = moonBase;
+    if (moonSample.a > 0.001 && faceReveal > 0.001) {
+    float moonTextureLuma = dot(
+      moonSample.rgb,
+      vec3(0.299, 0.587, 0.114)
     );
-    moonDisc *= 1.0 - lunarFaceShadow * 0.55;
+    vec2 facePoint = (moonUv - vec2(0.5, 0.5)) / 0.82;
+    float reliefStep = 0.007;
+    float reliefCenter = lunarFaceRelief(facePoint, moonTextureLuma);
+    float reliefLeft = lunarFaceRelief(
+      facePoint - vec2(reliefStep, 0.0),
+      moonTextureLuma
+    );
+    float reliefRight = lunarFaceRelief(
+      facePoint + vec2(reliefStep, 0.0),
+      moonTextureLuma
+    );
+    float reliefDown = lunarFaceRelief(
+      facePoint - vec2(0.0, reliefStep),
+      moonTextureLuma
+    );
+    float reliefUp = lunarFaceRelief(
+      facePoint + vec2(0.0, reliefStep),
+      moonTextureLuma
+    );
+    float reliefStrength = mix(6.8, 8.6, uMoonDread);
+    vec3 reliefNormal = normalize(vec3(
+      (reliefLeft - reliefRight) * reliefStrength,
+      (reliefDown - reliefUp) * reliefStrength,
+      1.0
+    ));
+    vec3 reliefLightDirection = normalize(vec3(-0.46, 0.62, 0.64));
+    float reliefLighting = clamp(
+      0.7 + dot(reliefNormal, reliefLightDirection) * 0.47,
+      0.22,
+      1.18
+    );
+    float recessedRelief = smoothstep(0.08, 0.58, -reliefCenter);
+    float raisedRelief = smoothstep(0.08, 0.42, reliefCenter);
+    vec3 relitMoon = moonBase * reliefLighting;
+    relitMoon *= 1.0 - recessedRelief * 0.56;
+    relitMoon += moonBase * raisedRelief * 0.14;
+    float reliefReveal = faceReveal * mix(0.84, 1.0, uMoonDread);
+    moonDisc = mix(moonBase, relitMoon, reliefReveal);
+    }
     color += moonDisc
       * moonSample.a
       * uMoonVisibility
@@ -358,7 +530,6 @@ export class Skybox {
     private readonly scene: Scene,
     initialState: SkyState,
     moonTexture: Texture,
-    moonFaceTexture: Texture,
     celestialDirections: SkyboxCelestialDirections = {
       sun: SUN_DIRECTION,
       moon: MOON_DIRECTION,
@@ -381,7 +552,6 @@ export class Skybox {
         uSunColor: { value: this.current.sunColor.clone() },
         uMoonColor: { value: this.current.moonColor.clone() },
         uMoonMap: { value: moonTexture },
-        uMoonFaceMap: { value: moonFaceTexture },
         uStarColor: { value: this.current.starColor.clone() },
         uSunDirection: {
           value: new Vector3(...celestialDirections.sun).normalize(),

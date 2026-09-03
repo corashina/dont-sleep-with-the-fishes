@@ -114,6 +114,15 @@ describe('AudioSystem', () => {
       .toHaveBeenCalledExactlyOnceWith(0.05);
   });
 
+  it('uses the Midnight Tour monster sound for Chest Attack', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.chestAttackCue('attack');
+
+    expect(backend.voices.map(({ id }) => id)).toEqual(['midnightMonsterAttack']);
+  });
+
   it('loads only shared sounds during system startup', async () => {
     const backend = new FakeAudioBackend();
     const system = await AudioSystem.loadWithBackend(backend);

@@ -323,7 +323,6 @@ export class SurvivalPhase implements GamePhase {
       context.camera,
       context.propModels,
       context.skyAssets.moonTexture,
-      context.skyAssets.moonFaceTexture,
       session.snapshot().savedItems,
       context.lifeboatAssets,
       context.shipFurniture,
@@ -865,9 +864,11 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private setBusy(busy: boolean): void {
+    const released = this.busy && !busy;
     this.busy = busy;
     this.ui.setBusy?.(busy);
-    this.syncCameraTurnControl(this.session.snapshot());
+    if (released) this.renderSnapshot(false, false);
+    else this.syncCameraTurnControl(this.session.snapshot());
     if (!busy) this.emitStableCheckpoint();
   }
 

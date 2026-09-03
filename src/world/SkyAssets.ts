@@ -7,7 +7,6 @@ import {
   TextureLoader,
 } from 'three';
 import moonTextureUrl from '../assets/sky/moon-gibbous.png';
-import moonFaceTextureUrl from '../assets/sky/moon-face-horror.png';
 
 export interface SkyTextureLoader {
   loadAsync(url: string): Promise<Texture>;
@@ -23,45 +22,35 @@ export class SkyAssetLoadError extends Error {
 export class SkyAssets {
   private disposed = false;
 
-  private constructor(
-    readonly moonTexture: Texture,
-    readonly moonFaceTexture: Texture,
-  ) {}
+  private constructor(readonly moonTexture: Texture) {}
 
   static async load(
     loader: SkyTextureLoader = new TextureLoader(),
   ): Promise<SkyAssets> {
     let moonTexture: Texture;
-    let moonFaceTexture: Texture;
     try {
-      [moonTexture, moonFaceTexture] = await Promise.all([
-        loader.loadAsync(moonTextureUrl),
-        loader.loadAsync(moonFaceTextureUrl),
-      ]);
+      moonTexture = await loader.loadAsync(moonTextureUrl);
     } catch (cause) {
-      throw new SkyAssetLoadError('Sky textures could not be loaded.', { cause });
+      throw new SkyAssetLoadError('The moon texture could not be loaded.', { cause });
     }
 
-    for (const texture of [moonTexture, moonFaceTexture]) {
-      texture.wrapS = ClampToEdgeWrapping;
-      texture.wrapT = ClampToEdgeWrapping;
-      texture.magFilter = LinearFilter;
-      texture.minFilter = LinearMipmapLinearFilter;
-      texture.generateMipmaps = true;
-      texture.colorSpace = SRGBColorSpace;
-      texture.needsUpdate = true;
-    }
-    return new SkyAssets(moonTexture, moonFaceTexture);
+    moonTexture.wrapS = ClampToEdgeWrapping;
+    moonTexture.wrapT = ClampToEdgeWrapping;
+    moonTexture.magFilter = LinearFilter;
+    moonTexture.minFilter = LinearMipmapLinearFilter;
+    moonTexture.generateMipmaps = true;
+    moonTexture.colorSpace = SRGBColorSpace;
+    moonTexture.needsUpdate = true;
+    return new SkyAssets(moonTexture);
   }
 
-  static fromTextures(moonTexture: Texture, moonFaceTexture: Texture): SkyAssets {
-    return new SkyAssets(moonTexture, moonFaceTexture);
+  static fromTexture(moonTexture: Texture): SkyAssets {
+    return new SkyAssets(moonTexture);
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.moonTexture.dispose();
-    this.moonFaceTexture.dispose();
   }
 }

@@ -230,8 +230,6 @@ export class SurvivalHudView {
   }
 
   private updateMeter(id: MeterId, value: number): void {
-    if (this.lastValues.get(`meter:${id}`) === value) return;
-    this.lastValues.set(`meter:${id}`, value);
     const definition = METERS.find((meter) => meter.id === id)!;
     const meter = this.meterElements.get(id)!;
     const displayed = definition.displayValue(value);

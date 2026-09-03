@@ -515,6 +515,34 @@ describe('SurvivalUI', () => {
     expect(meter.getAttribute('aria-valuetext')).toBeNull();
   });
 
+  it('restamps accessible meter values after a covered transition', () => {
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    const changed = snapshot({ health: 60, energy: 0 });
+    ui.render(changed, () => null);
+    const health = mount.querySelector<HTMLElement>('[data-meter="health"]')!;
+    const energy = mount.querySelector<HTMLElement>('[data-meter="energy"]')!;
+    const observer = new MutationObserver(() => undefined);
+    observer.observe(mount, {
+      attributes: true,
+      attributeFilter: ['aria-valuemax', 'aria-valuenow', 'aria-valuetext'],
+      subtree: true,
+    });
+
+    ui.render(changed, () => null);
+
+    const records = observer.takeRecords();
+    observer.disconnect();
+    expect(records.some(({ target, attributeName }) => (
+      target === health && attributeName === 'aria-valuenow'
+    ))).toBe(true);
+    expect(records.some(({ target, attributeName }) => (
+      target === energy && attributeName === 'aria-valuenow'
+    ))).toBe(true);
+    expect(health.getAttribute('aria-valuenow')).toBe('60');
+    expect(energy.getAttribute('aria-valuenow')).toBe('0');
+  });
+
   it('supports Carlitos pointer, keyboard, dismissal, focus, and action flows', () => {
     const mount = document.createElement('main');
     document.body.append(mount);

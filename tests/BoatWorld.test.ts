@@ -1057,6 +1057,57 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it('turns smoothly before the Chest Attack bite begins', async () => {
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+    const propModels = createTestPropModels();
+    const cues: EventPresentationCue[] = [];
+    const world = new BoatWorld(
+      camera,
+      propModels,
+      ...createTestSkyTextures(),
+    );
+    world.setEventCueHandler((cue) => cues.push(cue));
+    world.syncInventory(snapshot([], {
+      chest: { state: 'mimic', acquiredDay: 1 },
+    }));
+    world.stageEvent('chest-attack');
+
+    const attack = world.playEventChoice('chest-attack', {
+      choiceId: 'attack',
+      instanceId: null,
+      condition: null,
+    });
+    const turnSides: number[] = [];
+    for (let index = 1; index <= 6; index += 1) {
+      world.update(index * 0.2, 0.2);
+      const direction = camera.getWorldDirection(new Vector3());
+      if (Math.abs(direction.x) > 1e-4) turnSides.push(Math.sign(direction.x));
+    }
+
+    const chest = world.scene.getObjectByName('persistent-chest')!;
+    expect(new Set(turnSides).size).toBe(1);
+    expect(chest.userData.mouthOpen).toBe(0);
+    expect(chest.userData.bite).toBe(0);
+    expect(await remainsPending(attack)).toBe(true);
+
+    world.update(1.8, 0.6);
+    expect(chest.userData.mouthOpen).toBe(0);
+    expect(chest.userData.bite).toBe(0);
+    expect(await remainsPending(attack)).toBe(true);
+    expect(cues).toEqual([]);
+
+    world.update(1.9, 0.1);
+    expect(cues).toEqual([{ eventId: 'chest-attack', cue: 'attack' }]);
+
+    world.update(2.6, 0.7);
+    await attack;
+    expect(chest.userData.bite).toBe(1);
+    expect(cues).toEqual([{ eventId: 'chest-attack', cue: 'attack' }]);
+
+    world.dispose();
+    propModels.dispose();
+  });
+
   it('clears generic item motion before a focused trade reaction starts', async () => {
     const propModels = createTestPropModels();
     const active = focusedPresenterTestDouble('night-trader');
@@ -2998,22 +3049,33 @@ describe('BoatWorld helpers', () => {
     const disposeSilhouetteMaterial = vi.spyOn(silhouetteMaterial, 'dispose');
     expect(create).toHaveBeenCalledWith('fogMan');
     const silhouette = world.scene.getObjectByName('fog-man-silhouette')!;
+    const fogCurtain = world.scene.getObjectByName('weather-fog-man-mist')!;
+    const fogLayer = fogCurtain.children[0] as Mesh<BufferGeometry, Material>;
+    const disposeFogGeometry = vi.spyOn(fogLayer.geometry, 'dispose');
+    const disposeFogMaterial = vi.spyOn(fogLayer.material, 'dispose');
     expect(silhouette.position.z).toBe(-8);
+    expect(fogCurtain.children).toHaveLength(5);
+    expect(fogCurtain.visible).toBe(true);
 
     const reveal = world.revealEvent('man-in-the-fog');
     world.update(2.6, 2.6);
     expect(silhouette.visible).toBe(true);
+    expect(fogCurtain.visible).toBe(true);
     world.update(5.2, 2.6);
     await reveal;
     expect(silhouette.visible).toBe(true);
+    expect(fogCurtain.visible).toBe(true);
 
     world.clearEvent();
     expect(silhouette.visible).toBe(false);
+    expect(fogCurtain.visible).toBe(false);
 
     world.dispose();
     expect(disposeGeometry).toHaveBeenCalledOnce();
     expect(disposeSilhouetteMaterial).toHaveBeenCalledOnce();
     expect(disposeImportedMaterial).toHaveBeenCalledOnce();
+    expect(disposeFogGeometry).toHaveBeenCalledOnce();
+    expect(disposeFogMaterial).toHaveBeenCalledOnce();
     propModels.dispose();
   });
 
@@ -3053,7 +3115,33 @@ describe('BoatWorld helpers', () => {
     world.syncInventory(snapshot([flare]));
 
     world.stageEvent('ghosts');
-    expect(world.scene.getObjectByName('ghost-1')?.visible).toBe(false);
+    const ghostVisibility = () => Array.from({ length: 5 }, (_, index) => (
+      world.scene.getObjectByName(`ghost-${index + 1}`)?.visible
+    ));
+    expect(ghostVisibility()).toEqual([true, true, true, true, true]);
+    const ghostMist = world.scene.getObjectByName('supernatural-sea-mist') as Group;
+    const ghostMistLayer = world.scene.getObjectByName(
+      'supernatural-sea-mist-layer-1',
+    ) as Mesh<BufferGeometry, ShaderMaterial>;
+    expect(ghostMist.visible).toBe(true);
+    expect(ghostMist.scale.toArray()).toEqual([4, 5, 1.8]);
+    const ghostMistOpacity = ghostMistLayer.material.uniforms.uOpacity!.value as number;
+
+    const reveal = world.revealEvent('ghosts');
+    world.update(0, 0);
+    expect(ghostVisibility()).toEqual([true, true, true, true, true]);
+
+    world.stageEvent('eerie-melody');
+    await reveal;
+    const sirenMist = world.scene.getObjectByName('supernatural-sea-mist') as Group;
+    const sirenMistLayer = world.scene.getObjectByName(
+      'supernatural-sea-mist-layer-1',
+    ) as Mesh<BufferGeometry, ShaderMaterial>;
+    expect(sirenMist.scale.toArray()).toEqual([1, 1, 1]);
+    expect(sirenMistLayer.material.uniforms.uOpacity!.value).toBeGreaterThan(
+      ghostMistOpacity,
+    );
+    world.stageEvent('ghosts');
 
     const itemUse = world.playEventItemUse('ghosts', 'flareGun', flare.instanceId);
     expect(weatherSupport).not.toHaveBeenCalled();
@@ -3095,22 +3183,34 @@ describe('BoatWorld helpers', () => {
   });
 
   function expectMoonFaceShader(sky: Mesh<BufferGeometry, ShaderMaterial>): void {
-    expect(sky.material.fragmentShader).toContain('uMoonFaceMap');
-    expect(sky.material.fragmentShader).toContain('authoredFaceMask');
-    expect(sky.material.fragmentShader).toContain('lunarFaceShadow');
-    expect(sky.material.fragmentShader).toContain('lunarFaceSurface');
-    expect(sky.material.fragmentShader).toContain('lunarCraterDetail');
-    expect(sky.material.fragmentShader).toContain('faceContrast');
+    expect(sky.material.fragmentShader).toContain('lunarFaceRelief');
+    expect(sky.material.fragmentShader).toContain('eyeSocketRelief');
+    expect(sky.material.fragmentShader).toContain('pupilPitRelief');
+    expect(sky.material.fragmentShader).toContain('browRidgeRelief');
+    expect(sky.material.fragmentShader).toContain('noseRidgeRelief');
+    expect(sky.material.fragmentShader).toContain('mouthCraterRelief');
+    expect(sky.material.fragmentShader).toContain('toothRidgeRelief');
+    expect(sky.material.fragmentShader).toContain('reliefNormal');
+    expect(sky.material.fragmentShader).toContain('reliefLighting');
+    expect(sky.material.fragmentShader).toContain('moonTextureLuma');
     expect(sky.material.fragmentShader).toContain(
-      '(moonUv - vec2(0.5, 0.5)) / 0.58',
+      '(moonUv - vec2(0.5, 0.5)) / 0.82',
     );
-    expect(sky.material.fragmentShader).not.toContain('authoredFaceColor');
+    expect(sky.material.fragmentShader).not.toContain('uMoonFaceMap');
+    expect(sky.material.fragmentShader).not.toContain('faceSample');
+    expect(sky.material.fragmentShader).not.toContain('authoredFaceMask');
+    expect(sky.material.fragmentShader).not.toContain('tornMouth');
+    expect(sky.material.fragmentShader).not.toContain('predatoryGrin');
     expect(sky.material.fragmentShader).not.toContain('coldPupilMask');
     expect(sky.material.fragmentShader).not.toContain('distortedSocket');
     expect(sky.material.fragmentShader).not.toContain('tornMouthCavity');
     expect(sky.material.fragmentShader).toContain('uMoonDread');
     expect(sky.material.fragmentShader).not.toContain('taperedEyeHollow');
     expect(sky.material.fragmentShader).not.toContain('thinMouthShape');
+    expect(sky.material.fragmentShader).not.toContain('moonFaceShadow');
+    expect(sky.material.fragmentShader).not.toContain('angryBrowShadow');
+    expect(sky.material.fragmentShader).not.toContain('openMouthCavity');
+    expect(sky.material.fragmentShader).not.toContain('unevenTeeth');
   }
 
   async function revealMoonFace(world: BoatWorld, sky: Mesh<BufferGeometry, ShaderMaterial>): Promise<number> {
