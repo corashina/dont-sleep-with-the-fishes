@@ -21,6 +21,7 @@ import { clamp01, pulse, smoothstep } from './animationMath';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import type { EventPhysicalResponsePresentation } from './EventPhysicalResponse';
 import type { EventModelLibrary } from './EventModelLibrary';
+import { SeaMistCurtain } from './SeaMistCurtain';
 import type { ActionOutcome, ItemCondition } from './survivalTypes';
 import { StationaryEventCamera } from './StationaryEventCamera';
 import {
@@ -256,6 +257,7 @@ export class WeatherEventAnimator {
   private readonly flashlightBeamCone: Mesh;
   private readonly lightningFlash: Group;
   private readonly windPaper: Mesh;
+  private readonly fogCurtain: SeaMistCurtain | null;
   private fogManX = -FOG_MAN_SIDE_X;
   private active: ActiveWeatherAnimation | null = null;
   private selectedActorId: ItemInstanceId | null = null;
@@ -305,6 +307,9 @@ export class WeatherEventAnimator {
       ? new Group()
       : prepareFogMan(eventModels.create('fogMan'), this.figureMaterial);
     this.silhouette.name = 'fog-man-silhouette';
+    this.fogCurtain = onlyEventId === undefined || onlyEventId === 'man-in-the-fog'
+      ? new SeaMistCurtain('weather-fog-man-mist')
+      : null;
     this.flashlightBeam = createFlashlightBeam(this.beamMaterial);
     this.flashlightBeamCone = this.flashlightBeam.children[0] as Mesh;
     this.lightningFlash = createLightningFlash(this.lightningMaterial);
@@ -328,7 +333,9 @@ export class WeatherEventAnimator {
     this.windPaper.name = 'weather-windy-paper';
     this.windPaper.visible = false;
     this.windPaper.renderOrder = 3;
-    this.worldRoot.add(this.silhouette, this.lightningFlash, this.windPaper);
+    this.worldRoot.add(this.silhouette);
+    if (this.fogCurtain !== null) this.worldRoot.add(this.fogCurtain.root);
+    this.worldRoot.add(this.lightningFlash, this.windPaper);
     this.boatRoot.add(this.flashlightBeam);
     collectMeshResources(this.worldRoot, this.ownedGeometries, this.ownedMaterials);
     collectMeshResources(this.boatRoot, this.ownedGeometries, this.ownedMaterials);
@@ -346,6 +353,7 @@ export class WeatherEventAnimator {
     }
     this.rememberCameraBase();
     this.hideTransientEffects();
+    this.showStagedFog();
     this.selectedActorId = null;
   }
 
@@ -379,6 +387,7 @@ export class WeatherEventAnimator {
     this.stagedEventId = eventId;
     this.rememberCameraBase();
     this.hideTransientEffects();
+    this.showStagedFog();
     return new Promise((resolve) => {
       this.active = {
         kind: 'reveal',
@@ -403,6 +412,7 @@ export class WeatherEventAnimator {
     this.rememberCameraBase();
     this.hideTransientEffects();
     this.showStagedFogMan();
+    this.showStagedFog();
     resetItemSample(this.itemSample);
     this.selectedActorId = null;
     return new Promise((resolve) => {
@@ -435,6 +445,7 @@ export class WeatherEventAnimator {
     this.rememberCameraBase();
     this.hideTransientEffects();
     this.showStagedFogMan();
+    this.showStagedFog();
     this.pinReactionActors(eventId, actors);
     return new Promise((resolve) => {
       this.active = {
@@ -458,6 +469,7 @@ export class WeatherEventAnimator {
     this.restoreCamera();
     this.supplyDisplay.resetEventPoseForFrame();
     this.hideTransientEffects();
+    this.showStagedFog();
     if (active.kind !== 'reveal') this.showStagedFogMan();
     active.elapsed = Math.min(
       active.duration,
@@ -738,6 +750,13 @@ export class WeatherEventAnimator {
     if (this.stagedEventId === 'man-in-the-fog') this.showSilhouette(1);
   }
 
+  private showStagedFog(): void {
+    if (this.stagedEventId !== 'man-in-the-fog' || this.fogCurtain === null) return;
+    this.fogCurtain.root.visible = true;
+    this.fogCurtain.root.scale.x = this.fogManX < 0 ? 1 : -1;
+    this.fogCurtain.setOpacity(0.2);
+  }
+
   private applyWindPaper(progress: number): void {
     const value = clamp01(progress);
     this.windPaper.visible = value > 0.03 && value < 0.94;
@@ -766,6 +785,10 @@ export class WeatherEventAnimator {
     this.silhouette.position.set(this.fogManX, REVEAL_FIGURE_Y, FOG_MAN_Z);
     this.silhouette.scale.setScalar(1);
     this.figureMaterial.opacity = 0;
+    if (this.fogCurtain !== null) {
+      this.fogCurtain.root.visible = false;
+      this.fogCurtain.setOpacity(0);
+    }
     this.flashlightBeam.visible = false;
     this.flashlightBeam.rotation.set(0, 0, 0);
     this.flashlightBeamCone.scale.set(0.01, 0.01, 0.01);
@@ -787,6 +810,7 @@ export class WeatherEventAnimator {
         this.restoreCamera();
         this.hideTransientEffects();
         this.showStagedFogMan();
+        this.showStagedFog();
         active.resolve(true);
         break;
       case 'react':
@@ -808,6 +832,7 @@ export class WeatherEventAnimator {
         this.restoreCamera();
         this.hideTransientEffects();
         this.showStagedFogMan();
+        this.showStagedFog();
         active.resolve();
         break;
     }
@@ -819,6 +844,7 @@ export class WeatherEventAnimator {
     if (active !== null) this.restoreCamera();
     this.hideTransientEffects();
     this.showStagedFogMan();
+    this.showStagedFog();
     this.selectedActorId = null;
     if (active?.kind === 'item') {
       active.resolve(false);

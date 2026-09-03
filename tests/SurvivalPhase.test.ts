@@ -131,6 +131,40 @@ describe('survival checkpoints', () => {
     expect(onCheckpointChange).toHaveBeenCalledTimes(1);
   });
 
+  it('renders fresh resources and action reasons when busy presentation settles', () => {
+    let current = snapshot({
+      energy: 2,
+      chest: { state: 'closed', acquiredDay: 1 },
+    });
+    const render = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: {
+        snapshot: vi.fn(() => current),
+        availableReason: vi.fn((action) => (
+          action === 'openChest' && current.energy < 3
+            ? 'Opening the chest requires three energy.'
+            : null
+        )),
+      },
+      world: {},
+      ui: { render },
+    });
+    const internals = phase as unknown as { setBusy(value: boolean): void };
+
+    phase.start();
+    internals.setBusy(true);
+    current = snapshot({
+      energy: 3,
+      chest: { state: 'closed', acquiredDay: 1 },
+    });
+    internals.setBusy(false);
+
+    const [rendered, unavailable] = render.mock.calls.at(-1)!;
+    expect(rendered).toMatchObject({ energy: 3 });
+    expect(unavailable('openChest')).toBeNull();
+    expect(render).toHaveBeenCalledTimes(2);
+  });
+
   it('clears the checkpoint for a terminal snapshot', () => {
     const onCheckpointChange = vi.fn();
     const phase = SurvivalPhase.forTest({
@@ -978,7 +1012,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.steps.resultHold.isSettled()).toBe(false);
     rig.steps.resultHold.resolve();
     await flushPromises();
-    expect(rig.calls.slice(-2)).toEqual(['unlock', 'focus']);
+    expect(rig.calls.slice(-3)).toEqual(['unlock', 'renderCovered', 'focus']);
     rig.phase.dispose();
   });
 
@@ -5935,6 +5969,7 @@ describe('SurvivalPhase orchestration', () => {
 
   it('runs Chest Attack automatically without showing a choice', async () => {
     const calls: string[] = [];
+    const attackAnimation = deferred();
     let current = snapshot({
       state: 'nightEvent',
       pendingEventId: 'chest-attack',
@@ -5967,11 +6002,12 @@ describe('SurvivalPhase orchestration', () => {
       });
       return accepted({ code: 'dawn', cue: 'dawn', deltas: {} });
     });
-    const playEventChoice = vi.fn(async (
+    const playEventChoice = vi.fn((
       _eventId: string,
       choice: string | EventChoicePresentation,
     ) => {
       calls.push(`choice:${typeof choice === 'string' ? choice : choice.choiceId}`);
+      return attackAnimation.promise;
     });
     const setSleepCoverProfile = vi.fn(async (profile: string) => {
       calls.push(`profile:${profile}`);
@@ -6012,6 +6048,13 @@ describe('SurvivalPhase orchestration', () => {
     });
 
     phase.start();
+    for (let index = 0; index < 4; index += 1) await flushPromises();
+
+    expect(playEventChoice).toHaveBeenCalledOnce();
+    expect(resolveEvent).not.toHaveBeenCalled();
+    expect(setSleepCoverProfile).not.toHaveBeenCalled();
+
+    attackAnimation.resolve();
     for (let index = 0; index < 8; index += 1) await flushPromises();
 
     expect(setEventSelection).not.toHaveBeenCalled();

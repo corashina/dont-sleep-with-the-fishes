@@ -371,7 +371,6 @@ describe('launchGame', () => {
           context.camera,
           context.propModels,
           context.skyAssets.moonTexture,
-          context.skyAssets.moonFaceTexture,
           session.snapshot().savedItems,
           context.lifeboatAssets,
           context.shipFurniture,

@@ -5,14 +5,10 @@ export function createTestMoonTexture(): Texture {
   return new Texture();
 }
 
-export function createTestMoonFaceTexture(): Texture {
-  return new Texture();
-}
-
-export function createTestSkyTextures(): readonly [Texture, Texture] {
-  return [createTestMoonTexture(), createTestMoonFaceTexture()];
+export function createTestSkyTextures(): readonly [Texture] {
+  return [createTestMoonTexture()];
 }
 
 export function createTestSkyAssets(): SkyAssets {
-  return SkyAssets.fromTextures(...createTestSkyTextures());
+  return SkyAssets.fromTexture(...createTestSkyTextures());
 }
