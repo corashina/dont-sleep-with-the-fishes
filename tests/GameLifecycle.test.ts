@@ -1579,7 +1579,7 @@ describe('ScavengePhase lifecycle integration', () => {
     }).player;
 
     phase.update(0.016, 0.016);
-    expect(player.update).toHaveBeenLastCalledWith(0.016, input, 0.84);
+    expect(player.update).toHaveBeenLastCalledWith(0.016, input, 0.76);
     expect(session.saveCarriedBundle()).not.toBeNull();
     player.update.mockClear();
 

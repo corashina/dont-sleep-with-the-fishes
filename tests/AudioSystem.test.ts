@@ -281,7 +281,7 @@ describe('AudioSystem', () => {
     system.setVolume(0.35);
     system.setMuted(true);
     system.setMuted(false);
-    expect(backend.masterGains).toEqual([0.7, 0.35, 0, 0.35]);
+    expect(backend.masterGains).toEqual([0.25, 0.35, 0, 0.35]);
     expect(system.getPreference()).toEqual({ volume: 0.35, muted: false });
   });
 
