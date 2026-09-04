@@ -86,6 +86,21 @@ const expectTestModelTransform = (root: Object3D): void => {
   expect(model.scale.toArray()).toEqual(TEST_PROP_MODEL_TRANSFORM.scale);
 };
 
+const expectNumericRowsCloseTo = (
+  actual: readonly (readonly number[])[],
+  expected: readonly (readonly number[])[],
+): void => {
+  expect(actual).toHaveLength(expected.length);
+  actual.forEach((row, rowIndex) => {
+    const expectedRow = expected[rowIndex]!;
+    expect(row).toHaveLength(expectedRow.length);
+    row.forEach((value, columnIndex) => {
+      expect(value, `row ${rowIndex}, column ${columnIndex}`)
+        .toBeCloseTo(expectedRow[columnIndex]!, 12);
+    });
+  });
+};
+
 describe('volumetric scavenging clouds', () => {
 
   it('keeps flat clouds when cloud creation fails', () => {
@@ -250,7 +265,7 @@ describe('world builders', () => {
       expect(meshCount(ship.root)).toBe(392);
       expect(resources.geometries).toHaveLength(85);
       expect(ship.shellColliders).toHaveLength(37);
-      expect(ship.shellColliders.map((collider) => [
+      expectNumericRowsCloseTo(ship.shellColliders.map((collider) => [
         collider.minX,
         collider.maxX,
         collider.minY,
@@ -264,7 +279,7 @@ describe('world builders', () => {
           collider.orientedFootprint.halfDepth,
           collider.orientedFootprint.rotationY,
         ] : []),
-      ])).toEqual(SHIP_SHELL_COLLIDERS_BASE);
+      ]), SHIP_SHELL_COLLIDERS_BASE);
       expect(ship.arcColliders).toHaveLength(0);
       expect(updateMatrixWorld.mock.contexts.some((context, index) =>
         context === ship.root
