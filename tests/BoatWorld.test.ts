@@ -1808,6 +1808,7 @@ describe('BoatWorld helpers', () => {
 
   it('turns toward grounded stern actors on one stable camera path', async () => {
     expect(SURVIVAL_EVENT_MODEL_SPECS.checkBackFish.url).toMatch(/\/bass\.glb$/);
+    expect(SURVIVAL_EVENT_MODEL_SPECS.checkBackFish.targetLongestDimension).toBe(0.525);
     const checkBack = SURVIVAL_EVENTS.find(({ id }) => id === 'check-the-back')!;
     expect(checkBack.choices.find(({ id }) => id === 'check')?.outcomes)
       .toEqual(expect.arrayContaining([
@@ -1835,22 +1836,22 @@ describe('BoatWorld helpers', () => {
     const cues: EventPresentationCue[] = [];
     world.setEventCueHandler((cue) => cues.push(cue));
     const expectActorVisibleAtStern = (actorName: string): void => {
+      world.scene.updateMatrixWorld(true);
       const actor = world.scene.getObjectByName(actorName)!;
       const positionTarget = world.scene.getObjectByName(
-        actorName === 'check-back:fish'
-          ? 'check-back-fish-bench-target'
-          : 'persistent-chest',
+        'check-back-fish-bench-target',
       )!;
       const subject = world.scene.getObjectByName('check-back-presentation:subject')!;
       const bounds = new Box3().setFromObject(actor, true);
       const targetPosition = positionTarget.getWorldPosition(new Vector3());
       const floorY = targetPosition.y;
       const height = bounds.max.y - bounds.min.y;
-      const screenPosition = actor.getWorldPosition(new Vector3()).project(camera);
+      const boundsCenter = bounds.getCenter(new Vector3());
+      const screenPosition = boundsCenter.clone().project(camera);
       expect(subject.getWorldPosition(new Vector3()).distanceTo(targetPosition))
         .toBeLessThan(0.001);
       expect(floorY - bounds.min.y).toBeLessThan(height * 0.25);
-      expect(bounds.getCenter(new Vector3()).y).toBeGreaterThan(floorY);
+      expect(boundsCenter.y).toBeGreaterThan(floorY);
       expect(Math.abs(screenPosition.x)).toBeLessThan(0.8);
       expect(Math.abs(screenPosition.y)).toBeLessThan(0.8);
       expect(screenPosition.z).toBeGreaterThan(-1);

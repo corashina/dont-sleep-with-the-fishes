@@ -92,12 +92,12 @@ export class CheckBackPresentation extends KeyedEventPresentation {
       this.placeSubjectAt(this.fishBenchTarget);
       this.fish.visible = true;
       this.anglerfish.visible = false;
-      this.applySettledActor();
+      this.applySettledActor(this.fish);
     } else if (this.settledKind === 'check-the-back.bad') {
-      this.placeSubjectAt(this.badPositionTarget);
+      this.placeSubjectAt(this.fishBenchTarget);
       this.fish.visible = false;
       this.anglerfish.visible = true;
-      this.applySettledActor();
+      this.applySettledActor(this.anglerfish);
     } else {
       this.cameraLook.apply(0, 0);
       this.fish.visible = false;
@@ -123,9 +123,7 @@ export class CheckBackPresentation extends KeyedEventPresentation {
       return;
     }
     if (kind !== 'check-the-back.fish' && kind !== 'check-the-back.bad') return;
-    this.placeSubjectAt(
-      kind === 'check-the-back.fish' ? this.fishBenchTarget : this.badPositionTarget,
-    );
+    this.placeSubjectAt(this.fishBenchTarget);
     const actor = kind === 'check-the-back.fish' ? this.fish : this.anglerfish;
     actor.visible = true;
     const actorProgress = smoothstep(progress);
@@ -134,7 +132,7 @@ export class CheckBackPresentation extends KeyedEventPresentation {
     this.actorRig.position.y = this.anglerfishFloorY;
     const turn = smoothstep(progress / 0.68);
     this.cameraLook.applyLookAtWithFixedYaw(
-      this.actorRig,
+      actor,
       STERN_YAW,
       turn,
       CAMERA_FORWARD_TRAVEL,
@@ -172,11 +170,11 @@ export class CheckBackPresentation extends KeyedEventPresentation {
     return null;
   }
 
-  private applySettledActor(): void {
+  private applySettledActor(actor: Object3D): void {
     this.actorRig.position.y = this.anglerfishFloorY;
     this.actorRig.rotation.z = 0;
     this.cameraLook.applyLookAtWithFixedYaw(
-      this.actorRig,
+      actor,
       STERN_YAW,
       1,
       CAMERA_FORWARD_TRAVEL,

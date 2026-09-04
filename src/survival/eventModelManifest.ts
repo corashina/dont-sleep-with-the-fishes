@@ -41,7 +41,7 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
   }),
   checkBackFish: Object.freeze({
     url: new URL('../assets/models/fishing/bass.glb', import.meta.url).href,
-    targetLongestDimension: 1.05,
+    targetLongestDimension: 0.525,
     rotation: QUARTER_TURN_Y,
     maxTriangles: 506,
   }),
