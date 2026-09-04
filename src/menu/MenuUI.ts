@@ -124,6 +124,7 @@ export class MenuUI {
     this.guideButton.addEventListener('click', this.handleGuideOpen);
     this.guideButton.addEventListener('focus', this.handleGuideFocus);
     this.guideButton.addEventListener('blur', this.handleGuideBlur);
+    this.guide.addEventListener('click', this.handleGuideBackdrop);
     this.guideCloseButton.addEventListener('click', this.handleGuideClose);
     this.guidePreviousButton.addEventListener('click', this.handleGuidePrevious);
     this.guideNextButton.addEventListener('click', this.handleGuideNext);
@@ -168,6 +169,7 @@ export class MenuUI {
     this.guideButton.removeEventListener('click', this.handleGuideOpen);
     this.guideButton.removeEventListener('focus', this.handleGuideFocus);
     this.guideButton.removeEventListener('blur', this.handleGuideBlur);
+    this.guide.removeEventListener('click', this.handleGuideBackdrop);
     this.guideCloseButton.removeEventListener('click', this.handleGuideClose);
     this.guidePreviousButton.removeEventListener('click', this.handleGuidePrevious);
     this.guideNextButton.removeEventListener('click', this.handleGuideNext);
@@ -195,6 +197,10 @@ export class MenuUI {
   private readonly handleGuideFocus = (): void => this.onGuideFocusChange(true);
 
   private readonly handleGuideBlur = (): void => this.onGuideFocusChange(false);
+
+  private readonly handleGuideBackdrop = (event: MouseEvent): void => {
+    if (event.target === this.guide) this.setGuideOpen(false);
+  };
 
   private readonly handleGuideClose = (): void => this.setGuideOpen(false);
 

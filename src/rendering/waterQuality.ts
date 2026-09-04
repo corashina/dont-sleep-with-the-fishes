@@ -7,7 +7,7 @@ import {
 
 export type WaterQuality = 'low' | 'high' | 'ultra';
 
-export const DEFAULT_WATER_QUALITY: WaterQuality = 'low';
+export const DEFAULT_WATER_QUALITY: WaterQuality = 'high';
 export const WATER_QUALITY_STORAGE_KEY =
   'dont-sleep-with-the-fishes.water-quality';
 

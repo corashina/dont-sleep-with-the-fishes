@@ -17,6 +17,7 @@ import {
   runCleanupSteps,
 } from '../../world/SceneResources';
 import type { EventModelInstance } from '../EventModelLibrary';
+import type { EventModelId } from '../eventModelManifest';
 import type {
   DedicatedEventEnvironment,
   DedicatedEventPresentation,
@@ -51,9 +52,19 @@ interface FishActor {
 const MAX_FISH = 24;
 const MIN_FISH = 18;
 const WATERLINE = 0.08;
-const BODY_SURFACE_LIFT = 0.04;
+const BODY_SURFACE_OFFSET = -0.14;
 const SURFACE_EFFECT_LIFT = 0.02;
 const SCHOOL_BODY_TINT = new Color(0xc4d9dc);
+const SCHOOL_FISH_MODEL_SEQUENCE = [
+  'schoolFish',
+  'schoolFish',
+  'cod',
+  'schoolFish',
+  'bass',
+  'schoolFish',
+  'redSnapper',
+  'schoolFish',
+] as const satisfies readonly EventModelId[];
 
 const DEFAULT_VARIANT: SchoolVariant = {
   scale: 1,
@@ -174,7 +185,10 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     const models: EventModelInstance[] = [];
     try {
       for (let index = 0; index <= MAX_FISH; index += 1) {
-        models.push(environment.eventModels.create('schoolFish'));
+        const modelId = index === MAX_FISH
+          ? 'schoolFish'
+          : SCHOOL_FISH_MODEL_SEQUENCE[index % SCHOOL_FISH_MODEL_SEQUENCE.length]!;
+        models.push(environment.eventModels.create(modelId));
       }
     } catch (error) {
       runCleanupSteps([
@@ -381,7 +395,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       this.environment.sampleWorldWaveInto(fish.wave, time, pose.x, pose.z, 1);
       fish.root.position.set(
         pose.x + fish.wave.displacementX,
-        WATERLINE + fish.wave.height + BODY_SURFACE_LIFT - variant.depth * 0.32,
+        WATERLINE + fish.wave.height + BODY_SURFACE_OFFSET - variant.depth * 0.32,
         pose.z + fish.wave.displacementZ,
       );
       fish.root.rotation.set(

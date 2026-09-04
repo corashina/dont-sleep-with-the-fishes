@@ -47,9 +47,11 @@ const KNIFE_AIM_END = 0.5;
 const KNIFE_READY_LIFT = 0.34;
 const KNIFE_STAB_START = 0.54;
 const KNIFE_CONTACT_PROGRESS = 0.68;
+const KNIFE_RETRACT_START = 0.72;
 const KNIFE_RETRACT_END = 0.82;
 const KNIFE_GRIP_RETURN_END = 0.96;
 const KNIFE_RETURN_HOLD_PROGRESS = 0.16;
+const KNIFE_GUNWALE_CLEARANCE_HEIGHT = 0.65;
 const NET_SLAP_ACTION_CUE_PROGRESSES = Object.freeze([0.62]);
 const FLARE_GUN_ACTION_CUE_PROGRESSES = Object.freeze([0.46, 0.54]);
 const FLARE_GUN_READY_YAW = -Math.PI / 2 + 0.22;
@@ -207,7 +209,9 @@ const EVENT_ITEM_CONTEXT_RESOLVERS: Partial<Record<ItemId, EventItemContextResol
   map: resolveMapContext,
   spyglass: (_eventId, choiceId) => exactChoiceContext(choiceId, 'spyglass', 'binocular-look'),
   fishingNet: resolveFishingNetContext,
-  knife: (_eventId, choiceId) => exactChoiceContext(choiceId, 'knife', 'knife-stab'),
+  knife: (eventId, choiceId) => eventId === 'check-the-back'
+    ? null
+    : exactChoiceContext(choiceId, 'knife', 'knife-stab'),
   flashlight: resolveFlashlightContext,
   shotgun: (_eventId, choiceId) => exactChoiceContext(choiceId, 'shotgun', 'shotgun-fire'),
 };
@@ -838,18 +842,19 @@ function sampleKnifeStab(
   const aimOut = 1 - smoothstep(
     (progress - KNIFE_RETRACT_END) / (KNIFE_GRIP_RETURN_END - KNIFE_RETRACT_END),
   );
-  const stab = pulse(
-    progress,
-    KNIFE_STAB_START,
-    KNIFE_CONTACT_PROGRESS,
-    KNIFE_RETRACT_END,
-  );
+  const stab = smoothstep(
+    (progress - KNIFE_STAB_START) / (KNIFE_CONTACT_PROGRESS - KNIFE_STAB_START),
+  ) * (1 - smoothstep(
+    (progress - KNIFE_RETRACT_START) / (KNIFE_RETRACT_END - KNIFE_RETRACT_START),
+  ));
   output.yaw = KNIFE_GRIP_YAW * hold;
   output.pitch = 0;
   output.roll = KNIFE_GRIP_ROLL * hold;
   output.aimBlend = aimIn * aimOut * hold;
   output.viewY += KNIFE_READY_LIFT * output.aimBlend;
   output.targetBlend = stab;
+  output.flightArc = 4 * stab * (1 - stab);
+  output.flightArcHeight = KNIFE_GUNWALE_CLEARANCE_HEIGHT;
   output.primaryEffect = stab;
 }
 

@@ -70,6 +70,9 @@ describe('EventModelLibrary', () => {
     for (const id of [
       'leakPlanks',
       'schoolFish',
+      'cod',
+      'bass',
+      'redSnapper',
       'snatcher',
       'shark',
       'deathStareBlob',

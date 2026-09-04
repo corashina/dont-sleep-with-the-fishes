@@ -58,9 +58,9 @@ describe('drifting supplies', () => {
   });
 
   it.each([
-    ['barrel', 1, 3],
-    ['lifeboat', 2, 3],
-    ['container', 3, 2],
+    ['barrel', 1, 1],
+    ['lifeboat', 2, 1],
+    ['container', 3, 1],
   ] as const)('grants the %s food tier', (kind, quantity, energyCost) => {
     const outcome = sessionFor(kind, 0).resolveEvent({
       kind: 'choice',
@@ -94,53 +94,42 @@ describe('drifting supplies', () => {
     });
   });
 
-  it.each(['barrel', 'lifeboat'] as const)(
-    'requires three player energy for the %s',
+  it.each(DRIFTING_SUPPLY_KINDS)(
+    'retrieves the %s with one player energy',
     (kind) => {
-      const session = sessionFor(kind, 0, 2);
-      const before = session.snapshot();
+      const session = sessionFor(kind, 0, 1);
 
       expect(session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' }))
-        .toMatchObject({ accepted: false, code: 'requirements-unmet' });
-      expect(session.snapshot()).toEqual(before);
+        .toMatchObject({ accepted: true });
+      expect(session.snapshot().energy).toBe(0);
     },
   );
 
-  it('retrieves the container with two player energy', () => {
-    const session = sessionFor('container', 0, 2);
+  it.each(DRIFTING_SUPPLY_KINDS)(
+    'retrieves the %s with two Carlitos energy',
+    (kind) => {
+      const session = sessionFor(kind, 0, 0, 2);
 
-    expect(session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' }))
-      .toMatchObject({ accepted: true, deltas: { energy: -2, food: 3 } });
-    expect(session.snapshot().energy).toBe(0);
-  });
+      expect(session.resolveEvent({ kind: 'choice', choiceId: 'delegate-carlitos' }))
+        .toMatchObject({ accepted: true });
+      expect(session.snapshot().carlitos?.energy).toBe(0);
+    },
+  );
 
-  it('retrieves the container with two Carlitos energy', () => {
-    const session = sessionFor('container', 0, 0, 2);
+  it.each(DRIFTING_SUPPLY_KINDS)(
+    'shows the %s cost for the player and Carlitos',
+    (kind) => {
+      const session = sessionFor(kind, 0, 1, 2);
+      const event = survivalEventById('drifting-supplies');
+      if (event === undefined) throw new Error('Missing Drifting Supplies event.');
 
-    expect(session.resolveEvent({ kind: 'choice', choiceId: 'delegate-carlitos' }))
-      .toMatchObject({ accepted: true, deltas: { food: 3 } });
-    expect(session.snapshot().carlitos?.energy).toBe(0);
-  });
-
-  it('requires three Carlitos energy for the lifeboat', () => {
-    const session = sessionFor('lifeboat', 0, 0, 2);
-
-    expect(session.resolveEvent({ kind: 'choice', choiceId: 'delegate-carlitos' }))
-      .toMatchObject({ accepted: false, code: 'companion-action-unavailable' });
-    expect(session.snapshot().carlitos?.energy).toBe(2);
-  });
-
-  it('shows the container cost for the player and Carlitos', () => {
-    const session = sessionFor('container', 0, 2, 2);
-    const event = survivalEventById('drifting-supplies');
-    if (event === undefined) throw new Error('Missing Drifting Supplies event.');
-
-    expect(focusedChoicesFor(event, session.snapshot())).toEqual([
-      expect.objectContaining({ id: 'retrieve', energyCost: 2, unavailableReason: null }),
-      expect.objectContaining({
-        id: 'delegate-carlitos', energyCost: 2, unavailableReason: null,
-      }),
-      expect.objectContaining({ id: 'sleep' }),
-    ]);
-  });
+      expect(focusedChoicesFor(event, session.snapshot())).toEqual([
+        expect.objectContaining({ id: 'retrieve', energyCost: 1, unavailableReason: null }),
+        expect.objectContaining({
+          id: 'delegate-carlitos', energyCost: 2, unavailableReason: null,
+        }),
+        expect.objectContaining({ id: 'sleep' }),
+      ]);
+    },
+  );
 });

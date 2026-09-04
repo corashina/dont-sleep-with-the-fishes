@@ -46,7 +46,11 @@ import {
   type PresentationWeatherId,
   type PresentationWeatherProfile,
 } from '../weather/presentationWeather';
-import { createLifeboat } from '../world/Lifeboat';
+import {
+  createLifeboat,
+  LIFEBOAT_DISPLAY_SHELF_SURFACE_Y,
+  LIFEBOAT_VISIBLE_STERN_BENCH_Z,
+} from '../world/Lifeboat';
 import { LifeboatAssets } from '../world/LifeboatAssets';
 import { createRepairToolbox } from '../world/RepairToolbox';
 import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
@@ -222,11 +226,6 @@ const FLOWERS_DECK_TARGET = Object.freeze({
   x: 0.72,
   y: 0.58,
   z: 1.05,
-});
-const CHECK_BACK_STERN_FLOOR = Object.freeze({
-  x: 0,
-  y: -0.16,
-  z: 2.3,
 });
 export function createEmptyEventModelLibraryForTest(): EventModelLibrary {
   return {
@@ -448,7 +447,7 @@ export class BoatWorld {
     );
   };
   private readonly flowersDeckTarget = new Object3D();
-  private readonly checkBackSternFloor = new Object3D();
+  private readonly checkBackFishBenchTarget = new Object3D();
   private activeFeaturedEventId: FeaturedEventId | null = null;
   private readonly repairTools: Object3D;
   private readonly repairToolboxAnimation: RepairToolboxAnimation;
@@ -602,13 +601,14 @@ export class BoatWorld {
         FLOWERS_DECK_TARGET.z,
       );
       this.boat.add(this.flowersDeckTarget);
-      this.checkBackSternFloor.name = 'check-back-stern-floor';
-      this.checkBackSternFloor.position.set(
-        CHECK_BACK_STERN_FLOOR.x,
-        CHECK_BACK_STERN_FLOOR.y,
-        CHECK_BACK_STERN_FLOOR.z,
+      this.checkBackFishBenchTarget.name = 'check-back-fish-bench-target';
+      this.checkBackFishBenchTarget.position.set(
+        0,
+        LIFEBOAT_DISPLAY_SHELF_SURFACE_Y,
+        LIFEBOAT_VISIBLE_STERN_BENCH_Z,
       );
-      this.boat.add(this.checkBackSternFloor);
+      this.checkBackFishBenchTarget.rotation.y = Math.PI;
+      this.boat.add(this.checkBackFishBenchTarget);
       sleepPillow = createSleepPillow(propModels.createEquipment('pillow'));
       this.sleepPillow = sleepPillow;
       this.boat.add(sleepPillow.root);
@@ -846,7 +846,8 @@ export class BoatWorld {
       featuredTargets: {
         driftingCargoStern: this.chestDisplay.root,
         flowersDeck: this.flowersDeckTarget,
-        checkBackStern: this.checkBackSternFloor,
+        checkBackChest: this.chestDisplay.root,
+        checkBackFishBench: this.checkBackFishBenchTarget,
       },
       driftingWater: {
         sampleWaveInto: this.sampleWorldWaveInto,

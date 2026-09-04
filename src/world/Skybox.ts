@@ -215,21 +215,6 @@ const fragmentShader = `
     );
     float cheekRelief = max(leftCheek, rightCheek);
 
-    float noseRidgeRelief = softReliefEllipse(
-      wornPoint,
-      vec2(-0.005, -0.015),
-      vec2(0.048, 0.205),
-      -0.035,
-      0.38
-    );
-    float noseSideHollow = softReliefEllipse(
-      wornPoint,
-      vec2(0.055, -0.045),
-      vec2(0.052, 0.16),
-      -0.08,
-      0.46
-    );
-
     float mouthCraterRelief = softReliefEllipse(
       wornPoint,
       vec2(0.005, -0.255),
@@ -270,13 +255,11 @@ const fragmentShader = `
 
     return (
       cheekRelief * 0.1
-      + noseRidgeRelief * 0.38
       + browRidgeRelief * 0.11
       + lipRimRelief * 0.18
       + toothRidgeRelief * 1.04
       - eyeSocketRelief * 0.34
       - pupilPitRelief * 0.34
-      - noseSideHollow * 0.12
       - mouthCraterRelief * 0.78
     ) * surfaceWear;
   }
@@ -453,7 +436,7 @@ const fragmentShader = `
       facePoint + vec2(0.0, reliefStep),
       moonTextureLuma
     );
-    float reliefStrength = mix(6.8, 8.6, uMoonDread);
+    float reliefStrength = mix(11.0, 15.0, uMoonDread);
     vec3 reliefNormal = normalize(vec3(
       (reliefLeft - reliefRight) * reliefStrength,
       (reliefDown - reliefUp) * reliefStrength,
@@ -461,15 +444,15 @@ const fragmentShader = `
     ));
     vec3 reliefLightDirection = normalize(vec3(-0.46, 0.62, 0.64));
     float reliefLighting = clamp(
-      0.7 + dot(reliefNormal, reliefLightDirection) * 0.47,
-      0.22,
-      1.18
+      0.5 + dot(reliefNormal, reliefLightDirection) * 0.78,
+      0.03,
+      1.5
     );
     float recessedRelief = smoothstep(0.08, 0.58, -reliefCenter);
     float raisedRelief = smoothstep(0.08, 0.42, reliefCenter);
     vec3 relitMoon = moonBase * reliefLighting;
-    relitMoon *= 1.0 - recessedRelief * 0.56;
-    relitMoon += moonBase * raisedRelief * 0.14;
+    relitMoon *= 1.0 - recessedRelief * 0.94;
+    relitMoon += moonBase * raisedRelief * 0.48;
     float reliefReveal = faceReveal * mix(0.84, 1.0, uMoonDread);
     moonDisc = mix(moonBase, relitMoon, reliefReveal);
     }

@@ -15,7 +15,10 @@ export interface EventBundleSpec {
 
 const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
   leak: { models: ['leakPlanks'], sounds: ['leak'] },
-  'school-of-fish': { models: ['schoolFish'], sounds: [] },
+  'school-of-fish': {
+    models: ['schoolFish', 'cod', 'bass', 'redSnapper'],
+    sounds: [],
+  },
   snatcher: { models: ['snatcher'], sounds: ['tentacleMovement'] },
   'death-stare': { models: ['deathStareBlob'], sounds: [] },
   'swarm-of-sharks': { models: ['shark'], sounds: [] },

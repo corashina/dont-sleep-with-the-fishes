@@ -34,8 +34,8 @@ import { SeaMistCurtain } from './SeaMistCurtain';
 import type { ActionOutcome } from './survivalTypes';
 import { StationaryEventCamera } from './StationaryEventCamera';
 import {
+  createGhostFloatPaths,
   createGhostFloatPose,
-  GHOST_FLOAT_PATHS,
   sampleGhostFloatPathInto,
   sampleSupernaturalItemUse,
   sampleSupernaturalReaction,
@@ -78,7 +78,6 @@ type ActiveSupernaturalItem = Extract<ActiveSupernaturalAnimation, { kind: 'item
 type ActiveSupernaturalReaction = Extract<ActiveSupernaturalAnimation, { kind: 'react' }>;
 
 const REACTION_DURATION = 0.84;
-const GHOST_MODEL_FORWARD_YAW_OFFSET = Math.PI / 2;
 
 function itemDuration(eventId: string, choiceId: string): number | null {
   const sceneDuration = supernaturalItemUseDuration(eventId, choiceId);
@@ -93,8 +92,9 @@ const SIREN_ROCK_Z = -14.8;
 const SIREN_WATERLINE_Y = 0;
 const SIREN_ROCK_SUBMERGENCE = 0.28;
 const SIREN_BODY_SETTLE = 1.05;
-const GHOST_FOG_OPACITY = 0.11;
-const GHOST_FOG_SCALE = [4, 5, 1.8] as const;
+const GHOST_FOG_OPACITY = 0.18;
+const GHOST_FOG_SCALE = [4.5, 5.2, 1.8] as const;
+const GHOST_FOG_X = 18;
 const FLARE_RADII = [
   1, 0.68, 0.94, 0.62, 1.08, 0.7,
   0.88, 0.6, 1.02, 0.66, 0.9, 0.64,
@@ -312,6 +312,7 @@ export class SupernaturalEventAnimator {
   });
   private readonly ghosts: readonly Group[];
   private readonly ghostFloatPose = createGhostFloatPose();
+  private ghostFloatPaths = createGhostFloatPaths(0);
   private readonly siren: Group;
   private readonly sirenRock: Group;
   private readonly sirenTableau = new Group();
@@ -420,10 +421,11 @@ export class SupernaturalEventAnimator {
     this.rememberCameraBase();
   }
 
-  stage(eventId: string): void {
+  stage(eventId: string, variantSeed = 0): void {
     if (this.disposed) return;
     this.cancelActive();
     this.stagedEventId = supernaturalRevealDuration(eventId) === null ? null : eventId;
+    if (eventId === 'ghosts') this.ghostFloatPaths = createGhostFloatPaths(variantSeed);
     this.ghostFloatTime = 0;
     this.ghostLoopVisible = eventId === 'ghosts';
     this.rememberCameraBase();
@@ -698,15 +700,15 @@ export class SupernaturalEventAnimator {
   ): void {
     sampleGhostFloatPathInto(
       this.ghostFloatPose,
-      GHOST_FLOAT_PATHS[index]!,
+      this.ghostFloatPaths[index]!,
       this.ghostFloatTime,
     );
     ghost.position.set(...this.ghostFloatPose.position);
     ghost.rotation.y = Math.atan2(
-      this.ghostFloatPose.tangent[0],
-      this.ghostFloatPose.tangent[2],
-    ) + GHOST_MODEL_FORWARD_YAW_OFFSET;
-    ghost.userData.modelForwardAxis = 'negative-x';
+      -this.ghostFloatPose.tangent[0],
+      -this.ghostFloatPose.tangent[2],
+    );
+    ghost.userData.modelForwardAxis = 'negative-z';
     ghost.userData.facingPath = true;
   }
 
@@ -746,9 +748,11 @@ export class SupernaturalEventAnimator {
     this.fogSizeEventId = eventId;
     if (eventId === 'ghosts') {
       this.fogCurtain.root.scale.set(...GHOST_FOG_SCALE);
+      this.fogCurtain.root.position.x = GHOST_FOG_X;
       return;
     }
     this.fogCurtain.root.scale.set(1, 1, 1);
+    this.fogCurtain.root.position.x = 0;
   }
 
   private restoreStage(): void {

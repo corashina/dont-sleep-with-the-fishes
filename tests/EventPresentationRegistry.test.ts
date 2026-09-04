@@ -238,7 +238,8 @@ function createDependencies() {
       featuredTargets: {
         driftingCargoStern: new Group(),
         flowersDeck: new Group(),
-        checkBackStern: new Group(),
+        checkBackChest: new Group(),
+        checkBackFishBench: new Group(),
       },
       driftingWater: {},
       moon: {},
@@ -557,7 +558,7 @@ describe('EventPresentationRegistry', () => {
     adapter.clear();
     adapter.dispose();
     expect(layer.stage).toHaveBeenCalledWith('ghosts', 17);
-    expect(supernatural.stage).toHaveBeenCalledWith('ghosts');
+    expect(supernatural.stage).toHaveBeenCalledWith('ghosts', 17);
     expect(layer.reveal).toHaveBeenCalledWith('ghosts');
     expect(supernatural.reveal).toHaveBeenCalledWith('ghosts');
     expect(supernatural.playItemUse).toHaveBeenCalledWith(

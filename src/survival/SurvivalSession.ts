@@ -958,7 +958,12 @@ export class SurvivalSession {
     if (item.condition !== 'usable') {
       return this.reject('item-unavailable', 'That item has no uses remaining.');
     }
-    return this.resolveEventChoice(choice.id, response.instanceId, choice.itemId, undefined);
+    return this.resolveEventChoice(
+      choice.id,
+      response.instanceId,
+      choice.itemId,
+      response.resultId,
+    );
   }
 
   private resolveEventChoice(

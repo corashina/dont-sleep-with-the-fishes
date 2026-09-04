@@ -72,7 +72,7 @@ describe('Game construction rollback', () => {
     )).toThrow(WebGlInitializationError);
   }, 10_000);
 
-  it('starts with low visual quality and preserves renderer setup errors during cleanup', async () => {
+  it('starts with default quality and preserves renderer setup errors during cleanup', async () => {
     const calls: string[] = [];
     const canvas = document.createElement('canvas');
     vi.spyOn(canvas, 'remove').mockImplementation(() => calls.push('canvas'));
@@ -118,9 +118,9 @@ describe('Game construction rollback', () => {
     expect((thrown as Error).message).toContain('getMaxAnisotropy');
     expect(constructionMocks.createSceneRenderer).toHaveBeenCalledWith(
       renderer,
+      'medium',
       'low',
-      'low',
-      'low',
+      'high',
     );
     expect(calls).toEqual([
       'menuModels',

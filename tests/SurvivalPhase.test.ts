@@ -1233,7 +1233,7 @@ describe('SurvivalPhase orchestration', () => {
     const realSession = new SurvivalSession([], {
       seed: 28,
       random: sequenceRandom([0]),
-      initial: { day: 3, energy: 2 },
+      initial: { day: 3, energy: 0 },
       initialEventId: 'drifting-supplies',
     });
     const before = realSession.snapshot();
