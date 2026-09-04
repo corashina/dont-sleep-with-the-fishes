@@ -204,9 +204,9 @@ describe('PlayerController', () => {
   });
 
   it.each([
-    [1, 3.8],
-    [0.92, 3.8 * 0.92],
-    [0.84, 3.8 * 0.84],
+    [1, SCAVENGE_WALK_SPEED],
+    [0.88, SCAVENGE_WALK_SPEED * 0.88],
+    [0.76, SCAVENGE_WALK_SPEED * 0.76],
   ])('applies planar speed multiplier %s', (multiplier, expectedDistance) => {
     const input = new TestInput();
     const controller = new PlayerController(
@@ -240,7 +240,7 @@ describe('PlayerController', () => {
     carriedInput.queueJump();
 
     fullSpeed.update(0.1, fullSpeedInput.asControllerInput(), 1);
-    carried.update(0.1, carriedInput.asControllerInput(), 0.84);
+    carried.update(0.1, carriedInput.asControllerInput(), 0.76);
 
     expect(carried.localPosition.y).toBeCloseTo(fullSpeed.localPosition.y);
   });
@@ -435,13 +435,12 @@ describe('PlayerController', () => {
   });
 
   it.each([
-    ['right to left', 0.3, 1, -0.27],
-    ['left to right', -0.3, -1, 0.27],
+    ['right to left', 0.3, 1],
+    ['left to right', -0.3, -1],
   ])('does not capture the ladder when crossing its entry sideways %s', (
     _direction,
     startX,
     movementX,
-    expectedX,
   ) => {
     const input = new TestInput();
     const zone = testLadderZone();
@@ -460,7 +459,9 @@ describe('PlayerController', () => {
 
     controller.update(0.15, input.asControllerInput());
 
-    expect(controller.localPosition.x).toBeCloseTo(expectedX);
+    expect(controller.localPosition.x).toBeCloseTo(
+      startX - movementX * SCAVENGE_WALK_SPEED * 0.15,
+    );
     expect(controller.localPosition.y).toBeCloseTo(zone.bottomEyeY);
     expect(controller.localPosition.z).toBeCloseTo(3.7);
   });

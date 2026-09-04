@@ -1,7 +1,7 @@
 const STORAGE_KEY = 'dont-sleep-with-the-fishes.audio';
 
 export const DEFAULT_AUDIO_CONTROL_STATE = Object.freeze({
-  volume: 0.7,
+  volume: 0.25,
   muted: false,
 });
 
