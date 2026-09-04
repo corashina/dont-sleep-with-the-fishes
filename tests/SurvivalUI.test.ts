@@ -222,7 +222,7 @@ describe('item animation lab caption', () => {
     const ui = createUI(mount);
     const onAction = vi.fn();
     ui.onAction = onAction;
-    ui.render(snapshot({ energy: 3 }), () => null);
+    ui.render(snapshot({ energy: 0 }), () => null);
     ui.setAnchors([{
       id: 'persistent-chest',
       label: 'OPEN',
@@ -246,6 +246,8 @@ describe('item animation lab caption', () => {
     )!;
     expect(chest.disabled).toBe(false);
     expect(chest.getAttribute('aria-disabled')).toBe('false');
+    expect(chest.getAttribute('aria-label')).toBe('OPEN');
+    expect(chest.getAttribute('aria-description')).toContain('FREE');
 
     chest.click();
 

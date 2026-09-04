@@ -1,5 +1,4 @@
 import { ITEM_DEFINITIONS, type ItemId } from '../game/ItemState';
-import { CHEST_OPEN_ENERGY } from './chest';
 import { isDriftingItemEventId } from './eventCatalog';
 import {
   radioRescueLeadForSignal,
@@ -159,10 +158,7 @@ const useEnergyBarUnavailable: DayActionRule = (state) => {
 };
 
 const openChestUnavailable: DayActionRule = (state) => {
-  if (state.chestState !== 'closed') return 'There is no closed chest to open.';
-  return state.energy < CHEST_OPEN_ENERGY
-    ? 'Opening the chest requires three energy.'
-    : null;
+  return state.chestState === 'closed' ? null : 'There is no closed chest to open.';
 };
 
 const ACTION_UNAVAILABLE_RULES: Readonly<Record<DayActionId, DayActionRule>> = {

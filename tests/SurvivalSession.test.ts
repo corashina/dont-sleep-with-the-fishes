@@ -938,7 +938,7 @@ describe('SurvivalSession daytime actions', () => {
       accepted: true,
       code: 'chest-opened',
       cue: 'none',
-      deltas: { energy: -3 },
+      deltas: {},
       rewardSummary: { kind: 'item', id: 'compass', quantity: 1 },
     });
     expect(session.snapshot().chest).toEqual({ state: 'none', acquiredDay: null });
@@ -1797,6 +1797,27 @@ describe('SurvivalSession daytime actions', () => {
       bait: 0,
       repairMaterial: 0,
       chest: { state: 'closed', acquiredDay: 3 },
+    });
+  });
+
+  it('opens a retrieved Drifting Chest without more energy', () => {
+    const session = new SurvivalSession(saved(), {
+      seed: 1,
+      random: sequenceRandom([0, 0]),
+      initial: { day: 3, energy: 3 },
+      initialEventId: 'drifting-chest',
+    });
+
+    expect(session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' })).toMatchObject({
+      accepted: true,
+      deltas: { energy: -3 },
+    });
+    expect(session.snapshot().energy).toBe(0);
+    expect(session.perform('openChest')).toMatchObject({
+      accepted: true,
+      code: 'chest-opened',
+      deltas: {},
+      rewardSummary: { kind: 'item', id: 'compass', quantity: 1 },
     });
   });
 

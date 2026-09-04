@@ -145,6 +145,7 @@ describe('BoatInteractionProjector', () => {
     });
     expect(anchors.find(({ id }) => id === 'persistent-chest')).toMatchObject({
       label: 'OPEN',
+      description: 'A closed chest. Opening it is free.',
       action: 'openChest',
       hitArea: { width: 54, height: 54 },
     });

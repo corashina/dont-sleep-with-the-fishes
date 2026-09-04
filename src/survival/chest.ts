@@ -1,7 +1,6 @@
 import { ITEM_DEFINITIONS, ITEM_IDS, type ItemId } from '../game/ItemState';
 import type { RandomSource } from './survivalTypes';
 
-export const CHEST_OPEN_ENERGY = 3;
 export const CHEST_MIMIC_MIN_NIGHTS = 2;
 export const CHEST_MIMIC_CHANCE = 0.35;
 

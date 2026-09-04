@@ -245,7 +245,7 @@ export class BoatInteractionProjector {
     this.chestAnchor = {
       id: 'persistent-chest',
       label: 'OPEN',
-      description: 'A closed chest. Opening it costs three energy.',
+      description: 'A closed chest. Opening it is free.',
       itemType: null,
       toolId: 'chest',
       action: null,
