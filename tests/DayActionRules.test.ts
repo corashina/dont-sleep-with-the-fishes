@@ -74,7 +74,6 @@ describe('day action availability rules', () => {
     ['useEnergyBar', { inventory: withoutItem('energyBar-1') }, undefined, 'No energy bar remains.'],
     ['useEnergyBar', { energy: 3 }, undefined, 'Your energy is already full.'],
     ['openChest', { chestState: 'none' }, undefined, 'There is no closed chest to open.'],
-    ['openChest', { energy: 2 }, undefined, 'Opening the chest requires three energy.'],
     ['petCarlitos', { carlitos: null }, undefined, 'Carlitos is not aboard.'],
     ['petCarlitos', { carlitos: Object.freeze({ ...baseRuleState.carlitos!, alive: false }) }, undefined, 'Carlitos cannot respond.'],
     ['petCarlitos', { carlitos: Object.freeze({ ...baseRuleState.carlitos!, pettedToday: true }) }, undefined, 'Carlitos has already been petted today.'],
@@ -124,7 +123,7 @@ describe('day action availability rules', () => {
       ['treat', undefined],
       ['answerRadio', undefined],
       ['useEnergyBar', undefined, { energy: 1 }],
-      ['openChest', undefined],
+      ['openChest', undefined, { energy: 0 }],
       ['petCarlitos', undefined, {
         carlitos: Object.freeze({ ...baseRuleState.carlitos!, unhappiness: 3 }),
       }],

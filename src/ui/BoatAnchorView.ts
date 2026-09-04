@@ -53,7 +53,7 @@ const BOAT_TOOL_COPY: Readonly<Record<BoatToolId, BoatToolCopy>> = Object.freeze
   },
   chest: {
     label: 'CHEST',
-    description: 'Open the recovered chest. The task costs three energy.',
+    description: 'Open the recovered chest for free.',
   },
 });
 
@@ -73,7 +73,7 @@ const ACTIONS: readonly ActionDefinition[] = [
   { id: 'repairItem', label: 'REPAIR ITEM', cost: '1 DUCT TAPE', energyCost: 0, effect: 'Restore one broken item', risk: 'safe' },
   { id: 'answerRadio', label: 'ANSWER RADIO', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.radio.energy, effect: 'IMPROVE RESCUE LEAD', risk: 'safe' },
   { id: 'useEnergyBar', label: 'EAT ENERGY BAR', cost: '1 ENERGY BAR', energyCost: 0, effect: 'ENERGY TO 3', risk: 'safe' },
-  { id: 'openChest', label: 'OPEN CHEST', cost: '3 ENERGY', energyCost: 3, effect: 'RECOVER A SUPPLY', risk: 'uncertain' },
+  { id: 'openChest', label: 'OPEN CHEST', cost: 'FREE', energyCost: 0, effect: 'RECOVER A SUPPLY', risk: 'uncertain' },
   { id: 'petCarlitos', label: 'PET', cost: 'FREE', energyCost: 0, effect: 'EASE LONELINESS', risk: 'safe' },
   { id: 'feedCarlitos', label: 'FEED', cost: '1 FOOD', energyCost: 0, effect: 'RESTORE HUNGER', risk: 'safe' },
   { id: 'treatCarlitos', label: 'TREAT', cost: '1 MEDKIT', energyCost: 0, effect: 'CURE SICKNESS', risk: 'safe' },

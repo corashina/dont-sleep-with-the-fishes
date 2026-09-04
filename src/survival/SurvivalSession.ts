@@ -51,7 +51,6 @@ import {
 } from './SurvivalCheckpoint';
 import { Mulberry32Random, mulberry32, restoreMulberry32 } from './random';
 import {
-  CHEST_OPEN_ENERGY,
   drawChestReward,
   shouldBecomeMimic,
 } from './chest';
@@ -181,7 +180,6 @@ const DAY_ACTION_REJECTION_CODES: Readonly<Record<string, string>> = Object.free
   'No energy bar remains.': 'no-energy-bar',
   'Your energy is already full.': 'energy-full',
   'There is no closed chest to open.': 'no-closed-chest',
-  'Opening the chest requires three energy.': 'not-enough-energy',
   'Carlitos is not aboard.': 'no-carlitos',
   'Carlitos cannot respond.': 'carlitos-dead',
   'Carlitos has already been petted today.': 'already-petted',
@@ -1515,7 +1513,6 @@ export class SurvivalSession {
 
     if (reward.kind === 'resource') {
       const deltas: ResourceDelta = {
-        energy: -CHEST_OPEN_ENERGY,
         [reward.resource]: reward.quantity,
       };
       return this.commit(
@@ -1532,7 +1529,7 @@ export class SurvivalSession {
       return this.commit(
         'chest-opened',
         'The item cannot fit, so you recover two food.',
-        { energy: -CHEST_OPEN_ENERGY, food: 2 },
+        { food: 2 },
         'none',
         { kind: 'resource', id: 'food', quantity: 2 },
       );
@@ -1540,7 +1537,7 @@ export class SurvivalSession {
     return this.commit(
       'chest-opened',
       `The chest holds ${ITEM_DEFINITIONS[reward.itemId].label.toLowerCase()}.`,
-      { energy: -CHEST_OPEN_ENERGY },
+      {},
       'none',
       { kind: 'item', id: reward.itemId, quantity: 1 },
     );

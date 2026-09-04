@@ -141,8 +141,8 @@ describe('survival checkpoints', () => {
       session: {
         snapshot: vi.fn(() => current),
         availableReason: vi.fn((action) => (
-          action === 'openChest' && current.energy < 3
-            ? 'Opening the chest requires three energy.'
+          action === 'dive' && current.energy < 3
+            ? 'Diving requires three energy.'
             : null
         )),
       },
@@ -161,7 +161,7 @@ describe('survival checkpoints', () => {
 
     const [rendered, unavailable] = render.mock.calls.at(-1)!;
     expect(rendered).toMatchObject({ energy: 3 });
-    expect(unavailable('openChest')).toBeNull();
+    expect(unavailable('dive')).toBeNull();
     expect(render).toHaveBeenCalledTimes(2);
   });
 
