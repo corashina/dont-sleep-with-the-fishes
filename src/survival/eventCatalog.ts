@@ -1,5 +1,8 @@
 import type { ItemId } from '../game/ItemState';
-import { driftingSupplyEnergyCost } from './driftingSupplies';
+import {
+  DRIFTING_SUPPLY_CARLITOS_ENERGY_COST,
+  DRIFTING_SUPPLY_PLAYER_ENERGY_COST,
+} from './driftingSupplies';
 import { survivalEventFallbackById } from './eventSelection';
 import type {
   EventChoiceDefinition,
@@ -490,41 +493,50 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
       ...contextualChoice('retrieve', 'Retrieve Supplies',
         featuredResultOutcome('drifting-supplies-barrel-food', 'drifting-supplies.retrieve', 50,
           'You recover one food from the barrel.',
-          effects([subtract('energy', 3), add('food', 1)])),
+          effects([subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST), add('food', 1)])),
         featuredResultOutcome('drifting-supplies-barrel-bait', 'drifting-supplies.retrieve', 30,
           'You recover one bait from the barrel.',
-          effects([subtract('energy', 3), add('bait', 1)])),
+          effects([subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST), add('bait', 1)])),
         featuredResultOutcome('drifting-supplies-barrel-repair', 'drifting-supplies.retrieve', 20,
           'You recover one roll of duct tape from the barrel.',
-          effects([subtract('energy', 3), add('repairMaterial', 1)])),
+          effects([
+            subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST),
+            add('repairMaterial', 1),
+          ])),
         featuredResultOutcome('drifting-supplies-lifeboat-food', 'drifting-supplies.retrieve', 50,
           'You recover two food from the cooler.',
-          effects([subtract('energy', 3), add('food', 2)])),
+          effects([subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST), add('food', 2)])),
         featuredResultOutcome('drifting-supplies-lifeboat-bait', 'drifting-supplies.retrieve', 30,
           'You recover two bait from the cooler.',
-          effects([subtract('energy', 3), add('bait', 2)])),
+          effects([subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST), add('bait', 2)])),
         featuredResultOutcome('drifting-supplies-lifeboat-repair', 'drifting-supplies.retrieve', 20,
           'You recover two rolls of duct tape from the cooler.',
-          effects([subtract('energy', 3), add('repairMaterial', 2)])),
+          effects([
+            subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST),
+            add('repairMaterial', 2),
+          ])),
         featuredResultOutcome('drifting-supplies-container-food', 'drifting-supplies.retrieve', 45,
           'You recover three food from the shipping container.',
-          effects([subtract('energy', driftingSupplyEnergyCost('container')), add('food', 3)])),
+          effects([subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST), add('food', 3)])),
         featuredResultOutcome('drifting-supplies-container-bait', 'drifting-supplies.retrieve', 25,
           'You recover three bait from the shipping container.',
-          effects([subtract('energy', driftingSupplyEnergyCost('container')), add('bait', 3)])),
+          effects([subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST), add('bait', 3)])),
         featuredResultOutcome('drifting-supplies-container-repair', 'drifting-supplies.retrieve', 20,
           'You recover three rolls of duct tape from the shipping container.',
           effects([
-            subtract('energy', driftingSupplyEnergyCost('container')),
+            subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST),
             add('repairMaterial', 3),
           ])),
         featuredResultOutcome('drifting-supplies-container-energy-bar', 'drifting-supplies.retrieve', 10,
           'You recover an energy bar from the shipping container.',
           effects([
-            subtract('energy', driftingSupplyEnergyCost('container')),
+            subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST),
           ], [gain('energyBar')])),
       ),
-      requirements: [{ resource: 'energy', minimum: 3 }],
+      requirements: [{
+        resource: 'energy',
+        minimum: DRIFTING_SUPPLY_PLAYER_ENERGY_COST,
+      }],
     },
     {
       ...contextualChoice('delegate-carlitos', 'Send Carlitos',
@@ -549,7 +561,10 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
         featuredResultOutcome('drifting-supplies-container-energy-bar', 'drifting-supplies.retrieve', 10,
           'Carlitos recovers an energy bar from the shipping container.',
           effects(undefined, [gain('energyBar')]))),
-      companionAction: { id: 'delegateCarlitos', energyCost: 3 },
+      companionAction: {
+        id: 'delegateCarlitos',
+        energyCost: DRIFTING_SUPPLY_CARLITOS_ENERGY_COST,
+      },
     },
     contextualChoice('sleep', 'Let It Drift', outcome(
       1,
@@ -635,7 +650,10 @@ export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze([
           'A presence follows you through the wreck.',
           effects([subtract('energy', 3), subtract('health', { min: 20, max: 30 }),
             add('pressure', 1)]), 'wreckage-dive-ghost')),
-      requirements: [{ resource: 'energy', minimum: 3 }],
+      requirements: [{
+        resource: 'energy',
+        minimum: 3,
+      }],
     },
     contextualChoice('leave', 'Leave', outcome(
       1,

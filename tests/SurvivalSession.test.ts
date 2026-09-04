@@ -480,7 +480,7 @@ describe('SurvivalSession Carlitos events', () => {
       seed: 1,
       random: sequenceRandom([0]),
       initial: { energy: 1 },
-      initialCarlitos: { hunger: 5, energy: 3 },
+      initialCarlitos: { hunger: 5, energy: 2 },
       initialEventId: 'drifting-supplies',
     });
     const outcome = session.resolveEvent({ kind: 'choice', choiceId: 'delegate-carlitos' });
@@ -633,12 +633,12 @@ describe('SurvivalSession Carlitos events', () => {
     });
 
     expect(session.companionEventActionAvailability({
-      id: 'delegateCarlitos', energyCost: 3,
+      id: 'delegateCarlitos', energyCost: 2,
     })).toEqual({
       visible: true,
-      energyCost: 3,
+      energyCost: 2,
       availableEnergy: 0,
-      unavailableReason: 'Carlitos needs 3 energy; he has 0.',
+      unavailableReason: 'Carlitos needs 2 energy; he has 0.',
     });
     expect(session.resolveEvent({ kind: 'choice', choiceId: 'delegate-carlitos' })).toMatchObject({
       accepted: false,
@@ -689,7 +689,7 @@ describe('SurvivalSession Carlitos events', () => {
       state: { hunger: 3 },
       expected: {
         visible: true,
-        energyCost: 3,
+        energyCost: 2,
         availableEnergy: 3,
         unavailableReason: 'Carlitos is Hungry and cannot retrieve the loot.',
       },
@@ -700,7 +700,7 @@ describe('SurvivalSession Carlitos events', () => {
       state: { hunger: 5, sickness: 2 },
       expected: {
         visible: true,
-        energyCost: 3,
+        energyCost: 2,
         availableEnergy: 3,
         unavailableReason: 'Carlitos is Sick and cannot retrieve the loot.',
       },
@@ -711,7 +711,7 @@ describe('SurvivalSession Carlitos events', () => {
       state: { hunger: 5, unhappiness: 5 },
       expected: {
         visible: true,
-        energyCost: 3,
+        energyCost: 2,
         availableEnergy: 3,
         unavailableReason: 'Carlitos is Lonely and cannot retrieve the loot.',
       },
@@ -720,7 +720,7 @@ describe('SurvivalSession Carlitos events', () => {
       label: 'wellness four',
       items: ['carlitos'] as ItemId[],
       state: { hunger: 4 },
-      expected: { visible: true, energyCost: 3, availableEnergy: 3, unavailableReason: null },
+      expected: { visible: true, energyCost: 2, availableEnergy: 3, unavailableReason: null },
     },
   ])('owns exact Drifting Cargo delegation availability for $label', ({
     items,
@@ -734,7 +734,7 @@ describe('SurvivalSession Carlitos events', () => {
     });
 
     expect(session.companionEventActionAvailability({
-      id: 'delegateCarlitos', energyCost: 3,
+      id: 'delegateCarlitos', energyCost: 2,
     })).toEqual(expected);
   });
 });
@@ -1119,7 +1119,7 @@ describe('SurvivalSession daytime actions', () => {
 
   it('enforces contextual requirements without mutating the session', () => {
     const session = new SurvivalSession(saved(), {
-      seed: 104, random: sequenceRandom([0]), initial: { day: 3, energy: 2 }, initialEventId: 'drifting-supplies',
+      seed: 104, random: sequenceRandom([0]), initial: { day: 3, energy: 0 }, initialEventId: 'drifting-supplies',
     });
     const before = session.snapshot();
     expect(session.resolveEvent(choiceResponse('retrieve'))).toMatchObject({
@@ -1812,7 +1812,7 @@ describe('SurvivalSession daytime actions', () => {
       const outcome = driftingCargoSession([roll]).resolveEvent({ kind: 'choice', choiceId: 'retrieve' });
       expect(outcome).toMatchObject({
         accepted: true,
-        deltas: { energy: -2 },
+        deltas: { energy: -1 },
         rewardSummary,
       });
     }
@@ -1829,7 +1829,7 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it('rejects insufficient-energy Drifting Cargo retrieval atomically', () => {
-    const session = driftingCargoSession([0], 1);
+    const session = driftingCargoSession([0], 0);
     const before = session.snapshot();
 
     expect(session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' })).toMatchObject({

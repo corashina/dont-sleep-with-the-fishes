@@ -1,6 +1,6 @@
 // Importance: 9/10. Protects drifting-supply staging and retrieval motion.
 
-import { Group } from 'three';
+import { Group, Mesh, Quaternion, Raycaster, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { DriftingItemPresentation } from '../src/survival/DriftingItemPresentation';
 import type { DriftingWater } from '../src/survival/DriftingWaveMotion';
@@ -78,5 +78,57 @@ describe('DriftingItemPresentation', () => {
 
     expect(container.position.toArray()).toEqual(position.toArray());
     expect(container.visible).toBe(true);
+  });
+
+  it('adds a closed inner floor and releases its resources', () => {
+    const presentation = createPresentation();
+    presentation.stage('drifting-supplies', seedFor('lifeboat', 'near'));
+    const floor = presentation.root.getObjectByName(
+      'drifting-supplies:lifeboat-floor',
+    );
+
+    expect(floor).toBeInstanceOf(Mesh);
+    presentation.root.updateMatrixWorld(true);
+    const mesh = floor as Mesh;
+    mesh.geometry.computeBoundingBox();
+    const size = mesh.geometry.boundingBox!.getSize(new Vector3());
+    expect(size.x).toBeGreaterThan(1.7);
+    expect(size.x).toBeLessThan(1.9);
+    expect(size.y).toBeGreaterThan(0.05);
+    expect(size.z).toBeGreaterThan(3.75);
+    expect(size.z).toBeLessThan(4);
+
+    const parent = mesh.parent!;
+    const parentQuaternion = parent.getWorldQuaternion(new Quaternion());
+    const down = new Vector3(0, -1, 0).applyQuaternion(parentQuaternion);
+    const up = down.clone().negate();
+    const coveredPoints = [
+      new Vector3(0, 0, 0),
+      new Vector3(-0.8, 0, 0),
+      new Vector3(0.8, 0, 0),
+      new Vector3(0, 0, -1.75),
+      new Vector3(0, 0, 1.75),
+    ];
+    coveredPoints.forEach((point) => {
+      const worldPoint = parent.localToWorld(point.clone());
+      const fromAbove = new Raycaster(
+        worldPoint.clone().add(up),
+        down,
+      );
+      const fromBelow = new Raycaster(
+        worldPoint.clone().add(down),
+        up,
+      );
+      expect(fromAbove.intersectObject(mesh)).not.toHaveLength(0);
+      expect(fromBelow.intersectObject(mesh)).not.toHaveLength(0);
+    });
+
+    const disposeGeometry = vi.spyOn(mesh.geometry, 'dispose');
+    const material = Array.isArray(mesh.material) ? mesh.material[0]! : mesh.material;
+    const disposeMaterial = vi.spyOn(material, 'dispose');
+    presentation.dispose();
+
+    expect(disposeGeometry).toHaveBeenCalledOnce();
+    expect(disposeMaterial).toHaveBeenCalledOnce();
   });
 });

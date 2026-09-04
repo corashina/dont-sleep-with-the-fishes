@@ -188,7 +188,10 @@ describe('survival events', () => {
     expect(retrieve?.label).toBe(
       eventId === 'drifting-supplies' ? 'Retrieve Supplies' : 'Retrieve It',
     );
-    expect(retrieve?.requirements).toEqual([{ resource: 'energy', minimum: 3 }]);
+    expect(retrieve?.requirements).toEqual([{
+      resource: 'energy',
+      minimum: eventId === 'drifting-supplies' ? 1 : 3,
+    }]);
     expect(retrieve?.outcomes).toHaveLength(eventId === 'drifting-supplies' ? 10 : 1);
     },
   );

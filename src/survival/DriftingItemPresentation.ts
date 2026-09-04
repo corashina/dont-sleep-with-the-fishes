@@ -1,11 +1,16 @@
 import {
+  ExtrudeGeometry,
   Group,
+  Mesh,
+  MeshStandardMaterial,
   Object3D,
   PerspectiveCamera,
   Quaternion,
+  Shape,
   Vector3,
 } from 'three';
 import type { WaveSample } from '../ocean/WaveField';
+import { runCleanupSteps } from '../world/SceneResources';
 import {
   projectBoatObjectBounds,
   type ProjectedBoatBounds,
@@ -61,6 +66,22 @@ const WATERLINE_Y: Readonly<Record<DriftingSupplyKind, number>> = Object.freeze(
   container: 0.08,
 });
 const LIFEBOAT_COOLER_POSITION = Object.freeze({ x: 0, y: 0.18, z: 0.65 });
+const LIFEBOAT_FLOOR_Y = -0.1;
+const LIFEBOAT_FLOOR_THICKNESS = 0.1;
+const LIFEBOAT_FLOOR_OUTLINE = Object.freeze([
+  Object.freeze({ x: -0.48, z: -1.92 }),
+  Object.freeze({ x: 0.48, z: -1.92 }),
+  Object.freeze({ x: 0.82, z: -1.35 }),
+  Object.freeze({ x: 0.88, z: -0.6 }),
+  Object.freeze({ x: 0.88, z: 0.85 }),
+  Object.freeze({ x: 0.78, z: 1.45 }),
+  Object.freeze({ x: 0.48, z: 1.92 }),
+  Object.freeze({ x: -0.48, z: 1.92 }),
+  Object.freeze({ x: -0.78, z: 1.45 }),
+  Object.freeze({ x: -0.88, z: 0.85 }),
+  Object.freeze({ x: -0.88, z: -0.6 }),
+  Object.freeze({ x: -0.82, z: -1.35 }),
+]);
 const RECEDE_OFFSET = Object.freeze({ x: 5.2, y: -0.28, z: -2 });
 const RETRIEVE_DURATIONS: Readonly<Record<Exclude<DriftingCargoKind, 'container'>, number>> =
   Object.freeze({ barrel: 1.35, chest: 1.55, lifeboat: 1.8 });
@@ -73,6 +94,46 @@ function keyedRetrieveProgress(progress: number): number {
   return 1.04 + (1 - 1.04) * smoothstep((progress - 0.82) / 0.18);
 }
 
+function createLifeboatFloorMaterial(model: Object3D): MeshStandardMaterial {
+  const sources: MeshStandardMaterial[] = [];
+  model.traverse((object) => {
+    if (sources.length > 0 || !(object instanceof Mesh)) return;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    const source = materials.find((material): material is MeshStandardMaterial => (
+      material instanceof MeshStandardMaterial && material.name === 'BrightYellow'
+    ));
+    if (source !== undefined) sources.push(source);
+  });
+  const material = sources[0]?.clone() ?? new MeshStandardMaterial({
+    color: 0x574506,
+    roughness: 0.72,
+    metalness: 0.08,
+    flatShading: true,
+  });
+  material.name = 'drifting-lifeboat-floor-material';
+  return material;
+}
+
+function createLifeboatFloor(model: Object3D): Mesh<ExtrudeGeometry, MeshStandardMaterial> {
+  const shape = new Shape();
+  const [first, ...remaining] = LIFEBOAT_FLOOR_OUTLINE;
+  shape.moveTo(first!.x, first!.z);
+  remaining.forEach(({ x, z }) => shape.lineTo(x, z));
+  shape.closePath();
+  const geometry = new ExtrudeGeometry(shape, {
+    depth: LIFEBOAT_FLOOR_THICKNESS,
+    bevelEnabled: false,
+    curveSegments: 1,
+  });
+  geometry.rotateX(Math.PI / 2);
+  const floor = new Mesh(geometry, createLifeboatFloorMaterial(model));
+  floor.name = 'drifting-supplies:lifeboat-floor';
+  floor.position.y = LIFEBOAT_FLOOR_Y;
+  floor.castShadow = true;
+  floor.receiveShadow = true;
+  return floor;
+}
+
 export class DriftingItemPresentation {
   readonly root = new Group();
   private readonly roots: Readonly<Record<DriftingCargoKind, Group>>;
@@ -80,6 +141,7 @@ export class DriftingItemPresentation {
   private readonly baseQuaternions: Readonly<Record<DriftingCargoKind, Quaternion>>;
   private readonly baseScales: Readonly<Record<DriftingCargoKind, number>>;
   private readonly lifeboatCooler: Group;
+  private readonly lifeboatFloor: Mesh<ExtrudeGeometry, MeshStandardMaterial>;
   private readonly coolerBaseScale: number;
   private readonly targetPositionScratch = new Vector3();
   private readonly animationStartPosition = new Vector3();
@@ -119,6 +181,8 @@ export class DriftingItemPresentation {
 
     const lifeboat = this.createRoot('drifting-supplies:lifeboat', models.lifeboat);
     lifeboat.rotation.y = Math.PI / 4;
+    this.lifeboatFloor = createLifeboatFloor(models.lifeboat);
+    lifeboat.add(this.lifeboatFloor);
     this.lifeboatCooler = models.lifeboatCooler;
     this.lifeboatCooler.name = 'drifting-supplies:lifeboat-cooler';
     this.lifeboatCooler.position.set(
@@ -313,6 +377,10 @@ export class DriftingItemPresentation {
     this.cancelActiveAnimation();
     this.disposed = true;
     this.root.removeFromParent();
+    runCleanupSteps([
+      () => this.lifeboatFloor.geometry.dispose(),
+      () => this.lifeboatFloor.material.dispose(),
+    ]);
   }
 
   private createRoot(name: string, model: Group): Group {

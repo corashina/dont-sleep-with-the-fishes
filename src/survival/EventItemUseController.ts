@@ -52,6 +52,20 @@ type ActiveItemReaction = {
   readonly resolve: () => void;
 };
 
+const RETURN_TO_STORAGE_CONTEXTS: ReadonlySet<EventItemUseContext> = new Set([
+  'map-read',
+  'compass-search',
+  'net-scoop',
+  'flashlight-threat-beam',
+  'flashlight-signal',
+]);
+
+function stowAfterReaction(reaction: ActiveItemReaction): boolean {
+  if (reaction.disposition === 'depart') return true;
+  if (reaction.request.itemId === 'knife') return false;
+  return !RETURN_TO_STORAGE_CONTEXTS.has(reaction.request.context);
+}
+
 function dispositionFor(
   request: EventItemUseRequest,
   result: EventOutcomePresentation,
@@ -220,7 +234,7 @@ export class EventItemUseController {
     this.release(
       reaction.actor,
       reaction.request,
-      reaction.request.itemId !== 'knife' || reaction.disposition === 'depart',
+      stowAfterReaction(reaction),
     );
     this.held = null;
     reaction.resolve();

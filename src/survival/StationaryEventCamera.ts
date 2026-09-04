@@ -12,6 +12,10 @@ export class StationaryEventCamera {
   private readonly parentWorldQuaternion = new Quaternion();
   private readonly lookWorldQuaternion = new Quaternion();
   private readonly lookLocalQuaternion = new Quaternion();
+  private readonly baseInverseQuaternion = new Quaternion();
+  private readonly targetLocalPosition = new Vector3();
+  private readonly targetDirection = new Vector3();
+  private readonly cameraTravel = new Vector3();
   private captured = false;
 
   constructor(private readonly camera: Object3D) {}
@@ -19,12 +23,17 @@ export class StationaryEventCamera {
   capture(): void {
     this.basePosition.copy(this.camera.position);
     this.baseQuaternion.copy(this.camera.quaternion);
+    this.baseInverseQuaternion.copy(this.baseQuaternion).invert();
     this.captured = true;
   }
 
   apply(yaw: number, pitch: number, roll = 0): void {
     if (!this.captured) this.capture();
     this.camera.position.copy(this.basePosition);
+    this.applyRotation(yaw, pitch, roll);
+  }
+
+  private applyRotation(yaw: number, pitch: number, roll = 0): void {
     this.offsetEuler.set(pitch, yaw, roll, 'YXZ');
     this.offsetQuaternion.setFromEuler(this.offsetEuler);
     this.camera.quaternion
@@ -67,6 +76,34 @@ export class StationaryEventCamera {
       this.lookLocalQuaternion,
       Math.max(0, Math.min(1, strength)),
     );
+  }
+
+  applyLookAtWithFixedYaw(
+    target: Object3D,
+    yaw: number,
+    strength = 1,
+    forwardTravel = 0,
+  ): void {
+    if (!this.captured) this.capture();
+    const clampedStrength = Math.max(0, Math.min(1, strength));
+    this.camera.position.copy(this.basePosition);
+    this.cameraTravel.set(0, 0, -forwardTravel * clampedStrength)
+      .applyQuaternion(this.baseQuaternion);
+    this.camera.position.add(this.cameraTravel);
+    this.camera.updateWorldMatrix(true, false);
+    target.updateWorldMatrix(true, false);
+    target.getWorldPosition(this.targetWorldPosition);
+    this.targetLocalPosition.copy(this.targetWorldPosition);
+    this.camera.parent?.worldToLocal(this.targetLocalPosition);
+    this.targetDirection.copy(this.targetLocalPosition)
+      .sub(this.camera.position)
+      .applyQuaternion(this.baseInverseQuaternion);
+    const horizontalDistance = Math.hypot(
+      this.targetDirection.x,
+      this.targetDirection.z,
+    );
+    const pitch = Math.atan2(this.targetDirection.y, horizontalDistance);
+    this.applyRotation(yaw * clampedStrength, pitch * clampedStrength);
   }
 
   restore(): void {

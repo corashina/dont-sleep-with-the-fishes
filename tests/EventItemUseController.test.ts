@@ -8,6 +8,7 @@ import {
   MeshStandardMaterial,
   Object3D,
   PerspectiveCamera,
+  Quaternion,
   Vector3,
 } from 'three';
 import type { ItemInstanceId } from '../src/game/ItemState';
@@ -24,9 +25,12 @@ import {
 } from '../src/survival/EventItemUseController';
 import { eventItemUseDuration } from '../src/survival/eventItemUseChoreography';
 import type { EventOutcomePresentation } from '../src/survival/eventPresentationTypes';
+import { boatStorageTransform } from '../src/world/BoatStorage';
+import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 import {
   LIFEBOAT_FLOOR_SURFACE_Y,
   LIFEBOAT_GUNWALE_SURFACE_Y,
+  lifeboatHullHalfWidthAt,
 } from '../src/world/Lifeboat';
 
 function request(
@@ -70,11 +74,13 @@ function result(
   };
 }
 
-function setup() {
+function setup(
+  instanceId: ItemInstanceId = 'flashlight-1' as ItemInstanceId,
+) {
   const root = new Group();
   const camera = new PerspectiveCamera();
   const actor: BorrowedSupplyActor = {
-    instanceId: 'flashlight-1' as ItemInstanceId,
+    instanceId,
     root,
     applyPose: vi.fn(),
     releaseOnNextSync: vi.fn(),
@@ -95,31 +101,44 @@ function setup() {
 
 describe('EventItemUseController', () => {
 
-  it('holds a borrowed actor after use, then recovers and stows it', async () => {
-    const { actor, adapter, clear, controller, supplies } = setup();
-    const use = controller.play(request());
+  it.each([
+    ['dangerous-waters', 'map', 'map', 'map-read'],
+    ['dangerous-waters', 'compass', 'compass', 'compass-search'],
+    ['school-of-fish', 'fishingNet', 'fishingNet', 'net-scoop'],
+    ['ghosts', 'flashlight', 'flashlight', 'flashlight-threat-beam'],
+    ['plane', 'flashlight', 'flashlight', 'flashlight-signal'],
+  ] as const)(
+    'returns %s/%s to storage after its recovery animation',
+    async (eventId, choiceId, itemId, context) => {
+      const instanceId = `${itemId}-1` as ItemInstanceId;
+      const { actor, adapter, clear, controller, supplies } = setup(instanceId);
+      const use = controller.play({
+        ...request(instanceId),
+        eventId,
+        choiceId,
+        itemId,
+        context,
+      });
 
-    controller.update(10);
-    await expect(use).resolves.toBe(true);
-    expect(actor.release).not.toHaveBeenCalled();
+      controller.update(10);
+      await expect(use).resolves.toBe(true);
+      expect(actor.release).not.toHaveBeenCalled();
 
-    const reaction = controller.react(result(actor.instanceId));
-    controller.update(0.35);
-    expect(actor.root.visible).toBe(true);
-    controller.update(10);
-    await reaction;
-    const stowedPose = (actor.applyPose as ReturnType<typeof vi.fn>)
-      .mock.calls.at(-2)![0];
+      const reaction = controller.react(result(actor.instanceId));
+      controller.update(10);
+      await reaction;
+      const returnedPose = (actor.applyPose as ReturnType<typeof vi.fn>)
+        .mock.calls.at(-2)![0];
 
-    expect(actor.root.visible).toBe(false);
-    expect(stowedPose.x).toBeCloseTo(0);
-    expect(stowedPose.y).toBeCloseTo(0);
-    expect(stowedPose.z).toBeCloseTo(0);
-    expect(supplies.stowEventItemUntilDay).toHaveBeenCalledExactlyOnceWith(actor.instanceId);
-    expect(clear).toHaveBeenCalledBefore(actor.release as ReturnType<typeof vi.fn>);
-    expect(actor.release).toHaveBeenCalledOnce();
-    adapter.dispose();
-  });
+      expect(returnedPose.x).toBeCloseTo(0);
+      expect(returnedPose.y).toBeCloseTo(0);
+      expect(returnedPose.z).toBeCloseTo(0);
+      expect(supplies.stowEventItemUntilDay).not.toHaveBeenCalled();
+      expect(clear).toHaveBeenCalledBefore(actor.release as ReturnType<typeof vi.fn>);
+      expect(actor.release).toHaveBeenCalledOnce();
+      adapter.dispose();
+    },
+  );
 
   it('returns a recovered bucket to the boat instead of stowing it', async () => {
     const { actor, adapter, controller, supplies } = setup();
@@ -299,7 +318,7 @@ describe('EventItemUseController', () => {
     adapter.dispose();
   });
 
-  it('stows a broken item after its outcome motion', async () => {
+  it('returns a broken storage item after its outcome motion', async () => {
     const { actor, adapter, controller, supplies } = setup();
     const use = controller.play(request());
     controller.update(10);
@@ -311,7 +330,7 @@ describe('EventItemUseController', () => {
     controller.update(10);
     await reaction;
 
-    expect(supplies.stowEventItemUntilDay).toHaveBeenCalledExactlyOnceWith(actor.instanceId);
+    expect(supplies.stowEventItemUntilDay).not.toHaveBeenCalled();
     expect(actor.release).toHaveBeenCalledOnce();
     adapter.dispose();
   });
@@ -350,7 +369,7 @@ describe('EventItemUseController', () => {
     adapter.dispose();
   });
 
-  it('keeps the knife tip at half the moving target owner height', () => {
+  it('drives the knife tip into the explicit moving target', () => {
     const { actor, adapter, controller } = setup();
     const targetOwner = new Group();
     const target = new Object3D();
@@ -359,7 +378,7 @@ describe('EventItemUseController', () => {
     const targetShape = new Mesh(geometry, material);
     targetOwner.position.set(4, -3, -4);
     targetShape.position.y = 4;
-    target.position.set(0, -2, 1.25);
+    target.position.set(0, 1.25, 0.44);
     targetOwner.add(targetShape, target);
     (actor.applyPose as ReturnType<typeof vi.fn>).mockImplementation(
       (pose: MutableSupplyPose) => {
@@ -385,41 +404,33 @@ describe('EventItemUseController', () => {
     actor.root.updateWorldMatrix(true, false);
     targetOwner.updateWorldMatrix(true, false);
     const bladeTip = new Vector3(0.36, 0, 0).applyMatrix4(actor.root.matrixWorld);
-    const targetHalfHeight = new Vector3(0, 4, 1.25).applyMatrix4(
-      targetOwner.matrixWorld,
-    );
+    const explicitTarget = new Vector3();
+    target.getWorldPosition(explicitTarget);
 
-    expect(bladeTip.distanceTo(targetHalfHeight)).toBeLessThan(0.01);
+    expect(bladeTip.distanceTo(explicitTarget)).toBeLessThan(0.01);
     controller.clear('day');
     adapter.dispose();
     geometry.dispose();
     material.dispose();
   });
 
-  it('keeps the knife tip above the gunwale during a tentacle stab', () => {
+  it('does not twist the knife when the forward stab starts', () => {
     const { actor, adapter, camera, controller } = setup();
     const boat = new Group();
     const targetOwner = new Group();
     const target = new Object3D();
-    const geometry = new BoxGeometry(1, 2.5, 1);
-    const material = new MeshStandardMaterial();
-    const targetShape = new Mesh(geometry, material);
-    const targetFocus = new Vector3();
-    const bladeTip = new Vector3();
-
     boat.position.y = 0.22;
     actor.root.position.set(0.25, LIFEBOAT_FLOOR_SURFACE_Y, -0.55);
     boat.add(actor.root, targetOwner);
     targetOwner.position.set(2.05, -0.62, -0.66);
     targetOwner.rotation.set(-0.12, -0.32, -0.2);
     targetOwner.scale.setScalar(0.94);
-    targetShape.position.y = 1.25;
-    target.position.set(0, 0.18, 0.44);
-    targetOwner.add(targetShape, target);
+    target.position.set(0, 1.25, 0.44);
+    targetOwner.add(target);
+    const targetFocus = new Vector3();
     target.getWorldPosition(targetFocus);
     camera.position.set(0, 1.38, -1.42);
     camera.lookAt(targetFocus);
-
     const basePosition = actor.root.position.clone();
     const baseQuaternion = actor.root.quaternion.clone();
     (actor.applyPose as ReturnType<typeof vi.fn>).mockImplementation(
@@ -444,22 +455,95 @@ describe('EventItemUseController', () => {
       itemId: 'knife',
       context: 'knife-stab',
     });
+    const duration = eventItemUseDuration('knife-stab');
+    controller.update(duration * 0.54);
+    actor.root.updateWorldMatrix(true, false);
+    const beforeStab = new Quaternion();
+    actor.root.getWorldQuaternion(beforeStab);
+
+    controller.update(duration * 0.001);
+    actor.root.updateWorldMatrix(true, false);
+    const stabStart = new Quaternion();
+    actor.root.getWorldQuaternion(stabStart);
+
+    expect(beforeStab.angleTo(stabStart)).toBeLessThan(0.01);
+    controller.clear('day');
+    adapter.dispose();
+  });
+
+  it('keeps the complete knife above the boat until it clears the gunwale', () => {
+    const { actor, adapter, camera, controller } = setup('knife-1' as ItemInstanceId);
+    const boat = new Group();
+    const target = new Object3D();
+    const targetFocus = new Vector3();
+    const bladePoint = new Vector3();
+    const knifeTransform = boatStorageTransform({
+      instanceId: actor.instanceId,
+      type: 'knife',
+    });
+    const knifeBounds = ITEM_MODEL_SPECS.knife.normalizedBounds;
+
+    boat.position.y = 0.22;
+    actor.root.position.copy(knifeTransform.position);
+    actor.root.rotation.copy(knifeTransform.rotation);
+    actor.root.scale.setScalar(knifeTransform.scale);
+    target.position.set(2.19, 0.35, -0.19);
+    boat.add(actor.root, target);
+    target.getWorldPosition(targetFocus);
+    camera.position.set(0, 1.38, -1.42);
+    camera.lookAt(targetFocus);
+
+    const basePosition = actor.root.position.clone();
+    const baseQuaternion = actor.root.quaternion.clone();
+    const baseScale = actor.root.scale.clone();
+    (actor.applyPose as ReturnType<typeof vi.fn>).mockImplementation(
+      (pose: MutableSupplyPose) => {
+        actor.root.position.set(
+          basePosition.x + pose.x,
+          basePosition.y + pose.y,
+          basePosition.z + pose.z,
+        );
+        actor.root.quaternion.copy(baseQuaternion);
+        actor.root.rotateY(pose.yaw);
+        actor.root.rotateX(pose.pitch);
+        actor.root.rotateZ(pose.roll);
+        actor.root.scale.set(
+          baseScale.x * pose.scaleX,
+          baseScale.y * pose.scaleY,
+          baseScale.z * pose.scaleZ,
+        );
+      },
+    );
+
+    controller.play({
+      ...request(actor.instanceId, target),
+      eventId: 'snatcher',
+      choiceId: 'knife',
+      itemId: 'knife',
+      context: 'knife-stab',
+    });
 
     let previousProgress = 0;
-    for (const progress of [0.5, 0.54, 0.58, 0.62, 0.66, 0.68, 0.74, 0.78, 0.82]) {
+    for (let frame = 0; frame <= 160; frame += 1) {
+      const progress = 0.5 + 0.32 * frame / 160;
       controller.update(eventItemUseDuration('knife-stab') * (progress - previousProgress));
       previousProgress = progress;
       actor.root.updateWorldMatrix(true, false);
-      bladeTip.set(0.36, 0, 0).applyMatrix4(actor.root.matrixWorld);
-      boat.worldToLocal(bladeTip);
-
-      expect(bladeTip.y).toBeGreaterThan(LIFEBOAT_GUNWALE_SURFACE_Y);
+      for (const localX of [knifeBounds.min[0], knifeBounds.max[0]]) {
+        for (const localY of [knifeBounds.min[1], knifeBounds.max[1]]) {
+          for (const localZ of [knifeBounds.min[2], knifeBounds.max[2]]) {
+            bladePoint.set(localX, localY, localZ).applyMatrix4(actor.root.matrixWorld);
+            boat.worldToLocal(bladePoint);
+            const halfWidth = lifeboatHullHalfWidthAt(bladePoint.z);
+            if (halfWidth === null || Math.abs(bladePoint.x) > halfWidth) continue;
+            expect(bladePoint.y).toBeGreaterThan(LIFEBOAT_GUNWALE_SURFACE_Y);
+          }
+        }
+      }
     }
 
     controller.clear('day');
     adapter.dispose();
-    geometry.dispose();
-    material.dispose();
   });
 
   it('stows and releases a night item when use is cancelled', async () => {

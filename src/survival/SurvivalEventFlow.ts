@@ -1218,7 +1218,8 @@ export class SurvivalEventFlow {
     if (!await this.playContextualChoice(eventId, choice, generation, operation)) return;
     this.presentation = 'resolving';
     this.beginDeferredPresentationSync(pending, generation);
-    const outcome = this.dependencies.session.resolveEvent?.({ kind: 'choice', choiceId });
+    const response = this.contextualEventResponse(eventId, choiceId, pending);
+    const outcome = this.dependencies.session.resolveEvent?.(response);
     if (outcome === undefined || !this.isCurrent(generation, operation)) {
       this.cancelDeferredPresentationSync(generation);
       return;
@@ -1229,13 +1230,45 @@ export class SurvivalEventFlow {
     }
     await this.completeContextualChoice(
       eventId,
-      choiceId,
       pending,
       outcome,
       choice,
+      response.kind === 'item' ? response.choiceId : choiceId,
+      response.kind === 'item' ? response.instanceId : null,
       generation,
       operation,
     );
+  }
+
+  private contextualEventResponse(
+    eventId: string,
+    choiceId: EventResponseId,
+    snapshot: SurvivalSnapshot,
+  ): Exclude<EventResponse, { readonly kind: 'endure' }> {
+    const resultId = this.initialEventResultId;
+    this.initialEventResultId = undefined;
+    if (eventId !== 'check-the-back' || choiceId !== 'check') {
+      return {
+        kind: 'choice',
+        choiceId,
+        ...(resultId === undefined ? {} : { resultId }),
+      };
+    }
+    const knife = Object.values(snapshot.inventory).find(
+      (item) => item?.type === 'knife' && item.condition === 'usable',
+    );
+    return knife === undefined
+      ? {
+          kind: 'choice',
+          choiceId,
+          ...(resultId === undefined ? {} : { resultId }),
+        }
+      : {
+          kind: 'item',
+          choiceId: 'knife',
+          instanceId: knife.instanceId,
+          ...(resultId === undefined ? {} : { resultId }),
+        };
   }
 
   private resolveSpecialContextualChoice(
@@ -1289,17 +1322,18 @@ export class SurvivalEventFlow {
 
   private async completeContextualChoice(
     eventId: string,
-    choiceId: EventResponseId,
     pending: SurvivalSnapshot,
     outcome: ActionOutcome,
     choice: EventChoicePresentation,
+    resolvedChoiceId: EventResponseId,
+    selectedInstanceId: ItemInstanceId | null,
     generation: number,
     operation: number,
   ): Promise<void> {
     const focusedResult = isEventPresentationRoute(eventId, 'focused');
     if (await this.recoverFocusedResultIfInvalid(
       eventId,
-      choiceId,
+      resolvedChoiceId,
       outcome,
       pending.state,
       focusedResult,
@@ -1308,7 +1342,12 @@ export class SurvivalEventFlow {
     )) return;
     const resolved = this.dependencies.session.snapshot();
     this.finishDeferredChoiceSync(focusedResult, resolved, generation);
-    const presentation = deriveEventOutcomePresentation(pending, resolved, outcome, null);
+    const presentation = deriveEventOutcomePresentation(
+      pending,
+      resolved,
+      outcome,
+      selectedInstanceId,
+    );
     await this.runEventResolution(
       eventId,
       outcome,
@@ -1317,10 +1356,10 @@ export class SurvivalEventFlow {
       operation,
       choice,
       deriveEventPhysicalResponse(
-        choiceId,
+        resolvedChoiceId,
         pending.inventory,
         resolved.inventory,
-        null,
+        selectedInstanceId,
       ),
       presentation,
       focusedResult,
@@ -2230,7 +2269,9 @@ export class SurvivalEventFlow {
   private finishStandardEventReveal(event: SurvivalEventDefinition): void {
     const revealed = this.currentPendingEventSnapshot(event.id);
     if (revealed === null) return;
-    this.eligibility = this.eventEligibilityFor(event, revealed);
+    this.eligibility = event.id === 'check-the-back'
+      ? new Map()
+      : this.eventEligibilityFor(event, revealed);
     const visibleEligibility = isInspectableEventId(event.id)
       ? new Map<ItemInstanceId, EventResponseId>()
       : this.eligibility;

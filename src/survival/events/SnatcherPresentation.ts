@@ -3,8 +3,14 @@ import {
   Group,
   Mesh,
   MeshStandardMaterial,
+  SkinnedMesh,
+  Vector3,
 } from 'three';
-import type { AnimationAction } from 'three';
+import type {
+  AnimationAction,
+  BufferAttribute,
+  InterleavedBufferAttribute,
+} from 'three';
 import type { ItemInstanceId } from '../../game/ItemState';
 import { runCleanupSteps } from '../../world/SceneResources';
 import type {
@@ -29,6 +35,15 @@ const TENTACLE_X = 2.05;
 const TENTACLE_Y = -0.62;
 const TENTACLE_Z = -0.66;
 const TENTACLE_SCALE = 0.94;
+const TENTACLE_HIT_Y = 1.25;
+const TENTACLE_HIT_Z = 0.44;
+
+type PositionAttribute = BufferAttribute | InterleavedBufferAttribute;
+
+interface TentacleHitSurface {
+  readonly mesh: SkinnedMesh;
+  readonly position: PositionAttribute;
+}
 
 function setTentacleMaterial(root: Group): void {
   root.traverse((object) => {
@@ -57,6 +72,10 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   private readonly mixer: AnimationMixer | null;
   private readonly idleAction: AnimationAction | null;
   private readonly tentacle = new Group();
+  private readonly hitVertexPosition = new Vector3();
+  private readonly hitTargetWorldPosition = new Vector3();
+  private readonly hitClosestWorldPosition = new Vector3();
+  private readonly hitSurfaces: readonly TentacleHitSurface[];
   private readonly sample: SnatcherSample = identitySnatcherSample();
   private readonly animation = new TimedPresentationAnimation<
     'reveal' | 'item' | 'reaction'
@@ -88,9 +107,11 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
       : this.mixer!.clipAction(idleClip);
     this.tentacle.add(this.modelInstance.root);
     this.itemAimTarget.name = 'snatcher-item-aim-target';
-    this.itemAimTarget.position.set(0, 0.18, 0.44);
+    this.itemAimTarget.position.set(0, TENTACLE_HIT_Y, TENTACLE_HIT_Z);
     this.tentacle.add(this.itemAimTarget);
     this.boatRoot.add(this.tentacle);
+    this.hitSurfaces = this.findHitSurfaces();
+    this.updateItemAimTarget();
     this.hideScene();
   }
 
@@ -144,6 +165,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
     this.mixer?.update(safeDelta);
     this.animation.update(_time, safeDelta);
+    this.updateItemAimTarget();
   }
 
   settleForVisibilityChange(): void {
@@ -217,6 +239,47 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
       TENTACLE_SCALE * riseScale,
       TENTACLE_SCALE * (0.92 + this.sample.pointStrength * 0.08),
     );
+  }
+
+  private findHitSurfaces(): readonly TentacleHitSurface[] {
+    const surfaces: TentacleHitSurface[] = [];
+    this.modelInstance.root.traverse((object) => {
+      if (!(object instanceof SkinnedMesh)) return;
+      const position = object.geometry.getAttribute('position');
+      if (position === undefined || position.count === 0) return;
+      surfaces.push({ mesh: object, position });
+    });
+    if (surfaces.length === 0) {
+      throw new Error('Snatcher model has no skinned surface vertex');
+    }
+    return surfaces;
+  }
+
+  private updateItemAimTarget(): void {
+    this.tentacle.updateWorldMatrix(true, true);
+    this.hitTargetWorldPosition
+      .set(0, TENTACLE_HIT_Y, TENTACLE_HIT_Z)
+      .applyMatrix4(this.tentacle.matrixWorld);
+    let closestDistanceSquared = Number.POSITIVE_INFINITY;
+
+    for (const { mesh, position } of this.hitSurfaces) {
+      mesh.updateMatrixWorld(true);
+      mesh.skeleton.update();
+      for (let index = 0; index < position.count; index += 1) {
+        this.hitVertexPosition.fromBufferAttribute(position, index);
+        mesh.applyBoneTransform(index, this.hitVertexPosition);
+        mesh.localToWorld(this.hitVertexPosition);
+        const distanceSquared = this.hitVertexPosition.distanceToSquared(
+          this.hitTargetWorldPosition,
+        );
+        if (distanceSquared >= closestDistanceSquared) continue;
+        closestDistanceSquared = distanceSquared;
+        this.hitClosestWorldPosition.copy(this.hitVertexPosition);
+      }
+    }
+
+    this.tentacle.worldToLocal(this.hitClosestWorldPosition);
+    this.itemAimTarget.position.copy(this.hitClosestWorldPosition);
   }
 
   private hideScene(): void {

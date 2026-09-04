@@ -93,6 +93,7 @@ function testBundle(eventId: EventBundle['eventId'], calls: string[]): EventBund
 function createRig(
   initial: SurvivalSnapshot,
   bundleManager?: EventBundleManager,
+  overrides: Partial<SurvivalEventFlowDependencies> = {},
 ) {
   let current = initial;
   let generation = 3;
@@ -238,6 +239,7 @@ function createRig(
     isLifecycleGenerationCurrent: (captured: number) => captured === generation,
     onInvariantError,
     onFatalError,
+    ...overrides,
   } as unknown as SurvivalEventFlowDependencies);
   return {
     flow,
@@ -261,8 +263,11 @@ function createRig(
   };
 }
 
-function createSessionRig(realSession: SurvivalSession) {
-  const rig = createRig(realSession.snapshot());
+function createSessionRig(
+  realSession: SurvivalSession,
+  overrides: Partial<SurvivalEventFlowDependencies> = {},
+) {
+  const rig = createRig(realSession.snapshot(), undefined, overrides);
   rig.session.resolveEvent.mockImplementation((response: unknown) => {
     const outcome = realSession.resolveEvent(response as EventResponse);
     rig.setSnapshot(realSession.snapshot());
@@ -485,6 +490,86 @@ describe('event selection contracts', () => {
     expect(rig.ui.restoreCommandFocus).toHaveBeenCalled();
     expect(rig.onInvariantError).not.toHaveBeenCalled();
     expect(rig.onFatalError).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [0, 'check-the-back.fish', 'usable', 1],
+    [0.999, 'check-the-back.bad', 'broken', 0],
+  ] as const)(
+    'uses the Knife automatically for Check the Back result %s',
+    async (roll, resultId, knifeCondition, food) => {
+      const rig = createSessionRig(new SurvivalSession([
+        { instanceId: 'knife-1', type: 'knife' },
+      ], {
+        seed: 105,
+        random: sequenceRandom([roll]),
+        initial: { day: 2 },
+        initialEventId: 'check-the-back',
+      }));
+      await rig.flow.revealPending(rig.realSession.snapshot());
+
+      expect(rig.world.setEventEligibleItems).toHaveBeenLastCalledWith(new Set());
+      expect(rig.ui.setEventSelection).toHaveBeenLastCalledWith(
+        new Map(),
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'check', label: 'Yes' }),
+          expect.objectContaining({ id: 'sleep', label: 'No' }),
+        ]),
+      );
+
+      rig.flow.resolveContextual('check');
+      await vi.waitFor(() => expect(rig.session.resolveEvent).toHaveBeenCalledOnce());
+
+      expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({
+        kind: 'item', choiceId: 'knife', instanceId: 'knife-1',
+      });
+      expect(rig.world.playEventItemUse).not.toHaveBeenCalled();
+      expect(rig.session.resolveEvent.mock.results[0]!.value).toMatchObject({
+        accepted: true,
+        eventResult: { eventId: 'check-the-back', choiceId: 'knife', resultId },
+      });
+      expect(rig.realSession.snapshot()).toMatchObject({
+        food,
+        health: 100,
+        inventory: { 'knife-1': { condition: knifeCondition } },
+      });
+      expect(rig.onInvariantError).not.toHaveBeenCalled();
+      expect(rig.onFatalError).not.toHaveBeenCalled();
+      rig.flow.clear();
+    },
+  );
+
+  it('keeps the forced Fish result when automatic Knife use replaces Yes', async () => {
+    const rig = createSessionRig(new SurvivalSession([
+      { instanceId: 'knife-1', type: 'knife' },
+    ], {
+      seed: 105,
+      random: sequenceRandom([0.999]),
+      initial: { day: 2 },
+      initialEventId: 'check-the-back',
+    }), {
+      initialEventResultId: 'check-the-back.fish',
+    });
+    await rig.flow.revealPending(rig.realSession.snapshot());
+
+    rig.flow.resolveContextual('check');
+    await vi.waitFor(() => expect(rig.session.resolveEvent).toHaveBeenCalledOnce());
+
+    expect(rig.session.resolveEvent).toHaveBeenCalledWith({
+      kind: 'item',
+      choiceId: 'knife',
+      instanceId: 'knife-1',
+      resultId: 'check-the-back.fish',
+    });
+    expect(rig.session.resolveEvent.mock.results[0]!.value).toMatchObject({
+      eventResult: {
+        eventId: 'check-the-back',
+        choiceId: 'knife',
+        resultId: 'check-the-back.fish',
+      },
+    });
+    expect(rig.realSession.snapshot().inventory['knife-1']?.condition).toBe('usable');
+    rig.flow.clear();
   });
 });
 

@@ -8,12 +8,8 @@ export const DRIFTING_SUPPLY_KINDS = Object.freeze([
 
 export type DriftingSupplyKind = typeof DRIFTING_SUPPLY_KINDS[number];
 
-const DRIFTING_SUPPLY_ENERGY_COSTS: Readonly<Record<DriftingSupplyKind, number>> =
-  Object.freeze({
-    barrel: 3,
-    lifeboat: 3,
-    container: 2,
-  });
+export const DRIFTING_SUPPLY_PLAYER_ENERGY_COST = 1;
+export const DRIFTING_SUPPLY_CARLITOS_ENERGY_COST = 2;
 
 export const DRIFTING_SUPPLY_DISTANCES = Object.freeze([
   'near',
@@ -29,10 +25,6 @@ function normalizedSeed(seed: number): number {
 
 export function driftingSupplyKindFromSeed(seed: number): DriftingSupplyKind {
   return DRIFTING_SUPPLY_KINDS[(normalizedSeed(seed) >>> 1) % DRIFTING_SUPPLY_KINDS.length]!;
-}
-
-export function driftingSupplyEnergyCost(kind: DriftingSupplyKind): number {
-  return DRIFTING_SUPPLY_ENERGY_COSTS[kind];
 }
 
 export function driftingSupplyDistanceFromSeed(seed: number): DriftingSupplyDistance {
@@ -54,7 +46,6 @@ export function driftingSupplyChoiceForVariant(
 ): EventChoiceDefinition {
   if (choice.id === 'sleep') return choice;
   const kind = driftingSupplyKindFromSeed(variantSeed);
-  const energyCost = driftingSupplyEnergyCost(kind);
   const outcomes = choice.outcomes.filter(({ resultId }) => (
     isDriftingSupplyResult(resultId, kind)
   ));
@@ -67,12 +58,15 @@ export function driftingSupplyChoiceForVariant(
     ...(choice.requirements === undefined ? {} : {
       requirements: choice.requirements.map((requirement) => (
         requirement.resource === 'energy'
-          ? { ...requirement, minimum: energyCost }
+          ? { ...requirement, minimum: DRIFTING_SUPPLY_PLAYER_ENERGY_COST }
           : requirement
       )),
     }),
     ...(choice.companionAction === undefined ? {} : {
-      companionAction: { ...choice.companionAction, energyCost },
+      companionAction: {
+        ...choice.companionAction,
+        energyCost: DRIFTING_SUPPLY_CARLITOS_ENERGY_COST,
+      },
     }),
   };
 }

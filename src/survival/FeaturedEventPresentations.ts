@@ -63,7 +63,8 @@ export class FeaturedEventPresentations {
     camera: PerspectiveCamera,
     driftingCargoSternTarget: Object3D,
     flowersDeckTarget: Object3D,
-    checkBackSternTarget: Object3D,
+    checkBackChestTarget: Object3D,
+    checkBackFishBenchTarget: Object3D,
     emitCue: (cue: EventPresentationCue) => void,
     onlyEventId?: FeaturedEventId | null,
     driftingWater?: DriftingWater,
@@ -80,7 +81,8 @@ export class FeaturedEventPresentations {
         models.clone('checkBackFish'),
         models.clone('checkBackAnglerfish'),
         camera,
-        checkBackSternTarget,
+        checkBackChestTarget,
+        checkBackFishBenchTarget,
         emitCue,
       ));
     }

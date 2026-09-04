@@ -1,6 +1,5 @@
 import {
   BackSide,
-  Box3,
   DoubleSide,
   Euler,
   Material,
@@ -59,8 +58,6 @@ export class EventItemUseAdapter {
   private readonly cameraSpacePosition = new Vector3();
   private readonly actorParentPosition = new Vector3();
   private readonly targetWorldPosition = new Vector3();
-  private readonly aimTargetBounds = new Box3();
-  private readonly aimTargetCenterLocal = new Vector3();
   private readonly actorWorldPosition = new Vector3();
   private readonly actionOriginPosition = new Vector3();
   private readonly actionOriginOffset = new Vector3();
@@ -108,9 +105,7 @@ export class EventItemUseAdapter {
   private actor: BorrowedSupplyActor | null = null;
   private profile: EventItemMotionProfile | null = null;
   private aimTarget: Object3D | null = null;
-  private aimTargetOwner: Object3D | null = null;
   private knifeAttack = false;
-  private centerAimTargetHeight = false;
   private cameraFacingSurface: CameraFacingSurface = 'none';
   private lockItemToHeldCamera = false;
   private alignItemToCamera = false;
@@ -143,8 +138,6 @@ export class EventItemUseAdapter {
     this.profile = eventItemMotionProfile(itemId);
     this.aimTarget = aimTarget;
     this.knifeAttack = itemId === 'knife';
-    this.centerAimTargetHeight = this.knifeAttack;
-    this.captureAimTargetCenter();
     this.cameraFacingSurface = facingSurface ?? (itemId === 'map'
       ? 'y'
       : itemId === 'compass' || itemId === 'spyglass' ? 'z' : 'none');
@@ -170,7 +163,6 @@ export class EventItemUseAdapter {
   setAimTarget(aimTarget: Object3D | null): void {
     if (this.disposed) return;
     this.aimTarget = aimTarget;
-    this.captureAimTargetCenter();
   }
 
   apply(sample: Readonly<EventItemUseSample>): void {
@@ -223,6 +215,7 @@ export class EventItemUseAdapter {
     this.applyCameraAlignedRotation(sample, actor);
     this.applyKnifeAimBeforeTravel(sample, actor, profile);
     this.applyTargetTravel(sample, actor, profile);
+    this.applyKnifeGripAfterTravel(sample, actor);
     this.applyCameraFacing(sample, actor);
     this.applyAim(sample, actor, profile);
     this.effects.apply(sample, actor.root);
@@ -242,9 +235,7 @@ export class EventItemUseAdapter {
     this.actor = null;
     this.profile = null;
     this.aimTarget = null;
-    this.aimTargetOwner = null;
     this.knifeAttack = false;
-    this.centerAimTargetHeight = false;
     this.cameraFacingSurface = 'none';
     this.lockItemToHeldCamera = false;
     this.alignItemToCamera = false;
@@ -265,37 +256,7 @@ export class EventItemUseAdapter {
     this.camera.updateProjectionMatrix();
   }
 
-  private captureAimTargetCenter(): void {
-    this.aimTargetOwner = null;
-    const aimTarget = this.aimTarget;
-    if (!this.centerAimTargetHeight || aimTarget === null) return;
-
-    let owner: Object3D | null = aimTarget;
-    while (owner !== null) {
-      owner.updateWorldMatrix(true, true);
-      this.aimTargetBounds.makeEmpty().setFromObject(owner, true);
-      if (!this.aimTargetBounds.isEmpty()) break;
-      owner = owner.parent;
-    }
-    if (owner === null) return;
-
-    aimTarget.getWorldPosition(this.targetWorldPosition);
-    this.targetWorldPosition.y = (
-      this.aimTargetBounds.min.y + this.aimTargetBounds.max.y
-    ) * 0.5;
-    this.aimTargetCenterLocal.copy(this.targetWorldPosition);
-    owner.worldToLocal(this.aimTargetCenterLocal);
-    this.aimTargetOwner = owner;
-  }
-
   private readAimTargetWorldPosition(aimTarget: Object3D): void {
-    if (this.aimTargetOwner !== null) {
-      this.aimTargetOwner.updateWorldMatrix(true, false);
-      this.targetWorldPosition.copy(this.aimTargetCenterLocal).applyMatrix4(
-        this.aimTargetOwner.matrixWorld,
-      );
-      return;
-    }
     aimTarget.updateWorldMatrix(true, false);
     aimTarget.getWorldPosition(this.targetWorldPosition);
   }
@@ -708,6 +669,14 @@ export class EventItemUseAdapter {
   ): void {
     if (!this.knifeAttack || sample.targetBlend <= 0) return;
     this.applyAim(sample, actor, profile);
+  }
+
+  private applyKnifeGripAfterTravel(
+    sample: Readonly<EventItemUseSample>,
+    actor: BorrowedSupplyActor,
+  ): void {
+    if (!this.knifeAttack || sample.targetBlend <= 0) return;
+    this.applyCameraAlignedRotation(sample, actor);
   }
 
   private setPoseRotation(sample: Readonly<EventItemUseSample>): void {

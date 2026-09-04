@@ -7,14 +7,14 @@ import {
 
 export type VisualQuality = 'low' | 'medium' | 'high';
 
-export const DEFAULT_VISUAL_QUALITY: VisualQuality = 'low';
+export const DEFAULT_VISUAL_QUALITY: VisualQuality = 'medium';
 export const VISUAL_QUALITY_STORAGE_KEY =
   'dont-sleep-with-the-fishes.visual-quality';
 
 export interface VisualQualityPreference extends StoredPreference<VisualQuality> {}
 
 export function parseVisualQuality(value: unknown): VisualQuality {
-  return value === 'medium' || value === 'high'
+  return value === 'low' || value === 'medium' || value === 'high'
     ? value
     : DEFAULT_VISUAL_QUALITY;
 }

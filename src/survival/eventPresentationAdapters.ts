@@ -50,7 +50,8 @@ import {
 export interface FeaturedEventPresentationTargets {
   readonly driftingCargoStern: Object3D;
   readonly flowersDeck: Object3D;
-  readonly checkBackStern: Object3D;
+  readonly checkBackChest: Object3D;
+  readonly checkBackFishBench: Object3D;
 }
 
 export interface EventPresentationAdapterDependencies {
@@ -373,7 +374,8 @@ export const createFeaturedAdapter: EventPresentationAdapterFactory = (
     dependencies.focusedDependencies.camera,
     targets.driftingCargoStern,
     targets.flowersDeck,
-    targets.checkBackStern,
+    targets.checkBackChest,
+    targets.checkBackFishBench,
     dependencies.focusedDependencies.emitCue,
     eventId,
     dependencies.driftingWater,
@@ -417,6 +419,7 @@ export const createWeatherAdapter: EventPresentationAdapterFactory = (
       dependencies.dedicatedEnvironment.eventModels,
       dependencies.focusedDependencies.camera,
       eventId,
+      dependencies.dedicatedEnvironment,
     );
     const ownedLayer = layer;
     const ownedWeather = weather;
@@ -506,7 +509,7 @@ export const createSupernaturalAdapter: EventPresentationAdapterFactory = (
     ], {
       stage: (context) => {
         ownedLayer.stage(eventId, context.variantSeed);
-        ownedSupernatural.stage(eventId);
+        ownedSupernatural.stage(eventId, context.variantSeed);
       },
       reveal: () => Promise.all([
         ownedLayer.reveal(eventId),

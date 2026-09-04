@@ -94,8 +94,7 @@ describe('Knife survival item', () => {
     expect(resolveEventItemUseContext('snatcher', 'knife', 'knife')).toBe('knife-stab');
     expect(resolveEventItemUseContext('swarm-of-sharks', 'knife', 'knife'))
       .toBe('knife-stab');
-    expect(resolveEventItemUseContext('check-the-back', 'knife', 'knife'))
-      .toBe('knife-stab');
+    expect(resolveEventItemUseContext('check-the-back', 'knife', 'knife')).toBeNull();
 
     const ready = createEventItemUseSample();
     sampleEventItemUse('knife-stab', 'knife', 0.36, ready);
@@ -119,16 +118,18 @@ describe('Knife survival item', () => {
     expect(profile.actionOrigin).toEqual([0.36, 0, 0]);
   });
 
-  it('runs distinct grip, aim, stab, retract, and grip-return phases', () => {
+  it('runs distinct grip, aim, stab, contact, and retract phases', () => {
     const grip = createEventItemUseSample();
     const pointed = createEventItemUseSample();
     const contact = createEventItemUseSample();
+    const contactHold = createEventItemUseSample();
     const retracting = createEventItemUseSample();
     const returnedToGrip = createEventItemUseSample();
 
     sampleEventItemUse('knife-stab', 'knife', 0.36, grip);
     sampleEventItemUse('knife-stab', 'knife', 0.5, pointed);
     sampleEventItemUse('knife-stab', 'knife', 0.68, contact);
+    sampleEventItemUse('knife-stab', 'knife', 0.7, contactHold);
     sampleEventItemUse('knife-stab', 'knife', 0.78, retracting);
     sampleEventItemUse('knife-stab', 'knife', 0.96, returnedToGrip);
 
@@ -140,6 +141,8 @@ describe('Knife survival item', () => {
     expect(contact.aimBlend).toBe(1);
     expect(contact.targetBlend).toBe(1);
     expect(contact.viewY).toBeCloseTo(pointed.viewY);
+    expect(contactHold.aimBlend).toBe(1);
+    expect(contactHold.targetBlend).toBe(1);
     expect(retracting.aimBlend).toBe(1);
     expect(retracting.targetBlend).toBeGreaterThan(0);
     expect(retracting.viewY).toBeCloseTo(pointed.viewY);
@@ -153,7 +156,7 @@ describe('Knife survival item', () => {
     expect(returnedToGrip.roll).toBe(grip.roll);
   });
 
-  it('stabs the active target on a direct path without camera motion', () => {
+  it('stabs the active target after clearing the gunwale without camera motion', () => {
     const ready = createEventItemUseSample();
     const contact = createEventItemUseSample();
 
@@ -164,7 +167,7 @@ describe('Knife survival item', () => {
     expect(contact.cameraTargetBlend).toBe(0);
     expect(contact.ballisticFlight).toBe(false);
     expect(contact.flightArc).toBe(0);
-    expect(contact.flightArcHeight).toBe(0);
+    expect(contact.flightArcHeight).toBeGreaterThan(0.6);
     expect(contact.minimumLiftY).toBe(0);
     expect(contact.aimBlend).toBe(1);
     expect(contact.viewZ).toBeGreaterThan(-0.7);
@@ -179,18 +182,26 @@ describe('Knife survival item', () => {
   it('keeps every new knife phase continuous', () => {
     let previousTargetBlend = 0;
     let previousAimBlend = 0;
+    let previousFlightArc = 0;
+    let maximumFlightArcStep = 0;
     for (let frame = 0; frame <= 300; frame += 1) {
       const sample = createEventItemUseSample();
       sampleEventItemUse('knife-stab', 'knife', frame / 300, sample);
 
       expect(Math.abs(sample.targetBlend - previousTargetBlend)).toBeLessThan(0.05);
       expect(Math.abs(sample.aimBlend - previousAimBlend)).toBeLessThan(0.05);
+      maximumFlightArcStep = Math.max(
+        maximumFlightArcStep,
+        Math.abs(sample.flightArc - previousFlightArc),
+      );
       if (sample.targetBlend > 0) expect(sample.aimBlend).toBe(1);
-      expect(sample.flightArc).toBe(0);
+      expect(sample.flightArc).toBeGreaterThanOrEqual(0);
       expect(sample.minimumLiftY).toBe(0);
       previousTargetBlend = sample.targetBlend;
       previousAimBlend = sample.aimBlend;
+      previousFlightArc = sample.flightArc;
     }
+    expect(maximumFlightArcStep).toBeLessThan(0.2);
   });
 
   it('retracts to the same grip and pauses before returning to the boat', () => {

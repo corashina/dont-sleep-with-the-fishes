@@ -14,6 +14,9 @@ export function schoolItemDuration(choiceId: string): number {
 export const SCHOOL_CENTER_X = 0;
 export const SCHOOL_CENTER_Z = 0;
 
+const SCHOOL_RADIUS_X_BY_BAND = [2.4, 3.15, 3.9, 4.65, 8] as const;
+const SCHOOL_RADIUS_Z_BY_BAND = [3.4, 4.75, 6.1, 7.45, 14] as const;
+
 export type SchoolItemEffectKind =
   | 'none'
   | 'net-sweep'
@@ -81,14 +84,16 @@ export function createSchoolVariants(count: number, seed: number): readonly Scho
   const safeSeed = Number.isFinite(seed) ? Math.trunc(seed) : 0;
   const variants: SchoolVariant[] = [];
   for (let index = 0; index < safeCount; index += 1) {
-    const lane = index % 4;
+    const distanceBand = index % SCHOOL_RADIUS_X_BY_BAND.length;
     const orbitAngle = (index / Math.max(1, safeCount)) * Math.PI * 2
       + (variantUnit(safeSeed, index, 1) - 0.5) * 0.34;
     variants.push({
       scale: 0.78 + variantUnit(safeSeed, index, 0) * 0.46,
       orbitAngle,
-      orbitRadiusX: 2.95 + lane * 0.48 + variantUnit(safeSeed, index, 2) * 0.38,
-      orbitRadiusZ: 4.95 + lane * 0.72 + variantUnit(safeSeed, index, 3) * 0.55,
+      orbitRadiusX: SCHOOL_RADIUS_X_BY_BAND[distanceBand]!
+        + variantUnit(safeSeed, index, 2) * 0.42,
+      orbitRadiusZ: SCHOOL_RADIUS_Z_BY_BAND[distanceBand]!
+        + variantUnit(safeSeed, index, 3) * 0.7,
       depth: 0.04 + variantUnit(safeSeed, index, 4) * 0.16,
       approachScale: 0.45 + variantUnit(safeSeed, index, 5) * 0.45,
       scatterScale: 0.7 + variantUnit(safeSeed, index, 6) * 0.5,

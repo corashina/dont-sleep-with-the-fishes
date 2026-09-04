@@ -14,7 +14,7 @@ import {
 
 export type ShadowQuality = 'low' | 'high';
 
-export const DEFAULT_SHADOW_QUALITY: ShadowQuality = 'low';
+export const DEFAULT_SHADOW_QUALITY: ShadowQuality = 'high';
 export const SHADOW_QUALITY_STORAGE_KEY =
   'dont-sleep-with-the-fishes.shadow-quality';
 
@@ -22,7 +22,7 @@ export interface ShadowQualityPreference
   extends StoredPreference<ShadowQuality> {}
 
 export function parseShadowQuality(value: unknown): ShadowQuality {
-  return value === 'high' ? value : DEFAULT_SHADOW_QUALITY;
+  return value === 'low' || value === 'high' ? value : DEFAULT_SHADOW_QUALITY;
 }
 
 export function applyShadowQuality(

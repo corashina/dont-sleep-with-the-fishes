@@ -56,4 +56,21 @@ describe('MenuUI how-to-play popup', () => {
 
     ui.dispose();
   });
+
+  it('closes when the backdrop is pressed but stays open for panel presses', () => {
+    const ui = new MenuUI(document.body);
+    const open = document.querySelector<HTMLButtonElement>('[data-menu-guide-open]')!;
+    const dialog = document.querySelector<HTMLElement>('[data-menu-guide]')!;
+    const panel = document.querySelector<HTMLElement>('.how-to-play-popup')!;
+
+    open.click();
+    panel.click();
+    expect(dialog.getAttribute('aria-hidden')).toBe('false');
+
+    dialog.click();
+    expect(dialog.getAttribute('aria-hidden')).toBe('true');
+    expect(document.activeElement).toBe(open);
+
+    ui.dispose();
+  });
 });

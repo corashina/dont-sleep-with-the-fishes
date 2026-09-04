@@ -159,6 +159,7 @@ export type EventResponse =
       readonly kind: 'item';
       readonly choiceId: EventResponseId;
       readonly instanceId: ItemInstanceId;
+      readonly resultId?: string;
     }
   | {
       readonly kind: 'choice';

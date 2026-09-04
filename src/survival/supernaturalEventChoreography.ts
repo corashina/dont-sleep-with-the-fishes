@@ -71,6 +71,11 @@ export interface GhostFloatPath {
   readonly radiusZ: number;
   readonly period: number;
   readonly phase: number;
+  readonly direction: -1 | 1;
+  readonly wanderX: number;
+  readonly wanderZ: number;
+  readonly wanderPeriod: number;
+  readonly wanderPhase: number;
   readonly bobHeight: number;
   readonly bobRate: number;
 }
@@ -80,53 +85,51 @@ export interface GhostFloatPose {
   readonly tangent: [number, number, number];
 }
 
-export const GHOST_FLOAT_PATHS = Object.freeze([
-  Object.freeze({
-    center: [-2.8, 0.65, -8.2] as const,
-    radiusX: 5.4,
-    radiusZ: 2,
-    period: 18,
-    phase: 0.2,
-    bobHeight: 0.12,
-    bobRate: 0.72,
-  }),
-  Object.freeze({
-    center: [3.2, 0.92, -10.8] as const,
-    radiusX: 6.3,
-    radiusZ: 2.6,
-    period: 23,
-    phase: 2.4,
-    bobHeight: 0.15,
-    bobRate: 0.64,
-  }),
-  Object.freeze({
-    center: [-3.6, 1.2, -13.5] as const,
-    radiusX: 6.8,
-    radiusZ: 2.8,
-    period: 27,
-    phase: 4.1,
-    bobHeight: 0.18,
-    bobRate: 0.58,
-  }),
-  Object.freeze({
-    center: [3.8, 0.52, -16.4] as const,
-    radiusX: 7.5,
-    radiusZ: 3.2,
-    period: 31,
-    phase: 1.4,
-    bobHeight: 0.11,
-    bobRate: 0.68,
-  }),
-  Object.freeze({
-    center: [0, 1.42, -19.2] as const,
-    radiusX: 8,
-    radiusZ: 3.5,
-    period: 35,
-    phase: 5.2,
-    bobHeight: 0.2,
-    bobRate: 0.54,
-  }),
-] as const satisfies readonly GhostFloatPath[]);
+const GHOST_CORRIDORS = Object.freeze([
+  Object.freeze([-7.8, 0.72, -8.5] as const),
+  Object.freeze([6.8, 1.05, -11.7] as const),
+  Object.freeze([-8.4, 1.25, -15.6] as const),
+  Object.freeze([7.7, 0.62, -19.2] as const),
+  Object.freeze([0, 1.5, -23] as const),
+]);
+
+function seededUnit(seed: number): number {
+  let value = seed | 0;
+  value ^= value << 13;
+  value ^= value >>> 17;
+  value ^= value << 5;
+  return (value >>> 0) / 0x1_0000_0000;
+}
+
+function pathUnit(seed: number, index: number, channel: number): number {
+  return seededUnit(
+    (seed | 0)
+      ^ Math.imul(index + 1, 0x45d9f3b)
+      ^ Math.imul(channel + 17, 0x27d4eb2d),
+  );
+}
+
+export function createGhostFloatPaths(seed: number): readonly GhostFloatPath[] {
+  const safeSeed = Number.isFinite(seed) ? Math.trunc(seed) : 0;
+  return Object.freeze(GHOST_CORRIDORS.map((corridor, index) => Object.freeze({
+    center: Object.freeze([
+      corridor[0] + (pathUnit(safeSeed, index, 0) - 0.5) * 1.4,
+      corridor[1] + (pathUnit(safeSeed, index, 1) - 0.5) * 0.24,
+      corridor[2] + (pathUnit(safeSeed, index, 2) - 0.5) * 0.7,
+    ] as const),
+    radiusX: 1.35 + pathUnit(safeSeed, index, 3) * 0.8,
+    radiusZ: 0.62 + pathUnit(safeSeed, index, 4) * 0.42,
+    period: 13 + pathUnit(safeSeed, index, 5) * 10,
+    phase: pathUnit(safeSeed, index, 6) * Math.PI * 2,
+    direction: pathUnit(safeSeed, index, 7) < 0.5 ? -1 : 1,
+    wanderX: 0.32 + pathUnit(safeSeed, index, 8) * 0.42,
+    wanderZ: 0.2 + pathUnit(safeSeed, index, 9) * 0.3,
+    wanderPeriod: 7 + pathUnit(safeSeed, index, 10) * 8,
+    wanderPhase: pathUnit(safeSeed, index, 11) * Math.PI * 2,
+    bobHeight: 0.1 + pathUnit(safeSeed, index, 12) * 0.12,
+    bobRate: 0.46 + pathUnit(safeSeed, index, 13) * 0.34,
+  })));
+}
 
 const GHOST_REVEAL_START = 0.02;
 const GHOST_REVEAL_STAGGER = 0.015;
@@ -144,18 +147,26 @@ export function sampleGhostFloatPathInto(
   elapsedSeconds: number,
 ): GhostFloatPose {
   const time = Number.isFinite(elapsedSeconds) ? elapsedSeconds : 0;
-  const angularSpeed = Math.PI * 2 / path.period;
+  const angularSpeed = path.direction * Math.PI * 2 / path.period;
+  const wanderSpeed = Math.PI * 2 / path.wanderPeriod;
   const angle = time * angularSpeed + path.phase;
+  const wanderAngle = time * wanderSpeed + path.wanderPhase;
   const cosine = Math.cos(angle);
   const sine = Math.sin(angle);
   const bobPhase = time * path.bobRate + path.phase * 1.7;
 
-  output.position[0] = path.center[0] + path.radiusX * cosine;
+  output.position[0] = path.center[0]
+    + path.radiusX * cosine
+    + path.wanderX * Math.sin(wanderAngle);
   output.position[1] = path.center[1] + Math.sin(bobPhase) * path.bobHeight;
-  output.position[2] = path.center[2] + path.radiusZ * sine;
-  output.tangent[0] = -path.radiusX * sine * angularSpeed;
+  output.position[2] = path.center[2]
+    + path.radiusZ * sine
+    + path.wanderZ * Math.cos(wanderAngle);
+  output.tangent[0] = -path.radiusX * sine * angularSpeed
+    + path.wanderX * Math.cos(wanderAngle) * wanderSpeed;
   output.tangent[1] = Math.cos(bobPhase) * path.bobHeight * path.bobRate;
-  output.tangent[2] = path.radiusZ * cosine * angularSpeed;
+  output.tangent[2] = path.radiusZ * cosine * angularSpeed
+    - path.wanderZ * Math.sin(wanderAngle) * wanderSpeed;
   return output;
 }
 
@@ -252,7 +263,7 @@ export function sampleSupernaturalReveal(
   if (t === 0) return true;
 
   if (eventId === 'ghosts') {
-    for (let index = 0; index < GHOST_FLOAT_PATHS.length; index += 1) {
+    for (let index = 0; index < GHOST_CORRIDORS.length; index += 1) {
       const start = GHOST_REVEAL_START + index * GHOST_REVEAL_STAGGER;
       output.ghostVisibilities[index] = smoothstep((t - start) / 0.1);
     }

@@ -1,7 +1,9 @@
 /// <reference types="vite/client" />
 
 import generatedMetadataJson from '../assets/models/events/event-model-metadata.json';
+import fishingMetadataJson from '../assets/models/fishing/fishing-model-metadata.json';
 import { FOCUSED_EVENT_MODEL_METADATA } from '../world/focusedEventModelMetadata';
+import { FISHING_CATCH_MODEL_SPECS } from './fishingModelManifest';
 
 export const SURVIVAL_EVENT_MODEL_IDS = [
   'driftingBarrel',
@@ -89,7 +91,8 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
 
 export const EVENT_MODEL_IDS = Object.freeze([
   'fogMan', 'ghost', 'siren', 'sirenRock',
-  'leakPlanks', 'schoolFish', 'snatcher', 'anglerFish', 'shark', 'deathStareBlob',
+  'leakPlanks', 'schoolFish', 'cod', 'bass', 'redSnapper',
+  'snatcher', 'anglerFish', 'shark', 'deathStareBlob',
   'tornadoCore',
   'containerShip',
   'wreckageBox', 'wreckageCrate', 'wreckagePallet',
@@ -157,6 +160,24 @@ const PRESENTATION = {
     rotation: [0, -Math.PI / 2, 0],
     offset: [0, 0, 0],
     maxTriangles: 2_000,
+  },
+  cod: {
+    targetLongestDimension: 0.62,
+    rotation: [0, Math.PI, 0],
+    offset: [0, 0, 0],
+    maxTriangles: FISHING_CATCH_MODEL_SPECS.cod.maxTriangles,
+  },
+  bass: {
+    targetLongestDimension: 0.62,
+    rotation: [0, -Math.PI / 2, 0],
+    offset: [0, 0, 0],
+    maxTriangles: FISHING_CATCH_MODEL_SPECS.bass.maxTriangles,
+  },
+  redSnapper: {
+    targetLongestDimension: 0.62,
+    rotation: [0, -Math.PI / 2, 0],
+    offset: [0, 0, 0],
+    maxTriangles: FISHING_CATCH_MODEL_SPECS.redSnapper.maxTriangles,
   },
   snatcher: {
     targetLongestDimension: 2.5,
@@ -263,6 +284,9 @@ const generatedMetadata = {
   sirenRock: checkedMetadata('sirenRock', generatedMetadataJson.sirenRock),
   leakPlanks: checkedMetadata('leakPlanks', generatedMetadataJson.leakPlanks),
   schoolFish: checkedMetadata('schoolFish', generatedMetadataJson.schoolFish),
+  cod: checkedMetadata('cod', fishingMetadataJson.cod),
+  bass: checkedMetadata('bass', fishingMetadataJson.bass),
+  redSnapper: checkedMetadata('redSnapper', fishingMetadataJson.redSnapper),
   snatcher: checkedMetadata('snatcher', generatedMetadataJson.snatcher),
   anglerFish: checkedMetadata('anglerFish', generatedMetadataJson.anglerFish),
   shark: checkedMetadata('shark', generatedMetadataJson.shark),
@@ -275,6 +299,9 @@ const generatedMetadata = {
 } satisfies Readonly<Record<EventModelId, EventModelMetadata>>;
 
 function modelUrl(id: EventModelId): string {
+  if (id === 'cod' || id === 'bass' || id === 'redSnapper') {
+    return FISHING_CATCH_MODEL_SPECS[id].url;
+  }
   const url = urls[`../assets/models/events/${id}.glb`];
   if (!url) throw new Error(`Missing event model asset: ${id}`);
   return url;
