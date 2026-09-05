@@ -1,5 +1,5 @@
 import { PerspectiveCamera, Scene } from 'three';
-import type { GamePhase, PhaseContext } from '../app/GamePhase';
+import type { GamePhase, MenuPhaseContext } from '../app/GamePhase';
 import type { AudioScope } from '../audio/AudioScope';
 import { MenuModelLibrary } from '../menu/MenuModelLibrary';
 import { MENU_FADE_SECONDS, sampleMenuFade } from '../menu/menuChoreography';
@@ -46,7 +46,7 @@ interface MainMenuResources {
 }
 
 function createMainMenuResources(
-  context: PhaseContext,
+  context: MenuPhaseContext,
   scene: Scene,
   dependencies: MainMenuPhaseDependencies,
 ): MainMenuResources {
@@ -116,7 +116,7 @@ export class MainMenuPhase implements GamePhase {
   };
 
   constructor(
-    private readonly context: PhaseContext,
+    private readonly context: MenuPhaseContext,
     private readonly onComplete: () => void,
     private readonly dependencies: MainMenuPhaseDependencies =
       PRODUCTION_MAIN_MENU_DEPENDENCIES,

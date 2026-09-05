@@ -8,7 +8,7 @@ import {
   type BufferGeometry,
   type Material,
 } from 'three';
-import type { GamePhase, PhaseContext } from '../app/GamePhase';
+import type { GamePhase, ShipPhaseContext } from '../app/GamePhase';
 import type { VisualQuality } from '../rendering/visualQuality';
 import { pointerLockTransition } from '../game/GameLoop';
 import {
@@ -90,7 +90,7 @@ const ALARM_AUDIO_EMITTERS: readonly SpatialAudioEmitter[] = Object.freeze(
 );
 
 function createScavengeHandModelFactory(
-  propModels: PhaseContext['propModels'],
+  propModels: ShipPhaseContext['propModels'],
 ): ScavengeHandModelFactory {
   return {
     create(id) {
@@ -176,7 +176,7 @@ export class ScavengePhase implements GamePhase {
   private unsubscribeLanguage: () => void = () => undefined;
 
   constructor(
-    private readonly context: PhaseContext,
+    private readonly context: ShipPhaseContext,
     private readonly onComplete: (result: Readonly<ScavengeResult>) => void,
     private readonly onRestart: () => void,
     private readonly onReturnToMenu: () => void,

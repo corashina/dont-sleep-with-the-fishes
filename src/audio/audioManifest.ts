@@ -106,8 +106,18 @@ export const EVENT_ONLY_SOUND_IDS = Object.freeze([
 
 const eventOnlySounds = new Set<SoundId>(EVENT_ONLY_SOUND_IDS);
 
-export const SHARED_SOUND_IDS = Object.freeze(
-  SOUND_IDS.filter((id) => !eventOnlySounds.has(id)),
+export const INTERFACE_SOUND_IDS = ['confirm', 'denied', 'pause', 'resume', 'journal'] as const satisfies readonly SoundId[];
+export const MENU_SOUND_IDS = ['menuAmbient', ...INTERFACE_SOUND_IDS] as const;
+export const SHIP_SOUND_IDS = [
+  ...INTERFACE_SOUND_IDS, 'roomTone', 'shipAlarm', 'scavengeChase',
+  'scavengeCountdown', 'woodStep', 'jump', 'itemHandling', 'sinkingEnding', 'shipCrash',
+] as const satisfies readonly SoundId[];
+const shipOnlySounds = new Set<SoundId>([
+  'menuAmbient', 'roomTone', 'shipAlarm', 'scavengeChase', 'scavengeCountdown',
+  'woodStep', 'jump', 'shipCrash',
+]);
+export const SURVIVAL_SOUND_IDS = Object.freeze(
+  SOUND_IDS.filter(id => !eventOnlySounds.has(id) && !shipOnlySounds.has(id)),
 );
 
 export interface AudioAssetDefinition {

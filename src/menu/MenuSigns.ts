@@ -12,6 +12,10 @@ import { disposeResourceSets } from '../world/SceneResources';
 import { onLanguageChange } from '../i18n/language';
 import { menuText } from '../i18n/menuMessages';
 
+export async function loadMenuSignFont(): Promise<void> {
+  await document.fonts.load('400 150px "Bowlby One SC"');
+}
+
 export const MENU_GUIDE_SIGN_POSITION = [-2.55, -0.94, 3.75] as const;
 export const MENU_GUIDE_SIGN_ROTATION = [0.02, 0.24, -0.06] as const;
 export const MENU_START_SIGN_POSITION = [2.55, -0.86, 3.72] as const;

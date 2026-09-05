@@ -8,9 +8,12 @@ import type {
   SpatialAudioOptions,
 } from '../src/audio/AudioBackend';
 import { AudioSystem } from '../src/audio/AudioSystem';
+import { WebAudioBackend } from '../src/audio/WebAudioBackend';
 import { SurvivalAudio } from '../src/audio/SurvivalAudio';
 import {
-  SHARED_SOUND_IDS,
+  MENU_SOUND_IDS,
+  SHIP_SOUND_IDS,
+  SURVIVAL_SOUND_IDS,
   type AudioBusId,
   type SoundId,
 } from '../src/audio/audioManifest';
@@ -123,12 +126,51 @@ describe('AudioSystem', () => {
     expect(backend.voices.map(({ id }) => id)).toEqual(['midnightMonsterAttack']);
   });
 
-  it('loads only shared sounds during system startup', async () => {
+  it('starts audio without acquiring phase sounds', async () => {
     const backend = new FakeAudioBackend();
     const system = await AudioSystem.loadWithBackend(backend);
 
-    expect(backend.acquire).toHaveBeenCalledExactlyOnceWith(SHARED_SOUND_IDS);
+    expect(backend.acquire).not.toHaveBeenCalled();
 
+    system.dispose();
+  });
+
+  it('leases phase sounds and leaves incoming shared voices playing', async () => {
+    const backend = new FakeAudioBackend();
+    const system = AudioSystem.forTest(backend);
+    const menu = await system.acquirePhaseAudio(MENU_SOUND_IDS);
+    const ship = await system.acquirePhaseAudio(SHIP_SOUND_IDS);
+    const survival = await system.acquirePhaseAudio(SURVIVAL_SOUND_IDS);
+    const incoming = system.createScope();
+    const voice = incoming.play('confirm') as FakeVoice;
+    menu.dispose(); menu.dispose();
+    expect(backend.acquire.mock.calls.map(call => call[0])).toEqual([MENU_SOUND_IDS, SHIP_SOUND_IDS, SURVIVAL_SOUND_IDS]);
+    expect(backend.release).toHaveBeenCalledExactlyOnceWith(MENU_SOUND_IDS);
+    expect(voice.stop).not.toHaveBeenCalled();
+    incoming.dispose(); ship.dispose(); survival.dispose(); system.dispose();
+  });
+
+  it('retains actual shared backend buffers until the last phase releases them', async () => {
+    const context = {
+      createGain: () => ({ connect: vi.fn(), disconnect: vi.fn(), gain: {
+        value: 1, cancelScheduledValues: vi.fn(), setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn(),
+      } }),
+      destination: {}, currentTime: 0, state: 'running', close: async () => undefined,
+      decodeAudioData: async () => ({ duration: 1 }),
+    };
+    const fetchAudio = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(0) }));
+    const backend = new WebAudioBackend(context as unknown as AudioContext, fetchAudio as unknown as typeof fetch);
+    const system = AudioSystem.forTest(backend);
+    const menu = await system.acquirePhaseAudio(MENU_SOUND_IDS);
+    const ship = await system.acquirePhaseAudio(SHIP_SOUND_IDS);
+    const buffers = (backend as unknown as { buffers: Map<SoundId, AudioBuffer> }).buffers;
+    const sharedBuffer = buffers.get('confirm');
+    menu.dispose();
+    expect(buffers.has('menuAmbient')).toBe(false);
+    expect(buffers.get('confirm')).toBe(sharedBuffer);
+    expect(buffers.has('roomTone')).toBe(true);
+    ship.dispose();
+    expect(buffers.size).toBe(0);
     system.dispose();
   });
 

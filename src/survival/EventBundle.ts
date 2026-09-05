@@ -1,4 +1,4 @@
-import type { AudioSystem, EventAudioLease } from '../audio/AudioSystem';
+import type { AudioSystem, AudioLease } from '../audio/AudioSystem';
 import { runCleanupSteps } from '../world/SceneResources';
 import type { EventPresentationAdapter } from './EventPresentationAdapter';
 import { EventModelLibrary } from './EventModelLibrary';
@@ -64,7 +64,7 @@ export class EventBundle {
     private readonly adapter: EventPresentationAdapter,
     private readonly featuredModels: SurvivalEventModelLibrary,
     private readonly dedicatedModels: EventModelLibrary,
-    private readonly audio: EventAudioLease,
+    private readonly audio: AudioLease,
   ) {}
 
   attach(): void {
@@ -146,7 +146,7 @@ export class EventBundleLoader {
       throw new EventBundleLoadError(eventId, message, { cause: failure.reason });
     }
 
-    const audio = (audioResult as PromiseFulfilledResult<EventAudioLease>).value;
+    const audio = (audioResult as PromiseFulfilledResult<AudioLease>).value;
     const dedicated = (
       dedicatedResult as PromiseFulfilledResult<EventModelLibrary>
     ).value;
