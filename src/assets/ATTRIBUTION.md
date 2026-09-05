@@ -266,7 +266,7 @@ The Midnight shovel runtime cue uses a six-second cutoff. The MP3 remains unenco
 | Runtime ID | File | Source / creator |
 |---|---|---|
 | netImpact | `netImpact.mp3` | [Slap Hit / qubodup](https://freesound.org/people/qubodup/sounds/222507/), CC0 1.0. HQ preview downloaded September 5, 2026. |
-| knifeImpact | `knifeImpact.mp3` | [Knife Stab Melon / jawbutch](https://freesound.org/people/jawbutch/sounds/344404/), CC0 1.0. HQ preview downloaded September 5, 2026. |
+| knifeImpact | `knifeImpact.mp3` | [Knife Stab / Mixedupmoviestuff](https://freesound.org/people/Mixedupmoviestuff/sounds/179222/), CC0 1.0. HQ preview downloaded September 5, 2026. |
 | menuAmbient | `menuAmbient.mp3` | [Underwater Ambience / Tim_Verberne](https://freesound.org/people/Tim_Verberne/sounds/482167/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | calmOcean | `calmOcean.mp3` | [Calm Ocean Waves / SamsterBirdies](https://freesound.org/people/SamsterBirdies/sounds/578524/) |
 | roughOcean | `roughOcean.mp3` | [Storm Sea Close / frodeims](https://freesound.org/people/frodeims/sounds/616222/) |

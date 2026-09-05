@@ -41,7 +41,7 @@ describe('MenuUI how-to-play popup', () => {
         expect(document.querySelectorAll<HTMLImageElement>('[data-menu-guide-image]')[1]!.src)
           .toContain('/images/how-to-play/survival-loot.png');
         expect(document.querySelector('[data-menu-guide-description]')?.textContent).toContain('select the toolbox');
-        expect(document.querySelector('[data-menu-guide-description]')?.textContent).toContain('Collecting supplies costs ⚡.');
+        expect(document.querySelector('[data-menu-guide-description]')?.textContent).toContain('Collecting supplies costs 1 energy.');
       }
       if (index < titles.length - 1) next.click();
     });
