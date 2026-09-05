@@ -139,17 +139,6 @@ export class SurvivalDayActionFlow {
     );
   }
 
-  repairOption(snapshot: SurvivalSnapshot): DayActionOption | undefined {
-    if (snapshot.repairMaterial > 0) {
-      return { kind: 'hullRepair', material: 'repairMaterial' };
-    }
-    const hasDuctTape = Object.values(snapshot.inventory).some(
-      (item) => item?.type === 'ductTape' && item.condition === 'usable',
-    );
-    if (hasDuctTape) return { kind: 'hullRepair', material: 'ductTape' };
-    return undefined;
-  }
-
   repairItemReason(snapshot: SurvivalSnapshot): string | null {
     const target = Object.values(snapshot.inventory).find(
       (item) => item?.condition === 'broken' && ITEM_DEFINITIONS[item.type].breakable,
@@ -163,10 +152,7 @@ export class SurvivalDayActionFlow {
 
   unavailableReason(snapshot: SurvivalSnapshot, action: DayActionId): string | null {
     if (action === 'repairItem') return this.repairItemReason(snapshot);
-    return this.dependencies.session.availableReason?.(
-      action,
-      action === 'repair' ? this.repairOption(snapshot) : undefined,
-    ) ?? null;
+    return this.dependencies.session.availableReason?.(action) ?? null;
   }
 
   settleForVisibilityChange(): void {
@@ -341,9 +327,7 @@ export class SurvivalDayActionFlow {
   } | null {
     try {
       const beforeAction = this.dependencies.session.snapshot();
-      const selectedOption = action === 'repair'
-        ? this.repairOption(this.dependencies.session.snapshot())
-        : option;
+      const selectedOption = option;
       const outcome = this.dependencies.session.perform?.(action, selectedOption);
       return outcome === undefined ? null : { beforeAction, selectedOption, outcome };
     } catch (error) {

@@ -1478,9 +1478,7 @@ describe('SurvivalSession daytime actions', () => {
     const treating = new SurvivalSession(saved('medicalKit'), { seed: 1, initial: { health: 90 } });
     expect(treating.perform('treat').deltas).toEqual({ health: 10 });
     const repairing = new SurvivalSession(saved(), { seed: 1, initial: { hull: 90, energy: 3 } });
-    (repairing as unknown as { repairMaterial: number }).repairMaterial = 1;
-    expect(repairing.perform('repair', { kind: 'hullRepair', material: 'repairMaterial' }).deltas)
-      .toEqual({ energy: -1, hull: 10, repairMaterial: -1 });
+    expect(repairing.perform('repair').deltas).toEqual({ energy: -1, hull: 10 });
   });
 
   it('rejects unowned or exhausted event items without changing the event', () => {
@@ -1683,10 +1681,7 @@ describe('SurvivalSession daytime actions', () => {
     const attempt = beginFishing(afterFishing);
     expect(afterFishing.finishFishing(attempt.snapshot().id, reelCatch(attempt)).accepted).toBe(true);
     expect(afterFishing.perform('eat').accepted).toBe(true);
-    expect(afterFishing.perform('repair', {
-      kind: 'hullRepair',
-      material: 'ductTape',
-    }).accepted).toBe(true);
+    expect(afterFishing.perform('repair').accepted).toBe(true);
     expect(afterFishing.snapshot()).toMatchObject({ energy: 1, state: 'day' });
     expect(afterFishing.perform('endDay').accepted).toBe(true);
   });
@@ -2162,7 +2157,7 @@ describe('SurvivalSession daytime actions', () => {
     expect(storm.perform('dive')).toMatchObject({ accepted: false, code: 'weather-blocked' });
   });
 
-  it('eats for free, then repairs and treats using the documented resources', () => {
+  it('eats for free, then repairs with energy and treats with a Medkit', () => {
     const session = new SurvivalSession(saved('cannedFood', 'ductTape', 'medicalKit'), {
       seed: 1,
       random: sequenceRandom([0]),
@@ -2172,20 +2167,37 @@ describe('SurvivalSession daytime actions', () => {
       deltas: { hunger: -35, food: -1 },
     });
     expect(session.snapshot().energy).toBe(2);
-    expect(session.perform('repair', { kind: 'hullRepair', material: 'ductTape' }))
-      .toMatchObject({ deltas: { energy: -1, hull: 15 } });
+    expect(session.perform('repair'))
+      .toMatchObject({ deltas: { energy: -2, hull: 60 } });
+    expect(session.snapshot().inventory['ductTape-1']?.condition).toBe('usable');
     expect(session.perform('treat')).toMatchObject({ deltas: { health: 30 } });
   });
 
-  it.each([[99, 1], [1, 1]] as const)('charges one repair energy at %i hull', (hull, energyCost) => {
+  it.each([
+    [7, 3, 3, 93],
+    [90, 3, 1, 10],
+    [7, 1, 1, 33],
+    [66, 3, 2, 34],
+    [1, 4, 3, 99],
+  ] as const)(
+    'repairs hull %i with energy %i by spending %i and restoring %i',
+    (hull, energy, energySpent, hullRestored) => {
     const session = new SurvivalSession(saved('ductTape'), {
       seed: 1,
-      initial: { hull, energy: 3 },
+      initial: { hull, energy },
     });
 
-    expect(session.perform('repair', { kind: 'hullRepair', material: 'ductTape' }))
-      .toMatchObject({ accepted: true, deltas: { energy: -energyCost } });
-  });
+      expect(session.perform('repair')).toMatchObject({
+        accepted: true,
+        deltas: { energy: -energySpent, hull: hullRestored },
+      });
+      expect(session.snapshot()).toMatchObject({
+        energy: energy - energySpent,
+        hull: hull + hullRestored,
+      });
+      expect(session.snapshot().inventory['ductTape-1']?.condition).toBe('usable');
+    },
+  );
 
   it('rejects full-hull repairs and repairs without energy', () => {
     const full = new SurvivalSession(saved('ductTape'), {
@@ -2193,7 +2205,7 @@ describe('SurvivalSession daytime actions', () => {
       initial: { hull: 100, energy: 3 },
     });
     const fullSnapshot = full.snapshot();
-    expect(full.perform('repair', { kind: 'hullRepair', material: 'ductTape' }))
+    expect(full.perform('repair'))
       .toMatchObject({ accepted: false, code: 'hull-full' });
     expect(full.snapshot()).toEqual(fullSnapshot);
 
@@ -2201,7 +2213,7 @@ describe('SurvivalSession daytime actions', () => {
       seed: 1,
       initial: { hull: 33, energy: 0 },
     });
-    expect(exhausted.perform('repair', { kind: 'hullRepair', material: 'ductTape' }))
+    expect(exhausted.perform('repair'))
       .toMatchObject({
         accepted: false,
         code: 'not-enough-energy',
@@ -2308,10 +2320,8 @@ describe('SurvivalSession daytime actions', () => {
       initial: { energy: 4, hull: 75 },
     });
 
-    expect(session.perform('repair', {
-      kind: 'hullRepair',
-      material: 'ductTape',
-    })).toMatchObject({ accepted: true, deltas: { energy: -1 } });
+    expect(session.perform('repair'))
+      .toMatchObject({ accepted: true, deltas: { energy: -1, hull: 25 } });
     expect(session.snapshot().energy).toBe(3);
     expect(session.perform('useEnergyBar')).toMatchObject({
       accepted: false,
@@ -2367,22 +2377,20 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it('rejects every invalid action option before gates without mutating state', () => {
-    const hullRepair = { kind: 'hullRepair', material: 'repairMaterial' } as const;
     const itemRepair = { kind: 'itemRepair', target: 'compass-1' } as const;
     const cases: Array<{
       action: Exclude<DayActionId, 'fish'>;
       option: DayActionOption | null | undefined;
     }> = [
-      { action: 'dive', option: hullRepair },
-      { action: 'eat', option: hullRepair },
-      { action: 'repair', option: undefined },
+      { action: 'dive', option: itemRepair },
+      { action: 'eat', option: itemRepair },
       { action: 'repair', option: itemRepair },
       { action: 'repairItem', option: undefined },
-      { action: 'repairItem', option: hullRepair },
-      { action: 'treat', option: hullRepair },
-      { action: 'answerRadio', option: hullRepair },
-      { action: 'useEnergyBar', option: hullRepair },
-      { action: 'endDay', option: hullRepair },
+      { action: 'repairItem', option: null },
+      { action: 'treat', option: itemRepair },
+      { action: 'answerRadio', option: itemRepair },
+      { action: 'useEnergyBar', option: itemRepair },
+      { action: 'endDay', option: itemRepair },
     ];
 
     for (const { action, option } of cases) {

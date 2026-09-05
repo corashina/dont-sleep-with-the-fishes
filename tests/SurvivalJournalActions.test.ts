@@ -90,26 +90,23 @@ describe('ordinary day action journal', () => {
     expect(formatJournalEntry(entry).daytime).toContain('I found no supplies.');
   });
 
-  it('records both hull repair supplies without changing their separate costs', () => {
+  it('records energy-scaled hull repair without consuming Duct Tape', () => {
     const source = new SurvivalSession(saved('ductTape'), {
       seed: 1, initial: { day: 2, energy: 3, hull: 65 },
     });
-    const session = SurvivalSession.restore({ ...source.exportCheckpoint(), repairMaterial: 1 });
-    expect(session.perform('repair', { kind: 'hullRepair', material: 'repairMaterial' }).accepted).toBe(true);
-    expect(session.perform('repair', { kind: 'hullRepair', material: 'ductTape' }).accepted).toBe(true);
-    expect(session.perform('repair', { kind: 'hullRepair', material: 'ductTape' }).accepted).toBe(false);
+    const session = SurvivalSession.restore(source.exportCheckpoint());
+    expect(session.perform('repair').accepted).toBe(true);
+    expect(session.perform('repair').accepted).toBe(false);
 
     const entry = finishDay(session);
-    expect(entry.actions).toEqual([
-      { kind: 'dayAction', action: 'repair', deltas: { energy: -1, hull: 25, repairMaterial: -1 }, inventoryMutations: [] },
-      { kind: 'dayAction', action: 'repair', deltas: { energy: -1, hull: 10 },
-        inventoryMutations: [{ kind: 'consume', instanceIds: ['ductTape-1'] }] },
-    ]);
+    expect(entry.actions).toEqual([{
+      kind: 'dayAction', action: 'repair', deltas: { energy: -2, hull: 35 },
+      inventoryMutations: [],
+    }]);
     const copy = formatJournalEntry(entry).daytime;
-    expect(copy).toContain('Hull +25');
-    expect(copy).toContain('Hull +10');
-    expect(copy).toContain('Duct Tape -1');
-    expect(copy).toContain('duct tape was used up');
+    expect(copy).toContain('Hull +35');
+    expect(copy).not.toContain('Duct Tape');
+    expect(session.snapshot().inventory['ductTape-1']?.condition).toBe('usable');
     expect(copy).not.toMatch(/repair material|repair timber/i);
   });
 
@@ -140,7 +137,7 @@ describe('ordinary day action journal', () => {
     });
     expect(session.perform('treat').accepted).toBe(false);
     expect(session.perform('dive').accepted).toBe(false);
-    expect(session.perform('repair', { kind: 'hullRepair', material: 'repairMaterial' }).accepted).toBe(false);
+    expect(session.perform('repair').accepted).toBe(false);
     expect(session.perform('repairItem', { kind: 'itemRepair', target: 'compass-1' }).accepted).toBe(false);
 
     const entry = finishDay(session);
@@ -153,10 +150,10 @@ describe('ordinary day action journal', () => {
       seed: 41, initial: { day: 2, health: 90, energy: 4, hull: 90 },
       initialConditions: { 'compass-1': 'broken' },
     });
-    const session = SurvivalSession.restore({ ...source.exportCheckpoint(), repairMaterial: 1 });
+    const session = SurvivalSession.restore(source.exportCheckpoint());
     expect(session.perform('treat').accepted).toBe(true);
     expect(session.perform('repairItem', { kind: 'itemRepair', target: 'compass-1' }).accepted).toBe(true);
-    expect(session.perform('repair', { kind: 'hullRepair', material: 'repairMaterial' }).accepted).toBe(true);
+    expect(session.perform('repair').accepted).toBe(true);
     expect(session.perform('dive').accepted).toBe(true);
     if (stage === 'finalized') {
       finishDay(session);
