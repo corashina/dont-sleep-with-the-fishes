@@ -21,6 +21,21 @@ export interface PolyPizzaModelSource {
   readonly maxTriangles?: number;
   readonly simplifyRatio?: number;
   readonly simplifyError?: number;
+  readonly committedSha256?: string;
+  readonly textureProfile?: Readonly<{
+    maxDimension: number;
+    colorQuality: number;
+    normalQuality: number;
+    maxFileBytes: number;
+    textures: readonly Readonly<{
+      name: string;
+      width: number;
+      height: number;
+      channels: number;
+      slots: readonly string[];
+      hasAlpha: boolean;
+    }>[];
+  }>;
 }
 
 export const POLY_PIZZA_MODEL_SOURCES: Readonly<Record<string, PolyPizzaModelSource>>;

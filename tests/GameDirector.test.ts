@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
+import { createTestGame, flushPhases, type GameFixtureOptions } from './helpers/game';
 // Importance: 10/10 (scaled from 5/5). Protects phase lifecycle and ownership.
 
 import { describe, expect, it, vi } from 'vitest';
 import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
-import { Game, type GameTestOptions } from '../src/Game';
+import { Game } from '../src/Game';
 import type { ScavengeResult } from '../src/game/ScavengeSession';
 import type { MenuModelLibrary } from '../src/menu/MenuModelLibrary';
 import type { SurvivalPhaseStart } from '../src/survival/SurvivalPhase';
@@ -39,10 +40,10 @@ function createImmediateMenu(
 
 function testOptions(
   overrides: Omit<
-    GameTestOptions,
+    GameFixtureOptions,
     'propModels' | 'menuModels' | 'shipFurniture' | 'skyAssets' | 'physicsRuntime'
   > = {},
-): GameTestOptions {
+): GameFixtureOptions {
   return {
     propModels: createTestPropModels(),
     menuModels: EMPTY_MENU_MODELS,
@@ -54,26 +55,30 @@ function testOptions(
 }
 
 describe('Game director', () => {
-  it('starts the shared clock and schedules animation only once', () => {
+  it('starts the shared clock and schedules animation only once', async () => {
     const startClock = vi.fn();
     const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(42);
-    const game = Game.forTest({
+    const game = createTestGame({
       createMenu: createImmediateMenu,
       createScavenge: () => phase(),
       createSurvival: () => phase(),
     }, testOptions({
       clock: { start: startClock, getDelta: () => 0.016 },
     }));
+    await flushPhases();
 
     game.start();
+    await flushPhases();
     game.start();
+    await flushPhases();
 
     expect(startClock).toHaveBeenCalledOnce();
     expect(requestAnimationFrame).toHaveBeenCalledOnce();
     requestAnimationFrame.mockRestore();
+
   });
 
-  it('starts browser playtests in survival without accessing saves', () => {
+  it('starts browser playtests in survival without accessing saves', async () => {
     const browserPlaytest = {
       seed: 42,
       missingItemIds: ['map-1', 'knife-1'],
@@ -92,11 +97,12 @@ describe('Game director', () => {
       createSurvival: vi.fn(() => survival),
     };
 
-    const game = Game.forTest(factories, testOptions({
+    const game = createTestGame(factories, testOptions({
       browserPlaytest,
       saveStorage,
       createSeed,
     }));
+    await flushPhases();
 
     expect(factories.createMenu).not.toHaveBeenCalled();
     expect(factories.createSurvival).toHaveBeenCalledWith(
@@ -116,41 +122,47 @@ describe('Game director', () => {
     expect(saveStorage.setItem).not.toHaveBeenCalled();
     expect(saveStorage.removeItem).not.toHaveBeenCalled();
     game.start();
+    await flushPhases();
     expect(survival.start).toHaveBeenCalledOnce();
     game.dispose();
+    await flushPhases();
   });
 
-  it('creates the menu on normal startup', () => {
+  it('creates the menu on normal startup', async () => {
     const createMenu = vi.fn(() => phase());
 
-    const game = Game.forTest({
+    const game = createTestGame({
       createMenu,
       createScavenge: () => phase(),
       createSurvival: () => phase(),
     }, testOptions());
+    await flushPhases();
 
     expect(createMenu).toHaveBeenCalledOnce();
     game.dispose();
+    await flushPhases();
   });
 
-  it('clamps shared frame delta and renders through the active phase boundary', () => {
+  it('clamps shared frame delta and renders through the active phase boundary', async () => {
     const active = phase();
     const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(42);
-    const game = Game.forTest({
+    const game = createTestGame({
       createMenu: createImmediateMenu,
       createScavenge: () => active,
       createSurvival: () => phase(),
     }, testOptions());
+    await flushPhases();
     Object.assign(game, { clock: { start: vi.fn(), getDelta: () => 1 } });
 
-    (game as unknown as { handleAnimationFrame: () => void }).handleAnimationFrame();
+    (game as unknown as { handleAnimationFrame: () => void; }).handleAnimationFrame();
 
     expect(active.update).toHaveBeenCalledWith(0.05, 0.05);
     expect(active.render).toHaveBeenCalledOnce();
     requestAnimationFrame.mockRestore();
+
   });
 
-  it('deep-copies and freezes duplicate saved instances at the phase boundary', () => {
+  it('deep-copies and freezes duplicate saved instances at the phase boundary', async () => {
     const calls: string[] = [];
     let complete!: (result: Readonly<ScavengeResult>) => void;
     const scavenge = phase({ dispose: vi.fn(() => calls.push('dispose-scavenge')) });
@@ -161,7 +173,7 @@ describe('Game director', () => {
     ] as const;
     const sourceResult: ScavengeResult = { savedItems: sourceItems, elapsedSeconds: 8 };
     let receivedStart: SurvivalPhaseStart | undefined;
-    const game = Game.forTest({
+    const game = createTestGame({
       createMenu: createImmediateMenu,
       createScavenge: (_context, onComplete) => {
         complete = onComplete;
@@ -172,9 +184,12 @@ describe('Game director', () => {
         return survival;
       },
     }, testOptions());
+    await flushPhases();
 
     game.start();
+    await flushPhases();
     complete(sourceResult);
+    await flushPhases();
 
     expect(calls).toEqual(['dispose-scavenge', 'start-survival']);
     expect(receivedStart).toEqual({
@@ -194,7 +209,7 @@ describe('Game director', () => {
     expect(Object.isFrozen(receivedStart.savedItems[1])).toBe(true);
   });
 
-  it('ignores a stale return-to-menu callback after survival takes ownership', () => {
+  it('ignores a stale return-to-menu callback after survival takes ownership', async () => {
     let complete!: (result: Readonly<ScavengeResult>) => void;
     let returnToMenu!: () => void;
     const scavenge = phase();
@@ -204,22 +219,26 @@ describe('Game director', () => {
       returnToMenu = onReturnToMenu;
       return scavenge;
     });
-    const game = Game.forTest({
+    const game = createTestGame({
       createMenu: createImmediateMenu,
       createScavenge,
       createSurvival: () => survival,
     }, testOptions());
+    await flushPhases();
     game.start();
+    await flushPhases();
     complete({ savedItems: [], elapsedSeconds: 4 });
+    await flushPhases();
 
     returnToMenu();
+    await flushPhases();
 
     expect(createScavenge).toHaveBeenCalledOnce();
     expect(survival.dispose).not.toHaveBeenCalled();
-    expect((game as unknown as { activePhase: GamePhase }).activePhase).toBe(survival);
+    expect((game as unknown as { activePhase: GamePhase; }).activePhase).toBe(survival);
   });
 
-  it('returns from scavenging to the menu', () => {
+  it('returns from scavenging to the menu', async () => {
     let returnToMenu!: () => void;
     const initialMenu = phase();
     const returnedMenu = phase();
@@ -229,7 +248,7 @@ describe('Game director', () => {
       if (createMenu.mock.calls.length === 1) onComplete();
       return menu;
     });
-    const game = Game.forTest({
+    const game = createTestGame({
       createMenu,
       createScavenge: (_context, _onComplete, _onRestart, onReturn) => {
         returnToMenu = onReturn;
@@ -237,17 +256,20 @@ describe('Game director', () => {
       },
       createSurvival: () => phase(),
     }, testOptions());
+    await flushPhases();
     game.start();
+    await flushPhases();
 
     returnToMenu();
+    await flushPhases();
 
     expect(scavenge.dispose).toHaveBeenCalledOnce();
     expect(createMenu).toHaveBeenCalledTimes(2);
     expect(returnedMenu.start).toHaveBeenCalledOnce();
-    expect((game as unknown as { activePhase: GamePhase }).activePhase).toBe(returnedMenu);
+    expect((game as unknown as { activePhase: GamePhase; }).activePhase).toBe(returnedMenu);
   });
 
-  it('returns from survival to the menu', () => {
+  it('returns from survival to the menu', async () => {
     let complete!: (result: Readonly<ScavengeResult>) => void;
     let returnToMenu!: () => void;
     const initialMenu = phase();
@@ -259,7 +281,7 @@ describe('Game director', () => {
       if (createMenu.mock.calls.length === 1) onComplete();
       return menu;
     });
-    const game = Game.forTest({
+    const game = createTestGame({
       createMenu,
       createScavenge: (_context, onComplete) => {
         complete = onComplete;
@@ -270,18 +292,22 @@ describe('Game director', () => {
         return survival;
       },
     }, testOptions());
+    await flushPhases();
     game.start();
+    await flushPhases();
     complete({ savedItems: [], elapsedSeconds: 4 });
+    await flushPhases();
 
     returnToMenu();
+    await flushPhases();
 
     expect(survival.dispose).toHaveBeenCalledOnce();
     expect(createMenu).toHaveBeenCalledTimes(2);
     expect(returnedMenu.start).toHaveBeenCalledOnce();
-    expect((game as unknown as { activePhase: GamePhase }).activePhase).toBe(returnedMenu);
+    expect((game as unknown as { activePhase: GamePhase; }).activePhase).toBe(returnedMenu);
   });
 
-  it('keeps a nested restart when survival requests it synchronously during construction', () => {
+  it('keeps a nested restart when survival requests it synchronously during construction', async () => {
     let complete!: (result: Readonly<ScavengeResult>) => void;
     const initialScavenge = phase();
     const restartedScavenge = phase();
@@ -291,7 +317,7 @@ describe('Game director', () => {
       complete = onComplete;
       return scavenges[createScavenge.mock.calls.length - 1]!;
     });
-    const game = Game.forTest({
+    const game = createTestGame({
       createMenu: createImmediateMenu,
       createScavenge,
       createSurvival: (_context, _start, onRestart) => {
@@ -299,18 +325,21 @@ describe('Game director', () => {
         return staleSurvival;
       },
     }, testOptions());
+    await flushPhases();
     game.start();
+    await flushPhases();
 
     complete({ savedItems: [], elapsedSeconds: 5 });
+    await flushPhases();
 
     expect(initialScavenge.dispose).toHaveBeenCalledOnce();
     expect(restartedScavenge.start).toHaveBeenCalledOnce();
     expect(staleSurvival.dispose).toHaveBeenCalledOnce();
     expect(staleSurvival.start).not.toHaveBeenCalled();
-    expect((game as unknown as { activePhase: GamePhase }).activePhase).toBe(restartedScavenge);
+    expect((game as unknown as { activePhase: GamePhase; }).activePhase).toBe(restartedScavenge);
   });
 
-  it('ignores a phase restart callback fired reentrantly during its disposal', () => {
+  it('ignores a phase restart callback fired reentrantly during its disposal', async () => {
     let complete!: (result: Readonly<ScavengeResult>) => void;
     let restartSurvival!: () => void;
     const initialScavenge = phase();
@@ -329,7 +358,7 @@ describe('Game director', () => {
         restartSurvival();
       }),
     });
-    const game = Game.forTest({
+    const game = createTestGame({
       createMenu: createImmediateMenu,
       createScavenge,
       createSurvival: (_context, _start, onRestart) => {
@@ -337,19 +366,23 @@ describe('Game director', () => {
         return survival;
       },
     }, testOptions());
+    await flushPhases();
     game.start();
+    await flushPhases();
     complete({ savedItems: [], elapsedSeconds: 6 });
+    await flushPhases();
 
     game.restart();
+    await flushPhases();
 
     expect(survival.dispose).toHaveBeenCalledOnce();
     expect(createScavenge).toHaveBeenCalledTimes(2);
     expect(restartedScavenge.start).toHaveBeenCalledOnce();
     expect(unexpectedScavenge.start).not.toHaveBeenCalled();
-    expect((game as unknown as { activePhase: GamePhase }).activePhase).toBe(restartedScavenge);
+    expect((game as unknown as { activePhase: GamePhase; }).activePhase).toBe(restartedScavenge);
   });
 
-  it('full restart disposes survival before fresh scavenging and refreshes the survival seed', () => {
+  it('full restart disposes survival before fresh scavenging and refreshes the survival seed', async () => {
     const calls: string[] = [];
     const completions: Array<(result: Readonly<ScavengeResult>) => void> = [];
     const firstScavenge = phase();
@@ -372,28 +405,35 @@ describe('Game director', () => {
     const createSeed = vi.fn()
       .mockReturnValueOnce(11)
       .mockReturnValueOnce(22);
-    const game = Game.forTest({
+    const game = createTestGame({
       createMenu: createImmediateMenu,
       createScavenge,
       createSurvival,
     }, testOptions({
       createSeed,
     }));
+    await flushPhases();
     game.start();
+    await flushPhases();
     completions[0]!({ savedItems: [], elapsedSeconds: 3 });
+    await flushPhases();
+
     calls.length = 0;
 
     game.restart();
+    await flushPhases();
 
     expect(calls).toEqual(['dispose-survival-1', 'create-scavenge-2', 'start-scavenge-2']);
     expect(firstSurvival.dispose).toHaveBeenCalledOnce();
     expect(createScavenge).toHaveBeenCalledTimes(2);
     expect(firstScavenge).not.toBe(secondScavenge);
     completions[1]!({ savedItems: [], elapsedSeconds: 2 });
+    await flushPhases();
+
     expect(receivedSeeds).toEqual([11, 22]);
   });
 
-  it('disposes shared animation, renderer, and canvas resources exactly once', () => {
+  it('disposes shared animation, renderer, and canvas resources exactly once', async () => {
     const calls: string[] = [];
     const active = phase({ dispose: vi.fn(() => calls.push('dispose-phase')) });
     const propModels = createTestPropModels();
@@ -415,21 +455,25 @@ describe('Game director', () => {
       });
     const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(42);
     const cancelAnimationFrame = vi.spyOn(window, 'cancelAnimationFrame');
-    const game = Game.forTest({
+    const game = createTestGame({
       createMenu: createImmediateMenu,
       createScavenge: () => active,
       createSurvival: () => phase(),
     }, { propModels, menuModels: EMPTY_MENU_MODELS, shipFurniture, skyAssets, physicsRuntime });
+    await flushPhases();
     const renderer = (game as unknown as {
-      renderer: { dispose: () => void; domElement: HTMLCanvasElement };
+      renderer: { dispose: () => void; domElement: HTMLCanvasElement; };
     }).renderer;
     const disposeRenderer = vi.spyOn(renderer, 'dispose');
     const removeEventListener = vi.spyOn(window, 'removeEventListener');
     expect(renderer.domElement.parentElement).not.toBeNull();
     game.start();
+    await flushPhases();
 
     game.dispose();
+    await flushPhases();
     game.dispose();
+    await flushPhases();
 
     expect(cancelAnimationFrame).toHaveBeenCalledOnce();
     expect(active.dispose).toHaveBeenCalledOnce();
@@ -448,11 +492,14 @@ describe('Game director', () => {
     expect(removeEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
     expect(removeEventListener).toHaveBeenCalledWith('keydown', expect.any(Function), true);
     requestAnimationFrame.mockRestore();
+
     cancelAnimationFrame.mockRestore();
+
     removeEventListener.mockRestore();
+
   });
 
-  it('rolls back acquired construction resources without disposing unowned assets', () => {
+  it('rolls back acquired construction resources without disposing unowned assets', async () => {
     const mount = document.createElement('main');
     const canvas = document.createElement('canvas');
     const resizeError = new Error('initial resize failed');
@@ -475,7 +522,7 @@ describe('Game director', () => {
     const addEventListener = vi.spyOn(window, 'addEventListener');
     const removeEventListener = vi.spyOn(window, 'removeEventListener');
 
-    expect(() => Game.forTest({
+    expect(() => createTestGame({
       createMenu: createImmediateMenu,
       createScavenge: () => active,
       createSurvival: () => phase(),
@@ -487,7 +534,7 @@ describe('Game director', () => {
       physicsRuntime,
       mount,
       renderer,
-    } as unknown as GameTestOptions)).toThrow(resizeError);
+    } as unknown as GameFixtureOptions)).toThrow(resizeError);
 
     expect(addEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
     expect(removeEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
@@ -498,7 +545,7 @@ describe('Game director', () => {
     for (const [type, listener, options] of addEventListener.mock.calls) {
       expect(removeEventListener).toHaveBeenCalledWith(type, listener, ...(options === undefined ? [] : [options]));
     }
-    expect(active.dispose).toHaveBeenCalledOnce();
+    expect(active.dispose).not.toHaveBeenCalled();
     expect(renderer.dispose).toHaveBeenCalledOnce();
     expect(canvas.parentElement).toBeNull();
     expect(disposeModels).not.toHaveBeenCalled();
@@ -506,6 +553,8 @@ describe('Game director', () => {
     expect(disposeSkyAssets).not.toHaveBeenCalled();
 
     addEventListener.mockRestore();
+
     removeEventListener.mockRestore();
+
   });
 });

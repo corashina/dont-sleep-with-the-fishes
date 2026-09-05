@@ -15,7 +15,6 @@ import {
 } from './AudioScope';
 import { WebAudioBackend } from './WebAudioBackend';
 import {
-  SHARED_SOUND_IDS,
   type SoundId,
 } from './audioManifest';
 
@@ -42,7 +41,7 @@ export class AudioLoadError extends Error {
   }
 }
 
-export interface EventAudioLease {
+export interface AudioLease {
   readonly sounds: readonly SoundId[];
   dispose(): void;
 }
@@ -50,7 +49,7 @@ export interface EventAudioLease {
 export class AudioSystem {
   private readonly preference: AudioPreference;
   private readonly scopes = new Set<OwnedAudioScope>();
-  private readonly eventLeases = new Set<EventAudioLease>();
+  private readonly leases = new Set<AudioLease>();
   private unlockListening = false;
   private disposed = false;
 
@@ -58,7 +57,6 @@ export class AudioSystem {
     private readonly backend: AudioBackend,
     storage: Pick<Storage, 'getItem' | 'setItem'> | null | undefined,
     listenForUnlock: boolean,
-    private readonly ownsSharedAudio: boolean,
   ) {
     const onPreferenceChange = (state: Readonly<AudioControlState>): void => {
       this.applyPreference(state);
@@ -79,12 +77,7 @@ export class AudioSystem {
     } catch {
       return AudioSystem.silent();
     }
-    try {
-      return await AudioSystem.loadWithBackend(backend, undefined, true);
-    } catch (cause) {
-      backend.dispose();
-      throw new AudioLoadError('Required audio files could not be loaded.', { cause });
-    }
+    return AudioSystem.loadWithBackend(backend, undefined, true);
   }
 
   static async loadWithBackend(
@@ -93,8 +86,7 @@ export class AudioSystem {
     listenForUnlock = false,
   ): Promise<AudioSystem> {
     try {
-      await backend.acquire(SHARED_SOUND_IDS);
-      return new AudioSystem(backend, storage, listenForUnlock, true);
+      return new AudioSystem(backend, storage, listenForUnlock);
     } catch (cause) {
       backend.dispose();
       throw new AudioLoadError('Required audio files could not be loaded.', { cause });
@@ -105,13 +97,13 @@ export class AudioSystem {
     backend: AudioBackend,
     storage: Pick<Storage, 'getItem' | 'setItem'> | null = null,
   ): AudioSystem {
-    return new AudioSystem(backend, storage, false, false);
+    return new AudioSystem(backend, storage, false);
   }
 
   static silent(
     storage: Pick<Storage, 'getItem' | 'setItem'> | null | undefined = undefined,
   ): AudioSystem {
-    return new AudioSystem(new SilentAudioBackend(), storage, false, false);
+    return new AudioSystem(new SilentAudioBackend(), storage, false);
   }
 
   createScope(): AudioScope {
@@ -124,27 +116,39 @@ export class AudioSystem {
     return scope;
   }
 
-  async acquireEventAudio(sounds: readonly SoundId[]): Promise<EventAudioLease> {
+  acquirePhaseAudio(sounds: readonly SoundId[]): Promise<AudioLease> {
+    return this.acquireAudio(sounds, false);
+  }
+
+  acquireEventAudio(sounds: readonly SoundId[]): Promise<AudioLease> {
+    return this.acquireAudio(sounds, true);
+  }
+
+  private async acquireAudio(sounds: readonly SoundId[], stopVoices: boolean): Promise<AudioLease> {
     if (this.disposed) throw new Error('Audio system is disposed.');
     const ownedSounds = Object.freeze([...new Set(sounds)]);
-    await this.backend.acquire(ownedSounds);
+    try {
+      await this.backend.acquire(ownedSounds);
+    } catch (cause) {
+      throw new AudioLoadError('Required audio files could not be loaded.', { cause });
+    }
     if (this.disposed) {
       this.backend.release(ownedSounds);
-      throw new Error('Audio system was disposed while loading event audio.');
+      throw new Error('Audio system was disposed while loading audio.');
     }
     let disposed = false;
-    const lease: EventAudioLease = {
+    const lease: AudioLease = {
       sounds: ownedSounds,
       dispose: () => {
         if (disposed) return;
         disposed = true;
-        this.eventLeases.delete(lease);
+        this.leases.delete(lease);
         const soundSet = new Set<SoundId>(ownedSounds);
-        for (const scope of this.scopes) scope.stopSounds(soundSet);
+        if (stopVoices) for (const scope of this.scopes) scope.stopSounds(soundSet);
         this.backend.release(ownedSounds);
       },
     };
-    this.eventLeases.add(lease);
+    this.leases.add(lease);
     return lease;
   }
 
@@ -164,11 +168,10 @@ export class AudioSystem {
     if (this.disposed) return;
     this.disposed = true;
     this.removeUnlockListeners();
-    for (const lease of [...this.eventLeases]) lease.dispose();
-    this.eventLeases.clear();
+    for (const lease of [...this.leases]) lease.dispose();
+    this.leases.clear();
     for (const scope of [...this.scopes]) scope.dispose();
     this.scopes.clear();
-    if (this.ownsSharedAudio) this.backend.release(SHARED_SOUND_IDS);
     this.backend.dispose();
   }
 

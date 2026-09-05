@@ -29,19 +29,32 @@ export interface PhaseContext {
   visualQuality: VisualQualityPreference;
   waterQuality: WaterQualityPreference;
   camera: PerspectiveCamera;
+  maxTextureAnisotropy: number;
+  audio: AudioSystem;
+  onFatalError(error: unknown): void;
+}
+
+export interface MenuAssets {
+  menuModels: MenuModelLibrary;
+  menuSandAssets: MenuSandAssets;
+}
+export interface ShipPhaseAssets {
+  lifeboatAssets: LifeboatAssets;
   propModels: PropModelLibrary;
   shipFurniture: ShipFurnitureLibrary;
-  maxTextureAnisotropy: number;
   skyAssets: SkyAssets;
-  lifeboatAssets: LifeboatAssets;
   shipAssets: ShipAssets;
   physicsRuntime: PhysicsRuntime | null;
   physicsMode: PhysicsMode;
-  audio: AudioSystem;
-  menuModels: MenuModelLibrary;
-  menuSandAssets: MenuSandAssets;
-  onFatalError(error: unknown): void;
 }
+export interface SurvivalAssets {
+  propModels: PropModelLibrary;
+  skyAssets: SkyAssets;
+  lifeboatAssets: LifeboatAssets;
+}
+export interface MenuPhaseContext extends PhaseContext, MenuAssets {}
+export interface ShipPhaseContext extends PhaseContext, ShipPhaseAssets {}
+export interface SurvivalPhaseContext extends PhaseContext, SurvivalAssets {}
 
 export interface GamePhase {
   start(): void;
