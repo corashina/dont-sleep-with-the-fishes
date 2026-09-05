@@ -261,6 +261,17 @@ describe('AudioSystem', () => {
     expect(expired).toHaveBeenCalledOnce();
   });
 
+  it('uses hull repair audio only for hull repair', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.action('repair');
+    expect(backend.voices.at(-1)?.id).toBe('hullRepair');
+
+    audio.action('repairItem', { kind: 'itemRepair', target: 'compass-1' });
+    expect(backend.voices.at(-1)?.id).toBe('tapeRepair');
+  });
+
   it('pauses only the incoming radio signal for player panels', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());

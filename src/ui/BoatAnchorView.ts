@@ -6,7 +6,7 @@ import type { BoatInteractionAnchor, BoatToolId } from '../survival/BoatInteract
 import { carlitosStatus } from '../survival/CarlitosState';
 import type { InspectableEventId } from '../survival/eventCatalog';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
-import { repairEnergyCost, SURVIVAL_BALANCE } from '../survival/survivalBalance';
+import { calculateHullRepair, SURVIVAL_BALANCE } from '../survival/survivalBalance';
 import type {
   DayActionId,
   EventResponseId,
@@ -67,7 +67,7 @@ const ACTIONS: readonly ActionDefinition[] = [
   { id: 'fish', label: 'FISH', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.actions.fishEnergy, effect: 'Chance to gain food', risk: 'uncertain' },
   { id: 'dive', label: 'DIVE', cost: '3 ENERGY', energyCost: SURVIVAL_BALANCE.actions.diveEnergy, effect: 'May recover supplies; injury risk', risk: 'dangerous' },
   { id: 'eat', label: 'EAT', cost: '1 FOOD', energyCost: 0, effect: 'HUNGER -35', risk: 'safe' },
-  { id: 'repair', label: 'REPAIR', cost: '1 ENERGY + 1 DUCT TAPE', energyCost: SURVIVAL_BALANCE.actions.repairEnergy, effect: 'HULL +15–25', risk: 'safe' },
+  { id: 'repair', label: 'REPAIR', cost: '1–3 ENERGY', energyCost: 1, effect: 'HULL +33 PER ENERGY', risk: 'safe' },
   { id: 'treat', label: 'TREAT', cost: '1 MEDKIT', energyCost: 0, effect: 'HEALTH +30', risk: 'safe' },
   { id: 'endDay', label: 'END DAY', cost: 'REST', energyCost: 0, effect: 'RESTORE ENERGY AT DAWN', risk: 'safe' },
   { id: 'repairItem', label: 'REPAIR ITEM', cost: '1 DUCT TAPE', energyCost: 0, effect: 'Restore one broken item', risk: 'safe' },
@@ -97,21 +97,16 @@ function quantityLabel(label: string, quantity: number): string {
 }
 
 function actionPreview(definition: ActionDefinition, snapshot: SurvivalSnapshot): ActionPreview {
-  const missingHull = Math.max(0, 100 - snapshot.hull);
   switch (definition.id) {
     case 'eat': return { ...definition, effect: `HUNGER -${Math.min(35, snapshot.hunger)}` };
     case 'treat': return { ...definition, effect: `HEALTH +${Math.min(30, Math.max(0, 100 - snapshot.health))}` };
     case 'repair': {
-      const energyCost = repairEnergyCost(snapshot.hull);
-      const useTape = snapshot.repairMaterial < 1
-        && Object.values(snapshot.inventory).some(
-          (item) => item?.type === 'ductTape' && item.condition === 'usable',
-        );
+      const repair = calculateHullRepair(snapshot.hull, snapshot.energy);
       return {
         ...definition,
-        cost: `${energyCost} ENERGY + 1 DUCT TAPE`,
-        energyCost,
-        effect: `HULL +${Math.min(useTape ? 15 : 25, missingHull)}`,
+        cost: `${repair.energySpent} ENERGY`,
+        energyCost: repair.energySpent,
+        effect: `HULL +${repair.hullRestored}`,
       };
     }
     default: return definition;
@@ -677,7 +672,10 @@ export class BoatAnchorView {
     const visibleLabel = this.visibleAnchorLabel(anchor, anchoredChoice, itemLabel, quantity, state);
     const energyCost = this.tooltipEnergyCost(eventItemEligible, anchoredChoice, preview);
     const energyIndicator = this.energyIndicator(anchoredChoice, energyCost, reason);
-    this.updateTooltipNodes(button, anchor, visibleLabel, energyIndicator, anchoredChoice);
+    const tooltipLabel = action?.id === 'repair' && preview !== null && reason === null
+      ? `${visibleLabel} · ${preview.effect}`
+      : visibleLabel;
+    this.updateTooltipNodes(button, anchor, tooltipLabel, energyIndicator, anchoredChoice);
     this.updateAnchorDataset(button, anchor, backingInstanceId, item?.condition);
     this.updateAnchorAria(button, visibleLabel, action, preview, itemLabel, itemDescription, state, reason, anchoredChoice, energyCost);
   }

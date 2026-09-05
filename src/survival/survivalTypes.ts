@@ -20,9 +20,10 @@ export interface CompanionEventActionAvailability {
   readonly availableEnergy: number;
   readonly unavailableReason: string | null;
 }
-export type DayActionOption =
-  | { readonly kind: 'hullRepair'; readonly material: 'repairMaterial' | 'ductTape' }
-  | { readonly kind: 'itemRepair'; readonly target: ItemInstanceId };
+export type DayActionOption = {
+  readonly kind: 'itemRepair';
+  readonly target: ItemInstanceId;
+};
 export type RiskLabel = 'safe' | 'uncertain' | 'dangerous';
 export type PresentationCue =
   | 'none' | 'fish' | 'dive' | 'repair' | 'treat'

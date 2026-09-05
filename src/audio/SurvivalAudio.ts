@@ -181,11 +181,7 @@ export class SurvivalAudio {
     } else if (action === 'treat') {
       this.scope.play('medkit');
     } else if (action === 'repair') {
-      this.scope.play(
-        option?.kind === 'hullRepair' && option.material === 'ductTape'
-          ? 'tapeRepair'
-          : 'hullRepair',
-      );
+      this.scope.play('hullRepair');
     } else if (action === 'repairItem') {
       this.scope.play('tapeRepair');
     } else if (action === 'openChest') {

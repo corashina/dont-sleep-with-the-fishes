@@ -463,17 +463,12 @@ describe('SurvivalDayActionFlow', () => {
     expect(rig.events.beginDawn).not.toHaveBeenCalled();
   });
 
-  it('selects repair resources and coordinates unavailable reasons', async () => {
+  it('runs hull repair without a supply and coordinates item repair reasons', async () => {
     const rig = createRig();
-    const material = snapshot({ repairMaterial: 1 });
-    rig.setSnapshot(material);
 
     await rig.flow.run('repair');
 
-    expect(rig.session.perform).toHaveBeenCalledWith('repair', {
-      kind: 'hullRepair',
-      material: 'repairMaterial',
-    });
+    expect(rig.session.perform).toHaveBeenCalledWith('repair', undefined);
 
     const items = snapshot({
       inventory: {
@@ -484,10 +479,6 @@ describe('SurvivalDayActionFlow', () => {
           instanceId: 'compass-1', type: 'compass', condition: 'broken',
         },
       },
-    });
-    expect(rig.flow.repairOption(items)).toEqual({
-      kind: 'hullRepair',
-      material: 'ductTape',
     });
     expect(rig.flow.repairItemReason(items)).toBeNull();
     expect(rig.session.availableReason).toHaveBeenLastCalledWith('repairItem', {

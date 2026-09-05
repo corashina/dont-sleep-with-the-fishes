@@ -2,7 +2,7 @@ import { ITEM_DEFINITIONS, type ItemId } from '../game/ItemState';
 import { isDriftingItemEventId } from './eventCatalog';
 import {
   radioRescueLeadForSignal,
-  repairEnergyCost,
+  calculateHullRepair,
   SURVIVAL_BALANCE,
 } from './survivalBalance';
 import type { CarlitosState } from './CarlitosState';
@@ -30,7 +30,6 @@ export interface DayActionRuleState {
   readonly hull: number;
   readonly food: number;
   readonly bait: number;
-  readonly repairMaterial: number;
   readonly chestState: ChestState;
   readonly inventory: SurvivalInventorySnapshot;
   readonly carlitos: Readonly<CarlitosState> | null;
@@ -55,7 +54,7 @@ function hasUsable(inventory: SurvivalInventorySnapshot, type: ItemId): boolean 
 }
 
 function invalidOption(action: DayActionId, option?: DayActionOption): boolean {
-  if (action === 'repair') return option?.kind !== 'hullRepair';
+  if (action === 'repair') return option !== undefined;
   if (action === 'repairItem') return option?.kind !== 'itemRepair';
   return option !== undefined;
 }
@@ -113,17 +112,9 @@ const eatUnavailable: DayActionRule = (state) => {
   return state.hunger <= 0 ? 'You are not hungry.' : null;
 };
 
-const repairUnavailable: DayActionRule = (state, option) => {
+const repairUnavailable: DayActionRule = (state) => {
   if (state.hull >= SURVIVAL_BALANCE.thresholds.maximum) return 'The hull needs no repair.';
-  const energyCost = repairEnergyCost(state.hull);
-  if (state.energy < energyCost) {
-    const energyWord = ['', 'one', 'two', 'three'][energyCost];
-    return `Repairing requires ${energyWord} energy.`;
-  }
-  if (option?.kind === 'hullRepair' && option.material === 'ductTape') {
-    return hasUsable(state.inventory, 'ductTape') ? null : 'No duct tape remains.';
-  }
-  return state.repairMaterial < 1 ? 'No duct tape remains.' : null;
+  return state.energy < 1 ? 'Repairing requires one energy.' : null;
 };
 
 const repairItemUnavailable: DayActionRule = (state, option) => {
@@ -204,14 +195,11 @@ export function dayActionResourceDelta(
     case 'eat':
       return Object.freeze({ hunger: SURVIVAL_BALANCE.actions.foodHunger, food: -1 });
     case 'repair': {
-      const energy = -repairEnergyCost(state.hull);
-      return option?.kind === 'hullRepair' && option.material === 'ductTape'
-        ? Object.freeze({ energy, hull: SURVIVAL_BALANCE.actions.tapeHull })
-        : Object.freeze({
-            energy,
-            hull: SURVIVAL_BALANCE.actions.repairHull,
-            repairMaterial: -1,
-          });
+      const repair = calculateHullRepair(state.hull, state.energy);
+      return Object.freeze({
+        energy: -repair.energySpent,
+        hull: repair.hullRestored,
+      });
     }
     case 'treat':
       return Object.freeze({ health: SURVIVAL_BALANCE.actions.treatmentHealth });

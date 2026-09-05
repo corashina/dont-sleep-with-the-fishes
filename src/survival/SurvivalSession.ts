@@ -745,7 +745,7 @@ export class SurvivalSession {
     switch (action) {
       case 'dive': return this.dive();
       case 'eat': return this.eat();
-      case 'repair': return this.repair(option);
+      case 'repair': return this.repair();
       case 'repairItem': return this.repairItem(option);
       case 'treat': return this.treat();
       case 'answerRadio': return this.answerRadio();
@@ -1304,7 +1304,6 @@ export class SurvivalSession {
       hull: this.hull,
       food: this.food,
       bait: this.bait,
-      repairMaterial: this.repairMaterial,
       chestState: this.chestState,
       inventory: this.inventory.snapshot(),
       carlitos: this.carlitos === null
@@ -1391,18 +1390,8 @@ export class SurvivalSession {
     );
   }
 
-  private repair(option?: DayActionOption): ActionOutcome {
-    const deltas = dayActionResourceDelta(this.dayActionRuleState(), 'repair', option);
-    if (option?.kind === 'hullRepair' && option.material === 'ductTape') {
-      const consumed = this.inventory.consume('ductTape', 1);
-      return this.recordJournalAction('repair', this.commit(
-        'repaired-with-duct-tape',
-        'The emergency patch holds for now.',
-        deltas,
-        'repair',
-      ), [{ kind: 'consume', instanceIds: consumed }]);
-    }
-
+  private repair(): ActionOutcome {
+    const deltas = dayActionResourceDelta(this.dayActionRuleState(), 'repair');
     return this.recordJournalAction('repair', this.commit(
       'repaired',
       'You reinforce the damaged hull.',
