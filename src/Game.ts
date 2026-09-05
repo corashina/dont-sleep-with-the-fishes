@@ -36,6 +36,7 @@ import {
 import { SurvivalPhase } from './survival/SurvivalPhase';
 import { PerformanceStats } from './ui/PerformanceStats';
 import { PostProcessingConsole } from './ui/PostProcessingConsole';
+import { SettingsMenu } from './ui/SettingsMenu';
 import {
   createSystemTuningPreference,
   type SystemTuningPreference,
@@ -257,6 +258,7 @@ export class Game {
   private factories!: GameFactories;
   private activePhase: GamePhase | null = null;
   private performanceStats: PerformanceStats | null = null;
+  private settingsMenu: SettingsMenu | null = null;
   private postProcessingConsole: PostProcessingConsole | null = null;
   private saveStore!: SurvivalSaveStore;
   private weatherOverride: PresentationWeatherId | null = null;
@@ -488,6 +490,7 @@ export class Game {
       () => disposeMenuModelLibrary(this.menuModels),
       () => this.menuSandAssets.dispose(),
       () => postProcessingConsole?.dispose(),
+      () => { this.settingsMenu?.dispose(); this.settingsMenu = null; },
       () => performanceStats?.dispose(),
       () => this.propModels.dispose(),
       () => this.shipFurniture.dispose(),
@@ -635,7 +638,6 @@ export class Game {
               window.location.reload();
             },
           },
-          visualQuality,
           {
             selected: tuningState.weatherOverride ?? 'calm',
             source: tuningState.weatherOverride === null ? 'normal' : 'forced',
@@ -649,44 +651,42 @@ export class Game {
             options: EVENT_TEST_OPTIONS,
             enterEvent: (id) => this.enterTestEvent(id),
           },
-          waterQuality,
-          {
-            visible: this.performanceStats.isVisible(),
-            setVisible: (visible) => {
-              this.systemTuning.set('performanceStatsVisible', visible);
-              this.performanceStats?.setVisible(visible);
-            },
-          },
-          {
-            volume: audioSystem.getPreference().volume,
-            muted: audioSystem.getPreference().muted,
-            setVolume: (volume) => audioSystem.setVolume(volume),
-            setMuted: (muted) => audioSystem.setMuted(muted),
-          },
-          {
-            fieldOfView: camera.fov,
-            setFieldOfView: (fieldOfView) => {
-              this.systemTuning.set('cameraFieldOfView', fieldOfView);
-              if (camera.fov === fieldOfView) return;
-              camera.fov = fieldOfView;
-              camera.updateProjectionMatrix();
-            },
-          },
-          antiAliasingQuality,
-          shadowQuality,
-          {
-            enabled: this.saveStore.getState().enabled,
-            savedDay: this.saveStore.getState().checkpoint?.session.day ?? null,
-            setEnabled: (enabled) => this.setSaveEnabled(enabled),
-            continueSavedRun: () => this.continueSavedRun(),
-          },
-          {
-            enabled: this.volumetricCloudsEnabled,
-            available: true,
-            setEnabled: (enabled) => this.setVolumetricCloudsEnabled(enabled),
-          },
         );
       }
+      this.settingsMenu = new SettingsMenu(mount, {
+        visualQuality, waterQuality, antiAliasingQuality, shadowQuality,
+        performance: {
+          visible: this.performanceStats.isVisible(),
+          setVisible: (visible) => {
+            this.systemTuning.set('performanceStatsVisible', visible);
+            this.performanceStats?.setVisible(visible);
+          },
+        },
+        audio: {
+          volume: audioSystem.getPreference().volume,
+          setVolume: (volume) => audioSystem.setVolume(volume),
+        },
+        camera: {
+          fieldOfView: camera.fov,
+          setFieldOfView: (fieldOfView) => {
+            this.systemTuning.set('cameraFieldOfView', fieldOfView);
+            if (camera.fov === fieldOfView) return;
+            camera.fov = fieldOfView;
+            camera.updateProjectionMatrix();
+          },
+        },
+        save: {
+          enabled: this.saveStore.getState().enabled,
+          savedDay: this.saveStore.getState().checkpoint?.session.day ?? null,
+          setEnabled: (enabled) => this.setSaveEnabled(enabled),
+          continueSavedRun: () => this.continueSavedRun(),
+        },
+        clouds: {
+          enabled: this.volumetricCloudsEnabled,
+          available: true,
+          setEnabled: (enabled) => this.setVolumetricCloudsEnabled(enabled),
+        },
+      });
       this.onResize = () => this.handleResize();
       this.animate = () => this.handleAnimationFrame();
       window.addEventListener('resize', this.onResize);
@@ -727,6 +727,7 @@ export class Game {
       () => disposeMenuModelLibrary(this.menuModels),
       () => this.menuSandAssets.dispose(),
       () => postProcessingConsole?.dispose(),
+      () => { this.settingsMenu?.dispose(); this.settingsMenu = null; },
       () => performanceStats?.dispose(),
       () => this.sceneRenderer.dispose(),
       () => this.renderer.dispose(),
@@ -941,6 +942,7 @@ export class Game {
   }
 
   private detachActivePhase(): GamePhase | null {
+    this.settingsMenu?.close();
     const outgoing = this.activePhase;
     this.activePhase = null;
     this.phaseGeneration += 1;
@@ -989,7 +991,7 @@ export class Game {
 
   private syncSaveControls(): void {
     const state = this.saveStore.getState();
-    this.postProcessingConsole?.setSaveState(
+    this.settingsMenu?.setSaveState(
       state.enabled,
       state.checkpoint?.session.day ?? null,
     );
@@ -1035,9 +1037,9 @@ export class Game {
   }
 
   private synchronizePresentationControls(): void {
+    this.settingsMenu?.setVolumetricCloudAvailability(this.volumetricCloudsAvailable());
     const console = this.postProcessingConsole;
     if (console === null) return;
-    console.setVolumetricCloudAvailability(this.volumetricCloudsAvailable());
     console.setTimeOfDayState(this.presentationPhase());
     this.synchronizeWeatherControl(console);
   }

@@ -7,7 +7,7 @@ import {
 
 describe('scavenge movement balance', () => {
   it('uses the configured base speeds', () => {
-    expect(SCAVENGE_WALK_SPEED).toBe(3.5);
+    expect(SCAVENGE_WALK_SPEED).toBe(3.0);
     expect(SCAVENGE_SPRINT_SPEED).toBe(8.4);
   });
 

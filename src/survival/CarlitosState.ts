@@ -1,3 +1,4 @@
+import { domainMessage as t } from '../i18n/domainMessages';
 import type { RandomSource } from './survivalTypes';
 
 export type CarlitosDeathCause =
@@ -18,9 +19,9 @@ export interface CarlitosState {
 export type CarlitosSnapshot = Readonly<CarlitosState>;
 
 export interface CarlitosStatus {
-  readonly hunger: 'Satiated' | 'Peckish' | 'Hungry' | 'Starving';
-  readonly health: 'Healthy' | 'Unwell' | 'Sick' | 'Dying' | 'Dead';
-  readonly happiness: 'Happy' | 'Bored' | 'Lonely' | 'Depressed' | 'Miserable';
+  readonly hunger: string;
+  readonly health: string;
+  readonly happiness: string;
 }
 
 export function createCarlitosState(
@@ -155,26 +156,26 @@ export function advanceCarlitosDawn(
 }
 
 function hungerStatus(hunger: number): CarlitosStatus['hunger'] {
-  if (hunger >= 5) return 'Satiated';
-  if (hunger === 4) return 'Peckish';
-  if (hunger >= 2) return 'Hungry';
-  return 'Starving';
+  if (hunger >= 5) return t('satiated');
+  if (hunger === 4) return t('peckish');
+  if (hunger >= 2) return t('hungry');
+  return t('starving');
 }
 
 function healthStatus(sickness: number): CarlitosStatus['health'] {
-  if (sickness <= 0) return 'Healthy';
-  if (sickness === 1) return 'Unwell';
-  if (sickness <= 3) return 'Sick';
-  if (sickness === 4) return 'Dying';
-  return 'Dead';
+  if (sickness <= 0) return t('healthy');
+  if (sickness === 1) return t('unwell');
+  if (sickness <= 3) return t('sick');
+  if (sickness === 4) return t('dying');
+  return t('dead');
 }
 
 function happinessStatus(unhappiness: number): CarlitosStatus['happiness'] {
-  if (unhappiness <= 2) return 'Happy';
-  if (unhappiness <= 4) return 'Bored';
-  if (unhappiness <= 6) return 'Lonely';
-  if (unhappiness === 7) return 'Depressed';
-  return 'Miserable';
+  if (unhappiness <= 2) return t('happy');
+  if (unhappiness <= 4) return t('bored');
+  if (unhappiness <= 6) return t('lonely');
+  if (unhappiness === 7) return t('depressed');
+  return t('miserable');
 }
 
 function unhappinessPenalty(unhappiness: number): number {

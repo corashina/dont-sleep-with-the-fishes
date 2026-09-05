@@ -1,3 +1,7 @@
+import { uiDynamic } from '../i18n/uiDynamicMessages';
+import { onLanguageChange } from '../i18n/language';
+import { refreshUiText } from './translatedText';
+import { uiText } from '../i18n/uiMessages';
 import { ITEM_LABELS, type ItemInstanceId } from '../game/ItemState';
 import {
   endingCauseLine,
@@ -40,49 +44,73 @@ export class SurvivalModalViews {
   private readonly endingMenuButton: HTMLButtonElement;
   private readonly statisticsView: EndingStatisticsView;
   private endingFadeTimer: number | null = null;
+  private currentRepairItems: readonly Readonly<SurvivalItemState>[] = [];
+  private currentEnding: Exclude<EndingRecord, { id: 'dorothy' }> | null = null;
+  private endingSnapshot: SurvivalSnapshot | null = null;
   private repairBusy = false;
   private pauseRestartArmed = false;
   private endingActionIssued = false;
+  private readonly unsubscribeLanguage: () => void;
+  private refreshLanguage(): void {
+    refreshUiText(this.repairRoot, this.pauseRoot, this.endingRoot);
+    this.pauseRestartButton.textContent = uiText(this.pauseRestartArmed ? 'confirmRestart' : 'startOverUpper');
+    this.pauseRestartButton.setAttribute('aria-label', uiText(this.pauseRestartArmed ? 'confirmRestartLabel' : 'startOver'));
+    this.pauseRestartButton.setAttribute('aria-description', uiText(this.pauseRestartArmed ? 'abandonRun' : 'restartHelp'));
+    for (const item of this.currentRepairItems) {
+      const button = [...this.repairTargets.querySelectorAll<HTMLButtonElement>('button')].find(button => button.dataset.repairTarget === item.instanceId);
+      if (button) { button.textContent = uiDynamic('brokenItem', ITEM_LABELS[item.type]); button.setAttribute('aria-description', uiDynamic('repairItemHelp', ITEM_LABELS[item.type])); }
+    }
+    if (this.currentEnding !== null) {
+      this.endingTitle.textContent = endingTitle(this.currentEnding);
+      this.endingCause.textContent = endingCauseLine(this.currentEnding) ?? '';
+      this.endingStats.textContent = endingSummary(this.currentEnding);
+      this.statisticsView.render(survivalEndingStatistics(this.currentEnding, this.endingSnapshot));
+    }
+  }
+
   private disposed = false;
 
   constructor() {
     const template = document.createElement('template');
     template.innerHTML = `
-      <section class="routine-dialog routine-dialog--repair" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" aria-label="Repair target" inert>
+      <section class="routine-dialog routine-dialog--repair" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" data-ui-aria="repairTarget" aria-label="${uiText('repairTarget')}" inert>
         <div class="routine-dialog__card scuba-popup-paper">
-          <p class="eyebrow ui-role-context">DUCT TAPE</p>
-          <h2 class="scuba-popup-title ui-role-display" data-repair-options-title tabindex="-1">Choose an item to repair</h2>
-          <p class="ui-role-narrative">One emergency repair restores one broken item.</p>
+          <p class="eyebrow ui-role-context" data-ui-text="ductTape">${uiText('ductTape')}</p>
+          <h2 class="scuba-popup-title ui-role-display" data-repair-options-title tabindex="-1" data-ui-text="chooseRepair">${uiText('chooseRepair')}</h2>
+          <p class="ui-role-narrative" data-ui-text="repairHelp">${uiText('repairHelp')}</p>
           <div class="repair-targets" data-repair-targets></div>
-          <button type="button" class="secondary-action salvage-action ui-role-context" data-repair-cancel aria-label="Cancel repair">
-            CANCEL
+          <button type="button" class="secondary-action salvage-action ui-role-context" data-repair-cancel data-ui-aria="cancelRepair" aria-label="${uiText('cancelRepair')}" data-ui-text="cancel">
+            ${uiText('cancel')}
           </button>
         </div>
       </section>
-      <section class="survival-overlay pause-overlay cinematic-overlay scuba-popup-overlay" data-pause role="dialog" aria-modal="true" aria-hidden="true" aria-label="Survival paused" inert>
+      <section class="survival-overlay pause-overlay cinematic-overlay scuba-popup-overlay" data-pause role="dialog" aria-modal="true" aria-hidden="true" data-ui-aria="paused" aria-label="${uiText('paused')}" inert>
         <div class="cinematic-overlay__content scuba-popup-paper scuba-popup-panel">
-          <h2 class="scuba-popup-title ui-role-display">Hold Fast</h2>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-resume aria-label="Resume">
-            RESUME
+          <h2 class="scuba-popup-title ui-role-display" data-ui-text="holdFast">${uiText('holdFast')}</h2>
+          <button type="button" class="primary-action salvage-action ui-role-context" data-resume data-ui-aria="resume" aria-label="${uiText('resume')}" data-ui-text="resumeUpper">
+            ${uiText('resumeUpper')}
           </button>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-pause-restart aria-label="Start over">
-            START OVER
+          <button type="button" class="primary-action salvage-action ui-role-context" data-open-settings data-ui-aria="settings" aria-label="${uiText('settings')}" data-ui-text="settingsUpper">
+            ${uiText('settingsUpper')}
           </button>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-pause-menu aria-label="Back to menu">
-            BACK TO MENU
+          <button type="button" class="primary-action salvage-action ui-role-context" data-pause-restart data-ui-aria="startOver" aria-label="${uiText('startOver')}" data-ui-text="startOverUpper">
+            ${uiText('startOverUpper')}
+          </button>
+          <button type="button" class="primary-action salvage-action ui-role-context" data-pause-menu data-ui-aria="backMenu" aria-label="${uiText('backMenu')}" data-ui-text="backMenuUpper">
+            ${uiText('backMenuUpper')}
           </button>
         </div>
       </section>
-      <section class="survival-overlay ending-overlay cinematic-overlay scuba-popup-overlay" data-ending role="dialog" aria-modal="true" aria-hidden="true" aria-label="Journey ended" tabindex="-1" inert>
+      <section class="survival-overlay ending-overlay cinematic-overlay scuba-popup-overlay" data-ending role="dialog" aria-modal="true" aria-hidden="true" data-ui-aria="journeyEnded" aria-label="${uiText('journeyEnded')}" tabindex="-1" inert>
         <div class="cinematic-overlay__content scuba-popup-paper scuba-popup-panel">
           <h2 class="scuba-popup-title ui-role-display" data-ending-title tabindex="-1" role="alert"></h2>
           <p class="ending-cause ui-role-context" data-ending-cause></p>
           <p class="ending-stats ui-role-numeral" data-ending-stats></p>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-restart aria-label="Start from the ship">
-            START FROM THE SHIP
+          <button type="button" class="primary-action salvage-action ui-role-context" data-restart data-ui-aria="startShip" aria-label="${uiText('startShip')}" data-ui-text="startShipUpper">
+            ${uiText('startShipUpper')}
           </button>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-ending-menu aria-label="Back to menu">
-            BACK TO MENU
+          <button type="button" class="primary-action salvage-action ui-role-context" data-ending-menu data-ui-aria="backMenu" aria-label="${uiText('backMenu')}" data-ui-text="backMenuUpper">
+            ${uiText('backMenuUpper')}
           </button>
         </div>
       </section>`;
@@ -107,19 +135,22 @@ export class SurvivalModalViews {
     this.pauseRoot.addEventListener('click', this.handlePauseClick);
     this.endingRoot.addEventListener('click', this.handleEndingClick);
     this.endingRoot.addEventListener('transitionend', this.handleEndingTransitionEnd);
+    this.unsubscribeLanguage = onLanguageChange(() => this.refreshLanguage());
+    this.refreshLanguage();
   }
 
   showRepairOptions(items: readonly Readonly<SurvivalItemState>[]): void {
     if (this.disposed) return;
+    this.currentRepairItems = items;
     const targets = items.map((item) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'event-item repair-target ui-role-context';
       button.dataset.repairTarget = item.instanceId;
-      button.textContent = `${ITEM_LABELS[item.type]} — BROKEN`;
+      button.textContent = uiDynamic('brokenItem', ITEM_LABELS[item.type]);
       button.setAttribute(
         'aria-description',
-        `Repair ${ITEM_LABELS[item.type]} with Duct Tape.`,
+        uiDynamic('repairItemHelp', ITEM_LABELS[item.type]),
       );
       button.disabled = this.repairBusy;
       return button;
@@ -141,16 +172,18 @@ export class SurvivalModalViews {
     this.pauseRestartButton.disabled = false;
     this.pauseMenuButton.disabled = false;
     this.resumeButton.disabled = false;
-    this.pauseRestartButton.textContent = 'START OVER';
-    this.pauseRestartButton.setAttribute('aria-label', 'Start over');
+    this.pauseRestartButton.textContent = uiText('startOverUpper');
+    this.pauseRestartButton.setAttribute('aria-label', uiText('startOver'));
     this.pauseRestartButton.setAttribute(
       'aria-description',
-      'Press once, then confirm to abandon this survival run.',
+      uiText('restartHelp'),
     );
   }
 
   showEnding(record: Exclude<EndingRecord, { id: 'dorothy' }>, snapshot: SurvivalSnapshot | null): void {
     if (this.disposed || this.endingRoot.dataset.ending) return;
+    this.currentEnding = record;
+    this.endingSnapshot = snapshot;
     this.statisticsView.render(survivalEndingStatistics(record, snapshot));
     this.endingTitle.textContent = endingTitle(record);
     this.endingCause.textContent = endingCauseLine(record) ?? '';
@@ -195,6 +228,7 @@ export class SurvivalModalViews {
   beginDispose(): boolean {
     if (this.disposed) return false;
     this.disposed = true;
+    this.unsubscribeLanguage();
     this.cancelEndingFade();
     this.statisticsView.dispose();
     return true;
@@ -270,9 +304,9 @@ export class SurvivalModalViews {
     if (!button.hasAttribute('data-pause-restart')) return;
     if (!this.pauseRestartArmed) {
       this.pauseRestartArmed = true;
-      button.textContent = 'CONFIRM START OVER';
-      button.setAttribute('aria-label', 'Confirm start over');
-      button.setAttribute('aria-description', 'This abandons the current survival run.');
+      button.textContent = uiText('confirmRestart');
+      button.setAttribute('aria-label', uiText('confirmRestartLabel'));
+      button.setAttribute('aria-description', uiText('abandonRun'));
       return;
     }
     button.disabled = true;

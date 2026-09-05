@@ -1,3 +1,4 @@
+import { presentationUiText } from '../../i18n/presentationUiMessages';
 import {
   BufferGeometry,
   Float32BufferAttribute,
@@ -213,8 +214,8 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.itemAimTarget.position.set(3, 0.08, -11.6);
     this.targets = Object.freeze([Object.freeze({
       id: TARGET_ID,
-      label: 'WRECKAGE',
-      description: 'Inspect the floating debris.',
+      get label() { return presentationUiText('wreckage'); },
+      get description() { return presentationUiText('wreckageDescription'); },
       focusEventId: 'wreckage' as const,
       root: this.debris,
       tooltip: false,

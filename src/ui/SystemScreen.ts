@@ -1,3 +1,4 @@
+import { systemText } from '../i18n/systemMessages';
 export type SystemScreenDescription = {
   readonly kind: 'loading';
 } | {
@@ -24,7 +25,7 @@ function loadingProgress(): HTMLProgressElement {
   progress.className = 'system-loading-progress';
   progress.max = 1;
   progress.value = 0;
-  progress.setAttribute('aria-label', 'Loading game');
+  progress.setAttribute('aria-label', systemText('loading'));
   progress.setAttribute('aria-valuetext', '0%');
   return progress;
 }

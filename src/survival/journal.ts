@@ -1,3 +1,8 @@
+import { getLanguage } from '../i18n/language';
+import { journalMessage as t } from '../i18n/journalMessages';
+import { catchLabel } from '../i18n/itemMessages';
+import { survivalEventById } from './eventCatalog';
+import { resolveOutcomeText } from './outcomeText';
 import {
   ITEM_IDS,
   ITEM_LABELS,
@@ -15,10 +20,9 @@ import type {
   JournalNightRecord,
   JournalSurvivalActionRecord,
 } from './journalRecords';
-import type { ResourceDelta, WeatherId } from './survivalTypes';
+import type { ResourceDelta } from './survivalTypes';
 
-export const SINKING_SHIP_DAYTIME_TEXT =
-  'Dorothy struck something and began to sink. I reached the lifeboat with the supplies I could save.';
+export function sinkingShipDaytimeText(): string { return t('sinking'); }
 
 export interface JournalPageCopy {
   heading: string;
@@ -27,128 +31,117 @@ export interface JournalPageCopy {
   nighttime: string;
 }
 
-const WEATHER_LABELS: Readonly<Record<WeatherId, string>> = {
-  calm: 'CALM',
-  overcast: 'OVERCAST',
-  squall: 'SQUALL',
-};
+
 
 function formatEvent(record: JournalEventRecord): string {
-  const timing = record.phase === 'day' ? 'During the day' : 'That night';
-  const situation = `${timing}, I encountered ${record.title.toLocaleLowerCase('en-US')}.`;
-  const action = record.attemptedItemId === null
-    ? `I chose \u201c${record.choiceLabel}\u201d.`
-    : `I used the ${ITEM_LABELS[record.attemptedItemId].toLocaleLowerCase('en-US')}.`;
-
-  return `${situation} ${action} ${record.outcomeMessage}${formatMutations(record.inventoryMutations)}`;
+  const event = survivalEventById(record.eventId);
+  const choice = event?.choices.find(({ id }) => id === record.attemptedChoiceId);
+  if (event === undefined || choice === undefined) throw new Error('Invalid journal event reference.');
+  const situation = t(record.phase === 'day' ? 'dayEvent' : 'nightEvent', event.title.toLocaleLowerCase(getLanguage()));
+  const action = record.attemptedItemId === null ? t('choice', choice.label)
+    : t('item', ITEM_LABELS[record.attemptedItemId].toLocaleLowerCase(getLanguage()));
+  return [situation, action, resolveOutcomeText(record.text)].join(' ') + formatMutations(record.inventoryMutations);
 }
 
 function itemLabel(instanceId: ItemInstanceId): string {
   const itemId = ITEM_IDS.find((candidate) => instanceId.startsWith(`${candidate}-`));
   if (itemId === undefined) throw new Error(`Journal mutation contains unknown instance ${instanceId}.`);
-  return ITEM_LABELS[itemId].toLocaleLowerCase('en-US');
+  return ITEM_LABELS[itemId].toLocaleLowerCase(getLanguage());
 }
 
+const listFormatters = { en: new Intl.ListFormat('en'), pl: new Intl.ListFormat('pl') };
 function listLabels(instanceIds: readonly ItemInstanceId[]): string {
-  const labels = instanceIds.map(itemLabel);
-  if (labels.length < 2) return labels[0] ?? 'item';
-  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+  return listFormatters[getLanguage()].format(instanceIds.map(itemLabel));
 }
 
 function formatMutations(mutations: readonly JournalInventoryMutation[]): string {
   return mutations.map((mutation) => {
     const labels = listLabels(mutation.instanceIds);
-    const be = mutation.instanceIds.length === 1 ? 'was' : 'were';
     switch (mutation.kind) {
-      case 'break': return ` The ${labels} broke.`;
-      case 'consume': return ` The ${labels} ${be} used up.`;
-      case 'gain': return ` The ${labels} was brought aboard.`;
-      case 'lose': return ` The ${labels} ${be} lost.`;
-      case 'repair': return ` The ${labels} ${be} repaired.`;
+      case 'break': return t('break', labels);
+      case 'consume': return t('consume', labels, mutation.instanceIds.length);
+      case 'gain': return t('gain', labels);
+      case 'lose': return t('lose', labels, mutation.instanceIds.length);
+      case 'repair': return t('repair', labels, mutation.instanceIds.length);
     }
   }).join('');
 }
 
 function formatNight(record: JournalNightRecord): string {
   return record.kind === 'quiet'
-    ? 'That night, the sea stayed calm, and I slept without interruption.'
+    ? t('quietNight')
     : formatEvent(record.event);
 }
 
 function formatDaytime(record: JournalDaytimeRecord | null): string {
-  if (record === null) return 'The daylight hours passed quietly.';
-  if ('kind' in record) return SINKING_SHIP_DAYTIME_TEXT;
+  if (record === null) return t('quietDay');
+  if ('kind' in record) return sinkingShipDaytimeText();
   return formatEvent(record);
 }
 
 function formatFishing(record: JournalFishingRecord): string {
   let sentence: string;
   if (record.result === 'miss') {
-    sentence = 'I went fishing, but it got away.';
+    sentence = t('fishMiss');
   } else {
-    if (record.catchLabel === null) {
+    if (record.catchId === null) {
       throw new Error(`Fishing journal record ${record.attemptId} requires a catch label.`);
     }
-    const label = record.catchLabel.toLocaleLowerCase('en-US');
+    const label = catchLabel(record.catchId).toLocaleLowerCase(getLanguage());
     if (record.result === 'utility') {
-      sentence = `I reeled in ${label} and brought it aboard.`;
+      sentence = t('fishUtility', label);
     } else if (record.result === 'junk') {
-      sentence = `I reeled in ${label}, but it was no use.`;
+      sentence = t('fishJunk', label);
     } else {
-      sentence = `I caught a ${label} and gained ${record.food === 1 ? 'one' : 'two'} food.`;
+      sentence = t('fishFood', label, record.food);
     }
   }
-  return record.baitConsumed ? `${sentence} I used one bait.` : sentence;
+  return record.baitConsumed ? sentence + t('bait') : sentence;
 }
 
 function formatCarlitos(record: JournalCarlitosCareRecord | JournalCarlitosDawnRecord): string {
   if (record.kind === 'carlitosCare') {
-    if (record.action === 'pet') return 'I petted Carlitos.';
-    if (record.action === 'feed') return 'I fed Carlitos.';
-    return 'I treated Carlitos.';
+    if (record.action === 'pet') return t('pet');
+    if (record.action === 'feed') return t('feed');
+    return t('treatCarlitos');
   }
   if (record.before.alive && !record.after.alive) {
-    return 'Carlitos died during the night.';
+    return t('carlitosDied');
   }
   const changes: string[] = [];
   if (record.before.hunger !== record.after.hunger) {
-    changes.push(`hunger ${record.before.hunger} to ${record.after.hunger}`);
+    changes.push(t('change', t('hunger').toLocaleLowerCase(getLanguage()), record.before.hunger, record.after.hunger));
   }
   if (record.before.sickness !== record.after.sickness) {
-    changes.push(`sickness ${record.before.sickness} to ${record.after.sickness}`);
+    changes.push(t('change', t('sickness').toLocaleLowerCase(getLanguage()), record.before.sickness, record.after.sickness));
   }
   if (record.before.unhappiness !== record.after.unhappiness) {
-    changes.push(`unhappiness ${record.before.unhappiness} to ${record.after.unhappiness}`);
+    changes.push(t('change', t('unhappiness').toLocaleLowerCase(getLanguage()), record.before.unhappiness, record.after.unhappiness));
   }
   if (record.before.energy !== record.after.energy) {
-    changes.push(`energy ${record.before.energy} to ${record.after.energy}`);
+    changes.push(t('change', t('energy').toLocaleLowerCase(getLanguage()), record.before.energy, record.after.energy));
   }
   if (changes.length > 0) return `Carlitos: ${changes.join('; ')}.`;
-  return 'Carlitos changed during the night.';
+  return t('carlitosChanged');
 }
-
-const RESOURCE_LABELS: Readonly<Record<keyof ResourceDelta, string>> = {
-  pressure: 'Pressure', health: 'Health', hunger: 'Hunger', energy: 'Energy', hull: 'Hull',
-  food: 'Food', bait: 'Bait', rescueLead: 'Rescue lead',
-};
 
 function formatSurvivalAction(record: JournalSurvivalActionRecord): string {
   let sentence: string;
   switch (record.action) {
-    case 'treat': sentence = 'I treated my wounds.'; break;
-    case 'repair': sentence = 'I repaired the hull.'; break;
-    case 'repairItem': sentence = 'I repaired my equipment.'; break;
+    case 'treat': sentence = t('treated'); break;
+    case 'repair': sentence = t('repaired'); break;
+    case 'repairItem': sentence = t('repairedItem'); break;
     case 'dive': {
-      sentence = 'I dived beneath the boat.';
+      sentence = t('dived');
       const recovered = Object.values(record.deltas).some((delta) => delta > 0);
-      if (!recovered) sentence += ' I found no supplies.';
-      if ((record.deltas.health ?? 0) < 0) sentence += ' I was injured.';
+      if (!recovered) sentence += t('noSupplies');
+      if ((record.deltas.health ?? 0) < 0) sentence += t('injured');
       break;
     }
   }
   const changes = Object.entries(record.deltas)
     .filter(([, delta]) => delta !== 0)
-    .map(([resource, delta]) => `${RESOURCE_LABELS[resource as keyof ResourceDelta]} ${delta > 0 ? '+' : ''}${delta}`);
+    .map(([resource, delta]) => `${t(resource === 'bait' ? 'baitResource' : resource as Exclude<keyof ResourceDelta, 'bait'>)} ${delta > 0 ? '+' : ''}${delta}`);
   const resources = changes.length === 0 ? '' : ` ${changes.join('; ')}.`;
   return `${sentence}${resources}${formatMutations(record.inventoryMutations)}`;
 }
@@ -166,8 +159,8 @@ export function formatJournalEntry(entry: JournalEntry): JournalPageCopy {
   const actions = entry.actions.map(formatDayAction).join(' ');
   const daytime = entry.daytime === null && actions.length > 0 ? '' : formatDaytime(entry.daytime);
   return {
-    heading: `DAY ${entry.day}`,
-    weather: WEATHER_LABELS[entry.weather],
+    heading: t('day', entry.day),
+    weather: t(entry.weather),
     daytime: [actions, daytime].filter(Boolean).join(' '),
     nighttime: formatNight(entry.nighttime),
   };

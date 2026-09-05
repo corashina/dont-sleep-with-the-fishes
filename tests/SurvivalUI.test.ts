@@ -24,21 +24,7 @@ const journalEntries: readonly JournalEntry[] = [1, 2].map((day) => ({
   weather: day === 1 ? 'calm' : 'overcast',
   actions: [],
   daytime: null,
-  nighttime: {
-    kind: 'event',
-    event: {
-      phase: 'night',
-      eventId: `night-${day}`,
-      title: 'Quiet Night',
-      prompt: `Night ${day} settled over the boat.`,
-      attemptedItemId: null,
-      attemptedChoiceId: null,
-      choiceLabel: 'Endure',
-      outcomeCode: 'event-resolved',
-      outcomeMessage: 'I made it through until morning.',
-      inventoryMutations: [],
-    },
-  },
+  nighttime: { kind: 'quiet' },
 }));
 
 afterEach(() => {

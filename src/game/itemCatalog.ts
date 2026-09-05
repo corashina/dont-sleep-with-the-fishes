@@ -1,3 +1,4 @@
+import { itemLabel } from '../i18n/itemMessages';
 export const ITEM_IDS = [
   'cannedFood', 'baitTin', 'ductTape', 'compass', 'map', 'medicalKit',
   'spyglass', 'fishingNet', 'knife', 'bucket', 'flareGun', 'scubaSet', 'anchor',
@@ -26,47 +27,44 @@ export interface ItemDefinition {
 }
 
 const define = (
-  label: string,
   weight: 1 | 2 | 3,
   spawnCount: number,
   charges: number | null,
   durable: boolean,
   breakable: boolean,
   dayAction: ItemDayAction,
-): ItemDefinition => ({
-  label, weight, spawnCount, charges, durable, breakable, dayAction,
+): Omit<ItemDefinition, 'label'> => ({ weight, spawnCount, charges, durable, breakable, dayAction,
   modelId: '' as ItemId, artworkId: '' as ItemId,
 });
 
 const rawDefinitions = {
-  cannedFood: define('FOOD', 1, 3, 1, false, false, 'eat'),
-  baitTin: define('BAIT', 1, 2, 1, false, false, null),
-  ductTape: define('DUCT TAPE', 1, 1, 1, false, false, 'repairItem'),
-  compass: define('COMPASS', 1, 1, null, true, true, null),
-  map: define('MAP', 1, 1, null, true, true, null),
-  medicalKit: define('MEDKIT', 2, 1, 1, false, false, 'treat'),
-  spyglass: define('BINOCULARS', 1, 1, null, true, true, null),
-  fishingNet: define('FISHING NET', 2, 1, null, true, true, null),
-  knife: define('KNIFE', 1, 1, null, true, true, null),
-  bucket: define('BUCKET', 2, 1, null, true, true, null),
-  flareGun: define('FLARE GUN', 1, 1, 1, false, false, null),
-  scubaSet: define('SCUBA GEAR', 3, 1, null, true, true, 'dive'),
-  anchor: define('ANCHOR', 3, 1, null, true, true, null),
-  radio: define('RADIO', 1, 1, null, true, false, 'answerRadio'),
-  umbrella: define('UMBRELLA', 2, 1, null, true, true, null),
-  swimRing: define('SWIM RING', 2, 1, null, true, true, null),
-  flashlight: define('FLASHLIGHT', 1, 1, null, true, true, null),
-  shotgun: define('SHOTGUN', 2, 1, 1, false, false, null),
-  energyBar: define('ENERGY BAR', 1, 1, 1, false, false, 'useEnergyBar'),
-  carlitos: define(
-    'CARLITOS', 2, 1, null, true, false, null,
+  cannedFood: define(1, 3, 1, false, false, 'eat'),
+  baitTin: define(1, 2, 1, false, false, null),
+  ductTape: define(1, 1, 1, false, false, 'repairItem'),
+  compass: define(1, 1, null, true, true, null),
+  map: define(1, 1, null, true, true, null),
+  medicalKit: define(2, 1, 1, false, false, 'treat'),
+  spyglass: define(1, 1, null, true, true, null),
+  fishingNet: define(2, 1, null, true, true, null),
+  knife: define(1, 1, null, true, true, null),
+  bucket: define(2, 1, null, true, true, null),
+  flareGun: define(1, 1, 1, false, false, null),
+  scubaSet: define(3, 1, null, true, true, 'dive'),
+  anchor: define(3, 1, null, true, true, null),
+  radio: define(1, 1, null, true, false, 'answerRadio'),
+  umbrella: define(2, 1, null, true, true, null),
+  swimRing: define(2, 1, null, true, true, null),
+  flashlight: define(1, 1, null, true, true, null),
+  shotgun: define(2, 1, 1, false, false, null),
+  energyBar: define(1, 1, 1, false, false, 'useEnergyBar'),
+  carlitos: define(2, 1, null, true, false, null,
   ),
-} satisfies Record<ItemId, ItemDefinition>;
+} satisfies Record<ItemId, Omit<ItemDefinition, 'label'>>;
 
 export const ITEM_DEFINITIONS = Object.freeze(Object.fromEntries(
   ITEM_IDS.map((id) => [
     id,
-    Object.freeze({ ...rawDefinitions[id], modelId: id, artworkId: id }),
+    Object.freeze({ ...rawDefinitions[id], get label() { return itemLabel(id); }, modelId: id, artworkId: id }),
   ]),
 ) as Record<ItemId, ItemDefinition>);
 
@@ -93,9 +91,9 @@ const APPROVED_SPAWN_COUNTS = {
   carlitos: 1,
 } as const satisfies Record<ItemId, number>;
 
-export const ITEM_LABELS = Object.freeze(Object.fromEntries(
-  ITEM_IDS.map((id) => [id, ITEM_DEFINITIONS[id].label]),
-) as Record<ItemId, string>);
+export const ITEM_LABELS = Object.freeze(Object.defineProperties({}, Object.fromEntries(
+  ITEM_IDS.map((id) => [id, { enumerable: true, get: () => itemLabel(id) }]),
+)) as Record<ItemId, string>);
 
 export const itemDefinition = (id: ItemId): ItemDefinition => ITEM_DEFINITIONS[id];
 

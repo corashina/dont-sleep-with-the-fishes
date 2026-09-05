@@ -1,3 +1,6 @@
+import { onLanguageChange } from '../i18n/language';
+import { refreshUiText } from './translatedText';
+import { uiText } from '../i18n/uiMessages';
 import { ITEM_DEFINITIONS, type ItemId } from '../game/ItemState';
 import type { ScavengeSnapshot } from '../game/ScavengeSession';
 import type { ScavengeEndingStage } from '../game/scavengeEnding';
@@ -57,6 +60,13 @@ export class GameUI {
   private latestSnapshot: ScavengeSnapshot | null = null;
   private readonly pointerLockErrors: HTMLElement[];
   private handsFullNoticeTimer: number | null = null;
+  private readonly unsubscribeLanguage: () => void;
+  private refreshLanguage(): void {
+    refreshUiText(this.root);
+    if (this.renderedEndingRecord !== null) this.renderEndingRecord(this.renderedEndingRecord);
+    if (this.pointerLockErrors.some(element => element.classList.contains('is-visible'))) this.showPointerLockError();
+  }
+
   private disposed = false;
   private restartHandled = false;
   private endingStage: ScavengeEndingStage = 'playing';
@@ -79,8 +89,8 @@ export class GameUI {
         </div>
         <div class="prompt brush-label ui-role-context" data-prompt aria-live="polite"></div>
         <div class="boat-tooltip scavenge-tooltip ui-role-context" data-item-tooltip role="tooltip"></div>
-        <p class="hands-full-notice ui-role-display" data-hands-full-notice role="status" aria-live="polite" hidden>
-          HANDS FULL, QUICK TO THE BOAT.
+        <p class="hands-full-notice ui-role-display" data-hands-full-notice role="status" aria-live="polite" hidden data-ui-text="handsFull">
+          ${uiText('handsFull')}
         </p>
         <div class="scavenge-status" data-scavenge-status>
           <div class="carried" data-carried>
@@ -93,17 +103,20 @@ export class GameUI {
         </div>
       </div>
       <div class="intro-skip brush-label ui-role-context" data-intro-skip hidden>
-        <kbd>SPACE</kbd><span aria-hidden="true"> - </span>SKIP INTRO
+        <kbd data-ui-text="space">${uiText('space')}</kbd><span aria-hidden="true"> - </span><span data-ui-text="skipIntro">${uiText('skipIntro')}</span>
       </div>
       <div class="scavenge-intro-fade" data-intro-fade aria-hidden="true"></div>
       <section class="screen pause-screen poster-screen" data-pause>
         <div class="screen__content scuba-popup-paper scuba-popup-panel">
-          <h2 class="scuba-popup-title ui-role-display">Back to the deck?</h2>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-resume-button aria-label="Resume">
-            RESUME
+          <h2 class="scuba-popup-title ui-role-display" data-ui-text="backDeck">${uiText('backDeck')}</h2>
+          <button type="button" class="primary-action salvage-action ui-role-context" data-resume-button data-ui-aria="resume" aria-label="${uiText('resume')}" data-ui-text="resumeUpper">
+            ${uiText('resumeUpper')}
           </button>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-return-to-menu aria-label="Back to menu">
-            BACK TO MENU
+          <button type="button" class="primary-action salvage-action ui-role-context" data-open-settings data-ui-aria="settings" aria-label="${uiText('settings')}" data-ui-text="settingsUpper">
+            ${uiText('settingsUpper')}
+          </button>
+          <button type="button" class="primary-action salvage-action ui-role-context" data-return-to-menu data-ui-aria="backMenu" aria-label="${uiText('backMenu')}" data-ui-text="backMenuUpper">
+            ${uiText('backMenuUpper')}
           </button>
           <p class="input-error illustrated-warning ui-role-narrative" data-pointer-lock-error aria-live="polite">
             ${uiArtwork('warning', 'illustrated-warning__art')}
@@ -117,8 +130,8 @@ export class GameUI {
           <h2 class="scuba-popup-title ui-role-display" data-ending-title tabindex="-1" role="alert"></h2>
           <p class="ending-cause ui-role-context" data-ending-cause></p>
           <p class="ending-stats ui-role-numeral" data-ending-stats></p>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-ending-action hidden>
-            START FROM THE SHIP
+          <button type="button" class="primary-action salvage-action ui-role-context" data-ending-action hidden data-ui-text="startShipUpper">
+            ${uiText('startShipUpper')}
           </button>
         </div>
       </section>
@@ -153,6 +166,8 @@ export class GameUI {
     this.returnToMenuButton.addEventListener('click', this.handleReturnToMenu);
     this.endingAction.addEventListener('click', this.handleRestart);
     this.setPresentation('intro');
+    this.unsubscribeLanguage = onLanguageChange(() => this.refreshLanguage());
+    this.refreshLanguage();
     this.setIntroFadeProgress(1);
   }
 
@@ -182,7 +197,7 @@ export class GameUI {
 
   showPointerLockError(): void {
     this.pointerLockErrors.forEach((element) => {
-      requireElement<HTMLElement>(element, '[data-pointer-lock-error-copy]').textContent = 'Mouse look was blocked. Click the button and allow pointer lock to continue.';
+      requireElement<HTMLElement>(element, '[data-pointer-lock-error-copy]').textContent = uiText('pointerBlocked');
       element.classList.add('is-visible');
     });
   }
@@ -263,6 +278,7 @@ export class GameUI {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.unsubscribeLanguage();
     if (this.handsFullNoticeTimer !== null) window.clearTimeout(this.handsFullNoticeTimer);
     this.handsFullNoticeTimer = null;
     this.resumeButton.removeEventListener('click', this.handleResume);

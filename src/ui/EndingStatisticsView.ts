@@ -1,3 +1,6 @@
+import { onLanguageChange } from '../i18n/language';
+import { refreshUiText } from './translatedText';
+import { uiText } from '../i18n/uiMessages';
 import { createElementRequirement } from './dom';
 import type { EndingStatistics } from './EndingStatisticsModel';
 import { statisticsGraphMarkup } from './StatisticsGraph';
@@ -11,13 +14,19 @@ export class EndingStatisticsView {
   readonly title: HTMLElement;
   private readonly content: HTMLElement;
   private readonly back: HTMLButtonElement;
+  private readonly unsubscribeLanguage: () => void;
+  private refreshLanguage(): void {
+    refreshUiText(this.root);
+    this.button.textContent = uiText('viewStats');
+  }
+
   private disposed = false;
 
   constructor(private readonly host: HTMLElement, private readonly endingPanel: HTMLElement) {
     this.button = document.createElement('button');
     this.button.type = 'button';
     this.button.className = 'primary-action salvage-action ui-role-context';
-    this.button.textContent = 'VIEW STATISTICS';
+    this.button.textContent = uiText('viewStats');
     this.button.dataset.viewStatistics = '';
     this.endingPanel.append(this.button);
     this.root = document.createElement('div');
@@ -26,11 +35,11 @@ export class EndingStatisticsView {
     this.root.hidden = true;
     this.root.innerHTML = `
       <header class="ending-statistics-card__header">
-        <p class="ui-role-context">THE SHIP'S LOG</p>
-        <h2 class="ui-role-display" tabindex="-1" data-statistics-title>YOUR JOURNEY</h2>
+        <p class="ui-role-context" data-ui-text="shipLog">${uiText('shipLog')}</p>
+        <h2 class="ui-role-display" tabindex="-1" data-statistics-title data-ui-text="yourJourney">${uiText('yourJourney')}</h2>
       </header>
       <div class="ending-statistics-card__content" data-statistics-content></div>
-      <button type="button" class="carlitos-status__action ui-role-context" data-statistics-back>BACK TO ENDING</button>`;
+      <button type="button" class="carlitos-status__action ui-role-context" data-statistics-back data-ui-text="backEnding">${uiText('backEnding')}</button>`;
     this.title = requireElement(this.root, '[data-statistics-title]');
     this.content = requireElement(this.root, '[data-statistics-content]');
     this.back = requireElement(this.root, '[data-statistics-back]');
@@ -38,16 +47,24 @@ export class EndingStatisticsView {
     this.button.addEventListener('click', this.open);
     this.back.addEventListener('click', this.close);
     this.host.addEventListener('keydown', this.handleKeyDown);
+    this.unsubscribeLanguage = onLanguageChange(() => this.refreshLanguage());
+    this.refreshLanguage();
   }
 
   render(statistics: EndingStatistics): void {
     if (this.disposed) return;
+    const previousDetails = this.content.querySelector('details');
+    const detailsOpen = previousDetails?.open ?? false;
+    const summaryFocused = this.content.querySelector('summary') === document.activeElement;
     this.content.innerHTML = `<dl class="ending-statistics-rows">${statistics.rows.map((row) => `
       <div class="ending-statistics-row">
         <dt class="ui-role-context"><span aria-hidden="true">${row.icon}</span>${row.label}</dt>
         <dd class="ui-role-numeral">${row.value}</dd>
       </div>`).join('')}</dl>
       ${statistics.graph === null ? '' : statisticsGraphMarkup(statistics.graph)}`;
+    const details = this.content.querySelector('details');
+    if (details !== null) details.open = detailsOpen;
+    if (summaryFocused) this.content.querySelector('summary')?.focus({ preventScroll: true });
   }
 
   private readonly open = (): void => {
@@ -90,6 +107,7 @@ export class EndingStatisticsView {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.unsubscribeLanguage();
     this.button.removeEventListener('click', this.open);
     this.back.removeEventListener('click', this.close);
     this.host.removeEventListener('keydown', this.handleKeyDown);

@@ -19,6 +19,7 @@ import type {
 } from './BoatSupplyDisplay';
 import { EventItemEffects } from './EventItemEffects';
 import { StationaryEventCamera } from './StationaryEventCamera';
+import { NetAttackPose } from './NetAttackPose';
 import type { EventItemUseSample } from './eventItemUseChoreography';
 import {
   eventItemMotionProfile,
@@ -53,6 +54,7 @@ interface InteriorMaterialBinding {
 
 /** Adapts sampled item-use poses to a borrowed supply actor. */
 export class EventItemUseAdapter {
+  private readonly netAttackPose = new NetAttackPose();
   private readonly cameraLook: StationaryEventCamera;
   private readonly storedActorPosition = new Vector3();
   private readonly cameraSpacePosition = new Vector3();
@@ -214,7 +216,11 @@ export class EventItemUseAdapter {
     actor.applyPose(this.pose);
     this.applyCameraAlignedRotation(sample, actor);
     this.applyKnifeAimBeforeTravel(sample, actor, profile);
-    this.applyTargetTravel(sample, actor, profile);
+    if (sample.netSwing) {
+      this.netAttackPose.apply(actor.root, sample, this.cameraWorldMatrix, this.aimTarget);
+    } else {
+      this.applyTargetTravel(sample, actor, profile);
+    }
     this.applyKnifeGripAfterTravel(sample, actor);
     this.applyCameraFacing(sample, actor);
     this.applyAim(sample, actor, profile);

@@ -1,3 +1,4 @@
+import { interactionText } from '../i18n/interactionMessages';
 import {
   Matrix4,
   Object3D,
@@ -44,7 +45,7 @@ export function chooseContextAction(input: ContextInput): ContextAction {
   if (input.target === 'deposit' && input.carriedItem) {
     return {
       type: 'depositBundle',
-      prompt: 'LEFT CLICK — STORE CARRIED SUPPLIES',
+      get prompt() { return interactionText('store'); },
     };
   }
   if (input.target === 'item' && input.targetItem) {
@@ -52,24 +53,24 @@ export function chooseContextAction(input: ContextInput): ContextAction {
     if (definition.weight > input.remainingCapacity) {
       return {
         type: 'capacityFull',
-        prompt: `${definition.label} WEIGHS ${definition.weight} — ${input.remainingCapacity} CAPACITY FREE`,
+        get prompt() { return interactionText('capacity', definition.label, definition.weight, input.remainingCapacity); },
       };
     }
     return {
       type: 'pickUp',
       item: input.targetItem,
-      prompt: `LEFT CLICK — PICK UP ${definition.label}`,
+      get prompt() { return interactionText('pickup', definition.label); },
     };
   }
   if (input.nearEvacuation && !input.carriedItem) {
-    return { type: 'evacuate', prompt: 'LEFT CLICK — EVACUATE NOW' };
+    return { type: 'evacuate', get prompt() { return interactionText('evacuate'); } };
   }
   if (input.carriedItem && input.dropPoint) {
     return {
       type: 'drop',
       item: input.carriedItem,
       point: input.dropPoint,
-      prompt: `LEFT CLICK — DROP ${ITEM_LABELS[input.carriedItem.type]}`,
+      get prompt() { return interactionText('drop', ITEM_LABELS[input.carriedItem!.type]); },
     };
   }
   return { type: 'none', prompt: '' };

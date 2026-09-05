@@ -3,6 +3,7 @@ import { ITEM_DEFINITIONS, type ItemId, type ItemInstanceId } from '../game/Item
 import type { SurvivalUI } from '../ui/SurvivalUI';
 import type { EventContextChoice } from '../ui/SurvivalUiViewModel';
 import type { BoatWorld } from './BoatWorld';
+import { presentationUiText } from '../i18n/presentationUiMessages';
 import {
   CARLITOS_LAB_CHOICE_ID,
   CARLITOS_LAB_INSTANCE_ID,
@@ -366,12 +367,16 @@ export class ItemAnimationLabFlow {
   private showUseChoices(item: SurvivalItemState): void {
     const broken = item.condition === 'broken';
     const choices: EventContextChoice[] = (ITEM_ANIMATION_LAB_USES[item.type] ?? []).map(
-      ({ id, label }) => ({ id, label, unavailableReason: broken ? 'Item is broken.' : null }),
+      (use) => ({
+        id: use.id,
+        get label() { return use.label; },
+        get unavailableReason() { return broken ? presentationUiText('itemBroken') : null; },
+      }),
     );
     if (ITEM_DEFINITIONS[item.type].breakable) {
       choices.push(
-        { id: 'break', label: 'Break', unavailableReason: broken ? 'Item is already broken.' : null },
-        { id: 'fix', label: 'Fix', unavailableReason: broken ? null : 'Item is not broken.' },
+        { id: 'break', get label() { return presentationUiText('break'); }, get unavailableReason() { return broken ? presentationUiText('alreadyBroken') : null; } },
+        { id: 'fix', get label() { return presentationUiText('fix'); }, get unavailableReason() { return broken ? null : presentationUiText('notBroken'); } },
       );
     }
     this.pendingInstanceId = item.instanceId;

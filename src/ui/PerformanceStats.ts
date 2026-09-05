@@ -1,8 +1,12 @@
+import { onLanguageChange } from '../i18n/language';
+import { systemText } from '../i18n/systemMessages';
 export class PerformanceStats {
   private readonly element: HTMLOutputElement;
   private elapsed = 0;
   private frames = 0;
   private disposed = false;
+  private lastFps: number | null = null;
+  private readonly unsubscribeLanguage: () => void;
 
   constructor(mount: HTMLElement, visible = false) {
     this.element = document.createElement('output');
@@ -10,8 +14,9 @@ export class PerformanceStats {
     this.element.dataset.performanceStats = '';
     this.element.hidden = !visible;
     this.element.textContent = 'FPS --';
-    this.element.setAttribute('aria-label', 'Rendering performance: waiting for FPS data');
+    this.element.setAttribute('aria-label', systemText('fpsWait'));
     mount.append(this.element);
+    this.unsubscribeLanguage = onLanguageChange(() => { this.element.setAttribute('aria-label', this.lastFps === null ? systemText('fpsWait') : systemText('fps', this.lastFps)); });
   }
 
   isVisible(): boolean {
@@ -23,8 +28,9 @@ export class PerformanceStats {
     this.element.hidden = !visible;
     this.reset();
     if (visible) {
+      this.lastFps = null;
       this.element.textContent = 'FPS --';
-      this.element.setAttribute('aria-label', 'Rendering performance: waiting for FPS data');
+      this.element.setAttribute('aria-label', systemText('fpsWait'));
     }
   }
 
@@ -45,14 +51,16 @@ export class PerformanceStats {
     if (this.elapsed < 0.5) return;
 
     const fps = Math.round(this.frames / this.elapsed);
+    this.lastFps = fps;
     this.element.textContent = `FPS ${fps}`;
-    this.element.setAttribute('aria-label', `Rendering performance: ${fps} frames per second`);
+    this.element.setAttribute('aria-label', systemText('fps', fps));
     this.reset();
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.unsubscribeLanguage();
     this.element.remove();
   }
 

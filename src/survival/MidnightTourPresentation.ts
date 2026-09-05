@@ -1,3 +1,4 @@
+import { presentationUiText } from '../i18n/presentationUiMessages';
 import {
   AnimationMixer,
   Box3,
@@ -328,8 +329,8 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   interactionTargets(): readonly FocusedEventInteractionTarget[] {
     return [{
       id: 'midnight-tour:island',
-      label: 'ISLAND',
-      description: 'Turn the boat toward the small island.',
+      get label() { return presentationUiText('island'); },
+      get description() { return presentationUiText('islandDescription'); },
       choiceId: 'visit',
       root: this.island,
       minimumHitWidth: 96,

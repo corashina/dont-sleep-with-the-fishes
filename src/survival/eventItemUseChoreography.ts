@@ -2,6 +2,7 @@ import type { ItemId } from '../game/ItemState';
 import { clamp01, pulse, smoothstep } from './animationMath';
 import { eventItemMotionProfile, type EventItemMass } from './eventItemMotionProfile';
 import { scaleEventItemDuration, scaleThrownItemDuration } from './eventItemTiming';
+import { NET_ATTACK_BASE_DURATION, NET_ATTACK_CONTACT_PROGRESS, sampleNetAttackContact, sampleNetAttackSwing } from './netAttackChoreography';
 
 export type EventItemUseContext =
   | 'base' | 'throw-target' | 'tape-stretch' | 'compass-search' | 'map-read'
@@ -52,7 +53,7 @@ const KNIFE_RETRACT_END = 0.82;
 const KNIFE_GRIP_RETURN_END = 0.96;
 const KNIFE_RETURN_HOLD_PROGRESS = 0.16;
 const KNIFE_GUNWALE_CLEARANCE_HEIGHT = 0.65;
-const NET_SLAP_ACTION_CUE_PROGRESSES = Object.freeze([0.62]);
+const NET_SLAP_ACTION_CUE_PROGRESSES = Object.freeze([NET_ATTACK_CONTACT_PROGRESS]);
 const FLARE_GUN_ACTION_CUE_PROGRESSES = Object.freeze([0.46, 0.54]);
 const FLARE_GUN_READY_YAW = -Math.PI / 2 + 0.22;
 const FLARE_GUN_READY_PITCH = 1.25;
@@ -119,6 +120,7 @@ export interface EventItemUseSample {
   effectKind: EventItemEffectKind;
   aimBlend: number;
   targetBlend: number;
+  netSwing: boolean;
   ballisticFlight: boolean;
   flightArc: number;
   flightArcHeight: number;
@@ -155,7 +157,7 @@ const ANCHOR_DROP_EVENTS: ReadonlySet<string> = new Set([
   'tornado', 'thunderstorm', 'restless-waves',
 ]);
 const SETTLE_ROLL_EXCLUDED_CONTEXTS: ReadonlySet<EventItemUseContext> = new Set([
-  'map-read', 'compass-search', 'net-scoop', 'map-leak-patch', 'knife-stab',
+  'map-read', 'compass-search', 'net-scoop', 'net-slap', 'map-leak-patch', 'knife-stab',
 ]);
 const EVENT_ITEM_USE_BASE_DURATIONS: Readonly<Record<EventItemUseContext, number>> = {
   base: 1.35,
@@ -165,7 +167,7 @@ const EVENT_ITEM_USE_BASE_DURATIONS: Readonly<Record<EventItemUseContext, number
   'map-read': 1.55,
   'binocular-look': 1.7,
   'net-scoop': SCOOP_DURATION,
-  'net-slap': 1.2,
+  'net-slap': NET_ATTACK_BASE_DURATION,
   'bucket-scoop': SCOOP_DURATION,
   'bucket-helmet': 1.45,
   'trade-handover': 1.35,
@@ -237,6 +239,7 @@ export function createEventItemUseSample(): EventItemUseSample {
     effectKind: 'none',
     aimBlend: 0,
     targetBlend: 0,
+    netSwing: false,
     ballisticFlight: false,
     flightArc: 0,
     flightArcHeight: 0,
@@ -349,6 +352,7 @@ function resetSample(output: EventItemUseSample): void {
   output.effectKind = 'none';
   output.aimBlend = 0;
   output.targetBlend = 0;
+  output.netSwing = false;
   output.ballisticFlight = false;
   output.flightArc = 0;
   output.flightArcHeight = 0;
@@ -515,18 +519,18 @@ function sampleNetSlap(
   progress: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  const windUp = pulse(progress, 0.36, 0.48, 0.58);
-  const contact = pulse(progress, 0.5, 0.62, 0.76);
-  output.viewX += 0.22 * windUp - 0.14 * contact;
-  output.viewY += 0.18 * windUp - 0.2 * contact;
-  output.viewZ += 0.08 * windUp + 0.1 * contact;
-  output.yaw = -0.42 * windUp + 0.34 * contact;
-  output.pitch = -0.24 * windUp + 0.28 * contact;
-  output.roll = -0.54 * windUp + 1.18 * contact;
-  output.cameraTargetBlend = 0.28 * contact;
-  output.targetBlend = 0.82 * contact;
-  output.ballisticFlight = false;
-  output.primaryEffect = contact;
+  const swing = sampleNetAttackSwing(progress);
+  const ready = smoothstep((progress - 0.36) / 0.14);
+  const recovery = 1 - smoothstep((progress - 0.76) / 0.2);
+  output.netSwing = true;
+  output.yaw = -0.65 * swing;
+  output.pitch = 1.1 * swing;
+  output.roll = -0.35 * ready * recovery;
+  output.aimBlend = ready * recovery;
+  // Establish the grip before the fast arc; keep it steady through contact.
+  output.targetBlend = ready * recovery;
+  output.cameraTargetBlend = smoothstep((progress - 0.24) / 0.2) * recovery;
+  output.primaryEffect = sampleNetAttackContact(progress);
 }
 
 function sampleNetItemUse(
@@ -1113,6 +1117,10 @@ function sampleRecoveringEventItemOutcome(
   output: EventItemUseSample,
 ): boolean {
   switch (context) {
+    case 'net-slap':
+      sampleEventItemUse(context, itemId, 1, output);
+      output.cameraSpaceBlend *= 1 - smoothstep(progress);
+      return true;
     case 'knife-stab': sampleKnifeOutcome(itemId, progress, output); return true;
     case 'map-read': sampleMapOutcome(itemId, progress, output); return true;
     case 'compass-search': sampleCompassOutcome(progress, profile, output); return true;

@@ -1,3 +1,4 @@
+import { domainText, resolveOutcomeText, type OutcomeText } from './outcomeText';
 import type { ItemId } from '../game/ItemState';
 import type { FishingCatchReward } from './fishingCatalog';
 import type { FishingTerminalResult } from './FishingSession';
@@ -6,6 +7,7 @@ import type { ItemCondition, ResourceDelta } from './survivalTypes';
 export interface FishingSettlement {
   readonly code: 'fish-missed' | 'fish-caught' | 'utility-caught' | 'junk-caught';
   readonly message: string;
+  readonly text: OutcomeText;
   readonly deltas: Readonly<ResourceDelta>;
   readonly food: 0 | 1 | 2;
   readonly baitConsumed: boolean;
@@ -21,12 +23,9 @@ function settlementCode(result: FishingTerminalResult): FishingSettlement['code'
   return result.catch.kind === 'utility' ? 'utility-caught' : 'junk-caught';
 }
 
-function settlementMessage(result: FishingTerminalResult): string {
-  if (result.kind === 'miss') return 'The fish got away.';
-  const label = result.catch.label.toLocaleLowerCase('en-US');
-  return result.catch.kind === 'fish'
-    ? `You caught a ${label}.`
-    : `You reeled in ${label}.`;
+function settlementText(result: FishingTerminalResult): OutcomeText {
+  return result.kind === 'miss' ? domainText('fishMissed')
+    : { kind: 'fishing', catchId: result.catch.id, fish: result.catch.kind === 'fish' };
 }
 
 function settlementDeltas(
@@ -55,7 +54,8 @@ export function fishingSettlement(
 
   return Object.freeze({
     code: settlementCode(result),
-    message: settlementMessage(result),
+    text: settlementText(result),
+    get message() { return resolveOutcomeText(settlementText(result)); },
     deltas: Object.freeze(deltas),
     food,
     baitConsumed,
