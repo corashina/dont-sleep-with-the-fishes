@@ -3,6 +3,8 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
+import { POLY_PIZZA_MODEL_SOURCES } from './poly-pizza-models.mjs';
+import { inspectModelTextures } from './poly-pizza-textures.mjs';
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
@@ -101,10 +103,12 @@ export async function buildItemModelMetadata(modelsDir, itemIds) {
   if (new Set(itemIds).size !== itemIds.length) throw new Error('item IDs must be unique');
   const metadata = {};
   for (const itemId of itemIds) {
-    metadata[itemId] = inspectDocument(
-      itemId,
-      await io.read(join(modelsDir, `${itemId}.glb`)),
-    );
+    const document = await io.read(join(modelsDir, `${itemId}.glb`));
+    const textureProfile = POLY_PIZZA_MODEL_SOURCES[itemId]?.textureProfile;
+    metadata[itemId] = {
+      ...inspectDocument(itemId, document),
+      ...(textureProfile ? { textures: await inspectModelTextures(document) } : {}),
+    };
   }
   await writeFile(
     join(modelsDir, 'item-model-metadata.json'),

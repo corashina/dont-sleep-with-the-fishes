@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { access, readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +12,7 @@ import {
 import { POLY_PIZZA_MODEL_SOURCES } from './poly-pizza-models.mjs';
 import { parseModelCheckArguments } from './model-check-arguments.mjs';
 import { parseGlb, validateEmbeddedResources } from './glb-validation.mjs';
+import { validateModelTextureProfile } from './poly-pizza-textures.mjs';
 
 export const MODEL_LIMIT = 3_000;
 export const LIBRARY_LIMIT = 40_000;
@@ -186,10 +188,28 @@ function validateModelBounds(filePath, document) {
   return { min: state.modelMin, max: state.modelMax };
 }
 
-async function inspectModel(filePath) {
+async function validateProcessedTextures(itemId, bytes, document) {
+  const source = POLY_PIZZA_MODEL_SOURCES[itemId];
+  if (source?.committedSha256) {
+    const actualHash = createHash('sha256').update(bytes).digest('hex').toUpperCase();
+    if (actualHash !== source.committedSha256) {
+      throw new Error(`${itemId}: committed GLB SHA-256 does not match ${source.committedSha256}`);
+    }
+  }
+  const textures = await validateModelTextureProfile(
+    itemId,
+    bytes,
+    document,
+    source?.textureProfile,
+  );
+  return source?.textureProfile ? { textures } : {};
+}
+
+async function inspectModel(filePath, itemId) {
   const bytes = await readFile(filePath);
   validateEmbeddedResources(filePath, parseGlb(filePath, bytes));
   const document = await io.read(filePath);
+  const processedTextures = await validateProcessedTextures(itemId, bytes, document);
   if (
     filePath.endsWith('carlitos.glb')
     && document.getRoot().listNodes().some(
@@ -214,7 +234,11 @@ async function inspectModel(filePath) {
     }
   }
   const rawBounds = validateModelBounds(filePath, document);
-  return { rawBounds, triangles };
+  return {
+    rawBounds,
+    triangles,
+    ...processedTextures,
+  };
 }
 
 export async function countTriangles(filePath) {
@@ -278,6 +302,7 @@ function verifyPolyPizzaLedgerRow(actual, itemId, measurement, source) {
     actual.length !== 10
     || JSON.stringify(actual.slice(0, 8)) !== JSON.stringify(expectedCore)
     || !allSources.every((entry) => actual[8].includes(entry.sha256))
+    || (source.committedSha256 && !actual[8].includes(source.committedSha256))
     || !actual[8].includes('official Poly Pizza static GLB')
     || actual[9] !== source.downloadedOn
   ) {
@@ -377,7 +402,7 @@ async function measureModels(modelsDir, errors) {
     const filePath = resolve(modelsDir, `${itemId}.glb`);
     try {
       await access(filePath);
-      const measurement = await inspectModel(filePath);
+      const measurement = await inspectModel(filePath, itemId);
       measurements[itemId] = measurement;
       const { triangles } = measurement;
       const triangleLimit = modelTriangleLimit(itemId);
@@ -408,6 +433,9 @@ function validateMetadata(metadata, measurements, errors) {
         || !sameNumbers(expected.rawBounds?.max, measured.rawBounds.max)
       ) {
         errors.push(`${itemId}: metadata raw bounds do not match measured value`);
+      }
+      if (JSON.stringify(expected.textures) !== JSON.stringify(measured.textures)) {
+        errors.push(`${itemId}: metadata textures do not match measured value`);
       }
     }
   }

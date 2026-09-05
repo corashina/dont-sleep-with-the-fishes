@@ -7,6 +7,7 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { inspectEventModel } from './event-model-metadata.mjs';
 import { parseGlb, validateEmbeddedResources } from './glb-validation.mjs';
 import { parseModelCheckArguments } from './model-check-arguments.mjs';
+import { validateModelTextureProfile } from './poly-pizza-textures.mjs';
 import {
   POLY_PIZZA_MENU_MODEL_IDS,
   POLY_PIZZA_MENU_MODEL_SOURCES,
@@ -138,7 +139,8 @@ function menuMetadataMatches(expected, measurement) {
   return expected?.triangles === measurement.triangles
     && sameNumbers(expected?.rawBounds?.min, measurement.rawBounds.min)
     && sameNumbers(expected?.rawBounds?.max, measurement.rawBounds.max)
-    && sameAnimations(expected?.animations, measurement.animations);
+    && sameAnimations(expected?.animations, measurement.animations)
+    && JSON.stringify(expected?.textures) === JSON.stringify(measurement.textures);
 }
 
 function validateMenuSource(modelId, source) {
@@ -157,7 +159,17 @@ async function measureModel(modelId, modelsDir, metadata) {
   const bytes = await readFile(filePath);
   validateCommittedMenuModel(modelId, bytes);
   validateEmbeddedResources(filePath, parseGlb(filePath, bytes));
-  const measurement = inspectEventModel(modelId, await io.read(filePath));
+  const document = await io.read(filePath);
+  const textures = await validateModelTextureProfile(
+    modelId,
+    bytes,
+    document,
+    source.textureProfile,
+  );
+  const measurement = {
+    ...inspectEventModel(modelId, document),
+    ...(source.textureProfile ? { textures } : {}),
+  };
   console.log(`${modelId}.glb: ${measurement.triangles} / ${source.maxTriangles} triangles`);
   if (measurement.triangles !== source.sourceTriangles) {
     throw new Error(`${modelId}: expected ${source.sourceTriangles} triangles, received ${measurement.triangles}`);

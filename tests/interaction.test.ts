@@ -119,6 +119,25 @@ describe('chooseContextAction', () => {
 });
 
 describe('InteractionSystem', () => {
+  it('clears retained ray hits between different targets and an empty frame', () => {
+    const camera = new PerspectiveCamera(70, 1, 0.1, 100);
+    const interaction = new InteractionSystem(camera);
+    const first = item('ductTape-1', 'ductTape');
+    const second = item('ductTape-2', 'ductTape');
+    const target = new Mesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial());
+    target.position.z = -2;
+    const lifeboat = new Group();
+    const deposit = new Group();
+    const instances = new Map([[first.instanceId, first], [second.instanceId, second]]);
+    target.userData.instanceId = first.instanceId;
+    expect(interaction.update([target], lifeboat, deposit, instances).targetItem).toBe(first);
+    const nextTarget = target.clone();
+    nextTarget.position.z = -2.5;
+    nextTarget.userData.instanceId = second.instanceId;
+    expect(interaction.update([nextTarget], lifeboat, deposit, instances).targetItem).toBe(second);
+    expect(interaction.update([], lifeboat, deposit, instances).target).toBe('none');
+  });
+
   it.each([
     'fishingNet',
     'swimRing',

@@ -129,15 +129,26 @@ interface AnchorTooltipNodes {
   readonly energy: HTMLElement;
 }
 
+const ANCHOR_CONTENT_FIELDS = [
+  'companionId', 'label', 'description', 'tooltip', 'eventChoiceId', 'eventFocusId',
+  'itemType', 'supplyGroupId', 'toolId', 'action', 'depleted', 'remainingUses',
+  'quantity', 'usableQuantity', 'brokenQuantity', 'backingInstanceId',
+] as const satisfies readonly (keyof BoatInteractionAnchor)[];
+
+type AnchorContentField = typeof ANCHOR_CONTENT_FIELDS[number];
+type AnchorContentState = Partial<Record<AnchorContentField, BoatInteractionAnchor[AnchorContentField]>> & {
+  revision: number;
+};
+
 interface AnchorLayoutState {
-  readonly visible: boolean;
-  readonly x: number;
-  readonly y: number;
-  readonly targetKind: 'item' | 'tool' | 'event';
-  readonly width: number;
-  readonly height: number;
-  readonly zIndex: number;
-  readonly depleted: boolean;
+  visible: boolean;
+  x: number;
+  y: number;
+  targetKind: 'item' | 'tool' | 'event';
+  width: number;
+  height: number;
+  zIndex: number;
+  depleted: boolean;
 }
 
 const DEFAULT_ANCHOR_HIT_AREA = Object.freeze({
@@ -172,6 +183,13 @@ export class BoatAnchorView {
   private readonly anchorTooltipNodes = new WeakMap<HTMLButtonElement, AnchorTooltipNodes>();
   private readonly anchors = new Map<string, BoatInteractionAnchor>();
   private readonly anchorLayouts = new Map<string, AnchorLayoutState>();
+  private readonly anchorContents = new Map<string, AnchorContentState>();
+  private readonly seenAnchorIds = new Set<string>();
+  private readonly nextLayout: AnchorLayoutState = {
+    visible: false, x: 0, y: 0, targetKind: 'item', width: 0, height: 0, zIndex: 0, depleted: false,
+  };
+  private contentRevision = 0;
+  private viewportWidth = 0;
   private actionReasons: ReadonlyMap<DayActionId, string | null> = new Map();
   private currentSnapshot: SurvivalSnapshot | null = null;
   private eventEligibility: ReadonlyMap<ItemInstanceId, EventResponseId> | null = null;
@@ -190,8 +208,10 @@ export class BoatAnchorView {
   private modalOpen = false;
   private readonly unsubscribeLanguage: () => void;
   private refreshLanguage(): void {
+    this.contentRevision += 1;
     refreshUiText(...this.roots);
     if (this.currentSnapshot !== null) this.render(this.currentSnapshot, this.actionReasons);
+    else this.refreshAnchorContents();
   }
 
   private disposed = false;
@@ -259,6 +279,7 @@ export class BoatAnchorView {
     this.anchorLayer.addEventListener('wheel', this.handleAnchorWheel, { passive: false });
     document.addEventListener('click', this.handleDocumentClick);
     window.addEventListener('resize', this.handleWindowResize);
+    this.refreshViewport();
     this.unsubscribeLanguage = onLanguageChange(() => this.refreshLanguage());
     this.refreshLanguage();
   }
@@ -268,6 +289,7 @@ export class BoatAnchorView {
     unavailableReasons: ReadonlyMap<DayActionId, string | null>,
   ): void {
     if (this.disposed) return;
+    this.contentRevision += 1;
     this.currentSnapshot = snapshot;
     this.actionReasons = unavailableReasons;
     this.renderCarlitos(snapshot);
@@ -280,7 +302,8 @@ export class BoatAnchorView {
 
   setAnchors(nextAnchors: readonly BoatInteractionAnchor[]): void {
     if (this.disposed) return;
-    const seen = new Set<string>();
+    const seen = this.seenAnchorIds;
+    seen.clear();
     let highlightInvalidated = false;
     for (const anchor of nextAnchors) {
       seen.add(anchor.id);
@@ -320,6 +343,7 @@ export class BoatAnchorView {
       this.anchorButtons.delete(id);
       this.anchors.delete(id);
       this.anchorLayouts.delete(id);
+      this.anchorContents.delete(id);
     }
     return highlightInvalidated;
   }
@@ -332,7 +356,9 @@ export class BoatAnchorView {
   private updateAnchorLayout(button: HTMLButtonElement, anchor: BoatInteractionAnchor): void {
     const layout = this.anchorLayout(anchor);
     if (this.sameAnchorLayout(this.anchorLayouts.get(anchor.id), layout)) return;
-    this.anchorLayouts.set(anchor.id, layout);
+    const previous = this.anchorLayouts.get(anchor.id);
+    if (previous === undefined) this.anchorLayouts.set(anchor.id, { ...layout });
+    else Object.assign(previous, layout);
     button.hidden = !layout.visible;
     button.style.transform = `translate(${layout.x}px, ${layout.y}px)`;
     button.dataset.targetKind = layout.targetKind;
@@ -349,16 +375,16 @@ export class BoatAnchorView {
     const hitArea = anchor.hitArea ?? DEFAULT_ANCHOR_HIT_AREA;
     const targetKind = this.anchorTargetKind(anchor);
     const depthZIndex = this.anchorDepthZIndex(anchor);
-    return {
-      visible: anchor.visible,
-      x: Math.round(anchor.x),
-      y: Math.round(anchor.y),
-      targetKind,
-      width: Math.round(hitArea.width),
-      height: Math.round(hitArea.height),
-      zIndex: this.anchorZIndex(anchor, 'ordinary', depthZIndex),
-      depleted: anchor.depleted,
-    };
+    const layout = this.nextLayout;
+    layout.visible = anchor.visible;
+    layout.x = Math.round(anchor.x);
+    layout.y = Math.round(anchor.y);
+    layout.targetKind = targetKind;
+    layout.width = Math.round(hitArea.width);
+    layout.height = Math.round(hitArea.height);
+    layout.zIndex = this.anchorZIndex(anchor, 'ordinary', depthZIndex);
+    layout.depleted = anchor.depleted;
+    return layout;
   }
 
   private anchorDepthZIndex(anchor: BoatInteractionAnchor): number {
@@ -427,6 +453,7 @@ export class BoatAnchorView {
     if (this.disposed) return;
     this.closeCarlitosCard(false);
     this.clearHighlight();
+    this.contentRevision += 1;
     this.eventPresentationActive = true;
     this.itemAnimationLab = false;
     this.syncCommandState();
@@ -435,6 +462,7 @@ export class BoatAnchorView {
   setEventPresentationActive(active: boolean): void {
     if (this.disposed) return;
     if (active) this.closeCarlitosCard(false);
+    this.contentRevision += 1;
     this.eventPresentationActive = active;
     if (!active) this.itemAnimationLab = false;
     this.syncCommandState();
@@ -442,6 +470,7 @@ export class BoatAnchorView {
 
   setItemAnimationLabActive(active: boolean): void {
     if (this.disposed) return;
+    this.contentRevision += 1;
     this.itemAnimationLab = active;
     if (active) this.eventPresentationActive = true;
     this.anchors.forEach((anchor, id) => {
@@ -456,6 +485,7 @@ export class BoatAnchorView {
     contextualChoices: readonly EventContextChoice[] = [],
   ): void {
     if (this.disposed) return;
+    this.contentRevision += 1;
     this.eventEligibility = new Map(eligible);
     this.contextualEventChoices = [...contextualChoices];
     this.eventSelectedInstanceId = null;
@@ -482,6 +512,7 @@ export class BoatAnchorView {
   clearEventPresentation(): void {
     if (this.disposed) return;
     this.closeCarlitosCard(false);
+    this.contentRevision += 1;
     this.eventEligibility = null;
     this.contextualEventChoices = [];
     this.eventSelectedInstanceId = null;
@@ -664,7 +695,35 @@ export class BoatAnchorView {
     return button;
   }
 
+  private refreshAnchorContents(): void {
+    for (const [id, anchor] of this.anchors) {
+      const button = this.anchorButtons.get(id);
+      if (button !== undefined) this.refreshAnchorTooltip(button, anchor);
+    }
+  }
+
+  private anchorContentChanged(anchor: BoatInteractionAnchor): boolean {
+    const previous = this.anchorContents.get(anchor.id);
+    if (previous?.revision === this.contentRevision) {
+      let changed = false;
+      for (const key of ANCHOR_CONTENT_FIELDS) {
+        if (previous[key] !== anchor[key]) {
+          changed = true;
+          break;
+        }
+      }
+      if (!changed) return false;
+    }
+    const content: AnchorContentState = { revision: this.contentRevision };
+    for (const key of ANCHOR_CONTENT_FIELDS) {
+      content[key] = anchor[key];
+    }
+    this.anchorContents.set(anchor.id, content);
+    return true;
+  }
+
   private refreshAnchorTooltip(button: HTMLButtonElement, anchor: BoatInteractionAnchor): void {
+    if (!this.anchorContentChanged(anchor)) return;
     const backingInstanceId = this.anchorBackingInstanceId(anchor);
     const item = this.anchorInventoryItem(backingInstanceId);
     const quantity = this.anchorQuantity(anchor);
@@ -941,8 +1000,7 @@ export class BoatAnchorView {
   }
 
   private placeAnchorTooltip(button: HTMLButtonElement, x: number, y: number): void {
-    const bounds = this.host.getBoundingClientRect();
-    const viewportWidth = bounds.width || this.host.clientWidth || window.innerWidth;
+    const viewportWidth = this.viewportWidth;
     const edgeGutter = 160;
     button.dataset.tooltipX = x < edgeGutter
       ? 'left'
@@ -1416,8 +1474,18 @@ export class BoatAnchorView {
     this.closeCarlitosCard(restoreFocus);
   };
 
+  private refreshViewport(): void {
+    const bounds = this.host.getBoundingClientRect();
+    this.viewportWidth = bounds.width || this.host.clientWidth || window.innerWidth;
+    for (const [id, layout] of this.anchorLayouts) {
+      const button = this.anchorButtons.get(id);
+      if (button !== undefined) this.placeAnchorTooltip(button, layout.x, layout.y);
+    }
+  }
+
   private readonly handleWindowResize = (): void => {
     if (this.disposed) return;
+    this.refreshViewport();
     const anchor = [...this.anchors.values()].find(
       (candidate) => candidate.companionId === 'carlitos' && candidate.visible,
     );

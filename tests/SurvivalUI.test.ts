@@ -10,8 +10,12 @@ import { sequenceRandom } from './helpers/random';
 import type { SurvivalEventDefinition } from '../src/survival/survivalTypes';
 import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
+import { BoatAnchorView } from '../src/ui/BoatAnchorView';
+import { setLanguage } from '../src/i18n/language';
+import type { BoatInteractionAnchor } from '../src/survival/BoatInteraction';
 
 const activeUIs: SurvivalUI[] = [];
+const activeAnchorViews: BoatAnchorView[] = [];
 const mainStyles = readFileSync('src/styles/main.css', 'utf8') as string;
 
 const saved = (...types: ItemId[]): ItemInstance[] => types.map((type, index) => ({
@@ -28,10 +32,71 @@ const journalEntries: readonly JournalEntry[] = [1, 2].map((day) => ({
 }));
 
 afterEach(() => {
+  activeAnchorViews.splice(0).forEach((view) => view.dispose());
+  setLanguage('en');
   vi.useRealTimers();
   vi.unstubAllGlobals();
   activeUIs.splice(0).forEach((ui) => ui.dispose());
   document.body.innerHTML = '';
+});
+
+describe('anchor frame caches', () => {
+  function fixture() {
+    const host = document.createElement('main');
+    document.body.append(host);
+    const bounds = vi.spyOn(host, 'getBoundingClientRect').mockReturnValue({ width: 1000 } as DOMRect);
+    const view = new BoatAnchorView(host);
+    host.append(...view.roots);
+    activeAnchorViews.push(view);
+    const anchor = {
+      id: 'supply:cannedFood', itemType: 'cannedFood', toolId: null, action: 'eat',
+      remainingUses: 1, backingInstanceId: 'cannedFood-1', quantity: 2,
+      x: 400, y: 200, visible: true, depleted: false,
+    } satisfies BoatInteractionAnchor;
+    return { view, anchor, bounds };
+  }
+
+  it('moves a reused projection without rebuilding content and refreshes changed inputs', () => {
+    const { view, anchor } = fixture();
+    view.setAnchors([anchor]);
+    const button = view.anchorButton(anchor.id)!;
+    const attributes = vi.spyOn(button, 'setAttribute');
+    anchor.x += 40;
+    view.setAnchors([anchor]);
+    expect(button.style.transform).toBe('translate(440px, 200px)');
+    expect(attributes.mock.calls.filter(([name]) => name === 'aria-description')).toHaveLength(0);
+    anchor.quantity = 3;
+    view.setAnchors([anchor]);
+    expect(button.getAttribute('aria-label')).toContain('×3');
+    const english = button.getAttribute('aria-label');
+    setLanguage('pl');
+    expect(button.getAttribute('aria-label')).not.toBe(english);
+    setLanguage('en');
+    const session = new SurvivalSession(saved('cannedFood'), { seed: 19 });
+    view.render(session.snapshot(), new Map([['eat', 'Cannot eat now.']]));
+    expect(button.getAttribute('aria-description')).toContain('Cannot eat now.');
+    view.beginEventPresentation();
+    view.setEventSelection(new Map([['cannedFood-1', 'offer']]));
+    expect(button.getAttribute('aria-description')).not.toContain('Cannot eat now.');
+    expect(button.getAttribute('aria-disabled')).toBe('false');
+    view.setEventUsing('cannedFood-1');
+    expect(button.dataset.eventState).toBe('selected');
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('reads the viewport at construction and resize instead of per moving anchor', () => {
+    const { view, anchor, bounds } = fixture();
+    expect(bounds).toHaveBeenCalledTimes(1);
+    const anchors = [anchor, { ...anchor, id: 'other', x: 500 }];
+    view.setAnchors(anchors);
+    anchor.x = 600;
+    view.setAnchors(anchors);
+    expect(bounds).toHaveBeenCalledTimes(1);
+    bounds.mockReturnValue({ width: 700 } as DOMRect);
+    window.dispatchEvent(new Event('resize'));
+    expect(bounds).toHaveBeenCalledTimes(2);
+    expect(view.anchorButton(anchor.id)!.dataset.tooltipX).toBe('right');
+  });
 });
 
 function createUI(mount: HTMLElement): SurvivalUI {

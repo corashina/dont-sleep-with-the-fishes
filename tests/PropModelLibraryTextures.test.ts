@@ -111,7 +111,7 @@ describe('PropModelLibrary texture ownership', () => {
     expect(first!.animations[0]!.tracks[0]).not.toBe(second!.animations[0]!.tracks[0]);
   });
 
-  it('keeps loading when one optional event model fails', async () => {
+  it('rejects a required phase event model failure', async () => {
     const loader: ItemModelLoader = {
       async load(url) {
         if (url.includes('/events/midnightIsland.glb')) {
@@ -126,15 +126,8 @@ describe('PropModelLibrary texture ownership', () => {
       },
     };
 
-    const library = await PropModelLibrary.load(loader);
+    await expect(PropModelLibrary.load(loader)).rejects.toThrow('optional island missing');
 
-    expect(library.createEventModel('midnightIsland')).toBeNull();
-    expect(library.createEventModel('containerShip')).toMatchObject({
-      root: expect.any(Group),
-    });
-    expect(library.createEventModel('midnightPalmTrees')).toMatchObject({
-      root: expect.any(Group),
-    });
   });
 
   it('keeps required item model failures fatal', async () => {
@@ -150,4 +143,23 @@ describe('PropModelLibrary texture ownership', () => {
       itemId: 'cannedFood',
     }));
   });
+  it('loads only the requested event subset for ship hands', async () => {
+    const requests: string[] = [];
+    const loader: ItemModelLoader = {
+      async load(url) {
+        requests.push(url);
+        const animations = url.includes('/items/carlitos.glb')
+          ? [new AnimationClip(CARLITOS_SITTING_IDLE_CLIP, 1, [
+            new NumberKeyframeTrack('.rotation[x]', [0, 1], [0, 0.1]),
+          ])] : [];
+        return { scene: staticTemplate(), animations };
+      },
+    };
+    const library = await PropModelLibrary.load(loader, ['riggedHand']);
+    expect(requests.filter(url => url.includes('/events/'))).toHaveLength(1);
+    expect(requests.some(url => url.includes('/events/riggedHand.glb'))).toBe(true);
+    expect(library.createEventModel('midnightIsland')).toBeNull();
+    library.dispose();
+  });
+
 });

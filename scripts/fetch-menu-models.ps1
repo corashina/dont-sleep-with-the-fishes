@@ -56,12 +56,11 @@ try {
     & node scripts/poly-pizza-menu-models.mjs $sourceRoot $buildRoot
     if ($LASTEXITCODE -ne 0) { throw 'Menu model build failed' }
 
-    & node scripts/event-model-metadata.mjs $buildRoot @modelIds
+    & node scripts/menu-model-metadata.mjs $buildRoot
     if ($LASTEXITCODE -ne 0) { throw 'Menu model metadata build failed' }
   } finally {
     Pop-Location
   }
-  Move-Item -LiteralPath (Join-Path $buildRoot 'event-model-metadata.json') -Destination (Join-Path $buildRoot 'menu-model-metadata.json')
   Copy-UniqueModelBuildOutputs -BuildRoots @($buildRoot) -DestinationRoot $stagedRoot
   Assert-ExactModelDirectory `
     -Directory $stagedRoot -ExpectedFiles $expectedFiles -Description 'Staged menu models'
