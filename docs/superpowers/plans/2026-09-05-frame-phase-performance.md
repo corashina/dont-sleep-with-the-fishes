@@ -84,10 +84,11 @@ expect(after.carriedItems).toBe(before.carriedItems);
 
 ## Task 4: Integration validation and documentation
 
-**Files:** README.md and concise performance result notes under docs.
+**Files:** README.md, concise performance result notes under docs, and tests/GameConstruction.test.ts.
 
 **Interfaces:** Document the final implemented behavior, ownership, measured byte changes, and validation commands.
 
+- [ ] Remove unused menu asset fixtures and their disposal assertions from GameConstruction tests, as identified by Task 2 review. Preserve the renderer rollback assertions.
 - [ ] Run the complete test suite, typecheck, lint, production build, and all committed asset checks.
 - [ ] Run a browser smoke check if available. Confirm menu, START, survival, Continue/event entry, restart, and menu return.
 - [ ] Record startup loader counts and asset-byte reductions. Do not infer FPS changes from these measurements.

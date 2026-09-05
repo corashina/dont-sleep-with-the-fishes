@@ -69,12 +69,6 @@ describe('Game construction rollback', () => {
       dispose: vi.fn(() => calls.push('sceneRenderer')),
     };
     constructionMocks.createSceneRenderer.mockReturnValue(sceneRenderer);
-    const menuModels = {
-      dispose: vi.fn(() => calls.push('menuModels')),
-    } as unknown as MenuModelLibrary;
-    const menuSandAssets = {
-      dispose: vi.fn(() => calls.push('menuSandAssets')),
-    } as unknown as MenuSandAssets;
     const { Game } = await import('../src/Game');
 
     let thrown: unknown;
@@ -100,8 +94,6 @@ describe('Game construction rollback', () => {
       'renderer',
       'canvas',
     ]);
-    expect(menuModels.dispose).not.toHaveBeenCalled();
-    expect(menuSandAssets.dispose).not.toHaveBeenCalled();
     expect(sceneRenderer.dispose).toHaveBeenCalledOnce();
     expect(renderer.dispose).toHaveBeenCalledOnce();
   }, 30_000);
