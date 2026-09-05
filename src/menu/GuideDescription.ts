@@ -10,20 +10,12 @@ const TERMS = {
     pl: 'jedzenie|jedzenia',
   },
   energy: {
-    en: 'energy(?! bar)',
+    en: 'energy',
     pl: 'energi[aię]',
   },
   hull: {
     en: 'hull',
     pl: 'kadłub(?:a|u)?',
-  },
-  bait: {
-    en: 'bait',
-    pl: 'przynęt[ayę]',
-  },
-  pillow: {
-    en: 'pillow',
-    pl: 'poduszk[aię]',
   },
   toolbox: {
     en: 'toolbox',
@@ -32,10 +24,6 @@ const TERMS = {
   ductTape: {
     en: 'duct tape',
     pl: 'taśm[ayąę] klejąc[ayąę]',
-  },
-  carlitos: {
-    en: 'Carlitos',
-    pl: 'Carlitos(?:a)?',
   },
 } as const;
 
@@ -52,15 +40,12 @@ const PATTERNS = { en: keywordPattern('en'), pl: keywordPattern('pl') };
 
 export function renderGuideDescription(element: HTMLElement, description: string): void {
   const content = document.createDocumentFragment();
-  const highlighted = new Set<Mechanic>();
   let offset = 0;
   for (const match of description.matchAll(PATTERNS[getLanguage()])) {
     const mechanic = Object.keys(TERMS).find((key) => match.groups?.[key] !== undefined) as Mechanic;
-    if (highlighted.has(mechanic)) continue;
-    highlighted.add(mechanic);
     content.append(document.createTextNode(description.slice(offset, match.index)));
     const keyword = document.createElement('strong');
-    keyword.className = 'how-to-play-keyword';
+    keyword.className = `how-to-play-keyword how-to-play-keyword--${mechanic}`;
     keyword.textContent = match[0];
     content.append(keyword);
     offset = match.index + match[0].length;
