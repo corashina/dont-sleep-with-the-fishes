@@ -363,7 +363,6 @@ export class SurvivalUI {
     this.anchorView.setAnchors(anchors);
     this.fishingView.refreshResultPlacement();
     this.positionOpenRoutineDialogs();
-    this.syncCommandState();
   }
 
   setJournalUnread(unread: boolean): void {

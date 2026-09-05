@@ -121,6 +121,8 @@ interface RaycastSelection {
 export class InteractionSystem {
   private readonly raycaster = new Raycaster();
   private readonly center = new Vector2(0, 0);
+  private readonly targets: Object3D[] = [];
+  private readonly hits: Intersection<Object3D>[] = [];
   private readonly inverseOcclusionMatrix = new Matrix4();
   private readonly localRayStart = new Vector3();
   private readonly localRayEnd = new Vector3();
@@ -212,7 +214,12 @@ export class InteractionSystem {
     depositTarget: Object3D,
     instances: ReadonlyMap<ItemInstanceId, ItemInstance>,
   ): void {
-    const hits = this.raycaster.intersectObjects([...items, depositTarget], true);
+    this.targets.length = 0;
+    for (const item of items) this.targets.push(item);
+    this.targets.push(depositTarget);
+    const hits = this.hits;
+    hits.length = 0;
+    this.raycaster.intersectObjects(this.targets, true, hits);
     const selection = this.selection;
     selection.hit = hits[0];
     selection.tagged = findTaggedAncestor(selection.hit?.object ?? null);
@@ -251,7 +258,9 @@ export class InteractionSystem {
   private selectLifeboatTarget(lifeboat: Object3D, canReachLifeboat: boolean): void {
     if (this.selection.tagged !== null || !canReachLifeboat) return;
     this.raycaster.far = LIFEBOAT_INTERACTION_DISTANCE;
-    this.selection.hit = this.raycaster.intersectObject(lifeboat, true)[0];
+    this.hits.length = 0;
+    this.raycaster.intersectObject(lifeboat, true, this.hits);
+    this.selection.hit = this.hits[0];
     this.raycaster.far = STANDARD_INTERACTION_DISTANCE;
     this.selection.tagged = findTaggedAncestor(this.selection.hit?.object ?? null);
   }

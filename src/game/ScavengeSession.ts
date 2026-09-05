@@ -46,6 +46,8 @@ export class ScavengeSession {
   private snapshotRevision = 0;
   private cachedSnapshotRevision = -1;
   private cachedSnapshot: Readonly<ScavengeSnapshot> | null = null;
+  private cachedItems: ScavengeSnapshot['items'] | null = null;
+  private cachedCarriedItems: readonly ItemInstance[] = Object.freeze([]);
 
   constructor(instances: readonly ItemInstance[] = createScavengeItemInstances()) {
     this.items = Object.fromEntries(instances.map((item) => [
@@ -114,7 +116,7 @@ export class ScavengeSession {
     if (this.carriedWeight + ITEM_DEFINITIONS[item.type].weight > CARRY_CAPACITY) return false;
     item.status = 'carried';
     this.carriedIds.push(item.instanceId);
-    this.changed();
+    this.changed(true);
     return true;
   }
 
@@ -133,7 +135,7 @@ export class ScavengeSession {
       this.items[instanceId]!.status = 'saved';
     });
     this.savedCount += instanceIds.length;
-    this.changed();
+    this.changed(true);
     return Object.freeze(instanceIds.map((instanceId) => this.cloneInstance(instanceId)));
   }
 
@@ -153,7 +155,7 @@ export class ScavengeSession {
     const carriedIndex = this.carriedIds.lastIndexOf(instanceId);
     if (carriedIndex >= 0) this.carriedIds.splice(carriedIndex, 1);
     item.status = 'lost';
-    this.changed();
+    this.changed(true);
     return true;
   }
 
@@ -167,11 +169,14 @@ export class ScavengeSession {
       && this.cachedSnapshotRevision === this.snapshotRevision
     ) return this.cachedSnapshot;
 
-    const items = Object.fromEntries(Object.values(this.items).map((item) => [
-      item.instanceId,
-      Object.freeze({ ...item }),
-    ])) as Record<ItemInstanceId, ScavengeItemState>;
-    const carriedItems = this.carriedIds.map((id) => this.cloneInstance(id));
+    if (this.cachedItems === null) {
+      this.cachedItems = Object.freeze(Object.fromEntries(Object.values(this.items).map((item) => [
+        item.instanceId,
+        Object.freeze({ ...item }),
+      ])) as Record<ItemInstanceId, ScavengeItemState>);
+      this.cachedCarriedItems = Object.freeze(this.carriedIds.map((id) => this.cloneInstance(id)));
+    }
+    const carriedItems = this.cachedCarriedItems;
     const carriedItem = carriedItems.at(-1)?.type ?? null;
     this.cachedSnapshot = Object.freeze({
       pickupHistory: this.pickupHistory,
@@ -179,8 +184,8 @@ export class ScavengeSession {
       remainingSeconds: this.remainingSeconds,
       savedCount: this.savedCount,
       carriedWeight: this.carriedWeight,
-      carriedItems: Object.freeze(carriedItems),
-      items: Object.freeze(items),
+      carriedItems,
+      items: this.cachedItems,
       carriedItem,
     });
     this.cachedSnapshotRevision = this.snapshotRevision;
@@ -204,7 +209,7 @@ export class ScavengeSession {
     if (instanceId === undefined) return null;
     this.items[instanceId]!.status = status;
     if (status === 'saved') this.savedCount += 1;
-    this.changed();
+    this.changed(true);
     return this.cloneInstance(instanceId);
   }
 
@@ -237,7 +242,8 @@ export class ScavengeSession {
     return true;
   }
 
-  private changed(): void {
+  private changed(inventoryChanged = false): void {
+    if (inventoryChanged) this.cachedItems = null;
     if (this.pickupHistory.at(-1)!.savedCount !== this.savedCount) this.recordPickups();
     this.snapshotRevision += 1;
   }
