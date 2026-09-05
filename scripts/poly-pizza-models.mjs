@@ -14,9 +14,17 @@ import {
   weld,
 } from '@gltf-transform/functions';
 import { MeshoptSimplifier } from 'meshoptimizer';
+import { processModelTextures } from './poly-pizza-textures.mjs';
 
 const CC0 = 'https://creativecommons.org/publicdomain/zero/1.0/';
 const CC_BY_3 = 'https://creativecommons.org/licenses/by/3.0/';
+
+function outputProcessingOptions(committedSha256, textureProfile) {
+  return {
+    ...(committedSha256 === undefined ? {} : { committedSha256 }),
+    ...(textureProfile === undefined ? {} : { textureProfile }),
+  };
+}
 
 export function createPolyPizzaSource({
   id,
@@ -36,6 +44,8 @@ export function createPolyPizzaSource({
   maxTriangles,
   simplifyRatio,
   simplifyError = 0.01,
+  committedSha256,
+  textureProfile,
 }) {
   return Object.freeze({
     id,
@@ -58,6 +68,7 @@ export function createPolyPizzaSource({
     ...(scale === undefined ? {} : { scale: Object.freeze(scale) }),
     ...(maxTriangles === undefined ? {} : { maxTriangles }),
     ...(simplifyRatio === undefined ? {} : { simplifyRatio, simplifyError }),
+    ...outputProcessingOptions(committedSha256, textureProfile),
   });
 }
 
@@ -105,7 +116,24 @@ export const POLY_PIZZA_MODEL_SOURCES = Object.freeze({
     resourceId: 'c06cc95b-6a05-469c-aa4a-a44fdac2e9c0',
     title: 'Map', creator: 'Poly by Google', license: 'CC-BY 3.0',
     sha256: 'ACA3349080F1BDFF11AA6A7EA3C6C2854008B52ECB4624EEFC882724986087D4',
+    committedSha256: '4A851FCDC3D073822391DB7687F4A7F70528F0D1B3F723F4565D384417BDA127',
     sourceTriangles: 480,
+    textureProfile: Object.freeze({
+      maxDimension: 512,
+      colorQuality: 85,
+      normalQuality: 95,
+      maxFileBytes: 500_000,
+      textures: Object.freeze([
+        Object.freeze({
+          name: 'mapTxt',
+          width: 512,
+          height: 256,
+          channels: 3,
+          slots: Object.freeze(['baseColorTexture']),
+          hasAlpha: false,
+        }),
+      ]),
+    }),
   }),
   medicalKit: source({
     id: 'medicalKit', publicId: 'wP00rePSRD',
@@ -411,6 +439,7 @@ export async function buildPolyPizzaModel({
   await mergeComponents(id, document, componentSourcePaths, descriptor.components, verifySource);
   await simplifyDocument(document, descriptor);
   await document.transform(prune(), dedup(), unpartition());
+  await processModelTextures(id, document, descriptor.textureProfile);
 
   renameOutputScene(id, document);
   const triangles = validateOutputTriangles(id, document, descriptor);
