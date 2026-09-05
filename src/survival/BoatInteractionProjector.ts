@@ -165,7 +165,7 @@ export class BoatInteractionProjector {
     private readonly eventHost: EventInteractionProjectionHost,
   ) {
     this.supplyEntries = roots.supplyRecords.map((record) => {
-      const itemType = record.groupId === 'repairMaterial' ? null : record.groupId;
+      const itemType = record.groupId;
       return {
         record,
         cache: createBoatObjectBoundsCache(record.root),

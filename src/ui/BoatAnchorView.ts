@@ -749,16 +749,12 @@ export class BoatAnchorView {
   private anchorLabel(anchor: BoatInteractionAnchor, toolCopy: BoatToolCopy | undefined, quantity: number): string {
     if (anchor.label !== undefined) return anchor.label;
     if (anchor.itemType !== null) return quantityLabel(ITEM_LABELS[anchor.itemType], quantity);
-    if (anchor.supplyGroupId === 'repairMaterial') return quantityLabel('DUCT TAPE', quantity);
     return toolCopy?.label ?? 'UNKNOWN TOOL';
   }
 
   private anchorDescription(anchor: BoatInteractionAnchor, toolCopy: BoatToolCopy | undefined): string {
     if (anchor.description !== undefined) return anchor.description;
     if (anchor.itemType !== null) return SURVIVAL_ITEM_DESCRIPTIONS[anchor.itemType];
-    if (anchor.supplyGroupId === 'repairMaterial') {
-      return 'Recovered timber, fasteners, and rope for hull repairs.';
-    }
     return toolCopy?.description ?? 'Permanent lifeboat equipment.';
   }
 
@@ -814,7 +810,6 @@ export class BoatAnchorView {
       const label = quantityLabel(ITEM_LABELS[anchor.itemType], quantity);
       return state === null ? label : `${label} — ${state}`;
     }
-    if (anchor.supplyGroupId === 'repairMaterial') return quantityLabel('DUCT TAPE', quantity);
     if (anchor.toolId === 'fishingRod') return 'Fishing rod';
     return anchor.toolId === 'repairTools' ? 'REPAIR' : itemLabel;
   }

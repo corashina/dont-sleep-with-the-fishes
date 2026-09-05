@@ -373,7 +373,6 @@ function snapshot(
     bait: 0,
     recoveredFood: 0,
     recoveredBait: 0,
-    repairMaterial: 0,
     rescueLead: 0,
     rescueTraceFinds: 0,
     radioSignalAvailable: false,

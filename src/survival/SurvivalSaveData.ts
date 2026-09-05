@@ -55,7 +55,7 @@ const PRESENTATION_CUE_SET = new Set([
   'nightfall', 'dawn', 'rescue', 'death', 'sinking',
 ]);
 const ACTION_OUTCOME_DELTA_SET = new Set([
-  'pressure', 'health', 'hunger', 'energy', 'hull', 'food', 'bait', 'repairMaterial', 'rescueLead',
+  'pressure', 'health', 'hunger', 'energy', 'hull', 'food', 'bait', 'rescueLead',
 ]);
 const EVENT_PRESENTATION_KEY_SET = new Set(
   SURVIVAL_EVENTS.flatMap((event) => event.choices.flatMap((choice) => (
@@ -279,7 +279,7 @@ function parseEventPresentationKeyExtension(
 
 function parseRewardSummary(value: unknown): ActionOutcome['rewardSummary'] | undefined {
   if (!isRecord(value) || typeof value.kind !== 'string' || typeof value.id !== 'string') return undefined;
-  if (value.kind === 'resource' && (value.id === 'food' || value.id === 'bait' || value.id === 'repairMaterial')) {
+  if (value.kind === 'resource' && (value.id === 'food' || value.id === 'bait')) {
     const quantity = parseInteger(value.quantity, 1, MAX_COUNTER);
     return quantity === null ? undefined : Object.freeze({ kind: 'resource', id: value.id, quantity });
   }
@@ -584,7 +584,6 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const bait = parseInteger(value.bait, 0, MAX_COUNTER);
   const recoveredFood = parseInteger(value.recoveredFood, 0, parsedUpperBound(food));
   const recoveredBait = parseInteger(value.recoveredBait, 0, parsedUpperBound(bait));
-  const repairMaterial = parseInteger(value.repairMaterial, 0, MAX_COUNTER);
   const rescueLead = parseInteger(value.rescueLead, 0, 8);
   const rescueTraceFinds = parseInteger(value.rescueTraceFinds, 0, 2);
   const radioSignalsSent = parseInteger(value.radioSignalsSent, 0, MAX_COUNTER);
@@ -593,7 +592,7 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const seed = parseInteger(value.seed, 0, MAX_UINT32);
   const randomState = parseInteger(value.randomState, 0, MAX_UINT32);
   const scavengeFields = [day, pressure, health, hunger, energy, hull, food, bait, recoveredFood,
-    recoveredBait, repairMaterial, rescueLead, rescueTraceFinds, radioSignalsSent, savedPickupCount,
+    recoveredBait, rescueLead, rescueTraceFinds, radioSignalsSent, savedPickupCount,
     fishingCounter, seed, randomState];
   if (!hasValidSessionScalars(state, scavengeFields)) return null;
   if (!hasSessionFlags(value)) return null;
@@ -629,7 +628,7 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   return createSurvivalSessionCheckpoint({
     history: history!,
     state: state as SurvivalSessionCheckpoint['state'], day: day!, pressure: pressure!, health: health!, hunger: hunger!, energy: energy!, hull: hull!,
-    food: food!, bait: bait!, recoveredFood: recoveredFood!, recoveredBait: recoveredBait!, repairMaterial: repairMaterial!, rescueLead: rescueLead! as RescueLead,
+    food: food!, bait: bait!, recoveredFood: recoveredFood!, recoveredBait: recoveredBait!, rescueLead: rescueLead! as RescueLead,
     rescueTraceFinds: rescueTraceFinds! as 0 | 1 | 2, radioSignalAvailable: value.radioSignalAvailable, radioSignalsSent: radioSignalsSent!, radioSignalsEnabled: value.radioSignalsEnabled,
     chest: chest!, weather: value.weather, actedToday: value.actedToday, inventory: inventory!, savedItems: savedItems!, savedPickupCount: savedPickupCount!, carlitos: carlitos!,
     pendingEventId, pendingEventTargetId, nextDawnEnergyOverride: nextDawnEnergyOverride as DawnEnergy | null,

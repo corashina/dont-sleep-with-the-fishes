@@ -25,7 +25,6 @@ export interface SurvivalSnapshot {
   bait: number;
   recoveredFood: number;
   recoveredBait: number;
-  repairMaterial: number;
   rescueLead: number;
   readonly rescueTraceFinds: number;
   radioSignalAvailable: boolean;

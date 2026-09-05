@@ -47,7 +47,6 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     bait: 0,
     recoveredFood: 0,
     recoveredBait: 0,
-    repairMaterial: 0,
     rescueLead: 0,
     rescueTraceFinds: 0,
     radioSignalAvailable: false,
@@ -210,7 +209,6 @@ describe('formatDiveResult', () => {
   it.each([
     [{ food: 1, energy: -3 }, { kind: 'resource', id: 'food', quantity: 1 }, []],
     [{ bait: 1, energy: -3 }, { kind: 'resource', id: 'bait', quantity: 1 }, []],
-    [{ repairMaterial: 1, energy: -3 }, { kind: 'resource', id: 'repairMaterial', quantity: 1 }, []],
     [{ rescueLead: 1, energy: -3 }, null, ['RESCUE TRACE FOUND']],
     [{ energy: -3 }, null, ['NOTHING FOUND']],
     [{ energy: -3, health: -10 }, null, ['NOTHING FOUND', 'YOU SUFFERED SOME INJURIES']],

@@ -362,7 +362,6 @@ export class SurvivalSession {
   private bait = 0;
   private recoveredFood = 0;
   private recoveredBait = 0;
-  private repairMaterial = 0;
   private rescueLead: RescueLead;
   private rescueTraceFinds: 0 | 1 | 2;
   private radioSignalAvailable = false;
@@ -460,7 +459,6 @@ export class SurvivalSession {
     this.bait = checkpoint.bait;
     this.recoveredFood = checkpoint.recoveredFood;
     this.recoveredBait = checkpoint.recoveredBait;
-    this.repairMaterial = checkpoint.repairMaterial;
     this.radioSignalAvailable = checkpoint.radioSignalAvailable;
     this.radioSignalsSent = checkpoint.radioSignalsSent;
     this.actedToday = checkpoint.actedToday;
@@ -572,7 +570,6 @@ export class SurvivalSession {
       bait: this.bait,
       recoveredFood: this.recoveredFood,
       recoveredBait: this.recoveredBait,
-      repairMaterial: this.repairMaterial,
       rescueLead: this.rescueLead,
       rescueTraceFinds: this.rescueTraceFinds,
       radioSignalAvailable: this.radioSignalAvailable,
@@ -632,7 +629,6 @@ export class SurvivalSession {
       bait: this.bait,
       recoveredFood: this.recoveredFood,
       recoveredBait: this.recoveredBait,
-      repairMaterial: this.repairMaterial,
       rescueLead: this.rescueLead,
       rescueTraceFinds: this.rescueTraceFinds,
       radioSignalAvailable: this.radioSignalAvailable,
@@ -1593,11 +1589,11 @@ export class SurvivalSession {
   private eventResourceReward(resolved: WeightedEventOutcome): RewardSummary | undefined {
     const added = resolved.effects.resources?.find(
       ({ operation, resource }) => operation === 'add'
-        && (resource === 'food' || resource === 'bait' || resource === 'repairMaterial'),
+        && (resource === 'food' || resource === 'bait'),
     );
     if (added === undefined || typeof added.value !== 'number') return undefined;
     const id = added.resource;
-    if (id !== 'food' && id !== 'bait' && id !== 'repairMaterial') return undefined;
+    if (id !== 'food' && id !== 'bait') return undefined;
     return Object.freeze({ kind: 'resource', id, quantity: added.value });
   }
 
@@ -1791,7 +1787,7 @@ export class SurvivalSession {
     return {
       pressure: this.pressure,
       health: this.health, hunger: this.hunger, energy: this.energy, hull: this.hull,
-      food: this.food, bait: this.bait, repairMaterial: this.repairMaterial,
+      food: this.food, bait: this.bait,
       rescueLead: this.rescueLead,
     };
   }
@@ -2083,7 +2079,6 @@ export class SurvivalSession {
     this.hull += deltas.hull ?? 0;
     this.food += deltas.food ?? 0;
     this.bait += deltas.bait ?? 0;
-    this.repairMaterial += deltas.repairMaterial ?? 0;
     this.rescueLead = clampRescueLead(
       this.rescueLead + (deltas.rescueLead ?? 0),
     );
@@ -2174,7 +2169,6 @@ export class SurvivalSession {
     this.hull = resources.hull;
     this.food = Math.max(0, this.food);
     this.bait = Math.max(0, this.bait);
-    this.repairMaterial = Math.max(0, this.repairMaterial);
     this.pressure = Math.min(4, Math.max(0, this.pressure));
   }
 

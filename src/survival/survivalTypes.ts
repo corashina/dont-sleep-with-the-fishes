@@ -48,7 +48,6 @@ export interface ResourceDelta {
   hull?: number;
   food?: number;
   bait?: number;
-  repairMaterial?: number;
   rescueLead?: number;
 }
 
@@ -74,7 +73,7 @@ export type EventPresentationKey =
 export type RewardSummary =
   | {
       readonly kind: 'resource';
-      readonly id: 'food' | 'bait' | 'repairMaterial';
+      readonly id: 'food' | 'bait';
       readonly quantity: number;
     }
   | {
@@ -99,7 +98,7 @@ export interface ActionOutcome {
 
 export type EventResource =
   | 'pressure' | 'health' | 'hull' | 'energy'
-  | 'food' | 'bait' | 'repairMaterial' | 'rescueLead';
+  | 'food' | 'bait' | 'rescueLead';
 export type ChestState = 'none' | 'closed' | 'mimic';
 export interface ChestSnapshot {
   readonly state: ChestState;
