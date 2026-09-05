@@ -71,6 +71,32 @@ Color quality is 85. Normal-map quality is 95 when a processed model has normal 
 - Texture checks: nine committed texture maps passed.
 - Thumbnail check: 20 item thumbnails passed.
 
+Run integration checks with these commands:
+
+```text
+node node_modules/vitest/vitest.mjs run --reporter=verbose
+node node_modules/typescript/bin/tsc --noEmit
+node node_modules/eslint/bin/eslint.js . --max-warnings 0
+node node_modules/vite/bin/vite.js build
+```
+
+Run all eight committed asset checks with these commands:
+
+```text
+node scripts/check-item-models.mjs
+node scripts/check-ship-furniture.mjs
+node scripts/check-fishing-models.mjs
+node scripts/check-event-models.mjs
+node scripts/check-menu-models.mjs
+node scripts/check-lifeboat-textures.mjs
+node scripts/check-ship-textures.mjs
+node scripts/check-item-thumbnails.mjs
+```
+
+A frozen-lock install supplies glTF Transform 4.4.1 for the first five asset checks.
+The local shared install exposed 4.5.0, so validation temporarily mapped those imports to verified 4.4.1 packages.
+This local mapping did not change `node_modules`. A frozen-lock install needs no mapping hook.
+
 The build emits the map at 41.45 kB and the starfish at 58.40 kB.
 It retains the existing large-chunk warning.
 Rapier tests retain the existing deprecated initialization warning.
