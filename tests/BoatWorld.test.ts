@@ -1665,7 +1665,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('updates the full scene matrix once during a focused drifting-item frame', async () => {
+  it('prepares local matrices without traversing the scene during a focused drifting-item frame', async () => {
     const propModels = createTestPropModels();
     const featuredModels = await createTestFeaturedModels([
       'driftingBarrel',
@@ -1691,7 +1691,7 @@ describe('BoatWorld helpers', () => {
 
     world.update(1.3, 0.1);
 
-    expect(updateMatrixWorld).toHaveBeenCalledOnce();
+    expect(updateMatrixWorld).not.toHaveBeenCalled();
     world.dispose();
     featuredModels.dispose();
     propModels.dispose();
@@ -5228,6 +5228,7 @@ describe('BoatWorld helpers', () => {
       ...createTestSkyTextures(),
     );
     const internals = world as unknown as {
+      boat: Group;
       ocean: OceanRenderer;
       buoyancy: BoatBuoyancy;
       cameraController: {
@@ -5312,8 +5313,8 @@ describe('BoatWorld helpers', () => {
     vi.spyOn(internals.ocean, 'update').mockImplementation(() => {
       order.push('ocean');
     });
-    vi.spyOn(world.scene, 'updateMatrixWorld').mockImplementation(() => {
-      order.push('scene-matrix');
+    vi.spyOn(internals.boat, 'updateWorldMatrix').mockImplementation(() => {
+      order.push('boat-matrix');
     });
     vi.spyOn(internals.fishingPresentation, 'updateLineGeometry').mockImplementation(() => {
       order.push('fishing-line');
@@ -5351,7 +5352,7 @@ describe('BoatWorld helpers', () => {
       'fishing-particles',
       'fishing-surface',
       'ocean',
-      'scene-matrix',
+      'boat-matrix',
       'fishing-line',
       'ocean-exclusion',
       'weather',

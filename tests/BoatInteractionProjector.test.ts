@@ -94,7 +94,7 @@ function createFixture(): ProjectorFixture {
     activeFeaturedEventId: () => activeEventId,
   };
   return {
-    projector: new BoatInteractionProjector(scene, camera, roots, eventHost),
+    projector: new BoatInteractionProjector(camera, roots, eventHost),
     roots,
     eventHost,
     supplyRecord,
@@ -104,6 +104,20 @@ function createFixture(): ProjectorFixture {
 }
 
 describe('BoatInteractionProjector', () => {
+  it('updates standalone projection after parent motion without traversing the scene', () => {
+    const fixture = createFixture();
+    const scene = fixture.roots.repairRoot.parent!;
+    const sceneUpdate = vi.spyOn(scene, 'updateMatrixWorld');
+    const before = fixture.projector.projectAnchors(1280, 720)
+      .find(({ id }) => id === 'repair-tools')!.x;
+    scene.position.x += 0.5;
+    const after = fixture.projector.projectAnchors(1280, 720)
+      .find(({ id }) => id === 'repair-tools')!.x;
+    expect(after).toBeGreaterThan(before);
+    expect(sceneUpdate).not.toHaveBeenCalled();
+    fixture.projector.dispose();
+  });
+
   it('translates retained anchors and cached focused targets without reprojection', () => {
     const fixture = createFixture();
     fixture.projector.installFocusedInteractionTargets([{
@@ -232,6 +246,14 @@ describe('BoatInteractionProjector', () => {
       .toBe(interaction);
     expect(fixture.projector.projectEventResult('drifting-supplies', 1280, 720))
       .toBe(result);
+    const interactionX = interaction!.x;
+    const resultX = result!.x;
+    interactionRoot.children[0]!.position.x += 0.5;
+    resultRoot.children[0]!.position.x -= 0.5;
+    expect(fixture.projector.projectEventInteraction('drifting-supplies', 1280, 720)!.x)
+      .toBeGreaterThan(interactionX);
+    expect(fixture.projector.projectEventResult('drifting-supplies', 1280, 720)!.x)
+      .toBeLessThan(resultX);
     expect(fixture.projector.projectEventInteraction('drifting-supplies', 0, 720))
       .toBeNull();
   });

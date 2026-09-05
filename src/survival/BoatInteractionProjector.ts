@@ -2,7 +2,6 @@ import { presentationUiText } from '../i18n/presentationUiMessages';
 import type {
   Object3D,
   PerspectiveCamera,
-  Scene,
 } from 'three';
 import {
   ITEM_DEFINITIONS,
@@ -160,7 +159,6 @@ export class BoatInteractionProjector {
   private disposed = false;
 
   constructor(
-    private readonly scene: Scene,
     private readonly camera: PerspectiveCamera,
     private readonly roots: BoatInteractionProjectorRoots,
     private readonly eventHost: EventInteractionProjectionHost,
@@ -355,7 +353,6 @@ export class BoatInteractionProjector {
 
   projectAnchors(width: number, height: number): readonly BoatInteractionAnchor[] {
     if (this.disposed || width <= 0 || height <= 0) return this.emptyAnchors;
-    this.scene.updateMatrixWorld(true);
     this.nextAnchors.length = 0;
     this.projectSupplyAnchors(width, height);
     this.projectCarlitosAnchor(width, height);
@@ -549,7 +546,6 @@ export class BoatInteractionProjector {
     height: number,
   ): ProjectedBoatBounds | null {
     if (!this.canProjectEvent(width, height)) return null;
-    this.scene.updateMatrixWorld(true);
     const root = this.focusedInteractionRoot(eventId)
       ?? this.eventHost.interactionRoot(eventId);
     return root === null
@@ -569,7 +565,6 @@ export class BoatInteractionProjector {
     height: number,
   ): ProjectedBoatBounds | null {
     if (!this.canProjectEvent(width, height)) return null;
-    this.scene.updateMatrixWorld(true);
     const root = this.eventHost.resultRoot(eventId);
     return root === null
       ? null

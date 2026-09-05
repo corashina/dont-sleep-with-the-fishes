@@ -18,6 +18,44 @@ const ITEM_MUTATIONS = [
 ] as const;
 
 describe('ScavengeSession', () => {
+  it('reuses inventory records when only the timer or session status changes', () => {
+    const session = new ScavengeSession();
+    session.start();
+    session.pickUp('ductTape');
+    const before = session.snapshot();
+    session.tick(1 / 60);
+    const after = session.snapshot();
+    expect(after.remainingSeconds).toBeLessThan(before.remainingSeconds);
+    expect(after.items).toBe(before.items);
+    expect(after.carriedItems).toBe(before.carriedItems);
+    session.pause();
+    expect(session.snapshot().items).toBe(before.items);
+    session.resume();
+    session.penalize(1);
+    expect(session.snapshot().carriedItems).toBe(before.carriedItems);
+  });
+
+  it.each(ITEM_MUTATIONS)('invalidates inventory records after $name', ({ run }) => {
+    const session = new ScavengeSession([{ instanceId: 'ductTape-1', type: 'ductTape' }]);
+    session.start();
+    const available = session.snapshot();
+    session.pickUp('ductTape-1');
+    const carried = session.snapshot();
+    expect(carried.items).not.toBe(available.items);
+    expect(carried.carriedItems).not.toBe(available.carriedItems);
+    run(session);
+    const released = session.snapshot();
+    expect(released.items).not.toBe(carried.items);
+    expect(released.carriedItems).not.toBe(carried.carriedItems);
+    expect(carried.items['ductTape-1']!.status).toBe('carried');
+    expect(carried.carriedItems).toHaveLength(1);
+    expect(Object.isFrozen(released.items)).toBe(true);
+    expect(Object.isFrozen(released.items['ductTape-1'])).toBe(true);
+    session.tick(1 / 60);
+    expect(session.snapshot().items).toBe(released.items);
+    expect(session.snapshot().carriedItems).toBe(released.carriedItems);
+  });
+
   it('reuses a snapshot until state changes', () => {
     const session = new ScavengeSession();
     const initial = session.snapshot();

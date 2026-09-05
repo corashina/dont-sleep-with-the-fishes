@@ -736,7 +736,6 @@ export class BoatWorld {
         this.itemEffects.root,
       );
       this.interactionProjector = new BoatInteractionProjector(
-        this.scene,
         this.camera,
         {
           supplyRecords: this.supplyDisplay.records(),
@@ -1566,7 +1565,7 @@ export class BoatWorld {
     this.oceanAtmosphere.sunColor.copy(atmosphere.sunColor);
     this.oceanAtmosphere.sunVisibility = atmosphere.sunVisibility;
     this.ocean.update(time, amplitudeScale, fog.density, this.oceanAtmosphere);
-    this.scene.updateMatrixWorld(true);
+    this.boat.updateWorldMatrix(true, false);
     this.fishingPresentation.updateLineGeometry();
     this.oceanExclusion.worldToLocal.copy(this.boat.matrixWorld).invert();
     this.ocean.setExclusions(this.oceanExclusions);
