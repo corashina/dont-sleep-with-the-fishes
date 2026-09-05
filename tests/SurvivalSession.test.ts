@@ -503,9 +503,30 @@ describe('SurvivalSession Carlitos events', () => {
     expect(session.resolveEvent({ kind: 'choice', choiceId: 'search' }))
       .toMatchObject({
         accepted: true,
-        deltas: { energy: -1, repairMaterial: 2 },
-        rewardSummary: { kind: 'resource', id: 'repairMaterial', quantity: 2 },
+        deltas: { energy: -1, food: 1 },
+        rewardSummary: { kind: 'resource', id: 'food', quantity: 1 },
       });
+  });
+
+  it.each([
+    [0.429999, 'food'],
+    [0.43, 'bait'],
+    [0.799999, 'bait'],
+    [0.8, null],
+  ] as const)('uses the Wreckage player search boundary at %f', (roll, rewardId) => {
+    const session = new SurvivalSession(saved(), {
+      seed: 71,
+      random: sequenceRandom([roll, 0]),
+      initial: { day: 4, energy: 1 },
+      initialEventId: 'wreckage',
+    });
+
+    const outcome = session.resolveEvent({ kind: 'choice', choiceId: 'search' });
+
+    expect(outcome.rewardSummary).toEqual(rewardId === null
+      ? undefined
+      : { kind: 'resource', id: rewardId, quantity: 1 });
+    if (rewardId === null) expect(outcome.deltas.health).toBe(-15);
   });
 
   it('requires usable scuba gear and three energy for the Wreckage dive', () => {
@@ -603,10 +624,34 @@ describe('SurvivalSession Carlitos events', () => {
     expect(session.resolveEvent({ kind: 'choice', choiceId: 'delegate-carlitos' }))
       .toMatchObject({
         accepted: true,
-        deltas: { repairMaterial: 2 },
-        rewardSummary: { kind: 'resource', id: 'repairMaterial', quantity: 2 },
+        deltas: { food: 1 },
+        rewardSummary: { kind: 'resource', id: 'food', quantity: 1 },
       });
     expect(session.snapshot()).toMatchObject({ energy: 1, carlitos: { energy: 0 } });
+  });
+
+  it.each([
+    [0.429999, 'food'],
+    [0.43, 'bait'],
+    [0.799999, 'bait'],
+    [0.8, null],
+  ] as const)('uses the Wreckage Carlitos search boundary at %f', (roll, rewardId) => {
+    const session = new SurvivalSession(saved('carlitos'), {
+      seed: 74,
+      random: sequenceRandom([roll]),
+      initial: { day: 4 },
+      initialCarlitos: { hunger: 5, energy: 2 },
+      initialEventId: 'wreckage',
+    });
+
+    const outcome = session.resolveEvent({
+      kind: 'choice',
+      choiceId: 'delegate-carlitos',
+    });
+
+    expect(outcome.rewardSummary).toEqual(rewardId === null
+      ? undefined
+      : { kind: 'resource', id: rewardId, quantity: 1 });
   });
 
   it('rejects Wreckage delegation with one Carlitos energy', () => {
@@ -1819,8 +1864,9 @@ describe('SurvivalSession daytime actions', () => {
   it('records every applied Drifting Cargo reward without parsing its message', () => {
     const cases = [
       [0, { kind: 'resource', id: 'food', quantity: 3 }],
-      [0.45, { kind: 'resource', id: 'bait', quantity: 3 }],
-      [0.7, { kind: 'resource', id: 'repairMaterial', quantity: 3 }],
+      [0.549999, { kind: 'resource', id: 'food', quantity: 3 }],
+      [0.55, { kind: 'resource', id: 'bait', quantity: 3 }],
+      [0.899999, { kind: 'resource', id: 'bait', quantity: 3 }],
       [0.9, { kind: 'item', id: 'energyBar', quantity: 1 }],
     ] as const;
 
@@ -2135,7 +2181,7 @@ describe('SurvivalSession daytime actions', () => {
   it('does not refill a used recovered bait tin when diving finds loose bait', () => {
     const session = new SurvivalSession(saved('baitTin', 'scubaSet', 'energyBar'), {
       seed: 1,
-      random: sequenceRandom([0, 0, 0, 0, 0, 0.3]),
+      random: sequenceRandom([0, 0, 0, 0, 0, 0.5]),
       initial: { energy: 3 },
     });
 
@@ -2540,6 +2586,25 @@ describe('SurvivalSession daytime actions', () => {
     });
     expect(session.perform('dive').deltas).not.toHaveProperty('rescueLead');
     expect(session.snapshot()).toMatchObject({ rescueLead: 2, rescueTraceFinds: 2 });
+  });
+
+  it.each([
+    [0, { food: 1 }],
+    [0.374999, { food: 1 }],
+    [0.375, { bait: 1 }],
+    [0.749999, { bait: 1 }],
+    [0.75, { rescueLead: 1 }],
+  ] as const)('uses the normal Dive reward boundary at %f', (rewardRoll, reward) => {
+    const session = new SurvivalSession(saved('scubaSet'), {
+      seed: 3,
+      random: sequenceRandom([0, 0.99, rewardRoll]),
+      initial: { energy: 3 },
+    });
+
+    expect(session.perform('dive').deltas).toMatchObject({
+      energy: -3,
+      ...reward,
+    });
   });
 
   it('turns Other People into a persistent signal instead of rescue', () => {

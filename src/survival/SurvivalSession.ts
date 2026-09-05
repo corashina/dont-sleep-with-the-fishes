@@ -1371,9 +1371,8 @@ export class SurvivalSession {
 
   private applyDiveReward(deltas: ResourceDelta): void {
     const rewardRoll = this.random.next();
-    if (rewardRoll < 0.25) deltas.food = 1;
-    else if (rewardRoll < 0.5) deltas.bait = 1;
-    else if (rewardRoll < 0.75) deltas.repairMaterial = 1;
+    if (rewardRoll < 0.375) deltas.food = 1;
+    else if (rewardRoll < 0.75) deltas.bait = 1;
     else if (this.rescueTraceFinds < 2) {
       this.rescueTraceFinds = (this.rescueTraceFinds + 1) as 1 | 2;
       deltas.rescueLead = 1;
