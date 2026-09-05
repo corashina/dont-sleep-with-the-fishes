@@ -1,12 +1,6 @@
+import { onLanguageChange } from '../i18n/language';
+import { settingsText, refreshSettingsText } from '../i18n/settingsMessages';
 import type { EventTestOption } from '../app/EventTest';
-import {
-  createAntiAliasingQualityPreference,
-  type AntiAliasingQualityPreference,
-} from '../rendering/antiAliasingQuality';
-import {
-  createShadowQualityPreference,
-  type ShadowQualityPreference,
-} from '../rendering/shadowQuality';
 import type { ItemAmbientOcclusionMode } from '../rendering/ItemAmbientOcclusion';
 import {
   formatPostProcessingValue,
@@ -16,23 +10,11 @@ import {
   type PostProcessingNumericSetting,
 } from '../rendering/postProcessingControls';
 import {
-  createVisualQualityPreference,
-  type VisualQualityPreference,
-} from '../rendering/visualQuality';
-import {
-  createWaterQualityPreference,
-  type WaterQualityPreference,
-} from '../rendering/waterQuality';
-import {
   PRESENTATION_WEATHER_IDS,
   presentationWeatherProfile,
   type PresentationWeatherId,
   type WeatherControlSource,
 } from '../weather/presentationWeather';
-import { VisualQualityControl } from './VisualQualityControl';
-import { WaterQualityControl } from './WaterQualityControl';
-import { AntiAliasingQualityControl } from './AntiAliasingQualityControl';
-import { ShadowQualityControl } from './ShadowQualityControl';
 import type { SkyPhase } from '../world/skyPalette';
 
 const PANEL_ID = 'post-processing-console-panel';
@@ -60,36 +42,6 @@ export interface EventTestControls {
   enterEvent(id: string): void;
 }
 
-export interface PerformanceStatsControls {
-  readonly visible: boolean;
-  setVisible(visible: boolean): void;
-}
-
-export interface AudioControls {
-  readonly volume: number;
-  readonly muted: boolean;
-  setVolume(volume: number): void;
-  setMuted(muted: boolean): void;
-}
-
-export interface CameraControls {
-  readonly fieldOfView: number;
-  setFieldOfView(fieldOfView: number): void;
-}
-
-export interface SaveControls {
-  readonly enabled: boolean;
-  readonly savedDay: number | null;
-  setEnabled(enabled: boolean): void;
-  continueSavedRun(): void;
-}
-
-export interface VolumetricCloudControls {
-  readonly enabled: boolean;
-  readonly available: boolean;
-  setEnabled(enabled: boolean): void;
-}
-
 const DEFAULT_WEATHER_CONTROLS: WeatherControls = {
   selected: 'calm',
   source: 'normal',
@@ -98,18 +50,9 @@ const DEFAULT_WEATHER_CONTROLS: WeatherControls = {
 
 interface ConsoleMarkupOptions {
   readonly physicsControls?: PhysicsToggleControls;
-  readonly performanceStatsControls?: PerformanceStatsControls;
-  readonly audioControls?: AudioControls;
-  readonly cameraControls?: CameraControls;
-  readonly saveControls?: SaveControls;
   readonly timeOfDayControls?: TimeOfDayControls;
   readonly eventTestControls?: EventTestControls;
   readonly weatherControls: WeatherControls;
-  readonly volumetricCloudControls?: VolumetricCloudControls;
-}
-
-function onOff(enabled: boolean): 'ON' | 'OFF' {
-  return enabled ? 'ON' : 'OFF';
 }
 
 function checkedAttribute(checked: boolean): string {
@@ -120,16 +63,15 @@ function buildGameplayPhysicsControl(controls?: PhysicsToggleControls): string {
   if (controls === undefined) return '';
   return `
     <div class="post-processing-console__group">
-      <strong>SIMULATION</strong>
+      <strong data-settings-copy="simulation">${settingsText('simulation')}</strong>
       <label class="post-processing-console__physics">
-        <span>Barrel simulation</span>
+        <span data-settings-copy="barrels">${settingsText('barrels')}</span>
         <input
           type="checkbox"
           role="switch"
           data-physics-enabled
           ${checkedAttribute(controls.enabled)}
         >
-        <output data-physics-state>${onOff(controls.enabled)}</output>
       </label>
     </div>
   `;
@@ -140,9 +82,9 @@ function buildDiagnosticPhysicsControl(controls?: PhysicsToggleControls): string
   const disabled = controls.enabled ? '' : 'disabled';
   return `
     <div class="post-processing-console__group">
-      <strong>PHYSICS VIEW</strong>
+      <strong data-settings-copy="physics">${settingsText('physics')}</strong>
       <label class="post-processing-console__physics">
-        <span>Collision meshes</span>
+        <span data-settings-copy="collisions">${settingsText('collisions')}</span>
         <input
           type="checkbox"
           role="switch"
@@ -150,106 +92,8 @@ function buildDiagnosticPhysicsControl(controls?: PhysicsToggleControls): string
           ${checkedAttribute(controls.debugMeshes)}
           ${disabled}
         >
-        <output data-physics-debug-state>${onOff(controls.debugMeshes)}</output>
       </label>
     </div>
-  `;
-}
-
-function buildPerformanceStatsControl(controls?: PerformanceStatsControls): string {
-  if (controls === undefined) return '';
-  return `
-    <div class="post-processing-console__group">
-      <strong>PERFORMANCE</strong>
-      <label class="post-processing-console__toggle">
-        <span>Frame rate</span>
-        <input
-          type="checkbox"
-          role="switch"
-          data-performance-stats-enabled
-          ${checkedAttribute(controls.visible)}
-        >
-        <output data-performance-stats-state>${onOff(controls.visible)}</output>
-      </label>
-    </div>
-  `;
-}
-
-function buildAudioControl(controls?: AudioControls): string {
-  if (controls === undefined) return '';
-  const volume = Math.round(controls.volume * 100);
-  return `
-    <div class="post-processing-console__group">
-      <label class="post-processing-console__slider">
-        <span>Master volume</span>
-        <output data-audio-volume-output>${volume}%</output>
-        <input
-          type="range"
-          min="0"
-          max="100"
-          step="5"
-          value="${volume}"
-          data-audio-volume
-          aria-label="Master audio volume"
-        >
-      </label>
-      <label class="post-processing-console__toggle">
-        <span>Mute all audio</span>
-        <input
-          type="checkbox"
-          role="switch"
-          data-audio-muted
-          ${checkedAttribute(controls.muted)}
-        >
-        <output data-audio-muted-state>${onOff(controls.muted)}</output>
-      </label>
-    </div>
-  `;
-}
-
-function buildCameraControl(controls?: CameraControls): string {
-  if (controls === undefined) return '';
-  return `
-    <div class="post-processing-console__group">
-      <strong>CAMERA</strong>
-      <label class="post-processing-console__slider">
-        <span>Field of view</span>
-        <output data-camera-fov-output>${Math.round(controls.fieldOfView)}°</output>
-        <input
-          type="range"
-          min="40"
-          max="110"
-          step="1"
-          value="${controls.fieldOfView}"
-          data-camera-fov
-          aria-label="Vertical field of view"
-        >
-      </label>
-    </div>
-  `;
-}
-
-function buildSaveCategory(controls?: SaveControls): string {
-  if (controls === undefined) return '';
-  return `
-    <section class="post-processing-console__category">
-      <h2>SAVE SYSTEM</h2>
-      <div class="post-processing-console__group post-processing-console__save">
-        <label class="post-processing-console__toggle">
-          <span>Auto-save</span>
-          <input
-            type="checkbox"
-            role="switch"
-            data-save-enabled
-            aria-label="Enable survival auto-save"
-            ${checkedAttribute(controls.enabled)}
-          >
-          <output data-save-status>OFF</output>
-        </label>
-        <button type="button" data-save-continue>CONTINUE</button>
-        <small data-save-reason>Enable auto-save to create a checkpoint.</small>
-      </div>
-    </section>
   `;
 }
 
@@ -260,31 +104,22 @@ function buildEventTestControlHost(controls?: EventTestControls): string {
 
 function buildToolsCategory(options: ConsoleMarkupOptions): string {
   const controls = [
-    buildPerformanceStatsControl(options.performanceStatsControls),
     buildDiagnosticPhysicsControl(options.physicsControls),
     buildEventTestControlHost(options.eventTestControls),
   ].join('');
   if (controls.length === 0) return '';
   return `<section class="post-processing-console__category">
-    <h2>TOOLS</h2>
+    <h2 data-settings-copy="tools">${settingsText('tools')}</h2>
     ${controls}
-  </section>`;
-}
-
-function buildAudioCategory(controls?: AudioControls): string {
-  if (controls === undefined) return '';
-  return `<section class="post-processing-console__category">
-    <h2>SOUND</h2>
-    ${buildAudioControl(controls)}
   </section>`;
 }
 
 function buildTimeOfDayControl(controls?: TimeOfDayControls): string {
   if (controls === undefined) return '';
   const isNight = controls.selected === 'night';
-  const label = isNight ? 'Night' : 'Day';
+  const label = isNight ? settingsText('night') : settingsText('day');
   return `<div class="post-processing-console__group">
-    <strong>TIME OF DAY</strong>
+    <strong data-settings-copy="time">${settingsText('time')}</strong>
     <label class="post-processing-console__toggle">
       <span data-time-of-day-label>${label}</span>
       <input
@@ -293,26 +128,9 @@ function buildTimeOfDayControl(controls?: TimeOfDayControls): string {
         data-presentation-night
         ${checkedAttribute(isNight)}
       >
-      <output data-time-of-day-state>${controls.selected.toUpperCase()}</output>
+      <output data-time-of-day-state>${settingsText(controls.selected === 'night' ? 'nightUpper' : 'dayUpper')}</output>
     </label>
   </div>`;
-}
-
-function buildVolumetricCloudControl(controls?: VolumetricCloudControls): string {
-  if (controls === undefined) return '';
-  const disabled = controls.available ? '' : 'disabled';
-  const state = controls.available ? onOff(controls.enabled) : 'UNAVAILABLE';
-  return `<label class="post-processing-console__toggle">
-    <span>Volumetric clouds</span>
-    <input
-      type="checkbox"
-      role="switch"
-      data-volumetric-clouds
-      ${checkedAttribute(controls.enabled)}
-      ${disabled}
-    >
-    <output data-volumetric-clouds-state>${state}</output>
-  </label>`;
 }
 
 function buildConsoleMarkup(options: ConsoleMarkupOptions): string {
@@ -324,61 +142,47 @@ function buildConsoleMarkup(options: ConsoleMarkupOptions): string {
       id="${PANEL_ID}"
       class="post-processing-console__panel"
       data-post-processing-panel
-      aria-label="System tuning menu"
+      data-settings-aria="developer" aria-label="${settingsText('developer')}"
       hidden
     >
       <header>
-        <strong>SYSTEM TUNING</strong>
-        <button type="button" data-post-processing-close aria-label="Close system tuning menu">×</button>
+        <strong data-settings-copy="developerTitle">${settingsText('developerTitle')}</strong>
+        <button type="button" data-post-processing-close data-settings-aria="closeDeveloper" aria-label="${settingsText('closeDeveloper')}">×</button>
       </header>
-      <div class="post-processing-console__columns">
-        <div class="post-processing-console__category-column">
+      <div class="post-processing-console__sections">
           ${buildToolsCategory(options)}
-          ${buildAudioCategory(options.audioControls)}
-          ${buildSaveCategory(options.saveControls)}
-        </div>
-        <div class="post-processing-console__category-column">
           <section class="post-processing-console__category post-processing-console__category--graphics">
-            <h2>GRAPHICS</h2>
-            <div class="post-processing-console__quality-row">
-              <div class="post-processing-console__group" data-ao-quality-control></div>
-              <div class="post-processing-console__group" data-water-quality-control></div>
-              <div class="post-processing-console__group" data-anti-aliasing-quality-control></div>
-              <div class="post-processing-console__group" data-shadow-quality-control></div>
-            </div>
+            <h2 data-settings-copy="graphicsUpper">${settingsText('graphicsUpper')}</h2>
             <div class="post-processing-console__group post-processing-console__group--ao">
-              <strong>AMBIENT OCCLUSION</strong>
+              <strong data-settings-copy="ao">${settingsText('ao')}</strong>
               <label class="post-processing-console__select">
-                <span>Display</span>
+                <span data-settings-copy="display">${settingsText('display')}</span>
                 <select data-post-processing-ao-mode>
-                  <option value="composite">COMPOSITE</option>
-                  <option value="debug">DEBUG BUFFER</option>
-                  <option value="off">OFF</option>
+                  <option value="composite" data-settings-copy="composite">${settingsText('composite')}</option>
+                  <option value="debug" data-settings-copy="debug">${settingsText('debug')}</option>
+                  <option value="off" data-settings-copy="off">${settingsText('off')}</option>
                 </select>
               </label>
               <div class="post-processing-console__sliders" data-post-processing-sliders></div>
             </div>
           </section>
           <section class="post-processing-console__category">
-            <h2>GAMEPLAY</h2>
-            ${buildCameraControl(options.cameraControls)}
+            <h2 data-settings-copy="gameplay">${settingsText('gameplay')}</h2>
             ${buildGameplayPhysicsControl(options.physicsControls)}
             ${buildTimeOfDayControl(options.timeOfDayControls)}
             <div class="post-processing-console__group">
-              <strong>WEATHER</strong>
+              <strong data-settings-copy="weather">${settingsText('weather')}</strong>
               <label class="post-processing-console__select">
                 <span>
-                  Presentation
-                  <output data-weather-source>${options.weatherControls.source.toUpperCase()}</output>
+                  <span data-settings-copy="presentation">${settingsText('presentation')}</span>
+                  <output data-weather-source>${settingsText(options.weatherControls.source)}</output>
                 </span>
                 <select data-presentation-weather>
                   ${weatherOptions}
                 </select>
               </label>
-              ${buildVolumetricCloudControl(options.volumetricCloudControls)}
             </div>
           </section>
-        </div>
       </div>
     </section>
   `;
@@ -387,45 +191,21 @@ function buildConsoleMarkup(options: ConsoleMarkupOptions): string {
 export class PostProcessingConsole {
   readonly element = document.createElement('aside');
   private readonly panel: HTMLElement;
-  private readonly visualQualityControl: VisualQualityControl;
-  private readonly waterQualityControl: WaterQualityControl;
-  private readonly antiAliasingQualityControl: AntiAliasingQualityControl;
-  private readonly shadowQualityControl: ShadowQualityControl;
   private readonly weatherSelect: HTMLSelectElement;
   private readonly weatherSource: HTMLOutputElement;
-  private readonly volumetricCloudInput: HTMLInputElement | null;
-  private readonly volumetricCloudState: HTMLOutputElement | null;
   private weatherId: PresentationWeatherId;
   private weatherControlSource: WeatherControlSource;
-  private saveDay: number | null = null;
-  private volumetricCloudAvailability: boolean | null;
   private disposed = false;
+  private readonly unsubscribeLanguage: () => void;
 
   constructor(
     mount: HTMLElement,
     private readonly controls: PostProcessingControls,
     private readonly onOpenChange: (open: boolean) => void = () => undefined,
     private readonly physicsControls?: PhysicsToggleControls,
-    visualQuality: VisualQualityPreference = createVisualQualityPreference(
-      () => undefined,
-      null,
-    ),
     private readonly weatherControls: WeatherControls = DEFAULT_WEATHER_CONTROLS,
     private readonly timeOfDayControls?: TimeOfDayControls,
     private readonly eventTestControls?: EventTestControls,
-    waterQuality: WaterQualityPreference = createWaterQualityPreference(
-      () => undefined,
-      null,
-    ),
-    private readonly performanceStatsControls?: PerformanceStatsControls,
-    private readonly audioControls?: AudioControls,
-    private readonly cameraControls?: CameraControls,
-    antiAliasingQuality: AntiAliasingQualityPreference =
-      createAntiAliasingQualityPreference(() => undefined, null),
-    shadowQuality: ShadowQualityPreference =
-      createShadowQualityPreference(() => undefined, null),
-    private readonly saveControls?: SaveControls,
-    private readonly volumetricCloudControls?: VolumetricCloudControls,
   ) {
     const state = controls.getState();
     this.weatherId = weatherControls.selected;
@@ -434,41 +214,11 @@ export class PostProcessingConsole {
     this.element.dataset.open = 'false';
     this.element.innerHTML = buildConsoleMarkup({
       physicsControls,
-      performanceStatsControls,
-      audioControls,
-      cameraControls,
-      saveControls,
       timeOfDayControls,
       eventTestControls,
       weatherControls,
-      volumetricCloudControls,
     });
-    this.volumetricCloudInput = this.element.querySelector<HTMLInputElement>(
-      '[data-volumetric-clouds]',
-    );
-    this.volumetricCloudState = this.element.querySelector<HTMLOutputElement>(
-      '[data-volumetric-clouds-state]',
-    );
-    this.volumetricCloudAvailability = volumetricCloudControls?.available ?? null;
     this.panel = this.requireElement('[data-post-processing-panel]');
-    this.visualQualityControl = new VisualQualityControl(visualQuality);
-    this.requireElement('[data-ao-quality-control]').append(
-      this.visualQualityControl.element,
-    );
-    this.waterQualityControl = new WaterQualityControl(waterQuality);
-    this.requireElement('[data-water-quality-control]').append(
-      this.waterQualityControl.element,
-    );
-    this.antiAliasingQualityControl = new AntiAliasingQualityControl(
-      antiAliasingQuality,
-    );
-    this.requireElement('[data-anti-aliasing-quality-control]').append(
-      this.antiAliasingQualityControl.element,
-    );
-    this.shadowQualityControl = new ShadowQualityControl(shadowQuality);
-    this.requireElement('[data-shadow-quality-control]').append(
-      this.shadowQualityControl.element,
-    );
     if (eventTestControls !== undefined) this.buildEventTestControl(eventTestControls);
     this.weatherSelect = this.requireElement('[data-presentation-weather]');
     this.weatherSource = this.requireElement('[data-weather-source]');
@@ -477,14 +227,14 @@ export class PostProcessingConsole {
     aoMode.value = state.ambientOcclusionMode;
     aoMode.disabled = !state.ambientOcclusionAvailable;
     this.buildSliders(state);
-    if (saveControls !== undefined) {
-      this.setSaveState(saveControls.enabled, saveControls.savedDay);
-    }
     this.element.addEventListener('click', this.handleClick);
     this.element.addEventListener('change', this.handleChange);
     this.element.addEventListener('input', this.handleInput);
     window.addEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('click', this.handleOutsideClick, true);
     mount.append(this.element);
+    this.refreshLanguage();
+    this.unsubscribeLanguage = onLanguageChange(this.refreshLanguage);
   }
 
   setWeatherState(
@@ -498,7 +248,7 @@ export class PostProcessingConsole {
     this.weatherId = id;
     this.weatherControlSource = source;
     this.weatherSelect.value = id;
-    this.weatherSource.value = source.toUpperCase();
+    this.weatherSource.value = settingsText(source);
   }
 
   setTimeOfDayState(phase: SkyPhase): void {
@@ -507,60 +257,50 @@ export class PostProcessingConsole {
     const label = this.element.querySelector<HTMLElement>('[data-time-of-day-label]');
     const output = this.element.querySelector<HTMLOutputElement>('[data-time-of-day-state]');
     if (input !== null) input.checked = phase === 'night';
-    if (label !== null) label.textContent = phase === 'night' ? 'Night' : 'Day';
-    if (output !== null) output.value = phase.toUpperCase();
-  }
-
-  setSaveState(enabled: boolean, savedDay: number | null): void {
-    if (this.disposed) return;
-    this.saveDay = savedDay;
-    const input = this.element.querySelector<HTMLInputElement>('[data-save-enabled]');
-    const status = this.element.querySelector<HTMLOutputElement>('[data-save-status]');
-    const continueButton = this.element.querySelector<HTMLButtonElement>(
-      '[data-save-continue]',
-    );
-    const reason = this.element.querySelector<HTMLElement>('[data-save-reason]');
-    if (input !== null) input.checked = enabled;
-    if (status !== null) {
-      status.value = !enabled ? 'OFF' : savedDay === null ? 'NO SAVE' : `DAY ${savedDay}`;
-    }
-    if (continueButton !== null) continueButton.disabled = !enabled || savedDay === null;
-    if (reason !== null) {
-      reason.hidden = enabled && savedDay !== null;
-      reason.textContent = !enabled
-        ? 'Enable auto-save to create a checkpoint.'
-        : savedDay === null ? 'A checkpoint starts in survival.' : '';
-    }
-  }
-
-  setVolumetricCloudAvailability(available: boolean): void {
-    if (
-      this.disposed
-      || available === this.volumetricCloudAvailability
-      || this.volumetricCloudInput === null
-      || this.volumetricCloudState === null
-    ) return;
-    this.volumetricCloudAvailability = available;
-    this.volumetricCloudInput.disabled = !available;
-    this.volumetricCloudState.value = available
-      ? (this.volumetricCloudInput.checked ? 'ON' : 'OFF')
-      : 'UNAVAILABLE';
+    if (label !== null) label.textContent = phase === 'night' ? settingsText('night') : settingsText('day');
+    if (output !== null) output.value = settingsText(phase === 'night' ? 'nightUpper' : phase === 'day' ? 'dayUpper' : 'lab');
   }
 
   dispose(): void {
     if (this.disposed) return;
     if (!this.panel.hidden) this.onOpenChange(false);
     this.disposed = true;
+    this.unsubscribeLanguage();
     window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('click', this.handleOutsideClick, true);
     this.element.removeEventListener('click', this.handleClick);
     this.element.removeEventListener('change', this.handleChange);
     this.element.removeEventListener('input', this.handleInput);
-    this.visualQualityControl.dispose();
-    this.waterQualityControl.dispose();
-    this.antiAliasingQualityControl.dispose();
-    this.shadowQualityControl.dispose();
     this.element.dataset.open = 'false';
     this.element.remove();
+  }
+
+  private readonly refreshLanguage = (): void => {
+    refreshSettingsText(this.element);
+    this.weatherSource.value = settingsText(this.weatherControlSource);
+    for (const option of this.weatherSelect.options) option.textContent = presentationWeatherProfile(option.value as PresentationWeatherId).label;
+    const night = this.element.querySelector<HTMLInputElement>('[data-presentation-night]');
+    if (night) this.setTimeOfDayState(night.checked ? 'night' : 'day');
+    for (const definition of POST_PROCESSING_SLIDERS) {
+      const input = this.element.querySelector('[data-post-processing-setting="' + definition.key + '"]');
+      const span = input?.parentElement?.querySelector('span');
+      if (span) span.textContent = definition.label;
+    }
+    this.refreshEventTestLanguage();
+  };
+
+  private refreshEventTestLanguage(): void {
+    const host = this.element.querySelector('[data-event-test-control]');
+    if (host) {
+      host.querySelector('strong')!.textContent = settingsText('eventTest');
+      host.querySelector('button')!.textContent = settingsText('enterEvent');
+      host.querySelector('select')!.ariaLabel = settingsText('eventScene');
+      for (const group of host.querySelectorAll('optgroup')) group.label = settingsText(group.dataset.phase === 'ending' ? 'endings' : group.dataset.phase === 'night' ? 'nightUpper' : group.dataset.phase === 'day' ? 'dayUpper' : 'lab');
+      for (const option of host.querySelectorAll('option')) {
+        const definition = this.eventTestControls?.options.find((entry) => entry.id === option.value);
+        if (definition) option.textContent = definition.title;
+      }
+    }
   }
 
   private buildSliders(state: Readonly<PostProcessingControlState>): void {
@@ -591,18 +331,19 @@ export class PostProcessingConsole {
   private buildEventTestControl(controls: EventTestControls): void {
     const host = this.requireElement('[data-event-test-control]');
     const heading = document.createElement('strong');
-    heading.textContent = 'EVENT TEST';
+    heading.textContent = settingsText('eventTest');
 
     const control = document.createElement('div');
     control.className = 'post-processing-console__event-test';
     const select = document.createElement('select');
-    select.ariaLabel = 'Event test scene';
+    select.ariaLabel = settingsText('eventScene');
     select.dataset.eventTestSelect = '';
     for (const phase of ['lab', 'day', 'night', 'ending'] as const) {
       const options = controls.options.filter((option) => option.phase === phase);
       if (options.length === 0) continue;
       const group = document.createElement('optgroup');
-      group.label = phase === 'ending' ? 'ENDINGS' : phase.toUpperCase();
+      group.dataset.phase = phase;
+      group.label = phase === 'ending' ? settingsText('endings') : phase.toUpperCase();
       for (const option of options) {
         const element = document.createElement('option');
         element.value = option.id;
@@ -614,7 +355,7 @@ export class PostProcessingConsole {
     const enter = document.createElement('button');
     enter.type = 'button';
     enter.dataset.eventTestEnter = '';
-    enter.textContent = 'ENTER EVENT';
+    enter.textContent = settingsText('enterEvent');
     control.append(select, enter);
 
     host.append(heading, control);
@@ -625,15 +366,24 @@ export class PostProcessingConsole {
     if (this.panel.hidden === !open) return;
     this.element.dataset.open = String(open);
     this.panel.hidden = !open;
+    if (open) {
+      this.requireElement<HTMLSelectElement>('[data-post-processing-ao-mode]').value = this.controls.getState().ambientOcclusionMode;
+    }
     this.onOpenChange(open);
     if (open && document.pointerLockElement != null) {
       document.exitPointerLock?.();
     }
   }
 
+  private readonly handleOutsideClick = (event: MouseEvent): void => {
+    if (this.panel.hidden || event.composedPath().includes(this.panel)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    this.setOpen(false);
+  };
+
   private readonly handleClick = (event: Event): void => {
     const target = event.target as Element | null;
-    if (this.handleSaveContinue(target)) return;
     if (this.handleEventTestEnter(target)) return;
     if (target?.closest('[data-post-processing-close]')) this.setOpen(false);
   };
@@ -643,16 +393,6 @@ export class PostProcessingConsole {
     if (target instanceof HTMLInputElement) this.handleInputChange(target);
     if (target instanceof HTMLSelectElement) this.handleSelectChange(target);
   };
-
-  private handleSaveContinue(target: Element | null): boolean {
-    const button = target?.closest<HTMLButtonElement>('[data-save-continue]');
-    if (button === null || button === undefined) return false;
-    if (!button.disabled) {
-      this.setOpen(false);
-      this.saveControls?.continueSavedRun();
-    }
-    return true;
-  }
 
   private handleEventTestEnter(target: Element | null): boolean {
     if (!target?.closest('[data-event-test-enter]')) return false;
@@ -666,11 +406,6 @@ export class PostProcessingConsole {
   }
 
   private handleInputChange(target: HTMLInputElement): void {
-    if (target.matches('[data-save-enabled]')) {
-      this.saveControls?.setEnabled(target.checked);
-      this.setSaveState(target.checked, this.saveDay);
-      return;
-    }
     if (target.matches('[data-presentation-night]')) {
       const phase: SkyPhase = target.checked ? 'night' : 'day';
       this.setTimeOfDayState(phase);
@@ -681,21 +416,6 @@ export class PostProcessingConsole {
   }
 
   private handleToggleInput(target: HTMLInputElement): void {
-    if (target.matches('[data-volumetric-clouds]')) {
-      this.setToggleOutput('[data-volumetric-clouds-state]', target.checked);
-      this.volumetricCloudControls?.setEnabled(target.checked);
-      return;
-    }
-    if (target.matches('[data-audio-muted]')) {
-      this.setToggleOutput('[data-audio-muted-state]', target.checked);
-      this.audioControls?.setMuted(target.checked);
-      return;
-    }
-    if (target.matches('[data-performance-stats-enabled]')) {
-      this.setToggleOutput('[data-performance-stats-state]', target.checked);
-      this.performanceStatsControls?.setVisible(target.checked);
-      return;
-    }
     if (target.matches('[data-physics-enabled]')) this.setPhysicsEnabled(target.checked);
     if (target.matches('[data-physics-debug]')) this.setPhysicsDebug(target.checked);
   }
@@ -716,44 +436,19 @@ export class PostProcessingConsole {
     }
   }
 
-  private setToggleOutput(selector: string, checked: boolean): void {
-    const output = this.element.querySelector<HTMLOutputElement>(selector);
-    if (output !== null) output.value = checked ? 'ON' : 'OFF';
-  }
-
   private setPhysicsEnabled(enabled: boolean): void {
-    this.setToggleOutput('[data-physics-state]', enabled);
     const debug = this.element.querySelector<HTMLInputElement>('[data-physics-debug]');
     if (debug !== null) debug.disabled = !enabled;
     this.physicsControls?.setEnabled(enabled);
   }
 
   private setPhysicsDebug(enabled: boolean): void {
-    this.setToggleOutput('[data-physics-debug-state]', enabled);
     this.physicsControls?.setDebugMeshes(enabled);
   }
 
   private readonly handleInput = (event: Event): void => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement) || target.type !== 'range') return;
-    if (target.matches('[data-camera-fov]')) {
-      const fieldOfView = Math.min(110, Math.max(40, Number(target.value)));
-      const output = this.element.querySelector<HTMLOutputElement>(
-        '[data-camera-fov-output]',
-      );
-      if (output !== null) output.value = `${Math.round(fieldOfView)}°`;
-      this.cameraControls?.setFieldOfView(fieldOfView);
-      return;
-    }
-    if (target.matches('[data-audio-volume]')) {
-      const volume = Math.min(100, Math.max(0, Number(target.value)));
-      const output = this.element.querySelector<HTMLOutputElement>(
-        '[data-audio-volume-output]',
-      );
-      if (output !== null) output.value = `${Math.round(volume)}%`;
-      this.audioControls?.setVolume(volume / 100);
-      return;
-    }
     const setting = target.dataset.postProcessingSetting as
       | PostProcessingNumericSetting
       | undefined;

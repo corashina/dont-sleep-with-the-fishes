@@ -1,3 +1,4 @@
+import { onLanguageChange } from '../i18n/language';
 import {
   Box3,
   Group,
@@ -172,6 +173,7 @@ export class ScavengePhase implements GamePhase {
   private readonly audioUp = new Vector3(0, 1, 0);
   private readonly audioLocalQuaternion = new Quaternion();
   private readonly audioListenerPose: AudioListenerPose;
+  private unsubscribeLanguage: () => void = () => undefined;
 
   constructor(
     private readonly context: PhaseContext,
@@ -251,6 +253,7 @@ export class ScavengePhase implements GamePhase {
   start(): void {
     if (this.disposed || this.started) return;
     this.started = true;
+    this.unsubscribeLanguage = onLanguageChange(() => this.renderInterface(this.session.snapshot()));
     document.addEventListener('pointerlockchange', this.onPointerLockChange);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
     document.addEventListener('keydown', this.onKeyDown);
@@ -660,6 +663,7 @@ export class ScavengePhase implements GamePhase {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.unsubscribeLanguage();
     document.removeEventListener('pointerlockchange', this.onPointerLockChange);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     document.removeEventListener('keydown', this.onKeyDown);
@@ -739,7 +743,7 @@ export class ScavengePhase implements GamePhase {
     if (!projected.visible) return;
     const placement = projected.y - projected.height / 2 >= 96 ? 'above' : 'below';
     this.itemTooltip = {
-      text: ITEM_LABELS[target.targetItem.type],
+      get text() { return ITEM_LABELS[target.targetItem!.type]; },
       x: projected.x,
       y: placement === 'above'
         ? projected.y - projected.height / 2

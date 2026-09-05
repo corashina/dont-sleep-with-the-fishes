@@ -276,10 +276,11 @@ describe('PlayerController', () => {
   it('grabs the ladder at the current height after jumping into it', () => {
     const input = new TestInput();
     const zone = testLadderZone();
+    const entryCenterZ = (zone.bottomEntry.minZ + zone.bottomEntry.maxZ) / 2;
     const controller = new PlayerController(
       new PerspectiveCamera(),
       new Object3D(),
-      new Vector3(0, zone.bottomEyeY, 3.3),
+      new Vector3(0, zone.bottomEyeY, entryCenterZ - SCAVENGE_WALK_SPEED * 0.1),
       [],
       TEST_NAVIGATION_BOUNDS,
       vi.fn(),

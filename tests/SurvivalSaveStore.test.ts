@@ -210,5 +210,5 @@ describe('SurvivalSaveStore', () => {
 });
 
 it('exports the current save version', () => {
-  expect(SURVIVAL_SAVE_VERSION).toBe(2);
+  expect(SURVIVAL_SAVE_VERSION).toBe(3);
 });

@@ -1,3 +1,4 @@
+import { settingsText } from '../i18n/settingsMessages';
 import {
   type AntiAliasingQuality,
   type AntiAliasingQualityPreference,
@@ -9,11 +10,10 @@ export class AntiAliasingQualityControl
   constructor(preference: AntiAliasingQualityPreference) {
     super(preference, {
       kind: 'anti-aliasing',
-      label: 'ANTI-ALIASING',
-      note: 'High smooths edges further at a moderate GPU cost.',
+      get label() { return settingsText('aa'); },
       choices: [
-        { value: 'low', label: 'LOW' },
-        { value: 'high', label: 'HIGH' },
+        { value: 'low', get label() { return settingsText('low'); } },
+        { value: 'high', get label() { return settingsText('high'); } },
       ],
     });
   }

@@ -1,4 +1,4 @@
-export const SCAVENGE_WALK_SPEED = 3.5;
+export const SCAVENGE_WALK_SPEED = 3.0;
 export const SCAVENGE_SPRINT_SPEED = 8.4;
 
 export function scavengeSpeedMultiplier(carriedWeight: number): number {

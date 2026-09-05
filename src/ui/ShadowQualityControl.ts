@@ -1,3 +1,4 @@
+import { settingsText } from '../i18n/settingsMessages';
 import {
   type ShadowQuality,
   type ShadowQualityPreference,
@@ -8,11 +9,10 @@ export class ShadowQualityControl extends QualityControl<ShadowQuality> {
   constructor(preference: ShadowQualityPreference) {
     super(preference, {
       kind: 'shadows',
-      label: 'SHADOW QUALITY',
-      note: 'High adds softer shadow edges at a moderate GPU cost.',
+      get label() { return settingsText('shadowQuality'); },
       choices: [
-        { value: 'low', label: 'LOW' },
-        { value: 'high', label: 'HIGH' },
+        { value: 'low', get label() { return settingsText('low'); } },
+        { value: 'high', get label() { return settingsText('high'); } },
       ],
     });
   }

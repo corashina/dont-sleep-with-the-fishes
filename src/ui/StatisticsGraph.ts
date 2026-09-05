@@ -1,3 +1,5 @@
+import { uiDynamic } from '../i18n/uiDynamicMessages';
+import { uiText } from '../i18n/uiMessages';
 export interface StatisticsSeries {
   readonly label: string;
   readonly values: readonly number[];
@@ -36,9 +38,9 @@ export function statisticsGraphMarkup(graph: StatisticsGraph): string {
   </span>`).join('');
   const ticks = first === last ? [first] : [first, (first + last) / 2, last];
   return `<figure class="statistics-graph">
-    <figcaption class="ui-role-context">OVER TIME</figcaption>
+    <figcaption class="ui-role-context" data-ui-text="overTime">${uiText('overTime')}</figcaption>
     <div class="statistics-graph__legend ui-role-context">${legend}</div>
-    <svg class="statistics-graph__plot ui-role-numeral" viewBox="0 0 560 238" role="img" aria-label="${graph.series.map(({ label }) => label).join(', ')} over ${graph.axis.toLowerCase()}">
+    <svg class="statistics-graph__plot ui-role-numeral" viewBox="0 0 560 238" role="img" aria-label="${uiDynamic('graphDescription', graph.series.map(({ label }) => label).join(', '), graph.axis)}">
       <title>${graph.note}</title>
       ${[0, graph.maximum / 2, graph.maximum].map((value) => `<path class="statistics-graph__grid" d="M44 ${y(value)}H524"/><text x="34" y="${y(value) + 4}" text-anchor="end">${value}</text>`).join('')}
       ${lines}
@@ -47,9 +49,9 @@ export function statisticsGraphMarkup(graph: StatisticsGraph): string {
     </svg>
     <p class="statistics-graph__note ui-role-narrative">${graph.note}</p>
     <details class="statistics-graph__data ui-role-context">
-      <summary>VIEW GRAPH VALUES</summary>
+      <summary data-ui-text="viewGraph">${uiText('viewGraph')}</summary>
       <div class="statistics-graph__table"><table>
-        <caption>Recorded values</caption>
+        <caption data-ui-text="recordedValues">${uiText('recordedValues')}</caption>
         <thead><tr><th scope="col">${graph.axis}</th>${graph.series.map(({ label }) => `<th scope="col">${label}</th>`).join('')}</tr></thead>
         <tbody>${graph.times.map((time, point) => `<tr><th scope="row">${Number(time.toFixed(1))}</th>${graph.series.map(({ values }) => `<td>${values[point]}</td>`).join('')}</tr>`).join('')}</tbody>
       </table></div>

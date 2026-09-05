@@ -4,7 +4,7 @@ import {
   ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS,
   type ItemAmbientOcclusionMode,
 } from '../rendering/ItemAmbientOcclusion';
-import { clampPostProcessingSetting } from '../rendering/postProcessingControls';
+import { clampPostProcessingSetting, type AmbientOcclusionQuality } from '../rendering/postProcessingControls';
 import {
   PRESENTATION_WEATHER_IDS,
   type PresentationWeatherId,
@@ -13,6 +13,7 @@ import type { SkyPhase } from '../world/skyPalette';
 
 export interface SystemTuningState {
   readonly ambientOcclusionMode: ItemAmbientOcclusionMode;
+  readonly ambientOcclusionQuality: AmbientOcclusionQuality;
   readonly ambientOcclusionIntensity: number;
   readonly ambientOcclusionRadius: number;
   readonly performanceStatsVisible: boolean;
@@ -35,6 +36,7 @@ export const SYSTEM_TUNING_STORAGE_KEY =
 
 export const DEFAULT_SYSTEM_TUNING_STATE = Object.freeze({
   ambientOcclusionMode: 'composite',
+  ambientOcclusionQuality: 'low',
   ambientOcclusionIntensity: ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY,
   ambientOcclusionRadius: ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS,
   performanceStatsVisible: false,
@@ -96,6 +98,7 @@ function parseState(value: unknown): SystemTuningState {
 
   return Object.freeze({
     ambientOcclusionMode,
+    ambientOcclusionQuality: stored.ambientOcclusionQuality === 'high' ? 'high' : 'low',
     ambientOcclusionIntensity,
     ambientOcclusionRadius,
     performanceStatsVisible: booleanValue(

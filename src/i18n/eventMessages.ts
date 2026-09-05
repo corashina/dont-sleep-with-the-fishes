@@ -1,0 +1,365 @@
+import { defineMessages } from './messages';
+import type {
+  EventResultPresentation,
+  SurvivalEventDefinition,
+} from '../survival/survivalTypes';
+
+const EVENT_TEXT = {
+  'eventText001': { en: 'Choose a response.', pl: 'Wybierz reakcję.' },
+  'eventText002': { en: 'Jagged rocks break the surface as the current pulls the boat off course.', pl: 'Poszarpane skały wyłaniają się z wody, gdy prąd spycha łódź z kursu.' },
+  'eventText003': { en: 'Water pushes through a split in the hull.', pl: 'Woda wdziera się przez pęknięcie w kadłubie.' },
+  'eventText004': { en: 'A dense school churns the water beside the boat.', pl: 'Gęsta ławica wzburza wodę przy burcie.' },
+  'eventText005': { en: 'A tentacle curls over the gunwale and reaches for one of your supplies.', pl: 'Macka oplata burtę i sięga po jeden z twoich zapasów.' },
+  'eventText006': { en: 'A huge shape rises and fixes its gaze on the boat.', pl: 'Ogromny kształt wynurza się i wbija wzrok w łódź.' },
+  'eventText007': { en: 'Dark fins cut through the water and close in.', pl: 'Ciemne płetwy tną wodę i zbliżają się do łodzi.' },
+  'eventText008': { en: 'A dark wind funnel spins above the sea.', pl: 'Nad morzem wiruje ciemny lej powietrzny.' },
+  'eventText009': { en: 'Rain starts falling over the exposed boat.', pl: 'Deszcz zaczyna padać na nieosłoniętą łódź.' },
+  'eventText010': { en: 'Wind catches every loose object on the boat.', pl: 'Wiatr porywa każdy luźny przedmiot na łodzi.' },
+  'eventText011': { en: 'Uneasy darkness settles over the boat.', pl: 'Nad łodzią zapada niespokojna ciemność.' },
+  'eventText012': { en: 'Thunder rolls as the storm breaks overhead.', pl: 'Nad głową rozpętuje się burza i rozlega się grzmot.' },
+  'eventText013': { en: 'Waves hammer the sides through the night.', pl: 'Fale przez całą noc uderzają w burty.' },
+  'eventText014': { en: 'A lone figure appears in the fog.', pl: 'We mgle pojawia się samotna postać.' },
+  'eventText015': { en: 'Pale shapes gather around the drifting boat.', pl: 'Blade kształty gromadzą się wokół dryfującej łodzi.' },
+  'eventText016': { en: 'A distant melody drifts across the water.', pl: 'Po wodzie niesie się odległa melodia.' },
+  'eventText017': { en: 'A face takes shape across the moon.', pl: 'Na tarczy księżyca zarysowuje się twarz.' },
+  'eventText018': { en: 'A second cat-shaped shadow watches from beyond the lantern light.', pl: 'Drugi cień o kocim kształcie obserwuje łódź spoza blasku latarni.' },
+  'eventText019': { en: 'Carlitos sits alert while the night presses close.', pl: 'Carlitos czuwa, gdy noc zaciska się wokół łodzi.' },
+  'eventText020': { en: 'Useful supplies drift within reach of the boat.', pl: 'Przydatne zapasy dryfują w zasięgu łodzi.' },
+  'eventText021': { en: 'A small chest drifts within reach of the boat.', pl: 'Mała skrzynia dryfuje w zasięgu łodzi.' },
+  'eventText022': { en: 'Broken cargo and timber drift above a wreck resting below.', pl: 'Rozbity ładunek i deski dryfują nad wrakiem spoczywającym pod wodą.' },
+  'eventText023': { en: 'Something thumps against the back of the boat.', pl: 'Coś uderza o tył łodzi.' },
+  'eventText024': { en: 'A small patch of flowers drifts beside the boat.', pl: 'Niewielka kępa kwiatów dryfuje obok łodzi.' },
+  'eventText025': { en: 'The chest shudders and opens a row of wet teeth.', pl: 'Skrzynia drży i odsłania rząd mokrych zębów.' },
+  'eventText026': { en: 'A low island shape rises from the midnight water.', pl: 'Z nocnej wody wyłania się niski zarys wyspy.' },
+  'eventText027': { en: 'A trader waits beside the boat with an open case.', pl: 'Kupiec czeka przy łodzi z otwartą walizką.' },
+  'eventText028': { en: 'A handyman offers to swap whatever you have on hand.', pl: 'Majster proponuje wymianę za to, co masz pod ręką.' },
+  'eventText029': { en: 'A distant boat carries other people through the dark.', pl: 'W oddali łódź z innymi ludźmi płynie przez ciemność.' },
+  'eventText030': { en: 'A small plane crosses the dark horizon.', pl: 'Mały samolot przecina ciemny horyzont.' },
+
+  'eventText031': { en: 'Dangerous Waters', pl: 'Niebezpieczne wody' },
+  'eventText032': { en: 'Leak', pl: 'Przeciek' },
+  'eventText033': { en: 'School of Fish', pl: 'Ławica ryb' },
+  'eventText034': { en: 'Tentacle Attack', pl: 'Atak macki' },
+  'eventText035': { en: 'Death Stare', pl: 'Śmiertelne spojrzenie' },
+  'eventText036': { en: 'Swarm of Sharks', pl: 'Stado rekinów' },
+  'eventText037': { en: 'Tornado', pl: 'Trąba powietrzna' },
+  'eventText038': { en: 'Shower Night', pl: 'Deszczowa noc' },
+  'eventText039': { en: 'Windy Night', pl: 'Wietrzna noc' },
+  'eventText040': { en: 'Bad Sleep', pl: 'Zły sen' },
+  'eventText041': { en: 'Thunderstorm', pl: 'Burza z piorunami' },
+  'eventText042': { en: 'Restless Waves', pl: 'Niespokojne fale' },
+  'eventText043': { en: 'Man in the Fog', pl: 'Człowiek we mgle' },
+  'eventText044': { en: 'Ghosts', pl: 'Duchy' },
+  'eventText045': { en: 'Eerie Melody', pl: 'Upiorna melodia' },
+  'eventText046': { en: 'Face on the Moon', pl: 'Twarz na księżycu' },
+  'eventText047': { en: 'Shadow Figure', pl: 'Postać z cienia' },
+  'eventText048': { en: 'Guarded Sleep', pl: 'Sen pod strażą' },
+  'eventText049': { en: 'Drifting Supplies', pl: 'Dryfujące zapasy' },
+  'eventText050': { en: 'Drifting Chest', pl: 'Dryfująca skrzynia' },
+  'eventText051': { en: 'Wreckage', pl: 'Wrak' },
+  'eventText052': { en: 'Check the Back', pl: 'Sprawdź tył łodzi' },
+  'eventText053': { en: 'Flowers', pl: 'Kwiaty' },
+  'eventText054': { en: 'Chest Attack', pl: 'Atak skrzyni' },
+  'eventText055': { en: 'Midnight Tour', pl: 'Nocna wyprawa' },
+  'eventText056': { en: 'Night Trader', pl: 'Nocny kupiec' },
+  'eventText057': { en: 'Handyman', pl: 'Majster' },
+  'eventText058': { en: 'Other People', pl: 'Inni ludzie' },
+  'eventText059': { en: 'Plane', pl: 'Samolot' },
+
+  'eventText060': { en: 'Use Map', pl: 'Użyj mapy' },
+  'eventText061': { en: 'Use Anchor', pl: 'Użyj kotwicy' },
+  'eventText062': { en: 'Use Compass', pl: 'Użyj kompasu' },
+  'eventText063': { en: 'Sleep', pl: 'Śpij' },
+  'eventText064': { en: 'Use Duct Tape', pl: 'Użyj taśmy naprawczej' },
+  'eventText065': { en: 'Use Bucket', pl: 'Użyj wiadra' },
+  'eventText066': { en: 'Use Fishing Net', pl: 'Użyj sieci rybackiej' },
+  'eventText067': { en: 'Use Binoculars', pl: 'Użyj lornetki' },
+  'eventText068': { en: 'Use Knife', pl: 'Użyj noża' },
+  'eventText069': { en: 'Use Shotgun', pl: 'Użyj strzelby' },
+  'eventText070': { en: 'Use Flare Gun', pl: 'Użyj pistoletu sygnałowego' },
+  'eventText071': { en: 'Use Flashlight', pl: 'Użyj latarki' },
+  'eventText072': { en: 'Use Umbrella', pl: 'Użyj parasola' },
+  'eventText073': { en: 'Use Food', pl: 'Użyj jedzenia' },
+  'eventText074': { en: 'Use Bait', pl: 'Użyj przynęty' },
+  'eventText075': { en: 'Use Swim Ring', pl: 'Użyj koła ratunkowego' },
+  'eventText076': { en: 'Let Carlitos Watch', pl: 'Pozwól Carlitosowi czuwać' },
+  'eventText077': { en: 'Sleep Normally', pl: 'Śpij normalnie' },
+  'eventText078': { en: 'Retrieve Supplies', pl: 'Wyłów zapasy' },
+  'eventText079': { en: 'Retrieve It', pl: 'Wyłów ją' },
+  'eventText080': { en: 'Send Carlitos', pl: 'Wyślij Carlitosa' },
+  'eventText081': { en: 'Let It Drift', pl: 'Pozwól temu odpłynąć' },
+  'eventText082': { en: 'Search Debris', pl: 'Przeszukaj szczątki' },
+  'eventText083': { en: 'Search underwater', pl: 'Przeszukaj dno' },
+  'eventText084': { en: 'Leave', pl: 'Odejdź' },
+  'eventText085': { en: 'Yes', pl: 'Tak' },
+  'eventText086': { en: 'No', pl: 'Nie' },
+  'eventText087': { en: 'Let Them Drift', pl: 'Pozwól im odpłynąć' },
+  'eventText088': { en: 'Attack', pl: 'Atakuj' },
+  'eventText089': { en: 'Visit the Island', pl: 'Odwiedź wyspę' },
+  'eventText090': { en: 'Sail On', pl: 'Płyń dalej' },
+  'eventText091': { en: 'Offer Food', pl: 'Zaoferuj jedzenie' },
+  'eventText092': { en: 'Offer Bait', pl: 'Zaoferuj przynętę' },
+  'eventText093': { en: 'Offer Map', pl: 'Zaoferuj mapę' },
+  'eventText094': { en: 'Offer Umbrella', pl: 'Zaoferuj parasol' },
+  'eventText095': { en: 'Offer Swim Ring', pl: 'Zaoferuj koło ratunkowe' },
+  'eventText096': { en: 'Refuse', pl: 'Odmów' },
+  'eventText097': { en: 'Spyglass for Flashlight', pl: 'Lornetka za latarkę' },
+  'eventText098': { en: 'Flashlight for Spyglass', pl: 'Latarka za lornetkę' },
+  'eventText099': { en: 'Flare Gun for Shotgun', pl: 'Pistolet sygnałowy za strzelbę' },
+  'eventText100': { en: 'Shotgun for Flare Gun', pl: 'Strzelba za pistolet sygnałowy' },
+  'eventText101': { en: 'Medkit for Scuba Gear', pl: 'Apteczka za sprzęt do nurkowania' },
+  'eventText102': { en: 'Fishing Net for Bucket', pl: 'Sieć rybacka za wiadro' },
+  'eventText103': { en: 'Bucket for Fishing Net', pl: 'Wiadro za sieć rybacką' },
+  'eventText104': { en: 'Duct Tape for Energy Bar', pl: 'Taśma naprawcza za baton energetyczny' },
+  'eventText105': { en: 'Energy Bar for Duct Tape', pl: 'Baton energetyczny za taśmę naprawczą' },
+  'eventText106': { en: 'Swim Ring for Radio', pl: 'Koło ratunkowe za radio' },
+  'eventText107': { en: 'Anchor for Chest', pl: 'Kotwica za skrzynię' },
+  'eventText108': { en: 'Chest for Anchor', pl: 'Skrzynia za kotwicę' },
+  'eventText109': { en: 'Touch the Hand', pl: 'Dotknij dłoni' },
+  'eventText110': { en: 'Let It Pass', pl: 'Pozwól odpłynąć' },
+
+  'eventText111': { en: 'The map guides the boat through a clear channel.', pl: 'Mapa prowadzi łódź przez bezpieczny przesmyk.' },
+  'eventText112': { en: 'The rocks damage the boat.', pl: 'Skały uszkadzają łódź.' },
+  'eventText113': { en: 'The compass holds a safe bearing through the rocks.', pl: 'Kompas pozwala utrzymać bezpieczny kurs między skałami.' },
+  'eventText114': { en: 'The tape is used.', pl: 'Zużywasz taśmę.' },
+  'eventText115': { en: 'You keep pace with the rising water until dawn.', pl: 'Do świtu nadążasz z wylewaniem napływającej wody.' },
+  'eventText116': { en: 'The boat is damaged.', pl: 'Łódź zostaje uszkodzona.' },
+  'eventText117': { en: 'The map slows the leak.', pl: 'Mapa spowalnia przeciek.' },
+  'eventText118': { en: 'The map tears while slowing the leak.', pl: 'Mapa rozrywa się podczas tamowania przecieku.' },
+  'eventText119': { en: 'The leak damages the boat.', pl: 'Przeciek uszkadza łódź.' },
+  'eventText120': { en: 'The leak damages the boat and takes an item.', pl: 'Przeciek uszkadza łódź i porywa jeden przedmiot.' },
+  'eventText121': { en: 'You gain three food.', pl: 'Zdobywasz trzy porcje jedzenia.' },
+  'eventText122': { en: 'You gain two food.', pl: 'Zdobywasz dwie porcje jedzenia.' },
+  'eventText123': { en: 'You gain one food.', pl: 'Zdobywasz jedną porcję jedzenia.' },
+  'eventText124': { en: 'The school slips beyond the bucket.', pl: 'Ławica wymyka się poza zasięg wiadra.' },
+  'eventText125': { en: 'The school passes beyond reach.', pl: 'Ławica przepływa poza zasięgiem.' },
+  'eventText126': { en: 'The school moves on before dawn.', pl: 'Ławica odpływa przed świtem.' },
+  'eventText127': { en: 'You cut the tentacle. The supply stays aboard.', pl: 'Odcinasz mackę. Zapasy zostają na pokładzie.' },
+  'eventText128': { en: 'The shot drives the tentacle away. The supply stays aboard.', pl: 'Strzał odpędza mackę. Zapasy zostają na pokładzie.' },
+  'eventText129': { en: 'The flare drives the tentacle away. The supply stays aboard.', pl: 'Flara odpędza mackę. Zapasy zostają na pokładzie.' },
+  'eventText130': { en: 'The tentacle steals a supply and wounds you.', pl: 'Macka kradnie zapasy i cię rani.' },
+  'eventText131': { en: 'The creature sinks below the beam.', pl: 'Stworzenie znika pod snopem światła.' },
+  'eventText132': { en: 'The flashlight is lost.', pl: 'Tracisz latarkę.' },
+  'eventText133': { en: "The umbrella breaks the creature's gaze.", pl: 'Parasol zasłania spojrzenie stworzenia.' },
+  'eventText134': { en: 'The creature attacks.', pl: 'Stworzenie atakuje.' },
+  'eventText135': { en: 'You lose two food.', pl: 'Tracisz dwie porcje jedzenia.' },
+  'eventText136': { en: 'The shotgun is fired.', pl: 'Oddajesz strzał ze strzelby.' },
+  'eventText137': { en: 'The shape loses interest and sinks away.', pl: 'Kształt traci zainteresowanie i znika pod wodą.' },
+  'eventText138': { en: 'The net holds the swarm back.', pl: 'Sieć powstrzymuje stado.' },
+  'eventText139': { en: 'The net tears while holding the swarm back.', pl: 'Sieć rozrywa się, ale powstrzymuje stado.' },
+  'eventText140': { en: 'You drive the sharks away from the boat.', pl: 'Odpędzasz rekiny od łodzi.' },
+  'eventText141': { en: 'The knife breaks as a shark bites you.', pl: 'Nóż pęka, gdy rekin cię gryzie.' },
+  'eventText142': { en: 'The swarm attacks.', pl: 'Stado atakuje.' },
+  'eventText143': { en: 'You lose two bait.', pl: 'Tracisz dwie przynęty.' },
+  'eventText144': { en: 'The fins scatter before reaching the hull.', pl: 'Płetwy rozpraszają się przed dotarciem do kadłuba.' },
+  'eventText145': { en: 'The anchor holds the boat outside the current.', pl: 'Kotwica utrzymuje łódź poza nurtem.' },
+  'eventText146': { en: 'The ring pulls the boat outside the strongest current.', pl: 'Koło wyciąga łódź z najsilniejszego nurtu.' },
+  'eventText147': { en: 'The boat is badly damaged and one item is lost.', pl: 'Łódź zostaje ciężko uszkodzona. Tracisz jeden przedmiot.' },
+  'eventText148': { en: 'The bucket keeps the rain under control.', pl: 'Wiadro pozwala opanować napływ deszczu.' },
+  'eventText149': { en: 'The umbrella shelters you.', pl: 'Parasol chroni cię przed deszczem.' },
+  'eventText150': { en: 'The map covers the exposed supplies.', pl: 'Mapa osłania wystawione na deszcz zapasy.' },
+  'eventText151': { en: 'The rain eases before dawn.', pl: 'Deszcz słabnie przed świtem.' },
+  'eventText152': { en: 'You wake with two energy.', pl: 'Budzisz się z dwoma punktami energii.' },
+  'eventText153': { en: 'The net secures the loose supplies.', pl: 'Sieć zabezpiecza luźne zapasy.' },
+  'eventText154': { en: 'The net tears while securing the loose supplies.', pl: 'Sieć rozrywa się podczas zabezpieczania zapasów.' },
+  'eventText155': { en: 'The map is lost, but you find food.', pl: 'Tracisz mapę, ale znajdujesz jedzenie.' },
+  'eventText156': { en: 'The umbrella shields the loose supplies.', pl: 'Parasol osłania luźne zapasy.' },
+  'eventText157': { en: 'The umbrella is lost.', pl: 'Tracisz parasol.' },
+  'eventText158': { en: 'The wind batters the boat.', pl: 'Wiatr smaga łódź.' },
+  'eventText159': { en: 'The hollow bucket knocks through the night.', pl: 'Puste wiadro stuka przez całą noc.' },
+  'eventText160': { en: 'The beam finds only empty water.', pl: 'Snop światła pada tylko na pustą wodę.' },
+  'eventText161': { en: 'The ring drifts against the gunwale.', pl: 'Koło obija się o burtę.' },
+  'eventText162': { en: 'The umbrella shelters a restless sleep.', pl: 'Parasol osłania twój niespokojny sen.' },
+  'eventText163': { en: 'A hard gust folds the umbrella during the night.', pl: 'Silny podmuch łamie parasol w środku nocy.' },
+  'eventText164': { en: 'The anchor holds through the storm.', pl: 'Kotwica wytrzymuje napór burzy.' },
+  'eventText165': { en: 'A random item is lost.', pl: 'Tracisz losowy przedmiot.' },
+  'eventText166': { en: 'The umbrella sheds the worst rain.', pl: 'Parasol chroni przed najgorszą ulewą.' },
+  'eventText167': { en: 'The storm damages the boat and takes an item.', pl: 'Burza uszkadza łódź i porywa jeden przedmiot.' },
+  'eventText168': { en: 'The storm damages the boat.', pl: 'Burza uszkadza łódź.' },
+  'eventText169': { en: 'The anchor steadies the boat through the waves.', pl: 'Kotwica stabilizuje łódź pośród fal.' },
+  'eventText170': { en: 'The swim ring steadies the boat.', pl: 'Koło ratunkowe stabilizuje łódź.' },
+  'eventText171': { en: 'The waves damage the boat.', pl: 'Fale uszkadzają łódź.' },
+  'eventText172': { en: 'The waves damage the boat and take an item.', pl: 'Fale uszkadzają łódź i porywają jeden przedmiot.' },
+  'eventText173': { en: 'The compass keeps the boat on a steady bearing.', pl: 'Kompas pomaga utrzymać stały kurs.' },
+  'eventText174': { en: 'Danger increases.', pl: 'Zagrożenie rośnie.' },
+  'eventText175': { en: 'The beam drives the figure back into the fog.', pl: 'Snop światła odpędza postać z powrotem we mgłę.' },
+  'eventText176': { en: 'The figure attacks.', pl: 'Postać atakuje.' },
+  'eventText177': { en: 'You are injured.', pl: 'Zostajesz ranny.' },
+  'eventText178': { en: 'The flare drives the pale shapes into the dark.', pl: 'Flara odpędza blade kształty w ciemność.' },
+  'eventText179': { en: 'The beam keeps the pale shapes beyond the gunwale.', pl: 'Snop światła trzyma blade kształty z dala od burty.' },
+  'eventText180': { en: 'You wake with one energy.', pl: 'Budzisz się z jednym punktem energii.' },
+  'eventText181': { en: 'The siren attacks.', pl: 'Syrena atakuje.' },
+  'eventText182': { en: 'The umbrella muffles the melody until it fades.', pl: 'Parasol tłumi melodię, aż ta cichnie.' },
+  'eventText183': { en: 'The tape blocks the melody until it fades.', pl: 'Taśma odcina melodię, aż ta cichnie.' },
+  'eventText184': { en: 'You wake exhausted.', pl: 'Budzisz się wyczerpany.' },
+  'eventText185': { en: 'The false shape remains beyond the light.', pl: 'Fałszywy kształt pozostaje poza zasięgiem światła.' },
+  'eventText186': { en: 'The false shape claws you before retreating.', pl: 'Fałszywy kształt rani cię pazurami i wycofuje się.' },
+  'eventText187': { en: 'The flare drives the false shape away.', pl: 'Flara odpędza fałszywy kształt.' },
+  'eventText188': { en: 'The shadow leaves before dawn.', pl: 'Cień odchodzi przed świtem.' },
+  'eventText189': { en: 'Carlitos keeps the night peaceful.', pl: 'Carlitos pilnuje, aby noc minęła spokojnie.' },
+  'eventText190': { en: 'Something slips past his watch.', pl: 'Coś wymyka się jego czujności.' },
+  'eventText191': { en: 'The normal night continues.', pl: 'Zwykła noc trwa dalej.' },
+  'eventText192': { en: 'You recover one food from the barrel.', pl: 'Wyławiasz z beczki jedną porcję jedzenia.' },
+  'eventText193': { en: 'You recover one bait from the barrel.', pl: 'Wyławiasz z beczki jedną przynętę.' },
+  'eventText195': { en: 'You recover two food from the cooler.', pl: 'Wyławiasz z lodówki dwie porcje jedzenia.' },
+  'eventText196': { en: 'You recover two bait from the cooler.', pl: 'Wyławiasz z lodówki dwie przynęty.' },
+  'eventText198': { en: 'You recover three food from the shipping container.', pl: 'Odzyskujesz z kontenera trzy porcje jedzenia.' },
+  'eventText199': { en: 'You recover three bait from the shipping container.', pl: 'Odzyskujesz z kontenera trzy przynęty.' },
+  'eventText201': { en: 'You recover an energy bar from the shipping container.', pl: 'Odzyskujesz z kontenera baton energetyczny.' },
+  'eventText202': { en: 'Carlitos recovers one food from the barrel.', pl: 'Carlitos wyławia z beczki jedną porcję jedzenia.' },
+  'eventText203': { en: 'Carlitos recovers one bait from the barrel.', pl: 'Carlitos wyławia z beczki jedną przynętę.' },
+  'eventText205': { en: 'Carlitos recovers two food from the cooler.', pl: 'Carlitos wyławia z lodówki dwie porcje jedzenia.' },
+  'eventText206': { en: 'Carlitos recovers two bait from the cooler.', pl: 'Carlitos wyławia z lodówki dwie przynęty.' },
+  'eventText208': { en: 'Carlitos recovers three food from the shipping container.', pl: 'Carlitos odzyskuje z kontenera trzy porcje jedzenia.' },
+  'eventText209': { en: 'Carlitos recovers three bait from the shipping container.', pl: 'Carlitos odzyskuje z kontenera trzy przynęty.' },
+  'eventText211': { en: 'Carlitos recovers an energy bar from the shipping container.', pl: 'Carlitos odzyskuje z kontenera baton energetyczny.' },
+  'eventText212': { en: 'The supplies drift out of reach.', pl: 'Zapasy odpływają poza zasięg.' },
+  'eventText213': { en: 'You recover the closed chest.', pl: 'Wyławiasz zamkniętą skrzynię.' },
+  'eventText214': { en: 'Carlitos recovers the closed chest.', pl: 'Carlitos wyławia zamkniętą skrzynię.' },
+  'eventText215': { en: 'The chest drifts out of reach.', pl: 'Skrzynia odpływa poza zasięg.' },
+  'eventText216': { en: 'You recover duct tape.', pl: 'Odzyskujesz taśmę naprawczą.' },
+  'eventText217': { en: 'You recover one food.', pl: 'Odzyskujesz jedną porcję jedzenia.' },
+  'eventText218': { en: 'You recover one bait.', pl: 'Odzyskujesz jedną przynętę.' },
+  'eventText219': { en: 'Sharp debris cuts you.', pl: 'Ostre szczątki cię ranią.' },
+  'eventText221': { en: 'Carlitos recovers one food.', pl: 'Carlitos odzyskuje jedną porcję jedzenia.' },
+  'eventText222': { en: 'Carlitos recovers one bait.', pl: 'Carlitos odzyskuje jedną przynętę.' },
+  'eventText223': { en: 'Carlitos returns empty.', pl: 'Carlitos wraca z pustymi łapami.' },
+  'eventText224': { en: 'You recover a medkit.', pl: 'Odzyskujesz apteczkę.' },
+  'eventText225': { en: 'You recover a flare gun.', pl: 'Odzyskujesz pistolet sygnałowy.' },
+  'eventText226': { en: 'You recover an energy bar.', pl: 'Odzyskujesz baton energetyczny.' },
+  'eventText227': { en: 'The wreck collapses around you.', pl: 'Wrak zawala się wokół ciebie.' },
+  'eventText228': { en: 'The wreck collapses and damages your gear.', pl: 'Wrak zawala się i uszkadza twój sprzęt.' },
+  'eventText229': { en: 'A creature attacks inside the wreck.', pl: 'Wewnątrz wraku atakuje cię stworzenie.' },
+  'eventText230': { en: 'A presence follows you through the wreck.', pl: 'Jakaś obecność podąża za tobą przez wrak.' },
+  'eventText231': { en: 'You leave the wreckage behind.', pl: 'Zostawiasz wrak za sobą.' },
+  'eventText232': { en: 'You cut up the fish before it flops overboard.', pl: 'Patroszysz rybę, zanim wypada za burtę.' },
+  'eventText233': { en: 'The anglerfish bites the knife instead. The blade snaps.', pl: 'Żabnica zaciska zęby na nożu. Ostrze pęka.' },
+  'eventText234': { en: 'A fish has landed aboard.', pl: 'Ryba wpadła na pokład.' },
+  'eventText235': { en: 'An anglerfish strikes from the stern.', pl: 'Żabnica atakuje od strony rufy.' },
+  'eventText236': { en: 'You leave the sound alone.', pl: 'Ignorujesz ten dźwięk.' },
+  'eventText237': { en: 'You lift the flowers aboard.', pl: 'Wyławiasz kwiaty na pokład.' },
+  'eventText238': { en: 'You gather the flowers in the bucket.', pl: 'Zbierasz kwiaty do wiadra.' },
+  'eventText239': { en: 'The flowers drift into the dark.', pl: 'Kwiaty odpływają w ciemność.' },
+  'eventText240': { en: 'The knife reduced the bite. The chest falls overboard.', pl: 'Nóż osłabia ugryzienie. Skrzynia wypada za burtę.' },
+  'eventText241': { en: 'The chest tears into you before it falls overboard.', pl: 'Skrzynia wbija w ciebie zęby, zanim wypada za burtę.' },
+  'eventText242': { en: 'You find a chest.', pl: 'Znajdujesz skrzynię.' },
+  'eventText243': { en: 'Something jumps from the palms.', pl: 'Coś wyskakuje spomiędzy palm.' },
+  'eventText244': { en: 'The island disappears into the dark.', pl: 'Wyspa znika w ciemności.' },
+  'eventText245': { en: 'The trader gives you duct tape.', pl: 'Kupiec daje ci taśmę naprawczą.' },
+  'eventText246': { en: 'The trader gives you an energy bar.', pl: 'Kupiec daje ci baton energetyczny.' },
+  'eventText247': { en: 'The trader gives you a compass.', pl: 'Kupiec daje ci kompas.' },
+  'eventText248': { en: 'The trader gives you a medkit.', pl: 'Kupiec daje ci apteczkę.' },
+  'eventText249': { en: 'The trader gives you a radio.', pl: 'Kupiec daje ci radio.' },
+  'eventText250': { en: 'The trader rows on into the night.', pl: 'Kupiec odpływa w noc.' },
+  'eventText251': { en: 'The handyman gives you a flashlight.', pl: 'Majster daje ci latarkę.' },
+  'eventText252': { en: 'The handyman gives you binoculars.', pl: 'Majster daje ci lornetkę.' },
+  'eventText253': { en: 'The handyman gives you a shotgun.', pl: 'Majster daje ci strzelbę.' },
+  'eventText254': { en: 'The handyman gives you a flare gun.', pl: 'Majster daje ci pistolet sygnałowy.' },
+  'eventText255': { en: 'The handyman gives you scuba gear.', pl: 'Majster daje ci sprzęt do nurkowania.' },
+  'eventText256': { en: 'The handyman gives you a bucket.', pl: 'Majster daje ci wiadro.' },
+  'eventText257': { en: 'The handyman gives you a fishing net.', pl: 'Majster daje ci sieć rybacką.' },
+  'eventText258': { en: 'The handyman gives you an energy bar.', pl: 'Majster daje ci baton energetyczny.' },
+  'eventText259': { en: 'The handyman gives you duct tape.', pl: 'Majster daje ci taśmę naprawczą.' },
+  'eventText260': { en: 'The handyman gives you a radio.', pl: 'Majster daje ci radio.' },
+  'eventText261': { en: 'The handyman gives you a chest.', pl: 'Majster daje ci skrzynię.' },
+  'eventText262': { en: 'The handyman gives you an anchor.', pl: 'Majster daje ci kotwicę.' },
+  'eventText263': { en: 'The hand closes around you.', pl: 'Dłoń zaciska się wokół ciebie.' },
+  'eventText264': { en: 'The handyman shrugs and drifts away.', pl: 'Majster wzrusza ramionami i odpływa.' },
+  'eventText265': { en: 'The distant crew sees your flare.', pl: 'Odległa załoga dostrzega twoją flarę.' },
+  'eventText266': { en: 'The distant crew answers your light.', pl: 'Odległa załoga odpowiada na twój sygnał świetlny.' },
+  'eventText267': { en: 'You let the other boat pass.', pl: 'Pozwalasz drugiej łodzi odpłynąć.' },
+  'eventText268': { en: 'The plane banks after seeing your flare.', pl: 'Samolot skręca po dostrzeżeniu twojej flary.' },
+  'eventText269': { en: 'The plane answers your light with a wing dip.', pl: 'Samolot odpowiada na światło przechyleniem skrzydeł.' },
+  'eventText270': { en: 'You let the plane pass into the dark.', pl: 'Pozwalasz samolotowi zniknąć w ciemności.' },
+  'eventText271': { en: 'Quiet Waters', pl: 'Spokojne wody' },
+  'eventText272': { en: 'The sea stays calm around the boat.', pl: 'Morze wokół łodzi pozostaje spokojne.' },
+  'eventText273': { en: 'The day passes without incident.', pl: 'Dzień mija bez zdarzeń.' },
+  'eventText274': { en: 'Continue', pl: 'Kontynuuj' },
+  'eventText275': { en: 'The day passes quietly.', pl: 'Dzień mija spokojnie.' },
+  'eventText276': { en: 'Quiet Night', pl: 'Spokojna noc' },
+  'eventText277': { en: 'The dark water drifts past without disturbance.', pl: 'Ciemna woda przepływa obok bez zakłóceń.' },
+  'eventText278': { en: 'The night passes without incident.', pl: 'Noc mija bez zdarzeń.' },
+  'eventText279': { en: 'The night passes quietly.', pl: 'Noc mija spokojnie.' },
+  eventTestItemAnimationLab: { en: 'Item Animation Lab', pl: 'Laboratorium animacji przedmiotów' },
+  eventTestCheckBackFish: { en: 'Check the Back: Fish', pl: 'Sprawdź tył łodzi: ryba' },
+  eventTestCheckBackBad: { en: 'Check the Back: Anglerfish', pl: 'Sprawdź tył łodzi: żabnica' },
+  eventTestMidnightChest: { en: 'Midnight Tour: Chest', pl: 'Nocna wyprawa: skrzynia' },
+  eventTestMidnightMonster: { en: 'Midnight Tour: Monster', pl: 'Nocna wyprawa: potwór' },
+  eventTestDorothy: { en: 'Dorothy', pl: 'Dorothy' },
+  eventTestRescue: { en: 'Rescue', pl: 'Ratunek' },
+  eventTestDeath: { en: 'Death', pl: 'Śmierć' },
+  eventTestSinking: { en: 'Sinking', pl: 'Zatonięcie' },
+} as const;
+
+export type EventTextId = keyof typeof EVENT_TEXT;
+const translate = defineMessages(EVENT_TEXT);
+const registeredTextIds = new Map<string, EventTextId>();
+
+/** Resolve one stable event text path in the active language. */
+export function eventMessage(messageId: string, textId: EventTextId): string {
+  if (!(textId in EVENT_TEXT)) throw new Error(`Missing event translation: ${messageId}`);
+  const registered = registeredTextIds.get(messageId);
+  if (registered !== undefined && registered !== textId) {
+    throw new Error(`Event translation ID changed text: ${messageId}`);
+  }
+  registeredTextIds.set(messageId, textId);
+  return translate(textId);
+}
+
+export function eventTranslationCount(): number {
+  return Object.keys(EVENT_TEXT).length;
+}
+
+function localizedProperty<T extends object, K extends keyof T>(
+  owner: T,
+  property: K,
+  messageId: string,
+): void {
+  const textId = owner[property];
+  if (typeof textId !== 'string') throw new Error(`Invalid event text: ${messageId}`);
+  Object.defineProperty(owner, property, {
+    enumerable: true,
+    configurable: false,
+    get: () => eventMessage(messageId, textId as EventTextId),
+  });
+}
+
+/** Add stable result IDs and live text getters before a definition is frozen. */
+export function localizeEventDefinitionText(event: SurvivalEventDefinition): void {
+  localizedProperty(event, 'title', `${event.id}.title`);
+  localizedProperty(event, 'revealText', `${event.id}.reveal`);
+  localizedProperty(event, 'prompt', `${event.id}.prompt`);
+  for (const choice of event.choices) {
+    localizedProperty(choice, 'label', `${event.id}.${choice.id}.label`);
+    choice.outcomes.forEach((outcome, index) => {
+      const resultId = outcome.resultId ?? `${event.id}.${choice.id}.${index}`;
+      if (outcome.resultId === undefined) {
+        Object.defineProperty(outcome, 'resultId', {
+          enumerable: true,
+          configurable: false,
+          value: resultId,
+        });
+      }
+      localizedProperty(outcome, 'message', `${event.id}.${choice.id}.${resultId}`);
+    });
+  }
+}
+
+/** Resolve an event result saved with stable catalog IDs. */
+export function getEventResultMessage(reference: EventResultPresentation): string {
+  const event = eventDefinitionsById.get(reference.eventId);
+  const choice = event?.choices.find(({ id }) => id === reference.choiceId);
+  const outcome = choice?.outcomes.find(({ resultId }) => resultId === reference.resultId);
+  if (outcome === undefined) {
+    throw new Error(
+      `Unknown event result: ${reference.eventId}/${reference.choiceId}/${reference.resultId}`,
+    );
+  }
+  return outcome.message;
+}
+
+const eventDefinitionsById = new Map<string, SurvivalEventDefinition>();
+
+export function registerEventDefinitionText(event: SurvivalEventDefinition): void {
+  eventDefinitionsById.set(event.id, event);
+}

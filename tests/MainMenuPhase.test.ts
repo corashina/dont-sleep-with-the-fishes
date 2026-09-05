@@ -14,6 +14,8 @@ function createRig(
     onStart: () => undefined,
     onStartFocusChange: (_focused: boolean) => undefined,
     onGuideFocusChange: (_focused: boolean) => undefined,
+    onOverlayChange: () => undefined,
+    isOverlayOpen: false,
     setTransitioning: vi.fn(),
     setFadeProgress: vi.fn(),
     clearPointerLockError: vi.fn(),
@@ -70,6 +72,47 @@ function createRig(
 }
 
 describe('MainMenuPhase', () => {
+  it('keeps the animated background and ambience active while the menu overlay blocks start input', () => {
+    const { phase, ui, animator, audioScope, canvas, world, requestPointerLock, sceneRenderer } = createRig();
+    try {
+      phase.start();
+      ui.isOverlayOpen = true;
+      ui.onOverlayChange();
+      world.getMenuSignActionAt.mockReturnValue('start');
+      canvas.dispatchEvent(new MouseEvent('click', { button: 0 }));
+      ui.onStart();
+      phase.update(1, .25);
+      phase.update(2, .25);
+      phase.render();
+      expect(requestPointerLock).not.toHaveBeenCalled();
+      expect(world.getMenuSignActionAt).not.toHaveBeenCalled();
+      expect(animator.update).toHaveBeenLastCalledWith(.5, .25);
+      expect(sceneRenderer.render).toHaveBeenCalled();
+      expect(audioScope.startLoop).toHaveBeenCalledExactlyOnceWith('menuAmbient');
+      expect(audioScope.setLoopGain).not.toHaveBeenCalled();
+      ui.isOverlayOpen = false;
+      ui.onStart();
+      expect(requestPointerLock).toHaveBeenCalledOnce();
+    } finally { phase.dispose(); }
+  });
+
+  it('cancels a pending start when a menu overlay opens', async () => {
+    let resolvePointerLock!: () => void;
+    const request = vi.fn(() => new Promise<void>((resolve) => { resolvePointerLock = resolve; }));
+    const { phase, ui, onComplete, audioScope } = createRig(request);
+    try {
+      phase.start();
+      ui.onStart();
+      ui.isOverlayOpen = true;
+      resolvePointerLock();
+      await Promise.resolve();
+      phase.update(1, 1);
+      expect(ui.setTransitioning).not.toHaveBeenCalledWith(true);
+      expect(audioScope.setLoopGain).not.toHaveBeenCalled();
+      expect(onComplete).not.toHaveBeenCalled();
+    } finally { phase.dispose(); }
+  });
+
   it('owns and fades the menu ambience', async () => {
     const { audioScope, phase, ui } = createRig();
 

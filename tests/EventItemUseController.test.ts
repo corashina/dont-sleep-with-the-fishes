@@ -100,6 +100,36 @@ function setup(
 }
 
 describe('EventItemUseController', () => {
+  it('preserves player camera changes throughout the net attack and cleanup', () => {
+    const { actor, adapter, camera, controller } = setup();
+    const target = new Object3D();
+    target.position.set(5, 0.1, -1);
+    controller.play({
+      ...request(actor.instanceId, target),
+      eventId: 'swarm-of-sharks',
+      choiceId: 'fishingNet',
+      itemId: 'fishingNet',
+      context: 'net-slap',
+    });
+    for (let frame = 0; frame < 60; frame += 1) {
+      camera.rotation.set(0.1 + frame * 0.002, 0.5 + frame * 0.003, 0.08);
+      camera.position.set(1, 2, 3);
+      camera.fov = 55;
+      const orientation = camera.quaternion.clone();
+      controller.update(eventItemUseDuration('net-slap') / 60);
+      expect(camera.quaternion.angleTo(orientation)).toBeLessThan(1e-7);
+      expect(camera.position.toArray()).toEqual([1, 2, 3]);
+      expect(camera.fov).toBe(55);
+    }
+    const orientation = camera.quaternion.clone();
+    controller.recover();
+    controller.update(10);
+    controller.clear('day');
+    expect(camera.quaternion.angleTo(orientation)).toBeLessThan(1e-7);
+    expect(camera.position.toArray()).toEqual([1, 2, 3]);
+    expect(camera.fov).toBe(55);
+    adapter.dispose();
+  });
 
   it.each([
     ['dangerous-waters', 'map', 'map', 'map-read'],
@@ -274,19 +304,23 @@ describe('EventItemUseController', () => {
     adapter.dispose();
   });
 
-  it('fires the shotgun action cue once at the keyed shot frame', async () => {
+  it.each([
+    ['shotgun', 'shotgun-fire', 0.46],
+    ['fishingNet', 'net-slap', 0.68],
+    ['knife', 'knife-stab', 0.68],
+  ] as const)('fires the %s action cue once at contact', async (itemId, context, contact) => {
     const { actor, adapter, controller } = setup();
     const onAction = vi.fn();
     const use = controller.play({
       ...request(actor.instanceId),
-      itemId: 'shotgun',
-      context: 'shotgun-fire',
+      itemId,
+      context,
       onAction,
     });
-    const duration = eventItemUseDuration('shotgun-fire');
+    const duration = eventItemUseDuration(context);
 
     expect(onAction).not.toHaveBeenCalled();
-    controller.update(duration * 0.45);
+    controller.update(duration * (contact - 0.01));
     expect(onAction).not.toHaveBeenCalled();
     controller.update(duration * 0.02);
     expect(onAction).toHaveBeenCalledOnce();

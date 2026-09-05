@@ -539,29 +539,23 @@ Selector: Guarded Sleep.
 
 Selector: Drifting Supplies.
 
-- [ ] **Retrieve Supplies** (`retrieve`) — needs 3 energy for barrels and lifeboats, or 2 for containers.
-  - [ ] `drifting-supplies-barrel-food`: You recover one food from the barrel. Effects: subtract energy 3; add food 1.
-  - [ ] `drifting-supplies-barrel-bait`: You recover one bait from the barrel. Effects: subtract energy 3; add bait 1.
-  - [ ] `drifting-supplies-barrel-repair`: You recover one roll of duct tape from the barrel. Effects: subtract energy 3; add repairMaterial 1.
-  - [ ] `drifting-supplies-lifeboat-food`: You recover two food from the cooler. Effects: subtract energy 3; add food 2.
-  - [ ] `drifting-supplies-lifeboat-bait`: You recover two bait from the cooler. Effects: subtract energy 3; add bait 2.
-  - [ ] `drifting-supplies-lifeboat-repair`: You recover two rolls of duct tape from the cooler. Effects: subtract energy 3; add repairMaterial 2.
-  - [ ] `drifting-supplies-container-food`: You recover three food from the shipping container. Effects: subtract energy 2; add food 3.
-  - [ ] `drifting-supplies-container-bait`: You recover three bait from the shipping container. Effects: subtract energy 2; add bait 3.
-  - [ ] `drifting-supplies-container-repair`: You recover three rolls of duct tape from the shipping container. Effects: subtract energy 2; add repairMaterial 3.
-  - [ ] `drifting-supplies-container-energy-bar`: You recover an energy bar from the shipping container. Effects: subtract energy 2; gain energyBar ×1.
+- [ ] **Retrieve Supplies** (`retrieve`) — needs 1 energy.
+  - [ ] `drifting-supplies-barrel-food` (60%): You recover one food from the barrel. Effects: subtract energy 1; add food 1.
+  - [ ] `drifting-supplies-barrel-bait` (40%): You recover one bait from the barrel. Effects: subtract energy 1; add bait 1.
+  - [ ] `drifting-supplies-lifeboat-food` (60%): You recover two food from the cooler. Effects: subtract energy 1; add food 2.
+  - [ ] `drifting-supplies-lifeboat-bait` (40%): You recover two bait from the cooler. Effects: subtract energy 1; add bait 2.
+  - [ ] `drifting-supplies-container-food` (55%): You recover three food from the shipping container. Effects: subtract energy 1; add food 3.
+  - [ ] `drifting-supplies-container-bait` (35%): You recover three bait from the shipping container. Effects: subtract energy 1; add bait 3.
+  - [ ] `drifting-supplies-container-energy-bar` (10%): You recover an energy bar from the shipping container. Effects: subtract energy 1; gain energyBar ×1.
 
-- [ ] **Send Carlitos** (`delegate-carlitos`) — needs available Carlitos with 3 energy, or 2 for containers.
-  - [ ] `drifting-supplies-barrel-food`: Carlitos recovers one food from the barrel. Effects: add food 1.
-  - [ ] `drifting-supplies-barrel-bait`: Carlitos recovers one bait from the barrel. Effects: add bait 1.
-  - [ ] `drifting-supplies-barrel-repair`: Carlitos recovers one roll of duct tape from the barrel. Effects: add repairMaterial 1.
-  - [ ] `drifting-supplies-lifeboat-food`: Carlitos recovers two food from the cooler. Effects: add food 2.
-  - [ ] `drifting-supplies-lifeboat-bait`: Carlitos recovers two bait from the cooler. Effects: add bait 2.
-  - [ ] `drifting-supplies-lifeboat-repair`: Carlitos recovers two rolls of duct tape from the cooler. Effects: add repairMaterial 2.
-  - [ ] `drifting-supplies-container-food`: Carlitos recovers three food from the shipping container. Effects: add food 3.
-  - [ ] `drifting-supplies-container-bait`: Carlitos recovers three bait from the shipping container. Effects: add bait 3.
-  - [ ] `drifting-supplies-container-repair`: Carlitos recovers three rolls of duct tape from the shipping container. Effects: add repairMaterial 3.
-  - [ ] `drifting-supplies-container-energy-bar`: Carlitos recovers an energy bar from the shipping container. Effects: gain energyBar ×1.
+- [ ] **Send Carlitos** (`delegate-carlitos`) — needs available Carlitos with 2 energy.
+  - [ ] `drifting-supplies-barrel-food` (60%): Carlitos recovers one food from the barrel. Effects: add food 1.
+  - [ ] `drifting-supplies-barrel-bait` (40%): Carlitos recovers one bait from the barrel. Effects: add bait 1.
+  - [ ] `drifting-supplies-lifeboat-food` (60%): Carlitos recovers two food from the cooler. Effects: add food 2.
+  - [ ] `drifting-supplies-lifeboat-bait` (40%): Carlitos recovers two bait from the cooler. Effects: add bait 2.
+  - [ ] `drifting-supplies-container-food` (55%): Carlitos recovers three food from the shipping container. Effects: add food 3.
+  - [ ] `drifting-supplies-container-bait` (35%): Carlitos recovers three bait from the shipping container. Effects: add bait 3.
+  - [ ] `drifting-supplies-container-energy-bar` (10%): Carlitos recovers an energy bar from the shipping container. Effects: gain energyBar ×1.
 
 - [ ] **Let It Drift** (`sleep`).
   - [ ] `drifting-supplies.drift`: The supplies drift out of reach.
@@ -584,16 +578,14 @@ Selector: Drifting Chest.
 Selector: Wreckage.
 
 - [ ] **Search Debris** (`search`) — needs 1 energy.
-  - [ ] `wreckage-search-repair`: You recover duct tape. Effects: subtract energy 1; add repairMaterial 2.
-  - [ ] `wreckage-search-food`: You recover one food. Effects: subtract energy 1; add food 1.
-  - [ ] `wreckage-search-bait`: You recover one bait. Effects: subtract energy 1; add bait 1.
-  - [ ] `wreckage-search-injury`: Sharp debris cuts you. Effects: subtract energy 1; subtract health 15–25.
+  - [ ] `wreckage-search-food` (43%): You recover one food. Effects: subtract energy 1; add food 1.
+  - [ ] `wreckage-search-bait` (37%): You recover one bait. Effects: subtract energy 1; add bait 1.
+  - [ ] `wreckage-search-injury` (20%): Sharp debris cuts you. Effects: subtract energy 1; subtract health 15–25.
 
 - [ ] **Send Carlitos** (`delegate-carlitos`) — needs available Carlitos with 2 energy.
-  - [ ] `wreckage-carlitos-repair`: Carlitos recovers duct tape. Effects: add repairMaterial 2.
-  - [ ] `wreckage-carlitos-food`: Carlitos recovers one food. Effects: add food 1.
-  - [ ] `wreckage-carlitos-bait`: Carlitos recovers one bait. Effects: add bait 1.
-  - [ ] `wreckage-carlitos-empty`: Carlitos returns empty.
+  - [ ] `wreckage-carlitos-food` (43%): Carlitos recovers one food. Effects: add food 1.
+  - [ ] `wreckage-carlitos-bait` (37%): Carlitos recovers one bait. Effects: add bait 1.
+  - [ ] `wreckage-carlitos-empty` (20%): Carlitos returns empty.
 
 - [ ] **Search underwater** (`dive`) — needs usable SCUBA GEAR, 3 energy.
   - [ ] `wreckage-dive-medkit`: You recover a medkit. Effects: subtract energy 3; gain medicalKit ×1.

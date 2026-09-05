@@ -32,6 +32,8 @@ const freesoundSources = [
   ['woodStep', 'SoundsAreGr8', '340983'],
   ['jump', 'florianreichelt', '683101'],
   ['itemHandling', 'petenice', '9509'],
+  ['netImpact', 'qubodup', '222507'],
+  ['knifeImpact', 'jawbutch', '344404'],
   ['boatCreak', 'craigsmith', '675783'],
   ['lightWaveImpact', 'kyles', '637645'],
   ['hardWaveImpact', 'Sheyvan', '520511'],
