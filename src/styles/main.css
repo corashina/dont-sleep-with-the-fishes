@@ -1908,9 +1908,15 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   text-align: center;
 }
 .how-to-play-keyword {
-  color: #003c46;
   font-weight: 700;
+  -webkit-text-stroke: .025em currentColor;
 }
+.how-to-play-keyword--health { color: #801b20; }
+.how-to-play-keyword--food { color: #234d26; }
+.how-to-play-keyword--energy { color: #604200; }
+.how-to-play-keyword--hull { color: #603b24; }
+.how-to-play-keyword--toolbox { color: #14476b; }
+.how-to-play-keyword--ductTape { color: #593165; }
 .how-to-play-page__navigation {
   display: grid;
   grid-template-columns: 58px minmax(150px, auto) 58px;
