@@ -1,3 +1,5 @@
+import { onLanguageChange } from '../i18n/language';
+
 export interface QualityPreference<T extends string> {
   get(): T;
   set(value: T): void;
@@ -11,7 +13,6 @@ export interface QualityChoice<T extends string> {
 export interface QualityControlOptions<T extends string> {
   readonly kind: string;
   readonly label: string;
-  readonly note: string;
   readonly choices: readonly QualityChoice<T>[];
 }
 
@@ -20,6 +21,7 @@ export class QualityControl<T extends string> {
   private readonly buttons: readonly HTMLButtonElement[];
   private readonly choices: readonly QualityChoice<T>[];
   private disposed = false;
+  private readonly unsubscribeLanguage: () => void;
 
   constructor(
     private readonly preference: QualityPreference<T>,
@@ -35,18 +37,22 @@ export class QualityControl<T extends string> {
           <button type="button" data-quality="${value}">${label}</button>
         `).join('')}
       </div>
-      <p class="ui-role-narrative">${options.note}</p>
     `;
     this.buttons = [
       ...this.element.querySelectorAll<HTMLButtonElement>('[data-quality]'),
     ];
     this.element.addEventListener('click', this.handleClick);
     this.sync();
+    this.unsubscribeLanguage = onLanguageChange(() => {
+      this.element.querySelector('legend')!.textContent = options.label;
+      this.buttons.forEach((button, index) => { button.textContent = options.choices[index]!.label; });
+    });
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.unsubscribeLanguage();
     this.element.removeEventListener('click', this.handleClick);
     this.element.remove();
   }
@@ -62,7 +68,7 @@ export class QualityControl<T extends string> {
     this.sync();
   };
 
-  private sync(): void {
+  sync(): void {
     const selected = this.preference.get();
     this.buttons.forEach((button) => {
       const active = button.dataset.quality === selected;

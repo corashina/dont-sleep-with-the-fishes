@@ -1,8 +1,8 @@
+import { presentationUiText, type PresentationUiKey } from '../i18n/presentationUiMessages';
 import type { ItemId, ItemInstanceId } from '../game/ItemState';
 import type { ChestSnapshot, EventResponseId } from './survivalTypes';
 
 export const ITEM_ANIMATION_LAB_ID = 'item-animation-lab';
-export const ITEM_ANIMATION_LAB_TITLE = 'Item Animation Lab';
 export const ITEM_ANIMATION_LAB_INITIAL_RESOURCES = Object.freeze({
   food: 3,
   bait: 3,
@@ -27,10 +27,10 @@ export interface ItemAnimationLabUse {
 
 const use = (
   id: string,
-  label: string,
+  label: PresentationUiKey,
   eventId: string,
   choiceId: string,
-): ItemAnimationLabUse => Object.freeze({ id, label, eventId, choiceId });
+): ItemAnimationLabUse => Object.freeze({ id, get label() { return presentationUiText(label); }, eventId, choiceId });
 
 const uses = (...entries: ItemAnimationLabUse[]): readonly ItemAnimationLabUse[] =>
   Object.freeze(entries);
@@ -38,83 +38,82 @@ const uses = (...entries: ItemAnimationLabUse[]): readonly ItemAnimationLabUse[]
 export const ITEM_ANIMATION_LAB_USES:
 Readonly<Partial<Record<ItemId, readonly ItemAnimationLabUse[]>>> = Object.freeze({
   cannedFood: uses(
-    use('throw-target', 'Throw at target', 'death-stare', 'food'),
-    use('trade-handover', 'Trade handover', 'night-trader', 'food'),
+    use('throw-target', 'throwTarget', 'death-stare', 'food'),
+    use('trade-handover', 'tradeHandover', 'night-trader', 'food'),
   ),
   baitTin: uses(
-    use('throw-target', 'Throw at target', 'swarm-of-sharks', 'bait'),
-    use('trade-handover', 'Trade handover', 'night-trader', 'bait'),
+    use('throw-target', 'throwTarget', 'swarm-of-sharks', 'bait'),
+    use('trade-handover', 'tradeHandover', 'night-trader', 'bait'),
   ),
   ductTape: uses(
-    use('tape-stretch', 'Stretch tape', 'leak', 'ductTape'),
-    use('trade-handover', 'Trade handover', 'handyman', 'ductTape'),
+    use('tape-stretch', 'stretchTape', 'leak', 'ductTape'),
+    use('trade-handover', 'tradeHandover', 'handyman', 'ductTape'),
   ),
   compass: uses(
-    use('compass-search', 'Search with compass', 'man-in-the-fog', 'compass'),
+    use('compass-search', 'searchCompass', 'man-in-the-fog', 'compass'),
   ),
   map: uses(
-    use('map-read', 'Read map', 'dangerous-waters', 'map'),
-    use('map-leak-patch', 'Patch leak', 'leak', 'map'),
-    use('trade-handover', 'Trade handover', 'night-trader', 'map'),
+    use('map-read', 'readMap', 'dangerous-waters', 'map'),
+    use('map-leak-patch', 'patchLeak', 'leak', 'map'),
+    use('trade-handover', 'tradeHandover', 'night-trader', 'map'),
   ),
   medicalKit: uses(
-    use('throw-target', 'Throw at target', 'flowers', 'medicalKit'),
-    use('trade-handover', 'Trade handover', 'handyman', 'medicalKit'),
+    use('throw-target', 'throwTarget', 'flowers', 'medicalKit'),
+    use('trade-handover', 'tradeHandover', 'handyman', 'medicalKit'),
   ),
   spyglass: uses(
-    use('binocular-look', 'Look through', 'school-of-fish', 'spyglass'),
-    use('trade-handover', 'Trade handover', 'handyman', 'spyglass'),
+    use('binocular-look', 'lookThrough', 'school-of-fish', 'spyglass'),
+    use('trade-handover', 'tradeHandover', 'handyman', 'spyglass'),
   ),
   fishingNet: uses(
-    use('net-scoop', 'Scoop from water', 'school-of-fish', 'fishingNet'),
-    use('net-slap-death-stare', 'Slap Death Stare', 'death-stare', 'fishingNet'),
-    use('net-slap-shark', 'Slap shark', 'swarm-of-sharks', 'fishingNet'),
-    use('trade-handover', 'Trade handover', 'handyman', 'fishingNet'),
+    use('net-scoop', 'scoopWater', 'school-of-fish', 'fishingNet'),
+    use('net-attack', 'attack', 'snatcher', 'attack'),
+    use('trade-handover', 'tradeHandover', 'handyman', 'fishingNet'),
   ),
   knife: uses(
-    use('knife-stab', 'Stab knife', 'snatcher', 'knife'),
-    use('trade-handover', 'Trade handover', 'handyman', 'knife'),
+    use('knife-stab', 'stabKnife', 'snatcher', 'knife'),
+    use('trade-handover', 'tradeHandover', 'handyman', 'knife'),
   ),
   bucket: uses(
-    use('bucket-scoop', 'Scoop from water', 'school-of-fish', 'bucket'),
-    use('bucket-helmet', 'Wear as helmet', 'shower-night', 'bucket'),
-    use('trade-handover', 'Trade handover', 'handyman', 'bucket'),
+    use('bucket-scoop', 'scoopWater', 'school-of-fish', 'bucket'),
+    use('bucket-helmet', 'wearHelmet', 'shower-night', 'bucket'),
+    use('trade-handover', 'tradeHandover', 'handyman', 'bucket'),
   ),
   flareGun: uses(
-    use('flare-target', 'Fire at target', 'ghosts', 'flareGun'),
-    use('flare-sky', 'Signal sky', 'other-people', 'flareGun'),
-    use('trade-handover', 'Trade handover', 'handyman', 'flareGun'),
+    use('flare-target', 'fireTarget', 'ghosts', 'flareGun'),
+    use('flare-sky', 'signalSky', 'other-people', 'flareGun'),
+    use('trade-handover', 'tradeHandover', 'handyman', 'flareGun'),
   ),
   anchor: uses(
-    use('anchor-drop', 'Drop anchor', 'tornado', 'anchor'),
-    use('trade-handover', 'Trade handover', 'handyman', 'anchor'),
+    use('anchor-drop', 'dropAnchor', 'tornado', 'anchor'),
+    use('trade-handover', 'tradeHandover', 'handyman', 'anchor'),
   ),
   radio: uses(
-    use('radio-signal-receive', 'Receive signal', ITEM_ANIMATION_LAB_ID, 'radioSignal'),
-    use('trade-handover', 'Trade handover', 'handyman', 'radio'),
+    use('radio-signal-receive', 'receiveSignal', ITEM_ANIMATION_LAB_ID, 'radioSignal'),
+    use('trade-handover', 'tradeHandover', 'handyman', 'radio'),
   ),
   umbrella: uses(
-    use('umbrella-overhead', 'Hold overhead', 'shower-night', 'umbrella'),
-    use('umbrella-shield', 'Use as shield', 'death-stare', 'umbrella'),
-    use('trade-handover', 'Trade handover', 'night-trader', 'umbrella'),
+    use('umbrella-overhead', 'holdOverhead', 'shower-night', 'umbrella'),
+    use('umbrella-shield', 'useShield', 'death-stare', 'umbrella'),
+    use('trade-handover', 'tradeHandover', 'night-trader', 'umbrella'),
   ),
   swimRing: uses(
-    use('throw-target', 'Throw at target', 'tornado', 'swimRing'),
-    use('trade-handover', 'Trade with Night Trader', 'night-trader', 'swimRing'),
-    use('handyman-handover', 'Trade with Handyman', 'handyman', 'swimRing'),
+    use('throw-target', 'throwTarget', 'tornado', 'swimRing'),
+    use('trade-handover', 'tradeNight', 'night-trader', 'swimRing'),
+    use('handyman-handover', 'tradeHandyman', 'handyman', 'swimRing'),
   ),
   flashlight: uses(
-    use('flashlight-threat-beam', 'Aim threat beam', 'death-stare', 'flashlight'),
-    use('flashlight-signal', 'Send signal', 'plane', 'flashlight'),
-    use('trade-handover', 'Trade handover', 'handyman', 'flashlight'),
+    use('flashlight-threat-beam', 'aimBeam', 'death-stare', 'flashlight'),
+    use('flashlight-signal', 'sendSignal', 'plane', 'flashlight'),
+    use('trade-handover', 'tradeHandover', 'handyman', 'flashlight'),
   ),
   shotgun: uses(
-    use('shotgun-fire', 'Fire shotgun', 'snatcher', 'shotgun'),
-    use('trade-handover', 'Trade handover', 'handyman', 'shotgun'),
+    use('shotgun-fire', 'fireShotgun', 'snatcher', 'shotgun'),
+    use('trade-handover', 'tradeHandover', 'handyman', 'shotgun'),
   ),
   energyBar: uses(
-    use('throw-target', 'Throw at target', 'flowers', 'energyBar'),
-    use('trade-handover', 'Trade handover', 'handyman', 'energyBar'),
+    use('throw-target', 'throwTarget', 'flowers', 'energyBar'),
+    use('trade-handover', 'tradeHandover', 'handyman', 'energyBar'),
   ),
 });
 

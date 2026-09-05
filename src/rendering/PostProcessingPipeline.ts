@@ -46,6 +46,7 @@ import {
 } from './shadowQuality';
 import {
   clampPostProcessingSetting,
+  type AmbientOcclusionQuality,
   type PostProcessingControls,
   type PostProcessingControlState,
   type PostProcessingNumericSetting,
@@ -53,7 +54,7 @@ import {
 
 type AmbientOcclusionFactory = (
   mode: ItemAmbientOcclusionMode,
-  quality: VisualQuality,
+  quality: AmbientOcclusionQuality,
 ) => ItemAmbientOcclusionPass;
 type PipelineFactory = (
   renderer: WebGLRenderer,
@@ -328,6 +329,8 @@ export class PostProcessingPipeline implements SceneRenderer {
     }),
     setAmbientOcclusionMode: (mode: ItemAmbientOcclusionMode) =>
       this.setAmbientOcclusionMode(mode),
+    setAmbientOcclusionQuality: (quality: AmbientOcclusionQuality) =>
+      this.setAmbientOcclusionQuality(quality),
     setNumeric: (setting: PostProcessingNumericSetting, value: number) =>
       this.setNumeric(setting, value),
   });
@@ -364,6 +367,7 @@ export class PostProcessingPipeline implements SceneRenderer {
     this.controlState = {
       ambientOcclusionAvailable: true,
       ambientOcclusionMode: 'composite',
+      ambientOcclusionQuality: 'low',
       ambientOcclusionIntensity: ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY,
       ambientOcclusionRadius: ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS,
     };
@@ -372,7 +376,6 @@ export class PostProcessingPipeline implements SceneRenderer {
     renderer.getSize(this.size);
     const resources = this.createPipelineResources(
       createAmbientOcclusion,
-      quality,
       antiAliasingQuality,
     );
     this.composer = resources.composer;
@@ -388,7 +391,6 @@ export class PostProcessingPipeline implements SceneRenderer {
 
   private createPipelineResources(
     createAmbientOcclusion: AmbientOcclusionFactory,
-    quality: VisualQuality,
     antiAliasingQuality: AntiAliasingQuality,
   ): PipelineResources {
     const target = createComposerTarget(this.renderer, this.size, antiAliasingQuality);
@@ -402,7 +404,7 @@ export class PostProcessingPipeline implements SceneRenderer {
     try {
       composer = new EffectComposer(this.renderer, target);
       const renderPass = new RenderPass(new Scene(), new Camera());
-      itemAmbientOcclusionPass = this.createAmbientOcclusionPass(createAmbientOcclusion, quality);
+      itemAmbientOcclusionPass = this.createAmbientOcclusionPass(createAmbientOcclusion, this.controlState.ambientOcclusionQuality);
       outlinePass = new HoverOutlinePass(this.size, new Scene(), new PerspectiveCamera());
       configureHoverOutlinePass(outlinePass);
       bloomPass = new UnrealBloomPass(this.size, 0, 0, 1);
@@ -502,7 +504,7 @@ export class PostProcessingPipeline implements SceneRenderer {
 
   private createAmbientOcclusionPass(
     createAmbientOcclusion: AmbientOcclusionFactory,
-    quality: VisualQuality,
+    quality: AmbientOcclusionQuality,
   ): ItemAmbientOcclusionPass | null {
     try {
       return createAmbientOcclusion(this.controlState.ambientOcclusionMode, quality);
@@ -574,9 +576,14 @@ export class PostProcessingPipeline implements SceneRenderer {
     if (this.disposed || value === this.visualQuality) return;
     this.visualQuality = value;
     this.syncMenuProfile();
+  }
+
+  private setAmbientOcclusionQuality(value: AmbientOcclusionQuality): void {
+    if (this.disposed || value === this.controlState.ambientOcclusionQuality) return;
+    this.controlState.ambientOcclusionQuality = value;
     if (this.aoUnavailable || this.itemAmbientOcclusionPass === null) return;
     try {
-      this.itemAmbientOcclusionPass.setVisualQuality(value);
+      this.itemAmbientOcclusionPass.setQuality(value);
     } catch (error) {
       this.retireAmbientOcclusion(error);
     }

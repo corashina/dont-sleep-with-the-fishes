@@ -1,3 +1,4 @@
+import { flowText } from '../i18n/flowMessages';
 import type { SurvivalAudio } from '../audio/SurvivalAudio';
 import type { FishingResultView } from '../ui/SurvivalFishingView';
 import type { SurvivalUI } from '../ui/SurvivalUI';
@@ -76,47 +77,55 @@ type FishingPresentationState =
   | 'result'
   | 'returning';
 
-export function formatFishingResult(
+function buildFishingResult(
   result: FishingTerminalResult,
   outcome: ActionOutcome,
 ): FishingResultView {
   if (result.kind === 'miss') {
     return {
-      caption: 'EMPTY HOOK',
-      title: 'IT GOT AWAY',
-      detail: 'NO CATCH',
+      caption: flowText('emptyHook'),
+      get title() { return flowText('away'); },
+      detail: flowText('noCatch'),
       catchTarget: null,
     };
   }
   if (result.catch.kind === 'junk') {
     return {
-      caption: 'DRIFTING JUNK',
+      caption: flowText('junk'),
       title: result.catch.label.toLocaleUpperCase('en-US'),
-      detail: 'NO FOOD',
+      detail: flowText('noFood'),
       catchTarget: null,
     };
   }
   if (result.catch.kind === 'utility') {
     const reward = result.catch.reward;
     const detail = reward.kind === 'bait'
-      ? 'BAIT +1'
+      ? flowText('bait')
       : reward.kind === 'item' && reward.condition === 'broken'
-        ? 'BROKEN — REPAIR WITH DUCT TAPE'
+        ? flowText('broken')
         : reward.kind === 'item' && reward.itemId === 'ductTape'
-          ? 'DUCT TAPE RECOVERED'
-          : 'ENERGY BAR RECOVERED';
+          ? flowText('tape')
+          : flowText('bar');
     return {
-      caption: 'UTILITY SALVAGE',
+      caption: flowText('utility'),
       title: result.catch.label.toLocaleUpperCase('en-US'),
       detail,
       catchTarget: null,
     };
   }
-  const bait = outcome.deltas.bait === -1 ? ' - 1 BAIT USED' : '';
   return {
-    caption: `${result.catch.size.toLocaleUpperCase('en-US')} CATCH`,
+    caption: flowText('catchSize', result.catch.size),
     title: result.catch.label.toLocaleUpperCase('en-US'),
-    detail: `+${fishingCatchFood(result.catch)} FOOD${bait}`,
+    detail: flowText('food', fishingCatchFood(result.catch), outcome.deltas.bait === -1),
+    catchTarget: null,
+  };
+}
+
+export function formatFishingResult(result: FishingTerminalResult, outcome: ActionOutcome): FishingResultView {
+  return {
+    get caption() { return buildFishingResult(result, outcome).caption; },
+    get title() { return buildFishingResult(result, outcome).title; },
+    get detail() { return buildFishingResult(result, outcome).detail; },
     catchTarget: null,
   };
 }
@@ -154,7 +163,7 @@ export class SurvivalFishingFlow {
     this.dependencies.renderSnapshot();
     this.dependencies.ui.setFishingState?.({
       mode: 'waiting',
-      message: 'CLICK THE WATER TO CAST',
+      get message() { return flowText('cast'); },
       biteTarget: null,
     });
   }
@@ -169,7 +178,7 @@ export class SurvivalFishingFlow {
     this.presentation = 'aiming';
     this.dependencies.ui.setFishingState?.({
       mode: 'aiming',
-      message: 'CLICK THE WATER TO CAST',
+      get message() { return flowText('cast'); },
       biteTarget: null,
     });
     this.dependencies.ui.setFishingViewExitVisible?.(true);
@@ -304,7 +313,7 @@ export class SurvivalFishingFlow {
     this.dependencies.world.showFishingWaiting?.(storedPoint);
     this.dependencies.ui.setFishingState?.({
       mode: 'waiting',
-      message: 'WAIT FOR A BITE',
+      get message() { return flowText('wait'); },
       biteTarget: null,
     });
   }
@@ -316,7 +325,7 @@ export class SurvivalFishingFlow {
     this.dependencies.world.showFishingBite?.(point);
     this.dependencies.ui.setFishingState?.({
       mode: 'bite',
-      message: 'BITE - REEL NOW',
+      get message() { return flowText('bite'); },
       biteTarget: this.dependencies.world.projectFishingBite?.(
         this.viewportWidth,
         this.viewportHeight,
@@ -358,7 +367,7 @@ export class SurvivalFishingFlow {
     this.presentation = 'settling';
     this.dependencies.ui.setFishingState?.({
       mode: 'waiting',
-      message: result.kind === 'catch' ? 'REELING IN' : 'THE LINE WENT SLACK',
+      get message() { return result.kind === 'catch' ? flowText('reel') : flowText('slack'); },
       biteTarget: null,
     });
     void this.presentResult(attempt, result, outcome, generation);
@@ -480,7 +489,7 @@ export class SurvivalFishingFlow {
         this.viewportHeight,
       ) ?? null
       : null;
-    this.dependencies.ui.showFishingResult?.({ ...view, catchTarget });
+    this.dependencies.ui.showFishingResult?.({ get caption() { return view.caption; }, get title() { return view.title; }, get detail() { return view.detail; }, catchTarget });
   }
 
   private async returnFromView(generation: number): Promise<void> {

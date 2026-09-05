@@ -1,3 +1,7 @@
+import { defineMessages } from '../i18n/messages';
+import { getLanguage } from '../i18n/language';
+import { survivalEventById } from '../survival/eventCatalog';
+
 export type DeathCause =
   | { readonly kind: 'starvation' }
   | { readonly kind: 'diving' }
@@ -12,28 +16,27 @@ export type EndingRecord =
 
 export type SurvivalEndingId = Exclude<EndingRecord['id'], 'dorothy'>;
 
-const TITLES = Object.freeze({
-  dorothy: 'SUNK WITH DOROTHY',
-  rescue: 'RESCUE FOUND YOU',
-  death: 'THE SEA OUTLASTED YOU',
-  sinking: 'THE BOAT IS GONE',
-} as const);
+const t = defineMessages({
+  dorothy: { en: 'SUNK WITH DOROTHY', pl: 'NA DNIE Z DOROTHY' },
+  rescue: { en: 'RESCUE FOUND YOU', pl: 'NADESZŁA POMOC' },
+  death: { en: 'THE SEA OUTLASTED YOU', pl: 'MORZE PRZETRWAŁO DŁUŻEJ' },
+  sinking: { en: 'THE BOAT IS GONE', pl: 'ŁÓDŹ ZNIKNĘŁA' },
+  beforeDay: { en: 'BEFORE DAY 1', pl: 'PRZED DNIEM 1' },
+  day: { en: (day: number) => `DAY ${day}`, pl: (day: number) => `DZIEŃ ${day}` },
+  event: { en: (title: string) => `LAST EVENT: ${title}`, pl: (title: string) => `OSTATNIE ZDARZENIE: ${title}` },
+});
 
 export function endingTitle(record: EndingRecord): string {
-  return TITLES[record.id];
+  return t(record.id);
 }
 
 export function endingSummary(record: EndingRecord): string {
-  return record.id === 'dorothy' ? 'BEFORE DAY 1' : `DAY ${record.day}`;
-}
-
-function titleCaseId(id: string): string {
-  return id.split('-').map((part) => (
-    part.length === 0 ? part : part[0]!.toUpperCase() + part.slice(1)
-  )).join(' ');
+  return record.id === 'dorothy' ? t('beforeDay') : t('day', record.day);
 }
 
 export function endingCauseLine(record: EndingRecord): string | null {
   if (record.id !== 'sinking' || record.cause.eventId === null) return null;
-  return `LAST EVENT: ${titleCaseId(record.cause.eventId).toLocaleUpperCase('en-US')}`;
+  const event = survivalEventById(record.cause.eventId);
+  if (event === undefined) throw new Error(`Unknown ending event: ${record.cause.eventId}`);
+  return t('event', event.title.toLocaleUpperCase(getLanguage()));
 }

@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { setLanguage } from '../src/i18n/language';
+import type { EventContextChoice } from '../src/ui/SurvivalUiViewModel';
 import { type ItemId, type ItemInstanceId } from '../src/game/ItemState';
 import {
   FISHING_ROD_LAB_CHOICE_ID,
@@ -69,17 +71,51 @@ function conditionLab(type: ItemId = 'bucket', condition: 'usable' | 'broken' | 
 }
 
 describe('Item Animation Lab conditions', () => {
-  it('offers both fishing net slap previews', async () => {
-    const { flow, instanceId, ui } = conditionLab('fishingNet');
+  it('translates retained animation choices without replaying or changing the item', async () => {
+    const { flow, instanceId, ui, session, world } = conditionLab('bucket', 'broken');
+    await flow.play(instanceId);
+    const choices = ui.showItemAnimationLabChoices.mock.lastCall![0] as readonly EventContextChoice[];
+    const before = session.snapshot();
+    const scoop = choices.find(({ id }) => id === 'bucket-scoop')!;
+    try {
+      setLanguage('pl');
+      expect(scoop.label).toBe('Zagarnij z wody');
+      expect(scoop.unavailableReason).toBe('Przedmiot jest uszkodzony.');
+      expect(choices.find(({ id }) => id === 'fix')?.label).toBe('Napraw');
+      expect(session.snapshot()).toEqual(before);
+      expect(world.playEventItemUse).not.toHaveBeenCalled();
+      expect(ui.showItemAnimationLabChoices).toHaveBeenCalledOnce();
+    } finally {
+      setLanguage('en');
+    }
+  });
+
+  it('offers one generic net attack and reveals its example tentacle before swinging', async () => {
+    const { flow, instanceId, ui, world } = conditionLab('fishingNet');
+    const appearance = deferred();
+    world.revealEvent.mockReturnValueOnce(appearance.promise);
+    world.setItemAnimationLabCameraLook.mockClear();
 
     await flow.play(instanceId);
 
     expect(ui.showItemAnimationLabChoices).toHaveBeenLastCalledWith(
-      expect.arrayContaining([
-        { id: 'net-slap-death-stare', label: 'Slap Death Stare', unavailableReason: null },
-        { id: 'net-slap-shark', label: 'Slap shark', unavailableReason: null },
-      ]),
+      [
+        { id: 'net-scoop', label: 'Scoop from water', unavailableReason: null },
+        { id: 'net-attack', label: 'Attack', unavailableReason: null },
+        { id: 'trade-handover', label: 'Trade handover', unavailableReason: null },
+        { id: 'break', label: 'Break', unavailableReason: null },
+        { id: 'fix', label: 'Fix', unavailableReason: 'Item is not broken.' },
+      ],
     );
+    flow.choose('net-attack');
+    expect(world.stageEvent).toHaveBeenCalledWith('snatcher');
+    expect(world.revealEvent).toHaveBeenCalledWith('snatcher');
+    expect(world.playEventItemUse).not.toHaveBeenCalled();
+    appearance.resolve();
+    await vi.waitFor(() => {
+      expect(world.playEventItemUse).toHaveBeenCalledWith('snatcher', 'attack', instanceId, expect.any(Function), false);
+    });
+    expect(world.setItemAnimationLabCameraLook).not.toHaveBeenCalled();
   });
 
   it('breaks Flashlight, blocks each animation, and fixes it without resources', async () => {

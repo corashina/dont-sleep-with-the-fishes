@@ -17,6 +17,7 @@ describe('SystemTuningPreference', () => {
     const storage = {
       getItem: vi.fn().mockReturnValue(JSON.stringify({
         ambientOcclusionMode: 'off',
+        ambientOcclusionQuality: 'high',
         ambientOcclusionIntensity: 99,
         ambientOcclusionRadius: 0.16,
         performanceStatsVisible: true,
@@ -29,6 +30,7 @@ describe('SystemTuningPreference', () => {
     };
     expect(createSystemTuningPreference(storage).get()).toEqual({
       ambientOcclusionMode: 'off',
+      ambientOcclusionQuality: 'high',
       ambientOcclusionIntensity: 1,
       ambientOcclusionRadius: 0.16,
       performanceStatsVisible: true,

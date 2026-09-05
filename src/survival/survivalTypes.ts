@@ -1,3 +1,4 @@
+import type { OutcomeText } from './outcomeText';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../game/ItemState';
 
 export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dead' | 'sunk';
@@ -15,6 +16,7 @@ export interface CompanionEventActionDefinition {
 export type CompanionActionId =
   | 'petCarlitos' | 'feedCarlitos' | 'treatCarlitos' | CompanionEventActionId;
 export interface CompanionEventActionAvailability {
+  readonly text?: OutcomeText;
   readonly visible: boolean;
   readonly energyCost: number;
   readonly availableEnergy: number;
@@ -85,6 +87,7 @@ export type RewardSummary =
 export type DawnEnergy = 0 | 1 | 2 | 3 | 4;
 
 export interface ActionOutcome {
+  readonly text?: OutcomeText;
   accepted: boolean;
   code: string;
   message: string;

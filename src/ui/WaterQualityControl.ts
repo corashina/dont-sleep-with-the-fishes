@@ -1,3 +1,4 @@
+import { settingsText } from '../i18n/settingsMessages';
 import {
   type WaterQuality,
   type WaterQualityPreference,
@@ -8,12 +9,11 @@ export class WaterQualityControl extends QualityControl<WaterQuality> {
   constructor(preference: WaterQualityPreference) {
     super(preference, {
       kind: 'water',
-      label: 'WATER QUALITY',
-      note: 'Ultra adds a natural ocean surface at high GPU cost.',
+      get label() { return settingsText('waterQuality'); },
       choices: [
-        { value: 'low', label: 'LOW' },
-        { value: 'high', label: 'HIGH' },
-        { value: 'ultra', label: 'ULTRA' },
+        { value: 'low', get label() { return settingsText('low'); } },
+        { value: 'high', get label() { return settingsText('high'); } },
+        { value: 'ultra', get label() { return settingsText('ultra'); } },
       ],
     });
   }

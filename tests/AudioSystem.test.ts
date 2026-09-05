@@ -80,6 +80,20 @@ class FakeAudioBackend implements AudioBackend {
 }
 
 describe('AudioSystem', () => {
+  it.each([
+    ['fishingNet', 'netImpact'],
+    ['knife', 'knifeImpact'],
+  ] as const)('plays the %s impact at the action cue, separate from item handling', (itemId, soundId) => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    audio.eventItem(itemId);
+    expect(backend.voices.map(({ id }) => id)).toEqual(['itemHandling']);
+    audio.eventItemCue(itemId, 0);
+    expect(backend.voices.map(({ id }) => id)).toEqual(['itemHandling', soundId]);
+    audio.dispose();
+    audio.eventItemCue(itemId, 0);
+    expect(backend.voices).toHaveLength(2);
+  });
   it('plays every pet meow once before reshuffling without an adjacent repeat', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(

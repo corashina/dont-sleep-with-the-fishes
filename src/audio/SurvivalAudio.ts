@@ -281,6 +281,14 @@ export class SurvivalAudio {
 
   eventItemCue(itemId: ItemId, cueIndex: number): void {
     if (this.disposed) return;
+    if (itemId === 'fishingNet') {
+      this.scope.play('netImpact');
+      return;
+    }
+    if (itemId === 'knife') {
+      this.scope.play('knifeImpact');
+      return;
+    }
     if (itemId === 'radio') {
       this.clearRadioSignal();
       this.beginRadioSignal(() => undefined);

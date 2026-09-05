@@ -1,3 +1,4 @@
+import { presentationUiText } from '../i18n/presentationUiMessages';
 import type {
   Object3D,
   PerspectiveCamera,
@@ -92,14 +93,14 @@ function hitArea(width = 0, height = 0, depth = 0): BoatInteractionHitArea {
 }
 
 function featuredAnchorLabel(eventId: FeaturedEventId): string {
-  if (eventId === 'drifting-supplies') return 'SALVAGE';
-  if (eventId === 'drifting-chest') return 'CHEST';
-  return 'FLOWERS';
+  if (eventId === 'drifting-supplies') return presentationUiText('salvage');
+  if (eventId === 'drifting-chest') return presentationUiText('chest');
+  return presentationUiText('flowers');
 }
 
 function featuredAnchorDescription(eventId: FeaturedEventId): string {
-  if (isDriftingItemEventId(eventId)) return 'Floating salvage within reach.';
-  return 'Pale blooms pass in the dark water.';
+  if (isDriftingItemEventId(eventId)) return presentationUiText('salvageDescription');
+  return presentationUiText('flowersDescription');
 }
 
 function featuredAnchorChoice(eventId: FeaturedEventId): string | null {
@@ -244,8 +245,8 @@ export class BoatInteractionProjector {
     };
     this.chestAnchor = {
       id: 'persistent-chest',
-      label: 'OPEN',
-      description: 'A closed chest. Opening it is free.',
+      get label() { return presentationUiText('open'); },
+      get description() { return presentationUiText('chestDescription'); },
       itemType: null,
       toolId: 'chest',
       action: null,
@@ -264,7 +265,7 @@ export class BoatInteractionProjector {
       id: 'carlitos',
       companionId: 'carlitos',
       label: 'CARLITOS',
-      description: 'Check his hunger, happiness, and health.',
+      get description() { return presentationUiText('carlitosDescription'); },
       itemType: null,
       toolId: null,
       action: null,
@@ -282,8 +283,8 @@ export class BoatInteractionProjector {
     this.featuredEntries = FEATURED_EVENT_IDS.map((eventId) => {
       const anchor: MutableAnchor = {
         id: `event:${eventId}`,
-        label: featuredAnchorLabel(eventId),
-        description: featuredAnchorDescription(eventId),
+        get label() { return featuredAnchorLabel(eventId); },
+        get description() { return featuredAnchorDescription(eventId); },
         itemType: null,
         toolId: null,
         action: null,
@@ -319,8 +320,8 @@ export class BoatInteractionProjector {
       projection: projectionOutput(),
       anchor: {
         id: target.id,
-        label: target.label,
-        description: target.description,
+        get label() { return target.label; },
+        get description() { return target.description; },
         tooltip: target.tooltip,
         ...(target.choiceId === undefined
           ? { eventFocusId: target.focusEventId }

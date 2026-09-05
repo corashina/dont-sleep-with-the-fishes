@@ -1,39 +1,62 @@
-const POINTER_LOCK_ERROR = 'Mouse look was blocked. Click the button and allow pointer lock to continue.';
+import { menuText } from '../i18n/menuMessages';
+import { getLanguage, onLanguageChange } from '../i18n/language';
+import { MenuPauseView } from './MenuPauseView';
+import { renderGuideDescription } from './GuideDescription';
+
 const GUIDE_ASSET_ROOT = `${import.meta.env.BASE_URL}images/how-to-play`;
 
 interface GuidePage {
   readonly title: string;
-  readonly image: string;
-  readonly imageAlt: string;
+  readonly images: readonly { readonly src: string; readonly alt: string }[];
   readonly description: string;
 }
 
 const GUIDE_PAGES: readonly GuidePage[] = Object.freeze([
   {
-    title: 'SCAVENGE DOROTHY',
-    image: `${GUIDE_ASSET_ROOT}/scavenging.png`,
-    imageAlt: 'Inside Dorothy’s bunk room with supplies on the beds, three empty carry slots, and 48 seconds remaining.',
-    description: 'Dorothy sinks in 60 seconds. Search the ship for food, tools, and emergency supplies. Carry up to three weight, throw supplies into the lifeboat, then climb aboard before time ends.',
+    get title() { return menuText('guide0'); },
+    get images() {
+      return [
+        { src: `${GUIDE_ASSET_ROOT}/scavenging.png`, alt: menuText('guide1') },
+        { src: `${GUIDE_ASSET_ROOT}/scavenging-lifeboat.png`, alt: menuText('guideLifeboatImage') },
+      ];
+    },
+    get description() { return menuText('guide3'); },
   },
   {
-    title: 'SURVIVE THE DAY',
-    image: `${GUIDE_ASSET_ROOT}/survival-day.png`,
-    imageAlt: 'Daylight view from the lifeboat with recovered supplies, Carlitos, and condition meters.',
-    description: 'Each day gives limited energy. Fish, dive, eat, repair the hull, and use recovered supplies. Protect Health, Food, Energy, and Hull. Use the lantern when you are ready to end the day.',
+    get title() { return menuText('guide4'); },
+    get images() {
+      return [
+        { src: guideImage('survival-day'), alt: menuText('guide5') },
+        { src: `${GUIDE_ASSET_ROOT}/survival-fishing.png`, alt: menuText('guide12') },
+      ];
+    },
+    get description() { return menuText('guide6'); },
   },
   {
-    title: 'FISH FOR FOOD',
-    image: `${GUIDE_ASSET_ROOT}/survival-fishing.png`,
-    imageAlt: 'Fishing view over the lifeboat bow with the red bobber clearly visible to the right of the rod.',
-    description: 'Fishing costs one energy. Cast into the water, wait for a bite, then reel before the chance passes. Bait improves a fish catch and is used only when a fish lands.',
+    get title() { return menuText('guide17'); },
+    get images() {
+      return [
+        { src: guideImage('survival-repair'), alt: menuText('guideRepairImage') },
+        { src: guideImage('survival-loot'), alt: menuText('guideLootImage') },
+      ];
+    },
+    get description() { return menuText('guide20'); },
   },
   {
-    title: 'FACE THE NIGHT',
-    image: `${GUIDE_ASSET_ROOT}/survival-night-event.png`,
-    imageAlt: 'The lifeboat at night during a rain event with the umbrella and bucket highlighted.',
-    description: 'Night brings uncertain events. Read the situation and choose a response. A saved item can protect you, but each result can change your health, food, hull, or supplies. Dawn records the night in the journal.',
+    get title() { return menuText('guide14'); },
+    get images() {
+      return [
+        { src: guideImage('survival-night'), alt: menuText('guide15') },
+        { src: guideImage('survival-night-event'), alt: menuText('guide18') },
+      ];
+    },
+    get description() { return menuText('guide16'); },
   },
 ]);
+
+function guideImage(name: string): string {
+  return `${GUIDE_ASSET_ROOT}/${name}${getLanguage() === 'pl' ? '-pl.jpg' : '.png'}`;
+}
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -45,6 +68,9 @@ export class MenuUI {
   onStart: () => void = () => undefined;
   onStartFocusChange: (focused: boolean) => void = () => undefined;
   onGuideFocusChange: (focused: boolean) => void = () => undefined;
+  onOverlayChange: () => void = () => undefined;
+  private readonly pause: MenuPauseView;
+  private pauseOrigin: HTMLElement | null = null;
   private readonly root: HTMLDivElement;
   private readonly menu: HTMLElement;
   private readonly guide: HTMLElement;
@@ -54,7 +80,7 @@ export class MenuUI {
   private readonly guidePreviousButton: HTMLButtonElement;
   private readonly guideNextButton: HTMLButtonElement;
   private readonly guideTitle: HTMLElement;
-  private readonly guideImage: HTMLImageElement;
+  private readonly guideImages: HTMLElement;
   private readonly guideDescription: HTMLElement;
   private readonly guidePageCount: HTMLElement;
   private readonly pointerLockError: HTMLElement;
@@ -62,6 +88,7 @@ export class MenuUI {
   private guideOpen = false;
   private guidePageIndex = 0;
   private disposed = false;
+  private readonly unsubscribeLanguage: () => void;
 
   constructor(mount: HTMLElement) {
     this.root = document.createElement('div');
@@ -88,9 +115,7 @@ export class MenuUI {
             <header class="how-to-play-page__header">
               <h2 class="ui-role-display" id="menu-how-to-play-title" data-menu-guide-title tabindex="-1"></h2>
             </header>
-            <figure class="how-to-play-page__figure">
-              <img data-menu-guide-image width="1280" height="720" draggable="false">
-            </figure>
+            <div class="how-to-play-page__images" data-menu-guide-images></div>
             <p class="how-to-play-page__description ui-role-narrative"
               id="menu-how-to-play-description" data-menu-guide-description></p>
             <nav class="how-to-play-page__navigation ui-role-context" aria-label="How to play pages">
@@ -114,10 +139,12 @@ export class MenuUI {
     this.guidePreviousButton = requireElement(this.root, '[data-menu-guide-previous]');
     this.guideNextButton = requireElement(this.root, '[data-menu-guide-next]');
     this.guideTitle = requireElement(this.root, '[data-menu-guide-title]');
-    this.guideImage = requireElement(this.root, '[data-menu-guide-image]');
+    this.guideImages = requireElement(this.root, '[data-menu-guide-images]');
     this.guideDescription = requireElement(this.root, '[data-menu-guide-description]');
     this.guidePageCount = requireElement(this.root, '[data-menu-guide-page-count]');
     this.pointerLockError = requireElement(this.root, '[data-menu-pointer-lock-error]');
+    this.pause = new MenuPauseView(() => this.setPauseOpen(false));
+    this.root.append(this.pause.element);
     this.startButton.addEventListener('click', this.handleStart);
     this.startButton.addEventListener('focus', this.handleStartFocus);
     this.startButton.addEventListener('blur', this.handleStartBlur);
@@ -128,8 +155,9 @@ export class MenuUI {
     this.guideCloseButton.addEventListener('click', this.handleGuideClose);
     this.guidePreviousButton.addEventListener('click', this.handleGuidePrevious);
     this.guideNextButton.addEventListener('click', this.handleGuideNext);
-    this.root.addEventListener('keydown', this.handleKeyDown);
-    this.renderGuidePage();
+    window.addEventListener('keydown', this.handleKeyDown);
+    this.refreshLanguage();
+    this.unsubscribeLanguage = onLanguageChange(this.refreshLanguage);
   }
 
   setTransitioning(active: boolean): void {
@@ -147,7 +175,7 @@ export class MenuUI {
   }
 
   showPointerLockError(): void {
-    this.pointerLockError.textContent = POINTER_LOCK_ERROR;
+    this.pointerLockError.textContent = menuText('pointerLock');
     this.pointerLockError.classList.add('is-visible');
   }
 
@@ -157,12 +185,17 @@ export class MenuUI {
   }
 
   openGuide(): void {
-    if (!this.transitioning) this.setGuideOpen(true);
+    if (!this.transitioning && !this.pause.isOpen) this.setGuideOpen(true);
+  }
+
+  get isOverlayOpen(): boolean {
+    return this.guideOpen || this.pause.isOpen;
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.unsubscribeLanguage();
     this.startButton.removeEventListener('click', this.handleStart);
     this.startButton.removeEventListener('focus', this.handleStartFocus);
     this.startButton.removeEventListener('blur', this.handleStartBlur);
@@ -173,15 +206,17 @@ export class MenuUI {
     this.guideCloseButton.removeEventListener('click', this.handleGuideClose);
     this.guidePreviousButton.removeEventListener('click', this.handleGuidePrevious);
     this.guideNextButton.removeEventListener('click', this.handleGuideNext);
-    this.root.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keydown', this.handleKeyDown);
+    this.pause.dispose();
     this.onStart = () => undefined;
     this.onStartFocusChange = () => undefined;
     this.onGuideFocusChange = () => undefined;
+    this.onOverlayChange = () => undefined;
     this.root.remove();
   }
 
   private readonly handleStart = (): void => {
-    if (this.transitioning) return;
+    if (this.transitioning || this.isOverlayOpen) return;
     this.clearPointerLockError();
     this.onStart();
   };
@@ -209,7 +244,15 @@ export class MenuUI {
   private readonly handleGuideNext = (): void => this.moveGuidePage(1);
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (!this.guideOpen) return;
+    if (this.disposed || this.transitioning || event.defaultPrevented || event.repeat) return;
+    if (this.guideOpen) this.handleGuideKeyDown(event);
+    else if (event.key === 'Escape') {
+      event.preventDefault();
+      this.setPauseOpen(!this.pause.isOpen);
+    } else if (this.pause.isOpen) this.pause.trapFocus(event);
+  };
+
+  private handleGuideKeyDown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
       event.preventDefault();
       this.setGuideOpen(false);
@@ -236,7 +279,20 @@ export class MenuUI {
       return;
     }
     if (event.key === 'Tab') this.trapGuideFocus(event);
-  };
+  }
+
+  private setPauseOpen(open: boolean): void {
+    if (this.disposed || this.pause.isOpen === open) return;
+    if (open) this.pauseOrigin = this.menu.contains(document.activeElement)
+      ? document.activeElement as HTMLElement : this.startButton;
+    this.menu.toggleAttribute('inert', open);
+    this.pause.setOpen(open);
+    this.onOverlayChange();
+    if (!open) {
+      this.pauseOrigin?.focus();
+      this.pauseOrigin = null;
+    }
+  }
 
   private trapGuideFocus(event: KeyboardEvent): void {
     const buttons = [
@@ -270,13 +326,38 @@ export class MenuUI {
     (requested.disabled ? available : requested).focus();
   }
 
+  private readonly refreshLanguage = (): void => {
+    this.pause.refreshLanguage();
+    this.startButton.textContent = menuText('start');
+    this.guideButton.textContent = menuText('guide');
+    this.guideCloseButton.setAttribute('aria-label', menuText('close'));
+    this.guidePreviousButton.setAttribute('aria-label', menuText('previous'));
+    this.guideNextButton.setAttribute('aria-label', menuText('next'));
+    this.guide.querySelector('nav')?.setAttribute('aria-label', menuText('pages'));
+    if (this.pointerLockError.textContent) this.showPointerLockError();
+    this.renderGuidePage();
+  };
+
   private renderGuidePage(): void {
     const page = GUIDE_PAGES[this.guidePageIndex]!;
     this.guideTitle.textContent = page.title;
-    this.guideImage.src = page.image;
-    this.guideImage.alt = page.imageAlt;
-    this.guideDescription.textContent = page.description;
-    this.guidePageCount.textContent = `PAGE ${this.guidePageIndex + 1} OF ${GUIDE_PAGES.length}`;
+    const images = page.images;
+    this.guideImages.classList.toggle('how-to-play-page__images--pair', images.length === 2);
+    this.guideImages.replaceChildren(...images.map(({ src, alt }) => {
+      const figure = document.createElement('figure');
+      figure.className = 'how-to-play-page__figure';
+      const image = document.createElement('img');
+      image.dataset.menuGuideImage = '';
+      image.src = src;
+      image.alt = alt;
+      image.width = 1280;
+      image.height = 720;
+      image.draggable = false;
+      figure.append(image);
+      return figure;
+    }));
+    renderGuideDescription(this.guideDescription, page.description);
+    this.guidePageCount.textContent = menuText('page', this.guidePageIndex + 1, GUIDE_PAGES.length);
     this.guidePreviousButton.disabled = this.guidePageIndex === 0;
     this.guideNextButton.disabled = this.guidePageIndex === GUIDE_PAGES.length - 1;
     this.guide.dataset.page = String(this.guidePageIndex + 1);
@@ -296,6 +377,7 @@ export class MenuUI {
     this.guide.setAttribute('aria-hidden', String(!open));
     this.guide.toggleAttribute('inert', !open);
     this.menu.toggleAttribute('inert', open);
+    this.onOverlayChange();
     if (open) {
       this.resetGuide();
       this.guideNextButton.focus();

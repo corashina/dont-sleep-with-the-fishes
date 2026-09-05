@@ -1,3 +1,4 @@
+import { settingsText } from '../i18n/settingsMessages';
 import type { WeatherId } from '../survival/survivalTypes';
 
 export const PRESENTATION_WEATHER_IDS = Object.freeze([
@@ -30,42 +31,42 @@ const profile = (value: PresentationWeatherProfile): Readonly<PresentationWeathe
 
 const PROFILES: Readonly<Record<PresentationWeatherId, Readonly<PresentationWeatherProfile>>> = Object.freeze({
   calm: profile({
-    id: 'calm', label: 'Calm', skyWeather: 'calm',
+    id: 'calm', get label() { return settingsText('calm'); }, skyWeather: 'calm',
     fogDensityScale: 0.7, lightIntensityScale: 1, waveScale: 0.75,
     rainIntensity: 0, mistIntensity: 0.05, sprayIntensity: 0, lightning: false,
   }),
   overcast: profile({
-    id: 'overcast', label: 'Overcast', skyWeather: 'overcast',
+    id: 'overcast', get label() { return settingsText('overcast'); }, skyWeather: 'overcast',
     fogDensityScale: 1.15, lightIntensityScale: 0.82, waveScale: 1,
     rainIntensity: 0, mistIntensity: 0.2, sprayIntensity: 0.1, lightning: false,
   }),
   squall: profile({
-    id: 'squall', label: 'Squall', skyWeather: 'squall',
+    id: 'squall', get label() { return settingsText('squall'); }, skyWeather: 'squall',
     fogDensityScale: 1.5, lightIntensityScale: 0.55, waveScale: 1.5,
     rainIntensity: 0, mistIntensity: 0.6, sprayIntensity: 0.9, lightning: false,
   }),
   rain: profile({
-    id: 'rain', label: 'Rain', skyWeather: 'overcast',
+    id: 'rain', get label() { return settingsText('rain'); }, skyWeather: 'overcast',
     fogDensityScale: 1.55, lightIntensityScale: 0.58, waveScale: 1.15,
     rainIntensity: 1, mistIntensity: 0.55, sprayIntensity: 0.42, lightning: false,
   }),
   wind: profile({
-    id: 'wind', label: 'Wind', skyWeather: 'overcast',
+    id: 'wind', get label() { return settingsText('wind'); }, skyWeather: 'overcast',
     fogDensityScale: 1.15, lightIntensityScale: 0.7, waveScale: 1.45,
     rainIntensity: 0, mistIntensity: 1, sprayIntensity: 1, lightning: false,
   }),
   thunderstorm: profile({
-    id: 'thunderstorm', label: 'Thunderstorm', skyWeather: 'squall',
+    id: 'thunderstorm', get label() { return settingsText('storm'); }, skyWeather: 'squall',
     fogDensityScale: 1.65, lightIntensityScale: 0.48, waveScale: 1.55,
     rainIntensity: 1, mistIntensity: 0.55, sprayIntensity: 0.9, lightning: true,
   }),
   waves: profile({
-    id: 'waves', label: 'Waves', skyWeather: 'squall',
+    id: 'waves', get label() { return settingsText('waves'); }, skyWeather: 'squall',
     fogDensityScale: 1.15, lightIntensityScale: 0.75, waveScale: 1.7,
     rainIntensity: 0, mistIntensity: 0.15, sprayIntensity: 1, lightning: false,
   }),
   fog: profile({
-    id: 'fog', label: 'Fog', skyWeather: 'overcast',
+    id: 'fog', get label() { return settingsText('fog'); }, skyWeather: 'overcast',
     fogDensityScale: 4.4, lightIntensityScale: 0.38, waveScale: 0.65,
     rainIntensity: 0, mistIntensity: 1, sprayIntensity: 0, lightning: false,
   }),

@@ -1,3 +1,7 @@
+import { uiDynamic } from '../i18n/uiDynamicMessages';
+import { onLanguageChange } from '../i18n/language';
+import { refreshUiText } from './translatedText';
+import { uiText } from '../i18n/uiMessages';
 import {
   ITEM_LABELS,
   type ItemInstanceId,
@@ -40,20 +44,20 @@ interface BoatToolCopy {
 
 const BOAT_TOOL_COPY: Readonly<Record<BoatToolId, BoatToolCopy>> = Object.freeze({
   repairTools: {
-    label: 'REPAIR',
-    description: 'Use the open repair toolbox to repair the lifeboat.',
+    get label() { return uiText('repair'); },
+    get description() { return uiText('repairToolHelp'); },
   },
   fishingRod: {
-    label: 'FISH',
-    description: 'Cast from the bow to find food or drifting junk. Bait is used automatically when available.',
+    get label() { return uiText('fish'); },
+    get description() { return uiText('fishHelp'); },
   },
   pillow: {
-    label: 'END DAY',
-    description: 'Rest on the pillow to end the current day. Energy is restored at dawn.',
+    get label() { return uiText('endDay'); },
+    get description() { return uiText('endDayHelp'); },
   },
   chest: {
-    label: 'CHEST',
-    description: 'Open the recovered chest for free.',
+    get label() { return uiText('chest'); },
+    get description() { return uiText('chestHelp'); },
   },
 });
 
@@ -64,19 +68,19 @@ const EVENT_TARGET_Z_OFFSET = ANCHOR_Z_TIER_SIZE * 3;
 const CYCLED_ANCHOR_Z_INDEX = ANCHOR_Z_TIER_SIZE * 4 + 1;
 
 const ACTIONS: readonly ActionDefinition[] = [
-  { id: 'fish', label: 'FISH', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.actions.fishEnergy, effect: 'Chance to gain food', risk: 'uncertain' },
-  { id: 'dive', label: 'DIVE', cost: '3 ENERGY', energyCost: SURVIVAL_BALANCE.actions.diveEnergy, effect: 'May recover supplies; injury risk', risk: 'dangerous' },
-  { id: 'eat', label: 'EAT', cost: '1 FOOD', energyCost: 0, effect: 'HUNGER -35', risk: 'safe' },
-  { id: 'repair', label: 'REPAIR', cost: '1–3 ENERGY', energyCost: 1, effect: 'HULL +33 PER ENERGY', risk: 'safe' },
-  { id: 'treat', label: 'TREAT', cost: '1 MEDKIT', energyCost: 0, effect: 'HEALTH +30', risk: 'safe' },
-  { id: 'endDay', label: 'END DAY', cost: 'REST', energyCost: 0, effect: 'RESTORE ENERGY AT DAWN', risk: 'safe' },
-  { id: 'repairItem', label: 'REPAIR ITEM', cost: '1 DUCT TAPE', energyCost: 0, effect: 'Restore one broken item', risk: 'safe' },
-  { id: 'answerRadio', label: 'ANSWER RADIO', cost: '1 ENERGY', energyCost: SURVIVAL_BALANCE.radio.energy, effect: 'IMPROVE RESCUE LEAD', risk: 'safe' },
-  { id: 'useEnergyBar', label: 'EAT ENERGY BAR', cost: '1 ENERGY BAR', energyCost: 0, effect: 'ENERGY TO 3', risk: 'safe' },
-  { id: 'openChest', label: 'OPEN CHEST', cost: 'FREE', energyCost: 0, effect: 'RECOVER A SUPPLY', risk: 'uncertain' },
-  { id: 'petCarlitos', label: 'PET', cost: 'FREE', energyCost: 0, effect: 'EASE LONELINESS', risk: 'safe' },
-  { id: 'feedCarlitos', label: 'FEED', cost: '1 FOOD', energyCost: 0, effect: 'RESTORE HUNGER', risk: 'safe' },
-  { id: 'treatCarlitos', label: 'TREAT', cost: '1 MEDKIT', energyCost: 0, effect: 'CURE SICKNESS', risk: 'safe' },
+  { id: 'fish', get label() { return uiText('fish'); }, get cost() { return uiText('oneEnergy'); }, energyCost: SURVIVAL_BALANCE.actions.fishEnergy, get effect() { return uiText('foodChance'); }, risk: 'uncertain' },
+  { id: 'dive', get label() { return uiText('dive'); }, get cost() { return uiText('threeEnergy'); }, energyCost: SURVIVAL_BALANCE.actions.diveEnergy, get effect() { return uiText('diveRisk'); }, risk: 'dangerous' },
+  { id: 'eat', get label() { return uiText('eat'); }, get cost() { return uiText('oneFood'); }, energyCost: 0, get effect() { return uiText('hunger35'); }, risk: 'safe' },
+  { id: 'repair', get label() { return uiText('repair'); }, get cost() { return uiText('repairCost'); }, energyCost: 1, get effect() { return uiText('hullRepair'); }, risk: 'safe' },
+  { id: 'treat', get label() { return uiText('treat'); }, get cost() { return uiText('oneMedkit'); }, energyCost: 0, get effect() { return uiText('health30'); }, risk: 'safe' },
+  { id: 'endDay', get label() { return uiText('endDay'); }, get cost() { return uiText('rest'); }, energyCost: 0, get effect() { return uiText('restoreDawn'); }, risk: 'safe' },
+  { id: 'repairItem', get label() { return uiText('repairItem'); }, get cost() { return uiText('oneTape'); }, energyCost: 0, get effect() { return uiText('restoreItem'); }, risk: 'safe' },
+  { id: 'answerRadio', get label() { return uiText('answerRadio'); }, get cost() { return uiText('oneEnergy'); }, energyCost: SURVIVAL_BALANCE.radio.energy, get effect() { return uiText('rescueLead'); }, risk: 'safe' },
+  { id: 'useEnergyBar', get label() { return uiText('eatBar'); }, get cost() { return uiText('oneBar'); }, energyCost: 0, get effect() { return uiText('energyThree'); }, risk: 'safe' },
+  { id: 'openChest', get label() { return uiText('openChest'); }, get cost() { return uiText('free'); }, energyCost: 0, get effect() { return uiText('recoverSupply'); }, risk: 'uncertain' },
+  { id: 'petCarlitos', get label() { return uiText('pet'); }, get cost() { return uiText('free'); }, energyCost: 0, get effect() { return uiText('easeLonely'); }, risk: 'safe' },
+  { id: 'feedCarlitos', get label() { return uiText('feed'); }, get cost() { return uiText('oneFood'); }, energyCost: 0, get effect() { return uiText('restoreHunger'); }, risk: 'safe' },
+  { id: 'treatCarlitos', get label() { return uiText('treat'); }, get cost() { return uiText('oneMedkit'); }, energyCost: 0, get effect() { return uiText('cureSickness'); }, risk: 'safe' },
 ];
 
 const CARLITOS_ACTIONS = [
@@ -85,11 +89,9 @@ const CARLITOS_ACTIONS = [
   'treatCarlitos',
 ] as const satisfies readonly DayActionId[];
 
-const ENERGY_WORDS = ['', 'one', 'two', 'three'] as const;
-
 function spokenEnergyCost(cost: number): string | null {
   if (cost <= 0) return null;
-  return `${ENERGY_WORDS[cost] ?? String(cost)} energy`;
+  return uiDynamic('spokenEnergy', cost);
 }
 
 function quantityLabel(label: string, quantity: number): string {
@@ -98,15 +100,15 @@ function quantityLabel(label: string, quantity: number): string {
 
 function actionPreview(definition: ActionDefinition, snapshot: SurvivalSnapshot): ActionPreview {
   switch (definition.id) {
-    case 'eat': return { ...definition, effect: `HUNGER -${Math.min(35, snapshot.hunger)}` };
-    case 'treat': return { ...definition, effect: `HEALTH +${Math.min(30, Math.max(0, 100 - snapshot.health))}` };
+    case 'eat': return { ...definition, effect: uiDynamic('hungerDecrease', Math.min(35, snapshot.hunger)) };
+    case 'treat': return { ...definition, effect: uiDynamic('healthIncrease', Math.min(30, Math.max(0, 100 - snapshot.health))) };
     case 'repair': {
       const repair = calculateHullRepair(snapshot.hull, snapshot.energy);
       return {
         ...definition,
-        cost: `${repair.energySpent} ENERGY`,
+        cost: uiDynamic('hullRepairCost', repair.energySpent),
         energyCost: repair.energySpent,
-        effect: `HULL +${repair.hullRestored}`,
+        effect: uiDynamic('hullIncrease', repair.hullRestored),
       };
     }
     default: return definition;
@@ -186,14 +188,20 @@ export class BoatAnchorView {
   private busy = false;
   private paused = false;
   private modalOpen = false;
+  private readonly unsubscribeLanguage: () => void;
+  private refreshLanguage(): void {
+    refreshUiText(...this.roots);
+    if (this.currentSnapshot !== null) this.render(this.currentSnapshot, this.actionReasons);
+  }
+
   private disposed = false;
 
   constructor(private readonly host: HTMLElement) {
     const template = document.createElement('template');
     template.innerHTML = `
-      <div class="boat-anchors" data-boat-anchors aria-label="Boat interaction points"></div>
-      <section class="carlitos-card scuba-popup-paper" data-carlitos-card aria-label="Cat status" aria-hidden="true" hidden>
-        <button type="button" class="carlitos-card__close ui-role-context" data-carlitos-close aria-label="Close cat status">&times;</button>
+      <div class="boat-anchors" data-boat-anchors data-ui-aria="boatPoints" aria-label="${uiText('boatPoints')}"></div>
+      <section class="carlitos-card scuba-popup-paper" data-carlitos-card data-ui-aria="catStatus" aria-label="${uiText('catStatus')}" aria-hidden="true" hidden>
+        <button type="button" class="carlitos-card__close ui-role-context" data-carlitos-close data-ui-aria="closeCat" aria-label="${uiText('closeCat')}">&times;</button>
         <div class="carlitos-card__statuses">
           <div class="carlitos-status" data-carlitos-energy-row>
             <span class="carlitos-status__icon carlitos-status__icon--energy" aria-hidden="true">${uiArtwork('energy')}</span>
@@ -203,21 +211,21 @@ export class BoatAnchorView {
             <span class="carlitos-status__icon carlitos-status__icon--hunger" aria-hidden="true">${uiArtwork('hunger')}</span>
             <strong class="ui-role-context" data-carlitos-hunger-label></strong>
             <button type="button" class="carlitos-status__action ui-role-context" data-action="feedCarlitos" aria-disabled="false">
-              <span>FEED</span>
+              <span data-ui-text="feed">${uiText('feed')}</span>
             </button>
           </div>
           <div class="carlitos-status" data-carlitos-happiness-row>
             <span class="carlitos-status__icon carlitos-status__icon--mood" aria-hidden="true">${uiArtwork('mood')}</span>
             <strong class="ui-role-context" data-carlitos-happiness></strong>
             <button type="button" class="carlitos-status__action ui-role-context" data-action="petCarlitos" aria-disabled="false">
-              <span>PET</span>
+              <span data-ui-text="pet">${uiText('pet')}</span>
             </button>
           </div>
           <div class="carlitos-status" data-carlitos-health-row>
             <span class="carlitos-status__icon carlitos-status__icon--health" aria-hidden="true">${uiArtwork('health')}</span>
             <strong class="ui-role-context" data-carlitos-health></strong>
             <button type="button" class="carlitos-status__action ui-role-context" data-action="treatCarlitos" aria-disabled="false">
-              <span>TREAT</span>
+              <span data-ui-text="treat">${uiText('treat')}</span>
             </button>
           </div>
         </div>
@@ -251,6 +259,8 @@ export class BoatAnchorView {
     this.anchorLayer.addEventListener('wheel', this.handleAnchorWheel, { passive: false });
     document.addEventListener('click', this.handleDocumentClick);
     window.addEventListener('resize', this.handleWindowResize);
+    this.unsubscribeLanguage = onLanguageChange(() => this.refreshLanguage());
+    this.refreshLanguage();
   }
 
   render(
@@ -593,6 +603,7 @@ export class BoatAnchorView {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.unsubscribeLanguage();
     let failed = false;
     let firstError: unknown;
     const clean = (cleanup: () => void): void => {
@@ -741,7 +752,7 @@ export class BoatAnchorView {
     pillowSleep: EventContextChoice | undefined,
   ): BoatToolCopy | undefined {
     if (pillowSleep !== undefined) {
-      return { label: 'SLEEP', description: 'Rest on the pillow to sleep through the current event.' };
+      return { get label() { return uiText('sleep'); }, get description() { return uiText('sleepHelp'); } };
     }
     return anchor.toolId === null ? undefined : BOAT_TOOL_COPY[anchor.toolId];
   }
@@ -749,13 +760,13 @@ export class BoatAnchorView {
   private anchorLabel(anchor: BoatInteractionAnchor, toolCopy: BoatToolCopy | undefined, quantity: number): string {
     if (anchor.label !== undefined) return anchor.label;
     if (anchor.itemType !== null) return quantityLabel(ITEM_LABELS[anchor.itemType], quantity);
-    return toolCopy?.label ?? 'UNKNOWN TOOL';
+    return toolCopy?.label ?? uiText('unknownTool');
   }
 
   private anchorDescription(anchor: BoatInteractionAnchor, toolCopy: BoatToolCopy | undefined): string {
     if (anchor.description !== undefined) return anchor.description;
     if (anchor.itemType !== null) return SURVIVAL_ITEM_DESCRIPTIONS[anchor.itemType];
-    return toolCopy?.description ?? 'Permanent lifeboat equipment.';
+    return toolCopy?.description ?? uiText('permanentEquipment');
   }
 
   private tooltipAction(
@@ -792,9 +803,9 @@ export class BoatAnchorView {
     brokenQuantity: number,
   ): string | null {
     if (brokenQuantity > 0 && usableQuantity > 0) return `${usableQuantity} USABLE, ${brokenQuantity} BROKEN`;
-    if (brokenQuantity > 0 || condition === 'broken') return 'BROKEN';
-    if (condition === 'consumed') return 'USED';
-    return condition === 'lost' ? 'LOST' : null;
+    if (brokenQuantity > 0 || condition === 'broken') return uiText('broken');
+    if (condition === 'consumed') return uiText('used');
+    return condition === 'lost' ? uiText('lost') : null;
   }
 
   private visibleAnchorLabel(
@@ -810,8 +821,8 @@ export class BoatAnchorView {
       const label = quantityLabel(ITEM_LABELS[anchor.itemType], quantity);
       return state === null ? label : `${label} — ${state}`;
     }
-    if (anchor.toolId === 'fishingRod') return 'Fishing rod';
-    return anchor.toolId === 'repairTools' ? 'REPAIR' : itemLabel;
+    if (anchor.toolId === 'fishingRod') return uiText('fishingRod');
+    return anchor.toolId === 'repairTools' ? uiText('repair') : itemLabel;
   }
 
   private energyIndicator(
@@ -820,11 +831,11 @@ export class BoatAnchorView {
     reason: string | null,
   ): string {
     if (anchoredChoice === undefined) return '⚡'.repeat(energyCost);
-    if (energyCost <= 0) return reason === null ? '' : 'UNAVAILABLE';
+    if (energyCost <= 0) return reason === null ? '' : uiText('unavailable');
     if (anchoredChoice.energyOwner === 'carlitos') {
-      return `CARLITOS: ${energyCost} ENERGY${reason === null ? '' : ' — UNAVAILABLE'}`;
+      return uiDynamic('carlitosEnergy', energyCost, reason !== null);
     }
-    return `${'⚡'.repeat(energyCost)}${reason === null ? '' : ' — INSUFFICIENT ENERGY'}`;
+    return uiDynamic('playerEnergy', energyCost, reason !== null);
   }
 
   private updateTooltipNodes(
@@ -898,10 +909,9 @@ export class BoatAnchorView {
     reason: string | null,
   ): string {
     const spokenCost = anchoredChoice?.energyOwner === 'carlitos'
-      ? `${spokenEnergyCost(energyCost) ?? 'no energy'} from Carlitos`
+      ? uiDynamic('carlitosSpokenEnergy', energyCost)
       : spokenEnergyCost(energyCost);
-    const unavailable = anchoredChoice !== undefined && reason !== null ? ', insufficient energy' : '';
-    return spokenCost === null ? `${visibleLabel}${unavailable}` : `${visibleLabel}, ${spokenCost}${unavailable}`;
+    return uiDynamic('anchorLabel', visibleLabel, spokenCost, anchoredChoice !== undefined && reason !== null);
   }
 
   private anchorAriaDescription(
@@ -913,20 +923,20 @@ export class BoatAnchorView {
     reason: string | null,
   ): string {
     const stateText = state === null ? '' : ` — ${state}`;
-    const unavailable = reason ? ` — UNAVAILABLE: ${reason}` : '';
+    const unavailable = reason ? uiDynamic('unavailableReason', reason) : '';
     if (action === null || preview === null) return `${itemLabel}${stateText} — ${itemDescription}${unavailable}`;
     const actionText = itemLabel === action.label ? '' : ` — ${action.label}`;
-    return `${itemLabel}${stateText}${actionText} — ${itemDescription} — ${preview.cost} — ${preview.effect} — ${preview.risk.toUpperCase()}${unavailable}`;
+    return `${itemLabel}${stateText}${actionText} — ${itemDescription} — ${preview.cost} — ${preview.effect} — ${uiDynamic(preview.risk)}${unavailable}`;
   }
 
   private anchorUnavailableReason(anchor: BoatInteractionAnchor): string | null {
-    if (anchor.depleted) return 'This recovered item is depleted.';
+    if (anchor.depleted) return uiText('depleted');
     const backingInstanceId = this.anchorBackingInstanceId(anchor);
     const condition = this.anchorInventoryItem(backingInstanceId)?.condition;
     const quantity = this.anchorQuantity(anchor);
     const usableQuantity = this.usableQuantity(anchor, condition, quantity);
     const brokenQuantity = this.brokenQuantity(anchor, condition, quantity);
-    if (brokenQuantity > 0 && usableQuantity === 0) return 'Repair with Duct Tape.';
+    if (brokenQuantity > 0 && usableQuantity === 0) return uiText('repairTape');
     return anchor.action === null ? null : this.actionReasons.get(anchor.action) ?? null;
   }
 
@@ -951,12 +961,12 @@ export class BoatAnchorView {
     this.carlitosHappiness.textContent = status.happiness.toLocaleUpperCase('en-US');
     this.carlitosHealth.textContent = status.health.toLocaleUpperCase('en-US');
     this.carlitosEnergyLabel.textContent = `${carlitos.energy} / 3`;
-    this.carlitosRows.hunger.dataset.state = status.hunger === 'Starving' ? 'danger' : 'stable';
+    this.carlitosRows.hunger.dataset.state = carlitos.hunger < 2 ? 'danger' : 'stable';
     this.carlitosRows.happiness.dataset.state = (
-      status.happiness === 'Depressed' || status.happiness === 'Miserable'
+      carlitos.unhappiness > 6
     ) ? 'danger' : 'stable';
     this.carlitosRows.health.dataset.state = (
-      status.health === 'Sick' || status.health === 'Dying'
+      carlitos.sickness >= 2 && carlitos.sickness <= 4
     ) ? 'danger' : 'stable';
     this.syncCarlitosActions();
     const anchor = [...this.anchors.values()].find(
@@ -975,10 +985,10 @@ export class BoatAnchorView {
         'aria-description',
         reason ?? (
           action === 'petCarlitos'
-            ? 'Pet Carlitos.'
+            ? uiText('petHelp')
             : action === 'feedCarlitos'
-              ? 'Feed Carlitos one food.'
-              : 'Treat Carlitos with one medical kit.'
+              ? uiText('feedHelp')
+              : uiText('treatHelp')
         ),
       );
     });

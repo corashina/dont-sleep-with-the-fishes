@@ -25,6 +25,7 @@ describe('Knife survival item', () => {
         {
           weight: 1,
           message: 'You cut the tentacle. The supply stays aboard.',
+          resultId: 'snatcher.knife.0',
           effects: {},
         },
       ],
@@ -44,11 +45,13 @@ describe('Knife survival item', () => {
         {
           weight: 80,
           message: 'You drive the sharks away from the boat.',
+          resultId: 'swarm-of-sharks.knife.0',
           effects: {},
         },
         {
           weight: 20,
           message: 'The knife breaks as a shark bites you.',
+          resultId: 'swarm-of-sharks.knife.1',
           effects: {
             resources: [{ operation: 'subtract', resource: 'health', value: 20 }],
             items: [{ kind: 'break', itemId: 'knife', quantity: 1 }],
