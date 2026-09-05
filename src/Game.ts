@@ -3,9 +3,8 @@ import {
   PerspectiveCamera,
   SRGBColorSpace,
   WebGLRenderer,
-  Texture,
 } from 'three';
-import type { GamePhase, PhaseContext } from './app/GamePhase';
+import type { GamePhase, PhaseContext, MenuPhaseContext, ShipPhaseContext, SurvivalPhaseContext } from './app/GamePhase';
 import {
   EVENT_TEST_OPTIONS,
   createEventTestResult,
@@ -47,23 +46,13 @@ import {
   type PostProcessingNumericSetting,
 } from './rendering/postProcessingControls';
 import type { ItemAmbientOcclusionMode } from './rendering/ItemAmbientOcclusion';
-import type { PropModelLibrary } from './world/PropModelLibrary';
 import { runCleanupSteps } from './world/SceneResources';
-import type { ShipFurnitureLibrary } from './world/ShipFurnitureLibrary';
-import type { SkyAssets } from './world/SkyAssets';
-import { LifeboatAssets } from './world/LifeboatAssets';
-import { ShipAssets } from './world/ShipAssets';
-import type { PhysicsRuntime } from './physics/PhysicsRuntime';
 import {
   scavengePhysicsDebugMeshes,
   setScavengePhysicsDebugMeshes,
   setScavengePhysicsEnabled,
-  type PhysicsMode,
 } from './physics/PhysicsOptions';
 import type { PresentationWeatherId } from './weather/presentationWeather';
-import { AudioSystem } from './audio/AudioSystem';
-import type { MenuModelLibrary } from './menu/MenuModelLibrary';
-import { MenuSandAssets } from './menu/MenuSandAssets';
 import { MainMenuPhase } from './phases/MainMenuPhase';
 import type { SkyPhase } from './world/skyPalette';
 import { browserStorage } from './browser/storage';
@@ -76,21 +65,23 @@ import type {
   SurvivalPhaseStart,
 } from './survival/SurvivalPhase';
 import type { BrowserPlaytestStartup } from './app/BrowserPlaytest';
+import type { PhaseResourceSource, ResourceLease } from './app/PhaseResources';
+import { createSystemScreen } from './ui/SystemScreen';
 
 export interface GameFactories {
   createMenu(
-    context: PhaseContext,
+    context: MenuPhaseContext,
     onComplete: () => void,
   ): GamePhase;
   createScavenge(
-    context: PhaseContext,
+    context: ShipPhaseContext,
     onComplete: (result: Readonly<ScavengeResult>) => void,
     onRestart: () => void,
     onReturnToMenu: () => void,
     start: ScavengePhaseStart,
   ): GamePhase;
   createSurvival(
-    context: PhaseContext,
+    context: SurvivalPhaseContext,
     start: SurvivalPhaseStart,
     onRestart: () => void,
     onCheckpointChange: SurvivalCheckpointChange,
@@ -133,14 +124,6 @@ interface TestGameBase {
   readonly shadowQuality: ShadowQualityPreference;
 }
 
-const disposedMenuModelLibraries = new WeakSet<MenuModelLibrary>();
-
-export function disposeMenuModelLibrary(menuModels: MenuModelLibrary): void {
-  if (disposedMenuModelLibraries.has(menuModels)) return;
-  disposedMenuModelLibraries.add(menuModels);
-  menuModels.dispose();
-}
-
 export const GAME_CAMERA = Object.freeze({
   fov: 80,
   near: 0.08,
@@ -148,15 +131,7 @@ export const GAME_CAMERA = Object.freeze({
 });
 
 export interface GameTestOptions {
-  propModels: PropModelLibrary;
-  menuModels: MenuModelLibrary;
-  menuSandAssets?: MenuSandAssets;
-  shipFurniture: ShipFurnitureLibrary;
-  skyAssets: SkyAssets;
-  lifeboatAssets?: LifeboatAssets;
-  shipAssets?: ShipAssets;
-  physicsRuntime: PhysicsRuntime | null;
-  physicsMode?: PhysicsMode;
+  resources: PhaseResourceSource;
   clock?: GameClock;
   createSeed?: () => number;
   mount?: HTMLElement;
@@ -167,7 +142,6 @@ export interface GameTestOptions {
   visualQuality?: VisualQualityPreference;
   waterQuality?: WaterQualityPreference;
   systemTuning?: SystemTuningPreference;
-  audioSystem?: AudioSystem;
   onFatalError?: (error: unknown) => void;
   saveStorage?: SurvivalSaveStorage | null;
   browserPlaytest?: BrowserPlaytestStartup | null;
@@ -241,22 +215,18 @@ function valueOrCreate<T>(value: T | undefined, create: () => T): T {
 }
 
 export class Game {
+  ready!: Promise<void>;
   private renderer!: WebGLRenderer;
   private sceneRenderer!: SceneRenderer;
   private camera!: PerspectiveCamera;
   private clock!: GameClock;
-  private propModels!: PropModelLibrary;
-  private menuModels!: MenuModelLibrary;
-  private menuSandAssets!: MenuSandAssets;
-  private shipFurniture!: ShipFurnitureLibrary;
-  private skyAssets!: SkyAssets;
-  private lifeboatAssets!: LifeboatAssets;
-  private shipAssets!: ShipAssets;
-  private audio!: AudioSystem;
+  private resources!: PhaseResourceSource;
+  private loading: HTMLElement | null = null;
   private systemTuning!: SystemTuningPreference;
   private context!: PhaseContext;
   private factories!: GameFactories;
   private activePhase: GamePhase | null = null;
+  private activeLease: ResourceLease<unknown> | null = null;
   private performanceStats: PerformanceStats | null = null;
   private settingsMenu: SettingsMenu | null = null;
   private postProcessingConsole: PostProcessingConsole | null = null;
@@ -278,16 +248,7 @@ export class Game {
 
   constructor(
     mount: HTMLElement,
-    propModels: PropModelLibrary,
-    shipFurniture: ShipFurnitureLibrary,
-    skyAssets: SkyAssets,
-    lifeboatAssets: LifeboatAssets,
-    shipAssets: ShipAssets,
-    menuModels: MenuModelLibrary,
-    menuSandAssets: MenuSandAssets,
-    physicsRuntime: PhysicsRuntime | null,
-    physicsMode: PhysicsMode = 'enabled',
-    audioSystem: AudioSystem = AudioSystem.silent(),
+    resources: PhaseResourceSource,
     onFatalError: (error: unknown) => void = rethrowFatalError,
     browserPlaytest: BrowserPlaytestStartup | null = null,
   ) {
@@ -346,16 +307,7 @@ export class Game {
         systemTuning,
         camera,
         clock,
-        propModels,
-        shipFurniture,
-        skyAssets,
-        lifeboatAssets,
-        shipAssets,
-        menuModels,
-        menuSandAssets,
-        physicsRuntime,
-        physicsMode,
-        audioSystem,
+        resources,
         browserPlaytest === null
           ? browserStorage() as SurvivalSaveStorage | null
           : null,
@@ -413,18 +365,6 @@ export class Game {
         null,
       ),
     );
-    const lifeboatAssets = valueOrCreate(
-      options.lifeboatAssets,
-      () => LifeboatAssets.fromTextures(new Texture(), new Texture(), new Texture()),
-    );
-    const shipAssets = valueOrCreate(
-      options.shipAssets,
-      () => ShipAssets.fromTextures(new Texture(), new Texture(), new Texture()),
-    );
-    const menuSandAssets = valueOrCreate(
-      options.menuSandAssets,
-      () => MenuSandAssets.fromTexture(new Texture()),
-    );
     const browserPlaytest = options.browserPlaytest ?? null;
     const saveStorage = browserPlaytest === null ? options.saveStorage ?? null : null;
     this.initialize(
@@ -443,16 +383,7 @@ export class Game {
         GAME_CAMERA.far,
       ),
       base.clock,
-      options.propModels,
-      options.shipFurniture,
-      options.skyAssets,
-      lifeboatAssets,
-      shipAssets,
-      options.menuModels,
-      menuSandAssets,
-      options.physicsRuntime,
-      valueOrCreate(options.physicsMode, () => 'enabled'),
-      valueOrCreate(options.audioSystem, () => AudioSystem.silent()),
+      options.resources,
       saveStorage,
       factories,
       valueOrCreate(options.createSeed, () => createRandomSeed),
@@ -487,17 +418,10 @@ export class Game {
     this.postProcessingConsole = null;
     runCleanupSteps([
       () => outgoing?.dispose(),
-      () => disposeMenuModelLibrary(this.menuModels),
-      () => this.menuSandAssets.dispose(),
       () => postProcessingConsole?.dispose(),
       () => { this.settingsMenu?.dispose(); this.settingsMenu = null; },
       () => performanceStats?.dispose(),
-      () => this.propModels.dispose(),
-      () => this.shipFurniture.dispose(),
-      () => this.skyAssets.dispose(),
-      () => this.lifeboatAssets.dispose(),
-      () => this.shipAssets.dispose(),
-      () => this.audio.dispose(),
+      () => this.resources.dispose(),
       () => this.sceneRenderer.dispose(),
       () => this.renderer.dispose(),
       () => this.renderer.domElement.remove(),
@@ -515,16 +439,7 @@ export class Game {
     systemTuning: SystemTuningPreference,
     camera: PerspectiveCamera,
     clock: GameClock,
-    propModels: PropModelLibrary,
-    shipFurniture: ShipFurnitureLibrary,
-    skyAssets: SkyAssets,
-    lifeboatAssets: LifeboatAssets,
-    shipAssets: ShipAssets,
-    menuModels: MenuModelLibrary,
-    menuSandAssets: MenuSandAssets,
-    physicsRuntime: PhysicsRuntime | null,
-    physicsMode: PhysicsMode,
-    audioSystem: AudioSystem,
+    resources: PhaseResourceSource,
     saveStorage: SurvivalSaveStorage | null,
     factories: GameFactories,
     createSeed: () => number,
@@ -535,14 +450,9 @@ export class Game {
     this.sceneRenderer = sceneRenderer;
     this.camera = camera;
     this.clock = clock;
-    this.propModels = propModels;
-    this.shipFurniture = shipFurniture;
-    this.skyAssets = skyAssets;
-    this.lifeboatAssets = lifeboatAssets;
-    this.shipAssets = shipAssets;
-    this.menuModels = menuModels;
-    this.menuSandAssets = menuSandAssets;
-    this.audio = audioSystem;
+    this.resources = resources;
+    const audioSystem = resources.audio;
+    const physicsMode = resources.physicsMode;
     this.saveStore = new SurvivalSaveStore(saveStorage);
     this.systemTuning = systemTuning;
     this.factories = factories;
@@ -555,9 +465,6 @@ export class Game {
         1,
         renderer.capabilities.getMaxAnisotropy(),
       );
-      this.lifeboatAssets.configure(maxTextureAnisotropy);
-      this.shipAssets.configure(maxTextureAnisotropy);
-      this.menuSandAssets.configure(maxTextureAnisotropy);
       this.context = {
         mount,
         renderer,
@@ -565,20 +472,12 @@ export class Game {
         visualQuality,
         waterQuality,
         camera,
-        propModels,
-        shipFurniture,
         maxTextureAnisotropy,
-        skyAssets,
-        lifeboatAssets,
-        shipAssets,
-        menuModels,
-        menuSandAssets,
-        physicsRuntime,
-        physicsMode,
         audio: audioSystem,
         onFatalError: (error) => this.reportFatalError(error),
       };
       this.activePhase = null;
+      this.activeLease = null;
       this.performanceStats = null;
       this.postProcessingConsole = null;
       const tuningState = systemTuning.get();
@@ -590,6 +489,7 @@ export class Game {
       this.disposed = false;
       this.elapsed = 0;
       this.phaseGeneration = 0;
+      this.loading = null;
       this.fatalErrorReported = false;
       this.performanceStats = new PerformanceStats(
         mount,
@@ -692,15 +592,15 @@ export class Game {
       window.addEventListener('resize', this.onResize);
       resizeListenerRegistered = true;
       if (browserPlaytest === null) {
-        this.activateMenu(false);
+        this.ready = this.activateMenu();
       } else {
         this.seed = browserPlaytest.seed;
-        this.activateSurvival(Object.freeze({
+        this.ready = this.activateSurvival(Object.freeze({
           kind: 'fresh',
           savedItems: browserPlaytest.savedItems,
           seed: browserPlaytest.seed,
           scavengeElapsedSeconds: 0,
-        }), false);
+        }));
       }
       this.onResize();
     } catch (error) {
@@ -724,8 +624,6 @@ export class Game {
         if (resizeListenerRegistered) window.removeEventListener('resize', this.onResize);
       },
       () => activePhase?.dispose(),
-      () => disposeMenuModelLibrary(this.menuModels),
-      () => this.menuSandAssets.dispose(),
       () => postProcessingConsole?.dispose(),
       () => { this.settingsMenu?.dispose(); this.settingsMenu = null; },
       () => performanceStats?.dispose(),
@@ -735,81 +633,85 @@ export class Game {
     ]);
   }
 
-  private activateScavenge(start: boolean, phaseStart: ScavengePhaseStart = 'intro'): void {
-    const generation = ++this.phaseGeneration;
-    const phase = this.createScavengePhase(generation, phaseStart);
-    if (!this.ownsGeneration(generation)) {
-      phase.dispose();
-      return;
-    }
-    this.applyPresentationOverridesOrDispose(phase);
-    this.activePhase = phase;
-    this.synchronizePresentationControls();
-    if (start) {
-      phase.resize(window.innerWidth, window.innerHeight);
-      phase.start();
-    }
+  private activateScavenge(phaseStart: ScavengePhaseStart = 'intro'): Promise<void> {
+    return this.acquirePhase(() => this.resources.acquireShip(), (assets, generation) => {
+      assets.shipAssets.configure(this.context.maxTextureAnisotropy);
+      assets.lifeboatAssets.configure(this.context.maxTextureAnisotropy);
+      return this.factories.createScavenge(
+        { ...this.context, ...assets },
+        result => this.completeScavenge(generation, result),
+        () => this.restartFrom(generation),
+        () => this.returnToMenuFrom(generation),
+        phaseStart,
+      );
+    });
   }
 
-  private activateMenu(start: boolean): void {
-    const generation = ++this.phaseGeneration;
-    const phase = this.factories.createMenu(
-      this.context,
-      () => this.startScavengeFromMenu(generation),
-    );
-    if (!this.ownsGeneration(generation)) {
-      phase.dispose();
-      return;
-    }
-    this.applyPresentationOverridesOrDispose(phase);
-    this.activePhase = phase;
-    this.synchronizePresentationControls();
-    if (start) {
-      phase.resize(window.innerWidth, window.innerHeight);
-      phase.start();
-    }
+  private activateMenu(): Promise<void> {
+    return this.acquirePhase(() => this.resources.acquireMenu(), (assets, generation) => {
+      assets.menuSandAssets.configure(this.context.maxTextureAnisotropy);
+      return this.factories.createMenu(
+        { ...this.context, ...assets },
+        () => this.startScavengeFromMenu(generation),
+      );
+    });
   }
 
   private startScavengeFromMenu(generation: number): void {
     if (!this.ownsGeneration(generation)) return;
-    const nextGeneration = this.phaseGeneration + 1;
-    let nextSeed: number;
-    let scavenge: GamePhase;
-    try {
-      nextSeed = this.createSeed();
-      scavenge = this.createScavengePhase(nextGeneration);
-      this.applyPresentationOverridesOrDispose(scavenge);
-    } catch (error) {
-      this.reportFatalError(error);
-      return;
-    }
-    if (!this.ownsGeneration(generation)) {
-      scavenge.dispose();
-      return;
-    }
-    const menu = this.detachActivePhase();
-    this.resetCamera();
+    this.seed = this.createSeed();
     this.elapsed = 0;
-    this.seed = nextSeed;
-    this.activePhase = scavenge;
-    this.synchronizePresentationControls();
-    try {
-      menu?.dispose();
-      scavenge.resize(window.innerWidth, window.innerHeight);
-      scavenge.start();
-    } catch (error) {
-      this.reportFatalError(error);
-    }
+    this.activateScavenge();
   }
 
-  private createScavengePhase(generation: number, start: ScavengePhaseStart = 'intro'): GamePhase {
-    return this.factories.createScavenge(
-      this.context,
-      (result) => this.completeScavenge(generation, result),
-      () => this.restartFrom(generation),
-      () => this.returnToMenuFrom(generation),
-      start,
-    );
+  private acquirePhase<T>(
+    acquire: () => Promise<ResourceLease<T>>,
+    create: (assets: T, generation: number) => GamePhase,
+  ): Promise<void> {
+    const generation = ++this.phaseGeneration;
+    let loading: HTMLElement | null = null;
+    return Promise.resolve().then(() => {
+      this.settingsMenu?.close();
+      this.activePhase?.setOverlayActive?.(true);
+      this.loading?.remove();
+      loading = createSystemScreen({ kind: 'loading' });
+      loading.querySelector('progress')?.removeAttribute('value');
+      this.loading = loading;
+      this.context.mount.append(loading);
+      return acquire();
+    }).then(lease => {
+      if (!this.ownsGeneration(generation)) { lease.dispose(); return; }
+      const outgoing = this.takeActivePhase();
+      let phase: GamePhase | null = null;
+      let transferred = false;
+      try {
+        // Phase objects release their clones and scopes before the backing lease.
+        outgoing?.dispose();
+        this.resetCamera();
+        phase = create(lease.assets, generation);
+        if (!this.ownsGeneration(generation)) { const stale = phase; phase = null; stale.dispose(); return; }
+        this.applyPresentationOverrides(phase);
+        if (!this.ownsGeneration(generation)) { const stale = phase; phase = null; stale.dispose(); return; }
+        this.activePhase = phase;
+        this.activeLease = lease;
+        transferred = true;
+        this.synchronizePresentationControls();
+        phase.resize(window.innerWidth, window.innerHeight);
+        if (this.started && this.ownsGeneration(generation)) phase.start();
+      } catch (error) {
+        if (!transferred) {
+          try { phase?.dispose(); } catch { /* Keep the constructor error. */ }
+        }
+        throw error;
+      } finally {
+        if (!transferred) lease.dispose();
+      }
+    }).catch(error => {
+      if (this.ownsGeneration(generation)) this.reportFatalError(error);
+    }).finally(() => {
+      loading?.remove();
+      if (this.loading === loading) this.loading = null;
+    });
   }
 
   private reportFatalError(error: unknown): void {
@@ -823,10 +725,7 @@ export class Game {
     result: Readonly<ScavengeResult>,
   ): void {
     if (!this.ownsGeneration(generation)) return;
-    const scavenge = this.detachActivePhase();
     this.exitPointerLock();
-    scavenge?.dispose();
-    this.resetCamera();
     const copiedResult: Readonly<ScavengeResult> = Object.freeze({
       savedItems: Object.freeze(
         result.savedItems.map((item) => Object.freeze({ ...item })),
@@ -841,48 +740,34 @@ export class Game {
     }));
   }
 
-  private activateSurvival(start: SurvivalPhaseStart, begin = true): void {
-    const generation = ++this.phaseGeneration;
-    const onCheckpointChange: SurvivalCheckpointChange = (checkpoint) => {
-      if (!this.ownsGeneration(generation)) return;
-      if (checkpoint === null) this.saveStore.clearCheckpoint();
-      else this.saveStore.writeCheckpoint(checkpoint);
-      this.syncSaveControls();
-    };
-    const survival = this.factories.createSurvival(
-      this.context,
-      start,
-      () => this.restartFrom(generation),
-      onCheckpointChange,
-      () => this.returnToMenuFrom(generation),
-    );
-    if (!this.ownsGeneration(generation)) {
-      survival.dispose();
-      return;
-    }
-    this.applyPresentationOverridesOrDispose(survival);
-    this.activePhase = survival;
-    this.synchronizePresentationControls();
-    if (begin) {
-      survival.resize(window.innerWidth, window.innerHeight);
-      survival.start();
-    }
+  private activateSurvival(start: SurvivalPhaseStart): Promise<void> {
+    return this.acquirePhase(() => this.resources.acquireSurvival(), (assets, generation) => {
+      assets.lifeboatAssets.configure(this.context.maxTextureAnisotropy);
+      const onCheckpointChange: SurvivalCheckpointChange = checkpoint => {
+        if (!this.ownsGeneration(generation)) return;
+        if (checkpoint === null) this.saveStore.clearCheckpoint();
+        else this.saveStore.writeCheckpoint(checkpoint);
+        this.syncSaveControls();
+      };
+      return this.factories.createSurvival(
+        { ...this.context, ...assets }, start,
+        () => this.restartFrom(generation), onCheckpointChange,
+        () => this.returnToMenuFrom(generation),
+      );
+    });
   }
 
   private enterTestEvent(id: string): void {
     if (this.disposed) return;
     const option = EVENT_TEST_OPTIONS.find((candidate) => candidate.id === id);
     if (option === undefined) throw new Error(`Unknown event test scene: ${id}`);
-    const outgoing = this.detachActivePhase();
     this.exitPointerLock();
-    outgoing?.dispose();
-    this.resetCamera();
     this.elapsed = 0;
     this.seed = this.createSeed();
     const result = createEventTestResult();
     if (option.phase === 'ending') {
       if (option.endingId === 'dorothy') {
-        this.activateScavenge(true, 'ending-preview');
+        this.activateScavenge('ending-preview');
       } else {
         this.activateSurvival({
           kind: 'ending-preview',
@@ -911,40 +796,32 @@ export class Game {
 
   private returnToMenuFrom(generation: number): void {
     if (!this.ownsGeneration(generation)) return;
-    const outgoing = this.detachActivePhase();
-    try {
-      runCleanupSteps([
-        () => this.exitPointerLock(),
-        () => outgoing?.dispose(),
-        () => this.resetCamera(),
-        () => { this.elapsed = 0; },
-        () => this.activateMenu(true),
-      ]);
-    } catch (error) {
-      this.reportFatalError(error);
-    }
+    this.exitPointerLock();
+    this.elapsed = 0;
+    void this.activateMenu();
   }
 
   private restartCurrentPhase(): void {
-    const outgoing = this.detachActivePhase();
-    try {
-      runCleanupSteps([
-        () => this.exitPointerLock(),
-        () => outgoing?.dispose(),
-        () => this.resetCamera(),
-        () => { this.elapsed = 0; },
-        () => { this.seed = this.createSeed(); },
-        () => this.activateScavenge(true),
-      ]);
-    } catch (error) {
-      this.reportFatalError(error);
-    }
+    this.exitPointerLock();
+    this.elapsed = 0;
+    this.seed = this.createSeed();
+    void this.activateScavenge();
   }
 
-  private detachActivePhase(): GamePhase | null {
-    this.settingsMenu?.close();
-    const outgoing = this.activePhase;
+  private takeActivePhase(): Pick<GamePhase, 'dispose'> | null {
+    const phase = this.activePhase;
+    const lease = this.activeLease;
     this.activePhase = null;
+    this.activeLease = null;
+    if (phase === null && lease === null) return null;
+    return { dispose: () => runCleanupSteps([() => phase?.dispose(), () => lease?.dispose()]) };
+  }
+
+  private detachActivePhase(): Pick<GamePhase, 'dispose'> | null {
+    this.settingsMenu?.close();
+    this.loading?.remove();
+    this.loading = null;
+    const outgoing = this.takeActivePhase();
     this.phaseGeneration += 1;
     return outgoing;
   }
@@ -976,17 +853,10 @@ export class Game {
   private continueSavedRun(): void {
     const checkpoint = this.saveStore.getState().checkpoint;
     if (this.disposed || checkpoint === null) return;
-    const outgoing = this.detachActivePhase();
-    try {
-      this.exitPointerLock();
-      outgoing?.dispose();
-      this.resetCamera();
-      this.elapsed = 0;
-      this.seed = checkpoint.session.seed;
-      this.activateSurvival({ kind: 'restored', checkpoint });
-    } catch (error) {
-      this.reportFatalError(error);
-    }
+    this.exitPointerLock();
+    this.elapsed = 0;
+    this.seed = checkpoint.session.seed;
+    void this.activateSurvival({ kind: 'restored', checkpoint });
   }
 
   private syncSaveControls(): void {
@@ -1017,23 +887,10 @@ export class Game {
     this.activePhase?.setVolumetricCloudsEnabled?.(enabled);
   }
 
-  private applyPresentationOverridesOrDispose(phase: GamePhase): void {
-    try {
-      if (this.weatherOverride !== null) {
-        phase.setWeatherOverride?.(this.weatherOverride);
-      }
-      if (this.timeOfDayOverride !== null) {
-        phase.setTimeOfDayOverride?.(this.timeOfDayOverride);
-      }
-      phase.setVolumetricCloudsEnabled?.(this.volumetricCloudsEnabled);
-    } catch (error) {
-      try {
-        phase.dispose();
-      } catch {
-        // Preserve the override failure that prevented phase ownership.
-      }
-      throw error;
-    }
+  private applyPresentationOverrides(phase: GamePhase): void {
+    if (this.weatherOverride !== null) phase.setWeatherOverride?.(this.weatherOverride);
+    if (this.timeOfDayOverride !== null) phase.setTimeOfDayOverride?.(this.timeOfDayOverride);
+    phase.setVolumetricCloudsEnabled?.(this.volumetricCloudsEnabled);
   }
 
   private synchronizePresentationControls(): void {

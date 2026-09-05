@@ -227,7 +227,10 @@ export class PropModelLibrary {
     private readonly eventTemplates: ReadonlyMap<EventModelId, ModelTemplate>,
   ) {}
 
-  static async load(loader: ItemModelLoader = new GltfItemModelLoader()): Promise<PropModelLibrary> {
+  static async load(
+    loader: ItemModelLoader = new GltfItemModelLoader(),
+    eventIds: readonly EventModelId[] = EVENT_MODEL_IDS,
+  ): Promise<PropModelLibrary> {
     for (const id of RUNTIME_MODEL_IDS) {
       validateSpec(id, runtimeModelSpec(id));
     }
@@ -274,7 +277,7 @@ export class PropModelLibrary {
       }
     }
 
-    const eventResults = await Promise.allSettled(EVENT_MODEL_IDS.map(
+    const eventResults = await Promise.allSettled(eventIds.map(
       async (id): Promise<LoadedTemplate> => {
         let root: Group | null = null;
         try {
@@ -293,6 +296,15 @@ export class PropModelLibrary {
         }
       },
     ));
+
+    const eventFailure = eventResults.find(result => result.status === 'rejected');
+    if (eventFailure?.status === 'rejected') {
+      attemptCleanup(() => disposeRoots([
+        ...fulfilledRoots,
+        ...eventResults.flatMap(result => result.status === 'fulfilled' ? [result.value.root] : []),
+      ]));
+      throw eventFailure.reason;
+    }
 
     return new PropModelLibrary(
       new Map(ITEM_IDS.map((id, index) => [id, {
@@ -313,7 +325,7 @@ export class PropModelLibrary {
           animations: loaded[ITEM_IDS.length + LIFEBOAT_EQUIPMENT_IDS.length + index]!.animations,
         },
       ])),
-      new Map(EVENT_MODEL_IDS.flatMap((id, index) => {
+      new Map(eventIds.flatMap((id, index) => {
         const result = eventResults[index]!;
         return result.status === 'fulfilled'
           ? [[id, {

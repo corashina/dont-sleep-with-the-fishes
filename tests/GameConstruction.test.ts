@@ -5,28 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PropModelLibrary } from '../src/world/PropModelLibrary';
 import type { ShipFurnitureLibrary } from '../src/world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../src/world/SkyAssets';
-import type { LifeboatAssets } from '../src/world/LifeboatAssets';
-import type { ShipAssets } from '../src/world/ShipAssets';
-import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
+import type { MenuPhaseContext } from '../src/app/GamePhase';
 import type { MenuModelLibrary } from '../src/menu/MenuModelLibrary';
 import type { MenuSandAssets } from '../src/menu/MenuSandAssets';
+import { createTestGame, flushPhases } from './helpers/game';
+import type { PhaseResourceSource } from '../src/app/PhaseResources';
+import { AudioSystem } from '../src/audio/AudioSystem';
 import { testPhysicsRuntime } from './helpers/physics';
 
 const physicsRuntime = await testPhysicsRuntime();
-
-function createImmediateMenu(
-  _context: PhaseContext,
-  onComplete: () => void,
-): GamePhase {
-  onComplete();
-  return {
-    start: vi.fn(),
-    update: vi.fn(),
-    resize: vi.fn(),
-    render: vi.fn(),
-    dispose: vi.fn(),
-  };
-}
 
 const constructionMocks = vi.hoisted(() => ({
   WebGLRenderer: vi.fn(),
@@ -61,14 +48,7 @@ describe('Game construction rollback', () => {
 
     expect(() => new Game(
       document.createElement('main'),
-      {} as PropModelLibrary,
-      {} as ShipFurnitureLibrary,
-      {} as SkyAssets,
-      {} as LifeboatAssets,
-      {} as ShipAssets,
-      {} as MenuModelLibrary,
-      {} as MenuSandAssets,
-      physicsRuntime,
+      {} as PhaseResourceSource,
     )).toThrow(WebGlInitializationError);
   }, 10_000);
 
@@ -101,14 +81,7 @@ describe('Game construction rollback', () => {
     try {
       new Game(
         document.createElement('main'),
-        {} as PropModelLibrary,
-        {} as ShipFurnitureLibrary,
-        {} as SkyAssets,
-        {} as LifeboatAssets,
-        {} as ShipAssets,
-        menuModels,
-        menuSandAssets,
-        physicsRuntime,
+        { audio: AudioSystem.silent(), physicsMode: 'enabled' } as PhaseResourceSource,
       );
     } catch (error) {
       thrown = error;
@@ -123,14 +96,12 @@ describe('Game construction rollback', () => {
       'high',
     );
     expect(calls).toEqual([
-      'menuModels',
-      'menuSandAssets',
       'sceneRenderer',
       'renderer',
       'canvas',
     ]);
-    expect(menuModels.dispose).toHaveBeenCalledOnce();
-    expect(menuSandAssets.dispose).toHaveBeenCalledOnce();
+    expect(menuModels.dispose).not.toHaveBeenCalled();
+    expect(menuSandAssets.dispose).not.toHaveBeenCalled();
     expect(sceneRenderer.dispose).toHaveBeenCalledOnce();
     expect(renderer.dispose).toHaveBeenCalledOnce();
   }, 30_000);
@@ -151,11 +122,10 @@ describe('Game construction rollback', () => {
       configure: vi.fn(),
       dispose: vi.fn(),
     } as unknown as MenuSandAssets;
-    let phaseContext: PhaseContext | undefined;
-    const { Game } = await import('../src/Game');
-    const game = Game.forTest({
-      createMenu: createImmediateMenu,
-      createScavenge: (context) => {
+    let phaseContext: MenuPhaseContext | undefined;
+    const game = createTestGame({
+      createScavenge: () => { throw new Error("Unexpected ship"); },
+      createMenu: (context) => {
         phaseContext = context;
         return {
           start: vi.fn(),
@@ -179,6 +149,7 @@ describe('Game construction rollback', () => {
       renderer: renderer as never,
     });
 
+    await flushPhases();
     expect(phaseContext?.menuModels).toBe(menuModels);
     expect(phaseContext?.menuSandAssets).toBe(menuSandAssets);
     expect(menuSandAssets.configure).toHaveBeenCalledWith(1);

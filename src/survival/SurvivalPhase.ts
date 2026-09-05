@@ -1,5 +1,5 @@
 import { PerspectiveCamera } from 'three';
-import type { PhaseContext, GamePhase } from '../app/GamePhase';
+import type { SurvivalPhaseContext, GamePhase } from '../app/GamePhase';
 import { AudioSystem } from '../audio/AudioSystem';
 import { SurvivalAudio } from '../audio/SurvivalAudio';
 import type { SurvivalEndingId } from '../game/ending';
@@ -16,13 +16,10 @@ import {
   createWaterQualityPreference,
   type WaterQuality,
 } from '../rendering/waterQuality';
-import type { PhysicsRuntime } from '../physics/PhysicsRuntime';
 import { SurvivalUI } from '../ui/SurvivalUI';
 import type { PropModelLibrary } from '../world/PropModelLibrary';
-import type { ShipFurnitureLibrary } from '../world/ShipFurnitureLibrary';
 import type { SkyAssets } from '../world/SkyAssets';
 import type { LifeboatAssets } from '../world/LifeboatAssets';
-import type { ShipAssets } from '../world/ShipAssets';
 import { runCleanupSteps } from '../world/SceneResources';
 import type { SkyPhase } from '../world/skyPalette';
 import {
@@ -181,7 +178,7 @@ function testContext(
     dispose: () => undefined,
   },
   audio: AudioSystem = AudioSystem.silent(),
-): PhaseContext {
+): SurvivalPhaseContext {
   const mount = {
     clientWidth: 1,
     clientHeight: 1,
@@ -189,28 +186,22 @@ function testContext(
   } as unknown as HTMLElement;
   return {
     mount,
-    renderer: { render: () => undefined } as unknown as PhaseContext['renderer'],
+    renderer: { render: () => undefined } as unknown as SurvivalPhaseContext['renderer'],
     sceneRenderer,
     visualQuality: createVisualQualityPreference(() => undefined, null),
     waterQuality: createWaterQualityPreference(() => undefined, null),
     camera: new PerspectiveCamera(),
     propModels: {} as PropModelLibrary,
-    menuModels: { dispose: () => undefined } as unknown as PhaseContext['menuModels'],
-    menuSandAssets: {} as PhaseContext['menuSandAssets'],
-    shipFurniture: {} as ShipFurnitureLibrary,
     maxTextureAnisotropy: 1,
     skyAssets: {} as SkyAssets,
     lifeboatAssets: {} as LifeboatAssets,
-    shipAssets: {} as ShipAssets,
-    physicsRuntime: {} as PhysicsRuntime,
-    physicsMode: 'enabled',
     audio,
     onFatalError: () => undefined,
   };
 }
 
 export class SurvivalPhase implements GamePhase {
-  private context!: PhaseContext;
+  private context!: SurvivalPhaseContext;
   private session!: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>;
   private world!: SurvivalPhaseTestDependencies['world'];
   private ui!: Partial<SurvivalUI>;
@@ -261,14 +252,14 @@ export class SurvivalPhase implements GamePhase {
   private rearCameraView = false;
 
   constructor(
-    context: PhaseContext,
+    context: SurvivalPhaseContext,
     start: SurvivalPhaseStart,
     onRestart: () => void,
     onCheckpointChange: SurvivalCheckpointChange,
     onReturnToMenu: () => void,
   );
   constructor(
-    context: PhaseContext,
+    context: SurvivalPhaseContext,
     start: SurvivalPhaseStart,
     onRestart: () => void,
     onCheckpointChange: SurvivalCheckpointChange,
@@ -310,7 +301,7 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private initializeProduction(
-    context: PhaseContext,
+    context: SurvivalPhaseContext,
     session: SurvivalSession,
     start: SurvivalPhaseStart,
     onRestart: () => void,
@@ -325,7 +316,7 @@ export class SurvivalPhase implements GamePhase {
       context.skyAssets.moonTexture,
       session.snapshot().savedItems,
       context.lifeboatAssets,
-      context.shipFurniture,
+      undefined,
       context.waterQuality?.get() ?? 'low',
       undefined,
       undefined,
@@ -352,7 +343,7 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private initializeTest(
-    context: PhaseContext,
+    context: SurvivalPhaseContext,
     session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>,
     start: SurvivalPhaseStart,
     onRestart: () => void,
@@ -406,7 +397,7 @@ export class SurvivalPhase implements GamePhase {
     start: SurvivalPhaseStart,
   ): SurvivalPhase {
     const TestConstructor = SurvivalPhase as unknown as new (
-      context: PhaseContext,
+      context: SurvivalPhaseContext,
       start: SurvivalPhaseStart,
       onRestart: () => void,
       onCheckpointChange: SurvivalCheckpointChange | undefined,
@@ -674,7 +665,7 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private initialize(
-    context: PhaseContext,
+    context: SurvivalPhaseContext,
     session: Partial<SurvivalSession> & Pick<SurvivalSession, 'snapshot'>,
     world: SurvivalPhaseTestDependencies['world'],
     ui: Partial<SurvivalUI>,
