@@ -181,11 +181,7 @@ export class SurvivalAudio {
     } else if (action === 'treat') {
       this.scope.play('medkit');
     } else if (action === 'repair') {
-      this.scope.play(
-        option?.kind === 'hullRepair' && option.material === 'ductTape'
-          ? 'tapeRepair'
-          : 'hullRepair',
-      );
+      this.scope.play('hullRepair');
     } else if (action === 'repairItem') {
       this.scope.play('tapeRepair');
     } else if (action === 'openChest') {
@@ -285,6 +281,14 @@ export class SurvivalAudio {
 
   eventItemCue(itemId: ItemId, cueIndex: number): void {
     if (this.disposed) return;
+    if (itemId === 'fishingNet') {
+      this.scope.play('netImpact');
+      return;
+    }
+    if (itemId === 'knife') {
+      this.scope.play('knifeImpact');
+      return;
+    }
     if (itemId === 'radio') {
       this.clearRadioSignal();
       this.beginRadioSignal(() => undefined);

@@ -164,25 +164,27 @@ describe('fishing net attack choreography', () => {
     const contact = createEventItemUseSample();
     const recovered = createEventItemUseSample();
 
-    sampleEventItemUse(context, 'fishingNet', 0.48, windUp);
-    sampleEventItemUse(context, 'fishingNet', 0.62, contact);
+    sampleEventItemUse(context, 'fishingNet', 0.6, windUp);
+    sampleEventItemUse(context, 'fishingNet', 0.68, contact);
     sampleEventItemUse(context, 'fishingNet', 1, recovered);
 
-    expect(windUp.roll).toBeLessThan(-0.2);
-    expect(windUp.targetBlend).toBe(0);
+    expect(windUp.yaw).toBeLessThan(contact.yaw);
+    expect(windUp.roll).toBeCloseTo(Math.PI / 2);
+    expect(windUp.targetBlend).toBeGreaterThan(0);
+    expect(windUp.targetBlend).toBeLessThan(1);
     expect(contact.targetBlend).toBeGreaterThan(0.75);
     expect(contact.ballisticFlight).toBe(false);
     expect(contact.itemVisible).toBe(true);
-    expect(contact.primaryEffect).toBeGreaterThan(0.95);
+    expect(contact.primaryEffect).toBe(0);
     expect(recovered.targetBlend).toBe(0);
     expect(recovered.itemVisible).toBe(true);
-    expect(eventItemActionCueProgresses(context)).toEqual([0.62]);
+    expect(eventItemActionCueProgresses(context)).toEqual([0.68]);
   });
 
   it('makes the Death Stare creature flinch at contact', () => {
     const sample = identityDeathStareSample();
 
-    sampleDeathStareItemUse('fishingNet', 0.62, sample);
+    sampleDeathStareItemUse('fishingNet', 0.692, sample);
 
     expect(sample.effectKind).toBe('net-slap');
     expect(sample.effectStrength).toBeGreaterThan(0.95);
@@ -197,7 +199,7 @@ describe('fishing net attack choreography', () => {
     const contact = createSwarmSharkPose();
 
     sampleSwarmSharkPose(variants[0]!, 0, sample, before);
-    sampleSwarmItemUse('fishingNet', 0.62, sample);
+    sampleSwarmItemUse('fishingNet', 0.692, sample);
     sampleSwarmSharkPose(variants[0]!, 0, sample, contact);
 
     expect(sample.effectKind).toBe('net-slap');

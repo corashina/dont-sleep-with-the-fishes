@@ -47,7 +47,6 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     bait: 0,
     recoveredFood: 0,
     recoveredBait: 0,
-    repairMaterial: 0,
     rescueLead: 0,
     rescueTraceFinds: 0,
     radioSignalAvailable: false,
@@ -210,7 +209,6 @@ describe('formatDiveResult', () => {
   it.each([
     [{ food: 1, energy: -3 }, { kind: 'resource', id: 'food', quantity: 1 }, []],
     [{ bait: 1, energy: -3 }, { kind: 'resource', id: 'bait', quantity: 1 }, []],
-    [{ repairMaterial: 1, energy: -3 }, { kind: 'resource', id: 'repairMaterial', quantity: 1 }, []],
     [{ rescueLead: 1, energy: -3 }, null, ['RESCUE TRACE FOUND']],
     [{ energy: -3 }, null, ['NOTHING FOUND']],
     [{ energy: -3, health: -10 }, null, ['NOTHING FOUND', 'YOU SUFFERED SOME INJURIES']],
@@ -463,17 +461,12 @@ describe('SurvivalDayActionFlow', () => {
     expect(rig.events.beginDawn).not.toHaveBeenCalled();
   });
 
-  it('selects repair resources and coordinates unavailable reasons', async () => {
+  it('runs hull repair without a supply and coordinates item repair reasons', async () => {
     const rig = createRig();
-    const material = snapshot({ repairMaterial: 1 });
-    rig.setSnapshot(material);
 
     await rig.flow.run('repair');
 
-    expect(rig.session.perform).toHaveBeenCalledWith('repair', {
-      kind: 'hullRepair',
-      material: 'repairMaterial',
-    });
+    expect(rig.session.perform).toHaveBeenCalledWith('repair', undefined);
 
     const items = snapshot({
       inventory: {
@@ -484,10 +477,6 @@ describe('SurvivalDayActionFlow', () => {
           instanceId: 'compass-1', type: 'compass', condition: 'broken',
         },
       },
-    });
-    expect(rig.flow.repairOption(items)).toEqual({
-      kind: 'hullRepair',
-      material: 'ductTape',
     });
     expect(rig.flow.repairItemReason(items)).toBeNull();
     expect(rig.session.availableReason).toHaveBeenLastCalledWith('repairItem', {

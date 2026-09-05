@@ -1,3 +1,4 @@
+import { cloneActionOutcome } from './outcomeText';
 import type { DeathCause } from '../game/ending';
 import type { SurvivalReading } from '../game/runStatistics';
 import type { ItemInstance, ItemInstanceId } from '../game/ItemState';
@@ -37,7 +38,6 @@ export interface SurvivalSessionCheckpoint {
   readonly bait: number;
   readonly recoveredFood: number;
   readonly recoveredBait: number;
-  readonly repairMaterial: number;
   readonly rescueLead: RescueLead;
   readonly rescueTraceFinds: 0 | 1 | 2;
   readonly radioSignalAvailable: boolean;
@@ -108,16 +108,7 @@ function cloneRecord(record: Readonly<Record<string, number>>): Readonly<Record<
 }
 
 function cloneOutcome(outcome: ActionOutcome): ActionOutcome {
-  return Object.freeze({
-    ...outcome,
-    deltas: Object.freeze({ ...outcome.deltas }),
-    ...(outcome.rewardSummary === undefined
-      ? {}
-      : { rewardSummary: Object.freeze({ ...outcome.rewardSummary }) }),
-    ...(outcome.eventResult === undefined
-      ? {}
-      : { eventResult: Object.freeze({ ...outcome.eventResult }) }),
-  });
+  return Object.freeze(cloneActionOutcome(outcome));
 }
 
 function cloneDaytime(record: JournalDaytimeRecord | null): JournalDaytimeRecord | null {

@@ -47,7 +47,7 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
   }),
   checkBackAnglerfish: Object.freeze({
     url: new URL('../assets/models/events/anglerFish.glb', import.meta.url).href,
-    targetLongestDimension: 1.4,
+    targetLongestDimension: 0.7,
     rotation: [0, -Math.PI / 2, 0] as const,
     maxTriangles: generatedMetadataJson.anglerFish.triangles,
   }),

@@ -1,3 +1,6 @@
+import { onLanguageChange } from '../i18n/language';
+import { refreshUiText } from './translatedText';
+import { uiText } from '../i18n/uiMessages';
 import type { BoatInteractionAnchor, ProjectedBoatBounds } from '../survival/BoatInteraction';
 import { createElementRequirement } from './dom';
 import {
@@ -57,6 +60,8 @@ export class SurvivalFishingView {
   private readonly resultTitle: HTMLElement;
   private readonly resultDetail: HTMLElement;
   private currentMode: FishingUiMode = 'hidden';
+  private currentState: FishingUiState | null = null;
+  private currentResult: FishingResultView | null = null;
   private message = '';
   private readonly target = {
     x: 0,
@@ -76,6 +81,13 @@ export class SurvivalFishingView {
   private continueIssued = false;
   private resultTarget: ProjectedBoatBounds | null = null;
   private resultVisible = false;
+  private readonly unsubscribeLanguage: () => void;
+  private refreshLanguage(): void {
+    refreshUiText(...this.roots);
+    if (this.currentState !== null) this.applyStateMessage(this.currentState);
+    if (this.currentResult !== null) { this.resultCaption.textContent = this.currentResult.caption; this.resultTitle.textContent = this.currentResult.title; this.resultDetail.textContent = this.currentResult.detail; }
+  }
+
   private disposed = false;
 
   constructor(
@@ -85,11 +97,11 @@ export class SurvivalFishingView {
   ) {
     const template = document.createElement('template');
     template.innerHTML = `
-      <section class="fishing-layer" data-fishing role="region" aria-label="Fishing interaction" aria-hidden="true" inert tabindex="-1">
+      <section class="fishing-layer" data-fishing role="region" data-ui-aria="fishingInteraction" aria-label="${uiText('fishingInteraction')}" aria-hidden="true" inert tabindex="-1">
         <div class="survival-announcer" data-fishing-live aria-live="polite" aria-atomic="true"></div>
         <p class="fishing-instruction ui-role-context" data-fishing-message hidden></p>
-        <button type="button" class="fishing-bite-target" data-fishing-bite aria-label="BITE - REEL NOW" hidden></button>
-        <button type="button" class="fishing-view-exit ui-role-context" data-fishing-view-exit aria-label="Return to boat view" hidden>
+        <button type="button" class="fishing-bite-target" data-fishing-bite data-ui-aria="biteReel" aria-label="${uiText('biteReel')}" hidden></button>
+        <button type="button" class="fishing-view-exit ui-role-context" data-fishing-view-exit data-ui-aria="returnBoatView" aria-label="${uiText('returnBoatView')}" hidden>
           ${returnArrowArtwork('fishing-view-exit__arrow')}
         </button>
       </section>
@@ -99,8 +111,8 @@ export class SurvivalFishingView {
           <p class="eyebrow ui-role-context" data-fishing-result-caption></p>
           <h2 class="scuba-popup-title ui-role-display" id="fishing-result-title" data-fishing-result-title></h2>
           <p class="fishing-result-detail ui-role-narrative" data-fishing-result-detail></p>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-fishing-result-continue aria-label="Continue">
-            CONTINUE
+          <button type="button" class="primary-action salvage-action ui-role-context" data-fishing-result-continue data-ui-aria="continue" aria-label="${uiText('continue')}" data-ui-text="continueUpper">
+            ${uiText('continueUpper')}
           </button>
         </div>
       </section>`;
@@ -121,6 +133,8 @@ export class SurvivalFishingView {
     this.interactionRoot.addEventListener('pointerup', this.handlePointerUp);
     this.resultRoot.addEventListener('click', this.handleResultClick);
     window.addEventListener('resize', this.handleWindowResize);
+    this.unsubscribeLanguage = onLanguageChange(() => this.refreshLanguage());
+    this.refreshLanguage();
   }
 
   mode(): FishingUiMode {
@@ -129,6 +143,7 @@ export class SurvivalFishingView {
 
   setState(state: FishingUiState): boolean {
     if (this.disposed) return false;
+    this.currentState = state;
     const modeChanged = state.mode !== this.currentMode;
     const messageChanged = state.message !== this.message;
     const targetChanged = !this.sameTarget(state.biteTarget);
@@ -179,6 +194,7 @@ export class SurvivalFishingView {
 
   showResult(view: FishingResultView): void {
     if (this.disposed) return;
+    this.currentResult = view;
     this.continueIssued = false;
     this.resultCaption.textContent = view.caption;
     this.resultTitle.textContent = view.title;
@@ -193,6 +209,7 @@ export class SurvivalFishingView {
 
   hideResult(): void {
     if (this.disposed) return;
+    this.currentResult = null;
     this.onResultHide();
     this.resultVisible = false;
     this.resultTarget = null;
@@ -256,6 +273,7 @@ export class SurvivalFishingView {
   beginDispose(): boolean {
     if (this.disposed) return false;
     this.disposed = true;
+    this.unsubscribeLanguage();
     return true;
   }
 

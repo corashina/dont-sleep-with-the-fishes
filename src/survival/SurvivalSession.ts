@@ -1,3 +1,5 @@
+import { cloneActionOutcome, domainMessageId, domainText, resolveOutcomeText, withOutcomeText, type OutcomeText } from './outcomeText';
+import { domainMessage as t } from '../i18n/domainMessages';
 import {
   ITEM_DEFINITIONS,
   type ItemId,
@@ -147,7 +149,7 @@ export interface SurvivalSessionOptions {
 export type { DayActionOption } from './survivalTypes';
 interface Rejection {
   code: string;
-  message: string;
+  message: string | OutcomeText;
 }
 
 interface EventMutationApplication {
@@ -157,36 +159,36 @@ interface EventMutationApplication {
 }
 
 const DAY_ACTION_REJECTION_CODES: Readonly<Record<string, string>> = Object.freeze({
-  'Finish the active fishing attempt first.': 'fishing-in-progress',
-  'That option cannot be used for this action.': 'invalid-option',
-  'The survival journey has already ended.': 'terminal',
-  'That action is only available during the day.': 'not-daytime',
-  'Fishing requires one energy.': 'not-enough-energy',
-  'Diving requires a recovered scuba set.': 'no-scuba-set',
-  'Diving is too dangerous during a squall.': 'weather-blocked',
-  'Diving requires three energy.': 'not-enough-energy',
-  'No food remains.': 'no-food',
-  'You are not hungry.': 'not-hungry',
-  'The hull needs no repair.': 'hull-full',
-  'Repairing requires one energy.': 'not-enough-energy',
-  'No duct tape remains.': 'no-duct-tape',
-  'Choose a broken item to repair.': 'no-repair-target',
-  'That item cannot be repaired.': 'item-not-repairable',
-  'No treatment is needed.': 'health-full',
-  'No medical-kit charges remain.': 'no-medical-kit',
-  'The radio has no active signal.': 'no-radio-signal',
-  'No working radio remains.': 'no-radio',
-  'Answering the radio requires one energy.': 'not-enough-energy',
-  'No energy bar remains.': 'no-energy-bar',
-  'Your energy is already full.': 'energy-full',
-  'There is no closed chest to open.': 'no-closed-chest',
-  'Carlitos is not aboard.': 'no-carlitos',
-  'Carlitos cannot respond.': 'carlitos-dead',
-  'Carlitos has already been petted today.': 'already-petted',
-  'Carlitos is already happy.': 'carlitos-happy',
-  'Carlitos is already satiated.': 'carlitos-not-hungry',
-  'Carlitos needs no treatment.': 'carlitos-healthy',
-  'No medical kit remains.': 'no-medical-kit',
+  finishFishing: 'fishing-in-progress',
+  invalidOption: 'invalid-option',
+  terminal: 'terminal',
+  notDaytime: 'not-daytime',
+  fishEnergy: 'not-enough-energy',
+  noScuba: 'no-scuba-set',
+  squallDive: 'weather-blocked',
+  diveEnergy: 'not-enough-energy',
+  noFood: 'no-food',
+  notHungry: 'not-hungry',
+  hullFull: 'hull-full',
+  repairEnergyOne: 'not-enough-energy',
+  noTape: 'no-duct-tape',
+  chooseRepair: 'no-repair-target',
+  cannotRepair: 'item-not-repairable',
+  healthFull: 'health-full',
+  noMedkitCharges: 'no-medical-kit',
+  noSignal: 'no-radio-signal',
+  noRadio: 'no-radio',
+  radioEnergy: 'not-enough-energy',
+  noBar: 'no-energy-bar',
+  energyFull: 'energy-full',
+  noChest: 'no-closed-chest',
+  notAboard: 'no-carlitos',
+  cannotRespond: 'carlitos-dead',
+  alreadyPetted: 'already-petted',
+  alreadyHappy: 'carlitos-happy',
+  alreadySatiated: 'carlitos-not-hungry',
+  noCarlitosTreatment: 'carlitos-healthy',
+  noMedicalKit: 'no-medical-kit',
 });
 
 interface ActiveFishingTransaction {
@@ -362,7 +364,6 @@ export class SurvivalSession {
   private bait = 0;
   private recoveredFood = 0;
   private recoveredBait = 0;
-  private repairMaterial = 0;
   private rescueLead: RescueLead;
   private rescueTraceFinds: 0 | 1 | 2;
   private radioSignalAvailable = false;
@@ -460,7 +461,6 @@ export class SurvivalSession {
     this.bait = checkpoint.bait;
     this.recoveredFood = checkpoint.recoveredFood;
     this.recoveredBait = checkpoint.recoveredBait;
-    this.repairMaterial = checkpoint.repairMaterial;
     this.radioSignalAvailable = checkpoint.radioSignalAvailable;
     this.radioSignalsSent = checkpoint.radioSignalsSent;
     this.actedToday = checkpoint.actedToday;
@@ -572,7 +572,6 @@ export class SurvivalSession {
       bait: this.bait,
       recoveredFood: this.recoveredFood,
       recoveredBait: this.recoveredBait,
-      repairMaterial: this.repairMaterial,
       rescueLead: this.rescueLead,
       rescueTraceFinds: this.rescueTraceFinds,
       radioSignalAvailable: this.radioSignalAvailable,
@@ -613,10 +612,7 @@ export class SurvivalSession {
     const clonedOutcome = this.lastOutcome === null ? null : this.cloneOutcome(this.lastOutcome);
     const lastOutcome = clonedOutcome === null
       ? null
-      : Object.freeze({
-          ...clonedOutcome,
-          deltas: Object.freeze({ ...clonedOutcome.deltas }),
-        });
+      : Object.freeze(clonedOutcome);
 
     this.cachedSnapshot = Object.freeze({
       history: this.history,
@@ -632,7 +628,6 @@ export class SurvivalSession {
       bait: this.bait,
       recoveredFood: this.recoveredFood,
       recoveredBait: this.recoveredBait,
-      repairMaterial: this.repairMaterial,
       rescueLead: this.rescueLead,
       rescueTraceFinds: this.rescueTraceFinds,
       radioSignalAvailable: this.radioSignalAvailable,
@@ -687,7 +682,7 @@ export class SurvivalSession {
         visible: false,
         energyCost: 0,
         availableEnergy: 0,
-        unavailableReason: 'Carlitos is not aboard.',
+        unavailableReason: t('notAboard'),
       };
     }
     if (!this.carlitos.alive) {
@@ -695,15 +690,17 @@ export class SurvivalSession {
         visible: false,
         energyCost: 0,
         availableEnergy: 0,
-        unavailableReason: 'Carlitos cannot retrieve the loot.',
+        unavailableReason: t('cannotRetrieve'),
       };
     }
     if (this.carlitos.energy < energyCost) {
+      const text: OutcomeText = { kind: 'companionEnergy', required: energyCost, available: this.carlitos.energy };
       return {
         visible: true,
         energyCost,
         availableEnergy: this.carlitos.energy,
-        unavailableReason: `Carlitos needs ${energyCost} energy; he has ${this.carlitos.energy}.`,
+        get unavailableReason() { return resolveOutcomeText(text); },
+        text,
       };
     }
     if (carlitosWellness(this.carlitos) >= 4) {
@@ -721,11 +718,13 @@ export class SurvivalSession {
       : this.carlitos.sickness > 0
         ? status.health
         : status.happiness;
+    const text: OutcomeText = { kind: 'companionCondition', status: domainMessageId(label) };
     return {
       visible: true,
       energyCost,
       availableEnergy: this.carlitos.energy,
-      unavailableReason: `Carlitos is ${label} and cannot retrieve the loot.`,
+      get unavailableReason() { return resolveOutcomeText(text); },
+      text,
     };
   }
 
@@ -745,7 +744,7 @@ export class SurvivalSession {
     switch (action) {
       case 'dive': return this.dive();
       case 'eat': return this.eat();
-      case 'repair': return this.repair(option);
+      case 'repair': return this.repair();
       case 'repairItem': return this.repairItem(option);
       case 'treat': return this.treat();
       case 'answerRadio': return this.answerRadio();
@@ -761,7 +760,7 @@ export class SurvivalSession {
     const unavailable = this.unavailable('fish');
     if (unavailable !== null) {
       const message = unavailable.code === 'not-daytime'
-        ? 'Fishing is only available during the day.'
+        ? t('fishingDaytime')
         : unavailable.message;
       return { accepted: false, outcome: this.reject(unavailable.code, message) };
     }
@@ -783,7 +782,7 @@ export class SurvivalSession {
     });
     const outcome = this.commit(
       'fishing-started',
-      'You ready the line and look for a place to cast.',
+      domainText('readyLine'),
       { energy: -SURVIVAL_BALANCE.actions.fishEnergy },
       'none',
     );
@@ -799,21 +798,21 @@ export class SurvivalSession {
   cancelFishing(attemptId: string): ActionOutcome {
     const transaction = this.activeFishing;
     if (transaction === null) {
-      return this.reject('no-fishing-attempt', 'There is no active fishing attempt.');
+      return this.reject('no-fishing-attempt', t('noFishing'));
     }
     const snapshot = transaction.attempt.snapshot();
     if (snapshot.id !== attemptId) {
-      return this.reject('fishing-attempt-mismatch', 'That fishing attempt is no longer active.');
+      return this.reject('fishing-attempt-mismatch', t('fishingMismatch'));
     }
     if (snapshot.state !== 'aiming') {
-      return this.reject('fishing-already-cast', 'The line is already in the water.');
+      return this.reject('fishing-already-cast', t('alreadyCast'));
     }
 
     this.activeFishing = null;
     this.actedToday = transaction.previousActedToday;
     return this.commit(
       'fishing-cancelled',
-      'You lower the rod without casting.',
+      domainText('cancelFishing'),
       { energy: SURVIVAL_BALANCE.actions.fishEnergy },
       'none',
     );
@@ -822,17 +821,17 @@ export class SurvivalSession {
   finishFishing(attemptId: string, result: FishingTerminalResult): ActionOutcome {
     const transaction = this.activeFishing;
     if (transaction === null) {
-      return this.reject('no-fishing-attempt', 'There is no active fishing attempt.');
+      return this.reject('no-fishing-attempt', t('noFishing'));
     }
     const snapshot = transaction.attempt.snapshot();
     if (snapshot.id !== attemptId) {
-      return this.reject('fishing-attempt-mismatch', 'That fishing attempt is no longer active.');
+      return this.reject('fishing-attempt-mismatch', t('fishingMismatch'));
     }
     if (snapshot.result === null || (snapshot.state !== 'resolved' && snapshot.state !== 'missed')) {
-      return this.reject('fishing-unresolved', 'The fishing attempt has not reached a result.');
+      return this.reject('fishing-unresolved', t('unresolvedFishing'));
     }
     if (snapshot.result !== result) {
-      return this.reject('fishing-result-mismatch', 'That result does not belong to the active fishing attempt.');
+      return this.reject('fishing-result-mismatch', t('resultMismatch'));
     }
 
     const settlement = fishingSettlement(result, transaction.capturedBait);
@@ -845,7 +844,7 @@ export class SurvivalSession {
         throw new Error(`Fishing reward would duplicate active ${settlement.itemReward.itemId}`);
       }
     }
-    const outcome = this.commit(settlement.code, settlement.message, settlement.deltas, 'none');
+    const outcome = this.commit(settlement.code, settlement.text, settlement.deltas, 'none');
     this.pendingJournalActions.push(createJournalFishingRecord(
       attemptId,
       result,
@@ -859,7 +858,7 @@ export class SurvivalSession {
   requestDayEvent(): ActionOutcome {
     return this.reject(
       'day-event-scheduled',
-      'Day events open only through their own schedule.',
+      t('scheduledEvent'),
     );
   }
 
@@ -867,7 +866,7 @@ export class SurvivalSession {
     const unavailable = this.unavailable('endDay');
     if (unavailable !== null) {
       const message = unavailable.code === 'not-daytime'
-        ? 'The day cannot end while an event is unresolved.'
+        ? t('pendingEvent')
         : unavailable.message;
       return this.reject(unavailable.code, message);
     }
@@ -885,7 +884,7 @@ export class SurvivalSession {
       const attack = survivalEventById('chest-attack');
       if (attack === undefined) throw new Error('Missing Chest Attack event definition.');
       this.openEvent(attack);
-      return this.commit('event-opened', attack.prompt, {}, 'nightfall');
+      return this.commit('event-opened', { kind: 'eventPrompt', eventId: attack.id }, {}, 'nightfall');
     }
 
     if (this.random.next() < quietNightChance(this.pressure)) {
@@ -895,7 +894,7 @@ export class SurvivalSession {
     const event = this.drawEvent('night');
     if (event.id === 'night-calm-fallback') return this.beginQuietNight();
     this.openEvent(event);
-    return this.commit('event-opened', event.prompt, {}, 'nightfall');
+    return this.commit('event-opened', { kind: 'eventPrompt', eventId: event.id }, {}, 'nightfall');
   }
 
   private expirePendingDriftingLoot(): void {
@@ -915,18 +914,18 @@ export class SurvivalSession {
   private eventResolutionRejection(): ActionOutcome | null {
     if (this.activeFishing !== null) return this.fishingInProgress();
     if (this.isTerminal()) {
-      return this.reject('terminal', 'The survival journey has already ended.');
+      return this.reject('terminal', t('terminal'));
     }
     if ((this.state === 'dayEvent' || this.state === 'nightEvent') && this.pendingEvent !== null) {
       return null;
     }
-    return this.reject('no-event', 'There is no unresolved event.');
+    return this.reject('no-event', t('noEvent'));
   }
 
   private resolveEndureResponse(): ActionOutcome {
     const event = this.pendingEvent!;
     if (!isSignalSightingEventId(event.id) && this.hasUsableEventChoice(event)) {
-      return this.reject('endure-unavailable', 'Use one of the highlighted items to face this event.');
+      return this.reject('endure-unavailable', t('highlightedItems'));
     }
     return this.resolveEventChoice('sleep', null, null, undefined);
   }
@@ -936,7 +935,7 @@ export class SurvivalSession {
   ): ActionOutcome {
     const choice = this.pendingEvent!.choices.find(({ id }) => id === response.choiceId);
     if (choice?.itemId !== undefined) {
-      return this.reject('choice-unavailable', 'That response is not available for this event.');
+      return this.reject('choice-unavailable', t('unavailableResponse'));
     }
     return this.resolveEventChoice(response.choiceId, null, null, response.resultId);
   }
@@ -947,14 +946,14 @@ export class SurvivalSession {
     const item = this.inventory.snapshot()[response.instanceId];
     const choice = this.pendingEvent!.choices.find(({ id }) => id === response.choiceId);
     if (choice?.itemId === undefined) {
-      return this.reject('choice-unavailable', 'That response is not available for this event.');
+      return this.reject('choice-unavailable', t('unavailableResponse'));
     }
-    if (item === undefined) return this.reject('item-unavailable', 'That item is no longer on the boat.');
+    if (item === undefined) return this.reject('item-unavailable', t('itemGone'));
     if (item.type !== choice.itemId) {
-      return this.reject('item-mismatch', 'That physical item does not match the selected response.');
+      return this.reject('item-mismatch', t('itemMismatch'));
     }
     if (item.condition !== 'usable') {
-      return this.reject('item-unavailable', 'That item has no uses remaining.');
+      return this.reject('item-unavailable', t('itemSpent'));
     }
     return this.resolveEventChoice(
       choice.id,
@@ -971,10 +970,10 @@ export class SurvivalSession {
     resultId: string | undefined,
   ): ActionOutcome {
     const event = this.pendingEvent;
-    if (event === null) return this.reject('no-event', 'There is no unresolved event.');
+    if (event === null) return this.reject('no-event', t('noEvent'));
     const catalogChoice = event.choices.find((candidate) => candidate.id === choiceId);
     if (catalogChoice === undefined) {
-      return this.reject('choice-unavailable', 'That response is not available for this event.');
+      return this.reject('choice-unavailable', t('unavailableResponse'));
     }
     const choice = event.id === 'drifting-supplies'
       ? driftingSupplyChoiceForVariant(
@@ -1017,19 +1016,19 @@ export class SurvivalSession {
     const companionRejection = this.unavailableCompanionEventAction(choice.companionAction);
     if (companionRejection !== null) return companionRejection;
     if (!this.meetsChoiceRequirements(choice.requirements)) {
-      return { code: 'requirements-unmet', message: 'You do not have the resources for that response.' };
+      return { code: 'requirements-unmet', message: t('requirements') };
     }
     if (choice.requiredChestState !== undefined && choice.requiredChestState !== this.chestState) {
       return {
         code: 'chest-state-unavailable',
-        message: `That response requires a ${choice.requiredChestState} chest.`,
+        message: { kind: 'chestRequired', state: choice.requiredChestState },
       };
     }
     if (choice.companionAction?.id === 'delegateCarlitos'
       && !spendCarlitosEnergy(this.carlitos!, choice.companionAction.energyCost)) {
       return {
         code: 'companion-action-unavailable',
-        message: 'Carlitos does not have enough energy.',
+        message: t('carlitosEnergy'),
       };
     }
     return null;
@@ -1127,12 +1126,13 @@ export class SurvivalSession {
       fallbackFoodGranted,
     );
     const resultId = fallbackFoodGranted ? fallbackResultId(eventId) : resolved.resultId;
-    return {
+    if (resolved.resultId === undefined) throw new Error('Event outcome requires a stable result ID.');
+    const text: OutcomeText = fallbackFoodGranted ? domainText('fallbackFood')
+      : { kind: 'eventResult', reference: { eventId, choiceId, resultId: resolved.resultId } };
+    return withOutcomeText({
       accepted: true,
       code: 'event-resolved',
-      message: fallbackFoodGranted
-        ? 'The item slot is occupied, so you receive one food instead.'
-        : resolved.message,
+
       deltas,
       cue: this.presentationCue('none'),
       ...(resolved.effects.nextDawnEnergy === undefined
@@ -1145,7 +1145,7 @@ export class SurvivalSession {
       ...(resultId === undefined
         ? {}
         : { eventResult: Object.freeze({ eventId, choiceId, resultId }) }),
-    };
+    }, text);
   }
 
   private finishResolvedEvent(
@@ -1161,7 +1161,6 @@ export class SurvivalSession {
       this.recordJournalEvent(
         event,
         choice.id,
-        choice.label,
         attemptedItemId,
         outcome,
         inventoryMutations,
@@ -1192,8 +1191,8 @@ export class SurvivalSession {
     const dawn = this.commit(
       'dawn',
       hullWear > 0
-        ? 'The sea wears at the hull overnight. Another dawn breaks.'
-        : 'Another dawn breaks over the lifeboat.',
+        ? domainText('wornDawn')
+        : domainText('dawn'),
       deltas,
       'dawn',
     );
@@ -1208,13 +1207,13 @@ export class SurvivalSession {
   private dawnRejection(): ActionOutcome | null {
     if (this.activeFishing !== null) return this.fishingInProgress();
     if (this.isTerminal()) {
-      return this.reject('terminal', 'The survival journey has already ended.');
+      return this.reject('terminal', t('terminal'));
     }
     if (this.pendingEvent !== null) {
-      return this.reject('event-pending', 'Resolve the pending event before dawn.');
+      return this.reject('event-pending', t('resolveBeforeDawn'));
     }
     if (this.state !== 'nightEvent') {
-      return this.reject('not-nighttime', 'Dawn cannot begin before the night is complete.');
+      return this.reject('not-nighttime', t('nightIncomplete'));
     }
     return null;
   }
@@ -1276,7 +1275,7 @@ export class SurvivalSession {
     this.clearPendingEvent();
     return this.commit(
       'rescued',
-      'A rescue vessel finds the lifeboat at dawn.',
+      domainText('rescued'),
       {},
       'rescue',
     );
@@ -1304,7 +1303,6 @@ export class SurvivalSession {
       hull: this.hull,
       food: this.food,
       bait: this.bait,
-      repairMaterial: this.repairMaterial,
       chestState: this.chestState,
       inventory: this.inventory.snapshot(),
       carlitos: this.carlitos === null
@@ -1316,7 +1314,7 @@ export class SurvivalSession {
   private unavailable(action: DayActionId, option?: DayActionOption): Rejection | null {
     const message = dayActionUnavailableReason(this.dayActionRuleState(), action, option);
     if (message === null) return null;
-    const code = DAY_ACTION_REJECTION_CODES[message];
+    const code = DAY_ACTION_REJECTION_CODES[domainMessageId(message)];
     if (code === undefined) throw new Error(`Missing day action rejection code for: ${message}`);
     return { code, message };
   }
@@ -1329,7 +1327,7 @@ export class SurvivalSession {
     if (availability.unavailableReason === null) return null;
     return {
       code: 'companion-action-unavailable',
-      message: availability.unavailableReason,
+      message: availability.text ?? availability.unavailableReason,
     };
   }
 
@@ -1348,7 +1346,7 @@ export class SurvivalSession {
 
     return this.recordJournalAction('dive', this.commit(
       recovered ? 'dive-recovered' : 'dive-empty',
-      recovered ? 'You surfaced with useful salvage.' : 'You found nothing beneath the boat.',
+      recovered ? domainText('diveRecovered') : domainText('diveEmpty'),
       deltas,
       'dive',
     ));
@@ -1372,9 +1370,8 @@ export class SurvivalSession {
 
   private applyDiveReward(deltas: ResourceDelta): void {
     const rewardRoll = this.random.next();
-    if (rewardRoll < 0.25) deltas.food = 1;
-    else if (rewardRoll < 0.5) deltas.bait = 1;
-    else if (rewardRoll < 0.75) deltas.repairMaterial = 1;
+    if (rewardRoll < 0.375) deltas.food = 1;
+    else if (rewardRoll < 0.75) deltas.bait = 1;
     else if (this.rescueTraceFinds < 2) {
       this.rescueTraceFinds = (this.rescueTraceFinds + 1) as 1 | 2;
       deltas.rescueLead = 1;
@@ -1385,27 +1382,17 @@ export class SurvivalSession {
     const deltas = dayActionResourceDelta(this.dayActionRuleState(), 'eat');
     return this.commit(
       'ate',
-      'The food takes the edge off your hunger.',
+      domainText('ate'),
       deltas,
       'none',
     );
   }
 
-  private repair(option?: DayActionOption): ActionOutcome {
-    const deltas = dayActionResourceDelta(this.dayActionRuleState(), 'repair', option);
-    if (option?.kind === 'hullRepair' && option.material === 'ductTape') {
-      const consumed = this.inventory.consume('ductTape', 1);
-      return this.recordJournalAction('repair', this.commit(
-        'repaired-with-duct-tape',
-        'The emergency patch holds for now.',
-        deltas,
-        'repair',
-      ), [{ kind: 'consume', instanceIds: consumed }]);
-    }
-
+  private repair(): ActionOutcome {
+    const deltas = dayActionResourceDelta(this.dayActionRuleState(), 'repair');
     return this.recordJournalAction('repair', this.commit(
       'repaired',
-      'You reinforce the damaged hull.',
+      domainText('repaired'),
       deltas,
       'repair',
     ));
@@ -1413,12 +1400,12 @@ export class SurvivalSession {
 
   private repairItem(option?: DayActionOption): ActionOutcome {
     if (option?.kind !== 'itemRepair') {
-      return this.reject('no-repair-target', 'Choose a broken item to repair.');
+      return this.reject('no-repair-target', t('chooseRepair'));
     }
     this.inventory.repair(option.target);
     const consumed = this.inventory.consume('ductTape', 1);
     return this.recordJournalAction('repairItem',
-      this.commit('item-repaired', 'The duct tape makes the item usable again.', {}, 'repair'),
+      this.commit('item-repaired', domainText('itemRepaired'), {}, 'repair'),
       [
         { kind: 'repair', instanceIds: [option.target] },
         { kind: 'consume', instanceIds: consumed },
@@ -1430,7 +1417,7 @@ export class SurvivalSession {
     const consumed = this.inventory.consume('medicalKit', 1);
     return this.recordJournalAction('treat', this.commit(
       'treated',
-      'You clean and dress your wounds.',
+      domainText('treated'),
       deltas,
       'treat',
     ), [{ kind: 'consume', instanceIds: consumed }]);
@@ -1451,7 +1438,7 @@ export class SurvivalSession {
     if (this.carlitos === null || !petCarlitos(this.carlitos)) {
       throw new Error('Carlitos pet action was not available.');
     }
-    const outcome = this.commit('carlitos-petted', 'You pet Carlitos.', {}, 'none');
+    const outcome = this.commit('carlitos-petted', domainText('pet'), {}, 'none');
     this.pendingJournalActions.push(createJournalCarlitosCareRecord('pet'));
     return outcome;
   }
@@ -1460,7 +1447,7 @@ export class SurvivalSession {
     if (this.carlitos === null || !feedCarlitos(this.carlitos)) {
       throw new Error('Carlitos feed action was not available.');
     }
-    const outcome = this.commit('carlitos-fed', 'You feed Carlitos.', { food: -1 }, 'none');
+    const outcome = this.commit('carlitos-fed', domainText('feed'), { food: -1 }, 'none');
     this.pendingJournalActions.push(createJournalCarlitosCareRecord('feed'));
     return outcome;
   }
@@ -1470,7 +1457,7 @@ export class SurvivalSession {
       throw new Error('Carlitos treatment was not available.');
     }
     this.inventory.consume('medicalKit', 1);
-    const outcome = this.commit('carlitos-treated', 'You treat Carlitos.', {}, 'none');
+    const outcome = this.commit('carlitos-treated', domainText('treatCarlitos'), {}, 'none');
     this.pendingJournalActions.push(createJournalCarlitosCareRecord('treat'));
     return outcome;
   }
@@ -1481,7 +1468,7 @@ export class SurvivalSession {
     this.radioSignalsSent += 1;
     return this.commit(
       'radio-answered',
-      'You answer and transmit your position.',
+      domainText('radioAnswered'),
       deltas,
       'sighting',
     );
@@ -1502,7 +1489,7 @@ export class SurvivalSession {
   private useEnergyBar(): ActionOutcome {
     const deltas = dayActionResourceDelta(this.dayActionRuleState(), 'useEnergyBar');
     this.inventory.consume('energyBar', 1);
-    return this.commit('energy-bar-used', 'The ration restores your strength.', deltas, 'none');
+    return this.commit('energy-bar-used', domainText('barUsed'), deltas, 'none');
   }
 
   private openChest(): ActionOutcome {
@@ -1517,7 +1504,7 @@ export class SurvivalSession {
       };
       return this.commit(
         'chest-opened',
-        `The chest holds ${reward.quantity} ${reward.resource}.`,
+        { kind: 'chestResource', resource: reward.resource, quantity: reward.quantity },
         deltas,
         'none',
         { kind: 'resource', id: reward.resource, quantity: reward.quantity },
@@ -1528,7 +1515,7 @@ export class SurvivalSession {
     if (gained === null) {
       return this.commit(
         'chest-opened',
-        'The item cannot fit, so you recover two food.',
+        domainText('chestFood'),
         { food: 2 },
         'none',
         { kind: 'resource', id: 'food', quantity: 2 },
@@ -1536,7 +1523,7 @@ export class SurvivalSession {
     }
     return this.commit(
       'chest-opened',
-      `The chest holds ${ITEM_DEFINITIONS[reward.itemId].label.toLowerCase()}.`,
+      { kind: 'chestItem', itemId: reward.itemId },
       {},
       'none',
       { kind: 'item', id: reward.itemId, quantity: 1 },
@@ -1605,11 +1592,11 @@ export class SurvivalSession {
   private eventResourceReward(resolved: WeightedEventOutcome): RewardSummary | undefined {
     const added = resolved.effects.resources?.find(
       ({ operation, resource }) => operation === 'add'
-        && (resource === 'food' || resource === 'bait' || resource === 'repairMaterial'),
+        && (resource === 'food' || resource === 'bait'),
     );
     if (added === undefined || typeof added.value !== 'number') return undefined;
     const id = added.resource;
-    if (id !== 'food' && id !== 'bait' && id !== 'repairMaterial') return undefined;
+    if (id !== 'food' && id !== 'bait') return undefined;
     return Object.freeze({ kind: 'resource', id, quantity: added.value });
   }
 
@@ -1622,7 +1609,6 @@ export class SurvivalSession {
   private recordJournalEvent(
     event: SurvivalEventDefinition,
     attemptedChoiceId: string | null,
-    choiceLabel: string,
     attemptedItemId: ItemId | null,
     outcome: ActionOutcome,
     inventoryMutations: readonly JournalInventoryMutation[],
@@ -1630,7 +1616,6 @@ export class SurvivalSession {
     const record = createJournalEventRecord(
       event,
       attemptedChoiceId,
-      choiceLabel,
       attemptedItemId,
       outcome,
       inventoryMutations,
@@ -1661,7 +1646,7 @@ export class SurvivalSession {
     this.finalizeJournalDay();
     return this.commit(
       'quiet-night',
-      'The night passes without incident.',
+      domainText('quietNight'),
       {},
       'nightfall',
     );
@@ -1681,16 +1666,7 @@ export class SurvivalSession {
   }
 
   private cloneOutcome(outcome: ActionOutcome): ActionOutcome {
-    return {
-      ...outcome,
-      deltas: { ...outcome.deltas },
-      ...(outcome.rewardSummary === undefined
-        ? {}
-        : { rewardSummary: Object.freeze({ ...outcome.rewardSummary }) as RewardSummary }),
-      ...(outcome.eventResult === undefined
-        ? {}
-        : { eventResult: Object.freeze({ ...outcome.eventResult }) }),
-    };
+    return cloneActionOutcome(outcome);
   }
 
   private usableItemIds(): ReadonlySet<ItemId> {
@@ -1745,17 +1721,18 @@ export class SurvivalSession {
       .sort()[0] ?? null;
   }
 
-  private reject(code: string, message: string): ActionOutcome {
-    return { accepted: false, code, message, deltas: {}, cue: 'none' };
+  private reject(code: string, message: string | OutcomeText): ActionOutcome {
+    const text = typeof message === 'string' ? domainText(domainMessageId(message)) : message;
+    return withOutcomeText({ accepted: false, code, deltas: {}, cue: 'none' }, text);
   }
 
   private fishingInProgress(): ActionOutcome {
-    return this.reject('fishing-in-progress', 'Finish the active fishing attempt first.');
+    return this.reject('fishing-in-progress', t('finishFishing'));
   }
 
   private commit(
     code: string,
-    message: string,
+    text: OutcomeText,
     deltas: ResourceDelta,
     cue: PresentationCue,
     rewardSummary?: RewardSummary,
@@ -1769,17 +1746,16 @@ export class SurvivalSession {
       return [resource, after[resource] - before[resource]];
     })) as ResourceDelta;
     const terminalCue = this.state === 'dead' ? 'death' : this.state === 'sunk' ? 'sinking' : this.state === 'rescued' ? 'rescue' : cue;
-    const outcome: ActionOutcome = {
+    const outcome: ActionOutcome = withOutcomeText({
       accepted: true,
       code,
-      message,
       deltas: applied,
       cue: terminalCue,
       ...(rewardSummary === undefined ? {} : { rewardSummary }),
-    };
+    }, text);
     this.lastOutcome = outcome;
     this.changed();
-    return { ...outcome, deltas: { ...outcome.deltas } };
+    return cloneActionOutcome(outcome);
   }
 
   private changed(): void {
@@ -1803,7 +1779,7 @@ export class SurvivalSession {
     return {
       pressure: this.pressure,
       health: this.health, hunger: this.hunger, energy: this.energy, hull: this.hull,
-      food: this.food, bait: this.bait, repairMaterial: this.repairMaterial,
+      food: this.food, bait: this.bait,
       rescueLead: this.rescueLead,
     };
   }
@@ -1965,7 +1941,7 @@ export class SurvivalSession {
   }
 
   private carlitosDawnState(): JournalCarlitosDawnRecord['before'] {
-    if (this.carlitos === null) throw new Error('Carlitos is not aboard.');
+    if (this.carlitos === null) throw new Error(t('notAboard'));
     return createJournalCarlitosDawnState(this.carlitos);
   }
 
@@ -2095,7 +2071,6 @@ export class SurvivalSession {
     this.hull += deltas.hull ?? 0;
     this.food += deltas.food ?? 0;
     this.bait += deltas.bait ?? 0;
-    this.repairMaterial += deltas.repairMaterial ?? 0;
     this.rescueLead = clampRescueLead(
       this.rescueLead + (deltas.rescueLead ?? 0),
     );
@@ -2186,7 +2161,6 @@ export class SurvivalSession {
     this.hull = resources.hull;
     this.food = Math.max(0, this.food);
     this.bait = Math.max(0, this.bait);
-    this.repairMaterial = Math.max(0, this.repairMaterial);
     this.pressure = Math.min(4, Math.max(0, this.pressure));
   }
 

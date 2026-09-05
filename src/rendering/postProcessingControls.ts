@@ -1,12 +1,16 @@
+import { settingsText } from '../i18n/settingsMessages';
 import type { ItemAmbientOcclusionMode } from './ItemAmbientOcclusion';
 
 export type PostProcessingNumericSetting =
   | 'ambientOcclusionIntensity'
   | 'ambientOcclusionRadius';
 
+export type AmbientOcclusionQuality = 'low' | 'high';
+
 export interface PostProcessingControlState {
   ambientOcclusionAvailable: boolean;
   ambientOcclusionMode: ItemAmbientOcclusionMode;
+  ambientOcclusionQuality: AmbientOcclusionQuality;
   ambientOcclusionIntensity: number;
   ambientOcclusionRadius: number;
 }
@@ -14,6 +18,7 @@ export interface PostProcessingControlState {
 export interface PostProcessingControls {
   getState(): Readonly<PostProcessingControlState>;
   setAmbientOcclusionMode(mode: ItemAmbientOcclusionMode): void;
+  setAmbientOcclusionQuality(quality: AmbientOcclusionQuality): void;
   setNumeric(setting: PostProcessingNumericSetting, value: number): void;
 }
 
@@ -28,8 +33,8 @@ export interface PostProcessingSliderDefinition {
 
 export const POST_PROCESSING_SLIDERS =
   Object.freeze<readonly Readonly<PostProcessingSliderDefinition>[]>([
-    { key: 'ambientOcclusionIntensity', label: 'AO intensity', minimum: 0, maximum: 1, step: 0.05, digits: 2 },
-    { key: 'ambientOcclusionRadius', label: 'AO radius', minimum: 0.05, maximum: 0.5, step: 0.01, digits: 2 },
+    { key: 'ambientOcclusionIntensity', get label() { return settingsText('aoIntensity'); }, minimum: 0, maximum: 1, step: 0.05, digits: 2 },
+    { key: 'ambientOcclusionRadius', get label() { return settingsText('aoRadius'); }, minimum: 0.05, maximum: 0.5, step: 0.01, digits: 2 },
   ]);
 
 const SLIDER_BY_KEY = new Map(

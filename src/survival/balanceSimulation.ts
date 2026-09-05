@@ -168,14 +168,8 @@ function careForCarlitos(session: SurvivalSession): void {
 
 function repairHullAtOrBelowSixty(session: SurvivalSession): void {
   if (session.snapshot().hull > 60) return;
-  const repairMaterial = { kind: 'hullRepair', material: 'repairMaterial' } as const;
-  if (session.availableReason('repair', repairMaterial) === null) {
-    session.perform('repair', repairMaterial);
-    return;
-  }
-  const ductTape = { kind: 'hullRepair', material: 'ductTape' } as const;
-  if (session.availableReason('repair', ductTape) === null) {
-    session.perform('repair', ductTape);
+  if (session.availableReason('repair') === null) {
+    session.perform('repair');
   }
 }
 

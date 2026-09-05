@@ -19,6 +19,7 @@ import type {
 } from './BoatSupplyDisplay';
 import { EventItemEffects } from './EventItemEffects';
 import { StationaryEventCamera } from './StationaryEventCamera';
+import { NetAttackPose } from './NetAttackPose';
 import type { EventItemUseSample } from './eventItemUseChoreography';
 import {
   eventItemMotionProfile,
@@ -53,6 +54,7 @@ interface InteriorMaterialBinding {
 
 /** Adapts sampled item-use poses to a borrowed supply actor. */
 export class EventItemUseAdapter {
+  private readonly netAttackPose = new NetAttackPose();
   private readonly cameraLook: StationaryEventCamera;
   private readonly storedActorPosition = new Vector3();
   private readonly cameraSpacePosition = new Vector3();
@@ -109,6 +111,7 @@ export class EventItemUseAdapter {
   private cameraFacingSurface: CameraFacingSurface = 'none';
   private lockItemToHeldCamera = false;
   private alignItemToCamera = false;
+  private controlsCamera = true;
   private readonly interiorMaterialBindings: InteriorMaterialBinding[] = [];
   private readonly interiorMaterials = new Set<Material>();
   private interiorCoverage: Mesh | null = null;
@@ -170,9 +173,12 @@ export class EventItemUseAdapter {
     const profile = this.profile;
     if (this.disposed || !this.active || actor === null || profile === null) return;
 
-    this.cameraLook.apply(sample.cameraYaw, sample.cameraPitch);
-    this.applyCameraTarget(sample, actor);
-    this.applyFieldOfView(sample.fovScale);
+    this.controlsCamera = !sample.netSwing;
+    if (this.controlsCamera) {
+      this.cameraLook.apply(sample.cameraYaw, sample.cameraPitch);
+      this.applyCameraTarget(sample, actor);
+      this.applyFieldOfView(sample.fovScale);
+    }
     this.camera.updateWorldMatrix(true, false);
     this.cameraWorldMatrix.copy(this.camera.matrixWorld);
     if (this.lockItemToHeldCamera) this.updateHeldCameraWorldTransform();
@@ -214,7 +220,11 @@ export class EventItemUseAdapter {
     actor.applyPose(this.pose);
     this.applyCameraAlignedRotation(sample, actor);
     this.applyKnifeAimBeforeTravel(sample, actor, profile);
-    this.applyTargetTravel(sample, actor, profile);
+    if (sample.netSwing) {
+      this.netAttackPose.apply(actor.root, sample, this.cameraWorldMatrix, this.aimTarget);
+    } else {
+      this.applyTargetTravel(sample, actor, profile);
+    }
     this.applyKnifeGripAfterTravel(sample, actor);
     this.applyCameraFacing(sample, actor);
     this.applyAim(sample, actor, profile);
@@ -230,8 +240,10 @@ export class EventItemUseAdapter {
     this.actor?.applyPose(IDENTITY_POSE);
     this.clearInteriorCoverage();
     this.restoreInteriorMaterials();
-    this.cameraLook.restore();
-    this.restoreFieldOfView();
+    if (this.controlsCamera) {
+      this.cameraLook.restore();
+      this.restoreFieldOfView();
+    }
     this.actor = null;
     this.profile = null;
     this.aimTarget = null;
@@ -683,7 +695,13 @@ export class EventItemUseAdapter {
     this.pose.yaw = sample.yaw;
     this.pose.pitch = sample.pitch;
     this.pose.roll = sample.roll;
-    if (!this.knifeAttack) return;
+    if (sample.netSwing) {
+      // The net solver blends the stored pose to the handle position once.
+      this.pose.x = 0;
+      this.pose.y = 0;
+      this.pose.z = 0;
+    }
+    if (!this.knifeAttack && !sample.netSwing) return;
     this.pose.yaw = 0;
     this.pose.pitch = 0;
     this.pose.roll = 0;

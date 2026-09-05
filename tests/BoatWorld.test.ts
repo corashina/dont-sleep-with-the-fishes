@@ -373,7 +373,6 @@ function snapshot(
     bait: 0,
     recoveredFood: 0,
     recoveredBait: 0,
-    repairMaterial: 0,
     rescueLead: 0,
     rescueTraceFinds: 0,
     radioSignalAvailable: false,
@@ -1809,6 +1808,7 @@ describe('BoatWorld helpers', () => {
   it('turns toward grounded stern actors on one stable camera path', async () => {
     expect(SURVIVAL_EVENT_MODEL_SPECS.checkBackFish.url).toMatch(/\/bass\.glb$/);
     expect(SURVIVAL_EVENT_MODEL_SPECS.checkBackFish.targetLongestDimension).toBe(0.525);
+    expect(SURVIVAL_EVENT_MODEL_SPECS.checkBackAnglerfish.targetLongestDimension).toBe(0.7);
     const checkBack = SURVIVAL_EVENTS.find(({ id }) => id === 'check-the-back')!;
     expect(checkBack.choices.find(({ id }) => id === 'check')?.outcomes)
       .toEqual(expect.arrayContaining([

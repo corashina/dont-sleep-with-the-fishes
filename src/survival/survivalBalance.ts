@@ -4,8 +4,9 @@ export const SURVIVAL_BALANCE = {
   nightHullWear: { damage: 3, respiteInterval: 5 },
   thresholds: { hungry: 70, starving: 90, maximum: 100 },
   actions: {
-    fishEnergy: 1, repairEnergy: 1, diveEnergy: 3,
-    foodHunger: -35, repairHull: 25, tapeHull: 15, treatmentHealth: 30,
+    fishEnergy: 1, diveEnergy: 3,
+    foodHunger: -35, repairHullPerEnergy: 33, treatmentHealth: 30,
+    maximumRepairEnergy: 3,
     maximumEnergy: 3,
     maximumStoredEnergy: 4,
   },
@@ -37,9 +38,12 @@ export function radioRescueLeadForSignal(sentSignals: number): number {
   return gains[Math.min(sentSignals, gains.length - 1)]!;
 }
 
-export type RepairEnergyCost = 0 | 1 | 2 | 3;
-
 export type RescueLead = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+
+export interface HullRepairCalculation {
+  readonly energySpent: number;
+  readonly hullRestored: number;
+}
 
 export interface RescueChanceStep {
   readonly firstDay: number;
@@ -111,7 +115,21 @@ export function nightlyHullWearDamage(completedDay: number): number {
     : SURVIVAL_BALANCE.nightHullWear.damage;
 }
 
-export function repairEnergyCost(hull: number): RepairEnergyCost {
-  if (hull >= SURVIVAL_BALANCE.thresholds.maximum) return 0;
-  return SURVIVAL_BALANCE.actions.repairEnergy;
+export function calculateHullRepair(
+  hull: number,
+  energy: number,
+): Readonly<HullRepairCalculation> {
+  const missingHull = Math.max(0, SURVIVAL_BALANCE.thresholds.maximum - hull);
+  const energySpent = Math.min(
+    Math.max(0, Math.trunc(energy)),
+    SURVIVAL_BALANCE.actions.maximumRepairEnergy,
+    Math.ceil(missingHull / SURVIVAL_BALANCE.actions.repairHullPerEnergy),
+  );
+  return Object.freeze({
+    energySpent,
+    hullRestored: Math.min(
+      missingHull,
+      energySpent * SURVIVAL_BALANCE.actions.repairHullPerEnergy,
+    ),
+  });
 }

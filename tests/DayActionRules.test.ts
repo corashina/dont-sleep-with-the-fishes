@@ -20,7 +20,6 @@ const baseRuleState: DayActionRuleState = Object.freeze({
   hull: 50,
   food: 1,
   bait: 1,
-  repairMaterial: 1,
   chestState: 'closed',
   inventory: Object.freeze({
     'scubaSet-1': Object.freeze({ instanceId: 'scubaSet-1', type: 'scubaSet', condition: 'usable' }),
@@ -59,10 +58,8 @@ describe('day action availability rules', () => {
     ['dive', { energy: 2 }, undefined, 'Diving requires three energy.'],
     ['eat', { food: 0 }, undefined, 'No food remains.'],
     ['eat', { hunger: 0 }, undefined, 'You are not hungry.'],
-    ['repair', { hull: 100 }, { kind: 'hullRepair', material: 'repairMaterial' }, 'The hull needs no repair.'],
-    ['repair', { energy: 0 }, { kind: 'hullRepair', material: 'repairMaterial' }, 'Repairing requires one energy.'],
-    ['repair', { inventory: withoutItem('ductTape-1') }, { kind: 'hullRepair', material: 'ductTape' }, 'No duct tape remains.'],
-    ['repair', { repairMaterial: 0 }, { kind: 'hullRepair', material: 'repairMaterial' }, 'No duct tape remains.'],
+    ['repair', { hull: 100 }, undefined, 'The hull needs no repair.'],
+    ['repair', { energy: 0 }, undefined, 'Repairing requires one energy.'],
     ['repairItem', { inventory: withoutItem('ductTape-1') }, { kind: 'itemRepair', target: 'compass-1' }, 'No duct tape remains.'],
     ['repairItem', {}, undefined, 'That option cannot be used for this action.'],
     ['repairItem', {}, { kind: 'itemRepair', target: 'compass-2' }, 'That item cannot be repaired.'],
@@ -104,12 +101,12 @@ describe('day action availability rules', () => {
     expect(dayActionUnavailableReason(
       state({ activeFishing: true, state: 'dead', food: 0 }),
       'eat',
-      { kind: 'hullRepair', material: 'repairMaterial' },
+      { kind: 'itemRepair', target: 'compass-1' },
     )).toBe('Finish the active fishing attempt first.');
     expect(dayActionUnavailableReason(
       state({ state: 'dead', food: 0 }),
       'eat',
-      { kind: 'hullRepair', material: 'repairMaterial' },
+      { kind: 'itemRepair', target: 'compass-1' },
     )).toBe('That option cannot be used for this action.');
   });
 
@@ -118,7 +115,7 @@ describe('day action availability rules', () => {
       ['fish', undefined],
       ['dive', undefined],
       ['eat', undefined],
-      ['repair', { kind: 'hullRepair', material: 'repairMaterial' }],
+      ['repair', undefined],
       ['repairItem', { kind: 'itemRepair', target: 'compass-1' }],
       ['treat', undefined],
       ['answerRadio', undefined],
@@ -135,17 +132,42 @@ describe('day action availability rules', () => {
       expect(dayActionUnavailableReason(state(patch), action, option)).toBeNull();
     }
   });
+
+  it('allows hull repair without Duct Tape', () => {
+    expect(dayActionUnavailableReason(
+      state({ inventory: withoutItem('ductTape-1') }),
+      'repair',
+    )).toBeNull();
+  });
+
+  it('rejects every option for hull repair', () => {
+    expect(dayActionUnavailableReason(
+      state(),
+      'repair',
+      { kind: 'itemRepair', target: 'compass-1' },
+    )).toBe('That option cannot be used for this action.');
+  });
 });
 
 describe('day action resource rules', () => {
   it.each([
     ['eat', undefined, { hunger: -35, food: -1 }],
-    ['repair', { kind: 'hullRepair', material: 'repairMaterial' }, { energy: -1, hull: 25, repairMaterial: -1 }],
-    ['repair', { kind: 'hullRepair', material: 'ductTape' }, { energy: -1, hull: 15 }],
     ['treat', undefined, { health: 30 }],
     ['answerRadio', undefined, { energy: -1, rescueLead: 2 }],
     ['useEnergyBar', undefined, { energy: 2 }],
   ] as const)('computes the current %s resource effect', (action, option, expected) => {
     expect(dayActionResourceDelta(state({ energy: 1 }), action, option)).toEqual(expected);
+  });
+
+  it.each([
+    [{ hull: 7, energy: 3 }, { energy: -3, hull: 93 }],
+    [{ hull: 90, energy: 3 }, { energy: -1, hull: 10 }],
+    [{ hull: 7, energy: 1 }, { energy: -1, hull: 33 }],
+    [{ hull: 66, energy: 3 }, { energy: -2, hull: 34 }],
+    [{ hull: 1, energy: 4 }, { energy: -3, hull: 99 }],
+  ])('uses available energy for repair', (patch, expected) => {
+    const current = state(patch);
+    expect(dayActionUnavailableReason(current, 'repair')).toBeNull();
+    expect(dayActionResourceDelta(current, 'repair')).toEqual(expected);
   });
 });

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Game, WebGlInitializationError, type GameTestOptions } from '../src/Game';
 import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
 import { launchGame, type LaunchDependencies } from '../src/app/launchGame';
+import { initializeLanguage, LANGUAGE_STORAGE_KEY } from '../src/i18n/language';
 import { AudioSystem } from '../src/audio/AudioSystem';
 import {
   MenuModelLoadError,
@@ -117,12 +118,42 @@ function dependencies(
 
 describe('launchGame', () => {
   beforeEach(() => {
+    initializeLanguage(null);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
     document.body.replaceChildren();
   });
 
   afterEach(() => {
+    initializeLanguage(null);
+    vi.restoreAllMocks();
     document.body.replaceChildren();
   });
+
+  it.each(['asset', 'runtime'] as const)(
+    'uses saved Polish for %s failure guidance and logs the original diagnostic',
+    async (kind) => {
+      initializeLanguage({
+        getItem: (key) => key === LANGUAGE_STORAGE_KEY ? 'pl' : null,
+        setItem: vi.fn(),
+      });
+      const mount = connectedMount();
+      const error = kind === 'asset'
+        ? new ItemModelLoadError('ductTape', 'download failed')
+        : new Error('event bundle failed');
+      const handle = launchGame(mount, dependencies(
+        () => kind === 'asset'
+          ? Promise.reject(error)
+          : Promise.resolve({ dispose: vi.fn() } as unknown as PropModelLibrary),
+        kind === 'runtime' ? { createGame: () => { throw error; } } : {},
+      ));
+
+      await expect(handle.completion).resolves.toBeNull();
+      expect(mount.textContent).toContain('Odśwież stronę, aby spróbować ponownie.');
+      expect(mount.textContent).toContain(kind === 'asset' ? 'ZAPASY NIEDOSTĘPNE' : 'BŁĄD GRY');
+      expect(mount.textContent).not.toContain(error.message);
+      expect(console.error).toHaveBeenCalledWith(error);
+    },
+  );
 
   it('parses development playtest input before loading assets', async () => {
     const mount = connectedMount();
@@ -253,8 +284,9 @@ describe('launchGame', () => {
 
     await expect(handle.completion).resolves.toBeNull();
     expect(mount.textContent).toContain('MENU MODEL UNAVAILABLE');
-    expect(mount.textContent).toContain('Unable to prepare shark');
-    expect(mount.textContent).toContain('local file is missing');
+    expect(mount.textContent).toContain('Unable to prepare the underwater menu');
+    expect(mount.textContent).toContain('Refresh the page to try again.');
+    expect(console.error).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('local file is missing') }));
     expect(createGame).not.toHaveBeenCalled();
   });
 
@@ -274,7 +306,7 @@ describe('launchGame', () => {
     await expect(handle.completion).resolves.toBeNull();
     expect(mount.textContent).toContain('SEABED UNAVAILABLE');
     expect(mount.textContent).toContain('Unable to prepare the underwater sand');
-    expect(mount.textContent).toContain('local sand file is missing');
+    expect(console.error).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('local sand file is missing') }));
     expect(createGame).not.toHaveBeenCalled();
   });
 
@@ -649,7 +681,7 @@ describe('launchGame', () => {
     expect(models.dispose).toHaveBeenCalledOnce();
     expect(mount.textContent).toContain('PHYSICS UNAVAILABLE');
     expect(mount.textContent).toContain('Unable to prepare the moving deck');
-    expect(mount.textContent).toContain('WASM unavailable');
+    expect(console.error).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('WASM unavailable') }));
   });
 
   it('disposes fulfilled siblings and names a furniture preload failure', async () => {
@@ -674,8 +706,8 @@ describe('launchGame', () => {
     expect(disposeSky).toHaveBeenCalledOnce();
     expect(createGame).not.toHaveBeenCalled();
     expect(mount.textContent).toContain('FURNITURE UNAVAILABLE');
-    expect(mount.textContent).toContain('bookcaseOpen');
-    expect(mount.textContent).toContain('local GLB missing');
+    expect(mount.textContent).toContain('Unable to prepare the ship furniture');
+    expect(console.error).toHaveBeenCalledWith(expect.objectContaining({ modelId: 'bookcaseOpen', message: expect.stringContaining('local GLB missing') }));
   });
 
   it('selects simultaneous preload failures in models, furniture, then sky order', async () => {
@@ -707,7 +739,7 @@ describe('launchGame', () => {
     ));
     await furnitureFirst.completion;
     expect(mount.textContent).toContain('FURNITURE UNAVAILABLE');
-    expect(mount.textContent).toContain('furniture failed');
+    expect(console.error).toHaveBeenLastCalledWith(expect.objectContaining({ message: expect.stringContaining('furniture failed') }));
   });
 
   it('disposes fulfilled models when sky preload fails', async () => {
@@ -811,7 +843,7 @@ describe('launchGame', () => {
     expect(mount.textContent).toContain('SUPPLIES UNAVAILABLE');
     expect(mount.textContent).toContain('Unable to recover DUCT TAPE');
     expect(mount.textContent).toContain('DUCT TAPE');
-    expect(mount.textContent).toContain('download failed');
+    expect(console.error).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('download failed') }));
     expect(createGame).not.toHaveBeenCalled();
   });
 
@@ -825,11 +857,12 @@ describe('launchGame', () => {
 
     await expect(handle.completion).resolves.toBeNull();
     expect(mount.textContent).toContain('GAME ERROR');
-    expect(mount.textContent).toContain('event bundle failed');
+    expect(mount.textContent).toContain('Refresh the page to try again.');
+    expect(console.error).toHaveBeenCalledWith(error);
     expect(mount.textContent).not.toContain('WEBGL UNAVAILABLE');
   });
 
-  it('shows GAME ERROR and preserves a thrown string', async () => {
+  it('shows GAME ERROR and logs a thrown string', async () => {
     const mount = connectedMount();
     const handle = launchGame(mount, dependencies(
       () => Promise.resolve({ dispose: vi.fn() } as unknown as PropModelLibrary),
@@ -838,7 +871,8 @@ describe('launchGame', () => {
 
     await expect(handle.completion).resolves.toBeNull();
     expect(mount.textContent).toContain('GAME ERROR');
-    expect(mount.textContent).toContain('event bundle failed');
+    expect(mount.textContent).toContain('Refresh the page to try again.');
+    expect(console.error).toHaveBeenCalledWith('event bundle failed');
     expect(mount.textContent).not.toContain('WEBGL');
   });
 
@@ -851,7 +885,8 @@ describe('launchGame', () => {
 
     await expect(handle.completion).resolves.toBeNull();
     expect(mount.textContent).toContain('GAME ERROR');
-    expect(mount.textContent).toContain('Unknown game error');
+    expect(mount.textContent).toContain('Refresh the page to try again.');
+    expect(console.error).toHaveBeenCalledWith(undefined);
     expect(mount.textContent).not.toContain('WEBGL');
   });
 
@@ -868,6 +903,8 @@ describe('launchGame', () => {
 
     await expect(handle.completion).resolves.toBeNull();
     expect(mount.textContent).toContain('WEBGL UNAVAILABLE');
+    expect(mount.textContent).toContain('Enable hardware acceleration');
+    expect(console.error).toHaveBeenCalledWith(expect.any(WebGlInitializationError));
     expect(mount.textContent).not.toContain('GAME ERROR');
   });
 
@@ -886,7 +923,8 @@ describe('launchGame', () => {
     await expect(handle.completion).resolves.toBeNull();
     expect(mount.textContent).toContain('SHIP SETUP FAILED');
     expect(mount.textContent).toContain('Unable to prepare Dorothy');
-    expect(mount.textContent).toContain('Unable to place ship item: shotgun-1');
+    expect(mount.textContent).toContain('Refresh the page to try again.');
+    expect(console.error).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('Unable to place ship item: shotgun-1') }));
     expect(mount.textContent).not.toContain('WEBGL UNAVAILABLE');
   });
 
@@ -911,7 +949,8 @@ describe('launchGame', () => {
 
     expect(game.dispose).toHaveBeenCalledOnce();
     expect(mount.textContent).toContain('SHIP SETUP FAILED');
-    expect(mount.textContent).toContain('Unable to place ship item: shotgun-1');
+    expect(mount.textContent).toContain('Refresh the page to try again.');
+    expect(console.error).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('Unable to place ship item: shotgun-1') }));
     expect(mount.textContent).not.toContain('WEBGL UNAVAILABLE');
 
     handle.cancel();
@@ -987,7 +1026,7 @@ describe('launchGame', () => {
 
     await expect(handle.completion).resolves.toBeNull();
     expect(mount.textContent).toContain('GAME ERROR');
-    expect(mount.textContent).toContain('initial resize failed');
+    expect(console.error).toHaveBeenCalledWith(expect.objectContaining({ message: 'initial resize failed' }));
     expect(disposePhase).toHaveBeenCalledOnce();
     expect(disposeRenderer).toHaveBeenCalledOnce();
     expect(disposeModels).toHaveBeenCalledOnce();
@@ -997,7 +1036,7 @@ describe('launchGame', () => {
     expect(canvas.parentElement).toBeNull();
   });
 
-  it('renders hostile error text without creating markup', async () => {
+  it('keeps hostile error text in diagnostics and outside the failure screen', async () => {
     const mount = connectedMount();
     const handle = launchGame(mount, dependencies(
       () => Promise.reject(new ItemModelLoadError(
@@ -1009,9 +1048,11 @@ describe('launchGame', () => {
     await handle.completion;
 
     expect(mount.querySelector('script')).toBeNull();
-    expect(mount.textContent).toContain('<script>globalThis.compromised = true</script> & missing');
-    expect(mount.innerHTML).toContain('&lt;script&gt;');
-    expect(mount.innerHTML).toContain('&amp; missing');
+    expect(mount.textContent).toContain('Refresh the page to try again.');
+    expect(mount.textContent).not.toContain('globalThis.compromised');
+    expect(console.error).toHaveBeenCalledWith(expect.objectContaining({
+      message: expect.stringContaining('<script>globalThis.compromised = true</script> & missing'),
+    }));
   });
 
   it('disposes late models and skips construction after cancellation', async () => {

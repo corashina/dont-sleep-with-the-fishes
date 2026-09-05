@@ -80,6 +80,20 @@ class FakeAudioBackend implements AudioBackend {
 }
 
 describe('AudioSystem', () => {
+  it.each([
+    ['fishingNet', 'netImpact'],
+    ['knife', 'knifeImpact'],
+  ] as const)('plays the %s impact at the action cue, separate from item handling', (itemId, soundId) => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    audio.eventItem(itemId);
+    expect(backend.voices.map(({ id }) => id)).toEqual(['itemHandling']);
+    audio.eventItemCue(itemId, 0);
+    expect(backend.voices.map(({ id }) => id)).toEqual(['itemHandling', soundId]);
+    audio.dispose();
+    audio.eventItemCue(itemId, 0);
+    expect(backend.voices).toHaveLength(2);
+  });
   it('plays every pet meow once before reshuffling without an adjacent repeat', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(
@@ -259,6 +273,17 @@ describe('AudioSystem', () => {
     expect(secondSignal.stop).toHaveBeenCalledExactlyOnceWith(0.03);
     expect(backend.voices.at(-1)?.id).toBe('radioReply');
     expect(expired).toHaveBeenCalledOnce();
+  });
+
+  it('uses hull repair audio only for hull repair', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+
+    audio.action('repair');
+    expect(backend.voices.at(-1)?.id).toBe('hullRepair');
+
+    audio.action('repairItem', { kind: 'itemRepair', target: 'compass-1' });
+    expect(backend.voices.at(-1)?.id).toBe('tapeRepair');
   });
 
   it('pauses only the incoming radio signal for player panels', () => {

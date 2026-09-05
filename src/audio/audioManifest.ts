@@ -15,6 +15,8 @@ export const SOUND_IDS = [
   'woodStep',
   'jump',
   'itemHandling',
+  'netImpact',
+  'knifeImpact',
   'boatCreak',
   'lightWaveImpact',
   'hardWaveImpact',
@@ -80,6 +82,8 @@ export type SoundId = typeof SOUND_IDS[number];
 export type AudioBusId = 'music' | 'ambience' | 'effects' | 'interface';
 
 export const EVENT_ONLY_SOUND_IDS = Object.freeze([
+  'netImpact',
+  'knifeImpact',
   'bucketRain',
   'umbrella',
   'anchorChain',
@@ -167,6 +171,8 @@ export const AUDIO_MANIFEST: Readonly<Record<SoundId, AudioAssetDefinition>> =
     woodStep: asset('woodStep', 'effects', 0.28, false, 4),
     jump: asset('jump', 'effects', 0.3, false, 2),
     itemHandling: asset('itemHandling', 'effects', 0.38, false, 3),
+    netImpact: asset('netImpact', 'effects', 0.65, false, 1),
+    knifeImpact: asset('knifeImpact', 'effects', 0.6, false, 1),
     boatCreak: asset('boatCreak', 'ambience', 0.22, true),
     lightWaveImpact: asset('lightWaveImpact', 'effects', 0.28, false, 2),
     hardWaveImpact: asset('hardWaveImpact', 'effects', 0.46, false, 2),

@@ -1,3 +1,7 @@
+import { uiDynamic } from '../i18n/uiDynamicMessages';
+import { onLanguageChange } from '../i18n/language';
+import { refreshUiText } from './translatedText';
+import { uiText } from '../i18n/uiMessages';
 import type { ItemInstanceId } from '../game/ItemState';
 import type {
   EventResponseId,
@@ -24,7 +28,7 @@ export class SurvivalEventView {
   readonly roots: readonly [HTMLElement, HTMLElement];
 
   onChoice: (choiceId: EventResponseId) => void = () => undefined;
-  onAnnouncement: (message: string) => void = () => undefined;
+  onAnnouncement: () => void = () => undefined;
 
   private readonly title: HTMLElement;
   private readonly detail: HTMLElement;
@@ -32,10 +36,28 @@ export class SurvivalEventView {
   private readonly choices: HTMLElement;
   private readonly lastValues = new Map<string, string>();
   private selectedChoiceId: EventResponseId | null = null;
+  private currentEvent: Pick<SurvivalEventDefinition, 'id' | 'revealText' | 'danger'> | null = null;
+  private currentChoices: readonly EventContextChoice[] = [];
   private active = false;
   private busy = false;
   private modalOpen = false;
   private pendingChoiceBeat: PendingWork | null = null;
+  private readonly unsubscribeLanguage: () => void;
+  private refreshLanguage(): void {
+    refreshUiText(...this.roots);
+    if (this.caption.dataset.eventId === 'check-the-back') this.updateText('title', this.title, uiText('checkBack'));
+    if (this.caption.dataset.eventId === 'guarded-sleep') this.updateText('title', this.title, uiText('watchCarlitos'));
+    if (this.currentEvent !== null) { this.detail.textContent = this.currentEvent.revealText; this.risk.textContent = uiDynamic(this.currentEvent.danger); }
+    for (const choice of this.currentChoices) {
+      const button = this.choiceButton(choice.id);
+      if (!button) continue;
+      const label = this.caption.dataset.eventId === 'guarded-sleep' && choice.id === 'watch' ? uiText('yes') : choice.label;
+      if (button.firstChild?.nodeType === Node.TEXT_NODE) button.firstChild.textContent = label;
+      const reason = button.querySelector('.event-choice__reason');
+      if (reason && choice.unavailableReason !== null) { reason.textContent = choice.unavailableReason; button.dataset.unavailableReason = choice.unavailableReason; button.setAttribute('aria-description', choice.unavailableReason); }
+    }
+  }
+
   private disposed = false;
 
   constructor() {
@@ -48,7 +70,7 @@ export class SurvivalEventView {
         <h2 class="ui-role-display" data-event-title hidden></h2>
         <p class="event-caption__detail ui-role-narrative" data-event-detail hidden></p>
         <p class="event-caption__risk ui-role-context" data-event-risk hidden></p>
-        <nav class="event-choices" data-event-choices aria-label="Event choices" hidden></nav>
+        <nav class="event-choices" data-event-choices data-ui-aria="eventChoices" aria-label="${uiText('eventChoices')}" hidden></nav>
       </section>`;
     const roots = [...template.content.children] as HTMLElement[];
     this.sleepMask = roots[0]!;
@@ -59,6 +81,8 @@ export class SurvivalEventView {
     this.risk = requireElement(this.caption, '[data-event-risk]');
     this.choices = requireElement(this.caption, '[data-event-choices]');
     this.caption.addEventListener('click', this.handleClick);
+    this.unsubscribeLanguage = onLanguageChange(() => this.refreshLanguage());
+    this.refreshLanguage();
   }
 
   begin(): void {
@@ -105,7 +129,8 @@ export class SurvivalEventView {
     event: Pick<SurvivalEventDefinition, 'id' | 'revealText' | 'danger'>,
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    const risk = event.danger.toLocaleUpperCase('en-US');
+    this.currentEvent = event;
+    const risk = uiDynamic(event.danger);
     this.updateText('title', this.title, '');
     this.title.hidden = true;
     this.updateText('detail', this.detail, event.revealText);
@@ -130,10 +155,15 @@ export class SurvivalEventView {
     this.caption.setAttribute('aria-hidden', 'true');
     this.caption.removeAttribute('aria-label');
     this.syncChoiceState();
-    this.onAnnouncement(
-      `${event.danger[0]!.toUpperCase()}${event.danger.slice(1)} event. ${event.revealText}`,
-    );
+    this.onAnnouncement();
     return Promise.resolve();
+  }
+
+  announcementText(): string {
+    const event = this.currentEvent;
+    return event === null
+      ? ''
+      : uiDynamic('eventAnnouncement', uiDynamic(event.danger), event.revealText);
   }
 
   hideReveal(): void {
@@ -144,14 +174,15 @@ export class SurvivalEventView {
 
   setSelection(contextualChoices: readonly EventContextChoice[] = []): void {
     if (this.disposed) return;
+    this.currentChoices = contextualChoices;
     this.selectedChoiceId = null;
     const checkBack = this.caption.dataset.eventId === 'check-the-back';
     const guardedSleep = this.caption.dataset.eventId === 'guarded-sleep';
     if (checkBack) {
-      this.updateText('title', this.title, 'Check the back?');
+      this.updateText('title', this.title, uiText('checkBack'));
       this.title.hidden = false;
     } else if (guardedSleep) {
-      this.updateText('title', this.title, 'Let Carlitos watch?');
+      this.updateText('title', this.title, uiText('watchCarlitos'));
       this.title.hidden = false;
     }
     const buttons = contextualChoices
@@ -160,7 +191,7 @@ export class SurvivalEventView {
       ))
       .map((choice) => this.createChoice(
         guardedSleep && choice.id === 'watch'
-          ? { ...choice, label: 'Yes' }
+          ? { ...choice, label: uiText('yes') }
           : choice,
       ));
     this.choices.replaceChildren(...buttons);
@@ -247,6 +278,8 @@ export class SurvivalEventView {
   }
 
   clearPresentationState(): void {
+    this.currentEvent = null;
+    this.currentChoices = [];
     throwCleanupFailure(runCleanupSteps([
       () => { this.selectedChoiceId = null; },
       () => { this.active = false; },
@@ -338,6 +371,7 @@ export class SurvivalEventView {
   beginDispose(): boolean {
     if (this.disposed) return false;
     this.disposed = true;
+    this.unsubscribeLanguage();
     this.selectedChoiceId = null;
     this.active = false;
     return true;

@@ -1,3 +1,4 @@
+import { cloneOutcomeText, type OutcomeText } from './outcomeText';
 import type { ItemId, ItemInstanceId } from '../game/ItemState';
 import type { CarlitosDeathCause, CarlitosState } from './CarlitosState';
 import type { FishingTerminalResult } from './FishingSession';
@@ -18,13 +19,10 @@ export interface JournalInventoryMutation {
 export interface JournalEventRecord {
   readonly phase: 'day' | 'night';
   readonly eventId: string;
-  readonly title: string;
-  readonly prompt: string;
   readonly attemptedChoiceId: string | null;
-  readonly choiceLabel: string;
   readonly attemptedItemId: ItemId | null;
   readonly outcomeCode: string;
-  readonly outcomeMessage: string;
+  readonly text: OutcomeText;
   readonly eventPresentationKey?: EventPresentationKey;
   readonly inventoryMutations: readonly JournalInventoryMutation[];
 }
@@ -44,7 +42,6 @@ export interface JournalFishingRecord {
   readonly attemptId: string;
   readonly result: 'fish' | 'utility' | 'junk' | 'miss';
   readonly catchId: FishingCatchId | null;
-  readonly catchLabel: string | null;
   readonly food: 0 | 1 | 2;
   readonly baitConsumed: boolean;
 }
@@ -92,23 +89,20 @@ export interface JournalEntry {
 }
 
 export function createJournalEventRecord(
-  event: Pick<SurvivalEventDefinition, 'phase' | 'id' | 'title' | 'prompt'>,
+  event: Pick<SurvivalEventDefinition, 'phase' | 'id'>,
   attemptedChoiceId: string | null,
-  choiceLabel: string,
   attemptedItemId: ItemId | null,
-  outcome: Pick<ActionOutcome, 'code' | 'message' | 'eventPresentationKey'>,
+  outcome: Pick<ActionOutcome, 'code' | 'text' | 'eventPresentationKey'>,
   inventoryMutations: readonly JournalInventoryMutation[],
 ): JournalEventRecord {
+  if (outcome.text === undefined) throw new Error('Journal event requires a stable text reference.');
   return Object.freeze({
     phase: event.phase,
     eventId: event.id,
-    title: event.title,
-    prompt: event.prompt,
     attemptedChoiceId,
-    choiceLabel,
     attemptedItemId,
     outcomeCode: outcome.code,
-    outcomeMessage: outcome.message,
+    text: cloneOutcomeText(outcome.text),
     ...(outcome.eventPresentationKey === undefined
       ? {}
       : { eventPresentationKey: outcome.eventPresentationKey }),
@@ -135,7 +129,6 @@ export function createJournalFishingRecord(
     attemptId,
     result: result.kind === 'miss' ? 'miss' : result.catch.kind,
     catchId: result.kind === 'miss' ? null : result.catch.id,
-    catchLabel: result.kind === 'miss' ? null : result.catch.label,
     food,
     baitConsumed,
   });
@@ -208,6 +201,7 @@ export function createJournalEntry(
 function cloneJournalRecord(record: JournalEventRecord): JournalEventRecord {
   return Object.freeze({
     ...record,
+    text: cloneOutcomeText(record.text),
     inventoryMutations: cloneJournalInventoryMutations(record.inventoryMutations),
   });
 }

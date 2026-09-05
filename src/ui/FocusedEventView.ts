@@ -1,3 +1,7 @@
+import { uiDynamic } from '../i18n/uiDynamicMessages';
+import { onLanguageChange } from '../i18n/language';
+import { refreshUiText } from './translatedText';
+import { uiText } from '../i18n/uiMessages';
 import type { EventResponseId } from '../survival/survivalTypes';
 import type { InspectableEventId } from '../survival/eventCatalog';
 import { createElementRequirement } from './dom';
@@ -14,9 +18,9 @@ const ROUTINE_DIALOG_GAP = 22;
 const FOCUSED_EVENT_BOTTOM_RESERVE = 128;
 const requireElement = createElementRequirement('focused event view');
 const FOCUSED_EVENT_TITLES: Readonly<Record<InspectableEventId, string>> = Object.freeze({
-  wreckage: 'Wreckage Debris',
-  'drifting-supplies': 'Drifting Supplies',
-  'drifting-chest': 'Drifting Chest',
+  get wreckage() { return uiText('wreckageTitle'); },
+  get 'drifting-supplies'() { return uiText('suppliesTitle'); },
+  get 'drifting-chest'() { return uiText('chestTitle'); },
 });
 
 export class FocusedEventView {
@@ -32,11 +36,28 @@ export class FocusedEventView {
 
   private readonly choicesRoot: HTMLElement;
   private readonly title: HTMLElement;
+  private currentEventId: InspectableEventId | null = null;
   private target: FocusedEventFocusView['target'] = null;
   private readonly choicesById = new Map<EventResponseId, FocusedEventChoiceView>();
   private selectedChoiceId: EventResponseId | null = null;
   private busy = false;
   private visible = false;
+  private readonly unsubscribeLanguage: () => void;
+  private refreshLanguage(): void {
+    refreshUiText(this.root);
+    if (this.currentEventId !== null) this.title.textContent = FOCUSED_EVENT_TITLES[this.currentEventId];
+    for (const choice of this.choicesById.values()) {
+      const button = this.choiceButton(choice.id);
+      if (!button) continue;
+      const main = button.querySelector('.focused-event-view__choice-main');
+      if (main?.firstChild) main.firstChild.textContent = choice.label;
+      const cost = button.querySelector('.focused-event-view__cost');
+      if (cost) cost.setAttribute('aria-label', uiDynamic('energyCount', choice.energyCost ?? 0));
+      const reason = button.querySelector('.event-choice__reason');
+      if (reason && choice.unavailableReason !== null) { reason.textContent = choice.unavailableReason; button.dataset.unavailableReason = choice.unavailableReason; button.setAttribute('aria-description', choice.unavailableReason); }
+    }
+  }
+
   private disposed = false;
 
   constructor(private readonly coordinateRoot: HTMLElement) {
@@ -45,9 +66,9 @@ export class FocusedEventView {
       <section class="focused-event-view" data-focused-event-view role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="focused-event-title" inert>
         <div class="dive-result__paper focused-event-view__card scuba-popup-paper">
           <h2 class="dive-result__title scuba-popup-title ui-role-display" id="focused-event-title" data-focused-event-title></h2>
-          <nav data-focused-event-choices aria-label="Event choices"></nav>
+          <nav data-focused-event-choices data-ui-aria="eventChoices" aria-label="${uiText('eventChoices')}"></nav>
         </div>
-        <button type="button" class="focused-event-view__back" data-focused-event-back aria-label="Return to boat">
+        <button type="button" class="focused-event-view__back" data-focused-event-back data-ui-aria="returnBoat" aria-label="${uiText('returnBoat')}">
           ${returnArrowArtwork('focused-event-view__back-icon')}
         </button>
       </section>`;
@@ -58,15 +79,18 @@ export class FocusedEventView {
     this.choicesRoot = requireElement(this.root, '[data-focused-event-choices]');
     this.root.addEventListener('click', this.handleClick);
     window.addEventListener('resize', this.handleWindowResize);
+    this.unsubscribeLanguage = onLanguageChange(() => this.refreshLanguage());
+    this.refreshLanguage();
   }
 
   show(view: FocusedEventFocusView): void {
     if (this.disposed) return;
-    this.backButton.setAttribute('aria-label', 'Return to boat');
+    this.currentEventId = view.eventId;
+    this.backButton.setAttribute('aria-label', uiText('returnBoat'));
     this.title.textContent = FOCUSED_EVENT_TITLES[view.eventId];
     this.target = view.target === null ? null : Object.freeze({ ...view.target });
     this.choicesById.clear();
-    for (const choice of view.choices) this.choicesById.set(choice.id, Object.freeze({ ...choice }));
+    for (const choice of view.choices) this.choicesById.set(choice.id, choice);
     this.selectedChoiceId = null;
     this.renderChoices();
     this.position();
@@ -78,6 +102,7 @@ export class FocusedEventView {
     if (this.disposed) return;
     this.onHide();
     this.visible = false;
+    this.currentEventId = null;
     this.choicesById.clear();
     this.selectedChoiceId = null;
     this.title.textContent = '';
@@ -152,6 +177,7 @@ export class FocusedEventView {
   beginDispose(): boolean {
     if (this.disposed) return false;
     this.disposed = true;
+    this.unsubscribeLanguage();
     return true;
   }
 
@@ -195,7 +221,7 @@ export class FocusedEventView {
       if (energyCost > 0) {
         const cost = document.createElement('span');
         cost.className = 'focused-event-view__cost';
-        cost.setAttribute('aria-label', `${energyCost} energy`);
+        cost.setAttribute('aria-label', uiDynamic('energyCount', energyCost));
         cost.textContent = '⚡️'.repeat(energyCost);
         main.append(cost);
       }

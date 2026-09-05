@@ -19,7 +19,7 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
     models: ['schoolFish', 'cod', 'bass', 'redSnapper'],
     sounds: [],
   },
-  snatcher: { models: ['snatcher'], sounds: ['tentacleMovement'] },
+  snatcher: { models: ['snatcher'], sounds: ['tentacleMovement', 'netImpact'] },
   'death-stare': { models: ['deathStareBlob'], sounds: [] },
   'swarm-of-sharks': { models: ['shark'], sounds: [] },
   tornado: { models: ['tornadoCore'], sounds: ['tornadoWind'] },
@@ -71,6 +71,8 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
 };
 
 const ITEM_SOUNDS = Object.freeze({
+  fishingNet: ['netImpact'],
+  knife: ['knifeImpact'],
   bucket: ['bucketRain'],
   umbrella: ['umbrella'],
   anchor: ['anchorChain', 'anchorSplash'],

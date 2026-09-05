@@ -51,7 +51,6 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
     bait: 0,
     recoveredFood: 0,
     recoveredBait: 0,
-    repairMaterial: 0,
     rescueLead: 0,
     rescueTraceFinds: 0,
     radioSignalAvailable: false,
@@ -446,7 +445,10 @@ describe('event selection contracts', () => {
     expect(after.journalEntries).toHaveLength(1);
     expect(after.journalEntries[0]!.nighttime).toMatchObject({
       kind: 'event',
-      event: { attemptedChoiceId: 'sleep', choiceLabel: 'Let It Pass', attemptedItemId: null },
+      event: {
+        eventId: 'plane', attemptedChoiceId: 'sleep', attemptedItemId: null,
+        text: { kind: 'eventResult', reference: { eventId: 'plane', choiceId: 'sleep', resultId: 'plane-pass' } },
+      },
     });
     expect(rig.onInvariantError).not.toHaveBeenCalled();
     expect(rig.onFatalError).not.toHaveBeenCalled();
@@ -679,7 +681,7 @@ describe('SurvivalEventFlow', () => {
   });
 
   it.each([
-    ['search', null, { kind: 'resource', id: 'repairMaterial', quantity: 2 }],
+    ['search', null, { kind: 'resource', id: 'food', quantity: 1 }],
     ['delegate-carlitos', null, { kind: 'resource', id: 'food', quantity: 1 }],
     ['dive', 'scubaSet-1', { kind: 'item', id: 'medicalKit', quantity: 1 }],
   ] as const)('returns before showing the %s Wreckage result', async (

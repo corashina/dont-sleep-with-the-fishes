@@ -8,7 +8,7 @@ import {
   type WebGLRenderTarget,
 } from 'three';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
-import type { VisualQuality } from './visualQuality';
+import type { AmbientOcclusionQuality } from './postProcessingControls';
 
 export const ITEM_AMBIENT_OCCLUSION_LAYER = 1;
 export const ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY = 1;
@@ -30,12 +30,6 @@ export const ITEM_AMBIENT_OCCLUSION_QUALITY = {
     gtaoSamples: 6,
     denoiseRings: 1,
     denoiseSamples: 4,
-  },
-  medium: {
-    resolutionScale: 0.7,
-    gtaoSamples: 10,
-    denoiseRings: 2,
-    denoiseSamples: 8,
   },
   high: {
     resolutionScale: 1,
@@ -67,26 +61,26 @@ export function enableItemAmbientOcclusionOccluder(root: Object3D): void {
 }
 
 export class ItemAmbientOcclusionPass extends GTAOPass {
-  private visualQuality: VisualQuality;
+  private quality: AmbientOcclusionQuality;
   private fullWidth = 1;
   private fullHeight = 1;
 
   constructor(
     mode: ItemAmbientOcclusionMode = 'composite',
-    quality: VisualQuality = 'low',
+    quality: AmbientOcclusionQuality = 'low',
   ) {
     super(new Scene(), new PerspectiveCamera());
-    this.visualQuality = quality;
+    this.quality = quality;
     this.blendIntensity = ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY;
     this.updateGtaoMaterial(ITEM_AMBIENT_OCCLUSION_GTAO_SETTINGS);
-    this.applyVisualQuality();
+    this.applyQuality();
     this.setMode(mode);
   }
 
-  setVisualQuality(value: VisualQuality): void {
-    if (value === this.visualQuality) return;
-    this.visualQuality = value;
-    this.applyVisualQuality();
+  setQuality(value: AmbientOcclusionQuality): void {
+    if (value === this.quality) return;
+    this.quality = value;
+    this.applyQuality();
     this.resizeInternalTargets();
   }
 
@@ -141,8 +135,8 @@ export class ItemAmbientOcclusionPass extends GTAOPass {
     }
   }
 
-  private applyVisualQuality(): void {
-    const quality = ITEM_AMBIENT_OCCLUSION_QUALITY[this.visualQuality];
+  private applyQuality(): void {
+    const quality = ITEM_AMBIENT_OCCLUSION_QUALITY[this.quality];
     this.updateGtaoMaterial({ samples: quality.gtaoSamples });
     this.updatePdMaterial({
       radius: 4,
@@ -156,7 +150,7 @@ export class ItemAmbientOcclusionPass extends GTAOPass {
   }
 
   private resizeInternalTargets(): void {
-    const scale = ITEM_AMBIENT_OCCLUSION_QUALITY[this.visualQuality].resolutionScale;
+    const scale = ITEM_AMBIENT_OCCLUSION_QUALITY[this.quality].resolutionScale;
     super.setSize(
       Math.max(1, Math.floor(this.fullWidth * scale)),
       Math.max(1, Math.floor(this.fullHeight * scale)),

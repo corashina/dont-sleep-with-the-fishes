@@ -1,3 +1,4 @@
+import type { OutcomeText } from './outcomeText';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../game/ItemState';
 
 export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dead' | 'sunk';
@@ -15,14 +16,16 @@ export interface CompanionEventActionDefinition {
 export type CompanionActionId =
   | 'petCarlitos' | 'feedCarlitos' | 'treatCarlitos' | CompanionEventActionId;
 export interface CompanionEventActionAvailability {
+  readonly text?: OutcomeText;
   readonly visible: boolean;
   readonly energyCost: number;
   readonly availableEnergy: number;
   readonly unavailableReason: string | null;
 }
-export type DayActionOption =
-  | { readonly kind: 'hullRepair'; readonly material: 'repairMaterial' | 'ductTape' }
-  | { readonly kind: 'itemRepair'; readonly target: ItemInstanceId };
+export type DayActionOption = {
+  readonly kind: 'itemRepair';
+  readonly target: ItemInstanceId;
+};
 export type RiskLabel = 'safe' | 'uncertain' | 'dangerous';
 export type PresentationCue =
   | 'none' | 'fish' | 'dive' | 'repair' | 'treat'
@@ -47,7 +50,6 @@ export interface ResourceDelta {
   hull?: number;
   food?: number;
   bait?: number;
-  repairMaterial?: number;
   rescueLead?: number;
 }
 
@@ -56,7 +58,6 @@ export type DriftingCargoKind = 'barrel' | 'chest' | 'lifeboat' | 'container';
 export type EventPresentationKey =
   | 'drifting-supplies.retrieve'
   | 'drifting-chest.retrieve'
-  | 'wreckage.search-repair'
   | 'wreckage.search-food'
   | 'wreckage.search-bait'
   | 'wreckage.search-injury'
@@ -74,7 +75,7 @@ export type EventPresentationKey =
 export type RewardSummary =
   | {
       readonly kind: 'resource';
-      readonly id: 'food' | 'bait' | 'repairMaterial';
+      readonly id: 'food' | 'bait';
       readonly quantity: number;
     }
   | {
@@ -86,6 +87,7 @@ export type RewardSummary =
 export type DawnEnergy = 0 | 1 | 2 | 3 | 4;
 
 export interface ActionOutcome {
+  readonly text?: OutcomeText;
   accepted: boolean;
   code: string;
   message: string;
@@ -99,7 +101,7 @@ export interface ActionOutcome {
 
 export type EventResource =
   | 'pressure' | 'health' | 'hull' | 'energy'
-  | 'food' | 'bait' | 'repairMaterial' | 'rescueLead';
+  | 'food' | 'bait' | 'rescueLead';
 export type ChestState = 'none' | 'closed' | 'mimic';
 export interface ChestSnapshot {
   readonly state: ChestState;
