@@ -238,7 +238,7 @@ bun run models:check:menu
 
 ### Loading and ownership
 
-Startup loads only the menu models, sand, display font, and menu audio.
+Startup phase loaders request only the menu models, sand, display font, and menu audio.
 Selecting **START** loads ship models, textures, furniture, audio, sky assets, lifeboat assets, and physics.
 The survival handoff loads its models and audio. It keeps shared sky and lifeboat assets during the transition.
 **Continue** and event tests load survival directly. They do not load ship resources first.
