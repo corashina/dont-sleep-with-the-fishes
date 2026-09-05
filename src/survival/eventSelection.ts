@@ -6,6 +6,10 @@ import type {
   SurvivalEventDefinition,
   WeatherId,
 } from './survivalTypes';
+import {
+  localizeEventDefinitionText,
+  registerEventDefinitionText,
+} from '../i18n/eventMessages';
 
 function deepFreeze<T>(value: T): T {
   if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -96,22 +100,30 @@ export function eligibleEvents(
   return catalog.filter((eventEntry) => isEventEligible(eventEntry, criteria));
 }
 
-const FALLBACKS: Readonly<Record<'day' | 'night', SurvivalEventDefinition>> = deepFreeze({
+const fallbackDefinitions: Record<'day' | 'night', SurvivalEventDefinition> = {
   day: {
-    id: 'day-calm-fallback', phase: 'day', title: 'Quiet Waters',
-    revealText: 'The sea stays calm around the boat.',
-    prompt: 'The day passes without incident.', danger: 'safe', cue: 'none',
+    id: 'day-calm-fallback', phase: 'day', title: 'eventText271',
+    revealText: 'eventText272',
+    prompt: 'eventText273', danger: 'safe', cue: 'none',
     weight: 1, earliestDay: 1, cooldownDays: 0,
-    choices: [{ id: 'sleep', label: 'Continue', outcomes: [{ weight: 1, message: 'The day passes quietly.', effects: {} }] }],
+    choices: [{ id: 'sleep', label: 'eventText274', outcomes: [{ weight: 1, message: 'eventText275', effects: {} }] }],
   },
   night: {
-    id: 'night-calm-fallback', phase: 'night', title: 'Quiet Night',
-    revealText: 'The dark water drifts past without disturbance.',
-    prompt: 'The night passes without incident.', danger: 'safe', cue: 'none',
+    id: 'night-calm-fallback', phase: 'night', title: 'eventText276',
+    revealText: 'eventText277',
+    prompt: 'eventText278', danger: 'safe', cue: 'none',
     weight: 1, earliestDay: 1, cooldownDays: 0,
-    choices: [{ id: 'sleep', label: 'Sleep', outcomes: [{ weight: 1, message: 'The night passes quietly.', effects: {} }] }],
+    choices: [{ id: 'sleep', label: 'eventText063', outcomes: [{ weight: 1, message: 'eventText279', effects: {} }] }],
   },
-});
+};
+
+for (const eventDefinition of Object.values(fallbackDefinitions)) {
+  localizeEventDefinitionText(eventDefinition);
+  registerEventDefinitionText(eventDefinition);
+}
+
+const FALLBACKS: Readonly<Record<'day' | 'night', SurvivalEventDefinition>> =
+  deepFreeze(fallbackDefinitions);
 
 export function survivalEventFallbackById(
   id: string,

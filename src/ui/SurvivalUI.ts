@@ -1,3 +1,4 @@
+import { onLanguageChange } from '../i18n/language';
 import {
   ITEM_DEFINITIONS,
   type ItemInstanceId,
@@ -172,6 +173,8 @@ export class SurvivalUI {
   private fishingReturnTarget: HTMLElement | null = null;
   private latestCommandOrigin: HTMLButtonElement | null = null;
   private currentSnapshot: SurvivalSnapshot | null = null;
+  private currentUnavailable: ((action: DayActionId) => string | null) | null = null;
+  private readonly unsubscribeLanguage: () => void;
 
   constructor(mount: HTMLElement) {
     this.root = document.createElement('div');
@@ -270,7 +273,7 @@ export class SurvivalUI {
     this.eventView.onChoice = (choiceId) => {
       if (!this.disposed) this.onEventChoice(choiceId);
     };
-    this.eventView.onAnnouncement = (message) => this.publishAnnouncement(message);
+    this.eventView.onAnnouncement = () => this.publishAnnouncement();
     this.coverView.onResultShow = () => this.showLayer(this.coverView.resultRoot);
     this.coverView.onResultHide = () => this.hideLayer(this.coverView.resultRoot);
     this.coverView.onResultClose = () => {
@@ -336,11 +339,18 @@ export class SurvivalUI {
     document.addEventListener('click', this.handleDocumentClick, true);
     document.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('resize', this.handleWindowResize);
+    this.unsubscribeLanguage = onLanguageChange(() => {
+      this.refreshAnnouncement();
+      if (this.currentSnapshot !== null && this.currentUnavailable !== null) {
+        this.render(this.currentSnapshot, this.currentUnavailable);
+      }
+    });
   }
 
   render(snapshot: SurvivalSnapshot, unavailable: (action: DayActionId) => string | null): void {
     if (this.disposed) return;
     this.currentSnapshot = snapshot;
+    this.currentUnavailable = unavailable;
     const reasons = new Map<DayActionId, string | null>();
     DAY_ACTION_IDS.forEach((action) => reasons.set(action, unavailable(action)));
     this.hudView.render(snapshot, reasons);
@@ -450,6 +460,7 @@ export class SurvivalUI {
       () => this.coverView.clearBadSleepCueForCleanup(),
       () => { focusedContextualChoice = this.eventView.containsChoice(document.activeElement); },
       () => this.eventView.clearPresentationState(),
+      () => this.refreshAnnouncement(),
       () => this.syncCommandState(),
       () => { if (focusedContextualChoice) this.firstUsableAction()?.focus(); },
     ]);
@@ -639,6 +650,7 @@ export class SurvivalUI {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.unsubscribeLanguage();
     const fishingWasVisible = this.fishingView.mode() !== 'hidden';
     const cleanupSteps: (() => void)[] = [
       () => { this.eventView.beginDispose(); },
@@ -714,14 +726,20 @@ export class SurvivalUI {
     if (result.failed) throw result.firstError;
   }
 
-  private publishAnnouncement(message: string): void {
+  private publishAnnouncement(): void {
     if (this.disposed) return;
     const version = ++this.announcementVersion;
     this.announcer.textContent = '';
     queueMicrotask(() => {
       if (this.disposed || version !== this.announcementVersion) return;
-      this.announcer.textContent = message;
+      this.refreshAnnouncement();
     });
+  }
+
+  private refreshAnnouncement(): void {
+    if (this.disposed) return;
+    const message = this.eventView.announcementText();
+    if (this.announcer.textContent !== message) this.announcer.textContent = message;
   }
 
   private syncCommandState(): void {

@@ -1,3 +1,4 @@
+import { presentationUiText } from '../i18n/presentationUiMessages';
 import {
   Box3,
   BoxGeometry,
@@ -332,8 +333,8 @@ export class HandymanPresentation implements FocusedEventPresentation {
     return [
       {
         id: 'handyman:hand',
-        label: 'HAND',
-        description: 'Touch the waiting hand.',
+        get label() { return presentationUiText('hand'); },
+        get description() { return presentationUiText('handDescription'); },
         choiceId: 'touch',
         root: this.handVisual,
         tooltip: false,
@@ -342,8 +343,8 @@ export class HandymanPresentation implements FocusedEventPresentation {
       },
       {
         id: 'persistent-chest',
-        label: 'CHEST',
-        description: 'Offer the closed chest to the hand.',
+        get label() { return presentationUiText('chest'); },
+        get description() { return presentationUiText('offerChest'); },
         choiceId: 'chest',
         root: this.dependencies.chestDisplay.root,
         minimumHitWidth: 54,

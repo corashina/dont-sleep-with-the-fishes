@@ -1,3 +1,6 @@
+import { flowText } from '../i18n/flowMessages';
+import { getLanguage } from '../i18n/language';
+import { ITEM_LABELS } from '../game/ItemState';
 import type { SurvivalAudio } from '../audio/SurvivalAudio';
 import type { ItemId, ItemInstanceId } from '../game/ItemState';
 import { carlitosStatus, carlitosWellness } from './CarlitosState';
@@ -250,15 +253,15 @@ function carlitosChoiceAvailability(snapshot: SurvivalSnapshot, energyCost: numb
 } {
   const carlitos = snapshot.carlitos;
   if (carlitos === null) {
-    return { visible: false, unavailableReason: 'Carlitos is not aboard.' };
+    return { visible: false, get unavailableReason() { return flowText('noCarlitos'); } };
   }
   if (!carlitos.alive) {
-    return { visible: false, unavailableReason: 'Carlitos cannot retrieve the loot.' };
+    return { visible: false, get unavailableReason() { return flowText('noRetrieve'); } };
   }
   if (carlitos.energy < energyCost) {
     return {
       visible: true,
-      unavailableReason: `Carlitos needs ${energyCost} energy; he has ${carlitos.energy}.`,
+      get unavailableReason() { return flowText('companionEnergy', energyCost, carlitos.energy); },
     };
   }
   if (carlitosWellness(carlitos) >= 4) {
@@ -272,7 +275,7 @@ function carlitosChoiceAvailability(snapshot: SurvivalSnapshot, energyCost: numb
       : status.happiness;
   return {
     visible: true,
-    unavailableReason: `Carlitos is ${label} and cannot retrieve the loot.`,
+    get unavailableReason() { return flowText('companionState', label); },
   };
 }
 
@@ -294,8 +297,8 @@ function requirementUnavailableReason(
   snapshot: SurvivalSnapshot,
 ): string {
   const { resource, minimum } = requirement;
-  const resourceLabel = resource.replace(/([A-Z])/g, ' $1').toLocaleLowerCase('en-US');
-  return `Requires ${minimum} ${resourceLabel}; you have ${snapshot[resource]}.`;
+  const resourceLabel = flowText(resource === 'food' ? 'resourceFood' : resource === 'bait' ? 'resourceBait' : resource);
+  return flowText('requires', minimum, resourceLabel, snapshot[resource]);
 }
 
 function focusedChoiceUnavailableReasons(
@@ -308,13 +311,13 @@ function focusedChoiceUnavailableReasons(
     .filter(({ resource, minimum }) => snapshot[resource] < minimum)
     .map((requirement) => requirementUnavailableReason(requirement, snapshot));
   if (choice.itemId !== undefined && instanceId === null) {
-    const itemLabel = choice.itemId === 'scubaSet' ? 'scuba gear' : choice.itemId;
-    reasons.push(`Requires usable ${itemLabel}.`);
+    const itemLabel = getLanguage() === 'en' ? (choice.itemId === 'scubaSet' ? 'scuba gear' : choice.itemId) : ITEM_LABELS[choice.itemId];
+    reasons.push(flowText('requiresItem', itemLabel));
   }
   if (choice.requiredChestState !== undefined
     && choice.requiredChestState !== snapshot.chest.state) {
     reasons.push(
-      `Requires a ${choice.requiredChestState} chest; you have ${snapshot.chest.state}.`,
+      flowText('requiresChest', flowText(choice.requiredChestState), flowText(snapshot.chest.state)),
     );
   }
   if (choice.companionAction !== undefined
@@ -354,17 +357,17 @@ function focusedChoiceFor(
     && !companionAvailability.visible
     && event.id !== 'wreckage') return null;
   const instanceId = usableChoiceItemInstanceId(choice, snapshot);
-  const reasons = focusedChoiceUnavailableReasons(
+  const currentReasons = () => focusedChoiceUnavailableReasons(
     choice,
     snapshot,
     instanceId,
-    companionAvailability,
+    choice.companionAction === undefined ? companionAvailability : carlitosChoiceAvailability(snapshot, choice.companionAction.energyCost),
   );
   const anchorId = focusedChoiceAnchorId(event.id, choice.id);
   return {
     id: choice.id,
-    label: choice.label,
-    unavailableReason: reasons.length === 0 ? null : reasons.join(' '),
+    get label() { return choice.label; },
+    get unavailableReason() { const reasons = currentReasons(); return reasons.length === 0 ? null : reasons.join(' '); },
     instanceId,
     ...(anchorId === null ? {} : { anchorId }),
     ...focusedChoiceEnergy(choice),
@@ -894,10 +897,11 @@ export class SurvivalEventFlow {
     if (!this.isCurrent(context.generation, context.operation)) return;
     await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
     if (!this.canShowWreckageReward(context, state)) return;
+    const rewardLines = () => this.wreckageRewardLines(context);
     await (this.dependencies.ui.showRewardResult?.({
       title: 'WRECKAGE',
       reward: context.outcome.rewardSummary ?? null,
-      lines: this.wreckageRewardLines(context),
+      get lines() { return rewardLines(); },
     }) ?? Promise.resolve());
   }
 
@@ -921,7 +925,7 @@ export class SurvivalEventFlow {
   }
 
   private wreckageRewardLines(context: FocusedChoiceContext): string[] {
-    if (context.scubaBroke) return [context.outcome.message, 'Your scuba gear broke.'];
+    if (context.scubaBroke) return [context.outcome.message, flowText('scubaBroke')];
     if (context.outcome.rewardSummary === undefined) return [context.outcome.message];
     return [];
   }
@@ -2412,16 +2416,16 @@ export class SurvivalEventFlow {
           choice.companionAction,
         );
     if (this.hideContextualChoice(choice, companionAvailability)) return null;
-    const reasons = this.contextualChoiceUnavailableReasons(
+    const currentReasons = () => this.contextualChoiceUnavailableReasons(
       choice,
       snapshot,
-      companionAvailability,
+      choice.companionAction === undefined ? companionAvailability : this.dependencies.session.companionEventActionAvailability?.(choice.companionAction),
     );
     const anchorId = this.contextualEventAnchorId(event.id, choice.id);
     return {
       id: choice.id,
-      label: choice.label,
-      unavailableReason: reasons.length === 0 ? null : reasons.join(' '),
+      get label() { return choice.label; },
+      get unavailableReason() { const reasons = currentReasons(); return reasons.length === 0 ? null : reasons.join(' '); },
       ...(anchorId === null ? {} : { anchorId }),
       ...this.contextualChoiceEnergy(choice, companionAvailability),
     };
@@ -2447,7 +2451,7 @@ export class SurvivalEventFlow {
     if (choice.requiredChestState !== undefined
       && choice.requiredChestState !== snapshot.chest.state) {
       reasons.push(
-        `Requires a ${choice.requiredChestState} chest; you have ${snapshot.chest.state}.`,
+        flowText('requiresChest', flowText(choice.requiredChestState), flowText(snapshot.chest.state)),
       );
     }
     const companionReason = companionAvailability?.unavailableReason;

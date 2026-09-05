@@ -444,8 +444,9 @@ describe('Game director', () => {
     ]);
     expect(disposeRenderer).toHaveBeenCalledOnce();
     expect(renderer.domElement.parentElement).toBeNull();
-    expect(removeEventListener).toHaveBeenCalledTimes(1);
+    expect(removeEventListener).toHaveBeenCalledTimes(2);
     expect(removeEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
+    expect(removeEventListener).toHaveBeenCalledWith('keydown', expect.any(Function), true);
     requestAnimationFrame.mockRestore();
     cancelAnimationFrame.mockRestore();
     removeEventListener.mockRestore();
@@ -490,8 +491,13 @@ describe('Game director', () => {
 
     expect(addEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
     expect(removeEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
-    expect(addEventListener).toHaveBeenCalledOnce();
-    expect(removeEventListener).toHaveBeenCalledOnce();
+    expect(addEventListener).toHaveBeenCalledTimes(2);
+    expect(removeEventListener).toHaveBeenCalledTimes(2);
+    expect(addEventListener).toHaveBeenCalledWith('keydown', expect.any(Function), true);
+    expect(removeEventListener).toHaveBeenCalledWith('keydown', expect.any(Function), true);
+    for (const [type, listener, options] of addEventListener.mock.calls) {
+      expect(removeEventListener).toHaveBeenCalledWith(type, listener, ...(options === undefined ? [] : [options]));
+    }
     expect(active.dispose).toHaveBeenCalledOnce();
     expect(renderer.dispose).toHaveBeenCalledOnce();
     expect(canvas.parentElement).toBeNull();

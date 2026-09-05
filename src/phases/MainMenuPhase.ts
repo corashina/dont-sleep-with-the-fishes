@@ -141,6 +141,7 @@ export class MainMenuPhase implements GamePhase {
       this.guideKeyboardFocused = focused;
       this.syncSignHighlights();
     };
+    this.ui.onOverlayChange = () => this.clearSignInteraction();
   }
 
   start(): void {
@@ -213,6 +214,7 @@ export class MainMenuPhase implements GamePhase {
         this.ui.onStart = NOOP;
         this.ui.onStartFocusChange = NOOP;
         this.ui.onGuideFocusChange = NOOP;
+        this.ui.onOverlayChange = NOOP;
       },
       () => {
         this.pointerAction = null;
@@ -231,7 +233,7 @@ export class MainMenuPhase implements GamePhase {
   }
 
   private async requestStart(): Promise<void> {
-    if (this.disposed || this.transitioning || this.pointerLockPending) return;
+    if (this.disposed || this.transitioning || this.pointerLockPending || this.ui.isOverlayOpen) return;
     this.pointerLockPending = true;
     this.ui.clearPointerLockError();
     try {
@@ -246,7 +248,7 @@ export class MainMenuPhase implements GamePhase {
       return;
     }
     this.pointerLockPending = false;
-    if (this.disposed) {
+    if (this.disposed || this.ui.isOverlayOpen) {
       if (document.pointerLockElement === this.context.renderer.domElement) {
         document.exitPointerLock();
       }
@@ -286,7 +288,7 @@ export class MainMenuPhase implements GamePhase {
   };
 
   private menuSignAction(event: MouseEvent): MenuSignAction | null {
-    if (this.disposed || this.transitioning) return null;
+    if (this.disposed || this.transitioning || this.ui.isOverlayOpen) return null;
     const bounds = this.context.renderer.domElement.getBoundingClientRect();
     if (bounds.width <= 0 || bounds.height <= 0) return null;
     const ndcX = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;

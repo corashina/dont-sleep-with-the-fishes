@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { setLanguage } from '../src/i18n/language';
+import type { EventContextChoice } from '../src/ui/SurvivalUiViewModel';
 import { type ItemId, type ItemInstanceId } from '../src/game/ItemState';
 import {
   FISHING_ROD_LAB_CHOICE_ID,
@@ -69,6 +71,25 @@ function conditionLab(type: ItemId = 'bucket', condition: 'usable' | 'broken' | 
 }
 
 describe('Item Animation Lab conditions', () => {
+  it('translates retained animation choices without replaying or changing the item', async () => {
+    const { flow, instanceId, ui, session, world } = conditionLab('bucket', 'broken');
+    await flow.play(instanceId);
+    const choices = ui.showItemAnimationLabChoices.mock.lastCall![0] as readonly EventContextChoice[];
+    const before = session.snapshot();
+    const scoop = choices.find(({ id }) => id === 'bucket-scoop')!;
+    try {
+      setLanguage('pl');
+      expect(scoop.label).toBe('Zagarnij z wody');
+      expect(scoop.unavailableReason).toBe('Przedmiot jest uszkodzony.');
+      expect(choices.find(({ id }) => id === 'fix')?.label).toBe('Napraw');
+      expect(session.snapshot()).toEqual(before);
+      expect(world.playEventItemUse).not.toHaveBeenCalled();
+      expect(ui.showItemAnimationLabChoices).toHaveBeenCalledOnce();
+    } finally {
+      setLanguage('en');
+    }
+  });
+
   it('offers both fishing net slap previews', async () => {
     const { flow, instanceId, ui } = conditionLab('fishingNet');
 

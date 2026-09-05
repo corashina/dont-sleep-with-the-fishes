@@ -1,3 +1,4 @@
+import { flowText } from '../i18n/flowMessages';
 import type { SurvivalAudio } from '../audio/SurvivalAudio';
 import { ITEM_DEFINITIONS, type ItemInstanceId } from '../game/ItemState';
 import type { SurvivalUI } from '../ui/SurvivalUI';
@@ -86,7 +87,7 @@ function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
-export function formatDiveResult(outcome: ActionOutcome): RewardResultView {
+function buildDiveResult(outcome: ActionOutcome): RewardResultView {
   const lines: string[] = [];
   let reward = outcome.rewardSummary ?? null;
   const itemRewards = [
@@ -102,13 +103,21 @@ export function formatDiveResult(outcome: ActionOutcome): RewardResultView {
       }
     }
   }
-  if ((outcome.deltas.rescueLead ?? 0) > 0) lines.push('RESCUE TRACE FOUND');
-  if (reward === null && lines.length === 0) lines.push('NOTHING FOUND');
+  if ((outcome.deltas.rescueLead ?? 0) > 0) lines.push(flowText('trace'));
+  if (reward === null && lines.length === 0) lines.push(flowText('nothing'));
   const appliedHealthDelta = outcome.deltas.health;
   if (appliedHealthDelta !== undefined && appliedHealthDelta < 0) {
-    lines.push('YOU SUFFERED SOME INJURIES');
+    lines.push(flowText('injured'));
   }
   return { title: 'DIVE RESULT', reward, lines };
+}
+
+export function formatDiveResult(outcome: ActionOutcome): RewardResultView {
+  return {
+    title: 'DIVE RESULT',
+    reward: buildDiveResult(outcome).reward,
+    get lines() { return buildDiveResult(outcome).lines; },
+  };
 }
 
 export class SurvivalDayActionFlow {
@@ -142,7 +151,7 @@ export class SurvivalDayActionFlow {
     const target = Object.values(snapshot.inventory).find(
       (item) => item?.condition === 'broken' && ITEM_DEFINITIONS[item.type].breakable,
     );
-    if (target === undefined) return 'No broken repairable item remains.';
+    if (target === undefined) return flowText('noRepair');
     return this.dependencies.session.availableReason?.('repairItem', {
       kind: 'itemRepair',
       target: target.instanceId,

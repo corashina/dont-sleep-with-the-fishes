@@ -282,12 +282,12 @@ function physicalItemEvent(
         id: itemId,
         label: `Use ${itemId}`,
         itemId,
-        outcomes: [{ weight: 1, message: 'Handled.', effects }],
+        outcomes: [{ resultId: 'test-result', weight: 1, message: 'Handled.', effects }],
       })),
       {
         id: 'sleep',
         label: 'Endure',
-        outcomes: [{ weight: 1, message: 'Endured.', effects: {} }],
+        outcomes: [{ resultId: 'test-endure', weight: 1, message: 'Endured.', effects: {} }],
       },
     ] as unknown as SurvivalEventDefinition['choices'],
   };
@@ -327,7 +327,7 @@ function itemlessEvent(
     weight: 1,
     earliestDay: 1,
     cooldownDays: 0,
-    choices: [{ id: 'sleep', label: 'Sleep', outcomes: [{ weight: 1, message: 'Handled.', effects }] }],
+    choices: [{ id: 'sleep', label: 'Sleep', outcomes: [{ resultId: 'test-result', weight: 1, message: 'Handled.', effects }] }],
   };
 }
 
@@ -686,7 +686,7 @@ describe('SurvivalSession Carlitos events', () => {
 
     expect(session.companionEventActionAvailability({
       id: 'delegateCarlitos', energyCost: 2,
-    })).toEqual({
+    })).toMatchObject({
       visible: true,
       energyCost: 2,
       availableEnergy: 0,
@@ -787,7 +787,7 @@ describe('SurvivalSession Carlitos events', () => {
 
     expect(session.companionEventActionAvailability({
       id: 'delegateCarlitos', energyCost: 2,
-    })).toEqual(expected);
+    })).toMatchObject(expected);
   });
 });
 
@@ -1428,7 +1428,7 @@ describe('SurvivalSession daytime actions', () => {
         id: 'sleep',
         label: 'Sleep',
         requiredChestState: 'closed',
-        outcomes: [{ weight: 1, message: 'Handled.', effects: {} }],
+        outcomes: [{ resultId: 'test-result', weight: 1, message: 'Handled.', effects: {} }],
       }],
     };
 
@@ -2684,7 +2684,7 @@ describe('SurvivalSession daytime actions', () => {
       daytime: expect.objectContaining({
         eventId: 'drifting-supplies',
         attemptedChoiceId: 'retrieve',
-        outcomeMessage: 'You recover two food from the cooler.',
+        text: { kind: 'eventResult', reference: { eventId: 'drifting-supplies', choiceId: 'retrieve', resultId: 'drifting-supplies-lifeboat-food' } },
         inventoryMutations: [],
       }),
       nighttime: {
@@ -2693,7 +2693,6 @@ describe('SurvivalSession daytime actions', () => {
           phase: 'night',
           attemptedChoiceId: 'sleep',
           attemptedItemId: null,
-          choiceLabel: 'Sleep',
         }),
       },
     })]);
@@ -2761,21 +2760,21 @@ describe('SurvivalSession daytime actions', () => {
     if (daytime === null || 'kind' in daytime || nighttime.kind !== 'event') {
       throw new Error('Expected resolved day and night events.');
     }
-    const daytimeTitle = daytime.title;
-    const nighttimeTitle = nighttime.event.title;
+    const daytimeTitle = daytime.eventId;
+    const nighttimeTitle = nighttime.event.eventId;
 
     expect(() => {
-      (daytime as { title: string }).title = 'Mutated daytime title';
+      (daytime as { eventId: string }).eventId = 'Mutated daytime title';
     }).toThrow(TypeError);
     expect(() => {
-      (nighttime.event as { title: string }).title = 'Mutated nighttime title';
+      (nighttime.event as { eventId: string }).eventId = 'Mutated nighttime title';
     }).toThrow(TypeError);
 
     const fresh = session.snapshot().journalEntries[0]!;
-    expect(fresh.daytime).toMatchObject({ title: daytimeTitle });
+    expect(fresh.daytime).toMatchObject({ eventId: daytimeTitle });
     expect(fresh.nighttime).toMatchObject({
       kind: 'event',
-      event: { title: nighttimeTitle },
+      event: { eventId: nighttimeTitle },
     });
   });
 
@@ -2931,8 +2930,8 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().journalEntries[0]?.nighttime).toMatchObject({
       kind: 'event',
       event: {
-        choiceLabel: 'Sleep',
-        outcomeMessage: 'The tentacle steals a supply and wounds you.',
+        attemptedChoiceId: 'sleep',
+        text: expect.objectContaining({ kind: 'eventResult' }),
         inventoryMutations: [{ kind: 'lose', instanceIds: ['anchor-1'] }],
       },
     });
@@ -3080,7 +3079,7 @@ describe('SurvivalSession daytime actions', () => {
       id: 'test-ordered', phase: 'night', title: 'Ordered', revealText: 'Several effects arrive.', prompt: 'Choose.',
       danger: 'dangerous', cue: 'impact', weight: 1, earliestDay: 1, cooldownDays: 0,
       choices: [{ id: 'sleep', label: 'Sleep', outcomes: [{
-        weight: 1, message: 'Ordered effects.', effects: { resources: [
+        resultId: 'test-ordered-result', weight: 1, message: 'Ordered effects.', effects: { resources: [
           { resource: 'health', operation: 'set', value: 10 },
           { resource: 'health', operation: 'subtract', value: 20 },
           { resource: 'health', operation: 'add', value: 5 },
@@ -3128,7 +3127,7 @@ describe('SurvivalSession daytime actions', () => {
       danger: 'dangerous', cue: 'impact', weight: 1, earliestDay: 1, cooldownDays: 0,
       choices: [{ id: 'sleep', label: 'Sleep', outcomes: [{
         weight: 1,
-        message: 'Both food stores are gone.',
+        resultId: 'test-loss-result', message: 'Both food stores are gone.',
         effects: {
           resources: [{ resource: 'food', operation: 'subtract', value: 1 }],
           items: [{ kind: 'loseEventTarget', quantity: 1 }],

@@ -9,6 +9,8 @@ import {
   Scene,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
+import { setLanguage } from '../src/i18n/language';
+import { presentationUiText } from '../src/i18n/presentationUiMessages';
 import {
   BoatInteractionProjector,
   type BoatInteractionProjectorRoots,
@@ -102,6 +104,31 @@ function createFixture(): ProjectorFixture {
 }
 
 describe('BoatInteractionProjector', () => {
+  it('translates retained anchors and cached focused targets without reprojection', () => {
+    const fixture = createFixture();
+    fixture.projector.installFocusedInteractionTargets([{
+      id: 'handyman:hand', choiceId: 'touch', root: fixture.roots.repairRoot,
+      get label() { return presentationUiText('hand'); },
+      get description() { return presentationUiText('handDescription'); },
+    }]);
+    const anchors = fixture.projector.projectAnchors(1280, 720);
+    const chest = anchors.find(({ id }) => id === 'persistent-chest')!;
+    const hand = anchors.find(({ id }) => id === 'handyman:hand')!;
+    const position = { x: hand.x, y: hand.y };
+    expect(chest.label).toBe('OPEN');
+    expect(hand.label).toBe('HAND');
+    try {
+      setLanguage('pl');
+      expect(chest.label).toBe('OTWÓRZ');
+      expect(hand.label).toBe('DŁOŃ');
+      expect(hand.description).toBe('Dotknij czekającej dłoni.');
+      expect({ x: hand.x, y: hand.y }).toEqual(position);
+    } finally {
+      setLanguage('en');
+      fixture.projector.dispose();
+    }
+  });
+
   it('keeps anchor order, metadata, hidden targets, and minimum hit bounds', () => {
     const fixture = createFixture();
     fixture.roots.repairRoot.position.x = 100;

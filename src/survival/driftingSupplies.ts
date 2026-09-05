@@ -54,6 +54,7 @@ export function driftingSupplyChoiceForVariant(
   }
   return {
     ...choice,
+    get label() { return choice.label; },
     outcomes: outcomes as [WeightedEventOutcome, ...WeightedEventOutcome[]],
     ...(choice.requirements === undefined ? {} : {
       requirements: choice.requirements.map((requirement) => (

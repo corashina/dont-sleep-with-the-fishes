@@ -100,6 +100,24 @@ function setup(
 }
 
 describe('EventItemUseController', () => {
+  it('faces the net target through contact even when the enemy is beside the boat', () => {
+    const { actor, adapter, camera, controller } = setup();
+    const target = new Object3D();
+    target.position.set(5, 0.1, -1);
+    controller.play({
+      ...request(actor.instanceId, target),
+      eventId: 'swarm-of-sharks',
+      choiceId: 'fishingNet',
+      itemId: 'fishingNet',
+      context: 'net-slap',
+    });
+    controller.update(eventItemUseDuration('net-slap') * 0.62);
+    const view = camera.getWorldDirection(new Vector3());
+    const direction = target.position.clone().sub(camera.position).normalize();
+    expect(view.dot(direction)).toBeGreaterThan(0.999);
+    controller.clear('day');
+    adapter.dispose();
+  });
 
   it.each([
     ['dangerous-waters', 'map', 'map', 'map-read'],

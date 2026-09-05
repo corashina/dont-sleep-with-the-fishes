@@ -11,15 +11,15 @@ uses one locally processed Poly Haven CC0 texture set.
 
 ## Runtime font asset ledger
 
-The Latin WOFF2 files were downloaded from Fontsource's generated webfont
-repository at commit `1fdb61d90d0e5a234f14b562aebf3e2a7addf374`.
+The full TrueType fonts come from Google Fonts. They include all Polish letters in both cases.
+Downloaded on 2026-09-05. Font character maps were checked for `ąćęłńóśźżĄĆĘŁŃÓŚŹŻ`.
 
-| Runtime files | Family | Permanent source | License | Runtime verification |
+| Runtime file | Family | Source | License | SHA-256 |
 |---|---|---|---|---|
-| `src/assets/fonts/bowlby-one-sc-latin-400-normal.woff2` | Bowlby One SC | https://github.com/google/fonts/tree/main/ofl/bowlbyonesc | [OFL 1.1](https://github.com/google/fonts/blob/main/ofl/bowlbyonesc/OFL.txt) | SHA-256 `C6860FFE6F98701C1B0CDDAD6F6CF7D57EC1B1226647C9F7BA45A3BF5CE1261A` |
-| `src/assets/fonts/alegreya-sans-latin-{400,700}-normal.woff2` | Alegreya Sans | https://github.com/google/fonts/tree/main/ofl/alegreyasans | [OFL 1.1](https://github.com/google/fonts/blob/main/ofl/alegreyasans/OFL.txt) | 400 SHA-256 `B2A5A35A2563A2F9BF9FB91939FC6EA6C115E9811CDA5C4A37D02F623C7C4DBE`; 700 SHA-256 `5ACD19A588614D23E52B741A21DD8555178AB4932C3195C6D8FB4B296F84ACAE` |
-| `src/assets/fonts/ibm-plex-mono-latin-600-normal.woff2` | IBM Plex Mono | https://github.com/IBM/plex | [OFL 1.1](https://github.com/IBM/plex/blob/master/LICENSE.txt) | SHA-256 `0D1F0B8D0722224E32E9F28261BDC86C79115BE73444AE5ECEB73976A1BCDF83` |
-
+| `src/assets/fonts/bowlby-one-sc-400.ttf` | Bowlby One SC | https://fonts.gstatic.com/s/bowlbyonesc/v27/DtVlJxerQqQm37tzN3wMug9Pzgg.ttf | [OFL 1.1](https://github.com/google/fonts/blob/main/ofl/bowlbyonesc/OFL.txt) | `829cbc8a205afa5449effe936f797e3b25782e35c9ac2efb232b142fd6e5a4c9` |
+| `src/assets/fonts/alegreya-sans-400.ttf` | Alegreya Sans | https://fonts.gstatic.com/s/alegreyasans/v28/5aUz9_-1phKLFgshYDvh6Vwt3V0.ttf | [OFL 1.1](https://github.com/google/fonts/blob/main/ofl/alegreyasans/OFL.txt) | `a94abe0d90d3851cd4854e5d5e9ed6e2f69442f0636b05e1771593aa82500c73` |
+| `src/assets/fonts/alegreya-sans-700.ttf` | Alegreya Sans | https://fonts.gstatic.com/s/alegreyasans/v28/5aUu9_-1phKLFgshYDvh6Vwt5eFImE0.ttf | [OFL 1.1](https://github.com/google/fonts/blob/main/ofl/alegreyasans/OFL.txt) | `5bd81a6704bdd6f8da8b0eceba723b384311e008fefdd92e782674f70a7d3ab7` |
+| `src/assets/fonts/ibm-plex-mono-600.ttf` | IBM Plex Mono | https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3vAO8lc.ttf | [OFL 1.1](https://github.com/IBM/plex/blob/master/LICENSE.txt) | `754dfc9d50cf7aabfb6b108d2c2f7d20a3f1f2cc6f6c01640c6728091272cec0` |
 ## Runtime texture asset ledger
 
 | Runtime files | Texture / creator | Permanent source | License | Processing | Downloaded |

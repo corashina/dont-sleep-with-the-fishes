@@ -1,3 +1,7 @@
+import { rewardTitle } from '../i18n/uiDynamicMessages';
+import { onLanguageChange } from '../i18n/language';
+import { refreshUiText } from './translatedText';
+import { uiText } from '../i18n/uiMessages';
 import { ITEM_DEFINITIONS, type ItemId } from '../game/ItemState';
 import type { RewardSummary } from '../survival/survivalTypes';
 import { createElementRequirement } from './dom';
@@ -53,7 +57,14 @@ export class SurvivalCoverView {
   private pendingSleepHold: PendingWork | null = null;
   private pendingEventOutcomeHold: PendingWork | null = null;
   private rewardThumbnailErrorCleanup: (() => void) | null = null;
+  private currentReward: RewardResultView | null = null;
   private resultVisible = false;
+  private readonly unsubscribeLanguage: () => void;
+  private refreshLanguage(): void {
+    refreshUiText(...this.roots);
+    if (this.currentReward !== null) this.renderRewardText(this.currentReward);
+  }
+
   private disposed = false;
 
   constructor() {
@@ -72,7 +83,7 @@ export class SurvivalCoverView {
       </div>
       <section class="dive-result" data-dive-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="dive-result-title" inert>
         <div class="dive-result__paper scuba-popup-paper">
-          <button type="button" class="dive-result__close ui-role-context" data-dive-result-close aria-label="Close dive result">&times;</button>
+          <button type="button" class="dive-result__close ui-role-context" data-dive-result-close data-ui-aria="closeDive" aria-label="${uiText('closeDive')}">&times;</button>
           <h2 class="dive-result__title scuba-popup-title ui-role-display" id="dive-result-title" data-dive-result-title></h2>
           <ul class="dive-result__lines ui-role-numeral" data-dive-result-lines></ul>
           <div class="dive-result__rewards" data-dive-result-rewards hidden></div>
@@ -88,6 +99,8 @@ export class SurvivalCoverView {
     this.resultLines = requireElement(this.resultRoot, '[data-dive-result-lines]');
     this.resultClose = requireElement(this.resultRoot, '[data-dive-result-close]');
     this.resultClose.addEventListener('click', this.handleResultClose);
+    this.unsubscribeLanguage = onLanguageChange(() => this.refreshLanguage());
+    this.refreshLanguage();
   }
 
   setProfile(profile: SleepCoverProfile): Promise<void> {
@@ -152,24 +165,8 @@ export class SurvivalCoverView {
     if (this.disposed) return Promise.resolve();
     this.pendingRewardConfirmation?.finish();
     this.resultRoot.classList.toggle('is-chest-reward', view.title === 'CHEST REWARD');
-    this.resultTitle.textContent = view.title;
-    this.resultClose.setAttribute(
-      'aria-label',
-      view.title === 'CHEST REWARD'
-        ? 'Close chest reward'
-        : view.title === 'SALVAGE'
-          ? 'Close salvage result'
-          : view.title === 'WRECKAGE'
-            ? 'Close Wreckage result'
-            : 'Close dive result',
-    );
-    this.renderReward(view.reward);
-    this.resultLines.hidden = view.lines.length === 0;
-    this.resultLines.replaceChildren(...view.lines.map((line) => {
-      const item = document.createElement('li');
-      item.textContent = line;
-      return item;
-    }));
+    this.currentReward = view;
+    this.renderRewardText(view);
     const confirmation = new Promise<void>((resolve) => {
       let finished = false;
       const finish = (): void => {
@@ -190,6 +187,27 @@ export class SurvivalCoverView {
     this.resultVisible = true;
     this.onResultShow();
     return confirmation;
+  }
+
+  private renderRewardText(view: RewardResultView): void {
+    this.resultTitle.textContent = rewardTitle(view.title);
+    this.resultClose.setAttribute(
+      'aria-label',
+      view.title === 'CHEST REWARD'
+        ? uiText('closeChest')
+        : view.title === 'SALVAGE'
+          ? uiText('closeSalvage')
+          : view.title === 'WRECKAGE'
+            ? uiText('closeWreckage')
+            : uiText('closeDive'),
+    );
+    this.renderReward(view.reward);
+    this.resultLines.hidden = view.lines.length === 0;
+    this.resultLines.replaceChildren(...view.lines.map((line) => {
+      const item = document.createElement('li');
+      item.textContent = line;
+      return item;
+    }));
   }
 
   confirmRewardResult(): void {
@@ -290,6 +308,7 @@ export class SurvivalCoverView {
   beginDispose(): boolean {
     if (this.disposed) return false;
     this.disposed = true;
+    this.unsubscribeLanguage();
     return true;
   }
 
@@ -337,6 +356,7 @@ export class SurvivalCoverView {
   }
 
   private clearRewardResult(): void {
+    this.currentReward = null;
     this.resultVisible = false;
     throwCleanupFailure(runCleanupSteps([
       () => this.onResultHide(),

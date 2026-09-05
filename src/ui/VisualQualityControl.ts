@@ -1,3 +1,4 @@
+import { settingsText } from '../i18n/settingsMessages';
 import {
   type VisualQuality,
   type VisualQualityPreference,
@@ -8,12 +9,11 @@ export class VisualQualityControl extends QualityControl<VisualQuality> {
   constructor(preference: VisualQualityPreference) {
     super(preference, {
       kind: 'visual',
-      label: 'VISUAL QUALITY',
-      note: 'Medium adds atmosphere. High sharpens all effects.',
+      get label() { return settingsText('visualQuality'); },
       choices: [
-        { value: 'low', label: 'LOW' },
-        { value: 'medium', label: 'MEDIUM' },
-        { value: 'high', label: 'HIGH' },
+        { value: 'low', get label() { return settingsText('low'); } },
+        { value: 'medium', get label() { return settingsText('medium'); } },
+        { value: 'high', get label() { return settingsText('high'); } },
       ],
     });
   }
