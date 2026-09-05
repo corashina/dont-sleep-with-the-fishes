@@ -1,11 +1,13 @@
 import { clamp01, pulse, smoothstep } from '../animationMath';
 import { scaleEventItemDuration, scaleThrownItemDuration } from '../eventItemTiming';
+import { NET_ATTACK_BASE_DURATION, sampleNetAttackContact } from '../netAttackChoreography';
 
 export const DEATH_STARE_REVEAL_DURATION = 3.2;
 export const DEATH_STARE_ITEM_DURATION = scaleEventItemDuration(1.25);
 export const DEATH_STARE_REACTION_DURATION = 1.25;
 
 export function deathStareItemDuration(choiceId: string): number {
+  if (choiceId === 'fishingNet') return scaleEventItemDuration(NET_ATTACK_BASE_DURATION);
   return choiceId === 'food' || choiceId === 'cannedFood'
     ? scaleThrownItemDuration(1.25)
     : DEATH_STARE_ITEM_DURATION;
@@ -229,12 +231,7 @@ export function sampleDeathStareItemUse(
       output.fishZ = -action * 0.08;
       break;
     case 'fishingNet': {
-      const contact = pulse(t, 0.5, 0.62, 0.76);
-      output.itemX = 0.48 * lift;
-      output.itemY = 0.52 * lift;
-      output.itemZ = -0.18 * lift;
-      output.itemPitch = -0.36 * lift;
-      output.itemRoll = 0.18 * lift;
+      const contact = sampleNetAttackContact(t);
       output.effectStrength = contact;
       output.effectKind = 'net-slap';
       output.blink = contact;

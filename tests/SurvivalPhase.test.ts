@@ -321,17 +321,7 @@ describe('survival checkpoints', () => {
 
 function completedEntry(
   day: number,
-  nighttime: JournalNightRecord = {
-    kind: 'event',
-    event: {
-      phase: 'night', eventId: `night-${day}`, title: 'Quiet Night',
-      prompt: 'The night passed without incident.', attemptedChoiceId: null,
-      attemptedItemId: null,
-      choiceLabel: 'Endure', outcomeCode: 'event-resolved',
-      outcomeMessage: 'The night remained quiet.',
-      inventoryMutations: [],
-    },
-  },
+  nighttime: JournalNightRecord = { kind: 'quiet' },
 ): JournalEntry {
   return { day, weather: 'calm', actions: [], daytime: null, nighttime };
 }

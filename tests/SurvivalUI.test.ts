@@ -24,21 +24,7 @@ const journalEntries: readonly JournalEntry[] = [1, 2].map((day) => ({
   weather: day === 1 ? 'calm' : 'overcast',
   actions: [],
   daytime: null,
-  nighttime: {
-    kind: 'event',
-    event: {
-      phase: 'night',
-      eventId: `night-${day}`,
-      title: 'Quiet Night',
-      prompt: `Night ${day} settled over the boat.`,
-      attemptedItemId: null,
-      attemptedChoiceId: null,
-      choiceLabel: 'Endure',
-      outcomeCode: 'event-resolved',
-      outcomeMessage: 'I made it through until morning.',
-      inventoryMutations: [],
-    },
-  },
+  nighttime: { kind: 'quiet' },
 }));
 
 afterEach(() => {
@@ -2619,30 +2605,6 @@ describe('SurvivalUI', () => {
     expect(pause).toHaveBeenLastCalledWith(false);
   });
 
-  it('requires confirmation before restarting from pause', () => {
-    const mount = document.createElement('main');
-    document.body.append(mount);
-    const ui = createUI(mount);
-    const restart = vi.fn();
-    ui.onRestart = restart;
-    ui.render(snapshot(), () => null);
-    ui.setPaused(true);
-
-    const button = mount.querySelector<HTMLButtonElement>('[data-pause-restart]')!;
-    expect(button.textContent).toContain('START OVER');
-    button.click();
-    expect(restart).not.toHaveBeenCalled();
-    expect(button.textContent).toContain('CONFIRM START OVER');
-
-    ui.setPaused(false);
-    ui.setPaused(true);
-    expect(button.textContent).toContain('START OVER');
-    button.click();
-    button.click();
-    expect(restart).toHaveBeenCalledOnce();
-    expect(button.disabled).toBe(true);
-  });
-
   it('returns to the menu from pause', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -2659,7 +2621,7 @@ describe('SurvivalUI', () => {
     expect(returnToMenu).toHaveBeenCalledOnce();
     expect(button.disabled).toBe(true);
     expect(mount.querySelector<HTMLButtonElement>('[data-resume]')!.disabled).toBe(true);
-    expect(mount.querySelector<HTMLButtonElement>('[data-pause-restart]')!.disabled).toBe(true);
+    expect(mount.querySelector('[data-pause-restart]')).toBeNull();
   });
 
   it('restores the command origin when a command-driven pause closes', () => {

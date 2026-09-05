@@ -150,6 +150,18 @@ function openSystemTuning(): void {
   window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backquote', key: '`' }));
 }
 
+function openSaveSettings(mount: HTMLElement): void {
+  // These lifecycle tests use phase stubs, so provide their pause menu entry point.
+  const pause = document.createElement('section');
+  pause.dataset.pause = '';
+  pause.setAttribute('aria-hidden', 'false');
+  const button = document.createElement('button');
+  button.dataset.openSettings = '';
+  pause.append(button);
+  mount.append(pause);
+  button.click();
+}
+
 function saveLifecycleGame(
   storage: SurvivalSaveStorage,
   freshSurvival: GamePhase,
@@ -207,7 +219,7 @@ describe('Game survival save lifecycle', () => {
     const storage = memoryStorage();
     const rig = saveLifecycleGame(storage, gamePhase());
     try {
-      openSystemTuning();
+      openSaveSettings(rig.mount);
       const toggle = rig.mount.querySelector<HTMLInputElement>('[data-save-enabled]')!;
       expect(toggle.checked).toBe(false);
 
@@ -228,14 +240,14 @@ describe('Game survival save lifecycle', () => {
     const rig = saveLifecycleGame(storage, survival);
     try {
       rig.enterSurvival();
-      openSystemTuning();
+      openSaveSettings(rig.mount);
 
       const toggle = rig.mount.querySelector<HTMLInputElement>('[data-save-enabled]')!;
       toggle.checked = true;
       toggle.dispatchEvent(new Event('change', { bubbles: true }));
 
       expect(JSON.parse(storage.getItem(SURVIVAL_SAVE_DATA_KEY)!))
-        .toMatchObject({ version: 2, checkpoint });
+        .toMatchObject({ version: 3, checkpoint });
       expect(rig.mount.querySelector('[data-save-status]')?.textContent).toBe('DAY 5');
     } finally {
       rig.game.dispose();
@@ -248,7 +260,7 @@ describe('Game survival save lifecycle', () => {
     const storage = enabledStorageWith(checkpoint);
     const rig = saveLifecycleGame(storage, gamePhase());
     try {
-      openSystemTuning();
+      openSaveSettings(rig.mount);
       const toggle = rig.mount.querySelector<HTMLInputElement>('[data-save-enabled]')!;
       toggle.checked = false;
       toggle.dispatchEvent(new Event('change', { bubbles: true }));
@@ -272,7 +284,7 @@ describe('Game survival save lifecycle', () => {
     const rig = saveLifecycleGame(storage, outgoing, createSurvival);
     try {
       rig.enterSurvival();
-      openSystemTuning();
+      openSaveSettings(rig.mount);
 
       const continueButton = rig.mount.querySelector<HTMLButtonElement>('[data-save-continue]')!;
       expect(continueButton.disabled).toBe(false);
@@ -340,7 +352,7 @@ describe('Game survival save lifecycle', () => {
           ? rig.menu
           : source === 'scavenge' ? rig.scavenge : rig.freshSurvival;
 
-        openSystemTuning();
+        openSaveSettings(rig.mount);
         if (source === 'survival') {
           Object.defineProperty(document, 'pointerLockElement', {
             configurable: true,
@@ -406,10 +418,12 @@ function postProcessingSceneRenderer(): SceneRenderer {
     getState: vi.fn(() => ({
       ambientOcclusionAvailable: true,
       ambientOcclusionMode: 'composite' as const,
+      ambientOcclusionQuality: 'low' as const,
       ambientOcclusionIntensity: 1,
       ambientOcclusionRadius: 0.5,
     })),
     setAmbientOcclusionMode: vi.fn(),
+    setAmbientOcclusionQuality: vi.fn(),
     setNumeric: vi.fn(),
   };
   return {
@@ -2197,10 +2211,12 @@ describe('ScavengePhase lifecycle integration', () => {
       getState: vi.fn(() => ({
         ambientOcclusionAvailable: true,
         ambientOcclusionMode: 'composite' as const,
+        ambientOcclusionQuality: 'low' as const,
         ambientOcclusionIntensity: 1,
         ambientOcclusionRadius: 0.5,
       })),
       setAmbientOcclusionMode: vi.fn(),
+      setAmbientOcclusionQuality: vi.fn(),
       setNumeric: vi.fn(),
     };
     const sceneRenderer: SceneRenderer = {
@@ -2265,7 +2281,7 @@ describe('ScavengePhase lifecycle integration', () => {
       expect(fieldOfView.value).toBe('80');
       expect(fieldOfViewOutput.value).toBe('80°');
       expect(clouds.checked).toBe(false);
-      expect(cloudsState.value).toBe('OFF');
+      expect(cloudsState.value).toBe('');
       expect(scavengeSetWeather).not.toHaveBeenCalled();
       expect(scavengeSetTimeOfDay).not.toHaveBeenCalled();
 
@@ -2295,7 +2311,7 @@ describe('ScavengePhase lifecycle integration', () => {
 
       clouds.checked = true;
       clouds.dispatchEvent(new Event('change', { bubbles: true }));
-      expect(cloudsState.value).toBe('ON');
+      expect(cloudsState.value).toBe('');
       expect(scavengeSetClouds).toHaveBeenLastCalledWith(true);
 
       order.length = 0;
@@ -2990,6 +3006,7 @@ describe('ScavengePhase lifecycle integration', () => {
     const disposeInput = vi.fn();
     const disposeWorld = vi.fn();
     const disposeUI = vi.fn();
+    const unsubscribeLanguage = vi.fn();
     const hands = scavengeHandsStub();
     const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
     Object.assign(phase, {
@@ -3001,6 +3018,7 @@ describe('ScavengePhase lifecycle integration', () => {
       itemHoverOutline: { dispose: vi.fn() },
       world: { dispose: disposeWorld },
       ui: { dispose: disposeUI },
+      unsubscribeLanguage,
       onPointerLockChange: vi.fn(),
       onVisibilityChange: vi.fn(),
       onKeyDown: vi.fn(),
@@ -3016,6 +3034,7 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(hands.dispose).toHaveBeenCalledOnce();
     expect(disposeWorld).toHaveBeenCalledOnce();
     expect(disposeUI).toHaveBeenCalledOnce();
+    expect(unsubscribeLanguage).toHaveBeenCalledOnce();
     expect(removeEventListener).toHaveBeenCalledTimes(4);
     expect(removeEventListener).toHaveBeenCalledWith('pointerlockchange', expect.any(Function));
     expect(removeEventListener).toHaveBeenCalledWith('visibilitychange', expect.any(Function));

@@ -1,3 +1,7 @@
+import { uiDynamic } from '../i18n/uiDynamicMessages';
+import { onLanguageChange } from '../i18n/language';
+import { refreshUiText } from './translatedText';
+import { uiText } from '../i18n/uiMessages';
 import { SURVIVAL_BALANCE } from '../survival/survivalBalance';
 import type { DayActionId } from '../survival/survivalTypes';
 import type { SurvivalSnapshot } from '../survival/survivalSnapshot';
@@ -12,7 +16,7 @@ interface MeterDefinition {
   readonly min: number;
   readonly max: number;
   readonly fillBoundary?: (percentage: number) => number;
-  readonly dangerLabel: 'LOW' | 'HIGH';
+  readonly dangerLabel: string;
   readonly displayValue: (value: number) => number;
   readonly isDanger: (value: number) => boolean;
 }
@@ -59,10 +63,10 @@ function hullFillBoundary(percentage: number): number {
 }
 
 const METERS: readonly MeterDefinition[] = [
-  { id: 'health', label: 'HEALTH', min: 0, max: 100, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 20 },
-  { id: 'hunger', label: 'FOOD', min: 0, max: 100, fillBoundary: hungerFillBoundary, dangerLabel: 'LOW', displayValue: (value) => 100 - value, isDanger: (value) => value <= 30 },
-  { id: 'energy', label: 'ENERGY', min: 0, max: SURVIVAL_BALANCE.actions.maximumEnergy, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 1 },
-  { id: 'hull', label: 'HULL', min: 0, max: 100, fillBoundary: hullFillBoundary, dangerLabel: 'LOW', displayValue: identity, isDanger: (value) => value <= 20 },
+  { id: 'health', get label() { return uiText('health'); }, min: 0, max: 100, get dangerLabel() { return uiText('low'); }, displayValue: identity, isDanger: (value) => value <= 20 },
+  { id: 'hunger', get label() { return uiText('food'); }, min: 0, max: 100, fillBoundary: hungerFillBoundary, get dangerLabel() { return uiText('low'); }, displayValue: (value) => 100 - value, isDanger: (value) => value <= 30 },
+  { id: 'energy', get label() { return uiText('energy'); }, min: 0, max: SURVIVAL_BALANCE.actions.maximumEnergy, get dangerLabel() { return uiText('low'); }, displayValue: identity, isDanger: (value) => value <= 1 },
+  { id: 'hull', get label() { return uiText('hull'); }, min: 0, max: 100, fillBoundary: hullFillBoundary, get dangerLabel() { return uiText('low'); }, displayValue: identity, isDanger: (value) => value <= 20 },
 ];
 
 function meterFillHeight(definition: MeterDefinition, percentage: number): number {
@@ -108,9 +112,19 @@ export class SurvivalHudView {
   private readonly meterElements = new Map<MeterId, HTMLElement>();
   private readonly meterTooltips = new Map<MeterId, HTMLElement>();
   private readonly lastValues = new Map<string, string | number>();
+  private currentSnapshot: SurvivalSnapshot | null = null;
   private busy = false;
   private paused = false;
   private modalOpen = false;
+  private readonly unsubscribeLanguage: () => void;
+  private refreshLanguage(): void {
+    refreshUiText(...this.roots);
+    this.setJournalUnread(!this.journalUnread.hidden);
+    this.setCameraTurnState(!this.cameraTurn.hidden, this.cameraTurn.getAttribute('aria-pressed') === 'true');
+    METERS.forEach(({ id, label }) => this.meterElements.get(id)!.setAttribute('aria-label', label));
+    if (this.currentSnapshot !== null) this.render(this.currentSnapshot, new Map());
+  }
+
   private disposed = false;
 
   constructor() {
@@ -118,23 +132,23 @@ export class SurvivalHudView {
     template.innerHTML = `
       <div class="survival-top" data-survival-top>
         <div class="survival-top__status-row">
-          <button type="button" class="journal-marker" data-journal-open aria-label="Open journal">
+          <button type="button" class="journal-marker" data-journal-open data-ui-aria="openJournal" aria-label="${uiText('openJournal')}">
             ${uiArtwork('journal', 'journal-marker__art')}
-            <span class="journal-marker__unread ui-role-context" data-journal-unread hidden>NEW</span>
+            <span class="journal-marker__unread ui-role-context" data-journal-unread hidden data-ui-text="newEntry">${uiText('newEntry')}</span>
           </button>
-          <section class="survival-status" data-survival-status aria-label="Current survival day">
-            <strong class="ui-role-numeral" data-day>DAY 1</strong>
+          <section class="survival-status" data-survival-status data-ui-aria="currentDay" aria-label="${uiText('currentDay')}">
+            <strong class="ui-role-numeral" data-day data-ui-text="firstDay">${uiText('firstDay')}</strong>
           </section>
         </div>
-        <button type="button" class="chest-camera-turn" data-camera-turn aria-label="Look behind at the chest" aria-describedby="camera-turn-tooltip" aria-pressed="false" hidden>
+        <button type="button" class="chest-camera-turn" data-camera-turn data-ui-aria="lookBehind" aria-label="${uiText('lookBehind')}" aria-describedby="camera-turn-tooltip" aria-pressed="false" hidden>
           ${uiArtwork('chest', 'chest-camera-turn__art')}
-          <span class="chest-camera-turn__tooltip ui-role-context" data-camera-turn-tooltip id="camera-turn-tooltip" role="tooltip">LOOK BACK</span>
+          <span class="chest-camera-turn__tooltip ui-role-context" data-camera-turn-tooltip id="camera-turn-tooltip" role="tooltip" data-ui-text="lookBack">${uiText('lookBack')}</span>
         </button>
       </div>
-      <section class="survival-meters" aria-label="Condition meters">
+      <section class="survival-meters" data-ui-aria="meters" aria-label="${uiText('meters')}">
         ${METERS.map(meterMarkup).join('')}
       </section>
-      <button type="button" class="rear-camera-return" data-camera-return-front aria-label="Return to front of boat" hidden>
+      <button type="button" class="rear-camera-return" data-camera-return-front data-ui-aria="returnFront" aria-label="${uiText('returnFront')}" hidden>
         ${returnArrowArtwork('rear-camera-return__arrow')}
       </button>`;
     const roots = [...template.content.children];
@@ -154,6 +168,8 @@ export class SurvivalHudView {
     });
     this.topControls.addEventListener('click', this.handleClick);
     this.cameraReturn.addEventListener('click', this.handleClick);
+    this.unsubscribeLanguage = onLanguageChange(() => this.refreshLanguage());
+    this.refreshLanguage();
   }
 
   render(
@@ -161,7 +177,8 @@ export class SurvivalHudView {
     _unavailableReasons: ReadonlyMap<DayActionId, string | null>,
   ): void {
     if (this.disposed) return;
-    this.updateText('day', this.day, `DAY ${snapshot.day}`);
+    this.currentSnapshot = snapshot;
+    this.updateText('day', this.day, uiDynamic('day', snapshot.day));
     METERS.forEach(({ id }) => this.updateMeter(id, snapshot[id]));
   }
 
@@ -187,7 +204,7 @@ export class SurvivalHudView {
     this.journalMarker.dataset.unread = String(unread);
     this.journalMarker.setAttribute(
       'aria-label',
-      unread ? 'Open journal, new entry available' : 'Open journal',
+      unread ? uiText('openUnreadJournal') : uiText('openJournal'),
     );
   }
 
@@ -198,9 +215,9 @@ export class SurvivalHudView {
     this.cameraTurn.setAttribute('aria-pressed', String(rear));
     this.cameraTurn.setAttribute(
       'aria-label',
-      rear ? 'Look forward from the chest' : 'Look behind at the chest',
+      rear ? uiText('lookForwardChest') : uiText('lookBehind'),
     );
-    this.cameraTurnTooltip.textContent = rear ? 'LOOK FORWARD' : 'LOOK BACK';
+    this.cameraTurnTooltip.textContent = rear ? uiText('lookForward') : uiText('lookBack');
   }
 
   journalControl(): HTMLButtonElement {
@@ -210,6 +227,7 @@ export class SurvivalHudView {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.unsubscribeLanguage();
     let failed = false;
     let firstError: unknown;
     const clean = (cleanup: () => void): void => {
@@ -244,10 +262,10 @@ export class SurvivalHudView {
     if (bonusEnergy) {
       meter.setAttribute(
         'aria-valuetext',
-        `${definition.max} standard energy and ${displayed - definition.max} bonus energy`,
+        uiDynamic('bonusEnergy', definition.max, displayed - definition.max),
       );
     } else if (danger) {
-      meter.setAttribute('aria-valuetext', `${safe}, ${definition.dangerLabel.toLowerCase()}`);
+      meter.setAttribute('aria-valuetext', uiDynamic('dangerValue', safe));
     }
     else meter.removeAttribute('aria-valuetext');
     meter.style.setProperty('--meter-value', `${percentage}%`);

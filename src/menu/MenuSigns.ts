@@ -9,9 +9,9 @@ import {
 } from 'three';
 import type { MenuSceneComponent } from './MenuSceneComponent';
 import { disposeResourceSets } from '../world/SceneResources';
+import { onLanguageChange } from '../i18n/language';
+import { menuText } from '../i18n/menuMessages';
 
-export const MENU_START_SIGN_TITLE = 'START';
-export const MENU_GUIDE_SIGN_TITLE = 'HOW TO PLAY';
 export const MENU_GUIDE_SIGN_POSITION = [-2.55, -0.94, 3.75] as const;
 export const MENU_GUIDE_SIGN_ROTATION = [0.02, 0.24, -0.06] as const;
 export const MENU_START_SIGN_POSITION = [2.55, -0.86, 3.72] as const;
@@ -54,6 +54,8 @@ interface WoodenSignSpec {
 }
 
 interface WoodenSignParts {
+  readonly surface: MenuSignCanvasSurface;
+  readonly spec: WoodenSignSpec;
   readonly root: Group;
   readonly board: Mesh<BoxGeometry, MeshStandardMaterial[]>;
   readonly texture: CanvasTexture;
@@ -82,11 +84,12 @@ export class MenuSigns implements MenuSignsComponent {
   private startHighlighted = false;
   private guideHighlighted = false;
   private disposed = false;
+  private readonly unsubscribeLanguage: () => void;
 
   constructor(factory: MenuSignCanvasFactory = browserCanvas) {
     const guide = this.createWoodenSign(factory, {
       name: 'menu:guide-sign',
-      textLines: ['HOW TO', 'PLAY'],
+      get textLines() { return [menuText('guideLine1'), menuText('guideLine2')]; },
       textLineWidths: [510, 340],
       textLineYs: [112, 226],
       position: MENU_GUIDE_SIGN_POSITION,
@@ -100,7 +103,7 @@ export class MenuSigns implements MenuSignsComponent {
     });
     const start = this.createWoodenSign(factory, {
       name: 'menu:start-sign',
-      textLines: [MENU_START_SIGN_TITLE],
+      get textLines() { return [menuText('start')]; },
       textLineWidths: [560],
       textLineYs: [184],
       position: MENU_START_SIGN_POSITION,
@@ -120,6 +123,12 @@ export class MenuSigns implements MenuSignsComponent {
     this.startHitTarget = start.board;
     this.guideHitTarget = guide.board;
     this.textures = [guide.texture, start.texture];
+    this.unsubscribeLanguage = onLanguageChange(() => {
+      for (const sign of [this.guideSign, this.startSign]) {
+        this.paintSign(sign.surface, sign.spec);
+        sign.texture.needsUpdate = true;
+      }
+    });
   }
 
   setStartHighlighted(active: boolean): void {
@@ -137,6 +146,7 @@ export class MenuSigns implements MenuSignsComponent {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.unsubscribeLanguage();
     this.root.removeFromParent();
     for (const texture of this.textures) texture.dispose();
     disposeResourceSets(this.geometries, this.materials);
@@ -146,7 +156,44 @@ export class MenuSigns implements MenuSignsComponent {
     factory: MenuSignCanvasFactory,
     spec: WoodenSignSpec,
   ): WoodenSignParts {
-    const { canvas, context } = factory();
+    const surface = factory();
+    this.paintSign(surface, spec);
+    const texture = new CanvasTexture(surface.canvas);
+    texture.colorSpace = SRGBColorSpace;
+    texture.minFilter = LinearFilter;
+
+    const boardGeometry = new BoxGeometry(...spec.boardSize);
+    const leftPostGeometry = new BoxGeometry(0.22, spec.postHeight, 0.22);
+    const rightPostGeometry = new BoxGeometry(0.20, spec.postHeight - 0.25, 0.20);
+    const boardMaterial = new MeshStandardMaterial({ map: texture, color: 0xffffff, roughness: 0.9, metalness: 0, emissive: 0x000000, emissiveIntensity: 0 });
+    const edgeMaterial = new MeshStandardMaterial({ color: 0x36251b, roughness: 1, metalness: 0 });
+    const postMaterial = new MeshStandardMaterial({ color: 0x4b3425, roughness: 1, metalness: 0 });
+    this.geometries.add(boardGeometry);
+    this.geometries.add(leftPostGeometry);
+    this.geometries.add(rightPostGeometry);
+    this.materials.add(boardMaterial);
+    this.materials.add(edgeMaterial);
+    this.materials.add(postMaterial);
+    const board = new Mesh(boardGeometry, [edgeMaterial, edgeMaterial, edgeMaterial, edgeMaterial, boardMaterial, edgeMaterial]);
+    board.name = `${spec.name}-board`;
+    board.position.set(0, spec.boardHeight, 0);
+    const leftPost = new Mesh(leftPostGeometry, postMaterial);
+    leftPost.name = `${spec.name}-post-left`;
+    leftPost.position.set(-spec.postSpacing, 0.42, -0.12);
+    leftPost.rotation.z = 0.04;
+    const rightPost = new Mesh(rightPostGeometry, postMaterial);
+    rightPost.name = `${spec.name}-post-right`;
+    rightPost.position.set(spec.postSpacing, 0.48, -0.12);
+    rightPost.rotation.z = -0.035;
+    const root = new Group();
+    root.name = spec.name;
+    root.position.set(...spec.position);
+    root.rotation.set(...spec.rotation);
+    root.add(board, leftPost, rightPost);
+    return { root, board, texture, boardMaterial, edgeMaterial, postMaterial, surface, spec };
+  }
+
+  private paintSign({ canvas, context }: MenuSignCanvasSurface, spec: WoodenSignSpec): void {
     canvas.width = 1024;
     canvas.height = 320;
     const gradient = context.createLinearGradient(0, 0, 1024, 320);
@@ -222,63 +269,6 @@ export class MenuSigns implements MenuSignsComponent {
     }
     context.globalAlpha = 1;
 
-    const texture = new CanvasTexture(canvas);
-    texture.colorSpace = SRGBColorSpace;
-    texture.minFilter = LinearFilter;
-
-    const boardGeometry = new BoxGeometry(...spec.boardSize);
-    const leftPostGeometry = new BoxGeometry(0.22, spec.postHeight, 0.22);
-    const rightPostGeometry = new BoxGeometry(0.20, spec.postHeight - 0.25, 0.20);
-    const boardMaterial = new MeshStandardMaterial({
-      map: texture,
-      color: 0xffffff,
-      roughness: 0.9,
-      metalness: 0,
-      emissive: 0x000000,
-      emissiveIntensity: 0,
-    });
-    const edgeMaterial = new MeshStandardMaterial({
-      color: 0x36251b,
-      roughness: 1,
-      metalness: 0,
-    });
-    const postMaterial = new MeshStandardMaterial({
-      color: 0x4b3425,
-      roughness: 1,
-      metalness: 0,
-    });
-    this.geometries.add(boardGeometry);
-    this.geometries.add(leftPostGeometry);
-    this.geometries.add(rightPostGeometry);
-    this.materials.add(boardMaterial);
-    this.materials.add(edgeMaterial);
-    this.materials.add(postMaterial);
-
-    const board = new Mesh(boardGeometry, [
-      edgeMaterial,
-      edgeMaterial,
-      edgeMaterial,
-      edgeMaterial,
-      boardMaterial,
-      edgeMaterial,
-    ]);
-    board.name = `${spec.name}-board`;
-    board.position.set(0, spec.boardHeight, 0);
-    const leftPost = new Mesh(leftPostGeometry, postMaterial);
-    leftPost.name = `${spec.name}-post-left`;
-    leftPost.position.set(-spec.postSpacing, 0.42, -0.12);
-    leftPost.rotation.z = 0.04;
-    const rightPost = new Mesh(rightPostGeometry, postMaterial);
-    rightPost.name = `${spec.name}-post-right`;
-    rightPost.position.set(spec.postSpacing, 0.48, -0.12);
-    rightPost.rotation.z = -0.035;
-
-    const root = new Group();
-    root.name = spec.name;
-    root.position.set(...spec.position);
-    root.rotation.set(...spec.rotation);
-    root.add(board, leftPost, rightPost);
-    return { root, board, texture, boardMaterial, edgeMaterial, postMaterial };
   }
 
   private setSignHighlighted(sign: WoodenSignParts, active: boolean): void {

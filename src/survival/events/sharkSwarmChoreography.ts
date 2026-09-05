@@ -1,5 +1,6 @@
 import { clamp01, pulse, smoothstep } from '../animationMath';
 import { scaleEventItemDuration, scaleThrownItemDuration } from '../eventItemTiming';
+import { NET_ATTACK_BASE_DURATION, sampleNetAttackContact } from '../netAttackChoreography';
 import { resetTransformPose, type MutableTransformPose } from '../transformPose';
 
 export const SWARM_REVEAL_DURATION = 2.9;
@@ -7,6 +8,7 @@ export const SWARM_ITEM_DURATION = scaleEventItemDuration(1.2);
 export const SWARM_REACTION_DURATION = 1.15;
 
 export function swarmItemDuration(choiceId: string): number {
+  if (choiceId === 'fishingNet') return scaleEventItemDuration(NET_ATTACK_BASE_DURATION);
   return choiceId === 'bait' || choiceId === 'baitTin'
     ? scaleThrownItemDuration(1.2)
     : SWARM_ITEM_DURATION;
@@ -213,14 +215,8 @@ export function sampleSwarmItemUse(
   output.effect = action;
 
   if (choiceId === 'fishingNet') {
-    const contact = pulse(t, 0.5, 0.62, 0.76);
+    const contact = sampleNetAttackContact(t);
     output.netSlap = contact;
-    output.x = 0.58 * lift;
-    output.y = 0.48 * lift;
-    output.z = -0.24 * lift;
-    output.yaw = -0.26 * lift;
-    output.pitch = -0.38 * lift;
-    output.roll = -0.48 * contact;
     output.splash = contact;
     output.effect = contact;
     output.effectKind = 'net-slap';

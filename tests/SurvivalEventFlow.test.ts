@@ -445,7 +445,10 @@ describe('event selection contracts', () => {
     expect(after.journalEntries).toHaveLength(1);
     expect(after.journalEntries[0]!.nighttime).toMatchObject({
       kind: 'event',
-      event: { attemptedChoiceId: 'sleep', choiceLabel: 'Let It Pass', attemptedItemId: null },
+      event: {
+        eventId: 'plane', attemptedChoiceId: 'sleep', attemptedItemId: null,
+        text: { kind: 'eventResult', reference: { eventId: 'plane', choiceId: 'sleep', resultId: 'plane-pass' } },
+      },
     });
     expect(rig.onInvariantError).not.toHaveBeenCalled();
     expect(rig.onFatalError).not.toHaveBeenCalled();
