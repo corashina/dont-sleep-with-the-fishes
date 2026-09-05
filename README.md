@@ -236,6 +236,17 @@ bun run models:check:menu
 
 `bun run build` type-checks the project and writes the static production site to `dist/`. Deploy that directory to any static host.
 
+### Loading and ownership
+
+Startup loads only the menu models, sand, display font, and menu audio.
+Selecting **START** loads ship models, textures, furniture, audio, sky assets, lifeboat assets, and physics.
+The survival handoff loads its models and audio. It keeps shared sky and lifeboat assets during the transition.
+**Continue** and event tests load survival directly. They do not load ship resources first.
+
+`PhaseResources` shares pending loads and holds each asset until its final lease ends.
+`Game` disposes the outgoing phase before it releases that phase's lease.
+Stale or failed transitions release acquired resources and cannot replace the current phase.
+
 For ambient-occlusion inspection, append `?ao=debug` to show the raw item AO
 buffer or `?ao=off` for an unoccluded comparison. Reload after changing modes.
 While the game is open, press `O` to cycle composite, raw AO, and AO-off modes.
@@ -250,7 +261,9 @@ loading and keeps the seven obstacle visuals static.
 
 `src/world/ShipDangerEffects` owns room alarms and static puddles.
 
-- `src/app` — top-level game director, phase transitions, restart, and renderer ownership.
+- `src/Game` — top-level game director, phase transitions, restart, renderer ownership, and active phase leases.
+- `src/app/PhaseResources` — menu, ship, and survival resource groups with shared loads and reference-counted leases.
+- `src/app` — launch, phase contracts, saved-run entry, and browser test entry.
 - `src/menu` — underwater menu models, composition, animation, particles, and UI.
 - `src/menu/MenuSigns` — the owned title and interactive guide sign textures, geometry, and hover state.
 - `src/menu/SunkenDorothyWreck` — the simplified static Dorothy silhouette.
