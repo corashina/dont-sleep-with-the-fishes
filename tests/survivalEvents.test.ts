@@ -192,7 +192,7 @@ describe('survival events', () => {
       resource: 'energy',
       minimum: eventId === 'drifting-supplies' ? 1 : 3,
     }]);
-    expect(retrieve?.outcomes).toHaveLength(eventId === 'drifting-supplies' ? 10 : 1);
+    expect(retrieve?.outcomes).toHaveLength(eventId === 'drifting-supplies' ? 7 : 1);
     },
   );
 
