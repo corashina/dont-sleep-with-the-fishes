@@ -27,11 +27,10 @@ const FISHING_NET_HANDLE_SUPPORT_POINT = new Vector3(0, 0.09468515, 0.81206911);
 const STACK_GAP = 0.01;
 
 export type BoatItemSurface = 'shelf' | 'floor' | 'gunwale' | 'edgeShelf';
-export type BoatSupplyGroupId = ItemId | 'repairMaterial';
+export type BoatSupplyGroupId = ItemId;
 
 export const BOAT_SUPPLY_GROUP_IDS = Object.freeze([
   ...ITEM_IDS,
-  'repairMaterial',
 ] as const satisfies readonly BoatSupplyGroupId[]);
 
 export interface BoatStorageTransform {
@@ -159,27 +158,6 @@ const BOAT_STORAGE_SLOTS = {
   ],
 } satisfies Readonly<Record<ItemId, readonly SlotSpec[]>>;
 
-const REPAIR_MATERIAL_SLOTS = [
-  {
-    surface: 'floor',
-    position: [-0.82, LIFEBOAT_FLOOR_SURFACE_Y, 0.34],
-    rotation: [0, -0.10, 0],
-    scale: 1,
-  },
-  {
-    surface: 'floor',
-    position: [-0.65, LIFEBOAT_FLOOR_SURFACE_Y, 0.40],
-    rotation: [0, 0.08, 0],
-    scale: 1,
-  },
-  {
-    surface: 'floor',
-    position: [-0.48, LIFEBOAT_FLOOR_SURFACE_Y, 0.33],
-    rotation: [0, -0.04, 0],
-    scale: 1,
-  },
-] as const satisfies readonly SlotSpec[];
-
 function instanceOrdinal(instance: ItemInstance): number {
   const prefix = `${instance.type}-`;
   const suffix = instance.instanceId.startsWith(prefix)
@@ -228,11 +206,6 @@ export function boatSupplyTransform(
 ): BoatStorageTransform {
   if (!Number.isInteger(copyIndex) || copyIndex < 0) {
     throw new Error(`No boat supply slot for ${id}-${copyIndex + 1}`);
-  }
-  if (id === 'repairMaterial') {
-    const spec = REPAIR_MATERIAL_SLOTS[copyIndex];
-    if (!spec) throw new Error(`No boat supply slot for ${id}-${copyIndex + 1}`);
-    return transformFromSpec(spec);
   }
   const spec = BOAT_STORAGE_SLOTS[id][copyIndex];
   if (!spec) throw new Error(`No boat supply slot for ${id}-${copyIndex + 1}`);

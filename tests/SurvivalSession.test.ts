@@ -36,6 +36,13 @@ it('restores the next Mulberry32 value', () => {
   expect(restored.next()).toBe(random.next());
 });
 
+it('does not export repair material state', () => {
+  const session = new SurvivalSession([], { seed: 1 });
+
+  expect(session.snapshot()).not.toHaveProperty('repairMaterial');
+  expect(session.exportCheckpoint()).not.toHaveProperty('repairMaterial');
+});
+
 it('treats a night fallback as a quiet night', () => {
   const session = new SurvivalSession(saved(
     'cannedFood', 'cannedFood', 'cannedFood', 'baitTin', 'baitTin',
@@ -1407,10 +1414,10 @@ describe('SurvivalSession daytime actions', () => {
   it('resolves a named itemless event choice', () => {
     const session = new SurvivalSession(saved(), { seed: 1, initialEventId: 'shower-night' });
     (session as unknown as { pendingEvent: SurvivalEventDefinition }).pendingEvent =
-      itemlessEvent({ resources: [{ resource: 'repairMaterial', operation: 'add', value: 1 }] });
+      itemlessEvent({ resources: [{ resource: 'food', operation: 'add', value: 1 }] });
 
     expect(session.resolveEvent(choiceResponse('sleep'))).toMatchObject({ accepted: true, code: 'event-resolved' });
-    expect(session.snapshot().repairMaterial).toBe(1);
+    expect(session.snapshot().food).toBe(1);
   });
 
   it('rejects a response that requires another Chest state', () => {
@@ -1835,7 +1842,6 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot()).toMatchObject({
       food: 0,
       bait: 0,
-      repairMaterial: 0,
       chest: { state: 'closed', acquiredDay: 3 },
     });
   });

@@ -49,7 +49,7 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
   return {
     state: 'day', ending: null, day: 1, pressure: 0, health: 100, hunger: 20, energy: 3, hull: 100,
     history: [],
-    food: 0, bait: 0, recoveredFood: 0, recoveredBait: 0, repairMaterial: 0,
+    food: 0, bait: 0, recoveredFood: 0, recoveredBait: 0,
     rescueLead: 0, rescueTraceFinds: 0, radioSignalAvailable: false, radioSignalsSent: 0,
     chest: { state: 'none', acquiredDay: null },
     weather: 'calm', actedToday: false,
@@ -1275,7 +1275,6 @@ describe('SurvivalPhase orchestration', () => {
       energy: before.energy,
       food: before.food,
       bait: before.bait,
-      repairMaterial: before.repairMaterial,
       inventory: before.inventory,
       pendingEventId: 'drifting-supplies',
     });

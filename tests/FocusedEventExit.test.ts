@@ -67,7 +67,7 @@ describe('focused event dismiss actions', () => {
           state: 'day', pendingEventId: null,
           day: before.day, health: before.health, hunger: before.hunger,
           energy: before.energy, hull: before.hull, inventory: before.inventory,
-          food: before.food, bait: before.bait, repairMaterial: before.repairMaterial,
+          food: before.food, bait: before.bait,
           carlitos: before.carlitos,
         });
         expect(ui.setBusy).toHaveBeenLastCalledWith(false);

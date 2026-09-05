@@ -37,7 +37,6 @@ export interface SurvivalSessionCheckpoint {
   readonly bait: number;
   readonly recoveredFood: number;
   readonly recoveredBait: number;
-  readonly repairMaterial: number;
   readonly rescueLead: RescueLead;
   readonly rescueTraceFinds: 0 | 1 | 2;
   readonly radioSignalAvailable: boolean;

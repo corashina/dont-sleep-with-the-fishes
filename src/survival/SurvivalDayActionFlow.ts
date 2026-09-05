@@ -92,7 +92,6 @@ export function formatDiveResult(outcome: ActionOutcome): RewardResultView {
   const itemRewards = [
     ['food', 'food'],
     ['bait', 'bait'],
-    ['repairMaterial', 'repairMaterial'],
   ] as const;
   if (reward === null) {
     for (const [resource, id] of itemRewards) {

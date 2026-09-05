@@ -1,14 +1,11 @@
 import {
-  BoxGeometry,
   BufferGeometry,
   CylinderGeometry,
   Group,
   Material,
   Mesh,
-  MeshStandardMaterial,
   Object3D,
   Quaternion,
-  TorusGeometry,
   Vector3,
 } from 'three';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
@@ -27,7 +24,6 @@ import type {
   PropModelLibrary,
   PropPresentation,
 } from '../world/PropModelLibrary';
-import { enableItemAmbientOcclusion } from '../rendering/ItemAmbientOcclusion';
 import { HoverOutline } from '../rendering/HoverOutline';
 import {
   collectMeshResources,
@@ -223,33 +219,6 @@ function brokenMaterial(material: Material): Material {
   return clone;
 }
 
-function createRepairMaterialBundle(index: number): Group {
-  const wood = new MeshStandardMaterial({
-    color: index % 2 === 0 ? 0x73543a : 0x5c402d,
-    roughness: 0.94,
-    flatShading: true,
-  });
-  const rope = new MeshStandardMaterial({
-    color: 0x413323,
-    roughness: 1,
-    flatShading: true,
-  });
-  const root = new Group();
-  root.name = `repair-material-bundle-${index + 1}`;
-  for (let plankIndex = 0; plankIndex < 3; plankIndex += 1) {
-    const plank = new Mesh(new BoxGeometry(0.42, 0.045, 0.10), wood);
-    plank.position.set(0, plankIndex * 0.05, (plankIndex - 1) * 0.018);
-    plank.rotation.y = (plankIndex - 1) * 0.06;
-    root.add(plank);
-  }
-  const lashing = new Mesh(new TorusGeometry(0.105, 0.012, 5, 10), rope);
-  lashing.rotation.y = Math.PI / 2;
-  lashing.position.y = 0.06;
-  root.add(lashing);
-  enableItemAmbientOcclusion(root);
-  return root;
-}
-
 function createConditionBindings(
   root: Group,
   ownedMaterials: Set<Material>,
@@ -374,7 +343,7 @@ export class BoatSupplyDisplay {
 
   private supplyPoolSize(groupId: BoatSupplyGroupId): number {
     if (groupId === 'carlitos') return 0;
-    return groupId === 'repairMaterial' || groupId === 'cannedFood' || groupId === 'baitTin'
+    return groupId === 'cannedFood' || groupId === 'baitTin'
       ? 3
       : 1;
   }
@@ -385,16 +354,12 @@ export class BoatSupplyDisplay {
     groupId: BoatSupplyGroupId,
     index: number,
   ): CopyBinding {
-    const instance = groupId === 'repairMaterial'
-      ? null
-      : this.instancesByType.get(groupId)?.[index] ?? {
-          instanceId: `${groupId}-${index + 1}` as ItemInstanceId,
-          type: groupId,
-        };
-    const presentation = groupId === 'repairMaterial'
-      ? null
-      : propModels.createPresentation(instance!);
-    const copy = presentation?.root ?? createRepairMaterialBundle(index);
+    const instance = this.instancesByType.get(groupId)?.[index] ?? {
+      instanceId: `${groupId}-${index + 1}` as ItemInstanceId,
+      type: groupId,
+    };
+    const presentation = propModels.createPresentation(instance);
+    const copy = presentation.root;
     enableBoatSupplyShadows(copy);
     const transform = boatSupplyTransform(groupId, index);
     copy.name = `boat-supply:${groupId}:copy-${index + 1}`;
@@ -408,7 +373,7 @@ export class BoatSupplyDisplay {
       root: copy,
       presentation,
       materials: createConditionBindings(copy, this.ownedMaterials),
-      instanceId: instance?.instanceId ?? null,
+      instanceId: instance.instanceId,
       condition: 'lost',
     };
   }
@@ -423,7 +388,7 @@ export class BoatSupplyDisplay {
 
   itemType(instanceId: ItemInstanceId): ItemId | null {
     const groupId = this.groupByInstanceId.get(instanceId);
-    return groupId === undefined || groupId === 'repairMaterial' ? null : groupId;
+    return groupId ?? null;
   }
 
   setPresentationItemHidden(instanceId: ItemInstanceId, hidden: boolean): void {
@@ -776,7 +741,6 @@ export class BoatSupplyDisplay {
     groupId: BoatSupplyGroupId,
     snapshot: SurvivalSnapshot,
   ): ActiveSupplyItem[] {
-    if (groupId === 'repairMaterial') return [];
     return Object.values(snapshot.inventory)
       .filter((instance): instance is ActiveSupplyState => (
         isActiveSupplyState(instance, groupId)
@@ -792,7 +756,7 @@ export class BoatSupplyDisplay {
   ): number {
     if (groupId === 'cannedFood') return snapshot.food;
     if (groupId === 'baitTin') return snapshot.bait;
-    return groupId === 'repairMaterial' ? snapshot.repairMaterial : itemCount;
+    return itemCount;
   }
 
   private updateRecordCounts(
@@ -802,8 +766,7 @@ export class BoatSupplyDisplay {
     brokenCount: number,
   ): void {
     const aggregate = groupId === 'cannedFood'
-      || groupId === 'baitTin'
-      || groupId === 'repairMaterial';
+      || groupId === 'baitTin';
     record.usableQuantity = aggregate ? record.quantity : usableCount;
     record.brokenQuantity = aggregate ? 0 : brokenCount;
   }
@@ -837,7 +800,7 @@ export class BoatSupplyDisplay {
       const activeItem = activeItems[index];
       copy.instanceId = activeItem?.instance.instanceId ?? copy.instanceId;
       copy.condition = activeItem?.condition
-        ?? (groupId === 'repairMaterial' || groupId === 'cannedFood' || groupId === 'baitTin'
+        ?? (groupId === 'cannedFood' || groupId === 'baitTin'
           ? 'usable'
           : 'lost');
       copy.root.visible = copy.instanceId === null
@@ -855,7 +818,6 @@ export class BoatSupplyDisplay {
     usableIds: readonly ItemInstanceId[],
     brokenIds: readonly ItemInstanceId[],
   ): ItemInstanceId | null {
-    if (groupId === 'repairMaterial') return null;
     if (
       this.eventSelectedItemId !== null
       && this.groupByInstanceId.get(this.eventSelectedItemId) === groupId

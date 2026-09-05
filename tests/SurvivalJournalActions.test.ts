@@ -41,8 +41,7 @@ describe('ordinary day action journal', () => {
 
   it.each([
     [0.1, { food: 1 }, 'Food +1'],
-    [0.3, { bait: 1 }, 'Bait +1'],
-    [0.6, { repairMaterial: 1 }, 'Duct Tape +1'],
+    [0.5, { bait: 1 }, 'Bait +1'],
     [0.9, { rescueLead: 1 }, 'Rescue lead +1'],
   ])('records a dive reward from roll %s and its energy cost', (roll, reward, text) => {
     const session = new SurvivalSession(saved('scubaSet'), {
@@ -71,11 +70,11 @@ describe('ordinary day action journal', () => {
     const entry = finishDay(session);
     expect(entry.actions).toEqual([{
       kind: 'dayAction', action: 'dive',
-      deltas: { energy: -3, health: -50, repairMaterial: 1 }, inventoryMutations: [],
+      deltas: { energy: -3, health: -50, bait: 1 }, inventoryMutations: [],
     }]);
     const copy = formatJournalEntry(entry).daytime;
     expect(copy).toContain('Health -50');
-    expect(copy).toContain('Duct Tape +1');
+    expect(copy).toContain('Bait +1');
   });
 
   it('records an empty dive without inventing a reward', () => {

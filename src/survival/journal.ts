@@ -129,7 +129,7 @@ function formatCarlitos(record: JournalCarlitosCareRecord | JournalCarlitosDawnR
 
 const RESOURCE_LABELS: Readonly<Record<keyof ResourceDelta, string>> = {
   pressure: 'Pressure', health: 'Health', hunger: 'Hunger', energy: 'Energy', hull: 'Hull',
-  food: 'Food', bait: 'Bait', repairMaterial: 'Duct Tape', rescueLead: 'Rescue lead',
+  food: 'Food', bait: 'Bait', rescueLead: 'Rescue lead',
 };
 
 function formatSurvivalAction(record: JournalSurvivalActionRecord): string {

@@ -18,7 +18,7 @@ import type {
 } from './survivalTypes';
 
 const EVENT_RESOURCES: readonly EventResource[] = [
-  'pressure', 'health', 'hull', 'energy', 'food', 'bait', 'repairMaterial', 'rescueLead',
+  'pressure', 'health', 'hull', 'energy', 'food', 'bait', 'rescueLead',
 ];
 const ITEM_MUTATIONS = ['consume', 'break', 'lose', 'gain', 'gainChest', 'breakRandom', 'loseRandom', 'loseEventTarget'];
 
