@@ -75,6 +75,56 @@ describe('drifting supplies', () => {
     });
   });
 
+  it.each([
+    ['barrel', 0.599999, 'food', 1],
+    ['barrel', 0.6, 'bait', 1],
+    ['lifeboat', 0.599999, 'food', 2],
+    ['lifeboat', 0.6, 'bait', 2],
+    ['container', 0.549999, 'food', 3],
+    ['container', 0.55, 'bait', 3],
+    ['container', 0.899999, 'bait', 3],
+    ['container', 0.9, 'energyBar', 1],
+  ] as const)(
+    'uses the %s player reward boundary at %f',
+    (kind, roll, rewardId, quantity) => {
+      const outcome = sessionFor(kind, roll).resolveEvent({
+        kind: 'choice',
+        choiceId: 'retrieve',
+      });
+
+      expect(outcome.rewardSummary).toEqual(
+        rewardId === 'energyBar'
+          ? { kind: 'item', id: rewardId, quantity }
+          : { kind: 'resource', id: rewardId, quantity },
+      );
+    },
+  );
+
+  it.each([
+    ['barrel', 0.599999, 'food', 1],
+    ['barrel', 0.6, 'bait', 1],
+    ['lifeboat', 0.599999, 'food', 2],
+    ['lifeboat', 0.6, 'bait', 2],
+    ['container', 0.549999, 'food', 3],
+    ['container', 0.55, 'bait', 3],
+    ['container', 0.899999, 'bait', 3],
+    ['container', 0.9, 'energyBar', 1],
+  ] as const)(
+    'uses the %s Carlitos reward boundary at %f',
+    (kind, roll, rewardId, quantity) => {
+      const outcome = sessionFor(kind, roll, 0, 2).resolveEvent({
+        kind: 'choice',
+        choiceId: 'delegate-carlitos',
+      });
+
+      expect(outcome.rewardSummary).toEqual(
+        rewardId === 'energyBar'
+          ? { kind: 'item', id: rewardId, quantity }
+          : { kind: 'resource', id: rewardId, quantity },
+      );
+    },
+  );
+
   it('can grant an energy bar only from the shipping container', () => {
     const container = sessionFor('container', 0.95).resolveEvent({
       kind: 'choice',

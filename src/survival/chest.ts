@@ -8,7 +8,7 @@ export type ChestReward =
   | { readonly kind: 'item'; readonly itemId: ItemId }
   | {
       readonly kind: 'resource';
-      readonly resource: 'food' | 'bait' | 'repairMaterial';
+      readonly resource: 'food' | 'bait';
       readonly quantity: number;
     };
 
@@ -28,9 +28,10 @@ export function drawChestReward(
   const entries: WeightedChestReward[] = DURABLE_REWARDS
     .filter((id) => !activeItemIds.has(id))
     .map((itemId) => ({ weight: 4, reward: { kind: 'item', itemId } }));
-  if (!activeItemIds.has('ductTape')) {
-    entries.push({ weight: 2, reward: { kind: 'item', itemId: 'ductTape' } });
-  }
+  entries.push({
+    weight: activeItemIds.has('ductTape') ? 2 : 4,
+    reward: { kind: 'item', itemId: 'ductTape' },
+  });
   if (!activeItemIds.has('energyBar')) {
     entries.push({ weight: 2, reward: { kind: 'item', itemId: 'energyBar' } });
   }
@@ -40,7 +41,6 @@ export function drawChestReward(
   entries.push(
     { weight: 3, reward: { kind: 'resource', resource: 'food', quantity: 2 } },
     { weight: 2, reward: { kind: 'resource', resource: 'bait', quantity: 2 } },
-    { weight: 2, reward: { kind: 'resource', resource: 'repairMaterial', quantity: 2 } },
   );
 
   const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
