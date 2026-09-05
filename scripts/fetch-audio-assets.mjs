@@ -33,7 +33,7 @@ const freesoundSources = [
   ['jump', 'florianreichelt', '683101'],
   ['itemHandling', 'petenice', '9509'],
   ['netImpact', 'qubodup', '222507'],
-  ['knifeImpact', 'jawbutch', '344404'],
+  ['knifeImpact', 'Mixedupmoviestuff', '179222'],
   ['boatCreak', 'craigsmith', '675783'],
   ['lightWaveImpact', 'kyles', '637645'],
   ['hardWaveImpact', 'Sheyvan', '520511'],
