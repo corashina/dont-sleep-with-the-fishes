@@ -366,7 +366,7 @@ describe('event selection contracts', () => {
       kind: 'event',
       event: { attemptedChoiceId: 'touch', attemptedItemId: null, inventoryMutations: [] },
     });
-    expect(formatJournalEntry(entry).nighttime).toContain('Touch the Hand');
+    expect(formatJournalEntry(entry).nighttime).toContain('I touched the offered hand.');
     expect(rig.onInvariantError).not.toHaveBeenCalled();
     expect(rig.onFatalError).not.toHaveBeenCalled();
   });

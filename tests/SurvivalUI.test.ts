@@ -1569,20 +1569,20 @@ describe('SurvivalUI', () => {
     expect(action).not.toHaveBeenCalled();
   });
 
-  it('shows the exact energy-scaled hull repair preview', () => {
+  it('shows repair energy cost as emojis without the hull increase', () => {
     const mount = document.createElement('main');
     const ui = createUI(mount);
 
     ui.render(snapshot({ hull: 7, energy: 3 }), () => null);
 
     const repair = mount.querySelector<HTMLButtonElement>('[data-anchor-id="repair-tools"]')!;
-    expect(repair.querySelector('[role="tooltip"]')?.textContent).toContain('HULL +93');
+    expect(repair.querySelector('[role="tooltip"]')?.textContent).toBe('REPAIR ⚡⚡⚡');
     expect(repair.querySelector('.boat-tooltip__energy')?.textContent).toBe('⚡⚡⚡');
     expect(repair.getAttribute('aria-description')).toContain('3 ENERGY');
     expect(repair.getAttribute('aria-description')).not.toContain('DUCT TAPE');
 
     ui.render(snapshot({ hull: 90, energy: 3 }), () => null);
-    expect(repair.querySelector('[role="tooltip"]')?.textContent).toContain('HULL +10');
+    expect(repair.querySelector('[role="tooltip"]')?.textContent).toBe('REPAIR ⚡');
     expect(repair.querySelector('.boat-tooltip__energy')?.textContent).toBe('⚡');
     expect(repair.getAttribute('aria-description')).toContain('1 ENERGY');
   });

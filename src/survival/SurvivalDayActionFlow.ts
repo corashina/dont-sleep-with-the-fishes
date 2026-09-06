@@ -255,12 +255,16 @@ export class SurvivalDayActionFlow {
     }
   }
 
-  private async runDiveAction(outcome: ActionOutcome): Promise<void> {
+  private async runDiveAction(
+    outcome: ActionOutcome,
+    beforeAction: SurvivalSnapshot,
+  ): Promise<void> {
     const generation = this.dependencies.advanceLifecycleGeneration();
     const operation = this.beginOperation();
     try {
       if (!this.isCurrent(generation, operation)) return;
       const instanceId = this.diveInstanceId();
+      this.dependencies.events.beginDeferredSync(beforeAction, generation);
       this.setBusy(true);
       if (!await this.playDiveEntry(instanceId, generation, operation)) return;
       if (!await this.coverDive(generation, operation)) return;
@@ -280,6 +284,7 @@ export class SurvivalDayActionFlow {
         } catch {
           // Keep the action error as the primary failure.
         }
+        this.dependencies.events.cancelDeferredSync(generation);
       });
     }
   }
@@ -367,7 +372,7 @@ export class SurvivalDayActionFlow {
       return;
     }
     if (action === 'dive') {
-      await this.runDiveAction(outcome);
+      await this.runDiveAction(outcome, beforeAction);
       return;
     }
     if (!this.playActionAudio(
@@ -458,6 +463,8 @@ export class SurvivalDayActionFlow {
     generation: number,
     operation: number,
   ): Promise<void> {
+    this.dependencies.events.cancelDeferredSync(generation);
+    this.dependencies.events.sync(snapshot);
     await (this.dependencies.ui.showRewardResult?.(formatDiveResult(outcome)) ?? Promise.resolve());
     if (!await this.resumeCurrent(generation, operation)) return;
     this.setBusy(false);

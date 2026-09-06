@@ -66,7 +66,6 @@ import type {
 } from './survival/SurvivalPhase';
 import type { BrowserPlaytestStartup } from './app/BrowserPlaytest';
 import type { PhaseResourceSource, ResourceLease } from './app/PhaseResources';
-import { createSystemScreen } from './ui/SystemScreen';
 
 export interface GameFactories {
   createMenu(
@@ -221,7 +220,6 @@ export class Game {
   private camera!: PerspectiveCamera;
   private clock!: GameClock;
   private resources!: PhaseResourceSource;
-  private loading: HTMLElement | null = null;
   private systemTuning!: SystemTuningPreference;
   private context!: PhaseContext;
   private factories!: GameFactories;
@@ -489,7 +487,6 @@ export class Game {
       this.disposed = false;
       this.elapsed = 0;
       this.phaseGeneration = 0;
-      this.loading = null;
       this.fatalErrorReported = false;
       this.performanceStats = new PerformanceStats(
         mount,
@@ -676,15 +673,9 @@ export class Game {
     create: (assets: T, generation: number) => GamePhase,
   ): Promise<void> {
     const generation = ++this.phaseGeneration;
-    let loading: HTMLElement | null = null;
     return Promise.resolve().then(() => {
       this.settingsMenu?.close();
       this.activePhase?.setOverlayActive?.(true);
-      this.loading?.remove();
-      loading = createSystemScreen({ kind: 'loading' });
-      loading.querySelector('progress')?.removeAttribute('value');
-      this.loading = loading;
-      this.context.mount.append(loading);
       return acquire();
     }).then(lease => {
       if (!this.ownsGeneration(generation)) { lease.dispose(); return; }
@@ -715,9 +706,6 @@ export class Game {
       }
     }).catch(error => {
       if (this.ownsGeneration(generation)) this.reportFatalError(error);
-    }).finally(() => {
-      loading?.remove();
-      if (this.loading === loading) this.loading = null;
     });
   }
 
@@ -826,8 +814,6 @@ export class Game {
 
   private detachActivePhase(): Pick<GamePhase, 'dispose'> | null {
     this.settingsMenu?.close();
-    this.loading?.remove();
-    this.loading = null;
     const outgoing = this.takeActivePhase();
     this.phaseGeneration += 1;
     return outgoing;

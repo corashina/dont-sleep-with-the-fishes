@@ -294,6 +294,7 @@ const EVENT_TEXT = {
 export type EventTextId = keyof typeof EVENT_TEXT;
 const translate = defineMessages(EVENT_TEXT);
 const registeredTextIds = new Map<string, EventTextId>();
+const resultTextIds = new Map<string, EventTextId>();
 
 /** Resolve one stable event text path in the active language. */
 export function eventMessage(messageId: string, textId: EventTextId): string {
@@ -340,7 +341,9 @@ export function localizeEventDefinitionText(event: SurvivalEventDefinition): voi
           value: resultId,
         });
       }
-      localizedProperty(outcome, 'message', `${event.id}.${choice.id}.${resultId}`);
+      const path = `${event.id}.${choice.id}.${resultId}`;
+      resultTextIds.set(path, outcome.message as EventTextId);
+      localizedProperty(outcome, 'message', path);
     });
   }
 }
@@ -356,6 +359,14 @@ export function getEventResultMessage(reference: EventResultPresentation): strin
     );
   }
   return outcome.message;
+}
+
+/** The journal uses the result identity, but supplies its own narrative text. */
+export function getEventResultTextId(reference: EventResultPresentation): EventTextId {
+  const path = `${reference.eventId}.${reference.choiceId}.${reference.resultId}`;
+  const textId = resultTextIds.get(path);
+  if (textId === undefined) throw new Error(`Unknown journal event result: ${path}`);
+  return textId;
 }
 
 const eventDefinitionsById = new Map<string, SurvivalEventDefinition>();

@@ -94,8 +94,8 @@ describe('domain language', () => {
     expect(formatJournalEntry(entry).daytime).toContain('salmon');
     setLanguage('pl');
     expect(settlement.message).toContain('łosoś');
-    expect(formatJournalEntry(entry).daytime).toContain('łosoś');
-    expect(formatJournalEntry(entry).nighttime).toContain('Śpię bez przeszkód');
+    expect(formatJournalEntry(entry).daytime).toContain('łososia');
+    expect(formatJournalEntry(entry).nighttime).toContain('Morze dało mi pospać');
   });
 
   it('reloads event outcomes in Polish with no saved display text', () => {

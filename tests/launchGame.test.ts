@@ -43,10 +43,18 @@ describe('phase-based launch', () => {
   it('starts the menu while ship and physics promises remain unrequested', async () => {
     const ship = deferred<Awaited<ReturnType<LaunchDependencies['loadShipAssets']>>>();
     const physics = deferred<Awaited<ReturnType<LaunchDependencies['loadPhysicsRuntime']>>>();
-    const deps = dependencies({ loadShipAssets: vi.fn(() => ship.promise), loadPhysicsRuntime: vi.fn(() => physics.promise) });
-    const handle = launchGame(mount(), deps);
+    const menu = deferred<MenuModelLibrary>();
+    const deps = dependencies({ loadMenuModels: vi.fn(() => menu.promise), loadShipAssets: vi.fn(() => ship.promise), loadPhysicsRuntime: vi.fn(() => physics.promise) });
+    const element = mount();
+    const handle = launchGame(element, deps);
+    const loading = element.querySelector('.system-screen--loading');
+    expect(loading).not.toBeNull();
+    await flushPhases();
+    expect(element.querySelector('.system-screen--loading')).toBe(loading);
+    menu.resolve({ dispose: vi.fn(), configure: vi.fn() } as unknown as MenuModelLibrary);
     const game = await handle.completion;
     expect(game).not.toBeNull();
+    expect(element.querySelector('.system-screen--loading')).toBeNull();
     expect(deps.loadMenuModels).toHaveBeenCalledOnce();
     expect(deps.loadShipAssets).not.toHaveBeenCalled();
     expect(deps.loadPhysicsRuntime).not.toHaveBeenCalled();
@@ -57,9 +65,11 @@ describe('phase-based launch', () => {
     const pending = deferred<MenuModelLibrary>();
     const menu = { dispose: vi.fn() } as unknown as MenuModelLibrary;
     const deps = dependencies({ loadMenuModels: () => pending.promise });
-    const handle = launchGame(mount(), deps);
+    const element = mount();
+    const handle = launchGame(element, deps);
     await flushPhases();
     handle.cancel(); handle.cancel();
+    expect(element.querySelector('.system-screen--loading')).toBeNull();
     pending.resolve(menu);
     await expect(handle.completion).resolves.toBeNull();
     expect(menu.dispose).toHaveBeenCalledOnce();
