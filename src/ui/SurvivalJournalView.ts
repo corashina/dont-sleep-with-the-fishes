@@ -3,9 +3,11 @@ import { onLanguageChange } from '../i18n/language';
 import { refreshUiText } from './translatedText';
 import { uiText } from '../i18n/uiMessages';
 import { formatJournalEntry } from '../survival/journal';
+import { journalItemChanges, type JournalItemChange } from '../survival/journalItemChanges';
 import { journalSnapshot, type JournalEntry } from '../survival/journalRecords';
 import { createElementRequirement } from './dom';
 import { runCleanupSteps, throwCleanupFailure } from './UiCleanup';
+import { itemThumbnailUrl } from './itemThumbnailManifest';
 
 const requireElement = createElementRequirement('survival journal view');
 
@@ -23,6 +25,8 @@ export class SurvivalJournalView {
   private readonly story: HTMLElement;
   private readonly day: HTMLElement;
   private readonly night: HTMLElement;
+  private readonly dayItems: HTMLElement;
+  private readonly nightItems: HTMLElement;
   private readonly pageCount: HTMLElement;
   private entries: readonly JournalEntry[] = [];
   private pageIndex = 0;
@@ -47,8 +51,8 @@ export class SurvivalJournalView {
             <p class="journal-page__weather ui-role-context" data-journal-weather></p>
             <h2 class="ui-role-display" data-journal-title tabindex="-1"></h2>
             <div class="journal-page__story ui-role-narrative" data-journal-story>
-              <section aria-labelledby="journal-day-label"><h3 id="journal-day-label" data-ui-text="dayUpper">${uiText('dayUpper')}</h3><p data-journal-day></p></section>
-              <section aria-labelledby="journal-night-label"><h3 id="journal-night-label" data-ui-text="nightUpper">${uiText('nightUpper')}</h3><p data-journal-night></p></section>
+              <section aria-labelledby="journal-day-label"><h3 id="journal-day-label" data-ui-text="dayUpper">${uiText('dayUpper')}</h3><p data-journal-day></p><ul class="journal-items" data-journal-day-items hidden></ul></section>
+              <section aria-labelledby="journal-night-label"><h3 id="journal-night-label" data-ui-text="nightUpper">${uiText('nightUpper')}</h3><p data-journal-night></p><ul class="journal-items" data-journal-night-items hidden></ul></section>
             </div>
             <nav class="journal-page__navigation ui-role-context" data-ui-aria="journalPages" aria-label="${uiText('journalPages')}">
               <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--previous ui-role-context" data-journal-previous data-ui-aria="previousJournal" aria-label="${uiText('previousJournal')}">&lsaquo;</button>
@@ -64,6 +68,8 @@ export class SurvivalJournalView {
     this.story = requireElement(this.root, '[data-journal-story]');
     this.day = requireElement(this.root, '[data-journal-day]');
     this.night = requireElement(this.root, '[data-journal-night]');
+    this.dayItems = requireElement(this.root, '[data-journal-day-items]');
+    this.nightItems = requireElement(this.root, '[data-journal-night-items]');
     this.pageCount = requireElement(this.root, '[data-journal-page-count]');
     this.previousButton = requireElement(this.root, '[data-journal-previous]');
     this.nextButton = requireElement(this.root, '[data-journal-next]');
@@ -127,6 +133,8 @@ export class SurvivalJournalView {
       this.story.hidden = true;
       this.day.textContent = '';
       this.night.textContent = '';
+      this.renderItems(this.dayItems, []);
+      this.renderItems(this.nightItems, []);
       this.pageCount.textContent = uiText('emptyPages');
     } else {
       const page = formatJournalEntry(entry);
@@ -136,11 +144,42 @@ export class SurvivalJournalView {
       this.story.hidden = false;
       this.day.textContent = page.daytime;
       this.night.textContent = page.nighttime;
+      const changes = journalItemChanges(entry);
+      this.renderItems(this.dayItems, changes.day);
+      this.renderItems(this.nightItems, changes.night);
       this.pageCount.textContent = uiDynamic('page', this.pageIndex + 1, this.entries.length);
     }
     this.previousButton.disabled = this.pageIndex <= 0;
     this.nextButton.disabled = this.entries.length === 0
       || this.pageIndex >= this.entries.length - 1;
+  }
+
+  private renderItems(container: HTMLElement, changes: readonly JournalItemChange[]): void {
+    container.hidden = changes.length === 0;
+    container.replaceChildren(...changes.map((change) => {
+      const item = document.createElement('li');
+      item.className = 'journal-item';
+      item.dataset.itemType = change.itemId;
+      item.dataset.itemChange = change.kind;
+      item.title = change.label;
+      const art = document.createElement('span');
+      art.className = 'weight-circle journal-item__art';
+      art.setAttribute('role', 'img');
+      art.setAttribute('aria-label', change.label);
+      const thumbnail = document.createElement('img');
+      thumbnail.className = 'weight-circle__thumbnail';
+      thumbnail.src = itemThumbnailUrl(change.itemId);
+      thumbnail.alt = '';
+      thumbnail.decoding = 'async';
+      thumbnail.draggable = false;
+      art.append(thumbnail);
+      const badge = document.createElement('span');
+      badge.className = 'journal-item__status ui-role-numeral';
+      badge.setAttribute('aria-hidden', 'true');
+      badge.textContent = change.kind === 'gain' ? '+' : change.kind === 'repair' ? '✓' : '−';
+      item.append(art, badge);
+      return item;
+    }));
   }
 
   private movePage(delta: -1 | 1): void {
