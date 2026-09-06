@@ -137,6 +137,9 @@ function createTestEventBundleManager(): SurvivalPhaseBundleManager {
 }
 
 const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
+const OUTLINED_DAY_ACTIONS = [
+  'eat', 'fish', 'openChest', 'repair', 'dive', 'repairItem', 'answerRadio', 'useEnergyBar', 'treat',
+] as const;
 
 function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' {
   return TERMINAL_STATES.includes(state);
@@ -858,6 +861,7 @@ export class SurvivalPhase implements GamePhase {
     const released = this.busy && !busy;
     this.busy = busy;
     this.ui.setBusy?.(busy);
+    if (busy) this.world.setAvailableDayActions?.([]);
     if (released) this.renderSnapshot(false, false);
     else this.syncCameraTurnControl(this.session.snapshot());
     if (!busy) this.emitStableCheckpoint();
@@ -900,6 +904,9 @@ export class SurvivalPhase implements GamePhase {
 
   private renderSnapshot(openPendingEvent: boolean, presentTerminal = true): SurvivalSnapshot {
     const snapshot = this.session.snapshot();
+    this.world.setAvailableDayActions?.(this.busy ? [] : OUTLINED_DAY_ACTIONS.filter((action) => (
+      this.dayActionFlow.unavailableReason(snapshot, action) === null
+    )));
     this.syncVisualState(snapshot);
     this.world.setPhase?.(snapshot.state === 'nightEvent' ? 'night' : 'day');
     this.ui.render?.(snapshot, (action) => (

@@ -10,6 +10,7 @@ import {
 } from 'three';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import {
+  ITEM_DEFINITIONS,
   ITEM_IDS,
   type ItemId,
   type ItemInstance,
@@ -30,6 +31,7 @@ import {
   disposeResourceSets,
 } from '../world/SceneResources';
 import type {
+  DayActionId,
   ItemCondition,
   SurvivalItemState,
 } from './survivalTypes';
@@ -261,7 +263,8 @@ export class BoatSupplyDisplay {
   private currentSnapshot: SurvivalSnapshot | null = null;
   private eventEligibleItemIds: ReadonlySet<ItemInstanceId> | null = null;
   private eventSelectedItemId: ItemInstanceId | null = null;
-  private readonly eventEligibleOutlines = new Map<BoatSupplyGroupId, HoverOutline>();
+  private readonly availableDayActions = new Set<DayActionId>();
+  private readonly eligibleOutlines = new Map<BoatSupplyGroupId, HoverOutline>();
   private activeAnimation: ActiveAnimation | null = null;
   private eventAmbientRoll = 0;
   private eventAmbientLift = 0;
@@ -432,7 +435,7 @@ export class BoatSupplyDisplay {
         this.recordsById.get(groupId)!.root.visible = false;
       }
     }
-    this.syncEventEligibleOutlines();
+    this.syncEligibleOutlines();
   }
 
   setEventEligibleItems(instanceIds: ReadonlySet<ItemInstanceId> | null): void {
@@ -454,29 +457,49 @@ export class BoatSupplyDisplay {
     return false;
   }
 
-  private syncEventEligibleOutlines(): void {
+  setAvailableDayActions(actions: readonly DayActionId[]): void {
+    if (this.disposed || (
+      this.availableDayActions.size === actions.length
+      && actions.every((action) => this.availableDayActions.has(action))
+    )) return;
+    this.availableDayActions.clear();
+    for (const action of actions) this.availableDayActions.add(action);
+    this.syncEligibleOutlines();
+  }
+
+  private eligibleOutlineGroups(): ReadonlySet<BoatSupplyGroupId> {
     const eligibleGroups = new Set<BoatSupplyGroupId>();
+    if (this.eventEligibleItemIds === null) {
+      for (const groupId of BOAT_SUPPLY_GROUP_IDS) {
+        const action = ITEM_DEFINITIONS[groupId].dayAction;
+        if (action !== null && this.availableDayActions.has(action)) eligibleGroups.add(groupId);
+      }
+    }
     for (const instanceId of this.eventEligibleItemIds ?? []) {
       const groupId = this.groupByInstanceId.get(instanceId);
       if (groupId !== undefined) eligibleGroups.add(groupId);
     }
+    return eligibleGroups;
+  }
 
-    for (const [groupId, outline] of this.eventEligibleOutlines) {
+  private syncEligibleOutlines(): void {
+    const eligibleGroups = this.eligibleOutlineGroups();
+    for (const [groupId, outline] of this.eligibleOutlines) {
       if (
         eligibleGroups.has(groupId)
         && this.recordsById.get(groupId)?.visibleCopies !== 0
       ) continue;
       outline.dispose();
-      this.eventEligibleOutlines.delete(groupId);
+      this.eligibleOutlines.delete(groupId);
     }
 
     for (const groupId of eligibleGroups) {
-      if (this.eventEligibleOutlines.has(groupId)) continue;
+      if (this.eligibleOutlines.has(groupId)) continue;
       const record = this.recordsById.get(groupId);
       if (record === undefined || record.visibleCopies === 0) continue;
       const outline = new HoverOutline();
       outline.setTarget(record.root);
-      this.eventEligibleOutlines.set(groupId, outline);
+      this.eligibleOutlines.set(groupId, outline);
     }
   }
 
@@ -697,8 +720,8 @@ export class BoatSupplyDisplay {
 
   dispose(): void {
     if (this.disposed) return;
-    for (const outline of this.eventEligibleOutlines.values()) outline.dispose();
-    this.eventEligibleOutlines.clear();
+    for (const outline of this.eligibleOutlines.values()) outline.dispose();
+    this.eligibleOutlines.clear();
     this.clearEventMotion();
     this.cancelActiveAnimation();
     this.presentationHiddenItemIds.clear();
