@@ -266,7 +266,6 @@ export function launchGame(
       resources = new PhaseResources(dependencies, audio, physicsMode);
       if (invalid()) { disposeCurrentOwnership(); return null; }
       game = dependencies.createGame(mount, resources, reportRuntimeError, browserPlaytest);
-      loading.remove();
       if (invalid()) { disposeCurrentOwnership(); return null; }
       game.start();
       await game.ready;
@@ -276,6 +275,8 @@ export function launchGame(
       try { disposeCurrentOwnership(); } catch { /* Preserve the launch error. */ }
       if (!invalid()) renderPreloadFailure(mount, error);
       return null;
+    } finally {
+      loading.remove();
     }
   })();
   return {
@@ -283,6 +284,7 @@ export function launchGame(
     cancel(): void {
       if (cancelled) return;
       cancelled = true;
+      loading.remove();
       disposeCurrentOwnership();
     },
   };

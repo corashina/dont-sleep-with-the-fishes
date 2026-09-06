@@ -33,16 +33,16 @@ describe('ordinary day action journal', () => {
       inventoryMutations: [{ kind: 'consume', instanceIds: ['medicalKit-1'] }],
     }]);
     const copy = formatJournalEntry(entry).daytime;
-    expect(copy).toContain('I treated my wounds.');
-    expect(copy).toContain('Health +10');
-    expect(copy).toContain('medkit was used up');
-    expect(copy).not.toContain('passed quietly');
+    expect(copy).toContain('I dressed my wounds with the medkit.');
+    expect(copy).toContain('It brought some relief.');
+    expect(copy).toContain('medkit was empty');
+    expect(copy).not.toContain('Just water and sky');
   });
 
   it.each([
-    [0.1, { food: 1 }, 'Food +1'],
-    [0.5, { bait: 1 }, 'Bait +1'],
-    [0.9, { rescueLead: 1 }, 'Rescue lead +1'],
+    [0.1, { food: 1 }, 'something to eat'],
+    [0.5, { bait: 1 }, 'bait worth keeping'],
+    [0.9, { rescueLead: 1 }, 'a clue'],
   ])('records a dive reward from roll %s and its energy cost', (roll, reward, text) => {
     const session = new SurvivalSession(saved('scubaSet'), {
       seed: 1, random: sequenceRandom([0, 0.99, roll, 0]), initial: { day: 2, energy: 3 },
@@ -56,10 +56,10 @@ describe('ordinary day action journal', () => {
       kind: 'dayAction', action: 'dive', deltas: outcome.deltas, inventoryMutations: [],
     }]);
     const copy = formatJournalEntry(entry).daytime;
-    expect(copy).toContain('I dived beneath the boat.');
-    expect(copy).toContain('Energy -3');
+    expect(copy).toContain('I put on the scuba gear');
+    expect(copy).toContain('left me worn out');
     expect(copy).toContain(text);
-    expect(copy).not.toContain('passed quietly');
+    expect(copy).not.toContain('Just water and sky');
   });
 
   it('records both the reward and injury from the same dive', () => {
@@ -73,8 +73,8 @@ describe('ordinary day action journal', () => {
       deltas: { energy: -3, health: -50, bait: 1 }, inventoryMutations: [],
     }]);
     const copy = formatJournalEntry(entry).daytime;
-    expect(copy).toContain('Health -50');
-    expect(copy).toContain('Bait +1');
+    expect(copy).toContain('I came back hurt');
+    expect(copy).toContain('bait worth keeping');
   });
 
   it('records an empty dive without inventing a reward', () => {
@@ -86,7 +86,7 @@ describe('ordinary day action journal', () => {
     expect(entry.actions).toEqual([{
       kind: 'dayAction', action: 'dive', deltas: { energy: -3 }, inventoryMutations: [],
     }]);
-    expect(formatJournalEntry(entry).daytime).toContain('I found no supplies.');
+    expect(formatJournalEntry(entry).daytime).toContain('I came back empty-handed.');
   });
 
   it('records energy-scaled hull repair without consuming Duct Tape', () => {
@@ -103,7 +103,7 @@ describe('ordinary day action journal', () => {
       inventoryMutations: [],
     }]);
     const copy = formatJournalEntry(entry).daytime;
-    expect(copy).toContain('Hull +35');
+    expect(copy).toContain('The boat feels sounder now');
     expect(copy).not.toContain('Duct Tape');
     expect(session.snapshot().inventory['ductTape-1']?.condition).toBe('usable');
     expect(copy).not.toMatch(/repair material|repair timber/i);
@@ -126,8 +126,8 @@ describe('ordinary day action journal', () => {
       ],
     }]);
     const copy = formatJournalEntry(entry).daytime;
-    expect(copy).toContain('compass was repaired');
-    expect(copy).toContain('duct tape was used up');
+    expect(copy).toContain('compass working again');
+    expect(copy).toContain('last of the duct tape');
   });
 
   it('keeps a quiet day quiet when all attempted actions were rejected', () => {
@@ -141,7 +141,7 @@ describe('ordinary day action journal', () => {
 
     const entry = finishDay(session);
     expect(entry.actions).toEqual([]);
-    expect(formatJournalEntry(entry).daytime).toBe('The daylight hours passed quietly.');
+    expect(formatJournalEntry(entry).daytime).toBe('Just water and sky all day. I am starting to miss having something to complain about.');
   });
 
   it.each(['pending', 'finalized'] as const)('round-trips %s action records without repeating actions', (stage) => {

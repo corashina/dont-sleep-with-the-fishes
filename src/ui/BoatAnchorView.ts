@@ -742,10 +742,7 @@ export class BoatAnchorView {
     const visibleLabel = this.visibleAnchorLabel(anchor, anchoredChoice, itemLabel, quantity, state);
     const energyCost = this.tooltipEnergyCost(eventItemEligible, anchoredChoice, preview);
     const energyIndicator = this.energyIndicator(anchoredChoice, energyCost, reason);
-    const tooltipLabel = action?.id === 'repair' && preview !== null && reason === null
-      ? `${visibleLabel} · ${preview.effect}`
-      : visibleLabel;
-    this.updateTooltipNodes(button, anchor, tooltipLabel, energyIndicator, anchoredChoice);
+    this.updateTooltipNodes(button, anchor, visibleLabel, energyIndicator, anchoredChoice);
     this.updateAnchorDataset(button, anchor, backingInstanceId, item?.condition);
     this.updateAnchorAria(button, visibleLabel, action, preview, itemLabel, itemDescription, state, reason, anchoredChoice, energyCost);
   }

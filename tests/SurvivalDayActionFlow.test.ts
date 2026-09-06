@@ -385,6 +385,7 @@ describe('SurvivalDayActionFlow', () => {
     );
     expect(rig.calls).toEqual([
       'perform:dive:none',
+      'events:defer',
       'busy:true',
       'world:dive:scubaSet-1',
       'audio:begin-dive',
@@ -397,6 +398,8 @@ describe('SurvivalDayActionFlow', () => {
       'ui:hold-dive',
       'ui:cover:false',
       'ui:profile:solid',
+      'events:cancel-defer',
+      'events:sync',
       'ui:reward:DIVE RESULT',
       'busy:false',
       'ui:focus',
@@ -563,6 +566,7 @@ describe('SurvivalDayActionFlow', () => {
     await rig.flow.run('dive');
 
     expect(rig.audio.cancelDive).toHaveBeenCalledOnce();
+    expect(rig.events.cancelDeferredSync).toHaveBeenCalledWith(1);
     expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(primary);
   });
 

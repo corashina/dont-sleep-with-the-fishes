@@ -916,7 +916,7 @@ describe('SurvivalSession daytime actions', () => {
       },
     ]);
     expect(formatJournalEntry(caredForEntry).daytime).toContain(
-      'Carlitos: hunger 5 to 4; sickness 1 to 0; unhappiness 3 to 4; energy 0 to 1.',
+      'Carlitos is getting hungrier. I know the feeling. Carlitos looks a little healthier. Something to be thankful for. Carlitos seems sadder. I have not been much company on this voyage. Carlitos has got some of his strength back.',
     );
 
     const died = new SurvivalSession(saved('carlitos'), {
@@ -1047,7 +1047,7 @@ describe('SurvivalSession daytime actions', () => {
     expect(mitigatedSnapshot.chest.state).toBe('none');
     expect(mitigatedSnapshot.inventory['knife-1']?.condition).toBe('usable');
     expect(formatJournalEntry(mitigatedSnapshot.journalEntries[0]!).nighttime).toContain(
-      'I used the knife. The knife reduced the bite.',
+      'I wedged the knife between the chest’s teeth and pulled free',
     );
 
     const tour = new SurvivalSession(saved(), {
@@ -2708,8 +2708,9 @@ describe('SurvivalSession daytime actions', () => {
     session.resolveEvent(itemResponse('flashlight'));
     const page = formatJournalEntry(session.snapshot().journalEntries[0]!);
 
-    expect(page.nighttime).toContain('I used the flashlight.');
-    expect(page.nighttime).toContain('The flashlight is lost.');
+    expect(page.nighttime).toContain('I tried to hold its stare with the flashlight.');
+    expect(page.nighttime).toContain('The light went with it into the dark.');
+    expect(page.nighttime).not.toContain('I lost the flashlight in the trouble.');
     expect(page.nighttime).not.toContain('it helped');
   });
 
@@ -2723,8 +2724,8 @@ describe('SurvivalSession daytime actions', () => {
     session.resolveEvent(choiceResponse('sleep'));
     const page = formatJournalEntry(session.snapshot().journalEntries[0]!);
 
-    expect(page.nighttime).toContain('I chose \u201cSail On\u201d.');
-    expect(page.nighttime).toContain('The island disappears into the dark.');
+    expect(page.nighttime).toContain('I sailed past the island');
+    expect(page.nighttime).toContain('watched it disappear into the dark.');
   });
 
   it('records a quiet day and protects internal history from snapshot mutation', () => {

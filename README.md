@@ -189,7 +189,7 @@ Pressure, flags, chest state, day bounds, cooldowns, and inventory can gate even
 
 Clicking the physical boat lantern ends the day and uses the same slow cover before sleep. Most nights open an event decision; some nights pass quietly under the black cover before dawn fades back in over 2.5 seconds. Resolving a nighttime event or completing a quiet night advances to dawn. Each completed night adds an unread journal entry, and the player can open the journal later without advancing time.
 
-Each journal page retells that day's fishing, daytime event, and nighttime event as a short first-person entry. Fishing records name catches or misses and note bait consumption; event entries mention supplies only when they were attempted during an event.
+Each journal page retells fishing, daytime events, and nighttime events in the survivor's voice in all supported languages. Entries describe wounds, fatigue, catches, and Carlitos's condition in words, without resource counts or stat changes. Event entries explain the attempted action, its actual result, and how equipment was spent, damaged, lost, or traded.
 
 Rescue remains random. Maximum hidden rescue lead opens a small chance on day 25. Lower lead opens rescue later. Radio replies, rescue-trace dives, and the **Other People** event shorten the hidden wait. The Flare Gun is consumed during **Other People**, but **Other People** never ends the run immediately. Exact rescue lead and odds remain hidden. A well-supplied successful run usually ends from day 30 through day 35. A no-signal successful run can pass day 40.
 
