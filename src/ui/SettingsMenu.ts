@@ -1,4 +1,4 @@
-import { getLanguage, setLanguage, onLanguageChange } from '../i18n/language';
+import { getLanguage, isLanguage, setLanguage, onLanguageChange } from '../i18n/language';
 import { settingsText, settingsDynamic, refreshSettingsText } from '../i18n/settingsMessages';
 import type { VisualQualityPreference } from '../rendering/visualQuality';
 import type { WaterQualityPreference } from '../rendering/waterQuality';
@@ -166,7 +166,7 @@ export class SettingsMenu {
   };
 
   private changeLanguage(value: string): void {
-    if (value === 'en' || value === 'pl') setLanguage(value);
+    if (isLanguage(value)) setLanguage(value);
   }
 
   private readonly refreshLanguage = (): void => {

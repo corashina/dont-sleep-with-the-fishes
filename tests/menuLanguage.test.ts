@@ -11,6 +11,30 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
+it('updates all guide pages in Argentine Spanish and preserves navigation focus', () => {
+  menu = new MenuUI(document.body);
+  menu.openGuide();
+  menu.showPointerLockError();
+  const next = document.querySelector<HTMLButtonElement>('[data-menu-guide-next]')!;
+  next.focus();
+  setLanguage('es-AR');
+  expect(document.activeElement).toBe(next);
+  const titles = ['Recolección de suministros', 'Supervivencia', 'Día', 'Noche'];
+  for (const [index, title] of titles.entries()) {
+    expect(document.querySelector('[data-menu-guide-title]')?.textContent).toBe(title);
+    expect(document.querySelector('[data-menu-guide-page-count]')?.textContent).toBe(`PÁGINA ${index + 1} DE 4`);
+    expect(document.querySelector('[data-menu-guide-description]')?.textContent).toMatch(/Usá|Juntá|Elegí|elegí/);
+    const images = [...document.querySelectorAll<HTMLImageElement>('[data-menu-guide-image]')];
+    expect(images).toHaveLength(2);
+    expect(images.every(image => /bote|caja de herramientas|Dentro del Dorothy/.test(image.alt))).toBe(true);
+    if (index < titles.length - 1) next.click();
+  }
+  expect(document.querySelector('[data-menu-pointer-lock-error]')?.textContent).toContain('Hacé clic');
+  setLanguage('en');
+  expect(document.querySelector('[data-menu-guide-title]')?.textContent).toBe('Night');
+  expect(document.querySelector('[data-menu-guide-page-count]')?.textContent).toBe('PAGE 4 OF 4');
+});
+
 it('changes an open guide and error while keeping its page and keyboard focus', () => {
   menu = new MenuUI(document.body);
   menu.showPointerLockError();

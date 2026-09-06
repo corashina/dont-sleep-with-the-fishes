@@ -5,6 +5,16 @@ import { renderGuideDescription } from '../src/menu/GuideDescription';
 
 afterEach(() => initializeLanguage(null));
 
+it('highlights Argentine Spanish mechanics without matching parts of other words', () => {
+  setLanguage('es-AR');
+  const element = document.createElement('p');
+  const text = 'Salud, Comida, Energía, Casco, caja de herramientas, cinta adhesiva. Saludos, comidas.';
+  renderGuideDescription(element, text);
+  expect(element.textContent).toBe(text);
+  expect([...element.querySelectorAll('strong')].map(keyword => keyword.textContent))
+    .toEqual(['Salud', 'Comida', 'Energía', 'Casco', 'caja de herramientas', 'cinta adhesiva']);
+});
+
 it('marks core mechanics without changing text or treating it as HTML', () => {
   setLanguage('en');
   const element = document.createElement('p');

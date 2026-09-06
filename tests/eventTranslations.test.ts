@@ -30,7 +30,7 @@ describe('event translations', () => {
     expect(outcome.message).toContain('bezpieczny przesmyk');
   });
 
-  it('covers every event field in both languages', () => {
+  it('covers every event field in all languages', () => {
     const fallbackEvents = [
       survivalEventById('day-calm-fallback')!,
       survivalEventById('night-calm-fallback')!,
@@ -55,6 +55,12 @@ describe('event translations', () => {
     expect(english.every((text) => text.trim().length > 0)).toBe(true);
     expect(polish.every((text) => text.trim().length > 0)).toBe(true);
     expect(polish.every((text, index) => text !== english[index])).toBe(true);
+    setLanguage('es-AR');
+    const spanish = readText();
+    expect(spanish).toHaveLength(english.length);
+    expect(spanish.every(text => text.trim().length > 0)).toBe(true);
+    expect(survivalEventById('dangerous-waters')!.title).toBe('Aguas peligrosas');
+    expect(survivalEventById('dangerous-waters')!.choices[0]!.label).toBe('Usá el mapa');
   });
 
   it('assigns stable result IDs and resolves saved outcome text', () => {

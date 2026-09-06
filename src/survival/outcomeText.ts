@@ -19,20 +19,20 @@ export type OutcomeText =
   | { readonly kind: 'companionCondition'; readonly status: DomainMessageId };
 
 const t = defineMessages({
-  fishing: { en: (label: string, fish: boolean) => fish ? `You caught a ${label}.` : `You reeled in ${label}.`, pl: (label: string, fish: boolean) => fish ? `Twój połów: ${label}.` : `Wyławiasz znalezisko: ${label}.` },
-  chestResource: { en: (quantity: string) => `The chest holds ${quantity}.`, pl: (quantity: string) => `Zawartość skrzyni: ${quantity}.` },
-  chestItem: { en: (label: string) => `The chest holds ${label}.`, pl: (label: string) => `Zawartość skrzyni: ${label}.` },
-  chestRequired: { en: (state: string) => `That response requires a ${state} chest.`, pl: (state: string) => `Ta odpowiedź wymaga skrzyni. Wymagany stan: ${state}.` },
-  none: { en: 'none', pl: 'brak' }, closed: { en: 'closed', pl: 'zamknięta' }, mimic: { en: 'mimic', pl: 'mimik' },
-  companionEnergy: { en: (required: number, available: number) => `Carlitos needs ${required} energy; he has ${available}.`, pl: (required: number, available: number) => `Carlitos potrzebuje ${required} pkt. energii; ma ${available}.` },
-  companionCondition: { en: (status: string) => `Carlitos is ${status} and cannot retrieve the loot.`, pl: (status: string) => `Carlitos nie może przynieść znaleziska. Jego stan: ${status.toLocaleLowerCase('pl')}.` },
+  fishing: { en: (label: string, fish: boolean) => fish ? `You caught a ${label}.` : `You reeled in ${label}.`, pl: (label: string, fish: boolean) => fish ? `Twój połów: ${label}.` : `Wyławiasz znalezisko: ${label}.`, "es-AR": (label: string, fish: boolean) => fish ? `Pescaste ${label}.` : `Sacaste del agua: ${label}.` },
+  chestResource: { en: (quantity: string) => `The chest holds ${quantity}.`, pl: (quantity: string) => `Zawartość skrzyni: ${quantity}.`, "es-AR": (quantity: string) => `El cofre contiene ${quantity}.` },
+  chestItem: { en: (label: string) => `The chest holds ${label}.`, pl: (label: string) => `Zawartość skrzyni: ${label}.`, "es-AR": (label: string) => `El cofre contiene: ${label}.` },
+  chestRequired: { en: (state: string) => `That response requires a ${state} chest.`, pl: (state: string) => `Ta odpowiedź wymaga skrzyni. Wymagany stan: ${state}.`, "es-AR": (state: string) => `Esa respuesta requiere un cofre. Estado requerido: ${state}.` },
+  none: { en: 'none', pl: 'brak', "es-AR": "ninguno" }, closed: { en: 'closed', pl: 'zamknięta', "es-AR": "cerrado" }, mimic: { en: 'mimic', pl: 'mimik', "es-AR": "mímico" },
+  companionEnergy: { en: (required: number, available: number) => `Carlitos needs ${required} energy; he has ${available}.`, pl: (required: number, available: number) => `Carlitos potrzebuje ${required} pkt. energii; ma ${available}.`, "es-AR": (required: number, available: number) => `Carlitos necesita ${required} de energía; tiene ${available}.` },
+  companionCondition: { en: (status: string) => `Carlitos is ${status} and cannot retrieve the loot.`, pl: (status: string) => `Carlitos nie może przynieść znaleziska. Jego stan: ${status.toLocaleLowerCase('pl')}.`, "es-AR": (status: string) => `Carlitos no puede recuperar el botín. Su estado: ${status.toLocaleLowerCase("es-AR")}.` },
 });
 
 export function domainText(id: DomainMessageId): OutcomeText { return Object.freeze({ kind: 'domain', id }); }
 
 export function domainMessageId(message: string): DomainMessageId {
   const id = (Object.keys(DOMAIN_MESSAGES) as DomainMessageId[]).find((key) => (
-    DOMAIN_MESSAGES[key].en === message || DOMAIN_MESSAGES[key].pl === message
+    DOMAIN_MESSAGES[key].en === message || DOMAIN_MESSAGES[key].pl === message || DOMAIN_MESSAGES[key]['es-AR'] === message
   ));
   if (id === undefined) throw new Error(`Unregistered domain message: ${message}`);
   return id;
