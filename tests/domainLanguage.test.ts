@@ -15,6 +15,30 @@ import { cloneActionOutcome } from '../src/survival/outcomeText';
 afterEach(() => setLanguage('en'));
 
 describe('domain language', () => {
+  it('resolves Argentine Spanish action messages and restores saved journal records', () => {
+    setLanguage('es-AR');
+    const emptySession = new SurvivalSession([], { seed: 1, initial: { food: 0 } });
+    const rejected = emptySession.perform('eat');
+    expect(rejected.code).toBe('no-food');
+    expect(rejected.message).toBe('No queda comida.');
+    const session = new SurvivalSession([], { seed: 41, initialEventId: 'bad-sleep' });
+    session.resolveEvent({ kind: 'choice', choiceId: 'sleep' });
+    session.beginDawn();
+    const saved = JSON.stringify(createSurvivalSaveDocument({ scavengeElapsedSeconds: 8, session: session.exportCheckpoint() }));
+    const parsed = parseSurvivalSaveDocument(JSON.parse(saved));
+    expect(parsed).not.toBeNull();
+    const restored = SurvivalSession.restore(parsed!.checkpoint.session);
+    const entry = restored.snapshot().journalEntries[0]!;
+    const spanish = formatJournalEntry(entry);
+    expect(spanish.heading).toBe('DÍA 1');
+    expect(spanish.nighttime.length).toBeGreaterThan(0);
+    expect(ITEM_LABELS.medicalKit).toBe('BOTIQUÍN');
+    setLanguage('en');
+    expect(rejected.message).toBe('No food remains.');
+    expect(formatJournalEntry(entry).nighttime).not.toBe(spanish.nighttime);
+    expect(JSON.parse(JSON.stringify(restored.exportCheckpoint()))).toEqual(JSON.parse(JSON.stringify(session.exportCheckpoint())));
+  });
+
   it('updates retained item and fishing definitions without replacing their identities', () => {
     const items = ITEM_IDS.map((id) => ITEM_DEFINITIONS[id]);
     const englishDescriptions = ITEM_IDS.map((id) => SURVIVAL_ITEM_DESCRIPTIONS[id]);

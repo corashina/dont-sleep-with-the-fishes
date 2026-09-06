@@ -203,4 +203,22 @@ describe('Settings menu', () => {
     expect(button.getAttribute('aria-label')).toBe('Ustawienia');
     expect(document.activeElement).toBe(button);
   });
+
+  it('selects Argentine Spanish and keeps settings open', () => {
+    const { menu, button } = setup();
+    button.click();
+    cleanup.push(() => setLanguage('en'));
+    const select = menu.element.querySelector<HTMLSelectElement>('[data-language-select]')!;
+    expect(select.querySelector('option[value="es-AR"]')?.textContent).toBe('Español (Argentina)');
+    select.focus();
+    select.value = 'es-AR';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(getLanguage()).toBe('es-AR');
+    expect(document.documentElement.lang).toBe('es-AR');
+    expect(menu.element.querySelector('#settings-title')!.textContent).toBe('Configuración');
+    expect(menu.element.hidden).toBe(false);
+    expect(document.activeElement).toBe(select);
+    menu.close();
+    expect(button.getAttribute('aria-label')).toBe('Configuración');
+  });
 });

@@ -49,7 +49,7 @@ function itemLabel(instanceId: ItemInstanceId): string {
   return ITEM_LABELS[itemId].toLocaleLowerCase(getLanguage());
 }
 
-const listFormatters = { en: new Intl.ListFormat('en'), pl: new Intl.ListFormat('pl') };
+const listFormatters = { en: new Intl.ListFormat('en'), pl: new Intl.ListFormat('pl'), 'es-AR': new Intl.ListFormat('es-AR') };
 function listLabels(instanceIds: readonly ItemInstanceId[]): string {
   return listFormatters[getLanguage()].format(instanceIds.map(itemLabel));
 }

@@ -17,13 +17,13 @@ export type EndingRecord =
 export type SurvivalEndingId = Exclude<EndingRecord['id'], 'dorothy'>;
 
 const t = defineMessages({
-  dorothy: { en: 'SUNK WITH DOROTHY', pl: 'NA DNIE Z DOROTHY' },
-  rescue: { en: 'RESCUE FOUND YOU', pl: 'NADESZŁA POMOC' },
-  death: { en: 'THE SEA OUTLASTED YOU', pl: 'MORZE PRZETRWAŁO DŁUŻEJ' },
-  sinking: { en: 'THE BOAT IS GONE', pl: 'ŁÓDŹ ZNIKNĘŁA' },
-  beforeDay: { en: 'BEFORE DAY 1', pl: 'PRZED DNIEM 1' },
-  day: { en: (day: number) => `DAY ${day}`, pl: (day: number) => `DZIEŃ ${day}` },
-  event: { en: (title: string) => `LAST EVENT: ${title}`, pl: (title: string) => `OSTATNIE ZDARZENIE: ${title}` },
+  dorothy: { en: 'SUNK WITH DOROTHY', pl: 'NA DNIE Z DOROTHY', "es-AR": "TE HUNDISTE CON DOROTHY" },
+  rescue: { en: 'RESCUE FOUND YOU', pl: 'NADESZŁA POMOC', "es-AR": "LLEGÓ EL RESCATE" },
+  death: { en: 'THE SEA OUTLASTED YOU', pl: 'MORZE PRZETRWAŁO DŁUŻEJ', "es-AR": "EL MAR AGUANTÓ MÁS QUE VOS" },
+  sinking: { en: 'THE BOAT IS GONE', pl: 'ŁÓDŹ ZNIKNĘŁA', "es-AR": "EL BOTE DESAPARECIÓ" },
+  beforeDay: { en: 'BEFORE DAY 1', pl: 'PRZED DNIEM 1', "es-AR": "ANTES DEL DÍA 1" },
+  day: { en: (day: number) => `DAY ${day}`, pl: (day: number) => `DZIEŃ ${day}`, "es-AR": (day: number) => `DÍA ${day}` },
+  event: { en: (title: string) => `LAST EVENT: ${title}`, pl: (title: string) => `OSTATNIE ZDARZENIE: ${title}`, "es-AR": (title: string) => `ÚLTIMO EVENTO: ${title}` },
 });
 
 export function endingTitle(record: EndingRecord): string {

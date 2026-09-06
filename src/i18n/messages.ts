@@ -1,12 +1,11 @@
-import { getLanguage } from './language';
+import { getLanguage, type Language } from './language';
 
 type Text = string | ((...args: never[]) => string);
-type Entry = { readonly en: Text; readonly pl: Text };
+type Entry = Readonly<Record<Language, Text>>;
 type Arguments<T> = T extends (...args: infer A) => string ? A : [];
 type Matching<T extends Record<string, Entry>> = {
   readonly [K in keyof T]: {
-    readonly en: T[K]['en'];
-    readonly pl: T[K]['en'] extends string ? string : (...args: Arguments<T[K]['en']>) => string;
+    readonly [L in Language]: T[K]['en'] extends string ? string : (...args: Arguments<T[K]['en']>) => string;
   };
 };
 

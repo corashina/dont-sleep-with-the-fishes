@@ -82,8 +82,8 @@ function buildGeneralCategory(controls: SaveControls): string {
         </label>
         <button type="button" data-save-continue data-settings-copy="continueSave">${settingsText('continueSave')}</button>
       </div>
-      <label class="settings-menu__language"><span>Language / Język</span>
-        <select data-language-select aria-label="Language / Język"><option value="en">English</option><option value="pl">Polski</option></select>
+      <label class="settings-menu__language"><span>Language / Język / Idioma</span>
+        <select data-language-select aria-label="Language / Język / Idioma"><option value="en">English</option><option value="pl">Polski</option><option value="es-AR">Español (Argentina)</option></select>
       </label>
     </section>
   `;

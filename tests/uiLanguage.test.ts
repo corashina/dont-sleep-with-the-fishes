@@ -40,6 +40,10 @@ describe('live gameplay translations', () => {
     expect(find('[data-intro-skip]').textContent).toContain('POMIŃ WSTĘP');
     expect(find('[data-hands-full-notice]').textContent).toContain('PEŁNE RĘCE');
     expect(find('[data-timer]').textContent).toBe(timer);
+    setLanguage('es-AR');
+    expect(document.activeElement).toBe(resume);
+    expect(resume.textContent).toBe('CONTINUAR');
+    expect(find('[data-timer]').textContent).toBe(timer);
     vi.advanceTimersByTime(1299);
     expect(find('[data-hands-full-notice]').hidden).toBe(false);
     vi.advanceTimersByTime(1);
@@ -64,6 +68,12 @@ describe('live gameplay translations', () => {
     expect(find('#journal-day-label').textContent).toBe('DZIEŃ');
     expect(find('[data-journal-night]').textContent).not.toContain('night');
     expect(view.root.getAttribute('aria-label')).toBe('Dziennik przetrwania');
+    expect(pageTurn).not.toHaveBeenCalled();
+    setLanguage('es-AR');
+    expect(view.pageForTest()).toBe(1);
+    expect(document.activeElement).toBe(focus);
+    expect(find('[data-journal-page-count]').textContent).toBe('PÁGINA 2 DE 3');
+    expect(find('#journal-day-label').textContent).toBe('DÍA');
     expect(pageTurn).not.toHaveBeenCalled();
   });
 
