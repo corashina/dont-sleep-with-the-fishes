@@ -1204,7 +1204,7 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
-  it('outlines the persistent chest in the rear view', () => {
+  it('outlines available fishing and chest actions independently of hover', () => {
     const propModels = createTestPropModels();
     const world = new BoatWorld(
       new PerspectiveCamera(65, 16 / 9, 0.08, 220),
@@ -1216,13 +1216,53 @@ describe('BoatWorld helpers', () => {
     }));
     world.setRearCameraView(true, true);
     const chest = world.scene.getObjectByName('persistent-chest')!;
+    const rod = world.scene.getObjectByName('fishing-rod-pivot')!;
 
+    world.setAvailableDayActions(['fish', 'openChest']);
     world.setHighlightedItem('persistent-chest');
 
     expect(chest.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+    expect(rod.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
 
     world.setHighlightedItem(null);
+    expect(chest.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+    world.setAvailableDayActions(['fish']);
+    world.setHighlightedItem('persistent-chest');
     expect(chest.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+    expect(rod.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+    world.setAvailableDayActions([]);
+    expect(rod.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+    world.setAvailableDayActions(['fish', 'openChest']);
+    world.dispose();
+    expect(chest.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+    expect(rod.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+    propModels.dispose();
+  });
+
+  it('combines food and event outlines and clears them when food is gone', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
+      propModels,
+      ...createTestSkyTextures(),
+    );
+    const item = savedItem('cannedFood');
+    world.syncInventory(snapshot([item], { food: 1 }));
+    const food = world.scene.getObjectByName('boat-supply:cannedFood')!;
+    world.setAvailableDayActions(['eat']);
+    expect(food.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+    world.setEventEligibleItems(new Set([item.instanceId]));
+    world.setAvailableDayActions([]);
+    expect(food.children.filter((child) => child.name === HOVER_OUTLINE_NAME)).toHaveLength(1);
+    world.setEventEligibleItems(null);
+    expect(food.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+    world.setAvailableDayActions(['eat']);
+    world.setEventEligibleItems(new Set());
+    expect(food.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
+    world.setEventEligibleItems(null);
+    expect(food.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
+    world.syncInventory(snapshot([], { food: 0 }));
+    expect(food.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
     world.dispose();
     propModels.dispose();
   });

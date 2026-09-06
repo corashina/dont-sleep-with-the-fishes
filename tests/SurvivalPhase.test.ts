@@ -873,6 +873,51 @@ function createDiveRig(options: {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('SurvivalPhase orchestration', () => {
+  it.each([
+    [1, 1, 1, 'closed', ['eat', 'fish', 'openChest']],
+    [0, 1, 0, 'none', []],
+    [1, 0, 1, 'none', ['fish']],
+    [1, 1, 0, 'mimic', ['eat']],
+  ] as const)('outlines actions for hunger %i, food %i, energy %i and chest %s', (
+    hunger, food, energy, chest, expected,
+  ) => {
+    const session = new SurvivalSession([], {
+      seed: 1,
+      initial: { hunger, food, energy },
+      initialChest: { state: chest, acquiredDay: chest === 'none' ? null : 1 },
+    });
+    const setAvailableDayActions = vi.fn();
+    const phase = SurvivalPhase.forTest({ session, world: { setAvailableDayActions }, ui: {} });
+    phase.start();
+    expect(setAvailableDayActions).toHaveBeenLastCalledWith(expected);
+    const internals = phase as unknown as { setBusy(busy: boolean): void };
+    internals.setBusy(true);
+    expect(setAvailableDayActions).toHaveBeenLastCalledWith([]);
+    internals.setBusy(false);
+    expect(setAvailableDayActions).toHaveBeenLastCalledWith(expected);
+    phase.dispose();
+  });
+
+  it('clears action outlines after eating, opening the chest and starting fishing', () => {
+    const session = new SurvivalSession([], {
+      seed: 1, initial: { hunger: 1, food: 1, energy: 1 },
+      initialChest: { state: 'closed', acquiredDay: 1 },
+    });
+    const setAvailableDayActions = vi.fn();
+    const phase = SurvivalPhase.forTest({ session, world: { setAvailableDayActions }, ui: {} });
+    phase.start();
+    const internals = phase as unknown as { renderSnapshot(openPendingEvent: boolean): void };
+    expect(session.perform('eat').accepted).toBe(true);
+    internals.renderSnapshot(false);
+    expect(setAvailableDayActions).toHaveBeenLastCalledWith(['fish', 'openChest']);
+    expect(session.perform('openChest').accepted).toBe(true);
+    internals.renderSnapshot(false);
+    expect(setAvailableDayActions).toHaveBeenLastCalledWith(['fish']);
+    expect(session.beginFishing().accepted).toBe(true);
+    internals.renderSnapshot(false);
+    expect(setAvailableDayActions).toHaveBeenLastCalledWith([]);
+    phase.dispose();
+  });
 
   it('routes player panel state to the radio signal pause', () => {
     const setRadioSignalPaused = vi.spyOn(SurvivalAudio.prototype, 'setRadioSignalPaused');

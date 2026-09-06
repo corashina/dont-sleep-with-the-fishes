@@ -130,6 +130,7 @@ import {
 import { createSleepPillow, type SleepPillow } from './SleepPillow';
 import type {
   ActionOutcome,
+  DayActionId,
   EventPresentationKey,
   PresentationCue,
   WeatherId,
@@ -429,6 +430,9 @@ export class BoatWorld {
   private readonly focusedEventFactories: FocusedEventPresentationFactories;
   private chestState: SurvivalSnapshot['chest']['state'] = 'none';
   private readonly toolHoverOutline = new HoverOutline();
+  private readonly fishingAvailableOutline = new HoverOutline();
+  private readonly chestAvailableOutline = new HoverOutline();
+  private readonly repairAvailableOutline = new HoverOutline();
   private radioSignalAvailable = false;
   private readonly applyDangerousWatersReaction = (
     reaction: Readonly<DangerousWatersBoatReaction>,
@@ -769,6 +773,9 @@ export class BoatWorld {
           () => carlitosDelegation?.dispose(),
           () => carlitos?.dispose(),
           () => this.toolHoverOutline.dispose(),
+          () => this.fishingAvailableOutline.dispose(),
+          () => this.chestAvailableOutline.dispose(),
+          () => this.repairAvailableOutline.dispose(),
           () => hangingLantern?.dispose(),
           () => sleepPillow?.dispose(),
           () => weatherEffects?.dispose(),
@@ -1046,11 +1053,7 @@ export class BoatWorld {
   setHighlightedItem(anchorId: string | null): void {
     if (this.disposed) return;
     let focusedRoot: Object3D | null = null;
-    if (anchorId === 'repair-tools') {
-      focusedRoot = this.repairTools;
-    } else if (anchorId === 'persistent-chest') {
-      focusedRoot = this.chestDisplay.root;
-    } else if (anchorId === 'end-day-pillow') {
+    if (anchorId === 'end-day-pillow') {
       focusedRoot = this.sleepPillow.root;
     } else if (anchorId !== null) {
       const featuredEventId = this.activeFeaturedEventId;
@@ -1068,6 +1071,14 @@ export class BoatWorld {
   setEventEligibleItems(instanceIds: ReadonlySet<ItemInstanceId> | null): void {
     if (this.disposed) return;
     this.supplyDisplay.setEventEligibleItems(instanceIds);
+  }
+
+  setAvailableDayActions(actions: readonly DayActionId[]): void {
+    if (this.disposed) return;
+    this.supplyDisplay.setAvailableDayActions(actions);
+    this.fishingAvailableOutline.setTarget(actions.includes('fish') ? this.rod : null);
+    this.chestAvailableOutline.setTarget(actions.includes('openChest') ? this.chestDisplay.root : null);
+    this.repairAvailableOutline.setTarget(actions.includes('repair') ? this.repairTools : null);
   }
 
   setEventSelectedItem(instanceId: ItemInstanceId | null): void {
@@ -1644,6 +1655,9 @@ export class BoatWorld {
     runCleanupSteps([
       () => this.setHighlightedItem(null),
       () => this.toolHoverOutline.dispose(),
+      () => this.fishingAvailableOutline.dispose(),
+      () => this.chestAvailableOutline.dispose(),
+      () => this.repairAvailableOutline.dispose(),
       () => { this.eventCueHandler = () => undefined; },
       () => this.cameraController.dispose(),
       () => {
