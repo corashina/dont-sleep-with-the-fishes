@@ -45,7 +45,7 @@ export interface BoatSupplyPresentationRecord {
   readonly quantity: number;
   readonly usableQuantity: number;
   readonly brokenQuantity: number;
-  readonly visibleCopies: 0 | 1 | 2 | 3;
+  readonly visibleCopies: number;
   readonly backingInstanceId: ItemInstanceId | null;
 }
 
@@ -94,7 +94,7 @@ interface MutableRecord {
   quantity: number;
   usableQuantity: number;
   brokenQuantity: number;
-  visibleCopies: 0 | 1 | 2 | 3;
+  visibleCopies: number;
   backingInstanceId: ItemInstanceId | null;
 }
 
@@ -190,10 +190,6 @@ function createIdentitySupplyPose(): MutableSupplyPose {
     scaleY: 1,
     scaleZ: 1,
   };
-}
-
-function visibleCopyCount(quantity: number): 0 | 1 | 2 | 3 {
-  return Math.min(3, Math.max(0, Math.floor(quantity))) as 0 | 1 | 2 | 3;
 }
 
 function transformMaterial(
@@ -346,9 +342,8 @@ export class BoatSupplyDisplay {
 
   private supplyPoolSize(groupId: BoatSupplyGroupId): number {
     if (groupId === 'carlitos') return 0;
-    return groupId === 'cannedFood' || groupId === 'baitTin'
-      ? 3
-      : 1;
+    if (groupId === 'cannedFood') return 6;
+    return groupId === 'baitTin' ? 3 : 1;
   }
 
   private createSupplyCopy(
@@ -748,9 +743,7 @@ export class BoatSupplyDisplay {
     const quantity = this.groupQuantity(groupId, snapshot, activeItems.length);
     record.quantity = Math.max(0, Math.floor(quantity));
     this.updateRecordCounts(record, groupId, usableItems.length, brokenItems.length);
-    record.visibleCopies = groupId === 'carlitos'
-      ? 0
-      : visibleCopyCount(record.quantity);
+    record.visibleCopies = Math.min(record.quantity, this.copiesById.get(groupId)!.length);
     record.backingInstanceId = this.preferredBackingId(
       groupId,
       usableItems.map(({ instance }) => instance.instanceId),
