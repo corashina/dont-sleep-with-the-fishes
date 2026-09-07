@@ -24,7 +24,6 @@ import { CARLITOS_SEATED_SUPPORT_LIFT } from './CarlitosRestPose';
 import { ITEM_MODEL_SPECS } from './itemModelManifest';
 
 const FISHING_NET_HANDLE_SUPPORT_POINT = new Vector3(0, 0.09468515, 0.81206911);
-const STACK_GAP = 0.01;
 
 export type BoatItemSurface = 'shelf' | 'floor' | 'gunwale' | 'edgeShelf';
 export type BoatSupplyGroupId = ItemId;
@@ -90,28 +89,14 @@ const restingSlot = (
   };
 };
 
-const stackedSlot = (
-  surface: BoatItemSurface,
-  id: ItemId,
-  x: number,
-  z: number,
-  yaw: number,
-  scale = 0.5,
-): SlotSpec => {
-  const slot = restingSlot(surface, id, x, z, yaw, scale);
-  const modelBounds = ITEM_MODEL_SPECS[id].normalizedBounds;
-  const height = (modelBounds.max[1] - modelBounds.min[1]) * scale;
-  return {
-    ...slot,
-    position: [x, slot.position[1] + height + STACK_GAP, z],
-  };
-};
-
 const BOAT_STORAGE_SLOTS = {
   cannedFood: [
-    restingSlot('floor', 'cannedFood', -0.10, -1.24, 0.10),
-    restingSlot('floor', 'cannedFood', 0.10, -1.24, -0.05),
-    stackedSlot('floor', 'cannedFood', 0, -1.24, -0.08),
+    restingSlot('floor', 'cannedFood', -0.18, -1.32, 0.10),
+    restingSlot('floor', 'cannedFood', 0.02, -1.32, -0.05),
+    restingSlot('floor', 'cannedFood', 0.22, -1.32, -0.08),
+    restingSlot('floor', 'cannedFood', -0.20, -1.12, -0.06),
+    restingSlot('floor', 'cannedFood', 0, -1.12, 0.08),
+    restingSlot('floor', 'cannedFood', 0.20, -1.12, 0.03),
   ],
   baitTin: [
     restingSlot('shelf', 'baitTin', -0.105, -1.65, -0.05),
