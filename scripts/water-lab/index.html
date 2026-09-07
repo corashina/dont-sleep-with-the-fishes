@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Water quality lab</title>
+    <style>
+      :root { color-scheme: dark; font: 14px/1.35 system-ui, sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; overflow: hidden; background: #081925; color: #e4f1ef; }
+      #stage { position: fixed; inset: 0; }
+      canvas { display: block; width: 100%; height: 100%; }
+      #panel { position: fixed; top: 16px; left: 16px; width: 250px; padding: 14px; border: 1px solid #5a7f82; border-radius: 8px; background: #0b2530dd; box-shadow: 0 10px 30px #0008; }
+      h1 { margin: 0 0 10px; font-size: 18px; letter-spacing: .04em; }
+      fieldset { margin: 0 0 10px; padding: 8px; border: 1px solid #406368; border-radius: 5px; }
+      legend { padding: 0 4px; color: #a9c5c3; font-size: 11px; text-transform: uppercase; letter-spacing: .09em; }
+      .choices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; }
+      button { min-height: 32px; border: 1px solid #5b8587; border-radius: 4px; background: #123944; color: inherit; cursor: pointer; }
+      button:hover, button[aria-pressed="true"] { background: #2d6b70; border-color: #b1dfd3; }
+      label { display: flex; gap: 8px; align-items: center; margin: 7px 0; color: #c8d9d5; }
+      #diagnostics { margin-top: 12px; padding-top: 10px; border-top: 1px solid #406368; color: #a9c5c3; font: 11px/1.6 ui-monospace, monospace; white-space: pre-wrap; }
+      #error { position: fixed; inset: auto 16px 16px 16px; padding: 12px; border: 1px solid #d47b63; background: #361c1add; color: #ffd7c8; display: none; }
+    </style>
+  </head>
+  <body>
+    <main id="stage"></main>
+    <aside id="panel" aria-label="Water lab controls">
+      <h1>Water quality lab</h1>
+      <fieldset><legend>Quality</legend><div class="choices"><button data-quality="low">Low</button><button data-quality="high">High</button></div></fieldset>
+      <fieldset><legend>Sea state</legend><div class="choices"><button data-state="calm">Calm</button><button data-state="rough">Rough</button></div></fieldset>
+      <fieldset><legend>Light</legend><div class="choices"><button data-light="day">Day</button><button data-light="night">Night</button></div></fieldset>
+      <fieldset><legend>Camera</legend><div class="choices"><button data-camera="near">Near</button><button data-camera="horizon">Horizon</button><button data-camera="top">Top</button></div></fieldset>
+      <label><input id="moving" type="checkbox" checked /> Moving hull</label>
+      <label><input id="composer" type="checkbox" /> Game post-processing</label>
+      <button id="pause" type="button">Pause</button>
+      <div id="diagnostics">Starting…</div>
+    </aside>
+    <div id="error" role="alert"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

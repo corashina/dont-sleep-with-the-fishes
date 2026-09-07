@@ -24,8 +24,8 @@ describe('quality label language changes', () => {
     ];
     document.body.append(...controls.map(({ element }) => element));
     const buttons = controls.flatMap(({ element }) => [...element.querySelectorAll('button')]);
-    const english = ['LOW', 'MEDIUM', 'HIGH', 'LOW', 'HIGH', 'ULTRA', 'LOW', 'HIGH', 'LOW', 'HIGH'];
-    const polish = ['NISKA', 'ŚREDNIA', 'WYSOKA', 'NISKA', 'WYSOKA', 'ULTRA', 'NISKA', 'WYSOKA', 'NISKA', 'WYSOKA'];
+    const english = ['LOW', 'MEDIUM', 'HIGH', 'LOW', 'HIGH', 'LOW', 'HIGH', 'LOW', 'HIGH'];
+    const polish = ['NISKA', 'ŚREDNIA', 'WYSOKA', 'NISKA', 'WYSOKA', 'NISKA', 'WYSOKA', 'NISKA', 'WYSOKA'];
     buttons[0]!.click();
     buttons[0]!.focus();
     apply.mockClear();

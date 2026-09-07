@@ -13,7 +13,6 @@ export class WaterQualityControl extends QualityControl<WaterQuality> {
       choices: [
         { value: 'low', get label() { return settingsText('low'); } },
         { value: 'high', get label() { return settingsText('high'); } },
-        { value: 'ultra', get label() { return settingsText('ultra'); } },
       ],
     });
   }

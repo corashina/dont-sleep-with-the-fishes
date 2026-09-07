@@ -152,8 +152,11 @@ describe('Settings menu', () => {
     }
     expect(options.performance.setVisible).toHaveBeenCalledWith(true);
     expect(options.clouds.setEnabled).toHaveBeenCalledWith(true);
-    menu.element.querySelector<HTMLButtonElement>('[data-quality-control="water"] [data-quality="ultra"]')!.click();
-    expect(options.waterQuality.get()).toBe('ultra');
+    const water = menu.element.querySelector<HTMLFieldSetElement>('[data-quality-control="water"]')!;
+    expect([...water.querySelectorAll('[data-quality]')].map((choice) => choice.getAttribute('data-quality')))
+      .toEqual(['low', 'high']);
+    water.querySelector<HTMLButtonElement>('[data-quality="low"]')!.click();
+    expect(options.waterQuality.get()).toBe('low');
     menu.setVolumetricCloudAvailability(false);
     expect(menu.element.querySelector<HTMLInputElement>('[data-volumetric-clouds]')!.disabled).toBe(true);
     expect(menu.element.querySelector('[data-volumetric-clouds-state]')!.textContent).toBe('UNAVAILABLE');
