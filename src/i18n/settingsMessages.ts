@@ -54,7 +54,6 @@ export const settingsCatalog = {
   low: {"en":"LOW","pl":"NISKA","es-AR":"BAJA"},
   medium: {"en":"MEDIUM","pl":"ŚREDNIA","es-AR":"MEDIA"},
   high: {"en":"HIGH","pl":"WYSOKA","es-AR":"ALTA"},
-  ultra: {"en":"ULTRA","pl":"ULTRA","es-AR":"ULTRA"},
   waterQuality: {"en":"WATER QUALITY","pl":"JAKOŚĆ WODY","es-AR":"CALIDAD DEL AGUA"},
   aa: {"en":"ANTI-ALIASING","pl":"WYGŁADZANIE KRAWĘDZI","es-AR":"SUAVIZADO DE BORDES"},
   shadowQuality: {"en":"SHADOW QUALITY","pl":"JAKOŚĆ CIENI","es-AR":"CALIDAD DE SOMBRAS"},

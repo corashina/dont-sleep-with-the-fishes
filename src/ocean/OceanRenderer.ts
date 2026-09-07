@@ -2,8 +2,14 @@ import {
   BufferGeometry,
   Mesh,
   ShaderMaterial,
+  type Camera,
   type Color,
+  type Material,
+  type Scene,
+  type WebGLRenderer,
 } from 'three';
+import { OceanCapture } from './OceanCapture';
+import { OceanFoam } from './OceanFoam';
 import type { VortexWaveState } from './WaveField';
 import {
   UNBOUNDED_MAXIMUM_LOCAL_Y,
@@ -53,13 +59,6 @@ const OCEAN_SURFACE_QUALITY = Object.freeze({
     horizonRadialSegments: 72,
     horizonRadialExponent: 1.75,
   }),
-  ultra: Object.freeze({
-    segments: 384,
-    surfaceExtent: 180,
-    horizonHalfExtent: 1100,
-    horizonRadialSegments: 96,
-    horizonRadialExponent: 1.75,
-  }),
 }) satisfies Readonly<Record<WaterQuality, Readonly<OceanSurfaceQuality>>>;
 
 const finiteOrZero = (value: number): number => Number.isFinite(value) ? value : 0;
@@ -79,6 +78,12 @@ export class OceanRenderer {
   private readonly uniforms: OceanShaderUniforms;
   private quality: WaterQuality;
   private disposed = false;
+  private capture: OceanCapture | null = null;
+  private foam: OceanFoam | null = null;
+  private updateVersion = 0;
+  private preparedVersion = -1;
+  private preparedCamera: Camera | null = null;
+  private preparing = false;
 
   constructor(
     quality: WaterQuality = 'low',
@@ -114,6 +119,9 @@ export class OceanRenderer {
       this.material = material;
       this.mesh = mesh;
       this.horizonMesh = horizonMesh;
+      mesh.onBeforeRender = this.prepareWater;
+      horizonMesh.onBeforeRender = this.prepareWater;
+      if (quality === 'high') this.createHighResources();
     } catch (error) {
       ignoreCleanupError(() => runCleanupSteps([
         () => surface?.dispose(),
@@ -131,8 +139,10 @@ export class OceanRenderer {
     let nextHorizon: BufferGeometry;
     try {
       nextHorizon = createOceanHorizonGeometry(surfaceQuality);
+      if (value === 'high') this.createHighResources();
     } catch (error) {
       ignoreCleanupError(() => nextSurface.dispose());
+      ignoreCleanupError(() => nextHorizon?.dispose());
       throw error;
     }
     const previousSurface = this.mesh.geometry;
@@ -142,7 +152,9 @@ export class OceanRenderer {
     this.material.defines = applyOceanShaderQuality(this.uniforms, value);
     this.material.needsUpdate = true;
     this.quality = value;
+    this.preparedVersion = -1;
     runCleanupSteps([
+      () => { if (value === 'low') this.releaseHighResources(); },
       () => previousSurface.dispose(),
       () => previousHorizon.dispose(),
     ]);
@@ -154,6 +166,7 @@ export class OceanRenderer {
     fogDensity: number,
     atmosphere?: OceanAtmosphere,
   ): void {
+    this.updateVersion += 1;
     this.uniforms.uTime.value = timeSeconds;
     this.uniforms.uAmplitudeScale.value = amplitudeScale;
     this.uniforms.uFogDensity.value = fogDensity;
@@ -230,10 +243,76 @@ export class OceanRenderer {
     this.uniforms.uOrigin.value.set(snappedX, snappedZ);
   }
 
+  private createHighResources(): void {
+    const capture = new OceanCapture();
+    let foam: OceanFoam;
+    try {
+      foam = new OceanFoam(this.uniforms);
+    } catch (error) {
+      ignoreCleanupError(() => capture.dispose());
+      throw error;
+    }
+    this.capture = capture;
+    this.foam = foam;
+    this.uniforms.uFoamExtent.value = foam.extent;
+    this.uniforms.uWaterColor.value = capture.colorTexture;
+    this.uniforms.uWaterDepth.value = capture.depthTexture;
+    this.uniforms.uWaterReflection.value = capture.reflectionTexture;
+  }
+
+  private readonly prepareWater = (
+    renderer: WebGLRenderer,
+    scene: Scene,
+    camera: Camera,
+    _geometry: BufferGeometry,
+    material: Material,
+  ): void => {
+    if (
+      this.disposed || this.preparing || !this.capture || !this.foam
+      || material !== this.material || scene.overrideMaterial !== null
+      || (this.preparedVersion === this.updateVersion && this.preparedCamera === camera)
+    ) return;
+    this.preparing = true;
+    try {
+      this.foam.update(renderer, this.uniforms.uTime.value, this.uniforms.uOrigin.value);
+      this.capture.update(renderer, scene, camera, this.mesh);
+      this.uniforms.uPersistentFoam.value = this.foam.texture;
+      this.uniforms.uFoamOrigin.value.copy(this.foam.origin);
+      this.uniforms.uWaterReflectionMatrix.value.copy(this.capture.reflectionMatrix);
+      this.uniforms.uWaterInverseProjection.value.copy(this.capture.inverseProjection);
+      this.uniforms.uWaterViewMatrix.value.copy(this.capture.viewMatrix);
+      this.uniforms.uWaterViewport.value.copy(this.capture.viewport);
+      this.uniforms.uWaterReady.value = 1;
+      this.material.uniformsNeedUpdate = true;
+      this.preparedVersion = this.updateVersion;
+      this.preparedCamera = camera;
+    } finally {
+      this.preparing = false;
+    }
+  };
+
+  private releaseHighResources(): void {
+    const capture = this.capture;
+    const foam = this.foam;
+    this.capture = null;
+    this.foam = null;
+    this.preparedCamera = null;
+    this.uniforms.uWaterReady.value = 0;
+    this.uniforms.uWaterColor.value = null;
+    this.uniforms.uWaterDepth.value = null;
+    this.uniforms.uWaterReflection.value = null;
+    this.uniforms.uPersistentFoam.value = null;
+    runCleanupSteps([
+      () => capture?.dispose(),
+      () => foam?.dispose(),
+    ]);
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     runCleanupSteps([
+      () => this.releaseHighResources(),
       () => this.mesh.geometry.dispose(),
       () => this.horizonMesh.geometry.dispose(),
       () => this.material.dispose(),

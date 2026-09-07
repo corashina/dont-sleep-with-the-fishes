@@ -1,11 +1,13 @@
 import {
   Color,
   type IUniform,
+  type Texture,
   Matrix4,
   Vector2,
   Vector3,
   Vector4,
 } from 'three';
+import { OCEAN_OPTICS_UNIFORMS, OCEAN_OPTICS_FUNCTIONS } from './oceanOptics';
 import type { WaterQuality } from '../rendering/waterQuality';
 import {
   UNBOUNDED_MAXIMUM_LOCAL_Y,
@@ -20,6 +22,17 @@ export const MAX_OCEAN_EXCLUSIONS = 2;
 
 export interface OceanShaderUniforms {
   [name: string]: IUniform;
+  uWaterColor: IUniform<Texture | null>;
+  uWaterDepth: IUniform<Texture | null>;
+  uWaterReflection: IUniform<Texture | null>;
+  uPersistentFoam: IUniform<Texture | null>;
+  uWaterReflectionMatrix: IUniform<Matrix4>;
+  uWaterInverseProjection: IUniform<Matrix4>;
+  uWaterViewMatrix: IUniform<Matrix4>;
+  uWaterViewport: IUniform<Vector4>;
+  uFoamOrigin: IUniform<Vector2>;
+  uFoamExtent: IUniform<number>;
+  uWaterReady: IUniform<number>;
   uTime: IUniform<number>;
   uAmplitudeScale: IUniform<number>;
   uOrigin: IUniform<Vector2>;
@@ -65,10 +78,6 @@ interface OceanShaderQuality {
 
 const LOW_DEFINES = Object.freeze({});
 const HIGH_DEFINES = Object.freeze({ HIGH_QUALITY_WATER: 1 });
-const ULTRA_DEFINES = Object.freeze({
-  HIGH_QUALITY_WATER: 1,
-  ULTRA_QUALITY_WATER: 1,
-});
 
 const OCEAN_SHADER_QUALITY = Object.freeze({
   low: Object.freeze({
@@ -80,20 +89,12 @@ const OCEAN_SHADER_QUALITY = Object.freeze({
     defines: LOW_DEFINES,
   }),
   high: Object.freeze({
-    deepColor: 0x073844,
-    shallowColor: 0x35a6a0,
-    foamColor: 0xd4ded4,
-    detailFade: Object.freeze([40, 128] as const),
-    horizonFog: Object.freeze([180, 750, 0.82] as const),
-    defines: HIGH_DEFINES,
-  }),
-  ultra: Object.freeze({
     deepColor: 0x062932,
     shallowColor: 0x2f7377,
     foamColor: 0xc6cdc4,
     detailFade: Object.freeze([52, 160] as const),
     horizonFog: Object.freeze([210, 820, 0.78] as const),
-    defines: ULTRA_DEFINES,
+    defines: HIGH_DEFINES,
   }),
 }) satisfies Readonly<Record<WaterQuality, OceanShaderQuality>>;
 
@@ -159,6 +160,7 @@ export const OCEAN_VERTEX_SHADER = `
 `;
 
 export const OCEAN_FRAGMENT_SHADER = `
+  ${OCEAN_OPTICS_UNIFORMS}
   uniform float uTime;
   uniform float uAmplitudeScale;
   uniform vec2 uDetailFade;
@@ -272,70 +274,7 @@ export const OCEAN_FRAGMENT_SHADER = `
     return slope * distanceFade * weatherStrength;
   }
 
-  #ifdef HIGH_QUALITY_WATER
-  vec2 highQualityRippleSlope(vec2 worldPosition) {
-    vec2 wind = normalize(vec2(0.83, 0.56));
-    vec2 crossWind = vec2(-wind.y, wind.x);
-    vec2 quartering = normalize(vec2(-0.31, 0.95));
-    vec2 opposing = normalize(vec2(0.91, -0.41));
-    vec2 warped = worldPosition + windWarp(worldPosition) * 0.58;
 
-    float bandA = cos(dot(warped, wind) * 9.6 + uTime * 2.55);
-    float bandB = cos(dot(warped, crossWind) * 15.4 - uTime * 3.35);
-    float bandC = cos(dot(warped, quartering) * 24.8 + uTime * 4.35);
-    float bandD = cos(dot(warped, opposing) * 36.2 - uTime * 5.45);
-    vec2 slope = wind * bandA * 0.028
-      + crossWind * bandB * 0.022
-      + quartering * bandC * 0.015
-      + opposing * bandD * 0.009;
-    float distanceFade = 1.0 - smoothstep(
-      uDetailFade.x * 0.66,
-      uDetailFade.y * 0.84,
-      vViewDepth
-    );
-    float weatherStrength = clamp(
-      0.88 + (uAmplitudeScale - 1.0) * 0.24,
-      0.74,
-      1.12
-    );
-    return slope * distanceFade * weatherStrength;
-  }
-  #endif
-
-  #ifdef ULTRA_QUALITY_WATER
-  vec2 ultraQualityMicroSlope(vec2 worldPosition) {
-    vec2 wind = normalize(vec2(0.83, 0.56));
-    vec2 crossWind = vec2(-wind.y, wind.x);
-    vec2 quartering = normalize(vec2(0.58, -0.82));
-    vec2 opposing = normalize(vec2(-0.76, 0.65));
-    vec2 warped = worldPosition + windWarp(worldPosition) * 0.36;
-
-    float bandA = cos(dot(warped, wind) * 43.0 + uTime * 5.4);
-    float bandB = cos(dot(warped, crossWind) * 57.0 - uTime * 6.2);
-    float bandC = cos(dot(warped, quartering) * 73.0 + uTime * 7.4);
-    float bandD = cos(dot(warped, opposing) * 97.0 - uTime * 8.6);
-    vec2 slope = wind * bandA * 0.0065
-      + crossWind * bandB * 0.0050
-      + quartering * bandC * 0.0038
-      + opposing * bandD * 0.0026;
-    float distanceFade = 1.0 - smoothstep(
-      uDetailFade.x * 0.72,
-      uDetailFade.y,
-      vViewDepth
-    );
-    float weather = clamp((uAmplitudeScale - 0.78) / 0.57, 0.0, 1.0);
-    return slope * distanceFade * mix(0.28, 1.0, weather);
-  }
-
-  float ultraSurfaceRoughness(float waveSlope, vec2 detailSlope) {
-    float weather = clamp((uAmplitudeScale - 0.78) / 0.57, 0.0, 1.0);
-    return clamp(
-      0.075 + waveSlope * 0.12 + length(detailSlope) * 0.75 + weather * 0.06,
-      0.075,
-      0.34
-    );
-  }
-  #endif
 
   float hash21(vec2 position) {
     vec2 seed = fract(position * vec2(123.34, 456.21));
@@ -360,30 +299,6 @@ export const OCEAN_FRAGMENT_SHADER = `
     return mix(lower, upper, blend.y);
   }
 
-  #ifdef ULTRA_QUALITY_WATER
-  float ultraSunGlint(
-    vec2 worldPosition,
-    float specularFacing,
-    float windAlignment
-  ) {
-    vec2 wind = normalize(vec2(0.83, 0.56));
-    vec2 crossWind = vec2(-wind.y, wind.x);
-    vec2 drifted = worldPosition + wind * uTime * 0.18;
-    vec2 windSpace = vec2(dot(drifted, wind), dot(drifted, crossWind));
-    float carrier = valueNoise(
-      windSpace * vec2(5.8, 13.2) + vec2(3.7, -8.1)
-    );
-    float distanceFade = 1.0 - smoothstep(
-      uDetailFade.x * 0.55,
-      uDetailFade.y * 0.72,
-      vViewDepth
-    );
-    return smoothstep(0.86, 0.98, carrier)
-      * pow(specularFacing, 180.0)
-      * mix(0.35, 1.0, windAlignment)
-      * distanceFade;
-  }
-  #endif
 
   float foamRibbonNoise(vec2 worldPosition) {
     vec2 wind = normalize(vec2(0.83, 0.56));
@@ -456,148 +371,9 @@ export const OCEAN_FRAGMENT_SHADER = `
     return clamp(bodyFoam * crest * breaking * ribbonCore * strength, 0.0, 1.0);
   }
 
-  #ifdef HIGH_QUALITY_WATER
-  float highQualityFoamCoverage(
-    vec2 worldPosition,
-    float waveHeight,
-    float waveSlope,
-    float fineFade
-  ) {
-    float weather = clamp((uAmplitudeScale - 0.78) / 0.57, 0.0, 1.0);
-    vec2 wind = normalize(vec2(0.83, 0.56));
-    vec2 crossWind = vec2(-wind.y, wind.x);
-    vec2 drifted = worldPosition + wind * uTime * 0.38;
-    vec2 windSpace = vec2(dot(drifted, wind), dot(drifted, crossWind));
-    float broadWarp = valueNoise(
-      windSpace * vec2(0.055, 0.13) + vec2(4.7, -8.3)
-    );
-    float crossWarp = valueNoise(
-      windSpace * vec2(0.12, 0.19) + vec2(-11.2, 5.4)
-    );
-    vec2 warpedSpace = windSpace + vec2(
-      (broadWarp - 0.5) * 4.6,
-      (crossWarp - 0.5) * 2.3
-    );
-    float longBand = valueNoise(
-      warpedSpace * vec2(0.14, 0.62) + vec2(1.8, 7.1)
-    );
-    float brokenBand = valueNoise(
-      warpedSpace * vec2(0.31, 1.28) + vec2(-6.4, 12.9)
-    );
-    float streakField = clamp(longBand * 0.62 + brokenBand * 0.38, 0.0, 1.0);
-    float streaks = smoothstep(
-      mix(0.57, 0.47, weather),
-      mix(0.77, 0.66, weather),
-      streakField
-    );
 
-    float crestStart = mix(0.12, 0.01, weather);
-    float crest = smoothstep(crestStart, crestStart + 0.25, waveHeight);
-    float slopeStart = mix(0.07, 0.035, weather);
-    float breaking = smoothstep(slopeStart, slopeStart + 0.15, waveSlope);
-    float crestEnvelope = crest * mix(0.46, 1.0, breaking);
-    float trailingEnvelope = smoothstep(-0.04, 0.17, waveHeight)
-      * (1.0 - smoothstep(0.52, 0.83, waveHeight));
 
-    float edgeBreak = smoothstep(
-      0.18,
-      0.52,
-      valueNoise(warpedSpace * vec2(0.48, 1.70) + vec2(9.6, -2.7))
-    );
-    float brokenMask = mix(0.42, 1.0, max(streaks, edgeBreak * 0.75));
-    float foamEnvelope = max(
-      crestEnvelope,
-      trailingEnvelope * streaks * 0.48
-    );
-    float strength = mix(0.86, 1.16, weather);
-    return clamp(foamEnvelope * brokenMask * strength * fineFade, 0.0, 1.0);
-  }
-
-  float highQualityCrestCap(
-    vec2 worldPosition,
-    float waveHeight,
-    float waveSlope,
-    float highFoam,
-    float fineFade
-  ) {
-    float weather = clamp((uAmplitudeScale - 0.78) / 0.57, 0.0, 1.0);
-    float crestStart = mix(0.34, 0.17, weather);
-    float slopeStart = mix(0.13, 0.065, weather);
-    float crest = smoothstep(crestStart, crestStart + 0.17, waveHeight);
-    float breaking = smoothstep(slopeStart, slopeStart + 0.13, waveSlope);
-    vec2 drifted = worldPosition + vec2(0.83, 0.56) * uTime * 0.44;
-    float capNoise = valueNoise(
-      drifted * vec2(1.16, 1.84) + vec2(-3.7, 15.2)
-    );
-    float brokenCap = mix(0.52, 1.0, smoothstep(0.24, 0.68, capNoise));
-    float capEnvelope = max(crest * breaking, highFoam * crest * 0.58);
-    return clamp(
-      capEnvelope * brokenCap * mix(0.90, 1.14, weather) * fineFade,
-      0.0,
-      1.0
-    );
-  }
-  #endif
-
-  #ifdef ULTRA_QUALITY_WATER
-  vec2 ultraQualityFoam(
-    vec2 worldPosition,
-    float waveHeight,
-    float waveSlope,
-    float ribbonNoise,
-    float edgeNoise,
-    float distanceFade
-  ) {
-    float weather = clamp((uAmplitudeScale - 0.78) / 0.57, 0.0, 1.0);
-    vec2 wind = normalize(vec2(0.83, 0.56));
-    vec2 crossWind = vec2(-wind.y, wind.x);
-    vec2 drifted = worldPosition + wind * uTime * 0.34;
-    vec2 windSpace = vec2(dot(drifted, wind), dot(drifted, crossWind));
-    float longStreak = valueNoise(
-      windSpace * vec2(0.18, 0.82) + vec2(5.1, -9.3)
-    );
-    float brokenStreak = valueNoise(
-      windSpace * vec2(0.43, 1.64) + vec2(-7.6, 4.8)
-    );
-    float streakField = clamp(
-      longStreak * 0.66 + brokenStreak * 0.34,
-      0.0,
-      1.0
-    );
-    float streakMask = smoothstep(
-      mix(0.68, 0.56, weather),
-      mix(0.86, 0.73, weather),
-      streakField
-    );
-    float crestStart = mix(0.44, 0.22, weather);
-    float crest = smoothstep(crestStart, crestStart + 0.16, waveHeight);
-    float slopeStart = mix(0.22, 0.09, weather);
-    float breaking = smoothstep(slopeStart, slopeStart + 0.12, waveSlope);
-    float trailingEnvelope = smoothstep(-0.02, 0.18, waveHeight)
-      * (1.0 - smoothstep(0.30, 0.55, waveHeight));
-    float erosion = mix(
-      0.42,
-      1.0,
-      smoothstep(0.20, 0.62, mix(edgeNoise, ribbonNoise, 0.34))
-    );
-    float calmSuppression = mix(0.12, 1.0, weather);
-    float body = (
-      crest * breaking * mix(0.12, 1.0, streakMask)
-      + trailingEnvelope * streakMask * 0.34
-    ) * erosion * calmSuppression * distanceFade;
-    float capNoise = valueNoise(
-      windSpace * vec2(0.92, 2.10) + vec2(12.4, -3.2)
-    );
-    float cap = body
-      * smoothstep(mix(0.32, 0.18, weather), 0.62, waveHeight)
-      * smoothstep(0.44, 0.78, capNoise)
-      * mix(0.58, 1.0, breaking);
-    return vec2(
-      clamp(body, 0.0, 0.78),
-      clamp(cap, 0.0, 0.90)
-    );
-  }
-  #endif
+  ${OCEAN_OPTICS_FUNCTIONS}
 
   void main() {
     float vortexCoreRadius = uVortexRadius
@@ -662,21 +438,14 @@ export const OCEAN_FRAGMENT_SHADER = `
         }
       }
     }
-    vec2 detailSlope = warpedDetailSlope(vWorldPosition.xz);
     #ifdef HIGH_QUALITY_WATER
-    detailSlope += highQualityRippleSlope(vWorldPosition.xz);
-    #endif
-    #ifdef ULTRA_QUALITY_WATER
-    detailSlope += ultraQualityMicroSlope(vWorldPosition.xz);
-    #endif
+    vec3 color = shadeHighWater();
+    #else
+    vec2 detailSlope = warpedDetailSlope(vWorldPosition.xz);
     float waveHeight;
     vec2 waveDerivative;
     sampleSurfaceWave(vOceanPosition, waveHeight, waveDerivative);
     float waveSlope = length(waveDerivative);
-    #ifdef ULTRA_QUALITY_WATER
-    float surfaceRoughness = ultraSurfaceRoughness(waveSlope, detailSlope);
-    float ultraRoughnessT = smoothstep(0.075, 0.34, surfaceRoughness);
-    #endif
     vec3 normal = normalize(vec3(
       -waveDerivative.x - detailSlope.x,
       1.0,
@@ -693,15 +462,6 @@ export const OCEAN_FRAGMENT_SHADER = `
     float reflectedSky = smoothstep(0.02, 0.82, reflectionDirection.y);
     vec3 reflectedColor = mix(uHorizonColor * 0.92, uSkyColor, reflectedSky);
     reflectedColor = mix(uHorizonColor * 0.78, reflectedColor, reflectionLift);
-    #ifdef ULTRA_QUALITY_WATER
-    vec3 ultraBroadReflection = mix(uHorizonColor * 0.86, uSkyColor, 0.54);
-    float ultraReflectionBlur = smoothstep(0.075, 0.34, surfaceRoughness);
-    reflectedColor = mix(
-      reflectedColor,
-      ultraBroadReflection,
-      ultraReflectionBlur * 0.44
-    );
-    #endif
 
     float trough = 1.0 - smoothstep(-0.48, 0.38, waveHeight);
     float depthMix = clamp(0.18 + waveHeight * 0.27 + lightFacing * 0.23, 0.0, 1.0);
@@ -710,53 +470,7 @@ export const OCEAN_FRAGMENT_SHADER = `
     float forwardScatter = pow(clamp(dot(viewDirection, -lightDirection), 0.0, 1.0), 4.0);
     waterBody += uShallowColor * forwardScatter * uDirectLightStrength
       * (0.055 + waveSlope * 0.12);
-    #ifdef HIGH_QUALITY_WATER
-    float daylight = smoothstep(0.08, 0.92, uDirectLightStrength);
-    vec3 weatherTint = mix(uFogColor * 0.78, uHorizonColor * 0.64, 0.42);
-    float turquoiseRetention = mix(0.34, 0.92, daylight);
-    waterBody = mix(weatherTint, waterBody, turquoiseRetention);
-    float crestTransmission = smoothstep(-0.18, 0.58, waveHeight)
-      * pow(clamp(dot(viewDirection, -lightDirection), 0.0, 1.0), 2.0);
-    waterBody += uShallowColor * crestTransmission
-      * uDirectLightStrength * 0.075;
-    waterBody *= 1.0 - trough * 0.18;
-    #endif
-    #ifdef ULTRA_QUALITY_WATER
-    float ultraOpticalPath = clamp(
-      1.0 / max(viewFacing, 0.18) - 1.0,
-      0.0,
-      4.0
-    );
-    float ultraAbsorptionStrength = clamp(
-      ultraOpticalPath * 0.11 + trough * 0.22,
-      0.0,
-      0.52
-    );
-    vec3 ultraAbsorptionTint = vec3(0.74, 0.88, 0.90);
-    waterBody *= mix(
-      vec3(1.0),
-      ultraAbsorptionTint,
-      ultraAbsorptionStrength
-    );
-    waterBody = mix(waterBody, uDeepColor, trough * 0.18);
-    #endif
     float reflectionStrength = clamp(0.07 + fresnel * 0.89, 0.0, 0.95);
-    #ifdef ULTRA_QUALITY_WATER
-    reflectionStrength = clamp(
-      0.05 + fresnel * mix(0.63, 0.45, ultraRoughnessT),
-      0.0,
-      0.68
-    );
-    #else
-      #ifdef HIGH_QUALITY_WATER
-    float microFacet = clamp(length(detailSlope) * 2.6, 0.0, 1.0);
-    reflectionStrength = clamp(
-      reflectionStrength + microFacet * 0.11,
-      0.0,
-      0.97
-    );
-      #endif
-    #endif
     vec3 color = mix(waterBody, reflectedColor, reflectionStrength);
 
     vec3 halfDirection = normalize(lightDirection + viewDirection);
@@ -767,37 +481,9 @@ export const OCEAN_FRAGMENT_SHADER = `
     ));
     float sunCore = pow(specularFacing, 220.0) * 1.24;
     float sunSheen = pow(specularFacing, 38.0) * mix(0.10, 0.24, windAlignment);
-    #ifdef ULTRA_QUALITY_WATER
-    sunCore = pow(
-      specularFacing,
-      mix(620.0, 180.0, ultraRoughnessT)
-    ) * mix(1.12, 0.68, ultraRoughnessT);
-    sunSheen = pow(
-      specularFacing,
-      mix(92.0, 24.0, ultraRoughnessT)
-    ) * mix(0.08, 0.20, windAlignment);
-    sunCore += ultraSunGlint(
-      vWorldPosition.xz,
-      specularFacing,
-      windAlignment
-    ) * 0.42;
-    #else
-      #ifdef HIGH_QUALITY_WATER
-    sunCore += pow(specularFacing, 420.0)
-      * mix(0.20, 0.38, windAlignment);
-    sunSheen += pow(specularFacing, 74.0)
-      * mix(0.08, 0.18, windAlignment);
-      #endif
-    #endif
 
     float ribbonNoise = foamRibbonNoise(vWorldPosition.xz);
     float edgeNoise = foamEdgeNoise(vWorldPosition.xz);
-    #ifdef HIGH_QUALITY_WATER
-    float fineFoamNoise = valueNoise(
-      vWorldPosition.xz * 2.15 + vec2(uTime * 0.11, -uTime * 0.08)
-    );
-    edgeNoise = mix(edgeNoise, fineFoamNoise, 0.34);
-    #endif
     float fineDetailFade = 1.0 - smoothstep(
       uDetailFade.x * 0.72,
       uDetailFade.x,
@@ -817,49 +503,7 @@ export const OCEAN_FRAGMENT_SHADER = `
     );
     bodyFoam *= bodyDistanceFade;
     float capFoam;
-    #ifdef ULTRA_QUALITY_WATER
-    float ultraFoamDistanceFade = 1.0 - smoothstep(
-      uDetailFade.x * 0.72,
-      uDetailFade.y,
-      vViewDepth
-    );
-    vec2 ultraFoam = ultraQualityFoam(
-      vWorldPosition.xz,
-      waveHeight,
-      waveSlope,
-      ribbonNoise,
-      edgeNoise,
-      ultraFoamDistanceFade
-    );
-    bodyFoam = max(bodyFoam * 0.42, ultraFoam.x);
-    capFoam = ultraFoam.y;
-    #else
-      #ifdef HIGH_QUALITY_WATER
-    float highFoamDistanceFade = 1.0 - smoothstep(
-      uDetailFade.y * 0.42,
-      uDetailFade.y * 0.88,
-      vViewDepth
-    );
-    float highFoam = highQualityFoamCoverage(
-      vWorldPosition.xz,
-      waveHeight,
-      waveSlope,
-      highFoamDistanceFade
-    );
-    bodyFoam = max(bodyFoam, highFoam * 0.86);
-      #endif
     capFoam = foamCap(waveHeight, waveSlope, bodyFoam, ribbonNoise);
-      #ifdef HIGH_QUALITY_WATER
-    float highCapFoam = highQualityCrestCap(
-      vWorldPosition.xz,
-      waveHeight,
-      waveSlope,
-      highFoam,
-      highFoamDistanceFade
-    );
-    capFoam = max(capFoam, highCapFoam);
-      #endif
-    #endif
     float capDistanceFade = 1.0 - smoothstep(
       uDetailFade.y * 0.48,
       uDetailFade.y * 0.74,
@@ -869,15 +513,6 @@ export const OCEAN_FRAGMENT_SHADER = `
     float foam = clamp(bodyFoam + capFoam, 0.0, 1.0);
     color += uSunColor * (sunCore + sunSheen) * uDirectLightStrength
       * (1.0 - clamp(foam * 0.72 + capFoam * 0.22, 0.0, 0.94));
-    #ifdef ULTRA_QUALITY_WATER
-    vec3 ultraFoamColor = mix(
-      uFoamColor,
-      uSunColor,
-      0.08 * uDirectLightStrength
-    );
-    color = mix(color, uFoamColor, bodyFoam * 0.56);
-    color = mix(color, ultraFoamColor, capFoam * 0.78);
-    #else
     vec3 capFoamColor = mix(
       uFoamColor,
       uSunColor,
@@ -885,19 +520,7 @@ export const OCEAN_FRAGMENT_SHADER = `
     );
     color = mix(color, uFoamColor, bodyFoam * 0.64);
     color = mix(color, capFoamColor, capFoam * 0.90);
-      #ifdef HIGH_QUALITY_WATER
-    float highFoamLayer = clamp(
-      highFoam * 0.78 + highCapFoam * capDistanceFade * 0.86,
-      0.0,
-      1.0
-    );
-    vec3 highFoamColor = mix(
-      uFoamColor,
-      vec3(0.96, 1.0, 0.98),
-      0.46
-    );
-    color = mix(color, highFoamColor, highFoamLayer * 0.78);
-      #endif
+
     #endif
 
     float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vViewDepth * vViewDepth);
@@ -949,6 +572,17 @@ export function createOceanShaderDefinition(quality: WaterQuality): Readonly<{
 }> {
   const payload = createWaveUniformPayload(DEFAULT_WAVES);
   const uniforms: OceanShaderUniforms = {
+    uWaterColor: { value: null },
+    uWaterDepth: { value: null },
+    uWaterReflection: { value: null },
+    uPersistentFoam: { value: null },
+    uWaterReflectionMatrix: { value: new Matrix4() },
+    uWaterInverseProjection: { value: new Matrix4() },
+    uWaterViewMatrix: { value: new Matrix4() },
+    uWaterViewport: { value: new Vector4(0, 0, 1, 1) },
+    uFoamOrigin: { value: new Vector2() },
+    uFoamExtent: { value: 128 },
+    uWaterReady: { value: 0 },
     uTime: { value: 0 },
     uAmplitudeScale: { value: 1 },
     uOrigin: { value: new Vector2() },

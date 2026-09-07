@@ -5,7 +5,7 @@ import {
   type StoredPreference,
 } from '../browser/storage';
 
-export type WaterQuality = 'low' | 'high' | 'ultra';
+export type WaterQuality = 'low' | 'high';
 
 export const DEFAULT_WATER_QUALITY: WaterQuality = 'high';
 export const WATER_QUALITY_STORAGE_KEY =
@@ -14,7 +14,7 @@ export const WATER_QUALITY_STORAGE_KEY =
 export interface WaterQualityPreference extends StoredPreference<WaterQuality> {}
 
 export function parseWaterQuality(value: unknown): WaterQuality {
-  return value === 'low' || value === 'high' || value === 'ultra'
+  return value === 'low' || value === 'high'
     ? value
     : DEFAULT_WATER_QUALITY;
 }
