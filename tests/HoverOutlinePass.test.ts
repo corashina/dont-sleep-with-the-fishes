@@ -1,222 +1,237 @@
 import {
-  BufferGeometry,
-  Color,
-  Line,
-  LineBasicMaterial,
-  Mesh,
-  MeshBasicMaterial,
-  PerspectiveCamera,
-  Points,
-  PointsMaterial,
-  Scene,
-  SphereGeometry,
-  Vector2,
-  WebGLRenderTarget,
-  type WebGLRenderer,
+  BufferGeometry, Color, LessEqualDepth, Line, LineBasicMaterial, Mesh,
+  MeshBasicMaterial, NoBlending, PerspectiveCamera, Points, PointsMaterial,
+  Scene, SphereGeometry, Vector2, WebGLRenderTarget, type WebGLRenderer,
 } from 'three';
-import { expect, it, vi, type MockInstance } from 'vitest';
-import { HoverOutlinePass } from '../src/rendering/HoverOutlinePass';
+import { expect, it, vi } from 'vitest';
+import {
+  configureHoverOutlinePass, HoverOutlinePass, OutlineMaskCapturePass,
+} from '../src/rendering/HoverOutlinePass';
 
 type OutlineInternals = HoverOutlinePass & {
   _fsQuad: { render(renderer: WebGLRenderer): void };
-  _changeVisibilityOfSelectedObjects(visible: boolean): void;
+  _visibilityCache: Map<unknown, boolean>;
   _changeVisibilityOfNonSelectedObjects(visible: boolean): void;
 };
 
-function createPass(): {
-  pass: HoverOutlinePass;
-  scene: Scene;
-  selected: Mesh;
-  other: Mesh;
-  imageRender: MockInstance<(renderer: WebGLRenderer) => void>;
-} {
+function createFixture() {
   const scene = new Scene();
   const selected = new Mesh(new SphereGeometry(), new MeshBasicMaterial());
   const other = new Mesh(new SphereGeometry(), new MeshBasicMaterial());
-  scene.add(selected, other);
-  const pass = new HoverOutlinePass(
-    new Vector2(64, 64),
-    scene,
-    new PerspectiveCamera(),
-  );
+  const hidden = new Mesh(new SphereGeometry(), new MeshBasicMaterial());
+  hidden.visible = false;
+  const points = new Points(new BufferGeometry(), new PointsMaterial());
+  const line = new Line(new BufferGeometry(), new LineBasicMaterial());
+  scene.add(selected, other, hidden, points, line);
+  const pass = new HoverOutlinePass(new Vector2(64, 64), scene, new PerspectiveCamera());
+  configureHoverOutlinePass(pass);
   pass.selectedObjects = [selected];
-  const imageRender = vi.spyOn((pass as unknown as OutlineInternals)._fsQuad, 'render')
-    .mockImplementation(() => undefined);
-  return { pass, scene, selected, other, imageRender };
-}
-
-function createRenderer(onRender?: () => void): {
-  renderer: WebGLRenderer;
-  render: ReturnType<typeof vi.fn>;
-  stencilTest: () => boolean;
-  target: () => unknown;
-  clearColor: () => Color;
-  clearAlpha: () => number;
-} {
-  let color = new Color(0x123456);
+  const capture = new OutlineMaskCapturePass(pass);
+  const internals = pass as unknown as OutlineInternals;
+  const write = new WebGLRenderTarget(64, 64);
+  const read = new WebGLRenderTarget(64, 64);
+  const initialTarget = new WebGLRenderTarget(16, 16);
+  let target: WebGLRenderTarget | null = initialTarget;
+  const color = new Color(0x123456);
   let alpha = 0.4;
   let stencil = true;
-  let renderTarget: unknown = { name: 'initial-target' };
-  const render = vi.fn(() => onRender?.());
+  const events: string[] = [];
   const renderer = {
     autoClear: true,
     shadowMap: { autoUpdate: true, needsUpdate: true },
     state: { buffers: { stencil: { setTest: (value: boolean) => { stencil = value; } } } },
-    getClearColor: (target: Color) => target.copy(color),
+    getClearColor: (value: Color) => value.copy(color),
     getClearAlpha: () => alpha,
     setClearColor: (value: Color | number, nextAlpha: number) => {
-      color = value instanceof Color ? value.clone() : new Color(value);
-      alpha = nextAlpha;
+      color.set(value); alpha = nextAlpha;
     },
-    getRenderTarget: () => renderTarget,
-    setRenderTarget: (value: unknown) => { renderTarget = value; },
-    clear: vi.fn(),
-    render,
+    getRenderTarget: () => target,
+    setRenderTarget: vi.fn((value: WebGLRenderTarget | null) => { target = value; }),
+    clear: vi.fn(() => { events.push('clear'); }),
+    render: vi.fn(() => { events.push('scene'); }),
+    copyTextureToTexture: vi.fn(() => { events.push('copy-mask'); }),
   } as unknown as WebGLRenderer;
-  return {
-    renderer,
-    render,
-    stencilTest: () => stencil,
-    target: () => renderTarget,
-    clearColor: () => color,
-    clearAlpha: () => alpha,
+  const imageRender = vi.spyOn(internals._fsQuad, 'render').mockImplementation(() => {
+    events.push('image');
+  });
+  const runCapture = () => capture.render(renderer, write, read, 0, true);
+  const compose = () => pass.render(renderer, write, read, 0, true);
+  const assertRestored = () => {
+    expect([selected.visible, other.visible, hidden.visible, points.visible, line.visible])
+      .toEqual([true, true, false, true, true]);
+    expect(internals._visibilityCache.size).toBe(0);
+    expect(renderer.autoClear).toBe(true);
+    expect(renderer.shadowMap.autoUpdate).toBe(true);
+    expect(renderer.shadowMap.needsUpdate).toBe(true);
+    expect(stencil).toBe(true);
+    expect(target).toBe(initialTarget);
+    expect(color.getHex()).toBe(0x123456);
+    expect(alpha).toBe(0.4);
   };
+  const dispose = () => {
+    pass.dispose(); write.dispose(); read.dispose(); initialTarget.dispose();
+    for (const object of [selected, other, hidden, points, line]) {
+      object.geometry.dispose(); (object.material as MeshBasicMaterial).dispose();
+    }
+  };
+  return { pass, capture, scene, selected, other, renderer, write, read,
+    internals, imageRender, events, runCapture, compose, assertRestored, dispose };
 }
 
-it('disables shadow refreshes during both outline scene renders', () => {
-  const { pass } = createPass();
-  const shadowStates: Array<[boolean, boolean]> = [];
-  const testRenderer = createRenderer(() => {
-    shadowStates.push([
-      testRenderer.renderer.shadowMap.autoUpdate,
-      testRenderer.renderer.shadowMap.needsUpdate,
-    ]);
+it('saves color before clearing only source color and draws selected geometry once', () => {
+  const f = createFixture();
+  vi.mocked(f.renderer.render).mockImplementation(() => {
+    f.events.push('scene');
+    expect(f.renderer.getRenderTarget()).toBe(f.read);
+    expect(f.selected.visible).toBe(true);
+    expect(f.other.visible).toBe(false);
+    expect(f.scene.overrideMaterial).toBe(f.pass.prepareMaskMaterial);
+    expect(f.pass.prepareMaskMaterial.depthWrite).toBe(false);
+    expect(f.pass.prepareMaskMaterial.depthFunc).toBe(LessEqualDepth);
+    expect(f.renderer.shadowMap.autoUpdate).toBe(false);
+    expect(f.renderer.shadowMap.needsUpdate).toBe(false);
+  });
+  f.imageRender.mockImplementationOnce(() => {
+    f.events.push('save');
+    expect(f.renderer.getRenderTarget()).toBe(f.write);
+    expect(f.pass.materialCopy.uniforms.tDiffuse!.value).toBe(f.read.texture);
+    expect(f.pass.materialCopy.depthTest).toBe(false);
+    expect(f.pass.materialCopy.depthWrite).toBe(false);
+    expect(f.pass.materialCopy.blending).toBe(NoBlending);
   });
   try {
-    pass.render(
-      testRenderer.renderer,
-      new WebGLRenderTarget(64, 64),
-      new WebGLRenderTarget(64, 64),
-      0,
-      false,
+    expect(f.capture.needsSwap).toBe(false);
+    f.runCapture();
+    expect(f.events).toEqual(['save', 'clear', 'scene', 'copy-mask']);
+    expect(f.renderer.clear).toHaveBeenCalledExactlyOnceWith(true, false, false);
+    expect(f.renderer.render).toHaveBeenCalledExactlyOnceWith(f.scene, f.pass.renderCamera);
+    expect(f.renderer.copyTextureToTexture).toHaveBeenCalledExactlyOnceWith(
+      f.read.texture, f.pass.renderTargetMaskBuffer.texture,
     );
-    expect(shadowStates).toEqual([[false, false], [false, false]]);
-    expect(testRenderer.renderer.shadowMap.autoUpdate).toBe(true);
-    expect(testRenderer.renderer.shadowMap.needsUpdate).toBe(true);
-  } finally {
-    pass.dispose();
-  }
+    expect(f.renderer.setRenderTarget).toHaveBeenCalledWith(f.pass.renderTargetMaskBuffer);
+    expect(f.capture.needsSwap).toBe(true);
+    f.assertRestored();
+    f.compose();
+    expect(f.renderer.render).toHaveBeenCalledTimes(1);
+    expect(f.imageRender).toHaveBeenCalledTimes(6);
+    f.assertRestored();
+  } finally { f.dispose(); }
 });
 
-it('restores scene and renderer state when the selected render fails', () => {
-  const { pass, scene, selected, other } = createPass();
+it('uses either composer target as the retained depth source', () => {
+  const f = createFixture();
+  try {
+    f.runCapture();
+    f.capture.render(f.renderer, f.read, f.write, 0, false);
+    expect(f.renderer.copyTextureToTexture).toHaveBeenLastCalledWith(
+      f.write.texture, f.pass.renderTargetMaskBuffer.texture,
+    );
+    expect(f.capture.needsSwap).toBe(true);
+  } finally { f.dispose(); }
+});
+
+it.each(['empty', 'disabled'] as const)('skips %s selection after a populated frame', (mode) => {
+  const f = createFixture();
+  try {
+    f.runCapture();
+    if (mode === 'empty') f.pass.selectedObjects = [];
+    else f.pass.enabled = false;
+    f.imageRender.mockClear();
+    vi.mocked(f.renderer.render).mockClear();
+    f.runCapture();
+    f.pass.enabled = true;
+    f.pass.selectedObjects = [f.selected];
+    f.compose();
+    expect(f.capture.needsSwap).toBe(false);
+    expect(f.imageRender).not.toHaveBeenCalled();
+    expect(f.renderer.render).not.toHaveBeenCalled();
+  } finally { f.dispose(); }
+});
+
+it('does not compose a mask twice or before capture', () => {
+  const f = createFixture();
+  try {
+    f.compose();
+    expect(f.imageRender).not.toHaveBeenCalled();
+    f.runCapture();
+    f.compose();
+    f.imageRender.mockClear();
+    f.compose();
+    expect(f.imageRender).not.toHaveBeenCalled();
+  } finally { f.dispose(); }
+});
+
+it.each(['scene', 'copy-mask'] as const)('restores state and saved color after %s failure', (stage) => {
+  const f = createFixture();
   const background = new Color(0xabcdef);
-  const overrideMaterial = new MeshBasicMaterial();
-  scene.background = background;
-  scene.overrideMaterial = overrideMaterial;
-  let renderCount = 0;
-  const testRenderer = createRenderer(() => {
-    renderCount += 1;
-    if (renderCount === 2) throw new Error('mask render failed');
-  });
-  const initialTarget = testRenderer.target();
-  const initialColor = testRenderer.clearColor().clone();
+  const override = new MeshBasicMaterial();
+  f.scene.background = background;
+  f.scene.overrideMaterial = override;
   try {
-    expect(() => pass.render(
-      testRenderer.renderer,
-      new WebGLRenderTarget(64, 64),
-      new WebGLRenderTarget(64, 64),
-      0,
-      true,
-    )).toThrow('mask render failed');
-    expect(selected.visible).toBe(true);
-    expect(other.visible).toBe(true);
-    expect((selected.material as MeshBasicMaterial).colorWrite).toBe(true);
-    expect((other.material as MeshBasicMaterial).colorWrite).toBe(true);
-    expect(scene.background).toBe(background);
-    expect(scene.overrideMaterial).toBe(overrideMaterial);
-    expect(testRenderer.renderer.autoClear).toBe(true);
-    expect(testRenderer.stencilTest()).toBe(true);
-    expect(testRenderer.target()).toBe(initialTarget);
-    expect(testRenderer.clearColor()).toEqual(initialColor);
-    expect(testRenderer.clearAlpha()).toBe(0.4);
-    expect(testRenderer.renderer.shadowMap.autoUpdate).toBe(true);
-    expect(testRenderer.renderer.shadowMap.needsUpdate).toBe(true);
-  } finally {
-    pass.dispose();
-    overrideMaterial.dispose();
-  }
+    f.runCapture();
+    f.imageRender.mockClear();
+    const failure = new Error(stage);
+    vi.mocked(stage === 'scene' ? f.renderer.render : f.renderer.copyTextureToTexture)
+      .mockImplementationOnce(() => { throw failure; });
+    expect(f.runCapture).toThrow(failure);
+    expect(f.capture.needsSwap).toBe(false);
+    expect(f.imageRender).toHaveBeenCalledTimes(2);
+    expect(f.pass.materialCopy.uniforms.tDiffuse!.value).toBe(f.write.texture);
+    expect(f.scene.background).toBe(background);
+    expect(f.scene.overrideMaterial).toBe(override);
+    f.assertRestored();
+    f.imageRender.mockClear();
+    f.compose();
+    expect(f.imageRender).not.toHaveBeenCalled();
+  } finally { override.dispose(); f.dispose(); }
 });
 
-it('does not restore a non-selected visibility phase that never ran', () => {
-  const { pass, scene, selected } = createPass();
-  const internals = pass as unknown as OutlineInternals;
-  const selectedVisibility = vi.spyOn(internals, '_changeVisibilityOfSelectedObjects');
-  const nonSelectedVisibility = vi.spyOn(internals, '_changeVisibilityOfNonSelectedObjects');
-  const points = new Points(new BufferGeometry(), new PointsMaterial());
-  const line = new Line(new BufferGeometry(), new LineBasicMaterial());
-  scene.add(points, line);
-  const testRenderer = createRenderer(() => {
-    throw new Error('depth render failed');
-  });
+it('keeps the original error when color restoration also fails', () => {
+  const f = createFixture();
   try {
-    expect(() => pass.render(
-      testRenderer.renderer,
-      new WebGLRenderTarget(64, 64),
-      new WebGLRenderTarget(64, 64),
-      0,
-      true,
-    )).toThrow('depth render failed');
-    expect(selected.visible).toBe(true);
-    expect(points.visible).toBe(true);
-    expect(line.visible).toBe(true);
-    expect((points.material as PointsMaterial).colorWrite).toBe(true);
-    expect((line.material as LineBasicMaterial).colorWrite).toBe(true);
-    expect(selectedVisibility.mock.calls).toEqual([[false], [true]]);
-    expect(nonSelectedVisibility).not.toHaveBeenCalled();
-  } finally {
-    pass.dispose();
-  }
+    vi.mocked(f.renderer.render).mockImplementationOnce(() => { throw new Error('selected failed'); });
+    f.imageRender.mockImplementationOnce(() => undefined).mockImplementationOnce(() => {
+      throw new Error('restore failed');
+    });
+    expect(f.runCapture).toThrow('selected failed');
+    f.assertRestored();
+  } finally { f.dispose(); }
 });
 
-it('restores state when an image pass fails', () => {
-  const { pass, scene, selected, other, imageRender } = createPass();
-  const internals = pass as unknown as OutlineInternals;
-  const selectedVisibility = vi.spyOn(internals, '_changeVisibilityOfSelectedObjects');
-  const nonSelectedVisibility = vi.spyOn(internals, '_changeVisibilityOfNonSelectedObjects');
-  const background = new Color(0xabcdef);
-  const overrideMaterial = new MeshBasicMaterial();
-  scene.background = background;
-  scene.overrideMaterial = overrideMaterial;
-  imageRender.mockImplementationOnce(() => {
-    throw new Error('image pass failed');
-  });
-  const testRenderer = createRenderer();
-  const initialTarget = testRenderer.target();
-  const initialColor = testRenderer.clearColor().clone();
+it('does not restore visibility or source color when saving color fails', () => {
+  const f = createFixture();
+  const visibility = vi.spyOn(f.internals, '_changeVisibilityOfNonSelectedObjects');
   try {
-    expect(() => pass.render(
-      testRenderer.renderer,
-      new WebGLRenderTarget(64, 64),
-      new WebGLRenderTarget(64, 64),
-      0,
-      true,
-    )).toThrow('image pass failed');
-    expect(selected.visible).toBe(true);
-    expect(other.visible).toBe(true);
-    expect(scene.background).toBe(background);
-    expect(scene.overrideMaterial).toBe(overrideMaterial);
-    expect(testRenderer.renderer.autoClear).toBe(true);
-    expect(testRenderer.stencilTest()).toBe(true);
-    expect(testRenderer.target()).toBe(initialTarget);
-    expect(testRenderer.clearColor()).toEqual(initialColor);
-    expect(testRenderer.clearAlpha()).toBe(0.4);
-    expect(testRenderer.renderer.shadowMap.autoUpdate).toBe(true);
-    expect(testRenderer.renderer.shadowMap.needsUpdate).toBe(true);
-    expect(selectedVisibility.mock.calls).toEqual([[false], [true]]);
-    expect(nonSelectedVisibility.mock.calls).toEqual([[false], [true]]);
-  } finally {
-    pass.dispose();
-    overrideMaterial.dispose();
-  }
+    f.imageRender.mockImplementationOnce(() => { throw new Error('save failed'); });
+    expect(f.runCapture).toThrow('save failed');
+    expect(visibility).not.toHaveBeenCalled();
+    expect(f.renderer.clear).not.toHaveBeenCalled();
+    expect(f.imageRender).toHaveBeenCalledOnce();
+    f.assertRestored();
+  } finally { f.dispose(); }
+});
+
+it('restores renderer state and consumes the mask after composition fails', () => {
+  const f = createFixture();
+  try {
+    f.runCapture();
+    f.imageRender.mockImplementationOnce(() => { throw new Error('compose failed'); });
+    expect(f.compose).toThrow('compose failed');
+    f.assertRestored();
+    f.imageRender.mockClear();
+    f.compose();
+    expect(f.imageRender).not.toHaveBeenCalled();
+  } finally { f.dispose(); }
+});
+
+it('copies the scene to the screen without a captured mask', () => {
+  const f = createFixture();
+  try {
+    f.pass.renderToScreen = true;
+    f.compose();
+    expect(f.imageRender).toHaveBeenCalledOnce();
+    expect(f.renderer.getRenderTarget()).toBe(null);
+    expect(f.pass.materialCopy.uniforms.tDiffuse!.value).toBe(f.read.texture);
+    expect(f.renderer.render).not.toHaveBeenCalled();
+  } finally { f.dispose(); }
 });
