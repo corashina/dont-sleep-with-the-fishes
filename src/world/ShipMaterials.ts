@@ -16,6 +16,7 @@ import {
 } from 'three';
 import type { ShipAssets } from './ShipAssets';
 import { disposeResourceSets } from './SceneResources';
+import { applyShipWetSurface } from './ShipWetSurface';
 
 export interface ShipMaterials {
   timber: MeshStandardMaterial;
@@ -268,7 +269,7 @@ export function createShipMaterials(
         metalness: 0,
       })
   );
-  const timberFloor = timber;
+  const timberFloor = timber.clone();
   const crewFloor = timber.clone();
   crewFloor.color.setHex(0xb7c2bb);
   const cargoFloor = timberFloor;
@@ -378,8 +379,19 @@ export function createShipMaterials(
     side: DoubleSide,
   });
 
+  applyShipWetSurface(timberFloor, 1);
+  applyShipWetSurface(deckTimber, 0.85);
+  applyShipWetSurface(plainTimber, 0.65);
+  applyShipWetSurface(paintedPanel, 0.45);
+  applyShipWetSurface(plainPaintedSteel, 0.65);
+  applyShipWetSurface(paintedSteel, 0.65);
+  applyShipWetSurface(deckSteel, 0.8);
+  applyShipWetSurface(upperHull, 0.8);
+  applyShipWetSurface(waterline, 1);
+
   const ownedMaterials = new Set<Material>([
     timber,
+    timberFloor,
     crewFloor,
     wheelhouseFloor,
     cargoFloor,
