@@ -23,7 +23,7 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
   'death-stare': { models: ['deathStareBlob'], sounds: [] },
   'swarm-of-sharks': { models: ['shark'], sounds: [] },
   tornado: { models: ['tornadoCore'], sounds: ['tornadoWind'] },
-  'man-in-the-fog': { models: ['fogMan'], sounds: [] },
+  'monster-in-the-fog': { models: ['fogMonster'], sounds: [] },
   plane: { models: [], sounds: ['planeFlyby'] },
   ghosts: { models: ['ghost'], sounds: ['ghostSpiritBreath'] },
   'eerie-melody': {

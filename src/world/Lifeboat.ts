@@ -240,7 +240,7 @@ function addFramesAndBenches(target: Group, materials: LifeboatMaterials): void 
     rib.position.set(0, FLOOR_HEIGHT + 0.075, z);
     ribs.add(rib);
     for (const sign of [-1, 1]) {
-      const frame = new Mesh(frameGeometry, materials.cutWood);
+      const frame = new Mesh(frameGeometry, materials.darkTimber);
       frame.name = `lifeboat-side-frame-${index}-${sign}`;
       frame.position.set(sign * (halfWidth - 0.015), -0.025, z);
       frame.rotation.z = -sign * 0.07;

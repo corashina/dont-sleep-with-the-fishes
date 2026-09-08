@@ -28,7 +28,7 @@ export const EVENT_PRESENTATION_ROUTES = Object.freeze({
   'bad-sleep': 'weather',
   thunderstorm: 'weather',
   'restless-waves': 'weather',
-  'man-in-the-fog': 'weather',
+  'monster-in-the-fog': 'weather',
   ghosts: 'supernatural',
   'eerie-melody': 'supernatural',
   'face-on-the-moon': 'moon',

@@ -1,6 +1,9 @@
 import { onLanguageChange } from '../i18n/language';
 import { refreshUiText } from './translatedText';
 import { uiText } from '../i18n/uiMessages';
+import { uiDynamic } from '../i18n/uiDynamicMessages';
+import { ITEM_LABELS, type ItemId } from '../game/ItemState';
+import { itemThumbnailUrl } from './itemThumbnailManifest';
 import type { BoatInteractionAnchor, ProjectedBoatBounds } from '../survival/BoatInteraction';
 import { createElementRequirement } from './dom';
 import {
@@ -24,9 +27,12 @@ export interface FishingUiState {
 }
 
 export interface FishingResultView {
-  readonly caption: string;
-  readonly title: string;
-  readonly detail: string;
+  readonly items: readonly {
+    readonly itemId: ItemId;
+    readonly quantity: number;
+    readonly condition: 'usable' | 'broken';
+  }[];
+  readonly message: string;
   readonly catchTarget: ProjectedBoatBounds | null;
 }
 
@@ -41,7 +47,7 @@ export class SurvivalFishingView {
   readonly roots: readonly [HTMLElement, HTMLElement, HTMLElement];
   readonly biteButton: HTMLButtonElement;
   readonly exitButton: HTMLButtonElement;
-  readonly resultContinue: HTMLButtonElement;
+  readonly resultClose: HTMLButtonElement;
 
   onCast: (point: { readonly x: number; readonly y: number } | null) => boolean = () => false;
   onReel: () => boolean = () => false;
@@ -56,9 +62,8 @@ export class SurvivalFishingView {
 
   private readonly live: HTMLElement;
   private readonly visibleMessage: HTMLElement;
-  private readonly resultCaption: HTMLElement;
-  private readonly resultTitle: HTMLElement;
-  private readonly resultDetail: HTMLElement;
+  private readonly resultItems: HTMLElement;
+  private readonly resultMessage: HTMLElement;
   private currentMode: FishingUiMode = 'hidden';
   private currentState: FishingUiState | null = null;
   private currentResult: FishingResultView | null = null;
@@ -85,7 +90,7 @@ export class SurvivalFishingView {
   private refreshLanguage(): void {
     refreshUiText(...this.roots);
     if (this.currentState !== null) this.applyStateMessage(this.currentState);
-    if (this.currentResult !== null) { this.resultCaption.textContent = this.currentResult.caption; this.resultTitle.textContent = this.currentResult.title; this.resultDetail.textContent = this.currentResult.detail; }
+    if (this.currentResult !== null) this.renderResult(this.currentResult);
   }
 
   private disposed = false;
@@ -106,14 +111,11 @@ export class SurvivalFishingView {
         </button>
       </section>
       <div class="fishing-fade" data-fishing-fade aria-hidden="true"></div>
-      <section class="routine-dialog routine-dialog--fishing" data-fishing-result role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="fishing-result-title" inert>
+      <section class="routine-dialog routine-dialog--fishing" data-fishing-result role="dialog" aria-modal="true" aria-hidden="true" data-ui-aria="fishingResult" aria-label="${uiText('fishingResult')}" inert>
         <div class="routine-dialog__card fishing-result-card scuba-popup-paper">
-          <p class="eyebrow ui-role-context" data-fishing-result-caption></p>
-          <h2 class="scuba-popup-title ui-role-display" id="fishing-result-title" data-fishing-result-title></h2>
-          <p class="fishing-result-detail ui-role-narrative" data-fishing-result-detail></p>
-          <button type="button" class="primary-action salvage-action ui-role-context" data-fishing-result-continue data-ui-aria="continue" aria-label="${uiText('continue')}" data-ui-text="continueUpper">
-            ${uiText('continueUpper')}
-          </button>
+          <button type="button" class="dive-result__close ui-role-context" data-fishing-result-close data-ui-aria="closeFishing" aria-label="${uiText('closeFishing')}">&times;</button>
+          <div class="fishing-result-items" data-fishing-result-items></div>
+          <p class="ui-role-context" data-fishing-result-message hidden></p>
         </div>
       </section>`;
     const roots = [...template.content.children] as HTMLElement[];
@@ -125,10 +127,9 @@ export class SurvivalFishingView {
     this.visibleMessage = requireElement(this.interactionRoot, '[data-fishing-message]');
     this.biteButton = requireElement(this.interactionRoot, '[data-fishing-bite]');
     this.exitButton = requireElement(this.interactionRoot, '[data-fishing-view-exit]');
-    this.resultCaption = requireElement(this.resultRoot, '[data-fishing-result-caption]');
-    this.resultTitle = requireElement(this.resultRoot, '[data-fishing-result-title]');
-    this.resultDetail = requireElement(this.resultRoot, '[data-fishing-result-detail]');
-    this.resultContinue = requireElement(this.resultRoot, '[data-fishing-result-continue]');
+    this.resultItems = requireElement(this.resultRoot, '[data-fishing-result-items]');
+    this.resultMessage = requireElement(this.resultRoot, '[data-fishing-result-message]');
+    this.resultClose = requireElement(this.resultRoot, '[data-fishing-result-close]');
     this.interactionRoot.addEventListener('click', this.handleInteractionClick);
     this.interactionRoot.addEventListener('pointerup', this.handlePointerUp);
     this.resultRoot.addEventListener('click', this.handleResultClick);
@@ -196,9 +197,7 @@ export class SurvivalFishingView {
     if (this.disposed) return;
     this.currentResult = view;
     this.continueIssued = false;
-    this.resultCaption.textContent = view.caption;
-    this.resultTitle.textContent = view.title;
-    this.resultDetail.textContent = view.detail;
+    this.renderResult(view);
     this.resultTarget = view.catchTarget === null
       ? null
       : Object.freeze({ ...view.catchTarget });
@@ -213,6 +212,46 @@ export class SurvivalFishingView {
     this.onResultHide();
     this.resultVisible = false;
     this.resultTarget = null;
+  }
+
+  private renderResult(view: FishingResultView): void {
+    this.resultMessage.textContent = view.message;
+    this.resultMessage.hidden = view.message.length === 0;
+    this.resultItems.hidden = view.items.length === 0;
+    this.resultItems.replaceChildren(...view.items.map(({ itemId, quantity, condition }) => {
+      const entry = document.createElement('span');
+      entry.className = 'dive-result__reward-entry';
+      entry.dataset.itemType = itemId;
+      const name = condition === 'broken' ? uiDynamic('brokenItem', ITEM_LABELS[itemId]) : ITEM_LABELS[itemId];
+      const amount = `${quantity > 0 ? '+' : '−'}${Math.abs(quantity)}`;
+      entry.setAttribute('role', 'img');
+      entry.setAttribute('aria-label', `${name}: ${amount}`);
+      entry.title = name;
+      const art = document.createElement('span');
+      art.className = 'weight-circle is-filled dive-result__reward';
+      art.dataset.itemType = itemId;
+      art.setAttribute('aria-hidden', 'true');
+      const thumbnail = document.createElement('img');
+      thumbnail.className = 'weight-circle__thumbnail';
+      thumbnail.src = itemThumbnailUrl(itemId);
+      thumbnail.alt = '';
+      thumbnail.decoding = 'async';
+      thumbnail.draggable = false;
+      art.append(thumbnail);
+      const count = document.createElement('span');
+      count.className = 'dive-result__reward-quantity ui-role-numeral';
+      count.textContent = amount;
+      count.setAttribute('aria-hidden', 'true');
+      entry.append(art, count);
+      if (condition === 'broken') {
+        const label = document.createElement('span');
+        label.className = 'fishing-result-condition ui-role-context';
+        label.textContent = name;
+        label.setAttribute('aria-hidden', 'true');
+        entry.append(label);
+      }
+      return entry;
+    }));
   }
 
   refreshResultPlacement(): void {
@@ -498,7 +537,7 @@ export class SurvivalFishingView {
       || this.continueIssued
       || !this.canUseResult()
       || !(target instanceof Element)
-      || target.closest('[data-fishing-result-continue]') === null
+      || target.closest('[data-fishing-result-close]') === null
     ) return;
     this.continueIssued = true;
     this.onContinue();

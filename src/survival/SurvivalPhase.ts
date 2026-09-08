@@ -847,7 +847,10 @@ export class SurvivalPhase implements GamePhase {
     const released = this.busy && !busy;
     this.busy = busy;
     this.ui.setBusy?.(busy);
-    if (busy) this.world.setAvailableDayActions?.([]);
+    if (busy) {
+      this.world.setAvailableDayActions?.([]);
+      this.world.setPillowAvailable?.(false);
+    }
     if (released) this.renderSnapshot(false, false);
     else this.syncCameraTurnControl(this.session.snapshot());
     if (!busy) this.emitStableCheckpoint();
@@ -893,11 +896,19 @@ export class SurvivalPhase implements GamePhase {
     this.ui.setJournalUnread?.(this.latestJournalRevision(snapshot) > this.lastReadJournalRevision);
   }
 
-  private renderSnapshot(openPendingEvent: boolean, presentTerminal = true): SurvivalSnapshot {
-    const snapshot = this.session.snapshot();
+  private syncAvailableActions(snapshot: SurvivalSnapshot): void {
     this.world.setAvailableDayActions?.(this.busy ? [] : OUTLINED_DAY_ACTIONS.filter((action) => (
       this.dayActionFlow.unavailableReason(snapshot, action) === null
     )));
+    this.world.setPillowAvailable?.(!this.busy && (
+      this.dayActionFlow.unavailableReason(snapshot, 'endDay') === null
+      || this.eventFlow.canUsePillow(snapshot)
+    ));
+  }
+
+  private renderSnapshot(openPendingEvent: boolean, presentTerminal = true): SurvivalSnapshot {
+    const snapshot = this.session.snapshot();
+    this.syncAvailableActions(snapshot);
     this.syncVisualState(snapshot);
     this.world.setPhase?.(snapshot.state === 'nightEvent' ? 'night' : 'day');
     this.ui.render?.(snapshot, (action) => (

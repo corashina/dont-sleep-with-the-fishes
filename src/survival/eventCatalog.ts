@@ -28,7 +28,7 @@ export const SURVIVAL_EVENT_IDS = Object.freeze([
   'dangerous-waters', 'leak', 'school-of-fish', 'snatcher',
   'death-stare', 'swarm-of-sharks', 'tornado', 'shower-night',
   'windy-night', 'bad-sleep', 'thunderstorm', 'restless-waves',
-  'man-in-the-fog', 'ghosts', 'eerie-melody', 'face-on-the-moon',
+  'monster-in-the-fog', 'ghosts', 'eerie-melody', 'face-on-the-moon',
   'shadow-figure', 'guarded-sleep',
   'drifting-supplies', 'drifting-chest', 'wreckage',
   'check-the-back',
@@ -96,7 +96,7 @@ const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.free
   'bad-sleep': 'eventText011',
   thunderstorm: 'eventText012',
   'restless-waves': 'eventText013',
-  'man-in-the-fog': 'eventText014',
+  'monster-in-the-fog': 'eventText014',
   ghosts: 'eventText015',
   'eerie-melody': 'eventText016',
   'face-on-the-moon': 'eventText017',
@@ -428,7 +428,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(50, 'eventText171', atNextDawn(1, effects([subtract('hull', { min: 20, max: 30 })]))),
       outcome(50, 'eventText172', effects([subtract('hull', { min: 15, max: 25 })], [loseRandom(1)]))),
   ]),
-  event('man-in-the-fog', 'night', 'eventText043', 'dangerous', 'darkness', 1, 6, 4, [
+  event('monster-in-the-fog', 'night', 'eventText043', 'dangerous', 'darkness', 1, 6, 4, [
     choice('compass', 'eventText062', 'compass',
       outcome(1, 'eventText173',
         effects([subtract('pressure', 1)]))),

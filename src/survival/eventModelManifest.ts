@@ -27,7 +27,6 @@ export interface SurvivalEventModelSpec {
 }
 
 const NO_ROTATION = [0, 0, 0] as const;
-const QUARTER_TURN_Y = [0, Math.PI / 2, 0] as const;
 
 export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
   SurvivalEventModelId,
@@ -42,7 +41,7 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
   checkBackFish: Object.freeze({
     url: new URL('../assets/models/fishing/bass.glb', import.meta.url).href,
     targetLongestDimension: 0.525,
-    rotation: QUARTER_TURN_Y,
+    rotation: [Math.PI / 2, Math.PI / 2, 0] as const,
     maxTriangles: 506,
   }),
   checkBackAnglerfish: Object.freeze({
@@ -90,7 +89,7 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
 });
 
 export const EVENT_MODEL_IDS = Object.freeze([
-  'fogMan', 'ghost', 'siren', 'sirenRock',
+  'fogMonster', 'ghost', 'siren', 'sirenRock',
   'leakPlanks', 'schoolFish', 'cod', 'bass', 'redSnapper',
   'snatcher', 'anglerFish', 'shark', 'deathStareBlob',
   'tornadoCore',
@@ -125,11 +124,11 @@ export interface EventModelSpec {
 export const EVENT_MODEL_MAX_TOTAL_TRIANGLES = 22_000;
 
 const PRESENTATION = {
-  fogMan: {
+  fogMonster: {
     targetLongestDimension: 2.4,
-    rotation: [0, Math.PI, 0],
-    offset: [0, 1.2, 0],
-    maxTriangles: 2_200,
+    rotation: [0, 0, 0],
+    offset: [0, 0, 0],
+    maxTriangles: 2_500,
   },
   ghost: {
     targetLongestDimension: 1.65,
@@ -192,10 +191,10 @@ const PRESENTATION = {
     maxTriangles: 4_000,
   },
   shark: {
-    targetLongestDimension: 1.2,
+    targetLongestDimension: 3.2,
     rotation: [0, 0, 0],
     offset: [0, 0, 0],
-    maxTriangles: 200,
+    maxTriangles: 7_000,
   },
   deathStareBlob: {
     targetLongestDimension: 1.0,
@@ -278,7 +277,7 @@ function checkedMetadata(
 }
 
 const generatedMetadata = {
-  fogMan: checkedMetadata('fogMan', generatedMetadataJson.fogMan),
+  fogMonster: checkedMetadata('fogMonster', generatedMetadataJson.fogMonster),
   ghost: checkedMetadata('ghost', generatedMetadataJson.ghost),
   siren: checkedMetadata('siren', generatedMetadataJson.siren),
   sirenRock: checkedMetadata('sirenRock', generatedMetadataJson.sirenRock),

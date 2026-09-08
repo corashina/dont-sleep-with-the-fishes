@@ -240,7 +240,7 @@ export class SurvivalUI {
         [this.modalViews.endingRoot, () => this.modalViews.endingInitialFocus()],
         [this.coverView.resultRoot, this.coverView.resultClose],
         [this.focusedEventView.root, () => this.focusedEventView.initialFocus()],
-        [this.fishingView.resultRoot, this.fishingView.resultContinue],
+        [this.fishingView.resultRoot, this.fishingView.resultClose],
         [this.fishingView.interactionRoot, () => this.fishingView.initialFocus()],
       ]),
       (layer) => layer !== this.fishingView.interactionRoot || this.fishingView.mode() !== 'ready',
@@ -248,7 +248,7 @@ export class SurvivalUI {
     this.modalFocus.sync();
     this.modalDismissButtons = new Map<HTMLElement, HTMLButtonElement>([
       [this.coverView.resultRoot, this.coverView.resultClose],
-      [this.fishingView.resultRoot, this.fishingView.resultContinue],
+      [this.fishingView.resultRoot, this.fishingView.resultClose],
       [this.focusedEventView.root, this.focusedEventView.backButton],
       [this.modalViews.repairRoot, requireElement(this.modalViews.repairRoot, '[data-repair-cancel]')],
       [this.modalViews.pauseRoot, this.modalViews.resumeButton],

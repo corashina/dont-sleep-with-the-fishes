@@ -17,6 +17,26 @@ const LAYERS = Object.freeze([
   Object.freeze({ x: -9.4, y: 0.55, z: -17, width: 14.6, height: 1.3, rotation: 0.18 }),
 ] as const);
 
+const SURROUNDING_LAYERS = [
+  { radiusX: 2.8, radiusZ: 4.3, y: 1.3, height: 2.5 },
+  { radiusX: 6, radiusZ: 8, y: 1.55, height: 3 },
+  { radiusX: 12, radiusZ: 16, y: 1.85, height: 3.6 },
+].flatMap((ring) => Array.from({ length: 8 }, (_, index) => {
+  const angle = index * Math.PI / 4;
+  const start = angle - Math.PI / 8;
+  const end = angle + Math.PI / 8;
+  const dx = (Math.sin(end) - Math.sin(start)) * ring.radiusX;
+  const dz = (Math.cos(start) - Math.cos(end)) * ring.radiusZ;
+  return {
+    x: Math.sin(angle) * ring.radiusX,
+    y: ring.y,
+    z: -Math.cos(angle) * ring.radiusZ,
+    width: Math.hypot(dx, dz) * 1.45,
+    height: ring.height,
+    rotation: Math.atan2(-dz, dx),
+  };
+}));
+
 const COLORS = [0x789298, 0x68868d, 0x56777f, 0x6f8b91, 0x496b73] as const;
 const SEEDS = [0.17, 0.39, 0.61, 0.83, 1.07] as const;
 
@@ -65,24 +85,26 @@ function createMaterial(color: number, seed: number): ShaderMaterial {
 
 export class SeaMistCurtain {
   readonly root = new Group();
-  readonly layerCount = LAYERS.length;
+  readonly layerCount: number;
 
   private readonly materials = COLORS.map((color, index) => (
     createMaterial(color, SEEDS[index]!)
   ));
 
-  constructor(name: string) {
+  constructor(name: string, layout: 'distant' | 'surrounding' = 'distant') {
     this.root.name = name;
-    for (let index = 0; index < LAYERS.length; index += 1) {
-      const layer = LAYERS[index]!;
+    const layers = layout === 'surrounding' ? SURROUNDING_LAYERS : LAYERS;
+    this.layerCount = layers.length;
+    for (let index = 0; index < layers.length; index += 1) {
+      const layer = layers[index]!;
       const strip = new Mesh(
         new PlaneGeometry(layer.width, layer.height),
-        this.materials[index]!,
+        this.materials[index % this.materials.length]!,
       );
       strip.name = `${name}-layer-${index + 1}`;
       strip.position.set(layer.x, layer.y, layer.z);
       strip.rotation.set(0, layer.rotation, 0);
-      strip.renderOrder = 2 + index;
+      strip.renderOrder = layout === 'surrounding' ? 2 : 2 + index;
       this.root.add(strip);
     }
     this.root.visible = false;

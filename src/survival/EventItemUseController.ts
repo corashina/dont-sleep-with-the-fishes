@@ -18,6 +18,11 @@ import {
 } from './eventItemUseChoreography';
 import type { EventOutcomePresentation } from './eventPresentationTypes';
 
+export interface EventNetCatch {
+  capture(net: Object3D): void;
+  release(): void;
+}
+
 export interface EventItemUseRequest {
   readonly eventId: string;
   readonly choiceId: string;
@@ -25,6 +30,7 @@ export interface EventItemUseRequest {
   readonly itemId: ItemId;
   readonly context: EventItemUseContext;
   readonly aimTarget: Object3D | null;
+  readonly netCatch?: EventNetCatch | null;
   readonly onAction?: (cueIndex: number) => void;
 }
 
@@ -140,6 +146,12 @@ export class EventItemUseController {
       this.held = null;
       return Promise.resolve();
     }
+    if (held.request.context === 'umbrella-overhead') {
+      // Keep shelter overhead until the event flow clears the covered scene.
+      sampleEventItemUse('umbrella-overhead', 'umbrella', 1, this.sample);
+      this.applyRequestSample(held.request);
+      return Promise.resolve();
+    }
     return this.startReaction(held, dispositionFor(held.request, result));
   }
 
@@ -204,6 +216,7 @@ export class EventItemUseController {
     const progress = use.elapsed / use.duration;
     sampleEventItemUse(use.request.context, use.request.itemId, progress, this.sample);
     this.applyRequestSample(use.request);
+    if (progress >= 0.75) use.request.netCatch?.capture(use.actor.root);
     const actionCueProgresses = eventItemActionCueProgresses(use.request.context);
     while (use.request.onAction !== undefined
       && use.nextActionCueIndex < actionCueProgresses.length
@@ -268,6 +281,10 @@ export class EventItemUseController {
       this.sample.cameraTargetBlend = 0;
       this.sample.fovScale = 1;
     }
+    if (request.netCatch !== undefined && request.netCatch !== null) {
+      this.sample.flightTarget = 'event';
+      this.sample.ballisticFlight = false;
+    }
     this.adapter.apply(this.sample);
   }
 
@@ -280,6 +297,7 @@ export class EventItemUseController {
       this.supplies.stowEventItemUntilDay(request.instanceId);
     }
     this.adapter.clear();
+    request.netCatch?.release();
     actor.release();
   }
 }

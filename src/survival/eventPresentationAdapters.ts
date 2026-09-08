@@ -87,6 +87,7 @@ interface AdapterOperations {
     onAction?: (cueIndex: number) => void,
   ): Promise<boolean>;
   itemAimTarget(): Object3D | null;
+  netCatch?: EventPresentationAdapter['netCatch'];
   interactionTargets(): readonly FocusedEventInteractionTarget[];
   interactionRoot(id: string): Object3D | null;
   resultRoot(id: string): Object3D | null;
@@ -121,6 +122,9 @@ function createAdapter(
       return onAction === undefined
         ? operations.playItemUse(choiceId, instanceId)
         : operations.playItemUse(choiceId, instanceId, onAction);
+    },
+    netCatch() {
+      return disposed ? null : operations.netCatch?.() ?? null;
     },
     itemAimTarget(): Object3D | null {
       return disposed ? null : operations.itemAimTarget();
@@ -388,6 +392,7 @@ export const createFeaturedAdapter: EventPresentationAdapterFactory = (
     playChoice: noChoice,
     playItemUse: noItemUse,
     itemAimTarget: () => featured.itemAimTarget(eventId),
+    netCatch: () => featured.netCatch(),
     interactionTargets: noInteractionTargets,
     interactionRoot: (id) => featured.interactionRoot(id),
     resultRoot: (id) => featured.resultRoot(id),

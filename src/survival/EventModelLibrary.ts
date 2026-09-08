@@ -33,12 +33,11 @@ export interface EventModelInstance {
 
 type SupernaturalEventModelId = Extract<
   EventModelId,
-  'fogMan' | 'ghost' | 'siren' | 'sirenRock'
+  'ghost' | 'siren' | 'sirenRock'
 >;
 type DedicatedEventModelId = Exclude<EventModelId, SupernaturalEventModelId>;
 
 const SUPERNATURAL_EVENT_MODEL_IDS = new Set<EventModelId>([
-  'fogMan',
   'ghost',
   'siren',
   'sirenRock',

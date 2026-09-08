@@ -800,7 +800,24 @@ describe('SurvivalEventFlow', () => {
     await rig.flow.revealPending(pending);
     rig.calls.length = 0;
 
+    const hold = deferred();
+    const cover = deferred();
+    rig.ui.holdEventOutcome.mockImplementation(async () => {
+      rig.calls.push('hold');
+      await hold.promise;
+    });
+    rig.ui.setSleepCovered.mockImplementation(async (covered) => {
+      rig.calls.push(covered ? 'cover' : 'uncover');
+      if (covered) await cover.promise;
+    });
     rig.flow.resolveItem('umbrella', 'umbrella-1');
+    await vi.waitFor(() => expect(rig.calls).toContain('hold'));
+    expect(rig.calls).not.toContain('cover');
+    expect(rig.world.clearEvent).not.toHaveBeenCalled();
+    hold.resolve();
+    await vi.waitFor(() => expect(rig.calls).toContain('cover'));
+    expect(rig.world.clearEvent).not.toHaveBeenCalled();
+    cover.resolve();
     await vi.waitFor(() => expect(rig.ui.restoreCommandFocus).toHaveBeenCalledOnce());
 
     expect(rig.calls).toContain('use:shower-night/umbrella');

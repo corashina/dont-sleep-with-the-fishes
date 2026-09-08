@@ -78,7 +78,7 @@ const EVENT_CHOICE_PRIORITY = Object.freeze({
   'bad-sleep': ['flashlight', 'bucket', 'swimRing', 'umbrella', 'sleep'],
   thunderstorm: ['anchor', 'umbrella', 'bucket', 'sleep'],
   'restless-waves': ['anchor', 'swimRing', 'sleep'],
-  'man-in-the-fog': ['compass', 'flashlight', 'sleep'],
+  'monster-in-the-fog': ['compass', 'flashlight', 'sleep'],
   ghosts: ['flashlight', 'sleep', 'flareGun'],
   'eerie-melody': ['ductTape', 'umbrella', 'bucket', 'sleep', 'spyglass'],
   'face-on-the-moon': ['umbrella', 'spyglass', 'sleep'],

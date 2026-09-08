@@ -273,6 +273,8 @@ export const uiCatalog = {
     "pl": "Dryfująca skrzynia",
     "es-AR": "Cofre a la deriva"
   },
+  "fishingResult": { en: 'Fishing result', pl: 'Wynik połowu', 'es-AR': 'Resultado de pesca' },
+  "closeFishing": { en: 'Close fishing result', pl: 'Zamknij wynik połowu', 'es-AR': 'Cerrar resultado de pesca' },
   "fishingInteraction": {
     "en": "Fishing interaction",
     "pl": "Łowienie ryb",

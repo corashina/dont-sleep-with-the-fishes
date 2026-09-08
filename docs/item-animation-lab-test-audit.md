@@ -112,7 +112,7 @@ The event and choice shown below are preview inputs. They are not proof that the
 
 ### COMPASS
 
-- [ ] Search with compass (`man-in-the-fog` / `compass`).
+- [ ] Search with compass (`monster-in-the-fog` / `compass`).
 
 ### MAP
 
@@ -441,9 +441,9 @@ Selector: Restless Waves.
   - [ ] `outcome 1`: The waves damage the boat. Effects: subtract hull 20–30; next dawn Energy 1.
   - [ ] `outcome 2`: The waves damage the boat and take an item. Effects: subtract hull 15–25; loseRandom  ×1.
 
-### Man in the Fog (night)
+### Monster in the Fog (night)
 
-Selector: Man in the Fog.
+Selector: Monster in the Fog.
 
 - [ ] **Use Compass** (`compass`) — needs usable COMPASS.
   - [ ] `outcome 1`: The compass keeps the boat on a steady bearing. Effects: subtract pressure 1.
