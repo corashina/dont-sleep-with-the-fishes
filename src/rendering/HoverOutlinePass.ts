@@ -100,9 +100,8 @@ export class HoverOutlinePass extends OutlinePass {
       internals._changeVisibilityOfNonSelectedObjects(false);
       renderer.render(this.renderScene, this.renderCamera);
 
-      // The scene render resolved mask color. Initialize its copy destination first.
-      renderer.setRenderTarget(this.renderTargetMaskBuffer);
-      renderer.copyTextureToTexture(readBuffer.texture, this.renderTargetMaskBuffer.texture);
+      // Copy resolved mask color with the existing fullscreen material.
+      this.copyColor(renderer, readBuffer, this.renderTargetMaskBuffer);
     } catch (error) {
       if (sourceColorModified) {
         try {

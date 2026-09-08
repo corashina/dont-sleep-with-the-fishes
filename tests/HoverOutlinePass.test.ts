@@ -50,7 +50,6 @@ function createFixture() {
     setRenderTarget: vi.fn((value: WebGLRenderTarget | null) => { target = value; }),
     clear: vi.fn(() => { events.push('clear'); }),
     render: vi.fn(() => { events.push('scene'); }),
-    copyTextureToTexture: vi.fn(() => { events.push('copy-mask'); }),
   } as unknown as WebGLRenderer;
   const imageRender = vi.spyOn(internals._fsQuad, 'render').mockImplementation(() => {
     events.push('image');
@@ -100,6 +99,13 @@ it('saves color before clearing only source color and draws selected geometry on
     expect(f.pass.materialCopy.depthTest).toBe(false);
     expect(f.pass.materialCopy.depthWrite).toBe(false);
     expect(f.pass.materialCopy.blending).toBe(NoBlending);
+  }).mockImplementationOnce(() => {
+    f.events.push('copy-mask');
+    expect(f.renderer.getRenderTarget()).toBe(f.pass.renderTargetMaskBuffer);
+    expect(f.pass.materialCopy.uniforms.tDiffuse!.value).toBe(f.read.texture);
+    expect(f.pass.materialCopy.depthTest).toBe(false);
+    expect(f.pass.materialCopy.depthWrite).toBe(false);
+    expect(f.pass.materialCopy.blending).toBe(NoBlending);
   });
   try {
     expect(f.capture.needsSwap).toBe(false);
@@ -107,15 +113,13 @@ it('saves color before clearing only source color and draws selected geometry on
     expect(f.events).toEqual(['save', 'clear', 'scene', 'copy-mask']);
     expect(f.renderer.clear).toHaveBeenCalledExactlyOnceWith(true, false, false);
     expect(f.renderer.render).toHaveBeenCalledExactlyOnceWith(f.scene, f.pass.renderCamera);
-    expect(f.renderer.copyTextureToTexture).toHaveBeenCalledExactlyOnceWith(
-      f.read.texture, f.pass.renderTargetMaskBuffer.texture,
-    );
+    expect(f.imageRender).toHaveBeenCalledTimes(2);
     expect(f.renderer.setRenderTarget).toHaveBeenCalledWith(f.pass.renderTargetMaskBuffer);
     expect(f.capture.needsSwap).toBe(true);
     f.assertRestored();
     f.compose();
     expect(f.renderer.render).toHaveBeenCalledTimes(1);
-    expect(f.imageRender).toHaveBeenCalledTimes(6);
+    expect(f.imageRender).toHaveBeenCalledTimes(7);
     f.assertRestored();
   } finally { f.dispose(); }
 });
@@ -124,10 +128,15 @@ it('uses either composer target as the retained depth source', () => {
   const f = createFixture();
   try {
     f.runCapture();
+    f.imageRender.mockImplementationOnce(() => {
+      expect(f.renderer.getRenderTarget()).toBe(f.read);
+      expect(f.pass.materialCopy.uniforms.tDiffuse!.value).toBe(f.write.texture);
+    }).mockImplementationOnce(() => {
+      expect(f.renderer.getRenderTarget()).toBe(f.pass.renderTargetMaskBuffer);
+      expect(f.pass.materialCopy.uniforms.tDiffuse!.value).toBe(f.write.texture);
+    });
     f.capture.render(f.renderer, f.read, f.write, 0, false);
-    expect(f.renderer.copyTextureToTexture).toHaveBeenLastCalledWith(
-      f.write.texture, f.pass.renderTargetMaskBuffer.texture,
-    );
+    expect(f.imageRender).toHaveBeenCalledTimes(4);
     expect(f.capture.needsSwap).toBe(true);
   } finally { f.dispose(); }
 });
@@ -200,11 +209,23 @@ it.each(['scene', 'copy-mask'] as const)('restores state and saved color after %
     f.runCapture();
     f.imageRender.mockClear();
     const failure = new Error(stage);
-    vi.mocked(stage === 'scene' ? f.renderer.render : f.renderer.copyTextureToTexture)
-      .mockImplementationOnce(() => { throw failure; });
+    f.imageRender.mockImplementationOnce(() => undefined);
+    if (stage === 'scene') {
+      vi.mocked(f.renderer.render).mockImplementationOnce(() => { throw failure; });
+    } else {
+      f.imageRender.mockImplementationOnce(() => {
+        expect(f.renderer.getRenderTarget()).toBe(f.pass.renderTargetMaskBuffer);
+        expect(f.pass.materialCopy.uniforms.tDiffuse!.value).toBe(f.read.texture);
+        throw failure;
+      });
+    }
+    f.imageRender.mockImplementationOnce(() => {
+      expect(f.renderer.getRenderTarget()).toBe(f.read);
+      expect(f.pass.materialCopy.uniforms.tDiffuse!.value).toBe(f.write.texture);
+    });
     expect(f.runCapture).toThrow(failure);
     expect(f.capture.needsSwap).toBe(false);
-    expect(f.imageRender).toHaveBeenCalledTimes(2);
+    expect(f.imageRender).toHaveBeenCalledTimes(stage === 'scene' ? 2 : 3);
     expect(f.pass.materialCopy.uniforms.tDiffuse!.value).toBe(f.write.texture);
     expect(f.scene.background).toBe(background);
     expect(f.scene.overrideMaterial).toBe(override);
