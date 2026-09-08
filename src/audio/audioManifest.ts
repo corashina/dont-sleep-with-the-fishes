@@ -92,7 +92,6 @@ export const EVENT_ONLY_SOUND_IDS = Object.freeze([
   'flareGunShot',
   'flareGun',
   'shotgun',
-  'yawn',
   'thunderLightning',
   'thunderLightningCrack',
   'thunderLightningDry',

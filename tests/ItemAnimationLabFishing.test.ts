@@ -34,7 +34,7 @@ describe('Item Animation Lab fishing', () => {
       await Promise.resolve();
       phase.update(100, 100);
       await vi.waitFor(() => expect(world.playFishingMiss).toHaveBeenCalledOnce());
-      mount.querySelector<HTMLButtonElement>('[data-fishing-result-continue]')!.click();
+      mount.querySelector<HTMLButtonElement>('[data-fishing-result-close]')!.click();
       mount.querySelector<HTMLButtonElement>('[data-fishing-view-exit]')!.click();
       await vi.waitFor(() => expect(world.exitFishingView).toHaveBeenCalledOnce());
       rod.click();

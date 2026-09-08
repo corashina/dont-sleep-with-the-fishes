@@ -65,7 +65,7 @@ export const DANGEROUS_WATERS_ITEM_DURATION = scaleEventItemDuration(CHOICE_DURA
 const REACTION_DURATION = 0.9;
 const FRAGMENT_COUNT = 8;
 
-const DISTANT_ROCK_PLACEMENTS: readonly Readonly<{
+const ADDITIONAL_ROCK_PLACEMENTS: readonly Readonly<{
   name: string;
   position: VectorTuple;
   scale: VectorTuple;
@@ -106,6 +106,10 @@ const DISTANT_ROCK_PLACEMENTS: readonly Readonly<{
   { name: 'distant-33', position: [25, -0.72, -26], scale: [2.75, 1.84, 2.1], turn: -0.22 },
   { name: 'distant-34', position: [33, -0.82, -35], scale: [2.45, 1.65, 1.9], turn: 0.32 },
   { name: 'distant-35', position: [43, -0.9, -46], scale: [2.2, 1.48, 1.74], turn: -0.38 },
+  { name: 'port-edge-near', position: [-12.4, -0.68, -6.8], scale: [2.4, 1.6, 1.65], turn: 0.34 },
+  { name: 'starboard-edge-near', position: [13.7, -0.7, -7.7], scale: [2.65, 1.85, 1.8], turn: -0.28 },
+  { name: 'port-edge-far', position: [-22, -0.74, -13.2], scale: [2.7, 1.9, 2.1], turn: -0.16 },
+  { name: 'starboard-edge-far', position: [23.4, -0.8, -14.2], scale: [2.8, 2.1, 2.2], turn: 0.22 },
 ]);
 
 function createMaterials(): DangerousWatersMaterials {
@@ -297,7 +301,7 @@ export class DangerousWatersPresentation {
       this.materials,
       -0.18,
     );
-    const distantRocks = DISTANT_ROCK_PLACEMENTS.map((placement) => (
+    const additionalRocks = ADDITIONAL_ROCK_PLACEMENTS.map((placement) => (
       createRockGroup(
         `dangerous-waters-rock:${placement.name}`,
         placement.position,
@@ -316,7 +320,7 @@ export class DangerousWatersPresentation {
       starboardNearRock,
       channelRock,
       horizonRock,
-      ...distantRocks,
+      ...additionalRocks,
       this.itemAimTarget,
     );
     this.root.add(this.passage, this.fragments);
@@ -577,9 +581,7 @@ export class DangerousWatersPresentation {
   ): void {
     const pulse = progress >= 1 ? 0 : Math.sin(Math.PI * progress);
     const lift = smoothstep(Math.min(1, progress / 0.55));
-    if (choiceId === 'map') {
-      this.boatReaction.yaw -= pulse * 0.025 + lift * 0.02;
-    } else if (choiceId === 'compass') {
+    if (choiceId === 'compass') {
       this.boatReaction.yaw -= pulse * 0.014 + lift * 0.035;
     } else if (choiceId === 'sleep') {
       this.boatReaction.driftX -= lift * 0.12;
@@ -589,6 +591,7 @@ export class DangerousWatersPresentation {
   }
 
   private applySafePose(progress: number): void {
+    if (this.resultBaseChoiceId === 'map') return;
     const eased = smoothstep(progress);
     this.boatReaction.driftX -= eased * 0.48;
     this.boatReaction.yaw -= Math.sin(Math.PI * progress) * 0.028;

@@ -45,15 +45,15 @@ const EVENT_SOURCES = Object.freeze({
     creator: 'Poly by Google',
     license: 'CC BY 3.0',
   }),
-  fogMan: Object.freeze({
-    publicId: 'mQnGoME1ez',
-    resourceId: '66b57880-bcb0-479a-8d72-5c3e88afaa39',
-    sha256: '31FF1539E7A9A209D4EB1107E696D798FEDC7E35D84A58BBABFDC0F1B8B73763',
-    triangles: 2058,
-    maxTriangles: 2_200,
-    title: 'Man in Suit',
-    creator: 'Quaternius',
-    license: 'CC0 1.0',
+  fogMonster: Object.freeze({
+    publicId: '6O6XUMssAW',
+    resourceId: 'd0bb28aa-deb9-4c66-a7b6-de1461137cf6',
+    sha256: '8837B6E4DB5261614E0A26D6C502A011731B27AD6E5A761AE7AAD330C836483D',
+    triangles: 2340,
+    maxTriangles: 2_500,
+    title: 'Slime Enemy',
+    creator: 'Charlie',
+    license: 'CC-BY 3.0',
   }),
   ghost: Object.freeze({
     publicId: '112vpcommxv',
@@ -98,7 +98,7 @@ const FOCUSED_EVENT_MODEL_IDS = Object.freeze([
   'midnightShovel',
   'midnightMonster',
 ]);
-const ATTRIBUTION_MODEL_IDS = Object.freeze(['ghost', 'fogMan', 'siren', 'sirenRock']);
+const ATTRIBUTION_MODEL_IDS = Object.freeze(['ghost', 'fogMonster', 'siren', 'sirenRock']);
 const ATTRIBUTION_HEADING = '## Runtime survival-event model ledger';
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 

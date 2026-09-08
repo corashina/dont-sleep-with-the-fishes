@@ -67,7 +67,8 @@ const PROFILES: Readonly<Record<ItemId, EventItemMotionProfile>> = Object.freeze
   fishingNet: Object.freeze({
     ...createProfile('large', 'fishingNet'),
     view: [0.3, -0.34, -0.92] as const,
-    actionOrigin: [0, 0, -0.82] as const,
+    // Center of the net basket, between the handle and the far rim.
+    actionOrigin: [0, 0, -0.56] as const,
   }),
   knife: Object.freeze({
     ...createProfile('one-hand', 'knife'),

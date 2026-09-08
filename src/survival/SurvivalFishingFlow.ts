@@ -4,7 +4,6 @@ import type { FishingResultView } from '../ui/SurvivalFishingView';
 import type { SurvivalUI } from '../ui/SurvivalUI';
 import { runCleanupSteps } from '../world/SceneResources';
 import type { BoatWorld } from './BoatWorld';
-import { fishingCatchFood } from './fishingCatalog';
 import type {
   FishingCastPoint,
   FishingSession,
@@ -77,55 +76,21 @@ type FishingPresentationState =
   | 'result'
   | 'returning';
 
-function buildFishingResult(
-  result: FishingTerminalResult,
-  outcome: ActionOutcome,
-): FishingResultView {
-  if (result.kind === 'miss') {
-    return {
-      caption: flowText('emptyHook'),
-      get title() { return flowText('away'); },
-      detail: flowText('noCatch'),
-      catchTarget: null,
-    };
-  }
-  if (result.catch.kind === 'junk') {
-    return {
-      caption: flowText('junk'),
-      title: result.catch.label.toLocaleUpperCase('en-US'),
-      detail: flowText('noFood'),
-      catchTarget: null,
-    };
-  }
-  if (result.catch.kind === 'utility') {
-    const reward = result.catch.reward;
-    const detail = reward.kind === 'bait'
-      ? flowText('bait')
-      : reward.kind === 'item' && reward.condition === 'broken'
-        ? flowText('broken')
-        : reward.kind === 'item' && reward.itemId === 'ductTape'
-          ? flowText('tape')
-          : flowText('bar');
-    return {
-      caption: flowText('utility'),
-      title: result.catch.label.toLocaleUpperCase('en-US'),
-      detail,
-      catchTarget: null,
-    };
-  }
-  return {
-    caption: flowText('catchSize', result.catch.size),
-    title: result.catch.label.toLocaleUpperCase('en-US'),
-    detail: flowText('food', fishingCatchFood(result.catch), outcome.deltas.bait === -1),
-    catchTarget: null,
-  };
-}
-
 export function formatFishingResult(result: FishingTerminalResult, outcome: ActionOutcome): FishingResultView {
+  const items: FishingResultView['items'][number][] = [];
+  if (outcome.deltas.food) {
+    items.push({ itemId: 'cannedFood', quantity: outcome.deltas.food, condition: 'usable' });
+  }
+  if (outcome.deltas.bait) {
+    items.push({ itemId: 'baitTin', quantity: outcome.deltas.bait, condition: 'usable' });
+  }
+  if (result.kind === 'catch' && result.catch.reward.kind === 'item') {
+    const { itemId, condition } = result.catch.reward;
+    items.push({ itemId, quantity: 1, condition });
+  }
   return {
-    get caption() { return buildFishingResult(result, outcome).caption; },
-    get title() { return buildFishingResult(result, outcome).title; },
-    get detail() { return buildFishingResult(result, outcome).detail; },
+    items,
+    get message() { return items.length === 0 ? flowText('nothing') : ''; },
     catchTarget: null,
   };
 }
@@ -489,7 +454,7 @@ export class SurvivalFishingFlow {
         this.viewportHeight,
       ) ?? null
       : null;
-    this.dependencies.ui.showFishingResult?.({ get caption() { return view.caption; }, get title() { return view.title; }, get detail() { return view.detail; }, catchTarget });
+    this.dependencies.ui.showFishingResult?.({ items: view.items, get message() { return view.message; }, catchTarget });
   }
 
   private async returnFromView(generation: number): Promise<void> {

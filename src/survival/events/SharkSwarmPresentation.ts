@@ -1,4 +1,5 @@
 import {
+  AnimationMixer,
   Box3,
   BufferGeometry,
   Color,
@@ -43,6 +44,8 @@ import {
 interface SharkActor {
   readonly root: Group;
   readonly modelInstance: EventModelInstance;
+  readonly mixer: AnimationMixer;
+  readonly swimDuration: number;
   readonly waterlineLocalY: number;
   readonly wave: WaveSample;
   readonly pose: SwarmSharkPose;
@@ -54,8 +57,7 @@ interface SharkActor {
 }
 
 const WATERLINE = 0.02;
-const FIN_PRESENTATION_SCALE = 1.55;
-const FIN_WATERLINE_FRACTION = 0.2;
+const BODY_WATERLINE_FRACTION = 0.55;
 const SWARM_BODY_TINT = new Color(0x31535b);
 const SPLASH_COUNT = 2;
 const DEFAULT_VARIANT: SwarmVariant = {
@@ -73,7 +75,7 @@ const DEFAULT_VARIANT: SwarmVariant = {
   netSlapWeight: 0,
 };
 
-function styleFin(root: Group): void {
+function styleShark(root: Group): void {
   root.traverse((object) => {
     if (!(object instanceof Mesh)) return;
     const materials = Array.isArray(object.material)
@@ -82,7 +84,7 @@ function styleFin(root: Group): void {
     for (let index = 0; index < materials.length; index += 1) {
       const material = materials[index]!;
       if (!(material instanceof MeshStandardMaterial)) continue;
-      material.color.lerp(SWARM_BODY_TINT, 0.55);
+      material.color.lerp(SWARM_BODY_TINT, 0.18);
       material.emissive.setHex(0x07161c);
       material.emissiveIntensity = 0.14;
       material.roughness = Math.max(0.68, material.roughness);
@@ -162,20 +164,24 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
     for (let index = 0; index < SWARM_SHARK_COUNT; index += 1) {
       const modelInstance = environment.eventModels.create('shark');
       const root = modelInstance.root;
-      styleFin(root);
+      const swim = root.animations.find((clip) => clip.name.endsWith('|Swim'));
+      if (swim === undefined) throw new Error('Shark model is missing its swim animation');
+      const mixer = new AnimationMixer(root);
+      mixer.clipAction(swim).play();
+      styleShark(root);
       root.updateMatrixWorld(true);
       const bodyBounds = new Box3().setFromObject(root);
       const waterlineLocalY = bodyBounds.isEmpty()
         ? 0
         : bodyBounds.min.y
-          + (bodyBounds.max.y - bodyBounds.min.y) * FIN_WATERLINE_FRACTION;
+          + (bodyBounds.max.y - bodyBounds.min.y) * BODY_WATERLINE_FRACTION;
       root.name = `swarm-shark-${index + 1}`;
-      root.userData.presentationScaleMaximum = 1.62;
       root.userData.waterlineLocalY = waterlineLocalY;
-      root.userData.finOnly = true;
       this.sharks.push({
         root,
         modelInstance,
+        mixer,
+        swimDuration: swim.duration,
         waterlineLocalY,
         wave: waveSample(),
         pose: createSwarmSharkPose(),
@@ -211,7 +217,9 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
     for (let index = 0; index < this.sharks.length; index += 1) {
       const variant = variants[index] ?? DEFAULT_VARIANT;
       this.variants[index] = variant;
-      this.sharks[index]!.variant = variant;
+      const shark = this.sharks[index]!;
+      shark.variant = variant;
+      shark.mixer.setTime(variant.motionPhase / (Math.PI * 2) * shark.swimDuration);
       this.sharks[index]!.root.userData.orbitRadiusX = variant.radiusX;
       this.sharks[index]!.root.userData.orbitRadiusZ = variant.radiusZ;
     }
@@ -271,6 +279,9 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
     const safeDelta = Number.isFinite(delta) ? Math.max(0, delta) : 0;
     this.animation.update(time, safeDelta);
     this.applySample(time);
+    for (let index = 0; index < this.sharks.length; index += 1) {
+      this.sharks[index]!.mixer.update(safeDelta);
+    }
   }
 
   settleForVisibilityChange(): void {
@@ -305,6 +316,8 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
       () => {
         for (let index = 0; index < this.sharks.length; index += 1) {
           const shark = this.sharks[index]!;
+          shark.mixer.stopAllAction();
+          shark.mixer.uncacheRoot(shark.root);
           shark.modelInstance.dispose();
         }
       },
@@ -346,7 +359,7 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
         shark.pose.z,
         waveAmplitudeScale,
       );
-      const presentationScale = shark.pose.scale * FIN_PRESENTATION_SCALE;
+      const presentationScale = shark.pose.scale;
       const surfaceY = WATERLINE + shark.wave.height;
       const positionX = shark.pose.x + shark.wave.displacementX;
       const positionZ = shark.pose.z + shark.wave.displacementZ;

@@ -8,6 +8,8 @@ import {
   sampleWaveFieldInto,
   type WaveSample,
 } from '../ocean/WaveField';
+import type { EventNetCatch } from './EventItemUseController';
+import { eventItemMotionProfile } from './eventItemMotionProfile';
 import { KeyedEventPresentation } from './KeyedEventPresentation';
 import type { SurvivalEventModels } from './SurvivalEventModelLibrary';
 
@@ -29,6 +31,12 @@ const PAD_FRONT_Z = -4.2;
 
 export class FlowersPresentation extends KeyedEventPresentation {
   private readonly pads: Group[] = [];
+  private readonly scoopTarget = new Object3D();
+  private caught = false;
+  readonly netCatch: EventNetCatch = {
+    capture: (net) => this.captureInNet(net),
+    release: () => this.releaseFromNet(),
+  };
   private readonly basePositions: Vector3[] = [];
   private readonly target = new Vector3();
   private readonly wave: WaveSample = {
@@ -55,15 +63,23 @@ export class FlowersPresentation extends KeyedEventPresentation {
       ));
       this.subject.add(pad);
     });
+    // Keep one small flower within reach beside the boat.
+    this.basePositions[0]!.set(2.8, 0.27, 0.55);
+    this.scoopTarget.name = 'flowers-scoop-target';
+    this.subject.add(this.scoopTarget);
   }
 
   itemAimTarget(): Object3D | null {
-    return super.itemAimTarget() === null ? null : this.pads[0] ?? null;
+    return super.itemAimTarget() === null ? null : this.scoopTarget;
   }
 
   protected reset(): void {
+    this.caught = false;
     this.subject.position.set(0, 0, 0);
     this.pads.forEach((pad, index) => {
+      this.subject.add(pad);
+      pad.scale.setScalar(index === 0 ? 0.2 : 0.76 + ((index * 7) % 9) * 0.045);
+      pad.rotation.set(0, ((index * 11) % 17) * 0.37, 0);
       pad.position.copy(this.basePositions[index]!);
       pad.visible = true;
     });
@@ -72,7 +88,7 @@ export class FlowersPresentation extends KeyedEventPresentation {
   protected applyIdle(time: number): void {
     if (this.settledKind === 'flowers.collect') {
       this.floatPads(time);
-      this.moveFirstToDeck(1);
+      if (!this.caught) this.moveFirstToDeck(1);
       return;
     }
     if (this.settledKind === 'flowers.drift') return;
@@ -85,7 +101,7 @@ export class FlowersPresentation extends KeyedEventPresentation {
       this.floatPads(time);
     } else if (kind === 'flowers.collect') {
       this.floatPads(time);
-      this.moveFirstToDeck(eased);
+      if (!this.caught) this.moveFirstToDeck(eased);
     } else if (kind === 'flowers.drift') {
       this.floatPads(time);
       this.subject.position.x = -eased * 1.4;
@@ -99,11 +115,13 @@ export class FlowersPresentation extends KeyedEventPresentation {
   }
 
   protected disposeOwned(): void {
-    // The shared model library owns the model resources.
+    // Restore the flower from the boat before removing this presentation.
+    this.subject.add(this.pads[0]!);
   }
 
   private floatPads(time: number): void {
     for (let index = 0; index < this.pads.length; index += 1) {
+      if (index === 0 && this.caught) continue;
       const pad = this.pads[index]!;
       const base = this.basePositions[index]!;
       sampleWaveFieldInto(this.wave, DEFAULT_WAVES, time, base.x, base.z, 1);
@@ -114,7 +132,23 @@ export class FlowersPresentation extends KeyedEventPresentation {
       );
       pad.rotation.z = -this.wave.normal.x * 0.09;
       pad.rotation.x = this.wave.normal.z * 0.09;
+      if (index === 0) this.scoopTarget.position.copy(pad.position);
     }
+  }
+
+  private captureInNet(net: Object3D): void {
+    if (this.caught) return;
+    this.caught = true;
+    const pad = this.pads[0]!;
+    net.attach(pad);
+    pad.position.set(...eventItemMotionProfile('fishingNet').actionOrigin);
+    pad.rotation.set(0, 0, 0);
+  }
+
+  private releaseFromNet(): void {
+    if (!this.caught) return;
+    // Leave the flower inside the stored net and follow the boat's motion.
+    (this.deckTarget.parent ?? this.subject).attach(this.pads[0]!);
   }
 
   private moveFirstToDeck(progress: number): void {

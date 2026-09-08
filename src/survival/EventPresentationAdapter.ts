@@ -1,4 +1,5 @@
 import type { Object3D } from 'three';
+import type { EventNetCatch } from './EventItemUseController';
 import type { ItemInstanceId } from '../game/ItemState';
 import type {
   EventChoicePresentation,
@@ -32,6 +33,7 @@ export interface EventPresentationAdapter {
     onAction?: (cueIndex: number) => void,
   ): Promise<boolean>;
   itemAimTarget(): Object3D | null;
+  netCatch?(): EventNetCatch | null;
   interactionTargets(): readonly FocusedEventInteractionTarget[];
   interactionRoot(id: string): Object3D | null;
   resultRoot(id: string): Object3D | null;

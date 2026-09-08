@@ -313,7 +313,9 @@ export class SurvivalAudio {
   }
 
   sleep(): void {
-    if (!this.disposed) this.scope.play('goingToSleep');
+    if (this.disposed) return;
+    this.scope.play('goingToSleep');
+    this.scope.play('yawn');
   }
 
   nightfall(): void {

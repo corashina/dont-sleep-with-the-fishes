@@ -136,7 +136,11 @@ async function fetchFreesound([id, user, number, license = 'cc0']) {
   if (previewUrl === undefined) throw new Error(`No HQ MP3 preview: ${pageUrl}`);
   const audio = await fetchBuffer(previewUrl);
   if (audio.length === 0) throw new Error(`Empty preview: ${previewUrl}`);
-  await writeFile(destination, audio);
+  // Start the dive clip at its splash instead of the quiet recording lead-in.
+  const output = id === 'diveEntry'
+    ? splitMp3ByWindows(audio, [[0.8, Infinity]])[0]
+    : audio;
+  await writeFile(destination, output);
   process.stdout.write(`Downloaded ${basename(destination)}\n`);
 }
 

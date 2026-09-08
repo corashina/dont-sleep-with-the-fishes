@@ -76,7 +76,7 @@ const CAMERA_ONLY_WEATHER_EVENTS: ReadonlySet<string> = new Set([
   'windy-night',
   'thunderstorm',
   'restless-waves',
-  'man-in-the-fog',
+  'monster-in-the-fog',
 ]);
 
 export function isCameraOnlyWeatherEvent(eventId: string): boolean {
@@ -88,7 +88,7 @@ const REVEAL_DURATIONS: Readonly<Record<WeatherAnimationEventId, number>> = Obje
   'windy-night': 3.6,
   thunderstorm: 4,
   'restless-waves': 3.8,
-  'man-in-the-fog': 5.2,
+  'monster-in-the-fog': 5.2,
   'bad-sleep': 3.4,
 });
 
@@ -114,7 +114,7 @@ const ITEM_CHOREOGRAPHY: Readonly<
     anchor: Object.freeze({ duration: 1.75, effectKind: 'wave-anchor-stabilize' }),
     swimRing: Object.freeze({ duration: 1.3, effectKind: 'wave-ring-buffer' }),
   }),
-  'man-in-the-fog': Object.freeze({
+  'monster-in-the-fog': Object.freeze({
     compass: Object.freeze({ duration: 1.2, effectKind: 'compass-bearing' }),
     spyglass: Object.freeze({ duration: 1.45, effectKind: 'spyglass-optical-push' }),
     flashlight: Object.freeze({ duration: 1.35, effectKind: 'fog-flashlight-sweep' }),
@@ -259,7 +259,7 @@ function sampleWeatherRevealMotion(
   }
   if (eventId === 'windy-night') sampleWindyReveal(t, output);
   if (eventId === 'thunderstorm') output.lightningEmphasis = pulse(t, 0.44, 0.55, 0.68);
-  if (eventId === 'man-in-the-fog') {
+  if (eventId === 'monster-in-the-fog') {
     output.figureVisibility = smoothstep((t - 0.2) / 0.18);
     output.figureDistance = 0;
     return false;
@@ -282,7 +282,7 @@ export function sampleWeatherReveal(
   const t = clamp01(progress);
   if (t === 0) return true;
   if (t === 1) {
-    if (eventId === 'man-in-the-fog') output.figureVisibility = 1;
+    if (eventId === 'monster-in-the-fog') output.figureVisibility = 1;
     return true;
   }
   if (!sampleWeatherRevealMotion(eventId, t, output)) return true;
@@ -349,7 +349,7 @@ function sampleCameraWeatherItem(
     output.cameraPush = 0.12 * impact;
   } else if (eventId === 'restless-waves') {
     sampleWaveItem(choiceId, t, hold, impact, output);
-  } else if (eventId === 'man-in-the-fog') {
+  } else if (eventId === 'monster-in-the-fog') {
     sampleFogItem(choiceId, t, hold, output);
   }
 }
@@ -436,7 +436,7 @@ export function weatherReactionDuration(
     case 'bad-sleep': return choiceId === 'umbrella' ? 1.4 : 1.2;
     case 'thunderstorm': return choiceId === 'anchor' ? 1.5 : 1.35;
     case 'restless-waves':
-    case 'man-in-the-fog':
+    case 'monster-in-the-fog':
       return 0.84;
     default: return actors > 0 ? 1.25 : 1.1;
   }
