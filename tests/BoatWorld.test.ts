@@ -39,6 +39,7 @@ import {
 } from '../src/game/ItemState';
 import { BoatBuoyancy } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
+import { HIGH_WATER_LOOK } from '../src/ocean/highWaterLook';
 import { HOVER_OUTLINE_NAME } from '../src/rendering/HoverOutline';
 import {
   tryCreateVolumetricClouds,
@@ -470,6 +471,26 @@ function focusedPresenterTestDouble(eventId: string): FocusedPresenterTestDouble
 
 
 describe('BoatWorld helpers', () => {
+  it('uses the shared High water look through survival day and night changes', () => {
+    const propModels = createTestPropModels();
+    const world = new BoatWorld(
+      new PerspectiveCamera(65, 16 / 9, 0.08, 220), propModels, ...createTestSkyTextures(),
+    );
+    try {
+      world.setWaterQuality('high');
+      const water = world.scene.getObjectByName('procedural-ocean') as Mesh<BufferGeometry, ShaderMaterial>;
+      for (const phase of ['day', 'night'] as const) {
+        world.setPhase(phase);
+        world.update(2, 1 / 60);
+        expect(water.material.uniforms.uWaterReflectionSky!.value).toEqual(HIGH_WATER_LOOK[phase].reflectionColor);
+        expect(water.material.uniforms.uFogDensity!.value).toBe(HIGH_WATER_LOOK[phase].fogDensity);
+      }
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
 
   it('keeps the skybox active when cloud construction falls back', () => {
     const propModels = createTestPropModels();

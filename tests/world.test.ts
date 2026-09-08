@@ -26,6 +26,7 @@ import { createItemInstances, ITEM_IDS, type ItemInstance } from '../src/game/It
 import { getSinkingState } from '../src/game/sinking';
 import { BoatBuoyancy, smoothBoatPose } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
+import { HIGH_WATER_LOOK } from '../src/ocean/highWaterLook';
 import { resolveLocalMovement } from '../src/player/collisions';
 import {
   ScavengePhysics,
@@ -232,6 +233,25 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
+  it('uses the shared High water look through scavenging day and night changes', () => {
+    const scene = new Scene();
+    const propModels = createTestPropModels();
+    const world = createTestWorld(scene, propModels);
+    try {
+      world.setWaterQuality('high');
+      const water = scene.getObjectByName('procedural-ocean') as Mesh<BufferGeometry, ShaderMaterial>;
+      for (const phase of ['day', 'night'] as const) {
+        world.setPresentationPhase(phase);
+        world.update(2, 1 / 60, getSinkingState(0, 120), new Vector3(), false);
+        expect(water.material.uniforms.uWaterReflectionSky!.value).toEqual(HIGH_WATER_LOOK[phase].reflectionColor);
+        expect(water.material.uniforms.uFogDensity!.value).toBe(HIGH_WATER_LOOK[phase].fogDensity);
+      }
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
   it('adds invisible pickup targets only to the four open scavenging items', () => {
     const scene = new Scene();
     const propModels = createTestPropModels();

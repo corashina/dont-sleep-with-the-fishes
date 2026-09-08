@@ -15,6 +15,13 @@ Both quality levels use the same Gerstner waves as buoyancy.
 High normals include horizontal wave displacement and vortex deformation.
 Small ripples fade with pixel footprint. Unresolved normal variation increases highlight roughness.
 
+`highWaterLook` owns the approved lab's day and night lighting presets.
+Scavenging, survival, and the lab use the same High sun direction, colors, and water fog.
+Reflection depth separates real object reflections from the shared reflected sky background.
+Deep water uses the lab's shallow optical background without adding a floor to gameplay worlds.
+Nearby submerged objects retain scene refraction. Weather still drives the shared waves and foam.
+Low water continues to use scene lighting.
+
 ## High preparation
 
 The first water color draw after an ocean update prepares its textures.
@@ -37,6 +44,34 @@ Planar reflections approximate the sea with its mean plane. Large waves remain a
 
 Switching to Low releases all five High textures. Disposal releases geometry and material resources.
 Steady frame updates reuse vectors, matrices, arrays, and targets.
+
+## Shader performance
+
+Both settings skip vortex calculations when its strength is zero.
+Low skips detail past its existing fade distance and foam where coverage is zero.
+High computes wave height and displaced normals in one wave loop.
+High skips foam noise below the minimum density and bubbles where coverage is zero.
+Screen derivatives run before the foam coverage branch.
+
+On 2026-09-08, paired 1080p water draws were measured on an RTX 4070 Ti.
+Each case used 120 warm-up frames, then 300 alternating before/after pairs.
+Each timing covered eight draws and was divided by eight to reduce timing noise.
+Both versions used the same geometry, capture textures, foam texture, camera, and simulation time.
+
+| View | Low before / after | High before / after |
+| --- | --- | --- |
+| Calm, day | 0.208 / 0.127 ms | 0.307 / 0.240 ms |
+| Rough, day | 0.241 / 0.168 ms | 0.318 / 0.269 ms |
+| Horizon, rough, night | 0.216 / 0.146 ms | 0.213 / 0.183 ms |
+| Active vortex, day | 0.236 / 0.151 ms | 0.230 / 0.181 ms |
+
+These are median water draw times, excluding capture, foam simulation, and the rest of the frame.
+They do not measure an equivalent gain in full-game FPS.
+Pixel comparisons covered all eight cases at the same simulation time.
+Low differed by at most one channel level in six pixels per image.
+The largest High difference affected 462 of 2,073,600 pixels by more than one channel level.
+Its mean channel error was below 0.001 on the 0–255 scale.
+No shader or WebGL errors occurred.
 
 ## Visual checks
 

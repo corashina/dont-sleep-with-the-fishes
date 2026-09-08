@@ -10,6 +10,7 @@ import {
 } from 'three';
 import { OceanCapture } from './OceanCapture';
 import { OceanFoam } from './OceanFoam';
+import { applyHighWaterLook } from './highWaterLook';
 import type { VortexWaveState } from './WaveField';
 import {
   UNBOUNDED_MAXIMUM_LOCAL_Y,
@@ -64,6 +65,7 @@ const OCEAN_SURFACE_QUALITY = Object.freeze({
 const finiteOrZero = (value: number): number => Number.isFinite(value) ? value : 0;
 
 export interface OceanAtmosphere {
+  phase: 'day' | 'night';
   fogColor: Color;
   horizonColor: Color;
   skyColor: Color;
@@ -84,10 +86,12 @@ export class OceanRenderer {
   private preparedVersion = -1;
   private preparedCamera: Camera | null = null;
   private preparing = false;
+  private atmosphere: OceanAtmosphere | undefined;
+  private fogDensity = 0;
 
   constructor(
     quality: WaterQuality = 'low',
-    lightDirection: CelestialDirection = SUN_DIRECTION,
+    private readonly lightDirection: CelestialDirection = SUN_DIRECTION,
   ) {
     this.quality = quality;
     const surfaceQuality = OCEAN_SURFACE_QUALITY[quality];
@@ -116,6 +120,7 @@ export class OceanRenderer {
       horizonMesh.frustumCulled = false;
       mesh.add(horizonMesh);
       this.uniforms = definition.uniforms;
+      this.applyAtmosphere();
       this.material = material;
       this.mesh = mesh;
       this.horizonMesh = horizonMesh;
@@ -152,6 +157,7 @@ export class OceanRenderer {
     this.material.defines = applyOceanShaderQuality(this.uniforms, value);
     this.material.needsUpdate = true;
     this.quality = value;
+    this.applyAtmosphere();
     this.preparedVersion = -1;
     runCleanupSteps([
       () => { if (value === 'low') this.releaseHighResources(); },
@@ -169,7 +175,19 @@ export class OceanRenderer {
     this.updateVersion += 1;
     this.uniforms.uTime.value = timeSeconds;
     this.uniforms.uAmplitudeScale.value = amplitudeScale;
-    this.uniforms.uFogDensity.value = fogDensity;
+    this.fogDensity = fogDensity;
+    this.atmosphere = atmosphere;
+    this.applyAtmosphere();
+  }
+
+  private applyAtmosphere(): void {
+    if (this.quality === 'high') {
+      applyHighWaterLook(this.uniforms, this.atmosphere?.phase ?? 'day');
+      return;
+    }
+    this.uniforms.uLightDirection.value.set(...this.lightDirection).normalize();
+    this.uniforms.uFogDensity.value = this.fogDensity;
+    const atmosphere = this.atmosphere;
     if (!atmosphere) return;
     this.uniforms.uFogColor.value.copy(atmosphere.fogColor);
     this.uniforms.uHorizonColor.value.copy(atmosphere.horizonColor);
@@ -258,6 +276,7 @@ export class OceanRenderer {
     this.uniforms.uWaterColor.value = capture.colorTexture;
     this.uniforms.uWaterDepth.value = capture.depthTexture;
     this.uniforms.uWaterReflection.value = capture.reflectionTexture;
+    this.uniforms.uWaterReflectionDepth.value = capture.reflectionDepthTexture;
   }
 
   private readonly prepareWater = (
@@ -301,6 +320,7 @@ export class OceanRenderer {
     this.uniforms.uWaterColor.value = null;
     this.uniforms.uWaterDepth.value = null;
     this.uniforms.uWaterReflection.value = null;
+    this.uniforms.uWaterReflectionDepth.value = null;
     this.uniforms.uPersistentFoam.value = null;
     runCleanupSteps([
       () => capture?.dispose(),

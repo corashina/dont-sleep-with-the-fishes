@@ -24,6 +24,7 @@ export class OceanCapture {
   readonly colorTexture: Texture;
   readonly depthTexture: DepthTexture;
   readonly reflectionTexture: Texture;
+  readonly reflectionDepthTexture: DepthTexture;
   readonly reflectionMatrix = new Matrix4();
   readonly inverseProjection = new Matrix4();
   readonly cameraWorld = new Matrix4();
@@ -66,6 +67,9 @@ export class OceanCapture {
     this.reflector.rotateX(-Math.PI / 2);
     this.reflector.updateMatrixWorld(true);
     this.reflectionTexture = this.reflector.getRenderTarget().texture;
+    this.reflectionDepthTexture = new DepthTexture(1, 1, UnsignedIntType);
+    this.reflectionDepthTexture.name = 'ocean-reflection-depth';
+    this.reflector.getRenderTarget().depthTexture = this.reflectionDepthTexture;
     this.reflectionTexture.name = 'ocean-reflection';
     this.reflectionTexture.colorSpace = LinearSRGBColorSpace;
     this.reflectorTextureMatrix = (
@@ -171,5 +175,7 @@ export class OceanCapture {
     this.depthTexture.image.width = width;
     this.depthTexture.image.height = height;
     this.reflector.getRenderTarget().setSize(width, height);
+    this.reflectionDepthTexture.image.width = width;
+    this.reflectionDepthTexture.image.height = height;
   }
 }
