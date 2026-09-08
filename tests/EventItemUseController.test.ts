@@ -21,7 +21,7 @@ import {
   EventItemUseController,
   type EventItemUseRequest,
 } from '../src/survival/EventItemUseController';
-import { eventItemUseDuration } from '../src/survival/eventItemUseChoreography';
+import { eventItemUseDuration, resolveEventItemUseContext } from '../src/survival/eventItemUseChoreography';
 import type { EventOutcomePresentation } from '../src/survival/eventPresentationTypes';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
@@ -97,6 +97,42 @@ function setup(
 }
 
 describe('EventItemUseController', () => {
+  it.each(
+    ['shower-night', 'thunderstorm', 'bad-sleep', 'death-stare', 'eerie-melody', 'face-on-the-moon']
+      .flatMap((eventId) => ['usable', 'broken', 'lost'].map((condition) => [eventId, condition])),
+  )('holds the umbrella in %s with a %s result until the covered event is cleared', async (eventId, condition) => {
+    const { actor, adapter, controller } = setup('umbrella-1');
+    const apply = vi.spyOn(adapter, 'apply');
+    try {
+      const use = controller.play({
+        ...request(actor.instanceId),
+        eventId,
+        choiceId: 'umbrella',
+        itemId: 'umbrella',
+        context: resolveEventItemUseContext(eventId!, 'umbrella', 'umbrella')!,
+      });
+      controller.update(10);
+      await use;
+      const overhead = { ...apply.mock.calls.at(-1)![0] };
+      const reaction = controller.react(result(actor.instanceId, {
+        brokenInstanceIds: condition === 'broken' ? [actor.instanceId] : [],
+        lostInstanceIds: condition === 'lost' ? [actor.instanceId] : [],
+      }));
+      controller.update(10);
+      await reaction;
+      expect(apply.mock.calls.at(-1)![0]).toEqual(overhead);
+      expect(actor.root.visible).toBe(true);
+      expect(actor.release).not.toHaveBeenCalled();
+      controller.update(3);
+      expect(apply.mock.calls.at(-1)![0]).toEqual(overhead);
+      controller.clear('night');
+      expect(actor.release).toHaveBeenCalledOnce();
+    } finally {
+      controller.dispose();
+      adapter.dispose();
+    }
+  });
+
   it('preserves player camera changes throughout the net attack and cleanup', () => {
     const { actor, adapter, camera, controller } = setup();
     const target = new Object3D();

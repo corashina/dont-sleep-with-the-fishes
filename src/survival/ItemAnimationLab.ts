@@ -50,7 +50,7 @@ Readonly<Partial<Record<ItemId, readonly ItemAnimationLabUse[]>>> = Object.freez
     use('trade-handover', 'tradeHandover', 'handyman', 'ductTape'),
   ),
   compass: uses(
-    use('compass-search', 'searchCompass', 'man-in-the-fog', 'compass'),
+    use('compass-search', 'searchCompass', 'monster-in-the-fog', 'compass'),
   ),
   map: uses(
     use('map-read', 'readMap', 'dangerous-waters', 'map'),

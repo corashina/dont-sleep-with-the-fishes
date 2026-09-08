@@ -16,7 +16,7 @@ function atmosphere(phase: 'day' | 'night'): OceanAtmosphere {
 }
 
 describe('shared High water look', () => {
-  it.each(['day', 'night'] as const)('keeps the lab lighting in different %s game atmospheres', (phase) => {
+  it.each(['day', 'night'] as const)('keeps the shared colors and each scene light direction during %s', (phase) => {
     const lab = new OceanRenderer('high');
     const survival = new OceanRenderer('high', [0, 0.24, -1]);
     const scavenging = new OceanRenderer('high');
@@ -33,7 +33,7 @@ describe('shared High water look', () => {
       for (const ocean of [survival, scavenging]) {
         for (const key of [
           'uFogColor', 'uHorizonColor', 'uSkyColor', 'uSunColor',
-          'uWaterReflectionSky', 'uWaterOpenRadiance', 'uLightDirection',
+          'uWaterReflectionSky', 'uWaterOpenRadiance',
         ]) {
           expect(ocean.material.uniforms[key]!.value).toEqual(lab.material.uniforms[key]!.value);
         }
@@ -42,6 +42,8 @@ describe('shared High water look', () => {
       }
       expect(survival.material.uniforms.uAmplitudeScale!.value).toBe(0.75);
       expect(scavenging.material.uniforms.uAmplitudeScale!.value).toBe(1.7);
+      expect(survival.material.uniforms.uLightDirection!.value).toEqual(new Vector3(0, 0.24, -1).normalize());
+      expect(scavenging.material.uniforms.uLightDirection!.value).toEqual(new Vector3(...SUN_DIRECTION).normalize());
     } finally {
       lab.dispose();
       survival.dispose();
@@ -49,7 +51,7 @@ describe('shared High water look', () => {
     }
   });
 
-  it('restores scene lighting on Low and the shared preset on High without another frame', () => {
+  it('preserves the scene light direction when switching water quality without another frame', () => {
     const direction = [0, 0.24, -1] as const;
     const ocean = new OceanRenderer('high', direction);
     const scene = atmosphere('night');
@@ -62,7 +64,7 @@ describe('shared High water look', () => {
       expect(ocean.material.uniforms.uWaterReflectionDepth!.value).toBeNull();
       ocean.setQuality('high');
       expect(ocean.material.uniforms.uSkyColor!.value).toEqual(HIGH_WATER_LOOK.night.skyColor);
-      expect(ocean.material.uniforms.uLightDirection!.value).toEqual(new Vector3(...SUN_DIRECTION).normalize());
+      expect(ocean.material.uniforms.uLightDirection!.value).toEqual(new Vector3(...direction).normalize());
       expect(ocean.material.uniforms.uWaterReflectionDepth!.value.isDepthTexture).toBe(true);
     } finally {
       ocean.dispose();

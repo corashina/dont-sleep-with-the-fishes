@@ -209,9 +209,11 @@ function createTestSnatcherModel(): Group {
 function createTestEventModels(): EventModelLibrary {
   return {
     create: vi.fn((id: string) => {
-      if (['fogMan', 'ghost', 'siren', 'sirenRock'].includes(id)) return new Group();
+      if (['ghost', 'siren', 'sirenRock'].includes(id)) return new Group();
+      const root = id === 'snatcher' ? createTestSnatcherModel() : new Group();
+      if (id === 'shark') root.animations = [new AnimationClip('Shark|Swim', 1, [])];
       return {
-        root: id === 'snatcher' ? createTestSnatcherModel() : new Group(),
+        root,
         dispose: vi.fn(),
       } satisfies EventModelInstance;
     }),
@@ -1305,6 +1307,88 @@ describe('BoatWorld helpers', () => {
     },
   );
 
+  it('reveals Guarded Sleep with a gradual turn from the default view', async () => {
+    const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera();
+    const world = new BoatWorld(camera, propModels, ...createTestSkyTextures(), [savedItem('carlitos')]);
+    try {
+      const front = camera.quaternion.clone();
+      camera.rotateY(0.7);
+      world.stageEvent('guarded-sleep');
+      world.update(1, 1);
+      expect(camera.quaternion.angleTo(front)).toBeLessThan(1e-6);
+      const reveal = world.revealEvent('guarded-sleep');
+      world.update(1.1, 0.1);
+      const earlyAngle = camera.quaternion.angleTo(front);
+      world.update(2.2, 1.1);
+      const halfwayAngle = camera.quaternion.angleTo(front);
+      expect(halfwayAngle).toBeGreaterThan(earlyAngle);
+      world.update(3.4, 1.2);
+      const facingCarlitos = camera.quaternion.clone();
+      expect(camera.quaternion.angleTo(front)).toBeGreaterThan(halfwayAngle);
+      await reveal;
+      expect(camera.quaternion.angleTo(facingCarlitos)).toBeLessThan(1e-6);
+      world.update(3.5, 0.1);
+      expect(camera.quaternion.angleTo(facingCarlitos)).toBeLessThan(0.01);
+      world.clearEvent();
+      expect(camera.quaternion.angleTo(front)).toBeLessThan(1e-6);
+    } finally {
+      world.dispose();
+      propModels.dispose();
+    }
+  });
+
+  it('carries flowers inside the net from water contact through the return', async () => {
+    const item = savedItem('fishingNet');
+    const propModels = createTestPropModels();
+    const borrow = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
+    const world = new BoatWorld(new PerspectiveCamera(), propModels, ...createTestSkyTextures(), [item]);
+    try {
+      world.syncInventory(snapshot([item]));
+      world.stageEvent('flowers');
+      const flower = world.scene.getObjectByName('flowers:pad:0')!;
+      const use = world.playEventItemUse('flowers', 'fishingNet', item.instanceId);
+      const net = borrow.mock.results.at(-1)!.value.root as Group;
+      const duration = eventItemUseDuration('net-scoop');
+      world.update(duration * 0.68, duration * 0.68);
+      expect(flower.parent).not.toBe(net);
+      world.update(duration * 0.74, duration * 0.06);
+      const basket = net.localToWorld(new Vector3(0, 0, -0.56));
+      expect(basket.distanceTo(flower.getWorldPosition(new Vector3()))).toBeLessThan(0.01);
+      world.update(duration * 0.76, duration * 0.02);
+      expect(flower.parent).toBe(net);
+      expect(flower.position.toArray()).toEqual([0, 0, -0.56]);
+      world.update(duration, duration * 0.24);
+      await use;
+      expect(flower.parent).toBe(net);
+      const returning = world.returnEventItemUse();
+      const recovery = eventItemOutcomeDuration('fishingNet', 'recover');
+      world.update(duration + recovery / 2, recovery / 2);
+      expect(flower.parent).toBe(net);
+      world.update(duration + recovery, recovery / 2);
+      await returning;
+      expect(flower.parent).toBe(world.scene.getObjectByName('flowers-deck-target')!.parent);
+      const landed = flower.position.clone();
+      const storedNet = world.scene.getObjectByName('boat-supply:fishingNet:copy-1')!;
+      const storedBasket = storedNet.localToWorld(new Vector3(0, 0, -0.56));
+      expect(storedBasket.distanceTo(flower.getWorldPosition(new Vector3()))).toBeLessThan(0.01);
+      const collected = world.reactToEventOutcome('flowers', {
+        accepted: true, code: 'event-resolved', message: '', deltas: {}, cue: 'none',
+        eventPresentationKey: 'flowers.collect',
+      });
+      world.update(duration + recovery + 1, 1);
+      await collected;
+      expect(flower.position).toEqual(landed);
+      world.clearEvent();
+      expect(flower.parent?.name).toBe('event-prop:flowers');
+      expect(flower.visible).toBe(true);
+    } finally {
+      world.dispose();
+      borrow.mockRestore();
+      propModels.dispose();
+    }
+  });
+
   it('restores a completed returning item before dawn', async () => {
     const item = savedItem('fishingNet');
     const propModels = createTestPropModels();
@@ -1475,6 +1559,11 @@ describe('BoatWorld helpers', () => {
       );
       world.update(8, 4);
       await reaction;
+      if (eventId === 'shower-night') {
+        expect(release).not.toHaveBeenCalled();
+        expect(actor.root.visible).toBe(true);
+        world.clearEvent();
+      }
       expect(release).toHaveBeenCalledOnce();
 
       world.dispose();

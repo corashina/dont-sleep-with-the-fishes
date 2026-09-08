@@ -1,5 +1,4 @@
 import {
-  Box3,
   BoxGeometry,
   BufferGeometry,
   ConeGeometry,
@@ -12,10 +11,9 @@ import {
   Object3D,
   Shape,
   ShapeGeometry,
-  Texture,
 } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
-import { createWaveSample } from '../ocean/WaveField';
+import { FogMonster } from './FogMonster';
 import { collectMeshResources, disposeResourceSets } from '../world/SceneResources';
 import { clamp01, pulse, smoothstep } from './animationMath';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
@@ -98,11 +96,7 @@ function reactionCondition(
   return null;
 }
 
-const FOG_MAN_Z = -8;
-const FOG_MAN_SIDE_X = 2.6;
-const FOG_MAN_MIST_OPACITY = 0.56;
-const FOG_MAN_MIST_SCALE = [2.6, 2.2, 1] as const;
-const FOG_MAN_SUBMERGE_DEPTH = 0.42;
+const FOG_MONSTER_MIST_OPACITY = 0.56;
 
 interface WeatherWaveEnvironment {
   readonly sampleWorldWaveInto: WorldWaveSampler;
@@ -124,44 +118,6 @@ function resetItemSample(sample: WeatherItemSample): void {
   sample.cameraPush = 0;
   sample.supplyRoll = 0;
   sample.effectKind = 'none';
-}
-
-function prepareFogMan(model: Group, material: Material): Group {
-  const replacedMaterials = new Set<Material>();
-  const replacedTextures = new Set<Texture>();
-  model.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    const materials = Array.isArray(object.material) ? object.material : [object.material];
-    for (const replaced of materials) {
-      replacedMaterials.add(replaced);
-      for (const value of Object.values(replaced)) {
-        if (value instanceof Texture) replacedTextures.add(value);
-      }
-    }
-    object.material = material;
-  });
-  disposeResourceSets(replacedTextures, replacedMaterials);
-
-  const tableau = new Group();
-  tableau.name = 'event-tableau:man-in-the-fog';
-  tableau.add(model);
-  const bounds = new Box3().setFromObject(model);
-  const modelHeight = bounds.max.y - bounds.min.y;
-  if (Number.isFinite(modelHeight) && modelHeight > 0) {
-    tableau.position.y = -(bounds.min.y + bounds.max.y) * 0.5;
-    tableau.userData.waterlineFraction = (
-      FOG_MAN_SUBMERGE_DEPTH - tableau.position.y - bounds.min.y
-    ) / modelHeight;
-  } else {
-    tableau.userData.waterlineFraction = 0.5;
-  }
-
-  const root = new Group();
-  root.name = 'fog-man-silhouette';
-  root.position.set(-FOG_MAN_SIDE_X, -FOG_MAN_SUBMERGE_DEPTH, FOG_MAN_Z);
-  root.visible = false;
-  root.add(tableau);
-  return root;
 }
 
 function createFlashlightBeam(material: Material): Group {
@@ -257,19 +213,14 @@ export class WeatherEventAnimator {
     cameraRoll: 0,
     effectKind: 'none',
   };
-  private readonly figureMaterial: MeshStandardMaterial;
+  private readonly monster: FogMonster | null;
   private readonly beamMaterial: MeshBasicMaterial;
   private readonly lightningMaterial: MeshBasicMaterial;
-  private readonly silhouette: Group;
   private readonly flashlightBeam: Group;
   private readonly flashlightBeamCone: Mesh;
   private readonly lightningFlash: Group;
   private readonly windPaper: Mesh;
-  private readonly fogCurtainLeft: SeaMistCurtain | null;
-  private readonly fogCurtainRight: SeaMistCurtain | null;
-  private readonly fogManWave = createWaveSample();
-  private fogManX = -FOG_MAN_SIDE_X;
-  private fogManY = -FOG_MAN_SUBMERGE_DEPTH;
+  private readonly fog: SeaMistCurtain | null;
   private active: ActiveWeatherAnimation | null = null;
   private selectedActorId: ItemInstanceId | null = null;
   private stagedEventId: string | null = null;
@@ -281,23 +232,13 @@ export class WeatherEventAnimator {
     eventModels?: EventModelLibrary,
     viewCamera?: Object3D,
     onlyEventId?: string,
-    private readonly waveEnvironment?: WeatherWaveEnvironment,
+    waveEnvironment?: WeatherWaveEnvironment,
   ) {
     this.cameraLook = viewCamera === undefined
       ? null
       : new StationaryEventCamera(viewCamera);
     this.worldRoot.name = 'weather-event-world';
     this.boatRoot.name = 'weather-event-boat';
-    this.figureMaterial = new MeshStandardMaterial({
-      color: 0x504b45,
-      emissive: 0x62594f,
-      emissiveIntensity: 1.25,
-      roughness: 1,
-      flatShading: true,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-    });
     this.beamMaterial = new MeshBasicMaterial({
       color: 0xd6d2a5,
       transparent: true,
@@ -312,19 +253,12 @@ export class WeatherEventAnimator {
       depthWrite: false,
       side: DoubleSide,
     });
-    this.ownedMaterials.add(this.figureMaterial);
-    this.silhouette = eventModels === undefined || (
-      onlyEventId !== undefined && onlyEventId !== 'man-in-the-fog'
-    )
-      ? new Group()
-      : prepareFogMan(eventModels.create('fogMan'), this.figureMaterial);
-    this.silhouette.name = 'fog-man-silhouette';
-    const usesFogMan = onlyEventId === undefined || onlyEventId === 'man-in-the-fog';
-    this.fogCurtainLeft = usesFogMan
-      ? new SeaMistCurtain('weather-fog-man-mist')
-      : null;
-    this.fogCurtainRight = usesFogMan
-      ? new SeaMistCurtain('weather-fog-man-mist-right')
+    this.monster = eventModels !== undefined && (
+      onlyEventId === undefined || onlyEventId === 'monster-in-the-fog'
+    ) ? new FogMonster(eventModels.create('fogMonster'), viewCamera, waveEnvironment) : null;
+    const usesFogMonster = onlyEventId === undefined || onlyEventId === 'monster-in-the-fog';
+    this.fog = usesFogMonster
+      ? new SeaMistCurtain('weather-fog-monster-mist', 'surrounding')
       : null;
     this.flashlightBeam = createFlashlightBeam(this.beamMaterial);
     this.flashlightBeamCone = this.flashlightBeam.children[0] as Mesh;
@@ -349,13 +283,12 @@ export class WeatherEventAnimator {
     this.windPaper.name = 'weather-windy-paper';
     this.windPaper.visible = false;
     this.windPaper.renderOrder = 3;
-    this.worldRoot.add(this.silhouette);
-    if (this.fogCurtainLeft !== null) this.worldRoot.add(this.fogCurtainLeft.root);
-    if (this.fogCurtainRight !== null) this.worldRoot.add(this.fogCurtainRight.root);
+    if (this.fog !== null) this.worldRoot.add(this.fog.root);
     this.worldRoot.add(this.lightningFlash, this.windPaper);
     this.boatRoot.add(this.flashlightBeam);
     collectMeshResources(this.worldRoot, this.ownedGeometries, this.ownedMaterials);
     collectMeshResources(this.boatRoot, this.ownedGeometries, this.ownedMaterials);
+    if (this.monster !== null) this.worldRoot.add(this.monster.root);
     this.rememberCameraBase();
   }
 
@@ -363,12 +296,7 @@ export class WeatherEventAnimator {
     if (this.disposed) return;
     this.cancelActive();
     this.stagedEventId = eventId;
-    if (eventId === 'man-in-the-fog') {
-      this.fogManX = Math.abs(Math.trunc(variantSeed)) % 2 === 0
-        ? -FOG_MAN_SIDE_X
-        : FOG_MAN_SIDE_X;
-      this.fogManY = -FOG_MAN_SUBMERGE_DEPTH;
-    }
+    if (eventId === 'monster-in-the-fog') this.monster?.stage(variantSeed);
     this.rememberCameraBase();
     this.hideTransientEffects();
     this.showStagedFog();
@@ -382,8 +310,8 @@ export class WeatherEventAnimator {
   itemAimTarget(eventId: string): Object3D | null {
     if (this.disposed || this.stagedEventId !== eventId) return null;
     switch (eventId) {
-      case 'man-in-the-fog':
-        return this.silhouette;
+      case 'monster-in-the-fog':
+        return this.monster?.root ?? null;
       case 'thunderstorm':
         return this.lightningFlash;
       case 'windy-night':
@@ -429,7 +357,7 @@ export class WeatherEventAnimator {
     this.stagedEventId = eventId;
     this.rememberCameraBase();
     this.hideTransientEffects();
-    this.showStagedFogMan();
+    this.showStagedFogMonster();
     this.showStagedFog();
     resetItemSample(this.itemSample);
     this.selectedActorId = null;
@@ -462,7 +390,7 @@ export class WeatherEventAnimator {
     if (this.active !== null) this.cancelActive();
     this.rememberCameraBase();
     this.hideTransientEffects();
-    this.showStagedFogMan();
+    this.showStagedFogMonster();
     this.showStagedFog();
     this.pinReactionActors(eventId, actors);
     return new Promise((resolve) => {
@@ -481,7 +409,7 @@ export class WeatherEventAnimator {
 
   update(time: number, delta: number): void {
     if (this.disposed) return;
-    this.updateFogManWave(time);
+    if (this.stagedEventId === 'monster-in-the-fog') this.monster?.update(time, delta);
     const active = this.active;
     if (active === null) return;
 
@@ -489,7 +417,7 @@ export class WeatherEventAnimator {
     this.supplyDisplay.resetEventPoseForFrame();
     this.hideTransientEffects();
     this.showStagedFog();
-    if (active.kind !== 'reveal') this.showStagedFogMan();
+    if (active.kind !== 'reveal') this.showStagedFogMonster();
     active.elapsed = Math.min(
       active.duration,
       active.elapsed + Math.max(0, Number.isFinite(delta) ? delta : 0),
@@ -530,6 +458,7 @@ export class WeatherEventAnimator {
     this.disposed = true;
     this.worldRoot.removeFromParent();
     this.boatRoot.removeFromParent();
+    this.monster?.dispose();
     disposeResourceSets(this.ownedGeometries, this.ownedMaterials);
   }
 
@@ -547,7 +476,7 @@ export class WeatherEventAnimator {
     if (!isCameraOnlyWeatherEvent(eventId) && eventId !== 'bad-sleep') {
       this.supplyDisplay.applyEventAmbientPose(sample.supplyRoll, sample.supplyLift);
     }
-    if (eventId === 'man-in-the-fog') {
+    if (eventId === 'monster-in-the-fog') {
       this.showSilhouette(sample.figureVisibility);
     }
     if (eventId === 'windy-night') this.applyWindPaper(progress);
@@ -683,7 +612,7 @@ export class WeatherEventAnimator {
     hullDamage: number,
     progress: number,
   ): void {
-    if (eventId === 'man-in-the-fog' && healthDamage < 0) {
+    if (eventId === 'monster-in-the-fog' && healthDamage < 0) {
       const grab = pulse(progress, 0.08, 0.44, 0.9);
       this.applyCameraPose(
         -0.14 * grab,
@@ -754,54 +683,17 @@ export class WeatherEventAnimator {
   }
 
   private showSilhouette(visibility: number): void {
-    if (visibility <= 0.015) return;
-    this.silhouette.visible = true;
-    this.figureMaterial.opacity = Math.min(0.46, visibility * 0.44);
-    this.silhouette.position.set(
-      this.fogManX,
-      this.fogManY,
-      FOG_MAN_Z,
-    );
-    this.silhouette.scale.setScalar(0.86);
+    this.monster?.setVisibility(visibility);
   }
 
-  private showStagedFogMan(): void {
-    if (this.stagedEventId === 'man-in-the-fog') this.showSilhouette(1);
+  private showStagedFogMonster(): void {
+    if (this.stagedEventId === 'monster-in-the-fog') this.showSilhouette(1);
   }
 
   private showStagedFog(): void {
-    if (
-      this.stagedEventId !== 'man-in-the-fog'
-      || this.fogCurtainLeft === null
-      || this.fogCurtainRight === null
-    ) return;
-    this.fogCurtainLeft.root.visible = true;
-    this.fogCurtainLeft.root.scale.set(
-      FOG_MAN_MIST_SCALE[0],
-      FOG_MAN_MIST_SCALE[1],
-      FOG_MAN_MIST_SCALE[2],
-    );
-    this.fogCurtainLeft.setOpacity(FOG_MAN_MIST_OPACITY);
-    this.fogCurtainRight.root.visible = true;
-    this.fogCurtainRight.root.scale.set(
-      -FOG_MAN_MIST_SCALE[0],
-      FOG_MAN_MIST_SCALE[1],
-      FOG_MAN_MIST_SCALE[2],
-    );
-    this.fogCurtainRight.setOpacity(FOG_MAN_MIST_OPACITY);
-  }
-
-  private updateFogManWave(time: number): void {
-    if (this.stagedEventId !== 'man-in-the-fog' || this.waveEnvironment === undefined) return;
-    this.waveEnvironment.sampleWorldWaveInto(
-      this.fogManWave,
-      time,
-      this.fogManX,
-      FOG_MAN_Z,
-      this.waveEnvironment.readWorldWaveAmplitudeScale(),
-    );
-    this.fogManY = this.fogManWave.height - FOG_MAN_SUBMERGE_DEPTH;
-    this.silhouette.position.y = this.fogManY;
+    if (this.stagedEventId !== 'monster-in-the-fog' || this.fog === null) return;
+    this.fog.root.visible = true;
+    this.fog.setOpacity(FOG_MONSTER_MIST_OPACITY);
   }
 
   private applyWindPaper(progress: number): void {
@@ -828,17 +720,10 @@ export class WeatherEventAnimator {
   }
 
   private hideTransientEffects(): void {
-    this.silhouette.visible = false;
-    this.silhouette.position.set(this.fogManX, this.fogManY, FOG_MAN_Z);
-    this.silhouette.scale.setScalar(1);
-    this.figureMaterial.opacity = 0;
-    if (this.fogCurtainLeft !== null) {
-      this.fogCurtainLeft.root.visible = false;
-      this.fogCurtainLeft.setOpacity(0);
-    }
-    if (this.fogCurtainRight !== null) {
-      this.fogCurtainRight.root.visible = false;
-      this.fogCurtainRight.setOpacity(0);
+    this.monster?.setVisibility(0);
+    if (this.fog !== null) {
+      this.fog.root.visible = false;
+      this.fog.setOpacity(0);
     }
     this.flashlightBeam.visible = false;
     this.flashlightBeam.rotation.set(0, 0, 0);
@@ -860,7 +745,7 @@ export class WeatherEventAnimator {
       case 'item':
         this.restoreCamera();
         this.hideTransientEffects();
-        this.showStagedFogMan();
+        this.showStagedFogMonster();
         this.showStagedFog();
         active.resolve(true);
         break;
@@ -882,7 +767,7 @@ export class WeatherEventAnimator {
       case 'reveal':
         this.restoreCamera();
         this.hideTransientEffects();
-        this.showStagedFogMan();
+        this.showStagedFogMonster();
         this.showStagedFog();
         active.resolve();
         break;
@@ -894,7 +779,7 @@ export class WeatherEventAnimator {
     this.active = null;
     if (active !== null) this.restoreCamera();
     this.hideTransientEffects();
-    this.showStagedFogMan();
+    this.showStagedFogMonster();
     this.showStagedFog();
     this.selectedActorId = null;
     if (active?.kind === 'item') {

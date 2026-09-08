@@ -58,7 +58,7 @@ it('round-trips a stable pending event checkpoint', () => {
   const source = new SurvivalSession(saved('carlitos', 'compass', 'cannedFood'), {
     seed: 41,
     initial: { day: 8, pressure: 2, energy: 2 },
-    initialEventId: 'man-in-the-fog',
+    initialEventId: 'monster-in-the-fog',
   });
 
   const restored = SurvivalSession.restore(source.exportCheckpoint());
@@ -788,7 +788,7 @@ describe('SurvivalSession daytime actions', () => {
       seed: 12,
       random: sequenceRandom([0]),
       initial: { day: 6 },
-      initialEventId: 'man-in-the-fog',
+      initialEventId: 'monster-in-the-fog',
     });
     expect(increased.resolveEvent(itemResponse('spyglass')).deltas.pressure).toBe(1);
   });

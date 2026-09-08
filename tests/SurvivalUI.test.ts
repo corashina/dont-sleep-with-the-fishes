@@ -239,7 +239,7 @@ describe('SurvivalUI', () => {
     const continued = vi.fn();
     ui.onFishingResultContinue = continued;
     ui.setFishingState({ mode: 'result', message: '', biteTarget: null });
-    ui.showFishingResult({ caption: 'SMALL CATCH', title: 'COD', detail: '+1 FOOD', catchTarget: null });
+    ui.showFishingResult({ items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }], message: '', catchTarget: null });
     const popup = mount.querySelector<HTMLElement>('[data-fishing-result]')!;
     popup.querySelector<HTMLElement>('.routine-dialog__card')!.click();
     expect(continued).not.toHaveBeenCalled();
@@ -1782,14 +1782,14 @@ describe('SurvivalUI', () => {
     ui.render(snapshot(), () => null);
     ui.setBusy(true);
     ui.setFishingState({ mode: 'result', message: '', biteTarget: null });
-    ui.showFishingResult({ caption: 'SMALL CATCH', title: 'COD', detail: '+1 FOOD', catchTarget: null });
+    ui.showFishingResult({ items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }], message: '', catchTarget: null });
     ui.onFishingResultContinue = () => {
       ui.hideFishingResult();
       ui.setBusy(false);
       ui.setFishingViewExitVisible(true);
       ui.setFishingState({ mode: 'ready', message: '', biteTarget: null });
     };
-    mount.querySelector<HTMLButtonElement>('[data-fishing-result-continue]')!.click();
+    mount.querySelector<HTMLButtonElement>('[data-fishing-result-close]')!.click();
 
     const rod = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
     const back = mount.querySelector<HTMLButtonElement>('[data-fishing-view-exit]')!;

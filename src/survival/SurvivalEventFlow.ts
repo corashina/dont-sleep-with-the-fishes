@@ -597,6 +597,15 @@ export class SurvivalEventFlow {
     return this.presentation === 'choosing' && this.choiceCheckpointReady;
   }
 
+  canUsePillow(snapshot: SurvivalSnapshot): boolean {
+    if (this.disposed || this.presentation !== 'choosing' || snapshot.pendingEventId === null
+      || isInspectableEventId(snapshot.pendingEventId)) return false;
+    const event = survivalEventById(snapshot.pendingEventId);
+    const choice = event?.choices.find((candidate) => candidate.id === 'sleep' && candidate.itemId === undefined);
+    if (event === undefined || choice === undefined) return false;
+    return this.contextualChoiceFor(event, choice, snapshot)?.unavailableReason === null;
+  }
+
   update(deltaSeconds: number): void {
     if (this.disposed) return;
     const snapshot = this.dependencies.session.snapshot();

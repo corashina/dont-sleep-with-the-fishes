@@ -10,7 +10,7 @@ import {
   disposeResourceSets,
   runCleanupSteps,
 } from '../../world/SceneResources';
-import { clamp01, keyedRevealProgress, pulse } from '../animationMath';
+import { clamp01, keyedRevealProgress, pulse, smoothstep } from '../animationMath';
 import type { DedicatedEventId } from '../eventPresentationRoutes';
 import type {
   DedicatedEventEnvironment,
@@ -28,6 +28,7 @@ export const CARLITOS_EVENT_IDS = [
 export type CarlitosEventId = typeof CARLITOS_EVENT_IDS[number];
 
 const REVEAL_DURATION = 0.9;
+const GUARDED_SLEEP_TURN_DURATION = 2.4;
 const CHOICE_DURATION = 0.65;
 const REACTION_DURATION = 0.8;
 
@@ -59,6 +60,7 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
   private readonly baseHeadRotation = new Float64Array(3);
   private active: ActiveAnimation | null = null;
   private staged = false;
+  private facingStrength = 0;
   private disposed = false;
 
   constructor(
@@ -129,7 +131,8 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
     if (!this.canAnimate()) return Promise.resolve();
     this.cancelActive();
     this.applyStrength(0, 0);
-    return this.startAnimation('reveal', REVEAL_DURATION) as Promise<void>;
+    const duration = this.eventId === 'guarded-sleep' ? GUARDED_SLEEP_TURN_DURATION : REVEAL_DURATION;
+    return this.startAnimation('reveal', duration) as Promise<void>;
   }
 
   playChoice(_choiceId: string): Promise<void> {
@@ -160,7 +163,7 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
     if (this.disposed || !this.staged) return;
     const active = this.active;
     if (active === null) {
-      this.applyStrength(1, 1);
+      this.applyStrength(1, this.facingStrength);
       return;
     }
     const safeDelta = Number.isFinite(delta) && delta > 0 ? delta : 0;
@@ -172,7 +175,7 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
     else strength = 1 + pulse(progress, 0, 0.38, 0.82) * 0.12;
     this.applyStrength(
       strength,
-      active.kind === 'reveal' ? strength : 1,
+      active.kind === 'reveal' ? smoothstep(progress) : 1,
     );
     if (progress === 1) this.finishActive();
   }
@@ -275,9 +278,9 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
   }
 
   private applyStrength(strength: number, facingStrength = strength): void {
+    this.facingStrength = clamp01(facingStrength);
     if (this.eventId === 'guarded-sleep') {
-      const facing = clamp01(facingStrength);
-      this.cameraLook?.applyLookAt(this.itemAimTarget, facing);
+      this.cameraLook?.applyLookAt(this.itemAimTarget, this.facingStrength);
       return;
     }
     if (this.eventId === 'shadow-figure') {

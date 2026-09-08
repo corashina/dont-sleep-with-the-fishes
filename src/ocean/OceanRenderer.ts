@@ -94,9 +94,6 @@ export class OceanRenderer {
     this.quality = quality;
     const surfaceQuality = OCEAN_SURFACE_QUALITY[quality];
     const definition = createOceanShaderDefinition(quality);
-    definition.uniforms.uLightDirection.value
-      .set(...lightDirection)
-      .normalize();
     const material = new ShaderMaterial({
       vertexShader: definition.vertexShader,
       fragmentShader: definition.fragmentShader,
@@ -179,11 +176,11 @@ export class OceanRenderer {
   }
 
   private applyAtmosphere(): void {
+    this.uniforms.uLightDirection.value.set(...this.lightDirection).normalize();
     if (this.quality === 'high') {
       applyHighWaterLook(this.uniforms, this.atmosphere?.phase ?? 'day');
       return;
     }
-    this.uniforms.uLightDirection.value.set(...this.lightDirection).normalize();
     this.uniforms.uFogDensity.value = this.fogDensity;
     const atmosphere = this.atmosphere;
     if (!atmosphere) return;

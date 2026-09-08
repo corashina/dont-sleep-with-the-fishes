@@ -201,7 +201,7 @@ export function createEmptyEventModelLibraryForTest(): EventModelLibrary {
   return {
     create: (id: string) => {
       const root = new Group();
-      if (id === 'fogMan' || id === 'ghost' || id === 'siren' || id === 'sirenRock') {
+      if (id === 'ghost' || id === 'siren' || id === 'sirenRock') {
         return root;
       }
       return {
@@ -624,11 +624,12 @@ export class BoatWorld {
       );
 
       this.rodPivot.name = 'fishing-rod-pivot';
-      this.rodPivot.position.set(0, 0.56, -2.28);
+      this.rodPivot.position.set(0, 0.12, -2.28);
       this.rodPivot.rotation.x = FISHING_ROD_LEAN;
       this.rod = propModels.createEquipment('fishingRod');
       collectMeshResources(this.rod, this.ownedGeometries, this.ownedMaterials);
-      this.rod.position.set(0, 0, -0.9);
+      // Place the handle at the pivot before leaning the 1.8 m rod over the bow.
+      this.rod.position.set(0, 0.9, 0);
       this.rod.rotation.x = -Math.PI / 2;
       this.rodPivot.add(this.rod);
       this.boat.add(this.rodPivot);
@@ -1023,7 +1024,10 @@ export class BoatWorld {
     this.fishingAvailableOutline.setTarget(actions.includes('fish') ? this.rod : null);
     this.chestAvailableOutline.setTarget(actions.includes('openChest') ? this.chestDisplay.root : null);
     this.repairAvailableOutline.setTarget(actions.includes('repair') ? this.repairTools : null);
-    this.pillowAvailableOutline.setTarget(actions.includes('endDay') ? this.sleepPillow.root : null);
+  }
+
+  setPillowAvailable(available: boolean): void {
+    if (!this.disposed) this.pillowAvailableOutline.setTarget(available ? this.sleepPillow.root : null);
   }
 
   setEventSelectedItem(instanceId: ItemInstanceId | null): void {
@@ -1062,6 +1066,7 @@ export class BoatWorld {
         itemId,
         context,
         aimTarget,
+        netCatch: context === 'net-scoop' ? this.eventPresentationHost.netCatch() : null,
         onAction,
       };
       const [played] = await Promise.all([
@@ -1175,6 +1180,7 @@ export class BoatWorld {
       this.resetDedicatedEffects();
       Object.assign(this.vortexWave, createInactiveVortexWaveState());
     }
+    this.prepareEventCamera(eventId);
     this.eventPresentationHost.stage(
       typeof eventOrContext === 'string'
         ? {
@@ -1206,6 +1212,7 @@ export class BoatWorld {
       !this.disposed
       && operation === this.weatherEventOperation
       && eventId !== 'check-the-back'
+      && eventId !== 'guarded-sleep'
     ) {
       this.restoreEventCameraFront();
     }
@@ -1213,6 +1220,10 @@ export class BoatWorld {
 
   private restoreEventCameraFront(): void {
     this.cameraController.restoreBasePose();
+  }
+
+  private prepareEventCamera(eventId: string): void {
+    if (eventId === 'guarded-sleep') this.restoreEventCameraFront();
   }
 
   enterFocusedEventView(eventId: InspectableEventId): Promise<void> {
@@ -1823,7 +1834,7 @@ export class BoatWorld {
   ): EventSide | null {
     switch (eventId) {
       case 'night-trader':
-      case 'man-in-the-fog':
+      case 'monster-in-the-fog':
       case 'midnight-tour':
         return oppositeEventSide(eventSideFromSeed(variantSeed));
       case 'drifting-supplies':

@@ -141,20 +141,19 @@ describe('live gameplay translations', () => {
     views.push(view);
     document.body.append(...view.roots);
     view.showResult({ catchTarget: null,
-      get caption() { return getLanguage() === 'en' ? 'CATCH' : 'POŁÓW'; },
-      get title() { return getLanguage() === 'en' ? 'A fish' : 'Ryba'; },
-      get detail() { return getLanguage() === 'en' ? 'Food gained.' : 'Zdobyto jedzenie.'; },
+      items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }],
+      message: '',
     });
     const continued = vi.fn();
     view.onContinue = continued;
     view.resultRoot.removeAttribute('inert');
-    view.resultContinue.focus();
-    view.resultContinue.click();
+    view.resultClose.focus();
+    view.resultClose.click();
     setLanguage('pl');
-    expect(document.activeElement).toBe(view.resultContinue);
-    expect(find('[data-fishing-result-title]').textContent).toBe('Ryba');
-    expect(find('[data-fishing-result-detail]').textContent).toBe('Zdobyto jedzenie.');
-    view.resultContinue.click();
+    expect(document.activeElement).toBe(view.resultClose);
+    expect(find('[data-fishing-result-items] [role=img]').getAttribute('aria-label')).toBe('JEDZENIE: +1');
+    expect(view.resultClose.getAttribute('aria-label')).toBe('Zamknij wynik połowu');
+    view.resultClose.click();
     expect(continued).toHaveBeenCalledOnce();
   });
 
