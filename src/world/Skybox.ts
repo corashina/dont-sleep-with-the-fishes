@@ -19,6 +19,8 @@ import {
   SUN_DIRECTION,
   type CelestialDirection,
 } from './celestialLight';
+import { createCloudImpostorLayout, updateCloudImpostorShadows } from './cloudImpostorLayout';
+import { cloudImpostorShader } from './cloudImpostorShader';
 
 const TRANSITION_SECONDS = 1.5;
 const MOON_DIRECTION: CelestialDirection = [0.46, 0.52, -0.72];
@@ -113,17 +115,6 @@ const fragmentShader = `
     float lower = mix(mix(c000, c100, blend.x), mix(c010, c110, blend.x), blend.y);
     float upper = mix(mix(c001, c101, blend.x), mix(c011, c111, blend.x), blend.y);
     return mix(lower, upper, blend.z);
-  }
-
-  float cloudFbm(vec3 position) {
-    float sum = 0.0;
-    float amplitude = 0.5;
-    for (int octave = 0; octave < 4; octave++) {
-      sum += cloudValueNoise3D(position) * amplitude;
-      position = position * 2.03 + vec3(11.3, -8.2, 5.4);
-      amplitude *= 0.5;
-    }
-    return sum / 0.9375;
   }
 
   float softReliefEllipse(
@@ -264,24 +255,7 @@ const fragmentShader = `
     ) * surfaceWear;
   }
 
-  vec2 cloudLayer(vec3 direction) {
-    if (uCloudCoverage <= 0.0) return vec2(0.0);
-    float visibleSky = smoothstep(-0.02, 0.14, direction.y);
-    vec3 domain = direction * 3.1;
-    vec3 warp = vec3(
-      cloudValueNoise3D(domain * 0.62 + vec3(3.7, -2.1, 4.8)),
-      cloudValueNoise3D(domain * 0.62 + vec3(-5.4, 6.2, -1.7)),
-      cloudValueNoise3D(domain * 0.62 + vec3(8.1, 1.4, -6.6))
-    ) - 0.5;
-    float field = cloudFbm(domain + warp * 0.72);
-    float threshold = 1.0 - uCloudCoverage;
-    float mask = smoothstep(
-      threshold - uCloudContrast,
-      threshold + uCloudContrast,
-      field
-    ) * visibleSky;
-    return vec2(mask, field);
-  }
+  ${cloudImpostorShader}
 
   vec3 starLayer(vec3 direction, float scale, float threshold) {
     vec3 grid = direction * scale;
@@ -373,14 +347,8 @@ const fragmentShader = `
     float horizonLift = exp(-abs(direction.y) * 28.0) * (0.03 + uHaze * 0.08);
     color += uHorizonColor * horizonLift;
 
-    vec2 cloud = cloudLayer(direction);
-    float clouds = cloud.x * uCloudLayerStrength;
-    float cloudLight = 1.0 - smoothstep(0.42, 0.86, cloud.y);
-    vec3 cloudUnderside = mix(uUpperColor * 0.58, vec3(0.34, 0.40, 0.42), uHaze * 0.56);
-    vec3 cloudTop = mix(vec3(0.86, 0.89, 0.88), vec3(0.66, 0.71, 0.71), uHaze);
-    vec3 cloudColor = mix(cloudUnderside, cloudTop, cloudLight);
-    cloudColor = mix(cloudColor, uHorizonColor, uHaze * 0.48);
-    color = mix(color, cloudColor, clouds);
+    vec4 cloud = cloudLayer(direction);
+    color = mix(color, cloud.rgb, cloud.a);
 
     float horizonBand = smoothstep(-0.005, 0.012, direction.y)
       * exp(-max(direction.y, 0.0) * uHorizonBandWidth)
@@ -393,7 +361,8 @@ const fragmentShader = `
     float sunBloom = exp(-sunSeparation * 720.0);
     float sunHalo = exp(-sunSeparation * 44.0);
     float sunClarity = 1.0 - uHaze * 0.74;
-    color += uSunColor * uSunVisibility * (
+    float cloudSunTransmission = 1.0 - cloud.a * 0.96;
+    color += uSunColor * uSunVisibility * cloudSunTransmission * (
       sunDisc * sunClarity
       + sunBloom * mix(0.16, 0.28, sunClarity)
       + sunHalo * mix(0.035, 0.075, uHaze)
@@ -459,15 +428,16 @@ const fragmentShader = `
     color += moonDisc
       * moonSample.a
       * uMoonVisibility
-      * moonClarity;
+      * moonClarity
+      * (1.0 - cloud.a);
     float moonHalo = exp(
       -moonRadialDistance * moonRadialDistance * 1.65
     )
       * (1.0 - moonSample.a)
       * uMoonVisibility
       * mix(0.025, 0.07, moonClarity);
-    color += uMoonColor * moonHalo;
-    float moonStarOcclusion = 1.0 - moonSample.a;
+    color += uMoonColor * moonHalo * (1.0 - cloud.a);
+    float moonStarOcclusion = (1.0 - moonSample.a) * (1.0 - cloud.a);
 
     float starHorizon = smoothstep(0.04, 0.24, direction.y);
     float starClarity = max(0.0, 1.0 - uHaze * 0.94);
@@ -505,6 +475,8 @@ export class Skybox {
   private blendKey: string;
   private blendElapsed = TRANSITION_SECONDS;
   private starElapsed = 0;
+  private cloudElapsed = 0;
+  private readonly cloudLayout = createCloudImpostorLayout();
   private disposed = false;
 
   get palette(): Readonly<SkyPalette> { return this.current; }
@@ -522,6 +494,8 @@ export class Skybox {
     this.blendFrom = cloneSkyPalette(this.current);
     this.target = cloneSkyPalette(this.current);
     this.blendKey = `${initialState.weather}:${initialState.phase}`;
+    const sunDirection = new Vector3(...celestialDirections.sun).normalize();
+    updateCloudImpostorShadows(this.cloudLayout, sunDirection, 0, this.current.cloudCoverage);
     this.material = new ShaderMaterial({
       vertexShader,
       fragmentShader,
@@ -537,7 +511,7 @@ export class Skybox {
         uMoonMap: { value: moonTexture },
         uStarColor: { value: this.current.starColor.clone() },
         uSunDirection: {
-          value: new Vector3(...celestialDirections.sun).normalize(),
+          value: sunDirection,
         },
         uMoonDirection: {
           value: new Vector3(...celestialDirections.moon).normalize(),
@@ -560,6 +534,10 @@ export class Skybox {
         uMoonEventDim: { value: 0 },
         uMoonScale: { value: 1 },
         uStarTime: { value: 0 },
+        uCloudTime: { value: 0 },
+        uCloudCenters: { value: this.cloudLayout.centers },
+        uCloudScales: { value: this.cloudLayout.scales },
+        uCloudBlockers: { value: this.cloudLayout.blockers },
       },
     });
     this.mesh = new Mesh(new SphereGeometry(80, 48, 24), this.material);
@@ -585,8 +563,15 @@ export class Skybox {
     );
     this.starElapsed = (this.starElapsed + safeDelta) % 4096;
     this.material.uniforms.uStarTime!.value = this.starElapsed;
+    this.cloudElapsed += safeDelta;
+    this.material.uniforms.uCloudTime!.value = this.cloudElapsed;
     const alpha = smoothstep(this.blendElapsed / TRANSITION_SECONDS);
     lerpSkyPalette(this.current, this.blendFrom, this.target, alpha);
+    if (this.material.uniforms.uCloudLayerStrength!.value > 0) {
+      updateCloudImpostorShadows(this.cloudLayout,
+        this.material.uniforms.uSunDirection!.value as Vector3,
+        this.cloudElapsed, this.current.cloudCoverage);
+    }
     this.mesh.position.copy(cameraPosition);
     this.uploadPalette();
     return this.current;
