@@ -164,8 +164,8 @@ The ship sinks in one minute. Search the cabin, wheelhouse, cargo deck, and stor
 In the lifeboat, each day gives three energy for daytime actions:
 
 - **Fish** costs one energy and uses the lifeboat's permanent bow rod. Click valid water to cast, or press `Enter`/`Space` for the centered cast; when bubbles appear, click them or press `Enter`/`Space` within the 1.5-second reel window. Available bait improves the catch automatically and is consumed only when a fish lands, never for junk or a miss. Pausing with `Escape` freezes the attempt but does not cancel it, and an accepted attempt's energy remains spent.
-- **Dive** requires rescued scuba gear and searches for food, bait, or hidden rescue traces, with weather-dependent risk.
-- **Eat** spends one food to reduce hunger.
+- **Dive** costs 3 Energy and requires usable scuba gear. Normal dives have a 65% reward chance and an independent 25% injury chance. Overcast weather changes these to 60% and 30%. Injuries remove 15–45 Health. Flashlights do not affect diving. Rewards are food (37.5%), bait (37.5%), or rescue traces (25%, capped at two per run). Food and bait quantities are one (90%), two (9%), or three (1%). Wreckage dives give equipment (40%), food (17.5%), bait (17.5%), or injury (25%). Wreckage uses the same food and bait quantity chances.
+- **Eat** spends one food to reduce hunger by a random 18–24 points. Each whole number has equal probability. Hunger stops at zero.
 - **Repair** uses the lifeboat's fixed toolbox. It spends one to three Energy and repairs up to 33 Hull per Energy.
 - **Treat** consumes the recovered Medkit to restore health.
 - **End Day** starts the night sequence. Energy becomes one to three at dawn, based on hunger and night outcomes.

@@ -219,9 +219,9 @@ export const uiCatalog = {
     "es-AR": "CANCELAR"
   },
   "paused": {
-    "en": "Survival paused",
-    "pl": "Przetrwanie wstrzymane",
-    "es-AR": "Supervivencia en pausa"
+    "en": "Game paused",
+    "pl": "Gra wstrzymana",
+    "es-AR": "Juego en pausa"
   },
   "pauseMenu": {
     "en": "Pause menu",
@@ -505,10 +505,10 @@ export const uiCatalog = {
     "pl": "1 JEDZENIA",
     "es-AR": "1 DE COMIDA"
   },
-  "hunger35": {
-    "en": "HUNGER -35",
-    "pl": "GŁÓD -35",
-    "es-AR": "HAMBRE -35"
+  "foodHungerReduction": {
+    "en": "HUNGER −18–24",
+    "pl": "GŁÓD −18–24",
+    "es-AR": "HAMBRE −18–24"
   },
   "repairCost": {
     "en": "1–3 ENERGY",

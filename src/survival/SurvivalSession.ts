@@ -58,7 +58,7 @@ import {
   drawChestReward,
   shouldBecomeMimic,
 } from './chest';
-import { clampSurvivalResources, eventResourceDelta } from './eventOutcomeRules';
+import { clampSurvivalResources, eventResourceDelta, resolveIntegerValue } from './eventOutcomeRules';
 import {
   pressureForDay,
   pressureIncreaseForDay,
@@ -1335,14 +1335,13 @@ export class SurvivalSession {
   }
 
   private dive(): ActionOutcome {
-    const hasFlashlight = this.inventory.hasUsable('flashlight');
-    const chances = this.diveChances(hasFlashlight);
+    const chances = this.diveChances();
     const recovered = this.random.next() < chances.success;
     const injured = this.random.next() < chances.injury;
     const deltas: ResourceDelta = { energy: -SURVIVAL_BALANCE.actions.diveEnergy };
     if (injured) {
       this.lastHealthCause = { kind: 'diving' };
-      deltas.health = -SURVIVAL_BALANCE.diving.injuryDamage;
+      deltas.health = -resolveIntegerValue(SURVIVAL_BALANCE.diving.injuryDamage, this.random);
     }
 
     if (recovered) this.applyDiveReward(deltas);
@@ -1355,34 +1354,42 @@ export class SurvivalSession {
     ));
   }
 
-  private diveChances(hasFlashlight: boolean): { readonly success: number; readonly injury: number } {
+  private diveChances(): { readonly success: number; readonly injury: number } {
     const weatherSuccess = this.weather === 'overcast'
       ? SURVIVAL_BALANCE.diving.overcastSuccessDelta
       : 0;
     const weatherInjury = this.weather === 'overcast'
       ? SURVIVAL_BALANCE.diving.overcastInjuryDelta
       : 0;
-    const success = hasFlashlight
-      ? SURVIVAL_BALANCE.diving.flashlightSuccess
-      : SURVIVAL_BALANCE.diving.success;
-    const injury = hasFlashlight
-      ? SURVIVAL_BALANCE.diving.flashlightInjury
-      : SURVIVAL_BALANCE.diving.injury;
+    const success = SURVIVAL_BALANCE.diving.success;
+    const injury = SURVIVAL_BALANCE.diving.injury;
     return { success: success + weatherSuccess, injury: injury + weatherInjury };
   }
 
   private applyDiveReward(deltas: ResourceDelta): void {
     const rewardRoll = this.random.next();
-    if (rewardRoll < 0.375) deltas.food = 1;
-    else if (rewardRoll < 0.75) deltas.bait = 1;
-    else if (this.rescueTraceFinds < 2) {
+    if (rewardRoll < 0.75) {
+      const resource = rewardRoll < 0.375 ? 'food' : 'bait';
+      const quantityRoll = this.random.next();
+      let boundary = 0;
+      for (const { quantity, chance } of SURVIVAL_BALANCE.diving.supplyAmounts) {
+        boundary += chance;
+        if (quantityRoll < boundary) {
+          deltas[resource] = quantity;
+          break;
+        }
+      }
+    } else if (this.rescueTraceFinds < 2) {
       this.rescueTraceFinds = (this.rescueTraceFinds + 1) as 1 | 2;
       deltas.rescueLead = 1;
     }
   }
 
   private eat(): ActionOutcome {
-    const deltas = dayActionResourceDelta(this.dayActionRuleState(), 'eat');
+    const deltas: ResourceDelta = {
+      hunger: -resolveIntegerValue(SURVIVAL_BALANCE.actions.foodHunger, this.random),
+      food: -1,
+    };
     return this.commit(
       'ate',
       domainText('ate'),

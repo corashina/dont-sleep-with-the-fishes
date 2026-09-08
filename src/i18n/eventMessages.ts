@@ -5,6 +5,8 @@ import type {
 } from '../survival/survivalTypes';
 
 const EVENT_TEXT = {
+  wreckageDiveFood: { en: 'You recover food from the wreck.', pl: 'Odzyskujesz jedzenie z wraku.', 'es-AR': 'Recuperás comida del naufragio.' },
+  wreckageDiveBait: { en: 'You recover bait from the wreck.', pl: 'Odzyskujesz przynętę z wraku.', 'es-AR': 'Recuperás carnada del naufragio.' },
   'eventText001': { en: 'Choose a response.', pl: 'Wybierz reakcję.', 'es-AR': 'Elegí una respuesta.' },
   'eventText002': { en: 'Jagged rocks break the surface as the current pulls the boat off course.', pl: 'Poszarpane skały wyłaniają się z wody, gdy prąd spycha łódź z kursu.', 'es-AR': 'Unas rocas filosas asoman a la superficie mientras la corriente desvía el bote.' },
   'eventText003': { en: 'Water pushes through a split in the hull.', pl: 'Woda wdziera się przez pęknięcie w kadłubie.', 'es-AR': 'El agua entra por una grieta en el casco.' },

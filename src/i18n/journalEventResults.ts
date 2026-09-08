@@ -4,6 +4,8 @@ import { getLanguage } from './language';
 
 // These are diary outcomes, separate from the short messages shown during events.
 const results = {
+  wreckageDiveFood: ['I brought food back from the wreck.', 'Przyniosłem jedzenie z wraku.', 'Traje comida del naufragio.'],
+  wreckageDiveBait: ['I brought bait back from the wreck.', 'Przyniosłem przynętę z wraku.', 'Traje carnada del naufragio.'],
   eventText111: ['The map showed a channel between the rocks. I brought the boat through without a scrape.', 'Mapa pokazała przesmyk między skałami. Przeprowadziłem łódź bez draśnięcia.', "El mapa mostraba un paso entre las rocas. Llevé el bote por ahí sin un rasguño."],
   eventText112: ['I heard the rocks scrape along the hull. There is damage to mend now.', 'Usłyszałem zgrzyt skał pod kadłubem. Będzie co naprawiać.', "Escuché las rocas raspar el casco. Ahora tengo más cosas que arreglar."],
   eventText113: ['I held the bearing on the compass and threaded through the rocks. The hull came through safely.', 'Trzymałem kurs według kompasu i przemknąłem między skałami. Kadłub ocalał.', "Seguí el rumbo de la brújula y pasé entre las rocas. El casco salió ileso."],

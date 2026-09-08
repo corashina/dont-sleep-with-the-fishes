@@ -4,7 +4,6 @@ import {
   createSurvivalSaveDocument,
   parseSurvivalSaveDocument,
 } from '../src/survival/SurvivalSaveData';
-import { SURVIVAL_BALANCE } from '../src/survival/survivalBalance';
 import { sequenceRandom } from './helpers/random';
 
 const flashlight = { instanceId: 'flashlight-1', type: 'flashlight' } as const;
@@ -45,26 +44,20 @@ describe('Flashlight condition', () => {
     expect(session.snapshot()).toEqual(before);
   });
 
-  it('removes both diving bonuses while Flashlight is broken', () => {
-    const balance = SURVIVAL_BALANCE.diving;
-    const rolls = [
-      (balance.success + balance.flashlightSuccess) / 2,
-      (balance.injury + balance.flashlightInjury) / 2,
-      0,
-    ];
-    const dive = (condition: 'usable' | 'broken') => {
+  it.each([
+    [0.7, 0.2, 0],
+    [0.6, 0.2, 0.5, 0, 0.95],
+  ])('keeps dive results identical with usable, broken, or absent Flashlight (%s)', (...rolls) => {
+    const dive = (condition?: 'usable' | 'broken') => {
       const session = new SurvivalSession([
-        flashlight, { instanceId: 'scubaSet-1', type: 'scubaSet' },
+        ...(condition ? [flashlight] : []), { instanceId: 'scubaSet-1', type: 'scubaSet' },
       ], {
         seed: 42, weather: 'calm', random: sequenceRandom(rolls),
-        initialConditions: { 'flashlight-1': condition },
+        initialConditions: condition ? { 'flashlight-1': condition } : {},
       });
-      return { outcome: session.perform('dive'), snapshot: session.snapshot() };
+      return session.perform('dive');
     };
-    const usable = dive('usable');
-    const broken = dive('broken');
-    expect(usable.outcome).toMatchObject({ accepted: true, code: 'dive-recovered' });
-    expect(broken.outcome).toMatchObject({ accepted: true, code: 'dive-empty' });
-    expect(broken.snapshot.health).toBe(usable.snapshot.health - balance.injuryDamage);
+    expect(dive('usable')).toEqual(dive());
+    expect(dive('broken')).toEqual(dive());
   });
 });

@@ -40,6 +40,7 @@ type DeterministicDayActionId = Exclude<
   DayActionId,
   | 'fish'
   | 'dive'
+  | 'eat'
   | 'openChest'
   | 'repairItem'
   | 'petCarlitos'
@@ -192,8 +193,6 @@ export function dayActionResourceDelta(
   action: DeterministicDayActionId,
 ): Readonly<ResourceDelta> {
   switch (action) {
-    case 'eat':
-      return Object.freeze({ hunger: SURVIVAL_BALANCE.actions.foodHunger, food: -1 });
     case 'repair': {
       const repair = calculateHullRepair(state.hull, state.energy);
       return Object.freeze({
