@@ -9,7 +9,6 @@ import {
   type WebGLRenderer,
 } from 'three';
 import { OceanCapture } from './OceanCapture';
-import { OceanFoam } from './OceanFoam';
 import { applyHighWaterLook } from './highWaterLook';
 import type { VortexWaveState } from './WaveField';
 import {
@@ -81,7 +80,6 @@ export class OceanRenderer {
   private quality: WaterQuality;
   private disposed = false;
   private capture: OceanCapture | null = null;
-  private foam: OceanFoam | null = null;
   private updateVersion = 0;
   private preparedVersion = -1;
   private preparedCamera: Camera | null = null;
@@ -263,16 +261,7 @@ export class OceanRenderer {
 
   private createHighResources(): void {
     const capture = new OceanCapture();
-    let foam: OceanFoam;
-    try {
-      foam = new OceanFoam(this.uniforms);
-    } catch (error) {
-      ignoreCleanupError(() => capture.dispose());
-      throw error;
-    }
     this.capture = capture;
-    this.foam = foam;
-    this.uniforms.uFoamExtent.value = foam.extent;
     this.uniforms.uWaterColor.value = capture.colorTexture;
     this.uniforms.uWaterDepth.value = capture.depthTexture;
     this.uniforms.uWaterReflection.value = capture.reflectionTexture;
@@ -287,16 +276,13 @@ export class OceanRenderer {
     material: Material,
   ): void => {
     if (
-      this.disposed || this.preparing || !this.capture || !this.foam
+      this.disposed || this.preparing || !this.capture
       || material !== this.material || scene.overrideMaterial !== null
       || (this.preparedVersion === this.updateVersion && this.preparedCamera === camera)
     ) return;
     this.preparing = true;
     try {
-      this.foam.update(renderer, this.uniforms.uTime.value, this.uniforms.uOrigin.value);
       this.capture.update(renderer, scene, camera, this.mesh);
-      this.uniforms.uPersistentFoam.value = this.foam.texture;
-      this.uniforms.uFoamOrigin.value.copy(this.foam.origin);
       this.uniforms.uWaterReflectionMatrix.value.copy(this.capture.reflectionMatrix);
       this.uniforms.uWaterInverseProjection.value.copy(this.capture.inverseProjection);
       this.uniforms.uWaterViewMatrix.value.copy(this.capture.viewMatrix);
@@ -312,20 +298,14 @@ export class OceanRenderer {
 
   private releaseHighResources(): void {
     const capture = this.capture;
-    const foam = this.foam;
     this.capture = null;
-    this.foam = null;
     this.preparedCamera = null;
     this.uniforms.uWaterReady.value = 0;
     this.uniforms.uWaterColor.value = null;
     this.uniforms.uWaterDepth.value = null;
     this.uniforms.uWaterReflection.value = null;
     this.uniforms.uWaterReflectionDepth.value = null;
-    this.uniforms.uPersistentFoam.value = null;
-    runCleanupSteps([
-      () => capture?.dispose(),
-      () => foam?.dispose(),
-    ]);
+    capture?.dispose();
   }
 
   dispose(): void {

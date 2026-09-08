@@ -7,13 +7,10 @@ export const OCEAN_OPTICS_UNIFORMS = /* glsl */ `
   uniform sampler2D uWaterReflectionDepth;
   uniform vec3 uWaterReflectionSky;
   uniform vec3 uWaterOpenRadiance;
-  uniform sampler2D uPersistentFoam;
   uniform mat4 uWaterReflectionMatrix;
   uniform mat4 uWaterInverseProjection;
   uniform mat4 uWaterViewMatrix;
   uniform vec4 uWaterViewport;
-  uniform vec2 uFoamOrigin;
-  uniform float uFoamExtent;
   uniform float uWaterReady;
   uniform float uVortexTangentStrength;
   uniform float uVortexPhase;
@@ -109,25 +106,6 @@ export const OCEAN_OPTICS_FUNCTIONS = /* glsl */ `
     return distribution * visibility * fresnel * nl;
   }
 
-  float foamBubblePattern(vec2 p, float footprint) {
-    // Resolve individual cells only where the camera can see them.
-    if (footprint > 0.55) return 0.78;
-    vec2 cell = floor(p);
-    vec2 local = fract(p);
-    float nearest = 2.0;
-    for (int y = -1; y <= 1; y++) {
-      for (int x = -1; x <= 1; x++) {
-        vec2 offset = vec2(float(x), float(y));
-        vec2 seed = cell + offset;
-        vec2 center = vec2(hash21(seed), hash21(seed + vec2(17.3, 9.2)));
-        vec2 delta = offset + center - local;
-        nearest = min(nearest, dot(delta, delta));
-      }
-    }
-    float bubbles = smoothstep(0.018, 0.11, nearest);
-    return mix(bubbles, 0.78, smoothstep(0.18, 0.55, footprint));
-  }
-
   vec3 sampleWaterReflection(vec2 uv) {
     // Sky and clouds do not write depth. Use the same reflected environment as
     // the lab while retaining real ship, hull, and prop reflections.
@@ -142,7 +120,7 @@ export const OCEAN_OPTICS_FUNCTIONS = /* glsl */ `
     vec3 v = normalize(cameraPosition - vWorldPosition);
     vec3 l = normalize(uLightDirection);
     float nv = max(dot(n, v), 0.001);
-    float nl = max(dot(n, l), 0.0);
+
     float weather = clamp((uAmplitudeScale - 0.78) / 0.57, 0.0, 1.0);
     vec3 normalDx = dFdx(n);
     vec3 normalDy = dFdy(n);
@@ -216,28 +194,6 @@ export const OCEAN_OPTICS_FUNCTIONS = /* glsl */ `
     vec3 color = mix(body, reflection, fresnel);
     color += uSunColor * waterHighlight(n, v, l, roughness) * daylight * 2.2;
 
-    vec2 foamUv = (vWorldPosition.xz - uFoamOrigin) / uFoamExtent + 0.5;
-    vec2 foamEdge = min(foamUv, vec2(1.0) - foamUv);
-    float foamFade = smoothstep(0.0, 0.08, min(foamEdge.x, foamEdge.y));
-    float density = texture2D(uPersistentFoam, clamp(foamUv, 0.0, 1.0)).r * foamFade;
-    vec2 foamPosition = vWorldPosition.xz + vec2(0.83, 0.56) * uTime * 0.12;
-    vec2 cells = foamPosition * 16.0;
-    // Derivatives must run before the varying coverage branch.
-    float footprint = max(length(dFdx(cells)), length(dFdy(cells)));
-    // The lowest erosion threshold is 0.10. Lower density cannot show foam.
-    if (density > 0.10) {
-      float erosion = valueNoise(foamPosition * 0.85) * 0.65
-        + valueNoise(foamPosition * 3.1) * 0.35;
-      float coverage = smoothstep(0.10 + erosion * 0.28, 0.26 + erosion * 0.42, density);
-      if (coverage > 0.0) {
-        float bubbles = foamBubblePattern(cells, footprint);
-        float foamDetail = mix(bubbles, 1.0, smoothstep(0.55, 0.95, density));
-        float bubbleLight = mix(0.72, 1.0, foamDetail);
-        vec3 foamLight = uSkyColor * 0.50 + uSunColor * daylight * (0.12 + nl * 0.52);
-        vec3 foamColor = uFoamColor * foamLight * bubbleLight;
-        color = mix(color, foamColor, coverage * mix(0.78, 1.0, foamDetail));
-      }
-    }
     return color;
   }
   #endif
