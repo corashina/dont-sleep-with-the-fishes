@@ -16,7 +16,7 @@
     "models:fetch:items": "pwsh -NoProfile -File scripts/fetch-item-models.ps1",
     "models:fetch:ship": "pwsh -NoProfile -File scripts/fetch-ship-furniture.ps1",
     "models:fetch:fishing": "pwsh -NoProfile -File scripts/fetch-fishing-models.ps1",
-    "models:fetch:events": "pwsh -NoProfile -File scripts/fetch-event-models.ps1",
+    "models:fetch:events": "pwsh -NoProfile -File scripts/fetch-event-models.ps1 && node scripts/fetch-rescue-boat.mjs",
     "models:fetch:menu": "pwsh -NoProfile -File scripts/fetch-menu-models.ps1",
     "models:fetch": "bun run models:fetch:items && bun run models:fetch:ship && bun run models:fetch:fishing && bun run models:fetch:events && bun run models:fetch:menu",
     "models:check:items": "node scripts/check-item-models.mjs",

@@ -64,9 +64,6 @@ export interface EventPresentationAdapterDependencies {
   readonly featuredTargets: FeaturedEventPresentationTargets;
   readonly driftingWater: DriftingWater;
   readonly moon: MoonEventPresentationEnvironment;
-  readonly registerRescueCueCallback: (
-    callback: (progress: number | null) => void,
-  ) => void;
   readonly applyDangerousWatersReaction: (
     reaction: Readonly<DangerousWatersBoatReaction>,
   ) => void;
@@ -346,9 +343,6 @@ export const createFocusedAdapter: EventPresentationAdapterFactory = (
     dependencies.focusedFactories,
     eventId,
   );
-  if (eventId === 'other-people') {
-    dependencies.registerRescueCueCallback((progress) => layer.setRescueCue(progress));
-  }
   return createAdapter(eventId, [
     { parent: dependencies.worldParent, root: layer.root },
   ], {

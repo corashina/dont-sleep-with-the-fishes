@@ -978,9 +978,34 @@ export class SurvivalPhase implements GamePhase {
     this.presentedTerminalState = snapshot.state;
     this.clearTerminalCheckpoint();
     if (snapshot.ending !== null && snapshot.ending.id !== 'dorothy') {
+      if (snapshot.ending.id === 'rescue') {
+        this.reportFocusedError(this.presentRescueEnding(snapshot.ending));
+        return;
+      }
       this.audio.ending(snapshot.ending.id);
       this.ui.showEnding?.(snapshot.ending);
     }
+  }
+
+  private async presentRescueEnding(
+    ending: Extract<NonNullable<SurvivalSnapshot['ending']>, { id: 'rescue' }>,
+  ): Promise<void> {
+    const generation = this.lifecycleGeneration;
+    this.ui.beginRescueEnding?.();
+    this.audio.clearEvent();
+    this.world.clearEvent?.();
+    this.eventBundles.releaseActive();
+    await this.world.playRescueEnding?.(
+      () => {
+        if (this.isContinuationActive(generation)) this.audio.ending('rescue');
+      },
+      (opacity) => {
+        if (this.isContinuationActive(generation)) this.ui.setRescueFade?.(opacity);
+      },
+    );
+    if (!this.isContinuationActive(generation)) return;
+    this.audio.finishRescue();
+    this.ui.showEnding?.(ending);
   }
 
   private beginRadioSignal(snapshot: SurvivalSnapshot, generation: number): void {

@@ -116,6 +116,7 @@ export class SurvivalAudio {
   private midnightDigRemaining = 0;
   private midnightAttackPlayed = false;
   private planeFlybyVoice: AudioVoice | null = null;
+  private rescueEngine: AudioVoice | null = null;
   private radioSignalVoice: AudioVoice | null = null;
   private paused = false;
   private radioSignalPaused = false;
@@ -473,12 +474,22 @@ export class SurvivalAudio {
 
   ending(id: SurvivalEndingId): void {
     if (this.disposed) return;
+    if (id === 'rescue') this.scope.play('rescueHorn');
     const cue = id === 'rescue'
       ? 'rescueEnding'
       : id === 'sinking'
         ? 'sinkingEnding'
         : 'deathEnding';
-    this.scope.play(cue);
+    const voice = this.scope.play(cue);
+    if (id === 'rescue') {
+      this.rescueEngine = voice;
+      voice?.setGain(0.2);
+    }
+  }
+
+  finishRescue(): void {
+    this.rescueEngine?.stop(0.6);
+    this.rescueEngine = null;
   }
 
   setPaused(paused: boolean): void {

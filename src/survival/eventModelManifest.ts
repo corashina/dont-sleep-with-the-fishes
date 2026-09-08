@@ -6,6 +6,7 @@ import { FOCUSED_EVENT_MODEL_METADATA } from '../world/focusedEventModelMetadata
 import { FISHING_CATCH_MODEL_SPECS } from './fishingModelManifest';
 
 export const SURVIVAL_EVENT_MODEL_IDS = [
+  'rescueBoat',
   'driftingBarrel',
   'emptyLifeboat',
   'emptyLifeboatContainer',
@@ -32,6 +33,12 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
   SurvivalEventModelId,
   SurvivalEventModelSpec
 >> = Object.freeze({
+  rescueBoat: Object.freeze({
+    url: new URL('../assets/models/ending/rescueBoat.glb', import.meta.url).href,
+    targetLongestDimension: 12,
+    rotation: NO_ROTATION,
+    maxTriangles: 2892,
+  }),
   driftingBarrel: Object.freeze({
     url: new URL('../assets/models/events/driftingBarrel.glb', import.meta.url).href,
     targetLongestDimension: 1.15,

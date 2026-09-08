@@ -98,7 +98,6 @@ function createLayer() {
     copyDangerousWatersBoatReaction: vi.fn(() => false),
     update: vi.fn(),
     settleForVisibilityChange: vi.fn(),
-    setRescueCue: vi.fn(),
     clear: vi.fn(),
     dispose: vi.fn(),
   };
@@ -238,7 +237,6 @@ function createDependencies() {
       },
       driftingWater: {},
       moon: {},
-      registerRescueCueCallback: vi.fn(),
       applyDangerousWatersReaction: vi.fn(),
     } as unknown as EventPresentationAdapterDependencies,
   };

@@ -83,6 +83,22 @@ class FakeAudioBackend implements AudioBackend {
 }
 
 describe('AudioSystem', () => {
+  it('sounds the rescue horn first and stops the engine at the finish screen', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    expect(SURVIVAL_SOUND_IDS).toContain('rescueHorn');
+    audio.ending('rescue');
+    expect(backend.voices.map(({ id }) => id)).toEqual(['rescueHorn', 'rescueEnding']);
+    expect(backend.voices[1]!.setGain).toHaveBeenCalledWith(0.2);
+    audio.setPaused(true);
+    expect(backend.voices[0]!.setPaused).toHaveBeenCalledWith(true);
+    expect(backend.voices[1]!.setPaused).toHaveBeenCalledWith(true);
+    audio.finishRescue();
+    expect(backend.voices[1]!.stop).toHaveBeenCalledWith(0.6);
+    audio.dispose();
+    expect(backend.voices[0]!.stop).toHaveBeenCalled();
+  });
+
   it('plays every pet meow once before reshuffling without an adjacent repeat', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(

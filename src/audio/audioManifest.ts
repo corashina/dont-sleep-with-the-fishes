@@ -69,6 +69,7 @@ export const SOUND_IDS = [
   'eerieMelody',
   'chest',
   'rescueEnding',
+  'rescueHorn',
   'deathEnding',
   'sinkingEnding',
   'shipCrash',
@@ -234,6 +235,7 @@ export const AUDIO_MANIFEST: Readonly<Record<SoundId, AudioAssetDefinition>> =
     eerieMelody: asset('eerieMelody', 'ambience', 0.38, true, 1),
     chest: asset('chest', 'effects', 0.5, false, 2),
     rescueEnding: asset('rescueEnding', 'effects', 0.55, false, 1),
+    rescueHorn: asset('rescueHorn', 'effects', 0.65, false, 1),
     deathEnding: asset('deathEnding', 'music', 0.48, false, 1),
     sinkingEnding: asset('sinkingEnding', 'effects', 0.64, false, 1),
     shipCrash: Object.freeze({

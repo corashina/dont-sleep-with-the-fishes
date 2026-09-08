@@ -9,6 +9,15 @@ resource ID and source SHA-256. Ship furniture combines the existing Kenney CC0 
 pinned Poly Pizza barrel, shelf, crate, and cargo-box models, and the lifeboat
 uses one locally processed Poly Haven CC0 texture set.
 
+## Rescue ending boat
+
+`src/assets/models/ending/rescueBoat.glb` uses [Boat by Poly by Google](https://poly.pizza/m/84-DYhLzxNq)
+under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Downloaded on 2026-09-08.
+The source GLB is unchanged. Runtime scaling and placement fit the rescue scene.
+Source resource: `3b380db5-c7d5-42cd-b7d0-0952839cb589`. Triangles: 2,892.
+SHA-256: `CFA1315EB59F7AF0E4DFBAFC5343B71791107E16A4B590F7A7BE53BF57ECFC3F`.
+Fetch with `node scripts/fetch-rescue-boat.mjs`.
+
 ## Runtime font asset ledger
 
 The full TrueType fonts come from Google Fonts. They include all Polish letters in both cases.
@@ -329,6 +338,7 @@ The Midnight shovel runtime cue uses a six-second cutoff. The MP3 remains unenco
 | eerieMelody | `eerieMelody.mp3` | [woman humming cathedral / Pennywind](https://freesound.org/people/Pennywind/sounds/816687/) |
 | chest | `chest.mp3` | [Wooden Chest Open / The_Frisbee_of_Peace](https://freesound.org/people/The_Frisbee_of_Peace/sounds/573654/) |
 | rescueEnding | `rescueEnding.mp3` | [Rescue Vessel Engine / Lydmakeren](https://freesound.org/people/Lydmakeren/sounds/510907/) |
+| rescueHorn | `rescueHorn.mp3` | [horn.wav / chrobi](https://freesound.org/people/chrobi/sounds/118644/) (CC0 1.0) |
 | deathEnding | `deathEnding.mp3` | [Ominous Drone / SilverIllusionist](https://freesound.org/people/SilverIllusionist/sounds/693405/) |
 | sinkingEnding | `sinkingEnding.mp3` | [Wooden Ship Break / Kodack](https://freesound.org/people/Kodack/sounds/257752/) |
 | shipCrash | `sinkingEnding.mp3` | Reuses [Wooden Ship Break / Kodack](https://freesound.org/people/Kodack/sounds/257752/). |

@@ -210,8 +210,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   private shipRevealed = false;
   private staged = false;
   private terminalRescue = false;
-  private naturalRescueCue = false;
-  private resultRescueActive = false;
   private disposed = false;
 
   constructor(
@@ -260,8 +258,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.restoreCamera();
     this.releaseSupply();
     this.captureCamera();
-    this.naturalRescueCue = false;
-    this.resultRescueActive = false;
     this.terminalRescue = false;
     this.configureSide(variantSeed);
     this.staged = true;
@@ -342,12 +338,9 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       case 'people-rescue': {
         this.setPlayerSignalsDark();
         this.root.userData.state = 'answering';
-        this.resultRescueActive = true;
         const reaction = this.startAnimation('result-rescue', RESCUE_DURATION);
         this.root.userData.state = 'answering';
-        return reaction.then(() => {
-          this.resultRescueActive = false;
-        });
+        return reaction;
       }
       case 'people-pass':
         this.setPlayerSignalsDark();
@@ -368,8 +361,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.restoreCamera();
     this.setPlayerSignalsDark();
     this.staged = false;
-    this.naturalRescueCue = false;
-    this.resultRescueActive = false;
     if (this.terminalRescue) {
       this.root.visible = true;
       this.ship.visible = true;
@@ -409,8 +400,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.disposed = true;
     this.staged = false;
     this.terminalRescue = false;
-    this.naturalRescueCue = false;
-    this.resultRescueActive = false;
     this.root.userData.holdOnClear = false;
     this.root.removeFromParent();
     disposeResourceSets(
@@ -418,62 +407,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       this.staticMaterials,
     );
     this.root.clear();
-  }
-
-  setRescueCue(progress: number | null): void {
-    if (this.disposed) return;
-    if (this.resultRescueActive) return;
-    if (progress === null) {
-      if (!this.naturalRescueCue) return;
-      this.terminalRescue = false;
-      this.root.userData.holdOnClear = false;
-      this.root.visible = false;
-      this.root.userData.state = 'idle';
-      return;
-    }
-    if (!this.naturalRescueCue) {
-      this.animation.cancel();
-      this.releaseSupply();
-      this.restoreCamera();
-      this.resetActors();
-      this.naturalRescueCue = true;
-      this.root.visible = true;
-      this.ship.visible = true;
-      this.portBeacon.visible = true;
-      this.starboardBeacon.visible = true;
-    }
-    this.root.visible = true;
-    this.ship.visible = true;
-    this.portBeacon.visible = true;
-    this.starboardBeacon.visible = true;
-    this.setPlayerSignalsDark();
-    const normalized = clamp01(progress);
-    const approach = keyedTravel(normalized);
-    this.ship.position.lerpVectors(
-      this.shipBase,
-      this.shipApproach,
-      approach,
-    );
-    this.ship.rotation.y = this.shipYaw
-      + (this.rescueYaw - this.shipYaw) * smoothstep(normalized);
-    this.root.userData.answerPulses = normalized > 0 ? 1 : 0;
-    this.root.userData.courseTurns = normalized > 0 ? 1 : 0;
-    const answer = Math.sin(Math.PI * clamp01(normalized / 0.34));
-    this.setBeaconMaterialIntensity(
-      this.portBeaconMaterial,
-      HORIZON_LIGHT_INTENSITY + answer * 2.8,
-    );
-    this.setBeaconMaterialIntensity(
-      this.starboardBeaconMaterial,
-      HORIZON_LIGHT_INTENSITY,
-    );
-    this.updateBeaconPose();
-    this.updateOpenWaterDistance();
-    this.terminalRescue = normalized >= 1;
-    this.root.userData.holdOnClear = this.terminalRescue;
-    this.root.userData.state = this.terminalRescue
-      ? 'held-rescue'
-      : 'rescue-cue';
   }
 
   private startAnimation(
