@@ -40,6 +40,47 @@ function dependencies(overrides: Partial<LaunchDependencies> = {}): LaunchDepend
 }
 afterEach(() => { vi.restoreAllMocks(); document.body.replaceChildren(); initializeLanguage(null); });
 describe('phase-based launch', () => {
+  it('advances loading progress as resources finish and waits for game readiness', async () => {
+    const font = deferred<void>();
+    const models = deferred<MenuModelLibrary>();
+    const sand = deferred<MenuSandAssets>();
+    const ready = deferred<void>();
+    const element = mount();
+    const handle = launchGame(element, dependencies({
+      loadMenuFont: () => font.promise,
+      loadMenuModels: () => models.promise,
+      loadMenuSandAssets: () => sand.promise,
+      createGame: (_element, resources) => ({
+        start: vi.fn(),
+        dispose: vi.fn(),
+        ready: resources.acquireMenu().then(() => ready.promise),
+      }),
+    }));
+    const progress = element.querySelector('progress')!;
+    expect(progress.value).toBe(0);
+    await flushPhases();
+    expect(progress.max).toBe(6);
+    expect(progress.value).toBe(2);
+    expect(progress.getAttribute('aria-valuetext')).toBe('33%');
+
+    font.resolve();
+    await flushPhases();
+    expect(progress.value).toBe(3);
+    models.resolve({ dispose: vi.fn() } as unknown as MenuModelLibrary);
+    await flushPhases();
+    expect(progress.value).toBe(4);
+    sand.resolve({ dispose: vi.fn() } as unknown as MenuSandAssets);
+    await flushPhases();
+    expect(progress.value).toBe(5);
+    expect(progress.isConnected).toBe(true);
+
+    ready.resolve();
+    await handle.completion;
+    expect(progress.position).toBe(1);
+    expect(progress.getAttribute('aria-valuetext')).toBe('100%');
+    expect(progress.isConnected).toBe(false);
+    handle.cancel();
+  });
   it('starts the menu while ship and physics promises remain unrequested', async () => {
     const ship = deferred<Awaited<ReturnType<LaunchDependencies['loadShipAssets']>>>();
     const physics = deferred<Awaited<ReturnType<LaunchDependencies['loadPhysicsRuntime']>>>();
@@ -48,12 +89,16 @@ describe('phase-based launch', () => {
     const element = mount();
     const handle = launchGame(element, deps);
     const loading = element.querySelector('.system-screen--loading');
+    const progress = element.querySelector('progress')!;
     expect(loading).not.toBeNull();
     await flushPhases();
     expect(element.querySelector('.system-screen--loading')).toBe(loading);
+    expect(progress.value).toBe(4);
+    expect(progress.max).toBe(6);
     menu.resolve({ dispose: vi.fn(), configure: vi.fn() } as unknown as MenuModelLibrary);
     const game = await handle.completion;
     expect(game).not.toBeNull();
+    expect(progress.position).toBe(1);
     expect(element.querySelector('.system-screen--loading')).toBeNull();
     expect(deps.loadMenuModels).toHaveBeenCalledOnce();
     expect(deps.loadShipAssets).not.toHaveBeenCalled();
@@ -68,11 +113,14 @@ describe('phase-based launch', () => {
     const element = mount();
     const handle = launchGame(element, deps);
     await flushPhases();
+    const progress = element.querySelector('progress')!;
+    const position = progress.position;
     handle.cancel(); handle.cancel();
     expect(element.querySelector('.system-screen--loading')).toBeNull();
     pending.resolve(menu);
     await expect(handle.completion).resolves.toBeNull();
     expect(menu.dispose).toHaveBeenCalledOnce();
+    expect(progress.position).toBe(position);
   });
   it('cleans loaded audio when cancellation precedes game creation', async () => {
     const pending = deferred<AudioSystem>();
@@ -93,7 +141,9 @@ describe('phase-based launch', () => {
     const handle = launchGame(element, dependencies({
       loadMenuModels: async () => { throw error; }, loadMenuSandAssets: async () => sand,
     }));
+    const progress = element.querySelector('progress')!;
     await expect(handle.completion).resolves.toBeNull();
+    expect(progress.position).toBeLessThan(1);
     expect(log).toHaveBeenCalledWith(error);
     expect(element.querySelector('.system-screen--error')).not.toBeNull();
     handle.cancel();
@@ -110,11 +160,14 @@ describe('phase-based launch', () => {
   });
   it('starts a browser playtest directly in survival without menu or ship', async () => {
     const deps = dependencies();
-    const handle = launchGame(mount(), deps, 'enabled', {
+    const element = mount();
+    const handle = launchGame(element, deps, 'enabled', {
       search: '?playtest=survival&seed=42&missing=map-1&missing=knife-1', playtestEnabled: true,
     });
+    const progress = element.querySelector('progress')!;
     const game = await handle.completion;
     expect(game).not.toBeNull();
+    expect(progress.position).toBe(1);
     expect(deps.loadSurvivalModels).toHaveBeenCalledOnce();
     expect(deps.loadMenuModels).not.toHaveBeenCalled();
     expect(deps.loadShipAssets).not.toHaveBeenCalled();

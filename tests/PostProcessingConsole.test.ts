@@ -20,7 +20,7 @@ it('keeps only developer controls and toggles with backtick', () => {
   for (const selector of ['[data-physics-enabled]', '[data-physics-debug]', '[data-presentation-weather]', '[data-post-processing-ao-mode]']) {
     expect(root.querySelector(selector)).not.toBeNull();
   }
-  for (const selector of ['[data-language-select]', '[data-save-enabled]', '[data-audio-volume]', '[data-camera-fov]', '[data-quality-control]', '[data-performance-stats-enabled]', '[data-volumetric-clouds]']) {
+  for (const selector of ['[data-language-select]', '[data-save-enabled]', '[data-audio-volume]', '[data-camera-fov]', '[data-quality-control]', '[data-performance-stats-enabled]']) {
     expect(root.querySelector(selector)).toBeNull();
   }
   window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backquote' }));

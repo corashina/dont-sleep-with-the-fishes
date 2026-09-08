@@ -9,7 +9,6 @@ import {
   createEventItemUseSample,
   eventItemActionCueProgresses,
   eventItemOutcomeDuration,
-  eventItemUseDuration,
   eventItemUseDurationForItem,
   sampleEventItemOutcome,
   sampleEventItemUse,

@@ -4,7 +4,6 @@ import { createTestGame, flushPhases, type GameFixtureOptions } from './helpers/
 
 import { describe, expect, it, vi } from 'vitest';
 import type { GamePhase, PhaseContext } from '../src/app/GamePhase';
-import { Game } from '../src/Game';
 import type { ScavengeResult } from '../src/game/ScavengeSession';
 import type { MenuModelLibrary } from '../src/menu/MenuModelLibrary';
 import type { SurvivalPhaseStart } from '../src/survival/SurvivalPhase';

@@ -191,12 +191,6 @@ function transformFromSpec(spec: SlotSpec): BoatStorageTransform {
   };
 }
 
-export function boatStorageSurface(instance: ItemInstance): BoatItemSurface {
-  const spec = BOAT_STORAGE_SLOTS[instance.type][instanceOrdinal(instance)];
-  if (!spec) throw new Error(`No boat storage slot for ${instance.instanceId}`);
-  return spec.surface;
-}
-
 export function boatStorageTransform(
   instance: ItemInstance,
 ): BoatStorageTransform {

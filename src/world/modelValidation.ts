@@ -15,11 +15,6 @@ export interface LongestDimensionSpec {
   readonly maxTriangles: number;
 }
 
-export function geometryTriangles(geometry: BufferGeometry): number {
-  const count = geometry.index?.count ?? geometry.getAttribute('position')?.count ?? 0;
-  return count / 3;
-}
-
 export function validatedGeometryTriangles(
   geometry: BufferGeometry,
   error: ModelError,

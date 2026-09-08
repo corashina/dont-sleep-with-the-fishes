@@ -18,7 +18,6 @@ describe('SystemTuningPreference', () => {
         cameraFieldOfView: 91,
         weatherOverride: 'rain',
         phaseOverride: 'night',
-        volumetricCloudsEnabled: true,
       })),
       setItem: vi.fn(),
     };
@@ -32,7 +31,6 @@ describe('SystemTuningPreference', () => {
       cameraFieldOfView: 91,
       weatherOverride: 'rain',
       phaseOverride: 'night',
-      volumetricCloudsEnabled: true,
     });
     expect(storage.getItem).toHaveBeenCalledWith(SYSTEM_TUNING_STORAGE_KEY);
   });
@@ -40,9 +38,9 @@ describe('SystemTuningPreference', () => {
   it('writes one updated JSON state', () => {
     const storage = { getItem: vi.fn().mockReturnValue(null), setItem: vi.fn() };
     const preference = createSystemTuningPreference(storage);
-    preference.set('volumetricCloudsEnabled', true);
+    preference.set('performanceStatsVisible', true);
     expect(JSON.parse(storage.setItem.mock.calls[0]![1])).toMatchObject({
-      volumetricCloudsEnabled: true,
+      performanceStatsVisible: true,
       cameraFieldOfView: 80,
     });
   });

@@ -248,7 +248,7 @@ function buildBoot(root: Group, context: TemplateBuildContext): void {
 }
 
 function buildBottle(root: Group, context: TemplateBuildContext): void {
-  const body = addMesh(
+  addMesh(
     root,
     context,
     'fishing-catch:bottle:body',

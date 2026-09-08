@@ -1,5 +1,5 @@
 // Importance: 8/10 (scaled from 4/5). Protects physics startup and error context.
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   PhysicsLoadError,
   loadPhysicsRuntime,

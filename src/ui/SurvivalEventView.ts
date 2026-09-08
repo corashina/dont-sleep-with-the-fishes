@@ -2,7 +2,6 @@ import { uiDynamic } from '../i18n/uiDynamicMessages';
 import { onLanguageChange } from '../i18n/language';
 import { refreshUiText } from './translatedText';
 import { uiText } from '../i18n/uiMessages';
-import type { ItemInstanceId } from '../game/ItemState';
 import type {
   EventResponseId,
   SurvivalEventDefinition,

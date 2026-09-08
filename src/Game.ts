@@ -231,7 +231,6 @@ export class Game {
   private saveStore!: SurvivalSaveStore;
   private weatherOverride: PresentationWeatherId | null = null;
   private timeOfDayOverride: SkyPhase | null = null;
-  private volumetricCloudsEnabled = false;
   private animationFrame = 0;
   private started = false;
   private disposed = false;
@@ -262,7 +261,6 @@ export class Game {
     let sceneRenderer: SceneRenderer | null = null;
     const visualQuality = createVisualQualityPreference((quality) => {
       sceneRenderer?.setVisualQuality?.(quality);
-      this.activePhase?.setVisualQuality?.(quality);
     });
     const antiAliasingQuality = createAntiAliasingQualityPreference((quality) => {
       sceneRenderer?.setAntiAliasingQuality?.(quality);
@@ -358,7 +356,6 @@ export class Game {
       () => createVisualQualityPreference(
         (quality) => {
           base.sceneRenderer.setVisualQuality?.(quality);
-          this.activePhase?.setVisualQuality?.(quality);
         },
         null,
       ),
@@ -481,7 +478,6 @@ export class Game {
       const tuningState = systemTuning.get();
       this.weatherOverride = tuningState.weatherOverride;
       this.timeOfDayOverride = tuningState.phaseOverride;
-      this.volumetricCloudsEnabled = tuningState.volumetricCloudsEnabled;
       this.animationFrame = 0;
       this.started = false;
       this.disposed = false;
@@ -589,11 +585,6 @@ export class Game {
           savedDay: this.saveStore.getState().checkpoint?.session.day ?? null,
           setEnabled: (enabled) => this.setSaveEnabled(enabled),
           continueSavedRun: () => this.continueSavedRun(),
-        },
-        clouds: {
-          enabled: this.volumetricCloudsEnabled,
-          available: true,
-          setEnabled: (enabled) => this.setVolumetricCloudsEnabled(enabled),
         },
       });
       this.onResize = () => this.handleResize();
@@ -879,28 +870,16 @@ export class Game {
     this.activePhase?.setTimeOfDayOverride?.(phase);
   }
 
-  private setVolumetricCloudsEnabled(enabled: boolean): void {
-    this.volumetricCloudsEnabled = enabled;
-    this.systemTuning.set('volumetricCloudsEnabled', enabled);
-    this.activePhase?.setVolumetricCloudsEnabled?.(enabled);
-  }
-
   private applyPresentationOverrides(phase: GamePhase): void {
     if (this.weatherOverride !== null) phase.setWeatherOverride?.(this.weatherOverride);
     if (this.timeOfDayOverride !== null) phase.setTimeOfDayOverride?.(this.timeOfDayOverride);
-    phase.setVolumetricCloudsEnabled?.(this.volumetricCloudsEnabled);
   }
 
   private synchronizePresentationControls(): void {
-    this.settingsMenu?.setVolumetricCloudAvailability(this.volumetricCloudsAvailable());
     const console = this.postProcessingConsole;
     if (console === null) return;
     console.setTimeOfDayState(this.presentationPhase());
     this.synchronizeWeatherControl(console);
-  }
-
-  private volumetricCloudsAvailable(): boolean {
-    return this.activePhase?.getVolumetricCloudsAvailable?.() ?? true;
   }
 
   private presentationPhase(): SkyPhase {

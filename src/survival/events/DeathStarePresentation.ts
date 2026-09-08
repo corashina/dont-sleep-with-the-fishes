@@ -169,7 +169,6 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   private readonly mouthTarget = new Group();
   private readonly lure: Mesh;
   private readonly lureStalk: Mesh;
-  private readonly teeth: readonly Mesh[];
   private readonly waterStrands: readonly WaterStrand[];
   private readonly sample: DeathStareSample = identityDeathStareSample();
   private readonly itemPose: MutableSupplyPose = {
@@ -283,7 +282,6 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
     this.mouthTarget.position.set(0.02, -0.52, 0.8);
     this.angler.add(this.mouthTarget);
 
-    const teeth: Mesh[] = [];
     for (let index = 0; index < 13; index += 1) {
       const tooth = new Mesh(toothGeometry, this.toothMaterial);
       const top = index < 7;
@@ -310,10 +308,8 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
         0.82,
       );
       tooth.castShadow = true;
-      teeth.push(tooth);
       this.angler.add(tooth);
     }
-    this.teeth = teeth;
 
     this.lureStalk = new Mesh(lureStalkGeometry, this.wetLureMaterial);
     this.lureStalk.name = 'death-stare-lure-stalk';

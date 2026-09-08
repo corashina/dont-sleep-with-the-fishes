@@ -561,10 +561,6 @@ export class BoatAnchorView {
     return anchorId === undefined ? null : this.anchorButtons.get(anchorId) ?? null;
   }
 
-  isCarlitosCardOpen(): boolean {
-    return !this.carlitosCard.hidden;
-  }
-
   handleCarlitosEscape(event: KeyboardEvent): boolean {
     if (event.key !== 'Escape' || this.carlitosCard.hidden) return false;
     event.preventDefault();

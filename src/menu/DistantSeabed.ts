@@ -31,13 +31,8 @@ import {
 } from './MenuSceneLayout';
 import type { MenuSceneComponent } from './MenuSceneComponent';
 import { MenuSeabedLife } from './MenuSeabedLife';
-
-export const DISTANT_RIDGE_COUNT = 3;
-export const DISTANT_MOUNTAIN_COUNT = 3;
 export const SEABED_ROCK_INSTANCE_COUNT = 100;
 export const SEABED_STONE_INSTANCE_COUNT = 144;
-export const DISTANT_DEBRIS_COUNT = 20;
-export const NEAR_WRECK_DEBRIS_COUNT = 14;
 
 const RIDGES = [
   { width: 76, depth: 16, z: -34, height: 0.9, phase: 0.2 },

@@ -19,9 +19,3 @@ export interface SaveControls {
   setEnabled(enabled: boolean): void;
   continueSavedRun(): void;
 }
-
-export interface VolumetricCloudControls {
-  readonly enabled: boolean;
-  readonly available: boolean;
-  setEnabled(enabled: boolean): void;
-}

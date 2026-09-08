@@ -10,10 +10,6 @@ export interface MutableTransformPose {
   scaleZ: number;
 }
 
-export function createTransformPose(): MutableTransformPose {
-  return resetTransformPose({} as MutableTransformPose);
-}
-
 export function resetTransformPose<Pose extends MutableTransformPose>(
   pose: Pose,
 ): Pose {
@@ -27,20 +23,4 @@ export function resetTransformPose<Pose extends MutableTransformPose>(
   pose.scaleY = 1;
   pose.scaleZ = 1;
   return pose;
-}
-
-export function copyTransformPose<Pose extends MutableTransformPose>(
-  source: Readonly<MutableTransformPose>,
-  output: Pose,
-): Pose {
-  output.x = source.x;
-  output.y = source.y;
-  output.z = source.z;
-  output.yaw = source.yaw;
-  output.pitch = source.pitch;
-  output.roll = source.roll;
-  output.scaleX = source.scaleX;
-  output.scaleY = source.scaleY;
-  output.scaleZ = source.scaleZ;
-  return output;
 }

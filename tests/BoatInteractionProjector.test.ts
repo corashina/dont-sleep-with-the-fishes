@@ -76,7 +76,6 @@ function createFixture(): ProjectorFixture {
     activeEventId: vi.fn(() => activeEventId),
     interactionTargets: vi.fn(() => []),
     interactionRoot: vi.fn(() => null),
-    resultRoot: vi.fn(() => null),
     itemAimTarget: vi.fn(() => null),
   };
   const roots: BoatInteractionProjectorRoots = {

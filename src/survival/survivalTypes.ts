@@ -13,8 +13,6 @@ export interface CompanionEventActionDefinition {
   readonly id: CompanionEventActionId;
   readonly energyCost: number;
 }
-export type CompanionActionId =
-  | 'petCarlitos' | 'feedCarlitos' | 'treatCarlitos' | CompanionEventActionId;
 export interface CompanionEventActionAvailability {
   readonly text?: OutcomeText;
   readonly visible: boolean;

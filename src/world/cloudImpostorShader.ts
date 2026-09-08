@@ -159,7 +159,7 @@ export const cloudImpostorShader = `
 
   vec4 cloudLayer(vec3 direction) {
     float pixelWidth = length(fwidth(direction));
-    if (uCloudCoverage <= 0.0 || uCloudLayerStrength <= 0.0 || direction.y <= 0.0) {
+    if (uCloudCoverage <= 0.0 || direction.y <= 0.0) {
       return vec4(0.0);
     }
     float angle = uCloudTime * 0.0012;
@@ -181,7 +181,7 @@ export const cloudImpostorShader = `
       alpha += behind;
     }
     color /= max(alpha, 0.0001);
-    alpha *= smoothstep(0.0, 0.025, direction.y) * uCloudLayerStrength;
+    alpha *= smoothstep(0.0, 0.025, direction.y);
     return vec4(color, alpha);
   }
 `;

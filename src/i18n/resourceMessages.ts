@@ -1,4 +1,3 @@
-import { getLanguage } from './language';
 import { defineMessages } from './messages';
 
 const pluralRules = { en: new Intl.PluralRules('en'), pl: new Intl.PluralRules('pl') };
@@ -16,8 +15,4 @@ const t = defineMessages({
 
 export function resourceQuantity(resource: 'food' | 'bait', quantity: number): string {
   return t(resource, quantity);
-}
-
-export function formatDomainNumber(quantity: number): string {
-  return numbers[getLanguage()].format(quantity);
 }

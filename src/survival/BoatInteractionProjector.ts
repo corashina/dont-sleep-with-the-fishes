@@ -8,7 +8,6 @@ import {
   ITEM_IDS,
   type ItemId,
 } from '../game/ItemState';
-import type { BoatSupplyGroupId } from '../world/BoatStorage';
 import {
   createBoatObjectBoundsCache,
   projectBoatObjectBoundsInto,
@@ -39,7 +38,6 @@ export interface EventInteractionProjectionHost {
   activeEventId(): string | null;
   interactionTargets(): readonly FocusedEventInteractionTarget[];
   interactionRoot(id: string): Object3D | null;
-  resultRoot(id: string): Object3D | null;
   itemAimTarget(): Object3D | null;
 }
 
@@ -147,7 +145,6 @@ export class BoatInteractionProjector {
   private readonly chestProjection = projectionOutput();
   private readonly carlitosProjection = projectionOutput();
   private readonly eventInteractionProjection = projectionOutput();
-  private readonly eventResultProjection = projectionOutput();
   private readonly fishingAnchor: MutableAnchor;
   private readonly repairAnchor: MutableAnchor;
   private readonly pillowAnchor: MutableAnchor;
@@ -552,24 +549,6 @@ export class BoatInteractionProjector {
       ? null
       : projectBoatObjectBoundsInto(
           this.eventInteractionProjection,
-          root,
-          this.camera,
-          width,
-          height,
-        );
-  }
-
-  projectEventResult(
-    eventId: string,
-    width: number,
-    height: number,
-  ): ProjectedBoatBounds | null {
-    if (!this.canProjectEvent(width, height)) return null;
-    const root = this.eventHost.resultRoot(eventId);
-    return root === null
-      ? null
-      : projectBoatObjectBoundsInto(
-          this.eventResultProjection,
           root,
           this.camera,
           width,

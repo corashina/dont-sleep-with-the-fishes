@@ -1,7 +1,6 @@
 import { Box3, Euler, Quaternion, Vector3 } from 'three';
 import {
   ITEM_DEFINITIONS,
-  ITEM_IDS,
   type ItemId,
 } from '../game/itemCatalog';
 import type { ItemInstance, ItemInstanceId } from '../game/ItemState';
@@ -31,12 +30,6 @@ export interface ShipItemSurface {
   readonly footprint: { readonly width: number; readonly depth: number };
   readonly clearanceHeight: number;
   readonly standingPoints: readonly Vector3[];
-}
-
-export interface ShipItemProfile {
-  readonly width: number;
-  readonly depth: number;
-  readonly height: number;
 }
 
 export interface ShipItemTransform {
@@ -83,13 +76,6 @@ const validatedSurfaceInputs = new WeakMap<
   readonly ShipItemSurface[],
   WeakSet<readonly CollisionBox[]>
 >();
-
-export const SHIP_ITEM_PROFILES = Object.freeze(Object.fromEntries(
-  ITEM_IDS.map((id) => {
-    const [width, height, depth] = ITEM_MODEL_SPECS[id].normalizedSize;
-    return [id, { width, depth, height }];
-  }),
-) as Record<ItemId, ShipItemProfile>);
 
 function orientedItemBounds(id: ItemId, rotation: Euler): Box3 {
   const normalized = ITEM_MODEL_SPECS[id].normalizedBounds;

@@ -848,7 +848,6 @@ function sampleShotgunFire(
 
 function sampleKnifeStab(
   output: EventItemUseSample,
-  pickup: number,
   hold: number,
   progress: number,
 ): void {
@@ -968,7 +967,7 @@ function sampleTargetedEventItemUse(
       pulse(progress, 0.46, 0.53, 0.66),
       smoothstep((progress - 0.46) / 0.2),
     ); break;
-    case 'knife-stab': sampleKnifeStab(output, pickup, hold, progress); break;
+    case 'knife-stab': sampleKnifeStab(output, hold, progress); break;
   }
 }
 

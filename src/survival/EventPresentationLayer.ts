@@ -5,7 +5,6 @@ import {
   CylinderGeometry,
   Group,
   Material,
-  Mesh,
   MeshStandardMaterial,
   Object3D,
   Quaternion,
@@ -388,10 +387,6 @@ export class EventPresentationLayer {
     if (this.disposed || this.activeFocused === null) return null;
     return (this.focusedInteractionTargets.get(this.activeFocused) ?? [])
       .find(({ id }) => id === anchorId)?.root ?? null;
-  }
-
-  hasFocused(eventId: string): boolean {
-    return this.focused.has(eventId);
   }
 
   itemAimTarget(eventId: string): Object3D | null {

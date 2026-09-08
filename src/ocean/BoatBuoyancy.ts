@@ -47,12 +47,6 @@ export function deriveBoatPoseInto(
   output.driftZ = 0;
 }
 
-export function deriveBoatPose(samples: BoatHeightSamples, footprint: BoatFootprint): BoatPose {
-  const output: BoatPose = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
-  deriveBoatPoseInto(output, samples, footprint);
-  return output;
-}
-
 export function smoothBoatPoseInto(
   output: BoatPose,
   current: BoatPose,
@@ -66,17 +60,6 @@ export function smoothBoatPoseInto(
   output.roll = current.roll + (target.roll - current.roll) * factor;
   output.driftX = current.driftX + (target.driftX - current.driftX) * factor;
   output.driftZ = current.driftZ + (target.driftZ - current.driftZ) * factor;
-}
-
-export function smoothBoatPose(
-  current: BoatPose,
-  target: BoatPose,
-  deltaSeconds: number,
-  damping: number,
-): BoatPose {
-  const output: BoatPose = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
-  smoothBoatPoseInto(output, current, target, deltaSeconds, damping);
-  return output;
 }
 
 export class BoatBuoyancy {
@@ -158,11 +141,5 @@ export class BoatBuoyancy {
     ) / 4;
     output.driftX = Math.max(-0.35, Math.min(0.35, -centerNormalX * 0.3));
     output.driftZ = Math.max(-0.35, Math.min(0.35, -centerNormalZ * 0.3));
-  }
-
-  sampleTarget(time: number, anchorX: number, anchorZ: number, amplitudeScale: number): BoatPose {
-    const output: BoatPose = { y: 0, pitch: 0, roll: 0, driftX: 0, driftZ: 0 };
-    this.sampleTargetInto(output, time, anchorX, anchorZ, amplitudeScale);
-    return output;
   }
 }

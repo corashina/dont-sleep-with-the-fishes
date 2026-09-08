@@ -2129,10 +2129,6 @@ export class SurvivalSession {
     return Math.min(recovered, aggregate, -delta);
   }
 
-  private consumeCharge(id: ItemId): boolean {
-    return this.inventory.consume(id).length > 0;
-  }
-
   private protectedUsableCount(
     type: ItemId,
     excludedInstanceIds: ReadonlySet<ItemInstanceId>,

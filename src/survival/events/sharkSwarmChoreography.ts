@@ -164,8 +164,6 @@ export function createSwarmSample(): SwarmSample {
   return sample;
 }
 
-export const identitySwarmSample = createSwarmSample;
-
 export function createSwarmSharkPose(): SwarmSharkPose {
   return {
     x: 0,
@@ -176,8 +174,6 @@ export function createSwarmSharkPose(): SwarmSharkPose {
     scale: 1,
   };
 }
-
-export const identitySwarmSharkPose = createSwarmSharkPose;
 
 export function sampleSwarmReveal(
   progress: number,

@@ -1,5 +1,4 @@
 import {
-  BoxGeometry,
   BufferGeometry,
   CylinderGeometry,
   Group,

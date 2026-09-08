@@ -21,7 +21,6 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import { OceanRenderer } from '../ocean/OceanRenderer';
-import type { VisualQuality } from '../rendering/visualQuality';
 import type { WaterQuality } from '../rendering/waterQuality';
 import {
   createWaterExclusion,
@@ -62,10 +61,6 @@ import {
 } from '../world/SceneResources';
 import { alignDirectionalLightWithSun } from '../world/celestialLight';
 import { Skybox } from '../world/Skybox';
-import {
-  tryCreateVolumetricClouds,
-  type VolumetricClouds,
-} from '../world/VolumetricClouds';
 import { WeatherEffects } from '../world/WeatherEffects';
 import type { SkyPalette, SkyState } from '../world/skyPalette';
 import {
@@ -153,8 +148,6 @@ export const SURVIVAL_CELESTIAL_DIRECTION = Object.freeze([
   0.24,
   -1,
 ] as const);
-
-export const WEATHER_IDS = ['calm', 'overcast', 'squall'] as const satisfies readonly WeatherId[];
 export const DAY_CLOUD_BOUNCE_INTENSITY = 1.7;
 
 const CUE_DURATION: Readonly<Record<PresentationCue, number>> = {
@@ -193,30 +186,6 @@ interface ActiveSequence {
   elapsed: number;
   duration: number;
   resolve: () => void;
-}
-
-interface VolumetricCloudFrame {
-  time: number;
-  delta: number;
-  cameraPosition: Readonly<Vector3>;
-  state: Readonly<SkyState>;
-  palette: Readonly<SkyPalette>;
-}
-
-function createVolumetricCloudFrame(
-  volumetricClouds: VolumetricClouds | null,
-  cameraPosition: Readonly<Vector3>,
-  state: Readonly<SkyState>,
-  palette: Readonly<SkyPalette>,
-): VolumetricCloudFrame | null {
-  if (volumetricClouds === null) return null;
-  return {
-    time: 0,
-    delta: 0,
-    cameraPosition,
-    state,
-    palette,
-  };
 }
 
 const clamp = (value: number, minimum: number, maximum: number): number =>
@@ -367,8 +336,6 @@ export class BoatWorld {
   private readonly camera: PerspectiveCamera;
   private readonly ocean: OceanRenderer;
   private readonly sky: Skybox;
-  private readonly volumetricClouds!: VolumetricClouds | null;
-  private readonly volumetricCloudFrame!: VolumetricCloudFrame | null;
   private readonly weatherEffects: WeatherEffects;
   private readonly motionRig = new Group();
   private readonly cueCameraRig = new Group();
@@ -434,6 +401,7 @@ export class BoatWorld {
   private readonly fishingAvailableOutline = new HoverOutline();
   private readonly chestAvailableOutline = new HoverOutline();
   private readonly repairAvailableOutline = new HoverOutline();
+  private readonly pillowAvailableOutline = new HoverOutline();
   private radioSignalAvailable = false;
   private readonly applyDangerousWatersReaction = (
     reaction: Readonly<DangerousWatersBoatReaction>,
@@ -529,8 +497,6 @@ export class BoatWorld {
     models?: SurvivalEventModels | EventModelLibrary | FocusedEventPresentationFactories,
     eventModels?: EventModelLibrary,
     focusedEventFactories: FocusedEventPresentationFactories = {},
-    visualQuality: VisualQuality = 'low',
-    createClouds: typeof tryCreateVolumetricClouds = tryCreateVolumetricClouds,
   ) {
     const resolvedFocusedFactories = resolveFocusedEventFactories(
       models,
@@ -551,7 +517,6 @@ export class BoatWorld {
     this.originalCameraPosition = camera.position.clone();
     this.originalCameraQuaternion = camera.quaternion.clone();
     let sky: Skybox | null = null;
-    let volumetricClouds: VolumetricClouds | null = null;
     let weatherEffects: WeatherEffects | null = null;
     let sleepPillow: SleepPillow | null = null;
     let hangingLantern: HangingLantern | null = null;
@@ -575,14 +540,6 @@ export class BoatWorld {
         },
       );
       this.sky = sky;
-      volumetricClouds = createClouds(this.scene, visualQuality);
-      this.volumetricClouds = volumetricClouds;
-      this.volumetricCloudFrame = createVolumetricCloudFrame(
-        volumetricClouds,
-        this.worldCameraPosition,
-        this.skyState,
-        sky.palette,
-      );
       weatherEffects = new WeatherEffects(this.scene);
       this.weatherEffects = weatherEffects;
       weatherEffects.setLightningStrikeListener(this.queueLightningStrike);
@@ -777,10 +734,10 @@ export class BoatWorld {
           () => this.fishingAvailableOutline.dispose(),
           () => this.chestAvailableOutline.dispose(),
           () => this.repairAvailableOutline.dispose(),
+          () => this.pillowAvailableOutline.dispose(),
           () => hangingLantern?.dispose(),
           () => sleepPillow?.dispose(),
           () => weatherEffects?.dispose(),
-          () => volumetricClouds?.dispose(),
           () => sky?.dispose(),
           () => this.scene.clear(),
           () => camera.removeFromParent(),
@@ -1008,20 +965,6 @@ export class BoatWorld {
     this.ocean.setQuality(value);
   }
 
-  setVolumetricCloudsEnabled(enabled: boolean): void {
-    if (this.disposed) return;
-    this.volumetricClouds?.setEnabled(enabled);
-  }
-
-  setVisualQuality(value: VisualQuality): void {
-    if (this.disposed) return;
-    this.volumetricClouds?.setQuality(value);
-  }
-
-  volumetricCloudsAvailable(): boolean {
-    return !this.disposed && this.volumetricClouds !== null;
-  }
-
   syncInventory(snapshot: SurvivalSnapshot): void {
     if (this.disposed) return;
     this.supplyDisplay.sync(snapshot);
@@ -1080,6 +1023,7 @@ export class BoatWorld {
     this.fishingAvailableOutline.setTarget(actions.includes('fish') ? this.rod : null);
     this.chestAvailableOutline.setTarget(actions.includes('openChest') ? this.chestDisplay.root : null);
     this.repairAvailableOutline.setTarget(actions.includes('repair') ? this.repairTools : null);
+    this.pillowAvailableOutline.setTarget(actions.includes('endDay') ? this.sleepPillow.root : null);
   }
 
   setEventSelectedItem(instanceId: ItemInstanceId | null): void {
@@ -1348,14 +1292,6 @@ export class BoatWorld {
     return this.interactionProjector.projectEventInteraction(eventId, width, height);
   }
 
-  projectEventResultBounds(
-    eventId: string,
-    width: number,
-    height: number,
-  ): ProjectedBoatBounds | null {
-    return this.interactionProjector.projectEventResult(eventId, width, height);
-  }
-
   async reactToEventOutcome(
     eventId: string,
     outcome: ActionOutcome,
@@ -1503,8 +1439,6 @@ export class BoatWorld {
     });
   }
 
-  presentationCueForTest(): PresentationCue | null { return this.settledCue; }
-
   skipSequence(): void {
     const sequence = this.activeSequence;
     if (sequence !== null) {
@@ -1553,8 +1487,6 @@ export class BoatWorld {
       this.skyState,
       this.worldCameraPosition,
     );
-    const cloudStrength = this.updateVolumetricClouds(time, delta);
-    this.sky.setCloudLayerStrength(1 - cloudStrength);
     this.applyBaseLighting(this.sky.palette);
     if (this.settledCue) this.applyCue(this.settledCue, 1, time);
     this.supplyDisplay.updatePropAnimations(delta);
@@ -1592,15 +1524,6 @@ export class BoatWorld {
     return this.disposed
       || delta <= 0
       || (typeof document !== 'undefined' && document.hidden);
-  }
-
-  private updateVolumetricClouds(time: number, delta: number): number {
-    const cloudFrame = this.volumetricCloudFrame;
-    if (cloudFrame === null || this.volumetricClouds === null) return 0;
-    cloudFrame.time = time;
-    cloudFrame.delta = delta;
-    cloudFrame.palette = this.sky.palette;
-    return this.volumetricClouds.update(cloudFrame);
   }
 
   private advanceScenePresentation(time: number, delta: number): void {
@@ -1660,6 +1583,7 @@ export class BoatWorld {
       () => this.fishingAvailableOutline.dispose(),
       () => this.chestAvailableOutline.dispose(),
       () => this.repairAvailableOutline.dispose(),
+      () => this.pillowAvailableOutline.dispose(),
       () => { this.eventCueHandler = () => undefined; },
       () => this.cameraController.dispose(),
       () => {
@@ -1699,7 +1623,6 @@ export class BoatWorld {
       () => this.ocean.dispose(),
       () => this.weatherEffects.dispose(),
       () => this.fishingPresentation.disposeParticles(),
-      () => this.volumetricClouds?.dispose(),
       () => this.sky.dispose(),
       () => this.fishingPresentation.detach(),
       () => this.scene.remove(

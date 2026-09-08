@@ -290,7 +290,3 @@ export function selectFishingCatch(
   }
   throw new Error('No eligible fishing catches.');
 }
-
-export function isFishCatch(value: FishingCatchDefinition): boolean {
-  return value.kind === 'fish';
-}

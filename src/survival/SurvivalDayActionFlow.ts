@@ -133,14 +133,13 @@ export class SurvivalDayActionFlow {
 
     const prepared = this.prepareAction(action, option, commandGeneration);
     if (prepared === null) return;
-    const { beforeAction, selectedOption, outcome } = prepared;
+    const { beforeAction, outcome } = prepared;
     if (!outcome.accepted) {
       this.presentRejection(commandGeneration);
       return;
     }
     await this.runAcceptedAction(
       action,
-      selectedOption,
       outcome,
       beforeAction,
       commandGeneration,
@@ -335,14 +334,12 @@ export class SurvivalDayActionFlow {
     generation: number,
   ): {
     readonly beforeAction: SurvivalSnapshot;
-    readonly selectedOption: DayActionOption | undefined;
     readonly outcome: ActionOutcome;
   } | null {
     try {
       const beforeAction = this.dependencies.session.snapshot();
-      const selectedOption = option;
-      const outcome = this.dependencies.session.perform?.(action, selectedOption);
-      return outcome === undefined ? null : { beforeAction, selectedOption, outcome };
+      const outcome = this.dependencies.session.perform?.(action, option);
+      return outcome === undefined ? null : { beforeAction, outcome };
     } catch (error) {
       if (this.isLifecycleCurrent(generation)) {
         this.dependencies.onInvariantError(asError(error));
@@ -361,7 +358,6 @@ export class SurvivalDayActionFlow {
 
   private async runAcceptedAction(
     action: Exclude<DayActionId, 'fish'>,
-    option: DayActionOption | undefined,
     outcome: ActionOutcome,
     beforeAction: SurvivalSnapshot,
     generation: number,
@@ -376,7 +372,7 @@ export class SurvivalDayActionFlow {
       return;
     }
     if (!this.playActionAudio(
-      () => this.dependencies.audio.action?.(action, option),
+      () => this.dependencies.audio.action?.(action),
       generation,
     )) return;
     if (action === 'petCarlitos' || action === 'feedCarlitos') {

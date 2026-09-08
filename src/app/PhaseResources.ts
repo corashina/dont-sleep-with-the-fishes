@@ -96,7 +96,12 @@ export class PhaseResources implements PhaseResourceSource {
   private readonly lifeboat: AssetSlot<LifeboatAssets>;
   private readonly ship: AssetSlot<ShipAssets>;
   private readonly physics: AssetSlot<PhysicsRuntime | null>;
-  constructor(loaders: PhaseResourceLoaders, readonly audio: AudioSystem, readonly physicsMode: PhysicsMode) {
+  constructor(
+    loaders: PhaseResourceLoaders,
+    readonly audio: AudioSystem,
+    readonly physicsMode: PhysicsMode,
+    private readonly onProgress?: (completed: number, total: number) => void,
+  ) {
     this.menuFont = new AssetSlot(() => loaders.loadMenuFont(), () => undefined);
     this.menuModels = disposableSlot(() => loaders.loadMenuModels());
     this.menuSand = disposableSlot(() => loaders.loadMenuSandAssets());
@@ -140,16 +145,30 @@ export class PhaseResources implements PhaseResourceSource {
     if (this.disposed) throw new Error('Phase resources are disposed.');
     const acquired: { dispose(): void }[] = [];
     const pending: Promise<unknown>[] = [];
+    let completed = 0;
+    const finishResource = (): void => {
+      completed += 1;
+      if (!this.disposed) this.onProgress?.(completed, pending.length);
+    };
     const own = <A>(promise: Promise<ResourceLease<A>>): Promise<A> => {
-      const tracked = promise.then(lease => { acquired.push(lease); return lease.assets; });
+      const tracked = promise.then(lease => {
+        acquired.push(lease);
+        finishResource();
+        return lease.assets;
+      });
       pending.push(tracked);
       return tracked;
     };
     let assets: T;
     try {
-      const audio = this.audio.acquirePhaseAudio(sounds).then(lease => { acquired.push(lease); });
+      const audio = this.audio.acquirePhaseAudio(sounds).then(lease => {
+        acquired.push(lease);
+        finishResource();
+      });
       pending.push(audio);
-      [assets] = await Promise.all([load(own), audio]);
+      const assetLoad = load(own);
+      this.onProgress?.(0, pending.length);
+      [assets] = await Promise.all([assetLoad, audio]);
       if (this.disposed) throw new Error('Phase resources were disposed during loading.');
     } catch (error) {
       await Promise.allSettled(pending);

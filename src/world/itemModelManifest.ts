@@ -30,8 +30,6 @@ export interface RuntimeModelSpec {
   readonly maxTriangles: number;
   readonly generatedMetadata: GeneratedRuntimeModelMetadata;
 }
-
-export type GeneratedItemModelMetadata = GeneratedRuntimeModelMetadata;
 export type ItemModelSpec = RuntimeModelSpec;
 
 export const ITEM_MODEL_MAX_TOTAL_TRIANGLES = 40_000;

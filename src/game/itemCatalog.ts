@@ -95,8 +95,6 @@ export const ITEM_LABELS = Object.freeze(Object.defineProperties({}, Object.from
   ITEM_IDS.map((id) => [id, { enumerable: true, get: () => itemLabel(id) }]),
 )) as Record<ItemId, string>);
 
-export const itemDefinition = (id: ItemId): ItemDefinition => ITEM_DEFINITIONS[id];
-
 export function createItemInstances(): Array<{
   readonly instanceId: ItemInstanceId;
   readonly type: ItemId;

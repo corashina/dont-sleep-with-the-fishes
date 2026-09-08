@@ -1,7 +1,6 @@
 import type { PerspectiveCamera, WebGLRenderer } from 'three';
 import type { SceneRenderer } from '../rendering/SceneRenderer';
 import type {
-  VisualQuality,
   VisualQualityPreference,
 } from '../rendering/visualQuality';
 import type {
@@ -62,9 +61,6 @@ export interface GamePhase {
   resize(width: number, height: number): void;
   render(): void;
   setOverlayActive?(active: boolean): void;
-  setVisualQuality?(value: VisualQuality): void;
-  setVolumetricCloudsEnabled?(enabled: boolean): void;
-  getVolumetricCloudsAvailable?(): boolean;
   setWaterQuality?(value: WaterQuality): void;
   setWeatherOverride?(id: PresentationWeatherId | null): void;
   getPresentationWeather?(): PresentationWeatherId;
