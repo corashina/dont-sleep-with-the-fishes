@@ -24,6 +24,25 @@ function setup() {
 }
 
 describe('survival ending animation', () => {
+  it('clears the sleep cover and keeps the finish screen closed during rescue', () => {
+    const view = setup();
+    void view.ui.setSleepCovered(true);
+    view.ui.beginRescueEnding();
+    const cover = document.querySelector<HTMLElement>('[data-sleep-cover]')!;
+    expect(cover.classList.contains('is-covered')).toBe(false);
+    expect(cover.style.opacity).toBe('0');
+    expect(document.querySelector('.survival-ui')?.classList.contains('is-rescuing')).toBe(true);
+    expect(view.root.getAttribute('aria-hidden')).toBe('true');
+    expect(document.querySelector<HTMLElement>('[data-boat-anchors]')?.inert).toBe(true);
+    view.ui.setRescueFade(0.5);
+    expect(cover.style.opacity).toBe('0.5');
+    view.ui.setRescueFade(1);
+    view.ui.showEnding({ id: 'rescue', day: 8, savedPickupCount: 4, signalAssisted: false });
+    expect(cover.style.opacity).toBe('1');
+    expect(view.root.getAttribute('aria-hidden')).toBe('false');
+    expect(view.panel.hidden).toBe(false);
+  });
+
   it.each(['death', 'sinking'] as const)('fades %s before showing its popup and menu controls', (id) => {
     const view = setup();
     const restart = vi.fn();

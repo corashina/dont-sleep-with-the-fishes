@@ -83,10 +83,6 @@ interface MaritimeMaterials {
 
 const EMPTY_INTERACTION_TARGETS: readonly FocusedEventInteractionTarget[] = Object.freeze([]);
 
-interface RescueCuePresentation extends FocusedEventPresentation {
-  setRescueCue(progress: number | null): void;
-}
-
 const REVEAL_DURATION = 0.9;
 const REACTION_DURATION = 0.7;
 
@@ -516,17 +512,6 @@ export class EventPresentationLayer {
     animation.resolve();
   }
 
-  setRescueCue(progress: number | null): void {
-    if (this.disposed) return;
-    const presenter = this.focused.get('other-people');
-    if (
-      presenter === undefined
-      || presenter === this.activeFocused
-      || !this.supportsRescueCue(presenter)
-    ) return;
-    presenter.setRescueCue(progress);
-  }
-
   copyDangerousWatersBoatReaction(
     target: DangerousWatersBoatReaction,
   ): boolean {
@@ -639,14 +624,6 @@ export class EventPresentationLayer {
         0,
       );
     }
-  }
-
-  private supportsRescueCue(
-    presenter: FocusedEventPresentation,
-  ): presenter is RescueCuePresentation {
-    return typeof (
-      presenter as Partial<RescueCuePresentation>
-    ).setRescueCue === 'function';
   }
 
   private startAnimation(

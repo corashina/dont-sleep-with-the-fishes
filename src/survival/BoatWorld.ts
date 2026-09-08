@@ -142,6 +142,8 @@ import {
   type SurvivalEventModels,
 } from './SurvivalEventModelLibrary';
 import { RepairToolboxAnimation } from './RepairToolboxAnimation';
+import { RescueEndingPresentation } from './RescueEndingPresentation';
+import { SurvivalEventModelLibrary } from './SurvivalEventModelLibrary';
 
 export const SURVIVAL_CELESTIAL_DIRECTION = Object.freeze([
   0,
@@ -162,7 +164,7 @@ const CUE_DURATION: Readonly<Record<PresentationCue, number>> = {
   sighting: 1.2,
   nightfall: 1.1,
   dawn: 1.1,
-  rescue: 1.5,
+  rescue: 0,
   death: 1.5,
   sinking: 1.5,
 };
@@ -332,6 +334,8 @@ function physicalResponseFromEventChoice(
 }
 
 export class BoatWorld {
+  private rescueEnding: RescueEndingPresentation | null = null;
+  private rescueModels: SurvivalEventModelLibrary | null = null;
   readonly scene: Scene;
   private readonly camera: PerspectiveCamera;
   private readonly ocean: OceanRenderer;
@@ -387,11 +391,6 @@ export class BoatWorld {
   private readonly interactionProjector: BoatInteractionProjector;
   private readonly eventPresentationRegistry = new EventPresentationRegistry();
   private fallbackEventPresentation: EventPresentationAdapter | null = null;
-  private readonly rescueCueCallbacks = new WeakMap<
-    EventPresentationAdapter,
-    (progress: number | null) => void
-  >();
-  private activeRescueCueCallback: ((progress: number | null) => void) | null = null;
   private eventCueHandler: (cue: EventPresentationCue) => void = () => undefined;
   private readonly fallbackDedicatedEventModels: EventModelLibrary | null;
   private readonly fallbackFeaturedEventModels: SurvivalEventModels | null;
@@ -624,7 +623,7 @@ export class BoatWorld {
       );
 
       this.rodPivot.name = 'fishing-rod-pivot';
-      this.rodPivot.position.set(0, 0.12, -2.28);
+      this.rodPivot.position.set(0, 0.56, -2.28);
       this.rodPivot.rotation.x = FISHING_ROD_LEAN;
       this.rod = propModels.createEquipment('fishingRod');
       collectMeshResources(this.rod, this.ownedGeometries, this.ownedMaterials);
@@ -777,7 +776,6 @@ export class BoatWorld {
     featuredModels: SurvivalEventModels,
   ): EventPresentationAdapter {
     if (this.disposed) throw new Error('Boat world is disposed.');
-    let rescueCueCallback: ((progress: number | null) => void) | null = null;
     const adapter = this.eventPresentationRegistry.create(eventId, {
       worldParent: this.scene,
       boatParent: this.boat,
@@ -825,14 +823,8 @@ export class BoatWorld {
         supplies: this.supplyDisplay,
         itemAimTarget: this.moonItemAimTarget,
       },
-      registerRescueCueCallback: (callback) => {
-        rescueCueCallback = callback;
-      },
       applyDangerousWatersReaction: this.applyDangerousWatersReaction,
     });
-    if (rescueCueCallback !== null) {
-      this.rescueCueCallbacks.set(adapter, rescueCueCallback);
-    }
     return adapter;
   }
 
@@ -854,24 +846,17 @@ export class BoatWorld {
       }
       throw error;
     }
-    this.activeRescueCueCallback = this.rescueCueCallbacks.get(adapter) ?? null;
   }
 
   detach(adapter: EventPresentationAdapter): void {
-    try {
-      runCleanupSteps([
-        () => this.eventPresentationHost.detach(adapter),
-        () => {
-          if (this.eventPresentationHost.activeEventId() === null) {
-            this.interactionProjector.clearFocusedInteractionTargets();
-          }
-        },
-      ]);
-    } finally {
-      if (this.eventPresentationHost.activeEventId() === null) {
-        this.activeRescueCueCallback = null;
-      }
-    }
+    runCleanupSteps([
+      () => this.eventPresentationHost.detach(adapter),
+      () => {
+        if (this.eventPresentationHost.activeEventId() === null) {
+          this.interactionProjector.clearFocusedInteractionTargets();
+        }
+      },
+    ]);
   }
 
   private ensureEventPresenter(eventId: SurvivalEventId): void {
@@ -1436,6 +1421,25 @@ export class BoatWorld {
     this.fishingPresentation.clear();
   }
 
+  async playRescueEnding(onStart: () => void, onFade: (opacity: number) => void): Promise<void> {
+    if (this.disposed) return;
+    const models = await SurvivalEventModelLibrary.load(['rescueBoat']);
+    if (this.disposed) {
+      models.dispose();
+      return;
+    }
+    this.rescueModels = models;
+    this.cancelActiveSequence();
+    this.settledCue = null;
+    this.clearEvent();
+    this.applyBasePresentation();
+    const boat = models.clone('rescueBoat');
+    this.scene.add(boat);
+    this.rescueEnding = new RescueEndingPresentation(boat, this.camera, onFade);
+    onStart();
+    await this.rescueEnding.finished;
+  }
+
   play(cue: PresentationCue): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.cancelActiveSequence();
@@ -1507,6 +1511,7 @@ export class BoatWorld {
     if (advancePresentation) this.advanceScenePresentation(time, delta);
     else this.updateAmbientScenePresentation(time);
     this.diveController.applyPostEntryHoldCamera();
+    this.rescueEnding?.update(advancePresentation ? delta : 0, time, amplitudeScale);
     setSceneBinocularMaskStrength(
       this.scene,
       this.itemEffects.binocularMaskStrength,
@@ -1589,6 +1594,8 @@ export class BoatWorld {
   dispose(): void {
     if (this.disposed) return;
     runCleanupSteps([
+      () => this.rescueEnding?.dispose(),
+      () => this.rescueModels?.dispose(),
       () => this.setHighlightedItem(null),
       () => this.toolHoverOutline.dispose(),
       () => this.fishingAvailableOutline.dispose(),
@@ -1608,13 +1615,7 @@ export class BoatWorld {
       () => this.carlitosDelegation.dispose(),
       () => this.itemUseController.dispose(),
       () => this.repairToolboxAnimation.cancel(),
-      () => {
-        try {
-          this.eventPresentationHost.dispose();
-        } finally {
-          this.activeRescueCueCallback = null;
-        }
-      },
+      () => this.eventPresentationHost.dispose(),
       () => {
         const adapter = this.fallbackEventPresentation;
         this.fallbackEventPresentation = null;
@@ -1674,7 +1675,6 @@ export class BoatWorld {
     this.cueCameraRig.position.set(0, 0, 0);
     this.cueCameraRig.rotation.set(0, 0, 0);
     this.rodPivot.rotation.x = FISHING_ROD_LEAN;
-    this.activeRescueCueCallback?.(null);
   }
 
   private resetDedicatedEffects(): void {
@@ -1771,10 +1771,6 @@ export class BoatWorld {
       case 'impact':
         this.motionRig.rotation.x += pulse * 0.075;
         this.camera.rotateX(-pulse * 0.045);
-        break;
-      case 'rescue':
-        this.activeRescueCueCallback?.(eased);
-        this.camera.rotateY(-0.12 * eased);
         break;
       case 'sinking':
         this.motionRig.position.y -= eased * 1.05;

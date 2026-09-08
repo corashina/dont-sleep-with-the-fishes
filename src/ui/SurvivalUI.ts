@@ -644,6 +644,23 @@ export class SurvivalUI {
     }
   }
 
+  beginRescueEnding(): void {
+    if (this.disposed) return;
+    this.clearEventPresentation();
+    this.hideJournal();
+    this.root.classList.add('is-rescuing');
+    this.coverView.settleCoverTransition();
+    this.coverView.sleepCover.classList.remove('is-covered');
+    this.coverView.sleepCover.style.opacity = '0';
+    for (const root of this.hudView.roots) root.inert = true;
+    for (const root of this.anchorView.roots) root.inert = true;
+  }
+
+  setRescueFade(opacity: number): void {
+    if (this.disposed) return;
+    this.coverView.sleepCover.style.opacity = String(Math.max(0, Math.min(1, opacity)));
+  }
+
   showEnding(record: Exclude<EndingRecord, { id: 'dorothy' }>): void {
     if (this.disposed || this.endingStarted) return;
     this.endingStarted = true;

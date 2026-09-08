@@ -77,6 +77,7 @@ const freesoundSources = [
   ['tentacleMovement', 'iampagan', '177017'],
   ['chest', 'The_Frisbee_of_Peace', '573654'],
   ['rescueEnding', 'Lydmakeren', '510907'],
+  ['rescueHorn', 'chrobi', '118644'],
   ['deathEnding', 'SilverIllusionist', '693405'],
   ['sinkingEnding', 'Kodack', '257752'],
   ['midnightShovel', 'dr19', '353907'],
