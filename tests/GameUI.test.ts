@@ -10,6 +10,21 @@ afterEach(() => {
 });
 
 describe('GameUI', () => {
+  it('fades successful evacuation without showing the failure ending', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = new GameUI(mount);
+    try {
+      ui.renderEnding('sinking', 0, null);
+      ui.renderEnding('survivalReady', 1, null);
+      expect(mount.querySelector('[data-ending]')!.getAttribute('aria-hidden')).toBe('true');
+      expect(mount.querySelector<HTMLButtonElement>('[data-ending-action]')!.hidden).toBe(true);
+      expect(mount.firstElementChild!.getAttribute('style')).toContain('--scavenge-ending-blackout: 1');
+    } finally {
+      ui.dispose();
+    }
+  });
+
   it('shows the boat notice briefly after a blocked pickup', () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');

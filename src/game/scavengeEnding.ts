@@ -1,11 +1,11 @@
-import type { SessionStatus } from './ScavengeSession';
+import type { ScavengeSnapshot } from './ScavengeSession';
 import { clamp01, smootherStep } from './easing';
 import type { SinkingState } from './sinking';
 
 export const SINKING_CINEMATIC_SECONDS = 8;
 export const ENDING_HOLD_SECONDS = 3;
 
-export type ScavengeEndingStage = 'playing' | 'sinking' | 'endingHold' | 'menuReady';
+export type ScavengeEndingStage = 'playing' | 'sinking' | 'endingHold' | 'menuReady' | 'survivalReady';
 
 export interface ScavengeEndingState {
   readonly stage: ScavengeEndingStage;
@@ -41,17 +41,18 @@ export function createScavengeCinematicFrame(): ScavengeCinematicFrame {
 
 export function advanceScavengeEnding(
   state: ScavengeEndingState,
-  status: SessionStatus,
+  snapshot: Pick<ScavengeSnapshot, 'status' | 'remainingSeconds'>,
   deltaSeconds: number,
 ): ScavengeEndingState {
-  if (state.stage === 'menuReady') return state;
+  if (state.stage === 'menuReady' || state.stage === 'survivalReady') return state;
 
   let stage = state.stage;
   let elapsedSeconds = state.elapsedSeconds;
   let remainingDelta = Math.max(0, deltaSeconds);
 
   if (stage === 'playing') {
-    if (status === 'failure') {
+    if (snapshot.status === 'failure'
+      || (snapshot.status === 'success' && snapshot.remainingSeconds === 0)) {
       stage = 'sinking';
       elapsedSeconds = 0;
     } else {
@@ -65,6 +66,9 @@ export function advanceScavengeEnding(
       return { stage, elapsedSeconds: elapsedSeconds + remainingDelta };
     }
     remainingDelta -= remainingCinematic;
+    if (snapshot.status === 'success') {
+      return { stage: 'survivalReady', elapsedSeconds: 0 };
+    }
     stage = 'endingHold';
     elapsedSeconds = 0;
   }

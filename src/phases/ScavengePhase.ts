@@ -417,13 +417,15 @@ export class ScavengePhase implements GamePhase {
     snapshot: ScavengeSnapshot,
   ): Readonly<ReturnType<typeof getSinkingState>> {
     this.recordDorothyEnding(snapshot);
-    const failureStarted = !this.endingStarted && snapshot.status === 'failure';
     this.ending = advanceScavengeEnding(
       this.ending,
-      snapshot.status,
-      failureStarted ? 0 : deltaSeconds,
+      snapshot,
+      this.endingStarted ? deltaSeconds : 0,
     );
-    if (failureStarted) this.startSinking();
+    if (!this.endingStarted && this.ending.stage === 'sinking') {
+      if (snapshot.status === 'success') this.world.prepareSurvivalDeparture();
+      this.startSinking();
+    }
     this.endingBlackout = 0;
     if (!this.endingStarted) {
       return getSinkingState(this.elapsed, SCAVENGE_DURATION_SECONDS);
@@ -541,6 +543,7 @@ export class ScavengePhase implements GamePhase {
 
   private reportCompletion(snapshot: ScavengeSnapshot): void {
     if (snapshot.status !== 'success' || this.completionReported) return;
+    if (this.ending.stage !== 'playing' && this.ending.stage !== 'survivalReady') return;
     const result = this.session.result();
     if (result === null) return;
     this.completionReported = true;
@@ -573,7 +576,7 @@ export class ScavengePhase implements GamePhase {
 
   private overlayPausesAudio(active: boolean, snapshot: ScavengeSnapshot): boolean {
     return active
-      || snapshot.status !== 'running'
+      || (snapshot.status !== 'running' && this.ending.stage !== 'sinking')
       || document.hidden
       || (this.presentation === 'intro' && this.introPaused);
   }
