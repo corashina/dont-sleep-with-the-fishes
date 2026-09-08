@@ -1,4 +1,4 @@
-import { Float32BufferAttribute, Mesh, Vector3, type Group, type MeshStandardMaterial } from 'three';
+import { Float32BufferAttribute, Matrix3, Mesh, Vector3, type Group, type MeshStandardMaterial } from 'three';
 import { PLAYER_BODY_HEIGHT } from '../player/collisions';
 import { FREIGHTER_DIMENSIONS, SHIP_TRANSVERSE_PORTHOLE_CENTER_X } from './ShipLayoutTypes';
 
@@ -6,6 +6,7 @@ const declarations = `
   varying vec3 vRoomWearPosition;
   varying vec4 vRoomWearPanel;
   varying vec2 vRoomWearFeatures;
+  varying vec2 vRoomWearSurface;
 `;
 
 /** Layer paint loss over the existing texture and water film, in ship coordinates. */
@@ -19,11 +20,13 @@ export function applyShipRoomWear(material: MeshStandardMaterial, metal: boolean
         attribute vec3 roomWearPosition;
         attribute vec4 roomWearPanel;
         attribute vec2 roomWearFeatures;
+        attribute vec2 roomWearSurface;
         ${declarations}`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         vRoomWearPosition = roomWearPosition;
         vRoomWearPanel = roomWearPanel;
-        vRoomWearFeatures = roomWearFeatures;`);
+        vRoomWearFeatures = roomWearFeatures;
+        vRoomWearSurface = roomWearSurface;`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
         ${declarations}
@@ -39,6 +42,22 @@ export function applyShipRoomWear(material: MeshStandardMaterial, metal: boolean
           return mix(mix(roomHash(cell), roomHash(cell + vec2(1.0, 0.0)), f.x),
             mix(roomHash(cell + vec2(0.0, 1.0)), roomHash(cell + vec2(1.0)), f.x), f.y);
         }
+        float roomGradientDot(vec2 cell, vec2 offset) {
+          float hash = roomHash(cell);
+          vec2 gradient = vec2(hash, fract(hash * 7.13)) * 2.0 - 1.0;
+          return dot(gradient, offset);
+        }
+        // Gradient noise removes the square plateaus of thresholded value noise.
+        float roomFlakeNoise(vec2 p) {
+          vec2 cell = floor(p);
+          vec2 f = fract(p);
+          vec2 blend = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+          float lower = mix(roomGradientDot(cell, f),
+            roomGradientDot(cell + vec2(1.0, 0.0), f - vec2(1.0, 0.0)), blend.x);
+          float upper = mix(roomGradientDot(cell + vec2(0.0, 1.0), f - vec2(0.0, 1.0)),
+            roomGradientDot(cell + vec2(1.0), f - vec2(1.0)), blend.x);
+          return clamp(0.5 + 1.3 * mix(lower, upper, blend.y), 0.0, 1.0);
+        }
       `)
       // Run after the wet surface hook. Bare wood and rust retain a rough finish.
       .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
@@ -49,9 +68,9 @@ export function applyShipRoomWear(material: MeshStandardMaterial, metal: boolean
           float horizontal = step(0.5, abs(vRoomWearFeatures.x));
           float ceiling = step(vRoomWearFeatures.x, -0.5);
           vec3 p = vRoomWearPosition;
-          vec2 surface = mix(vec2(p.x + p.z, p.y), p.xz, horizontal);
+          vec2 surface = vRoomWearSurface;
           float broad = roomNoise(surface * 1.6);
-          float flakes = roomNoise(surface * 26.0 + broad * 3.0);
+          float flakes = roomFlakeNoise(surface * 26.0 + broad * 3.0);
           float grain = roomNoise(surface * vec2(85.0, 9.0));
           float edgeWear = (1.0 - smoothstep(0.015, 0.12 + broad * 0.36, edge))
             * (0.4 + broad * 0.6);
@@ -82,9 +101,10 @@ export function applyShipRoomWear(material: MeshStandardMaterial, metal: boolean
           float leak = ceiling * (1.0 - smoothstep(0.15, 1.6, edge))
             * smoothstep(0.35, 0.67, broad);
           damp = max(damp, leak * 0.85);
-          float loss = smoothstep(0.53, 0.67,
-            flakes * 0.44 + grain * 0.09 + broad * 0.22 + max(edgeWear, seamWear) * 0.42
-            + foot * 0.17 + damp * 0.12);
+          float wearSignal = flakes * 0.44 + grain * 0.09 + broad * 0.22
+            + max(edgeWear, seamWear) * 0.42 + foot * 0.17 + damp * 0.12;
+          float feather = max(0.07, fwidth(wearSignal) * 0.75);
+          float loss = smoothstep(0.6 - feather, 0.6 + feather, wearSignal);
           loss *= mix(1.0, 0.42, ceiling);
           vec3 substrate = ${metal
             ? 'mix(vec3(0.105, 0.043, 0.019), vec3(0.31, 0.13, 0.045), grain)'
@@ -103,13 +123,24 @@ export function applyShipRoomWear(material: MeshStandardMaterial, metal: boolean
         }
       `);
   };
-  material.customProgramCacheKey = () => `${cacheKey}:room-wear-v1:${metal ? 'steel' : 'wood'}`;
+  material.customProgramCacheKey = () => `${cacheKey}:room-wear-v2:${metal ? 'steel' : 'wood'}`;
+}
+
+function writeSurfaceProjection(
+  surfaces: Float32Array, index: number, point: Vector3, normal: Vector3, horizontal: boolean,
+): void {
+  // Project along the wall tangent. Adding X and Z collapses 45-degree walls.
+  const u = horizontal ? point.x
+    : (point.x * normal.z - point.z * normal.x) / Math.hypot(normal.x, normal.z);
+  surfaces.set([u, horizontal ? point.z : point.y], index * 2);
 }
 
 /** Bake once. Coordinates stay attached when the ship moves or sinks. */
 export function prepareShipRoomWear(root: Group, materials: readonly MeshStandardMaterial[]): void {
   root.updateMatrixWorld(true);
   const point = new Vector3();
+  const faceNormal = new Vector3();
+  const normalMatrix = new Matrix3();
   root.traverse((object) => {
     if (!(object instanceof Mesh) || !materials.includes(object.material)) return;
     const geometry = object.geometry;
@@ -118,11 +149,13 @@ export function prepareShipRoomWear(root: Group, materials: readonly MeshStandar
     const coordinates = new Float32Array(position.count * 3);
     const panels = new Float32Array(position.count * 4);
     const features = new Float32Array(position.count * 2);
+    const surfaces = new Float32Array(position.count * 2);
     const cabin = /wall-|wheelhouse-pane:|^door-wall:|roof|^cabin-/.test(object.name);
     const portholes = /^(crew-cabin|storage-workroom)-wall-(aft|forward)-/.test(object.name);
     const sill = object.name.startsWith('wheelhouse-pane:') && object.name.endsWith(':sill');
     geometry.computeBoundingBox();
     const bounds = geometry.boundingBox!;
+    normalMatrix.getNormalMatrix(object.matrixWorld);
     for (let index = 0; index < position.count; index += 1) {
       point.fromBufferAttribute(position, index);
       const up = normal.getY(index);
@@ -134,11 +167,14 @@ export function prepareShipRoomWear(root: Group, materials: readonly MeshStandar
         cabin ? bounds.max[uAxis] - bounds.min[uAxis] : 0, bounds.max[vAxis] - bounds.min[vAxis],
       ], index * 4);
       point.applyMatrix4(object.matrixWorld);
+      faceNormal.fromBufferAttribute(normal, index).applyNormalMatrix(normalMatrix);
+      writeSurfaceProjection(surfaces, index, point, faceNormal, horizontal);
       coordinates.set([point.x, point.y, point.z], index * 3);
       features.set([up, portholes ? 1 : sill ? 2 : 0], index * 2);
     }
     geometry.setAttribute('roomWearPosition', new Float32BufferAttribute(coordinates, 3));
     geometry.setAttribute('roomWearPanel', new Float32BufferAttribute(panels, 4));
     geometry.setAttribute('roomWearFeatures', new Float32BufferAttribute(features, 2));
+    geometry.setAttribute('roomWearSurface', new Float32BufferAttribute(surfaces, 2));
   });
 }
