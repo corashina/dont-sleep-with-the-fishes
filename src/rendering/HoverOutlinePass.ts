@@ -111,6 +111,9 @@ export class HoverOutlinePass extends OutlinePass {
     const currentRenderTarget = renderer.getRenderTarget();
     const currentBackground = this.renderScene.background;
     const currentOverrideMaterial = this.renderScene.overrideMaterial;
+    let selectedObjectsHidden = false;
+    let nonSelectedObjectsHidden = false;
+    let colorWritesDisabled = false;
     try {
       renderer.autoClear = false;
       if (maskActive) renderer.state.buffers.stencil.setTest(false);
@@ -121,24 +124,32 @@ export class HoverOutlinePass extends OutlinePass {
 
       renderer.setRenderTarget(this.renderTargetMaskBuffer);
       renderer.clear();
+      selectedObjectsHidden = true;
       internals._changeVisibilityOfSelectedObjects(false);
+      colorWritesDisabled = true;
       this.disableSceneColorWrites();
       renderer.render(this.renderScene, this.renderCamera);
       this.restoreSceneColorWrites();
+      colorWritesDisabled = false;
       internals._changeVisibilityOfSelectedObjects(true);
+      selectedObjectsHidden = false;
 
+      nonSelectedObjectsHidden = true;
       internals._changeVisibilityOfNonSelectedObjects(false);
       this.renderScene.overrideMaterial = this.prepareMaskMaterial;
       renderer.render(this.renderScene, this.renderCamera);
       internals._changeVisibilityOfNonSelectedObjects(true);
+      nonSelectedObjectsHidden = false;
 
       this.renderScene.background = currentBackground;
       this.renderScene.overrideMaterial = currentOverrideMaterial;
       this.renderOutlineTextures(renderer, readBuffer);
     } finally {
-      this.restoreSceneColorWrites();
-      internals._changeVisibilityOfSelectedObjects(true);
-      internals._changeVisibilityOfNonSelectedObjects(true);
+      if (colorWritesDisabled) this.restoreSceneColorWrites();
+      if (selectedObjectsHidden) internals._changeVisibilityOfSelectedObjects(true);
+      if (nonSelectedObjectsHidden) {
+        internals._changeVisibilityOfNonSelectedObjects(true);
+      }
       this.renderScene.background = currentBackground;
       this.renderScene.overrideMaterial = currentOverrideMaterial;
       if (maskActive) renderer.state.buffers.stencil.setTest(true);
