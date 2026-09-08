@@ -31,6 +31,7 @@ import { sceneHoverOutlineTargets } from './HoverOutline';
 import {
   configureHoverOutlinePass,
   HoverOutlinePass,
+  OutlineMaskCapturePass,
 } from './HoverOutlinePass';
 import {
   MENU_ATMOSPHERE_QUALITY,
@@ -192,7 +193,7 @@ export class PostProcessingPipeline implements SceneRenderer {
     const target = createComposerTarget(this.renderer, this.size, antiAliasingQuality);
     let composer: EffectComposer | undefined;
     let posterization: PosterizationPass | undefined;
-    let outlinePass: OutlinePass | undefined;
+    let outlinePass: HoverOutlinePass | undefined;
     let bloomPass: UnrealBloomPass | undefined;
     let menuAtmospherePass: MenuAtmospherePass | undefined;
     let binocularMaskPass: BinocularMaskPass | undefined;
@@ -212,6 +213,7 @@ export class PostProcessingPipeline implements SceneRenderer {
       posterization = new PosterizationPass();
 
       composer.addPass(renderPass);
+      composer.addPass(new OutlineMaskCapturePass(outlinePass));
       itemAmbientOcclusionPass = this.addAmbientOcclusionPass(composer, itemAmbientOcclusionPass);
       composer.addPass(outlinePass);
       composer.addPass(bloomPass);
@@ -369,7 +371,7 @@ export class PostProcessingPipeline implements SceneRenderer {
       this.composer.setSize(width, height);
       this.binocularMaskPass.setSize(width, height);
     } finally {
-      if (pass !== null) this.composer.passes.splice(1, 0, pass);
+      if (pass !== null) this.composer.passes.splice(2, 0, pass);
     }
   }
 
