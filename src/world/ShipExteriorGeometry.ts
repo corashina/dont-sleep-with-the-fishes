@@ -1,10 +1,8 @@
 import {
-  BufferGeometry,
   CylinderGeometry,
   Group,
   Material,
   Mesh,
-  RingGeometry,
   Vector3,
 } from 'three';
 import { addDeckHatch } from './ShipDeckFittings';
@@ -14,8 +12,6 @@ import {
 } from './shipLayoutData';
 import {
   requiredShipZone,
-  SHIP_BOW_DEPTH,
-  SHIP_STRUCTURAL_DECK_TOP_Y,
   shipRoomRoofTopY,
   type ShipLayoutSpec,
 } from './ShipLayoutTypes';
@@ -50,60 +46,6 @@ function addCylinder(
   parent.add(mesh);
   context.geometries.add(geometry);
   return mesh;
-}
-
-function addExteriorConstructionDetails(
-  context: ShipGeometryBuildContext,
-  root: Group,
-  geometries: Set<BufferGeometry>,
-  materials: ShipMaterials,
-  layout: ShipLayoutSpec,
-): void {
-  const cargo = requiredShipZone(layout, 'cargoDeck').bounds;
-  const bowShoulderZ = cargo.maxZ - SHIP_BOW_DEPTH;
-
-  const stemHeight = 1.4;
-  const stemGeometry = new CylinderGeometry(0.2, 0.46, stemHeight, 4);
-  const stem = new Mesh(stemGeometry, materials.exposedMetal);
-  stem.name = 'bow-stem';
-  stem.position.set(0, SHIP_STRUCTURAL_DECK_TOP_Y - stemHeight / 2, cargo.maxZ - 0.18);
-  stem.rotation.y = Math.PI / 4;
-  stem.castShadow = true;
-  stem.receiveShadow = true;
-  root.add(stem);
-  geometries.add(stemGeometry);
-
-  addBlock(context, root, {
-    name: 'stern-transom',
-    size: [5.4, 1.08, 0.42],
-    position: [0, 1.59, cargo.minZ + 0.16],
-    material: materials.upperHull,
-  });
-  addBlock(context, root, {
-    name: 'stern-transom-waterline',
-    size: [4.3, 0.18, 0.48],
-    position: [0, 1.18, cargo.minZ + 0.12],
-    material: materials.waterline,
-  });
-
-  addDeckHatch(context, layout);
-
-  const hawseGeometry = new RingGeometry(0.24, 0.38, 16);
-  geometries.add(hawseGeometry);
-  const hawseX = (cargo.maxX - cargo.minX) * 0.18;
-  const hawseZ = bowShoulderZ + SHIP_BOW_DEPTH * 0.9 - 0.08;
-  ([
-    ['port', -hawseX],
-    ['starboard', hawseX],
-  ] as const).forEach(([side, x]) => {
-    const hawse = new Mesh(hawseGeometry, materials.darkMetal);
-    hawse.name = `anchor-hawse-${side}`;
-    hawse.position.set(x, 1.72, hawseZ);
-    hawse.castShadow = true;
-    hawse.receiveShadow = true;
-    root.add(hawse);
-  });
-
 }
 
 function addRoofEngine(
@@ -182,13 +124,7 @@ export function addShipExterior(
   context: ShipGeometryBuildContext,
   layout: ShipLayoutSpec,
 ): readonly [Vector3, Vector3] {
-  addExteriorConstructionDetails(
-    context,
-    context.root,
-    context.geometries,
-    context.materials,
-    layout,
-  );
+  addDeckHatch(context, layout);
   const stackOutlets = addRoofEngine(
     context,
     context.root,

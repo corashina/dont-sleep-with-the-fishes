@@ -201,6 +201,52 @@ const carlitosAnchor = (x = 720, y = 360) => ({
 });
 
 describe('SurvivalUI', () => {
+  it('dismisses only the top popup and consumes the outside click', async () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.onPauseChange = (paused) => ui.setPaused(paused);
+    const settled = vi.fn();
+    const result = ui.showRewardResult({ title: 'DIVE RESULT', reward: null, lines: ['Nothing found.'] });
+    void result.then(settled);
+    const popup = mount.querySelector<HTMLElement>('[data-dive-result]')!;
+    popup.querySelector<HTMLElement>('.dive-result__paper')!.click();
+    await Promise.resolve();
+    expect(settled).not.toHaveBeenCalled();
+
+    ui.setPaused(true);
+    mount.querySelector<HTMLElement>('[data-pause]')!.click();
+    expect(mount.querySelector('[data-pause]')!.classList.contains('is-visible')).toBe(false);
+    expect(popup.hasAttribute('inert')).toBe(false);
+    await Promise.resolve();
+    expect(settled).not.toHaveBeenCalled();
+
+    const background = document.createElement('button');
+    const backgroundAction = vi.fn();
+    background.addEventListener('click', backgroundAction);
+    mount.append(background);
+    background.click();
+    await result;
+    expect(settled).toHaveBeenCalledOnce();
+    expect(backgroundAction).not.toHaveBeenCalled();
+    expect(popup.classList.contains('is-visible')).toBe(false);
+  });
+
+  it('continues fishing results once when the player clicks outside the card', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const continued = vi.fn();
+    ui.onFishingResultContinue = continued;
+    ui.setFishingState({ mode: 'result', message: '', biteTarget: null });
+    ui.showFishingResult({ caption: 'SMALL CATCH', title: 'COD', detail: '+1 FOOD', catchTarget: null });
+    const popup = mount.querySelector<HTMLElement>('[data-fishing-result]')!;
+    popup.querySelector<HTMLElement>('.routine-dialog__card')!.click();
+    expect(continued).not.toHaveBeenCalled();
+    popup.click();
+    popup.click();
+    expect(continued).toHaveBeenCalledOnce();
+  });
 
   function expectMeter(
     mount: HTMLElement,

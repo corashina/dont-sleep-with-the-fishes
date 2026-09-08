@@ -72,7 +72,7 @@ const ACTIONS: readonly ActionDefinition[] = [
   { id: 'dive', get label() { return uiText('dive'); }, get cost() { return uiText('threeEnergy'); }, energyCost: SURVIVAL_BALANCE.actions.diveEnergy, get effect() { return uiText('diveRisk'); }, risk: 'dangerous' },
   { id: 'eat', get label() { return uiText('eat'); }, get cost() { return uiText('oneFood'); }, energyCost: 0, get effect() { return uiText('hunger35'); }, risk: 'safe' },
   { id: 'repair', get label() { return uiText('repair'); }, get cost() { return uiText('repairCost'); }, energyCost: 1, get effect() { return uiText('hullRepair'); }, risk: 'safe' },
-  { id: 'treat', get label() { return uiText('treat'); }, get cost() { return uiText('oneMedkit'); }, energyCost: 0, get effect() { return uiText('health30'); }, risk: 'safe' },
+  { id: 'treat', get label() { return uiText('treat'); }, get cost() { return uiText('oneMedkit'); }, energyCost: 0, get effect() { return uiText('restoreHealth'); }, risk: 'safe' },
   { id: 'endDay', get label() { return uiText('endDay'); }, get cost() { return uiText('rest'); }, energyCost: 0, get effect() { return uiText('restoreDawn'); }, risk: 'safe' },
   { id: 'repairItem', get label() { return uiText('repairItem'); }, get cost() { return uiText('oneTape'); }, energyCost: 0, get effect() { return uiText('restoreItem'); }, risk: 'safe' },
   { id: 'answerRadio', get label() { return uiText('answerRadio'); }, get cost() { return uiText('oneEnergy'); }, energyCost: SURVIVAL_BALANCE.radio.energy, get effect() { return uiText('rescueLead'); }, risk: 'safe' },
@@ -101,7 +101,7 @@ function quantityLabel(label: string, quantity: number): string {
 function actionPreview(definition: ActionDefinition, snapshot: SurvivalSnapshot): ActionPreview {
   switch (definition.id) {
     case 'eat': return { ...definition, effect: uiDynamic('hungerDecrease', Math.min(35, snapshot.hunger)) };
-    case 'treat': return { ...definition, effect: uiDynamic('healthIncrease', Math.min(30, Math.max(0, 100 - snapshot.health))) };
+    case 'treat': return { ...definition, effect: uiDynamic('healthIncrease', Math.max(0, SURVIVAL_BALANCE.thresholds.maximum - snapshot.health)) };
     case 'repair': {
       const repair = calculateHullRepair(snapshot.hull, snapshot.energy);
       return {

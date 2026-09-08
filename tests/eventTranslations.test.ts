@@ -33,7 +33,6 @@ describe('event translations', () => {
   it('covers every event field in all languages', () => {
     const fallbackEvents = [
       survivalEventById('day-calm-fallback')!,
-      survivalEventById('night-calm-fallback')!,
     ];
     const events = [...SURVIVAL_EVENTS, ...fallbackEvents];
     const readText = () => events.flatMap((event) => [

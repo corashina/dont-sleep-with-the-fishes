@@ -5,7 +5,7 @@ import { ScavengeSession } from '../src/game/ScavengeSession';
 
 const BLOCKED_STATE_SETUPS = [
   { name: 'paused', enter: (session: ScavengeSession) => session.pause() },
-  { name: 'after success', enter: (session: ScavengeSession) => session.evacuate() },
+  { name: 'after success', enter: (session: ScavengeSession) => session.tick(60, true) },
   { name: 'after failure', enter: (session: ScavengeSession) => session.tick(60) },
 ] as const;
 
@@ -193,12 +193,11 @@ describe('ScavengeSession', () => {
     session.saveCarried();
     session.pickUp('bucket-1');
     session.dropCarried();
-    session.tick(12);
-    session.evacuate();
+    session.tick(60, true);
 
     expect(session.result()).toEqual({
       savedItems: [{ instanceId: 'flareGun-1', type: 'flareGun' }],
-      elapsedSeconds: 12,
+      elapsedSeconds: 60,
     });
     const result = session.result()!;
     expect(Object.isFrozen(result)).toBe(true);

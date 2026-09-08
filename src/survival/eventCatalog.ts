@@ -24,6 +24,7 @@ import type {
 } from './survivalTypes';
 
 export const SURVIVAL_EVENT_IDS = Object.freeze([
+  'quiet-night',
   'dangerous-waters', 'leak', 'school-of-fish', 'snatcher',
   'death-stare', 'swarm-of-sharks', 'tornado', 'shower-night',
   'windy-night', 'bad-sleep', 'thunderstorm', 'restless-waves',
@@ -82,6 +83,7 @@ export function driftingItemRetrieveKey(eventId: DriftingItemEventId): EventPres
 }
 
 const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.freeze({
+  'quiet-night': 'eventText277',
   'dangerous-waters': 'eventText002',
   leak: 'eventText003',
   'school-of-fish': 'eventText004',
@@ -301,7 +303,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(60, 'eventText119', atNextDawn(2, effects([subtract('hull', { min: 15, max: 20 })]))),
       outcome(40, 'eventText120', effects([subtract('hull', { min: 5, max: 20 })], [loseRandom(1)]))),
   ], undefined, { maximumAppearances: 1 }),
-  event('school-of-fish', 'night', 'eventText033', 'uncertain', 'fish', 4, 8, 39, [
+  event('school-of-fish', 'night', 'eventText033', 'uncertain', 'fish', 4, 8, 4, [
     choice('fishingNet', 'eventText066', 'fishingNet',
       outcome(60, 'eventText121', effects([add('food', 3)])),
       outcome(40, 'eventText122', effects([add('food', 2)], [breakItem('fishingNet')]))),
@@ -313,7 +315,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
     choice('sleep', 'eventText063', undefined, outcome(1, 'eventText126')),
   ], undefined, { minimumPressure: 1 }),
   {
-    ...event('snatcher', 'night', 'eventText034', 'uncertain', 'impact', 3, 8, 45, [
+    ...event('snatcher', 'night', 'eventText034', 'uncertain', 'impact', 3, 8, 5, [
       choice('knife', 'eventText068', 'knife',
         outcome(1, 'eventText127')),
       choice('shotgun', 'eventText069', 'shotgun',
@@ -332,7 +334,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       'map', 'scubaSet', 'umbrella', 'cannedFood',
     ],
   },
-  event('death-stare', 'night', 'eventText035', 'dangerous', 'impact', 1, 9, 32, [
+  event('death-stare', 'night', 'eventText035', 'dangerous', 'impact', 1, 9, 4, [
     choice('flashlight', 'eventText071', 'flashlight',
       outcome(80, 'eventText131'),
       outcome(20, 'eventText132', atNextDawn(1, effects(undefined, [lose('flashlight')])))),
@@ -348,7 +350,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
     choice('fishingNet', 'eventText066', 'fishingNet', outcome(1, 'eventText134', effects([subtract('hull', { min: 55, max: 60 }), subtract('health', 60)], [breakItem('fishingNet')]))),
     choice('sleep', 'eventText063', undefined, outcome(5, 'eventText137'), outcome(85, 'eventText134', effects([subtract('hull', { min: 44, max: 60 }), subtract('health', 60)]))),
   ], undefined, { minimumPressure: 1 }),
-  event('swarm-of-sharks', 'night', 'eventText036', 'dangerous', 'fish', 1, 10, 38, [
+  event('swarm-of-sharks', 'night', 'eventText036', 'dangerous', 'fish', 1, 10, 4, [
     choice('fishingNet', 'eventText066', 'fishingNet',
       outcome(80, 'eventText138'),
       outcome(20, 'eventText139', effects(undefined, [breakItem('fishingNet')]))),
@@ -363,7 +365,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
     choice('sleep', 'eventText063', undefined,
       outcome(65, 'eventText142', effects([subtract('hull', { min: 20, max: 40 }), subtract('health', 50)])), outcome(25, 'eventText144')),
   ], undefined, { minimumPressure: 1 }),
-  event('tornado', 'night', 'eventText037', 'dangerous', 'impact', 1, 12, 30, [
+  event('tornado', 'night', 'eventText037', 'dangerous', 'impact', 1, 12, 3, [
     choice('anchor', 'eventText061', 'anchor', outcome(90, 'eventText145'), outcome(10, 'eventText116', effects([subtract('hull', { min: 5, max: 10 })], [breakItem('anchor')]))),
     choice('swimRing', 'eventText075', 'swimRing',
       outcome(60, 'eventText146'),
@@ -374,13 +376,13 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(80, 'eventText116', atNextDawn(0, effects([subtract('hull', { min: 20, max: 40 })]))),
       outcome(30, 'eventText147', atNextDawn(2, effects([subtract('hull', { min: 50, max: 60 })], [loseRandom(1)])))),
   ], undefined, { minimumPressure: 1 }),
-  event('shower-night', 'night', 'eventText038', 'uncertain', 'storm', 3, 2, 35, [
+  event('shower-night', 'night', 'eventText038', 'uncertain', 'storm', 3, 2, 4, [
     choice('bucket', 'eventText065', 'bucket', outcome(90, 'eventText148'), outcome(10, 'eventText148', effects(undefined, [breakItem('bucket')]))),
     choice('umbrella', 'eventText072', 'umbrella', outcome(100, 'eventText149'), outcome(50, 'eventText149', effects(undefined, [breakItem('umbrella')]))),
     choice('map', 'eventText060', 'map', outcome(1, 'eventText150', effects(undefined, [breakItem('map')]))),
     choice('sleep', 'eventText063', undefined, outcome(80, 'eventText151'), outcome(20, 'eventText152', atNextDawn(2))),
   ]),
-  event('windy-night', 'night', 'eventText039', 'dangerous', 'storm', 1, 2, 40, [
+  event('windy-night', 'night', 'eventText039', 'dangerous', 'storm', 1, 2, 4, [
     choice('fishingNet', 'eventText066', 'fishingNet',
       outcome(80, 'eventText153'),
       outcome(20, 'eventText154', effects(undefined, [breakItem('fishingNet')]))),
@@ -392,14 +394,14 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(80, 'eventText158', effects([subtract('hull', { min: 10, max: 30 })], [breakRandom(2)])),
       outcome(20, 'eventText158', atNextDawn(1, effects([subtract('hull', { min: 10, max: 30 })])))),
   ]),
-  event('bad-sleep', 'night', 'eventText040', 'uncertain', 'darkness', 4, 2, 40, [
+  event('bad-sleep', 'night', 'eventText040', 'uncertain', 'darkness', 4, 2, 4, [
     choice('bucket', 'eventText065', 'bucket', outcome(1, 'eventText159')),
     choice('flashlight', 'eventText071', 'flashlight', outcome(1, 'eventText160')),
     choice('swimRing', 'eventText075', 'swimRing', outcome(1, 'eventText161')),
     choice('umbrella', 'eventText072', 'umbrella', outcome(100, 'eventText162'), outcome(5, 'eventText163', effects(undefined, [breakItem('umbrella')]))),
     choice('sleep', 'eventText063', undefined, outcome(1, 'eventText152', atNextDawn(2))),
   ], 10),
-  event('thunderstorm', 'night', 'eventText041', 'dangerous', 'storm', 1, 2, 35, [
+  event('thunderstorm', 'night', 'eventText041', 'dangerous', 'storm', 1, 2, 4, [
     choice('anchor', 'eventText061', 'anchor', outcome(80, 'eventText164'), outcome(20, 'eventText152', atNextDawn(2))),
     choice('bucket', 'eventText065', 'bucket',
       outcome(40, 'eventText116', effects([subtract('hull', { min: 15, max: 25 })], [breakItem('bucket')])),
@@ -415,7 +417,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(60, 'eventText167', atNextDawn(2, effects([subtract('hull', { min: 30, max: 48 })], [loseRandom(1)]))),
       outcome(30, 'eventText168', atNextDawn(2, effects([subtract('hull', { min: 20, max: 35 })])))),
   ]),
-  event('restless-waves', 'night', 'eventText042', 'dangerous', 'impact', 1, 3, 35, [
+  event('restless-waves', 'night', 'eventText042', 'dangerous', 'impact', 1, 3, 4, [
     choice('anchor', 'eventText061', 'anchor', outcome(1, 'eventText169')),
     choice('swimRing', 'eventText075', 'swimRing',
       outcome(50, 'eventText170'),
@@ -426,7 +428,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(50, 'eventText171', atNextDawn(1, effects([subtract('hull', { min: 20, max: 30 })]))),
       outcome(50, 'eventText172', effects([subtract('hull', { min: 15, max: 25 })], [loseRandom(1)]))),
   ]),
-  event('man-in-the-fog', 'night', 'eventText043', 'dangerous', 'darkness', 1, 6, 40, [
+  event('man-in-the-fog', 'night', 'eventText043', 'dangerous', 'darkness', 1, 6, 4, [
     choice('compass', 'eventText062', 'compass',
       outcome(1, 'eventText173',
         effects([subtract('pressure', 1)]))),
@@ -440,14 +442,14 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(50, 'eventText116', effects([add('pressure', 1), subtract('hull', { min: 10, max: 30 })])),
       outcome(50, 'eventText177', atNextDawn(2, effects([add('pressure', 1), subtract('health', 20)])))),
   ], undefined, { minimumPressure: 1 }),
-  event('ghosts', 'night', 'eventText044', 'uncertain', 'darkness', 3, 8, 38, [
+  event('ghosts', 'night', 'eventText044', 'uncertain', 'darkness', 3, 8, 4, [
     choice('flareGun', 'eventText070', 'flareGun',
       outcome(1, 'eventText178',
         effects([subtract('pressure', 1)], [consume('flareGun')]))),
     choice('flashlight', 'eventText071', 'flashlight', outcome(60, 'eventText179'), outcome(40, 'eventText180', atNextDawn(1))),
     choice('sleep', 'eventText063', undefined, outcome(60, 'eventText152', atNextDawn(2)), outcome(30, 'eventText180', atNextDawn(1))),
   ], undefined, { minimumPressure: 1 }),
-  event('eerie-melody', 'night', 'eventText045', 'dangerous', 'darkness', 1, 13, 30, [
+  event('eerie-melody', 'night', 'eventText045', 'dangerous', 'darkness', 1, 13, 3, [
     choice('bucket', 'eventText065', 'bucket', outcome(1, 'eventText180', atNextDawn(1, effects(undefined, [breakItem('bucket')])))),
     choice('spyglass', 'eventText067', 'spyglass', outcome(1, 'eventText181', effects([subtract('hull', { min: 30, max: 40 }), subtract('health', 20)]))),
     choice('umbrella', 'eventText072', 'umbrella',
@@ -462,7 +464,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(60, 'eventText184', atNextDawn(0)),
       outcome(40, 'eventText181', atNextDawn(1, effects([subtract('hull', { min: 30, max: 40 }), subtract('health', 20)])))),
   ], undefined, { minimumPressure: 2 }),
-  event('face-on-the-moon', 'night', 'eventText046', 'uncertain', 'darkness', 1, 17, 50, [
+  event('face-on-the-moon', 'night', 'eventText046', 'uncertain', 'darkness', 1, 17, 5, [
     choice('umbrella', 'eventText072', 'umbrella', outcome(1, 'eventText152', atNextDawn(2))),
     choice('spyglass', 'eventText067', 'spyglass',
       outcome(60, 'eventText180', atNextDawn(1, effects(undefined, [breakItem('spyglass')]))),
@@ -471,7 +473,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(100, 'eventText184', atNextDawn(0)),
       outcome(20, 'eventText152', atNextDawn(2))),
   ], undefined, { minimumPressure: 3 }),
-  event('shadow-figure', 'night', 'eventText047', 'dangerous', 'darkness', 1, 20, 30, [
+  event('shadow-figure', 'night', 'eventText047', 'dangerous', 'darkness', 1, 20, 3, [
     choice('flashlight', 'eventText071', 'flashlight',
       outcome(50, 'eventText185', effects([add('pressure', 1)])),
       outcome(50, 'eventText186', effects([subtract('health', 50)]))),
@@ -482,7 +484,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
     )),
     contextualChoice('sleep', 'eventText063', outcome(1, 'eventText188')),
   ], undefined, { minimumPressure: 3, requiresLivingCompanion: true }),
-  event('guarded-sleep', 'night', 'eventText048', 'uncertain', 'darkness', 4, 7, 4, [
+  event('guarded-sleep', 'night', 'eventText048', 'uncertain', 'darkness', 4, 7, 0, [
     contextualChoice('watch', 'eventText076',
       outcome(85, 'eventText189'),
       outcome(15, 'eventText190', { followUpNight: true })),
@@ -491,8 +493,8 @@ const survivalEvents: SurvivalEventDefinition[] = [
       'eventText191',
       { followUpNight: true },
     )),
-  ], undefined, { requiresLivingCompanion: true }),
-  event('drifting-supplies', 'day', 'eventText049', 'safe', 'fish', 1, 3, 3, [
+  ], undefined, { requiresLivingCompanion: true, maximumAppearances: 1 }),
+  event('drifting-supplies', 'day', 'eventText049', 'safe', 'fish', 1, 3, 1, [
     {
       ...contextualChoice('retrieve', 'eventText078',
         featuredResultOutcome('drifting-supplies-barrel-food', 'drifting-supplies.retrieve', 60,
@@ -551,7 +553,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       'eventText212',
     )),
   ]),
-  event('drifting-chest', 'day', 'eventText050', 'safe', 'fish', 1, 3, 3, [
+  event('drifting-chest', 'day', 'eventText050', 'safe', 'fish', 1, 3, 1, [
     {
       ...contextualChoice('retrieve', 'eventText079',
         featuredOutcome(
@@ -578,7 +580,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       'eventText215',
     )),
   ], undefined, { allowedChestStates: ['none'] }),
-  event('wreckage', 'day', 'eventText051', 'uncertain', 'dive', 1, 4, 5, [
+  event('wreckage', 'day', 'eventText051', 'uncertain', 'dive', 1, 4, 1, [
     {
       ...contextualChoice('search', 'eventText082',
         wreckageOutcome('wreckage.search-food', 43, 'eventText217',
@@ -635,7 +637,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       'eventText231',
     )),
   ]),
-  event('check-the-back', 'night', 'eventText052', 'uncertain', 'fish', 3, 2, 35, [
+  event('check-the-back', 'night', 'eventText052', 'uncertain', 'fish', 3, 2, 4, [
     choice('knife', 'eventText068', 'knife',
       {
         ...featuredOutcome('check-the-back.fish', 80,
@@ -682,7 +684,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
         chest: 'destroy',
       }, 'chest-attack')),
   ], undefined, { allowedChestStates: ['mimic'] }),
-  event('midnight-tour', 'night', 'eventText055', 'dangerous', 'sighting', 2, 7, 30, [
+  event('midnight-tour', 'night', 'eventText055', 'dangerous', 'sighting', 2, 7, 3, [
     contextualChoice('visit', 'eventText089',
       outcome(80, 'eventText242', {
         ...atNextDawn(2, { resources: [add('pressure', 1)] }),
@@ -694,7 +696,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
     ),
     contextualChoice('sleep', 'eventText090', outcome(1, 'eventText244', {}, 'tour-pass')),
   ], 40, { minimumPressure: 1, allowedChestStates: ['none'] }),
-  event('night-trader', 'night', 'eventText056', 'safe', 'sighting', 2, 10, 35, [
+  event('night-trader', 'night', 'eventText056', 'safe', 'sighting', 2, 10, 4, [
     choice('food', 'eventText091', 'cannedFood', outcome(1, 'eventText245', effects([subtract('food', 1)], [gain('ductTape')]), 'trader-reward')),
     choice('bait', 'eventText092', 'baitTin', outcome(1, 'eventText246', effects([subtract('bait', 1)], [gain('energyBar')]), 'trader-reward')),
     choice('map', 'eventText093', 'map', outcome(1, 'eventText247', effects(undefined, [lose('map'), gain('compass')]), 'trader-reward')),
@@ -702,7 +704,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
     choice('swimRing', 'eventText095', 'swimRing', outcome(1, 'eventText249', effects(undefined, [lose('swimRing'), gain('radio')]), 'trader-reward')),
     contextualChoice('sleep', 'eventText096', outcome(1, 'eventText250', {}, 'trader-refuse')),
   ]),
-  event('handyman', 'night', 'eventText057', 'dangerous', 'repair', 2, 20, 50, [
+  event('handyman', 'night', 'eventText057', 'dangerous', 'repair', 2, 20, 5, [
     choice('spyglass', 'eventText097', 'spyglass', outcome(1, 'eventText251', effects(undefined, [lose('spyglass'), gain('flashlight')]), 'handyman-reward')),
     choice('flashlight', 'eventText098', 'flashlight', outcome(1, 'eventText252', effects(undefined, [lose('flashlight'), gain('spyglass')]), 'handyman-reward')),
     choice('flareGun', 'eventText099', 'flareGun', outcome(1, 'eventText253', effects(undefined, [consume('flareGun'), gain('shotgun')]), 'handyman-reward')),
@@ -728,7 +730,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
     )),
     contextualChoice('sleep', 'eventText063', outcome(1, 'eventText264', {}, 'handyman-sleep')),
   ], undefined, { minimumPressure: 2 }),
-  event('other-people', 'night', 'eventText058', 'safe', 'sighting', 2, 15, 20, [
+  event('other-people', 'night', 'eventText058', 'safe', 'sighting', 2, 15, 2, [
     choice('flareGun', 'eventText070', 'flareGun', outcome(
       1,
       'eventText265',
@@ -748,7 +750,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       'people-pass',
     )),
   ], undefined, { minimumRescueLead: 2, maximumAppearances: 2 }),
-  event('plane', 'night', 'eventText059', 'safe', 'sighting', 2, 15, 20, [
+  event('plane', 'night', 'eventText059', 'safe', 'sighting', 2, 15, 2, [
     choice('flareGun', 'eventText070', 'flareGun', outcome(
       1,
       'eventText268',
@@ -768,6 +770,9 @@ const survivalEvents: SurvivalEventDefinition[] = [
       'plane-pass',
     )),
   ], undefined, { minimumRescueLead: 2, maximumAppearances: 2 }),
+  event('quiet-night', 'night', 'eventText276', 'safe', 'none', 3, 1, 15, [
+    contextualChoice('sleep', 'eventText063', outcome(1, 'eventText279')),
+  ]),
 ];
 
 for (const eventDefinition of survivalEvents) {

@@ -47,7 +47,7 @@ export class EventPresentationRegistry {
     dependencies: EventPresentationAdapterDependencies,
   ): EventPresentationAdapter {
     const route = EVENT_PRESENTATION_ROUTES[eventId];
-    const factory: EventPresentationAdapterFactory | undefined = route === undefined
+    const factory: EventPresentationAdapterFactory | undefined = route == null
       ? undefined
       : this.factories[route];
     if (factory === undefined) {

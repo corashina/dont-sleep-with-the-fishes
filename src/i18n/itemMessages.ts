@@ -51,7 +51,7 @@ export const itemDescription = defineMessages({
   ductTape: { en: "A single emergency repair for a broken item or hull patch.", pl: "Jednorazowa awaryjna naprawa przedmiotu lub łata na kadłub.", "es-AR": "Una reparación de emergencia para un objeto roto o un parche para el casco." },
   compass: { en: "Keeps direction when landmarks disappear.", pl: "Pomaga utrzymać kierunek, gdy znikają punkty orientacyjne.", "es-AR": "Te ayuda a mantener el rumbo cuando desaparecen los puntos de referencia." },
   map: { en: "Charts safer water through dangerous routes.", pl: "Wskazuje bezpieczniejsze wody na niebezpiecznych szlakach.", "es-AR": "Indica aguas más seguras en rutas peligrosas." },
-  medicalKit: { en: "Treats injuries once.", pl: "Jednorazowo leczy obrażenia.", "es-AR": "Trata heridas una vez." },
+  medicalKit: { en: "Restores Health to 100. Single use.", pl: "Przywraca zdrowie do 100. Jednorazowy użytek.", "es-AR": "Restaura la Salud a 100. Un solo uso." },
   spyglass: { en: "Reveals distant movement and threats.", pl: "Pozwala dostrzec odległy ruch i zagrożenia.", "es-AR": "Permite ver movimientos y amenazas a la distancia." },
   fishingNet: { en: "Collects fish and floating supplies.", pl: "Służy do zbierania ryb i dryfujących zapasów.", "es-AR": "Recoge peces y suministros que flotan." },
   knife: { en: "Cuts through threats during close attacks.", pl: "Przecina zagrożenia podczas ataków z bliska.", "es-AR": "Corta las amenazas durante ataques cercanos." },

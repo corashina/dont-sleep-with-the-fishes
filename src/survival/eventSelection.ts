@@ -100,20 +100,13 @@ export function eligibleEvents(
   return catalog.filter((eventEntry) => isEventEligible(eventEntry, criteria));
 }
 
-const fallbackDefinitions: Record<'day' | 'night', SurvivalEventDefinition> = {
+const fallbackDefinitions: Record<'day', SurvivalEventDefinition> = {
   day: {
     id: 'day-calm-fallback', phase: 'day', title: 'eventText271',
     revealText: 'eventText272',
     prompt: 'eventText273', danger: 'safe', cue: 'none',
     weight: 1, earliestDay: 1, cooldownDays: 0,
     choices: [{ id: 'sleep', label: 'eventText274', outcomes: [{ weight: 1, message: 'eventText275', effects: {} }] }],
-  },
-  night: {
-    id: 'night-calm-fallback', phase: 'night', title: 'eventText276',
-    revealText: 'eventText277',
-    prompt: 'eventText278', danger: 'safe', cue: 'none',
-    weight: 1, earliestDay: 1, cooldownDays: 0,
-    choices: [{ id: 'sleep', label: 'eventText063', outcomes: [{ weight: 1, message: 'eventText279', effects: {} }] }],
   },
 };
 
@@ -122,7 +115,7 @@ for (const eventDefinition of Object.values(fallbackDefinitions)) {
   registerEventDefinitionText(eventDefinition);
 }
 
-const FALLBACKS: Readonly<Record<'day' | 'night', SurvivalEventDefinition>> =
+const FALLBACKS: Readonly<Record<'day', SurvivalEventDefinition>> =
   deepFreeze(fallbackDefinitions);
 
 export function survivalEventFallbackById(
@@ -137,7 +130,10 @@ export function drawWeightedEvent(
   eligibility: EventEligibility,
 ): SurvivalEventDefinition {
   const pool = eligibleEvents(events, eligibility);
-  if (pool.length === 0) return FALLBACKS[eligibility.phase];
+  if (pool.length === 0) {
+    if (eligibility.phase === 'day') return FALLBACKS.day;
+    throw new Error(`No eligible night event on day ${eligibility.day}.`);
+  }
   const pressure = eligibility.pressure ?? 0;
   const totalWeight = pool.reduce(
     (sum, eventEntry) => sum + weightedEventDrawWeight(eventEntry, pressure),

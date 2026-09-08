@@ -685,7 +685,7 @@ describe('SurvivalPhase orchestration', () => {
     async (teardown) => {
       const realSession = new SurvivalSession([], {
         seed: 29,
-        random: sequenceRandom([0, 0, 0]),
+        random: sequenceRandom([0.99, 0, 0]),
         initial: { day: 2 },
       });
       const reveal = deferred();
@@ -1223,7 +1223,7 @@ describe('SurvivalPhase orchestration', () => {
       session: {
         snapshot: vi.fn(() => snapshot({
           state: 'nightEvent',
-          pendingEventId: 'night-calm-fallback',
+          pendingEventId: 'quiet-night',
         })),
       },
       world,
@@ -2633,11 +2633,11 @@ describe('SurvivalPhase orchestration', () => {
       expect(session.snapshot()).toMatchObject({
         state: 'nightEvent',
         day: 1,
-        pendingEventId: 'night-calm-fallback',
+        pendingEventId: 'quiet-night',
       });
-      expect(calls.indexOf('cover')).toBeLessThan(calls.indexOf('stage:night-calm-fallback'));
-      expect(calls.indexOf('stage:night-calm-fallback')).toBeLessThan(calls.indexOf('uncover'));
-      expect(calls).toContain('select:night-calm-fallback');
+      expect(calls.indexOf('cover')).toBeLessThan(calls.indexOf('stage:quiet-night'));
+      expect(calls.indexOf('stage:quiet-night')).toBeLessThan(calls.indexOf('uncover'));
+      expect(calls).toContain('select:quiet-night');
 
       ui.onEventChoice?.('sleep');
       await flushPromises();

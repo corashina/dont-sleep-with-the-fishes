@@ -14,7 +14,6 @@ export const SHIP_FURNITURE_MODEL_IDS = [
   'crewDesk',
   'crewCabinet',
   'crewWallPainting',
-  'crewWallArt',
   'crewTable',
   'wheelhouseCorkboard',
   'workroomCardboardBox',
@@ -136,13 +135,6 @@ export const SHIP_FURNITURE_MODEL_SPECS = {
     scaleAxis: 'x',
     targetAxisLength: 1.2,
     canonicalSize: [1.2, 0.099984, 1.386343],
-    ...sharedLimits,
-  },
-  crewWallArt: {
-    url: new URL('../assets/models/ship/crewWallArt.glb', import.meta.url).href,
-    scaleAxis: 'y',
-    targetAxisLength: 0.95,
-    canonicalSize: [0.576404, 0.95, 0.032023],
     ...sharedLimits,
   },
   crewTable: {

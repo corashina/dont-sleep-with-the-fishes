@@ -202,6 +202,16 @@ function rectangularFloorHole(
   return path;
 }
 
+function polygonFloorShape(polygon: ShipZoneSpec['polygon']): Shape {
+  const shape = new Shape();
+  polygon.forEach(([x, z], index) => {
+    if (index === 0) shape.moveTo(x, -z);
+    else shape.lineTo(x, -z);
+  });
+  shape.closePath();
+  return shape;
+}
+
 function cargoFloorShape(layout: ShipLayoutSpec): Shape {
   const station = requiredShipZone(layout, 'lifeboatStation').bounds;
   const cargo = requiredShipZone(layout, 'cargoDeck').bounds;
@@ -220,11 +230,11 @@ function cargoFloorShape(layout: ShipLayoutSpec): Shape {
   shape.lineTo(-radius, -(cargo.minZ + SHIP_STERN_CHAMFER));
   shape.closePath();
   const crew = requiredShipZone(layout, 'crewCabin').bounds;
-  const wheelhouse = requiredShipZone(layout, 'wheelhouse').bounds;
+  const wheelhouse = requiredShipZone(layout, 'wheelhouse');
   const storage = requiredShipZone(layout, 'storageWorkroom').bounds;
   shape.holes.push(
     rectangularFloorHole(crew.minX, crew.maxX, crew.minZ, crew.maxZ),
-    rectangularFloorHole(wheelhouse.minX, wheelhouse.maxX, wheelhouse.minZ, wheelhouse.maxZ),
+    new Path(polygonFloorShape(wheelhouse.polygon).getPoints().reverse()),
     rectangularFloorHole(storage.minX, storage.maxX, storage.minZ, storage.maxZ),
   );
   return shape;
@@ -290,7 +300,7 @@ function addFinishedFloors(
   layout: ShipLayoutSpec,
 ): void {
   const crew = requiredShipZone(layout, 'crewCabin').bounds;
-  const wheelhouse = requiredShipZone(layout, 'wheelhouse').bounds;
+  const wheelhouse = requiredShipZone(layout, 'wheelhouse');
   const storage = requiredShipZone(layout, 'storageWorkroom').bounds;
   const lifeboat = requiredShipZone(layout, 'lifeboatStation').bounds;
   addFloorSurface(
@@ -302,7 +312,7 @@ function addFinishedFloors(
   addFloorSurface(
     context,
     'floor-wheelhouse',
-    rectangularFloorShape(wheelhouse.minX, wheelhouse.maxX, wheelhouse.minZ, wheelhouse.maxZ),
+    polygonFloorShape(wheelhouse.polygon),
     context.materials.wheelhouseFloor,
   );
   addFloorSurface(

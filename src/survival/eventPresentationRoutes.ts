@@ -11,10 +11,11 @@ export type EventPresentationRoute =
 
 type EventPresentationRouteMap = Readonly<Record<
   SurvivalEventId,
-  EventPresentationRoute
+  EventPresentationRoute | null
 >>;
 
 export const EVENT_PRESENTATION_ROUTES = Object.freeze({
+  'quiet-night': null,
   'dangerous-waters': 'dangerousWaters',
   leak: 'dedicated',
   'school-of-fish': 'dedicated',

@@ -32,7 +32,7 @@ const situations: Record<string, readonly [string, string, string]> = {
   'other-people': ['', '', ""],
   plane: ['', '', ""],
   'day-calm-fallback': ['', '', ""],
-  'night-calm-fallback': ['', '', ""],
+  'quiet-night': ['', '', ""],
 };
 
 // Shared outcomes need the attempted action as well as the result.

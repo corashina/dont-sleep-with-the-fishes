@@ -208,14 +208,9 @@ describe('world builders', () => {
       expect(ship.root.children.some(({ name }) => name.startsWith('balcony:crew-balcony:coaming:')))
         .toBe(false);
       expect(ship.root.getObjectByName('ladder:crew-ladder')).toBeDefined();
-      const exteriorStart = ship.root.children.findIndex(({ name }) => name === 'bow-stem');
-      expect(ship.root.children.slice(exteriorStart, exteriorStart + 16).map(({ name }) => name)).toEqual([
-        'bow-stem',
-        'stern-transom',
-        'stern-transom-waterline',
+      const exteriorStart = ship.root.children.findIndex(({ name }) => name === 'deck-hatch');
+      expect(ship.root.children.slice(exteriorStart, exteriorStart + 11).map(({ name }) => name)).toEqual([
         'deck-hatch',
-        'anchor-hawse-port',
-        'anchor-hawse-starboard',
         'roof-engine-body',
         'roof-engine-service-panel',
         'roof-engine-vent-1',

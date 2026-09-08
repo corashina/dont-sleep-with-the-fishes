@@ -66,7 +66,6 @@ import {
 import {
   clampRescueLead,
   nightlyHullWearDamage,
-  quietNightChance,
   rescueChanceForDay,
   type RescueLead,
   SURVIVAL_BALANCE,
@@ -892,12 +891,8 @@ export class SurvivalSession {
       return this.commit('event-opened', { kind: 'eventPrompt', eventId: attack.id }, {}, 'nightfall');
     }
 
-    if (this.random.next() < quietNightChance(this.pressure)) {
-      return this.beginQuietNight();
-    }
-
     const event = this.drawEvent('night');
-    if (event.id === 'night-calm-fallback') return this.beginQuietNight();
+    if (event.id === 'quiet-night') return this.beginQuietNight();
     this.openEvent(event);
     return this.commit('event-opened', { kind: 'eventPrompt', eventId: event.id }, {}, 'nightfall');
   }
@@ -1264,6 +1259,8 @@ export class SurvivalSession {
     if (hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.maximum) {
       this.lastHealthCause = { kind: 'starvation' };
       deltas.health = -SURVIVAL_BALANCE.dawn.starvationDamage;
+    } else if (hungerAfterDawn < SURVIVAL_BALANCE.thresholds.hungry) {
+      deltas.health = SURVIVAL_BALANCE.dawn.healthRecovery;
     }
     return deltas;
   }
@@ -1660,6 +1657,9 @@ export class SurvivalSession {
 
   private beginQuietNight(): ActionOutcome {
     this.state = 'nightEvent';
+    this.lastEventId = 'quiet-night';
+    this.lastSeenDay.set('quiet-night', this.day);
+    this.appearanceCounts.set('quiet-night', (this.appearanceCounts.get('quiet-night') ?? 0) + 1);
     this.pendingJournalNighttime = createQuietJournalNightRecord();
     this.finalizeJournalDay();
     return this.commit(

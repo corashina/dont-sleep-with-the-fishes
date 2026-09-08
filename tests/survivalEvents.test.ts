@@ -49,11 +49,12 @@ describe('survival events', () => {
   it('defines Carlitos event gates and living-companion eligibility', () => {
     expect(survivalEventById('sick-companion')).toBeUndefined();
     expect(survivalEventById('shadow-figure')).toMatchObject({
-      earliestDay: 20, minimumPressure: 3, weight: 1, cooldownDays: 30,
+      earliestDay: 20, minimumPressure: 3, weight: 1, cooldownDays: 3,
       requiresLivingCompanion: true,
     });
     expect(survivalEventById('guarded-sleep')).toMatchObject({
-      earliestDay: 7, weight: 4, cooldownDays: 4, requiresLivingCompanion: true,
+      earliestDay: 7, weight: 4, cooldownDays: 0, requiresLivingCompanion: true,
+      maximumAppearances: 1,
     });
     expect(survivalEventById('swarm-of-sharks')?.requiresLivingCompanion).toBeUndefined();
 
@@ -141,8 +142,8 @@ describe('survival events', () => {
     expect(eligible(new Set(['cannedFood'])).map(({ id }) => id)).toContain('snatcher');
   });
 
-  it('draws by stable weighted boundaries and returns a quiet fallback for an empty pool', () => {
-    const pool = SURVIVAL_EVENTS.filter((event) => event.phase === 'night').slice(0, 2);
+  it('draws by stable weighted boundaries and rejects an empty night pool', () => {
+    const pool = SURVIVAL_EVENTS.filter((event) => ['dangerous-waters', 'leak'].includes(event.id));
     const eligibility = (phase: 'day' | 'night') => ({
       phase,
       day: 10,
@@ -162,8 +163,8 @@ describe('survival events', () => {
     ).id).toBe(pool[1]!.id);
     expect(drawWeightedEvent(sequenceRandom([0]), [], eligibility('day')).id)
       .toBe('day-calm-fallback');
-    expect(drawWeightedEvent(sequenceRandom([0]), [], eligibility('night')).id)
-      .toBe('night-calm-fallback');
+    expect(() => drawWeightedEvent(sequenceRandom([0]), [], eligibility('night')))
+      .toThrow('No eligible night event on day 10.');
   });
 
   it('uses pressure-adjusted dangerous weights', () => {

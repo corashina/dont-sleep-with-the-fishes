@@ -1,11 +1,11 @@
 export const SURVIVAL_BALANCE = {
   start: { health: 100, hunger: 0, energy: 3, hull: 100 },
-  dawn: { hungerIncrease: 18, starvationDamage: 7, normalEnergy: 3, hungryEnergy: 2, starvingEnergy: 1 },
+  dawn: { hungerIncrease: 18, healthRecovery: 5, starvationDamage: 7, normalEnergy: 3, hungryEnergy: 2, starvingEnergy: 1 },
   nightHullWear: { damage: 3, respiteInterval: 5 },
   thresholds: { hungry: 70, starving: 90, maximum: 100 },
   actions: {
     fishEnergy: 1, diveEnergy: 3,
-    foodHunger: -35, repairHullPerEnergy: 33, treatmentHealth: 30,
+    foodHunger: -35, repairHullPerEnergy: 33,
     maximumRepairEnergy: 3,
     maximumEnergy: 3,
     maximumStoredEnergy: 4,
@@ -101,13 +101,6 @@ export function rescueChanceForDay(realDay: number, rescueLead: number): number 
 }
 
 validateRescueChanceSteps(RESCUE_CHANCE_STEPS);
-
-const QUIET_NIGHT_CHANCES = Object.freeze([0.30, 0.25, 0.20, 0.15, 0.10]);
-
-export function quietNightChance(pressure: number): number {
-  const index = Math.min(4, Math.max(0, Math.trunc(pressure)));
-  return QUIET_NIGHT_CHANCES[index]!;
-}
 
 export function nightlyHullWearDamage(completedDay: number): number {
   return completedDay % SURVIVAL_BALANCE.nightHullWear.respiteInterval === 0
