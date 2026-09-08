@@ -703,14 +703,6 @@ const decorations: readonly ShipRoomDecorationSpec[] = [
     scale: [1, 1, 1],
   },
   {
-    id: 'cabin-wall-art-aft-center',
-    modelId: 'crewWallArt',
-    zoneId: 'crewCabin',
-    position: [0.75, 4.2, crewBounds.minZ + SHIP_ROOM_WALL_THICKNESS + 0.02],
-    rotation: [0, 0, 0],
-    scale: [1, 1, 1],
-  },
-  {
     id: 'workroom-corkboard-aft',
     modelId: 'wheelhouseCorkboard',
     zoneId: 'storageWorkroom',

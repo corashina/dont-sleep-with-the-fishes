@@ -34,7 +34,7 @@ it('does not export repair material state', () => {
   expect(session.exportCheckpoint()).not.toHaveProperty('repairMaterial');
 });
 
-it('treats a night fallback as a quiet night', () => {
+it('automatically resolves the Quiet Night event', () => {
   const session = new SurvivalSession(saved(
     'cannedFood', 'cannedFood', 'cannedFood', 'baitTin', 'baitTin',
     'ductTape', 'compass', 'map', 'spyglass', 'fishingNet', 'knife',
@@ -92,7 +92,7 @@ it.each([
       seed: 13,
       random: sequenceRandom([0, 0, 0.99]),
       initial: { day: 24, rescueLead: 8 },
-      initialEventId: 'night-calm-fallback',
+      initialEventId: 'quiet-night',
     });
     session.resolveEvent(choiceResponse('sleep'));
     session.beginDawn();
@@ -121,7 +121,7 @@ it('applies three hull wear after four of every five nights', () => {
   const worn = new SurvivalSession(saved(), {
     seed: 1,
     initial: { day: 4 },
-    initialEventId: 'night-calm-fallback',
+    initialEventId: 'quiet-night',
   });
   worn.resolveEvent(choiceResponse('sleep'));
   expect(worn.beginDawn()).toMatchObject({
@@ -132,7 +132,7 @@ it('applies three hull wear after four of every five nights', () => {
   const respite = new SurvivalSession(saved(), {
     seed: 1,
     initial: { day: 5 },
-    initialEventId: 'night-calm-fallback',
+    initialEventId: 'quiet-night',
   });
   respite.resolveEvent(choiceResponse('sleep'));
   expect(respite.beginDawn().deltas).not.toHaveProperty('hull');
@@ -142,7 +142,7 @@ it('can sink from overnight hull wear', () => {
   const session = new SurvivalSession(saved(), {
     seed: 1,
     initial: { hull: 3 },
-    initialEventId: 'night-calm-fallback',
+    initialEventId: 'quiet-night',
   });
   session.resolveEvent(choiceResponse('sleep'));
 
@@ -777,7 +777,7 @@ describe('SurvivalSession daytime actions', () => {
   it('raises scheduled pressure at dawn', () => {
     const pressure = new SurvivalSession(saved(), {
       seed: 7,
-      random: sequenceRandom([0, 0.99, 0.99]),
+      random: sequenceRandom([0.99, 0.99, 0.99]),
       initial: { day: 7 },
     });
     pressure.perform('endDay');
@@ -1191,7 +1191,7 @@ describe('SurvivalSession daytime actions', () => {
   it('opens Drifting Cargo from day 3 at the 25 percent dawn boundary', () => {
     const opens = new SurvivalSession(saved(), {
       seed: 1,
-      random: sequenceRandom([0, 0.249, 0, 0.499]),
+      random: sequenceRandom([0.99, 0.249, 0, 0.499]),
       initial: { day: 2 },
     });
     expect(opens.perform('endDay').accepted).toBe(true);
@@ -1204,7 +1204,7 @@ describe('SurvivalSession daytime actions', () => {
 
     const misses = new SurvivalSession(saved(), {
       seed: 2,
-      random: sequenceRandom([0, 0.25]),
+      random: sequenceRandom([0.99, 0.25]),
       initial: { day: 2 },
     });
     misses.perform('endDay');
@@ -1219,7 +1219,7 @@ describe('SurvivalSession daytime actions', () => {
   it('acquires a closed chest from Drifting Chest during a normal run', () => {
     const session = new SurvivalSession(saved(), {
       seed: 1,
-      random: sequenceRandom([0, 0.249, 0.5, 0]),
+      random: sequenceRandom([0.99, 0.249, 0.5, 0]),
       initial: { day: 2 },
     });
 
@@ -1518,7 +1518,8 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.perform('repair'))
       .toMatchObject({ deltas: { energy: -2, hull: 60 } });
     expect(session.snapshot().inventory['ductTape-1']?.condition).toBe('usable');
-    expect(session.perform('treat')).toMatchObject({ deltas: { health: 30 } });
+    expect(session.perform('treat')).toMatchObject({ deltas: { health: 40 } });
+    expect(session.snapshot().health).toBe(100);
   });
 
   it.each([
@@ -1739,19 +1740,55 @@ describe('SurvivalSession daytime actions', () => {
     }
   });
 
+  it.each([
+    [0, 40, 45],
+    [51, 40, 45],
+    [52, 40, 40],
+    [72, 40, 40],
+    [82, 40, 33],
+    [0, 98, 100],
+    [0, 100, 100],
+  ])('recovers health at dawn for hunger %i and health %i', (hunger, health, expectedHealth) => {
+    const session = new SurvivalSession(saved(), {
+      seed: 1,
+      random: sequenceRandom([0]),
+      initial: { hunger, health },
+    });
+    expect(session.endDay().accepted).toBe(true);
+    const dawn = session.beginDawn();
+    expect(dawn.accepted).toBe(true);
+    expect(dawn.deltas.health ?? 0).toBe(expectedHealth - health);
+    expect(session.snapshot().health).toBe(expectedHealth);
+    expect(session.beginDawn().accepted).toBe(false);
+    expect(session.snapshot().health).toBe(expectedHealth);
+  });
+
+  it.each([1, 40, 99])('fully heals health %i with one medkit and no energy', (health) => {
+    const session = new SurvivalSession(saved('medicalKit'), {
+      seed: 1,
+      initial: { health, energy: 0 },
+    });
+    expect(session.perform('treat')).toMatchObject({ accepted: true, deltas: { health: 100 - health } });
+    expect(session.snapshot()).toMatchObject({ health: 100, energy: 0 });
+    expect(session.snapshot().inventory['medicalKit-1']?.condition).toBe('consumed');
+    expect(session.perform('treat').accepted).toBe(false);
+  });
+
   it('applies dawn hunger, energy tiers, starvation, and terminal states once', () => {
     const session = new SurvivalSession(saved(), {
       seed: 1,
-      random: sequenceRandom([0, 0, 0.99]),
+      random: sequenceRandom([0.99]),
       initial: { hunger: 95, health: 20, hull: 100, energy: 0 },
     });
     session.perform('endDay');
     session.beginDawn();
     expect(session.snapshot()).toMatchObject({ day: 2, hunger: 100, energy: 1, health: 13 });
     session.perform('endDay');
+    expect(session.resolveEvent(choiceResponse('sleep')).accepted).toBe(true);
     session.beginDawn();
     expect(session.snapshot()).toMatchObject({ day: 3, health: 6, state: 'day' });
     session.perform('endDay');
+    expect(session.resolveEvent(choiceResponse('sleep')).accepted).toBe(true);
     session.beginDawn();
     expect(session.snapshot().state).toBe('dead');
     const terminal = session.snapshot();
@@ -1832,7 +1869,7 @@ describe('SurvivalSession daytime actions', () => {
       seed: 1,
       random: { next },
       initial: { day: 23, rescueLead: 8 },
-      initialEventId: 'night-calm-fallback',
+      initialEventId: 'quiet-night',
     });
     session.resolveEvent(choiceResponse('sleep'));
     const beforeDawn = next.mock.calls.length;
@@ -2038,7 +2075,7 @@ describe('SurvivalSession daytime actions', () => {
     });
   });
 
-  it('finalizes a quiet night below the 30 percent threshold', () => {
+  it('finalizes a quiet night selected from the event pool', () => {
     const session = new SurvivalSession(saved(), {
       seed: 21,
       random: sequenceRandom([0.299999]),
@@ -2056,7 +2093,7 @@ describe('SurvivalSession daytime actions', () => {
     });
   });
 
-  it('opens a night event at the 30 percent threshold', () => {
+  it('opens a night encounter selected from the event pool', () => {
     const session = new SurvivalSession(saved(), {
       seed: 22,
       random: sequenceRandom([0.30, 0]),

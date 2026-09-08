@@ -1,11 +1,9 @@
-// Protects the cost of decorative machinery and the shape of wet patches.
+// Protects the cost of decorative machinery and the cabin trim joins.
 import { describe, expect, it } from 'vitest';
 import { Box3, BufferGeometry, Group, Mesh, Vector3 } from 'three';
 import { createShipMaterials } from '../src/world/ShipMaterials';
 import { addShipMachineryDetails } from '../src/world/ShipMachineryDetails';
 import { SHIP_LAYOUT } from '../src/world/shipLayoutData';
-import { SHIP_DANGER_LAYOUT } from '../src/world/ShipDangerLayout';
-import { ShipPuddleEffects } from '../src/world/ShipPuddleEffects';
 import { addShipCabinTrim } from '../src/world/ShipCabinTrim';
 
 describe('Dorothy visual detail budgets', () => {
@@ -57,27 +55,4 @@ describe('Dorothy visual detail budgets', () => {
     }
   });
 
-  it('gives every puddle a distinct silhouette with one shared material', () => {
-    const puddles = new ShipPuddleEffects(SHIP_DANGER_LAYOUT.puddles);
-    try {
-      const meshes = puddles.root.children as Mesh[];
-      const shapes = meshes.map(({ geometry }) => {
-        const positions = geometry.getAttribute('position');
-        // Normalize size: simple scaling must not count as a different shape.
-        const extent = Math.max(...Array.from(positions.array, Math.abs));
-        return Array.from(positions.array, (value) => (value / extent).toFixed(4)).join(',');
-      });
-      expect(new Set(shapes).size).toBe(meshes.length);
-      expect(new Set(meshes.map(({ material }) => material)).size).toBe(1);
-      meshes.forEach(({ geometry }) => {
-        expect(Array.from(geometry.getAttribute('position').array).every(Number.isFinite)).toBe(true);
-        const colors = geometry.getAttribute('color');
-        const alphas = Array.from({ length: colors.count }, (_, index) => colors.getW(index));
-        expect(Math.min(...alphas)).toBe(0);
-        expect(Math.max(...alphas)).toBeGreaterThan(0.5);
-      });
-    } finally {
-      puddles.dispose();
-    }
-  });
 });

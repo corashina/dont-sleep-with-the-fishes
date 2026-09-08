@@ -102,6 +102,12 @@ export class SettingsMenu {
 
   private readonly handleClick = (event: MouseEvent): void => {
     if (!(event.target instanceof Element)) return;
+    if (!this.element.hidden && event.target === this.element) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.close();
+      return;
+    }
     const button = event.target.closest<HTMLButtonElement>('button');
     if (!button || button.disabled) return;
     if (button.matches('[data-open-settings]')) this.open(button);

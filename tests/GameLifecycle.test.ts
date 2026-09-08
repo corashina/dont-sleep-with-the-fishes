@@ -1613,21 +1613,27 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(internals.audio.sink).toHaveBeenCalledOnce();
   });
 
-  it('starts survival immediately after early evacuation', () => {
+  it('waits for the deadline while the player stands in the evacuation area', () => {
     const session = new ScavengeSession();
     session.start();
     session.tick(10);
-    session.evacuate();
     const { phase } = createUpdateHarness(session);
     const internals = phase as unknown as {
       audio: { sink: ReturnType<typeof vi.fn>; };
       world: { prepareSurvivalDeparture: ReturnType<typeof vi.fn>; };
       onComplete: ReturnType<typeof vi.fn>;
     };
-    phase.update(0, 1);
-    expect(internals.onComplete).toHaveBeenCalledExactlyOnceWith(session.result());
+    phase.update(0, SCAVENGE_DURATION_SECONDS - 11);
+    expect(session.snapshot().status).toBe('running');
+    expect(session.snapshot().remainingSeconds).toBe(1);
+    expect(internals.onComplete).not.toHaveBeenCalled();
     expect(internals.audio.sink).not.toHaveBeenCalled();
     expect(internals.world.prepareSurvivalDeparture).not.toHaveBeenCalled();
+    phase.update(0, 1);
+    expect(session.snapshot().status).toBe('success');
+    expect(internals.onComplete).not.toHaveBeenCalled();
+    phase.update(0, SINKING_CINEMATIC_SECONDS);
+    expect(internals.onComplete).toHaveBeenCalledExactlyOnceWith(session.result());
   });
 
   it('starts one shared alarm phase with the loop and freezes both while paused', () => {
@@ -2514,7 +2520,7 @@ describe('ScavengePhase lifecycle integration', () => {
   );
 
   it('handles capacity rejection without mutating gameplay or world state', () => {
-    const session = { pickUp: vi.fn(), evacuate: vi.fn() };
+    const session = { pickUp: vi.fn() };
     const carry = { pickUp: vi.fn(), releaseAll: vi.fn(), drop: vi.fn() };
     const world = {
       itemObjects: new Map(),
@@ -2546,7 +2552,6 @@ describe('ScavengePhase lifecycle integration', () => {
     });
 
     expect(session.pickUp).not.toHaveBeenCalled();
-    expect(session.evacuate).not.toHaveBeenCalled();
     expect(carry.pickUp).not.toHaveBeenCalled();
     expect(carry.releaseAll).not.toHaveBeenCalled();
     expect(carry.drop).not.toHaveBeenCalled();

@@ -315,12 +315,14 @@ describe('EventPresentationRegistry', () => {
     const dependencies = {} as EventPresentationAdapterDependencies;
 
     for (const eventId of SURVIVAL_EVENT_IDS) {
+      if (eventId === 'quiet-night') continue;
       const adapter = registry.create(eventId, dependencies);
       expect(adapter.eventId).toBe(eventId);
       adapter.dispose();
     }
 
     for (const eventId of SURVIVAL_EVENT_IDS) {
+      if (eventId === 'quiet-night') continue;
       expect(calls.get(EVENT_PRESENTATION_ROUTES[eventId])).toContain(eventId);
     }
     expect(() => registry.create('missing' as SurvivalEventId, dependencies))
@@ -331,6 +333,7 @@ describe('EventPresentationRegistry', () => {
     const registry = new EventPresentationRegistry();
     const { dependencies } = createDependencies();
     for (const eventId of SURVIVAL_EVENT_IDS) {
+      if (eventId === 'quiet-night') continue;
       const adapter = registry.create(eventId, dependencies);
       expect(adapter.eventId).toBe(eventId);
       adapter.dispose();

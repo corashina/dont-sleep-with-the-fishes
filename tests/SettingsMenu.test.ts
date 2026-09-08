@@ -51,6 +51,24 @@ function setup(enabled = false, savedDay: number | null = null) {
 }
 
 describe('Settings menu', () => {
+  it('closes from outside the paper without resuming the game', () => {
+    const { menu, button, pause, ui } = setup();
+    const resume = vi.fn();
+    ui.onResume = resume;
+    button.click();
+    menu.element.querySelector<HTMLElement>('.settings-menu__paper')!.click();
+    expect(menu.element.hidden).toBe(false);
+    menu.element.click();
+    expect(menu.element.hidden).toBe(true);
+    expect(pause.hasAttribute('inert')).toBe(false);
+    expect(document.activeElement).toBe(button);
+    expect(resume).not.toHaveBeenCalled();
+    pause.querySelector<HTMLElement>('.screen__content')!.click();
+    expect(resume).not.toHaveBeenCalled();
+    pause.click();
+    expect(resume).toHaveBeenCalledOnce();
+  });
+
   it('shows posterization at 25 percent, changes strength, and keeps strength when disabled', () => {
     const { menu, options, button } = setup();
     button.click();

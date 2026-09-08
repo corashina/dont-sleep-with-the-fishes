@@ -454,9 +454,9 @@ export const uiCatalog = {
     "es-AR": "TERMINAR EL DÍA"
   },
   "endDayHelp": {
-    "en": "Rest on the pillow to end the current day. Energy is restored at dawn.",
-    "pl": "Odpocznij na poduszce, aby zakończyć dzień. Energia odnawia się o świcie.",
-    "es-AR": "Descansá en la almohada para terminar el día. La energía se recupera al amanecer."
+    "en": "Rest on the pillow to end the day. Dawn restores energy and up to 5 Health if Food remains above 30 after its decrease.",
+    "pl": "Odpocznij na poduszce, aby zakończyć dzień. Świt odnawia energię i do 5 punktów zdrowia, jeśli jedzenie po spadku przekracza 30.",
+    "es-AR": "Descansá en la almohada para terminar el día. El amanecer restaura energía y hasta 5 de Salud si la Comida queda por encima de 30 después de bajar."
   },
   "chest": {
     "en": "CHEST",
@@ -528,10 +528,10 @@ export const uiCatalog = {
     "pl": "1 APTECZKA",
     "es-AR": "1 BOTIQUÍN"
   },
-  "health30": {
-    "en": "HEALTH +30",
-    "pl": "ZDROWIE +30",
-    "es-AR": "SALUD +30"
+  "restoreHealth": {
+    "en": "FULL HEALTH",
+    "pl": "PEŁNE ZDROWIE",
+    "es-AR": "SALUD COMPLETA"
   },
   "rest": {
     "en": "REST",

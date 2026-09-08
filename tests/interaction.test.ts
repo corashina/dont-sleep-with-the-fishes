@@ -36,7 +36,6 @@ describe('chooseContextAction', () => {
       targetItem: flareGun,
       carriedItem: null,
       remainingCapacity: 3,
-      nearEvacuation: false,
     })).toEqual({ type: 'pickUp', item: flareGun, prompt: 'LEFT CLICK — PICK UP FLARE GUN' });
   });
 
@@ -46,7 +45,6 @@ describe('chooseContextAction', () => {
       targetItem: null,
       carriedItem: item('ductTape-1', 'ductTape'),
       remainingCapacity: 2,
-      nearEvacuation: false,
     })).toEqual({
       type: 'depositBundle',
       prompt: 'LEFT CLICK — STORE CARRIED SUPPLIES',
@@ -59,7 +57,6 @@ describe('chooseContextAction', () => {
       targetItem: item('scubaSet-1', 'scubaSet'),
       carriedItem: item('cannedFood-1', 'cannedFood'),
       remainingCapacity: 2,
-      nearEvacuation: false,
     })).toEqual({ type: 'capacityFull', prompt: 'SCUBA GEAR WEIGHS 3 — 2 CAPACITY FREE' });
   });
 
@@ -70,18 +67,16 @@ describe('chooseContextAction', () => {
       targetItem: ductTape,
       carriedItem: item('cannedFood-1', 'cannedFood'),
       remainingCapacity: 2,
-      nearEvacuation: false,
     })).toEqual({ type: 'pickUp', item: ductTape, prompt: 'LEFT CLICK — PICK UP DUCT TAPE' });
   });
 
-  it('offers evacuation near the marker with empty hands', () => {
+  it.each(['none', 'deposit'] as const)('offers no early evacuation action for %s with empty hands', (target) => {
     expect(chooseContextAction({
-      target: 'none',
+      target,
       targetItem: null,
       carriedItem: null,
       remainingCapacity: 3,
-      nearEvacuation: true,
-    })).toEqual({ type: 'evacuate', prompt: 'LEFT CLICK — EVACUATE NOW' });
+    })).toEqual({ type: 'none', prompt: '' });
   });
 
   it('does not drop unless the crosshair reaches the floor', () => {
@@ -90,7 +85,6 @@ describe('chooseContextAction', () => {
       targetItem: null,
       carriedItem: item('flashlight-1', 'flashlight'),
       remainingCapacity: 2,
-      nearEvacuation: false,
     })).toEqual({ type: 'none', prompt: '' });
   });
 
@@ -100,18 +94,16 @@ describe('chooseContextAction', () => {
       targetItem: null,
       carriedItem: null,
       remainingCapacity: 3,
-      nearEvacuation: false,
     })).toEqual({ type: 'none', prompt: '' });
   });
 
-  it('prioritizes a deposit target over mixed evacuation and drop inputs', () => {
+  it('prioritizes a deposit target over mixed item inputs', () => {
     const umbrella = item('umbrella-1', 'umbrella');
     expect(chooseContextAction({
       target: 'deposit',
       targetItem: item('flareGun-1', 'flareGun'),
       carriedItem: umbrella,
       remainingCapacity: 1,
-      nearEvacuation: true,
     })).toEqual({
       type: 'depositBundle', prompt: 'LEFT CLICK — STORE CARRIED SUPPLIES',
     });

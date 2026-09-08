@@ -159,10 +159,6 @@ export class ScavengeSession {
     return true;
   }
 
-  evacuate(): boolean {
-    return this.status === 'running' && this.finish('success');
-  }
-
   snapshot(): ScavengeSnapshot {
     if (
       this.cachedSnapshot !== null

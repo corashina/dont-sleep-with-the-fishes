@@ -8,24 +8,22 @@ import {
 
 describe('scavenge ending timeline', () => {
   it('finishes successful deadline evacuation at the fade without a failure hold', () => {
-    const snapshot = { status: 'success', remainingSeconds: 0 } as const;
-    const start = advanceScavengeEnding(createScavengeEndingState(), snapshot, 0);
+    const start = advanceScavengeEnding(createScavengeEndingState(), 'success', 0);
     expect(start).toEqual({ stage: 'sinking', elapsedSeconds: 0 });
-    const ready = advanceScavengeEnding(start, snapshot, SINKING_CINEMATIC_SECONDS + 20);
+    const ready = advanceScavengeEnding(start, 'success', SINKING_CINEMATIC_SECONDS + 20);
     expect(ready).toEqual({ stage: 'survivalReady', elapsedSeconds: 0 });
-    expect(advanceScavengeEnding(ready, snapshot, 20)).toBe(ready);
+    expect(advanceScavengeEnding(ready, 'success', 20)).toBe(ready);
   });
 
-  it('keeps early evacuation outside the cinematic', () => {
+  it('keeps scavenging active while the session is running', () => {
     const state = createScavengeEndingState();
-    expect(advanceScavengeEnding(state, { status: 'success', remainingSeconds: 1 }, 20)).toBe(state);
+    expect(advanceScavengeEnding(state, 'running', 20)).toBe(state);
   });
 
   it('keeps the failure hold and menu action after sinking', () => {
-    const snapshot = { status: 'failure', remainingSeconds: 0 } as const;
-    const hold = advanceScavengeEnding(createScavengeEndingState(), snapshot, SINKING_CINEMATIC_SECONDS);
+    const hold = advanceScavengeEnding(createScavengeEndingState(), 'failure', SINKING_CINEMATIC_SECONDS);
     expect(hold).toEqual({ stage: 'endingHold', elapsedSeconds: 0 });
-    expect(advanceScavengeEnding(hold, snapshot, ENDING_HOLD_SECONDS))
+    expect(advanceScavengeEnding(hold, 'failure', ENDING_HOLD_SECONDS))
       .toEqual({ stage: 'menuReady', elapsedSeconds: 0 });
   });
 });

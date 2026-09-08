@@ -25,7 +25,7 @@ The scavenging phase takes place on a furnished single-level coastal freighter. 
 
 Collectibles spawn on authored desks, shelves, cabinets, workbenches, racks, and crates across all ship regions. Each item type uses fitting surfaces without room categories. Dorothy contains exactly 20 scavenging item types and 23 physical pickups. Food appears three times, Bait twice, and every other item type once.
 
-The ship combines original procedural geometry with locally committed wood maps and flat authored steel materials. Static puddles add tension without changing movement. Each enclosed room has a pulsing caged alarm lamp centered on its ceiling. One synchronized CC0 klaxon feeds those three room positions at half volume, fades naturally through doors, and follows pause and exit lifecycle.
+The ship combines original procedural geometry with locally committed wood maps and flat authored steel materials. Each enclosed room has a pulsing caged alarm lamp centered on its ceiling. One synchronized CC0 klaxon feeds those three room positions at half volume, fades naturally through doors, and follows pause and exit lifecycle.
 
 ## Dorothy supplies
 
@@ -82,7 +82,7 @@ and mouse-accessible controls.
 | Mouse | Look |
 | `Shift` | Sprint |
 | `Space` | Jump |
-| Left mouse click | Pick up another supply, drop the newest carried supply, throw it into the lifeboat, or evacuate |
+| Left mouse click | Pick up another supply, drop the newest carried supply, or store supplies in the lifeboat |
 | `Escape` | Pause or resume, and release the mouse while paused |
 
 Supplies are repeatable physical instances rather than one slot per item type. The HUD reads `CARRY n / 3`: every instance contributes its listed weight, and pickups are refused when their weight would take the total over three. Dropping returns the newest carried instance to the deck, where it can be picked up again. The weathered wooden lifeboat has unlimited storage, so every supply thrown aboard is retained and no full-boat state exists.
@@ -159,7 +159,7 @@ Accepted daytime actions play through the lifeboat scene, update the condition d
 
 ## Game loop
 
-The ship sinks in one minute. Search the cabin, wheelhouse, cargo deck, and storage room, carry any combination of supplies up to weight three, throw as many as you can reach into the lifeboat, and evacuate before the timer expires. Duplicate instances remain distinct, and only items physically saved in the boat enter the survival inventory and reappear as survival props.
+The ship sinks in one minute. Search the cabin, wheelhouse, cargo deck, and storage room. Carry supplies up to weight three and store them in the lifeboat. Stand in the marked evacuation area beside the lifeboat when the timer reaches zero. Evacuation is automatic; you cannot leave early. Dorothy then sinks before survival starts. Duplicate instances remain distinct. Only stored supplies enter the survival inventory and reappear as survival props.
 
 In the lifeboat, each day gives three energy for daytime actions:
 
@@ -220,7 +220,7 @@ The ship alarm uses [Klaxon by InfamousLazure](https://freesound.org/people/Infa
 
 Carlitos uses seven clips split from [Cat Meows 7x by Kinoton](https://freesound.org/people/Kinoton/sounds/584895/) under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
 
-Dorothy's deck and tinted room floors use [Poly Haven — Dark Wooden Planks](https://polyhaven.com/a/dark_wooden_planks). Cabin walls and ceiling linings use [ambientCG — Painted Wood 006C](https://ambientcg.com/view?id=PaintedWood006C). White corner trim joins continuous roof trim. Benches and the hatch use dark timber and steel fittings. Tubular deck and crow's nest rails share meshes by material. Room alarms are the only lamps. Each puddle has a distinct outline, soft edges, and approximate sky-light reflections without extra scene renders. Machinery details use 836 triangles and two material batches. Rigging lines attach directly to small mounting plates.
+Dorothy's deck and tinted room floors use [Poly Haven — Dark Wooden Planks](https://polyhaven.com/a/dark_wooden_planks). Cabin walls and ceiling linings use [ambientCG — Painted Wood 006C](https://ambientcg.com/view?id=PaintedWood006C). White corner trim joins continuous roof trim. Benches and the hatch use dark timber and steel fittings. Tubular deck and crow's nest rails share meshes by material. Room alarms are the only lamps. Machinery details use 836 triangles and two material batches. Rigging lines attach directly to small mounting plates.
 
 ## Commands
 
@@ -259,7 +259,7 @@ loading and keeps the seven obstacle visuals static.
 
 ## Architecture
 
-`src/world/ShipDangerEffects` owns room alarms and static puddles.
+`src/world/ShipDangerEffects` owns room alarms.
 
 - `src/Game` — top-level game director, phase transitions, restart, renderer ownership, and active phase leases.
 - `src/app/PhaseResources` — menu, ship, and survival resource groups with shared loads and reference-counted leases.

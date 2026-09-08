@@ -358,7 +358,7 @@ describe('event selection contracts', () => {
       eventResult: { eventId: 'handyman', choiceId: 'touch', resultId: 'handyman-touch' },
     });
     const after = rig.realSession.snapshot();
-    expect(after).toMatchObject({ health: 40, inventory: { 'spyglass-1': { condition: 'usable' } } });
+    expect(after).toMatchObject({ health: 45, inventory: { 'spyglass-1': { condition: 'usable' } } });
     const entry = after.journalEntries.find(({ day }) => day === 20)!;
     expect(entry.nighttime).toMatchObject({
       kind: 'event',
@@ -484,7 +484,7 @@ describe('event selection contracts', () => {
       eventResult: { eventId: 'chest-attack', choiceId: 'attack', resultId: 'chest-attack' },
     });
     expect(rig.realSession.snapshot()).toMatchObject({
-      state: 'day', pendingEventId: null, health: 75, chest: { state: 'none', acquiredDay: null },
+      state: 'day', pendingEventId: null, health: 80, chest: { state: 'none', acquiredDay: null },
     });
     expect(rig.setBusy).toHaveBeenLastCalledWith(false);
     expect(rig.ui.restoreCommandFocus).toHaveBeenCalled();

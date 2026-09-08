@@ -417,7 +417,7 @@ export class ScavengePhase implements GamePhase {
     this.recordDorothyEnding(snapshot);
     this.ending = advanceScavengeEnding(
       this.ending,
-      snapshot,
+      snapshot.status,
       this.endingStarted ? deltaSeconds : 0,
     );
     if (!this.endingStarted && this.ending.stage === 'sinking') {
@@ -541,7 +541,7 @@ export class ScavengePhase implements GamePhase {
 
   private reportCompletion(snapshot: ScavengeSnapshot): void {
     if (snapshot.status !== 'success' || this.completionReported) return;
-    if (this.ending.stage !== 'playing' && this.ending.stage !== 'survivalReady') return;
+    if (this.ending.stage !== 'survivalReady') return;
     const result = this.session.result();
     if (result === null) return;
     this.completionReported = true;
@@ -693,7 +693,6 @@ export class ScavengePhase implements GamePhase {
         ...target,
         carriedItem: this.carry.activeInstance,
         remainingCapacity: 3 - snapshot.carriedWeight,
-        nearEvacuation,
       });
     this.updateItemTooltip(target);
     if (this.input.consumeInteract()) this.performAction(this.contextAction);
@@ -759,8 +758,6 @@ export class ScavengePhase implements GamePhase {
       this.world.dropItem(released.instanceId, action.point);
       this.hands.playGesture('ground-drop');
       this.audio.itemHandled();
-    } else if (action.type === 'evacuate') {
-      this.session.evacuate();
     } else if (action.type === 'capacityFull') {
       this.audio.deny();
       this.ui.showHandsFullNotice();

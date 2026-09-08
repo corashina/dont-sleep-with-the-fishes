@@ -162,6 +162,7 @@ export class GameUI {
     this.statisticsView.button.hidden = true;
     this.pointerLockErrors = [...this.root.querySelectorAll<HTMLElement>('[data-pointer-lock-error]')];
     this.resumeButton.addEventListener('click', this.handleResume);
+    this.pauseLayer.addEventListener('click', this.handlePauseBackdrop);
     this.returnToMenuButton.addEventListener('click', this.handleReturnToMenu);
     this.endingAction.addEventListener('click', this.handleRestart);
     this.setPresentation('intro');
@@ -281,6 +282,7 @@ export class GameUI {
     if (this.handsFullNoticeTimer !== null) window.clearTimeout(this.handsFullNoticeTimer);
     this.handsFullNoticeTimer = null;
     this.resumeButton.removeEventListener('click', this.handleResume);
+    this.pauseLayer.removeEventListener('click', this.handlePauseBackdrop);
     this.returnToMenuButton.removeEventListener('click', this.handleReturnToMenu);
     this.endingAction.removeEventListener('click', this.handleRestart);
     this.statisticsView.dispose();
@@ -330,6 +332,17 @@ export class GameUI {
   }
 
   private readonly handleResume = (): void => this.onResume();
+  private readonly handlePauseBackdrop = (event: MouseEvent): void => {
+    if (
+      this.disposed
+      || event.target !== this.pauseLayer
+      || !this.pauseLayer.classList.contains('is-visible')
+      || this.pauseLayer.hasAttribute('inert')
+    ) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.resumeButton.click();
+  };
   private readonly handleReturnToMenu = (): void => this.onReturnToMenu();
   private renderEndingRecord(record: Extract<EndingRecord, { id: 'dorothy' }>): void {
     this.statisticsView.render(scavengeEndingStatistics(record, this.latestSnapshot));

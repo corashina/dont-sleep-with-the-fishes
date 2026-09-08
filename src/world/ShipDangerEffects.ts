@@ -3,13 +3,10 @@ import type { ShipDangerState } from '../game/shipDanger';
 import { ignoreCleanupError, runCleanupSteps } from './SceneResources';
 import { ShipAlarmLights } from './ShipAlarmLights';
 import { SHIP_DANGER_LAYOUT } from './ShipDangerLayout';
-import { ShipPuddleEffects } from './ShipPuddleEffects';
 
-export type ShipDangerConstructionStage = 'alarms' | 'puddles';
+export type ShipDangerConstructionStage = 'alarms';
 
-export type ShipDangerOwnedResource =
-  | ShipAlarmLights
-  | ShipPuddleEffects;
+export type ShipDangerOwnedResource = ShipAlarmLights;
 
 export interface ShipDangerConstructionOptions {
   readonly checkpoint?: (stage: ShipDangerConstructionStage) => void;
@@ -18,14 +15,12 @@ export interface ShipDangerConstructionOptions {
 
 export interface ShipDangerEffectsSnapshot {
   readonly alarms: number;
-  readonly puddles: number;
 }
 
 export class ShipDangerEffects {
   readonly root = new Group();
 
   private readonly alarms!: ShipAlarmLights;
-  private readonly puddles!: ShipPuddleEffects;
   private disposed = false;
 
   constructor(options: ShipDangerConstructionOptions = {}) {
@@ -37,15 +32,7 @@ export class ShipDangerEffects {
       options.onResource?.(this.alarms);
       options.checkpoint?.('alarms');
 
-      this.puddles = new ShipPuddleEffects(SHIP_DANGER_LAYOUT.puddles);
-      cleanup.push(() => this.puddles.dispose());
-      options.onResource?.(this.puddles);
-      options.checkpoint?.('puddles');
-
-      this.root.add(
-        this.alarms.root,
-        this.puddles.root,
-      );
+      this.root.add(this.alarms.root);
     } catch (error) {
       for (let index = cleanup.length - 1; index >= 0; index -= 1) {
         ignoreCleanupError(cleanup[index]!);
@@ -62,7 +49,6 @@ export class ShipDangerEffects {
   snapshotForTest(): ShipDangerEffectsSnapshot {
     return {
       alarms: this.alarms.snapshotForTest().lampCount,
-      puddles: this.puddles.snapshotForTest().puddleCount,
     };
   }
 
@@ -70,7 +56,6 @@ export class ShipDangerEffects {
     if (this.disposed) return;
     this.disposed = true;
     runCleanupSteps([
-      () => this.puddles.dispose(),
       () => this.alarms.dispose(),
       () => this.root.clear(),
     ]);

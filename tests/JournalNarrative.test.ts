@@ -38,7 +38,7 @@ function eventRecord(eventId: string, choiceId: string, index = 0): JournalEvent
 describe('journal narrative', () => {
   it.each(['en', 'pl', 'es-AR'] as const)('covers every event result in %s without statistics or menu labels', (language) => {
     setLanguage(language);
-    const catalog = [...SURVIVAL_EVENTS, survivalEventById('day-calm-fallback')!, survivalEventById('night-calm-fallback')!];
+    const catalog = [...SURVIVAL_EVENTS, survivalEventById('day-calm-fallback')!];
     for (const event of catalog) {
       for (const choice of event.choices) {
         choice.outcomes.forEach((_, index) => {

@@ -30,7 +30,6 @@ export interface ContextInput {
   dropPoint?: Vector3;
   carriedItem: ItemInstance | null;
   remainingCapacity: number;
-  nearEvacuation: boolean;
 }
 
 export type ContextAction =
@@ -38,8 +37,7 @@ export type ContextAction =
   | { type: 'pickUp'; item: ItemInstance; prompt: string }
   | { type: 'drop'; item: ItemInstance; point: Vector3; prompt: string }
   | { type: 'depositBundle'; prompt: string }
-  | { type: 'capacityFull'; prompt: string }
-  | { type: 'evacuate'; prompt: string };
+  | { type: 'capacityFull'; prompt: string };
 
 export function chooseContextAction(input: ContextInput): ContextAction {
   if (input.target === 'deposit' && input.carriedItem) {
@@ -61,9 +59,6 @@ export function chooseContextAction(input: ContextInput): ContextAction {
       item: input.targetItem,
       get prompt() { return interactionText('pickup', definition.label); },
     };
-  }
-  if (input.nearEvacuation && !input.carriedItem) {
-    return { type: 'evacuate', get prompt() { return interactionText('evacuate'); } };
   }
   if (input.carriedItem && input.dropPoint) {
     return {

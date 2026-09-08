@@ -202,7 +202,7 @@ export function dayActionResourceDelta(
       });
     }
     case 'treat':
-      return Object.freeze({ health: SURVIVAL_BALANCE.actions.treatmentHealth });
+      return Object.freeze({ health: SURVIVAL_BALANCE.thresholds.maximum - state.health });
     case 'answerRadio':
       return Object.freeze({
         energy: -SURVIVAL_BALANCE.radio.energy,

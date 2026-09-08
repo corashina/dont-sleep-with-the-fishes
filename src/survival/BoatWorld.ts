@@ -1156,7 +1156,7 @@ export class BoatWorld {
     const resolvedVariantSeed = typeof eventOrContext === 'string'
       ? variantSeed
       : eventOrContext.variantSeed;
-    if (eventId === 'night-calm-fallback') {
+    if (eventId === 'quiet-night') {
       this.clearEvent();
       return;
     }
@@ -1193,7 +1193,7 @@ export class BoatWorld {
 
   async revealEvent(eventId: string): Promise<void> {
     if (this.disposed) return;
-    if (eventId === 'night-calm-fallback') {
+    if (eventId === 'quiet-night') {
       this.restoreEventCameraFront();
       return;
     }

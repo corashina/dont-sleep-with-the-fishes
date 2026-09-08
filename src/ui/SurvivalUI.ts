@@ -162,6 +162,7 @@ export class SurvivalUI {
   private readonly modalViews: SurvivalModalViews;
   private readonly announcer: HTMLElement;
   private readonly modalFocus: ModalFocusManager;
+  private readonly modalDismissButtons: ReadonlyMap<HTMLElement, HTMLButtonElement>;
   private busy = false;
   private paused = false;
   private disposed = false;
@@ -245,6 +246,14 @@ export class SurvivalUI {
       (layer) => layer !== this.fishingView.interactionRoot || this.fishingView.mode() !== 'ready',
     );
     this.modalFocus.sync();
+    this.modalDismissButtons = new Map<HTMLElement, HTMLButtonElement>([
+      [this.coverView.resultRoot, this.coverView.resultClose],
+      [this.fishingView.resultRoot, this.fishingView.resultContinue],
+      [this.focusedEventView.root, this.focusedEventView.backButton],
+      [this.modalViews.repairRoot, requireElement(this.modalViews.repairRoot, '[data-repair-cancel]')],
+      [this.modalViews.pauseRoot, this.modalViews.resumeButton],
+      [this.journalView.root, requireElement(this.journalView.root, '[data-journal-close]')],
+    ]);
 
     this.hudView.onJournal = () => {
       if (!this.disposed) this.onJournalOpen();
@@ -944,12 +953,26 @@ export class SurvivalUI {
   }
 
   private readonly handleDocumentClick = (event: MouseEvent): void => {
+    if (this.disposed || !(event.target instanceof Node)) return;
+    const modal = this.modalFocus.topmostModal();
+    if (modal !== null) {
+      const dismiss = this.modalDismissButtons.get(modal);
+      if (
+        dismiss !== undefined
+        && !modal.hasAttribute('inert')
+        && !modal.firstElementChild?.contains(event.target)
+        && !dismiss.contains(event.target)
+      ) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        dismiss.click();
+      }
+      return;
+    }
     const caption = this.eventView.caption;
     if (
-      this.disposed
-      || caption.dataset.eventId !== 'item-animation-lab'
+      caption.dataset.eventId !== 'item-animation-lab'
       || !caption.classList.contains('is-visible')
-      || !(event.target instanceof Node)
       || caption.contains(event.target)
     ) return;
     this.hideItemAnimationLabChoices();
