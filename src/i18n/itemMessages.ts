@@ -62,7 +62,7 @@ export const itemDescription = defineMessages({
   radio: { en: "Receives brief signals and transmits your position for one energy.", pl: "Odbiera krótkie sygnały i nadaje twoją pozycję za jeden punkt energii.", "es-AR": "Recibe señales breves y transmite tu posición por un punto de energía." },
   umbrella: { en: "Provides cover from rain, sun, and strange sights.", pl: "Osłania przed deszczem, słońcem i dziwnymi widokami.", "es-AR": "Te cubre de la lluvia, el sol y las visiones extrañas." },
   swimRing: { en: "Provides emergency flotation.", pl: "Zapewnia awaryjną pomoc w utrzymaniu się na wodzie.", "es-AR": "Te mantiene a flote en una emergencia." },
-  flashlight: { en: "Improves visibility in darkness and while diving.", pl: "Poprawia widoczność w ciemności i podczas nurkowania.", "es-AR": "Mejora la visibilidad en la oscuridad y durante el buceo." },
+  flashlight: { en: "Improves visibility in darkness.", pl: "Poprawia widoczność w ciemności.", "es-AR": "Mejora la visibilidad en la oscuridad." },
   shotgun: { en: "Provides one defensive shotgun blast.", pl: "Zapewnia jeden strzał obronny.", "es-AR": "Permite disparar una vez para defenderte." },
   energyBar: { en: () => `Restores energy to ${SURVIVAL_BALANCE.actions.maximumEnergy} once.`, pl: () => `Jednorazowo przywraca energię do ${SURVIVAL_BALANCE.actions.maximumEnergy}.`, "es-AR": () => `Recupera tu energía hasta ${SURVIVAL_BALANCE.actions.maximumEnergy} una vez.` },
   carlitos: { en: "A warm, watchful scrap of company in a very large sea.", pl: "Ciepły, czujny towarzysz na ogromnym morzu.", "es-AR": "Una pequeña compañía cálida y atenta en un mar enorme." },

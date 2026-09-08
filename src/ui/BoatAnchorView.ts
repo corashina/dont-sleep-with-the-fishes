@@ -70,7 +70,7 @@ const CYCLED_ANCHOR_Z_INDEX = ANCHOR_Z_TIER_SIZE * 4 + 1;
 const ACTIONS: readonly ActionDefinition[] = [
   { id: 'fish', get label() { return uiText('fish'); }, get cost() { return uiText('oneEnergy'); }, energyCost: SURVIVAL_BALANCE.actions.fishEnergy, get effect() { return uiText('foodChance'); }, risk: 'uncertain' },
   { id: 'dive', get label() { return uiText('dive'); }, get cost() { return uiText('threeEnergy'); }, energyCost: SURVIVAL_BALANCE.actions.diveEnergy, get effect() { return uiText('diveRisk'); }, risk: 'dangerous' },
-  { id: 'eat', get label() { return uiText('eat'); }, get cost() { return uiText('oneFood'); }, energyCost: 0, get effect() { return uiText('hunger35'); }, risk: 'safe' },
+  { id: 'eat', get label() { return uiText('eat'); }, get cost() { return uiText('oneFood'); }, energyCost: 0, get effect() { return uiText('foodHungerReduction'); }, risk: 'safe' },
   { id: 'repair', get label() { return uiText('repair'); }, get cost() { return uiText('repairCost'); }, energyCost: 1, get effect() { return uiText('hullRepair'); }, risk: 'safe' },
   { id: 'treat', get label() { return uiText('treat'); }, get cost() { return uiText('oneMedkit'); }, energyCost: 0, get effect() { return uiText('restoreHealth'); }, risk: 'safe' },
   { id: 'endDay', get label() { return uiText('endDay'); }, get cost() { return uiText('rest'); }, energyCost: 0, get effect() { return uiText('restoreDawn'); }, risk: 'safe' },

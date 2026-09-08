@@ -422,7 +422,7 @@ describe('SurvivalSession Carlitos events', () => {
 
     const collapse = new SurvivalSession(saved('scubaSet'), {
       seed: 73,
-      random: sequenceRandom([0.55, 0.5]),
+      random: sequenceRandom([0.825, 0.5]),
       initial: { day: 4, energy: 3, health: 100 },
       initialEventId: 'wreckage',
     });
@@ -1047,7 +1047,9 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it('reports applied rather than requested clamped deltas', () => {
-    const eating = new SurvivalSession(saved('cannedFood'), { seed: 1, initial: { hunger: 20 } });
+    const eating = new SurvivalSession(saved('cannedFood'), {
+      seed: 1, random: sequenceRandom([0.999999]), initial: { hunger: 20 },
+    });
     expect(eating.perform('eat').deltas).toEqual({ hunger: -20, food: -1 });
     const treating = new SurvivalSession(saved('medicalKit'), { seed: 1, initial: { health: 90 } });
     expect(treating.perform('treat').deltas).toEqual({ health: 10 });
@@ -1475,7 +1477,7 @@ describe('SurvivalSession daytime actions', () => {
   it('does not restore a consumed recovered can when diving finds loose food', () => {
     const session = new SurvivalSession(saved('cannedFood', 'scubaSet', 'energyBar'), {
       seed: 1,
-      random: sequenceRandom([0, 0.99, 0]),
+      random: sequenceRandom([0, 0, 0.99, 0, 0]),
       initial: { hunger: 80, energy: 3 },
     });
 
@@ -1490,7 +1492,7 @@ describe('SurvivalSession daytime actions', () => {
   it('does not refill a used recovered bait tin when diving finds loose bait', () => {
     const session = new SurvivalSession(saved('baitTin', 'scubaSet', 'energyBar'), {
       seed: 1,
-      random: sequenceRandom([0, 0, 0, 0, 0, 0.5]),
+      random: sequenceRandom([0, 0, 0, 0, 0, 0, 0.5, 0]),
       initial: { energy: 3 },
     });
 
@@ -1505,6 +1507,30 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot()).toMatchObject({ bait: 1, recoveredBait: 0 });
   });
 
+  it.each([18, 19, 20, 21, 22, 23, 24])('reduces hunger by %i when eating', (reduction) => {
+    const session = new SurvivalSession(saved('cannedFood'), {
+      seed: 1, random: sequenceRandom([(reduction - 18 + 0.5) / 7]),
+      initial: { hunger: 80, health: 60, energy: 2 },
+    });
+    expect(session.perform('eat')).toMatchObject({
+      accepted: true, deltas: { hunger: -reduction, food: -1 },
+    });
+    expect(session.snapshot()).toMatchObject({ hunger: 80 - reduction, food: 0, health: 60, energy: 2 });
+    expect(session.snapshot().inventory['cannedFood-1']?.condition).toBe('consumed');
+  });
+
+  it('does not draw a food amount when eating is unavailable', () => {
+    const next = vi.fn(() => 0);
+    const session = new SurvivalSession(saved('cannedFood'), {
+      seed: 1, random: { next }, initial: { hunger: 0 },
+    });
+    const before = session.snapshot();
+    const drawCount = next.mock.calls.length;
+    expect(session.perform('eat').accepted).toBe(false);
+    expect(session.snapshot()).toEqual(before);
+    expect(next).toHaveBeenCalledTimes(drawCount);
+  });
+
   it('eats for free, then repairs with energy and treats with a Medkit', () => {
     const session = new SurvivalSession(saved('cannedFood', 'ductTape', 'medicalKit'), {
       seed: 1,
@@ -1512,7 +1538,7 @@ describe('SurvivalSession daytime actions', () => {
       initial: { hunger: 80, health: 60, hull: 40, energy: 2 },
     });
     expect(session.perform('eat')).toMatchObject({
-      deltas: { hunger: -35, food: -1 },
+      deltas: { hunger: -18, food: -1 },
     });
     expect(session.snapshot().energy).toBe(2);
     expect(session.perform('repair'))

@@ -46,7 +46,7 @@ Sources: [selector options](../src/app/EventTest.ts), [contextual resolution](..
 | Chest state | The lab starts with one closed chest. There is no chest respawn, age, or mimic control. Test delayed mimic conversion and automatic attack in a run. |
 | Handyman chest trade | The event selector starts without a chest, so Chest for Anchor is unavailable. The lab chest cannot carry into that fresh event. |
 | Trade and wreckage item gains | Full inventory converts duplicate item rewards to Food. Missing or lost reward items are needed to test actual item acquisition. Broken items still occupy their slot. |
-| Wreckage outcomes | Search has four results, Carlitos has four, and diving has eight. Injury, collapse, broken scuba, creature, ghost, and each loot result cannot be selected. |
+| Wreckage outcomes | Search has four results, Carlitos has four, and diving has fourteen. Injury, collapse, broken scuba, creature, ghost, and each loot result cannot be selected. |
 | Drifting Supplies variants | Barrel, lifeboat, and container have different rewards. Side and near/middle/far distance vary by seed. No variant selector exists. |
 | Carlitos states | He starts alive, full, healthy, happy, and rested. Care success, exhausted delegation, absence, sickness, misery, starvation, and death require a prepared run. |
 | Radio progression | The lab forces a reception preview. It does not test dawn signal chance, missed calls, answering costs, repeated calls, or rescue progress. |
@@ -592,6 +592,8 @@ Selector: Wreckage.
   - [ ] `wreckage-dive-flare-gun`: You recover a flare gun. Effects: subtract energy 3; gain flareGun ×1.
   - [ ] `wreckage-dive-duct-tape`: You recover duct tape. Effects: subtract energy 3; gain ductTape ×1.
   - [ ] `wreckage-dive-energy-bar`: You recover an energy bar. Effects: subtract energy 3; gain energyBar ×1.
+  - [ ] `wreckage-dive-food-1` (15.75%), `wreckage-dive-food-2` (1.575%), `wreckage-dive-food-3` (0.175%): Gain 1, 2, or 3 food. Cost: 3 energy.
+  - [ ] `wreckage-dive-bait-1` (15.75%), `wreckage-dive-bait-2` (1.575%), `wreckage-dive-bait-3` (0.175%): Gain 1, 2, or 3 bait. Cost: 3 energy.
   - [ ] `wreckage-dive-collapse`: The wreck collapses around you. Effects: subtract energy 3; subtract health 25–35.
   - [ ] `wreckage-dive-collapse-scuba`: The wreck collapses and damages your gear. Effects: subtract energy 3; subtract health 25–35; break scubaSet ×1.
   - [ ] `wreckage-dive-creature`: A creature attacks inside the wreck. Effects: subtract energy 3; subtract health 30–40.

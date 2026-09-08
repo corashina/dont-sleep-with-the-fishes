@@ -5,7 +5,7 @@ export const SURVIVAL_BALANCE = {
   thresholds: { hungry: 70, starving: 90, maximum: 100 },
   actions: {
     fishEnergy: 1, diveEnergy: 3,
-    foodHunger: -35, repairHullPerEnergy: 33,
+    foodHunger: { min: 18, max: 24 }, repairHullPerEnergy: 33,
     maximumRepairEnergy: 3,
     maximumEnergy: 3,
     maximumStoredEnergy: 4,
@@ -16,9 +16,14 @@ export const SURVIVAL_BALANCE = {
     reactionSeconds: 6,
   },
   diving: {
-    success: 0.65, injury: 0.25, flashlightSuccess: 0.80,
-    flashlightInjury: 0.18, injuryDamage: 50, overcastSuccessDelta: -0.05,
+    success: 0.65, injury: 0.25,
+    injuryDamage: { min: 15, max: 45 }, overcastSuccessDelta: -0.05,
     overcastInjuryDelta: 0.05,
+    supplyAmounts: [
+      { quantity: 1, chance: 0.90 },
+      { quantity: 2, chance: 0.09 },
+      { quantity: 3, chance: 0.01 },
+    ],
   },
   rescue: { firstEffectiveDay: 33, maximumLead: 8 },
   radio: {

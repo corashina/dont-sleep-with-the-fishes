@@ -1,4 +1,5 @@
 import type { ItemId } from '../game/ItemState';
+import { SURVIVAL_BALANCE } from './survivalBalance';
 import {
   DRIFTING_SUPPLY_CARLITOS_ENERGY_COST,
   DRIFTING_SUPPLY_PLAYER_ENERGY_COST,
@@ -44,6 +45,8 @@ export const WRECKAGE_RESULT_IDS = Object.freeze([
   'wreckage-dive-energy-bar', 'wreckage-dive-collapse',
   'wreckage-dive-collapse-scuba', 'wreckage-dive-creature',
   'wreckage-dive-ghost',
+  'wreckage-dive-food-1', 'wreckage-dive-food-2', 'wreckage-dive-food-3',
+  'wreckage-dive-bait-1', 'wreckage-dive-bait-2', 'wreckage-dive-bait-3',
 ] as const);
 export type WreckageResultId = typeof WRECKAGE_RESULT_IDS[number];
 export type SignalSightingEventId = Extract<
@@ -612,18 +615,24 @@ const survivalEvents: SurvivalEventDefinition[] = [
           effects([subtract('energy', 3)], [gain('ductTape')]), 'wreckage-dive-duct-tape'),
         wreckageOutcome('wreckage.dive-loot', 10, 'eventText226',
           effects([subtract('energy', 3)], [gain('energyBar')]), 'wreckage-dive-energy-bar'),
-        wreckageOutcome('wreckage.dive-collapse', 10, 'eventText227',
+        ...(['food', 'bait'] as const).flatMap((resource) =>
+          SURVIVAL_BALANCE.diving.supplyAmounts.map(({ quantity, chance }) =>
+            wreckageOutcome('wreckage.dive-loot', 17.5 * chance,
+              resource === 'food' ? 'wreckageDiveFood' : 'wreckageDiveBait',
+              effects([subtract('energy', 3), add(resource, quantity)]),
+              `wreckage-dive-${resource}-${quantity}`))),
+        wreckageOutcome('wreckage.dive-collapse', 5, 'eventText227',
           effects([subtract('energy', 3), subtract('health', { min: 25, max: 35 })]),
           'wreckage-dive-collapse'),
-        wreckageOutcome('wreckage.dive-collapse', 10,
+        wreckageOutcome('wreckage.dive-collapse', 5,
           'eventText228',
           effects([subtract('energy', 3), subtract('health', { min: 25, max: 35 })],
             [breakItem('scubaSet')]), 'wreckage-dive-collapse-scuba'),
-        wreckageOutcome('wreckage.dive-creature', 20,
+        wreckageOutcome('wreckage.dive-creature', 7.5,
           'eventText229',
           effects([subtract('energy', 3), subtract('health', { min: 30, max: 40 })]),
           'wreckage-dive-creature'),
-        wreckageOutcome('wreckage.dive-ghost', 20,
+        wreckageOutcome('wreckage.dive-ghost', 7.5,
           'eventText230',
           effects([subtract('energy', 3), subtract('health', { min: 20, max: 30 }),
             add('pressure', 1)]), 'wreckage-dive-ghost')),

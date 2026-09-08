@@ -64,13 +64,13 @@ describe('ordinary day action journal', () => {
 
   it('records both the reward and injury from the same dive', () => {
     const session = new SurvivalSession(saved('scubaSet'), {
-      seed: 1, random: sequenceRandom([0, 0, 0.6, 0]), initial: { day: 2, energy: 3 },
+      seed: 1, random: sequenceRandom([0, 0, 0.5, 0.6, 0]), initial: { day: 2, energy: 3 },
     });
     expect(session.perform('dive').accepted).toBe(true);
     const entry = finishDay(session);
     expect(entry.actions).toEqual([{
       kind: 'dayAction', action: 'dive',
-      deltas: { energy: -3, health: -50, bait: 1 }, inventoryMutations: [],
+      deltas: { energy: -3, health: -30, bait: 1 }, inventoryMutations: [],
     }]);
     const copy = formatJournalEntry(entry).daytime;
     expect(copy).toContain('I came back hurt');
