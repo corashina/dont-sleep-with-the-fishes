@@ -4,6 +4,37 @@ import { createShipGeometry } from '../src/world/ShipGeometry';
 import { createShipMaterials } from '../src/world/ShipMaterials';
 
 describe('room weathering', () => {
+  it('preserves wear scale across both diagonal wheelhouse walls', () => {
+    const materials = createShipMaterials();
+    const ship = createShipGeometry(materials);
+    let diagonals = 0;
+    try {
+      ship.root.traverse((object) => {
+        if (!(object instanceof Mesh) || !object.name.endsWith(':sill')) return;
+        if (!object.name.includes('chamfer')) return;
+        diagonals += 1;
+        const position = object.geometry.getAttribute('position');
+        const normal = object.geometry.getAttribute('normal');
+        const surface = object.geometry.getAttribute('roomWearSurface');
+        expect(surface, object.name).toBeDefined();
+        const localX: number[] = [];
+        const surfaceU: number[] = [];
+        for (let index = 0; index < position.count; index += 1) {
+          if (normal.getZ(index) < 0.99) continue;
+          localX.push(position.getX(index));
+          surfaceU.push(surface.getX(index));
+        }
+        const width = Math.max(...localX) - Math.min(...localX);
+        expect(width).toBeGreaterThan(1);
+        expect(Math.max(...surfaceU) - Math.min(...surfaceU)).toBeCloseTo(width, 4);
+      });
+      expect(diagonals).toBe(2);
+    } finally {
+      ship.disposeGeometry();
+      materials.dispose();
+    }
+  });
+
   it('covers walls, infills, roofs and ceilings with finite, stationary surface coordinates', () => {
     const materials = createShipMaterials();
     const ship = createShipGeometry(materials);
@@ -18,9 +49,12 @@ describe('room weathering', () => {
         const position = object.geometry.getAttribute('position');
         const panel = object.geometry.getAttribute('roomWearPanel');
         const coordinates = object.geometry.getAttribute('roomWearPosition');
+        const surface = object.geometry.getAttribute('roomWearSurface');
         expect(panel, object.name).toBeDefined();
         expect(coordinates.count, object.name).toBe(position.count);
         expect(Array.from(coordinates.array).every(Number.isFinite), object.name).toBe(true);
+        expect(surface.count, object.name).toBe(position.count);
+        expect(Array.from(surface.array).every(Number.isFinite), object.name).toBe(true);
         expect(Array.from(panel.array).every(Number.isFinite), object.name).toBe(true);
         expect(panel.getZ(0), object.name).toBeGreaterThan(0);
         const original = Array.from(coordinates.array);
