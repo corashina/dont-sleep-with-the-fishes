@@ -120,10 +120,12 @@ describe('OceanCapture', () => {
     expect(capture.colorTexture.image).toMatchObject({ width: 1024, height: 576 });
     expect(capture.depthTexture.image).toMatchObject({ width: 1024, height: 576 });
     expect(capture.reflectionTexture.image).toMatchObject({ width: 1024, height: 576 });
+    expect(capture.reflectionDepthTexture.image).toMatchObject({ width: 1024, height: 576 });
     expect(testRenderer.records).toHaveLength(2);
     expect(testRenderer.records[0]).toMatchObject({ camera, waterVisible: false });
     expect(testRenderer.records[1]!.camera).not.toBe(camera);
     expect(testRenderer.records[1]!.camera.layers.mask).toBe(camera.layers.mask);
+    expect(testRenderer.records[1]!.target!.depthTexture).toBe(capture.reflectionDepthTexture);
     expect(testRenderer.records.every((record) => record.shadowNeedsUpdate === false)).toBe(true);
     expect(capture.viewport.toArray()).toEqual([0, 0, 3840, 2160]);
     expectMatrixClose(capture.inverseProjection, camera.projectionMatrixInverse);
