@@ -24,6 +24,7 @@ import {
 import { addShipHull, type ShipHullWaterExclusion } from './ShipHullGeometry';
 import { addShipRooms } from './ShipRoomGeometry';
 import { addShipCabinDetails } from './ShipCabinDetails';
+import { prepareShipRoomWear } from './ShipRoomWear';
 
 export interface ShipGeometryBuild {
   root: Group;
@@ -58,6 +59,7 @@ export function createShipGeometry(
     addShipCabinDetails(context, layout);
     const climbZones = addShipAccess(context, layout);
     const stackOutlets = addShipExterior(context, layout);
+    prepareShipRoomWear(root, [materials.paintedPanel, materials.paintedSteel, materials.plainPaintedSteel]);
 
     const zoneCenters = new Map<ShipZoneId, Vector3>(layout.zones.map((zone) => [
       zone.id,
