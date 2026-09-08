@@ -14,6 +14,12 @@ import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ExperimentalFilterPasses } from './ExperimentalFilterPasses';
+import {
+  DEFAULT_POST_PROCESSING_FILTERS,
+  normalizePostProcessingFilters,
+  type PostProcessingFilterState,
+} from './postProcessingFilters';
 import {
   ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY,
   ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS,
@@ -64,6 +70,7 @@ type PipelineFactory = (
 type FallbackReporter = (error: unknown) => void;
 
 interface PipelineResources {
+  readonly filters: ExperimentalFilterPasses;
   readonly composer: EffectComposer;
   readonly renderPass: RenderPass;
   readonly itemAmbientOcclusionPass: ItemAmbientOcclusionPass | null;
@@ -322,6 +329,7 @@ export class HoverOutlinePass extends OutlinePass {
 
 export class PostProcessingPipeline implements SceneRenderer {
   readonly postProcessingControls: PostProcessingControls = Object.freeze({
+    setFilters: (filters: PostProcessingFilterState) => this.setFilters(filters),
     getState: () => Object.freeze({
       ...this.controlState,
       ambientOcclusionAvailable:
@@ -335,6 +343,7 @@ export class PostProcessingPipeline implements SceneRenderer {
       this.setNumeric(setting, value),
   });
   private readonly composer: EffectComposer;
+  private readonly filters: ExperimentalFilterPasses;
   private readonly renderPass: RenderPass;
   private itemAmbientOcclusionPass: ItemAmbientOcclusionPass | null;
   private readonly outlinePass: OutlinePass;
@@ -365,6 +374,7 @@ export class PostProcessingPipeline implements SceneRenderer {
     this.visualQuality = quality;
     this.antiAliasingQuality = antiAliasingQuality;
     this.controlState = {
+      filters: DEFAULT_POST_PROCESSING_FILTERS,
       ambientOcclusionAvailable: true,
       ambientOcclusionMode: 'composite',
       ambientOcclusionQuality: 'low',
@@ -379,6 +389,7 @@ export class PostProcessingPipeline implements SceneRenderer {
       antiAliasingQuality,
     );
     this.composer = resources.composer;
+    this.filters = resources.filters;
     this.renderPass = resources.renderPass;
     this.itemAmbientOcclusionPass = resources.itemAmbientOcclusionPass;
     this.outlinePass = resources.outlinePass;
@@ -395,6 +406,7 @@ export class PostProcessingPipeline implements SceneRenderer {
   ): PipelineResources {
     const target = createComposerTarget(this.renderer, this.size, antiAliasingQuality);
     let composer: EffectComposer | undefined;
+    let filters: ExperimentalFilterPasses | undefined;
     let outlinePass: OutlinePass | undefined;
     let bloomPass: UnrealBloomPass | undefined;
     let menuAtmospherePass: MenuAtmospherePass | undefined;
@@ -412,15 +424,18 @@ export class PostProcessingPipeline implements SceneRenderer {
       menuAtmospherePass = new MenuAtmospherePass();
       binocularMaskPass = new BinocularMaskPass();
       outputPass = new OutputPass();
+      filters = new ExperimentalFilterPasses();
 
       composer.addPass(renderPass);
       itemAmbientOcclusionPass = this.addAmbientOcclusionPass(composer, itemAmbientOcclusionPass);
       composer.addPass(outlinePass);
       composer.addPass(bloomPass);
       composer.addPass(menuAtmospherePass);
-      composer.addPass(binocularMaskPass);
       composer.addPass(outputPass);
+      for (const pass of filters.passes) composer.addPass(pass);
+      composer.addPass(binocularMaskPass);
       return {
+        filters,
         composer,
         renderPass,
         itemAmbientOcclusionPass,
@@ -431,6 +446,7 @@ export class PostProcessingPipeline implements SceneRenderer {
         outputPass,
       };
     } catch (error) {
+      filters?.dispose();
       this.disposePipelineResources(
         target,
         composer,
@@ -490,6 +506,7 @@ export class PostProcessingPipeline implements SceneRenderer {
     this.outlinePass.renderCamera = camera;
     this.outlinePass.selectedObjects = sceneHoverOutlineTargets(scene);
     this.binocularMaskPass.setStrength(sceneBinocularMaskStrength(scene));
+    this.filters.setTime(state.elapsedSeconds);
     this.composer.render(0);
   }
 
@@ -592,6 +609,7 @@ export class PostProcessingPipeline implements SceneRenderer {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.filters.dispose();
     this.itemAmbientOcclusionPass?.dispose();
     this.outlinePass.dispose();
     this.bloomPass.dispose();
@@ -644,6 +662,13 @@ export class PostProcessingPipeline implements SceneRenderer {
     this.bloomPass.strength = enabled ? settings.bloomStrength : 0;
     this.bloomPass.radius = enabled ? settings.bloomRadius : 0;
     this.bloomPass.threshold = enabled ? settings.bloomThreshold : 1;
+    const bloom = this.controlState.filters.bloom;
+    if (bloom.enabled && bloom.strength > 0) {
+      this.bloomPass.enabled = true;
+      this.bloomPass.strength = bloom.strength;
+      this.bloomPass.radius = 0.45;
+      this.bloomPass.threshold = 0.72;
+    }
     this.menuAtmospherePass.setProfile(
       this.menuEffectsActive,
       this.visualQuality,
@@ -662,6 +687,13 @@ export class PostProcessingPipeline implements SceneRenderer {
     this.itemAmbientOcclusionPass.setRadius(
       menuProfile?.radius ?? this.controlState.ambientOcclusionRadius,
     );
+  }
+
+  private setFilters(filters: PostProcessingFilterState): void {
+    if (this.disposed) return;
+    this.controlState.filters = normalizePostProcessingFilters(filters);
+    this.filters.setState(this.controlState.filters);
+    this.syncMenuProfile();
   }
 
   private retireAmbientOcclusion(error: unknown): void {

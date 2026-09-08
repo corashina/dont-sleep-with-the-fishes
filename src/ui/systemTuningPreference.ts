@@ -1,5 +1,10 @@
 import { browserStorage, type PreferenceStorage } from '../browser/storage';
 import {
+  DEFAULT_POST_PROCESSING_FILTERS,
+  normalizePostProcessingFilters,
+  type PostProcessingFilterState,
+} from '../rendering/postProcessingFilters';
+import {
   ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY,
   ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS,
   type ItemAmbientOcclusionMode,
@@ -12,6 +17,7 @@ import {
 import type { SkyPhase } from '../world/skyPalette';
 
 export interface SystemTuningState {
+  readonly filters: PostProcessingFilterState;
   readonly ambientOcclusionMode: ItemAmbientOcclusionMode;
   readonly ambientOcclusionQuality: AmbientOcclusionQuality;
   readonly ambientOcclusionIntensity: number;
@@ -35,6 +41,7 @@ export const SYSTEM_TUNING_STORAGE_KEY =
   'dont-sleep-with-the-fishes.system-tuning';
 
 export const DEFAULT_SYSTEM_TUNING_STATE = Object.freeze({
+  filters: DEFAULT_POST_PROCESSING_FILTERS,
   ambientOcclusionMode: 'composite',
   ambientOcclusionQuality: 'low',
   ambientOcclusionIntensity: ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY,
@@ -97,6 +104,7 @@ function parseState(value: unknown): SystemTuningState {
     : DEFAULT_SYSTEM_TUNING_STATE.phaseOverride;
 
   return Object.freeze({
+    filters: normalizePostProcessingFilters(stored.filters),
     ambientOcclusionMode,
     ambientOcclusionQuality: stored.ambientOcclusionQuality === 'high' ? 'high' : 'low',
     ambientOcclusionIntensity,

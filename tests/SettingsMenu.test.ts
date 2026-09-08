@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { DEFAULT_POST_PROCESSING_FILTERS } from '../src/rendering/postProcessingFilters';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SettingsMenu } from '../src/ui/SettingsMenu';
 import { getLanguage, setLanguage } from '../src/i18n/language';
@@ -21,7 +22,7 @@ function setup(enabled = false, savedDay: number | null = null) {
   ui.setPaused(true);
   cleanup.push(() => ui.dispose());
   const aoState: PostProcessingControlState = {
-    ambientOcclusionAvailable: true,
+    filters: DEFAULT_POST_PROCESSING_FILTERS, ambientOcclusionAvailable: true,
     ambientOcclusionMode: 'composite',
     ambientOcclusionQuality: 'low',
     ambientOcclusionIntensity: 1,
@@ -30,7 +31,7 @@ function setup(enabled = false, savedDay: number | null = null) {
   const options = {
     ambientOcclusion: {
       getState: () => aoState,
-      setAmbientOcclusionMode: vi.fn((mode: PostProcessingControlState['ambientOcclusionMode']) => { aoState.ambientOcclusionMode = mode; }),
+      setFilters: vi.fn(), setAmbientOcclusionMode: vi.fn((mode: PostProcessingControlState['ambientOcclusionMode']) => { aoState.ambientOcclusionMode = mode; }),
       setAmbientOcclusionQuality: vi.fn((quality: PostProcessingControlState['ambientOcclusionQuality']) => { aoState.ambientOcclusionQuality = quality; }),
       setNumeric: vi.fn(),
     },
