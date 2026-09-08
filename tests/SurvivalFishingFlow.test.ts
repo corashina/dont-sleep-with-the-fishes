@@ -101,7 +101,7 @@ function createRig(options: FishingRigOptions = {}) {
       calls.push(`ui:${state.mode}:${state.message}`);
     }),
     showFishingResult: vi.fn((view: FishingResultView) => {
-      calls.push(`ui:result:${view.title}`);
+      calls.push(`ui:result:${view.items.length}`);
     }),
     hideFishingResult: vi.fn(() => calls.push('ui:hide-result')),
     updateFishingBiteTarget: vi.fn(() => calls.push('ui:bite-target')),
@@ -230,7 +230,7 @@ describe('SurvivalFishingFlow', () => {
     rig.animations.reel[0]!.resolve();
     await flushPromises();
     expect(rig.ui.showFishingResult).toHaveBeenCalledWith({
-      caption: 'SMALL CATCH', title: 'COD', detail: '+1 FOOD', catchTarget: rig.catchTarget,
+      items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }], message: '', catchTarget: rig.catchTarget,
     });
     expect(rig.world.projectFishingCatch).toHaveBeenCalledWith(1280, 720);
 
@@ -395,7 +395,7 @@ describe('SurvivalFishingFlow', () => {
     rig.animations.miss[0]!.resolve();
     await flushPromises();
     expect(rig.ui.showFishingResult).toHaveBeenCalledWith({
-      caption: 'EMPTY HOOK', title: 'IT GOT AWAY', detail: 'NO CATCH', catchTarget: null,
+      items: [], message: 'NOTHING FOUND', catchTarget: null,
     });
   });
 

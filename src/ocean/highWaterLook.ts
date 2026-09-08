@@ -1,8 +1,7 @@
 import { Color } from 'three';
-import { SUN_DIRECTION } from '../world/celestialLight';
 import type { OceanShaderUniforms } from './oceanShader';
 
-/** The approved water-lab lighting, shared by every High ocean. */
+/** The approved water-lab colors and optics, shared by every High ocean. */
 export const HIGH_WATER_LOOK = {
   day: {
     fogColor: new Color('#173d4a'),
@@ -36,7 +35,6 @@ export function applyHighWaterLook(
   uniforms.uSkyColor.value.copy(look.skyColor);
   uniforms.uSunColor.value.copy(look.sunColor);
   uniforms.uDirectLightStrength.value = look.lightStrength;
-  uniforms.uLightDirection.value.set(...SUN_DIRECTION).normalize();
   uniforms.uWaterReflectionSky.value.copy(look.reflectionColor);
   uniforms.uWaterOpenRadiance.value.copy(look.openRadiance);
 }

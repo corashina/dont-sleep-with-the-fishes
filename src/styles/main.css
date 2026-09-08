@@ -881,13 +881,15 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   justify-items: center;
   text-align: center;
 }
-.routine-dialog--fishing .fishing-result-card > p.fishing-result-detail {
-  color: var(--ink-bone);
-  font-family: var(--font-narrative);
-  font-size: clamp(1rem, 2vw, 1.35rem);
-  letter-spacing: .08em;
-  text-transform: uppercase;
+.routine-dialog--fishing .fishing-result-card { padding: 58px 28px 28px; }
+.fishing-result-items {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 24px;
 }
+.fishing-result-items[hidden] { display: none; }
+.fishing-result-condition { max-width: 160px; font-size: .8rem; }
 .fishing-view-exit {
   position: absolute;
   left: 50%;
@@ -2226,8 +2228,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .scuba-popup-paper .eyebrow,
 .scuba-popup-paper .kicker { color: #75543b; }
 .scuba-popup-paper > p:not(.eyebrow),
-.scuba-popup-paper > header .lead,
-.routine-dialog .scuba-popup-paper > p.fishing-result-detail {
+.scuba-popup-paper > header .lead {
   color: #553829;
 }
 .scuba-popup-paper.scuba-popup-paper::before {

@@ -88,6 +88,7 @@ describe('survival checkpoints', () => {
   it.each([
     ['day event', 'wreckage'],
     ['night event', 'bad-sleep'],
+    ['night choice', 'guarded-sleep'],
   ] as const)(
     'restores a %s without emitting until its reveal settles',
     async (_label, eventId) => {
@@ -102,12 +103,14 @@ describe('survival checkpoints', () => {
       };
       const reveal = deferred();
       const setEventSelection = vi.fn();
+      const setPillowAvailable = vi.fn();
       const onCheckpointChange = vi.fn();
       const phase = SurvivalPhase.forTestStart({
         world: {
           syncInventory: vi.fn(),
           stageEvent: vi.fn(),
           revealEvent: vi.fn(() => reveal.promise),
+          setPillowAvailable,
         },
         ui: {
           render: vi.fn(),
@@ -126,6 +129,7 @@ describe('survival checkpoints', () => {
 
         expect(phase.getSurvivalCheckpoint()).toBeNull();
         expect(onCheckpointChange).not.toHaveBeenCalled();
+        expect(setPillowAvailable).toHaveBeenLastCalledWith(false);
 
         reveal.resolve();
         await flushPromises();
@@ -133,6 +137,14 @@ describe('survival checkpoints', () => {
         expect(setEventSelection).toHaveBeenCalledOnce();
         expect(phase.getSurvivalCheckpoint()).toEqual(checkpoint);
         expect(onCheckpointChange).toHaveBeenLastCalledWith(checkpoint);
+        if (eventId !== 'wreckage') {
+          expect(setPillowAvailable).toHaveBeenLastCalledWith(true);
+          const internals = phase as unknown as { setBusy(busy: boolean): void };
+          internals.setBusy(true);
+          expect(setPillowAvailable).toHaveBeenLastCalledWith(false);
+          internals.setBusy(false);
+          expect(setPillowAvailable).toHaveBeenLastCalledWith(true);
+        }
       } finally {
         phase.dispose();
       }
@@ -313,7 +325,7 @@ function createFishingRig(options: FishingRigOptions = {}) {
       return handle.promise;
     }),
     showFishingResult: vi.fn((view: FishingResultView) => {
-      calls.push(`result:${view.title}:${view.detail}`);
+      calls.push(`result:${view.items[0]?.itemId}:${view.items[0]?.quantity}`);
     }),
     hideFishingResult: vi.fn(() => calls.push('hideFishingResult')),
     setFishingViewExitVisible: vi.fn((visible: boolean) => {
@@ -838,16 +850,15 @@ describe('SurvivalPhase orchestration', () => {
     const presentationIndex = rig.calls.indexOf('playFishingReel:cod');
     expect(finishIndex).toBeLessThan(renderIndex);
     expect(renderIndex).toBeLessThan(presentationIndex);
-    expect(rig.calls).not.toContain('result:COD:+1 FOOD');
+    expect(rig.calls).not.toContain('result:cannedFood:1');
     expect(rig.world.exitFishingView).not.toHaveBeenCalled();
 
     rig.animations.reel.at(-1)!.resolve();
     await flushPromises();
-    expect(rig.calls).toContain('result:COD:+1 FOOD');
+    expect(rig.calls).toContain('result:cannedFood:1');
     expect(rig.ui.showFishingResult).toHaveBeenCalledWith({
-      caption: 'SMALL CATCH',
-      title: 'COD',
-      detail: '+1 FOOD',
+      items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }],
+      message: '',
       catchTarget: rig.catchTarget,
     });
     expect(rig.world.projectFishingCatch).toHaveBeenCalledWith(1, 1);
@@ -871,8 +882,8 @@ describe('SurvivalPhase orchestration', () => {
     const unlockIndex = rig.calls.lastIndexOf('unlock');
     expect(presentationIndex).toBeLessThan(exitIndex);
     expect(rig.calls.indexOf('playFishingReel:cod'))
-      .toBeLessThan(rig.calls.indexOf('result:COD:+1 FOOD'));
-    expect(rig.calls.indexOf('result:COD:+1 FOOD'))
+      .toBeLessThan(rig.calls.indexOf('result:cannedFood:1'));
+    expect(rig.calls.indexOf('result:cannedFood:1'))
       .toBeLessThan(rig.calls.indexOf('exitFishingView'));
     expect(exitIndex).toBeLessThan(unlockIndex);
     expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({

@@ -14,7 +14,7 @@ const situations: Record<string, readonly [string, string, string]> = {
   'bad-sleep': ['There was something wrong with the dark around us. I could not settle.', 'Coś było nie tak z ciemnością wokół nas. Nie mogłem się uspokoić.', "Había algo raro en la oscuridad alrededor. No podía tranquilizarme."],
   thunderstorm: ['Thunder broke overhead and the boat pitched beneath me.', 'Nad głową trzasnął piorun, a łódź zakołysała się pode mną.', "Un trueno estalló arriba y el bote se sacudió debajo de mí."],
   'restless-waves': ['The waves would not leave us alone.', 'Fale nie chciały dać nam spokoju.', "Las olas no querían dejarnos en paz."],
-  'man-in-the-fog': ['A lone figure stood in the fog where there should only have been water.', 'We mgle stała samotna postać. Tam, gdzie powinna być tylko woda.', "Había una figura sola entre la niebla, donde solo tendría que haber agua."],
+  'monster-in-the-fog': ['A monster moved over the water, weaving through the fog.', 'Potwór poruszał się po wodzie, klucząc we mgle.', "Un monstruo se movía sobre el agua, de un lado a otro entre la niebla."],
   ghosts: ['Pale shapes gathered around the boat.', 'Wokół łodzi zebrały się blade kształty.', "Unas formas pálidas se juntaron alrededor del bote."],
   'eerie-melody': ['A song drifted across the water. I wished I had never heard it.', 'Po wodzie niósł się śpiew. Wolałbym nigdy go nie usłyszeć.', "Un canto llegaba por el agua. Ojalá nunca lo hubiera escuchado."],
   'face-on-the-moon': ['There was a face on the moon. It seemed to be looking at us.', 'Na księżycu pojawiła się twarz. Chyba patrzyła na nas.', "Había una cara en la luna. Parecía estar mirándonos."],

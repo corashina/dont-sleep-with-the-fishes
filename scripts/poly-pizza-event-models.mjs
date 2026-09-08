@@ -22,7 +22,7 @@ export const POLY_PIZZA_EVENT_MODEL_PAGES = Object.freeze({
   schoolFish: 'https://poly.pizza/m/HkUAXudvBt',
   snatcher: 'https://poly.pizza/m/BR1vpIvvvv',
   anglerFish: 'https://poly.pizza/m/85n5_RiSeSf',
-  shark: 'https://poly.pizza/m/1L9OjE5KOlC',
+  shark: 'https://poly.pizza/m/YYsK3gRCBZ',
   deathStareBlob: 'https://poly.pizza/m/IoWG5F9WUc',
   tornadoCore: 'https://poly.pizza/m/2TBzV_5N0ci',
   midnightShovel: 'https://poly.pizza/m/oNBQSf87ZJ',
@@ -41,7 +41,7 @@ export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
   schoolFish: 2_000,
   snatcher: 4_000,
   anglerFish: 4_000,
-  shark: 200,
+  shark: 7_000,
   deathStareBlob: 5_000,
   tornadoCore: 3_000,
   midnightShovel: 1_000,
@@ -55,7 +55,7 @@ export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
   wreckagePallet: 3_000,
 });
 
-export const EVENT_MODEL_TOTAL_TRIANGLE_LIMIT = 26_000;
+export const EVENT_MODEL_TOTAL_TRIANGLE_LIMIT = 33_000;
 export const EVENT_MODEL_IDS = Object.freeze(Object.keys(POLY_PIZZA_EVENT_MODEL_PAGES));
 export const POLY_PIZZA_EVENT_MODEL_IDS = EVENT_MODEL_IDS;
 const EVENT_MODEL_COMMITTED_SHA256 = Object.freeze({
@@ -63,7 +63,7 @@ const EVENT_MODEL_COMMITTED_SHA256 = Object.freeze({
   schoolFish: '94C8D591FA64FC5E9EE77669D1DEC18376F7EDD3EA5A659504D87E80FAA9308F',
   snatcher: 'F775807D6EB98B8D8DDF95FF8AB158779537A563C8C537A9F6CD9AA26EDD2C3E',
   anglerFish: '6BC94129AE46B671535537A74CE7369A824C3617D9C9FCA32CB7B417BFA72DDF',
-  shark: 'FDA903C2DB7FD4BBE7A95D5A63E98DC6649A7F022A67ED94A7B92B269BD189BC',
+  shark: '7C6FBF22D0C1E48B29399922415BF6C54BCA6F3AB06F6A18C4316E1510DE39C5',
   deathStareBlob: 'CF870628D467F00FE6FBFE428C948C41FD7180F11D954075DFF998D320593D1F',
   tornadoCore: 'A3060A591DE5B796C495FD7B329CE83766D2DFE39F9387B2DE44CF620FB3A24F',
   midnightShovel: '1D482586A319E0C176BACE1EBFEB618F903187F36C91755E6CE061874B19F6D5',
@@ -367,7 +367,7 @@ function processingDescription(id, staticSource) {
   return 'pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data';
 }
 
-async function processEventModel(id, sourcePath, outputPath, descriptor) {
+export async function processEventModel(id, sourcePath, outputPath, descriptor) {
   const bytes = await readFile(sourcePath);
   const actualHash = sha256(bytes);
   validateSourceHash(id, actualHash, descriptor);

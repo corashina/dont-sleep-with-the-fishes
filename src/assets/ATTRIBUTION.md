@@ -155,11 +155,11 @@ pallet `6EF862AC5F278117164D6CDDD3EA98CE3495C27FF06A6D6CF377A06B1E710952`.
   License: CC BY 3.0.
   Source asset ID: `poly-pizza:02d70fdb-284b-4799-a9ee-18c7277f158c`.
   Source GLB SHA-256: `3AFB58D595ECA2D5F7953847CF51230270BB9EEE40B59F56FE04CDF4A28CD1C3`.
-- "Man in Suit" by Quaternius.
-  Source: https://poly.pizza/m/mQnGoME1ez
-  License: CC0 1.0.
-  Source asset ID: `poly-pizza:66b57880-bcb0-479a-8d72-5c3e88afaa39`.
-  Source GLB SHA-256: `31FF1539E7A9A209D4EB1107E696D798FEDC7E35D84A58BBABFDC0F1B8B73763`.
+- "Slime Enemy" by Charlie.
+  Source: https://poly.pizza/m/6O6XUMssAW
+  License: CC-BY 3.0.
+  Source asset ID: `poly-pizza:d0bb28aa-deb9-4c66-a7b6-de1461137cf6`.
+  Source GLB SHA-256: `8837B6E4DB5261614E0A26D6C502A011731B27AD6E5A761AE7AAD330C836483D`.
 - "Mermaid" by Kamylle B. Grenier.
   Source: https://poly.pizza/m/7X8_6iciXvk
   License: CC-BY 3.0.
@@ -241,7 +241,7 @@ The Shark model keeps its source rig and swim clip.
 | schoolFish | `schoolFish.glb` | Fish / Kenney | https://poly.pizza/m/HkUAXudvBt | `poly-pizza:401cad25-1cb8-4842-8f3a-ad4c3440ed2a` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `26893FFED61079A4A045D050631C2B59EFDAF7119BBFBA8BD134FB2A8754E1F3` | 233 | 233 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-31 |
 | snatcher | `snatcher.glb` | Tentacle / Quaternius | https://poly.pizza/m/BR1vpIvvvv | `poly-pizza:b39d86e5-e51f-4bd8-bc63-c7fc0cdea864` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `B53DB44D80B3CE066849009DD39CFCADBAC82EFAA5A0C5D52BACBC0656ADE931` | 3874 | 3874 | pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data | 2026-07-31 |
 | anglerFish | `anglerFish.glb` | Angler Fish / Anonymous | https://poly.pizza/m/85n5_RiSeSf | `poly-pizza:b682255b-2f96-44fe-9221-9e3f126b4ddd` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `E0A9D0AF0A00FE6254831A6CC2C8980E292AD8B9BCEE37570163BC195DF0F1E8` | 2150 | 2150 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-31 |
-| shark | `shark.glb` | Shark fin / Poly by Google | https://poly.pizza/m/1L9OjE5KOlC | `poly-pizza:f06b710e-2c30-46fe-aa81-44d3292986e9` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `B1CAB021EAF289C1402261309D92D6900415E5C8CFD87BE4DA82B16DD74DC4B6` | 88 | 88 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-08-26 |
+| shark | `shark.glb` | Shark / Quaternius | https://poly.pizza/m/YYsK3gRCBZ | `poly-pizza:840dac4f-e6b5-4015-88d7-ceb940a4b90e` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `385B9EBA21F56832C36F3088DCC4440145ECC7225371E7D08539561E27F5D7D5` | 6604 | 6604 | pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data; retained Swim, Swim_Fast, and Swim_Bite clips | 2026-09-08 |
 | deathStareBlob | `deathStareBlob.glb` | Green Spiky Blob / Quaternius | https://poly.pizza/m/IoWG5F9WUc | `poly-pizza:cd25a048-719e-4ec4-bbf5-a266776fe129` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `AD5E8B1CDF8C0D328B4B44537D3DA8FA98119A9A99FB6163E2F325DBB8BBECC1` | 4888 | 4888 | pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data | 2026-08-01 |
 | tornadoCore | `tornadoCore.glb` | Tornado / Poly by Google | https://poly.pizza/m/2TBzV_5N0ci | `poly-pizza:b48384ed-dc47-4bce-8c0b-c60bb3369ee2` | [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `A3199265639E07658F4D30AB1384CF9CE33832D0CDAFBCAB6CD268357A91AF4F` | 324 | 324 | pruned, deduplicated, welded, unpartitioned, renamed, and embedded | 2026-07-31 |
 | midnightShovel | `midnightShovel.glb` | Shovel / Quaternius | https://poly.pizza/m/oNBQSf87ZJ | `poly-pizza:4ca5006b-da27-4d96-9042-9672c9776750` | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | `768F33C6BCD41E65208C7F0513D2A7010313FA44A932B4F5327A5BC66D22149B` | 322 | 322 | Output GLB SHA-256 `1D482586A319E0C176BACE1EBFEB618F903187F36C91755E6CE061874B19F6D5`; pruned, deduplicated, welded, unpartitioned, renamed, and embedded. | 2026-08-20 |
@@ -299,7 +299,7 @@ The Midnight shovel runtime cue uses a six-second cutoff. The MP3 remains unenco
 | hullRepair | `hullRepair.mp3` | [hammer pounding on wood / Ryujin95](https://freesound.org/people/Ryujin95/sounds/394891/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | tapeRepair | `tapeRepair.mp3` | [Duct Tape Rip / baidonovan](https://freesound.org/people/baidonovan/sounds/187338/) |
 | ductTapePickup | `ductTapePickup.mp3` | [Tape Handling 8 / Geoff-Bremner-Audio](https://freesound.org/people/Geoff-Bremner-Audio/sounds/795714/), [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
-| diveEntry | `diveEntry.mp3` | [Jump into Water / Urkki69](https://freesound.org/people/Urkki69/sounds/628350/) |
+| diveEntry | `diveEntry.mp3` | [Jump into Water / Urkki69](https://freesound.org/people/Urkki69/sounds/628350/). Removed the 0.8-second lead-in. |
 | underwaterMovement | `underwaterMovement.mp3` | [Underwater Movement / Tim_Verberne](https://freesound.org/people/Tim_Verberne/sounds/484187/) |
 | diveSurface | `diveSurface.mp3` | [Water Splash / audiosmedia](https://freesound.org/people/audiosmedia/sounds/243519/) |
 | fishingCast | `fishingCast.mp3` | [Fishing Reel Cast with Splash / mwchristian95](https://freesound.org/people/mwchristian95/sounds/725425/) |
