@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { DEFAULT_POST_PROCESSING_FILTERS } from '../src/rendering/postProcessingFilters';
 import { afterEach, expect, it, vi } from 'vitest';
 import { PostProcessingConsole } from '../src/ui/PostProcessingConsole';
 
@@ -9,9 +10,9 @@ it('keeps only developer controls and toggles with backtick', () => {
   const changes = vi.fn();
   const numeric = vi.fn();
   console = new PostProcessingConsole(document.body, {
-    getState: () => ({ ambientOcclusionAvailable: true, ambientOcclusionMode: 'composite', ambientOcclusionQuality: 'low', ambientOcclusionIntensity: 1, ambientOcclusionRadius: .5 }),
+    getState: () => ({ filters: DEFAULT_POST_PROCESSING_FILTERS, ambientOcclusionAvailable: true, ambientOcclusionMode: 'composite', ambientOcclusionQuality: 'low', ambientOcclusionIntensity: 1, ambientOcclusionRadius: .5 }),
     setAmbientOcclusionQuality: vi.fn(),
-    setAmbientOcclusionMode: vi.fn(), setNumeric: numeric,
+    setFilters: vi.fn(), setAmbientOcclusionMode: vi.fn(), setNumeric: numeric,
   }, changes, { enabled: true, debugMeshes: false, setEnabled: vi.fn(), setDebugMeshes: vi.fn() });
   const root = console.element;
   for (const selector of ['[data-physics-enabled]', '[data-physics-debug]', '[data-presentation-weather]', '[data-post-processing-ao-mode]']) {

@@ -1,3 +1,4 @@
+import { DEFAULT_POST_PROCESSING_FILTERS } from '../src/rendering/postProcessingFilters';
 import { describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_SYSTEM_TUNING_STATE,
@@ -29,6 +30,7 @@ describe('SystemTuningPreference', () => {
       setItem: vi.fn(),
     };
     expect(createSystemTuningPreference(storage).get()).toEqual({
+      filters: DEFAULT_POST_PROCESSING_FILTERS,
       ambientOcclusionMode: 'off',
       ambientOcclusionQuality: 'high',
       ambientOcclusionIntensity: 1,
