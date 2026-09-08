@@ -11,6 +11,7 @@ import {
 type OutlineInternals = HoverOutlinePass & {
   _fsQuad: { render(renderer: WebGLRenderer): void };
   _visibilityCache: Map<unknown, boolean>;
+  _selectionCache: Set<unknown>;
   _changeVisibilityOfNonSelectedObjects(visible: boolean): void;
 };
 
@@ -60,6 +61,7 @@ function createFixture() {
     expect([selected.visible, other.visible, hidden.visible, points.visible, line.visible])
       .toEqual([true, true, false, true, true]);
     expect(internals._visibilityCache.size).toBe(0);
+    expect(internals._selectionCache.size).toBe(0);
     expect(renderer.autoClear).toBe(true);
     expect(renderer.shadowMap.autoUpdate).toBe(true);
     expect(renderer.shadowMap.needsUpdate).toBe(true);
@@ -127,6 +129,33 @@ it('uses either composer target as the retained depth source', () => {
       f.write.texture, f.pass.renderTargetMaskBuffer.texture,
     );
     expect(f.capture.needsSwap).toBe(true);
+  } finally { f.dispose(); }
+});
+
+it('uses the new scene and camera without retaining previous phase meshes', () => {
+  const f = createFixture();
+  const nextScene = new Scene();
+  const nextCamera = new PerspectiveCamera();
+  const nextSelected = f.selected.clone();
+  const nextOther = f.other.clone();
+  nextScene.add(nextSelected, nextOther);
+  try {
+    f.runCapture();
+    f.assertRestored();
+    f.pass.renderScene = nextScene;
+    f.pass.renderCamera = nextCamera;
+    f.pass.selectedObjects = [nextSelected];
+    vi.mocked(f.renderer.render).mockImplementation((scene, camera) => {
+      expect(scene).toBe(nextScene);
+      expect(camera).toBe(nextCamera);
+      expect(nextOther.visible).toBe(false);
+      expect(f.other.visible).toBe(true);
+      expect(f.internals._selectionCache.has(f.selected)).toBe(false);
+      expect(f.internals._visibilityCache.has(f.other)).toBe(false);
+    });
+    f.capture.render(f.renderer, f.read, f.write, 0, false);
+    expect(nextOther.visible).toBe(true);
+    f.assertRestored();
   } finally { f.dispose(); }
 });
 
