@@ -386,6 +386,7 @@ export class BoatWorld {
   private readonly ownedMaterials = new Set<Material>();
   private readonly ownedTextures = new Set<Texture>();
   private readonly oceanAtmosphere = {
+    phase: 'day' as 'day' | 'night',
     fogColor: new Color(),
     horizonColor: new Color(),
     skyColor: new Color(),
@@ -1570,6 +1571,7 @@ export class BoatWorld {
     this.fishingPresentation.updateSurface(time, amplitudeScale);
     const fog = this.scene.fog as FogExp2;
     const atmosphere = this.sky.palette;
+    this.oceanAtmosphere.phase = this.skyState.phase;
     this.oceanAtmosphere.fogColor.copy(fog.color);
     this.oceanAtmosphere.horizonColor.copy(atmosphere.horizonColor);
     this.oceanAtmosphere.skyColor.copy(atmosphere.zenithColor);

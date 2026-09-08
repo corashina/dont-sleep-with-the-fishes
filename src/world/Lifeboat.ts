@@ -10,9 +10,11 @@ import {
   Shape,
   ShapeGeometry,
   TorusGeometry,
-  TubeGeometry,
   Vector3,
 } from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { createLifeboatRailGeometry, mapLifeboatWoodGrain } from './LifeboatGeometry';
+import { mergeLifeboatFastenings } from './LifeboatFastenings';
 import type { LifeboatAssets } from './LifeboatAssets';
 import {
   createLifeboatMaterials,
@@ -168,40 +170,19 @@ function addHullPlanks(target: Group, materials: LifeboatMaterials): void {
   hull.name = 'lifeboat-hull-geometry';
   const plankGroup = new Group();
   plankGroup.name = 'lifeboat-hull-planks';
-  for (const sign of [-1, 1] as const) {
-    const side = sign < 0 ? 'port' : 'starboard';
-    for (let index = 0; index < HULL_STATIONS.length - 1; index += 1) {
-      const first = HULL_STATIONS[index]!;
-      const second = HULL_STATIONS[index + 1]!;
-      const x1 = sign * first.halfWidth;
-      const x2 = sign * second.halfWidth;
-      const dx = x2 - x1;
-      const dz = second.z - first.z;
-      const length = Math.hypot(dx, dz) + 0.04;
-      const segment = new Mesh(
-        new BoxGeometry(0.22, 0.74, length),
-        materials.darkTimber,
-      );
-      segment.name = `hull-segment-${side}-${index}`;
-      segment.position.set((x1 + x2) / 2, -0.02, (first.z + second.z) / 2);
-      segment.rotation.set(0, Math.atan2(dx, dz), sign * 0.10);
-      plankGroup.add(segment);
-
-      for (let strake = 0; strake < 4; strake += 1) {
-        const overlay = new Mesh(
-          new BoxGeometry(0.235, 0.145, length - 0.025),
-          strake === 3 ? materials.rescueTrim : materials.timber,
-        );
-        overlay.name = `hull-strake-${side}-${index}-${strake}`;
-        overlay.position.set(
-          (x1 + x2) / 2 - sign * 0.012,
-          -0.285 + strake * 0.19,
-          (first.z + second.z) / 2,
-        );
-        overlay.rotation.set(0, Math.atan2(dx, dz), sign * 0.10);
-        plankGroup.add(overlay);
-      }
-    }
+  for (let strake = 0; strake < 5; strake += 1) {
+    const curve = new CatmullRomCurve3(
+      outlinePoints(-0.32 + strake * 0.153, (4 - strake) * 0.009),
+      true,
+      'centripetal',
+    );
+    const plank = new Mesh(
+      createLifeboatRailGeometry(curve, 0.22, 0.158, 0.018 + strake * 0.125),
+      strake === 0 ? materials.darkTimber
+        : strake === 4 ? materials.rescueTrim : materials.timber,
+    );
+    plank.name = `lifeboat-hull-strake-${strake}`;
+    plankGroup.add(plank);
   }
   hull.add(plankGroup);
   target.add(hull);
@@ -224,16 +205,20 @@ function addFloor(target: Group, materials: LifeboatMaterials): void {
   );
   xPositions.forEach((x, index) => {
     const geometry = new ExtrudeGeometry(floorboardShape(x), {
-      depth: FLOORBOARD_THICKNESS,
-      bevelEnabled: false,
+      depth: FLOORBOARD_THICKNESS - 0.012,
+      bevelEnabled: true,
+      bevelSize: 0.005,
+      bevelThickness: 0.006,
+      bevelSegments: 2,
     });
     geometry.rotateX(-Math.PI / 2);
+    mapLifeboatWoodGrain(geometry, 'z', FLOORBOARD_WIDTH, 0.018 + (index % 7) * 0.125, x);
     const board = new Mesh(
       geometry,
       index % 3 === 0 ? materials.cutWood : materials.timber,
     );
     board.name = `lifeboat-floorboard-${index}`;
-    board.position.y = FLOOR_HEIGHT + 0.0105;
+    board.position.y = FLOOR_HEIGHT + 0.0165;
     floorboards.add(board);
   });
   target.add(floorboards);
@@ -242,20 +227,39 @@ function addFloor(target: Group, materials: LifeboatMaterials): void {
 function addFramesAndBenches(target: Group, materials: LifeboatMaterials): void {
   const ribs = new Group();
   ribs.name = 'survival-ribs';
+  const frameGeometry = new RoundedBoxGeometry(0.075, 0.68, 0.09, 1, 0.012);
+  mapLifeboatWoodGrain(frameGeometry, 'y', 0.075, 0.143);
   for (const [index, z] of LIFEBOAT_FLOOR_RIB_CENTERS_Z.entries()) {
     const halfWidth = Math.max(0.48, (lifeboatHullHalfWidthAt(z) ?? 1.4) - 0.15);
     const rib = new Mesh(
-      new BoxGeometry(halfWidth * 2, 0.085, LIFEBOAT_FLOOR_RIB_DEPTH),
-      materials.cutWood,
+      new RoundedBoxGeometry(halfWidth * 2, 0.085, LIFEBOAT_FLOOR_RIB_DEPTH, 1, 0.012),
+      materials.darkTimber,
     );
     rib.name = `survival-rib-${index}`;
+    mapLifeboatWoodGrain(rib.geometry, 'x', LIFEBOAT_FLOOR_RIB_DEPTH, 0.018);
     rib.position.set(0, FLOOR_HEIGHT + 0.075, z);
     ribs.add(rib);
+    for (const sign of [-1, 1]) {
+      const frame = new Mesh(frameGeometry, materials.cutWood);
+      frame.name = `lifeboat-side-frame-${index}-${sign}`;
+      frame.position.set(sign * (halfWidth - 0.015), -0.025, z);
+      frame.rotation.z = -sign * 0.07;
+      ribs.add(frame);
+      const fasteningGeometry = new CylinderGeometry(0.016, 0.016, 0.008, 8);
+      fasteningGeometry.rotateZ(Math.PI / 2);
+      for (const y of [-0.21, 0.22]) {
+        const fastening = new Mesh(fasteningGeometry, materials.iron);
+        fastening.position.set(sign * (halfWidth - 0.062), y, z);
+        ribs.add(fastening);
+      }
+    }
   }
   target.add(ribs);
 
   const benches = new Group();
   benches.name = 'survival-benches';
+  const supportGeometry = new RoundedBoxGeometry(0.13, 0.39, 0.34, 1, 0.012);
+  mapLifeboatWoodGrain(supportGeometry, 'y', 0.13, 0.393);
   const createBench = (
     name: string,
     seatName: string,
@@ -264,8 +268,10 @@ function addFramesAndBenches(target: Group, materials: LifeboatMaterials): void 
     const halfWidth = (lifeboatHullHalfWidthAt(z) ?? 1.5) - 0.17;
     const bench = new Group();
     bench.name = name;
+    const seatGeometry = new RoundedBoxGeometry(halfWidth * 2, 0.12, 0.48, 3, 0.014);
+    mapLifeboatWoodGrain(seatGeometry, 'x', 0.48, 0.268);
     const seat = new Mesh(
-      new BoxGeometry(halfWidth * 2, 0.12, 0.48),
+      seatGeometry,
       materials.timber,
     );
     seat.name = seatName;
@@ -275,9 +281,24 @@ function addFramesAndBenches(target: Group, materials: LifeboatMaterials): void 
       materials.darkTimber,
     );
     frontRail.position.set(0, 0.03, -0.18);
+    mapLifeboatWoodGrain(frontRail.geometry, 'x', 0.09, 0.018);
     const backRail = frontRail.clone();
     backRail.position.z = 0.18;
     bench.add(seat, frontRail, backRail);
+    const fasteningGeometry = new CylinderGeometry(0.018, 0.018, 0.004, 10);
+    for (const sign of [-1, 1]) {
+      const support = new Mesh(
+        supportGeometry,
+        materials.darkTimber,
+      );
+      support.position.set(sign * (halfWidth - 0.19), -0.095, 0);
+      bench.add(support);
+      for (const seatZ of [-0.15, 0.15]) {
+        const fastening = new Mesh(fasteningGeometry, materials.iron);
+        fastening.position.set(sign * (halfWidth - 0.19), 0.22, seatZ);
+        bench.add(fastening);
+      }
+    }
     bench.position.z = z;
     return bench;
   };
@@ -303,12 +324,12 @@ function addGunwalesAndKeel(target: Group, materials: LifeboatMaterials): void {
   const outerCurve = new CatmullRomCurve3(outlinePoints(0.39), true, 'centripetal');
   const innerCurve = new CatmullRomCurve3(outlinePoints(0.315, 0.08), true, 'centripetal');
   const outer = new Mesh(
-    new TubeGeometry(outerCurve, 80, 0.082, 7, true),
-    materials.darkTimber,
+    createLifeboatRailGeometry(outerCurve, 0.19, 0.164, 0.393),
+    materials.cutWood,
   );
   outer.name = 'lifeboat-outer-gunwale';
   const inner = new Mesh(
-    new TubeGeometry(innerCurve, 80, 0.045, 6, true),
+    createLifeboatRailGeometry(innerCurve, 0.09, 0.09, 0.518),
     materials.rescueTrim,
   );
   inner.name = 'lifeboat-faded-rescue-trim';
@@ -322,15 +343,7 @@ function addGunwalesAndKeel(target: Group, materials: LifeboatMaterials): void {
   target.add(keel);
 
   for (const [name, z] of [['bow', -3], ['stern', 3]] as const) {
-    const cap = new Mesh(
-      new CylinderGeometry(0.43, 0.50, 0.74, 8),
-      materials.darkTimber,
-    );
-    cap.name = `hull-${name}-rounded-cap`;
-    cap.position.set(0, -0.02, z);
-    cap.scale.set(1, 1, 0.54);
-    target.add(cap);
-    const capPlate = new Mesh(new BoxGeometry(0.58, 0.08, 0.30), materials.cutWood);
+    const capPlate = new Mesh(new RoundedBoxGeometry(0.58, 0.08, 0.30, 2, 0.015), materials.cutWood);
     capPlate.name = `lifeboat-${name}-cap-plate`;
     capPlate.position.set(0, 0.38, z + (name === 'bow' ? 0.04 : -0.04));
     target.add(capPlate);
@@ -344,10 +357,12 @@ function addWear(target: Group, materials: LifeboatMaterials): void {
     for (const [index, z] of [-1.78, -0.34, 1.22].entries()) {
       const isSideShelf = index === 1;
       const scuff = new Mesh(
-        new BoxGeometry(
+        new RoundedBoxGeometry(
           isSideShelf ? 0.315 : 0.245,
           0.035,
           isSideShelf ? 0.48 : 0.34,
+          2,
+          0.008,
         ),
         materials.cutWood,
       );
@@ -363,7 +378,7 @@ function addWear(target: Group, materials: LifeboatMaterials): void {
       wear.add(scuff);
     }
   }
-  const patch = new Mesh(new BoxGeometry(0.74, 0.06, 0.54), materials.cutWood);
+  const patch = new Mesh(new RoundedBoxGeometry(0.74, 0.06, 0.54, 2, 0.008), materials.cutWood);
   patch.name = 'damaged-plank-patch';
   patch.position.set(-1.18, -0.28, 0.62);
   patch.rotation.set(0.04, -0.16, 0.20);
@@ -393,6 +408,7 @@ function createPaddle(
     materials.cutWood,
   );
   shaft.name = `paddle-shaft-${side}`;
+  mapLifeboatWoodGrain(shaft.geometry, 'y', 0.09, 0.518);
   shaft.rotation.x = Math.PI / 2;
   paddle.add(shaft);
 
@@ -410,6 +426,7 @@ function createPaddle(
     bevelThickness: 0.02,
   }), materials.cutWood);
   blade.name = `paddle-blade-${side}`;
+  mapLifeboatWoodGrain(blade.geometry, 'y', 0.5, 0.643);
   blade.rotation.x = -Math.PI / 2;
   blade.position.z = -1.49;
   paddle.add(blade);
@@ -433,6 +450,7 @@ export function createLifeboat(assets: LifeboatAssets): LifeboatBuild {
   addGunwalesAndKeel(root, materials);
   addWear(root, materials);
   root.add(createPaddle('port', materials), createPaddle('starboard', materials));
+  mergeLifeboatFastenings(root, materials.iron);
 
   const storageRoot = new Group();
   storageRoot.name = 'lifeboat-storage';

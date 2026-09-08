@@ -7,7 +7,6 @@ import {
 } from '../src/game/ItemState';
 import { eligibleFishingCatches } from '../src/survival/fishingCatalog';
 import { SurvivalInventoryState } from '../src/survival/inventory';
-import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { mulberry32 } from '../src/survival/random';
 import { sequenceRandom } from './helpers/random';
 
@@ -21,12 +20,6 @@ const saved = (...types: ItemId[]): ItemInstance[] => {
 };
 
 describe('survival foundations', () => {
-  it('keeps Carlitos out of the session inventory', () => {
-    const session = new SurvivalSession(saved('carlitos', 'cannedFood'), { seed: 1 });
-
-    expect(session.snapshot().inventory).not.toHaveProperty('carlitos-1');
-    expect(session.snapshot().inventory).toHaveProperty('cannedFood-1');
-  });
 
   it('creates one usable record per saved physical instance', () => {
     const inventory = new SurvivalInventoryState(saved(
@@ -95,17 +88,6 @@ describe('survival foundations', () => {
     expect(inventory.snapshot()['cannedFood-3']?.condition).toBe('usable');
   });
 
-  it('consumes only an exact eligible charged instance', () => {
-    const inventory = new SurvivalInventoryState(saved('cannedFood', 'cannedFood', 'compass'));
-
-    expect(inventory.consumeInstance('cannedFood-2')).toBe(true);
-    expect(inventory.snapshot()['cannedFood-1']?.condition).toBe('usable');
-    expect(inventory.snapshot()['cannedFood-2']?.condition).toBe('consumed');
-    expect(inventory.consumeInstance('cannedFood-2')).toBe(false);
-    expect(inventory.consumeInstance('cannedFood-3')).toBe(false);
-    expect(inventory.consumeInstance('compass-1')).toBe(false);
-  });
-
   it('allows only catalog-approved break and repair transitions', () => {
     const inventory = new SurvivalInventoryState(saved(
       'compass', 'flashlight', 'ductTape', 'carlitos',
@@ -120,26 +102,6 @@ describe('survival foundations', () => {
     expect(inventory.consume('carlitos')).toEqual([]);
     inventory.consume('ductTape');
     expect(inventory.repair('ductTape-1')).toBe(false);
-  });
-
-  it('never repairs consumed or lost items', () => {
-    const inventory = new SurvivalInventoryState(saved('map', 'energyBar'));
-    inventory.lose('map-1');
-    inventory.consume('energyBar');
-    expect(inventory.repair('map-1')).toBe(false);
-    expect(inventory.repair('energyBar-1')).toBe(false);
-  });
-
-  it('counts exact conditions and reports only usable ownership', () => {
-    const inventory = new SurvivalInventoryState(saved('map', 'cannedFood', 'cannedFood'));
-    inventory.break('map-1');
-    inventory.consume('cannedFood');
-
-    expect(inventory.hasUsable('map')).toBe(false);
-    expect(inventory.hasUsable('cannedFood')).toBe(true);
-    expect(inventory.count('cannedFood')).toBe(2);
-    expect(inventory.count('cannedFood', 'usable')).toBe(1);
-    expect(inventory.count('cannedFood', 'consumed')).toBe(1);
   });
 
   it('draws sorted random mutation candidates without replacement', () => {

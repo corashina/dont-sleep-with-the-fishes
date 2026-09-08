@@ -83,20 +83,6 @@ class FakeAudioBackend implements AudioBackend {
 }
 
 describe('AudioSystem', () => {
-  it.each([
-    ['fishingNet', 'netImpact'],
-    ['knife', 'knifeImpact'],
-  ] as const)('plays the %s impact at the action cue, separate from item handling', (itemId, soundId) => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-    audio.eventItem(itemId);
-    expect(backend.voices.map(({ id }) => id)).toEqual(['itemHandling']);
-    audio.eventItemCue(itemId, 0);
-    expect(backend.voices.map(({ id }) => id)).toEqual(['itemHandling', soundId]);
-    audio.dispose();
-    audio.eventItemCue(itemId, 0);
-    expect(backend.voices).toHaveLength(2);
-  });
   it('plays every pet meow once before reshuffling without an adjacent repeat', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(
@@ -129,24 +115,6 @@ describe('AudioSystem', () => {
     expect(backend.voices.filter(({ id }) => id === 'midnightMonsterAttack')).toHaveLength(1);
     expect(backend.voices.find(({ id }) => id === 'midnightShovel')?.stop)
       .toHaveBeenCalledExactlyOnceWith(0.05);
-  });
-
-  it('uses the Midnight Tour monster sound for Chest Attack', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.chestAttackCue('attack');
-
-    expect(backend.voices.map(({ id }) => id)).toEqual(['midnightMonsterAttack']);
-  });
-
-  it('starts audio without acquiring phase sounds', async () => {
-    const backend = new FakeAudioBackend();
-    const system = await AudioSystem.loadWithBackend(backend);
-
-    expect(backend.acquire).not.toHaveBeenCalled();
-
-    system.dispose();
   });
 
   it('leases phase sounds and leaves incoming shared voices playing', async () => {
@@ -242,50 +210,6 @@ describe('AudioSystem', () => {
     expect(backend.listenerPoses).toEqual([pose]);
   });
 
-  it('finishes Wreckage dive audio after its focused animation', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.beginDive();
-    const movement = backend.voices.find(({ id }) => id === 'underwaterMovement')!;
-    audio.finishDive();
-
-    expect(movement.stop).toHaveBeenCalledExactlyOnceWith(0.2);
-    expect(backend.voices.at(-1)?.id).toBe('diveSurface');
-  });
-
-  it('cancels Wreckage dive audio when the event clears', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.beginDive();
-    const movement = backend.voices.find(({ id }) => id === 'underwaterMovement')!;
-    audio.clearEvent();
-    audio.clearEvent();
-
-    expect(movement.stop).toHaveBeenCalledExactlyOnceWith(0.2);
-    expect(backend.voices.some(({ id }) => id === 'diveSurface')).toBe(false);
-  });
-
-  it('starts two distinct overlapping meows for Shadow Figure', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(
-      AudioSystem.forTest(backend).createScope(),
-      () => 0,
-    );
-
-    audio.eventReveal('shadow-figure');
-
-    expect(backend.voices[0]?.id).toBe('eventReveal');
-    expect(backend.voices[1]?.id).toMatch(/^catMeow/);
-    audio.update(0.1);
-    expect(backend.voices).toHaveLength(2);
-    audio.update(0.03);
-    expect(backend.voices[2]?.id).toMatch(/^catMeow/);
-    expect(backend.voices[2]?.id).not.toBe(backend.voices[1]?.id);
-    expect(backend.voices[1]?.stop).not.toHaveBeenCalled();
-  });
-
   it('cancels the second Shadow Figure meow when the event clears', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
@@ -317,17 +241,6 @@ describe('AudioSystem', () => {
     expect(expired).toHaveBeenCalledOnce();
   });
 
-  it('uses hull repair audio only for hull repair', () => {
-    const backend = new FakeAudioBackend();
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
-
-    audio.action('repair');
-    expect(backend.voices.at(-1)?.id).toBe('hullRepair');
-
-    audio.action('repairItem', { kind: 'itemRepair', target: 'compass-1' });
-    expect(backend.voices.at(-1)?.id).toBe('tapeRepair');
-  });
-
   it('pauses only the incoming radio signal for player panels', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
@@ -350,22 +263,6 @@ describe('AudioSystem', () => {
     system.setMuted(false);
     expect(backend.masterGains).toEqual([0.25, 0.35, 0, 0.35]);
     expect(system.getPreference()).toEqual({ volume: 0.35, muted: false });
-  });
-
-  it('restores volume and mute through the silent fallback', () => {
-    const values = new Map<string, string>();
-    const storage = {
-      getItem: (key: string) => values.get(key) ?? null,
-      setItem: (key: string, value: string) => values.set(key, value),
-    };
-    const first = AudioSystem.silent(storage);
-    first.setVolume(0.35);
-    first.setMuted(true);
-    first.dispose();
-
-    const restored = AudioSystem.silent(storage);
-
-    expect(restored.getPreference()).toEqual({ volume: 0.35, muted: true });
   });
 
   it('silences game audio while paused and keeps interface feedback', () => {

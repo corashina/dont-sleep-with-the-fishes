@@ -9,6 +9,7 @@ import { WaterQualityControl } from './WaterQualityControl';
 import { AntiAliasingQualityControl } from './AntiAliasingQualityControl';
 import { ShadowQualityControl } from './ShadowQualityControl';
 import { AmbientOcclusionQualityControl } from './AmbientOcclusionQualityControl';
+import { PosterizationControl } from './PosterizationControl';
 import type { PostProcessingControls } from '../rendering/postProcessingControls';
 import { settingsMarkup, type SettingsMarkupOptions } from './SettingsMarkup';
 import { createElementRequirement } from './dom';
@@ -27,6 +28,7 @@ export class SettingsMenu {
   readonly element = document.createElement('section');
   private readonly qualityControls;
   private readonly ambientOcclusionControl;
+  private readonly posterizationControl;
   private pauseRoot: HTMLElement | null = null;
   private opener: HTMLButtonElement | null = null;
   private disposed = false;
@@ -54,6 +56,9 @@ export class SettingsMenu {
     ];
     const host = requireElement(this.element, '[data-settings-quality]');
     for (const control of this.qualityControls) host.append(control.element);
+    this.posterizationControl = options.ambientOcclusion
+      ? new PosterizationControl(options.ambientOcclusion) : null;
+    if (this.posterizationControl) host.after(this.posterizationControl.element);
     this.setSaveState(options.save.enabled, options.save.savedDay);
     this.mount.addEventListener('click', this.handleClick);
     this.element.addEventListener('input', this.handleInput);
@@ -101,6 +106,7 @@ export class SettingsMenu {
     this.element.removeEventListener('change', this.handleChange);
     window.removeEventListener('keydown', this.handleKeyDown, true);
     for (const control of this.qualityControls) control.dispose();
+    this.posterizationControl?.dispose();
     this.element.remove();
   }
 
@@ -123,6 +129,7 @@ export class SettingsMenu {
     this.opener = button;
     this.pauseRoot = pause;
     this.element.hidden = false;
+    this.posterizationControl?.refresh();
     this.ambientOcclusionControl?.refresh();
     requireElement<HTMLInputElement>(this.element, '[data-save-enabled]').focus();
     pause.setAttribute('inert', '');

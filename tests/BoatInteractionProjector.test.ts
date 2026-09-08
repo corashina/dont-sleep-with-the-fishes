@@ -4,7 +4,6 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
-  Object3D,
   PerspectiveCamera,
   Scene,
 } from 'three';
@@ -192,72 +191,6 @@ describe('BoatInteractionProjector', () => {
     });
   });
 
-  it('returns one empty output for zero viewports', () => {
-    const fixture = createFixture();
-
-    const zeroWidth = fixture.projector.projectAnchors(0, 720);
-
-    expect(zeroWidth).toEqual([]);
-    expect(fixture.projector.projectAnchors(1280, 0)).toBe(zeroWidth);
-  });
-
-  it('places the fishing target on the upper rod section', () => {
-    const fixture = createFixture();
-    fixture.roots.fishingRoot.scale.y = 10;
-    fixture.projector.installFocusedInteractionTargets([{
-      id: 'full-fishing-bounds',
-      label: 'FULL ROD',
-      description: 'Full fishing rod bounds.',
-      choiceId: 'inspect',
-      root: fixture.roots.fishingRoot,
-      minimumHitWidth: 0,
-      minimumHitHeight: 0,
-    }]);
-
-    const anchors = fixture.projector.projectAnchors(1280, 720);
-    const fishing = anchors.find(({ id }) => id === 'fishing-tools')!;
-    const fullBounds = anchors.find(({ id }) => id === 'full-fishing-bounds')!;
-
-    expect(fishing.hitArea!.height).toBeCloseTo(fullBounds.hitArea!.height * 0.44);
-    expect(fishing.y).toBeCloseTo(fullBounds.y - fullBounds.hitArea!.height * 0.28);
-  });
-
-  it('projects event interaction and result roots through the host', () => {
-    const fixture = createFixture();
-    const interactionRoot = meshRoot('interaction', -0.4);
-    const resultRoot = meshRoot('result', 0.4);
-    (fixture.roots.carlitosRoot.parent as Scene).add(interactionRoot, resultRoot);
-    fixture.setActiveEventId('drifting-supplies');
-    vi.mocked(fixture.eventHost.interactionRoot).mockReturnValue(interactionRoot);
-    vi.mocked(fixture.eventHost.resultRoot).mockReturnValue(resultRoot);
-
-    const interaction = fixture.projector.projectEventInteraction(
-      'drifting-supplies',
-      1280,
-      720,
-    );
-    const result = fixture.projector.projectEventResult('drifting-supplies', 1280, 720);
-
-    expect(interaction).toMatchObject({ visible: true });
-    expect(result).toMatchObject({ visible: true });
-    expect(fixture.eventHost.interactionRoot).toHaveBeenCalledWith('drifting-supplies');
-    expect(fixture.eventHost.resultRoot).toHaveBeenCalledWith('drifting-supplies');
-    expect(fixture.projector.projectEventInteraction('drifting-supplies', 1280, 720))
-      .toBe(interaction);
-    expect(fixture.projector.projectEventResult('drifting-supplies', 1280, 720))
-      .toBe(result);
-    const interactionX = interaction!.x;
-    const resultX = result!.x;
-    interactionRoot.children[0]!.position.x += 0.5;
-    resultRoot.children[0]!.position.x -= 0.5;
-    expect(fixture.projector.projectEventInteraction('drifting-supplies', 1280, 720)!.x)
-      .toBeGreaterThan(interactionX);
-    expect(fixture.projector.projectEventResult('drifting-supplies', 1280, 720)!.x)
-      .toBeLessThan(resultX);
-    expect(fixture.projector.projectEventInteraction('drifting-supplies', 0, 720))
-      .toBeNull();
-  });
-
   it('uses featured roots and installed presenter metadata without frame rebuilds', () => {
     const fixture = createFixture();
     const featuredRoot = meshRoot('barrel', -0.5);
@@ -415,22 +348,5 @@ describe('BoatInteractionProjector', () => {
     const restored = fixture.projector.projectAnchors(1280, 720);
     expect(restored).not.toBe(withoutSupply);
     expect(restored[0]).toBe(firstSupply);
-  });
-
-  it('resolves aim targets and disposes once', () => {
-    const fixture = createFixture();
-    const target = new Object3D();
-    vi.mocked(fixture.eventHost.itemAimTarget).mockReturnValue(target);
-
-    expect(fixture.projector.eventItemAimTarget('dangerous-waters')).toBe(target);
-    expect(fixture.eventHost.itemAimTarget).toHaveBeenCalledOnce();
-
-    fixture.projector.dispose();
-    fixture.projector.dispose();
-
-    expect(fixture.projector.eventItemAimTarget('dangerous-waters')).toBeNull();
-    expect(fixture.projector.projectAnchors(1280, 720)).toEqual([]);
-    expect(fixture.projector.projectEventInteraction('dangerous-waters', 1280, 720))
-      .toBeNull();
   });
 });

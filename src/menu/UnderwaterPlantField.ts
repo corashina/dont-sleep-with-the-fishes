@@ -1,124 +1,115 @@
 import {
-  Color,
-  DoubleSide,
-  Group,
-  InstancedBufferAttribute,
-  InstancedMesh,
-  Object3D,
-  PlaneGeometry,
-  ShaderMaterial,
+  Color, DoubleSide, Group, InstancedBufferAttribute, InstancedMesh,
+  MeshStandardMaterial, Object3D, type BufferGeometry,
 } from 'three';
 import {
-  findClearMenuX,
-  menuVisibleCenterLimit,
+  MENU_PLANT_PATCHES, MENU_PROTECTED_FOOTPRINTS,
+  menuSandChannelContains, menuSeabedHeight,
 } from './MenuSceneLayout';
+import { createMenuPlantGeometry, type MenuPlantKind } from './MenuPlantGeometry';
 
-export const KELP_COUNT = 54;
-const KELP_EDGE_CLEARANCE = 0.2;
-export const KELP_SWEEP_RADIUS = Math.hypot(0.17 + 0.24, 0.08);
-
-const KELP_VERTEX_SHADER = `
-  attribute float phase;
-  uniform float uTime;
-  varying float vHeight;
-
-  void main() {
-    vec3 transformed = position;
-    float height = uv.y;
-    float sway = sin(uTime * 0.72 + phase + height * 2.8) * height * height;
-    transformed.x += sway * 0.24;
-    transformed.z += cos(uTime * 0.51 + phase * 1.7 + height * 2.1) * height * 0.08;
-    vHeight = height;
-    gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(transformed, 1.0);
-  }
-`;
-
-const KELP_FRAGMENT_SHADER = `
-  uniform vec3 uColor;
-  uniform vec3 uFogColor;
-  varying float vHeight;
-
-  void main() {
-    vec3 color = mix(uColor * 0.52, uColor, vHeight);
-    float depthFade = smoothstep(7.0, 22.0, gl_FragCoord.z / gl_FragCoord.w);
-    gl_FragColor = vec4(mix(color, uFogColor, depthFade * 0.7), 1.0);
-  }
-`;
+const PLANTS = [
+  { kind: 'grass', perPatch: 3, color: 0x53684c },
+  { kind: 'kelp', perPatch: 2, color: 0x596c41 },
+  { kind: 'frond', perPatch: 2, color: 0x3f6b59 },
+] as const;
 
 export class UnderwaterPlantField {
   readonly root = new Group();
-  readonly kelp: InstancedMesh<PlaneGeometry, ShaderMaterial>;
-
-  private readonly geometry: PlaneGeometry;
-  private readonly material: ShaderMaterial;
+  private readonly time = { value: 0 };
+  private readonly planted: Array<readonly [number, number]> = [];
   private disposed = false;
 
   constructor() {
     this.root.name = 'menu:plant-field';
-    this.geometry = new PlaneGeometry(0.34, 1.8, 1, 5);
-    this.geometry.translate(0, 0.9, 0);
+    for (const spec of PLANTS) this.root.add(this.createPatchBatch(spec));
+  }
 
-    const phases = new Float32Array(KELP_COUNT);
-    this.geometry.setAttribute('phase', new InstancedBufferAttribute(phases, 1));
-    this.material = new ShaderMaterial({
-      uniforms: {
-        uTime: { value: 0 },
-        uColor: { value: new Color(0x315f48) },
-        uFogColor: { value: new Color(0x0b3440) },
-      },
-      vertexShader: KELP_VERTEX_SHADER,
-      fragmentShader: KELP_FRAGMENT_SHADER,
-      side: DoubleSide,
+  private createPatchBatch(spec: {
+    kind: MenuPlantKind; perPatch: number; color: number;
+  }): InstancedMesh<BufferGeometry, MeshStandardMaterial> {
+    const capacity = MENU_PLANT_PATCHES.length * spec.perPatch;
+    const geometry = createMenuPlantGeometry(spec.kind);
+    const phases = new Float32Array(capacity);
+    geometry.setAttribute('phase', new InstancedBufferAttribute(phases, 1));
+    const material = new MeshStandardMaterial({
+      color: spec.color, roughness: 1, metalness: 0, side: DoubleSide,
     });
-    this.kelp = new InstancedMesh(this.geometry, this.material, KELP_COUNT);
-    this.kelp.name = 'menu:procedural-kelp';
-    this.kelp.frustumCulled = false;
-
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.uPlantTime = this.time;
+      shader.vertexShader = 'attribute float phase;\nuniform float uPlantTime;\nvarying float vPlantHeight;\n' + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
+        #include <begin_vertex>
+        vPlantHeight = uv.y;
+        float bend = uv.y * uv.y;
+        transformed.x += sin(uPlantTime * 0.62 + phase + position.y * 1.9) * bend * 0.16;
+        transformed.z += cos(uPlantTime * 0.47 + phase) * bend * 0.07;
+      `);
+      shader.fragmentShader = 'varying float vPlantHeight;\n' + shader.fragmentShader;
+      shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
+        #include <color_fragment>
+        diffuseColor.rgb *= mix(0.48, 1.12, smoothstep(0.0, 1.0, vPlantHeight));
+      `);
+    };
+    material.customProgramCacheKey = () => 'menu:rooted-leaves';
+    const batch = new InstancedMesh(geometry, material, capacity);
+    batch.name = `menu:${spec.kind}-patches`;
     const transform = new Object3D();
-    for (let index = 0; index < KELP_COUNT; index += 1) {
-      const slot = index % 6;
-      const lane = Math.floor(index / 6);
-      const depth = -3.2 - lane * 5.2 - (slot % 2) * 0.9;
-      const spread = 7.5 + lane * 3.7;
-      const scale = 0.72 + (index % 5) * 0.11;
-      const sourceX = ((slot / 5) * 2 - 1) * spread + ((lane + slot) % 3 - 1) * 0.8;
-      const sweepRadius = KELP_SWEEP_RADIUS * scale;
-      const visibleLimit = menuVisibleCenterLimit(
-        -0.42,
-        depth + sweepRadius,
-        sweepRadius,
-      );
-      const x = findClearMenuX(
-        sourceX,
-        depth,
-        sweepRadius,
-        sweepRadius,
-        KELP_EDGE_CLEARANCE,
-        undefined,
-        -visibleLimit,
-        visibleLimit,
-      );
-      transform.position.set(x, -0.42, depth);
-      transform.rotation.set(0, index * 1.37, 0);
-      transform.scale.set(scale, scale, scale);
-      transform.updateMatrix();
-      this.kelp.setMatrixAt(index, transform.matrix);
-      phases[index] = index * 0.73;
+    const tint = new Color();
+    let placed = 0;
+    for (let patch = 0; patch < MENU_PLANT_PATCHES.length; patch += 1) {
+      const [cx, cz, radius] = MENU_PLANT_PATCHES[patch]!;
+      if (cz > 2 && spec.kind !== 'grass') continue;
+      for (let leaf = 0; leaf < spec.perPatch; leaf += 1) {
+        const slot = spec.kind === 'grass' ? leaf * 2
+          : spec.kind === 'kelp' ? leaf * 4 + 1 : leaf * 3 + 3;
+        const angle = slot * Math.PI * 2 / 7 + patch * 1.7;
+        const spread = radius * (0.85 + Math.cos(patch + slot * 1.6) * 0.08);
+        const x = cx + Math.cos(angle) * spread;
+        const z = cz + Math.sin(angle) * spread;
+        if (menuSandChannelContains(x, z, 0.5)) continue;
+        if (MENU_PROTECTED_FOOTPRINTS.some(({ position, halfSize }) => (
+          Math.abs(x - position[0]) < halfSize[0] + 0.45
+          && Math.abs(z - position[2]) < halfSize[1] + 0.45
+        ))) continue;
+        if (this.planted.some(([px, pz]) => Math.hypot(x - px, z - pz) < 0.7)) continue;
+        this.planted.push([x, z]);
+        const scale = 0.7 + ((patch * 3 + leaf) % 7) * 0.07;
+        transform.position.set(x, menuSeabedHeight(x, z) - 0.025, z);
+        transform.rotation.set(0, angle + 0.5, 0);
+        transform.scale.setScalar(scale);
+        transform.updateMatrix();
+        batch.setMatrixAt(placed, transform.matrix);
+        tint.setHSL(0.12 + (patch % 3) * 0.025, 0.1, 0.82 + (leaf % 3) * 0.035);
+        batch.setColorAt(placed, tint);
+        phases[placed] = patch * 0.51 + leaf * 0.8;
+        placed += 1;
+      }
     }
-    this.kelp.instanceMatrix.needsUpdate = true;
-    this.geometry.getAttribute('phase').needsUpdate = true;
-    this.root.add(this.kelp);
+    batch.count = placed;
+    batch.computeBoundingBox();
+    batch.computeBoundingSphere();
+    // Include the complete GPU sway envelope in CPU visibility bounds.
+    batch.boundingBox!.expandByScalar(0.3);
+    batch.boundingSphere!.radius += 0.3;
+    batch.updateMatrix();
+    batch.matrixAutoUpdate = false;
+    return batch;
   }
 
   setTime(time: number): void {
-    this.material.uniforms.uTime!.value = time;
+    this.time.value = time;
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.root.removeFromParent();
-    this.geometry.dispose();
-    this.material.dispose();
+    for (const child of this.root.children) {
+      const batch = child as InstancedMesh<BufferGeometry, MeshStandardMaterial>;
+      batch.dispose();
+      batch.geometry.dispose();
+      batch.material.dispose();
+    }
   }
 }

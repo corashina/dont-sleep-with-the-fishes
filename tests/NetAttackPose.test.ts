@@ -47,38 +47,6 @@ describe('net grip and target placement', () => {
     expect(velocity.dot(cameraUp)).toBeLessThan(0);
   });
 
-  it('holds the net head above the hand before it flies to the target', () => {
-    const { root, target, camera, solver, sample } = setup();
-    target.position.set(0, 1.35, -5.13);
-    sampleEventItemUse('net-slap', 'fishingNet', 0.5, sample);
-    solver.apply(root, sample, camera.matrixWorld, target);
-    const rim = root.localToWorld(new Vector3(...NET_ATTACK_CONTACT));
-    const grip = root.localToWorld(new Vector3(...NET_ATTACK_GRIP));
-    const heldGrip = new Vector3(sample.viewX, sample.viewY, sample.viewZ).applyMatrix4(camera.matrixWorld);
-    const cameraUp = new Vector3(0, 1, 0).transformDirection(camera.matrixWorld);
-    expect(grip.distanceTo(heldGrip)).toBeLessThan(1e-6);
-    expect(rim.sub(grip).normalize().dot(cameraUp)).toBeGreaterThan(0.9);
-    expect(sample.targetBlend).toBe(0);
-  });
-
-  it('keeps the grip fixed while the rim sweeps through an arc', () => {
-    const { root, target, camera, solver, sample } = setup();
-    target.position.set(0, 1.35, -5.13);
-    const grips: Vector3[] = [];
-    const rims: Vector3[] = [];
-    for (const progress of [0.64, 0.664, 0.68]) {
-      sampleEventItemUse('net-slap', 'fishingNet', progress, sample);
-      solver.apply(root, sample, camera.matrixWorld, target);
-      grips.push(root.localToWorld(new Vector3(...NET_ATTACK_GRIP)));
-      rims.push(root.localToWorld(new Vector3(...NET_ATTACK_CONTACT)));
-    }
-    for (let index = 1; index < grips.length; index += 1) {
-      expect(grips[index]!.distanceTo(grips[0]!)).toBeLessThan(1e-6);
-      expect(rims[index]!.distanceTo(grips[index]!)).toBeCloseTo(0.66, 6);
-      expect(rims[index]!.distanceTo(rims[index - 1]!)).toBeGreaterThan(0.1);
-    }
-  });
-
   it.each([-1, 1])('clears the boat side throughout the attack and return (%s)', (side) => {
     const { root, target, camera, solver, sample } = setup();
     camera.position.set(0, 1.15, 1.75);

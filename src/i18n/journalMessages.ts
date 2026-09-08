@@ -1,6 +1,8 @@
 import { defineMessages } from './messages';
 
 export const journalMessage = defineMessages({
+  nightPending: { en: 'Night in progress.', pl: 'Noc jeszcze trwa.', 'es-AR': 'La noche sigue en curso.' },
+  night: { en: (day: number) => `NIGHT ${day}`, pl: (day: number) => `NOC ${day}`, 'es-AR': (day: number) => `NOCHE ${day}` },
   sinking: { en: 'Dorothy hit something below the water. By the time I reached the lifeboat, she was going under. I saved what I could carry.', pl: 'Dorothy uderzył w coś pod wodą. Kiedy dotarłem do szalupy, już tonął. Uratowałem tyle, ile zdołałem unieść.', 'es-AR': "Dorothy chocó con algo bajo el agua. Cuando llegué al bote, ya se estaba hundiendo. Salvé lo que pude cargar." },
   quietDay: { en: 'Just water and sky all day. I am starting to miss having something to complain about.', pl: 'Przez cały dzień tylko woda i niebo. Zaczyna mi brakować powodów do narzekania.', 'es-AR': "Agua y cielo todo el día. Empiezo a extrañar tener algo de qué quejarme." },
   quietNight: { en: 'The sea let me sleep. Nothing tried to climb aboard before morning.', pl: 'Morze dało mi pospać. Do rana nic nie próbowało wejść na pokład.', 'es-AR': "El mar me dejó dormir. Nada intentó subir a bordo antes del amanecer." },

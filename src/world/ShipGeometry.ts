@@ -23,6 +23,7 @@ import {
 } from './ShipGeometryPrimitives';
 import { addShipHull, type ShipHullWaterExclusion } from './ShipHullGeometry';
 import { addShipRooms } from './ShipRoomGeometry';
+import { addShipCabinDetails } from './ShipCabinDetails';
 
 export interface ShipGeometryBuild {
   root: Group;
@@ -54,6 +55,7 @@ export function createShipGeometry(
   try {
     const { waterExclusion } = addShipHull(context, layout);
     addShipRooms(context, layout);
+    addShipCabinDetails(context, layout);
     const climbZones = addShipAccess(context, layout);
     const stackOutlets = addShipExterior(context, layout);
 

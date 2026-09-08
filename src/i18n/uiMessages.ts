@@ -223,10 +223,10 @@ export const uiCatalog = {
     "pl": "Przetrwanie wstrzymane",
     "es-AR": "Supervivencia en pausa"
   },
-  "holdFast": {
-    "en": "Hold Fast",
-    "pl": "Trzymaj się",
-    "es-AR": "Aguantá firme"
+  "pauseMenu": {
+    "en": "Pause menu",
+    "pl": "Menu pauzy",
+    "es-AR": "Menú de pausa"
   },
   "journeyEnded": {
     "en": "Journey ended",

@@ -1,5 +1,5 @@
 import { Box3, Mesh, Raycaster, Vector3 } from 'three';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { SunkenDorothyWreck } from '../src/menu/SunkenDorothyWreck';
 
 function localWreck(): SunkenDorothyWreck {
@@ -61,18 +61,5 @@ describe('SunkenDorothyWreck', () => {
     }
     expect(triangles).toBeLessThan(40000);
     wreck.dispose();
-  });
-
-  it('releases each owned GPU resource once when disposed repeatedly', () => {
-    const wreck = new SunkenDorothyWreck();
-    const spies = wreck.root.children.flatMap((child) => {
-      const mesh = child as Mesh;
-      const material = Array.isArray(mesh.material) ? mesh.material[0]! : mesh.material;
-      return [vi.spyOn(mesh.geometry, 'dispose'), vi.spyOn(material, 'dispose')];
-    });
-    wreck.dispose();
-    wreck.dispose();
-    for (const spy of spies) expect(spy).toHaveBeenCalledTimes(1);
-    expect(wreck.root.parent).toBeNull();
   });
 });

@@ -34,8 +34,10 @@ import {
   type ShipZoneSpec,
 } from './ShipLayoutTypes';
 import type { ShipMaterials } from './ShipMaterials';
+import { ShipDetailGeometry } from './ShipDetailGeometry';
 import {
   addBlock,
+  addBeveledBlock,
   toCollisionBox,
   toOrientedCollisionBox,
   type ShipBlockOptions,
@@ -228,15 +230,6 @@ function segmentColliderTransform(
   return segmentTransform(segment, height, centerY);
 }
 
-function roomSurfaceMaterial(
-  materials: ShipMaterials,
-  zoneId: ShipZoneId,
-): Material {
-  return zoneId === 'storageWorkroom'
-    ? materials.plainPaintedSteel
-    : materials.paintedPanel;
-}
-
 function wallUvOffsets(
   segment: WallSegmentSpec,
   horizontalCenter: number,
@@ -329,12 +322,17 @@ function addPortholeDetails(
     PORTHOLE_GASKET_OUTER_RADIUS,
     PORTHOLE_SEGMENTS,
   );
-  const frameGeometry = new RingGeometry(
-    PORTHOLE_GASKET_OUTER_RADIUS,
-    PORTHOLE_FRAME_OUTER_RADIUS,
-    PORTHOLE_SEGMENTS,
-  );
-  const boltGeometry = new CircleGeometry(PORTHOLE_BOLT_RADIUS, 8);
+  const frameShape = new Shape();
+  frameShape.absarc(0, 0, PORTHOLE_FRAME_OUTER_RADIUS, 0, Math.PI * 2, false);
+  const frameHole = new Path();
+  frameHole.absarc(0, 0, PORTHOLE_GASKET_OUTER_RADIUS, 0, Math.PI * 2, true);
+  frameShape.holes.push(frameHole);
+  const frameGeometry = new ExtrudeGeometry(frameShape, {
+    depth: 0.035, steps: 1, bevelEnabled: true, bevelSegments: 1,
+    bevelSize: 0.008, bevelThickness: 0.008, curveSegments: 12,
+  });
+  const boltGeometry = new CylinderGeometry(PORTHOLE_BOLT_RADIUS, PORTHOLE_BOLT_RADIUS, 0.025, 6);
+  boltGeometry.rotateX(Math.PI / 2);
   const linerGeometry = new CylinderGeometry(
     PORTHOLE_OPENING_RADIUS,
     PORTHOLE_OPENING_RADIUS,
@@ -385,7 +383,7 @@ function addPortholeDetails(
       glass.castShadow = false;
       group.add(glass);
 
-      const gasket = new Mesh(gasketGeometry, materials.darkMetal);
+      const gasket = new Mesh(gasketGeometry, materials.rubber);
       gasket.name = `${group.name}:${face}:gasket`;
       gasket.position.z = faceZ;
       gasket.rotation.y = rotationY;
@@ -407,7 +405,7 @@ function addPortholeDetails(
         bolt.position.set(
           Math.cos(angle) * PORTHOLE_BOLT_ORBIT,
           Math.sin(angle) * PORTHOLE_BOLT_ORBIT,
-          direction * (WALL_HALF_THICKNESS + 0.022),
+          direction * (WALL_HALF_THICKNESS + 0.072),
         );
         bolt.rotation.y = rotationY;
         bolt.castShadow = true;
@@ -435,7 +433,7 @@ function addWallSegments(
       return;
     }
     const height = SHIP_ROOM_WALL_HEIGHT;
-    const material = roomSurfaceMaterial(materials, segment.zoneId);
+    const material = materials.paintedPanel;
     const portholes = portholesForSegment(segment);
     if (portholes.length > 0) {
       const wall = segmentColliderTransform(segment, height, wallBottomY + height / 2);
@@ -577,7 +575,7 @@ function addDoorJamb(
   jambCenterY: number,
 ): void {
   const sideDoor = door.orientation === 'side';
-  addBlock(context, root, {
+  addBeveledBlock(context, root, {
     name: `door-frame:${door.id}:jamb-${index === 0 ? 'left' : 'right'}`,
     size: sideDoor ? [DOOR_FRAME_DEPTH, jambHeight, DOOR_FRAME_WIDTH] : [DOOR_FRAME_WIDTH, jambHeight, DOOR_FRAME_DEPTH],
     position: sideDoor
@@ -596,7 +594,7 @@ function addDoorHeader(
   headerCenterY: number,
 ): void {
   const sideDoor = door.orientation === 'side';
-  addBlock(context, root, {
+  addBeveledBlock(context, root, {
     name: `door-frame:${door.id}:header`,
     size: sideDoor ? [DOOR_FRAME_DEPTH, DOOR_FRAME_WIDTH, door.width] : [door.width, DOOR_FRAME_WIDTH, DOOR_FRAME_DEPTH],
     position: sideDoor
@@ -626,7 +624,7 @@ function addDoorInfill(
     sideDoor ? -coordinates.axisCenter : coordinates.axisCenter,
     infillCenterY,
   );
-  const infill = new Mesh(geometry, roomSurfaceMaterial(materials, door.zoneId));
+  const infill = new Mesh(geometry, materials.paintedPanel);
   infill.name = `door-wall:${door.id}:header-infill`;
   infill.position.set(
     sideDoor ? coordinates.wallFixed : coordinates.axisCenter,
@@ -837,6 +835,20 @@ function addWheelhousePane(
     position: [0, WINDOW_SILL_HEIGHT + windowHeight / 2, -WALL_HALF_THICKNESS],
     material: materials.glass,
   }).castShadow = false;
+  const seals = new ShipDetailGeometry(geometries);
+  const centerY = WINDOW_SILL_HEIGHT + windowHeight / 2;
+  for (const face of [-1, 1]) {
+    const z = -WALL_HALF_THICKNESS + face * 0.035;
+    for (const side of [-1, 1]) {
+      seals.box(materials.rubber, [0.045, windowHeight, 0.045],
+        [side * (openingWidth / 2 - 0.022), centerY, z], 0, 0.01);
+      seals.box(materials.rubber, [openingWidth, 0.045, 0.045],
+        [0, centerY + side * (windowHeight / 2 - 0.022), z], 0, 0.01);
+      seals.box(materials.plainPaintedSteel, [width, 0.1, 0.1],
+        [0, centerY + side * (windowHeight / 2 + 0.05), z + face * 0.03]);
+    }
+  }
+  seals.finish(pane, 'window-seals');
 }
 
 function addWheelhouseFacade(
@@ -902,7 +914,7 @@ function addRoomRoofs(
       });
       geometry.rotateX(Math.PI / 2);
       applyRoofPlanarUvs(geometry, 0, 0);
-      const roof = new Mesh(geometry, roomSurfaceMaterial(materials, zone.id));
+      const roof = new Mesh(geometry, materials.paintedSteel);
       roof.name = 'wheelhouse-roof';
       roof.position.y = wallTopY + SHIP_ROOM_ROOF_THICKNESS;
       roof.castShadow = true;
@@ -915,7 +927,7 @@ function addRoomRoofs(
     const centerZ = (zone.bounds.minZ + zone.bounds.maxZ) / 2;
     const geometry = new BoxGeometry(width, SHIP_ROOM_ROOF_THICKNESS, length);
     applyRoofPlanarUvs(geometry, centerX, centerZ);
-    const roof = new Mesh(geometry, roomSurfaceMaterial(materials, zone.id));
+    const roof = new Mesh(geometry, materials.paintedSteel);
     roof.name = `${zone.id}-roof`;
     roof.position.set(
       centerX,

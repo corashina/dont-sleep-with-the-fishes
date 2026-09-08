@@ -10,6 +10,44 @@ export const MENU_CAMERA_FIELD_OF_VIEW = 65;
 export const MENU_MINIMUM_ASPECT = 1365 / 768;
 export const MENU_SEABED_POSITION = [0, -0.46, -25] as const;
 
+export function menuSandChannelCenter(z: number): number {
+  return Math.sin((z + 1) * 0.32) * 0.42;
+}
+
+export function menuSandChannelHalfWidth(z: number): number {
+  return 0.65 + Math.max(0, Math.min(1, -z / 14)) * 1.15;
+}
+
+export function menuSandChannelContains(x: number, z: number, radius = 0): boolean {
+  return z > -12 && Math.abs(x - menuSandChannelCenter(z))
+    < menuSandChannelHalfWidth(z) + radius;
+}
+
+// Authored patches leave both sign faces and the sandy centre open.
+export const MENU_PLANT_PATCHES = [
+  [-2.0, 5.7, 0.85], [2.1, 5.6, 0.85],
+  [-3.8, 4.8, 0.85], [4.0, 4.7, 0.9],
+  [-5.5, 3.4, 1.05], [5.7, 3.2, 1.05],
+  [-6.7, 1.2, 1.2], [6.9, 1.0, 1.2],
+  [-8.5, -1.4, 1.3], [8.8, -1.8, 1.3],
+  [-2.7, 5.0, 0.65], [3.0, 4.8, 0.7],
+  [-4.8, 3.1, 0.9], [5.1, 2.8, 0.95],
+  [-1.5, 1.7, 0.8], [2.1, 0.8, 0.9],
+  [-4.0, 0.1, 1.2], [4.7, -1.3, 1.3],
+  [-6.6, -2.5, 1.4], [7.4, -3.5, 1.5],
+  [-3.9, -6.2, 1.1], [4.7, -8.1, 1.3],
+  [-8.8, -6.5, 1.7], [10.2, -8.0, 1.8],
+  [-12.0, -11.5, 1.9], [14.0, -11.5, 1.8],
+  [-19.8, -24.0, 1.8], [21.0, -27.0, 1.8],
+] as const;
+
+export const MENU_SIDE_STONES = [
+  [-1.9, 5.55], [2.0, 5.45], [-2.9, 5.05], [3.1, 4.95],
+  [-4.3, 4.45], [4.5, 4.35], [-5.6, 3.3], [5.9, 3.15],
+  [-5.4, 1.45], [5.7, 1.2], [-7.1, 0.1], [7.4, -0.15],
+  [-8.8, -2.6], [9.1, -2.9], [-10.4, -5.1], [10.8, -5.4],
+] as const;
+
 export function menuSeabedHeight(worldX: number, worldZ: number): number {
   const localZ = worldZ - MENU_SEABED_POSITION[2];
   const dune = Math.sin(worldX * 0.12) * 0.22
@@ -17,7 +55,10 @@ export function menuSeabedHeight(worldX: number, worldZ: number): number {
     + Math.sin((worldX + localZ) * 0.08) * 0.14;
   const ripple = Math.sin(localZ * 1.35 + Math.sin(worldX * 0.18)) * 0.045
     + Math.sin(worldX * 0.75 + localZ * 0.31) * 0.025;
-  return MENU_SEABED_POSITION[1] + dune + ripple;
+  const bankDistance = Math.abs(worldX - menuSandChannelCenter(worldZ));
+  const banks = Math.exp(-Math.pow((bankDistance - 4.4) / 2.1, 2))
+    * Math.exp(-Math.pow((worldZ + 1.0) / 7, 2)) * 0.26;
+  return MENU_SEABED_POSITION[1] + dune + ripple + banks;
 }
 
 export function menuGroundedY(

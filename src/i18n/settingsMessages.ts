@@ -1,6 +1,8 @@
 import { defineMessages } from './messages';
 
 export const settingsCatalog = {
+  posterizationStrength: { en: 'Strength', pl: 'Siła', 'es-AR': 'Intensidad' },
+  posterization: { en: 'Posterization', pl: 'Posteryzacja', 'es-AR': 'Posterización' },
   simulation: {"en":"SIMULATION","pl":"SYMULACJA","es-AR":"SIMULACIÓN"},
   barrels: {"en":"Barrel simulation","pl":"Symulacja beczek","es-AR":"Simulación de barriles"},
   physics: {"en":"PHYSICS VIEW","pl":"WIDOK FIZYKI","es-AR":"VISTA DE FÍSICA"},
@@ -52,7 +54,6 @@ export const settingsCatalog = {
   back: {"en":"BACK","pl":"WRÓĆ","es-AR":"VOLVER"},
   visualQuality: {"en":"VISUAL QUALITY","pl":"JAKOŚĆ OBRAZU","es-AR":"CALIDAD VISUAL"},
   low: {"en":"LOW","pl":"NISKA","es-AR":"BAJA"},
-  medium: {"en":"MEDIUM","pl":"ŚREDNIA","es-AR":"MEDIA"},
   high: {"en":"HIGH","pl":"WYSOKA","es-AR":"ALTA"},
   waterQuality: {"en":"WATER QUALITY","pl":"JAKOŚĆ WODY","es-AR":"CALIDAD DEL AGUA"},
   aa: {"en":"ANTI-ALIASING","pl":"WYGŁADZANIE KRAWĘDZI","es-AR":"SUAVIZADO DE BORDES"},

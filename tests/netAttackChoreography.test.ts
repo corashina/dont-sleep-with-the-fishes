@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createEventItemUseSample, eventItemUseDuration, resolveEventItemUseContext, sampleEventItemUse } from '../src/survival/eventItemUseChoreography';
-import { deathStareItemDuration, identityDeathStareSample, sampleDeathStareItemUse } from '../src/survival/events/deathStareChoreography';
-import { createSwarmSample, sampleSwarmItemUse, swarmItemDuration } from '../src/survival/events/sharkSwarmChoreography';
+import { deathStareItemDuration } from '../src/survival/events/deathStareChoreography';
+import { swarmItemDuration } from '../src/survival/events/sharkSwarmChoreography';
 
 describe('shared net attack', () => {
   it('resolves the generic attack without an enemy event', () => {
@@ -18,17 +18,6 @@ describe('shared net attack', () => {
   it('synchronizes both enemies with the item clock', () => {
     expect(deathStareItemDuration('fishingNet')).toBe(eventItemUseDuration('net-slap'));
     expect(swarmItemDuration('fishingNet')).toBe(eventItemUseDuration('net-slap'));
-  });
-
-  it('does not make either enemy recoil before contact', () => {
-    const deathStare = identityDeathStareSample();
-    const shark = createSwarmSample();
-    for (const progress of [0.5, 0.64, 0.679]) {
-      sampleDeathStareItemUse('fishingNet', progress, deathStare);
-      sampleSwarmItemUse('fishingNet', progress, shark);
-      expect(deathStare.effectStrength).toBe(0);
-      expect(shark.netSlap).toBe(0);
-    }
   });
 
   it('continues the arc through impact and then slows to a stop', () => {

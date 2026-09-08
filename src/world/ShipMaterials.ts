@@ -36,6 +36,8 @@ export interface ShipMaterials {
   darkHull: MeshStandardMaterial;
   darkMetal: MeshStandardMaterial;
   exposedMetal: MeshStandardMaterial;
+  rubber: MeshStandardMaterial;
+  lamp: MeshStandardMaterial;
   rust: MeshStandardMaterial;
   rope: MeshStandardMaterial;
   glass: MeshPhysicalMaterial;
@@ -122,9 +124,8 @@ function surfaceOffset(kind: SurfaceKind, x: number, y: number, byte: number): n
       return centeredNoise(byte, 6) + (diamond ? 8 : -2);
     }
     case 'paintedPanel':
-      return centeredNoise(byte, 7)
-        - (x % 32 === 0 || y % 32 === 0 ? 9 : 0)
-        - ((x + y * 3) % 47 === 0 ? 12 : 0);
+      return centeredNoise(byte, 3)
+        + Math.sin(x * Math.PI / 32) * Math.cos(y * Math.PI / 32) * 3;
   }
 }
 
@@ -268,10 +269,13 @@ export function createShipMaterials(
       })
   );
   const timberFloor = timber;
-  const crewFloor = timberFloor;
+  const crewFloor = timber.clone();
+  crewFloor.color.setHex(0xb7c2bb);
   const cargoFloor = timberFloor;
-  const wheelhouseFloor = timberFloor;
-  const storageFloor = timberFloor;
+  const wheelhouseFloor = timber.clone();
+  wheelhouseFloor.color.setHex(0xaabbb9);
+  const storageFloor = timber.clone();
+  storageFloor.color.setHex(0xc1b29c);
   const lifeboatFloor = createSurfaceMaterial(industrialFloor, {
     color: 0xcbd1cf,
     roughness: 0.9,
@@ -308,11 +312,10 @@ export function createShipMaterials(
         },
       )
     : undefined;
-  const plainPaintedSteel = roomWallMaterial ?? new MeshStandardMaterial({
+  const plainPaintedSteel = new MeshStandardMaterial({
       color: 0xcbd2cf,
       roughness: 0.9,
-      metalness: 0.24,
-      flatShading: true,
+      metalness: 0.08,
     });
   const plainTimber = assets
     ? createAssetMaterial(
@@ -343,18 +346,21 @@ export function createShipMaterials(
       roughness: 0.94,
       metalness: 0.12,
     });
-  const paintedSteel = new MeshStandardMaterial({
-      color: 0xd5dbd8,
-      roughness: 0.86,
-      metalness: 0.32,
-      flatShading: true,
-    });
-  const darkHull = paintedPanel;
-  const darkMetal = new MeshStandardMaterial({ color: 0x2f3435, roughness: 0.84, metalness: 0.55, flatShading: true });
-  const exposedMetal = new MeshStandardMaterial({ color: 0x81796c, roughness: 0.68, metalness: 0.62, flatShading: true });
+  const paintedSteel = createSurfaceMaterial(paintedPanelTextures, {
+    color: 0xb6c4bb, roughness: 0.68, metalness: 0.08,
+  });
+  const darkHull = createSurfaceMaterial(paintedPanelTextures, {
+    color: 0x3f565b, roughness: 0.78, metalness: 0.08,
+  });
+  const darkMetal = new MeshStandardMaterial({ color: 0x303a3b, roughness: 0.64, metalness: 0.65 });
+  const exposedMetal = new MeshStandardMaterial({ color: 0x9c9789, roughness: 0.42, metalness: 0.85 });
+  const rubber = new MeshStandardMaterial({ color: 0x202725, roughness: 0.96, metalness: 0 });
+  const lamp = new MeshStandardMaterial({
+    color: 0xf2dab0, emissive: 0xffcc88, emissiveIntensity: 1.4, roughness: 0.4,
+  });
   const rust = new MeshStandardMaterial({ color: 0x7a3d28, roughness: 0.95, metalness: 0.08, flatShading: true });
   const rope = new MeshStandardMaterial({ color: 0x3d3022, roughness: 1, metalness: 0, flatShading: true });
-  const glass = new MeshPhysicalMaterial({ color: 0x6d8790, roughness: 0.18, transmission: 0.15, transparent: true, opacity: 0.55, depthWrite: false });
+  const glass = new MeshPhysicalMaterial({ color: 0xb2cbcb, roughness: 0.24, metalness: 0, transmission: 0, transparent: true, opacity: 0.3, depthWrite: false, clearcoat: 0.6, clearcoatRoughness: 0.18 });
   const emergency = new MeshStandardMaterial({ color: 0x9c4f3f, emissive: 0x3d120d, emissiveIntensity: 0.35, roughness: 0.7 });
   const canvas = new MeshStandardMaterial({
     color: 0xb9cad0,
@@ -362,8 +368,12 @@ export function createShipMaterials(
     metalness: 0,
     side: DoubleSide,
   });
-  const upperHull = paintedPanel;
-  const waterline = paintedPanel;
+  const upperHull = createSurfaceMaterial(paintedPanelTextures, {
+    color: 0x718984, roughness: 0.72, metalness: 0.08,
+  });
+  const waterline = createSurfaceMaterial(paintedPanelTextures, {
+    color: 0x343e3d, roughness: 0.53, metalness: 0.04,
+  });
   const canvasEdge = new MeshStandardMaterial({
     color: 0x647b82,
     roughness: 0.98,
@@ -390,6 +400,8 @@ export function createShipMaterials(
     darkHull,
     darkMetal,
     exposedMetal,
+    rubber,
+    lamp,
     rust,
     rope,
     glass,
@@ -433,6 +445,8 @@ export function createShipMaterials(
     darkHull,
     darkMetal,
     exposedMetal,
+    rubber,
+    lamp,
     rust,
     rope,
     glass,

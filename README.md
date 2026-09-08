@@ -220,7 +220,7 @@ The ship alarm uses [Klaxon by InfamousLazure](https://freesound.org/people/Infa
 
 Carlitos uses seven clips split from [Cat Meows 7x by Kinoton](https://freesound.org/people/Kinoton/sounds/584895/) under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
 
-Dorothy's main cargo deck uses [Poly Haven — Dark Wooden Planks](https://polyhaven.com/a/dark_wooden_planks). All room floors use [Poly Haven — Blue Painted Planks](https://polyhaven.com/a/blue_painted_planks), interior and exterior room walls use [ambientCG — Painted Wood 006C](https://ambientcg.com/view?id=PaintedWood006C), and the exterior hull sides and waterline use [ambientCG — Painted Metal 006](https://ambientcg.com/view?id=PaintedMetal006). Windows, roofs, machinery, rails, ropes, safety markings, canvas, and small hardware retain distinct authored materials for readability.
+Dorothy's deck and tinted room floors use [Poly Haven — Dark Wooden Planks](https://polyhaven.com/a/dark_wooden_planks). Cabin walls and ceiling linings use [ambientCG — Painted Wood 006C](https://ambientcg.com/view?id=PaintedWood006C). The hull, waterline, roofs, and machinery use distinct authored painted metal materials. Rubber window seals, raised porthole frames, rounded trim, and door hardware add construction detail. Warm cabin lamps point downward. Wet patches have soft edges and a surface sheen. Pipe joints, exhaust clamps, pulley blocks, and bound canvas folds detail the machinery and rigging. Small static fittings share meshes by material.
 
 ## Commands
 

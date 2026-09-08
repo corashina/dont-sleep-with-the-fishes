@@ -5,7 +5,7 @@ import {
   boatSupplyTransform,
   type BoatSupplyGroupId,
 } from '../src/world/BoatStorage';
-import { LIFEBOAT_FLOOR_SURFACE_Y } from '../src/world/Lifeboat';
+import { LIFEBOAT_DISPLAY_SHELF_SURFACE_Y, LIFEBOAT_FLOOR_SURFACE_Y } from '../src/world/Lifeboat';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 
 describe('boat storage', () => {
@@ -13,7 +13,7 @@ describe('boat storage', () => {
     expect(BOAT_SUPPLY_GROUP_IDS).not.toContain('repairMaterial');
   });
 
-  it('fits six food models together on the floor without intersections', () => {
+  it.each(['cannedFood', 'baitTin'] as const)('fits eight %s models without intersections', (groupId) => {
     const storageBounds = (id: BoatSupplyGroupId, index: number) => {
       const transform = boatSupplyTransform(id, index);
       const model = ITEM_MODEL_SPECS[id].normalizedBounds;
@@ -24,23 +24,40 @@ describe('boat storage', () => {
           new Vector3().setScalar(transform.scale),
         ));
     };
-    const bounds = Array.from({ length: 6 }, (_, index) => storageBounds('cannedFood', index));
-    const neighbors = BOAT_SUPPLY_GROUP_IDS.filter((id) => id !== 'cannedFood');
+    const bounds = Array.from({ length: 8 }, (_, index) => storageBounds(groupId, index));
+    const neighbors = BOAT_SUPPLY_GROUP_IDS.filter((id) => id !== groupId);
+    const surfaceY = {
+      cannedFood: LIFEBOAT_FLOOR_SURFACE_Y,
+      baitTin: LIFEBOAT_DISPLAY_SHELF_SURFACE_Y,
+    }[groupId];
+    const modelBounds = ITEM_MODEL_SPECS[groupId].normalizedBounds;
+    const stackHeight = (modelBounds.max[1] - modelBounds.min[1]) * 0.5 + 0.01;
     const cluster = new Box3();
     for (let index = 0; index < bounds.length; index += 1) {
       const bound = bounds[index]!;
-      expect(bound.min.y).toBeCloseTo(LIFEBOAT_FLOOR_SURFACE_Y, 6);
+      const stacked = groupId === 'cannedFood' && index === 2;
+      expect(bound.min.y).toBeCloseTo(surfaceY + (stacked ? stackHeight : 0), 6);
       for (const other of bounds.slice(index + 1)) {
         expect(bound.intersectsBox(other)).toBe(false);
       }
       for (const id of neighbors) {
-        expect(bound.intersectsBox(storageBounds(id, 0)), `food ${index + 1} overlaps ${id}`)
-          .toBe(false);
+        const neighborCount = id === 'cannedFood' || id === 'baitTin' ? 8 : 1;
+        for (let slot = 0; slot < neighborCount; slot += 1) {
+          expect(bound.intersectsBox(storageBounds(id, slot)), `${groupId} ${index + 1} overlaps ${id}`)
+            .toBe(false);
+        }
       }
       cluster.union(bound);
     }
     const size = cluster.getSize(new Vector3());
-    expect(size.x).toBeLessThan(0.65);
-    expect(size.z).toBeLessThan(0.4);
+    expect(size.x).toBeLessThan(groupId === 'baitTin' ? 0.67 : 0.65);
+    expect(size.z).toBeLessThan(groupId === 'baitTin' ? 0.53 : 0.73);
+    if (groupId === 'baitTin') {
+      const tape = storageBounds('ductTape', 0);
+      expect(cluster.min.x - tape.max.x).toBeGreaterThan(0.08);
+      const addedBounds = bounds.slice(3).reduce((area, bound) => area.union(bound), new Box3());
+      expect(addedBounds.min.z).toBeGreaterThan(-1.82);
+      expect(addedBounds.max.z).toBeLessThan(-1.34);
+    }
   });
 });

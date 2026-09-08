@@ -19,6 +19,7 @@ import {
   type ShipStaySpec,
 } from './ShipLayoutTypes';
 import type { ShipMaterials } from './ShipMaterials';
+import { ShipDetailGeometry } from './ShipDetailGeometry';
 import { disposeResourceSets, runCleanupSteps } from './SceneResources';
 
 export interface ShipRiggingBuild {
@@ -54,8 +55,8 @@ function createFurledSailGeometry(
   spec: ShipSailSpec,
   mastClearance: number,
 ): BufferGeometry {
-  const radialSegments = 8;
-  const lengthSegments = 12;
+  const radialSegments = 12;
+  const lengthSegments = 40;
   const positions: number[] = [];
   const indices: number[] = [];
   const rollY = spec.footY + 0.32;
@@ -64,16 +65,17 @@ function createFurledSailGeometry(
   for (let lengthIndex = 0; lengthIndex <= lengthSegments; lengthIndex += 1) {
     const fraction = lengthIndex / lengthSegments;
     const taper = Math.sin(Math.PI * fraction);
-    const irregularity = Math.sin(lengthIndex * 2.37) * 0.025;
+    const irregularity = Math.sin(fraction * Math.PI * 18) * 0.018;
     const radius = 0.13 + taper * 0.13 + irregularity;
     const centerX = Math.sin(Math.PI * fraction) * spec.billow * 0.12
-      + Math.sin(lengthIndex * 1.71) * 0.018;
-    const centerY = rollY + Math.sin(lengthIndex * 1.19) * 0.018;
+      + Math.sin(fraction * 12) * 0.018;
+    const centerY = rollY + Math.sin(fraction * 16) * 0.018;
     for (let radialIndex = 0; radialIndex < radialSegments; radialIndex += 1) {
       const angle = radialIndex / radialSegments * Math.PI * 2;
+      const fold = Math.sin(angle * 3 + fraction * 14) * 0.022;
       positions.push(
-        centerX + Math.cos(angle) * radius,
-        centerY + Math.sin(angle) * radius,
+        centerX + Math.cos(angle) * (radius + fold),
+        centerY + Math.sin(angle) * (radius + fold),
         startZ + (spec.clewZ - startZ) * fraction,
       );
     }
@@ -222,30 +224,30 @@ function addFurledSailDetails(
   materials: ShipMaterials,
   sailSpec: ShipSailSpec,
   mastClearance: number,
+  ownedGeometries: Set<BufferGeometry>,
 ): void {
   const rollY = sailSpec.footY + 0.32;
   const startZ = Math.sign(sailSpec.clewZ) * mastClearance;
+  const bindings = new ShipDetailGeometry(ownedGeometries);
   ([0.08, 0.28, 0.5, 0.72, 0.92] as const).forEach((fraction, index) => {
     const z = startZ + (sailSpec.clewZ - startZ) * fraction;
-    addCylinder(
-      root,
-      cylinder,
-      materials.rope,
-      `sail-furl-tie:${sailSpec.id}:${index + 1}`,
-      [0, rollY, z],
-      [0.29, 0.075, 0.29],
-      Math.PI / 2,
-    );
+    const centerX = Math.sin(Math.PI * fraction) * sailSpec.billow * 0.12 + Math.sin(fraction * 12) * 0.018;
+    const centerY = rollY + Math.sin(fraction * 16) * 0.018;
+    const radius = 0.15 + Math.sin(Math.PI * fraction) * 0.13
+      + Math.sin(fraction * Math.PI * 18) * 0.018;
+    bindings.ring(materials.rope, [centerX, centerY, z], radius, 0.016);
+    bindings.ring(materials.rope, [centerX, centerY - radius, z + 0.015], 0.035, 0.014);
     addRodBetween(
       root,
       cylinder,
       materials.rope,
       `sail-furl-tail:${sailSpec.id}:${index + 1}`,
-      [0.02, rollY - 0.18, z],
-      [0.08, rollY - 0.42 - index % 2 * 0.06, z + Math.sign(sailSpec.clewZ) * 0.05],
+      [centerX, centerY - radius, z],
+      [centerX + 0.06, centerY - radius - 0.2 - index % 2 * 0.06, z + Math.sign(sailSpec.clewZ) * 0.05],
       0.012,
     );
   });
+  bindings.finish(root, 'canvas-bindings');
 }
 
 function addCylinder(
@@ -354,6 +356,28 @@ export function createShipRigging(
       [0, 0.09, 0],
       [mastSpec.baseDiameter * 1.25, 0.18, mastSpec.baseDiameter * 1.25],
     );
+    const fittings = new ShipDetailGeometry(ownedGeometries);
+    for (let index = 0; index < 8; index += 1) {
+      const angle = index / 8 * Math.PI * 2;
+      const radius = mastSpec.baseDiameter * 0.55;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      fittings.rod(materials.exposedMetal, [x, 0.17, z], [x, 0.23, z], 0.045);
+    }
+    for (const stay of mastSpec.stays) {
+      const anchor = new Vector3(...stay.anchor);
+      const along = new Vector3(0, mastSpec.height - 0.18, 0).sub(anchor).normalize();
+      const lower = anchor.clone().addScaledVector(along, 0.15).toArray();
+      const upper = anchor.clone().addScaledVector(along, 0.65).toArray();
+      fittings.rod(materials.exposedMetal, lower, upper, 0.065);
+      fittings.ring(materials.darkMetal, lower, 0.1, 0.028);
+      for (const offset of [-0.11, 0.11]) {
+        fittings.rod(materials.darkMetal,
+          [anchor.x + offset, anchor.y + 0.07, anchor.z],
+          [anchor.x + offset, anchor.y + 0.13, anchor.z], 0.035);
+      }
+    }
+    fittings.finish(mast, 'mast-fittings');
     mastSpec.stays.forEach((stay) => {
       addStay(mast, cylinder, materials, mastSpec, stay);
       addStayAttachment(mast, attachmentBox, materials, mastSpec.id, stay);
@@ -391,26 +415,26 @@ export function createShipRigging(
           materials,
           sailSpec,
           sailMastClearance,
+          ownedGeometries,
         );
       } else {
         addSailEdgeDetails(sail, cylinder, materials, sailSpec, ownedGeometries);
       }
 
-      addCylinder(
-        mast,
-        cylinder,
-        materials.exposedMetal,
-        `pulley:${mastSpec.id}:${sailSpec.id}`,
-        [
-          Math.sin(sailSpec.rotationY) * Math.sign(sailSpec.clewZ) * 0.16,
-          SHIP_SAIL_CLOTH_MIN_Y + 0.16,
-          sailMountOffset
-            + Math.cos(sailSpec.rotationY) * Math.sign(sailSpec.clewZ) * 0.16,
-        ],
-        [0.18, 0.12, 0.18],
-        0,
-        Math.PI / 2,
-      );
+      const pulley = new ShipDetailGeometry(ownedGeometries);
+      const pulleyY = SHIP_SAIL_CLOTH_MIN_Y + 0.16;
+      const pulleyZ = Math.sign(sailSpec.clewZ) * (sailMastClearance + 0.14);
+      for (const x of [-0.065, 0.065]) {
+        pulley.box(materials.plainTimber, [0.065, 0.4, 0.27], [x, pulleyY, pulleyZ], 0, 0.04);
+      }
+      pulley.rod(materials.exposedMetal, [-0.12, pulleyY, pulleyZ], [0.12, pulleyY, pulleyZ], 0.045);
+      pulley.rod(materials.darkMetal, [-0.04, pulleyY, pulleyZ], [0.04, pulleyY, pulleyZ], 0.12);
+      pulley.tube(materials.rope, [
+        [0, sailSpec.footY + 0.32, pulleyZ], [0, pulleyY, pulleyZ - 0.12],
+        [0, pulleyY - 0.15, pulleyZ], [0, pulleyY, pulleyZ + 0.12],
+        [0, sailSpec.footY + 0.32, pulleyZ + 0.3],
+      ], 0.018);
+      pulley.finish(sail, `pulley:${mastSpec.id}:${sailSpec.id}`);
 
       sails.push(sail);
       neutralRotations.push(sail.rotation.z);

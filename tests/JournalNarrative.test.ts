@@ -58,7 +58,7 @@ describe('journal narrative', () => {
     const better = { ...before, hunger: 4, sickness: 1, unhappiness: 2, energy: 3 };
     const copy = (after: typeof before) => formatJournalEntry(createJournalEntry(
       2, 'calm', [createJournalCarlitosDawnRecord(before, after)], null, { kind: 'quiet' },
-    )).daytime;
+    )).nighttime;
     const bad = copy(worse);
     const good = copy(better);
     for (const text of [bad, good]) expect(text).not.toMatch(noStats);
@@ -74,11 +74,11 @@ describe('journal narrative', () => {
   it('does not invent changes when Carlitos stays the same or has died', () => {
     const before = createJournalCarlitosDawnState(createCarlitosState());
     const unchanged = formatJournalEntry(createJournalEntry(2, 'calm', [createJournalCarlitosDawnRecord(before, before)], null, { kind: 'quiet' }));
-    expect(unchanged.daytime).not.toContain('Carlitos');
+    expect(unchanged.nighttime).not.toContain('Carlitos');
     const dead = { ...before, alive: false, hunger: 0, energy: 0, deathCause: 'starvation' as const };
     const died = formatJournalEntry(createJournalEntry(2, 'calm', [createJournalCarlitosDawnRecord(before, dead)], null, { kind: 'quiet' }));
-    expect(died.daytime).toContain('Carlitos died');
-    expect(died.daytime).not.toMatch(/hungrier|strength back|rest/);
+    expect(died.nighttime).toContain('Carlitos died');
+    expect(died.nighttime).not.toMatch(/hungrier|strength back|rest/);
   });
 
   it('explains a map patch and the damage it suffers in Polish', () => {
@@ -162,6 +162,7 @@ describe('journal narrative', () => {
       { type: 'spyglass', instanceId: 'spyglass-1' }, { type: 'flashlight', instanceId: 'flashlight-1' },
     ], { seed: 1, initialEventId: 'handyman', random: sequenceRandom([0]) });
     session.resolveEvent({ kind: 'item', choiceId: 'spyglass', instanceId: 'spyglass-1' });
+    expect(session.beginDawn().accepted).toBe(true);
     const entry = session.snapshot().journalEntries[0]!;
     const copy = formatJournalEntry(entry).nighttime;
     expect(copy).toContain('took food instead');

@@ -1,5 +1,6 @@
 import { cloneActionOutcome, domainMessageId, domainText, resolveOutcomeText, withOutcomeText, type OutcomeText } from './outcomeText';
 import { domainMessage as t } from '../i18n/domainMessages';
+import { presentationWeatherForEvent } from '../weather/presentationWeather';
 import {
   ITEM_DEFINITIONS,
   type ItemId,
@@ -27,6 +28,7 @@ import { fishingSettlement } from './fishingSettlementRules';
 import { SurvivalInventoryState } from './inventory';
 import {
   cloneJournalActions,
+  cloneJournalEntry,
   cloneJournalNight,
   createJournalCarlitosCareRecord,
   createJournalCarlitosDawnRecord,
@@ -504,13 +506,7 @@ export class SurvivalSession {
       ? null
       : cloneJournalNight(checkpoint.pendingJournalNighttime);
     this.pendingJournalActions = [...cloneJournalActions(checkpoint.pendingJournalActions)];
-    for (const entry of checkpoint.journalEntries) this.journalEntries.push(createJournalEntry(
-      entry.day,
-      entry.weather,
-      entry.actions,
-      entry.daytime,
-      entry.nighttime,
-    ));
+    for (const entry of checkpoint.journalEntries) this.journalEntries.push(cloneJournalEntry(entry));
   }
 
   private restorePendingJournalDaytime(
@@ -668,6 +664,14 @@ export class SurvivalSession {
       : this.inventory.repair(instanceId);
     if (changed) this.changed();
     return changed;
+  }
+
+  setResourceQuantityForLab(resource: 'food' | 'bait', quantity: number): boolean {
+    if (this.activeFishing !== null || this.isTerminal()) return false;
+    if (!Number.isSafeInteger(quantity) || quantity < 1 || this[resource] === quantity) return false;
+    this[resource] = quantity;
+    this.changed();
+    return true;
   }
 
   companionEventActionAvailability(
@@ -872,6 +876,7 @@ export class SurvivalSession {
     }
 
     this.expirePendingDriftingLoot();
+    this.finalizeJournalDay();
 
     this.radioSignalAvailable = false;
 
@@ -1219,6 +1224,7 @@ export class SurvivalSession {
   }
 
   private resetForDawn(): number {
+    this.finalizeJournalNight();
     const hullWear = nightlyHullWearDamage(this.day);
     this.day += 1;
     this.radioSignalAvailable = false;
@@ -1626,18 +1632,30 @@ export class SurvivalSession {
     }
     this.pendingJournalNighttime = createJournalNightEventRecord(record);
     this.finalizeJournalDay();
+    if (this.isTerminal()) this.finalizeJournalNight();
   }
 
   private finalizeJournalDay(): void {
-    if (this.pendingJournalNighttime === null) return;
     if (this.journalEntries.some((entry) => entry.day === this.day)) return;
+    const event = this.pendingJournalDaytime;
     this.journalEntries.push(createJournalEntry(
       this.day,
-      this.weather,
+      event !== null && !('kind' in event) ? presentationWeatherForEvent(event.eventId) ?? 'calm' : 'calm',
       this.pendingJournalActions,
       this.pendingJournalDaytime,
-      this.pendingJournalNighttime,
+      { kind: 'pending' },
     ));
+  }
+
+  private finalizeJournalNight(): void {
+    if (this.pendingJournalNighttime === null) return;
+    const index = this.journalEntries.findIndex((entry) => entry.day === this.day);
+    if (index < 0) return;
+    const entry = this.journalEntries[index]!;
+    if (entry.nighttime.kind !== 'pending') return;
+    this.journalEntries[index] = createJournalEntry(
+      entry.day, entry.weather, entry.actions, entry.daytime, this.pendingJournalNighttime,
+    );
   }
 
   private beginQuietNight(): ActionOutcome {

@@ -7,6 +7,7 @@ export interface LifeboatMaterials {
   readonly cutWood: MeshStandardMaterial;
   readonly rescueTrim: MeshStandardMaterial;
   readonly rope: MeshStandardMaterial;
+  readonly iron: MeshStandardMaterial;
 }
 
 export function createLifeboatMaterials(assets: LifeboatAssets): LifeboatMaterials {
@@ -14,37 +15,41 @@ export function createLifeboatMaterials(assets: LifeboatAssets): LifeboatMateria
     map: assets.color,
     roughnessMap: assets.roughness,
     normalMap: assets.normal,
-    normalScale: new Vector2(0.28, 0.28),
+    normalScale: new Vector2(0.42, 0.42),
     metalness: 0,
-    flatShading: true,
+    vertexColors: true,
   } as const;
   return {
     timber: new MeshStandardMaterial({
       ...textured,
-      color: 0x745c47,
-      roughness: 0.92,
+      color: 0xd0b79a,
+      roughness: 0.84,
     }),
     darkTimber: new MeshStandardMaterial({
       ...textured,
-      color: 0x4b382c,
-      roughness: 0.96,
+      color: 0x827361,
+      roughness: 0.9,
     }),
     cutWood: new MeshStandardMaterial({
       ...textured,
-      color: 0x8a6b4f,
+      color: 0xe0c9a4,
       roughness: 0.88,
     }),
     rescueTrim: new MeshStandardMaterial({
-      color: 0x8f4f32,
+      ...textured,
+      color: 0xc88a64,
       roughness: 0.9,
       metalness: 0.02,
-      flatShading: true,
     }),
     rope: new MeshStandardMaterial({
-      color: 0x4a3826,
+      color: 0x8c7958,
       roughness: 1,
       metalness: 0,
-      flatShading: true,
+    }),
+    iron: new MeshStandardMaterial({
+      color: 0x514e46,
+      roughness: 0.74,
+      metalness: 0.65,
     }),
   };
 }

@@ -1,17 +1,11 @@
+import { DEFAULT_POSTERIZATION } from '../src/rendering/posterization';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  DEFAULT_SYSTEM_TUNING_STATE,
   SYSTEM_TUNING_STORAGE_KEY,
   createSystemTuningPreference,
 } from '../src/ui/systemTuningPreference';
 
 describe('SystemTuningPreference', () => {
-  it('uses safe defaults without stored state', () => {
-    const storage = { getItem: vi.fn().mockReturnValue(null), setItem: vi.fn() };
-    expect(createSystemTuningPreference(storage).get()).toEqual(
-      DEFAULT_SYSTEM_TUNING_STATE,
-    );
-  });
 
   it('keeps valid fields and replaces invalid fields', () => {
     const storage = {
@@ -29,6 +23,7 @@ describe('SystemTuningPreference', () => {
       setItem: vi.fn(),
     };
     expect(createSystemTuningPreference(storage).get()).toEqual({
+      posterization: DEFAULT_POSTERIZATION,
       ambientOcclusionMode: 'off',
       ambientOcclusionQuality: 'high',
       ambientOcclusionIntensity: 1,

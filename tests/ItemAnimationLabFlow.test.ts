@@ -70,6 +70,57 @@ function conditionLab(type: ItemId = 'bucket', condition: 'usable' | 'broken' | 
   return { flow, session, instanceId, world, ui, renderSnapshot, lifecycleCurrent };
 }
 
+describe('Item Animation Lab quantities', () => {
+  it.each([
+    ['cannedFood', 'food', 'bait'],
+    ['baitTin', 'bait', 'food'],
+  ] as const)('changes %s quantity and keeps animations available', async (type, resource, otherResource) => {
+    const { flow, session, instanceId, ui, world, renderSnapshot } = conditionLab(type);
+    const before = session.snapshot();
+    await flow.play(instanceId);
+    flow.choose('quantity-less');
+    expect(session.snapshot()).toBe(before);
+    expect(ui.showItemAnimationLabChoices.mock.lastCall![0]).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'quantity-less', unavailableReason: 'Keep at least one item.' }),
+    ]));
+
+    flow.choose('quantity-more');
+    flow.choose('quantity-more');
+    expect(session.snapshot()[resource]).toBe(3);
+    expect(session.snapshot()[otherResource]).toBe(before[otherResource]);
+    expect(session.snapshot().inventory).toEqual(before.inventory);
+    expect(renderSnapshot).toHaveBeenCalledTimes(2);
+    expect(world.playEventItemUse).not.toHaveBeenCalled();
+    expect(ui.showItemAnimationLabChoices.mock.lastCall![0]).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'quantity-less', label: 'Quantity − (3 → 2)', unavailableReason: null }),
+    ]));
+
+    flow.choose('quantity-less');
+    expect(session.snapshot()[resource]).toBe(2);
+    flow.choose('throw-target');
+    expect(world.playEventItemUse).toHaveBeenCalledWith(
+      type === 'cannedFood' ? 'death-stare' : 'swarm-of-sharks', resource, instanceId,
+    );
+    flow.choose('quantity-more');
+    expect(session.snapshot()[resource]).toBe(2);
+  });
+
+  it.each([0, -1, 1.5, NaN, Infinity])('rejects invalid quantity %s', (quantity) => {
+    const { session } = conditionLab('cannedFood');
+    const before = session.snapshot();
+    expect(session.setResourceQuantityForLab('food', quantity)).toBe(false);
+    expect(session.snapshot()).toBe(before);
+  });
+
+  it('ignores quantity choices for other items', async () => {
+    const { flow, session, instanceId } = conditionLab('bucket');
+    const before = session.snapshot();
+    await flow.play(instanceId);
+    flow.choose('quantity-more');
+    expect(session.snapshot()).toBe(before);
+  });
+});
+
 describe('Item Animation Lab conditions', () => {
   it('translates retained animation choices without replaying or changing the item', async () => {
     const { flow, instanceId, ui, session, world } = conditionLab('bucket', 'broken');
@@ -266,7 +317,7 @@ describe('ItemAnimationLabFlow', () => {
     const clearRadioSignal = vi.fn();
     const playFishing = vi.fn(() => Promise.resolve());
     const flow = new ItemAnimationLabFlow({
-      session: { snapshot: () => snapshot, setItemConditionForLab: vi.fn(() => false) },
+      session: { snapshot: () => snapshot, setItemConditionForLab: vi.fn(() => false), setResourceQuantityForLab: vi.fn(() => false) },
       renderSnapshot: () => snapshot,
       world: {
         stageEvent,
