@@ -18,6 +18,7 @@ import {
 import type { ShipAssets } from './ShipAssets';
 import { disposeResourceSets } from './SceneResources';
 import { applyShipWetSurface } from './ShipWetSurface';
+import { applyShipRoomWear } from './ShipRoomWear';
 
 export interface ShipMaterials {
   timber: MeshStandardMaterial;
@@ -393,6 +394,9 @@ export function createShipMaterials(
   applyShipWetSurface(deckSteel, 0.8);
   applyShipWetSurface(upperHull, 0.8);
   applyShipWetSurface(waterline, 1);
+  applyShipRoomWear(paintedPanel, false);
+  applyShipRoomWear(paintedSteel, true);
+  applyShipRoomWear(plainPaintedSteel, true);
 
   const ownedMaterials = new Set<Material>([
     timber,
