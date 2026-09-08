@@ -208,19 +208,6 @@ export class OceanRenderer {
     this.uniforms.uVortexStrength.value = finiteOrZero(state.strength);
   }
 
-  vortexStateForTest(): VortexWaveState {
-    const center = this.uniforms.uVortexCenter.value;
-    return {
-      centerX: center.x,
-      centerZ: center.y,
-      radius: this.uniforms.uVortexRadius.value,
-      depression: this.uniforms.uVortexDepression.value,
-      tangentStrength: this.uniforms.uVortexTangentStrength.value,
-      phase: this.uniforms.uVortexPhase.value,
-      strength: this.uniforms.uVortexStrength.value,
-    };
-  }
-
   setExclusions(regions: readonly WaterExclusionRegion[]): void {
     const worldToLocal = this.uniforms.uExclusionWorldToLocal.value;
     const bounds = this.uniforms.uExclusionBounds.value;

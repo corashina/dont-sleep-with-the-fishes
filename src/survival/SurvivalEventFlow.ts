@@ -593,10 +593,6 @@ export class SurvivalEventFlow {
     return this.presentation === 'idle';
   }
 
-  isChoosing(): boolean {
-    return this.presentation === 'choosing';
-  }
-
   isStableChoice(): boolean {
     return this.presentation === 'choosing' && this.choiceCheckpointReady;
   }
@@ -844,7 +840,7 @@ export class SurvivalEventFlow {
         presentation,
       ) ?? Promise.resolve(),
     ]);
-    if (this.isCurrent(generation, operation)) this.dependencies.audio.finishEventReaction(eventId);
+    if (this.isCurrent(generation, operation)) this.dependencies.audio.finishEventReaction();
   }
 
   private focusedChoicePresentation(
@@ -1684,7 +1680,7 @@ export class SurvivalEventFlow {
       ) ?? Promise.resolve(),
     ]);
     if (!this.isCurrent(generation, operation)) return false;
-    this.dependencies.audio.finishEventReaction(eventId);
+    this.dependencies.audio.finishEventReaction();
     return this.resumeAfterVisibility(generation, operation);
   }
 
@@ -1901,7 +1897,7 @@ export class SurvivalEventFlow {
     this.beginEventResolution(context);
     await this.playEventResolutionReaction(context);
     if (!this.isCurrent(generation, operation)) return;
-    this.dependencies.audio.finishEventReaction(eventId);
+    this.dependencies.audio.finishEventReaction();
     if (!await this.resumeAfterVisibility(generation, operation)) return;
     const terminal = this.dependencies.session.snapshot();
     if (focusedResult && !isTerminal(terminal.state)) {

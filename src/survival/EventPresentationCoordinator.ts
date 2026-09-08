@@ -35,10 +35,6 @@ export class EventPresentationCoordinator {
     }
   }
 
-  handles(eventId: string): eventId is DedicatedEventId {
-    return !this.disposed && this.presentations.has(eventId as DedicatedEventId);
-  }
-
   stage(context: EventSceneContext): boolean {
     if (this.disposed) return false;
     const presentation = this.presentations.get(context.eventId);

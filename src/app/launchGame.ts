@@ -6,6 +6,7 @@ import {
 import { ITEM_DEFINITIONS } from '../game/ItemState';
 import {
   createSystemScreen,
+  updateSystemScreenProgress,
   type SystemScreenDescription,
 } from '../ui/SystemScreen';
 import {
@@ -263,13 +264,18 @@ export function launchGame(
   const completion = (async (): Promise<Game | null> => {
     try {
       const audio = await dependencies.loadAudio();
-      resources = new PhaseResources(dependencies, audio, physicsMode);
+      resources = new PhaseResources(dependencies, audio, physicsMode, (completed, total) => {
+        if (invalid() || !loading.isConnected) return;
+        // Count audio initialization and game readiness alongside the phase resources.
+        updateSystemScreenProgress(loading, completed + 1, total + 2);
+      });
       if (invalid()) { disposeCurrentOwnership(); return null; }
       game = dependencies.createGame(mount, resources, reportRuntimeError, browserPlaytest);
       if (invalid()) { disposeCurrentOwnership(); return null; }
       game.start();
       await game.ready;
       if (invalid()) { disposeCurrentOwnership(); return null; }
+      if (game !== null) updateSystemScreenProgress(loading, 1, 1);
       return game as Game | null;
     } catch (error) {
       try { disposeCurrentOwnership(); } catch { /* Preserve the launch error. */ }

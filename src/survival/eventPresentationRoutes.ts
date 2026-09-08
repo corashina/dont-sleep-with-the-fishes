@@ -58,8 +58,6 @@ function idsForRoute<Route extends EventPresentationRoute>(
     .filter(([, value]) => value === route)
     .map(([id]) => id as EventIdForRoute<Route>));
 }
-
-export const DEDICATED_EVENT_IDS = idsForRoute('dedicated');
 export const FOCUSED_EVENT_IDS = idsForRoute('focused');
 export const FEATURED_EVENT_IDS = idsForRoute('featured');
 

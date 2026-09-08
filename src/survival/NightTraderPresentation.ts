@@ -152,7 +152,6 @@ export class NightTraderPresentation implements FocusedEventPresentation {
   private paymentActor: Group | null = null;
   private rewardActor: Group | null = null;
   private paymentInstanceId: ItemInstanceId | null = null;
-  private activeChoiceId: string | null = null;
   private usingSupplyPayment = false;
   private paymentVisible = false;
   private rewardVisible = false;
@@ -267,7 +266,6 @@ export class NightTraderPresentation implements FocusedEventPresentation {
 
   playChoice(choice: EventChoicePresentation): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    this.activeChoiceId = choice.choiceId;
     if (choice.choiceId === 'sleep') {
       this.root.userData.state = 'refusing';
       return this.startAnimation('choice-refuse', REFUSE_CHOICE_DURATION);
@@ -289,7 +287,6 @@ export class NightTraderPresentation implements FocusedEventPresentation {
       throw new Error(`Night Trader received result for ${result.eventId}.`);
     }
     void outcome;
-    this.activeChoiceId = result.choiceId;
     switch (result.resultId) {
       case 'trader-reward': {
         const itemId = TRADER_REWARDS[result.choiceId];
@@ -693,7 +690,6 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.paymentActor = null;
     this.rewardActor = null;
     this.paymentInstanceId = null;
-    this.activeChoiceId = null;
     this.usingSupplyPayment = false;
     this.paymentVisible = false;
     this.rewardVisible = false;

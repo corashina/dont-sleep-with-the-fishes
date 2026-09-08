@@ -255,21 +255,6 @@ function finishObjectProjectionInto(
   );
 }
 
-export function projectObjectScreenBounds(
-  root: Object3D,
-  camera: PerspectiveCamera,
-  viewportWidth: number,
-  viewportHeight: number,
-): ProjectedScreenBounds {
-  return projectObjectScreenBoundsInto(
-    hiddenBounds(),
-    root,
-    camera,
-    viewportWidth,
-    viewportHeight,
-  );
-}
-
 export function projectObjectScreenBoundsInto(
   output: ProjectedScreenBounds,
   root: Object3D,
@@ -320,23 +305,6 @@ function isVisibleWithinRoot(object: Object3D, root: Object3D): boolean {
     current = current.parent;
   }
   return false;
-}
-
-export function projectCachedObjectScreenBounds(
-  root: Object3D,
-  cache: ObjectScreenBoundsCache | null,
-  camera: PerspectiveCamera,
-  viewportWidth: number,
-  viewportHeight: number,
-): ProjectedScreenBounds {
-  return projectCachedObjectScreenBoundsInto(
-    hiddenBounds(),
-    root,
-    cache,
-    camera,
-    viewportWidth,
-    viewportHeight,
-  );
 }
 
 export function projectCachedObjectScreenBoundsInto(

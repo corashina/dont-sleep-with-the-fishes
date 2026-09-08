@@ -1,4 +1,4 @@
-import { Group, type Object3D } from 'three';
+import { type Object3D } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import { runCleanupSteps } from '../world/SceneResources';
 import type {

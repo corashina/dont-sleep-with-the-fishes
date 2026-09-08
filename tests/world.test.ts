@@ -78,30 +78,6 @@ const expectNumericRowsCloseTo = (
   });
 };
 
-describe('volumetric scavenging clouds', () => {
-
-  it('keeps flat clouds when cloud creation fails', () => {
-    const scene = new Scene();
-    const environment = new Environment(
-      scene,
-      createTestMoonTexture(),
-      'low',
-      () => null,
-    );
-
-    try {
-      environment.setVolumetricCloudsEnabled(true);
-      environment.setVisualQuality('high');
-      expect(environment.volumetricCloudsAvailable()).toBe(false);
-      environment.update(1, 1, new Vector3());
-      const sky = environment as unknown as { sky: { material: ShaderMaterial } };
-      expect(sky.sky.material.uniforms.uCloudLayerStrength!.value).toBe(1);
-    } finally {
-      environment.dispose();
-    }
-  });
-});
-
 interface RenderResources {
   geometries: Set<BufferGeometry>;
   materials: Set<Material>;

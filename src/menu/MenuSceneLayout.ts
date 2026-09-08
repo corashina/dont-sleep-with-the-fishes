@@ -282,21 +282,3 @@ export function menuVisibleCenterLimit(y: number, z: number, halfX: number): num
     cameraDepth * CAMERA_HORIZONTAL_SCALE - halfX - MENU_VIEWPORT_EDGE_CLEARANCE,
   );
 }
-
-export function findMenuPlacementOverlaps(
-  placements: readonly MenuGroundFootprint[],
-): readonly (readonly [string, string])[] {
-  const overlaps: Array<readonly [string, string]> = [];
-  for (let first = 0; first < placements.length; first += 1) {
-    for (let second = first + 1; second < placements.length; second += 1) {
-      const a = placements[first]!;
-      const b = placements[second]!;
-      const separatedX = Math.abs(a.position[0] - b.position[0])
-        >= a.halfSize[0] + b.halfSize[0];
-      const separatedZ = Math.abs(a.position[2] - b.position[2])
-        >= a.halfSize[1] + b.halfSize[1];
-      if (!separatedX && !separatedZ) overlaps.push([a.id, b.id]);
-    }
-  }
-  return overlaps;
-}

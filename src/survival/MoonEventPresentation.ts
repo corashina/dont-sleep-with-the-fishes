@@ -1,6 +1,6 @@
 import type { Object3D, PerspectiveCamera } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
-import type { MoonFacePresentation, Skybox } from '../world/Skybox';
+import type { Skybox } from '../world/Skybox';
 import { runCleanupSteps } from '../world/SceneResources';
 import type { BoatCameraController } from './BoatCameraController';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';

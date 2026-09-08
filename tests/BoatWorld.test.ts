@@ -224,7 +224,7 @@ async function createTestFeaturedModels(
   ids: Parameters<typeof SurvivalEventModelLibrary.load>[0],
 ): Promise<SurvivalEventModelLibrary> {
   return SurvivalEventModelLibrary.load(ids, {
-    load: async (url) => {
+    load: async () => {
       const root = new Group();
       root.add(new Mesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial()));
       return root;
@@ -1030,7 +1030,7 @@ describe('BoatWorld helpers', () => {
     let time = 0;
 
     try {
-      for (const [context, eventId, choiceId, itemId, routedDuration] of cases) {
+      for (const [, eventId, choiceId, itemId, routedDuration] of cases) {
         const item = savedItems.find(({ type }) => type === itemId)!;
         world.stageEvent(eventId);
         const borrowCount = borrowActor.mock.results.length;

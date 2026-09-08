@@ -10,7 +10,6 @@ import {
 import type { SceneRenderer, SurvivalVisualState } from '../rendering/SceneRenderer';
 import {
   createVisualQualityPreference,
-  type VisualQuality,
 } from '../rendering/visualQuality';
 import {
   createWaterQualityPreference,
@@ -141,6 +140,7 @@ function createTestEventBundleManager(): SurvivalPhaseBundleManager {
 const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
 const OUTLINED_DAY_ACTIONS = [
   'eat', 'fish', 'openChest', 'repair', 'dive', 'repairItem', 'answerRadio', 'useEnergyBar', 'treat',
+  'endDay',
 ] as const;
 
 function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' {
@@ -324,10 +324,6 @@ export class SurvivalPhase implements GamePhase {
       context.lifeboatAssets,
       undefined,
       context.waterQuality?.get() ?? 'low',
-      undefined,
-      undefined,
-      {},
-      context.visualQuality.get(),
     );
     this.initialize(
       context,
@@ -572,20 +568,6 @@ export class SurvivalPhase implements GamePhase {
   setWaterQuality(value: WaterQuality): void {
     if (this.disposed) return;
     this.world.setWaterQuality?.(value);
-  }
-
-  setVisualQuality(value: VisualQuality): void {
-    if (this.disposed) return;
-    this.world.setVisualQuality?.(value);
-  }
-
-  setVolumetricCloudsEnabled(enabled: boolean): void {
-    if (this.disposed) return;
-    this.world.setVolumetricCloudsEnabled?.(enabled);
-  }
-
-  getVolumetricCloudsAvailable(): boolean {
-    return !this.disposed && (this.world.volumetricCloudsAvailable?.() ?? false);
   }
 
   getPresentationWeather(): PresentationWeatherId {

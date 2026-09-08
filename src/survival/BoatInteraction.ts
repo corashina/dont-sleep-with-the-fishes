@@ -1,12 +1,9 @@
-import { Box3, type Object3D, type PerspectiveCamera, Vector3 } from 'three';
+import type { Object3D, PerspectiveCamera } from 'three';
 import type { ItemId } from '../game/ItemState';
 import {
   createObjectScreenBoundsCache,
-  projectCachedObjectScreenBounds,
   projectCachedObjectScreenBoundsInto,
-  projectObjectScreenBounds,
   projectObjectScreenBoundsInto,
-  projectScreenBounds,
   type ObjectScreenBoundsCache,
   type ProjectedScreenBounds,
 } from '../rendering/projectScreenBounds';
@@ -49,24 +46,6 @@ export interface BoatInteractionAnchor {
   readonly hitArea?: BoatInteractionHitArea;
 }
 
-export function projectBoatBounds(
-  bounds: Box3,
-  camera: PerspectiveCamera,
-  viewportWidth: number,
-  viewportHeight: number,
-): ProjectedBoatBounds {
-  return projectScreenBounds(bounds, camera, viewportWidth, viewportHeight);
-}
-
-export function projectBoatObjectBounds(
-  root: Object3D,
-  camera: PerspectiveCamera,
-  viewportWidth: number,
-  viewportHeight: number,
-): ProjectedBoatBounds {
-  return projectObjectScreenBounds(root, camera, viewportWidth, viewportHeight);
-}
-
 export function projectBoatObjectBoundsInto(
   output: ProjectedBoatBounds,
   root: Object3D,
@@ -89,22 +68,6 @@ export function createBoatObjectBoundsCache(
   return createObjectScreenBoundsCache(root);
 }
 
-export function projectCachedBoatObjectBounds(
-  root: Object3D,
-  cache: BoatObjectBoundsCache | null,
-  camera: PerspectiveCamera,
-  viewportWidth: number,
-  viewportHeight: number,
-): ProjectedBoatBounds {
-  return projectCachedObjectScreenBounds(
-    root,
-    cache,
-    camera,
-    viewportWidth,
-    viewportHeight,
-  );
-}
-
 export function projectCachedBoatObjectBoundsInto(
   output: ProjectedBoatBounds,
   root: Object3D,
@@ -121,22 +84,4 @@ export function projectCachedBoatObjectBoundsInto(
     viewportWidth,
     viewportHeight,
   );
-}
-
-export function projectBoatAnchor(
-  worldPosition: Vector3,
-  camera: PerspectiveCamera,
-  width: number,
-  height: number,
-): Pick<BoatInteractionAnchor, 'x' | 'y' | 'visible'> {
-  camera.updateWorldMatrix(true, false);
-  const cameraSpace = worldPosition.clone().applyMatrix4(camera.matrixWorldInverse);
-  const projected = worldPosition.clone().project(camera);
-  return {
-    x: (projected.x * 0.5 + 0.5) * width,
-    y: (-projected.y * 0.5 + 0.5) * height,
-    visible: cameraSpace.z < 0
-      && Math.abs(projected.x) <= 1
-      && Math.abs(projected.y) <= 1,
-  };
 }

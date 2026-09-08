@@ -1,7 +1,6 @@
 import {
   BufferGeometry,
   ConeGeometry,
-  CylinderGeometry,
   Group,
   Material,
   Mesh,

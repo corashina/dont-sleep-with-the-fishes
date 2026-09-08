@@ -272,13 +272,13 @@ function addFramesAndBenches(target: Group, materials: LifeboatMaterials): void 
     mapLifeboatWoodGrain(seatGeometry, 'x', 0.48, 0.268);
     const seat = new Mesh(
       seatGeometry,
-      materials.timber,
+      materials.trimTimber,
     );
     seat.name = seatName;
     seat.position.y = 0.16;
     const frontRail = new Mesh(
       new BoxGeometry(halfWidth * 1.8, 0.12, 0.09),
-      materials.darkTimber,
+      materials.trimTimber,
     );
     frontRail.position.set(0, 0.03, -0.18);
     mapLifeboatWoodGrain(frontRail.geometry, 'x', 0.09, 0.018);
@@ -289,9 +289,14 @@ function addFramesAndBenches(target: Group, materials: LifeboatMaterials): void 
     for (const sign of [-1, 1]) {
       const support = new Mesh(
         supportGeometry,
-        materials.darkTimber,
+        materials.trimTimber,
       );
       support.position.set(sign * (halfWidth - 0.19), -0.095, 0);
+      if (z === DISPLAY_BENCH_Z) {
+        // Keep the front bench legs beneath its front rail, clear of the stored net.
+        support.scale.z = 0.12 / 0.34;
+        support.position.z = -0.15;
+      }
       bench.add(support);
       for (const seatZ of [-0.15, 0.15]) {
         const fastening = new Mesh(fasteningGeometry, materials.iron);
@@ -325,12 +330,12 @@ function addGunwalesAndKeel(target: Group, materials: LifeboatMaterials): void {
   const innerCurve = new CatmullRomCurve3(outlinePoints(0.315, 0.08), true, 'centripetal');
   const outer = new Mesh(
     createLifeboatRailGeometry(outerCurve, 0.19, 0.164, 0.393),
-    materials.cutWood,
+    materials.trimTimber,
   );
   outer.name = 'lifeboat-outer-gunwale';
   const inner = new Mesh(
     createLifeboatRailGeometry(innerCurve, 0.09, 0.09, 0.518),
-    materials.rescueTrim,
+    materials.trimTimber,
   );
   inner.name = 'lifeboat-faded-rescue-trim';
   gunwales.add(outer, inner);
@@ -343,7 +348,7 @@ function addGunwalesAndKeel(target: Group, materials: LifeboatMaterials): void {
   target.add(keel);
 
   for (const [name, z] of [['bow', -3], ['stern', 3]] as const) {
-    const capPlate = new Mesh(new RoundedBoxGeometry(0.58, 0.08, 0.30, 2, 0.015), materials.cutWood);
+    const capPlate = new Mesh(new RoundedBoxGeometry(0.58, 0.08, 0.30, 2, 0.015), materials.trimTimber);
     capPlate.name = `lifeboat-${name}-cap-plate`;
     capPlate.position.set(0, 0.38, z + (name === 'bow' ? 0.04 : -0.04));
     target.add(capPlate);

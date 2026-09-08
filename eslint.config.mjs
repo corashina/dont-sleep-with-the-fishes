@@ -5,7 +5,7 @@ export default tseslint.config(
     ignores: [
       "node_modules/**",
       "dist/**",
-      ".superpowers/browser-playtests/**/build/**",
+      ".superpowers/**",
       "coverage/**",
       ".worktrees/**",
       ".pnpm-store/**",

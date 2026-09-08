@@ -143,8 +143,8 @@ The menu also offers **Calm**, **Overcast**, **Squall**, **Rain**, **Wind**,
 **Thunderstorm**, **Waves**, and **Fog**. A selection overrides event weather,
 carries across the phase handoff, and persists between sessions.
 
-Volumetric clouds start off. Turn them on in the **Weather** group. They render
-only by day and adapt to the active weather.
+Daytime clouds adapt to the active weather. They have varied sizes and rounded shapes.
+Calm clouds keep the sun clear.
 
 Normal gameplay is **Calm** outside events. Night events can use authored presentation weather while staged and resolved. The event weather includes **Overcast**, **Squall**, **Rain**, **Wind**, **Thunderstorm**, **Waves**, and **Fog**. Calm returns after each event ends.
 

@@ -4,6 +4,7 @@ import type { LifeboatAssets } from './LifeboatAssets';
 export interface LifeboatMaterials {
   readonly timber: MeshStandardMaterial;
   readonly darkTimber: MeshStandardMaterial;
+  readonly trimTimber: MeshStandardMaterial;
   readonly cutWood: MeshStandardMaterial;
   readonly rescueTrim: MeshStandardMaterial;
   readonly rope: MeshStandardMaterial;
@@ -28,6 +29,11 @@ export function createLifeboatMaterials(assets: LifeboatAssets): LifeboatMateria
     darkTimber: new MeshStandardMaterial({
       ...textured,
       color: 0x827361,
+      roughness: 0.9,
+    }),
+    trimTimber: new MeshStandardMaterial({
+      ...textured,
+      color: 0x554333,
       roughness: 0.9,
     }),
     cutWood: new MeshStandardMaterial({

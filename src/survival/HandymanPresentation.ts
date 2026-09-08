@@ -1,6 +1,5 @@
 import { presentationUiText } from '../i18n/presentationUiMessages';
 import {
-  Box3,
   BoxGeometry,
   BufferGeometry,
   CylinderGeometry,
@@ -21,7 +20,6 @@ import {
   type WaveSample,
 } from '../ocean/WaveField';
 import {
-  collectOwnedSkeletons,
   disposeRejectedModel as disposeModel,
   disposeSkeletons,
   hasRenderableBounds,
@@ -171,7 +169,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
   private paymentActor: Group | null = null;
   private rewardActor: Group | null = null;
   private paymentInstanceId: ItemInstanceId | null = null;
-  private activeChoiceId: string | null = null;
   private usingSupplyPayment = false;
   private usingChestPayment = false;
   private chestCaptured = false;
@@ -246,7 +243,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
 
   playChoice(choice: EventChoicePresentation): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    this.activeChoiceId = choice.choiceId;
     if (choice.choiceId === 'touch') {
       this.root.userData.state = 'touch-selected';
       return Promise.resolve();
@@ -272,7 +268,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
       throw new Error(`Handyman received result for ${result.eventId}.`);
     }
     void outcome;
-    this.activeChoiceId = result.choiceId;
     switch (result.resultId) {
       case 'handyman-reward': {
         const reward = HANDYMAN_REWARDS[result.choiceId];
@@ -833,7 +828,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.paymentActor = null;
     this.rewardActor = null;
     this.paymentInstanceId = null;
-    this.activeChoiceId = null;
     this.usingSupplyPayment = false;
     this.usingChestPayment = false;
     this.paymentVisible = false;

@@ -4,17 +4,12 @@ import {
   Mesh,
   MeshStandardMaterial,
   Object3D,
-  PerspectiveCamera,
   Quaternion,
   Shape,
   Vector3,
 } from 'three';
 import type { WaveSample } from '../ocean/WaveField';
 import { runCleanupSteps } from '../world/SceneResources';
-import {
-  projectBoatObjectBounds,
-  type ProjectedBoatBounds,
-} from './BoatInteraction';
 import {
   smoothstepUnchecked as smoothstep,
   type TimedAnimation,
@@ -44,11 +39,6 @@ export interface DriftingItemModels {
   readonly lifeboat: Group;
   readonly lifeboatCooler: Group;
   readonly shippingContainer: Group;
-}
-
-export interface DriftingItemInteractionProjection {
-  readonly variant: DriftingCargoKind;
-  readonly bounds: ProjectedBoatBounds;
 }
 
 const SUPPLY_POSITIONS: Readonly<Record<
@@ -158,7 +148,6 @@ export class DriftingItemPresentation {
     normal: { x: 0, y: 1, z: 0 },
   };
   private activeAnimation: ActiveDriftingItemAnimation | null = null;
-  private activeEventId: DriftingItemEventId | null = null;
   private activeVariant: DriftingCargoKind | null = null;
   private side: EventSide = -1;
   private state: DriftingItemState = 'idle';
@@ -226,7 +215,6 @@ export class DriftingItemPresentation {
   stage(eventId: DriftingItemEventId, variantSeed = 0): void {
     if (this.disposed) return;
     this.cancelActiveAnimation();
-    this.activeEventId = eventId;
     const supplyKind = eventId === 'drifting-supplies'
       ? driftingSupplyKindFromSeed(variantSeed)
       : null;
@@ -279,21 +267,6 @@ export class DriftingItemPresentation {
     return this.startAnimation('retrieve', RETRIEVE_DURATIONS[variant]);
   }
 
-  projectInteraction(
-    camera: PerspectiveCamera,
-    width: number,
-    height: number,
-  ): DriftingItemInteractionProjection | null {
-    const variant = this.activeVariant;
-    if (this.disposed || this.state !== 'floating' || variant === null || width <= 0 || height <= 0) {
-      return null;
-    }
-    return {
-      variant,
-      bounds: projectBoatObjectBounds(this.roots[variant], camera, width, height),
-    };
-  }
-
   interactionRoot(): Group | null {
     return this.disposed || this.state !== 'floating' || this.activeVariant === null
       ? null
@@ -326,7 +299,6 @@ export class DriftingItemPresentation {
   clear(): void {
     if (this.disposed) return;
     this.cancelActiveAnimation();
-    this.activeEventId = null;
     this.activeVariant = null;
     this.state = 'idle';
     this.resetAll();
@@ -343,7 +315,7 @@ export class DriftingItemPresentation {
 
     animation.elapsed = Math.min(animation.duration, animation.elapsed + Math.max(0, delta));
     const progress = animation.duration <= 0 ? 1 : animation.elapsed / animation.duration;
-    this.updateAnimationPose(animation, variant, progress);
+    this.updateAnimationPose(variant, progress);
     if (progress < 1) return;
 
     this.finishAnimation(animation, variant);
@@ -355,7 +327,6 @@ export class DriftingItemPresentation {
   }
 
   private updateAnimationPose(
-    animation: ActiveDriftingItemAnimation,
     variant: DriftingCargoKind,
     progress: number,
   ): void {

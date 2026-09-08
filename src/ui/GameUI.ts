@@ -5,7 +5,6 @@ import { ITEM_DEFINITIONS, type ItemId } from '../game/ItemState';
 import type { ScavengeSnapshot } from '../game/ScavengeSession';
 import type { ScavengeEndingStage } from '../game/scavengeEnding';
 import { SCAVENGE_DURATION_SECONDS } from '../game/scavengeRules';
-import type { SinkingState } from '../game/sinking';
 import {
   endingCauseLine,
   endingSummary,

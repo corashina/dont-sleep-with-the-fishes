@@ -1,6 +1,6 @@
 export {
   EVENT_CHOICE_EXCLUDED_ITEM_IDS, ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS, createItemInstances,
-  itemDefinition, validateItemCatalog,
+  validateItemCatalog,
 } from './itemCatalog';
 export type { ItemDefinition, ItemId, ItemInstanceId } from './itemCatalog';
 

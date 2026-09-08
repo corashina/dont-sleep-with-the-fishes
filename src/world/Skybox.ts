@@ -75,7 +75,6 @@ const fragmentShader = `
   uniform float uHaze;
   uniform float uCloudCoverage;
   uniform float uCloudContrast;
-  uniform float uCloudLayerStrength;
   uniform float uHorizonBandStrength;
   uniform float uHorizonBandWidth;
   uniform float uExposure;
@@ -523,7 +522,6 @@ export class Skybox {
         uHaze: { value: this.current.haze },
         uCloudCoverage: { value: this.current.cloudCoverage },
         uCloudContrast: { value: this.current.cloudContrast },
-        uCloudLayerStrength: { value: 1 },
         uHorizonBandStrength: { value: this.current.horizonBandStrength },
         uHorizonBandWidth: { value: this.current.horizonBandWidth },
         uExposure: { value: this.current.exposure },
@@ -567,11 +565,9 @@ export class Skybox {
     this.material.uniforms.uCloudTime!.value = this.cloudElapsed;
     const alpha = smoothstep(this.blendElapsed / TRANSITION_SECONDS);
     lerpSkyPalette(this.current, this.blendFrom, this.target, alpha);
-    if (this.material.uniforms.uCloudLayerStrength!.value > 0) {
-      updateCloudImpostorShadows(this.cloudLayout,
-        this.material.uniforms.uSunDirection!.value as Vector3,
-        this.cloudElapsed, this.current.cloudCoverage);
-    }
+    updateCloudImpostorShadows(this.cloudLayout,
+      this.material.uniforms.uSunDirection!.value as Vector3,
+      this.cloudElapsed, this.current.cloudCoverage);
     this.mesh.position.copy(cameraPosition);
     this.uploadPalette();
     return this.current;
@@ -602,11 +598,6 @@ export class Skybox {
     if (this.disposed) return;
     (this.material.uniforms.uTintColor!.value as Color).copy(color);
     this.material.uniforms.uTintAmount!.value = clamp01(amount);
-  }
-
-  setCloudLayerStrength(value: number): void {
-    if (this.disposed) return;
-    this.material.uniforms.uCloudLayerStrength!.value = clamp01(value);
   }
 
   dispose(): void {

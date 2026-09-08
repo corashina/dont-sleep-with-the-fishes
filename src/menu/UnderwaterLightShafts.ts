@@ -9,8 +9,6 @@ import {
 } from 'three';
 import { disposeResourceSets } from '../world/SceneResources';
 
-export const LIGHT_SHAFT_COUNT = 4;
-
 const LIGHT_SHAFT_VERTEX_SHADER = `
   uniform float uTime;
   uniform float uPhase;

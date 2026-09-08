@@ -149,26 +149,6 @@ export function circleOverlapsCollisionFootprint(
   return (position.x - closestX) ** 2 + (position.z - closestZ) ** 2 < radius ** 2;
 }
 
-export function pointInsideCollisionBox(
-  position: LocalPlayerPosition,
-  box: CollisionBox,
-): boolean {
-  if (position.y < box.minY || position.y > box.maxY) return false;
-  const footprint = box.orientedFootprint;
-  if (!footprint) {
-    return position.x >= box.minX && position.x <= box.maxX
-      && position.z >= box.minZ && position.z <= box.maxZ;
-  }
-  const cosine = Math.cos(footprint.rotationY);
-  const sine = Math.sin(footprint.rotationY);
-  const offsetX = position.x - footprint.centerX;
-  const offsetZ = position.z - footprint.centerZ;
-  const localX = cosine * offsetX - sine * offsetZ;
-  const localZ = sine * offsetX + cosine * offsetZ;
-  return Math.abs(localX) <= footprint.halfWidth
-    && Math.abs(localZ) <= footprint.halfDepth;
-}
-
 function bodyOverlapsBox(
   position: Pick<LocalPlayerPosition, 'x' | 'z'>,
   eyeHeight: number,

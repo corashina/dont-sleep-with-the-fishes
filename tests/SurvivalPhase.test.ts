@@ -542,10 +542,10 @@ describe('SurvivalPhase orchestration', () => {
     const internals = phase as unknown as { renderSnapshot(openPendingEvent: boolean): void };
     expect(session.perform('eat').accepted).toBe(true);
     internals.renderSnapshot(false);
-    expect(setAvailableDayActions).toHaveBeenLastCalledWith(['fish', 'openChest']);
+    expect(setAvailableDayActions).toHaveBeenLastCalledWith(['fish', 'openChest', 'endDay']);
     expect(session.perform('openChest').accepted).toBe(true);
     internals.renderSnapshot(false);
-    expect(setAvailableDayActions).toHaveBeenLastCalledWith(['fish']);
+    expect(setAvailableDayActions).toHaveBeenLastCalledWith(['fish', 'endDay']);
     expect(session.beginFishing().accepted).toBe(true);
     internals.renderSnapshot(false);
     expect(setAvailableDayActions).toHaveBeenLastCalledWith([]);

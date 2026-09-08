@@ -47,7 +47,6 @@ export const settingsCatalog = {
   autoSaveAria: {"en":"Enable survival auto-save","pl":"Włącz automatyczny zapis przetrwania","es-AR":"Activar guardado automático de supervivencia"},
   continueSave: {"en":"CONTINUE SAVED RUN","pl":"KONTYNUUJ ZAPISANĄ GRĘ","es-AR":"CONTINUAR PARTIDA GUARDADA"},
   noSave: {"en":"NO SAVE","pl":"BRAK ZAPISU","es-AR":"SIN PARTIDA GUARDADA"},
-  clouds: {"en":"Volumetric clouds","pl":"Chmury przestrzenne","es-AR":"Nubes volumétricas"},
   settings: {"en":"Settings","pl":"Ustawienia","es-AR":"Configuración"},
   sound: {"en":"Sound","pl":"Dźwięk","es-AR":"Sonido"},
   graphics: {"en":"Graphics","pl":"Grafika","es-AR":"Gráficos"},

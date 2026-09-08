@@ -1,5 +1,4 @@
 import {
-  Box3,
   BufferGeometry,
   Group,
   Material,
@@ -7,7 +6,6 @@ import {
   Skeleton,
   SkinnedMesh,
   Texture,
-  Vector3,
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';

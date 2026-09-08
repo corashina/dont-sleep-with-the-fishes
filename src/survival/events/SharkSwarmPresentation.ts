@@ -36,7 +36,6 @@ import {
   SWARM_REACTION_DURATION,
   SWARM_REVEAL_DURATION,
   type SwarmSharkPose,
-  type SwarmReactionState,
   type SwarmSample,
   type SwarmVariant,
 } from './sharkSwarmChoreography';

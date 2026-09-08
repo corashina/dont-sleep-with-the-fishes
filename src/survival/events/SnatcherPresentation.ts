@@ -87,7 +87,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
   private staged = false;
   private disposed = false;
 
-  constructor(private readonly environment: DedicatedEventEnvironment) {
+  constructor(environment: DedicatedEventEnvironment) {
     this.worldRoot.name = 'tentacle-attack-world';
     this.boatRoot.name = 'tentacle-attack-boat';
     this.tentacle.name = 'tentacle-attack-tentacle';

@@ -163,11 +163,6 @@ export class EventItemUseAdapter {
     this.active = true;
   }
 
-  setAimTarget(aimTarget: Object3D | null): void {
-    if (this.disposed) return;
-    this.aimTarget = aimTarget;
-  }
-
   apply(sample: Readonly<EventItemUseSample>): void {
     const actor = this.actor;
     const profile = this.profile;

@@ -37,7 +37,6 @@ function setup(enabled = false, savedDay: number | null = null) {
     audio: { volume: .6, setVolume: vi.fn() },
     camera: { fieldOfView: 65, setFieldOfView: vi.fn() },
     performance: { visible: false, setVisible: vi.fn() },
-    clouds: { enabled: false, available: true, setEnabled: vi.fn() },
     save: { enabled, savedDay, setEnabled: vi.fn(), continueSavedRun: vi.fn() },
     visualQuality: createVisualQualityPreference(vi.fn(), null),
     waterQuality: createWaterQualityPreference(vi.fn(), null),
@@ -149,7 +148,7 @@ describe('Settings menu', () => {
     expect(resume).not.toHaveBeenCalled();
   });
 
-  it('applies sound, camera, frame rate, cloud, and quality controls', () => {
+  it('applies sound, camera, frame rate, and quality controls', () => {
     const { menu, options, button } = setup();
     button.click();
     for (const [selector, value] of [['[data-audio-volume]', '35'], ['[data-camera-fov]', '90']] as const) {
@@ -159,19 +158,13 @@ describe('Settings menu', () => {
     }
     expect(options.audio.setVolume).toHaveBeenCalledWith(.35);
     expect(options.camera.setFieldOfView).toHaveBeenCalledWith(90);
-    for (const selector of ['[data-performance-stats-enabled]', '[data-volumetric-clouds]']) {
-      menu.element.querySelector<HTMLInputElement>(selector)!.click();
-    }
+    menu.element.querySelector<HTMLInputElement>('[data-performance-stats-enabled]')!.click();
     expect(options.performance.setVisible).toHaveBeenCalledWith(true);
-    expect(options.clouds.setEnabled).toHaveBeenCalledWith(true);
     const water = menu.element.querySelector<HTMLFieldSetElement>('[data-quality-control="water"]')!;
     expect([...water.querySelectorAll('[data-quality]')].map((choice) => choice.getAttribute('data-quality')))
       .toEqual(['low', 'high']);
     water.querySelector<HTMLButtonElement>('[data-quality="low"]')!.click();
     expect(options.waterQuality.get()).toBe('low');
-    menu.setVolumetricCloudAvailability(false);
-    expect(menu.element.querySelector<HTMLInputElement>('[data-volumetric-clouds]')!.disabled).toBe(true);
-    expect(menu.element.querySelector('[data-volumetric-clouds-state]')!.textContent).toBe('UNAVAILABLE');
   });
 
   it('updates saves and keeps newly created checkpoints when enabling auto-save', () => {

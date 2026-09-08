@@ -5,7 +5,6 @@ import type { DedicatedEventId } from '../survival/eventPresentationRoutes';
 import type {
   ActionOutcome,
   DayActionId,
-  DayActionOption,
 } from '../survival/survivalTypes';
 import type { PresentationWeatherId } from '../weather/presentationWeather';
 import type {
@@ -174,7 +173,7 @@ export class SurvivalAudio {
     }
   }
 
-  action(action: DayActionId, option?: DayActionOption): void {
+  action(action: DayActionId): void {
     if (this.disposed) return;
     if (action === 'eat' || action === 'useEnergyBar') {
       this.scope.play('eating');
@@ -389,7 +388,7 @@ export class SurvivalAudio {
     if (!attack) this.stopEventMelody(0.02);
   }
 
-  finishEventReaction(eventId: string): void {
+  finishEventReaction(): void {
     if (this.disposed) return;
     this.clearEvent();
   }

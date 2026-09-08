@@ -1,5 +1,5 @@
 import { settingsText } from '../i18n/settingsMessages';
-import type { AudioControls, CameraControls, SaveControls, PerformanceStatsControls, VolumetricCloudControls } from './SettingsControls';
+import type { AudioControls, CameraControls, SaveControls, PerformanceStatsControls } from './SettingsControls';
 
 function checkedAttribute(checked: boolean): string {
   return checked ? 'checked' : '';
@@ -89,28 +89,11 @@ function buildGeneralCategory(controls: SaveControls): string {
   `;
 }
 
-function buildVolumetricCloudControl(controls: VolumetricCloudControls): string {
-  const disabled = controls.available ? '' : 'disabled';
-  const state = controls.available ? '' : settingsText('unavailable');
-  return `<label class="settings-menu__toggle">
-    <span data-settings-copy="clouds">${settingsText('clouds')}</span>
-    <input
-      type="checkbox"
-      role="switch"
-      data-volumetric-clouds
-      ${checkedAttribute(controls.enabled)}
-      ${disabled}
-    >
-    <output data-volumetric-clouds-state>${state}</output>
-  </label>`;
-}
-
 export interface SettingsMarkupOptions {
   audio: AudioControls;
   camera: CameraControls;
   save: SaveControls;
   performance: PerformanceStatsControls;
-  clouds: VolumetricCloudControls;
 }
 
 export function settingsMarkup(options: SettingsMarkupOptions): string {
@@ -123,7 +106,6 @@ export function settingsMarkup(options: SettingsMarkupOptions): string {
         <section class="settings-menu__category"><h3 data-settings-copy="graphics">${settingsText('graphics')}</h3>
           <div class="settings-menu__quality" data-settings-quality></div>
           ${buildCameraControl(options.camera)}
-          <div class="settings-menu__group">${buildVolumetricCloudControl(options.clouds)}</div>
           ${buildPerformanceStatsControl(options.performance)}
         </section>
       </div>

@@ -1,12 +1,10 @@
 import {
   AnimationClip,
-  Box3,
   BufferGeometry,
   Group,
   Material,
   Mesh,
   Texture,
-  Vector3,
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
@@ -36,7 +34,6 @@ import {
   ignoreCleanupError as attemptCleanup,
 } from './SceneResources';
 import { normalizeLongestDimensionTemplate } from './modelValidation';
-export { geometryTriangles } from './modelValidation';
 import { enableItemAmbientOcclusion } from '../rendering/ItemAmbientOcclusion';
 import {
   CARLITOS_SITTING_IDLE_CLIP,

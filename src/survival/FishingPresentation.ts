@@ -690,10 +690,6 @@ export class FishingPresentation {
     this.updateLineGeometry();
   }
 
-  phaseForTest(): FishingPresentationPhase {
-    return this.phase;
-  }
-
   disposeAnimation(): void {
     if (this.animationDisposed) return;
     this.animationDisposed = true;

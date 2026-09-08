@@ -34,11 +34,9 @@ export class SettingsMenu {
   private disposed = false;
   private readonly unsubscribeLanguage: () => void;
   private savedDay: number | null;
-  private cloudAvailability: boolean;
 
   constructor(private readonly mount: HTMLElement, private readonly options: SettingsMenuOptions) {
     this.savedDay = options.save.savedDay;
-    this.cloudAvailability = options.clouds.available;
     this.element.className = 'settings-menu';
     this.element.hidden = true;
     this.element.setAttribute('role', 'dialog');
@@ -86,14 +84,6 @@ export class SettingsMenu {
     requireElement<HTMLInputElement>(this.element, '[data-save-enabled]').checked = enabled;
     this.output('[data-save-status]', !enabled ? '' : savedDay === null ? settingsText('noSave') : settingsDynamic('day', savedDay));
     requireElement<HTMLButtonElement>(this.element, '[data-save-continue]').disabled = !enabled || savedDay === null;
-  }
-
-  setVolumetricCloudAvailability(available: boolean): void {
-    if (this.disposed || available === this.cloudAvailability) return;
-    this.cloudAvailability = available;
-    const input = requireElement<HTMLInputElement>(this.element, '[data-volumetric-clouds]');
-    input.disabled = !available;
-    this.output('[data-volumetric-clouds-state]', available ? '' : settingsText('unavailable'));
   }
 
   dispose(): void {
@@ -167,9 +157,6 @@ export class SettingsMenu {
     if (input.matches('[data-performance-stats-enabled]')) {
       this.options.performance.setVisible(enabled);
     }
-    if (input.matches('[data-volumetric-clouds]')) {
-      this.options.clouds.setEnabled(enabled);
-    }
   };
 
   private changeLanguage(value: string): void {
@@ -182,7 +169,6 @@ export class SettingsMenu {
     requireElement<HTMLSelectElement>(this.element, '[data-language-select]').value = getLanguage();
     const enabled = requireElement<HTMLInputElement>(this.element, '[data-save-enabled]').checked;
     this.setSaveState(enabled, this.savedDay);
-    this.output('[data-volumetric-clouds-state]', this.cloudAvailability ? '' : settingsText('unavailable'));
   };
 
   private output(selector: string, value: string): void {

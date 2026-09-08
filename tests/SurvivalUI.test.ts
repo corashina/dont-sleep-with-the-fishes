@@ -900,7 +900,7 @@ describe('SurvivalUI', () => {
     const ui = createUI(mount);
 
     let firstSettled = false;
-    const first = ui.holdEventOutcome().then(() => { firstSettled = true; });
+    void ui.holdEventOutcome().then(() => { firstSettled = true; });
     expect(vi.getTimerCount()).toBe(1);
     let replacementSettled = false;
     const replacement = ui.holdEventOutcome().then(() => { replacementSettled = true; });
@@ -1971,7 +1971,6 @@ describe('SurvivalUI', () => {
     const restarted = vi.fn();
     ui.onRestart = restarted;
     ui.render(snapshot(), () => null);
-    const pause = mount.querySelector<HTMLElement>('[data-pause]')!;
 
     ui.showEnding({ id: 'sinking', day: 2, savedPickupCount: 4, cause: { eventId: null } });
     const endingLayer = mount.querySelector<HTMLElement>('[data-ending]')!;

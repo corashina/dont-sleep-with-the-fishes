@@ -26,7 +26,6 @@ export interface SystemTuningState {
   readonly cameraFieldOfView: number;
   readonly weatherOverride: PresentationWeatherId | null;
   readonly phaseOverride: SkyPhase | null;
-  readonly volumetricCloudsEnabled: boolean;
 }
 
 export interface SystemTuningPreference {
@@ -50,7 +49,6 @@ export const DEFAULT_SYSTEM_TUNING_STATE = Object.freeze({
   cameraFieldOfView: 80,
   weatherOverride: null,
   phaseOverride: null,
-  volumetricCloudsEnabled: false,
 } satisfies SystemTuningState);
 
 const AMBIENT_OCCLUSION_MODES: readonly ItemAmbientOcclusionMode[] = [
@@ -119,10 +117,6 @@ function parseState(value: unknown): SystemTuningState {
     ),
     weatherOverride,
     phaseOverride,
-    volumetricCloudsEnabled: booleanValue(
-      stored.volumetricCloudsEnabled,
-      DEFAULT_SYSTEM_TUNING_STATE.volumetricCloudsEnabled,
-    ),
   });
 }
 

@@ -162,27 +162,8 @@ export interface ShipCrowsNestSpec {
     readonly outwardZ: -1;
   };
 }
-
-export const SHIP_SAIL_CLOTH_CLEARANCE_Y = 5.2;
 export const SHIP_SAIL_CLOTH_MIN_Y = 5.21;
 export const SHIP_SAIL_TOP_OFFSET = 0.25;
-export const SHIP_SAIL_MAX_LENGTH = 8.6;
-
-export interface ShipSailGeometryLimits {
-  readonly top: number;
-  readonly clothHeight: number;
-  readonly clothLength: number;
-}
-
-export function shipSailGeometryLimits(
-  spec: Pick<ShipMastSpec, 'sails'>,
-  sailSpec: ShipSailSpec = spec.sails[0]!,
-): ShipSailGeometryLimits {
-  const top = sailSpec.topY;
-  const clothHeight = top - sailSpec.footY;
-  const clothLength = Math.abs(sailSpec.clewZ);
-  return { top, clothHeight, clothLength };
-}
 
 export interface ShipRiggingSpec {
   readonly masts: readonly ShipMastSpec[];

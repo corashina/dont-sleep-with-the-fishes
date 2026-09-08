@@ -190,7 +190,6 @@ export function dayActionUnavailableReason(
 export function dayActionResourceDelta(
   state: DayActionRuleState,
   action: DeterministicDayActionId,
-  option?: DayActionOption,
 ): Readonly<ResourceDelta> {
   switch (action) {
     case 'eat':

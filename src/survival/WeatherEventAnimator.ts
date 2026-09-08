@@ -13,7 +13,6 @@ import {
   Shape,
   ShapeGeometry,
   Texture,
-  Vector3,
 } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import { createWaveSample } from '../ocean/WaveField';
