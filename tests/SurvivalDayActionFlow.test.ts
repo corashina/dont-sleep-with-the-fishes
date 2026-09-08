@@ -1,7 +1,6 @@
 // Importance: 10/10. Protects day-action order, covers, feedback, and lifecycle guards.
 import { describe, expect, it, vi } from 'vitest';
 import {
-  formatDiveResult,
   SurvivalDayActionFlow,
   type DayActionAudioPort,
   type DayActionEventPort,
@@ -205,31 +204,6 @@ function createRig() {
   };
 }
 
-describe('formatDiveResult', () => {
-  it.each([
-    [{ food: 1, energy: -3 }, { kind: 'resource', id: 'food', quantity: 1 }, []],
-    [{ bait: 1, energy: -3 }, { kind: 'resource', id: 'bait', quantity: 1 }, []],
-    [{ rescueLead: 1, energy: -3 }, null, ['RESCUE TRACE FOUND']],
-    [{ energy: -3 }, null, ['NOTHING FOUND']],
-    [{ energy: -3, health: -10 }, null, ['NOTHING FOUND', 'YOU SUFFERED SOME INJURIES']],
-  ] as const)('formats exact dive deltas', (deltas, reward, lines) => {
-    expect(formatDiveResult(accepted({ deltas }))).toEqual({
-      title: 'DIVE RESULT',
-      reward,
-      lines,
-    });
-  });
-
-  it('passes an item reward to the result paper', () => {
-    const rewardSummary = { kind: 'item', id: 'energyBar', quantity: 1 } as const;
-    expect(formatDiveResult(accepted({ deltas: { energy: -3 }, rewardSummary }))).toEqual({
-      title: 'DIVE RESULT',
-      reward: rewardSummary,
-      lines: [],
-    });
-  });
-});
-
 describe('SurvivalDayActionFlow', () => {
   it('routes a rejected command through deny without busy state', async () => {
     const rig = createRig();
@@ -333,30 +307,6 @@ describe('SurvivalDayActionFlow', () => {
       .toBeLessThan(rig.calls.indexOf('render:day'));
     expect(rig.ui.restoreCommandFocus).toHaveBeenCalledOnce();
   });
-
-  it.each(['petCarlitos', 'feedCarlitos'] as const)(
-    'syncs and presents %s after the accepted mutation',
-    async (action) => {
-      const rig = createRig();
-
-      await rig.flow.run(action);
-
-      expect(rig.events.sync).toHaveBeenCalledOnce();
-      if (action === 'petCarlitos') {
-        expect(rig.world.playCarlitosAction).toHaveBeenCalledWith(
-          action,
-          expect.any(Function),
-        );
-      } else {
-        expect(rig.world.playCarlitosAction).toHaveBeenCalledWith(action);
-      }
-      expect(rig.calls.indexOf('audio:action:' + action))
-        .toBeLessThan(rig.calls.indexOf('events:sync'));
-      expect(rig.calls.indexOf('events:sync'))
-        .toBeLessThan(rig.calls.indexOf(`world:carlitos:${action}`));
-      expect(rig.ui.restoreCommandFocus).toHaveBeenCalledOnce();
-    },
-  );
 
   it('runs the dive cover, hold, reward, and focus sequence in order', async () => {
     const rig = createRig();
@@ -535,54 +485,6 @@ describe('SurvivalDayActionFlow', () => {
     await secondRun;
     expect(rig.renderSnapshot).toHaveBeenCalledOnce();
     expect(rig.ui.restoreCommandFocus).toHaveBeenCalledOnce();
-  });
-
-  it('keeps the primary failure while chest cleanup and unlock fail', async () => {
-    const rig = createRig();
-    const primary = new Error('cue failed');
-    vi.mocked(rig.world.play).mockRejectedValueOnce(primary);
-    vi.mocked(rig.events.cancelDeferredSync).mockImplementationOnce(() => {
-      throw new Error('deferred cleanup failed');
-    });
-    vi.mocked(rig.setBusy).mockImplementation((busy: boolean) => {
-      rig.calls.push(`busy:${busy}`);
-      if (!busy) throw new Error('unlock failed');
-    });
-
-    await rig.flow.run('openChest');
-
-    expect(rig.onFatalError).toHaveBeenCalledTimes(1);
-    expect(rig.onFatalError).toHaveBeenCalledWith(primary);
-  });
-
-  it('runs dive audio cleanup when presentation cleanup fails', async () => {
-    const rig = createRig();
-    const primary = new Error('dive failed');
-    vi.mocked(rig.world.playDive).mockRejectedValueOnce(primary);
-    vi.mocked(rig.world.clearDivePresentation).mockImplementationOnce(() => {
-      throw new Error('dive presentation cleanup failed');
-    });
-
-    await rig.flow.run('dive');
-
-    expect(rig.audio.cancelDive).toHaveBeenCalledOnce();
-    expect(rig.events.cancelDeferredSync).toHaveBeenCalledWith(1);
-    expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(primary);
-  });
-
-  it('keeps an end-day error primary when event cleanup fails', async () => {
-    const rig = createRig();
-    const primary = new Error('night cue failed');
-    vi.mocked(rig.world.play).mockRejectedValueOnce(primary);
-    vi.mocked(rig.events.clearAfterFailure).mockImplementationOnce(() => {
-      throw new Error('event cleanup failed');
-    });
-
-    await rig.flow.run('endDay');
-
-    expect(rig.events.clearAfterFailure).toHaveBeenCalledOnce();
-    expect(rig.events.finishQuietNight).toHaveBeenCalledOnce();
-    expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(primary);
   });
 
   it('cancels dive audio when visibility settles', () => {

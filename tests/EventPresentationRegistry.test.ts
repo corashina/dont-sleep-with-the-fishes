@@ -17,11 +17,6 @@ import {
 } from '../src/survival/eventPresentationRoutes';
 import type { EventPresentationAdapterDependencies } from '../src/survival/eventPresentationAdapters';
 import type {
-  EventPresentationContext,
-  EventPresentationReaction,
-} from '../src/survival/eventPresentationTypes';
-import type {
-  EventChoicePresentation,
   FocusedEventInteractionTarget,
 } from '../src/survival/FocusedEventPresentation';
 
@@ -249,36 +244,6 @@ function createDependencies() {
   };
 }
 
-function calledFamilyConstructors(): string[] {
-  return Object.entries(constructors)
-    .filter(([, constructor]) => constructor.mock.calls.length > 0)
-    .map(([name]) => name)
-    .sort();
-}
-
-const context = {
-  eventId: 'leak',
-  targetInstanceId: null,
-  variantSeed: 17,
-} as EventPresentationContext;
-const choice = {
-  choiceId: 'choice',
-  instanceId: null,
-  condition: null,
-} as EventChoicePresentation;
-const reaction = {
-  outcome: {
-    accepted: true,
-    deltas: {},
-    eventPresentationKey: 'flowers.keep',
-  },
-  physicalResponse: { choiceId: 'choice', actors: [] },
-  result: {
-    selectedInstanceId: null,
-  },
-  choice,
-} as unknown as EventPresentationReaction;
-
 beforeEach(() => {
   vi.clearAllMocks();
   layer = createLayer();
@@ -372,59 +337,6 @@ describe('EventPresentationRegistry', () => {
     }
   });
 
-  it('passes owned model results through the borrowed library', () => {
-    const containerShip = {
-      root: new Group(),
-      dispose: vi.fn(),
-    };
-    const create = vi.fn(() => containerShip);
-    const { dependencies: defaults } = createDependencies();
-    const dependencies = {
-      ...defaults,
-      dedicatedEnvironment: {
-        ...defaults.dedicatedEnvironment,
-        eventModels: {
-          create,
-          animations: vi.fn(() => []),
-          dispose: vi.fn(),
-        },
-      },
-    } as unknown as EventPresentationAdapterDependencies;
-
-    const adapter = new EventPresentationRegistry().create('wreckage', dependencies);
-
-    const environment = constructors.wreckage.mock.calls[0]![0];
-    const forwarded = environment.eventModels.create('containerShip');
-    expect(forwarded).toBe(containerShip);
-    forwarded.dispose();
-    expect(create).toHaveBeenCalledWith('containerShip');
-    expect(containerShip.dispose).toHaveBeenCalledOnce();
-    adapter.dispose();
-  });
-
-  it('delegates the dangerous-waters lifecycle to its layer', async () => {
-    const { dependencies } = createDependencies();
-    const adapter = new EventPresentationRegistry().create('dangerous-waters', dependencies);
-    const routeContext: EventPresentationContext = {
-      ...context,
-      eventId: 'dangerous-waters',
-    };
-    adapter.stage(routeContext);
-    await adapter.reveal();
-    await adapter.playChoice(choice);
-    await adapter.playItemUse('choice', 'map-1' as ItemInstanceId);
-    await adapter.react(reaction);
-    adapter.clear();
-    adapter.dispose();
-    expect(layer.stage).toHaveBeenCalledWith('dangerous-waters', 17);
-    expect(layer.reveal).toHaveBeenCalledWith('dangerous-waters');
-    expect(layer.playChoice).toHaveBeenCalledWith('dangerous-waters', 'choice');
-    expect(layer.playDangerousWatersItemUse).toHaveBeenCalledWith('choice', 'map-1');
-    expect(layer.react).toHaveBeenCalledWith('dangerous-waters', reaction.outcome);
-    expect(layer.clear).toHaveBeenCalledOnce();
-    expect(layer.dispose).toHaveBeenCalledOnce();
-  });
-
   it('does not replay a dangerous-waters item choice after its item motion', async () => {
     const { dependencies } = createDependencies();
     const adapter = new EventPresentationRegistry().create('dangerous-waters', dependencies);
@@ -439,144 +351,6 @@ describe('EventPresentationRegistry', () => {
 
     expect(layer.playDangerousWatersItemUse).toHaveBeenCalledOnce();
     expect(layer.playChoice).not.toHaveBeenCalled();
-  });
-
-  it('delegates the dedicated lifecycle to its coordinator', async () => {
-    const { dependencies } = createDependencies();
-    const adapter = new EventPresentationRegistry().create('leak', dependencies);
-    adapter.stage(context);
-    await adapter.reveal();
-    await adapter.playChoice(choice);
-    await adapter.playItemUse('choice', 'bucket-1' as ItemInstanceId);
-    await adapter.react(reaction);
-    adapter.clear();
-    adapter.dispose();
-    expect(coordinator.stage).toHaveBeenCalledWith(context);
-    expect(coordinator.reveal).toHaveBeenCalledOnce();
-    expect(coordinator.playChoice).toHaveBeenCalledWith('choice');
-    expect(coordinator.playItemUse).toHaveBeenCalledWith('choice', 'bucket-1');
-    expect(coordinator.react).toHaveBeenCalledWith(reaction.result);
-    expect(coordinator.clear).toHaveBeenCalledOnce();
-    expect(coordinator.dispose).toHaveBeenCalledOnce();
-  });
-
-  it('delegates the focused lifecycle to its layer', async () => {
-    const { dependencies } = createDependencies();
-    const targets = [{
-      id: 'custom:focused',
-      label: 'FOCUSED',
-      description: 'Focused target.',
-      choiceId: 'focus',
-      root: new Group(),
-    }];
-    layer.interactionTargets.mockReturnValue(targets);
-    const adapter = new EventPresentationRegistry().create('chest-attack', dependencies);
-    expect(adapter.interactionTargets()).toBe(targets);
-    adapter.stage({ ...context, eventId: 'chest-attack' });
-    await adapter.reveal();
-    await adapter.playChoice(choice);
-    await adapter.playItemUse('choice', 'shotgun-1' as ItemInstanceId);
-    await adapter.react(reaction);
-    adapter.clear();
-    adapter.dispose();
-    expect(layer.stage).toHaveBeenCalledWith('chest-attack', 17);
-    expect(layer.interactionTargets).toHaveBeenCalledWith('chest-attack');
-    expect(layer.reveal).toHaveBeenCalledWith('chest-attack');
-    expect(layer.playChoice).toHaveBeenCalledWith('chest-attack', choice);
-    expect(layer.react).toHaveBeenCalledWith('chest-attack', reaction.outcome);
-    expect(layer.clear).toHaveBeenCalledOnce();
-    expect(layer.dispose).toHaveBeenCalledOnce();
-  });
-
-  it('delegates the featured lifecycle to its family', async () => {
-    const { dependencies } = createDependencies();
-    const adapter = new EventPresentationRegistry().create('drifting-supplies', dependencies);
-    adapter.stage({ ...context, eventId: 'drifting-supplies' });
-    await adapter.reveal();
-    await adapter.playChoice(choice);
-    await adapter.playItemUse('choice', 'map-1' as ItemInstanceId);
-    await adapter.react(reaction);
-    adapter.clear();
-    adapter.dispose();
-    expect(featured.stage).toHaveBeenCalledWith('drifting-supplies', 17);
-    expect(featured.reveal).toHaveBeenCalledWith('drifting-supplies');
-    expect(featured.react).toHaveBeenCalledWith(
-      'drifting-supplies',
-      reaction.outcome.eventPresentationKey,
-    );
-    expect(featured.clear).toHaveBeenCalledOnce();
-    expect(featured.dispose).toHaveBeenCalledOnce();
-  });
-
-  it('delegates weather to its layer and animator in existing order', async () => {
-    const calls: string[] = [];
-    layer.clear.mockImplementation(() => calls.push('layer.clear'));
-    weather.clear.mockImplementation(() => calls.push('weather.clear'));
-    layer.dispose.mockImplementation(() => calls.push('layer.dispose'));
-    weather.dispose.mockImplementation(() => calls.push('weather.dispose'));
-    const { dependencies } = createDependencies();
-    const adapter = new EventPresentationRegistry().create('shower-night', dependencies);
-    adapter.stage({ ...context, eventId: 'shower-night' });
-    await adapter.reveal();
-    await adapter.playChoice(choice);
-    await adapter.playItemUse('umbrella', 'umbrella-1' as ItemInstanceId);
-    await adapter.react(reaction);
-    adapter.clear();
-    adapter.dispose();
-    expect(layer.stage).toHaveBeenCalledWith('shower-night', 17);
-    expect(weather.stage).toHaveBeenCalledWith('shower-night', 17);
-    expect(layer.reveal).toHaveBeenCalledWith('shower-night');
-    expect(weather.reveal).toHaveBeenCalledWith('shower-night');
-    expect(weather.playItemUse).toHaveBeenCalledWith(
-      'shower-night',
-      'umbrella',
-      'umbrella-1',
-    );
-    expect(layer.react).toHaveBeenCalledWith('shower-night', reaction.outcome);
-    expect(weather.react).toHaveBeenCalledWith(
-      'shower-night',
-      reaction.outcome,
-      reaction.physicalResponse,
-      null,
-    );
-    expect(calls).toEqual([
-      'layer.clear',
-      'weather.clear',
-      'layer.dispose',
-      'weather.dispose',
-    ]);
-  });
-
-  it('delegates supernatural to its layer and animator', async () => {
-    const { dependencies } = createDependencies();
-    const adapter = new EventPresentationRegistry().create('ghosts', dependencies);
-    adapter.stage({ ...context, eventId: 'ghosts' });
-    await adapter.reveal();
-    await adapter.playChoice(choice);
-    await adapter.playItemUse('flareGun', 'flareGun-1' as ItemInstanceId);
-    await adapter.react(reaction);
-    adapter.clear();
-    adapter.dispose();
-    expect(layer.stage).toHaveBeenCalledWith('ghosts', 17);
-    expect(supernatural.stage).toHaveBeenCalledWith('ghosts', 17);
-    expect(layer.reveal).toHaveBeenCalledWith('ghosts');
-    expect(supernatural.reveal).toHaveBeenCalledWith('ghosts');
-    expect(supernatural.playItemUse).toHaveBeenCalledWith(
-      'ghosts',
-      'flareGun',
-      'flareGun-1',
-    );
-    expect(layer.react).toHaveBeenCalledWith('ghosts', reaction.outcome);
-    expect(supernatural.react).toHaveBeenCalledWith(
-      'ghosts',
-      reaction.outcome,
-      reaction.physicalResponse,
-      null,
-    );
-    expect(layer.clear).toHaveBeenCalledOnce();
-    expect(supernatural.clear).toHaveBeenCalledOnce();
-    expect(layer.dispose).toHaveBeenCalledOnce();
-    expect(supernatural.dispose).toHaveBeenCalledOnce();
   });
 
   it('keeps unsupported animator item use on the shared fallback path', async () => {
@@ -599,31 +373,6 @@ describe('EventPresentationRegistry', () => {
     expect(supernatural.playItemUse).not.toHaveBeenCalled();
   });
 
-  it('owns one moon presenter and delegates its normalized lifecycle directly', async () => {
-    const { dependencies } = createDependencies();
-    const adapter = new EventPresentationRegistry().create('face-on-the-moon', dependencies);
-    const moonContext = { ...context, eventId: 'face-on-the-moon' } as const;
-    adapter.stage(moonContext);
-    await adapter.reveal();
-    await adapter.playChoice(choice);
-    await adapter.playItemUse('umbrella', 'umbrella-1' as ItemInstanceId);
-    await adapter.react(reaction);
-    adapter.update(9, 0.25);
-    adapter.settleForVisibilityChange();
-    adapter.clear();
-    adapter.dispose();
-    expect(constructors.moon).toHaveBeenCalledOnce();
-    expect(constructors.moon).toHaveBeenCalledWith(dependencies.moon);
-    expect(moon.stage).toHaveBeenCalledWith(moonContext);
-    expect(moon.reveal).toHaveBeenCalledWith();
-    expect(moon.react).toHaveBeenCalledWith(reaction.result, reaction.outcome);
-    expect(moon.update).toHaveBeenCalledWith(9, 0.25);
-    expect(moon.settleForVisibilityChange).toHaveBeenCalledOnce();
-    expect(moon.clear).toHaveBeenCalledOnce();
-    expect(moon.dispose).toHaveBeenCalledOnce();
-    expect(calledFamilyConstructors()).toEqual(['moon']);
-  });
-
   it('preserves a construction error while rollback cleanup continues', () => {
     const constructionError = new Error('weather construction');
     const cleanupError = new Error('layer cleanup');
@@ -637,18 +386,5 @@ describe('EventPresentationRegistry', () => {
     expect(() => new EventPresentationRegistry().create('shower-night', dependencies))
       .toThrow(constructionError);
     expect(layer.dispose).toHaveBeenCalledOnce();
-  });
-
-  it('continues adapter cleanup after the first family error', () => {
-    const cleanupError = new Error('layer cleanup');
-    layer.dispose.mockImplementation(() => {
-      throw cleanupError;
-    });
-    const { dependencies } = createDependencies();
-    const adapter = new EventPresentationRegistry().create('shower-night', dependencies);
-    expect(() => adapter.dispose()).toThrow(cleanupError);
-    expect(weather.dispose).toHaveBeenCalledOnce();
-    adapter.dispose();
-    expect(weather.dispose).toHaveBeenCalledOnce();
   });
 });

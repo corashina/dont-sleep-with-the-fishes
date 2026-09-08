@@ -43,6 +43,8 @@ const catalog = {
   notBroken: { en: 'Item is not broken.', pl: 'Przedmiot jest sprawny.', 'es-AR': "El objeto no está roto." },
   break: { en: 'Break', pl: 'Uszkodź', 'es-AR': "Romper" },
   fix: { en: 'Fix', pl: 'Napraw', 'es-AR': "Reparar" },
+  quantity: { en: 'Quantity', pl: 'Ilość', 'es-AR': 'Cantidad' },
+  minimumQuantity: { en: 'Keep at least one item.', pl: 'Zachowaj co najmniej jeden przedmiot.', 'es-AR': 'Conservá al menos un objeto.' },
 } as const;
 
 export type PresentationUiKey = keyof typeof catalog;

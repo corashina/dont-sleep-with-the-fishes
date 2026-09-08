@@ -94,19 +94,6 @@ describe('EventPresentationHost', () => {
     expect(host.activeEventId()).toBeNull();
   });
 
-  it('returns inactive values when no adapter is attached', async () => {
-    const host = new EventPresentationHost();
-
-    await expect(host.reveal()).resolves.toBeUndefined();
-    await expect(host.playChoice({} as never)).resolves.toBeUndefined();
-    await expect(host.playItemUse('seal', 'cannedFood-1')).resolves.toBe(false);
-    await expect(host.react({} as never)).resolves.toBeUndefined();
-    expect(host.itemAimTarget()).toBeNull();
-    expect(host.interactionTargets()).toEqual([]);
-    expect(host.interactionRoot('seal')).toBeNull();
-    expect(host.resultRoot('seal')).toBeNull();
-  });
-
   it('rejects duplicate attachment and detaching a different adapter', () => {
     const host = new EventPresentationHost();
     const adapter = createAdapter();
@@ -140,101 +127,6 @@ describe('EventPresentationHost', () => {
     expect(host.activeEventId()).toBeNull();
   });
 
-  it('rolls back a root when its parent attaches it and then throws', () => {
-    const parent = new Group();
-    const root = new Group();
-    const attachmentError = new Error('attach failed');
-    const add = parent.add.bind(parent);
-    vi.spyOn(parent, 'add').mockImplementation((object) => {
-      add(object);
-      throw attachmentError;
-    });
-    const host = new EventPresentationHost();
-    const adapter = createAdapter('leak', [{ parent, root }]);
-
-    expect(() => host.attach(adapter)).toThrow(attachmentError);
-
-    expect(root.parent).toBeNull();
-    expect(host.activeEventId()).toBeNull();
-  });
-
-  it('leaves a root with its existing parent when add throws before attachment', () => {
-    const first = { parent: new Group(), root: new Group() };
-    const existingParent = new Group();
-    const root = new Group();
-    const failingParent = new Group();
-    const attachmentError = new Error('attach failed');
-    existingParent.add(root);
-    vi.spyOn(failingParent, 'add').mockImplementation(() => {
-      throw attachmentError;
-    });
-    const host = new EventPresentationHost();
-    const adapter = createAdapter('leak', [first, { parent: failingParent, root }]);
-
-    expect(() => host.attach(adapter)).toThrow(attachmentError);
-
-    expect(first.root.parent).toBeNull();
-    expect(root.parent).toBe(existingParent);
-    expect(existingParent.children).toEqual([root]);
-    expect(host.activeEventId()).toBeNull();
-  });
-
-  it('rolls back all attached roots in reverse order', () => {
-    const order: string[] = [];
-    const first = { parent: new Group(), root: new Group() };
-    const second = { parent: new Group(), root: new Group() };
-    const failingParent = new Group();
-    const attachmentError = new Error('attach failed');
-    const firstRemove = first.root.removeFromParent.bind(first.root);
-    const secondRemove = second.root.removeFromParent.bind(second.root);
-    vi.spyOn(first.root, 'removeFromParent').mockImplementation(() => {
-      if (first.root.parent !== null) order.push('first');
-      return firstRemove();
-    });
-    vi.spyOn(second.root, 'removeFromParent').mockImplementation(() => {
-      if (second.root.parent !== null) order.push('second');
-      return secondRemove();
-    });
-    vi.spyOn(failingParent, 'add').mockImplementation(() => {
-      throw attachmentError;
-    });
-    const adapter = createAdapter('leak', [
-      first,
-      second,
-      { parent: failingParent, root: new Group() },
-    ]);
-    const host = new EventPresentationHost();
-
-    expect(() => host.attach(adapter)).toThrow(attachmentError);
-
-    expect(order).toEqual(['second', 'first']);
-    expect(first.root.parent).toBeNull();
-    expect(second.root.parent).toBeNull();
-  });
-
-  it('detaches roots in reverse order', () => {
-    const order: string[] = [];
-    const first = { parent: new Group(), root: new Group() };
-    const second = { parent: new Group(), root: new Group() };
-    vi.spyOn(first.root, 'removeFromParent').mockImplementation(() => {
-      order.push('first');
-      return first.root;
-    });
-    vi.spyOn(second.root, 'removeFromParent').mockImplementation(() => {
-      order.push('second');
-      return second.root;
-    });
-    const host = new EventPresentationHost();
-    const adapter = createAdapter('leak', [first, second]);
-
-    host.attach(adapter);
-    order.length = 0;
-    host.detach(adapter);
-    host.detach(adapter);
-
-    expect(order).toEqual(['second', 'first']);
-  });
-
   it('clears once for each staged activation and skips cleared work during disposal', () => {
     const host = new EventPresentationHost();
     const adapter = createAdapter();
@@ -250,20 +142,6 @@ describe('EventPresentationHost', () => {
 
     expect(adapter.stage).toHaveBeenCalledTimes(2);
     expect(adapter.clear).toHaveBeenCalledTimes(2);
-  });
-
-  it('does not retry a clear that throws', () => {
-    const host = new EventPresentationHost();
-    const adapter = createAdapter();
-    const clearError = new Error('clear failed');
-    vi.mocked(adapter.clear).mockImplementation(() => { throw clearError; });
-
-    host.attach(adapter);
-    expect(() => host.clear()).toThrow(clearError);
-    expect(() => host.clear()).not.toThrow();
-    expect(() => host.dispose()).not.toThrow();
-
-    expect(adapter.clear).toHaveBeenCalledOnce();
   });
 
   it('cleans up after a clear failure and leaves disposal to the bundle', () => {

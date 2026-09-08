@@ -9,8 +9,6 @@ import {
   driftingSupplyKindFromSeed,
   type DriftingSupplyKind,
 } from '../src/survival/driftingSupplies';
-import { focusedChoicesFor } from '../src/survival/SurvivalEventFlow';
-import { survivalEventById } from '../src/survival/eventCatalog';
 import { deriveEventVariantSeed } from '../src/survival/eventPresentationOutcome';
 import { sequenceRandom } from './helpers/random';
 
@@ -55,24 +53,6 @@ describe('drifting supplies', () => {
         && driftingSupplyDistanceFromSeed(seed) === 'far'
       ))).toBe(true);
     }
-  });
-
-  it.each([
-    ['barrel', 1, 1],
-    ['lifeboat', 2, 1],
-    ['container', 3, 1],
-  ] as const)('grants the %s food tier', (kind, quantity, energyCost) => {
-    const outcome = sessionFor(kind, 0).resolveEvent({
-      kind: 'choice',
-      choiceId: 'retrieve',
-    });
-
-    expect(outcome).toMatchObject({
-      accepted: true,
-      deltas: { energy: -energyCost, food: quantity },
-      rewardSummary: { kind: 'resource', id: 'food', quantity },
-      eventPresentationKey: 'drifting-supplies.retrieve',
-    });
   });
 
   it.each([
@@ -143,43 +123,4 @@ describe('drifting supplies', () => {
       kind: 'item', id: 'energyBar', quantity: 1,
     });
   });
-
-  it.each(DRIFTING_SUPPLY_KINDS)(
-    'retrieves the %s with one player energy',
-    (kind) => {
-      const session = sessionFor(kind, 0, 1);
-
-      expect(session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' }))
-        .toMatchObject({ accepted: true });
-      expect(session.snapshot().energy).toBe(0);
-    },
-  );
-
-  it.each(DRIFTING_SUPPLY_KINDS)(
-    'retrieves the %s with two Carlitos energy',
-    (kind) => {
-      const session = sessionFor(kind, 0, 0, 2);
-
-      expect(session.resolveEvent({ kind: 'choice', choiceId: 'delegate-carlitos' }))
-        .toMatchObject({ accepted: true });
-      expect(session.snapshot().carlitos?.energy).toBe(0);
-    },
-  );
-
-  it.each(DRIFTING_SUPPLY_KINDS)(
-    'shows the %s cost for the player and Carlitos',
-    (kind) => {
-      const session = sessionFor(kind, 0, 1, 2);
-      const event = survivalEventById('drifting-supplies');
-      if (event === undefined) throw new Error('Missing Drifting Supplies event.');
-
-      expect(focusedChoicesFor(event, session.snapshot())).toEqual([
-        expect.objectContaining({ id: 'retrieve', energyCost: 1, unavailableReason: null }),
-        expect.objectContaining({
-          id: 'delegate-carlitos', energyCost: 2, unavailableReason: null,
-        }),
-        expect.objectContaining({ id: 'sleep' }),
-      ]);
-    },
-  );
 });

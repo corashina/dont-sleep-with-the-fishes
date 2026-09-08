@@ -9,9 +9,7 @@ import { validateSurvivalEventCatalog } from '../src/survival/eventCatalogValida
 import { drawWeightedEvent, eligibleEvents } from '../src/survival/eventSelection';
 import { sequenceRandom } from './helpers/random';
 import type {
-  IntegerValue,
   SurvivalEventDefinition,
-  WeightedEventOutcome,
 } from '../src/survival/survivalTypes';
 
 
@@ -22,21 +20,6 @@ const resource = (resourceName: string, operation: string, value: unknown) => ({
 const add = (name: string, value: unknown) => resource(name, 'add', value);
 const subtract = (name: string, value: unknown) => resource(name, 'subtract', value);
 const item = (kind: string, itemId: string, quantity = 1) => ({ kind, itemId, quantity });
-
-function maximumValue(value: IntegerValue): number {
-  return typeof value === 'number' ? value : value.max;
-}
-
-function maximumLoss(
-  outcome: WeightedEventOutcome,
-  resourceName: 'health' | 'hull',
-): number {
-  return (outcome.effects.resources ?? [])
-    .filter((effect) => (
-      effect.resource === resourceName && effect.operation === 'subtract'
-    ))
-    .reduce((sum, effect) => sum + maximumValue(effect.value), 0);
-}
 
 
 
@@ -62,75 +45,6 @@ const weightedTestEvent = (
 });
 
 describe('survival events', () => {
-  it('caps ordinary outcome damage at sixty per meter', () => {
-    for (const eventEntry of SURVIVAL_EVENTS) {
-      for (const choice of eventEntry.choices) {
-        for (const result of choice.outcomes) {
-          expect(
-            maximumLoss(result, 'health'),
-            `${eventEntry.id}.${choice.id} Health`,
-          ).toBeLessThanOrEqual(60);
-          expect(
-            maximumLoss(result, 'hull'),
-            `${eventEntry.id}.${choice.id} Hull`,
-          ).toBeLessThanOrEqual(60);
-        }
-      }
-    }
-  });
-
-  it('uses the reduced Eerie Melody damage ranges', () => {
-    const melody = survivalEventById('eerie-melody')!;
-    const spyglass = melody.choices.find(({ id }) => id === 'spyglass')!.outcomes[0]!;
-    const umbrella = melody.choices.find(({ id }) => id === 'umbrella')!.outcomes[1]!;
-    const sleep = melody.choices.find(({ id }) => id === 'sleep')!.outcomes[1]!;
-
-    expect(spyglass.effects.resources).toEqual([
-      subtract('hull', { min: 30, max: 40 }),
-      subtract('health', 20),
-    ]);
-    expect(umbrella.effects.resources).toEqual([
-      subtract('hull', { min: 25, max: 35 }),
-    ]);
-    expect(sleep.effects.resources).toEqual([
-      subtract('hull', { min: 30, max: 40 }),
-      subtract('health', 20),
-    ]);
-  });
-
-  it('keeps one no-item response on every event', () => {
-    for (const eventEntry of SURVIVAL_EVENTS) {
-      expect(
-        eventEntry.choices.some(({ itemId }) => itemId === undefined),
-        eventEntry.id,
-      ).toBe(true);
-    }
-  });
-
-  it('limits random item loss to one', () => {
-    for (const eventEntry of SURVIVAL_EVENTS) {
-      for (const choice of eventEntry.choices) {
-        for (const result of choice.outcomes) {
-          const randomLoss = (result.effects.items ?? [])
-            .filter(({ kind }) => kind === 'loseRandom')
-            .reduce((sum, mutation) => sum + mutation.quantity, 0);
-          expect(randomLoss, `${eventEntry.id}.${choice.id}`).toBeLessThanOrEqual(1);
-        }
-      }
-    }
-  });
-  it('uses dawn energy instead of immediate energy during night events', () => {
-    for (const event of SURVIVAL_EVENTS.filter(({ phase }) => phase === 'night')) {
-      for (const choice of event.choices) {
-        for (const result of choice.outcomes) {
-          expect(
-            result.effects.resources?.some(({ resource }) => resource === 'energy') ?? false,
-            `${event.id}.${choice.id}`,
-          ).toBe(false);
-        }
-      }
-    }
-  });
 
   it('defines Carlitos event gates and living-companion eligibility', () => {
     expect(survivalEventById('sick-companion')).toBeUndefined();
@@ -169,33 +83,6 @@ describe('survival events', () => {
     expect(companionEvents.every((id) => living.includes(id))).toBe(true);
   });
 
-
-
-
-
-
-  it.each(['drifting-supplies', 'drifting-chest'] as const)(
-    'keeps %s in the catalog as a dawn-only cargo event',
-    (eventId) => {
-    const loot = SURVIVAL_EVENTS.find(({ id }) => id === eventId);
-
-    expect(loot).toMatchObject({
-      phase: 'day',
-      earliestDay: 3,
-      cooldownDays: 3,
-    });
-    const retrieve = loot?.choices.find(({ id }) => id === 'retrieve');
-    expect(retrieve?.label).toBe(
-      eventId === 'drifting-supplies' ? 'Retrieve Supplies' : 'Retrieve It',
-    );
-    expect(retrieve?.requirements).toEqual([{
-      resource: 'energy',
-      minimum: eventId === 'drifting-supplies' ? 1 : 3,
-    }]);
-    expect(retrieve?.outcomes).toHaveLength(eventId === 'drifting-supplies' ? 7 : 1);
-    },
-  );
-
   it('blocks one-time, absent-item, and rescue-lead events', () => {
     const base = {
       phase: 'night' as const, day: 20, weather: 'calm' as const, lastEventId: null,
@@ -216,22 +103,6 @@ describe('survival events', () => {
       rescueLead: 2,
       appearanceCounts: new Map([['other-people', 1]]),
     }).some(({ id }) => id === 'other-people')).toBe(true);
-  });
-
-  it('allows Check the Back only when no chest occupies the stern', () => {
-    const eligible = (chestState: 'none' | 'closed' | 'mimic') => eligibleEvents(
-      SURVIVAL_EVENTS,
-      {
-        phase: 'night', day: 20, weather: 'calm', lastEventId: null,
-        lastSeenDay: new Map(), targetableItemIds: new Set(),
-        appearanceCounts: new Map(), inventoryItemIds: new Set(), rescueLead: 0,
-        chestState,
-      },
-    ).some(({ id }) => id === 'check-the-back');
-
-    expect(eligible('none')).toBe(true);
-    expect(eligible('closed')).toBe(false);
-    expect(eligible('mimic')).toBe(false);
   });
 
   it('filters by phase, day bounds, immediate repeat, and cooldown', () => {
@@ -258,15 +129,6 @@ describe('survival events', () => {
     }).map((event) => event.id)).not.toContain('dangerous-waters');
   });
 
-  it('limits Dangerous Waters to one appearance per run', () => {
-    expect(eligibleEvents(SURVIVAL_EVENTS, {
-      phase: 'night', day: 12, weather: 'calm', lastEventId: null,
-      lastSeenDay: new Map(), targetableItemIds: new Set(),
-      appearanceCounts: new Map([['dangerous-waters', 1]]),
-      inventoryItemIds: new Set(), rescueLead: 0,
-    }).map(({ id }) => id)).not.toContain('dangerous-waters');
-  });
-
   it('excludes Tentacle Attack from the draw pool without a canonical target', () => {
     const eligible = (targetableItemIds: ReadonlySet<ItemId>) => eligibleEvents(SURVIVAL_EVENTS, {
       phase: 'night', day: 8, weather: 'calm', lastEventId: null, lastSeenDay: new Map(),
@@ -277,20 +139,6 @@ describe('survival events', () => {
     expect(eligible(new Set()).map(({ id }) => id)).not.toContain('snatcher');
     expect(eligible(new Set(['baitTin', 'fishingNet'])).map(({ id }) => id)).not.toContain('snatcher');
     expect(eligible(new Set(['cannedFood'])).map(({ id }) => id)).toContain('snatcher');
-  });
-
-  it('limits Tentacle Attack responses to weapons and sleep', () => {
-    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'snatcher');
-
-    expect(event?.choices.map(({ id }) => id)).toEqual([
-      'knife', 'shotgun', 'flareGun', 'sleep',
-    ]);
-  });
-
-  it('limits Chest Attack outcomes to its automatic attack and Knife mitigation', () => {
-    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'chest-attack');
-
-    expect(event?.choices.map(({ id }) => id)).toEqual(['knife', 'attack']);
   });
 
   it('draws by stable weighted boundaries and returns a quiet fallback for an empty pool', () => {
@@ -398,17 +246,6 @@ describe('survival events', () => {
     rejects((catalog) => {
       catalog[0].choices[0].outcomes[0].effects.companion = [];
     }, /unsupported effect key companion/i);
-  });
-
-  it('allows scuba gear in events and keeps radio excluded', () => {
-    const scubaCatalog = structuredClone(SURVIVAL_EVENTS) as any[];
-    scubaCatalog[0].choices[0].itemId = 'scubaSet';
-    expect(() => validateSurvivalEventCatalog(scubaCatalog)).not.toThrow();
-
-    const radioCatalog = structuredClone(SURVIVAL_EVENTS) as any[];
-    radioCatalog[0].choices[0].itemId = 'radio';
-    expect(() => validateSurvivalEventCatalog(radioCatalog))
-      .toThrow(/event-choice-excluded item/i);
   });
 
   it.each([

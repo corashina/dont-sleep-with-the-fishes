@@ -25,6 +25,9 @@ export interface OceanShaderUniforms {
   uWaterColor: IUniform<Texture | null>;
   uWaterDepth: IUniform<Texture | null>;
   uWaterReflection: IUniform<Texture | null>;
+  uWaterReflectionDepth: IUniform<Texture | null>;
+  uWaterReflectionSky: IUniform<Color>;
+  uWaterOpenRadiance: IUniform<Color>;
   uPersistentFoam: IUniform<Texture | null>;
   uWaterReflectionMatrix: IUniform<Matrix4>;
   uWaterInverseProjection: IUniform<Matrix4>;
@@ -139,17 +142,19 @@ export const OCEAN_VERTEX_SHADER = `
       displaced.x += uParameters[i].w * amplitude * direction.x * waveCos;
       displaced.z += uParameters[i].w * amplitude * direction.y * waveCos;
     }
-    vec2 vortexDelta = worldXZ - uVortexCenter;
-    float vortexDistance = length(vortexDelta);
-    float vortexRadius = max(0.001, uVortexRadius);
-    float envelopeT = clamp(1.0 - vortexDistance / vortexRadius, 0.0, 1.0);
-    float envelope = envelopeT * envelopeT * (3.0 - 2.0 * envelopeT) * uVortexStrength;
-    float inverseDistance = vortexDistance > 0.0001 ? 1.0 / vortexDistance : 0.0;
-    vec2 radial = vortexDelta * inverseDistance;
-    float swirl = 0.78 + 0.22 * sin(uVortexPhase + vortexDistance * 0.65);
-    height -= uVortexDepression * envelope;
-    displaced.x += -radial.y * uVortexTangentStrength * envelope * swirl;
-    displaced.z += radial.x * uVortexTangentStrength * envelope * swirl;
+    if (uVortexStrength != 0.0) {
+      vec2 vortexDelta = worldXZ - uVortexCenter;
+      float vortexDistance = length(vortexDelta);
+      float vortexRadius = max(0.001, uVortexRadius);
+      float envelopeT = clamp(1.0 - vortexDistance / vortexRadius, 0.0, 1.0);
+      float envelope = envelopeT * envelopeT * (3.0 - 2.0 * envelopeT) * uVortexStrength;
+      float inverseDistance = vortexDistance > 0.0001 ? 1.0 / vortexDistance : 0.0;
+      vec2 radial = vortexDelta * inverseDistance;
+      float swirl = 0.78 + 0.22 * sin(uVortexPhase + vortexDistance * 0.65);
+      height -= uVortexDepression * envelope;
+      displaced.x += -radial.y * uVortexTangentStrength * envelope * swirl;
+      displaced.z += radial.x * uVortexTangentStrength * envelope * swirl;
+    }
     displaced.y += height;
     vec4 worldPosition = modelMatrix * vec4(displaced, 1.0);
     vViewDepth = length(cameraPosition - worldPosition.xyz);
@@ -194,25 +199,12 @@ export const OCEAN_FRAGMENT_SHADER = `
   varying vec2 vOceanPosition;
   varying vec3 vWorldPosition;
 
-  void sampleSurfaceWave(
+  void applyVortexDepression(
     vec2 worldPosition,
-    out float height,
-    out vec2 derivative
+    inout float height,
+    inout vec2 derivative
   ) {
-    height = 0.0;
-    derivative = vec2(0.0);
-    for (int i = 0; i < 4; i++) {
-      vec2 direction = normalize(uDirections[i]);
-      float amplitude = uParameters[i].x * uAmplitudeScale;
-      float waveNumber = 6.28318530718 / uParameters[i].y;
-      float theta = waveNumber * dot(direction, worldPosition)
-        + uParameters[i].z * uTime
-        + uPhases[i];
-      float waveCos = cos(theta);
-      height += amplitude * sin(theta);
-      derivative += amplitude * waveNumber * direction * waveCos;
-    }
-
+    if (uVortexStrength == 0.0) return;
     vec2 vortexDelta = worldPosition - uVortexCenter;
     float vortexDistance = length(vortexDelta);
     float vortexRadius = max(0.001, uVortexRadius);
@@ -231,6 +223,27 @@ export const OCEAN_FRAGMENT_SHADER = `
         : 0.0;
     height -= uVortexDepression * envelope;
     derivative -= uVortexDepression * envelopeDerivative * radial;
+  }
+
+  void sampleSurfaceWave(
+    vec2 worldPosition,
+    out float height,
+    out vec2 derivative
+  ) {
+    height = 0.0;
+    derivative = vec2(0.0);
+    for (int i = 0; i < 4; i++) {
+      vec2 direction = normalize(uDirections[i]);
+      float amplitude = uParameters[i].x * uAmplitudeScale;
+      float waveNumber = 6.28318530718 / uParameters[i].y;
+      float theta = waveNumber * dot(direction, worldPosition)
+        + uParameters[i].z * uTime
+        + uPhases[i];
+      float waveCos = cos(theta);
+      height += amplitude * sin(theta);
+      derivative += amplitude * waveNumber * direction * waveCos;
+    }
+    applyVortexDepression(worldPosition, height, derivative);
   }
 
   float bayer2(vec2 cell) {
@@ -254,6 +267,7 @@ export const OCEAN_FRAGMENT_SHADER = `
   }
 
   vec2 warpedDetailSlope(vec2 worldPosition) {
+    if (vViewDepth >= uDetailFade.y) return vec2(0.0);
     vec2 wind = normalize(vec2(0.83, 0.56));
     vec2 crossWind = vec2(-wind.y, wind.x);
     vec2 quartering = normalize(vec2(0.24, -0.97));
@@ -482,34 +496,40 @@ export const OCEAN_FRAGMENT_SHADER = `
     float sunCore = pow(specularFacing, 220.0) * 1.24;
     float sunSheen = pow(specularFacing, 38.0) * mix(0.10, 0.24, windAlignment);
 
-    float ribbonNoise = foamRibbonNoise(vWorldPosition.xz);
-    float edgeNoise = foamEdgeNoise(vWorldPosition.xz);
-    float fineDetailFade = 1.0 - smoothstep(
-      uDetailFade.x * 0.72,
-      uDetailFade.x,
-      vViewDepth
-    );
-    float bodyFoam = foamBody(
-      waveHeight,
-      waveSlope,
-      ribbonNoise,
-      edgeNoise,
-      fineDetailFade
-    );
-    float bodyDistanceFade = 1.0 - smoothstep(
-      uDetailFade.y * 0.62,
-      uDetailFade.y * 0.96,
-      vViewDepth
-    );
-    bodyFoam *= bodyDistanceFade;
-    float capFoam;
-    capFoam = foamCap(waveHeight, waveSlope, bodyFoam, ribbonNoise);
-    float capDistanceFade = 1.0 - smoothstep(
-      uDetailFade.y * 0.48,
-      uDetailFade.y * 0.74,
-      vViewDepth
-    );
-    capFoam *= capDistanceFade;
+    float bodyFoam = 0.0;
+    float capFoam = 0.0;
+    float foamWeather = clamp((uAmplitudeScale - 0.78) / 0.57, 0.0, 1.0);
+    // Below the crest threshold or beyond the fade, foam coverage is exactly zero.
+    if (waveHeight > mix(0.31, 0.13, foamWeather)
+        && vViewDepth < uDetailFade.y * 0.96) {
+      float ribbonNoise = foamRibbonNoise(vWorldPosition.xz);
+      float fineDetailFade = 1.0 - smoothstep(
+        uDetailFade.x * 0.72,
+        uDetailFade.x,
+        vViewDepth
+      );
+      float edgeNoise = fineDetailFade > 0.0 ? foamEdgeNoise(vWorldPosition.xz) : 1.0;
+      bodyFoam = foamBody(
+        waveHeight,
+        waveSlope,
+        ribbonNoise,
+        edgeNoise,
+        fineDetailFade
+      );
+      float bodyDistanceFade = 1.0 - smoothstep(
+        uDetailFade.y * 0.62,
+        uDetailFade.y * 0.96,
+        vViewDepth
+      );
+      bodyFoam *= bodyDistanceFade;
+      capFoam = foamCap(waveHeight, waveSlope, bodyFoam, ribbonNoise);
+      float capDistanceFade = 1.0 - smoothstep(
+        uDetailFade.y * 0.48,
+        uDetailFade.y * 0.74,
+        vViewDepth
+      );
+      capFoam *= capDistanceFade;
+    }
     float foam = clamp(bodyFoam + capFoam, 0.0, 1.0);
     color += uSunColor * (sunCore + sunSheen) * uDirectLightStrength
       * (1.0 - clamp(foam * 0.72 + capFoam * 0.22, 0.0, 0.94));
@@ -575,6 +595,9 @@ export function createOceanShaderDefinition(quality: WaterQuality): Readonly<{
     uWaterColor: { value: null },
     uWaterDepth: { value: null },
     uWaterReflection: { value: null },
+    uWaterReflectionDepth: { value: null },
+    uWaterReflectionSky: { value: new Color() },
+    uWaterOpenRadiance: { value: new Color() },
     uPersistentFoam: { value: null },
     uWaterReflectionMatrix: { value: new Matrix4() },
     uWaterInverseProjection: { value: new Matrix4() },

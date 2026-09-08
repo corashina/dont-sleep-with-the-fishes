@@ -342,8 +342,7 @@ export class BoatSupplyDisplay {
 
   private supplyPoolSize(groupId: BoatSupplyGroupId): number {
     if (groupId === 'carlitos') return 0;
-    if (groupId === 'cannedFood') return 6;
-    return groupId === 'baitTin' ? 3 : 1;
+    return AGGREGATE_ITEM_IDS.has(groupId) ? 8 : 1;
   }
 
   private createSupplyCopy(

@@ -1,4 +1,5 @@
 import { DOMAIN_MESSAGES } from '../i18n/domainMessages';
+import { PRESENTATION_WEATHER_IDS, type PresentationWeatherId } from '../weather/presentationWeather';
 import { withOutcomeText, type OutcomeText } from './outcomeText';
 import {
   ITEM_DEFINITIONS,
@@ -38,7 +39,7 @@ import type {
 } from './survivalTypes';
 import type { FishingCatchId } from './fishingCatalog';
 
-export const SURVIVAL_SAVE_VERSION = 3 as const;
+export const SURVIVAL_SAVE_VERSION = 4 as const;
 
 export interface SurvivalSaveDocument {
   readonly version: typeof SURVIVAL_SAVE_VERSION;
@@ -51,6 +52,7 @@ const ITEM_ID_SET = new Set<string>(ITEM_IDS);
 const EVENT_ID_SET = new Set(SURVIVAL_EVENTS.map(({ id }) => id));
 const FISHING_CATCH_ID_SET = new Set(FISHING_CATCHES.map(({ id }) => id));
 const WEATHER_ID_SET = new Set<WeatherId>(['calm', 'overcast', 'squall']);
+const JOURNAL_WEATHER_ID_SET = new Set<string>(PRESENTATION_WEATHER_IDS);
 const ITEM_CONDITION_SET = new Set<ItemCondition>(['usable', 'broken', 'consumed', 'lost']);
 const PRESENTATION_CUE_SET = new Set([
   'none', 'fish', 'dive', 'repair', 'treat', 'storm', 'impact', 'darkness', 'sighting',
@@ -492,12 +494,20 @@ function parseJournalNight(value: unknown): JournalNightRecord | null {
 function parseJournalEntry(value: unknown): JournalEntry | null {
   if (!isRecord(value) || !Array.isArray(value.actions)) return null;
   const day = parseInteger(value.day, 1, MAX_COUNTER);
-  if (day === null || typeof value.weather !== 'string' || !WEATHER_ID_SET.has(value.weather as WeatherId)) return null;
+  if (day === null || typeof value.weather !== 'string' || !JOURNAL_WEATHER_ID_SET.has(value.weather)) return null;
   const actions = value.actions.map(parseJournalAction);
   const daytime = parseJournalDaytime(value.daytime);
-  const nighttime = parseJournalNight(value.nighttime);
+  const nighttime: JournalEntry['nighttime'] | null = isRecord(value.nighttime) && value.nighttime.kind === 'pending'
+    ? Object.freeze({ kind: 'pending' }) : parseJournalNight(value.nighttime);
   if (actions.some((action) => action === null) || daytime === undefined || nighttime === null) return null;
-  return Object.freeze({ day, weather: value.weather as WeatherId, actions: Object.freeze(actions as JournalDayActionRecord[]), daytime, nighttime });
+  if (!validJournalNightWeather(value.nightWeather, nighttime)) return null;
+  return Object.freeze({ day, weather: value.weather as PresentationWeatherId,
+    nightWeather: value.nightWeather as PresentationWeatherId | null,
+    actions: Object.freeze(actions as JournalDayActionRecord[]), daytime, nighttime });
+}
+
+function validJournalNightWeather(value: unknown, night: JournalEntry['nighttime']): boolean {
+  return night.kind === 'pending' ? value === null : typeof value === 'string' && JOURNAL_WEATHER_ID_SET.has(value);
 }
 
 function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | null {

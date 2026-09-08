@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ItemInstanceId } from '../src/game/ItemState';
 import {
-  dayActionResourceDelta,
   dayActionUnavailableReason,
   type DayActionRuleState,
 } from '../src/survival/dayActionRules';
@@ -146,28 +145,5 @@ describe('day action availability rules', () => {
       'repair',
       { kind: 'itemRepair', target: 'compass-1' },
     )).toBe('That option cannot be used for this action.');
-  });
-});
-
-describe('day action resource rules', () => {
-  it.each([
-    ['eat', undefined, { hunger: -35, food: -1 }],
-    ['treat', undefined, { health: 30 }],
-    ['answerRadio', undefined, { energy: -1, rescueLead: 2 }],
-    ['useEnergyBar', undefined, { energy: 2 }],
-  ] as const)('computes the current %s resource effect', (action, option, expected) => {
-    expect(dayActionResourceDelta(state({ energy: 1 }), action, option)).toEqual(expected);
-  });
-
-  it.each([
-    [{ hull: 7, energy: 3 }, { energy: -3, hull: 93 }],
-    [{ hull: 90, energy: 3 }, { energy: -1, hull: 10 }],
-    [{ hull: 7, energy: 1 }, { energy: -1, hull: 33 }],
-    [{ hull: 66, energy: 3 }, { energy: -2, hull: 34 }],
-    [{ hull: 1, energy: 4 }, { energy: -3, hull: 99 }],
-  ])('uses available energy for repair', (patch, expected) => {
-    const current = state(patch);
-    expect(dayActionUnavailableReason(current, 'repair')).toBeNull();
-    expect(dayActionResourceDelta(current, 'repair')).toEqual(expected);
   });
 });

@@ -7,62 +7,92 @@ describe('MenuUI how-to-play popup', () => {
     document.body.replaceChildren();
   });
 
-  it('moves through all four pages with buttons and arrow keys', () => {
+  it('pairs two screenshots with subtitles and paragraphs on all four pages', () => {
     const ui = new MenuUI(document.body);
-    document.querySelector<HTMLButtonElement>('[data-menu-guide-open]')!.click();
-    const dialog = document.querySelector<HTMLElement>('[data-menu-guide]')!;
-    const next = document.querySelector<HTMLButtonElement>('[data-menu-guide-next]')!;
-    const previous = document.querySelector<HTMLButtonElement>('[data-menu-guide-previous]')!;
-    const titles = ['Scavenging', 'Survival', 'Day', 'Night'];
-
-    expect(previous.disabled).toBe(true);
-    titles.forEach((title, index) => {
-      expect(document.querySelector('[data-menu-guide-title]')?.textContent).toBe(title);
-      expect(document.querySelector('[data-menu-guide-page-count]')?.textContent)
-        .toBe(`PAGE ${index + 1} OF 4`);
-      expect(document.querySelectorAll('[data-menu-guide-image]')).toHaveLength(2);
-      expect(document.querySelector('[data-menu-guide-description] strong')).not.toBeNull();
-      if (title === 'Scavenging') {
-        expect(document.querySelectorAll<HTMLImageElement>('[data-menu-guide-image]')[1]!.src)
-          .toContain('/images/how-to-play/scavenging-lifeboat.png');
-      }
-      if (title === 'Survival') {
-        expect(document.querySelectorAll<HTMLImageElement>('[data-menu-guide-image]')[1]!.src)
-          .toContain('/images/how-to-play/survival-fishing.png');
-        expect(document.querySelector('[data-menu-guide-description]')?.textContent).toContain('wait for a bite');
-      }
-      if (title === 'Night') {
-        expect(document.querySelectorAll<HTMLImageElement>('[data-menu-guide-image]')[1]!.src)
-          .toContain('/images/how-to-play/survival-night-event.png');
-      }
-      if (title === 'Day') {
-        expect(document.querySelector<HTMLImageElement>('[data-menu-guide-image]')!.src)
-          .toContain('/images/how-to-play/survival-repair.png');
-        expect(document.querySelectorAll<HTMLImageElement>('[data-menu-guide-image]')[1]!.src)
-          .toContain('/images/how-to-play/survival-loot.png');
-        expect(document.querySelector('[data-menu-guide-description]')?.textContent).toContain('select the toolbox');
-        expect(document.querySelector('[data-menu-guide-description]')?.textContent).toContain('Collecting supplies costs 1 energy.');
-      }
-      if (index < titles.length - 1) next.click();
-    });
-    expect(document.querySelector('[data-menu-guide-page-count]')?.textContent)
-      .toBe('PAGE 4 OF 4');
-    expect(next.disabled).toBe(true);
-
-    dialog.dispatchEvent(new KeyboardEvent('keydown', {
-      key: 'ArrowLeft',
-      bubbles: true,
-    }));
-    expect(document.querySelector('[data-menu-guide-title]')?.textContent)
-      .toBe('Day');
-    expect(document.querySelector<HTMLImageElement>('[data-menu-guide-image]')?.src)
-      .toContain('/images/how-to-play/survival-repair.png');
-    expect(document.querySelector<HTMLImageElement>('[data-menu-guide-image]')?.alt)
-      .toBe('The repair toolbox with its hull repair action and energy cost.');
-
-    ui.dispose();
+    try {
+      ui.openGuide();
+      const next = document.querySelector<HTMLButtonElement>('[data-menu-guide-next]')!;
+      const previous = document.querySelector<HTMLButtonElement>('[data-menu-guide-previous]')!;
+      const titles = ['Scavenging', 'Survival', 'Day', 'Night'];
+      const sectionIds = [['collect', 'evacuate'], ['needs', 'catch'], ['hullRepair', 'drifting'], ['nightEvent', 'nightResponse']];
+      expect(previous.disabled).toBe(true);
+      titles.forEach((title, index) => {
+        expect(document.querySelector('[data-menu-guide-title]')?.textContent).toBe(title);
+        expect(document.querySelector('[data-menu-guide-page-count]')?.textContent).toBe(`PAGE ${index + 1} OF 4`);
+        const sections = [...document.querySelectorAll('[data-menu-guide-section]')];
+        expect(sections).toHaveLength(2);
+        expect(sections.map(section => section.getAttribute('data-menu-guide-section'))).toEqual(sectionIds[index]);
+        expect(document.querySelectorAll('[data-menu-guide] p')).toHaveLength(2);
+        for (const section of sections) {
+          const image = section.querySelector('img')!;
+          const subtitle = section.querySelector('h3')!;
+          expect(image.alt.length).toBeGreaterThan(10);
+          expect(subtitle.textContent!.length).toBeGreaterThan(0);
+          expect(section.getAttribute('aria-labelledby')).toBe(subtitle.id);
+          expect(section.querySelectorAll('p')).toHaveLength(1);
+          expect(section.querySelector('p')!.textContent!.trim()).not.toContain('\n');
+          if (index === 1 || index === 2) {
+            expect(section.querySelector('p')!.textContent!.trim().split(/\s+/).length).toBeLessThanOrEqual(120);
+          }
+        }
+        if (index === 0) expect(document.querySelector('[data-menu-guide] strong')).toBeNull();
+        if (index < titles.length - 1) next.click();
+      });
+      expect(next.disabled).toBe(true);
+      expect(document.activeElement).toBe(previous);
+    } finally { ui.dispose(); }
   });
 
+  it('supports page boundaries, scroll reset, and reopening at the first page', () => {
+    const ui = new MenuUI(document.body);
+    try {
+      ui.openGuide();
+      const dialog = document.querySelector<HTMLElement>('[data-menu-guide]')!;
+      const content = document.querySelector<HTMLElement>('[data-menu-guide-sections]')!;
+      const key = (value: string) => dialog.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true }));
+      content.scrollTop = 240;
+      key('End');
+      expect(dialog.dataset.page).toBe('4');
+      expect(content.scrollTop).toBe(0);
+      key('ArrowRight');
+      expect(dialog.dataset.page).toBe('4');
+      key('ArrowLeft');
+      expect(dialog.dataset.page).toBe('3');
+      key('Home');
+      expect(dialog.dataset.page).toBe('1');
+      key('ArrowLeft');
+      expect(dialog.dataset.page).toBe('1');
+      key('End');
+      key('Escape');
+      ui.openGuide();
+      expect(dialog.dataset.page).toBe('1');
+      content.scrollTop = 240;
+      key('Escape');
+      ui.openGuide();
+      expect(content.scrollTop).toBe(0);
+    } finally { ui.dispose(); }
+  });
+
+  it('keeps the scroll region keyboard accessible and traps focus inside the dialog', () => {
+    const ui = new MenuUI(document.body);
+    try {
+      ui.openGuide();
+      const dialog = document.querySelector<HTMLElement>('[data-menu-guide]')!;
+      const content = document.querySelector<HTMLElement>('[data-menu-guide-sections]')!;
+      const close = document.querySelector<HTMLButtonElement>('[data-menu-guide-close]')!;
+      const next = document.querySelector<HTMLButtonElement>('[data-menu-guide-next]')!;
+      expect(content.tabIndex).toBe(0);
+      next.focus();
+      dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', cancelable: true, bubbles: true }));
+      expect(document.activeElement).toBe(close);
+      dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, cancelable: true, bubbles: true }));
+      expect(document.activeElement).toBe(next);
+      content.focus();
+      const scroll = new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true, bubbles: true });
+      content.dispatchEvent(scroll);
+      expect(scroll.defaultPrevented).toBe(false);
+    } finally { ui.dispose(); }
+  });
   it('closes with Escape and restores focus to the guide button', () => {
     const ui = new MenuUI(document.body);
     const open = document.querySelector<HTMLButtonElement>('[data-menu-guide-open]')!;

@@ -23,8 +23,10 @@ import {
   type ShipLayoutSpec,
 } from './ShipLayoutTypes';
 import type { ShipMaterials } from './ShipMaterials';
+import { addShipMachineryDetails } from './ShipMachineryDetails';
 import {
   addBlock,
+  addBeveledBlock,
   toCollisionBox,
   toOrientedCollisionBox,
   type ShipBlockOptions,
@@ -205,7 +207,7 @@ function addRoofEngine(
   const engineCenterY = roofY + SHIP_ROOF_ENGINE.height / 2;
   const engineTopY = roofY + SHIP_ROOF_ENGINE.height;
   const engineFrontZ = engineZ + SHIP_ROOF_ENGINE.depth / 2;
-  addBlock(context, root, {
+  addBeveledBlock(context, root, {
     name: 'roof-engine-body',
     size: [SHIP_ROOF_ENGINE.width, SHIP_ROOF_ENGINE.height, SHIP_ROOF_ENGINE.depth],
     position: [SHIP_ROOF_ENGINE.centerX, engineCenterY, engineZ],
@@ -463,6 +465,7 @@ export function addShipExterior(
     context.materials,
     layout,
   );
+  addShipMachineryDetails(context, layout, stackOutlets);
   addRails(
     context,
     context.root,

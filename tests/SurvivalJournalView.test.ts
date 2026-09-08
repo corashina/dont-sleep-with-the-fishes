@@ -30,7 +30,7 @@ function eventRecord(eventId: string, choiceId: string, inventoryMutations: Jour
 }
 
 const quiet: JournalEntry = {
-  day: 1, weather: 'calm', actions: [], daytime: null, nighttime: { kind: 'quiet' },
+  day: 1, weather: 'calm', nightWeather: 'calm', actions: [], daytime: null, nighttime: { kind: 'quiet' },
 };
 
 const changes: JournalEntry = {
@@ -52,6 +52,21 @@ const changes: JournalEntry = {
 };
 
 describe('journal item changes', () => {
+  it('shows two pages with separate headings, weather, and a pending night', () => {
+    const view = fixture();
+    view.show([{ ...changes, weather: 'rain', nightWeather: 'wind' }]);
+    const pages = view.root.querySelectorAll('.journal-page');
+    expect(pages).toHaveLength(2);
+    expect(pages[0]!.querySelector('[data-journal-title]')?.textContent).toBe('DAY 2');
+    expect(pages[1]!.querySelector('[data-journal-night-title]')?.textContent).toBe('NIGHT 2');
+    expect(pages[0]!.querySelector('[data-journal-weather]')?.textContent).toMatch(/rain/i);
+    expect(pages[1]!.querySelector('[data-journal-night-weather]')?.textContent).toMatch(/wind/i);
+    view.show([{ ...changes, nighttime: { kind: 'pending' }, nightWeather: null }]);
+    expect(pages[1]!.querySelector('[data-journal-night]')?.textContent).toBe('Night in progress.');
+    expect(pages[1]!.querySelector('[data-journal-night-weather]')?.textContent).toBe('');
+    expect(pages[1]!.querySelectorAll('.journal-item')).toHaveLength(0);
+  });
+
   it('places recorded day and night changes below their text, including repeated items', () => {
     const view = fixture();
     view.show([changes]);

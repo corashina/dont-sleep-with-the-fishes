@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
-import { initializeLanguage, setLanguage } from '../src/i18n/language';
+import { initializeLanguage, setLanguage, type Language } from '../src/i18n/language';
 import { MenuUI } from '../src/menu/MenuUI';
 
 let menu: MenuUI | null = null;
@@ -11,88 +13,66 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-it('updates all guide pages in Argentine Spanish and preserves navigation focus', () => {
+it.each<Language>(['pl', 'es-AR'])('translates both sections on every page into %s without moving focus', (language) => {
   menu = new MenuUI(document.body);
   menu.openGuide();
-  menu.showPointerLockError();
   const next = document.querySelector<HTMLButtonElement>('[data-menu-guide-next]')!;
-  next.focus();
-  setLanguage('es-AR');
-  expect(document.activeElement).toBe(next);
-  const titles = ['Recolección de suministros', 'Supervivencia', 'Día', 'Noche'];
-  for (const [index, title] of titles.entries()) {
-    expect(document.querySelector('[data-menu-guide-title]')?.textContent).toBe(title);
-    expect(document.querySelector('[data-menu-guide-page-count]')?.textContent).toBe(`PÁGINA ${index + 1} DE 4`);
-    expect(document.querySelector('[data-menu-guide-description]')?.textContent).toMatch(/Usá|Juntá|Elegí|elegí/);
+  const previous = document.querySelector<HTMLButtonElement>('[data-menu-guide-previous]')!;
+  for (let page = 1; page <= 4; page += 1) {
+    setLanguage('en');
+    const english = [...document.querySelectorAll('[data-menu-guide-description]')].map(p => p.textContent);
+    const englishAlt = [...document.querySelectorAll<HTMLImageElement>('[data-menu-guide-image]')].map(img => img.alt);
+    const focused = page < 4 ? next : previous;
+    focused.focus();
+    setLanguage(language);
+    expect(document.documentElement.lang).toBe(language);
+    expect(document.activeElement).toBe(focused);
+    expect(document.querySelector<HTMLElement>('[data-menu-guide]')!.dataset.page).toBe(String(page));
+    expect(document.querySelector('[data-menu-guide-page-count]')!.textContent)
+      .toBe(language === 'pl' ? `STRONA ${page} Z 4` : `PÁGINA ${page} DE 4`);
+    const descriptions = [...document.querySelectorAll('[data-menu-guide-description]')];
+    expect(descriptions).toHaveLength(2);
+    descriptions.forEach((paragraph, index) => {
+      expect(paragraph.textContent).not.toBe(english[index]);
+      expect(paragraph.textContent!.length).toBeGreaterThan(100);
+      expect(paragraph.textContent).not.toContain('\n');
+    });
     const images = [...document.querySelectorAll<HTMLImageElement>('[data-menu-guide-image]')];
-    expect(images).toHaveLength(2);
-    expect(images.every(image => /bote|caja de herramientas|Dentro del Dorothy/.test(image.alt))).toBe(true);
-    if (index < titles.length - 1) next.click();
+    images.forEach((image, index) => {
+      expect(image.alt).not.toBe(englishAlt[index]);
+      if (page > 1) expect(image.src).toContain(`-${language}.jpg`);
+    });
+    if (page < 4) next.click();
   }
-  expect(document.querySelector('[data-menu-pointer-lock-error]')?.textContent).toContain('Hacé clic');
-  setLanguage('en');
-  expect(document.querySelector('[data-menu-guide-title]')?.textContent).toBe('Night');
-  expect(document.querySelector('[data-menu-guide-page-count]')?.textContent).toBe('PAGE 4 OF 4');
 });
 
-it('changes an open guide and error while keeping its page and keyboard focus', () => {
+it.each<Language>(['en', 'pl', 'es-AR'])('ships every screenshot referenced by the %s guide', (language) => {
+  setLanguage(language);
+  menu = new MenuUI(document.body);
+  menu.openGuide();
+  const next = document.querySelector<HTMLButtonElement>('[data-menu-guide-next]')!;
+  for (let page = 1; page <= 4; page += 1) {
+    const images = [...document.querySelectorAll<HTMLImageElement>('[data-menu-guide-image]')];
+    for (const image of images) {
+      const path = image.getAttribute('src')!;
+      const asset = path.slice(path.indexOf('images/how-to-play/'));
+      expect(existsSync(resolve('public', asset)), `Missing guide screenshot: ${asset}`).toBe(true);
+    }
+    if (page < 4) next.click();
+  }
+});
+
+it('refreshes pointer-lock help with an open guide and stops updating after disposal', () => {
   menu = new MenuUI(document.body);
   menu.showPointerLockError();
   menu.openGuide();
-  const next = document.querySelector<HTMLButtonElement>('[data-menu-guide-next]')!;
-  next.click();
-  next.focus();
+  setLanguage('es-AR');
+  expect(document.querySelector('[data-menu-pointer-lock-error]')?.textContent).toContain('Hacé clic');
   setLanguage('pl');
-  expect(document.documentElement.lang).toBe('pl');
-  expect(document.querySelector('[data-menu-guide-title]')?.textContent).toBe('Przetrwanie');
-  expect(document.querySelector('[data-menu-guide-image]')?.getAttribute('src')).toContain('survival-day-pl.jpg');
-  expect(document.querySelector('[data-menu-guide-page-count]')?.textContent).toBe('STRONA 2 Z 4');
-  expect(document.querySelectorAll('[data-menu-guide-image]')).toHaveLength(2);
-  expect(document.querySelectorAll<HTMLImageElement>('[data-menu-guide-image]')[1]!.alt).toContain('spławik');
-  expect(document.querySelector('[data-menu-guide-description]')?.textContent).toContain('Niewykorzystana energia przepada.');
   expect(document.querySelector('[data-menu-pointer-lock-error]')?.textContent).toContain('przechwycenie kursora');
-  expect(document.activeElement).toBe(next);
-  expect(document.querySelector('[data-menu-guide]')?.getAttribute('aria-hidden')).toBe('false');
-  setLanguage('en');
-  expect(document.querySelector('[data-menu-guide-title]')?.textContent).toBe('Survival');
-  expect(document.querySelector('[data-menu-guide-image]')?.getAttribute('src')).toContain('survival-day.png');
-  expect(document.querySelector('[data-menu-guide-description]')?.textContent).toContain('Unused energy does not carry over.');
-  expect(document.activeElement).toBe(next);
-});
-
-it('translates Day and Night screenshots and descriptions in order', () => {
-  menu = new MenuUI(document.body);
-  menu.openGuide();
-  const next = document.querySelector<HTMLButtonElement>('[data-menu-guide-next]')!;
-  next.click();
-  next.click();
-  setLanguage('pl');
-  expect(document.querySelector('[data-menu-guide-title]')?.textContent).toBe('Dzień');
-  expect(document.querySelectorAll<HTMLImageElement>('[data-menu-guide-image]')[1]!.src)
-    .toContain('survival-loot-pl.jpg');
-  expect(document.querySelector<HTMLImageElement>('[data-menu-guide-image]')!.src)
-    .toContain('survival-repair-pl.jpg');
-  expect(document.querySelector('[data-menu-guide-description]')?.textContent).toContain('skrzynkę z narzędziami');
-  setLanguage('en');
-  expect(document.querySelectorAll<HTMLImageElement>('[data-menu-guide-image]')[1]!.src)
-    .toContain('survival-loot.png');
-  next.click();
-  setLanguage('pl');
-  expect(document.querySelectorAll('[data-menu-guide-image]')).toHaveLength(2);
-  expect(document.querySelectorAll<HTMLImageElement>('[data-menu-guide-image]')[1]!.src)
-    .toContain('survival-night-event-pl.jpg');
-  expect(document.querySelector('[data-menu-guide-description]')?.textContent).toContain('świecą na biało');
-  setLanguage('en');
-  expect(document.querySelectorAll<HTMLImageElement>('[data-menu-guide-image]')[1]!.src)
-    .toContain('survival-night-event.png');
-});
-
-it('uses the selected language on creation and stops updating a disposed guide', () => {
-  setLanguage('pl');
-  menu = new MenuUI(document.body);
-  const guide = document.querySelector('[data-menu-guide-title]')!;
-  expect(guide.textContent).toBe('Zbieranie zapasów');
+  const section = document.querySelector('[data-menu-guide-section]')!;
+  const before = section.textContent;
   menu.dispose();
   setLanguage('en');
-  expect(guide.textContent).toBe('Zbieranie zapasów');
+  expect(section.textContent).toBe(before);
 });

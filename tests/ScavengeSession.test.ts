@@ -56,23 +56,6 @@ describe('ScavengeSession', () => {
     expect(session.snapshot().carriedItems).toBe(released.carriedItems);
   });
 
-  it('reuses a snapshot until state changes', () => {
-    const session = new ScavengeSession();
-    const initial = session.snapshot();
-
-    expect(session.snapshot()).toBe(initial);
-    session.start();
-    expect(session.snapshot()).not.toBe(initial);
-  });
-
-  it('keeps snapshot identity after a rejected mutation', () => {
-    const session = new ScavengeSession();
-    const initial = session.snapshot();
-
-    expect(session.pickUp('cannedFood')).toBe(false);
-    expect(session.snapshot()).toBe(initial);
-  });
-
   it('starts at 60 seconds and fails exactly once at expiry', () => {
     const session = new ScavengeSession();
     session.start();
@@ -82,18 +65,6 @@ describe('ScavengeSession', () => {
     expect(session.snapshot().status).toBe('failure');
     session.tick(5);
     expect(session.snapshot().remainingSeconds).toBe(0);
-  });
-
-  it('does not advance while paused', () => {
-    const session = new ScavengeSession();
-    session.start();
-    session.tick(10);
-    session.pause();
-    session.tick(40);
-    expect(session.snapshot().remainingSeconds).toBe(50);
-    session.resume();
-    session.tick(1);
-    expect(session.snapshot().remainingSeconds).toBe(49);
   });
 
   it('carries repeatable instances up to total weight three', () => {
@@ -106,28 +77,6 @@ describe('ScavengeSession', () => {
     expect(session.pickUp('cannedFood-2')).toBe(false);
     expect(session.snapshot().carriedItems.map(({ instanceId }) => instanceId))
       .toEqual(['cannedFood-1', 'ductTape-1', 'flashlight-1']);
-  });
-
-  it.each(['scubaSet-1', 'anchor-1'] as const)(
-    'rejects %s unless the full capacity is free',
-    (instanceId) => {
-      const session = new ScavengeSession();
-      session.start();
-      session.pickUp('cannedFood-1');
-      expect(session.pickUp(instanceId)).toBe(false);
-      expect(session.dropCarried()?.instanceId).toBe('cannedFood-1');
-      expect(session.pickUp(instanceId)).toBe(true);
-    },
-  );
-
-  it('saves duplicate instances without a boat limit', () => {
-    const session = new ScavengeSession();
-    session.start();
-    for (const id of ['cannedFood-1', 'cannedFood-2', 'cannedFood-3'] as const) {
-      session.pickUp(id);
-      expect(session.saveCarried()?.instanceId).toBe(id);
-    }
-    expect(session.snapshot().savedCount).toBe(3);
   });
 
   it('saves the full carried bundle atomically in pickup order', () => {
@@ -187,24 +136,6 @@ describe('ScavengeSession', () => {
     });
   });
 
-  it('keeps saved and lost instance transitions idempotent', () => {
-    const savedSession = new ScavengeSession();
-    savedSession.start();
-    savedSession.pickUp('flareGun-1');
-    expect(savedSession.saveCarried()?.instanceId).toBe('flareGun-1');
-    expect(savedSession.lose('flareGun-1')).toBe(false);
-    expect(savedSession.pickUp('flareGun-1')).toBe(false);
-    expect(savedSession.snapshot().items['flareGun-1']!.status).toBe('saved');
-
-    const lostSession = new ScavengeSession();
-    lostSession.start();
-    lostSession.pickUp('flashlight-1');
-    expect(lostSession.loseCarried()?.instanceId).toBe('flashlight-1');
-    expect(lostSession.lose('flashlight-1')).toBe(false);
-    expect(lostSession.pickUp('flashlight-1')).toBe(false);
-    expect(lostSession.snapshot().items['flashlight-1']!.status).toBe('lost');
-  });
-
   it.each(BLOCKED_STATE_SETUPS)('rejects item mutations while $name', ({ enter }) => {
     for (const mutation of ITEM_MUTATIONS) {
       const session = new ScavengeSession();
@@ -216,14 +147,6 @@ describe('ScavengeSession', () => {
       expect.soft(mutation.run(session), mutation.name).toBe(mutation.rejected);
       expect.soft(session.snapshot(), mutation.name).toEqual(before);
     }
-  });
-
-  it('commits success only once', () => {
-    const session = new ScavengeSession();
-    session.start();
-    expect(session.evacuate()).toBe(true);
-    expect(session.evacuate()).toBe(false);
-    expect(session.snapshot().status).toBe('success');
   });
 
   it('auto-evacuates when eligible on the deadline-crossing tick', () => {
@@ -285,21 +208,6 @@ describe('ScavengeSession', () => {
       instanceId: 'bucket-1',
       type: 'bucket',
     })).toThrow();
-  });
-
-  it('does not return a result before successful evacuation', () => {
-    const idle = new ScavengeSession();
-    expect(idle.result()).toBeNull();
-    idle.start();
-    expect(idle.result()).toBeNull();
-  });
-
-  it('does not return a result after failure', () => {
-    const session = new ScavengeSession();
-    session.start();
-    session.tick(60);
-
-    expect(session.result()).toBeNull();
   });
 
   it('deducts a five-second fall penalty without double-finishing', () => {

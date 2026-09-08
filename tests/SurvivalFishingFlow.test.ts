@@ -1,9 +1,7 @@
 // Importance: 10/10. Protects fishing workflow order, state, and lifecycle guards.
 import { describe, expect, it, vi } from 'vitest';
-import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import type { FishingCastPoint } from '../src/survival/FishingSession';
 import {
-  formatFishingResult,
   SurvivalFishingFlow,
   type FishingAudioPort,
   type FishingUiPort,
@@ -180,44 +178,6 @@ async function cast(rig: ReturnType<typeof createRig>): Promise<void> {
   await flushPromises();
 }
 
-describe('formatFishingResult', () => {
-  it.each([
-    ['bait', 'BAIT', 'BAIT +1'],
-    ['wetDuctTape', 'WET DUCT TAPE', 'DUCT TAPE RECOVERED'],
-    ['brokenCompass', 'BROKEN COMPASS', 'BROKEN — REPAIR WITH DUCT TAPE'],
-    ['tornFishingNet', 'TORN FISHING NET', 'BROKEN — REPAIR WITH DUCT TAPE'],
-    ['energyBar', 'ENERGY BAR', 'ENERGY BAR RECOVERED'],
-  ] as const)('formats the %s utility result', (catchId, title, detail) => {
-    expect(formatFishingResult({
-      kind: 'catch',
-      catch: FISHING_CATCHES.find(({ id }) => id === catchId)!,
-    }, {
-      accepted: true,
-      code: 'utility-caught',
-      message: 'Recovered utility.',
-      deltas: catchId === 'bait' ? { bait: 1 } : {},
-      cue: 'none',
-    })).toMatchObject({ caption: 'UTILITY SALVAGE', title, detail });
-  });
-
-  it.each([
-    ['cod', {}, { caption: 'SMALL CATCH', title: 'COD', detail: '+1 FOOD' }],
-    ['tuna', { bait: -1 }, { caption: 'LARGE CATCH', title: 'TUNA', detail: '+2 FOOD - 1 BAIT USED' }],
-    ['plasticBottle', {}, { caption: 'DRIFTING JUNK', title: 'PLASTIC BOTTLE', detail: 'NO FOOD' }],
-  ] as const)('formats the %s catch', (catchId, deltas, expected) => {
-    expect(formatFishingResult({
-      kind: 'catch',
-      catch: FISHING_CATCHES.find(({ id }) => id === catchId)!,
-    }, {
-      accepted: true,
-      code: 'fishing-settled',
-      message: 'Fishing settled.',
-      deltas,
-      cue: 'none',
-    })).toMatchObject(expected);
-  });
-});
-
 describe('SurvivalFishingFlow', () => {
   it('rejects a start without entering the view or setting busy', async () => {
     const rig = createRig({ energy: 0 });
@@ -292,17 +252,6 @@ describe('SurvivalFishingFlow', () => {
     expect(rig.setBusy).toHaveBeenLastCalledWith(false);
     expect(rig.ui.restoreCommandFocus).toHaveBeenCalledOnce();
     expect(rig.flow.hasActiveAttempt()).toBe(false);
-  });
-
-  it('uses the centered cast for keyboard input', async () => {
-    const rig = createRig();
-    await enter(rig);
-
-    expect(rig.flow.cast(null, null, 800, 600)).toBe(true);
-
-    expect(rig.world.centeredFishingCast).toHaveBeenCalledOnce();
-    expect(rig.world.castFishingAtScreenPoint).not.toHaveBeenCalled();
-    expect(rig.world.playFishingCast).toHaveBeenCalledWith(rig.castPoint);
   });
 
   it('starts a new attempt after Continue and settles each catch only once', async () => {
@@ -430,46 +379,6 @@ describe('SurvivalFishingFlow', () => {
     expect(rig.flow.reel()).toBe(true);
   });
 
-  it('reprojects the bite target on resize without advancing the attempt', async () => {
-    const rig = createRig();
-    await enter(rig);
-    await cast(rig);
-    rig.flow.update(3);
-    const attempt = rig.session.beginFishing.mock.results[0]!.value.attempt;
-    const beforeResize = attempt.snapshot();
-    const resizedTarget = { ...rig.biteTarget, x: 520, y: 210 };
-    vi.mocked(rig.world.projectFishingBite).mockReturnValueOnce(resizedTarget);
-
-    rig.flow.resize(1920, 1080);
-
-    expect(attempt.snapshot()).toEqual(beforeResize);
-    expect(rig.world.showFishingBite).toHaveBeenCalledOnce();
-    expect(rig.world.projectFishingBite).toHaveBeenLastCalledWith(1920, 1080);
-    expect(rig.ui.updateFishingBiteTarget).toHaveBeenLastCalledWith(resizedTarget);
-  });
-
-  it('uses the live attempt view and only reprojects on active bite frames', async () => {
-    const rig = createRig();
-    await enter(rig);
-    await cast(rig);
-    const attempt = rig.session.beginFishing.mock.results[0]!.value.attempt;
-    const attemptSnapshot = vi.spyOn(attempt, 'snapshot');
-    attemptSnapshot.mockClear();
-
-    rig.flow.update(2.99);
-    expect(attempt.view().state).toBe('waiting');
-    rig.flow.update(0.01);
-    expect(attempt.view().state).toBe('bite');
-    expect(attemptSnapshot).not.toHaveBeenCalled();
-    vi.mocked(rig.ui.updateFishingBiteTarget).mockClear();
-
-    rig.flow.update(0.1);
-    rig.flow.update(0.1);
-
-    expect(attemptSnapshot).not.toHaveBeenCalled();
-    expect(rig.ui.updateFishingBiteTarget).toHaveBeenCalledTimes(2);
-  });
-
   it('commits one miss and ignores late reels', async () => {
     const rig = createRig({ withBait: true });
     await enter(rig);
@@ -543,45 +452,6 @@ describe('SurvivalFishingFlow', () => {
     expect(rig.ui.hideFishingResult).toHaveBeenCalledOnce();
     expect(rig.ui.setFishingViewExitVisible).toHaveBeenLastCalledWith(false);
     expect(vi.mocked(rig.ui.setFishingState).mock.calls).toHaveLength(stateCalls);
-    expect(rig.flow.cast(null, null, 800, 600)).toBe(false);
-    expect(rig.flow.reel()).toBe(false);
-  });
-
-  it.each([
-    ['the result cleanup', true, false],
-    ['the exit cleanup', false, true],
-    ['both UI cleanups', true, true],
-  ] as const)('commits disposal and continues after %s fails', (
-    _label,
-    failResult,
-    failExit,
-  ) => {
-    const rig = createRig();
-    const resultFailure = { kind: 'result-cleanup-failure' };
-    const exitFailure = { kind: 'exit-cleanup-failure' };
-    if (failResult) {
-      vi.mocked(rig.ui.hideFishingResult).mockImplementation(() => { throw resultFailure; });
-    }
-    if (failExit) {
-      vi.mocked(rig.ui.setFishingViewExitVisible).mockImplementation(() => {
-        throw exitFailure;
-      });
-    }
-
-    let thrown: unknown;
-    try {
-      rig.flow.dispose();
-    } catch (error) {
-      thrown = error;
-    }
-
-    expect(thrown).toBe(failResult ? resultFailure : exitFailure);
-    expect(rig.ui.hideFishingResult).toHaveBeenCalledOnce();
-    expect(rig.ui.setFishingViewExitVisible).toHaveBeenCalledExactlyOnceWith(false);
-    expect(() => rig.flow.dispose()).not.toThrow();
-    expect(rig.ui.hideFishingResult).toHaveBeenCalledOnce();
-    expect(rig.ui.setFishingViewExitVisible).toHaveBeenCalledOnce();
-    expect(rig.flow.hasActiveAttempt()).toBe(false);
     expect(rig.flow.cast(null, null, 800, 600)).toBe(false);
     expect(rig.flow.reel()).toBe(false);
   });

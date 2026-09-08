@@ -495,6 +495,7 @@ export class Game {
       let persistedPostProcessingControls: PostProcessingControls | undefined;
       if (sceneRenderer.postProcessingControls !== undefined) {
         const controls = sceneRenderer.postProcessingControls;
+        controls.setPosterization(tuningState.posterization);
         controls.setAmbientOcclusionMode(tuningState.ambientOcclusionMode);
         controls.setAmbientOcclusionQuality(tuningState.ambientOcclusionQuality);
         controls.setNumeric(
@@ -506,6 +507,10 @@ export class Game {
           tuningState.ambientOcclusionRadius,
         );
         persistedPostProcessingControls = Object.freeze<PostProcessingControls>({
+          setPosterization: (posterization) => {
+            controls.setPosterization(posterization);
+            this.systemTuning.set('posterization', controls.getState().posterization);
+          },
           getState: () => controls.getState(),
           setAmbientOcclusionMode: (mode: ItemAmbientOcclusionMode) => {
             this.systemTuning.set('ambientOcclusionMode', mode);

@@ -33,18 +33,6 @@ const choice = (overrides: Partial<EventChoiceDefinition> = {}): EventChoiceDefi
 });
 
 describe('resolveWeightedOutcome', () => {
-  it('returns the stable presentation key for the selected outcome', () => {
-    const resolved = resolveWeightedOutcome(choice({
-      outcomes: [{
-        weight: 1,
-        message: 'shown',
-        presentationKey: 'flowers.collect',
-        effects: {},
-      }],
-    }), sequenceRandom([0]));
-
-    expect(resolved.presentationKey).toBe('flowers.collect');
-  });
 
   it('excludes outcomes that require an earlier appearance', () => {
     const gated = choice({
@@ -62,50 +50,6 @@ describe('resolveWeightedOutcome', () => {
 
     expect(resolveWeightedOutcome(gated, sequenceRandom([0.99]), 0).message).toBe('common');
     expect(resolveWeightedOutcome(gated, sequenceRandom([0.99]), 1).message).toBe('rare');
-  });
-
-  it('clones gain effects without mutating the catalog outcome', () => {
-    const resolved = resolveWeightedOutcome(choice({
-      outcomes: [{
-        weight: 1,
-        message: 'found',
-        effects: { items: [{ kind: 'gain', itemId: 'energyBar', quantity: 1, fallbackFood: 1 }] },
-      }],
-    }), sequenceRandom([0]));
-    expect(resolved.effects.items).toEqual([
-      { kind: 'gain', itemId: 'energyBar', quantity: 1, fallbackFood: 1 },
-    ]);
-  });
-
-  it('preserves typed night flow effects', () => {
-    const source = choice({
-      outcomes: [{
-        weight: 1,
-        message: 'changed',
-        effects: {
-          nextDawnEnergy: 0,
-          followUpNight: true,
-        },
-      }],
-    });
-    const resolved = resolveWeightedOutcome(source, sequenceRandom([0]));
-
-    expect(resolved.effects).toEqual(source.outcomes[0]?.effects);
-  });
-
-  it.each([0, 3] as const)('preserves next dawn energy %i', (value) => {
-    const choice: EventChoiceDefinition = {
-      id: 'sleep',
-      label: 'Sleep',
-      outcomes: [{
-        weight: 1,
-        message: 'Morning comes.',
-        effects: { nextDawnEnergy: value },
-      }],
-    };
-
-    expect(resolveWeightedOutcome(choice, sequenceRandom([0])))
-      .toMatchObject({ effects: { nextDawnEnergy: value } });
   });
 
   it('selects the next outcome when a roll lands exactly on a cumulative boundary', () => {

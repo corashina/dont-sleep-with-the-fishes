@@ -5,6 +5,7 @@ import {
   type Material,
   Mesh,
 } from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { CollisionBox } from '../player/collisions';
 import type { ShipMaterials } from './ShipMaterials';
 
@@ -23,6 +24,7 @@ export interface ShipBlockOptions {
 }
 
 const boxGeometries = new WeakMap<Group, BoxGeometry>();
+const beveledGeometries = new WeakMap<Group, Map<string, RoundedBoxGeometry>>();
 
 function sharedBoxGeometry(
   context: ShipGeometryBuildContext,
@@ -88,6 +90,33 @@ export function addBlock(
   mesh.name = options.name;
   mesh.position.set(...options.position);
   mesh.scale.set(...options.size);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  parent.add(mesh);
+  return mesh;
+}
+
+export function addBeveledBlock(
+  context: ShipGeometryBuildContext,
+  parent: Group,
+  options: ShipBlockOptions,
+): Mesh {
+  const radius = Math.min(0.055, ...options.size.map((size) => size / 4));
+  let geometries = beveledGeometries.get(parent);
+  if (!geometries) {
+    geometries = new Map();
+    beveledGeometries.set(parent, geometries);
+  }
+  const key = options.size.join(':');
+  let geometry = geometries.get(key);
+  if (!geometry) {
+    geometry = new RoundedBoxGeometry(...options.size, 1, radius);
+    context.geometries.add(geometry);
+    geometries.set(key, geometry);
+  }
+  const mesh = new Mesh(geometry, options.material);
+  mesh.name = options.name;
+  mesh.position.set(...options.position);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   parent.add(mesh);

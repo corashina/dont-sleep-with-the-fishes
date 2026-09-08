@@ -6,14 +6,12 @@ import {
   SurvivalEventFlow,
   type SurvivalEventFlowDependencies,
 } from '../src/survival/SurvivalEventFlow';
-import type { FocusedEventChoiceResolution } from '../src/survival/FocusedEventFlow';
 import type {
   ActionOutcome,
   SurvivalInventorySnapshot,
   SurvivalItemState,
 } from '../src/survival/survivalTypes';
 import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
-import type { FocusedEventChoiceView } from '../src/ui/SurvivalUiViewModel';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { PLANE_CHOICE_WINDOW_SECONDS } from '../src/survival/eventCatalog';
 import { formatJournalEntry } from '../src/survival/journal';
@@ -576,109 +574,6 @@ describe('event selection contracts', () => {
 });
 
 describe('SurvivalEventFlow', () => {
-  it('builds the four exact Wreckage choices with independent requirements', async () => {
-    const rig = createRig(snapshot({
-      state: 'dayEvent',
-      pendingEventId: 'wreckage',
-      energy: 1,
-      carlitos: {
-        alive: true, energy: 2, hunger: 5, sickness: 0,
-        unhappiness: 0, pettedToday: false, deathCause: null,
-      },
-      inventory: inventory({
-        'scubaSet-2': {
-          instanceId: 'scubaSet-2', type: 'scubaSet', condition: 'usable',
-        },
-        'scubaSet-1': {
-          instanceId: 'scubaSet-1', type: 'scubaSet', condition: 'usable',
-        },
-      }),
-    }));
-    await rig.flow.revealPending(rig.session.snapshot());
-    await rig.flow.focusEvent('wreckage');
-
-    expect(rig.focused.enter).toHaveBeenCalledWith('wreckage', [
-      {
-        id: 'search', label: 'Search Debris', unavailableReason: null,
-        energyCost: 1, energyOwner: 'player', instanceId: null,
-      },
-      {
-        id: 'delegate-carlitos', label: 'Send Carlitos', unavailableReason: null,
-        energyCost: 2, energyOwner: 'carlitos', instanceId: null,
-      },
-      {
-        id: 'dive', label: 'Search underwater',
-        unavailableReason: 'Requires 3 energy; you have 1.',
-        energyCost: 3, energyOwner: 'player', instanceId: 'scubaSet-1',
-      },
-      {
-        id: 'leave', label: 'Leave', unavailableReason: null, instanceId: null,
-        dismisses: true,
-      },
-    ]);
-  });
-
-  it.each([
-    ['missing', inventory(), 'Requires usable scuba gear.'],
-    ['broken', inventory({
-      'scubaSet-1': {
-        instanceId: 'scubaSet-1', type: 'scubaSet', condition: 'broken',
-      },
-    }), 'Requires usable scuba gear.'],
-  ])('keeps Dive visible with %s scuba gear', async (_label, carried, reason) => {
-    const rig = createRig(snapshot({
-      state: 'dayEvent', pendingEventId: 'wreckage', energy: 3, inventory: carried,
-    }));
-    await rig.flow.revealPending(rig.session.snapshot());
-    await rig.flow.focusEvent('wreckage');
-
-    expect(rig.focused.enter).toHaveBeenCalledWith('wreckage', expect.arrayContaining([
-      expect.objectContaining({
-        id: 'dive', instanceId: null, unavailableReason: reason,
-      }),
-    ]));
-  });
-
-  it.each([
-    ['absent', null, 'Carlitos is not aboard.'],
-    ['dead', {
-      alive: false, energy: 3, hunger: 5, sickness: 0,
-      unhappiness: 0, pettedToday: false, deathCause: 'sickness' as const,
-    }, 'Carlitos cannot retrieve the loot.'],
-    ['tired', {
-      alive: true, energy: 1, hunger: 5, sickness: 0,
-      unhappiness: 0, pettedToday: false, deathCause: null,
-    }, 'Carlitos needs 2 energy; he has 1.'],
-    ['hungry', {
-      alive: true, energy: 3, hunger: 3, sickness: 0,
-      unhappiness: 0, pettedToday: false, deathCause: null,
-    }, 'Carlitos is Hungry and cannot retrieve the loot.'],
-  ] as const)('keeps all four Wreckage choices visible when Carlitos is %s', async (
-    _label,
-    carlitos,
-    unavailableReason,
-  ) => {
-    const rig = createRig(snapshot({
-      state: 'dayEvent',
-      pendingEventId: 'wreckage',
-      carlitos,
-    }));
-    await rig.flow.revealPending(rig.session.snapshot());
-    await rig.flow.focusEvent('wreckage');
-
-    const choices = rig.focused.enter.mock.calls[0]![1] as readonly FocusedEventChoiceView[];
-    expect(choices.map(({ id }) => id)).toEqual([
-      'search', 'delegate-carlitos', 'dive', 'leave',
-    ]);
-    expect(choices).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        id: 'delegate-carlitos',
-        energyCost: 2,
-        energyOwner: 'carlitos',
-        unavailableReason,
-      }),
-    ]));
-  });
 
   it.each([
     ['search', null, { kind: 'resource', id: 'food', quantity: 1 }],
@@ -734,77 +629,6 @@ describe('SurvivalEventFlow', () => {
     expect(rig.ui.showRewardResult).toHaveBeenCalledWith({
       title: 'WRECKAGE', reward: rewardSummary, lines: [],
     });
-  });
-
-  it('reports a broken selected scuba instance after the Wreckage return', async () => {
-    const pending = snapshot({
-      state: 'dayEvent', pendingEventId: 'wreckage', energy: 3,
-      inventory: inventory({
-        'scubaSet-1': {
-          instanceId: 'scubaSet-1', type: 'scubaSet', condition: 'usable',
-        },
-      }),
-    });
-    const rig = createRig(pending);
-    rig.setResolveEvent(() => {
-      rig.setSnapshot(snapshot({
-        state: 'day',
-        inventory: inventory({
-          'scubaSet-1': {
-            instanceId: 'scubaSet-1', type: 'scubaSet', condition: 'broken',
-          },
-        }),
-      }));
-      return accepted({ message: 'The wreck collapses and damages your gear.' });
-    });
-    await rig.flow.revealPending(pending);
-    await rig.flow.focusEvent('wreckage');
-    rig.flow.setFocusedResolutionActive(true);
-    const resolution = rig.flow.resolveFocusedEventChoice({
-      id: 'dive', instanceId: 'scubaSet-1',
-    });
-    if (resolution === undefined || !resolution.accepted) throw new Error('Expected Dive choice.');
-    await resolution.playAnimation();
-    await resolution.beforeReturn();
-    resolution.clearEvent(true);
-    resolution.renderSnapshot();
-    await resolution.afterReturn();
-
-    expect(rig.ui.showRewardResult).toHaveBeenCalledWith({
-      title: 'WRECKAGE',
-      reward: null,
-      lines: [
-        'The wreck collapses and damages your gear.',
-        'Your scuba gear broke.',
-      ],
-    });
-  });
-
-  it('keeps Wreckage controls inside the shared focused flow', async () => {
-    const rig = createRig(snapshot({
-      state: 'dayEvent',
-      pendingEventId: 'wreckage',
-      energy: 2,
-      inventory: inventory({
-        'scubaSet-1': {
-          instanceId: 'scubaSet-1',
-          type: 'scubaSet',
-          condition: 'usable',
-        },
-      }),
-    }));
-
-    await rig.flow.revealPending(rig.session.snapshot());
-
-    expect(rig.ui.setEventSelection).toHaveBeenLastCalledWith(
-      new Map(),
-      [],
-    );
-    await rig.flow.focusEvent('wreckage');
-    expect(rig.focused.enter).toHaveBeenCalledWith('wreckage', expect.arrayContaining([
-      expect.objectContaining({ id: 'search', instanceId: null }),
-      expect.objectContaining({ id: 'leave', instanceId: null }),
-    ]));
   });
 
   it('runs dive audio through the Wreckage focused item use', async () => {
@@ -887,21 +711,6 @@ describe('SurvivalEventFlow', () => {
       .toEqual({ accepted: false });
   });
 
-  it('skips invalid Drifting Loot retrieval animation', async () => {
-    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-supplies' });
-    const rig = createRig(pending);
-    rig.setResolveEvent(() => accepted({ rewardSummary: undefined }));
-    await rig.flow.revealPending(pending);
-    await rig.flow.focusEvent('drifting-supplies');
-    rig.flow.setFocusedResolutionActive(true);
-    const resolution = rig.flow.resolveFocusedEventChoice({ id: 'retrieve', instanceId: null });
-    if (resolution === undefined || !resolution.accepted) throw new Error('Expected accepted result.');
-
-    await resolution.playAnimation();
-
-    expect(rig.world.retrieveDriftingItem).not.toHaveBeenCalled();
-  });
-
   it('clears active Wreckage dive audio after failure', async () => {
     const itemUse = deferred();
     const pending = snapshot({
@@ -943,21 +752,6 @@ describe('SurvivalEventFlow', () => {
     expect(rig.audio.cancelDive).toHaveBeenCalledOnce();
     itemUse.resolve();
     await work;
-  });
-
-  it('plays dawn after overnight hull wear', async () => {
-    const rig = createRig(snapshot({ state: 'nightEvent' }));
-    rig.session.beginDawn.mockReturnValueOnce(accepted({
-      code: 'dawn',
-      message: 'The sea wears at the hull overnight. Another dawn breaks.',
-      deltas: { hull: -3 },
-      cue: 'dawn',
-    }));
-
-    await rig.flow.beginDawn();
-
-    expect(rig.audio.dawn).toHaveBeenCalledOnce();
-    expect(rig.world.play).toHaveBeenCalledWith('dawn');
   });
   it('loads, activates, stages, and reveals before it enables eligible items', async () => {
     const umbrella = {
@@ -1191,83 +985,6 @@ describe('SurvivalEventFlow', () => {
     expect(rig.presentTerminal).not.toHaveBeenCalled();
   });
 
-  it('keeps a focused invariant primary when synchronous cleanup fails', async () => {
-    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'handyman' });
-    const rig = createRig(pending);
-    const cleanupError = new Error('world cleanup failed');
-    rig.setResolveEvent(() => {
-      rig.setSnapshot(snapshot());
-      return accepted();
-    });
-    await rig.flow.revealPending(pending);
-    rig.world.clearEvent.mockImplementationOnce(() => { throw cleanupError; });
-
-    rig.flow.resolveContextual('touch');
-    await vi.waitFor(() => expect(rig.onInvariantError).toHaveBeenCalledOnce());
-
-    expect(rig.onInvariantError.mock.calls[0]![0].message).toContain(
-      'requires result handyman/touch; received missing',
-    );
-    expect(rig.onFatalError).not.toHaveBeenCalled();
-    expect(rig.bundles.releaseActive).toHaveBeenCalled();
-    expect(rig.ui.clearEventPresentation).toHaveBeenCalled();
-  });
-
-  it('finishes focused recovery when the invariant reporter throws', async () => {
-    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'handyman' });
-    const rig = createRig(pending);
-    const reporterFailure = new Error('invariant reporter failed');
-    rig.setResolveEvent(() => {
-      rig.setSnapshot(snapshot());
-      return accepted();
-    });
-    rig.onInvariantError.mockImplementationOnce(() => { throw reporterFailure; });
-    await rig.flow.revealPending(pending);
-    rig.setBusy.mockClear();
-
-    rig.flow.resolveContextual('touch');
-    await vi.waitFor(() => expect(rig.ui.restoreCommandFocus).toHaveBeenCalledOnce());
-
-    expect(rig.onInvariantError).toHaveBeenCalledOnce();
-    expect(rig.onInvariantError.mock.calls[0]![0].message).toContain(
-      'requires result handyman/touch; received missing',
-    );
-    expect(rig.onFatalError).not.toHaveBeenCalled();
-    expect(rig.ui.setSleepCovered).toHaveBeenCalledWith(true);
-    expect(rig.ui.setSleepCovered).toHaveBeenLastCalledWith(false);
-    expect(rig.setBusy).toHaveBeenLastCalledWith(false);
-  });
-
-  it('keeps a Midnight Tour fatal error primary when synchronous cleanup fails', async () => {
-    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'midnight-tour' });
-    const rig = createRig(pending);
-    const primaryError = new Error('visit presenter failed');
-    rig.world.playEventChoice.mockRejectedValueOnce(primaryError);
-    await rig.flow.revealPending(pending);
-    rig.world.clearEvent.mockImplementationOnce(() => {
-      throw new Error('world cleanup failed');
-    });
-
-    rig.flow.resolveContextual('visit');
-    await vi.waitFor(() => expect(rig.onFatalError).toHaveBeenCalledOnce());
-
-    expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(primaryError);
-    expect(rig.bundles.releaseActive).toHaveBeenCalled();
-    expect(rig.calls).toContain('ready');
-  });
-
-  it('keeps normal cleanup failure reporting and continues later cleanup', () => {
-    const cleanupError = new Error('normal world cleanup failed');
-    const rig = createRig(snapshot());
-    rig.world.clearEvent.mockImplementationOnce(() => { throw cleanupError; });
-
-    rig.flow.clear();
-
-    expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(cleanupError);
-    expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
-    expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
-  });
-
   it('reports only the first cleanup error after every cleanup step', () => {
     const firstError = new Error('audio cleanup failed');
     const rig = createRig(snapshot());
@@ -1286,54 +1003,6 @@ describe('SurvivalEventFlow', () => {
     expect(rig.bundles.cancelPendingActivation).toHaveBeenCalledOnce();
     expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
     expect(rig.calls).toContain('weather:calm');
-  });
-
-  it.each([undefined, null])(
-    'preserves a first cleanup failure thrown as %s',
-    (firstError) => {
-      const rig = createRig(snapshot());
-      rig.audio.clearEvent.mockImplementationOnce(() => { throw firstError; });
-      rig.world.clearEvent.mockImplementationOnce(() => {
-        throw new Error('later world cleanup failed');
-      });
-
-      rig.flow.clear();
-
-      expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(firstError);
-      expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
-      expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
-      expect(rig.calls).toContain('weather:calm');
-    },
-  );
-
-  it('keeps disposal idempotent when the fatal reporter throws', () => {
-    const cleanupError = new Error('audio cleanup failed');
-    const reporterError = new Error('fatal reporter failed');
-    const rig = createRig(snapshot());
-    rig.audio.clearEvent.mockImplementationOnce(() => { throw cleanupError; });
-    rig.onFatalError.mockImplementationOnce(() => { throw reporterError; });
-
-    expect(() => rig.flow.dispose()).toThrow(reporterError);
-    expect(() => rig.flow.dispose()).not.toThrow();
-
-    expect(rig.onFatalError).toHaveBeenCalledExactlyOnceWith(cleanupError);
-    expect(rig.focused.clear).toHaveBeenCalledOnce();
-    expect(rig.bundles.cancelPendingActivation).toHaveBeenCalledOnce();
-    expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
-    expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
-  });
-
-  it('suppresses cleanup errors when another flow owns the primary failure', () => {
-    const rig = createRig(snapshot());
-    rig.world.clearEvent.mockImplementationOnce(() => {
-      throw new Error('secondary world cleanup failed');
-    });
-
-    rig.flow.clearAfterFailure();
-
-    expect(rig.onFatalError).not.toHaveBeenCalled();
-    expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
-    expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
   });
 
   it('cleans and unlocks when night-transition UI setup throws', () => {

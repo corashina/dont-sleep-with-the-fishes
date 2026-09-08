@@ -4,6 +4,9 @@ export const OCEAN_OPTICS_UNIFORMS = /* glsl */ `
   uniform sampler2D uWaterColor;
   uniform sampler2D uWaterDepth;
   uniform sampler2D uWaterReflection;
+  uniform sampler2D uWaterReflectionDepth;
+  uniform vec3 uWaterReflectionSky;
+  uniform vec3 uWaterOpenRadiance;
   uniform sampler2D uPersistentFoam;
   uniform mat4 uWaterReflectionMatrix;
   uniform mat4 uWaterInverseProjection;
@@ -40,7 +43,7 @@ export const OCEAN_OPTICS_FUNCTIONS = /* glsl */ `
   vec3 displacedWaterNormal(out float height, out float compression) {
     vec3 tangentX = vec3(1.0, 0.0, 0.0);
     vec3 tangentZ = vec3(0.0, 0.0, 1.0);
-    vec2 fullDerivative = vec2(0.0);
+    height = 0.0;
     float geometryLod = smoothstep(55.0, 140.0, vViewDepth);
     for (int i = 0; i < 4; i++) {
       vec2 d = normalize(uDirections[i]);
@@ -49,32 +52,34 @@ export const OCEAN_OPTICS_FUNCTIONS = /* glsl */ `
       float weight = mix(1.0, smoothstep(4.0, 11.0, uParameters[i].y), geometryLod);
       float phase = k * dot(d, vOceanPosition) + uParameters[i].z * uTime + uPhases[i];
       float vertical = a * k * cos(phase);
-      float horizontal = uParameters[i].w * a * k * sin(phase) * weight;
+      float waveSin = sin(phase);
+      height += a * waveSin;
+      float horizontal = uParameters[i].w * a * k * waveSin * weight;
       tangentX += vec3(-horizontal * d.x * d.x, vertical * d.x * weight, -horizontal * d.x * d.y);
       tangentZ += vec3(-horizontal * d.x * d.y, vertical * d.y * weight, -horizontal * d.y * d.y);
-      fullDerivative += vertical * d;
     }
-    vec2 waveDerivative;
-    sampleSurfaceWave(vOceanPosition, height, waveDerivative);
-    // The shared sample includes the vortex depression derivative.
-    tangentX.y += waveDerivative.x - fullDerivative.x;
-    tangentZ.y += waveDerivative.y - fullDerivative.y;
-    vec2 vortexDelta = vOceanPosition - uVortexCenter;
-    float radius = length(vortexDelta);
-    if (radius > 0.0001 && radius < uVortexRadius && uVortexStrength > 0.0) {
-      float t = 1.0 - radius / uVortexRadius;
-      float envelope = t * t * (3.0 - 2.0 * t) * uVortexStrength;
-      float envelopeDerivative = -6.0 * t * (1.0 - t) * uVortexStrength / uVortexRadius;
-      float phase = uVortexPhase + radius * 0.65;
-      float swirl = 0.78 + 0.22 * sin(phase);
-      float swirlDerivative = 0.143 * cos(phase);
-      float scale = uVortexTangentStrength * envelope * swirl / radius;
-      float scaleDerivative = uVortexTangentStrength * (
-        (envelopeDerivative * swirl + envelope * swirlDerivative) / radius
-        - envelope * swirl / (radius * radius));
-      vec2 gradient = scaleDerivative * vortexDelta / radius;
-      tangentX.xz += vec2(-vortexDelta.y * gradient.x, scale + vortexDelta.x * gradient.x);
-      tangentZ.xz += vec2(-scale - vortexDelta.y * gradient.y, vortexDelta.x * gradient.y);
+    vec2 vortexDerivative = vec2(0.0);
+    applyVortexDepression(vOceanPosition, height, vortexDerivative);
+    tangentX.y += vortexDerivative.x;
+    tangentZ.y += vortexDerivative.y;
+    if (uVortexStrength > 0.0) {
+      vec2 vortexDelta = vOceanPosition - uVortexCenter;
+      float radius = length(vortexDelta);
+      if (radius > 0.0001 && radius < uVortexRadius) {
+        float t = 1.0 - radius / uVortexRadius;
+        float envelope = t * t * (3.0 - 2.0 * t) * uVortexStrength;
+        float envelopeDerivative = -6.0 * t * (1.0 - t) * uVortexStrength / uVortexRadius;
+        float phase = uVortexPhase + radius * 0.65;
+        float swirl = 0.78 + 0.22 * sin(phase);
+        float swirlDerivative = 0.143 * cos(phase);
+        float scale = uVortexTangentStrength * envelope * swirl / radius;
+        float scaleDerivative = uVortexTangentStrength * (
+          (envelopeDerivative * swirl + envelope * swirlDerivative) / radius
+          - envelope * swirl / (radius * radius));
+        vec2 gradient = scaleDerivative * vortexDelta / radius;
+        tangentX.xz += vec2(-vortexDelta.y * gradient.x, scale + vortexDelta.x * gradient.x);
+        tangentZ.xz += vec2(-scale - vortexDelta.y * gradient.y, vortexDelta.x * gradient.y);
+      }
     }
     compression = 1.0 - (tangentX.x * tangentZ.z - tangentX.z * tangentZ.x);
     vec3 n = normalize(cross(tangentZ, tangentX));
@@ -123,6 +128,13 @@ export const OCEAN_OPTICS_FUNCTIONS = /* glsl */ `
     return mix(bubbles, 0.78, smoothstep(0.18, 0.55, footprint));
   }
 
+  vec3 sampleWaterReflection(vec2 uv) {
+    // Sky and clouds do not write depth. Use the same reflected environment as
+    // the lab while retaining real ship, hull, and prop reflections.
+    float sky = step(0.99999, texture2D(uWaterReflectionDepth, uv).r);
+    return mix(texture2D(uWaterReflection, uv).rgb, uWaterReflectionSky, sky);
+  }
+
   vec3 shadeHighWater() {
     float height;
     float compression;
@@ -147,7 +159,14 @@ export const OCEAN_OPTICS_FUNCTIONS = /* glsl */ `
     float crest = smoothstep(0.0, 0.75, height) * max(compression, 0.0);
     float backLight = pow(max(dot(v, -l), 0.0), 4.0);
     scatter += uShallowColor * crest * backLight * daylight * 1.4;
-    vec3 body = scatter;
+    // Reproduce the lab's shallow optical background in open ocean without
+    // adding a physical floor to either gameplay world. Real nearby submerged
+    // objects still use captured color and depth below.
+    float referencePath = max(0.0, vWorldPosition.y + 3.4) / max(v.y, 0.025);
+    vec3 referenceTransmission = exp(-vec3(0.34, 0.095, 0.065) * referencePath);
+    vec3 openWater = uWaterOpenRadiance * referenceTransmission
+      + scatter * (1.0 - referenceTransmission);
+    vec3 body = openWater;
 
     if (uWaterReady > 0.5) {
       vec2 screenUv = (gl_FragCoord.xy - uWaterViewport.xy) / uWaterViewport.zw;
@@ -175,6 +194,7 @@ export const OCEAN_OPTICS_FUNCTIONS = /* glsl */ `
       if (-behind.z > surfaceDepth + 0.02) {
         body = texture2D(uWaterColor, refractedUv).rgb * transmission
           + scatter * (1.0 - transmission);
+        body = mix(body, openWater, smoothstep(20.0, 40.0, pathLength));
       }
 
       vec4 projected = uWaterReflectionMatrix * vec4(vWorldPosition, 1.0);
@@ -185,11 +205,11 @@ export const OCEAN_OPTICS_FUNCTIONS = /* glsl */ `
         * step(0.001, projected.w);
       vec2 blur = vec2(0.001 + roughness * roughness * 0.009);
       vec2 safeUv = clamp(reflectedUv, vec2(0.015), vec2(0.985));
-      vec3 sceneReflection = texture2D(uWaterReflection, safeUv).rgb * 0.4;
-      sceneReflection += texture2D(uWaterReflection, safeUv + blur).rgb * 0.15;
-      sceneReflection += texture2D(uWaterReflection, safeUv - blur).rgb * 0.15;
-      sceneReflection += texture2D(uWaterReflection, safeUv + vec2(blur.x, -blur.y)).rgb * 0.15;
-      sceneReflection += texture2D(uWaterReflection, safeUv + vec2(-blur.x, blur.y)).rgb * 0.15;
+      vec3 sceneReflection = sampleWaterReflection(safeUv) * 0.4;
+      sceneReflection += sampleWaterReflection(safeUv + blur) * 0.15;
+      sceneReflection += sampleWaterReflection(safeUv - blur) * 0.15;
+      sceneReflection += sampleWaterReflection(safeUv + vec2(blur.x, -blur.y)) * 0.15;
+      sceneReflection += sampleWaterReflection(safeUv + vec2(-blur.x, blur.y)) * 0.15;
       reflection = mix(reflection, sceneReflection, reflectionCoverage);
     }
 
@@ -201,17 +221,23 @@ export const OCEAN_OPTICS_FUNCTIONS = /* glsl */ `
     float foamFade = smoothstep(0.0, 0.08, min(foamEdge.x, foamEdge.y));
     float density = texture2D(uPersistentFoam, clamp(foamUv, 0.0, 1.0)).r * foamFade;
     vec2 foamPosition = vWorldPosition.xz + vec2(0.83, 0.56) * uTime * 0.12;
-    float erosion = valueNoise(foamPosition * 0.85) * 0.65
-      + valueNoise(foamPosition * 3.1) * 0.35;
-    float coverage = smoothstep(0.10 + erosion * 0.28, 0.26 + erosion * 0.42, density);
     vec2 cells = foamPosition * 16.0;
+    // Derivatives must run before the varying coverage branch.
     float footprint = max(length(dFdx(cells)), length(dFdy(cells)));
-    float bubbles = foamBubblePattern(cells, footprint);
-    float foamDetail = mix(bubbles, 1.0, smoothstep(0.55, 0.95, density));
-    float bubbleLight = mix(0.72, 1.0, foamDetail);
-    vec3 foamLight = uSkyColor * 0.50 + uSunColor * daylight * (0.12 + nl * 0.52);
-    vec3 foamColor = uFoamColor * foamLight * bubbleLight;
-    color = mix(color, foamColor, coverage * mix(0.78, 1.0, foamDetail));
+    // The lowest erosion threshold is 0.10. Lower density cannot show foam.
+    if (density > 0.10) {
+      float erosion = valueNoise(foamPosition * 0.85) * 0.65
+        + valueNoise(foamPosition * 3.1) * 0.35;
+      float coverage = smoothstep(0.10 + erosion * 0.28, 0.26 + erosion * 0.42, density);
+      if (coverage > 0.0) {
+        float bubbles = foamBubblePattern(cells, footprint);
+        float foamDetail = mix(bubbles, 1.0, smoothstep(0.55, 0.95, density));
+        float bubbleLight = mix(0.72, 1.0, foamDetail);
+        vec3 foamLight = uSkyColor * 0.50 + uSunColor * daylight * (0.12 + nl * 0.52);
+        vec3 foamColor = uFoamColor * foamLight * bubbleLight;
+        color = mix(color, foamColor, coverage * mix(0.78, 1.0, foamDetail));
+      }
+    }
     return color;
   }
   #endif

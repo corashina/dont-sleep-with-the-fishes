@@ -4,7 +4,6 @@ import {
   Color,
   DirectionalLight,
   Fog,
-  Group,
   Mesh,
   MeshStandardMaterial,
   PerspectiveCamera,
@@ -14,8 +13,9 @@ import {
   WebGLRenderer,
   Vector3,
 } from 'three';
-import { OceanRenderer } from '../../src/ocean/OceanRenderer';
-import { createWaterExclusion } from '../../src/ocean/WaterExclusion';
+import { OceanRenderer, type OceanAtmosphere } from '../../src/ocean/OceanRenderer';
+import { HIGH_WATER_LOOK } from '../../src/ocean/highWaterLook';
+import { createWaterLabHull } from './hull';
 import { DEFAULT_WAVES, createWaveSample, sampleWaveFieldInto } from '../../src/ocean/WaveField';
 import type { WaterQuality } from '../../src/rendering/waterQuality';
 import { PostProcessingPipeline } from '../../src/rendering/PostProcessingPipeline';
@@ -62,14 +62,7 @@ for (const [x, z, y] of [[-4, -3, -1], [3, -7, -2], [8, -11, -2.7]] as const) {
   scene.add(object);
 }
 
-const hull = new Group();
-hull.name = 'water-lab-test-hull';
-const hullBody = new Mesh(new BoxGeometry(3.8, .65, 7), new MeshStandardMaterial({ color: '#936044', roughness: .82 }));
-hullBody.position.y = -.25;
-hull.add(hullBody);
-const cabin = new Mesh(new BoxGeometry(2, 1, 2), new MeshStandardMaterial({ color: '#d2b589', roughness: .8 }));
-cabin.position.set(0, .5, .5);
-hull.add(cabin);
+const { hull, body: hullBody, exclusion: hullExclusion } = createWaterLabHull();
 scene.add(hull);
 
 let quality: WaterQuality = 'high';
@@ -78,6 +71,7 @@ let lightMode: 'day' | 'night' = 'day';
 let cameraMode: 'near' | 'horizon' | 'top' = 'near';
 let moving = true;
 let paused = false;
+let hullHeight = 0;
 let time = 0;
 let lastFrame = performance.now();
 let cpuMs = 0;
@@ -86,9 +80,8 @@ let shaderErrors = 0;
 let lastFrameInterval = 0;
 const errorLogs: string[] = [];
 const sample = createWaveSample();
-const hullExclusion = createWaterExclusion(hull, 2.1, 4.1, 3.2, -3.4);
 const exclusions = [hullExclusion] as const;
-const atmosphere = { fogColor: (scene.fog as Fog).color, horizonColor, skyColor, sunColor: sun.color, sunVisibility: 1 };
+const atmosphere: OceanAtmosphere = { phase: lightMode, fogColor: (scene.fog as Fog).color, horizonColor, skyColor, sunColor: sun.color, sunVisibility: 1 };
 renderer.debug.onShaderError = (gl, program, vertexShader, fragmentShader) => {
   shaderErrors += 1;
   const details = [
@@ -111,11 +104,12 @@ function updateCamera(): void {
 }
 function updateAtmosphere(): void {
   const night = lightMode === 'night';
-  scene.background = new Color(night ? '#071523' : '#78a7b0');
-  scene.fog = new Fog(night ? '#0b2333' : '#173d4a', 35, 170);
-  horizonColor.set(night ? '#173d5e' : '#8bb8bd');
+  const look = HIGH_WATER_LOOK[lightMode];
+  scene.background = look.reflectionColor.clone();
+  scene.fog = new Fog(look.fogColor, 35, 170);
+  horizonColor.copy(look.skyColor);
   skyColor.copy(horizonColor);
-  sun.color.set(night ? '#8ab3d9' : '#ffe0a2');
+  sun.color.copy(look.sunColor);
   sun.intensity = night ? .8 : 3.2;
 }
 function frame(now: number): void {
@@ -127,14 +121,15 @@ function frame(now: number): void {
   if (!paused) time += delta;
   if (moving && !paused) hull.position.x = Math.sin(time * .22) * 7;
   sampleWaveFieldInto(sample, DEFAULT_WAVES, time, hull.position.x, hull.position.z, amplitudeScale);
-  hull.position.y = sample.height + .18;
+  hull.position.y = sample.height + .18 + hullHeight;
   hull.rotation.z = sample.normal.x * -.22;
   hull.rotation.x = sample.normal.z * .22;
   ocean.follow(camera.position.x, camera.position.z);
-  hull.updateWorldMatrix(true, false);
-  hullExclusion.worldToLocal.copy(hull.matrixWorld).invert();
+  hullBody.updateWorldMatrix(true, false);
+  hullExclusion.worldToLocal.copy(hullBody.matrixWorld).invert();
   ocean.setExclusions(exclusions);
   atmosphere.fogColor = (scene.fog as Fog).color;
+  atmosphere.phase = lightMode;
   atmosphere.sunVisibility = lightMode === 'night' ? .25 : 1;
   ocean.update(time, amplitudeScale, lightMode === 'night' ? .012 : .006, atmosphere);
   const start = performance.now();
@@ -150,6 +145,9 @@ document.querySelectorAll<HTMLButtonElement>('[data-state]').forEach((button) =>
 document.querySelectorAll<HTMLButtonElement>('[data-light]').forEach((button) => button.addEventListener('click', () => { lightMode = button.dataset.light as typeof lightMode; updateAtmosphere(); setPressed('[data-light]', lightMode); }));
 document.querySelectorAll<HTMLButtonElement>('[data-camera]').forEach((button) => button.addEventListener('click', () => { cameraMode = button.dataset.camera as typeof cameraMode; updateCamera(); setPressed('[data-camera]', cameraMode); }));
 document.querySelector<HTMLInputElement>('#moving')!.addEventListener('change', (event) => { moving = (event.target as HTMLInputElement).checked; });
+document.querySelector<HTMLInputElement>('#hull-height')!.addEventListener('input', (event) => {
+  hullHeight = (event.target as HTMLInputElement).valueAsNumber;
+});
 document.querySelector<HTMLInputElement>('#composer')!.addEventListener('change', (event) => {
   useComposer = (event.target as HTMLInputElement).checked;
   if (useComposer && !pipeline) {

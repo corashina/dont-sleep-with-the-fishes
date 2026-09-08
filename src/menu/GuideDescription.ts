@@ -1,4 +1,5 @@
 import { getLanguage, type Language } from '../i18n/language';
+import { flowText } from '../i18n/flowMessages';
 
 const TERMS = {
   health: {
@@ -39,16 +40,32 @@ function keywordPattern(language: Language): RegExp {
   const groups = Object.entries(TERMS)
     .map(([mechanic, terms]) => `(?<${mechanic}>${terms[language]})`)
     .join('|');
-  return new RegExp(`(?<![\\p{L}\\p{N}])(?:${groups})(?![\\p{L}\\p{N}])`, 'giu');
+  return new RegExp(`(?<energyAmount>⚡[1-3])|(?<![\\p{L}\\p{N}])(?:${groups})(?![\\p{L}\\p{N}])`, 'giu');
 }
 
 const PATTERNS = { en: keywordPattern('en'), pl: keywordPattern('pl'), 'es-AR': keywordPattern('es-AR') };
 
 export function renderGuideDescription(element: HTMLElement, description: string): void {
   const content = document.createDocumentFragment();
+  const highlighted = new Set<Mechanic>();
   let offset = 0;
   for (const match of description.matchAll(PATTERNS[getLanguage()])) {
+    if (match.groups?.energyAmount !== undefined) {
+      content.append(document.createTextNode(description.slice(offset, match.index)));
+      const amount = document.createElement('span');
+      amount.className = 'how-to-play-energy';
+      amount.setAttribute('role', 'img');
+      amount.setAttribute('aria-label', `${match[0].slice(1)} ${flowText('energy')}`);
+      const number = document.createElement('sup');
+      number.textContent = match[0].slice(1);
+      amount.append('⚡', number);
+      content.append(amount);
+      offset = match.index + match[0].length;
+      continue;
+    }
     const mechanic = Object.keys(TERMS).find((key) => match.groups?.[key] !== undefined) as Mechanic;
+    if (highlighted.has(mechanic)) continue;
+    highlighted.add(mechanic);
     content.append(document.createTextNode(description.slice(offset, match.index)));
     const keyword = document.createElement('strong');
     keyword.className = `how-to-play-keyword how-to-play-keyword--${mechanic}`;

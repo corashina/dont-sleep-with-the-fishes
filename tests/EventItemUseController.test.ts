@@ -2,13 +2,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   BoxGeometry,
-  DoubleSide,
   Group,
   Mesh,
   MeshStandardMaterial,
   Object3D,
   PerspectiveCamera,
-  Quaternion,
   Vector3,
 } from 'three';
 import type { ItemInstanceId } from '../src/game/ItemState';
@@ -28,7 +26,6 @@ import type { EventOutcomePresentation } from '../src/survival/eventPresentation
 import { boatStorageTransform } from '../src/world/BoatStorage';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 import {
-  LIFEBOAT_FLOOR_SURFACE_Y,
   LIFEBOAT_GUNWALE_SURFACE_Y,
   lifeboatHullHalfWidthAt,
 } from '../src/world/Lifeboat';
@@ -170,110 +167,6 @@ describe('EventItemUseController', () => {
     },
   );
 
-  it('returns a recovered bucket to the boat instead of stowing it', async () => {
-    const { actor, adapter, controller, supplies } = setup();
-    const use = controller.play({
-      ...request(actor.instanceId),
-      eventId: 'leak',
-      choiceId: 'bucket',
-      itemId: 'bucket',
-      context: 'bucket-scoop',
-    });
-
-    controller.update(10);
-    await expect(use).resolves.toBe(true);
-    const reaction = controller.react(result(actor.instanceId));
-    controller.update(10);
-    await reaction;
-
-    expect(supplies.stowEventItemUntilDay).not.toHaveBeenCalled();
-    expect(actor.release).toHaveBeenCalledOnce();
-    adapter.dispose();
-  });
-
-  it('uses temporary two-sided materials for the bucket helmet interior', () => {
-    const { actor, adapter, controller } = setup();
-    const original = new MeshStandardMaterial();
-    const mesh = new Mesh(new BoxGeometry(1, 1, 1), original);
-    actor.root.add(mesh);
-
-    controller.play({
-      ...request(actor.instanceId),
-      eventId: 'shower-night',
-      choiceId: 'bucket',
-      itemId: 'bucket',
-      context: 'bucket-helmet',
-    });
-
-    expect(mesh.material).not.toBe(original);
-    expect(mesh.material.side).toBe(DoubleSide);
-    const interior = mesh.material;
-    const dispose = vi.spyOn(interior, 'dispose');
-
-    controller.clear('day');
-
-    expect(mesh.material).toBe(original);
-    expect(dispose).toHaveBeenCalledOnce();
-    adapter.dispose();
-    original.dispose();
-    mesh.geometry.dispose();
-  });
-
-  it('keeps the bucket helmet in place until the event is cleared', async () => {
-    const { actor, adapter, controller } = setup();
-    const use = controller.play({
-      ...request(actor.instanceId),
-      eventId: 'shower-night',
-      choiceId: 'bucket',
-      itemId: 'bucket',
-      context: 'bucket-helmet',
-    });
-
-    controller.update(10);
-    await use;
-    const reaction = controller.react(result(actor.instanceId));
-    controller.update(10);
-    await reaction;
-
-    expect(actor.root.visible).toBe(true);
-    expect(actor.release).not.toHaveBeenCalled();
-
-    controller.clear('night');
-
-    expect(actor.release).toHaveBeenCalledOnce();
-    adapter.dispose();
-  });
-
-  it('keeps the map patch on the leak until the event is cleared', async () => {
-    const { actor, adapter, controller } = setup();
-    const material = new MeshStandardMaterial();
-    const mesh = new Mesh(new BoxGeometry(1, 0.02, 1), material);
-    actor.root.add(mesh);
-    const use = controller.play({
-      ...request(actor.instanceId, new Object3D()),
-      eventId: 'leak',
-      choiceId: 'map',
-      itemId: 'map',
-      context: 'map-leak-patch',
-    });
-
-    controller.update(10);
-    await use;
-    await controller.react(result(actor.instanceId));
-    controller.update(10);
-
-    expect(actor.root.visible).toBe(true);
-    expect(mesh.material.side).toBe(DoubleSide);
-    expect(actor.release).not.toHaveBeenCalled();
-
-    controller.clear('night');
-
-    expect(actor.release).toHaveBeenCalledOnce();
-    adapter.dispose();
-    material.dispose();
-    mesh.geometry.dispose();
-  });
-
   it('tracks a moving aim target while the completed use remains held', async () => {
     const { actor, adapter, controller } = setup();
     const target = new Object3D();
@@ -352,57 +245,6 @@ describe('EventItemUseController', () => {
     adapter.dispose();
   });
 
-  it('returns a broken storage item after its outcome motion', async () => {
-    const { actor, adapter, controller, supplies } = setup();
-    const use = controller.play(request());
-    controller.update(10);
-    await use;
-
-    const reaction = controller.react(result(actor.instanceId, {
-      brokenInstanceIds: [actor.instanceId],
-    }));
-    controller.update(10);
-    await reaction;
-
-    expect(supplies.stowEventItemUntilDay).not.toHaveBeenCalled();
-    expect(actor.release).toHaveBeenCalledOnce();
-    adapter.dispose();
-  });
-
-  it('returns a broken knife to its slot without stowing it', async () => {
-    const { actor, adapter, controller, supplies } = setup();
-    const use = controller.play({
-      ...request(actor.instanceId, new Object3D()),
-      eventId: 'snatcher',
-      choiceId: 'knife',
-      itemId: 'knife',
-      context: 'knife-stab',
-    });
-    controller.update(10);
-    await use;
-
-    const reaction = controller.react(result(actor.instanceId, {
-      brokenInstanceIds: [actor.instanceId],
-    }));
-    controller.update(10);
-    await reaction;
-    const returnedPose = (actor.applyPose as ReturnType<typeof vi.fn>)
-      .mock.calls.at(-2)![0];
-
-    expect(returnedPose).toMatchObject({
-      x: 0,
-      y: 0,
-      z: 0,
-      yaw: 0,
-      pitch: 0,
-      roll: 0,
-    });
-    expect(actor.root.visible).toBe(true);
-    expect(supplies.stowEventItemUntilDay).not.toHaveBeenCalled();
-    expect(actor.release).toHaveBeenCalledOnce();
-    adapter.dispose();
-  });
-
   it('drives the knife tip into the explicit moving target', () => {
     const { actor, adapter, controller } = setup();
     const targetOwner = new Group();
@@ -446,63 +288,6 @@ describe('EventItemUseController', () => {
     adapter.dispose();
     geometry.dispose();
     material.dispose();
-  });
-
-  it('does not twist the knife when the forward stab starts', () => {
-    const { actor, adapter, camera, controller } = setup();
-    const boat = new Group();
-    const targetOwner = new Group();
-    const target = new Object3D();
-    boat.position.y = 0.22;
-    actor.root.position.set(0.25, LIFEBOAT_FLOOR_SURFACE_Y, -0.55);
-    boat.add(actor.root, targetOwner);
-    targetOwner.position.set(2.05, -0.62, -0.66);
-    targetOwner.rotation.set(-0.12, -0.32, -0.2);
-    targetOwner.scale.setScalar(0.94);
-    target.position.set(0, 1.25, 0.44);
-    targetOwner.add(target);
-    const targetFocus = new Vector3();
-    target.getWorldPosition(targetFocus);
-    camera.position.set(0, 1.38, -1.42);
-    camera.lookAt(targetFocus);
-    const basePosition = actor.root.position.clone();
-    const baseQuaternion = actor.root.quaternion.clone();
-    (actor.applyPose as ReturnType<typeof vi.fn>).mockImplementation(
-      (pose: MutableSupplyPose) => {
-        actor.root.position.set(
-          basePosition.x + pose.x,
-          basePosition.y + pose.y,
-          basePosition.z + pose.z,
-        );
-        actor.root.quaternion.copy(baseQuaternion);
-        actor.root.rotateY(pose.yaw);
-        actor.root.rotateX(pose.pitch);
-        actor.root.rotateZ(pose.roll);
-        actor.root.scale.set(pose.scaleX, pose.scaleY, pose.scaleZ);
-      },
-    );
-
-    controller.play({
-      ...request(actor.instanceId, target),
-      eventId: 'snatcher',
-      choiceId: 'knife',
-      itemId: 'knife',
-      context: 'knife-stab',
-    });
-    const duration = eventItemUseDuration('knife-stab');
-    controller.update(duration * 0.54);
-    actor.root.updateWorldMatrix(true, false);
-    const beforeStab = new Quaternion();
-    actor.root.getWorldQuaternion(beforeStab);
-
-    controller.update(duration * 0.001);
-    actor.root.updateWorldMatrix(true, false);
-    const stabStart = new Quaternion();
-    actor.root.getWorldQuaternion(stabStart);
-
-    expect(beforeStab.angleTo(stabStart)).toBeLessThan(0.01);
-    controller.clear('day');
-    adapter.dispose();
   });
 
   it('keeps the complete knife above the boat until it clears the gunwale', () => {

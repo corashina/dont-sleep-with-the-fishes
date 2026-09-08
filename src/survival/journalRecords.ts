@@ -1,4 +1,5 @@
 import { cloneOutcomeText, type OutcomeText } from './outcomeText';
+import { presentationWeatherForEvent, type PresentationWeatherId } from '../weather/presentationWeather';
 import type { ItemId, ItemInstanceId } from '../game/ItemState';
 import type { CarlitosDeathCause, CarlitosState } from './CarlitosState';
 import type { FishingTerminalResult } from './FishingSession';
@@ -8,7 +9,6 @@ import type {
   EventPresentationKey,
   ResourceDelta,
   SurvivalEventDefinition,
-  WeatherId,
 } from './survivalTypes';
 
 export interface JournalInventoryMutation {
@@ -82,10 +82,11 @@ export type JournalDayActionRecord =
 
 export interface JournalEntry {
   readonly day: number;
-  readonly weather: WeatherId;
+  readonly weather: PresentationWeatherId;
+  readonly nightWeather: PresentationWeatherId | null;
   readonly actions: readonly JournalDayActionRecord[];
   readonly daytime: JournalDaytimeRecord | null;
-  readonly nighttime: JournalNightRecord;
+  readonly nighttime: JournalNightRecord | { readonly kind: 'pending' };
 }
 
 export function createJournalEventRecord(
@@ -184,17 +185,19 @@ export function createJournalSinkingShipRecord(): JournalSinkingShipRecord {
 
 export function createJournalEntry(
   day: number,
-  weather: WeatherId,
+  weather: PresentationWeatherId,
   actions: readonly JournalDayActionRecord[],
   daytime: JournalDaytimeRecord | null,
-  nighttime: JournalNightRecord,
+  nighttime: JournalEntry['nighttime'],
 ): JournalEntry {
   return Object.freeze({
     day,
     weather,
+    nightWeather: nighttime.kind === 'pending' ? null
+      : nighttime.kind === 'event' ? presentationWeatherForEvent(nighttime.event.eventId) ?? 'calm' : 'calm',
     actions: cloneJournalActions(actions),
     daytime: daytime === null ? null : cloneJournalDaytime(daytime),
-    nighttime: cloneJournalNight(nighttime),
+    nighttime: nighttime.kind === 'pending' ? Object.freeze({ kind: 'pending' }) : cloneJournalNight(nighttime),
   });
 }
 
@@ -213,13 +216,13 @@ function cloneJournalDaytime(record: JournalDaytimeRecord): JournalDaytimeRecord
 }
 
 export function cloneJournalEntry(entry: JournalEntry): JournalEntry {
-  return createJournalEntry(
-    entry.day,
-    entry.weather,
-    entry.actions,
-    entry.daytime,
-    entry.nighttime,
-  );
+  return Object.freeze({
+    ...entry,
+    actions: cloneJournalActions(entry.actions),
+    daytime: entry.daytime === null ? null : cloneJournalDaytime(entry.daytime),
+    nighttime: entry.nighttime.kind === 'pending'
+      ? Object.freeze({ kind: 'pending' }) : cloneJournalNight(entry.nighttime),
+  });
 }
 
 export function cloneJournalNight(record: JournalNightRecord): JournalNightRecord {

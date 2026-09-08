@@ -247,6 +247,7 @@ export class World {
   private readonly lifeboatWaterExclusion!: WaterExclusionRegion;
   private readonly oceanExclusions!: readonly WaterExclusionRegion[];
   private readonly oceanAtmosphere = {
+    phase: 'day' as 'day' | 'night',
     fogColor: new Color(),
     horizonColor: new Color(),
     skyColor: new Color(),
@@ -752,6 +753,7 @@ export class World {
 
   setPresentationPhase(phase: 'day' | 'night'): void {
     if (this.disposed) return;
+    this.oceanAtmosphere.phase = phase;
     this.environment.setPhase(phase);
   }
 

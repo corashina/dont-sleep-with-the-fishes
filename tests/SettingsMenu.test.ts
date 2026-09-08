@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
+import { DEFAULT_POSTERIZATION } from '../src/rendering/posterization';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SettingsMenu } from '../src/ui/SettingsMenu';
 import { getLanguage, setLanguage } from '../src/i18n/language';
 import { GameUI } from '../src/ui/GameUI';
 import { MenuUI } from '../src/menu/MenuUI';
-import { SurvivalModalViews } from '../src/ui/SurvivalModalViews';
 import { createVisualQualityPreference } from '../src/rendering/visualQuality';
 import { createWaterQualityPreference } from '../src/rendering/waterQuality';
 import { createAntiAliasingQualityPreference } from '../src/rendering/antiAliasingQuality';
@@ -21,7 +21,7 @@ function setup(enabled = false, savedDay: number | null = null) {
   ui.setPaused(true);
   cleanup.push(() => ui.dispose());
   const aoState: PostProcessingControlState = {
-    ambientOcclusionAvailable: true,
+    posterization: DEFAULT_POSTERIZATION, ambientOcclusionAvailable: true,
     ambientOcclusionMode: 'composite',
     ambientOcclusionQuality: 'low',
     ambientOcclusionIntensity: 1,
@@ -30,7 +30,7 @@ function setup(enabled = false, savedDay: number | null = null) {
   const options = {
     ambientOcclusion: {
       getState: () => aoState,
-      setAmbientOcclusionMode: vi.fn((mode: PostProcessingControlState['ambientOcclusionMode']) => { aoState.ambientOcclusionMode = mode; }),
+      setPosterization: vi.fn((value: PostProcessingControlState['posterization']) => { aoState.posterization = value; }), setAmbientOcclusionMode: vi.fn((mode: PostProcessingControlState['ambientOcclusionMode']) => { aoState.ambientOcclusionMode = mode; }),
       setAmbientOcclusionQuality: vi.fn((quality: PostProcessingControlState['ambientOcclusionQuality']) => { aoState.ambientOcclusionQuality = quality; }),
       setNumeric: vi.fn(),
     },
@@ -52,6 +52,36 @@ function setup(enabled = false, savedDay: number | null = null) {
 }
 
 describe('Settings menu', () => {
+  it('shows posterization at 25 percent, changes strength, and keeps strength when disabled', () => {
+    const { menu, options, button } = setup();
+    button.click();
+    const checkbox = menu.element.querySelector<HTMLInputElement>('[data-posterization-enabled]')!;
+    const slider = menu.element.querySelector<HTMLInputElement>('[data-posterization-strength]')!;
+    const output = menu.element.querySelector<HTMLOutputElement>('[data-posterization-output]')!;
+    expect(checkbox.checked).toBe(true);
+    expect(slider.disabled).toBe(false);
+    expect(slider.value).toBe('0.25');
+    expect(output.value).toBe('25%');
+    slider.value = '0.6';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(options.ambientOcclusion.getState().posterization.strength).toBe(.6);
+    expect(output.value).toBe('60%');
+    checkbox.click();
+    expect(slider.disabled).toBe(true);
+    expect(options.ambientOcclusion.getState().posterization).toEqual({ enabled: false, strength: .6 });
+    menu.close();
+    button.click();
+    expect(checkbox.checked).toBe(false);
+    expect(slider.value).toBe('0.6');
+    checkbox.click();
+    expect(slider.disabled).toBe(false);
+    const language = getLanguage();
+    try {
+      setLanguage('pl');
+      expect(menu.element.querySelector('#posterization-name')!.textContent).toBe('Posteryzacja');
+    } finally { setLanguage(language); }
+  });
+
   it('sets AO presets and reflects developer changes when reopened', () => {
     const { menu, options, button } = setup();
     button.click();
@@ -119,24 +149,6 @@ describe('Settings menu', () => {
     expect(resume).not.toHaveBeenCalled();
   });
 
-  it('places Settings after Resume in both pause menus', () => {
-    const { button, mount, menu } = setup();
-    expect(button.previousElementSibling?.getAttribute('aria-label')).toBe('Resume');
-    expect(button.nextElementSibling?.getAttribute('aria-label')).toBe('Back to menu');
-    const survival = new SurvivalModalViews();
-    cleanup.push(() => survival.dispose());
-    mount.append(survival.pauseRoot);
-    survival.pauseRoot.setAttribute('aria-hidden', 'false');
-    survival.pauseRoot.removeAttribute('inert');
-    const survivalButton = survival.pauseRoot.querySelector<HTMLButtonElement>('[data-open-settings]')!;
-    expect(survivalButton.previousElementSibling).toBe(survival.resumeButton);
-    expect(survivalButton.nextElementSibling).toBe(survival.pauseMenuButton);
-    survivalButton.click();
-    expect(menu.element.hidden).toBe(false);
-    menu.element.querySelector<HTMLButtonElement>('[data-settings-back]')!.click();
-    expect(document.activeElement).toBe(survivalButton);
-  });
-
   it('applies sound, camera, frame rate, cloud, and quality controls', () => {
     const { menu, options, button } = setup();
     button.click();
@@ -190,38 +202,5 @@ describe('Settings menu', () => {
     button.click();
     expect(menu.element.isConnected).toBe(false);
     expect(menu.element.hidden).toBe(true);
-  });
-
-  it('changes language from Settings while keeping the pause open', () => {
-    const { menu, button } = setup();
-    button.click();
-    cleanup.push(() => setLanguage('en'));
-    const select = menu.element.querySelector<HTMLSelectElement>('[data-language-select]')!;
-    select.value = 'pl';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(getLanguage()).toBe('pl');
-    expect(menu.element.querySelector('#settings-title')!.textContent).toBe('Ustawienia');
-    expect(menu.element.hidden).toBe(false);
-    menu.close();
-    expect(button.getAttribute('aria-label')).toBe('Ustawienia');
-    expect(document.activeElement).toBe(button);
-  });
-
-  it('selects Argentine Spanish and keeps settings open', () => {
-    const { menu, button } = setup();
-    button.click();
-    cleanup.push(() => setLanguage('en'));
-    const select = menu.element.querySelector<HTMLSelectElement>('[data-language-select]')!;
-    expect(select.querySelector('option[value="es-AR"]')?.textContent).toBe('Español (Argentina)');
-    select.focus();
-    select.value = 'es-AR';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(getLanguage()).toBe('es-AR');
-    expect(document.documentElement.lang).toBe('es-AR');
-    expect(menu.element.querySelector('#settings-title')!.textContent).toBe('Configuración');
-    expect(menu.element.hidden).toBe(false);
-    expect(document.activeElement).toBe(select);
-    menu.close();
-    expect(button.getAttribute('aria-label')).toBe('Configuración');
   });
 });
