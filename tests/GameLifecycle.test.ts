@@ -426,6 +426,7 @@ function createUpdateHarness(
     world: {
       update: updateWorld,
       attachPhysicsObjectsToShip,
+      prepareSurvivalDeparture: vi.fn(),
       evacuationBounds: { minX: 8.55, maxX: 9.25, minZ: -0.35, maxZ: 0.35 },
     },
     player: {
@@ -1563,13 +1564,21 @@ describe('ScavengePhase lifecycle integration', () => {
     }
   });
 
-  it('evacuates at the deadline from inside the lifeboat bounds', () => {
+  it('plays the sinking cinematic before survival when evacuating at the deadline', () => {
     const session = new ScavengeSession();
     session.start();
+    session.pickUp('cannedFood');
+    session.saveCarried();
     const { phase } = createUpdateHarness(session);
     const internals = phase as unknown as {
       player: { localPosition: Vector3; };
-      audio: { complete: ReturnType<typeof vi.fn>; };
+      audio: {
+        complete: ReturnType<typeof vi.fn>;
+        sink: ReturnType<typeof vi.fn>;
+        setPaused: ReturnType<typeof vi.fn>;
+      };
+      world: { prepareSurvivalDeparture: ReturnType<typeof vi.fn>; };
+      ui: { renderEnding: ReturnType<typeof vi.fn>; };
       onComplete: ReturnType<typeof vi.fn>;
     };
     const { player } = internals;
@@ -1578,9 +1587,47 @@ describe('ScavengePhase lifecycle integration', () => {
     phase.update(0, SCAVENGE_DURATION_SECONDS);
 
     expect(session.snapshot().status).toBe('success');
+    expect(internals.onComplete).not.toHaveBeenCalled();
+    expect(internals.audio.sink).toHaveBeenCalledOnce();
+    expect(internals.world.prepareSurvivalDeparture).toHaveBeenCalledOnce();
+    expect(internals.ui.renderEnding).toHaveBeenLastCalledWith('sinking', 0, null);
+
+    phase.setOverlayActive(true);
+    phase.update(0, 30);
+    expect(internals.onComplete).not.toHaveBeenCalled();
+    expect(internals.ui.renderEnding).toHaveBeenLastCalledWith('sinking', 0, null);
+    phase.setOverlayActive(false);
+    expect(internals.audio.setPaused).toHaveBeenLastCalledWith(false);
+
+    phase.update(0, SINKING_CINEMATIC_SECONDS - 0.5);
+    expect(internals.onComplete).not.toHaveBeenCalled();
+    phase.update(0, 0.5);
+    expect(internals.ui.renderEnding).toHaveBeenLastCalledWith('survivalReady', 1, null);
+    expect(internals.onComplete).toHaveBeenCalledExactlyOnceWith(session.result());
+    expect(session.result()!.savedItems).toHaveLength(1);
     expect(internals.audio.complete).toHaveBeenCalledOnce();
     expect(internals.audio.complete.mock.invocationCallOrder[0])
       .toBeLessThan(internals.onComplete.mock.invocationCallOrder[0]!);
+    phase.update(0, 1);
+    expect(internals.onComplete).toHaveBeenCalledOnce();
+    expect(internals.audio.sink).toHaveBeenCalledOnce();
+  });
+
+  it('starts survival immediately after early evacuation', () => {
+    const session = new ScavengeSession();
+    session.start();
+    session.tick(10);
+    session.evacuate();
+    const { phase } = createUpdateHarness(session);
+    const internals = phase as unknown as {
+      audio: { sink: ReturnType<typeof vi.fn>; };
+      world: { prepareSurvivalDeparture: ReturnType<typeof vi.fn>; };
+      onComplete: ReturnType<typeof vi.fn>;
+    };
+    phase.update(0, 1);
+    expect(internals.onComplete).toHaveBeenCalledExactlyOnceWith(session.result());
+    expect(internals.audio.sink).not.toHaveBeenCalled();
+    expect(internals.world.prepareSurvivalDeparture).not.toHaveBeenCalled();
   });
 
   it('starts one shared alarm phase with the loop and freezes both while paused', () => {

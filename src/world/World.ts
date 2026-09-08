@@ -746,6 +746,11 @@ export class World {
     this.ocean.setExclusions(this.oceanExclusions);
   }
 
+  prepareSurvivalDeparture(): void {
+    // Keep the lifeboat clear of Dorothy and in the foreground of the sinking shot.
+    this.boatAnchor.set(this.shipBuild.lifeboatAnchor.x + 6, this.boatAnchor.y, 8);
+  }
+
   setPresentationWeather(id: PresentationWeatherId): void {
     if (this.disposed) return;
     this.environment.setWeather(id);
