@@ -2,6 +2,7 @@ import {
   DataTexture,
   Color,
   DoubleSide,
+  FrontSide,
   LinearFilter,
   LinearMipmapLinearFilter,
   Material,
@@ -344,6 +345,10 @@ export function createShipMaterials(
   const paintedSteel = createSurfaceMaterial(paintedPanelTextures, {
     color: 0xb6c4bb, roughness: 0.68, metalness: 0.08,
   });
+  // Use the full wall and roof thickness to block light at interior seams.
+  // Back-face shadows lose seam occlusion to the light's depth bias.
+  paintedPanel.shadowSide = FrontSide;
+  paintedSteel.shadowSide = FrontSide;
   const deckSteel = new MeshStandardMaterial({
     color: 0x35423f, roughness: 0.6, metalness: 0.22,
   });
