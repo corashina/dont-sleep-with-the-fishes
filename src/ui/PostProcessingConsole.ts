@@ -1,5 +1,4 @@
 import { onLanguageChange } from '../i18n/language';
-import { PostProcessingFilterControl } from './PostProcessingFilterControl';
 import { settingsText, refreshSettingsText } from '../i18n/settingsMessages';
 import type { EventTestOption } from '../app/EventTest';
 import type { ItemAmbientOcclusionMode } from '../rendering/ItemAmbientOcclusion';
@@ -192,7 +191,6 @@ function buildConsoleMarkup(options: ConsoleMarkupOptions): string {
 export class PostProcessingConsole {
   readonly element = document.createElement('aside');
   private readonly panel: HTMLElement;
-  private readonly filterControl: PostProcessingFilterControl;
   private readonly weatherSelect: HTMLSelectElement;
   private readonly weatherSource: HTMLOutputElement;
   private weatherId: PresentationWeatherId;
@@ -221,8 +219,6 @@ export class PostProcessingConsole {
       weatherControls,
     });
     this.panel = this.requireElement('[data-post-processing-panel]');
-    this.filterControl = new PostProcessingFilterControl(controls);
-    this.requireElement('.post-processing-console__category--graphics').after(this.filterControl.element);
     if (eventTestControls !== undefined) this.buildEventTestControl(eventTestControls);
     this.weatherSelect = this.requireElement('[data-presentation-weather]');
     this.weatherSource = this.requireElement('[data-weather-source]');
@@ -270,7 +266,6 @@ export class PostProcessingConsole {
     if (!this.panel.hidden) this.onOpenChange(false);
     this.disposed = true;
     this.unsubscribeLanguage();
-    this.filterControl.dispose();
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('click', this.handleOutsideClick, true);
     this.element.removeEventListener('click', this.handleClick);
@@ -372,7 +367,6 @@ export class PostProcessingConsole {
     this.element.dataset.open = String(open);
     this.panel.hidden = !open;
     if (open) {
-      this.filterControl.refresh();
       this.requireElement<HTMLSelectElement>('[data-post-processing-ao-mode]').value = this.controls.getState().ambientOcclusionMode;
     }
     this.onOpenChange(open);

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { DEFAULT_POST_PROCESSING_FILTERS } from '../src/rendering/postProcessingFilters';
+import { DEFAULT_POSTERIZATION } from '../src/rendering/posterization';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SettingsMenu } from '../src/ui/SettingsMenu';
 import { getLanguage, setLanguage } from '../src/i18n/language';
@@ -22,7 +22,7 @@ function setup(enabled = false, savedDay: number | null = null) {
   ui.setPaused(true);
   cleanup.push(() => ui.dispose());
   const aoState: PostProcessingControlState = {
-    filters: DEFAULT_POST_PROCESSING_FILTERS, ambientOcclusionAvailable: true,
+    posterization: DEFAULT_POSTERIZATION, ambientOcclusionAvailable: true,
     ambientOcclusionMode: 'composite',
     ambientOcclusionQuality: 'low',
     ambientOcclusionIntensity: 1,
@@ -31,7 +31,7 @@ function setup(enabled = false, savedDay: number | null = null) {
   const options = {
     ambientOcclusion: {
       getState: () => aoState,
-      setFilters: vi.fn(), setAmbientOcclusionMode: vi.fn((mode: PostProcessingControlState['ambientOcclusionMode']) => { aoState.ambientOcclusionMode = mode; }),
+      setPosterization: vi.fn((value: PostProcessingControlState['posterization']) => { aoState.posterization = value; }), setAmbientOcclusionMode: vi.fn((mode: PostProcessingControlState['ambientOcclusionMode']) => { aoState.ambientOcclusionMode = mode; }),
       setAmbientOcclusionQuality: vi.fn((quality: PostProcessingControlState['ambientOcclusionQuality']) => { aoState.ambientOcclusionQuality = quality; }),
       setNumeric: vi.fn(),
     },
@@ -53,6 +53,36 @@ function setup(enabled = false, savedDay: number | null = null) {
 }
 
 describe('Settings menu', () => {
+  it('shows posterization at 25 percent, changes strength, and keeps strength when disabled', () => {
+    const { menu, options, button } = setup();
+    button.click();
+    const checkbox = menu.element.querySelector<HTMLInputElement>('[data-posterization-enabled]')!;
+    const slider = menu.element.querySelector<HTMLInputElement>('[data-posterization-strength]')!;
+    const output = menu.element.querySelector<HTMLOutputElement>('[data-posterization-output]')!;
+    expect(checkbox.checked).toBe(true);
+    expect(slider.disabled).toBe(false);
+    expect(slider.value).toBe('0.25');
+    expect(output.value).toBe('25%');
+    slider.value = '0.6';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(options.ambientOcclusion.getState().posterization.strength).toBe(.6);
+    expect(output.value).toBe('60%');
+    checkbox.click();
+    expect(slider.disabled).toBe(true);
+    expect(options.ambientOcclusion.getState().posterization).toEqual({ enabled: false, strength: .6 });
+    menu.close();
+    button.click();
+    expect(checkbox.checked).toBe(false);
+    expect(slider.value).toBe('0.6');
+    checkbox.click();
+    expect(slider.disabled).toBe(false);
+    const language = getLanguage();
+    try {
+      setLanguage('pl');
+      expect(menu.element.querySelector('#posterization-name')!.textContent).toBe('Posteryzacja');
+    } finally { setLanguage(language); }
+  });
+
   it('sets AO presets and reflects developer changes when reopened', () => {
     const { menu, options, button } = setup();
     button.click();

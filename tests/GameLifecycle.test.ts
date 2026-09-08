@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { DEFAULT_POST_PROCESSING_FILTERS } from '../src/rendering/postProcessingFilters';
+import { DEFAULT_POSTERIZATION } from '../src/rendering/posterization';
 import { createTestGame, flushPhases } from './helpers/game';
 // Importance: 10/10 (scaled from 5/5). Protects full game lifecycle integration.
 
@@ -472,13 +472,13 @@ function scavengeHandsStub() {
 function postProcessingSceneRenderer(): SceneRenderer {
   const postProcessingControls: PostProcessingControls = {
     getState: vi.fn(() => ({
-      filters: DEFAULT_POST_PROCESSING_FILTERS, ambientOcclusionAvailable: true,
+      posterization: DEFAULT_POSTERIZATION, ambientOcclusionAvailable: true,
       ambientOcclusionMode: 'composite' as const,
       ambientOcclusionQuality: 'low' as const,
       ambientOcclusionIntensity: 1,
       ambientOcclusionRadius: 0.5,
     })),
-    setFilters: vi.fn(), setAmbientOcclusionMode: vi.fn(),
+    setPosterization: vi.fn(), setAmbientOcclusionMode: vi.fn(),
     setAmbientOcclusionQuality: vi.fn(),
     setNumeric: vi.fn(),
   };
@@ -2314,13 +2314,13 @@ describe('ScavengePhase lifecycle integration', () => {
     };
     const postProcessingControls: PostProcessingControls = {
       getState: vi.fn(() => ({
-        filters: DEFAULT_POST_PROCESSING_FILTERS, ambientOcclusionAvailable: true,
+        posterization: DEFAULT_POSTERIZATION, ambientOcclusionAvailable: true,
         ambientOcclusionMode: 'composite' as const,
         ambientOcclusionQuality: 'low' as const,
         ambientOcclusionIntensity: 1,
         ambientOcclusionRadius: 0.5,
       })),
-      setFilters: vi.fn(), setAmbientOcclusionMode: vi.fn(),
+      setPosterization: vi.fn(), setAmbientOcclusionMode: vi.fn(),
       setAmbientOcclusionQuality: vi.fn(),
       setNumeric: vi.fn(),
     };
