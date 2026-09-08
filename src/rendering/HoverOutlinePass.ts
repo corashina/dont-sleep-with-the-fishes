@@ -100,7 +100,7 @@ export class HoverOutlinePass extends OutlinePass {
       internals._changeVisibilityOfNonSelectedObjects(false);
       renderer.render(this.renderScene, this.renderCamera);
 
-      // Switching targets resolves the mask color. Initialize its destination first.
+      // The scene render resolved mask color. Initialize its copy destination first.
       renderer.setRenderTarget(this.renderTargetMaskBuffer);
       renderer.copyTextureToTexture(readBuffer.texture, this.renderTargetMaskBuffer.texture);
     } catch (error) {
