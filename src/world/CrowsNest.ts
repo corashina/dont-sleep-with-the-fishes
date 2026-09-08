@@ -1,9 +1,11 @@
 import {
   BoxGeometry,
   BufferGeometry,
+  CubicBezierCurve3,
   Group,
   Material,
   Mesh,
+  Vector3,
 } from 'three';
 import type { ScavengeIntroAnchors } from '../game/scavengeIntro';
 import type { CollisionBox } from '../player/collisions';
@@ -15,6 +17,7 @@ import {
 } from './ShipLayoutTypes';
 import type { ShipMaterials } from './ShipMaterials';
 import { disposeResourceSets } from './SceneResources';
+import { ShipDetailGeometry } from './ShipDetailGeometry';
 
 export interface CrowsNestBuild {
   readonly root: Group;
@@ -119,47 +122,46 @@ export function createCrowsNest(
 
   const guardY = floorSurfaceY + spec.guardHeight / 2;
   const sideGuardThickness = 0.12;
-  const topRailHeight = 0.14;
   const postWidth = 0.12;
   const portX = minX + sideGuardThickness / 2;
   const starboardX = maxX - sideGuardThickness / 2;
   const aftZ = minZ + sideGuardThickness / 2;
   const forwardZ = maxZ - sideGuardThickness / 2;
-  const topRailY = floorSurfaceY + spec.guardHeight - topRailHeight / 2;
-  const addGuardPart = (
-    name: string,
-    size: readonly [number, number, number],
-    position: readonly [number, number, number],
-  ): void => {
-    addBox(`crows-nest:guard:${name}`, size, position, materials.timber);
+  const topRailY = floorSurfaceY + spec.guardHeight - 0.055;
+  const guard = new ShipDetailGeometry(geometries);
+  const addPost = (x: number, z: number): void => {
+    if ((x === portX || x === starboardX) && (z === aftZ || z === forwardZ)) {
+      x += x === portX ? 0.02 : -0.02;
+      z += z === aftZ ? 0.02 : -0.02;
+    }
+    guard.rod(materials.deckSteel, [x, floorSurfaceY, z], [x, topRailY, z], 0.04);
+    guard.box(materials.darkMetal, [0.17, 0.035, 0.17], [x, floorSurfaceY + 0.0175, z], 0, 0);
   };
-  addGuardPart('port-top', [sideGuardThickness, topRailHeight, spec.outerWidth], [
-    portX, topRailY, mast.position[2],
-  ]);
-  addGuardPart('starboard-top', [sideGuardThickness, topRailHeight, spec.outerWidth], [
-    starboardX, topRailY, mast.position[2],
-  ]);
-  addGuardPart('forward-top', [spec.outerWidth, topRailHeight, sideGuardThickness], [
-    mast.position[0], topRailY, forwardZ,
-  ]);
-  addGuardPart('aft-top', [spec.outerWidth, topRailHeight, sideGuardThickness], [
-    mast.position[0], topRailY, aftZ,
-  ]);
+  const corners = [[portX, aftZ], [portX, forwardZ], [starboardX, forwardZ], [starboardX, aftZ]] as const;
+  for (const [index, corner] of corners.entries()) {
+    const previous = corners[(index + corners.length - 1) % corners.length]!;
+    const next = corners[(index + 1) % corners.length]!;
+    const beforeX = corner[0] + Math.sign(previous[0] - corner[0]) * 0.12;
+    const beforeZ = corner[1] + Math.sign(previous[1] - corner[1]) * 0.12;
+    const afterX = corner[0] + Math.sign(next[0] - corner[0]) * 0.12;
+    const afterZ = corner[1] + Math.sign(next[1] - corner[1]) * 0.12;
+    const endX = next[0] + Math.sign(corner[0] - next[0]) * 0.12;
+    const endZ = next[1] + Math.sign(corner[1] - next[1]) * 0.12;
+    for (const [y, radius] of [[topRailY, 0.055], [floorSurfaceY + spec.guardHeight * 0.48, 0.028]] as const) {
+      guard.tube(materials.deckSteel, new CubicBezierCurve3(
+        new Vector3(beforeX, y, beforeZ), new Vector3(corner[0], y, corner[1]),
+        new Vector3(corner[0], y, corner[1]), new Vector3(afterX, y, afterZ)), 4, radius);
+      guard.rod(materials.deckSteel, [afterX, y, afterZ], [endX, y, endZ], radius);
+    }
+  }
   ([minZ + postWidth / 2, mast.position[2], maxZ - postWidth / 2] as const)
-    .forEach((z, index) => {
-      addGuardPart(`port-post-${index}`, [postWidth, spec.guardHeight, postWidth], [
-        portX, guardY, z,
-      ]);
-      addGuardPart(`starboard-post-${index}`, [postWidth, spec.guardHeight, postWidth], [
-        starboardX, guardY, z,
-      ]);
+    .forEach((z) => {
+      addPost(portX, z);
+      addPost(starboardX, z);
     });
-  addGuardPart('forward-post', [postWidth, spec.guardHeight, postWidth], [
-    mast.position[0], guardY, forwardZ,
-  ]);
-  addGuardPart('aft-post', [postWidth, spec.guardHeight, postWidth], [
-    mast.position[0], guardY, aftZ,
-  ]);
+  addPost(mast.position[0], forwardZ);
+  addPost(mast.position[0], aftZ);
+  guard.finish(root, 'crows-nest:guard');
   colliders.push(
     boxCollider([portX, guardY, mast.position[2]], [
       sideGuardThickness, spec.guardHeight, spec.outerWidth,
@@ -181,23 +183,24 @@ export function createCrowsNest(
 
   const ladderBaseY = mast.position[1] - LADDER_DECK_EMBED;
   const ladderHeight = floorY - ladderBaseY + 0.1;
-  ([-spec.ladder.width / 2, spec.ladder.width / 2] as const).forEach((x, index) => {
-    addBox(`${spec.ladder.id}:rail:${index}`, [0.09, ladderHeight, 0.09], [
-      mast.position[0] + x,
-      ladderBaseY + ladderHeight / 2,
-      ladderZ,
-    ], materials.darkMetal);
+  const ladder = new ShipDetailGeometry(geometries);
+  ([-spec.ladder.width / 2, spec.ladder.width / 2] as const).forEach((x) => {
+    ladder.rod(materials.paintedSteel, [mast.position[0] + x, ladderBaseY, ladderZ],
+      [mast.position[0] + x, ladderBaseY + ladderHeight, ladderZ], 0.045);
+    const mountCount = Math.ceil(ladderHeight / 2.4);
+    for (let index = 1; index < mountCount; index += 1) {
+      const y = ladderBaseY + ladderHeight * index / mountCount;
+      ladder.rod(materials.paintedSteel, [mast.position[0] + x, y, ladderZ],
+        [mast.position[0], y, ladderZ + spec.ladder.mastOffset + 0.08], 0.025);
+    }
   });
   const rungCount = Math.ceil((floorY - mast.position[1]) / spec.ladder.rungSpacing) + 1;
   for (let index = 0; index < rungCount; index += 1) {
-    addBox(`${spec.ladder.id}:rung:${index}`, [
-      spec.ladder.width, 0.07, LADDER_RUNG_DEPTH,
-    ], [
-      mast.position[0],
-      mast.position[1] + index * spec.ladder.rungSpacing,
-      ladderZ,
-    ], materials.exposedMetal);
+    const y = mast.position[1] + index * spec.ladder.rungSpacing;
+    ladder.rod(materials.exposedMetal, [mast.position[0] - spec.ladder.width / 2, y, ladderZ],
+      [mast.position[0] + spec.ladder.width / 2, y, ladderZ], 0.033);
   }
+  ladder.finish(root, spec.ladder.id);
 
   const bottomEyeY = mast.position[1] + 1.5;
   const topEyeY = floorSurfaceY + 1.5;

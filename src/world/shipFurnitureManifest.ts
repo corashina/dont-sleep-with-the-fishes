@@ -13,7 +13,6 @@ export const SHIP_FURNITURE_MODEL_IDS = [
   'crewNightStand',
   'crewDesk',
   'crewCabinet',
-  'crewCeilingLight',
   'crewWallPainting',
   'crewWallArt',
   'crewTable',
@@ -130,13 +129,6 @@ export const SHIP_FURNITURE_MODEL_SPECS = {
     scaleAxis: 'y',
     targetAxisLength: 1.35,
     canonicalSize: [1.36025, 1.35, 0.81829],
-    ...sharedLimits,
-  },
-  crewCeilingLight: {
-    url: new URL('../assets/models/ship/crewCeilingLight.glb', import.meta.url).href,
-    scaleAxis: 'y',
-    targetAxisLength: 0.48,
-    canonicalSize: [0.171113, 0.48, 0.169371],
     ...sharedLimits,
   },
   crewWallPainting: {

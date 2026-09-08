@@ -695,14 +695,6 @@ const decorations: readonly ShipRoomDecorationSpec[] = [
     scale: [1, 1, 1],
   },
   {
-    id: 'cabin-ceiling-light',
-    modelId: 'crewCeilingLight',
-    zoneId: 'crewCabin',
-    position: [-2.2, FREIGHTER_DIMENSIONS.deckY + SHIP_ROOM_WALL_HEIGHT, 7.2],
-    rotation: [PI, 0, 0],
-    scale: [1, 1, 1],
-  },
-  {
     id: 'cabin-wall-painting-aft',
     modelId: 'crewWallPainting',
     zoneId: 'crewCabin',
@@ -941,7 +933,6 @@ export const SHIP_LAYOUT: ShipLayoutSpec = {
       zoneId: 'crewCabin',
       ladderId: 'crew-ladder',
       edge: 'aft',
-      coamingHeight: 0.12,
       openingWidth: 1.5,
     },
   ],

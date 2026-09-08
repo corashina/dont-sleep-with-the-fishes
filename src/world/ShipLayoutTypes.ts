@@ -5,6 +5,7 @@ export const FREIGHTER_DIMENSIONS = { width: 16.25, length: 55, deckY: 2.22 } as
 export const SHIP_ROOM_WALL_HEIGHT = 3.4;
 export const SHIP_ROOM_WALL_THICKNESS = 0.22;
 export const SHIP_ROOM_ROOF_THICKNESS = 0.24;
+export const SHIP_WHEELHOUSE_ROOF_OVERHANG = 0.28;
 export const SHIP_TRANSVERSE_PORTHOLE_CENTER_X = 2.2;
 export const SHIP_BOW_DEPTH = 8.5;
 export const SHIP_BOW_NOSE_CONTROL_WIDTH_SCALE = 0.5;
@@ -199,7 +200,6 @@ export interface ShipBalconySpec {
   readonly zoneId: ShipBalconyZoneId;
   readonly ladderId: 'crew-ladder';
   readonly edge: ShipTransverseEdge;
-  readonly coamingHeight: number;
   readonly openingWidth: number;
 }
 

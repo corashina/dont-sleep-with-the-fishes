@@ -1,5 +1,6 @@
 import {
   DataTexture,
+  Color,
   DoubleSide,
   LinearFilter,
   LinearMipmapLinearFilter,
@@ -30,14 +31,14 @@ export interface ShipMaterials {
   waterline: MeshStandardMaterial;
   plainPaintedSteel: MeshStandardMaterial;
   plainTimber: MeshStandardMaterial;
-  hatchTimber: MeshStandardMaterial;
   paintedPanel: MeshStandardMaterial;
   paintedSteel: MeshStandardMaterial;
+  deckSteel: MeshStandardMaterial;
+  deckTimber: MeshStandardMaterial;
   darkHull: MeshStandardMaterial;
   darkMetal: MeshStandardMaterial;
   exposedMetal: MeshStandardMaterial;
   rubber: MeshStandardMaterial;
-  lamp: MeshStandardMaterial;
   rust: MeshStandardMaterial;
   rope: MeshStandardMaterial;
   glass: MeshPhysicalMaterial;
@@ -249,7 +250,6 @@ export function createShipMaterials(
 ): ShipMaterials {
   const anisotropy = Math.max(1, Math.min(8, maxAnisotropy));
   const warmWood = createSurfaceTextureSet(seed, 'warmWood', anisotropy);
-  const hatchWood = createSurfaceTextureSet(seed ^ 0x3c6ef372, 'warmWood', anisotropy);
   const industrialFloor = createSurfaceTextureSet(seed, 'industrialFloor', anisotropy);
   const paintedPanelTextures = createSurfaceTextureSet(seed, 'paintedPanel', anisotropy);
 
@@ -336,11 +336,6 @@ export function createShipMaterials(
         metalness: 0,
         flatShading: true,
       });
-  const hatchTimber = createSurfaceMaterial(hatchWood, {
-    color: 0x9a765d,
-    roughness: 0.98,
-    metalness: 0,
-  });
   const paintedPanel = roomWallMaterial ?? createSurfaceMaterial(paintedPanelTextures, {
       color: 0xf5f0e5,
       roughness: 0.94,
@@ -349,15 +344,17 @@ export function createShipMaterials(
   const paintedSteel = createSurfaceMaterial(paintedPanelTextures, {
     color: 0xb6c4bb, roughness: 0.68, metalness: 0.08,
   });
+  const deckSteel = new MeshStandardMaterial({
+    color: 0x35423f, roughness: 0.6, metalness: 0.22,
+  });
+  const deckTimber = timber.clone();
+  deckTimber.color.multiply(new Color(0x9c8571));
   const darkHull = createSurfaceMaterial(paintedPanelTextures, {
     color: 0x3f565b, roughness: 0.78, metalness: 0.08,
   });
   const darkMetal = new MeshStandardMaterial({ color: 0x303a3b, roughness: 0.64, metalness: 0.65 });
   const exposedMetal = new MeshStandardMaterial({ color: 0x9c9789, roughness: 0.42, metalness: 0.85 });
   const rubber = new MeshStandardMaterial({ color: 0x202725, roughness: 0.96, metalness: 0 });
-  const lamp = new MeshStandardMaterial({
-    color: 0xf2dab0, emissive: 0xffcc88, emissiveIntensity: 1.4, roughness: 0.4,
-  });
   const rust = new MeshStandardMaterial({ color: 0x7a3d28, roughness: 0.95, metalness: 0.08, flatShading: true });
   const rope = new MeshStandardMaterial({ color: 0x3d3022, roughness: 1, metalness: 0, flatShading: true });
   const glass = new MeshPhysicalMaterial({ color: 0xb2cbcb, roughness: 0.24, metalness: 0, transmission: 0, transparent: true, opacity: 0.3, depthWrite: false, clearcoat: 0.6, clearcoatRoughness: 0.18 });
@@ -394,14 +391,14 @@ export function createShipMaterials(
     waterline,
     plainPaintedSteel,
     plainTimber,
-    hatchTimber,
     paintedPanel,
     paintedSteel,
+    deckSteel,
+    deckTimber,
     darkHull,
     darkMetal,
     exposedMetal,
     rubber,
-    lamp,
     rust,
     rope,
     glass,
@@ -413,9 +410,6 @@ export function createShipMaterials(
     warmWood.color,
     warmWood.roughness,
     warmWood.bump,
-    hatchWood.color,
-    hatchWood.roughness,
-    hatchWood.bump,
     industrialFloor.color,
     industrialFloor.roughness,
     industrialFloor.bump,
@@ -439,14 +433,14 @@ export function createShipMaterials(
     waterline,
     plainPaintedSteel,
     plainTimber,
-    hatchTimber,
     paintedPanel,
     paintedSteel,
+    deckSteel,
+    deckTimber,
     darkHull,
     darkMetal,
     exposedMetal,
     rubber,
-    lamp,
     rust,
     rope,
     glass,

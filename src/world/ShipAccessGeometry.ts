@@ -1,6 +1,8 @@
 import {
   BufferGeometry,
+  CubicBezierCurve3,
   Group,
+  Vector3,
 } from 'three';
 import { PLAYER_BODY_HEIGHT } from '../player/collisions';
 import type { LadderClimbZone, LadderEntryArea } from '../player/LadderTraversal';
@@ -14,14 +16,10 @@ import {
   type ShipLayoutSpec,
 } from './ShipLayoutTypes';
 import type { ShipMaterials } from './ShipMaterials';
-import {
-  addBlock,
-  type ShipGeometryBuildContext,
-} from './ShipGeometryPrimitives';
+import type { ShipGeometryBuildContext } from './ShipGeometryPrimitives';
+import { ShipDetailGeometry } from './ShipDetailGeometry';
 
 const LADDER_RAIL_WIDTH = 0.08;
-const LADDER_RAIL_DEPTH = 0.1;
-const LADDER_RUNG_HEIGHT = 0.065;
 const LADDER_RUNG_DEPTH = 0.11;
 const LADDER_CLIMB_CLEARANCE = PLAYER_LAYOUT_RADIUS + LADDER_RUNG_DEPTH / 2 + 0.03;
 const LADDER_GRAB_RISE = 0.72;
@@ -92,7 +90,6 @@ function resolvedClimbZone(
 }
 
 function addLadders(
-  context: ShipGeometryBuildContext,
   root: Group,
   geometries: Set<BufferGeometry>,
   materials: ShipMaterials,
@@ -113,46 +110,32 @@ function addLadders(
     ladder.position.set(ladderSpec.centerX, 0, ladderZ);
     root.add(ladder);
 
-    ([-1, 1] as const).forEach((side, index) => {
-      const sideName = index === 0 ? 'port' : 'starboard';
+    const details = new ShipDetailGeometry(geometries);
+    ([-1, 1] as const).forEach((side) => {
       const x = side * ladderSpec.width / 2;
-      addBlock(context, ladder, {
-        name: `${ladder.name}:side-rail:${sideName}`,
-        size: [LADDER_RAIL_WIDTH, ladderHeight, LADDER_RAIL_DEPTH],
-        position: [x, bottomFloorY + ladderHeight / 2, 0],
-        material: materials.darkMetal,
-      });
-      addBlock(context, ladder, {
-        name: `${ladder.name}:grab-rail:${sideName}`,
-        size: [LADDER_RAIL_WIDTH, LADDER_GRAB_RISE, LADDER_RAIL_DEPTH],
-        position: [x, topFloorY + LADDER_GRAB_RISE / 2, 0],
-        material: materials.exposedMetal,
-      });
+      const gripY = topFloorY + LADDER_GRAB_RISE - 0.18;
+      const returnZ = -outwardZ * (ladderSpec.wallOffset + 0.18);
+      details.rod(materials.paintedSteel, [x, bottomFloorY, 0], [x, gripY, 0], LADDER_RAIL_WIDTH / 2);
+      details.tube(materials.paintedSteel, new CubicBezierCurve3(
+        new Vector3(x, gripY, 0), new Vector3(x, gripY + 0.24, 0),
+        new Vector3(x, gripY + 0.24, returnZ), new Vector3(x, gripY, returnZ)), 10, LADDER_RAIL_WIDTH / 2);
+      details.rod(materials.paintedSteel, [x, gripY, returnZ], [x, topFloorY, returnZ], LADDER_RAIL_WIDTH / 2);
+      details.box(materials.paintedSteel, [0.14, 0.025, 0.14], [x, topFloorY + 0.0125, returnZ], 0, 0);
       for (let bracketIndex = 0; bracketIndex < 3; bracketIndex += 1) {
         const y = bottomFloorY + ladderHeight * ((bracketIndex + 1) / 4);
-        addBlock(context, ladder, {
-          name: `${ladder.name}:bracket:${sideName}:${bracketIndex}`,
-          size: [LADDER_RAIL_WIDTH, LADDER_RAIL_WIDTH, ladderSpec.wallOffset],
-          position: [x, y, -outwardZ * ladderSpec.wallOffset / 2],
-          material: materials.exposedMetal,
-        });
+        const wallOffsetZ = -outwardZ * ladderSpec.wallOffset;
+        details.rod(materials.paintedSteel, [x, y, 0], [x, y, wallOffsetZ], 0.025);
+        details.box(materials.paintedSteel, [0.13, 0.16, 0.025], [x, y, wallOffsetZ], 0, 0);
       }
     });
 
     const rungCount = Math.floor(ladderHeight / ladderSpec.rungSpacing);
     for (let index = 0; index <= rungCount; index += 1) {
       const y = bottomFloorY + Math.min(index * ladderSpec.rungSpacing, ladderHeight);
-      addBlock(context, ladder, {
-        name: `${ladder.name}:rung:${index}`,
-        size: [
-          ladderSpec.width - LADDER_RAIL_WIDTH,
-          LADDER_RUNG_HEIGHT,
-          LADDER_RUNG_DEPTH,
-        ],
-        position: [0, y, 0],
-        material: materials.darkMetal,
-      });
+      details.rod(materials.exposedMetal, [-ladderSpec.width / 2, y, 0],
+        [ladderSpec.width / 2, y, 0], 0.033);
     }
+    details.finish(ladder, 'ladder-fittings');
 
     return resolvedClimbZone(
       ladderSpec,
@@ -172,7 +155,6 @@ export function addShipAccess(
   layout: ShipLayoutSpec,
 ): readonly LadderClimbZone[] {
   return addLadders(
-    context,
     context.root,
     context.geometries,
     context.materials,

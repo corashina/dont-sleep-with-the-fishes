@@ -127,7 +127,7 @@ describe('ship layout validation', () => {
     const invalidDimension = {
       ...SHIP_LAYOUT,
       balconies: SHIP_LAYOUT.balconies.map((balcony) => balcony.id === 'crew-balcony'
-        ? { ...balcony, coamingHeight: Number.NaN }
+        ? { ...balcony, openingWidth: Number.NaN }
         : balcony),
     };
     expect(() => validateShipLayout(invalidDimension)).toThrow(/crew-balcony.*positive/i);

@@ -20,6 +20,7 @@ import type { ShipItemSurface } from './ShipItemPlacement';
 import type { ShipMaterials } from './ShipMaterials';
 import { SHIP_FURNITURE_MODEL_SPECS } from './shipFurnitureManifest';
 import { disposeResourceSets } from './SceneResources';
+import { ShipDetailGeometry } from './ShipDetailGeometry';
 
 export interface ShipFurnitureCollider extends CollisionBox {
   readonly furnitureId: string;
@@ -102,30 +103,35 @@ function createCargoCrateStack(
 
 function createCargoRack(
   parent: Group,
-  geometry: BoxGeometry,
+  geometry: GeneratedGeometry,
   materials: ShipMaterials,
   size: readonly [number, number, number],
 ): void {
-  const topHeight = 0.12;
-  const legHeight = size[1] - topHeight;
-  addBox(
-    parent,
-    geometry,
-    materials.hatchTimber,
-    'cargo-rack-top',
-    [size[0], topHeight, size[2]],
-    [0, size[1] - topHeight / 2, 0],
-  );
-  ([-1, 1] as const).forEach((xSign) => ([-1, 1] as const).forEach((zSign) => {
-    addBox(
-      parent,
-      geometry,
-      materials.darkMetal,
-      `cargo-rack-leg-${xSign}-${zSign}`,
-      [0.12, legHeight, 0.12],
-      [xSign * (size[0] / 2 - 0.12), legHeight / 2, zSign * (size[2] / 2 - 0.12)],
-    );
-  }));
+  const details = new ShipDetailGeometry(geometry.owned);
+  const seatThickness = 0.085;
+  const legHeight = size[1] - seatThickness;
+  const plankDepth = (size[2] - 0.036) / 3;
+  for (let index = 0; index < 3; index += 1) {
+    details.box(materials.deckTimber, [size[0], seatThickness, plankDepth],
+      [0, size[1] - seatThickness / 2, (index - 1) * (plankDepth + 0.018)], 0, 0.016);
+  }
+  for (const x of [-size[0] / 2 + 0.23, size[0] / 2 - 0.23]) {
+    details.box(materials.deckSteel, [0.09, 0.065, size[2] - 0.06],
+      [x, legHeight - 0.032, 0], 0, 0);
+    for (const z of [-size[2] / 2 + 0.12, size[2] / 2 - 0.12]) {
+      details.box(materials.deckSteel, [0.075, legHeight, 0.075],
+        [x, legHeight / 2, z], 0, 0.01);
+      details.box(materials.darkMetal, [0.15, 0.025, 0.13], [x, 0.0125, z], 0, 0);
+    }
+    for (let index = 0; index < 3; index += 1) {
+      const z = (index - 1) * (plankDepth + 0.018);
+      details.rod(materials.exposedMetal, [x, size[1] - 0.005, z], [x, size[1] + 0.002, z], 0.014);
+    }
+  }
+  details.box(materials.deckSteel, [size[0] - 0.46, 0.065, 0.065],
+    [0, legHeight - 0.04, 0], 0, 0);
+  details.finish(parent, 'cargo-rack');
+  parent.children[0]!.name = 'cargo-rack-top';
 }
 
 function createOpenShelf(
@@ -276,7 +282,7 @@ export function createShipFurniture(
         placementSpec.colliderSize,
       );
     } else if (placementSpec.modelId === 'cargoRack') {
-      createCargoRack(placementRoot, geometry.box, materials, placementSpec.colliderSize);
+      createCargoRack(placementRoot, geometry, materials, placementSpec.colliderSize);
     } else if (placementSpec.modelId === 'bookcaseOpen') {
       createOpenShelf(placementRoot, library, placementSpec);
     } else {

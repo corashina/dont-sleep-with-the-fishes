@@ -220,7 +220,7 @@ The ship alarm uses [Klaxon by InfamousLazure](https://freesound.org/people/Infa
 
 Carlitos uses seven clips split from [Cat Meows 7x by Kinoton](https://freesound.org/people/Kinoton/sounds/584895/) under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
 
-Dorothy's deck and tinted room floors use [Poly Haven — Dark Wooden Planks](https://polyhaven.com/a/dark_wooden_planks). Cabin walls and ceiling linings use [ambientCG — Painted Wood 006C](https://ambientcg.com/view?id=PaintedWood006C). The hull, waterline, roofs, and machinery use distinct authored painted metal materials. Rubber window seals, raised porthole frames, rounded trim, and door hardware add construction detail. Warm cabin lamps point downward. Wet patches have soft edges and a surface sheen. Pipe joints, exhaust clamps, pulley blocks, and bound canvas folds detail the machinery and rigging. Small static fittings share meshes by material.
+Dorothy's deck and tinted room floors use [Poly Haven — Dark Wooden Planks](https://polyhaven.com/a/dark_wooden_planks). Cabin walls and ceiling linings use [ambientCG — Painted Wood 006C](https://ambientcg.com/view?id=PaintedWood006C). White corner trim joins continuous roof trim. Benches and the hatch use dark timber and steel fittings. Tubular deck and crow's nest rails share meshes by material. Room alarms are the only lamps. Each puddle has a distinct outline, soft edges, and approximate sky-light reflections without extra scene renders. Machinery details use 836 triangles and two material batches. Rigging lines attach directly to small mounting plates.
 
 ## Commands
 
