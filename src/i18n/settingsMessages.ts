@@ -1,17 +1,8 @@
 import { defineMessages } from './messages';
 
 export const settingsCatalog = {
-  filters: { en: 'FILTERS', pl: 'FILTRY', 'es-AR': 'FILTROS' },
-  filterStrength: { en: 'Strength', pl: 'Siła', 'es-AR': 'Intensidad' },
-  resetFilters: { en: 'Reset filters', pl: 'Resetuj filtry', 'es-AR': 'Restablecer filtros' },
-  filterSea: { en: 'Sea color grade', pl: 'Morska paleta barw', 'es-AR': 'Color marino' },
-  filterBleach: { en: 'Bleach bypass', pl: 'Efekt wybielania', 'es-AR': 'Blanqueado parcial' },
-  filterBloom: { en: 'Soft bloom', pl: 'Delikatna poświata', 'es-AR': 'Resplandor suave' },
-  filterVignette: { en: 'Vignette', pl: 'Winieta', 'es-AR': 'Viñeta' },
-  filterGrain: { en: 'Film grain', pl: 'Ziarno filmowe', 'es-AR': 'Grano de película' },
-  filterSepia: { en: 'Faded sepia', pl: 'Wyblakła sepia', 'es-AR': 'Sepia desvanecido' },
-  filterChromatic: { en: 'Chromatic aberration', pl: 'Aberracja chromatyczna', 'es-AR': 'Aberración cromática' },
-  filterPosterization: { en: 'Posterization', pl: 'Posteryzacja', 'es-AR': 'Posterización' },
+  posterizationStrength: { en: 'Strength', pl: 'Siła', 'es-AR': 'Intensidad' },
+  posterization: { en: 'Posterization', pl: 'Posteryzacja', 'es-AR': 'Posterización' },
   simulation: {"en":"SIMULATION","pl":"SYMULACJA","es-AR":"SIMULACIÓN"},
   barrels: {"en":"Barrel simulation","pl":"Symulacja beczek","es-AR":"Simulación de barriles"},
   physics: {"en":"PHYSICS VIEW","pl":"WIDOK FIZYKI","es-AR":"VISTA DE FÍSICA"},
