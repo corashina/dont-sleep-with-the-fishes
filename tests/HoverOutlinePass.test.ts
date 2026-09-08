@@ -1,19 +1,26 @@
 import {
+  BufferGeometry,
   Color,
+  Line,
+  LineBasicMaterial,
   Mesh,
   MeshBasicMaterial,
   PerspectiveCamera,
+  Points,
+  PointsMaterial,
   Scene,
   SphereGeometry,
   Vector2,
   WebGLRenderTarget,
   type WebGLRenderer,
 } from 'three';
-import { expect, it, vi } from 'vitest';
+import { expect, it, vi, type MockInstance } from 'vitest';
 import { HoverOutlinePass } from '../src/rendering/HoverOutlinePass';
 
 type OutlineInternals = HoverOutlinePass & {
   _fsQuad: { render(renderer: WebGLRenderer): void };
+  _changeVisibilityOfSelectedObjects(visible: boolean): void;
+  _changeVisibilityOfNonSelectedObjects(visible: boolean): void;
 };
 
 function createPass(): {
@@ -21,6 +28,7 @@ function createPass(): {
   scene: Scene;
   selected: Mesh;
   other: Mesh;
+  imageRender: MockInstance<(renderer: WebGLRenderer) => void>;
 } {
   const scene = new Scene();
   const selected = new Mesh(new SphereGeometry(), new MeshBasicMaterial());
@@ -32,9 +40,9 @@ function createPass(): {
     new PerspectiveCamera(),
   );
   pass.selectedObjects = [selected];
-  vi.spyOn((pass as unknown as OutlineInternals)._fsQuad, 'render')
+  const imageRender = vi.spyOn((pass as unknown as OutlineInternals)._fsQuad, 'render')
     .mockImplementation(() => undefined);
-  return { pass, scene, selected, other };
+  return { pass, scene, selected, other, imageRender };
 }
 
 function createRenderer(onRender?: () => void): {
@@ -134,6 +142,79 @@ it('restores scene and renderer state when the selected render fails', () => {
     expect(testRenderer.clearAlpha()).toBe(0.4);
     expect(testRenderer.renderer.shadowMap.autoUpdate).toBe(true);
     expect(testRenderer.renderer.shadowMap.needsUpdate).toBe(true);
+  } finally {
+    pass.dispose();
+    overrideMaterial.dispose();
+  }
+});
+
+it('does not restore a non-selected visibility phase that never ran', () => {
+  const { pass, scene, selected } = createPass();
+  const internals = pass as unknown as OutlineInternals;
+  const selectedVisibility = vi.spyOn(internals, '_changeVisibilityOfSelectedObjects');
+  const nonSelectedVisibility = vi.spyOn(internals, '_changeVisibilityOfNonSelectedObjects');
+  const points = new Points(new BufferGeometry(), new PointsMaterial());
+  const line = new Line(new BufferGeometry(), new LineBasicMaterial());
+  scene.add(points, line);
+  const testRenderer = createRenderer(() => {
+    throw new Error('depth render failed');
+  });
+  try {
+    expect(() => pass.render(
+      testRenderer.renderer,
+      new WebGLRenderTarget(64, 64),
+      new WebGLRenderTarget(64, 64),
+      0,
+      true,
+    )).toThrow('depth render failed');
+    expect(selected.visible).toBe(true);
+    expect(points.visible).toBe(true);
+    expect(line.visible).toBe(true);
+    expect((points.material as PointsMaterial).colorWrite).toBe(true);
+    expect((line.material as LineBasicMaterial).colorWrite).toBe(true);
+    expect(selectedVisibility.mock.calls).toEqual([[false], [true]]);
+    expect(nonSelectedVisibility).not.toHaveBeenCalled();
+  } finally {
+    pass.dispose();
+  }
+});
+
+it('restores state when an image pass fails', () => {
+  const { pass, scene, selected, other, imageRender } = createPass();
+  const internals = pass as unknown as OutlineInternals;
+  const selectedVisibility = vi.spyOn(internals, '_changeVisibilityOfSelectedObjects');
+  const nonSelectedVisibility = vi.spyOn(internals, '_changeVisibilityOfNonSelectedObjects');
+  const background = new Color(0xabcdef);
+  const overrideMaterial = new MeshBasicMaterial();
+  scene.background = background;
+  scene.overrideMaterial = overrideMaterial;
+  imageRender.mockImplementationOnce(() => {
+    throw new Error('image pass failed');
+  });
+  const testRenderer = createRenderer();
+  const initialTarget = testRenderer.target();
+  const initialColor = testRenderer.clearColor().clone();
+  try {
+    expect(() => pass.render(
+      testRenderer.renderer,
+      new WebGLRenderTarget(64, 64),
+      new WebGLRenderTarget(64, 64),
+      0,
+      true,
+    )).toThrow('image pass failed');
+    expect(selected.visible).toBe(true);
+    expect(other.visible).toBe(true);
+    expect(scene.background).toBe(background);
+    expect(scene.overrideMaterial).toBe(overrideMaterial);
+    expect(testRenderer.renderer.autoClear).toBe(true);
+    expect(testRenderer.stencilTest()).toBe(true);
+    expect(testRenderer.target()).toBe(initialTarget);
+    expect(testRenderer.clearColor()).toEqual(initialColor);
+    expect(testRenderer.clearAlpha()).toBe(0.4);
+    expect(testRenderer.renderer.shadowMap.autoUpdate).toBe(true);
+    expect(testRenderer.renderer.shadowMap.needsUpdate).toBe(true);
+    expect(selectedVisibility.mock.calls).toEqual([[false], [true]]);
+    expect(nonSelectedVisibility.mock.calls).toEqual([[false], [true]]);
   } finally {
     pass.dispose();
     overrideMaterial.dispose();
