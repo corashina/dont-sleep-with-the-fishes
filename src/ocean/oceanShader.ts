@@ -28,13 +28,10 @@ export interface OceanShaderUniforms {
   uWaterReflectionDepth: IUniform<Texture | null>;
   uWaterReflectionSky: IUniform<Color>;
   uWaterOpenRadiance: IUniform<Color>;
-  uPersistentFoam: IUniform<Texture | null>;
   uWaterReflectionMatrix: IUniform<Matrix4>;
   uWaterInverseProjection: IUniform<Matrix4>;
   uWaterViewMatrix: IUniform<Matrix4>;
   uWaterViewport: IUniform<Vector4>;
-  uFoamOrigin: IUniform<Vector2>;
-  uFoamExtent: IUniform<number>;
   uWaterReady: IUniform<number>;
   uTime: IUniform<number>;
   uAmplitudeScale: IUniform<number>;
@@ -51,7 +48,6 @@ export interface OceanShaderUniforms {
   uVortexStrength: IUniform<number>;
   uDeepColor: IUniform<Color>;
   uShallowColor: IUniform<Color>;
-  uFoamColor: IUniform<Color>;
   uFogColor: IUniform<Color>;
   uSkyColor: IUniform<Color>;
   uHorizonColor: IUniform<Color>;
@@ -73,7 +69,6 @@ export interface OceanShaderUniforms {
 interface OceanShaderQuality {
   readonly deepColor: number;
   readonly shallowColor: number;
-  readonly foamColor: number;
   readonly detailFade: readonly [number, number];
   readonly horizonFog: readonly [number, number, number];
   readonly defines: Readonly<Record<string, number>>;
@@ -86,7 +81,6 @@ const OCEAN_SHADER_QUALITY = Object.freeze({
   low: Object.freeze({
     deepColor: 0x162c35,
     shallowColor: 0x42656a,
-    foamColor: 0xb7b7a5,
     detailFade: Object.freeze([28, 92] as const),
     horizonFog: Object.freeze([150, 650, 0.86] as const),
     defines: LOW_DEFINES,
@@ -94,7 +88,6 @@ const OCEAN_SHADER_QUALITY = Object.freeze({
   high: Object.freeze({
     deepColor: 0x062932,
     shallowColor: 0x2f7377,
-    foamColor: 0xc6cdc4,
     detailFade: Object.freeze([52, 160] as const),
     horizonFog: Object.freeze([210, 820, 0.78] as const),
     defines: HIGH_DEFINES,
@@ -178,7 +171,6 @@ export const OCEAN_FRAGMENT_SHADER = `
   uniform float uVortexStrength;
   uniform vec3 uDeepColor;
   uniform vec3 uShallowColor;
-  uniform vec3 uFoamColor;
   uniform vec3 uFogColor;
   uniform vec3 uSkyColor;
   uniform vec3 uHorizonColor;
@@ -286,103 +278,6 @@ export const OCEAN_FRAGMENT_SHADER = `
     float distanceFade = 1.0 - smoothstep(uDetailFade.x, uDetailFade.y, vViewDepth);
     float weatherStrength = clamp(0.92 + (uAmplitudeScale - 1.0) * 0.32, 0.78, 1.18);
     return slope * distanceFade * weatherStrength;
-  }
-
-
-
-  float hash21(vec2 position) {
-    vec2 seed = fract(position * vec2(123.34, 456.21));
-    seed += dot(seed, seed + 45.32);
-    return fract(seed.x * seed.y);
-  }
-
-  float valueNoise(vec2 position) {
-    vec2 cell = floor(position);
-    vec2 fractional = fract(position);
-    vec2 blend = fractional * fractional * (3.0 - 2.0 * fractional);
-    float lower = mix(
-      hash21(cell),
-      hash21(cell + vec2(1.0, 0.0)),
-      blend.x
-    );
-    float upper = mix(
-      hash21(cell + vec2(0.0, 1.0)),
-      hash21(cell + vec2(1.0, 1.0)),
-      blend.x
-    );
-    return mix(lower, upper, blend.y);
-  }
-
-
-  float foamRibbonNoise(vec2 worldPosition) {
-    vec2 wind = normalize(vec2(0.83, 0.56));
-    vec2 crossWind = vec2(-wind.y, wind.x);
-    vec2 drifted = worldPosition + wind * uTime * 0.24;
-    vec2 windSpace = vec2(dot(drifted, wind), dot(drifted, crossWind));
-    float warpAlong = valueNoise(
-      windSpace * vec2(0.075, 0.21) + vec2(8.7, -3.2)
-    );
-    float warpAcross = valueNoise(
-      windSpace * vec2(0.11, 0.16) + vec2(-4.1, 6.8)
-    );
-    vec2 warpedSpace = windSpace + vec2(
-      (warpAlong - 0.5) * 3.4,
-      (warpAcross - 0.5) * 1.8
-    );
-    float coarse = valueNoise(warpedSpace * vec2(0.11, 0.34));
-    float medium = valueNoise(
-      warpedSpace * vec2(0.26, 0.78) + vec2(13.6, -9.4)
-    );
-    return clamp(coarse * 0.62 + medium * 0.38, 0.0, 1.0);
-  }
-
-  float foamEdgeNoise(vec2 worldPosition) {
-    vec2 wind = normalize(vec2(0.83, 0.56));
-    vec2 crossWind = vec2(-wind.y, wind.x);
-    vec2 drifted = worldPosition + wind * uTime * 0.31;
-    vec2 edgeSpace = vec2(dot(drifted, wind), dot(drifted, crossWind));
-    float edge = valueNoise(edgeSpace * vec2(0.72, 1.46) + vec2(2.9, 17.3));
-    return edge;
-  }
-
-  float foamBody(
-    float waveHeight,
-    float waveSlope,
-    float ribbonNoise,
-    float edgeNoise,
-    float fineFade
-  ) {
-    float weather = clamp((uAmplitudeScale - 0.78) / 0.57, 0.0, 1.0);
-    float crestStart = mix(0.31, 0.13, weather);
-    float crestWidth = mix(0.30, 0.24, weather);
-    float slopeStart = mix(0.11, 0.055, weather);
-    float slopeWidth = mix(0.23, 0.17, weather);
-    float crest = smoothstep(crestStart, crestStart + crestWidth, waveHeight);
-    float breaking = smoothstep(slopeStart, slopeStart + slopeWidth, waveSlope);
-    float crestEnvelope = crest * mix(0.62, 1.0, breaking);
-    float ribbonStart = mix(0.57, 0.42, weather);
-    float ribbon = smoothstep(ribbonStart, ribbonStart + 0.18, ribbonNoise);
-    float erodedEdge = smoothstep(0.14, 0.44, edgeNoise);
-    float edgeMask = mix(1.0, erodedEdge, fineFade);
-    float strength = mix(0.92, 1.12, weather);
-    return clamp(crestEnvelope * ribbon * edgeMask * strength, 0.0, 1.0);
-  }
-
-  float foamCap(
-    float waveHeight,
-    float waveSlope,
-    float bodyFoam,
-    float ribbonNoise
-  ) {
-    float weather = clamp((uAmplitudeScale - 0.78) / 0.57, 0.0, 1.0);
-    float crestStart = mix(0.48, 0.29, weather);
-    float slopeStart = mix(0.22, 0.13, weather);
-    float crest = smoothstep(crestStart, crestStart + 0.18, waveHeight);
-    float breaking = smoothstep(slopeStart, slopeStart + 0.16, waveSlope);
-    float ribbonStart = mix(0.68, 0.55, weather);
-    float ribbonCore = smoothstep(ribbonStart, ribbonStart + 0.15, ribbonNoise);
-    float strength = mix(0.80, 1.0, weather);
-    return clamp(bodyFoam * crest * breaking * ribbonCore * strength, 0.0, 1.0);
   }
 
 
@@ -496,50 +391,7 @@ export const OCEAN_FRAGMENT_SHADER = `
     float sunCore = pow(specularFacing, 220.0) * 1.24;
     float sunSheen = pow(specularFacing, 38.0) * mix(0.10, 0.24, windAlignment);
 
-    float bodyFoam = 0.0;
-    float capFoam = 0.0;
-    float foamWeather = clamp((uAmplitudeScale - 0.78) / 0.57, 0.0, 1.0);
-    // Below the crest threshold or beyond the fade, foam coverage is exactly zero.
-    if (waveHeight > mix(0.31, 0.13, foamWeather)
-        && vViewDepth < uDetailFade.y * 0.96) {
-      float ribbonNoise = foamRibbonNoise(vWorldPosition.xz);
-      float fineDetailFade = 1.0 - smoothstep(
-        uDetailFade.x * 0.72,
-        uDetailFade.x,
-        vViewDepth
-      );
-      float edgeNoise = fineDetailFade > 0.0 ? foamEdgeNoise(vWorldPosition.xz) : 1.0;
-      bodyFoam = foamBody(
-        waveHeight,
-        waveSlope,
-        ribbonNoise,
-        edgeNoise,
-        fineDetailFade
-      );
-      float bodyDistanceFade = 1.0 - smoothstep(
-        uDetailFade.y * 0.62,
-        uDetailFade.y * 0.96,
-        vViewDepth
-      );
-      bodyFoam *= bodyDistanceFade;
-      capFoam = foamCap(waveHeight, waveSlope, bodyFoam, ribbonNoise);
-      float capDistanceFade = 1.0 - smoothstep(
-        uDetailFade.y * 0.48,
-        uDetailFade.y * 0.74,
-        vViewDepth
-      );
-      capFoam *= capDistanceFade;
-    }
-    float foam = clamp(bodyFoam + capFoam, 0.0, 1.0);
-    color += uSunColor * (sunCore + sunSheen) * uDirectLightStrength
-      * (1.0 - clamp(foam * 0.72 + capFoam * 0.22, 0.0, 0.94));
-    vec3 capFoamColor = mix(
-      uFoamColor,
-      uSunColor,
-      0.08 * uDirectLightStrength
-    );
-    color = mix(color, uFoamColor, bodyFoam * 0.64);
-    color = mix(color, capFoamColor, capFoam * 0.90);
+    color += uSunColor * (sunCore + sunSheen) * uDirectLightStrength;
 
     #endif
 
@@ -580,7 +432,6 @@ export function applyOceanShaderQuality(
   );
   uniforms.uDeepColor.value.setHex(values.deepColor);
   uniforms.uShallowColor.value.setHex(values.shallowColor);
-  uniforms.uFoamColor.value.setHex(values.foamColor);
   return values.defines;
 }
 
@@ -598,13 +449,10 @@ export function createOceanShaderDefinition(quality: WaterQuality): Readonly<{
     uWaterReflectionDepth: { value: null },
     uWaterReflectionSky: { value: new Color() },
     uWaterOpenRadiance: { value: new Color() },
-    uPersistentFoam: { value: null },
     uWaterReflectionMatrix: { value: new Matrix4() },
     uWaterInverseProjection: { value: new Matrix4() },
     uWaterViewMatrix: { value: new Matrix4() },
     uWaterViewport: { value: new Vector4(0, 0, 1, 1) },
-    uFoamOrigin: { value: new Vector2() },
-    uFoamExtent: { value: 128 },
     uWaterReady: { value: 0 },
     uTime: { value: 0 },
     uAmplitudeScale: { value: 1 },
@@ -627,7 +475,6 @@ export function createOceanShaderDefinition(quality: WaterQuality): Readonly<{
     uVortexStrength: { value: 0 },
     uDeepColor: { value: new Color() },
     uShallowColor: { value: new Color() },
-    uFoamColor: { value: new Color() },
     uFogColor: { value: new Color(0x27343b) },
     uSkyColor: { value: new Color(0x496b75) },
     uHorizonColor: { value: new Color(0x6f8587) },
