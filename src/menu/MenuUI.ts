@@ -1,62 +1,9 @@
 import { menuText } from '../i18n/menuMessages';
-import { getLanguage, onLanguageChange } from '../i18n/language';
+import { onLanguageChange } from '../i18n/language';
+import { guideText } from '../i18n/guideMessages';
+import { GUIDE_PAGES, guideImage, type GuideSectionId } from './GuidePages';
 import { MenuPauseView } from './MenuPauseView';
 import { renderGuideDescription } from './GuideDescription';
-
-const GUIDE_ASSET_ROOT = `${import.meta.env.BASE_URL}images/how-to-play`;
-
-interface GuidePage {
-  readonly title: string;
-  readonly images: readonly { readonly src: string; readonly alt: string }[];
-  readonly description: string;
-}
-
-const GUIDE_PAGES: readonly GuidePage[] = Object.freeze([
-  {
-    get title() { return menuText('guide0'); },
-    get images() {
-      return [
-        { src: `${GUIDE_ASSET_ROOT}/scavenging.png`, alt: menuText('guide1') },
-        { src: `${GUIDE_ASSET_ROOT}/scavenging-lifeboat.png`, alt: menuText('guideLifeboatImage') },
-      ];
-    },
-    get description() { return menuText('guide3'); },
-  },
-  {
-    get title() { return menuText('guide4'); },
-    get images() {
-      return [
-        { src: guideImage('survival-day'), alt: menuText('guide5') },
-        { src: `${GUIDE_ASSET_ROOT}/survival-fishing.png`, alt: menuText('guide12') },
-      ];
-    },
-    get description() { return menuText('guide6'); },
-  },
-  {
-    get title() { return menuText('guide17'); },
-    get images() {
-      return [
-        { src: guideImage('survival-repair'), alt: menuText('guideRepairImage') },
-        { src: guideImage('survival-loot'), alt: menuText('guideLootImage') },
-      ];
-    },
-    get description() { return menuText('guide20'); },
-  },
-  {
-    get title() { return menuText('guide14'); },
-    get images() {
-      return [
-        { src: guideImage('survival-night'), alt: menuText('guide15') },
-        { src: guideImage('survival-night-event'), alt: menuText('guide18') },
-      ];
-    },
-    get description() { return menuText('guide16'); },
-  },
-]);
-
-function guideImage(name: string): string {
-  return `${GUIDE_ASSET_ROOT}/${name}${getLanguage() === 'pl' ? '-pl.jpg' : '.png'}`;
-}
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
   const element = root.querySelector<T>(selector);
@@ -80,8 +27,7 @@ export class MenuUI {
   private readonly guidePreviousButton: HTMLButtonElement;
   private readonly guideNextButton: HTMLButtonElement;
   private readonly guideTitle: HTMLElement;
-  private readonly guideImages: HTMLElement;
-  private readonly guideDescription: HTMLElement;
+  private readonly guideSections: HTMLElement;
   private readonly guidePageCount: HTMLElement;
   private readonly pointerLockError: HTMLElement;
   private transitioning = false;
@@ -107,7 +53,7 @@ export class MenuUI {
       <section class="screen how-to-play-screen poster-screen"
         id="menu-how-to-play-dialog" data-menu-guide role="dialog"
         aria-modal="true" aria-hidden="true" aria-labelledby="menu-how-to-play-title"
-        aria-describedby="menu-how-to-play-description" inert>
+        inert>
         <div class="screen__content how-to-play-popup">
           <button type="button" class="how-to-play-page__close ui-role-context"
             data-menu-guide-close aria-label="Close how to play">&times;</button>
@@ -115,13 +61,13 @@ export class MenuUI {
             <header class="how-to-play-page__header">
               <h2 class="ui-role-display" id="menu-how-to-play-title" data-menu-guide-title tabindex="-1"></h2>
             </header>
-            <div class="how-to-play-page__images" data-menu-guide-images></div>
-            <p class="how-to-play-page__description ui-role-narrative"
-              id="menu-how-to-play-description" data-menu-guide-description></p>
+            <div class="how-to-play-page__sections" data-menu-guide-sections tabindex="0"
+              role="region" aria-labelledby="menu-how-to-play-title"></div>
             <nav class="how-to-play-page__navigation ui-role-context" aria-label="How to play pages">
               <button type="button" class="how-to-play-page__arrow" data-menu-guide-previous
                 aria-label="Previous how to play page">&lsaquo;</button>
-              <span class="how-to-play-page__folio ui-role-numeral" data-menu-guide-page-count></span>
+              <span class="how-to-play-page__folio ui-role-numeral" data-menu-guide-page-count
+                aria-live="polite" aria-atomic="true"></span>
               <button type="button" class="how-to-play-page__arrow" data-menu-guide-next
                 aria-label="Next how to play page">&rsaquo;</button>
             </nav>
@@ -139,8 +85,7 @@ export class MenuUI {
     this.guidePreviousButton = requireElement(this.root, '[data-menu-guide-previous]');
     this.guideNextButton = requireElement(this.root, '[data-menu-guide-next]');
     this.guideTitle = requireElement(this.root, '[data-menu-guide-title]');
-    this.guideImages = requireElement(this.root, '[data-menu-guide-images]');
-    this.guideDescription = requireElement(this.root, '[data-menu-guide-description]');
+    this.guideSections = requireElement(this.root, '[data-menu-guide-sections]');
     this.guidePageCount = requireElement(this.root, '[data-menu-guide-page-count]');
     this.pointerLockError = requireElement(this.root, '[data-menu-pointer-lock-error]');
     this.pause = new MenuPauseView(() => this.setPauseOpen(false));
@@ -295,21 +240,21 @@ export class MenuUI {
   }
 
   private trapGuideFocus(event: KeyboardEvent): void {
-    const buttons = [
-      this.guidePreviousButton,
-      this.guideNextButton,
+    const controls = [
       this.guideCloseButton,
-    ].filter((button) => !button.disabled);
-    const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
+      this.guideSections,
+      ...[this.guidePreviousButton, this.guideNextButton].filter((button) => !button.disabled),
+    ];
+    const currentIndex = controls.indexOf(document.activeElement as HTMLElement);
     if (currentIndex < 0) {
       event.preventDefault();
-      buttons[0]?.focus();
+      controls[0]?.focus();
       return;
     }
-    const boundary = event.shiftKey ? currentIndex === 0 : currentIndex === buttons.length - 1;
+    const boundary = event.shiftKey ? currentIndex === 0 : currentIndex === controls.length - 1;
     if (!boundary) return;
     event.preventDefault();
-    buttons[event.shiftKey ? buttons.length - 1 : 0]?.focus();
+    controls[event.shiftKey ? controls.length - 1 : 0]?.focus();
   }
 
   private moveGuidePage(delta: -1 | 1): void {
@@ -340,30 +285,46 @@ export class MenuUI {
 
   private renderGuidePage(): void {
     const page = GUIDE_PAGES[this.guidePageIndex]!;
-    this.guideTitle.textContent = page.title;
-    const images = page.images;
-    this.guideImages.classList.toggle('how-to-play-page__images--pair', images.length === 2);
-    this.guideImages.replaceChildren(...images.map(({ src, alt }) => {
-      const figure = document.createElement('figure');
-      figure.className = 'how-to-play-page__figure';
-      const image = document.createElement('img');
-      image.dataset.menuGuideImage = '';
-      image.src = src;
-      image.alt = alt;
-      image.width = 1280;
-      image.height = 720;
-      image.draggable = false;
-      figure.append(image);
-      return figure;
-    }));
-    renderGuideDescription(this.guideDescription, page.description);
+    this.guideTitle.textContent = guideText(page.title);
+    this.guideSections.replaceChildren(...page.sections.map((key) => this.createGuideSection(key)));
+    this.guideSections.scrollTop = 0;
     this.guidePageCount.textContent = menuText('page', this.guidePageIndex + 1, GUIDE_PAGES.length);
     this.guidePreviousButton.disabled = this.guidePageIndex === 0;
     this.guideNextButton.disabled = this.guidePageIndex === GUIDE_PAGES.length - 1;
     this.guide.dataset.page = String(this.guidePageIndex + 1);
   }
 
+  private createGuideSection(key: GuideSectionId): HTMLElement {
+    const section = document.createElement('section');
+    section.className = 'how-to-play-page__section';
+    section.dataset.menuGuideSection = key;
+    const figure = document.createElement('figure');
+    figure.className = 'how-to-play-page__figure';
+    const image = document.createElement('img');
+    image.dataset.menuGuideImage = '';
+    image.src = guideImage(key);
+    image.alt = guideText(`${key}Alt`);
+    image.width = 1280;
+    image.height = 720;
+    image.draggable = false;
+    figure.append(image);
+    const subtitle = document.createElement('h3');
+    subtitle.className = 'how-to-play-page__subtitle ui-role-context';
+    subtitle.id = `menu-guide-${key}`;
+    subtitle.textContent = guideText(`${key}Title`);
+    section.setAttribute('aria-labelledby', subtitle.id);
+    const description = document.createElement('p');
+    description.className = 'how-to-play-page__description ui-role-narrative';
+    description.dataset.menuGuideDescription = '';
+    const text = guideText(`${key}Body`);
+    if (this.guidePageIndex === 0) description.textContent = text;
+    else renderGuideDescription(description, text);
+    section.append(figure, subtitle, description);
+    return section;
+  }
+
   private resetGuide(): void {
+    this.guideSections.scrollTop = 0;
     if (this.guidePageIndex !== 0) {
       this.guidePageIndex = 0;
       this.renderGuidePage();

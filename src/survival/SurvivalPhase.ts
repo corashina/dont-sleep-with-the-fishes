@@ -41,6 +41,8 @@ import {
   type ItemAnimationLabWorldPort,
 } from './ItemAnimationLabFlow';
 import { ItemAnimationLabCameraControls } from './ItemAnimationLabCameraControls';
+import { createItemAnimationLabJournal } from './ItemAnimationLabJournal';
+import type { JournalEntry } from './journalRecords';
 import {
   FocusedEventFlow,
   type FocusedEventUiPort,
@@ -230,7 +232,8 @@ export class SurvivalPhase implements GamePhase {
   private transitionRequested = false;
   private presentedTerminalState: SurvivalState | null = null;
   private terminalCheckpointCleared = false;
-  private lastReadJournalDay = 0;
+  private lastReadJournalRevision = 0;
+  private labJournal: readonly JournalEntry[] = [];
   private viewportWidth = 1;
   private viewportHeight = 1;
   private fishingFlow!: SurvivalFishingFlow;
@@ -523,10 +526,10 @@ export class SurvivalPhase implements GamePhase {
   handleJournalOpen(): void {
     if (this.disposed || this.busy || this.gameplayPaused() || this.documentIsHidden()) return;
     const snapshot = this.session.snapshot();
-    this.lastReadJournalDay = this.latestJournalDay(snapshot);
+    this.lastReadJournalRevision = this.latestJournalRevision(snapshot);
     this.audio.journal();
     this.ui.setJournalUnread?.(false);
-    this.ui.showJournal?.(snapshot.journalEntries);
+    this.ui.showJournal?.(this.journalEntries(snapshot));
   }
 
   handleJournalClose(): void {
@@ -697,6 +700,7 @@ export class SurvivalPhase implements GamePhase {
     this.onFatalError = onFatalError;
     this.eventBundles = eventBundles;
     this.itemAnimationLab = itemAnimationLab;
+    this.labJournal = itemAnimationLab ? createItemAnimationLabJournal() : [];
     this.audio = new SurvivalAudio(context.audio.createScope());
     this.fishingFlow = new SurvivalFishingFlow({
       session: session as FishingSessionPort,
@@ -894,12 +898,17 @@ export class SurvivalPhase implements GamePhase {
       && (generation === undefined || generation === this.lifecycleGeneration);
   }
 
-  private latestJournalDay(snapshot: SurvivalSnapshot): number {
-    return snapshot.journalEntries.at(-1)?.day ?? 0;
+  private journalEntries(snapshot: SurvivalSnapshot): readonly JournalEntry[] {
+    return this.itemAnimationLab ? this.labJournal : snapshot.journalEntries;
+  }
+
+  private latestJournalRevision(snapshot: SurvivalSnapshot): number {
+    const entry = this.journalEntries(snapshot).at(-1);
+    return entry === undefined ? 0 : entry.day * 2 + (entry.nighttime.kind === 'pending' ? 0 : 1);
   }
 
   private syncJournalUnread(snapshot: SurvivalSnapshot): void {
-    this.ui.setJournalUnread?.(this.latestJournalDay(snapshot) > this.lastReadJournalDay);
+    this.ui.setJournalUnread?.(this.latestJournalRevision(snapshot) > this.lastReadJournalRevision);
   }
 
   private renderSnapshot(openPendingEvent: boolean, presentTerminal = true): SurvivalSnapshot {

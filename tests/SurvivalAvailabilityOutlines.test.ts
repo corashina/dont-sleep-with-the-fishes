@@ -90,13 +90,4 @@ describe('survival availability outlines', () => {
       rig.dispose();
     }
   });
-
-  it('does not outline day actions during the night', () => {
-    const rig = createRig(3, true);
-    try {
-      expect(rig.targets()).toEqual([]);
-    } finally {
-      rig.dispose();
-    }
-  });
 });

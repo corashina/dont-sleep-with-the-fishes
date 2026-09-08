@@ -5,16 +5,16 @@ import {
   type StoredPreference,
 } from '../browser/storage';
 
-export type VisualQuality = 'low' | 'medium' | 'high';
+export type VisualQuality = 'low' | 'high';
 
-export const DEFAULT_VISUAL_QUALITY: VisualQuality = 'medium';
+export const DEFAULT_VISUAL_QUALITY: VisualQuality = 'high';
 export const VISUAL_QUALITY_STORAGE_KEY =
   'dont-sleep-with-the-fishes.visual-quality';
 
 export interface VisualQualityPreference extends StoredPreference<VisualQuality> {}
 
 export function parseVisualQuality(value: unknown): VisualQuality {
-  return value === 'low' || value === 'medium' || value === 'high'
+  return value === 'low' || value === 'high'
     ? value
     : DEFAULT_VISUAL_QUALITY;
 }

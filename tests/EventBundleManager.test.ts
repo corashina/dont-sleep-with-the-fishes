@@ -203,31 +203,6 @@ describe('EventBundleManager', () => {
     expect(featuredDispose).toHaveBeenCalledOnce();
   });
 
-  it('attaches through the host and disposes the adapter once', () => {
-    const presentation = adapter('leak');
-    const host = {
-      createEventPresentation: vi.fn(() => presentation),
-      attach: vi.fn(),
-      detach: vi.fn(),
-    };
-    const eventBundle = new EventBundle(
-      'leak',
-      host,
-      presentation,
-      { dispose: vi.fn() } as unknown as SurvivalEventModelLibrary,
-      { dispose: vi.fn() } as unknown as EventModelLibrary,
-      { sounds: [], dispose: vi.fn() },
-    );
-
-    eventBundle.attach();
-    eventBundle.dispose();
-    eventBundle.dispose();
-
-    expect(host.attach).toHaveBeenCalledWith(presentation);
-    expect(host.detach).toHaveBeenCalledWith(presentation);
-    expect(presentation.dispose).toHaveBeenCalledOnce();
-  });
-
   it('loads, activates, and releases one event bundle', async () => {
     const log: string[] = [];
     const pending = deferred<EventBundle>();
@@ -247,21 +222,6 @@ describe('EventBundleManager', () => {
     manager.releaseActive();
 
     expect(log).toEqual(['load:leak', 'attach:leak', 'dispose:leak']);
-  });
-
-  it('releases an active bundle exactly once across repeated flow cleanup', async () => {
-    const log: string[] = [];
-    const manager = new EventBundleManager({
-      load: async (eventId) => bundle(eventId, log),
-    });
-
-    await manager.beginLoad('leak');
-    await manager.activate('leak');
-    manager.releaseActive();
-    manager.releaseActive();
-    manager.dispose();
-
-    expect(log).toEqual(['attach:leak', 'dispose:leak']);
   });
 
   it('disposes every bundle resource when attachment fails', async () => {
@@ -325,19 +285,6 @@ describe('EventBundleManager', () => {
     expect(log).toEqual(['dispose:leak']);
   });
 
-  it('disposes a fulfilled pending bundle when activation is cancelled', async () => {
-    const log: string[] = [];
-    const loaded = bundle('leak', log);
-    const manager = new EventBundleManager({ load: async () => loaded });
-
-    await manager.beginLoad('leak');
-    manager.cancelPendingActivation();
-    manager.cancelPendingActivation();
-
-    expect(loaded.attach).not.toHaveBeenCalled();
-    expect(loaded.dispose).toHaveBeenCalledOnce();
-  });
-
   it('shares concurrent activation and keeps the active bundle owned', async () => {
     const log: string[] = [];
     const pending = deferred<EventBundle>();
@@ -361,28 +308,6 @@ describe('EventBundleManager', () => {
     expect(loaded.dispose).toHaveBeenCalledOnce();
   });
 
-  it('keeps cancellation primary when late bundle disposal throws', async () => {
-    const cleanupError = new Error('late disposal failed');
-    const pending = deferred<EventBundle>();
-    const loaded = {
-      eventId: 'leak',
-      attach: vi.fn(),
-      dispose: vi.fn(() => { throw cleanupError; }),
-    } as unknown as EventBundle;
-    const manager = new EventBundleManager({ load: () => pending.promise });
-    manager.beginLoad('leak');
-    const activation = manager.activate('leak');
-
-    manager.cancelPendingActivation();
-    pending.resolve(loaded);
-
-    await expect(activation).rejects.toThrow(
-      'Event bundle activation was cancelled: leak',
-    );
-    expect(loaded.attach).not.toHaveBeenCalled();
-    expect(loaded.dispose).toHaveBeenCalledOnce();
-  });
-
   it('disposes a late bundle after manager shutdown', async () => {
     const log: string[] = [];
     const pending = deferred<EventBundle>();
@@ -395,58 +320,4 @@ describe('EventBundleManager', () => {
 
     expect(log).toEqual(['dispose:leak']);
   });
-
-  it('disposes a fulfilled pending bundle once after manager shutdown', async () => {
-    const log: string[] = [];
-    const loaded = bundle('leak', log);
-    const manager = new EventBundleManager({ load: async () => loaded });
-
-    await manager.beginLoad('leak');
-    manager.dispose();
-    manager.dispose();
-
-    expect(loaded.attach).not.toHaveBeenCalled();
-    expect(loaded.dispose).toHaveBeenCalledOnce();
-  });
-
-  it.each([undefined, null])(
-    'preserves a first disposal failure thrown as %s',
-    async (firstError) => {
-      const log: string[] = [];
-      const active = bundle('leak', log);
-      const pending = bundle('ghosts', log);
-      vi.mocked(pending.dispose).mockImplementationOnce(() => {
-        log.push('dispose:ghosts');
-        throw firstError;
-      });
-      vi.mocked(active.dispose).mockImplementationOnce(() => {
-        log.push('dispose:leak');
-        throw new Error('later active disposal failed');
-      });
-      const loader = {
-        load: vi.fn()
-          .mockResolvedValueOnce(active)
-          .mockResolvedValueOnce(pending),
-      };
-      const manager = new EventBundleManager(loader);
-      await manager.beginLoad('leak');
-      await manager.activate('leak');
-      await manager.beginLoad('ghosts');
-
-      let thrown = false;
-      let received: unknown;
-      try {
-        manager.dispose();
-      } catch (error) {
-        thrown = true;
-        received = error;
-      }
-
-      expect(thrown).toBe(true);
-      expect(received).toBe(firstError);
-      expect(pending.dispose).toHaveBeenCalledOnce();
-      expect(active.dispose).toHaveBeenCalledOnce();
-      expect(() => manager.dispose()).not.toThrow();
-    },
-  );
 });

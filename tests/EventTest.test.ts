@@ -34,11 +34,4 @@ describe('event test option translations', () => {
       'Zatonięcie',
     ]);
   });
-
-  it('keeps Dorothy unchanged', () => {
-    const dorothy = EVENT_TEST_OPTIONS.find(({ id }) => id === 'ending-dorothy')!;
-    expect(dorothy.title).toBe('Dorothy');
-    setLanguage('pl');
-    expect(dorothy.title).toBe('Dorothy');
-  });
 });

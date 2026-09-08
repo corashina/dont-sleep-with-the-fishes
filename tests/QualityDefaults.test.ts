@@ -11,7 +11,7 @@ import { DEFAULT_WATER_QUALITY } from '../src/rendering/waterQuality';
 
 describe('quality defaults', () => {
   it('uses the requested quality levels', () => {
-    expect(DEFAULT_VISUAL_QUALITY).toBe('medium');
+    expect(DEFAULT_VISUAL_QUALITY).toBe('high');
     expect(DEFAULT_WATER_QUALITY).toBe('high');
     expect(DEFAULT_SHADOW_QUALITY).toBe('high');
   });

@@ -56,6 +56,7 @@ import { UnderwaterLightShafts } from './UnderwaterLightShafts';
 import { UnderwaterPlantField } from './UnderwaterPlantField';
 import type { MenuSandAssets } from './MenuSandAssets';
 import { createMenuSeabedMaterial } from './MenuSeabedMaterial';
+import { MenuGroundBatches } from './MenuGroundBatches';
 import {
   disposeResourceSets,
   ignoreCleanupError,
@@ -176,11 +177,8 @@ export class UnderwaterMenuWorld {
       for (const modelId of MENU_GROUND_MODEL_IDS) {
         for (const placement of placementsByModelId[modelId]) {
           const groundModel = this.createModel(models, modelId);
-          if (modelId === 'skull') {
-            this.placeGroundedModel(groundModel.root, placement.id, placement, 0.04);
-          } else {
-            this.placeModel(groundModel.root, placement.id, placement);
-          }
+          this.placeGroundedModel(groundModel.root, placement.id, placement,
+            modelId === 'skull' ? 0.04 : modelId === 'seaweed' ? 0.025 : 0.14);
           groundModelRoots.push(groundModel.root);
         }
       }
@@ -227,9 +225,11 @@ export class UnderwaterMenuWorld {
     const storyProps = this.createStoryProps();
     const caustic = this.createCausticOverlay();
     this.causticMaterial = caustic.material;
+    const groundBatches = new MenuGroundBatches(groundModelRoots);
+    this.components.push(groundBatches);
 
     this.enableShadows(boat.root);
-    for (const root of groundModelRoots) this.enableShadows(root);
+    this.enableShadows(groundBatches.root);
     this.enableShadows(signs.root);
     this.enableShadows(dorothy.root);
     this.enableShadows(storyProps);
@@ -241,6 +241,9 @@ export class UnderwaterMenuWorld {
     directionalLight.position.set(-5.5, 8.5, 3.2);
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.set(2048, 2048);
+    // All shadow casters in this menu are static. Fish and swaying leaves do not cast.
+    directionalLight.shadow.autoUpdate = false;
+    directionalLight.shadow.needsUpdate = true;
     directionalLight.shadow.camera.left = -18;
     directionalLight.shadow.camera.right = 18;
     directionalLight.shadow.camera.top = 15;
@@ -255,7 +258,7 @@ export class UnderwaterMenuWorld {
     this.root.add(
       seabed,
       boat.root,
-      ...groundModelRoots,
+      groundBatches.root,
       signs.root,
       dorothy.root,
       distantSeabed.root,
@@ -404,19 +407,6 @@ export class UnderwaterMenuWorld {
     return { root: school, fish: actors };
   }
 
-  private placeModel(
-    root: Group,
-    name: string,
-    placement: {
-      readonly position: readonly [number, number, number];
-      readonly rotation: readonly [number, number, number];
-    },
-  ): void {
-    root.name = `menu:${name}`;
-    root.position.set(...placement.position);
-    root.rotation.set(...placement.rotation);
-  }
-
   private placeGroundedModel(
     root: Group,
     name: string,
@@ -438,13 +428,16 @@ export class UnderwaterMenuWorld {
   private createSeabed(
     sand: MenuSandAssets,
   ): Mesh<PlaneGeometry, MeshStandardMaterial> {
-    const geometry = new PlaneGeometry(140, 100, 56, 42);
+    const geometry = new PlaneGeometry(140, 100, 64, 56);
     geometry.rotateX(-Math.PI / 2);
     const position = geometry.getAttribute('position') as BufferAttribute;
     const color = new Float32BufferAttribute(position.count * 3, 3);
     for (let index = 0; index < position.count; index += 1) {
-      const x = position.getX(index);
-      const z = position.getZ(index);
+      const sourceX = position.getX(index);
+      const x = Math.sign(sourceX) * Math.pow(Math.abs(sourceX) / 70, 1.5) * 70;
+      const z = 32 - Math.pow((50 - position.getZ(index)) / 100, 1.8) * 82;
+      position.setX(index, x);
+      position.setZ(index, z);
       const height = menuSeabedHeight(
         x + MENU_SEABED_POSITION[0],
         z + MENU_SEABED_POSITION[2],
@@ -452,7 +445,7 @@ export class UnderwaterMenuWorld {
       position.setY(index, height);
       const shade = 0.88 + Math.sin(x * 0.31 + z * 0.19) * 0.055
         + Math.cos(z * 0.47) * 0.035;
-      color.setXYZ(index, 0.46 * shade, 0.43 * shade, 0.33 * shade);
+      color.setXYZ(index, 0.52 * shade, 0.48 * shade, 0.36 * shade);
     }
     position.needsUpdate = true;
     geometry.setAttribute('color', color);

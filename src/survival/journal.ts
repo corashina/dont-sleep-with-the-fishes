@@ -1,4 +1,5 @@
 import { journalMessage as t } from '../i18n/journalMessages';
+import { presentationWeatherProfile } from '../weather/presentationWeather';
 import { journalCatchName } from '../i18n/journalInventoryMessages';
 import { formatJournalEvent } from './journalEvents';
 import { formatJournalMutations } from './journalInventory';
@@ -9,7 +10,6 @@ import type {
   JournalDaytimeRecord,
   JournalEntry,
   JournalFishingRecord,
-  JournalNightRecord,
   JournalSurvivalActionRecord,
 } from './journalRecords';
 
@@ -17,12 +17,15 @@ export function sinkingShipDaytimeText(): string { return t('sinking'); }
 
 export interface JournalPageCopy {
   heading: string;
+  nightHeading: string;
   weather: string;
+  nightWeather: string;
   daytime: string;
   nighttime: string;
 }
 
-function formatNight(record: JournalNightRecord): string {
+function formatNight(record: JournalEntry['nighttime']): string {
+  if (record.kind === 'pending') return t('nightPending');
   return record.kind === 'quiet' ? t('quietNight') : formatJournalEvent(record.event);
 }
 
@@ -97,12 +100,15 @@ function formatDayAction(record: JournalDayActionRecord): string {
 }
 
 export function formatJournalEntry(entry: JournalEntry): JournalPageCopy {
-  const actions = entry.actions.map(formatDayAction).filter(Boolean).join(' ');
+  const actions = entry.actions.filter((action) => action.kind !== 'carlitosDawn').map(formatDayAction).filter(Boolean).join(' ');
+  const dawn = entry.actions.filter((action) => action.kind === 'carlitosDawn').map(formatDayAction).filter(Boolean);
   const daytime = entry.daytime === null && actions.length > 0 ? '' : formatDaytime(entry.daytime);
   return {
     heading: t('day', entry.day),
-    weather: t(entry.weather),
+    nightHeading: t('night', entry.day),
+    weather: presentationWeatherProfile(entry.weather).label,
+    nightWeather: entry.nightWeather === null ? '' : presentationWeatherProfile(entry.nightWeather).label,
     daytime: [actions, daytime].filter(Boolean).join(' '),
-    nighttime: formatNight(entry.nighttime),
+    nighttime: [formatNight(entry.nighttime), ...dawn].join(' '),
   };
 }

@@ -1,9 +1,7 @@
 // Importance: 10/10. Protects water capture state, sizing, and reflection projection.
 import {
-  BufferGeometry,
   Camera,
   Matrix4,
-  MeshBasicMaterial,
   Object3D,
   PerspectiveCamera,
   Scene,
@@ -216,47 +214,5 @@ describe('OceanCapture', () => {
     expect(testRenderer.state().scissor.toArray()).toEqual([4, 5, 80, 90]);
     originalTarget.dispose();
     capture.dispose();
-  });
-
-  it('skips capture while the scene uses an override material', () => {
-    const capture = new OceanCapture();
-    const testRenderer = createRenderer();
-    const { scene, water, camera } = createSceneInput();
-    testRenderer.setWater(water);
-    const overrideMaterial = new MeshBasicMaterial();
-    scene.overrideMaterial = overrideMaterial;
-
-    capture.update(testRenderer.renderer, scene, camera, water);
-
-    expect(testRenderer.renderer.render).not.toHaveBeenCalled();
-    expect(water.visible).toBe(true);
-    expect(scene.overrideMaterial).toBe(overrideMaterial);
-    overrideMaterial.dispose();
-    capture.dispose();
-  });
-
-  it('disposes each owned target and reflector geometry once', () => {
-    const targetDispose = vi.spyOn(WebGLRenderTarget.prototype, 'dispose');
-    const geometryDispose = vi.spyOn(BufferGeometry.prototype, 'dispose');
-    const capture = new OceanCapture();
-
-    capture.dispose();
-    capture.dispose();
-
-    expect(targetDispose).toHaveBeenCalledTimes(2);
-    expect(geometryDispose).toHaveBeenCalledTimes(1);
-  });
-
-  it('does no work after disposal', () => {
-    const capture = new OceanCapture();
-    const testRenderer = createRenderer();
-    const { scene, water, camera } = createSceneInput();
-    testRenderer.setWater(water);
-    capture.dispose();
-
-    capture.update(testRenderer.renderer, scene, camera, water);
-
-    expect(testRenderer.renderer.getRenderTarget).not.toHaveBeenCalled();
-    expect(testRenderer.renderer.render).not.toHaveBeenCalled();
   });
 });

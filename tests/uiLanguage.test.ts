@@ -56,7 +56,7 @@ describe('live gameplay translations', () => {
     document.body.append(view.root);
     view.root.removeAttribute('inert');
     view.root.setAttribute('aria-hidden', 'false');
-    view.show([1, 2, 3].map(day => ({ day, weather: 'calm', actions: [], daytime: null, nighttime: { kind: 'quiet' } })));
+    view.show([1, 2, 3].map(day => ({ day, weather: 'calm', nightWeather: 'calm', actions: [], daytime: null, nighttime: { kind: 'quiet' } })));
     view.previous();
     const pageTurn = vi.fn();
     view.onPage = pageTurn;
@@ -65,7 +65,7 @@ describe('live gameplay translations', () => {
     expect(view.pageForTest()).toBe(1);
     expect(document.activeElement).toBe(focus);
     expect(find('[data-journal-page-count]').textContent).toBe('STRONA 2 Z 3');
-    expect(find('#journal-day-label').textContent).toBe('DZIEŃ');
+    expect(find('#journal-day-label').textContent).toBe('DZIEŃ 2');
     expect(find('[data-journal-night]').textContent).not.toContain('night');
     expect(view.root.getAttribute('aria-label')).toBe('Dziennik przetrwania');
     expect(pageTurn).not.toHaveBeenCalled();
@@ -73,7 +73,7 @@ describe('live gameplay translations', () => {
     expect(view.pageForTest()).toBe(1);
     expect(document.activeElement).toBe(focus);
     expect(find('[data-journal-page-count]').textContent).toBe('PÁGINA 2 DE 3');
-    expect(find('#journal-day-label').textContent).toBe('DÍA');
+    expect(find('#journal-day-label').textContent).toBe('DÍA 2');
     expect(pageTurn).not.toHaveBeenCalled();
   });
 

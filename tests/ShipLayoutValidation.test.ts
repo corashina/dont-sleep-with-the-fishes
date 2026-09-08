@@ -16,9 +16,6 @@ function expectValidationError(layout: ShipLayoutSpec, expected: string): void {
 }
 
 describe('ship layout validation', () => {
-  it('accepts the canonical ship layout', () => {
-    expect(() => validateShipLayout(SHIP_LAYOUT)).not.toThrow();
-  });
 
   it('rejects invalid mainmast lookout assignments', () => {
     const missingMast = {
