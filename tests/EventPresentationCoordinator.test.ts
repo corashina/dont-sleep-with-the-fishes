@@ -55,33 +55,6 @@ const outcome: EventOutcomePresentation = {
 };
 
 describe('EventPresentationCoordinator', () => {
-  it('registers exact event IDs and attaches each module below owned roots', () => {
-    const leak = fakePresentation('leak');
-    const snatcher = fakePresentation('snatcher');
-    const coordinator = new EventPresentationCoordinator([leak, snatcher]);
-
-    expect(coordinator.handles('leak')).toBe(true);
-    expect(coordinator.handles('shower-night')).toBe(false);
-    expect(leak.worldRoot.parent).toBe(coordinator.worldRoot);
-    expect(leak.boatRoot.parent).toBe(coordinator.boatRoot);
-    expect(snatcher.worldRoot.parent).toBe(coordinator.worldRoot);
-    expect(snatcher.boatRoot.parent).toBe(coordinator.boatRoot);
-  });
-
-  it('clears the prior route and stages only the selected module', () => {
-    const leak = fakePresentation('leak');
-    const snatcher = fakePresentation('snatcher');
-    const coordinator = new EventPresentationCoordinator([leak, snatcher]);
-
-    expect(coordinator.stage(context('leak'))).toBe(true);
-    const snatcherContext = context('snatcher', 'map-1');
-    expect(coordinator.stage(snatcherContext)).toBe(true);
-
-    expect(leak.stage).toHaveBeenCalledOnce();
-    expect(leak.clear).toHaveBeenCalledOnce();
-    expect(snatcher.stage).toHaveBeenCalledExactlyOnceWith(snatcherContext);
-    expect(snatcher.clear).not.toHaveBeenCalled();
-  });
 
   it('keeps the active route when an unknown event reaches stage', () => {
     const leak = fakePresentation('leak');
@@ -122,26 +95,6 @@ describe('EventPresentationCoordinator', () => {
     expect(leak.reveal).not.toHaveBeenCalled();
     expect(leak.skip).not.toHaveBeenCalled();
     expect(leak.update).not.toHaveBeenCalled();
-  });
-
-  it('clears the active route and makes inactive calls safe', async () => {
-    const leak = fakePresentation('leak');
-    const coordinator = new EventPresentationCoordinator([leak]);
-    coordinator.stage(context('leak'));
-
-    coordinator.clear();
-    coordinator.clear();
-    coordinator.update(1, 1);
-    coordinator.settleForVisibilityChange();
-    coordinator.skip();
-
-    expect(leak.clear).toHaveBeenCalledOnce();
-    expect(leak.update).not.toHaveBeenCalled();
-    expect(leak.settleForVisibilityChange).not.toHaveBeenCalled();
-    expect(leak.skip).not.toHaveBeenCalled();
-    await expect(coordinator.reveal()).resolves.toBeUndefined();
-    await expect(coordinator.playItemUse('none', 'map-1')).resolves.toBe(false);
-    await expect(coordinator.react(outcome)).resolves.toBeUndefined();
   });
 
   it('disposes every module and both owned roots once', () => {

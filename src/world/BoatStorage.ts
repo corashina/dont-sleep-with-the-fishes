@@ -89,19 +89,39 @@ const restingSlot = (
   };
 };
 
+const stackedSlot = (
+  surface: BoatItemSurface,
+  id: ItemId,
+  x: number,
+  z: number,
+  yaw: number,
+): SlotSpec => {
+  const slot = restingSlot(surface, id, x, z, yaw);
+  const bounds = ITEM_MODEL_SPECS[id].normalizedBounds;
+  const height = (bounds.max[1] - bounds.min[1]) * slot.scale + 0.01;
+  return { ...slot, position: [x, slot.position[1] + height, z] };
+};
+
 const BOAT_STORAGE_SLOTS = {
   cannedFood: [
-    restingSlot('floor', 'cannedFood', -0.18, -1.32, 0.10),
-    restingSlot('floor', 'cannedFood', 0.02, -1.32, -0.05),
-    restingSlot('floor', 'cannedFood', 0.22, -1.32, -0.08),
-    restingSlot('floor', 'cannedFood', -0.20, -1.12, -0.06),
-    restingSlot('floor', 'cannedFood', 0, -1.12, 0.08),
-    restingSlot('floor', 'cannedFood', 0.20, -1.12, 0.03),
+    restingSlot('floor', 'cannedFood', -0.10, -1.24, 0.10),
+    restingSlot('floor', 'cannedFood', 0.10, -1.24, -0.05),
+    stackedSlot('floor', 'cannedFood', 0, -1.24, -0.08),
+    restingSlot('floor', 'cannedFood', 0, -1.755, 0.12),
+    restingSlot('floor', 'cannedFood', -0.212, -1.445, -0.11),
+    restingSlot('floor', 'cannedFood', 0.212, -1.445, 0.15),
+    restingSlot('floor', 'cannedFood', -0.200, -1.650, -0.08),
+    restingSlot('floor', 'cannedFood', 0.200, -1.650, 0.08),
   ],
   baitTin: [
-    restingSlot('shelf', 'baitTin', -0.105, -1.65, -0.05),
-    restingSlot('shelf', 'baitTin', 0.105, -1.65, 0.08),
-    restingSlot('shelf', 'baitTin', 0, -1.855, -0.03),
+    restingSlot('shelf', 'baitTin', -0.105, -1.650, -0.05, 0.375),
+    restingSlot('shelf', 'baitTin', 0.105, -1.650, 0.08, 0.375),
+    restingSlot('shelf', 'baitTin', 0, -1.855, -0.03, 0.375),
+    restingSlot('shelf', 'baitTin', 0, -1.487, 0.13, 0.375),
+    restingSlot('shelf', 'baitTin', -0.155, -1.490, -0.04, 0.375),
+    restingSlot('shelf', 'baitTin', 0.155, -1.495, 0.09, 0.375),
+    restingSlot('shelf', 'baitTin', -0.255, -1.660, -0.10, 0.375),
+    restingSlot('shelf', 'baitTin', 0.255, -1.660, 0.12, 0.375),
   ],
   ductTape: [restingSlot('shelf', 'ductTape', -0.55, -1.65, 0.05, 0.5, Math.PI / 2)],
   compass: [restingSlot(

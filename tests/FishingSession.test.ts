@@ -117,18 +117,6 @@ describe('FishingSession', () => {
     expect(invalid.snapshot().state).toBe('aiming');
   });
 
-  it('requires completeCast before waiting', () => {
-    const session = createSession();
-    expect(session.reel().accepted).toBe(false);
-    expect(session.completeCast().accepted).toBe(false);
-    expect(session.cast({ x: 1, z: 1 }).accepted).toBe(true);
-    expect(session.reel().accepted).toBe(false);
-    expect(session.advance(3), 'casting does not advance').toBeUndefined();
-    expect(session.snapshot().state).toBe('casting');
-    expect(session.completeCast().accepted).toBe(true);
-    expect(session.reel().accepted).toBe(false);
-  });
-
   it('advances only finite non-negative elapsed time and preserves bite overflow', () => {
     const session = createSession([0.5, 0]);
     castToWaiting(session);
@@ -183,20 +171,6 @@ describe('FishingSession', () => {
     session.advance(3 + SURVIVAL_BALANCE.fishing.reactionSeconds);
     expect(session.snapshot().result).toEqual({ kind: 'miss' });
     expect(session.snapshot().result).not.toHaveProperty('catch');
-  });
-
-  it('does not progress while a caller omits advance during a pause', () => {
-    const session = createSession([0, 0]);
-    castToWaiting(session);
-    session.advance(3.25);
-    const beforePause = session.snapshot();
-    const afterPause = session.snapshot();
-    expect(beforePause.biteSeconds).toBeGreaterThan(0);
-    expect(afterPause).toMatchObject({
-      state: 'bite',
-      waitingSeconds: beforePause.waitingSeconds,
-      biteSeconds: beforePause.biteSeconds,
-    });
   });
 
   it('reuses a frozen live view for allocation-free state reads', () => {

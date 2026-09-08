@@ -21,14 +21,6 @@ export const MENU_ATMOSPHERE_QUALITY: Readonly<
     vignetteStrength: 0,
     grainStrength: 0,
   },
-  medium: {
-    bloomStrength: 0.28,
-    bloomRadius: 0.3,
-    bloomThreshold: 0.72,
-    gradeStrength: 0.7,
-    vignetteStrength: 0.22,
-    grainStrength: 0.012,
-  },
   high: {
     bloomStrength: 0.42,
     bloomRadius: 0.44,

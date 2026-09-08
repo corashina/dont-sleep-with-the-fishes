@@ -1,8 +1,11 @@
 import {
   BufferGeometry,
+  DataTexture,
   Group,
+  LinearFilter,
   Mesh,
-  MeshStandardMaterial,
+  MeshPhysicalMaterial,
+  RGBAFormat,
   Shape,
   ShapeGeometry,
 } from 'three';
@@ -16,20 +19,30 @@ export class ShipPuddleEffects {
   readonly root = new Group();
 
   private readonly geometries = new Set<BufferGeometry>();
-  private readonly materials = new Set<MeshStandardMaterial>();
+  private readonly materials = new Set<MeshPhysicalMaterial>();
+  private readonly textures = new Set<DataTexture>();
   private disposed = false;
 
   constructor(private readonly puddles: readonly FootprintAnchor[]) {
     this.root.name = 'ship-danger-puddle-effects';
     const geometry = this.ownGeometry(createPuddleGeometry());
-    const material = this.ownMaterial(new MeshStandardMaterial({
-      color: 0x496773,
+    const alpha = createWetPatchMask();
+    this.textures.add(alpha);
+    const material = new MeshPhysicalMaterial({
+      color: 0x283a37,
       transparent: true,
-      opacity: 0.42,
-      roughness: 0.92,
+      opacity: 0.52,
+      alphaMap: alpha,
+      roughness: 0.22,
       metalness: 0,
+      clearcoat: 1,
+      clearcoatRoughness: 0.12,
       depthWrite: false,
-    }));
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
+    this.materials.add(material);
     puddles.forEach((anchor) => {
       const puddle = new Mesh(geometry, material);
       puddle.name = `ship-danger-puddle:${anchor.id}`;
@@ -47,7 +60,7 @@ export class ShipPuddleEffects {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    disposeResourceSets(this.geometries, this.materials);
+    disposeResourceSets(this.geometries, this.materials, this.textures);
     this.root.clear();
   }
 
@@ -56,13 +69,9 @@ export class ShipPuddleEffects {
     return geometry;
   }
 
-  private ownMaterial<T extends MeshStandardMaterial>(material: T): T {
-    this.materials.add(material);
-    return material;
-  }
 }
 
-function createPuddleGeometry(): BufferGeometry {
+function createPuddleShape(): Shape {
   const first = SHIP_PUDDLE_OUTLINE[0]!;
   const last = SHIP_PUDDLE_OUTLINE[SHIP_PUDDLE_OUTLINE.length - 1]!;
   const shape = new Shape();
@@ -77,5 +86,46 @@ function createPuddleGeometry(): BufferGeometry {
     );
   });
   shape.closePath();
-  return new ShapeGeometry(shape, 4);
+  return shape;
+}
+
+function createPuddleGeometry(): BufferGeometry {
+  const geometry = new ShapeGeometry(createPuddleShape(), 4);
+  const positions = geometry.getAttribute('position');
+  const uv = geometry.getAttribute('uv');
+  for (let index = 0; index < uv.count; index += 1) {
+    uv.setXY(index, (positions.getX(index) + 1) / 2, (positions.getY(index) + 1) / 2);
+  }
+  return geometry;
+}
+
+function createWetPatchMask(): DataTexture {
+  const size = 128;
+  const bytes = new Uint8Array(size * size * 4);
+  const outline = createPuddleShape().getPoints(4);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const px = (x + 0.5) / size * 2 - 1;
+      const py = (y + 0.5) / size * 2 - 1;
+      let distance = Infinity;
+      for (let index = 0; index < outline.length - 1; index += 1) {
+        const a = outline[index]!;
+        const b = outline[index + 1]!;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / (dx * dx + dy * dy)));
+        distance = Math.min(distance, Math.hypot(px - a.x - dx * t, py - a.y - dy * t));
+      }
+      const edge = Math.min(1, distance / 0.15);
+      const patch = 0.72 + Math.sin(px * 15 + Math.cos(py * 11)) * Math.sin(py * 19) * 0.18;
+      const alpha = Math.round(255 * edge * edge * (3 - 2 * edge) * patch);
+      bytes.set([alpha, alpha, alpha, 255], (y * size + x) * 4);
+    }
+  }
+  const texture = new DataTexture(bytes, size, size, RGBAFormat);
+  texture.name = 'dorothy-wet-patch-mask';
+  texture.minFilter = LinearFilter;
+  texture.magFilter = LinearFilter;
+  texture.needsUpdate = true;
+  return texture;
 }

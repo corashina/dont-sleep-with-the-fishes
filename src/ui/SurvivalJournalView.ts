@@ -23,11 +23,14 @@ export class SurvivalJournalView {
 
   private readonly weather: HTMLElement;
   private readonly story: HTMLElement;
+  private readonly nightTitle: HTMLElement;
+  private readonly nightWeather: HTMLElement;
+  private readonly nightStory: HTMLElement;
   private readonly day: HTMLElement;
   private readonly night: HTMLElement;
   private readonly dayItems: HTMLElement;
   private readonly nightItems: HTMLElement;
-  private readonly pageCount: HTMLElement;
+  private readonly pageCounts: NodeListOf<HTMLElement>;
   private entries: readonly JournalEntry[] = [];
   private pageIndex = 0;
   private readonly unsubscribeLanguage: () => void;
@@ -44,21 +47,25 @@ export class SurvivalJournalView {
       <section class="survival-overlay journal-overlay" data-journal role="dialog" aria-modal="true" aria-hidden="true" data-ui-aria="journal" aria-label="${uiText('journal')}" inert>
         <div class="journal-book" data-journal-book>
           <div class="journal-book__cover" aria-hidden="true"></div>
-          <div class="journal-book__rings" data-journal-rings aria-hidden="true"><i data-journal-ring></i><i data-journal-ring></i><i data-journal-ring></i></div>
           <div class="journal-book__tabs" data-journal-tabs aria-hidden="true"><i data-journal-tab></i><i data-journal-tab></i><i data-journal-tab></i><i data-journal-tab></i></div>
-          <article class="journal-page">
-            <button type="button" class="journal-page__close ui-role-context" data-journal-close data-ui-aria="closeJournal" aria-label="${uiText('closeJournal')}">&times;</button>
+          <article class="journal-page journal-page--day" aria-labelledby="journal-day-label">
             <p class="journal-page__weather ui-role-context" data-journal-weather></p>
-            <h2 class="ui-role-display" data-journal-title tabindex="-1"></h2>
+            <h2 id="journal-day-label" class="ui-role-display" data-journal-title tabindex="-1"></h2>
             <div class="journal-page__story ui-role-narrative" data-journal-story>
-              <section aria-labelledby="journal-day-label"><h3 id="journal-day-label" data-ui-text="dayUpper">${uiText('dayUpper')}</h3><p data-journal-day></p><ul class="journal-items" data-journal-day-items hidden></ul></section>
-              <section aria-labelledby="journal-night-label"><h3 id="journal-night-label" data-ui-text="nightUpper">${uiText('nightUpper')}</h3><p data-journal-night></p><ul class="journal-items" data-journal-night-items hidden></ul></section>
+              <p data-journal-day></p><ul class="journal-items" data-journal-day-items hidden></ul>
             </div>
-            <nav class="journal-page__navigation ui-role-context" data-ui-aria="journalPages" aria-label="${uiText('journalPages')}">
-              <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--previous ui-role-context" data-journal-previous data-ui-aria="previousJournal" aria-label="${uiText('previousJournal')}">&lsaquo;</button>
-              <span class="journal-page__folio ui-role-numeral" data-journal-page-count data-ui-text="emptyPages">${uiText('emptyPages')}</span>
-              <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--next ui-role-context" data-journal-next data-ui-aria="nextJournal" aria-label="${uiText('nextJournal')}">&rsaquo;</button>
-            </nav>
+            <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--previous ui-role-context" data-journal-previous data-ui-aria="previousJournal" aria-label="${uiText('previousJournal')}">&lsaquo;</button>
+            <span class="journal-page__folio ui-role-numeral" data-journal-page-count data-ui-text="emptyPages">${uiText('emptyPages')}</span>
+          </article>
+          <article class="journal-page journal-page--night" aria-labelledby="journal-night-label">
+            <button type="button" class="journal-page__close ui-role-context" data-journal-close data-ui-aria="closeJournal" aria-label="${uiText('closeJournal')}">&times;</button>
+            <p class="journal-page__weather ui-role-context" data-journal-night-weather></p>
+            <h2 id="journal-night-label" class="ui-role-display" data-journal-night-title></h2>
+            <div class="journal-page__story ui-role-narrative" data-journal-night-story>
+              <p data-journal-night></p><ul class="journal-items" data-journal-night-items hidden></ul>
+            </div>
+            <span class="journal-page__folio ui-role-numeral" data-journal-page-count data-ui-text="emptyPages">${uiText('emptyPages')}</span>
+            <button type="button" class="journal-page__edge-arrow journal-page__edge-arrow--next ui-role-context" data-journal-next data-ui-aria="nextJournal" aria-label="${uiText('nextJournal')}">&rsaquo;</button>
           </article>
         </div>
       </section>`;
@@ -66,11 +73,14 @@ export class SurvivalJournalView {
     this.title = requireElement(this.root, '[data-journal-title]');
     this.weather = requireElement(this.root, '[data-journal-weather]');
     this.story = requireElement(this.root, '[data-journal-story]');
+    this.nightTitle = requireElement(this.root, '[data-journal-night-title]');
+    this.nightWeather = requireElement(this.root, '[data-journal-night-weather]');
+    this.nightStory = requireElement(this.root, '[data-journal-night-story]');
     this.day = requireElement(this.root, '[data-journal-day]');
     this.night = requireElement(this.root, '[data-journal-night]');
     this.dayItems = requireElement(this.root, '[data-journal-day-items]');
     this.nightItems = requireElement(this.root, '[data-journal-night-items]');
-    this.pageCount = requireElement(this.root, '[data-journal-page-count]');
+    this.pageCounts = this.root.querySelectorAll<HTMLElement>('[data-journal-page-count]');
     this.previousButton = requireElement(this.root, '[data-journal-previous]');
     this.nextButton = requireElement(this.root, '[data-journal-next]');
     this.closeButton = requireElement(this.root, '[data-journal-close]');
@@ -130,25 +140,32 @@ export class SurvivalJournalView {
       this.title.textContent = uiText('emptyJournal');
       this.title.dataset.empty = 'true';
       this.weather.textContent = '';
+      this.nightWeather.textContent = '';
+      this.nightTitle.textContent = '';
       this.story.hidden = true;
+      this.nightStory.hidden = true;
       this.day.textContent = '';
       this.night.textContent = '';
       this.renderItems(this.dayItems, []);
       this.renderItems(this.nightItems, []);
-      this.pageCount.textContent = uiText('emptyPages');
     } else {
       const page = formatJournalEntry(entry);
       this.title.textContent = page.heading;
+      this.nightTitle.textContent = page.nightHeading;
       delete this.title.dataset.empty;
       this.weather.textContent = page.weather;
+      this.nightWeather.textContent = page.nightWeather;
       this.story.hidden = false;
+      this.nightStory.hidden = false;
       this.day.textContent = page.daytime;
       this.night.textContent = page.nighttime;
       const changes = journalItemChanges(entry);
       this.renderItems(this.dayItems, changes.day);
       this.renderItems(this.nightItems, changes.night);
-      this.pageCount.textContent = uiDynamic('page', this.pageIndex + 1, this.entries.length);
     }
+    const pageCount = entry === undefined ? uiText('emptyPages')
+      : uiDynamic('page', this.pageIndex + 1, this.entries.length);
+    this.pageCounts.forEach((counter) => { counter.textContent = pageCount; });
     this.previousButton.disabled = this.pageIndex <= 0;
     this.nextButton.disabled = this.entries.length === 0
       || this.pageIndex >= this.entries.length - 1;

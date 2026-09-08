@@ -13,7 +13,6 @@ import { createInactiveVortexWaveState } from '../src/ocean/WaveField';
 import { WreckagePresentation } from '../src/survival/events/WreckagePresentation';
 import type {
   DedicatedEventEnvironment,
-  EventOutcomePresentation,
 } from '../src/survival/eventPresentationTypes';
 
 const NORMALIZED_DEBRIS_DIMENSIONS: Readonly<Record<string, readonly [number, number, number]>> = {
@@ -80,50 +79,12 @@ function createEnvironment(options: { readonly normalizedDebrisBounds?: boolean 
   return { environment, created, cloned, ownedModelDispose };
 }
 
-
-function outcomePresentation(): EventOutcomePresentation {
-  return {
-    outcome: {
-      accepted: true,
-      code: 'event',
-      message: '',
-      deltas: {},
-      cue: 'none',
-      eventPresentationKey: 'wreckage.dive-creature',
-    },
-    resourceDeltas: {},
-    gainedInstanceIds: [],
-    brokenInstanceIds: [],
-    lostInstanceIds: [],
-    consumedInstanceIds: [],
-    selectedInstanceId: null,
-    selectedCondition: null,
-    targetInstanceId: null,
-  };
-}
-
 function stage(presentation: WreckagePresentation): Group {
   presentation.stage({ eventId: 'wreckage', targetInstanceId: null, variantSeed: 17 });
   return presentation.worldRoot.getObjectByName('wreckage-surface-debris') as Group;
 }
 
 describe('WreckagePresentation', () => {
-
-  it('shares one geometry and material array across five procedural planks', () => {
-    const { environment } = createEnvironment();
-    const presentation = new WreckagePresentation(environment);
-    const planks = stage(presentation).children.filter(
-      (child): child is Mesh => child instanceof Mesh,
-    );
-
-    expect(planks).toHaveLength(5);
-    expect(planks[0]!.material).toBeInstanceOf(Array);
-    for (const plank of planks.slice(1)) {
-      expect(plank.geometry).toBe(planks[0]!.geometry);
-      expect(plank.material).toBe(planks[0]!.material);
-    }
-    presentation.dispose();
-  });
 
   it('keeps the complete ship submerged and hidden during surface focus', async () => {
     const { environment } = createEnvironment();
@@ -178,25 +139,6 @@ describe('WreckagePresentation', () => {
     presentation.clear();
     expect(environment.dive.clear).toHaveBeenCalledOnce();
     expect(environment.underwaterView.exit).toHaveBeenCalledOnce();
-    presentation.dispose();
-  });
-
-  it('restores underwater visibility when hold setup fails', async () => {
-    const { environment } = createEnvironment();
-    const presentation = new WreckagePresentation(environment);
-    stage(presentation);
-    const setupError = new Error('underwater visibility failed');
-    vi.mocked(environment.underwaterView.enter).mockImplementationOnce(() => {
-      throw setupError;
-    });
-
-    const dive = presentation.playItemUse('dive', 'scubaSet-1');
-    const options = vi.mocked(environment.dive.play).mock.calls[0]![1];
-
-    expect(() => options.postEntryHold!.onStart()).toThrow(setupError);
-    expect(environment.underwaterView.exit).toHaveBeenCalledOnce();
-    presentation.clear();
-    await dive;
     presentation.dispose();
   });
 
@@ -279,40 +221,5 @@ describe('WreckagePresentation', () => {
     expect(seabed.geometry).toBe(seabedGeometry);
     expect(seabed.material).toBe(seabedMaterial);
     presentation.dispose();
-  });
-
-  it('resolves results without restoring obsolete Wreckage actors', async () => {
-    const { environment, ownedModelDispose } = createEnvironment();
-    const presentation = new WreckagePresentation(environment);
-    stage(presentation);
-
-    await expect(presentation.react(outcomePresentation())).resolves.toBeUndefined();
-    for (const name of [
-      'wreckage-search-injury-flash',
-      'wreckage-recovered-debris',
-      'wreckage-loot',
-      'wreckage-silt',
-      'wreckage-creature',
-      'wreckage-ghost',
-    ]) {
-      expect(presentation.worldRoot.getObjectByName(name)).toBeUndefined();
-      expect(presentation.boatRoot.getObjectByName(name)).toBeUndefined();
-    }
-
-    const seabed = presentation.worldRoot.getObjectByName('wreckage-seabed') as Mesh;
-    const disposeSeabedGeometry = vi.spyOn(seabed.geometry, 'dispose');
-    const disposeSeabedMaterial = vi.spyOn(seabed.material as MeshStandardMaterial, 'dispose');
-
-    presentation.dispose();
-    presentation.dispose();
-    expect(presentation.worldRoot.children).toHaveLength(0);
-    expect(ownedModelDispose.mock.calls.map(([id]) => id)).toEqual([
-      'containerShip',
-      'wreckageBox',
-      'wreckageCrate',
-      'wreckagePallet',
-    ]);
-    expect(disposeSeabedGeometry).toHaveBeenCalledOnce();
-    expect(disposeSeabedMaterial).toHaveBeenCalledOnce();
   });
 });

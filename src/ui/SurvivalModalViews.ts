@@ -81,7 +81,6 @@ export class SurvivalModalViews {
       </section>
       <section class="survival-overlay pause-overlay cinematic-overlay scuba-popup-overlay" data-pause role="dialog" aria-modal="true" aria-hidden="true" data-ui-aria="paused" aria-label="${uiText('paused')}" inert>
         <div class="cinematic-overlay__content scuba-popup-paper scuba-popup-panel">
-          <h2 class="scuba-popup-title ui-role-display" data-ui-text="holdFast">${uiText('holdFast')}</h2>
           <button type="button" class="primary-action salvage-action ui-role-context" data-resume data-ui-aria="resume" aria-label="${uiText('resume')}" data-ui-text="resumeUpper">
             ${uiText('resumeUpper')}
           </button>

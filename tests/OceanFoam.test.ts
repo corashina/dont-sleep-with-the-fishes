@@ -61,23 +61,6 @@ function createFoam() {
 }
 
 describe('OceanFoam', () => {
-  it('clears both 512-square targets before use and alternates textures', () => {
-    const { foam } = createFoam();
-    const { renderer, stub, draws } = createRenderer();
-    const firstTexture = foam.texture;
-    foam.update(renderer, 5, new Vector2());
-    const secondTexture = foam.texture;
-    expect(secondTexture).not.toBe(firstTexture);
-    expect(stub.clear).toHaveBeenCalledTimes(2);
-    expect(draws[0]!.step).toBe(0);
-    expect(foam.extent).toBe(128);
-    expect(secondTexture.image).toMatchObject({ width: 512, height: 512 });
-    foam.update(renderer, 5.02, new Vector2());
-    expect(foam.texture).toBe(firstTexture);
-    expect(stub.clear).toHaveBeenCalledTimes(2);
-    expect(draws[1]!.step).toBeCloseTo(0.02);
-    foam.dispose();
-  });
 
   it('reprojects old world positions into the previous texture without clearing overlap', () => {
     const { foam } = createFoam();

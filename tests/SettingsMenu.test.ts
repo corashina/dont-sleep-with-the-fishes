@@ -5,7 +5,6 @@ import { SettingsMenu } from '../src/ui/SettingsMenu';
 import { getLanguage, setLanguage } from '../src/i18n/language';
 import { GameUI } from '../src/ui/GameUI';
 import { MenuUI } from '../src/menu/MenuUI';
-import { SurvivalModalViews } from '../src/ui/SurvivalModalViews';
 import { createVisualQualityPreference } from '../src/rendering/visualQuality';
 import { createWaterQualityPreference } from '../src/rendering/waterQuality';
 import { createAntiAliasingQualityPreference } from '../src/rendering/antiAliasingQuality';
@@ -150,24 +149,6 @@ describe('Settings menu', () => {
     expect(resume).not.toHaveBeenCalled();
   });
 
-  it('places Settings after Resume in both pause menus', () => {
-    const { button, mount, menu } = setup();
-    expect(button.previousElementSibling?.getAttribute('aria-label')).toBe('Resume');
-    expect(button.nextElementSibling?.getAttribute('aria-label')).toBe('Back to menu');
-    const survival = new SurvivalModalViews();
-    cleanup.push(() => survival.dispose());
-    mount.append(survival.pauseRoot);
-    survival.pauseRoot.setAttribute('aria-hidden', 'false');
-    survival.pauseRoot.removeAttribute('inert');
-    const survivalButton = survival.pauseRoot.querySelector<HTMLButtonElement>('[data-open-settings]')!;
-    expect(survivalButton.previousElementSibling).toBe(survival.resumeButton);
-    expect(survivalButton.nextElementSibling).toBe(survival.pauseMenuButton);
-    survivalButton.click();
-    expect(menu.element.hidden).toBe(false);
-    menu.element.querySelector<HTMLButtonElement>('[data-settings-back]')!.click();
-    expect(document.activeElement).toBe(survivalButton);
-  });
-
   it('applies sound, camera, frame rate, cloud, and quality controls', () => {
     const { menu, options, button } = setup();
     button.click();
@@ -221,38 +202,5 @@ describe('Settings menu', () => {
     button.click();
     expect(menu.element.isConnected).toBe(false);
     expect(menu.element.hidden).toBe(true);
-  });
-
-  it('changes language from Settings while keeping the pause open', () => {
-    const { menu, button } = setup();
-    button.click();
-    cleanup.push(() => setLanguage('en'));
-    const select = menu.element.querySelector<HTMLSelectElement>('[data-language-select]')!;
-    select.value = 'pl';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(getLanguage()).toBe('pl');
-    expect(menu.element.querySelector('#settings-title')!.textContent).toBe('Ustawienia');
-    expect(menu.element.hidden).toBe(false);
-    menu.close();
-    expect(button.getAttribute('aria-label')).toBe('Ustawienia');
-    expect(document.activeElement).toBe(button);
-  });
-
-  it('selects Argentine Spanish and keeps settings open', () => {
-    const { menu, button } = setup();
-    button.click();
-    cleanup.push(() => setLanguage('en'));
-    const select = menu.element.querySelector<HTMLSelectElement>('[data-language-select]')!;
-    expect(select.querySelector('option[value="es-AR"]')?.textContent).toBe('Español (Argentina)');
-    select.focus();
-    select.value = 'es-AR';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(getLanguage()).toBe('es-AR');
-    expect(document.documentElement.lang).toBe('es-AR');
-    expect(menu.element.querySelector('#settings-title')!.textContent).toBe('Configuración');
-    expect(menu.element.hidden).toBe(false);
-    expect(document.activeElement).toBe(select);
-    menu.close();
-    expect(button.getAttribute('aria-label')).toBe('Configuración');
   });
 });

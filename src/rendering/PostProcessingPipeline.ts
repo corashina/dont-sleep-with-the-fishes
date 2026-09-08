@@ -105,7 +105,6 @@ function createComposerTarget(
 }
 const MENU_AMBIENT_OCCLUSION = {
   low: null,
-  medium: { intensity: 1.08, radius: 0.2 },
   high: { intensity: 1.18, radius: 0.17 },
 } as const satisfies Readonly<Record<VisualQuality, {
   readonly intensity: number;

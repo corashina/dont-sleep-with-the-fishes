@@ -24,7 +24,7 @@ import type {
 import type { SurvivalSnapshot } from './survivalSnapshot';
 
 export type ItemAnimationLabSessionPort = Pick<
-  SurvivalSession, 'snapshot' | 'setItemConditionForLab'
+  SurvivalSession, 'snapshot' | 'setItemConditionForLab' | 'setResourceQuantityForLab'
 >;
 
 const ITEM_CONDITION_CHOICE_ID = 'item-condition';
@@ -149,10 +149,7 @@ export class ItemAnimationLabFlow {
     if (!this.isLifecycleCurrent(generation)) return;
     const item = this.dependencies.session.snapshot().inventory[instanceId];
     if (item === undefined) return;
-    if (choiceId === 'break' || choiceId === 'fix') {
-      this.changeItemCondition(instanceId, choiceId);
-      return;
-    }
+    if (this.handleSettingChoice(item, choiceId)) return;
     const use = ITEM_ANIMATION_LAB_USES[item.type]?.find((candidate) => candidate.id === choiceId);
     if (item.condition !== 'usable' || use === undefined) return;
     this.pendingInstanceId = null;
@@ -381,8 +378,50 @@ export class ItemAnimationLabFlow {
         { id: 'fix', get label() { return presentationUiText('fix'); }, get unavailableReason() { return broken ? null : presentationUiText('notBroken'); } },
       );
     }
+    const resource = item.type === 'cannedFood' ? 'food' : item.type === 'baitTin' ? 'bait' : null;
+    if (resource !== null) {
+      const quantity = this.dependencies.session.snapshot()[resource];
+      choices.push(
+        {
+          id: 'quantity-less',
+          get label() { return `${presentationUiText('quantity')} − (${quantity} → ${Math.max(1, quantity - 1)})`; },
+          get unavailableReason() { return quantity <= 1 ? presentationUiText('minimumQuantity') : null; },
+        },
+        {
+          id: 'quantity-more',
+          get label() { return `${presentationUiText('quantity')} + (${quantity} → ${quantity + 1})`; },
+          unavailableReason: null,
+        },
+      );
+    }
     this.pendingInstanceId = item.instanceId;
     this.dependencies.ui.showItemAnimationLabChoices?.(choices);
+  }
+
+  private handleSettingChoice(item: SurvivalItemState, choiceId: EventResponseId): boolean {
+    switch (choiceId) {
+      case 'break':
+      case 'fix':
+        this.changeItemCondition(item.instanceId, choiceId);
+        return true;
+      case 'quantity-less':
+      case 'quantity-more':
+        this.changeResourceQuantity(item, choiceId === 'quantity-more' ? 1 : -1);
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  private changeResourceQuantity(item: SurvivalItemState, delta: number): void {
+    const resource = item.type === 'cannedFood' ? 'food' : item.type === 'baitTin' ? 'bait' : null;
+    if (resource === null) return;
+    const quantity = this.dependencies.session.snapshot()[resource] + delta;
+    if (!this.dependencies.session.setResourceQuantityForLab(resource, quantity)) return;
+    const snapshot = this.dependencies.renderSnapshot();
+    this.eligibility = this.buildEligibility(snapshot);
+    this.restoreSelection();
+    this.showUseChoices(snapshot.inventory[item.instanceId]!);
   }
 
   private changeItemCondition(instanceId: ItemInstanceId, choiceId: 'break' | 'fix'): void {

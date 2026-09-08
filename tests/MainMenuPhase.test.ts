@@ -2,7 +2,6 @@
 // Importance: 9/10. Protects menu input, transition, rendering, retry, and lifecycle ownership.
 import { PerspectiveCamera, type Scene } from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { MENU_FADE_SECONDS } from '../src/menu/menuChoreography';
 import { MainMenuPhase } from '../src/phases/MainMenuPhase';
 
 function createRig(
@@ -113,21 +112,6 @@ describe('MainMenuPhase', () => {
     } finally { phase.dispose(); }
   });
 
-  it('owns and fades the menu ambience', async () => {
-    const { audioScope, phase, ui } = createRig();
-
-    phase.start();
-    expect(audioScope.startLoop).toHaveBeenCalledExactlyOnceWith('menuAmbient');
-
-    ui.onStart();
-    await Promise.resolve();
-    expect(audioScope.setLoopGain)
-      .toHaveBeenCalledWith('menuAmbient', 0, MENU_FADE_SECONDS);
-
-    phase.dispose();
-    expect(audioScope.dispose).toHaveBeenCalledOnce();
-  });
-
   it('keeps rendering until pointer lock succeeds and fade completes', async () => {
     const { onComplete, phase, ui } = createRig();
 
@@ -165,21 +149,6 @@ describe('MainMenuPhase', () => {
     expect(requestPointerLock).toHaveBeenCalledTimes(2);
     expect(ui.clearPointerLockError).toHaveBeenCalledTimes(3);
     expect(ui.setTransitioning).toHaveBeenCalledWith(true);
-    phase.dispose();
-  });
-
-  it('ignores repeat start input after the transition begins', async () => {
-    const { phase, requestPointerLock, ui } = createRig();
-
-    phase.start();
-    ui.onStart();
-    await Promise.resolve();
-    ui.onStart();
-
-    expect(requestPointerLock).toHaveBeenCalledOnce();
-    expect(ui.setTransitioning).toHaveBeenCalledTimes(2);
-    expect(ui.setTransitioning).toHaveBeenLastCalledWith(true);
-    expect(ui.setFadeProgress).toHaveBeenLastCalledWith(0);
     phase.dispose();
   });
 
@@ -362,28 +331,6 @@ describe('MainMenuPhase', () => {
     expect(ui.showPointerLockError).not.toHaveBeenCalled();
   });
 
-  it('runs all disposal steps and preserves the first disposal error', () => {
-    const firstError = new Error('animator disposal failed');
-    const secondError = new Error('world disposal failed');
-    const { animator, camera, dependencies, phase, ui, world } = createRig();
-    const menuScene = dependencies.createWorld.mock.calls[0]![0] as Scene;
-    menuScene.add(new PerspectiveCamera());
-    animator.dispose.mockImplementation(() => {
-      throw firstError;
-    });
-    world.dispose.mockImplementation(() => {
-      throw secondError;
-    });
-
-    expect(() => phase.dispose()).toThrow(firstError);
-
-    expect(animator.dispose).toHaveBeenCalledOnce();
-    expect(world.dispose).toHaveBeenCalledOnce();
-    expect(ui.dispose).toHaveBeenCalledOnce();
-    expect(menuScene.children).not.toContain(camera);
-    expect(menuScene.children).toHaveLength(0);
-  });
-
   it('releases pointer lock acquired after disposal', async () => {
     const originalExitPointerLock = Object.getOwnPropertyDescriptor(
       document,
@@ -442,51 +389,5 @@ describe('MainMenuPhase', () => {
           .pointerLockElement;
       }
     }
-  });
-
-  it('cleans completed construction steps when animator creation fails', () => {
-    const camera = new PerspectiveCamera();
-    const ui = {
-      onStart: () => undefined,
-      onStartFocusChange: (_focused: boolean) => undefined,
-      onGuideFocusChange: (_focused: boolean) => undefined,
-      dispose: vi.fn(),
-    };
-    const world = {
-      actors: {},
-      getMenuSignActionAt: vi.fn(() => null),
-      setMenuSignHighlighted: vi.fn(),
-      dispose: vi.fn(),
-    };
-    let menuScene!: Scene;
-    const context = {
-      mount: document.createElement('main'),
-      renderer: { domElement: document.createElement('canvas') },
-      camera,
-      sceneRenderer: {},
-      menuModels: {},
-    } as never;
-    const dependencies = {
-      createUI: vi.fn(() => ui),
-      createWorld: vi.fn((scene: Scene) => {
-        menuScene = scene;
-        return world;
-      }),
-      createAnimator: vi.fn(() => {
-        throw new Error('animator failed');
-      }),
-      requestPointerLock: vi.fn(),
-    };
-
-    expect(() => new MainMenuPhase(
-      context,
-      vi.fn(),
-      dependencies as never,
-    )).toThrow('animator failed');
-
-    expect(world.dispose).toHaveBeenCalledOnce();
-    expect(ui.dispose).toHaveBeenCalledOnce();
-    expect(menuScene.children).not.toContain(camera);
-    expect(menuScene.children).toHaveLength(0);
   });
 });

@@ -19,7 +19,7 @@ it.each([
   const view = new SurvivalJournalView();
   try {
     view.show(JSON.parse(JSON.stringify([entry])));
-    const text = view.root.querySelector('[data-journal-day]')!.textContent!;
+    const text = view.root.querySelector('[data-journal-night]')!.textContent!;
     expect(text).toContain(hunger);
     expect(text).toContain(sadness);
     expect(text).not.toMatch(/\d|→|Carlitos:/);

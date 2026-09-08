@@ -1,4 +1,3 @@
-import { uiText } from '../i18n/uiMessages';
 import { refreshUiText } from '../ui/translatedText';
 
 /** Start menu navigation only. The menu world and audio keep running. */
@@ -12,12 +11,11 @@ export class MenuPauseView {
     this.element.dataset.pause = '';
     this.element.setAttribute('role', 'dialog');
     this.element.setAttribute('aria-modal', 'true');
-    this.element.setAttribute('aria-labelledby', 'start-menu-pause-title');
+    this.element.dataset.uiAria = 'pauseMenu';
     this.element.setAttribute('aria-hidden', 'true');
     this.element.setAttribute('inert', '');
     this.element.innerHTML = `
       <div class="screen__content scuba-popup-paper scuba-popup-panel">
-        <h2 id="start-menu-pause-title" class="scuba-popup-title ui-role-display" data-ui-text="holdFast">${uiText('holdFast')}</h2>
         <button type="button" class="primary-action salvage-action ui-role-context" data-menu-resume data-ui-aria="resume" data-ui-text="resumeUpper"></button>
         <button type="button" class="primary-action salvage-action ui-role-context" data-open-settings data-ui-aria="settings" data-ui-text="settingsUpper"></button>
       </div>`;

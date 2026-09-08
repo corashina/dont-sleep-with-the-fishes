@@ -85,7 +85,7 @@ describe('Game construction rollback', () => {
     expect((thrown as Error).message).toContain('getMaxAnisotropy');
     expect(constructionMocks.createSceneRenderer).toHaveBeenCalledWith(
       renderer,
-      'medium',
+      'high',
       'low',
       'high',
     );
