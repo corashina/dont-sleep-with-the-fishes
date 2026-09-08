@@ -1,5 +1,5 @@
 import {
-  BufferGeometry, CatmullRomCurve3, CylinderGeometry, Group, Material, Mesh,
+  BoxGeometry, BufferGeometry, Curve, CylinderGeometry, Group, Material, Mesh,
   Quaternion, TorusGeometry, TubeGeometry, Vector3,
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -14,8 +14,13 @@ export class ShipDetailGeometry {
   constructor(private readonly owned: Set<BufferGeometry>) {}
 
   box(material: Material, size: Point, position: Point, rotationY = 0, radius = 0.025): void {
-    this.add(new RoundedBoxGeometry(...size, 1, Math.min(radius, ...size.map((v) => v / 3))),
+    this.add(radius === 0 ? new BoxGeometry(...size)
+      : new RoundedBoxGeometry(...size, 1, Math.min(radius, ...size.map((v) => v / 3))),
       material, position, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), rotationY));
+  }
+
+  tube(material: Material, path: Curve<Vector3>, segments: number, radius: number): void {
+    this.add(new TubeGeometry(path, segments, radius, 8, false), material, [0, 0, 0]);
   }
 
   rod(material: Material, start: Point, end: Point, radius: number): void {
@@ -30,11 +35,6 @@ export class ShipDetailGeometry {
   ring(material: Material, position: Point, radius: number, thickness: number, horizontal = false): void {
     const rotation = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), horizontal ? Math.PI / 2 : 0);
     this.add(new TorusGeometry(radius, thickness, 6, 16), material, position, rotation);
-  }
-
-  tube(material: Material, points: readonly Point[], radius: number): void {
-    const curve = new CatmullRomCurve3(points.map((point) => new Vector3(...point)));
-    this.add(new TubeGeometry(curve, Math.max(12, points.length * 4), radius, 6, false), material, [0, 0, 0]);
   }
 
   finish(parent: Group | Mesh, name: string): void {

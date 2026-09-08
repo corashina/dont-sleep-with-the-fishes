@@ -228,18 +228,16 @@ describe('world builders', () => {
         'lifeboat-station-footprint-left',
         'lifeboat-station-footprint-right',
       ]);
-      expect(ship.root.children.slice(11, 58)).toHaveLength(47);
       expect(ship.root.children[11]!.name).toBe('crew-cabin-wall-port-0');
-      expect(ship.root.children[57]!.name)
-        .toBe('balcony:crew-balcony:coaming:aft:1');
+      expect(ship.root.children.some(({ name }) => name.startsWith('balcony:crew-balcony:coaming:')))
+        .toBe(false);
       expect(ship.root.getObjectByName('ladder:crew-ladder')).toBeDefined();
       const exteriorStart = ship.root.children.findIndex(({ name }) => name === 'bow-stem');
-      expect(ship.root.children.slice(exteriorStart, exteriorStart + 17).map(({ name }) => name)).toEqual([
+      expect(ship.root.children.slice(exteriorStart, exteriorStart + 16).map(({ name }) => name)).toEqual([
         'bow-stem',
         'stern-transom',
         'stern-transom-waterline',
         'deck-hatch',
-        'deck-hatch-timber-panel',
         'anchor-hawse-port',
         'anchor-hawse-starboard',
         'roof-engine-body',
@@ -253,7 +251,7 @@ describe('world builders', () => {
         'smokestack-starboard',
         'smokestack-starboard-collar',
       ]);
-      expect(ship.root.children.filter(({ name }) => name.startsWith('rail-'))).toHaveLength(67);
+      expect(ship.root.children.filter(({ name }) => name.startsWith('rail-deck:'))).toHaveLength(2);
 
       ship.disposeGeometry();
       ship.disposeGeometry();

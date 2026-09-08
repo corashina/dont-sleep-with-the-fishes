@@ -350,7 +350,7 @@ function validateBalconyStructure(layout: ShipLayoutSpec): void {
   });
   const balconyLadderIds = new Set<string>();
   layout.balconies.forEach((balcony) => {
-    if (!positive(balcony.coamingHeight) || !positive(balcony.openingWidth)) {
+    if (!positive(balcony.openingWidth)) {
       throw new Error(`Balcony ${balcony.id} must have positive finite dimensions`);
     }
     if (balcony.zoneId !== 'crewCabin') {

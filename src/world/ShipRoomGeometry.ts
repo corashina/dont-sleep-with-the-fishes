@@ -24,17 +24,12 @@ import {
   SHIP_ROOM_ROOF_THICKNESS,
   SHIP_ROOM_WALL_HEIGHT,
   SHIP_ROOM_WALL_THICKNESS,
+  SHIP_WHEELHOUSE_ROOF_OVERHANG as WHEELHOUSE_ROOF_OVERHANG,
   SHIP_TRANSVERSE_PORTHOLE_CENTER_X,
-  shipRoomRoofTopY,
-  type ShipBalconySpec,
   type ShipDoorSpec,
   type ShipLayoutSpec,
-  type ShipTransverseEdge,
-  type ShipZoneId,
-  type ShipZoneSpec,
 } from './ShipLayoutTypes';
 import type { ShipMaterials } from './ShipMaterials';
-import { ShipDetailGeometry } from './ShipDetailGeometry';
 import {
   addBlock,
   addBeveledBlock,
@@ -54,7 +49,6 @@ const DOOR_FRAME_CLEAR_HEIGHT = 2.35;
 const WINDOW_SILL_HEIGHT = 0.82;
 const WINDOW_HEADER_HEIGHT = 0.52;
 const WINDOW_GLASS_THICKNESS = 0.035;
-const WHEELHOUSE_ROOF_OVERHANG = 0.28;
 const WHEELHOUSE_FRAME_WIDTH = 0.18;
 const PORTHOLE_CENTER_HEIGHT = PLAYER_BODY_HEIGHT;
 const PORTHOLE_OPENING_RADIUS = 0.48;
@@ -64,7 +58,6 @@ const PORTHOLE_FRAME_OUTER_RADIUS = 0.66;
 const PORTHOLE_BOLT_RADIUS = 0.045;
 const PORTHOLE_BOLT_ORBIT = 0.575;
 const PORTHOLE_SEGMENTS = 24;
-const BALCONY_RAIL_MEMBER_THICKNESS = 0.12;
 
 function applyWallPlanarUvs(
   geometry: BufferGeometry,
@@ -322,17 +315,8 @@ function addPortholeDetails(
     PORTHOLE_GASKET_OUTER_RADIUS,
     PORTHOLE_SEGMENTS,
   );
-  const frameShape = new Shape();
-  frameShape.absarc(0, 0, PORTHOLE_FRAME_OUTER_RADIUS, 0, Math.PI * 2, false);
-  const frameHole = new Path();
-  frameHole.absarc(0, 0, PORTHOLE_GASKET_OUTER_RADIUS, 0, Math.PI * 2, true);
-  frameShape.holes.push(frameHole);
-  const frameGeometry = new ExtrudeGeometry(frameShape, {
-    depth: 0.035, steps: 1, bevelEnabled: true, bevelSegments: 1,
-    bevelSize: 0.008, bevelThickness: 0.008, curveSegments: 12,
-  });
-  const boltGeometry = new CylinderGeometry(PORTHOLE_BOLT_RADIUS, PORTHOLE_BOLT_RADIUS, 0.025, 6);
-  boltGeometry.rotateX(Math.PI / 2);
+  const frameGeometry = new RingGeometry(PORTHOLE_GASKET_OUTER_RADIUS, PORTHOLE_FRAME_OUTER_RADIUS, PORTHOLE_SEGMENTS);
+  const boltGeometry = new CircleGeometry(PORTHOLE_BOLT_RADIUS, 8);
   const linerGeometry = new CylinderGeometry(
     PORTHOLE_OPENING_RADIUS,
     PORTHOLE_OPENING_RADIUS,
@@ -405,7 +389,7 @@ function addPortholeDetails(
         bolt.position.set(
           Math.cos(angle) * PORTHOLE_BOLT_ORBIT,
           Math.sin(angle) * PORTHOLE_BOLT_ORBIT,
-          direction * (WALL_HALF_THICKNESS + 0.072),
+          direction * (WALL_HALF_THICKNESS + 0.022),
         );
         bolt.rotation.y = rotationY;
         bolt.castShadow = true;
@@ -487,7 +471,6 @@ function addWallSegments(
 function addDoorFrames(
   context: ShipGeometryBuildContext,
   root: Group,
-  geometries: Set<BufferGeometry>,
   materials: ShipMaterials,
   layout: ShipLayoutSpec,
 ): void {
@@ -741,7 +724,6 @@ function addWheelhousePaneColliders(
 function addWheelhousePane(
   context: ShipGeometryBuildContext,
   facade: Group,
-  geometries: Set<BufferGeometry>,
   materials: ShipMaterials,
   spec: WheelhousePaneSpec,
 ): void {
@@ -835,26 +817,11 @@ function addWheelhousePane(
     position: [0, WINDOW_SILL_HEIGHT + windowHeight / 2, -WALL_HALF_THICKNESS],
     material: materials.glass,
   }).castShadow = false;
-  const seals = new ShipDetailGeometry(geometries);
-  const centerY = WINDOW_SILL_HEIGHT + windowHeight / 2;
-  for (const face of [-1, 1]) {
-    const z = -WALL_HALF_THICKNESS + face * 0.035;
-    for (const side of [-1, 1]) {
-      seals.box(materials.rubber, [0.045, windowHeight, 0.045],
-        [side * (openingWidth / 2 - 0.022), centerY, z], 0, 0.01);
-      seals.box(materials.rubber, [openingWidth, 0.045, 0.045],
-        [0, centerY + side * (windowHeight / 2 - 0.022), z], 0, 0.01);
-      seals.box(materials.plainPaintedSteel, [width, 0.1, 0.1],
-        [0, centerY + side * (windowHeight / 2 + 0.05), z + face * 0.03]);
-    }
-  }
-  seals.finish(pane, 'window-seals');
 }
 
 function addWheelhouseFacade(
   context: ShipGeometryBuildContext,
   root: Group,
-  geometries: Set<BufferGeometry>,
   materials: ShipMaterials,
   layout: ShipLayoutSpec,
 ): void {
@@ -863,7 +830,7 @@ function addWheelhouseFacade(
   root.add(facade);
 
   wheelhousePaneSpecs(layout).forEach((spec) =>
-    addWheelhousePane(context, facade, geometries, materials, spec));
+    addWheelhousePane(context, facade, materials, spec));
 }
 
 function addRoomRoofs(
@@ -941,101 +908,6 @@ function addRoomRoofs(
   });
 }
 
-interface BalconyRun {
-  readonly edge: WallEdge;
-  readonly index: number;
-  readonly size: readonly [number, number];
-  readonly position: readonly [number, number];
-}
-
-function balconyRuns(
-  balcony: ShipBalconySpec,
-  zone: ShipZoneSpec,
-): readonly BalconyRun[] {
-  const { bounds } = zone;
-  const width = bounds.maxX - bounds.minX;
-  const length = bounds.maxZ - bounds.minZ;
-  const centerZ = (bounds.minZ + bounds.maxZ) / 2;
-  const openingZ = balcony.edge === 'aft'
-    ? bounds.minZ + BALCONY_RAIL_MEMBER_THICKNESS / 2
-    : bounds.maxZ - BALCONY_RAIL_MEMBER_THICKNESS / 2;
-  const oppositeEdge: ShipTransverseEdge = balcony.edge === 'aft' ? 'forward' : 'aft';
-  const oppositeZ = balcony.edge === 'aft'
-    ? bounds.maxZ - BALCONY_RAIL_MEMBER_THICKNESS / 2
-    : bounds.minZ + BALCONY_RAIL_MEMBER_THICKNESS / 2;
-  const openingHalfWidth = balcony.openingWidth / 2;
-  const leftWidth = -openingHalfWidth - bounds.minX;
-  const rightWidth = bounds.maxX - openingHalfWidth;
-
-  return [
-    {
-      edge: 'port',
-      index: 0,
-      size: [
-        BALCONY_RAIL_MEMBER_THICKNESS,
-        length - BALCONY_RAIL_MEMBER_THICKNESS * 2,
-      ],
-      position: [bounds.minX + BALCONY_RAIL_MEMBER_THICKNESS / 2, centerZ],
-    },
-    {
-      edge: 'starboard',
-      index: 0,
-      size: [
-        BALCONY_RAIL_MEMBER_THICKNESS,
-        length - BALCONY_RAIL_MEMBER_THICKNESS * 2,
-      ],
-      position: [bounds.maxX - BALCONY_RAIL_MEMBER_THICKNESS / 2, centerZ],
-    },
-    {
-      edge: oppositeEdge,
-      index: 0,
-      size: [width, BALCONY_RAIL_MEMBER_THICKNESS],
-      position: [(bounds.minX + bounds.maxX) / 2, oppositeZ],
-    },
-    {
-      edge: balcony.edge,
-      index: 0,
-      size: [leftWidth, BALCONY_RAIL_MEMBER_THICKNESS],
-      position: [bounds.minX + leftWidth / 2, openingZ],
-    },
-    {
-      edge: balcony.edge,
-      index: 1,
-      size: [rightWidth, BALCONY_RAIL_MEMBER_THICKNESS],
-      position: [openingHalfWidth + rightWidth / 2, openingZ],
-    },
-  ];
-}
-
-function addRoofBalconies(
-  context: ShipGeometryBuildContext,
-  root: Group,
-  geometries: Set<BufferGeometry>,
-  shellColliders: CollisionBox[],
-  materials: ShipMaterials,
-  layout: ShipLayoutSpec,
-): void {
-  layout.balconies.forEach((balcony) => {
-    const zone = requiredShipZone(layout, balcony.zoneId);
-    const deckTopY = shipRoomRoofTopY(zone.id);
-
-    const runs = balconyRuns(balcony, zone);
-    runs.forEach((run) => {
-      addBlock(context, root, {
-        name: `balcony:${balcony.id}:coaming:${run.edge}:${run.index}`,
-        size: [run.size[0], balcony.coamingHeight, run.size[1]],
-        position: [
-          run.position[0],
-          deckTopY + balcony.coamingHeight / 2,
-          run.position[1],
-        ],
-        material: materials.darkMetal,
-      });
-    });
-  });
-}
-
-
 export function addShipRooms(
   context: ShipGeometryBuildContext,
   layout: ShipLayoutSpec,
@@ -1051,14 +923,12 @@ export function addShipRooms(
   addWheelhouseFacade(
     context,
     context.root,
-    context.geometries,
     context.materials,
     layout,
   );
   addDoorFrames(
     context,
     context.root,
-    context.geometries,
     context.materials,
     layout,
   );
@@ -1071,14 +941,6 @@ export function addShipRooms(
   addRoomRoofs(
     context.root,
     context.geometries,
-    context.materials,
-    layout,
-  );
-  addRoofBalconies(
-    context,
-    context.root,
-    context.geometries,
-    context.shellColliders,
     context.materials,
     layout,
   );
