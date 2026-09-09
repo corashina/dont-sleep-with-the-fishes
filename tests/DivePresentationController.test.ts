@@ -80,6 +80,32 @@ function createHarness() {
 }
 
 describe('DivePresentationController', () => {
+  it('looks skyward and rolls backward over the gunwale before water impact', async () => {
+    const { camera, controller } = createHarness();
+    const impact = vi.fn();
+    const dive = controller.play(FIRST_SCUBA, { onWaterImpact: impact });
+
+    controller.update(2.2, 2.2);
+    const seatedPosition = camera.position.clone();
+    const seatedForward = new Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+
+    controller.update(2.9, 0.7);
+    expect(camera.getWorldDirection(new Vector3()).y).toBeGreaterThan(0.8);
+    expect(camera.position.clone().sub(seatedPosition).dot(seatedForward)).toBeLessThan(0);
+    expect(impact).not.toHaveBeenCalled();
+
+    controller.update(3.5, 0.6);
+    const cameraUp = new Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+    expect(cameraUp.y).toBeLessThan(-0.7);
+    expect(impact).not.toHaveBeenCalled();
+
+    controller.update(3.7, 0.2);
+    expect(impact).toHaveBeenCalledOnce();
+    controller.clear();
+    await dive;
+    controller.dispose();
+  });
+
   it('owns the item, elapsed time, wave sample, camera pose, and presentation', async () => {
     const {
       camera,

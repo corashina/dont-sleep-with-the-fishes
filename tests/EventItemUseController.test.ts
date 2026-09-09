@@ -220,13 +220,12 @@ describe('EventItemUseController', () => {
     const actorPosition = actor.root.getWorldPosition(new Vector3());
     const expectedDirection = target.position.clone()
       .sub(actorPosition)
-    expectedDirection.y = 0;
-    expectedDirection.normalize();
+      .normalize();
     const heldForward = new Vector3(1, 0, 0)
       .applyQuaternion(actor.root.quaternion)
       .normalize();
     expect(heldForward.angleTo(expectedDirection)).toBeLessThan(1e-6);
-    expect(heldForward.y).toBeCloseTo(0);
+    expect(heldForward.y).toBeGreaterThan(0);
     expect(heldForward.angleTo(initialForward)).toBeGreaterThan(0.1);
 
     controller.clear('day');

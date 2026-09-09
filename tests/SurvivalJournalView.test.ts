@@ -26,6 +26,7 @@ function eventRecord(eventId: string, choiceId: string, inventoryMutations: Jour
     phase: event.phase, eventId, attemptedChoiceId: choiceId, attemptedItemId: null,
     outcomeCode: 'test', text: { kind: 'eventResult', reference: { eventId, choiceId, resultId } },
     inventoryMutations,
+    deltas: {},
   };
 }
 
@@ -52,6 +53,20 @@ const changes: JournalEntry = {
 };
 
 describe('journal item changes', () => {
+  it('shows food gains and used bait from fishing with the existing signs and thumbnails', () => {
+    const view = fixture();
+    view.show([{ ...quiet, actions: [{
+      kind: 'fishing', attemptId: 'catch-1', result: 'fish', catchId: 'tuna', food: 2, baitConsumed: true,
+      deltas: { food: 2, bait: -1 }, inventoryMutations: [],
+    }] }]);
+    const items = [...view.root.querySelectorAll<HTMLElement>('[data-journal-day-items] .journal-item')];
+    expect(items.map((item) => item.dataset.itemType)).toEqual(['cannedFood', 'cannedFood', 'baitTin']);
+    expect(items.map((item) => item.querySelector('.journal-item__status')?.textContent)).toEqual(['+', '+', '−']);
+    expect(items.map((item) => item.querySelector('img')?.getAttribute('src')))
+      .toEqual([itemThumbnailUrl('cannedFood'), itemThumbnailUrl('cannedFood'), itemThumbnailUrl('baitTin')]);
+    expect(items[2]!.getAttribute('title')).toContain('Used up');
+  });
+
   it('shows two pages with separate headings, weather, and a pending night', () => {
     const view = fixture();
     view.show([{ ...changes, weather: 'rain', nightWeather: 'wind' }]);

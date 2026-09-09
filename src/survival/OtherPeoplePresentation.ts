@@ -176,7 +176,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     transparent: true,
     opacity: 0,
   });
-  private readonly beamVisual = new Group();
   private readonly staticGeometries = new Set<BufferGeometry>();
   private readonly staticMaterials = new Set<Material>();
   private readonly shipStartPosition = new Vector3();
@@ -237,12 +236,10 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       this.starboardBeaconMaterial,
       'other-people-horizon-light-starboard',
     );
-    this.buildFlashlightBeam();
     this.root.add(
       this.ship,
       this.portBeacon,
       this.starboardBeacon,
-      this.beamVisual,
     );
     collectMeshResources(
       this.root,
@@ -250,6 +247,10 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       this.staticMaterials,
     );
     this.resetActors();
+  }
+
+  itemAimTarget(): Group | null {
+    return this.ship.visible ? this.ship : null;
   }
 
   stage(variantSeed = 0): void {
@@ -506,19 +507,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   private applyFlashlightChoice(progress: number): void {
     const aim = smoothstep(progress / 0.24);
     this.applySupplyAim(aim);
-    const phase = Math.min(5.999999, progress * 6);
-    const segment = Math.floor(phase);
-    const local = phase - segment;
-    const on = progress < 1 && segment % 2 === 0;
-    const pulse = on ? 0.25 + Math.sin(local * Math.PI) * 0.75 : 0;
-    this.beamVisual.visible = on;
-    const visual = this.beamVisual.children[0];
-    if (visual instanceof Mesh) {
-      const material = visual.material;
-      if (material instanceof MeshStandardMaterial) {
-        material.opacity = on ? 0.08 + pulse * 0.09 : 0;
-      }
-    }
     this.root.userData.signalPulses = progress <= 0
       ? 0
       : Math.min(3, Math.ceil(progress * 3));
@@ -551,7 +539,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.ship.rotation.y = this.shipStartYaw
       + (this.rescueYaw - this.shipStartYaw) * turn;
     this.root.userData.courseTurns = turn > 0 ? 1 : 0;
-    this.beamVisual.visible = false;
     this.updateBeaconPose();
     this.applyCameraPose(
       0.17 + smoothstep(progress) * 0.01,
@@ -642,7 +629,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   }
 
   private setPlayerSignalsDark(): void {
-    this.beamVisual.visible = false;
   }
 
   private setBeaconIntensity(intensity: number): void {
@@ -721,7 +707,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     this.shipExit.x *= mirror;
     this.shipYaw = this.side === -1 ? SHIP_YAW : Math.PI - SHIP_YAW;
     this.rescueYaw = this.side === -1 ? RESCUE_YAW : Math.PI - RESCUE_YAW;
-    this.beamVisual.scale.x = mirror;
     this.root.userData.eventSide = this.side === -1 ? 'left' : 'right';
   }
 
@@ -866,24 +851,6 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     lens.name = `${name}-lens`;
     lens.scale.set(1.25, 0.82, 0.7);
     beacon.add(lens);
-  }
-
-  private buildFlashlightBeam(): void {
-    this.beamVisual.name = 'other-people-flashlight-beam';
-    const material = createMaterial(0xe7dfc5, 0.72, {
-      emissive: 0x665d46,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-    });
-    addMesh(
-      this.beamVisual,
-      'other-people-flashlight-beam-visual',
-      new CylinderGeometry(0.045, 2.25, 39, 8, 1, true),
-      material,
-      [1.2, 2.2, -20],
-      [Math.PI / 2, 0.02, 0.03],
-    );
   }
 
 }

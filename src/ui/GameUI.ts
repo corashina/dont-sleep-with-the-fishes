@@ -233,8 +233,14 @@ export class GameUI {
     this.handsFullNotice.hidden = false;
     this.handsFullNoticeTimer = window.setTimeout(() => {
       this.handsFullNoticeTimer = null;
-      this.handsFullNotice.hidden = true;
+      this.renderHandsFullNotice();
     }, 2_000);
+  }
+
+  private renderHandsFullNotice(): void {
+    const full = (this.latestSnapshot?.carriedWeight ?? 0) >= this.carrySlots.length;
+    const hidden = !full && this.handsFullNoticeTimer === null;
+    if (this.handsFullNotice.hidden !== hidden) this.handsFullNotice.hidden = hidden;
   }
 
   render(snapshot: ScavengeSnapshot): void {
@@ -247,6 +253,7 @@ export class GameUI {
     this.timer.textContent = formatDuration(snapshot.remainingSeconds);
     this.timer.classList.toggle('is-critical', snapshot.remainingSeconds <= 30);
     this.renderCarry(snapshot);
+    this.renderHandsFullNotice();
   }
 
   renderEnding(

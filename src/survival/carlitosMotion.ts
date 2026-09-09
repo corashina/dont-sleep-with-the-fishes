@@ -2,11 +2,11 @@ import type { CarlitosSnapshot } from './CarlitosState';
 import { clamp01Unchecked, smoothstepUnchecked } from './animationMath';
 
 export type CarlitosPoseState =
-  | 'sick'
+  | 'exhausted'
   | 'starving'
   | 'hungry'
   | 'unhappy'
-  | 'healthy';
+  | 'content';
 
 export type CarlitosAction = 'pet' | 'feed';
 
@@ -23,7 +23,6 @@ export interface MutableCarlitosPose {
   handContact: number;
   handCurl: number;
   tailSway: number;
-  foodReach: number;
 }
 
 export interface CarlitosPoseSample {
@@ -47,18 +46,17 @@ export function createCarlitosPose(): MutableCarlitosPose {
     handContact: 0,
     handCurl: 0,
     tailSway: 0,
-    foodReach: 0,
   };
 }
 
 export function carlitosPoseState(
   snapshot: CarlitosSnapshot,
 ): CarlitosPoseState {
-  if (snapshot.sickness > 0) return 'sick';
+  if (snapshot.energy === 0) return 'exhausted';
   if (snapshot.hunger <= 1) return 'starving';
   if (snapshot.unhappiness >= 3) return 'unhappy';
   if (snapshot.hunger <= 3) return 'hungry';
-  return 'healthy';
+  return 'content';
 }
 
 export function sampleCarlitosPoseInto(
@@ -109,23 +107,18 @@ export function sampleCarlitosPoseInto(
       tailPhase = Math.PI * 2;
     }
     const response = Math.max(contact, reach * 0.18);
-    output.headPitch -= (0.09 + stroke * 0.085) * response;
+    output.headPitch -= (0.04 + stroke * 0.045) * response;
     output.headYaw *= 1 - 0.86 * response;
-    output.actionLean = (0.07 + stroke * 0.05) * response;
-    output.bodyLift += (0.01 + stroke * 0.012) * response;
+    output.actionLean = (0.025 + stroke * 0.02) * response;
+    output.bodyLift += (0.006 + stroke * 0.008) * response;
     output.handReach = reach;
     output.handStroke = stroke;
     output.handLift = lift;
     output.handContact = contact;
-    output.handCurl = 0.12 + contact * 0.18;
+    output.handCurl = 0.06 + contact * 0.1;
     output.tailSway = Math.sin(tailPhase) * contact * 0.13;
   } else {
-    const weight = actionWeight(progress);
-    output.headPitch -= 0.28 * weight;
-    output.headYaw *= 1 - 0.9 * weight;
-    output.actionLean = 0.24 * weight;
-    output.bodyLift -= 0.025 * weight;
-    output.foodReach = weight;
+    sampleFeeding(output, progress);
   }
   return output;
 }
@@ -141,13 +134,12 @@ function setBasePose(
   output.handContact = 0;
   output.handCurl = 0;
   output.tailSway = 0;
-  output.foodReach = 0;
-  if (status === 'sick') {
-    output.bodyPitch = 0.16;
-    output.bodyYaw = -0.04;
-    output.bodyLift = -0.07;
-    output.headPitch = -0.3;
-    output.headYaw = 0.08;
+  if (status === 'exhausted') {
+    output.bodyPitch = 0.08;
+    output.bodyYaw = 0;
+    output.bodyLift = -0.035;
+    output.headPitch = -0.25;
+    output.headYaw = 0;
     return;
   }
   if (status === 'starving') {
@@ -181,15 +173,8 @@ function setBasePose(
   output.headYaw = 0;
 }
 
-function actionWeight(progress: number): number {
-  if (progress < 0.16) {
-    return -0.18 * smoothstepUnchecked(progress / 0.16);
-  }
-  if (progress < 0.48) {
-    const travel = smoothstepUnchecked((progress - 0.16) / 0.32);
-    return -0.18 + 1.18 * travel;
-  }
-  if (progress < 0.68) return 1;
-  const settle = smoothstepUnchecked((progress - 0.68) / 0.32);
-  return (1 - settle) * (1 + Math.sin(settle * Math.PI) * 0.08);
+function sampleFeeding(output: MutableCarlitosPose, progress: number): void {
+  const bite = Math.sin(clamp01Unchecked((progress - 0.8) / 0.2) * Math.PI);
+  output.headPitch += bite * 0.07;
+  output.actionLean = bite * 0.035;
 }

@@ -371,13 +371,12 @@ describe('SurvivalUI', () => {
     ui.setAnchors([carlitosAnchor(1000, 760)]);
     ui.render(snapshot({
       carlitos: {
-        alive: true,
+
         energy: 3,
         hunger: 3,
-        sickness: 1,
         unhappiness: 3,
         pettedToday: false,
-        deathCause: null,
+
       },
     }), () => null);
 
@@ -397,11 +396,9 @@ describe('SurvivalUI', () => {
     expect(Number.parseFloat(card.style.getPropertyValue('--carlitos-card-y'))).toBeGreaterThanOrEqual(16);
     card.querySelector<HTMLButtonElement>('[data-action="petCarlitos"]')!.click();
     card.querySelector<HTMLButtonElement>('[data-action="feedCarlitos"]')!.click();
-    card.querySelector<HTMLButtonElement>('[data-action="treatCarlitos"]')!.click();
     expect(action.mock.calls).toEqual([
       ['petCarlitos', undefined],
       ['feedCarlitos', undefined],
-      ['treatCarlitos', undefined],
     ]);
 
     card.querySelector<HTMLButtonElement>('[data-carlitos-close]')!.click();
@@ -457,13 +454,12 @@ describe('SurvivalUI', () => {
     ui.setAnchors([carlitosAnchor(850, 590)]);
     ui.render(snapshot({
       carlitos: {
-        alive: true,
+
         energy: 3,
         hunger: 4,
-        sickness: 0,
         unhappiness: 0,
         pettedToday: false,
-        deathCause: null,
+
       },
     }), () => null);
 
@@ -477,26 +473,28 @@ describe('SurvivalUI', () => {
     expect(y + measuredCard.height).toBeLessThanOrEqual(viewport.height - 16);
   });
 
-  it('closes the Carlitos card when Carlitos dies', () => {
+  it('keeps the Carlitos card available when he becomes exhausted', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
     ui.setAnchors([carlitosAnchor()]);
     const living = {
-      alive: true,
+
       energy: 3,
       hunger: 4,
-      sickness: 2,
       unhappiness: 5,
       pettedToday: false,
-      deathCause: null,
+
     } as const;
     ui.render(snapshot({ carlitos: living }), () => null);
     mount.querySelector<HTMLButtonElement>('[data-anchor-id="carlitos"]')!.click();
     ui.render(snapshot({
-      carlitos: { ...living, alive: false, deathCause: 'sickness' },
+      carlitos: { ...living, energy: 0 },
     }), () => null);
-    expect(mount.querySelector<HTMLElement>('[data-carlitos-card]')!.hidden).toBe(true);
+    expect(mount.querySelector<HTMLElement>('[data-carlitos-card]')!.hidden).toBe(false);
+    expect(mount.querySelector('[data-carlitos-rest]')!.textContent).toContain('Too tired to help.');
+    expect(mount.querySelector('[data-carlitos-energy-label]')!.textContent).toBe('0 / 1');
+    expect(mount.querySelector('[data-carlitos-health-row]')).toBeNull();
   });
 
   it.each(['click', 'Enter', ' '] as const)(
@@ -709,6 +707,12 @@ describe('SurvivalUI', () => {
     expect(shotgun.dataset.eventState).toBe('unavailable');
     expect(island.dataset.eventState).toBe('available');
     expect(Number(island.style.zIndex)).toBeGreaterThan(Number(shotgun.style.zIndex));
+    ui.setEventSelection(new Map(), [{
+      id: 'visit', label: 'Visit island', unavailableReason: null,
+    }, {
+      id: 'sleep', label: 'Skip island', unavailableReason: null,
+    }]);
+    expect(island.getAttribute('aria-disabled')).toBe('true');
   });
 
   it('cycles overlapping boat items with the wheel and arrow keys', () => {
@@ -1025,8 +1029,22 @@ describe('SurvivalUI', () => {
     expect(dialog.dataset.placement).toBe('left');
     const targets = [...mount.querySelectorAll<HTMLButtonElement>('[data-repair-target]')];
     expect(targets.map(({ dataset }) => dataset.repairTarget)).toEqual(['bucket-2', 'compass-4']);
-    targets[0]!.click();
+    const thumbnail = targets[0]!.querySelector<HTMLImageElement>('img')!;
+    expect(thumbnail.src).toContain('/bucket.png');
+    expect(targets[0]!.getAttribute('aria-label')).toBe('BUCKET — BROKEN');
+    setLanguage('pl');
+    expect(targets[0]!.querySelector('img')).toBe(thumbnail);
+    expect(targets[0]!.getAttribute('aria-label')).toContain('WIADRO');
+    expect(targets[0]!.title).toBe(targets[0]!.getAttribute('aria-label'));
+    setLanguage('en');
+    thumbnail.click();
     expect(action).toHaveBeenCalledWith('repairItem', { kind: 'itemRepair', target: 'bucket-2' });
+    expect(dialog.classList.contains('is-visible')).toBe(false);
+    action.mockClear();
+    ui.openRepairOptions();
+    mount.querySelector<HTMLButtonElement>('[data-repair-cancel]')!.click();
+    expect(dialog.classList.contains('is-visible')).toBe(false);
+    expect(action).not.toHaveBeenCalled();
   });
 
   it('shows event feedback and routes only eligible physical anchors', async () => {
@@ -1357,6 +1375,43 @@ describe('SurvivalUI', () => {
     await pending;
     expect(settled).toBe(true);
     expect(cancelFrame).not.toHaveBeenCalled();
+  });
+
+  it('paints the instant attack blackout before allowing scene cleanup', async () => {
+    const callbacks: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => callbacks.push(callback));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const mount = document.createElement('main');
+    const ui = createUI(mount);
+    await ui.setSleepCoverProfile('midnight-attack');
+    let settled = false;
+    const pending = ui.setSleepCovered(true);
+    void pending.then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(mount.querySelector('[data-sleep-cover]')!.classList).toContain('is-covered');
+    callbacks.shift()!(16);
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    callbacks.shift()!(32);
+    await pending;
+    expect(settled).toBe(true);
+  });
+
+  it('holds the bite blackout for three seconds and releases its timer on disposal', async () => {
+    vi.useFakeTimers();
+    const ui = createUI(document.createElement('main'));
+    let settled = false;
+    const hold = ui.holdSleep(3_000);
+    void hold.then(() => { settled = true; });
+    await vi.advanceTimersByTimeAsync(2_999);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await hold;
+    const cancelled = ui.holdSleep(3_000);
+    ui.dispose();
+    await cancelled;
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('settles superseded and disposed covered-scene waits without stale frames', async () => {
@@ -1769,12 +1824,12 @@ describe('SurvivalUI', () => {
     expect(exit).toHaveBeenCalledOnce();
   });
 
-  it('releases boat controls and native button keys after fishing Continue', () => {
+  it('accepts a water click after Continue while boat controls stay locked', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
     const action = vi.fn();
-    const cast = vi.fn();
+    const cast = vi.fn(() => true);
     const exit = vi.fn();
     ui.onAction = action;
     ui.onFishingCast = cast;
@@ -1785,56 +1840,39 @@ describe('SurvivalUI', () => {
     ui.showFishingResult({ items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }], message: '', catchTarget: null });
     ui.onFishingResultContinue = () => {
       ui.hideFishingResult();
-      ui.setBusy(false);
       ui.setFishingViewExitVisible(true);
-      ui.setFishingState({ mode: 'ready', message: '', biteTarget: null });
+      ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
     };
     mount.querySelector<HTMLButtonElement>('[data-fishing-result-close]')!.click();
 
     const rod = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
     const back = mount.querySelector<HTMLButtonElement>('[data-fishing-view-exit]')!;
-    expect(rod.closest('[inert]')).toBeNull();
-    expect(mount.querySelector('[data-survival-top]')!.hasAttribute('inert')).toBe(false);
+    expect(rod.closest('[inert]')).not.toBeNull();
+    expect(mount.querySelector('[data-survival-top]')!.hasAttribute('inert')).toBe(true);
     rod.click();
-    expect(action).toHaveBeenCalledExactlyOnceWith('fish', undefined);
-    for (const button of [rod, back]) {
-      button.focus();
-      for (const key of ['Enter', ' ', 'Tab']) {
-        const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
-        button.dispatchEvent(event);
-        expect(event.defaultPrevented).toBe(false);
-      }
-    }
+    expect(action).not.toHaveBeenCalled();
+    mount.querySelector<HTMLElement>('[data-fishing]')!.click();
+    expect(cast).toHaveBeenCalledOnce();
     back.click();
     expect(exit).toHaveBeenCalledOnce();
-    expect(cast).not.toHaveBeenCalled();
   });
 
-  it('blocks ready fishing Back during a busy action but permits aiming cancellation', () => {
+  it('permits leaving aiming while boat commands stay busy', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
     const exit = vi.fn();
     ui.onFishingViewExit = exit;
     ui.setFishingViewExitVisible(true);
-    ui.setFishingState({ mode: 'ready', message: '', biteTarget: null });
+    ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
     const back = mount.querySelector<HTMLButtonElement>('[data-fishing-view-exit]')!;
 
     ui.setBusy(true);
     back.click();
-    expect(exit).not.toHaveBeenCalled();
-
-    ui.setBusy(false);
-    back.click();
     expect(exit).toHaveBeenCalledOnce();
-
-    ui.setBusy(true);
-    ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
-    back.click();
-    expect(exit).toHaveBeenCalledTimes(2);
   });
 
-  it('blocks ready fishing controls under the Journal and pause, then restores access', () => {
+  it('blocks aiming controls under the Journal and pause, then restores access', () => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -1844,7 +1882,7 @@ describe('SurvivalUI', () => {
     ui.onFishingViewExit = exit;
     ui.render(snapshot(), () => null);
     ui.setFishingViewExitVisible(true);
-    ui.setFishingState({ mode: 'ready', message: '', biteTarget: null });
+    ui.setFishingState({ mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null });
     const rod = mount.querySelector<HTMLButtonElement>('[data-action="fish"]')!;
     const back = mount.querySelector<HTMLButtonElement>('[data-fishing-view-exit]')!;
 
@@ -1859,7 +1897,7 @@ describe('SurvivalUI', () => {
       expect(exit).not.toHaveBeenCalled();
       if (modal === 'journal') ui.hideJournal();
       else ui.setPaused(false);
-      expect(rod.closest('[inert]')).toBeNull();
+      expect(rod.closest('[inert]')).not.toBeNull();
       expect(back.closest('[inert]')).toBeNull();
     }
 

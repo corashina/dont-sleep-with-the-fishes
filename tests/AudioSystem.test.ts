@@ -83,6 +83,30 @@ class FakeAudioBackend implements AudioBackend {
 }
 
 describe('AudioSystem', () => {
+  it('chooses one of three yawns each time the player sleeps', () => {
+    const backend = new FakeAudioBackend();
+    const random = vi.fn()
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0.5)
+      .mockReturnValueOnce(0.999999);
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope(), random);
+
+    audio.sleep();
+    audio.sleep();
+    audio.sleep();
+
+    expect(backend.voices.map(({ id }) => id)).toEqual([
+      'goingToSleep', 'yawn',
+      'goingToSleep', 'yawnShort',
+      'goingToSleep', 'yawnTired',
+    ]);
+    expect(SURVIVAL_SOUND_IDS).toEqual(expect.arrayContaining(['yawn', 'yawnShort', 'yawnTired']));
+    audio.dispose();
+    audio.sleep();
+    expect(random).toHaveBeenCalledTimes(3);
+    expect(backend.voices).toHaveLength(6);
+  });
+
   it('sounds the rescue horn first and stops the engine at the finish screen', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
@@ -106,7 +130,7 @@ describe('AudioSystem', () => {
       () => 0,
     );
 
-    for (let index = 0; index < 14; index += 1) audio.petCarlitos();
+    for (let index = 0; index < 14; index += 1) audio.meowCarlitos();
 
     const ids = backend.voices.map(({ id }) => id);
     expect(new Set(ids.slice(0, 7))).toHaveLength(7);

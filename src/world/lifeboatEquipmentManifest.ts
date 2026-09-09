@@ -14,7 +14,8 @@ export const LIFEBOAT_EQUIPMENT_MODEL_SPECS: Readonly<
     {
       targetLongestDimension: 1.80,
       rotation: [Math.PI / 2, 0, 0],
-      offset: [0, 0, 0],
+      // Center the shaft; the reel shifts the model's bounding-box center.
+      offset: [-0.0347, 0, 0],
     },
   ),
   hammer: createRuntimeModelSpec(

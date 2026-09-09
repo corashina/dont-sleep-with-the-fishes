@@ -12,7 +12,7 @@ export const EVENT_CHOICE_EXCLUDED_ITEM_IDS: readonly ItemId[] = Object.freeze([
   'radio',
 ]);
 export type ItemDayAction =
-  | 'dive' | 'eat' | 'treat' | 'repairItem'
+  | 'netFish' | 'dive' | 'eat' | 'treat' | 'repairItem'
   | 'answerRadio' | 'useEnergyBar' | null;
 export interface ItemDefinition {
   readonly label: string;
@@ -45,7 +45,7 @@ const rawDefinitions = {
   map: define(1, 1, null, true, true, null),
   medicalKit: define(2, 1, 1, false, false, 'treat'),
   spyglass: define(1, 1, null, true, true, null),
-  fishingNet: define(2, 1, null, true, true, null),
+  fishingNet: define(2, 1, null, true, true, 'netFish'),
   knife: define(1, 1, null, true, true, null),
   bucket: define(2, 1, null, true, true, null),
   flareGun: define(1, 1, 1, false, false, null),

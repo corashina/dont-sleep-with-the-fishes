@@ -95,7 +95,7 @@ const PROFILES: Readonly<Record<ItemId, EventItemMotionProfile>> = Object.freeze
   flashlight: Object.freeze({
     ...createProfile('one-hand', 'flashlight'),
     view: [0.3, -0.3, -0.78] as const,
-    aim: 'horizontal-entity' as const,
+    aim: 'entity' as const,
     forward: [1, 0, 0] as const,
   }),
   shotgun: Object.freeze({

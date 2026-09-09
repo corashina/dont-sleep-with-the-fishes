@@ -95,6 +95,7 @@ const EVENT_CHOICE_PRIORITY = Object.freeze({
   handyman: ['sleep'],
   'other-people': ['flareGun', 'flashlight', 'sleep'],
   plane: ['flareGun', 'flashlight', 'sleep'],
+  lighthouse: ['flareGun', 'flashlight', 'shotgun', 'sleep'],
 } as const satisfies Readonly<Record<SurvivalEventId, readonly string[]>>);
 
 function resolvePendingEvent(session: SurvivalSession, signalsEnabled: boolean): void {
@@ -151,7 +152,7 @@ function resolvePendingNightEvent(session: SurvivalSession, signalsEnabled: bool
 
 function careForCarlitos(session: SurvivalSession): void {
   let carlitos = session.snapshot().carlitos;
-  if (carlitos === null || !carlitos.alive) return;
+  if (carlitos === null) return;
   if (!carlitos.pettedToday && session.availableReason('petCarlitos') === null) {
     session.perform('petCarlitos');
   }
@@ -159,11 +160,6 @@ function careForCarlitos(session: SurvivalSession): void {
   if (carlitos !== null && carlitos.hunger <= 3
     && session.availableReason('feedCarlitos') === null) {
     session.perform('feedCarlitos');
-  }
-  carlitos = session.snapshot().carlitos;
-  if (carlitos !== null && carlitos.sickness >= 2
-    && session.availableReason('treatCarlitos') === null) {
-    session.perform('treatCarlitos');
   }
 }
 

@@ -24,6 +24,7 @@ function sampleEvent(eventId: SurvivalEventId, choiceId: string, outcomeIndex = 
   });
   return createJournalEventRecord(event, choiceId, choice.itemId ?? null, {
     code: 'lab-journal-example',
+    deltas: {},
     text: { kind: 'eventResult', reference: { eventId, choiceId, resultId: outcome.resultId } },
   }, inventoryMutations);
 }
@@ -38,7 +39,8 @@ export function createItemAnimationLabJournal(): readonly JournalEntry[] {
     createJournalEntry(3, 'squall', [
       { kind: 'dayAction', action: 'treat', deltas: { health: 10 },
         inventoryMutations: [{ kind: 'consume', instanceIds: ['medicalKit-1'] }] },
-      { kind: 'fishing', attemptId: 'lab-journal-fishing', result: 'fish', catchId: 'cod', food: 1, baitConsumed: true },
+      { kind: 'fishing', attemptId: 'lab-journal-fishing', result: 'fish', catchId: 'cod', food: 1, baitConsumed: true,
+        deltas: { food: 1, bait: -1 }, inventoryMutations: [] },
     ], null, createJournalNightEventRecord(sampleEvent('swarm-of-sharks', 'knife', 1))),
     // Repair the knife and trade the swim ring for a radio.
     createJournalEntry(4, 'calm', [

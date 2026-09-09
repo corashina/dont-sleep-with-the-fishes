@@ -52,13 +52,15 @@ import { DANGEROUS_WATERS_ITEM_DURATION } from '../src/survival/DangerousWatersP
 import {
   type FocusedEventPresentation,
 } from '../src/survival/FocusedEventPresentation';
-import { MONSTER_IMPACT_SECONDS } from '../src/survival/midnightTourChoreography';
+import { MONSTER_IMPACT_SECONDS, MONSTER_RESULT_DURATION_SECONDS } from '../src/survival/midnightTourChoreography';
 import type { SupplyAdditivePose } from '../src/survival/BoatSupplyDisplay';
 import type { EventPresentationAdapter } from '../src/survival/EventPresentationAdapter';
 import { EventPresentationRegistry } from '../src/survival/EventPresentationRegistry';
 import { EventItemEffects } from '../src/survival/EventItemEffects';
 import { EventItemUseAdapter } from '../src/survival/EventItemUseAdapter';
 import { EventItemUseController } from '../src/survival/EventItemUseController';
+import { CARLITOS_FEED_DURATION } from '../src/survival/CarlitosPresentation';
+import { createCarlitosState } from '../src/survival/CarlitosState';
 import {
   createEventItemUseSample,
   eventItemOutcomeDuration,
@@ -480,6 +482,8 @@ describe('BoatWorld helpers', () => {
       world.update(MONSTER_IMPACT_SECONDS - 0.01, MONSTER_IMPACT_SECONDS - 0.01);
       expect(await remainsPending(reaction)).toBe(true);
       world.update(MONSTER_IMPACT_SECONDS, 0.01);
+      expect(await remainsPending(reaction)).toBe(true);
+      world.update(MONSTER_RESULT_DURATION_SECONDS, MONSTER_RESULT_DURATION_SECONDS - MONSTER_IMPACT_SECONDS);
       await reaction;
       const presentation = world.scene.getObjectByName('focused-event:midnight-tour')!;
       expect(presentation.userData.searchLeft).toBe(1);
@@ -1306,6 +1310,68 @@ describe('BoatWorld helpers', () => {
       propModels.dispose();
     },
   );
+
+  it('feeds Carlitos with the stored can pickup and throw, then restores lab replay', async () => {
+    const propModels = createTestPropModels();
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
+    const items = [savedItem('carlitos'), savedItem('cannedFood')];
+    const world = new BoatWorld(camera, propModels, ...createTestSkyTextures(), items);
+    const borrow = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
+    const play = vi.spyOn(EventItemUseController.prototype, 'play');
+    try {
+      world.syncInventory(snapshot(items, { food: 1, carlitos: createCarlitosState() }));
+      const hand = world.scene.getObjectByName('carlitos-care-hand')!;
+      const target = world.scene.getObjectByName('carlitos-food-target')!;
+      const supply = world.scene.getObjectByName('boat-supply:cannedFood')!;
+      const cameraRotation = camera.quaternion.clone();
+      const cameraPosition = camera.position.clone();
+      for (let replay = 0; replay < 2; replay += 1) {
+        const meow = vi.fn();
+        const feed = world.playCarlitosAction('feedCarlitos', meow);
+        const actor = borrow.mock.results.at(-1)!.value as BorrowedSupplyActor;
+        expect(play.mock.lastCall?.[0]).toMatchObject({
+          itemId: 'cannedFood', context: 'throw-target', aimTarget: target, landAtTarget: true,
+          durationSeconds: CARLITOS_FEED_DURATION,
+        });
+        const stored = actor.root.getWorldPosition(new Vector3());
+        expect(hand.visible).toBe(false);
+        world.update(1, CARLITOS_FEED_DURATION * 0.5);
+        expect(camera.quaternion.angleTo(cameraRotation)).toBeLessThan(1e-6);
+        expect(camera.position.distanceTo(cameraPosition)).toBeLessThan(1e-6);
+        expect(actor.root.visible).toBe(true);
+        expect(actor.root.getWorldPosition(new Vector3()).distanceTo(stored)).toBeGreaterThan(0.3);
+        expect(hand.visible).toBe(false);
+        world.update(2, CARLITOS_FEED_DURATION * 0.49);
+        expect(meow).not.toHaveBeenCalled();
+        expect(camera.quaternion.angleTo(cameraRotation)).toBeLessThan(1e-6);
+        expect(camera.position.distanceTo(cameraPosition)).toBeLessThan(1e-6);
+        expect(actor.root.visible).toBe(true);
+        expect(actor.root.getWorldPosition(new Vector3()).distanceTo(target.getWorldPosition(new Vector3())))
+          .toBeLessThan(0.2);
+        world.update(3, CARLITOS_FEED_DURATION * 0.02);
+        expect(actor.root.visible).toBe(false);
+        expect(hand.visible).toBe(false);
+        await feed;
+        expect(meow).toHaveBeenCalledOnce();
+        expect(camera.quaternion.angleTo(cameraRotation)).toBeLessThan(1e-6);
+        expect(actor.root.parent).toBeNull();
+        expect(supply.visible).toBe(true);
+      }
+      const interruptedMeow = vi.fn();
+      const interrupted = world.playCarlitosAction('feedCarlitos', interruptedMeow);
+      world.setDocumentHidden(true);
+      world.update(4, CARLITOS_FEED_DURATION);
+      await interrupted;
+      expect(interruptedMeow).not.toHaveBeenCalled();
+      world.syncInventory(snapshot(items, { food: 0, carlitos: createCarlitosState() }));
+      expect(supply.visible).toBe(false);
+    } finally {
+      borrow.mockRestore();
+      play.mockRestore();
+      world.dispose();
+      propModels.dispose();
+    }
+  });
 
   it('reveals Guarded Sleep with a gradual turn from the default view', async () => {
     const propModels = createTestPropModels();

@@ -657,5 +657,49 @@
     "animationCount": 0,
     "animations": [],
     "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "lighthouse": {
+    "triangles": 726,
+    "rawBounds": {
+      "min": [
+        -6.915679931640625,
+        0,
+        -8.12823486328125
+      ],
+      "max": [
+        6.915679931640625,
+        35.810813903808594,
+        6.915679931640625
+      ]
+    },
+    "sourceSha256": "C28DEFEDC7A44991AA5E3D7E162C33851B662E8F85EF20E6E9674E60B8011F4A",
+    "sourceTriangles": 726,
+    "outputSha256": "CF9350742721B5E04C371D9C56C4DC4CA350045460B06B668D93CFA1E2968849",
+    "hasSkins": false,
+    "animationCount": 0,
+    "animations": [],
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "midnightBush": {
+    "triangles": 360,
+    "rawBounds": {
+      "min": [
+        -1.0261795483529568,
+        -0.2886201720684767,
+        -1.0356031358242035
+      ],
+      "max": [
+        1.0428105480968952,
+        0.8996034972369671,
+        1.0295714251697063
+      ]
+    },
+    "sourceSha256": "917DE9EEE116CD439637ABECA201AC0A823CB534C4618E15DCBCA34D3A916782",
+    "sourceTriangles": 360,
+    "outputSha256": "0D5155B733C1DC009641612DE487AED0ED818C8E195258923FFC2AECABE31FBE",
+    "hasSkins": false,
+    "animationCount": 0,
+    "animations": [],
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
   }
 }

@@ -31,6 +31,7 @@ const situations: Record<string, readonly [string, string, string]> = {
   handyman: ['', '', ""],
   'other-people': ['', '', ""],
   plane: ['', '', ""],
+  lighthouse: ['A lighthouse shone far across the water.', 'Daleko za wodą świeciła latarnia morska.', 'Un faro brillaba a lo lejos, al otro lado del agua.'],
   'day-calm-fallback': ['', '', ""],
   'quiet-night': ['', '', ""],
 };

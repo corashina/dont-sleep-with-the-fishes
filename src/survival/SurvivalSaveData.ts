@@ -12,7 +12,7 @@ import type { DeathCause } from '../game/ending';
 import type { SurvivalReading } from '../game/runStatistics';
 import { SURVIVAL_EVENTS } from './eventCatalog';
 import { FISHING_CATCHES } from './fishingCatalog';
-import type { CarlitosSnapshot } from './CarlitosState';
+import { carlitosEnergyLimit, CARLITOS_MAX_UNHAPPINESS, type CarlitosSnapshot } from './CarlitosState';
 import {
   createSurvivalSessionCheckpoint,
   type SurvivalRunCheckpoint,
@@ -39,7 +39,7 @@ import type {
 } from './survivalTypes';
 import type { FishingCatchId } from './fishingCatalog';
 
-export const SURVIVAL_SAVE_VERSION = 4 as const;
+export const SURVIVAL_SAVE_VERSION = 6 as const;
 
 export interface SurvivalSaveDocument {
   readonly version: typeof SURVIVAL_SAVE_VERSION;
@@ -151,8 +151,8 @@ function parseInventory(value: unknown): SurvivalInventorySnapshot | null {
 }
 
 function allParsedCounters(
-  values: readonly [number | null, number | null, number | null, number | null],
-): values is readonly [number, number, number, number] {
+  values: readonly [number | null, number | null, number | null],
+): values is readonly [number, number, number] {
   return values.every((field) => field !== null);
 }
 
@@ -162,36 +162,19 @@ function parseCarlitos(value: unknown): CarlitosSnapshot | null | undefined {
   const counters = [
     parseInteger(value.energy, 0, 3),
     parseInteger(value.hunger, 0, 5),
-    parseInteger(value.sickness, 0, 5),
-    parseInteger(value.unhappiness, 0, MAX_COUNTER),
+    parseInteger(value.unhappiness, 0, CARLITOS_MAX_UNHAPPINESS),
   ] as const;
   if (!allParsedCounters(counters)) return undefined;
-  const [energy, hunger, sickness, unhappiness] = counters;
-  if (!hasCarlitosFlags(value)) return undefined;
-  const deathCause = value.deathCause;
-  if (!isCarlitosDeathCause(deathCause)) return undefined;
-  if (value.alive !== (deathCause === null)) return undefined;
+  const [energy, hunger, unhappiness] = counters;
+  if (typeof value.pettedToday !== 'boolean') return undefined;
+  const state = { energy, hunger, unhappiness, pettedToday: value.pettedToday };
+  if (energy > carlitosEnergyLimit(state)) return undefined;
   return Object.freeze({
-    alive: value.alive,
     energy,
     hunger,
-    sickness,
     unhappiness,
     pettedToday: value.pettedToday,
-    deathCause,
   });
-}
-
-function hasCarlitosFlags(
-  value: Record<string, unknown>,
-): value is Record<string, unknown> & { alive: boolean; pettedToday: boolean } {
-  return typeof value.alive === 'boolean' && typeof value.pettedToday === 'boolean';
-}
-
-function isCarlitosDeathCause(
-  value: unknown,
-): value is CarlitosSnapshot['deathCause'] {
-  return value === null || value === 'starvation' || value === 'sickness' || value === 'misery';
 }
 
 type ActionOutcomeExtensions = {
@@ -329,7 +312,8 @@ function parseJournalFishingAction(
 ): Extract<JournalDayActionRecord, { readonly kind: 'fishing' }> | null {
   if (!hasJournalFishingFields(value)) return null;
   const food = parseInteger(value.food, 0, 2);
-  if (food === null || !hasMatchingJournalFishingCatch(value)) return null;
+  const effects = parseJournalEffects(value);
+  if (food === null || effects === null || !hasMatchingJournalFishingCatch(value)) return null;
   return Object.freeze({
     kind: 'fishing',
     attemptId: value.attemptId,
@@ -337,6 +321,7 @@ function parseJournalFishingAction(
     catchId: value.catchId,
     food: food as 0 | 1 | 2,
     baitConsumed: value.baitConsumed,
+    ...effects,
   });
 }
 
@@ -367,7 +352,7 @@ function hasMatchingJournalFishingCatch(value: JournalFishingFields): boolean {
 function parseJournalCarlitosCareAction(
   value: Record<string, unknown>,
 ): Extract<JournalDayActionRecord, { readonly kind: 'carlitosCare' }> | null {
-  if (value.action !== 'pet' && value.action !== 'feed' && value.action !== 'treat') return null;
+  if (value.action !== 'pet' && value.action !== 'feed') return null;
   return Object.freeze({ kind: 'carlitosCare', action: value.action });
 }
 
@@ -390,13 +375,13 @@ function parseJournalEvent(value: unknown): Exclude<JournalDaytimeRecord, { read
   if (event === undefined) return null;
   const choice = event.choices.find(({ id }) => id === value.attemptedChoiceId);
   const text = parseOutcomeText(value.text);
-  const inventoryMutations = parseJournalMutations(value.inventoryMutations);
+  const effects = parseJournalEffects(value);
   if (choice === undefined || event.phase !== value.phase
-    || (choice.itemId ?? null) !== value.attemptedItemId || text === null || inventoryMutations === null) return null;
+    || (choice.itemId ?? null) !== value.attemptedItemId || text === null || effects === null) return null;
   if (!matchesJournalText(text, event, choice, value.eventPresentationKey)) return null;
   return Object.freeze({
     phase: event.phase, eventId: event.id, attemptedChoiceId: choice.id,
-    attemptedItemId: choice.itemId ?? null, outcomeCode: 'event-resolved', text, inventoryMutations,
+    attemptedItemId: choice.itemId ?? null, outcomeCode: 'event-resolved', text, ...effects,
     ...(value.eventPresentationKey === undefined ? {} : { eventPresentationKey: value.eventPresentationKey as EventPresentationKey }),
   });
 }
@@ -431,6 +416,14 @@ function parseJournalMutations(
   return inventoryMutations.some((mutation) => mutation === null)
     ? null
     : Object.freeze(inventoryMutations as JournalInventoryMutation[]);
+}
+
+function parseJournalEffects(value: Record<string, unknown>) {
+  const deltas = parseResourceDeltas(value.deltas);
+  const inventoryMutations = Array.isArray(value.inventoryMutations)
+    ? parseJournalMutations(value.inventoryMutations) : null;
+  return deltas === null || inventoryMutations === null
+    ? null : { deltas: Object.freeze(deltas), inventoryMutations };
 }
 
 function hasValidJournalPresentationKey(value: Record<string, unknown>): boolean {
@@ -767,6 +760,9 @@ function parseOutcomeText(value: unknown): OutcomeText | null {
     case 'fishing': return parseFishingText(value);
     case 'chestResource': return parseChestResourceText(value);
     case 'chestItem': return parseChestItemText(value);
+    case 'backpackItem': return typeof value.itemId === 'string' && ITEM_ID_SET.has(value.itemId)
+      && ITEM_DEFINITIONS[value.itemId as ItemId].weight === 1
+      ? Object.freeze({ kind: 'backpackItem', itemId: value.itemId as ItemId }) : null;
     default: return null;
   }
 }

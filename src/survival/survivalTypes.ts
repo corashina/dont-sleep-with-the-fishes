@@ -5,10 +5,10 @@ export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dea
 /** Gameplay weather remains separate from renderer-only presentation weather. */
 export type WeatherId = 'calm' | 'overcast' | 'squall';
 export type DayActionId =
-  | 'fish' | 'dive' | 'eat' | 'repair' | 'repairItem'
+  | 'fish' | 'netFish' | 'dive' | 'eat' | 'repair' | 'repairItem'
   | 'treat' | 'answerRadio' | 'useEnergyBar' | 'openChest' | 'endDay'
-  | 'petCarlitos' | 'feedCarlitos' | 'treatCarlitos';
-export type CompanionEventActionId = 'delegateCarlitos';
+  | 'petCarlitos' | 'feedCarlitos';
+export type CompanionEventActionId = 'delegateCarlitos' | 'watchCarlitos';
 export interface CompanionEventActionDefinition {
   readonly id: CompanionEventActionId;
   readonly energyCost: number;
@@ -187,7 +187,7 @@ export interface SurvivalEventDefinition {
   allowedChestStates?: readonly ChestState[];
   weather?: readonly WeatherId[];
   targetItemIds?: readonly ItemId[];
-  readonly requiresLivingCompanion?: boolean;
+  readonly requiresCompanion?: boolean;
   choices: readonly [EventChoiceDefinition, ...EventChoiceDefinition[]];
   cue: PresentationCue;
 }

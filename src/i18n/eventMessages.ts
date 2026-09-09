@@ -5,6 +5,12 @@ import type {
 } from '../survival/survivalTypes';
 
 const EVENT_TEXT = {
+  lighthouseTitle: { en: 'Lighthouse', pl: 'Latarnia morska', 'es-AR': 'Faro' },
+  lighthouseReveal: { en: 'A distant lighthouse sweeps its beam across the dark sea.', pl: 'Odległa latarnia morska omiata światłem ciemne morze.', 'es-AR': 'Un faro lejano barre el mar oscuro con su luz.' },
+  lighthouseFlare: { en: 'Your flare rises above the waves, bright enough to be seen from shore.', pl: 'Twoja flara wznosi się nad falami, wystarczająco jasna, by dostrzec ją z brzegu.', 'es-AR': 'Tu bengala sube sobre las olas, con suficiente brillo para verse desde la costa.' },
+  lighthouseFlashlight: { en: 'You flash SOS toward the lighthouse.', pl: 'Nadajesz latarką sygnał SOS w stronę latarni morskiej.', 'es-AR': 'Hacés señales de SOS con la linterna hacia el faro.' },
+  lighthouseShotgun: { en: 'Your shot carries across the water toward shore.', pl: 'Odgłos twojego strzału niesie się nad wodą w stronę brzegu.', 'es-AR': 'El sonido de tu disparo cruza el agua hacia la costa.' },
+  lighthouseSleep: { en: 'You sleep while the distant beam keeps turning.', pl: 'Śpisz, a odległy snop światła wciąż się obraca.', 'es-AR': 'Dormís mientras el haz de luz lejano sigue girando.' },
   wreckageDiveFood: { en: 'You recover food from the wreck.', pl: 'Odzyskujesz jedzenie z wraku.', 'es-AR': 'Recuperás comida del naufragio.' },
   wreckageDiveBait: { en: 'You recover bait from the wreck.', pl: 'Odzyskujesz przynętę z wraku.', 'es-AR': 'Recuperás carnada del naufragio.' },
   'eventText001': { en: 'Choose a response.', pl: 'Wybierz reakcję.', 'es-AR': 'Elegí una respuesta.' },
@@ -97,8 +103,8 @@ const EVENT_TEXT = {
   'eventText086': { en: 'No', pl: 'Nie', 'es-AR': 'No' },
   'eventText087': { en: 'Let Them Drift', pl: 'Pozwól im odpłynąć', 'es-AR': 'Dejalas ir' },
   'eventText088': { en: 'Attack', pl: 'Atakuj', 'es-AR': 'Atacá' },
-  'eventText089': { en: 'Visit the Island', pl: 'Odwiedź wyspę', 'es-AR': 'Visitá la isla' },
-  'eventText090': { en: 'Sail On', pl: 'Płyń dalej', 'es-AR': 'Seguí navegando' },
+  'eventText089': { en: 'Visit island', pl: 'Odwiedź wyspę', 'es-AR': 'Visitá la isla' },
+  'eventText090': { en: 'Skip island', pl: 'Pomiń wyspę', 'es-AR': 'Seguí de largo' },
   'eventText091': { en: 'Offer Food', pl: 'Zaoferuj jedzenie', 'es-AR': 'Ofrecé comida' },
   'eventText092': { en: 'Offer Bait', pl: 'Zaoferuj przynętę', 'es-AR': 'Ofrecé carnada' },
   'eventText093': { en: 'Offer Map', pl: 'Zaoferuj mapę', 'es-AR': 'Ofrecé el mapa' },

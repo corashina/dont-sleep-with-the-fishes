@@ -1,6 +1,7 @@
 import {
   selectFishingCatch,
   type FishingCatchDefinition,
+  type FishingGear,
 } from './fishingCatalog';
 import type { ItemId } from '../game/ItemState';
 import { SURVIVAL_BALANCE } from './survivalBalance';
@@ -25,9 +26,12 @@ export interface FishingCastPoint {
 export type FishingAttemptState =
   | 'aiming' | 'casting' | 'waiting' | 'bite' | 'reeling' | 'resolved' | 'missed';
 
-export type FishingTerminalResult =
+export type FishingSingleResult =
   | { readonly kind: 'catch'; readonly catch: FishingCatchDefinition }
   | { readonly kind: 'miss' };
+export type FishingHaul = readonly [FishingCatchDefinition, FishingCatchDefinition];
+export type FishingTerminalResult = FishingSingleResult
+  | { readonly kind: 'haul'; readonly catches: FishingHaul };
 
 export interface FishingAttemptSnapshot {
   readonly id: string;
@@ -53,6 +57,7 @@ export interface FishingCommandResult {
 }
 
 export interface FishingSessionOptions {
+  readonly gear?: FishingGear;
   readonly id: string;
   readonly day: number;
   readonly capturedBait: boolean;
@@ -70,10 +75,12 @@ function rejected(code: string): FishingCommandResult {
 }
 
 export class FishingSession {
+  readonly gear: FishingGear;
   private readonly id: string;
   private readonly capturedBait: boolean;
   private readonly biteDelaySeconds: number;
   private readonly hiddenCatch: FishingCatchDefinition;
+  private readonly hiddenHaul: FishingHaul | null;
   private state: FishingAttemptState = 'aiming';
   private castPoint: FishingCastPoint | null = null;
   private waitingSeconds = 0;
@@ -82,19 +89,22 @@ export class FishingSession {
   private readonly liveView: FishingAttemptView;
 
   constructor(options: FishingSessionOptions) {
+    this.gear = options.gear ?? 'rod';
     this.id = options.id;
-    this.capturedBait = options.capturedBait;
+    this.capturedBait = this.gear === 'rod' && options.capturedBait;
     const biteDelayRoll = options.random.next();
     const catchRoll = options.random.next();
     this.biteDelaySeconds = SURVIVAL_BALANCE.fishing.minimumBiteDelaySeconds
       + biteDelayRoll * SURVIVAL_BALANCE.fishing.biteDelayRangeSeconds;
     this.hiddenCatch = selectFishingCatch(
       options.day,
-      options.capturedBait,
+      this.capturedBait,
       catchRoll,
       options.activeItemIds,
       options.fishWeightMultiplier,
+      this.gear,
     );
+    this.hiddenHaul = this.gear === 'net' ? this.drawHaul(options) : null;
     const session = this;
     this.liveView = Object.freeze({
       get id(): string { return session.id; },
@@ -132,7 +142,10 @@ export class FishingSession {
 
   completeCast(): FishingCommandResult {
     if (this.state !== 'casting') return rejected('not-casting');
-    this.state = 'waiting';
+    if (this.hiddenHaul !== null) {
+      this.result = Object.freeze({ kind: 'haul', catches: this.hiddenHaul });
+      this.state = 'resolved';
+    } else this.state = 'waiting';
     return accepted('cast-completed');
   }
 
@@ -170,5 +183,14 @@ export class FishingSession {
     if (this.biteSeconds < SURVIVAL_BALANCE.fishing.reactionSeconds) return;
     this.result = Object.freeze({ kind: 'miss' });
     this.state = 'missed';
+  }
+
+  private drawHaul(options: FishingSessionOptions): FishingHaul {
+    const activeItems = new Set(options.activeItemIds);
+    if (this.hiddenCatch.reward.kind === 'item') activeItems.add(this.hiddenCatch.reward.itemId);
+    const second = selectFishingCatch(
+      options.day, false, options.random.next(), activeItems, options.fishWeightMultiplier, 'net',
+    );
+    return Object.freeze([this.hiddenCatch, second]);
   }
 }

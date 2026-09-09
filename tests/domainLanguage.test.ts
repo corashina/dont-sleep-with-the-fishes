@@ -50,7 +50,10 @@ describe('domain language', () => {
       expect(ITEM_DEFINITIONS[id]).toBe(items[index]);
       expect(SURVIVAL_ITEM_DESCRIPTIONS[id]).not.toBe(englishDescriptions[index]);
     }
-    for (const [index, entry] of FISHING_CATCHES.entries()) expect(entry.label).not.toBe(englishCatches[index]);
+    for (const [index, entry] of FISHING_CATCHES.entries()) {
+      if (entry.id === 'halibut') expect(entry.label).toBe('Halibut');
+      else expect(entry.label).not.toBe(englishCatches[index]);
+    }
   });
 
   it.each([[1, '1 porcja jedzenia'], [2, '2 porcje jedzenia'], [5, '5 porcji jedzenia'], [12, '12 porcji jedzenia'], [22, '22 porcje jedzenia']] as const)(
@@ -88,7 +91,7 @@ describe('domain language', () => {
     const definition = FISHING_CATCHES.find(({ id }) => id === 'salmon')!;
     const result = { kind: 'catch', catch: definition } as const;
     const settlement = fishingSettlement(result, true);
-    const record = createJournalFishingRecord('test-catch', result, 1, true);
+    const record = createJournalFishingRecord('test-catch', result, settlement, []);
     const entry = createJournalEntry(1, 'calm', [record], null, createQuietJournalNightRecord());
     expect(JSON.stringify(record)).not.toContain('catchLabel');
     expect(formatJournalEntry(entry).daytime).toContain('salmon');

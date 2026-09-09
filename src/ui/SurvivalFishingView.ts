@@ -18,7 +18,7 @@ const ROUTINE_DIALOG_MARGIN = 20;
 const ROUTINE_DIALOG_GAP = 22;
 const requireElement = createElementRequirement('survival fishing view');
 
-export type FishingUiMode = 'hidden' | 'aiming' | 'waiting' | 'bite' | 'result' | 'ready';
+export type FishingUiMode = 'hidden' | 'aiming' | 'waiting' | 'bite' | 'result';
 
 export interface FishingUiState {
   readonly mode: FishingUiMode;
@@ -114,7 +114,8 @@ export class SurvivalFishingView {
       <section class="routine-dialog routine-dialog--fishing" data-fishing-result role="dialog" aria-modal="true" aria-hidden="true" data-ui-aria="fishingResult" aria-label="${uiText('fishingResult')}" inert>
         <div class="routine-dialog__card fishing-result-card scuba-popup-paper">
           <button type="button" class="dive-result__close ui-role-context" data-fishing-result-close data-ui-aria="closeFishing" aria-label="${uiText('closeFishing')}">&times;</button>
-          <div class="fishing-result-items" data-fishing-result-items></div>
+          <h2 class="dive-result__title scuba-popup-title ui-role-display" data-ui-text="fishingResult">${uiText('fishingResult')}</h2>
+          <div class="dive-result__rewards fishing-result-items" data-fishing-result-items></div>
           <p class="ui-role-context" data-fishing-result-message hidden></p>
         </div>
       </section>`;
@@ -172,7 +173,6 @@ export class SurvivalFishingView {
     this.message = state.message;
     this.visibleMessage.textContent = state.message;
     this.visibleMessage.hidden = state.mode === 'hidden'
-      || state.mode === 'ready'
       || state.mode === 'result'
       || state.message.length === 0;
     this.live.setAttribute('aria-live', state.mode === 'bite' ? 'assertive' : 'polite');
@@ -242,14 +242,14 @@ export class SurvivalFishingView {
       count.className = 'dive-result__reward-quantity ui-role-numeral';
       count.textContent = amount;
       count.setAttribute('aria-hidden', 'true');
-      entry.append(art, count);
-      if (condition === 'broken') {
-        const label = document.createElement('span');
-        label.className = 'fishing-result-condition ui-role-context';
-        label.textContent = name;
-        label.setAttribute('aria-hidden', 'true');
-        entry.append(label);
-      }
+      const copy = document.createElement('span');
+      copy.className = 'dive-result__reward-copy';
+      const label = document.createElement('strong');
+      label.className = 'dive-result__reward-name ui-role-context';
+      label.textContent = name;
+      label.setAttribute('aria-hidden', 'true');
+      copy.append(label, count);
+      entry.append(art, copy);
       return entry;
     }));
   }
@@ -293,7 +293,6 @@ export class SurvivalFishingView {
     if (
       this.disposed
       || event.repeat
-      || this.currentMode === 'ready'
       || (event.target instanceof Node && this.exitButton.contains(event.target))
       || (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar')
     ) return false;
@@ -305,7 +304,6 @@ export class SurvivalFishingView {
 
   initialFocus(): HTMLElement {
     if (this.currentMode === 'bite' && !this.biteButton.hidden) return this.biteButton;
-    if (this.currentMode === 'ready' && !this.exitButton.hidden) return this.exitButton;
     return this.interactionRoot;
   }
 
@@ -442,8 +440,10 @@ export class SurvivalFishingView {
     );
     const maximumWidth = Math.max(1, viewportWidth - ROUTINE_DIALOG_MARGIN * 2);
     const maximumHeight = Math.max(1, viewportHeight - ROUTINE_DIALOG_MARGIN * 2);
-    const cardWidth = Math.min(360, maximumWidth);
-    const cardHeight = Math.min(250, maximumHeight);
+    const cardWidth = Math.min(480, maximumWidth);
+    this.resultRoot.style.setProperty('--routine-width', `${Math.round(cardWidth)}px`);
+    const card = this.resultItems.parentElement!;
+    const cardHeight = Math.min(card.offsetHeight || 360, maximumHeight);
     const target = this.resultDialogTarget(viewportWidth, viewportHeight);
     const [horizontalPlacement, unclampedX] = this.horizontalDialogPosition(
       target.x, target.width, cardWidth, viewportWidth,
@@ -461,7 +461,6 @@ export class SurvivalFishingView {
     );
     this.resultRoot.style.setProperty('--routine-x', `${Math.round(x)}px`);
     this.resultRoot.style.setProperty('--routine-y', `${Math.round(y)}px`);
-    this.resultRoot.style.setProperty('--routine-width', `${Math.round(cardWidth)}px`);
     this.resultRoot.dataset.placement = horizontalPlacement;
     this.resultRoot.dataset.verticalPlacement = verticalPlacement;
     this.resultRoot.dataset.anchorState = target.projected ? 'projected' : 'fallback';

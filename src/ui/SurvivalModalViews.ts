@@ -15,6 +15,7 @@ import { EndingStatisticsView } from './EndingStatisticsView';
 import { survivalEndingStatistics } from './EndingStatisticsModel';
 import { createElementRequirement } from './dom';
 import { runCleanupSteps, throwCleanupFailure } from './UiCleanup';
+import { itemThumbnailUrl } from './itemThumbnailManifest';
 
 const requireElement = createElementRequirement('survival modal views');
 const ENDING_FADE_MS = 1_500;
@@ -53,7 +54,7 @@ export class SurvivalModalViews {
     refreshUiText(this.repairRoot, this.pauseRoot, this.endingRoot);
     for (const item of this.currentRepairItems) {
       const button = [...this.repairTargets.querySelectorAll<HTMLButtonElement>('button')].find(button => button.dataset.repairTarget === item.instanceId);
-      if (button) { button.textContent = uiDynamic('brokenItem', ITEM_LABELS[item.type]); button.setAttribute('aria-description', uiDynamic('repairItemHelp', ITEM_LABELS[item.type])); }
+      if (button) this.labelRepairTarget(button, item);
     }
     if (this.currentEnding !== null) {
       this.endingTitle.textContent = endingTitle(this.currentEnding);
@@ -70,11 +71,9 @@ export class SurvivalModalViews {
     template.innerHTML = `
       <section class="routine-dialog routine-dialog--repair" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" data-ui-aria="repairTarget" aria-label="${uiText('repairTarget')}" inert>
         <div class="routine-dialog__card scuba-popup-paper">
-          <p class="eyebrow ui-role-context" data-ui-text="ductTape">${uiText('ductTape')}</p>
           <h2 class="scuba-popup-title ui-role-display" data-repair-options-title tabindex="-1" data-ui-text="chooseRepair">${uiText('chooseRepair')}</h2>
-          <p class="ui-role-narrative" data-ui-text="repairHelp">${uiText('repairHelp')}</p>
           <div class="repair-targets" data-repair-targets></div>
-          <button type="button" class="secondary-action salvage-action ui-role-context" data-repair-cancel data-ui-aria="cancelRepair" aria-label="${uiText('cancelRepair')}" data-ui-text="cancel">
+          <button type="button" class="primary-action salvage-action ui-role-context" data-repair-cancel data-ui-aria="cancelRepair" aria-label="${uiText('cancelRepair')}" data-ui-text="cancel">
             ${uiText('cancel')}
           </button>
         </div>
@@ -136,17 +135,28 @@ export class SurvivalModalViews {
     const targets = items.map((item) => {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'event-item repair-target ui-role-context';
+      button.className = 'weight-circle is-filled dive-result__reward repair-target';
       button.dataset.repairTarget = item.instanceId;
-      button.textContent = uiDynamic('brokenItem', ITEM_LABELS[item.type]);
-      button.setAttribute(
-        'aria-description',
-        uiDynamic('repairItemHelp', ITEM_LABELS[item.type]),
-      );
+      button.dataset.itemType = item.type;
+      this.labelRepairTarget(button, item);
+      const thumbnail = document.createElement('img');
+      thumbnail.className = 'weight-circle__thumbnail';
+      thumbnail.src = itemThumbnailUrl(item.type);
+      thumbnail.alt = '';
+      thumbnail.decoding = 'async';
+      thumbnail.draggable = false;
+      button.append(thumbnail);
       button.disabled = this.repairBusy;
       return button;
     });
     this.repairTargets.replaceChildren(...targets);
+  }
+
+  private labelRepairTarget(button: HTMLButtonElement, item: Readonly<SurvivalItemState>): void {
+    const label = uiDynamic('brokenItem', ITEM_LABELS[item.type]);
+    button.title = label;
+    button.setAttribute('aria-label', label);
+    button.setAttribute('aria-description', uiDynamic('repairItemHelp', ITEM_LABELS[item.type]));
   }
 
   setRepairBusy(busy: boolean): void {

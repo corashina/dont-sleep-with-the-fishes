@@ -44,8 +44,7 @@ export class SurvivalEventView {
   private readonly unsubscribeLanguage: () => void;
   private refreshLanguage(): void {
     refreshUiText(...this.roots);
-    if (this.caption.dataset.eventId === 'check-the-back') this.updateText('title', this.title, uiText('checkBack'));
-    if (this.caption.dataset.eventId === 'guarded-sleep') this.updateText('title', this.title, uiText('watchCarlitos'));
+    this.refreshConfirmationTitle();
     if (this.currentEvent !== null) { this.detail.textContent = this.currentEvent.revealText; this.risk.textContent = uiDynamic(this.currentEvent.danger); }
     for (const choice of this.currentChoices) {
       const button = this.choiceButton(choice.id);
@@ -55,6 +54,12 @@ export class SurvivalEventView {
       const reason = button.querySelector('.event-choice__reason');
       if (reason && choice.unavailableReason !== null) { reason.textContent = choice.unavailableReason; button.dataset.unavailableReason = choice.unavailableReason; button.setAttribute('aria-description', choice.unavailableReason); }
     }
+  }
+
+  private refreshConfirmationTitle(): void {
+    const titles = { 'check-the-back': 'checkBack', 'guarded-sleep': 'watchCarlitos', 'midnight-tour': 'visitIslandPrompt' } as const;
+    const key = titles[this.caption.dataset.eventId as keyof typeof titles];
+    if (key !== undefined) this.updateText('title', this.title, uiText(key));
   }
 
   private disposed = false;
@@ -129,6 +134,8 @@ export class SurvivalEventView {
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.currentEvent = event;
+    this.caption.removeAttribute('aria-labelledby');
+    this.title.removeAttribute('id');
     const risk = uiDynamic(event.danger);
     this.updateText('title', this.title, '');
     this.title.hidden = true;
@@ -177,6 +184,7 @@ export class SurvivalEventView {
     this.selectedChoiceId = null;
     const checkBack = this.caption.dataset.eventId === 'check-the-back';
     const guardedSleep = this.caption.dataset.eventId === 'guarded-sleep';
+    const islandConfirmation = this.syncIslandConfirmation(contextualChoices);
     if (checkBack) {
       this.updateText('title', this.title, uiText('checkBack'));
       this.title.hidden = false;
@@ -186,7 +194,7 @@ export class SurvivalEventView {
     }
     const buttons = contextualChoices
       .filter((choice) => (
-        (checkBack || choice.id !== 'sleep') && choice.anchorId === undefined
+        (checkBack || islandConfirmation || choice.id !== 'sleep') && choice.anchorId === undefined
       ))
       .map((choice) => this.createChoice(
         guardedSleep && choice.id === 'watch'
@@ -204,6 +212,32 @@ export class SurvivalEventView {
     this.caption.classList.toggle('is-visible', showCaption);
     this.caption.setAttribute('aria-hidden', showCaption ? 'false' : 'true');
     this.syncChoiceState();
+    if (islandConfirmation) this.choiceButtonsInOrder()[0]?.focus();
+  }
+
+  private syncIslandConfirmation(contextualChoices: readonly EventContextChoice[]): boolean {
+    const island = this.caption.dataset.eventId === 'midnight-tour';
+    const islandConfirmation = island && contextualChoices.some((choice) => (
+      choice.id === 'visit' && choice.anchorId === undefined
+    ));
+    if (island) {
+      this.title.hidden = !islandConfirmation;
+      this.updateText('title', this.title, uiText('visitIslandPrompt'));
+      this.caption.classList.toggle('confirmation-dialog', islandConfirmation);
+      this.caption.classList.toggle('scuba-popup-paper', islandConfirmation);
+      if (islandConfirmation) {
+        this.caption.setAttribute('role', 'dialog');
+        this.caption.setAttribute('aria-modal', 'true');
+        this.caption.setAttribute('aria-labelledby', 'island-confirmation-title');
+        this.title.id = 'island-confirmation-title';
+      } else {
+        this.caption.removeAttribute('role');
+        this.caption.removeAttribute('aria-modal');
+        this.caption.removeAttribute('aria-labelledby');
+        this.title.removeAttribute('id');
+      }
+    }
+    return islandConfirmation;
   }
 
   setBusy(busy: boolean): void {

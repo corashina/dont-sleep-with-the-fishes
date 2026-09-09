@@ -1,10 +1,5 @@
 import { browserStorage, type PreferenceStorage } from '../browser/storage';
 import {
-  DEFAULT_POSTERIZATION,
-  normalizePosterization,
-  type PosterizationSetting,
-} from '../rendering/posterization';
-import {
   ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY,
   ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS,
   type ItemAmbientOcclusionMode,
@@ -17,7 +12,6 @@ import {
 import type { SkyPhase } from '../world/skyPalette';
 
 export interface SystemTuningState {
-  readonly posterization: PosterizationSetting;
   readonly ambientOcclusionMode: ItemAmbientOcclusionMode;
   readonly ambientOcclusionQuality: AmbientOcclusionQuality;
   readonly ambientOcclusionIntensity: number;
@@ -40,7 +34,6 @@ export const SYSTEM_TUNING_STORAGE_KEY =
   'dont-sleep-with-the-fishes.system-tuning';
 
 export const DEFAULT_SYSTEM_TUNING_STATE = Object.freeze({
-  posterization: DEFAULT_POSTERIZATION,
   ambientOcclusionMode: 'composite',
   ambientOcclusionQuality: 'low',
   ambientOcclusionIntensity: ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY,
@@ -102,7 +95,6 @@ function parseState(value: unknown): SystemTuningState {
     : DEFAULT_SYSTEM_TUNING_STATE.phaseOverride;
 
   return Object.freeze({
-    posterization: normalizePosterization(stored.posterization),
     ambientOcclusionMode,
     ambientOcclusionQuality: stored.ambientOcclusionQuality === 'high' ? 'high' : 'low',
     ambientOcclusionIntensity,

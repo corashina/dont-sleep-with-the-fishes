@@ -21,6 +21,9 @@ const spanishItems = {
 } satisfies Record<ItemId, string>;
 
 const catches = {
+  blowfish: 'rozdymkę', fish: 'rybę', goldfish: 'złotą rybkę', trout: 'pstrąga',
+  kingfish: 'seriolę', piranha: 'piranię', crayfish: 'raka', halibut: 'halibuta',
+  brokenCan: 'uszkodzoną puszkę', crushedCan: 'zgniecioną puszkę', backpack: 'plecak',
   cod: 'dorsza', salmon: 'łososia', tuna: 'tuńczyka', crab: 'kraba', squid: 'kałamarnicę',
   sardine: 'sardynkę', bass: 'okonia', redSnapper: 'lucjana czerwonego', clownfish: 'błazenka',
   seaweed: 'wodorosty', boot: 'but', plasticBottle: 'plastikową butelkę', fishBones: 'rybie ości',

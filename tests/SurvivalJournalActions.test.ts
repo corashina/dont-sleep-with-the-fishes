@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
 import { formatJournalEntry } from '../src/survival/journal';
+import { journalItemChanges } from '../src/survival/journalItemChanges';
 import { createSurvivalSaveDocument, parseSurvivalSaveDocument } from '../src/survival/SurvivalSaveData';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { sequenceRandom } from './helpers/random';
@@ -57,6 +58,9 @@ describe('ordinary day action journal', () => {
     }]);
     const copy = formatJournalEntry(entry).daytime;
     expect(copy).toContain('I put on the scuba gear');
+    expect(journalItemChanges(entry).day.map(({ itemId, kind }) => ({ itemId, kind })))
+      .toEqual('food' in reward ? [{ itemId: 'cannedFood', kind: 'gain' }]
+        : 'bait' in reward ? [{ itemId: 'baitTin', kind: 'gain' }] : []);
     expect(copy).toContain('left me worn out');
     expect(copy).toContain(text);
     expect(copy).not.toContain('Just water and sky');

@@ -1,12 +1,25 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
-import { PhaseResources, type PhaseResourceLoaders } from '../src/app/PhaseResources';
+import { PHASE_RESOURCE_LOADERS, PhaseResources, type PhaseResourceLoaders } from '../src/app/PhaseResources';
+import { PropModelLibrary } from '../src/world/PropModelLibrary';
+import { createTestPropModels } from './helpers/propModels';
 import { AudioSystem } from '../src/audio/AudioSystem';
 function loaders() {
   const asset = () => ({ dispose: vi.fn(), configure: vi.fn() });
   return Object.fromEntries(['loadMenuFont','loadMenuModels','loadMenuSandAssets','loadShipModels','loadSurvivalModels','loadShipFurniture','loadSkyAssets','loadLifeboatAssets','loadShipAssets','loadPhysicsRuntime'].map(key => [key, vi.fn(async () => asset())])) as unknown as PhaseResourceLoaders;
 }
 describe('phase resource ownership', () => {
+  it('includes the care hand when loading survival directly', async () => {
+    const models = createTestPropModels();
+    const load = vi.spyOn(PropModelLibrary, 'load').mockResolvedValue(models);
+    try {
+      await PHASE_RESOURCE_LOADERS.loadSurvivalModels();
+      expect(load).toHaveBeenCalledWith(undefined, expect.arrayContaining(['riggedHand']));
+    } finally {
+      load.mockRestore();
+      models.dispose();
+    }
+  });
   it('loads menu without requesting ship, survival, or physics', async () => {
     const dependencies = loaders();
     const resources = new PhaseResources(dependencies, AudioSystem.silent(), 'enabled');

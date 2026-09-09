@@ -93,6 +93,10 @@ function createRig() {
   } as unknown as DayActionSessionPort;
   const world = {
     play: vi.fn(async (cue: string) => { calls.push(`world:play:${cue}`); }),
+    playRepairToolboxAnimation: vi.fn(async (onAudioStart?: () => void) => {
+      calls.push('world:repair-hammer');
+      onAudioStart?.();
+    }),
     playCarlitosAction: vi.fn(async (action: string) => {
       calls.push(`world:carlitos:${action}`);
     }),
@@ -127,6 +131,7 @@ function createRig() {
     finishDive: vi.fn(() => calls.push('audio:finish-dive')),
     cancelDive: vi.fn(() => calls.push('audio:cancel-dive')),
     nightfall: vi.fn(() => calls.push('audio:nightfall')),
+    meowCarlitos: vi.fn(),
   } as unknown as DayActionAudioPort;
   const events = {
     sync: vi.fn(() => calls.push('events:sync')),
@@ -205,6 +210,31 @@ function createRig() {
 }
 
 describe('SurvivalDayActionFlow', () => {
+  it('keeps the last can on the boat until feeding finishes', async () => {
+    const rig = createRig();
+    const before = snapshot({ food: 1 });
+    const after = snapshot({ food: 0 });
+    const animation = deferred();
+    rig.setSnapshot(before);
+    vi.mocked(rig.session.perform).mockImplementation(() => {
+      rig.setSnapshot(after);
+      return accepted({ cue: 'none', deltas: { food: -1 } });
+    });
+    vi.mocked(rig.world.playCarlitosAction).mockReturnValue(animation.promise);
+    const feeding = rig.flow.run('feedCarlitos');
+    expect(rig.events.beginDeferredSync).toHaveBeenCalledWith(before, 0);
+    expect(rig.events.sync).not.toHaveBeenCalledWith(after);
+    expect(rig.renderSnapshot).not.toHaveBeenCalled();
+    expect(rig.audio.meowCarlitos).not.toHaveBeenCalled();
+    vi.mocked(rig.world.playCarlitosAction).mock.lastCall?.[1]?.();
+    expect(rig.audio.meowCarlitos).toHaveBeenCalledOnce();
+    animation.resolve();
+    await feeding;
+    expect(rig.events.cancelDeferredSync).toHaveBeenCalledWith(0);
+    expect(rig.renderSnapshot).toHaveBeenCalledOnce();
+    expect(rig.renderSnapshot.mock.results[0]?.value).toBe(after);
+  });
+
   it('routes a rejected command through deny without busy state', async () => {
     const rig = createRig();
     const rejection = accepted({
@@ -251,18 +281,40 @@ describe('SurvivalDayActionFlow', () => {
     async (action) => {
       const rig = createRig();
       const cue = deferred();
-      vi.mocked(rig.world.play).mockImplementationOnce(() => cue.promise);
+      const play = action === 'repair' ? rig.world.playRepairToolboxAnimation : rig.world.play;
+      vi.mocked(play).mockImplementationOnce(() => cue.promise);
 
       const pending = rig.flow.run(action);
 
       expect(rig.renderSnapshot).toHaveBeenCalledOnce();
       expect(rig.renderSnapshot.mock.invocationCallOrder[0])
-        .toBeLessThan(vi.mocked(rig.world.play).mock.invocationCallOrder[0]!);
+        .toBeLessThan(vi.mocked(play).mock.invocationCallOrder[0]!);
       cue.resolve();
       await pending;
       expect(rig.renderSnapshot).toHaveBeenCalledOnce();
     },
   );
+
+  it('waits for the repair hammer and starts its sound at the animation cue', async () => {
+    const rig = createRig();
+    const animation = deferred();
+    let startSound!: () => void;
+    vi.mocked(rig.world.playRepairToolboxAnimation).mockImplementationOnce((onAudioStart) => {
+      startSound = onAudioStart!;
+      return animation.promise;
+    });
+    const pending = rig.flow.run('repair');
+    expect(rig.world.playRepairToolboxAnimation).toHaveBeenCalledOnce();
+    expect(rig.world.play).not.toHaveBeenCalled();
+    expect(rig.audio.action).not.toHaveBeenCalled();
+    expect(rig.setBusy).toHaveBeenLastCalledWith(true);
+    startSound();
+    expect(rig.audio.action).toHaveBeenCalledExactlyOnceWith('repair');
+    animation.resolve();
+    await pending;
+    expect(rig.setBusy).toHaveBeenLastCalledWith(false);
+    expect(rig.ui.restoreCommandFocus).toHaveBeenCalledOnce();
+  });
 
   it('holds chest presentation sync until reward confirmation', async () => {
     const rig = createRig();

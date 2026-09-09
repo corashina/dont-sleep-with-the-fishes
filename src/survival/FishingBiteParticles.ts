@@ -36,7 +36,7 @@ export class FishingBiteParticles {
     this.points.frustumCulled = false;
   }
 
-  emit(origin: Vector3, intensity: number): void {
+  emit(origin: Vector3, intensity: number, verticalVelocity?: number): void {
     const strength = Math.min(1, Math.max(0, intensity));
     const count = 3 + Math.floor(strength * 5);
     for (let burstIndex = 0; burstIndex < count; burstIndex += 1) {
@@ -49,7 +49,7 @@ export class FishingBiteParticles {
       this.positions[offset + 1] = origin.y;
       this.positions[offset + 2] = origin.z;
       this.velocities[offset] = Math.cos(phase) * radialSpeed;
-      this.velocities[offset + 1] = 0.45 + strength * 0.65;
+      this.velocities[offset + 1] = verticalVelocity ?? (0.45 + strength * 0.65);
       this.velocities[offset + 2] = Math.sin(phase) * radialSpeed - 0.16;
       this.life[index] = (
         0.28 + (index % 5) * 0.035 + strength * 0.12

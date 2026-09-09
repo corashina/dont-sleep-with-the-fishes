@@ -2,6 +2,24 @@
   "schemaVersion": 1,
   "generatedOn": "2026-08-26",
   "sources": {
+    "lighthouse": {
+      "id": "lighthouse",
+      "pageUrl": "https://poly.pizza/m/7H8is9jrGeB",
+      "publicId": "7H8is9jrGeB",
+      "resourceId": "3a953081-6a7c-4cab-9859-538307b9965f",
+      "downloadUrl": "https://static.poly.pizza/3a953081-6a7c-4cab-9859-538307b9965f.glb",
+      "sourceAssetId": "poly-pizza:3a953081-6a7c-4cab-9859-538307b9965f",
+      "modelName": "Lighthouse",
+      "author": "Poly by Google",
+      "license": "CC-BY 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+      "pageAnimated": false,
+      "sha256": "C28DEFEDC7A44991AA5E3D7E162C33851B662E8F85EF20E6E9674E60B8011F4A",
+      "sourceTriangles": 726,
+      "sourceHasSkins": false,
+      "sourceAnimationCount": 0,
+      "downloadedOn": "2026-09-09"
+    },
     "leakPlanks": {
       "id": "leakPlanks",
       "pageUrl": "https://poly.pizza/m/hwQ1Fx5P8U",
@@ -145,6 +163,24 @@
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
       "downloadedOn": "2026-08-26"
+    },
+    "midnightBush": {
+      "id": "midnightBush",
+      "pageUrl": "https://poly.pizza/m/ooG6CkLyE8",
+      "publicId": "ooG6CkLyE8",
+      "resourceId": "6bbb833e-26cb-4bf9-ae67-a31b98e30bd9",
+      "downloadUrl": "https://static.poly.pizza/6bbb833e-26cb-4bf9-ae67-a31b98e30bd9.glb",
+      "sourceAssetId": "poly-pizza:6bbb833e-26cb-4bf9-ae67-a31b98e30bd9",
+      "modelName": "Bush",
+      "author": "Quaternius",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "pageAnimated": false,
+      "sha256": "917DE9EEE116CD439637ABECA201AC0A823CB534C4618E15DCBCA34D3A916782",
+      "sourceTriangles": 360,
+      "sourceHasSkins": false,
+      "sourceAnimationCount": 0,
+      "downloadedOn": "2026-09-09"
     },
     "midnightMonster": {
       "id": "midnightMonster",

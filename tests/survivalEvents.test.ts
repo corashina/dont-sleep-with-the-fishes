@@ -50,13 +50,13 @@ describe('survival events', () => {
     expect(survivalEventById('sick-companion')).toBeUndefined();
     expect(survivalEventById('shadow-figure')).toMatchObject({
       earliestDay: 20, minimumPressure: 3, weight: 1, cooldownDays: 3,
-      requiresLivingCompanion: true,
+      requiresCompanion: true,
     });
     expect(survivalEventById('guarded-sleep')).toMatchObject({
-      earliestDay: 7, weight: 4, cooldownDays: 0, requiresLivingCompanion: true,
+      earliestDay: 7, weight: 4, cooldownDays: 0, requiresCompanion: true,
       maximumAppearances: 1,
     });
-    expect(survivalEventById('swarm-of-sharks')?.requiresLivingCompanion).toBeUndefined();
+    expect(survivalEventById('swarm-of-sharks')?.requiresCompanion).toBeUndefined();
 
     const criteria = {
       phase: 'night' as const,
@@ -73,13 +73,13 @@ describe('survival events', () => {
     const companionEvents = ['shadow-figure', 'guarded-sleep'];
     const absent = eligibleEvents(SURVIVAL_EVENTS, {
       ...criteria,
-      hasLivingCompanion: false,
+      hasCompanion: false,
     }).map(({ id }) => id);
     expect(companionEvents.every((id) => !absent.includes(id))).toBe(true);
 
     const living = eligibleEvents(SURVIVAL_EVENTS, {
       ...criteria,
-      hasLivingCompanion: true,
+      hasCompanion: true,
     }).map(({ id }) => id);
     expect(companionEvents.every((id) => living.includes(id))).toBe(true);
   });
@@ -224,8 +224,8 @@ describe('survival events', () => {
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.items = [{ kind: 'gainChest', quantity: 1, fallbackFood: 2 }]; }, /fallback food/i);
     rejects((catalog) => { catalog[0].choices[0].requiredChestState = 'open'; }, /required chest state/i);
     rejects((catalog) => { catalog[0].latestDay = 1; }, /day bounds/i);
-    rejects((catalog) => { catalog[0].requiresLivingCompanion = 'yes'; }, /living companion.*boolean/i);
-    rejects((catalog) => { catalog[0].requiresLivingCompanion = undefined; }, /living companion.*boolean/i);
+    rejects((catalog) => { catalog[0].requiresCompanion = 'yes'; }, /companion.*boolean/i);
+    rejects((catalog) => { catalog[0].requiresCompanion = undefined; }, /companion.*boolean/i);
     rejects((catalog) => { catalog[0].choices[0].companionAction = 'swim'; }, /companion action/i);
     rejects((catalog) => { catalog[0].choices[0].companionAction = undefined; }, /companion action/i);
     rejects((catalog) => {

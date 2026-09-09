@@ -4,6 +4,10 @@ import { getLanguage } from './language';
 
 // These are diary outcomes, separate from the short messages shown during events.
 const results = {
+  lighthouseFlare: ['I fired a flare above the waves. It could be seen from shore.', 'Wystrzeliłem flarę nad fale. Była widoczna z brzegu.', 'Disparé una bengala sobre las olas. Podía verse desde la costa.'],
+  lighthouseFlashlight: ['I flashed SOS toward the lighthouse. Perhaps someone was watching.', 'Nadałem latarką SOS w stronę latarni morskiej. Może ktoś patrzył.', 'Hice señales de SOS con la linterna hacia el faro. Quizás alguien estaba mirando.'],
+  lighthouseShotgun: ['I fired the shotgun. The sound carried toward shore.', 'Wystrzeliłem ze strzelby. Dźwięk poniósł się w stronę brzegu.', 'Disparé la escopeta. El sonido llegó hacia la costa.'],
+  lighthouseSleep: ['I slept beneath the turning beam. The lighthouse kept its watch.', 'Spałem pod obracającym się światłem. Latarnia morska czuwała.', 'Dormí bajo el haz de luz que giraba. El faro siguió de guardia.'],
   wreckageDiveFood: ['I brought food back from the wreck.', 'Przyniosłem jedzenie z wraku.', 'Traje comida del naufragio.'],
   wreckageDiveBait: ['I brought bait back from the wreck.', 'Przyniosłem przynętę z wraku.', 'Traje carnada del naufragio.'],
   eventText111: ['The map showed a channel between the rocks. I brought the boat through without a scrape.', 'Mapa pokazała przesmyk między skałami. Przeprowadziłem łódź bez draśnięcia.', "El mapa mostraba un paso entre las rocas. Llevé el bote por ahí sin un rasguño."],

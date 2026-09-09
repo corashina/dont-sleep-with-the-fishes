@@ -139,7 +139,7 @@ function createTestEventBundleManager(): SurvivalPhaseBundleManager {
 
 const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
 const OUTLINED_DAY_ACTIONS = [
-  'eat', 'fish', 'openChest', 'repair', 'dive', 'repairItem', 'answerRadio', 'useEnergyBar', 'treat',
+  'eat', 'fish', 'netFish', 'openChest', 'repair', 'dive', 'repairItem', 'answerRadio', 'useEnergyBar', 'treat',
   'endDay',
 ] as const;
 
@@ -496,8 +496,16 @@ export class SurvivalPhase implements GamePhase {
       this.audio.deny();
       return;
     }
-    if (action === 'fish') {
-      void this.fishingFlow.begin();
+    if (action === 'fish' || action === 'netFish') {
+      void this.fishingFlow.begin(action === 'netFish' ? 'net' : 'rod');
+      return;
+    }
+    if (this.itemAnimationLab && action === 'repairItem') {
+      if (option?.kind === 'itemRepair') this.itemAnimationLabFlow.repairItem(option.target);
+      return;
+    }
+    if (this.itemAnimationLab && (action === 'petCarlitos' || action === 'feedCarlitos')) {
+      void this.itemAnimationLabFlow.playCarlitos(action);
       return;
     }
     void this.dayActionFlow.run(action, option);
@@ -589,7 +597,7 @@ export class SurvivalPhase implements GamePhase {
       || this.itemAnimationLab
       || isTerminal(snapshot.state)
       || !stablePresentation
-      || this.fishingFlow.hasActiveAttempt()
+      || this.fishingFlow.isFishing()
       || this.session.exportCheckpoint === undefined
     ) return null;
     try {
@@ -811,7 +819,7 @@ export class SurvivalPhase implements GamePhase {
     );
     this.ui.onFishingReel = () => this.fishingFlow.reel();
     this.ui.onFishingResultContinue = () => this.fishingFlow.continueResult();
-    this.ui.onFishingViewExit = () => this.fishingFlow.exitReadyView();
+    this.ui.onFishingViewExit = () => this.fishingFlow.exitView();
     this.ui.onFocusedEventSelect = (eventId) => { void this.eventFlow.focusEvent(eventId); };
     this.ui.onFocusedEventChoice = (choice) => {
       this.reportFocusedError(this.focusedEventFlow.choose(choice));
@@ -912,7 +920,10 @@ export class SurvivalPhase implements GamePhase {
     this.syncVisualState(snapshot);
     this.world.setPhase?.(snapshot.state === 'nightEvent' ? 'night' : 'day');
     this.ui.render?.(snapshot, (action) => (
-      this.dayActionFlow.unavailableReason(snapshot, action)
+      this.itemAnimationLab && snapshot.carlitos !== null
+        && (action === 'petCarlitos' || action === 'feedCarlitos')
+        ? null
+        : this.dayActionFlow.unavailableReason(snapshot, action)
     ));
     this.syncCameraTurnControl(snapshot);
     this.syncJournalUnread(snapshot);
@@ -931,15 +942,18 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private cameraTurnAvailable(snapshot: Readonly<SurvivalSnapshot>): boolean {
+    const optionalLootEvent = snapshot.state === 'dayEvent'
+      && isInspectableEventId(snapshot.pendingEventId ?? '');
     const stableDayView = this.itemAnimationLab || (
-      snapshot.pendingEventId === null
-      && this.eventFlow.isIdle()
+      optionalLootEvent
+        ? this.eventFlow.isStableChoice()
+        : snapshot.pendingEventId === null && this.eventFlow.isIdle()
     );
     return !this.busy
-      && snapshot.state === 'day'
+      && (snapshot.state === 'day' || optionalLootEvent)
       && snapshot.chest.state !== 'none'
       && stableDayView
-      && !this.fishingFlow.hasActiveAttempt()
+      && !this.fishingFlow.isFishing()
       && this.forcedPresentationPhase !== 'night';
   }
 

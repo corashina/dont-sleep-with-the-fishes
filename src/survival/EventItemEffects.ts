@@ -1,8 +1,11 @@
 import {
   BufferGeometry,
   ConeGeometry,
+  DynamicDrawUsage,
   Group,
+  InstancedMesh,
   Material,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -17,6 +20,7 @@ import {
   Vector3,
 } from 'three';
 import { clamp01Unchecked } from './animationMath';
+import { FlashlightBeam } from './FlashlightBeam';
 import {
   LIFEBOAT_GUNWALE_SURFACE_Y,
   lifeboatHullHalfWidthAt,
@@ -28,7 +32,6 @@ type EffectRoot = Group;
 const TAPE = 'event-item-tape';
 const FLARE = 'event-item-flare';
 const CHAIN = 'event-item-chain';
-const FLASHLIGHT = 'event-item-flashlight-beam';
 const SHOTGUN_SMOKE = 'event-item-shotgun-smoke';
 const FLARE_MUZZLE_X = 0.34;
 const FLARE_DISTANCE = 21;
@@ -41,7 +44,10 @@ const CHAIN_BOAT_ATTACHMENT_LOCAL = new Vector3(0, 0.29, 1.48);
 const CHAIN_GUNWALE_Z = 0.55;
 const CHAIN_GUNWALE_X = lifeboatHullHalfWidthAt(CHAIN_GUNWALE_Z) ?? 1.63;
 const CHAIN_SEGMENT_SPLIT = 0.44;
-const CHAIN_LINK_COUNT = 36;
+const CHAIN_LINK_CAPACITY = 256;
+const CHAIN_LINK_PITCH = 0.056;
+const CHAIN_PATH_SEGMENTS = 128;
+const CHAIN_LINK_SCALE = new Vector3(1, 1, 1);
 
 /** Owns the short-lived visual cues for survival item use. */
 export class EventItemEffects {
@@ -58,14 +64,13 @@ export class EventItemEffects {
   private readonly flareDestination = new Vector3();
   private flareLaunched = false;
   private flareTravel = 0;
-  private readonly flashlightLight: PointLight;
   private readonly flareLight: PointLight;
   private readonly heldFillLight: PointLight;
   private readonly tape: EffectRoot;
   private readonly flare: EffectRoot;
   private readonly chain: EffectRoot;
-  private readonly chainLinks: readonly Mesh<BufferGeometry, Material>[];
-  private readonly flashlight: EffectRoot;
+  private readonly chainLinks: InstancedMesh<BufferGeometry, Material>;
+  readonly flashlight = new FlashlightBeam();
   private readonly shotgunSmoke: EffectRoot;
   private binocularStrength = 0;
   private effectOpacity = 0;
@@ -78,10 +83,12 @@ export class EventItemEffects {
   private readonly chainGunwaleWorld = new Vector3();
   private readonly chainAnchorWorld = new Vector3();
   private readonly chainPoint = new Vector3();
-  private readonly chainBefore = new Vector3();
-  private readonly chainAfter = new Vector3();
+  private readonly chainPath = Array.from({ length: CHAIN_PATH_SEGMENTS + 1 }, () => new Vector3());
+  private readonly chainDistances = new Float64Array(CHAIN_PATH_SEGMENTS + 1);
   private readonly chainTangent = new Vector3();
   private readonly chainTwist = new Quaternion();
+  private readonly chainRotation = new Quaternion();
+  private readonly chainMatrix = new Matrix4();
   private readonly applyEffectOpacity = (object: Object3D): void => {
     if (!(object instanceof Mesh)) return;
     if (Array.isArray(object.material)) {
@@ -97,7 +104,6 @@ export class EventItemEffects {
     this.tape = this.createTape();
     [this.flare, this.flareLight] = this.createFlare();
     [this.chain, this.chainLinks] = this.createChain();
-    [this.flashlight, this.flashlightLight] = this.createFlashlight();
     this.shotgunSmoke = this.createShotgunSmoke();
     this.heldFillLight = new PointLight(0xffddad, 0, 2.8, 2);
     this.heldFillLight.name = 'event-item-held-fill';
@@ -106,10 +112,9 @@ export class EventItemEffects {
       this.tape,
       this.flare,
       this.chain,
-      this.flashlight,
       this.shotgunSmoke,
     ];
-    this.root.add(...this.effects, this.heldFillLight);
+    this.root.add(...this.effects, this.flashlight, this.heldFillLight);
     this.clear();
   }
 
@@ -146,12 +151,7 @@ export class EventItemEffects {
         this.updateChain(actor, secondary);
         break;
       case 'flashlight':
-        this.show(this.flashlight, primary);
-        this.flashlight.position.set(0, 0, 0);
-        this.flashlight.rotation.set(0, 0, 0);
-        this.flashlight.scale.setScalar(0.8 + primary * 0.28);
-        this.flashlightLight.intensity = primary
-          * (1.1 + primary * 3.2 + secondary * 2.5);
+        this.flashlight.apply(actor, primary, secondary);
         break;
       case 'shotgun-smoke':
         this.applyShotgunSmoke(primary, secondary);
@@ -200,6 +200,7 @@ export class EventItemEffects {
 
   clear(): void {
     this.hideEffects();
+    this.flashlight.setTarget(null);
     this.flareLaunched = false;
     this.flareTravel = 0;
   }
@@ -215,7 +216,7 @@ export class EventItemEffects {
     }
     for (const material of this.baseOpacities.keys()) material.opacity = 0;
     this.binocularStrength = 0;
-    if (this.flashlightLight) this.flashlightLight.intensity = 0;
+    this.flashlight.hide();
     if (this.flareLight) this.flareLight.intensity = 0;
     if (this.heldFillLight) {
       this.heldFillLight.visible = false;
@@ -246,9 +247,10 @@ export class EventItemEffects {
     if (this.disposed) return;
     this.disposed = true;
     this.clear();
-    this.flashlightLight.shadow.dispose();
+    this.flashlight.dispose();
     this.flareLight.shadow.dispose();
     this.heldFillLight.shadow.dispose();
+    this.chainLinks.dispose();
     this.geometries.forEach((geometry) => geometry.dispose());
     this.materials.forEach((material) => material.dispose());
     this.geometries.clear();
@@ -364,23 +366,24 @@ export class EventItemEffects {
     return [flare, light];
   }
 
-  private createChain(): [EffectRoot, readonly Mesh<BufferGeometry, Material>[]] {
+  private createChain(): [EffectRoot, InstancedMesh<BufferGeometry, Material>] {
     const chain = new Group();
     chain.name = CHAIN;
-    const links: Mesh<BufferGeometry, Material>[] = [];
-    const linkGeometry = new TorusGeometry(0.022, 0.005, 4, 8);
-    linkGeometry.scale(0.72, 1.18, 1);
+    const linkGeometry = new TorusGeometry(0.025, 0.005, 6, 16);
+    linkGeometry.scale(0.8, 1.4, 1);
     const iron = new MeshStandardMaterial({
       color: 0x45433d,
       roughness: 0.68,
       metalness: 0.78,
       flatShading: true,
     });
-    for (let index = 0; index < CHAIN_LINK_COUNT; index += 1) {
-      const link = this.mesh(linkGeometry, iron, `event-item-chain-link-${index}`);
-      links.push(link);
-      chain.add(link);
-    }
+    this.geometries.add(linkGeometry);
+    this.trackMaterial(iron);
+    const links = new InstancedMesh(linkGeometry, iron, CHAIN_LINK_CAPACITY);
+    links.name = 'event-item-chain-links';
+    links.instanceMatrix.setUsage(DynamicDrawUsage);
+    links.frustumCulled = false;
+    chain.add(links);
     return [chain, links];
   }
 
@@ -402,21 +405,48 @@ export class EventItemEffects {
       this.chainGunwaleWorld.copy(this.chainGunwaleLocal).applyMatrix4(parent.matrixWorld);
     }
 
-    const lastIndex = this.chainLinks.length - 1;
-    for (let index = 0; index <= lastIndex; index += 1) {
-      const progress = index / lastIndex;
-      this.sampleChainPoint(progress, travel, this.chainPoint);
-      this.sampleChainPoint(Math.max(0, progress - 0.02), travel, this.chainBefore);
-      this.sampleChainPoint(Math.min(1, progress + 0.02), travel, this.chainAfter);
-      this.chainTangent.subVectors(this.chainAfter, this.chainBefore).normalize();
-      const link = this.chainLinks[index]!;
-      link.position.copy(this.chainPoint).sub(this.actorPosition);
-      link.quaternion.setFromUnitVectors(CHAIN_LINK_AXIS, this.chainTangent);
-      if (index % 2 !== 0) {
-        this.chainTwist.setFromAxisAngle(this.chainTangent, Math.PI / 2);
-        link.quaternion.premultiply(this.chainTwist);
+    this.updateChainPath(travel);
+    this.placeChainLinks();
+  }
+
+  private updateChainPath(travel: number): void {
+    const half = CHAIN_PATH_SEGMENTS / 2;
+    for (let index = 0; index <= CHAIN_PATH_SEGMENTS; index += 1) {
+      // Include the gunwale bend exactly in the distance table.
+      const progress = index <= half
+        ? CHAIN_SEGMENT_SPLIT * index / half
+        : CHAIN_SEGMENT_SPLIT + (1 - CHAIN_SEGMENT_SPLIT) * (index - half) / half;
+      this.sampleChainPoint(progress, travel, this.chainPath[index]!);
+      if (index > 0) {
+        this.chainDistances[index] = this.chainDistances[index - 1]!
+          + this.chainPath[index]!.distanceTo(this.chainPath[index - 1]!);
       }
     }
+  }
+
+  private placeChainLinks(): void {
+    const length = this.chainDistances[CHAIN_PATH_SEGMENTS]!;
+    const lastIndex = Math.min(CHAIN_LINK_CAPACITY - 1, Math.ceil(length / CHAIN_LINK_PITCH));
+    this.chainLinks.count = lastIndex + 1;
+    let segment = 1;
+    for (let index = 0; index <= lastIndex; index += 1) {
+      const distance = length * index / lastIndex;
+      while (segment < CHAIN_PATH_SEGMENTS && this.chainDistances[segment]! < distance) segment += 1;
+      const before = this.chainPath[segment - 1]!;
+      const after = this.chainPath[segment]!;
+      const segmentLength = this.chainDistances[segment]! - this.chainDistances[segment - 1]!;
+      const progress = segmentLength > 0 ? (distance - this.chainDistances[segment - 1]!) / segmentLength : 0;
+      this.chainPoint.lerpVectors(before, after, progress).sub(this.actorPosition);
+      this.chainTangent.subVectors(after, before).normalize();
+      this.chainRotation.setFromUnitVectors(CHAIN_LINK_AXIS, this.chainTangent);
+      if (index % 2 !== 0) {
+        this.chainTwist.setFromAxisAngle(this.chainTangent, Math.PI / 2);
+        this.chainRotation.premultiply(this.chainTwist);
+      }
+      this.chainMatrix.compose(this.chainPoint, this.chainRotation, CHAIN_LINK_SCALE);
+      this.chainLinks.setMatrixAt(index, this.chainMatrix);
+    }
+    this.chainLinks.instanceMatrix.needsUpdate = true;
   }
 
   private sampleChainPoint(progress: number, travel: number, output: Vector3): void {
@@ -429,23 +459,6 @@ export class EventItemEffects {
     const segmentProgress = (progress - CHAIN_SEGMENT_SPLIT) / (1 - CHAIN_SEGMENT_SPLIT);
     output.lerpVectors(this.chainGunwaleWorld, this.chainAnchorWorld, segmentProgress);
     output.y -= Math.sin(Math.PI * segmentProgress) * (0.08 + travel * 0.22);
-  }
-
-  private createFlashlight(): [EffectRoot, PointLight] {
-    const flashlight = new Group();
-    flashlight.name = FLASHLIGHT;
-    const beam = this.mesh(
-      new ConeGeometry(0.42, 4.2, 10, 1, true),
-      new MeshBasicMaterial({ color: 0xffefb8, transparent: true, opacity: 0.16, depthWrite: false, side: 2 }),
-      'event-item-flashlight-cone',
-    );
-    beam.rotation.z = Math.PI / 2;
-    beam.position.x = 2.1;
-    const light = new PointLight(0xffedb5, 0, 4.8, 2);
-    light.name = 'event-item-flashlight-light';
-    light.position.x = 0.16;
-    flashlight.add(beam, light);
-    return [flashlight, light];
   }
 
   private createShotgunSmoke(): EffectRoot {

@@ -1,6 +1,5 @@
 import { settingsText } from '../i18n/settingsMessages';
 import type { ItemAmbientOcclusionMode } from './ItemAmbientOcclusion';
-import type { PosterizationSetting } from './posterization';
 
 export type PostProcessingNumericSetting =
   | 'ambientOcclusionIntensity'
@@ -9,7 +8,6 @@ export type PostProcessingNumericSetting =
 export type AmbientOcclusionQuality = 'low' | 'high';
 
 export interface PostProcessingControlState {
-  posterization: PosterizationSetting;
   ambientOcclusionAvailable: boolean;
   ambientOcclusionMode: ItemAmbientOcclusionMode;
   ambientOcclusionQuality: AmbientOcclusionQuality;
@@ -18,7 +16,6 @@ export interface PostProcessingControlState {
 }
 
 export interface PostProcessingControls {
-  setPosterization(posterization: PosterizationSetting): void;
   getState(): Readonly<PostProcessingControlState>;
   setAmbientOcclusionMode(mode: ItemAmbientOcclusionMode): void;
   setAmbientOcclusionQuality(quality: AmbientOcclusionQuality): void;

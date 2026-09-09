@@ -7,7 +7,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import type { BoatInteractionAnchor, BoatToolId } from '../survival/BoatInteraction';
-import { carlitosStatus } from '../survival/CarlitosState';
+import { carlitosEnergyLimit, carlitosStatus } from '../survival/CarlitosState';
 import type { InspectableEventId } from '../survival/eventCatalog';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import { calculateHullRepair, SURVIVAL_BALANCE } from '../survival/survivalBalance';
@@ -69,6 +69,7 @@ const CYCLED_ANCHOR_Z_INDEX = ANCHOR_Z_TIER_SIZE * 4 + 1;
 
 const ACTIONS: readonly ActionDefinition[] = [
   { id: 'fish', get label() { return uiText('fish'); }, get cost() { return uiText('oneEnergy'); }, energyCost: SURVIVAL_BALANCE.actions.fishEnergy, get effect() { return uiText('foodChance'); }, risk: 'uncertain' },
+  { id: 'netFish', get label() { return uiText('fish'); }, get cost() { return uiText('twoEnergy'); }, energyCost: SURVIVAL_BALANCE.actions.netEnergy, get effect() { return uiText('netReward'); }, risk: 'uncertain' },
   { id: 'dive', get label() { return uiText('dive'); }, get cost() { return uiText('threeEnergy'); }, energyCost: SURVIVAL_BALANCE.actions.diveEnergy, get effect() { return uiText('diveRisk'); }, risk: 'dangerous' },
   { id: 'eat', get label() { return uiText('eat'); }, get cost() { return uiText('oneFood'); }, energyCost: 0, get effect() { return uiText('foodHungerReduction'); }, risk: 'safe' },
   { id: 'repair', get label() { return uiText('repair'); }, get cost() { return uiText('repairCost'); }, energyCost: 1, get effect() { return uiText('hullRepair'); }, risk: 'safe' },
@@ -80,13 +81,11 @@ const ACTIONS: readonly ActionDefinition[] = [
   { id: 'openChest', get label() { return uiText('openChest'); }, get cost() { return uiText('free'); }, energyCost: 0, get effect() { return uiText('recoverSupply'); }, risk: 'uncertain' },
   { id: 'petCarlitos', get label() { return uiText('pet'); }, get cost() { return uiText('free'); }, energyCost: 0, get effect() { return uiText('easeLonely'); }, risk: 'safe' },
   { id: 'feedCarlitos', get label() { return uiText('feed'); }, get cost() { return uiText('oneFood'); }, energyCost: 0, get effect() { return uiText('restoreHunger'); }, risk: 'safe' },
-  { id: 'treatCarlitos', get label() { return uiText('treat'); }, get cost() { return uiText('oneMedkit'); }, energyCost: 0, get effect() { return uiText('cureSickness'); }, risk: 'safe' },
 ];
 
 const CARLITOS_ACTIONS = [
   'petCarlitos',
   'feedCarlitos',
-  'treatCarlitos',
 ] as const satisfies readonly DayActionId[];
 
 function spokenEnergyCost(cost: number): string | null {
@@ -175,9 +174,9 @@ export class BoatAnchorView {
   private readonly carlitosPet: HTMLButtonElement;
   private readonly carlitosHungerLabel: HTMLElement;
   private readonly carlitosHappiness: HTMLElement;
-  private readonly carlitosHealth: HTMLElement;
   private readonly carlitosEnergyLabel: HTMLElement;
-  private readonly carlitosRows: Readonly<Record<'hunger' | 'happiness' | 'health', HTMLElement>>;
+  private readonly carlitosRestLabel: HTMLElement;
+  private readonly carlitosRows: Readonly<Record<'hunger' | 'happiness', HTMLElement>>;
   private readonly carlitosActions = new Map<DayActionId, HTMLButtonElement>();
   private readonly anchorButtons = new Map<string, HTMLButtonElement>();
   private readonly anchorTooltipNodes = new WeakMap<HTMLButtonElement, AnchorTooltipNodes>();
@@ -241,14 +240,8 @@ export class BoatAnchorView {
               <span data-ui-text="pet">${uiText('pet')}</span>
             </button>
           </div>
-          <div class="carlitos-status" data-carlitos-health-row>
-            <span class="carlitos-status__icon carlitos-status__icon--health" aria-hidden="true">${uiArtwork('health')}</span>
-            <strong class="ui-role-context" data-carlitos-health></strong>
-            <button type="button" class="carlitos-status__action ui-role-context" data-action="treatCarlitos" aria-disabled="false">
-              <span data-ui-text="treat">${uiText('treat')}</span>
-            </button>
-          </div>
         </div>
+        <p class="carlitos-card__rest ui-role-context" data-carlitos-rest></p>
       </section>`;
     const roots = [...template.content.children];
     this.anchorLayer = roots[0] as HTMLElement;
@@ -257,12 +250,11 @@ export class BoatAnchorView {
     this.carlitosPet = requireElement(this.carlitosCard, '[data-action="petCarlitos"]');
     this.carlitosHungerLabel = requireElement(this.carlitosCard, '[data-carlitos-hunger-label]');
     this.carlitosHappiness = requireElement(this.carlitosCard, '[data-carlitos-happiness]');
-    this.carlitosHealth = requireElement(this.carlitosCard, '[data-carlitos-health]');
     this.carlitosEnergyLabel = requireElement(this.carlitosCard, '[data-carlitos-energy-label]');
+    this.carlitosRestLabel = requireElement(this.carlitosCard, '[data-carlitos-rest]');
     this.carlitosRows = {
       hunger: requireElement(this.carlitosCard, '[data-carlitos-hunger-row]'),
       happiness: requireElement(this.carlitosCard, '[data-carlitos-happiness-row]'),
-      health: requireElement(this.carlitosCard, '[data-carlitos-health-row]'),
     };
     CARLITOS_ACTIONS.forEach((action) => {
       this.carlitosActions.set(
@@ -1003,21 +995,19 @@ export class BoatAnchorView {
 
   private renderCarlitos(snapshot: SurvivalSnapshot): void {
     const carlitos = snapshot.carlitos;
-    if (carlitos === null || !carlitos.alive) {
+    if (carlitos === null) {
       this.closeCarlitosCard(false);
       return;
     }
     const status = carlitosStatus(carlitos);
     this.carlitosHungerLabel.textContent = status.hunger.toLocaleUpperCase('en-US');
     this.carlitosHappiness.textContent = status.happiness.toLocaleUpperCase('en-US');
-    this.carlitosHealth.textContent = status.health.toLocaleUpperCase('en-US');
-    this.carlitosEnergyLabel.textContent = `${carlitos.energy} / 3`;
+    this.carlitosEnergyLabel.textContent = `${carlitos.energy} / ${carlitosEnergyLimit(carlitos)}`;
+    this.carlitosRestLabel.hidden = carlitos.energy !== 0;
+    this.carlitosRestLabel.textContent = carlitos.energy === 0 ? uiText('carlitosExhausted') : '';
     this.carlitosRows.hunger.dataset.state = carlitos.hunger < 2 ? 'danger' : 'stable';
     this.carlitosRows.happiness.dataset.state = (
       carlitos.unhappiness > 6
-    ) ? 'danger' : 'stable';
-    this.carlitosRows.health.dataset.state = (
-      carlitos.sickness >= 2 && carlitos.sickness <= 4
     ) ? 'danger' : 'stable';
     this.syncCarlitosActions();
     const anchor = [...this.anchors.values()].find(
@@ -1037,9 +1027,7 @@ export class BoatAnchorView {
         reason ?? (
           action === 'petCarlitos'
             ? uiText('petHelp')
-            : action === 'feedCarlitos'
-              ? uiText('feedHelp')
-              : uiText('treatHelp')
+            : uiText('feedHelp')
         ),
       );
     });
@@ -1061,7 +1049,7 @@ export class BoatAnchorView {
 
   private canOpenCarlitosCard(anchorButton: HTMLButtonElement): boolean {
     const carlitos = this.currentSnapshot?.carlitos;
-    if (carlitos?.alive !== true || this.busy || this.paused || this.modalOpen) return false;
+    if (carlitos == null || this.busy || this.paused || this.modalOpen) return false;
     if (this.eventPresentationActive && !this.itemAnimationLab) return false;
     return !anchorButton.disabled && anchorButton.getAttribute('aria-hidden') !== 'true';
   }
@@ -1213,6 +1201,7 @@ export class BoatAnchorView {
       const direct = this.contextualEventChoices.find(
         (choice) => choice.id === anchor.eventChoiceId,
       );
+      if (id === 'midnight-tour:island' && direct?.anchorId === undefined) return undefined;
       if (direct !== undefined) return direct;
     }
     const projected = this.contextualEventChoices.find(

@@ -4,6 +4,7 @@ import type { SurvivalUI } from '../ui/SurvivalUI';
 import type { EventContextChoice } from '../ui/SurvivalUiViewModel';
 import type { BoatWorld } from './BoatWorld';
 import { presentationUiText } from '../i18n/presentationUiMessages';
+import { uiText } from '../i18n/uiMessages';
 import {
   CARLITOS_LAB_CHOICE_ID,
   CARLITOS_LAB_INSTANCE_ID,
@@ -22,12 +23,18 @@ import type {
   SurvivalItemState,
 } from './survivalTypes';
 import type { SurvivalSnapshot } from './survivalSnapshot';
+import { FISHING_CATCHES } from './fishingCatalog';
+import type { FishingHaul } from './FishingSession';
 
 export type ItemAnimationLabSessionPort = Pick<
   SurvivalSession, 'snapshot' | 'setItemConditionForLab' | 'setResourceQuantityForLab'
 >;
 
 const ITEM_CONDITION_CHOICE_ID = 'item-condition';
+const LAB_NET_HAUL: FishingHaul = Object.freeze([
+  FISHING_CATCHES.find(({ id }) => id === 'cod')!,
+  FISHING_CATCHES.find(({ id }) => id === 'salmon')!,
+]);
 
 export type ItemAnimationLabWorldPort = Pick<
   BoatWorld,
@@ -38,9 +45,17 @@ export type ItemAnimationLabWorldPort = Pick<
   | 'clearEvent'
   | 'cancelRepairToolboxAnimation'
   | 'playRepairToolboxAnimation'
+  | 'playCarlitosAction'
   | 'setEventEligibleItems'
   | 'setEventSelectedItem'
   | 'setItemAnimationLabCameraLook'
+  | 'enterFishingView'
+  | 'centeredFishingCast'
+  | 'playFishingNetHaul'
+  | 'exitFishingView'
+  | 'clearFishingPresentation'
+  | 'playDive'
+  | 'clearDivePresentation'
 >;
 
 export type ItemAnimationLabUiPort = Pick<
@@ -50,8 +65,12 @@ export type ItemAnimationLabUiPort = Pick<
   | 'showItemAnimationLab'
   | 'showItemAnimationLabChoices'
   | 'hideItemAnimationLabChoices'
+  | 'openRepairOptions'
   | 'setEventSelection'
   | 'setEventUsing'
+  | 'setSleepCoverProfile'
+  | 'setSleepCovered'
+  | 'holdDiveCovered'
 >;
 
 export type ItemAnimationLabAudioPort = Pick<
@@ -61,6 +80,11 @@ export type ItemAnimationLabAudioPort = Pick<
   | 'eventItem'
   | 'eventItemCue'
   | 'repairToolbox'
+  | 'meowCarlitos'
+  | 'fishingCast'
+  | 'beginDive'
+  | 'finishDive'
+  | 'cancelDive'
 >;
 
 export interface ItemAnimationLabBundlePort {
@@ -104,6 +128,7 @@ export class ItemAnimationLabFlow {
   private using = false;
   private pendingInstanceId: ItemInstanceId | null = null;
   private disposed = false;
+  private waterUse: 'net-fishing' | 'scuba-dive' | null = null;
 
   constructor(private readonly dependencies: ItemAnimationLabFlowDependencies) {}
 
@@ -142,6 +167,28 @@ export class ItemAnimationLabFlow {
     await this.playInventoryItem(instanceId, expectedChoice, generation, operation);
   }
 
+  async playCarlitos(action: 'petCarlitos' | 'feedCarlitos'): Promise<void> {
+    const generation = this.dependencies.captureLifecycleGeneration();
+    if (!this.canPlay(this.eligibility.get(CARLITOS_LAB_INSTANCE_ID), undefined, generation)) return;
+    const operation = this.beginOperation();
+    this.pendingInstanceId = null;
+    try {
+      this.dependencies.ui.hideItemAnimationLabChoices?.();
+      this.beginUse(CARLITOS_LAB_INSTANCE_ID);
+      await (this.dependencies.world.playCarlitosAction?.(
+        action,
+        () => {
+          if (this.isCurrent(generation, operation)) this.dependencies.audio.meowCarlitos?.();
+        },
+      ) ?? Promise.resolve());
+    } catch (error) {
+      this.handleFailure('invariant', error, generation, operation, false);
+      return;
+    }
+    if (!this.isCurrent(generation, operation)) return;
+    this.cleanupStandaloneUse(false);
+  }
+
   choose(choiceId: EventResponseId): void {
     const instanceId = this.pendingInstanceId;
     if (instanceId === null || !this.entered || this.using) return;
@@ -162,6 +209,19 @@ export class ItemAnimationLabFlow {
     return new Set(this.buildEligibility(snapshot).keys());
   }
 
+  repairItem(target: ItemInstanceId): void {
+    if (!this.entered || this.using || this.pendingInstanceId === null) return;
+    if (!this.isLifecycleCurrent(this.dependencies.captureLifecycleGeneration())) return;
+    const snapshot = this.dependencies.session.snapshot();
+    const tape = snapshot.inventory[this.pendingInstanceId];
+    if (tape?.type !== 'ductTape' || tape.condition !== 'usable') return;
+    if (snapshot.inventory[target]?.condition !== 'broken') return;
+    if (!this.dependencies.session.setItemConditionForLab(target, 'usable')) return;
+    this.pendingInstanceId = null;
+    this.eligibility = this.buildEligibility(this.dependencies.renderSnapshot());
+    this.restoreSelection();
+  }
+
   settleForVisibilityChange(): void {
     if (this.disposed) return;
     // BoatWorld settles the active animation promise before guarded cleanup continues.
@@ -178,6 +238,7 @@ export class ItemAnimationLabFlow {
     this.eligibility = new Map();
     if (!cleanExternalState) return;
     this.runCleanup([
+      () => this.clearWaterUse(),
       () => this.dependencies.world.cancelRepairToolboxAnimation?.(),
       () => this.dependencies.audio.clearRadioSignal?.(),
       () => this.dependencies.audio.clearEvent?.(),
@@ -249,6 +310,9 @@ export class ItemAnimationLabFlow {
     generation: number,
     operation: number,
   ): Promise<void> {
+    if (use.id === 'net-fishing' || use.id === 'scuba-dive') {
+      return this.playWaterUse(instanceId, use.id, generation, operation);
+    }
     return this.playItem(
       instanceId,
       itemType,
@@ -257,6 +321,75 @@ export class ItemAnimationLabFlow {
       generation,
       operation,
     );
+  }
+
+  private async playWaterUse(
+    instanceId: ItemInstanceId,
+    use: 'net-fishing' | 'scuba-dive',
+    generation: number,
+    operation: number,
+  ): Promise<void> {
+    this.waterUse = use;
+    try {
+      this.beginUse(instanceId);
+      if (use === 'net-fishing') await this.playNetFishing(generation, operation);
+      else await this.playScubaDive(instanceId, generation, operation);
+    } catch (error) {
+      if (!this.isCurrent(generation, operation)) return;
+      this.clearWaterUse();
+      this.handleFailure('invariant', error, generation, operation, false);
+      return;
+    }
+    if (!this.isCurrent(generation, operation)) return;
+    this.waterUse = null;
+    this.cleanupStandaloneUse(false);
+  }
+
+  private async playNetFishing(generation: number, operation: number): Promise<void> {
+    await this.dependencies.world.enterFishingView('net');
+    if (!this.isCurrent(generation, operation)) return;
+    this.dependencies.audio.fishingCast();
+    await this.dependencies.world.playFishingNetHaul(LAB_NET_HAUL, this.dependencies.world.centeredFishingCast());
+    if (!this.isCurrent(generation, operation)) return;
+    await this.dependencies.world.exitFishingView();
+  }
+
+  private async playScubaDive(instanceId: ItemInstanceId, generation: number, operation: number): Promise<void> {
+    await this.dependencies.world.playDive(instanceId, {
+      onWaterImpact: () => {
+        if (this.isCurrent(generation, operation)) this.dependencies.audio.beginDive();
+      },
+    });
+    if (!this.isCurrent(generation, operation)) return;
+    await this.dependencies.ui.setSleepCoverProfile('dive');
+    if (!this.isCurrent(generation, operation)) return;
+    await this.dependencies.ui.setSleepCovered(true);
+    if (!this.isCurrent(generation, operation)) return;
+    this.dependencies.world.clearDivePresentation();
+    this.dependencies.audio.finishDive();
+    await this.dependencies.ui.holdDiveCovered();
+    if (!this.isCurrent(generation, operation)) return;
+    await this.dependencies.ui.setSleepCovered(false);
+    if (!this.isCurrent(generation, operation)) return;
+    await this.dependencies.ui.setSleepCoverProfile('solid');
+  }
+
+  private clearWaterUse(): void {
+    const use = this.waterUse;
+    this.waterUse = null;
+    if (use === 'net-fishing') {
+      this.runCleanup([
+        () => this.dependencies.world.clearFishingPresentation(),
+        () => { void this.dependencies.world.exitFishingView().catch(() => undefined); },
+      ], true);
+    } else if (use === 'scuba-dive') {
+      this.runCleanup([
+        () => this.dependencies.world.clearDivePresentation(),
+        () => this.dependencies.audio.cancelDive(),
+        () => { void this.dependencies.ui.setSleepCovered(false).catch(() => undefined); },
+        () => { void this.dependencies.ui.setSleepCoverProfile('solid').catch(() => undefined); },
+      ], true);
+    }
   }
 
   private async playRepairToolbox(
@@ -283,7 +416,7 @@ export class ItemAnimationLabFlow {
       return;
     }
     if (!this.isCurrent(generation, operation)) return;
-    this.cleanupRepairUse(false);
+    this.cleanupStandaloneUse(false);
   }
 
   private beginUse(instanceId: ItemInstanceId): void {
@@ -372,6 +505,13 @@ export class ItemAnimationLabFlow {
         get unavailableReason() { return broken ? presentationUiText('itemBroken') : null; },
       }),
     );
+    if (item.type === 'ductTape') {
+      choices.unshift({
+        id: 'repairItem',
+        get label() { return uiText('repairItem'); },
+        unavailableReason: null,
+      });
+    }
     if (ITEM_DEFINITIONS[item.type].breakable) {
       choices.push(
         { id: 'break', get label() { return presentationUiText('break'); }, get unavailableReason() { return broken ? presentationUiText('alreadyBroken') : null; } },
@@ -400,6 +540,12 @@ export class ItemAnimationLabFlow {
 
   private handleSettingChoice(item: SurvivalItemState, choiceId: EventResponseId): boolean {
     switch (choiceId) {
+      case 'repairItem':
+        if (item.type === 'ductTape' && item.condition === 'usable') {
+          this.dependencies.ui.hideItemAnimationLabChoices?.();
+          this.dependencies.ui.openRepairOptions?.();
+        }
+        return true;
       case 'break':
       case 'fix':
         this.changeItemCondition(item.instanceId, choiceId);
@@ -489,7 +635,7 @@ export class ItemAnimationLabFlow {
       const choice = this.itemChoice(item);
       if (choice !== undefined) eligibility.set(item.instanceId, choice);
     }
-    if (snapshot.carlitos?.alive) {
+    if (snapshot.carlitos !== null) {
       eligibility.set(CARLITOS_LAB_INSTANCE_ID, CARLITOS_LAB_CHOICE_ID);
     }
     eligibility.set(FISHING_ROD_LAB_INSTANCE_ID, FISHING_ROD_LAB_CHOICE_ID);
@@ -526,7 +672,7 @@ export class ItemAnimationLabFlow {
       }
     } finally {
       if (itemUse) this.cleanupItemUse(true);
-      else this.cleanupRepairUse(true);
+      else this.cleanupStandaloneUse(true);
     }
   }
 
@@ -543,7 +689,7 @@ export class ItemAnimationLabFlow {
     ], suppressErrors);
   }
 
-  private cleanupRepairUse(suppressErrors: boolean): void {
+  private cleanupStandaloneUse(suppressErrors: boolean): void {
     this.runCleanup([
       () => this.dependencies.world.setEventSelectedItem?.(null),
       () => this.restoreSelection(),

@@ -1,6 +1,6 @@
 import { domainMessage as t } from '../i18n/domainMessages';
 import { ITEM_DEFINITIONS, type ItemId } from '../game/ItemState';
-import { isDriftingItemEventId } from './eventCatalog';
+import { isInspectableEventId } from './eventCatalog';
 import {
   radioRescueLeadForSignal,
   calculateHullRepair,
@@ -39,13 +39,13 @@ export interface DayActionRuleState {
 type DeterministicDayActionId = Exclude<
   DayActionId,
   | 'fish'
+  | 'netFish'
   | 'dive'
   | 'eat'
   | 'openChest'
   | 'repairItem'
   | 'petCarlitos'
   | 'feedCarlitos'
-  | 'treatCarlitos'
   | 'endDay'
 >;
 
@@ -63,29 +63,24 @@ function invalidOption(action: DayActionId, option?: DayActionOption): boolean {
 
 function carlitosCareUnavailableReason(
   state: DayActionRuleState,
-  action: 'pet' | 'feed' | 'treat',
+  action: 'pet' | 'feed',
 ): string | null {
   const carlitos = state.carlitos;
   if (carlitos === null) return t('notAboard');
-  if (!carlitos.alive) return t('cannotRespond');
   return carlitosCareRule(state, carlitos, action);
 }
 
 function carlitosCareRule(
   state: DayActionRuleState,
   carlitos: Readonly<CarlitosState>,
-  action: 'pet' | 'feed' | 'treat',
+  action: 'pet' | 'feed',
 ): string | null {
   if (action === 'pet') {
     if (carlitos.pettedToday) return t('alreadyPetted');
     return carlitos.unhappiness <= 2 ? t('alreadyHappy') : null;
   }
-  if (action === 'feed') {
-    if (carlitos.hunger >= 5) return t('alreadySatiated');
-    return state.food < 1 ? t('noFood') : null;
-  }
-  if (carlitos.sickness <= 0) return t('noCarlitosTreatment');
-  return hasUsable(state.inventory, 'medicalKit') ? null : t('noMedicalKit');
+  if (carlitos.hunger >= 5) return t('alreadySatiated');
+  return state.food < 1 ? t('noFood') : null;
 }
 
 type DayActionRule = (
@@ -156,6 +151,10 @@ const openChestUnavailable: DayActionRule = (state) => {
 
 const ACTION_UNAVAILABLE_RULES: Readonly<Record<DayActionId, DayActionRule>> = {
   fish: fishUnavailable,
+  netFish: (state) => {
+    if (!hasUsable(state.inventory, 'fishingNet')) return t('noNet');
+    return state.energy < SURVIVAL_BALANCE.actions.netEnergy ? t('netEnergy') : null;
+  },
   dive: diveUnavailable,
   eat: eatUnavailable,
   repair: repairUnavailable,
@@ -166,7 +165,6 @@ const ACTION_UNAVAILABLE_RULES: Readonly<Record<DayActionId, DayActionRule>> = {
   openChest: openChestUnavailable,
   petCarlitos: (state) => carlitosCareUnavailableReason(state, 'pet'),
   feedCarlitos: (state) => carlitosCareUnavailableReason(state, 'feed'),
-  treatCarlitos: (state) => carlitosCareUnavailableReason(state, 'treat'),
   endDay: () => null,
 };
 
@@ -181,7 +179,7 @@ export function dayActionUnavailableReason(
     return t('terminal');
   }
   const optionalLootEvent = state.state === 'dayEvent'
-    && isDriftingItemEventId(state.pendingEventId ?? '');
+    && isInspectableEventId(state.pendingEventId ?? '');
   if (state.state !== 'day' && !optionalLootEvent) {
     return t('notDaytime');
   }

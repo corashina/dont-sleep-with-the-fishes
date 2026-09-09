@@ -32,6 +32,7 @@ import type {
   EventSceneContext,
 } from '../eventPresentationTypes';
 import { StationaryEventCamera } from '../StationaryEventCamera';
+import { ItemAimTarget } from '../ItemAimTarget';
 import { TimedPresentationAnimation } from '../TimedPresentationAnimation';
 import {
   DEATH_STARE_REACTION_DURATION,
@@ -102,10 +103,10 @@ export class DeathStarePresentation implements DedicatedEventPresentation {
   readonly eventId = 'death-stare' as const;
   readonly worldRoot = new Group();
   readonly boatRoot = new Group();
-  readonly itemAimTarget = new Group();
 
   private readonly modelInstance;
   private readonly angler = new Group();
+  readonly itemAimTarget = new ItemAimTarget(this.angler);
   private readonly dominantEyeMaterial = new MeshStandardMaterial({
     color: 0xd8e5c8,
     emissive: 0xb4dfbf,

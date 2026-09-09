@@ -22,6 +22,7 @@ const baseRuleState: DayActionRuleState = Object.freeze({
   chestState: 'closed',
   inventory: Object.freeze({
     'scubaSet-1': Object.freeze({ instanceId: 'scubaSet-1', type: 'scubaSet', condition: 'usable' }),
+    'fishingNet-1': Object.freeze({ instanceId: 'fishingNet-1', type: 'fishingNet', condition: 'usable' }),
     'ductTape-1': Object.freeze({ instanceId: 'ductTape-1', type: 'ductTape', condition: 'usable' }),
     'medicalKit-1': Object.freeze({ instanceId: 'medicalKit-1', type: 'medicalKit', condition: 'usable' }),
     'radio-1': Object.freeze({ instanceId: 'radio-1', type: 'radio', condition: 'usable' }),
@@ -29,13 +30,12 @@ const baseRuleState: DayActionRuleState = Object.freeze({
     'compass-1': Object.freeze({ instanceId: 'compass-1', type: 'compass', condition: 'broken' }),
   }),
   carlitos: Object.freeze({
-    alive: true,
+
     energy: 3,
     hunger: 4,
-    sickness: 1,
     unhappiness: 1,
     pettedToday: false,
-    deathCause: null,
+
   }),
 });
 
@@ -71,13 +71,10 @@ describe('day action availability rules', () => {
     ['useEnergyBar', { energy: 3 }, undefined, 'Your energy is already full.'],
     ['openChest', { chestState: 'none' }, undefined, 'There is no closed chest to open.'],
     ['petCarlitos', { carlitos: null }, undefined, 'Carlitos is not aboard.'],
-    ['petCarlitos', { carlitos: Object.freeze({ ...baseRuleState.carlitos!, alive: false }) }, undefined, 'Carlitos cannot respond.'],
     ['petCarlitos', { carlitos: Object.freeze({ ...baseRuleState.carlitos!, pettedToday: true }) }, undefined, 'Carlitos has already been petted today.'],
     ['petCarlitos', {}, undefined, 'Carlitos is already happy.'],
     ['feedCarlitos', { carlitos: Object.freeze({ ...baseRuleState.carlitos!, hunger: 5 }) }, undefined, 'Carlitos is already satiated.'],
     ['feedCarlitos', { food: 0 }, undefined, 'No food remains.'],
-    ['treatCarlitos', { carlitos: Object.freeze({ ...baseRuleState.carlitos!, sickness: 0 }) }, undefined, 'Carlitos needs no treatment.'],
-    ['treatCarlitos', { inventory: withoutItem('medicalKit-1') }, undefined, 'No medical kit remains.'],
   ] satisfies ReadonlyArray<readonly [DayActionId, Partial<DayActionRuleState>, DayActionOption | undefined, string]>) (
     'rejects %s with the current message',
     (action, patch, option, message) => {
@@ -109,9 +106,11 @@ describe('day action availability rules', () => {
     )).toBe('That option cannot be used for this action.');
   });
 
-  it('accepts every action when its current gates pass', () => {
+  it.each([null, 'wreckage', 'drifting-supplies', 'drifting-chest'])(
+    'accepts every action when its current gates pass with pending loot %s', (pendingEventId) => {
     const cases: ReadonlyArray<readonly [DayActionId, DayActionOption | undefined, Partial<DayActionRuleState>?]> = [
       ['fish', undefined],
+      ['netFish', undefined],
       ['dive', undefined],
       ['eat', undefined],
       ['repair', undefined],
@@ -124,12 +123,32 @@ describe('day action availability rules', () => {
         carlitos: Object.freeze({ ...baseRuleState.carlitos!, unhappiness: 3 }),
       }],
       ['feedCarlitos', undefined],
-      ['treatCarlitos', undefined],
       ['endDay', undefined],
     ];
     for (const [action, option, patch] of cases) {
-      expect(dayActionUnavailableReason(state(patch), action, option)).toBeNull();
+      expect(dayActionUnavailableReason(state({
+        ...patch,
+        state: pendingEventId === null ? 'day' : 'dayEvent',
+        pendingEventId,
+      }), action, option)).toBeNull();
     }
+  });
+
+  it.each(['wreckage', 'drifting-supplies', 'drifting-chest'])(
+    'keeps resource and weather limits during %s', (pendingEventId) => {
+      const pending = { state: 'dayEvent' as const, pendingEventId };
+      expect(dayActionUnavailableReason(state({ ...pending, energy: 0 }), 'repair'))
+        .toBe('Repairing requires one energy.');
+      expect(dayActionUnavailableReason(state({ ...pending, weather: 'squall' }), 'dive'))
+        .toBe('Diving is too dangerous during a squall.');
+      expect(dayActionUnavailableReason(state({ ...pending, food: 0 }), 'eat'))
+        .toBe('No food remains.');
+    },
+  );
+
+  it('blocks normal actions during a required day event', () => {
+    expect(dayActionUnavailableReason(state({ state: 'dayEvent', pendingEventId: 'leak' }), 'repair'))
+      .toBe('That action is only available during the day.');
   });
 
   it('allows hull repair without Duct Tape', () => {

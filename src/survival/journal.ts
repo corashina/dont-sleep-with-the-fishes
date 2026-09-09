@@ -1,6 +1,7 @@
 import { journalMessage as t } from '../i18n/journalMessages';
 import { presentationWeatherProfile } from '../weather/presentationWeather';
 import { journalCatchName } from '../i18n/journalInventoryMessages';
+import { happinessStatus, hungerStatus } from './CarlitosState';
 import { formatJournalEvent } from './journalEvents';
 import { formatJournalMutations } from './journalInventory';
 import type {
@@ -51,21 +52,44 @@ function formatFishing(record: JournalFishingRecord): string {
 function formatCarlitos(record: JournalCarlitosCareRecord | JournalCarlitosDawnRecord): string {
   if (record.kind === 'carlitosCare') {
     if (record.action === 'pet') return t('pet');
-    if (record.action === 'feed') return t('feed');
-    return t('treatCarlitos');
+    return t('feed');
   }
-  if (record.before.alive && !record.after.alive) return t('carlitosDied');
-  if (!record.after.alive) return '';
   return formatCarlitosChanges(record);
 }
 
 function formatCarlitosChanges({ before, after }: JournalCarlitosDawnRecord): string {
-  const changes: string[] = [];
-  if (before.hunger !== after.hunger) changes.push(t(after.hunger < before.hunger ? 'hungrier' : 'fuller'));
-  if (before.sickness !== after.sickness) changes.push(t(after.sickness > before.sickness ? 'sicker' : 'healthier'));
-  if (before.unhappiness !== after.unhappiness) changes.push(t(after.unhappiness > before.unhappiness ? 'sadder' : 'happier'));
-  if (before.energy !== after.energy) changes.push(t(after.energy < before.energy ? 'tiredCarlitos' : 'restedCarlitos'));
-  return changes.join(' ');
+  return [
+    formatCarlitosHunger(before.hunger, after.hunger),
+    formatCarlitosMood(before.unhappiness, after.unhappiness),
+    formatCarlitosEnergy(before.energy, after.energy),
+  ].filter(Boolean).join(' ');
+}
+
+function formatCarlitosEnergy(before: number, after: number): string {
+  if (before > 0 && after === 0) return t('exhaustedCarlitos');
+  if (before === 0 && after > 0) return t('restedCarlitos');
+  return after < before ? t('tiredCarlitos') : '';
+}
+
+function formatCarlitosHunger(before: number, after: number): string {
+  const previous = hungerStatus(before);
+  const current = hungerStatus(after);
+  if (previous === current) return '';
+  if (after > before) return previous === 'hungry' || previous === 'starving' ? t('fuller') : '';
+  if (current === 'hungry') return t('hungryCarlitos');
+  if (current === 'starving') return t('starvingCarlitos');
+  return '';
+}
+
+function formatCarlitosMood(before: number, after: number): string {
+  const previous = happinessStatus(before);
+  const current = happinessStatus(after);
+  if (previous === current) return '';
+  if (after < before) return previous === 'bored' || previous === 'happy' ? '' : t('happier');
+  if (current === 'lonely') return t('lonelyCarlitos');
+  if (current === 'depressed') return t('depressedCarlitos');
+  if (current === 'miserable') return t('miserableCarlitos');
+  return '';
 }
 
 function formatDive(record: JournalSurvivalActionRecord): string {
@@ -74,7 +98,8 @@ function formatDive(record: JournalSurvivalActionRecord): string {
   if (food > 0) sentences.push(t('foundFood'));
   if (bait > 0) sentences.push(t('foundBait'));
   if (rescueLead > 0) sentences.push(t('foundLead'));
-  if (food <= 0 && bait <= 0 && rescueLead <= 0) sentences.push(t('noSupplies'));
+  const gainedItem = record.inventoryMutations.some(({ kind, instanceIds }) => kind === 'gain' && instanceIds.length > 0);
+  if (Math.max(food, bait, rescueLead) <= 0 && !gainedItem) sentences.push(t('noSupplies'));
   if (health < 0) sentences.push(t('injured'));
   return sentences.join(' ');
 }

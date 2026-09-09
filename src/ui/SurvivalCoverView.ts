@@ -124,7 +124,8 @@ export class SurvivalCoverView {
       : profile === 'dive'
         ? DIVE_TRANSITION_MS
         : SLEEP_TRANSITION_MS;
-    if (delay === INSTANT_TRANSITION_MS) return Promise.resolve();
+    // Commit the instant cover before callers change the scene or cover profile.
+    if (delay === INSTANT_TRANSITION_MS) return this.settleCoveredScene();
     return new Promise((resolve) => {
       let finished = false;
       let timer = 0;
@@ -255,11 +256,11 @@ export class SurvivalCoverView {
     });
   }
 
-  holdSleep(): Promise<void> {
+  holdSleep(durationMs = SLEEP_HOLD_MS): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.pendingSleepHold?.finish();
     return this.createTimedHold(
-      SLEEP_HOLD_MS,
+      durationMs,
       (pending) => { this.pendingSleepHold = pending; },
       () => this.pendingSleepHold,
       () => { this.pendingSleepHold = null; },

@@ -383,9 +383,9 @@ function validateEventSchedule(eventEntry: SurvivalEventDefinition): void {
 }
 
 function validateEventAppearanceRules(eventEntry: SurvivalEventDefinition): void {
-  if (Object.hasOwn(eventEntry, 'requiresLivingCompanion')
-    && typeof eventEntry.requiresLivingCompanion !== 'boolean') {
-    throw new Error(`${eventEntry.id} living companion requirement must be boolean`);
+  if (Object.hasOwn(eventEntry, 'requiresCompanion')
+    && typeof eventEntry.requiresCompanion !== 'boolean') {
+    throw new Error(`${eventEntry.id} companion requirement must be boolean`);
   }
   if (eventEntry.maximumAppearances !== undefined
     && (!Number.isInteger(eventEntry.maximumAppearances) || eventEntry.maximumAppearances < 1)) {
@@ -502,7 +502,8 @@ function validateChoiceOptions(
   if (Object.hasOwn(eventChoice, 'companionAction')) {
     const path = `${eventEntry.id}.${eventChoice.id} companion action`;
     assertPlainObject(eventChoice.companionAction, path);
-    if (eventChoice.companionAction.id !== 'delegateCarlitos') {
+    if (eventChoice.companionAction.id !== 'delegateCarlitos'
+      && eventChoice.companionAction.id !== 'watchCarlitos') {
       throw new Error(`${path} is invalid`);
     }
     if (!Number.isInteger(eventChoice.companionAction.energyCost)

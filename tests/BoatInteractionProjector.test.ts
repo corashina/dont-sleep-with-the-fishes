@@ -10,6 +10,7 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 import { setLanguage } from '../src/i18n/language';
 import { presentationUiText } from '../src/i18n/presentationUiMessages';
+import { projectBoatObjectBoundsInto } from '../src/survival/BoatInteraction';
 import {
   BoatInteractionProjector,
   type BoatInteractionProjectorRoots,
@@ -102,6 +103,22 @@ function createFixture(): ProjectorFixture {
 }
 
 describe('BoatInteractionProjector', () => {
+  it('covers the full fishing rod, including its handle, with the click target', () => {
+    const fixture = createFixture();
+    fixture.roots.fishingRoot.scale.y = 10;
+    const camera = new PerspectiveCamera(65, 16 / 9, 0.1, 100);
+    const bounds = projectBoatObjectBoundsInto(
+      { x: 0, y: 0, width: 0, height: 0, depth: 0, visible: false },
+      fixture.roots.fishingRoot, camera, 1280, 720,
+    );
+    const anchor = fixture.projector.projectAnchors(1280, 720)
+      .find(({ id }) => id === 'fishing-tools')!;
+    expect(anchor.visible).toBe(true);
+    expect(anchor.y + anchor.hitArea!.height / 2).toBeGreaterThanOrEqual(bounds.y + bounds.height / 2 - 0.001);
+    expect(anchor.y - anchor.hitArea!.height / 2).toBeLessThanOrEqual(bounds.y - bounds.height / 2 + 0.001);
+    fixture.projector.dispose();
+  });
+
   it('updates standalone projection after parent motion without traversing the scene', () => {
     const fixture = createFixture();
     const scene = fixture.roots.repairRoot.parent!;

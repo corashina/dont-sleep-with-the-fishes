@@ -25,7 +25,7 @@ describe('GameUI', () => {
     }
   });
 
-  it('shows the boat notice briefly after a blocked pickup', () => {
+  it('shows the boat notice while full and briefly after a blocked pickup', () => {
     vi.useFakeTimers();
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -42,7 +42,6 @@ describe('GameUI', () => {
 
     session.pickUp('cannedFood-1');
     session.pickUp('cannedFood-2');
-    session.pickUp('cannedFood-3');
     ui.render(session.snapshot());
     expect(notice.hidden).toBe(true);
 
@@ -53,6 +52,24 @@ describe('GameUI', () => {
     vi.advanceTimersByTime(1_999);
     expect(notice.hidden).toBe(false);
     vi.advanceTimersByTime(1);
+    expect(notice.hidden).toBe(true);
+
+    session.pickUp('cannedFood-3');
+    ui.render(session.snapshot());
+    expect(notice.hidden).toBe(false);
+    ui.showHandsFullNotice();
+    vi.advanceTimersByTime(2_000);
+    expect(notice.hidden).toBe(false);
+
+    session.dropCarried();
+    ui.render(session.snapshot());
+    expect(notice.hidden).toBe(true);
+
+    session.pickUp('cannedFood-3');
+    ui.render(session.snapshot());
+    expect(notice.hidden).toBe(false);
+    session.saveCarriedBundle();
+    ui.render(session.snapshot());
     expect(notice.hidden).toBe(true);
     ui.dispose();
   });

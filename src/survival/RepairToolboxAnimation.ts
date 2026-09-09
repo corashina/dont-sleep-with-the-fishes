@@ -5,6 +5,7 @@ import {
   Vector3,
 } from 'three';
 import { TimedPresentationAnimation } from './TimedPresentationAnimation';
+import { LIFEBOAT_DISPLAY_SHELF_SURFACE_Y } from '../world/Lifeboat';
 
 const AUDIO_START_SECONDS = 0.55;
 const AUDIO_PEAK_SECONDS = Object.freeze([
@@ -36,28 +37,28 @@ function raisedOrientation(contact: Quaternion, angle: number): Quaternion {
     .multiply(contact);
 }
 
-const PORT_CONTACT = hammerOrientation([0, 1, 0], [-1, 0, 0]);
 const CENTER_CONTACT = hammerOrientation([1, 0, 0], [0, -1, 0]);
-const STARBOARD_CONTACT = hammerOrientation([0, 1, 0], [1, 0, 0]);
+// Put the striking face on the exposed front edge, clear of stored supplies.
+const REPAIR_HEIGHT = LIFEBOAT_DISPLAY_SHELF_SURFACE_Y + 0.107;
 
 const REPAIR_SITES = Object.freeze([
   Object.freeze({
-    position: new Vector3(-1.38, 0.12, 0.08),
-    contact: PORT_CONTACT,
-    raised: raisedOrientation(PORT_CONTACT, -0.48),
-    normal: new Vector3(1, 0, 0),
-  }),
-  Object.freeze({
-    position: new Vector3(0, -0.16, -0.34),
+    position: new Vector3(-0.72, REPAIR_HEIGHT, -1.38),
     contact: CENTER_CONTACT,
     raised: raisedOrientation(CENTER_CONTACT, 0.48),
     normal: new Vector3(0, 1, 0),
   }),
   Object.freeze({
-    position: new Vector3(1.38, 0.12, 0.08),
-    contact: STARBOARD_CONTACT,
-    raised: raisedOrientation(STARBOARD_CONTACT, 0.48),
-    normal: new Vector3(-1, 0, 0),
+    position: new Vector3(0, REPAIR_HEIGHT, -1.38),
+    contact: CENTER_CONTACT,
+    raised: raisedOrientation(CENTER_CONTACT, 0.48),
+    normal: new Vector3(0, 1, 0),
+  }),
+  Object.freeze({
+    position: new Vector3(0.72, REPAIR_HEIGHT, -1.38),
+    contact: CENTER_CONTACT,
+    raised: raisedOrientation(CENTER_CONTACT, 0.48),
+    normal: new Vector3(0, 1, 0),
   }),
 ]);
 
