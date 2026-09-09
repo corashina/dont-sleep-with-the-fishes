@@ -4,6 +4,8 @@ import { getLanguage } from './language';
 
 // These are diary outcomes, separate from the short messages shown during events.
 const results = {
+  bloodOceanNetResult: ['I pulled a sealed tin from a dead sailor’s coat with the net. The body rolled toward me. I wish I could forget its face.', 'Wyciągnąłem siecią zamkniętą puszkę z płaszcza martwego marynarza. Ciało obróciło się ku mnie. Chciałbym zapomnieć tę twarz.', 'Saqué con la red una lata cerrada del abrigo de un marinero muerto. El cuerpo giró hacia mí. Ojalá pudiera olvidar su cara.'],
+  bloodOceanWaitResult: ['I counted the bodies until dawn. They never touched the boat. I barely slept.', 'Liczyłem ciała do świtu. Nigdy nie dotknęły łodzi. Prawie nie spałem.', 'Conté los cuerpos hasta el amanecer. Nunca tocaron el bote. Casi no dormí.'],
   driftingLootRetrieved: ['I recovered supplies from the drifting cargo.', 'Odzyskałem zapasy z dryfującego ładunku.', 'Recuperé suministros de la carga flotante.'],
   driftingLootDelegated: ['Carlitos brought supplies back from the drifting cargo.', 'Carlitos przyniósł zapasy z dryfującego ładunku.', 'Carlitos trajo suministros de la carga flotante.'],
   lighthouseFlare: ['I fired a flare above the waves. It could be seen from shore.', 'Wystrzeliłem flarę nad fale. Była widoczna z brzegu.', 'Disparé una bengala sobre las olas. Podía verse desde la costa.'],

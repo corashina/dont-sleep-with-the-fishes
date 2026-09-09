@@ -116,6 +116,7 @@ export type EventInventoryMutation =
   | { readonly kind: 'breakRandom' | 'loseRandom'; readonly quantity: number }
   | { readonly kind: 'loseEventTarget'; readonly quantity: 1 };
 export interface EventEffects {
+  readonly maximumNextDawnEnergy?: DawnEnergy;
   readonly resources?: readonly ResourceEffect[];
   readonly items?: readonly EventInventoryMutation[];
   readonly chest?: ChestEventEffect;

@@ -21,6 +21,7 @@ import {
 } from './celestialLight';
 import { createCloudImpostorLayout, updateCloudImpostorShadows } from './cloudImpostorLayout';
 import { cloudImpostorShader } from './cloudImpostorShader';
+import { applyBloodOceanPalette } from './bloodOceanPalette';
 
 const TRANSITION_SECONDS = 1.5;
 const MOON_DIRECTION: CelestialDirection = [0.46, 0.52, -0.72];
@@ -79,6 +80,7 @@ const fragmentShader = `
   uniform float uHorizonBandWidth;
   uniform float uExposure;
   uniform float uTintAmount;
+  uniform float uBloodOceanIntensity;
   uniform float uMoonFaceReveal;
   uniform float uMoonDread;
   uniform float uMoonStarScale;
@@ -347,6 +349,7 @@ const fragmentShader = `
     color += uHorizonColor * horizonLift;
 
     vec4 cloud = cloudLayer(direction);
+    cloud.rgb *= mix(1.0, 0.13, uBloodOceanIntensity);
     color = mix(color, cloud.rgb, cloud.a);
 
     float horizonBand = smoothstep(-0.005, 0.012, direction.y)
@@ -469,6 +472,8 @@ export class Skybox {
   readonly material: ShaderMaterial;
   readonly mesh: Mesh<SphereGeometry, ShaderMaterial>;
   private readonly current: SkyPalette;
+  private readonly bloodPalette: SkyPalette;
+  private bloodOceanIntensity = 0;
   private readonly blendFrom: SkyPalette;
   private readonly target: SkyPalette;
   private blendKey: string;
@@ -478,7 +483,7 @@ export class Skybox {
   private readonly cloudLayout = createCloudImpostorLayout();
   private disposed = false;
 
-  get palette(): Readonly<SkyPalette> { return this.current; }
+  get palette(): Readonly<SkyPalette> { return this.bloodPalette; }
 
   constructor(
     private readonly scene: Scene,
@@ -490,6 +495,7 @@ export class Skybox {
     },
   ) {
     this.current = skyPaletteFor(initialState);
+    this.bloodPalette = cloneSkyPalette(this.current);
     this.blendFrom = cloneSkyPalette(this.current);
     this.target = cloneSkyPalette(this.current);
     this.blendKey = `${initialState.weather}:${initialState.phase}`;
@@ -526,6 +532,7 @@ export class Skybox {
         uHorizonBandWidth: { value: this.current.horizonBandWidth },
         uExposure: { value: this.current.exposure },
         uTintAmount: { value: 0 },
+        uBloodOceanIntensity: { value: 0 },
         uMoonFaceReveal: { value: 0 },
         uMoonDread: { value: 0 },
         uMoonStarScale: { value: 1 },
@@ -565,12 +572,14 @@ export class Skybox {
     this.material.uniforms.uCloudTime!.value = this.cloudElapsed;
     const alpha = smoothstep(this.blendElapsed / TRANSITION_SECONDS);
     lerpSkyPalette(this.current, this.blendFrom, this.target, alpha);
+    lerpSkyPalette(this.bloodPalette, this.current, this.current, 0);
+    applyBloodOceanPalette(this.bloodPalette, this.bloodOceanIntensity);
     updateCloudImpostorShadows(this.cloudLayout,
       this.material.uniforms.uSunDirection!.value as Vector3,
-      this.cloudElapsed, this.current.cloudCoverage);
+      this.cloudElapsed, this.bloodPalette.cloudCoverage);
     this.mesh.position.copy(cameraPosition);
     this.uploadPalette();
-    return this.current;
+    return this.bloodPalette;
   }
 
   resetTransient(): void {
@@ -582,6 +591,11 @@ export class Skybox {
     uniforms.uMoonStarScale!.value = 1;
     uniforms.uMoonEventDim!.value = 0;
     uniforms.uMoonScale!.value = 1;
+  }
+
+  setBloodOceanIntensity(intensity: number): void {
+    this.bloodOceanIntensity = Number.isFinite(intensity) ? clamp01(intensity) : 0;
+    this.material.uniforms.uBloodOceanIntensity!.value = this.bloodOceanIntensity;
   }
 
   setMoonFace(value: MoonFacePresentation): void {
@@ -611,20 +625,20 @@ export class Skybox {
 
   private uploadPalette(): void {
     const uniforms = this.material.uniforms;
-    (uniforms.uZenithColor!.value as Color).copy(this.current.zenithColor);
-    (uniforms.uUpperColor!.value as Color).copy(this.current.upperColor);
-    (uniforms.uHorizonColor!.value as Color).copy(this.current.horizonColor);
-    (uniforms.uSunColor!.value as Color).copy(this.current.sunColor);
-    (uniforms.uMoonColor!.value as Color).copy(this.current.moonColor);
-    (uniforms.uStarColor!.value as Color).copy(this.current.starColor);
-    uniforms.uSunVisibility!.value = this.current.sunVisibility;
-    uniforms.uMoonVisibility!.value = this.current.moonVisibility;
-    uniforms.uStarVisibility!.value = this.current.starVisibility;
-    uniforms.uHaze!.value = this.current.haze;
-    uniforms.uCloudCoverage!.value = this.current.cloudCoverage;
-    uniforms.uCloudContrast!.value = this.current.cloudContrast;
-    uniforms.uHorizonBandStrength!.value = this.current.horizonBandStrength;
-    uniforms.uHorizonBandWidth!.value = this.current.horizonBandWidth;
-    uniforms.uExposure!.value = this.current.exposure;
+    (uniforms.uZenithColor!.value as Color).copy(this.bloodPalette.zenithColor);
+    (uniforms.uUpperColor!.value as Color).copy(this.bloodPalette.upperColor);
+    (uniforms.uHorizonColor!.value as Color).copy(this.bloodPalette.horizonColor);
+    (uniforms.uSunColor!.value as Color).copy(this.bloodPalette.sunColor);
+    (uniforms.uMoonColor!.value as Color).copy(this.bloodPalette.moonColor);
+    (uniforms.uStarColor!.value as Color).copy(this.bloodPalette.starColor);
+    uniforms.uSunVisibility!.value = this.bloodPalette.sunVisibility;
+    uniforms.uMoonVisibility!.value = this.bloodPalette.moonVisibility;
+    uniforms.uStarVisibility!.value = this.bloodPalette.starVisibility;
+    uniforms.uHaze!.value = this.bloodPalette.haze;
+    uniforms.uCloudCoverage!.value = this.bloodPalette.cloudCoverage;
+    uniforms.uCloudContrast!.value = this.bloodPalette.cloudContrast;
+    uniforms.uHorizonBandStrength!.value = this.bloodPalette.horizonBandStrength;
+    uniforms.uHorizonBandWidth!.value = this.bloodPalette.horizonBandWidth;
+    uniforms.uExposure!.value = this.bloodPalette.exposure;
   }
 }

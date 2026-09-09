@@ -38,6 +38,7 @@ import { SharkSwarmPresentation } from './events/SharkSwarmPresentation';
 import { CarlitosEventPresentation } from './events/CarlitosEventPresentation';
 import { DeathStarePresentation } from './events/DeathStarePresentation';
 import { LeakPresentation } from './events/LeakPresentation';
+import { OceanOfBloodPresentation } from './events/OceanOfBloodPresentation';
 import { SchoolOfFishPresentation } from './events/SchoolOfFishPresentation';
 import { SnatcherPresentation } from './events/SnatcherPresentation';
 import { TornadoPresentation } from './events/TornadoPresentation';
@@ -198,6 +199,9 @@ function createDedicatedCoordinator(
   const presentations: DedicatedEventPresentation[] = [];
   try {
     switch (eventId) {
+      case 'ocean-of-blood':
+        presentations.push(new OceanOfBloodPresentation(dedicatedEnvironment));
+        break;
       case 'leak':
         presentations.push(new LeakPresentation(dedicatedEnvironment));
         break;
@@ -314,6 +318,7 @@ export const createDedicatedAdapter: EventPresentationAdapterFactory = (
       ? coordinator.playItemUse(choiceId, instanceId)
       : coordinator.playItemUse(choiceId, instanceId, onAction),
     itemAimTarget: () => coordinator.itemAimTarget(),
+    netCatch: () => coordinator.netCatch(),
     interactionTargets: () => coordinator.interactionTargets(),
     interactionRoot: (id) => coordinator.interactionRoot(id),
     resultRoot: noRoot,

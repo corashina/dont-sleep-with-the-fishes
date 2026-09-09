@@ -1113,6 +1113,11 @@ export class SurvivalSession {
     if (resolved.effects.nextDawnEnergy !== undefined) {
       this.nextDawnEnergyOverride = resolved.effects.nextDawnEnergy;
     }
+    if (resolved.effects.maximumNextDawnEnergy !== undefined) {
+      this.nextDawnEnergyOverride = Math.min(
+        this.normalDawnEnergy(), resolved.effects.maximumNextDawnEnergy,
+      ) as DawnEnergy;
+    }
     this.resolveTerminal();
     this.lastEventId = event.id;
     this.lastSeenDay.set(event.id, this.day);
@@ -1144,9 +1149,9 @@ export class SurvivalSession {
 
       deltas,
       cue: this.presentationCue('none'),
-      ...(resolved.effects.nextDawnEnergy === undefined
+      ...(resolved.effects.nextDawnEnergy === undefined && resolved.effects.maximumNextDawnEnergy === undefined
         ? {}
-        : { nextDawnEnergy: resolved.effects.nextDawnEnergy }),
+        : { nextDawnEnergy: this.nextDawnEnergyOverride! }),
       ...(resolved.presentationKey === undefined
         ? {}
         : { eventPresentationKey: resolved.presentationKey }),
@@ -1243,16 +1248,24 @@ export class SurvivalSession {
     return hullWear;
   }
 
+  private normalDawnEnergy(): DawnEnergy {
+    const hungerAfterDawn = Math.min(
+      SURVIVAL_BALANCE.thresholds.maximum,
+      this.hunger + SURVIVAL_BALANCE.dawn.hungerIncrease,
+    );
+    return hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.starving
+      ? SURVIVAL_BALANCE.dawn.starvingEnergy
+      : hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.hungry
+        ? SURVIVAL_BALANCE.dawn.hungryEnergy
+        : SURVIVAL_BALANCE.dawn.normalEnergy;
+  }
+
   private dawnDeltas(hullWear: number): ResourceDelta {
     const hungerAfterDawn = Math.min(
       SURVIVAL_BALANCE.thresholds.maximum,
       this.hunger + SURVIVAL_BALANCE.dawn.hungerIncrease,
     );
-    const normalMorningEnergy = hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.starving
-      ? SURVIVAL_BALANCE.dawn.starvingEnergy
-      : hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.hungry
-        ? SURVIVAL_BALANCE.dawn.hungryEnergy
-        : SURVIVAL_BALANCE.dawn.normalEnergy;
+    const normalMorningEnergy = this.normalDawnEnergy();
     const morningEnergy = this.nextDawnEnergyOverride ?? normalMorningEnergy;
     this.nextDawnEnergyOverride = null;
     const deltas: ResourceDelta = {

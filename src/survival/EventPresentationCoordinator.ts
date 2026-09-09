@@ -1,4 +1,5 @@
 import { Group } from 'three';
+import type { EventNetCatch } from './EventItemUseController';
 import type { Object3D } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import { runCleanupSteps } from '../world/SceneResources';
@@ -83,6 +84,10 @@ export class EventPresentationCoordinator {
 
   react(result: EventOutcomePresentation): Promise<void> {
     return this.activePresentation?.react(result) ?? Promise.resolve();
+  }
+
+  netCatch(): EventNetCatch | null {
+    return this.activePresentation?.netCatch?.() ?? null;
   }
 
   update(time: number, delta: number): void {
