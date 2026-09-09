@@ -11,7 +11,7 @@ import { normalizeLongestDimensionTemplate } from '../src/world/modelValidation'
 import { createTestPropModels } from './helpers/propModels';
 import { createTestSkyTextures } from './helpers/skyAssets';
 
-it('keeps the production net clear of the bow and ribs during pickup and return', async () => {
+it('keeps the production net clear of the bow, ribs, and bench supports during pickup and return', async () => {
   const bytes = await readFile('src/assets/models/items/fishingNet.glb');
   const data = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(data).set(bytes);
@@ -30,6 +30,12 @@ it('keeps the production net clear of the bow and ribs during pickup and return'
     const object = boat.getObjectByName(name)!;
     return { name, bounds: new Box3().setFromObject(object, true).applyMatrix4(inverse) };
   });
+  const bench = boat.getObjectByName('lifeboat-display-bench')!;
+  for (const support of bench.children) {
+    if (support instanceof Mesh && support.position.y < 0) {
+      obstacles.push({ name: 'front bench support', bounds: new Box3().setFromObject(support, true).applyMatrix4(inverse) });
+    }
+  }
   const check = (label: string) => {
     let minimumY = Infinity;
     let collision: string | null = null;

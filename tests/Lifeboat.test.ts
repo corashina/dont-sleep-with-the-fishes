@@ -20,6 +20,8 @@ describe('lifeboat visual geometry', () => {
     ));
     expect(supports).toHaveLength(2);
     for (const id of BOAT_SUPPLY_GROUP_IDS) {
+      // The tilted net's box includes empty space. NetFishingPlacement checks its triangles against these supports.
+      if (id === 'fishingNet') continue;
       const transform = boatSupplyTransform(id, 0);
       const bounds = ITEM_MODEL_SPECS[id].normalizedBounds;
       const itemBounds = new Box3(new Vector3(...bounds.min), new Vector3(...bounds.max))
