@@ -414,11 +414,6 @@ export const uiCatalog = {
     "pl": "Zamknij wynik zbierania",
     "es-AR": "Cerrar resultado de la recolección"
   },
-  "closeWreckage": {
-    "en": "Close Wreckage result",
-    "pl": "Zamknij wynik przeszukiwania wraku",
-    "es-AR": "Cerrar resultado de los restos del naufragio"
-  },
   "repair": {
     "en": "REPAIR",
     "pl": "NAPRAW",
