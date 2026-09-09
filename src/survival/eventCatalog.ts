@@ -1,6 +1,6 @@
 import type { ItemId } from '../game/ItemState';
-import { SURVIVAL_BALANCE } from './survivalBalance';
 import {
+  DRIFTING_SUPPLY_KINDS,
   DRIFTING_SUPPLY_CARLITOS_ENERGY_COST,
   DRIFTING_SUPPLY_PLAYER_ENERGY_COST,
 } from './driftingSupplies';
@@ -31,24 +31,13 @@ export const SURVIVAL_EVENT_IDS = Object.freeze([
   'windy-night', 'bad-sleep', 'thunderstorm', 'restless-waves',
   'monster-in-the-fog', 'ghosts', 'eerie-melody', 'face-on-the-moon',
   'shadow-figure', 'guarded-sleep',
-  'drifting-supplies', 'drifting-chest', 'wreckage',
+  'drifting-supplies', 'drifting-chest',
   'check-the-back',
   'flowers', 'chest-attack', 'midnight-tour', 'night-trader',
   'handyman', 'other-people', 'plane', 'lighthouse',
 ] as const);
 
 export type SurvivalEventId = typeof SURVIVAL_EVENT_IDS[number];
-export const WRECKAGE_RESULT_IDS = Object.freeze([
-  'wreckage-search-food', 'wreckage-search-bait', 'wreckage-search-injury',
-  'wreckage-carlitos-food', 'wreckage-carlitos-bait', 'wreckage-carlitos-empty',
-  'wreckage-dive-medkit', 'wreckage-dive-flare-gun', 'wreckage-dive-duct-tape',
-  'wreckage-dive-energy-bar', 'wreckage-dive-collapse',
-  'wreckage-dive-collapse-scuba', 'wreckage-dive-creature',
-  'wreckage-dive-ghost',
-  'wreckage-dive-food-1', 'wreckage-dive-food-2', 'wreckage-dive-food-3',
-  'wreckage-dive-bait-1', 'wreckage-dive-bait-2', 'wreckage-dive-bait-3',
-] as const);
-export type WreckageResultId = typeof WRECKAGE_RESULT_IDS[number];
 export type SignalSightingEventId = Extract<
   SurvivalEventId,
   'other-people' | 'plane' | 'lighthouse'
@@ -73,10 +62,10 @@ export function isDriftingItemEventId(
   return eventId === 'drifting-supplies' || eventId === 'drifting-chest';
 }
 
-export type InspectableEventId = DriftingItemEventId | 'wreckage';
+export type InspectableEventId = DriftingItemEventId;
 
 export function isInspectableEventId(eventId: string): eventId is InspectableEventId {
-  return eventId === 'wreckage' || isDriftingItemEventId(eventId);
+  return isDriftingItemEventId(eventId);
 }
 
 export function driftingItemRetrieveKey(eventId: DriftingItemEventId): EventPresentationKey {
@@ -107,7 +96,6 @@ const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.free
   'guarded-sleep': 'eventText019',
   'drifting-supplies': 'eventText020',
   'drifting-chest': 'eventText021',
-  wreckage: 'eventText022',
   'check-the-back': 'eventText023',
   flowers: 'eventText024',
   'chest-attack': 'eventText025',
@@ -205,19 +193,15 @@ const featuredResultOutcome = (
   effects: outcomeEffects,
 });
 
-const wreckageOutcome = (
-  presentationKey: EventPresentationKey,
-  weight: number,
-  message: string,
-  outcomeEffects: WeightedEventOutcome['effects'],
-  resultId: WreckageResultId,
-): WeightedEventOutcome => ({
-  resultId,
-  weight,
-  message,
-  presentationKey,
-  effects: outcomeEffects,
-});
+function driftingOutcomes(delegated: boolean): [WeightedEventOutcome, ...WeightedEventOutcome[]] {
+  return DRIFTING_SUPPLY_KINDS.map((kind) => featuredResultOutcome(
+    `drifting-supplies-${kind}-loot`,
+    'drifting-supplies.retrieve',
+    1,
+    delegated ? 'driftingLootDelegated' : 'driftingLootRetrieved',
+    effects(delegated ? [] : [subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST)]),
+  )) as [WeightedEventOutcome, ...WeightedEventOutcome[]];
+}
 
 function choice(
   id: string,
@@ -503,62 +487,14 @@ const survivalEvents: SurvivalEventDefinition[] = [
   ], undefined, { requiresCompanion: true, maximumAppearances: 1 }),
   event('drifting-supplies', 'day', 'eventText049', 'safe', 'fish', 1, 3, 1, [
     {
-      ...contextualChoice('retrieve', 'eventText078',
-        featuredResultOutcome('drifting-supplies-barrel-food', 'drifting-supplies.retrieve', 60,
-          'eventText192',
-          effects([subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST), add('food', 1)])),
-        featuredResultOutcome('drifting-supplies-barrel-bait', 'drifting-supplies.retrieve', 40,
-          'eventText193',
-          effects([subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST), add('bait', 1)])),
-        featuredResultOutcome('drifting-supplies-lifeboat-food', 'drifting-supplies.retrieve', 60,
-          'eventText195',
-          effects([subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST), add('food', 2)])),
-        featuredResultOutcome('drifting-supplies-lifeboat-bait', 'drifting-supplies.retrieve', 40,
-          'eventText196',
-          effects([subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST), add('bait', 2)])),
-        featuredResultOutcome('drifting-supplies-container-food', 'drifting-supplies.retrieve', 55,
-          'eventText198',
-          effects([subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST), add('food', 3)])),
-        featuredResultOutcome('drifting-supplies-container-bait', 'drifting-supplies.retrieve', 35,
-          'eventText199',
-          effects([subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST), add('bait', 3)])),
-        featuredResultOutcome('drifting-supplies-container-energy-bar', 'drifting-supplies.retrieve', 10,
-          'eventText201',
-          effects([
-            subtract('energy', DRIFTING_SUPPLY_PLAYER_ENERGY_COST),
-          ], [gain('energyBar')])),
-      ),
-      requirements: [{
-        resource: 'energy',
-        minimum: DRIFTING_SUPPLY_PLAYER_ENERGY_COST,
-      }],
+      ...contextualChoice('retrieve', 'eventText078', ...driftingOutcomes(false)),
+      requirements: [{ resource: 'energy', minimum: DRIFTING_SUPPLY_PLAYER_ENERGY_COST }],
     },
     {
-      ...contextualChoice('delegate-carlitos', 'eventText080',
-        featuredResultOutcome('drifting-supplies-barrel-food', 'drifting-supplies.retrieve', 60,
-          'eventText202', effects([add('food', 1)])),
-        featuredResultOutcome('drifting-supplies-barrel-bait', 'drifting-supplies.retrieve', 40,
-          'eventText203', effects([add('bait', 1)])),
-        featuredResultOutcome('drifting-supplies-lifeboat-food', 'drifting-supplies.retrieve', 60,
-          'eventText205', effects([add('food', 2)])),
-        featuredResultOutcome('drifting-supplies-lifeboat-bait', 'drifting-supplies.retrieve', 40,
-          'eventText206', effects([add('bait', 2)])),
-        featuredResultOutcome('drifting-supplies-container-food', 'drifting-supplies.retrieve', 55,
-          'eventText208', effects([add('food', 3)])),
-        featuredResultOutcome('drifting-supplies-container-bait', 'drifting-supplies.retrieve', 35,
-          'eventText209', effects([add('bait', 3)])),
-        featuredResultOutcome('drifting-supplies-container-energy-bar', 'drifting-supplies.retrieve', 10,
-          'eventText211',
-          effects(undefined, [gain('energyBar')]))),
-      companionAction: {
-        id: 'delegateCarlitos',
-        energyCost: DRIFTING_SUPPLY_CARLITOS_ENERGY_COST,
-      },
+      ...contextualChoice('delegate-carlitos', 'eventText080', ...driftingOutcomes(true)),
+      companionAction: { id: 'delegateCarlitos', energyCost: DRIFTING_SUPPLY_CARLITOS_ENERGY_COST },
     },
-    contextualChoice('sleep', 'eventText081', outcome(
-      1,
-      'eventText212',
-    )),
+    contextualChoice('sleep', 'eventText081', outcome(1, 'eventText212')),
   ]),
   event('drifting-chest', 'day', 'eventText050', 'safe', 'fish', 1, 3, 1, [
     {
@@ -587,69 +523,6 @@ const survivalEvents: SurvivalEventDefinition[] = [
       'eventText215',
     )),
   ], undefined, { allowedChestStates: ['none'] }),
-  event('wreckage', 'day', 'eventText051', 'uncertain', 'dive', 1, 4, 1, [
-    {
-      ...contextualChoice('search', 'eventText082',
-        wreckageOutcome('wreckage.search-food', 43, 'eventText217',
-          effects([subtract('energy', 1), add('food', 1)]), 'wreckage-search-food'),
-        wreckageOutcome('wreckage.search-bait', 37, 'eventText218',
-          effects([subtract('energy', 1), add('bait', 1)]), 'wreckage-search-bait'),
-        wreckageOutcome('wreckage.search-injury', 20, 'eventText219',
-          effects([subtract('energy', 1), subtract('health', { min: 15, max: 25 })]),
-          'wreckage-search-injury')),
-      requirements: [{ resource: 'energy', minimum: 1 }],
-    },
-    {
-      ...contextualChoice('delegate-carlitos', 'eventText080',
-        wreckageOutcome('wreckage.search-food', 43, 'eventText221',
-          effects([add('food', 1)]), 'wreckage-carlitos-food'),
-        wreckageOutcome('wreckage.search-bait', 37, 'eventText222',
-          effects([add('bait', 1)]), 'wreckage-carlitos-bait'),
-        wreckageOutcome('wreckage.carlitos-empty', 20, 'eventText223',
-          {}, 'wreckage-carlitos-empty')),
-      companionAction: { id: 'delegateCarlitos', energyCost: 2 },
-    },
-    {
-      ...choice('dive', 'eventText083', 'scubaSet',
-        wreckageOutcome('wreckage.dive-loot', 10, 'eventText224',
-          effects([subtract('energy', 3)], [gain('medicalKit')]), 'wreckage-dive-medkit'),
-        wreckageOutcome('wreckage.dive-loot', 10, 'eventText225',
-          effects([subtract('energy', 3)], [gain('flareGun')]), 'wreckage-dive-flare-gun'),
-        wreckageOutcome('wreckage.dive-loot', 10, 'eventText216',
-          effects([subtract('energy', 3)], [gain('ductTape')]), 'wreckage-dive-duct-tape'),
-        wreckageOutcome('wreckage.dive-loot', 10, 'eventText226',
-          effects([subtract('energy', 3)], [gain('energyBar')]), 'wreckage-dive-energy-bar'),
-        ...(['food', 'bait'] as const).flatMap((resource) =>
-          SURVIVAL_BALANCE.diving.supplyAmounts.map(({ quantity, chance }) =>
-            wreckageOutcome('wreckage.dive-loot', 17.5 * chance,
-              resource === 'food' ? 'wreckageDiveFood' : 'wreckageDiveBait',
-              effects([subtract('energy', 3), add(resource, quantity)]),
-              `wreckage-dive-${resource}-${quantity}`))),
-        wreckageOutcome('wreckage.dive-collapse', 5, 'eventText227',
-          effects([subtract('energy', 3), subtract('health', { min: 25, max: 35 })]),
-          'wreckage-dive-collapse'),
-        wreckageOutcome('wreckage.dive-collapse', 5,
-          'eventText228',
-          effects([subtract('energy', 3), subtract('health', { min: 25, max: 35 })],
-            [breakItem('scubaSet')]), 'wreckage-dive-collapse-scuba'),
-        wreckageOutcome('wreckage.dive-creature', 7.5,
-          'eventText229',
-          effects([subtract('energy', 3), subtract('health', { min: 30, max: 40 })]),
-          'wreckage-dive-creature'),
-        wreckageOutcome('wreckage.dive-ghost', 7.5,
-          'eventText230',
-          effects([subtract('energy', 3), subtract('health', { min: 20, max: 30 }),
-            add('pressure', 1)]), 'wreckage-dive-ghost')),
-      requirements: [{
-        resource: 'energy',
-        minimum: 3,
-      }],
-    },
-    contextualChoice('leave', 'eventText084', outcome(
-      1,
-      'eventText231',
-    )),
-  ]),
   event('check-the-back', 'night', 'eventText052', 'uncertain', 'fish', 3, 2, 4, [
     choice('knife', 'eventText068', 'knife',
       {

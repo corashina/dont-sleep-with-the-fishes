@@ -10,16 +10,16 @@ const exitCases = [
     eventId, energy: 0, carlitos: 'absent',
   })),
   ...[0].flatMap((energy) => ['absent', 'low-energy', 'hungry'].map((carlitos) => ({
-    eventId: 'wreckage' as const, energy, carlitos,
+    eventId: 'drifting-supplies' as const, energy, carlitos,
   }))),
 ];
 
 describe('focused event dismiss actions', () => {
   for (const { eventId, energy, carlitos } of exitCases) {
-    const declineId = eventId === 'wreckage' ? 'leave' : 'sleep';
+    const declineId = 'sleep';
     it.each(['choice', 'return'] as const)(`${eventId}, Energy ${energy}, Carlitos ${carlitos}: %s resolves the event`, async (exit) => {
       const session = new SurvivalSession([
-        ...(eventId === 'wreckage' ? [{ instanceId: 'scubaSet-1' as const, type: 'scubaSet' as const }] : []),
+        ...(eventId === 'drifting-supplies' ? [{ instanceId: 'scubaSet-1' as const, type: 'scubaSet' as const }] : []),
         ...(carlitos !== 'absent' ? [{ instanceId: 'carlitos-1' as const, type: 'carlitos' as const }] : []),
       ], {
         seed: 41, initial: { day: 3, energy }, initialEventId: eventId,
@@ -75,7 +75,7 @@ describe('focused event dismiss actions', () => {
         expect(ui.setBusy).toHaveBeenLastCalledWith(false);
         expect(ui.clearEventPresentation).toHaveBeenCalled();
         expect(ui.hideFocusedEvent).toHaveBeenCalled();
-        if (eventId === 'wreckage') {
+        if (eventId === 'drifting-supplies') {
           expect(ui.setSleepCovered).not.toHaveBeenCalled();
           expect(ui.settleCoveredScene).not.toHaveBeenCalled();
         }
@@ -103,75 +103,4 @@ describe('focused event dismiss actions', () => {
       expect(session.snapshot().pendingEventId).not.toBe(eventId);
     },
   );
-
-  it('resolves wreckage after the real back arrow returns the camera', async () => {
-    vi.useFakeTimers();
-    const mount = document.createElement('main');
-    document.body.append(mount);
-    const session = new SurvivalSession([], {
-      seed: 41,
-      initial: { day: 3, energy: 0 },
-      initialEventId: 'wreckage',
-    });
-    const ui = new SurvivalUI(mount);
-    const setBusy = vi.spyOn(ui, 'setBusy');
-    const exitFocusedEventView = vi.fn(async () => {});
-    const phase = SurvivalPhase.forTest({
-      session,
-      ui,
-      world: {
-        stageEvent: vi.fn(),
-        revealEvent: vi.fn(async () => {}),
-        enterFocusedEventView: vi.fn(async () => {}),
-        exitFocusedEventView,
-        playEventChoice: vi.fn(async () => {}),
-        clearEvent: vi.fn(),
-        projectInteractionAnchors: vi.fn(() => []),
-      },
-    }, 'wreckage');
-    try {
-      phase.start();
-      await vi.runAllTimersAsync();
-      expect(setBusy).toHaveBeenLastCalledWith(false);
-      ui.setAnchors([{
-        id: 'event:wreckage',
-        eventFocusId: 'wreckage',
-        tooltip: false,
-        label: 'WRECKAGE',
-        description: 'Inspect the floating debris.',
-        itemType: null,
-        toolId: null,
-        action: null,
-        remainingUses: null,
-        x: 850,
-        y: 360,
-        visible: true,
-        depleted: false,
-      }]);
-      const debris = mount.querySelector<HTMLButtonElement>(
-        '[data-anchor-id="event:wreckage"]',
-      )!;
-      debris.click();
-      await Promise.resolve();
-      expect(mount.querySelector('[data-focused-event-view]')?.classList)
-        .toContain('is-visible');
-
-      mount.querySelector<HTMLButtonElement>('[data-focused-event-back]')!.click();
-
-      await vi.runAllTimersAsync();
-      expect(exitFocusedEventView).toHaveBeenCalledOnce();
-      expect(session.snapshot()).toMatchObject({
-        state: 'day',
-        pendingEventId: null,
-        day: 3,
-        energy: 0,
-      });
-      expect(mount.querySelector('[data-focused-event-view]')?.classList)
-        .not.toContain('is-visible');
-    } finally {
-      phase.dispose();
-      mount.remove();
-      vi.useRealTimers();
-    }
-  });
 });

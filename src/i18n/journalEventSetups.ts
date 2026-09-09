@@ -22,7 +22,6 @@ const situations: Record<string, readonly [string, string, string]> = {
   'guarded-sleep': ['', '', ""],
   'drifting-supplies': ['', '', ""],
   'drifting-chest': ['', '', ""],
-  wreckage: ['', '', ""],
   'check-the-back': ['', '', ""],
   flowers: ['', '', ""],
   'chest-attack': ['', '', ""],
@@ -74,11 +73,5 @@ export function journalEventSetup(eventId: string, choiceId: string, textId?: Ev
   const situation = situations[eventId];
   if (situation === undefined) throw new Error(`Missing journal situation: ${eventId}`);
   const action = textId !== undefined && needsAction.has(textId) ? attempts[`${eventId}.${choiceId}`] : undefined;
-  if (eventId === 'wreckage' && choiceId === 'dive') {
-    if (language === 2) return 'Me puse el equipo de buceo y bajé al naufragio. Volver me costó muchas fuerzas.';
-    return language === 1
-      ? 'Założyłem sprzęt do nurkowania i zszedłem do wraku. Powrót kosztował mnie sporo sił.'
-      : 'I put on the scuba gear and descended into the wreck. Getting back took a lot out of me.';
-  }
   return [situation[language], action?.[language]].filter(Boolean).join(' ');
 }

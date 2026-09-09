@@ -102,8 +102,8 @@ describe('domain language', () => {
   });
 
   it('reloads event outcomes in Polish with no saved display text', () => {
-    const session = new SurvivalSession([], { seed: 41, initial: { day: 3 }, initialEventId: 'wreckage' });
-    const outcome = session.resolveEvent({ kind: 'choice', choiceId: 'search' });
+    const session = new SurvivalSession([], { seed: 41, initial: { day: 3 }, initialEventId: 'drifting-supplies' });
+    const outcome = session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' });
     const englishMessage = outcome.message;
     const document = createSurvivalSaveDocument({ scavengeElapsedSeconds: 8, session: session.exportCheckpoint() });
     const serialized = JSON.stringify(document);
@@ -145,10 +145,9 @@ describe('domain language', () => {
 
   it('translates ending titles and event causes', () => {
     setLanguage('pl');
-    const ending = { id: 'sinking', day: 5, savedPickupCount: 3, cause: { eventId: 'wreckage' } } as const;
+    const ending = { id: 'sinking', day: 5, savedPickupCount: 3, cause: { eventId: 'drifting-supplies' } } as const;
     expect(endingTitle(ending)).toBe('ŁÓDŹ ZNIKNĘŁA');
     expect(endingSummary(ending)).toBe('DZIEŃ 5');
     expect(endingCauseLine(ending)).toContain('OSTATNIE ZDARZENIE:');
-    expect(endingCauseLine(ending)).not.toContain('WRECKAGE');
   });
 });

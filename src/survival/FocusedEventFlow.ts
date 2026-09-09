@@ -34,8 +34,6 @@ export type FocusedEventChoiceResolution =
       readonly accepted: true;
       readonly playAnimation: () => Promise<void>;
       readonly afterAnimation: () => Promise<void>;
-      readonly beforeReturn: () => Promise<void>;
-      readonly afterReturn: () => Promise<void>;
       readonly clearEvent: (reportCleanupErrors: boolean) => void;
       readonly renderSnapshot: () => boolean;
       readonly presentTerminal: () => void;
@@ -376,7 +374,6 @@ export class FocusedEventFlow {
     if (!await this.resumeFocusedResolution(eventId, generation, operation)) return;
     await resolution.afterAnimation();
     if (!await this.resumeFocusedResolution(eventId, generation, operation)) return;
-    await resolution.beforeReturn();
     if (!this.isCurrentFocus(eventId, 'resolving', generation, operation)) return;
     await this.returnAfterResolution(eventId, resolution, generation, operation);
   }
@@ -435,7 +432,6 @@ export class FocusedEventFlow {
     }
     let returned = false;
     try {
-      await resolution.afterReturn();
       returned = true;
     } catch {
       // The action error stays primary.
@@ -464,7 +460,6 @@ export class FocusedEventFlow {
       if (!this.isCurrent(generation)) return;
       terminal = resolution.renderSnapshot();
       if (!this.isCurrent(generation)) return;
-      await resolution.afterReturn();
       if (!this.isCurrent(generation)) return;
     } finally {
       this.releaseSettledBusy(generation, operation);

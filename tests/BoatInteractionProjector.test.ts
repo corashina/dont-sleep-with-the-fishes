@@ -187,7 +187,7 @@ describe('BoatInteractionProjector', () => {
     expect(anchors[0]!.hitArea).toMatchObject({ width: 36, height: 36 });
     expect(anchors.find(({ id }) => id === 'carlitos')).toMatchObject({
       label: 'CARLITOS',
-      description: 'Check his hunger, happiness, and health.',
+      description: 'Check his hunger and happiness.',
       hitArea: { width: 54, height: 54 },
     });
     expect(anchors.find(({ id }) => id === 'repair-tools')?.visible).toBe(false);
@@ -211,7 +211,7 @@ describe('BoatInteractionProjector', () => {
     const fixture = createFixture();
     const featuredRoot = meshRoot('barrel', -0.5);
     const customRoot = meshRoot('custom', 0.5);
-    const wreckageRoot = meshRoot('wreckage', 0.7);
+    const wreckageRoot = meshRoot('drifting-supplies', 0.7);
     const chestRoot = fixture.roots.chestRoot;
     const targets = Object.freeze([
       Object.freeze({
@@ -232,10 +232,10 @@ describe('BoatInteractionProjector', () => {
         root: chestRoot,
       }),
       Object.freeze({
-        id: 'event:wreckage',
+        id: 'event:drifting-supplies',
         label: 'WRECKAGE',
         description: 'Inspect the floating debris.',
-        focusEventId: 'wreckage',
+        focusEventId: 'drifting-supplies',
         root: wreckageRoot,
       }),
     ]);
@@ -256,7 +256,7 @@ describe('BoatInteractionProjector', () => {
       'event:drifting-supplies',
       'custom:signal',
       'persistent-chest',
-      'event:wreckage',
+      'event:drifting-supplies',
     ]);
     expect(anchors.at(-4)).toMatchObject({
       label: 'SALVAGE',
@@ -281,7 +281,7 @@ describe('BoatInteractionProjector', () => {
     expect(anchors.at(-1)).toMatchObject({
       label: 'WRECKAGE',
       description: 'Inspect the floating debris.',
-      eventFocusId: 'wreckage',
+      eventFocusId: 'drifting-supplies',
       hitArea: { width: 64, height: 64 },
     });
 

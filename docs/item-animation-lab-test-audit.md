@@ -45,7 +45,7 @@ Sources: [selector options](../src/app/EventTest.ts), [contextual resolution](..
 | Chest rewards | A fresh full-inventory lab chest always awards two Food. Item, Bait, and duct tape rewards need a missing item slot. No reward selector exists. |
 | Chest state | The lab starts with one closed chest. There is no chest respawn, age, or mimic control. Test delayed mimic conversion and automatic attack in a run. |
 | Handyman chest trade | The event selector starts without a chest, so Chest for Anchor is unavailable. The lab chest cannot carry into that fresh event. |
-| Trade and wreckage item gains | Full inventory converts duplicate item rewards to Food. Missing or lost reward items are needed to test actual item acquisition. Broken items still occupy their slot. |
+| Trade and drifting item gains | Trades convert occupied durable slots to Food. Drifting loot excludes owned durable items. Common consumables can repeat. |
 | Wreckage outcomes | Search has four results, Carlitos has four, and diving has fourteen. Injury, collapse, broken scuba, creature, ghost, and each loot result cannot be selected. |
 | Drifting Supplies variants | Barrel, lifeboat, and container have different rewards. Side and near/middle/far distance vary by seed. No variant selector exists. |
 | Carlitos states | He starts full, happy, and rested. Care success, exhausted delegation, absence, misery, and hunger require a prepared run. |
@@ -543,28 +543,20 @@ Selector: Guarded Sleep.
 
 ### Drifting Supplies (day)
 
-Selector: Drifting Supplies.
+Selector: Drifting Supplies. Variants: barrel, lifeboat, container, debris.
+Use the current probabilities in [Drifting loot](drifting-loot-design.md).
 
-- [ ] **Retrieve Supplies** (`retrieve`) — needs 1 energy.
-  - [ ] `drifting-supplies-barrel-food` (60%): You recover one food from the barrel. Effects: subtract energy 1; add food 1.
-  - [ ] `drifting-supplies-barrel-bait` (40%): You recover one bait from the barrel. Effects: subtract energy 1; add bait 1.
-  - [ ] `drifting-supplies-lifeboat-food` (60%): You recover two food from the cooler. Effects: subtract energy 1; add food 2.
-  - [ ] `drifting-supplies-lifeboat-bait` (40%): You recover two bait from the cooler. Effects: subtract energy 1; add bait 2.
-  - [ ] `drifting-supplies-container-food` (55%): You recover three food from the shipping container. Effects: subtract energy 1; add food 3.
-  - [ ] `drifting-supplies-container-bait` (35%): You recover three bait from the shipping container. Effects: subtract energy 1; add bait 3.
-  - [ ] `drifting-supplies-container-energy-bar` (10%): You recover an energy bar from the shipping container. Effects: subtract energy 1; gain energyBar ×1.
-
-- [ ] **Send Carlitos** (`delegate-carlitos`) — needs available Carlitos with 2 energy.
-  - [ ] `drifting-supplies-barrel-food` (60%): Carlitos recovers one food from the barrel. Effects: add food 1.
-  - [ ] `drifting-supplies-barrel-bait` (40%): Carlitos recovers one bait from the barrel. Effects: add bait 1.
-  - [ ] `drifting-supplies-lifeboat-food` (60%): Carlitos recovers two food from the cooler. Effects: add food 2.
-  - [ ] `drifting-supplies-lifeboat-bait` (40%): Carlitos recovers two bait from the cooler. Effects: add bait 2.
-  - [ ] `drifting-supplies-container-food` (55%): Carlitos recovers three food from the shipping container. Effects: add food 3.
-  - [ ] `drifting-supplies-container-bait` (35%): Carlitos recovers three bait from the shipping container. Effects: add bait 3.
-  - [ ] `drifting-supplies-container-energy-bar` (10%): Carlitos recovers an energy bar from the shipping container. Effects: gain energyBar ×1.
-
-- [ ] **Let It Drift** (`sleep`).
-  - [ ] `drifting-supplies.drift`: The supplies drift out of reach.
+- [ ] Retrieve each variant for 1 player energy.
+- [ ] Send Carlitos to each variant for 2 Carlitos energy.
+- [ ] Confirm food and bait each grant 1–3 when selected.
+- [ ] Confirm common supplies can accompany at most one valuable item.
+- [ ] Confirm repeated tape and energy bars remain usable.
+- [ ] Confirm owned durable items do not repeat.
+- [ ] Confirm the popup and journal show all gains after save loading.
+- [ ] Confirm barrel, cooler, and container reach the player and disappear before the popup.
+- [ ] Confirm debris spawns on either side and sinks over two seconds.
+- [ ] Confirm debris offers no scuba choice.
+- [ ] Let supplies drift without gaining rewards.
 
 ### Drifting Chest (day)
 
@@ -578,35 +570,6 @@ Selector: Drifting Chest.
 
 - [ ] **Let It Drift** (`sleep`).
   - [ ] `drifting-chest.drift`: The chest drifts out of reach.
-
-### Wreckage (day)
-
-Selector: Wreckage.
-
-- [ ] **Search Debris** (`search`) — needs 1 energy.
-  - [ ] `wreckage-search-food` (43%): You recover one food. Effects: subtract energy 1; add food 1.
-  - [ ] `wreckage-search-bait` (37%): You recover one bait. Effects: subtract energy 1; add bait 1.
-  - [ ] `wreckage-search-injury` (20%): Sharp debris cuts you. Effects: subtract energy 1; subtract health 15–25.
-
-- [ ] **Send Carlitos** (`delegate-carlitos`) — needs available Carlitos with 2 energy.
-  - [ ] `wreckage-carlitos-food` (43%): Carlitos recovers one food. Effects: add food 1.
-  - [ ] `wreckage-carlitos-bait` (37%): Carlitos recovers one bait. Effects: add bait 1.
-  - [ ] `wreckage-carlitos-empty` (20%): Carlitos returns empty.
-
-- [ ] **Search underwater** (`dive`) — needs usable SCUBA GEAR, 3 energy.
-  - [ ] `wreckage-dive-medkit`: You recover a medkit. Effects: subtract energy 3; gain medicalKit ×1.
-  - [ ] `wreckage-dive-flare-gun`: You recover a flare gun. Effects: subtract energy 3; gain flareGun ×1.
-  - [ ] `wreckage-dive-duct-tape`: You recover duct tape. Effects: subtract energy 3; gain ductTape ×1.
-  - [ ] `wreckage-dive-energy-bar`: You recover an energy bar. Effects: subtract energy 3; gain energyBar ×1.
-  - [ ] `wreckage-dive-food-1` (15.75%), `wreckage-dive-food-2` (1.575%), `wreckage-dive-food-3` (0.175%): Gain 1, 2, or 3 food. Cost: 3 energy.
-  - [ ] `wreckage-dive-bait-1` (15.75%), `wreckage-dive-bait-2` (1.575%), `wreckage-dive-bait-3` (0.175%): Gain 1, 2, or 3 bait. Cost: 3 energy.
-  - [ ] `wreckage-dive-collapse`: The wreck collapses around you. Effects: subtract energy 3; subtract health 25–35.
-  - [ ] `wreckage-dive-collapse-scuba`: The wreck collapses and damages your gear. Effects: subtract energy 3; subtract health 25–35; break scubaSet ×1.
-  - [ ] `wreckage-dive-creature`: A creature attacks inside the wreck. Effects: subtract energy 3; subtract health 30–40.
-  - [ ] `wreckage-dive-ghost`: A presence follows you through the wreck. Effects: subtract energy 3; subtract health 20–30; add pressure 1.
-
-- [ ] **Leave** (`leave`).
-  - [ ] `wreckage-leave`: You leave the wreckage behind.
 
 ### Check the Back (night)
 

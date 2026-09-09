@@ -51,7 +51,7 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
 
 describe('survival checkpoints', () => {
 
-  it.each(['wreckage', 'drifting-supplies', 'drifting-chest'] as const)(
+  it.each(['drifting-supplies', 'drifting-chest'] as const)(
     'keeps repair, camera controls, and inspection available during %s', async (eventId) => {
       const session = new SurvivalSession([], {
         seed: 72,
@@ -139,7 +139,7 @@ describe('survival checkpoints', () => {
   });
 
   it.each([
-    ['day event', 'wreckage'],
+    ['day event', 'drifting-supplies'],
     ['night event', 'bad-sleep'],
     ['night choice', 'guarded-sleep'],
   ] as const)(
@@ -190,7 +190,7 @@ describe('survival checkpoints', () => {
         expect(setEventSelection).toHaveBeenCalledOnce();
         expect(phase.getSurvivalCheckpoint()).toEqual(checkpoint);
         expect(onCheckpointChange).toHaveBeenLastCalledWith(checkpoint);
-        if (eventId !== 'wreckage') {
+        if (eventId !== 'drifting-supplies') {
           expect(setPillowAvailable).toHaveBeenLastCalledWith(true);
           const internals = phase as unknown as { setBusy(busy: boolean): void };
           internals.setBusy(true);

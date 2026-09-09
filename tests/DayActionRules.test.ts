@@ -106,7 +106,7 @@ describe('day action availability rules', () => {
     )).toBe('That option cannot be used for this action.');
   });
 
-  it.each([null, 'wreckage', 'drifting-supplies', 'drifting-chest'])(
+  it.each([null, 'drifting-supplies', 'drifting-supplies', 'drifting-chest'])(
     'accepts every action when its current gates pass with pending loot %s', (pendingEventId) => {
     const cases: ReadonlyArray<readonly [DayActionId, DayActionOption | undefined, Partial<DayActionRuleState>?]> = [
       ['fish', undefined],
@@ -134,7 +134,7 @@ describe('day action availability rules', () => {
     }
   });
 
-  it.each(['wreckage', 'drifting-supplies', 'drifting-chest'])(
+  it.each(['drifting-supplies', 'drifting-chest'])(
     'keeps resource and weather limits during %s', (pendingEventId) => {
       const pending = { state: 'dayEvent' as const, pendingEventId };
       expect(dayActionUnavailableReason(state({ ...pending, energy: 0 }), 'repair'))

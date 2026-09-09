@@ -178,7 +178,7 @@ function createRig(
     deny: vi.fn(),
     beginEventReaction: vi.fn(),
     finishEventReaction: vi.fn((eventId: string) => {
-      if (eventId === 'wreckage') finishDive();
+      if (eventId === 'drifting-supplies') finishDive();
     }),
     beginDive: vi.fn(),
     finishDive,
@@ -653,119 +653,6 @@ describe('SurvivalEventFlow', () => {
     expect(rig.session.resolveEvent).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ['search', null, { kind: 'resource', id: 'food', quantity: 1 }],
-    ['delegate-carlitos', null, { kind: 'resource', id: 'food', quantity: 1 }],
-    ['dive', 'scubaSet-1', { kind: 'item', id: 'medicalKit', quantity: 1 }],
-  ] as const)('returns before showing the %s Wreckage result', async (
-    choiceId,
-    instanceId,
-    rewardSummary,
-  ) => {
-    const pending = snapshot({
-      state: 'dayEvent', pendingEventId: 'wreckage', energy: 3,
-      inventory: inventory({
-        'scubaSet-1': {
-          instanceId: 'scubaSet-1', type: 'scubaSet', condition: 'usable',
-        },
-      }),
-    });
-    const rig = createRig(pending);
-    rig.setResolveEvent(() => {
-      rig.calls.push('action-complete');
-      rig.setSnapshot(snapshot({ state: 'day', inventory: pending.inventory }));
-      return accepted({ rewardSummary });
-    });
-    await rig.flow.revealPending(pending);
-    await rig.flow.focusEvent('wreckage');
-    rig.flow.setFocusedResolutionActive(true);
-    const actionStart = rig.calls.length;
-    const resolution = rig.flow.resolveFocusedEventChoice({ id: choiceId, instanceId });
-    if (resolution === undefined || !resolution.accepted) throw new Error('Expected Wreckage choice.');
-
-    await resolution.playAnimation();
-    if (choiceId === 'search') {
-      expect(rig.world.playEventChoice).not.toHaveBeenCalled();
-      expect(rig.world.reactToEventOutcome).not.toHaveBeenCalled();
-    }
-    await resolution.afterAnimation();
-    await resolution.beforeReturn();
-    rig.calls.push('exit-focus');
-    resolution.clearEvent(true);
-    rig.calls.push('render-default');
-    resolution.renderSnapshot();
-    await resolution.afterReturn();
-
-    const orderedCalls = rig.calls.slice(actionStart).filter((call) => [
-      'action-complete', 'cover', 'exit-focus', 'clear-world',
-      'render-default', 'settle', 'uncover', 'show-result',
-    ].includes(call));
-    expect(orderedCalls).toEqual([
-      'action-complete', 'cover', 'exit-focus', 'clear-world',
-      'render-default', 'settle', 'uncover', 'show-result',
-    ]);
-    expect(rig.ui.showRewardResult).toHaveBeenCalledWith({
-      title: 'WRECKAGE', reward: rewardSummary, lines: [],
-    });
-  });
-
-  it('runs dive audio through the Wreckage focused item use', async () => {
-    const pending = snapshot({
-      state: 'dayEvent',
-      pendingEventId: 'wreckage',
-      energy: 3,
-      inventory: inventory({
-        'scubaSet-1': {
-          instanceId: 'scubaSet-1',
-          type: 'scubaSet',
-          condition: 'usable',
-        },
-      }),
-    });
-    const rig = createRig(pending);
-    rig.setResolveEvent(() => {
-      rig.setSnapshot(snapshot({
-        state: 'day',
-        energy: 0,
-        inventory: pending.inventory,
-      }));
-      return accepted({ eventPresentationKey: 'wreckage.dive-loot' });
-    });
-    let waterImpact: ((cueIndex: number) => void) | undefined;
-    rig.world.playEventItemUse.mockImplementationOnce(async (
-      _eventId,
-      _choiceId,
-      _instanceId,
-      onAction,
-    ) => {
-      waterImpact = onAction;
-    });
-    await rig.flow.revealPending(pending);
-
-    await rig.flow.focusEvent('wreckage');
-    rig.flow.setFocusedResolutionActive(true);
-    const resolution = rig.flow.resolveFocusedEventChoice({
-      id: 'dive',
-      instanceId: 'scubaSet-1',
-    });
-    if (resolution === undefined || !resolution.accepted) throw new Error('Expected Wreckage choice.');
-    const animation = resolution.playAnimation();
-    await Promise.resolve();
-
-    expect(rig.audio.beginDive).not.toHaveBeenCalled();
-    expect(rig.audio.finishDive).not.toHaveBeenCalled();
-    waterImpact?.(0);
-    await animation;
-
-    expect(rig.audio.beginDive).toHaveBeenCalledOnce();
-    expect(rig.audio.finishDive).not.toHaveBeenCalled();
-    await resolution.beforeReturn();
-    expect(rig.audio.finishDive).toHaveBeenCalledOnce();
-    expect(rig.ui.setSleepCovered.mock.invocationCallOrder[0]!).toBeLessThan(
-      rig.audio.finishDive.mock.invocationCallOrder[0]!,
-    );
-  });
-
   it('keeps the focused operation active when a choice is rejected', async () => {
     const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-supplies' });
     const rig = createRig(pending);
@@ -787,49 +674,6 @@ describe('SurvivalEventFlow', () => {
 
     expect(rig.flow.resolveFocusedEventChoice({ id: 'retrieve', instanceId: null }))
       .toEqual({ accepted: false });
-  });
-
-  it('clears active Wreckage dive audio after failure', async () => {
-    const itemUse = deferred();
-    const pending = snapshot({
-      state: 'dayEvent',
-      pendingEventId: 'wreckage',
-      energy: 3,
-      inventory: inventory({
-        'scubaSet-1': {
-          instanceId: 'scubaSet-1',
-          type: 'scubaSet',
-          condition: 'usable',
-        },
-      }),
-    });
-    const rig = createRig(pending);
-    rig.world.playEventItemUse.mockImplementationOnce((
-      _eventId,
-      _choiceId,
-      _instanceId,
-      onAction,
-    ) => {
-      onAction?.(0);
-      return itemUse.promise;
-    });
-    rig.audio.clearEvent.mockImplementation(() => rig.audio.cancelDive());
-    await rig.flow.revealPending(pending);
-
-    await rig.flow.focusEvent('wreckage');
-    rig.flow.setFocusedResolutionActive(true);
-    const resolution = rig.flow.resolveFocusedEventChoice({
-      id: 'dive',
-      instanceId: 'scubaSet-1',
-    });
-    if (resolution === undefined || !resolution.accepted) throw new Error('Expected Wreckage choice.');
-    const work = resolution.playAnimation();
-    await vi.waitFor(() => expect(rig.audio.beginDive).toHaveBeenCalledOnce());
-    rig.flow.clearAfterFailure();
-
-    expect(rig.audio.cancelDive).toHaveBeenCalledOnce();
-    itemUse.resolve();
-    await work;
   });
   it('loads, activates, stages, and reveals before it enables eligible items', async () => {
     const umbrella = {

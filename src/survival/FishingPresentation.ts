@@ -902,7 +902,7 @@ export class FishingPresentation {
 
   private applyReelAnimation(normalized: number): void {
     this.dependencies.rodPivot.rotation.x = this.baseRodPivotRotationX
-      + (FISHING_ROD_REWARD_LEAN - this.baseRodPivotRotationX) * smootherStep(normalized);
+      + (FISHING_ROD_REWARD_LEAN - this.baseRodPivotRotationX) * smootherStep(Math.min(1, normalized / 0.2));
     if (this.activeCatch === null) return;
     this.catchRest.getWorldPosition(this.catchTargetWorld);
     this.catchApproachWorld.copy(this.catchTargetWorld);

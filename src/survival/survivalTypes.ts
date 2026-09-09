@@ -51,26 +51,23 @@ export interface ResourceDelta {
   rescueLead?: number;
 }
 
-export type DriftingCargoKind = 'barrel' | 'chest' | 'lifeboat' | 'container';
+export type DriftingCargoKind = 'barrel' | 'chest' | 'lifeboat' | 'container' | 'debris';
 
 export type EventPresentationKey =
   | 'drifting-supplies.retrieve'
   | 'drifting-chest.retrieve'
-  | 'wreckage.search-food'
-  | 'wreckage.search-bait'
-  | 'wreckage.search-injury'
-  | 'wreckage.carlitos-empty'
-  | 'wreckage.dive-loot'
-  | 'wreckage.dive-collapse'
-  | 'wreckage.dive-creature'
-  | 'wreckage.dive-ghost'
   | 'check-the-back.fish'
   | 'check-the-back.bad'
   | 'check-the-back.ignore'
   | 'flowers.collect'
   | 'flowers.drift';
 
-export type RewardSummary =
+export type RewardSummary = RewardEntry | {
+  readonly kind: 'bundle';
+  readonly rewards: readonly RewardEntry[];
+};
+
+export type RewardEntry =
   | {
       readonly kind: 'resource';
       readonly id: 'food' | 'bait';

@@ -14,8 +14,6 @@ const catalog = {
   hand: { en: 'HAND', pl: 'DŁOŃ', 'es-AR': "MANO" },
   handDescription: { en: 'Touch the waiting hand.', pl: 'Dotknij czekającej dłoni.', 'es-AR': "Tocá la mano que espera." },
   offerChest: { en: 'Offer the closed chest to the hand.', pl: 'Podaj dłoni zamkniętą skrzynię.', 'es-AR': "Ofrecele el cofre cerrado a la mano." },
-  wreckage: { en: 'WRECKAGE', pl: 'WRAK', 'es-AR': "RESTOS DEL NAUFRAGIO" },
-  wreckageDescription: { en: 'Inspect the floating debris.', pl: 'Zbadaj dryfujące szczątki.', 'es-AR': "Examiná los restos flotantes." },
   island: { en: 'ISLAND', pl: 'WYSPA', 'es-AR': "ISLA" },
   islandDescription: { en: 'Turn the boat toward the small island.', pl: 'Skieruj łódź ku małej wyspie.', 'es-AR': "Dirigí el bote hacia la pequeña isla." },
   throwTarget: { en: 'Throw at target', pl: 'Rzuć w cel', 'es-AR': "Lanzar al objetivo" },

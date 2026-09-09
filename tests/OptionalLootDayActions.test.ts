@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { sequenceRandom } from './helpers/random';
 
-describe.each(['wreckage', 'drifting-supplies', 'drifting-chest'] as const)(
+describe.each(['drifting-supplies', 'drifting-chest'] as const)(
   'day actions during %s', (eventId) => {
     function session(quietNight = false): SurvivalSession {
       return new SurvivalSession([{ instanceId: 'energyBar-1', type: 'energyBar' }], {
@@ -27,7 +27,7 @@ describe.each(['wreckage', 'drifting-supplies', 'drifting-chest'] as const)(
       const restored = SurvivalSession.restore(run.exportCheckpoint());
       expect(restored.snapshot().pendingEventId).toBe(eventId);
       expect(restored.perform('useEnergyBar').accepted).toBe(true);
-      const choiceId = eventId === 'wreckage' ? 'search' : 'retrieve';
+      const choiceId = 'retrieve';
       expect(restored.resolveEvent({ kind: 'choice', choiceId }).accepted).toBe(true);
       expect(restored.snapshot()).toMatchObject({ state: 'day', pendingEventId: null });
     });
@@ -41,7 +41,7 @@ describe.each(['wreckage', 'drifting-supplies', 'drifting-chest'] as const)(
         journalEntries: [expect.objectContaining({
           daytime: expect.objectContaining({
             eventId,
-            attemptedChoiceId: eventId === 'wreckage' ? 'leave' : 'sleep',
+            attemptedChoiceId: 'sleep',
           }),
         })],
       });

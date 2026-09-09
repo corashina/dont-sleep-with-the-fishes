@@ -252,11 +252,6 @@ export const uiCatalog = {
     "pl": "Wróć do łodzi",
     "es-AR": "Volver al bote"
   },
-  "wreckageTitle": {
-    "en": "Wreckage Debris",
-    "pl": "Szczątki wraku",
-    "es-AR": "Restos del naufragio"
-  },
   "suppliesTitle": {
     "en": "Drifting Supplies",
     "pl": "Dryfujące zapasy",

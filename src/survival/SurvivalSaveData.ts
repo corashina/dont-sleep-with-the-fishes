@@ -1,3 +1,4 @@
+import type { RewardEntry } from './survivalTypes';
 import { DOMAIN_MESSAGES } from '../i18n/domainMessages';
 import { PRESENTATION_WEATHER_IDS, type PresentationWeatherId } from '../weather/presentationWeather';
 import { withOutcomeText, type OutcomeText } from './outcomeText';
@@ -266,7 +267,18 @@ function parseEventPresentationKeyExtension(
 }
 
 function parseRewardSummary(value: unknown): ActionOutcome['rewardSummary'] | undefined {
-  if (!isRecord(value) || typeof value.kind !== 'string' || typeof value.id !== 'string') return undefined;
+  if (!isRecord(value) || typeof value.kind !== 'string') return undefined;
+  if (value.kind === 'bundle') {
+    if (!Array.isArray(value.rewards) || value.rewards.length < 1 || value.rewards.length > 4) return undefined;
+    const rewards = value.rewards.map(parseRewardEntry);
+    if (rewards.some((entry) => entry === undefined)) return undefined;
+    return Object.freeze({ kind: 'bundle', rewards: Object.freeze(rewards as RewardEntry[]) });
+  }
+  return parseRewardEntry(value);
+}
+
+function parseRewardEntry(value: unknown): RewardEntry | undefined {
+  if (!isRecord(value) || typeof value.id !== 'string') return undefined;
   if (value.kind === 'resource' && (value.id === 'food' || value.id === 'bait')) {
     const quantity = parseInteger(value.quantity, 1, MAX_COUNTER);
     return quantity === null ? undefined : Object.freeze({ kind: 'resource', id: value.id, quantity });
