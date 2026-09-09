@@ -361,7 +361,7 @@ function applyAppearance(template: FamilyTemplate, appearance: FishingAppearance
 function catchModelSpec(
   definition: FishingCatchDefinition,
 ): FishingCatchModelSpec | undefined {
-  if (definition.presentation.kind === 'fishing') {
+  if (definition.presentation.kind !== 'item') {
     return fishingCatchModelSpec(definition.id);
   }
   const item = ITEM_MODEL_SPECS[definition.presentation.itemId];
@@ -382,6 +382,14 @@ function decorateLoadedItemCatch(
   active.root.userData.fishingItemId = definition.presentation.itemId;
   if (definition.presentation.condition !== 'broken') return;
   for (const material of active.materials) applyBrokenMaterialTreatment(material);
+}
+
+function prepareUnloadedCatch(definition: FishingCatchDefinition): ActiveCatch {
+  const { presentation, id } = definition;
+  if (presentation.kind === 'model') throw new Error(`Missing fishing model: ${id}`);
+  return presentation.kind === 'fishing'
+    ? prepareProceduralCatch(presentation.family, presentation.appearance, id)
+    : prepareProceduralItemCatch(presentation.itemId, presentation.condition);
 }
 
 export class FishingCatchLibrary {
@@ -410,8 +418,9 @@ export class FishingCatchLibrary {
           definition.presentation.kind === 'item',
         );
         decorateLoadedItemCatch(active, definition);
-      } catch {
+      } catch (error) {
         if (!this.isCurrent(requestId)) return null;
+        if (definition.presentation.kind === 'model') throw error;
       }
     }
     if (!this.isCurrent(requestId)) {
@@ -419,16 +428,7 @@ export class FishingCatchLibrary {
       return null;
     }
 
-    active ??= definition.presentation.kind === 'fishing'
-      ? prepareProceduralCatch(
-        definition.presentation.family,
-        definition.presentation.appearance,
-        catchId,
-      )
-      : prepareProceduralItemCatch(
-        definition.presentation.itemId,
-        definition.presentation.condition,
-      );
+    active ??= prepareUnloadedCatch(definition);
     this.active = active;
     return active.root;
   }

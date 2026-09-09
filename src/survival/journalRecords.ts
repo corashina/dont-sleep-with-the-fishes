@@ -1,9 +1,10 @@
 import { cloneOutcomeText, type OutcomeText } from './outcomeText';
 import { presentationWeatherForEvent, type PresentationWeatherId } from '../weather/presentationWeather';
 import type { ItemId, ItemInstanceId } from '../game/ItemState';
-import type { CarlitosDeathCause, CarlitosState } from './CarlitosState';
-import type { FishingTerminalResult } from './FishingSession';
+import type { CarlitosState } from './CarlitosState';
+import type { FishingSingleResult } from './FishingSession';
 import type { FishingCatchId } from './fishingCatalog';
+import type { FishingSettlement } from './fishingSettlementRules';
 import type {
   ActionOutcome,
   EventPresentationKey,
@@ -17,6 +18,7 @@ export interface JournalInventoryMutation {
 }
 
 export interface JournalEventRecord {
+  readonly deltas: Readonly<ResourceDelta>;
   readonly phase: 'day' | 'night';
   readonly eventId: string;
   readonly attemptedChoiceId: string | null;
@@ -38,6 +40,8 @@ export type JournalNightRecord =
   | { readonly kind: 'quiet' };
 
 export interface JournalFishingRecord {
+  readonly deltas: Readonly<ResourceDelta>;
+  readonly inventoryMutations: readonly JournalInventoryMutation[];
   readonly kind: 'fishing';
   readonly attemptId: string;
   readonly result: 'fish' | 'utility' | 'junk' | 'miss';
@@ -48,7 +52,7 @@ export interface JournalFishingRecord {
 
 export interface JournalCarlitosCareRecord {
   readonly kind: 'carlitosCare';
-  readonly action: 'pet' | 'feed' | 'treat';
+  readonly action: 'pet' | 'feed';
 }
 
 export interface JournalSurvivalActionRecord {
@@ -65,13 +69,10 @@ export interface JournalCarlitosDawnRecord {
 }
 
 export interface JournalCarlitosDawnState {
-  readonly alive: boolean;
   readonly energy: number;
   readonly hunger: number;
-  readonly sickness: number;
   readonly unhappiness: number;
   readonly pettedToday: boolean;
-  readonly deathCause: CarlitosDeathCause | null;
 }
 
 export type JournalDayActionRecord =
@@ -93,7 +94,7 @@ export function createJournalEventRecord(
   event: Pick<SurvivalEventDefinition, 'phase' | 'id'>,
   attemptedChoiceId: string | null,
   attemptedItemId: ItemId | null,
-  outcome: Pick<ActionOutcome, 'code' | 'text' | 'eventPresentationKey'>,
+  outcome: Pick<ActionOutcome, 'code' | 'text' | 'eventPresentationKey' | 'deltas'>,
   inventoryMutations: readonly JournalInventoryMutation[],
 ): JournalEventRecord {
   if (outcome.text === undefined) throw new Error('Journal event requires a stable text reference.');
@@ -103,6 +104,7 @@ export function createJournalEventRecord(
     attemptedChoiceId,
     attemptedItemId,
     outcomeCode: outcome.code,
+    deltas: Object.freeze({ ...outcome.deltas }),
     text: cloneOutcomeText(outcome.text),
     ...(outcome.eventPresentationKey === undefined
       ? {}
@@ -121,17 +123,19 @@ export function createQuietJournalNightRecord(): JournalNightRecord {
 
 export function createJournalFishingRecord(
   attemptId: string,
-  result: FishingTerminalResult,
-  food: 0 | 1 | 2,
-  baitConsumed: boolean,
+  result: FishingSingleResult,
+  settlement: Pick<FishingSettlement, 'food' | 'baitConsumed' | 'deltas'>,
+  inventoryMutations: readonly JournalInventoryMutation[],
 ): JournalFishingRecord {
   return Object.freeze({
     kind: 'fishing',
     attemptId,
     result: result.kind === 'miss' ? 'miss' : result.catch.kind,
     catchId: result.kind === 'miss' ? null : result.catch.id,
-    food,
-    baitConsumed,
+    food: settlement.food,
+    baitConsumed: settlement.baitConsumed,
+    deltas: Object.freeze({ ...settlement.deltas }),
+    inventoryMutations: cloneJournalInventoryMutations(inventoryMutations),
   });
 }
 
@@ -169,13 +173,10 @@ export function createJournalCarlitosDawnState(
   state: CarlitosState,
 ): JournalCarlitosDawnState {
   return Object.freeze({
-    alive: state.alive,
     energy: state.energy,
     hunger: state.hunger,
-    sickness: state.sickness,
     unhappiness: state.unhappiness,
     pettedToday: state.pettedToday,
-    deathCause: state.deathCause,
   });
 }
 
@@ -204,6 +205,7 @@ export function createJournalEntry(
 function cloneJournalRecord(record: JournalEventRecord): JournalEventRecord {
   return Object.freeze({
     ...record,
+    deltas: Object.freeze({ ...record.deltas }),
     text: cloneOutcomeText(record.text),
     inventoryMutations: cloneJournalInventoryMutations(record.inventoryMutations),
   });
@@ -235,6 +237,10 @@ export function cloneJournalActions(
   actions: readonly JournalDayActionRecord[],
 ): readonly JournalDayActionRecord[] {
   return Object.freeze(actions.map((action) => {
+    if (action.kind === 'fishing') {
+      return Object.freeze({ ...action, deltas: Object.freeze({ ...action.deltas }),
+        inventoryMutations: cloneJournalInventoryMutations(action.inventoryMutations) });
+    }
     if (action.kind === 'dayAction') {
       return createJournalSurvivalActionRecord(action.action, action.deltas, action.inventoryMutations);
     }

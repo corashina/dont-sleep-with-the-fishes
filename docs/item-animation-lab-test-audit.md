@@ -8,8 +8,8 @@ All checkboxes remain blank. They do not represent the user’s test history.
 ## Coverage baseline
 
 - 36 selector entries: one lab, 31 event entries for 29 events, and four endings.
-- 41 lab use entries across 18 item types.
-- Scuba Gear has condition controls but no lab use entry.
+- 44 lab use entries across 19 item types, updated on 2026-09-09.
+- Fishing Net has a Fish with net preview. Scuba Gear has a Dive preview.
 - The lab also exposes Fishing Rod, Repair Toolbox, Chest, and the Carlitos status card.
 - The event catalog defines 117 responses and 194 outcome entries. Some entries share a visual result.
 - 846 existing tests passed across 15 files. This does not establish complete visual, audio, or branch coverage.
@@ -39,7 +39,7 @@ Sources: [selector options](../src/app/EventTest.ts), [contextual resolution](..
 | Event context | Most lab uses stage a scene without its reveal. Handyman is the exception. Test each actual event’s target, framing, timing, effects, and return. |
 | Lab-only routes | Some previews have no current event choice. Examples: throwing Medkit or Energy Bar at Flowers, and trading Knife or Radio with Handyman. |
 | Audio differences | Lab Bucket Helmet does not route the Shower Night rain cue. Event reveal, reaction, sleep, and dawn sounds also need actual event tests. |
-| Normal day actions | Eating, treatment, Energy Bar use, normal scuba diving, paid item repair, and real hull repair are not normal action previews in the lab. Toolbox only plays its animation. |
+| Normal day actions | Eating, treatment, Energy Bar use, paid item repair, and real hull repair are not normal action previews in the lab. Net fishing, scuba diving, and Toolbox previews play their animations without changing resources. |
 | Fishing rewards | Day 1 excludes Crab, Tuna, and Squid. Full inventory excludes Wet Duct Tape, Broken Compass, Torn Fishing Net, and Energy Bar. No catch selector exists. |
 | Fishing repetition | Fishing spends real Energy. The lab has no refill control. Three completed attempts exhaust starting Energy. Chest opening also spends all three Energy. |
 | Chest rewards | A fresh full-inventory lab chest always awards two Food. Item, Bait, and duct tape rewards need a missing item slot. No reward selector exists. |
@@ -48,7 +48,7 @@ Sources: [selector options](../src/app/EventTest.ts), [contextual resolution](..
 | Trade and wreckage item gains | Full inventory converts duplicate item rewards to Food. Missing or lost reward items are needed to test actual item acquisition. Broken items still occupy their slot. |
 | Wreckage outcomes | Search has four results, Carlitos has four, and diving has fourteen. Injury, collapse, broken scuba, creature, ghost, and each loot result cannot be selected. |
 | Drifting Supplies variants | Barrel, lifeboat, and container have different rewards. Side and near/middle/far distance vary by seed. No variant selector exists. |
-| Carlitos states | He starts alive, full, healthy, happy, and rested. Care success, exhausted delegation, absence, sickness, misery, starvation, and death require a prepared run. |
+| Carlitos states | He starts full, happy, and rested. Care success, exhausted delegation, absence, misery, and hunger require a prepared run. |
 | Radio progression | The lab forces a reception preview. It does not test dawn signal chance, missed calls, answering costs, repeated calls, or rescue progress. |
 | Event scheduling | Forced entry bypasses day, pressure, cooldown, inventory, companion, chest, and rescue requirements. It cannot prove natural event eligibility or repeat limits. |
 | Quiet and chained nights | Quiet Waters and Quiet Night are not selector entries. Guarded Sleep follow-up selection remains random. Test these through normal progression. |
@@ -132,6 +132,7 @@ The event and choice shown below are preview inputs. They are not proof that the
 
 ### FISHING NET
 
+- [ ] Fish with net (`item-animation-lab` / `netFish`). Shows two sample catches and returns to the lab.
 - [ ] Scoop from water (`school-of-fish` / `fishingNet`).
 - [ ] Trade handover (`handyman` / `fishingNet`).
 
@@ -139,6 +140,11 @@ The event and choice shown below are preview inputs. They are not proof that the
 
 - [ ] Slash knife (`snatcher` / `knife`).
 - [ ] Trade handover (`handyman` / `knife`).
+
+### SCUBA GEAR
+
+- [ ] Dive (`item-animation-lab` / `dive`). Plays water entry, dive audio, and the covered return.
+- [ ] Repeat the preview at zero Energy. Resources and item condition remain unchanged.
 
 ### BUCKET
 
@@ -528,7 +534,7 @@ Selector: Shadow Figure.
 
 Selector: Guarded Sleep.
 
-- [ ] **Let Carlitos Watch** (`watch`).
+- [ ] **Let Carlitos Watch** (`watch`) — needs Carlitos with 1 energy.
   - [ ] `outcome 1`: Carlitos keeps the night peaceful.
   - [ ] `outcome 2`: Something slips past his watch. Effects: follow-up night.
 

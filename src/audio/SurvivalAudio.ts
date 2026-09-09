@@ -106,6 +106,12 @@ const CAT_MEOW_SOUNDS = Object.freeze([
 
 const SHADOW_MEOW_DELAY_SECONDS = 0.12;
 
+const YAWN_SOUNDS = Object.freeze([
+  'yawn',
+  'yawnShort',
+  'yawnTired',
+] as const satisfies readonly SoundId[]);
+
 export class SurvivalAudio {
   private weather: PresentationWeatherId = 'calm';
   private waveClock = 0;
@@ -192,7 +198,7 @@ export class SurvivalAudio {
     }
   }
 
-  petCarlitos(): void {
+  meowCarlitos(): void {
     if (this.disposed) return;
     const meow = this.drawMeow();
     if (meow !== null) this.scope.play(meow);
@@ -265,7 +271,9 @@ export class SurvivalAudio {
     if (result.kind === 'miss') {
       this.scope.play('fishingMiss');
     } else {
-      this.scope.play(result.catch.kind === 'fish' ? 'fishCatch' : 'junkCatch');
+      const fish = result.kind === 'haul'
+        ? result.catches.some((entry) => entry.kind === 'fish') : result.catch.kind === 'fish';
+      this.scope.play(fish ? 'fishCatch' : 'junkCatch');
     }
   }
 
@@ -316,7 +324,7 @@ export class SurvivalAudio {
   sleep(): void {
     if (this.disposed) return;
     this.scope.play('goingToSleep');
-    this.scope.play('yawn');
+    this.scope.play(YAWN_SOUNDS[Math.floor(this.random() * YAWN_SOUNDS.length)]!);
   }
 
   nightfall(): void {

@@ -1,26 +1,20 @@
 import { domainMessage as t } from '../i18n/domainMessages';
 import type { RandomSource } from './survivalTypes';
 
-export type CarlitosDeathCause =
-  | 'starvation' | 'sickness' | 'misery';
-
 export const CARLITOS_MAX_ENERGY = 3;
+export const CARLITOS_MAX_UNHAPPINESS = 10;
 
 export interface CarlitosState {
-  alive: boolean;
   energy: number;
   hunger: number;
-  sickness: number;
   unhappiness: number;
   pettedToday: boolean;
-  deathCause: CarlitosDeathCause | null;
 }
 
 export type CarlitosSnapshot = Readonly<CarlitosState>;
 
 export interface CarlitosStatus {
   readonly hunger: string;
-  readonly health: string;
   readonly happiness: string;
 }
 
@@ -28,43 +22,41 @@ export function createCarlitosState(
   initial: Partial<CarlitosSnapshot> = {},
 ): CarlitosState {
   const state: CarlitosState = {
-    alive: true,
     energy: CARLITOS_MAX_ENERGY,
     hunger: 5,
-    sickness: 0,
     unhappiness: 0,
     pettedToday: false,
-    deathCause: null,
     ...initial,
   };
-  state.energy = clampCarlitosEnergy(state.energy);
+  normalizeCarlitos(state);
   return state;
 }
 
 export function carlitosStatus(state: CarlitosSnapshot): CarlitosStatus {
   return {
-    hunger: hungerStatus(state.hunger),
-    health: healthStatus(state.sickness),
-    happiness: happinessStatus(state.unhappiness),
+    hunger: t(hungerStatus(state.hunger)),
+    happiness: t(happinessStatus(state.unhappiness)),
   };
 }
 
-export function carlitosWellness(state: CarlitosSnapshot): number {
-  return clampNeed(state.hunger) - clampNeed(state.sickness) - unhappinessPenalty(state.unhappiness);
+export function carlitosEnergyLimit(state: CarlitosSnapshot): number {
+  const wellness = clampNeed(state.hunger) - unhappinessPenalty(state.unhappiness);
+  return Math.min(CARLITOS_MAX_ENERGY, Math.max(0, wellness - 1));
 }
 
 export function spendCarlitosEnergy(
   state: CarlitosState,
   amount: number,
 ): boolean {
-  state.energy = clampCarlitosEnergy(state.energy);
-  if (!state.alive || state.energy < amount) return false;
+  normalizeCarlitos(state);
+  if (!Number.isInteger(amount) || amount <= 0 || state.energy < amount) return false;
   state.energy -= amount;
   return true;
 }
 
 export function petCarlitos(state: CarlitosState): boolean {
-  if (!state.alive || state.pettedToday) {
+  normalizeCarlitos(state);
+  if (state.pettedToday || state.unhappiness <= 2) {
     return false;
   }
 
@@ -74,39 +66,10 @@ export function petCarlitos(state: CarlitosState): boolean {
 }
 
 export function feedCarlitos(state: CarlitosState): boolean {
-  if (!state.alive) {
-    return false;
-  }
-
-  state.hunger = clampNeed(state.hunger);
+  normalizeCarlitos(state);
   if (state.hunger === 5) return false;
 
   state.hunger = 5;
-  return true;
-}
-
-export function treatCarlitos(state: CarlitosState): boolean {
-  if (!state.alive) {
-    return false;
-  }
-
-  state.sickness = clampNeed(state.sickness);
-  if (state.sickness === 0) return false;
-
-  state.sickness = 0;
-  return true;
-}
-
-export function killCarlitos(
-  state: CarlitosState,
-  cause: CarlitosDeathCause,
-): boolean {
-  if (!state.alive) {
-    return false;
-  }
-
-  state.alive = false;
-  state.deathCause = cause;
   return true;
 }
 
@@ -114,68 +77,34 @@ export function advanceCarlitosDawn(
   state: CarlitosState,
   random: RandomSource,
 ): CarlitosSnapshot {
-  if (!state.alive) {
-    return state;
-  }
-
-  state.hunger = clampNeed(state.hunger);
-  state.sickness = clampNeed(state.sickness);
-  state.unhappiness = Math.max(0, state.unhappiness);
+  normalizeCarlitos(state);
 
   if (random.next() < 0.5) {
-    state.hunger -= 1;
-  }
-  if (state.hunger === 0) {
-    killCarlitos(state, 'starvation');
-    return state;
-  }
-
-  if (random.next() < (state.sickness + 1) / 100) {
-    state.sickness = clampNeed(state.sickness + 1);
-  }
-  if (state.sickness === 5) {
-    killCarlitos(state, 'sickness');
-    return state;
-  }
-
-  if (state.sickness > 0 && random.next() < ((5 - state.sickness) * 3) / 100) {
-    state.sickness = 0;
+    state.hunger = Math.max(0, state.hunger - 1);
   }
 
   if (!state.pettedToday) {
-    state.unhappiness += 1;
-  }
-  if (state.unhappiness > 10 && random.next() < 0.45) {
-    killCarlitos(state, 'misery');
-    return state;
+    state.unhappiness = Math.min(CARLITOS_MAX_UNHAPPINESS, state.unhappiness + 1);
   }
 
-  state.energy = clampCarlitosEnergy(state.energy + 1);
+  state.energy = Math.min(carlitosEnergyLimit(state), state.energy + 1);
   state.pettedToday = false;
   return state;
 }
 
-function hungerStatus(hunger: number): CarlitosStatus['hunger'] {
-  if (hunger >= 5) return t('satiated');
-  if (hunger === 4) return t('peckish');
-  if (hunger >= 2) return t('hungry');
-  return t('starving');
+export function hungerStatus(hunger: number): 'satiated' | 'peckish' | 'hungry' | 'starving' {
+  if (hunger >= 5) return 'satiated';
+  if (hunger === 4) return 'peckish';
+  if (hunger >= 2) return 'hungry';
+  return 'starving';
 }
 
-function healthStatus(sickness: number): CarlitosStatus['health'] {
-  if (sickness <= 0) return t('healthy');
-  if (sickness === 1) return t('unwell');
-  if (sickness <= 3) return t('sick');
-  if (sickness === 4) return t('dying');
-  return t('dead');
-}
-
-function happinessStatus(unhappiness: number): CarlitosStatus['happiness'] {
-  if (unhappiness <= 2) return t('happy');
-  if (unhappiness <= 4) return t('bored');
-  if (unhappiness <= 6) return t('lonely');
-  if (unhappiness === 7) return t('depressed');
-  return t('miserable');
+export function happinessStatus(unhappiness: number): 'happy' | 'bored' | 'lonely' | 'depressed' | 'miserable' {
+  if (unhappiness <= 2) return 'happy';
+  if (unhappiness <= 4) return 'bored';
+  if (unhappiness <= 6) return 'lonely';
+  if (unhappiness === 7) return 'depressed';
+  return 'miserable';
 }
 
 function unhappinessPenalty(unhappiness: number): number {
@@ -191,6 +120,8 @@ function clampNeed(value: number): number {
   return Math.min(5, Math.max(0, value));
 }
 
-function clampCarlitosEnergy(value: number): number {
-  return Math.min(CARLITOS_MAX_ENERGY, Math.max(0, Math.trunc(value)));
+function normalizeCarlitos(state: CarlitosState): void {
+  state.hunger = clampNeed(state.hunger);
+  state.unhappiness = Math.min(CARLITOS_MAX_UNHAPPINESS, Math.max(0, Math.trunc(state.unhappiness)));
+  state.energy = Math.min(carlitosEnergyLimit(state), Math.max(0, Math.trunc(state.energy)));
 }

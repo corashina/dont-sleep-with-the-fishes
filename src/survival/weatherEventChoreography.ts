@@ -101,7 +101,6 @@ const ITEM_CHOREOGRAPHY: Readonly<
     map: Object.freeze({ duration: 1.4, effectKind: 'none' }),
   }),
   'windy-night': Object.freeze({
-    fishingNet: Object.freeze({ duration: 1.6, effectKind: 'none' }),
     map: Object.freeze({ duration: 1.45, effectKind: 'none' }),
     umbrella: Object.freeze({ duration: 1.55, effectKind: 'none' }),
   }),

@@ -1,6 +1,6 @@
 import {
   BufferGeometry,
-  CylinderGeometry,
+  Color,
   Group,
   Material,
   Mesh,
@@ -8,7 +8,7 @@ import {
   Object3D,
   Quaternion,
   Skeleton,
-  SphereGeometry,
+  Vector3,
 } from 'three';
 import type { ItemInstance, ItemInstanceId } from '../game/ItemState';
 import { enableItemAmbientOcclusion } from '../rendering/ItemAmbientOcclusion';
@@ -31,6 +31,7 @@ import {
   disposeResourceSets,
   runCleanupSteps,
 } from '../world/SceneResources';
+import { eventItemUseDurationForItem } from './eventItemUseChoreography';
 import type { CarlitosSnapshot } from './CarlitosState';
 import type { EventSide } from './eventVariant';
 import {
@@ -49,7 +50,7 @@ const CARLITOS_INSTANCE = Object.freeze({
 } satisfies ItemInstance);
 
 export const CARLITOS_PET_DURATION = 2.4;
-const CARLITOS_FEED_DURATION = 0.8;
+export const CARLITOS_FEED_DURATION = eventItemUseDurationForItem('throw-target', 'cannedFood') * 0.8;
 const PET_CONTACT_PROGRESS = 0.18;
 
 interface ActiveAction {
@@ -61,27 +62,17 @@ interface ActiveAction {
   readonly resolve: () => void;
 }
 
-export interface CarlitosPresentationConstructionHooks {
-  readonly onPropPartCreated?: (
-    prop: 'hand' | 'food',
-    part: Mesh,
-  ) => void;
-}
-
-interface OwnedCompanionProp {
-  readonly root: Group;
-  readonly geometries: Set<BufferGeometry>;
-  readonly materials: Set<Material>;
-}
-
 export class CarlitosPresentation {
   readonly root = new Group();
   readonly interactionRoot = new Group();
+  readonly foodTarget = new Group();
   private readonly poseRoot = new Group();
   private readonly headPoseRoot = new Group();
   private readonly hand: Group;
   private readonly handJoints: readonly HandJoint[];
-  private readonly food: Group;
+  private readonly handMaterials = new Set<Material>();
+  private readonly head: Object3D;
+  private readonly headPosition = new Vector3();
   private readonly tailTip: Object3D | null;
   private readonly tailAnimationQuaternion = new Quaternion();
   private readonly modelPresentation: PropPresentation;
@@ -92,19 +83,18 @@ export class CarlitosPresentation {
   private readonly ownedSkeletons = new Set<Skeleton>();
   private readonly pose: MutableCarlitosPose = createCarlitosPose();
   private readonly poseSample: CarlitosPoseSample = {
-    status: 'healthy',
+    status: 'content',
     action: null,
     elapsed: 0,
     duration: CARLITOS_PET_DURATION,
   };
-  private status: CarlitosPoseState = 'healthy';
+  private status: CarlitosPoseState = 'content';
   private activeAction: ActiveAction | null = null;
-  private living = false;
+  private aboard = false;
   private disposed = false;
 
   constructor(
     propModels: Pick<PropModelLibrary, 'createPresentation' | 'createEventModel'>,
-    hooks: CarlitosPresentationConstructionHooks = {},
   ) {
     this.root.name = 'carlitos-companion';
     const transform = boatStorageTransform(CARLITOS_INSTANCE);
@@ -126,6 +116,7 @@ export class CarlitosPresentation {
         this.ownedMaterials,
       );
       this.modelPresentation.root.name = 'carlitos-model';
+      this.head = this.modelPresentation.root.getObjectByName('Head_22') ?? this.modelPresentation.root;
       this.tailTip = this.modelPresentation.root.getObjectByName('TailTip_8') ?? null;
       if (this.tailTip !== null) {
         this.tailAnimationQuaternion.copy(this.tailTip.quaternion);
@@ -137,7 +128,7 @@ export class CarlitosPresentation {
 
       const handModel = propModels.createEventModel('riggedHand');
       this.hand = new Group();
-      this.hand.name = 'carlitos-petting-hand';
+      this.hand.name = 'carlitos-care-hand';
       this.hand.scale.setScalar(0.32);
       if (handModel === null) {
         this.handJoints = [];
@@ -147,7 +138,7 @@ export class CarlitosPresentation {
         const handRig = findImportedHandRig(handModel.root);
         this.handJoints = handRig?.joints ?? [];
         this.hand.userData.modelKind = handRig === null ? 'model' : 'rigged';
-        preparePettingHand(handModel.root);
+        preparePettingHand(handModel.root, this.handMaterials);
         collectMeshResources(
           handModel.root,
           this.ownedGeometries,
@@ -155,11 +146,10 @@ export class CarlitosPresentation {
         );
         collectOwnedSkeletons(handModel.root, this.ownedSkeletons);
       }
-      const food = createFoodProp(hooks.onPropPartCreated);
-      this.food = food.root;
-      this.takePropOwnership(food);
-      this.root.add(this.hand, this.food);
-      this.setLiving(false);
+      this.foodTarget.name = 'carlitos-food-target';
+      this.root.add(this.foodTarget);
+      this.headPoseRoot.add(this.hand);
+      this.setAboard(false);
       this.applyPose();
     } catch (error) {
       try {
@@ -181,15 +171,15 @@ export class CarlitosPresentation {
 
   sync(snapshot: CarlitosSnapshot | null): void {
     if (this.disposed) return;
-    this.status = snapshot === null ? 'healthy' : carlitosPoseState(snapshot);
-    this.setLiving(snapshot?.alive === true);
-    if (!this.living) this.finishAction();
+    this.status = snapshot === null ? 'content' : carlitosPoseState(snapshot);
+    this.setAboard(snapshot !== null);
+    if (!this.aboard) this.finishAction();
     this.samplePose();
     this.applyPose();
   }
 
   play(action: CarlitosAction, onContact?: () => void): Promise<void> {
-    if (this.disposed || !this.living) return Promise.resolve();
+    if (this.disposed || !this.aboard) return Promise.resolve();
     this.finishAction();
     const duration = action === 'pet' ? CARLITOS_PET_DURATION : CARLITOS_FEED_DURATION;
     return new Promise((resolve) => {
@@ -251,15 +241,10 @@ export class CarlitosPresentation {
     ]);
   }
 
-  private setLiving(living: boolean): void {
-    this.living = living;
-    this.root.visible = living;
-    this.interactionRoot.visible = living;
-  }
-
-  private takePropOwnership(prop: OwnedCompanionProp): void {
-    for (const geometry of prop.geometries) this.ownedGeometries.add(geometry);
-    for (const material of prop.materials) this.ownedMaterials.add(material);
+  private setAboard(aboard: boolean): void {
+    this.aboard = aboard;
+    this.root.visible = aboard;
+    this.interactionRoot.visible = aboard;
   }
 
   private finishAction(): void {
@@ -299,29 +284,49 @@ export class CarlitosPresentation {
       if (pose.tailSway !== 0) this.tailTip.rotateY(pose.tailSway);
     }
 
-    this.hand.visible = this.living && pose.handReach !== 0;
-    this.hand.position.x = -0.04;
-    this.hand.position.y = 0.46
-      + (1 - pose.handReach) * 0.07
-      - pose.handStroke * 0.1
-      + pose.handLift * 0.1;
-    this.hand.position.z = -0.36;
-    this.hand.rotation.set(
-      0.08 + pose.handStroke * 0.04 - pose.handLift * 0.03,
-      -Math.PI / 2 + 0.06 + pose.handReach * 0.02,
-      0.04 + pose.handStroke * 0.03 - pose.handLift * 0.02,
-    );
+    this.updateHeadPosition();
+    this.foodTarget.position.copy(this.headPosition);
+    this.foodTarget.position.y += 0.015;
+    this.foodTarget.position.z -= 0.1;
+    this.hand.visible = this.aboard && this.activeAction?.id === 'pet' && pose.handReach > 0;
+    this.updateHandOpacity();
+    if (!this.hand.visible) return;
+    this.head.getWorldPosition(this.headPosition);
+    this.headPoseRoot.worldToLocal(this.headPosition);
+    this.applyPettingPose();
     applyHandJointCurl(this.handJoints, pose.handCurl);
-
-    this.food.visible = this.living && pose.foodReach !== 0;
-    this.food.position.x = 0.5 - pose.foodReach * 0.3;
-    this.food.position.y = 0.18 + pose.foodReach * 0.02;
-    this.food.position.z = 0.26 - pose.foodReach * 0.15;
-    this.food.rotation.y = -0.22 * pose.foodReach;
   }
+
+  private updateHeadPosition(): void {
+    this.head.getWorldPosition(this.headPosition);
+    this.root.worldToLocal(this.headPosition);
+  }
+
+  private updateHandOpacity(): void {
+    const opacity = this.activeAction?.id === 'pet' ? this.pose.handReach : 1;
+    for (const material of this.handMaterials) {
+      material.opacity = opacity;
+      material.depthWrite = opacity === 1;
+    }
+  }
+
+  private applyPettingPose(): void {
+    const pose = this.pose;
+    this.hand.position.copy(this.headPosition);
+    this.hand.position.y += 0.14 + pose.handLift * 0.08 + (1 - pose.handReach) * 0.08;
+    this.hand.position.z += -0.025 + pose.handStroke * 0.07 - (1 - pose.handReach) * 0.05;
+    this.hand.position.x += 0.025 * Math.sin(pose.handStroke * Math.PI);
+    this.hand.rotation.set(
+      pose.handStroke * 0.09 - pose.handLift * 0.07,
+      Math.PI / 2 - 0.3 * (1 - pose.handReach),
+      -0.04 - (1 - pose.handReach) * 0.18,
+    );
+  }
+
 }
 
-function preparePettingHand(root: Group): void {
+function preparePettingHand(root: Group, handMaterials: Set<Material>): void {
+  const skinTint = new Color(0xb78c72);
   root.traverse((object) => {
     if (!(object instanceof Mesh)) return;
     object.castShadow = false;
@@ -329,7 +334,10 @@ function preparePettingHand(root: Group): void {
     const materials = Array.isArray(object.material) ? object.material : [object.material];
     for (const material of materials) {
       if (!(material instanceof MeshStandardMaterial)) continue;
-      material.color.multiplyScalar(0.82);
+      handMaterials.add(material);
+      material.transparent = true;
+      material.depthWrite = false;
+      material.color.multiply(skinTint);
       material.roughness = Math.max(material.roughness, 0.92);
       material.metalness = 0;
       material.emissive.setHex(0x241812);
@@ -339,64 +347,4 @@ function preparePettingHand(root: Group): void {
     }
   });
   enableItemAmbientOcclusion(root);
-}
-
-function createFoodProp(
-  onPartCreated?: CarlitosPresentationConstructionHooks['onPropPartCreated'],
-): OwnedCompanionProp {
-  const root = new Group();
-  root.name = 'carlitos-food';
-  const geometries = new Set<BufferGeometry>();
-  const materials = new Set<Material>();
-  try {
-    const bowlMaterial = new MeshStandardMaterial({
-      color: 0x53646a,
-      roughness: 0.82,
-      metalness: 0.18,
-      flatShading: true,
-    });
-    materials.add(bowlMaterial);
-    const foodMaterial = new MeshStandardMaterial({
-      color: 0x754532,
-      roughness: 0.98,
-      flatShading: true,
-    });
-    materials.add(foodMaterial);
-    const bowlGeometry = new CylinderGeometry(0.2, 0.145, 0.09, 8, 1, false);
-    geometries.add(bowlGeometry);
-    const bowl = new Mesh(bowlGeometry, bowlMaterial);
-    bowl.name = 'carlitos-food:bowl';
-    root.add(bowl);
-    onPartCreated?.('food', bowl);
-
-    const rationGeometry = new SphereGeometry(0.12, 7, 4);
-    geometries.add(rationGeometry);
-    const ration = new Mesh(rationGeometry, foodMaterial);
-    ration.name = 'carlitos-food:ration';
-    ration.position.y = 0.065;
-    ration.scale.set(1, 0.38, 0.78);
-    ration.rotation.y = 0.24;
-    root.add(ration);
-    onPartCreated?.('food', ration);
-    enableItemAmbientOcclusion(root);
-    return { root, geometries, materials };
-  } catch (error) {
-    cleanupFailedProp(root, geometries, materials);
-    throw error;
-  }
-}
-
-function cleanupFailedProp(
-  root: Group,
-  geometries: Set<BufferGeometry>,
-  materials: Set<Material>,
-): void {
-  try {
-    runCleanupSteps([
-      () => root.clear(),
-      () => disposeResourceSets(geometries, materials),
-    ]);
-  } catch {
-    // Preserve the prop construction error after each resource runs.
-  }
 }

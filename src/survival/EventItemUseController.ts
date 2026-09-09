@@ -30,6 +30,8 @@ export interface EventItemUseRequest {
   readonly itemId: ItemId;
   readonly context: EventItemUseContext;
   readonly aimTarget: Object3D | null;
+  readonly landAtTarget?: boolean;
+  readonly durationSeconds?: number;
   readonly netCatch?: EventNetCatch | null;
   readonly onAction?: (cueIndex: number) => void;
 }
@@ -120,7 +122,7 @@ export class EventItemUseController {
         request,
         actor,
         elapsed: 0,
-        duration: eventItemUseDurationForItem(request.context, request.itemId),
+        duration: request.durationSeconds ?? eventItemUseDurationForItem(request.context, request.itemId),
         nextActionCueIndex: 0,
         resolve,
       };
@@ -275,13 +277,13 @@ export class EventItemUseController {
   }
 
   private applyRequestSample(request: EventItemUseRequest): void {
-    if (request.eventId === 'tornado') {
+    if (request.eventId === 'tornado' || request.eventId === 'carlitos') {
       this.sample.cameraYaw = 0;
       this.sample.cameraPitch = 0;
       this.sample.cameraTargetBlend = 0;
       this.sample.fovScale = 1;
     }
-    if (request.netCatch !== undefined && request.netCatch !== null) {
+    if (request.landAtTarget || (request.netCatch !== undefined && request.netCatch !== null)) {
       this.sample.flightTarget = 'event';
       this.sample.ballisticFlight = false;
     }

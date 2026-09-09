@@ -10,13 +10,13 @@ const eligibility = (day: number): EventEligibility => ({
   phase: 'night', day, weather: 'calm', lastEventId: null,
   lastSeenDay: new Map(), appearanceCounts: new Map(),
   targetableItemIds: new Set<ItemId>(), inventoryItemIds: new Set<ItemId>(),
-  rescueLead: 0, pressure: 0, chestState: 'closed', hasLivingCompanion: false,
+  rescueLead: 0, pressure: 0, chestState: 'closed', hasCompanion: false,
 });
 
 describe('night scheduling', () => {
   it('never repeats Guarded Sleep, even after a long delay', () => {
     const pool = eligibleEvents(SURVIVAL_EVENTS, {
-      ...eligibility(50), hasLivingCompanion: true,
+      ...eligibility(50), hasCompanion: true,
       appearanceCounts: new Map([['guarded-sleep', 1]]),
       lastSeenDay: new Map([['guarded-sleep', 7]]),
     });

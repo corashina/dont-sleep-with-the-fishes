@@ -8,13 +8,13 @@ import { SurvivalJournalView } from '../src/ui/SurvivalJournalView';
 afterEach(() => setLanguage('en'));
 
 it.each([
-  ['en', 'hungrier', 'sadder'],
-  ['pl', 'głodny', 'posmutniał'],
-  ['es-AR', 'hambre', 'triste'],
+  ['en', 'hungry', 'lonely'],
+  ['pl', 'głodny', 'samotnego'],
+  ['es-AR', 'hambre', 'solo'],
 ] as const)('renders saved Carlitos changes as prose in %s', (language, hunger, sadness) => {
   setLanguage(language);
-  const before = createJournalCarlitosDawnState(createCarlitosState({ hunger: 5, unhappiness: 0 }));
-  const after = { ...before, hunger: 4, unhappiness: 1 };
+  const before = createJournalCarlitosDawnState(createCarlitosState({ hunger: 4, unhappiness: 4 }));
+  const after = { ...before, hunger: 3, unhappiness: 5 };
   const entry = createJournalEntry(2, 'calm', [createJournalCarlitosDawnRecord(before, after)], null, { kind: 'quiet' });
   const view = new SurvivalJournalView();
   try {
@@ -23,6 +23,20 @@ it.each([
     expect(text).toContain(hunger);
     expect(text).toContain(sadness);
     expect(text).not.toMatch(/\d|→|Carlitos:/);
+  } finally {
+    view.dispose();
+  }
+});
+
+it.each(['en', 'pl', 'es-AR'] as const)('omits routine saved changes in %s', (language) => {
+  setLanguage(language);
+  const before = createJournalCarlitosDawnState(createCarlitosState({ energy: 1 }));
+  const after = { ...before, hunger: 4, unhappiness: 1, energy: 2 };
+  const entry = createJournalEntry(2, 'calm', [createJournalCarlitosDawnRecord(before, after)], null, { kind: 'quiet' });
+  const view = new SurvivalJournalView();
+  try {
+    view.show(JSON.parse(JSON.stringify([entry])));
+    expect(view.root.querySelector('[data-journal-night]')!.textContent).not.toContain('Carlitos');
   } finally {
     view.dispose();
   }

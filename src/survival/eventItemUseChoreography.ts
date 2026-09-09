@@ -149,14 +149,14 @@ const UMBRELLA_OVERHEAD_EVENTS: ReadonlySet<string> = new Set([
 const UMBRELLA_SHIELD_EVENTS: ReadonlySet<string> = new Set([
   'bad-sleep', 'death-stare', 'eerie-melody', 'face-on-the-moon',
 ]);
-const FLARE_SKY_EVENTS: ReadonlySet<string> = new Set(['other-people', 'plane']);
+const FLARE_SKY_EVENTS: ReadonlySet<string> = new Set(['other-people', 'plane', 'lighthouse']);
 const FLARE_TARGET_EVENTS: ReadonlySet<string> = new Set(['ghosts', 'snatcher']);
 const TRADE_EVENTS: ReadonlySet<string> = new Set(['night-trader', 'handyman']);
 const NET_SLAP_EVENTS: ReadonlySet<string> = new Set([
   'death-stare', 'swarm-of-sharks',
 ]);
 const FLASHLIGHT_SIGNAL_EVENTS: ReadonlySet<string> = new Set([
-  'other-people', 'plane',
+  'other-people', 'plane', 'lighthouse',
 ]);
 const ANCHOR_DROP_EVENTS: ReadonlySet<string> = new Set([
   'tornado', 'thunderstorm', 'restless-waves',
@@ -309,6 +309,7 @@ function resolveFishingNetContext(
 ): EventItemUseContext | null {
   if (choiceId === 'attack') return 'net-slap';
   if (choiceId !== 'fishingNet') return null;
+  if (eventId === 'windy-night') return null;
   return NET_SLAP_EVENTS.has(eventId) ? 'net-slap' : 'net-scoop';
 }
 
@@ -497,7 +498,7 @@ function sampleBinocularLook(
   output.scaleY = 1 + 0.35 * approach;
   output.scaleZ = 1 + 0.35 * approach;
   output.effectKind = mask > 0 ? 'binocular-mask' : 'none';
-  output.fovScale = 1 - 0.24 * mask;
+  output.fovScale = 1 - 0.62 * mask;
   output.primaryEffect = mask;
   output.secondaryEffect = passCamera;
   output.cameraTargetBlend = targetLook;
@@ -1088,7 +1089,7 @@ function sampleBinocularOutcome(progress: number, output: EventItemUseSample): v
   const mask = 1 - smoothstep(progress);
   output.effectKind = mask > 0 ? 'binocular-mask' : 'none';
   output.primaryEffect = mask;
-  output.fovScale = 1 - 0.24 * mask;
+  output.fovScale = 1 - 0.62 * mask;
   output.cameraTargetBlend = mask;
   output.itemVisible = false;
 }

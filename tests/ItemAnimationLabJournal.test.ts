@@ -41,9 +41,9 @@ describe('Item Animation Lab journal examples', () => {
         rig.button('[data-journal-previous]').click();
       }
       expect(observed).toEqual([
-        ['gain:flareGun', 'consume:flareGun'],
+        ['consume:cannedFood', 'gain:flareGun', 'consume:flareGun'],
         ['repair:knife', 'consume:ductTape', 'lose:swimRing', 'gain:radio'],
-        ['consume:medicalKit', 'break:knife'],
+        ['consume:medicalKit', 'gain:cannedFood', 'consume:baitTin', 'break:knife'],
         ['gain:medicalKit', 'lose:map'],
         [],
       ]);

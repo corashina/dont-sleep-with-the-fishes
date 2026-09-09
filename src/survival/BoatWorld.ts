@@ -48,6 +48,7 @@ import {
 import {
   createLifeboat,
   LIFEBOAT_DISPLAY_SHELF_SURFACE_Y,
+  LIFEBOAT_FLOOR_SURFACE_Y,
   LIFEBOAT_VISIBLE_STERN_BENCH_Z,
 } from '../world/Lifeboat';
 import { LifeboatAssets } from '../world/LifeboatAssets';
@@ -71,7 +72,7 @@ import { BoatInteractionProjector } from './BoatInteractionProjector';
 import { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import { BoatCameraController } from './BoatCameraController';
 import { CarlitosDelegationPresentation } from './CarlitosDelegationPresentation';
-import { CarlitosPresentation } from './CarlitosPresentation';
+import { CarlitosPresentation, CARLITOS_FEED_DURATION } from './CarlitosPresentation';
 import { ChestDisplay } from './ChestDisplay';
 import {
   DivePresentationController,
@@ -112,7 +113,8 @@ import type {
   EventOutcomePresentation,
   EventSceneContext,
 } from './eventPresentationTypes';
-import type { FishingCatchId } from './fishingCatalog';
+import type { FishingCatchId, FishingGear } from './fishingCatalog';
+import type { FishingHaul } from './FishingSession';
 import {
   FISHING_ROD_LEAN,
   FishingPresentation,
@@ -291,6 +293,7 @@ function blocksEventItemUse(
     && EVENT_CHOICE_EXCLUDED_ITEM_IDS.includes(itemId)
     && !allowExcludedEventChoiceItem
   ) return true;
+  if (eventId === 'windy-night' && choiceId === 'fishingNet' && itemId === 'fishingNet') return true;
   return eventId === 'flowers' && choiceId === 'bucket' && itemId === 'bucket';
 }
 
@@ -426,6 +429,8 @@ export class BoatWorld {
   private readonly rodPivot = new Group();
   private readonly rod: Object3D;
   private readonly fishingPresentation: FishingPresentation;
+  private readonly netModel: Object3D;
+  private hiddenFishingNetId: ItemInstanceId | null = null;
   private readonly vortexWave = createInactiveVortexWaveState();
   private readonly sampleWorldWave = (
     time: number,
@@ -623,7 +628,8 @@ export class BoatWorld {
       );
 
       this.rodPivot.name = 'fishing-rod-pivot';
-      this.rodPivot.position.set(0, 0.56, -2.28);
+      // Keep the handle near the floor and leave room for the forward cast at the bow.
+      this.rodPivot.position.set(0, LIFEBOAT_FLOOR_SURFACE_Y + 0.008, -2.02);
       this.rodPivot.rotation.x = FISHING_ROD_LEAN;
       this.rod = propModels.createEquipment('fishingRod');
       collectMeshResources(this.rod, this.ownedGeometries, this.ownedMaterials);
@@ -673,6 +679,7 @@ export class BoatWorld {
         worldRoot: this.scene,
       });
       this.fishingPresentation = fishingPresentation;
+      this.netModel = propModels.create({ instanceId: 'fishing-net-haul-model' as ItemInstanceId, type: 'fishingNet' });
       ocean = new OceanRenderer(
         waterQuality,
         SURVIVAL_CELESTIAL_DIRECTION,
@@ -961,14 +968,31 @@ export class BoatWorld {
     this.chestDisplay.sync(snapshot.chest);
   }
 
-  playCarlitosAction(
+  async playCarlitosAction(
     action: 'petCarlitos' | 'feedCarlitos',
     onContact?: () => void,
   ): Promise<void> {
-    return this.carlitos.play(
-      action === 'petCarlitos' ? 'pet' : 'feed',
-      onContact,
-    );
+    if (this.disposed) return;
+    if (action === 'petCarlitos') return this.carlitos.play('pet', onContact);
+    const instanceId = this.supplyDisplay.recordFor('cannedFood')?.backingInstanceId;
+    if (instanceId == null) return;
+    const operation = ++this.weatherEventOperation;
+    const [, played] = await Promise.all([
+      this.carlitos.play('feed'),
+      this.itemUseController.play({
+        eventId: 'carlitos',
+        choiceId: 'feedCarlitos',
+        instanceId,
+        itemId: 'cannedFood',
+        context: 'throw-target',
+        aimTarget: this.carlitos.foodTarget,
+        landAtTarget: true,
+        durationSeconds: CARLITOS_FEED_DURATION,
+      }),
+    ]);
+    if (this.eventOperationIsStale(operation)) return;
+    this.itemUseController.clear('day');
+    if (played) onContact?.();
   }
 
   playDive(instanceId: ItemInstanceId, options: DivePlayOptions): Promise<void> {
@@ -1112,6 +1136,10 @@ export class BoatWorld {
     choice: string | EventChoicePresentation,
   ): Promise<void> {
     if (this.disposed) return Promise.resolve();
+    const choiceId = typeof choice === 'string' ? choice : choice.choiceId;
+    if (eventId === 'midnight-tour' && choiceId === 'visit') {
+      this.cameraController.cancelFocusedEventView();
+    }
     if (eventPresentationRoute(eventId) !== null) {
       this.ensureEventPresenter(eventId as SurvivalEventId);
     }
@@ -1119,11 +1147,14 @@ export class BoatWorld {
     if (typeof choice === 'string' || choice.instanceId === null) {
       this.itemUseController.clear(this.phase);
     }
-    return this.eventPresentationHost.playChoice(
+    const animation = this.eventPresentationHost.playChoice(
       typeof choice === 'string'
         ? { choiceId: choice, instanceId: null, condition: null }
         : choice,
     );
+    return eventId === 'midnight-tour' && choiceId === 'sleep'
+      ? Promise.all([animation, this.cameraController.endFocusedEventView()]).then(() => undefined)
+      : animation;
   }
 
   stageEvent(context: EventSceneContext): void;
@@ -1211,7 +1242,7 @@ export class BoatWorld {
     if (eventId === 'guarded-sleep') this.restoreEventCameraFront();
   }
 
-  enterFocusedEventView(eventId: InspectableEventId): Promise<void> {
+  enterFocusedEventView(eventId: InspectableEventId | 'midnight-tour'): Promise<void> {
     if (this.disposed || this.eventPresentationHost.activeEventId() !== eventId) {
       return Promise.resolve();
     }
@@ -1254,7 +1285,7 @@ export class BoatWorld {
   }
 
   private retrieveFeaturedDriftingItem(eventId: DriftingItemEventId): Promise<void> {
-    const coverPersistentChest = this.chestState !== 'none';
+    const coverPersistentChest = eventId === 'drifting-chest' && this.chestState !== 'none';
     if (coverPersistentChest) this.chestDisplay.root.visible = false;
     return this.playFeaturedPresentation(driftingItemRetrieveKey(eventId)).then(() => {
       if (this.disposed) return;
@@ -1363,8 +1394,13 @@ export class BoatWorld {
     return this.interactionProjector.projectAnchors(width, height);
   }
 
-  enterFishingView(): Promise<void> {
-    return this.fishingPresentation.enterView();
+  enterFishingView(gear: FishingGear = 'rod'): Promise<void> {
+    if (gear === 'net') {
+      const record = this.supplyDisplay.recordFor('fishingNet');
+      this.hiddenFishingNetId = record?.backingInstanceId ?? null;
+      if (this.hiddenFishingNetId !== null) this.supplyDisplay.setPresentationItemHidden(this.hiddenFishingNetId, true);
+    }
+    return this.fishingPresentation.enterView(gear === 'net' ? this.netModel : undefined);
   }
 
   castFishingAtScreenPoint(
@@ -1405,6 +1441,10 @@ export class BoatWorld {
     return this.fishingPresentation.playReel(catchId);
   }
 
+  playFishingNetHaul(haul: FishingHaul, point: FishingCastPoint): Promise<void> {
+    return this.fishingPresentation.playNetHaul(haul, point);
+  }
+
   projectFishingCatch(width: number, height: number): ProjectedBoatBounds | null {
     return this.fishingPresentation.projectCatch(width, height);
   }
@@ -1413,8 +1453,12 @@ export class BoatWorld {
     return this.fishingPresentation.playMiss();
   }
 
-  exitFishingView(): Promise<void> {
-    return this.fishingPresentation.exitView();
+  async exitFishingView(): Promise<void> {
+    await this.fishingPresentation.exitView();
+    if (this.hiddenFishingNetId !== null) {
+      this.supplyDisplay.setPresentationItemHidden(this.hiddenFishingNetId, false);
+      this.hiddenFishingNetId = null;
+    }
   }
 
   clearFishingPresentation(): void {

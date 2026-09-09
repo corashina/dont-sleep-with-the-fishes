@@ -26,6 +26,7 @@ function includesFeaturedEvent(
 function createDriftingItems(
   models: SurvivalEventModels,
   target: Object3D,
+  camera: PerspectiveCamera,
   onlyEventId: FeaturedEventId | null | undefined,
   water: DriftingWater | undefined,
 ): DriftingItemPresentation | null {
@@ -48,7 +49,7 @@ function createDriftingItems(
     shippingContainer: includeSupplies
       ? models.clone('shippingContainer')
       : new Group(),
-  }, target, water);
+  }, target, camera, water);
 }
 
 export class FeaturedEventPresentations {
@@ -74,6 +75,7 @@ export class FeaturedEventPresentations {
     this.driftingItems = createDriftingItems(
       models,
       driftingCargoSternTarget,
+      camera,
       onlyEventId,
       driftingWater,
     );

@@ -16,6 +16,30 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve };
 }
 
+function waterWorld() {
+  return {
+    enterFishingView: vi.fn(async () => undefined),
+    centeredFishingCast: vi.fn(() => ({ x: 0, z: -6.4 })),
+    playFishingNetHaul: vi.fn(async () => undefined),
+    exitFishingView: vi.fn(async () => undefined),
+    clearFishingPresentation: vi.fn(),
+    playDive: vi.fn(async (_id: ItemInstanceId, options: { onWaterImpact: () => void }) => { options.onWaterImpact(); }),
+    clearDivePresentation: vi.fn(),
+  };
+}
+
+function waterUi() {
+  return {
+    setSleepCoverProfile: vi.fn(async () => undefined),
+    setSleepCovered: vi.fn(async () => undefined),
+    holdDiveCovered: vi.fn(async () => undefined),
+  };
+}
+
+function waterAudio() {
+  return { fishingCast: vi.fn(), beginDive: vi.fn(), finishDive: vi.fn(), cancelDive: vi.fn() };
+}
+
 function conditionLab(type: ItemId = 'bucket', condition: 'usable' | 'broken' | 'lost' = 'usable') {
   const instanceId = `${type}-1` as ItemInstanceId;
   const session = new SurvivalSession([{ instanceId, type }], {
@@ -23,6 +47,7 @@ function conditionLab(type: ItemId = 'bucket', condition: 'usable' | 'broken' | 
     initialConditions: { [instanceId]: condition },
   });
   const world = {
+    ...waterWorld(),
     stageEvent: vi.fn(),
     revealEvent: vi.fn(() => Promise.resolve()),
     playEventItemUse: vi.fn(() => Promise.resolve()),
@@ -30,16 +55,19 @@ function conditionLab(type: ItemId = 'bucket', condition: 'usable' | 'broken' | 
     clearEvent: vi.fn(),
     cancelRepairToolboxAnimation: vi.fn(),
     playRepairToolboxAnimation: vi.fn(() => Promise.resolve()),
+    playCarlitosAction: vi.fn(() => Promise.resolve()),
     setEventEligibleItems: vi.fn(),
     setEventSelectedItem: vi.fn(),
     setItemAnimationLabCameraLook: vi.fn(),
   };
   const ui = {
+    ...waterUi(),
     beginEventPresentation: vi.fn(),
     clearEventPresentation: vi.fn(),
     showItemAnimationLab: vi.fn(),
     showItemAnimationLabChoices: vi.fn(),
     hideItemAnimationLabChoices: vi.fn(),
+    openRepairOptions: vi.fn(),
     setEventSelection: vi.fn(),
     setEventUsing: vi.fn(),
   };
@@ -51,8 +79,9 @@ function conditionLab(type: ItemId = 'bucket', condition: 'usable' | 'broken' | 
     ui,
     renderSnapshot,
     audio: {
+      ...waterAudio(),
       clearEvent: vi.fn(), clearRadioSignal: vi.fn(), eventItem: vi.fn(),
-      eventItemCue: vi.fn(), repairToolbox: vi.fn(),
+      eventItemCue: vi.fn(), repairToolbox: vi.fn(), meowCarlitos: vi.fn(),
     },
     bundles: {
       beginLoad: vi.fn(), activate: vi.fn(),
@@ -151,6 +180,7 @@ describe('Item Animation Lab conditions', () => {
 
     expect(ui.showItemAnimationLabChoices).toHaveBeenLastCalledWith(
       [
+        { id: 'net-fishing', label: 'Fish with net', unavailableReason: null },
         { id: 'net-scoop', label: 'Scoop from water', unavailableReason: null },
         { id: 'net-attack', label: 'Attack', unavailableReason: null },
         { id: 'trade-handover', label: 'Trade handover', unavailableReason: null },
@@ -320,6 +350,7 @@ describe('ItemAnimationLabFlow', () => {
       session: { snapshot: () => snapshot, setItemConditionForLab: vi.fn(() => false), setResourceQuantityForLab: vi.fn(() => false) },
       renderSnapshot: () => snapshot,
       world: {
+        ...waterWorld(),
         stageEvent,
         revealEvent,
         playEventItemUse,
@@ -327,25 +358,30 @@ describe('ItemAnimationLabFlow', () => {
         clearEvent: vi.fn(),
         cancelRepairToolboxAnimation: vi.fn(),
         playRepairToolboxAnimation: vi.fn(() => Promise.resolve()),
+        playCarlitosAction: vi.fn(() => Promise.resolve()),
         setEventEligibleItems: vi.fn(),
         setEventSelectedItem: vi.fn(),
         setItemAnimationLabCameraLook: vi.fn(),
       },
       ui: {
+        ...waterUi(),
         beginEventPresentation: vi.fn(),
         clearEventPresentation: vi.fn(),
         showItemAnimationLab: vi.fn(),
         showItemAnimationLabChoices: vi.fn(),
         hideItemAnimationLabChoices: vi.fn(),
+        openRepairOptions: vi.fn(),
         setEventSelection: vi.fn(),
         setEventUsing: vi.fn(),
       },
       audio: {
+        ...waterAudio(),
         clearEvent: vi.fn(),
         clearRadioSignal,
         eventItem: vi.fn(),
         eventItemCue: vi.fn(),
         repairToolbox: vi.fn(),
+        meowCarlitos: vi.fn(),
       },
       bundles: {
         beginLoad: vi.fn(),

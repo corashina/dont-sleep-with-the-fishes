@@ -107,6 +107,7 @@ export class EventItemUseAdapter {
   private actor: BorrowedSupplyActor | null = null;
   private profile: EventItemMotionProfile | null = null;
   private aimTarget: Object3D | null = null;
+  private flashlight = false;
   private knifeAttack = false;
   private cameraFacingSurface: CameraFacingSurface = 'none';
   private lockItemToHeldCamera = false;
@@ -140,6 +141,8 @@ export class EventItemUseAdapter {
     this.actor = actor;
     this.profile = eventItemMotionProfile(itemId);
     this.aimTarget = aimTarget;
+    this.flashlight = itemId === 'flashlight';
+    if (this.flashlight) this.effects.flashlight.setTarget(aimTarget);
     this.knifeAttack = itemId === 'knife';
     this.cameraFacingSurface = facingSurface ?? (itemId === 'map'
       ? 'y'
@@ -167,6 +170,7 @@ export class EventItemUseAdapter {
     const actor = this.actor;
     const profile = this.profile;
     if (this.disposed || !this.active || actor === null || profile === null) return;
+    this.effects.flashlight.updateTarget();
 
     this.controlsCamera = !sample.netSwing;
     if (this.controlsCamera) {
@@ -242,6 +246,7 @@ export class EventItemUseAdapter {
     this.actor = null;
     this.profile = null;
     this.aimTarget = null;
+    this.flashlight = false;
     this.knifeAttack = false;
     this.cameraFacingSurface = 'none';
     this.lockItemToHeldCamera = false;
@@ -264,6 +269,7 @@ export class EventItemUseAdapter {
   }
 
   private readAimTargetWorldPosition(aimTarget: Object3D): void {
+    if (this.flashlight && this.effects.flashlight.copyTargetCenter(this.targetWorldPosition)) return;
     aimTarget.updateWorldMatrix(true, false);
     aimTarget.getWorldPosition(this.targetWorldPosition);
   }

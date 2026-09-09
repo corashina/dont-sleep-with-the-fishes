@@ -43,7 +43,7 @@ export const PHASE_RESOURCE_LOADERS: PhaseResourceLoaders = {
   loadMenuModels: () => MenuModelLibrary.load(),
   loadMenuSandAssets: () => MenuSandAssets.load(),
   loadShipModels: () => PropModelLibrary.load(undefined, ['riggedHand']),
-  loadSurvivalModels: () => PropModelLibrary.load(undefined, EVENT_MODEL_IDS.filter(id => id !== 'riggedHand')),
+  loadSurvivalModels: () => PropModelLibrary.load(undefined, EVENT_MODEL_IDS),
   loadShipFurniture: () => ShipFurnitureLibrary.load(),
   loadSkyAssets: () => SkyAssets.load(),
   loadLifeboatAssets: () => LifeboatAssets.load(),

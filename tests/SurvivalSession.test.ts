@@ -1,3 +1,5 @@
+import { eligibleFishingCatches } from '../src/survival/fishingCatalog';
+import { fishingRoll } from './helpers/fishing';
 // Importance: 10/10 (scaled from 5/5). Protects core survival rules and state.
 import { describe, expect, it, vi } from 'vitest';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
@@ -114,9 +116,9 @@ it.each([
     .toThrow('Cannot checkpoint terminal state.');
 });
 
-it('applies three hull wear after four of every five nights', () => {
+it('applies six hull wear after four of every five nights', () => {
   expect(Array.from({ length: 10 }, (_, index) => nightlyHullWearDamage(index + 1)))
-    .toEqual([3, 3, 3, 3, 0, 3, 3, 3, 3, 0]);
+    .toEqual([6, 6, 6, 6, 0, 6, 6, 6, 6, 0]);
 
   const worn = new SurvivalSession(saved(), {
     seed: 1,
@@ -126,7 +128,7 @@ it('applies three hull wear after four of every five nights', () => {
   worn.resolveEvent(choiceResponse('sleep'));
   expect(worn.beginDawn()).toMatchObject({
     accepted: true,
-    deltas: { hull: -3 },
+    deltas: { hull: -6 },
   });
 
   const respite = new SurvivalSession(saved(), {
@@ -358,7 +360,7 @@ describe('SurvivalSession Carlitos events', () => {
     expect(normal.snapshot().pendingEventId).not.toBe('guarded-sleep');
   });
 
-  it('delegates Drifting Cargo at sufficient wellness and spends Carlitos energy', () => {
+  it('delegates Drifting Cargo with enough energy and spends Carlitos energy', () => {
     const session = new SurvivalSession(saved('carlitos'), {
       seed: 1,
       random: sequenceRandom([0]),
@@ -550,14 +552,14 @@ describe('SurvivalSession Carlitos events', () => {
       },
     },
     {
-      label: 'dead',
+      label: 'exhausted',
       items: ['carlitos'] as ItemId[],
-      state: { alive: false, deathCause: 'sickness' as const },
+      state: { energy: 0 },
       expected: {
-        visible: false,
-        energyCost: 0,
+        visible: true,
+        energyCost: 2,
         availableEnergy: 0,
-        unavailableReason: 'Carlitos cannot retrieve the loot.',
+        unavailableReason: 'Carlitos needs 2 energy; he has 0.',
       },
     },
     {
@@ -567,19 +569,8 @@ describe('SurvivalSession Carlitos events', () => {
       expected: {
         visible: true,
         energyCost: 2,
-        availableEnergy: 3,
-        unavailableReason: 'Carlitos is Hungry and cannot retrieve the loot.',
-      },
-    },
-    {
-      label: 'Sick',
-      items: ['carlitos'] as ItemId[],
-      state: { hunger: 5, sickness: 2 },
-      expected: {
-        visible: true,
-        energyCost: 2,
-        availableEnergy: 3,
-        unavailableReason: 'Carlitos is Sick and cannot retrieve the loot.',
+        availableEnergy: 2,
+        unavailableReason: null,
       },
     },
     {
@@ -589,8 +580,8 @@ describe('SurvivalSession Carlitos events', () => {
       expected: {
         visible: true,
         energyCost: 2,
-        availableEnergy: 3,
-        unavailableReason: 'Carlitos is Lonely and cannot retrieve the loot.',
+        availableEnergy: 2,
+        unavailableReason: null,
       },
     },
     {
@@ -617,21 +608,28 @@ describe('SurvivalSession Carlitos events', () => {
 });
 
 describe('SurvivalSession daytime actions', () => {
-  it('applies fishing luck only while Carlitos is alive', () => {
-    const options = { seed: 7, random: sequenceRandom([0, 0.36]) };
-    const living = new SurvivalSession(saved('carlitos'), options);
-    const dead = new SurvivalSession(saved('carlitos'), {
+  it('applies fishing luck only while Carlitos has energy', () => {
+    const boundary = (multiplier: number) => {
+      const entries = eligibleFishingCatches(1, false, new Set(), multiplier);
+      const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
+      const index = entries.findIndex((entry) => entry.catch.id === 'seaweed');
+      return entries.slice(0, index).reduce((sum, entry) => sum + entry.weight, 0) / total;
+    };
+    const roll = (boundary(1) + boundary(1.01)) / 2;
+    const options = { seed: 7, random: sequenceRandom([0, roll]) };
+    const rested = new SurvivalSession(saved('carlitos'), options);
+    const exhausted = new SurvivalSession(saved('carlitos'), {
       ...options,
-      random: sequenceRandom([0, 0.36]),
-      initialCarlitos: { alive: false, deathCause: 'sickness' },
+      random: sequenceRandom([0, roll]),
+      initialCarlitos: { energy: 0, unhappiness: 3 },
     });
     const absent = new SurvivalSession(saved(), {
       ...options,
-      random: sequenceRandom([0, 0.36]),
+      random: sequenceRandom([0, roll]),
     });
 
-    expect(reelCatch(beginFishing(living))).toMatchObject({ kind: 'catch', catch: { id: 'clownfish' } });
-    expect(reelCatch(beginFishing(dead))).toMatchObject({ kind: 'catch', catch: { id: 'seaweed' } });
+    expect(reelCatch(beginFishing(rested))).toMatchObject({ kind: 'catch', catch: { id: 'clownfish' } });
+    expect(reelCatch(beginFishing(exhausted))).toMatchObject({ kind: 'catch', catch: { id: 'seaweed' } });
     expect(reelCatch(beginFishing(absent))).toMatchObject({ kind: 'catch', catch: { id: 'seaweed' } });
   });
 
@@ -639,7 +637,7 @@ describe('SurvivalSession daytime actions', () => {
     const session = new SurvivalSession(saved('carlitos', 'cannedFood', 'medicalKit'), { seed: 7 });
     const snapshot = session.snapshot();
 
-    expect(snapshot.carlitos).toMatchObject({ alive: true, hunger: 5 });
+    expect(snapshot.carlitos).toMatchObject({ hunger: 5 });
     expect(snapshot.inventory['carlitos-1']).toBeUndefined();
     expect(snapshot.savedItems.some(({ type }) => type === 'carlitos')).toBe(false);
   });
@@ -664,7 +662,7 @@ describe('SurvivalSession daytime actions', () => {
   it('cares for Carlitos during the day without using energy', () => {
     const session = new SurvivalSession(saved('carlitos', 'cannedFood', 'medicalKit'), {
       seed: 7,
-      initialCarlitos: { hunger: 2, sickness: 2, unhappiness: 5 },
+      initialCarlitos: { hunger: 2, unhappiness: 5 },
     });
 
     expect(session.perform('petCarlitos')).toMatchObject({
@@ -673,23 +671,19 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.perform('feedCarlitos')).toMatchObject({
       accepted: true, code: 'carlitos-fed', deltas: { food: -1 }, cue: 'none',
     });
-    expect(session.perform('treatCarlitos')).toMatchObject({
-      accepted: true, code: 'carlitos-treated', deltas: {}, cue: 'none',
-    });
     expect(session.snapshot()).toMatchObject({
       energy: 3,
-      carlitos: { hunger: 5, sickness: 0, unhappiness: 1, pettedToday: true },
+      carlitos: { hunger: 5, unhappiness: 1, pettedToday: true },
     });
     expect(session.snapshot().inventory).toMatchObject({
       'cannedFood-1': { condition: 'consumed' },
-      'medicalKit-1': { condition: 'consumed' },
+      'medicalKit-1': { condition: 'usable' },
     });
   });
 
   it('rejects unavailable Carlitos care actions', () => {
     const healthy = new SurvivalSession(saved('carlitos'), { seed: 7 });
     expect(healthy.perform('feedCarlitos')).toMatchObject({ code: 'carlitos-not-hungry' });
-    expect(healthy.perform('treatCarlitos')).toMatchObject({ code: 'carlitos-healthy' });
     expect(healthy.perform('petCarlitos')).toMatchObject({ code: 'carlitos-happy' });
 
     const bored = new SurvivalSession(saved('carlitos'), {
@@ -701,16 +695,15 @@ describe('SurvivalSession daytime actions', () => {
 
     const noSupplies = new SurvivalSession(saved('carlitos'), {
       seed: 7,
-      initialCarlitos: { hunger: 2, sickness: 1 },
+      initialCarlitos: { hunger: 2 },
     });
     expect(noSupplies.perform('feedCarlitos')).toMatchObject({ code: 'no-food' });
-    expect(noSupplies.perform('treatCarlitos')).toMatchObject({ code: 'no-medical-kit' });
 
-    const dead = new SurvivalSession(saved('carlitos'), {
+    const exhausted = new SurvivalSession(saved('carlitos'), {
       seed: 7,
-      initialCarlitos: { alive: false, deathCause: 'sickness' },
+      initialCarlitos: { energy: 0, unhappiness: 3 },
     });
-    expect(dead.perform('petCarlitos')).toMatchObject({ code: 'carlitos-dead' });
+    expect(exhausted.perform('petCarlitos')).toMatchObject({ accepted: true });
 
     const absent = new SurvivalSession(saved(), { seed: 7 });
     expect(absent.perform('petCarlitos')).toMatchObject({ code: 'no-carlitos' });
@@ -727,7 +720,7 @@ describe('SurvivalSession daytime actions', () => {
     const caredFor = new SurvivalSession(saved('carlitos'), {
       seed: 7,
       random: sequenceRandom([0, 0, 0.99, 0]),
-      initialCarlitos: { energy: 0, sickness: 1, unhappiness: 3 },
+      initialCarlitos: { energy: 0, unhappiness: 3 },
     });
     caredFor.perform('endDay');
     caredFor.beginDawn();
@@ -736,30 +729,26 @@ describe('SurvivalSession daytime actions', () => {
     expect(caredForEntry.actions).toEqual([
       {
         kind: 'carlitosDawn',
-        before: expect.objectContaining({ alive: true, energy: 0, hunger: 5, sickness: 1, unhappiness: 3 }),
-        after: expect.objectContaining({ alive: true, energy: 1, hunger: 4, sickness: 0, unhappiness: 4 }),
+        before: expect.objectContaining({ energy: 0, hunger: 5, unhappiness: 3 }),
+        after: expect.objectContaining({ energy: 1, hunger: 4, unhappiness: 4 }),
       },
     ]);
-    expect(formatJournalEntry(caredForEntry).nighttime).toContain(
-      'Carlitos is getting hungrier. I know the feeling. Carlitos looks a little healthier. Something to be thankful for. Carlitos seems sadder. I have not been much company on this voyage. Carlitos has got some of his strength back.',
-    );
+    expect(formatJournalEntry(caredForEntry).nighttime).toContain('enough strength to help again');
 
-    const died = new SurvivalSession(saved('carlitos'), {
+    const neglected = new SurvivalSession(saved('carlitos'), {
       seed: 7,
       random: sequenceRandom([0]),
-      initialCarlitos: { hunger: 1 },
+      initialCarlitos: { hunger: 2 },
     });
-    died.perform('endDay');
-    died.beginDawn();
-
-    expect(formatJournalEntry(died.snapshot().journalEntries[0]!).nighttime)
-      .toContain('Carlitos died during the night.');
-
-    died.perform('endDay');
-    died.beginDawn();
-    const secondDay = died.snapshot().journalEntries[1]!;
-    expect(secondDay.actions).not.toContainEqual(expect.objectContaining({ kind: 'carlitosDawn' }));
-    expect(formatJournalEntry(secondDay).nighttime).not.toContain('Carlitos died during the night.');
+    neglected.perform('endDay');
+    neglected.beginDawn();
+    expect(neglected.snapshot().carlitos).toMatchObject({ energy: 0 });
+    expect(formatJournalEntry(neglected.snapshot().journalEntries[0]!).nighttime)
+      .toContain('Carlitos is too tired to help.');
+    neglected.perform('endDay');
+    neglected.beginDawn();
+    expect(formatJournalEntry(neglected.snapshot().journalEntries[1]!).nighttime)
+      .not.toContain('Carlitos is too tired to help.');
   });
 
   it('reuses an immutable snapshot until an action changes state', () => {
@@ -1334,7 +1323,7 @@ describe('SurvivalSession daytime actions', () => {
 
     const tuna = new SurvivalSession(saved(), {
       seed: 1,
-      random: sequenceRandom([0, 44 / 422]),
+      random: sequenceRandom([0, fishingRoll('tuna', 3)]),
       initial: { day: 3 },
     });
     const tunaAttempt = beginFishing(tuna);
@@ -1347,11 +1336,11 @@ describe('SurvivalSession daytime actions', () => {
   });
 
   it.each([
-    ['bait', 396 / 422, {}, { bait: 1 }, undefined],
-    ['wetDuctTape', 401 / 422, {}, {}, ['ductTape-1', 'usable']],
-    ['brokenCompass', 406 / 422, {}, {}, ['compass-1', 'broken']],
-    ['tornFishingNet', 411 / 422, {}, {}, ['fishingNet-1', 'broken']],
-    ['energyBar', 414 / 422, {}, {}, ['energyBar-1', 'usable']],
+    ['bait', fishingRoll('bait', 3), {}, { bait: 1 }, undefined],
+    ['wetDuctTape', fishingRoll('wetDuctTape', 3), {}, {}, ['ductTape-1', 'usable']],
+    ['brokenCompass', fishingRoll('brokenCompass', 3), {}, {}, ['compass-1', 'broken']],
+    ['tornFishingNet', fishingRoll('tornFishingNet', 3), {}, {}, ['fishingNet-1', 'broken']],
+    ['energyBar', fishingRoll('energyBar', 3), {}, {}, ['energyBar-1', 'usable']],
   ] as const)('applies the %s utility reward', (
     catchId, catchRoll, deltas, snapshotMatch, item,
   ) => {
@@ -1385,7 +1374,7 @@ describe('SurvivalSession daytime actions', () => {
       seed: 1,
       initial: { day: 3 },
       initialConditions,
-      random: sequenceRandom([0, 401 / 417]),
+      random: sequenceRandom([0, fishingRoll('wetDuctTape', 3, false, new Set(['compass']))]),
     });
     const attempt = beginFishing(session);
     expect(reelCatch(attempt)).toMatchObject({ kind: 'catch', catch: { id: 'wetDuctTape' } });
@@ -1457,7 +1446,7 @@ describe('SurvivalSession daytime actions', () => {
   it('records start, fish, junk, and miss outcomes without the generic fish cue', () => {
     const cases = [
       { roll: 0, terminal: reelCatch, finishCode: 'fish-caught' },
-      { roll: 0.7, terminal: reelCatch, finishCode: 'junk-caught' },
+      { roll: fishingRoll('seaweed'), terminal: reelCatch, finishCode: 'junk-caught' },
       { roll: 0, terminal: missCatch, finishCode: 'fish-missed' },
     ] as const;
 
@@ -1741,7 +1730,7 @@ describe('SurvivalSession daytime actions', () => {
   it('rejects every invalid action option before gates without mutating state', () => {
     const itemRepair = { kind: 'itemRepair', target: 'compass-1' } as const;
     const cases: Array<{
-      action: Exclude<DayActionId, 'fish'>;
+      action: Exclude<DayActionId, 'fish' | 'netFish'>;
       option: DayActionOption | null | undefined;
     }> = [
       { action: 'dive', option: itemRepair },

@@ -21,7 +21,7 @@ export type DayActionSessionPort = Pick<
 
 export type DayActionWorldPort = Pick<
   BoatWorld,
-  'play' | 'playCarlitosAction' | 'playDive' | 'clearDivePresentation'
+  'play' | 'playRepairToolboxAnimation' | 'playCarlitosAction' | 'playDive' | 'clearDivePresentation'
 >;
 
 export type DayActionUiPort = Pick<
@@ -44,7 +44,7 @@ export type DayActionAudioPort = Pick<
   | 'finishDive'
   | 'cancelDive'
   | 'nightfall'
-  | 'petCarlitos'
+  | 'meowCarlitos'
 >;
 
 export type DayActionEventPort = Pick<
@@ -129,7 +129,7 @@ export class SurvivalDayActionFlow {
 
   async run(action: DayActionId, option?: DayActionOption): Promise<void> {
     const commandGeneration = this.dependencies.captureLifecycleGeneration();
-    if (action === 'fish' || !this.isLifecycleCurrent(commandGeneration)) return;
+    if (action === 'fish' || action === 'netFish' || !this.isLifecycleCurrent(commandGeneration)) return;
 
     const prepared = this.prepareAction(action, option, commandGeneration);
     if (prepared === null) return;
@@ -179,7 +179,7 @@ export class SurvivalDayActionFlow {
   }
 
   private async runDayAction(
-    action: Exclude<DayActionId, 'fish'>,
+    action: Exclude<DayActionId, 'fish' | 'netFish'>,
     outcome: ActionOutcome,
   ): Promise<void> {
     const generation = this.dependencies.captureLifecycleGeneration();
@@ -189,7 +189,14 @@ export class SurvivalDayActionFlow {
       this.setBusy(true);
       const renderBeforeCue = action === 'repair' || action === 'repairItem';
       let snapshot = renderBeforeCue ? this.dependencies.renderSnapshot() : null;
-      await (this.dependencies.world.play?.(outcome.cue) ?? Promise.resolve());
+      if (action === 'repair') {
+        await this.dependencies.world.playRepairToolboxAnimation(() => {
+          if (!this.isCurrent(generation, operation)) return;
+          this.playActionAudio(() => this.dependencies.audio.action('repair'), generation);
+        });
+      } else {
+        await (this.dependencies.world.play?.(outcome.cue) ?? Promise.resolve());
+      }
       if (!this.isCurrent(generation, operation)) return;
       snapshot ??= this.dependencies.renderSnapshot();
       this.setBusy(false);
@@ -232,25 +239,27 @@ export class SurvivalDayActionFlow {
 
   private async runCarlitosAction(
     action: 'petCarlitos' | 'feedCarlitos',
+    beforeAction: SurvivalSnapshot,
   ): Promise<void> {
     const generation = this.dependencies.captureLifecycleGeneration();
     const operation = this.beginOperation();
     try {
       if (!this.isCurrent(generation, operation)) return;
+      this.dependencies.events.beginDeferredSync(beforeAction, generation);
       this.setBusy(true);
-      const presentation = action === 'petCarlitos'
-        ? this.dependencies.world.playCarlitosAction?.(
-            action,
-            () => this.dependencies.audio.petCarlitos?.(),
-          )
-        : this.dependencies.world.playCarlitosAction?.(action);
+      const presentation = this.dependencies.world.playCarlitosAction?.(action, () => {
+        if (this.isCurrent(generation, operation)) this.dependencies.audio.meowCarlitos?.();
+      });
       await (presentation ?? Promise.resolve());
       if (!this.isCurrent(generation, operation)) return;
+      this.dependencies.events.cancelDeferredSync(generation);
       this.dependencies.renderSnapshot();
       this.setBusy(false);
       this.dependencies.ui.restoreCommandFocus?.();
     } catch (error) {
-      this.handleFailure(error, generation, operation);
+      this.handleFailure(error, generation, operation, () => {
+        this.dependencies.events.cancelDeferredSync(generation);
+      });
     }
   }
 
@@ -329,7 +338,7 @@ export class SurvivalDayActionFlow {
   }
 
   private prepareAction(
-    action: Exclude<DayActionId, 'fish'>,
+    action: Exclude<DayActionId, 'fish' | 'netFish'>,
     option: DayActionOption | undefined,
     generation: number,
   ): {
@@ -357,7 +366,7 @@ export class SurvivalDayActionFlow {
   }
 
   private async runAcceptedAction(
-    action: Exclude<DayActionId, 'fish'>,
+    action: Exclude<DayActionId, 'fish' | 'netFish'>,
     outcome: ActionOutcome,
     beforeAction: SurvivalSnapshot,
     generation: number,
@@ -371,13 +380,12 @@ export class SurvivalDayActionFlow {
       await this.runDiveAction(outcome, beforeAction);
       return;
     }
-    if (!this.playActionAudio(
+    if (action !== 'repair' && !this.playActionAudio(
       () => this.dependencies.audio.action?.(action),
       generation,
     )) return;
     if (action === 'petCarlitos' || action === 'feedCarlitos') {
-      if (!this.syncCarlitosEvent(generation)) return;
-      await this.runCarlitosAction(action);
+      await this.runCarlitosAction(action, beforeAction);
       return;
     }
     if (action === 'openChest') await this.runChestAction(outcome, beforeAction);
@@ -387,16 +395,6 @@ export class SurvivalDayActionFlow {
   private playActionAudio(play: () => void, generation: number): boolean {
     try {
       play();
-      return true;
-    } catch (error) {
-      if (this.isLifecycleCurrent(generation)) this.dependencies.onFatalError(error);
-      return false;
-    }
-  }
-
-  private syncCarlitosEvent(generation: number): boolean {
-    try {
-      this.dependencies.events.sync(this.dependencies.session.snapshot());
       return true;
     } catch (error) {
       if (this.isLifecycleCurrent(generation)) this.dependencies.onFatalError(error);

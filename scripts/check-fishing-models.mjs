@@ -11,7 +11,7 @@ import {
 import { parseModelCheckArguments } from './model-check-arguments.mjs';
 
 const MODEL_LIMIT = 2_000;
-const LIBRARY_LIMIT = 10_000;
+const LIBRARY_LIMIT = 16_000;
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
 function validatePrimitive(filePath, primitive) {

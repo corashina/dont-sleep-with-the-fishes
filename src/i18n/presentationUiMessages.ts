@@ -1,6 +1,8 @@
 import { defineMessages } from './messages';
 
 const catalog = {
+  fishWithNet: { en: 'Fish with net', pl: 'Łów siecią', 'es-AR': 'Pescar con red' },
+  scubaDive: { en: 'Dive', pl: 'Nurkuj', 'es-AR': 'Bucear' },
   salvage: { en: 'SALVAGE', pl: 'ZAPASY', 'es-AR': "SUMINISTROS" },
   chest: { en: 'CHEST', pl: 'SKRZYNIA', 'es-AR': "COFRE" },
   flowers: { en: 'FLOWERS', pl: 'KWIATY', 'es-AR': "FLORES" },
@@ -8,7 +10,7 @@ const catalog = {
   flowersDescription: { en: 'Pale blooms pass in the dark water.', pl: 'Blade kwiaty przepływają przez ciemną wodę.', 'es-AR': "Flores pálidas pasan por el agua oscura." },
   open: { en: 'OPEN', pl: 'OTWÓRZ', 'es-AR': "ABRIR" },
   chestDescription: { en: 'A closed chest. Opening it is free.', pl: 'Zamknięta skrzynia. Otwarcie nic nie kosztuje.', 'es-AR': "Un cofre cerrado. Abrirlo no cuesta nada." },
-  carlitosDescription: { en: 'Check his hunger, happiness, and health.', pl: 'Sprawdź jego głód, nastrój i zdrowie.', 'es-AR': "Revisá su hambre, felicidad y salud." },
+  carlitosDescription: { en: 'Check his hunger and happiness.', pl: 'Sprawdź jego głód i nastrój.', 'es-AR': "Revisá su hambre y felicidad." },
   hand: { en: 'HAND', pl: 'DŁOŃ', 'es-AR': "MANO" },
   handDescription: { en: 'Touch the waiting hand.', pl: 'Dotknij czekającej dłoni.', 'es-AR': "Tocá la mano que espera." },
   offerChest: { en: 'Offer the closed chest to the hand.', pl: 'Podaj dłoni zamkniętą skrzynię.', 'es-AR': "Ofrecele el cofre cerrado a la mano." },

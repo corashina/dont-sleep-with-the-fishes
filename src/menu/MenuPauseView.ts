@@ -16,6 +16,7 @@ export class MenuPauseView {
     this.element.setAttribute('inert', '');
     this.element.innerHTML = `
       <div class="screen__content scuba-popup-paper scuba-popup-panel">
+        <h2 class="scuba-popup-title ui-role-display" data-ui-text="paused"></h2>
         <button type="button" class="primary-action salvage-action ui-role-context" data-menu-resume data-ui-aria="resume" data-ui-text="resumeUpper"></button>
         <button type="button" class="primary-action salvage-action ui-role-context" data-open-settings data-ui-aria="settings" data-ui-text="settingsUpper"></button>
       </div>`;

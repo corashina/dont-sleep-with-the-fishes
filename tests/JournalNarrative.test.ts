@@ -30,6 +30,7 @@ function eventRecord(eventId: string, choiceId: string, index = 0): JournalEvent
   return {
     phase: event.phase, eventId, attemptedChoiceId: choiceId, attemptedItemId: choice.itemId ?? null,
     outcomeCode: 'test',
+    deltas: {},
     text: { kind: 'eventResult', reference: { eventId, choiceId, resultId: outcome.resultId! } },
     inventoryMutations: mutations,
   };
@@ -53,32 +54,28 @@ describe('journal narrative', () => {
 
   it.each(['en', 'pl', 'es-AR'] as const)('describes both directions of Carlitos needs correctly in %s', (language) => {
     setLanguage(language);
-    const before = createJournalCarlitosDawnState(createCarlitosState({ hunger: 3, sickness: 2, unhappiness: 3, energy: 2 }));
-    const worse = { ...before, hunger: 2, sickness: 3, unhappiness: 4, energy: 1 };
-    const better = { ...before, hunger: 4, sickness: 1, unhappiness: 2, energy: 3 };
+    const before = { ...createCarlitosState(), hunger: 3, unhappiness: 6, energy: 2 };
+    const worse = { ...before, hunger: 1, unhappiness: 7, energy: 1 };
+    const better = { ...before, hunger: 4, unhappiness: 2, energy: 3 };
     const copy = (after: typeof before) => formatJournalEntry(createJournalEntry(
       2, 'calm', [createJournalCarlitosDawnRecord(before, after)], null, { kind: 'quiet' },
     )).nighttime;
     const bad = copy(worse);
     const good = copy(better);
     for (const text of [bad, good]) expect(text).not.toMatch(noStats);
-    for (const word of language === 'en' ? ['hungrier', 'worse', 'sadder', 'less strength'] : language === 'pl' ? ['głodny', 'gorzej', 'posmutniał', 'mniej sił'] : ['más hambre', 'peor', 'más triste', 'menos fuerzas']) {
+    for (const word of language === 'en' ? ['starving', 'depressed', 'less strength'] : language === 'pl' ? ['jest bardzo głodny', 'przygnębionego', 'mniej sił'] : ['muy hambriento', 'deprimido', 'menos fuerzas']) {
       expect(bad).toContain(word);
       expect(good).not.toContain(word);
     }
-    for (const word of language === 'en' ? ['less hungry', 'healthier', 'happier', 'strength back'] : language === 'pl' ? ['tak głodnego', 'zdrowiej', 'poweselał', 'odzyskał'] : ['tanta hambre', 'más sano', 'contento', 'recuperó']) {
+    for (const word of language === 'en' ? ['less hungry', 'happier'] : language === 'pl' ? ['tak głodnego', 'poweselał'] : ['tanta hambre', 'contento']) {
       expect(good).toContain(word);
     }
   });
 
-  it('does not invent changes when Carlitos stays the same or has died', () => {
+  it('does not invent changes when Carlitos stays the same', () => {
     const before = createJournalCarlitosDawnState(createCarlitosState());
     const unchanged = formatJournalEntry(createJournalEntry(2, 'calm', [createJournalCarlitosDawnRecord(before, before)], null, { kind: 'quiet' }));
     expect(unchanged.nighttime).not.toContain('Carlitos');
-    const dead = { ...before, alive: false, hunger: 0, energy: 0, deathCause: 'starvation' as const };
-    const died = formatJournalEntry(createJournalEntry(2, 'calm', [createJournalCarlitosDawnRecord(before, dead)], null, { kind: 'quiet' }));
-    expect(died.nighttime).toContain('Carlitos died');
-    expect(died.nighttime).not.toMatch(/hungrier|strength back|rest/);
   });
 
   it('explains a map patch and the damage it suffers in Polish', () => {

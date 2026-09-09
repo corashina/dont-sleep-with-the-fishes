@@ -16,6 +16,7 @@ const exitCases = [
 
 describe('focused event dismiss actions', () => {
   for (const { eventId, energy, carlitos } of exitCases) {
+    const declineId = eventId === 'wreckage' ? 'leave' : 'sleep';
     it.each(['choice', 'return'] as const)(`${eventId}, Energy ${energy}, Carlitos ${carlitos}: %s resolves the event`, async (exit) => {
       const session = new SurvivalSession([
         ...(eventId === 'wreckage' ? [{ instanceId: 'scubaSet-1' as const, type: 'scubaSet' as const }] : []),
@@ -49,7 +50,6 @@ describe('focused event dismiss actions', () => {
         await vi.waitFor(() => expect(ui.setBusy).toHaveBeenLastCalledWith(false));
         ui.onFocusedEventSelect?.(eventId);
         await vi.waitFor(() => expect(showFocusedEvent).toHaveBeenCalledOnce());
-        const declineId = eventId === 'wreckage' ? 'leave' : 'sleep';
         const choices = (showFocusedEvent.mock.calls[0]![0] as FocusedEventFocusView).choices;
         expect(choices).toEqual(expect.arrayContaining([
           expect.objectContaining({
@@ -59,6 +59,8 @@ describe('focused event dismiss actions', () => {
         for (const choice of choices.filter(({ id }) => id !== declineId)) {
           expect(choice.unavailableReason).toEqual(expect.any(String));
         }
+        vi.mocked(ui.setSleepCovered!).mockClear();
+        vi.mocked(ui.settleCoveredScene!).mockClear();
         if (exit === 'return') ui.onFocusedEventBack?.();
         else ui.onFocusedEventChoice?.({ id: declineId, instanceId: null });
         await vi.waitFor(() => expect(exitFocusedEventView).toHaveBeenCalledOnce());
@@ -73,6 +75,10 @@ describe('focused event dismiss actions', () => {
         expect(ui.setBusy).toHaveBeenLastCalledWith(false);
         expect(ui.clearEventPresentation).toHaveBeenCalled();
         expect(ui.hideFocusedEvent).toHaveBeenCalled();
+        if (eventId === 'wreckage') {
+          expect(ui.setSleepCovered).not.toHaveBeenCalled();
+          expect(ui.settleCoveredScene).not.toHaveBeenCalled();
+        }
         ui.onFocusedEventSelect?.(eventId);
         await Promise.resolve();
         expect(showFocusedEvent).toHaveBeenCalledOnce();

@@ -50,6 +50,16 @@ counters can lower pressure. Quiet-night chances fall as pressure rises.
 Dangerous event weights rise by 25 percent per pressure level. Night energy
 results apply at the next dawn. Event damage has no day-50 multiplier.
 
+## Carlitos
+
+Carlitos cannot die during survival. Hunger and unhappiness limit his energy to zero through three.
+His condition score is fullness minus unhappiness penalty. Scores of four or more allow three energy.
+Scores of three, two, or one and below allow two, one, or zero energy.
+He recovers one energy each dawn, up to that limit. Care raises the limit but does not refill energy.
+At zero energy he rests aboard. He cannot retrieve supplies, keep watch, or improve fishing luck.
+Feeding and petting work at zero energy. Carlitos meows after the thrown food reaches him.
+Unhappiness stops at ten. All needs remain recoverable. Keeping watch costs one Carlitos energy.
+
 ## Run
 
 ```bash
@@ -105,11 +115,11 @@ Supplies are repeatable physical instances rather than one slot per item type. T
 
 Carlitos is the only crewmate. Save him on Dorothy to bring him into the lifeboat.
 
-Select **Carlitos** to see his Hunger, Happiness, and Health. The card offers **Pet**, **Feed**, and **Treat**.
+Select **Carlitos** to see his Energy, Hunger, and Happiness. The card offers **Pet** and **Feed**.
 
-Pet eases loneliness once each day. Feed uses one Food. Treat uses one Medkit when he is sick.
+Pet eases loneliness once each day. Feed uses one Food. Carlitos meows when the thrown food reaches him.
 
-Living Carlitos gives a small passive fishing-luck bonus. He also enables crewmate events that can harm or kill him.
+Carlitos improves fishing luck and can help during events while he has energy.
 
 ### Fishing
 

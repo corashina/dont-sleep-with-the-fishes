@@ -303,8 +303,7 @@ export class CarlitosEventPresentation implements DedicatedEventPresentation {
     clone.name = 'shadow-figure:false-cat';
     clone.visible = false;
     clone.getObjectByName('carlitos-interaction')!.visible = true;
-    clone.getObjectByName('carlitos-petting-hand')!.visible = false;
-    clone.getObjectByName('carlitos-food')!.visible = false;
+    clone.getObjectByName('carlitos-care-hand')!.visible = false;
     const silhouetteMaterial = new MeshStandardMaterial({
       name: 'shadow-figure-silhouette-material',
       color: 0x030506,

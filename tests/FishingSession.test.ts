@@ -1,3 +1,4 @@
+import { fishingRoll } from './helpers/fishing';
 // Importance: 10/10 (scaled from 5/5). Protects the fishing state machine.
 import { describe, expect, it } from 'vitest';
 import { FishingSession } from '../src/survival/FishingSession';
@@ -21,7 +22,8 @@ function castToWaiting(session: FishingSession): void {
 
 describe('FishingSession', () => {
   it('consumes bite delay then hidden catch during construction', () => {
-    const source = sequenceRandom([0.25, 0.999999]);
+    const roll = fishingRoll('energyBar', 1);
+    const source = sequenceRandom([0.25, roll]);
     const draws: number[] = [];
     const random: RandomSource = { next: () => {
       const value = source.next();
@@ -31,7 +33,7 @@ describe('FishingSession', () => {
 
     const session = new FishingSession({ id: 'attempt-1', day: 1, capturedBait: false, random });
 
-    expect(draws).toEqual([0.25, 0.999999]);
+    expect(draws).toEqual([0.25, roll]);
     expect(session.snapshot()).toMatchObject({ biteDelaySeconds: 4, result: null });
     castToWaiting(session);
     session.advance(4);
@@ -47,7 +49,7 @@ describe('FishingSession', () => {
       day: 3,
       capturedBait: false,
       activeItemIds: new Set(['ductTape', 'compass', 'fishingNet', 'energyBar']),
-      random: sequenceRandom([0, 0.999999]),
+      random: sequenceRandom([0, fishingRoll('bait', 3, false, new Set(['ductTape', 'compass', 'fishingNet', 'energyBar']))]),
     });
     castToWaiting(session);
     session.advance(session.snapshot().biteDelaySeconds);
@@ -62,7 +64,7 @@ describe('FishingSession', () => {
       day: 0,
       capturedBait: false,
       fishWeightMultiplier: 1.01,
-      random: sequenceRandom([0, 0.36]),
+      random: sequenceRandom([0, fishingRoll('clownfish', 0, false, new Set(), 1.01)]),
     });
 
     castToWaiting(session);

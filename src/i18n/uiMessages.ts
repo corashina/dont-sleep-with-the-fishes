@@ -1,6 +1,10 @@
 import { defineMessages } from './messages';
 
 export const uiCatalog = {
+  visitIslandPrompt: { en: 'Visit the island?', pl: 'Odwiedzić wyspę?', 'es-AR': '¿Visitar la isla?' },
+  carlitosExhausted: { en: 'Too tired to help.', pl: 'Zbyt zmęczony, by pomóc.', 'es-AR': 'Demasiado cansado para ayudar.' },
+  twoEnergy: { en: '⚡2', pl: '⚡2', 'es-AR': '⚡2' },
+  netReward: { en: 'Two catches, less junk', pl: 'Dwa znaleziska, mniej śmieci', 'es-AR': 'Dos capturas, menos basura' },
   "settings": { "en": "Settings", "pl": "Ustawienia", "es-AR": "Configuración" },
   "settingsUpper": { "en": "SETTINGS", "pl": "USTAWIENIA", "es-AR": "CONFIGURACIÓN" },
   "handsFull": {
@@ -193,20 +197,10 @@ export const uiCatalog = {
     "pl": "Przedmiot do naprawy",
     "es-AR": "Objeto para reparar"
   },
-  "ductTape": {
-    "en": "DUCT TAPE",
-    "pl": "TAŚMA KLEJĄCA",
-    "es-AR": "CINTA ADHESIVA"
-  },
   "chooseRepair": {
     "en": "Choose an item to repair",
     "pl": "Wybierz przedmiot do naprawy",
     "es-AR": "Elegí un objeto para reparar"
-  },
-  "repairHelp": {
-    "en": "One emergency repair restores one broken item.",
-    "pl": "Jedna awaryjna naprawa przywraca sprawność jednego uszkodzonego przedmiotu.",
-    "es-AR": "Una reparación de emergencia restaura un objeto roto."
   },
   "cancelRepair": {
     "en": "Cancel repair",
@@ -620,11 +614,6 @@ export const uiCatalog = {
     "pl": "ZASPOKÓJ GŁÓD",
     "es-AR": "SACIAR EL HAMBRE"
   },
-  "cureSickness": {
-    "en": "CURE SICKNESS",
-    "pl": "WYLECZ CHOROBĘ",
-    "es-AR": "CURAR LA ENFERMEDAD"
-  },
   "boatPoints": {
     "en": "Boat interaction points",
     "pl": "Punkty interakcji na łodzi",
@@ -704,11 +693,6 @@ export const uiCatalog = {
     "en": "Feed Carlitos one food.",
     "pl": "Daj Carlitosowi jedną porcję jedzenia.",
     "es-AR": "Dale una porción de comida a Carlitos."
-  },
-  "treatHelp": {
-    "en": "Treat Carlitos with one medical kit.",
-    "pl": "Ulecz Carlitosa jedną apteczką.",
-    "es-AR": "Curá a Carlitos con un botiquín."
   }
 } as const;
 export type UiTextKey = keyof typeof uiCatalog;

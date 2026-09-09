@@ -1,11 +1,11 @@
 import { defineMessages } from './messages';
 
 export const flowText = defineMessages({
+  netCast: { en: 'CLICK THE WATER TO SCOOP', pl: 'KLIKNIJ WODĘ, ABY ZACZERPNĄĆ SIECIĄ', 'es-AR': 'HACÉ CLIC EN EL AGUA PARA PESCAR CON LA RED' },
+  netHaul: { en: 'HAULING THE NET', pl: 'WCIĄGANIE SIECI', 'es-AR': 'RECOGIENDO LA RED' },
   noRepair: { en: 'No broken repairable item remains.', pl: 'Nie ma już uszkodzonych przedmiotów do naprawy.', "es-AR": "No quedan objetos rotos que se puedan reparar." },
   noCarlitos: { en: 'Carlitos is not aboard.', pl: 'Carlitosa nie ma na pokładzie.', "es-AR": "Carlitos no está a bordo." },
-  noRetrieve: { en: 'Carlitos cannot retrieve the loot.', pl: 'Carlitos nie może przynieść znaleziska.', "es-AR": "Carlitos no puede recuperar el botín." },
   companionEnergy: { en: (need: number, have: number) => `Carlitos needs ${need} energy; he has ${have}.`, pl: (need: number, have: number) => `Carlitos potrzebuje ${need} pkt. energii; ma ${have}.`, "es-AR": (need: number, have: number) => `Carlitos necesita ${need} de energía; tiene ${have}.` },
-  companionState: { en: (state: string) => `Carlitos is ${state} and cannot retrieve the loot.`, pl: (state: string) => `Carlitos nie może przynieść znaleziska. Jego stan: ${state}.`, "es-AR": (state: string) => `Carlitos no puede recuperar el botín. Su estado: ${state}.` },
   requires: { en: (minimum: number, resource: string, available: number) => `Requires ${minimum} ${resource}; you have ${available}.`, pl: (minimum: number, resource: string, available: number) => `Wymagane: ${minimum} (${resource}). Masz: ${available}.`, "es-AR": (minimum: number, resource: string, available: number) => `Necesitás ${minimum} de ${resource}; tenés ${available}.` },
   requiresItem: { en: (item: string) => `Requires usable ${item}.`, pl: (item: string) => `Wymagany sprawny przedmiot: ${item}.`, "es-AR": (item: string) => `Necesitás un objeto que funcione: ${item}.` },
   requiresChest: { en: (required: string, available: string) => `Requires a ${required} chest; you have ${available}.`, pl: (required: string, available: string) => `Wymagany stan skrzyni: ${required}. Obecny stan: ${available}.`, "es-AR": (required: string, available: string) => `Estado requerido del cofre: ${required}. Estado actual: ${available}.` },

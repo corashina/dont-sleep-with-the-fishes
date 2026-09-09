@@ -1,7 +1,6 @@
 import {
   BoxGeometry,
   BufferGeometry,
-  ConeGeometry,
   DoubleSide,
   Group,
   Material,
@@ -25,7 +24,6 @@ import type { ActionOutcome, ItemCondition } from './survivalTypes';
 import { StationaryEventCamera } from './StationaryEventCamera';
 import {
   isCameraOnlyWeatherEvent,
-  sampleWeatherItemUse,
   sampleWeatherReaction,
   sampleWeatherReveal,
   weatherItemUseDuration,
@@ -120,19 +118,6 @@ function resetItemSample(sample: WeatherItemSample): void {
   sample.effectKind = 'none';
 }
 
-function createFlashlightBeam(material: Material): Group {
-  const root = new Group();
-  root.name = 'weather-flashlight-beam';
-  const beam = new Mesh(new ConeGeometry(0.72, 4.8, 8, 1, true), material);
-  beam.name = 'weather-flashlight-beam-cone';
-  beam.position.set(0.15, 1.45, -3);
-  beam.rotation.x = -Math.PI / 2;
-  beam.scale.set(0.01, 0.01, 0.01);
-  root.add(beam);
-  root.visible = false;
-  return root;
-}
-
 function createLightningFlash(material: Material): Group {
   const root = new Group();
   root.name = 'weather-lightning-flash';
@@ -214,10 +199,7 @@ export class WeatherEventAnimator {
     effectKind: 'none',
   };
   private readonly monster: FogMonster | null;
-  private readonly beamMaterial: MeshBasicMaterial;
   private readonly lightningMaterial: MeshBasicMaterial;
-  private readonly flashlightBeam: Group;
-  private readonly flashlightBeamCone: Mesh;
   private readonly lightningFlash: Group;
   private readonly windPaper: Mesh;
   private readonly fog: SeaMistCurtain | null;
@@ -239,13 +221,6 @@ export class WeatherEventAnimator {
       : new StationaryEventCamera(viewCamera);
     this.worldRoot.name = 'weather-event-world';
     this.boatRoot.name = 'weather-event-boat';
-    this.beamMaterial = new MeshBasicMaterial({
-      color: 0xd6d2a5,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      side: DoubleSide,
-    });
     this.lightningMaterial = new MeshBasicMaterial({
       color: 0xdce8e6,
       transparent: true,
@@ -260,8 +235,6 @@ export class WeatherEventAnimator {
     this.fog = usesFogMonster
       ? new SeaMistCurtain('weather-fog-monster-mist', 'surrounding')
       : null;
-    this.flashlightBeam = createFlashlightBeam(this.beamMaterial);
-    this.flashlightBeamCone = this.flashlightBeam.children[0] as Mesh;
     this.lightningFlash = createLightningFlash(this.lightningMaterial);
     const paperShape = new Shape();
     paperShape.moveTo(-0.34, -0.22);
@@ -285,7 +258,6 @@ export class WeatherEventAnimator {
     this.windPaper.renderOrder = 3;
     if (this.fog !== null) this.worldRoot.add(this.fog.root);
     this.worldRoot.add(this.lightningFlash, this.windPaper);
-    this.boatRoot.add(this.flashlightBeam);
     collectMeshResources(this.worldRoot, this.ownedGeometries, this.ownedMaterials);
     collectMeshResources(this.boatRoot, this.ownedGeometries, this.ownedMaterials);
     if (this.monster !== null) this.worldRoot.add(this.monster.root);
@@ -428,7 +400,6 @@ export class WeatherEventAnimator {
         this.updateReveal(active.eventId, progress);
         break;
       case 'item':
-        this.updateItem(active, progress);
         break;
       case 'react':
         this.updateReaction(active, progress);
@@ -484,36 +455,6 @@ export class WeatherEventAnimator {
       this.lightningFlash.visible = true;
       this.lightningFlash.scale.setScalar(0.9 + sample.lightningEmphasis * 0.22);
       this.lightningMaterial.opacity = 0.24 + sample.lightningEmphasis * 0.72;
-    }
-  }
-
-  private updateItem(
-    active: Extract<ActiveWeatherAnimation, { readonly kind: 'item' }>,
-    progress: number,
-  ): void {
-    if (!sampleWeatherItemUse(
-      active.eventId,
-      active.choiceId,
-      progress,
-      this.itemSample,
-    )) return;
-    const effect = this.itemSample.effect;
-    if (effect <= 0.01) return;
-    switch (this.itemSample.effectKind) {
-      case 'wave-anchor-stabilize':
-        break;
-      case 'fog-flashlight-sweep':
-        this.flashlightBeam.visible = true;
-        this.flashlightBeam.rotation.y = this.itemSample.yaw * 0.72;
-        this.flashlightBeamCone.scale.set(
-          0.62 + effect * 0.38,
-          0.78 + effect * 0.22,
-          0.62 + effect * 0.38,
-        );
-        this.beamMaterial.opacity = effect * 0.24;
-        break;
-      default:
-        break;
     }
   }
 
@@ -725,10 +666,6 @@ export class WeatherEventAnimator {
       this.fog.root.visible = false;
       this.fog.setOpacity(0);
     }
-    this.flashlightBeam.visible = false;
-    this.flashlightBeam.rotation.set(0, 0, 0);
-    this.flashlightBeamCone.scale.set(0.01, 0.01, 0.01);
-    this.beamMaterial.opacity = 0;
     this.lightningFlash.visible = false;
     this.lightningFlash.scale.set(1, 1, 1);
     this.lightningMaterial.opacity = 0;

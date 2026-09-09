@@ -1,6 +1,5 @@
 import {
   BufferGeometry,
-  CylinderGeometry,
   Group,
   Material,
   Mesh,
@@ -8,7 +7,6 @@ import {
   Vector3,
 } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
-import { addTransformedMesh as addMesh } from '../rendering/addTransformedMesh';
 import { hasRenderableBounds } from '../rendering/modelPresentation';
 import {
   collectMeshResources,
@@ -65,30 +63,9 @@ function brightenPlaneMaterial(planeMaterial: Material): void {
   planeMaterial.needsUpdate = true;
 }
 
-function material(
-  color: number,
-  options: {
-    readonly emissive?: number;
-    readonly transparent?: boolean;
-    readonly opacity?: number;
-    readonly depthWrite?: boolean;
-  } = {},
-): MeshStandardMaterial {
-  return new MeshStandardMaterial({
-    color,
-    roughness: 0.78,
-    emissive: options.emissive ?? 0,
-    transparent: options.transparent ?? false,
-    opacity: options.opacity ?? 1,
-    depthWrite: options.depthWrite ?? true,
-    flatShading: true,
-  });
-}
-
 export class PlanePresentation implements FocusedEventPresentation {
   readonly root = new Group();
   private readonly aircraft = new Group();
-  private readonly beam = new Group();
   private readonly geometries = new Set<BufferGeometry>();
   private readonly materials = new Set<Material>();
   private readonly exitStart = new Vector3();
@@ -130,8 +107,7 @@ export class PlanePresentation implements FocusedEventPresentation {
     this.root.userData.holdOnClear = false;
     this.aircraft.name = 'plane-aircraft';
     this.aircraft.add(this.requiredAirplaneModel());
-    this.buildFlashlightBeam();
-    this.root.add(this.aircraft, this.beam);
+    this.root.add(this.aircraft);
     collectMeshResources(this.root, this.geometries, this.materials);
     this.configureSide(0);
     this.resetActors();
@@ -153,7 +129,6 @@ export class PlanePresentation implements FocusedEventPresentation {
     this.aircraft.visible = true;
     this.aircraft.position.copy(this.planeStart);
     this.aircraft.rotation.set(this.planePitch, this.planeYaw, -0.06);
-    this.beam.visible = false;
     this.root.userData.state = 'staged';
   }
 
@@ -177,7 +152,6 @@ export class PlanePresentation implements FocusedEventPresentation {
         return this.startAnimation('choice-flashlight', FLASHLIGHT_DURATION);
       case 'sleep':
         this.releaseSupply();
-        this.beam.visible = false;
         this.root.userData.state = 'letting-pass';
         return this.startAnimation('choice-pass', PASS_CHOICE_DURATION);
       default:
@@ -197,7 +171,6 @@ export class PlanePresentation implements FocusedEventPresentation {
       case 'plane-signaled':
         this.animation.settle();
         this.releaseSupply();
-        this.beam.visible = false;
         this.root.userData.state = 'signal-sent';
         return Promise.resolve();
       case 'plane-pass':
@@ -295,7 +268,6 @@ export class PlanePresentation implements FocusedEventPresentation {
         this.applyFlashlight(normalized);
         break;
       case 'choice-pass':
-        this.beam.visible = false;
         break;
       case 'result-pass':
         this.aircraft.position.lerpVectors(
@@ -331,13 +303,6 @@ export class PlanePresentation implements FocusedEventPresentation {
   private applyFlashlight(progress: number): void {
     const aim = smoothstep(progress / 0.24);
     this.applySupplyAim(aim);
-    const phase = Math.min(5.999999, progress * 6);
-    const on = progress < 1 && Math.floor(phase) % 2 === 0;
-    this.beam.visible = on;
-    const visual = this.beam.children[0];
-    if (visual instanceof Mesh && visual.material instanceof MeshStandardMaterial) {
-      visual.material.opacity = on ? 0.14 : 0;
-    }
   }
 
   private prepareSupply(choice: EventChoicePresentation): void {
@@ -386,7 +351,6 @@ export class PlanePresentation implements FocusedEventPresentation {
     this.aircraft.visible = false;
     this.aircraft.position.copy(this.planeStart);
     this.aircraft.rotation.set(this.planePitch, this.planeYaw, -0.06);
-    this.beam.visible = false;
   }
 
   private configureSide(variantSeed: number): void {
@@ -419,20 +383,4 @@ export class PlanePresentation implements FocusedEventPresentation {
     this.planeYaw = Math.atan2(-x, -z) + Math.PI / 2;
   }
 
-  private buildFlashlightBeam(): void {
-    this.beam.name = 'plane-flashlight-beam';
-    addMesh(
-      this.beam,
-      'plane-flashlight-beam-visual',
-      new CylinderGeometry(0.05, 2.4, 48, 8, 1, true),
-      material(0xe7dfc5, {
-        emissive: 0x665d46,
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-      }),
-      [1.2, 5.2, -24],
-      [Math.PI / 2.18, 0.02, 0.03],
-    );
-  }
 }

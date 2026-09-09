@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import { DEFAULT_POSTERIZATION } from '../src/rendering/posterization';
 import { createTestGame, flushPhases } from './helpers/game';
 // Importance: 10/10 (scaled from 5/5). Protects full game lifecycle integration.
 
@@ -247,7 +246,7 @@ describe('Game survival save lifecycle', () => {
       await flushPhases();
 
       expect(JSON.parse(storage.getItem(SURVIVAL_SAVE_DATA_KEY)!))
-        .toMatchObject({ version: 4, checkpoint });
+        .toMatchObject({ version: 6, checkpoint });
       expect(rig.mount.querySelector('[data-save-status]')?.textContent).toBe('DAY 5');
     } finally {
       rig.game.dispose();
@@ -368,13 +367,13 @@ function scavengeHandsStub() {
 function postProcessingSceneRenderer(): SceneRenderer {
   const postProcessingControls: PostProcessingControls = {
     getState: vi.fn(() => ({
-      posterization: DEFAULT_POSTERIZATION, ambientOcclusionAvailable: true,
+      ambientOcclusionAvailable: true,
       ambientOcclusionMode: 'composite' as const,
       ambientOcclusionQuality: 'low' as const,
       ambientOcclusionIntensity: 1,
       ambientOcclusionRadius: 0.5,
     })),
-    setPosterization: vi.fn(), setAmbientOcclusionMode: vi.fn(),
+    setAmbientOcclusionMode: vi.fn(),
     setAmbientOcclusionQuality: vi.fn(),
     setNumeric: vi.fn(),
   };
@@ -1835,13 +1834,13 @@ describe('ScavengePhase lifecycle integration', () => {
     };
     const postProcessingControls: PostProcessingControls = {
       getState: vi.fn(() => ({
-        posterization: DEFAULT_POSTERIZATION, ambientOcclusionAvailable: true,
+        ambientOcclusionAvailable: true,
         ambientOcclusionMode: 'composite' as const,
         ambientOcclusionQuality: 'low' as const,
         ambientOcclusionIntensity: 1,
         ambientOcclusionRadius: 0.5,
       })),
-      setPosterization: vi.fn(), setAmbientOcclusionMode: vi.fn(),
+      setAmbientOcclusionMode: vi.fn(),
       setAmbientOcclusionQuality: vi.fn(),
       setNumeric: vi.fn(),
     };

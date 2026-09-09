@@ -1,22 +1,30 @@
 export const SURVIVAL_BALANCE = {
   start: { health: 100, hunger: 0, energy: 3, hull: 100 },
   dawn: { hungerIncrease: 18, healthRecovery: 5, starvationDamage: 7, normalEnergy: 3, hungryEnergy: 2, starvingEnergy: 1 },
-  nightHullWear: { damage: 3, respiteInterval: 5 },
+  nightHullWear: { damage: 6, respiteInterval: 5 },
   thresholds: { hungry: 70, starving: 90, maximum: 100 },
   actions: {
-    fishEnergy: 1, diveEnergy: 3,
+    fishEnergy: 1, netEnergy: 2, diveEnergy: 3,
     foodHunger: { min: 18, max: 24 }, repairHullPerEnergy: 33,
     maximumRepairEnergy: 3,
     maximumEnergy: 3,
     maximumStoredEnergy: 4,
   },
   fishing: {
+    backpackChance: 0.04,
     minimumBiteDelaySeconds: 3,
     biteDelayRangeSeconds: 4,
     reactionSeconds: 6,
   },
+  netFishing: {
+    junkWeight: 0.35,
+    largeFishWeight: 2,
+    usableItemWeight: 2,
+    backpackChance: 0.08,
+  },
   diving: {
     success: 0.65, injury: 0.25,
+    itemChance: 0.10,
     injuryDamage: { min: 15, max: 45 }, overcastSuccessDelta: -0.05,
     overcastInjuryDelta: 0.05,
     supplyAmounts: [

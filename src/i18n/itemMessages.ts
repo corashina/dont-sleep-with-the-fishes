@@ -25,6 +25,17 @@ export const itemLabel = defineMessages({
 });
 
 export const catchLabel = defineMessages({
+  blowfish: { en: "Blowfish", pl: "Rozdymka", "es-AR": "Pez globo" },
+  fish: { en: "Fish", pl: "Ryba", "es-AR": "Pez" },
+  goldfish: { en: "Goldfish", pl: "Złota rybka", "es-AR": "Pez dorado" },
+  trout: { en: "Trout", pl: "Pstrąg", "es-AR": "Trucha" },
+  kingfish: { en: "Kingfish", pl: "Seriola", "es-AR": "Seriola" },
+  piranha: { en: "Piranha", pl: "Pirania", "es-AR": "Piraña" },
+  crayfish: { en: "Crayfish", pl: "Rak", "es-AR": "Cangrejo de río" },
+  halibut: { en: "Halibut", pl: "Halibut", "es-AR": "Fletán" },
+  brokenCan: { en: "Broken Can", pl: "Uszkodzona puszka", "es-AR": "Lata rota" },
+  crushedCan: { en: "Crushed Soda Can", pl: "Zgnieciona puszka", "es-AR": "Lata aplastada" },
+  backpack: { en: "Backpack", pl: "Plecak", "es-AR": "Mochila" },
   cod: { en: "Cod", pl: "Dorsz", "es-AR": "Bacalao" },
   salmon: { en: "Salmon", pl: "Łosoś", "es-AR": "Salmón" },
   tuna: { en: "Tuna", pl: "Tuńczyk", "es-AR": "Atún" },
@@ -53,7 +64,7 @@ export const itemDescription = defineMessages({
   map: { en: "Charts safer water through dangerous routes.", pl: "Wskazuje bezpieczniejsze wody na niebezpiecznych szlakach.", "es-AR": "Indica aguas más seguras en rutas peligrosas." },
   medicalKit: { en: "Restores Health to 100. Single use.", pl: "Przywraca zdrowie do 100. Jednorazowy użytek.", "es-AR": "Restaura la Salud a 100. Un solo uso." },
   spyglass: { en: "Reveals distant movement and threats.", pl: "Pozwala dostrzec odległy ruch i zagrożenia.", "es-AR": "Permite ver movimientos y amenazas a la distancia." },
-  fishingNet: { en: "Collects fish and floating supplies.", pl: "Służy do zbierania ryb i dryfujących zapasów.", "es-AR": "Recoge peces y suministros que flotan." },
+  fishingNet: { en: "Costs 2 Energy. Hauls two catches with less junk. No bait needed.", pl: "Kosztuje 2 punkty energii. Dwa znaleziska i mniej śmieci. Nie wymaga przynęty.", "es-AR": "Cuesta 2 de Energía. Recoge dos capturas con menos basura. No necesita carnada." },
   knife: { en: "Cuts through threats during close attacks.", pl: "Przecina zagrożenia podczas ataków z bliska.", "es-AR": "Corta las amenazas durante ataques cercanos." },
   bucket: { en: "Bails water and catches loose supplies.", pl: "Służy do wybierania wody i zbierania zapasów.", "es-AR": "Sirve para sacar agua del bote y recoger suministros sueltos." },
   flareGun: { en: "Fires one signal flare.", pl: "Wystrzeliwuje jedną flarę sygnałową.", "es-AR": "Dispara una bengala de señalización." },

@@ -1,4 +1,5 @@
 export const EVENT_MODEL_IDS = [
+  'lighthouse',
   'chestClosed',
   'midnightIsland',
   'deadTree',
@@ -9,6 +10,7 @@ export const EVENT_MODEL_IDS = [
   'airplane',
   'midnightPalmTrees',
   'midnightShovel',
+  'midnightBush',
   'midnightMonster',
 ] as const;
 

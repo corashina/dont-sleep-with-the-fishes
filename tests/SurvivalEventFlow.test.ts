@@ -112,6 +112,7 @@ function createRig(
     })),
   };
   const world = {
+    enterFocusedEventView: vi.fn(async (): Promise<void> => undefined),
     stageEvent: vi.fn((eventId: unknown) => calls.push(`stage:${
       typeof eventId === 'string' ? eventId : (eventId as { eventId: string }).eventId
     }`)),
@@ -158,6 +159,7 @@ function createRig(
       calls.push(covered ? 'cover' : 'uncover');
     }),
     setSleepCoverProfile: vi.fn(async () => undefined),
+    holdSleep: vi.fn(async (_durationMs?: number): Promise<void> => undefined),
     setBadSleepCue: vi.fn(),
     holdEventOutcome: vi.fn(async () => { calls.push('hold'); }),
     showRewardResult: vi.fn(async () => { calls.push('show-result'); }),
@@ -574,6 +576,82 @@ describe('event selection contracts', () => {
 });
 
 describe('SurvivalEventFlow', () => {
+  it.each([false, true])('holds the bite blackout after dawn settles, disposed=%s', async (disposeDuringHold) => {
+    const settled = deferred<boolean>();
+    const hold = deferred();
+    let waitForDawn = false;
+    const rig = createRig(snapshot({ state: 'nightEvent', pendingEventId: 'midnight-tour' }), undefined, {
+      renderAndSettleCoveredScene: async () => waitForDawn ? settled.promise : true,
+    });
+    rig.setResolveEvent(() => {
+      rig.setSnapshot(snapshot({ state: 'nightEvent', pendingEventId: null }));
+      return accepted({ eventResult: { eventId: 'midnight-tour', choiceId: 'visit', resultId: 'tour-attack' } });
+    });
+    rig.ui.holdSleep.mockReturnValue(hold.promise);
+    await rig.flow.revealPending(rig.session.snapshot());
+    rig.flow.resolveContextual('visit');
+    await vi.waitFor(() => expect(rig.setBusy).toHaveBeenLastCalledWith(false));
+    waitForDawn = true;
+    rig.flow.resolveContextual('visit');
+    await vi.waitFor(() => expect(rig.session.beginDawn).toHaveBeenCalledOnce());
+    expect(rig.ui.setSleepCovered).toHaveBeenLastCalledWith(true);
+    expect(rig.ui.holdSleep).not.toHaveBeenCalled();
+    expect(rig.flow.presentationSnapshot(rig.session.snapshot()).state).toBe('day');
+    settled.resolve(true);
+    await vi.waitFor(() => expect(rig.ui.holdSleep).toHaveBeenCalledExactlyOnceWith(3_000));
+    expect(rig.ui.setSleepCovered).toHaveBeenLastCalledWith(true);
+    expect(rig.setBusy).toHaveBeenLastCalledWith(true);
+    if (disposeDuringHold) rig.flow.dispose();
+    rig.ui.setSleepCovered.mockClear();
+    hold.resolve();
+    if (disposeDuringHold) {
+      await hold.promise;
+      await Promise.resolve();
+      expect(rig.ui.setSleepCovered).not.toHaveBeenCalledWith(false);
+    } else {
+      await vi.waitFor(() => expect(rig.ui.setSleepCovered).toHaveBeenLastCalledWith(false));
+      expect(rig.setBusy).toHaveBeenLastCalledWith(false);
+      rig.flow.dispose();
+    }
+  });
+
+  it('waits at the bow before offering an island choice without consuming the event', async () => {
+    const rig = createRig(snapshot({ state: 'nightEvent', pendingEventId: 'midnight-tour' }));
+    await rig.flow.revealPending(rig.session.snapshot());
+    const arrival = deferred();
+    rig.world.enterFocusedEventView.mockReturnValueOnce(arrival.promise);
+    rig.flow.resolveContextual('visit');
+    rig.flow.resolveContextual('visit');
+    expect(rig.world.enterFocusedEventView).toHaveBeenCalledOnce();
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+    expect(rig.ui.setEventSelection).toHaveBeenLastCalledWith(new Map(), []);
+    arrival.resolve();
+    await vi.waitFor(() => expect(rig.setBusy).toHaveBeenLastCalledWith(false));
+    expect(rig.ui.setEventSelection).toHaveBeenLastCalledWith(new Map(), [
+      expect.objectContaining({ id: 'visit' }), expect.objectContaining({ id: 'sleep' }),
+    ]);
+    const choices = rig.ui.setEventSelection.mock.lastCall?.[1];
+    expect(choices?.every((choice: { anchorId?: string }) => choice.anchorId === undefined)).toBe(true);
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+    rig.flow.resolveContextual('sleep');
+    await vi.waitFor(() => expect(rig.session.resolveEvent).toHaveBeenCalledWith({ kind: 'choice', choiceId: 'sleep' }));
+    rig.flow.dispose();
+  });
+
+  it('does not reopen an island popup after disposal during the walk', async () => {
+    const rig = createRig(snapshot({ state: 'nightEvent', pendingEventId: 'midnight-tour' }));
+    await rig.flow.revealPending(rig.session.snapshot());
+    const arrival = deferred();
+    rig.world.enterFocusedEventView.mockReturnValueOnce(arrival.promise);
+    rig.flow.resolveContextual('visit');
+    rig.flow.dispose();
+    rig.ui.setEventSelection.mockClear();
+    arrival.resolve();
+    await arrival.promise;
+    await Promise.resolve();
+    expect(rig.ui.setEventSelection).not.toHaveBeenCalled();
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+  });
 
   it.each([
     ['search', null, { kind: 'resource', id: 'food', quantity: 1 }],

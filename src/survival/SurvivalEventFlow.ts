@@ -3,7 +3,6 @@ import { getLanguage } from '../i18n/language';
 import { ITEM_LABELS } from '../game/ItemState';
 import type { SurvivalAudio } from '../audio/SurvivalAudio';
 import type { ItemId, ItemInstanceId } from '../game/ItemState';
-import { carlitosStatus, carlitosWellness } from './CarlitosState';
 import type { SurvivalUI } from '../ui/SurvivalUI';
 import type {
   EventContextChoice,
@@ -19,6 +18,7 @@ import type { EventChoicePresentation } from './FocusedEventPresentation';
 import {
   isDriftingItemEventId,
   isInspectableEventId,
+  isSignalSightingEventId,
   PLANE_CHOICE_WINDOW_SECONDS,
   survivalEventById,
   type DriftingItemEventId,
@@ -69,6 +69,7 @@ export type EventWorldPort = Pick<
   | 'retrieveDriftingItem'
   | 'delegateDriftingItem'
   | 'play'
+  | 'enterFocusedEventView'
 >;
 
 export type EventUiPort = Pick<
@@ -82,6 +83,7 @@ export type EventUiPort = Pick<
   | 'setEventSleepMask'
   | 'setSleepCovered'
   | 'setSleepCoverProfile'
+  | 'holdSleep'
   | 'setBadSleepCue'
   | 'holdEventOutcome'
   | 'clearEventPresentation'
@@ -158,6 +160,7 @@ type EventPresentationState =
   | 'resolving';
 
 const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
+const MIDNIGHT_ATTACK_BLACKOUT_MS = 3_000;
 
 type SurvivalEventDefinition = NonNullable<ReturnType<typeof survivalEventById>>;
 type SurvivalEventChoice = SurvivalEventDefinition['choices'][number];
@@ -257,28 +260,13 @@ function carlitosChoiceAvailability(snapshot: SurvivalSnapshot, energyCost: numb
   if (carlitos === null) {
     return { visible: false, get unavailableReason() { return flowText('noCarlitos'); } };
   }
-  if (!carlitos.alive) {
-    return { visible: false, get unavailableReason() { return flowText('noRetrieve'); } };
-  }
   if (carlitos.energy < energyCost) {
     return {
       visible: true,
       get unavailableReason() { return flowText('companionEnergy', energyCost, carlitos.energy); },
     };
   }
-  if (carlitosWellness(carlitos) >= 4) {
-    return { visible: true, unavailableReason: null };
-  }
-  const status = carlitosStatus(carlitos);
-  const label = carlitos.hunger < 4
-    ? status.hunger
-    : carlitos.sickness > 0
-      ? status.health
-      : status.happiness;
-  return {
-    visible: true,
-    get unavailableReason() { return flowText('companionState', label); },
-  };
+  return { visible: true, unavailableReason: null };
 }
 
 function usableChoiceItemInstanceId(
@@ -397,6 +385,7 @@ export function focusedChoicesFor(
 export class SurvivalEventFlow {
   private presentation: EventPresentationState = 'idle';
   private choiceCheckpointReady = false;
+  private islandConfirmationOpen = false;
   private eligibility = new Map<ItemInstanceId, EventResponseId>();
   private deferredSync: {
     readonly generation: number;
@@ -460,8 +449,7 @@ export class SurvivalEventFlow {
     const pendingEventId = this.dependencies.session.snapshot().pendingEventId;
     if (
       this.eligibility.size !== 0
-      && pendingEventId !== 'other-people'
-      && pendingEventId !== 'plane'
+      && !isSignalSightingEventId(pendingEventId ?? '')
     ) return;
     const operation = this.beginOperation();
     void this.runOwnedOperation(
@@ -479,8 +467,24 @@ export class SurvivalEventFlow {
     void this.runOwnedOperation(
       generation,
       operation,
-      () => this.resolveContextualChoice(choiceId, generation, operation),
+      () => this.dependencies.session.snapshot().pendingEventId === 'midnight-tour'
+        && choiceId === 'visit' && !this.islandConfirmationOpen
+        ? this.openIslandConfirmation(generation, operation)
+        : this.resolveContextualChoice(choiceId, generation, operation),
     );
+  }
+
+  private async openIslandConfirmation(generation: number, operation: number): Promise<void> {
+    this.presentation = 'transitioning';
+    this.setBusy(true);
+    this.dependencies.ui.setEventSelection?.(new Map(), []);
+    await this.dependencies.world.enterFocusedEventView('midnight-tour');
+    if (!this.isCurrent(generation, operation)) return;
+    if (!await this.resumeAfterVisibility(generation, operation)) return;
+    this.islandConfirmationOpen = true;
+    this.presentation = 'choosing';
+    this.restoreEventSelection();
+    this.setBusy(false);
   }
 
   async focusEvent(eventId: InspectableEventId): Promise<void> {
@@ -784,8 +788,8 @@ export class SurvivalEventFlow {
 
   private async playWreckageChoiceAnimation(context: FocusedChoiceContext): Promise<void> {
     const { choice, eventId, pending, generation, operation } = context;
-    if (choice.id === 'search') return;
-    if (choice.id === 'delegate-carlitos' || choice.id === 'leave') {
+    if (choice.id === 'search' || choice.id === 'leave') return;
+    if (choice.id === 'delegate-carlitos') {
       await (this.dependencies.world.playEventChoice?.(eventId, choice.id) ?? Promise.resolve());
       return;
     }
@@ -879,11 +883,17 @@ export class SurvivalEventFlow {
     return context.choice.id === 'retrieve' || context.choice.id === 'delegate-carlitos';
   }
 
+  private canCoverFocusedChoiceReturn(context: FocusedChoiceContext): boolean {
+    return context.wreckage
+      && context.choice.id !== 'leave'
+      && this.isCurrent(context.generation, context.operation);
+  }
+
   private async coverFocusedChoiceReturn(
     context: FocusedChoiceContext,
     state: FocusedChoiceResolutionState,
   ): Promise<void> {
-    if (!context.wreckage || !this.isCurrent(context.generation, context.operation)) return;
+    if (!this.canCoverFocusedChoiceReturn(context)) return;
     await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
     if (
       context.choice.id === 'dive'
@@ -898,7 +908,7 @@ export class SurvivalEventFlow {
     context: FocusedChoiceContext,
     state: FocusedChoiceResolutionState,
   ): Promise<void> {
-    if (!context.wreckage || !this.isCurrent(context.generation, context.operation)) return;
+    if (!this.canCoverFocusedChoiceReturn(context)) return;
     if (!await this.ensureFocusedChoiceReturnCovered(context, state)) return;
     if (!await this.dependencies.renderAndSettleCoveredScene(context.generation)) return;
     if (!this.isCurrent(context.generation, context.operation)) return;
@@ -1659,9 +1669,13 @@ export class SurvivalEventFlow {
     if (!await this.prepareMidnightTourReturn(outcome, generation, operation)) return;
     const snapshot = await this.chestAttackReturnSnapshot(generation, operation);
     if (!this.isCurrent(generation, operation)) return;
+    this.flushDeferredPresentationSync(snapshot, generation);
     if (!await this.dependencies.renderAndSettleCoveredScene(generation)) return;
     if (!this.isCurrent(generation, operation)) return;
-    this.flushDeferredPresentationSync(snapshot, generation);
+    if (outcome.eventResult?.resultId === 'tour-attack') {
+      await this.dependencies.ui.holdSleep?.(MIDNIGHT_ATTACK_BLACKOUT_MS);
+      if (!await this.resumeAfterVisibility(generation, operation)) return;
+    }
     await this.finishChestAttackReturn(snapshot, generation, operation);
   }
 
@@ -1828,7 +1842,7 @@ export class SurvivalEventFlow {
     generation: number,
     operation: number,
   ): Promise<boolean> {
-    if (eventId !== 'other-people' && eventId !== 'plane') return true;
+    if (!isSignalSightingEventId(eventId)) return true;
     await (this.dependencies.world.playEventChoice?.(eventId, choice) ?? Promise.resolve());
     return this.isCurrent(generation, operation);
   }
@@ -2490,6 +2504,7 @@ export class SurvivalEventFlow {
   }
 
   private contextualEventAnchorId(eventId: string, choiceId: string): string | null {
+    if (eventId === 'midnight-tour' && this.islandConfirmationOpen) return null;
     return focusedChoiceAnchorId(eventId, choiceId);
   }
 
@@ -2670,6 +2685,7 @@ export class SurvivalEventFlow {
     reportCleanupErrors = true,
     cancelPendingActivation = false,
   ): void {
+    this.islandConfirmationOpen = false;
     if (!preserveDeferredSync) this.cancelDeferredPresentationSync();
     this.preparedEventId = null;
     this.activeFocusedOperation = null;

@@ -51,6 +51,59 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
 
 describe('survival checkpoints', () => {
 
+  it.each(['wreckage', 'drifting-supplies', 'drifting-chest'] as const)(
+    'keeps repair, camera controls, and inspection available during %s', async (eventId) => {
+      const session = new SurvivalSession([], {
+        seed: 72,
+        initial: { day: 4, energy: 3, hull: 95 },
+        initialChest: { state: 'closed', acquiredDay: 4 },
+        initialEventId: eventId,
+      });
+      const repair = deferred();
+      const setAvailableDayActions = vi.fn();
+      const setCameraTurnState = vi.fn();
+      const setRearCameraView = vi.fn();
+      const showFocusedEvent = vi.fn();
+      const ui: Partial<SurvivalUI> = {
+        setCameraTurnState,
+        showFocusedEvent,
+        setSleepCovered: vi.fn(() => Promise.resolve()),
+        showEventReveal: vi.fn(() => Promise.resolve()),
+      };
+      const phase = SurvivalPhase.forTest({
+        session,
+        world: {
+          stageEvent: vi.fn(),
+          revealEvent: vi.fn(() => Promise.resolve()),
+        enterFocusedEventView: vi.fn(() => Promise.resolve()),
+          playRepairToolboxAnimation: vi.fn(() => repair.promise),
+          setAvailableDayActions,
+          setRearCameraView,
+        },
+        ui,
+      });
+      phase.start();
+      await flushPromises();
+      expect(setAvailableDayActions).toHaveBeenLastCalledWith(expect.arrayContaining(['repair', 'fish']));
+      expect(setCameraTurnState).toHaveBeenLastCalledWith(true, false);
+      ui.onCameraTurn?.();
+      expect(setRearCameraView).toHaveBeenLastCalledWith(true);
+      ui.onCameraTurn?.();
+
+      phase.handleAction('repair');
+      expect(session.snapshot().hull).toBe(100);
+      expect(setCameraTurnState).toHaveBeenLastCalledWith(false, false);
+      repair.resolve();
+      await flushPromises();
+      expect(session.snapshot().pendingEventId).toBe(eventId);
+      expect(setCameraTurnState).toHaveBeenLastCalledWith(true, false);
+      ui.onFocusedEventSelect?.(eventId);
+      await flushPromises();
+      expect(showFocusedEvent).toHaveBeenCalledOnce();
+      phase.dispose();
+    },
+  );
+
   it('renders fresh resources and action reasons when busy presentation settles', () => {
     let current = snapshot({
       energy: 2,
@@ -794,18 +847,18 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
-  it('renders the committed energy and locks commands before entering aiming', async () => {
+  it('locks commands before aiming and preserves Energy until the water click', async () => {
     const rig = createFishingRig();
     rig.phase.start();
     rig.calls.length = 0;
 
     rig.phase.handleAction('fish');
 
-    expect(rig.session.beginFishing).toHaveBeenCalledOnce();
+    expect(rig.session.beginFishing).not.toHaveBeenCalled();
     expect(rig.session.perform).not.toHaveBeenCalled();
-    expect(rig.realSession.snapshot()).toMatchObject({ energy: 2, actedToday: true });
+    expect(rig.realSession.snapshot()).toMatchObject({ energy: 3, actedToday: false });
     expect(rig.calls.indexOf('lock')).toBeLessThan(rig.calls.indexOf('play:enter'));
-    expect(rig.calls.indexOf('render:2:0:0')).toBeLessThan(rig.calls.indexOf('play:enter'));
+    expect(rig.calls.indexOf('render:3:0:0')).toBeLessThan(rig.calls.indexOf('play:enter'));
     expect(rig.calls.some((call) => call.startsWith('ui:aiming:'))).toBe(false);
     rig.phase.handleAction('dive');
     rig.phase.handleAction('repair');
@@ -896,7 +949,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.realSession.snapshot().journalEntries[0]?.actions).toHaveLength(1);
   });
 
-  it('routes rod activation after Continue and refunds a cancelled new attempt', async () => {
+  it('keeps aiming after Continue and leaves without another Energy charge', async () => {
     const rig = createFishingRig();
     rig.phase.start();
     rig.ui.onAction?.('fish');
@@ -913,11 +966,10 @@ describe('SurvivalPhase orchestration', () => {
     rig.ui.onAction?.('fish');
     rig.ui.onAction?.('fish');
 
-    expect(rig.session.beginFishing).toHaveBeenCalledTimes(2);
-    expect(rig.realSession.snapshot()).toMatchObject({ energy: 1, food: 1 });
+    expect(rig.session.beginFishing).toHaveBeenCalledOnce();
+    expect(rig.realSession.snapshot()).toMatchObject({ energy: 2, food: 1 });
     expect(rig.world.exitFishingView).not.toHaveBeenCalled();
-    rig.animations.enter.at(-1)!.resolve();
-    await flushPromises();
+    expect(rig.animations.enter).toHaveLength(1);
     expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({
       mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null,
     });
@@ -925,7 +977,7 @@ describe('SurvivalPhase orchestration', () => {
     rig.ui.onFishingViewExit?.();
     rig.ui.onFishingViewExit?.();
 
-    expect(rig.session.cancelFishing).toHaveBeenCalledOnce();
+    expect(rig.session.cancelFishing).not.toHaveBeenCalled();
     expect(rig.session.finishFishing).toHaveBeenCalledOnce();
     expect(rig.realSession.snapshot()).toMatchObject({ energy: 2, food: 1, actedToday: true });
     expect(rig.world.exitFishingView).toHaveBeenCalledOnce();
@@ -935,7 +987,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.ui.restoreCommandFocus).toHaveBeenCalledOnce();
 
     rig.ui.onAction?.('fish');
-    expect(rig.session.beginFishing).toHaveBeenCalledTimes(3);
+    expect(rig.session.beginFishing).toHaveBeenCalledOnce();
     rig.animations.enter.at(-1)!.resolve();
     await flushPromises();
     expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({
@@ -956,8 +1008,9 @@ describe('SurvivalPhase orchestration', () => {
     rig.phase.start();
     rig.phase.handleAction('fish');
     await reachFishingTeardownStage(rig, state);
-    const attempt = rig.session.beginFishing.mock.results[0]!.value.attempt;
-    const beforeTeardown = attempt.snapshot();
+    const attempt = rig.session.beginFishing.mock.results[0]?.value.attempt;
+    expect(attempt === undefined).toBe(state === 'entering' || state === 'aiming');
+    const beforeTeardown = attempt?.snapshot();
     const sessionBeforeTeardown = rig.realSession.snapshot();
     const fishingUiCalls = vi.mocked(rig.ui.setFishingState!).mock.calls.length;
     const eventCalls = rig.session.requestDayEvent.mock.calls.length;
@@ -986,7 +1039,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.session.requestDayEvent).toHaveBeenCalledTimes(eventCalls);
     expect(rig.session.finishFishing).toHaveBeenCalledTimes(finishCalls);
     expect(rig.world.exitFishingView).toHaveBeenCalledTimes(exitCalls);
-    expect(attempt.snapshot()).toEqual(beforeTeardown);
+    expect(attempt?.snapshot()).toEqual(beforeTeardown);
     expect(rig.realSession.snapshot()).toEqual(sessionBeforeTeardown);
     },
   );
@@ -1388,6 +1441,7 @@ describe('SurvivalPhase orchestration', () => {
         }),
       },
       world: {
+        enterFocusedEventView: vi.fn(() => Promise.resolve()),
         stageEvent: vi.fn(),
         revealEvent: vi.fn(() => Promise.resolve()),
         playEventChoice: vi.fn((_eventId, receivedChoice) => {
@@ -1426,6 +1480,10 @@ describe('SurvivalPhase orchestration', () => {
     calls.length = 0;
     setBusy.mockClear();
     trackTour = true;
+
+    (ui as Partial<SurvivalUI>).onEventChoice?.('visit');
+    await flushPromises();
+    setBusy.mockClear();
 
     (ui as Partial<SurvivalUI>).onEventChoice?.('visit');
     await flushPromises();
@@ -1777,6 +1835,7 @@ describe('SurvivalPhase orchestration', () => {
         }),
       },
       world: {
+        enterFocusedEventView: vi.fn(() => Promise.resolve()),
         stageEvent: vi.fn(),
         revealEvent: vi.fn(() => Promise.resolve()),
         playEventItemUse: vi.fn(() => Promise.resolve()),
@@ -1796,6 +1855,10 @@ describe('SurvivalPhase orchestration', () => {
     syncInventory.mockClear();
     if (route === 'item') phase.handleEventItem(choiceId, 'map-1');
     else if (route === 'context') {
+      if (eventId === 'midnight-tour') {
+        (ui as Partial<SurvivalUI>).onEventChoice?.('visit');
+        await flushPromises();
+      }
       (ui as Partial<SurvivalUI>).onEventChoice?.(choiceId);
     } else {
       phase.handleEndure();
@@ -1873,6 +1936,7 @@ describe('SurvivalPhase orchestration', () => {
           }),
         },
         world: {
+          enterFocusedEventView: vi.fn(() => Promise.resolve()),
           stageEvent: vi.fn(),
           revealEvent: vi.fn(() => Promise.resolve()),
           playEventChoice: vi.fn(() => Promise.resolve()),
@@ -1887,6 +1951,8 @@ describe('SurvivalPhase orchestration', () => {
       });
 
       phase.start();
+      await flushPromises();
+      (ui as Partial<SurvivalUI>).onEventChoice?.('visit');
       await flushPromises();
       (ui as Partial<SurvivalUI>).onEventChoice?.('visit');
       await flushPromises();
@@ -2793,6 +2859,7 @@ describe('SurvivalPhase orchestration', () => {
         resolveEvent,
       },
       world: {
+        enterFocusedEventView: vi.fn(() => Promise.resolve()),
         stageEvent: vi.fn(),
         revealEvent: vi.fn(() => Promise.resolve()),
         setEventEligibleItems: vi.fn(),
@@ -2805,6 +2872,8 @@ describe('SurvivalPhase orchestration', () => {
     phase.start();
     await flushPromises();
 
+    ui.onEventChoice?.('visit');
+    await flushPromises();
     ui.onEventChoice?.('visit');
     await flushPromises();
     expect(playEventChoice).toHaveBeenCalledOnce();
@@ -2882,6 +2951,7 @@ describe('SurvivalPhase orchestration', () => {
         }),
       },
       world: {
+        enterFocusedEventView: vi.fn(() => Promise.resolve()),
         stageEvent: vi.fn(),
         revealEvent: vi.fn(() => Promise.resolve()),
         setEventEligibleItems: vi.fn(),
@@ -2896,6 +2966,8 @@ describe('SurvivalPhase orchestration', () => {
       ui,
     });
     phase.start();
+    await flushPromises();
+    (ui as Partial<SurvivalUI>).onEventChoice?.('visit');
     await flushPromises();
     (ui as Partial<SurvivalUI>).onEventChoice?.('visit');
     await flushPromises();

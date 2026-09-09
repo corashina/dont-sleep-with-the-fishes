@@ -23,13 +23,6 @@ import type {
   EventOutcomePresentation,
   EventSceneContext,
 } from '../eventPresentationTypes';
-import {
-  createWreckageSample,
-  sampleWreckageBeat,
-  wreckageBeatDuration,
-  type WreckageBeat,
-  type WreckageSample,
-} from './wreckageChoreography';
 
 type SurfaceDebrisKind = 'box' | 'crate' | 'pallet' | 'plank';
 
@@ -40,12 +33,6 @@ interface SurfaceDebrisPlacement {
   readonly z: number;
   readonly yaw: number;
   readonly scale: number;
-}
-
-interface ActiveWreckageBeat {
-  readonly beat: WreckageBeat;
-  elapsed: number;
-  readonly resolve: () => void;
 }
 
 const SURFACE_DEBRIS = Object.freeze([
@@ -167,9 +154,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   private readonly surfaceBaseQuaternions: Quaternion[] = [];
   private readonly surfaceNormal = new Vector3();
   private readonly surfaceWaveQuaternion = new Quaternion();
-  private readonly sample: WreckageSample = createWreckageSample();
   private readonly targets: readonly FocusedEventInteractionTarget[];
-  private active: ActiveWreckageBeat | null = null;
   private surfaceTime = 0;
   private operation = 0;
   private diveOwned = false;
@@ -239,7 +224,6 @@ export class WreckagePresentation implements DedicatedEventPresentation {
   stage(context: EventSceneContext): void {
     if (this.disposed || context.eventId !== this.eventId) return;
     this.beginOperation();
-    this.cancelActive();
     this.releaseDive();
     this.surfaceTime = 0;
     this.staged = true;
@@ -247,8 +231,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.boatRoot.visible = true;
     this.shipPlacement.visible = false;
     this.updateFloatingDebris();
-    sampleWreckageBeat('surface-hold', 0, this.sample);
-    this.applySample();
+    this.applyVisibility();
   }
 
   reveal(): Promise<void> {
@@ -264,7 +247,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     if (choiceId === 'delegate-carlitos') {
       return this.environment.delegateCarlitos(async () => undefined);
     }
-    return choiceId === 'leave' ? this.startBeat('leave') : Promise.resolve();
+    return Promise.resolve();
   }
 
   async playItemUse(
@@ -299,43 +282,22 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     return Promise.resolve();
   }
 
-  update(time: number, delta: number): void {
+  update(time: number, _delta: number): void {
     if (this.disposed || !this.staged) return;
     if (Number.isFinite(time)) this.surfaceTime = time;
     this.updateFloatingDebris();
-    const active = this.active;
-    if (active === null || !Number.isFinite(delta) || delta <= 0) return;
-    const duration = wreckageBeatDuration(active.beat);
-    active.elapsed = Math.min(duration, active.elapsed + delta);
-    sampleWreckageBeat(active.beat, active.elapsed, this.sample);
-    this.applySample();
-    if (active.elapsed < duration) return;
-    this.active = null;
-    active.resolve();
   }
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
     this.beginOperation();
-    const active = this.active;
-    runCleanupSteps([
-      () => this.settleDive(),
-      () => {
-        if (active === null) return;
-        active.elapsed = wreckageBeatDuration(active.beat);
-        sampleWreckageBeat(active.beat, active.elapsed, this.sample);
-        this.applySample();
-        this.active = null;
-        active.resolve();
-      },
-    ]);
+    this.settleDive();
   }
 
   clear(): void {
     if (this.disposed) return;
     this.beginOperation();
     runCleanupSteps([
-      () => this.cancelActive(),
       () => this.releaseDive(),
       () => this.restoreUnderwaterView(),
       () => {
@@ -350,7 +312,6 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.disposed = true;
     this.beginOperation();
     runCleanupSteps([
-      () => this.cancelActive(),
       () => this.releaseDive(),
       () => this.restoreUnderwaterView(),
       () => this.hideScene(),
@@ -387,22 +348,6 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     this.debris.add(object);
   }
 
-  private startBeat(beat: WreckageBeat): Promise<void> {
-    this.cancelActive();
-    sampleWreckageBeat(beat, 0, this.sample);
-    this.applySample();
-    return new Promise((resolve) => {
-      this.active = { beat, elapsed: 0, resolve };
-    });
-  }
-
-  private cancelActive(): void {
-    const active = this.active;
-    if (active === null) return;
-    this.active = null;
-    active.resolve();
-  }
-
   private updateFloatingDebris(): void {
     const amplitudeScale = this.environment.readWorldWaveAmplitudeScale();
     for (let index = 0; index < this.surfaceObjects.length; index += 1) {
@@ -429,7 +374,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     }
   }
 
-  private applySample(): void {
+  private applyVisibility(): void {
     if (this.underwaterVisible) {
       this.debris.visible = false;
       this.seabed.visible = this.staged;
@@ -438,8 +383,8 @@ export class WreckagePresentation implements DedicatedEventPresentation {
       this.boatRoot.visible = false;
       return;
     }
-    this.debris.visible = this.staged && this.sample.debrisAlpha > 0;
-    this.worldRoot.visible = this.staged && this.sample.sceneAlpha > 0;
+    this.debris.visible = this.staged;
+    this.worldRoot.visible = this.staged;
     this.boatRoot.visible = this.worldRoot.visible;
     this.seabed.visible = false;
     this.shipPlacement.visible = false;
@@ -464,7 +409,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
       throw error;
     }
     this.underwaterVisible = true;
-    this.applySample();
+    this.applyVisibility();
   }
 
   private beginOperation(): number {
@@ -483,7 +428,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     runCleanupSteps([
       () => this.environment.dive.clear(),
       () => this.restoreUnderwaterView(),
-      () => this.applySample(),
+      () => this.applyVisibility(),
     ]);
   }
 
@@ -494,7 +439,7 @@ export class WreckagePresentation implements DedicatedEventPresentation {
     runCleanupSteps([
       () => this.environment.dive.settleForVisibilityChange(),
       () => this.restoreUnderwaterView(),
-      () => this.applySample(),
+      () => this.applyVisibility(),
     ]);
   }
 

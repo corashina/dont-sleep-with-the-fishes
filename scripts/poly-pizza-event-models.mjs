@@ -18,6 +18,7 @@ import {
 import { MeshoptSimplifier } from 'meshoptimizer';
 
 export const POLY_PIZZA_EVENT_MODEL_PAGES = Object.freeze({
+  lighthouse: 'https://poly.pizza/m/7H8is9jrGeB',
   leakPlanks: 'https://poly.pizza/m/hwQ1Fx5P8U',
   schoolFish: 'https://poly.pizza/m/HkUAXudvBt',
   snatcher: 'https://poly.pizza/m/BR1vpIvvvv',
@@ -26,6 +27,7 @@ export const POLY_PIZZA_EVENT_MODEL_PAGES = Object.freeze({
   deathStareBlob: 'https://poly.pizza/m/IoWG5F9WUc',
   tornadoCore: 'https://poly.pizza/m/2TBzV_5N0ci',
   midnightShovel: 'https://poly.pizza/m/oNBQSf87ZJ',
+  midnightBush: 'https://poly.pizza/m/ooG6CkLyE8',
   midnightMonster: 'https://poly.pizza/m/22K0aSZkHV',
   airplane: 'https://poly.pizza/m/8VysVKMXN2J',
   emptyLifeboat: 'https://poly.pizza/m/Hgf0R8s4Uo',
@@ -37,6 +39,7 @@ export const POLY_PIZZA_EVENT_MODEL_PAGES = Object.freeze({
 });
 
 export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
+  lighthouse: 1_000,
   leakPlanks: 2_000,
   schoolFish: 2_000,
   snatcher: 4_000,
@@ -45,6 +48,7 @@ export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
   deathStareBlob: 5_000,
   tornadoCore: 3_000,
   midnightShovel: 1_000,
+  midnightBush: 500,
   midnightMonster: 6_000,
   airplane: 2_500,
   emptyLifeboat: 2_000,
@@ -55,10 +59,12 @@ export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
   wreckagePallet: 3_000,
 });
 
-export const EVENT_MODEL_TOTAL_TRIANGLE_LIMIT = 33_000;
+export const EVENT_MODEL_TOTAL_TRIANGLE_LIMIT = 34_000;
 export const EVENT_MODEL_IDS = Object.freeze(Object.keys(POLY_PIZZA_EVENT_MODEL_PAGES));
 export const POLY_PIZZA_EVENT_MODEL_IDS = EVENT_MODEL_IDS;
 const EVENT_MODEL_COMMITTED_SHA256 = Object.freeze({
+  midnightBush: '0D5155B733C1DC009641612DE487AED0ED818C8E195258923FFC2AECABE31FBE',
+  lighthouse: 'CF9350742721B5E04C371D9C56C4DC4CA350045460B06B668D93CFA1E2968849',
   leakPlanks: '8EFEDCE21FEF2A542E047BD82F2C9E04D59CF81810ECFB6D62D5DA9239677DD6',
   schoolFish: '94C8D591FA64FC5E9EE77669D1DEC18376F7EDD3EA5A659504D87E80FAA9308F',
   snatcher: 'F775807D6EB98B8D8DDF95FF8AB158779537A563C8C537A9F6CD9AA26EDD2C3E',

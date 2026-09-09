@@ -1,8 +1,6 @@
 import { defineMessages } from './messages';
 
 export const settingsCatalog = {
-  posterizationStrength: { en: 'Strength', pl: 'Siła', 'es-AR': 'Intensidad' },
-  posterization: { en: 'Posterization', pl: 'Posteryzacja', 'es-AR': 'Posterización' },
   simulation: {"en":"SIMULATION","pl":"SYMULACJA","es-AR":"SIMULACIÓN"},
   barrels: {"en":"Barrel simulation","pl":"Symulacja beczek","es-AR":"Simulación de barriles"},
   physics: {"en":"PHYSICS VIEW","pl":"WIDOK FIZYKI","es-AR":"VISTA DE FÍSICA"},

@@ -23,7 +23,7 @@ import {
 import { CARLITOS_SEATED_SUPPORT_LIFT } from './CarlitosRestPose';
 import { ITEM_MODEL_SPECS } from './itemModelManifest';
 
-const FISHING_NET_HANDLE_SUPPORT_POINT = new Vector3(0, 0.09468515, 0.81206911);
+const FISHING_NET_HANDLE_SUPPORT_POINT = new Vector3(0, 0.09820857, 0.82);
 
 export type BoatItemSurface = 'shelf' | 'floor' | 'gunwale' | 'edgeShelf';
 export type BoatSupplyGroupId = ItemId;
@@ -137,7 +137,8 @@ const BOAT_STORAGE_SLOTS = {
   map: [restingSlot('shelf', 'map', 0, 0.65, 0)],
   medicalKit: [restingSlot('floor', 'medicalKit', -0.50, -1.27, 0.10)],
   spyglass: [restingSlot('shelf', 'spyglass', -1.08, -1.70, Math.PI + 0.14)],
-  fishingNet: [restingSlot('floor', 'fishingNet', -0.96, -1.15, 0.45, 0.5, 11 * Math.PI / 180)],
+  // Roll around the handle axis so the basket hangs down toward the water.
+  fishingNet: [restingSlot('floor', 'fishingNet', -1.22005223, -2.04704738, 42 * Math.PI / 180, 1, 68 * Math.PI / 180, -1.02758174)],
   knife: [restingSlot('floor', 'knife', 0.25, -0.55, 0, 0.5, Math.PI / 2)],
   bucket: [restingSlot('floor', 'bucket', 1.03, -1.00, -0.12)],
   flareGun: [restingSlot(

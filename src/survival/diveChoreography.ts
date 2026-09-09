@@ -88,7 +88,8 @@ export function sampleDivePose(elapsedSeconds: number, output: DivePose): DivePo
   output.cameraY = -0.16 * impactProgress - 0.72 * underwaterProgress;
   output.cameraZ = -0.18 * impactProgress - 0.44 * underwaterProgress;
   output.cameraYaw = 0.12 * impactProgress;
-  output.cameraPitch = -2.58 * impactProgress;
+  // Positive local pitch tips the view skyward for a backward entry.
+  output.cameraPitch = 2.58 * impactProgress;
   output.cameraRoll = 0.07 * impactProgress
     - 0.035 * rollAnticipation
     + 0.02 * impactJolt;

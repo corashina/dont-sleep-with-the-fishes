@@ -25,8 +25,9 @@ import {
 } from './BoatInteraction';
 import { FishingBiteParticles } from './FishingBiteParticles';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
+import { NetFishingPresentation, NET_HAUL_DURATION } from './NetFishingPresentation';
 import type { FishingCatchId } from './fishingCatalog';
-import type { FishingCastPoint } from './FishingSession';
+import type { FishingCastPoint, FishingHaul } from './FishingSession';
 import {
   disposeResourceSets,
   runCleanupSteps,
@@ -46,6 +47,7 @@ const FISHING_CAMERA_LOOK_TARGET = Object.freeze({ x: 0, y: -0.42, z: -7.4 });
 const FISHING_CAMERA_DURATION = 1.1;
 const FISHING_CAST_DURATION = 0.8;
 const FISHING_REEL_DURATION = 1;
+const FISHING_ROD_REWARD_LEAN = 0;
 const FISHING_MISS_DURATION = 0.8;
 const FISHING_SPLASH_HOLD_DURATION = 0.12;
 const FISHING_CAST_MIN_X = -2.7;
@@ -128,7 +130,7 @@ type FishingPresentationPhase =
   | 'missing'
   | 'returning';
 
-type FishingAnimationKind = 'enter' | 'cast' | 'reel' | 'miss' | 'return';
+type FishingAnimationKind = 'enter' | 'cast' | 'reel' | 'net' | 'miss' | 'return';
 
 interface ActiveFishingAnimation {
   readonly kind: FishingAnimationKind;
@@ -317,6 +319,9 @@ function isValidCastInput(
 }
 
 export class FishingPresentation {
+  private net: NetFishingPresentation | null = null;
+  private usingNet = false;
+  private rodVisibleBeforeNet = true;
   readonly root = new Group();
   private readonly ownedGeometries = new Set<BufferGeometry>();
   private readonly ownedMaterials = new Set<Material>();
@@ -472,9 +477,19 @@ export class FishingPresentation {
     }
   }
 
-  enterView(): Promise<void> {
+  enterView(netModel?: Object3D): Promise<void> {
     if (this.disposed) return Promise.resolve();
+    if (this.usingNet) this.dependencies.rod.visible = this.rodVisibleBeforeNet;
+    if (netModel !== undefined) this.rodVisibleBeforeNet = this.dependencies.rod.visible;
+    this.usingNet = netModel !== undefined;
+    if (netModel !== undefined) {
+      this.net ??= new NetFishingPresentation(netModel, this.dependencies.worldRoot, this.dependencies.boatRoot, (output, x, z) => {
+        this.dependencies.sampleWaveInto(output, this.currentTime, x, z, this.dependencies.waveAmplitudeScale());
+      });
+      this.net.show();
+    }
     if (this.phase === 'ready') {
+      if (this.usingNet) this.net?.samplePickup(1);
       this.dependencies.resetBasePresentation();
       this.applyPhasePresentation();
       return Promise.resolve();
@@ -587,6 +602,13 @@ export class FishingPresentation {
     this.activeCatch.rotation.set(0, 0.08, -0.04);
     this.activeCatch.updateMatrixWorld(true);
     this.catchBounds.setFromObject(this.activeCatch, true);
+    // Lay long rewards across the bow, clear of the upright rod behind them.
+    if (this.catchBounds.max.z - this.catchBounds.min.z
+      > this.catchBounds.max.x - this.catchBounds.min.x) {
+      this.activeCatch.rotation.y += Math.PI / 2;
+      this.activeCatch.updateMatrixWorld(true);
+      this.catchBounds.setFromObject(this.activeCatch, true);
+    }
     this.activeCatch.position.y = -this.catchBounds.min.y;
     this.fishing.catchDisplay.add(this.activeCatch);
     this.reelStartWorld.set(
@@ -600,6 +622,10 @@ export class FishingPresentation {
   }
 
   projectCatch(width: number, height: number): ProjectedBoatBounds | null {
+    if (this.usingNet && this.net !== null && this.phase === 'landed') {
+      this.dependencies.worldRoot.updateMatrixWorld(true);
+      return projectBoatObjectBoundsInto(this.catchProjection, this.net.root, this.dependencies.camera, width, height);
+    }
     if (
       this.disposed
       || this.phase !== 'landed'
@@ -624,11 +650,19 @@ export class FishingPresentation {
     return this.startAnimation('miss', FISHING_MISS_DURATION);
   }
 
+  async playNetHaul(haul: FishingHaul, point: FishingCastPoint): Promise<void> {
+    if (this.disposed || this.net === null) return;
+    if (!await this.net.prepare(haul, point) || this.disposed) return;
+    this.phase = 'reeling';
+    await this.startAnimation('net', NET_HAUL_DURATION);
+  }
+
   exitView(): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.cameraStartPosition.copy(this.dependencies.camera.position);
     this.cameraStartQuaternion.copy(this.dependencies.camera.quaternion);
     this.resetVisuals();
+    if (this.usingNet) this.net?.beginReturn();
     this.phase = 'returning';
     return this.startAnimation('return', FISHING_CAMERA_DURATION);
   }
@@ -662,6 +696,7 @@ export class FishingPresentation {
 
   updateParticles(delta: number): void {
     if (this.disposed || delta <= 0) return;
+    this.net?.update(delta);
     this.updateBiteParticles(delta);
   }
 
@@ -702,6 +737,7 @@ export class FishingPresentation {
     this.catchesDisposed = true;
     this.disposed = true;
     this.dependencies.catches.dispose();
+    this.net?.dispose();
   }
 
   disposeParticles(): void {
@@ -773,6 +809,7 @@ export class FishingPresentation {
   }
 
   private applyPhasePresentation(): void {
+    if (this.usingNet) this.dependencies.rod.visible = false;
     this.fishing.line.visible = false;
     this.fishing.bobber.visible = false;
     this.fishing.splash.visible = false;
@@ -785,8 +822,10 @@ export class FishingPresentation {
     this.dependencies.camera.position.copy(this.cameraPosition);
     this.dependencies.camera.quaternion.copy(this.cameraQuaternion);
     if (this.phase === 'ready') return;
+    if (this.usingNet) return;
 
     if (this.phase === 'landed') {
+      this.dependencies.rodPivot.rotation.x = FISHING_ROD_REWARD_LEAN;
       this.fishing.catchDisplay.visible = this.activeCatch !== null;
       return;
     }
@@ -803,70 +842,28 @@ export class FishingPresentation {
   private applyAnimation(kind: FishingAnimationKind, progress: number): void {
     const normalized = clamp(progress, 0, 1);
     switch (kind) {
+      case 'net':
+        this.net?.sample(normalized);
+        break;
       case 'enter':
-        if (normalized === 1) {
-          this.dependencies.camera.position.copy(this.cameraPosition);
-          this.dependencies.camera.quaternion.copy(this.cameraQuaternion);
-        } else {
-          this.dependencies.camera.position.lerpVectors(
-            this.cameraStartPosition,
-            this.cameraPosition,
-            smootherStep(normalized),
-          );
-          this.dependencies.camera.quaternion.copy(this.cameraStartQuaternion)
-            .slerp(this.cameraQuaternion, smootherStep(normalized));
-        }
+        this.applyViewEntry(normalized);
         break;
       case 'return':
-        if (normalized === 1) {
-          this.dependencies.cameraControl.restoreBasePose();
-        } else {
-          this.dependencies.cameraControl.interpolateToBasePose(
-            this.cameraStartPosition,
-            this.cameraStartQuaternion,
-            smootherStep(normalized),
-          );
-        }
+        this.applyViewReturn(normalized);
         break;
       case 'cast': {
         const drawBack = normalized < 0.28
           ? easeInOut(normalized / 0.28) * 0.42
           : (1 - easeOut((normalized - 0.28) / 0.72)) * 0.42
-            - Math.sin(Math.PI * (normalized - 0.28) / 0.72) * 0.5;
+            // Keep the shaft above the bow cap while the handle rests on the floor.
+            - Math.sin(Math.PI * (normalized - 0.28) / 0.72) * 0.34;
         this.dependencies.rodPivot.rotation.x = this.baseRodPivotRotationX + drawBack;
         this.fishing.splash.visible = normalized >= 0.9 && normalized < 1;
         break;
       }
-      case 'reel': {
-        const swing = 0.34;
-        this.dependencies.rodPivot.rotation.x = this.baseRodPivotRotationX
-          - Math.sin(Math.PI * normalized) * swing;
-        if (this.activeCatch) {
-          this.catchRest.getWorldPosition(this.catchTargetWorld);
-          this.catchApproachWorld.copy(this.catchTargetWorld);
-          this.catchApproachWorld.y += 0.72;
-          if (normalized < 0.72) {
-            const haul = easeOut(normalized / 0.72);
-            this.fishing.catchDisplay.position.lerpVectors(
-              this.reelStartWorld,
-              this.catchApproachWorld,
-              haul,
-            );
-            this.fishing.catchDisplay.position.y += Math.sin(Math.PI * haul) * 0.58;
-          } else {
-            const drop = easeInOut((normalized - 0.72) / 0.28);
-            this.fishing.catchDisplay.position.lerpVectors(
-              this.catchApproachWorld,
-              this.catchTargetWorld,
-              drop,
-            );
-            this.fishing.catchDisplay.position.y -= Math.sin(Math.PI * drop) * 0.045;
-          }
-          this.fishing.catchDisplay.rotation.z =
-            Math.sin(normalized * Math.PI * 2) * 0.16 * (1 - normalized);
-        }
+      case 'reel':
+        this.applyReelAnimation(normalized);
         break;
-      }
       case 'miss':
         this.dependencies.rodPivot.rotation.x = this.baseRodPivotRotationX
           + Math.sin(Math.PI * normalized) * 0.18;
@@ -874,8 +871,59 @@ export class FishingPresentation {
     }
   }
 
+  private applyViewEntry(normalized: number): void {
+    if (this.usingNet) this.net?.samplePickup(normalized);
+    if (normalized === 1) {
+      this.dependencies.camera.position.copy(this.cameraPosition);
+      this.dependencies.camera.quaternion.copy(this.cameraQuaternion);
+    } else {
+      this.dependencies.camera.position.lerpVectors(
+        this.cameraStartPosition,
+        this.cameraPosition,
+        smootherStep(normalized),
+      );
+      this.dependencies.camera.quaternion.copy(this.cameraStartQuaternion)
+        .slerp(this.cameraQuaternion, smootherStep(normalized));
+    }
+  }
+
+  private applyViewReturn(normalized: number): void {
+    if (this.usingNet) this.net?.sampleReturn(normalized);
+    if (normalized === 1) {
+      this.dependencies.cameraControl.restoreBasePose();
+    } else {
+      this.dependencies.cameraControl.interpolateToBasePose(
+        this.cameraStartPosition,
+        this.cameraStartQuaternion,
+        smootherStep(normalized),
+      );
+    }
+  }
+
+  private applyReelAnimation(normalized: number): void {
+    this.dependencies.rodPivot.rotation.x = this.baseRodPivotRotationX
+      + (FISHING_ROD_REWARD_LEAN - this.baseRodPivotRotationX) * smootherStep(normalized);
+    if (this.activeCatch === null) return;
+    this.catchRest.getWorldPosition(this.catchTargetWorld);
+    this.catchApproachWorld.copy(this.catchTargetWorld);
+    this.catchApproachWorld.y += 0.72;
+    if (normalized < 0.72) {
+      const haul = easeOut(normalized / 0.72);
+      this.fishing.catchDisplay.position.lerpVectors(this.reelStartWorld, this.catchApproachWorld, haul);
+      this.fishing.catchDisplay.position.y += Math.sin(Math.PI * haul) * 0.58;
+    } else {
+      const drop = easeInOut((normalized - 0.72) / 0.28);
+      this.fishing.catchDisplay.position.lerpVectors(this.catchApproachWorld, this.catchTargetWorld, drop);
+      this.fishing.catchDisplay.position.y -= Math.sin(Math.PI * drop) * 0.045;
+    }
+    this.fishing.catchDisplay.rotation.z = Math.sin(normalized * Math.PI * 2) * 0.16 * (1 - normalized);
+  }
+
   private finishAnimation(kind: FishingAnimationKind): void {
     switch (kind) {
+      case 'net':
+        this.phase = 'landed';
+        break;
       case 'enter':
         this.phase = 'ready';
         break;
@@ -893,12 +941,15 @@ export class FishingPresentation {
         break;
       case 'return':
         this.resetVisuals();
+        if (this.usingNet) this.dependencies.rod.visible = this.rodVisibleBeforeNet;
+        this.usingNet = false;
         this.phase = 'idle';
         break;
     }
   }
 
   private resetVisuals(): void {
+    this.net?.clear();
     this.fishing.line.visible = false;
     this.fishing.bobber.visible = false;
     this.fishing.splash.visible = false;

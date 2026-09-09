@@ -68,6 +68,8 @@ const freesoundSources = [
   ['shotgun', 'hyperix6', '660299'],
   ['goingToSleep', 'Froey_', '644490'],
   ['yawn', 'spookymodem', '202105'],
+  ['yawnShort', 'amorralteixe', '238399'],
+  ['yawnTired', 'DrFortyseven', '240139'],
   ['nightfall', 'DeVern', '427533'],
   ['eventReveal', 'nomiqbomi', '578362'],
   ['planeFlyby', 'straget', '403316'],

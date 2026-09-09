@@ -243,7 +243,6 @@ export class SurvivalUI {
         [this.fishingView.resultRoot, this.fishingView.resultClose],
         [this.fishingView.interactionRoot, () => this.fishingView.initialFocus()],
       ]),
-      (layer) => layer !== this.fishingView.interactionRoot || this.fishingView.mode() !== 'ready',
     );
     this.modalFocus.sync();
     this.modalDismissButtons = new Map<HTMLElement, HTMLButtonElement>([
@@ -303,10 +302,7 @@ export class SurvivalUI {
       if (!this.disposed) this.onFishingViewExit?.();
     };
     this.fishingView.canUseInteraction = () => (
-      !(this.fishingView.mode() === 'ready' && this.busy)
-      && this.modalFocus.topmostModal() === (
-        this.fishingView.mode() === 'ready' ? null : this.fishingView.interactionRoot
-      )
+      this.modalFocus.topmostModal() === this.fishingView.interactionRoot
     );
     this.fishingView.canUseResult = () => (
       this.modalFocus.topmostModal() === this.fishingView.resultRoot
@@ -568,8 +564,8 @@ export class SurvivalUI {
     return this.disposed ? Promise.resolve() : this.fishingView.setFade(covered);
   }
 
-  holdSleep(): Promise<void> {
-    return this.disposed ? Promise.resolve() : this.coverView.holdSleep();
+  holdSleep(durationMs?: number): Promise<void> {
+    return this.disposed ? Promise.resolve() : this.coverView.holdSleep(durationMs);
   }
 
   holdEventOutcome(): Promise<void> {
@@ -861,7 +857,8 @@ export class SurvivalUI {
     this.onAction(action, undefined);
   }
 
-  private openRepairOptions(): void {
+  openRepairOptions(): void {
+    if (this.disposed || this.busy) return;
     const snapshot = this.currentSnapshot;
     if (snapshot === null) return;
     const targets = Object.values(snapshot.inventory).filter((

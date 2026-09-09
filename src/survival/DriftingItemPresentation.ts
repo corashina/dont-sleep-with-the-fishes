@@ -1,4 +1,5 @@
 import {
+  Box3,
   ExtrudeGeometry,
   Group,
   Mesh,
@@ -73,8 +74,8 @@ const LIFEBOAT_FLOOR_OUTLINE = Object.freeze([
   Object.freeze({ x: -0.82, z: -1.35 }),
 ]);
 const RECEDE_OFFSET = Object.freeze({ x: 5.2, y: -0.28, z: -2 });
-const RETRIEVE_DURATIONS: Readonly<Record<Exclude<DriftingCargoKind, 'container'>, number>> =
-  Object.freeze({ barrel: 1.35, chest: 1.55, lifeboat: 1.8 });
+const RETRIEVE_DURATIONS: Readonly<Record<DriftingCargoKind, number>> =
+  Object.freeze({ barrel: 1.35, chest: 1.55, lifeboat: 1.8, container: 1.8 });
 
 function keyedRetrieveProgress(progress: number): number {
   if (progress < 0.14) return -0.045 * smoothstep(progress / 0.14);
@@ -134,6 +135,9 @@ export class DriftingItemPresentation {
   private readonly lifeboatFloor: Mesh<ExtrudeGeometry, MeshStandardMaterial>;
   private readonly coolerBaseScale: number;
   private readonly targetPositionScratch = new Vector3();
+  private readonly contactBounds = new Box3();
+  private readonly retrievalAimTarget = new Group();
+  private playerContactDistance = 0.65;
   private readonly animationStartPosition = new Vector3();
   private readonly quaternionScratch = new Quaternion();
   private readonly targetQuaternionScratch = new Quaternion();
@@ -156,9 +160,12 @@ export class DriftingItemPresentation {
   constructor(
     models: DriftingItemModels,
     private readonly sternTarget: Object3D,
+    private readonly playerTarget: Object3D,
     private readonly water: DriftingWater,
   ) {
     this.root.name = 'drifting-item-presentation';
+    this.retrievalAimTarget.name = 'drifting-item-retrieval-aim';
+    this.root.add(this.retrievalAimTarget);
 
     const barrel = this.createRoot('drifting-supplies:barrel', models.barrel);
     barrel.rotation.z = Math.PI / 2;
@@ -249,10 +256,6 @@ export class DriftingItemPresentation {
   retrieve(): Promise<void> {
     const variant = this.activeVariant;
     if (this.disposed || variant === null) return Promise.resolve();
-    if (variant === 'container') {
-      this.state = 'held';
-      return Promise.resolve();
-    }
     const target = variant === 'lifeboat' ? this.lifeboatCooler : this.roots[variant];
     if (variant === 'lifeboat') {
       this.lifeboatExitStartPosition.copy(this.roots.lifeboat.position);
@@ -263,6 +266,12 @@ export class DriftingItemPresentation {
     this.animationStartPosition.copy(target.position);
     this.animationStartQuaternion.copy(target.quaternion);
     this.animationStartScale = target.scale.x;
+    if (variant !== 'chest') {
+      this.retrievalAimTarget.position.copy(this.roots[variant].position);
+      this.contactBounds.setFromObject(target, true).getSize(this.targetPositionScratch);
+      // Stop the item's surface in front of the player, including large containers.
+      this.playerContactDistance = Math.max(0.65, this.targetPositionScratch.length() / 2 + 0.2);
+    }
     this.state = 'retrieving';
     return this.startAnimation('retrieve', RETRIEVE_DURATIONS[variant]);
   }
@@ -274,8 +283,10 @@ export class DriftingItemPresentation {
   }
 
   itemAimTarget(): Group | null {
-    return this.disposed || this.activeVariant === null
-      ? null
+    if (this.disposed || this.activeVariant === null) return null;
+    // Keep the view steady instead of following loot into the player's hands.
+    return this.activeVariant !== 'chest' && this.state !== 'floating'
+      ? this.retrievalAimTarget
       : this.roots[this.activeVariant];
   }
 
@@ -291,8 +302,7 @@ export class DriftingItemPresentation {
     if (this.disposed || this.activeAnimation === null || variant === null) return;
     const animation = this.activeAnimation;
     this.activeAnimation = null;
-    if (variant !== 'container') this.finishRetrieve(variant);
-    else this.state = 'held';
+    this.finishRetrieve(variant);
     animation.resolve();
   }
 
@@ -315,7 +325,7 @@ export class DriftingItemPresentation {
 
     animation.elapsed = Math.min(animation.duration, animation.elapsed + Math.max(0, delta));
     const progress = animation.duration <= 0 ? 1 : animation.elapsed / animation.duration;
-    this.updateAnimationPose(variant, progress);
+    this.applyRetrievePose(variant, progress);
     if (progress < 1) return;
 
     this.finishAnimation(animation, variant);
@@ -323,14 +333,7 @@ export class DriftingItemPresentation {
 
   private updateIdlePose(variant: DriftingCargoKind, time: number): void {
     if (this.state === 'floating') this.applyFloatingPose(variant, time);
-    else if (this.state === 'held' && variant !== 'container') this.applyHeldPose(variant);
-  }
-
-  private updateAnimationPose(
-    variant: DriftingCargoKind,
-    progress: number,
-  ): void {
-    if (variant !== 'container') this.applyRetrievePose(variant, progress);
+    else if (this.state === 'held' && variant === 'chest') this.applyHeldPose(variant);
   }
 
   private finishAnimation(
@@ -338,8 +341,7 @@ export class DriftingItemPresentation {
     variant: DriftingCargoKind,
   ): void {
     this.activeAnimation = null;
-    if (variant !== 'container') this.finishRetrieve(variant);
-    else this.state = 'held';
+    this.finishRetrieve(variant);
     animation.resolve();
   }
 
@@ -382,9 +384,12 @@ export class DriftingItemPresentation {
     );
   }
 
-  private applyRetrievePose(variant: Exclude<DriftingCargoKind, 'container'>, progress: number): void {
-    this.readTargetPose();
-    const travel = keyedRetrieveProgress(Math.min(1, Math.max(0, progress)));
+  private applyRetrievePose(variant: DriftingCargoKind, progress: number): void {
+    this.readTargetPose(variant);
+    const clampedProgress = Math.min(1, Math.max(0, progress));
+    const travel = variant === 'chest'
+      ? keyedRetrieveProgress(clampedProgress)
+      : smoothstep(clampedProgress);
     const target = variant === 'lifeboat' ? this.lifeboatCooler : this.roots[variant];
     target.position.lerpVectors(this.animationStartPosition, this.targetPositionScratch, travel);
     target.quaternion.slerpQuaternions(
@@ -418,32 +423,40 @@ export class DriftingItemPresentation {
     );
   }
 
-  private finishRetrieve(variant: Exclude<DriftingCargoKind, 'container'>): void {
+  private finishRetrieve(variant: DriftingCargoKind): void {
     this.state = 'held';
     this.applyHeldPose(variant);
+    if (variant !== 'chest') this.resultRoot()!.visible = false;
     if (variant === 'lifeboat') this.roots.lifeboat.visible = false;
   }
 
-  private applyHeldPose(variant: Exclude<DriftingCargoKind, 'container'>): void {
-    this.readTargetPose();
+  private applyHeldPose(variant: DriftingCargoKind): void {
+    this.readTargetPose(variant);
     const target = variant === 'lifeboat' ? this.lifeboatCooler : this.roots[variant];
     target.position.copy(this.targetPositionScratch);
     target.quaternion.copy(this.targetQuaternionScratch);
     target.scale.setScalar(this.targetScale(variant));
   }
 
-  private readTargetPose(): void {
-    this.sternTarget.getWorldPosition(this.targetPositionScratch);
-    this.sternTarget.getWorldQuaternion(this.targetQuaternionScratch);
+  private readTargetPose(variant: DriftingCargoKind): void {
+    if (variant === 'chest') {
+      this.sternTarget.getWorldPosition(this.targetPositionScratch);
+      this.sternTarget.getWorldQuaternion(this.targetQuaternionScratch);
+    } else {
+      this.playerTarget.updateWorldMatrix(true, false);
+      this.targetPositionScratch.set(0, -0.2, -this.playerContactDistance);
+      this.playerTarget.localToWorld(this.targetPositionScratch);
+      this.playerTarget.getWorldQuaternion(this.targetQuaternionScratch);
+    }
     this.root.worldToLocal(this.targetPositionScratch);
     this.root.getWorldQuaternion(this.quaternionScratch).invert();
     this.targetQuaternionScratch.premultiply(this.quaternionScratch);
   }
 
-  private targetScale(variant: Exclude<DriftingCargoKind, 'container'>): number {
+  private targetScale(variant: DriftingCargoKind): number {
     if (variant === 'chest') return CHEST_DISPLAY_SCALE;
     if (variant === 'lifeboat') return this.coolerBaseScale;
-    return this.baseScales.barrel;
+    return this.baseScales[variant];
   }
 
   private resetAll(): void {

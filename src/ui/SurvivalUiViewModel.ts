@@ -16,7 +16,6 @@ export const DAY_ACTION_IDS = [
   'openChest',
   'petCarlitos',
   'feedCarlitos',
-  'treatCarlitos',
 ] as const satisfies readonly DayActionId[];
 
 export interface EventContextChoice {

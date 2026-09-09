@@ -24,6 +24,7 @@ import type {
   EventSceneContext,
 } from '../eventPresentationTypes';
 import { TimedPresentationAnimation } from '../TimedPresentationAnimation';
+import { ItemAimTarget } from '../ItemAimTarget';
 import {
   createSwarmSharkPose,
   createSwarmSample,
@@ -111,7 +112,7 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
   readonly eventId = 'swarm-of-sharks' as const;
   readonly worldRoot = new Group();
   readonly boatRoot = new Group();
-  readonly itemAimTarget = new Group();
+  readonly itemAimTarget: ItemAimTarget;
 
   private readonly sharks: SharkActor[] = [];
   private readonly variants: SwarmVariant[] = Array.from(
@@ -193,6 +194,7 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
       });
       this.worldRoot.add(root);
     }
+    this.itemAimTarget = new ItemAimTarget(this.sharks[0]!.root);
     this.itemAimTarget.name = 'swarm-of-sharks-item-aim-target';
     this.itemAimTarget.position.set(0, 0.08, 0.22);
     this.sharks[0]!.root.add(this.itemAimTarget);

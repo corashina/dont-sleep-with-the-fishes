@@ -34,7 +34,7 @@ export const SURVIVAL_EVENT_IDS = Object.freeze([
   'drifting-supplies', 'drifting-chest', 'wreckage',
   'check-the-back',
   'flowers', 'chest-attack', 'midnight-tour', 'night-trader',
-  'handyman', 'other-people', 'plane',
+  'handyman', 'other-people', 'plane', 'lighthouse',
 ] as const);
 
 export type SurvivalEventId = typeof SURVIVAL_EVENT_IDS[number];
@@ -51,7 +51,7 @@ export const WRECKAGE_RESULT_IDS = Object.freeze([
 export type WreckageResultId = typeof WRECKAGE_RESULT_IDS[number];
 export type SignalSightingEventId = Extract<
   SurvivalEventId,
-  'other-people' | 'plane'
+  'other-people' | 'plane' | 'lighthouse'
 >;
 
 export const PLANE_CHOICE_WINDOW_SECONDS = 10;
@@ -59,7 +59,7 @@ export const PLANE_CHOICE_WINDOW_SECONDS = 10;
 export function isSignalSightingEventId(
   eventId: string,
 ): eventId is SignalSightingEventId {
-  return eventId === 'other-people' || eventId === 'plane';
+  return eventId === 'other-people' || eventId === 'plane' || eventId === 'lighthouse';
 }
 
 export type DriftingItemEventId = Extract<
@@ -116,6 +116,7 @@ const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.free
   handyman: 'eventText028',
   'other-people': 'eventText029',
   plane: 'eventText030',
+  lighthouse: 'lighthouseReveal',
 });
 
 const resource = (
@@ -248,7 +249,7 @@ function event(
     SurvivalEventDefinition,
     | 'maximumAppearances' | 'absentItemIds' | 'minimumRescueLead'
     | 'minimumPressure' | 'maximumPressure' | 'allowedChestStates'
-    | 'requiresLivingCompanion'
+    | 'requiresCompanion'
   > = {},
 ): SurvivalEventDefinition {
   return {
@@ -486,17 +487,20 @@ const survivalEvents: SurvivalEventDefinition[] = [
       effects(undefined, [consume('flareGun')]),
     )),
     contextualChoice('sleep', 'eventText063', outcome(1, 'eventText188')),
-  ], undefined, { minimumPressure: 3, requiresLivingCompanion: true }),
+  ], undefined, { minimumPressure: 3, requiresCompanion: true }),
   event('guarded-sleep', 'night', 'eventText048', 'uncertain', 'darkness', 4, 7, 0, [
-    contextualChoice('watch', 'eventText076',
-      outcome(85, 'eventText189'),
-      outcome(15, 'eventText190', { followUpNight: true })),
+    {
+      ...contextualChoice('watch', 'eventText076',
+        outcome(85, 'eventText189'),
+        outcome(15, 'eventText190', { followUpNight: true })),
+      companionAction: { id: 'watchCarlitos', energyCost: 1 },
+    },
     contextualChoice('sleep', 'eventText077', outcome(
       1,
       'eventText191',
       { followUpNight: true },
     )),
-  ], undefined, { requiresLivingCompanion: true, maximumAppearances: 1 }),
+  ], undefined, { requiresCompanion: true, maximumAppearances: 1 }),
   event('drifting-supplies', 'day', 'eventText049', 'safe', 'fish', 1, 3, 1, [
     {
       ...contextualChoice('retrieve', 'eventText078',
@@ -777,6 +781,23 @@ const survivalEvents: SurvivalEventDefinition[] = [
       'eventText270',
       {},
       'plane-pass',
+    )),
+  ], undefined, { minimumRescueLead: 2, maximumAppearances: 2 }),
+  event('lighthouse', 'night', 'lighthouseTitle', 'safe', 'sighting', 2, 15, 2, [
+    choice('flareGun', 'eventText070', 'flareGun', outcome(
+      1, 'lighthouseFlare', effects([add('rescueLead', 4)], [consume('flareGun')]),
+      'lighthouse-flare',
+    )),
+    choice('flashlight', 'eventText071', 'flashlight', outcome(
+      1, 'lighthouseFlashlight', effects([add('rescueLead', 2)]),
+      'lighthouse-flashlight',
+    )),
+    choice('shotgun', 'eventText069', 'shotgun', outcome(
+      1, 'lighthouseShotgun', effects([add('rescueLead', 1)], [consume('shotgun')]),
+      'lighthouse-shotgun',
+    )),
+    contextualChoice('sleep', 'eventText110', outcome(
+      1, 'lighthouseSleep', {}, 'lighthouse-sleep',
     )),
   ], undefined, { minimumRescueLead: 2, maximumAppearances: 2 }),
   event('quiet-night', 'night', 'eventText276', 'safe', 'none', 3, 1, 15, [

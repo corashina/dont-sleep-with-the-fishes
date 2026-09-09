@@ -427,8 +427,7 @@ export class BoatInteractionProjector {
       this.fishingProjection,
       this.roots.fishingVisibilityRoot.visible && this.fishingProjection.visible,
     );
-    this.fishingAnchor.y -= this.fishingProjection.height * 0.28;
-    updateHitArea(this.fishingAnchor, this.fishingProjection, 44, 72, 1, 0.44);
+    updateHitArea(this.fishingAnchor, this.fishingProjection, 44, 72);
     this.nextAnchors.push(this.fishingAnchor);
 
     projectCachedBoatObjectBoundsInto(
