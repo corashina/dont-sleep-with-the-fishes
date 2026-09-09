@@ -105,6 +105,13 @@ describe('net animation', () => {
       scene.updateMatrixWorld(true);
       pivot.matrixWorld.elements.forEach((value, index) => expect(value).toBeCloseTo(held.elements[index]!, 8));
       net.sample(1);
+      scene.updateMatrixWorld(true);
+      const landedRelative = boat.matrixWorld.clone().invert().multiply(pivot.matrixWorld);
+      boat.position.y += 0.4;
+      boat.rotation.set(-0.2, 0.1, 0.24);
+      scene.updateMatrixWorld(true);
+      const movedRelative = boat.matrixWorld.clone().invert().multiply(pivot.matrixWorld);
+      movedRelative.elements.forEach((value, index) => expect(value).toBeCloseTo(landedRelative.elements[index]!, 8));
       net.beginReturn();
       const returnStart = pivot.position.clone();
       net.sampleReturn(0);

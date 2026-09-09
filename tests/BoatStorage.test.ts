@@ -25,7 +25,8 @@ describe('boat storage', () => {
         ));
     };
     const bounds = Array.from({ length: 8 }, (_, index) => storageBounds(groupId, index));
-    const neighbors = BOAT_SUPPLY_GROUP_IDS.filter((id) => id !== groupId);
+    // The net's empty bounding box overlaps supplies. Check its mesh in NetRestClearance.
+    const neighbors = BOAT_SUPPLY_GROUP_IDS.filter((id) => id !== groupId && id !== 'fishingNet');
     const surfaceY = {
       cannedFood: LIFEBOAT_FLOOR_SURFACE_Y,
       baitTin: LIFEBOAT_DISPLAY_SHELF_SURFACE_Y,

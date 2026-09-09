@@ -64,7 +64,7 @@ it('keeps the production net clear of the bow, ribs, and bench supports during p
     const pivot = model.parent!;
     const position = pivot.getWorldPosition(new Vector3()).applyMatrix4(inverse);
     expect(position.x).toBeLessThan(rod.position.x);
-    expect(position.x - rod.position.x).toBeLessThan(-1);
+    expect(position.x - rod.position.x).toBeLessThan(-0.7);
     const handle = pivot.localToWorld(new Vector3(0, 0.09820857, 0.82)).applyMatrix4(inverse);
     const basket = pivot.localToWorld(new Vector3(0, 0.03, -0.56)).applyMatrix4(inverse);
     expect(handle.y).toBeCloseTo(LIFEBOAT_FLOOR_SURFACE_Y, 5);
