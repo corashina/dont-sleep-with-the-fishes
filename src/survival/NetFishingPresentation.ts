@@ -20,9 +20,10 @@ export class NetFishingPresentation {
   private readonly catches = [new FishingCatchLibrary(), new FishingCatchLibrary()] as const;
   private readonly particles = new FishingBiteParticles();
   private readonly bounds = new Box3();
-  private readonly start = new Vector3(-0.75, 0.7, -2.9);
+  private readonly start = new Vector3(-0.75, 0.48, -2.9);
   private readonly water = new Vector3();
-  private readonly rest = new Vector3(-0.45, 0.65, -2.95);
+  private readonly waterWorld = new Vector3();
+  private readonly rest = new Vector3(-0.45, 0.43, -2.95);
   private readonly splash = new Vector3();
   private readonly wave = createWaveSample();
   private readonly storage = boatSupplyTransform('fishingNet', 0);
@@ -46,7 +47,7 @@ export class NetFishingPresentation {
 
   constructor(
     model: Object3D,
-    worldRoot: Object3D,
+    private readonly worldRoot: Object3D,
     private readonly boatRoot: Object3D,
     private readonly sampleWave: (output: WaveSample, x: number, z: number) => void,
   ) {
@@ -57,8 +58,9 @@ export class NetFishingPresentation {
     // The existing net's basket center is 0.56 metres ahead of its grip.
     this.basket.position.set(0, 0.03, -0.56);
     this.netPivot.add(this.basket);
-    this.root.add(this.netPivot, this.particles.points);
-    worldRoot.add(this.root);
+    this.root.add(this.netPivot);
+    boatRoot.add(this.root);
+    worldRoot.add(this.particles.points);
     this.root.visible = false;
   }
 
@@ -106,7 +108,7 @@ export class NetFishingPresentation {
 
   async prepare(haul: FishingHaul, point: FishingCastPoint): Promise<boolean> {
     const generation = ++this.generation;
-    this.water.set(Math.min(1.2, Math.max(-1.2, point.x)), 0, -3.9);
+    this.waterWorld.set(Math.min(1.2, Math.max(-1.2, point.x)), 0, -3.9);
     const models = await Promise.all(this.catches.map((library, index) => library.prepare(haul[index]!.id)));
     if (generation !== this.generation) return false;
     models.forEach((model, index) => {
@@ -127,8 +129,10 @@ export class NetFishingPresentation {
   sample(progress: number): void {
     this.netPivot.scale.setScalar(1);
     this.progress = Math.min(1, Math.max(0, progress));
-    this.sampleWave(this.wave, this.water.x, this.water.z - 0.56);
-    this.water.y = this.wave.height + 0.22;
+    this.sampleWave(this.wave, this.waterWorld.x, this.waterWorld.z - 0.56);
+    this.waterWorld.y = this.wave.height + 0.22;
+    this.water.copy(this.waterWorld);
+    this.root.worldToLocal(this.water);
     const t = this.progress;
     if (t < 0.28) {
       this.netPivot.position.lerpVectors(this.start, this.water, smooth(t / 0.28));
@@ -157,7 +161,7 @@ export class NetFishingPresentation {
     if (t < 0.24 || t > 0.91 || burst === this.lastBurst) return;
     this.lastBurst = burst;
     this.basket.getWorldPosition(this.splash);
-    this.root.worldToLocal(this.splash);
+    this.worldRoot.worldToLocal(this.splash);
     this.particles.emit(this.splash, t < 0.6 ? 0.7 : 0.05, t < 0.6 ? undefined : -0.15);
   }
 
@@ -176,6 +180,7 @@ export class NetFishingPresentation {
       () => this.catches[0].dispose(),
       () => this.catches[1].dispose(),
       () => this.particles.dispose(),
+      () => this.particles.points.removeFromParent(),
       () => this.root.removeFromParent(),
     ]);
   }
