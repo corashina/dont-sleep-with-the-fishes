@@ -120,6 +120,7 @@ export interface EventEffects {
   readonly items?: readonly EventInventoryMutation[];
   readonly chest?: ChestEventEffect;
   readonly nextDawnEnergy?: DawnEnergy;
+  readonly nextDawnEnergyReduction?: 1;
   readonly followUpNight?: true;
 }
 export interface WeightedEventOutcome {

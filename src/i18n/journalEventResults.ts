@@ -4,6 +4,9 @@ import { getLanguage } from './language';
 
 // These are diary outcomes, separate from the short messages shown during events.
 const results = {
+  underUsStillResult: ['I sat without moving until it left. By dawn I was too tired to do as much as usual.', 'Siedziałem bez ruchu, aż odpłynęło. O świcie byłem zbyt zmęczony, by zrobić tyle co zwykle.', 'Me quedé inmóvil hasta que se fue. Al amanecer estaba demasiado cansado para hacer lo de siempre.'],
+  underUsBaitResult: ['I threw bait away from the boat. The shadow followed it, and I finally slept.', 'Rzuciłem przynętę z dala od łodzi. Cień podążył za nią i wreszcie zasnąłem.', 'Tiré carnada lejos del bote. La sombra la siguió y por fin pude dormir.'],
+  underUsLightResult: ['I shone the flashlight into the water. Pale ridges filled the beam. The blow shook the hull before it vanished.', 'Poświeciłem latarką w wodę. Blade grzbiety wypełniły snop światła. Uderzenie wstrząsnęło kadłubem, zanim stworzenie zniknęło.', 'Alumbré el agua con la linterna. Unas crestas pálidas llenaron el haz. El golpe sacudió el casco antes de que desapareciera.'],
   driftingLootRetrieved: ['I recovered supplies from the drifting cargo.', 'Odzyskałem zapasy z dryfującego ładunku.', 'Recuperé suministros de la carga flotante.'],
   driftingLootDelegated: ['Carlitos brought supplies back from the drifting cargo.', 'Carlitos przyniósł zapasy z dryfującego ładunku.', 'Carlitos trajo suministros de la carga flotante.'],
   lighthouseFlare: ['I fired a flare above the waves. It could be seen from shore.', 'Wystrzeliłem flarę nad fale. Była widoczna z brzegu.', 'Disparé una bengala sobre las olas. Podía verse desde la costa.'],

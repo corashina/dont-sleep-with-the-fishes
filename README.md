@@ -35,13 +35,20 @@ Food, Bait, Duct Tape, Medkit, Flare Gun, and Shotgun are one-use Dorothy suppli
 
 The repair toolbox and bow-mounted Fishing Rod are permanent lifeboat equipment rather than Dorothy collectibles. The rod is never picked up or recovered. It is available for fishing in every survival run. The toolbox spends up to three Energy to repair the hull. Each Energy repairs up to 33 Hull. Duct Tape repairs broken items only. End Day starts the night sequence. Energy becomes one to three at dawn, based on hunger and night outcomes. From day five, a saved Radio has a 20% chance to receive a signal at dawn. The signal remains actionable while its incoming audio plays. Answering costs one energy, keeps the Radio, and adds diminishing hidden rescue lead. Energy Bar restores energy to the maximum of three and is consumed.
 
-The event catalog contains 29 live events. The day pool contains Drifting Supplies,
-Drifting Chest, and Wreckage. Event selection relies on the scene and response prompts.
+The day pool contains Drifting Supplies and Drifting Chest.
+Event selection relies on the scene and response prompts.
 It does not show event titles.
 
 All night events use the bright, glowy star field when weather and haze allow it.
 
 An old chest can become a mimic and attack automatically. A usable Knife reduces the damage from 25 to 10 Health.
+
+**Something Under Us** can appear at night from day eight, with pressure one or higher.
+A vast sea shadow approaches, reacts to the lantern, and lifts the boat.
+Stay still to lose one Energy from the normal dawn amount. Throw one Bait to preserve sleep.
+Using the Flashlight reveals pale ridges and causes 20 Hull damage. The Flashlight stays usable.
+The event has a seven-day cooldown and can appear twice per run.
+Use System Tuning → Event Test → Something Under Us to inspect it.
 
 Flowers accepts Fishing Net or Bucket. It records the choice without a large reward.
 
