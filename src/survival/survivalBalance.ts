@@ -17,8 +17,10 @@ export const SURVIVAL_BALANCE = {
     reactionSeconds: 6,
   },
   netFishing: {
-    junkWeight: 0.35,
-    largeFishWeight: 2,
+    junkWeight: 0.1,
+    // One catch costs two energy. Large fish enter the net pool from day zero.
+    // These weights keep useful reward per energy about 10% above unbaited rods.
+    largeFishWeights: [0.5, 0.5, 1.25, 3.65],
     usableItemWeight: 2,
     backpackChance: 0.08,
   },

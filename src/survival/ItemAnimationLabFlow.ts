@@ -23,18 +23,12 @@ import type {
   SurvivalItemState,
 } from './survivalTypes';
 import type { SurvivalSnapshot } from './survivalSnapshot';
-import { FISHING_CATCHES } from './fishingCatalog';
-import type { FishingHaul } from './FishingSession';
 
 export type ItemAnimationLabSessionPort = Pick<
   SurvivalSession, 'snapshot' | 'setItemConditionForLab' | 'setResourceQuantityForLab'
 >;
 
 const ITEM_CONDITION_CHOICE_ID = 'item-condition';
-const LAB_NET_HAUL: FishingHaul = Object.freeze([
-  FISHING_CATCHES.find(({ id }) => id === 'cod')!,
-  FISHING_CATCHES.find(({ id }) => id === 'salmon')!,
-]);
 
 export type ItemAnimationLabWorldPort = Pick<
   BoatWorld,
@@ -349,7 +343,7 @@ export class ItemAnimationLabFlow {
     await this.dependencies.world.enterFishingView('net');
     if (!this.isCurrent(generation, operation)) return;
     this.dependencies.audio.fishingCast();
-    await this.dependencies.world.playFishingNetHaul(LAB_NET_HAUL, this.dependencies.world.centeredFishingCast());
+    await this.dependencies.world.playFishingNetHaul('cod', this.dependencies.world.centeredFishingCast());
     if (!this.isCurrent(generation, operation)) return;
     await this.dependencies.world.exitFishingView();
   }

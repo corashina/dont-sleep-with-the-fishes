@@ -1,7 +1,7 @@
 import { domainText, resolveOutcomeText, type OutcomeText } from './outcomeText';
 import type { ItemId } from '../game/ItemState';
 import type { FishingCatchReward } from './fishingCatalog';
-import type { FishingSingleResult } from './FishingSession';
+import type { FishingTerminalResult } from './FishingSession';
 import type { ItemCondition, ResourceDelta } from './survivalTypes';
 
 export interface FishingSettlement {
@@ -17,13 +17,13 @@ export interface FishingSettlement {
   }> | null;
 }
 
-function settlementCode(result: FishingSingleResult): FishingSettlement['code'] {
+function settlementCode(result: FishingTerminalResult): FishingSettlement['code'] {
   if (result.kind === 'miss') return 'fish-missed';
   if (result.catch.kind === 'fish') return 'fish-caught';
   return result.catch.kind === 'utility' ? 'utility-caught' : 'junk-caught';
 }
 
-function settlementText(result: FishingSingleResult): OutcomeText {
+function settlementText(result: FishingTerminalResult): OutcomeText {
   if (result.kind === 'catch' && result.catch.id === 'backpack' && result.catch.reward.kind === 'item') {
     return { kind: 'backpackItem', itemId: result.catch.reward.itemId };
   }
@@ -46,7 +46,7 @@ function settlementDeltas(
 }
 
 export function fishingSettlement(
-  result: FishingSingleResult,
+  result: FishingTerminalResult,
   capturedBait: boolean,
 ): FishingSettlement {
   const reward = result.kind === 'catch' ? result.catch.reward : { kind: 'none' as const };

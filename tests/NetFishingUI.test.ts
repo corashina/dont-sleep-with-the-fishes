@@ -3,6 +3,27 @@ import { expect, it, vi } from 'vitest';
 import { BoatAnchorView } from '../src/ui/BoatAnchorView';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { ACTION_FOR_ITEM } from '../src/survival/BoatInteractionProjector';
+import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
+import { formatFishingResult } from '../src/survival/SurvivalFishingFlow';
+import { SurvivalUI } from '../src/ui/SurvivalUI';
+
+it.each(['plasticBottle', 'brokenCan', 'cod'] as const)('shows the caught %s in the popup', (id) => {
+  const host = document.createElement('main');
+  document.body.append(host);
+  const ui = new SurvivalUI(host);
+  const caught = FISHING_CATCHES.find((entry) => entry.id === id)!;
+  const game = new SurvivalSession([], { seed: 1 });
+  try {
+    ui.showFishingResult(formatFishingResult({ kind: 'catch', catch: caught }, game.beginFishing().outcome));
+    const popup = host.querySelector('[data-fishing-result]')!;
+    expect(popup.textContent).toContain(caught.label);
+    expect(popup.textContent).not.toContain('NOTHING FOUND');
+    if (caught.reward.kind === 'none') expect(popup.textContent).toContain('No usable reward.');
+  } finally {
+    ui.dispose();
+    host.remove();
+  }
+});
 
 it('offers net fishing at two energy and reports why one energy is insufficient', () => {
   const host = document.createElement('main');

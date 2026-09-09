@@ -85,15 +85,17 @@ export function formatFishingResult(result: FishingTerminalResult, outcome: Acti
   if (outcome.deltas.bait) {
     items.push({ itemId: 'baitTin', quantity: outcome.deltas.bait, condition: 'usable' });
   }
-  const catches = result.kind === 'haul' ? result.catches : result.kind === 'catch' ? [result.catch] : [];
-  for (const entry of catches) {
-    if (entry.reward.kind !== 'item') continue;
-    const { itemId, condition } = entry.reward;
+  if (result.kind === 'catch' && result.catch.reward.kind === 'item') {
+    const { itemId, condition } = result.catch.reward;
     if (!items.some((item) => item.itemId === itemId)) items.push({ itemId, quantity: 1, condition });
   }
   return {
     items,
-    get message() { return items.length === 0 ? flowText('nothing') : ''; },
+    get message() {
+      if (result.kind === 'miss') return flowText('nothing');
+      return result.catch.reward.kind === 'none'
+        ? flowText('unusableCatch', result.catch.label) : result.catch.label;
+    },
     catchTarget: null,
   };
 }
@@ -347,7 +349,7 @@ export class SurvivalFishingFlow {
     this.presentation = 'settling';
     this.dependencies.ui.setFishingState?.({
       mode: 'waiting',
-      get message() { return flowText(result.kind === 'haul' ? 'netHaul' : result.kind === 'catch' ? 'reel' : 'slack'); },
+      get message() { return flowText(attempt.gear === 'net' ? 'netHaul' : result.kind === 'catch' ? 'reel' : 'slack'); },
       biteTarget: null,
     });
     void this.presentResult(attempt, result, outcome, generation);
@@ -441,9 +443,9 @@ export class SurvivalFishingFlow {
   }
 
   private playResultAnimation(result: FishingTerminalResult): Promise<void> {
-    if (result.kind === 'haul') {
+    if (this.gear === 'net' && result.kind === 'catch') {
       const point = this.activeFishing!.view().castPoint!;
-      return this.dependencies.world.playFishingNetHaul(result.catches, point);
+      return this.dependencies.world.playFishingNetHaul(result.catch.id, point);
     }
     if (result.kind === 'catch') {
       return this.dependencies.world.playFishingReel?.(result.catch.id) ?? Promise.resolve();

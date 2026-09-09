@@ -271,8 +271,7 @@ export class SurvivalAudio {
     if (result.kind === 'miss') {
       this.scope.play('fishingMiss');
     } else {
-      const fish = result.kind === 'haul'
-        ? result.catches.some((entry) => entry.kind === 'fish') : result.catch.kind === 'fish';
+      const fish = result.catch.kind === 'fish';
       this.scope.play(fish ? 'fishCatch' : 'junkCatch');
     }
   }

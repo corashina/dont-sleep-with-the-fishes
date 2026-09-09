@@ -273,12 +273,16 @@ function catchWeight(
   capturedBait: boolean,
   fishWeightMultiplier: number,
   gear: FishingGear,
+  day: number,
 ): number {
   const baited = baitWeight(catchDefinition, capturedBait);
   let weight = catchDefinition.kind === 'fish' ? baited * fishWeightMultiplier : baited;
   if (gear === 'net') {
     if (catchDefinition.kind === 'junk') weight *= SURVIVAL_BALANCE.netFishing.junkWeight;
-    if (catchDefinition.size === 'large') weight *= SURVIVAL_BALANCE.netFishing.largeFishWeight;
+    if (catchDefinition.size === 'large') {
+      const weights = SURVIVAL_BALANCE.netFishing.largeFishWeights;
+      weight *= weights[Math.min(Math.max(0, Math.floor(day)), weights.length - 1)]!;
+    }
     if (catchDefinition.reward.kind === 'bait'
       || (catchDefinition.reward.kind === 'item' && catchDefinition.reward.condition === 'usable')) {
       weight *= SURVIVAL_BALANCE.netFishing.usableItemWeight;
@@ -323,11 +327,11 @@ export function eligibleFishingCatches(
   validateFishWeightMultiplier(fishWeightMultiplier);
   const entries: WeightedFishingCatch[] = FISHING_CATCHES
     .filter((catchDefinition) => catchDefinition.reward.kind !== 'backpack')
-    .filter((catchDefinition) => catchDefinition.minimumDay <= day)
+    .filter((catchDefinition) => catchDefinition.minimumDay <= day || (gear === 'net' && catchDefinition.size === 'large'))
     .filter((catchDefinition) => !isBlockedUniqueReward(catchDefinition, activeItemIds))
     .map((catchDefinition) => Object.freeze({
       catch: catchDefinition,
-      weight: catchWeight(catchDefinition, capturedBait, fishWeightMultiplier, gear),
+      weight: catchWeight(catchDefinition, capturedBait, fishWeightMultiplier, gear, day),
     }));
   if (missingBackpackItems(activeItemIds).length > 0) {
     const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
