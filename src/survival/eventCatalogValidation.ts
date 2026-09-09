@@ -225,7 +225,7 @@ function validateEffectRecord(value: unknown, path: string): PlainRecord {
     'effect',
     [
       'resources', 'items', 'chest',
-      'nextDawnEnergy', 'followUpNight',
+      'nextDawnEnergy', 'maximumNextDawnEnergy', 'followUpNight',
     ],
   );
   return candidateEffects;
@@ -316,7 +316,18 @@ function validateOutcomeLosses(
   }
 }
 
+function validateDawnEnergyCap(candidateEffects: PlainRecord, path: string): void {
+  if (Object.hasOwn(candidateEffects, 'maximumNextDawnEnergy')) {
+    const cap = candidateEffects.maximumNextDawnEnergy;
+    if (!Number.isInteger(cap) || (cap as number) < 0 || (cap as number) > 4
+      || Object.hasOwn(candidateEffects, 'nextDawnEnergy')) {
+      throw new Error(`${path}.maximumNextDawnEnergy requires an exclusive integer from zero through four`);
+    }
+  }
+}
+
 function validateOptionalEffects(candidateEffects: PlainRecord, path: string): void {
+  validateDawnEnergyCap(candidateEffects, path);
   const hasChest = Object.hasOwn(candidateEffects, 'chest');
   const hasNextDawnEnergy = Object.hasOwn(candidateEffects, 'nextDawnEnergy');
   const hasFollowUpNight = Object.hasOwn(candidateEffects, 'followUpNight');

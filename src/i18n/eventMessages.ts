@@ -5,6 +5,12 @@ import type {
 } from '../survival/survivalTypes';
 
 const EVENT_TEXT = {
+  bloodOceanTitle: { en: 'Ocean of Blood', pl: 'Ocean krwi', 'es-AR': 'Océano de sangre' },
+  bloodOceanReveal: { en: 'The sea turns red. Bodies drift beneath a pale moon. One stops beside the boat. Every head turns toward you.', pl: 'Morze czerwienieje. Pod bladym księżycem dryfują ciała. Jedno zatrzymuje się przy łodzi. Wszystkie głowy obracają się ku tobie.', 'es-AR': 'El mar se vuelve rojo. Flotan cuerpos bajo una luna pálida. Uno se detiene junto al bote. Todas las cabezas giran hacia vos.' },
+  bloodOceanNetChoice: { en: 'Search a body with the net', pl: 'Przeszukaj ciało siecią', 'es-AR': 'Revisá un cuerpo con la red' },
+  bloodOceanWaitChoice: { en: 'Wait for dawn', pl: 'Czekaj do świtu', 'es-AR': 'Esperá el amanecer' },
+  bloodOceanNetResult: { en: 'The net catches a sealed tin inside the coat. The body rolls toward you. You keep the food. And the memory.', pl: 'Sieć wyciąga zamkniętą puszkę z płaszcza. Ciało obraca się ku tobie. Zostaje ci jedzenie. I wspomnienie.', 'es-AR': 'La red engancha una lata cerrada dentro del abrigo. El cuerpo gira hacia vos. Te quedás con la comida. Y el recuerdo.' },
+  bloodOceanWaitResult: { en: 'The bodies gather around the boat. None touch it. You count them until dawn, too afraid to sleep.', pl: 'Ciała zbierają się wokół łodzi. Żadne jej nie dotyka. Liczysz je do świtu, zbyt przerażony, by zasnąć.', 'es-AR': 'Los cuerpos rodean el bote. Ninguno lo toca. Los contás hasta el amanecer, con demasiado miedo para dormir.' },
   driftingLootRetrieved: { en: 'You recover supplies from the drifting cargo.', pl: 'Odzyskujesz zapasy z dryfującego ładunku.', 'es-AR': 'Recuperás provisiones de la carga a la deriva.' },
   driftingLootDelegated: { en: 'Carlitos brings back supplies from the drifting cargo.', pl: 'Carlitos przynosi zapasy z dryfującego ładunku.', 'es-AR': 'Carlitos trae provisiones de la carga a la deriva.' },
   lighthouseTitle: { en: 'Lighthouse', pl: 'Latarnia morska', 'es-AR': 'Faro' },

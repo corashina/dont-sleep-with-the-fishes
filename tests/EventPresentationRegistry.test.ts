@@ -203,6 +203,7 @@ function createDependencies() {
       worldParent: new Group(),
       boatParent: new Group(),
       dedicatedEnvironment: {
+        setBloodOceanIntensity: vi.fn(),
         eventModels: {
           create: vi.fn(() => ({
             root: new Group(),
