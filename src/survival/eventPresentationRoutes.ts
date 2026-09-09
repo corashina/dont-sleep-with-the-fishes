@@ -22,6 +22,7 @@ export const EVENT_PRESENTATION_ROUTES = Object.freeze({
   snatcher: 'dedicated',
   'death-stare': 'dedicated',
   'swarm-of-sharks': 'dedicated',
+  'something-under-us': 'dedicated',
   tornado: 'dedicated',
   'shower-night': 'weather',
   'windy-night': 'weather',

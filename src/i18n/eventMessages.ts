@@ -5,6 +5,14 @@ import type {
 } from '../survival/survivalTypes';
 
 const EVENT_TEXT = {
+  underUsTitle: { en: 'Something Under Us', pl: 'Coś pod nami', 'es-AR': 'Algo debajo nuestro' },
+  underUsReveal: { en: 'A vast shadow stops beneath the boat. The hull rises. Something twitches toward the lantern.', pl: 'Ogromny cień zatrzymuje się pod łodzią. Kadłub się unosi. Coś drga w stronę latarni.', 'es-AR': 'Una sombra enorme se detiene debajo del bote. El casco se eleva. Algo se mueve hacia el farol.' },
+  underUsStillChoice: { en: 'Stay still — lose 1 Energy at dawn', pl: 'Nie ruszaj się — strać 1 energię o świcie', 'es-AR': 'Quedate quieto — perdés 1 de energía al amanecer' },
+  underUsBaitChoice: { en: 'Throw 1 Bait away from the boat', pl: 'Rzuć 1 przynętę z dala od łodzi', 'es-AR': 'Tirá 1 carnada lejos del bote' },
+  underUsLightChoice: { en: 'Shine the Flashlight', pl: 'Poświeć latarką', 'es-AR': 'Alumbrá con la linterna' },
+  underUsStillResult: { en: 'You stay still until it leaves. Keeping watch costs you one energy at dawn.', pl: 'Nie ruszasz się, aż odpływa. Czuwanie kosztuje cię jedną energię o świcie.', 'es-AR': 'Te quedás quieto hasta que se va. La vigilia te cuesta una energía al amanecer.' },
+  underUsBaitResult: { en: 'The shadow follows the bait. The boat settles, and you can sleep.', pl: 'Cień podąża za przynętą. Łódź opada i możesz zasnąć.', 'es-AR': 'La sombra sigue la carnada. El bote baja y podés dormir.' },
+  underUsLightResult: { en: 'The beam reveals pale ridges. Something strikes the hull, then sinks out of sight.', pl: 'Snop światła odsłania blade grzbiety. Coś uderza w kadłub, po czym znika w głębinie.', 'es-AR': 'El haz revela crestas pálidas. Algo golpea el casco y se hunde fuera de vista.' },
   driftingLootRetrieved: { en: 'You recover supplies from the drifting cargo.', pl: 'Odzyskujesz zapasy z dryfującego ładunku.', 'es-AR': 'Recuperás provisiones de la carga a la deriva.' },
   driftingLootDelegated: { en: 'Carlitos brings back supplies from the drifting cargo.', pl: 'Carlitos przynosi zapasy z dryfującego ładunku.', 'es-AR': 'Carlitos trae provisiones de la carga a la deriva.' },
   lighthouseTitle: { en: 'Lighthouse', pl: 'Latarnia morska', 'es-AR': 'Faro' },
