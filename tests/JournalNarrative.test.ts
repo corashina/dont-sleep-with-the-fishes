@@ -104,7 +104,7 @@ describe('journal narrative', () => {
       ['leak', 'map', 1], ['death-stare', 'flashlight', 1],
       ['swarm-of-sharks', 'fishingNet', 1], ['swarm-of-sharks', 'knife', 1],
       ['windy-night', 'fishingNet', 1], ['windy-night', 'map', 0], ['windy-night', 'umbrella', 1],
-      ['bad-sleep', 'umbrella', 1], ['wreckage', 'dive', 11], ['check-the-back', 'knife', 1],
+      ['bad-sleep', 'umbrella', 1], ['check-the-back', 'knife', 1],
     ] as const;
     for (const [event, choice, index] of cases) {
       const record = eventRecord(event, choice, index);

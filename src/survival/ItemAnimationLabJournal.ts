@@ -7,7 +7,7 @@ import {
   type JournalEntry,
 } from './journalRecords';
 
-function sampleEvent(eventId: SurvivalEventId, choiceId: string, outcomeIndex = 0) {
+function sampleEvent(eventId: SurvivalEventId, choiceId: string, outcomeIndex = 0, gainedItem?: ItemInstanceId) {
   const event = survivalEventById(eventId);
   const choice = event?.choices.find(({ id }) => id === choiceId);
   const outcome = choice?.outcomes[outcomeIndex];
@@ -22,6 +22,7 @@ function sampleEvent(eventId: SurvivalEventId, choiceId: string, outcomeIndex = 
         `${mutation.itemId}-${index + 1}` as ItemInstanceId),
     };
   });
+  if (gainedItem) inventoryMutations.push({ kind: 'gain', instanceIds: [gainedItem] });
   return createJournalEventRecord(event, choiceId, choice.itemId ?? null, {
     code: 'lab-journal-example',
     deltas: {},
@@ -33,7 +34,7 @@ export function createItemAnimationLabJournal(): readonly JournalEntry[] {
   return Object.freeze([
     createJournalEntry(1, 'calm', [], null, { kind: 'quiet' }),
     // Find medicine by day and lose the map at night.
-    createJournalEntry(2, 'overcast', [], sampleEvent('wreckage', 'dive'),
+    createJournalEntry(2, 'overcast', [], sampleEvent('drifting-supplies', 'retrieve', 0, 'medicalKit-1'),
       createJournalNightEventRecord(sampleEvent('windy-night', 'map'))),
     // Use the medicine, then break the knife defending the boat.
     createJournalEntry(3, 'squall', [
@@ -53,7 +54,7 @@ export function createItemAnimationLabJournal(): readonly JournalEntry[] {
     createJournalEntry(5, 'overcast', [
       { kind: 'carlitosCare', action: 'feed' },
       { kind: 'carlitosCare', action: 'pet' },
-    ], sampleEvent('wreckage', 'dive', 1),
+    ], sampleEvent('drifting-supplies', 'retrieve', 1, 'flareGun-1'),
     createJournalNightEventRecord(sampleEvent('other-people', 'flareGun'))),
   ]);
 }

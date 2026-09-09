@@ -1065,7 +1065,6 @@ export class BoatWorld {
     const context = itemId === null
       ? null
       : resolveEventItemUseContext(eventId, choiceId, itemId);
-    this.handoffWreckageFocusedView(eventId, choiceId);
     if (itemId !== null && context !== null) {
       const aimTarget = this.eventItemAimTarget(eventId);
       const request: EventItemUseRequest = {
@@ -1097,10 +1096,6 @@ export class BoatWorld {
     return this.disposed || operation !== this.weatherEventOperation;
   }
 
-  private handoffWreckageFocusedView(eventId: string, choiceId: string): void {
-    if (eventId !== 'wreckage' || choiceId !== 'dive') return;
-    this.cameraController.handoffFocusedEventView();
-  }
 
   returnEventItemUse(): Promise<void> {
     if (this.disposed) return Promise.resolve();

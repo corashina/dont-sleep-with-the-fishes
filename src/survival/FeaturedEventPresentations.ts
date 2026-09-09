@@ -37,18 +37,20 @@ function createDriftingItems(
   }
   if (!included || water === undefined) return null;
   const includeSupplies = includesFeaturedEvent(onlyEventId, 'drifting-supplies');
+  const supplyModel = (id: Parameters<SurvivalEventModels['clone']>[0]): Group => (
+    includeSupplies ? models.clone(id) : new Group()
+  );
   return new DriftingItemPresentation({
-    barrel: includeSupplies ? models.clone('driftingBarrel') : new Group(),
+    barrel: supplyModel('driftingBarrel'),
     chest: includesFeaturedEvent(onlyEventId, 'drifting-chest')
       ? models.clone('mysteryChest')
       : new Group(),
-    lifeboat: includeSupplies ? models.clone('emptyLifeboat') : new Group(),
-    lifeboatCooler: includeSupplies
-      ? models.clone('emptyLifeboatContainer')
-      : new Group(),
-    shippingContainer: includeSupplies
-      ? models.clone('shippingContainer')
-      : new Group(),
+    lifeboat: supplyModel('emptyLifeboat'),
+    lifeboatCooler: supplyModel('emptyLifeboatContainer'),
+    debrisBox: supplyModel('wreckageBox'),
+    debrisCrate: supplyModel('wreckageCrate'),
+    debrisPallet: supplyModel('wreckagePallet'),
+    shippingContainer: supplyModel('shippingContainer'),
   }, target, camera, water);
 }
 

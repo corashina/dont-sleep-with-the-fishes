@@ -1,3 +1,4 @@
+import { DriftingDebris } from './DriftingDebris';
 import {
   Box3,
   ExtrudeGeometry,
@@ -40,6 +41,9 @@ export interface DriftingItemModels {
   readonly lifeboat: Group;
   readonly lifeboatCooler: Group;
   readonly shippingContainer: Group;
+  readonly debrisBox: Group;
+  readonly debrisCrate: Group;
+  readonly debrisPallet: Group;
 }
 
 const SUPPLY_POSITIONS: Readonly<Record<
@@ -55,6 +59,7 @@ const WATERLINE_Y: Readonly<Record<DriftingSupplyKind, number>> = Object.freeze(
   barrel: 0.02,
   lifeboat: 0.24,
   container: 0.08,
+  debris: 0.02,
 });
 const LIFEBOAT_COOLER_POSITION = Object.freeze({ x: 0, y: 0.18, z: 0.65 });
 const LIFEBOAT_FLOOR_Y = -0.1;
@@ -75,7 +80,7 @@ const LIFEBOAT_FLOOR_OUTLINE = Object.freeze([
 ]);
 const RECEDE_OFFSET = Object.freeze({ x: 5.2, y: -0.28, z: -2 });
 const RETRIEVE_DURATIONS: Readonly<Record<DriftingCargoKind, number>> =
-  Object.freeze({ barrel: 1.35, chest: 1.55, lifeboat: 1.8, container: 1.8 });
+  Object.freeze({ barrel: 1.35, chest: 1.55, lifeboat: 1.8, container: 1.8, debris: 2 });
 
 function keyedRetrieveProgress(progress: number): number {
   if (progress < 0.14) return -0.045 * smoothstep(progress / 0.14);
@@ -132,6 +137,7 @@ export class DriftingItemPresentation {
   private readonly baseQuaternions: Readonly<Record<DriftingCargoKind, Quaternion>>;
   private readonly baseScales: Readonly<Record<DriftingCargoKind, number>>;
   private readonly lifeboatCooler: Group;
+  private readonly debris: DriftingDebris;
   private readonly lifeboatFloor: Mesh<ExtrudeGeometry, MeshStandardMaterial>;
   private readonly coolerBaseScale: number;
   private readonly targetPositionScratch = new Vector3();
@@ -195,27 +201,32 @@ export class DriftingItemPresentation {
     container.rotation.set(0.04, -0.16, -0.035);
     container.scale.setScalar(0.92);
 
-    this.roots = { barrel, chest, lifeboat, container };
+    this.debris = new DriftingDebris(models.debrisBox, models.debrisCrate, models.debrisPallet);
+    const debris = this.createRoot('drifting-supplies:debris', this.debris.root);
+    this.roots = { barrel, chest, lifeboat, container, debris };
     this.basePositions = {
       barrel: barrel.position.clone(),
       chest: chest.position.clone(),
       lifeboat: lifeboat.position.clone(),
       container: container.position.clone(),
+      debris: debris.position.clone(),
     };
     this.baseQuaternions = {
       barrel: barrel.quaternion.clone(),
       chest: chest.quaternion.clone(),
       lifeboat: lifeboat.quaternion.clone(),
       container: container.quaternion.clone(),
+      debris: debris.quaternion.clone(),
     };
     this.baseScales = {
       barrel: barrel.scale.x,
       chest: chest.scale.x,
       lifeboat: lifeboat.scale.x,
       container: container.scale.x,
+      debris: debris.scale.x,
     };
     this.coolerBaseScale = this.lifeboatCooler.scale.x;
-    this.root.add(barrel, chest, lifeboat, container);
+    this.root.add(barrel, chest, lifeboat, container, debris);
     this.resetAll();
   }
 
@@ -247,6 +258,7 @@ export class DriftingItemPresentation {
     this.resetAll();
     this.roots[this.activeVariant].visible = true;
     this.applyFloatingPose(this.activeVariant, 0);
+    this.debris.setPose(this.side, 0);
   }
 
   reveal(): Promise<void> {
@@ -325,6 +337,7 @@ export class DriftingItemPresentation {
 
     animation.elapsed = Math.min(animation.duration, animation.elapsed + Math.max(0, delta));
     const progress = animation.duration <= 0 ? 1 : animation.elapsed / animation.duration;
+    if (variant === 'debris') this.applyFloatingPose(variant, time);
     this.applyRetrievePose(variant, progress);
     if (progress < 1) return;
 
@@ -351,6 +364,7 @@ export class DriftingItemPresentation {
     this.disposed = true;
     this.root.removeFromParent();
     runCleanupSteps([
+      () => this.debris.dispose(),
       () => this.lifeboatFloor.geometry.dispose(),
       () => this.lifeboatFloor.material.dispose(),
     ]);
@@ -385,6 +399,10 @@ export class DriftingItemPresentation {
   }
 
   private applyRetrievePose(variant: DriftingCargoKind, progress: number): void {
+    if (variant === 'debris') {
+      this.debris.setPose(this.side, progress);
+      return;
+    }
     this.readTargetPose(variant);
     const clampedProgress = Math.min(1, Math.max(0, progress));
     const travel = variant === 'chest'
@@ -425,7 +443,8 @@ export class DriftingItemPresentation {
 
   private finishRetrieve(variant: DriftingCargoKind): void {
     this.state = 'held';
-    this.applyHeldPose(variant);
+    if (variant === 'debris') this.debris.setPose(this.side, 1);
+    else this.applyHeldPose(variant);
     if (variant !== 'chest') this.resultRoot()!.visible = false;
     if (variant === 'lifeboat') this.roots.lifeboat.visible = false;
   }
@@ -465,10 +484,13 @@ export class DriftingItemPresentation {
     this.resetPose('chest');
     this.resetPose('lifeboat');
     this.resetPose('container');
+    this.resetPose('debris');
+    this.debris.setPose(this.side, 0);
     this.roots.barrel.visible = false;
     this.roots.chest.visible = false;
     this.roots.lifeboat.visible = false;
     this.roots.container.visible = false;
+    this.roots.debris.visible = false;
   }
 
   private resetCooler(): void {

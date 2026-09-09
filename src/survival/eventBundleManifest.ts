@@ -41,6 +41,7 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
       'emptyLifeboat',
       'emptyLifeboatContainer',
       'shippingContainer',
+      'wreckageBox', 'wreckageCrate', 'wreckagePallet',
     ],
     sounds: [],
   },
@@ -51,10 +52,6 @@ const RESOURCES: Partial<Readonly<Record<SurvivalEventId, EventBundleSpec>>> = {
   'check-the-back': {
     models: ['checkBackFish', 'checkBackAnglerfish'],
     sounds: ['checkBackFish', 'checkBackAnglerfish'],
-  },
-  wreckage: {
-    models: ['containerShip', 'wreckageBox', 'wreckageCrate', 'wreckagePallet'],
-    sounds: ['diveEntry', 'underwaterMovement', 'diveSurface'],
   },
   flowers: { models: ['flowers'], sounds: [] },
   'chest-attack': {

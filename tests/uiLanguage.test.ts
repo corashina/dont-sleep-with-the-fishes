@@ -105,7 +105,7 @@ describe('live gameplay translations', () => {
     const view = new FocusedEventView(document.body);
     views.push(view);
     document.body.append(view.root);
-    view.show({ eventId: 'wreckage', target: null, choices: [{ id: 'take', instanceId: null, energyCost: 2,
+    view.show({ eventId: 'drifting-supplies', target: null, choices: [{ id: 'take', instanceId: null, energyCost: 2,
       get label() { return getLanguage() === 'en' ? 'Take supplies' : 'Zabierz zapasy'; },
       get unavailableReason() { return getLanguage() === 'en' ? 'No energy.' : 'Brak energii.'; },
     }] });
@@ -118,7 +118,7 @@ describe('live gameplay translations', () => {
     expect(choice.textContent).toContain('Zabierz zapasy');
     expect(choice.getAttribute('aria-description')).toBe('Brak energii.');
     expect(choice.querySelector('.focused-event-view__cost')?.getAttribute('aria-label')).toBe('2 energii');
-    expect(find('[data-focused-event-title]').textContent).toBe('Szczątki wraku');
+    expect(find('[data-focused-event-title]').textContent).toBe('Dryfujące zapasy');
   });
 
   it('refreshes fishing text without reissuing the cast', () => {

@@ -37,10 +37,10 @@ describe('journal phase completion', () => {
 
   it('saves the completed day while its night event is still open', () => {
     const session = new SurvivalSession([], {
-      seed: 1, initial: { day: 2 }, initialEventId: 'wreckage',
+      seed: 1, initial: { day: 2 }, initialEventId: 'drifting-supplies',
       initialChest: { state: 'mimic', acquiredDay: 1 },
     });
-    expect(session.resolveEvent({ kind: 'choice', choiceId: 'leave' }).accepted).toBe(true);
+    expect(session.resolveEvent({ kind: 'choice', choiceId: 'sleep' }).accepted).toBe(true);
     expect(session.endDay().accepted).toBe(true);
     expect(session.snapshot().journalEntries[0]).toMatchObject({ weather: 'calm', nightWeather: null });
     const document = createSurvivalSaveDocument({ scavengeElapsedSeconds: 0, session: session.exportCheckpoint() });

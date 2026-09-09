@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import { survivalEventById } from '../src/survival/eventCatalog';
 import { sequenceRandom } from './helpers/random';
 
 const scuba = { instanceId: 'scubaSet-1', type: 'scubaSet' } as const;
@@ -43,46 +42,5 @@ describe('normal diving balance', () => {
     const outcome = session.perform('dive');
     expect(outcome.code).toBe(recovered ? 'dive-recovered' : 'dive-empty');
     expect(outcome.deltas.health).toBe(injured ? -15 : undefined);
-  });
-});
-
-describe('wreckage diving balance', () => {
-  const choice = survivalEventById('wreckage')!.choices.find((entry) => entry.id === 'dive')!;
-
-  it('gives 40% equipment, 35% supplies, and 25% injury', () => {
-    const total = choice.outcomes.reduce((sum, outcome) => sum + outcome.weight, 0);
-    const injury = choice.outcomes.filter((outcome) =>
-      outcome.effects.resources?.some((effect) => effect.resource === 'health'));
-    const equipment = choice.outcomes.filter((outcome) =>
-      outcome.effects.items?.some((mutation) => mutation.kind === 'gain'));
-    expect(total).toBeCloseTo(100);
-    expect(injury.reduce((sum, outcome) => sum + outcome.weight, 0) / total).toBeCloseTo(0.25);
-    expect(equipment.reduce((sum, outcome) => sum + outcome.weight, 0) / total).toBeCloseTo(0.40);
-    for (const resource of ['food', 'bait']) {
-      const supplies = choice.outcomes.filter((outcome) =>
-        outcome.effects.resources?.some((effect) => effect.resource === resource));
-      expect(supplies).toHaveLength(3);
-      for (const [index, probability] of [0.1575, 0.01575, 0.00175].entries()) {
-        expect(supplies[index]!.weight / total).toBeCloseTo(probability, 8);
-      }
-    }
-  });
-
-  it.each([
-    [0.40, 'food', 1], [0.56, 'food', 2], [0.574, 'food', 3],
-    [0.58, 'bait', 1], [0.74, 'bait', 2], [0.749, 'bait', 3],
-  ] as const)('settles %s as %s ×%s', (roll, resource, quantity) => {
-    const session = new SurvivalSession([scuba], {
-      seed: 1, initialEventId: 'wreckage', initial: { day: 4, energy: 3 },
-      random: sequenceRandom([roll]),
-    });
-    expect(session.resolveEvent({ kind: 'item', choiceId: 'dive', instanceId: scuba.instanceId }))
-      .toMatchObject({
-        accepted: true, deltas: { energy: -3, [resource]: quantity },
-        rewardSummary: { kind: 'resource', id: resource, quantity },
-        eventPresentationKey: 'wreckage.dive-loot',
-      });
-    expect(session.snapshot()[resource]).toBe(quantity);
-    expect(session.snapshot().health).toBe(100);
   });
 });

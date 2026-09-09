@@ -23,6 +23,5 @@ export const flowText = defineMessages({
   dive: {"en":"DIVE RESULT","pl":"WYNIK NURKOWANIA", "es-AR": "RESULTADO DEL BUCEO" },
   chest: {"en":"CHEST REWARD","pl":"ZAWARTOŚĆ SKRZYNI", "es-AR": "RECOMPENSA DEL COFRE" },
   salvage: {"en":"SALVAGE","pl":"ZAPASY", "es-AR": "OBJETOS RECUPERADOS" },
-  wreckage: {"en":"WRECKAGE","pl":"SZCZĄTKI WRAKU", "es-AR": "RESTOS DEL NAUFRAGIO" },
   scubaBroke: {"en":"Your scuba gear broke.","pl":"Twój sprzęt do nurkowania się zepsuł.", "es-AR": "Tu equipo de buceo se rompió." },
 });

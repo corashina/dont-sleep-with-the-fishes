@@ -36,9 +36,9 @@ function eventResultRunCheckpoint(): SurvivalRunCheckpoint {
   const session = new SurvivalSession([], {
     seed: 41,
     initial: { day: 3 },
-    initialEventId: 'wreckage',
+    initialEventId: 'drifting-supplies',
   });
-  session.resolveEvent({ kind: 'choice', choiceId: 'search' });
+  session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' });
   return { scavengeElapsedSeconds: 8, session: session.exportCheckpoint() };
 }
 

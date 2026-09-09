@@ -45,7 +45,7 @@ const changes: JournalEntry = {
       { kind: 'break', instanceIds: ['radio-1'] },
     ],
   }],
-  daytime: eventRecord('wreckage', 'search', [{ kind: 'gain', instanceIds: ['medicalKit-1', 'medicalKit-2'] }]),
+  daytime: eventRecord('drifting-supplies', 'retrieve', [{ kind: 'gain', instanceIds: ['medicalKit-1', 'medicalKit-2'] }]),
   nighttime: {
     kind: 'event',
     event: eventRecord('bad-sleep', 'sleep', [{ kind: 'lose', instanceIds: ['medicalKit-1'] }]),

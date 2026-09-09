@@ -730,7 +730,7 @@ describe('BoatWorld helpers', () => {
   it('prepares local matrices without traversing the scene during a focused drifting-item frame', async () => {
     const propModels = createTestPropModels();
     const featuredModels = await createTestFeaturedModels([
-      'driftingBarrel',
+      'driftingBarrel', 'wreckageBox', 'wreckageCrate', 'wreckagePallet',
       'emptyLifeboat',
       'emptyLifeboatContainer',
       'shippingContainer',
@@ -1138,23 +1138,11 @@ describe('BoatWorld helpers', () => {
         const playCount = controllerPlay.mock.calls.length;
         const borrowCount = borrowActor.mock.calls.length;
         const beginCount = begin.mock.calls.length;
-        const dedicatedCount = dedicatedPlay.mock.calls.length;
         const use = world.playEventItemUse(
           event.id,
           choice.id,
           item.instanceId,
         );
-
-        if (event.id === 'wreckage' && choice.id === 'dive') {
-          expect(controllerPlay).toHaveBeenCalledTimes(playCount);
-          expect(borrowActor).toHaveBeenCalledTimes(borrowCount);
-          expect(begin).toHaveBeenCalledTimes(beginCount);
-          expect(dedicatedPlay).toHaveBeenCalledTimes(dedicatedCount + 1);
-          world.update(10, 10);
-          world.clearEvent();
-          await use;
-          continue;
-        }
 
         expect(controllerPlay).toHaveBeenCalledTimes(playCount + 1);
         expect(borrowActor).toHaveBeenCalledTimes(borrowCount + 1);
@@ -2495,7 +2483,7 @@ describe('BoatWorld helpers', () => {
   it('keeps ocean water continuous beneath the drifting lifeboat', async () => {
     const propModels = createTestPropModels();
     const featuredModels = await createTestFeaturedModels([
-      'driftingBarrel',
+      'driftingBarrel', 'wreckageBox', 'wreckageCrate', 'wreckagePallet',
       'emptyLifeboat',
       'emptyLifeboatContainer',
       'shippingContainer',

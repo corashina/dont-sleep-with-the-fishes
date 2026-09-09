@@ -185,18 +185,14 @@ const EVENT_ITEM_CUE_TYPES: ReadonlySet<ItemId> = new Set([
 interface FocusedChoiceContext {
   readonly eventId: InspectableEventId;
   readonly choice: FocusedEventChoiceSelection;
-  readonly pending: SurvivalSnapshot;
   readonly outcome: ActionOutcome;
   readonly generation: number;
   readonly operation: number;
-  readonly wreckage: boolean;
-  readonly scubaBroke: boolean;
   readonly skipDriftingAnimation: boolean;
 }
 
 interface FocusedChoiceResolutionState {
   terminalSnapshot: SurvivalSnapshot | null;
-  returnCovered: boolean;
 }
 
 interface EventResolutionContext {
@@ -244,7 +240,6 @@ function pendingEventDefinition(snapshot: SurvivalSnapshot): SurvivalEventDefini
 }
 
 function focusedChoiceAnchorId(eventId: string, choiceId: string): string | null {
-  if (eventId === 'wreckage') return null;
   if (choiceId === 'delegate-carlitos') return 'carlitos';
   if (isDriftingItemEventId(eventId) && (choiceId === 'retrieve' || choiceId === 'search')) {
     return `event:${eventId}`;
@@ -331,7 +326,6 @@ function focusedChoiceEnergy(
 }
 
 function focusedChoiceDismisses(eventId: string, choiceId: string): boolean {
-  if (eventId === 'wreckage') return choiceId === 'leave';
   return isDriftingItemEventId(eventId) && choiceId === 'sleep';
 }
 
@@ -344,8 +338,7 @@ function focusedChoiceFor(
     ? { visible: true, unavailableReason: null }
     : carlitosChoiceAvailability(snapshot, choice.companionAction.energyCost);
   if (choice.companionAction !== undefined
-    && !companionAvailability.visible
-    && event.id !== 'wreckage') return null;
+    && !companionAvailability.visible) return null;
   const instanceId = usableChoiceItemInstanceId(choice, snapshot);
   const currentReasons = () => focusedChoiceUnavailableReasons(
     choice,
@@ -671,7 +664,6 @@ export class SurvivalEventFlow {
     const context = this.createFocusedChoiceContext(
       eventId,
       choice,
-      pending,
       outcome,
       generation,
       operation,
@@ -679,14 +671,11 @@ export class SurvivalEventFlow {
     if (context.skipDriftingAnimation) this.reportMissingDriftingReward(context);
     const state: FocusedChoiceResolutionState = {
       terminalSnapshot: null,
-      returnCovered: false,
     };
     return {
       accepted: true,
       playAnimation: () => this.playFocusedChoiceAnimation(context),
       afterAnimation: () => this.afterFocusedChoiceAnimation(context),
-      beforeReturn: () => this.coverFocusedChoiceReturn(context, state),
-      afterReturn: () => this.finishFocusedChoiceReturn(context, state),
       clearEvent: (reportCleanupErrors) => this.clearFocusedChoiceEvent(
         context,
         reportCleanupErrors,
@@ -723,38 +712,18 @@ export class SurvivalEventFlow {
   private createFocusedChoiceContext(
     eventId: InspectableEventId,
     choice: FocusedEventChoiceSelection,
-    pending: SurvivalSnapshot,
     outcome: ActionOutcome,
     generation: number,
     operation: number,
   ): FocusedChoiceContext {
-    const wreckage = eventId === 'wreckage';
     return {
       eventId,
       choice,
-      pending,
       outcome,
       generation,
       operation,
-      wreckage,
-      scubaBroke: this.didFocusedScubaBreak(eventId, choice, pending),
       skipDriftingAnimation: this.shouldSkipDriftingAnimation(eventId, choice, outcome),
     };
-  }
-
-  private didFocusedScubaBreak(
-    eventId: InspectableEventId,
-    choice: FocusedEventChoiceSelection,
-    pending: SurvivalSnapshot,
-  ): boolean {
-    if (eventId !== 'wreckage' || choice.id !== 'dive' || choice.instanceId === null) {
-      return false;
-    }
-    const beforeCondition = pending.inventory[choice.instanceId]?.condition;
-    const afterCondition = this.dependencies.session.snapshot().inventory[
-      choice.instanceId
-    ]?.condition;
-    return beforeCondition === 'usable' && afterCondition === 'broken';
   }
 
   private shouldSkipDriftingAnimation(
@@ -774,34 +743,8 @@ export class SurvivalEventFlow {
 
   private async playFocusedChoiceAnimation(context: FocusedChoiceContext): Promise<void> {
     if (!this.isCurrent(context.generation, context.operation)) return;
-    if (context.wreckage) {
-      await this.playWreckageChoiceAnimation(context);
-      return;
-    }
     if (context.skipDriftingAnimation) return;
-    if (isDriftingItemEventId(context.eventId)) {
-      await this.playDriftingChoiceAnimation(context.eventId, context);
-      return;
-    }
-    await this.playStandardFocusedChoiceAnimation(context);
-  }
-
-  private async playWreckageChoiceAnimation(context: FocusedChoiceContext): Promise<void> {
-    const { choice, eventId, pending, generation, operation } = context;
-    if (choice.id === 'search' || choice.id === 'leave') return;
-    if (choice.id === 'delegate-carlitos') {
-      await (this.dependencies.world.playEventChoice?.(eventId, choice.id) ?? Promise.resolve());
-      return;
-    }
-    if (choice.id !== 'dive' || choice.instanceId === null) return;
-    await this.playEventItemUseWithSound(
-      eventId,
-      choice.id,
-      choice.instanceId,
-      pending.inventory[choice.instanceId]?.type,
-      generation,
-      operation,
-    );
+    await this.playDriftingChoiceAnimation(context.eventId, context);
   }
 
   private async playDriftingChoiceAnimation(
@@ -816,54 +759,6 @@ export class SurvivalEventFlow {
     if (choice.id === 'delegate-carlitos') {
       await (this.dependencies.world.delegateDriftingItem?.(eventId) ?? Promise.resolve());
     }
-  }
-
-  private async playStandardFocusedChoiceAnimation(
-    context: FocusedChoiceContext,
-  ): Promise<void> {
-    const { choice, eventId, pending, outcome, generation, operation } = context;
-    if (choice.instanceId !== null) {
-      await this.playEventItemUseWithSound(
-        eventId,
-        choice.id,
-        choice.instanceId,
-        pending.inventory[choice.instanceId]?.type,
-        generation,
-        operation,
-      );
-    }
-    if (!this.isCurrent(generation, operation)) return;
-    const playedChoice = this.focusedChoicePresentation(choice, pending);
-    await (this.dependencies.world.playEventChoice?.(eventId, playedChoice) ?? Promise.resolve());
-    if (!this.isCurrent(generation, operation)) return;
-    const resolved = this.dependencies.session.snapshot();
-    const presentation = deriveEventOutcomePresentation(
-      pending,
-      resolved,
-      outcome,
-      choice.instanceId,
-    );
-    this.dependencies.audio.beginEventReaction(eventId, outcome);
-    await Promise.all([
-      this.dependencies.world.play?.(outcome.cue) ?? Promise.resolve(),
-      this.dependencies.world.reactToEventOutcome?.(
-        eventId,
-        outcome,
-        playedChoice,
-        presentation,
-      ) ?? Promise.resolve(),
-    ]);
-    if (this.isCurrent(generation, operation)) this.dependencies.audio.finishEventReaction();
-  }
-
-  private focusedChoicePresentation(
-    choice: FocusedEventChoiceSelection,
-    pending: SurvivalSnapshot,
-  ): EventChoicePresentation {
-    const condition = choice.instanceId === null
-      ? null
-      : pending.inventory[choice.instanceId]?.condition ?? null;
-    return { choiceId: choice.id, instanceId: choice.instanceId, condition };
   }
 
   private async afterFocusedChoiceAnimation(context: FocusedChoiceContext): Promise<void> {
@@ -881,70 +776,6 @@ export class SurvivalEventFlow {
     if (context.eventId !== 'drifting-supplies') return false;
     if (context.outcome.rewardSummary === undefined) return false;
     return context.choice.id === 'retrieve' || context.choice.id === 'delegate-carlitos';
-  }
-
-  private canCoverFocusedChoiceReturn(context: FocusedChoiceContext): boolean {
-    return context.wreckage
-      && context.choice.id !== 'leave'
-      && this.isCurrent(context.generation, context.operation);
-  }
-
-  private async coverFocusedChoiceReturn(
-    context: FocusedChoiceContext,
-    state: FocusedChoiceResolutionState,
-  ): Promise<void> {
-    if (!this.canCoverFocusedChoiceReturn(context)) return;
-    await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
-    if (
-      context.choice.id === 'dive'
-      && this.isCurrent(context.generation, context.operation)
-    ) {
-      this.dependencies.audio.finishDive();
-    }
-    state.returnCovered = true;
-  }
-
-  private async finishFocusedChoiceReturn(
-    context: FocusedChoiceContext,
-    state: FocusedChoiceResolutionState,
-  ): Promise<void> {
-    if (!this.canCoverFocusedChoiceReturn(context)) return;
-    if (!await this.ensureFocusedChoiceReturnCovered(context, state)) return;
-    if (!await this.dependencies.renderAndSettleCoveredScene(context.generation)) return;
-    if (!this.isCurrent(context.generation, context.operation)) return;
-    await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
-    if (!this.canShowWreckageReward(context, state)) return;
-    const rewardLines = () => this.wreckageRewardLines(context);
-    await (this.dependencies.ui.showRewardResult?.({
-      title: 'WRECKAGE',
-      reward: context.outcome.rewardSummary ?? null,
-      get lines() { return rewardLines(); },
-    }) ?? Promise.resolve());
-  }
-
-  private async ensureFocusedChoiceReturnCovered(
-    context: FocusedChoiceContext,
-    state: FocusedChoiceResolutionState,
-  ): Promise<boolean> {
-    if (state.returnCovered) return true;
-    await (this.dependencies.ui.setSleepCovered?.(true) ?? Promise.resolve());
-    if (!this.isCurrent(context.generation, context.operation)) return false;
-    state.returnCovered = true;
-    return true;
-  }
-
-  private canShowWreckageReward(
-    context: FocusedChoiceContext,
-    state: FocusedChoiceResolutionState,
-  ): boolean {
-    if (!this.isCurrent(context.generation, context.operation)) return false;
-    return context.choice.id !== 'leave' && state.terminalSnapshot === null;
-  }
-
-  private wreckageRewardLines(context: FocusedChoiceContext): string[] {
-    if (context.scubaBroke) return [context.outcome.message, flowText('scubaBroke')];
-    if (context.outcome.rewardSummary === undefined) return [context.outcome.message];
-    return [];
   }
 
   private clearFocusedChoiceEvent(
@@ -2319,16 +2150,6 @@ export class SurvivalEventFlow {
     generation: number,
     operation: number,
   ): Promise<void> {
-    if (eventId === 'wreckage' && itemType === 'scubaSet') {
-      return this.dependencies.world.playEventItemUse?.(
-        eventId,
-        choiceId,
-        instanceId,
-        () => {
-          if (this.isCurrent(generation, operation)) this.dependencies.audio.beginDive();
-        },
-      ) ?? Promise.resolve();
-    }
     if (usesEventItemCues(itemType)) {
       return this.playCuedEventItemUse(
         eventId,

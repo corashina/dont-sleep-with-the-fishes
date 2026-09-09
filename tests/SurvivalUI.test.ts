@@ -560,8 +560,8 @@ describe('SurvivalUI', () => {
         hitArea: { width: 40, height: 40, depth: 1 },
       },
       {
-        id: 'event:wreckage',
-        eventFocusId: 'wreckage',
+        id: 'event:drifting-supplies',
+        eventFocusId: 'drifting-supplies',
         itemType: null,
         toolId: null,
         action: null,
@@ -578,7 +578,7 @@ describe('SurvivalUI', () => {
       '[data-anchor-id="shotgun-overlap"]',
     )!;
     const event = mount.querySelector<HTMLButtonElement>(
-      '[data-anchor-id="event:wreckage"]',
+      '[data-anchor-id="event:drifting-supplies"]',
     )!;
 
     expect(Number(event.style.zIndex)).toBeGreaterThan(Number(shotgun.style.zIndex));
@@ -1630,138 +1630,6 @@ describe('SurvivalUI', () => {
 
     observer.disconnect();
     expect(publications.filter((message) => message === 'BITE - REEL NOW')).toHaveLength(1);
-  });
-
-  it('opens a shared wreckage focus and returns the chosen item instance', () => {
-    const style = document.createElement('style');
-    style.textContent = mainStyles.match(
-      /\.focused-event-view__card nav(?:\[hidden\])?\s*\{[^}]*\}/g,
-    )?.join('\n') ?? '';
-    const mount = document.createElement('main');
-    document.body.append(style, mount);
-    const ui = createUI(mount);
-    const selected = vi.fn();
-    const returned = vi.fn();
-    const choice = vi.fn();
-    ui.onFocusedEventSelect = selected;
-    ui.onFocusedEventChoice = choice;
-    ui.onFocusedEventBack = returned;
-    ui.setAnchors([{
-      id: 'event:wreckage',
-      eventFocusId: 'wreckage',
-      tooltip: false,
-      label: 'WRECKAGE',
-      description: 'Inspect the floating debris.',
-      itemType: null,
-      toolId: null,
-      action: null,
-      remainingUses: null,
-      x: 850,
-      y: 360,
-      visible: true,
-      depleted: false,
-      hitArea: { width: 180, height: 110, depth: 2 },
-    }]);
-    ui.beginEventPresentation();
-    ui.setEventSelection(new Map());
-
-    const anchor = mount.querySelector<HTMLButtonElement>(
-      '[data-anchor-id="event:wreckage"]',
-    )!;
-    expect(anchor.querySelector('.boat-tooltip')).toBeNull();
-    expect(anchor.dataset.eventState).toBe('available');
-    expect(anchor.disabled).toBe(false);
-    expect(anchor.tabIndex).toBe(0);
-    anchor.click();
-    expect(selected).toHaveBeenCalledWith('wreckage');
-
-    ui.showFocusedEvent({
-      eventId: 'wreckage',
-      target: { x: 850, y: 360, width: 180, height: 110, depth: 2, visible: true },
-      choices: [
-        {
-          id: 'search',
-          label: 'Search Debris',
-          energyCost: 2,
-          energyOwner: 'player',
-          unavailableReason: null,
-          instanceId: null,
-        },
-        {
-          id: 'delegate-carlitos',
-          label: 'Send Carlitos',
-          energyCost: 3,
-          energyOwner: 'carlitos',
-          unavailableReason: 'Carlitos needs more energy.',
-          instanceId: null,
-        },
-        {
-          id: 'dive',
-          label: 'Dive',
-          energyCost: 3,
-          energyOwner: 'player',
-          unavailableReason: null,
-          instanceId: 'scubaSet-1' as ItemInstanceId,
-        },
-        { id: 'leave', label: 'Leave', unavailableReason: null, instanceId: null },
-      ],
-    });
-
-    const focus = mount.querySelector<HTMLElement>('[data-focused-event-view]')!;
-    const focusCard = focus.querySelector<HTMLElement>('.focused-event-view__card')!;
-    expect(focusCard.classList).toContain('dive-result__paper');
-    expect(focus.querySelector('[data-focused-event-title]')?.textContent)
-      .toBe('Wreckage Debris');
-    expect(focus.getAttribute('aria-labelledby')).toBe('focused-event-title');
-    expect(focus.getAttribute('aria-label')).toBeNull();
-    expect(focus.dataset.anchorState).toBe('projected');
-    const popupX = Number.parseFloat(focus.style.getPropertyValue('--focused-event-x'));
-    const popupWidth = Number.parseFloat(focus.style.getPropertyValue('--focused-event-width'));
-    const targetLeft = 850 - 180 / 2;
-    const targetRight = 850 + 180 / 2;
-    expect(popupX + popupWidth <= targetLeft || popupX >= targetRight).toBe(true);
-    expect(focus.textContent).not.toContain('DRIFTING ITEM');
-    const energyCosts = [...focus.querySelectorAll<HTMLElement>('.focused-event-view__cost')];
-    expect(energyCosts.map(({ textContent }) => textContent))
-      .toEqual(['⚡️⚡️', '⚡️⚡️⚡️', '⚡️⚡️⚡️']);
-    expect(energyCosts.map((cost) => cost.getAttribute('aria-label')))
-      .toEqual(['2 energy', '3 energy', '3 energy']);
-    expect(focus.textContent).not.toContain('PLAYER');
-    expect(focus.textContent).not.toContain('CARLITOS —');
-    expect(mainStyles).toMatch(
-      /\.focused-event-view__choice-main\s*\{[^}]*font-size:\s*1rem;/s,
-    );
-    expect(focus.textContent).toContain('Leave');
-    expect(focus.querySelector('.event-choice__reason')?.textContent)
-      .toBe('Carlitos needs more energy.');
-    expect(document.activeElement).toBe(
-      focus.querySelector<HTMLButtonElement>('[data-event-choice="search"]'),
-    );
-
-    focus.querySelector<HTMLButtonElement>('[data-event-choice="search"]')!.click();
-    expect(choice).toHaveBeenCalledExactlyOnceWith({ id: 'search', instanceId: null });
-
-    const back = focus.querySelector<HTMLButtonElement>('[data-focused-event-back]')!;
-    expect(back.parentElement).toBe(focus);
-    expect(back.parentElement).not.toBe(focusCard);
-    expect(back.textContent?.trim()).toBe('');
-    expect(back.querySelector('[data-return-arrow] path')?.getAttribute('d'))
-      .toBe('M9 3h6v10h5l-8 8-8-8h5z');
-    expect(back.getAttribute('aria-label')).toBe('Return to boat');
-    expect(mainStyles).toMatch(
-      /\.return-arrow-artwork\s*\{[^}]*width:\s*82px;[^}]*height:\s*82px;/s,
-    );
-    expect(mainStyles).toMatch(
-      /\.focused-event-view__back:hover\s*\{[^}]*color:\s*#ead4a5;[^}]*\}/s,
-    );
-    expect(mainStyles).not.toMatch(
-      /\.focused-event-view__back:hover\s*,\s*\.focused-event-view__back:focus-visible/,
-    );
-    expect(mainStyles).toMatch(
-      /\.focused-event-view__back:focus-visible\s*\{[^}]*outline:\s*none;/s,
-    );
-    back.click();
-    expect(returned).toHaveBeenCalledOnce();
   });
 
   it('focuses the back control when no focused event choice is available', () => {

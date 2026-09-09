@@ -76,9 +76,6 @@ vi.mock('../src/survival/events/TornadoPresentation', () => ({
 vi.mock('../src/survival/events/CarlitosEventPresentation', () => ({
   CarlitosEventPresentation: constructors.carlitos,
 }));
-vi.mock('../src/survival/events/WreckagePresentation', () => ({
-  WreckagePresentation: constructors.wreckage,
-}));
 
 function asyncVoid() {
   return vi.fn(async () => undefined);
@@ -266,7 +263,7 @@ beforeEach(() => {
   constructors.carlitos.mockImplementation(() => presentation);
   constructors.wreckage.mockImplementation(() => ({
     ...presentation,
-    eventId: 'wreckage',
+    eventId: 'drifting-supplies',
   }));
 });
 

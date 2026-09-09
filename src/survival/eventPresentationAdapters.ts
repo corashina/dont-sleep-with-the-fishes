@@ -41,7 +41,6 @@ import { LeakPresentation } from './events/LeakPresentation';
 import { SchoolOfFishPresentation } from './events/SchoolOfFishPresentation';
 import { SnatcherPresentation } from './events/SnatcherPresentation';
 import { TornadoPresentation } from './events/TornadoPresentation';
-import { WreckagePresentation } from './events/WreckagePresentation';
 import {
   MoonEventPresentation,
   type MoonEventPresentationEnvironment,
@@ -216,9 +215,6 @@ function createDedicatedCoordinator(
         break;
       case 'tornado':
         presentations.push(new TornadoPresentation(dedicatedEnvironment));
-        break;
-      case 'wreckage':
-        presentations.push(new WreckagePresentation(dedicatedEnvironment));
         break;
       case 'shadow-figure':
       case 'guarded-sleep':

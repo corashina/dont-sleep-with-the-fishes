@@ -18,7 +18,8 @@ import {
 import { drawWeightedEvent } from './eventSelection';
 import { drawDiveItem } from './diveRewards';
 import { resolveWeightedOutcome } from './eventResolver';
-import { driftingSupplyChoiceForVariant } from './driftingSupplies';
+import { drawDriftingLoot, driftingLootEffects } from './driftingLoot';
+import { driftingSupplyKindFromSeed, driftingSupplyChoiceForVariant } from './driftingSupplies';
 import { deriveEventVariantSeed } from './eventPresentationOutcome';
 import {
   FishingSession,
@@ -101,6 +102,7 @@ import type {
   SurvivalEventDefinition,
   SurvivalState,
   ResourceEffect,
+  RewardEntry,
   RewardSummary,
   ChestSnapshot,
   ChestState,
@@ -892,7 +894,7 @@ export class SurvivalSession {
 
   private expirePendingDriftingLoot(): void {
     if (this.state !== 'dayEvent' || !isInspectableEventId(this.pendingEventId ?? '')) return;
-    const choiceId = this.pendingEventId === 'wreckage' ? 'leave' : 'sleep';
+    const choiceId = 'sleep';
     const expired = this.resolveEventChoice(choiceId, null, null, undefined);
     if (!expired.accepted) throw new Error('Pending drifting loot could not expire at nightfall.');
   }
@@ -994,6 +996,7 @@ export class SurvivalSession {
       resolved,
       applied.fallbackFoodGranted,
       this.appliedResourceDelta(before, this.resourceValues()),
+      applied.inventoryMutations,
     );
     this.finishResolvedEvent(
       event,
@@ -1033,12 +1036,23 @@ export class SurvivalSession {
     choice: EventChoiceDefinition,
     resultId: string | undefined,
   ): WeightedEventOutcome {
-    return resolveWeightedOutcome(
+    const resolved = resolveWeightedOutcome(
       choice,
       this.random,
       this.appearanceCounts.get(event.id) ?? 0,
       resultId,
     );
+    if (event.id !== 'drifting-supplies' || choice.id === 'sleep') return resolved;
+    const kind = driftingSupplyKindFromSeed(deriveEventVariantSeed(this.seed, this.day, event.id));
+    const loot = driftingLootEffects(drawDriftingLoot(kind, this.presentItemIds(), this.random));
+    return {
+      ...resolved,
+      effects: {
+        ...resolved.effects,
+        resources: [...(resolved.effects.resources ?? []), ...(loot.resources ?? [])],
+        items: loot.items!,
+      },
+    };
   }
 
   private applyResolvedEventEffects(
@@ -1112,12 +1126,13 @@ export class SurvivalSession {
     resolved: WeightedEventOutcome,
     fallbackFoodGranted: boolean,
     deltas: ResourceDelta,
+    inventoryMutations: readonly JournalInventoryMutation[],
   ): ActionOutcome {
     const rewardSummary = this.eventRewardSummary(
       eventId,
       choiceId,
-      resolved,
-      fallbackFoodGranted,
+      deltas,
+      inventoryMutations,
     );
     const resultId = fallbackFoodGranted ? fallbackResultId(eventId) : resolved.resultId;
     if (resolved.resultId === undefined) throw new Error('Event outcome requires a stable result ID.');
@@ -1577,48 +1592,23 @@ export class SurvivalSession {
   private eventRewardSummary(
     eventId: string,
     choiceId: string,
-    resolved: WeightedEventOutcome,
-    fallbackFoodGranted: boolean,
+    deltas: ResourceDelta,
+    mutations: readonly JournalInventoryMutation[],
   ): RewardSummary | undefined {
-    const source = this.eventRewardSource(eventId, choiceId);
-    if (source === null) return undefined;
-    if (fallbackFoodGranted) return Object.freeze({ kind: 'resource', id: 'food', quantity: 1 });
-    const resourceReward = this.eventResourceReward(resolved);
-    if (resourceReward !== undefined) return resourceReward;
-    if (source === 'wreckage') return this.wreckageItemReward(resolved);
-    return Object.freeze({ kind: 'item', id: 'energyBar', quantity: 1 });
-  }
-
-  private eventRewardSource(
-    eventId: string,
-    choiceId: string,
-  ): 'driftingCargo' | 'wreckage' | null {
-    if (eventId === 'drifting-supplies'
-      && (choiceId === 'retrieve' || choiceId === 'delegate-carlitos')) {
-      return 'driftingCargo';
+    if (eventId !== 'drifting-supplies' || choiceId === 'sleep') return undefined;
+    const rewards: RewardEntry[] = [];
+    for (const id of ['food', 'bait'] as const) {
+      const quantity = deltas[id] ?? 0;
+      if (quantity > 0) rewards.push({ kind: 'resource', id, quantity });
     }
-    if (eventId === 'wreckage'
-      && (choiceId === 'search' || choiceId === 'delegate-carlitos' || choiceId === 'dive')) {
-      return 'wreckage';
+    for (const mutation of mutations) {
+      if (mutation.kind !== 'gain') continue;
+      for (const instanceId of mutation.instanceIds) {
+        const item = this.inventory.snapshot()[instanceId]!;
+        rewards.push({ kind: 'item', id: item.type, quantity: 1 });
+      }
     }
-    return null;
-  }
-
-  private eventResourceReward(resolved: WeightedEventOutcome): RewardSummary | undefined {
-    const added = resolved.effects.resources?.find(
-      ({ operation, resource }) => operation === 'add'
-        && (resource === 'food' || resource === 'bait'),
-    );
-    if (added === undefined || typeof added.value !== 'number') return undefined;
-    const id = added.resource;
-    if (id !== 'food' && id !== 'bait') return undefined;
-    return Object.freeze({ kind: 'resource', id, quantity: added.value });
-  }
-
-  private wreckageItemReward(resolved: WeightedEventOutcome): RewardSummary | undefined {
-    const gained = resolved.effects.items?.find(({ kind }) => kind === 'gain');
-    if (gained?.kind !== 'gain') return undefined;
-    return Object.freeze({ kind: 'item', id: gained.itemId, quantity: 1 });
+    return Object.freeze({ kind: 'bundle', rewards: Object.freeze(rewards.map((entry) => Object.freeze(entry))) });
   }
 
   private recordJournalEvent(

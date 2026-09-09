@@ -2,7 +2,6 @@
 
 import generatedMetadataJson from '../assets/models/events/event-model-metadata.json';
 import fishingMetadataJson from '../assets/models/fishing/fishing-model-metadata.json';
-import { FOCUSED_EVENT_MODEL_METADATA } from '../world/focusedEventModelMetadata';
 import { FISHING_CATCH_MODEL_SPECS } from './fishingModelManifest';
 
 export const SURVIVAL_EVENT_MODEL_IDS = [
@@ -11,6 +10,7 @@ export const SURVIVAL_EVENT_MODEL_IDS = [
   'emptyLifeboat',
   'emptyLifeboatContainer',
   'shippingContainer',
+  'wreckageBox', 'wreckageCrate', 'wreckagePallet',
   'checkBackFish',
   'checkBackAnglerfish',
   'anglerFish',
@@ -87,6 +87,24 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
     rotation: NO_ROTATION,
     maxTriangles: generatedMetadataJson.shippingContainer.triangles,
   }),
+  wreckageBox: Object.freeze({
+    url: new URL('../assets/models/events/wreckageBox.glb', import.meta.url).href,
+    targetLongestDimension: 0.9,
+    rotation: NO_ROTATION,
+    maxTriangles: generatedMetadataJson.wreckageBox.triangles,
+  }),
+  wreckageCrate: Object.freeze({
+    url: new URL('../assets/models/events/wreckageCrate.glb', import.meta.url).href,
+    targetLongestDimension: 1.15,
+    rotation: NO_ROTATION,
+    maxTriangles: generatedMetadataJson.wreckageCrate.triangles,
+  }),
+  wreckagePallet: Object.freeze({
+    url: new URL('../assets/models/events/wreckagePallet.glb', import.meta.url).href,
+    targetLongestDimension: 1.8,
+    rotation: NO_ROTATION,
+    maxTriangles: generatedMetadataJson.wreckagePallet.triangles,
+  }),
   flowers: Object.freeze({
     url: new URL('../assets/models/events/flowers.glb', import.meta.url).href,
     targetLongestDimension: 0.9,
@@ -100,8 +118,6 @@ export const EVENT_MODEL_IDS = Object.freeze([
   'leakPlanks', 'schoolFish', 'cod', 'bass', 'redSnapper',
   'snatcher', 'anglerFish', 'shark', 'deathStareBlob',
   'tornadoCore',
-  'containerShip',
-  'wreckageBox', 'wreckageCrate', 'wreckagePallet',
 ] as const);
 
 export type EventModelId = typeof EVENT_MODEL_IDS[number];
@@ -215,30 +231,6 @@ const PRESENTATION = {
     offset: [0, 0, 0],
     maxTriangles: 3_000,
   },
-  containerShip: {
-    targetLongestDimension: 18,
-    rotation: [0, 0, 0],
-    offset: [0, 0, 0],
-    maxTriangles: 2_500,
-  },
-  wreckageBox: {
-    targetLongestDimension: 0.9,
-    rotation: [0, 0, 0],
-    offset: [0, 0, 0],
-    maxTriangles: 2_000,
-  },
-  wreckageCrate: {
-    targetLongestDimension: 1.05,
-    rotation: [0, 0, 0],
-    offset: [0, 0, 0],
-    maxTriangles: 2_000,
-  },
-  wreckagePallet: {
-    targetLongestDimension: 1.8,
-    rotation: [0, 0, 0],
-    offset: [0, 0, 0],
-    maxTriangles: 3_000,
-  },
 } as const satisfies Readonly<Record<
   EventModelId,
   Pick<
@@ -298,10 +290,6 @@ const generatedMetadata = {
   shark: checkedMetadata('shark', generatedMetadataJson.shark),
   deathStareBlob: checkedMetadata('deathStareBlob', generatedMetadataJson.deathStareBlob),
   tornadoCore: checkedMetadata('tornadoCore', generatedMetadataJson.tornadoCore),
-  containerShip: FOCUSED_EVENT_MODEL_METADATA.containerShip,
-  wreckageBox: checkedMetadata('wreckageBox', generatedMetadataJson.wreckageBox),
-  wreckageCrate: checkedMetadata('wreckageCrate', generatedMetadataJson.wreckageCrate),
-  wreckagePallet: checkedMetadata('wreckagePallet', generatedMetadataJson.wreckagePallet),
 } satisfies Readonly<Record<EventModelId, EventModelMetadata>>;
 
 function modelUrl(id: EventModelId): string {

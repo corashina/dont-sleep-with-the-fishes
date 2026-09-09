@@ -31,14 +31,12 @@ export const uiDynamic = defineMessages({
   diveResult: { en: 'DIVE RESULT', pl: 'WYNIK NURKOWANIA', 'es-AR': "RESULTADO DEL BUCEO" },
   chestReward: { en: 'CHEST REWARD', pl: 'ZDOBYCZ ZE SKRZYNI', 'es-AR': "RECOMPENSA DEL COFRE" },
   salvageResult: { en: 'SALVAGE', pl: 'ODZYSKANE ZAPASY', 'es-AR': "SUMINISTROS RECUPERADOS" },
-  wreckageResult: { en: 'WRECKAGE', pl: 'WRAK', 'es-AR': "RESTOS DEL NAUFRAGIO" },
 });
 
-export function rewardTitle(title: 'DIVE RESULT' | 'CHEST REWARD' | 'SALVAGE' | 'WRECKAGE'): string {
+export function rewardTitle(title: 'DIVE RESULT' | 'CHEST REWARD' | 'SALVAGE'): string {
   switch (title) {
     case 'DIVE RESULT': return uiDynamic('diveResult');
     case 'CHEST REWARD': return uiDynamic('chestReward');
     case 'SALVAGE': return uiDynamic('salvageResult');
-    case 'WRECKAGE': return uiDynamic('wreckageResult');
   }
 }

@@ -75,7 +75,9 @@ export function cloneActionOutcome(outcome: ActionOutcome): ActionOutcome {
   return withOutcomeText({
     ...outcome,
     deltas: Object.freeze({ ...outcome.deltas }),
-    ...(outcome.rewardSummary === undefined ? {} : { rewardSummary: Object.freeze({ ...outcome.rewardSummary }) }),
+    ...(outcome.rewardSummary === undefined ? {} : { rewardSummary: outcome.rewardSummary.kind === 'bundle'
+      ? Object.freeze({ kind: 'bundle' as const, rewards: Object.freeze(outcome.rewardSummary.rewards.map((entry) => Object.freeze({ ...entry }))) })
+      : Object.freeze({ ...outcome.rewardSummary }) }),
     ...(outcome.eventResult === undefined ? {} : { eventResult: Object.freeze({ ...outcome.eventResult }) }),
   }, outcome.text);
 }

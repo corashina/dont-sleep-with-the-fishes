@@ -23,7 +23,7 @@ const driftingChoices = [
   },
 ] as const;
 
-function createRig(eventId: 'drifting-supplies' | 'wreckage' = 'drifting-supplies') {
+function createRig(eventId: 'drifting-supplies' = 'drifting-supplies') {
   const calls: string[] = [];
   let generation = 1;
   let pending = true;
@@ -31,8 +31,6 @@ function createRig(eventId: 'drifting-supplies' | 'wreckage' = 'drifting-supplie
     accepted: true,
     playAnimation: async () => { calls.push('animate'); },
     afterAnimation: async () => { calls.push('after-animation'); },
-    beforeReturn: async () => { calls.push('before-return'); },
-    afterReturn: async () => { calls.push('after-return'); },
     clearEvent: () => { calls.push('clear-event'); },
     renderSnapshot: () => { calls.push('render'); return false; },
     presentTerminal: () => { calls.push('terminal'); },
@@ -224,8 +222,6 @@ describe('FocusedEventFlow', () => {
       accepted: true,
       playAnimation: async () => animation.promise,
       afterAnimation: async () => undefined,
-      beforeReturn: async () => undefined,
-      afterReturn: async () => undefined,
       clearEvent: vi.fn(),
       renderSnapshot: () => false,
       presentTerminal: vi.fn(),

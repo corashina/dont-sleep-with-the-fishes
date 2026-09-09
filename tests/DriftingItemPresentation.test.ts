@@ -47,10 +47,40 @@ function createPresentation(player = new Group()): DriftingItemPresentation {
     lifeboat: new Group(),
     lifeboatCooler: new Group(),
     shippingContainer: new Group(),
+    debrisBox: new Group(), debrisCrate: new Group(), debrisPallet: new Group(),
   }, stern, player, flatWater());
 }
 
 describe('DriftingItemPresentation', () => {
+  it.each([6, 7])('sinks debris on either side in two seconds, seed %s', async (seed) => {
+    const presentation = createPresentation();
+    presentation.stage('drifting-supplies', seed);
+    const cargo = presentation.resultRoot()!;
+    expect(cargo.name).toBe('drifting-supplies:debris');
+    expect(Math.sign(cargo.position.x)).toBe(seed === 6 ? -1 : 1);
+    const parts = cargo.getObjectByName('wreckage-surface-debris')!.children;
+    const start = parts.map(part => part.position.clone());
+    let finished = false;
+    const retrieval = presentation.retrieve().then(() => { finished = true; });
+    presentation.update(1, 1);
+    await Promise.resolve();
+    expect(finished).toBe(false);
+    expect(cargo.visible).toBe(true);
+    parts.forEach((part, index) => {
+      expect(part.position.x).toBe(start[index]!.x);
+      expect(part.position.z).toBe(start[index]!.z);
+      expect(part.position.y).toBeLessThan(start[index]!.y);
+      expect(part.position.y).toBeGreaterThan(start[index]!.y - 2);
+    });
+    presentation.update(2, 1);
+    await retrieval;
+    expect(cargo.visible).toBe(false);
+    presentation.clear();
+    presentation.stage('drifting-supplies', seed);
+    expect(cargo.visible).toBe(true);
+    parts.forEach((part, index) => expect(part.position.toArray()).toEqual(start[index]!.toArray()));
+    presentation.dispose();
+  });
 
   it('detaches the cooler, opens it at the player, and removes the empty lifeboat', async () => {
     const presentation = createPresentation();

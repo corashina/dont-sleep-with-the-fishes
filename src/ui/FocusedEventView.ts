@@ -18,7 +18,6 @@ const ROUTINE_DIALOG_GAP = 22;
 const FOCUSED_EVENT_BOTTOM_RESERVE = 128;
 const requireElement = createElementRequirement('focused event view');
 const FOCUSED_EVENT_TITLES: Readonly<Record<InspectableEventId, string>> = Object.freeze({
-  get wreckage() { return uiText('wreckageTitle'); },
   get 'drifting-supplies'() { return uiText('suppliesTitle'); },
   get 'drifting-chest'() { return uiText('chestTitle'); },
 });

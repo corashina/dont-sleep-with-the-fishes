@@ -51,29 +51,13 @@ describe('journal resource changes', () => {
     expect(changes(pendingEntry(session))).toEqual(expected);
   });
 
-  it.each([[0, 'cannedFood'], [0.5, 'baitTin']] as const)('records wreckage resource roll %s', (roll, itemId) => {
-    const session = new SurvivalSession([], {
-      seed: 71, random: savedRandom([roll, 0]), initial: { day: 4, energy: 1 }, initialEventId: 'wreckage',
-    });
-    expect(session.resolveEvent({ kind: 'choice', choiceId: 'search' }).accepted).toBe(true);
-    expect(changes(pendingEntry(session))).toEqual([`gain:${itemId}`]);
-  });
-
   it('records drifting food and preserves the count after save loading', () => {
     const session = new SurvivalSession([], {
-      seed: 9, random: savedRandom([0, 0.5, 0, 0]), initial: { day: 2 }, initialEventId: 'drifting-supplies',
+      seed: 9, random: savedRandom([0, 0, 0, 0.99, 0.99]), initial: { day: 2 }, initialEventId: 'drifting-supplies',
     });
     const outcome = session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' });
     expect(outcome.deltas.food).toBeGreaterThan(0);
     expect(changes(pendingEntry(session))).toEqual(Array(outcome.deltas.food).fill('gain:cannedFood'));
-  });
-
-  it('records food when wreckage cannot grant an owned item', () => {
-    const session = new SurvivalSession([
-      { type: 'scubaSet', instanceId: 'scubaSet-1' }, { type: 'medicalKit', instanceId: 'medicalKit-1' },
-    ], { seed: 76, random: savedRandom([0]), initial: { day: 4, energy: 3 }, initialEventId: 'wreckage' });
-    expect(session.resolveEvent({ kind: 'item', choiceId: 'dive', instanceId: 'scubaSet-1' }).deltas.food).toBe(1);
-    expect(changes(pendingEntry(session))).toEqual(['gain:cannedFood']);
   });
 
   it('counts recovered supplies once and preserves separate gains and losses', () => {

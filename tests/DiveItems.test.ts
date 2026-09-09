@@ -63,7 +63,7 @@ describe('normal dive item rewards', () => {
       seed: 1, weather: 'calm', random: sequenceRandom([0.6, 0.99, 0]),
       initialConditions: { 'compass-1': 'broken' },
     });
-    expect(session.perform('dive').rewardSummary?.id).toBe('anchor');
+    expect(session.perform('dive').rewardSummary).toMatchObject({ kind: 'item', id: 'anchor' });
     expect(session.snapshot().inventory['compass-1']?.condition).toBe('broken');
     expect(session.snapshot().inventory['cannedFood-1']).toBeUndefined();
   });
@@ -73,7 +73,7 @@ describe('normal dive item rewards', () => {
       seed: 1, weather: 'calm', random: sequenceRandom([0.6, 0.99, 0]),
       initialConditions: { 'medicalKit-1': condition },
     });
-    expect(session.perform('dive').rewardSummary?.id).toBe('medicalKit');
+    expect(session.perform('dive').rewardSummary).toMatchObject({ kind: 'item', id: 'medicalKit' });
     expect(session.snapshot().inventory['medicalKit-1']?.condition).toBe('usable');
   });
 

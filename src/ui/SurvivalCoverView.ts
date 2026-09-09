@@ -3,7 +3,7 @@ import { onLanguageChange } from '../i18n/language';
 import { refreshUiText } from './translatedText';
 import { uiText } from '../i18n/uiMessages';
 import { ITEM_DEFINITIONS, type ItemId } from '../game/ItemState';
-import type { RewardSummary } from '../survival/survivalTypes';
+import type { RewardEntry, RewardSummary } from '../survival/survivalTypes';
 import { createElementRequirement } from './dom';
 import { itemThumbnailUrl } from './itemThumbnailManifest';
 import type { RewardResultView, SleepCoverProfile } from './SurvivalCoverViewModel';
@@ -25,14 +25,14 @@ interface PendingWork {
   readonly finish: () => void;
 }
 
-function driftingCargoRewardItemId(reward: RewardSummary): ItemId {
+function driftingCargoRewardItemId(reward: RewardEntry): ItemId {
   if (reward.kind === 'item') return reward.id;
   if (reward.id === 'food') return 'cannedFood';
   if (reward.id === 'bait') return 'baitTin';
   return 'ductTape';
 }
 
-function diveRewardName(reward: RewardSummary): string {
+function diveRewardName(reward: RewardEntry): string {
   return ITEM_DEFINITIONS[driftingCargoRewardItemId(reward)].label;
 }
 
@@ -198,9 +198,7 @@ export class SurvivalCoverView {
         ? uiText('closeChest')
         : view.title === 'SALVAGE'
           ? uiText('closeSalvage')
-          : view.title === 'WRECKAGE'
-            ? uiText('closeWreckage')
-            : uiText('closeDive'),
+          : uiText('closeDive'),
     );
     this.renderReward(view.reward);
     this.resultLines.hidden = view.lines.length === 0;
@@ -376,6 +374,11 @@ export class SurvivalCoverView {
     this.resultRewards.replaceChildren();
     this.resultRewards.hidden = reward === null;
     if (reward === null) return;
+    const entries = reward.kind === 'bundle' ? reward.rewards : [reward];
+    for (const entry of entries) this.appendReward(entry);
+  }
+
+  private appendReward(reward: RewardEntry): void {
     const itemId = driftingCargoRewardItemId(reward);
     const entry = document.createElement('span');
     entry.className = 'dive-result__reward-entry';
@@ -394,7 +397,9 @@ export class SurvivalCoverView {
       circle.classList.add('has-image-error');
     };
     thumbnail.addEventListener('error', handleThumbnailError, { once: true });
+    const previousCleanup = this.rewardThumbnailErrorCleanup;
     this.rewardThumbnailErrorCleanup = () => {
+      previousCleanup?.();
       thumbnail.removeEventListener('error', handleThumbnailError);
     };
     circle.append(thumbnail);
@@ -410,7 +415,7 @@ export class SurvivalCoverView {
     quantity.textContent = `×${reward.quantity}`;
     copy.append(name, quantity);
     entry.append(circle, copy);
-    this.resultRewards.replaceChildren(entry);
+    this.resultRewards.append(entry);
   }
 
   private removeRewardThumbnailErrorListener(): void {
