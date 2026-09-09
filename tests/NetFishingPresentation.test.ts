@@ -4,13 +4,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { describe, expect, it, vi } from 'vitest';
 import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { NetFishingPresentation } from '../src/survival/NetFishingPresentation';
-import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 import { normalizeLongestDimensionTemplate } from '../src/world/modelValidation';
 import { boatSupplyTransform } from '../src/world/BoatStorage';
 
 describe('net animation', () => {
-  it('keeps the production net in view, submerges the basket, and raises the catches', async () => {
+  it('keeps the production net in view, submerges the basket, and raises one catch', async () => {
     const bytes = await readFile('src/assets/models/items/fishingNet.glb');
     const data = new ArrayBuffer(bytes.byteLength);
     new Uint8Array(data).set(bytes);
@@ -28,9 +27,10 @@ describe('net animation', () => {
     const point = new Vector3();
     try {
       net.show();
-      await net.prepare([FISHING_CATCHES[0]!, FISHING_CATCHES[1]!], { x: 0, z: -6.4 });
+      await net.prepare('cod', { x: 0, z: -6.4 });
       const basket = net.root.getObjectByName('fishing-net-catches')!;
-      expect(basket.children).toHaveLength(2);
+      expect(basket.children).toHaveLength(1);
+      expect(prepare).toHaveBeenCalledExactlyOnceWith('cod');
       for (let frame = 0; frame <= 288; frame += 1) {
         net.sample(frame / 288);
         net.update(1 / 60);
@@ -63,7 +63,7 @@ describe('net animation', () => {
     const net = new NetFishingPresentation(new Group(), scene, scene, (output) => { output.height = 0; });
     try {
       net.show();
-      const load = net.prepare([FISHING_CATCHES[0]!, FISHING_CATCHES[1]!], { x: 0, z: -6.4 });
+      const load = net.prepare('cod', { x: 0, z: -6.4 });
       net.clear();
       finish(new Group());
       expect(await load).toBe(false);

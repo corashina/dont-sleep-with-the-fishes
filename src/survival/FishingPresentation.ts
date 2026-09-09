@@ -27,7 +27,7 @@ import { FishingBiteParticles } from './FishingBiteParticles';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { NetFishingPresentation, NET_HAUL_DURATION } from './NetFishingPresentation';
 import type { FishingCatchId } from './fishingCatalog';
-import type { FishingCastPoint, FishingHaul } from './FishingSession';
+import type { FishingCastPoint } from './FishingSession';
 import {
   disposeResourceSets,
   runCleanupSteps,
@@ -650,9 +650,9 @@ export class FishingPresentation {
     return this.startAnimation('miss', FISHING_MISS_DURATION);
   }
 
-  async playNetHaul(haul: FishingHaul, point: FishingCastPoint): Promise<void> {
+  async playNetHaul(catchId: FishingCatchId, point: FishingCastPoint): Promise<void> {
     if (this.disposed || this.net === null) return;
-    if (!await this.net.prepare(haul, point) || this.disposed) return;
+    if (!await this.net.prepare(catchId, point) || this.disposed) return;
     this.phase = 'reeling';
     await this.startAnimation('net', NET_HAUL_DURATION);
   }

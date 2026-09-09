@@ -812,27 +812,12 @@ export class SurvivalSession {
       return this.reject('fishing-result-mismatch', t('resultMismatch'));
     }
 
-    const catches = result.kind === 'haul'
-      ? result.catches.map((entry) => ({ kind: 'catch' as const, catch: entry })) : [result];
-    const deltas: ResourceDelta = {};
-    const settlements = catches.map((entry, index) => {
-      const settlement = fishingSettlement(entry, transaction.capturedBait);
-      const inventoryMutations = this.applyFishingReward(settlement);
-      for (const key of Object.keys(settlement.deltas) as (keyof ResourceDelta)[]) {
-        deltas[key] = (deltas[key] ?? 0) + settlement.deltas[key]!;
-      }
-      this.pendingJournalActions.push(createJournalFishingRecord(
-        result.kind === 'haul' ? `${attemptId}-${index + 1}` : attemptId,
-        entry, settlement, inventoryMutations,
-      ));
-      return settlement;
-    });
-    const first = settlements[0]!;
-    const outcome = this.commit(
-      result.kind === 'haul' ? 'net-hauled' : first.code,
-      result.kind === 'haul' ? domainText('netHauled') : first.text,
-      deltas, 'none',
-    );
+    const settlement = fishingSettlement(result, transaction.capturedBait);
+    const inventoryMutations = this.applyFishingReward(settlement);
+    this.pendingJournalActions.push(createJournalFishingRecord(
+      attemptId, result, settlement, inventoryMutations,
+    ));
+    const outcome = this.commit(settlement.code, settlement.text, settlement.deltas, 'none');
     this.activeFishing = null;
     return outcome;
   }
