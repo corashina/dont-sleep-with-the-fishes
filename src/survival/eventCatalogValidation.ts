@@ -227,11 +227,14 @@ function validateEffectRecord(value: unknown, path: string): PlainRecord {
     'effect',
     [
       'resources', 'items', 'chest', 'ending',
-      'nextDawnEnergy', 'nextDawnEnergyReduction', 'maximumNextDawnEnergy', 'followUpNight',
+      'nextDawnEnergy', 'nextDawnEnergyReduction', 'maximumNextDawnEnergy', 'followUpNight', 'restoreCrew',
     ],
   );
   if (Object.hasOwn(candidateEffects, 'ending') && candidateEffects.ending !== 'abduction') {
     throw new Error(`${path}.effects.ending must be abduction`);
+  }
+  if (Object.hasOwn(candidateEffects, 'restoreCrew') && candidateEffects.restoreCrew !== true) {
+    throw new Error(`${path}.effects.restoreCrew must be true`);
   }
   return candidateEffects;
 }

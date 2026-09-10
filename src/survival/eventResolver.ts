@@ -51,6 +51,7 @@ function resolvedEffects(
   random: RandomSource,
 ): WeightedEventOutcome['effects'] {
   return {
+    ...(selected.effects.restoreCrew === true ? { restoreCrew: true } : {}),
     ...(selected.effects.resources
       ? { resources: selected.effects.resources.map((effect) => resolveEffect(effect, random)) }
       : {}),

@@ -5,6 +5,8 @@ import { getLanguage } from './language';
 // These are diary outcomes, separate from the short messages shown during events.
 const results = {
   seagullTheftResult: ['A gull swooped down and stole a food can. Breakfast had wings today.', 'Mewa zanurkowała i porwała puszkę jedzenia. Dziś śniadanie miało skrzydła.', 'Una gaviota bajó en picada y me robó una lata. Hoy el desayuno tuvo alas.'],
+  starryNightRestored: ['I reached for the stars. Their warmth washed away pain, hunger, and weariness. By dawn, the gift still held.', 'Sięgnąłem ku gwiazdom. Ich ciepło zmyło ból, głód i zmęczenie. O świcie dar wciąż trwał.', 'Alcé la mano hacia las estrellas. Su calor borró el dolor, el hambre y el cansancio. El regalo seguía al amanecer.'],
+  starryNightSlept: ['I closed my eyes and let the miracle pass. I slept as usual.', 'Zamknąłem oczy i pozwoliłem cudowi przeminąć. Spałem jak zwykle.', 'Cerré los ojos y dejé pasar el milagro. Dormí como siempre.'],
   midnightGraveResult: ['I dug beneath the fresh earth. The coffin held supplies. I took them back to the boat.', 'Kopałem pod świeżą ziemią. Trumna zawierała zapasy. Zabrałem je na łódź.', 'Cavé bajo la tierra fresca. El ataúd tenía provisiones. Las llevé al bote.'],
   snatcherNetHeld: ['I struck the tentacle with the net. It let go of my supplies and slipped back into the sea.', 'Uderzyłem mackę siecią. Puściła zapasy i wsunęła się z powrotem do morza.', 'Golpeé el tentáculo con la red. Soltó mis provisiones y volvió al mar.'],
   snatcherNetTorn: ['I struck the tentacle with the net. The mesh tore, but my supplies stayed aboard.', 'Uderzyłem mackę siecią. Oczka pękły, ale zapasy zostały na pokładzie.', 'Golpeé el tentáculo con la red. La malla se rompió, pero mis provisiones quedaron a bordo.'],

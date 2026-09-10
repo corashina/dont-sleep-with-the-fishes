@@ -184,6 +184,7 @@ export class SurvivalEventView {
     this.selectedChoiceId = null;
     const checkBack = this.caption.dataset.eventId === 'check-the-back';
     const guardedSleep = this.caption.dataset.eventId === 'guarded-sleep';
+    const starryNight = this.caption.dataset.eventId === 'starry-night';
     const islandConfirmation = this.syncIslandConfirmation(contextualChoices);
     if (checkBack) {
       this.updateText('title', this.title, uiText('checkBack'));
@@ -194,7 +195,7 @@ export class SurvivalEventView {
     }
     const buttons = contextualChoices
       .filter((choice) => (
-        (checkBack || islandConfirmation || choice.id !== 'sleep') && choice.anchorId === undefined
+        (checkBack || islandConfirmation || starryNight || choice.id !== 'sleep') && choice.anchorId === undefined
       ))
       .map((choice) => this.createChoice(
         guardedSleep && choice.id === 'watch'

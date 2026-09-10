@@ -66,6 +66,7 @@ export function enumerateMissingPickupSets(): readonly MissingPickupSet[] {
 }
 
 const EVENT_CHOICE_PRIORITY = Object.freeze({
+  'starry-night': ['wish'],
   'quiet-night': ['sleep'],
   'something-under-us': ['baitTin', 'sleep'],
   'ocean-of-blood': ['fishingNet', 'sleep'],

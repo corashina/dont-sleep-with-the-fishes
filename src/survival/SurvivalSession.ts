@@ -381,6 +381,7 @@ export class SurvivalSession {
   private pendingEvent: SurvivalEventDefinition | null = null;
   private pendingEventTargetId: ItemInstanceId | null = null;
   private nextDawnEnergyOverride: DawnEnergy | null = null;
+  private crewRestorationAtDawn = false;
   private lastEventId: string | null = null;
   private readonly lastSeenDay = new Map<string, number>();
   private readonly appearanceCounts = new Map<string, number>();
@@ -488,6 +489,7 @@ export class SurvivalSession {
     if (this.pendingEvent !== null) this.pendingEvent = this.prepareEvent(this.pendingEvent);
     this.pendingEventTargetId = checkpoint.pendingEventTargetId;
     this.nextDawnEnergyOverride = checkpoint.nextDawnEnergyOverride;
+    this.crewRestorationAtDawn = checkpoint.crewRestorationAtDawn;
     this.lastEventId = checkpoint.lastEventId;
   }
 
@@ -585,6 +587,7 @@ export class SurvivalSession {
       pendingEventId: this.pendingEventId,
       pendingEventTargetId: this.pendingEventTargetId,
       nextDawnEnergyOverride: this.nextDawnEnergyOverride,
+      crewRestorationAtDawn: this.crewRestorationAtDawn,
       lastEventId: this.lastEventId,
       lastSeenDays: Object.fromEntries([...this.lastSeenDay].sort()),
       appearanceCounts: Object.fromEntries([...this.appearanceCounts].sort()),
@@ -1112,7 +1115,20 @@ export class SurvivalSession {
       inventoryMutations,
     );
     this.applyChestEffect(resolved.effects.chest);
+    if (resolved.effects.restoreCrew) this.restoreCrew();
     return { inventoryMutations, fallbackFoodGranted };
+  }
+
+  private restoreCrew(): void {
+    this.health = SURVIVAL_BALANCE.thresholds.maximum;
+    this.hunger = 0;
+    this.energy = SURVIVAL_BALANCE.actions.maximumStoredEnergy;
+    this.nextDawnEnergyOverride = SURVIVAL_BALANCE.actions.maximumStoredEnergy;
+    this.crewRestorationAtDawn = true;
+    if (this.carlitos === null) return;
+    this.carlitos.rest = 'rested';
+    this.carlitos.hunger = 5;
+    this.carlitos.unhappiness = 0;
   }
 
   private applyResolvedItemMutations(
@@ -1280,7 +1296,11 @@ export class SurvivalSession {
     this.actedToday = false;
     this.clearPendingEvent();
     this.state = 'day';
-    this.advanceCarlitosDawn();
+    if (this.crewRestorationAtDawn) {
+      if (this.carlitos !== null) this.carlitos.pettedToday = false;
+    } else {
+      this.advanceCarlitosDawn();
+    }
     this.weather = 'calm';
     return hullWear;
   }
@@ -1298,14 +1318,16 @@ export class SurvivalSession {
   }
 
   private dawnDeltas(hullWear: number): ResourceDelta {
+    const hungerIncrease = this.crewRestorationAtDawn ? 0 : SURVIVAL_BALANCE.dawn.hungerIncrease;
+    this.crewRestorationAtDawn = false;
     const hungerAfterDawn = Math.min(
       SURVIVAL_BALANCE.thresholds.maximum,
-      this.hunger + SURVIVAL_BALANCE.dawn.hungerIncrease,
+      this.hunger + hungerIncrease,
     );
     const morningEnergy = this.nextDawnEnergyOverride ?? this.normalDawnEnergy();
     this.nextDawnEnergyOverride = null;
     const deltas: ResourceDelta = {
-      hunger: SURVIVAL_BALANCE.dawn.hungerIncrease,
+      hunger: hungerIncrease,
       energy: morningEnergy - this.energy,
     };
     if (hullWear > 0) {

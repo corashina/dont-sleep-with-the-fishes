@@ -27,6 +27,7 @@ import type {
 
 export const SURVIVAL_EVENT_IDS = Object.freeze([
   'quiet-night',
+  'starry-night',
   'ocean-of-blood',
   'dangerous-waters', 'leak', 'school-of-fish', 'snatcher',
   'death-stare', 'swarm-of-sharks', 'tornado', 'shower-night',
@@ -79,6 +80,7 @@ export function driftingItemRetrieveKey(eventId: DriftingItemEventId): EventPres
 }
 
 const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.freeze({
+  'starry-night': 'starryNightReveal',
   'ocean-of-blood': 'bloodOceanReveal',
   'quiet-night': 'eventText277',
   'dangerous-waters': 'eventText002',
@@ -721,6 +723,15 @@ const survivalEvents: SurvivalEventDefinition[] = [
     contextualChoice('sleep', 'underUsStillChoice',
       outcome(1, 'underUsStillResult', { nextDawnEnergyReduction: 1 }, 'under-us-waited')),
   ], undefined, { minimumPressure: 1, maximumAppearances: 2 }),
+  {
+    ...event('starry-night', 'night', 'starryNightTitle', 'safe', 'sighting', 1, 3, 14, [
+      contextualChoice('wish', 'starryNightWish',
+        outcome(1, 'starryNightRestored', { restoreCrew: true }, 'starry-night-miracle')),
+      contextualChoice('sleep', 'eventText063',
+        outcome(1, 'starryNightSlept', {}, 'starry-night-sleep')),
+    ]),
+    weather: ['calm'],
+  },
   event('quiet-night', 'night', 'eventText276', 'safe', 'none', 3, 1, 15, [
     contextualChoice('sleep', 'eventText063', outcome(1, 'eventText279')),
   ]),
