@@ -343,6 +343,7 @@ export class SurvivalAudio {
     if (this.disposed) return;
     if (
       eventId === 'drifting-supplies'
+      || eventId === 'seagull-theft'
       || eventId === 'drifting-chest'
       || eventId === 'flying-saucer'
     ) return;
@@ -368,6 +369,12 @@ export class SurvivalAudio {
   beginEvent(eventId: string): void {
     this.clearEvent();
     if (this.disposed) return;
+    if (eventId === 'seagull-theft') {
+      this.scope.startLoop('seagulls');
+      this.scope.setLoopGain('seagulls', 0, 0);
+      this.scope.setLoopGain('seagulls', 1, 2);
+      return;
+    }
     if (eventId === 'snatcher') {
       this.scope.startLoop('tentacleMovement');
       return;
@@ -454,6 +461,7 @@ export class SurvivalAudio {
     this.planeFlybyVoice = null;
     this.clearMidnightTour();
     this.scope.stopLoop('leak', 0.08);
+    this.scope.stopLoop('seagulls', 0.8);
     this.scope.stopLoop('tentacleMovement', 0.08);
     this.scope.stopLoop('tornadoWind', 0.08);
     this.scope.stopLoop('ufoFlyby', 0.08);

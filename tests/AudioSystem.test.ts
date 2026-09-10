@@ -84,6 +84,24 @@ class FakeAudioBackend implements AudioBackend {
 }
 
 describe('AudioSystem', () => {
+  it('fades in the selected seagull ambience and stops it when the event clears', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    audio.beginEvent('seagull-theft');
+    audio.eventReveal('seagull-theft');
+    expect(backend.voices.map(({ id }) => id)).toEqual(['seagulls']);
+    const voice = backend.voices[0]!;
+    expect(voice.setGain).toHaveBeenCalledWith(0, 0);
+    expect(voice.setGain).toHaveBeenCalledWith(1, 2);
+    audio.setPaused(true);
+    expect(voice.setPaused).toHaveBeenLastCalledWith(true);
+    audio.setPaused(false);
+    expect(voice.setPaused).toHaveBeenLastCalledWith(false);
+    audio.clearEvent();
+    expect(voice.stop).toHaveBeenCalledWith(0.8);
+    audio.dispose();
+  });
+
   it('plays the selected fishing sounds and owns the net sound through pause and disposal', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
