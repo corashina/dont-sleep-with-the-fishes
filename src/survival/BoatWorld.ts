@@ -786,6 +786,10 @@ export class BoatWorld {
       worldParent: this.scene,
       boatParent: this.boat,
       dedicatedEnvironment: {
+        setBloodOceanIntensity: (intensity) => {
+          this.sky.setBloodOceanIntensity(intensity);
+          this.ocean.setBloodOceanIntensity(intensity);
+        },
         eventModels: dedicatedModels,
         featuredModels,
         dive: this.diveController,
