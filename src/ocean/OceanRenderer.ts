@@ -179,6 +179,12 @@ export class OceanRenderer {
     this.uniforms.uLightDirection.value.set(...this.lightDirection).normalize();
     if (this.quality === 'high') {
       applyHighWaterLook(this.uniforms, this.atmosphere?.phase ?? 'day');
+      if (this.atmosphere) {
+        const amount = this.uniforms.uBloodOceanIntensity.value;
+        this.uniforms.uFogColor.value.lerp(this.atmosphere.fogColor, amount);
+        this.uniforms.uHorizonColor.value.lerp(this.atmosphere.horizonColor, amount);
+        this.uniforms.uFogDensity.value += (this.fogDensity - this.uniforms.uFogDensity.value) * amount;
+      }
       return;
     }
     this.uniforms.uFogDensity.value = this.fogDensity;
@@ -203,6 +209,12 @@ export class OceanRenderer {
     this.uniforms.uVortexTangentStrength.value = finiteOrZero(state.tangentStrength);
     this.uniforms.uVortexPhase.value = finiteOrZero(state.phase);
     this.uniforms.uVortexStrength.value = finiteOrZero(state.strength);
+  }
+
+  setBloodOceanIntensity(intensity: number): void {
+    if (this.disposed) return;
+    this.uniforms.uBloodOceanIntensity.value = Number.isFinite(intensity)
+      ? Math.min(1, Math.max(0, intensity)) : 0;
   }
 
   setExclusions(regions: readonly WaterExclusionRegion[]): void {

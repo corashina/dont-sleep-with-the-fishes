@@ -1103,20 +1103,16 @@ export class SurvivalSession {
         0, this.normalDawnEnergy() - resolved.effects.nextDawnEnergyReduction,
       ) as DawnEnergy;
     }
+    if (resolved.effects.maximumNextDawnEnergy !== undefined) {
+      this.nextDawnEnergyOverride = Math.min(
+        this.normalDawnEnergy(), resolved.effects.maximumNextDawnEnergy,
+      ) as DawnEnergy;
+    }
     this.resolveTerminal();
     this.lastEventId = event.id;
     this.lastSeenDay.set(event.id, this.day);
     this.appearanceCounts.set(event.id, (this.appearanceCounts.get(event.id) ?? 0) + 1);
     this.clearPendingEvent();
-  }
-
-  private normalDawnEnergy(): number {
-    const hunger = this.hunger + SURVIVAL_BALANCE.dawn.hungerIncrease;
-    return hunger >= SURVIVAL_BALANCE.thresholds.starving
-      ? SURVIVAL_BALANCE.dawn.starvingEnergy
-      : hunger >= SURVIVAL_BALANCE.thresholds.hungry
-        ? SURVIVAL_BALANCE.dawn.hungryEnergy
-        : SURVIVAL_BALANCE.dawn.normalEnergy;
   }
 
   private createResolvedEventOutcome(
@@ -1240,6 +1236,18 @@ export class SurvivalSession {
     this.advanceCarlitosDawn();
     this.weather = 'calm';
     return hullWear;
+  }
+
+  private normalDawnEnergy(): DawnEnergy {
+    const hungerAfterDawn = Math.min(
+      SURVIVAL_BALANCE.thresholds.maximum,
+      this.hunger + SURVIVAL_BALANCE.dawn.hungerIncrease,
+    );
+    return hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.starving
+      ? SURVIVAL_BALANCE.dawn.starvingEnergy
+      : hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.hungry
+        ? SURVIVAL_BALANCE.dawn.hungryEnergy
+        : SURVIVAL_BALANCE.dawn.normalEnergy;
   }
 
   private dawnDeltas(hullWear: number): ResourceDelta {
