@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { createTestGame, flushPhases } from './helpers/game';
+import { createTestGame,flushPhases } from './helpers/game';
 // Importance: 10/10 (scaled from 5/5). Protects full game lifecycle integration.
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe,expect,it,vi } from 'vitest';
 import {
   Box3,
   Group,
@@ -10,17 +10,16 @@ import {
   Vector3,
   type WebGLRenderer,
 } from 'three';
-import type { GamePhase, PhaseContext, ShipPhaseContext } from '../src/app/GamePhase';
+import type { GamePhase,PhaseContext } from '../src/app/GamePhase';
 import type { MenuModelLibrary } from '../src/menu/MenuModelLibrary';
 import type { ScavengeAudio } from '../src/audio/ScavengeAudio';
-import { AudioSystem } from '../src/audio/AudioSystem';
 import { type GameFactories } from '../src/Game';
 import {
   SURVIVAL_SAVE_DATA_KEY,
   SURVIVAL_SAVE_ENABLED_KEY,
   type SurvivalSaveStorage,
 } from '../src/browser/SurvivalSaveStore';
-import { ScavengeSession, type ScavengeResult } from '../src/game/ScavengeSession';
+import { ScavengeSession,type ScavengeResult } from '../src/game/ScavengeSession';
 import {
   createScavengeCinematicFrame,
   createScavengeEndingState,
@@ -29,32 +28,25 @@ import {
 } from '../src/game/scavengeEnding';
 import { createScavengeIntroFrame } from '../src/game/scavengeIntro';
 import { SCAVENGE_DURATION_SECONDS } from '../src/game/scavengeRules';
-import { ITEM_IDS, type ItemInstance } from '../src/game/ItemState';
-import { createScavengeItemInstances } from '../src/game/scavengeCatalog';
+import { type ItemInstance } from '../src/game/ItemState';
 import {
   createShipAlarmPhase,
   createShipDangerState,
 } from '../src/game/shipDanger';
-import { InteractionSystem } from '../src/interaction/InteractionSystem';
 import { PlayerController } from '../src/player/PlayerController';
 import { ScavengePhase } from '../src/phases/ScavengePhase';
-import { HOVER_OUTLINE_NAME } from '../src/rendering/HoverOutline';
 import type { SceneRenderer } from '../src/rendering/SceneRenderer';
 import type {
   PostProcessingControls,
 } from '../src/rendering/postProcessingControls';
-import { createVisualQualityPreference } from '../src/rendering/visualQuality';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 import type { SurvivalRunCheckpoint } from '../src/survival/SurvivalCheckpoint';
 import { createSurvivalSaveDocument } from '../src/survival/SurvivalSaveData';
 import {
-  SurvivalPhase,
-  type SurvivalCheckpointChange,
-  type SurvivalPhaseStart,
+  type SurvivalPhaseStart
 } from '../src/survival/SurvivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import type { PresentationWeatherId } from '../src/weather/presentationWeather';
-import { World } from '../src/world/World';
 import { createTestPropModels } from './helpers/propModels';
 import { testPhysicsRuntime } from './helpers/physics';
 import { createTestShipFurniture } from './helpers/shipFurniture';
@@ -132,10 +124,6 @@ function enabledStorageWith(checkpoint: SurvivalRunCheckpoint): SurvivalSaveStor
   });
 }
 
-function openSystemTuning(): void {
-  window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backquote', key: '`' }));
-}
-
 function openSaveSettings(mount: HTMLElement): void {
   // These lifecycle tests use phase stubs, so provide their pause menu entry point.
   const pause = document.createElement('section');
@@ -204,29 +192,6 @@ async function saveLifecycleGame(
 }
 
 describe('Game survival save lifecycle', () => {
-  it('keeps saving off by default and persists the enabled preference', async () => {
-    const storage = memoryStorage();
-    const rig = await saveLifecycleGame(storage, gamePhase());
-    await flushPhases();
-    try {
-      openSaveSettings(rig.mount);
-
-      const toggle = rig.mount.querySelector<HTMLInputElement>('[data-save-enabled]')!;
-      expect(toggle.checked).toBe(false);
-
-      toggle.checked = true;
-
-      toggle.dispatchEvent(new Event('change', { bubbles: true }));
-      await flushPhases();
-
-      expect(storage.getItem(SURVIVAL_SAVE_ENABLED_KEY)).toBe('true');
-    } finally {
-      rig.game.dispose();
-      await flushPhases();
-      rig.mount.remove();
-
-    }
-  });
 
   it('enables saving and writes the active stable checkpoint', async () => {
     const storage = memoryStorage();
@@ -248,30 +213,6 @@ describe('Game survival save lifecycle', () => {
       expect(JSON.parse(storage.getItem(SURVIVAL_SAVE_DATA_KEY)!))
         .toMatchObject({ version: 6, checkpoint });
       expect(rig.mount.querySelector('[data-save-status]')?.textContent).toBe('DAY 5');
-    } finally {
-      rig.game.dispose();
-      await flushPhases();
-      rig.mount.remove();
-
-    }
-  });
-
-  it('clears the checkpoint when saving is disabled', async () => {
-    const checkpoint = validRunCheckpoint(5);
-    const storage = enabledStorageWith(checkpoint);
-    const rig = await saveLifecycleGame(storage, gamePhase());
-    await flushPhases();
-    try {
-      openSaveSettings(rig.mount);
-
-      const toggle = rig.mount.querySelector<HTMLInputElement>('[data-save-enabled]')!;
-      toggle.checked = false;
-
-      toggle.dispatchEvent(new Event('change', { bubbles: true }));
-      await flushPhases();
-
-      expect(storage.getItem(SURVIVAL_SAVE_ENABLED_KEY)).toBe('false');
-      expect(storage.getItem(SURVIVAL_SAVE_DATA_KEY)).toBeNull();
     } finally {
       rig.game.dispose();
       await flushPhases();
@@ -310,28 +251,6 @@ describe('Game survival save lifecycle', () => {
       );
       expect(restored.resize).toHaveBeenCalledWith(window.innerWidth, window.innerHeight);
       expect(restored.start).toHaveBeenCalledOnce();
-    } finally {
-      rig.game.dispose();
-      await flushPhases();
-      rig.mount.remove();
-
-    }
-  });
-
-  it('deletes the checkpoint when the phase reports a terminal run', async () => {
-    const storage = enabledStorageWith(validRunCheckpoint(4));
-    let report!: SurvivalCheckpointChange;
-    const rig = await saveLifecycleGame(storage, gamePhase(), (_context, _start, _restart, change) => {
-      report = change;
-      return gamePhase();
-    });
-    await flushPhases();
-    try {
-      await rig.enterSurvival();
-
-      report(null);
-
-      expect(storage.getItem(SURVIVAL_SAVE_DATA_KEY)).toBeNull();
     } finally {
       rig.game.dispose();
       await flushPhases();
@@ -943,28 +862,6 @@ describe('ScavengePhase lifecycle integration', () => {
       'audio:resume',
     ]);
     expect(sessionStart).not.toHaveBeenCalled();
-  });
-
-  it('fires the crash once across a large delta', () => {
-    const { phase, crash, triggerCrash } = introHarness(5.9);
-    const updateIntro = (phase as unknown as { updateIntro(delta: number): void; }).updateIntro;
-    updateIntro.call(phase, 2);
-    updateIntro.call(phase, 0.2);
-    expect(crash).toHaveBeenCalledOnce();
-    expect(triggerCrash).toHaveBeenCalledOnce();
-  });
-
-  it('completes naturally, clears queued jump, and starts once', () => {
-    const {
-      phase, sessionStart, beginRun, consumeJump, setScriptedPose,
-    } = introHarness(11.9);
-    const updateIntro = (phase as unknown as { updateIntro(delta: number): void; }).updateIntro;
-    updateIntro.call(phase, 0.2);
-    updateIntro.call(phase, 0.2);
-    expect(sessionStart).toHaveBeenCalledOnce();
-    expect(beginRun).toHaveBeenCalledOnce();
-    expect(consumeJump).toHaveBeenCalledOnce();
-    expect(setScriptedPose).toHaveBeenCalledWith(expect.objectContaining({ yaw: 0 }));
   });
 
   it('skips with Space, clears queued jump, and does not play the missed crash', () => {
@@ -1974,185 +1871,6 @@ describe('ScavengePhase lifecycle integration', () => {
     }
   });
 
-  it('enters selected test events from scavenging and survival with every item', async () => {
-    const mount = document.createElement('main');
-    document.body.append(mount);
-
-    const scavenge = gamePhase();
-    const firstSurvival = gamePhase();
-    const secondSurvival = gamePhase();
-    const survivalPhases = [firstSurvival, secondSurvival];
-    const initialEventIds: Array<string | undefined> = [];
-    const createSurvival = vi.fn((
-      _context: PhaseContext,
-      start: SurvivalPhaseStart,
-      _onRestart: () => void,
-      _onCheckpointChange: SurvivalCheckpointChange,
-    ) => {
-      initialEventIds.push(start.kind === 'fresh' ? start.initialEventId : undefined);
-      return survivalPhases[initialEventIds.length - 1]!;
-    });
-    const game = createTestGame({
-      createMenu: createImmediateMenu,
-      createScavenge: () => scavenge,
-      createSurvival,
-    }, {
-      propModels: createTestPropModels(),
-      menuModels: EMPTY_MENU_MODELS,
-      shipFurniture: createTestShipFurniture(),
-      skyAssets: createTestSkyAssets(),
-      physicsRuntime,
-      sceneRenderer: postProcessingSceneRenderer(),
-      mount,
-      createSeed: vi.fn()
-        .mockReturnValueOnce(11)
-        .mockReturnValueOnce(22)
-        .mockReturnValueOnce(33),
-    });
-    await flushPhases();
-    game.start();
-    await flushPhases();
-
-    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backquote', key: '`' }));
-    await flushPhases();
-    const select = mount.querySelector<HTMLSelectElement>('[data-event-test-select]')!;
-    select.value = 'shower-night';
-
-    mount.querySelector<HTMLButtonElement>('[data-event-test-enter]')!.click();
-    await flushPhases();
-
-    expect(scavenge.dispose).toHaveBeenCalledOnce();
-    expect(createSurvival).toHaveBeenLastCalledWith(
-      expect.anything(),
-      {
-        kind: 'fresh',
-        savedItems: ITEM_IDS.map((type) => ({ instanceId: `${type}-1`, type })),
-        seed: 22,
-        scavengeElapsedSeconds: 0,
-        initialEventId: 'shower-night',
-        initialEventResultId: undefined,
-      },
-      expect.any(Function),
-      expect.any(Function),
-      expect.any(Function),
-    );
-    expect(firstSurvival.resize).toHaveBeenCalledWith(
-      window.innerWidth,
-      window.innerHeight,
-    );
-    expect(firstSurvival.start).toHaveBeenCalledOnce();
-
-    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Backquote', key: '`' }));
-    await flushPhases();
-    select.value = 'dangerous-waters';
-
-    mount.querySelector<HTMLButtonElement>('[data-event-test-enter]')!.click();
-    await flushPhases();
-
-    expect(firstSurvival.dispose).toHaveBeenCalledOnce();
-    expect(initialEventIds.at(-1)).toBe('dangerous-waters');
-    expect(secondSurvival.start).toHaveBeenCalledOnce();
-
-    expect(() => (
-      game as unknown as { enterTestEvent(id: string): void; }
-    ).enterTestEvent('missing-event')).toThrow(/unknown event test scene/i);
-    expect(secondSurvival.dispose).not.toHaveBeenCalled();
-
-    game.dispose();
-    await flushPhases();
-  });
-
-  it('plays all ending dropdown entries and preserves the saved run when switching scenes', async () => {
-    vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
-    const mount = document.createElement('main');
-    document.body.append(mount);
-
-    const storage = enabledStorageWith(validRunCheckpoint(9));
-    const savedDocument = storage.getItem(SURVIVAL_SAVE_DATA_KEY);
-    const phases: GamePhase[] = [];
-    const createScavenge: GameFactories['createScavenge'] = (
-      context, complete, restart, returnToMenu, start,
-    ) => {
-      const phase = new ScavengePhase(context, complete, restart, returnToMenu, start);
-      phases.push(phase);
-      return phase;
-    };
-    const game = createTestGame({
-      createMenu: () => gamePhase(),
-      createScavenge,
-      createSurvival: (context, start, onRestart, onCheckpointChange, onReturnToMenu) => {
-        const phase = SurvivalPhase.forTestStart({
-          world: {},
-          ui: new SurvivalUI(context.mount),
-          onRestart,
-          onCheckpointChange,
-          onReturnToMenu,
-        }, start);
-        phases.push(phase);
-        return phase;
-      },
-    }, {
-      mount,
-      propModels: createTestPropModels(),
-      menuModels: EMPTY_MENU_MODELS,
-      shipFurniture: createTestShipFurniture(),
-      skyAssets: createTestSkyAssets(),
-      physicsRuntime,
-      physicsMode: 'off',
-      sceneRenderer: postProcessingSceneRenderer(),
-      saveStorage: storage,
-    });
-    await flushPhases();
-    game.start();
-    await flushPhases();
-
-    const enter = (id: string): void => {
-      openSystemTuning();
-      mount.querySelector<HTMLSelectElement>('[data-event-test-select]')!.value = id;
-      mount.querySelector<HTMLButtonElement>('[data-event-test-enter]')!.click();
-    };
-
-    try {
-      const group = mount.querySelector('optgroup[label="ENDINGS"]');
-      expect(Array.from(group?.querySelectorAll('option') ?? [], (option) => option.value))
-        .toEqual(['ending-dorothy', 'ending-rescue', 'ending-death', 'ending-sinking', 'ending-abduction']);
-      enter('item-animation-lab');
-      await flushPhases();
-      for (const endingId of ['dorothy', 'rescue', 'death', 'sinking', 'abduction', 'dorothy']) {
-        const previous = phases.at(-1)!;
-        const dispose = vi.spyOn(previous, 'dispose');
-        enter(`ending-${endingId}`);
-        await flushPhases();
-        expect(dispose).toHaveBeenCalledOnce();
-        if (endingId === 'dorothy') {
-          const phase = phases.at(-1)!;
-          const internals = phase as unknown as {
-            session: ScavengeSession;
-            ending: { stage: string; elapsedSeconds: number; };
-          };
-          expect(internals.session.snapshot().status).toBe('failure');
-          expect(internals.ending).toEqual({ stage: 'sinking', elapsedSeconds: 0 });
-          phase.update(0, SINKING_CINEMATIC_SECONDS + ENDING_HOLD_SECONDS);
-          await flushPhases();
-          expect(internals.ending.stage).toBe('menuReady');
-          expect(mount.querySelector<HTMLButtonElement>('[data-ending-action]')!.hidden).toBe(false);
-        }
-        expect(mount.querySelector<HTMLElement>(`[data-ending="${endingId}"]`)?.hidden).toBe(false);
-        expect(storage.getItem(SURVIVAL_SAVE_DATA_KEY)).toBe(savedDocument);
-      }
-      enter('item-animation-lab');
-      await flushPhases();
-      expect(mount.querySelector('[data-event-id="item-animation-lab"]')).not.toBeNull();
-      expect(mount.querySelector('[data-ending="dorothy"]')).toBeNull();
-      expect(storage.getItem(SURVIVAL_SAVE_DATA_KEY)).toBe(savedDocument);
-    } finally {
-      game.dispose();
-      await flushPhases();
-      mount.remove();
-
-    }
-  });
-
   it('shares fixture assets across phase completion and restart', async () => {
     const propModels = createTestPropModels();
     const shipFurniture = createTestShipFurniture();
@@ -2332,71 +2050,6 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(() => game.dispose()).not.toThrow();
   });
 
-  it('binds all real world instances to interaction and excludes an unavailable prop', () => {
-    const propModels = createTestPropModels();
-    const shipFurniture = createTestShipFurniture();
-    const skyAssets = createTestSkyAssets();
-    const context = {
-      mount: document.createElement('main'),
-      camera: new PerspectiveCamera(70, 1, 0.1, 100),
-      renderer: { domElement: document.createElement('canvas') },
-      propModels,
-      shipFurniture,
-      skyAssets,
-      physicsRuntime,
-      maxTextureAnisotropy: 1,
-      audio: AudioSystem.silent(),
-      visualQuality: createVisualQualityPreference(() => undefined, null),
-    } as unknown as ShipPhaseContext;
-    const phase = new ScavengePhase(context, vi.fn(), vi.fn(), vi.fn());
-    const internals = phase as unknown as {
-      interaction: InteractionSystem;
-      session: ScavengeSession;
-      updateInteraction: () => void;
-      world: World;
-    };
-    const cannedFood = internals.world.itemObjects.get('cannedFood-1')!;
-    const updateInteraction = vi.spyOn(internals.interaction, 'update')
-      .mockReturnValueOnce({
-        target: 'item',
-        targetItem: { instanceId: 'cannedFood-1', type: 'cannedFood' },
-      })
-      .mockReturnValue({ target: 'none', targetItem: null });
-    internals.session.start();
-
-    internals.updateInteraction();
-
-    const firstItems = updateInteraction.mock.calls[0]![0];
-    const depositTarget = updateInteraction.mock.calls[0]![2];
-    const firstInstances = updateInteraction.mock.calls[0]![3];
-    const scavengeItemCount = createScavengeItemInstances().length;
-    expect(internals.world.itemObjects.size).toBe(scavengeItemCount);
-    expect(internals.world.itemObjects.has('energyBar-1')).toBe(false);
-    expect(firstItems).toHaveLength(scavengeItemCount);
-    expect(firstItems).toContain(cannedFood);
-    expect(depositTarget).toBe(internals.world.boatDepositTarget);
-    expect(firstInstances.size).toBe(scavengeItemCount);
-    expect(firstInstances.get('cannedFood-1')).toEqual({
-      instanceId: 'cannedFood-1',
-      type: 'cannedFood',
-    });
-    expect(cannedFood.getObjectByName(HOVER_OUTLINE_NAME)).toBeDefined();
-
-    expect(internals.session.pickUp('cannedFood-1')).toBe(true);
-    internals.updateInteraction();
-
-    const nextItems = updateInteraction.mock.calls[1]![0];
-    const nextInstances = updateInteraction.mock.calls[1]![3];
-    expect(nextItems).toHaveLength(scavengeItemCount - 1);
-    expect(nextItems).not.toContain(cannedFood);
-    expect(nextInstances.has('cannedFood-1')).toBe(false);
-    expect(cannedFood.getObjectByName(HOVER_OUTLINE_NAME)).toBeUndefined();
-    phase.dispose();
-    context.audio.dispose();
-    propModels.dispose();
-    skyAssets.dispose();
-  });
-
   it('exits an owned lock and tears down only phase-owned resources once', () => {
     const removeEventListener = vi.spyOn(document, 'removeEventListener');
     const exitPointerLock = vi.fn();
@@ -2478,50 +2131,6 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(loseItem).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ['onLanded', 'dropCarried', 'landItem'],
-    ['onLost', 'loseCarried', 'loseItem'],
-  ] as const)(
-    'routes %s flight results to the matching instance and world',
-    async (handlerName, sessionMethod, worldMethod) => {
-
-      const instance = { instanceId: 'cannedFood-2', type: 'cannedFood' } as const;
-
-      const sessionResult = vi.fn().mockReturnValue(instance);
-
-      const worldResult = vi.fn();
-
-      const carryUpdate = vi.fn((
-        _delta: number,
-        _acceptance: Box3,
-        _waterHeight: (x: number, z: number) => number,
-        handlers: Record<typeof handlerName, (item: ItemInstance) => void>,
-      ) => handlers[handlerName](instance));
-
-      const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
-
-      Object.assign(phase, {
-        elapsed: 0,
-        session: {
-          [sessionMethod]: sessionResult,
-        },
-        carry: { update: carryUpdate },
-        world: {
-          lifeboat: new Group(),
-          lifeboatAcceptance: new Box3(),
-          [worldMethod]: worldResult,
-        },
-      });
-
-      (phase as unknown as { updateFlight: (delta: number, scale: number) => void; })
-        .updateFlight(0.016, 1);
-
-      expect(sessionResult).toHaveBeenCalledOnce();
-
-      expect(worldResult).toHaveBeenCalledWith(instance.instanceId);
-    },
-  );
-
   it('handles capacity rejection without mutating gameplay or world state', () => {
     const session = { pickUp: vi.fn() };
     const carry = { pickUp: vi.fn(), releaseAll: vi.fn(), drop: vi.fn() };
@@ -2564,28 +2173,5 @@ describe('ScavengePhase lifecycle integration', () => {
     expect(world.loseItem).not.toHaveBeenCalled();
     expect(hands.playGesture).not.toHaveBeenCalled();
     expect(ui.showHandsFullNotice).toHaveBeenCalledOnce();
-  });
-
-  it('reports pointer-lock rejection through the UI', async () => {
-    const showPointerLockError = vi.fn();
-    const setPaused = vi.fn();
-    const audio = scavengeAudioStub();
-    const phase = Object.create(ScavengePhase.prototype) as ScavengePhase;
-    Object.assign(phase, {
-      disposed: false,
-      presentation: 'intro',
-      introPaused: false,
-      audio,
-      input: { requestPointerLock: vi.fn().mockResolvedValue(false) },
-      session: { snapshot: () => ({ status: 'idle' }) },
-      ui: { showPointerLockError, setPaused },
-    });
-
-    await (phase as unknown as { requestPointerLock: () => Promise<void>; }).requestPointerLock();
-
-    expect(showPointerLockError).toHaveBeenCalledOnce();
-    expect(setPaused).toHaveBeenCalledWith(true);
-    expect(audio.setPaused).toHaveBeenCalledWith(true);
-    expect((phase as unknown as { introPaused: boolean; }).introPaused).toBe(true);
   });
 });

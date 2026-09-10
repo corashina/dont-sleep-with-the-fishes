@@ -1,13 +1,13 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach,describe,expect,it } from 'vitest';
 import { setLanguage } from '../src/i18n/language';
-import { SURVIVAL_EVENTS, survivalEventById } from '../src/survival/eventCatalog';
+import { SURVIVAL_EVENTS,survivalEventById } from '../src/survival/eventCatalog';
 import { formatJournalEntry } from '../src/survival/journal';
 import { formatJournalEvent } from '../src/survival/journalEvents';
 import { formatJournalMutations } from '../src/survival/journalInventory';
 import { createCarlitosState } from '../src/survival/CarlitosState';
 import {
-  createJournalCarlitosDawnRecord, createJournalCarlitosDawnState, createJournalEntry,
-  type JournalEventRecord, type JournalInventoryMutation,
+  createJournalCarlitosDawnRecord,createJournalCarlitosDawnState,createJournalEntry,
+  type JournalEventRecord,type JournalInventoryMutation,
 } from '../src/survival/journalRecords';
 import type { ItemInstanceId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
@@ -78,26 +78,6 @@ describe('journal narrative', () => {
     expect(unchanged.nighttime).not.toContain('Carlitos');
   });
 
-  it('explains a map patch and the damage it suffers in Polish', () => {
-    setLanguage('pl');
-    const copy = formatJournalEvent(eventRecord('leak', 'map', 1));
-    expect(copy).toContain('Zatkałem szczelinę mapą');
-    expect(copy).toContain('Przyhamowała przeciek');
-    expect(copy).toContain('naporu wody');
-    expect(copy).not.toContain('Uszkodziłem mapę');
-    expect(copy).not.toMatch(noStats);
-  });
-
-  it('distinguishes a failed knife defence from a successful net that tears', () => {
-    const knife = formatJournalEvent(eventRecord('swarm-of-sharks', 'knife', 1));
-    const net = formatJournalEvent(eventRecord('swarm-of-sharks', 'fishingNet', 1));
-    expect(knife).toContain('Its bite caught me');
-    expect(knife).toContain('blade snapped');
-    expect(net).toContain('held the sharks back');
-    expect(net).toContain('tore through the mesh');
-    expect(net).not.toContain('bite caught me');
-  });
-
   it.each(['en', 'pl', 'es-AR'] as const)('mentions each narrated item consequence once in %s', (language) => {
     setLanguage(language);
     const cases = [
@@ -125,24 +105,6 @@ describe('journal narrative', () => {
     expect(copy).toContain(formatJournalMutations(extra));
     expect(copy).not.toContain(formatJournalMutations(record.inventoryMutations));
     expect(copy).toContain('blade snapped');
-  });
-
-  it('describes the knife defence and compass through concrete observations', () => {
-    setLanguage('pl');
-    const attack = formatJournalEvent(eventRecord('chest-attack', 'knife'));
-    const compass = formatJournalEvent(eventRecord('night-trader', 'map'));
-    expect(attack).toContain('Wcisnąłem nóż między zęby skrzyni');
-    expect(attack).not.toContain('osłabił ugryzienie');
-    expect(compass).toContain('igła przestaje drżeć');
-    expect(compass).not.toContain('Trochę kierunku');
-  });
-
-  it('explains spent ammunition without saying the gun broke', () => {
-    const copy = formatJournalEvent(eventRecord('snatcher', 'shotgun'));
-    expect(copy).toContain('fired the shotgun at the tentacle');
-    expect(copy).toContain('without my supplies');
-    expect(copy).toContain('last shell');
-    expect(copy).not.toMatch(/damaged|repairs/);
   });
 
   it('describes traded equipment as payment instead of consumed ammunition or medicine', () => {

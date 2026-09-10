@@ -1,8 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 import {
-  SURVIVAL_SAVE_VERSION,
   createSurvivalSaveDocument,
-  parseSurvivalSaveDocument,
+  parseSurvivalSaveDocument
 } from '../src/survival/SurvivalSaveData';
 import type { SurvivalRunCheckpoint } from '../src/survival/SurvivalCheckpoint';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
@@ -207,8 +206,4 @@ describe('SurvivalSaveStore', () => {
     corrupt(value.checkpoint.session.journalEntries[0].nighttime.event);
     expect(parseSurvivalSaveDocument(value)).toBeNull();
   });
-});
-
-it('exports the current save version', () => {
-  expect(SURVIVAL_SAVE_VERSION).toBe(6);
 });

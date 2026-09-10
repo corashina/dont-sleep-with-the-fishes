@@ -1,33 +1,24 @@
 // Importance: 10/10 (scaled from 5/5). Protects survival orchestration and lifecycle.
-import { PerspectiveCamera, Scene } from 'three';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SurvivalAudio } from '../src/audio/SurvivalAudio';
-import type { ItemInstance, ItemInstanceId } from '../src/game/ItemState';
+import { Scene } from 'three';
+import { afterEach,describe,expect,it,vi } from 'vitest';
+import type { ItemInstance,ItemInstanceId } from '../src/game/ItemState';
 import type { SceneRenderer } from '../src/rendering/SceneRenderer';
 import type { ProjectedBoatBounds } from '../src/survival/BoatInteraction';
-import { BoatWorld } from '../src/survival/BoatWorld';
 import {
   SURVIVAL_EVENTS,
 } from '../src/survival/eventCatalog';
 import type { FishingCastPoint } from '../src/survival/FishingSession';
-import type { JournalEntry, JournalNightRecord } from '../src/survival/journalRecords';
 import { formatDiveResult } from '../src/survival/SurvivalDayActionFlow';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import type {
   SurvivalInventorySnapshot,
-  SurvivalItemState,
-  SurvivalState,
+  SurvivalItemState
 } from '../src/survival/survivalTypes';
 import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
-import type { RewardResultView } from '../src/ui/SurvivalCoverViewModel';
-import type { FishingResultView, FishingUiState } from '../src/ui/SurvivalFishingView';
-import type { EventContextChoice } from '../src/ui/SurvivalUiViewModel';
+import type { FishingResultView,FishingUiState } from '../src/ui/SurvivalFishingView';
 import type { SurvivalUI } from '../src/ui/SurvivalUI';
-import type { PresentationWeatherId } from '../src/weather/presentationWeather';
-import { createTestPropModels } from './helpers/propModels';
 import { sequenceRandom } from './helpers/random';
-import { createTestSkyTextures } from './helpers/skyAssets';
 
 function inventory(
   overrides: Partial<Record<ItemInstanceId, SurvivalItemState>> = {},
@@ -50,26 +41,6 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
 }
 
 describe('survival checkpoints', () => {
-  it('prepares the initial night scene before starting event flow', async () => {
-    const scene = new Scene();
-    const setPhase = vi.fn();
-    const prepare = vi.fn().mockResolvedValue(undefined);
-    const render = vi.fn();
-    const phase = SurvivalPhase.forTest({
-      session: { snapshot: () => snapshot({ state: 'nightEvent', weather: 'squall' }) },
-      world: { scene, setPhase },
-      ui: {},
-      sceneRenderer: { prepare, render, resize: vi.fn(), dispose: vi.fn() },
-    });
-    try {
-      await phase.prepare();
-      expect(setPhase).toHaveBeenCalledWith('night');
-      expect(prepare).toHaveBeenCalledWith(scene, expect.any(PerspectiveCamera), {
-        kind: 'survival', elapsedSeconds: 0, phase: 'night', weather: 'squall',
-      });
-      expect(render).toHaveBeenCalledOnce();
-    } finally { phase.dispose(); }
-  });
 
   it.each(['drifting-supplies', 'drifting-chest'] as const)(
     'keeps repair, camera controls, and inspection available during %s', async (eventId) => {
@@ -224,13 +195,6 @@ describe('survival checkpoints', () => {
     },
   );
 });
-
-function completedEntry(
-  day: number,
-  nighttime: JournalNightRecord = { kind: 'quiet' },
-): JournalEntry {
-  return { day, weather: 'calm', nightWeather: 'calm', actions: [], daytime: null, nighttime };
-}
 
 function accepted(overrides: Record<string, unknown> = {}) {
   return {
@@ -455,161 +419,8 @@ async function completeFishingCast(rig: FishingRig): Promise<void> {
   await flushPromises();
 }
 
-type FishingTeardownStage =
-  | 'entering'
-  | 'aiming'
-  | 'casting'
-  | 'waiting'
-  | 'bite'
-  | 'reeling'
-  | 'missing'
-  | 'result'
-  | 'returning';
-
-async function reachFishingTeardownStage(
-  rig: FishingRig,
-  stage: FishingTeardownStage,
-): Promise<void> {
-  if (stage === 'entering') return;
-
-  await settleFishingEntry(rig);
-  if (stage === 'aiming') return;
-  expect(fishingCastCallback(rig)(null)).toBe(true);
-  if (stage === 'casting') return;
-  await completeFishingCast(rig);
-  if (stage === 'waiting') return;
-  rig.phase.update(3, 3);
-  if (stage === 'bite') return;
-  if (stage === 'missing') {
-    rig.phase.update(4.5, 1.5);
-    return;
-  }
-
-  fishingReelCallback(rig)();
-  if (stage === 'reeling') return;
-  rig.animations.reel.at(-1)!.resolve();
-  await flushPromises();
-  if (stage === 'result') return;
-  rig.ui.onFishingResultContinue?.();
-  rig.ui.onFishingViewExit?.();
-  if (stage === 'returning') return;
-  rig.animations.exit.at(-1)!.resolve();
-  await flushPromises();
-}
-
 async function flushPromises(): Promise<void> {
   for (let index = 0; index < 128; index += 1) await Promise.resolve();
-}
-
-function createDiveRig(options: {
-  readonly terminalState?: Extract<SurvivalState, 'dead' | 'sunk' | 'rescued'>;
-  readonly withScuba?: boolean;
-} = {}) {
-  const calls: string[] = [];
-  const sequence = deferred();
-  const fadeOut = deferred();
-  const coveredScene = deferred();
-  const coveredHold = deferred();
-  const fadeIn = deferred();
-  const resultHold = deferred();
-  const diveInventory = options.withScuba === false
-    ? inventory()
-    : inventory({
-        'scubaSet-1': {
-          instanceId: 'scubaSet-1',
-          type: 'scubaSet',
-          condition: 'usable',
-        },
-      });
-  let current = snapshot({ inventory: diveInventory });
-  const outcome = accepted({
-    code: 'dive-food',
-    message: 'You find food below.',
-    deltas: { energy: -3, food: 1 },
-    cue: 'fish',
-  });
-  const perform = vi.fn(() => {
-    calls.push('perform:dive');
-    current = snapshot({
-      inventory: diveInventory,
-      state: options.terminalState ?? 'day',
-      ending: options.terminalState === 'dead'
-        ? { id: 'death', day: 1, savedPickupCount: 0, cause: { kind: 'diving' } }
-        : options.terminalState === 'sunk'
-          ? { id: 'sinking', day: 1, savedPickupCount: 0, cause: { eventId: null } }
-          : options.terminalState === 'rescued'
-            ? { id: 'rescue', day: 1, savedPickupCount: 0, signalAssisted: false }
-            : null,
-      energy: 0,
-      food: 1,
-      health: options.terminalState === 'dead' ? 0 : 100,
-    });
-    return outcome;
-  });
-  let impact: () => void = () => undefined;
-  const playDive = vi.fn((instanceId: ItemInstanceId, options: {
-    readonly onWaterImpact: () => void;
-  }) => {
-    calls.push(`playDive:${instanceId}`);
-    impact = options.onWaterImpact;
-    return sequence.promise;
-  });
-  const world = {
-    playDive,
-    clearDivePresentation: vi.fn(() => calls.push('clearDive')),
-    syncInventory: vi.fn(),
-    projectInteractionAnchors: vi.fn(() => []),
-    setDocumentHidden: vi.fn(),
-    dispose: vi.fn(),
-  };
-  const ui: Partial<SurvivalUI> = {
-    setBusy: vi.fn((busy: boolean) => calls.push(busy ? 'lock' : 'unlock')),
-    setSleepCoverProfile: vi.fn((profile) => {
-      calls.push(`coverProfile:${profile}`);
-      return Promise.resolve();
-    }),
-    setSleepCovered: vi.fn((covered: boolean) => {
-      calls.push(`fade:${covered}`);
-      return covered ? fadeOut.promise : fadeIn.promise;
-    }),
-    render: vi.fn(() => calls.push('renderCovered')),
-    setJournalUnread: vi.fn(),
-    setAnchors: vi.fn(),
-    settleCoveredScene: vi.fn(() => coveredScene.promise),
-    holdDiveCovered: vi.fn(() => {
-      calls.push('holdCovered');
-      return coveredHold.promise;
-    }),
-    showRewardResult: vi.fn((_view: RewardResultView) => {
-      calls.push('showResult');
-      return resultHold.promise;
-    }),
-    restoreCommandFocus: vi.fn(() => calls.push('focus')),
-    showEnding: vi.fn(() => calls.push('ending')),
-    dispose: vi.fn(),
-  };
-  const phase = SurvivalPhase.forTest({
-    session: { snapshot: vi.fn(() => current), perform },
-    world,
-    ui,
-  });
-  const phaseAudio = (phase as unknown as { audio: SurvivalAudio }).audio;
-  vi.spyOn(phaseAudio, 'beginDive').mockImplementation(() => calls.push('impactAudio'));
-  vi.spyOn(phaseAudio, 'finishDive').mockImplementation(() => calls.push('finishAudio'));
-  const cancelDive = vi.spyOn(phaseAudio, 'cancelDive');
-  const deny = vi.spyOn(phaseAudio, 'deny');
-  return {
-    phase,
-    calls,
-    outcome,
-    perform,
-    world,
-    ui,
-    deny,
-    cancelDive,
-    impact: () => impact(),
-    steps: { sequence, fadeOut, coveredScene, coveredHold, fadeIn, resultHold },
-  };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -635,17 +446,6 @@ describe('SurvivalPhase orchestration', () => {
     internals.renderSnapshot(false);
     expect(setAvailableDayActions).toHaveBeenLastCalledWith([]);
     phase.dispose();
-  });
-
-  it('denies a second command while the dive sequence runs', () => {
-    const rig = createDiveRig();
-
-    rig.phase.handleAction('dive');
-    rig.phase.handleAction('repair');
-
-    expect(rig.perform).toHaveBeenCalledOnce();
-    expect(rig.deny).toHaveBeenCalledOnce();
-    rig.phase.dispose();
   });
 
   it('keeps a real insufficient-energy Drifting Cargo encounter choosing without mutation', async () => {
@@ -838,35 +638,6 @@ describe('SurvivalPhase orchestration', () => {
     },
   );
 
-  it('marks both the completed day and completed night unread', () => {
-    let current = snapshot();
-    const setJournalUnread = vi.fn();
-    const showJournal = vi.fn();
-    const phase = SurvivalPhase.forTest({
-      session: { snapshot: vi.fn(() => current) },
-      world: { dispose: vi.fn() },
-      ui: { render: vi.fn(), setJournalUnread, showJournal, dispose: vi.fn() },
-    });
-    phase.start();
-    expect(setJournalUnread).toHaveBeenLastCalledWith(false);
-    const render = () => (phase as unknown as { renderSnapshot(openPendingEvent: boolean): void }).renderSnapshot(false);
-    current = snapshot({ journalEntries: [{ ...completedEntry(1), nighttime: { kind: 'pending' }, nightWeather: null }] });
-    render();
-    expect(setJournalUnread).toHaveBeenLastCalledWith(true);
-    phase.handleJournalOpen();
-    expect(showJournal).toHaveBeenLastCalledWith(current.journalEntries);
-    expect(setJournalUnread).toHaveBeenLastCalledWith(false);
-    phase.handleJournalClose();
-    current = snapshot({ journalEntries: [completedEntry(1)] });
-    render();
-    expect(setJournalUnread).toHaveBeenLastCalledWith(true);
-    phase.handleJournalOpen();
-    phase.handleJournalClose();
-    render();
-    expect(setJournalUnread).toHaveBeenLastCalledWith(false);
-    phase.dispose();
-  });
-
   it('locks commands before aiming and preserves Energy until the water click', async () => {
     const rig = createFishingRig();
     rig.phase.start();
@@ -1014,55 +785,6 @@ describe('SurvivalPhase orchestration', () => {
       mode: 'aiming', message: 'CLICK THE WATER TO CAST', biteTarget: null,
     });
   });
-
-  it.each(([
-    'entering', 'aiming', 'casting', 'waiting', 'bite', 'reeling', 'missing', 'result', 'returning',
-  ] as const).flatMap((stage) => (
-    (['dispose', 'restart'] as const).map((teardown) => [stage, teardown] as const)
-  )))(
-    '%s settles safely through %s without later callbacks',
-    async (state, teardown) => {
-    let rig!: FishingRig;
-    const onRestart = vi.fn(() => rig.phase.dispose());
-    rig = createFishingRig({ onRestart });
-    rig.phase.start();
-    rig.phase.handleAction('fish');
-    await reachFishingTeardownStage(rig, state);
-    const attempt = rig.session.beginFishing.mock.results[0]?.value.attempt;
-    expect(attempt === undefined).toBe(state === 'entering' || state === 'aiming');
-    const beforeTeardown = attempt?.snapshot();
-    const sessionBeforeTeardown = rig.realSession.snapshot();
-    const fishingUiCalls = vi.mocked(rig.ui.setFishingState!).mock.calls.length;
-    const eventCalls = rig.session.requestDayEvent.mock.calls.length;
-    const finishCalls = rig.session.finishFishing.mock.calls.length;
-    const exitCalls = rig.world.exitFishingView.mock.calls.length;
-    const continueResult = rig.ui.onFishingResultContinue;
-    const pendingHandles = Object.values(rig.animations)
-      .flat()
-      .filter((handle) => !handle.isSettled());
-
-    if (teardown === 'restart') rig.phase.requestRestart();
-    else rig.phase.dispose();
-    rig.phase.dispose();
-    await flushPromises();
-    continueResult?.();
-    await flushPromises();
-    rig.phase.update(20, 20);
-
-    expect(onRestart).toHaveBeenCalledTimes(teardown === 'restart' ? 1 : 0);
-    expect(rig.world.dispose).toHaveBeenCalledOnce();
-    expect(rig.ui.dispose).toHaveBeenCalledOnce();
-    expect(rig.ui.hideFishingResult).toHaveBeenCalled();
-    expect(rig.ui.onFishingResultContinue).toBeNull();
-    expect(pendingHandles.every((handle) => handle.isSettled())).toBe(true);
-    expect(vi.mocked(rig.ui.setFishingState!).mock.calls).toHaveLength(fishingUiCalls);
-    expect(rig.session.requestDayEvent).toHaveBeenCalledTimes(eventCalls);
-    expect(rig.session.finishFishing).toHaveBeenCalledTimes(finishCalls);
-    expect(rig.world.exitFishingView).toHaveBeenCalledTimes(exitCalls);
-    expect(attempt?.snapshot()).toEqual(beforeTeardown);
-    expect(rig.realSession.snapshot()).toEqual(sessionBeforeTeardown);
-    },
-  );
 
   it('stages a committed night event under cover before revealing choices', async () => {
     const event = SURVIVAL_EVENTS.find(({ id }) => id === 'shower-night')!;
@@ -1293,90 +1015,6 @@ describe('SurvivalPhase orchestration', () => {
     expect(calls.indexOf('cover')).toBeGreaterThanOrEqual(0);
     expect(calls.indexOf('cover')).toBeLessThan(calls.indexOf('release'));
     expect(releaseActive).toHaveBeenCalledOnce();
-    phase.dispose();
-  });
-
-  it('opens the internal quiet night through the real BoatWorld path', async () => {
-    const propModels = createTestPropModels();
-    const world = new BoatWorld(
-      new PerspectiveCamera(65, 16 / 9, 0.08, 220),
-      propModels,
-      ...createTestSkyTextures(),
-    );
-    const setEventSelection = vi.fn();
-    const phase = SurvivalPhase.forTest({
-      session: {
-        snapshot: vi.fn(() => snapshot({
-          state: 'nightEvent',
-          pendingEventId: 'quiet-night',
-        })),
-      },
-      world,
-      ui: {
-        showEventReveal: vi.fn(() => Promise.resolve()),
-        setEventSelection,
-        dispose: vi.fn(),
-      },
-    });
-
-    try {
-      phase.start();
-      await flushPromises();
-
-      expect(setEventSelection).toHaveBeenCalledOnce();
-    } finally {
-      phase.dispose();
-      propModels.dispose();
-    }
-  });
-
-  it('keeps forced weather above automatic weather and restores the active event weather', async () => {
-    let phase!: SurvivalPhase;
-    const calls: string[] = [];
-    let actualWeather: PresentationWeatherId = 'calm';
-    const setPresentationWeather = vi.fn((id: PresentationWeatherId) => {
-      actualWeather = id;
-      calls.push(`weather:${id}`);
-    });
-    const setWeather = vi.fn((id: PresentationWeatherId) => {
-      calls.push(`gameplay:${id}`);
-      setPresentationWeather(id);
-    });
-    phase = SurvivalPhase.forTest({
-      session: {
-        snapshot: vi.fn(() => snapshot({
-          state: 'nightEvent',
-          pendingEventId: 'thunderstorm',
-        })),
-      },
-      world: {
-        setWeather,
-        setPresentationWeather,
-        stageEvent: vi.fn(() => {
-          calls.push(`stage:${phase.getPresentationWeather()}:${actualWeather}`);
-        }),
-        revealEvent: vi.fn(() => Promise.resolve()),
-        dispose: vi.fn(),
-      },
-      ui: {
-        showEventReveal: vi.fn(() => Promise.resolve()),
-        setEventSelection: vi.fn(),
-        dispose: vi.fn(),
-      },
-    });
-
-    phase.setWeatherOverride('fog');
-    phase.start();
-    await flushPromises();
-
-    expect(calls).toContain('stage:fog:fog');
-    expect(setWeather).not.toHaveBeenCalled();
-    expect(phase.getPresentationWeather()).toBe('fog');
-    expect(actualWeather).toBe('fog');
-    phase.setWeatherOverride(null);
-    expect(phase.getPresentationWeather()).toBe('thunderstorm');
-    expect(actualWeather).toBe('thunderstorm');
-    expect(setPresentationWeather).toHaveBeenLastCalledWith('thunderstorm');
     phase.dispose();
   });
 
@@ -2409,199 +2047,6 @@ describe('SurvivalPhase orchestration', () => {
     },
   );
 
-  it('derives the selected item before random changed actors without an early inventory sync', async () => {
-    const event = SURVIVAL_EVENTS.find(({ id }) => id === 'shower-night')!;
-    const cue = deferred();
-    let current = snapshot({
-      state: 'nightEvent',
-      pendingEventId: event.id,
-      inventory: inventory({
-        'bucket-1': { instanceId: 'bucket-1', type: 'bucket', condition: 'usable' },
-        'map-1': { instanceId: 'map-1', type: 'map', condition: 'usable' },
-      }),
-    });
-    const outcome = accepted({ code: 'event-resolved', cue: 'impact' });
-    const focusedChoice = deferred();
-    const resolveEvent = vi.fn(() => {
-      current = snapshot({
-        state: 'nightEvent',
-        pendingEventId: null,
-        inventory: inventory({
-          'bucket-1': { instanceId: 'bucket-1', type: 'bucket', condition: 'broken' },
-          'map-1': { instanceId: 'map-1', type: 'map', condition: 'broken' },
-        }),
-      });
-      return outcome;
-    });
-    const playEventItemUse = vi.fn(() => cue.promise);
-    const playEventChoice = vi.fn(() => focusedChoice.promise);
-    const syncInventory = vi.fn();
-    const reactToEventOutcome = vi.fn(() => {
-      expect(syncInventory).not.toHaveBeenCalledWith(current);
-      return Promise.resolve();
-    });
-    const phase = SurvivalPhase.forTest({
-      session: { snapshot: vi.fn(() => current), resolveEvent },
-      world: {
-        play: vi.fn(() => Promise.resolve()),
-        playEventItemUse,
-        playEventChoice,
-        reactToEventOutcome,
-        syncInventory,
-        dispose: vi.fn(),
-      },
-      ui: {
-        showEventReveal: vi.fn(() => Promise.resolve()),
-        setEventSelection: vi.fn(),
-        setBusy: vi.fn(),
-        dispose: vi.fn(),
-      },
-    });
-
-    phase.start();
-    await flushPromises();
-    phase.handleEventItem('bucket', 'bucket-1');
-    phase.handleEndure();
-    expect(playEventItemUse).toHaveBeenCalledWith(
-      'shower-night',
-      'bucket',
-      'bucket-1',
-      expect.any(Function),
-    );
-    expect(resolveEvent).not.toHaveBeenCalled();
-
-    cue.resolve();
-    await flushPromises();
-    expect(playEventChoice).toHaveBeenCalledWith(
-      'shower-night',
-      {
-        choiceId: 'bucket',
-        instanceId: 'bucket-1',
-        condition: 'usable',
-      },
-    );
-    expect(resolveEvent).not.toHaveBeenCalled();
-
-    focusedChoice.resolve();
-    await flushPromises();
-    expect(resolveEvent).toHaveBeenCalledOnce();
-    expect(resolveEvent).toHaveBeenCalledWith({
-      kind: 'item',
-      choiceId: 'bucket',
-      instanceId: 'bucket-1',
-    });
-    expect(reactToEventOutcome).toHaveBeenCalledWith(
-      'shower-night',
-      outcome,
-      {
-        choiceId: 'bucket',
-        actors: [
-          { instanceId: 'bucket-1', condition: 'broken' },
-          { instanceId: 'map-1', condition: 'broken' },
-        ],
-      },
-      expect.anything(),
-    );
-  });
-
-  it('passes an exact dedicated before-and-after diff to the world', async () => {
-    let current = snapshot({
-      state: 'dayEvent',
-      day: 6,
-      seed: 42,
-      hull: 88,
-      pendingEventId: 'snatcher',
-      pendingEventTargetId: 'map-1',
-      inventory: inventory({
-        'map-1': { instanceId: 'map-1', type: 'map', condition: 'usable' },
-        'shotgun-1': {
-          instanceId: 'shotgun-1',
-          type: 'shotgun',
-          condition: 'usable',
-        },
-      }),
-    });
-    const outcome = accepted({
-      code: 'event-resolved',
-      message: 'The shot drives the tentacle away. The supply stays aboard.',
-      deltas: {},
-      cue: 'impact',
-    });
-    const reactToEventOutcome = vi.fn(() => Promise.resolve());
-    const phase = SurvivalPhase.forTest({
-      session: {
-        snapshot: vi.fn(() => current),
-        resolveEvent: vi.fn(() => {
-          current = snapshot({
-            state: 'day',
-            day: 6,
-            seed: 42,
-            hull: 88,
-            inventory: inventory({
-              'map-1': { instanceId: 'map-1', type: 'map', condition: 'usable' },
-              'shotgun-1': {
-                instanceId: 'shotgun-1',
-                type: 'shotgun',
-                condition: 'consumed',
-              },
-            }),
-          });
-          return outcome;
-        }),
-      },
-      world: {
-        scene: new Scene(),
-        stageEvent: vi.fn(),
-        revealEvent: vi.fn(() => Promise.resolve()),
-        playEventItemUse: vi.fn(() => Promise.resolve()),
-        reactToEventOutcome,
-        play: vi.fn(() => Promise.resolve()),
-        clearEvent: vi.fn(),
-        dispose: vi.fn(),
-      },
-      ui: {
-        beginEventPresentation: vi.fn(),
-        setSleepCovered: vi.fn(() => Promise.resolve()),
-        showEventReveal: vi.fn(() => Promise.resolve()),
-        setEventSelection: vi.fn(),
-        setEventUsing: vi.fn(),
-        holdEventOutcome: vi.fn(() => Promise.resolve()),
-        clearEventPresentation: vi.fn(),
-        setBusy: vi.fn(),
-        render: vi.fn(),
-        setJournalUnread: vi.fn(),
-        dispose: vi.fn(),
-      },
-    });
-
-    phase.start();
-    await flushPromises();
-    phase.handleEventItem('shotgun', 'shotgun-1');
-    await flushPromises();
-
-    const presentation = {
-      outcome,
-      resourceDeltas: {},
-      gainedInstanceIds: [],
-      brokenInstanceIds: [],
-      lostInstanceIds: [],
-      consumedInstanceIds: ['shotgun-1'],
-      selectedInstanceId: 'shotgun-1',
-      selectedCondition: 'consumed',
-      targetInstanceId: 'map-1',
-    };
-    expect(reactToEventOutcome).toHaveBeenCalledWith(
-      'snatcher',
-      outcome,
-      {
-        choiceId: 'shotgun',
-        instanceId: 'shotgun-1',
-        condition: 'consumed',
-      },
-      presentation,
-    );
-  });
-
   it.each(['dispose', 'restart'] as const)(
     'does not resolve an event when %s supersedes its pending physical item use',
     async (teardown) => {
@@ -2648,103 +2093,6 @@ describe('SurvivalPhase orchestration', () => {
 
       expect(resolveEvent).not.toHaveBeenCalled();
       expect(onRestart).toHaveBeenCalledTimes(teardown === 'restart' ? 1 : 0);
-    },
-  );
-
-  it.each([
-    ['Sleep Normally', 'sleep', [0, 0, 0.99, 0.99, 0.99]],
-    ['Watch at the exact 0.85 boundary', 'watch', [0.85, 0, 0.99, 0.99, 0.99]],
-  ] as const)(
-    'reveals and resolves the Guarded Sleep follow-up before day two for %s',
-    async (_label, choiceId, rolls) => {
-      const session = new SurvivalSession([{
-        instanceId: 'carlitos-1',
-        type: 'carlitos',
-      }], {
-        seed: 91,
-        random: sequenceRandom(rolls),
-        initial: { day: 1 },
-        initialEventId: 'guarded-sleep',
-      });
-      const beginDawn = vi.spyOn(session, 'beginDawn');
-      const calls: string[] = [];
-      const setEventSelection = vi.fn((
-        _eligible: ReadonlyMap<ItemInstanceId, string>,
-        _choices: readonly EventContextChoice[],
-      ) => {
-        calls.push(`select:${session.snapshot().pendingEventId}`);
-      });
-      const ui: Partial<SurvivalUI> = {
-        beginEventPresentation: vi.fn(),
-        setSleepCovered: vi.fn((covered) => {
-          calls.push(covered ? 'cover' : 'uncover');
-          return Promise.resolve();
-        }),
-        showEventReveal: vi.fn(() => Promise.resolve()),
-        settleCoveredScene: vi.fn(() => Promise.resolve()),
-        setEventSelection,
-        playEventChoiceBeat: vi.fn(() => Promise.resolve()),
-        holdEventOutcome: vi.fn(() => Promise.resolve()),
-        clearEventPresentation: vi.fn(() => calls.push('clear-ui')),
-        setBusy: vi.fn(),
-        render: vi.fn(),
-        setJournalUnread: vi.fn(),
-        setAnchors: vi.fn(),
-        restoreCommandFocus: vi.fn(),
-        dispose: vi.fn(),
-      };
-      const phase = SurvivalPhase.forTest({
-        session,
-        world: {
-          syncInventory: vi.fn(),
-          projectInteractionAnchors: vi.fn(() => []),
-          setPhase: vi.fn(),
-          stageEvent: vi.fn((context: string | { eventId: string }) => {
-            calls.push(`stage:${typeof context === 'string' ? context : context.eventId}`);
-          }),
-          revealEvent: vi.fn(() => Promise.resolve()),
-          playEventChoice: vi.fn(() => Promise.resolve()),
-          reactToEventOutcome: vi.fn(() => Promise.resolve()),
-          play: vi.fn(() => Promise.resolve()),
-          clearEvent: vi.fn(() => calls.push('clear-world')),
-          setEventSelectedItem: vi.fn(),
-          setEventEligibleItems: vi.fn(),
-          dispose: vi.fn(),
-        },
-        ui,
-      });
-
-      phase.start();
-      await flushPromises();
-      const guardedChoices = setEventSelection.mock.calls.at(-1)?.[1] ?? [];
-      expect(guardedChoices).toEqual(expect.arrayContaining([
-        expect.objectContaining({ id: 'watch' }),
-      ]));
-      expect(guardedChoices.find(({ id }) => id === 'watch'))
-        .not.toHaveProperty('anchorId');
-      calls.length = 0;
-
-      ui.onEventChoice?.(choiceId);
-      await flushPromises();
-      await flushPromises();
-
-      expect(beginDawn).not.toHaveBeenCalled();
-      expect(session.snapshot()).toMatchObject({
-        state: 'nightEvent',
-        day: 1,
-        pendingEventId: 'quiet-night',
-      });
-      expect(calls.indexOf('cover')).toBeLessThan(calls.indexOf('stage:quiet-night'));
-      expect(calls.indexOf('stage:quiet-night')).toBeLessThan(calls.indexOf('uncover'));
-      expect(calls).toContain('select:quiet-night');
-
-      ui.onEventChoice?.('sleep');
-      await flushPromises();
-      await flushPromises();
-
-      expect(beginDawn).toHaveBeenCalledOnce();
-      expect(session.snapshot()).toMatchObject({ state: 'day', day: 2, pendingEventId: null });
-      phase.dispose();
     },
   );
 

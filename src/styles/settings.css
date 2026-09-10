@@ -1,5 +1,5 @@
 .settings-menu[hidden] { display: none; }
-.settings-covered[aria-hidden="true"] { visibility: hidden; }
+.settings-covered[aria-hidden="true"] { display: none; }
 .menu-ui .pause-screen { z-index: 5; background: #101d2570; transition: opacity 260ms ease; }
 .settings-menu {
   --settings-ink: #35291e;
@@ -12,7 +12,7 @@
   display: grid;
   place-items: center;
   padding: 20px;
-  background: #101d25c9;
+  background: radial-gradient(circle at 50% 50%, #090b0cbb, #030404f2 72%);
   color: var(--settings-ink);
   color-scheme: light;
   font: 700 1rem/1.25 var(--font-narrative);

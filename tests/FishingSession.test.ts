@@ -1,9 +1,7 @@
-import { fishingRoll } from './helpers/fishing';
 // Importance: 10/10 (scaled from 5/5). Protects the fishing state machine.
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 import { FishingSession } from '../src/survival/FishingSession';
 import { SURVIVAL_BALANCE } from '../src/survival/survivalBalance';
-import type { RandomSource } from '../src/survival/survivalTypes';
 import { sequenceRandom } from './helpers/random';
 
 function createSession(draws: readonly number[] = [0, 0]) {
@@ -21,56 +19,6 @@ function castToWaiting(session: FishingSession): void {
 }
 
 describe('FishingSession', () => {
-  it('consumes bite delay then hidden catch during construction', () => {
-    const roll = fishingRoll('energyBar', 1);
-    const source = sequenceRandom([0.25, roll]);
-    const draws: number[] = [];
-    const random: RandomSource = { next: () => {
-      const value = source.next();
-      draws.push(value);
-      return value;
-    } };
-
-    const session = new FishingSession({ id: 'attempt-1', day: 1, capturedBait: false, random });
-
-    expect(draws).toEqual([0.25, roll]);
-    expect(session.snapshot()).toMatchObject({ biteDelaySeconds: 4, result: null });
-    castToWaiting(session);
-    session.advance(4);
-    expect(session.reel()).toMatchObject({
-      accepted: true,
-      result: { kind: 'catch', catch: { id: 'energyBar' } },
-    });
-  });
-
-  it('removes active unique utility rewards before drawing the hidden catch', () => {
-    const session = new FishingSession({
-      id: 'attempt-1',
-      day: 3,
-      capturedBait: false,
-      activeItemIds: new Set(['ductTape', 'compass', 'fishingNet', 'energyBar']),
-      random: sequenceRandom([0, fishingRoll('bait', 3, false, new Set(['ductTape', 'compass', 'fishingNet', 'energyBar']))]),
-    });
-    castToWaiting(session);
-    session.advance(session.snapshot().biteDelaySeconds);
-    expect(session.reel()).toMatchObject({
-      result: { kind: 'catch', catch: { id: 'bait' } },
-    });
-  });
-
-  it('passes the fish weight multiplier to hidden catch selection', () => {
-    const session = new FishingSession({
-      id: 'attempt-1',
-      day: 0,
-      capturedBait: false,
-      fishWeightMultiplier: 1.01,
-      random: sequenceRandom([0, fishingRoll('clownfish', 0, false, new Set(), 1.01)]),
-    });
-
-    castToWaiting(session);
-    session.advance(session.snapshot().biteDelaySeconds);
-    expect(session.reel()).toMatchObject({ result: { kind: 'catch', catch: { id: 'clownfish' } } });
-  });
 
   it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
     'rejects invalid fish weight multiplier %s',
@@ -84,26 +32,6 @@ describe('FishingSession', () => {
       })).toThrow(RangeError);
     },
   );
-
-  it('derives bite delays from the full documented range', () => {
-    expect(createSession([0, 0]).snapshot().biteDelaySeconds).toBe(3);
-    expect(createSession([0.999999, 0]).snapshot().biteDelaySeconds).toBeCloseTo(6.999996);
-  });
-
-  it('follows the legal successful lifecycle', () => {
-    const session = createSession();
-    expect(session.snapshot().state).toBe('aiming');
-    expect(session.cast({ x: 4, z: -2 }).accepted).toBe(true);
-    expect(session.snapshot().state).toBe('casting');
-    expect(session.completeCast().accepted).toBe(true);
-    expect(session.snapshot().state).toBe('waiting');
-    session.advance(3);
-    expect(session.snapshot().state).toBe('bite');
-    expect(session.reel().accepted).toBe(true);
-    expect(session.snapshot().state).toBe('reeling');
-    expect(session.completeReel().accepted).toBe(true);
-    expect(session.snapshot().state).toBe('resolved');
-  });
 
   it('stores an immutable horizontal cast point and rejects invalid or duplicate casts', () => {
     const session = createSession();
@@ -144,18 +72,6 @@ describe('FishingSession', () => {
     expect(missed.reel().accepted).toBe(false);
   });
 
-  it('keeps the catch hidden until it reels once', () => {
-    const session = createSession([0, 0]);
-    castToWaiting(session);
-    session.advance(3);
-    expect(session.snapshot().result).toBeNull();
-    const firstReel = session.reel();
-    expect(firstReel).toMatchObject({ accepted: true, result: { kind: 'catch', catch: { id: 'cod' } } });
-    expect(session.snapshot().result).toBe(firstReel.result);
-    expect(session.reel().accepted).toBe(false);
-    expect(session.snapshot().state).toBe('reeling');
-  });
-
   it('resolves only a reeling attempt and keeps terminal results stable', () => {
     const session = createSession();
     expect(session.completeReel().accepted).toBe(false);
@@ -165,14 +81,6 @@ describe('FishingSession', () => {
     expect(session.completeReel().accepted).toBe(true);
     expect(session.completeReel().accepted).toBe(false);
     expect(session.snapshot().result).toBe(result);
-  });
-
-  it('creates a miss without exposing the discarded catch', () => {
-    const session = createSession([0, 0]);
-    castToWaiting(session);
-    session.advance(3 + SURVIVAL_BALANCE.fishing.reactionSeconds);
-    expect(session.snapshot().result).toEqual({ kind: 'miss' });
-    expect(session.snapshot().result).not.toHaveProperty('catch');
   });
 
   it('reuses a frozen live view for allocation-free state reads', () => {

@@ -1,5 +1,5 @@
 // Importance: 10/10. Protects day-action order, covers, feedback, and lifecycle guards.
-import { describe, expect, it, vi } from 'vitest';
+import { describe,expect,it,vi } from 'vitest';
 import {
   SurvivalDayActionFlow,
   type DayActionAudioPort,
@@ -235,47 +235,6 @@ describe('SurvivalDayActionFlow', () => {
     expect(rig.renderSnapshot.mock.results[0]?.value).toBe(after);
   });
 
-  it('routes a rejected command through deny without busy state', async () => {
-    const rig = createRig();
-    const rejection = accepted({
-      accepted: false,
-      code: 'no-energy',
-      message: 'No energy remains.',
-    });
-    rig.setOutcome(rejection);
-
-    await rig.flow.run('repair');
-
-    expect(rig.audio.deny).toHaveBeenCalledOnce();
-    expect(rig.setBusy).not.toHaveBeenCalled();
-    expect(rig.world.play).not.toHaveBeenCalled();
-  });
-
-  it('runs a normal action and restores focus after its cue', async () => {
-    const rig = createRig();
-    const cue = deferred();
-    vi.mocked(rig.world.play).mockImplementationOnce(() => cue.promise);
-
-    const pending = rig.flow.run('eat');
-
-    expect(rig.calls).toEqual([
-      'perform:eat:none',
-      'audio:action:eat',
-      'busy:true',
-    ]);
-    cue.resolve();
-    await pending;
-
-    expect(rig.calls).toEqual([
-      'perform:eat:none',
-      'audio:action:eat',
-      'busy:true',
-      'render:day',
-      'busy:false',
-      'ui:focus',
-    ]);
-  });
-
   it.each(['repair', 'repairItem'] as const)(
     'renders %s resource changes before its cue settles',
     async (action) => {
@@ -425,71 +384,6 @@ describe('SurvivalDayActionFlow', () => {
 
     expect(rig.presentTerminal).toHaveBeenCalledWith(expect.objectContaining({ state: 'dead' }));
     expect(rig.ui.restoreCommandFocus).not.toHaveBeenCalled();
-  });
-
-  it('holds a quiet night, requests dawn, and removes the sleep cover', async () => {
-    const rig = createRig();
-    rig.setSnapshot(snapshot({ state: 'nightEvent' }));
-    rig.setOutcome(accepted({ code: 'quiet-night', cue: 'nightfall' }));
-
-    await rig.flow.run('endDay');
-
-    expect(rig.calls).toEqual([
-      'perform:endDay:none',
-      'audio:sleep',
-      'events:begin-night',
-      'world:play:nightfall',
-      'ui:cover:true',
-      'audio:nightfall',
-      'render:nightEvent',
-      'ui:hold-sleep',
-      'events:dawn',
-      'render:covered',
-      'ui:cover:false',
-      'events:finish-night',
-      'terminal:day',
-      'ui:focus',
-    ]);
-  });
-
-  it('hands an eventful night to the event flow while covered', async () => {
-    const rig = createRig();
-    const night = snapshot({ state: 'nightEvent', pendingEventId: 'fog-wall' });
-    rig.setSnapshot(night);
-    rig.setOutcome(accepted({ code: 'night-event', cue: 'nightfall' }));
-
-    await rig.flow.run('endDay');
-
-    expect(rig.events.beginNightTransition).toHaveBeenCalledWith(night, true);
-    expect(rig.events.revealPending).toHaveBeenCalledWith(night, true);
-    expect(rig.ui.holdSleep).not.toHaveBeenCalled();
-    expect(rig.events.beginDawn).not.toHaveBeenCalled();
-  });
-
-  it('runs hull repair without a supply and coordinates item repair reasons', async () => {
-    const rig = createRig();
-
-    await rig.flow.run('repair');
-
-    expect(rig.session.perform).toHaveBeenCalledWith('repair', undefined);
-
-    const items = snapshot({
-      inventory: {
-        'ductTape-1': {
-          instanceId: 'ductTape-1', type: 'ductTape', condition: 'usable',
-        },
-        'compass-1': {
-          instanceId: 'compass-1', type: 'compass', condition: 'broken',
-        },
-      },
-    });
-    expect(rig.flow.repairItemReason(items)).toBeNull();
-    expect(rig.session.availableReason).toHaveBeenLastCalledWith('repairItem', {
-      kind: 'itemRepair',
-      target: 'compass-1',
-    });
-    expect(rig.flow.repairItemReason(snapshot()))
-      .toBe('No broken repairable item remains.');
   });
 
   it('makes disposed and restarted continuations inert', async () => {

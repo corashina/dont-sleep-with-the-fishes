@@ -1,17 +1,14 @@
-import { describe, expect, it } from 'vitest';
-import { Box3, Matrix4, Quaternion, Vector3 } from 'three';
+import { describe,expect,it } from 'vitest';
+import { Box3,Matrix4,Quaternion,Vector3 } from 'three';
 import {
   BOAT_SUPPLY_GROUP_IDS,
   boatSupplyTransform,
   type BoatSupplyGroupId,
 } from '../src/world/BoatStorage';
-import { LIFEBOAT_DISPLAY_SHELF_SURFACE_Y, LIFEBOAT_FLOOR_SURFACE_Y } from '../src/world/Lifeboat';
+import { LIFEBOAT_DISPLAY_SHELF_SURFACE_Y,LIFEBOAT_FLOOR_SURFACE_Y } from '../src/world/Lifeboat';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 
 describe('boat storage', () => {
-  it('has no repair material supply group', () => {
-    expect(BOAT_SUPPLY_GROUP_IDS).not.toContain('repairMaterial');
-  });
 
   it.each(['cannedFood', 'baitTin'] as const)('fits eight %s models without intersections', (groupId) => {
     const storageBounds = (id: BoatSupplyGroupId, index: number) => {

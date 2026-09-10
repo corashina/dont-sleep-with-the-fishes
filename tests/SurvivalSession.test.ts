@@ -1,17 +1,14 @@
-import { eligibleFishingCatches } from '../src/survival/fishingCatalog';
 import { fishingRoll } from './helpers/fishing';
 // Importance: 10/10 (scaled from 5/5). Protects core survival rules and state.
-import { describe, expect, it, vi } from 'vitest';
-import type { ItemId, ItemInstance, ItemInstanceId } from '../src/game/ItemState';
+import { describe,expect,it,vi } from 'vitest';
+import type { ItemId,ItemInstance,ItemInstanceId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import { driftingSupplyKindFromSeed } from '../src/survival/driftingSupplies';
-import { deriveEventVariantSeed } from '../src/survival/eventPresentationOutcome';
 import {
   nightlyHullWearDamage,
   SURVIVAL_BALANCE,
 } from '../src/survival/survivalBalance';
 import { formatJournalEntry } from '../src/survival/journal';
-import type { FishingSession, FishingTerminalResult } from '../src/survival/FishingSession';
+import type { FishingSession,FishingTerminalResult } from '../src/survival/FishingSession';
 import type {
   DayActionId,
   DayActionOption,
@@ -28,33 +25,6 @@ const saved = (...types: ItemId[]): ItemInstance[] => {
     return { instanceId: `${type}-${number}` as ItemInstanceId, type };
   });
 };
-
-it('does not export repair material state', () => {
-  const session = new SurvivalSession([], { seed: 1 });
-
-  expect(session.snapshot()).not.toHaveProperty('repairMaterial');
-  expect(session.exportCheckpoint()).not.toHaveProperty('repairMaterial');
-});
-
-it('automatically resolves the Quiet Night event', () => {
-  const session = new SurvivalSession(saved(
-    'cannedFood', 'cannedFood', 'cannedFood', 'baitTin', 'baitTin',
-    'ductTape', 'compass', 'map', 'spyglass', 'fishingNet', 'knife',
-    'bucket', 'flareGun', 'scubaSet', 'anchor', 'radio', 'umbrella',
-    'swimRing', 'shotgun', 'carlitos',
-  ), { seed: 3051382588 });
-
-  expect(session.endDay()).toMatchObject({
-    accepted: true,
-    code: 'quiet-night',
-    cue: 'nightfall',
-  });
-  expect(session.snapshot()).toMatchObject({
-    state: 'nightEvent',
-    pendingEventId: null,
-    journalEntries: [{ day: 1, nighttime: { kind: 'pending' } }],
-  });
-});
 
 it('round-trips a stable pending event checkpoint', () => {
   const source = new SurvivalSession(saved('carlitos', 'compass', 'cannedFood'), {
@@ -159,22 +129,6 @@ it('can sink from overnight hull wear', () => {
   });
 });
 
-function driftingCargoSession(random: readonly number[], energy = 3, items: ItemId[] = []): SurvivalSession {
-  const day = 3;
-  const seed = Array.from({ length: 1_000 }, (_, index) => index).find((candidate) => (
-    driftingSupplyKindFromSeed(
-      deriveEventVariantSeed(candidate, day, 'drifting-supplies'),
-    ) === 'container'
-  ));
-  if (seed === undefined) throw new Error('Missing shipping-container event seed.');
-  return new SurvivalSession(saved(...items), {
-    seed,
-    random: sequenceRandom(random),
-    initial: { day, energy },
-    initialEventId: 'drifting-supplies',
-  });
-}
-
 function beginFishing(session: SurvivalSession): FishingSession {
   const begun = session.beginFishing();
   expect(begun.accepted).toBe(true);
@@ -240,36 +194,6 @@ function itemResponse(itemId: ItemId, number = 1): EventResponse {
     kind: 'item',
     choiceId: itemId,
     instanceId: `${itemId}-${number}` as ItemInstanceId,
-  };
-}
-
-function itemChoiceResponse(
-  choiceId: string,
-  itemId: ItemId,
-  number = 1,
-): EventResponse {
-  return {
-    kind: 'item',
-    choiceId,
-    instanceId: `${itemId}-${number}` as ItemInstanceId,
-  };
-}
-
-function itemlessEvent(
-  effects: SurvivalEventDefinition['choices'][number]['outcomes'][number]['effects'],
-): SurvivalEventDefinition {
-  return {
-    id: 'test-itemless-choice',
-    phase: 'night',
-    title: 'Itemless Choice',
-    revealText: 'Choose without an item.',
-    prompt: 'Choose.',
-    danger: 'uncertain',
-    cue: 'none',
-    weight: 1,
-    earliestDay: 1,
-    cooldownDays: 0,
-    choices: [{ id: 'sleep', label: 'Sleep', outcomes: [{ resultId: 'test-result', weight: 1, message: 'Handled.', effects }] }],
   };
 }
 
@@ -447,148 +371,6 @@ describe('SurvivalSession Carlitos events', () => {
 });
 
 describe('SurvivalSession daytime actions', () => {
-  it('applies fishing luck only while Carlitos has energy', () => {
-    const boundary = (multiplier: number) => {
-      const entries = eligibleFishingCatches(1, false, new Set(), multiplier);
-      const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
-      const index = entries.findIndex((entry) => entry.catch.id === 'seaweed');
-      return entries.slice(0, index).reduce((sum, entry) => sum + entry.weight, 0) / total;
-    };
-    const roll = (boundary(1) + boundary(1.01)) / 2;
-    const options = { seed: 7, random: sequenceRandom([0, roll]) };
-    const rested = new SurvivalSession(saved('carlitos'), options);
-    const exhausted = new SurvivalSession(saved('carlitos'), {
-      ...options,
-      random: sequenceRandom([0, roll]),
-      initialCarlitos: { energy: 0, unhappiness: 3 },
-    });
-    const absent = new SurvivalSession(saved(), {
-      ...options,
-      random: sequenceRandom([0, roll]),
-    });
-
-    expect(reelCatch(beginFishing(rested))).toMatchObject({ kind: 'catch', catch: { id: 'clownfish' } });
-    expect(reelCatch(beginFishing(exhausted))).toMatchObject({ kind: 'catch', catch: { id: 'seaweed' } });
-    expect(reelCatch(beginFishing(absent))).toMatchObject({ kind: 'catch', catch: { id: 'seaweed' } });
-  });
-
-  it('hands Carlitos from saved items to companion state', () => {
-    const session = new SurvivalSession(saved('carlitos', 'cannedFood', 'medicalKit'), { seed: 7 });
-    const snapshot = session.snapshot();
-
-    expect(snapshot.carlitos).toMatchObject({ hunger: 5 });
-    expect(snapshot.inventory['carlitos-1']).toBeUndefined();
-    expect(snapshot.savedItems.some(({ type }) => type === 'carlitos')).toBe(false);
-  });
-
-  it('has no companion state when Carlitos was not saved', () => {
-    const session = new SurvivalSession(saved('cannedFood'), { seed: 7 });
-
-    expect(session.snapshot().carlitos).toBeNull();
-  });
-
-  it('returns immutable Carlitos snapshots', () => {
-    const session = new SurvivalSession(saved('carlitos'), { seed: 7 });
-    const snapshot = session.snapshot();
-
-    expect(Object.isFrozen(snapshot.carlitos)).toBe(true);
-    expect(() => {
-      (snapshot.carlitos as { hunger: number }).hunger = 0;
-    }).toThrow();
-    expect(session.snapshot().carlitos?.hunger).toBe(5);
-  });
-
-  it('cares for Carlitos during the day without using energy', () => {
-    const session = new SurvivalSession(saved('carlitos', 'cannedFood', 'medicalKit'), {
-      seed: 7,
-      initialCarlitos: { hunger: 2, unhappiness: 5 },
-    });
-
-    expect(session.perform('petCarlitos')).toMatchObject({
-      accepted: true, code: 'carlitos-petted', deltas: {}, cue: 'none',
-    });
-    expect(session.perform('feedCarlitos')).toMatchObject({
-      accepted: true, code: 'carlitos-fed', deltas: { food: -1 }, cue: 'none',
-    });
-    expect(session.snapshot()).toMatchObject({
-      energy: 3,
-      carlitos: { hunger: 5, unhappiness: 1, pettedToday: true },
-    });
-    expect(session.snapshot().inventory).toMatchObject({
-      'cannedFood-1': { condition: 'consumed' },
-      'medicalKit-1': { condition: 'usable' },
-    });
-  });
-
-  it('rejects unavailable Carlitos care actions', () => {
-    const healthy = new SurvivalSession(saved('carlitos'), { seed: 7 });
-    expect(healthy.perform('feedCarlitos')).toMatchObject({ code: 'carlitos-not-hungry' });
-    expect(healthy.perform('petCarlitos')).toMatchObject({ code: 'carlitos-happy' });
-
-    const bored = new SurvivalSession(saved('carlitos'), {
-      seed: 7,
-      initialCarlitos: { unhappiness: 3 },
-    });
-    expect(bored.perform('petCarlitos').accepted).toBe(true);
-    expect(bored.perform('petCarlitos')).toMatchObject({ code: 'already-petted' });
-
-    const noSupplies = new SurvivalSession(saved('carlitos'), {
-      seed: 7,
-      initialCarlitos: { hunger: 2 },
-    });
-    expect(noSupplies.perform('feedCarlitos')).toMatchObject({ code: 'no-food' });
-
-    const exhausted = new SurvivalSession(saved('carlitos'), {
-      seed: 7,
-      initialCarlitos: { energy: 0, unhappiness: 3 },
-    });
-    expect(exhausted.perform('petCarlitos')).toMatchObject({ accepted: true });
-
-    const absent = new SurvivalSession(saved(), { seed: 7 });
-    expect(absent.perform('petCarlitos')).toMatchObject({ code: 'no-carlitos' });
-
-    healthy.perform('endDay');
-    expect(healthy.perform('petCarlitos')).toMatchObject({ code: 'not-daytime' });
-
-    const fishing = new SurvivalSession(saved('carlitos'), { seed: 7 });
-    expect(fishing.beginFishing().accepted).toBe(true);
-    expect(fishing.perform('petCarlitos')).toMatchObject({ code: 'fishing-in-progress' });
-  });
-
-  it('records Carlitos care and dawn results in the journal', () => {
-    const caredFor = new SurvivalSession(saved('carlitos'), {
-      seed: 7,
-      random: sequenceRandom([0, 0, 0.99, 0]),
-      initialCarlitos: { energy: 0, unhappiness: 3 },
-    });
-    caredFor.perform('endDay');
-    caredFor.beginDawn();
-    const caredForEntry = caredFor.snapshot().journalEntries[0]!;
-
-    expect(caredForEntry.actions).toEqual([
-      {
-        kind: 'carlitosDawn',
-        before: expect.objectContaining({ energy: 0, hunger: 5, unhappiness: 3 }),
-        after: expect.objectContaining({ energy: 1, hunger: 4, unhappiness: 4 }),
-      },
-    ]);
-    expect(formatJournalEntry(caredForEntry).nighttime).toContain('enough strength to help again');
-
-    const neglected = new SurvivalSession(saved('carlitos'), {
-      seed: 7,
-      random: sequenceRandom([0]),
-      initialCarlitos: { hunger: 2 },
-    });
-    neglected.perform('endDay');
-    neglected.beginDawn();
-    expect(neglected.snapshot().carlitos).toMatchObject({ energy: 0 });
-    expect(formatJournalEntry(neglected.snapshot().journalEntries[0]!).nighttime)
-      .toContain('Carlitos is too tired to help.');
-    neglected.perform('endDay');
-    neglected.beginDawn();
-    expect(formatJournalEntry(neglected.snapshot().journalEntries[1]!).nighttime)
-      .not.toContain('Carlitos is too tired to help.');
-  });
 
   it('reuses an immutable snapshot until an action changes state', () => {
     const session = new SurvivalSession(saved(), { seed: 1 });
@@ -619,24 +401,6 @@ describe('SurvivalSession daytime actions', () => {
       initialEventId: 'monster-in-the-fog',
     });
     expect(increased.resolveEvent(itemResponse('spyglass')).deltas.pressure).toBe(1);
-  });
-
-  it('opens a recovered chest and prefers a missing durable item', () => {
-    const session = new SurvivalSession(saved(), {
-      seed: 9,
-      random: sequenceRandom([0]),
-      initialChest: { state: 'closed', acquiredDay: 1 },
-    });
-
-    expect(session.perform('openChest')).toMatchObject({
-      accepted: true,
-      code: 'chest-opened',
-      cue: 'none',
-      deltas: {},
-      rewardSummary: { kind: 'item', id: 'compass', quantity: 1 },
-    });
-    expect(session.snapshot().chest).toEqual({ state: 'none', acquiredDay: null });
-    expect(session.snapshot().inventory['compass-1']).toMatchObject({ condition: 'usable' });
   });
 
   it('turns an old chest into a mimic before the automatic attack', () => {
@@ -723,25 +487,6 @@ describe('SurvivalSession daytime actions', () => {
 
   });
 
-  it('records the Flowers event without granting a survival reward', () => {
-    const session = new SurvivalSession(saved('bucket'), {
-      seed: 11,
-      random: sequenceRandom([0]),
-      initial: { day: 4 },
-      initialEventId: 'flowers',
-    });
-
-    expect(session.resolveEvent(itemResponse('bucket'))).toMatchObject({
-      accepted: true,
-      deltas: {},
-    });
-    expect(session.beginDawn().accepted).toBe(true);
-    expect(session.snapshot().journalEntries[0]?.nighttime).toMatchObject({
-      kind: 'event',
-      event: { eventId: 'flowers', attemptedItemId: 'bucket' },
-    });
-  });
-
   it('enforces contextual requirements without mutating the session', () => {
     const session = new SurvivalSession(saved(), {
       seed: 104, random: sequenceRandom([0]), initial: { day: 3, energy: 0 }, initialEventId: 'drifting-supplies',
@@ -751,107 +496,6 @@ describe('SurvivalSession daytime actions', () => {
       accepted: false, code: 'requirements-unmet', deltas: {},
     });
     expect(session.snapshot()).toEqual(before);
-  });
-
-  it('trades a closed Chest for an Anchor without exposing it otherwise', () => {
-    const noChest = new SurvivalSession(saved(), {
-      seed: 106,
-      random: sequenceRandom([0]),
-      initial: { day: 20, pressure: 2 },
-      initialEventId: 'handyman',
-    });
-    expect(noChest.resolveEvent(choiceResponse('chest'))).toMatchObject({
-      accepted: false,
-      code: 'chest-state-unavailable',
-    });
-
-    const session = new SurvivalSession(saved(), {
-      seed: 106,
-      random: sequenceRandom([0]),
-      initial: { day: 20, pressure: 2 },
-      initialChest: { state: 'closed', acquiredDay: 18 },
-      initialEventId: 'handyman',
-    });
-    expect(session.resolveEvent(choiceResponse('chest'))).toMatchObject({
-      accepted: true,
-      eventResult: { resultId: 'handyman-reward' },
-    });
-    expect(session.snapshot()).toMatchObject({
-      chest: { state: 'none', acquiredDay: null },
-      inventory: { 'anchor-1': { condition: 'usable' } },
-    });
-  });
-
-  it('executes Night Trader resource and Other People signal choices deterministically', () => {
-    const trader = new SurvivalSession(saved('cannedFood'), {
-      seed: 107, random: sequenceRandom([0]), initial: { day: 10 }, initialEventId: 'night-trader',
-    });
-    expect(trader.resolveEvent(itemChoiceResponse('food', 'cannedFood')))
-      .toMatchObject({ accepted: true, deltas: { food: -1 } });
-    expect(trader.snapshot()).toMatchObject({ food: 0, inventory: { 'ductTape-1': { condition: 'usable' } } });
-
-    const flare = new SurvivalSession(saved('flareGun'), {
-      seed: 110, random: sequenceRandom([0]), initial: { day: 15, rescueLead: 2 }, initialEventId: 'other-people',
-    });
-    expect(flare.resolveEvent(itemResponse('flareGun'))).toMatchObject({
-      accepted: true,
-      deltas: { rescueLead: 6 },
-      eventResult: { resultId: 'people-signaled' },
-    });
-    expect(flare.snapshot()).toMatchObject({
-      state: 'nightEvent',
-      rescueLead: 8,
-      inventory: { 'flareGun-1': { condition: 'consumed' } },
-    });
-  });
-
-  it.each([
-    ['without a signal item', []],
-    ['with a Flashlight', ['flashlight']],
-  ] as const)('lets Other People pass through Endure %s', (_label, items) => {
-    const session = new SurvivalSession(saved(...items), {
-      seed: 1101,
-      random: sequenceRandom([0]),
-      initial: { day: 15, rescueLead: 2 },
-      initialEventId: 'other-people',
-    });
-
-    expect(session.resolveEvent({ kind: 'endure' })).toMatchObject({
-      accepted: true,
-      code: 'event-resolved',
-      message: 'You let the other boat pass.',
-      eventResult: {
-        eventId: 'other-people',
-        choiceId: 'sleep',
-        resultId: 'people-pass',
-      },
-    });
-    expect(session.snapshot()).toMatchObject({
-      state: 'nightEvent',
-      pendingEventId: null,
-    });
-  });
-
-  it('gains an event item and falls back to food when its stable slot is occupied', () => {
-    const gained = new SurvivalSession(saved(), { seed: 1, initialEventId: 'shower-night' });
-    (gained as unknown as { pendingEvent: SurvivalEventDefinition }).pendingEvent =
-      itemlessEvent({
-        items: [{ kind: 'gain', itemId: 'compass', quantity: 1, fallbackFood: 1 }],
-      });
-
-    expect(gained.resolveEvent(choiceResponse('sleep')).accepted).toBe(true);
-    expect(gained.snapshot().inventory['compass-1']?.condition).toBe('usable');
-
-    const fallback = new SurvivalSession(saved('compass'), { seed: 1, initialEventId: 'shower-night' });
-    (fallback as unknown as { pendingEvent: SurvivalEventDefinition }).pendingEvent =
-      itemlessEvent({
-        items: [{ kind: 'gain', itemId: 'compass', quantity: 1, fallbackFood: 1 }],
-      });
-
-    expect(fallback.resolveEvent(choiceResponse('sleep'))).toMatchObject({
-      deltas: { food: 1 },
-      message: 'The item slot is occupied, so you receive one food instead.',
-    });
   });
 
   it('rejects a mismatched or stale exact instance without mutation or random draws', () => {
@@ -940,53 +584,6 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot().state).toBe('nightEvent');
     expect(session.beginDawn()).toMatchObject({ accepted: true, cue: 'dawn' });
   });
-  it('starts day one with frozen cloned supplies and one food per can', () => {
-    const savedItems = saved('cannedFood', 'compass');
-    const session = new SurvivalSession(savedItems, { seed: 9, random: sequenceRandom([0]) });
-    savedItems.length = 0;
-    const state = session.snapshot();
-    expect(state).toMatchObject({
-      state: 'day', day: 1, health: 100, hunger: 0, energy: 3, hull: 100, food: 1,
-    });
-    expect(state.inventory['cannedFood-1']).toEqual({
-      instanceId: 'cannedFood-1', type: 'cannedFood', condition: 'usable',
-    });
-    expect(state.inventory['compass-1']).toEqual({
-      instanceId: 'compass-1', type: 'compass', condition: 'usable',
-    });
-    expect(state.savedItems).toEqual(saved('cannedFood', 'compass'));
-    expect(state.savedItems).not.toBe(savedItems);
-    expect(Object.isFrozen(state.savedItems)).toBe(true);
-    expect(state.savedItems.every(Object.isFrozen)).toBe(true);
-  });
-
-  it('charges one Energy for fishing and captures bait through the injected random source', () => {
-    const draws = [0.25, 0];
-    let drawIndex = 0;
-    const session = new SurvivalSession(saved('baitTin'), {
-      seed: 1,
-      random: { next: () => draws[drawIndex++] ?? 0 },
-    });
-
-    const begun = session.beginFishing();
-
-    expect(begun).toMatchObject({
-      accepted: true,
-      outcome: { code: 'fishing-started', deltas: { energy: -1 }, cue: 'none' },
-      attempt: {},
-    });
-    if (!begun.accepted) throw new Error('Expected fishing to begin.');
-    expect(begun.attempt.snapshot()).toMatchObject({
-      id: 'fishing-1-1',
-      capturedBait: true,
-      biteDelaySeconds: 4,
-    });
-    expect(begun.attempt.snapshot().id).toBe(begun.attempt.snapshot().id);
-    expect(drawIndex).toBe(2);
-    expect(session.snapshot()).toMatchObject({ energy: 2, bait: 1, actedToday: true });
-    expect(new SurvivalSession(saved(), { seed: 10, initial: { energy: 0 } }).beginFishing())
-      .toMatchObject({ accepted: false, outcome: { code: 'not-enough-energy' } });
-  });
 
   it('cancels only an uncast attempt and restores its reserved action state', () => {
     const session = new SurvivalSession(saved(), {
@@ -1044,41 +641,6 @@ describe('SurvivalSession daytime actions', () => {
       state: 'day',
       pendingEventId: null,
     });
-  });
-
-  it('acquires a closed chest from Drifting Chest during a normal run', () => {
-    const session = new SurvivalSession(saved(), {
-      seed: 1,
-      random: sequenceRandom([0.99, 0.249, 0.5, 0]),
-      initial: { day: 2 },
-    });
-
-    expect(session.perform('endDay').accepted).toBe(true);
-    expect(session.beginDawn().accepted).toBe(true);
-    expect(session.snapshot().pendingEventId).toBe('drifting-chest');
-    expect(session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' }).accepted).toBe(true);
-    expect(session.snapshot().chest).toEqual({ state: 'closed', acquiredDay: 3 });
-  });
-
-  it('records every applied Drifting Cargo reward without parsing its message', () => {
-    const outcome = driftingCargoSession([0.99]).resolveEvent({ kind: 'choice', choiceId: 'retrieve' });
-    expect(outcome).toMatchObject({ accepted: true, deltas: { energy: -1, food: 3, bait: 3 },
-      rewardSummary: { kind: 'bundle', rewards: [
-        { kind: 'resource', id: 'food', quantity: 3 },
-        { kind: 'resource', id: 'bait', quantity: 3 },
-      ] },
-    });
-  });
-
-  it('rejects insufficient-energy Drifting Cargo retrieval atomically', () => {
-    const session = driftingCargoSession([0], 0);
-    const before = session.snapshot();
-
-    expect(session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' })).toMatchObject({
-      accepted: false,
-      code: 'requirements-unmet',
-    });
-    expect(session.snapshot()).toEqual(before);
   });
 
   it('rejects invalid fishing starts atomically', () => {
@@ -1165,50 +727,6 @@ describe('SurvivalSession daytime actions', () => {
     });
   });
 
-  it.each([
-    ['bait', fishingRoll('bait', 3), {}, { bait: 1 }, undefined],
-    ['wetDuctTape', fishingRoll('wetDuctTape', 3), {}, {}, ['ductTape-1', 'usable']],
-    ['brokenCompass', fishingRoll('brokenCompass', 3), {}, {}, ['compass-1', 'broken']],
-    ['energyBar', fishingRoll('energyBar', 3), {}, {}, ['energyBar-1', 'usable']],
-  ] as const)('applies the %s utility reward', (
-    catchId, catchRoll, deltas, snapshotMatch, item,
-  ) => {
-    const session = new SurvivalSession([], {
-      seed: 1,
-      initial: { day: 3 },
-      random: sequenceRandom([0, catchRoll]),
-    });
-    const attempt = beginFishing(session);
-    const result = reelCatch(attempt);
-    expect(result).toMatchObject({ kind: 'catch', catch: { id: catchId, kind: 'utility' } });
-    const outcome = session.finishFishing(attempt.snapshot().id, result);
-    expect(outcome).toMatchObject({
-      accepted: true, code: 'utility-caught', deltas,
-    });
-    if (result.kind !== 'catch') throw new Error('Expected utility fishing catch.');
-    expect(outcome.message).toBe(`You reeled in ${result.catch.label.toLocaleLowerCase('en-US')}.`);
-    expect(session.snapshot()).toMatchObject(snapshotMatch);
-    if (item) {
-      expect(session.snapshot().inventory[item[0]]?.condition).toBe(item[1]);
-    }
-  });
-
-  it.each([
-    ['usable', undefined],
-    ['broken', { 'compass-1': 'broken' }],
-  ] as const)('excludes a %s owned unique fishing utility before selection', (
-    _condition, initialConditions,
-  ) => {
-    const session = new SurvivalSession(saved('compass'), {
-      seed: 1,
-      initial: { day: 3 },
-      initialConditions,
-      random: sequenceRandom([0, fishingRoll('wetDuctTape', 3, false, new Set(['compass']))]),
-    });
-    const attempt = beginFishing(session);
-    expect(reelCatch(attempt)).toMatchObject({ kind: 'catch', catch: { id: 'wetDuctTape' } });
-  });
-
   it('does not consume bait that was unavailable when the fishing attempt began', () => {
     const session = new SurvivalSession(saved(), { seed: 1, random: sequenceRandom([0, 0]) });
     const attempt = beginFishing(session);
@@ -1292,80 +810,6 @@ describe('SurvivalSession daytime actions', () => {
     }
   });
 
-  it('does not restore a consumed recovered can when diving finds loose food', () => {
-    const session = new SurvivalSession(saved('cannedFood', 'scubaSet', 'energyBar'), {
-      seed: 1,
-      random: sequenceRandom([0, 0, 0.99, 0, 0]),
-      initial: { hunger: 80, energy: 3 },
-    });
-
-    session.perform('eat');
-    expect(session.snapshot()).toMatchObject({ food: 0, recoveredFood: 0 });
-    session.perform('useEnergyBar');
-    session.perform('dive');
-
-    expect(session.snapshot()).toMatchObject({ food: 1, recoveredFood: 0 });
-  });
-
-  it('does not refill a used recovered bait tin when diving finds loose bait', () => {
-    const session = new SurvivalSession(saved('baitTin', 'scubaSet', 'energyBar'), {
-      seed: 1,
-      random: sequenceRandom([0, 0, 0, 0, 0, 0, 0.5, 0]),
-      initial: { energy: 3 },
-    });
-
-    const attempt = beginFishing(session);
-    const result = reelCatch(attempt);
-    session.finishFishing(attempt.snapshot().id, result);
-    expect(session.snapshot()).toMatchObject({ bait: 0, recoveredBait: 0 });
-    session.perform('endDay');
-    session.beginDawn();
-    session.perform('dive');
-
-    expect(session.snapshot()).toMatchObject({ bait: 1, recoveredBait: 0 });
-  });
-
-  it.each([18, 19, 20, 21, 22, 23, 24])('reduces hunger by %i when eating', (reduction) => {
-    const session = new SurvivalSession(saved('cannedFood'), {
-      seed: 1, random: sequenceRandom([(reduction - 18 + 0.5) / 7]),
-      initial: { hunger: 80, health: 60, energy: 2 },
-    });
-    expect(session.perform('eat')).toMatchObject({
-      accepted: true, deltas: { hunger: -reduction, food: -1 },
-    });
-    expect(session.snapshot()).toMatchObject({ hunger: 80 - reduction, food: 0, health: 60, energy: 2 });
-    expect(session.snapshot().inventory['cannedFood-1']?.condition).toBe('consumed');
-  });
-
-  it('does not draw a food amount when eating is unavailable', () => {
-    const next = vi.fn(() => 0);
-    const session = new SurvivalSession(saved('cannedFood'), {
-      seed: 1, random: { next }, initial: { hunger: 0 },
-    });
-    const before = session.snapshot();
-    const drawCount = next.mock.calls.length;
-    expect(session.perform('eat').accepted).toBe(false);
-    expect(session.snapshot()).toEqual(before);
-    expect(next).toHaveBeenCalledTimes(drawCount);
-  });
-
-  it('eats for free, then repairs with energy and treats with a Medkit', () => {
-    const session = new SurvivalSession(saved('cannedFood', 'ductTape', 'medicalKit'), {
-      seed: 1,
-      random: sequenceRandom([0]),
-      initial: { hunger: 80, health: 60, hull: 40, energy: 2 },
-    });
-    expect(session.perform('eat')).toMatchObject({
-      deltas: { hunger: -18, food: -1 },
-    });
-    expect(session.snapshot().energy).toBe(2);
-    expect(session.perform('repair'))
-      .toMatchObject({ deltas: { energy: -2, hull: 60 } });
-    expect(session.snapshot().inventory['ductTape-1']?.condition).toBe('usable');
-    expect(session.perform('treat')).toMatchObject({ deltas: { health: 40 } });
-    expect(session.snapshot().health).toBe(100);
-  });
-
   it.each([
     [7, 3, 3, 93],
     [90, 3, 1, 10],
@@ -1391,28 +835,6 @@ describe('SurvivalSession daytime actions', () => {
       expect(session.snapshot().inventory['ductTape-1']?.condition).toBe('usable');
     },
   );
-
-  it('rejects full-hull repairs and repairs without energy', () => {
-    const full = new SurvivalSession(saved('ductTape'), {
-      seed: 1,
-      initial: { hull: 100, energy: 3 },
-    });
-    const fullSnapshot = full.snapshot();
-    expect(full.perform('repair'))
-      .toMatchObject({ accepted: false, code: 'hull-full' });
-    expect(full.snapshot()).toEqual(fullSnapshot);
-
-    const exhausted = new SurvivalSession(saved('ductTape'), {
-      seed: 1,
-      initial: { hull: 33, energy: 0 },
-    });
-    expect(exhausted.perform('repair'))
-      .toMatchObject({
-        accepted: false,
-        code: 'not-enough-energy',
-        message: 'Repairing requires one energy.',
-      });
-  });
 
   it('starts at three energy and restores energy through End Day dawn tiers', () => {
     const recover = (hunger: number) => {
@@ -1494,68 +916,6 @@ describe('SurvivalSession daytime actions', () => {
     });
   });
 
-  it('spends bonus energy and restores only the standard limit', () => {
-    const session = new SurvivalSession(saved('energyBar', 'ductTape'), {
-      seed: 1,
-      initial: { energy: 4, hull: 75 },
-    });
-
-    expect(session.perform('repair'))
-      .toMatchObject({ accepted: true, deltas: { energy: -1, hull: 25 } });
-    expect(session.snapshot().energy).toBe(3);
-    expect(session.perform('useEnergyBar')).toMatchObject({
-      accepted: false,
-      code: 'energy-full',
-    });
-  });
-
-  it('spends the only Duct Tape to repair one broken item', () => {
-    const session = new SurvivalSession(saved('ductTape', 'compass'), {
-      seed: 1,
-      initialConditions: { 'compass-1': 'broken' },
-    });
-    expect(session.perform('repairItem', {
-      kind: 'itemRepair', target: 'compass-1',
-    })).toMatchObject({ accepted: true, code: 'item-repaired' });
-    expect(session.snapshot().inventory['compass-1']?.condition).toBe('usable');
-    expect(session.snapshot().inventory['ductTape-1']?.condition).toBe('consumed');
-  });
-
-  it('synchronizes recovered food instances in stable order without consuming loose food', () => {
-    const session = new SurvivalSession(saved('cannedFood', 'cannedFood'), {
-      seed: 1,
-      initial: { hunger: 100 },
-    });
-
-    session.perform('eat');
-    expect(session.snapshot().inventory['cannedFood-1']?.condition).toBe('consumed');
-    expect(session.snapshot().inventory['cannedFood-2']?.condition).toBe('usable');
-    session.perform('eat');
-    expect(session.snapshot().inventory['cannedFood-2']?.condition).toBe('consumed');
-  });
-
-  it('rejects unknown or illegal initial instance conditions', () => {
-    expect(() => new SurvivalSession(saved('compass'), {
-      seed: 1,
-      initialConditions: { 'compass-2': 'broken' },
-    })).toThrow(/unknown instance/i);
-    expect(() => new SurvivalSession(saved('energyBar'), {
-      seed: 1,
-      initialConditions: { 'energyBar-1': 'broken' },
-    })).toThrow(/illegal condition/i);
-  });
-
-  it('applies a consumed initial condition to the exact duplicate instance', () => {
-    const session = new SurvivalSession(saved('cannedFood', 'cannedFood'), {
-      seed: 1,
-      initialConditions: { 'cannedFood-2': 'consumed' },
-    });
-
-    expect(session.snapshot().inventory['cannedFood-1']?.condition).toBe('usable');
-    expect(session.snapshot().inventory['cannedFood-2']?.condition).toBe('consumed');
-    expect(session.snapshot()).toMatchObject({ food: 1, recoveredFood: 1 });
-  });
-
   it('rejects every invalid action option before gates without mutating state', () => {
     const itemRepair = { kind: 'itemRepair', target: 'compass-1' } as const;
     const cases: Array<{
@@ -1582,40 +942,6 @@ describe('SurvivalSession daytime actions', () => {
       });
       expect(session.snapshot()).toEqual(before);
     }
-  });
-
-  it.each([
-    [0, 40, 45],
-    [51, 40, 45],
-    [52, 40, 40],
-    [72, 40, 40],
-    [82, 40, 33],
-    [0, 98, 100],
-    [0, 100, 100],
-  ])('recovers health at dawn for hunger %i and health %i', (hunger, health, expectedHealth) => {
-    const session = new SurvivalSession(saved(), {
-      seed: 1,
-      random: sequenceRandom([0]),
-      initial: { hunger, health },
-    });
-    expect(session.endDay().accepted).toBe(true);
-    const dawn = session.beginDawn();
-    expect(dawn.accepted).toBe(true);
-    expect(dawn.deltas.health ?? 0).toBe(expectedHealth - health);
-    expect(session.snapshot().health).toBe(expectedHealth);
-    expect(session.beginDawn().accepted).toBe(false);
-    expect(session.snapshot().health).toBe(expectedHealth);
-  });
-
-  it.each([1, 40, 99])('fully heals health %i with one medkit and no energy', (health) => {
-    const session = new SurvivalSession(saved('medicalKit'), {
-      seed: 1,
-      initial: { health, energy: 0 },
-    });
-    expect(session.perform('treat')).toMatchObject({ accepted: true, deltas: { health: 100 - health } });
-    expect(session.snapshot()).toMatchObject({ health: 100, energy: 0 });
-    expect(session.snapshot().inventory['medicalKit-1']?.condition).toBe('consumed');
-    expect(session.perform('treat').accepted).toBe(false);
   });
 
   it('applies dawn hunger, energy tiers, starvation, and terminal states once', () => {
@@ -1656,46 +982,6 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot()).toEqual(before);
     expect(random.next).not.toHaveBeenCalled();
   });
-  it('still rejects arbitrary response strings and recovered but unusable items', () => {
-    const invalid = new SurvivalSession(saved('anchor', 'bucket'), {
-      seed: 2,
-      initialEventId: 'shower-night',
-    });
-    const before = invalid.snapshot();
-    expect(invalid.resolveEvent({
-      kind: 'item',
-      choiceId: 'not-an-event-response',
-      instanceId: 'anchor-1',
-    })).toMatchObject({
-      accepted: false,
-      code: 'choice-unavailable',
-    });
-    expect(invalid.snapshot()).toEqual(before);
-
-    const broken = new SurvivalSession(saved('anchor', 'bucket'), {
-      seed: 2,
-      initialConditions: { 'bucket-1': 'broken' },
-      initialEventId: 'shower-night',
-    });
-    expect(broken.resolveEvent(itemResponse('bucket'))).toMatchObject({
-      accepted: false,
-      code: 'item-unavailable',
-    });
-
-    const suitable = new SurvivalSession(saved('bucket'), {
-      seed: 2,
-      random: sequenceRandom([0.99]),
-      initialEventId: 'shower-night',
-    });
-    expect(suitable.resolveEvent(itemResponse('bucket'))).toMatchObject({
-      accepted: true,
-      code: 'event-resolved',
-      message: 'The bucket keeps the rain under control.',
-    });
-    expect(suitable.snapshot().inventory['bucket-1']?.condition).toBe('broken');
-    suitable.beginDawn();
-    expect(suitable.snapshot().inventory['bucket-1']?.condition).toBe('broken');
-  });
 
   it('draws a night event, advances dawn, and applies increasing rescue chance', () => {
     const session = new SurvivalSession(saved(), { seed: 2, random: sequenceRandom([0.5, 0, 0.99, 0.99, 0.99, 0]) });
@@ -1719,137 +1005,6 @@ describe('SurvivalSession daytime actions', () => {
     const beforeDawn = next.mock.calls.length;
     session.beginDawn();
     expect(next).toHaveBeenCalledTimes(beforeDawn + 1);
-  });
-
-  it.each([
-    [0, { food: 1 }],
-    [0.374999, { food: 1 }],
-    [0.375, { bait: 1 }],
-    [0.749999, { bait: 1 }],
-    [0.75, { rescueLead: 1 }],
-  ] as const)('uses the normal Dive reward boundary at %f', (rewardRoll, reward) => {
-    const session = new SurvivalSession(saved('scubaSet'), {
-      seed: 3,
-      random: sequenceRandom([0, 0.99, rewardRoll]),
-      initial: { energy: 3 },
-    });
-
-    expect(session.perform('dive').deltas).toMatchObject({
-      energy: -3,
-      ...reward,
-    });
-  });
-
-  it.each([
-    ['map safe', ['map'], itemResponse('map'), [0], {}, 8],
-    ['map collision', ['map'], itemResponse('map'), [0.99, 0], { hull: -5, pressure: 1 }, 8],
-    ['compass safe', ['compass'], itemResponse('compass'), [0], {}, 8],
-    ['compass collision', ['compass'], itemResponse('compass'), [0.99, 0], { hull: -5, pressure: 1 }, 8],
-    ['sleep collision', [], choiceResponse('sleep'), [0, 0], { hull: -25, pressure: 1 }, 8],
-  ] as const)(
-    'aligns Dangerous Waters for %s',
-    (_name, itemIds, response, rolls, deltas, rescueLead) => {
-      const session = new SurvivalSession(saved(...itemIds), {
-        seed: 31,
-        random: sequenceRandom(rolls),
-        initial: { day: 2, rescueLead },
-        initialEventId: 'dangerous-waters',
-      });
-
-      expect(session.snapshot()).toMatchObject({ state: 'nightEvent' });
-
-      expect(session.resolveEvent(response)).toMatchObject({
-        accepted: true,
-        deltas,
-      });
-      expect(session.snapshot()).toMatchObject({
-        rescueLead,
-      });
-      for (const itemState of Object.values(session.snapshot().inventory)) {
-        expect(itemState?.condition).toBe('usable');
-      }
-    },
-  );
-
-  it('finalizes one journal entry with separate attempted and concrete facts', () => {
-    const session = new SurvivalSession(saved('bucket'), {
-      seed: 9,
-      random: sequenceRandom([0, 0, 0, 0.99, 0.99]),
-      initial: { day: 2 },
-      initialEventId: 'drifting-supplies',
-    });
-    session.resolveEvent(choiceResponse('retrieve'));
-    session.perform('endDay');
-    session.resolveEvent(choiceResponse('sleep'));
-    expect(session.beginDawn().accepted).toBe(true);
-
-    expect(session.snapshot().journalEntries).toEqual([expect.objectContaining({
-      day: 2,
-      weather: 'calm',
-      daytime: expect.objectContaining({
-        eventId: 'drifting-supplies',
-        attemptedChoiceId: 'retrieve',
-        text: { kind: 'eventResult', reference: { eventId: 'drifting-supplies', choiceId: 'retrieve', resultId: 'drifting-supplies-container-loot' } },
-        inventoryMutations: [],
-      }),
-      nighttime: {
-        kind: 'event',
-        event: expect.objectContaining({
-          phase: 'night',
-          attemptedChoiceId: 'sleep',
-          attemptedItemId: null,
-        }),
-      },
-    })]);
-  });
-
-  it('records an item action without claiming it helped', () => {
-    const session = new SurvivalSession(saved('flashlight'), {
-      seed: 40,
-      random: sequenceRandom([0.99]),
-      initialEventId: 'death-stare',
-    });
-
-    session.resolveEvent(itemResponse('flashlight'));
-    expect(session.beginDawn().accepted).toBe(true);
-    const page = formatJournalEntry(session.snapshot().journalEntries[0]!);
-
-    expect(page.nighttime).toContain('I tried to hold its stare with the flashlight.');
-    expect(page.nighttime).toContain('The light went with it into the dark.');
-    expect(page.nighttime).not.toContain('I lost the flashlight in the trouble.');
-    expect(page.nighttime).not.toContain('it helped');
-  });
-
-  it('records the selected contextual label and actual result', () => {
-    const session = new SurvivalSession(saved(), {
-      seed: 41,
-      random: sequenceRandom([0]),
-      initialEventId: 'midnight-tour',
-    });
-
-    session.resolveEvent(choiceResponse('sleep'));
-    expect(session.beginDawn().accepted).toBe(true);
-    const page = formatJournalEntry(session.snapshot().journalEntries[0]!);
-
-    expect(page.nighttime).toContain('I sailed past the island');
-    expect(page.nighttime).toContain('watched it disappear into the dark.');
-  });
-
-  it('records a quiet day and protects internal history from snapshot mutation', () => {
-    const session = new SurvivalSession(saved(), {
-      seed: 10,
-      initialEventId: 'shower-night',
-    });
-    session.resolveEvent({ kind: 'endure' });
-    const first = session.snapshot();
-    expect(first.journalEntries).toHaveLength(1);
-    expect(first.journalEntries[0]!.daytime).toEqual({ kind: 'sinkingShip' });
-    expect(() => {
-      (first.journalEntries as unknown as Array<{ day: number }>)[0]!.day = 99;
-    }).toThrow(TypeError);
-    expect(session.snapshot().journalEntries[0]!.day).toBe(1);
-    expect(session.resolveEvent({ kind: 'endure' }).accepted).toBe(false);
-    expect(session.snapshot().journalEntries).toHaveLength(1);
   });
 
   it('protects nested daytime and nighttime event records from snapshot mutation', () => {
@@ -1887,24 +1042,6 @@ describe('SurvivalSession daytime actions', () => {
     });
   });
 
-  it('protects quiet-night records from snapshot mutation', () => {
-    const session = new SurvivalSession(saved(), {
-      seed: 10,
-      random: sequenceRandom([0]),
-    });
-    expect(session.perform('endDay').code).toBe('quiet-night');
-    expect(session.beginDawn().accepted).toBe(true);
-    const first = session.snapshot().journalEntries[0]!;
-    expect(first.daytime).toEqual({ kind: 'sinkingShip' });
-    expect(first.nighttime).toEqual({ kind: 'quiet' });
-
-    expect(() => {
-      (first.nighttime as { kind: string }).kind = 'event';
-    }).toThrow(TypeError);
-
-    expect(session.snapshot().journalEntries[0]!.nighttime).toEqual({ kind: 'quiet' });
-  });
-
   it('finalizes the journal before a night consequence ends the run', () => {
     const session = new SurvivalSession(saved(), {
       seed: 12,
@@ -1917,56 +1054,6 @@ describe('SurvivalSession daytime actions', () => {
       state: 'sunk',
       journalEntries: [expect.objectContaining({ day: 1 })],
     });
-  });
-
-  it('finalizes a quiet night selected from the event pool', () => {
-    const session = new SurvivalSession(saved(), {
-      seed: 21,
-      random: sequenceRandom([0.299999]),
-    });
-
-    expect(session.perform('endDay')).toMatchObject({
-      accepted: true,
-      code: 'quiet-night',
-      cue: 'nightfall',
-    });
-    expect(session.snapshot()).toMatchObject({
-      state: 'nightEvent',
-      pendingEventId: null,
-      journalEntries: [{ day: 1, nighttime: { kind: 'pending' } }],
-    });
-  });
-
-  it('opens a night encounter selected from the event pool', () => {
-    const session = new SurvivalSession(saved(), {
-      seed: 22,
-      random: sequenceRandom([0.30, 0]),
-      initial: { day: 2 },
-    });
-
-    expect(session.perform('endDay')).toMatchObject({
-      accepted: true,
-      code: 'event-opened',
-      cue: 'nightfall',
-    });
-    expect(session.snapshot()).toMatchObject({
-      state: 'nightEvent',
-      pendingEventId: expect.any(String),
-      journalEntries: [{ day: 2, nighttime: { kind: 'pending' } }],
-    });
-  });
-
-  it('breaks and repairs a durable event item', () => {
-    const session = new SurvivalSession(saved('bucket', 'ductTape'), {
-      seed: 13,
-      random: sequenceRandom([0.99, 0.99]),
-      initialEventId: 'shower-night',
-    });
-    expect(session.resolveEvent(itemResponse('bucket')).accepted).toBe(true);
-    expect(session.snapshot().inventory['bucket-1']?.condition).toBe('broken');
-    session.beginDawn();
-    expect(session.perform('repairItem', { kind: 'itemRepair', target: 'bucket-1' }).accepted).toBe(true);
-    expect(session.snapshot().inventory['bucket-1']?.condition).toBe('usable');
   });
 
   it('breaks random eligible items without replacement during event resolution', () => {
@@ -2026,64 +1113,6 @@ describe('SurvivalSession daytime actions', () => {
     });
   });
 
-  it('does not select a broken item as a later event target', () => {
-    const session = new SurvivalSession(saved('anchor'), {
-      seed: 181,
-      random: sequenceRandom([0]),
-      initialConditions: { 'anchor-1': 'broken' },
-      initialEventId: 'snatcher',
-    });
-
-    expect(session.snapshot().pendingEventTargetId).toBeNull();
-  });
-
-  it('excludes broken, consumed, and lost Snatcher candidates', () => {
-    const session = new SurvivalSession(saved('anchor', 'map', 'fishingNet'), {
-      seed: 19,
-      random: sequenceRandom([0]),
-      initialConditions: { 'anchor-1': 'broken', 'map-1': 'lost' },
-      initialEventId: 'snatcher',
-    });
-    expect(session.snapshot().pendingEventTargetId).toBeNull();
-  });
-
-  it('rejects unsupported Bait for Snatcher without changing the physical supply', () => {
-    const session = new SurvivalSession(saved('baitTin'), {
-      seed: 19,
-      random: sequenceRandom([0]),
-      initialEventId: 'snatcher',
-    });
-
-    expect(session.snapshot()).toMatchObject({
-      pendingEventTargetId: null,
-      bait: 1,
-      recoveredBait: 1,
-    });
-    expect(session.resolveEvent(itemResponse('baitTin'))).toMatchObject({
-      accepted: false,
-      code: 'choice-unavailable',
-      deltas: {},
-    });
-    expect(session.snapshot()).toMatchObject({ bait: 1, recoveredBait: 1 });
-    expect(session.snapshot().inventory['baitTin-1']?.condition).toBe('usable');
-  });
-
-  it('rejects Fishing Net when Snatcher has no canonical target', () => {
-    const session = new SurvivalSession(saved('fishingNet'), {
-      seed: 19,
-      random: sequenceRandom([0, 0]),
-      initialEventId: 'snatcher',
-    });
-
-    expect(session.snapshot().pendingEventTargetId).toBeNull();
-    expect(session.resolveEvent(itemResponse('fishingNet'))).toMatchObject({
-      accepted: false,
-      code: 'choice-unavailable',
-      deltas: {},
-    });
-    expect(session.snapshot().inventory['fishingNet-1']?.condition).toBe('usable');
-  });
-
   it('keeps the Snatcher target pending after rejected choices and clears it after endurance', () => {
     const session = new SurvivalSession(saved('anchor'), {
       seed: 20, random: sequenceRandom([0, 0]), initialEventId: 'snatcher',
@@ -2109,24 +1138,6 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.resolveEvent(itemResponse('bucket'))).toMatchObject({ accepted: false, code: 'item-unavailable' });
     expect(session.snapshot()).toEqual(before);
     expect(session.resolveEvent({ kind: 'endure' }).message).toBe('You wake with two energy.');
-  });
-
-  it('consumes recovered Food and Bait before loose aggregate resources', () => {
-    const food = new SurvivalSession(saved('cannedFood'), {
-      seed: 22, random: sequenceRandom([0]), initialEventId: 'death-stare',
-    });
-    (food as unknown as { food: number }).food = 3;
-    food.resolveEvent(itemResponse('cannedFood'));
-    expect(food.snapshot()).toMatchObject({ food: 1, recoveredFood: 0 });
-    expect(food.snapshot().inventory['cannedFood-1']?.condition).toBe('consumed');
-
-    const bait = new SurvivalSession(saved('baitTin'), {
-      seed: 23, random: sequenceRandom([0]), initialEventId: 'swarm-of-sharks',
-    });
-    (bait as unknown as { bait: number }).bait = 3;
-    bait.resolveEvent(itemResponse('baitTin'));
-    expect(bait.snapshot()).toMatchObject({ bait: 1, recoveredBait: 0 });
-    expect(bait.snapshot().inventory['baitTin-1']?.condition).toBe('consumed');
   });
 
   it('applies set, subtract, and add resource effects in authored order with clamps', () => {

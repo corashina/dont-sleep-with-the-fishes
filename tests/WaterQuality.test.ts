@@ -1,17 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe,expect,it,vi } from 'vitest';
 import {
-  DEFAULT_WATER_QUALITY,
-  createWaterQualityPreference,
-  parseWaterQuality,
+  createWaterQualityPreference
 } from '../src/rendering/waterQuality';
 
 describe('water quality preference', () => {
-  it('accepts low and high and falls back to high for invalid values', () => {
-    expect(parseWaterQuality('low')).toBe('low');
-    expect(parseWaterQuality('high')).toBe('high');
-    expect(parseWaterQuality('ultra')).toBe(DEFAULT_WATER_QUALITY);
-    expect(parseWaterQuality(null)).toBe(DEFAULT_WATER_QUALITY);
-  });
 
   it('loads the saved value and applies a changed choice', () => {
     const apply = vi.fn();

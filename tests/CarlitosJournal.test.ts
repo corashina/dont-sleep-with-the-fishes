@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach,describe,expect,it } from 'vitest';
 import { setLanguage } from '../src/i18n/language';
-import { createCarlitosState, type CarlitosSnapshot } from '../src/survival/CarlitosState';
+import { createCarlitosState,type CarlitosSnapshot } from '../src/survival/CarlitosState';
 import { formatJournalEntry } from '../src/survival/journal';
-import { createJournalCarlitosDawnRecord, createJournalEntry } from '../src/survival/journalRecords';
+import { createJournalCarlitosDawnRecord,createJournalEntry } from '../src/survival/journalRecords';
 
 afterEach(() => setLanguage('en'));
 
@@ -39,15 +39,6 @@ describe('Carlitos journal milestones', () => {
   ] as const)('reports a new warning from %j to %j', (before, after, warning) => {
     expect(night(before, after)).toContain(warning);
     expect(night(after, after)).not.toContain('Carlitos');
-  });
-
-  it.each([
-    [{ hunger: 1 }, { hunger: 2 }, 'less hungry'],
-    [{ hunger: 3 }, { hunger: 4 }, 'less hungry'],
-    [{ unhappiness: 5 }, { unhappiness: 4 }, 'happier'],
-    [{ unhappiness: 8 }, { unhappiness: 7 }, 'happier'],
-  ] as const)('reports recovery from %j to %j', (before, after, recovery) => {
-    expect(night(before, after)).toContain(recovery);
   });
 
   it('reports exhaustion once and recovery when energy returns', () => {

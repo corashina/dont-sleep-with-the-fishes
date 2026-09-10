@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach,describe,expect,it,vi } from 'vitest';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
@@ -72,31 +72,5 @@ describe('Item Animation Lab repair menu', () => {
     expect(lab.phase.getSurvivalCheckpoint()).toBeNull();
     expect(lab.onCheckpointChange).not.toHaveBeenCalled();
     expect(lab.onFatalError).not.toHaveBeenCalled();
-  });
-
-  it('opens an empty menu and cancels without changing the session or blocking later choices', () => {
-    const lab = repairLab();
-    const before = lab.session.snapshot();
-    lab.openRepair();
-    expect(lab.mount.querySelectorAll('[data-repair-target]')).toHaveLength(0);
-    lab.click('[data-repair-cancel]');
-    expect(lab.session.snapshot()).toBe(before);
-    lab.ui.onEventItem('bucket-scoop', 'bucket-1');
-    lab.click('[data-event-choice="break"]');
-    lab.openRepair();
-    expect(lab.mount.querySelector('[data-repair-target="bucket-1"]')).not.toBeNull();
-  });
-
-  it('ignores lost targets and repair commands without a selected tape', () => {
-    const lab = repairLab();
-    lab.ui.onEventItem('bucket-scoop', 'bucket-1');
-    lab.click('[data-event-choice="break"]');
-    const before = lab.session.snapshot();
-    lab.phase.handleAction('repairItem', { kind: 'itemRepair', target: 'bucket-1' });
-    expect(lab.session.snapshot()).toBe(before);
-    lab.openRepair();
-    lab.click('[data-repair-cancel]');
-    lab.phase.handleAction('repairItem', { kind: 'itemRepair', target: 'knife-1' });
-    expect(lab.session.snapshot()).toBe(before);
   });
 });

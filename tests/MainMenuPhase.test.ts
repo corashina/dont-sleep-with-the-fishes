@@ -72,6 +72,18 @@ function createRig(
 }
 
 describe('MainMenuPhase', () => {
+  it('requests raw mouse movement before entering scavenging', async () => {
+    const { phase, ui, canvas, requestPointerLock } = createRig();
+    try {
+      phase.start();
+      ui.onStart();
+      await Promise.resolve();
+      expect(requestPointerLock).toHaveBeenCalledExactlyOnceWith(
+        canvas, { unadjustedMovement: true },
+      );
+    } finally { phase.dispose(); }
+  });
+
   it('prepares the scene before starting its input and audio', async () => {
     const { phase, sceneRenderer, audioScope, camera } = createRig();
     try {

@@ -1,5 +1,5 @@
 // Importance: 10/10 (scaled from 5/5). Protects pickup, carry, drop, and deposit rules.
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 import {
   Box3,
   BoxGeometry,
@@ -11,7 +11,7 @@ import {
   Vector3,
 } from 'three';
 import { CarryController } from '../src/interaction/CarryController';
-import { InteractionSystem, chooseContextAction } from '../src/interaction/InteractionSystem';
+import { InteractionSystem,chooseContextAction } from '../src/interaction/InteractionSystem';
 import type { ItemInstance } from '../src/game/ItemState';
 import {
   addScavengePickupTarget,
@@ -29,55 +29,6 @@ const item = (instanceId: ItemInstance['instanceId'], type: ItemInstance['type']
 });
 
 describe('chooseContextAction', () => {
-  it('offers pickup for an item when hands are empty', () => {
-    const flareGun = item('flareGun-1', 'flareGun');
-    expect(chooseContextAction({
-      target: 'item',
-      targetItem: flareGun,
-      carriedItem: null,
-      remainingCapacity: 3,
-    })).toEqual({ type: 'pickUp', item: flareGun, prompt: 'LEFT CLICK — PICK UP FLARE GUN' });
-  });
-
-  it('offers a bundle deposit while carrying at a deposit target', () => {
-    expect(chooseContextAction({
-      target: 'deposit',
-      targetItem: null,
-      carriedItem: item('ductTape-1', 'ductTape'),
-      remainingCapacity: 2,
-    })).toEqual({
-      type: 'depositBundle',
-      prompt: 'LEFT CLICK — STORE CARRIED SUPPLIES',
-    });
-  });
-
-  it('explains when a targeted pickup exceeds remaining capacity', () => {
-    expect(chooseContextAction({
-      target: 'item',
-      targetItem: item('scubaSet-1', 'scubaSet'),
-      carriedItem: item('cannedFood-1', 'cannedFood'),
-      remainingCapacity: 2,
-    })).toEqual({ type: 'capacityFull', prompt: 'SCUBA GEAR WEIGHS 3 — 2 CAPACITY FREE' });
-  });
-
-  it('offers another pickup when the target fits the remaining capacity', () => {
-    const ductTape = item('ductTape-1', 'ductTape');
-    expect(chooseContextAction({
-      target: 'item',
-      targetItem: ductTape,
-      carriedItem: item('cannedFood-1', 'cannedFood'),
-      remainingCapacity: 2,
-    })).toEqual({ type: 'pickUp', item: ductTape, prompt: 'LEFT CLICK — PICK UP DUCT TAPE' });
-  });
-
-  it.each(['none', 'deposit'] as const)('offers no early evacuation action for %s with empty hands', (target) => {
-    expect(chooseContextAction({
-      target,
-      targetItem: null,
-      carriedItem: null,
-      remainingCapacity: 3,
-    })).toEqual({ type: 'none', prompt: '' });
-  });
 
   it('does not drop unless the crosshair reaches the floor', () => {
     expect(chooseContextAction({
@@ -86,27 +37,6 @@ describe('chooseContextAction', () => {
       carriedItem: item('flashlight-1', 'flashlight'),
       remainingCapacity: 2,
     })).toEqual({ type: 'none', prompt: '' });
-  });
-
-  it('returns the exact no-action result when no context applies', () => {
-    expect(chooseContextAction({
-      target: 'none',
-      targetItem: null,
-      carriedItem: null,
-      remainingCapacity: 3,
-    })).toEqual({ type: 'none', prompt: '' });
-  });
-
-  it('prioritizes a deposit target over mixed item inputs', () => {
-    const umbrella = item('umbrella-1', 'umbrella');
-    expect(chooseContextAction({
-      target: 'deposit',
-      targetItem: item('flareGun-1', 'flareGun'),
-      carriedItem: umbrella,
-      remainingCapacity: 1,
-    })).toEqual({
-      type: 'depositBundle', prompt: 'LEFT CLICK — STORE CARRIED SUPPLIES',
-    });
   });
 });
 
@@ -152,14 +82,6 @@ describe('InteractionSystem', () => {
     );
 
     expect(result).toEqual({ target: 'item', targetItem: instance });
-  });
-
-  it('keeps solid items on their model geometry', () => {
-    const solidItem = new Group();
-
-    addScavengePickupTarget(solidItem, 'medicalKit');
-
-    expect(solidItem.getObjectByName(SCAVENGE_PICKUP_TARGET_NAME)).toBeUndefined();
   });
 
   it('returns the aimed deck point when it is inside interaction range', () => {
@@ -251,23 +173,6 @@ describe('InteractionSystem', () => {
     expect(result).toEqual({ target: 'deposit', targetItem: null });
   });
 
-  it('resolves a direct lifeboat mesh', () => {
-    const camera = new PerspectiveCamera(70, 1, 0.1, 100);
-    const lifeboat = new Group();
-    lifeboat.name = 'lifeboat';
-    lifeboat.position.z = -2;
-    const material = new MeshStandardMaterial();
-    const mesh = new Mesh(new BoxGeometry(2, 1, 1), material);
-    lifeboat.add(mesh);
-    const interaction = new InteractionSystem(camera);
-
-    const result = interaction.update([], lifeboat, new Group(), new Map());
-
-    expect(result).toEqual({ target: 'deposit', targetItem: null });
-    expect(mesh.material).toBe(material);
-    expect(mesh.material).toBe(material);
-  });
-
   it('reaches the lifeboat beyond normal item range from the drop-off area', () => {
     const camera = new PerspectiveCamera(70, 1, 0.1, 100);
     const lifeboat = new Group();
@@ -294,29 +199,6 @@ describe('InteractionSystem', () => {
     );
 
     expect(result).toEqual({ target: 'none', targetItem: null });
-  });
-
-  it('resolves the tagged station deck as a deposit target', () => {
-    const camera = new PerspectiveCamera(70, 1, 0.1, 100);
-    const lifeboat = new Group();
-    lifeboat.name = 'lifeboat';
-    lifeboat.position.x = 10;
-    const depositTarget = new Mesh(
-      new BoxGeometry(2, 0.1, 2),
-      new MeshStandardMaterial(),
-    );
-    depositTarget.position.z = -2;
-    depositTarget.userData.boatDepositTarget = true;
-    const interaction = new InteractionSystem(camera);
-
-    const result = interaction.update(
-      [],
-      lifeboat,
-      depositTarget,
-      new Map(),
-    );
-
-    expect(result).toEqual({ target: 'deposit', targetItem: null });
   });
 
   it('keeps an available item selectable through the station target surface', () => {

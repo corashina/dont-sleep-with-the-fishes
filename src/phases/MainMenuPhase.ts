@@ -27,7 +27,7 @@ export interface MainMenuPhaseDependencies {
   createAnimator(
     actors: UnderwaterMenuWorld['actors'],
   ): UnderwaterMenuAnimator;
-  requestPointerLock(canvas: HTMLCanvasElement): Promise<void>;
+  requestPointerLock(canvas: HTMLCanvasElement, options: PointerLockOptions): Promise<void>;
 }
 
 const PRODUCTION_MAIN_MENU_DEPENDENCIES: MainMenuPhaseDependencies = {
@@ -36,7 +36,7 @@ const PRODUCTION_MAIN_MENU_DEPENDENCIES: MainMenuPhaseDependencies = {
     new UnderwaterMenuWorld(scene, camera, models, sand)
   ),
   createAnimator: (actors) => new UnderwaterMenuAnimator(actors),
-  requestPointerLock: (canvas) => canvas.requestPointerLock(),
+  requestPointerLock: (canvas, options) => canvas.requestPointerLock(options),
 };
 
 interface MainMenuResources {
@@ -244,6 +244,7 @@ export class MainMenuPhase implements GamePhase {
     try {
       await this.dependencies.requestPointerLock(
         this.context.renderer.domElement,
+        { unadjustedMovement: true },
       );
     } catch {
       this.pointerLockPending = false;

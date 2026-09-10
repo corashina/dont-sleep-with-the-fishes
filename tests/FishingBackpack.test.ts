@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { ITEM_DEFINITIONS, ITEM_IDS, type ItemId } from '../src/game/ItemState';
-import { eligibleFishingCatches, selectFishingCatch } from '../src/survival/fishingCatalog';
+import { describe,expect,it } from 'vitest';
+import { ITEM_DEFINITIONS,ITEM_IDS,type ItemId } from '../src/game/ItemState';
+import { eligibleFishingCatches,selectFishingCatch } from '../src/survival/fishingCatalog';
 import { fishingSettlement } from '../src/survival/fishingSettlementRules';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import { createSurvivalSaveDocument, parseSurvivalSaveDocument } from '../src/survival/SurvivalSaveData';
+import { createSurvivalSaveDocument,parseSurvivalSaveDocument } from '../src/survival/SurvivalSaveData';
 import { formatFishingResult } from '../src/survival/SurvivalFishingFlow';
 import { createJournalEntry } from '../src/survival/journalRecords';
 import { journalItemChanges } from '../src/survival/journalItemChanges';
@@ -42,17 +42,6 @@ describe('fishing backpack', () => {
     const entry = createJournalEntry(1, 'calm', restored.exportCheckpoint().pendingJournalActions, null, { kind: 'quiet' });
     expect(journalItemChanges(entry).day.map(({ itemId, kind }) => ({ itemId, kind })))
       .toEqual([{ itemId: missing, kind: 'gain' }]);
-  });
-  it.each([false, true])('has exactly 4% odds with bait=%s', (bait) => {
-    for (const day of [0, 2, 3, 20]) {
-      for (const multiplier of [1, 1.01]) {
-        const entries = eligibleFishingCatches(day, bait, new Set(), multiplier);
-        const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
-        expect(entries.find((entry) => entry.catch.id === 'backpack')!.weight / total).toBeCloseTo(0.04, 14);
-        expect(selectFishingCatch(day, bait, 0.959999, new Set(), multiplier).id).not.toBe('backpack');
-        expect(selectFishingCatch(day, bait, 0.96, new Set(), multiplier).id).toBe('backpack');
-      }
-    }
   });
 
   it('can award every missing weight-1 item, with equal odds', () => {

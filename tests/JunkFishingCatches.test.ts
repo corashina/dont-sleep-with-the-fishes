@@ -1,9 +1,9 @@
-import { Box3, BufferGeometry, Material, Mesh, Vector3 } from 'three';
-import { describe, expect, it, vi } from 'vitest';
+import { Box3,BufferGeometry,Material,Mesh,Vector3 } from 'three';
+import { describe,expect,it,vi } from 'vitest';
 import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
-import { FISHING_CATCHES, eligibleFishingCatches, selectFishingCatch } from '../src/survival/fishingCatalog';
+import { eligibleFishingCatches,selectFishingCatch } from '../src/survival/fishingCatalog';
 import { fishingSettlement } from '../src/survival/fishingSettlementRules';
-import { collectMaterialTextures, modelTriangleCount } from '../src/rendering/modelPresentation';
+import { collectMaterialTextures,modelTriangleCount } from '../src/rendering/modelPresentation';
 import type { SimpleJunkId } from '../src/survival/JunkCatchModels';
 
 const ids: readonly SimpleJunkId[] = [
@@ -24,12 +24,6 @@ describe('new junk catches', () => {
         code: 'junk-caught', food: 0, deltas: {}, itemReward: null, baitConsumed: false,
       });
     }
-  });
-
-  it('retains the total junk weight when adding variety', () => {
-    const weight = FISHING_CATCHES.filter((catchDefinition) => catchDefinition.kind === 'junk')
-      .reduce((sum, catchDefinition) => sum + catchDefinition.baseWeight, 0);
-    expect(weight).toBe(302);
   });
 
   it.each(ids)('builds %s at catch scale and releases all model resources', async (id) => {

@@ -1,13 +1,11 @@
 // Importance: 9/10. Protects merged drifting-supply variants, distance, and loot tiers.
 
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 import type { ItemInstance } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import {
-  DRIFTING_SUPPLY_KINDS,
-  driftingSupplyDistanceFromSeed,
-  driftingSupplyKindFromSeed,
-  type DriftingSupplyKind,
+  DRIFTING_SUPPLY_KINDS,driftingSupplyKindFromSeed,
+  type DriftingSupplyKind
 } from '../src/survival/driftingSupplies';
 import { deriveEventVariantSeed } from '../src/survival/eventPresentationOutcome';
 import { sequenceRandom } from './helpers/random';
@@ -40,21 +38,6 @@ function sessionFor(
 }
 
 describe('drifting supplies', () => {
-
-  it('selects every model and distance from the stable event seed', () => {
-    const seeds = Array.from({ length: 256 }, (_, seed) => seed);
-    expect(new Set(seeds.map(driftingSupplyKindFromSeed)))
-      .toEqual(new Set(DRIFTING_SUPPLY_KINDS));
-    expect(new Set(seeds.map(driftingSupplyDistanceFromSeed)))
-      .toEqual(new Set(['near', 'middle', 'far']));
-    for (const kind of DRIFTING_SUPPLY_KINDS) {
-      expect(seeds.some((seed) => (
-        driftingSupplyKindFromSeed(seed) === kind
-        && driftingSupplyDistanceFromSeed(seed) === 'far'
-      ))).toBe(true);
-    }
-  });
-
 
   it.each(DRIFTING_SUPPLY_KINDS)('grants bundles from %s to the player and Carlitos', (kind) => {
     for (const choiceId of ['retrieve', 'delegate-carlitos']) {

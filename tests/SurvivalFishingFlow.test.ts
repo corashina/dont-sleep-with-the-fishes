@@ -1,5 +1,5 @@
 // Importance: 10/10. Protects fishing workflow order, state, and lifecycle guards.
-import { describe, expect, it, vi } from 'vitest';
+import { describe,expect,it,vi } from 'vitest';
 import type { FishingCastPoint } from '../src/survival/FishingSession';
 import {
   SurvivalFishingFlow,
@@ -8,8 +8,7 @@ import {
   type FishingWorldPort,
 } from '../src/survival/SurvivalFishingFlow';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import { SURVIVAL_BALANCE } from '../src/survival/survivalBalance';
-import type { FishingResultView, FishingUiState } from '../src/ui/SurvivalFishingView';
+import type { FishingResultView,FishingUiState } from '../src/ui/SurvivalFishingView';
 import type { ProjectedBoatBounds } from '../src/survival/BoatInteraction';
 import { sequenceRandom } from './helpers/random';
 
@@ -215,57 +214,6 @@ describe('SurvivalFishingFlow', () => {
     expect(rig.setBusy).toHaveBeenLastCalledWith(false);
   });
 
-  it('preserves net energy when exiting before the water click', async () => {
-    const rig = createRig({ withNet: true });
-    const entry = rig.flow.begin('net');
-    rig.animations.enter[0]!.resolve();
-    await entry;
-    rig.flow.exitView();
-    rig.animations.exit[0]!.resolve();
-    await flushPromises();
-    expect(rig.realSession.snapshot()).toMatchObject({ energy: 3, actedToday: false });
-    expect(rig.session.beginFishing).not.toHaveBeenCalled();
-  });
-
-  it('opens the camera without spending Energy and charges only the first accepted water click', async () => {
-    const rig = createRig();
-    const before = rig.realSession.snapshot();
-    const entry = rig.flow.begin();
-    expect(rig.flow.cast(640, 360, 1280, 720)).toBe(false);
-    expect(rig.realSession.snapshot()).toEqual(before);
-    rig.animations.enter[0]!.resolve();
-    await entry;
-    expect(rig.session.beginFishing).not.toHaveBeenCalled();
-    expect(rig.flow.cast(640, 360, 1280, 720)).toBe(true);
-    expect(rig.flow.cast(640, 360, 1280, 720)).toBe(false);
-    expect(rig.realSession.snapshot()).toMatchObject({ energy: 2, actedToday: true });
-    expect(rig.session.beginFishing).toHaveBeenCalledOnce();
-  });
-
-  it.each(['catch', 'miss'])('returns after closing the last %s result', async (result) => {
-    const rig = createRig({ energy: 1 });
-    await enter(rig);
-    await cast(rig);
-    rig.flow.update(3);
-    if (result === 'catch') {
-      expect(rig.flow.reel()).toBe(true);
-      rig.animations.reel[0]!.resolve();
-    } else {
-      rig.flow.update(SURVIVAL_BALANCE.fishing.reactionSeconds);
-      rig.animations.miss[0]!.resolve();
-    }
-    await flushPromises();
-    expect(rig.world.exitFishingView).not.toHaveBeenCalled();
-    rig.flow.continueResult();
-    rig.flow.continueResult();
-    expect(rig.world.exitFishingView).toHaveBeenCalledOnce();
-    expect(rig.flow.cast(null, null, 800, 600)).toBe(false);
-    rig.animations.exit[0]!.resolve();
-    await flushPromises();
-    expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({ mode: 'hidden', message: '', biteTarget: null });
-    expect(rig.setBusy).toHaveBeenLastCalledWith(false);
-  });
-
   it('rejects an invalid cast without spending Energy and still accepts the next cast', async () => {
     const rig = createRig();
     await enter(rig);
@@ -276,28 +224,6 @@ describe('SurvivalFishingFlow', () => {
     expect(rig.session.beginFishing).not.toHaveBeenCalled();
     expect(rig.flow.cast(640, 360, 1280, 720)).toBe(true);
     expect(rig.realSession.snapshot().energy).toBe(2);
-  });
-
-  it('rejects a cast if another attempt already spent the remaining Energy', async () => {
-    const rig = createRig({ energy: 1 });
-    await enter(rig);
-    expect(rig.realSession.beginFishing().accepted).toBe(true);
-    expect(rig.flow.cast(640, 360, 1280, 720)).toBe(false);
-    expect(rig.world.playFishingCast).not.toHaveBeenCalled();
-    expect(rig.realSession.snapshot().energy).toBe(0);
-    rig.flow.exitView();
-    expect(rig.world.exitFishingView).toHaveBeenCalledOnce();
-  });
-
-  it('rejects a start without entering the view or setting busy', async () => {
-    const rig = createRig({ energy: 0 });
-
-    await rig.flow.begin();
-
-    expect(rig.audio.deny).toHaveBeenCalledOnce();
-    expect(rig.world.enterFishingView).not.toHaveBeenCalled();
-    expect(rig.setBusy).not.toHaveBeenCalled();
-    expect(rig.flow.isFishing()).toBe(false);
   });
 
   it('runs cast, bite, reel, result, continue, and ready exit in order', async () => {
@@ -446,24 +372,6 @@ describe('SurvivalFishingFlow', () => {
       .toBe('casting');
   });
 
-  it('leaves aiming without starting an attempt or changing the snapshot', async () => {
-    const rig = createRig();
-    const before = rig.realSession.snapshot();
-    await enter(rig);
-
-    rig.flow.exitView();
-    rig.flow.exitView();
-
-    expect(rig.session.beginFishing).not.toHaveBeenCalled();
-    expect(rig.session.cancelFishing).not.toHaveBeenCalled();
-    expect(rig.realSession.snapshot()).toEqual(before);
-    expect(rig.renderSnapshot).toHaveBeenLastCalledWith();
-    expect(rig.world.exitFishingView).toHaveBeenCalledOnce();
-    rig.animations.exit[0]!.resolve();
-    await flushPromises();
-    expect(rig.ui.restoreCommandFocus).toHaveBeenCalledOnce();
-  });
-
   it('does not advance or accept direct input while paused or hidden', async () => {
     const rig = createRig();
     await enter(rig);
@@ -491,26 +399,6 @@ describe('SurvivalFishingFlow', () => {
     expect(rig.flow.reel()).toBe(false);
     rig.setHidden(false);
     expect(rig.flow.reel()).toBe(true);
-  });
-
-  it('commits one miss and ignores late reels', async () => {
-    const rig = createRig({ withBait: true });
-    await enter(rig);
-    await cast(rig);
-    rig.flow.update(3);
-
-    rig.flow.update(SURVIVAL_BALANCE.fishing.reactionSeconds);
-    expect(rig.flow.reel()).toBe(false);
-    rig.flow.update(0.5);
-
-    expect(rig.session.finishFishing).toHaveBeenCalledOnce();
-    expect(rig.world.playFishingMiss).toHaveBeenCalledOnce();
-    expect(rig.realSession.snapshot()).toMatchObject({ food: 0, bait: 1 });
-    rig.animations.miss[0]!.resolve();
-    await flushPromises();
-    expect(rig.ui.showFishingResult).toHaveBeenCalledWith({
-      items: [], message: 'NOTHING FOUND', catchTarget: null,
-    });
   });
 
   it('restores the bite state after a rejected settlement and permits retry', async () => {

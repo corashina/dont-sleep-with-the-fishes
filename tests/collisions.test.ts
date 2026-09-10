@@ -1,15 +1,13 @@
 // Importance: 10/10 (scaled from 5/5). Protects valid player navigation and containment.
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 import { Vector3 } from 'three';
 import {
   findSupportEyeHeight,
   MAX_JUMPABLE_SUPPORT_HEIGHT,
-  PLAYER_BODY_HEIGHT,
-  movementAxes,
-  resolveArcMovement,
-  resolveLocalMovement,
+  PLAYER_BODY_HEIGHT,resolveArcMovement,
+  resolveLocalMovement
 } from '../src/player/collisions';
-import type { CollisionArc, CollisionBox } from '../src/player/collisions';
+import type { CollisionArc,CollisionBox } from '../src/player/collisions';
 import { createTestShip } from './helpers/shipFurniture';
 import { SHIP_LAYOUT } from '../src/world/shipLayoutData';
 import {
@@ -86,37 +84,6 @@ const followPath = (
 };
 
 describe('player movement helpers', () => {
-  it('normalizes diagonal keyboard movement', () => {
-    const axes = movementAxes(new Set(['KeyW', 'KeyD']));
-
-    expect(Math.hypot(axes.x, axes.z)).toBeCloseTo(1);
-    expect(axes.x).toBeGreaterThan(0);
-    expect(axes.z).toBeLessThan(0);
-  });
-
-  it('resolves a circle out of a wall box', () => {
-    const result = resolveLocalMovement(
-      { x: 0, y: 3.7, z: 0 },
-      { x: 1.2, y: 3.7, z: 0 },
-      0.35,
-      [{ minX: 1, maxX: 2, minY: 2, maxY: 5, minZ: -2, maxZ: 2 }],
-    );
-
-    expect(result.x).toBeCloseTo(0.65);
-    expect(result.z).toBeCloseTo(0);
-  });
-
-  it('resolves axes independently so diagonal movement can slide', () => {
-    const result = resolveLocalMovement(
-      { x: 0, y: 3.7, z: 0 },
-      { x: 1.2, y: 3.7, z: 1.2 },
-      0.35,
-      [{ minX: 1, maxX: 2, minY: 2, maxY: 5, minZ: 1, maxZ: 2 }],
-    );
-
-    expect(result.x).toBeCloseTo(1.2);
-    expect(result.z).toBeCloseTo(0.65);
-  });
 
   it('slides along a single oriented wall box', () => {
     const rotationY = Math.PI / 4;

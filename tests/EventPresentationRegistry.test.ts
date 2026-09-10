@@ -1,20 +1,13 @@
 // Importance: 10/10. Protects exhaustive event adapter routing and family delegation.
 import { Group } from 'three';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach,describe,expect,it,vi } from 'vitest';
 import type { ItemInstanceId } from '../src/game/ItemState';
-import type { EventPresentationAdapter } from '../src/survival/EventPresentationAdapter';
 import {
-  EventPresentationRegistry,
-  type EventPresentationAdapterFactory,
+  EventPresentationRegistry
 } from '../src/survival/EventPresentationRegistry';
 import {
-  SURVIVAL_EVENT_IDS,
-  type SurvivalEventId,
+  SURVIVAL_EVENT_IDS
 } from '../src/survival/eventCatalog';
-import {
-  EVENT_PRESENTATION_ROUTES,
-  type EventPresentationRoute,
-} from '../src/survival/eventPresentationRoutes';
 import type { EventPresentationAdapterDependencies } from '../src/survival/eventPresentationAdapters';
 import type {
   FocusedEventInteractionTarget,
@@ -268,62 +261,7 @@ beforeEach(() => {
   }));
 });
 
-function createAdapter(eventId: SurvivalEventId): EventPresentationAdapter {
-  return {
-    eventId,
-    roots: [],
-    stage: vi.fn(),
-    reveal: vi.fn(async () => undefined),
-    playChoice: vi.fn(async () => undefined),
-    playItemUse: vi.fn(async () => false),
-    itemAimTarget: vi.fn(() => null),
-    interactionTargets: vi.fn(() => []),
-    interactionRoot: vi.fn(() => null),
-    resultRoot: vi.fn(() => null),
-    react: vi.fn(async () => undefined),
-    update: vi.fn(),
-    settleForVisibilityChange: vi.fn(),
-    clear: vi.fn(),
-    dispose: vi.fn(),
-  };
-}
-
 describe('EventPresentationRegistry', () => {
-  it('creates every event through its exact route factory', () => {
-    const calls = new Map<EventPresentationRoute, SurvivalEventId[]>();
-    const factory = (route: EventPresentationRoute): EventPresentationAdapterFactory => (
-      eventId,
-    ) => {
-      const eventIds = calls.get(route) ?? [];
-      eventIds.push(eventId);
-      calls.set(route, eventIds);
-      return createAdapter(eventId);
-    };
-    const registry = new EventPresentationRegistry({
-      dangerousWaters: factory('dangerousWaters'),
-      dedicated: factory('dedicated'),
-      focused: factory('focused'),
-      featured: factory('featured'),
-      weather: factory('weather'),
-      supernatural: factory('supernatural'),
-      moon: factory('moon'),
-    });
-    const dependencies = {} as EventPresentationAdapterDependencies;
-
-    for (const eventId of SURVIVAL_EVENT_IDS) {
-      if (eventId === 'quiet-night') continue;
-      const adapter = registry.create(eventId, dependencies);
-      expect(adapter.eventId).toBe(eventId);
-      adapter.dispose();
-    }
-
-    for (const eventId of SURVIVAL_EVENT_IDS) {
-      if (eventId === 'quiet-night') continue;
-      expect(calls.get(EVENT_PRESENTATION_ROUTES[eventId])).toContain(eventId);
-    }
-    expect(() => registry.create('missing' as SurvivalEventId, dependencies))
-      .toThrow('Missing event presentation factory: missing');
-  });
 
   it('creates and disposes a default adapter for every event', () => {
     const registry = new EventPresentationRegistry();

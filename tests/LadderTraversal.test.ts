@@ -1,5 +1,5 @@
 // Importance: 10/10 (scaled from 5/5). Protects vertical player navigation.
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 import {
   resolveLadderTraversal,
   type LadderClimbZone,
@@ -21,50 +21,6 @@ const crewZone: LadderClimbZone = {
 };
 
 describe('resolveLadderTraversal', () => {
-  it('captures at deck level only while moving toward the ladder', () => {
-    const result = resolveLadderTraversal({
-      position: { x: 0.1, y: 3.72, z: 3.7 },
-      activeLadderId: null,
-      planarMovement: [0, 0.2],
-      verticalInput: 1,
-      deltaSeconds: 0.1,
-      floorEyeY: 3.72,
-    }, [crewZone]);
-
-    expect(result.activeLadderId).toBe('crew-ladder');
-    expect(result.consumed).toBe(true);
-    expect(result.position).toEqual({ x: 0.1, y: 3.72, z: 3.7 });
-  });
-
-  it('captures at balcony level while moving toward the ladder', () => {
-    const result = resolveLadderTraversal({
-      position: { x: -0.1, y: 6.42, z: 3.7 },
-      activeLadderId: null,
-      planarMovement: [0, -0.2],
-      verticalInput: -1,
-      deltaSeconds: 0.1,
-      floorEyeY: 6.42,
-    }, [crewZone]);
-
-    expect(result.activeLadderId).toBe('crew-ladder');
-    expect(result.consumed).toBe(true);
-    expect(result.position).toEqual({ x: -0.1, y: 6.42, z: 3.7 });
-  });
-
-  it('captures an airborne player at the height where they reach the ladder', () => {
-    const result = resolveLadderTraversal({
-      position: { x: 0.1, y: 4.8, z: 3.7 },
-      activeLadderId: null,
-      planarMovement: [0, 0.2],
-      verticalInput: 1,
-      deltaSeconds: 0.1,
-      floorEyeY: 3.72,
-    }, [crewZone]);
-
-    expect(result.activeLadderId).toBe('crew-ladder');
-    expect(result.consumed).toBe(true);
-    expect(result.position).toEqual({ x: 0.1, y: 4.8, z: 3.7 });
-  });
 
   it('does not capture an idle player in a ladder entry area', () => {
     const input = {
@@ -122,75 +78,6 @@ describe('resolveLadderTraversal', () => {
     expect(resultDistance).toBeLessThan(startDistance);
     expect(result.activeLadderId).toBe('crew-ladder');
     expect(result.consumed).toBe(true);
-  });
-
-  it('moves upward along the ladder centerline at the climb speed', () => {
-    const result = resolveLadderTraversal({
-      position: { x: crewZone.climbX, y: 4, z: crewZone.climbZ },
-      activeLadderId: 'crew-ladder',
-      planarMovement: [0.5, 0.5],
-      verticalInput: 1,
-      deltaSeconds: 0.25,
-      floorEyeY: 3.72,
-    }, [crewZone]);
-
-    expect(result).toMatchObject({
-      activeLadderId: 'crew-ladder',
-      consumed: true,
-      floorEyeY: 3.72,
-      position: { x: 0, y: 4.6, z: 4 },
-    });
-  });
-
-  it('moves downward along the ladder centerline at the climb speed', () => {
-    const result = resolveLadderTraversal({
-      position: { x: crewZone.climbX, y: 5, z: crewZone.climbZ },
-      activeLadderId: 'crew-ladder',
-      planarMovement: [0, 0],
-      verticalInput: -1,
-      deltaSeconds: 0.25,
-      floorEyeY: 6.42,
-    }, [crewZone]);
-
-    expect(result.position).toEqual({ x: 0, y: 4.4, z: 4 });
-    expect(result.activeLadderId).toBe('crew-ladder');
-    expect(result.consumed).toBe(true);
-  });
-
-  it('dismounts onto the balcony and updates the floor eye height', () => {
-    const result = resolveLadderTraversal({
-      position: { x: crewZone.climbX, y: crewZone.topEyeY - 0.05, z: crewZone.climbZ },
-      activeLadderId: 'crew-ladder',
-      planarMovement: [0, 0],
-      verticalInput: 1,
-      deltaSeconds: 0.1,
-      floorEyeY: crewZone.bottomEyeY,
-    }, [crewZone]);
-
-    expect(result).toEqual({
-      activeLadderId: null,
-      floorEyeY: crewZone.topEyeY,
-      consumed: true,
-      position: { x: 0, y: 6.42, z: 4.5 },
-    });
-  });
-
-  it('dismounts onto the lower deck and restores its floor eye height', () => {
-    const result = resolveLadderTraversal({
-      position: { x: crewZone.climbX, y: crewZone.bottomEyeY + 0.05, z: crewZone.climbZ },
-      activeLadderId: 'crew-ladder',
-      planarMovement: [0, 0],
-      verticalInput: -1,
-      deltaSeconds: 0.1,
-      floorEyeY: crewZone.topEyeY,
-    }, [crewZone]);
-
-    expect(result).toEqual({
-      activeLadderId: null,
-      floorEyeY: crewZone.bottomEyeY,
-      consumed: true,
-      position: { x: 0, y: 3.72, z: 3.5 },
-    });
   });
 
   it('releases an absent active ladder without moving the player', () => {

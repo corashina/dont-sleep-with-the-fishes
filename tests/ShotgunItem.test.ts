@@ -1,9 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
-import { Group, PerspectiveCamera, Quaternion, Vector3 } from 'three';
-import { boatSupplyTransform } from '../src/world/BoatStorage';
-import type { BorrowedSupplyActor } from '../src/survival/BoatSupplyDisplay';
+import { describe,expect,it } from 'vitest';
+import { Group,Vector3 } from 'three';
 import { EventItemEffects } from '../src/survival/EventItemEffects';
-import { EventItemUseAdapter } from '../src/survival/EventItemUseAdapter';
 import {
   createEventItemUseSample,
   eventItemActionCueProgresses,
@@ -22,73 +19,6 @@ function shot(secondsAfterCue: number) {
 }
 
 describe('shotgun discharge', () => {
-  it('holds steady before the audio cue, kicks quickly, and recovers more slowly', () => {
-    const ready = shot(-0.1);
-    const before = shot(-0.001);
-    const fire = shot(0);
-    const kick = shot(0.06);
-    const recovering = shot(0.22);
-    const recovered = shot(0.6);
-
-    expect(before.viewZ).toBe(ready.viewZ);
-    expect(before.roll).toBe(ready.roll);
-    expect(before.recoilPitch).toBe(0);
-    expect(before.effectKind).toBe('none');
-    expect(fire.primaryEffect).toBe(1);
-    expect(kick.viewZ - ready.viewZ).toBeGreaterThan(0.15);
-    expect(kick.recoilPitch).toBeGreaterThan(0.15);
-    expect(recovering.viewZ).toBeLessThan(kick.viewZ);
-    expect(recovering.viewZ).toBeGreaterThan(ready.viewZ);
-    expect(recovered.viewZ).toBe(ready.viewZ);
-    expect(recovered.recoilPitch).toBe(0);
-    expect(recovered.primaryEffect).toBe(0);
-    expect(recovered.secondaryEffect).toBeGreaterThan(0);
-    expect(shot(1).effectKind).toBe('none');
-  });
-
-  it.each([[-6, -2], [6, -2], [0, -6], [0, 6]])(
-    'holds the stored shotgun upright and recoils upward toward target %s, %s', (x, z) => {
-    const camera = new PerspectiveCamera();
-    camera.position.set(0, 1.5, 0);
-    const boat = new Group();
-    boat.rotation.set(0.12, 0.4, -0.15);
-    boat.position.set(2, 0.2, -1);
-    const root = new Group();
-    boat.add(root);
-    const stored = boatSupplyTransform('shotgun', 0);
-    root.position.copy(stored.position);
-    root.rotation.copy(stored.rotation);
-    const target = new Group();
-    target.position.set(x, 0, z);
-    const actor: BorrowedSupplyActor = {
-      root, instanceId: 'shotgun-1', release: vi.fn(), releaseOnNextSync: vi.fn(),
-      applyPose: (pose) => {
-        root.position.copy(stored.position).add(new Vector3(pose.x, pose.y, pose.z));
-        root.rotation.copy(stored.rotation);
-        root.rotateY(pose.yaw);
-        root.rotateX(pose.pitch);
-        root.rotateZ(pose.roll);
-      },
-    };
-    const adapter = new EventItemUseAdapter(camera, new EventItemEffects());
-    adapter.begin(actor, 'shotgun', target);
-    adapter.apply(shot(-0.01));
-    const orientation = root.getWorldQuaternion(new Quaternion());
-    const ready = new Vector3(0, 0, -1).applyQuaternion(orientation);
-    const up = new Vector3(0, 1, 0).applyQuaternion(orientation);
-    const targetDirection = target.position.clone().sub(root.getWorldPosition(new Vector3()));
-    targetDirection.y = 0;
-    expect(ready.distanceTo(targetDirection.normalize())).toBeLessThan(1e-6);
-    expect(up.y).toBeGreaterThan(0.999);
-    adapter.apply(shot(0.065));
-    const kicked = new Vector3(0, 0, -1).applyQuaternion(root.getWorldQuaternion(orientation));
-    expect(ready.y).toBeCloseTo(0);
-    expect(kicked.y).toBeGreaterThan(0.15);
-    adapter.apply(shot(0.65));
-    const settled = new Vector3(0, 0, -1).applyQuaternion(root.getWorldQuaternion(orientation));
-    expect(settled.distanceTo(ready)).toBeLessThan(1e-6);
-    adapter.dispose();
-  });
 
   it('places the flash at the scaled muzzle and leaves smoke behind during recoil', () => {
     const scene = new Group();

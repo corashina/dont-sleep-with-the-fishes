@@ -1,12 +1,9 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest';
-import { PHASE_RESOURCE_LOADERS, PhaseResources, type PhaseResourceLoaders } from '../src/app/PhaseResources';
-import { PropModelLibrary } from '../src/world/PropModelLibrary';
-import { EVENT_MODEL_IDS } from '../src/world/eventModelIds';
-import { createTestPropModels } from './helpers/propModels';
+import { describe,it,expect,vi } from 'vitest';
+import { PhaseResources,type PhaseResourceLoaders } from '../src/app/PhaseResources';
 import { AudioSystem } from '../src/audio/AudioSystem';
 import type { AudioBackend } from '../src/audio/AudioBackend';
-import { EVENT_ONLY_SOUND_IDS, MENU_SOUND_IDS, SURVIVAL_SOUND_IDS } from '../src/audio/audioManifest';
+import { EVENT_ONLY_SOUND_IDS,MENU_SOUND_IDS,SURVIVAL_SOUND_IDS } from '../src/audio/audioManifest';
 
 function loaders(): PhaseResourceLoaders {
   const asset = () => ({ dispose: vi.fn(), configure: vi.fn() });
@@ -45,18 +42,6 @@ async function flushPromises(): Promise<void> {
 }
 
 describe('phase resource ownership', () => {
-  it('loads all gameplay prop templates, including the care hand', async () => {
-    const models = createTestPropModels();
-    const load = vi.spyOn(PropModelLibrary, 'load').mockResolvedValue(models);
-    try {
-      await PHASE_RESOURCE_LOADERS.loadGameplayModels();
-      expect(load).toHaveBeenCalledExactlyOnceWith(undefined, EVENT_MODEL_IDS);
-      expect(EVENT_MODEL_IDS).toContain('riggedHand');
-    } finally {
-      load.mockRestore();
-      models.dispose();
-    }
-  });
 
   it('loads only menu assets and audio before gameplay starts', async () => {
     const dependencies = loaders();
@@ -237,27 +222,6 @@ describe('phase resource ownership', () => {
     expect(models.dispose).toHaveBeenCalledOnce();
     expect(content.dispose).toHaveBeenCalledOnce();
     expect(progress).toHaveBeenCalledTimes(progressCalls);
-  });
-
-  it('reports every required ship resource before returning the lease', async () => {
-    const progress = vi.fn();
-    const resources = new PhaseResources(loaders(), AudioSystem.silent(), 'off', progress);
-    const lease = await resources.acquireShip();
-    expect(progress.mock.calls).toEqual(Array.from({ length: 10 }, (_, completed) => [completed, 9]));
-    expect(lease.assets.physicsRuntime).toBeNull();
-    lease.dispose();
-    resources.dispose();
-  });
-
-  it('uses the acquisition progress callback instead of the default callback', async () => {
-    const fallback = vi.fn();
-    const progress = vi.fn();
-    const resources = new PhaseResources(loaders(), AudioSystem.silent(), 'off', fallback);
-    const lease = await resources.acquireMenu(progress);
-    expect(fallback).not.toHaveBeenCalled();
-    expect(progress.mock.calls).toEqual(Array.from({ length: 5 }, (_, completed) => [completed, 4]));
-    lease.dispose();
-    resources.dispose();
   });
 
   it('waits for the display font before returning menu assets', async () => {

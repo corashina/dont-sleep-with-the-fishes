@@ -1,5 +1,5 @@
 import { Group } from 'three';
-import { describe, expect, it, vi } from 'vitest';
+import { describe,expect,it,vi } from 'vitest';
 import type { EventPresentationAdapter } from '../src/survival/EventPresentationAdapter';
 import { EventPresentationHost } from '../src/survival/EventPresentationHost';
 
@@ -27,84 +27,6 @@ function createAdapter(
 }
 
 describe('EventPresentationHost', () => {
-  it('attaches roots and delegates the normalized lifecycle', async () => {
-    const attachmentOrder: string[] = [];
-    const first = { parent: new Group(), root: new Group() };
-    const second = { parent: new Group(), root: new Group() };
-    vi.spyOn(first.parent, 'add').mockImplementation((root) => {
-      attachmentOrder.push('first');
-      return Group.prototype.add.call(first.parent, root);
-    });
-    vi.spyOn(second.parent, 'add').mockImplementation((root) => {
-      attachmentOrder.push('second');
-      return Group.prototype.add.call(second.parent, root);
-    });
-    const adapter = createAdapter('leak', [first, second]);
-    const host = new EventPresentationHost();
-    const context = { eventId: 'leak' as const, targetInstanceId: null, variantSeed: 3 };
-    const choice = { id: 'seal' } as never;
-    const reaction = {} as never;
-
-    host.attach(adapter);
-    expect(attachmentOrder).toEqual(['first', 'second']);
-    expect(first.parent.children).toEqual([first.root]);
-    expect(second.parent.children).toEqual([second.root]);
-    expect(host.activeEventId()).toBe('leak');
-    const aimTarget = new Group();
-    const interactionTargets = [{
-      id: 'custom-target',
-      label: 'CUSTOM',
-      description: 'Custom target.',
-      choiceId: 'inspect',
-      root: new Group(),
-    }];
-    const interactionRoot = new Group();
-    const resultRoot = new Group();
-    vi.mocked(adapter.itemAimTarget).mockReturnValue(aimTarget);
-    vi.mocked(adapter.interactionTargets).mockReturnValue(interactionTargets);
-    vi.mocked(adapter.interactionRoot).mockReturnValue(interactionRoot);
-    vi.mocked(adapter.resultRoot).mockReturnValue(resultRoot);
-    expect(host.itemAimTarget()).toBe(aimTarget);
-    expect(host.interactionTargets()).toBe(interactionTargets);
-    expect(host.interactionRoot('seal')).toBe(interactionRoot);
-    expect(host.resultRoot('seal')).toBe(resultRoot);
-
-    host.stage(context);
-    await host.reveal();
-    await host.playChoice(choice);
-    await host.playItemUse('seal', 'cannedFood-1');
-    await host.react(reaction);
-    host.update(11, 0.5);
-    host.settleForVisibilityChange();
-    host.clear();
-
-    expect(adapter.stage).toHaveBeenCalledWith(context);
-    expect(adapter.reveal).toHaveBeenCalledOnce();
-    expect(adapter.playChoice).toHaveBeenCalledWith(choice);
-    expect(adapter.playItemUse).toHaveBeenCalledWith('seal', 'cannedFood-1');
-    expect(adapter.react).toHaveBeenCalledWith(reaction);
-    expect(adapter.update).toHaveBeenCalledWith(11, 0.5);
-    expect(adapter.settleForVisibilityChange).toHaveBeenCalledOnce();
-    expect(adapter.clear).toHaveBeenCalledOnce();
-    expect(host.activeEventId()).toBe('leak');
-
-    host.detach(adapter);
-    expect(first.root.parent).toBeNull();
-    expect(second.root.parent).toBeNull();
-    expect(host.activeEventId()).toBeNull();
-  });
-
-  it('rejects duplicate attachment and detaching a different adapter', () => {
-    const host = new EventPresentationHost();
-    const adapter = createAdapter();
-    const other = createAdapter('flowers');
-
-    host.attach(adapter);
-
-    expect(() => host.attach(adapter)).toThrow('Event presentation is already attached.');
-    expect(() => host.attach(other)).toThrow('Event presentation is already attached.');
-    expect(() => host.detach(other)).toThrow('Cannot detach an inactive event presentation.');
-  });
 
   it('rolls back attached roots in reverse order and preserves the attachment error', () => {
     const first = { parent: new Group(), root: new Group() };

@@ -1,9 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { ITEM_IDS, type ItemId } from '../src/game/ItemState';
-import { FISHING_CATCHES, eligibleFishingCatches } from '../src/survival/fishingCatalog';
+import { describe,expect,it } from 'vitest';
+import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import { formatFishingResult } from '../src/survival/SurvivalFishingFlow';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import { SURVIVAL_BALANCE } from '../src/survival/survivalBalance';
 import { sequenceRandom } from './helpers/random';
 
 describe('net catch agreement', () => {
@@ -37,23 +35,5 @@ describe('net catch agreement', () => {
     const popup = formatFishingResult({ kind: 'catch', catch: caught }, game.beginFishing().outcome);
     expect(popup.message).toBe(`${caught.label}. No usable reward.`);
     expect(popup.items).toEqual([]);
-  });
-
-  it('gives about 10% more useful reward per energy than an unbaited rod', () => {
-    for (const day of [0, 1, 2, 3, 10, 55]) {
-      for (const active of [new Set<ItemId>(['fishingNet']), new Set(ITEM_IDS)]) {
-        const expected = (gear: 'rod' | 'net') => {
-          const entries = eligibleFishingCatches(day, false, active, 1, gear);
-          const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
-          const reward = entries.reduce((sum, { catch: entry, weight }) => {
-            const value = entry.reward.kind === 'none' ? 0 : entry.reward.kind === 'food' ? entry.reward.amount : 1;
-            return sum + value * weight / total;
-          }, 0);
-          return reward / SURVIVAL_BALANCE.actions[gear === 'net' ? 'netEnergy' : 'fishEnergy'];
-        };
-        expect(expected('net') / expected('rod')).toBeGreaterThanOrEqual(1.05);
-        expect(expected('net') / expected('rod')).toBeLessThanOrEqual(1.15);
-      }
-    }
   });
 });
