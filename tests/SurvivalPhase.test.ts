@@ -19,6 +19,11 @@ import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
 import type { FishingResultView,FishingUiState } from '../src/ui/SurvivalFishingView';
 import type { SurvivalUI } from '../src/ui/SurvivalUI';
 import { sequenceRandom } from './helpers/random';
+import { nightTraderOffers } from '../src/survival/nightTraderTrades';
+import { deriveEventVariantSeed } from '../src/survival/eventPresentationOutcome';
+
+const traderMapSeed = Array.from({ length: 100 }, (_, seed) => seed).find((seed) =>
+  nightTraderOffers(deriveEventVariantSeed(seed, 1, 'night-trader')).some(({ id }) => id === 'map'))!;
 
 function inventory(
   overrides: Partial<Record<ItemInstanceId, SurvivalItemState>> = {},
@@ -1219,6 +1224,7 @@ describe('SurvivalPhase orchestration', () => {
     let current = snapshot({
       state: 'nightEvent',
       pendingEventId: 'night-trader',
+      seed: traderMapSeed,
       inventory: inventory({ 'map-1': map }),
     });
     let resolvedSnapshot: SurvivalSnapshot | null = null;
@@ -1409,6 +1415,7 @@ describe('SurvivalPhase orchestration', () => {
       pendingEventId: eventId,
       energy: 3,
       bait: 0,
+      seed: traderMapSeed,
       ...(route === 'item'
         ? { inventory: inventory({ 'map-1': map }) }
         : {}),
