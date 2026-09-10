@@ -92,6 +92,21 @@ function presentation() {
 }
 
 describe('Ocean of Blood presentation', () => {
+  it('starts fully red before reveal and keeps the atmosphere red throughout reveal', async () => {
+    const { event, intensity } = presentation();
+    try {
+      expect(intensity).toHaveBeenLastCalledWith(1);
+      const reveal = event.reveal();
+      for (const time of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) {
+        event.update(time, time === 0 ? 0 : 1);
+        expect(intensity).toHaveBeenLastCalledWith(1);
+      }
+      await reveal;
+    } finally {
+      event.dispose();
+    }
+  });
+
   it('frames the nearest body during reveal and restores the camera when interrupted', async () => {
     const { event, camera, intensity } = presentation();
     const original = camera.quaternion.clone();
