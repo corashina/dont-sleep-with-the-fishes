@@ -11,6 +11,7 @@ import { AudioSystem } from '../src/audio/AudioSystem';
 import { WebAudioBackend } from '../src/audio/WebAudioBackend';
 import { SurvivalAudio } from '../src/audio/SurvivalAudio';
 import {
+  AUDIO_MANIFEST,
   MENU_SOUND_IDS,
   SHIP_SOUND_IDS,
   SURVIVAL_SOUND_IDS,
@@ -83,6 +84,28 @@ class FakeAudioBackend implements AudioBackend {
 }
 
 describe('AudioSystem', () => {
+  it('plays the UFO sound through reveal, pauses it, and fades it on departure', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    audio.beginEvent('flying-saucer');
+    audio.eventReveal('flying-saucer');
+    expect(backend.voices.map(({ id }) => id)).toEqual(['ufoFlyby']);
+    const voice = backend.voices[0]!;
+    expect(voice.setGain).toHaveBeenCalledWith(0, 0);
+    expect(voice.setGain).toHaveBeenCalledWith(1, 1.2);
+    audio.setPaused(true);
+    expect(voice.setPaused).toHaveBeenLastCalledWith(true);
+    audio.setPaused(false);
+    expect(voice.setPaused).toHaveBeenLastCalledWith(false);
+    audio.beginEventReaction('flying-saucer', {
+      accepted: true, code: 'event-resolved', message: '', deltas: {}, cue: 'none',
+      eventResult: { eventId: 'flying-saucer', choiceId: 'sleep', resultId: 'ufo-pass' },
+    });
+    expect(voice.setGain).toHaveBeenLastCalledWith(0, 5);
+    audio.finishEventReaction();
+    expect(voice.stop).toHaveBeenCalledWith(0.08);
+    audio.dispose();
+  });
 
   it('sounds the rescue horn first and stops the engine at the finish screen', () => {
     const backend = new FakeAudioBackend();
@@ -155,14 +178,21 @@ describe('AudioSystem', () => {
         value: 1, cancelScheduledValues: vi.fn(), setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn(),
       } }),
       destination: {}, currentTime: 0, state: 'running', close: async () => undefined,
-      decodeAudioData: async () => ({ duration: 1 }),
+      decodeAudioData: async (bytes: ArrayBuffer) => {
+        // Browser decoding transfers the input buffer to the decoder.
+        structuredClone(bytes, { transfer: [bytes] });
+        return { duration: 1 };
+      },
     };
-    const fetchAudio = vi.fn(async () => new Response(new ArrayBuffer(0)));
+    const fetchAudio = vi.fn(async (_url: string) => new Response(new Uint8Array([1, 2, 3])));
     const backend = new WebAudioBackend(context as unknown as AudioContext, fetchAudio as unknown as typeof fetch);
     const system = AudioSystem.forTest(backend);
     const menu = await system.acquirePhaseAudio(MENU_SOUND_IDS);
     const ship = await system.acquirePhaseAudio(SHIP_SOUND_IDS);
     const buffers = (backend as unknown as { buffers: Map<SoundId, AudioBuffer> }).buffers;
+    expect(buffers.has('shipCrash')).toBe(true);
+    expect(buffers.has('sinkingEnding')).toBe(true);
+    expect(fetchAudio.mock.calls.filter(([url]) => url === AUDIO_MANIFEST.shipCrash.url)).toHaveLength(1);
     const sharedBuffer = buffers.get('confirm');
     menu.dispose();
     expect(buffers.has('menuAmbient')).toBe(false);

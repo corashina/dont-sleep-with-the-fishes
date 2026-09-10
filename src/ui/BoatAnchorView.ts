@@ -796,9 +796,6 @@ export class BoatAnchorView {
     pillowSleep: EventContextChoice | undefined,
   ): BoatToolCopy | undefined {
     if (pillowSleep !== undefined) {
-      if (this.currentSnapshot?.pendingEventId === 'flying-saucer') {
-        return { get label() { return pillowSleep.label; }, get description() { return pillowSleep.label; } };
-      }
       return { get label() { return uiText('sleep'); }, get description() { return uiText('sleepHelp'); } };
     }
     return anchor.toolId === null ? undefined : BOAT_TOOL_COPY[anchor.toolId];

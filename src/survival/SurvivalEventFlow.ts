@@ -20,6 +20,7 @@ import {
   isInspectableEventId,
   isSignalSightingEventId,
   FLYBY_CHOICE_WINDOW_SECONDS,
+  UFO_CHOICE_WINDOW_SECONDS,
   survivalEventById,
   type DriftingItemEventId,
   type InspectableEventId,
@@ -607,14 +608,15 @@ export class SurvivalEventFlow {
   }
 
   update(deltaSeconds: number): void {
-    if (this.disposed) return;
+    if (this.disposed || this.dependencies.isVisibilityBlocked()) return;
     const snapshot = this.dependencies.session.snapshot();
     if (this.presentation !== 'choosing' || (snapshot.pendingEventId !== 'plane' && snapshot.pendingEventId !== 'flying-saucer')) {
       this.flybyChoiceWindowRemaining = null;
       return;
     }
     if (this.flybyChoiceWindowRemaining === null) {
-      this.flybyChoiceWindowRemaining = FLYBY_CHOICE_WINDOW_SECONDS;
+      this.flybyChoiceWindowRemaining = snapshot.pendingEventId === 'flying-saucer'
+        ? UFO_CHOICE_WINDOW_SECONDS : FLYBY_CHOICE_WINDOW_SECONDS;
     }
     this.flybyChoiceWindowRemaining -= Math.max(0, deltaSeconds);
     if (this.flybyChoiceWindowRemaining > 0) return;
@@ -1643,7 +1645,7 @@ export class SurvivalEventFlow {
     const pending = this.dependencies.session.snapshot();
     const eventId = pending.pendingEventId;
     if (eventId === null) return;
-    this.dependencies.audio.confirm();
+    if (eventId !== 'flying-saucer') this.dependencies.audio.confirm();
     const choice: EventChoicePresentation = {
       choiceId: 'sleep',
       instanceId: null,
@@ -2262,6 +2264,7 @@ export class SurvivalEventFlow {
     choice: SurvivalEventChoice,
     snapshot: SurvivalSnapshot,
   ): EventContextChoice | null {
+    if (event.id === 'flying-saucer') return null;
     const companionAvailability = choice.companionAction === undefined
       ? undefined
       : this.dependencies.session.companionEventActionAvailability?.(

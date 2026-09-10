@@ -54,23 +54,35 @@ describe('flying saucer presentation', () => {
     } finally { presentation.dispose(); }
   });
 
-  it('hides safely and restores the camera on cleanup', async () => {
-    const { presentation, camera } = fixture();
+  it('keeps flying through staging, reveal, and safe departure without moving the camera', async () => {
+    const { presentation, camera, takeCameraControl } = fixture();
     const position = camera.position.clone();
     const quaternion = camera.quaternion.clone();
     try {
       presentation.stage();
-      const hide = presentation.playChoice({ choiceId: 'sleep', instanceId: null, condition: null });
+      const craft = presentation.itemAimTarget()!;
+      const startX = craft.position.x;
       presentation.update(1, 1);
-      await hide;
-      expect(camera.position.y).toBeLessThan(position.y);
-      const hiddenHeight = camera.position.y;
+      expect(Math.abs(craft.position.x - startX)).toBeCloseTo(10);
+      const beforeReveal = craft.position.clone();
+      const reveal = presentation.reveal();
+      expect(craft.position.equals(beforeReveal)).toBe(true);
+      presentation.update(3, 2);
+      await reveal;
+      expect(Math.abs(craft.position.x - startX)).toBeCloseTo(30);
+      await presentation.playChoice({ choiceId: 'sleep', instanceId: null, condition: null });
+      const beforePass = craft.position.clone();
       const pass = presentation.react(result('ufo-pass'), outcome);
-      expect(camera.position.y).toBe(hiddenHeight);
-      presentation.update(1, 0);
-      expect(camera.position.y).toBe(hiddenHeight);
-      presentation.update(6, 5);
+      expect(craft.position.equals(beforePass)).toBe(true);
+      presentation.update(3, 0);
+      expect(craft.position.equals(beforePass)).toBe(true);
+      presentation.update(4, 1);
+      expect(Math.abs(craft.position.x - beforePass.x)).toBeCloseTo(10);
+      expect(camera.position.equals(position)).toBe(true);
+      expect(camera.quaternion.equals(quaternion)).toBe(true);
+      presentation.update(8, 4);
       await pass;
+      expect(takeCameraControl).not.toHaveBeenCalled();
       expect(presentation.root.visible).toBe(false);
       expect(presentation.root.getObjectByName('ufo-abduction-beam')!.visible).toBe(false);
       presentation.clear();
