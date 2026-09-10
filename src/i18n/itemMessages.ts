@@ -25,6 +25,12 @@ export const itemLabel = defineMessages({
 });
 
 export const catchLabel = defineMessages({
+  trafficCone: { en: 'Traffic Cone', pl: 'Pachołek drogowy', 'es-AR': 'Cono de tránsito' },
+  clothesHanger: { en: 'Clothes Hanger', pl: 'Wieszak na ubrania', 'es-AR': 'Percha' },
+  toiletPlunger: { en: 'Toilet Plunger', pl: 'Przepychacz', 'es-AR': 'Sopapa' },
+  golfBall: { en: 'Golf Ball', pl: 'Piłka golfowa', 'es-AR': 'Pelota de golf' },
+  bowlingPin: { en: 'Bowling Pin', pl: 'Kręgiel', 'es-AR': 'Palo de bowling' },
+  tableTennisPaddle: { en: 'Table Tennis Paddle', pl: 'Rakietka do tenisa stołowego', 'es-AR': 'Paleta de ping-pong' },
   blowfish: { en: "Blowfish", pl: "Rozdymka", "es-AR": "Pez globo" },
   fish: { en: "Fish", pl: "Ryba", "es-AR": "Pez" },
   goldfish: { en: "Goldfish", pl: "Złota rybka", "es-AR": "Pez dorado" },
