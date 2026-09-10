@@ -9,6 +9,14 @@ resource ID and source SHA-256. Ship furniture combines the existing Kenney CC0 
 pinned Poly Pizza barrel, shelf, crate, and cargo-box models, and the lifeboat
 uses one locally processed Poly Haven CC0 texture set.
 
+## Midnight Tour abandoned camp
+
+- `midnightCampfire.glb`: [Bonfire by Quaternius](https://poly.pizza/m/Azj9hJwwwG), CC0 1.0. 602 triangles.
+- `midnightWoodLog.glb`: [Wood Log by Quaternius](https://poly.pizza/m/L4E32Wee6C), CC0 1.0. 202 triangles.
+
+Sources use [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). The build embeds and normalizes the models.
+The game adds flames, embers, and light. Source hashes and download dates are in `scripts/event-model-lock.json`.
+
 ## Rescue ending boat
 
 `src/assets/models/ending/rescueBoat.glb` uses [Boat by Poly by Google](https://poly.pizza/m/84-DYhLzxNq)

@@ -606,11 +606,17 @@ const survivalEvents: SurvivalEventDefinition[] = [
   ], undefined, { allowedChestStates: ['mimic'] }),
   event('midnight-tour', 'night', 'eventText055', 'dangerous', 'sighting', 2, 7, 3, [
     contextualChoice('visit', 'eventText089',
-      outcome(60, 'eventText242', {
+      outcome(40, 'eventText242', {
         ...atNextDawn(2, { resources: [add('pressure', 1)] }),
         items: [gainChest()],
       }, 'tour-chest'),
       outcome(20, 'midnightGraveResult', atNextDawn(2), 'tour-grave'),
+      outcome(15, 'midnightCampResult', {
+        resources: [add('food', { min: 0, max: 2 }), add('bait', { min: 0, max: 2 })],
+      }, 'tour-camp'),
+      outcome(5, 'midnightCampBackpackResult', {
+        resources: [add('food', { min: 0, max: 2 }), add('bait', { min: 0, max: 2 })],
+      }, 'tour-camp-backpack'),
       outcome(20, 'eventText243', {
         resources: [subtract('health', { min: 25, max: 45 })],
       }, 'tour-attack'),

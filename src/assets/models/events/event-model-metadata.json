@@ -767,5 +767,49 @@
     "animationCount": 0,
     "animations": [],
     "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "midnightCampfire": {
+    "triangles": 602,
+    "rawBounds": {
+      "min": [
+        -0.20237413700670004,
+        -0.03336616046668425,
+        -0.1795153973728012
+      ],
+      "max": [
+        0.20419631619006395,
+        0.07880607957957989,
+        0.18286775701708274
+      ]
+    },
+    "sourceSha256": "B574B0E83C6B49BD54330AB5CD648A6CC826D90C886CE4B6A791B6AF3C2E951B",
+    "sourceTriangles": 602,
+    "outputSha256": "41B34523DC42582CBDF41920028F83A19061BD56C23B76F69DFCD6B5E847B400",
+    "hasSkins": false,
+    "animationCount": 0,
+    "animations": [],
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "midnightWoodLog": {
+    "triangles": 202,
+    "rawBounds": {
+      "min": [
+        -1.907713587339632,
+        -0.019475761022530104,
+        -0.6492014177738021
+      ],
+      "max": [
+        1.8611090974143736,
+        1.0740359092854614,
+        0.45981250223882325
+      ]
+    },
+    "sourceSha256": "7C3489A6D7F39025DC86278F17BA005A62466061067A385FEC88A61F79D03844",
+    "sourceTriangles": 202,
+    "outputSha256": "80A158D47E4FE832C971FFA9D51D6B8D7C087805B07478E8AB97695DC8F60539",
+    "hasSkins": false,
+    "animationCount": 0,
+    "animations": [],
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
   }
 }

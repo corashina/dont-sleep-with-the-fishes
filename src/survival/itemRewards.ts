@@ -1,7 +1,13 @@
-import type { ItemId } from '../game/ItemState';
+import { ITEM_IDS, type ItemId } from '../game/ItemState';
 import type { RandomSource } from './survivalTypes';
 
 export type ItemRewardWeight = (itemId: ItemId) => number;
+
+export const BACKPACK_ITEM_IDS = ITEM_IDS.filter((id) => id !== 'carlitos');
+
+export function drawBackpackItem(owned: ReadonlySet<ItemId>, random: RandomSource): ItemId | null {
+  return drawMissingItem(owned, BACKPACK_ITEM_IDS, random, (id) => id === 'scubaSet' ? 3 : 1);
+}
 
 export function missingItemRewards(
   owned: ReadonlySet<ItemId>,

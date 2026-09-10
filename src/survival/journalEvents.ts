@@ -22,7 +22,8 @@ export function formatJournalEvent(record: JournalEventRecord): string {
       : journalEventResult(textId);
   // The result already names acquired items. Trade costs belong to the exchange, not damage or ammunition use.
   const mutations = record.inventoryMutations.filter(({ kind }) => (
-    (kind !== 'gain' || record.eventId === 'handyman') && !(trade && (kind === 'lose' || kind === 'consume'))
+    (kind !== 'gain' || record.eventId === 'handyman' || record.eventId === 'midnight-tour')
+      && !(trade && (kind === 'lose' || kind === 'consume'))
   ));
   const narrated = textId === undefined ? undefined : journalNarratedItemChange(textId);
   return [setup, offering, result, formatJournalMutations(mutations, narrated)].filter(Boolean).join(' ');

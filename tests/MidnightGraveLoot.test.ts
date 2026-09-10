@@ -38,8 +38,8 @@ describe('Midnight grave rewards', () => {
   });
 
   it.each([
-    [0, 'tour-chest'], [0.59999, 'tour-chest'],
-    [0.6, 'tour-grave'], [0.79999, 'tour-grave'],
+    [0, 'tour-chest'], [0.39999, 'tour-chest'],
+    [0.4, 'tour-grave'], [0.59999, 'tour-grave'],
     [0.8, 'tour-attack'], [0.99999, 'tour-attack'],
   ])('resolves roll %s as %s', (roll, resultId) => {
     const session = new SurvivalSession([], {
@@ -50,7 +50,7 @@ describe('Midnight grave rewards', () => {
 
   it.each([0, 0.1, 0.5])('reports the actual grave gain and keeps it through dawn, roll %s', (roll) => {
     const session = new SurvivalSession([], {
-      seed: 11, initialEventId: 'midnight-tour', random: sequenceRandom([0.7, roll, 0.99]),
+      seed: 11, initialEventId: 'midnight-tour', random: sequenceRandom([0.5, roll, 0.99]),
     });
     const result = session.resolveEvent({ kind: 'choice', choiceId: 'visit' });
     expect(result.eventResult?.resultId).toBe('tour-grave');

@@ -1,4 +1,4 @@
-import { AnimationClip,Group,NumberKeyframeTrack,PerspectiveCamera } from 'three';
+import { AnimationClip,Group,NumberKeyframeTrack,PerspectiveCamera,PointLight } from 'three';
 import { describe,expect,it,vi } from 'vitest';
 import { MidnightTourPresentation } from '../src/survival/MidnightTourPresentation';
 import type { FocusedEventPresentationDependencies } from '../src/survival/FocusedEventPresentation';
@@ -49,6 +49,36 @@ function setup(animatedMonster = false) {
 const outcome = { accepted: true } as ActionOutcome;
 
 describe('Midnight Tour animation', () => {
+  it.each(['tour-camp', 'tour-camp-backpack'])('holds the %s fire until return and restores the boat camera', async (resultId) => {
+    const rig = setup();
+    const boatPosition = rig.camera.position.clone();
+    const boatQuaternion = rig.camera.quaternion.clone();
+    await rig.presentation.playChoice({ choiceId: 'visit', instanceId: null, condition: null });
+    const shorePosition = rig.camera.position.clone();
+    const shoreQuaternion = rig.camera.quaternion.clone();
+    const result = rig.presentation.react({ eventId: 'midnight-tour', choiceId: 'visit', resultId }, outcome);
+    expect(rig.camera.position.equals(shorePosition)).toBe(true);
+    expect(rig.camera.quaternion.angleTo(shoreQuaternion)).toBeLessThan(0.00001);
+    const camp = rig.presentation.root.getObjectByName('midnight-tour-abandoned-camp')!;
+    const flame = camp.getObjectByName('midnight-tour-camp-flame')!;
+    const light = camp.getObjectByName('midnight-tour-camp-light') as PointLight;
+    rig.advance(8);
+    await result;
+    expect(rig.presentation.root.userData.state).toBe('held-camp');
+    const flameHeight = flame.scale.y;
+    rig.presentation.settleForVisibilityChange();
+    rig.advance(9);
+    expect(flame.scale.y).not.toBe(flameHeight);
+    expect(light.intensity).toBeGreaterThan(0);
+    expect(rig.emitCue).not.toHaveBeenCalled();
+    rig.presentation.clear();
+    expect(rig.presentation.root.getObjectByName('midnight-tour-abandoned-camp')).toBeUndefined();
+    expect(rig.camera.parent).toBe(rig.cameraRig);
+    expect(rig.camera.position.equals(boatPosition)).toBe(true);
+    expect(rig.camera.quaternion.angleTo(boatQuaternion)).toBeLessThan(0.00001);
+    rig.dispose();
+  });
+
   it('keeps arrival continuous and grows soil through three strokes before lowering the shovel', async () => {
     const rig = setup();
     const { presentation, camera } = rig;
