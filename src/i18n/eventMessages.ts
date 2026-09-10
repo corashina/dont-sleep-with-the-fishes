@@ -5,6 +5,12 @@ import type {
 } from '../survival/survivalTypes';
 
 const EVENT_TEXT = {
+  ufoTitle: { en: 'Flying Saucer', pl: 'Latający spodek', 'es-AR': 'Platillo volador' },
+  eventTestAbduction: { en: 'Abduction Ending', pl: 'Zakończenie: porwanie', 'es-AR': 'Final: abducción' },
+  ufoReveal: { en: 'A silent disc crosses the stars. Its cold lights search the sea. Keep your head down.', pl: 'Cichy dysk przesłania gwiazdy. Jego zimne światła przeszukują morze. Nie wychylaj się.', 'es-AR': 'Un disco silencioso cruza las estrellas. Sus luces frías registran el mar. Mantené la cabeza baja.' },
+  ufoHide: { en: 'Stay silent and hide', pl: 'Zachowaj ciszę i ukryj się', 'es-AR': 'Quedate en silencio y escondete' },
+  ufoTaken: { en: 'The disc stops above you. A cold beam lifts you from the boat. The sea falls away.', pl: 'Dysk zatrzymuje się nad tobą. Zimny promień unosi cię z łodzi. Morze zostaje daleko w dole.', 'es-AR': 'El disco se detiene sobre vos. Un haz frío te levanta del bote. El mar queda atrás.' },
+  ufoPassed: { en: 'You crouch below the rim and stay silent. The lights pass without finding you.', pl: 'Kucasz poniżej burty i milczysz. Światła mijają cię, niczego nie znajdując.', 'es-AR': 'Te agachás bajo la borda y guardás silencio. Las luces pasan sin encontrarte.' },
   driftingLootRetrieved: { en: 'You recover supplies from the drifting cargo.', pl: 'Odzyskujesz zapasy z dryfującego ładunku.', 'es-AR': 'Recuperás provisiones de la carga a la deriva.' },
   driftingLootDelegated: { en: 'Carlitos brings back supplies from the drifting cargo.', pl: 'Carlitos przynosi zapasy z dryfującego ładunku.', 'es-AR': 'Carlitos trae provisiones de la carga a la deriva.' },
   lighthouseTitle: { en: 'Lighthouse', pl: 'Latarnia morska', 'es-AR': 'Faro' },

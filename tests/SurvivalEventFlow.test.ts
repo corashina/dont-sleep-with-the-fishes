@@ -13,7 +13,7 @@ import type {
 } from '../src/survival/survivalTypes';
 import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import { PLANE_CHOICE_WINDOW_SECONDS } from '../src/survival/eventCatalog';
+import { FLYBY_CHOICE_WINDOW_SECONDS } from '../src/survival/eventCatalog';
 import { formatJournalEntry } from '../src/survival/journal';
 import type { EventResponse } from '../src/survival/survivalTypes';
 import { sequenceRandom } from './helpers/random';
@@ -382,16 +382,16 @@ describe('event selection contracts', () => {
       const use = deferred();
       rig.world.playEventItemUse.mockImplementation(() => use.promise);
       await rig.flow.revealPending(rig.realSession.snapshot());
-      rig.flow.update(PLANE_CHOICE_WINDOW_SECONDS - 0.01);
+      rig.flow.update(FLYBY_CHOICE_WINDOW_SECONDS - 0.01);
       rig.flow.resolveItem(itemId, instanceId);
-      rig.flow.update(PLANE_CHOICE_WINDOW_SECONDS);
+      rig.flow.update(FLYBY_CHOICE_WINDOW_SECONDS);
       rig.flow.resolveEndure();
       rig.flow.resolveItem(itemId, instanceId);
       expect(rig.session.resolveEvent).not.toHaveBeenCalled();
       use.resolve();
 
       await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
-      rig.flow.update(PLANE_CHOICE_WINDOW_SECONDS);
+      rig.flow.update(FLYBY_CHOICE_WINDOW_SECONDS);
       rig.flow.resolveItem(itemId, instanceId);
       expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({
         kind: 'item', choiceId: itemId, instanceId,
@@ -412,22 +412,45 @@ describe('event selection contracts', () => {
     },
   );
 
-  it('rejects late Plane input and records Let It Pass once without consuming either item', async () => {
+  it('waits for the UFO beam before presenting the ending and retains the final scene', async () => {
+    const rig = createSessionRig(new SurvivalSession([
+      { instanceId: 'flashlight-1', type: 'flashlight' },
+    ], { seed: 1113, initial: { day: 15 }, initialEventId: 'flying-saucer' }));
+    const beam = deferred();
+    rig.world.reactToEventOutcome.mockImplementation(() => beam.promise);
+    await rig.flow.revealPending(rig.realSession.snapshot());
+    rig.world.clearEvent.mockClear();
+    rig.flow.resolveItem('flashlight', 'flashlight-1');
+    await vi.waitFor(() => expect(rig.world.reactToEventOutcome).toHaveBeenCalledOnce());
+    expect(rig.realSession.snapshot().state).toBe('abducted');
+    expect(rig.presentTerminal).not.toHaveBeenCalled();
+    rig.flow.update(FLYBY_CHOICE_WINDOW_SECONDS);
+    expect(rig.session.resolveEvent).toHaveBeenCalledOnce();
+    beam.resolve();
+    await vi.waitFor(() => expect(rig.presentTerminal).toHaveBeenCalledOnce());
+    expect(rig.world.clearEvent).not.toHaveBeenCalled();
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['plane', 'plane-pass'],
+    ['flying-saucer', 'ufo-pass'],
+  ] as const)('rejects late %s signals and records the safe response once', async (eventId, resultId) => {
     const rig = createSessionRig(new SurvivalSession([
       { instanceId: 'flareGun-1', type: 'flareGun' },
       { instanceId: 'flashlight-1', type: 'flashlight' },
     ], {
       seed: 1112, random: sequenceRandom([0, 0.99, 0.99, 0.99]),
-      initial: { day: 15, rescueLead: 2 }, initialEventId: 'plane',
+      initial: { day: 15, rescueLead: 2 }, initialEventId: eventId,
     }));
     const choice = deferred();
     rig.world.playEventChoice.mockImplementation(() => choice.promise);
     await rig.flow.revealPending(rig.realSession.snapshot());
-    rig.flow.update(PLANE_CHOICE_WINDOW_SECONDS);
+    rig.flow.update(FLYBY_CHOICE_WINDOW_SECONDS);
     rig.flow.resolveItem('flareGun', 'flareGun-1');
     rig.flow.resolveItem('flashlight', 'flashlight-1');
     rig.flow.resolveEndure();
-    rig.flow.update(PLANE_CHOICE_WINDOW_SECONDS);
+    rig.flow.update(FLYBY_CHOICE_WINDOW_SECONDS);
     expect(rig.session.resolveEvent).not.toHaveBeenCalled();
     choice.resolve();
 
@@ -435,7 +458,7 @@ describe('event selection contracts', () => {
     expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({ kind: 'endure' });
     expect(rig.session.resolveEvent.mock.results[0]!.value).toMatchObject({
       accepted: true,
-      eventResult: { eventId: 'plane', choiceId: 'sleep', resultId: 'plane-pass' },
+      eventResult: { eventId, choiceId: 'sleep', resultId },
     });
     const after = rig.realSession.snapshot();
     expect(after).toMatchObject({
@@ -446,8 +469,8 @@ describe('event selection contracts', () => {
     expect(after.journalEntries[0]!.nighttime).toMatchObject({
       kind: 'event',
       event: {
-        eventId: 'plane', attemptedChoiceId: 'sleep', attemptedItemId: null,
-        text: { kind: 'eventResult', reference: { eventId: 'plane', choiceId: 'sleep', resultId: 'plane-pass' } },
+        eventId, attemptedChoiceId: 'sleep', attemptedItemId: null,
+        text: { kind: 'eventResult', reference: { eventId, choiceId: 'sleep', resultId } },
       },
     });
     expect(rig.onInvariantError).not.toHaveBeenCalled();

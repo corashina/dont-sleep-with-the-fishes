@@ -19,7 +19,7 @@ import {
   isDriftingItemEventId,
   isInspectableEventId,
   isSignalSightingEventId,
-  PLANE_CHOICE_WINDOW_SECONDS,
+  FLYBY_CHOICE_WINDOW_SECONDS,
   survivalEventById,
   type DriftingItemEventId,
   type InspectableEventId,
@@ -159,7 +159,7 @@ type EventPresentationState =
   | 'using'
   | 'resolving';
 
-const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
+const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk', 'abducted'];
 const MIDNIGHT_ATTACK_BLACKOUT_MS = 3_000;
 
 type SurvivalEventDefinition = NonNullable<ReturnType<typeof survivalEventById>>;
@@ -225,7 +225,7 @@ const FIXED_CHOICE_ANCHORS: Readonly<Record<string, string>> = {
   'flowers:sleep': 'event:flowers',
 };
 
-function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' {
+function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' | 'abducted' {
   return TERMINAL_STATES.includes(state);
 }
 
@@ -393,7 +393,7 @@ export class SurvivalEventFlow {
     readonly operation: number;
   } | null = null;
   private ownsBusyState = false;
-  private planeChoiceWindowRemaining: number | null = null;
+  private flybyChoiceWindowRemaining: number | null = null;
   private disposed = false;
 
   constructor(private readonly dependencies: SurvivalEventFlowDependencies) {
@@ -606,16 +606,16 @@ export class SurvivalEventFlow {
   update(deltaSeconds: number): void {
     if (this.disposed) return;
     const snapshot = this.dependencies.session.snapshot();
-    if (this.presentation !== 'choosing' || snapshot.pendingEventId !== 'plane') {
-      this.planeChoiceWindowRemaining = null;
+    if (this.presentation !== 'choosing' || (snapshot.pendingEventId !== 'plane' && snapshot.pendingEventId !== 'flying-saucer')) {
+      this.flybyChoiceWindowRemaining = null;
       return;
     }
-    if (this.planeChoiceWindowRemaining === null) {
-      this.planeChoiceWindowRemaining = PLANE_CHOICE_WINDOW_SECONDS;
+    if (this.flybyChoiceWindowRemaining === null) {
+      this.flybyChoiceWindowRemaining = FLYBY_CHOICE_WINDOW_SECONDS;
     }
-    this.planeChoiceWindowRemaining -= Math.max(0, deltaSeconds);
-    if (this.planeChoiceWindowRemaining > 0) return;
-    this.planeChoiceWindowRemaining = null;
+    this.flybyChoiceWindowRemaining -= Math.max(0, deltaSeconds);
+    if (this.flybyChoiceWindowRemaining > 0) return;
+    this.flybyChoiceWindowRemaining = null;
     this.dependencies.ui.setEventSelection?.(new Map(), []);
     this.dependencies.world.setEventEligibleItems?.(new Set());
     this.resolveEndure();
@@ -1830,7 +1830,7 @@ export class SurvivalEventFlow {
     if (!await this.holdDedicatedEventOutcome(context)) return;
     if (!await this.coverTerminalEventResolution(context)) return;
     const snapshot = this.dependencies.renderSnapshot();
-    if (snapshot.state === 'rescued') this.retainTerminalEventTableau();
+    if (snapshot.state === 'rescued' || snapshot.state === 'abducted') this.retainTerminalEventTableau();
     else this.clearPresentation();
     if (!await this.resetResolutionCoverProfile(context)) return;
     this.presentation = 'idle';

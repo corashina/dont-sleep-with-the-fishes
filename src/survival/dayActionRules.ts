@@ -175,7 +175,7 @@ export function dayActionUnavailableReason(
 ): string | null {
   if (state.activeFishing) return t('finishFishing');
   if (invalidOption(action, option)) return t('invalidOption');
-  if (state.state === 'rescued' || state.state === 'dead' || state.state === 'sunk') {
+  if (state.state === 'rescued' || state.state === 'dead' || state.state === 'sunk' || state.state === 'abducted') {
     return t('terminal');
   }
   const optionalLootEvent = state.state === 'dayEvent'

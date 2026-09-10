@@ -7,6 +7,7 @@ describe('survival ending previews', () => {
     ['rescue', 'rescued'],
     ['death', 'dead'],
     ['sinking', 'sunk'],
+    ['abduction', 'abducted'],
   ] as const)('presents %s once without changing checkpoints', async (endingId, state) => {
     const render = vi.fn();
     const showEnding = vi.fn();

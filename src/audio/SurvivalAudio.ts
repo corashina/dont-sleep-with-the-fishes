@@ -482,6 +482,10 @@ export class SurvivalAudio {
 
   ending(id: SurvivalEndingId): void {
     if (this.disposed) return;
+    if (id === 'abduction') {
+      this.clearEvent();
+      return;
+    }
     if (id === 'rescue') this.scope.play('rescueHorn');
     const cue = id === 'rescue'
       ? 'rescueEnding'

@@ -44,6 +44,7 @@ export const EVENT_PRESENTATION_ROUTES = Object.freeze({
   handyman: 'focused',
   'other-people': 'focused',
   plane: 'focused',
+  'flying-saucer': 'focused',
   lighthouse: 'focused',
 } as const satisfies EventPresentationRouteMap);
 

@@ -102,6 +102,15 @@ const presentations = {
     translation: [0, 0, 0],
     rotation: [0, 0, 0],
   },
+  flyingSaucer: {
+    sourceUrl: 'https://poly.pizza/m/6hu2h8v78mO',
+    sourceModelId: 'poly-pizza:077f565d-a601-4667-883e-1a598a3b4acb',
+    license: 'CC-BY 3.0',
+    targetLongestDimension: 12,
+    maxTriangles: 4_000,
+    translation: [0, 0, 0],
+    rotation: [0, 0, 0],
+  },
   midnightPalmTrees: {
     sourceUrl: 'https://poly.pizza/m/VYslw9DEi6',
     sourceModelId: 'poly-pizza:88fb0209-5e1e-4cb0-9d11-112e6140ab13',

@@ -30,6 +30,7 @@ export const POLY_PIZZA_EVENT_MODEL_PAGES = Object.freeze({
   midnightBush: 'https://poly.pizza/m/ooG6CkLyE8',
   midnightMonster: 'https://poly.pizza/m/22K0aSZkHV',
   airplane: 'https://poly.pizza/m/8VysVKMXN2J',
+  flyingSaucer: 'https://poly.pizza/m/6hu2h8v78mO',
   emptyLifeboat: 'https://poly.pizza/m/Hgf0R8s4Uo',
   emptyLifeboatContainer: 'https://poly.pizza/m/dvu1_2Wlhc0',
   shippingContainer: 'https://poly.pizza/m/dlBoC4Wkzp2',
@@ -51,6 +52,7 @@ export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
   midnightBush: 500,
   midnightMonster: 6_000,
   airplane: 2_500,
+  flyingSaucer: 4_000,
   emptyLifeboat: 2_000,
   emptyLifeboatContainer: 1_000,
   shippingContainer: 3_000,
@@ -59,7 +61,7 @@ export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
   wreckagePallet: 3_000,
 });
 
-export const EVENT_MODEL_TOTAL_TRIANGLE_LIMIT = 34_000;
+export const EVENT_MODEL_TOTAL_TRIANGLE_LIMIT = 38_000;
 export const EVENT_MODEL_IDS = Object.freeze(Object.keys(POLY_PIZZA_EVENT_MODEL_PAGES));
 export const POLY_PIZZA_EVENT_MODEL_IDS = EVENT_MODEL_IDS;
 const EVENT_MODEL_COMMITTED_SHA256 = Object.freeze({
@@ -75,6 +77,7 @@ const EVENT_MODEL_COMMITTED_SHA256 = Object.freeze({
   midnightShovel: '1D482586A319E0C176BACE1EBFEB618F903187F36C91755E6CE061874B19F6D5',
   midnightMonster: '76599ABFADB3629F435165418BFCF02FB8FAC2C34A71B913106663655E6C41D0',
   airplane: 'B64E73F3127A636F336F769235A5BCB30F215C8C59F98E4841612A92BE94C171',
+  flyingSaucer: 'E94C9D0B080031C94D7FB6C729933D1D7572B97C2AD0F600345A64C597BF7155',
   emptyLifeboat: '99FA2EDD3431AC0D9D3AB975F0AB3170AE0549D0F0B31D34FCC47D3622F870ED',
   emptyLifeboatContainer: '56630098F09950C8643982E65895F55257ADBC9F1F668C9A889F6DFE4D7957A8',
   shippingContainer: '6DF575590888973250E7B4A53ECA9BCC304CE52EFCF3E729318CAD0FC7399CB6',
@@ -329,6 +332,18 @@ function validateSourceMetadata(id, source, descriptor) {
 
 async function transformSourceDocument(id, source, staticSource) {
   if (staticSource) {
+    if (id === 'flyingSaucer') {
+      await source.document.transform(
+        weld(),
+        simplify({
+          simplifier: MeshoptSimplifier,
+          ratio: 0.62,
+          error: 0.01,
+          lockBorder: false,
+        }),
+        normals({ overwrite: true }),
+      );
+    }
     await source.document.transform(prune(), dedup(), weld(), prune(), dedup(), unpartition());
     return;
   }
@@ -366,6 +381,9 @@ function validateProcessedTriangles(id, document) {
 }
 
 function processingDescription(id, staticSource) {
+  if (id === 'flyingSaucer') {
+    return 'welded, simplified, normals regenerated, pruned, deduplicated, unpartitioned, renamed, and embedded';
+  }
   if (staticSource) return 'pruned, deduplicated, welded, unpartitioned, renamed, and embedded';
   if (id === 'midnightMonster') {
     return 'welded, simplified, normals regenerated, pruned, deduplicated, unpartitioned, renamed, and embedded; retained source skin and animation data';

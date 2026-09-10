@@ -224,10 +224,13 @@ function validateEffectRecord(value: unknown, path: string): PlainRecord {
     `${path}.effects`,
     'effect',
     [
-      'resources', 'items', 'chest',
+      'resources', 'items', 'chest', 'ending',
       'nextDawnEnergy', 'followUpNight',
     ],
   );
+  if (Object.hasOwn(candidateEffects, 'ending') && candidateEffects.ending !== 'abduction') {
+    throw new Error(`${path}.effects.ending must be abduction`);
+  }
   return candidateEffects;
 }
 

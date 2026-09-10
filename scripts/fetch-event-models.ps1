@@ -33,6 +33,7 @@ $modelIds = @(
   'midnightBush'
   'midnightMonster'
   'airplane'
+  'flyingSaucer'
   'emptyLifeboat'
   'emptyLifeboatContainer'
   'shippingContainer'
