@@ -7,6 +7,10 @@ import type {
 } from '../survival/survivalTypes';
 
 const EVENT_TEXT = {
+  seagullTheftTitle: { en: 'Seagull Theft', pl: 'Mewia kradzież', 'es-AR': 'Robo de gaviota' },
+  seagullTheftReveal: { en: 'Small black wings cross the distant sky.', pl: 'Małe czarne skrzydła przecinają odległe niebo.', 'es-AR': 'Unas alas negras cruzan el cielo a lo lejos.' },
+  seagullTheftChoice: { en: 'Lose a food can', pl: 'Strać puszkę jedzenia', 'es-AR': 'Perder una lata de comida' },
+  seagullTheftResult: { en: 'A gull snatches a food can and flies away. −1 Food.', pl: 'Mewa porywa puszkę jedzenia i odlatuje. −1 Jedzenie.', 'es-AR': 'Una gaviota se lleva una lata. −1 Comida.' },
   snatcherNetChoice: { en: 'Strike the tentacle with the Net — may tear', pl: 'Uderz mackę siecią — może się rozerwać', 'es-AR': 'Golpeá el tentáculo con la red — puede romperse' },
   snatcherNetHeld: { en: 'The net drives the tentacle away. Your supplies stay aboard.', pl: 'Sieć odpędza mackę. Zapasy zostają na pokładzie.', 'es-AR': 'La red aleja al tentáculo. Tus provisiones quedan a bordo.' },
   snatcherNetTorn: { en: 'The net tears as you strike. The tentacle retreats without your supplies.', pl: 'Sieć pęka przy uderzeniu. Macka wycofuje się bez zapasów.', 'es-AR': 'La red se rompe con el golpe. El tentáculo se retira sin tus provisiones.' },

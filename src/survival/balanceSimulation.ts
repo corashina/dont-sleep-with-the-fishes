@@ -89,6 +89,7 @@ const EVENT_CHOICE_PRIORITY = Object.freeze({
   'guarded-sleep': ['watch', 'sleep'],
   'drifting-supplies': ['retrieve', 'delegate-carlitos', 'sleep'],
   'drifting-chest': ['retrieve', 'delegate-carlitos', 'sleep'],
+  'seagull-theft': ['steal'],
   'check-the-back': ['check', 'sleep'],
   flowers: ['fishingNet', 'bucket', 'sleep'],
   'chest-attack': ['knife', 'attack'],

@@ -380,6 +380,7 @@ export const createFeaturedAdapter: EventPresentationAdapterFactory = (
     targets.checkBackChest,
     targets.checkBackFishBench,
     dependencies.focusedDependencies.emitCue,
+    dependencies.focusedDependencies.supplyDisplay,
     eventId,
     dependencies.driftingWater,
   );

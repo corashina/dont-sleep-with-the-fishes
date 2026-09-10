@@ -20,6 +20,7 @@ export const CHECK_BACK_AUDIO_CUES = Object.freeze([
 export type CheckBackAudioCue = typeof CHECK_BACK_AUDIO_CUES[number];
 
 export type EventPresentationCue =
+  | Readonly<{ eventId: 'seagull-theft'; cue: 'grab' }>
   | Readonly<{
       eventId: 'midnight-tour';
       cue: MidnightTourAudioCue;
