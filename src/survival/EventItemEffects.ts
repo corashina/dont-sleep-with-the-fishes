@@ -21,6 +21,7 @@ import {
 } from 'three';
 import { clamp01Unchecked } from './animationMath';
 import { FlashlightBeam } from './FlashlightBeam';
+import { ShotgunBlast } from './ShotgunBlast';
 import {
   LIFEBOAT_GUNWALE_SURFACE_Y,
   lifeboatHullHalfWidthAt,
@@ -32,7 +33,6 @@ type EffectRoot = Group;
 const TAPE = 'event-item-tape';
 const FLARE = 'event-item-flare';
 const CHAIN = 'event-item-chain';
-const SHOTGUN_SMOKE = 'event-item-shotgun-smoke';
 const FLARE_MUZZLE_X = 0.34;
 const FLARE_DISTANCE = 21;
 const FLARE_ARC_HEIGHT = 3.2;
@@ -71,7 +71,7 @@ export class EventItemEffects {
   private readonly chain: EffectRoot;
   private readonly chainLinks: InstancedMesh<BufferGeometry, Material>;
   readonly flashlight = new FlashlightBeam();
-  private readonly shotgunSmoke: EffectRoot;
+  private readonly shotgun = new ShotgunBlast();
   private binocularStrength = 0;
   private effectOpacity = 0;
   private readonly chainBoatWorld = new Vector3();
@@ -104,7 +104,6 @@ export class EventItemEffects {
     this.tape = this.createTape();
     [this.flare, this.flareLight] = this.createFlare();
     [this.chain, this.chainLinks] = this.createChain();
-    this.shotgunSmoke = this.createShotgunSmoke();
     this.heldFillLight = new PointLight(0xffddad, 0, 2.8, 2);
     this.heldFillLight.name = 'event-item-held-fill';
     this.heldFillLight.position.set(-0.24, 0.36, 0.48);
@@ -112,15 +111,15 @@ export class EventItemEffects {
       this.tape,
       this.flare,
       this.chain,
-      this.shotgunSmoke,
     ];
-    this.root.add(...this.effects, this.flashlight, this.heldFillLight);
+    this.root.add(...this.effects, this.flashlight, this.shotgun, this.heldFillLight);
     this.clear();
   }
 
   apply(sample: Readonly<EventItemUseSample>, actor: Object3D): void {
     if (this.disposed) return;
     this.hideEffects();
+    if (sample.effectKind !== 'shotgun-blast') this.shotgun.reset();
 
     actor.updateWorldMatrix(true, false);
     actor.getWorldPosition(this.actorPosition);
@@ -153,8 +152,9 @@ export class EventItemEffects {
       case 'flashlight':
         this.flashlight.apply(actor, primary, secondary);
         break;
-      case 'shotgun-smoke':
-        this.applyShotgunSmoke(primary, secondary);
+      case 'shotgun-blast':
+        this.root.quaternion.identity();
+        this.shotgun.apply(sample, actor);
         break;
       case 'binocular-mask':
         this.binocularStrength = primary;
@@ -182,24 +182,9 @@ export class EventItemEffects {
     this.flareLight.intensity = 7.2 + Math.sin(sample.effectTravel * Math.PI * 38);
   }
 
-  private applyShotgunSmoke(primary: number, secondary: number): void {
-    this.show(this.shotgunSmoke, primary);
-    this.shotgunSmoke.position.set(0.015, 0.025, -0.54 - secondary * 0.14);
-    this.shotgunSmoke.rotation.set(0.02, -0.04, -0.04);
-    for (let index = 0; index < this.shotgunSmoke.children.length; index += 1) {
-      const puff = this.shotgunSmoke.children[index]!;
-      const side = index % 2 === 0 ? -1 : 1;
-      const spread = secondary * (0.035 + index * 0.012);
-      puff.position.x = side * 0.006;
-      puff.position.y = side * spread + secondary * (0.02 + index * 0.006);
-      puff.position.z = -index * 0.024 - secondary * (0.06 + index * 0.018);
-      puff.rotation.z = side * (0.12 + secondary * (0.22 + index * 0.04));
-      puff.scale.setScalar(0.72 + index * 0.13 + secondary * (0.8 + index * 0.12));
-    }
-  }
-
   clear(): void {
     this.hideEffects();
+    this.shotgun.reset();
     this.flashlight.setTarget(null);
     this.flareLaunched = false;
     this.flareTravel = 0;
@@ -217,6 +202,7 @@ export class EventItemEffects {
     for (const material of this.baseOpacities.keys()) material.opacity = 0;
     this.binocularStrength = 0;
     this.flashlight.hide();
+    this.shotgun.visible = false;
     if (this.flareLight) this.flareLight.intensity = 0;
     if (this.heldFillLight) {
       this.heldFillLight.visible = false;
@@ -248,6 +234,7 @@ export class EventItemEffects {
     this.disposed = true;
     this.clear();
     this.flashlight.dispose();
+    this.shotgun.dispose();
     this.flareLight.shadow.dispose();
     this.heldFillLight.shadow.dispose();
     this.chainLinks.dispose();
@@ -459,31 +446,6 @@ export class EventItemEffects {
     const segmentProgress = (progress - CHAIN_SEGMENT_SPLIT) / (1 - CHAIN_SEGMENT_SPLIT);
     output.lerpVectors(this.chainGunwaleWorld, this.chainAnchorWorld, segmentProgress);
     output.y -= Math.sin(Math.PI * segmentProgress) * (0.08 + travel * 0.22);
-  }
-
-  private createShotgunSmoke(): EffectRoot {
-    const smoke = new Group();
-    smoke.name = SHOTGUN_SMOKE;
-    const smokeGeometry = new SphereGeometry(0.065, 7, 5);
-    const smokeMaterial = new MeshBasicMaterial({
-      color: 0xb8b9af,
-      transparent: true,
-      opacity: 0.4,
-      depthWrite: false,
-      side: 2,
-    });
-    for (let index = 0; index < 6; index += 1) {
-      const puff = this.mesh(
-        smokeGeometry,
-        smokeMaterial,
-        `event-item-shotgun-smoke-puff-${index}`,
-      );
-      puff.position.set(index % 2 === 0 ? -0.006 : 0.006, 0, -index * 0.024);
-      puff.rotation.z = index % 2 === 0 ? -0.12 : 0.12;
-      puff.scale.setScalar(0.72 + index * 0.13);
-      smoke.add(puff);
-    }
-    return smoke;
   }
 
 }

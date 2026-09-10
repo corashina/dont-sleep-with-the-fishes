@@ -68,9 +68,7 @@ describe('lab water actions', () => {
       if (type === 'fishingNet') {
         expect(rig.world.enterFishingView).toHaveBeenCalledWith('net');
         expect(rig.world.playFishingNetHaul).toHaveBeenCalledTimes(run);
-        expect(rig.world.playFishingNetHaul).toHaveBeenLastCalledWith([
-          expect.objectContaining({ id: 'cod' }), expect.objectContaining({ id: 'salmon' }),
-        ], { x: 0, z: -6.4 });
+        expect(rig.world.playFishingNetHaul).toHaveBeenLastCalledWith('cod', { x: 0, z: -6.4 });
         expect(rig.world.exitFishingView).toHaveBeenCalledTimes(run);
       } else {
         expect(rig.world.playDive).toHaveBeenCalledTimes(run);

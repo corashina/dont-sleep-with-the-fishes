@@ -176,6 +176,9 @@ function validateOutcome(
   const { resources, items } = validatedEffectArrays(candidateEffects, path);
   validateResourceEffects(resources, path);
   validateNightEnergyEffects(resources, path, phase);
+  if (candidateEffects.nextDawnEnergyReduction !== undefined && phase !== 'night') {
+    throw new Error(`${path} reduces dawn energy outside a night event`);
+  }
   validateItemEffects(items, path);
   validateOutcomeLosses(outcomeEntry, items, path);
   validateOptionalEffects(candidateEffects, path);
@@ -225,7 +228,7 @@ function validateEffectRecord(value: unknown, path: string): PlainRecord {
     'effect',
     [
       'resources', 'items', 'chest', 'ending',
-      'nextDawnEnergy', 'followUpNight',
+      'nextDawnEnergy', 'nextDawnEnergyReduction', 'followUpNight',
     ],
   );
   if (Object.hasOwn(candidateEffects, 'ending') && candidateEffects.ending !== 'abduction') {
@@ -319,7 +322,18 @@ function validateOutcomeLosses(
   }
 }
 
+function validateDawnEnergyReduction(candidateEffects: PlainRecord, path: string): void {
+  if (Object.hasOwn(candidateEffects, 'nextDawnEnergyReduction') && (
+    candidateEffects.nextDawnEnergyReduction !== 1
+    || Object.hasOwn(candidateEffects, 'nextDawnEnergy')
+    || Object.hasOwn(candidateEffects, 'followUpNight')
+  )) {
+    throw new Error(`${path}.nextDawnEnergyReduction must be one and cannot combine with another dawn or follow-up effect`);
+  }
+}
+
 function validateOptionalEffects(candidateEffects: PlainRecord, path: string): void {
+  validateDawnEnergyReduction(candidateEffects, path);
   const hasChest = Object.hasOwn(candidateEffects, 'chest');
   const hasNextDawnEnergy = Object.hasOwn(candidateEffects, 'nextDawnEnergy');
   const hasFollowUpNight = Object.hasOwn(candidateEffects, 'followUpNight');

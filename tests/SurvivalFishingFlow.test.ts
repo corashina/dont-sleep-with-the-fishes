@@ -186,7 +186,7 @@ async function cast(rig: ReturnType<typeof createRig>): Promise<void> {
 }
 
 describe('SurvivalFishingFlow', () => {
-  it('hauls two net catches automatically and returns aboard after the result', async () => {
+  it('hauls one net catch automatically and returns aboard after the result', async () => {
     const rig = createRig({ withNet: true, withBait: true });
     const before = rig.realSession.snapshot();
     const entry = rig.flow.begin('net');
@@ -195,15 +195,17 @@ describe('SurvivalFishingFlow', () => {
     await entry;
     expect(rig.world.enterFishingView).toHaveBeenCalledWith('net');
     expect(rig.flow.cast(640, 360, 1280, 720)).toBe(true);
-    expect(rig.realSession.snapshot()).toMatchObject({ energy: 1, food: before.food + 2, bait: before.bait });
+    expect(rig.realSession.snapshot()).toMatchObject({ energy: 1, food: before.food + 1, bait: before.bait });
     expect(rig.animations.net).toHaveLength(1);
+    expect(rig.world.playFishingNetHaul).toHaveBeenCalledExactlyOnceWith('cod', rig.castPoint);
     expect(rig.animations.cast).toHaveLength(0);
     expect(rig.ui.showFishingResult).not.toHaveBeenCalled();
     expect(rig.flow.cast(640, 360, 1280, 720)).toBe(false);
     rig.animations.net[0]!.resolve();
     await flushPromises();
     expect(rig.ui.showFishingResult).toHaveBeenCalledWith(expect.objectContaining({
-      items: [{ itemId: 'cannedFood', quantity: 2, condition: 'usable' }],
+      items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }],
+      message: 'Cod',
     }));
     expect(rig.audio.fishingBite).not.toHaveBeenCalled();
     rig.flow.continueResult();
@@ -338,7 +340,7 @@ describe('SurvivalFishingFlow', () => {
     rig.animations.reel[0]!.resolve();
     await flushPromises();
     expect(rig.ui.showFishingResult).toHaveBeenCalledWith({
-      items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }], message: '', catchTarget: rig.catchTarget,
+      items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }], message: 'Cod', catchTarget: rig.catchTarget,
     });
     expect(rig.world.projectFishingCatch).toHaveBeenCalledWith(1280, 720);
 

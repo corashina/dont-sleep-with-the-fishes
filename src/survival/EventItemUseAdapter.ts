@@ -82,6 +82,7 @@ export class EventItemUseAdapter {
   private readonly actorParentWorldQuaternion = new Quaternion();
   private readonly actorParentQuaternion = new Quaternion();
   private readonly cameraAlignedEuler = new Euler(0, 0, 0, 'YXZ');
+  private readonly aimEuler = new Euler(0, 0, 0, 'YXZ');
   private readonly facingWorldQuaternion = new Quaternion();
   private readonly facingTargetQuaternion = new Quaternion();
   private readonly facingDeltaQuaternion = new Quaternion();
@@ -227,6 +228,7 @@ export class EventItemUseAdapter {
     this.applyKnifeGripAfterTravel(sample, actor);
     this.applyCameraFacing(sample, actor);
     this.applyAim(sample, actor, profile);
+    this.applyRecoil(sample, actor);
     this.effects.apply(sample, actor.root);
     this.updateInteriorCoverage(sample.primaryEffect);
     actor.root.visible = sample.itemVisible;
@@ -510,17 +512,7 @@ export class EventItemUseAdapter {
     if (this.targetDirection.lengthSq() === 0) return;
     this.targetDirection.normalize();
     actor.root.getWorldQuaternion(this.actorWorldQuaternion);
-    this.currentWorldForward
-      .set(profile.forward[0], profile.forward[1], profile.forward[2])
-      .applyQuaternion(this.actorWorldQuaternion)
-      .normalize();
-    this.aimDeltaQuaternion.setFromUnitVectors(
-      this.currentWorldForward,
-      this.targetDirection,
-    );
-    this.solvedWorldQuaternion
-      .copy(this.aimDeltaQuaternion)
-      .multiply(this.actorWorldQuaternion);
+    this.solveAimRotation(sample, profile);
     this.actorWorldQuaternion.slerp(this.solvedWorldQuaternion, sample.aimBlend);
 
     const parent = actor.root.parent;
@@ -534,6 +526,28 @@ export class EventItemUseAdapter {
         .multiply(this.actorWorldQuaternion);
     }
     actor.root.quaternion.copy(this.actorParentQuaternion);
+  }
+
+  private solveAimRotation(sample: Readonly<EventItemUseSample>, profile: EventItemMotionProfile): void {
+    if (profile.aim === 'horizontal-entity') {
+      // A level barrel also needs an upright stock, independent of its storage roll.
+      this.aimEuler.set(
+        0, Math.atan2(-this.targetDirection.x, -this.targetDirection.z), sample.roll,
+      );
+      this.solvedWorldQuaternion.setFromEuler(this.aimEuler);
+      return;
+    }
+    this.currentWorldForward
+      .set(profile.forward[0], profile.forward[1], profile.forward[2])
+      .applyQuaternion(this.actorWorldQuaternion)
+      .normalize();
+    this.aimDeltaQuaternion.setFromUnitVectors(this.currentWorldForward, this.targetDirection);
+    this.solvedWorldQuaternion.copy(this.aimDeltaQuaternion).multiply(this.actorWorldQuaternion);
+  }
+
+  private applyRecoil(sample: Readonly<EventItemUseSample>, actor: BorrowedSupplyActor): void {
+    // Target alignment must not erase the barrel rise from firing.
+    if (sample.recoilPitch !== 0) actor.root.rotateX(sample.recoilPitch);
   }
 
   private updateHeldCameraWorldTransform(): void {

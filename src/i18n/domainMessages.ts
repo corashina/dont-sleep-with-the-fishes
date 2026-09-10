@@ -4,7 +4,6 @@ export const DOMAIN_MESSAGES = {
   noNet: { en: 'Fishing requires a usable net.', pl: 'Łowienie wymaga sprawnej sieci.', 'es-AR': 'Para pescar necesitás una red en buen estado.' },
   netEnergy: { en: 'Net fishing requires two energy.', pl: 'Łowienie siecią wymaga dwóch punktów energii.', 'es-AR': 'Pescar con red requiere dos puntos de energía.' },
   readyNet: { en: 'You lift the net and choose where to scoop.', pl: 'Podnosisz sieć i wybierasz miejsce połowu.', 'es-AR': 'Levantás la red y elegís dónde pescar.' },
-  netHauled: { en: 'You bring the net aboard and sort the catch.', pl: 'Wciągasz sieć na pokład i sprawdzasz połów.', 'es-AR': 'Subís la red al bote y revisás la pesca.' },
   notAboard: { en: "Carlitos is not aboard.", pl: "Carlitos nie ma na pokładzie.", "es-AR": "Carlitos no está a bordo." },
   alreadyPetted: { en: "Carlitos has already been petted today.", pl: "Carlitos dostał już dziś swoją porcję głaskania.", "es-AR": "Ya acariciaste a Carlitos hoy." },
   alreadyHappy: { en: "Carlitos is already happy.", pl: "Carlitos jest już szczęśliwy.", "es-AR": "Carlitos ya está contento." },

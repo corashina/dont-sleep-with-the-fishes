@@ -2,7 +2,8 @@ import { Box3, Euler, Group, Matrix4, Object3D, Quaternion, Vector3 } from 'thre
 import { createWaveSample, type WaveSample } from '../ocean/WaveField';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
-import type { FishingCastPoint, FishingHaul } from './FishingSession';
+import type { FishingCastPoint } from './FishingSession';
+import type { FishingCatchId } from './fishingCatalog';
 import { runCleanupSteps } from '../world/SceneResources';
 import { boatSupplyTransform } from '../world/BoatStorage';
 
@@ -17,7 +18,7 @@ export class NetFishingPresentation {
   readonly root = new Group();
   private readonly basket = new Group();
   private readonly netPivot = new Group();
-  private readonly catches = [new FishingCatchLibrary(), new FishingCatchLibrary()] as const;
+  private readonly catchLibrary = new FishingCatchLibrary();
   private readonly particles = new FishingBiteParticles();
   private readonly bounds = new Box3();
   private readonly start = new Vector3(-0.75, 0.48, -2.9);
@@ -106,22 +107,22 @@ export class NetFishingPresentation {
       .decompose(this.storedPosition, this.storedRotation, this.storedScale);
   }
 
-  async prepare(haul: FishingHaul, point: FishingCastPoint): Promise<boolean> {
+  async prepare(catchId: FishingCatchId, point: FishingCastPoint): Promise<boolean> {
     const generation = ++this.generation;
     this.waterWorld.set(Math.min(1.2, Math.max(-1.2, point.x)), 0, -3.9);
-    const models = await Promise.all(this.catches.map((library, index) => library.prepare(haul[index]!.id)));
+    this.basket.clear();
+    const model = await this.catchLibrary.prepare(catchId);
     if (generation !== this.generation) return false;
-    models.forEach((model, index) => {
-      if (model === null) return;
+    if (model !== null) {
       model.position.set(0, 0, 0);
-      model.rotation.set(0, index === 0 ? 0.4 : -0.6, 0);
+      model.rotation.set(0, 0.4, 0);
       this.bounds.setFromObject(model, true);
       const size = this.bounds.getSize(this.splash);
       model.scale.multiplyScalar(Math.min(1, 0.32 / Math.max(size.x, size.y, size.z)));
       this.bounds.setFromObject(model, true);
-      model.position.set(index === 0 ? -0.07 : 0.07, -this.bounds.min.y - 0.13, index === 0 ? -0.08 : 0.1);
+      model.position.set(0, -this.bounds.min.y - 0.13, 0);
       this.basket.add(model);
-    });
+    }
     this.sample(0);
     return true;
   }
@@ -169,7 +170,7 @@ export class NetFishingPresentation {
     this.generation += 1;
     this.root.visible = false;
     this.basket.clear();
-    this.catches.forEach((library) => library.hide());
+    this.catchLibrary.hide();
     this.particles.reset();
     this.lastBurst = -1;
   }
@@ -177,8 +178,7 @@ export class NetFishingPresentation {
   dispose(): void {
     this.clear();
     runCleanupSteps([
-      () => this.catches[0].dispose(),
-      () => this.catches[1].dispose(),
+      () => this.catchLibrary.dispose(),
       () => this.particles.dispose(),
       () => this.particles.points.removeFromParent(),
       () => this.root.removeFromParent(),

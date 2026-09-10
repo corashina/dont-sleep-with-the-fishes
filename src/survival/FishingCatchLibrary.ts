@@ -39,6 +39,7 @@ import {
 import { type ItemId } from '../game/ItemState';
 import { ITEM_MODEL_SPECS } from '../world/itemModelManifest';
 import { applyBrokenMaterialTreatment } from './itemConditionAppearance';
+import { buildSimpleJunk } from './JunkCatchModels';
 
 interface FamilyTemplate {
   readonly root: Group;
@@ -340,6 +341,10 @@ function buildFamily(
     case 'boot': buildBoot(root, context); break;
     case 'bottle': buildBottle(root, context); break;
     case 'fishBones': buildFishBones(root, context); break;
+    default:
+      root.add(buildSimpleJunk(family, body, accent));
+      collectMeshResources(root, geometries, materials);
+      break;
   }
 
   root.updateMatrixWorld(true);

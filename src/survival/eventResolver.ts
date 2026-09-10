@@ -62,6 +62,9 @@ function resolvedEffects(
     ...(selected.effects.nextDawnEnergy !== undefined
       ? { nextDawnEnergy: selected.effects.nextDawnEnergy }
       : {}),
+    ...(selected.effects.nextDawnEnergyReduction !== undefined
+      ? { nextDawnEnergyReduction: selected.effects.nextDawnEnergyReduction }
+      : {}),
     ...(selected.effects.followUpNight !== undefined
       ? { followUpNight: selected.effects.followUpNight }
       : {}),
