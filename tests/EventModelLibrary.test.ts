@@ -46,6 +46,21 @@ function completeRoots(): Record<EventModelId, Group> {
 }
 
 describe('EventModelLibrary', () => {
+  it('prepares the full catalogue while enforcing each model budget', async () => {
+    const roots = completeRoots();
+    let triangles = 0;
+    for (const id of EVENT_MODEL_IDS) {
+      const mesh = roots[id].children[0] as Mesh;
+      const indices = Array.from(mesh.geometry.index!.array);
+      const count = EVENT_MODEL_SPECS[id].generatedMetadata.triangles;
+      triangles += count;
+      mesh.geometry.setIndex(Array.from({ length: count * 3 }, (_, index) => indices[index % indices.length]!));
+    }
+    expect(triangles).toBeGreaterThan(22_000);
+    const library = await EventModelLibrary.load(EVENT_MODEL_IDS, loaderFrom(roots));
+    expect([...library.preparationRoots()]).toHaveLength(EVENT_MODEL_IDS.length);
+    library.dispose();
+  });
 
   it('loads only requested templates', async () => {
     const roots = completeRoots();

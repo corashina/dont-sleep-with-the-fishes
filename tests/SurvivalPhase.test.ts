@@ -67,7 +67,7 @@ describe('survival checkpoints', () => {
       expect(prepare).toHaveBeenCalledWith(scene, expect.any(PerspectiveCamera), {
         kind: 'survival', elapsedSeconds: 0, phase: 'night', weather: 'squall',
       });
-      expect(render).not.toHaveBeenCalled();
+      expect(render).toHaveBeenCalledOnce();
     } finally { phase.dispose(); }
   });
 

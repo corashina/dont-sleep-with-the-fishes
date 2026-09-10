@@ -23,8 +23,6 @@ import {
   projectBoatObjectBoundsInto,
   type ProjectedBoatBounds,
 } from './BoatInteraction';
-import { FishingBiteParticles } from './FishingBiteParticles';
-import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { NetFishingPresentation, NET_HAUL_DURATION } from './NetFishingPresentation';
 import type { FishingCatchId } from './fishingCatalog';
 import type { FishingCastPoint } from './FishingSession';
@@ -112,11 +110,6 @@ export interface FishingPresentationResourceFactories {
   createCatches(): FishingCatchPresentationLibrary;
   createBiteParticles(): FishingBiteParticlePresentation;
 }
-
-const DEFAULT_FISHING_RESOURCE_FACTORIES: FishingPresentationResourceFactories = {
-  createCatches: () => new FishingCatchLibrary(),
-  createBiteParticles: () => new FishingBiteParticles(),
-};
 
 type FishingPresentationPhase =
   | 'idle'
@@ -403,7 +396,7 @@ export class FishingPresentation {
 
   static create(
     dependencies: FishingPresentationHostDependencies,
-    factories: FishingPresentationResourceFactories = DEFAULT_FISHING_RESOURCE_FACTORIES,
+    factories: FishingPresentationResourceFactories,
   ): FishingPresentation {
     let catches: FishingCatchPresentationLibrary | null = null;
     let biteParticles: FishingBiteParticlePresentation | null = null;
@@ -485,7 +478,7 @@ export class FishingPresentation {
     if (netModel !== undefined) {
       this.net ??= new NetFishingPresentation(netModel, this.dependencies.worldRoot, this.dependencies.boatRoot, (output, x, z) => {
         this.dependencies.sampleWaveInto(output, this.currentTime, x, z, this.dependencies.waveAmplitudeScale());
-      });
+      }, this.dependencies.catches);
       this.net.show();
     }
     if (this.phase === 'ready') {

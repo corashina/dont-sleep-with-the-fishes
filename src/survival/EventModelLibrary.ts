@@ -10,7 +10,6 @@ import {
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import {
-  EVENT_MODEL_MAX_TOTAL_TRIANGLES,
   EVENT_MODEL_SPECS,
   type EventModelId,
   type EventModelSpec,
@@ -303,7 +302,6 @@ function cloneOwnedEventTemplate(template: Group): OwnedEventTemplateClone {
 
 interface LoadedTemplate {
   readonly root: Group;
-  readonly triangles: number;
 }
 
 export class EventModelLibrary {
@@ -325,13 +323,13 @@ export class EventModelLibrary {
       async (id, index): Promise<LoadedTemplate> => {
         const root = await loader.load(EVENT_MODEL_SPECS[id].url);
         loadedRoots[index] = root;
-        const triangles = normalizeTemplate(id, root, EVENT_MODEL_SPECS[id]);
+        normalizeTemplate(id, root, EVENT_MODEL_SPECS[id]);
         const template = new Group();
         template.name = `event-model:${id}`;
         template.userData.eventModelId = id;
         template.animations = root.animations.slice();
         template.add(root);
-        return { root: template, triangles };
+        return { root: template };
       },
     ));
 
@@ -350,19 +348,6 @@ export class EventModelLibrary {
     const loaded = results.map(
       (result) => (result as PromiseFulfilledResult<LoadedTemplate>).value,
     );
-    let aggregateTriangles = 0;
-    for (let index = 0; index < loaded.length; index += 1) {
-      aggregateTriangles += loaded[index]!.triangles;
-      if (aggregateTriangles > EVENT_MODEL_MAX_TOTAL_TRIANGLES) {
-        const error = new EventModelLoadError(
-          requestedIds[index]!,
-          `aggregate triangle count ${aggregateTriangles} exceeds the ${EVENT_MODEL_MAX_TOTAL_TRIANGLES} limit`,
-        );
-        attemptCleanup(() => disposeTemplateRoots(loaded.map(({ root }) => root)));
-        throw error;
-      }
-    }
-
     return new EventModelLibrary(new Map(
       requestedIds.map((id, index) => [id, loaded[index]!.root]),
     ));
@@ -391,6 +376,10 @@ export class EventModelLibrary {
   animations(_id: SupernaturalEventModelId): readonly [] {
     if (this.disposed) throw new Error('Event model library is disposed');
     return [];
+  }
+
+  preparationRoots(): Iterable<Group> {
+    return this.templates.values();
   }
 
   dispose(): void {

@@ -20,6 +20,7 @@ import type { MenuModelLibrary } from '../menu/MenuModelLibrary';
 import type { MenuSandAssets } from '../menu/MenuSandAssets';
 import type { SkyPhase } from '../world/skyPalette';
 import type { SurvivalRunCheckpoint } from '../survival/SurvivalCheckpoint';
+import type { SurvivalContent } from '../survival/SurvivalContent';
 
 export interface PhaseContext {
   mount: HTMLElement;
@@ -38,6 +39,7 @@ export interface MenuAssets {
   menuSandAssets: MenuSandAssets;
 }
 export interface ShipPhaseAssets {
+  survivalContent: SurvivalContent;
   lifeboatAssets: LifeboatAssets;
   propModels: PropModelLibrary;
   shipFurniture: ShipFurnitureLibrary;
@@ -47,6 +49,7 @@ export interface ShipPhaseAssets {
   physicsMode: PhysicsMode;
 }
 export interface SurvivalAssets {
+  survivalContent: SurvivalContent;
   propModels: PropModelLibrary;
   skyAssets: SkyAssets;
   lifeboatAssets: LifeboatAssets;

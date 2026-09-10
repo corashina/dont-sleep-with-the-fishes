@@ -36,7 +36,7 @@ import { SurvivalPhase } from './survival/SurvivalPhase';
 import { PerformanceStats } from './ui/PerformanceStats';
 import { PostProcessingConsole } from './ui/PostProcessingConsole';
 import { SettingsMenu } from './ui/SettingsMenu';
-import { createSystemScreen } from './ui/SystemScreen';
+import { createSystemScreen, updateSystemScreenProgress } from './ui/SystemScreen';
 import {
   createSystemTuningPreference,
   type SystemTuningPreference,
@@ -66,7 +66,7 @@ import type {
   SurvivalPhaseStart,
 } from './survival/SurvivalPhase';
 import type { BrowserPlaytestStartup } from './app/BrowserPlaytest';
-import type { PhaseResourceSource, ResourceLease } from './app/PhaseResources';
+import type { PhaseResourceSource, ResourceLease, ResourceProgress } from './app/PhaseResources';
 
 export interface GameFactories {
   createMenu(
@@ -197,6 +197,7 @@ function createTestRenderer(): WebGLRenderer {
     setPixelRatio: () => undefined,
     setSize: () => undefined,
     render: () => undefined,
+    initTexture: () => undefined,
     compileAsync: async () => undefined,
     dispose: () => undefined,
     shadowMap: { enabled: true, type: 0 },
@@ -229,6 +230,7 @@ export class Game {
   private activeLease: ResourceLease<unknown> | null = null;
   private pendingPreparation: Promise<void> | null = null;
   private transitionScreen: HTMLElement | null = null;
+  private preparing = false;
   private performanceStats: PerformanceStats | null = null;
   private settingsMenu: SettingsMenu | null = null;
   private postProcessingConsole: PostProcessingConsole | null = null;
@@ -395,7 +397,7 @@ export class Game {
     if (this.disposed || this.started) return;
     this.started = true;
     this.clock.start();
-    this.activePhase?.start();
+    if (!this.preparing) this.activePhase?.start();
     this.animationFrame = requestAnimationFrame(this.animate);
   }
 
@@ -637,7 +639,7 @@ export class Game {
   }
 
   private activateScavenge(phaseStart: ScavengePhaseStart = 'intro'): Promise<void> {
-    return this.acquirePhase(() => this.resources.acquireShip(), (assets, generation) => {
+    return this.acquirePhase(progress => this.resources.acquireShip(progress), (assets, generation) => {
       assets.shipAssets.configure(this.context.maxTextureAnisotropy);
       assets.lifeboatAssets.configure(this.context.maxTextureAnisotropy);
       return this.factories.createScavenge(
@@ -651,7 +653,7 @@ export class Game {
   }
 
   private activateMenu(): Promise<void> {
-    return this.acquirePhase(() => this.resources.acquireMenu(), (assets, generation) => {
+    return this.acquirePhase(progress => this.resources.acquireMenu(progress), (assets, generation) => {
       assets.menuSandAssets.configure(this.context.maxTextureAnisotropy);
       return this.factories.createMenu(
         { ...this.context, ...assets },
@@ -668,16 +670,20 @@ export class Game {
   }
 
   private acquirePhase<T>(
-    acquire: () => Promise<ResourceLease<T>>,
+    acquire: (onProgress: ResourceProgress) => Promise<ResourceLease<T>>,
     create: (assets: T, generation: number) => GamePhase,
   ): Promise<void> {
     const generation = ++this.phaseGeneration;
+    this.preparing = true;
+    this.showTransitionScreen();
+    const progress: ResourceProgress = (completed, total) => {
+      if (this.ownsGeneration(generation)) this.updatePreparationProgress(Math.round(completed / Math.max(1, total) * 80));
+    };
     return Promise.resolve().then(() => {
       if (!this.ownsGeneration(generation)) return null;
       this.settingsMenu?.close();
       this.activePhase?.setOverlayActive?.(true);
-      this.showTransitionScreen();
-      return acquire();
+      return acquire(progress);
     }).then(lease => {
       if (lease === null) return;
       if (!this.ownsGeneration(generation)) { lease.dispose(); return; }
@@ -692,7 +698,10 @@ export class Game {
     }).catch(error => {
       if (this.ownsGeneration(generation)) this.reportFatalError(error);
     }).finally(() => {
-      if (this.ownsGeneration(generation)) this.clearTransitionScreen();
+      if (this.ownsGeneration(generation)) {
+        this.preparing = false;
+        this.clearTransitionScreen();
+      }
     });
   }
 
@@ -703,6 +712,8 @@ export class Game {
     previous: Promise<void> | null,
   ): Promise<void> {
     if (previous !== null) await previous;
+    // Let the cover paint before scene construction starts.
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
     if (!this.ownsGeneration(generation)) { lease.dispose(); return; }
     const outgoing = this.takeActivePhase();
     let phase: GamePhase | null = null;
@@ -712,11 +723,13 @@ export class Game {
       outgoing?.dispose();
       this.resetCamera();
       phase = create(lease.assets, generation);
+      this.updatePreparationProgress(85);
       await this.preparePhasePresentation(phase, generation);
       if (!this.ownsGeneration(generation)) { const stale = phase; phase = null; stale.dispose(); return; }
       this.activePhase = phase;
       this.activeLease = lease;
       transferred = true;
+      this.updatePreparationProgress(100);
       this.synchronizePresentationControls();
       if (this.started && this.ownsGeneration(generation)) phase.start();
     } catch (error) {
@@ -742,14 +755,14 @@ export class Game {
 
   private showTransitionScreen(): void {
     if (this.transitionScreen !== null) return;
-    // The launcher owns the first loading screen until Game.ready settles.
-    if (this.context.mount.querySelector('.system-screen--loading') !== null) return;
-    const screen = createSystemScreen({ kind: 'loading' });
-    const progress = screen.querySelector('progress');
-    progress?.removeAttribute('value');
-    progress?.removeAttribute('aria-valuetext');
+    const screen = this.context.mount.querySelector<HTMLElement>('.system-screen--loading')
+      ?? createSystemScreen({ kind: 'loading' });
     this.context.mount.append(screen);
     this.transitionScreen = screen;
+  }
+
+  private updatePreparationProgress(completed: number): void {
+    if (this.transitionScreen !== null) updateSystemScreenProgress(this.transitionScreen, completed, 100);
   }
 
   private clearTransitionScreen(): void {
@@ -792,7 +805,7 @@ export class Game {
   }
 
   private activateSurvival(start: SurvivalPhaseStart): Promise<void> {
-    return this.acquirePhase(() => this.resources.acquireSurvival(), (assets, generation) => {
+    return this.acquirePhase(progress => this.resources.acquireSurvival(progress), (assets, generation) => {
       assets.lifeboatAssets.configure(this.context.maxTextureAnisotropy);
       const onCheckpointChange: SurvivalCheckpointChange = checkpoint => {
         if (!this.ownsGeneration(generation)) return;
@@ -977,9 +990,11 @@ export class Game {
     this.performanceStats?.recordFrame(rawDeltaSeconds);
     const deltaSeconds = Math.min(rawDeltaSeconds, 0.05);
     this.elapsed += deltaSeconds;
-    this.activePhase?.update(this.elapsed, deltaSeconds);
-    this.synchronizePresentationControls();
-    this.activePhase?.render();
+    if (!this.preparing) {
+      this.activePhase?.update(this.elapsed, deltaSeconds);
+      this.synchronizePresentationControls();
+      this.activePhase?.render();
+    }
     if (!this.disposed) {
       this.animationFrame = requestAnimationFrame(this.animate);
     }

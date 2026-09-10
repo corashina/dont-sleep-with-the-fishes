@@ -1,6 +1,6 @@
 import { Euler, Group, Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import { createWaveSample, type WaveSample } from '../ocean/WaveField';
-import { FishingCatchLibrary } from './FishingCatchLibrary';
+import type { FishingCatchPresentationLibrary } from './FishingPresentation';
 import { FishingBiteParticles } from './FishingBiteParticles';
 import type { FishingCastPoint } from './FishingSession';
 import type { FishingCatchId } from './fishingCatalog';
@@ -19,7 +19,6 @@ export class NetFishingPresentation {
   readonly root = new Group();
   private readonly basket = new Group();
   private readonly netPivot = new Group();
-  private readonly catchLibrary = new FishingCatchLibrary();
   private readonly particles = new FishingBiteParticles();
   private readonly catchPlacement: NetCatchPlacement;
   private readonly start = new Vector3(-0.75, 0.48, -2.9);
@@ -52,6 +51,7 @@ export class NetFishingPresentation {
     private readonly worldRoot: Object3D,
     private readonly boatRoot: Object3D,
     private readonly sampleWave: (output: WaveSample, x: number, z: number) => void,
+    private readonly catchLibrary: FishingCatchPresentationLibrary,
   ) {
     this.root.name = 'fishing-net-haul';
     this.netPivot.name = 'fishing-net-haul-pivot';
