@@ -312,7 +312,7 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   overflow-y: auto;
 }
 .system-screen {
-  z-index: 100;
+  z-index: 200;
   justify-content: flex-start;
   background:
     linear-gradient(90deg, #11191ee8 0 42%, #11191e99 64%, #11191e 100%),

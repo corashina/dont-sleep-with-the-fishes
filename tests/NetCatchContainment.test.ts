@@ -65,8 +65,10 @@ it('contains every production catch throughout the haul without resizing or inte
   boat.rotation.set(-0.15, 0.06, 0.2);
   const library = new FishingCatchLibrary({ load: url => loadModel(decodeURIComponent(url.slice(url.indexOf('/src/assets/') + 1))) });
   const prepare = library.prepare.bind(library);
-  const mock = vi.spyOn(FishingCatchLibrary.prototype, 'prepare');
-  const net = new NetFishingPresentation(model, world, boat, output => { output.height = 0.15; });
+  const mock = vi.fn();
+  const net = new NetFishingPresentation(model, world, boat, output => { output.height = 0.15; }, {
+    prepare: mock, hide: () => undefined, dispose: () => undefined,
+  });
   try {
     for (const definition of FISHING_CATCHES) {
       const caught = (await prepare(definition.id))!;
@@ -100,7 +102,6 @@ it('contains every production catch throughout the haul without resizing or inte
   } finally {
     net.dispose();
     library.dispose();
-    mock.mockRestore();
   }
 }, 30_000);
 

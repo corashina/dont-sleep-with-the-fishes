@@ -145,8 +145,6 @@ export interface EventModelSpec {
   readonly generatedMetadata: EventModelMetadata;
 }
 
-export const EVENT_MODEL_MAX_TOTAL_TRIANGLES = 22_000;
-
 const PRESENTATION = {
   fogMonster: {
     targetLongestDimension: 2.4,

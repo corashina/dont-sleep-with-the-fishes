@@ -1,5 +1,6 @@
 import { runCleanupSteps } from '../../src/world/SceneResources';
 import { Texture } from 'three';
+import { vi } from 'vitest';
 import { Game, type GameFactories, type GameTestOptions } from '../../src/Game';
 import type { PropModelLibrary } from '../../src/world/PropModelLibrary';
 import type { MenuModelLibrary } from '../../src/menu/MenuModelLibrary';
@@ -12,6 +13,7 @@ import type { PhysicsRuntime } from '../../src/physics/PhysicsRuntime';
 import type { PhysicsMode } from '../../src/physics/PhysicsOptions';
 import { AudioSystem } from '../../src/audio/AudioSystem';
 import type { PhaseResourceSource } from '../../src/app/PhaseResources';
+import type { SurvivalContent } from '../../src/survival/SurvivalContent';
 export interface GameFixtureOptions extends Omit<GameTestOptions, 'resources'> {
   propModels: PropModelLibrary;
   menuModels: MenuModelLibrary;
@@ -31,7 +33,8 @@ export function fixtureResources(options: GameFixtureOptions): PhaseResourceSour
   const menuSandAssets = options.menuSandAssets ?? MenuSandAssets.fromTexture(new Texture());
   const audio = options.audioSystem ?? AudioSystem.silent();
   const physicsMode = options.physicsMode ?? 'enabled';
-  const assets = { ...options, lifeboatAssets, shipAssets, menuSandAssets, physicsMode };
+  const survivalContent = { preparationRoots: () => [] } as unknown as SurvivalContent;
+  const assets = { ...options, lifeboatAssets, shipAssets, menuSandAssets, physicsMode, survivalContent };
   let disposed = false;
   return {
     audio, physicsMode,
@@ -54,5 +57,9 @@ export function createTestGame(factories: GameFactories, options: GameFixtureOpt
   return Game.forTest(factories, { ...options, resources: fixtureResources(options) });
 }
 export async function flushPhases(): Promise<void> {
-  for (let i = 0; i < 12; i += 1) await Promise.resolve();
+  for (let turn = 0; turn < 3; turn += 1) {
+    for (let i = 0; i < 12; i += 1) await Promise.resolve();
+    if (vi.isFakeTimers()) await vi.advanceTimersByTimeAsync(0);
+    else await new Promise<void>(resolve => setTimeout(resolve, 0));
+  }
 }

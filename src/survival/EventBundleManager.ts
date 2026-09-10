@@ -26,6 +26,7 @@ export class EventBundleManager {
 
   beginLoad(eventId: SurvivalEventId): Promise<EventBundle> {
     if (this.disposed) throw new Error('Event bundle manager is disposed.');
+    if (this.active?.eventId === eventId) return Promise.resolve(this.active);
     if (this.pending !== null) {
       if (this.pending.eventId === eventId) return this.pending.promise;
       throw new Error(`Event bundle ${this.pending.eventId} is already loading.`);

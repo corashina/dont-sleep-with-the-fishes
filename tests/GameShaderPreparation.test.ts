@@ -58,7 +58,7 @@ describe('phase shader preparation', () => {
     f.game.start();
     await flushPhases();
     expect(f.mount.querySelector('.system-screen--loading')).not.toBeNull();
-    expect(f.mount.querySelector('progress')?.hasAttribute('value')).toBe(false);
+    expect(f.mount.querySelector('progress')?.value).toBe(85);
     frame(16);
     expect(menu.start).not.toHaveBeenCalled();
     expect(menu.update).not.toHaveBeenCalled();

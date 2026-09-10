@@ -144,7 +144,8 @@ import {
 } from './SurvivalEventModelLibrary';
 import { RepairToolboxAnimation } from './RepairToolboxAnimation';
 import { RescueEndingPresentation } from './RescueEndingPresentation';
-import { SurvivalEventModelLibrary } from './SurvivalEventModelLibrary';
+import { FishingCatchLibrary, type FishingCatchModelLoader } from './FishingCatchLibrary';
+import { FishingBiteParticles } from './FishingBiteParticles';
 
 export const SURVIVAL_CELESTIAL_DIRECTION = Object.freeze([
   0,
@@ -337,7 +338,6 @@ function physicalResponseFromEventChoice(
 
 export class BoatWorld {
   private rescueEnding: RescueEndingPresentation | null = null;
-  private rescueModels: SurvivalEventModelLibrary | null = null;
   readonly scene: Scene;
   private readonly camera: PerspectiveCamera;
   private readonly ocean: OceanRenderer;
@@ -500,6 +500,7 @@ export class BoatWorld {
     models?: SurvivalEventModels | EventModelLibrary | FocusedEventPresentationFactories,
     eventModels?: EventModelLibrary,
     focusedEventFactories: FocusedEventPresentationFactories = {},
+    fishingModels?: FishingCatchModelLoader,
   ) {
     const resolvedFocusedFactories = resolveFocusedEventFactories(
       models,
@@ -676,6 +677,11 @@ export class BoatWorld {
         rod: this.rod,
         boatRoot: this.boat,
         worldRoot: this.scene,
+      }, {
+        createCatches: () => new FishingCatchLibrary(fishingModels ?? {
+          load: async () => { throw new Error('Fishing models were not prepared.'); },
+        }),
+        createBiteParticles: () => new FishingBiteParticles(),
       });
       this.fishingPresentation = fishingPresentation;
       this.netModel = propModels.create({ instanceId: 'fishing-net-haul-model' as ItemInstanceId, type: 'fishingNet' });
@@ -1466,12 +1472,8 @@ export class BoatWorld {
 
   async playRescueEnding(onStart: () => void, onFade: (opacity: number) => void): Promise<void> {
     if (this.disposed) return;
-    const models = await SurvivalEventModelLibrary.load(['rescueBoat']);
-    if (this.disposed) {
-      models.dispose();
-      return;
-    }
-    this.rescueModels = models;
+    const models = this.fallbackFeaturedEventModels;
+    if (models === null) throw new Error('Rescue model was not prepared.');
     this.cancelActiveSequence();
     this.settledCue = null;
     this.clearEvent();
@@ -1638,7 +1640,6 @@ export class BoatWorld {
     if (this.disposed) return;
     runCleanupSteps([
       () => this.rescueEnding?.dispose(),
-      () => this.rescueModels?.dispose(),
       () => this.setHighlightedItem(null),
       () => this.toolHoverOutline.dispose(),
       () => this.fishingAvailableOutline.dispose(),

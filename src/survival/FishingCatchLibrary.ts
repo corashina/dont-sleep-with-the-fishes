@@ -10,18 +10,19 @@ import {
   Mesh,
   MeshStandardMaterial,
   Object3D,
+  Skeleton,
   SphereGeometry,
   Texture,
   TorusGeometry,
   Vector3,
 } from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
 import {
   collectMaterialTextures,
+  collectOwnedSkeletons,
   modelTriangleCount,
 } from '../rendering/modelPresentation';
 import {
@@ -367,7 +368,7 @@ function applyAppearance(template: FamilyTemplate, appearance: FishingAppearance
   template.root.updateMatrixWorld(true);
 }
 
-function catchModelSpec(
+export function catchModelSpec(
   definition: FishingCatchDefinition,
 ): FishingCatchModelSpec | undefined {
   if (definition.presentation.kind !== 'item') {
@@ -406,7 +407,7 @@ export class FishingCatchLibrary {
   private requestId = 0;
   private disposed = false;
 
-  constructor(private readonly loader: FishingCatchModelLoader = new GltfFishingCatchModelLoader()) {}
+  constructor(private readonly loader: FishingCatchModelLoader) {}
 
   async prepare(catchId: FishingCatchId): Promise<Object3D | null> {
     if (this.disposed) throw new Error('Fishing catch library is disposed.');
@@ -428,7 +429,7 @@ export class FishingCatchLibrary {
         decorateLoadedItemCatch(active, definition);
       } catch (error) {
         if (!this.isCurrent(requestId)) return null;
-        if (definition.presentation.kind === 'model') throw error;
+        throw error;
       }
     }
     if (!this.isCurrent(requestId)) {
@@ -467,14 +468,6 @@ export class FishingCatchLibrary {
 
 export interface FishingCatchModelLoader {
   load(url: string): Promise<Object3D>;
-}
-
-class GltfFishingCatchModelLoader implements FishingCatchModelLoader {
-  private readonly loader = new GLTFLoader();
-
-  async load(url: string): Promise<Object3D> {
-    return (await this.loader.loadAsync(url)).scene;
-  }
 }
 
 interface ActiveCatch {
@@ -614,5 +607,7 @@ function prepareProceduralItemCatch(
 function disposeActiveCatch(active: ActiveCatch): void {
   active.root.visible = false;
   active.root.removeFromParent();
-  disposeResourceSets(active.textures, active.geometries, active.materials);
+  const skeletons = new Set<Skeleton>();
+  collectOwnedSkeletons(active.root, skeletons);
+  disposeResourceSets(active.textures, active.geometries, active.materials, skeletons);
 }

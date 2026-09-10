@@ -1,4 +1,5 @@
 import { onLanguageChange } from '../i18n/language';
+import { prepareScene } from '../rendering/prepareScene';
 import {
   Box3,
   Group,
@@ -246,11 +247,6 @@ export class ScavengePhase implements GamePhase {
     this.ui.onReturnToMenu = this.onReturnToMenu;
     this.ui.setPresentation('intro');
     this.ui.setIntroFadeProgress(1);
-  }
-
-  async prepare(): Promise<void> {
-    if (this.disposed) return;
-    await this.context.sceneRenderer.prepare(this.scene, this.context.camera, this.visualState);
   }
 
   start(): void {
@@ -615,6 +611,13 @@ export class ScavengePhase implements GamePhase {
 
   getPresentationPhase(): SkyPhase {
     return this.presentationPhase;
+  }
+
+  async prepare(): Promise<void> {
+    await prepareScene(this.context.renderer, this.scene, this.context.camera,
+      this.context.propModels.preparationRoots(), () => !this.disposed);
+    if (!this.disposed) await this.context.sceneRenderer.prepare(this.scene, this.context.camera, this.visualState);
+    if (!this.disposed) this.render();
   }
 
   render(): void {

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { Box3, Matrix4, Mesh, PerspectiveCamera, Triangle, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { BoatWorld } from '../src/survival/BoatWorld';
 import { NetFishingPresentation } from '../src/survival/NetFishingPresentation';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
@@ -21,7 +21,9 @@ it('keeps the production net clear of the bow, ribs, and bench supports during p
   const world = new BoatWorld(new PerspectiveCamera(), models, ...createTestSkyTextures());
   const rod = world.scene.getObjectByName('fishing-rod-pivot')!;
   const boat = rod.parent!;
-  const net = new NetFishingPresentation(model, world.scene, boat, (output) => { output.height = 0; });
+  const net = new NetFishingPresentation(model, world.scene, boat, (output) => { output.height = 0; }, {
+    prepare: vi.fn(async () => null), hide: vi.fn(), dispose: vi.fn(),
+  });
   boat.updateWorldMatrix(true, true);
   const inverse = boat.matrixWorld.clone().invert();
   const meshToBoat = new Matrix4();
