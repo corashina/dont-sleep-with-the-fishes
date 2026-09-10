@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fishing finds · Junk review</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #e8e5dc; color: #233d42; font-family: Georgia, serif; }
+    main { max-width: 1300px; margin: auto; padding: 30px 34px; }
+    header { display: flex; justify-content: space-between; align-items: end; margin-bottom: 23px; gap: 20px; }
+    .eyebrow { font: 11px Arial, sans-serif; letter-spacing: 3px; color: #856442; text-transform: uppercase; }
+    h1 { margin: 8px 0 0; font-size: 40px; font-weight: 400; }
+    header p, footer { font: 13px/1.6 Arial, sans-serif; color: #586a6a; }
+    #gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 17px; }
+    article { background: #f3f0e8; border: 1px solid #d2d3c8; border-radius: 5px; overflow: hidden; }
+    .viewport { height: 255px; position: relative; background: #d9dfda; }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+    canvas:active { cursor: grabbing; }
+    .caption { padding: 15px 18px 13px; }
+    h2 { font-size: 20px; font-weight: 400; margin: 0; }
+    .number { color: #927655; font: 11px Arial, sans-serif; margin-right: 10px; }
+    .controls { display: flex; gap: 7px; margin-top: 12px; }
+    button { border: 1px solid #c7ccc3; border-radius: 3px; background: transparent; color: #385456; padding: 5px 10px; cursor: pointer; }
+    button:hover { background: #dfe4da; }
+    button:focus-visible, canvas:focus-visible { outline: 2px solid #995135; outline-offset: -3px; }
+    footer { margin-top: 18px; }
+    @media (max-width: 780px) { #gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); } header { display: block; } }
+    @media (max-width: 480px) { #gallery { grid-template-columns: 1fr; } main { padding: 22px 18px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header><div><div class="eyebrow">Don't Sleep With the Fishes</div><h1>Fishing finds</h1></div><p>Six new junk catches.<br>Drag each item to turn it. Scroll to zoom.</p></header>
+    <div id="gallery" aria-label="New junk catches"></div>
+    <footer>Items shown at equal display size. Use Reset to restore each view.</footer>
+  </main>
+  <script type="module" src="./junk-catch-review.ts"></script>
+</body>
+</html>
