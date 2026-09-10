@@ -2,7 +2,7 @@ import { cloneOutcomeText, type OutcomeText } from './outcomeText';
 import { presentationWeatherForEvent, type PresentationWeatherId } from '../weather/presentationWeather';
 import type { ItemId, ItemInstanceId } from '../game/ItemState';
 import type { CarlitosState } from './CarlitosState';
-import type { FishingSingleResult } from './FishingSession';
+import type { FishingTerminalResult } from './FishingSession';
 import type { FishingCatchId } from './fishingCatalog';
 import type { FishingSettlement } from './fishingSettlementRules';
 import type {
@@ -123,7 +123,7 @@ export function createQuietJournalNightRecord(): JournalNightRecord {
 
 export function createJournalFishingRecord(
   attemptId: string,
-  result: FishingSingleResult,
+  result: FishingTerminalResult,
   settlement: Pick<FishingSettlement, 'food' | 'baitConsumed' | 'deltas'>,
   inventoryMutations: readonly JournalInventoryMutation[],
 ): JournalFishingRecord {

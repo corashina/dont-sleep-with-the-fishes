@@ -21,6 +21,8 @@ const spanishItems = {
 } satisfies Record<ItemId, string>;
 
 const catches = {
+  trafficCone: 'pachołek drogowy', clothesHanger: 'wieszak na ubrania', toiletPlunger: 'przepychacz',
+  golfBall: 'piłkę golfową', bowlingPin: 'kręgiel', tableTennisPaddle: 'rakietkę do tenisa stołowego',
   blowfish: 'rozdymkę', fish: 'rybę', goldfish: 'złotą rybkę', trout: 'pstrąga',
   kingfish: 'seriolę', piranha: 'piranię', crayfish: 'raka', halibut: 'halibuta',
   brokenCan: 'uszkodzoną puszkę', crushedCan: 'zgniecioną puszkę', backpack: 'plecak',

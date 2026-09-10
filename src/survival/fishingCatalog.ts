@@ -6,8 +6,10 @@ import {
 } from '../game/ItemState';
 import type { ItemCondition } from './survivalTypes';
 import { SURVIVAL_BALANCE } from './survivalBalance';
+import type { SimpleJunkId } from './JunkCatchModels';
 
 export type FishingCatchId =
+  | SimpleJunkId
   | 'cod' | 'salmon' | 'tuna' | 'crab' | 'squid'
   | 'sardine' | 'bass' | 'redSnapper' | 'clownfish'
   | 'blowfish' | 'fish' | 'goldfish' | 'trout' | 'kingfish' | 'piranha' | 'crayfish' | 'halibut'
@@ -19,6 +21,7 @@ export type FishingCatchKind = 'fish' | 'junk' | 'utility';
 export type FishingGear = 'rod' | 'net';
 export type FishingCatchSize = 'small' | 'large' | 'junk' | 'utility';
 export type FishingModelFamily =
+  | SimpleJunkId
   | 'ordinaryFish' | 'crab' | 'squid' | 'seaweed' | 'boot' | 'bottle' | 'fishBones';
 export type FishingItemCondition = Extract<ItemCondition, 'usable' | 'broken'>;
 
@@ -85,10 +88,10 @@ const catalogRows: readonly Omit<FishingCatchDefinition, 'label'>[] = [
   { id: 'bass', kind: 'fish', baseWeight: 30, minimumDay: 0, reward: { kind: 'food', amount: 1 }, size: 'small', presentation: fishing('ordinaryFish', { color: 0x5c7a42, accentColor: 0xd6bb68, length: 0.525, height: 0.18, width: 0.15 }) },
   { id: 'redSnapper', kind: 'fish', baseWeight: 20, minimumDay: 0, reward: { kind: 'food', amount: 1 }, size: 'small', presentation: fishing('ordinaryFish', { color: 0xc95045, accentColor: 0xf0b08a, length: 0.95, height: 0.32, width: 0.27 }) },
   { id: 'clownfish', kind: 'fish', baseWeight: 1, minimumDay: 0, reward: { kind: 'food', amount: 1 }, size: 'small', presentation: fishing('ordinaryFish', { color: 0xe8803d, accentColor: 0xf4f0d3, length: 0.58, height: 0.24, width: 0.18 }) },
-  { id: 'seaweed', kind: 'junk', baseWeight: 82, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: fishing('seaweed', { color: 0x456e4b, accentColor: 0x8daa5d, length: 0.31, height: 0.475, width: 0.11 }) },
-  { id: 'boot', kind: 'junk', baseWeight: 72, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: fishing('boot', { color: 0x5b4637, accentColor: 0x2f2926, length: 0.36, height: 0.38, width: 0.18 }) },
-  { id: 'plasticBottle', kind: 'junk', baseWeight: 60, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: fishing('bottle', { color: 0x507b82, accentColor: 0xc7d7c7, length: 0.15, height: 0.43, width: 0.15 }) },
-  { id: 'fishBones', kind: 'junk', baseWeight: 16, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: fishing('fishBones', { color: 0xd8d0b8, accentColor: 0x756b5f, length: 0.44, height: 0.21, width: 0.09 }) },
+  { id: 'seaweed', kind: 'junk', baseWeight: 41, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: fishing('seaweed', { color: 0x456e4b, accentColor: 0x8daa5d, length: 0.31, height: 0.475, width: 0.11 }) },
+  { id: 'boot', kind: 'junk', baseWeight: 36, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: fishing('boot', { color: 0x5b4637, accentColor: 0x2f2926, length: 0.36, height: 0.38, width: 0.18 }) },
+  { id: 'plasticBottle', kind: 'junk', baseWeight: 30, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: fishing('bottle', { color: 0x507b82, accentColor: 0xc7d7c7, length: 0.15, height: 0.43, width: 0.15 }) },
+  { id: 'fishBones', kind: 'junk', baseWeight: 8, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: fishing('fishBones', { color: 0xd8d0b8, accentColor: 0x756b5f, length: 0.44, height: 0.21, width: 0.09 }) },
   { id: 'bait', kind: 'utility', baseWeight: 5, minimumDay: 0, reward: { kind: 'bait', amount: 1 }, size: 'utility', presentation: { kind: 'item', itemId: 'baitTin', condition: 'usable' } },
   { id: 'wetDuctTape', kind: 'utility', baseWeight: 5, minimumDay: 3, reward: { kind: 'item', itemId: 'ductTape', condition: 'usable', unique: true }, size: 'utility', presentation: { kind: 'item', itemId: 'ductTape', condition: 'usable' } },
   { id: 'brokenCompass', kind: 'utility', baseWeight: 5, minimumDay: 0, reward: { kind: 'item', itemId: 'compass', condition: 'broken', unique: true }, size: 'utility', presentation: { kind: 'item', itemId: 'compass', condition: 'broken' } },
@@ -102,8 +105,14 @@ const catalogRows: readonly Omit<FishingCatchDefinition, 'label'>[] = [
   { id: 'piranha', kind: 'fish', baseWeight: 7, minimumDay: 0, reward: { kind: 'food', amount: 1 }, size: 'small', presentation: { kind: 'model' } },
   { id: 'crayfish', kind: 'fish', baseWeight: 14, minimumDay: 2, reward: { kind: 'food', amount: 1 }, size: 'small', presentation: { kind: 'model' } },
   { id: 'halibut', kind: 'fish', baseWeight: 5, minimumDay: 3, reward: { kind: 'food', amount: 2 }, size: 'large', presentation: { kind: 'model' } },
-  { id: 'brokenCan', kind: 'junk', baseWeight: 36, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: { kind: 'model' } },
-  { id: 'crushedCan', kind: 'junk', baseWeight: 36, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: { kind: 'model' } },
+  { id: 'brokenCan', kind: 'junk', baseWeight: 18, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: { kind: 'model' } },
+  { id: 'crushedCan', kind: 'junk', baseWeight: 18, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: { kind: 'model' } },
+  { id: 'trafficCone', kind: 'junk', baseWeight: 20, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: fishing('trafficCone', { color: 0xd66a32, accentColor: 0xeee5cf, length: 0.3, height: 0.43, width: 0.3 }) },
+  { id: 'clothesHanger', kind: 'junk', baseWeight: 32, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: fishing('clothesHanger', { color: 0x859493, accentColor: 0x596b69, length: 0.42, height: 0.27, width: 0.019 }) },
+  { id: 'toiletPlunger', kind: 'junk', baseWeight: 24, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: fishing('toiletPlunger', { color: 0x854738, accentColor: 0xb18a57, length: 0.19, height: 0.48, width: 0.19 }) },
+  { id: 'golfBall', kind: 'junk', baseWeight: 30, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: fishing('golfBall', { color: 0xeeeade, accentColor: 0xeeeade, length: 0.075, height: 0.075, width: 0.075 }) },
+  { id: 'bowlingPin', kind: 'junk', baseWeight: 20, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: fishing('bowlingPin', { color: 0xeee5d3, accentColor: 0xac463c, length: 0.15, height: 0.38, width: 0.15 }) },
+  { id: 'tableTennisPaddle', kind: 'junk', baseWeight: 25, minimumDay: 0, reward: { kind: 'none' }, size: 'junk', presentation: fishing('tableTennisPaddle', { color: 0xa94436, accentColor: 0xc8a879, length: 0.19, height: 0.3, width: 0.021 }) },
   { id: 'backpack', kind: 'utility', baseWeight: 1, minimumDay: 0, reward: { kind: 'backpack' }, size: 'utility', presentation: { kind: 'model' } },
 ];
 
@@ -273,12 +282,16 @@ function catchWeight(
   capturedBait: boolean,
   fishWeightMultiplier: number,
   gear: FishingGear,
+  day: number,
 ): number {
   const baited = baitWeight(catchDefinition, capturedBait);
   let weight = catchDefinition.kind === 'fish' ? baited * fishWeightMultiplier : baited;
   if (gear === 'net') {
     if (catchDefinition.kind === 'junk') weight *= SURVIVAL_BALANCE.netFishing.junkWeight;
-    if (catchDefinition.size === 'large') weight *= SURVIVAL_BALANCE.netFishing.largeFishWeight;
+    if (catchDefinition.size === 'large') {
+      const weights = SURVIVAL_BALANCE.netFishing.largeFishWeights;
+      weight *= weights[Math.min(Math.max(0, Math.floor(day)), weights.length - 1)]!;
+    }
     if (catchDefinition.reward.kind === 'bait'
       || (catchDefinition.reward.kind === 'item' && catchDefinition.reward.condition === 'usable')) {
       weight *= SURVIVAL_BALANCE.netFishing.usableItemWeight;
@@ -323,11 +336,11 @@ export function eligibleFishingCatches(
   validateFishWeightMultiplier(fishWeightMultiplier);
   const entries: WeightedFishingCatch[] = FISHING_CATCHES
     .filter((catchDefinition) => catchDefinition.reward.kind !== 'backpack')
-    .filter((catchDefinition) => catchDefinition.minimumDay <= day)
+    .filter((catchDefinition) => catchDefinition.minimumDay <= day || (gear === 'net' && catchDefinition.size === 'large'))
     .filter((catchDefinition) => !isBlockedUniqueReward(catchDefinition, activeItemIds))
     .map((catchDefinition) => Object.freeze({
       catch: catchDefinition,
-      weight: catchWeight(catchDefinition, capturedBait, fishWeightMultiplier, gear),
+      weight: catchWeight(catchDefinition, capturedBait, fishWeightMultiplier, gear, day),
     }));
   if (missingBackpackItems(activeItemIds).length > 0) {
     const total = entries.reduce((sum, entry) => sum + entry.weight, 0);

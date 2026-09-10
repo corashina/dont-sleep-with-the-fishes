@@ -35,6 +35,7 @@ import type {
   DedicatedEventPresentation,
 } from './eventPresentationTypes';
 import { SharkSwarmPresentation } from './events/SharkSwarmPresentation';
+import { SomethingUnderUsPresentation } from './events/SomethingUnderUsPresentation';
 import { CarlitosEventPresentation } from './events/CarlitosEventPresentation';
 import { DeathStarePresentation } from './events/DeathStarePresentation';
 import { LeakPresentation } from './events/LeakPresentation';
@@ -212,6 +213,9 @@ function createDedicatedCoordinator(
         break;
       case 'swarm-of-sharks':
         presentations.push(new SharkSwarmPresentation(dedicatedEnvironment));
+        break;
+      case 'something-under-us':
+        presentations.push(new SomethingUnderUsPresentation(dedicatedEnvironment));
         break;
       case 'tornado':
         presentations.push(new TornadoPresentation(dedicatedEnvironment));

@@ -114,7 +114,6 @@ import type {
   EventSceneContext,
 } from './eventPresentationTypes';
 import type { FishingCatchId, FishingGear } from './fishingCatalog';
-import type { FishingHaul } from './FishingSession';
 import {
   FISHING_ROD_LEAN,
   FishingPresentation,
@@ -1437,8 +1436,8 @@ export class BoatWorld {
     return this.fishingPresentation.playReel(catchId);
   }
 
-  playFishingNetHaul(haul: FishingHaul, point: FishingCastPoint): Promise<void> {
-    return this.fishingPresentation.playNetHaul(haul, point);
+  playFishingNetHaul(catchId: FishingCatchId, point: FishingCastPoint): Promise<void> {
+    return this.fishingPresentation.playNetHaul(catchId, point);
   }
 
   projectFishingCatch(width: number, height: number): ProjectedBoatBounds | null {

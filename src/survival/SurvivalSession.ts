@@ -813,27 +813,12 @@ export class SurvivalSession {
       return this.reject('fishing-result-mismatch', t('resultMismatch'));
     }
 
-    const catches = result.kind === 'haul'
-      ? result.catches.map((entry) => ({ kind: 'catch' as const, catch: entry })) : [result];
-    const deltas: ResourceDelta = {};
-    const settlements = catches.map((entry, index) => {
-      const settlement = fishingSettlement(entry, transaction.capturedBait);
-      const inventoryMutations = this.applyFishingReward(settlement);
-      for (const key of Object.keys(settlement.deltas) as (keyof ResourceDelta)[]) {
-        deltas[key] = (deltas[key] ?? 0) + settlement.deltas[key]!;
-      }
-      this.pendingJournalActions.push(createJournalFishingRecord(
-        result.kind === 'haul' ? `${attemptId}-${index + 1}` : attemptId,
-        entry, settlement, inventoryMutations,
-      ));
-      return settlement;
-    });
-    const first = settlements[0]!;
-    const outcome = this.commit(
-      result.kind === 'haul' ? 'net-hauled' : first.code,
-      result.kind === 'haul' ? domainText('netHauled') : first.text,
-      deltas, 'none',
-    );
+    const settlement = fishingSettlement(result, transaction.capturedBait);
+    const inventoryMutations = this.applyFishingReward(settlement);
+    this.pendingJournalActions.push(createJournalFishingRecord(
+      attemptId, result, settlement, inventoryMutations,
+    ));
+    const outcome = this.commit(settlement.code, settlement.text, settlement.deltas, 'none');
     this.activeFishing = null;
     return outcome;
   }
@@ -1115,11 +1100,25 @@ export class SurvivalSession {
     if (resolved.effects.nextDawnEnergy !== undefined) {
       this.nextDawnEnergyOverride = resolved.effects.nextDawnEnergy;
     }
+    if (resolved.effects.nextDawnEnergyReduction !== undefined) {
+      this.nextDawnEnergyOverride = Math.max(
+        0, this.normalDawnEnergy() - resolved.effects.nextDawnEnergyReduction,
+      ) as DawnEnergy;
+    }
     this.resolveTerminal();
     this.lastEventId = event.id;
     this.lastSeenDay.set(event.id, this.day);
     this.appearanceCounts.set(event.id, (this.appearanceCounts.get(event.id) ?? 0) + 1);
     this.clearPendingEvent();
+  }
+
+  private normalDawnEnergy(): number {
+    const hunger = this.hunger + SURVIVAL_BALANCE.dawn.hungerIncrease;
+    return hunger >= SURVIVAL_BALANCE.thresholds.starving
+      ? SURVIVAL_BALANCE.dawn.starvingEnergy
+      : hunger >= SURVIVAL_BALANCE.thresholds.hungry
+        ? SURVIVAL_BALANCE.dawn.hungryEnergy
+        : SURVIVAL_BALANCE.dawn.normalEnergy;
   }
 
   private createResolvedEventOutcome(
@@ -1146,9 +1145,9 @@ export class SurvivalSession {
 
       deltas,
       cue: this.presentationCue('none'),
-      ...(resolved.effects.nextDawnEnergy === undefined
+      ...(this.nextDawnEnergyOverride === null
         ? {}
-        : { nextDawnEnergy: resolved.effects.nextDawnEnergy }),
+        : { nextDawnEnergy: this.nextDawnEnergyOverride }),
       ...(resolved.presentationKey === undefined
         ? {}
         : { eventPresentationKey: resolved.presentationKey }),
@@ -1250,12 +1249,7 @@ export class SurvivalSession {
       SURVIVAL_BALANCE.thresholds.maximum,
       this.hunger + SURVIVAL_BALANCE.dawn.hungerIncrease,
     );
-    const normalMorningEnergy = hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.starving
-      ? SURVIVAL_BALANCE.dawn.starvingEnergy
-      : hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.hungry
-        ? SURVIVAL_BALANCE.dawn.hungryEnergy
-        : SURVIVAL_BALANCE.dawn.normalEnergy;
-    const morningEnergy = this.nextDawnEnergyOverride ?? normalMorningEnergy;
+    const morningEnergy = this.nextDawnEnergyOverride ?? this.normalDawnEnergy();
     this.nextDawnEnergyOverride = null;
     const deltas: ResourceDelta = {
       hunger: SURVIVAL_BALANCE.dawn.hungerIncrease,

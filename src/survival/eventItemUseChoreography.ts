@@ -21,7 +21,7 @@ export type EventItemUseContext =
 
 export type EventItemEffectKind =
   | 'none' | 'tape' | 'binocular-mask'
-  | 'flare' | 'chain' | 'flashlight' | 'shotgun-smoke';
+  | 'flare' | 'chain' | 'flashlight' | 'shotgun-blast';
 
 export type EventItemSurfaceFacing =
   | 'default' | 'none' | 'target' | 'target-plane' | 'target-plane-opposite';
@@ -113,6 +113,7 @@ export interface EventItemUseSample {
   yaw: number;
   pitch: number;
   roll: number;
+  recoilPitch: number;
   scaleX: number;
   scaleY: number;
   scaleZ: number;
@@ -162,6 +163,7 @@ const ANCHOR_DROP_EVENTS: ReadonlySet<string> = new Set([
   'tornado', 'thunderstorm', 'restless-waves',
 ]);
 const SETTLE_ROLL_EXCLUDED_CONTEXTS: ReadonlySet<EventItemUseContext> = new Set([
+  'shotgun-fire',
   'map-read', 'compass-search', 'net-scoop', 'net-slap', 'map-leak-patch', 'knife-stab',
 ]);
 const EVENT_ITEM_USE_BASE_DURATIONS: Readonly<Record<EventItemUseContext, number>> = {
@@ -232,6 +234,7 @@ export function createEventItemUseSample(): EventItemUseSample {
     yaw: 0,
     pitch: 0,
     roll: 0,
+    recoilPitch: 0,
     scaleX: 1,
     scaleY: 1,
     scaleZ: 1,
@@ -347,6 +350,7 @@ function resetSample(output: EventItemUseSample): void {
   output.yaw = 0;
   output.pitch = 0;
   output.roll = 0;
+  output.recoilPitch = 0;
   output.scaleX = 1;
   output.scaleY = 1;
   output.scaleZ = 1;
@@ -833,18 +837,24 @@ function sampleShotgunFire(
   output: EventItemUseSample,
   pickup: number,
   hold: number,
-  action: number,
-  smoke: number,
-  smokeTravel: number,
+  progress: number,
 ): void {
   samplePickupAndHold(output, pickup, hold);
-  output.effectKind = smoke > 0 ? 'shotgun-smoke' : 'none';
-  output.viewZ += 0.28 * action;
-  output.yaw = -0.16 * action;
-  output.pitch = 0.16 * action;
-  output.roll = -0.06 * action;
-  output.primaryEffect = smoke;
-  output.secondaryEffect = smokeTravel;
+  // Use seconds so the brief discharge does not inherit the slow pickup timing.
+  const elapsed = (progress - SHOTGUN_ACTION_CUE_PROGRESSES[0]!)
+    * eventItemUseDuration('shotgun-fire');
+  const kick = pulse(elapsed, 0, 0.045, 0.5);
+  const rise = pulse(elapsed, 0, 0.065, 0.58);
+  const flash = elapsed >= 0 ? 1 - smoothstep(elapsed / 0.075) : 0;
+  const smoke = pulse(elapsed, 0, 0.07, 0.95);
+  output.viewZ += 0.19 * kick;
+  output.viewY += 0.025 * rise;
+  output.recoilPitch = 0.17 * rise;
+  output.roll = -0.025 * rise;
+  output.primaryEffect = flash;
+  output.secondaryEffect = smoke;
+  output.effectTravel = clamp01(elapsed / 0.95);
+  output.effectKind = flash > 0 || smoke > 0 ? 'shotgun-blast' : 'none';
 }
 
 function sampleKnifeStab(
@@ -960,14 +970,7 @@ function sampleTargetedEventItemUse(
     case 'anchor-drop': sampleAnchorDrop(output, pickup, hold, progress); break;
     case 'flashlight-threat-beam': sampleFlashlightThreatBeam(output, pickup, hold, progress); break;
     case 'flashlight-signal': sampleFlashlightSignal(output, pickup, hold, progress); break;
-    case 'shotgun-fire': sampleShotgunFire(
-      output,
-      pickup,
-      hold,
-      pulse(progress, 0.42, 0.5, 0.68),
-      pulse(progress, 0.46, 0.53, 0.66),
-      smoothstep((progress - 0.46) / 0.2),
-    ); break;
+    case 'shotgun-fire': sampleShotgunFire(output, pickup, hold, progress); break;
     case 'knife-stab': sampleKnifeStab(output, hold, progress); break;
   }
 }
