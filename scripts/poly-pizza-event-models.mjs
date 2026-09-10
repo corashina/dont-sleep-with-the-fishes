@@ -26,6 +26,8 @@ export const POLY_PIZZA_EVENT_MODEL_PAGES = Object.freeze({
   shark: 'https://poly.pizza/m/YYsK3gRCBZ',
   deathStareBlob: 'https://poly.pizza/m/IoWG5F9WUc',
   tornadoCore: 'https://poly.pizza/m/2TBzV_5N0ci',
+  midnightGravestone: 'https://poly.pizza/m/125x68MbyA0',
+  midnightCoffin: 'https://poly.pizza/m/egmks2_joYD',
   midnightShovel: 'https://poly.pizza/m/oNBQSf87ZJ',
   midnightBush: 'https://poly.pizza/m/ooG6CkLyE8',
   midnightMonster: 'https://poly.pizza/m/22K0aSZkHV',
@@ -48,6 +50,8 @@ export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
   shark: 7_000,
   deathStareBlob: 5_000,
   tornadoCore: 3_000,
+  midnightGravestone: 2_000,
+  midnightCoffin: 2_000,
   midnightShovel: 1_000,
   midnightBush: 500,
   midnightMonster: 6_000,
@@ -65,6 +69,8 @@ export const EVENT_MODEL_TOTAL_TRIANGLE_LIMIT = 38_000;
 export const EVENT_MODEL_IDS = Object.freeze(Object.keys(POLY_PIZZA_EVENT_MODEL_PAGES));
 export const POLY_PIZZA_EVENT_MODEL_IDS = EVENT_MODEL_IDS;
 const EVENT_MODEL_COMMITTED_SHA256 = Object.freeze({
+  midnightCoffin: '787D9A7211225D3B18B690C0FCE64738971B61798433450B9AAFFE9120BF8626',
+  midnightGravestone: 'A4839DB3DDA0B48D68653A1E0C34938B6C8F64EA16C06B929B0736E866C39FC4',
   midnightBush: '0D5155B733C1DC009641612DE487AED0ED818C8E195258923FFC2AECABE31FBE',
   lighthouse: 'CF9350742721B5E04C371D9C56C4DC4CA350045460B06B668D93CFA1E2968849',
   leakPlanks: '8EFEDCE21FEF2A542E047BD82F2C9E04D59CF81810ECFB6D62D5DA9239677DD6',

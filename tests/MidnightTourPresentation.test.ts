@@ -161,3 +161,31 @@ describe('Midnight Tour animation', () => {
     }
   });
 });
+
+
+it('uncovers the coffin beneath a grave mound and keeps the gravestone through the result', async () => {
+  const rig = setup();
+  const { presentation } = rig;
+  await presentation.playChoice({ choiceId: 'visit', instanceId: null, condition: null });
+  const result = presentation.react({ eventId: 'midnight-tour', choiceId: 'visit', resultId: 'tour-grave' }, outcome);
+  const mound = presentation.root.getObjectByName('midnight-tour-grave-mound')!;
+  const coffin = presentation.root.getObjectByName('midnight-tour-reward-coffin')!;
+  const stone = presentation.root.getObjectByName('midnight-tour-gravestone')!;
+  expect(stone).toBeDefined();
+  expect(presentation.root.getObjectByName('midnight-tour-reward-chest')).toBeUndefined();
+  const buriedHeight = coffin.position.y;
+  expect(mound.scale.y).toBe(0.85);
+  rig.advance(5);
+  expect(mound.scale.y).toBeLessThan(0.85);
+  expect(coffin.position.y).toBeGreaterThan(buriedHeight);
+  rig.advance(9);
+  expect(mound.visible).toBe(false);
+  expect(presentation.root.userData.digContacts).toBe(3);
+  rig.advance(12);
+  await result;
+  expect(presentation.root.userData.state).toBe('held-grave');
+  expect(stone.visible).toBe(true);
+  presentation.clear();
+  expect(presentation.root.getObjectByName('midnight-tour-gravestone')).toBeUndefined();
+  rig.dispose();
+});

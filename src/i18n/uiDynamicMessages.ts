@@ -30,13 +30,15 @@ export const uiDynamic = defineMessages({
   unavailableReason: { en: (reason: string) => ` — UNAVAILABLE: ${reason}`, pl: (reason: string) => ` — NIEDOSTĘPNE: ${reason}`, 'es-AR': (reason: string) => ` — NO DISPONIBLE: ${reason}` },
   diveResult: { en: 'DIVE RESULT', pl: 'WYNIK NURKOWANIA', 'es-AR': "RESULTADO DEL BUCEO" },
   chestReward: { en: 'CHEST REWARD', pl: 'ZDOBYCZ ZE SKRZYNI', 'es-AR': "RECOMPENSA DEL COFRE" },
+  islandRewards: { en: 'island rewards', pl: 'nagrody z wyspy', 'es-AR': 'recompensas de la isla' },
   salvageResult: { en: 'SALVAGE', pl: 'ODZYSKANE ZAPASY', 'es-AR': "SUMINISTROS RECUPERADOS" },
 });
 
-export function rewardTitle(title: 'DIVE RESULT' | 'CHEST REWARD' | 'SALVAGE'): string {
+export function rewardTitle(title: 'DIVE RESULT' | 'CHEST REWARD' | 'SALVAGE' | 'ISLAND REWARDS'): string {
   switch (title) {
     case 'DIVE RESULT': return uiDynamic('diveResult');
     case 'CHEST REWARD': return uiDynamic('chestReward');
+    case 'ISLAND REWARDS': return uiDynamic('islandRewards');
     case 'SALVAGE': return uiDynamic('salvageResult');
   }
 }

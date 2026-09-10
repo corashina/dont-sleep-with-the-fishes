@@ -343,6 +343,42 @@
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
       "downloadedOn": "2026-08-26"
+    },
+    "midnightGravestone": {
+      "id": "midnightGravestone",
+      "pageUrl": "https://poly.pizza/m/125x68MbyA0",
+      "publicId": "125x68MbyA0",
+      "resourceId": "8cc2b568-f2b3-433f-ab87-ef9456a999c8",
+      "downloadUrl": "https://static.poly.pizza/8cc2b568-f2b3-433f-ab87-ef9456a999c8.glb",
+      "sourceAssetId": "poly-pizza:8cc2b568-f2b3-433f-ab87-ef9456a999c8",
+      "modelName": "Gravestone",
+      "author": "Poly by Google",
+      "license": "CC-BY 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+      "pageAnimated": false,
+      "sha256": "36250C1E163F1F837EF50245A01AA8A373164D39AAC65CF26A44B42FB8CCB25B",
+      "sourceTriangles": 684,
+      "sourceHasSkins": false,
+      "sourceAnimationCount": 0,
+      "downloadedOn": "2026-09-10"
+    },
+    "midnightCoffin": {
+      "id": "midnightCoffin",
+      "pageUrl": "https://poly.pizza/m/egmks2_joYD",
+      "publicId": "egmks2_joYD",
+      "resourceId": "8e2080ef-3755-4d53-87a4-ac3daa0ecfb0",
+      "downloadUrl": "https://static.poly.pizza/8e2080ef-3755-4d53-87a4-ac3daa0ecfb0.glb",
+      "sourceAssetId": "poly-pizza:8e2080ef-3755-4d53-87a4-ac3daa0ecfb0",
+      "modelName": "Coffin",
+      "author": "Poly by Google",
+      "license": "CC-BY 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+      "pageAnimated": false,
+      "sha256": "7F2CE4B969AB3274FB9B07C01C94B51E19B7EDB2FFD8A6DB93EE591B6BF1A48E",
+      "sourceTriangles": 554,
+      "sourceHasSkins": false,
+      "sourceAnimationCount": 0,
+      "downloadedOn": "2026-09-10"
     }
   }
 }

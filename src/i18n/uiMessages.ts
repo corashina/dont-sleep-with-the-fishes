@@ -408,6 +408,7 @@ export const uiCatalog = {
     "pl": "Zamknij zdobycz ze skrzyni",
     "es-AR": "Cerrar recompensa del cofre"
   },
+  "closeIslandRewards": { en: "Close island rewards", pl: "Zamknij nagrody z wyspy", "es-AR": "Cerrar recompensas de la isla" },
   "closeSalvage": {
     "en": "Close salvage result",
     "pl": "Zamknij wynik zbierania",

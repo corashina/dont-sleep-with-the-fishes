@@ -1511,11 +1511,28 @@ export class SurvivalEventFlow {
     this.flushDeferredPresentationSync(snapshot, generation);
     if (!await this.dependencies.renderAndSettleCoveredScene(generation)) return;
     if (!this.isCurrent(generation, operation)) return;
+    if (!await this.showIslandRewards(outcome, snapshot, generation, operation)) return;
     if (outcome.eventResult?.resultId === 'tour-attack') {
       await this.dependencies.ui.holdSleep?.(MIDNIGHT_ATTACK_BLACKOUT_MS);
       if (!await this.resumeAfterVisibility(generation, operation)) return;
     }
     await this.finishChestAttackReturn(snapshot, generation, operation);
+  }
+
+  private async showIslandRewards(
+    outcome: ActionOutcome,
+    snapshot: SurvivalSnapshot,
+    generation: number,
+    operation: number,
+  ): Promise<boolean> {
+    if (outcome.eventResult?.resultId !== 'tour-grave' || isTerminal(snapshot.state)) return true;
+    await (this.dependencies.ui.setSleepCovered?.(false) ?? Promise.resolve());
+    if (!this.isCurrent(generation, operation)) return false;
+    await (this.dependencies.ui.showRewardResult?.({
+      title: 'ISLAND REWARDS', reward: outcome.rewardSummary ?? null, lines: [],
+    }) ?? Promise.resolve());
+    if (!this.isCurrent(generation, operation)) return false;
+    return this.resumeAfterVisibility(generation, operation);
   }
 
   private async playMidnightTourReaction(
