@@ -29,6 +29,7 @@ export interface EventEligibility {
   readonly appearanceCounts: ReadonlyMap<string, number>;
   readonly inventoryItemIds: ReadonlySet<ItemId>;
   readonly rescueLead: number;
+  readonly food?: number;
   readonly pressure?: number;
   readonly chestState?: ChestState;
   readonly hasCompanion?: boolean;
@@ -51,6 +52,7 @@ function matchesEventInventory(
   eventEntry: SurvivalEventDefinition,
   criteria: EventEligibility,
 ): boolean {
+  if ((criteria.food ?? 0) < (eventEntry.minimumFood ?? 0)) return false;
   if (eventEntry.targetItemIds !== undefined
     && !eventEntry.targetItemIds.some((itemId) => criteria.targetableItemIds.has(itemId))) return false;
   if (eventEntry.absentItemIds !== undefined

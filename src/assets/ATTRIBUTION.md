@@ -298,6 +298,7 @@ The Midnight shovel runtime cue uses a six-second cutoff. The MP3 remains unenco
 
 | Runtime ID | File | Source / creator |
 |---|---|---|
+| seagulls | `seagulls.mp3` | [A quiet seaside seagulls distant / selcukartut](https://freesound.org/people/selcukartut/sounds/546565/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). First 40 seconds of the HQ MP3 preview, cut at MP3 frame boundaries. Downloaded September 10, 2026. |
 | netImpact | `netImpact.mp3` | [Slap Hit / qubodup](https://freesound.org/people/qubodup/sounds/222507/), CC0 1.0. HQ preview downloaded September 5, 2026. |
 | knifeImpact | `knifeImpact.mp3` | [Knife Stab / Mixedupmoviestuff](https://freesound.org/people/Mixedupmoviestuff/sounds/179222/), CC0 1.0. HQ preview downloaded September 5, 2026. |
 | menuAmbient | `menuAmbient.mp3` | [Underwater Ambience / Tim_Verberne](https://freesound.org/people/Tim_Verberne/sounds/482167/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |

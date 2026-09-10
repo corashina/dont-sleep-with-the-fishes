@@ -3,6 +3,7 @@ import { describe,expect,it,vi } from 'vitest';
 import {
   AnimationClip,
   Bone,
+  Box3,
   BoxGeometry,
   BufferGeometry,
   Float32BufferAttribute,
@@ -17,6 +18,7 @@ import {
   Points,
   Quaternion,
   QuaternionKeyframeTrack,
+  Raycaster,
   ShaderMaterial,
   Skeleton,
   SkinnedMesh,
@@ -83,6 +85,8 @@ import {
 } from './helpers/propModels';
 import { createTestSkyTextures } from './helpers/skyAssets';
 import { createTestShipFurniture } from './helpers/shipFurniture';
+import { boatSupplyTransform } from '../src/world/BoatStorage';
+import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 
 const savedItem = (type: ItemId, index = 1): ItemInstance => ({
   instanceId: `${type}-${index}` as ItemInstanceId,
@@ -286,6 +290,49 @@ function focusedPresenterTestDouble(eventId: string): FocusedPresenterTestDouble
 }
 
 describe('BoatWorld helpers', () => {
+  it('keeps repair selectable and clears the flare gun after moving the toolbox back', () => {
+    const camera = new PerspectiveCamera(63, 16 / 9, 0.08, 220);
+    const world = new BoatWorld(camera, createTestPropModels(), ...createTestSkyTextures());
+    try {
+      world.update(0.01, 0.01);
+      world.scene.updateMatrixWorld(true);
+      const toolbox = world.scene.getObjectByName('repair-toolbox')!;
+      const bounds = ITEM_MODEL_SPECS.flareGun.normalizedBounds;
+      const pose = boatSupplyTransform('flareGun', 0);
+      const target = new Box3(new Vector3(...bounds.min), new Vector3(...bounds.max))
+        .getCenter(new Vector3()).multiplyScalar(pose.scale).applyEuler(pose.rotation).add(pose.position);
+      world.scene.getObjectByName('lifeboat')!.localToWorld(target);
+      const origin = camera.getWorldPosition(new Vector3());
+      const ray = new Raycaster(origin, target.clone().sub(origin).normalize(), 0, origin.distanceTo(target));
+      expect(ray.intersectObject(toolbox, true)).toHaveLength(0);
+      expect(world.projectInteractionAnchors(1280, 720).find((anchor) => anchor.toolId === 'repairTools')!.visible).toBe(true);
+    } finally {
+      world.dispose();
+    }
+  });
+
+  it('preserves the forward direction and centers the chest in the shorter boat', () => {
+    const camera = new PerspectiveCamera(63, 16 / 9, 0.08, 220);
+    const world = new BoatWorld(camera, createTestPropModels(), ...createTestSkyTextures());
+    try {
+      const direction = camera.getWorldDirection(new Vector3());
+      expect(direction.x).toBeCloseTo(0);
+      expect(direction.y).toBeCloseTo(0);
+      expect(direction.z).toBeCloseTo(-1);
+      world.setRearCameraView(true, true);
+      world.update(0.01, 0.01);
+      world.scene.updateMatrixWorld(true);
+      const chest = world.scene.getObjectByName('persistent-chest')!;
+      const screen = chest.getWorldPosition(new Vector3()).project(camera);
+      expect(Math.abs(screen.x)).toBeLessThan(0.65);
+      expect(Math.abs(screen.y)).toBeLessThan(0.65);
+      expect(screen.z).toBeGreaterThan(-1);
+      expect(screen.z).toBeLessThan(1);
+    } finally {
+      world.dispose();
+    }
+  });
+
 
   it('runs and restores the Midnight Tour attack cutscene on each seeded side', async () => {
     const propModels = createTestPropModels();

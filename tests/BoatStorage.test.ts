@@ -9,6 +9,24 @@ import { LIFEBOAT_DISPLAY_SHELF_SURFACE_Y,LIFEBOAT_FLOOR_SURFACE_Y } from '../sr
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 
 describe('boat storage', () => {
+  it('places tape and the energy bar beside the map without overlap', () => {
+    const bounds = (['ductTape', 'map', 'energyBar'] as const).map((id) => {
+      const transform = boatSupplyTransform(id, 0);
+      const model = ITEM_MODEL_SPECS[id].normalizedBounds;
+      return new Box3(new Vector3(...model.min), new Vector3(...model.max))
+        .applyMatrix4(new Matrix4().compose(transform.position,
+          new Quaternion().setFromEuler(transform.rotation), new Vector3().setScalar(transform.scale)));
+    });
+    const [tape, map, bar] = bounds as [Box3, Box3, Box3];
+    expect(tape.max.x).toBeLessThan(map.min.x);
+    expect(bar.min.x).toBeGreaterThan(map.max.x);
+    for (const bound of bounds) expect(bound.min.y).toBeCloseTo(LIFEBOAT_DISPLAY_SHELF_SURFACE_Y);
+  });
+
+  it('uses the former energy bar position for the binoculars', () => {
+    const binoculars = boatSupplyTransform('spyglass', 0).position;
+    expect([binoculars.x, binoculars.z]).toEqual([0.502, -1.64]);
+  });
 
   it.each(['cannedFood', 'baitTin'] as const)('fits eight %s models without intersections', (groupId) => {
     const storageBounds = (id: BoatSupplyGroupId, index: number) => {
@@ -51,8 +69,6 @@ describe('boat storage', () => {
     expect(size.x).toBeLessThan(groupId === 'baitTin' ? 0.67 : 0.65);
     expect(size.z).toBeLessThan(groupId === 'baitTin' ? 0.53 : 0.73);
     if (groupId === 'baitTin') {
-      const tape = storageBounds('ductTape', 0);
-      expect(cluster.min.x - tape.max.x).toBeGreaterThan(0.08);
       const addedBounds = bounds.slice(3).reduce((area, bound) => area.union(bound), new Box3());
       expect(addedBounds.min.z).toBeGreaterThan(-1.82);
       expect(addedBounds.max.z).toBeLessThan(-1.34);
