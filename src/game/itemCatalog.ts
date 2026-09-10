@@ -53,7 +53,7 @@ const rawDefinitions = {
   anchor: define(3, 1, null, true, true, null),
   radio: define(1, 1, null, true, false, 'answerRadio'),
   umbrella: define(2, 1, null, true, true, null),
-  swimRing: define(2, 1, null, true, true, null),
+  swimRing: define(2, 1, 1, false, false, null),
   flashlight: define(1, 1, null, true, true, null),
   shotgun: define(2, 1, 1, false, false, null),
   energyBar: define(1, 1, 1, false, false, 'useEnergyBar'),

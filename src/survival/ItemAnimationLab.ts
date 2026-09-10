@@ -39,11 +39,11 @@ export const ITEM_ANIMATION_LAB_USES:
 Readonly<Partial<Record<ItemId, readonly ItemAnimationLabUse[]>>> = Object.freeze({
   cannedFood: uses(
     use('throw-target', 'throwTarget', 'death-stare', 'food'),
-    use('trade-handover', 'tradeHandover', 'night-trader', 'food'),
+    use('trade-handover', 'tradeHandover', 'night-trader', 'food-consumable'),
   ),
   baitTin: uses(
     use('throw-target', 'throwTarget', 'swarm-of-sharks', 'bait'),
-    use('trade-handover', 'tradeHandover', 'night-trader', 'bait'),
+    use('trade-handover', 'tradeHandover', 'night-trader', 'bait-consumable'),
   ),
   ductTape: uses(
     use('tape-stretch', 'stretchTape', 'leak', 'ductTape'),
@@ -55,7 +55,7 @@ Readonly<Partial<Record<ItemId, readonly ItemAnimationLabUse[]>>> = Object.freez
   map: uses(
     use('map-read', 'readMap', 'dangerous-waters', 'map'),
     use('map-leak-patch', 'patchLeak', 'leak', 'map'),
-    use('trade-handover', 'tradeHandover', 'night-trader', 'map'),
+    use('trade-handover', 'tradeHandover', 'handyman', 'map'),
   ),
   medicalKit: uses(
     use('throw-target', 'throwTarget', 'flowers', 'medicalKit'),
@@ -99,11 +99,10 @@ Readonly<Partial<Record<ItemId, readonly ItemAnimationLabUse[]>>> = Object.freez
   umbrella: uses(
     use('umbrella-overhead', 'holdOverhead', 'shower-night', 'umbrella'),
     use('umbrella-shield', 'useShield', 'death-stare', 'umbrella'),
-    use('trade-handover', 'tradeHandover', 'night-trader', 'umbrella'),
+    use('trade-handover', 'tradeHandover', 'handyman', 'umbrella'),
   ),
   swimRing: uses(
     use('throw-target', 'throwTarget', 'tornado', 'swimRing'),
-    use('trade-handover', 'tradeNight', 'night-trader', 'swimRing'),
     use('handyman-handover', 'tradeHandyman', 'handyman', 'swimRing'),
   ),
   flashlight: uses(

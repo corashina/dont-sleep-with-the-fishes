@@ -4,6 +4,8 @@ import { getLanguage } from './language';
 
 // These are diary outcomes, separate from the short messages shown during events.
 const results = {
+  tradeCompleted: ['I completed the exchange.', 'Dokonałem wymiany.', 'Completé el intercambio.'],
+  deathStareLightFlickers: ['The stare drained my strength.', 'Spojrzenie odebrało mi siły.', 'La mirada me dejó sin fuerzas.'],
   ufoTaken: ['I signalled the disc. It stopped above the boat. A cold light took me, and the sea fell away.', 'Dałem sygnał dyskowi. Zatrzymał się nad łodzią. Zimne światło porwało mnie, a morze zostało w dole.', 'Le hice señales al disco. Se detuvo sobre el bote. Una luz fría me llevó y el mar quedó atrás.'],
   ufoPassed: ['I stayed below the rim without a sound. The lights moved on. I waited before breathing again.', 'Ukryłem się poniżej burty i nie wydałem żadnego dźwięku. Światła odpłynęły. Dopiero wtedy znów odetchnąłem.', 'Me quedé bajo la borda sin hacer ruido. Las luces siguieron de largo. Esperé antes de volver a respirar.'],
   underUsStillResult: ['I sat without moving until it left. By dawn I was too tired to do as much as usual.', 'Siedziałem bez ruchu, aż odpłynęło. O świcie byłem zbyt zmęczony, by zrobić tyle co zwykle.', 'Me quedé inmóvil hasta que se fue. Al amanecer estaba demasiado cansado para hacer lo de siempre.'],

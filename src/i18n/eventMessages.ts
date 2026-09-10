@@ -5,6 +5,9 @@ import type {
 } from '../survival/survivalTypes';
 
 const EVENT_TEXT = {
+  tradeOffer: { en: 'Offer an item', pl: 'Oddaj przedmiot', 'es-AR': 'Ofrecer un objeto' },
+  tradeCompleted: { en: 'The exchange is complete.', pl: 'Wymiana zakończona.', 'es-AR': 'El intercambio terminó.' },
+  deathStareLightFlickers: { en: 'The stare drains your strength.', pl: 'Spojrzenie odbiera ci siły.', 'es-AR': 'La mirada te deja sin fuerzas.' },
   ufoTitle: { en: 'Flying Saucer', pl: 'Latający spodek', 'es-AR': 'Platillo volador' },
   eventTestAbduction: { en: 'Abduction Ending', pl: 'Zakończenie: porwanie', 'es-AR': 'Final: abducción' },
   ufoReveal: { en: 'A silent disc crosses the stars. Its cold lights search the sea. Keep your head down.', pl: 'Cichy dysk przesłania gwiazdy. Jego zimne światła przeszukują morze. Nie wychylaj się.', 'es-AR': 'Un disco silencioso cruza las estrellas. Sus luces frías registran el mar. Mantené la cabeza baja.' },

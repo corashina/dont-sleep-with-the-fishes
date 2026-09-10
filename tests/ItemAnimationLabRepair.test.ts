@@ -53,6 +53,7 @@ describe('Item Animation Lab repair menu', () => {
       lab.click('[data-event-choice="break"]');
     }
     lab.openRepair();
+    expect(lab.mount.querySelector('[data-discard-target]')).toBeNull();
     expect([...lab.mount.querySelectorAll<HTMLElement>('[data-repair-target]')]
       .map((button) => button.dataset.repairTarget)).toEqual(['bucket-1', 'compass-1']);
     lab.click('[data-repair-target="bucket-1"]');

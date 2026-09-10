@@ -32,6 +32,15 @@ export class SurvivalInventoryState {
     return this.count(type, 'usable') > 0;
   }
 
+  hasOwned(type: ItemId): boolean {
+    for (const item of this.items.values()) {
+      if (item.type === type && (item.condition === 'usable' || item.condition === 'broken')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   gain(
     type: ItemId,
     condition: Extract<ItemCondition, 'usable' | 'broken'> = 'usable',
@@ -39,20 +48,8 @@ export class SurvivalInventoryState {
     if (condition === 'broken' && !ITEM_DEFINITIONS[type].breakable) {
       throw new Error(`${type} cannot be gained broken`);
     }
-    let instanceId = `${type}-1` as ItemInstanceId;
-    const existing = this.items.get(instanceId);
-    if (existing === undefined) {
-      this.items.set(instanceId, { instanceId, type, condition });
-      return instanceId;
-    }
-    if (existing.condition === 'consumed' || existing.condition === 'lost') {
-      this.setCondition(instanceId, condition);
-      return instanceId;
-    }
-    if (ITEM_DEFINITIONS[type].durable) return null;
-    let nextIndex = 2;
-    while (this.items.has(`${type}-${nextIndex}` as ItemInstanceId)) nextIndex += 1;
-    instanceId = `${type}-${nextIndex}` as ItemInstanceId;
+    if (this.hasOwned(type)) return null;
+    const instanceId = `${type}-1` as ItemInstanceId;
     this.items.set(instanceId, { instanceId, type, condition });
     return instanceId;
   }
@@ -132,7 +129,9 @@ export class SurvivalInventoryState {
 
   repair(instanceId: ItemInstanceId): boolean {
     const item = this.items.get(instanceId);
-    if (item === undefined || item.condition !== 'broken') return false;
+    if (item === undefined || item.condition !== 'broken' || !ITEM_DEFINITIONS[item.type].breakable) {
+      return false;
+    }
     this.setCondition(instanceId, 'usable');
     return true;
   }

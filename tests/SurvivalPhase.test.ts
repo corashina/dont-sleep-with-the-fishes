@@ -11,6 +11,7 @@ import type { FishingCastPoint } from '../src/survival/FishingSession';
 import { formatDiveResult } from '../src/survival/SurvivalDayActionFlow';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
+import { createNightTraderStock } from '../src/survival/tradeRules';
 import type {
   SurvivalInventorySnapshot,
   SurvivalItemState
@@ -1210,16 +1211,14 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
-  it('orders a focused item result without showing outcome text', async () => {
-    const map = {
-      instanceId: 'map-1' as const,
-      type: 'map' as const,
-      condition: 'usable' as const,
-    };
+  it('orders a focused trader result without showing outcome text', async () => {
+    const choiceId = 'food-equipment';
+    const rewardItemId = createNightTraderStock(new Set(), 8, 1).equipment!.itemId;
+    const rewardInstanceId = `${rewardItemId}-1` as ItemInstanceId;
     let current = snapshot({
       state: 'nightEvent',
       pendingEventId: 'night-trader',
-      inventory: inventory({ 'map-1': map }),
+      food: 3,
     });
     let resolvedSnapshot: SurvivalSnapshot | null = null;
     const calls: string[] = [];
@@ -1231,11 +1230,12 @@ describe('SurvivalPhase orchestration', () => {
     const outcome = accepted({
       code: 'event-resolved',
       cue: 'none',
-      message: 'The trader gives you a compass.',
-      deltas: {},
+      message: 'The trade is complete.',
+      deltas: { food: -3 },
+      rewardSummary: { kind: 'item', id: rewardItemId, quantity: 1 },
       eventResult: {
         eventId: 'night-trader',
-        choiceId: 'map',
+        choiceId,
         resultId: 'trader-reward',
       },
     });
@@ -1271,12 +1271,12 @@ describe('SurvivalPhase orchestration', () => {
           resolvedSnapshot = snapshot({
             state: 'nightEvent',
             pendingEventId: null,
+            food: 0,
             inventory: inventory({
-              'map-1': { ...map, condition: 'lost' },
-              'compass-1': {
-                instanceId: 'compass-1',
-                type: 'compass',
-                condition: 'usable',
+              [rewardInstanceId]: {
+                instanceId: rewardInstanceId,
+                type: rewardItemId,
+                condition: 'usable' as const,
               },
             }),
           });
@@ -1300,9 +1300,9 @@ describe('SurvivalPhase orchestration', () => {
         playEventChoice: vi.fn((_eventId, choice) => {
           calls.push('choice');
           expect(choice).toEqual({
-            choiceId: 'map',
-            instanceId: 'map-1',
-            condition: 'usable',
+            choiceId,
+            instanceId: null,
+            condition: null,
           });
           return choiceMotion.promise;
         }),
@@ -1310,9 +1310,9 @@ describe('SurvivalPhase orchestration', () => {
           calls.push('result');
           expect(received).toBe(outcome);
           expect(choice).toEqual({
-            choiceId: 'map',
-            instanceId: 'map-1',
-            condition: 'lost',
+            choiceId,
+            instanceId: null,
+            condition: null,
           });
           return reaction.promise;
         }),
@@ -1328,13 +1328,12 @@ describe('SurvivalPhase orchestration', () => {
 
     phase.start();
     await flushPromises();
-    expect([...ui.setEventSelection.mock.calls[0]![0]]).toEqual([
-      ['map-1', 'map'],
-    ]);
-    expect(ui.setEventSelection.mock.calls[0]![1]).toEqual([
-      { id: 'sleep', label: 'Refuse', unavailableReason: null },
-    ]);
-    phase.handleEventItem('map', 'map-1');
+    expect([...ui.setEventSelection.mock.calls[0]![0]]).toEqual([]);
+    expect(ui.setEventSelection.mock.calls[0]![1]).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: choiceId, unavailableReason: null }),
+      expect.objectContaining({ id: 'sleep', unavailableReason: null }),
+    ]));
+    (ui as Partial<SurvivalUI>).onEventChoice?.(choiceId);
     await flushPromises();
     expect(setEventEligibleItems).toHaveBeenLastCalledWith(new Set());
     expect(calls).toEqual(['stage', 'reveal', 'unlock', 'choice']);
@@ -1362,7 +1361,7 @@ describe('SurvivalPhase orchestration', () => {
   it.each([
     {
       label: 'a missing event result',
-      eventId: 'night-trader',
+      eventId: 'handyman',
       choiceId: 'map',
       route: 'item',
       eventResult: undefined,
@@ -1410,7 +1409,7 @@ describe('SurvivalPhase orchestration', () => {
       energy: 3,
       bait: 0,
       ...(route === 'item'
-        ? { inventory: inventory({ 'map-1': map }) }
+        ? { pressure: 2, inventory: inventory({ 'map-1': map }) }
         : {}),
     });
     let current = before;

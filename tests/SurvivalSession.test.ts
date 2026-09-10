@@ -615,10 +615,10 @@ describe('SurvivalSession daytime actions', () => {
     expect(session.snapshot()).toEqual(beforeRejectedCancel);
   });
 
-  it('opens Drifting Cargo from day 3 at the 25 percent dawn boundary', () => {
+  it('opens Drifting Cargo from day 3 at the 35 percent dawn boundary', () => {
     const opens = new SurvivalSession(saved(), {
       seed: 1,
-      random: sequenceRandom([0.99, 0.249, 0, 0.499]),
+      random: sequenceRandom([0.99, 0.349, 0, 0.499]),
       initial: { day: 2 },
     });
     expect(opens.perform('endDay').accepted).toBe(true);
@@ -631,7 +631,7 @@ describe('SurvivalSession daytime actions', () => {
 
     const misses = new SurvivalSession(saved(), {
       seed: 2,
-      random: sequenceRandom([0.99, 0.25]),
+      random: sequenceRandom([0.99, 0.35]),
       initial: { day: 2 },
     });
     misses.perform('endDay');
