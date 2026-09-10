@@ -347,6 +347,7 @@ The Midnight shovel runtime cue uses a six-second cutoff. The MP3 remains unenco
 | dawn | `dawn.wav` | [First Light Particles / Yoiyami](https://opengameart.org/content/first-light-particles-%E2%80%93-cc0-atmospheric-pianoambient-track) |
 | eventReveal | `eventReveal.mp3` | [Dissonant Sting / nomiqbomi](https://freesound.org/people/nomiqbomi/sounds/578362/) |
 | planeFlyby | `planeFlyby.mp3` | [A small propeller plane.wav / straget](https://freesound.org/people/straget/sounds/403316/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| ufoFlyby | `ufoFlyby.wav` | [A UFO Passing Overhead.wav / LilMati](https://freesound.org/people/LilMati/sounds/518740/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). HQ preview trimmed to its steady hum and crossfaded with `scripts/prepare-ufo-audio.py`. |
 | ghostSpiritBreath | `ghostSpiritBreath.mp3` | [Spirit-Breath1.aif / timgormly](https://freesound.org/people/timgormly/sounds/152721/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | tornadoWind | `tornadoWind.mp3` | [JM_NATURAL ELEMENTS_Wind 01 - Tornado - Inside a metalic squeaking building.wav / Julien_Matthey](https://freesound.org/people/Julien_Matthey/sounds/557188/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | leak | `leak.mp3` | [Water - Leak, small / colinpoh](https://freesound.org/people/colinpoh/sounds/146346/) |

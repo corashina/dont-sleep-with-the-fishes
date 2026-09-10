@@ -342,7 +342,8 @@ export class WebAudioBackend implements AudioBackend {
     let request: Promise<AudioBuffer>;
     request = (async () => {
       const bytes = await loadAssetBytes(AUDIO_MANIFEST[id].url, this.fetchAudio);
-      const buffer = await this.context.decodeAudioData(bytes);
+      // Decoding detaches its input; concurrent downloads can share these bytes.
+      const buffer = await this.context.decodeAudioData(bytes.slice(0));
       if (!this.disposed && (this.references.get(id) ?? 0) > 0) {
         this.buffers.set(id, buffer);
       }

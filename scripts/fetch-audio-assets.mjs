@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, rmdir, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -73,6 +73,7 @@ const freesoundSources = [
   ['nightfall', 'DeVern', '427533'],
   ['eventReveal', 'nomiqbomi', '578362'],
   ['planeFlyby', 'straget', '403316'],
+  ['ufoFlyby', 'LilMati', '518740'],
   ['ghostSpiritBreath', 'timgormly', '152721'],
   ['tornadoWind', 'Julien_Matthey', '557188'],
   ['leak', 'colinpoh', '146346'],
@@ -114,8 +115,37 @@ async function fetchBuffer(url) {
   throw new Error(`Download attempts exhausted: ${url}`);
 }
 
+async function prepareUfoAudio(audio, destination) {
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'fishes-ufo-'));
+  const source = join(temporaryRoot, 'source.mp3');
+  try {
+    await writeFile(source, audio);
+    const prepared = spawnSync(process.env.PYTHON ?? 'python', [
+      join(scriptRoot, 'prepare-ufo-audio.py'), source, destination,
+    ], { stdio: 'inherit' });
+    if (prepared.status !== 0) throw new Error('UFO loop preparation failed; install Python, soundfile, and numpy.');
+  } finally {
+    await rm(source, { force: true });
+    await rmdir(temporaryRoot);
+  }
+  process.stdout.write(`Prepared ${basename(destination)}\n`);
+}
+
+async function writeFreesoundAudio(id, audio, destination) {
+  if (id === 'ufoFlyby') {
+    await prepareUfoAudio(audio, destination);
+    return;
+  }
+  // Start the dive clip at its splash instead of the quiet recording lead-in.
+  const output = id === 'diveEntry'
+    ? splitMp3ByWindows(audio, [[0.8, Infinity]])[0]
+    : audio;
+  await writeFile(destination, output);
+  process.stdout.write(`Downloaded ${basename(destination)}\n`);
+}
+
 async function fetchFreesound([id, user, number, license = 'cc0']) {
-  const destination = join(assetRoot, `${id}.mp3`);
+  const destination = join(assetRoot, `${id}.${id === 'ufoFlyby' ? 'wav' : 'mp3'}`);
   if (await hasFile(destination)) return;
   const pageUrl = `https://freesound.org/people/${user}/sounds/${number}/`;
   let page = '';
@@ -139,12 +169,7 @@ async function fetchFreesound([id, user, number, license = 'cc0']) {
   if (previewUrl === undefined) throw new Error(`No HQ MP3 preview: ${pageUrl}`);
   const audio = await fetchBuffer(previewUrl);
   if (audio.length === 0) throw new Error(`Empty preview: ${previewUrl}`);
-  // Start the dive clip at its splash instead of the quiet recording lead-in.
-  const output = id === 'diveEntry'
-    ? splitMp3ByWindows(audio, [[0.8, Infinity]])[0]
-    : audio;
-  await writeFile(destination, output);
-  process.stdout.write(`Downloaded ${basename(destination)}\n`);
+  await writeFreesoundAudio(id, audio, destination);
 }
 
 async function fetchCatMeows() {
@@ -210,7 +235,7 @@ if (!await hasFile(dawnDestination)) {
 }
 
 const results = await Promise.all([
-  ...freesoundSources.map(([id]) => stat(join(assetRoot, `${id}.mp3`))),
+  ...freesoundSources.map(([id]) => stat(join(assetRoot, `${id}.${id === 'ufoFlyby' ? 'wav' : 'mp3'}`))),
   ...catMeowDestinations.map((path) => stat(path)),
   stat(dawnDestination),
 ]);
