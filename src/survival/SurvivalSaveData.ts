@@ -295,7 +295,7 @@ function parseEventResult(value: unknown): ActionOutcome['eventResult'] | undefi
   const event = eventById(value.eventId);
   if (event === undefined) return undefined;
   const choice = event.choices.find(({ id }) => id === value.choiceId);
-  if (choice === undefined || !matchesResultId(event, choice, value.resultId)) return undefined;
+  if (choice === undefined || !matchesResultId(choice, value.resultId)) return undefined;
   return Object.freeze({ eventId: value.eventId, choiceId: value.choiceId, resultId: value.resultId });
 }
 
@@ -312,7 +312,7 @@ function parseJournalAction(value: unknown): JournalDayActionRecord | null {
 
 function parseJournalSurvivalAction(value: Record<string, unknown>): JournalDayActionRecord | null {
   if (value.action !== 'treat' && value.action !== 'dive'
-    && value.action !== 'repair' && value.action !== 'repairItem') return null;
+    && value.action !== 'repair' && value.action !== 'repairItem' && value.action !== 'discardItem') return null;
   const deltas = parseResourceDeltas(value.deltas);
   if (deltas === null || !Array.isArray(value.inventoryMutations)) return null;
   const mutations = parseJournalMutations(value.inventoryMutations);
@@ -449,17 +449,10 @@ function eventById(eventId: string) {
 }
 
 function matchesResultId(
-  event: (typeof SURVIVAL_EVENTS)[number],
   choice: (typeof SURVIVAL_EVENTS)[number]['choices'][number],
   resultId: string,
 ): boolean {
-  return choice.outcomes.some((outcome) => outcome.resultId === resultId)
-    || (resultId === fallbackResultId(event.id) && choiceMayFallbackToFood(choice));
-}
-
-function fallbackResultId(eventId: string): string | undefined {
-  if (eventId === 'handyman') return 'handyman-food-fallback';
-  return undefined;
+  return choice.outcomes.some((outcome) => outcome.resultId === resultId);
 }
 
 function choiceMayFallbackToFood(

@@ -81,7 +81,7 @@ describe('journal narrative', () => {
   it.each(['en', 'pl', 'es-AR'] as const)('mentions each narrated item consequence once in %s', (language) => {
     setLanguage(language);
     const cases = [
-      ['leak', 'map', 1], ['death-stare', 'flashlight', 1],
+      ['leak', 'map', 1],
       ['swarm-of-sharks', 'fishingNet', 1], ['swarm-of-sharks', 'knife', 1],
       ['windy-night', 'fishingNet', 1], ['windy-night', 'map', 0], ['windy-night', 'umbrella', 1],
       ['bad-sleep', 'umbrella', 1], ['check-the-back', 'knife', 1],
@@ -111,21 +111,22 @@ describe('journal narrative', () => {
     for (const id of ['flareGun', 'shotgun', 'medicalKit', 'ductTape']) {
       const copy = formatJournalEvent(eventRecord('handyman', id));
       expect(copy).toContain('for the trade');
-      expect(copy).toContain('in exchange');
+      expect(copy).toContain('completed the exchange');
       expect(copy).not.toMatch(/last shell|last flare|medkit was empty|last of the duct tape|lost .*trouble/);
     }
   });
 
-  it('uses the actual food reward when traded equipment was already owned', () => {
+  it('names the actual missing same-weight Handyman reward', () => {
     const session = new SurvivalSession([
-      { type: 'spyglass', instanceId: 'spyglass-1' }, { type: 'flashlight', instanceId: 'flashlight-1' },
+      { type: 'anchor', instanceId: 'anchor-1' },
     ], { seed: 1, initialEventId: 'handyman', random: sequenceRandom([0]) });
-    session.resolveEvent({ kind: 'item', choiceId: 'spyglass', instanceId: 'spyglass-1' });
+    const outcome = session.resolveEvent({ kind: 'item', choiceId: 'anchor', instanceId: 'anchor-1' });
+    expect(outcome.rewardSummary).toEqual({ kind: 'item', id: 'scubaSet', quantity: 1 });
     expect(session.beginDawn().accepted).toBe(true);
     const entry = session.snapshot().journalEntries[0]!;
     const copy = formatJournalEntry(entry).nighttime;
-    expect(copy).toContain('took food instead');
-    expect(copy).not.toContain('handed me a flashlight');
+    expect(copy).toContain('completed the exchange');
+    expect(copy).toContain('scuba gear');
   });
 
   it.each(['en', 'pl', 'es-AR'] as const)('keeps treatment, repair and dive prose free of numbers in %s', (language) => {

@@ -11,7 +11,6 @@ import {
   Quaternion,
   Skeleton,
   SphereGeometry,
-  TorusGeometry,
   Vector3,
 } from 'three';
 import type { ItemId, ItemInstanceId } from '../game/ItemState';
@@ -33,7 +32,6 @@ import {
   collectMeshResources,
   disposeResourceSets,
 } from '../world/SceneResources';
-import { CHEST_DISPLAY_SCALE } from './ChestDisplay';
 import type { MutableSupplyPose } from './BoatSupplyDisplay';
 import {
   clamp01Unchecked as clamp01,
@@ -50,6 +48,7 @@ import type {
   EventResultPresentation,
 } from './survivalTypes';
 import { TimedPresentationAnimation } from './TimedPresentationAnimation';
+import { HANDYMAN_ITEM_IDS } from './tradeRules';
 
 type HandymanAnimationKind =
   | 'reveal'
@@ -71,7 +70,6 @@ const WRIST_SUNK = new Vector3(-2.55, -2.4, -2.55);
 const PALM_TARGET = new Vector3(0.05, 0.32, 0.05);
 const PAYMENT_START = new Vector3(3.05, 0.38, 3.9);
 const REWARD_END = new Vector3(2.85, 0.55, 3.6);
-const CHEST_PALM_TARGET = new Vector3(-2.22, 0.9, -2.08);
 const X_AXIS = new Vector3(1, 0, 0);
 const Y_AXIS = new Vector3(0, 1, 0);
 const Z_AXIS = new Vector3(0, 0, 1);
@@ -83,23 +81,6 @@ const PALM_BASE_QUATERNION = new Quaternion().setFromUnitVectors(
   Y_AXIS,
   PALM_FACING_DIRECTION,
 );
-
-const HANDYMAN_REWARDS: Readonly<Partial<Record<string, ItemId | 'chest'>>> =
-  Object.freeze({
-    spyglass: 'flashlight',
-    flashlight: 'spyglass',
-    flareGun: 'shotgun',
-    shotgun: 'flareGun',
-    scubaSet: 'medicalKit',
-    medicalKit: 'scubaSet',
-    fishingNet: 'bucket',
-    bucket: 'fishingNet',
-    ductTape: 'energyBar',
-    energyBar: 'ductTape',
-    swimRing: 'radio',
-    anchor: 'chest',
-    chest: 'anchor',
-  });
 
 function keyedTravel(progress: number): number {
   if (progress < 0.14) return -0.035 * smoothstep(progress / 0.14);
@@ -159,9 +140,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
     scaleY: 1,
     scaleZ: 1,
   };
-  private readonly chestStartPosition = new Vector3();
-  private readonly chestStartQuaternion = new Quaternion();
-  private readonly chestStartScale = new Vector3(1, 1, 1);
   private readonly animation = new TimedPresentationAnimation<HandymanAnimationKind>(
     (kind, _time, progress) => this.applyAnimation(kind, progress),
     (kind) => this.finishAnimation(kind),
@@ -170,8 +148,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
   private rewardActor: Group | null = null;
   private paymentInstanceId: ItemInstanceId | null = null;
   private usingSupplyPayment = false;
-  private usingChestPayment = false;
-  private chestCaptured = false;
   private paymentVisible = false;
   private rewardVisible = false;
   private fingerBend = 0;
@@ -218,9 +194,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.animation.cancel();
     this.dependencies.supplyDisplay.releaseEventActor();
     this.dependencies.supplyDisplay.clearEventPose();
-    this.restoreChestPose();
-    this.dependencies.chestDisplay.restorePose();
-    this.captureChestPose();
     this.clearExchangeActors();
     this.staged = true;
     this.root.visible = true;
@@ -251,7 +224,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
       this.root.userData.state = 'waiting';
       return this.startAnimation('choice-sleep', SLEEP_CHOICE_DURATION);
     }
-    if (HANDYMAN_REWARDS[choice.choiceId] === undefined) {
+    if (!HANDYMAN_ITEM_IDS.includes(choice.choiceId as ItemId)) {
       throw new Error(`Unsupported Handyman choice: ${choice.choiceId}`);
     }
     this.preparePayment(choice);
@@ -267,25 +240,17 @@ export class HandymanPresentation implements FocusedEventPresentation {
     if (result.eventId !== 'handyman') {
       throw new Error(`Handyman received result for ${result.eventId}.`);
     }
-    void outcome;
     switch (result.resultId) {
       case 'handyman-reward': {
-        const reward = HANDYMAN_REWARDS[result.choiceId];
-        if (reward === undefined) {
-          throw new Error(`Handyman has no reward for ${result.choiceId}.`);
+        if (outcome.rewardSummary?.kind !== 'item') {
+          throw new Error('Handyman reward result requires one item reward.');
         }
         this.hidePayment();
-        this.prepareReward(reward, false);
+        this.prepareReward(outcome.rewardSummary.id);
         this.setFingerBend(1);
         this.root.userData.state = 'opening-reward';
         return this.startAnimation('result-reward', RESULT_DURATION);
       }
-      case 'handyman-food-fallback':
-        this.hidePayment();
-        this.prepareReward('cannedFood', true);
-        this.setFingerBend(1);
-        this.root.userData.state = 'opening-food';
-        return this.startAnimation('result-reward', RESULT_DURATION);
       case 'handyman-touch':
         this.hidePayment();
         this.root.userData.state = 'closing-around-camera';
@@ -304,7 +269,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.animation.cancel();
     this.dependencies.supplyDisplay.releaseEventActor();
     this.dependencies.supplyDisplay.clearEventPose();
-    this.restoreChestPose();
     this.clearExchangeActors();
     this.resetStaticActors();
     this.root.visible = false;
@@ -336,15 +300,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
         minimumHitWidth: 82,
         minimumHitHeight: 82,
       },
-      {
-        id: 'persistent-chest',
-        get label() { return presentationUiText('chest'); },
-        get description() { return presentationUiText('offerChest'); },
-        choiceId: 'chest',
-        root: this.dependencies.chestDisplay.root,
-        minimumHitWidth: 54,
-        minimumHitHeight: 54,
-      },
     ];
   }
 
@@ -353,7 +308,6 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.animation.cancel();
     this.dependencies.supplyDisplay.releaseEventActor();
     this.dependencies.supplyDisplay.clearEventPose();
-    this.restoreChestPose();
     this.clearExchangeActors();
     this.disposed = true;
     this.staged = false;
@@ -413,9 +367,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
         this.root.userData.state = 'choice-sleep';
         break;
       case 'result-reward':
-        this.root.userData.state = this.rewardActor?.userData.itemType === 'cannedFood'
-          ? 'held-food'
-          : 'held-reward';
+        this.root.userData.state = 'held-reward';
         break;
       case 'result-touch':
         this.root.userData.state = 'held-touch';
@@ -443,23 +395,7 @@ export class HandymanPresentation implements FocusedEventPresentation {
 
   private applyPaymentChoice(progress: number): void {
     const travel = smoothstep(progress / 0.58);
-    if (this.usingChestPayment) {
-      this.dependencies.chestDisplay.root.position.lerpVectors(
-        this.chestStartPosition,
-        CHEST_PALM_TARGET,
-        travel,
-      );
-      this.dependencies.chestDisplay.root.quaternion
-        .copy(this.chestStartQuaternion);
-      this.dependencies.chestDisplay.root.rotateY(-0.42 * travel);
-      this.dependencies.chestDisplay.root.scale.copy(this.chestStartScale);
-      this.dependencies.chestDisplay.root.scale.multiplyScalar(
-        Math.max(
-          0.001,
-          1 - smoothstep((progress - 0.78) / 0.12),
-        ),
-      );
-    } else if (
+    if (
       this.usingSupplyPayment
       && this.paymentInstanceId !== null
     ) {
@@ -615,16 +551,9 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.dependencies.supplyDisplay.clearEventPose();
     this.clearExchangeActors();
     this.paymentInstanceId = choice.instanceId;
-    this.usingChestPayment = choice.choiceId === 'chest';
-    this.usingSupplyPayment = !this.usingChestPayment
-      && choice.instanceId !== null
+    this.usingSupplyPayment = choice.instanceId !== null
       && this.dependencies.supplyDisplay.pinEventActor(choice.instanceId);
-    if (this.usingChestPayment) {
-      this.dependencies.chestDisplay.restorePose();
-      this.captureChestPose();
-      this.dependencies.chestDisplay.root.visible = true;
-      this.root.userData.chestPaymentUsesPersistentChest = true;
-    } else if (!this.usingSupplyPayment) {
+    if (!this.usingSupplyPayment) {
       this.paymentActor = this.createItemActor(
         choice.choiceId as ItemId,
         'payment',
@@ -639,18 +568,9 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.updateExchangeState();
   }
 
-  private prepareReward(
-    reward: ItemId | 'chest',
-    authoredFood: boolean,
-  ): void {
+  private prepareReward(reward: ItemId): void {
     this.rewardActors.clear();
-    if (authoredFood) {
-      this.rewardActor = this.createFoodToken();
-    } else if (reward === 'chest') {
-      this.rewardActor = this.createChestReward();
-    } else {
-      this.rewardActor = this.createItemActor(reward, 'reward');
-    }
+    this.rewardActor = this.createItemActor(reward, 'reward');
     this.rewardActor.position.copy(PALM_TARGET);
     this.rewardActor.visible = false;
     this.rewardVisible = false;
@@ -701,98 +621,9 @@ export class HandymanPresentation implements FocusedEventPresentation {
     return actor;
   }
 
-  private createFoodToken(): Group {
-    const actor = new Group();
-    actor.name = 'handyman-reward-food-token';
-    actor.userData.itemType = 'cannedFood';
-    actor.userData.tokenKind = 'food';
-    const tin = createMaterial(0x69716e, 0.72, 0.28);
-    const label = createMaterial(0x8a6845, 0.94);
-    const body = new Mesh(
-      new CylinderGeometry(0.17, 0.17, 0.06, 9),
-      label,
-    );
-    body.name = 'handyman-food-token-body';
-    body.rotation.x = Math.PI / 2;
-    const rim = new Mesh(
-      new TorusGeometry(0.168, 0.018, 5, 10),
-      tin,
-    );
-    rim.name = 'handyman-food-token-rim';
-    rim.rotation.x = Math.PI / 2;
-    const seam = new Mesh(
-      new BoxGeometry(0.21, 0.026, 0.026),
-      tin,
-    );
-    seam.name = 'handyman-food-token-seam';
-    seam.position.z = 0.04;
-    seam.rotation.z = -0.17;
-    actor.add(body, rim, seam);
-    this.rewardActors.add(actor);
-    collectMeshResources(
-      actor,
-      this.exchangeGeometries,
-      this.exchangeMaterials,
-    );
-    return actor;
-  }
-
-  private createChestReward(): Group {
-    const actor = new Group();
-    actor.name = 'handyman-reward-chest';
-    actor.userData.itemType = 'chest';
-    let selected: Group | null = null;
-    try {
-      selected = this.dependencies.propModels.createEventModel(
-        'chestClosed',
-      )?.root ?? null;
-    } catch {
-      selected = null;
-    }
-    if (selected !== null && hasRenderableBounds(selected)) {
-      selected.name = 'handyman-reward-chest-model';
-      actor.add(selected);
-      actor.userData.model = 'event-clone';
-    } else {
-      if (selected !== null) disposeRejectedModel(selected);
-      const wood = createMaterial(0x5a402e, 0.96);
-      const iron = createMaterial(0x505a58, 0.72, 0.3);
-      const body = new Mesh(
-        new BoxGeometry(0.78, 0.4, 0.55),
-        wood,
-      );
-      body.name = 'handyman-reward-chest-fallback-body';
-      const lid = new Mesh(
-        new BoxGeometry(0.82, 0.19, 0.58),
-        wood,
-      );
-      lid.name = 'handyman-reward-chest-fallback-lid';
-      lid.position.y = 0.3;
-      const band = new Mesh(
-        new BoxGeometry(0.12, 0.68, 0.61),
-        iron,
-      );
-      band.name = 'handyman-reward-chest-fallback-band';
-      band.position.y = 0.08;
-      actor.add(body, lid, band);
-      actor.userData.model = 'procedural';
-    }
-    actor.scale.setScalar(0.78 * CHEST_DISPLAY_SCALE);
-    this.rewardActors.add(actor);
-    collectMeshResources(
-      actor,
-      this.exchangeGeometries,
-      this.exchangeMaterials,
-    );
-    return actor;
-  }
-
   private hidePayment(): void {
     this.paymentVisible = false;
-    if (this.usingChestPayment) {
-      this.dependencies.chestDisplay.root.visible = false;
-      this.dependencies.chestDisplay.root.scale.setScalar(0.001);
-    } else if (
+    if (
       this.usingSupplyPayment
       && this.paymentInstanceId !== null
     ) {
@@ -829,30 +660,9 @@ export class HandymanPresentation implements FocusedEventPresentation {
     this.rewardActor = null;
     this.paymentInstanceId = null;
     this.usingSupplyPayment = false;
-    this.usingChestPayment = false;
     this.paymentVisible = false;
     this.rewardVisible = false;
     this.updateExchangeState();
-  }
-
-  private captureChestPose(): void {
-    this.chestStartPosition.copy(this.dependencies.chestDisplay.root.position);
-    this.chestStartQuaternion.copy(
-      this.dependencies.chestDisplay.root.quaternion,
-    );
-    this.chestStartScale.copy(this.dependencies.chestDisplay.root.scale);
-    this.chestCaptured = true;
-  }
-
-  private restoreChestPose(): void {
-    if (!this.chestCaptured) return;
-    this.dependencies.chestDisplay.restorePose();
-    this.dependencies.chestDisplay.root.position.copy(this.chestStartPosition);
-    this.dependencies.chestDisplay.root.quaternion.copy(
-      this.chestStartQuaternion,
-    );
-    this.dependencies.chestDisplay.root.scale.copy(this.chestStartScale);
-    this.chestCaptured = false;
   }
 
   private resetStaticActors(): void {

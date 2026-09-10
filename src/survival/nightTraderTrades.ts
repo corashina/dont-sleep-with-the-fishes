@@ -129,7 +129,7 @@ export function ownsNightTraderReward(
 ): boolean {
   if (choiceId === 'sleep') return false;
   const { reward } = nightTraderTrade(choiceId);
-  return ITEM_DEFINITIONS[reward].durable && Object.values(inventory).some((item) => (
+  return Object.values(inventory).some((item) => (
     item?.type === reward && (item.condition === 'usable' || item.condition === 'broken')
   ));
 }

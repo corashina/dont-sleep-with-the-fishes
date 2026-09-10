@@ -1,5 +1,6 @@
 import type { ItemId } from '../game/ItemState';
 import { nightTraderChoices, nightTraderEventForSeed } from './nightTraderTrades';
+import { HANDYMAN_ITEM_IDS } from './tradeRules';
 import {
   DRIFTING_SUPPLY_KINDS,
   DRIFTING_SUPPLY_CARLITOS_ENERGY_COST,
@@ -131,8 +132,6 @@ const lose = (itemId: ItemId) => mutation('lose', itemId);
 const loseRandom = (quantity: number): EventInventoryMutation => ({ kind: 'loseRandom', quantity });
 const breakRandom = (quantity: number): EventInventoryMutation => ({ kind: 'breakRandom', quantity });
 const loseEventTarget = (): EventInventoryMutation => ({ kind: 'loseEventTarget', quantity: 1 });
-const gain = (itemId: ItemId): EventInventoryMutation =>
-  ({ kind: 'gain', itemId, quantity: 1, fallbackFood: 1 });
 const gainChest = (): EventInventoryMutation =>
   ({ kind: 'gainChest', quantity: 1, fallbackFood: 1 });
 
@@ -343,9 +342,9 @@ const survivalEvents: SurvivalEventDefinition[] = [
     ],
   },
   event('death-stare', 'night', 'eventText035', 'dangerous', 'impact', 1, 9, 4, [
-    choice('flashlight', 'eventText071', 'flashlight',
+    { ...choice('flashlight', 'eventText071', 'flashlight',
       outcome(80, 'eventText131'),
-      outcome(20, 'eventText132', atNextDawn(1, effects(undefined, [lose('flashlight')])))),
+      outcome(20, 'deathStareLightFlickers', atNextDawn(1))), breakChance: 0.40 },
     choice('umbrella', 'eventText072', 'umbrella',
       outcome(60, 'eventText133'),
       outcome(40, 'eventText134', effects([
@@ -384,7 +383,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(60, 'eventText146'),
       outcome(40, 'eventText116', effects([
         subtract('hull', { min: 20, max: 40 }),
-      ], [breakItem('swimRing')]))),
+      ], [consume('swimRing')]))),
     choice('sleep', 'eventText063', undefined,
       outcome(80, 'eventText116', atNextDawn(0, effects([subtract('hull', { min: 20, max: 40 })]))),
       outcome(30, 'eventText147', atNextDawn(2, effects([subtract('hull', { min: 50, max: 60 })], [loseRandom(1)])))),
@@ -440,7 +439,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(50, 'eventText170'),
       outcome(50, 'eventText171', effects([
         subtract('hull', { min: 10, max: 20 }),
-      ], [breakItem('swimRing')]))),
+      ], [consume('swimRing')]))),
     choice('sleep', 'eventText063', undefined,
       outcome(50, 'eventText171', atNextDawn(1, effects([subtract('hull', { min: 20, max: 30 })]))),
       outcome(50, 'eventText172', effects([subtract('hull', { min: 15, max: 25 })], [loseRandom(1)]))),
@@ -617,35 +616,16 @@ const survivalEvents: SurvivalEventDefinition[] = [
     ),
     contextualChoice('sleep', 'eventText090', outcome(1, 'eventText244', {}, 'tour-pass')),
   ], 40, { minimumPressure: 1, allowedChestStates: ['none'] }),
-  event('night-trader', 'night', 'eventText056', 'safe', 'sighting', 2, 10, 4, [
+  event('night-trader', 'night', 'eventText056', 'safe', 'sighting', 2, 5, 4, [
     ...nightTraderChoices(),
     contextualChoice('sleep', 'eventText096', outcome(1, 'eventText250', {}, 'trader-refuse')),
   ]),
   event('handyman', 'night', 'eventText057', 'dangerous', 'repair', 2, 20, 5, [
-    choice('spyglass', 'eventText097', 'spyglass', outcome(1, 'eventText251', effects(undefined, [lose('spyglass'), gain('flashlight')]), 'handyman-reward')),
-    choice('flashlight', 'eventText098', 'flashlight', outcome(1, 'eventText252', effects(undefined, [lose('flashlight'), gain('spyglass')]), 'handyman-reward')),
-    choice('flareGun', 'eventText099', 'flareGun', outcome(1, 'eventText253', effects(undefined, [consume('flareGun'), gain('shotgun')]), 'handyman-reward')),
-    choice('shotgun', 'eventText100', 'shotgun', outcome(1, 'eventText254', effects(undefined, [consume('shotgun'), gain('flareGun')]), 'handyman-reward')),
-    choice('medicalKit', 'eventText101', 'medicalKit', outcome(1, 'eventText255', effects(undefined, [consume('medicalKit'), gain('scubaSet')]), 'handyman-reward')),
-    choice('fishingNet', 'eventText102', 'fishingNet', outcome(1, 'eventText256', effects(undefined, [lose('fishingNet'), gain('bucket')]), 'handyman-reward')),
-    choice('bucket', 'eventText103', 'bucket', outcome(1, 'eventText257', effects(undefined, [lose('bucket'), gain('fishingNet')]), 'handyman-reward')),
-    choice('ductTape', 'eventText104', 'ductTape', outcome(1, 'eventText258', effects(undefined, [consume('ductTape'), gain('energyBar')]), 'handyman-reward')),
-    choice('energyBar', 'eventText105', 'energyBar', outcome(1, 'eventText259', effects(undefined, [consume('energyBar'), gain('ductTape')]), 'handyman-reward')),
-    choice('swimRing', 'eventText106', 'swimRing', outcome(1, 'eventText260', effects(undefined, [lose('swimRing'), gain('radio')]), 'handyman-reward')),
-    choice('anchor', 'eventText107', 'anchor', outcome(1, 'eventText261', effects(undefined, [lose('anchor'), gainChest()]), 'handyman-reward')),
-    {
-      ...contextualChoice('chest', 'eventText108', outcome(1, 'eventText262', {
-        chest: 'destroy',
-        items: [gain('anchor')],
-      }, 'handyman-reward')),
-      requiredChestState: 'closed',
-    },
-    contextualChoice('touch', 'eventText109', outcome(
-      1,
-      'eventText263',
-      effects([subtract('hull', { min: 30, max: 60 }), subtract('health', 60)]), 'handyman-touch',
-    )),
     contextualChoice('sleep', 'eventText063', outcome(1, 'eventText264', {}, 'handyman-sleep')),
+    ...HANDYMAN_ITEM_IDS.map((id) => choice(id, 'tradeOffer', id,
+      outcome(1, 'tradeCompleted', {}, 'handyman-reward'))),
+    contextualChoice('touch', 'eventText109', outcome(1, 'eventText263',
+      effects([subtract('hull', { min: 30, max: 60 }), subtract('health', 60)]), 'handyman-touch')),
   ], undefined, { minimumPressure: 2 }),
   event('other-people', 'night', 'eventText058', 'safe', 'sighting', 2, 15, 2, [
     choice('radio', 'peopleRadioChoice', 'radio', outcome(
@@ -680,12 +660,12 @@ const survivalEvents: SurvivalEventDefinition[] = [
       effects([add('rescueLead', 4)], [consume('flareGun')]),
       'plane-signaled',
     )),
-    choice('flashlight', 'eventText071', 'flashlight', outcome(
+    { ...choice('flashlight', 'eventText071', 'flashlight', outcome(
       1,
       'eventText269',
       effects([add('rescueLead', 2)]),
       'plane-signaled',
-    )),
+    )), breakChance: 0.05 },
     contextualChoice('sleep', 'eventText110', outcome(
       1,
       'eventText270',

@@ -520,10 +520,23 @@ function validateChoice(
   validateChoiceOutcomes(eventEntry, eventChoice);
 }
 
+function validateChoiceWear(
+  eventEntry: SurvivalEventDefinition,
+  eventChoice: SurvivalEventDefinition['choices'][number],
+): void {
+  if (eventChoice.breakChance !== undefined
+    && (!Number.isFinite(eventChoice.breakChance) || eventChoice.breakChance < 0
+      || eventChoice.breakChance > 1 || eventChoice.itemId === undefined
+      || !ITEM_DEFINITIONS[eventChoice.itemId].breakable)) {
+    throw new Error(`${eventEntry.id}.${eventChoice.id} has an invalid break chance`);
+  }
+}
+
 function validateChoiceOptions(
   eventEntry: SurvivalEventDefinition,
   eventChoice: SurvivalEventDefinition['choices'][number],
 ): void {
+  validateChoiceWear(eventEntry, eventChoice);
   if (Object.hasOwn(eventChoice, 'companionAction')) {
     const path = `${eventEntry.id}.${eventChoice.id} companion action`;
     assertPlainObject(eventChoice.companionAction, path);

@@ -1,5 +1,5 @@
 import { describe,expect,it } from 'vitest';
-import { ITEM_DEFINITIONS,type ItemId } from '../src/game/ItemState';
+import { ITEM_DEFINITIONS, type ItemId } from '../src/game/ItemState';
 import { DRIFTING_LOOT_POOLS,drawDriftingLoot } from '../src/survival/driftingLoot';
 import { DRIFTING_SUPPLY_KINDS } from '../src/survival/driftingSupplies';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
@@ -23,6 +23,15 @@ describe('drifting loot', () => {
       expect(items).toHaveLength(index < 95 ? 1 : 0);
       for (const item of items) expect(owned.has(item.id as ItemId)).toBe(false);
     }
+  });
+
+  it('does not award owned consumables', () => {
+    const rewards = drawDriftingLoot(
+      'barrel',
+      new Set(['ductTape', 'energyBar']),
+      sequenceRandom([0, 0, 0, 0]),
+    );
+    expect(rewards.filter((reward) => reward.kind === 'item')).toEqual([]);
   });
 
   it('saves and restores all rewards in a bundle', () => {

@@ -46,7 +46,8 @@ function formatFishing(record: JournalFishingRecord): string {
     const key = record.result === 'utility' ? 'fishUtility' : record.result === 'junk' ? 'fishJunk' : 'fishFood';
     sentence = t(key, label);
   }
-  return record.baitConsumed ? `${sentence} ${t('bait')}` : sentence;
+  return [sentence, record.baitConsumed ? t('bait') : '',
+    formatJournalMutations(record.inventoryMutations)].filter(Boolean).join(' ');
 }
 
 function formatCarlitos(record: JournalCarlitosCareRecord | JournalCarlitosDawnRecord): string {
@@ -110,6 +111,7 @@ function formatSurvivalAction(record: JournalSurvivalActionRecord): string {
     case 'treat': sentence = t('treated'); break;
     case 'repair': sentence = t('repaired'); break;
     case 'repairItem': sentence = t('repairedItem'); break;
+    case 'discardItem': sentence = ''; break;
     case 'dive': sentence = formatDive(record); break;
   }
   return [sentence, formatJournalMutations(record.inventoryMutations)].filter(Boolean).join(' ');

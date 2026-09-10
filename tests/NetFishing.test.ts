@@ -38,7 +38,7 @@ describe('net fishing', () => {
   });
 
   it('automatically settles one catch once, leaves bait and the net intact, and blocks other actions', () => {
-    const game = session();
+    const game = session(3, [0, 0, 0.20]);
     const before = game.snapshot();
     const begun = game.beginFishing('net');
     if (!begun.accepted) throw new Error('Net unavailable');

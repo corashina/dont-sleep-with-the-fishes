@@ -5,6 +5,7 @@ import {
   type ItemId,
 } from '../game/ItemState';
 import type { ItemCondition } from './survivalTypes';
+import { drawMissingItem, missingItemRewards } from './itemRewards';
 import { SURVIVAL_BALANCE } from './survivalBalance';
 import type { SimpleJunkId } from './JunkCatchModels';
 
@@ -299,10 +300,10 @@ function catchWeight(
   return weight;
 }
 
-const BACKPACK_ITEM_IDS = ITEM_IDS.filter((id) => ITEM_DEFINITIONS[id].weight === 1);
+const BACKPACK_ITEM_IDS = ITEM_IDS.filter((id) => id !== 'carlitos');
 
 function missingBackpackItems(activeItemIds: ReadonlySet<ItemId>): readonly ItemId[] {
-  return BACKPACK_ITEM_IDS.filter((id) => !activeItemIds.has(id));
+  return missingItemRewards(activeItemIds, BACKPACK_ITEM_IDS);
 }
 
 function resolveBackpackCatch(
@@ -310,8 +311,13 @@ function resolveBackpackCatch(
   activeItemIds: ReadonlySet<ItemId>,
   roll: number,
 ): FishingCatchDefinition {
-  const candidates = missingBackpackItems(activeItemIds);
-  const itemId = candidates[Math.min(candidates.length - 1, Math.floor(roll * candidates.length))]!;
+  const itemId = drawMissingItem(
+    activeItemIds,
+    BACKPACK_ITEM_IDS,
+    { next: () => roll },
+    (candidate) => candidate === 'scubaSet' ? 3 : 1,
+  );
+  if (itemId === null) throw new Error('Backpack reward pool is empty.');
   return Object.freeze({
     ...definition,
     get label() { return catchLabel('backpack'); },

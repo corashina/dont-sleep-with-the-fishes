@@ -1,5 +1,5 @@
 import { describe,expect,it } from 'vitest';
-import { ITEM_DEFINITIONS,ITEM_IDS,type ItemId } from '../src/game/ItemState';
+import { ITEM_IDS,type ItemId } from '../src/game/ItemState';
 import { eligibleFishingCatches,selectFishingCatch } from '../src/survival/fishingCatalog';
 import { fishingSettlement } from '../src/survival/fishingSettlementRules';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
@@ -10,7 +10,7 @@ import { journalItemChanges } from '../src/survival/journalItemChanges';
 
 describe('fishing backpack', () => {
   it.each(['map', 'cannedFood', 'baitTin'] as const)('settles and saves a missing %s exactly once', (missing) => {
-    const saved = ITEM_IDS.filter((id) => ITEM_DEFINITIONS[id].weight === 1 && id !== missing)
+    const saved = ITEM_IDS.filter((id) => id !== missing)
       .map((type) => ({ type, instanceId: `${type}-1` as const }));
     const session = new SurvivalSession(saved, {
       seed: 24, initialConditions: { 'compass-1': 'broken' },
@@ -44,18 +44,35 @@ describe('fishing backpack', () => {
       .toEqual([{ itemId: missing, kind: 'gain' }]);
   });
 
-  it('can award every missing weight-1 item, with equal odds', () => {
-    const candidates = ITEM_IDS.filter((id) => ITEM_DEFINITIONS[id].weight === 1);
-    for (const [index, itemId] of candidates.entries()) {
-      const roll = 0.96 + 0.04 * (index + 0.5) / candidates.length;
-      const caught = selectFishingCatch(0, false, roll);
+  it('can award every missing item except Carlitos', () => {
+    const candidates = ITEM_IDS.filter((id) => id !== 'carlitos');
+    for (const itemId of candidates) {
+      const owned = new Set<ItemId>(candidates.filter((candidate) => candidate !== itemId));
+      const caught = selectFishingCatch(0, false, 0.95, owned);
       expect(caught).toMatchObject({ id: 'backpack', reward: { kind: 'item', itemId, condition: 'usable' } });
     }
   });
 
+  it('gives scuba gear three times the backpack weight of other items', () => {
+    const owned = new Set<ItemId>(ITEM_IDS.filter((itemId) => (
+      itemId !== 'compass' && itemId !== 'scubaSet'
+    )));
+    expect(selectFishingCatch(0, false, 0.924999, owned).reward).toMatchObject({ itemId: 'compass' });
+    expect(selectFishingCatch(0, false, 0.925, owned).reward).toMatchObject({ itemId: 'scubaSet' });
+  });
+
+  it.each([
+    ['rod', 0.899999, false],
+    ['rod', 0.90, true],
+    ['net', 0.849999, false],
+    ['net', 0.85, true],
+  ] as const)('uses the %s backpack chance at roll %s', (gear, roll, isBackpack) => {
+    expect(selectFishingCatch(0, false, roll, new Set(), 1, gear).id === 'backpack').toBe(isBackpack);
+  });
+
   it('only awards the missing item and disappears when all eligible items are present', () => {
     const present = new Set<ItemId>(ITEM_IDS.filter((id) => id !== 'map'));
-    for (const roll of [0.96, 0.98, 0.999999]) {
+    for (const roll of [0.90, 0.95, 0.999999]) {
       expect(selectFishingCatch(3, true, roll, present).reward).toMatchObject({ itemId: 'map' });
     }
     present.add('map');
@@ -65,7 +82,7 @@ describe('fishing backpack', () => {
 
   it('awards the item without consuming bait and names the contents', () => {
     const present = new Set(ITEM_IDS.filter((id) => id !== 'map'));
-    const caught = selectFishingCatch(3, true, 0.98, present);
+    const caught = selectFishingCatch(3, true, 0.95, present);
     expect(fishingSettlement({ kind: 'catch', catch: caught }, true)).toMatchObject({
       code: 'utility-caught', baitConsumed: false, deltas: {},
       itemReward: { itemId: 'map', condition: 'usable' },

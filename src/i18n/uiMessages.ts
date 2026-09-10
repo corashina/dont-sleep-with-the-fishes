@@ -193,19 +193,19 @@ export const uiCatalog = {
     "es-AR": "MIRÁ ADELANTE"
   },
   "repairTarget": {
-    "en": "Repair target",
-    "pl": "Przedmiot do naprawy",
-    "es-AR": "Objeto para reparar"
+    "en": "Broken item actions",
+    "pl": "Działania dla uszkodzonych przedmiotów",
+    "es-AR": "Acciones para objetos rotos"
   },
   "chooseRepair": {
-    "en": "Choose an item to repair",
-    "pl": "Wybierz przedmiot do naprawy",
-    "es-AR": "Elegí un objeto para reparar"
+    "en": "Choose what to do with a broken item",
+    "pl": "Wybierz działanie dla uszkodzonego przedmiotu",
+    "es-AR": "Elegí qué hacer con un objeto roto"
   },
   "cancelRepair": {
-    "en": "Cancel repair",
-    "pl": "Anuluj naprawę",
-    "es-AR": "Cancelar reparación"
+    "en": "Cancel broken item actions",
+    "pl": "Anuluj działania dla uszkodzonego przedmiotu",
+    "es-AR": "Cancelar acciones para objetos rotos"
   },
   "cancel": {
     "en": "CANCEL",
@@ -540,9 +540,19 @@ export const uiCatalog = {
     "es-AR": "1 CINTA ADHESIVA"
   },
   "restoreItem": {
-    "en": "Restore one broken item",
-    "pl": "Napraw jeden uszkodzony przedmiot",
-    "es-AR": "Restaurar un objeto roto"
+    "en": "Restore one broken item. No repair limit.",
+    "pl": "Napraw jeden uszkodzony przedmiot. Bez limitu napraw.",
+    "es-AR": "Restaurar un objeto roto. Sin límite de reparaciones."
+  },
+  "discardItem": {
+    "en": "DISCARD",
+    "pl": "WYRZUĆ",
+    "es-AR": "DESCARTAR"
+  },
+  "brokenItemHelp": {
+    "en": "Choose Repair or Discard.",
+    "pl": "Wybierz naprawę lub wyrzucenie.",
+    "es-AR": "Elegí Reparar o Descartar."
   },
   "answerRadio": {
     "en": "ANSWER RADIO",
