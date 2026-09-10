@@ -31,7 +31,7 @@ export function sampleUnderUsReveal(progress: number, pose: UnderUsPose): void {
 export function sampleUnderUsReaction(choice: string, progress: number, pose: UnderUsPose): void {
   const leave = smoothstep((progress - 0.15) / 0.85);
   const impact = choice === 'flashlight' ? pulse(progress, 0.03, 0.18, 0.5) : 0;
-  pose.x = choice === 'baitTin' ? 13 * leave : -5 * leave;
+  pose.x = choice === 'baitTin' || choice === 'cannedFood' ? 13 * leave : -5 * leave;
   pose.z = -6 * leave;
   pose.opacity = 0.78 * (1 - leave);
   pose.light = choice === 'flashlight' ? 1 - smoothstep(progress / 0.52) : 0;

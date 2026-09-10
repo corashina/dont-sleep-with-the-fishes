@@ -13,7 +13,7 @@ beforeEach(() => initializeLanguage(null));
 describe('event translations', () => {
   it('updates an existing event definition after the language changes', () => {
     const event = survivalEventById('dangerous-waters')!;
-    const choice = event.choices[0]!;
+    const choice = event.choices.find(({ id }) => id === 'map')!;
     const outcome = choice.outcomes[0]!;
 
     expect(event.title).toBe('Dangerous Waters');
@@ -59,7 +59,7 @@ describe('event translations', () => {
     expect(spanish).toHaveLength(english.length);
     expect(spanish.every(text => text.trim().length > 0)).toBe(true);
     expect(survivalEventById('dangerous-waters')!.title).toBe('Aguas peligrosas');
-    expect(survivalEventById('dangerous-waters')!.choices[0]!.label).toBe('Usá el mapa');
+    expect(survivalEventById('dangerous-waters')!.choices.find(({ id }) => id === 'map')!.label).toBe('Usá el mapa');
   });
 
   it('assigns stable result IDs and resolves saved outcome text', () => {

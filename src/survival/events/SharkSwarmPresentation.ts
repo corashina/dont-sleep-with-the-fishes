@@ -36,6 +36,8 @@ import {
   swarmItemDuration,
   SWARM_SHARK_COUNT,
   SWARM_REACTION_DURATION,
+  SWARM_DIVERSION_DURATION,
+  SWARM_DISTRACTION_TARGET,
   SWARM_REVEAL_DURATION,
   type SwarmSharkPose,
   type SwarmSample,
@@ -101,11 +103,12 @@ function supportedChoice(choiceId: string): boolean {
     || choiceId === 'shotgun'
     || choiceId === 'flashlight'
     || choiceId === 'baitTin'
+    || choiceId === 'cannedFood'
     || choiceId === 'bait';
 }
 
 function sceneChoiceId(choiceId: string): string {
-  return choiceId === 'bait' ? 'baitTin' : choiceId;
+  return choiceId === 'bait' || choiceId === 'cannedFood' ? 'baitTin' : choiceId;
 }
 
 export class SharkSwarmPresentation implements DedicatedEventPresentation {
@@ -215,6 +218,8 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
   stage(context: EventSceneContext): void {
     if (this.disposed || context.eventId !== this.eventId) return;
     this.clear();
+    this.sharks[0]!.root.add(this.itemAimTarget);
+    this.itemAimTarget.position.set(0, 0.08, 0.22);
     const variants = createSwarmVariants(SWARM_SHARK_COUNT, context.variantSeed);
     for (let index = 0; index < this.sharks.length; index += 1) {
       const variant = variants[index] ?? DEFAULT_VARIANT;
@@ -247,6 +252,10 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
     }
     this.animation.cancel();
     this.activeChoiceId = choiceId;
+    if (sceneChoiceId(choiceId) === 'baitTin') {
+      this.worldRoot.add(this.itemAimTarget);
+      this.itemAimTarget.position.set(SWARM_DISTRACTION_TARGET.x, WATERLINE, SWARM_DISTRACTION_TARGET.z);
+    }
     sampleSwarmItemUse(sceneChoiceId(choiceId), 0, this.sample);
     this.applySample(0);
     return this.animation.start(
@@ -273,7 +282,8 @@ export class SharkSwarmPresentation implements DedicatedEventPresentation {
     this.worldRoot.userData.baitDelta = this.reactionState.baitDelta;
     sampleSwarmReaction(this.reactionState, 0, this.sample);
     this.applySample(0);
-    return this.animation.start('reaction', SWARM_REACTION_DURATION);
+    const diverted = this.reactionState.foodDelta < 0 || this.reactionState.baitDelta < 0;
+    return this.animation.start('reaction', diverted ? SWARM_DIVERSION_DURATION : SWARM_REACTION_DURATION);
   }
 
   update(time: number, delta: number): void {

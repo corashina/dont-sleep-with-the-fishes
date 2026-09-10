@@ -20,7 +20,7 @@ import {
 } from '../world/SceneResources';
 import type { ItemInstanceId } from '../game/ItemState';
 import { clamp01, smoothstep, type TimedAnimation } from './animationMath';
-import { scaleEventItemDuration } from './eventItemTiming';
+import { eventItemUseDurationForItem } from './eventItemUseChoreography';
 import type { ActionOutcome } from './survivalTypes';
 
 export interface DangerousWatersBoatReaction {
@@ -35,7 +35,8 @@ export interface DangerousWatersBoatReaction {
   supplyLift: number;
 }
 
-type DangerousWatersChoiceId = 'map' | 'compass' | 'sleep';
+type DangerousWatersChoiceId = 'map' | 'compass' | 'anchor' | 'spyglass' | 'sleep';
+type DangerousWatersItemChoiceId = Exclude<DangerousWatersChoiceId, 'sleep'>;
 type MotionKind = 'reveal' | 'choice' | 'safe' | 'damage' | 'severe';
 
 type ActiveMotion = TimedAnimation<MotionKind, {
@@ -61,9 +62,33 @@ interface DangerousWatersMaterials {
 
 const REVEAL_DURATION = 2.4;
 const CHOICE_DURATION = 1.1;
-export const DANGEROUS_WATERS_ITEM_DURATION = scaleEventItemDuration(CHOICE_DURATION);
+export const DANGEROUS_WATERS_ITEM_DURATION = eventItemUseDurationForItem('map-read', 'map');
 const REACTION_DURATION = 0.9;
 const FRAGMENT_COUNT = 8;
+
+function isDangerousWatersChoiceId(choiceId: string): choiceId is DangerousWatersChoiceId {
+  return choiceId === 'map'
+    || choiceId === 'compass'
+    || choiceId === 'anchor'
+    || choiceId === 'spyglass'
+    || choiceId === 'sleep';
+}
+
+function isDangerousWatersItemChoiceId(choiceId: string): choiceId is DangerousWatersItemChoiceId {
+  return choiceId === 'map'
+    || choiceId === 'compass'
+    || choiceId === 'anchor'
+    || choiceId === 'spyglass';
+}
+
+function itemUseDuration(choiceId: DangerousWatersItemChoiceId): number {
+  switch (choiceId) {
+    case 'map': return eventItemUseDurationForItem('map-read', 'map');
+    case 'compass': return eventItemUseDurationForItem('compass-search', 'compass');
+    case 'anchor': return eventItemUseDurationForItem('anchor-drop', 'anchor');
+    case 'spyglass': return eventItemUseDurationForItem('binocular-look', 'spyglass');
+  }
+}
 
 const ADDITIONAL_ROCK_PLACEMENTS: readonly Readonly<{
   name: string;
@@ -347,26 +372,23 @@ export class DangerousWatersPresentation {
   }
 
   playChoice(choiceId: string): Promise<void> {
-    if (
-      this.disposed
-      || (choiceId !== 'map' && choiceId !== 'compass' && choiceId !== 'sleep')
-    ) return Promise.resolve();
+    if (this.disposed || !isDangerousWatersChoiceId(choiceId)) return Promise.resolve();
     this.resultBaseChoiceId = null;
     return this.startMotion('choice', choiceId, CHOICE_DURATION);
   }
 
   playItemUse(choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
-    if (
-      this.disposed
-      || (choiceId !== 'map' && choiceId !== 'compass')
-    ) return Promise.resolve(false);
+    if (this.disposed || !isDangerousWatersItemChoiceId(choiceId)) {
+      return Promise.resolve(false);
+    }
+    const duration = itemUseDuration(choiceId);
     this.cancelActiveMotion();
     this.resultBaseChoiceId = null;
     return new Promise((resolve) => {
       this.beginMotion(
         'choice',
         choiceId,
-        DANGEROUS_WATERS_ITEM_DURATION,
+        duration,
         true,
         () => resolve(true),
         () => resolve(false),
@@ -416,19 +438,18 @@ export class DangerousWatersPresentation {
 
   settleForVisibilityChange(): void {
     if (this.disposed) return;
-    this.heldChoiceId = null;
-    this.resultBaseChoiceId = null;
     if (this.activeMotion === null) {
-      this.heldKind = 'reveal';
-      this.heldProgress = 1;
-      this.applyPose('reveal', 1, null);
+      if (this.heldKind === 'reveal') this.heldProgress = 1;
+      const choiceId = this.heldKind === 'choice' ? this.heldChoiceId : null;
+      this.applyPose(this.heldKind, this.heldProgress, choiceId);
       return;
     }
     const motion = this.activeMotion;
     this.activeMotion = null;
-    this.heldKind = motion.kind === 'choice' ? 'reveal' : motion.kind;
+    this.heldKind = motion.kind;
     this.heldProgress = 1;
-    this.applyPose(this.heldKind, 1, null);
+    this.heldChoiceId = motion.kind === 'choice' ? motion.choiceId : null;
+    this.applyPose(this.heldKind, 1, this.heldChoiceId);
     motion.resolve();
   }
 
@@ -583,6 +604,15 @@ export class DangerousWatersPresentation {
     const lift = smoothstep(Math.min(1, progress / 0.55));
     if (choiceId === 'compass') {
       this.boatReaction.yaw -= pulse * 0.014 + lift * 0.035;
+    } else if (choiceId === 'anchor') {
+      const stop = smoothstep(Math.min(1, progress / 0.72));
+      this.boatReaction.driftX -= stop * 0.24;
+      this.boatReaction.pitch += pulse * 0.018;
+      this.boatReaction.roll -= pulse * 0.012;
+    } else if (choiceId === 'spyglass') {
+      const scan = Math.sin(Math.PI * 2 * progress);
+      this.passage.position.x = scan * 0.55;
+      this.boatReaction.roll -= scan * 0.008;
     } else if (choiceId === 'sleep') {
       this.boatReaction.driftX -= lift * 0.12;
       this.boatReaction.lightScale -= pulse * 0.36 + lift * 0.22;
@@ -591,7 +621,7 @@ export class DangerousWatersPresentation {
   }
 
   private applySafePose(progress: number): void {
-    if (this.resultBaseChoiceId === 'map') return;
+    if (this.resultBaseChoiceId === 'map' || this.resultBaseChoiceId === 'anchor') return;
     const eased = smoothstep(progress);
     this.boatReaction.driftX -= eased * 0.48;
     this.boatReaction.yaw -= Math.sin(Math.PI * progress) * 0.028;

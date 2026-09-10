@@ -1,12 +1,15 @@
 import { clamp01, pulse, smoothstep } from '../animationMath';
 import { scaleEventItemDuration } from '../eventItemTiming';
+import { eventItemUseDurationForItem } from '../eventItemUseChoreography';
+import { sampleNetAttackContact } from '../netAttackChoreography';
 
 export const SNATCHER_REVEAL_DURATION = 2.5;
 export const SNATCHER_ITEM_DURATION = scaleEventItemDuration(1.15);
 export const SNATCHER_REACTION_DURATION = 1.2;
 const SNATCHER_REVEAL_DEPTH = 2.4;
 
-export function snatcherItemDuration(_choiceId: string): number {
+export function snatcherItemDuration(choiceId: string): number {
+  if (choiceId === 'fishingNet') return eventItemUseDurationForItem('net-slap', 'fishingNet');
   return SNATCHER_ITEM_DURATION;
 }
 
@@ -91,12 +94,12 @@ export function sampleSnatcherItemUse(
   output: SnatcherSample,
 ): boolean {
   resetSnatcherSample(output);
-  if (choiceId !== 'shotgun' && choiceId !== 'knife') return false;
+  if (choiceId !== 'shotgun' && choiceId !== 'knife' && choiceId !== 'fishingNet') return false;
 
   holdCrouchedThreat(output);
   const t = clamp01(progress);
   if (t === 0 || t === 1) return true;
-  const action = choiceId === 'knife'
+  const action = choiceId === 'fishingNet' ? sampleNetAttackContact(t) : choiceId === 'knife'
     ? pulse(t, 0.52, 0.7, 0.84)
     : pulse(t, 0.16, 0.56, 0.9);
   output.recoilStrength = action;

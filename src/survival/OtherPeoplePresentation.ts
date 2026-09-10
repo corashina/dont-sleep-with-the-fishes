@@ -29,6 +29,7 @@ import { eventSideFromSeed, type EventSide } from './eventVariant';
 import {
   clamp01Unchecked as clamp01,
   smoothstepUnchecked as smoothstep,
+  pulse,
 } from './animationMath';
 import type {
   EventChoicePresentation,
@@ -47,6 +48,7 @@ type OtherPeopleAnimationKind =
   | 'choice-flashlight'
   | 'choice-pass'
   | 'result-rescue'
+  | 'result-radio-answer'
   | 'result-pass';
 
 const REVEAL_DURATION = 3.4;
@@ -289,6 +291,9 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
     if (!this.staged) this.stage();
     this.ensureShipPresented();
     switch (choice.choiceId) {
+      case 'radio':
+        this.root.userData.state = 'calling';
+        return Promise.resolve();
       case 'flareGun':
         this.root.userData.state = 'flare-sent';
         return Promise.resolve();
@@ -334,6 +339,10 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
       case 'people-signaled':
         this.animation.settle();
         this.setPlayerSignalsDark();
+        if (result.choiceId === 'radio') {
+          this.root.userData.state = 'answering-radio';
+          return this.startAnimation('result-radio-answer', 1.4);
+        }
         this.root.userData.state = 'signal-sent';
         return Promise.resolve();
       case 'people-rescue': {
@@ -426,6 +435,13 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   ): void {
     const normalized = clamp01(progress);
     switch (kind) {
+      case 'result-radio-answer':
+        this.setBeaconMaterialIntensity(
+          this.starboardBeaconMaterial,
+          HORIZON_LIGHT_INTENSITY + pulse(normalized, 0.1, 0.4, 0.8) * 3.2,
+        );
+        if (normalized >= 0.4) this.root.userData.answerPulses = 1;
+        break;
       case 'reveal':
         this.applyReveal(normalized);
         break;
@@ -447,6 +463,9 @@ export class OtherPeoplePresentation implements FocusedEventPresentation {
   private finishAnimation(kind: OtherPeopleAnimationKind): void {
     this.applyAnimation(kind, 1);
     switch (kind) {
+      case 'result-radio-answer':
+        this.root.userData.state = 'signal-sent';
+        break;
       case 'reveal':
         this.root.userData.state = 'revealed';
         break;

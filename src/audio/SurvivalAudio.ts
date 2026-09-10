@@ -298,7 +298,8 @@ export class SurvivalAudio {
     }
     if (itemId === 'radio') {
       this.clearRadioSignal();
-      this.beginRadioSignal(() => undefined);
+      if (cueIndex === 1) this.scope.play('radioReply');
+      else this.beginRadioSignal(() => undefined);
       return;
     }
     if (itemId === 'flareGun') {

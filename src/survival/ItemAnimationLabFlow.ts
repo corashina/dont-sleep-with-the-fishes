@@ -438,10 +438,11 @@ export class ItemAnimationLabFlow {
         instanceId,
         (cueIndex) => {
           if (this.isCurrent(generation, operation)) {
-            this.dependencies.audio.eventItemCue?.(itemType, cueIndex);
+            this.dependencies.audio.eventItemCue?.(
+              itemType, eventId === 'other-people' && itemType === 'radio' ? 1 : cueIndex,
+            );
           }
         },
-        itemType === 'radio',
       ) ?? Promise.resolve();
     }
     if (itemType === 'umbrella') this.dependencies.audio.eventItem?.(itemType);

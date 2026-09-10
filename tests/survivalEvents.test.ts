@@ -206,7 +206,6 @@ describe('survival events', () => {
     rejects((catalog) => { catalog[0].weight = 0; }, /event.*weight/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].weight = 0; }, /outcome.*weight/i);
     rejects((catalog) => { catalog[0].choices[0].itemId = 'telescope'; }, /unknown item/i);
-    rejects((catalog) => { catalog[0].choices[0].itemId = 'radio'; }, /event-choice-excluded item/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.resources = [add('danger', 1)]; }, /unknown resource/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects.resources = [subtract('hull', { min: 4, max: 3 })]; }, /invalid range/i);
     rejects((catalog) => { catalog[0].choices[0].outcomes[0].effects = null; }, /effects/i);

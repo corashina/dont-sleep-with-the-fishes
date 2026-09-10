@@ -75,7 +75,7 @@ export const itemDescription = defineMessages({
   flareGun: { en: "Fires one signal flare.", pl: "Wystrzeliwuje jedną flarę sygnałową.", "es-AR": "Dispara una bengala de señalización." },
   scubaSet: { en: "Enables dives beneath the lifeboat.", pl: "Umożliwia nurkowanie pod szalupą.", "es-AR": "Te permite bucear debajo del bote salvavidas." },
   anchor: { en: "Holds the lifeboat against dangerous water.", pl: "Stabilizuje szalupę na niebezpiecznych wodach.", "es-AR": "Mantiene firme el bote salvavidas en aguas peligrosas." },
-  radio: { en: "Receives brief signals and transmits your position for one energy.", pl: "Odbiera krótkie sygnały i nadaje twoją pozycję za jeden punkt energii.", "es-AR": "Recibe señales breves y transmite tu posición por un punto de energía." },
+  radio: { en: "Answers brief signals for one Energy. Calling a passing crew costs sleep.", pl: "Odpowiada na krótkie sygnały za jedną energię. Wywołanie mijającej załogi kosztuje sen.", "es-AR": "Responde señales breves por una energía. Llamar a una tripulación que pasa cuesta sueño." },
   umbrella: { en: "Provides cover from rain, sun, and strange sights.", pl: "Osłania przed deszczem, słońcem i dziwnymi widokami.", "es-AR": "Te cubre de la lluvia, el sol y las visiones extrañas." },
   swimRing: { en: "Provides emergency flotation.", pl: "Zapewnia awaryjną pomoc w utrzymaniu się na wodzie.", "es-AR": "Te mantiene a flote en una emergencia." },
   flashlight: { en: "Improves visibility in darkness.", pl: "Poprawia widoczność w ciemności.", "es-AR": "Mejora la visibilidad en la oscuridad." },

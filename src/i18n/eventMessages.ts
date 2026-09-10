@@ -5,6 +5,23 @@ import type {
 } from '../survival/survivalTypes';
 
 const EVENT_TEXT = {
+  snatcherNetChoice: { en: 'Strike the tentacle with the Net — may tear', pl: 'Uderz mackę siecią — może się rozerwać', 'es-AR': 'Golpeá el tentáculo con la red — puede romperse' },
+  snatcherNetHeld: { en: 'The net drives the tentacle away. Your supplies stay aboard.', pl: 'Sieć odpędza mackę. Zapasy zostają na pokładzie.', 'es-AR': 'La red aleja al tentáculo. Tus provisiones quedan a bordo.' },
+  snatcherNetTorn: { en: 'The net tears as you strike. The tentacle retreats without your supplies.', pl: 'Sieć pęka przy uderzeniu. Macka wycofuje się bez zapasów.', 'es-AR': 'La red se rompe con el golpe. El tentáculo se retira sin tus provisiones.' },
+  sharksFoodChoice: { en: 'Throw 2 Food away from the boat', pl: 'Rzuć 2 jedzenia z dala od łodzi', 'es-AR': 'Tirá 2 de comida lejos del bote' },
+  sharksFoodResult: { en: 'The sharks follow the food away from the boat.', pl: 'Rekiny podążają za jedzeniem, oddalając się od łodzi.', 'es-AR': 'Los tiburones siguen la comida y se alejan del bote.' },
+  underUsFoodChoice: { en: 'Throw 1 Food away from the boat', pl: 'Rzuć 1 jedzenie z dala od łodzi', 'es-AR': 'Tirá 1 de comida lejos del bote' },
+  underUsFoodResult: { en: 'The shadow follows the food. The boat settles, and you can sleep.', pl: 'Cień podąża za jedzeniem. Łódź opada i możesz zasnąć.', 'es-AR': 'La sombra sigue la comida. El bote baja y podés dormir.' },
+  windTapeChoice: { en: 'Tape down supplies — spend Tape; hull damage remains', pl: 'Przyklej zapasy — zużyjesz taśmę; kadłub nadal ucierpi', 'es-AR': 'Sujetá las provisiones — gastás cinta; el casco igual sufre daños' },
+  windTapeResult: { en: 'The tape holds your supplies in place. The wind still batters the hull.', pl: 'Taśma utrzymuje zapasy na miejscu. Wiatr nadal niszczy kadłub.', 'es-AR': 'La cinta mantiene tus provisiones en su lugar. El viento igual golpea el casco.' },
+  watersAnchorChoice: { en: 'Drop the Anchor before the rocks — may break', pl: 'Rzuć kotwicę przed skałami — może pęknąć', 'es-AR': 'Soltá el ancla antes de las rocas — puede romperse' },
+  watersAnchorHeld: { en: 'The anchor catches in the shallows. The boat stops before the rocks.', pl: 'Kotwica zahacza o płytkie dno. Łódź zatrzymuje się przed skałami.', 'es-AR': 'El ancla se afirma en el fondo poco profundo. El bote frena antes de las rocas.' },
+  watersAnchorBroke: { en: 'The anchor breaks under the strain. The hull scrapes a rock as the boat slips past.', pl: 'Kotwica pęka pod naporem. Kadłub ociera się o skałę, gdy łódź przepływa obok.', 'es-AR': 'El ancla se rompe por la tensión. El casco raspa una roca al pasar.' },
+  watersLookoutChoice: { en: 'Find a gap with Binoculars — lose 1 Energy at dawn; may scrape rocks', pl: 'Znajdź przejście lornetką — stracisz 1 energię o świcie; możliwe otarcie o skały', 'es-AR': 'Buscá un paso con binoculares — perdés 1 de energía al amanecer; podés rozar rocas' },
+  watersLookoutSafe: { en: 'You find a gap between the rocks. Keeping watch leaves you tired at dawn.', pl: 'Znajdujesz przejście między skałami. Czuwanie męczy cię do świtu.', 'es-AR': 'Encontrás un paso entre las rocas. La vigilia te deja cansado al amanecer.' },
+  watersLookoutScrape: { en: 'You spot the gap late. The hull scrapes a rock, and the lookout costs you sleep.', pl: 'Za późno dostrzegasz przejście. Kadłub ociera się o skałę, a czuwanie odbiera ci sen.', 'es-AR': 'Ves el paso tarde. El casco raspa una roca y la vigilia te quita el sueño.' },
+  peopleRadioChoice: { en: 'Call them on the Radio — lose 1 Energy at dawn', pl: 'Wywołaj ich przez radio — stracisz 1 energię o świcie', 'es-AR': 'Llamalos por radio — perdés 1 de energía al amanecer' },
+  peopleRadioResult: { en: 'The crew answers your call and flashes a light. They will pass your location on. Talking costs you sleep.', pl: 'Załoga odpowiada na wywołanie i błyska światłem. Przekażą twoje położenie dalej. Rozmowa odbiera ci sen.', 'es-AR': 'La tripulación responde y hace una señal de luz. Van a comunicar tu ubicación. La charla te quita el sueño.' },
   ufoTitle: { en: 'Flying Saucer', pl: 'Latający spodek', 'es-AR': 'Platillo volador' },
   eventTestAbduction: { en: 'Abduction Ending', pl: 'Zakończenie: porwanie', 'es-AR': 'Final: abducción' },
   ufoReveal: { en: 'A silent disc crosses the stars. Its cold lights search the sea. Keep your head down.', pl: 'Cichy dysk przesłania gwiazdy. Jego zimne światła przeszukują morze. Nie wychylaj się.', 'es-AR': 'Un disco silencioso cruza las estrellas. Sus luces frías registran el mar. Mantené la cabeza baja.' },

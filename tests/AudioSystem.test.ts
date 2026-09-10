@@ -211,6 +211,14 @@ describe('AudioSystem', () => {
     expect(backend.voices.filter(({ id }) => id.startsWith('catMeow'))).toHaveLength(1);
   });
 
+  it('plays the crew call without requiring an incoming radio signal', () => {
+    const backend = new FakeAudioBackend();
+    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
+    audio.eventItemCue('radio', 1);
+    expect(backend.voices.map(({ id }) => id)).toEqual(['radioReply']);
+    audio.dispose();
+  });
+
   it('plays an incoming radio signal until it ends or the player answers', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());

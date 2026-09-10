@@ -281,6 +281,32 @@ function createSessionRig(
 }
 
 describe('event selection contracts', () => {
+  it('offers the Radio to call a crew and routes its reply through the event flow', async () => {
+    const rig = createSessionRig(new SurvivalSession([
+      { instanceId: 'radio-1', type: 'radio' },
+    ], {
+      seed: 41, random: sequenceRandom([0]),
+      initial: { day: 20, energy: 0, hunger: 0, food: 3 },
+      initialEventId: 'other-people',
+    }));
+    await rig.flow.revealPending(rig.realSession.snapshot());
+    expect(rig.world.setEventEligibleItems).toHaveBeenLastCalledWith(new Set(['radio-1']));
+
+    rig.flow.resolveItem('radio', 'radio-1');
+    await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
+
+    expect(rig.world.playEventItemUse).toHaveBeenCalledWith(
+      'other-people', 'radio', 'radio-1', expect.any(Function),
+    );
+    expect(rig.audio.eventItemCue).toHaveBeenCalledExactlyOnceWith('radio', 1);
+    expect(rig.realSession.snapshot()).toMatchObject({
+      rescueLead: 5, energy: 2, ending: null,
+      inventory: { 'radio-1': { condition: 'usable' } },
+    });
+    expect(rig.onInvariantError).not.toHaveBeenCalled();
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['spyglass', 'flashlight', 'lost'],
     ['flareGun', 'shotgun', 'consumed'],
