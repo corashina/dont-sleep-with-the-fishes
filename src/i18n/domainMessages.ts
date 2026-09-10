@@ -1,6 +1,11 @@
 import { defineMessages } from './messages';
 
 export const DOMAIN_MESSAGES = {
+  rested: { en: 'Rested', pl: 'Wypoczęty', 'es-AR': 'Descansado' },
+  tired: { en: 'Tired', pl: 'Zmęczony', 'es-AR': 'Cansado' },
+  exhausted: { en: 'Exhausted', pl: 'Wyczerpany', 'es-AR': 'Agotado' },
+  carlitosTired: { en: 'Carlitos is tired. He must rest before helping.', pl: 'Carlitos jest zmęczony. Musi odpocząć, zanim pomoże.', 'es-AR': 'Carlitos está cansado. Debe descansar antes de ayudar.' },
+  carlitosExhausted: { en: 'Carlitos is exhausted. He must rest before helping.', pl: 'Carlitos jest wyczerpany. Musi odpocząć, zanim pomoże.', 'es-AR': 'Carlitos está agotado. Debe descansar antes de ayudar.' },
   chooseDiscard: { en: 'Choose a broken item to discard.', pl: 'Wybierz uszkodzony przedmiot do wyrzucenia.', 'es-AR': 'Elegí un objeto roto para descartar.' },
   itemDiscarded: { en: 'You discard the broken item.', pl: 'Wyrzucasz uszkodzony przedmiot.', 'es-AR': 'Descartás el objeto roto.' },
   tradeUnavailable: { en: 'No exchange is available.', pl: 'Wymiana jest niedostępna.', 'es-AR': 'No hay ningún intercambio disponible.' },
@@ -52,7 +57,6 @@ export const DOMAIN_MESSAGES = {
   itemMismatch: { en: "That physical item does not match the selected response.", pl: "Ten przedmiot nie pasuje do wybranej odpowiedzi.", "es-AR": "Ese objeto no corresponde a la respuesta elegida." },
   itemSpent: { en: "That item has no uses remaining.", pl: "Ten przedmiot jest już zużyty.", "es-AR": "A ese objeto no le quedan usos." },
   requirements: { en: "You do not have the resources for that response.", pl: "Nie masz zasobów potrzebnych do tej odpowiedzi.", "es-AR": "No tenés los recursos necesarios para esa respuesta." },
-  carlitosEnergy: { en: "Carlitos does not have enough energy.", pl: "Carlitos nie ma dość energii.", "es-AR": "Carlitos no tiene suficiente energía." },
   fallbackFood: { en: "The item slot is occupied, so you receive one food instead.", pl: "Masz już ten przedmiot, więc otrzymujesz jedną porcję jedzenia.", "es-AR": "El espacio para ese objeto está ocupado. Recibís una porción de comida en su lugar." },
   wornDawn: { en: "The sea wears at the hull overnight. Another dawn breaks.", pl: "Morze niszczy kadłub przez noc. Nadchodzi kolejny świt.", "es-AR": "El mar desgasta el casco durante la noche. Llega otro amanecer." },
   dawn: { en: "Another dawn breaks over the lifeboat.", pl: "Nad szalupą wstaje kolejny świt.", "es-AR": "Amanece otra vez sobre el bote salvavidas." },

@@ -55,6 +55,18 @@ describe('domain language', () => {
     }
   });
 
+  it('describes item lifecycle rules in each language', () => {
+    for (const language of ['en', 'pl', 'es-AR'] as const) {
+      setLanguage(language);
+      expect(SURVIVAL_ITEM_DESCRIPTIONS.ductTape).toMatch(/one|jedn|un/iu);
+      expect(SURVIVAL_ITEM_DESCRIPTIONS.map).toMatch(/reusable|wielokrotnego|reutilizable/iu);
+      expect(SURVIVAL_ITEM_DESCRIPTIONS.flashlight).toMatch(/break|uszkodzić|romper/iu);
+      expect(SURVIVAL_ITEM_DESCRIPTIONS.swimRing).toMatch(/consumed|zużyte|consume/iu);
+      expect(SURVIVAL_ITEM_DESCRIPTIONS.flareGun).toMatch(/consumed|zużyta|consume/iu);
+      expect(SURVIVAL_ITEM_DESCRIPTIONS.shotgun).toMatch(/consumed|zużyta|consume/iu);
+    }
+  });
+
   it.each([[1, '1 porcja jedzenia'], [2, '2 porcje jedzenia'], [5, '5 porcji jedzenia'], [12, '12 porcji jedzenia'], [22, '22 porcje jedzenia']] as const)(
     'uses the Polish resource form for %i', (quantity, expected) => {
       setLanguage('pl');

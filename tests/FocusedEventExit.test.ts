@@ -9,7 +9,7 @@ const exitCases = [
   ...(['drifting-supplies', 'drifting-chest'] as const).map((eventId) => ({
     eventId, energy: 0, carlitos: 'absent',
   })),
-  ...[0].flatMap((energy) => ['absent', 'low-energy', 'hungry'].map((carlitos) => ({
+  ...[0].flatMap((energy) => ['absent', 'tired', 'exhausted'].map((carlitos) => ({
     eventId: 'drifting-supplies' as const, energy, carlitos,
   }))),
 ];
@@ -23,7 +23,7 @@ describe('focused event dismiss actions', () => {
         ...(carlitos !== 'absent' ? [{ instanceId: 'carlitos-1' as const, type: 'carlitos' as const }] : []),
       ], {
         seed: 41, initial: { day: 3, energy }, initialEventId: eventId,
-        initialCarlitos: { energy: carlitos === 'low-energy' ? 1 : 3, hunger: carlitos === 'hungry' ? 0 : 5 },
+        initialCarlitos: { rest: carlitos === 'tired' ? 'tired' : 'exhausted' },
       });
       const before = session.snapshot();
       const showFocusedEvent = vi.fn();

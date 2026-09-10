@@ -57,7 +57,7 @@ describe('Item Animation Lab Carlitos', () => {
     expect(lab.session.availableReason('feedCarlitos')).not.toBeNull();
     lab.click('[data-anchor-id="carlitos"]');
     expect(lab.mount.querySelector<HTMLElement>('[data-carlitos-card]')!.hidden).toBe(false);
-    expect(lab.mount.querySelector<HTMLElement>('[data-carlitos-rest]')!.hidden).toBe(true);
+    expect(lab.mount.querySelector<HTMLElement>('[data-carlitos-rest-label]')!.textContent).toBe('RESTED');
     expect(lab.mount.textContent).not.toContain('Care raises');
     expect(lab.mount.textContent).not.toContain('Rest restores');
     for (const action of ['petCarlitos', 'feedCarlitos', 'petCarlitos', 'feedCarlitos'] as const) {

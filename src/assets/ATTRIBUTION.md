@@ -325,9 +325,10 @@ The Midnight shovel runtime cue uses a six-second cutoff. The MP3 remains unenco
 | diveEntry | `diveEntry.mp3` | [Jump into Water / Urkki69](https://freesound.org/people/Urkki69/sounds/628350/). Removed the 0.8-second lead-in. |
 | underwaterMovement | `underwaterMovement.mp3` | [Underwater Movement / Tim_Verberne](https://freesound.org/people/Tim_Verberne/sounds/484187/) |
 | diveSurface | `diveSurface.mp3` | [Water Splash / audiosmedia](https://freesound.org/people/audiosmedia/sounds/243519/) |
-| fishingCast | `fishingCast.mp3` | [Fishing Reel Cast with Splash / mwchristian95](https://freesound.org/people/mwchristian95/sounds/725425/) |
+| fishingCast | `fishingCast.mp3` | [fishingreel_throw.wav / BranndyBottle](https://freesound.org/people/BranndyBottle/sounds/464697/) |
 | fishingBite | `fishingBite.mp3` | [Fish Splash Release 1 / paulprit](https://freesound.org/people/paulprit/sounds/507094/) |
-| fishingReel | `fishingReel.mp3` | [Fishing Reel / mwchristian95](https://freesound.org/people/mwchristian95/sounds/725424/) |
+| fishingReel | `fishingReel.mp3` | [reeling.wav / BranndyBottle](https://freesound.org/people/BranndyBottle/sounds/464701/) |
+| fishingNet | `fishingNet.mp3` | [frantic splashing / adviseme333](https://freesound.org/people/adviseme333/sounds/679403/) — first 4.8 seconds |
 | fishCatch | `fishCatch.mp3` | [Fish Flopping / RatBird](https://freesound.org/people/RatBird/sounds/570208/) |
 | junkCatch | `junkCatch.mp3` | [Light Metal Trash / loganzsound](https://freesound.org/people/loganzsound/sounds/850720/) |
 | fishingMiss | `fishingMiss.mp3` | [Rope Quick Snatch / Vrymaa](https://freesound.org/people/Vrymaa/sounds/802697/) |

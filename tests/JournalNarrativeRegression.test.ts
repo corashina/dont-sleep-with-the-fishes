@@ -30,8 +30,8 @@ it.each([
 
 it.each(['en', 'pl', 'es-AR'] as const)('omits routine saved changes in %s', (language) => {
   setLanguage(language);
-  const before = createJournalCarlitosDawnState(createCarlitosState({ energy: 1 }));
-  const after = { ...before, hunger: 4, unhappiness: 1, energy: 2 };
+  const before = createJournalCarlitosDawnState(createCarlitosState({ rest: 'rested' }));
+  const after = { ...before, hunger: 4, unhappiness: 1 };
   const entry = createJournalEntry(2, 'calm', [createJournalCarlitosDawnRecord(before, after)], null, { kind: 'quiet' });
   const view = new SurvivalJournalView();
   try {

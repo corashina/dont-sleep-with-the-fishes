@@ -52,9 +52,10 @@ const freesoundSources = [
   ['diveEntry', 'Urkki69', '628350'],
   ['underwaterMovement', 'Tim_Verberne', '484187'],
   ['diveSurface', 'audiosmedia', '243519'],
-  ['fishingCast', 'mwchristian95', '725425'],
+  ['fishingCast', 'BranndyBottle', '464697'],
   ['fishingBite', 'paulprit', '507094'],
-  ['fishingReel', 'mwchristian95', '725424'],
+  ['fishingReel', 'BranndyBottle', '464701'],
+  ['fishingNet', 'adviseme333', '679403'],
   ['fishCatch', 'RatBird', '570208'],
   ['junkCatch', 'loganzsound', '850720'],
   ['fishingMiss', 'Vrymaa', '802697'],
@@ -139,7 +140,9 @@ async function writeFreesoundAudio(id, audio, destination) {
   // Start the dive clip at its splash instead of the quiet recording lead-in.
   const output = id === 'diveEntry'
     ? splitMp3ByWindows(audio, [[0.8, Infinity]])[0]
-    : audio;
+    : id === 'fishingNet'
+      ? splitMp3ByWindows(audio, [[0, 4.8]])[0]
+      : audio;
   await writeFile(destination, output);
   process.stdout.write(`Downloaded ${basename(destination)}\n`);
 }

@@ -3,6 +3,7 @@ import { clamp01Unchecked, smoothstepUnchecked } from './animationMath';
 
 export type CarlitosPoseState =
   | 'exhausted'
+  | 'tired'
   | 'starving'
   | 'hungry'
   | 'unhappy'
@@ -52,10 +53,11 @@ export function createCarlitosPose(): MutableCarlitosPose {
 export function carlitosPoseState(
   snapshot: CarlitosSnapshot,
 ): CarlitosPoseState {
-  if (snapshot.energy === 0) return 'exhausted';
+  if (snapshot.rest === 'exhausted') return 'exhausted';
   if (snapshot.hunger <= 1) return 'starving';
   if (snapshot.unhappiness >= 3) return 'unhappy';
   if (snapshot.hunger <= 3) return 'hungry';
+  if (snapshot.rest === 'tired') return 'tired';
   return 'content';
 }
 
@@ -147,6 +149,14 @@ function setBasePose(
     output.bodyYaw = 0;
     output.bodyLift = -0.025;
     output.headPitch = -0.22;
+    output.headYaw = 0;
+    return;
+  }
+  if (status === 'tired') {
+    output.bodyPitch = 0.035;
+    output.bodyYaw = 0;
+    output.bodyLift = -0.01;
+    output.headPitch = -0.12;
     output.headYaw = 0;
     return;
   }

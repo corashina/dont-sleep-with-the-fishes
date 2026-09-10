@@ -106,8 +106,6 @@ function createRig(
     }),
     companionEventActionAvailability: vi.fn(() => ({
       visible: true,
-      energyCost: 3,
-      availableEnergy: 3,
       unavailableReason: null,
     })),
   };

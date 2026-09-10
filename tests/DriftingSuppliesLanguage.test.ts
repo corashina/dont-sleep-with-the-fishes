@@ -14,7 +14,7 @@ describe('open drifting supply language changes', () => {
     const random = vi.fn(() => 0);
     const session = new SurvivalSession([{ instanceId: 'carlitos-1', type: 'carlitos' }], {
       seed: 7, random: { next: random }, initial: { day: 3, energy: 3 },
-      initialEventId: 'drifting-supplies', initialCarlitos: { hunger: 5, energy: 3 },
+      initialEventId: 'drifting-supplies', initialCarlitos: { hunger: 5, rest: 'rested' },
     });
     const event = survivalEventById('drifting-supplies')!;
     const choices = focusedChoicesFor(event, session.snapshot());
