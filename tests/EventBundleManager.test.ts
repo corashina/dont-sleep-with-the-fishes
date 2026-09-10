@@ -57,6 +57,8 @@ function adapter(eventId: EventPresentationAdapter['eventId']): EventPresentatio
 describe('EventBundleManager', () => {
 
   it.each([
+    ['campfire model', { missingModel: 'midnightCampfire' }, 'Missing required Midnight Tour campfire model.'],
+    ['wood log model', { missingModel: 'midnightWoodLog' }, 'Missing required Midnight Tour wood log model.'],
     [
       'palm model',
       { missingModel: 'midnightPalmTrees' },

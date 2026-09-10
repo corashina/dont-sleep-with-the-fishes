@@ -31,6 +31,8 @@ $modelIds = @(
   'tornadoCore'
   'midnightShovel'
   'midnightBush'
+  'midnightCampfire'
+  'midnightWoodLog'
   'midnightMonster'
   'airplane'
   'flyingSaucer'

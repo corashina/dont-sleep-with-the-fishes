@@ -68,7 +68,7 @@ function validateIntegerValue(effect: ResourceEffect, path: string): void {
   assertExactKeys(value, `${path}.value`, 'range', ['min', 'max'], ['min', 'max']);
   if (!Number.isInteger(value.min) || !Number.isInteger(value.max)
     || value.min < 0 || value.max < value.min
-    || (effect.operation !== 'set' && value.min === 0)) {
+    || (effect.operation !== 'set' && value.max === 0)) {
     throw new Error(`${path} has an invalid range`);
   }
 }
