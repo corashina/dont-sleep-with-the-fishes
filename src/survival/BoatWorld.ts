@@ -60,7 +60,7 @@ import {
   disposeResourceSets,
   runCleanupSteps,
 } from '../world/SceneResources';
-import { alignDirectionalLightWithSun } from '../world/celestialLight';
+import { alignDirectionalLightWithSun, SURVIVAL_CELESTIAL_DIRECTION } from '../world/celestialLight';
 import { Skybox } from '../world/Skybox';
 import { WeatherEffects } from '../world/WeatherEffects';
 import type { SkyPalette, SkyState } from '../world/skyPalette';
@@ -147,11 +147,6 @@ import { RescueEndingPresentation } from './RescueEndingPresentation';
 import { FishingCatchLibrary, type FishingCatchModelLoader } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
 
-export const SURVIVAL_CELESTIAL_DIRECTION = Object.freeze([
-  0,
-  0.24,
-  -1,
-] as const);
 export const DAY_CLOUD_BOUNCE_INTENSITY = 1.7;
 
 const CUE_DURATION: Readonly<Record<PresentationCue, number>> = {

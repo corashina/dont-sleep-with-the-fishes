@@ -53,6 +53,7 @@ export interface SurvivalSessionCheckpoint {
   readonly pendingEventId: string | null;
   readonly pendingEventTargetId: ItemInstanceId | null;
   readonly nextDawnEnergyOverride: DawnEnergy | null;
+  readonly crewRestorationAtDawn: boolean;
   readonly lastEventId: string | null;
   readonly lastSeenDays: Readonly<Record<string, number>>;
   readonly appearanceCounts: Readonly<Record<string, number>>;

@@ -16,6 +16,7 @@ type EventPresentationRouteMap = Readonly<Record<
 
 export const EVENT_PRESENTATION_ROUTES = Object.freeze({
   'quiet-night': null,
+  'starry-night': 'dedicated',
   'ocean-of-blood': 'dedicated',
   'dangerous-waters': 'dangerousWaters',
   leak: 'dedicated',
