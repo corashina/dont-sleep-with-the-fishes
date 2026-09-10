@@ -110,6 +110,8 @@ function createRig(
     })),
   };
   const world = {
+    hasEventPassed: vi.fn(() => false),
+    returnEventItemUse: vi.fn(async () => undefined),
     enterFocusedEventView: vi.fn(async (): Promise<void> => undefined),
     stageEvent: vi.fn((eventId: unknown) => calls.push(`stage:${
       typeof eventId === 'string' ? eventId : (eventId as { eventId: string }).eventId
@@ -520,6 +522,45 @@ describe('event selection contracts', () => {
       },
     });
     expect(rig.onInvariantError).not.toHaveBeenCalled();
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+  });
+
+  it('ends Ghost Ship only after the presenter reports the whole ship has passed', async () => {
+    const rig = createSessionRig(new SurvivalSession([], {
+      seed: 42, random: sequenceRandom([0, 0.99, 0.99, 0.99]), initial: { day: 15 }, initialEventId: 'ghost-ship',
+    }));
+    await rig.flow.revealPending(rig.realSession.snapshot());
+    rig.flow.update(1000);
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+    rig.world.hasEventPassed.mockReturnValue(true);
+    rig.flow.update(0.016);
+    rig.flow.update(0.016);
+    await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
+    expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({ kind: 'endure' });
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+  });
+
+  it('returns from binoculars to Ghost Ship choices without resolving or spending the item', async () => {
+    const rig = createSessionRig(new SurvivalSession([
+      { instanceId: 'spyglass-1', type: 'spyglass' },
+      { instanceId: 'flashlight-1', type: 'flashlight' },
+    ], {
+      seed: 42, random: sequenceRandom([0, 0.99, 0.99, 0.99]), initial: { day: 15 }, initialEventId: 'ghost-ship',
+    }));
+    await rig.flow.revealPending(rig.realSession.snapshot());
+    const before = rig.realSession.snapshot();
+    rig.flow.resolveItem('spyglass', 'spyglass-1');
+    await vi.waitFor(() => expect(rig.world.returnEventItemUse).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(rig.flow.isStableChoice()).toBe(true));
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+    expect(rig.realSession.snapshot()).toEqual(before);
+    expect(rig.world.setEventEligibleItems).toHaveBeenLastCalledWith(new Set(['spyglass-1', 'flashlight-1']));
+    rig.flow.resolveItem('flashlight', 'flashlight-1');
+    await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
+    expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({
+      kind: 'item', choiceId: 'flashlight', instanceId: 'flashlight-1',
+    });
+    expect(rig.realSession.snapshot().health).toBeLessThan(before.health);
     expect(rig.onFatalError).not.toHaveBeenCalled();
   });
 

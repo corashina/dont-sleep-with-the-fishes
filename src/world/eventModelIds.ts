@@ -1,4 +1,5 @@
 export const EVENT_MODEL_IDS = [
+  'ghostShip',
   'lighthouse',
   'chestClosed',
   'midnightIsland',

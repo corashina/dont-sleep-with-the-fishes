@@ -2,6 +2,7 @@ import type { GeneratedRuntimeModelMetadata } from './itemModelManifest';
 import type { EventModelId } from './eventModelIds';
 
 const metadata = {
+  ghostShip: {"triangles":3938,"rawBounds":{"min":[-0.8475294906849271,-0.11195184055863656,-2.6044873088043796],"max":[0.8475294697826499,3.737726440021559,3.7709396976592795]},"animations":[]},
   midnightCoffin: {"triangles":554,"rawBounds":{"min":[-0.8425750136375427,0,-0.907820999622345],"max":[0.740451991558075,0.5399129986763,2.0753068923950195]},"animations":[]},
   midnightGravestone: {"triangles":684,"rawBounds":{"min":[-104.52655029296875,-70.96319580078125,-34.77937698364258],"max":[104.52655029296875,154.7286376953125,21.177465438842773]},"animations":[]},
   midnightWoodLog: {"triangles":202,"rawBounds":{"min":[-1.907713587339632,-0.019475761022530104,-0.6492014177738021],"max":[1.8611090974143736,1.0740359092854614,0.45981250223882325]},"animations":[]},

@@ -52,6 +52,7 @@ import { HandymanPresentation } from './HandymanPresentation';
 import { MidnightTourPresentation } from './MidnightTourPresentation';
 import { NightTraderPresentation } from './NightTraderPresentation';
 import { OtherPeoplePresentation } from './OtherPeoplePresentation';
+import { GhostShipPresentation } from './GhostShipPresentation';
 import { PlanePresentation } from './PlanePresentation';
 import { FlyingSaucerPresentation } from './FlyingSaucerPresentation';
 import { LighthousePresentation } from './LighthousePresentation';
@@ -94,6 +95,7 @@ export const AUTHORED_EVENT_PRESENTATION_FACTORIES: FocusedEventPresentationFact
   'night-trader': (dependencies) => new NightTraderPresentation(dependencies),
   handyman: (dependencies) => new HandymanPresentation(dependencies),
   'other-people': (dependencies) => new OtherPeoplePresentation(dependencies),
+  'ghost-ship': (dependencies) => new GhostShipPresentation(dependencies),
   plane: (dependencies) => new PlanePresentation(dependencies),
   'flying-saucer': (dependencies) => new FlyingSaucerPresentation(dependencies),
   lighthouse: (dependencies) => new LighthousePresentation(dependencies),
@@ -362,7 +364,7 @@ export class EventPresentationLayer {
     try {
       presenter = factory(this.dependencies);
     } catch (error) {
-      if (eventId === 'midnight-tour') throw error;
+      if (eventId === 'midnight-tour' || eventId === 'ghost-ship') throw error;
       return false;
     }
     if (presenter === null || this.ownedFocused.has(presenter)) return false;
@@ -400,6 +402,10 @@ export class EventPresentationLayer {
     }
     if (this.stagedEventId !== eventId) return null;
     return this.tableaus.get(eventId)?.root ?? null;
+  }
+
+  hasPassed(): boolean {
+    return this.activeFocused?.hasPassed?.() ?? false;
   }
 
   stage(eventId: string, variantSeed?: number): void {

@@ -21,6 +21,15 @@ type EventModelPresentation = Pick<
 > & Pick<EventModelSpec, 'sourceUrl' | 'sourceModelId' | 'license'>;
 
 const presentations = {
+  ghostShip: {
+    sourceUrl: 'https://poly.pizza/m/cIzO4MBPqI',
+    sourceModelId: 'poly-pizza:941391c3-04a0-43fe-9f7a-c8e7d3b3a77d',
+    license: 'CC0 1.0',
+    targetLongestDimension: 28,
+    maxTriangles: 4_000,
+    translation: [0, 7.85, 0],
+    rotation: [0, 0, 0],
+  },
   midnightCoffin: {
     sourceUrl: 'https://poly.pizza/m/egmks2_joYD',
     sourceModelId: 'poly-pizza:8e2080ef-3755-4d53-87a4-ac3daa0ecfb0',

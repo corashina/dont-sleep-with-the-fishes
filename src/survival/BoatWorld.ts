@@ -1243,6 +1243,10 @@ export class BoatWorld {
     if (eventId === 'guarded-sleep') this.restoreEventCameraFront();
   }
 
+  hasEventPassed(): boolean {
+    return this.eventPresentationHost.hasPassed();
+  }
+
   enterFocusedEventView(eventId: InspectableEventId | 'midnight-tour'): Promise<void> {
     if (this.disposed || this.eventPresentationHost.activeEventId() !== eventId) {
       return Promise.resolve();
@@ -1880,6 +1884,7 @@ export class BoatWorld {
       case 'plane':
         return 1;
       case 'other-people':
+      case 'ghost-ship':
         return oppositeEventSide(eventSideFromSeed(variantSeed));
       case 'school-of-fish':
       case 'tornado':

@@ -45,6 +45,7 @@ export const EVENT_PRESENTATION_ROUTES = Object.freeze({
   'night-trader': 'focused',
   handyman: 'focused',
   'other-people': 'focused',
+  'ghost-ship': 'focused',
   plane: 'focused',
   'flying-saucer': 'focused',
   lighthouse: 'focused',

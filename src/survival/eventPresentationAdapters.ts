@@ -85,6 +85,7 @@ interface AdapterOperations {
     onAction?: (cueIndex: number) => void,
   ): Promise<boolean>;
   itemAimTarget(): Object3D | null;
+  hasPassed?(): boolean;
   netCatch?: EventPresentationAdapter['netCatch'];
   interactionTargets(): readonly FocusedEventInteractionTarget[];
   interactionRoot(id: string): Object3D | null;
@@ -126,6 +127,9 @@ function createAdapter(
     },
     itemAimTarget(): Object3D | null {
       return disposed ? null : operations.itemAimTarget();
+    },
+    hasPassed(): boolean {
+      return !disposed && (operations.hasPassed?.() ?? false);
     },
     interactionTargets(): readonly FocusedEventInteractionTarget[] {
       return disposed ? EMPTY_INTERACTION_TARGETS : operations.interactionTargets();
@@ -356,6 +360,7 @@ export const createFocusedAdapter: EventPresentationAdapterFactory = (
     playChoice: (choice) => layer.playChoice(eventId, choice),
     playItemUse: noItemUse,
     itemAimTarget: () => layer.itemAimTarget(eventId),
+    hasPassed: () => layer.hasPassed(),
     interactionTargets: () => layer.interactionTargets(eventId),
     interactionRoot: (id) => layer.interactionRoot(id),
     resultRoot: noRoot,
