@@ -40,7 +40,7 @@ Sources: [selector options](../src/app/EventTest.ts), [contextual resolution](..
 | Lab-only routes | Some previews have no current event choice. Examples: throwing Medkit or Energy Bar at Flowers, and trading Knife or Radio with Handyman. |
 | Audio differences | Lab Bucket Helmet does not route the Shower Night rain cue. Event reveal, reaction, sleep, and dawn sounds also need actual event tests. |
 | Normal day actions | Eating, treatment, Energy Bar use, paid item repair, and real hull repair are not normal action previews in the lab. Net fishing, scuba diving, and Toolbox previews play their animations without changing resources. |
-| Fishing rewards | Day 1 excludes Crab, Tuna, and Squid. Full inventory excludes Wet Duct Tape, Broken Compass, Torn Fishing Net, and Energy Bar. No catch selector exists. |
+| Fishing rewards | Day 1 excludes Crab, Tuna, and Squid. Full inventory excludes Wet Duct Tape, Broken Compass, and Energy Bar. No catch selector exists. |
 | Fishing repetition | Fishing spends real Energy. The lab has no refill control. Three completed attempts exhaust starting Energy. Chest opening also spends all three Energy. |
 | Chest rewards | A fresh full-inventory lab chest always awards two Food. Item, Bait, and duct tape rewards need a missing item slot. No reward selector exists. |
 | Chest state | The lab starts with one closed chest. There is no chest respawn, age, or mimic control. Test delayed mimic conversion and automatic attack in a run. |

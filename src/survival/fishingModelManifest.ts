@@ -1,5 +1,6 @@
 import generatedMetadata from '../assets/models/fishing/fishing-model-metadata.json';
 import type { FishingCatchId } from './fishingCatalog';
+import { FISHING_MODEL_SIZES } from '../game/fishingModelSizes';
 
 export const FISHING_MODEL_CATCH_IDS = [
   'cod',
@@ -32,7 +33,7 @@ export type FishingModelCatchId = typeof FISHING_MODEL_CATCH_IDS[number];
 
 export interface FishingCatchModelSpec {
   readonly url: string;
-  readonly targetLength: number;
+  readonly targetLongestDimension: number;
   readonly rotation: readonly [number, number, number];
   readonly maxTriangles: number;
 }
@@ -68,32 +69,32 @@ const modelUrls: Readonly<Record<FishingModelCatchId, string>> = {
 
 const presentation: Readonly<Record<
   FishingModelCatchId,
-  Pick<FishingCatchModelSpec, 'targetLength' | 'rotation'>
+  Pick<FishingCatchModelSpec, 'targetLongestDimension' | 'rotation'>
 >> = {
-  cod: { targetLength: 1.05, rotation: NO_ROTATION },
-  salmon: { targetLength: 1.1, rotation: QUARTER_TURN_Y },
-  tuna: { targetLength: 1.65, rotation: QUARTER_TURN_Y },
-  crab: { targetLength: 0.78, rotation: NO_ROTATION },
-  squid: { targetLength: 1.45, rotation: QUARTER_TURN_Y },
-  sardine: { targetLength: 0.68, rotation: QUARTER_TURN_Y },
-  bass: { targetLength: 0.525, rotation: QUARTER_TURN_Y },
-  redSnapper: { targetLength: 0.95, rotation: QUARTER_TURN_Y },
-  clownfish: { targetLength: 0.58, rotation: NO_ROTATION },
-  seaweed: { targetLength: 0.31, rotation: NO_ROTATION },
-  boot: { targetLength: 0.36, rotation: NO_ROTATION },
-  plasticBottle: { targetLength: 0.15, rotation: NO_ROTATION },
-  fishBones: { targetLength: 0.44, rotation: QUARTER_TURN_Y },
-  blowfish: { targetLength: 0.39, rotation: NO_ROTATION },
-  fish: { targetLength: 0.525, rotation: QUARTER_TURN_Y },
-  goldfish: { targetLength: 0.29, rotation: QUARTER_TURN_Y },
-  trout: { targetLength: 0.55, rotation: QUARTER_TURN_Y },
-  kingfish: { targetLength: 0.825, rotation: QUARTER_TURN_Y },
-  piranha: { targetLength: 0.475, rotation: QUARTER_TURN_Y },
-  crayfish: { targetLength: 0.39, rotation: QUARTER_TURN_Y },
-  halibut: { targetLength: 0.825, rotation: QUARTER_TURN_Y },
-  brokenCan: { targetLength: 0.15, rotation: NO_ROTATION },
-  crushedCan: { targetLength: 0.15, rotation: NO_ROTATION },
-  backpack: { targetLength: 0.38, rotation: NO_ROTATION },
+  cod: { targetLongestDimension: FISHING_MODEL_SIZES.cod, rotation: NO_ROTATION },
+  salmon: { targetLongestDimension: FISHING_MODEL_SIZES.salmon, rotation: QUARTER_TURN_Y },
+  tuna: { targetLongestDimension: FISHING_MODEL_SIZES.tuna, rotation: QUARTER_TURN_Y },
+  crab: { targetLongestDimension: FISHING_MODEL_SIZES.crab, rotation: NO_ROTATION },
+  squid: { targetLongestDimension: FISHING_MODEL_SIZES.squid, rotation: QUARTER_TURN_Y },
+  sardine: { targetLongestDimension: FISHING_MODEL_SIZES.sardine, rotation: QUARTER_TURN_Y },
+  bass: { targetLongestDimension: FISHING_MODEL_SIZES.bass, rotation: QUARTER_TURN_Y },
+  redSnapper: { targetLongestDimension: FISHING_MODEL_SIZES.redSnapper, rotation: QUARTER_TURN_Y },
+  clownfish: { targetLongestDimension: FISHING_MODEL_SIZES.clownfish, rotation: NO_ROTATION },
+  seaweed: { targetLongestDimension: FISHING_MODEL_SIZES.seaweed, rotation: NO_ROTATION },
+  boot: { targetLongestDimension: FISHING_MODEL_SIZES.boot, rotation: NO_ROTATION },
+  plasticBottle: { targetLongestDimension: FISHING_MODEL_SIZES.plasticBottle, rotation: NO_ROTATION },
+  fishBones: { targetLongestDimension: FISHING_MODEL_SIZES.fishBones, rotation: QUARTER_TURN_Y },
+  blowfish: { targetLongestDimension: FISHING_MODEL_SIZES.blowfish, rotation: NO_ROTATION },
+  fish: { targetLongestDimension: FISHING_MODEL_SIZES.fish, rotation: QUARTER_TURN_Y },
+  goldfish: { targetLongestDimension: FISHING_MODEL_SIZES.goldfish, rotation: QUARTER_TURN_Y },
+  trout: { targetLongestDimension: FISHING_MODEL_SIZES.trout, rotation: QUARTER_TURN_Y },
+  kingfish: { targetLongestDimension: FISHING_MODEL_SIZES.kingfish, rotation: QUARTER_TURN_Y },
+  piranha: { targetLongestDimension: FISHING_MODEL_SIZES.piranha, rotation: QUARTER_TURN_Y },
+  crayfish: { targetLongestDimension: FISHING_MODEL_SIZES.crayfish, rotation: QUARTER_TURN_Y },
+  halibut: { targetLongestDimension: FISHING_MODEL_SIZES.halibut, rotation: QUARTER_TURN_Y },
+  brokenCan: { targetLongestDimension: FISHING_MODEL_SIZES.brokenCan, rotation: NO_ROTATION },
+  crushedCan: { targetLongestDimension: FISHING_MODEL_SIZES.crushedCan, rotation: NO_ROTATION },
+  backpack: { targetLongestDimension: FISHING_MODEL_SIZES.backpack, rotation: NO_ROTATION },
 };
 
 export const FISHING_CATCH_MODEL_SPECS: Readonly<Record<

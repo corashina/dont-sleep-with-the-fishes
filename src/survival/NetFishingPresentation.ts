@@ -1,4 +1,4 @@
-import { Box3, Euler, Group, Matrix4, Object3D, Quaternion, Vector3 } from 'three';
+import { Euler, Group, Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import { createWaveSample, type WaveSample } from '../ocean/WaveField';
 import { FishingCatchLibrary } from './FishingCatchLibrary';
 import { FishingBiteParticles } from './FishingBiteParticles';
@@ -6,6 +6,7 @@ import type { FishingCastPoint } from './FishingSession';
 import type { FishingCatchId } from './fishingCatalog';
 import { runCleanupSteps } from '../world/SceneResources';
 import { boatSupplyTransform } from '../world/BoatStorage';
+import { NET_BASKET_CENTER, NetCatchPlacement } from './NetCatchPlacement';
 
 export const NET_HAUL_DURATION = 4.8;
 const smooth = (value: number): number => {
@@ -20,7 +21,7 @@ export class NetFishingPresentation {
   private readonly netPivot = new Group();
   private readonly catchLibrary = new FishingCatchLibrary();
   private readonly particles = new FishingBiteParticles();
-  private readonly bounds = new Box3();
+  private readonly catchPlacement: NetCatchPlacement;
   private readonly start = new Vector3(-0.75, 0.48, -2.9);
   private readonly water = new Vector3();
   private readonly waterWorld = new Vector3();
@@ -56,8 +57,9 @@ export class NetFishingPresentation {
     this.netPivot.name = 'fishing-net-haul-pivot';
     this.basket.name = 'fishing-net-catches';
     this.netPivot.add(model);
+    this.catchPlacement = new NetCatchPlacement(model);
     // The existing net's basket center is 0.56 metres ahead of its grip.
-    this.basket.position.set(0, 0.03, -0.56);
+    this.basket.position.set(...NET_BASKET_CENTER);
     this.netPivot.add(this.basket);
     this.root.add(this.netPivot);
     boatRoot.add(this.root);
@@ -114,13 +116,8 @@ export class NetFishingPresentation {
     const model = await this.catchLibrary.prepare(catchId);
     if (generation !== this.generation) return false;
     if (model !== null) {
-      model.position.set(0, 0, 0);
       model.rotation.set(0, 0.4, 0);
-      this.bounds.setFromObject(model, true);
-      const size = this.bounds.getSize(this.splash);
-      model.scale.multiplyScalar(Math.min(1, 0.32 / Math.max(size.x, size.y, size.z)));
-      this.bounds.setFromObject(model, true);
-      model.position.set(0, -this.bounds.min.y - 0.13, 0);
+      this.catchPlacement.place(model);
       this.basket.add(model);
     }
     this.sample(0);

@@ -21,7 +21,7 @@ describe('net animation', () => {
     camera.lookAt(0, -0.42, -7.4);
     camera.updateMatrixWorld();
     const prepare = vi.spyOn(FishingCatchLibrary.prototype, 'prepare').mockImplementation(async () => (
-      new Mesh(new BoxGeometry(0.5, 0.1, 0.1), new MeshStandardMaterial())
+      new Mesh(new BoxGeometry(0.25, 0.1, 0.1), new MeshStandardMaterial())
     ));
     const net = new NetFishingPresentation(gltf.scene, scene, scene, (output) => { output.height = 0; });
     const point = new Vector3();

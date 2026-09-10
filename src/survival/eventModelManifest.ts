@@ -3,6 +3,7 @@
 import generatedMetadataJson from '../assets/models/events/event-model-metadata.json';
 import fishingMetadataJson from '../assets/models/fishing/fishing-model-metadata.json';
 import { FISHING_CATCH_MODEL_SPECS } from './fishingModelManifest';
+import { FISHING_MODEL_SIZES } from '../game/fishingModelSizes';
 
 export const SURVIVAL_EVENT_MODEL_IDS = [
   'rescueBoat',
@@ -47,7 +48,7 @@ export const SURVIVAL_EVENT_MODEL_SPECS: Readonly<Record<
   }),
   checkBackFish: Object.freeze({
     url: new URL('../assets/models/fishing/bass.glb', import.meta.url).href,
-    targetLongestDimension: 0.525,
+    targetLongestDimension: FISHING_MODEL_SIZES.bass,
     rotation: [Math.PI / 2, Math.PI / 2, 0] as const,
     maxTriangles: 506,
   }),
@@ -184,19 +185,19 @@ const PRESENTATION = {
     maxTriangles: 2_000,
   },
   cod: {
-    targetLongestDimension: 0.62,
+    targetLongestDimension: FISHING_MODEL_SIZES.cod,
     rotation: [0, Math.PI, 0],
     offset: [0, 0, 0],
     maxTriangles: FISHING_CATCH_MODEL_SPECS.cod.maxTriangles,
   },
   bass: {
-    targetLongestDimension: 0.62,
+    targetLongestDimension: FISHING_MODEL_SIZES.bass,
     rotation: [0, -Math.PI / 2, 0],
     offset: [0, 0, 0],
     maxTriangles: FISHING_CATCH_MODEL_SPECS.bass.maxTriangles,
   },
   redSnapper: {
-    targetLongestDimension: 0.62,
+    targetLongestDimension: FISHING_MODEL_SIZES.redSnapper,
     rotation: [0, -Math.PI / 2, 0],
     offset: [0, 0, 0],
     maxTriangles: FISHING_CATCH_MODEL_SPECS.redSnapper.maxTriangles,
