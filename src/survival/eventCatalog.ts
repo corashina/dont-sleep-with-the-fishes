@@ -26,6 +26,7 @@ import type {
 
 export const SURVIVAL_EVENT_IDS = Object.freeze([
   'quiet-night',
+  'ocean-of-blood',
   'dangerous-waters', 'leak', 'school-of-fish', 'snatcher',
   'death-stare', 'swarm-of-sharks', 'tornado', 'shower-night',
   'something-under-us',
@@ -76,6 +77,7 @@ export function driftingItemRetrieveKey(eventId: DriftingItemEventId): EventPres
 }
 
 const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.freeze({
+  'ocean-of-blood': 'bloodOceanReveal',
   'quiet-night': 'eventText277',
   'dangerous-waters': 'eventText002',
   leak: 'eventText003',
@@ -419,6 +421,12 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(50, 'eventText171', atNextDawn(1, effects([subtract('hull', { min: 20, max: 30 })]))),
       outcome(50, 'eventText172', effects([subtract('hull', { min: 15, max: 25 })], [loseRandom(1)]))),
   ]),
+  event('ocean-of-blood', 'night', 'bloodOceanTitle', 'uncertain', 'darkness', 1, 12, 8, [
+    choice('fishingNet', 'bloodOceanNetChoice', 'fishingNet',
+      outcome(1, 'bloodOceanNetResult', effects([add('food', 1), add('pressure', 1)]), 'blood-ocean-searched')),
+    contextualChoice('sleep', 'bloodOceanWaitChoice',
+      outcome(1, 'bloodOceanWaitResult', { maximumNextDawnEnergy: 2 }, 'blood-ocean-waited')),
+  ], undefined, { minimumPressure: 2, maximumAppearances: 1 }),
   event('monster-in-the-fog', 'night', 'eventText043', 'dangerous', 'darkness', 1, 6, 4, [
     choice('compass', 'eventText062', 'compass',
       outcome(1, 'eventText173',

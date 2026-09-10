@@ -117,6 +117,7 @@ export type EventInventoryMutation =
   | { readonly kind: 'loseEventTarget'; readonly quantity: 1 };
 export interface EventEffects {
   readonly ending?: 'abduction';
+  readonly maximumNextDawnEnergy?: DawnEnergy;
   readonly resources?: readonly ResourceEffect[];
   readonly items?: readonly EventInventoryMutation[];
   readonly chest?: ChestEventEffect;

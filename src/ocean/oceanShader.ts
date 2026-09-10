@@ -21,6 +21,7 @@ import {
 export const MAX_OCEAN_EXCLUSIONS = 2;
 
 export interface OceanShaderUniforms {
+  uBloodOceanIntensity: IUniform<number>;
   [name: string]: IUniform;
   uWaterColor: IUniform<Texture | null>;
   uWaterDepth: IUniform<Texture | null>;
@@ -170,6 +171,7 @@ export const OCEAN_FRAGMENT_SHADER = `
   uniform float uVortexDepression;
   uniform float uVortexStrength;
   uniform vec3 uDeepColor;
+  uniform float uBloodOceanIntensity;
   uniform vec3 uShallowColor;
   uniform vec3 uFogColor;
   uniform vec3 uSkyColor;
@@ -395,6 +397,10 @@ export const OCEAN_FRAGMENT_SHADER = `
 
     #endif
 
+    // Preserve wave shading in both water quality modes, with opaque crimson depths.
+    float bloodLight = clamp(dot(color, vec3(0.2126, 0.7152, 0.0722)) * 2.4, 0.0, 1.0);
+    vec3 bloodColor = mix(vec3(0.055, 0.0015, 0.002), vec3(0.42, 0.012, 0.012), bloodLight);
+    color = mix(color, bloodColor, uBloodOceanIntensity);
     float fogFactor = 1.0 - exp(-uFogDensity * uFogDensity * vViewDepth * vViewDepth);
     float horizonFogProgress = smoothstep(
       uHorizonFog.x,
@@ -474,6 +480,7 @@ export function createOceanShaderDefinition(quality: WaterQuality): Readonly<{
     uVortexPhase: { value: 0 },
     uVortexStrength: { value: 0 },
     uDeepColor: { value: new Color() },
+    uBloodOceanIntensity: { value: 0 },
     uShallowColor: { value: new Color() },
     uFogColor: { value: new Color(0x27343b) },
     uSkyColor: { value: new Color(0x496b75) },

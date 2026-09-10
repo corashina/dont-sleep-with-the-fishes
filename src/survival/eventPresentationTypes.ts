@@ -2,6 +2,7 @@ import type { Group, Object3D, PerspectiveCamera } from 'three';
 import type { ItemInstanceId } from '../game/ItemState';
 import type { WaveSample, VortexWaveState } from '../ocean/WaveField';
 import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
+import type { EventNetCatch } from './EventItemUseController';
 import type { CarlitosPresentation } from './CarlitosPresentation';
 import type { DivePresentationController } from './DivePresentationController';
 import type { EventModelLibrary } from './EventModelLibrary';
@@ -64,6 +65,7 @@ export interface UnderwaterViewEnvironment {
 }
 
 export interface DedicatedEventEnvironment {
+  readonly setBloodOceanIntensity: (intensity: number) => void;
   readonly eventModels: EventModelLibrary;
   readonly featuredModels: SurvivalEventModels;
   readonly dive: Pick<
@@ -83,6 +85,7 @@ export interface DedicatedEventEnvironment {
 }
 
 export interface DedicatedEventPresentation {
+  netCatch?(): EventNetCatch | null;
   readonly eventId: DedicatedEventId;
   readonly worldRoot: Group;
   readonly boatRoot: Group;
