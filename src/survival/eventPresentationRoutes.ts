@@ -38,6 +38,7 @@ export const EVENT_PRESENTATION_ROUTES = Object.freeze({
   'guarded-sleep': 'dedicated',
   'drifting-supplies': 'featured',
   'drifting-chest': 'featured',
+  'seagull-theft': 'featured',
   'check-the-back': 'featured',
   flowers: 'featured',
   'chest-attack': 'focused',

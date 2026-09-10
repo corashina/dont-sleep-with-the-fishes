@@ -11,7 +11,7 @@ import type { TimedAnimation } from './animationMath';
 const FOCUSED_EVENT_CAMERA_DURATION = 1.1;
 const REAR_CAMERA_TURN_DURATION = 0.65;
 const REAR_CAMERA_PITCH = -0.75;
-const BASE_CAMERA_POSITION = Object.freeze({ x: 0, y: 0.88, z: 1.56 });
+const BASE_CAMERA_POSITION = Object.freeze({ x: 0, y: 0.88, z: 0.96 });
 const FOCUSED_EVENT_CAMERA_POSITION = Object.freeze({ x: 0, y: 1.38, z: -1.42 });
 
 type FocusedEventCameraPhase = 'idle' | 'entering' | 'focused' | 'returning';

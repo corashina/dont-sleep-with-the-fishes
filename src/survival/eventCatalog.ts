@@ -34,7 +34,7 @@ export const SURVIVAL_EVENT_IDS = Object.freeze([
   'windy-night', 'bad-sleep', 'thunderstorm', 'restless-waves',
   'monster-in-the-fog', 'ghosts', 'eerie-melody', 'face-on-the-moon',
   'shadow-figure', 'guarded-sleep',
-  'drifting-supplies', 'drifting-chest',
+  'drifting-supplies', 'drifting-chest', 'seagull-theft',
   'check-the-back',
   'flowers', 'chest-attack', 'midnight-tour', 'night-trader',
   'handyman', 'other-people', 'ghost-ship', 'plane', 'flying-saucer', 'lighthouse',
@@ -102,6 +102,7 @@ const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.free
   'guarded-sleep': 'eventText019',
   'drifting-supplies': 'eventText020',
   'drifting-chest': 'eventText021',
+  'seagull-theft': 'seagullTheftReveal',
   'check-the-back': 'eventText023',
   flowers: 'eventText024',
   'chest-attack': 'eventText025',
@@ -239,7 +240,7 @@ function event(
     SurvivalEventDefinition,
     | 'maximumAppearances' | 'absentItemIds' | 'minimumRescueLead'
     | 'minimumPressure' | 'maximumPressure' | 'allowedChestStates'
-    | 'requiresCompanion'
+    | 'requiresCompanion' | 'minimumFood'
   > = {},
 ): SurvivalEventDefinition {
   return {
@@ -558,6 +559,10 @@ const survivalEvents: SurvivalEventDefinition[] = [
       'eventText215',
     )),
   ], undefined, { allowedChestStates: ['none'] }),
+  event('seagull-theft', 'day', 'seagullTheftTitle', 'dangerous', 'none', 1, 3, 3, [
+    contextualChoice('steal', 'seagullTheftChoice',
+      outcome(1, 'seagullTheftResult', effects([subtract('food', 1)]))),
+  ], undefined, { minimumFood: 1 }),
   event('check-the-back', 'night', 'eventText052', 'uncertain', 'fish', 3, 2, 4, [
     choice('knife', 'eventText068', 'knife',
       {

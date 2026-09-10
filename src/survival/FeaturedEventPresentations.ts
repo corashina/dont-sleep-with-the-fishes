@@ -15,6 +15,8 @@ import {
 } from './eventCatalog';
 import type { EventPresentationKey } from './survivalTypes';
 import type { EventPresentationCue } from './eventPresentationCue';
+import { SeagullPresentation } from './SeagullPresentation';
+import type { BoatSupplyDisplay } from './BoatSupplyDisplay';
 
 function includesFeaturedEvent(
   onlyEventId: FeaturedEventId | null | undefined,
@@ -70,6 +72,7 @@ export class FeaturedEventPresentations {
     checkBackChestTarget: Object3D,
     checkBackFishBenchTarget: Object3D,
     emitCue: (cue: EventPresentationCue) => void,
+    food: Pick<BoatSupplyDisplay, 'borrowFoodCan'>,
     onlyEventId?: FeaturedEventId | null,
     driftingWater?: DriftingWater,
   ) {
@@ -93,6 +96,9 @@ export class FeaturedEventPresentations {
     }
     if (includesFeaturedEvent(onlyEventId, 'flowers')) {
       this.presentations.set('flowers', new FlowersPresentation(models, flowersDeckTarget));
+    }
+    if (includesFeaturedEvent(onlyEventId, 'seagull-theft')) {
+      this.presentations.set('seagull-theft', new SeagullPresentation(camera, food, emitCue));
     }
     this.presentationList = Object.freeze([...this.presentations.values()]);
     this.root.add(

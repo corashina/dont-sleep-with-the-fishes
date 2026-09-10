@@ -180,6 +180,7 @@ export interface SurvivalEventDefinition {
   maximumAppearances?: number;
   absentItemIds?: readonly ItemId[];
   minimumRescueLead?: number;
+  minimumFood?: number;
   minimumPressure?: number;
   maximumPressure?: number;
   allowedChestStates?: readonly ChestState[];

@@ -236,6 +236,7 @@ function createConditionBindings(
 export class BoatSupplyDisplay {
   /** Presentation actor for food units, including food without an inventory can. */
   readonly foodSupplyActorId = 'boat-food-supply' as ItemInstanceId;
+  private borrowedFoodCanId: ItemInstanceId | null = null;
   private readonly recordsById = new Map<BoatSupplyGroupId, MutableRecord>();
   private readonly eventMotionRecords: MutableRecord[] = [];
   private readonly copiesById = new Map<BoatSupplyGroupId, CopyBinding[]>();
@@ -428,7 +429,7 @@ export class BoatSupplyDisplay {
       ) {
         this.syncGroup(groupId, snapshot);
       } else if (this.hasBorrowedGroup(groupId)) {
-        this.recordsById.get(groupId)!.root.visible = false;
+        this.applyBorrowedGroupVisibility(groupId);
       }
     }
     this.syncEligibleOutlines();
@@ -550,6 +551,22 @@ export class BoatSupplyDisplay {
     target.scaleY = pose.scaleY;
     target.scaleZ = pose.scaleZ;
     return true;
+  }
+
+  borrowFoodCan(): BorrowedSupplyActor | null {
+    const actor = this.borrowEventActor(this.foodSupplyActorId);
+    if (actor !== null) {
+      this.borrowedFoodCanId = actor.instanceId;
+      this.applyBorrowedGroupVisibility('cannedFood');
+    }
+    return actor;
+  }
+
+  private applyBorrowedGroupVisibility(groupId: BoatSupplyGroupId): void {
+    const root = this.recordsById.get(groupId)!.root;
+    const keepOtherCans = groupId === 'cannedFood' && this.borrowedFoodCanId !== null;
+    root.visible = keepOtherCans;
+    if (keepOtherCans && root.children[0] !== undefined) root.children[0].visible = false;
   }
 
   borrowEventActor(instanceId: ItemInstanceId): BorrowedSupplyActor | null {
@@ -1024,6 +1041,7 @@ export class BoatSupplyDisplay {
     const binding = this.borrowedBindings.get(instanceId);
     if (binding === undefined) return;
     const groupId = binding.groupId;
+    if (this.borrowedFoodCanId === instanceId) this.borrowedFoodCanId = null;
     this.borrowedBindings.delete(instanceId);
     this.borrowedActors.delete(instanceId);
     this.releaseBorrowedOnSync.delete(instanceId);
@@ -1065,7 +1083,7 @@ export class BoatSupplyDisplay {
       root.position.y += this.eventAmbientLift;
       root.rotateZ(this.eventAmbientRoll * (1 + index * 0.08));
       if (this.hasBorrowedGroup(groupId)) {
-        root.visible = false;
+        this.applyBorrowedGroupVisibility(groupId);
         continue;
       }
       const binding = this.eventItemPosesByGroupId.get(groupId);
