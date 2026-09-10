@@ -42,6 +42,8 @@ import type {
 } from './survivalTypes';
 import { eventSideFromSeed, type EventSide } from './eventVariant';
 import { TimedPresentationAnimation } from './TimedPresentationAnimation';
+import { NightTraderSign } from './NightTraderSign';
+import { nightTraderOffers, nightTraderTrade } from './nightTraderTrades';
 
 type NightTraderAnimationKind =
   | 'reveal'
@@ -64,14 +66,6 @@ const PAYMENT_START = new Vector3(-0.35, 0.72, -1.05);
 const REWARD_END = new Vector3(-0.35, 0.72, -1.05);
 const X_AXIS = new Vector3(1, 0, 0);
 const Z_AXIS = new Vector3(0, 0, 1);
-
-const TRADER_REWARDS: Readonly<Partial<Record<string, ItemId>>> = Object.freeze({
-  food: 'ductTape',
-  bait: 'energyBar',
-  map: 'compass',
-  umbrella: 'medicalKit',
-  swimRing: 'radio',
-});
 
 function keyedTravel(progress: number): number {
   if (progress < 0.15) return -0.04 * smoothstep(progress / 0.15);
@@ -108,6 +102,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
   private readonly vesselContent = new Group();
   private readonly rowboat = new Group();
   private readonly trader = new Group();
+  private readonly sign = new NightTraderSign();
   private readonly lantern = new Group();
   private readonly lanternReflection = new Group();
   private readonly mist = new Group();
@@ -181,10 +176,12 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.trader.userData.animationMode = 'none';
     this.buildTrader();
     this.vesselContent.add(this.trader);
+    this.vesselContent.add(this.sign.root);
 
     this.lantern.name = 'night-trader-lantern';
     this.lanternLight = this.buildLantern();
-    this.vesselContent.add(this.lantern);
+    this.lantern.position.set(1.08, 0.6, 0.35);
+    this.sign.root.add(this.lantern);
     this.lanternReflection.name = 'night-trader-lantern-reflection';
     this.reflectionMaterial = createMaterial(0xd48746, 0.64, {
       emissive: 0x6b381a,
@@ -229,6 +226,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
   stage(variantSeed = 0): void {
     if (this.disposed) return;
     this.side = eventSideFromSeed(variantSeed);
+    this.sign.setOffers(nightTraderOffers(variantSeed));
     this.applySideLayout();
     this.animation.cancel();
     this.dependencies.supplyDisplay.releaseEventActor();
@@ -270,9 +268,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
       this.root.userData.state = 'refusing';
       return this.startAnimation('choice-refuse', REFUSE_CHOICE_DURATION);
     }
-    if (TRADER_REWARDS[choice.choiceId] === undefined) {
-      throw new Error(`Unsupported Night Trader choice: ${choice.choiceId}`);
-    }
+    nightTraderTrade(choice.choiceId);
     this.preparePayment(choice);
     this.root.userData.state = 'taking-payment';
     return this.startAnimation('choice-payment', PAYMENT_DURATION);
@@ -289,20 +285,12 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     void outcome;
     switch (result.resultId) {
       case 'trader-reward': {
-        const itemId = TRADER_REWARDS[result.choiceId];
-        if (itemId === undefined) {
-          throw new Error(`Night Trader has no reward for ${result.choiceId}.`);
-        }
+        const itemId = nightTraderTrade(result.choiceId).reward;
         this.hidePayment();
-        this.prepareReward(itemId, false);
+        this.prepareReward(itemId, itemId === 'cannedFood');
         this.root.userData.state = 'returning-reward';
         return this.startAnimation('result-reward', RESULT_DURATION);
       }
-      case 'trader-food-fallback':
-        this.hidePayment();
-        this.prepareReward('cannedFood', true);
-        this.root.userData.state = 'returning-food';
-        return this.startAnimation('result-reward', RESULT_DURATION);
       case 'trader-refuse':
         this.hidePayment();
         this.root.userData.state = 'departing';
@@ -345,6 +333,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.staged = false;
     this.root.removeFromParent();
     this.lanternLight.shadow.dispose();
+    this.sign.dispose();
     disposeResourceSets(this.staticGeometries, this.staticMaterials);
     this.root.clear();
   }
@@ -525,12 +514,13 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.usingSupplyPayment = choice.instanceId !== null
       && this.dependencies.supplyDisplay.pinEventActor(choice.instanceId);
     if (!this.usingSupplyPayment) {
-      this.paymentActor = choice.choiceId === 'food'
+      const payment = nightTraderTrade(choice.choiceId).payment;
+      this.paymentActor = payment === 'cannedFood'
         ? this.createTradeToken('food', 'payment')
-        : choice.choiceId === 'bait'
+        : payment === 'baitTin'
           ? this.createTradeToken('bait', 'payment')
           : this.createItemActor(
-            choice.choiceId as ItemId,
+            payment,
             'payment',
           );
       this.paymentActor.position.copy(this.paymentStart);
@@ -729,6 +719,11 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.trader.rotation.y = Math.atan2(
       -(this.boatBase.x + this.trader.position.x),
       -(this.boatBase.z + this.trader.position.z),
+    );
+    this.sign.root.position.set(-1.02 * this.side, 2.65, 0.42);
+    this.sign.root.rotation.y = Math.atan2(
+      -(this.boatBase.x + this.sign.root.position.x),
+      -(this.boatBase.z + this.sign.root.position.z),
     );
     this.mist.position.x = Math.abs(this.mist.position.x) * this.side;
   }

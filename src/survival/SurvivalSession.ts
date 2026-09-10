@@ -21,6 +21,7 @@ import { resolveWeightedOutcome } from './eventResolver';
 import { drawDriftingLoot, driftingLootEffects } from './driftingLoot';
 import { driftingSupplyKindFromSeed, driftingSupplyChoiceForVariant } from './driftingSupplies';
 import { deriveEventVariantSeed } from './eventPresentationOutcome';
+import { nightTraderEventForSeed, ownsNightTraderReward } from './nightTraderTrades';
 import {
   FishingSession,
   type BeginFishingResult,
@@ -117,7 +118,6 @@ const NO_EVENT_EXCLUSIONS: ReadonlySet<string> = new Set();
 const NO_ITEM_EXCLUSIONS: ReadonlySet<ItemInstanceId> = new Set();
 
 function fallbackResultId(eventId: string): string | undefined {
-  if (eventId === 'night-trader') return 'trader-food-fallback';
   if (eventId === 'handyman') return 'handyman-food-fallback';
   return undefined;
 }
@@ -483,7 +483,8 @@ export class SurvivalSession {
   private restorePendingCheckpointEvent(checkpoint: SurvivalSessionCheckpoint): void {
     this.pendingEvent = checkpoint.pendingEventId === null
       ? null
-      : survivalEventById(checkpoint.pendingEventId) ?? null;
+      : survivalEventById(checkpoint.pendingEventId,
+          deriveEventVariantSeed(this.seed, this.day, checkpoint.pendingEventId)) ?? null;
     this.pendingEventTargetId = checkpoint.pendingEventTargetId;
     this.nextDawnEnergyOverride = checkpoint.nextDawnEnergyOverride;
     this.lastEventId = checkpoint.lastEventId;
@@ -955,6 +956,9 @@ export class SurvivalSession {
     if (event === null) return this.reject('no-event', t('noEvent'));
     const catalogChoice = event.choices.find((candidate) => candidate.id === choiceId);
     if (catalogChoice === undefined) {
+      return this.reject('choice-unavailable', t('unavailableResponse'));
+    }
+    if (event.id === 'night-trader' && ownsNightTraderReward(choiceId, this.inventory.snapshot())) {
       return this.reject('choice-unavailable', t('unavailableResponse'));
     }
     const choice = event.id === 'drifting-supplies'
@@ -1677,7 +1681,9 @@ export class SurvivalSession {
   }
 
   private openEvent(event: SurvivalEventDefinition): void {
-    this.pendingEvent = event;
+    this.pendingEvent = event.id === 'night-trader'
+      ? nightTraderEventForSeed(event, deriveEventVariantSeed(this.seed, this.day, event.id))
+      : event;
     this.pendingEventId = event.id;
     this.pendingEventTargetId = event.targetItemIds === undefined ? null : this.drawEventTarget(event);
     this.state = event.phase === 'day' ? 'dayEvent' : 'nightEvent';
@@ -1729,6 +1735,7 @@ export class SurvivalSession {
       choice.itemId !== undefined
       && (choice.requiredChestState === undefined || choice.requiredChestState === this.chestState)
       && this.canUseEventItem(choice.itemId)
+      && (event.id !== 'night-trader' || !ownsNightTraderReward(choice.id, this.inventory.snapshot()))
     ));
   }
 

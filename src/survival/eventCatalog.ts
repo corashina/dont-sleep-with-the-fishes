@@ -1,4 +1,5 @@
 import type { ItemId } from '../game/ItemState';
+import { nightTraderChoices, nightTraderEventForSeed } from './nightTraderTrades';
 import {
   DRIFTING_SUPPLY_KINDS,
   DRIFTING_SUPPLY_CARLITOS_ENERGY_COST,
@@ -617,11 +618,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
     contextualChoice('sleep', 'eventText090', outcome(1, 'eventText244', {}, 'tour-pass')),
   ], 40, { minimumPressure: 1, allowedChestStates: ['none'] }),
   event('night-trader', 'night', 'eventText056', 'safe', 'sighting', 2, 10, 4, [
-    choice('food', 'eventText091', 'cannedFood', outcome(1, 'eventText245', effects([subtract('food', 1)], [gain('ductTape')]), 'trader-reward')),
-    choice('bait', 'eventText092', 'baitTin', outcome(1, 'eventText246', effects([subtract('bait', 1)], [gain('energyBar')]), 'trader-reward')),
-    choice('map', 'eventText093', 'map', outcome(1, 'eventText247', effects(undefined, [lose('map'), gain('compass')]), 'trader-reward')),
-    choice('umbrella', 'eventText094', 'umbrella', outcome(1, 'eventText248', effects(undefined, [lose('umbrella'), gain('medicalKit')]), 'trader-reward')),
-    choice('swimRing', 'eventText095', 'swimRing', outcome(1, 'eventText249', effects(undefined, [lose('swimRing'), gain('radio')]), 'trader-reward')),
+    ...nightTraderChoices(),
     contextualChoice('sleep', 'eventText096', outcome(1, 'eventText250', {}, 'trader-refuse')),
   ]),
   event('handyman', 'night', 'eventText057', 'dangerous', 'repair', 2, 20, 5, [
@@ -744,7 +741,10 @@ for (const eventDefinition of survivalEvents) {
 
 export const SURVIVAL_EVENTS: readonly SurvivalEventDefinition[] = deepFreeze(survivalEvents);
 
-export function survivalEventById(id: string): SurvivalEventDefinition | undefined {
-  return SURVIVAL_EVENTS.find((event) => event.id === id)
+export function survivalEventById(id: string, variantSeed?: number): SurvivalEventDefinition | undefined {
+  const event = SURVIVAL_EVENTS.find((event) => event.id === id)
     ?? survivalEventFallbackById(id);
+  return event?.id === 'night-trader' && variantSeed !== undefined
+    ? nightTraderEventForSeed(event, variantSeed)
+    : event;
 }
