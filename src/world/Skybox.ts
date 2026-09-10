@@ -349,7 +349,7 @@ const fragmentShader = `
     color += uHorizonColor * horizonLift;
 
     vec4 cloud = cloudLayer(direction);
-    cloud.rgb *= mix(1.0, 0.13, uBloodOceanIntensity);
+    cloud.a *= 1.0 - uBloodOceanIntensity;
     color = mix(color, cloud.rgb, cloud.a);
 
     float horizonBand = smoothstep(-0.005, 0.012, direction.y)
@@ -439,7 +439,20 @@ const fragmentShader = `
       * uMoonVisibility
       * mix(0.025, 0.07, moonClarity);
     color += uMoonColor * moonHalo * (1.0 - cloud.a);
-    float moonStarOcclusion = (1.0 - moonSample.a) * (1.0 - cloud.a);
+    // An eclipsed red sun replaces the moon during the blood event.
+    float bloodSunDistance = length(cross(direction, moonDirection)) / 0.081;
+    float bloodSunFacing = step(0.0, dot(direction, moonDirection));
+    float bloodSunWear = cloudValueNoise3D(direction * 160.0) * 0.025;
+    float bloodSunEdge = bloodSunDistance + bloodSunWear;
+    float bloodSunDisc = (1.0 - smoothstep(0.985, 1.015, bloodSunEdge)) * bloodSunFacing;
+    float bloodSunRim = smoothstep(0.74, 0.97, bloodSunEdge) * bloodSunDisc;
+    float bloodSunHalo = exp(-abs(bloodSunDistance - 1.0) * 12.0)
+      * (1.0 - bloodSunDisc) * bloodSunFacing;
+    color = mix(color, vec3(0.018, 0.0008, 0.0012), bloodSunDisc * uBloodOceanIntensity);
+    color += (vec3(0.38, 0.008, 0.003) * bloodSunRim
+      + vec3(0.13, 0.003, 0.001) * bloodSunHalo) * uBloodOceanIntensity;
+    float moonStarOcclusion = (1.0 - moonSample.a * (1.0 - uBloodOceanIntensity))
+      * (1.0 - bloodSunDisc * uBloodOceanIntensity) * (1.0 - cloud.a);
 
     float starHorizon = smoothstep(0.04, 0.24, direction.y);
     float starClarity = max(0.0, 1.0 - uHaze * 0.94);
@@ -448,8 +461,13 @@ const fragmentShader = `
     vec3 glowingStars = glowingStarLayer(direction, 145.0, 0.9948)
       + glowingStarLayer(direction, 285.0, 0.9975) * 0.72;
     float nightStars = step(0.001, uStarVisibility);
-    color += (uStarColor * backgroundStars * uStarVisibility
-      + glowingStars * nightStars)
+    vec3 bloodStars = glowingStarLayer(direction, 65.0, 0.996)
+      + glowingStarLayer(direction, 105.0, 0.998) * 0.55;
+    vec3 stars = mix(uStarColor * backgroundStars * uStarVisibility
+      + glowingStars * nightStars,
+      uStarColor * dot(bloodStars, vec3(0.299, 0.587, 0.114)) * 0.7,
+      uBloodOceanIntensity);
+    color += stars
       * starHorizon
       * starClarity
       * uMoonStarScale
