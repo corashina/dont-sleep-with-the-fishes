@@ -984,8 +984,7 @@ export class BoatWorld {
   ): Promise<void> {
     if (this.disposed) return;
     if (action === 'petCarlitos') return this.carlitos.play('pet', onContact);
-    const instanceId = this.supplyDisplay.recordFor('cannedFood')?.backingInstanceId;
-    if (instanceId == null) return;
+    const instanceId = this.supplyDisplay.foodSupplyActorId;
     const operation = ++this.weatherEventOperation;
     const [, played] = await Promise.all([
       this.carlitos.play('feed'),

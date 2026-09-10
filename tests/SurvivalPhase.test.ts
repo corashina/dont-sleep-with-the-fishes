@@ -703,7 +703,7 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.calls).toContain('result:cannedFood:1');
     expect(rig.ui.showFishingResult).toHaveBeenCalledWith({
       items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }],
-      message: 'Cod',
+      message: '',
       catchTarget: rig.catchTarget,
     });
     expect(rig.world.projectFishingCatch).toHaveBeenCalledWith(1, 1);

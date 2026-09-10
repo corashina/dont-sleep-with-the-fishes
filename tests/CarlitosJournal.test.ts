@@ -17,7 +17,7 @@ describe('Carlitos journal milestones', () => {
   it.each(['en', 'pl', 'es-AR'] as const)('silences routine changes in %s', (language) => {
     setLanguage(language);
     for (const [before, after] of [
-      [{ hunger: 5, unhappiness: 0, energy: 1 }, { hunger: 4, unhappiness: 1, energy: 2 }],
+      [{ hunger: 5, unhappiness: 0, rest: 'rested' }, { hunger: 4, unhappiness: 1, rest: 'rested' }],
       [{ hunger: 3 }, { hunger: 2 }],
       [{ hunger: 4 }, { hunger: 5 }],
       [{ unhappiness: 2 }, { unhappiness: 3 }],
@@ -25,7 +25,7 @@ describe('Carlitos journal milestones', () => {
       [{ unhappiness: 3 }, { unhappiness: 2 }],
       [{ unhappiness: 5 }, { unhappiness: 6 }],
       [{ unhappiness: 8 }, { unhappiness: 9 }],
-      [{ energy: 2 }, { energy: 3 }],
+      [{ rest: 'rested' }, { rest: 'rested' }],
     ] as const) expect(night(before, after)).not.toContain('Carlitos');
   });
 
@@ -41,10 +41,12 @@ describe('Carlitos journal milestones', () => {
     expect(night(after, after)).not.toContain('Carlitos');
   });
 
-  it('reports exhaustion once and recovery when energy returns', () => {
-    const exhausted = { hunger: 0, unhappiness: 10, energy: 0 };
+  it('reports exhaustion once and recovery when fully rested', () => {
+    const exhausted = { hunger: 0, unhappiness: 10, rest: 'exhausted' as const };
     expect(night({ hunger: 2 }, exhausted)).toContain('Carlitos is too tired to help.');
     expect(night(exhausted, exhausted)).not.toContain('Carlitos');
-    expect(night({ energy: 0 }, { energy: 1 })).toContain('enough strength to help again');
+    expect(night({ rest: 'exhausted' }, { rest: 'tired' })).toContain('needs more rest');
+    expect(night({ rest: 'exhausted' }, { rest: 'tired' })).not.toContain('help again');
+    expect(night({ rest: 'exhausted' as const }, { rest: 'rested' })).toContain('enough strength to help again');
   });
 });

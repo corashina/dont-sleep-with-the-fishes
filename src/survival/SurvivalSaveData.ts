@@ -13,7 +13,7 @@ import type { DeathCause } from '../game/ending';
 import type { SurvivalReading } from '../game/runStatistics';
 import { SURVIVAL_EVENTS } from './eventCatalog';
 import { FISHING_CATCHES } from './fishingCatalog';
-import { carlitosEnergyLimit, CARLITOS_MAX_UNHAPPINESS, type CarlitosSnapshot } from './CarlitosState';
+import { CARLITOS_MAX_UNHAPPINESS, type CarlitosSnapshot } from './CarlitosState';
 import {
   createSurvivalSessionCheckpoint,
   type SurvivalRunCheckpoint,
@@ -151,31 +151,15 @@ function parseInventory(value: unknown): SurvivalInventorySnapshot | null {
   return Object.freeze(inventory);
 }
 
-function allParsedCounters(
-  values: readonly [number | null, number | null, number | null],
-): values is readonly [number, number, number] {
-  return values.every((field) => field !== null);
-}
-
 function parseCarlitos(value: unknown): CarlitosSnapshot | null | undefined {
   if (value === null) return null;
   if (!isRecord(value)) return undefined;
-  const counters = [
-    parseInteger(value.energy, 0, 3),
-    parseInteger(value.hunger, 0, 5),
-    parseInteger(value.unhappiness, 0, CARLITOS_MAX_UNHAPPINESS),
-  ] as const;
-  if (!allParsedCounters(counters)) return undefined;
-  const [energy, hunger, unhappiness] = counters;
-  if (typeof value.pettedToday !== 'boolean') return undefined;
-  const state = { energy, hunger, unhappiness, pettedToday: value.pettedToday };
-  if (energy > carlitosEnergyLimit(state)) return undefined;
-  return Object.freeze({
-    energy,
-    hunger,
-    unhappiness,
-    pettedToday: value.pettedToday,
-  });
+  const { rest } = value;
+  if (rest !== 'exhausted' && rest !== 'tired' && rest !== 'rested') return undefined;
+  const hunger = parseInteger(value.hunger, 0, 5);
+  const unhappiness = parseInteger(value.unhappiness, 0, CARLITOS_MAX_UNHAPPINESS);
+  if (hunger === null || unhappiness === null || typeof value.pettedToday !== 'boolean') return undefined;
+  return Object.freeze({ rest, hunger, unhappiness, pettedToday: value.pettedToday });
 }
 
 type ActionOutcomeExtensions = {

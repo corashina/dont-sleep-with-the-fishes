@@ -24,7 +24,7 @@ export interface EventContextChoice {
   readonly unavailableReason: string | null;
   readonly anchorId?: string;
   readonly energyCost?: number;
-  readonly energyOwner?: 'player' | 'carlitos';
+  readonly usesCarlitos?: boolean;
 }
 
 export interface FocusedEventChoiceView extends EventContextChoice {

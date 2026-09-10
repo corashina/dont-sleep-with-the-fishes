@@ -2,7 +2,6 @@ import type { ItemId } from '../game/ItemState';
 import { HANDYMAN_ITEM_IDS } from './tradeRules';
 import {
   DRIFTING_SUPPLY_KINDS,
-  DRIFTING_SUPPLY_CARLITOS_ENERGY_COST,
   DRIFTING_SUPPLY_PLAYER_ENERGY_COST,
 } from './driftingSupplies';
 import { survivalEventFallbackById } from './eventSelection';
@@ -47,6 +46,7 @@ export type SignalSightingEventId = Extract<
 >;
 
 export const FLYBY_CHOICE_WINDOW_SECONDS = 10;
+export const UFO_CHOICE_WINDOW_SECONDS = 12;
 
 export function isSignalSightingEventId(
   eventId: string,
@@ -487,7 +487,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       ...contextualChoice('watch', 'eventText076',
         outcome(85, 'eventText189'),
         outcome(15, 'eventText190', { followUpNight: true })),
-      companionAction: { id: 'watchCarlitos', energyCost: 1 },
+      companionAction: { id: 'watchCarlitos' },
     },
     contextualChoice('sleep', 'eventText077', outcome(
       1,
@@ -502,7 +502,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
     },
     {
       ...contextualChoice('delegate-carlitos', 'eventText080', ...driftingOutcomes(true)),
-      companionAction: { id: 'delegateCarlitos', energyCost: DRIFTING_SUPPLY_CARLITOS_ENERGY_COST },
+      companionAction: { id: 'delegateCarlitos' },
     },
     contextualChoice('sleep', 'eventText081', outcome(1, 'eventText212')),
   ]),
@@ -526,7 +526,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
           'eventText214',
           effects(undefined, [gainChest()]),
         )),
-      companionAction: { id: 'delegateCarlitos', energyCost: 3 },
+      companionAction: { id: 'delegateCarlitos' },
     },
     contextualChoice('sleep', 'eventText081', outcome(
       1,
@@ -651,7 +651,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
     choice('flashlight', 'eventText071', 'flashlight', outcome(
       1, 'ufoTaken', { ending: 'abduction' }, 'ufo-abduction',
     )),
-    contextualChoice('sleep', 'ufoHide', outcome(1, 'ufoPassed', {}, 'ufo-pass')),
+    contextualChoice('sleep', 'ufoIgnore', outcome(1, 'ufoPassed', {}, 'ufo-pass')),
   ], undefined, { maximumAppearances: 1 }),
   event('lighthouse', 'night', 'lighthouseTitle', 'safe', 'sighting', 2, 15, 2, [
     choice('flareGun', 'eventText070', 'flareGun', outcome(

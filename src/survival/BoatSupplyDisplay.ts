@@ -234,6 +234,8 @@ function createConditionBindings(
 }
 
 export class BoatSupplyDisplay {
+  /** Presentation actor for food units, including food without an inventory can. */
+  readonly foodSupplyActorId = 'boat-food-supply' as ItemInstanceId;
   private readonly recordsById = new Map<BoatSupplyGroupId, MutableRecord>();
   private readonly eventMotionRecords: MutableRecord[] = [];
   private readonly copiesById = new Map<BoatSupplyGroupId, CopyBinding[]>();
@@ -279,6 +281,7 @@ export class BoatSupplyDisplay {
     savedItems: readonly ItemInstance[],
   ) {
     this.registerInstances(savedItems);
+    this.groupByInstanceId.set(this.foodSupplyActorId, 'cannedFood');
     this.createSupplyGroups(propModels, parent);
     for (const [instanceId, groupId] of this.groupByInstanceId) {
       this.prepareEventActor(instanceId, groupId);
@@ -955,7 +958,8 @@ export class BoatSupplyDisplay {
   ): record is MutableRecord {
     return record !== undefined
       && record.visibleCopies > 0
-      && record.backingInstanceId === instanceId;
+      && (record.backingInstanceId === instanceId
+        || instanceId === this.foodSupplyActorId);
   }
 
   private restoreSelectedGroup(

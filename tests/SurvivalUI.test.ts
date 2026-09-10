@@ -12,6 +12,8 @@ import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
 import { SurvivalUI } from '../src/ui/SurvivalUI';
 import { BoatAnchorView } from '../src/ui/BoatAnchorView';
 import { setLanguage } from '../src/i18n/language';
+import { focusedChoicesFor } from '../src/survival/SurvivalEventFlow';
+import { survivalEventById } from '../src/survival/eventCatalog';
 import type { BoatInteractionAnchor } from '../src/survival/BoatInteraction';
 
 const activeUIs: SurvivalUI[] = [];
@@ -201,6 +203,55 @@ const carlitosAnchor = (x = 720, y = 360) => ({
 });
 
 describe('SurvivalUI', () => {
+  it.each(['rested', 'tired', 'exhausted'] as const)('shows Carlitos rest as status text: %s', (rest) => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const session = new SurvivalSession(saved('carlitos'), { seed: 1, initialCarlitos: { rest } });
+    ui.render(session.snapshot(), () => null);
+    ui.setAnchors([carlitosAnchor()]);
+    mount.querySelector<HTMLButtonElement>('[data-anchor-id="carlitos"]')!.click();
+    const label = mount.querySelector<HTMLElement>('[data-carlitos-rest-label]')!;
+    expect(label.textContent).toBe(rest.toUpperCase());
+    expect(label.classList.contains('ui-role-context')).toBe(true);
+    expect(mount.querySelector('[data-carlitos-energy-label]')).toBeNull();
+  });
+
+  it.each(['tired', 'exhausted'] as const)('keeps disabled Carlitos retrieval and its hint visible while %s', (rest) => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const session = new SurvivalSession(saved('carlitos'), {
+      seed: 1, initialCarlitos: { rest }, initialEventId: 'drifting-supplies',
+    });
+    const choices = focusedChoicesFor(survivalEventById('drifting-supplies')!, session.snapshot());
+    const reason = `Carlitos is ${rest}. He must rest before helping.`;
+    const select = vi.fn();
+    ui.onEventChoice = select;
+    ui.render(session.snapshot(), () => null);
+    ui.setAnchors([carlitosAnchor()]);
+    ui.beginEventPresentation();
+    ui.setEventSelection(new Map(), choices);
+    const anchor = mount.querySelector<HTMLButtonElement>('[data-anchor-id="carlitos"]')!;
+    expect(anchor.getAttribute('aria-disabled')).toBe('true');
+    expect(anchor.dataset.eventState).toBe('unavailable');
+    const hint = anchor.querySelector<HTMLElement>('.boat-tooltip__reason')!;
+    expect(hint.hidden).toBe(false);
+    expect(hint.textContent).toBe(reason);
+    anchor.click();
+    expect(select).not.toHaveBeenCalled();
+
+    ui.showFocusedEvent({ eventId: 'drifting-supplies', choices, target: null });
+    const button = mount.querySelector<HTMLButtonElement>('[data-focused-event-view] [data-event-choice="delegate-carlitos"]')!;
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.querySelector('.event-choice__reason')!.textContent).toBe(reason);
+    expect(button.querySelector('.focused-event-view__cost')).toBeNull();
+    button.click();
+    expect(select).not.toHaveBeenCalled();
+    setLanguage('pl');
+    expect(button.querySelector('.event-choice__reason')!.textContent).toContain('Musi odpocząć');
+  });
+
   it('dismisses only the top popup and consumes the outside click', async () => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -274,7 +325,7 @@ describe('SurvivalUI', () => {
     ui.render(snapshot({
       carlitos: {
 
-        energy: 3,
+        rest: 'rested',
         hunger: 3,
         unhappiness: 3,
         pettedToday: false,
@@ -1429,16 +1480,14 @@ describe('SurvivalUI', () => {
           id: 'retrieve',
           label: 'RETRIEVE',
           energyCost: 3,
-          energyOwner: 'player',
           unavailableReason: 'You need more energy.',
           instanceId: null,
         },
         {
           id: 'delegate-carlitos',
           label: 'SEND CARLITOS',
-          energyCost: 3,
-          energyOwner: 'carlitos',
-          unavailableReason: 'Carlitos needs more energy.',
+          usesCarlitos: true,
+          unavailableReason: 'Carlitos is tired. He must rest before helping.',
           instanceId: null,
         },
       ],

@@ -11,13 +11,10 @@ export type DayActionId =
 export type CompanionEventActionId = 'delegateCarlitos' | 'watchCarlitos';
 export interface CompanionEventActionDefinition {
   readonly id: CompanionEventActionId;
-  readonly energyCost: number;
 }
 export interface CompanionEventActionAvailability {
   readonly text?: OutcomeText;
   readonly visible: boolean;
-  readonly energyCost: number;
-  readonly availableEnergy: number;
   readonly unavailableReason: string | null;
 }
 export type DayActionOption = {

@@ -1,7 +1,7 @@
 import { journalMessage as t } from '../i18n/journalMessages';
 import { presentationWeatherProfile } from '../weather/presentationWeather';
 import { journalCatchName } from '../i18n/journalInventoryMessages';
-import { happinessStatus, hungerStatus } from './CarlitosState';
+import { happinessStatus, hungerStatus, type CarlitosRest } from './CarlitosState';
 import { formatJournalEvent } from './journalEvents';
 import { formatJournalMutations } from './journalInventory';
 import type {
@@ -62,14 +62,15 @@ function formatCarlitosChanges({ before, after }: JournalCarlitosDawnRecord): st
   return [
     formatCarlitosHunger(before.hunger, after.hunger),
     formatCarlitosMood(before.unhappiness, after.unhappiness),
-    formatCarlitosEnergy(before.energy, after.energy),
+    formatCarlitosRest(before.rest, after.rest),
   ].filter(Boolean).join(' ');
 }
 
-function formatCarlitosEnergy(before: number, after: number): string {
-  if (before > 0 && after === 0) return t('exhaustedCarlitos');
-  if (before === 0 && after > 0) return t('restedCarlitos');
-  return after < before ? t('tiredCarlitos') : '';
+function formatCarlitosRest(before: CarlitosRest, after: CarlitosRest): string {
+  if (before === after) return '';
+  if (after === 'exhausted') return t('exhaustedCarlitos');
+  if (after === 'rested') return t('restedCarlitos');
+  return t('tiredCarlitos');
 }
 
 function formatCarlitosHunger(before: number, after: number): string {

@@ -2,7 +2,6 @@ import { defineMessages } from './messages';
 
 export const uiCatalog = {
   visitIslandPrompt: { en: 'Visit the island?', pl: 'Odwiedzić wyspę?', 'es-AR': '¿Visitar la isla?' },
-  carlitosExhausted: { en: 'Too tired to help.', pl: 'Zbyt zmęczony, by pomóc.', 'es-AR': 'Demasiado cansado para ayudar.' },
   twoEnergy: { en: '⚡2', pl: '⚡2', 'es-AR': '⚡2' },
   netReward: { en: 'Two catches, less junk', pl: 'Dwa znaleziska, mniej śmieci', 'es-AR': 'Dos capturas, menos basura' },
   "settings": { "en": "Settings", "pl": "Ustawienia", "es-AR": "Configuración" },
@@ -262,7 +261,7 @@ export const uiCatalog = {
     "pl": "Dryfująca skrzynia",
     "es-AR": "Cofre a la deriva"
   },
-  "fishingResult": { en: 'Fishing result', pl: 'Wynik połowu', 'es-AR': 'Resultado de pesca' },
+  "fishingResult": { en: 'Results', pl: 'Wyniki', 'es-AR': 'Resultados' },
   "closeFishing": { en: 'Close fishing result', pl: 'Zamknij wynik połowu', 'es-AR': 'Cerrar resultado de pesca' },
   "fishingInteraction": {
     "en": "Fishing interaction",
