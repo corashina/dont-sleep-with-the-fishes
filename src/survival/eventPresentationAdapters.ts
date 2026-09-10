@@ -43,6 +43,7 @@ import { OceanOfBloodPresentation } from './events/OceanOfBloodPresentation';
 import { SchoolOfFishPresentation } from './events/SchoolOfFishPresentation';
 import { SnatcherPresentation } from './events/SnatcherPresentation';
 import { TornadoPresentation } from './events/TornadoPresentation';
+import { StarryNightPresentation } from './events/StarryNightPresentation';
 import {
   MoonEventPresentation,
   type MoonEventPresentationEnvironment,
@@ -203,46 +204,32 @@ function createDedicatedCoordinator(
   const dedicatedEnvironment = createBorrowedDedicatedEnvironment(environment);
   const presentations: DedicatedEventPresentation[] = [];
   try {
-    switch (eventId) {
-      case 'ocean-of-blood':
-        presentations.push(new OceanOfBloodPresentation(dedicatedEnvironment));
-        break;
-      case 'leak':
-        presentations.push(new LeakPresentation(dedicatedEnvironment));
-        break;
-      case 'school-of-fish':
-        presentations.push(new SchoolOfFishPresentation(dedicatedEnvironment));
-        break;
-      case 'snatcher':
-        presentations.push(new SnatcherPresentation(dedicatedEnvironment));
-        break;
-      case 'death-stare':
-        presentations.push(new DeathStarePresentation(dedicatedEnvironment));
-        break;
-      case 'swarm-of-sharks':
-        presentations.push(new SharkSwarmPresentation(dedicatedEnvironment));
-        break;
-      case 'something-under-us':
-        presentations.push(new SomethingUnderUsPresentation(dedicatedEnvironment));
-        break;
-      case 'tornado':
-        presentations.push(new TornadoPresentation(dedicatedEnvironment));
-        break;
-      case 'shadow-figure':
-      case 'guarded-sleep':
-        presentations.push(new CarlitosEventPresentation(eventId, dedicatedEnvironment));
-        break;
-      default: {
-        const unhandledEventId: never = eventId;
-        throw new Error(`Missing dedicated event presentation: ${unhandledEventId}`);
-      }
-    }
+    presentations.push(createDedicatedPresentation(eventId, dedicatedEnvironment));
     return new EventPresentationCoordinator(presentations);
   } catch (error) {
     return preserveConstructionError(
       error,
       presentations.map((presentation) => () => presentation.dispose()),
     );
+  }
+}
+
+function createDedicatedPresentation(
+  eventId: DedicatedEventId,
+  environment: DedicatedEventEnvironment,
+): DedicatedEventPresentation {
+  switch (eventId) {
+    case 'starry-night': return new StarryNightPresentation(environment);
+    case 'ocean-of-blood': return new OceanOfBloodPresentation(environment);
+    case 'leak': return new LeakPresentation(environment);
+    case 'school-of-fish': return new SchoolOfFishPresentation(environment);
+    case 'snatcher': return new SnatcherPresentation(environment);
+    case 'death-stare': return new DeathStarePresentation(environment);
+    case 'swarm-of-sharks': return new SharkSwarmPresentation(environment);
+    case 'something-under-us': return new SomethingUnderUsPresentation(environment);
+    case 'tornado': return new TornadoPresentation(environment);
+    case 'shadow-figure':
+    case 'guarded-sleep': return new CarlitosEventPresentation(eventId, environment);
   }
 }
 

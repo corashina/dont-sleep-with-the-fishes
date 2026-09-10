@@ -2,6 +2,8 @@ import type { DirectionalLight } from 'three';
 
 export type CelestialDirection = readonly [number, number, number];
 
+export const SURVIVAL_CELESTIAL_DIRECTION: CelestialDirection = Object.freeze([0, 0.24, -1]);
+
 export const SUN_DIRECTION: CelestialDirection = Object.freeze([
   -0.42,
   0.58,

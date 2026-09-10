@@ -227,6 +227,7 @@ interface MidnightTourRecoveryReason {
 }
 
 const FIXED_CHOICE_ANCHORS: Readonly<Record<string, string>> = {
+  'starry-night:wish': 'starry-night:constellation',
   'midnight-tour:visit': 'midnight-tour:island',
   'handyman:touch': 'handyman:hand',
   'flowers:sleep': 'event:flowers',

@@ -40,7 +40,7 @@ import type {
 } from './survivalTypes';
 import type { FishingCatchId } from './fishingCatalog';
 
-export const SURVIVAL_SAVE_VERSION = 6 as const;
+export const SURVIVAL_SAVE_VERSION = 7 as const;
 
 export interface SurvivalSaveDocument {
   readonly version: typeof SURVIVAL_SAVE_VERSION;
@@ -552,6 +552,7 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
     rescueTraceFinds: rescueTraceFinds! as 0 | 1 | 2, radioSignalAvailable: value.radioSignalAvailable, radioSignalsSent: radioSignalsSent!, radioSignalsEnabled: value.radioSignalsEnabled,
     chest: chest!, weather: value.weather, actedToday: value.actedToday, inventory: inventory!, savedItems: savedItems!, savedPickupCount: savedPickupCount!, carlitos: carlitos!,
     pendingEventId, pendingEventTargetId, nextDawnEnergyOverride: nextDawnEnergyOverride as DawnEnergy | null,
+    crewRestorationAtDawn: value.crewRestorationAtDawn,
     lastEventId: lastEventId!, lastSeenDays: lastSeenDays!, appearanceCounts: appearanceCounts!, lastOutcome: lastOutcome!, lastHealthCause: lastHealthCause!, lastHullEventId: lastHullEventId!,
     pendingJournalDaytime: pendingJournalDaytime!, pendingJournalNighttime: pendingJournalNighttime!, pendingJournalActions: pendingJournalActions!, journalEntries: journalEntries!,
     fishingCounter: fishingCounter!, seed: seed!, randomState: randomState!,
@@ -614,11 +615,13 @@ function hasSessionFlags(
   radioSignalAvailable: boolean;
   radioSignalsEnabled: boolean;
   actedToday: boolean;
+  crewRestorationAtDawn: boolean;
   weather: WeatherId;
 } {
   return typeof value.radioSignalAvailable === 'boolean'
     && typeof value.radioSignalsEnabled === 'boolean'
     && typeof value.actedToday === 'boolean'
+    && typeof value.crewRestorationAtDawn === 'boolean'
     && typeof value.weather === 'string'
     && WEATHER_ID_SET.has(value.weather as WeatherId);
 }

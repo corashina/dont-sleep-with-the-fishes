@@ -332,6 +332,29 @@ describe('event selection contracts', () => {
     expect(rig.onFatalError).not.toHaveBeenCalled();
   });
 
+  it('anchors Starry Night to the constellation and restores both survivors at dawn', async () => {
+    const rig = createSessionRig(new SurvivalSession([
+      { instanceId: 'carlitos-1', type: 'carlitos' },
+    ], {
+      seed: 715, initial: { day: 4, health: 14, hunger: 95, energy: 0 },
+      initialCarlitos: { rest: 'exhausted', hunger: 0, unhappiness: 10 },
+      initialEventId: 'starry-night',
+    }));
+    await rig.flow.revealPending(rig.realSession.snapshot());
+    expect(rig.ui.setEventSelection).toHaveBeenLastCalledWith(new Map(), [
+      expect.objectContaining({ id: 'wish', anchorId: 'starry-night:constellation' }),
+      expect.objectContaining({ id: 'sleep' }),
+    ]);
+    rig.flow.resolveContextual('wish');
+    rig.flow.resolveContextual('wish');
+    await vi.waitFor(() => expect(rig.session.beginDawn).toHaveBeenCalledTimes(1));
+    expect(rig.session.resolveEvent).toHaveBeenCalledTimes(1);
+    expect(rig.realSession.snapshot()).toMatchObject({
+      health: 100, hunger: 0, energy: 4,
+      carlitos: { rest: 'rested', hunger: 5, unhappiness: 0 },
+    });
+    rig.flow.dispose();
+  });
   it('offers the Radio to call a crew and routes its reply through the event flow', async () => {
     const rig = createSessionRig(new SurvivalSession([
       { instanceId: 'radio-1', type: 'radio' },
