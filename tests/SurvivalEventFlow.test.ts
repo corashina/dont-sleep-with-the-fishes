@@ -308,11 +308,11 @@ describe('event selection contracts', () => {
   });
 
   it.each([
-    ['spyglass', 'flashlight', 'lost'],
-    ['flareGun', 'shotgun', 'consumed'],
-    ['ductTape', 'energyBar', 'consumed'],
-  ] as const)('keeps the selected Handyman %s instance through the result and journal', async (
-    source, reward, condition,
+    'spyglass',
+    'flareGun',
+    'ductTape',
+  ] as const)('loses the selected Handyman %s instance and records the resolved reward', async (
+    source,
   ) => {
     const selectedId = `${source}-2` as ItemInstanceId;
     const rig = createSessionRig(new SurvivalSession([
@@ -339,12 +339,13 @@ describe('event selection contracts', () => {
     expect(rig.session.resolveEvent.mock.results[0]!.value).toMatchObject({
       accepted: true,
       eventResult: { eventId: 'handyman', choiceId: source, resultId: 'handyman-reward' },
+      rewardSummary: { kind: 'item', id: 'energyBar', quantity: 1 },
     });
     const after = rig.realSession.snapshot();
     expect(after.inventory).toMatchObject({
       [`${source}-1`]: { condition: 'usable' },
-      [selectedId]: { condition },
-      [`${reward}-1`]: { condition: 'usable' },
+      [selectedId]: { condition: 'lost' },
+      'energyBar-1': { condition: 'usable' },
     });
     expect(after.health).toBe(100);
     const entry = after.journalEntries.find(({ day }) => day === 20)!;
@@ -353,8 +354,8 @@ describe('event selection contracts', () => {
       event: {
         eventId: 'handyman', attemptedChoiceId: source, attemptedItemId: source,
         inventoryMutations: expect.arrayContaining([
-          { kind: condition === 'lost' ? 'lose' : 'consume', instanceIds: [selectedId] },
-          { kind: 'gain', instanceIds: [`${reward}-1`] },
+          { kind: 'lose', instanceIds: [selectedId] },
+          { kind: 'gain', instanceIds: ['energyBar-1'] },
         ]),
       },
     });

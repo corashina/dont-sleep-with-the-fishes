@@ -29,7 +29,7 @@ describe('dive item selection', () => {
 });
 
 describe('normal dive item rewards', () => {
-  it.each(['calm', 'overcast'] as const)('gives an item on 10%% of all dives in %s weather', (weather) => {
+  it.each(['calm', 'overcast'] as const)('gives an item on 15%% of all dives in %s weather', (weather) => {
     let itemFinds = 0;
     for (let index = 0; index < 100; index += 1) {
       const session = new SurvivalSession(saved(['scubaSet']), {
@@ -37,7 +37,7 @@ describe('normal dive item rewards', () => {
       });
       if (session.perform('dive').rewardSummary?.kind === 'item') itemFinds += 1;
     }
-    expect(itemFinds).toBe(10);
+    expect(itemFinds).toBe(15);
   });
 
   it.each(inventoryIds.filter((id) => id !== 'scubaSet'))('adds missing %s and preserves it on restore', (missing) => {

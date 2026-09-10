@@ -1,5 +1,6 @@
-import { ITEM_DEFINITIONS, type ItemId } from '../game/ItemState';
+import type { ItemId } from '../game/ItemState';
 import type { DriftingSupplyKind } from './driftingSupplies';
+import { drawMissingItem } from './itemRewards';
 import type { RandomSource, RewardEntry, WeightedEventOutcome } from './survivalTypes';
 
 interface LootPool {
@@ -43,15 +44,13 @@ function drawItem(
   const total = pool.reduce((sum, [, weight]) => sum + weight, 0);
   const roll = random.next() * 100;
   if (roll >= total) return null;
-  const eligible = pool.filter(([id]) => !ITEM_DEFINITIONS[id].durable || !owned.has(id));
-  const eligibleTotal = eligible.reduce((sum, [, weight]) => sum + weight, 0);
-  if (eligibleTotal === 0) return null;
-  let boundary = 0;
-  for (const [id, weight] of eligible) {
-    boundary += weight;
-    if (roll / total * eligibleTotal < boundary) return id;
-  }
-  throw new Error('Drifting loot roll is outside the reward pool.');
+  const weights = new Map(pool);
+  return drawMissingItem(
+    owned,
+    pool.map(([itemId]) => itemId),
+    { next: () => roll / total },
+    (itemId) => weights.get(itemId)!,
+  );
 }
 
 export function drawDriftingLoot(
@@ -66,8 +65,10 @@ export function drawDriftingLoot(
   const rewards: RewardEntry[] = [];
   if (food) rewards.push({ kind: 'resource', id: 'food', quantity: 1 + Math.floor(random.next() * 3) });
   if (bait) rewards.push({ kind: 'resource', id: 'bait', quantity: 1 + Math.floor(random.next() * 3) });
-  const common = drawItem(pool.common, owned, random);
-  const valuable = drawItem(pool.valuable, owned, random);
+  const reserved = new Set(owned);
+  const common = drawItem(pool.common, reserved, random);
+  if (common !== null) reserved.add(common);
+  const valuable = drawItem(pool.valuable, reserved, random);
   if (common !== null) rewards.push({ kind: 'item', id: common, quantity: 1 });
   if (valuable !== null) rewards.push({ kind: 'item', id: valuable, quantity: 1 });
   return rewards;

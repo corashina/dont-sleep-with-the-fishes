@@ -57,7 +57,7 @@ export interface JournalCarlitosCareRecord {
 
 export interface JournalSurvivalActionRecord {
   readonly kind: 'dayAction';
-  readonly action: 'treat' | 'dive' | 'repair' | 'repairItem';
+  readonly action: 'treat' | 'dive' | 'repair' | 'repairItem' | 'discardItem';
   readonly deltas: Readonly<ResourceDelta>;
   readonly inventoryMutations: readonly JournalInventoryMutation[];
 }

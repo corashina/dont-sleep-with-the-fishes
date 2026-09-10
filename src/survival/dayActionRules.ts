@@ -44,6 +44,7 @@ type DeterministicDayActionId = Exclude<
   | 'eat'
   | 'openChest'
   | 'repairItem'
+  | 'discardItem'
   | 'petCarlitos'
   | 'feedCarlitos'
   | 'endDay'
@@ -58,6 +59,7 @@ function hasUsable(inventory: SurvivalInventorySnapshot, type: ItemId): boolean 
 function invalidOption(action: DayActionId, option?: DayActionOption): boolean {
   if (action === 'repair') return option !== undefined;
   if (action === 'repairItem') return option?.kind !== 'itemRepair';
+  if (action === 'discardItem') return option?.kind !== 'itemDiscard';
   return option !== undefined;
 }
 
@@ -159,6 +161,8 @@ const ACTION_UNAVAILABLE_RULES: Readonly<Record<DayActionId, DayActionRule>> = {
   eat: eatUnavailable,
   repair: repairUnavailable,
   repairItem: repairItemUnavailable,
+  discardItem: (state, option) => option?.kind === 'itemDiscard'
+    && state.inventory[option.target]?.condition === 'broken' ? null : t('chooseDiscard'),
   treat: treatUnavailable,
   answerRadio: answerRadioUnavailable,
   useEnergyBar: useEnergyBarUnavailable,

@@ -1,6 +1,9 @@
 import { defineMessages } from './messages';
 
 export const DOMAIN_MESSAGES = {
+  chooseDiscard: { en: 'Choose a broken item to discard.', pl: 'Wybierz uszkodzony przedmiot do wyrzucenia.', 'es-AR': 'Elegí un objeto roto para descartar.' },
+  itemDiscarded: { en: 'You discard the broken item.', pl: 'Wyrzucasz uszkodzony przedmiot.', 'es-AR': 'Descartás el objeto roto.' },
+  tradeUnavailable: { en: 'No exchange is available.', pl: 'Wymiana jest niedostępna.', 'es-AR': 'No hay ningún intercambio disponible.' },
   noNet: { en: 'Fishing requires a usable net.', pl: 'Łowienie wymaga sprawnej sieci.', 'es-AR': 'Para pescar necesitás una red en buen estado.' },
   netEnergy: { en: 'Net fishing requires two energy.', pl: 'Łowienie siecią wymaga dwóch punktów energii.', 'es-AR': 'Pescar con red requiere dos puntos de energía.' },
   readyNet: { en: 'You lift the net and choose where to scoop.', pl: 'Podnosisz sieć i wybierasz miejsce połowu.', 'es-AR': 'Levantás la red y elegís dónde pescar.' },

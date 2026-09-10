@@ -72,12 +72,20 @@ describe('Night Trader offers', () => {
     expect(session.snapshot().inventory).toEqual(before.inventory);
   });
 
-  it('refuses an owned durable reward instead of substituting food', () => {
+  it.each([
+    ['map', 'map', 'compass', 'usable'],
+    ['map', 'map', 'compass', 'broken'],
+    ['food', 'cannedFood', 'ductTape', 'usable'],
+    ['flareGun-shotgun', 'flareGun', 'shotgun', 'usable'],
+  ] as const)('refuses owned %s rewards in %s/%s/%s without payment', (choiceId, payment, reward, condition) => {
     const session = new SurvivalSession([
-      { type: 'map', instanceId: 'map-1' }, { type: 'compass', instanceId: 'compass-1' },
-    ], { seed: seedFor('map'), initial: { day: 10 }, initialEventId: 'night-trader' });
+      { type: payment, instanceId: `${payment}-1` }, { type: reward, instanceId: `${reward}-1` },
+    ], {
+      seed: seedFor(choiceId), initial: { day: 10 }, initialEventId: 'night-trader',
+      initialConditions: { [`${reward}-1`]: condition },
+    });
     const before = session.snapshot();
-    expect(session.resolveEvent({ kind: 'item', choiceId: 'map', instanceId: 'map-1' }).accepted).toBe(false);
+    expect(session.resolveEvent({ kind: 'item', choiceId, instanceId: `${payment}-1` }).accepted).toBe(false);
     expect(session.snapshot().inventory).toEqual(before.inventory);
     expect(session.snapshot().food).toBe(before.food);
   });

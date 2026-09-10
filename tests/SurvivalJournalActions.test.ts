@@ -46,7 +46,9 @@ describe('ordinary day action journal', () => {
     [0.9, { rescueLead: 1 }, 'a clue'],
   ])('records a dive reward from roll %s and its energy cost', (roll, reward, text) => {
     const session = new SurvivalSession(saved('scubaSet'), {
-      seed: 1, random: sequenceRandom([0, 0.99, roll, 0]), initial: { day: 2, energy: 3 },
+      seed: 1,
+      random: sequenceRandom([0, 0.99, roll, ...(roll < 0.75 ? [0] : []), 0.99]),
+      initial: { day: 2, energy: 3 },
     });
     const outcome = session.perform('dive');
     expect(outcome).toMatchObject({ accepted: true, deltas: { energy: -3, ...reward } });
@@ -68,7 +70,7 @@ describe('ordinary day action journal', () => {
 
   it('records both the reward and injury from the same dive', () => {
     const session = new SurvivalSession(saved('scubaSet'), {
-      seed: 1, random: sequenceRandom([0, 0, 0.5, 0.6, 0]), initial: { day: 2, energy: 3 },
+      seed: 1, random: sequenceRandom([0, 0, 0.5, 0.6, 0, 0.99]), initial: { day: 2, energy: 3 },
     });
     expect(session.perform('dive').accepted).toBe(true);
     const entry = finishDay(session);
@@ -83,7 +85,7 @@ describe('ordinary day action journal', () => {
 
   it('records an empty dive without inventing a reward', () => {
     const session = new SurvivalSession(saved('scubaSet'), {
-      seed: 1, random: sequenceRandom([0.99, 0.99, 0]), initial: { day: 2, energy: 3 },
+      seed: 1, random: sequenceRandom([0.99, 0.99, 0.99]), initial: { day: 2, energy: 3 },
     });
     session.perform('dive');
     const entry = finishDay(session);
@@ -91,6 +93,20 @@ describe('ordinary day action journal', () => {
       kind: 'dayAction', action: 'dive', deltas: { energy: -3 }, inventoryMutations: [],
     }]);
     expect(formatJournalEntry(entry).daytime).toContain('I came back empty-handed.');
+  });
+
+  it('appends scuba gear breakage after the completed dive', () => {
+    const session = new SurvivalSession(saved('scubaSet'), {
+      seed: 1, random: sequenceRandom([0.99, 0.99, 0]), initial: { day: 2, energy: 3 },
+    });
+    session.perform('dive');
+
+    const entry = finishDay(session);
+    expect(entry.actions).toEqual([{
+      kind: 'dayAction', action: 'dive', deltas: { energy: -3 },
+      inventoryMutations: [{ kind: 'break', instanceIds: ['scubaSet-1'] }],
+    }]);
+    expect(formatJournalEntry(entry).daytime).toContain('scuba gear damaged');
   });
 
   it('records energy-scaled hull repair without consuming Duct Tape', () => {

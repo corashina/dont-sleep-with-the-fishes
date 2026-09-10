@@ -49,6 +49,18 @@ describe('survival foundations', () => {
     expect(inventory.gain('bucket')).toBeNull();
   });
 
+  it('blocks a reward while any consumable instance remains owned', () => {
+    const inventory = new SurvivalInventoryState(saved('cannedFood', 'cannedFood'));
+    inventory.consume('cannedFood');
+
+    expect(inventory.hasOwned('cannedFood')).toBe(true);
+    expect(inventory.gain('cannedFood')).toBeNull();
+
+    inventory.consume('cannedFood');
+    expect(inventory.hasOwned('cannedFood')).toBe(false);
+    expect(inventory.gain('cannedFood')).toBe('cannedFood-1');
+  });
+
   it('gains a unique item directly in its declared condition', () => {
     const inventory = new SurvivalInventoryState([]);
     expect(inventory.gain('compass', 'broken')).toBe('compass-1');
@@ -102,6 +114,17 @@ describe('survival foundations', () => {
     expect(inventory.consume('carlitos')).toEqual([]);
     inventory.consume('ductTape');
     expect(inventory.repair('ductTape-1')).toBe(false);
+  });
+
+  it('does not repair an invalid broken consumable from restored data', () => {
+    const inventory = SurvivalInventoryState.restore({
+      'medicalKit-1': {
+        instanceId: 'medicalKit-1', type: 'medicalKit', condition: 'broken',
+      },
+    });
+
+    expect(inventory.repair('medicalKit-1')).toBe(false);
+    expect(inventory.snapshot()['medicalKit-1']?.condition).toBe('broken');
   });
 
   it('draws sorted random mutation candidates without replacement', () => {

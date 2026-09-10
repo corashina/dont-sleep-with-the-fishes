@@ -5,7 +5,7 @@ export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dea
 /** Gameplay weather remains separate from renderer-only presentation weather. */
 export type WeatherId = 'calm' | 'overcast' | 'squall';
 export type DayActionId =
-  | 'fish' | 'netFish' | 'dive' | 'eat' | 'repair' | 'repairItem'
+  | 'fish' | 'netFish' | 'dive' | 'eat' | 'repair' | 'repairItem' | 'discardItem'
   | 'treat' | 'answerRadio' | 'useEnergyBar' | 'openChest' | 'endDay'
   | 'petCarlitos' | 'feedCarlitos';
 export type CompanionEventActionId = 'delegateCarlitos' | 'watchCarlitos';
@@ -21,7 +21,7 @@ export interface CompanionEventActionAvailability {
   readonly unavailableReason: string | null;
 }
 export type DayActionOption = {
-  readonly kind: 'itemRepair';
+  readonly kind: 'itemRepair' | 'itemDiscard';
   readonly target: ItemInstanceId;
 };
 export type RiskLabel = 'safe' | 'uncertain' | 'dangerous';
@@ -134,6 +134,7 @@ export interface WeightedEventOutcome {
   readonly effects: EventEffects;
 }
 export interface EventChoiceDefinition {
+  readonly breakChance?: number;
   readonly id: string;
   readonly label: string;
   readonly itemId?: ItemId;

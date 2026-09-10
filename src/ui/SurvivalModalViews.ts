@@ -35,9 +35,11 @@ export class SurvivalModalViews {
   onReturnToMenu: () => void = () => undefined;
   onEndingReady: () => void = () => undefined;
   onRepairTarget: (instanceId: ItemInstanceId) => void = () => undefined;
+  onDiscardTarget: (instanceId: ItemInstanceId) => void = () => undefined;
   onRepairCancel: () => void = () => undefined;
 
   private readonly repairTargets: HTMLElement;
+  private readonly repairUnavailable: HTMLElement;
   private readonly endingCause: HTMLElement;
   private readonly endingStats: HTMLElement;
   private readonly endingPanel: HTMLElement;
@@ -45,6 +47,7 @@ export class SurvivalModalViews {
   private readonly statisticsView: EndingStatisticsView;
   private endingFadeTimer: number | null = null;
   private currentRepairItems: readonly Readonly<SurvivalItemState>[] = [];
+  private currentRepairReason: () => string | null = () => null;
   private currentEnding: Exclude<EndingRecord, { id: 'dorothy' }> | null = null;
   private endingSnapshot: SurvivalSnapshot | null = null;
   private repairBusy = false;
@@ -53,9 +56,12 @@ export class SurvivalModalViews {
   private refreshLanguage(): void {
     refreshUiText(this.repairRoot, this.pauseRoot, this.endingRoot);
     for (const item of this.currentRepairItems) {
-      const button = [...this.repairTargets.querySelectorAll<HTMLButtonElement>('button')].find(button => button.dataset.repairTarget === item.instanceId);
-      if (button) this.labelRepairTarget(button, item);
+      const repair = this.repairTargets.querySelector<HTMLButtonElement>(`[data-repair-target="${item.instanceId}"]`);
+      const discard = this.repairTargets.querySelector<HTMLButtonElement>(`[data-discard-target="${item.instanceId}"]`);
+      if (repair) this.labelRepairTarget(repair, item);
+      if (discard) this.labelDiscardTarget(discard, item);
     }
+    this.labelRepairAvailability();
     if (this.currentEnding !== null) {
       this.endingTitle.textContent = endingTitle(this.currentEnding);
       this.endingCause.textContent = endingCauseLine(this.currentEnding) ?? '';
@@ -72,6 +78,7 @@ export class SurvivalModalViews {
       <section class="routine-dialog routine-dialog--repair" data-repair-options role="dialog" aria-modal="true" aria-hidden="true" data-ui-aria="repairTarget" aria-label="${uiText('repairTarget')}" inert>
         <div class="routine-dialog__card scuba-popup-paper">
           <h2 class="scuba-popup-title ui-role-display" data-repair-options-title tabindex="-1" data-ui-text="chooseRepair">${uiText('chooseRepair')}</h2>
+          <p class="repair-unavailable ui-role-context" data-repair-unavailable hidden></p>
           <div class="repair-targets" data-repair-targets></div>
           <button type="button" class="primary-action salvage-action ui-role-context" data-repair-cancel data-ui-aria="cancelRepair" aria-label="${uiText('cancelRepair')}" data-ui-text="cancel">
             ${uiText('cancel')}
@@ -109,6 +116,7 @@ export class SurvivalModalViews {
     this.pauseRoot = requireElement(template.content, '[data-pause]');
     this.endingRoot = requireElement(template.content, '[data-ending]');
     this.repairTitle = requireElement(this.repairRoot, '[data-repair-options-title]');
+    this.repairUnavailable = requireElement(this.repairRoot, '[data-repair-unavailable]');
     this.repairTargets = requireElement(this.repairRoot, '[data-repair-targets]');
     this.resumeButton = requireElement(this.pauseRoot, '[data-resume]');
     this.pauseMenuButton = requireElement(this.pauseRoot, '[data-pause-menu]');
@@ -129,10 +137,18 @@ export class SurvivalModalViews {
     this.refreshLanguage();
   }
 
-  showRepairOptions(items: readonly Readonly<SurvivalItemState>[]): void {
+  showRepairOptions(
+    items: readonly Readonly<SurvivalItemState>[],
+    repairReason: () => string | null = () => null,
+    showDiscard = true,
+  ): void {
     if (this.disposed) return;
     this.currentRepairItems = items;
+    this.currentRepairReason = repairReason;
+    this.labelRepairAvailability();
     const targets = items.map((item) => {
+      const row = document.createElement('div');
+      row.className = 'repair-target-row';
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'weight-circle is-filled dive-result__reward repair-target';
@@ -147,7 +163,27 @@ export class SurvivalModalViews {
       thumbnail.draggable = false;
       button.append(thumbnail);
       button.disabled = this.repairBusy;
-      return button;
+      const repairLabel = document.createElement('span');
+      repairLabel.className = 'repair-target__label ui-role-context';
+      repairLabel.textContent = uiText('repair');
+      repairLabel.dataset.uiText = 'repair';
+      repairLabel.setAttribute('aria-hidden', 'true');
+      button.append(repairLabel);
+      row.append(button);
+      if (showDiscard) {
+        const discard = document.createElement('button');
+        discard.type = 'button';
+        discard.className = 'primary-action salvage-action repair-target__discard ui-role-context';
+        discard.dataset.discardTarget = item.instanceId;
+        discard.dataset.itemType = item.type;
+        discard.textContent = uiText('discardItem');
+        this.labelDiscardTarget(discard, item);
+        discard.disabled = this.repairBusy;
+        row.append(discard);
+      } else {
+        row.classList.add('repair-target-row--repair-only');
+      }
+      return row;
     });
     this.repairTargets.replaceChildren(...targets);
   }
@@ -156,7 +192,21 @@ export class SurvivalModalViews {
     const label = uiDynamic('brokenItem', ITEM_LABELS[item.type]);
     button.title = label;
     button.setAttribute('aria-label', label);
-    button.setAttribute('aria-description', uiDynamic('repairItemHelp', ITEM_LABELS[item.type]));
+    const reason = this.currentRepairReason();
+    button.setAttribute('aria-disabled', String(reason !== null));
+    button.setAttribute('aria-description', reason ?? uiDynamic('repairItemHelp', ITEM_LABELS[item.type]));
+  }
+
+  private labelDiscardTarget(button: HTMLButtonElement, item: Readonly<SurvivalItemState>): void {
+    button.textContent = uiText('discardItem');
+    button.setAttribute('aria-label', `${uiText('discardItem')} — ${ITEM_LABELS[item.type]}`);
+    button.setAttribute('aria-description', uiDynamic('discardItemHelp', ITEM_LABELS[item.type]));
+  }
+
+  private labelRepairAvailability(): void {
+    const reason = this.currentRepairReason();
+    this.repairUnavailable.hidden = reason === null;
+    this.repairUnavailable.textContent = reason === null ? '' : uiDynamic('repairUnavailable', reason);
   }
 
   setRepairBusy(busy: boolean): void {
@@ -243,6 +293,7 @@ export class SurvivalModalViews {
       () => { this.onReturnToMenu = () => undefined; },
       () => { this.onEndingReady = () => undefined; },
       () => { this.onRepairTarget = () => undefined; },
+      () => { this.onDiscardTarget = () => undefined; },
       () => { this.onRepairCancel = () => undefined; },
     ]));
   }
@@ -270,7 +321,10 @@ export class SurvivalModalViews {
     if (button === null || button.disabled || !this.repairRoot.contains(button)) return;
     const instanceId = button.dataset.repairTarget as ItemInstanceId | undefined;
     if (instanceId !== undefined && this.repairTargets.contains(button)) {
+      if (button.getAttribute('aria-disabled') === 'true') return;
       this.onRepairTarget(instanceId);
+    } else if (button.dataset.discardTarget !== undefined && this.repairTargets.contains(button)) {
+      this.onDiscardTarget(button.dataset.discardTarget as ItemInstanceId);
     } else if (button.hasAttribute('data-repair-cancel')) {
       this.onRepairCancel();
     }

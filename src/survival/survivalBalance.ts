@@ -11,7 +11,7 @@ export const SURVIVAL_BALANCE = {
     maximumStoredEnergy: 4,
   },
   fishing: {
-    backpackChance: 0.04,
+    backpackChance: 0.10,
     minimumBiteDelaySeconds: 3,
     biteDelayRangeSeconds: 4,
     reactionSeconds: 6,
@@ -22,11 +22,11 @@ export const SURVIVAL_BALANCE = {
     // These weights keep useful reward per energy about 10% above unbaited rods.
     largeFishWeights: [0.5, 0.5, 1.25, 3.65],
     usableItemWeight: 2,
-    backpackChance: 0.08,
+    backpackChance: 0.15,
   },
   diving: {
     success: 0.65, injury: 0.25,
-    itemChance: 0.10,
+    itemChance: 0.15,
     injuryDamage: { min: 15, max: 45 }, overcastSuccessDelta: -0.05,
     overcastInjuryDelta: 0.05,
     supplyAmounts: [
@@ -44,7 +44,7 @@ export const SURVIVAL_BALANCE = {
   },
   dayEvents: {
     firstDay: 3,
-    chance: 0.25,
+    chance: 0.35,
   },
 } as const;
 

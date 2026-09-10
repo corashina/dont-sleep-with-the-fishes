@@ -1,31 +1,27 @@
-import { describe,expect,it } from 'vitest';
-import { ITEM_IDS } from '../src/game/ItemState';
+import { describe, expect, it } from 'vitest';
+import { ITEM_IDS, type ItemId } from '../src/game/ItemState';
 import { drawChestReward } from '../src/survival/chest';
 import { sequenceRandom } from './helpers/random';
 
 describe('chest rewards', () => {
-  it('gives missing Duct Tape the combined weight four', () => {
-    const active = new Set(ITEM_IDS.filter((id) => id !== 'ductTape'));
+  const rewardItems = ITEM_IDS.filter((itemId) => itemId !== 'carlitos');
 
-    expect(drawChestReward(active, sequenceRandom([3.999 / 9]))).toEqual({
-      kind: 'item',
-      itemId: 'ductTape',
-    });
-    expect(drawChestReward(active, sequenceRandom([4 / 9]))).toEqual({
-      kind: 'resource',
-      resource: 'food',
-      quantity: 2,
-    });
+  it.each(rewardItems)('can award missing %s', (missing) => {
+    const owned = new Set<ItemId>(rewardItems.filter((itemId) => itemId !== missing));
+    expect(drawChestReward(owned, sequenceRandom([0]))).toEqual({ kind: 'item', itemId: missing });
   });
 
-  it('keeps active Duct Tape at weight two', () => {
-    const active = new Set(ITEM_IDS);
+  it('gives scuba gear three times the weight of other items', () => {
+    const owned = new Set<ItemId>(rewardItems.filter((itemId) => (
+      itemId !== 'compass' && itemId !== 'scubaSet'
+    )));
 
-    expect(drawChestReward(active, sequenceRandom([1.999 / 7]))).toEqual({
-      kind: 'item',
-      itemId: 'ductTape',
-    });
-    expect(drawChestReward(active, sequenceRandom([2 / 7]))).toEqual({
+    expect(drawChestReward(owned, sequenceRandom([0.249999]))).toEqual({ kind: 'item', itemId: 'compass' });
+    expect(drawChestReward(owned, sequenceRandom([0.25]))).toEqual({ kind: 'item', itemId: 'scubaSet' });
+  });
+
+  it('gives two food when every reward item is owned', () => {
+    expect(drawChestReward(new Set(rewardItems), sequenceRandom([0]))).toEqual({
       kind: 'resource',
       resource: 'food',
       quantity: 2,

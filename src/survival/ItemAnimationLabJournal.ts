@@ -7,7 +7,13 @@ import {
   type JournalEntry,
 } from './journalRecords';
 
-function sampleEvent(eventId: SurvivalEventId, choiceId: string, outcomeIndex = 0, gainedItem?: ItemInstanceId) {
+function sampleEvent(
+  eventId: SurvivalEventId,
+  choiceId: string,
+  outcomeIndex = 0,
+  gainedItem?: ItemInstanceId,
+  surrenderedItem?: ItemInstanceId,
+) {
   const event = survivalEventById(eventId);
   const choice = event?.choices.find(({ id }) => id === choiceId);
   const outcome = choice?.outcomes[outcomeIndex];
@@ -22,6 +28,7 @@ function sampleEvent(eventId: SurvivalEventId, choiceId: string, outcomeIndex = 
         `${mutation.itemId}-${index + 1}` as ItemInstanceId),
     };
   });
+  if (surrenderedItem) inventoryMutations.push({ kind: 'lose', instanceIds: [surrenderedItem] });
   if (gainedItem) inventoryMutations.push({ kind: 'gain', instanceIds: [gainedItem] });
   return createJournalEventRecord(event, choiceId, choice.itemId ?? null, {
     code: 'lab-journal-example',
@@ -43,13 +50,15 @@ export function createItemAnimationLabJournal(): readonly JournalEntry[] {
       { kind: 'fishing', attemptId: 'lab-journal-fishing', result: 'fish', catchId: 'cod', food: 1, baitConsumed: true,
         deltas: { food: 1, bait: -1 }, inventoryMutations: [] },
     ], null, createJournalNightEventRecord(sampleEvent('swarm-of-sharks', 'knife', 1))),
-    // Repair the knife and trade the swim ring for a radio.
+    // Repair the knife and exchange the fishing net for an umbrella.
     createJournalEntry(4, 'calm', [
       { kind: 'dayAction', action: 'repairItem', deltas: {}, inventoryMutations: [
         { kind: 'repair', instanceIds: ['knife-1'] },
         { kind: 'consume', instanceIds: ['ductTape-1'] },
       ] },
-    ], null, createJournalNightEventRecord(sampleEvent('night-trader', 'swimRing'))),
+    ], null, createJournalNightEventRecord(sampleEvent(
+      'handyman', 'fishingNet', 0, 'umbrella-1', 'fishingNet-1',
+    ))),
     // Find and use the same item across both sections of a longer page.
     createJournalEntry(5, 'overcast', [
       { kind: 'carlitosCare', action: 'feed' },

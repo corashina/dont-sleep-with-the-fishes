@@ -849,6 +849,8 @@ describe('SurvivalUI', () => {
     expect(dialog.dataset.placement).toBe('left');
     const targets = [...mount.querySelectorAll<HTMLButtonElement>('[data-repair-target]')];
     expect(targets.map(({ dataset }) => dataset.repairTarget)).toEqual(['bucket-2', 'compass-4']);
+    expect([...mount.querySelectorAll<HTMLButtonElement>('[data-discard-target]')]
+      .map(({ dataset }) => dataset.discardTarget)).toEqual(['bucket-2', 'compass-4']);
     const thumbnail = targets[0]!.querySelector<HTMLImageElement>('img')!;
     expect(thumbnail.src).toContain('/bucket.png');
     expect(targets[0]!.getAttribute('aria-label')).toBe('BUCKET — BROKEN');
@@ -865,6 +867,45 @@ describe('SurvivalUI', () => {
     mount.querySelector<HTMLButtonElement>('[data-repair-cancel]')!.click();
     expect(dialog.classList.contains('is-visible')).toBe(false);
     expect(action).not.toHaveBeenCalled();
+  });
+
+  it('opens broken item actions without tape and dispatches discard for that instance', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = new SurvivalUI(mount);
+    activeUIs.push(ui);
+    const instanceId = 'bucket-1' as ItemInstanceId;
+    const state = new SurvivalSession(saved('bucket'), {
+      seed: 1,
+      initialConditions: { [instanceId]: 'broken' as const },
+    }).snapshot();
+    const action = vi.fn();
+    ui.onAction = action;
+    ui.render(state, (id) => id === 'repairItem' ? 'No Duct Tape remains.' : null);
+    ui.setAnchors([{
+      id: instanceId, itemType: 'bucket', toolId: null, action: null, remainingUses: 0,
+      quantity: 1, usableQuantity: 0, brokenQuantity: 1,
+      x: 320, y: 240, visible: true, depleted: false,
+    }]);
+
+    const anchor = mount.querySelector<HTMLButtonElement>(`[data-anchor-id="${instanceId}"]`)!;
+    expect(anchor.getAttribute('aria-disabled')).toBe('false');
+    expect(anchor.getAttribute('aria-description')).toContain('Choose Repair or Discard.');
+    anchor.click();
+
+    const dialog = mount.querySelector<HTMLElement>('[data-repair-options]')!;
+    expect(dialog.classList).toContain('is-visible');
+    const repair = dialog.querySelector<HTMLButtonElement>('[data-repair-target]')!;
+    expect(repair.getAttribute('aria-disabled')).toBe('true');
+    expect(repair.disabled).toBe(false);
+    expect(dialog.querySelector('[data-repair-unavailable]')?.textContent)
+      .toBe('Repair unavailable: No Duct Tape remains.');
+    repair.click();
+    expect(action).not.toHaveBeenCalled();
+
+    dialog.querySelector<HTMLButtonElement>('[data-discard-target]')!.click();
+    expect(action).toHaveBeenCalledWith('discardItem', { kind: 'itemDiscard', target: instanceId });
+    expect(dialog.classList).not.toContain('is-visible');
   });
 
   it('shows event feedback and routes only eligible physical anchors', async () => {
@@ -1081,7 +1122,7 @@ describe('SurvivalUI', () => {
     expect(onAction).not.toHaveBeenCalled();
   });
 
-  it.each(['bucket', 'flashlight'] as const)('keeps broken %s inspectable without exposing a usable action', (itemType) => {
+  it.each(['bucket', 'flashlight'] as const)('keeps broken %s inspectable and exposes its item actions', (itemType) => {
     const mount = document.createElement('main');
     document.body.append(mount);
     const ui = createUI(mount);
@@ -1099,10 +1140,10 @@ describe('SurvivalUI', () => {
 
     const broken = mount.querySelector<HTMLButtonElement>(`[data-anchor-id="${instanceId}"]`)!;
     expect(broken.disabled).toBe(false);
-    expect(broken.getAttribute('aria-disabled')).toBe('true');
+    expect(broken.getAttribute('aria-disabled')).toBe('false');
     expect(broken.querySelector('[role="tooltip"]')?.textContent).toBe(`${itemType.toUpperCase()} — BROKEN`);
     expect(broken.getAttribute('aria-description')).toContain('BROKEN');
-    expect(broken.getAttribute('aria-description')).toContain('Repair with Duct Tape.');
+    expect(broken.getAttribute('aria-description')).toContain('Choose Repair or Discard.');
     expect(broken.dataset.condition).toBe('broken');
     broken.focus();
     expect(document.activeElement).toBe(broken);
