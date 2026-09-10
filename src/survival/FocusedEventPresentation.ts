@@ -62,6 +62,7 @@ export interface FocusedEventPresentationDependencies {
   readonly supplyDisplay: BoatSupplyDisplay;
   readonly chestDisplay: ChestDisplay;
   readonly emitCue: (cue: EventPresentationCue) => void;
+  readonly takeCameraControl: () => void;
 }
 
 export type FocusedEventPresentationFactory = (

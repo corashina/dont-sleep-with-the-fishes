@@ -810,6 +810,7 @@ export class BoatWorld {
         supplyDisplay: this.supplyDisplay,
         chestDisplay: this.chestDisplay,
         emitCue: (cue) => this.eventCueHandler(cue),
+        takeCameraControl: () => this.cameraController.handoffFocusedEventView(),
       },
       focusedFactories: this.focusedEventFactories,
       featuredModels,
@@ -1610,7 +1611,7 @@ export class BoatWorld {
 
   private updateAmbientScenePresentation(time: number): void {
     const activeEventId = this.eventPresentationHost.activeEventId();
-    if (activeEventId !== null && eventPresentationRoute(activeEventId) === 'moon') {
+    if (activeEventId !== null && (eventPresentationRoute(activeEventId) === 'moon' || activeEventId === 'flying-saucer')) {
       this.eventPresentationHost.update(time, 0);
     }
     this.cameraController.applyFocusedEventView(

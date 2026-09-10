@@ -8,6 +8,7 @@ export const EVENT_MODEL_IDS = [
   'riggedHand',
   'containerShip',
   'airplane',
+  'flyingSaucer',
   'midnightPalmTrees',
   'midnightShovel',
   'midnightBush',

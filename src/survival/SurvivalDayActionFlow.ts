@@ -77,9 +77,9 @@ export interface SurvivalDayActionFlowDependencies {
   readonly onFatalError: (error: unknown) => void;
 }
 
-const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
+const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk', 'abducted'];
 
-function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' {
+function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' | 'abducted' {
   return TERMINAL_STATES.includes(state);
 }
 

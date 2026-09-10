@@ -488,6 +488,28 @@
     "animations": [],
     "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
   },
+  "flyingSaucer": {
+    "triangles": 3958,
+    "rawBounds": {
+      "min": [
+        -212.18299865722656,
+        -25.2406005859375,
+        -212.18299865722656
+      ],
+      "max": [
+        212.18299865722656,
+        83.23770141601562,
+        212.18299865722656
+      ]
+    },
+    "sourceSha256": "4F320514CA53F04D02E5E9009CF172E999A68D8478FD29C7F998D04DC2ADDE6E",
+    "sourceTriangles": 6384,
+    "outputSha256": "E94C9D0B080031C94D7FB6C729933D1D7572B97C2AD0F600345A64C597BF7155",
+    "hasSkins": false,
+    "animationCount": 0,
+    "animations": [],
+    "processing": "welded, simplified, normals regenerated, pruned, deduplicated, unpartitioned, renamed, and embedded"
+  },
   "shark": {
     "triangles": 6604,
     "rawBounds": {

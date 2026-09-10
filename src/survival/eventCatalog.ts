@@ -34,21 +34,21 @@ export const SURVIVAL_EVENT_IDS = Object.freeze([
   'drifting-supplies', 'drifting-chest',
   'check-the-back',
   'flowers', 'chest-attack', 'midnight-tour', 'night-trader',
-  'handyman', 'other-people', 'plane', 'lighthouse',
+  'handyman', 'other-people', 'plane', 'flying-saucer', 'lighthouse',
 ] as const);
 
 export type SurvivalEventId = typeof SURVIVAL_EVENT_IDS[number];
 export type SignalSightingEventId = Extract<
   SurvivalEventId,
-  'other-people' | 'plane' | 'lighthouse'
+  'other-people' | 'plane' | 'flying-saucer' | 'lighthouse'
 >;
 
-export const PLANE_CHOICE_WINDOW_SECONDS = 10;
+export const FLYBY_CHOICE_WINDOW_SECONDS = 10;
 
 export function isSignalSightingEventId(
   eventId: string,
 ): eventId is SignalSightingEventId {
-  return eventId === 'other-people' || eventId === 'plane' || eventId === 'lighthouse';
+  return eventId === 'other-people' || eventId === 'plane' || eventId === 'flying-saucer' || eventId === 'lighthouse';
 }
 
 export type DriftingItemEventId = Extract<
@@ -104,6 +104,7 @@ const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.free
   handyman: 'eventText028',
   'other-people': 'eventText029',
   plane: 'eventText030',
+  'flying-saucer': 'ufoReveal',
   lighthouse: 'lighthouseReveal',
 });
 
@@ -656,6 +657,15 @@ const survivalEvents: SurvivalEventDefinition[] = [
       'plane-pass',
     )),
   ], undefined, { minimumRescueLead: 2, maximumAppearances: 2 }),
+  event('flying-saucer', 'night', 'ufoTitle', 'dangerous', 'sighting', 1, 8, 15, [
+    choice('flareGun', 'eventText070', 'flareGun', outcome(
+      1, 'ufoTaken', { ending: 'abduction', items: [consume('flareGun')] }, 'ufo-abduction',
+    )),
+    choice('flashlight', 'eventText071', 'flashlight', outcome(
+      1, 'ufoTaken', { ending: 'abduction' }, 'ufo-abduction',
+    )),
+    contextualChoice('sleep', 'ufoHide', outcome(1, 'ufoPassed', {}, 'ufo-pass')),
+  ], undefined, { maximumAppearances: 1 }),
   event('lighthouse', 'night', 'lighthouseTitle', 'safe', 'sighting', 2, 15, 2, [
     choice('flareGun', 'eventText070', 'flareGun', outcome(
       1, 'lighthouseFlare', effects([add('rescueLead', 4)], [consume('flareGun')]),

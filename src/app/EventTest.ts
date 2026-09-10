@@ -125,6 +125,7 @@ export const EVENT_TEST_OPTIONS: readonly EventTestOption[] = Object.freeze([
   endingOption('rescue', 'eventTestRescue'),
   endingOption('death', 'eventTestDeath'),
   endingOption('sinking', 'eventTestSinking'),
+  endingOption('abduction', 'eventTestAbduction'),
 ]);
 
 export function createEventTestResult(): Readonly<ScavengeResult> {

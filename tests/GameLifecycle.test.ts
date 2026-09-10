@@ -2112,10 +2112,10 @@ describe('ScavengePhase lifecycle integration', () => {
     try {
       const group = mount.querySelector('optgroup[label="ENDINGS"]');
       expect(Array.from(group?.querySelectorAll('option') ?? [], (option) => option.value))
-        .toEqual(['ending-dorothy', 'ending-rescue', 'ending-death', 'ending-sinking']);
+        .toEqual(['ending-dorothy', 'ending-rescue', 'ending-death', 'ending-sinking', 'ending-abduction']);
       enter('item-animation-lab');
       await flushPhases();
-      for (const endingId of ['dorothy', 'rescue', 'death', 'sinking', 'dorothy']) {
+      for (const endingId of ['dorothy', 'rescue', 'death', 'sinking', 'abduction', 'dorothy']) {
         const previous = phases.at(-1)!;
         const dispose = vi.spyOn(previous, 'dispose');
         enter(`ending-${endingId}`);

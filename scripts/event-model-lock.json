@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedOn": "2026-08-26",
+  "generatedOn": "2026-09-09",
   "sources": {
     "lighthouse": {
       "id": "lighthouse",
@@ -217,6 +217,24 @@
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
       "downloadedOn": "2026-08-26"
+    },
+    "flyingSaucer": {
+      "id": "flyingSaucer",
+      "pageUrl": "https://poly.pizza/m/6hu2h8v78mO",
+      "publicId": "6hu2h8v78mO",
+      "resourceId": "077f565d-a601-4667-883e-1a598a3b4acb",
+      "downloadUrl": "https://static.poly.pizza/077f565d-a601-4667-883e-1a598a3b4acb.glb",
+      "sourceAssetId": "poly-pizza:077f565d-a601-4667-883e-1a598a3b4acb",
+      "modelName": "Flying saucer",
+      "author": "Poly by Google",
+      "license": "CC-BY 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+      "pageAnimated": false,
+      "sha256": "4F320514CA53F04D02E5E9009CF172E999A68D8478FD29C7F998D04DC2ADDE6E",
+      "sourceTriangles": 6384,
+      "sourceHasSkins": false,
+      "sourceAnimationCount": 0,
+      "downloadedOn": "2026-09-09"
     },
     "emptyLifeboat": {
       "id": "emptyLifeboat",

@@ -136,7 +136,7 @@ const BOAT_STORAGE_SLOTS = {
   )],
   map: [restingSlot('shelf', 'map', 0, 0.65, 0)],
   medicalKit: [restingSlot('floor', 'medicalKit', -0.50, -1.27, 0.10)],
-  spyglass: [restingSlot('shelf', 'spyglass', -1.08, -1.70, Math.PI + 0.14)],
+  spyglass: [restingSlot('floor', 'spyglass', -0.96, -1.15, Math.PI + 0.14)],
   // Roll around the handle axis so the basket hangs down toward the water.
   fishingNet: [restingSlot('floor', 'fishingNet', -0.77005223, -2.04704738, 42 * Math.PI / 180, 1, 68 * Math.PI / 180, -1.02758174)],
   knife: [restingSlot('floor', 'knife', 0.25, -0.55, 0, 0.5, Math.PI / 2)],

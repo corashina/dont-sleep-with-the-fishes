@@ -9,6 +9,7 @@ export type DeathCause =
   | { readonly kind: 'other' };
 
 export type EndingRecord =
+  | { readonly id: 'abduction'; readonly day: number; readonly savedPickupCount: number }
   | { readonly id: 'dorothy'; readonly day: 0; readonly savedPickupCount: number }
   | { readonly id: 'rescue'; readonly day: number; readonly savedPickupCount: number; readonly signalAssisted: boolean }
   | { readonly id: 'death'; readonly day: number; readonly savedPickupCount: number; readonly cause: DeathCause }
@@ -17,6 +18,7 @@ export type EndingRecord =
 export type SurvivalEndingId = Exclude<EndingRecord['id'], 'dorothy'>;
 
 const t = defineMessages({
+  abduction: { en: 'TAKEN FROM THE SEA', pl: 'PORWANY Z MORZA', 'es-AR': 'TE LLEVARON DEL MAR' },
   dorothy: { en: 'SUNK WITH DOROTHY', pl: 'NA DNIE Z DOROTHY', "es-AR": "TE HUNDISTE CON DOROTHY" },
   rescue: { en: 'RESCUE FOUND YOU', pl: 'NADESZŁA POMOC', "es-AR": "LLEGÓ EL RESCATE" },
   death: { en: 'THE SEA OUTLASTED YOU', pl: 'MORZE PRZETRWAŁO DŁUŻEJ', "es-AR": "EL MAR AGUANTÓ MÁS QUE VOS" },

@@ -137,13 +137,13 @@ function createTestEventBundleManager(): SurvivalPhaseBundleManager {
   };
 }
 
-const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
+const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk', 'abducted'];
 const OUTLINED_DAY_ACTIONS = [
   'eat', 'fish', 'netFish', 'openChest', 'repair', 'dive', 'repairItem', 'answerRadio', 'useEnergyBar', 'treat',
   'endDay',
 ] as const;
 
-function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' {
+function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' | 'abducted' {
   return TERMINAL_STATES.includes(state);
 }
 
@@ -937,7 +937,7 @@ export class SurvivalPhase implements GamePhase {
 
   private syncVisualState(snapshot: Readonly<SurvivalSnapshot>): void {
     this.visualState.elapsedSeconds = this.elapsedSeconds;
-    this.visualState.phase = snapshot.state === 'nightEvent' ? 'night' : 'day';
+    this.visualState.phase = snapshot.state === 'nightEvent' || snapshot.state === 'abducted' ? 'night' : 'day';
     this.visualState.weather = snapshot.weather;
   }
 

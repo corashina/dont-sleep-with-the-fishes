@@ -453,6 +453,7 @@ export class SurvivalSession {
       });
       session.state = 'rescued';
     }
+    if (endingId === 'abduction') session.abduct();
     return session;
   }
 
@@ -1110,6 +1111,7 @@ export class SurvivalSession {
     event: SurvivalEventDefinition,
     resolved: WeightedEventOutcome,
   ): void {
+    if (resolved.effects.ending === 'abduction') this.abduct();
     if (resolved.effects.nextDawnEnergy !== undefined) {
       this.nextDawnEnergyOverride = resolved.effects.nextDawnEnergy;
     }
@@ -2157,8 +2159,13 @@ export class SurvivalSession {
     if (this.ending !== null) this.clearPendingEvent();
   }
 
+  private abduct(): void {
+    this.state = 'abducted';
+    this.ending = Object.freeze({ id: 'abduction', day: this.day, savedPickupCount: this.savedPickupCount });
+  }
+
   private isTerminal(): boolean {
-    return this.state === 'rescued' || this.state === 'dead' || this.state === 'sunk';
+    return this.state === 'rescued' || this.state === 'dead' || this.state === 'sunk' || this.state === 'abducted';
   }
 
   private clampMeters(): void {

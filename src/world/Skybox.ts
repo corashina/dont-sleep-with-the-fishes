@@ -21,6 +21,7 @@ import {
 } from './celestialLight';
 import { createCloudImpostorLayout, updateCloudImpostorShadows } from './cloudImpostorLayout';
 import { cloudImpostorShader } from './cloudImpostorShader';
+import { lunarFaceShader } from './lunarFaceShader';
 
 const TRANSITION_SECONDS = 1.5;
 const MOON_DIRECTION: CelestialDirection = [0.46, 0.52, -0.72];
@@ -116,143 +117,7 @@ const fragmentShader = `
     return mix(lower, upper, blend.z);
   }
 
-  float softReliefEllipse(
-    vec2 point,
-    vec2 center,
-    vec2 radius,
-    float angle,
-    float softness
-  ) {
-    vec2 offset = point - center;
-    float angleCos = cos(angle);
-    float angleSin = sin(angle);
-    vec2 rotated = vec2(
-      offset.x * angleCos - offset.y * angleSin,
-      offset.x * angleSin + offset.y * angleCos
-    );
-    float distanceToEdge = length(rotated / radius);
-    return 1.0 - smoothstep(
-      1.0 - softness,
-      1.0 + softness,
-      distanceToEdge
-    );
-  }
-
-  float lunarFaceRelief(vec2 facePoint, float moonTextureLuma) {
-    float warpX = cloudValueNoise3D(vec3(facePoint * 9.0, 4.7)) - 0.5;
-    float warpY = cloudValueNoise3D(vec3(facePoint.yx * 11.0, 8.3)) - 0.5;
-    vec2 wornPoint = facePoint + vec2(warpX, warpY) * 0.018;
-
-    float leftEye = softReliefEllipse(
-      wornPoint,
-      vec2(-0.17, 0.105),
-      vec2(0.11, 0.052),
-      0.08,
-      0.32
-    );
-    float rightEye = softReliefEllipse(
-      wornPoint,
-      vec2(0.18, 0.09),
-      vec2(0.102, 0.048),
-      -0.12,
-      0.34
-    );
-    float eyeSocketRelief = max(leftEye, rightEye);
-    float leftPupil = softReliefEllipse(
-      wornPoint,
-      vec2(-0.16, 0.1),
-      vec2(0.025, 0.03),
-      0.02,
-      0.42
-    );
-    float rightPupil = softReliefEllipse(
-      wornPoint,
-      vec2(0.17, 0.085),
-      vec2(0.023, 0.028),
-      -0.04,
-      0.42
-    );
-    float pupilPitRelief = max(leftPupil, rightPupil);
-    float leftBrowRidge = softReliefEllipse(
-      wornPoint,
-      vec2(-0.17, 0.17),
-      vec2(0.13, 0.025),
-      0.08,
-      0.48
-    );
-    float rightBrowRidge = softReliefEllipse(
-      wornPoint,
-      vec2(0.18, 0.155),
-      vec2(0.12, 0.024),
-      -0.1,
-      0.5
-    );
-    float browRidgeRelief = max(leftBrowRidge, rightBrowRidge);
-
-    float leftCheek = softReliefEllipse(
-      wornPoint,
-      vec2(-0.19, -0.07),
-      vec2(0.16, 0.18),
-      -0.14,
-      0.48
-    );
-    float rightCheek = softReliefEllipse(
-      wornPoint,
-      vec2(0.19, -0.055),
-      vec2(0.15, 0.17),
-      0.12,
-      0.5
-    );
-    float cheekRelief = max(leftCheek, rightCheek);
-
-    float mouthCraterRelief = softReliefEllipse(
-      wornPoint,
-      vec2(0.005, -0.255),
-      vec2(0.225, 0.16),
-      -0.025,
-      0.22
-    );
-    float mouthCore = softReliefEllipse(
-      wornPoint,
-      vec2(0.008, -0.258),
-      vec2(0.18, 0.12),
-      -0.025,
-      0.3
-    );
-    float lipRimRelief = max(mouthCraterRelief - mouthCore, 0.0);
-
-    float upperToothA = softReliefEllipse(
-      wornPoint, vec2(-0.105, -0.19), vec2(0.022, 0.027), 0.1, 0.42
-    );
-    float upperToothB = softReliefEllipse(
-      wornPoint, vec2(-0.038, -0.184), vec2(0.024, 0.031), 0.03, 0.38
-    );
-    float upperToothC = softReliefEllipse(
-      wornPoint, vec2(0.036, -0.186), vec2(0.024, 0.03), -0.04, 0.38
-    );
-    float upperToothD = softReliefEllipse(
-      wornPoint, vec2(0.105, -0.195), vec2(0.021, 0.026), -0.12, 0.44
-    );
-    float toothRidgeRelief = max(
-      max(upperToothA, upperToothB),
-      max(upperToothC, upperToothD)
-    ) * mouthCore;
-
-    float surfaceWear = mix(0.76, 1.08, cloudValueNoise3D(
-      vec3(wornPoint * 23.0, 12.6)
-    ));
-    surfaceWear *= mix(0.9, 1.08, moonTextureLuma);
-
-    return (
-      cheekRelief * 0.1
-      + browRidgeRelief * 0.11
-      + lipRimRelief * 0.18
-      + toothRidgeRelief * 1.04
-      - eyeSocketRelief * 0.34
-      - pupilPitRelief * 0.34
-      - mouthCraterRelief * 0.78
-    ) * surfaceWear;
-  }
+  ${lunarFaceShader}
 
   ${cloudImpostorShader}
 
@@ -377,7 +242,7 @@ const fragmentShader = `
       moonUv
     );
     float moonClarity = 1.0 - uHaze * 0.72;
-    float faceReveal = smoothstep(0.02, 0.18, uMoonFaceReveal);
+    float faceReveal = smoothstep(0.04, 0.96, uMoonFaceReveal);
     vec3 moonBase = uMoonColor * moonSample.rgb;
     vec3 moonDisc = moonBase;
     if (moonSample.a > 0.001 && faceReveal > 0.001) {
@@ -421,6 +286,8 @@ const fragmentShader = `
     vec3 relitMoon = moonBase * reliefLighting;
     relitMoon *= 1.0 - recessedRelief * 0.94;
     relitMoon += moonBase * raisedRelief * 0.48;
+    relitMoon += uMoonColor * vec3(0.56, 0.64, 0.61)
+      * lunarFaceStare(facePoint) * smoothstep(0.35, 0.9, uMoonFaceReveal);
     float reliefReveal = faceReveal * mix(0.84, 1.0, uMoonDread);
     moonDisc = mix(moonBase, relitMoon, reliefReveal);
     }

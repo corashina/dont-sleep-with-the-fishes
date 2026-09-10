@@ -17,7 +17,7 @@ import {
   clamp01Unchecked as clamp01,
   smoothstepUnchecked as smoothstep,
 } from './animationMath';
-import { PLANE_CHOICE_WINDOW_SECONDS } from './eventCatalog';
+import { FLYBY_CHOICE_WINDOW_SECONDS } from './eventCatalog';
 import type {
   EventChoicePresentation,
   FocusedEventPresentation,
@@ -43,7 +43,7 @@ const PLANE_SPEED = 20;
 const PLANE_START = new Vector3(130, 28, -70);
 const PLANE_REVEALED = new Vector3(90, 28, -70);
 const PLANE_WINDOW_END = new Vector3(
-  PLANE_REVEALED.x - PLANE_SPEED * PLANE_CHOICE_WINDOW_SECONDS,
+  PLANE_REVEALED.x - PLANE_SPEED * FLYBY_CHOICE_WINDOW_SECONDS,
   PLANE_REVEALED.y,
   PLANE_REVEALED.z,
 );
