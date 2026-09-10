@@ -1636,6 +1636,7 @@ export class SurvivalSession {
       lastEventId: this.lastEventId,
       lastSeenDay: this.lastSeenDay,
       targetableItemIds: this.usableItemIds(),
+      food: this.food,
       appearanceCounts: this.appearanceCounts,
       inventoryItemIds: this.presentItemIds(),
       rescueLead: this.rescueLead,

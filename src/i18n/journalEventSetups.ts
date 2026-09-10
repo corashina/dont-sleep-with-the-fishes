@@ -2,6 +2,7 @@ import { getLanguage } from './language';
 import type { EventTextId } from './eventMessages';
 
 const situations: Record<string, readonly [string, string, string]> = {
+  'seagull-theft': ['A few gulls crossed the morning sky, far from the boat.', 'Kilka mew przecinało poranne niebo, daleko od łodzi.', 'Unas gaviotas cruzaban el cielo de la mañana, lejos del bote.'],
   'flying-saucer': ['A low hum rolled across the sea. A disc moved across the stars, its lights searching the water.', 'Niski pomruk niósł się nad morzem. Dysk sunął pośród gwiazd, a jego światła przeszukiwały wodę.', 'Un zumbido grave recorría el mar. Un disco cruzaba las estrellas; sus luces registraban el agua.'],
   'something-under-us': ['Something larger than the boat stopped beneath us. The hull rose without a wave.', 'Coś większego od łodzi zatrzymało się pod nami. Kadłub uniósł się bez fali.', 'Algo más grande que el bote se detuvo debajo nuestro. El casco se elevó sin una ola.'],
   'ocean-of-blood': ['The sea turned red. Drifting bodies turned their heads toward me.', 'Morze zrobiło się czerwone. Dryfujące ciała obracały głowy w moją stronę.', 'El mar se volvió rojo. Los cuerpos que flotaban giraban la cabeza hacia mí.'],

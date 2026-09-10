@@ -20,6 +20,7 @@ const catMeowWindows = [
 ];
 
 const freesoundSources = [
+  ['seagulls', 'selcukartut', '546565'],
   ['menuAmbient', 'Tim_Verberne', '482167'],
   ['calmOcean', 'SamsterBirdies', '578524'],
   ['roughOcean', 'frodeims', '616222'],
@@ -140,6 +141,8 @@ async function writeFreesoundAudio(id, audio, destination) {
   // Start the dive clip at its splash instead of the quiet recording lead-in.
   const output = id === 'diveEntry'
     ? splitMp3ByWindows(audio, [[0.8, Infinity]])[0]
+    : id === 'seagulls'
+      ? splitMp3ByWindows(audio, [[0, 40]])[0]
     : id === 'fishingNet'
       ? splitMp3ByWindows(audio, [[0, 4.8]])[0]
       : audio;

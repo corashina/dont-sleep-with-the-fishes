@@ -279,6 +279,57 @@ function createSessionRig(
 }
 
 describe('event selection contracts', () => {
+  it('resolves seagull theft at contact, keeps the flock, and releases it at night', async () => {
+    const rig = createSessionRig(new SurvivalSession([], {
+      seed: 41, initial: { day: 4, food: 2 }, initialEventId: 'seagull-theft',
+    }));
+    const flight = deferred();
+    rig.world.revealEvent.mockImplementation(() => flight.promise);
+    const reveal = rig.flow.revealPending(rig.realSession.snapshot());
+    await vi.waitFor(() => expect(rig.world.revealEvent).toHaveBeenCalledWith('seagull-theft'));
+    expect(rig.calls.indexOf('stage:seagull-theft')).toBeLessThan(rig.calls.indexOf('uncover'));
+    expect(rig.realSession.snapshot().food).toBe(2);
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+    expect(rig.ui.setEventSelection).not.toHaveBeenCalled();
+    rig.flow.seagullGrab();
+    rig.flow.seagullGrab();
+    expect(rig.session.resolveEvent).toHaveBeenCalledOnce();
+    expect(rig.realSession.snapshot()).toMatchObject({ food: 1, state: 'day', day: 4 });
+    expect(rig.setBusy).toHaveBeenLastCalledWith(true);
+    flight.resolve();
+    await reveal;
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+    expect(rig.ui.holdEventOutcome).not.toHaveBeenCalled();
+    expect(rig.ui.showEventReveal).not.toHaveBeenCalled();
+    expect(rig.ui.setEventSelection).not.toHaveBeenCalled();
+    expect(rig.world.clearEvent).not.toHaveBeenCalled();
+    expect(rig.bundles.releaseActive).not.toHaveBeenCalled();
+    expect(rig.flow.isIdle()).toBe(true);
+    expect(rig.setBusy).toHaveBeenLastCalledWith(false);
+    rig.flow.beginNightTransition(rig.realSession.snapshot(), false);
+    expect(rig.world.clearEvent).toHaveBeenCalledOnce();
+    expect(rig.audio.clearEvent).toHaveBeenCalledOnce();
+    expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
+    rig.flow.dispose();
+  });
+
+  it('ignores seagull contact after cancellation', async () => {
+    const rig = createSessionRig(new SurvivalSession([], {
+      seed: 41, initial: { day: 4, food: 2 }, initialEventId: 'seagull-theft',
+    }));
+    const flight = deferred();
+    rig.world.revealEvent.mockImplementation(() => flight.promise);
+    const reveal = rig.flow.revealPending(rig.realSession.snapshot());
+    await vi.waitFor(() => expect(rig.world.revealEvent).toHaveBeenCalled());
+    rig.flow.clear();
+    rig.flow.seagullGrab();
+    flight.resolve();
+    await reveal;
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+    expect(rig.realSession.snapshot().food).toBe(2);
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+  });
+
   it('offers the Radio to call a crew and routes its reply through the event flow', async () => {
     const rig = createSessionRig(new SurvivalSession([
       { instanceId: 'radio-1', type: 'radio' },

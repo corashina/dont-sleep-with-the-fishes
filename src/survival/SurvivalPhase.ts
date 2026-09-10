@@ -833,7 +833,8 @@ export class SurvivalPhase implements GamePhase {
       onFatalError: (error) => this.onFatalError(error),
     });
     this.world.setEventCueHandler?.(({ eventId, cue }) => {
-      if (eventId === 'midnight-tour') this.audio.midnightTourCue(cue);
+      if (eventId === 'seagull-theft') this.eventFlow.seagullGrab();
+      else if (eventId === 'midnight-tour') this.audio.midnightTourCue(cue);
       else if (eventId === 'chest-attack') this.audio.chestAttackCue(cue);
       else this.audio.checkBackCue(cue);
     });
