@@ -64,6 +64,9 @@ function resolvedEffects(
     ...(selected.effects.nextDawnEnergyReduction !== undefined
       ? { nextDawnEnergyReduction: selected.effects.nextDawnEnergyReduction }
       : {}),
+    ...(selected.effects.maximumNextDawnEnergy !== undefined
+      ? { maximumNextDawnEnergy: selected.effects.maximumNextDawnEnergy }
+      : {}),
     ...(selected.effects.followUpNight !== undefined
       ? { followUpNight: selected.effects.followUpNight }
       : {}),

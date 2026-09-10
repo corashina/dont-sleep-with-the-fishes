@@ -228,7 +228,7 @@ function validateEffectRecord(value: unknown, path: string): PlainRecord {
     'effect',
     [
       'resources', 'items', 'chest',
-      'nextDawnEnergy', 'nextDawnEnergyReduction', 'followUpNight',
+      'nextDawnEnergy', 'nextDawnEnergyReduction', 'maximumNextDawnEnergy', 'followUpNight',
     ],
   );
   return candidateEffects;
@@ -323,14 +323,27 @@ function validateDawnEnergyReduction(candidateEffects: PlainRecord, path: string
   if (Object.hasOwn(candidateEffects, 'nextDawnEnergyReduction') && (
     candidateEffects.nextDawnEnergyReduction !== 1
     || Object.hasOwn(candidateEffects, 'nextDawnEnergy')
+    || Object.hasOwn(candidateEffects, 'maximumNextDawnEnergy')
     || Object.hasOwn(candidateEffects, 'followUpNight')
   )) {
     throw new Error(`${path}.nextDawnEnergyReduction must be one and cannot combine with another dawn or follow-up effect`);
   }
 }
 
+function validateDawnEnergyCap(candidateEffects: PlainRecord, path: string): void {
+  if (Object.hasOwn(candidateEffects, 'maximumNextDawnEnergy')) {
+    const cap = candidateEffects.maximumNextDawnEnergy;
+    if (!Number.isInteger(cap) || (cap as number) < 0 || (cap as number) > 4
+      || Object.hasOwn(candidateEffects, 'nextDawnEnergy')
+      || Object.hasOwn(candidateEffects, 'nextDawnEnergyReduction')) {
+      throw new Error(`${path}.maximumNextDawnEnergy requires an exclusive integer from zero through four`);
+    }
+  }
+}
+
 function validateOptionalEffects(candidateEffects: PlainRecord, path: string): void {
   validateDawnEnergyReduction(candidateEffects, path);
+  validateDawnEnergyCap(candidateEffects, path);
   const hasChest = Object.hasOwn(candidateEffects, 'chest');
   const hasNextDawnEnergy = Object.hasOwn(candidateEffects, 'nextDawnEnergy');
   const hasFollowUpNight = Object.hasOwn(candidateEffects, 'followUpNight');

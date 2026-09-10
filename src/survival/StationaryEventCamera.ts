@@ -41,9 +41,10 @@ export class StationaryEventCamera {
       .multiply(this.offsetQuaternion);
   }
 
-  applyLookAt(target: Object3D, strength = 1): void {
+  applyLookAt(target: Object3D, strength = 1, heightOffset = 0): void {
     if (!this.captured) this.capture();
     this.camera.position.copy(this.basePosition);
+    this.camera.position.y += heightOffset * Math.max(0, Math.min(1, strength));
     this.camera.updateWorldMatrix(true, false);
     target.updateWorldMatrix(true, false);
     this.camera.getWorldPosition(this.cameraWorldPosition);

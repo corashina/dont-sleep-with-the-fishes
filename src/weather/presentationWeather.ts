@@ -73,6 +73,7 @@ const PROFILES: Readonly<Record<PresentationWeatherId, Readonly<PresentationWeat
 });
 
 const EVENT_WEATHER: Readonly<Record<string, PresentationWeatherId>> = Object.freeze({
+  'ocean-of-blood': 'calm',
   'dangerous-waters': 'squall',
   leak: 'rain',
   snatcher: 'waves',

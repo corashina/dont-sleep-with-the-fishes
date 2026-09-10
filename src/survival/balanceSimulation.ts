@@ -67,6 +67,7 @@ export function enumerateMissingPickupSets(): readonly MissingPickupSet[] {
 const EVENT_CHOICE_PRIORITY = Object.freeze({
   'quiet-night': ['sleep'],
   'something-under-us': ['baitTin', 'sleep'],
+  'ocean-of-blood': ['fishingNet', 'sleep'],
   'dangerous-waters': ['map', 'compass', 'sleep'],
   leak: ['ductTape', 'bucket', 'map', 'sleep'],
   'school-of-fish': ['fishingNet', 'bucket', 'spyglass', 'sleep'],
