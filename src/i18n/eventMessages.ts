@@ -237,7 +237,7 @@ const EVENT_TEXT = {
   'eventText158': { en: 'The wind batters the boat.', pl: 'Wiatr smaga łódź.', 'es-AR': 'El viento azota el bote.' },
   'eventText159': { en: 'The hollow bucket knocks through the night.', pl: 'Puste wiadro stuka przez całą noc.', 'es-AR': 'El balde vacío golpea toda la noche.' },
   'eventText160': { en: 'The beam finds only empty water.', pl: 'Snop światła pada tylko na pustą wodę.', 'es-AR': 'El haz de luz solo encuentra agua vacía.' },
-  'eventText161': { en: 'The ring drifts against the gunwale.', pl: 'Koło obija się o burtę.', 'es-AR': 'El salvavidas flota y golpea contra la borda.' },
+  'eventText161': { en: 'You pull the swim ring over your head and settle it around your waist.', pl: 'Przekładasz koło ratunkowe przez głowę i opuszczasz je do pasa.', 'es-AR': 'Te pasás el salvavidas por la cabeza y lo acomodás en la cintura.' },
   'eventText162': { en: 'The umbrella shelters a restless sleep.', pl: 'Parasol osłania twój niespokojny sen.', 'es-AR': 'El paraguas te protege durante un sueño inquieto.' },
   'eventText163': { en: 'A hard gust folds the umbrella during the night.', pl: 'Silny podmuch łamie parasol w środku nocy.', 'es-AR': 'Una ráfaga fuerte dobla el paraguas durante la noche.' },
   'eventText164': { en: 'The anchor holds through the storm.', pl: 'Kotwica wytrzymuje napór burzy.', 'es-AR': 'El ancla resiste la tormenta.' },

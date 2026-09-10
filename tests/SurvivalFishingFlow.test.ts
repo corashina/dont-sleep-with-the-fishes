@@ -84,9 +84,6 @@ function createRig(options: FishingRigOptions = {}) {
   const biteTarget: ProjectedBoatBounds = Object.freeze({
     x: 320, y: 180, width: 64, height: 48, depth: 2, visible: true,
   });
-  const catchTarget: ProjectedBoatBounds = Object.freeze({
-    x: 410, y: 290, width: 96, height: 54, depth: 1.8, visible: true,
-  });
   const world: FishingWorldPort = {
     enterFishingView: vi.fn(() => startAnimation('enter')),
     castFishingAtScreenPoint: vi.fn((): FishingCastPoint | null => castPoint),
@@ -97,7 +94,6 @@ function createRig(options: FishingRigOptions = {}) {
     projectFishingBite: vi.fn(() => biteTarget),
     playFishingReel: vi.fn(() => startAnimation('reel')),
     playFishingNetHaul: vi.fn(() => startAnimation('net')),
-    projectFishingCatch: vi.fn(() => catchTarget),
     playFishingMiss: vi.fn(() => startAnimation('miss')),
     exitFishingView: vi.fn(() => startAnimation('exit')),
     clearFishingPresentation: vi.fn(() => calls.push('world:clear')),
@@ -162,7 +158,6 @@ function createRig(options: FishingRigOptions = {}) {
     animations,
     castPoint,
     biteTarget,
-    catchTarget,
     renderSnapshot,
     setBusy,
     setPaused: (value: boolean) => { paused = value; },
@@ -270,9 +265,8 @@ describe('SurvivalFishingFlow', () => {
     rig.animations.reel[0]!.resolve();
     await flushPromises();
     expect(rig.ui.showFishingResult).toHaveBeenCalledWith({
-      items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }], message: '', catchTarget: rig.catchTarget,
+      items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }], message: '',
     });
-    expect(rig.world.projectFishingCatch).toHaveBeenCalledWith(1280, 720);
 
     rig.flow.continueResult();
     rig.flow.continueResult();

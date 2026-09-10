@@ -29,7 +29,6 @@ export type FishingWorldPort = Pick<
   | 'projectFishingBite'
   | 'playFishingReel'
   | 'playFishingNetHaul'
-  | 'projectFishingCatch'
   | 'playFishingMiss'
   | 'exitFishingView'
   | 'clearFishingPresentation'
@@ -95,9 +94,8 @@ export function formatFishingResult(result: FishingTerminalResult, outcome: Acti
       if (result.kind === 'miss') return flowText('nothing');
       if (result.catch.id === 'backpack' || result.catch.kind === 'fish') return '';
       return result.catch.reward.kind === 'none'
-        ? flowText('unusableCatch', result.catch.label) : result.catch.label;
+        ? flowText('junk') : result.catch.label;
     },
-    catchTarget: null,
   };
 }
 
@@ -457,13 +455,7 @@ export class SurvivalFishingFlow {
 
   private showResult(result: FishingTerminalResult, outcome: ActionOutcome): void {
     const view = formatFishingResult(result, outcome);
-    const catchTarget = result.kind !== 'miss'
-      ? this.dependencies.world.projectFishingCatch?.(
-        this.viewportWidth,
-        this.viewportHeight,
-      ) ?? null
-      : null;
-    this.dependencies.ui.showFishingResult?.({ items: view.items, get message() { return view.message; }, catchTarget });
+    this.dependencies.ui.showFishingResult?.(view);
   }
 
   private async returnFromView(generation: number): Promise<void> {

@@ -190,11 +190,7 @@ export class SurvivalUI {
     this.coverView = new SurvivalCoverView();
     this.hudView = new SurvivalHudView();
     this.anchorView = new BoatAnchorView(this.root);
-    this.fishingView = new SurvivalFishingView(
-      mount,
-      this.root,
-      () => this.anchorView.anchor('fishing-tools'),
-    );
+    this.fishingView = new SurvivalFishingView(mount);
     this.focusedEventView = new FocusedEventView(this.root);
     this.journalView = new SurvivalJournalView();
     this.modalViews = new SurvivalModalViews();
@@ -370,7 +366,6 @@ export class SurvivalUI {
   setAnchors(anchors: readonly BoatInteractionAnchor[]): void {
     if (this.disposed) return;
     this.anchorView.setAnchors(anchors);
-    this.fishingView.refreshResultPlacement();
     this.positionOpenRoutineDialogs();
   }
 

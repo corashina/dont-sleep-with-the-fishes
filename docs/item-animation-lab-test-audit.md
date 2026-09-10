@@ -563,7 +563,7 @@ Use the current probabilities in [Drifting loot](drifting-loot-design.md).
 Selector: Drifting Chest.
 
 - [ ] **Retrieve It** (`retrieve`) — needs 3 energy.
-  - [ ] `drifting-chest.retrieve`: You recover the closed chest. Effects: subtract energy 3; gainChest  ×1.
+  - [ ] `drifting-chest.retrieve`: You recover the closed chest. Effects: subtract energy 1; gainChest  ×1.
 
 - [ ] **Send Carlitos** (`delegate-carlitos`) — needs available Carlitos.
   - [ ] `drifting-chest.retrieve`: Carlitos recovers the closed chest. Effects: gainChest  ×1.

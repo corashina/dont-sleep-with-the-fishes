@@ -261,7 +261,7 @@ export const uiCatalog = {
     "pl": "Dryfująca skrzynia",
     "es-AR": "Cofre a la deriva"
   },
-  "fishingResult": { en: 'Results', pl: 'Wyniki', 'es-AR': 'Resultados' },
+  "fishingResult": { en: 'Fishing Result', pl: 'Wynik połowu', 'es-AR': 'Resultado de pesca' },
   "closeFishing": { en: 'Close fishing result', pl: 'Zamknij wynik połowu', 'es-AR': 'Cerrar resultado de pesca' },
   "fishingInteraction": {
     "en": "Fishing interaction",
@@ -450,9 +450,9 @@ export const uiCatalog = {
     "es-AR": "COFRE"
   },
   "chestHelp": {
-    "en": "Open the recovered chest for free.",
-    "pl": "Otwórz odzyskaną skrzynię bez kosztu.",
-    "es-AR": "Abrí el cofre recuperado sin costo."
+    "en": "Open the recovered chest for 3 energy.",
+    "pl": "Otwórz odzyskaną skrzynię za 3 punkty energii.",
+    "es-AR": "Abrí el cofre recuperado por 3 puntos de energía."
   },
   "oneEnergy": {
     "en": "1 ENERGY",

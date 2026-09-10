@@ -1538,7 +1538,7 @@ describe('SurvivalUI', () => {
     ui.render(snapshot(), () => null);
     ui.setBusy(true);
     ui.setFishingState({ mode: 'result', message: '', biteTarget: null });
-    ui.showFishingResult({ items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }], message: '', catchTarget: null });
+    ui.showFishingResult({ items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }], message: '' });
     ui.onFishingResultContinue = () => {
       ui.hideFishingResult();
       ui.setFishingViewExitVisible(true);

@@ -8,6 +8,7 @@ import {
 } from '../game/ItemState';
 import type { BoatInteractionAnchor, BoatToolId } from '../survival/BoatInteraction';
 import { carlitosStatus } from '../survival/CarlitosState';
+import { isOptionalLootDayEvent } from '../survival/dayActionRules';
 import type { InspectableEventId } from '../survival/eventCatalog';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import { calculateHullRepair, SURVIVAL_BALANCE } from '../survival/survivalBalance';
@@ -78,7 +79,7 @@ const ACTIONS: readonly ActionDefinition[] = [
   { id: 'repairItem', get label() { return uiText('repairItem'); }, get cost() { return uiText('oneTape'); }, energyCost: 0, get effect() { return uiText('restoreItem'); }, risk: 'safe' },
   { id: 'answerRadio', get label() { return uiText('answerRadio'); }, get cost() { return uiText('oneEnergy'); }, energyCost: SURVIVAL_BALANCE.radio.energy, get effect() { return uiText('rescueLead'); }, risk: 'safe' },
   { id: 'useEnergyBar', get label() { return uiText('eatBar'); }, get cost() { return uiText('oneBar'); }, energyCost: 0, get effect() { return uiText('energyThree'); }, risk: 'safe' },
-  { id: 'openChest', get label() { return uiText('openChest'); }, get cost() { return uiText('free'); }, energyCost: 0, get effect() { return uiText('recoverSupply'); }, risk: 'uncertain' },
+  { id: 'openChest', get label() { return uiText('openChest'); }, get cost() { return uiText('threeEnergy'); }, energyCost: SURVIVAL_BALANCE.actions.openChestEnergy, get effect() { return uiText('recoverSupply'); }, risk: 'uncertain' },
   { id: 'petCarlitos', get label() { return uiText('pet'); }, get cost() { return uiText('free'); }, energyCost: 0, get effect() { return uiText('easeLonely'); }, risk: 'safe' },
   { id: 'feedCarlitos', get label() { return uiText('feed'); }, get cost() { return uiText('oneFood'); }, energyCost: 0, get effect() { return uiText('restoreHunger'); }, risk: 'safe' },
 ];
@@ -1054,7 +1055,7 @@ export class BoatAnchorView {
   private canOpenCarlitosCard(anchorButton: HTMLButtonElement): boolean {
     const carlitos = this.currentSnapshot?.carlitos;
     if (carlitos == null || this.busy || this.paused || this.modalOpen) return false;
-    if (this.eventPresentationActive && !this.itemAnimationLab) return false;
+    if (!this.allowsDayActions() && !this.itemAnimationLab) return false;
     return !anchorButton.disabled && anchorButton.getAttribute('aria-hidden') !== 'true';
   }
 
@@ -1230,7 +1231,19 @@ export class BoatAnchorView {
     }
     const choice = this.eventChoiceForAnchor(id, anchor);
     if (choice !== undefined) return this.eventChoiceState(choice);
+    if (this.allowsDayActions()) return 'ordinary';
     return this.eventItemState(id, anchor);
+  }
+
+  private allowsDayActions(): boolean {
+    if (!this.eventPresentationActive) return true;
+    return !this.itemAnimationLab
+      && this.currentSnapshot !== null
+      && isOptionalLootDayEvent(this.currentSnapshot)
+      && this.eventEligibility !== null
+      && this.eventSelectedInstanceId === null
+      && this.eventSelectedChoiceId === null
+      && !this.busy;
   }
 
   private eventChoiceState(choice: EventContextChoice): AnchorInteractionState {
@@ -1383,7 +1396,7 @@ export class BoatAnchorView {
   }
 
   private handleEventItemClick(button: HTMLButtonElement): boolean {
-    if (!this.eventPresentationActive) return false;
+    if (this.allowsDayActions()) return false;
     const instanceId = this.instanceIdForButton(button);
     if (instanceId === undefined) return false;
     if (button.dataset.targetKind !== 'item' && this.eventEligibility?.has(instanceId) !== true) {
@@ -1397,7 +1410,7 @@ export class BoatAnchorView {
   }
 
   private handleBrokenItemClick(button: HTMLButtonElement): boolean {
-    if (this.eventPresentationActive || button.dataset.condition !== 'broken') return false;
+    if (!this.allowsDayActions() || button.dataset.condition !== 'broken') return false;
     const instanceId = this.instanceIdForButton(button);
     if (instanceId === undefined || this.busy) return false;
     this.onBrokenItem(instanceId, button);
@@ -1420,7 +1433,7 @@ export class BoatAnchorView {
     action: ActionDefinition | undefined,
   ): void {
     if (action === undefined) return;
-    if (this.eventPresentationActive && !(this.itemAnimationLab && action.id === 'openChest')) return;
+    if (!this.allowsDayActions() && !(this.itemAnimationLab && action.id === 'openChest')) return;
     this.onAction(action.id, button);
   }
 
@@ -1454,7 +1467,7 @@ export class BoatAnchorView {
   }
 
   private canUseCarlitosAction(): boolean {
-    return !this.modalOpen && (!this.eventPresentationActive || this.itemAnimationLab);
+    return !this.modalOpen && (this.allowsDayActions() || this.itemAnimationLab);
   }
 
   private readonly handleDocumentClick = (event: MouseEvent): void => {
@@ -1463,7 +1476,7 @@ export class BoatAnchorView {
     if (!(target instanceof Node)) return;
     if (this.carlitosCard.contains(target) || this.carlitosReturnTarget?.contains(target)) return;
     const restoreFocus = !this.busy
-      && !this.eventPresentationActive
+      && this.allowsDayActions()
       && !this.paused
       && !this.modalOpen;
     this.closeCarlitosCard(restoreFocus);

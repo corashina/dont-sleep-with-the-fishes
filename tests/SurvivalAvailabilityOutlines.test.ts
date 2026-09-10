@@ -43,7 +43,8 @@ describe('survival availability outlines', () => {
     const rig = createRig(energy);
     const expected = [
       'boat-supply:cannedFood', `boat-supply:${energyItem}`, 'boat-supply:ductTape',
-      'boat-supply:radio', 'boat-supply:medicalKit', 'repair-toolbox', 'fishing-rod', 'persistent-chest',
+      'boat-supply:radio', 'boat-supply:medicalKit', 'repair-toolbox', 'fishing-rod',
+      ...(energy === 3 ? ['persistent-chest'] : []),
       'sleep-pillow',
     ].sort();
     try {
@@ -71,7 +72,7 @@ describe('survival availability outlines', () => {
       expect(rig.session.perform('answerRadio').accepted).toBe(true);
       expect(rig.session.setItemConditionForLab('scubaSet-1', 'broken')).toBe(true);
       rig.internals.renderSnapshot(false);
-      expect(rig.targets()).toEqual(['boat-supply:energyBar', 'fishing-rod', 'persistent-chest', 'sleep-pillow']);
+      expect(rig.targets()).toEqual(['boat-supply:energyBar', 'fishing-rod', 'sleep-pillow']);
       expect(rig.session.beginFishing().accepted).toBe(true);
       rig.internals.renderSnapshot(false);
       expect(rig.targets()).toEqual([]);
@@ -85,7 +86,7 @@ describe('survival availability outlines', () => {
     try {
       expect(rig.targets()).toEqual([
         'boat-supply:cannedFood', 'boat-supply:ductTape', 'boat-supply:energyBar',
-        'boat-supply:medicalKit', 'persistent-chest', 'sleep-pillow',
+        'boat-supply:medicalKit', 'sleep-pillow',
       ]);
     } finally {
       rig.dispose();

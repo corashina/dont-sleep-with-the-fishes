@@ -11,7 +11,7 @@ const catalog = {
   salvageDescription: { en: 'Floating salvage within reach.', pl: 'Dryfujące zapasy w zasięgu ręki.', 'es-AR': "Suministros flotantes al alcance." },
   flowersDescription: { en: 'Pale blooms pass in the dark water.', pl: 'Blade kwiaty przepływają przez ciemną wodę.', 'es-AR': "Flores pálidas pasan por el agua oscura." },
   open: { en: 'OPEN', pl: 'OTWÓRZ', 'es-AR': "ABRIR" },
-  chestDescription: { en: 'A closed chest. Opening it is free.', pl: 'Zamknięta skrzynia. Otwarcie nic nie kosztuje.', 'es-AR': "Un cofre cerrado. Abrirlo no cuesta nada." },
+  chestDescription: { en: 'A closed chest. Opening it costs 3 energy.', pl: 'Zamknięta skrzynia. Otwarcie kosztuje 3 punkty energii.', 'es-AR': "Un cofre cerrado. Abrirlo cuesta 3 puntos de energía." },
   carlitosDescription: { en: 'Check his hunger and happiness.', pl: 'Sprawdź jego głód i nastrój.', 'es-AR': "Revisá su hambre y felicidad." },
   hand: { en: 'HAND', pl: 'DŁOŃ', 'es-AR': "MANO" },
   handDescription: { en: 'Touch the waiting hand.', pl: 'Dotknij czekającej dłoni.', 'es-AR': "Tocá la mano que espera." },

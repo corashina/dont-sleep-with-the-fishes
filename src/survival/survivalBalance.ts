@@ -4,7 +4,7 @@ export const SURVIVAL_BALANCE = {
   nightHullWear: { damage: 6, respiteInterval: 5 },
   thresholds: { hungry: 70, starving: 90, maximum: 100 },
   actions: {
-    fishEnergy: 1, netEnergy: 2, diveEnergy: 3,
+    fishEnergy: 1, netEnergy: 2, diveEnergy: 3, openChestEnergy: 3,
     foodHunger: { min: 18, max: 24 }, repairHullPerEnergy: 33,
     maximumRepairEnergy: 3,
     maximumEnergy: 3,

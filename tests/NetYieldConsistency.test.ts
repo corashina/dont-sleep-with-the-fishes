@@ -22,22 +22,22 @@ describe('net catch agreement', () => {
       expect(outcome.accepted).toBe(true);
       if (result.catch.kind === 'fish' || result.catch.id === 'backpack') {
         expect(popup.message).toBe('');
-      } else {
+      } else if (result.catch.reward.kind !== 'none') {
         expect(popup.message).toContain(result.catch.label);
       }
       expect(popup.items.length).toBeLessThanOrEqual(1);
       if (result.catch.reward.kind === 'none') {
         expect(popup.items).toEqual([]);
-        expect(popup.message).toContain('No usable reward.');
+        expect(popup.message).toBe('Junk');
       }
     }
   });
 
-  it.each(['plasticBottle', 'brokenCan', 'crushedCan'] as const)('names %s instead of claiming nothing was found', (id) => {
+  it.each(['plasticBottle', 'brokenCan', 'crushedCan'] as const)('labels %s as Junk', (id) => {
     const caught = FISHING_CATCHES.find((entry) => entry.id === id)!;
     const game = new SurvivalSession([], { seed: 1 });
     const popup = formatFishingResult({ kind: 'catch', catch: caught }, game.beginFishing().outcome);
-    expect(popup.message).toBe(`${caught.label}. No usable reward.`);
+    expect(popup.message).toBe('Junk');
     expect(popup.items).toEqual([]);
   });
 });
