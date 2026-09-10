@@ -1,6 +1,7 @@
 import { Scene, Texture, Vector3, Vector4 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Skybox } from '../src/world/Skybox';
+import { CLOUD_QUERY_COUNT, CLOUD_RINGS } from '../src/world/cloudImpostorLayout';
 
 describe('default cloud motion', () => {
   it('keeps cloud groups stable when the camera and weather change', () => {
@@ -9,6 +10,7 @@ describe('default cloud motion', () => {
     const sky = new Skybox(new Scene(), state, texture);
     const centers = sky.material.uniforms.uCloudCenters!.value as Vector4[];
     const scales = sky.material.uniforms.uCloudScales!.value as Vector4[];
+    const queryRings = sky.material.uniforms.uCloudQueryRings!.value as Vector4[];
     const originalCenters = centers.map(center => center.toArray());
     const originalScales = scales.map(scale => scale.toArray().slice(0, 3));
     try {
@@ -17,6 +19,9 @@ describe('default cloud motion', () => {
       }
       expect(sky.material.uniforms.uCloudCenters!.value).toBe(centers);
       expect(sky.material.uniforms.uCloudScales!.value).toBe(scales);
+      expect(sky.material.uniforms.uCloudQueryRings!.value).toBe(queryRings);
+      expect(queryRings).toHaveLength(CLOUD_RINGS.length);
+      expect(sky.material.uniforms.uCloudQueryCount!.value).toBe(CLOUD_QUERY_COUNT);
       expect(centers.map(center => center.toArray())).toEqual(originalCenters);
       expect(scales.map(scale => scale.toArray().slice(0, 3))).toEqual(originalScales);
       expect(sky.mesh.position.toArray()).toEqual([59, 3, -59]);

@@ -144,6 +144,11 @@ export class MainMenuPhase implements GamePhase {
     this.ui.onOverlayChange = () => this.clearSignInteraction();
   }
 
+  async prepare(): Promise<void> {
+    if (this.disposed) return;
+    await this.context.sceneRenderer.prepare(this.scene, this.context.camera, this.visualState);
+  }
+
   start(): void {
     if (this.disposed || this.started) return;
     this.started = true;
