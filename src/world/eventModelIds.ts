@@ -14,6 +14,8 @@ export const EVENT_MODEL_IDS = [
   'midnightCoffin',
   'midnightShovel',
   'midnightBush',
+  'midnightCampfire',
+  'midnightWoodLog',
   'midnightMonster',
 ] as const;
 

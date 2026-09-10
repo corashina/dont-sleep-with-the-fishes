@@ -21,6 +21,7 @@ import { selectHandymanReward, eligibleHandymanRewards } from './tradeRules';
 import { drawMidnightGraveLoot } from './midnightGraveLoot';
 import { drawDiveItem } from './diveRewards';
 import { resolveWeightedOutcome } from './eventResolver';
+import { drawMidnightCampItems } from './midnightCampLoot';
 import { drawDriftingLoot, driftingLootEffects } from './driftingLoot';
 import { driftingSupplyKindFromSeed, driftingSupplyChoiceForVariant } from './driftingSupplies';
 import { deriveEventVariantSeed } from './eventPresentationOutcome';
@@ -1046,12 +1047,7 @@ export class SurvivalSession {
       this.appearanceCounts.get(event.id) ?? 0,
       resultId,
     );
-    if (event.id === 'midnight-tour' && resolved.resultId === 'tour-grave') {
-      return { ...resolved, effects: {
-        ...resolved.effects,
-        ...drawMidnightGraveLoot(this.presentItemIds(), this.random),
-      } };
-    }
+    if (event.id === 'midnight-tour') return this.resolveMidnightTourOutcome(resolved);
     if (event.id === 'handyman' && choice.itemId !== undefined) {
       const reward = selectHandymanReward(this.presentItemIds(), choice.itemId, this.random);
       if (reward === null) throw new Error('Handyman exchange has no eligible reward.');
@@ -1071,6 +1067,22 @@ export class SurvivalSession {
         items: loot.items!,
       },
     };
+  }
+
+  private resolveMidnightTourOutcome(resolved: WeightedEventOutcome): WeightedEventOutcome {
+    if (resolved.resultId === 'tour-grave') {
+      return { ...resolved, effects: {
+        ...resolved.effects,
+        ...drawMidnightGraveLoot(this.presentItemIds(), this.random),
+      } };
+    }
+    if ((resolved.resultId === 'tour-camp' || resolved.resultId === 'tour-camp-backpack')) {
+      return { ...resolved, effects: {
+        ...resolved.effects,
+        items: drawMidnightCampItems(this.presentItemIds(), this.random, resolved.resultId === 'tour-camp-backpack'),
+      } };
+    }
+    return resolved;
   }
 
   private applyResolvedEventEffects(

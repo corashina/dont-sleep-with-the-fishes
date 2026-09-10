@@ -119,6 +119,12 @@ export const EVENT_TEST_OPTIONS: readonly EventTestOption[] = Object.freeze([
           resultId: 'tour-grave',
         }, () => eventMessage('event-test.midnight-tour.grave', 'eventTestMidnightGrave')),
         eventSceneOption({
+          id: 'midnight-tour-camp',
+          phase,
+          eventId: id,
+          resultId: 'tour-camp',
+        }, () => eventMessage('event-test.midnight-tour.camp', 'eventTestMidnightCamp')),
+        eventSceneOption({
           id: 'midnight-tour-monster',
           phase,
           eventId: id,
