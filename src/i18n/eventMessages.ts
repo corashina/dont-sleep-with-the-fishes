@@ -1,4 +1,6 @@
 import { defineMessages } from './messages';
+import { itemLabel } from './itemMessages';
+import { nightTraderTrade } from '../survival/nightTraderTrades';
 import type {
   EventResultPresentation,
   SurvivalEventDefinition,
@@ -22,6 +24,8 @@ const EVENT_TEXT = {
   watersLookoutScrape: { en: 'You spot the gap late. The hull scrapes a rock, and the lookout costs you sleep.', pl: 'Za późno dostrzegasz przejście. Kadłub ociera się o skałę, a czuwanie odbiera ci sen.', 'es-AR': 'Ves el paso tarde. El casco raspa una roca y la vigilia te quita el sueño.' },
   peopleRadioChoice: { en: 'Call them on the Radio — lose 1 Energy at dawn', pl: 'Wywołaj ich przez radio — stracisz 1 energię o świcie', 'es-AR': 'Llamalos por radio — perdés 1 de energía al amanecer' },
   peopleRadioResult: { en: 'The crew answers your call and flashes a light. They will pass your location on. Talking costs you sleep.', pl: 'Załoga odpowiada na wywołanie i błyska światłem. Przekażą twoje położenie dalej. Rozmowa odbiera ci sen.', 'es-AR': 'La tripulación responde y hace una señal de luz. Van a comunicar tu ubicación. La charla te quita el sueño.' },
+  traderExchange: { en: 'Exchange', pl: 'Wymiana', 'es-AR': 'Intercambio' },
+  traderReceived: { en: 'Received from the trader', pl: 'Otrzymujesz od kupca', 'es-AR': 'Recibiste del comerciante' },
   ufoTitle: { en: 'Flying Saucer', pl: 'Latający spodek', 'es-AR': 'Platillo volador' },
   eventTestAbduction: { en: 'Abduction Ending', pl: 'Zakończenie: porwanie', 'es-AR': 'Final: abducción' },
   ufoReveal: { en: 'A silent disc crosses the stars. Its cold lights search the sea. Keep your head down.', pl: 'Cichy dysk przesłania gwiazdy. Jego zimne światła przeszukują morze. Nie wychylaj się.', 'es-AR': 'Un disco silencioso cruza las estrellas. Sus luces frías registran el mar. Mantené la cabeza baja.' },
@@ -344,13 +348,14 @@ function localizedProperty<T extends object, K extends keyof T>(
   owner: T,
   property: K,
   messageId: string,
+  suffix: () => string = () => '',
 ): void {
   const textId = owner[property];
   if (typeof textId !== 'string') throw new Error(`Invalid event text: ${messageId}`);
   Object.defineProperty(owner, property, {
     enumerable: true,
     configurable: false,
-    get: () => eventMessage(messageId, textId as EventTextId),
+    get: () => eventMessage(messageId, textId as EventTextId) + suffix(),
   });
 }
 
@@ -360,7 +365,9 @@ export function localizeEventDefinitionText(event: SurvivalEventDefinition): voi
   localizedProperty(event, 'revealText', `${event.id}.reveal`);
   localizedProperty(event, 'prompt', `${event.id}.prompt`);
   for (const choice of event.choices) {
-    localizedProperty(choice, 'label', `${event.id}.${choice.id}.label`);
+    const trade = event.id === 'night-trader' && choice.itemId !== undefined ? nightTraderTrade(choice.id) : undefined;
+    localizedProperty(choice, 'label', `${event.id}.${choice.id}.label`, trade === undefined ? undefined
+      : () => `: ${itemLabel(trade.payment)} → ${itemLabel(trade.reward)}`);
     choice.outcomes.forEach((outcome, index) => {
       const resultId = outcome.resultId ?? `${event.id}.${choice.id}.${index}`;
       if (outcome.resultId === undefined) {
@@ -372,7 +379,8 @@ export function localizeEventDefinitionText(event: SurvivalEventDefinition): voi
       }
       const path = `${event.id}.${choice.id}.${resultId}`;
       resultTextIds.set(path, outcome.message as EventTextId);
-      localizedProperty(outcome, 'message', path);
+      localizedProperty(outcome, 'message', path, outcome.message === 'traderReceived' && trade !== undefined
+        ? () => `: ${itemLabel(trade.reward)}.` : undefined);
     });
   }
 }

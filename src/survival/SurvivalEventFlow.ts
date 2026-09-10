@@ -30,6 +30,7 @@ import {
   deriveEventVariantSeed,
 } from './eventPresentationOutcome';
 import { driftingSupplyChoiceForVariant } from './driftingSupplies';
+import { nightTraderOffers, ownsNightTraderReward } from './nightTraderTrades';
 import { isEventPresentationRoute } from './eventPresentationRoutes';
 import type { EventOutcomePresentation } from './eventPresentationTypes';
 import {
@@ -237,7 +238,8 @@ function usesEventItemCues(itemType: ItemId | undefined): itemType is ItemId {
 function pendingEventDefinition(snapshot: SurvivalSnapshot): SurvivalEventDefinition | undefined {
   if (snapshot.pendingEventId === null) return undefined;
   if (isTerminal(snapshot.state)) return undefined;
-  return survivalEventById(snapshot.pendingEventId);
+  return survivalEventById(snapshot.pendingEventId,
+    deriveEventVariantSeed(snapshot.seed, snapshot.day, snapshot.pendingEventId));
 }
 
 function focusedChoiceAnchorId(eventId: string, choiceId: string): string | null {
@@ -2221,8 +2223,13 @@ export class SurvivalEventFlow {
     event: NonNullable<ReturnType<typeof survivalEventById>>,
     snapshot: SurvivalSnapshot,
   ): Map<ItemInstanceId, EventResponseId> {
+    const offers = event.id === 'night-trader'
+      ? nightTraderOffers(deriveEventVariantSeed(snapshot.seed, snapshot.day, event.id))
+      : null;
     const choiceByItem = new Map(
       event.choices
+        .filter((choice) => offers === null || (offers.some(({ id }) => id === choice.id)
+          && !ownsNightTraderReward(choice.id, snapshot.inventory)))
         .filter((choice) => choice.itemId !== undefined
           && this.meetsRequirements(choice.requirements, snapshot)
           && (choice.requiredChestState === undefined

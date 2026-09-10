@@ -458,7 +458,6 @@ function matchesResultId(
 }
 
 function fallbackResultId(eventId: string): string | undefined {
-  if (eventId === 'night-trader') return 'trader-food-fallback';
   if (eventId === 'handyman') return 'handyman-food-fallback';
   return undefined;
 }
