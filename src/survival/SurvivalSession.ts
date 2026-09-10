@@ -16,6 +16,8 @@ import {
   survivalEventById,
 } from './eventCatalog';
 import { drawWeightedEvent } from './eventSelection';
+import { prepareTradeEvent } from './tradeEvents';
+import { selectHandymanReward, eligibleHandymanRewards } from './tradeRules';
 import { drawDiveItem } from './diveRewards';
 import { resolveWeightedOutcome } from './eventResolver';
 import { drawDriftingLoot, driftingLootEffects } from './driftingLoot';
@@ -116,12 +118,6 @@ import type { SurvivalSnapshot } from './survivalSnapshot';
 const NO_EVENT_EXCLUSIONS: ReadonlySet<string> = new Set();
 const NO_ITEM_EXCLUSIONS: ReadonlySet<ItemInstanceId> = new Set();
 
-function fallbackResultId(eventId: string): string | undefined {
-  if (eventId === 'night-trader') return 'trader-food-fallback';
-  if (eventId === 'handyman') return 'handyman-food-fallback';
-  return undefined;
-}
-
 export interface SurvivalSessionOptions {
   seed: number;
   random?: RandomSource;
@@ -177,6 +173,7 @@ const DAY_ACTION_REJECTION_CODES: Readonly<Record<string, string>> = Object.free
   noTape: 'no-duct-tape',
   chooseRepair: 'no-repair-target',
   cannotRepair: 'item-not-repairable',
+  chooseDiscard: 'item-not-discardable',
   healthFull: 'health-full',
   noMedkitCharges: 'no-medical-kit',
   noSignal: 'no-radio-signal',
@@ -484,6 +481,7 @@ export class SurvivalSession {
     this.pendingEvent = checkpoint.pendingEventId === null
       ? null
       : survivalEventById(checkpoint.pendingEventId) ?? null;
+    if (this.pendingEvent !== null) this.pendingEvent = this.prepareEvent(this.pendingEvent);
     this.pendingEventTargetId = checkpoint.pendingEventTargetId;
     this.nextDawnEnergyOverride = checkpoint.nextDawnEnergyOverride;
     this.lastEventId = checkpoint.lastEventId;
@@ -725,6 +723,7 @@ export class SurvivalSession {
       case 'eat': return this.eat();
       case 'repair': return this.repair();
       case 'repairItem': return this.repairItem(option);
+      case 'discardItem': return this.discardItem(option);
       case 'treat': return this.treat();
       case 'answerRadio': return this.answerRadio();
       case 'useEnergyBar': return this.useEnergyBar();
@@ -815,6 +814,9 @@ export class SurvivalSession {
 
     const settlement = fishingSettlement(result, transaction.capturedBait);
     const inventoryMutations = this.applyFishingReward(settlement);
+    if (transaction.attempt.gear === 'net') {
+      inventoryMutations.push(...this.equipmentWear('fishingNet', 0.20));
+    }
     this.pendingJournalActions.push(createJournalFishingRecord(
       attemptId, result, settlement, inventoryMutations,
     ));
@@ -975,6 +977,15 @@ export class SurvivalSession {
       selectedInstanceId,
       attemptedItemId,
     );
+    if (selectedInstanceId !== null && choice.breakChance !== undefined) {
+      applied.inventoryMutations.push(...this.equipmentWear(
+        attemptedItemId!, choice.breakChance, selectedInstanceId,
+      ));
+    }
+    if (attemptedItemId === 'swimRing' && selectedInstanceId !== null
+      && this.inventory.consumeInstance(selectedInstanceId)) {
+      applied.inventoryMutations.push({ kind: 'consume', instanceIds: [selectedInstanceId] });
+    }
     this.completeResolvedEventState(event, resolved);
     const outcome = this.createResolvedEventOutcome(
       event.id,
@@ -996,6 +1007,8 @@ export class SurvivalSession {
   }
 
   private eventChoiceRejection(choice: EventChoiceDefinition): Rejection | null {
+    const tradeRejection = this.tradeChoiceRejection(choice);
+    if (tradeRejection !== null) return tradeRejection;
     const companionRejection = this.unavailableCompanionEventAction(choice.companionAction);
     if (companionRejection !== null) return companionRejection;
     if (!this.meetsChoiceRequirements(choice.requirements)) {
@@ -1017,6 +1030,19 @@ export class SurvivalSession {
     return null;
   }
 
+  private tradeChoiceRejection(choice: EventChoiceDefinition): Rejection | null {
+    if (this.pendingEvent?.id === 'handyman' && choice.itemId !== undefined
+      && eligibleHandymanRewards(this.presentItemIds(), choice.itemId).length === 0) {
+      return { code: 'trade-unavailable', message: t('tradeUnavailable') };
+    }
+    if (this.pendingEvent?.id === 'night-trader' && choice.id !== 'sleep'
+      && choice.outcomes.some((outcome) => outcome.effects.items?.some((mutation) =>
+        mutation.kind === 'gain' && this.inventory.hasOwned(mutation.itemId)))) {
+      return { code: 'trade-unavailable', message: t('tradeUnavailable') };
+    }
+    return null;
+  }
+
   private resolveChoiceOutcome(
     event: SurvivalEventDefinition,
     choice: EventChoiceDefinition,
@@ -1028,6 +1054,14 @@ export class SurvivalSession {
       this.appearanceCounts.get(event.id) ?? 0,
       resultId,
     );
+    if (event.id === 'handyman' && choice.itemId !== undefined) {
+      const reward = selectHandymanReward(this.presentItemIds(), choice.itemId, this.random);
+      if (reward === null) throw new Error('Handyman exchange has no eligible reward.');
+      return { ...resolved, effects: { items: [
+        { kind: 'lose', itemId: choice.itemId, quantity: 1 },
+        { kind: 'gain', itemId: reward, quantity: 1, fallbackFood: 1 },
+      ] } };
+    }
     if (event.id !== 'drifting-supplies' || choice.id === 'sleep') return resolved;
     const kind = driftingSupplyKindFromSeed(deriveEventVariantSeed(this.seed, this.day, event.id));
     const loot = driftingLootEffects(drawDriftingLoot(kind, this.presentItemIds(), this.random));
@@ -1131,7 +1165,7 @@ export class SurvivalSession {
       deltas,
       inventoryMutations,
     );
-    const resultId = fallbackFoodGranted ? fallbackResultId(eventId) : resolved.resultId;
+    const resultId = resolved.resultId;
     if (resolved.resultId === undefined) throw new Error('Event outcome requires a stable result ID.');
     const text: OutcomeText = fallbackFoodGranted ? domainText('fallbackFood')
       : { kind: 'eventResult', reference: { eventId, choiceId, resultId: resolved.resultId } };
@@ -1358,12 +1392,13 @@ export class SurvivalSession {
       deltas.health = -resolveIntegerValue(SURVIVAL_BALANCE.diving.injuryDamage, this.random);
     }
 
-    // Reserve a 10% slice of all dives within the success range for missing items.
+    // Item rewards occupy a slice of all attempts within the successful-dive range.
     const itemId = recovered && recoveryRoll >= chances.success - SURVIVAL_BALANCE.diving.itemChance
       ? drawDiveItem(this.presentItemIds(), this.random)
       : null;
     const inventoryMutations = itemId === null ? [] : this.gainDiveItem(itemId, deltas);
     if (recovered && itemId === null) this.applyDiveReward(deltas);
+    inventoryMutations.push(...this.equipmentWear('scubaSet', 0.15));
 
     return this.recordJournalAction('dive', this.commit(
       recovered ? 'dive-recovered' : 'dive-empty',
@@ -1456,6 +1491,29 @@ export class SurvivalSession {
       ]);
   }
 
+  private discardItem(option?: DayActionOption): ActionOutcome {
+    if (option?.kind !== 'itemDiscard' || !this.inventory.lose(option.target)) {
+      return this.reject('item-not-discardable', t('chooseDiscard'));
+    }
+    return this.recordJournalAction('discardItem',
+      this.commit('item-discarded', domainText('itemDiscarded'), {}, 'none'),
+      [{ kind: 'lose', instanceIds: [option.target] }],
+    );
+  }
+
+  private equipmentWear(
+    type: ItemId,
+    chance: number,
+    selectedId?: ItemInstanceId,
+  ): JournalInventoryMutation[] {
+    const item = selectedId === undefined
+      ? Object.values(this.inventory.snapshot()).find((entry) => entry?.type === type && entry.condition === 'usable')
+      : this.inventory.snapshot()[selectedId];
+    if (item?.condition !== 'usable' || chance <= 0 || this.random.next() >= chance
+      || !this.inventory.break(item.instanceId)) return [];
+    return [{ kind: 'break', instanceIds: [item.instanceId] }];
+  }
+
   private treat(): ActionOutcome {
     const deltas = dayActionResourceDelta(this.dayActionRuleState(), 'treat');
     const consumed = this.inventory.consume('medicalKit', 1);
@@ -1545,20 +1603,12 @@ export class SurvivalSession {
       );
     }
 
-    const gained = this.inventory.gain(reward.itemId);
-    if (gained === null) {
-      return this.commit(
-        'chest-opened',
-        domainText('chestFood'),
-        { food: 2 },
-        'none',
-        { kind: 'resource', id: 'food', quantity: 2 },
-      );
-    }
+    const deltas: ResourceDelta = {};
+    this.gainDiveItem(reward.itemId, deltas);
     return this.commit(
       'chest-opened',
       { kind: 'chestItem', itemId: reward.itemId },
-      {},
+      deltas,
       'none',
       { kind: 'item', id: reward.itemId, quantity: 1 },
     );
@@ -1599,12 +1649,19 @@ export class SurvivalSession {
     deltas: ResourceDelta,
     mutations: readonly JournalInventoryMutation[],
   ): RewardSummary | undefined {
-    if (eventId !== 'drifting-supplies' || choiceId === 'sleep') return undefined;
-    const rewards: RewardEntry[] = [];
+    const trade = eventId === 'handyman' || eventId === 'night-trader';
+    if ((!trade && eventId !== 'drifting-supplies') || choiceId === 'sleep') return undefined;
+    const rewards = this.gainedItemRewards(mutations);
+    if (trade) return rewards[0] === undefined ? undefined : Object.freeze(rewards[0]);
     for (const id of ['food', 'bait'] as const) {
       const quantity = deltas[id] ?? 0;
       if (quantity > 0) rewards.push({ kind: 'resource', id, quantity });
     }
+    return Object.freeze({ kind: 'bundle', rewards: Object.freeze(rewards.map((entry) => Object.freeze(entry))) });
+  }
+
+  private gainedItemRewards(mutations: readonly JournalInventoryMutation[]): RewardEntry[] {
+    const rewards: RewardEntry[] = [];
     for (const mutation of mutations) {
       if (mutation.kind !== 'gain') continue;
       for (const instanceId of mutation.instanceIds) {
@@ -1612,7 +1669,7 @@ export class SurvivalSession {
         rewards.push({ kind: 'item', id: item.type, quantity: 1 });
       }
     }
-    return Object.freeze({ kind: 'bundle', rewards: Object.freeze(rewards.map((entry) => Object.freeze(entry))) });
+    return rewards;
   }
 
   private recordJournalEvent(
@@ -1677,10 +1734,14 @@ export class SurvivalSession {
   }
 
   private openEvent(event: SurvivalEventDefinition): void {
-    this.pendingEvent = event;
+    this.pendingEvent = this.prepareEvent(event);
     this.pendingEventId = event.id;
     this.pendingEventTargetId = event.targetItemIds === undefined ? null : this.drawEventTarget(event);
     this.state = event.phase === 'day' ? 'dayEvent' : 'nightEvent';
+  }
+
+  private prepareEvent(event: SurvivalEventDefinition): SurvivalEventDefinition {
+    return prepareTradeEvent(event, { inventory: this.inventory.snapshot(), seed: this.seed, day: this.day });
   }
 
   private clearPendingEvent(): void {
@@ -1926,7 +1987,11 @@ export class SurvivalSession {
 
   private applyItemGain(itemId: ItemId, fallbackFood: number): EventMutationApplication {
     const gained = this.inventory.gain(itemId);
-    if (gained !== null) return this.directMutation('gain', [gained]);
+    if (gained !== null) {
+      if (itemId === 'cannedFood') { this.recoveredFood += 1; this.applyDeltas({ food: 1 }); }
+      if (itemId === 'baitTin') { this.recoveredBait += 1; this.applyDeltas({ bait: 1 }); }
+      return this.directMutation('gain', [gained]);
+    }
     this.applyDeltas({ food: fallbackFood });
     return { kind: 'gain', instanceIds: [], fallbackFoodGranted: true };
   }

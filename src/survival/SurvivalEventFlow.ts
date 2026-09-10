@@ -30,6 +30,7 @@ import {
   deriveEventVariantSeed,
 } from './eventPresentationOutcome';
 import { driftingSupplyChoiceForVariant } from './driftingSupplies';
+import { prepareTradeEvent } from './tradeEvents';
 import { isEventPresentationRoute } from './eventPresentationRoutes';
 import type { EventOutcomePresentation } from './eventPresentationTypes';
 import {
@@ -221,7 +222,6 @@ interface MidnightTourRecoveryReason {
 const FIXED_CHOICE_ANCHORS: Readonly<Record<string, string>> = {
   'midnight-tour:visit': 'midnight-tour:island',
   'handyman:touch': 'handyman:hand',
-  'handyman:chest': 'persistent-chest',
   'flowers:sleep': 'event:flowers',
 };
 
@@ -236,7 +236,8 @@ function usesEventItemCues(itemType: ItemId | undefined): itemType is ItemId {
 function pendingEventDefinition(snapshot: SurvivalSnapshot): SurvivalEventDefinition | undefined {
   if (snapshot.pendingEventId === null) return undefined;
   if (isTerminal(snapshot.state)) return undefined;
-  return survivalEventById(snapshot.pendingEventId);
+  const event = survivalEventById(snapshot.pendingEventId);
+  return event === undefined ? undefined : prepareTradeEvent(event, snapshot);
 }
 
 function focusedChoiceAnchorId(eventId: string, choiceId: string): string | null {
@@ -2331,9 +2332,7 @@ export class SurvivalEventFlow {
 
   private restoreEventSelection(): void {
     const snapshot = this.dependencies.session.snapshot();
-    const event = snapshot.pendingEventId === null
-      ? undefined
-      : survivalEventById(snapshot.pendingEventId);
+    const event = pendingEventDefinition(snapshot);
     this.dependencies.ui.setEventSelection?.(
       this.eligibility,
       event === undefined ? [] : this.contextualChoicesFor(event, snapshot),

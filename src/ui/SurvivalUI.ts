@@ -261,6 +261,9 @@ export class SurvivalUI {
       if (!this.disposed) this.onCameraTurn?.();
     };
     this.anchorView.onAction = (action, origin) => this.activateDayAction(action, origin);
+    this.anchorView.onBrokenItem = (instanceId, origin) => {
+      this.openBrokenItemOptions(instanceId, origin);
+    };
     this.anchorView.onEventItem = (choiceId, instanceId) => {
       if (!this.disposed) this.onEventItem(choiceId, instanceId);
     };
@@ -327,6 +330,7 @@ export class SurvivalUI {
       if (!this.disposed) this.onJournalPage();
     };
     this.modalViews.onRepairTarget = (instanceId) => this.chooseRepairTarget(instanceId);
+    this.modalViews.onDiscardTarget = (instanceId) => this.chooseDiscardTarget(instanceId);
     this.modalViews.onRepairCancel = () => this.closeRepairOptions();
     this.modalViews.onResume = () => {
       if (!this.disposed) this.onPauseChange(false);
@@ -851,31 +855,63 @@ export class SurvivalUI {
     if (this.disposed) return;
     this.latestCommandOrigin = origin;
     if (action === 'repairItem') {
-      this.openRepairOptions();
+      this.openRepairPicker();
       return;
     }
     this.onAction(action, undefined);
   }
 
   openRepairOptions(): void {
+    this.openRepairPicker(false);
+  }
+
+  private openRepairPicker(showDiscard = true): void {
     if (this.disposed || this.busy) return;
+    const targets = this.brokenItemTargets();
+    if (targets.length === 0) return;
+    this.modalViews.showRepairOptions(
+      targets,
+      () => this.currentUnavailable?.('repairItem') ?? null,
+      showDiscard,
+    );
+    this.showLayer(this.modalViews.repairRoot);
+  }
+
+  private openBrokenItemOptions(instanceId: ItemInstanceId, origin: HTMLButtonElement): void {
+    if (this.disposed || this.busy) return;
+    const target = this.brokenItemTargets().find((item) => item.instanceId === instanceId);
+    if (target === undefined) return;
+    this.latestCommandOrigin = origin;
+    this.modalViews.showRepairOptions(
+      [target],
+      () => this.currentUnavailable?.('repairItem') ?? null,
+    );
+    this.showLayer(this.modalViews.repairRoot);
+  }
+
+  private brokenItemTargets(): readonly Readonly<SurvivalItemState>[] {
     const snapshot = this.currentSnapshot;
-    if (snapshot === null) return;
-    const targets = Object.values(snapshot.inventory).filter((
+    if (snapshot === null) return [];
+    return Object.values(snapshot.inventory).filter((
       item,
     ): item is Readonly<SurvivalItemState> => (
       item !== undefined
       && item.condition === 'broken'
       && ITEM_DEFINITIONS[item.type].breakable
     ));
-    this.modalViews.showRepairOptions(targets);
-    this.showLayer(this.modalViews.repairRoot);
   }
 
   private chooseRepairTarget(target: ItemInstanceId): void {
     if (this.disposed) return;
     this.hideLayer(this.modalViews.repairRoot);
     this.onAction('repairItem', { kind: 'itemRepair', target });
+    if (this.modalFocus.topmostModal() === null) this.restoreCommandFocus(this.latestCommandOrigin);
+  }
+
+  private chooseDiscardTarget(target: ItemInstanceId): void {
+    if (this.disposed) return;
+    this.hideLayer(this.modalViews.repairRoot);
+    this.onAction('discardItem', { kind: 'itemDiscard', target });
     if (this.modalFocus.topmostModal() === null) this.restoreCommandFocus(this.latestCommandOrigin);
   }
 

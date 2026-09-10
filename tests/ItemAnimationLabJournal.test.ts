@@ -42,7 +42,7 @@ describe('Item Animation Lab journal examples', () => {
       }
       expect(observed).toEqual([
         ['consume:cannedFood', 'gain:flareGun', 'consume:flareGun'],
-        ['repair:knife', 'consume:ductTape', 'lose:swimRing', 'gain:radio'],
+        ['repair:knife', 'consume:ductTape', 'lose:fishingNet', 'gain:umbrella'],
         ['consume:medicalKit', 'gain:cannedFood', 'consume:baitTin', 'break:knife'],
         ['gain:medicalKit', 'lose:map'],
         [],

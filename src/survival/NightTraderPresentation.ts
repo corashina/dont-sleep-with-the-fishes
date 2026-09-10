@@ -42,6 +42,7 @@ import type {
 } from './survivalTypes';
 import { eventSideFromSeed, type EventSide } from './eventVariant';
 import { TimedPresentationAnimation } from './TimedPresentationAnimation';
+import { parseTraderChoiceId } from './tradeRules';
 
 type NightTraderAnimationKind =
   | 'reveal'
@@ -64,14 +65,6 @@ const PAYMENT_START = new Vector3(-0.35, 0.72, -1.05);
 const REWARD_END = new Vector3(-0.35, 0.72, -1.05);
 const X_AXIS = new Vector3(1, 0, 0);
 const Z_AXIS = new Vector3(0, 0, 1);
-
-const TRADER_REWARDS: Readonly<Partial<Record<string, ItemId>>> = Object.freeze({
-  food: 'ductTape',
-  bait: 'energyBar',
-  map: 'compass',
-  umbrella: 'medicalKit',
-  swimRing: 'radio',
-});
 
 function keyedTravel(progress: number): number {
   if (progress < 0.15) return -0.04 * smoothstep(progress / 0.15);
@@ -270,7 +263,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
       this.root.userData.state = 'refusing';
       return this.startAnimation('choice-refuse', REFUSE_CHOICE_DURATION);
     }
-    if (TRADER_REWARDS[choice.choiceId] === undefined) {
+    if (parseTraderChoiceId(choice.choiceId) === null) {
       throw new Error(`Unsupported Night Trader choice: ${choice.choiceId}`);
     }
     this.preparePayment(choice);
@@ -286,23 +279,16 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     if (result.eventId !== 'night-trader') {
       throw new Error(`Night Trader received result for ${result.eventId}.`);
     }
-    void outcome;
     switch (result.resultId) {
       case 'trader-reward': {
-        const itemId = TRADER_REWARDS[result.choiceId];
-        if (itemId === undefined) {
-          throw new Error(`Night Trader has no reward for ${result.choiceId}.`);
+        if (outcome.rewardSummary?.kind !== 'item') {
+          throw new Error('Night Trader reward result requires one item reward.');
         }
         this.hidePayment();
-        this.prepareReward(itemId, false);
+        this.prepareReward(outcome.rewardSummary.id);
         this.root.userData.state = 'returning-reward';
         return this.startAnimation('result-reward', RESULT_DURATION);
       }
-      case 'trader-food-fallback':
-        this.hidePayment();
-        this.prepareReward('cannedFood', true);
-        this.root.userData.state = 'returning-food';
-        return this.startAnimation('result-reward', RESULT_DURATION);
       case 'trader-refuse':
         this.hidePayment();
         this.root.userData.state = 'departing';
@@ -525,14 +511,17 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.usingSupplyPayment = choice.instanceId !== null
       && this.dependencies.supplyDisplay.pinEventActor(choice.instanceId);
     if (!this.usingSupplyPayment) {
-      this.paymentActor = choice.choiceId === 'food'
-        ? this.createTradeToken('food', 'payment')
-        : choice.choiceId === 'bait'
-          ? this.createTradeToken('bait', 'payment')
-          : this.createItemActor(
-            choice.choiceId as ItemId,
-            'payment',
-          );
+      const tradeChoice = parseTraderChoiceId(choice.choiceId);
+      if (tradeChoice === null) {
+        throw new Error(`Unsupported Night Trader choice: ${choice.choiceId}`);
+      }
+      this.paymentActor = this.createTradeToken(
+        tradeChoice.payment,
+        'payment',
+      );
+      this.paymentActor.userData.quantity = tradeChoice.kind === 'consumable'
+        ? 1
+        : 3;
       this.paymentActor.position.copy(this.paymentStart);
     }
     this.paymentVisible = true;
@@ -542,14 +531,9 @@ export class NightTraderPresentation implements FocusedEventPresentation {
     this.updateExchangeState();
   }
 
-  private prepareReward(itemId: ItemId, authoredFood: boolean): void {
+  private prepareReward(itemId: ItemId): void {
     this.rewardActors.clear();
-    if (authoredFood) {
-      this.rewardActor = this.createTradeToken('food', 'reward');
-      this.rewardActor.userData.itemType = 'cannedFood';
-    } else {
-      this.rewardActor = this.createItemActor(itemId, 'reward');
-    }
+    this.rewardActor = this.createItemActor(itemId, 'reward');
     this.rewardActor.position.copy(this.caseTarget);
     this.rewardActor.visible = false;
     this.rewardVisible = false;

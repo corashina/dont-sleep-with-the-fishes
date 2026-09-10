@@ -164,6 +164,7 @@ export class BoatAnchorView {
   readonly roots: readonly [HTMLElement, HTMLElement];
 
   onAction: (action: DayActionId, origin: HTMLButtonElement) => void = () => undefined;
+  onBrokenItem: (instanceId: ItemInstanceId, origin: HTMLButtonElement) => void = () => undefined;
   onUnavailableAction: (action: DayActionId, reason: string) => void = () => undefined;
   onEventItem: (choiceId: EventResponseId, instanceId: ItemInstanceId) => void = () => undefined;
   onEventChoice: (choiceId: EventResponseId) => void = () => undefined;
@@ -650,6 +651,7 @@ export class BoatAnchorView {
     clean(() => document.removeEventListener('click', this.handleDocumentClick));
     clean(() => window.removeEventListener('resize', this.handleWindowResize));
     clean(() => { this.onAction = () => undefined; });
+    clean(() => { this.onBrokenItem = () => undefined; });
     clean(() => { this.onUnavailableAction = () => undefined; });
     clean(() => { this.onEventItem = () => undefined; });
     clean(() => { this.onEventChoice = () => undefined; });
@@ -722,9 +724,11 @@ export class BoatAnchorView {
     const eventItemEligible = this.eventItemEligible(backingInstanceId);
     const toolCopy = this.anchorToolCopy(anchor, pillowSleep);
     const itemLabel = this.anchorLabel(anchor, toolCopy, quantity);
-    const itemDescription = this.anchorDescription(anchor, toolCopy);
-    const action = this.tooltipAction(anchor, pillowSleep, anchoredChoice, eventItemEligible);
-    const reason = this.tooltipReason(anchor, pillowSleep, anchoredChoice, eventItemEligible);
+    const broken = item?.condition === 'broken';
+    const baseDescription = this.anchorDescription(anchor, toolCopy);
+    const itemDescription = broken ? `${baseDescription} ${uiText('brokenItemHelp')}` : baseDescription;
+    const action = broken ? null : this.tooltipAction(anchor, pillowSleep, anchoredChoice, eventItemEligible);
+    const reason = broken ? null : this.tooltipReason(anchor, pillowSleep, anchoredChoice, eventItemEligible);
     const preview = this.tooltipPreview(action);
     const state = this.anchorState(item?.condition, usableQuantity, brokenQuantity);
     const visibleLabel = this.visibleAnchorLabel(anchor, anchoredChoice, itemLabel, quantity, state);
@@ -796,9 +800,6 @@ export class BoatAnchorView {
     pillowSleep: EventContextChoice | undefined,
   ): BoatToolCopy | undefined {
     if (pillowSleep !== undefined) {
-      if (this.currentSnapshot?.pendingEventId === 'flying-saucer') {
-        return { get label() { return pillowSleep.label; }, get description() { return pillowSleep.label; } };
-      }
       return { get label() { return uiText('sleep'); }, get description() { return uiText('sleepHelp'); } };
     }
     return anchor.toolId === null ? undefined : BOAT_TOOL_COPY[anchor.toolId];
@@ -983,7 +984,7 @@ export class BoatAnchorView {
     const quantity = this.anchorQuantity(anchor);
     const usableQuantity = this.usableQuantity(anchor, condition, quantity);
     const brokenQuantity = this.brokenQuantity(anchor, condition, quantity);
-    if (brokenQuantity > 0 && usableQuantity === 0) return uiText('repairTape');
+    if (brokenQuantity > 0 && usableQuantity === 0) return null;
     return anchor.action === null ? null : this.actionReasons.get(anchor.action) ?? null;
   }
 
@@ -1359,6 +1360,7 @@ export class BoatAnchorView {
     if (this.handleCarlitosAnchorClick(button)) return;
     if (this.handleEventFocusClick(button)) return;
     if (this.handleEventItemClick(button)) return;
+    if (this.handleBrokenItemClick(button)) return;
     const action = ACTIONS.find(({ id }) => id === button.dataset.action);
     if (this.handleUnavailableAnchorClick(button, action)) return;
     if (button.hasAttribute('data-event-choice')) return this.activateEventChoice(button);
@@ -1391,6 +1393,14 @@ export class BoatAnchorView {
     if (choiceId !== undefined && !this.busy && this.eventSelectedInstanceId === null) {
       this.onEventItem(choiceId, instanceId);
     }
+    return true;
+  }
+
+  private handleBrokenItemClick(button: HTMLButtonElement): boolean {
+    if (this.eventPresentationActive || button.dataset.condition !== 'broken') return false;
+    const instanceId = this.instanceIdForButton(button);
+    if (instanceId === undefined || this.busy) return false;
+    this.onBrokenItem(instanceId, button);
     return true;
   }
 
