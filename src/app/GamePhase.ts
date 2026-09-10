@@ -56,6 +56,7 @@ export interface ShipPhaseContext extends PhaseContext, ShipPhaseAssets {}
 export interface SurvivalPhaseContext extends PhaseContext, SurvivalAssets {}
 
 export interface GamePhase {
+  prepare?(): Promise<void>;
   start(): void;
   update(time: number, deltaSeconds: number): void;
   resize(width: number, height: number): void;
