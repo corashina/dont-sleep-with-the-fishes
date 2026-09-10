@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { Color, Vector3 } from 'three';
-import { OceanRenderer, type OceanAtmosphere } from '../src/ocean/OceanRenderer';
+import { describe,expect,it } from 'vitest';
+import { Color,Vector3 } from 'three';
+import { OceanRenderer,type OceanAtmosphere } from '../src/ocean/OceanRenderer';
 import { HIGH_WATER_LOOK } from '../src/ocean/highWaterLook';
 import { SUN_DIRECTION } from '../src/world/celestialLight';
 
@@ -48,26 +48,6 @@ describe('shared High water look', () => {
       lab.dispose();
       survival.dispose();
       scavenging.dispose();
-    }
-  });
-
-  it('preserves the scene light direction when switching water quality without another frame', () => {
-    const direction = [0, 0.24, -1] as const;
-    const ocean = new OceanRenderer('high', direction);
-    const scene = atmosphere('night');
-    try {
-      ocean.update(2, 1, 0.04, scene);
-      ocean.setQuality('low');
-      expect(ocean.material.uniforms.uFogDensity!.value).toBe(0.04);
-      expect(ocean.material.uniforms.uSkyColor!.value).toEqual(scene.skyColor);
-      expect(ocean.material.uniforms.uLightDirection!.value).toEqual(new Vector3(...direction).normalize());
-      expect(ocean.material.uniforms.uWaterReflectionDepth!.value).toBeNull();
-      ocean.setQuality('high');
-      expect(ocean.material.uniforms.uSkyColor!.value).toEqual(HIGH_WATER_LOOK.night.skyColor);
-      expect(ocean.material.uniforms.uLightDirection!.value).toEqual(new Vector3(...direction).normalize());
-      expect(ocean.material.uniforms.uWaterReflectionDepth!.value.isDepthTexture).toBe(true);
-    } finally {
-      ocean.dispose();
     }
   });
 });

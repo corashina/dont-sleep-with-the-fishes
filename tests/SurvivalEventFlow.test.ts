@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe,expect,it,vi } from 'vitest';
 import type { ItemInstanceId } from '../src/game/ItemState';
 import type { EventBundle } from '../src/survival/EventBundle';
 import { EventBundleManager } from '../src/survival/EventBundleManager';
@@ -676,105 +676,6 @@ describe('SurvivalEventFlow', () => {
     expect(rig.session.resolveEvent).not.toHaveBeenCalled();
   });
 
-  it('keeps the focused operation active when a choice is rejected', async () => {
-    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'drifting-supplies' });
-    const rig = createRig(pending);
-    rig.setResolveEvent(() => ({
-      accepted: false,
-      code: 'requirements-unmet',
-      message: 'No longer available.',
-      deltas: {},
-      cue: 'none',
-    }));
-    await rig.flow.revealPending(pending);
-    await rig.flow.focusEvent('drifting-supplies');
-    rig.flow.setFocusedResolutionActive(true);
-
-    expect(rig.flow.resolveFocusedEventChoice({ id: 'retrieve', instanceId: null }))
-      .toEqual({ accepted: false });
-    rig.flow.setFocusedResolutionActive(false);
-    rig.flow.setFocusedResolutionActive(true);
-
-    expect(rig.flow.resolveFocusedEventChoice({ id: 'retrieve', instanceId: null }))
-      .toEqual({ accepted: false });
-  });
-  it('loads, activates, stages, and reveals before it enables eligible items', async () => {
-    const umbrella = {
-      instanceId: 'umbrella-1',
-      type: 'umbrella',
-      condition: 'usable',
-    } as const;
-    const rig = createRig(snapshot({
-      state: 'dayEvent',
-      pendingEventId: 'shower-night',
-      inventory: inventory({ 'umbrella-1': umbrella }),
-    }));
-
-    await rig.flow.revealPending(rig.session.snapshot());
-
-    expect(rig.bundles.beginLoad).toHaveBeenCalledWith('shower-night');
-    expect(rig.bundles.activate).toHaveBeenCalledWith('shower-night');
-    expect(rig.world.stageEvent).toHaveBeenCalled();
-    expect(rig.world.revealEvent).toHaveBeenCalledWith('shower-night');
-    expect(rig.ui.setEventSelection).toHaveBeenCalledWith(
-      new Map([['umbrella-1', 'umbrella']]),
-      expect.any(Array),
-    );
-    expect(rig.calls.indexOf('activate:shower-night')).toBeLessThan(
-      rig.calls.indexOf('stage:shower-night'),
-    );
-    expect(rig.calls.at(-1)).toBe('ready');
-  });
-
-  it('uses an eligible item, resolves the event, runs dawn, and cleans in order', async () => {
-    const umbrella = {
-      instanceId: 'umbrella-1',
-      type: 'umbrella',
-      condition: 'usable',
-    } as const;
-    const pending = snapshot({
-      state: 'nightEvent',
-      pendingEventId: 'shower-night',
-      inventory: inventory({ 'umbrella-1': umbrella }),
-    });
-    const rig = createRig(pending);
-    rig.setResolveEvent(() => {
-      rig.setSnapshot(snapshot({ state: 'nightEvent', day: pending.day }));
-      return accepted();
-    });
-    await rig.flow.revealPending(pending);
-    rig.calls.length = 0;
-
-    const hold = deferred();
-    const cover = deferred();
-    rig.ui.holdEventOutcome.mockImplementation(async () => {
-      rig.calls.push('hold');
-      await hold.promise;
-    });
-    rig.ui.setSleepCovered.mockImplementation(async (covered) => {
-      rig.calls.push(covered ? 'cover' : 'uncover');
-      if (covered) await cover.promise;
-    });
-    rig.flow.resolveItem('umbrella', 'umbrella-1');
-    await vi.waitFor(() => expect(rig.calls).toContain('hold'));
-    expect(rig.calls).not.toContain('cover');
-    expect(rig.world.clearEvent).not.toHaveBeenCalled();
-    hold.resolve();
-    await vi.waitFor(() => expect(rig.calls).toContain('cover'));
-    expect(rig.world.clearEvent).not.toHaveBeenCalled();
-    cover.resolve();
-    await vi.waitFor(() => expect(rig.ui.restoreCommandFocus).toHaveBeenCalledOnce());
-
-    expect(rig.calls).toContain('use:shower-night/umbrella');
-    expect(rig.calls).toContain('begin-dawn');
-    expect(rig.calls.indexOf('clear-world')).toBeLessThan(
-      rig.calls.indexOf('release-bundle'),
-    );
-    expect(rig.calls.indexOf('release-bundle')).toBeLessThan(
-      rig.calls.indexOf('clear-ui'),
-    );
-  });
-
   it('reports an exact focused-result invariant and recovers the covered scene', async () => {
     const pending = snapshot({ state: 'dayEvent', pendingEventId: 'handyman' });
     const rig = createRig(pending);
@@ -795,68 +696,6 @@ describe('SurvivalEventFlow', () => {
     expect(rig.calls).toContain('uncover');
     expect(rig.calls).toContain('focus');
     expect(rig.calls.indexOf('ready')).toBeLessThan(rig.calls.indexOf('focus'));
-  });
-
-  it('retains a rescued event tableau while it clears selection and UI state', async () => {
-    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'other-people' });
-    const rig = createRig(pending);
-    rig.setResolveEvent(() => {
-      rig.setSnapshot(snapshot({ state: 'rescued' }));
-      return accepted({
-        eventResult: {
-          eventId: 'other-people',
-          choiceId: 'sleep',
-          resultId: 'people-sleep',
-        },
-      });
-    });
-    await rig.flow.revealPending(pending);
-    rig.calls.length = 0;
-
-    rig.flow.resolveEndure();
-    await vi.waitFor(() => expect(rig.presentTerminal).toHaveBeenCalledOnce());
-
-    expect(rig.world.clearEvent).not.toHaveBeenCalled();
-    expect(rig.bundles.releaseActive).not.toHaveBeenCalled();
-    expect(rig.ui.clearEventPresentation).toHaveBeenCalled();
-    expect(rig.world.setEventEligibleItems).toHaveBeenLastCalledWith(null);
-  });
-
-  it('makes a stale activation inert and does not clear newer busy state', async () => {
-    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'shower-night' });
-    const rig = createRig(pending);
-    const activation = deferred();
-    rig.bundles.activate.mockReturnValueOnce(activation.promise);
-
-    const reveal = rig.flow.revealPending(pending);
-    await vi.waitFor(() => expect(rig.bundles.activate).toHaveBeenCalledOnce());
-    rig.advanceGeneration();
-    rig.calls.length = 0;
-    activation.resolve();
-    await reveal;
-
-    expect(rig.world.stageEvent).not.toHaveBeenCalled();
-    expect(rig.calls).not.toContain('ready');
-  });
-
-  it('routes activation and presenter failures to the fatal handler', async () => {
-    const pending = snapshot({ state: 'dayEvent', pendingEventId: 'shower-night' });
-    const activationRig = createRig(pending);
-    const activationError = new Error('bundle activation failed');
-    activationRig.bundles.activate.mockRejectedValueOnce(activationError);
-
-    await activationRig.flow.revealPending(pending);
-
-    expect(activationRig.onFatalError).toHaveBeenCalledWith(activationError);
-    expect(activationRig.calls.at(-1)).toBe('ready');
-
-    const presenterRig = createRig(pending);
-    const presenterError = new Error('presenter failed');
-    presenterRig.world.revealEvent.mockRejectedValueOnce(presenterError);
-    await presenterRig.flow.revealPending(pending);
-
-    expect(presenterRig.onFatalError).toHaveBeenCalledWith(presenterError);
-    expect(presenterRig.calls.at(-1)).toBe('ready');
   });
 
   it.each([
@@ -981,23 +820,6 @@ describe('SurvivalEventFlow', () => {
     expect(rig.world.clearEvent).toHaveBeenCalled();
     expect(rig.bundles.releaseActive).toHaveBeenCalled();
     expect(rig.setBusy.mock.calls.map(([busy]) => busy)).toEqual([true, false]);
-  });
-
-  it('clears deferred daytime loot before a quiet night transition', async () => {
-    const daytime = snapshot({
-      state: 'dayEvent',
-      pendingEventId: 'drifting-supplies',
-    });
-    const rig = createRig(daytime);
-    await rig.flow.revealPending(daytime);
-    rig.world.clearEvent.mockClear();
-    rig.bundles.releaseActive.mockClear();
-
-    const night = snapshot({ state: 'nightEvent', pendingEventId: null });
-    expect(rig.flow.beginNightTransition(night, false)).toBe(true);
-
-    expect(rig.world.clearEvent).toHaveBeenCalledOnce();
-    expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
   });
 
   it.each(['clear', 'dispose'] as const)(

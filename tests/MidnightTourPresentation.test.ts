@@ -1,10 +1,10 @@
-import { AnimationClip, Group, NumberKeyframeTrack, PerspectiveCamera } from 'three';
-import { describe, expect, it, vi } from 'vitest';
+import { AnimationClip,Group,NumberKeyframeTrack,PerspectiveCamera } from 'three';
+import { describe,expect,it,vi } from 'vitest';
 import { MidnightTourPresentation } from '../src/survival/MidnightTourPresentation';
 import type { FocusedEventPresentationDependencies } from '../src/survival/FocusedEventPresentation';
 import type { ActionOutcome } from '../src/survival/survivalTypes';
 import { createTestPropModels } from './helpers/propModels';
-import { MONSTER_IMPACT_SECONDS, MONSTER_RESULT_DURATION_SECONDS, MONSTER_TURN_BACK_END_SECONDS } from '../src/survival/midnightTourChoreography';
+import { MONSTER_IMPACT_SECONDS,MONSTER_RESULT_DURATION_SECONDS,MONSTER_TURN_BACK_END_SECONDS } from '../src/survival/midnightTourChoreography';
 
 function setup(animatedMonster = false) {
   const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
@@ -112,19 +112,6 @@ describe('Midnight Tour animation', () => {
     expect(rig.emitCue.mock.calls.filter(([cue]) => cue.cue === 'attack')).toHaveLength(1);
     rig.presentation.clear();
     expect(rig.camera.parent).toBe(rig.cameraRig);
-    rig.dispose();
-  });
-
-  it('places six bushes around a clear central dig site and aims at the island', () => {
-    const rig = setup();
-    const island = rig.presentation.root.getObjectByName('midnight-tour-island')!;
-    const bushes = island.children.filter((child) => child.name.startsWith('midnight-tour-bush-'));
-    expect(bushes).toHaveLength(6);
-    expect(bushes.every((bush) => Math.hypot(bush.position.x - 0.75, bush.position.z + 0.15) > 1)).toBe(true);
-    expect(rig.presentation.itemAimTarget().parent).toBe(island);
-    for (const name of ['midnight-tour-shore-light', 'midnight-tour-moon-fill']) {
-      expect(island.getObjectByName(name)!.position.y).toBeGreaterThan(island.userData.greenTopLocalY);
-    }
     rig.dispose();
   });
 

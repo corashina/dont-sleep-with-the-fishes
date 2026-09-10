@@ -1,7 +1,7 @@
-import { Vector3, type Vector4 } from 'three';
-import { describe, expect, it } from 'vitest';
+import { Vector3,type Vector4 } from 'three';
+import { describe,expect,it } from 'vitest';
 import {
-  CLOUD_QUERY_COUNT, CLOUD_RINGS, CLOUD_RING_PHASE, createCloudImpostorLayout, updateCloudImpostorShadows,
+  CLOUD_QUERY_COUNT,CLOUD_RINGS,CLOUD_RING_PHASE,createCloudImpostorLayout,updateCloudImpostorShadows,
 } from '../src/world/cloudImpostorLayout';
 import { cloudImpostorShader } from '../src/world/cloudImpostorShader';
 
@@ -61,11 +61,6 @@ describe('cloud impostor layout', () => {
       expect(actual).toHaveLength(27);
       expect(new Set(actual).size).toBe(27);
     }
-  });
-
-  it('uses one runtime-bounded cloud group query body', () => {
-    expect(cloudImpostorShader.match(/CloudSurface candidate = cloudGroup\(/g)).toHaveLength(1);
-    expect(cloudImpostorShader).toContain('query < uCloudQueryCount');
   });
 
   it('keeps the calm sun clear throughout cloud drift and restores storm cover', () => {

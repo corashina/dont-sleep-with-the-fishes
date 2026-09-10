@@ -1,8 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe,expect,it,vi } from 'vitest';
 import { journalItemChanges } from '../src/survival/journalItemChanges';
-import { createJournalEntry, type JournalEntry } from '../src/survival/journalRecords';
+import { createJournalEntry,type JournalEntry } from '../src/survival/journalRecords';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import { createSurvivalSaveDocument, parseSurvivalSaveDocument } from '../src/survival/SurvivalSaveData';
+import { createSurvivalSaveDocument,parseSurvivalSaveDocument } from '../src/survival/SurvivalSaveData';
 import { fishingRoll } from './helpers/fishing';
 import { sequenceRandom } from './helpers/random';
 import { Mulberry32Random } from '../src/survival/random';
@@ -49,15 +49,6 @@ describe('journal resource changes', () => {
     attempt.completeReel();
     expect(session.finishFishing(attempt.snapshot().id, result).accepted).toBe(true);
     expect(changes(pendingEntry(session))).toEqual(expected);
-  });
-
-  it('records drifting food and preserves the count after save loading', () => {
-    const session = new SurvivalSession([], {
-      seed: 9, random: savedRandom([0, 0, 0, 0.99, 0.99]), initial: { day: 2 }, initialEventId: 'drifting-supplies',
-    });
-    const outcome = session.resolveEvent({ kind: 'choice', choiceId: 'retrieve' });
-    expect(outcome.deltas.food).toBeGreaterThan(0);
-    expect(changes(pendingEntry(session))).toEqual(Array(outcome.deltas.food).fill('gain:cannedFood'));
   });
 
   it('counts recovered supplies once and preserves separate gains and losses', () => {

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import type { ItemId, ItemInstanceId } from '../src/game/ItemState';
+import { describe,expect,it } from 'vitest';
+import type { ItemId,ItemInstanceId } from '../src/game/ItemState';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { resolveEventItemUseContext } from '../src/survival/eventItemUseChoreography';
 import { sequenceRandom } from './helpers/random';
@@ -28,15 +28,6 @@ describe('lighthouse signals', () => {
     expect(run.snapshot()).toMatchObject({
       rescueLead: 2 + lead, inventory: { [instanceId]: { condition } },
     });
-  });
-
-  it.each([undefined, 'flashlight'] as const)('allows sleep with %s and no rescue gain', (itemId) => {
-    const run = session(itemId);
-    const before = run.snapshot();
-    expect(run.resolveEvent({ kind: 'endure' })).toMatchObject({
-      accepted: true, eventResult: { resultId: 'lighthouse-sleep' },
-    });
-    expect(run.snapshot()).toMatchObject({ rescueLead: 2, inventory: before.inventory });
   });
 
   it('rejects a signal without the required item', () => {

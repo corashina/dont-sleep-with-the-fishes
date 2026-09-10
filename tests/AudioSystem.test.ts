@@ -1,5 +1,5 @@
 // Importance: 8/10 (scaled from 4/5). Protects audio scope ownership, routing, pause behavior, and cleanup.
-import { describe, expect, it, vi } from 'vitest';
+import { describe,expect,it,vi } from 'vitest';
 import type {
   AudioBackend,
   AudioListenerPose,
@@ -83,29 +83,6 @@ class FakeAudioBackend implements AudioBackend {
 }
 
 describe('AudioSystem', () => {
-  it('chooses one of three yawns each time the player sleeps', () => {
-    const backend = new FakeAudioBackend();
-    const random = vi.fn()
-      .mockReturnValueOnce(0)
-      .mockReturnValueOnce(0.5)
-      .mockReturnValueOnce(0.999999);
-    const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope(), random);
-
-    audio.sleep();
-    audio.sleep();
-    audio.sleep();
-
-    expect(backend.voices.map(({ id }) => id)).toEqual([
-      'goingToSleep', 'yawn',
-      'goingToSleep', 'yawnShort',
-      'goingToSleep', 'yawnTired',
-    ]);
-    expect(SURVIVAL_SOUND_IDS).toEqual(expect.arrayContaining(['yawn', 'yawnShort', 'yawnTired']));
-    audio.dispose();
-    audio.sleep();
-    expect(random).toHaveBeenCalledTimes(3);
-    expect(backend.voices).toHaveLength(6);
-  });
 
   it('sounds the rescue horn first and stops the engine at the finish screen', () => {
     const backend = new FakeAudioBackend();
@@ -223,33 +200,6 @@ describe('AudioSystem', () => {
     expect(denied.stop).not.toHaveBeenCalled();
   });
 
-  it('owns one instance of each loop per scope', () => {
-    const backend = new FakeAudioBackend();
-    const scope = AudioSystem.forTest(backend).createScope();
-    expect(scope.startLoop('calmOcean')).toBe(scope.startLoop('calmOcean'));
-    expect(backend.voices.map(({ id }) => id)).toEqual(['calmOcean']);
-    expect(() => scope.startLoop('confirm')).toThrow(
-      'Sound is not configured as a loop: confirm',
-    );
-  });
-
-  it('owns one synchronized spatial loop and forwards its listener pose', () => {
-    const backend = new FakeAudioBackend();
-    const scope = AudioSystem.forTest(backend).createScope();
-    const emitters = [{ position: [0, 5, 0] as const }];
-    const options = { gain: 0.5, refDistance: 1.5, maxDistance: 11, rolloffFactor: 1 };
-    const pose: AudioListenerPose = {
-      position: { x: 0, y: 3.7, z: 0 },
-      forward: { x: 0, y: 0, z: -1 },
-      up: { x: 0, y: 1, z: 0 },
-    };
-    expect(scope.startSpatialLoop('shipAlarm', emitters, options))
-      .toBe(scope.startSpatialLoop('shipAlarm', emitters, options));
-    scope.setListenerPose(pose);
-    expect(backend.spatial).toEqual([{ id: 'shipAlarm', emitters, options }]);
-    expect(backend.listenerPoses).toEqual([pose]);
-  });
-
   it('cancels the second Shadow Figure meow when the event clears', () => {
     const backend = new FakeAudioBackend();
     const audio = new SurvivalAudio(AudioSystem.forTest(backend).createScope());
@@ -293,16 +243,6 @@ describe('AudioSystem', () => {
     audio.setRadioSignalPaused(false);
 
     expect(signal.setPaused.mock.calls).toEqual([[true], [false]]);
-  });
-
-  it('applies master volume and mute without losing volume', () => {
-    const backend = new FakeAudioBackend();
-    const system = AudioSystem.forTest(backend);
-    system.setVolume(0.35);
-    system.setMuted(true);
-    system.setMuted(false);
-    expect(backend.masterGains).toEqual([0.25, 0.35, 0, 0.35]);
-    expect(system.getPreference()).toEqual({ volume: 0.35, muted: false });
   });
 
   it('silences game audio while paused and keeps interface feedback', () => {

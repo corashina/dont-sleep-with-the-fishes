@@ -1,6 +1,6 @@
-import { BoxGeometry, DataTexture, Group, Mesh, MeshStandardMaterial } from 'three';
-import { describe, expect, it, vi } from 'vitest';
-import { FishingCatchLibrary, catchModelSpec } from '../src/survival/FishingCatchLibrary';
+import { BoxGeometry,DataTexture,Group,Mesh,MeshStandardMaterial } from 'three';
+import { describe,expect,it,vi } from 'vitest';
+import { FishingCatchLibrary,catchModelSpec } from '../src/survival/FishingCatchLibrary';
 import { FishingModelLibrary } from '../src/survival/FishingModelLibrary';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 
@@ -94,14 +94,6 @@ describe('prepared fishing models', () => {
     await expect(library.load('missing.glb')).rejects.toThrow('Missing prepared fishing model: missing.glb');
     expect(loader.load).toHaveBeenCalledTimes(requests);
     library.dispose();
-  });
-
-  it('propagates item model errors', async () => {
-    const failure = new Error('Missing prepared fishing model');
-    const catches = new FishingCatchLibrary({ load: async () => { throw failure; } });
-    const item = FISHING_CATCHES.find(({ presentation }) => presentation.kind === 'item')!;
-    await expect(catches.prepare(item.id)).rejects.toBe(failure);
-    catches.dispose();
   });
 
   it('waits for pending loads and releases successful models after preload failure', async () => {

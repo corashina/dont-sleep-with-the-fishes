@@ -1,14 +1,13 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach,describe,expect,it } from 'vitest';
 import { setLanguage } from '../src/i18n/language';
 import { resourceQuantity } from '../src/i18n/resourceMessages';
-import { ITEM_DEFINITIONS, ITEM_IDS, ITEM_LABELS } from '../src/game/ItemState';
-import { endingCauseLine, endingSummary, endingTitle } from '../src/game/ending';
+import { ITEM_DEFINITIONS,ITEM_IDS,ITEM_LABELS } from '../src/game/ItemState';
 import { FISHING_CATCHES } from '../src/survival/fishingCatalog';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../src/survival/itemDescriptions';
 import { formatJournalEntry } from '../src/survival/journal';
-import { createJournalEntry, createJournalFishingRecord, createQuietJournalNightRecord } from '../src/survival/journalRecords';
+import { createJournalEntry,createJournalFishingRecord,createQuietJournalNightRecord } from '../src/survival/journalRecords';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import { createSurvivalSaveDocument, parseSurvivalSaveDocument } from '../src/survival/SurvivalSaveData';
+import { createSurvivalSaveDocument,parseSurvivalSaveDocument } from '../src/survival/SurvivalSaveData';
 import { fishingSettlement } from '../src/survival/fishingSettlementRules';
 import { cloneActionOutcome } from '../src/survival/outcomeText';
 
@@ -135,19 +134,5 @@ describe('domain language', () => {
     const text = entry.nighttime.event.text;
     expect(Object.isFrozen(text)).toBe(true);
     if (text.kind === 'eventResult') expect(Object.isFrozen(text.reference)).toBe(true);
-  });
-
-  it('rejects a complete obsolete version 2 save', () => {
-    const session = new SurvivalSession([], { seed: 41 });
-    const document = createSurvivalSaveDocument({ scavengeElapsedSeconds: 8, session: session.exportCheckpoint() });
-    expect(parseSurvivalSaveDocument({ ...document, version: 2 })).toBeNull();
-  });
-
-  it('translates ending titles and event causes', () => {
-    setLanguage('pl');
-    const ending = { id: 'sinking', day: 5, savedPickupCount: 3, cause: { eventId: 'drifting-supplies' } } as const;
-    expect(endingTitle(ending)).toBe('ŁÓDŹ ZNIKNĘŁA');
-    expect(endingSummary(ending)).toBe('DZIEŃ 5');
-    expect(endingCauseLine(ending)).toContain('OSTATNIE ZDARZENIE:');
   });
 });

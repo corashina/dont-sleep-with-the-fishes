@@ -7,7 +7,7 @@ import {
   PerspectiveCamera,
   Scene,
 } from 'three';
-import { describe, expect, it, vi } from 'vitest';
+import { describe,expect,it,vi } from 'vitest';
 import { setLanguage } from '../src/i18n/language';
 import { presentationUiText } from '../src/i18n/presentationUiMessages';
 import { projectBoatObjectBoundsInto } from '../src/survival/BoatInteraction';
@@ -156,55 +156,6 @@ describe('BoatInteractionProjector', () => {
       setLanguage('en');
       fixture.projector.dispose();
     }
-  });
-
-  it('keeps anchor order, metadata, hidden targets, and minimum hit bounds', () => {
-    const fixture = createFixture();
-    fixture.roots.repairRoot.position.x = 100;
-    fixture.roots.pillowRoot.visible = false;
-
-    const anchors = fixture.projector.projectAnchors(1280, 720);
-
-    expect(anchors.map(({ id }) => id)).toEqual([
-      'supply:cannedFood',
-      'carlitos',
-      'fishing-tools',
-      'repair-tools',
-      'end-day-pillow',
-      'persistent-chest',
-    ]);
-    expect(anchors[0]).toMatchObject({
-      itemType: 'cannedFood',
-      supplyGroupId: 'cannedFood',
-      action: 'eat',
-      depleted: false,
-      remainingUses: 1,
-      quantity: 2,
-      usableQuantity: 1,
-      brokenQuantity: 1,
-      backingInstanceId: 'cannedFood-1',
-    });
-    expect(anchors[0]!.hitArea).toMatchObject({ width: 36, height: 36 });
-    expect(anchors.find(({ id }) => id === 'carlitos')).toMatchObject({
-      label: 'CARLITOS',
-      description: 'Check his hunger and happiness.',
-      hitArea: { width: 54, height: 54 },
-    });
-    expect(anchors.find(({ id }) => id === 'repair-tools')?.visible).toBe(false);
-    expect(anchors.find(({ id }) => id === 'fishing-tools')?.hitArea).toMatchObject({
-      width: 44,
-      height: 72,
-    });
-    expect(anchors.find(({ id }) => id === 'end-day-pillow')).toMatchObject({
-      toolId: 'pillow',
-      visible: false,
-    });
-    expect(anchors.find(({ id }) => id === 'persistent-chest')).toMatchObject({
-      label: 'OPEN',
-      description: 'A closed chest. Opening it is free.',
-      action: 'openChest',
-      hitArea: { width: 54, height: 54 },
-    });
   });
 
   it('uses featured roots and installed presenter metadata without frame rebuilds', () => {

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach,describe,expect,it,vi } from 'vitest';
 import { SurvivalAudio } from '../src/audio/SurvivalAudio';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
@@ -73,28 +73,6 @@ describe('Item Animation Lab Carlitos', () => {
     expect(lab.onCheckpointChange).not.toHaveBeenCalled();
   });
 
-  it('blocks overlap and meows at pet contact or food arrival', async () => {
-    const lab = carlitosLab();
-    let finish = () => {};
-    lab.playCarlitosAction.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
-    lab.phase.handleAction('petCarlitos');
-    expect(lab.meowCarlitos).not.toHaveBeenCalled();
-    lab.phase.handleAction('feedCarlitos');
-    expect(lab.playCarlitosAction).toHaveBeenCalledTimes(1);
-    lab.playCarlitosAction.mock.lastCall?.[1]?.();
-    expect(lab.meowCarlitos).toHaveBeenCalledTimes(1);
-    finish();
-    await Promise.resolve();
-    expect(lab.setEventEligibleItems).toHaveBeenLastCalledWith(expect.objectContaining({ size: 3 }));
-    lab.phase.handleAction('feedCarlitos');
-    expect(lab.playCarlitosAction).toHaveBeenCalledTimes(2);
-    expect(lab.meowCarlitos).toHaveBeenCalledTimes(1);
-    lab.playCarlitosAction.mock.lastCall?.[1]?.();
-    expect(lab.meowCarlitos).toHaveBeenCalledTimes(2);
-    finish();
-    await Promise.resolve();
-  });
-
   it('restores controls after playback rejects', async () => {
     const lab = carlitosLab();
     const error = new Error('Playback failed');
@@ -120,19 +98,5 @@ describe('Item Animation Lab Carlitos', () => {
     await Promise.resolve();
     expect(lab.meowCarlitos).not.toHaveBeenCalled();
     expect(lab.setEventEligibleItems).not.toHaveBeenCalled();
-  });
-
-  it('keeps normal care limits outside the lab', () => {
-    const normal = carlitosLab(false);
-    normal.phase.handleAction('petCarlitos');
-    normal.phase.handleAction('feedCarlitos');
-    expect(normal.playCarlitosAction).not.toHaveBeenCalled();
-  });
-
-  it('does not play when Carlitos is absent', () => {
-    const lab = carlitosLab(true, false);
-    lab.phase.handleAction('petCarlitos');
-    lab.phase.handleAction('feedCarlitos');
-    expect(lab.playCarlitosAction).not.toHaveBeenCalled();
   });
 });

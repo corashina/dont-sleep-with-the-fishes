@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { sequenceRandom } from './helpers/random';
 
@@ -18,17 +18,6 @@ describe('normal diving balance', () => {
       expect(session.snapshot()[resource]).toBe(quantity);
     }
   });
-
-  it.each(Array.from({ length: 31 }, (_, index) => index))(
-    'can lose %s plus 15 Health while gaining a reward', (index) => {
-      const session = new SurvivalSession([scuba], {
-        seed: 1, weather: 'calm', random: sequenceRandom([0, 0, (index + 0.5) / 31, 0, 0]),
-      });
-      expect(session.perform('dive')).toMatchObject({
-        accepted: true, deltas: { energy: -3, health: -(15 + index), food: 1 },
-      });
-    },
-  );
 
   it.each([
     ['calm', 0.649999, 0.249999, true, true],

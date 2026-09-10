@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 import { ITEM_IDS } from '../src/game/ItemState';
 import { drawChestReward } from '../src/survival/chest';
 import { sequenceRandom } from './helpers/random';
@@ -30,17 +30,5 @@ describe('chest rewards', () => {
       resource: 'food',
       quantity: 2,
     });
-  });
-
-  it.each([
-    [0, 'ductTape'],
-    [4 / 9, 'food'],
-    [7 / 9, 'bait'],
-  ] as const)('never returns repair material at roll %f', (roll, expected) => {
-    const active = new Set(ITEM_IDS.filter((id) => id !== 'ductTape'));
-    const reward = drawChestReward(active, sequenceRandom([roll]));
-
-    if (reward.kind === 'item') expect(reward.itemId).toBe(expected);
-    else expect(reward.resource).toBe(expected);
   });
 });

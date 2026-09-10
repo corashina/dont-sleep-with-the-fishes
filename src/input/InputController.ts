@@ -14,6 +14,7 @@ export class InputController {
     window.addEventListener('mousedown', this.onMouseDown);
     window.addEventListener('mousemove', this.onMouseMove);
     window.addEventListener('blur', this.clear);
+    document.addEventListener('pointerlockchange', this.onPointerLockChange);
   }
 
   get movement(): MovementAxes {
@@ -30,7 +31,7 @@ export class InputController {
 
   async requestPointerLock(): Promise<boolean> {
     try {
-      await this.canvas.requestPointerLock();
+      await this.canvas.requestPointerLock({ unadjustedMovement: true });
       return true;
     } catch {
       return false;
@@ -70,6 +71,7 @@ export class InputController {
     window.removeEventListener('mousedown', this.onMouseDown);
     window.removeEventListener('mousemove', this.onMouseMove);
     window.removeEventListener('blur', this.clear);
+    document.removeEventListener('pointerlockchange', this.onPointerLockChange);
   }
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
@@ -94,6 +96,10 @@ export class InputController {
     if (!this.pointerLocked) return;
     this.lookX += event.movementX;
     this.lookY += event.movementY;
+  };
+
+  private readonly onPointerLockChange = (): void => {
+    this.clearLook();
   };
 
   private readonly clear = (): void => {

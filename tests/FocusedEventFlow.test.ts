@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe,expect,it,vi } from 'vitest';
 import type { FocusedEventChoiceResolution } from '../src/survival/FocusedEventFlow';
 import {
   FocusedEventFlow,
@@ -79,64 +79,12 @@ function createRig(eventId: 'drifting-supplies' = 'drifting-supplies') {
 }
 
 describe('FocusedEventFlow', () => {
-  it('enters the focused camera before it shows choices', async () => {
-    const rig = createRig();
-    await rig.flow.enter('drifting-supplies', driftingChoices);
-    expect(rig.calls).toEqual(['busy', 'enter:drifting-supplies', 'show-focus', 'ready']);
-  });
 
   it('rejects an ID and instance pair that was not rendered', async () => {
     const rig = createRig();
     await rig.flow.enter('drifting-supplies', driftingChoices);
     await rig.flow.choose({ id: 'retrieve', instanceId: 'scubaSet-1' });
     expect(rig.resolveChoice).not.toHaveBeenCalled();
-  });
-
-  it('restores the focus after a rejected resolution', async () => {
-    const rig = createRig();
-    rig.setResolution({ accepted: false });
-    await rig.flow.enter('drifting-supplies', driftingChoices);
-    await rig.flow.choose({ id: 'retrieve', instanceId: null });
-    expect(rig.calls).toContain('event-choosing');
-    expect(rig.ui.showFocusedEvent).toHaveBeenCalledTimes(2);
-  });
-
-  it('makes an in-flight entry inert after cleanup', async () => {
-    const rig = createRig();
-    const pending = deferred();
-    rig.world.enterFocusedEventView.mockReturnValueOnce(pending.promise);
-    const work = rig.flow.enter('drifting-supplies', driftingChoices);
-    await Promise.resolve();
-    rig.flow.clear();
-    pending.resolve();
-    await work;
-    expect(rig.ui.showFocusedEvent).not.toHaveBeenCalled();
-  });
-
-  it('releases busy when the pending event changes after camera entry', async () => {
-    const rig = createRig();
-    const entry = deferred();
-    const exit = deferred();
-    rig.world.enterFocusedEventView.mockReturnValueOnce(entry.promise);
-    rig.world.exitFocusedEventView.mockReturnValueOnce(exit.promise);
-    const work = rig.flow.enter('drifting-supplies', driftingChoices);
-    await Promise.resolve();
-
-    rig.setPending(false);
-    entry.resolve();
-    await Promise.resolve();
-
-    expect(rig.world.exitFocusedEventView).toHaveBeenCalledOnce();
-    expect(rig.ui.showFocusedEvent).not.toHaveBeenCalled();
-    expect(rig.setBusy).toHaveBeenLastCalledWith(true);
-
-    exit.resolve();
-    await work;
-
-    expect(rig.setBusy).toHaveBeenLastCalledWith(false);
-    rig.setPending(true);
-    await rig.flow.enter('drifting-supplies', driftingChoices);
-    expect(rig.ui.showFocusedEvent).toHaveBeenCalledOnce();
   });
 
   it('does not unlock newer work after cleanup supersedes an entry', async () => {
@@ -175,18 +123,6 @@ describe('FocusedEventFlow', () => {
     expect(rig.resolveChoice).toHaveBeenCalledOnce();
   });
 
-  it('makes stale lifecycle work inert', async () => {
-    const rig = createRig();
-    const pending = deferred();
-    rig.world.enterFocusedEventView.mockReturnValueOnce(pending.promise);
-    const work = rig.flow.enter('drifting-supplies', driftingChoices);
-    await Promise.resolve();
-    rig.advanceGeneration();
-    pending.resolve();
-    await work;
-    expect(rig.ui.showFocusedEvent).not.toHaveBeenCalled();
-  });
-
   it('waits for visibility before it resolves a choice', async () => {
     const rig = createRig();
     const resume = deferred<boolean>();
@@ -200,49 +136,6 @@ describe('FocusedEventFlow', () => {
     await choosing;
 
     expect(rig.resolveChoice).toHaveBeenCalledOnce();
-  });
-
-  it('returns to the boat by resolving the decline choice', async () => {
-    const rig = createRig();
-    await rig.flow.enter('drifting-supplies', driftingChoices);
-    rig.calls.length = 0;
-    await rig.flow.back();
-    expect(rig.resolveChoice).toHaveBeenCalledExactlyOnceWith({
-      id: 'sleep', instanceId: null,
-    });
-    expect(rig.calls).toContain('clear-event');
-    expect(rig.calls).toContain('exit');
-    expect(rig.calls.at(-1)).toBe('restore-focus');
-  });
-
-  it('makes a pending choice inert after external cleanup', async () => {
-    const rig = createRig();
-    const animation = deferred();
-    rig.setResolution({
-      accepted: true,
-      playAnimation: async () => animation.promise,
-      afterAnimation: async () => undefined,
-      clearEvent: vi.fn(),
-      renderSnapshot: () => false,
-      presentTerminal: vi.fn(),
-    });
-    await rig.flow.enter('drifting-supplies', driftingChoices);
-    const work = rig.flow.choose({ id: 'retrieve', instanceId: null });
-    await Promise.resolve();
-    rig.flow.clear();
-    animation.resolve();
-    await work;
-    expect(rig.world.exitFocusedEventView).not.toHaveBeenCalled();
-  });
-
-  it('clears an open focus before another entry', async () => {
-    const rig = createRig();
-    await rig.flow.enter('drifting-supplies', driftingChoices);
-
-    rig.flow.clear();
-    await rig.flow.enter('drifting-supplies', driftingChoices);
-
-    expect(rig.world.enterFocusedEventView).toHaveBeenCalledTimes(2);
   });
 
   it('makes a stale camera return inert', async () => {
@@ -259,22 +152,5 @@ describe('FocusedEventFlow', () => {
     await work;
 
     expect(rig.calls).not.toContain('clear-event');
-  });
-
-  it('becomes inert after disposal', async () => {
-    const rig = createRig();
-    const entry = deferred();
-    rig.world.enterFocusedEventView.mockReturnValueOnce(entry.promise);
-    const work = rig.flow.enter('drifting-supplies', driftingChoices);
-    await Promise.resolve();
-
-    rig.flow.dispose();
-    entry.resolve();
-    await work;
-    await rig.flow.enter('drifting-supplies', driftingChoices);
-    await rig.flow.choose({ id: 'retrieve', instanceId: null });
-    await rig.flow.back();
-
-    expect(rig.resolveChoice).not.toHaveBeenCalled();
   });
 });

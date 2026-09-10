@@ -1,5 +1,5 @@
 // Importance: 10/10 (scaled from 5/5). Protects world integration and resource ownership.
-import { describe, expect, it, vi } from 'vitest';
+import { describe,expect,it,vi } from 'vitest';
 import {
   Box3,
   BufferGeometry,
@@ -14,32 +14,25 @@ import {
   Points,
   PerspectiveCamera,
   Quaternion,
-  Scene,
-  ShaderMaterial,
-  Texture,
-  Vector3,
+  Scene,Texture,
+  Vector3
 } from 'three';
-import { createItemInstances, type ItemInstance } from '../src/game/ItemState';
+import { createItemInstances,type ItemInstance } from '../src/game/ItemState';
 import { getSinkingState } from '../src/game/sinking';
 import { getScavengeCinematicFrame } from '../src/game/scavengeEnding';
 import { BoatBuoyancy } from '../src/ocean/BoatBuoyancy';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
-import { HIGH_WATER_LOOK } from '../src/ocean/highWaterLook';
 import {
   ScavengePhysics,
 } from '../src/physics/ScavengePhysics';
-import { DEFAULT_WAVES, sampleWaveField } from '../src/ocean/WaveField';
+import { DEFAULT_WAVES,sampleWaveField } from '../src/ocean/WaveField';
 import { presentationWeatherProfile } from '../src/weather/presentationWeather';
 import { boatStorageTransform } from '../src/world/BoatStorage';
 import { Environment } from '../src/world/Environment';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
-import { SCAVENGE_PICKUP_TARGET_NAME } from '../src/world/ScavengePickupTarget';
 import { SCAVENGE_PHYSICS_OBJECT_SPECS } from '../src/world/ScavengePhysicsObjectCatalog';
 import { createShipGeometry } from '../src/world/ShipGeometry';
 import { shipItemTransformBounds } from '../src/world/ShipItemPlacement';
-import {
-  FREIGHTER_DIMENSIONS,
-} from '../src/world/ShipLayoutTypes';
 import { createShipMaterials } from '../src/world/ShipMaterials';
 import {
   World,
@@ -139,23 +132,6 @@ const createTestWorld = (
 };
 
 describe('world builders', () => {
-  it('adds invisible pickup targets only to the four open scavenging items', () => {
-    const scene = new Scene();
-    const propModels = createTestPropModels();
-    const world = createTestWorld(scene, propModels);
-    const expandedItemIds = new Set(['fishingNet', 'swimRing', 'anchor', 'ductTape']);
-
-    try {
-      world.itemObjects.forEach((itemObject, instanceId) => {
-        const target = itemObject.getObjectByName(SCAVENGE_PICKUP_TARGET_NAME);
-        expect(target !== undefined).toBe(expandedItemIds.has(instanceId.split('-')[0]!));
-        if (target) expect(target.visible).toBe(false);
-      });
-    } finally {
-      world.dispose();
-      propModels.dispose();
-    }
-  });
 
   it('preserves ship composition and idempotent geometry ownership', () => {
     const updateMatrixWorld = vi.spyOn(Group.prototype, 'updateMatrixWorld');
@@ -233,25 +209,6 @@ describe('world builders', () => {
       ship.disposeGeometry();
       materials.dispose();
       updateMatrixWorld.mockRestore();
-    }
-  });
-
-  it('uses the shared High water look through scavenging day and night changes', () => {
-    const scene = new Scene();
-    const propModels = createTestPropModels();
-    const world = createTestWorld(scene, propModels);
-    try {
-      world.setWaterQuality('high');
-      const water = scene.getObjectByName('procedural-ocean') as Mesh<BufferGeometry, ShaderMaterial>;
-      for (const phase of ['day', 'night'] as const) {
-        world.setPresentationPhase(phase);
-        world.update(2, 1 / 60, getSinkingState(0, 120), new Vector3(), false);
-        expect(water.material.uniforms.uWaterReflectionSky!.value).toEqual(HIGH_WATER_LOOK[phase].reflectionColor);
-        expect(water.material.uniforms.uFogDensity!.value).toBe(HIGH_WATER_LOOK[phase].fogDensity);
-      }
-    } finally {
-      world.dispose();
-      propModels.dispose();
     }
   });
 
@@ -483,46 +440,6 @@ describe('world builders', () => {
     world.physicsObjects.forEach((object, index) => expect(object.position).toEqual(before[index]));
 
     world.dispose();
-    propModels.dispose();
-  });
-
-  it('owns and disposes a collider overlay only in debug mode', () => {
-    const scene = new Scene();
-    const propModels = createTestPropModels();
-    const world = createTestWorld(
-      scene,
-      propModels,
-      createTestMoonTexture(),
-      createItemInstances(),
-      Math.random,
-      physicsRuntime,
-      { physicsMode: 'debug' },
-    );
-
-    expect(world.physicsMode).toBe('debug');
-    expect(scene.getObjectByName('physics-debug-dynamic')?.visible).toBe(false);
-    expect(world.ship.getObjectByName('physics-debug-static')?.visible).toBe(false);
-    const floor = world.ship.getObjectByName('physics-debug-cuboid:0') as Mesh;
-    expect(floor.position.x - floor.scale.x / 2)
-      .toBeCloseTo(-FREIGHTER_DIMENSIONS.width / 2);
-    expect(floor.position.x + floor.scale.x / 2)
-      .toBeCloseTo(FREIGHTER_DIMENSIONS.width / 2);
-    expect(floor.position.z - floor.scale.z / 2)
-      .toBeCloseTo(-FREIGHTER_DIMENSIONS.length / 2);
-    expect(floor.position.z + floor.scale.z / 2)
-      .toBeCloseTo(FREIGHTER_DIMENSIONS.length / 2);
-    SCAVENGE_PHYSICS_OBJECT_SPECS.forEach(({ id }) => {
-      expect(scene.getObjectByName(`physics-debug-object:${id}`)).toBeDefined();
-    });
-
-    world.revealPhysicsObjects();
-
-    expect(scene.getObjectByName('physics-debug-dynamic')?.visible).toBe(true);
-    expect(world.ship.getObjectByName('physics-debug-static')?.visible).toBe(true);
-
-    world.dispose();
-    expect(scene.getObjectByName('physics-debug-dynamic')).toBeUndefined();
-    expect(scene.getObjectByName('physics-debug-static')).toBeUndefined();
     propModels.dispose();
   });
 

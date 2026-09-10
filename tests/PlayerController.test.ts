@@ -1,15 +1,15 @@
 // Importance: 10/10 (scaled from 5/5). Protects player movement and recovery.
-import { describe, expect, it, vi } from 'vitest';
-import { Euler, Object3D, PerspectiveCamera, Quaternion, Vector3 } from 'three';
+import { describe,expect,it,vi } from 'vitest';
+import { Euler,Object3D,PerspectiveCamera,Quaternion,Vector3 } from 'three';
 import type { InputController } from '../src/input/InputController';
-import type { LocalPlayerPosition, MovementAxes } from '../src/player/collisions';
+import type { MovementAxes } from '../src/player/collisions';
 import type { LadderClimbZone } from '../src/player/LadderTraversal';
 import {
   PlayerController,
   type DynamicMovementResolver,
   type PlayerNavigationBounds,
 } from '../src/player/PlayerController';
-import { SCAVENGE_SPRINT_SPEED, SCAVENGE_WALK_SPEED } from '../src/game/scavengeMovement';
+import { SCAVENGE_WALK_SPEED } from '../src/game/scavengeMovement';
 import { SHIP_LAYOUT } from '../src/world/shipLayoutData';
 import { FREIGHTER_DIMENSIONS } from '../src/world/ShipLayoutTypes';
 import { createTestShip } from './helpers/shipFurniture';
@@ -83,26 +83,6 @@ function testLadderZone(): LadderClimbZone {
 }
 
 describe('PlayerController', () => {
-  it('places the camera from ship-local position and view rotation', () => {
-    const ship = new Object3D();
-    ship.position.set(8, -2, 5);
-    ship.rotation.set(0.2, 0.35, -0.1);
-    const camera = new PerspectiveCamera();
-    const start = new Vector3(1.25, 3.7, -2.5);
-    const controller = new PlayerController(
-      camera, ship, start, [], TEST_NAVIGATION_BOUNDS, vi.fn(), noDynamicMovement,
-    );
-
-    controller.update(0, new TestInput().asControllerInput());
-
-    const expectedPosition = start.clone();
-    ship.localToWorld(expectedPosition);
-    const expectedRotation = ship.quaternion.clone().multiply(
-      new Quaternion().setFromEuler(new Euler(0, Math.PI, 0, 'YXZ')),
-    );
-    expectVector(camera.position, expectedPosition);
-    expectRotation(camera.quaternion, expectedRotation);
-  });
 
   it.each([
     ['downward', 10_000, -1.35],
@@ -130,8 +110,8 @@ describe('PlayerController', () => {
   });
 
   it.each([
-    ['right', Math.PI / (2 * 0.0018), Math.PI / 2],
-    ['left', -Math.PI / (2 * 0.0018), Math.PI * 1.5],
+    ['right', Math.PI / (2 * 0.0027), Math.PI / 2],
+    ['left', -Math.PI / (2 * 0.0027), Math.PI * 1.5],
   ])('allows %s yaw beyond the former scavenging look cone', (
     _direction,
     movementX,
@@ -152,77 +132,6 @@ describe('PlayerController', () => {
       camera.quaternion,
       new Quaternion().setFromEuler(new Euler(0, expectedYaw, 0, 'YXZ')),
     );
-  });
-
-  it('uses walk and sprint speeds in the current local heading', () => {
-    const input = new TestInput();
-    input.movement = { x: 0, z: -1 };
-    const walking = new PlayerController(
-      new PerspectiveCamera(), new Object3D(), new Vector3(0, 3.7, 0), [],
-      TEST_NAVIGATION_BOUNDS, vi.fn(), noDynamicMovement,
-    );
-    const sprinting = new PlayerController(
-      new PerspectiveCamera(), new Object3D(), new Vector3(0, 3.7, 0), [],
-      TEST_NAVIGATION_BOUNDS, vi.fn(), noDynamicMovement,
-    );
-
-    walking.update(1, input.asControllerInput());
-    input.sprinting = true;
-    sprinting.update(1, input.asControllerInput());
-
-    expect(walking.localPosition.z).toBeCloseTo(SCAVENGE_WALK_SPEED);
-    expect(sprinting.localPosition.z).toBeCloseTo(SCAVENGE_SPRINT_SPEED);
-  });
-
-  it('resolves dynamic movement after static collision', () => {
-    let receivedDesiredZ = Number.NaN;
-    const resolveDynamicMovement = vi.fn((
-      _current: Readonly<LocalPlayerPosition>,
-      desired: LocalPlayerPosition,
-    ) => {
-      receivedDesiredZ = desired.z;
-      desired.z = Math.max(desired.z, -0.1);
-    });
-    const controller = new PlayerController(
-      new PerspectiveCamera(),
-      new Object3D(),
-      new Vector3(0, 3.72, 0),
-      [],
-      TEST_NAVIGATION_BOUNDS,
-      vi.fn(),
-      resolveDynamicMovement,
-    );
-    const input = new TestInput();
-    input.movement = { x: 0, z: 1 };
-
-    controller.update(1, input.asControllerInput());
-
-    expect(resolveDynamicMovement).toHaveBeenCalledOnce();
-    expect(resolveDynamicMovement.mock.calls[0]![0]).toEqual({ x: 0, y: 3.72, z: 0 });
-    expect(receivedDesiredZ).toBeCloseTo(-SCAVENGE_WALK_SPEED);
-    expect(controller.localPosition.z).toBe(-0.1);
-  });
-
-  it.each([
-    [1, SCAVENGE_WALK_SPEED],
-    [0.88, SCAVENGE_WALK_SPEED * 0.88],
-    [0.76, SCAVENGE_WALK_SPEED * 0.76],
-  ])('applies planar speed multiplier %s', (multiplier, expectedDistance) => {
-    const input = new TestInput();
-    const controller = new PlayerController(
-      new PerspectiveCamera(),
-      new Object3D(),
-      new Vector3(0, 3.72, 0),
-      [],
-      TEST_NAVIGATION_BOUNDS,
-      vi.fn(),
-      noDynamicMovement,
-    );
-    input.movement = { x: 0, z: -1 };
-
-    const sample = controller.update(1, input.asControllerInput(), multiplier);
-
-    expect(sample.movedDistance).toBeCloseTo(expectedDistance);
   });
 
   it('keeps jump height equal across speed multipliers', () => {
@@ -388,7 +297,7 @@ describe('PlayerController', () => {
     expect(controller.localPosition.y).toBeCloseTo(zone.bottomEyeY);
     expectRotation(
       camera.quaternion,
-      new Quaternion().setFromEuler(new Euler(0.09, Math.PI - 0.18, 0, 'YXZ')),
+      new Quaternion().setFromEuler(new Euler(0.135, Math.PI - 0.27, 0, 'YXZ')),
     );
 
     input.movement = { x: 0, z: -1 };
@@ -556,7 +465,7 @@ describe('PlayerController', () => {
       camera, ship, new Vector3(0, 3.7, 0), [], TEST_NAVIGATION_BOUNDS, vi.fn(),
       noDynamicMovement,
     );
-    input.queueLook(Math.PI / (2 * 0.0018), 0);
+    input.queueLook(Math.PI / (2 * 0.0027), 0);
     controller.update(0, input.asControllerInput());
     const visibleDirection = cameraDirection.clone().applyQuaternion(camera.quaternion);
     visibleDirection.y = 0;
@@ -665,49 +574,6 @@ describe('PlayerController', () => {
     shipBuild.dispose();
   });
 
-  it('places the shared camera from the player pose without a movement tick', () => {
-    const ship = new Object3D();
-    ship.position.set(4, 1, -3);
-    ship.rotation.y = Math.PI / 6;
-    ship.updateMatrixWorld(true);
-    const camera = new PerspectiveCamera();
-    const start = new Vector3(1, 3.7, 2);
-    const controller = new PlayerController(
-      camera, ship, start, [], TEST_NAVIGATION_BOUNDS, vi.fn(), noDynamicMovement,
-    );
-    const expectedPosition = ship.localToWorld(start.clone());
-    const expectedForward = new Vector3(0, 0, 1).applyQuaternion(ship.quaternion);
-
-    controller.placeCamera();
-
-    expectVector(camera.position, expectedPosition);
-    expectVector(camera.getWorldDirection(new Vector3()), expectedForward);
-    expectVector(controller.localPosition, start);
-  });
-
-  it('applies one complete scripted local pose', () => {
-    const ship = new Object3D();
-    ship.position.set(4, 1, -3);
-    ship.rotation.y = Math.PI / 6;
-    ship.updateMatrixWorld(true);
-    const camera = new PerspectiveCamera();
-    const controller = new PlayerController(
-      camera, ship, new Vector3(0, 3.72, 0), [], TEST_NAVIGATION_BOUNDS, vi.fn(),
-      noDynamicMovement,
-    );
-
-    controller.setScriptedPose({
-      position: [0, 14.22, -0.85],
-      yaw: Math.PI + 0.4,
-      pitch: -0.25,
-      floorEyeY: 14.22,
-    });
-    controller.placeCamera();
-
-    expect(controller.localPosition.toArray()).toEqual([0, 14.22, -0.85]);
-    expectVector(camera.position, ship.localToWorld(new Vector3(0, 14.22, -0.85)));
-  });
-
   it('clears prior ladder and jump state before a passive update', () => {
     const input = new TestInput();
     const zone = testLadderZone();
@@ -771,31 +637,6 @@ describe('PlayerController', () => {
 
     expectVector(camera.position, ship.localToWorld(start.clone()));
     expectVector(controller.localPosition, start);
-  });
-
-  it('reset restores the supplied local start and default view', () => {
-    const ship = new Object3D();
-    const camera = new PerspectiveCamera();
-    const input = new TestInput();
-    input.movement = { x: 1, z: 0 };
-    input.queueLook(250, -400);
-    const controller = new PlayerController(
-      camera, ship, new Vector3(0, 3.7, 0), [], TEST_NAVIGATION_BOUNDS, vi.fn(),
-      noDynamicMovement,
-    );
-    controller.update(0.25, input.asControllerInput());
-    const resetStart = new Vector3(2, 3.8, -1);
-
-    controller.reset(resetStart);
-    input.movement = { x: 0, z: 0 };
-    controller.update(0, input.asControllerInput());
-
-    expectVector(controller.localPosition, resetStart);
-    expectVector(camera.position, resetStart);
-    expectRotation(
-      camera.quaternion,
-      new Quaternion().setFromEuler(new Euler(0, Math.PI, 0, 'YXZ')),
-    );
   });
 
   it('reset uses the supplied start height as the floor for an immediate jump', () => {

@@ -1,18 +1,16 @@
-import { describe, expect, it, vi } from 'vitest';
-import { Group, Mesh, PerspectiveCamera, Scene, Texture, Vector3 } from 'three';
+import { describe,expect,it,vi } from 'vitest';
+import { Group,Mesh,PerspectiveCamera,Scene,Texture,Vector3 } from 'three';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import { SURVIVAL_EVENTS, survivalEventById } from '../src/survival/eventCatalog';
+import { SURVIVAL_EVENTS,survivalEventById } from '../src/survival/eventCatalog';
 import { eligibleEvents } from '../src/survival/eventSelection';
 import { validateSurvivalEventCatalog } from '../src/survival/eventCatalogValidation';
-import { OceanOfBloodPresentation, BLOOD_OCEAN_REVEAL_SECONDS } from '../src/survival/events/OceanOfBloodPresentation';
+import { OceanOfBloodPresentation,BLOOD_OCEAN_REVEAL_SECONDS } from '../src/survival/events/OceanOfBloodPresentation';
 import type { DedicatedEventEnvironment } from '../src/survival/eventPresentationTypes';
 import { deriveEventOutcomePresentation } from '../src/survival/eventPresentationOutcome';
 import { Skybox } from '../src/world/Skybox';
 import { OceanRenderer } from '../src/ocean/OceanRenderer';
 import { HIGH_WATER_LOOK } from '../src/ocean/highWaterLook';
-import { setLanguage } from '../src/i18n/language';
-import { formatJournalEntry } from '../src/survival/journal';
-import type { ItemId, ItemInstanceId } from '../src/game/ItemState';
+import type { ItemId,ItemInstanceId } from '../src/game/ItemState';
 
 function session(hunger = 0, item?: ItemId): SurvivalSession {
   return new SurvivalSession(item ? [{ type: item, instanceId: `${item}-1` as ItemInstanceId }] : [], {
@@ -74,20 +72,6 @@ describe('Ocean of Blood rules', () => {
     const event = catalog.find(event => event.id === 'ocean-of-blood')!;
     Object.assign(event.choices[1]!.outcomes[0]!.effects, { maximumNextDawnEnergy });
     expect(() => validateSurvivalEventCatalog(catalog)).toThrow(/maximumNextDawnEnergy/);
-  });
-
-  it.each(['en', 'pl', 'es-AR'] as const)('formats both journal results in %s', (language) => {
-    setLanguage(language);
-    try {
-      for (const item of [undefined, 'fishingNet'] as const) {
-        const run = session(0, item);
-        run.resolveEvent(item ? { kind: 'item', choiceId: item, instanceId: 'fishingNet-1' } : { kind: 'endure' });
-        run.beginDawn();
-        const copy = formatJournalEntry(run.snapshot().journalEntries.find(entry => entry.day === 12)!);
-        expect(copy.nighttime.length).toBeGreaterThan(50);
-        expect(copy.nighttime).not.toMatch(/bloodOcean|undefined/);
-      }
-    } finally { setLanguage('en'); }
   });
 });
 

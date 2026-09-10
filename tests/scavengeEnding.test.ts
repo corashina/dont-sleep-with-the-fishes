@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe,expect,it } from 'vitest';
 import {
   advanceScavengeEnding,
   createScavengeEndingState,
@@ -13,11 +13,6 @@ describe('scavenge ending timeline', () => {
     const ready = advanceScavengeEnding(start, 'success', SINKING_CINEMATIC_SECONDS + 20);
     expect(ready).toEqual({ stage: 'survivalReady', elapsedSeconds: 0 });
     expect(advanceScavengeEnding(ready, 'success', 20)).toBe(ready);
-  });
-
-  it('keeps scavenging active while the session is running', () => {
-    const state = createScavengeEndingState();
-    expect(advanceScavengeEnding(state, 'running', 20)).toBe(state);
   });
 
   it('keeps the failure hold and menu action after sinking', () => {

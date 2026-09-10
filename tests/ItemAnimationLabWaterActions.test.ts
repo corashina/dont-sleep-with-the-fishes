@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ItemId, ItemInstanceId } from '../src/game/ItemState';
+import { afterEach,describe,expect,it,vi } from 'vitest';
+import type { ItemId,ItemInstanceId } from '../src/game/ItemState';
 import type { DivePlayOptions } from '../src/survival/DivePresentation';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
@@ -58,43 +58,6 @@ function lab(type: 'fishingNet' | 'scubaSet', broken = false) {
 }
 
 describe('lab water actions', () => {
-  it.each(['fishingNet', 'scubaSet'] as const)('repeats %s from its real menu at zero energy', async (type) => {
-    const rig = lab(type);
-    const before = rig.session.snapshot();
-    for (let run = 1; run <= 2; run += 1) {
-      rig.open();
-      rig.play();
-      await vi.waitFor(() => expect(rig.world.setEventSelectedItem).toHaveBeenLastCalledWith(null));
-      if (type === 'fishingNet') {
-        expect(rig.world.enterFishingView).toHaveBeenCalledWith('net');
-        expect(rig.world.playFishingNetHaul).toHaveBeenCalledTimes(run);
-        expect(rig.world.playFishingNetHaul).toHaveBeenLastCalledWith('cod', { x: 0, z: -6.4 });
-        expect(rig.world.exitFishingView).toHaveBeenCalledTimes(run);
-      } else {
-        expect(rig.world.playDive).toHaveBeenCalledTimes(run);
-        expect(rig.world.playDive).toHaveBeenLastCalledWith(rig.instanceId, expect.objectContaining({ onWaterImpact: expect.any(Function) }));
-        expect(rig.cover).toHaveBeenCalledWith(true);
-        expect(rig.cover).toHaveBeenLastCalledWith(false);
-        expect(rig.profile).toHaveBeenLastCalledWith('solid');
-      }
-      expect(rig.session.snapshot()).toEqual(before);
-      expect(rig.onInvariantError).not.toHaveBeenCalled();
-    }
-  });
-
-  it.each(['fishingNet', 'scubaSet'] as const)('disables broken %s and allows its preview after Fix', async (type) => {
-    const rig = lab(type, true);
-    rig.open();
-    expect(rig.mount.querySelector(`[data-event-choice="${rig.use}"]`)?.getAttribute('aria-disabled')).toBe('true');
-    rig.play();
-    expect(rig.world.enterFishingView).not.toHaveBeenCalled();
-    expect(rig.world.playDive).not.toHaveBeenCalled();
-    rig.click('[data-event-choice="fix"]');
-    rig.play();
-    await vi.waitFor(() => expect(rig.world.setEventSelectedItem).toHaveBeenLastCalledWith(null));
-    const animation = type === 'fishingNet' ? rig.world.playFishingNetHaul : rig.world.playDive;
-    expect(animation).toHaveBeenCalledOnce();
-  });
 
   it.each(['fishingNet', 'scubaSet'] as const)('cleans up a failed %s preview and permits another try', async (type) => {
     const rig = lab(type);

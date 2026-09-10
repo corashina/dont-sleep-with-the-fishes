@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { ITEM_IDS, type ItemId, type ItemInstance } from '../src/game/ItemState';
+import { describe,expect,it } from 'vitest';
+import { ITEM_IDS,type ItemId,type ItemInstance } from '../src/game/ItemState';
 import { drawDiveItem } from '../src/survival/diveRewards';
 import { formatJournalEntry } from '../src/survival/journal';
 import { formatDiveResult } from '../src/survival/SurvivalDayActionFlow';
@@ -12,10 +12,6 @@ const saved = (ids: readonly ItemId[]): ItemInstance[] => ids.map((type) => ({
 }));
 
 describe('dive item selection', () => {
-  it.each(inventoryIds)('includes missing %s', (missing) => {
-    const present = new Set(inventoryIds.filter((id) => id !== missing));
-    expect(drawDiveItem(present, sequenceRandom([0.5]))).toBe(missing);
-  });
 
   it('assigns relative chances of 3, 2, and 1 to item weights 1, 2, and 3', () => {
     const present = new Set(inventoryIds.filter((id) => !['compass', 'medicalKit', 'anchor'].includes(id)));

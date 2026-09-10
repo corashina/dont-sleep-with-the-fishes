@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InputController } from '../src/input/InputController';
 
-interface TestDocument {
+interface TestDocument extends EventTarget {
   pointerLockElement: Element | null;
 }
 
@@ -35,7 +35,7 @@ function createInput(request = (): Promise<void> => Promise.resolve()): {
 
 beforeEach(() => {
   browserWindow = new EventTarget();
-  browserDocument = { pointerLockElement: null };
+  browserDocument = Object.assign(new EventTarget(), { pointerLockElement: null });
   inputs = [];
   Object.defineProperty(globalThis, 'window', { configurable: true, value: browserWindow });
   Object.defineProperty(globalThis, 'document', { configurable: true, value: browserDocument });
@@ -92,11 +92,26 @@ describe('InputController', () => {
     expect(input.consumeLook()).toEqual({ x: 0, y: 0 });
   });
 
-  it('reports successful pointer-lock acquisition', async () => {
+  it.each(['release', 'acquire'] as const)('clears queued look on pointer-lock %s', (transition) => {
+    const { canvas, input } = createInput();
+    browserDocument.pointerLockElement = canvas;
+    dispatch('mousemove', { movementX: 120, movementY: -60 });
+
+    browserDocument.pointerLockElement = transition === 'release' ? null : canvas;
+    browserDocument.dispatchEvent(new Event('pointerlockchange'));
+
+    expect(input.consumeLook()).toEqual({ x: 0, y: 0 });
+    browserDocument.pointerLockElement = canvas;
+    browserDocument.dispatchEvent(new Event('pointerlockchange'));
+    dispatch('mousemove', { movementX: 3, movementY: -2 });
+    expect(input.consumeLook()).toEqual({ x: 3, y: -2 });
+  });
+
+  it('requests raw mouse movement when acquiring pointer lock', async () => {
     const { input, requestPointerLock } = createInput(() => Promise.resolve());
 
     await expect(input.requestPointerLock()).resolves.toBe(true);
-    expect(requestPointerLock).toHaveBeenCalledOnce();
+    expect(requestPointerLock).toHaveBeenCalledExactlyOnceWith({ unadjustedMovement: true });
   });
 
   it('reports rejected pointer-lock acquisition without rejecting its caller', async () => {
@@ -180,11 +195,17 @@ describe('InputController', () => {
   });
 
   it('removes all event listeners when disposed', () => {
+    const addListener = vi.spyOn(browserDocument, 'addEventListener');
+    const removeListener = vi.spyOn(browserDocument, 'removeEventListener');
     const { canvas, input } = createInput();
     browserDocument.pointerLockElement = canvas;
 
     input.dispose();
     input.dispose();
+    expect(addListener).toHaveBeenCalledWith('pointerlockchange', expect.any(Function));
+    expect(removeListener).toHaveBeenCalledExactlyOnceWith(
+      'pointerlockchange', addListener.mock.calls[0]![1],
+    );
     dispatch('keydown', { code: 'KeyW', repeat: false });
     dispatch('mousemove', { movementX: 5, movementY: 6 });
     dispatch('mousedown', { button: 0 });

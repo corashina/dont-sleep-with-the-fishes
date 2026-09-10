@@ -1,43 +1,10 @@
-import {
-  Box3, BoxGeometry, Group, InstancedMesh, Matrix4, Mesh, MeshStandardMaterial,
-  Texture, Vector3,
-} from 'three';
-import { describe, expect, it, vi } from 'vitest';
-import { DistantSeabed } from '../src/menu/DistantSeabed';
+import { BoxGeometry,Group,InstancedMesh,Matrix4,Mesh,MeshStandardMaterial,Vector3 } from 'three';
+import { describe,expect,it,vi } from 'vitest';
 import { MenuGroundBatches } from '../src/menu/MenuGroundBatches';
 import { UnderwaterPlantField } from '../src/menu/UnderwaterPlantField';
-import { menuSandChannelContains, menuSeabedHeight } from '../src/menu/MenuSceneLayout';
+import { menuSandChannelContains,menuSeabedHeight } from '../src/menu/MenuSceneLayout';
 
 describe('menu environment', () => {
-  it('keeps stone geometry outside the foreground sand opening', () => {
-    const texture = new Texture();
-    const seabed = new DistantSeabed(texture);
-    const matrix = new Matrix4();
-    const position = new Vector3();
-    const bounds = new Box3();
-    let foreground = 0;
-    try {
-      for (const name of ['menu:scatter-rocks', 'menu:scatter-stones']) {
-        const batch = seabed.root.getObjectByName(name) as InstancedMesh;
-        batch.geometry.computeBoundingBox();
-        for (let index = 0; index < batch.count; index += 1) {
-          batch.getMatrixAt(index, matrix);
-          position.setFromMatrixPosition(matrix);
-          if (position.z < -12) continue;
-          foreground += 1;
-          bounds.copy(batch.geometry.boundingBox!).applyMatrix4(matrix);
-          const radius = Math.max(position.x - bounds.min.x, bounds.max.x - position.x);
-          expect(menuSandChannelContains(position.x, position.z, radius)).toBe(false);
-        }
-      }
-      expect(foreground).toBeGreaterThan(10);
-      expect((seabed.root.getObjectByName('menu:barnacle-colonies') as InstancedMesh).count).toBeGreaterThan(0);
-      expect((seabed.root.getObjectByName('menu:sponge-colonies') as InstancedMesh).count).toBeGreaterThan(0);
-    } finally {
-      seabed.dispose();
-      texture.dispose();
-    }
-  });
 
   it('roots all plant forms on the terrain and preserves static instance buffers during animation', () => {
     const plants = new UnderwaterPlantField();

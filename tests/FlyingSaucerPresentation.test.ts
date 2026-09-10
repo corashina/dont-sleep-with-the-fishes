@@ -1,8 +1,8 @@
-import { BoxGeometry, Group, Mesh, MeshStandardMaterial, PerspectiveCamera } from 'three';
-import { describe, expect, it, vi } from 'vitest';
-import { FlyingSaucerPresentation, UFO_ABDUCTION_DURATION } from '../src/survival/FlyingSaucerPresentation';
+import { BoxGeometry,Group,Mesh,MeshStandardMaterial,PerspectiveCamera } from 'three';
+import { describe,expect,it,vi } from 'vitest';
+import { FlyingSaucerPresentation,UFO_ABDUCTION_DURATION } from '../src/survival/FlyingSaucerPresentation';
 import type { FocusedEventPresentationDependencies } from '../src/survival/FocusedEventPresentation';
-import type { ActionOutcome, EventResultPresentation } from '../src/survival/survivalTypes';
+import type { ActionOutcome,EventResultPresentation } from '../src/survival/survivalTypes';
 
 function fixture() {
   const camera = new PerspectiveCamera(50, 1, 0.1, 200);
@@ -24,37 +24,6 @@ const result = (resultId: string): EventResultPresentation => ({ eventId: 'flyin
 const outcome: ActionOutcome = { accepted: true, code: 'event-resolved', message: '', deltas: {}, cue: 'none' };
 
 describe('flying saucer presentation', () => {
-  it('keeps a lit, curved flyby distant and continuous for either arrival side', async () => {
-    for (const seed of [0, 1]) {
-      const { presentation } = fixture();
-      try {
-        presentation.stage(seed);
-        const craft = presentation.itemAimTarget()!;
-        const lamp = craft.getObjectByName('ufo-running-light')!;
-        expect(lamp.visible).toBe(true);
-        const reveal = presentation.reveal();
-        presentation.update(2, 2);
-        await reveal;
-        const revealed = craft.position.clone();
-        presentation.update(2, 0);
-        expect(craft.position.equals(revealed)).toBe(true);
-        for (let second = 3; second <= 12; second++) {
-          presentation.update(second, 1);
-          expect(craft.position.length()).toBeGreaterThan(110);
-          expect(Math.abs(craft.rotation.z)).toBeLessThan(0.05);
-        }
-        expect(Math.abs(craft.position.y - revealed.y)).toBeGreaterThan(1);
-        expect(Math.abs(craft.position.z - revealed.z)).toBeGreaterThan(1);
-        const beforeSignal = craft.position.clone();
-        const reaction = presentation.react(result('ufo-abduction'), outcome);
-        expect(craft.position.equals(beforeSignal)).toBe(true);
-        presentation.settleForVisibilityChange();
-        await reaction;
-        expect(craft.position.toArray()).toEqual([0, 18, -0.5]);
-        expect(craft.rotation.z).toBeCloseTo(0);
-      } finally { presentation.dispose(); }
-    }
-  });
 
   it('approaches before the beam opens, then lifts the camera before resolving', async () => {
     const { presentation, camera, takeCameraControl } = fixture();

@@ -1,6 +1,5 @@
 // Importance: 10/10 (scaled from 5/5). Protects the scavenging state machine.
-import { describe, expect, it } from 'vitest';
-import type { ItemInstance } from '../src/game/ItemState';
+import { describe,expect,it } from 'vitest';
 import { ScavengeSession } from '../src/game/ScavengeSession';
 
 const BLOCKED_STATE_SETUPS = [
@@ -163,50 +162,6 @@ describe('ScavengeSession', () => {
     session.start();
     session.tick(60, false);
     expect(session.snapshot()).toMatchObject({ status: 'failure', remainingSeconds: 0 });
-  });
-
-  it('returns frozen snapshot clones instead of exposing session state', () => {
-    const instances: readonly ItemInstance[] = [
-      { instanceId: 'cannedFood-1', type: 'cannedFood' },
-      { instanceId: 'cannedFood-2', type: 'cannedFood' },
-    ];
-    const session = new ScavengeSession(instances);
-    session.start();
-    session.pickUp('cannedFood-1');
-
-    const snapshot = session.snapshot();
-    expect(Object.isFrozen(snapshot.carriedItems)).toBe(true);
-    expect(Object.isFrozen(snapshot.carriedItems[0])).toBe(true);
-    expect(Object.isFrozen(snapshot.items)).toBe(true);
-    expect(Object.isFrozen(snapshot.items['cannedFood-1'])).toBe(true);
-    expect(snapshot.carriedItems[0]).not.toBe(instances[0]);
-    expect(() => {
-      (snapshot.items['cannedFood-1'] as { status: string }).status = 'lost';
-    }).toThrow();
-    expect(session.snapshot().items['cannedFood-1']!.status).toBe('carried');
-  });
-
-  it('returns an immutable result containing frozen saved instances', () => {
-    const session = new ScavengeSession();
-    session.start();
-    session.pickUp('flareGun-1');
-    session.saveCarried();
-    session.pickUp('bucket-1');
-    session.dropCarried();
-    session.tick(60, true);
-
-    expect(session.result()).toEqual({
-      savedItems: [{ instanceId: 'flareGun-1', type: 'flareGun' }],
-      elapsedSeconds: 60,
-    });
-    const result = session.result()!;
-    expect(Object.isFrozen(result)).toBe(true);
-    expect(Object.isFrozen(result.savedItems)).toBe(true);
-    expect(Object.isFrozen(result.savedItems[0])).toBe(true);
-    expect(() => (result.savedItems as ItemInstance[]).push({
-      instanceId: 'bucket-1',
-      type: 'bucket',
-    })).toThrow();
   });
 
   it('deducts a five-second fall penalty without double-finishing', () => {

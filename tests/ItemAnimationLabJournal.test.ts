@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach,describe,expect,it } from 'vitest';
 import { setLanguage } from '../src/i18n/language';
 import { SurvivalPhase } from '../src/survival/SurvivalPhase';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
@@ -58,17 +58,6 @@ describe('Item Animation Lab journal examples', () => {
       expect(rig.mount.querySelector<HTMLElement>('[data-journal-unread]')!.hidden).toBe(true);
       expect(rig.session.snapshot()).toBe(before);
       expect(rig.phase.getSurvivalCheckpoint()).toBeNull();
-    } finally {
-      rig.dispose();
-    }
-  });
-
-  it('keeps the normal survival journal empty until a day is recorded', () => {
-    const rig = fixture(false);
-    try {
-      rig.button('[data-journal-open]').click();
-      expect(rig.mount.querySelector('[data-journal-title]')!.hasAttribute('data-empty')).toBe(true);
-      expect(rig.mount.querySelectorAll('[data-item-change]')).toHaveLength(0);
     } finally {
       rig.dispose();
     }

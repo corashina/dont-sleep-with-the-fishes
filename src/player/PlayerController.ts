@@ -21,7 +21,7 @@ const LADDER_REGRAB_DELAY = 0.35;
 const GRAVITY = 14;
 const GROUND_EPSILON = 1e-6;
 const DEFAULT_YAW = Math.PI;
-const LOOK_SENSITIVITY = 0.0018;
+const LOOK_SENSITIVITY = 0.0027;
 const PITCH_LIMIT = 1.35;
 
 export interface PlayerNavigationBounds {
