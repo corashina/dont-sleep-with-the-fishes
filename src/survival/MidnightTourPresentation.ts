@@ -32,6 +32,7 @@ import type {
 import type { ActionOutcome, EventResultPresentation } from './survivalTypes';
 import { eventSideFromSeed, type EventSide } from './eventVariant';
 import { MidnightShovelAnimation } from './MidnightShovelAnimation';
+import { CAMP_RESULT_DURATION_SECONDS, MidnightCampPresentation } from './MidnightCampPresentation';
 import { TimedPresentationAnimation } from './TimedPresentationAnimation';
 import {
   CHEST_RESULT_DURATION_SECONDS,
@@ -52,6 +53,7 @@ type MidnightTourAnimationKind =
   | 'reveal'
   | 'choice-pass'
   | 'result-chest'
+  | 'result-camp'
   | 'result-attack'
   | 'result-pass';
 
@@ -125,6 +127,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private monsterIdleClip: AnimationClip | null = null;
   private monsterAttackClip: AnimationClip | null = null;
   private shovelAnimation: MidnightShovelAnimation | null = null;
+  private camp: MidnightCampPresentation | null = null;
   private readonly digOrigin = new Vector3();
   private readonly scanQuaternion = new Quaternion();
   private readonly attackQuaternion = new Quaternion();
@@ -137,7 +140,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private resultRevealMarked = false;
   private cameraKickMarked = false;
   private activeResultTimeline = false;
-  private heldResultKind: 'result-chest' | 'result-attack' | null = null;
+  private heldResultKind: 'result-chest' | 'result-camp' | 'result-attack' | null = null;
   private digCueEmitted = false;
   private digContacts = 0;
   private chestBuriedY = 0;
@@ -240,6 +243,24 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.clearResultActors();
     this.activeResultTimeline = false;
     switch (result.resultId) {
+      case 'tour-camp-backpack':
+      case 'tour-camp': {
+        this.prepareCutsceneCamera();
+        this.resetResultCounters();
+        this.camp = new MidnightCampPresentation(this.dependencies.propModels);
+        this.camp.root.position.set(
+          this.islandBase.x - 0.95,
+          this.islandBase.y + this.greenTopLocalY,
+          this.islandBase.z + 1.8,
+        );
+        this.activeActor = this.camp.root;
+        this.addResultActor(this.camp.root);
+        this.root.userData.state = 'camp-result';
+        this.activeResultTimeline = true;
+        const animation = this.animation.start('result-camp', CAMP_RESULT_DURATION_SECONDS);
+        this.applyAnimation('result-camp', 0);
+        return animation;
+      }
       case 'tour-chest': {
         this.prepareCutsceneCamera();
         this.resetResultCounters();
@@ -299,6 +320,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   update(time: number, delta: number): void {
     if (this.disposed || delta < 0) return;
     this.animation.update(time, delta);
+    this.camp?.update(time);
     if (this.heldResultKind !== null) {
       this.applyAnimation(this.heldResultKind, 1);
     } else if (this.cameraCaptured && !this.activeResultTimeline) {
@@ -359,6 +381,9 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       case 'result-chest':
         this.applyChestResult(normalized * CHEST_RESULT_DURATION_SECONDS);
         break;
+      case 'result-camp':
+        this.applyCampResult(normalized);
+        break;
       case 'result-attack':
         this.applyAttackResult(normalized * MONSTER_RESULT_DURATION_SECONDS);
         break;
@@ -378,6 +403,11 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
         this.root.userData.state = 'held-chest';
         this.activeResultTimeline = false;
         this.heldResultKind = 'result-chest';
+        break;
+      case 'result-camp':
+        this.root.userData.state = 'held-camp';
+        this.activeResultTimeline = false;
+        this.heldResultKind = 'result-camp';
         break;
       case 'result-attack':
         this.root.userData.state = 'held-attack';
@@ -459,6 +489,20 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     chest.position.y = this.chestBuriedY
       + (this.chestEnd.y - this.chestBuriedY) * pose.excavation;
     this.dirtPile?.scale.set(1, 0.25 + 0.75 * pose.deposit, 1);
+  }
+
+  private applyCampResult(progress: number): void {
+    if (this.camp === null) return;
+    this.markResultReveal(this.camp.root);
+    const approach = smoothstep(clamp01(progress / 0.45));
+    this.cutsceneCameraPosition.x = this.islandBase.x - approach * 0.95;
+    this.cutsceneCameraPosition.z = this.islandBase.z + 2.4 + approach * 2;
+    this.applyCameraPose(
+      this.islandBase.x + 0.65 - approach * 1.6,
+      this.camp.root.position.y + 1 - approach * 0.75,
+      this.islandBase.z + 0.15 + approach * 1.65,
+      0,
+    );
   }
 
   private applyAttackResult(elapsedSeconds: number): void {
@@ -587,6 +631,13 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     const geometries = new Set<BufferGeometry>();
     const materials = new Set<Material>();
     try {
+      for (const [id, label] of [
+        ['midnightCampfire', 'campfire'], ['midnightWoodLog', 'wood log'],
+      ] as const) {
+        const model = this.dependencies.propModels.createEventModel(id);
+        if (model === null) throw new Error(`Missing required Midnight Tour ${label} model.`);
+        collectMeshResources(model.root, geometries, materials);
+      }
       const chest = this.dependencies.propModels.createEventModel('chestClosed');
       if (chest === null) {
         throw new Error('Missing required Midnight Tour chest model.');
@@ -932,6 +983,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
 
   private clearResultActors(): void {
     this.heldResultKind = null;
+    this.camp = null;
     this.disposeShovel();
     this.disposeMonsterAnimation();
     this.activeActor = null;

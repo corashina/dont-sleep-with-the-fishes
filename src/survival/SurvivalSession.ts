@@ -20,6 +20,7 @@ import { prepareTradeEvent } from './tradeEvents';
 import { selectHandymanReward, eligibleHandymanRewards } from './tradeRules';
 import { drawDiveItem } from './diveRewards';
 import { resolveWeightedOutcome } from './eventResolver';
+import { drawMidnightCampItems } from './midnightCampLoot';
 import { drawDriftingLoot, driftingLootEffects } from './driftingLoot';
 import { driftingSupplyKindFromSeed, driftingSupplyChoiceForVariant } from './driftingSupplies';
 import { deriveEventVariantSeed } from './eventPresentationOutcome';
@@ -1045,6 +1046,12 @@ export class SurvivalSession {
       this.appearanceCounts.get(event.id) ?? 0,
       resultId,
     );
+    if (event.id === 'midnight-tour' && (resolved.resultId === 'tour-camp' || resolved.resultId === 'tour-camp-backpack')) {
+      return { ...resolved, effects: {
+        ...resolved.effects,
+        items: drawMidnightCampItems(this.presentItemIds(), this.random, resolved.resultId === 'tour-camp-backpack'),
+      } };
+    }
     if (event.id === 'handyman' && choice.itemId !== undefined) {
       const reward = selectHandymanReward(this.presentItemIds(), choice.itemId, this.random);
       if (reward === null) throw new Error('Handyman exchange has no eligible reward.');

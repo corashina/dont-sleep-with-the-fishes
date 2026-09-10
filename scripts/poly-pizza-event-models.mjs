@@ -28,6 +28,8 @@ export const POLY_PIZZA_EVENT_MODEL_PAGES = Object.freeze({
   tornadoCore: 'https://poly.pizza/m/2TBzV_5N0ci',
   midnightShovel: 'https://poly.pizza/m/oNBQSf87ZJ',
   midnightBush: 'https://poly.pizza/m/ooG6CkLyE8',
+  midnightCampfire: 'https://poly.pizza/m/Azj9hJwwwG',
+  midnightWoodLog: 'https://poly.pizza/m/L4E32Wee6C',
   midnightMonster: 'https://poly.pizza/m/22K0aSZkHV',
   airplane: 'https://poly.pizza/m/8VysVKMXN2J',
   flyingSaucer: 'https://poly.pizza/m/6hu2h8v78mO',
@@ -50,6 +52,8 @@ export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
   tornadoCore: 3_000,
   midnightShovel: 1_000,
   midnightBush: 500,
+  midnightCampfire: 700,
+  midnightWoodLog: 250,
   midnightMonster: 6_000,
   airplane: 2_500,
   flyingSaucer: 4_000,
@@ -65,6 +69,8 @@ export const EVENT_MODEL_TOTAL_TRIANGLE_LIMIT = 38_000;
 export const EVENT_MODEL_IDS = Object.freeze(Object.keys(POLY_PIZZA_EVENT_MODEL_PAGES));
 export const POLY_PIZZA_EVENT_MODEL_IDS = EVENT_MODEL_IDS;
 const EVENT_MODEL_COMMITTED_SHA256 = Object.freeze({
+  midnightWoodLog: '80A158D47E4FE832C971FFA9D51D6B8D7C087805B07478E8AB97695DC8F60539',
+  midnightCampfire: '41B34523DC42582CBDF41920028F83A19061BD56C23B76F69DFCD6B5E847B400',
   midnightBush: '0D5155B733C1DC009641612DE487AED0ED818C8E195258923FFC2AECABE31FBE',
   lighthouse: 'CF9350742721B5E04C371D9C56C4DC4CA350045460B06B668D93CFA1E2968849',
   leakPlanks: '8EFEDCE21FEF2A542E047BD82F2C9E04D59CF81810ECFB6D62D5DA9239677DD6',

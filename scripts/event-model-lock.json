@@ -343,6 +343,42 @@
       "sourceHasSkins": false,
       "sourceAnimationCount": 0,
       "downloadedOn": "2026-08-26"
+    },
+    "midnightCampfire": {
+      "id": "midnightCampfire",
+      "pageUrl": "https://poly.pizza/m/Azj9hJwwwG",
+      "publicId": "Azj9hJwwwG",
+      "resourceId": "e96d5573-fa3a-47ad-bae0-0ef9640026fa",
+      "downloadUrl": "https://static.poly.pizza/e96d5573-fa3a-47ad-bae0-0ef9640026fa.glb",
+      "sourceAssetId": "poly-pizza:e96d5573-fa3a-47ad-bae0-0ef9640026fa",
+      "modelName": "Bonfire",
+      "author": "Quaternius",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "pageAnimated": false,
+      "sha256": "B574B0E83C6B49BD54330AB5CD648A6CC826D90C886CE4B6A791B6AF3C2E951B",
+      "sourceTriangles": 602,
+      "sourceHasSkins": false,
+      "sourceAnimationCount": 0,
+      "downloadedOn": "2026-09-10"
+    },
+    "midnightWoodLog": {
+      "id": "midnightWoodLog",
+      "pageUrl": "https://poly.pizza/m/L4E32Wee6C",
+      "publicId": "L4E32Wee6C",
+      "resourceId": "89d5c7b9-0735-4640-913d-87261dfecd32",
+      "downloadUrl": "https://static.poly.pizza/89d5c7b9-0735-4640-913d-87261dfecd32.glb",
+      "sourceAssetId": "poly-pizza:89d5c7b9-0735-4640-913d-87261dfecd32",
+      "modelName": "Wood Log",
+      "author": "Quaternius",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "pageAnimated": false,
+      "sha256": "7C3489A6D7F39025DC86278F17BA005A62466061067A385FEC88A61F79D03844",
+      "sourceTriangles": 202,
+      "sourceHasSkins": false,
+      "sourceAnimationCount": 0,
+      "downloadedOn": "2026-09-10"
     }
   }
 }
