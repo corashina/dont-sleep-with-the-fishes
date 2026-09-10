@@ -95,6 +95,7 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
     if (this.disposed || context.eventId !== this.eventId) return;
     this.clear();
     this.staged = true;
+    this.applyAtmosphere();
     this.driftPhase = (context.variantSeed % 1024) / 1024 * Math.PI * 2;
     this.bodies[0]!.figure.add(this.tin);
     this.tin.position.set(-0.15, -0.2, 0.23);
@@ -176,7 +177,7 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
 
   private applyAtmosphere(): void {
     this.environment.setBloodOceanIntensity(
-      smoothstepRange(0, 0.5, this.revealProgress) * (1 - smoothstepRange(0.75, 1, this.reactionProgress)),
+      1 - smoothstepRange(0.75, 1, this.reactionProgress),
     );
   }
 
