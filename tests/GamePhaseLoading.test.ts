@@ -66,12 +66,12 @@ describe('asynchronous phase activation', () => {
     vi.mocked(r.loaders.loadShipAssets).mockReturnValue(pending.promise);
     start();
     await flushPhases();
-    expect(r.mount.querySelector('.system-screen--loading')).toBeNull();
+    expect(r.mount.querySelector('.system-screen--loading')).not.toBeNull();
     const event = EVENT_TEST_OPTIONS.find(option => option.phase !== 'ending')!;
     (r.game as unknown as { enterTestEvent(id: string): void }).enterTestEvent(event.id);
     await flushPhases();
     expect(r.factories.createSurvival).toHaveBeenCalledOnce();
-    expect(r.mount.querySelector('.system-screen--loading')).toBeNull();
+    await vi.waitFor(() => expect(r.mount.querySelector('.system-screen--loading')).toBeNull());
     if (outcome === 'resolve') pending.resolve(ship as unknown as Awaited<ReturnType<PhaseResourceLoaders['loadShipAssets']>>);
     else pending.reject(new Error('stale failure'));
     await flushPhases();
@@ -104,7 +104,7 @@ describe('asynchronous phase activation', () => {
     });
     await r.game.ready;
     start(); await flushPhases();
-    expect(r.onFatalError).toHaveBeenCalledExactlyOnceWith(error);
+    await vi.waitFor(() => expect(r.onFatalError).toHaveBeenCalledExactlyOnceWith(error));
     const models = await vi.mocked(r.loaders.loadShipModels).mock.results[0]!.value;
     expect(models.dispose).toHaveBeenCalledOnce();
     r.game.dispose();

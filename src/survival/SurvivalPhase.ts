@@ -178,6 +178,7 @@ function createSession(
 
 function testContext(
   sceneRenderer: SceneRenderer = {
+    prepare: async () => undefined,
     render: () => undefined,
     resize: () => undefined,
     dispose: () => undefined,
@@ -413,6 +414,18 @@ export class SurvivalPhase implements GamePhase {
       dependencies.onCheckpointChange,
       dependencies.onReturnToMenu ?? (() => undefined),
       dependencies,
+    );
+  }
+
+  async prepare(): Promise<void> {
+    if (this.disposed || this.world.scene === undefined) return;
+    const snapshot = this.session.snapshot();
+    this.syncVisualState(snapshot);
+    this.world.setPhase?.(snapshot.state === 'nightEvent' ? 'night' : 'day');
+    await this.context.sceneRenderer.prepare(
+      this.world.scene,
+      this.context.camera,
+      this.visualState,
     );
   }
 
