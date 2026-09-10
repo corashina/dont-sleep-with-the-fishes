@@ -15,7 +15,7 @@ export type FishingCatchId =
   | 'blowfish' | 'fish' | 'goldfish' | 'trout' | 'kingfish' | 'piranha' | 'crayfish' | 'halibut'
   | 'brokenCan' | 'crushedCan' | 'backpack'
   | 'seaweed' | 'boot' | 'plasticBottle' | 'fishBones'
-  | 'bait' | 'wetDuctTape' | 'brokenCompass' | 'tornFishingNet' | 'energyBar';
+  | 'bait' | 'wetDuctTape' | 'brokenCompass' | 'energyBar';
 
 export type FishingCatchKind = 'fish' | 'junk' | 'utility';
 export type FishingGear = 'rod' | 'net';
@@ -95,7 +95,6 @@ const catalogRows: readonly Omit<FishingCatchDefinition, 'label'>[] = [
   { id: 'bait', kind: 'utility', baseWeight: 5, minimumDay: 0, reward: { kind: 'bait', amount: 1 }, size: 'utility', presentation: { kind: 'item', itemId: 'baitTin', condition: 'usable' } },
   { id: 'wetDuctTape', kind: 'utility', baseWeight: 5, minimumDay: 3, reward: { kind: 'item', itemId: 'ductTape', condition: 'usable', unique: true }, size: 'utility', presentation: { kind: 'item', itemId: 'ductTape', condition: 'usable' } },
   { id: 'brokenCompass', kind: 'utility', baseWeight: 5, minimumDay: 0, reward: { kind: 'item', itemId: 'compass', condition: 'broken', unique: true }, size: 'utility', presentation: { kind: 'item', itemId: 'compass', condition: 'broken' } },
-  { id: 'tornFishingNet', kind: 'utility', baseWeight: 3, minimumDay: 0, reward: { kind: 'item', itemId: 'fishingNet', condition: 'broken', unique: true }, size: 'utility', presentation: { kind: 'item', itemId: 'fishingNet', condition: 'broken' } },
   { id: 'energyBar', kind: 'utility', baseWeight: 8, minimumDay: 0, reward: { kind: 'item', itemId: 'energyBar', condition: 'usable', unique: true }, size: 'utility', presentation: { kind: 'item', itemId: 'energyBar', condition: 'usable' } },
   { id: 'blowfish', kind: 'fish', baseWeight: 8, minimumDay: 0, reward: { kind: 'food', amount: 1 }, size: 'small', presentation: { kind: 'model' } },
   { id: 'fish', kind: 'fish', baseWeight: 20, minimumDay: 0, reward: { kind: 'food', amount: 1 }, size: 'small', presentation: { kind: 'model' } },

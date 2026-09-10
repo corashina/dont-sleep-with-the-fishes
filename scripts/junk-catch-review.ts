@@ -3,9 +3,11 @@ import {
   OrthographicCamera, Scene, Vector3, WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { catchLabel } from '../src/i18n/itemMessages';
 import type { SimpleJunkId } from '../src/survival/JunkCatchModels';
+import { modelTriangleCount } from '../src/rendering/modelPresentation';
 
 const items: readonly [number, SimpleJunkId][] = [
   [1, 'trafficCone'], [2, 'clothesHanger'], [4, 'toiletPlunger'],
@@ -20,14 +22,18 @@ async function addItem(number: number, id: SimpleJunkId): Promise<void> {
   article.innerHTML = `<div class="viewport"></div><div class="caption"><h2><span class="number">${String(number).padStart(2, '0')}</span>${label}</h2><div class="controls"><button aria-label="Turn ${label} left">↶ Turn</button><button aria-label="Turn ${label} right">Turn ↷</button><button aria-label="Reset ${label}">Reset</button></div></div>`;
   document.querySelector('#gallery')!.append(article);
   const viewport = article.querySelector<HTMLElement>('.viewport')!;
-  const library = new FishingCatchLibrary();
+  const loader = new GLTFLoader();
+  const library = new FishingCatchLibrary({ load: async url => (await loader.loadAsync(url)).scene });
   const model = (await library.prepare(id))!;
   const bounds = new Box3().setFromObject(model);
   const size = bounds.getSize(new Vector3());
   const center = bounds.getCenter(new Vector3());
+  const details = document.createElement('p');
+  details.textContent = `${modelTriangleCount(model, 'Missing geometry')} triangles · ${(Math.max(size.x, size.y, size.z) * 100).toFixed(1)} cm`;
+  article.querySelector('h2')!.after(details);
   const scale = 1.55 / Math.max(size.x, size.y, size.z);
   model.scale.multiplyScalar(scale);
-  model.position.copy(center).multiplyScalar(-scale);
+  model.position.sub(center).multiplyScalar(scale);
   const scene = new Scene();
   scene.background = new Color(0xd9dfda);
   scene.add(model, new HemisphereLight(0xe9f1fa, 0x697565, 2.1));

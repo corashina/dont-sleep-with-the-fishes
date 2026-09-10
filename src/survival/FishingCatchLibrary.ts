@@ -40,6 +40,7 @@ import { type ItemId } from '../game/ItemState';
 import { ITEM_MODEL_SPECS } from '../world/itemModelManifest';
 import { applyBrokenMaterialTreatment } from './itemConditionAppearance';
 import { buildSimpleJunk } from './JunkCatchModels';
+import { FISHING_MODEL_SIZES } from '../game/fishingModelSizes';
 
 interface FamilyTemplate {
   readonly root: Group;
@@ -352,7 +353,7 @@ function buildFamily(
   return { root, bodyMaterial: body, accentMaterial: accent, baseSize };
 }
 
-function applyAppearance(template: FamilyTemplate, appearance: FishingAppearance): void {
+function applyAppearance(template: FamilyTemplate, appearance: FishingAppearance, longest: number): void {
   template.bodyMaterial.color.setHex(appearance.color);
   template.accentMaterial.color.setHex(appearance.accentColor);
   template.root.scale.set(
@@ -360,6 +361,9 @@ function applyAppearance(template: FamilyTemplate, appearance: FishingAppearance
     appearance.height / template.baseSize.y,
     appearance.width / template.baseSize.z,
   );
+  template.root.scale.multiplyScalar(longest / Math.max(appearance.length, appearance.height, appearance.width));
+  const center = new Box3().setFromObject(template.root, true).getCenter(new Vector3());
+  template.root.position.sub(center);
   template.root.updateMatrixWorld(true);
 }
 
@@ -372,7 +376,7 @@ function catchModelSpec(
   const item = ITEM_MODEL_SPECS[definition.presentation.itemId];
   return {
     url: item.url,
-    targetLength: item.targetLongestDimension,
+    targetLongestDimension: item.targetLongestDimension,
     rotation: item.rotation,
     maxTriangles: item.maxTriangles,
   };
@@ -420,7 +424,6 @@ export class FishingCatchLibrary {
           root,
           catchId,
           spec,
-          definition.presentation.kind === 'item',
         );
         decorateLoadedItemCatch(active, definition);
       } catch (error) {
@@ -492,7 +495,6 @@ function prepareLoadedCatch(
   sourceRoot: Object3D,
   catchId: FishingCatchId,
   spec: FishingCatchModelSpec,
-  normalizeByLongestDimension = false,
 ): ActiveCatch {
   const root = new Group();
   root.name = `fishing-catch:${catchId}:model`;
@@ -517,10 +519,7 @@ function prepareLoadedCatch(
     throw new Error(`Fishing model ${catchId} has invalid bounds.`);
   }
   sourceRoot.position.sub(center);
-  const normalizationDimension = normalizeByLongestDimension
-    ? Math.max(size.x, size.y, size.z)
-    : size.x;
-  root.scale.setScalar(spec.targetLength / normalizationDimension);
+  root.scale.setScalar(spec.targetLongestDimension / Math.max(size.x, size.y, size.z));
 
   root.traverse((object) => {
     if (!(object instanceof Mesh)) return;
@@ -547,7 +546,8 @@ function prepareProceduralCatch(
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
   const template = buildFamily(family, geometries, materials);
-  applyAppearance(template, appearance);
+  if (!(catchId in FISHING_MODEL_SIZES)) throw new Error(`Missing model size: ${catchId}`);
+  applyAppearance(template, appearance, FISHING_MODEL_SIZES[catchId as keyof typeof FISHING_MODEL_SIZES]);
   template.root.userData.fishingCatchId = catchId;
   template.root.userData.fishingModelSource = 'procedural';
   template.root.visible = true;
@@ -555,7 +555,7 @@ function prepareProceduralCatch(
     root: template.root,
     geometries,
     materials,
-    textures: new Set<Texture>(),
+    textures: collectMaterialTextures(materials),
   };
 }
 
@@ -596,12 +596,6 @@ function prepareProceduralItemCatch(
     const needle = mesh('utility:compass:needle', new ConeGeometry(0.08, 0.32, 3), accent);
     needle.position.y = 0.08;
     needle.rotation.z = Math.PI / 2;
-  } else if (itemId === 'fishingNet') {
-    const handle = mesh('utility:net:handle', new CylinderGeometry(0.035, 0.045, 0.9, 6), body);
-    handle.rotation.z = Math.PI / 2;
-    handle.position.x = -0.42;
-    const rim = mesh('utility:net:rim', new TorusGeometry(0.32, 0.035, 5, 10), accent);
-    rim.position.x = 0.34;
   } else {
     mesh('utility:energy-bar:wrapper', new BoxGeometry(0.72, 0.16, 0.28), body);
     const band = mesh('utility:energy-bar:band', new BoxGeometry(0.2, 0.18, 0.3), accent);

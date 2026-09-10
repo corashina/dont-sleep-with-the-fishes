@@ -3,6 +3,7 @@
 import generatedMetadataJson from '../assets/models/items/item-model-metadata.json';
 import { ITEM_IDS, type ItemId } from '../game/ItemState';
 import { normalizeGeneratedBounds } from './modelNormalization';
+import { FISHING_ITEM_SIZES } from '../game/fishingModelSizes';
 
 export interface GeneratedRuntimeModelMetadata {
   readonly triangles: number;
@@ -41,10 +42,10 @@ export type RuntimeModelPresentation = Pick<
 type Presentation = RuntimeModelPresentation;
 const presentation = {
   cannedFood: { targetLongestDimension: 0.42, rotation: [0, 0, 0], offset: [0, 0.04, 0] },
-  baitTin: { targetLongestDimension: 0.36, rotation: [0, 0, 0], offset: [0, 0.04, 0] },
-  ductTape: { targetLongestDimension: 0.55, rotation: [0, 0, 0], offset: [0, 0, 0] },
+  baitTin: { targetLongestDimension: FISHING_ITEM_SIZES.baitTin, rotation: [0, 0, 0], offset: [0, 0.04, 0] },
+  ductTape: { targetLongestDimension: FISHING_ITEM_SIZES.ductTape, rotation: [0, 0, 0], offset: [0, 0, 0] },
   compass: {
-    targetLongestDimension: 0.48,
+    targetLongestDimension: FISHING_ITEM_SIZES.compass,
     rotation: [0, -Math.PI / 2, 0],
     offset: [0, 0, 0],
   },
@@ -66,7 +67,7 @@ const presentation = {
   swimRing: { targetLongestDimension: 0.70, rotation: [0, 0, 0], offset: [0, 0, 0] },
   flashlight: { targetLongestDimension: 0.72, rotation: [0, 0, 0], offset: [0, 0, 0] },
   shotgun: { targetLongestDimension: 1.00, rotation: [0, Math.PI / 2, 0], offset: [0, 0, 0] },
-  energyBar: { targetLongestDimension: 0.48, rotation: [0, 0, 0], offset: [0, 0, 0] },
+  energyBar: { targetLongestDimension: FISHING_ITEM_SIZES.energyBar, rotation: [0, 0, 0], offset: [0, 0, 0] },
   carlitos: {
     targetLongestDimension: 0.87,
     rotation: [0, 0, 0],
