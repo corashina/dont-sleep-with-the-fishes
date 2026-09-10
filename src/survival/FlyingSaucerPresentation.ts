@@ -12,7 +12,7 @@ import { TimedPresentationAnimation } from './TimedPresentationAnimation';
 
 export const UFO_ABDUCTION_DURATION = 11;
 const CRUISE_SPEED = 10;
-type Animation = 'reveal' | 'hide' | 'pass' | 'abduct';
+type Animation = 'reveal' | 'pass' | 'abduct';
 const smooth = (value: number): number => {
   const t = Math.max(0, Math.min(1, value));
   return t * t * (3 - 2 * t);
@@ -38,7 +38,6 @@ export class FlyingSaucerPresentation implements FocusedEventPresentation {
   private readonly runningLight = new PointLight(0xa2ffe8, 6, 8, 2);
   private readonly geometries = new Set<BufferGeometry>();
   private readonly materials = new Set<Material>();
-  private readonly exit = new Vector3();
   private readonly reactionStart = new Vector3();
   private readonly overhead = new Vector3(0, 18, -0.5);
   private readonly cameraStart = new Vector3();
@@ -122,11 +121,11 @@ export class FlyingSaucerPresentation implements FocusedEventPresentation {
     if (this.disposed) return;
     this.clear();
     this.side = eventSideFromSeed(variantSeed);
-    this.exit.set(-155 * this.side, 44, -165);
     this.craft.rotation.set(0, 0, 0);
     this.sampleFlyby(0);
     this.root.visible = true;
     this.staged = true;
+    this.cruising = true;
     this.root.userData.state = 'staged';
   }
 
@@ -140,27 +139,25 @@ export class FlyingSaucerPresentation implements FocusedEventPresentation {
     if (this.disposed) return Promise.resolve();
     if (choice.choiceId === 'flareGun' || choice.choiceId === 'flashlight') return Promise.resolve();
     if (choice.choiceId !== 'sleep') throw new Error(`Unsupported UFO choice: ${choice.choiceId}`);
-    this.acquireCamera();
-    return this.startAnimation('hide', 0.8);
+    return Promise.resolve();
   }
 
   react(result: EventResultPresentation, _outcome: ActionOutcome): Promise<void> {
     if (this.disposed) return Promise.resolve();
     if (result.eventId !== 'flying-saucer') throw new Error(`UFO received result for ${result.eventId}`);
+    if (result.resultId === 'ufo-pass') return this.startAnimation('pass', 5);
     this.cruising = false;
     this.reactionStart.copy(this.craft.position);
     this.reactionBank = this.craft.rotation.z;
     this.acquireCamera();
-    if (result.resultId === 'ufo-pass') return this.startAnimation('pass', 5);
     if (result.resultId === 'ufo-abduction') return this.startAnimation('abduct', UFO_ABDUCTION_DURATION);
     throw new Error(`Unsupported UFO result: ${result.resultId}`);
   }
 
   update(time: number, delta: number): void {
     if (this.disposed || !this.staged || delta < 0) return;
-    const wasCruising = this.cruising;
+    if (this.cruising) this.sampleFlyby(this.flightSeconds + delta);
     this.animation.update(time, delta);
-    if (wasCruising && this.cruising) this.sampleFlyby(this.flightSeconds + delta);
     this.craft.rotation.y = time * 0.12;
     if (this.ownsCamera) this.applyCamera();
   }
@@ -207,10 +204,6 @@ export class FlyingSaucerPresentation implements FocusedEventPresentation {
   }
 
   private sample(kind: Animation, progress: number): void {
-    if (kind === 'reveal') this.sampleFlyby(progress * 2);
-    if (kind === 'hide') this.cameraLift = -0.65 * smooth(progress);
-    if (kind === 'pass') this.cameraLift = -0.65;
-    if (kind === 'pass') this.sampleApproach(this.exit, progress, 8);
     if (kind === 'abduct') {
       const seconds = progress * UFO_ABDUCTION_DURATION;
       this.sampleApproach(this.overhead, seconds / 5, 12);

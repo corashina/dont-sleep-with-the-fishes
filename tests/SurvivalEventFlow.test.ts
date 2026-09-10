@@ -13,7 +13,7 @@ import type {
 } from '../src/survival/survivalTypes';
 import type { SurvivalSnapshot } from '../src/survival/survivalSnapshot';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
-import { FLYBY_CHOICE_WINDOW_SECONDS } from '../src/survival/eventCatalog';
+import { FLYBY_CHOICE_WINDOW_SECONDS, UFO_CHOICE_WINDOW_SECONDS } from '../src/survival/eventCatalog';
 import { formatJournalEntry } from '../src/survival/journal';
 import type { EventResponse } from '../src/survival/survivalTypes';
 import { sequenceRandom } from './helpers/random';
@@ -438,15 +438,36 @@ describe('event selection contracts', () => {
     },
   );
 
-  it('waits for the UFO beam before presenting the ending and retains the final scene', async () => {
-    const rig = createSessionRig(new SurvivalSession([
+  it.each([true, false])('offers only UFO signals and pauses the twelve-second window, equipped=%s', async (equipped) => {
+    const isVisibilityBlocked = vi.fn(() => false);
+    const rig = createSessionRig(new SurvivalSession(equipped ? [
       { instanceId: 'flashlight-1', type: 'flashlight' },
+    ] : [], { seed: 1113, initial: { day: 15 }, initialEventId: 'flying-saucer' }), { isVisibilityBlocked });
+    rig.flow.update(100);
+    await rig.flow.revealPending(rig.realSession.snapshot());
+    expect(rig.flow.canUsePillow(rig.realSession.snapshot())).toBe(false);
+    expect(rig.ui.setEventSelection).toHaveBeenLastCalledWith(new Map(equipped ? [['flashlight-1', 'flashlight']] : []), []);
+    rig.flow.update(UFO_CHOICE_WINDOW_SECONDS - 1);
+    isVisibilityBlocked.mockReturnValue(true);
+    rig.flow.update(100);
+    expect(rig.session.resolveEvent).not.toHaveBeenCalled();
+    isVisibilityBlocked.mockReturnValue(false);
+    rig.flow.update(1);
+    await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
+    expect(rig.session.resolveEvent).toHaveBeenCalledExactlyOnceWith({ kind: 'endure' });
+    expect(rig.audio.confirm).not.toHaveBeenCalled();
+    expect(rig.onFatalError).not.toHaveBeenCalled();
+  });
+
+  it.each(['flashlight', 'flareGun'] as const)('waits for the UFO beam after %s and retains the final scene', async (itemId) => {
+    const rig = createSessionRig(new SurvivalSession([
+      { instanceId: `${itemId}-1`, type: itemId },
     ], { seed: 1113, initial: { day: 15 }, initialEventId: 'flying-saucer' }));
     const beam = deferred();
     rig.world.reactToEventOutcome.mockImplementation(() => beam.promise);
     await rig.flow.revealPending(rig.realSession.snapshot());
     rig.world.clearEvent.mockClear();
-    rig.flow.resolveItem('flashlight', 'flashlight-1');
+    rig.flow.resolveItem(itemId, `${itemId}-1`);
     await vi.waitFor(() => expect(rig.world.reactToEventOutcome).toHaveBeenCalledOnce());
     expect(rig.realSession.snapshot().state).toBe('abducted');
     expect(rig.presentTerminal).not.toHaveBeenCalled();
@@ -459,9 +480,9 @@ describe('event selection contracts', () => {
   });
 
   it.each([
-    ['plane', 'plane-pass'],
-    ['flying-saucer', 'ufo-pass'],
-  ] as const)('rejects late %s signals and records the safe response once', async (eventId, resultId) => {
+    ['plane', 'plane-pass', FLYBY_CHOICE_WINDOW_SECONDS],
+    ['flying-saucer', 'ufo-pass', UFO_CHOICE_WINDOW_SECONDS],
+  ] as const)('rejects late %s signals and records the safe response once', async (eventId, resultId, windowSeconds) => {
     const rig = createSessionRig(new SurvivalSession([
       { instanceId: 'flareGun-1', type: 'flareGun' },
       { instanceId: 'flashlight-1', type: 'flashlight' },
@@ -472,7 +493,7 @@ describe('event selection contracts', () => {
     const choice = deferred();
     rig.world.playEventChoice.mockImplementation(() => choice.promise);
     await rig.flow.revealPending(rig.realSession.snapshot());
-    rig.flow.update(FLYBY_CHOICE_WINDOW_SECONDS);
+    rig.flow.update(windowSeconds);
     rig.flow.resolveItem('flareGun', 'flareGun-1');
     rig.flow.resolveItem('flashlight', 'flashlight-1');
     rig.flow.resolveEndure();

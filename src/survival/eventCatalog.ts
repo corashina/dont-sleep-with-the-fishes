@@ -47,6 +47,7 @@ export type SignalSightingEventId = Extract<
 >;
 
 export const FLYBY_CHOICE_WINDOW_SECONDS = 10;
+export const UFO_CHOICE_WINDOW_SECONDS = 12;
 
 export function isSignalSightingEventId(
   eventId: string,
@@ -700,7 +701,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
     choice('flashlight', 'eventText071', 'flashlight', outcome(
       1, 'ufoTaken', { ending: 'abduction' }, 'ufo-abduction',
     )),
-    contextualChoice('sleep', 'ufoHide', outcome(1, 'ufoPassed', {}, 'ufo-pass')),
+    contextualChoice('sleep', 'ufoIgnore', outcome(1, 'ufoPassed', {}, 'ufo-pass')),
   ], undefined, { maximumAppearances: 1 }),
   event('lighthouse', 'night', 'lighthouseTitle', 'safe', 'sighting', 2, 15, 2, [
     choice('flareGun', 'eventText070', 'flareGun', outcome(
