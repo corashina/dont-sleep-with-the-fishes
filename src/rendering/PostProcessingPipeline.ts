@@ -4,6 +4,7 @@ import {
   Scene,
   Vector2,
   WebGLRenderTarget,
+  type Material,
   type WebGLRenderer,
 } from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -14,6 +15,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import {
   ITEM_AMBIENT_OCCLUSION_DEFAULT_INTENSITY,
   ITEM_AMBIENT_OCCLUSION_DEFAULT_RADIUS,
+  ITEM_AMBIENT_OCCLUSION_LAYER,
   ItemAmbientOcclusionPass,
   type ItemAmbientOcclusionMode,
 } from './ItemAmbientOcclusion';
@@ -53,6 +55,11 @@ import {
   type PostProcessingControlState,
   type PostProcessingNumericSetting,
 } from './postProcessingControls';
+import {
+  prepareFullscreenMaterials,
+  prepareOutputPass,
+  prepareOverrideMaterial,
+} from './prepareMaterials';
 
 type AmbientOcclusionFactory = (
   mode: ItemAmbientOcclusionMode,
@@ -252,12 +259,88 @@ export class PostProcessingPipeline implements SceneRenderer {
     else composer.dispose();
   }
 
+  async prepare(
+    scene: Scene,
+    camera: Camera,
+    state: Readonly<SceneVisualState>,
+  ): Promise<void> {
+    if (this.disposed) return;
+    this.configureScene(scene, camera, state);
+    const previousTarget = this.renderer.getRenderTarget();
+    const previousCubeFace = this.renderer.getActiveCubeFace();
+    const previousMipmapLevel = this.renderer.getActiveMipmapLevel();
+    const compilations: Promise<unknown>[] = [];
+    let schedulingFailure: { error: unknown } | undefined;
+    try {
+      // RenderPass writes scene color into the composer's read buffer.
+      // This target selects the linear, untone-mapped scene program variants.
+      this.renderer.setRenderTarget(this.composer.readBuffer);
+      compilations.push(this.renderer.compileAsync(scene, camera));
+      const materials: Material[] = [
+        this.outlinePass.materialCopy,
+        this.outlinePass.edgeDetectionMaterial,
+        this.outlinePass.separableBlurMaterial1,
+        this.outlinePass.overlayMaterial,
+      ];
+      compilations.push(prepareOverrideMaterial(
+        this.renderer, scene, camera, this.outlinePass.prepareMaskMaterial,
+      ));
+      const ao = this.itemAmbientOcclusionPass;
+      if (ao?.enabled) {
+        const originalLayerMask = camera.layers.mask;
+        camera.layers.set(ITEM_AMBIENT_OCCLUSION_LAYER);
+        try {
+          compilations.push(prepareOverrideMaterial(this.renderer, scene, camera, ao.normalMaterial));
+        } finally {
+          camera.layers.mask = originalLayerMask;
+        }
+        materials.push(ao.gtaoMaterial, ao.pdMaterial, ao.copyMaterial, ao.blendMaterial);
+      }
+      if (this.bloomPass.enabled) {
+        materials.push(
+          this.bloomPass.materialHighPassFilter,
+          ...this.bloomPass.separableBlurMaterials,
+          this.bloomPass.compositeMaterial,
+          this.bloomPass.blendMaterial,
+        );
+      }
+      if (this.menuAtmospherePass.enabled) materials.push(this.menuAtmospherePass.material);
+      compilations.push(prepareFullscreenMaterials(this.renderer, materials));
+      this.outputPass.renderToScreen = !this.binocularMaskPass.enabled;
+      compilations.push(prepareOutputPass(
+        this.renderer, this.outputPass, this.composer.writeBuffer, this.composer.readBuffer,
+      ));
+      // Binoculars follow OutputPass and always draw to the screen.
+      this.renderer.setRenderTarget(null);
+      compilations.push(prepareFullscreenMaterials(this.renderer, [this.binocularMaskPass.material]));
+    } catch (error) {
+      schedulingFailure = { error };
+    } finally {
+      // compileAsync schedules synchronously. Restore shared state before yielding.
+      this.renderer.setRenderTarget(previousTarget, previousCubeFace, previousMipmapLevel);
+    }
+    const results = await Promise.allSettled(compilations);
+    if (schedulingFailure !== undefined) throw schedulingFailure.error;
+    for (const result of results) {
+      if (result.status === 'rejected') throw result.reason;
+    }
+  }
+
   render(
     scene: Scene,
     camera: Camera,
     state: Readonly<SceneVisualState>,
   ): void {
     if (this.disposed) return;
+    this.configureScene(scene, camera, state);
+    this.composer.render(0);
+  }
+
+  private configureScene(
+    scene: Scene,
+    camera: Camera,
+    state: Readonly<SceneVisualState>,
+  ): void {
     if (this.shadowMaterialsNeedUpdate) {
       refreshSceneShadowMaterials(scene);
       this.shadowMaterialsNeedUpdate = false;
@@ -277,7 +360,6 @@ export class PostProcessingPipeline implements SceneRenderer {
     this.outlinePass.renderCamera = camera;
     this.outlinePass.selectedObjects = sceneHoverOutlineTargets(scene);
     this.binocularMaskPass.setStrength(sceneBinocularMaskStrength(scene));
-    this.composer.render(0);
   }
 
   resize(width: number, height: number, pixelRatio: number): void {

@@ -10,15 +10,18 @@ Staged events also prepare their scene before reveal. Superseded preparation can
 
 - TypeScript passed.
 - ESLint passed with zero warnings.
-- Vitest passed: 162 files, 1,639 tests.
+- Vitest passed after master integration: 164 files, 1,652 tests.
 - Production build passed. Vite still reports the large bundle warning.
 
 Tests cover retained resources, retries, pending shutdown, prepared catch clones, and loading-screen lifetime.
 They also cover cancelled preparation, failed preparation, and the complete event model catalogue.
 
+Integration preserves master's serialized phase preparation and delayed renderer disposal.
+It also preserves asynchronous preparation for the menu, post-processing passes, and cloud shaders.
+
 ## Browser check
 
-Used a separate static production preview at port 4174.
+Before master integration, used a separate static production preview at port 4174.
 After refresh, selected Leak through the backtick developer menu. Gameplay became ready and showed its actions.
 Then selected Flowers and returned to Leak. Both scenes became ready.
 

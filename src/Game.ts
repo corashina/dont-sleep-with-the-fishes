@@ -36,6 +36,7 @@ import { SurvivalPhase } from './survival/SurvivalPhase';
 import { PerformanceStats } from './ui/PerformanceStats';
 import { PostProcessingConsole } from './ui/PostProcessingConsole';
 import { SettingsMenu } from './ui/SettingsMenu';
+import { createSystemScreen, updateSystemScreenProgress } from './ui/SystemScreen';
 import {
   createSystemTuningPreference,
   type SystemTuningPreference,
@@ -66,7 +67,6 @@ import type {
 } from './survival/SurvivalPhase';
 import type { BrowserPlaytestStartup } from './app/BrowserPlaytest';
 import type { PhaseResourceSource, ResourceLease, ResourceProgress } from './app/PhaseResources';
-import { createSystemScreen, updateSystemScreenProgress } from './ui/SystemScreen';
 
 export interface GameFactories {
   createMenu(
@@ -198,7 +198,7 @@ function createTestRenderer(): WebGLRenderer {
     setSize: () => undefined,
     render: () => undefined,
     initTexture: () => undefined,
-    compileAsync: async (scene: import('three').Object3D) => scene,
+    compileAsync: async () => undefined,
     dispose: () => undefined,
     shadowMap: { enabled: true, type: 0 },
     capabilities: { getMaxAnisotropy: () => 1 },
@@ -228,7 +228,8 @@ export class Game {
   private factories!: GameFactories;
   private activePhase: GamePhase | null = null;
   private activeLease: ResourceLease<unknown> | null = null;
-  private preparationScreen: HTMLElement | null = null;
+  private pendingPreparation: Promise<void> | null = null;
+  private transitionScreen: HTMLElement | null = null;
   private preparing = false;
   private performanceStats: PerformanceStats | null = null;
   private settingsMenu: SettingsMenu | null = null;
@@ -417,14 +418,15 @@ export class Game {
     const postProcessingConsole = this.postProcessingConsole;
     this.postProcessingConsole = null;
     runCleanupSteps([
-      () => { this.preparationScreen?.remove(); this.preparationScreen = null; },
       () => outgoing?.dispose(),
       () => postProcessingConsole?.dispose(),
       () => { this.settingsMenu?.dispose(); this.settingsMenu = null; },
       () => performanceStats?.dispose(),
-      () => this.resources.dispose(),
-      () => this.sceneRenderer.dispose(),
-      () => this.renderer.dispose(),
+      () => this.clearTransitionScreen(),
+      () => {
+        if (this.pendingPreparation === null) this.disposeRenderingResources();
+        else void this.pendingPreparation.then(() => this.disposeRenderingResources());
+      },
       () => this.renderer.domElement.remove(),
     ]);
   }
@@ -479,6 +481,8 @@ export class Game {
       };
       this.activePhase = null;
       this.activeLease = null;
+      this.pendingPreparation = null;
+      this.transitionScreen = null;
       this.performanceStats = null;
       this.postProcessingConsole = null;
       const tuningState = systemTuning.get();
@@ -671,79 +675,107 @@ export class Game {
   ): Promise<void> {
     const generation = ++this.phaseGeneration;
     this.preparing = true;
-    this.preparationScreen?.remove();
-    const screen = (generation === 1
-      ? this.context.mount.querySelector<HTMLElement>('.system-screen--loading')
-      : null) ?? createSystemScreen({ kind: 'loading' });
-    this.preparationScreen = screen;
-    this.context.mount.append(screen);
+    this.showTransitionScreen();
     const progress: ResourceProgress = (completed, total) => {
-      if (!this.ownsGeneration(generation)) return;
-      updateSystemScreenProgress(screen, Math.round(completed / Math.max(1, total) * 80), 100);
+      if (this.ownsGeneration(generation)) this.updatePreparationProgress(Math.round(completed / Math.max(1, total) * 80));
     };
     return Promise.resolve().then(() => {
       if (!this.ownsGeneration(generation)) return null;
       this.settingsMenu?.close();
       this.activePhase?.setOverlayActive?.(true);
       return acquire(progress);
-    }).then(async lease => {
+    }).then(lease => {
       if (lease === null) return;
       if (!this.ownsGeneration(generation)) { lease.dispose(); return; }
-      // Paint the cover before synchronous scene construction starts.
-      await new Promise<void>(resolve => setTimeout(resolve, 0));
-      if (!this.ownsGeneration(generation)) { lease.dispose(); return; }
-      const phase = this.installPhase(lease, create, generation);
-      if (phase === null) return;
-      updateSystemScreenProgress(screen, 85, 100);
-      await phase.prepare?.();
-      if (!this.ownsGeneration(generation)) return;
-      updateSystemScreenProgress(screen, 100, 100);
-      this.preparing = false;
-      if (this.started) phase.start();
+      const previous = this.pendingPreparation;
+      const preparation = this.preparePhase(lease, create, generation, previous);
+      const settled = preparation.then(() => undefined, () => undefined);
+      this.pendingPreparation = settled;
+      void settled.then(() => {
+        if (this.pendingPreparation === settled) this.pendingPreparation = null;
+      });
+      return preparation;
     }).catch(error => {
       if (this.ownsGeneration(generation)) this.reportFatalError(error);
     }).finally(() => {
-      screen.remove();
       if (this.ownsGeneration(generation)) {
-        this.preparationScreen = null;
         this.preparing = false;
+        this.clearTransitionScreen();
       }
     });
   }
 
-  private installPhase<T>(
+  private async preparePhase<T>(
     lease: ResourceLease<T>,
     create: (assets: T, generation: number) => GamePhase,
     generation: number,
-  ): GamePhase | null {
+    previous: Promise<void> | null,
+  ): Promise<void> {
+    if (previous !== null) await previous;
+    // Let the cover paint before scene construction starts.
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+    if (!this.ownsGeneration(generation)) { lease.dispose(); return; }
     const outgoing = this.takeActivePhase();
     let phase: GamePhase | null = null;
     let transferred = false;
     try {
+      // Phase objects release their clones and scopes before the backing lease.
       outgoing?.dispose();
       this.resetCamera();
       phase = create(lease.assets, generation);
-      if (!this.ownsGeneration(generation)) {
-        const stale = phase; phase = null; stale.dispose(); return null;
-      }
-      this.applyPresentationOverrides(phase);
-      if (!this.ownsGeneration(generation)) {
-        const stale = phase; phase = null; stale.dispose(); return null;
-      }
+      this.updatePreparationProgress(85);
+      await this.preparePhasePresentation(phase, generation);
+      if (!this.ownsGeneration(generation)) { const stale = phase; phase = null; stale.dispose(); return; }
       this.activePhase = phase;
       this.activeLease = lease;
       transferred = true;
+      this.updatePreparationProgress(100);
       this.synchronizePresentationControls();
-      phase.resize(window.innerWidth, window.innerHeight);
-      return phase;
+      if (this.started && this.ownsGeneration(generation)) phase.start();
     } catch (error) {
       if (!transferred) {
-        try { phase?.dispose(); } catch { /* Preserve the construction error. */ }
+        try { phase?.dispose(); } catch { /* Keep the preparation error. */ }
       }
       throw error;
     } finally {
       if (!transferred) lease.dispose();
     }
+  }
+
+  private async preparePhasePresentation(phase: GamePhase, generation: number): Promise<void> {
+    if (!this.ownsGeneration(generation)) return;
+    this.applyPresentationOverrides(phase);
+    if (!this.ownsGeneration(generation)) return;
+    phase.resize(window.innerWidth, window.innerHeight);
+    if (phase.prepare === undefined) return;
+    await phase.prepare();
+    // A resize can arrive while shader compilation runs.
+    if (this.ownsGeneration(generation)) phase.resize(window.innerWidth, window.innerHeight);
+  }
+
+  private showTransitionScreen(): void {
+    if (this.transitionScreen !== null) return;
+    const screen = this.context.mount.querySelector<HTMLElement>('.system-screen--loading')
+      ?? createSystemScreen({ kind: 'loading' });
+    this.context.mount.append(screen);
+    this.transitionScreen = screen;
+  }
+
+  private updatePreparationProgress(completed: number): void {
+    if (this.transitionScreen !== null) updateSystemScreenProgress(this.transitionScreen, completed, 100);
+  }
+
+  private clearTransitionScreen(): void {
+    this.transitionScreen?.remove();
+    this.transitionScreen = null;
+  }
+
+  private disposeRenderingResources(): void {
+    runCleanupSteps([
+      () => this.resources.dispose(),
+      () => this.sceneRenderer.dispose(),
+      () => this.renderer.dispose(),
+    ]);
   }
 
   private reportFatalError(error: unknown): void {
@@ -957,8 +989,8 @@ export class Game {
     const rawDeltaSeconds = this.clock.getDelta();
     this.performanceStats?.recordFrame(rawDeltaSeconds);
     const deltaSeconds = Math.min(rawDeltaSeconds, 0.05);
+    this.elapsed += deltaSeconds;
     if (!this.preparing) {
-      this.elapsed += deltaSeconds;
       this.activePhase?.update(this.elapsed, deltaSeconds);
       this.synchronizePresentationControls();
       this.activePhase?.render();

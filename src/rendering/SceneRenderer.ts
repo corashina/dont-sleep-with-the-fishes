@@ -34,6 +34,7 @@ export type SceneVisualState =
 
 export interface SceneRenderer {
   readonly postProcessingControls?: PostProcessingControls;
+  prepare(scene: Scene, camera: Camera, state: Readonly<SceneVisualState>): Promise<void>;
   render(scene: Scene, camera: Camera, state: Readonly<SceneVisualState>): void;
   resize(width: number, height: number, pixelRatio: number): void;
   setAntiAliasingQuality?(value: AntiAliasingQuality): void;
@@ -51,6 +52,15 @@ export class DirectSceneRenderer implements SceneRenderer {
     shadowQuality: ShadowQuality = 'low',
   ) {
     applyShadowQuality(renderer, shadowQuality);
+  }
+
+  async prepare(scene: Scene, camera: Camera, _state?: Readonly<SceneVisualState>): Promise<void> {
+    if (this.disposed) return;
+    if (this.shadowMaterialsNeedUpdate) {
+      refreshSceneShadowMaterials(scene);
+      this.shadowMaterialsNeedUpdate = false;
+    }
+    await this.renderer.compileAsync(scene, camera);
   }
 
   render(scene: Scene, camera: Camera, _state?: Readonly<SceneVisualState>): void {

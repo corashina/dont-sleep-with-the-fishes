@@ -19,7 +19,7 @@ import {
   SUN_DIRECTION,
   type CelestialDirection,
 } from './celestialLight';
-import { createCloudImpostorLayout, updateCloudImpostorShadows } from './cloudImpostorLayout';
+import { CLOUD_QUERY_COUNT, createCloudImpostorLayout, updateCloudImpostorShadows } from './cloudImpostorLayout';
 import { cloudImpostorShader } from './cloudImpostorShader';
 import { lunarFaceShader } from './lunarFaceShader';
 import { applyBloodOceanPalette } from './bloodOceanPalette';
@@ -428,6 +428,8 @@ export class Skybox {
         uCloudCenters: { value: this.cloudLayout.centers },
         uCloudScales: { value: this.cloudLayout.scales },
         uCloudBlockers: { value: this.cloudLayout.blockers },
+        uCloudQueryRings: { value: this.cloudLayout.queryRings },
+        uCloudQueryCount: { value: CLOUD_QUERY_COUNT },
       },
     });
     this.mesh = new Mesh(new SphereGeometry(80, 48, 24), this.material);

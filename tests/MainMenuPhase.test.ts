@@ -35,6 +35,7 @@ function createRig(
     dispose: vi.fn(),
   };
   const sceneRenderer = {
+    prepare: vi.fn().mockResolvedValue(undefined),
     render: vi.fn(),
     resize: vi.fn(),
     dispose: vi.fn(),
@@ -71,6 +72,18 @@ function createRig(
 }
 
 describe('MainMenuPhase', () => {
+  it('prepares the scene before starting its input and audio', async () => {
+    const { phase, sceneRenderer, audioScope, camera } = createRig();
+    try {
+      await phase.prepare();
+      expect(sceneRenderer.prepare).toHaveBeenCalledWith(
+        expect.anything(), camera, { kind: 'menu', elapsedSeconds: 0 },
+      );
+      expect(sceneRenderer.render).not.toHaveBeenCalled();
+      expect(audioScope.startLoop).not.toHaveBeenCalled();
+    } finally { phase.dispose(); }
+  });
+
   it('keeps the animated background and ambience active while the menu overlay blocks start input', () => {
     const { phase, ui, animator, audioScope, canvas, world, requestPointerLock, sceneRenderer } = createRig();
     try {

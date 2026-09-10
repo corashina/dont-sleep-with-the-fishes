@@ -70,7 +70,7 @@ describe('asynchronous phase activation', () => {
     await flushPhases();
     (r.game as unknown as { enterTestEvent(id: string): void }).enterTestEvent('leak');
     await flushPhases();
-    expect(ship.dispose).toHaveBeenCalledOnce();
+    expect(ship.dispose).not.toHaveBeenCalled();
     pending.resolve();
     await flushPhases();
     expect(ship.start).not.toHaveBeenCalled();
