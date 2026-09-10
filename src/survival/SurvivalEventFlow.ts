@@ -402,9 +402,19 @@ export class SurvivalEventFlow {
   private ownsBusyState = false;
   private flybyChoiceWindowRemaining: number | null = null;
   private disposed = false;
+  private seagullOutcome: ActionOutcome | null = null;
 
   constructor(private readonly dependencies: SurvivalEventFlowDependencies) {
     this.initialEventResultId = dependencies.initialEventResultId;
+  }
+
+  seagullGrab(): void {
+    if (this.disposed || this.presentation !== 'revealing' || this.seagullOutcome !== null) return;
+    if (this.dependencies.session.snapshot().pendingEventId !== 'seagull-theft') return;
+    const outcome = this.dependencies.session.resolveEvent({ kind: 'choice', choiceId: 'steal' });
+    if (!outcome.accepted) throw new Error(`Seagull theft was rejected: ${outcome.code}`);
+    this.seagullOutcome = outcome;
+    this.dependencies.renderSnapshot();
   }
 
   async revealPending(
@@ -515,7 +525,9 @@ export class SurvivalEventFlow {
     if (!this.isLifecycleCurrent(generation)) return false;
     const operation = this.beginOperation();
     try {
-      if (this.presentation === 'choosing') this.clearPresentation(false, true, true);
+      if (this.presentation === 'choosing' || this.seagullOutcome !== null) {
+        this.clearPresentation(false, true, true);
+      }
       this.presentation = opensEvent ? 'transitioning' : 'sleeping';
       this.setBusy(true);
       if (!opensEvent) return true;
@@ -2016,9 +2028,27 @@ export class SurvivalEventFlow {
     this.beginBadSleepReveal(event);
     await this.revealWorldEvent(event, generation, operation);
     if (!this.isCurrent(generation, operation)) return;
+    if (event.id === 'seagull-theft') {
+      await this.finishSeagullReveal(generation, operation);
+      return;
+    }
     if (!await this.showLateEventReveal(event, generation, operation)) return;
     if (!await this.resumeAfterVisibility(generation, operation)) return;
     await this.finishPendingEventReveal(event, generation, operation);
+  }
+
+  private async finishSeagullReveal(
+    generation: number,
+    operation: number,
+  ): Promise<void> {
+    if (this.seagullOutcome === null) throw new Error('Seagull theft completed without grabbing food.');
+    if (!await this.resumeAfterVisibility(generation, operation)) return;
+    this.dependencies.ui.clearEventPresentation?.();
+    this.dependencies.world.setEventEligibleItems?.(null);
+    this.presentation = 'idle';
+    this.dependencies.renderSnapshot();
+    this.setBusy(false);
+    this.dependencies.ui.restoreCommandFocus?.();
   }
 
   private async preparePendingEventReveal(
@@ -2537,6 +2567,7 @@ export class SurvivalEventFlow {
     reportCleanupErrors = true,
     cancelPendingActivation = false,
   ): void {
+    this.seagullOutcome = null;
     this.islandConfirmationOpen = false;
     if (!preserveDeferredSync) this.cancelDeferredPresentationSync();
     this.preparedEventId = null;
