@@ -340,6 +340,7 @@ export class SurvivalAudio {
     if (
       eventId === 'drifting-supplies'
       || eventId === 'drifting-chest'
+      || eventId === 'flying-saucer'
     ) return;
     if (eventId === 'bad-sleep') {
       this.scope.play('yawn');
@@ -383,12 +384,21 @@ export class SurvivalAudio {
       });
       return;
     }
+    if (eventId === 'flying-saucer') {
+      this.scope.startLoop('ufoFlyby');
+      this.scope.setLoopGain('ufoFlyby', 0, 0);
+      this.scope.setLoopGain('ufoFlyby', 1, 1.2);
+      return;
+    }
     if (eventId !== 'eerie-melody') return;
     this.eventMelodyActive = true;
     this.scope.startLoop('eerieMelody');
   }
 
   beginEventReaction(eventId: string, outcome: ActionOutcome): void {
+    if (!this.disposed && eventId === 'flying-saucer' && outcome.eventResult?.resultId === 'ufo-pass') {
+      this.scope.setLoopGain('ufoFlyby', 0, 5);
+    }
     if (
       this.disposed
       || !this.eventMelodyActive
@@ -442,6 +452,7 @@ export class SurvivalAudio {
     this.scope.stopLoop('leak', 0.08);
     this.scope.stopLoop('tentacleMovement', 0.08);
     this.scope.stopLoop('tornadoWind', 0.08);
+    this.scope.stopLoop('ufoFlyby', 0.08);
     this.stopEventMelody(0.08);
   }
 

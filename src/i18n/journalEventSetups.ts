@@ -2,7 +2,7 @@ import { getLanguage } from './language';
 import type { EventTextId } from './eventMessages';
 
 const situations: Record<string, readonly [string, string, string]> = {
-  'flying-saucer': ['A silent disc moved across the stars. Its lights searched the sea.', 'Cichy dysk sunął pośród gwiazd. Jego światła przeszukiwały morze.', 'Un disco silencioso cruzaba las estrellas. Sus luces registraban el mar.'],
+  'flying-saucer': ['A low hum rolled across the sea. A disc moved across the stars, its lights searching the water.', 'Niski pomruk niósł się nad morzem. Dysk sunął pośród gwiazd, a jego światła przeszukiwały wodę.', 'Un zumbido grave recorría el mar. Un disco cruzaba las estrellas; sus luces registraban el agua.'],
   'something-under-us': ['Something larger than the boat stopped beneath us. The hull rose without a wave.', 'Coś większego od łodzi zatrzymało się pod nami. Kadłub uniósł się bez fali.', 'Algo más grande que el bote se detuvo debajo nuestro. El casco se elevó sin una ola.'],
   'ocean-of-blood': ['The sea turned red. Drifting bodies turned their heads toward me.', 'Morze zrobiło się czerwone. Dryfujące ciała obracały głowy w moją stronę.', 'El mar se volvió rojo. Los cuerpos que flotaban giraban la cabeza hacia mí.'],
   'dangerous-waters': ['The current drew us towards jagged rocks.', 'Prąd znosił nas na ostre skały.', "La corriente nos llevaba hacia rocas filosas."],
