@@ -616,6 +616,7 @@ export class ScavengePhase implements GamePhase {
   async prepare(): Promise<void> {
     await prepareScene(this.context.renderer, this.scene, this.context.camera,
       this.context.propModels.preparationRoots(), () => !this.disposed);
+    if (!this.disposed) await this.context.sceneRenderer.prepare(this.scene, this.context.camera, this.visualState);
     if (!this.disposed) this.render();
   }
 

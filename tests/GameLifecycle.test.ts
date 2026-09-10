@@ -379,6 +379,7 @@ function postProcessingSceneRenderer(): SceneRenderer {
   };
   return {
     postProcessingControls,
+    prepare: vi.fn().mockResolvedValue(undefined),
     render: vi.fn(),
     resize: vi.fn(),
     dispose: vi.fn(),
@@ -1846,6 +1847,7 @@ describe('ScavengePhase lifecycle integration', () => {
     };
     const sceneRenderer: SceneRenderer = {
       postProcessingControls,
+      prepare: vi.fn().mockResolvedValue(undefined),
       render: vi.fn(),
       resize: vi.fn(),
       dispose: vi.fn(),
@@ -2274,6 +2276,7 @@ describe('ScavengePhase lifecycle integration', () => {
     } as unknown as WebGLRenderer;
     const sceneRenderer: SceneRenderer = {
       render: vi.fn(), resize: vi.fn(),
+      prepare: vi.fn().mockResolvedValue(undefined),
       dispose: vi.fn(() => calls.push('sceneRenderer')),
     };
     const removeCanvas = vi.spyOn(renderer.domElement, 'remove').mockImplementation(() => {

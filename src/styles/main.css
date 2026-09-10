@@ -332,6 +332,14 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   box-shadow: inset 0 0 0 1px #8d81704d, 3px 4px 0 #02050999;
 }
 .system-loading-progress::-webkit-progress-bar { background: #080d10; }
+.system-loading-progress:indeterminate { animation: system-loading-pulse 900ms ease-in-out infinite alternate; }
+.system-loading-progress:indeterminate::-webkit-progress-bar {
+  background: repeating-linear-gradient(110deg, #77503a 0 14px, #b77a35 14px 28px);
+}
+@keyframes system-loading-pulse {
+  from { opacity: 0.45; }
+  to { opacity: 1; }
+}
 .system-loading-progress::-webkit-progress-value {
   background:
     repeating-linear-gradient(8deg, transparent 0 7px, #f2ead71f 8px 9px),

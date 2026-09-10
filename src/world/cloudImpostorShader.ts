@@ -1,30 +1,4 @@
-import { CLOUD_GROUP_COUNT, CLOUD_RINGS, CLOUD_RING_PHASE } from './cloudImpostorLayout';
-
-// Nearby rings surround the view. Far rings need only the five sectors facing the viewing ray.
-let firstGroup = 0;
-const ringQueries = CLOUD_RINGS.map((ring, ringIndex) => {
-  const start = firstGroup;
-  firstGroup += ring.count;
-  const count = ringIndex < 2 ? ring.count : 5;
-  return `
-    {
-      int sector = int(floor((azimuth - ${Number(ringIndex * CLOUD_RING_PHASE).toFixed(4)})
-        * ${Number(ring.count / (Math.PI * 2)).toFixed(8)}));
-      for (int slot = 0; slot < ${count}; slot++) {
-        int index = ${start} + int(mod(float(sector + slot - 2), ${ring.count}.0));
-        float limit = front.alpha >= 0.999 ? front.distance : 10000.0;
-        CloudSurface candidate = cloudGroup(ray, index, expansion, pixelWidth, limit);
-        if (candidate.alpha <= 0.0) continue;
-        if (candidate.distance < front.distance) {
-          back = front;
-          front = candidate;
-        } else if (candidate.distance < back.distance) {
-          back = candidate;
-        }
-      }
-    }
-  `;
-}).join('\n');
+import { CLOUD_GROUP_COUNT, CLOUD_RINGS } from './cloudImpostorLayout';
 
 // Analytic cloud impostors: surface depth and normals, with no density ray march or cloud textures.
 export const cloudImpostorShader = `
@@ -32,6 +6,8 @@ export const cloudImpostorShader = `
   uniform vec4 uCloudCenters[${CLOUD_GROUP_COUNT}];
   uniform vec4 uCloudScales[${CLOUD_GROUP_COUNT}];
   uniform vec4 uCloudBlockers[${CLOUD_GROUP_COUNT}];
+  uniform vec4 uCloudQueryRings[${CLOUD_RINGS.length}];
+  uniform int uCloudQueryCount;
 
   struct CloudSurface {
     float distance;
@@ -171,7 +147,31 @@ export const cloudImpostorShader = `
     CloudSurface front = emptyCloudSurface();
     CloudSurface back = emptyCloudSurface();
     float azimuth = atan(ray.x, -ray.z);
-    ${ringQueries}
+    // A uniform bound keeps the compiler from expanding the expensive query body per ring or slot.
+    // Nearby rings surround the view; far rings use five sectors facing the viewing ray.
+    int ringIndex = 0;
+    int slot = 0;
+    vec4 ring = uCloudQueryRings[0];
+    int sector = int(floor((azimuth - ring.z) * ring.w));
+    for (int query = 0; query < uCloudQueryCount; query++) {
+      if (slot >= (ringIndex < 2 ? int(ring.y) : 5)) {
+        ringIndex++;
+        slot = 0;
+        ring = uCloudQueryRings[ringIndex];
+        sector = int(floor((azimuth - ring.z) * ring.w));
+      }
+      int index = int(ring.x) + int(mod(float(sector + slot - 2), ring.y));
+      slot++;
+      float limit = front.alpha >= 0.999 ? front.distance : 10000.0;
+      CloudSurface candidate = cloudGroup(ray, index, expansion, pixelWidth, limit);
+      if (candidate.alpha <= 0.0) continue;
+      if (candidate.distance < front.distance) {
+        back = front;
+        front = candidate;
+      } else if (candidate.distance < back.distance) {
+        back = candidate;
+      }
+    }
     if (front.alpha <= 0.0) return vec4(0.0);
     vec3 color = shadeCloud(front, ray, sun, storm, expansion) * front.alpha;
     float alpha = front.alpha;

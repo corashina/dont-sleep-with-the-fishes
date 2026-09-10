@@ -180,6 +180,7 @@ function createSession(
 
 function testContext(
   sceneRenderer: SceneRenderer = {
+    prepare: async () => undefined,
     render: () => undefined,
     resize: () => undefined,
     dispose: () => undefined,
@@ -198,8 +199,8 @@ function testContext(
     visualQuality: createVisualQualityPreference(() => undefined, null),
     waterQuality: createWaterQualityPreference(() => undefined, null),
     camera: new PerspectiveCamera(),
-    propModels: {} as PropModelLibrary,
-    survivalContent: {} as SurvivalContent,
+    propModels: { preparationRoots: () => [] } as unknown as PropModelLibrary,
+    survivalContent: { preparationRoots: () => [] } as unknown as SurvivalContent,
     maxTextureAnisotropy: 1,
     skyAssets: {} as SkyAssets,
     lifeboatAssets: {} as LifeboatAssets,
@@ -491,6 +492,8 @@ export class SurvivalPhase implements GamePhase {
   async prepare(): Promise<void> {
     if (this.world.scene === undefined || this.disposed) return;
     const snapshot = this.session.snapshot();
+    this.syncVisualState(snapshot);
+    this.world.setPhase?.(snapshot.state === 'nightEvent' ? 'night' : 'day');
     if (!this.itemAnimationLab && snapshot.pendingEventId !== null && !isTerminal(snapshot.state)) {
       await this.eventBundles.beginLoad(snapshot.pendingEventId as Parameters<EventBundleManager['beginLoad']>[0]);
       if (this.disposed) return;
@@ -503,6 +506,7 @@ export class SurvivalPhase implements GamePhase {
     ];
     await prepareScene(this.context.renderer, this.world.scene, this.context.camera,
       templates, () => !this.disposed);
+    if (!this.disposed) await this.context.sceneRenderer.prepare(this.world.scene, this.context.camera, this.visualState);
     if (!this.disposed) this.render();
   }
 
@@ -521,6 +525,9 @@ export class SurvivalPhase implements GamePhase {
       try {
         await prepareScene(this.context.renderer, this.world.scene, this.context.camera,
           [], () => this.isContinuationActive(generation));
+        if (this.isContinuationActive(generation)) {
+          await this.context.sceneRenderer.prepare(this.world.scene, this.context.camera, this.visualState);
+        }
       } finally {
         this.scenePreparations -= 1;
       }

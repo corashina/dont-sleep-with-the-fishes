@@ -50,6 +50,26 @@ function snapshot(overrides: Partial<SurvivalSnapshot> = {}): SurvivalSnapshot {
 }
 
 describe('survival checkpoints', () => {
+  it('prepares the initial night scene before starting event flow', async () => {
+    const scene = new Scene();
+    const setPhase = vi.fn();
+    const prepare = vi.fn().mockResolvedValue(undefined);
+    const render = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: () => snapshot({ state: 'nightEvent', weather: 'squall' }) },
+      world: { scene, setPhase },
+      ui: {},
+      sceneRenderer: { prepare, render, resize: vi.fn(), dispose: vi.fn() },
+    });
+    try {
+      await phase.prepare();
+      expect(setPhase).toHaveBeenCalledWith('night');
+      expect(prepare).toHaveBeenCalledWith(scene, expect.any(PerspectiveCamera), {
+        kind: 'survival', elapsedSeconds: 0, phase: 'night', weather: 'squall',
+      });
+      expect(render).toHaveBeenCalledOnce();
+    } finally { phase.dispose(); }
+  });
 
   it.each(['drifting-supplies', 'drifting-chest'] as const)(
     'keeps repair, camera controls, and inspection available during %s', async (eventId) => {
@@ -1055,6 +1075,7 @@ describe('SurvivalPhase orchestration', () => {
     const sceneSettle = deferred();
     const uncover = deferred();
     const sceneRenderer: SceneRenderer = {
+      prepare: vi.fn().mockResolvedValue(undefined),
       render: vi.fn(() => { calls.push('scene-render'); }),
       resize: vi.fn(),
       dispose: vi.fn(),
@@ -2098,6 +2119,7 @@ describe('SurvivalPhase orchestration', () => {
       },
       ui,
       sceneRenderer: {
+        prepare: vi.fn().mockResolvedValue(undefined),
         render: vi.fn(() => { calls.push('scene-render'); }),
         resize: vi.fn(),
         dispose: vi.fn(),
