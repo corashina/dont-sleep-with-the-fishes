@@ -9,6 +9,7 @@ import {
   disposeResourceSets,
   runCleanupSteps,
 } from '../world/SceneResources';
+import { LIFEBOAT_PLAYER_BENCH_Z } from '../world/Lifeboat';
 
 export interface SleepPillow {
   readonly root: Group;
@@ -18,7 +19,7 @@ export interface SleepPillow {
 export function createSleepPillow(model: Group): SleepPillow {
   const root = new Group();
   root.name = 'sleep-pillow';
-  root.position.set(1.05, 0.235, 0.78);
+  root.position.set(1.05, 0.235, LIFEBOAT_PLAYER_BENCH_Z);
   root.rotation.y = -0.12;
 
   const geometries = new Set<BufferGeometry>();

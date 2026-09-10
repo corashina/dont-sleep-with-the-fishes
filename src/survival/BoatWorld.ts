@@ -48,6 +48,7 @@ import {
   createLifeboat,
   LIFEBOAT_DISPLAY_SHELF_SURFACE_Y,
   LIFEBOAT_FLOOR_SURFACE_Y,
+  LIFEBOAT_PLAYER_BENCH_Z,
   LIFEBOAT_VISIBLE_STERN_BENCH_Z,
 } from '../world/Lifeboat';
 import { LifeboatAssets } from '../world/LifeboatAssets';
@@ -554,6 +555,8 @@ export class BoatWorld {
         build.waterExclusion.halfLength,
         build.waterExclusion.taperStart,
         build.waterExclusion.minimumLocalY,
+        undefined,
+        build.waterExclusion.longitudinalProfile,
       );
       this.oceanExclusions = [this.oceanExclusion];
       collectMeshResources(this.boat, this.ownedGeometries, this.ownedMaterials);
@@ -612,7 +615,7 @@ export class BoatWorld {
 
       const repairHammer = propModels.createEquipment('hammer');
       const repairTools = createRepairToolbox(repairHammer);
-      repairTools.position.set(-1.05, 0.225, 0.78);
+      repairTools.position.set(-1.05, 0.225, LIFEBOAT_PLAYER_BENCH_Z + 0.18);
       repairTools.rotation.y = -Math.PI / 2;
       repairTools.scale.setScalar(0.72);
       this.boat.add(repairTools);
