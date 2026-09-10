@@ -33,6 +33,7 @@ export interface EventPresentationAdapter {
     onAction?: (cueIndex: number) => void,
   ): Promise<boolean>;
   itemAimTarget(): Object3D | null;
+  hasPassed?(): boolean;
   netCatch?(): EventNetCatch | null;
   interactionTargets(): readonly FocusedEventInteractionTarget[];
   interactionRoot(id: string): Object3D | null;

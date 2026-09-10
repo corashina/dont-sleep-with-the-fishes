@@ -2,6 +2,24 @@
   "schemaVersion": 1,
   "generatedOn": "2026-09-09",
   "sources": {
+    "ghostShip": {
+      "id": "ghostShip",
+      "pageUrl": "https://poly.pizza/m/cIzO4MBPqI",
+      "publicId": "cIzO4MBPqI",
+      "resourceId": "941391c3-04a0-43fe-9f7a-c8e7d3b3a77d",
+      "downloadUrl": "https://static.poly.pizza/941391c3-04a0-43fe-9f7a-c8e7d3b3a77d.glb",
+      "sourceAssetId": "poly-pizza:941391c3-04a0-43fe-9f7a-c8e7d3b3a77d",
+      "modelName": "Sail Ship",
+      "author": "Quaternius",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "pageAnimated": false,
+      "sha256": "797C86A5D558E543A623B7E963982F2C447941D79EEFF19EE5AC77A4F02DC8EA",
+      "sourceTriangles": 3938,
+      "sourceHasSkins": false,
+      "sourceAnimationCount": 0,
+      "downloadedOn": "2026-09-10"
+    },
     "lighthouse": {
       "id": "lighthouse",
       "pageUrl": "https://poly.pizza/m/7H8is9jrGeB",

@@ -39,6 +39,7 @@ export type FocusedEventInteractionTarget = {
 export interface FocusedEventPresentation {
   readonly root: Group;
   itemAimTarget?(): Object3D | null;
+  hasPassed?(): boolean;
   stage(variantSeed?: number): void;
   reveal(): Promise<void>;
   playChoice(choice: EventChoicePresentation): Promise<void>;

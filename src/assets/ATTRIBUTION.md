@@ -375,3 +375,5 @@ The Midnight shovel runtime cue uses a six-second cutoff. The MP3 remains unenco
 | midnightMonsterAttack | `midnightMonsterAttack.mp3` | [Freesound 467701 / LucasDuff](https://freesound.org/people/LucasDuff/sounds/467701/) |
 | checkBackFish | `checkBackFish.mp3` | [Freesound 450830 / kyles](https://freesound.org/people/kyles/sounds/450830/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | checkBackAnglerfish | `checkBackAnglerfish.mp3` | [Freesound 435683 / ItsThatRoboGuy](https://freesound.org/people/ItsThatRoboGuy/sounds/435683/), [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+
+Ghost Ship: Sail Ship by Quaternius. https://poly.pizza/m/cIzO4MBPqI — CC0 1.0. Downloaded 2026-09-10. Source SHA-256: 797C86A5D558E543A623B7E963982F2C447941D79EEFF19EE5AC77A4F02DC8EA. Processed SHA-256: 1581E02162ADEEC349478806FB22602ECA20A1EBAF7C97BCD540FB3B0CB5CEFD. pruned, deduplicated, welded, unpartitioned, renamed, and embedded. Runtime materials add green spectral light.

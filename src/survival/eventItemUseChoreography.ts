@@ -151,14 +151,14 @@ const UMBRELLA_OVERHEAD_EVENTS: ReadonlySet<string> = new Set([
 const UMBRELLA_SHIELD_EVENTS: ReadonlySet<string> = new Set([
   'bad-sleep', 'death-stare', 'eerie-melody', 'face-on-the-moon',
 ]);
-const FLARE_SKY_EVENTS: ReadonlySet<string> = new Set(['other-people', 'plane', 'flying-saucer', 'lighthouse']);
+const FLARE_SKY_EVENTS: ReadonlySet<string> = new Set(['other-people', 'ghost-ship', 'plane', 'flying-saucer', 'lighthouse']);
 const FLARE_TARGET_EVENTS: ReadonlySet<string> = new Set(['ghosts', 'snatcher']);
 const TRADE_EVENTS: ReadonlySet<string> = new Set(['night-trader', 'handyman']);
 const NET_SLAP_EVENTS: ReadonlySet<string> = new Set([
   'death-stare', 'swarm-of-sharks', 'snatcher',
 ]);
 const FLASHLIGHT_SIGNAL_EVENTS: ReadonlySet<string> = new Set([
-  'other-people', 'plane', 'flying-saucer', 'lighthouse',
+  'other-people', 'ghost-ship', 'plane', 'flying-saucer', 'lighthouse',
 ]);
 const ANCHOR_DROP_EVENTS: ReadonlySet<string> = new Set([
   'tornado', 'thunderstorm', 'restless-waves', 'dangerous-waters',

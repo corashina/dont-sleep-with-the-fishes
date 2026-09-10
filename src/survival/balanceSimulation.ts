@@ -96,6 +96,7 @@ const EVENT_CHOICE_PRIORITY = Object.freeze({
   'night-trader': ['sleep'],
   handyman: ['sleep'],
   'other-people': ['flareGun', 'flashlight', 'sleep'],
+  'ghost-ship': ['sleep'],
   plane: ['flareGun', 'flashlight', 'sleep'],
   'flying-saucer': ['sleep'],
   lighthouse: ['flareGun', 'flashlight', 'shotgun', 'sleep'],

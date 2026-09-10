@@ -75,6 +75,8 @@ export type EventWorldPort = Pick<
   | 'delegateDriftingItem'
   | 'play'
   | 'enterFocusedEventView'
+  | 'hasEventPassed'
+  | 'returnEventItemUse'
 >;
 
 export type EventUiPort = Pick<
@@ -613,6 +615,10 @@ export class SurvivalEventFlow {
   update(deltaSeconds: number): void {
     if (this.disposed || this.dependencies.isVisibilityBlocked()) return;
     const snapshot = this.dependencies.session.snapshot();
+    if (snapshot.pendingEventId === 'ghost-ship') {
+      this.updateGhostShip();
+      return;
+    }
     if (this.presentation !== 'choosing' || (snapshot.pendingEventId !== 'plane' && snapshot.pendingEventId !== 'flying-saucer')) {
       this.flybyChoiceWindowRemaining = null;
       return;
@@ -627,6 +633,10 @@ export class SurvivalEventFlow {
     this.dependencies.ui.setEventSelection?.(new Map(), []);
     this.dependencies.world.setEventEligibleItems?.(new Set());
     this.resolveEndure();
+  }
+
+  private updateGhostShip(): void {
+    if (this.presentation === 'choosing' && this.dependencies.world.hasEventPassed()) this.resolveEndure();
   }
 
   isPendingEvent(eventId: InspectableEventId): boolean {
@@ -881,7 +891,7 @@ export class SurvivalEventFlow {
       instanceId,
       condition: pending.inventory[instanceId]?.condition ?? null,
     };
-    if (!await this.playChoiceAndResume(eventId, choice, generation, operation)) return;
+    if (!await this.playItemChoiceForResolution(eventId, choice, generation, operation)) return;
     this.presentation = 'resolving';
     this.beginDeferredPresentationSync(pending, generation);
     const outcome = this.dependencies.session.resolveEvent?.({
@@ -906,6 +916,17 @@ export class SurvivalEventFlow {
       generation,
       operation,
     );
+  }
+
+  private async returnFromObservation(generation: number, operation: number): Promise<void> {
+    await this.dependencies.world.returnEventItemUse();
+    if (!this.isCurrent(generation, operation)) return;
+    if (!await this.resumeAfterVisibility(generation, operation)) return;
+    this.presentation = 'choosing';
+    this.dependencies.world.setEventSelectedItem?.(null);
+    this.dependencies.world.setEventEligibleItems?.(new Set(this.eligibility.keys()));
+    this.restoreEventSelection();
+    this.setBusy(false);
   }
 
   private async prepareItemChoice(
@@ -935,7 +956,7 @@ export class SurvivalEventFlow {
     return this.resumeAfterVisibility(generation, operation);
   }
 
-  private async playChoiceAndResume(
+  private async playItemChoiceForResolution(
     eventId: string,
     choice: EventChoicePresentation,
     generation: number,
@@ -943,7 +964,12 @@ export class SurvivalEventFlow {
   ): Promise<boolean> {
     await (this.dependencies.world.playEventChoice?.(eventId, choice) ?? Promise.resolve());
     if (!this.isCurrent(generation, operation)) return false;
-    return this.resumeAfterVisibility(generation, operation);
+    if (!await this.resumeAfterVisibility(generation, operation)) return false;
+    if (eventId === 'ghost-ship' && choice.choiceId === 'spyglass') {
+      await this.returnFromObservation(generation, operation);
+      return false;
+    }
+    return true;
   }
 
   private async resumeAfterVisibility(generation: number, operation: number): Promise<boolean> {

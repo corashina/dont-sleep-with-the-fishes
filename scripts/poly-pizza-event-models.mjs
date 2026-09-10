@@ -18,6 +18,7 @@ import {
 import { MeshoptSimplifier } from 'meshoptimizer';
 
 export const POLY_PIZZA_EVENT_MODEL_PAGES = Object.freeze({
+  ghostShip: 'https://poly.pizza/m/cIzO4MBPqI',
   lighthouse: 'https://poly.pizza/m/7H8is9jrGeB',
   leakPlanks: 'https://poly.pizza/m/hwQ1Fx5P8U',
   schoolFish: 'https://poly.pizza/m/HkUAXudvBt',
@@ -44,6 +45,7 @@ export const POLY_PIZZA_EVENT_MODEL_PAGES = Object.freeze({
 });
 
 export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
+  ghostShip: 4_000,
   lighthouse: 1_000,
   leakPlanks: 2_000,
   schoolFish: 2_000,
@@ -69,10 +71,11 @@ export const EVENT_MODEL_TRIANGLE_LIMITS = Object.freeze({
   wreckagePallet: 3_000,
 });
 
-export const EVENT_MODEL_TOTAL_TRIANGLE_LIMIT = 39_000;
+export const EVENT_MODEL_TOTAL_TRIANGLE_LIMIT = 43_000;
 export const EVENT_MODEL_IDS = Object.freeze(Object.keys(POLY_PIZZA_EVENT_MODEL_PAGES));
 export const POLY_PIZZA_EVENT_MODEL_IDS = EVENT_MODEL_IDS;
 const EVENT_MODEL_COMMITTED_SHA256 = Object.freeze({
+  ghostShip: '1581E02162ADEEC349478806FB22602ECA20A1EBAF7C97BCD540FB3B0CB5CEFD',
   midnightCoffin: '787D9A7211225D3B18B690C0FCE64738971B61798433450B9AAFFE9120BF8626',
   midnightGravestone: 'A4839DB3DDA0B48D68653A1E0C34938B6C8F64EA16C06B929B0736E866C39FC4',
   midnightWoodLog: '80A158D47E4FE832C971FFA9D51D6B8D7C087805B07478E8AB97695DC8F60539',

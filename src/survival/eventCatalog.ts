@@ -37,13 +37,13 @@ export const SURVIVAL_EVENT_IDS = Object.freeze([
   'drifting-supplies', 'drifting-chest',
   'check-the-back',
   'flowers', 'chest-attack', 'midnight-tour', 'night-trader',
-  'handyman', 'other-people', 'plane', 'flying-saucer', 'lighthouse',
+  'handyman', 'other-people', 'ghost-ship', 'plane', 'flying-saucer', 'lighthouse',
 ] as const);
 
 export type SurvivalEventId = typeof SURVIVAL_EVENT_IDS[number];
 export type SignalSightingEventId = Extract<
   SurvivalEventId,
-  'other-people' | 'plane' | 'flying-saucer' | 'lighthouse'
+  'other-people' | 'ghost-ship' | 'plane' | 'flying-saucer' | 'lighthouse'
 >;
 
 export const FLYBY_CHOICE_WINDOW_SECONDS = 10;
@@ -52,7 +52,7 @@ export const UFO_CHOICE_WINDOW_SECONDS = 12;
 export function isSignalSightingEventId(
   eventId: string,
 ): eventId is SignalSightingEventId {
-  return eventId === 'other-people' || eventId === 'plane' || eventId === 'flying-saucer' || eventId === 'lighthouse';
+  return eventId === 'other-people' || eventId === 'ghost-ship' || eventId === 'plane' || eventId === 'flying-saucer' || eventId === 'lighthouse';
 }
 
 export type DriftingItemEventId = Extract<
@@ -109,6 +109,7 @@ const EVENT_REVEAL_TEXT: Readonly<Record<SurvivalEventId, string>> = Object.free
   'night-trader': 'eventText027',
   handyman: 'eventText028',
   'other-people': 'eventText029',
+  'ghost-ship': 'ghostShipReveal',
   plane: 'eventText030',
   'flying-saucer': 'ufoReveal',
   lighthouse: 'lighthouseReveal',
@@ -660,6 +661,22 @@ const survivalEvents: SurvivalEventDefinition[] = [
       'people-pass',
     )),
   ], undefined, { minimumRescueLead: 2, maximumAppearances: 2 }),
+  event('ghost-ship', 'night', 'ghostShipTitle', 'dangerous', 'sighting', 1, 8, 8, [
+    choice('spyglass', 'eventText067', 'spyglass', outcome(1, 'ghostShipPassed', {}, 'ghost-ship-pass')),
+    choice('flashlight', 'ghostShipLightChoice', 'flashlight', outcome(
+      1, 'ghostShipSignaled', effects([subtract('health', 20), add('pressure', 1)]),
+      'ghost-ship-signaled',
+    )),
+    choice('flareGun', 'ghostShipFlareChoice', 'flareGun', outcome(
+      1, 'ghostShipSignaled', effects([subtract('health', 20), add('pressure', 1)], [consume('flareGun')]),
+      'ghost-ship-signaled',
+    )),
+    choice('shotgun', 'ghostShipShotgunChoice', 'shotgun', outcome(
+      1, 'ghostShipSignaled', effects([subtract('health', 20), add('pressure', 1)], [consume('shotgun')]),
+      'ghost-ship-signaled',
+    )),
+    contextualChoice('sleep', 'ghostShipSilentChoice', outcome(1, 'ghostShipPassed', {}, 'ghost-ship-pass')),
+  ], undefined, { minimumPressure: 1, maximumAppearances: 2 }),
   event('plane', 'night', 'eventText059', 'safe', 'sighting', 2, 15, 2, [
     choice('flareGun', 'eventText070', 'flareGun', outcome(
       1,

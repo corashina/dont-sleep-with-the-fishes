@@ -32,6 +32,7 @@ const situations: Record<string, readonly [string, string, string]> = {
   'night-trader': ['', '', ""],
   handyman: ['', '', ""],
   'other-people': ['', '', ""],
+  'ghost-ship': ['An empty ship glowed green beside us. Its sails were perfectly still.', 'Obok nas płynął pusty statek, świecąc na zielono. Jego żagle pozostawały nieruchome.', 'Un barco vacío brillaba verde a nuestro lado. Sus velas estaban completamente inmóviles.'],
   plane: ['', '', ""],
   lighthouse: ['A lighthouse shone far across the water.', 'Daleko za wodą świeciła latarnia morska.', 'Un faro brillaba a lo lejos, al otro lado del agua.'],
   'day-calm-fallback': ['', '', ""],

@@ -7,6 +7,14 @@ import type {
 } from '../survival/survivalTypes';
 
 const EVENT_TEXT = {
+  ghostShipTitle: { en: 'Ghost Ship', pl: 'Statek widmo', 'es-AR': 'Barco fantasma' },
+  ghostShipReveal: { en: 'A green light glides beside you. A sailing ship emerges, its deck empty and its sails perfectly still.', pl: 'Obok sunie zielone światło. Wyłania się żaglowiec. Pokład jest pusty, a żagle pozostają nieruchome.', 'es-AR': 'Una luz verde se desliza a tu lado. Aparece un velero, con la cubierta vacía y las velas completamente inmóviles.' },
+  ghostShipLightChoice: { en: 'Signal with the Flashlight', pl: 'Daj sygnał latarką', 'es-AR': 'Hacé señales con la linterna' },
+  ghostShipFlareChoice: { en: 'Fire a Flare', pl: 'Wystrzel flarę', 'es-AR': 'Dispará una bengala' },
+  ghostShipShotgunChoice: { en: 'Fire the Shotgun to be heard', pl: 'Wystrzel ze strzelby, aby cię usłyszano', 'es-AR': 'Dispará la escopeta para que te escuchen' },
+  ghostShipSilentChoice: { en: 'Stay silent', pl: 'Zachowaj ciszę', 'es-AR': 'Quedate en silencio' },
+  ghostShipSignaled: { en: 'The ship keeps sailing. Green light passes through you like ice. It knows you are here.', pl: 'Statek płynie dalej. Zielone światło przenika cię lodowatym chłodem. Wie, że tu jesteś.', 'es-AR': 'El barco sigue navegando. Una luz verde te atraviesa como hielo. Sabe que estás acá.' },
+  ghostShipPassed: { en: 'You stay silent. The empty ship glides past and dissolves into the dark.', pl: 'Zachowujesz ciszę. Pusty statek przepływa obok i rozpływa się w ciemności.', 'es-AR': 'Te quedás en silencio. El barco vacío pasa de largo y se disuelve en la oscuridad.' },
   snatcherNetChoice: { en: 'Strike the tentacle with the Net — may tear', pl: 'Uderz mackę siecią — może się rozerwać', 'es-AR': 'Golpeá el tentáculo con la red — puede romperse' },
   snatcherNetHeld: { en: 'The net drives the tentacle away. Your supplies stay aboard.', pl: 'Sieć odpędza mackę. Zapasy zostają na pokładzie.', 'es-AR': 'La red aleja al tentáculo. Tus provisiones quedan a bordo.' },
   snatcherNetTorn: { en: 'The net tears as you strike. The tentacle retreats without your supplies.', pl: 'Sieć pęka przy uderzeniu. Macka wycofuje się bez zapasów.', 'es-AR': 'La red se rompe con el golpe. El tentáculo se retira sin tus provisiones.' },

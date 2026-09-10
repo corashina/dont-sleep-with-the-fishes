@@ -109,6 +109,10 @@ export class EventPresentationHost {
     return this.active?.itemAimTarget() ?? null;
   }
 
+  hasPassed(): boolean {
+    return this.active?.hasPassed?.() ?? false;
+  }
+
   interactionTargets(): readonly FocusedEventInteractionTarget[] {
     return this.active?.interactionTargets() ?? EMPTY_INTERACTION_TARGETS;
   }

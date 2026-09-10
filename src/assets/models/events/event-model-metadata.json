@@ -811,5 +811,27 @@
     "animationCount": 0,
     "animations": [],
     "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "ghostShip": {
+    "triangles": 3938,
+    "rawBounds": {
+      "min": [
+        -0.8475294906849271,
+        -0.11195184055863656,
+        -2.6044873088043796
+      ],
+      "max": [
+        0.8475294697826499,
+        3.737726440021559,
+        3.7709396976592795
+      ]
+    },
+    "sourceSha256": "797C86A5D558E543A623B7E963982F2C447941D79EEFF19EE5AC77A4F02DC8EA",
+    "sourceTriangles": 3938,
+    "outputSha256": "1581E02162ADEEC349478806FB22602ECA20A1EBAF7C97BCD540FB3B0CB5CEFD",
+    "hasSkins": false,
+    "animationCount": 0,
+    "animations": [],
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
   }
 }

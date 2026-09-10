@@ -21,6 +21,7 @@ $tempParent = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).Tri
 )
 $tempRoot = Join-Path $tempParent "dont-sleep-event-models-$swapId"
 $modelIds = @(
+  'ghostShip'
   'lighthouse'
   'leakPlanks'
   'schoolFish'
