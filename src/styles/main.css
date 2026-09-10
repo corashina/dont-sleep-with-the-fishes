@@ -2799,8 +2799,8 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   list-style: none;
 }
 .journal-items[hidden] { display: none; }
-.journal-item { position: relative; flex: 0 0 56px; width: 56px; height: 56px; }
-.journal-item__art { width: 56px; height: 56px; border-width: 3px; }
+.journal-item { position: relative; flex: 0 0 73px; width: 73px; height: 73px; }
+.journal-item__art { width: 73px; height: 73px; border-width: 3px; }
 .journal-item__art .weight-circle__thumbnail { animation: none; }
 .journal-item__status {
   position: absolute;

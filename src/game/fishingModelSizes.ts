@@ -11,5 +11,5 @@ export const FISHING_MODEL_SIZES = Object.freeze({
 });
 
 export const FISHING_ITEM_SIZES = Object.freeze({
-  baitTin: 0.23, ductTape: 0.25, compass: 0.24, energyBar: 0.31,
+  baitTin: 0.36, ductTape: 0.55, compass: 0.48, energyBar: 0.48,
 });

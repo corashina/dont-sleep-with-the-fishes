@@ -1,4 +1,5 @@
 import { presentationUiText } from '../i18n/presentationUiMessages';
+import { SceneFade } from '../rendering/SceneFade';
 import {
   AnimationMixer,
   Box3,
@@ -108,8 +109,9 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private readonly shovelGeometries = new Set<BufferGeometry>();
   private readonly shovelMaterials = new Set<Material>();
   private readonly islandBase = new Vector3();
-  private readonly islandBehind = new Vector3();
-  private readonly islandStart = new Vector3();
+  private readonly islandFade = new SceneFade();
+  private passVisibility = 1;
+  private passStartVisibility = 1;
   private readonly chestEnd = new Vector3();
   private readonly monsterPosition = new Vector3();
   private cameraParent: Object3D | null = null;
@@ -181,6 +183,8 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
 
   stage(variantSeed = 0): void {
     if (this.disposed) return;
+    this.islandFade.reset();
+    this.passVisibility = 1;
     this.animation.cancel();
     this.restoreCamera();
     this.clearResultActors();
@@ -215,7 +219,8 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
       case 'sleep': {
         this.animation.settle();
         this.restoreCamera();
-        this.islandStart.copy(this.island.position);
+        this.islandFade.begin([this.island]);
+        this.passStartVisibility = this.passVisibility;
         this.root.userData.state = 'sailing-on';
         const animation = this.animation.start('choice-pass', PASS_DURATION);
         this.applyAnimation('choice-pass', 0);
@@ -294,13 +299,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
         return animation;
       }
       case 'tour-pass': {
-        this.restoreCamera();
-        this.islandStart.copy(this.island.position);
-        this.root.userData.state = 'pass-result';
-        this.activeResultTimeline = true;
-        const animation = this.animation.start('result-pass', PASS_DURATION * 0.55);
-        this.applyAnimation('result-pass', 0);
-        return animation;
+        return this.playPassResult();
       }
       default:
         throw new Error(`Unsupported Midnight Tour result: ${result.resultId}`);
@@ -309,6 +308,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
 
   clear(): void {
     if (this.disposed) return;
+    this.islandFade.reset();
     this.animation.cancel();
     this.activeResultTimeline = false;
     this.clearResultActors();
@@ -319,6 +319,17 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.root.visible = false;
     this.root.userData.state = 'idle';
     this.staged = false;
+  }
+
+  private playPassResult(): Promise<void> {
+    this.restoreCamera();
+    if (this.passVisibility === 1) this.islandFade.begin([this.island]);
+    this.passStartVisibility = this.passVisibility;
+    this.root.userData.state = 'pass-result';
+    this.activeResultTimeline = true;
+    const animation = this.animation.start('result-pass', PASS_DURATION * 0.55);
+    this.applyAnimation('result-pass', 0);
+    return animation;
   }
 
   update(time: number, delta: number): void {
@@ -362,6 +373,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
 
   dispose(): void {
     if (this.disposed) return;
+    this.islandFade.reset();
     this.animation.cancel();
     this.activeResultTimeline = false;
     this.restoreCamera();
@@ -432,9 +444,9 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   }
 
   private applyPass(progress: number): void {
-    const travel = smoothstep(progress);
-    this.island.position.lerpVectors(this.islandStart, this.islandBehind, travel);
-    this.island.rotation.y = 0.08 * this.side - this.side * travel * 0.2;
+    this.passVisibility = this.passStartVisibility * (1 - smoothstep(progress));
+    this.islandFade.apply(this.passVisibility);
+    this.island.visible = this.passVisibility > 0;
   }
 
   private applyChestResult(elapsedSeconds: number): void {
@@ -833,7 +845,6 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     const islandY = MAXIMUM_WAVE_CREST + ISLAND_TOP_WAVE_CLEARANCE
       - this.greenTopLocalY;
     this.islandBase.set(islandX, islandY, ISLAND_Z);
-    this.islandBehind.set(-4.6 * this.side, islandY, 10.5);
     this.chestEnd.set(
       this.islandBase.x + 0.75,
       this.islandBase.y + this.greenTopLocalY + 0.2,
