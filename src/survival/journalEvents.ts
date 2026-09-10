@@ -5,6 +5,7 @@ import { journalInventoryMessage, journalItemName } from '../i18n/journalInvento
 import { journalMessage } from '../i18n/journalMessages';
 import { formatJournalMutations } from './journalInventory';
 import type { JournalEventRecord } from './journalRecords';
+import { nightTraderTrade } from './nightTraderTrades';
 
 export function formatJournalEvent(record: JournalEventRecord): string {
   const receivedFood = record.text.kind === 'domain' && record.text.id === 'fallbackFood';
@@ -16,7 +17,9 @@ export function formatJournalEvent(record: JournalEventRecord): string {
   const offering = tradeOffering(record, trade);
   const result = textId === undefined
     ? journalMessage(record.attemptedChoiceId === 'delegate-carlitos' ? 'spareFoodCarlitos' : 'spareFood')
-    : journalEventResult(textId);
+    : textId === 'traderReceived'
+      ? journalInventoryMessage('gain', journalItemName(nightTraderTrade(record.attemptedChoiceId).reward))
+      : journalEventResult(textId);
   // The result already names acquired items. Trade costs belong to the exchange, not damage or ammunition use.
   const mutations = record.inventoryMutations.filter(({ kind }) => (
     kind !== 'gain' && !(trade && (kind === 'lose' || kind === 'consume'))
