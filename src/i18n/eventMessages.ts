@@ -319,6 +319,8 @@ const EVENT_TEXT = {
   eventTestItemAnimationLab: { en: 'Item Animation Lab', pl: 'Laboratorium animacji przedmiotów', 'es-AR': 'Laboratorio de animación de objetos' },
   eventTestCheckBackFish: { en: 'Check the Back: Fish', pl: 'Sprawdź tył łodzi: ryba', 'es-AR': 'Revisá atrás: pez' },
   eventTestCheckBackBad: { en: 'Check the Back: Anglerfish', pl: 'Sprawdź tył łodzi: żabnica', 'es-AR': 'Revisá atrás: pez abisal' },
+  midnightGraveResult: { en: 'You dug up a coffin and brought its supplies back to the boat.', pl: 'Wykopano trumnę i zabrano z niej zapasy na łódź.', 'es-AR': 'Desenterraste un ataúd y llevaste sus provisiones al bote.' },
+  eventTestMidnightGrave: { en: 'Midnight Tour: Grave', pl: 'Nocna wyprawa: grób', 'es-AR': 'Paseo de medianoche: tumba' },
   eventTestMidnightChest: { en: 'Midnight Tour: Chest', pl: 'Nocna wyprawa: skrzynia', 'es-AR': 'Paseo de medianoche: cofre' },
   eventTestMidnightMonster: { en: 'Midnight Tour: Monster', pl: 'Nocna wyprawa: potwór', 'es-AR': 'Paseo de medianoche: monstruo' },
   eventTestDorothy: { en: 'Dorothy', pl: 'Dorothy', 'es-AR': 'Dorothy' },

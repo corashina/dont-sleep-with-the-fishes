@@ -938,3 +938,45 @@ describe('SurvivalEventFlow', () => {
     expect(second.dispose).toHaveBeenCalledOnce();
   });
 });
+
+
+it.each([false, true])('shows grave gains only after dawn and waits for close, disposed=%s', async (disposeDuringPopup) => {
+  const settled = deferred<boolean>();
+  const close = deferred();
+  let waitForDawn = false;
+  const rig = createRig(snapshot({ state: 'nightEvent', pendingEventId: 'midnight-tour' }), undefined, {
+    renderAndSettleCoveredScene: async () => waitForDawn ? settled.promise : true,
+  });
+  const reward = { kind: 'bundle', rewards: [{ kind: 'item', id: 'knife', quantity: 1 }] } as const;
+  rig.setResolveEvent(() => {
+    rig.setSnapshot(snapshot({ state: 'nightEvent', pendingEventId: null }));
+    return accepted({ eventResult: { eventId: 'midnight-tour', choiceId: 'visit', resultId: 'tour-grave' }, rewardSummary: reward });
+  });
+  rig.ui.showRewardResult.mockReturnValue(close.promise);
+  await rig.flow.revealPending(rig.session.snapshot());
+  rig.flow.resolveContextual('visit');
+  await vi.waitFor(() => expect(rig.setBusy).toHaveBeenLastCalledWith(false));
+  waitForDawn = true;
+  rig.flow.resolveContextual('visit');
+  await vi.waitFor(() => expect(rig.session.beginDawn).toHaveBeenCalledOnce());
+  expect(rig.ui.showRewardResult).not.toHaveBeenCalled();
+  settled.resolve(true);
+  await vi.waitFor(() => expect(rig.ui.showRewardResult).toHaveBeenCalledExactlyOnceWith({
+    title: 'ISLAND REWARDS', reward, lines: [],
+  }));
+  expect(rig.session.snapshot().day).toBe(5);
+  expect(rig.ui.setSleepCovered).toHaveBeenLastCalledWith(false);
+  expect(rig.setBusy).toHaveBeenLastCalledWith(true);
+  if (disposeDuringPopup) rig.flow.dispose();
+  rig.ui.restoreCommandFocus.mockClear();
+  close.resolve();
+  if (disposeDuringPopup) {
+    await close.promise;
+    await Promise.resolve();
+    expect(rig.ui.restoreCommandFocus).not.toHaveBeenCalled();
+  } else {
+    await vi.waitFor(() => expect(rig.setBusy).toHaveBeenLastCalledWith(false));
+    expect(rig.ui.restoreCommandFocus).toHaveBeenCalled();
+    rig.flow.dispose();
+  }
+});

@@ -18,6 +18,7 @@ import {
 import { drawWeightedEvent } from './eventSelection';
 import { prepareTradeEvent } from './tradeEvents';
 import { selectHandymanReward, eligibleHandymanRewards } from './tradeRules';
+import { drawMidnightGraveLoot } from './midnightGraveLoot';
 import { drawDiveItem } from './diveRewards';
 import { resolveWeightedOutcome } from './eventResolver';
 import { drawDriftingLoot, driftingLootEffects } from './driftingLoot';
@@ -1045,6 +1046,12 @@ export class SurvivalSession {
       this.appearanceCounts.get(event.id) ?? 0,
       resultId,
     );
+    if (event.id === 'midnight-tour' && resolved.resultId === 'tour-grave') {
+      return { ...resolved, effects: {
+        ...resolved.effects,
+        ...drawMidnightGraveLoot(this.presentItemIds(), this.random),
+      } };
+    }
     if (event.id === 'handyman' && choice.itemId !== undefined) {
       const reward = selectHandymanReward(this.presentItemIds(), choice.itemId, this.random);
       if (reward === null) throw new Error('Handyman exchange has no eligible reward.');
@@ -1155,6 +1162,7 @@ export class SurvivalSession {
       choiceId,
       deltas,
       inventoryMutations,
+      resolved.resultId,
     );
     const resultId = resolved.resultId;
     if (resolved.resultId === undefined) throw new Error('Event outcome requires a stable result ID.');
@@ -1639,9 +1647,11 @@ export class SurvivalSession {
     choiceId: string,
     deltas: ResourceDelta,
     mutations: readonly JournalInventoryMutation[],
+    resultId: string | undefined,
   ): RewardSummary | undefined {
     const trade = eventId === 'handyman' || eventId === 'night-trader';
-    if ((!trade && eventId !== 'drifting-supplies') || choiceId === 'sleep') return undefined;
+    const grave = eventId === 'midnight-tour' && resultId === 'tour-grave';
+    if ((!trade && !grave && eventId !== 'drifting-supplies') || choiceId === 'sleep') return undefined;
     const rewards = this.gainedItemRewards(mutations);
     if (trade) return rewards[0] === undefined ? undefined : Object.freeze(rewards[0]);
     for (const id of ['food', 'bait'] as const) {

@@ -723,5 +723,49 @@
     "animationCount": 0,
     "animations": [],
     "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "midnightGravestone": {
+    "triangles": 684,
+    "rawBounds": {
+      "min": [
+        -104.52655029296875,
+        -70.96319580078125,
+        -34.77937698364258
+      ],
+      "max": [
+        104.52655029296875,
+        154.7286376953125,
+        21.177465438842773
+      ]
+    },
+    "sourceSha256": "36250C1E163F1F837EF50245A01AA8A373164D39AAC65CF26A44B42FB8CCB25B",
+    "sourceTriangles": 684,
+    "outputSha256": "A4839DB3DDA0B48D68653A1E0C34938B6C8F64EA16C06B929B0736E866C39FC4",
+    "hasSkins": false,
+    "animationCount": 0,
+    "animations": [],
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
+  },
+  "midnightCoffin": {
+    "triangles": 554,
+    "rawBounds": {
+      "min": [
+        -0.8425750136375427,
+        0,
+        -0.907820999622345
+      ],
+      "max": [
+        0.740451991558075,
+        0.5399129986763,
+        2.0753068923950195
+      ]
+    },
+    "sourceSha256": "7F2CE4B969AB3274FB9B07C01C94B51E19B7EDB2FFD8A6DB93EE591B6BF1A48E",
+    "sourceTriangles": 554,
+    "outputSha256": "787D9A7211225D3B18B690C0FCE64738971B61798433450B9AAFFE9120BF8626",
+    "hasSkins": false,
+    "animationCount": 0,
+    "animations": [],
+    "processing": "pruned, deduplicated, welded, unpartitioned, renamed, and embedded"
   }
 }

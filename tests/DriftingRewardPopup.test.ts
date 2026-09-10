@@ -31,3 +31,25 @@ it('shows every reward and preserves the bundle when the language changes', asyn
     view.dispose();
   }
 });
+
+
+it('shows the island rewards title and resolves only after close', async () => {
+  const view = new SurvivalCoverView();
+  try {
+    view.onResultClose = () => view.confirmRewardResult();
+    let closed = false;
+    const result = view.showRewardResult({ title: 'ISLAND REWARDS', lines: [], reward: {
+      kind: 'bundle', rewards: [{ kind: 'resource', id: 'bait', quantity: 1 }],
+    } }).then(() => { closed = true; });
+    await Promise.resolve();
+    expect(closed).toBe(false);
+    expect(view.resultRoot.textContent).toContain('island rewards');
+    const close = view.resultRoot.querySelector<HTMLButtonElement>('[aria-label="Close island rewards"]')!;
+    expect(close).not.toBeNull();
+    close.click();
+    await result;
+    expect(closed).toBe(true);
+  } finally {
+    view.dispose();
+  }
+});

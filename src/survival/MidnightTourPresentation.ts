@@ -129,6 +129,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
   private readonly scanQuaternion = new Quaternion();
   private readonly attackQuaternion = new Quaternion();
   private dirtPile: Group | null = null;
+  private graveMound: Mesh | null = null;
   private side: EventSide = -1;
   private greenTopLocalY = 0;
   private cameraCaptured = false;
@@ -240,13 +241,16 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.clearResultActors();
     this.activeResultTimeline = false;
     switch (result.resultId) {
-      case 'tour-chest': {
+      case 'tour-chest':
+      case 'tour-grave': {
         this.prepareCutsceneCamera();
         this.resetResultCounters();
-        this.activeActor = this.createChestReward();
+        this.activeActor = this.createBuriedReward(
+          result.resultId === 'tour-grave' ? 'midnightCoffin' : 'chestClosed',
+        );
         this.prepareChestCamera();
         this.createShovel();
-        this.root.userData.state = 'chest-result';
+        this.root.userData.state = result.resultId === 'tour-grave' ? 'grave-result' : 'chest-result';
         this.activeResultTimeline = true;
         const animation = this.animation.start(
           'result-chest',
@@ -375,7 +379,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
         this.root.userData.state = 'choice-passed';
         break;
       case 'result-chest':
-        this.root.userData.state = 'held-chest';
+        this.root.userData.state = this.graveMound === null ? 'held-chest' : 'held-grave';
         this.activeResultTimeline = false;
         this.heldResultKind = 'result-chest';
         break;
@@ -413,10 +417,12 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     let targetY = this.chestEnd.y + 0.25;
     let targetZ = this.chestEnd.z;
     const approach = smoothstep(clamp01(elapsedSeconds / CHEST_SEARCH_END_SECONDS));
+    const cameraHeight = this.graveMound === null ? CHEST_CAMERA_HEIGHT : 1.65;
+    const cameraDepth = this.graveMound === null ? CHEST_CAMERA_DEPTH : 1.55;
     this.cutsceneCameraPosition.y = this.islandBase.y + this.greenTopLocalY
-      + 1.45 + (CHEST_CAMERA_HEIGHT - 1.45) * approach;
+      + 1.45 + (cameraHeight - 1.45) * approach;
     this.cutsceneCameraPosition.z = this.islandBase.z
-      + 2.4 + (CHEST_CAMERA_DEPTH - 2.4) * approach;
+      + 2.4 + (cameraDepth - 2.4) * approach;
 
     if (elapsedSeconds < CHEST_SEARCH_END_SECONDS) {
       const searchProgress = elapsedSeconds / CHEST_SEARCH_END_SECONDS;
@@ -459,6 +465,10 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     chest.position.y = this.chestBuriedY
       + (this.chestEnd.y - this.chestBuriedY) * pose.excavation;
     this.dirtPile?.scale.set(1, 0.25 + 0.75 * pose.deposit, 1);
+    if (this.graveMound !== null) {
+      this.graveMound.scale.y = 0.85 * (1 - pose.excavation);
+      this.graveMound.visible = pose.excavation < 1;
+    }
   }
 
   private applyAttackResult(elapsedSeconds: number): void {
@@ -709,7 +719,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     }
   }
 
-  private createDigSite(): void {
+  private createDigSite(grave: boolean): void {
     const site = new Group();
     site.name = 'midnight-tour-dig-site';
     this.digOrigin.set(this.chestEnd.x, this.islandBase.y + this.greenTopLocalY, this.chestEnd.z);
@@ -718,12 +728,12 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     const soil = createMaterial(0x594232, 1);
     const freshSoil = createMaterial(0x74553a, 1);
     const patch = new Mesh(new CylinderGeometry(0.64, 0.68, 0.025, 11), soil);
-    patch.scale.z = 0.75;
-    patch.rotation.y = 0.35;
+    patch.scale.set(grave ? 0.78 : 1, 1, grave ? 1.4 : 0.75);
+    patch.rotation.y = grave ? 0.05 : 0.35;
     site.add(patch);
     const pile = new Group();
     pile.name = 'midnight-tour-dirt-pile';
-    pile.position.set(-0.52, 0, -0.05);
+    pile.position.set(grave ? -0.8 : -0.52, 0, -0.05);
     const geometry = new CylinderGeometry(0.12, 0.48, 0.3, 9, 2);
     const positions = geometry.getAttribute('position');
     for (let index = 0; index < positions.count; index += 1) {
@@ -747,7 +757,24 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     pile.scale.y = 0.25;
     site.add(pile);
     this.dirtPile = pile;
+    if (grave) this.createGrave(site, geometry, freshSoil);
     this.addResultActor(site);
+  }
+
+  private createGrave(site: Group, earth: BufferGeometry, material: Material): void {
+    const selected = this.dependencies.propModels.createEventModel('midnightGravestone');
+    if (selected === null) throw new Error('Missing required Midnight Tour gravestone model.');
+    const stone = selected.root;
+    stone.name = 'midnight-tour-gravestone';
+    stone.position.set(-0.06, -EVENT_MODEL_SPECS.midnightGravestone.normalizedBounds.min[1], -1.04);
+    stone.rotation.set(0, Math.PI, -0.06);
+    site.add(stone);
+    const mound = new Mesh(earth, material);
+    mound.name = 'midnight-tour-grave-mound';
+    mound.scale.set(0.98, 0.85, 1.8);
+    mound.rotation.y = 0.025;
+    site.add(mound);
+    this.graveMound = mound;
   }
 
   private setSidePositions(): void {
@@ -830,17 +857,18 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.root.userData.digContacts = completed;
   }
 
-  private createChestReward(): Group {
+  private createBuriedReward(modelId: 'chestClosed' | 'midnightCoffin'): Group {
     const actor = new Group();
-    actor.name = 'midnight-tour-reward-chest';
-    const selected = this.dependencies.propModels.createEventModel('chestClosed');
+    const grave = modelId === 'midnightCoffin';
+    actor.name = grave ? 'midnight-tour-reward-coffin' : 'midnight-tour-reward-chest';
+    const selected = this.dependencies.propModels.createEventModel(modelId);
     if (selected === null) {
-      throw new Error('Missing required Midnight Tour chest model.');
+      throw new Error(`Missing required Midnight Tour reward model: ${modelId}.`);
     }
-    selected.root.name = 'event-model:chestClosed';
+    selected.root.name = `event-model:${modelId}`;
     actor.add(selected.root);
     actor.userData.model = 'imported';
-    actor.scale.setScalar(0.9 * CHEST_DISPLAY_SCALE);
+    actor.scale.setScalar(grave ? 1 : 0.9 * CHEST_DISPLAY_SCALE);
     actor.visible = true;
     actor.position.set(0, 0, 0);
     actor.updateMatrixWorld(true);
@@ -852,7 +880,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     actor.position.copy(this.chestEnd);
     actor.position.y = this.chestBuriedY;
     this.addResultActor(actor);
-    this.createDigSite();
+    this.createDigSite(grave);
     return actor;
   }
 
@@ -936,6 +964,7 @@ export class MidnightTourPresentation implements FocusedEventPresentation {
     this.disposeMonsterAnimation();
     this.activeActor = null;
     this.dirtPile = null;
+    this.graveMound = null;
     this.resultActors.clear();
     disposeResourceSets(this.resultGeometries, this.resultMaterials);
   }

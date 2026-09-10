@@ -4,6 +4,7 @@ import { getLanguage } from './language';
 
 // These are diary outcomes, separate from the short messages shown during events.
 const results = {
+  midnightGraveResult: ['I dug beneath the fresh earth. The coffin held supplies. I took them back to the boat.', 'Kopałem pod świeżą ziemią. Trumna zawierała zapasy. Zabrałem je na łódź.', 'Cavé bajo la tierra fresca. El ataúd tenía provisiones. Las llevé al bote.'],
   snatcherNetHeld: ['I struck the tentacle with the net. It let go of my supplies and slipped back into the sea.', 'Uderzyłem mackę siecią. Puściła zapasy i wsunęła się z powrotem do morza.', 'Golpeé el tentáculo con la red. Soltó mis provisiones y volvió al mar.'],
   snatcherNetTorn: ['I struck the tentacle with the net. The mesh tore, but my supplies stayed aboard.', 'Uderzyłem mackę siecią. Oczka pękły, ale zapasy zostały na pokładzie.', 'Golpeé el tentáculo con la red. La malla se rompió, pero mis provisiones quedaron a bordo.'],
   sharksFoodResult: ['I threw food away from the boat. The fins followed my next meal into the dark.', 'Rzuciłem jedzenie z dala od łodzi. Płetwy ruszyły w ciemność za moim następnym posiłkiem.', 'Tiré comida lejos del bote. Las aletas siguieron mi próxima cena hacia la oscuridad.'],
