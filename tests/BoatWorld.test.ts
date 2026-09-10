@@ -766,10 +766,12 @@ describe('BoatWorld helpers', () => {
     },
   );
 
-  it('feeds Carlitos with the stored can pickup and throw, then restores lab replay', async () => {
+  it.each([true, false])('feeds Carlitos with the stored can pickup and throw (inventory can: %s), then restores lab replay', async (hasInventoryCan) => {
     const propModels = createTestPropModels();
     const camera = new PerspectiveCamera(65, 16 / 9, 0.08, 220);
-    const items = [savedItem('carlitos'), savedItem('cannedFood')];
+    const items = hasInventoryCan
+      ? [savedItem('carlitos'), savedItem('cannedFood')]
+      : [savedItem('carlitos')];
     const world = new BoatWorld(camera, propModels, ...createTestSkyTextures(), items);
     const borrow = vi.spyOn(BoatSupplyDisplay.prototype, 'borrowEventActor');
     const play = vi.spyOn(EventItemUseController.prototype, 'play');
@@ -783,6 +785,7 @@ describe('BoatWorld helpers', () => {
       for (let replay = 0; replay < 2; replay += 1) {
         const meow = vi.fn();
         const feed = world.playCarlitosAction('feedCarlitos', meow);
+        expect(borrow).toHaveBeenCalledTimes(replay + 1);
         const actor = borrow.mock.results.at(-1)!.value as BorrowedSupplyActor;
         expect(play.mock.lastCall?.[0]).toMatchObject({
           itemId: 'cannedFood', context: 'throw-target', aimTarget: target, landAtTarget: true,

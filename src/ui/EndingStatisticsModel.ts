@@ -3,7 +3,7 @@ import { uiText } from '../i18n/uiMessages';
 import type { EndingRecord } from '../game/ending';
 import type { ScavengeSnapshot } from '../game/ScavengeSession';
 import { SCAVENGE_DURATION_SECONDS } from '../game/scavengeRules';
-import { carlitosEnergyLimit } from '../survival/CarlitosState';
+import { carlitosStatus } from '../survival/CarlitosState';
 import type { SurvivalSnapshot } from '../survival/survivalSnapshot';
 import { itemArtwork, uiArtwork } from './uiArtwork';
 import type { StatisticsGraph } from './StatisticsGraph';
@@ -55,8 +55,7 @@ export function survivalEndingStatistics(record: EndingRecord, snapshot: Surviva
 
 function companionValue(snapshot: SurvivalSnapshot): string {
   if (snapshot.carlitos === null) return uiText('notAboard');
-  if (snapshot.carlitos.energy === 0) return uiText('carlitosExhausted');
-  return `${snapshot.carlitos.energy} / ${carlitosEnergyLimit(snapshot.carlitos)}`;
+  return carlitosStatus(snapshot.carlitos).rest;
 }
 
 export function scavengeEndingStatistics(record: EndingRecord, snapshot: ScavengeSnapshot | null): EndingStatistics {

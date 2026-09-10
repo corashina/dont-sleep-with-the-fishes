@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import {
-  Box3, Group, Mesh, MeshStandardMaterial, PerspectiveCamera, Triangle,
+  Box3, Group, Mesh, MeshStandardMaterial, PerspectiveCamera, Raycaster, Triangle, Vector3,
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { expect, it, vi } from 'vitest';
@@ -41,7 +41,11 @@ it('keeps every production catch clear of the rod during reeling and reward disp
   });
   const prepare = library.prepare.bind(library);
   const prepareCatch = vi.spyOn(FishingCatchLibrary.prototype, 'prepare');
-  const world = new BoatWorld(new PerspectiveCamera(), models, ...createTestSkyTextures());
+  const camera = new PerspectiveCamera(70, 16 / 9, 0.01, 100);
+  const world = new BoatWorld(camera, models, ...createTestSkyTextures());
+  const sightline = new Raycaster();
+  const eye = new Vector3();
+  const center = new Vector3();
   const catchBounds = new Box3();
   const triangle = new Triangle();
   let time = 0;
@@ -87,6 +91,15 @@ it('keeps every production catch clear of the rod during reeling and reward disp
           expect(intersects, `${definition.id}, cast ${x}, frame ${frame}`).toBe(false);
         }
         await reeling;
+        camera.getWorldPosition(eye);
+        catchBounds.getCenter(center);
+        const distance = eye.distanceTo(center);
+        sightline.set(eye, center.sub(eye).normalize());
+        const obstruction = sightline.intersectObject(rod, true)[0];
+        expect(obstruction?.distance ?? Infinity, `${definition.id} reward is behind the rod`)
+          .toBeGreaterThan(distance);
+        const projected = world.projectFishingCatch(1280, 720);
+        expect(projected?.visible, `${definition.id} reward must stay in view`).toBe(true);
       }
     }
   } finally {

@@ -93,7 +93,7 @@ it.each([-1, 1] as const)('keeps the petting hand clear across care poses on sid
     presentation.setSeatSide(side);
     const hand = presentation.root.getObjectByName('carlitos-care-hand')!;
     const cat = presentation.root.getObjectByName('carlitos-model')!;
-    for (const state of [{}, { energy: 0 }, { hunger: 1 }, { hunger: 3 }, { unhappiness: 5 }]) {
+    for (const state of [{}, { rest: 'exhausted' as const }, { rest: 'tired' as const }, { hunger: 1 }, { hunger: 3 }, { unhappiness: 5 }]) {
       presentation.sync(createCarlitosState(state));
       void presentation.play('pet');
       let clearance = Infinity;

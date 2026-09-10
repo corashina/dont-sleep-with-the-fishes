@@ -1,3 +1,5 @@
+import { carlitosHelpUnavailableMessage } from './CarlitosState';
+import { domainMessage } from '../i18n/domainMessages';
 import { flowText } from '../i18n/flowMessages';
 import { getLanguage } from '../i18n/language';
 import { ITEM_LABELS } from '../game/ItemState';
@@ -20,6 +22,7 @@ import {
   isInspectableEventId,
   isSignalSightingEventId,
   FLYBY_CHOICE_WINDOW_SECONDS,
+  UFO_CHOICE_WINDOW_SECONDS,
   survivalEventById,
   type DriftingItemEventId,
   type InspectableEventId,
@@ -248,7 +251,7 @@ function focusedChoiceAnchorId(eventId: string, choiceId: string): string | null
   return FIXED_CHOICE_ANCHORS[`${eventId}:${choiceId}`] ?? null;
 }
 
-function carlitosChoiceAvailability(snapshot: SurvivalSnapshot, energyCost: number): {
+function carlitosChoiceAvailability(snapshot: SurvivalSnapshot): {
   readonly visible: boolean;
   readonly unavailableReason: string | null;
 } {
@@ -256,10 +259,11 @@ function carlitosChoiceAvailability(snapshot: SurvivalSnapshot, energyCost: numb
   if (carlitos === null) {
     return { visible: false, get unavailableReason() { return flowText('noCarlitos'); } };
   }
-  if (carlitos.energy < energyCost) {
+  const message = carlitosHelpUnavailableMessage(carlitos);
+  if (message !== null) {
     return {
       visible: true,
-      get unavailableReason() { return flowText('companionEnergy', energyCost, carlitos.energy); },
+      get unavailableReason() { return domainMessage(message); },
     };
   }
   return { visible: true, unavailableReason: null };
@@ -315,15 +319,15 @@ function focusedChoiceUnavailableReasons(
 
 function focusedChoiceEnergy(
   choice: SurvivalEventChoice,
-): Partial<Pick<FocusedEventChoiceView, 'energyCost' | 'energyOwner'>> {
+): Partial<Pick<FocusedEventChoiceView, 'energyCost' | 'usesCarlitos'>> {
   if (choice.companionAction !== undefined) {
-    return { energyCost: choice.companionAction.energyCost, energyOwner: 'carlitos' };
+    return { usesCarlitos: true };
   }
   const playerEnergyCost = choice.requirements?.find(
     ({ resource }) => resource === 'energy',
   )?.minimum;
   if (playerEnergyCost === undefined) return {};
-  return { energyCost: playerEnergyCost, energyOwner: 'player' };
+  return { energyCost: playerEnergyCost };
 }
 
 function focusedChoiceDismisses(eventId: string, choiceId: string): boolean {
@@ -337,7 +341,7 @@ function focusedChoiceFor(
 ): FocusedEventChoiceView | null {
   const companionAvailability: CompanionChoiceAvailability = choice.companionAction === undefined
     ? { visible: true, unavailableReason: null }
-    : carlitosChoiceAvailability(snapshot, choice.companionAction.energyCost);
+    : carlitosChoiceAvailability(snapshot);
   if (choice.companionAction !== undefined
     && !companionAvailability.visible) return null;
   const instanceId = usableChoiceItemInstanceId(choice, snapshot);
@@ -345,7 +349,7 @@ function focusedChoiceFor(
     choice,
     snapshot,
     instanceId,
-    choice.companionAction === undefined ? companionAvailability : carlitosChoiceAvailability(snapshot, choice.companionAction.energyCost),
+    choice.companionAction === undefined ? companionAvailability : carlitosChoiceAvailability(snapshot),
   );
   const anchorId = focusedChoiceAnchorId(event.id, choice.id);
   return {
@@ -605,14 +609,15 @@ export class SurvivalEventFlow {
   }
 
   update(deltaSeconds: number): void {
-    if (this.disposed) return;
+    if (this.disposed || this.dependencies.isVisibilityBlocked()) return;
     const snapshot = this.dependencies.session.snapshot();
     if (this.presentation !== 'choosing' || (snapshot.pendingEventId !== 'plane' && snapshot.pendingEventId !== 'flying-saucer')) {
       this.flybyChoiceWindowRemaining = null;
       return;
     }
     if (this.flybyChoiceWindowRemaining === null) {
-      this.flybyChoiceWindowRemaining = FLYBY_CHOICE_WINDOW_SECONDS;
+      this.flybyChoiceWindowRemaining = snapshot.pendingEventId === 'flying-saucer'
+        ? UFO_CHOICE_WINDOW_SECONDS : FLYBY_CHOICE_WINDOW_SECONDS;
     }
     this.flybyChoiceWindowRemaining -= Math.max(0, deltaSeconds);
     if (this.flybyChoiceWindowRemaining > 0) return;
@@ -1641,7 +1646,7 @@ export class SurvivalEventFlow {
     const pending = this.dependencies.session.snapshot();
     const eventId = pending.pendingEventId;
     if (eventId === null) return;
-    this.dependencies.audio.confirm();
+    if (eventId !== 'flying-saucer') this.dependencies.audio.confirm();
     const choice: EventChoicePresentation = {
       choiceId: 'sleep',
       instanceId: null,
@@ -2253,6 +2258,7 @@ export class SurvivalEventFlow {
     choice: SurvivalEventChoice,
     snapshot: SurvivalSnapshot,
   ): EventContextChoice | null {
+    if (event.id === 'flying-saucer') return null;
     const companionAvailability = choice.companionAction === undefined
       ? undefined
       : this.dependencies.session.companionEventActionAvailability?.(
@@ -2305,15 +2311,15 @@ export class SurvivalEventFlow {
   private contextualChoiceEnergy(
     choice: SurvivalEventChoice,
     companionAvailability: SessionCompanionAvailability | undefined,
-  ): Partial<Pick<EventContextChoice, 'energyCost' | 'energyOwner'>> {
+  ): Partial<Pick<EventContextChoice, 'energyCost' | 'usesCarlitos'>> {
     if (choice.companionAction !== undefined && companionAvailability !== undefined) {
-      return { energyCost: companionAvailability.energyCost, energyOwner: 'carlitos' };
+      return { usesCarlitos: true };
     }
     const playerEnergyCost = choice.requirements?.find(
       ({ resource }) => resource === 'energy',
     )?.minimum;
     if (playerEnergyCost === undefined) return {};
-    return { energyCost: playerEnergyCost, energyOwner: 'player' };
+    return { energyCost: playerEnergyCost };
   }
 
   private meetsRequirements(

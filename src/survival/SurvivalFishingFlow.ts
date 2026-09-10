@@ -48,7 +48,7 @@ export type FishingUiPort = Pick<
 
 export type FishingAudioPort = Pick<
   SurvivalAudio,
-  'deny' | 'fishingCast' | 'fishingBite' | 'fishingReel' | 'fishingResult'
+  'deny' | 'fishingCast' | 'fishingBite' | 'fishingReel' | 'fishingNet' | 'fishingResult'
 >;
 
 export interface SurvivalFishingFlowDependencies {
@@ -93,6 +93,7 @@ export function formatFishingResult(result: FishingTerminalResult, outcome: Acti
     items,
     get message() {
       if (result.kind === 'miss') return flowText('nothing');
+      if (result.catch.id === 'backpack' || result.catch.kind === 'fish') return '';
       return result.catch.reward.kind === 'none'
         ? flowText('unusableCatch', result.catch.label) : result.catch.label;
     },
@@ -402,7 +403,7 @@ export class SurvivalFishingFlow {
   }
 
   private startCast(attempt: FishingSession, point: FishingCastPoint): void {
-    this.dependencies.audio.fishingCast?.();
+    if (attempt.gear === 'rod') this.dependencies.audio.fishingCast?.();
     const generation = this.dependencies.captureLifecycleGeneration();
     this.dependencies.ui.setFishingViewExitVisible?.(false);
     this.presentation = 'casting';
@@ -445,6 +446,7 @@ export class SurvivalFishingFlow {
   private playResultAnimation(result: FishingTerminalResult): Promise<void> {
     if (this.gear === 'net' && result.kind === 'catch') {
       const point = this.activeFishing!.view().castPoint!;
+      this.dependencies.audio.fishingNet?.();
       return this.dependencies.world.playFishingNetHaul(result.catch.id, point);
     }
     if (result.kind === 'catch') {

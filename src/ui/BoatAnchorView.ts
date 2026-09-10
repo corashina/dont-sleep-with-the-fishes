@@ -7,7 +7,7 @@ import {
   type ItemInstanceId,
 } from '../game/ItemState';
 import type { BoatInteractionAnchor, BoatToolId } from '../survival/BoatInteraction';
-import { carlitosEnergyLimit, carlitosStatus } from '../survival/CarlitosState';
+import { carlitosStatus } from '../survival/CarlitosState';
 import type { InspectableEventId } from '../survival/eventCatalog';
 import { SURVIVAL_ITEM_DESCRIPTIONS } from '../survival/itemDescriptions';
 import { calculateHullRepair, SURVIVAL_BALANCE } from '../survival/survivalBalance';
@@ -126,6 +126,7 @@ interface AnchorTooltipNodes {
   readonly label: Text;
   readonly separator: Text;
   readonly energy: HTMLElement;
+  readonly reason: HTMLElement;
 }
 
 const ANCHOR_CONTENT_FIELDS = [
@@ -175,8 +176,7 @@ export class BoatAnchorView {
   private readonly carlitosPet: HTMLButtonElement;
   private readonly carlitosHungerLabel: HTMLElement;
   private readonly carlitosHappiness: HTMLElement;
-  private readonly carlitosEnergyLabel: HTMLElement;
-  private readonly carlitosRestLabel: HTMLElement;
+  private readonly carlitosRestStatus: HTMLElement;
   private readonly carlitosRows: Readonly<Record<'hunger' | 'happiness', HTMLElement>>;
   private readonly carlitosActions = new Map<DayActionId, HTMLButtonElement>();
   private readonly anchorButtons = new Map<string, HTMLButtonElement>();
@@ -223,9 +223,9 @@ export class BoatAnchorView {
       <section class="carlitos-card scuba-popup-paper" data-carlitos-card data-ui-aria="catStatus" aria-label="${uiText('catStatus')}" aria-hidden="true" hidden>
         <button type="button" class="carlitos-card__close ui-role-context" data-carlitos-close data-ui-aria="closeCat" aria-label="${uiText('closeCat')}">&times;</button>
         <div class="carlitos-card__statuses">
-          <div class="carlitos-status" data-carlitos-energy-row>
+          <div class="carlitos-status" data-carlitos-rest-row>
             <span class="carlitos-status__icon carlitos-status__icon--energy" aria-hidden="true">${uiArtwork('energy')}</span>
-            <strong class="ui-role-numeral" data-carlitos-energy-label></strong>
+            <strong class="ui-role-context" data-carlitos-rest-label></strong>
           </div>
           <div class="carlitos-status" data-carlitos-hunger-row>
             <span class="carlitos-status__icon carlitos-status__icon--hunger" aria-hidden="true">${uiArtwork('hunger')}</span>
@@ -242,7 +242,6 @@ export class BoatAnchorView {
             </button>
           </div>
         </div>
-        <p class="carlitos-card__rest ui-role-context" data-carlitos-rest></p>
       </section>`;
     const roots = [...template.content.children];
     this.anchorLayer = roots[0] as HTMLElement;
@@ -251,8 +250,7 @@ export class BoatAnchorView {
     this.carlitosPet = requireElement(this.carlitosCard, '[data-action="petCarlitos"]');
     this.carlitosHungerLabel = requireElement(this.carlitosCard, '[data-carlitos-hunger-label]');
     this.carlitosHappiness = requireElement(this.carlitosCard, '[data-carlitos-happiness]');
-    this.carlitosEnergyLabel = requireElement(this.carlitosCard, '[data-carlitos-energy-label]');
-    this.carlitosRestLabel = requireElement(this.carlitosCard, '[data-carlitos-rest]');
+    this.carlitosRestStatus = requireElement(this.carlitosCard, '[data-carlitos-rest-label]');
     this.carlitosRows = {
       hunger: requireElement(this.carlitosCard, '[data-carlitos-hunger-row]'),
       happiness: requireElement(this.carlitosCard, '[data-carlitos-happiness-row]'),
@@ -676,9 +674,12 @@ export class BoatAnchorView {
       const energy = document.createElement('span');
       energy.className = 'boat-tooltip__energy ui-role-numeral';
       energy.setAttribute('aria-hidden', 'true');
-      tooltip.append(label, separator, energy);
+      const reason = document.createElement('small');
+      reason.className = 'boat-tooltip__reason';
+      reason.hidden = true;
+      tooltip.append(label, separator, energy, reason);
       button.append(tooltip);
-      this.anchorTooltipNodes.set(button, { tooltip, label, separator, energy });
+      this.anchorTooltipNodes.set(button, { tooltip, label, separator, energy, reason });
     }
     this.anchorLayer.append(button);
     this.anchorButtons.set(anchor.id, button);
@@ -879,10 +880,8 @@ export class BoatAnchorView {
     reason: string | null,
   ): string {
     if (anchoredChoice === undefined) return '⚡'.repeat(energyCost);
+    if (anchoredChoice.usesCarlitos) return '';
     if (energyCost <= 0) return reason === null ? '' : uiText('unavailable');
-    if (anchoredChoice.energyOwner === 'carlitos') {
-      return uiDynamic('carlitosEnergy', energyCost, reason !== null);
-    }
     return uiDynamic('playerEnergy', energyCost, reason !== null);
   }
 
@@ -900,6 +899,9 @@ export class BoatAnchorView {
     const separator = energyIndicator === '' ? '' : anchoredChoice === undefined ? ' ' : ' — ';
     if (nodes.separator.data !== separator) nodes.separator.data = separator;
     if (nodes.energy.textContent !== energyIndicator) nodes.energy.textContent = energyIndicator;
+    const reason = (anchoredChoice?.usesCarlitos ? anchoredChoice.unavailableReason : null) ?? '';
+    nodes.reason.hidden = !reason;
+    if (nodes.reason.textContent !== reason) nodes.reason.textContent = reason;
   }
 
   private updateAnchorDataset(
@@ -956,8 +958,8 @@ export class BoatAnchorView {
     energyCost: number,
     reason: string | null,
   ): string {
-    const spokenCost = anchoredChoice?.energyOwner === 'carlitos'
-      ? uiDynamic('carlitosSpokenEnergy', energyCost)
+    const spokenCost = anchoredChoice?.usesCarlitos
+      ? ''
       : spokenEnergyCost(energyCost);
     return uiDynamic('anchorLabel', visibleLabel, spokenCost, anchoredChoice !== undefined && reason !== null);
   }
@@ -1006,9 +1008,7 @@ export class BoatAnchorView {
     const status = carlitosStatus(carlitos);
     this.carlitosHungerLabel.textContent = status.hunger.toLocaleUpperCase('en-US');
     this.carlitosHappiness.textContent = status.happiness.toLocaleUpperCase('en-US');
-    this.carlitosEnergyLabel.textContent = `${carlitos.energy} / ${carlitosEnergyLimit(carlitos)}`;
-    this.carlitosRestLabel.hidden = carlitos.energy !== 0;
-    this.carlitosRestLabel.textContent = carlitos.energy === 0 ? uiText('carlitosExhausted') : '';
+    this.carlitosRestStatus.textContent = status.rest.toLocaleUpperCase('en-US');
     this.carlitosRows.hunger.dataset.state = carlitos.hunger < 2 ? 'danger' : 'stable';
     this.carlitosRows.happiness.dataset.state = (
       carlitos.unhappiness > 6

@@ -136,7 +136,7 @@ const BOAT_STORAGE_SLOTS = {
   // Support the shaft on the rim, with the basket hanging outside the boat.
   fishingNet: [{
     surface: 'gunwale',
-    position: [-1.35, 0.28, -2.04704738],
+    position: [-1.05, 0.26, -2.44704738],
     rotation: [68 * Math.PI / 180, 42 * Math.PI / 180, -1.02758174],
     scale: 1,
   }],

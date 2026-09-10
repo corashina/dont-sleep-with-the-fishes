@@ -45,7 +45,6 @@ const FISHING_CAMERA_LOOK_TARGET = Object.freeze({ x: 0, y: -0.42, z: -7.4 });
 const FISHING_CAMERA_DURATION = 1.1;
 const FISHING_CAST_DURATION = 0.8;
 const FISHING_REEL_DURATION = 1;
-const FISHING_ROD_REWARD_LEAN = 0;
 const FISHING_MISS_DURATION = 0.8;
 const FISHING_SPLASH_HOLD_DURATION = 0.12;
 const FISHING_CAST_MIN_X = -2.7;
@@ -56,7 +55,7 @@ const CENTERED_FISHING_CAST: FishingCastPoint = Object.freeze({ x: 0, z: -6.4 })
 const FISHING_TARGET_SIZE = 52;
 const FISHING_BITE_PARTICLE_INTERVAL_SECONDS = 0.12;
 const FISHING_BITE_PARTICLE_INTENSITY = 0.85;
-const FISHING_CATCH_BOW_REST = Object.freeze({ x: 0, y: 0.43, z: -2.52 });
+const FISHING_CATCH_REST = Object.freeze({ x: 0, y: 0.72, z: -2.16 });
 
 export interface FishingCameraControl {
   restoreBasePose(): void;
@@ -429,11 +428,11 @@ export class FishingPresentation {
   constructor(private readonly dependencies: FishingPresentationDependencies) {
     this.root.name = 'fishing-presentation';
     this.lineOrigin.name = 'fishing-line-origin';
-    this.catchRest.name = 'fishing-catch-bow-rest';
+    this.catchRest.name = 'fishing-catch-rest';
     this.catchRest.position.set(
-      FISHING_CATCH_BOW_REST.x,
-      FISHING_CATCH_BOW_REST.y,
-      FISHING_CATCH_BOW_REST.z,
+      FISHING_CATCH_REST.x,
+      FISHING_CATCH_REST.y,
+      FISHING_CATCH_REST.z,
     );
     this.baseRodPivotRotationX = dependencies.rodPivot.rotation.x;
     try {
@@ -595,7 +594,7 @@ export class FishingPresentation {
     this.activeCatch.rotation.set(0, 0.08, -0.04);
     this.activeCatch.updateMatrixWorld(true);
     this.catchBounds.setFromObject(this.activeCatch, true);
-    // Lay long rewards across the bow, clear of the upright rod behind them.
+    // Show long rewards across the view, in front of the rod.
     if (this.catchBounds.max.z - this.catchBounds.min.z
       > this.catchBounds.max.x - this.catchBounds.min.x) {
       this.activeCatch.rotation.y += Math.PI / 2;
@@ -818,7 +817,7 @@ export class FishingPresentation {
     if (this.usingNet) return;
 
     if (this.phase === 'landed') {
-      this.dependencies.rodPivot.rotation.x = FISHING_ROD_REWARD_LEAN;
+      this.dependencies.rodPivot.rotation.x = this.baseRodPivotRotationX;
       this.fishing.catchDisplay.visible = this.activeCatch !== null;
       return;
     }
@@ -894,8 +893,7 @@ export class FishingPresentation {
   }
 
   private applyReelAnimation(normalized: number): void {
-    this.dependencies.rodPivot.rotation.x = this.baseRodPivotRotationX
-      + (FISHING_ROD_REWARD_LEAN - this.baseRodPivotRotationX) * smootherStep(Math.min(1, normalized / 0.2));
+    this.dependencies.rodPivot.rotation.x = this.baseRodPivotRotationX;
     if (this.activeCatch === null) return;
     this.catchRest.getWorldPosition(this.catchTargetWorld);
     this.catchApproachWorld.copy(this.catchTargetWorld);
@@ -903,7 +901,7 @@ export class FishingPresentation {
     if (normalized < 0.72) {
       const haul = easeOut(normalized / 0.72);
       this.fishing.catchDisplay.position.lerpVectors(this.reelStartWorld, this.catchApproachWorld, haul);
-      this.fishing.catchDisplay.position.y += Math.sin(Math.PI * haul) * 0.58;
+      this.fishing.catchDisplay.position.y += Math.sin(Math.PI * haul) * 0.95;
     } else {
       const drop = easeInOut((normalized - 0.72) / 0.28);
       this.fishing.catchDisplay.position.lerpVectors(this.catchApproachWorld, this.catchTargetWorld, drop);

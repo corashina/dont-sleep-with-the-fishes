@@ -54,16 +54,16 @@ describe('journal narrative', () => {
 
   it.each(['en', 'pl', 'es-AR'] as const)('describes both directions of Carlitos needs correctly in %s', (language) => {
     setLanguage(language);
-    const before = { ...createCarlitosState(), hunger: 3, unhappiness: 6, energy: 2 };
-    const worse = { ...before, hunger: 1, unhappiness: 7, energy: 1 };
-    const better = { ...before, hunger: 4, unhappiness: 2, energy: 3 };
-    const copy = (after: typeof before) => formatJournalEntry(createJournalEntry(
+    const before = { ...createCarlitosState(), hunger: 3, unhappiness: 6, rest: 'tired' as const };
+    const worse = { ...before, hunger: 1, unhappiness: 7, rest: 'exhausted' as const };
+    const better = { ...before, hunger: 4, unhappiness: 2, rest: 'rested' as const };
+    const copy = (after: ReturnType<typeof createCarlitosState>) => formatJournalEntry(createJournalEntry(
       2, 'calm', [createJournalCarlitosDawnRecord(before, after)], null, { kind: 'quiet' },
     )).nighttime;
     const bad = copy(worse);
     const good = copy(better);
     for (const text of [bad, good]) expect(text).not.toMatch(noStats);
-    for (const word of language === 'en' ? ['starving', 'depressed', 'less strength'] : language === 'pl' ? ['jest bardzo głodny', 'przygnębionego', 'mniej sił'] : ['muy hambriento', 'deprimido', 'menos fuerzas']) {
+    for (const word of language === 'en' ? ['starving', 'depressed', 'too tired'] : language === 'pl' ? ['jest bardzo głodny', 'przygnębionego', 'zbyt zmęczony'] : ['muy hambriento', 'deprimido', 'demasiado cansado']) {
       expect(bad).toContain(word);
       expect(good).not.toContain(word);
     }

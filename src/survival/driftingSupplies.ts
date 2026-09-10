@@ -10,7 +10,6 @@ export const DRIFTING_SUPPLY_KINDS = Object.freeze([
 export type DriftingSupplyKind = typeof DRIFTING_SUPPLY_KINDS[number];
 
 export const DRIFTING_SUPPLY_PLAYER_ENERGY_COST = 1;
-export const DRIFTING_SUPPLY_CARLITOS_ENERGY_COST = 2;
 
 export const DRIFTING_SUPPLY_DISTANCES = Object.freeze([
   'near',
@@ -63,12 +62,6 @@ export function driftingSupplyChoiceForVariant(
           ? { ...requirement, minimum: DRIFTING_SUPPLY_PLAYER_ENERGY_COST }
           : requirement
       )),
-    }),
-    ...(choice.companionAction === undefined ? {} : {
-      companionAction: {
-        ...choice.companionAction,
-        energyCost: DRIFTING_SUPPLY_CARLITOS_ENERGY_COST,
-      },
     }),
   };
 }

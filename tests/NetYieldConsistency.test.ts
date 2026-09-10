@@ -5,7 +5,7 @@ import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { sequenceRandom } from './helpers/random';
 
 describe('net catch agreement', () => {
-  it('settles one catch and names it in the popup for every catch roll', () => {
+  it('settles one catch and shows the matching popup for every catch roll', () => {
     for (let index = 0; index < 1000; index += 1) {
       const game = new SurvivalSession([{ instanceId: 'fishingNet-1', type: 'fishingNet' }], {
         seed: 1, random: sequenceRandom([0, index / 1000]),
@@ -20,7 +20,11 @@ describe('net catch agreement', () => {
       const outcome = game.finishFishing(begun.attempt.view().id, result);
       const popup = formatFishingResult(result, outcome);
       expect(outcome.accepted).toBe(true);
-      expect(popup.message).toContain(result.catch.label);
+      if (result.catch.kind === 'fish' || result.catch.id === 'backpack') {
+        expect(popup.message).toBe('');
+      } else {
+        expect(popup.message).toContain(result.catch.label);
+      }
       expect(popup.items.length).toBeLessThanOrEqual(1);
       if (result.catch.reward.kind === 'none') {
         expect(popup.items).toEqual([]);
