@@ -321,7 +321,7 @@ function scavengingRestingRotation(itemId: ItemId, surface: ShipItemSurface): Eu
     );
     return new Euler().setFromQuaternion(surfaceOrientation.multiply(lyingOrientation));
   }
-  if (itemId === 'anchor' || itemId === 'ductTape') {
+  if (itemId === 'ductTape') {
     const surfaceOrientation = new Quaternion().setFromEuler(surfaceRotation);
     const lyingOrientation = new Quaternion().setFromAxisAngle(
       new Vector3(1, 0, 0),
@@ -343,7 +343,7 @@ function surfaceFit(surface: ShipItemSurface, itemId: ItemId): SurfaceFit | unde
   const rotation = scavengingRestingRotation(itemId, surface);
   const fitBounds = orientedItemBounds(
     itemId,
-    itemId === 'anchor' || itemId === 'compass' || itemId === 'ductTape' || itemId === 'carlitos'
+    itemId === 'compass' || itemId === 'ductTape' || itemId === 'carlitos'
       ? rotation
       : surface.rotation,
   );

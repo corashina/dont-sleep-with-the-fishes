@@ -2,7 +2,7 @@ import { defineMessages } from './messages';
 
 export const flowText = defineMessages({
   netCast: { en: 'CLICK THE WATER TO SCOOP', pl: 'KLIKNIJ WODĘ, ABY ZACZERPNĄĆ SIECIĄ', 'es-AR': 'HACÉ CLIC EN EL AGUA PARA PESCAR CON LA RED' },
-  unusableCatch: { en: (name: string) => `${name}. No usable reward.`, pl: (name: string) => `${name}. Brak przydatnej zdobyczy.`, 'es-AR': (name: string) => `${name}. Sin recompensa útil.` },
+  junk: { en: 'Junk', pl: 'Śmieci', 'es-AR': 'Basura' },
   netHaul: { en: 'HAULING THE NET', pl: 'WCIĄGANIE SIECI', 'es-AR': 'RECOGIENDO LA RED' },
   noRepair: { en: 'No broken repairable item remains.', pl: 'Nie ma już uszkodzonych przedmiotów do naprawy.', "es-AR": "No quedan objetos rotos que se puedan reparar." },
   noCarlitos: { en: 'Carlitos is not aboard.', pl: 'Carlitosa nie ma na pokładzie.', "es-AR": "Carlitos no está a bordo." },

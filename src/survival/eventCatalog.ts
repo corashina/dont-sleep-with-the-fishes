@@ -541,10 +541,10 @@ const survivalEvents: SurvivalEventDefinition[] = [
           'drifting-chest.retrieve',
           1,
           'eventText213',
-          effects([subtract('energy', 3)], [gainChest()]),
+          effects([subtract('energy', 1)], [gainChest()]),
         ),
       ),
-      requirements: [{ resource: 'energy', minimum: 3 }],
+      requirements: [{ resource: 'energy', minimum: 1 }],
     },
     {
       ...contextualChoice('delegate-carlitos', 'eventText080',

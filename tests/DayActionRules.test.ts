@@ -69,7 +69,7 @@ describe('day action availability rules', () => {
       ['treat', undefined],
       ['answerRadio', undefined],
       ['useEnergyBar', undefined, { energy: 1 }],
-      ['openChest', undefined, { energy: 0 }],
+      ['openChest', undefined, { energy: 3 }],
       ['petCarlitos', undefined, {
         carlitos: Object.freeze({ ...baseRuleState.carlitos!, unhappiness: 3 }),
       }],

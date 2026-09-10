@@ -148,7 +148,8 @@ const useEnergyBarUnavailable: DayActionRule = (state) => {
 };
 
 const openChestUnavailable: DayActionRule = (state) => {
-  return state.chestState === 'closed' ? null : t('noChest');
+  if (state.chestState !== 'closed') return t('noChest');
+  return state.energy < SURVIVAL_BALANCE.actions.openChestEnergy ? t('chestEnergy') : null;
 };
 
 const ACTION_UNAVAILABLE_RULES: Readonly<Record<DayActionId, DayActionRule>> = {
@@ -172,6 +173,12 @@ const ACTION_UNAVAILABLE_RULES: Readonly<Record<DayActionId, DayActionRule>> = {
   endDay: () => null,
 };
 
+export function isOptionalLootDayEvent(
+  state: Pick<DayActionRuleState, 'state' | 'pendingEventId'>,
+): boolean {
+  return state.state === 'dayEvent' && isInspectableEventId(state.pendingEventId ?? '');
+}
+
 export function dayActionUnavailableReason(
   state: DayActionRuleState,
   action: DayActionId,
@@ -182,9 +189,7 @@ export function dayActionUnavailableReason(
   if (state.state === 'rescued' || state.state === 'dead' || state.state === 'sunk' || state.state === 'abducted') {
     return t('terminal');
   }
-  const optionalLootEvent = state.state === 'dayEvent'
-    && isInspectableEventId(state.pendingEventId ?? '');
-  if (state.state !== 'day' && !optionalLootEvent) {
+  if (state.state !== 'day' && !isOptionalLootDayEvent(state)) {
     return t('notDaytime');
   }
   return ACTION_UNAVAILABLE_RULES[action](state, option);

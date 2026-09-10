@@ -35,8 +35,8 @@ const define = (
 });
 
 const rawDefinitions = {
-  cannedFood: define(1, 3, 1, false, false, 'eat'),
-  baitTin: define(1, 2, 1, false, false, null),
+  cannedFood: define(1, 7, 1, false, false, 'eat'),
+  baitTin: define(1, 4, 1, false, false, null),
   ductTape: define(1, 1, 1, false, false, 'repairItem'),
   compass: define(1, 1, null, true, true, null),
   map: define(1, 1, null, true, true, null),
@@ -66,8 +66,8 @@ export const ITEM_DEFINITIONS = Object.freeze(Object.fromEntries(
 ) as Record<ItemId, ItemDefinition>);
 
 const APPROVED_SPAWN_COUNTS = {
-  cannedFood: 3,
-  baitTin: 2,
+  cannedFood: 7,
+  baitTin: 4,
   ductTape: 1,
   compass: 1,
   map: 1,
@@ -126,7 +126,7 @@ export function validateItemCatalog(
     (sum, id) => sum + (definitions[id]?.spawnCount ?? 0),
     0,
   );
-  if (total !== 23) errors.push(`catalog must create exactly 23 instances, received ${total}`);
+  if (total !== 29) errors.push(`catalog must create exactly 29 instances, received ${total}`);
   if (errors.length > 0) throw new Error(`Invalid item catalog: ${errors.join('; ')}`);
 }
 

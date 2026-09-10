@@ -12,7 +12,7 @@ import {
 export type EventItemUseContext =
   | 'base' | 'throw-target' | 'tape-stretch' | 'compass-search' | 'map-read'
   | 'binocular-look' | 'net-scoop' | 'net-slap' | 'bucket-scoop' | 'bucket-helmet'
-  | 'trade-handover' | 'map-leak-patch'
+  | 'trade-handover' | 'map-leak-patch' | 'swim-ring-wear'
   | 'radio-signal-receive' | 'radio-call' | 'tape-secure'
   | 'flare-target' | 'flare-sky' | 'anchor-drop'
   | 'umbrella-overhead' | 'umbrella-shield'
@@ -100,6 +100,9 @@ const BUCKET_HELMET_OVERHEAD_Y = 0.56;
 const BUCKET_HELMET_WORN_Y = -0.04;
 const BUCKET_HELMET_CENTER_X = 0;
 const BUCKET_HELMET_SCALE = 1.35;
+const SWIM_RING_WORN_SCALE = 3;
+const SWIM_RING_OVERHEAD_Y = 0.65;
+const SWIM_RING_WORN_Y = -0.62;
 const NO_ACTION_CUE_PROGRESSES: readonly number[] = Object.freeze([]);
 type StagedEventItemUseSample = EventItemUseSample & {
   [MOTION_PROFILE]?: ReturnType<typeof eventItemMotionProfile>;
@@ -165,6 +168,7 @@ const ANCHOR_DROP_EVENTS: ReadonlySet<string> = new Set([
 ]);
 const SETTLE_ROLL_EXCLUDED_CONTEXTS: ReadonlySet<EventItemUseContext> = new Set([
   'shotgun-fire',
+  'swim-ring-wear',
   'map-read', 'compass-search', 'net-scoop', 'net-slap', 'map-leak-patch', 'knife-stab',
 ]);
 const EVENT_ITEM_USE_BASE_DURATIONS: Readonly<Record<EventItemUseContext, number>> = {
@@ -178,6 +182,7 @@ const EVENT_ITEM_USE_BASE_DURATIONS: Readonly<Record<EventItemUseContext, number
   'net-slap': NET_ATTACK_BASE_DURATION,
   'bucket-scoop': SCOOP_DURATION,
   'bucket-helmet': 1.45,
+  'swim-ring-wear': 1.25,
   'trade-handover': 1.35,
   'radio-signal-receive': 1.65,
   'radio-call': 2.1,
@@ -215,7 +220,9 @@ const EVENT_ITEM_CONTEXT_RESOLVERS: Partial<Record<ItemId, EventItemContextResol
     : null,
   medicalKit: (_eventId, choiceId) => exactChoiceContext(choiceId, 'medicalKit', 'throw-target'),
   energyBar: (_eventId, choiceId) => exactChoiceContext(choiceId, 'energyBar', 'throw-target'),
-  swimRing: (_eventId, choiceId) => exactChoiceContext(choiceId, 'swimRing', 'throw-target'),
+  swimRing: (eventId, choiceId) => exactChoiceContext(
+    choiceId, 'swimRing', eventId === 'bad-sleep' ? 'swim-ring-wear' : 'throw-target',
+  ),
   ductTape: (eventId, choiceId) => exactChoiceContext(
     choiceId, 'ductTape', eventId === 'windy-night' ? 'tape-secure' : 'tape-stretch',
   ),
@@ -662,6 +669,23 @@ function sampleBucketHelmet(
   output.primaryEffect = lower;
 }
 
+function sampleSwimRingWear(output: EventItemUseSample, progress: number): void {
+  const pickup = smoothstep(progress / 0.25);
+  const raise = smoothstep((progress - 0.25) / 0.23);
+  const lower = smoothstep((progress - 0.54) / 0.34);
+  output.cameraSpaceBlend = pickup;
+  output.viewX = 0;
+  output.viewY = -0.08 + (SWIM_RING_OVERHEAD_Y + 0.08) * raise
+    + (SWIM_RING_WORN_Y - SWIM_RING_OVERHEAD_Y) * lower;
+  output.viewZ = -0.65 * (1 - raise);
+  // Face the opening toward the player, then level it before lowering over the head.
+  output.pitch = Math.PI / 2 * pickup * (1 - raise);
+  const scale = 1 + (SWIM_RING_WORN_SCALE - 1) * pickup;
+  output.scaleX = scale;
+  output.scaleY = scale;
+  output.scaleZ = scale;
+}
+
 function sampleTradeHandover(
   output: EventItemUseSample,
   pickup: number,
@@ -975,6 +999,7 @@ function sampleHeldEventItemUse(
     case 'map-read': sampleMapRead(output, pickup, hold, progress); return true;
     case 'binocular-look': sampleBinocularLook(output, pickup, hold, progress); return true;
     case 'bucket-helmet': sampleBucketHelmet(output, progress); return true;
+    case 'swim-ring-wear': sampleSwimRingWear(output, progress); return true;
     case 'trade-handover': sampleTradeHandover(output, pickup, hold, progress); return true;
     case 'radio-signal-receive': sampleRadioSignalReceive(output, pickup, hold, progress); return true;
     case 'umbrella-overhead': sampleUmbrella(output, pickup, hold, false, progress); return true;
@@ -1049,6 +1074,7 @@ export function sampleEventItemOutcome(
   output: EventItemUseSample,
 ): void {
   sampleEventItemUse(context, itemId, 1, output);
+  if (context === 'swim-ring-wear') return;
   const t = clamp01(progress);
   const profile = eventItemMotionProfile(itemId);
 

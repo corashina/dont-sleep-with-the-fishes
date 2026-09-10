@@ -122,7 +122,7 @@ describe('live gameplay translations', () => {
   });
 
   it('refreshes fishing text without reissuing the cast', () => {
-    const view = new SurvivalFishingView(document.body, document.body, () => null);
+    const view = new SurvivalFishingView(document.body);
     views.push(view);
     document.body.append(...view.roots);
     const cast = vi.fn(() => true);
@@ -137,11 +137,10 @@ describe('live gameplay translations', () => {
   });
 
   it('translates an existing fishing result without resetting its continue action', () => {
-    const view = new SurvivalFishingView(document.body, document.body, () => null);
+    const view = new SurvivalFishingView(document.body);
     views.push(view);
     document.body.append(...view.roots);
-    view.showResult({ catchTarget: null,
-      items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }],
+    view.showResult({ items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }],
       message: '',
     });
     const continued = vi.fn();

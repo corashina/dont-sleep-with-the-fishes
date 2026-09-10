@@ -503,7 +503,7 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
     { branch: true },
   )]),
   placement('cabin-table-starboard-center', 'crewTable', 'crewCabin', [-4.45, 2.22, 12.25], 0, [1.836937, 0.72, 1.836937], crewTableSurfaces('cabin-table-starboard-center')),
-  placement('chart-table-port', 'table', 'wheelhouse', [0, 2.22, 21.15], 0, [2.112, 0.82, 1.123], tableSurfaces('chart-table-port', 'wheelhouse', 1)),
+  placement('chart-table-port', 'table', 'wheelhouse', [0, 2.22, 21.15], 0, [2.112, 0.82, 1.123], tableSurfaces('chart-table-port', 'wheelhouse', 3)),
   placement(
     'chart-table-forward',
     'table',
@@ -514,7 +514,7 @@ const furniture: readonly ShipFurniturePlacementSpec[] = [
     tableSurfaces('chart-table-forward', 'wheelhouse', 1, true),
     [1, 1, 0.58],
   ),
-  placement('workbench-starboard', 'table', 'storageWorkroom', [2.65, 2.22, -16.7], 0, [2.112, 0.82, 1.123], tableSurfaces('workbench-starboard', 'storageWorkroom', 1)),
+  placement('workbench-starboard', 'table', 'storageWorkroom', [2.65, 2.22, -16.7], 0, [2.112, 0.82, 1.123], tableSurfaces('workbench-starboard', 'storageWorkroom', 3)),
   placement('storage-shelf-forward', 'bookcaseOpen', 'storageWorkroom', [0, 2.22, -11.1], 0, [0.841, 1.85, 0.526], bookcaseSurfaces('storage-shelf-forward', 'storageWorkroom', -1.3)),
   placement(
     'workroom-storage-shelf-port-forward',

@@ -186,6 +186,7 @@ const DAY_ACTION_REJECTION_CODES: Readonly<Record<string, string>> = Object.free
   noBar: 'no-energy-bar',
   energyFull: 'energy-full',
   noChest: 'no-closed-chest',
+  chestEnergy: 'not-enough-energy',
   notAboard: 'no-carlitos',
   alreadyPetted: 'already-petted',
   alreadyHappy: 'carlitos-happy',
@@ -1625,6 +1626,7 @@ export class SurvivalSession {
 
     if (reward.kind === 'resource') {
       const deltas: ResourceDelta = {
+        energy: -SURVIVAL_BALANCE.actions.openChestEnergy,
         [reward.resource]: reward.quantity,
       };
       return this.commit(
@@ -1636,7 +1638,7 @@ export class SurvivalSession {
       );
     }
 
-    const deltas: ResourceDelta = {};
+    const deltas: ResourceDelta = { energy: -SURVIVAL_BALANCE.actions.openChestEnergy };
     this.gainDiveItem(reward.itemId, deltas);
     return this.commit(
       'chest-opened',

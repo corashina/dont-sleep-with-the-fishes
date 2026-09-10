@@ -35,6 +35,7 @@ export const DOMAIN_MESSAGES = {
   radioEnergy: { en: "Answering the radio requires one energy.", pl: "Odpowiedź przez radio wymaga jednego punktu energii.", "es-AR": "Responder por radio requiere un punto de energía." },
   noBar: { en: "No energy bar remains.", pl: "Nie ma już batona energetycznego.", "es-AR": "No queda ninguna barra energética." },
   energyFull: { en: "Your energy is already full.", pl: "Masz już pełną energię.", "es-AR": "Ya tenés la energía al máximo." },
+  chestEnergy: { en: 'Opening a chest requires three energy.', pl: 'Otwarcie skrzyni wymaga trzech punktów energii.', 'es-AR': 'Abrir un cofre requiere tres puntos de energía.' },
   noChest: { en: "There is no closed chest to open.", pl: "Nie ma zamkniętej skrzyni do otwarcia.", "es-AR": "No hay ningún cofre cerrado para abrir." },
   finishFishing: { en: "Finish the active fishing attempt first.", pl: "Najpierw zakończ łowienie.", "es-AR": "Primero terminá el intento de pesca actual." },
   invalidOption: { en: "That option cannot be used for this action.", pl: "Nie można użyć tej opcji przy tej czynności.", "es-AR": "No podés usar esa opción para esta acción." },

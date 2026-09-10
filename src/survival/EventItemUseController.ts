@@ -113,7 +113,8 @@ export class EventItemUseController {
         || request.context === 'umbrella-shield'
         || request.context === 'map-leak-patch',
       request.context === 'umbrella-shield' ? 'x' : null,
-      request.context === 'bucket-helmet' || request.context === 'knife-stab',
+      request.context === 'bucket-helmet' || request.context === 'knife-stab'
+        || request.context === 'swim-ring-wear',
     );
     sampleEventItemUse(request.context, request.itemId, 0, this.sample);
     this.applyRequestSample(request);
@@ -181,6 +182,7 @@ export class EventItemUseController {
     this.applyRequestSample(held.request);
     if (
       held.request.context === 'bucket-helmet'
+      || held.request.context === 'swim-ring-wear'
       || held.request.context === 'map-leak-patch'
       || held.request.context === 'umbrella-shield'
     ) return Promise.resolve();

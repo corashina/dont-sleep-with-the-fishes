@@ -434,7 +434,7 @@ describe('SurvivalPhase orchestration', () => {
 
   it('clears action outlines after eating, opening the chest and starting fishing', () => {
     const session = new SurvivalSession([], {
-      seed: 1, initial: { hunger: 1, food: 1, energy: 1 },
+      seed: 1, initial: { hunger: 1, food: 1, energy: 4 },
       initialChest: { state: 'closed', acquiredDay: 1 },
     });
     const setAvailableDayActions = vi.fn();
@@ -708,9 +708,8 @@ describe('SurvivalPhase orchestration', () => {
     expect(rig.ui.showFishingResult).toHaveBeenCalledWith({
       items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }],
       message: '',
-      catchTarget: rig.catchTarget,
     });
-    expect(rig.world.projectFishingCatch).toHaveBeenCalledWith(1, 1);
+    expect(rig.world.projectFishingCatch).not.toHaveBeenCalled();
     expect(rig.ui.setFishingState).toHaveBeenLastCalledWith({
       mode: 'result', message: '', biteTarget: null,
     });

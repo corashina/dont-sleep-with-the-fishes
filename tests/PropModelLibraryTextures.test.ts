@@ -60,6 +60,43 @@ function firstMesh(root: Group): Mesh<BufferGeometry, MeshStandardMaterial> {
 }
 
 describe('PropModelLibrary texture ownership', () => {
+  it('starts event downloads before item downloads finish', async () => {
+    let finishItems!: () => void;
+    const itemsPending = new Promise<void>(resolve => { finishItems = resolve; });
+    const requests: string[] = [];
+    const loader: ItemModelLoader = {
+      async load(url) {
+        requests.push(url);
+        if (!url.includes('/events/')) await itemsPending;
+        const animations = url.includes('/items/carlitos.glb')
+          ? [new AnimationClip(CARLITOS_SITTING_IDLE_CLIP, 1, [
+            new NumberKeyframeTrack('.rotation[x]', [0, 1], [0, 0.1]),
+          ])] : [];
+        return { scene: staticTemplate(), animations };
+      },
+    };
+    const pending = PropModelLibrary.load(loader, ['riggedHand']);
+    try {
+      expect(requests.some(url => url.includes('/events/riggedHand.glb'))).toBe(true);
+    } finally {
+      finishItems();
+      (await pending).dispose();
+    }
+  });
+
+  it('releases event models when an item download fails', async () => {
+    const eventRoot = staticTemplate();
+    const geometryDispose = vi.spyOn(firstMesh(eventRoot).geometry, 'dispose');
+    const loader: ItemModelLoader = {
+      async load(url) {
+        if (url.includes('/events/')) return { scene: eventRoot, animations: [] };
+        throw new Error('item download failed');
+      },
+    };
+    await expect(PropModelLibrary.load(loader, ['riggedHand'])).rejects.toThrow('item download failed');
+    expect(geometryDispose).toHaveBeenCalledOnce();
+  });
+
   it('disposes shared template textures exactly once', () => {
     const texture = new Texture();
     const material = new MeshStandardMaterial({ map: texture });

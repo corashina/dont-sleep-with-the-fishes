@@ -238,18 +238,24 @@ export class PropModelLibrary {
       validateSpec(id, runtimeModelSpec(id));
     }
 
-    const results = await Promise.allSettled(RUNTIME_MODEL_IDS.map(async (id): Promise<LoadedTemplate> => {
-      const spec = runtimeModelSpec(id);
-      const loadedModel = await loader.load(spec.url);
-      const root = loadedModel.scene;
+    // Start every model download together so the loading total covers both groups.
+    const modelIds: readonly ModelId[] = [...RUNTIME_MODEL_IDS, ...eventIds];
+    const results = await Promise.allSettled(modelIds.map(async (id, index): Promise<LoadedTemplate> => {
+      let root: Group | null = null;
       try {
+        const spec = index < RUNTIME_MODEL_IDS.length
+          ? runtimeModelSpec(id as RuntimeModelId)
+          : validateSpec(id, EVENT_MODEL_SPECS[id as EventModelId]);
+        const loadedModel = await loader.load(spec.url);
+        root = loadedModel.scene;
         const triangles = normalizeTemplate(id, root, spec);
         const animations = validateAnimations(id, loadedModel.animations);
         const template = new Group();
         template.add(root);
         return { root: template, animations, triangles };
       } catch (error) {
-        attemptCleanup(() => disposeRoots([root]));
+        const failedRoot = root;
+        if (failedRoot !== null) attemptCleanup(() => disposeRoots([failedRoot]));
         throw error;
       }
     }));
@@ -257,10 +263,11 @@ export class PropModelLibrary {
     const fulfilledRoots = results.flatMap((result) => result.status === 'fulfilled' ? [result.value.root] : []);
     const firstFailureIndex = results.findIndex((result) => result.status === 'rejected');
     if (firstFailureIndex >= 0) {
-      const id = RUNTIME_MODEL_IDS[firstFailureIndex]!;
       const rejected = results[firstFailureIndex] as PromiseRejectedResult;
       const cause = rejected.reason;
       attemptCleanup(() => disposeRoots(fulfilledRoots));
+      if (firstFailureIndex >= RUNTIME_MODEL_IDS.length) throw cause;
+      const id = RUNTIME_MODEL_IDS[firstFailureIndex]!;
       if (cause instanceof ItemModelLoadError && cause.itemId === id) throw cause;
       const message = cause instanceof Error ? cause.message : String(cause);
       throw new ItemModelLoadError(id, message, { cause });
@@ -268,7 +275,7 @@ export class PropModelLibrary {
 
     const loaded = results.map((result) => (result as PromiseFulfilledResult<LoadedTemplate>).value);
     let aggregateTriangles = 0;
-    for (let index = 0; index < loaded.length; index += 1) {
+    for (let index = 0; index < RUNTIME_MODEL_IDS.length; index += 1) {
       aggregateTriangles += loaded[index]!.triangles;
       if (aggregateTriangles > ITEM_MODEL_MAX_TOTAL_TRIANGLES) {
         const error = new ItemModelLoadError(
@@ -278,35 +285,6 @@ export class PropModelLibrary {
         attemptCleanup(() => disposeRoots(fulfilledRoots));
         throw error;
       }
-    }
-
-    const eventResults = await Promise.allSettled(eventIds.map(
-      async (id): Promise<LoadedTemplate> => {
-        let root: Group | null = null;
-        try {
-          const spec = validateSpec(id, EVENT_MODEL_SPECS[id]);
-          const loadedModel = await loader.load(spec.url);
-          root = loadedModel.scene;
-          const triangles = normalizeTemplate(id, root, spec);
-          const animations = validateAnimations(id, loadedModel.animations);
-          const template = new Group();
-          template.add(root);
-          return { root: template, animations, triangles };
-        } catch (error) {
-          const failedRoot = root;
-          if (failedRoot) attemptCleanup(() => disposeRoots([failedRoot]));
-          throw error;
-        }
-      },
-    ));
-
-    const eventFailure = eventResults.find(result => result.status === 'rejected');
-    if (eventFailure?.status === 'rejected') {
-      attemptCleanup(() => disposeRoots([
-        ...fulfilledRoots,
-        ...eventResults.flatMap(result => result.status === 'fulfilled' ? [result.value.root] : []),
-      ]));
-      throw eventFailure.reason;
     }
 
     return new PropModelLibrary(
@@ -328,15 +306,10 @@ export class PropModelLibrary {
           animations: loaded[ITEM_IDS.length + LIFEBOAT_EQUIPMENT_IDS.length + index]!.animations,
         },
       ])),
-      new Map(eventIds.flatMap((id, index) => {
-        const result = eventResults[index]!;
-        return result.status === 'fulfilled'
-          ? [[id, {
-            root: result.value.root,
-            animations: result.value.animations,
-          }] as const]
-          : [];
-      })),
+      new Map(eventIds.map((id, index) => [id, {
+        root: loaded[RUNTIME_MODEL_IDS.length + index]!.root,
+        animations: loaded[RUNTIME_MODEL_IDS.length + index]!.animations,
+      }])),
     );
   }
 

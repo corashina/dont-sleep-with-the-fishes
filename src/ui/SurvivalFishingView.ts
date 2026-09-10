@@ -4,7 +4,7 @@ import { uiText } from '../i18n/uiMessages';
 import { uiDynamic } from '../i18n/uiDynamicMessages';
 import { ITEM_LABELS, type ItemId } from '../game/ItemState';
 import { itemThumbnailUrl } from './itemThumbnailManifest';
-import type { BoatInteractionAnchor, ProjectedBoatBounds } from '../survival/BoatInteraction';
+import type { ProjectedBoatBounds } from '../survival/BoatInteraction';
 import { createElementRequirement } from './dom';
 import {
   runCleanupSteps,
@@ -14,8 +14,6 @@ import {
 import { returnArrowArtwork } from './uiArtwork';
 
 const FISHING_FADE_MS = 180;
-const ROUTINE_DIALOG_MARGIN = 20;
-const ROUTINE_DIALOG_GAP = 22;
 const requireElement = createElementRequirement('survival fishing view');
 
 export type FishingUiMode = 'hidden' | 'aiming' | 'waiting' | 'bite' | 'result';
@@ -33,7 +31,6 @@ export interface FishingResultView {
     readonly condition: 'usable' | 'broken';
   }[];
   readonly message: string;
-  readonly catchTarget: ProjectedBoatBounds | null;
 }
 
 interface PendingFade {
@@ -84,8 +81,6 @@ export class SurvivalFishingView {
   private announcementVersion = 0;
   private pendingFade: PendingFade | null = null;
   private continueIssued = false;
-  private resultTarget: ProjectedBoatBounds | null = null;
-  private resultVisible = false;
   private readonly unsubscribeLanguage: () => void;
   private refreshLanguage(): void {
     refreshUiText(...this.roots);
@@ -97,8 +92,6 @@ export class SurvivalFishingView {
 
   constructor(
     private readonly mount: HTMLElement,
-    private readonly coordinateRoot: HTMLElement,
-    private readonly fallbackAnchor: () => BoatInteractionAnchor | null,
   ) {
     const template = document.createElement('template');
     template.innerHTML = `
@@ -111,12 +104,12 @@ export class SurvivalFishingView {
         </button>
       </section>
       <div class="fishing-fade" data-fishing-fade aria-hidden="true"></div>
-      <section class="routine-dialog routine-dialog--fishing" data-fishing-result role="dialog" aria-modal="true" aria-hidden="true" data-ui-aria="fishingResult" aria-label="${uiText('fishingResult')}" inert>
-        <div class="routine-dialog__card fishing-result-card scuba-popup-paper">
+      <section class="dive-result" data-fishing-result role="dialog" aria-modal="true" aria-hidden="true" data-ui-aria="fishingResult" aria-label="${uiText('fishingResult')}" inert>
+        <div class="dive-result__paper fishing-result-card scuba-popup-paper">
           <button type="button" class="dive-result__close ui-role-context" data-fishing-result-close data-ui-aria="closeFishing" aria-label="${uiText('closeFishing')}">&times;</button>
           <h2 class="dive-result__title scuba-popup-title ui-role-display" data-ui-text="fishingResult">${uiText('fishingResult')}</h2>
           <div class="dive-result__rewards fishing-result-items" data-fishing-result-items></div>
-          <p class="ui-role-context" data-fishing-result-message hidden></p>
+          <p class="dive-result__lines ui-role-numeral" data-fishing-result-message hidden></p>
         </div>
       </section>`;
     const roots = [...template.content.children] as HTMLElement[];
@@ -134,7 +127,6 @@ export class SurvivalFishingView {
     this.interactionRoot.addEventListener('click', this.handleInteractionClick);
     this.interactionRoot.addEventListener('pointerup', this.handlePointerUp);
     this.resultRoot.addEventListener('click', this.handleResultClick);
-    window.addEventListener('resize', this.handleWindowResize);
     this.unsubscribeLanguage = onLanguageChange(() => this.refreshLanguage());
     this.refreshLanguage();
   }
@@ -198,11 +190,6 @@ export class SurvivalFishingView {
     this.currentResult = view;
     this.continueIssued = false;
     this.renderResult(view);
-    this.resultTarget = view.catchTarget === null
-      ? null
-      : Object.freeze({ ...view.catchTarget });
-    this.resultVisible = true;
-    this.positionResult();
     this.onResultShow();
   }
 
@@ -210,8 +197,6 @@ export class SurvivalFishingView {
     if (this.disposed) return;
     this.currentResult = null;
     this.onResultHide();
-    this.resultVisible = false;
-    this.resultTarget = null;
   }
 
   private renderResult(view: FishingResultView): void {
@@ -252,10 +237,6 @@ export class SurvivalFishingView {
       entry.append(art, copy);
       return entry;
     }));
-  }
-
-  refreshResultPlacement(): void {
-    if (!this.disposed && this.resultVisible) this.positionResult();
   }
 
   setFade(covered: boolean): Promise<void> {
@@ -331,7 +312,6 @@ export class SurvivalFishingView {
       () => this.interactionRoot.removeEventListener('click', this.handleInteractionClick),
       () => this.interactionRoot.removeEventListener('pointerup', this.handlePointerUp),
       () => this.resultRoot.removeEventListener('click', this.handleResultClick),
-      () => window.removeEventListener('resize', this.handleWindowResize),
     ]));
   }
 
@@ -428,72 +408,6 @@ export class SurvivalFishingView {
     if (!this.onReel()) this.reelIssued = false;
   }
 
-  private positionResult(): void {
-    const rootBounds = this.coordinateRoot.getBoundingClientRect();
-    const viewportWidth = Math.max(
-      1,
-      rootBounds.width || this.coordinateRoot.clientWidth || window.innerWidth,
-    );
-    const viewportHeight = Math.max(
-      1,
-      rootBounds.height || this.coordinateRoot.clientHeight || window.innerHeight,
-    );
-    const maximumWidth = Math.max(1, viewportWidth - ROUTINE_DIALOG_MARGIN * 2);
-    const maximumHeight = Math.max(1, viewportHeight - ROUTINE_DIALOG_MARGIN * 2);
-    const cardWidth = Math.min(480, maximumWidth);
-    this.resultRoot.style.setProperty('--routine-width', `${Math.round(cardWidth)}px`);
-    const card = this.resultItems.parentElement!;
-    const cardHeight = Math.min(card.offsetHeight || 360, maximumHeight);
-    const target = this.resultDialogTarget(viewportWidth, viewportHeight);
-    const [horizontalPlacement, unclampedX] = this.horizontalDialogPosition(
-      target.x, target.width, cardWidth, viewportWidth,
-    );
-    const [verticalPlacement, unclampedY] = this.verticalDialogPosition(
-      target.y, target.height, cardHeight, viewportHeight,
-    );
-    const x = Math.min(
-      viewportWidth - ROUTINE_DIALOG_MARGIN - cardWidth,
-      Math.max(ROUTINE_DIALOG_MARGIN, unclampedX),
-    );
-    const y = Math.min(
-      viewportHeight - ROUTINE_DIALOG_MARGIN - cardHeight,
-      Math.max(ROUTINE_DIALOG_MARGIN, unclampedY),
-    );
-    this.resultRoot.style.setProperty('--routine-x', `${Math.round(x)}px`);
-    this.resultRoot.style.setProperty('--routine-y', `${Math.round(y)}px`);
-    this.resultRoot.dataset.placement = horizontalPlacement;
-    this.resultRoot.dataset.verticalPlacement = verticalPlacement;
-    this.resultRoot.dataset.anchorState = target.projected ? 'projected' : 'fallback';
-  }
-
-  private resultDialogTarget(viewportWidth: number, viewportHeight: number): {
-    readonly x: number; readonly y: number; readonly width: number; readonly height: number; readonly projected: boolean;
-  } {
-    const target = this.resultTarget?.visible === true ? this.resultTarget : this.fallbackAnchor();
-    if (target?.visible !== true) return { x: viewportWidth * 0.7, y: viewportHeight * 0.55, width: 0, height: 0, projected: false };
-    const hitArea = this.resultTarget?.visible === true
-      ? this.resultTarget
-      : (target as BoatInteractionAnchor).hitArea ?? { width: 54, height: 54, depth: 0 };
-    return { x: target.x, y: target.y, width: hitArea.width, height: hitArea.height, projected: true };
-  }
-
-  private horizontalDialogPosition(anchorX: number, hitWidth: number, cardWidth: number, viewportWidth: number): readonly ['left' | 'right', number] {
-    const right = anchorX + hitWidth / 2 + ROUTINE_DIALOG_GAP;
-    const left = anchorX - hitWidth / 2 - ROUTINE_DIALOG_GAP - cardWidth;
-    return right + cardWidth <= viewportWidth - ROUTINE_DIALOG_MARGIN || left < ROUTINE_DIALOG_MARGIN
-      ? ['right', right] : ['left', left];
-  }
-
-  private verticalDialogPosition(anchorY: number, hitHeight: number, cardHeight: number, viewportHeight: number): readonly ['above' | 'below' | 'center', number] {
-    const centered = anchorY - cardHeight / 2;
-    if (centered >= ROUTINE_DIALOG_MARGIN && centered + cardHeight <= viewportHeight - ROUTINE_DIALOG_MARGIN) return ['center', centered];
-    const below = anchorY + hitHeight / 2 + ROUTINE_DIALOG_GAP;
-    if (below + cardHeight <= viewportHeight - ROUTINE_DIALOG_MARGIN) return ['below', below];
-    const above = anchorY - hitHeight / 2 - ROUTINE_DIALOG_GAP - cardHeight;
-    if (above >= ROUTINE_DIALOG_MARGIN) return ['above', above];
-    return anchorY < viewportHeight / 2 ? ['below', below] : ['above', above];
-  }
-
   private readonly handleInteractionClick = (event: MouseEvent): void => {
     if (this.disposed || !this.canUseInteraction()) return;
     const target = event.target;
@@ -540,9 +454,5 @@ export class SurvivalFishingView {
     ) return;
     this.continueIssued = true;
     this.onContinue();
-  };
-
-  private readonly handleWindowResize = (): void => {
-    this.refreshResultPlacement();
   };
 }
