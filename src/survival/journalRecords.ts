@@ -1,7 +1,7 @@
 import { cloneOutcomeText, type OutcomeText } from './outcomeText';
 import { presentationWeatherForEvent, type PresentationWeatherId } from '../weather/presentationWeather';
 import type { ItemId, ItemInstanceId } from '../game/ItemState';
-import type { CarlitosState } from './CarlitosState';
+import type { CarlitosState, CarlitosRest } from './CarlitosState';
 import type { FishingTerminalResult } from './FishingSession';
 import type { FishingCatchId } from './fishingCatalog';
 import type { FishingSettlement } from './fishingSettlementRules';
@@ -69,7 +69,7 @@ export interface JournalCarlitosDawnRecord {
 }
 
 export interface JournalCarlitosDawnState {
-  readonly energy: number;
+  readonly rest: CarlitosRest;
   readonly hunger: number;
   readonly unhappiness: number;
   readonly pettedToday: boolean;
@@ -173,7 +173,7 @@ export function createJournalCarlitosDawnState(
   state: CarlitosState,
 ): JournalCarlitosDawnState {
   return Object.freeze({
-    energy: state.energy,
+    rest: state.rest,
     hunger: state.hunger,
     unhappiness: state.unhappiness,
     pettedToday: state.pettedToday,

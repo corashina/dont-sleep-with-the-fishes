@@ -85,7 +85,8 @@ import {
   createCarlitosState,
   feedCarlitos,
   petCarlitos,
-  spendCarlitosEnergy,
+  useCarlitosHelp,
+  carlitosHelpUnavailableMessage,
   type CarlitosSnapshot,
   type CarlitosState,
 } from './CarlitosState';
@@ -679,30 +680,16 @@ export class SurvivalSession {
     if (action.id !== 'delegateCarlitos' && action.id !== 'watchCarlitos') {
       throw new Error(`Unknown companion event action: ${action.id}`);
     }
-    const { energyCost } = action;
     if (this.carlitos === null) {
-      return {
-        visible: false,
-        energyCost: 0,
-        availableEnergy: 0,
-        unavailableReason: t('notAboard'),
-      };
+      return { visible: false, unavailableReason: t('notAboard') };
     }
-    if (this.carlitos.energy < energyCost) {
-      const text: OutcomeText = { kind: 'companionEnergy', required: energyCost, available: this.carlitos.energy };
-      return {
-        visible: true,
-        energyCost,
-        availableEnergy: this.carlitos.energy,
-        get unavailableReason() { return resolveOutcomeText(text); },
-        text,
-      };
-    }
+    const message = carlitosHelpUnavailableMessage(this.carlitos);
+    if (message === null) return { visible: true, unavailableReason: null };
+    const text = domainText(message);
     return {
       visible: true,
-      energyCost,
-      availableEnergy: this.carlitos.energy,
-      unavailableReason: null,
+      get unavailableReason() { return resolveOutcomeText(text); },
+      text,
     };
   }
 
@@ -756,7 +743,7 @@ export class SurvivalSession {
       day: this.day,
       capturedBait,
       activeItemIds,
-      ...((this.carlitos?.energy ?? 0) > 0 ? { fishWeightMultiplier: 1.01 } : {}),
+      ...(this.carlitos?.rest === 'rested' ? { fishWeightMultiplier: 1.01 } : {}),
       random: this.random,
     });
     const outcome = this.commit(
@@ -1025,10 +1012,10 @@ export class SurvivalSession {
       };
     }
     if (choice.companionAction !== undefined
-      && !spendCarlitosEnergy(this.carlitos!, choice.companionAction.energyCost)) {
+      && !useCarlitosHelp(this.carlitos!, choice.companionAction.id)) {
       return {
         code: 'companion-action-unavailable',
-        message: t('carlitosEnergy'),
+        message: t(carlitosHelpUnavailableMessage(this.carlitos!)!),
       };
     }
     return null;
@@ -2044,7 +2031,7 @@ export class SurvivalSession {
     after: JournalCarlitosDawnRecord['after'],
   ): boolean {
     return before.hunger !== after.hunger
-      || before.energy !== after.energy
+      || before.rest !== after.rest
       || before.unhappiness !== after.unhappiness;
   }
 

@@ -228,11 +228,8 @@ describe('survival events', () => {
     rejects((catalog) => { catalog[0].choices[0].companionAction = 'swim'; }, /companion action/i);
     rejects((catalog) => { catalog[0].choices[0].companionAction = undefined; }, /companion action/i);
     rejects((catalog) => {
-      catalog[0].choices[0].companionAction = { id: 'swim', energyCost: 3 };
+      catalog[0].choices[0].companionAction = { id: 'swim' };
     }, /companion action.*invalid/i);
-    rejects((catalog) => {
-      catalog[0].choices[0].companionAction = { id: 'delegateCarlitos', energyCost: 0 };
-    }, /companion action.*energy cost/i);
     rejects((catalog) => { catalog[0].choices.at(-1).itemId = 'bucket'; }, /no-item response/i);
     rejects((catalog) => {
       catalog[0].choices[0].outcomes[0].effects.resources = [

@@ -266,6 +266,10 @@ export class SurvivalAudio {
     if (!this.disposed) this.scope.play('fishingReel');
   }
 
+  fishingNet(): void {
+    if (!this.disposed) this.scope.play('fishingNet');
+  }
+
   fishingResult(result: FishingTerminalResult): void {
     if (this.disposed) return;
     if (result.kind === 'miss') {

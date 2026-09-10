@@ -3,7 +3,6 @@ import { nightTraderChoices, nightTraderEventForSeed } from './nightTraderTrades
 import { HANDYMAN_ITEM_IDS } from './tradeRules';
 import {
   DRIFTING_SUPPLY_KINDS,
-  DRIFTING_SUPPLY_CARLITOS_ENERGY_COST,
   DRIFTING_SUPPLY_PLAYER_ENERGY_COST,
 } from './driftingSupplies';
 import { survivalEventFallbackById } from './eventSelection';
@@ -512,7 +511,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       ...contextualChoice('watch', 'eventText076',
         outcome(85, 'eventText189'),
         outcome(15, 'eventText190', { followUpNight: true })),
-      companionAction: { id: 'watchCarlitos', energyCost: 1 },
+      companionAction: { id: 'watchCarlitos' },
     },
     contextualChoice('sleep', 'eventText077', outcome(
       1,
@@ -527,7 +526,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
     },
     {
       ...contextualChoice('delegate-carlitos', 'eventText080', ...driftingOutcomes(true)),
-      companionAction: { id: 'delegateCarlitos', energyCost: DRIFTING_SUPPLY_CARLITOS_ENERGY_COST },
+      companionAction: { id: 'delegateCarlitos' },
     },
     contextualChoice('sleep', 'eventText081', outcome(1, 'eventText212')),
   ]),
@@ -551,7 +550,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
           'eventText214',
           effects(undefined, [gainChest()]),
         )),
-      companionAction: { id: 'delegateCarlitos', energyCost: 3 },
+      companionAction: { id: 'delegateCarlitos' },
     },
     contextualChoice('sleep', 'eventText081', outcome(
       1,

@@ -122,6 +122,7 @@ function createRig(options: FishingRigOptions = {}) {
     fishingCast: vi.fn(() => calls.push('audio:cast')),
     fishingBite: vi.fn(() => calls.push('audio:bite')),
     fishingReel: vi.fn(() => calls.push('audio:reel')),
+    fishingNet: vi.fn(() => calls.push('audio:net')),
     fishingResult: vi.fn(() => calls.push('audio:result')),
   };
   let paused = false;
@@ -204,9 +205,12 @@ describe('SurvivalFishingFlow', () => {
     await flushPromises();
     expect(rig.ui.showFishingResult).toHaveBeenCalledWith(expect.objectContaining({
       items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }],
-      message: 'Cod',
+      message: '',
     }));
     expect(rig.audio.fishingBite).not.toHaveBeenCalled();
+    expect(rig.audio.fishingCast).not.toHaveBeenCalled();
+    expect(rig.audio.fishingReel).not.toHaveBeenCalled();
+    expect(rig.audio.fishingNet).toHaveBeenCalledOnce();
     rig.flow.continueResult();
     expect(rig.animations.exit).toHaveLength(1);
     rig.animations.exit[0]!.resolve();
@@ -266,7 +270,7 @@ describe('SurvivalFishingFlow', () => {
     rig.animations.reel[0]!.resolve();
     await flushPromises();
     expect(rig.ui.showFishingResult).toHaveBeenCalledWith({
-      items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }], message: 'Cod', catchTarget: rig.catchTarget,
+      items: [{ itemId: 'cannedFood', quantity: 1, condition: 'usable' }], message: '', catchTarget: rig.catchTarget,
     });
     expect(rig.world.projectFishingCatch).toHaveBeenCalledWith(1280, 720);
 

@@ -30,7 +30,7 @@ const baseRuleState: DayActionRuleState = Object.freeze({
   }),
   carlitos: Object.freeze({
 
-    energy: 3,
+    rest: 'rested',
     hunger: 4,
     unhappiness: 1,
     pettedToday: false,

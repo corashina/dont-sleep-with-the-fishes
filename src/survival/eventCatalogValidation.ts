@@ -544,10 +544,6 @@ function validateChoiceOptions(
       && eventChoice.companionAction.id !== 'watchCarlitos') {
       throw new Error(`${path} is invalid`);
     }
-    if (!Number.isInteger(eventChoice.companionAction.energyCost)
-      || (eventChoice.companionAction.energyCost as number) <= 0) {
-      throw new Error(`${path} energy cost must be a positive integer`);
-    }
   }
   if (eventChoice.requiredChestState !== undefined
     && !['none', 'closed', 'mimic'].includes(eventChoice.requiredChestState)) {
