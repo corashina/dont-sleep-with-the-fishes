@@ -1,16 +1,19 @@
 import { clamp01, pulse, smoothstep } from '../animationMath';
-import { scaleEventItemDuration, scaleThrownItemDuration } from '../eventItemTiming';
+import { scaleEventItemDuration } from '../eventItemTiming';
+import { eventItemUseDurationForItem } from '../eventItemUseChoreography';
 import { NET_ATTACK_BASE_DURATION, sampleNetAttackContact } from '../netAttackChoreography';
 import { resetTransformPose, type MutableTransformPose } from '../transformPose';
 
 export const SWARM_REVEAL_DURATION = 2.9;
 export const SWARM_ITEM_DURATION = scaleEventItemDuration(1.2);
 export const SWARM_REACTION_DURATION = 1.15;
+export const SWARM_DIVERSION_DURATION = 3.2;
+export const SWARM_DISTRACTION_TARGET = Object.freeze({ x: 12, z: -9 });
 
 export function swarmItemDuration(choiceId: string): number {
   if (choiceId === 'fishingNet') return scaleEventItemDuration(NET_ATTACK_BASE_DURATION);
   return choiceId === 'bait' || choiceId === 'baitTin'
-    ? scaleThrownItemDuration(1.2)
+    ? eventItemUseDurationForItem('throw-target', 'baitTin')
     : SWARM_ITEM_DURATION;
 }
 export const SWARM_SHARK_COUNT = 5;
@@ -235,7 +238,8 @@ export function sampleSwarmItemUse(
     output.pitch = -0.34 * lift;
     output.effectKind = 'flashlight-sweep';
   } else {
-    output.baitDiversion = action;
+    // Wait for the thrown food or bait to land before following it.
+    output.baitDiversion = 0;
     output.x = 2.5 * action;
     output.y = (0.34 + Math.sin(Math.PI * t) * 0.72) * action;
     output.z = -1.35 * action;
@@ -276,7 +280,7 @@ export function sampleSwarmReaction(
     output.catchStrength = output.foodDelta > 0
       ? smoothstep((t - 0.08) / 0.66)
       : 0;
-    output.baitDiversion = output.baitDelta < 0
+    output.baitDiversion = output.baitDelta < 0 || reaction.foodDelta < 0
       ? smoothstep((t - 0.04) / 0.72)
       : 0;
     output.splash = pulse(t, 0.04, 0.3, 0.76)
@@ -321,8 +325,8 @@ export function sampleSwarmSharkPose(
   const opening = swarm.opening * openingWeight * 1.2;
 
   const diversionSide = baseX >= 0 ? 1 : -1;
-  const diversionX = swarm.baitDiversion * (2.8 + diversionSide * 0.48);
-  const diversionZ = swarm.baitDiversion * -2.2;
+  const diversionX = swarm.baitDiversion * (SWARM_DISTRACTION_TARGET.x + diversionSide * 0.48 - baseX);
+  const diversionZ = swarm.baitDiversion * (SWARM_DISTRACTION_TARGET.z + variant.group * 0.4 - baseZ);
   const lunge = swarm.attack * (0.72 + (variant.group % 2) * 0.18);
   const netSlap = swarm.netSlap * variant.netSlapWeight;
   const pulseOffset = Math.sin(

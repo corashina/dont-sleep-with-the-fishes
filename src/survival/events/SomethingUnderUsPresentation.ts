@@ -103,14 +103,15 @@ export class SomethingUnderUsPresentation implements DedicatedEventPresentation 
   }
 
   playItemUse(choiceId: string, _instanceId: ItemInstanceId): Promise<boolean> {
-    if (!this.staged || this.disposed || (choiceId !== 'baitTin' && choiceId !== 'flashlight')) {
+    if (!this.staged || this.disposed
+      || (choiceId !== 'baitTin' && choiceId !== 'cannedFood' && choiceId !== 'flashlight')) {
       return Promise.resolve(false);
     }
     this.choice = choiceId;
-    // Bait lands away from the hull; the beam instead points beside the bow.
-    this.itemAimTarget.position.set(choiceId === 'baitTin' ? 10 : -2, 0.1, -6);
+    // Food and bait land away from the hull; the beam points beside the bow.
+    this.itemAimTarget.position.set(choiceId === 'flashlight' ? -2 : 10, 0.1, -6);
     const duration = eventItemUseDurationForItem(
-      choiceId === 'baitTin' ? 'throw-target' : 'flashlight-threat-beam', choiceId,
+      choiceId === 'flashlight' ? 'flashlight-threat-beam' : 'throw-target', choiceId,
     );
     return this.animation.start('item', duration, {
       complete: true, cancel: false,

@@ -171,6 +171,7 @@ type SessionCompanionAvailability = ReturnType<
 >;
 
 const EVENT_ITEM_CUE_TYPES: ReadonlySet<ItemId> = new Set([
+  'radio',
   'fishingNet',
   'knife',
   'shotgun',
@@ -2208,7 +2209,9 @@ export class SurvivalEventFlow {
   ): void {
     if (!this.isCurrent(generation, operation)) return;
     if (itemType !== 'bucket') {
-      this.dependencies.audio.eventItemCue(itemType, cueIndex);
+      this.dependencies.audio.eventItemCue(
+        itemType, eventId === 'other-people' && itemType === 'radio' ? 1 : cueIndex,
+      );
       return;
     }
     if (eventId === 'shower-night') this.dependencies.audio.bucketHelmetRain();

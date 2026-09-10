@@ -47,6 +47,7 @@ Readonly<Partial<Record<ItemId, readonly ItemAnimationLabUse[]>>> = Object.freez
   ),
   ductTape: uses(
     use('tape-stretch', 'stretchTape', 'leak', 'ductTape'),
+    use('tape-secure', 'secureSupplies', 'windy-night', 'ductTape'),
     use('trade-handover', 'tradeHandover', 'handyman', 'ductTape'),
   ),
   compass: uses(
@@ -68,7 +69,7 @@ Readonly<Partial<Record<ItemId, readonly ItemAnimationLabUse[]>>> = Object.freez
   fishingNet: uses(
     use('net-fishing', 'fishWithNet', ITEM_ANIMATION_LAB_ID, 'netFish'),
     use('net-scoop', 'scoopWater', 'school-of-fish', 'fishingNet'),
-    use('net-attack', 'attack', 'snatcher', 'attack'),
+    use('net-attack', 'attack', 'snatcher', 'fishingNet'),
     use('trade-handover', 'tradeHandover', 'handyman', 'fishingNet'),
   ),
   knife: uses(
@@ -94,6 +95,7 @@ Readonly<Partial<Record<ItemId, readonly ItemAnimationLabUse[]>>> = Object.freez
   ),
   radio: uses(
     use('radio-signal-receive', 'receiveSignal', ITEM_ANIMATION_LAB_ID, 'radioSignal'),
+    use('radio-call', 'callCrew', 'other-people', 'radio'),
     use('trade-handover', 'tradeHandover', 'handyman', 'radio'),
   ),
   umbrella: uses(

@@ -4,6 +4,16 @@ import { getLanguage } from './language';
 
 // These are diary outcomes, separate from the short messages shown during events.
 const results = {
+  snatcherNetHeld: ['I struck the tentacle with the net. It let go of my supplies and slipped back into the sea.', 'Uderzyłem mackę siecią. Puściła zapasy i wsunęła się z powrotem do morza.', 'Golpeé el tentáculo con la red. Soltó mis provisiones y volvió al mar.'],
+  snatcherNetTorn: ['I struck the tentacle with the net. The mesh tore, but my supplies stayed aboard.', 'Uderzyłem mackę siecią. Oczka pękły, ale zapasy zostały na pokładzie.', 'Golpeé el tentáculo con la red. La malla se rompió, pero mis provisiones quedaron a bordo.'],
+  sharksFoodResult: ['I threw food away from the boat. The fins followed my next meal into the dark.', 'Rzuciłem jedzenie z dala od łodzi. Płetwy ruszyły w ciemność za moim następnym posiłkiem.', 'Tiré comida lejos del bote. Las aletas siguieron mi próxima cena hacia la oscuridad.'],
+  underUsFoodResult: ['I threw food beyond the boat. The shadow followed it. The hull settled, and I finally slept.', 'Rzuciłem jedzenie poza łódź. Cień podążył za nim. Kadłub opadł i wreszcie zasnąłem.', 'Tiré comida lejos del bote. La sombra la siguió. El casco bajó y al fin dormí.'],
+  windTapeResult: ['I taped down the loose supplies. They stayed put while the wind battered the hull.', 'Przykleiłem luźne zapasy taśmą. Zostały na miejscu, gdy wiatr niszczył kadłub.', 'Sujeté las provisiones sueltas con cinta. Quedaron en su lugar mientras el viento golpeaba el casco.'],
+  watersAnchorHeld: ['I dropped the anchor into the shallows. It held us clear of the rocks.', 'Rzuciłem kotwicę na płyciznę. Utrzymała nas z dala od skał.', 'Solté el ancla en la parte poco profunda. Nos mantuvo lejos de las rocas.'],
+  watersAnchorBroke: ['I dropped the anchor before the rocks. It broke under the strain, and the hull scraped past a jagged edge.', 'Rzuciłem kotwicę przed skałami. Pękła pod naporem, a kadłub otarł się o ostrą krawędź.', 'Solté el ancla antes de las rocas. Se rompió por la tensión y el casco raspó un borde filoso.'],
+  watersLookoutSafe: ['I searched through the binoculars until I found a gap. We passed safely, but I lost my sleep.', 'Szukałem przez lornetkę, aż znalazłem przejście. Przepłynęliśmy bezpiecznie, ale straciłem sen.', 'Busqué con los binoculares hasta encontrar un paso. Pasamos a salvo, pero perdí el sueño.'],
+  watersLookoutScrape: ['I found a gap through the binoculars too late. A rock scraped the hull. I stayed awake until morning.', 'Za późno znalazłem przejście przez lornetkę. Skała otarła kadłub. Czuwałem do rana.', 'Encontré un paso con los binoculares demasiado tarde. Una roca raspó el casco. Seguí despierto hasta la mañana.'],
+  peopleRadioResult: ['I called the passing crew on the radio. They answered with a light and promised to relay our location. I lost sleep talking.', 'Wywołałem mijającą nas załogę przez radio. Odpowiedzieli światłem i obiecali przekazać nasze położenie. Rozmowa odebrała mi sen.', 'Llamé por radio a la tripulación que pasaba. Respondieron con una luz y prometieron comunicar nuestra ubicación. Perdí sueño hablando.'],
   ufoTaken: ['I signalled the disc. It stopped above the boat. A cold light took me, and the sea fell away.', 'Dałem sygnał dyskowi. Zatrzymał się nad łodzią. Zimne światło porwało mnie, a morze zostało w dole.', 'Le hice señales al disco. Se detuvo sobre el bote. Una luz fría me llevó y el mar quedó atrás.'],
   ufoPassed: ['I stayed below the rim without a sound. The lights moved on. I waited before breathing again.', 'Ukryłem się poniżej burty i nie wydałem żadnego dźwięku. Światła odpłynęły. Dopiero wtedy znów odetchnąłem.', 'Me quedé bajo la borda sin hacer ruido. Las luces siguieron de largo. Esperé antes de volver a respirar.'],
   underUsStillResult: ['I sat without moving until it left. By dawn I was too tired to do as much as usual.', 'Siedziałem bez ruchu, aż odpłynęło. O świcie byłem zbyt zmęczony, by zrobić tyle co zwykle.', 'Me quedé inmóvil hasta que se fue. Al amanecer estaba demasiado cansado para hacer lo de siempre.'],
@@ -163,6 +173,8 @@ const languageIndex = { en: 0, pl: 1, 'es-AR': 2 } as const;
 
 // These outcomes already describe the item change in every language.
 const narratedItemChanges: Partial<Record<EventTextId, JournalNarratedItemChange>> = {
+  snatcherNetTorn: { kind: 'break', itemId: 'fishingNet' },
+  watersAnchorBroke: { kind: 'break', itemId: 'anchor' },
   eventText118: { kind: 'break', itemId: 'map' },
   eventText132: { kind: 'lose', itemId: 'flashlight' },
   eventText139: { kind: 'break', itemId: 'fishingNet' },

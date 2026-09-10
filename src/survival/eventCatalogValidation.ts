@@ -1,5 +1,4 @@
 import {
-  EVENT_CHOICE_EXCLUDED_ITEM_IDS,
   ITEM_DEFINITIONS,
   ITEM_IDS,
   type ItemId,
@@ -516,10 +515,6 @@ function validateChoice(
   if (choiceIds.has(eventChoice.id)) throw new Error(`${eventEntry.id} choice ID ${eventChoice.id} is duplicated`);
   choiceIds.add(eventChoice.id);
   if (eventChoice.itemId !== undefined && !isItemId(eventChoice.itemId)) throw new Error(`${eventEntry.id}.${eventChoice.id} contains unknown item`);
-  if (eventChoice.itemId !== undefined
-    && EVENT_CHOICE_EXCLUDED_ITEM_IDS.includes(eventChoice.itemId)) {
-    throw new Error(`${eventEntry.id}.${eventChoice.id} uses an event-choice-excluded item`);
-  }
   validateChoiceOptions(eventEntry, eventChoice);
   validateChoiceRequirements(eventEntry, eventChoice);
   validateChoiceOutcomes(eventEntry, eventChoice);

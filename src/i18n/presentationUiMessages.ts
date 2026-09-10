@@ -1,6 +1,8 @@
 import { defineMessages } from './messages';
 
 const catalog = {
+  secureSupplies: { en: 'Tape down supplies', pl: 'Przyklej zapasy', 'es-AR': 'Sujetar provisiones con cinta' },
+  callCrew: { en: 'Call the passing crew', pl: 'Wywołaj mijającą załogę', 'es-AR': 'Llamar a la tripulación' },
   fishWithNet: { en: 'Fish with net', pl: 'Łów siecią', 'es-AR': 'Pescar con red' },
   scubaDive: { en: 'Dive', pl: 'Nurkuj', 'es-AR': 'Bucear' },
   salvage: { en: 'SALVAGE', pl: 'ZAPASY', 'es-AR': "SUMINISTROS" },

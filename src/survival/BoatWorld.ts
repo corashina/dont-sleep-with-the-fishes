@@ -15,7 +15,6 @@ import {
   Vector3,
 } from 'three';
 import {
-  EVENT_CHOICE_EXCLUDED_ITEM_IDS,
   type ItemId,
   type ItemInstance,
   type ItemInstanceId,
@@ -286,13 +285,7 @@ function blocksEventItemUse(
   eventId: string,
   choiceId: string,
   itemId: ItemId | null,
-  allowExcludedEventChoiceItem: boolean,
 ): boolean {
-  if (
-    itemId !== null
-    && EVENT_CHOICE_EXCLUDED_ITEM_IDS.includes(itemId)
-    && !allowExcludedEventChoiceItem
-  ) return true;
   if (eventId === 'windy-night' && choiceId === 'fishingNet' && itemId === 'fishingNet') return true;
   return eventId === 'flowers' && choiceId === 'bucket' && itemId === 'bucket';
 }
@@ -471,6 +464,7 @@ export class BoatWorld {
   private readonly boatTargetPose: BoatPose = { ...INITIAL_BOAT_POSE };
   private readonly worldCameraPosition = new Vector3();
   private readonly moonItemAimTarget = new Object3D();
+  private readonly supplyTapeAimTarget = new Object3D();
   private readonly skyState: SkyState = {
     weather: 'calm',
     phase: 'day',
@@ -551,6 +545,9 @@ export class BoatWorld {
       const resolvedLifeboatAssets = this.resolveLifeboatAssets(lifeboatAssets);
       const build = createLifeboat(resolvedLifeboatAssets);
       this.boat = build.root;
+      this.supplyTapeAimTarget.name = 'windy-night-tape-supply-target';
+      this.supplyTapeAimTarget.position.set(-0.3, LIFEBOAT_DISPLAY_SHELF_SURFACE_Y + 0.14, -1.65);
+      this.boat.add(this.supplyTapeAimTarget);
       this.oceanExclusion = createWaterExclusion(
         this.boat,
         build.waterExclusion.halfWidth,
@@ -1059,7 +1056,6 @@ export class BoatWorld {
     choiceId: string,
     instanceId: ItemInstanceId,
     onAction?: (cueIndex: number) => void,
-    allowExcludedEventChoiceItem = false,
   ): Promise<void> {
     if (this.disposed) return;
     this.ensureRoutedEventPresenter(eventId);
@@ -1070,13 +1066,14 @@ export class BoatWorld {
       eventId,
       choiceId,
       itemId,
-      allowExcludedEventChoiceItem,
     )) return;
     const context = itemId === null
       ? null
       : resolveEventItemUseContext(eventId, choiceId, itemId);
     if (itemId !== null && context !== null) {
-      const aimTarget = this.eventItemAimTarget(eventId);
+      const aimTarget = context === 'tape-secure'
+        ? this.supplyTapeAimTarget
+        : this.eventItemAimTarget(eventId);
       const request: EventItemUseRequest = {
         eventId,
         choiceId,

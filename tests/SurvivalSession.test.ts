@@ -1092,7 +1092,7 @@ describe('SurvivalSession daytime actions', () => {
       initialEventId: 'snatcher',
     });
     expect(session.snapshot().pendingEventTargetId).toBe('anchor-1');
-    const outcome = session.resolveEvent({ kind: 'endure' });
+    const outcome = session.resolveEvent({ kind: 'choice', choiceId: 'sleep' });
     expect(session.snapshot()).toMatchObject({ pendingEventId: null, pendingEventTargetId: null });
     expect(outcome).toMatchObject({
       accepted: true,
@@ -1120,7 +1120,7 @@ describe('SurvivalSession daytime actions', () => {
     const pending = session.snapshot().pendingEventTargetId;
     expect(session.resolveEvent(itemResponse('fishingNet'))).toMatchObject({
       accepted: false,
-      code: 'choice-unavailable',
+      code: 'item-unavailable',
     });
     expect(session.snapshot().pendingEventTargetId).toBe(pending);
     session.resolveEvent({ kind: 'endure' });
@@ -1180,7 +1180,7 @@ describe('SurvivalSession daytime actions', () => {
     });
     expect(session.snapshot()).toMatchObject({ food: 1, pendingEventTargetId: 'cannedFood-1' });
 
-    const outcome = session.resolveEvent({ kind: 'endure' });
+    const outcome = session.resolveEvent({ kind: 'choice', choiceId: 'sleep' });
 
     expect(outcome.deltas).toEqual({ health: -30, food: -1 });
     expect(session.snapshot()).toMatchObject({ food: 0, recoveredFood: 0 });

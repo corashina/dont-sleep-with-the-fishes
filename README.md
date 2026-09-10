@@ -47,10 +47,20 @@ An old chest can become a mimic and attack automatically. A usable Knife reduces
 A vast sea shadow approaches, reacts to the lantern, and lifts the boat.
 Stay still to lose one Energy from the normal dawn amount. Throw one Bait to preserve sleep.
 Using the Flashlight reveals pale ridges and causes 20 Hull damage. The Flashlight stays usable.
+Throwing one Food also diverts the shadow and preserves sleep.
 The event has a seven-day cooldown and can appear twice per run.
 Use System Tuning → Event Test → Something Under Us to inspect it.
 
 Flowers accepts Fishing Net or Bucket. It records the choice without a large reward.
+
+Additional event responses use recovered equipment:
+
+- **Snatcher:** Strike with the Fishing Net to save the targeted supply without injury. The net has a 20% tear chance.
+- **Swarm of Sharks:** Throw two Food away from the boat to divert the sharks. This requires two Food.
+- **Windy Night:** Spend Duct Tape to secure supplies against loss and breakage. Wind still removes 10–20 Hull.
+- **Dangerous Waters:** Drop the Anchor in the shallows. It holds safely 80% of the time. Otherwise, it breaks and removes 5–10 Hull.
+- **Dangerous Waters:** Find a gap with Binoculars. Lose one Energy from the normal dawn amount. Passage is safe 60% of the time; otherwise, rocks remove 5–10 Hull. Keep the Binoculars.
+- **Other People:** Call the crew on the Radio. Keep the Radio and gain hidden rescue progress. Lose one Energy from the normal dawn amount. The call does not end the run.
 
 Run pressure rises on days 8, 15, 25, and 40. Successful supernatural
 counters can lower pressure. Quiet-night chances fall as pressure rises.

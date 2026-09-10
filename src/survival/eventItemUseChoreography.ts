@@ -13,7 +13,7 @@ export type EventItemUseContext =
   | 'base' | 'throw-target' | 'tape-stretch' | 'compass-search' | 'map-read'
   | 'binocular-look' | 'net-scoop' | 'net-slap' | 'bucket-scoop' | 'bucket-helmet'
   | 'trade-handover' | 'map-leak-patch'
-  | 'radio-signal-receive'
+  | 'radio-signal-receive' | 'radio-call' | 'tape-secure'
   | 'flare-target' | 'flare-sky' | 'anchor-drop'
   | 'umbrella-overhead' | 'umbrella-shield'
   | 'flashlight-threat-beam' | 'flashlight-signal' | 'shotgun-fire'
@@ -84,6 +84,7 @@ const MAP_PATCH_TRAVEL_END = 0.38;
 const MAP_PATCH_MINIMUM_LIFT_Y = 0.42;
 const MAP_PATCH_TRAVEL_ARC_HEIGHT = 0.52;
 const RADIO_SIGNAL_CUE_PROGRESSES = Object.freeze([0.52]);
+const RADIO_CALL_CUE_PROGRESSES = Object.freeze([0.65]);
 const BUCKET_HELMET_RAIN_CUE_PROGRESSES = Object.freeze([0.65]);
 const WEIGHTED_THROW_DURATION_MULTIPLIER = 1.15;
 const SCOOP_DURATION = 1.65;
@@ -154,13 +155,13 @@ const FLARE_SKY_EVENTS: ReadonlySet<string> = new Set(['other-people', 'plane', 
 const FLARE_TARGET_EVENTS: ReadonlySet<string> = new Set(['ghosts', 'snatcher']);
 const TRADE_EVENTS: ReadonlySet<string> = new Set(['night-trader', 'handyman']);
 const NET_SLAP_EVENTS: ReadonlySet<string> = new Set([
-  'death-stare', 'swarm-of-sharks',
+  'death-stare', 'swarm-of-sharks', 'snatcher',
 ]);
 const FLASHLIGHT_SIGNAL_EVENTS: ReadonlySet<string> = new Set([
   'other-people', 'plane', 'flying-saucer', 'lighthouse',
 ]);
 const ANCHOR_DROP_EVENTS: ReadonlySet<string> = new Set([
-  'tornado', 'thunderstorm', 'restless-waves',
+  'tornado', 'thunderstorm', 'restless-waves', 'dangerous-waters',
 ]);
 const SETTLE_ROLL_EXCLUDED_CONTEXTS: ReadonlySet<EventItemUseContext> = new Set([
   'shotgun-fire',
@@ -179,6 +180,8 @@ const EVENT_ITEM_USE_BASE_DURATIONS: Readonly<Record<EventItemUseContext, number
   'bucket-helmet': 1.45,
   'trade-handover': 1.35,
   'radio-signal-receive': 1.65,
+  'radio-call': 2.1,
+  'tape-secure': 1.9,
   'map-leak-patch': 1.5,
   'flare-target': 1.5,
   'flare-sky': 1.65,
@@ -197,9 +200,9 @@ type EventItemContextResolver = (
 ) => EventItemUseContext | null;
 
 const EVENT_ITEM_CONTEXT_RESOLVERS: Partial<Record<ItemId, EventItemContextResolver>> = {
-  radio: (_eventId, choiceId) => exactChoiceContext(
-    choiceId, 'radioSignal', 'radio-signal-receive',
-  ),
+  radio: (eventId, choiceId) => eventId === 'other-people' && choiceId === 'radio'
+    ? 'radio-call'
+    : exactChoiceContext(choiceId, 'radioSignal', 'radio-signal-receive'),
   bucket: resolveBucketContext,
   umbrella: resolveUmbrellaContext,
   flareGun: resolveFlareContext,
@@ -213,7 +216,9 @@ const EVENT_ITEM_CONTEXT_RESOLVERS: Partial<Record<ItemId, EventItemContextResol
   medicalKit: (_eventId, choiceId) => exactChoiceContext(choiceId, 'medicalKit', 'throw-target'),
   energyBar: (_eventId, choiceId) => exactChoiceContext(choiceId, 'energyBar', 'throw-target'),
   swimRing: (_eventId, choiceId) => exactChoiceContext(choiceId, 'swimRing', 'throw-target'),
-  ductTape: (_eventId, choiceId) => exactChoiceContext(choiceId, 'ductTape', 'tape-stretch'),
+  ductTape: (eventId, choiceId) => exactChoiceContext(
+    choiceId, 'ductTape', eventId === 'windy-night' ? 'tape-secure' : 'tape-stretch',
+  ),
   compass: (_eventId, choiceId) => exactChoiceContext(choiceId, 'compass', 'compass-search'),
   map: resolveMapContext,
   spyglass: (_eventId, choiceId) => exactChoiceContext(choiceId, 'spyglass', 'binocular-look'),
@@ -446,6 +451,28 @@ function sampleCompassSearch(
   output.scaleX = readingScale;
   output.scaleY = readingScale;
   output.scaleZ = readingScale;
+}
+
+function sampleTapeSecure(
+  output: EventItemUseSample, pickup: number, hold: number, progress: number,
+): void {
+  const stretch = pulse(progress, 0.4, 0.58, 1);
+  sampleTapeStretch(output, pickup, hold, stretch);
+  const press = smoothstep((progress - 0.62) / 0.28);
+  output.targetBlend = press;
+  output.cameraTargetBlend = 0.65 * smoothstep((progress - 0.5) / 0.22);
+  output.pitch = -0.28 * press;
+  output.itemVisible = progress < 1;
+}
+
+function sampleRadioCall(
+  output: EventItemUseSample, pickup: number, hold: number, progress: number,
+): void {
+  sampleRadioSignalReceive(output, pickup, hold, progress);
+  const speak = smoothstep((progress - 0.5) / 0.15) * hold;
+  output.viewX -= 0.15 * speak;
+  output.viewY -= 0.16 * speak;
+  output.yaw += 0.18 * speak;
 }
 
 function sampleMapRead(
@@ -920,7 +947,11 @@ export function sampleEventItemUse(
   staged[MOTION_PROFILE] = eventItemMotionProfile(itemId ?? 'cannedFood');
   staged[ANTICIPATE] = anticipate;
 
-  if (!sampleHeldEventItemUse(context, output, pickup, hold, action, t)) {
+  if (context === 'tape-secure') {
+    sampleTapeSecure(output, pickup, hold, t);
+  } else if (context === 'radio-call') {
+    sampleRadioCall(output, pickup, hold, t);
+  } else if (!sampleHeldEventItemUse(context, output, pickup, hold, action, t)) {
     sampleTargetedEventItemUse(context, output, itemId, pickup, hold, t);
   }
 
@@ -989,31 +1020,25 @@ function liftCompletionForItem(itemId: ItemId): number {
     : liftCompletionForMass(eventItemMotionProfile(itemId).mass);
 }
 
-export function eventItemActionCueProgresses(
-  context: EventItemUseContext,
-): readonly number[] {
-  const meleeCues = meleeActionCueProgresses(context);
-  if (meleeCues !== null) return meleeCues;
-  if (context === 'shotgun-fire') return SHOTGUN_ACTION_CUE_PROGRESSES;
-  if (context === 'anchor-drop') return ANCHOR_ACTION_CUE_PROGRESSES;
-  if (context === 'tape-stretch') return TAPE_ACTION_CUE_PROGRESSES;
-  if (context === 'map-leak-patch') return MAP_PATCH_ACTION_CUE_PROGRESSES;
-  if (context === 'flare-target' || context === 'flare-sky') {
-    return FLARE_GUN_ACTION_CUE_PROGRESSES;
-  }
-  if (context === 'flashlight-threat-beam') return FLASHLIGHT_THREAT_CUE_PROGRESSES;
-  if (context === 'flashlight-signal') return FLASHLIGHT_MORSE_CUE_PROGRESSES;
-  if (context === 'radio-signal-receive') return RADIO_SIGNAL_CUE_PROGRESSES;
-  if (context === 'bucket-helmet') return BUCKET_HELMET_RAIN_CUE_PROGRESSES;
-  return NO_ACTION_CUE_PROGRESSES;
-}
+const ACTION_CUES: Readonly<Partial<Record<EventItemUseContext, readonly number[]>>> = {
+  'radio-call': RADIO_CALL_CUE_PROGRESSES,
+  'radio-signal-receive': RADIO_SIGNAL_CUE_PROGRESSES,
+  'tape-secure': TAPE_ACTION_CUE_PROGRESSES,
+  'tape-stretch': TAPE_ACTION_CUE_PROGRESSES,
+  'knife-stab': KNIFE_ACTION_CUE_PROGRESSES,
+  'net-slap': NET_SLAP_ACTION_CUE_PROGRESSES,
+  'shotgun-fire': SHOTGUN_ACTION_CUE_PROGRESSES,
+  'anchor-drop': ANCHOR_ACTION_CUE_PROGRESSES,
+  'map-leak-patch': MAP_PATCH_ACTION_CUE_PROGRESSES,
+  'flare-target': FLARE_GUN_ACTION_CUE_PROGRESSES,
+  'flare-sky': FLARE_GUN_ACTION_CUE_PROGRESSES,
+  'flashlight-threat-beam': FLASHLIGHT_THREAT_CUE_PROGRESSES,
+  'flashlight-signal': FLASHLIGHT_MORSE_CUE_PROGRESSES,
+  'bucket-helmet': BUCKET_HELMET_RAIN_CUE_PROGRESSES,
+};
 
-function meleeActionCueProgresses(
-  context: EventItemUseContext,
-): readonly number[] | null {
-  if (context === 'knife-stab') return KNIFE_ACTION_CUE_PROGRESSES;
-  if (context === 'net-slap') return NET_SLAP_ACTION_CUE_PROGRESSES;
-  return null;
+export function eventItemActionCueProgresses(context: EventItemUseContext): readonly number[] {
+  return ACTION_CUES[context] ?? NO_ACTION_CUE_PROGRESSES;
 }
 
 export function sampleEventItemOutcome(
@@ -1051,6 +1076,10 @@ function sampleImmediateEventItemOutcome(
   output: EventItemUseSample,
 ): boolean {
   switch (context) {
+    case 'tape-secure':
+      output.itemVisible = false;
+      output.cameraTargetBlend *= 1 - smoothstep(progress);
+      return true;
     case 'throw-target': output.itemVisible = false; return true;
     case 'bucket-helmet': return true;
     case 'umbrella-shield': return true;
@@ -1133,6 +1162,12 @@ function sampleRecoveringEventItemOutcome(
   output: EventItemUseSample,
 ): boolean {
   switch (context) {
+    case 'radio-call': {
+      resetSample(output);
+      const pickup = 1 - smoothstep(progress);
+      sampleRadioCall(output, pickup, pickup, 1);
+      return true;
+    }
     case 'net-slap':
       sampleEventItemUse(context, itemId, 1, output);
       output.cameraSpaceBlend *= 1 - smoothstep(progress);

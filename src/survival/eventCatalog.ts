@@ -268,6 +268,17 @@ function deepFreeze<T>(value: T): T {
 
 const survivalEvents: SurvivalEventDefinition[] = [
   event('dangerous-waters', 'night', 'eventText031', 'dangerous', 'impact', 1, 2, 0, [
+    choice('anchor', 'watersAnchorChoice', 'anchor',
+      outcome(80, 'watersAnchorHeld'),
+      outcome(20, 'watersAnchorBroke', effects(
+        [subtract('hull', { min: 5, max: 10 })], [breakItem('anchor')],
+      ))),
+    choice('spyglass', 'watersLookoutChoice', 'spyglass',
+      outcome(60, 'watersLookoutSafe', { nextDawnEnergyReduction: 1 }),
+      outcome(40, 'watersLookoutScrape', {
+        ...effects([subtract('hull', { min: 5, max: 10 })]),
+        nextDawnEnergyReduction: 1,
+      })),
     choice('map', 'eventText060', 'map',
       outcome(80, 'eventText111', dangerousWatersEffects()),
       outcome(20, 'eventText112', dangerousWatersEffects([
@@ -309,6 +320,9 @@ const survivalEvents: SurvivalEventDefinition[] = [
   ], undefined, { minimumPressure: 1 }),
   {
     ...event('snatcher', 'night', 'eventText034', 'uncertain', 'impact', 3, 8, 5, [
+      choice('fishingNet', 'snatcherNetChoice', 'fishingNet',
+        outcome(80, 'snatcherNetHeld'),
+        outcome(20, 'snatcherNetTorn', effects(undefined, [breakItem('fishingNet')]))),
       choice('knife', 'eventText068', 'knife',
         outcome(1, 'eventText127')),
       choice('shotgun', 'eventText069', 'shotgun',
@@ -344,6 +358,11 @@ const survivalEvents: SurvivalEventDefinition[] = [
     choice('sleep', 'eventText063', undefined, outcome(5, 'eventText137'), outcome(85, 'eventText134', effects([subtract('hull', { min: 44, max: 60 }), subtract('health', 60)]))),
   ], undefined, { minimumPressure: 1 }),
   event('swarm-of-sharks', 'night', 'eventText036', 'dangerous', 'fish', 1, 10, 4, [
+    {
+      ...choice('cannedFood', 'sharksFoodChoice', 'cannedFood',
+        outcome(1, 'sharksFoodResult', effects([subtract('food', 2)]))),
+      requirements: [{ resource: 'food', minimum: 2 }],
+    },
     choice('fishingNet', 'eventText066', 'fishingNet',
       outcome(80, 'eventText138'),
       outcome(20, 'eventText139', effects(undefined, [breakItem('fishingNet')]))),
@@ -376,6 +395,10 @@ const survivalEvents: SurvivalEventDefinition[] = [
     choice('sleep', 'eventText063', undefined, outcome(80, 'eventText151'), outcome(20, 'eventText152', atNextDawn(2))),
   ]),
   event('windy-night', 'night', 'eventText039', 'dangerous', 'storm', 1, 2, 4, [
+    choice('ductTape', 'windTapeChoice', 'ductTape',
+      outcome(1, 'windTapeResult', effects(
+        [subtract('hull', { min: 10, max: 20 })], [consume('ductTape')],
+      ))),
     choice('fishingNet', 'eventText066', 'fishingNet',
       outcome(80, 'eventText153'),
       outcome(20, 'eventText154', effects(undefined, [breakItem('fishingNet')]))),
@@ -628,6 +651,12 @@ const survivalEvents: SurvivalEventDefinition[] = [
     contextualChoice('sleep', 'eventText063', outcome(1, 'eventText264', {}, 'handyman-sleep')),
   ], undefined, { minimumPressure: 2 }),
   event('other-people', 'night', 'eventText058', 'safe', 'sighting', 2, 15, 2, [
+    choice('radio', 'peopleRadioChoice', 'radio', outcome(
+      1, 'peopleRadioResult', {
+        ...effects([add('rescueLead', 5)]),
+        nextDawnEnergyReduction: 1,
+      }, 'people-signaled',
+    )),
     choice('flareGun', 'eventText070', 'flareGun', outcome(
       1,
       'eventText265',
@@ -694,6 +723,8 @@ const survivalEvents: SurvivalEventDefinition[] = [
     )),
   ], undefined, { minimumRescueLead: 2, maximumAppearances: 2 }),
   event('something-under-us', 'night', 'underUsTitle', 'uncertain', 'darkness', 2, 8, 7, [
+    choice('cannedFood', 'underUsFoodChoice', 'cannedFood',
+      outcome(1, 'underUsFoodResult', effects([subtract('food', 1)]), 'under-us-diverted')),
     choice('baitTin', 'underUsBaitChoice', 'baitTin',
       outcome(1, 'underUsBaitResult', effects([subtract('bait', 1)]), 'under-us-diverted')),
     choice('flashlight', 'underUsLightChoice', 'flashlight',

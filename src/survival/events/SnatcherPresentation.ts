@@ -137,7 +137,7 @@ export class SnatcherPresentation implements DedicatedEventPresentation {
     if (
       this.disposed
       || !this.staged
-      || (choiceId !== 'shotgun' && choiceId !== 'knife')
+      || (choiceId !== 'shotgun' && choiceId !== 'knife' && choiceId !== 'fishingNet')
     ) {
       return Promise.resolve(false);
     }
