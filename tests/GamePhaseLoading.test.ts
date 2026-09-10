@@ -22,7 +22,7 @@ function asset() { return { dispose: vi.fn(), configure: vi.fn() }; }
 function phase(): GamePhase { return { start: vi.fn(), update: vi.fn(), resize: vi.fn(), render: vi.fn(), dispose: vi.fn() }; }
 function rig(overrides: Partial<GameFactories> = {}, options: Pick<GameTestOptions, 'saveStorage'> = {}) {
   const loaders = Object.fromEntries([
-    'loadMenuFont','loadMenuModels','loadMenuSandAssets','loadShipModels','loadSurvivalModels','loadShipFurniture',
+    'loadMenuFont','loadMenuModels','loadMenuSandAssets','loadGameplayModels','loadSurvivalContent','loadShipFurniture',
     'loadSkyAssets','loadLifeboatAssets','loadShipAssets','loadPhysicsRuntime',
   ].map(key => [key, vi.fn(async () => asset())])) as unknown as PhaseResourceLoaders;
   const resources = new PhaseResources(loaders, AudioSystem.silent(), 'enabled');
@@ -36,6 +36,67 @@ function rig(overrides: Partial<GameFactories> = {}, options: Pick<GameTestOptio
 }
 afterEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); });
 describe('asynchronous phase activation', () => {
+  it('holds the loading cover and gameplay until scene preparation finishes', async () => {
+    let start!: () => void;
+    const pending = deferred<void>();
+    const ship = { ...phase(), prepare: vi.fn(() => pending.promise) };
+    const r = rig({
+      createMenu: (_context, next) => { start = next; return phase(); },
+      createScavenge: () => ship,
+    });
+    await r.game.ready;
+    start();
+    await flushPhases();
+    expect(ship.prepare).toHaveBeenCalledOnce();
+    expect(ship.start).not.toHaveBeenCalled();
+    expect(r.mount.querySelector('progress')?.value).toBe(85);
+    pending.resolve();
+    await flushPhases();
+    expect(ship.start).toHaveBeenCalledOnce();
+    expect(r.mount.querySelector('.system-screen--loading')).toBeNull();
+    r.game.dispose();
+  });
+
+  it('does not start a prepared scene after another selection replaces it', async () => {
+    let start!: () => void;
+    const pending = deferred<void>();
+    const ship = { ...phase(), prepare: () => pending.promise };
+    const r = rig({
+      createMenu: (_context, next) => { start = next; return phase(); },
+      createScavenge: () => ship,
+    });
+    await r.game.ready;
+    start();
+    await flushPhases();
+    (r.game as unknown as { enterTestEvent(id: string): void }).enterTestEvent('leak');
+    await flushPhases();
+    expect(ship.dispose).toHaveBeenCalledOnce();
+    pending.resolve();
+    await flushPhases();
+    expect(ship.start).not.toHaveBeenCalled();
+    expect(r.factories.createSurvival).toHaveBeenCalledOnce();
+    expect(r.onFatalError).not.toHaveBeenCalled();
+    r.game.dispose();
+    expect(ship.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('reports preparation failures without starting gameplay', async () => {
+    let start!: () => void;
+    const error = new Error('shader compilation');
+    const ship = { ...phase(), prepare: async () => { throw error; } };
+    const r = rig({
+      createMenu: (_context, next) => { start = next; return phase(); },
+      createScavenge: () => ship,
+    });
+    await r.game.ready;
+    start();
+    await flushPhases();
+    expect(r.onFatalError).toHaveBeenCalledExactlyOnceWith(error);
+    expect(ship.start).not.toHaveBeenCalled();
+    r.game.dispose();
+    expect(ship.dispose).toHaveBeenCalledOnce();
+  });
+
   it('requests ship once for START and keeps shared assets through survival handoff', async () => {
     let start!: () => void;
     let complete!: Parameters<GameFactories['createScavenge']>[1];
@@ -46,16 +107,17 @@ describe('asynchronous phase activation', () => {
     await r.game.ready;
     start(); start();
     await flushPhases();
-    expect(r.loaders.loadShipModels).toHaveBeenCalledOnce();
-    expect(r.loaders.loadSurvivalModels).not.toHaveBeenCalled();
+    expect(r.loaders.loadGameplayModels).toHaveBeenCalledOnce();
+    expect(r.loaders.loadSurvivalContent).toHaveBeenCalledOnce();
     complete({ savedItems: [], elapsedSeconds: 3 });
     await flushPhases();
-    expect(r.loaders.loadSurvivalModels).toHaveBeenCalledOnce();
+    expect(r.loaders.loadSurvivalContent).toHaveBeenCalledOnce();
     expect(r.loaders.loadSkyAssets).toHaveBeenCalledOnce();
     expect(r.loaders.loadLifeboatAssets).toHaveBeenCalledOnce();
-    const models = await vi.mocked(r.loaders.loadShipModels).mock.results[0]!.value;
-    expect(models.dispose).toHaveBeenCalledOnce();
+    const models = await vi.mocked(r.loaders.loadGameplayModels).mock.results[0]!.value;
+    expect(models.dispose).not.toHaveBeenCalled();
     r.game.dispose();
+    expect(models.dispose).toHaveBeenCalledOnce();
   });
   it.each(['resolve','reject'] as const)('ignores a replaced ship load that later %ss', async outcome => {
     let start!: () => void;
@@ -66,7 +128,7 @@ describe('asynchronous phase activation', () => {
     vi.mocked(r.loaders.loadShipAssets).mockReturnValue(pending.promise);
     start();
     await flushPhases();
-    expect(r.mount.querySelector('.system-screen--loading')).toBeNull();
+    expect(r.mount.querySelector('.system-screen--loading')).not.toBeNull();
     const event = EVENT_TEST_OPTIONS.find(option => option.phase !== 'ending')!;
     (r.game as unknown as { enterTestEvent(id: string): void }).enterTestEvent(event.id);
     await flushPhases();
@@ -77,8 +139,9 @@ describe('asynchronous phase activation', () => {
     await flushPhases();
     expect(r.factories.createScavenge).not.toHaveBeenCalled();
     expect(r.onFatalError).not.toHaveBeenCalled();
-    if (outcome === 'resolve') expect(ship.dispose).toHaveBeenCalledOnce();
+    if (outcome === 'resolve') expect(ship.dispose).not.toHaveBeenCalled();
     r.game.dispose();
+    if (outcome === 'resolve') expect(ship.dispose).toHaveBeenCalledOnce();
   });
   it('releases a pending ship load once when the game is disposed', async () => {
     let start!: () => void;
@@ -105,8 +168,8 @@ describe('asynchronous phase activation', () => {
     await r.game.ready;
     start(); await flushPhases();
     expect(r.onFatalError).toHaveBeenCalledExactlyOnceWith(error);
-    const models = await vi.mocked(r.loaders.loadShipModels).mock.results[0]!.value;
-    expect(models.dispose).toHaveBeenCalledOnce();
+    const models = await vi.mocked(r.loaders.loadGameplayModels).mock.results[0]!.value;
+    expect(models.dispose).not.toHaveBeenCalled();
     r.game.dispose();
     expect(models.dispose).toHaveBeenCalledOnce();
   });
@@ -166,8 +229,8 @@ describe('asynchronous phase activation', () => {
     if (route === 'continue') director.continueSavedRun();
     else director.enterTestEvent(EVENT_TEST_OPTIONS.find(option => option.phase !== 'ending')!.id);
     await flushPhases();
-    expect(r.loaders.loadSurvivalModels).toHaveBeenCalledOnce();
-    expect(r.loaders.loadShipModels).not.toHaveBeenCalled();
+    expect(r.loaders.loadSurvivalContent).toHaveBeenCalledOnce();
+    expect(r.loaders.loadGameplayModels).toHaveBeenCalledOnce();
     expect(r.loaders.loadShipAssets).not.toHaveBeenCalled();
     expect(r.loaders.loadShipFurniture).not.toHaveBeenCalled();
     expect(r.loaders.loadPhysicsRuntime).not.toHaveBeenCalled();

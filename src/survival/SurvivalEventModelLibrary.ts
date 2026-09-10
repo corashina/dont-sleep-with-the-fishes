@@ -175,6 +175,10 @@ export class SurvivalEventModelLibrary implements SurvivalEventModels {
     return clone;
   }
 
+  preparationRoots(): Iterable<Group> {
+    return this.templates.values();
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;

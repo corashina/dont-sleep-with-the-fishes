@@ -110,8 +110,6 @@ export const EVENT_ONLY_SOUND_IDS = Object.freeze([
   'checkBackAnglerfish',
 ] as const satisfies readonly SoundId[]);
 
-const eventOnlySounds = new Set<SoundId>(EVENT_ONLY_SOUND_IDS);
-
 export const INTERFACE_SOUND_IDS = ['confirm', 'denied', 'pause', 'resume', 'journal'] as const satisfies readonly SoundId[];
 export const MENU_SOUND_IDS = ['menuAmbient', ...INTERFACE_SOUND_IDS] as const;
 export const SHIP_SOUND_IDS = [
@@ -123,7 +121,7 @@ const shipOnlySounds = new Set<SoundId>([
   'woodStep', 'jump', 'shipCrash',
 ]);
 export const SURVIVAL_SOUND_IDS = Object.freeze(
-  SOUND_IDS.filter(id => !eventOnlySounds.has(id) && !shipOnlySounds.has(id)),
+  SOUND_IDS.filter(id => !shipOnlySounds.has(id)),
 );
 
 export interface AudioAssetDefinition {

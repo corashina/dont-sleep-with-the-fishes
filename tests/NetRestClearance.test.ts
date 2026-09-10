@@ -78,6 +78,22 @@ it.each([
     });
     expect(hits).toBe(0);
     expect(supplyContact).toBe(false);
+    const down = new Vector3(0, -1, 0).transformDirection(boat.matrixWorld);
+    let supportGap = Infinity;
+    let supportZ = Infinity;
+    for (let index = 0; index <= 128; index += 1) {
+      const z = -0.24 + index / 128 * 1.06;
+      ray.ray.origin.set(0, 0.09820857, z).applyMatrix4(net.matrixWorld);
+      ray.ray.direction.copy(down);
+      ray.near = 0;
+      ray.far = 1;
+      const hit = ray.intersectObjects(rails, false)[0];
+      if (hit === undefined || hit.distance >= supportGap) continue;
+      supportGap = hit.distance;
+      supportZ = z;
+    }
+    expect(supportGap).toBeLessThan(0.015);
+    expect(supportZ).toBeGreaterThan(-0.25);
   } finally {
     boat.traverse((object) => {
       if (!(object instanceof Mesh)) return;

@@ -140,13 +140,13 @@ describe('EventBundleManager', () => {
             for (const root of presentation.roots) root.root.removeFromParent();
           },
         },
-        loadDedicatedModels: vi.fn(async () => ({
+        dedicatedModels: {
           dispose: vi.fn(),
-        } as unknown as EventModelLibrary)),
-        loadFeaturedModels: vi.fn(async () => ({
+        } as unknown as EventModelLibrary,
+        featuredModels: {
           clone: () => { throw new Error('Unexpected featured model clone.'); },
           dispose: vi.fn(),
-        } as unknown as SurvivalEventModelLibrary)),
+        } as unknown as SurvivalEventModelLibrary,
       });
       const manager = new EventBundleManager(loader);
       manager.beginLoad('midnight-tour');
@@ -172,7 +172,7 @@ describe('EventBundleManager', () => {
     },
   );
 
-  it('cleans completed siblings when one event resource fails', async () => {
+  it('releases event audio but retains prepared models when presentation construction fails', async () => {
     const audioDispose = vi.fn();
     const featuredDispose = vi.fn();
     const loader = new EventBundleLoader({
@@ -183,16 +183,14 @@ describe('EventBundleManager', () => {
         })),
       },
       host: {
-        createEventPresentation: vi.fn(),
+        createEventPresentation: vi.fn(() => { throw new Error('model failed'); }),
         attach: vi.fn(),
         detach: vi.fn(),
       },
-      loadDedicatedModels: vi.fn(async () => {
-        throw new Error('model failed');
-      }),
-      loadFeaturedModels: vi.fn(async () => ({
+      dedicatedModels: {} as EventModelLibrary,
+      featuredModels: {
         dispose: featuredDispose,
-      } as unknown as SurvivalEventModelLibrary)),
+      } as unknown as SurvivalEventModelLibrary,
     });
 
     await expect(loader.load('leak')).rejects.toMatchObject({
@@ -200,7 +198,7 @@ describe('EventBundleManager', () => {
       eventId: 'leak',
     });
     expect(audioDispose).toHaveBeenCalledOnce();
-    expect(featuredDispose).toHaveBeenCalledOnce();
+    expect(featuredDispose).not.toHaveBeenCalled();
   });
 
   it('loads, activates, and releases one event bundle', async () => {
@@ -228,8 +226,6 @@ describe('EventBundleManager', () => {
     const attachmentError = new Error('attachment failed');
     const cleanupError = new Error('detach cleanup failed');
     const presentation = adapter('leak');
-    const featuredDispose = vi.fn();
-    const dedicatedDispose = vi.fn();
     const audioDispose = vi.fn();
     const host = {
       createEventPresentation: vi.fn(() => presentation),
@@ -240,8 +236,6 @@ describe('EventBundleManager', () => {
       'leak',
       host,
       presentation,
-      { dispose: featuredDispose } as unknown as SurvivalEventModelLibrary,
-      { dispose: dedicatedDispose } as unknown as EventModelLibrary,
       { sounds: [], dispose: audioDispose },
     );
     const manager = new EventBundleManager({ load: async () => eventBundle });
@@ -251,8 +245,6 @@ describe('EventBundleManager', () => {
 
     expect(host.detach).toHaveBeenCalledWith(presentation);
     expect(presentation.dispose).toHaveBeenCalledOnce();
-    expect(featuredDispose).toHaveBeenCalledOnce();
-    expect(dedicatedDispose).toHaveBeenCalledOnce();
     expect(audioDispose).toHaveBeenCalledOnce();
   });
 

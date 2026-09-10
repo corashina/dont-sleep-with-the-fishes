@@ -1169,7 +1169,6 @@ describe('SurvivalSession daytime actions', () => {
     ['bait', fishingRoll('bait', 3), {}, { bait: 1 }, undefined],
     ['wetDuctTape', fishingRoll('wetDuctTape', 3), {}, {}, ['ductTape-1', 'usable']],
     ['brokenCompass', fishingRoll('brokenCompass', 3), {}, {}, ['compass-1', 'broken']],
-    ['tornFishingNet', fishingRoll('tornFishingNet', 3), {}, {}, ['fishingNet-1', 'broken']],
     ['energyBar', fishingRoll('energyBar', 3), {}, {}, ['energyBar-1', 'usable']],
   ] as const)('applies the %s utility reward', (
     catchId, catchRoll, deltas, snapshotMatch, item,

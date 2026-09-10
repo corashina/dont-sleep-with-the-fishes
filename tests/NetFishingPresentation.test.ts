@@ -2,7 +2,6 @@ import { readFile } from 'node:fs/promises';
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial, PerspectiveCamera, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { describe, expect, it, vi } from 'vitest';
-import { FishingCatchLibrary } from '../src/survival/FishingCatchLibrary';
 import { NetFishingPresentation } from '../src/survival/NetFishingPresentation';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 import { normalizeLongestDimensionTemplate } from '../src/world/modelValidation';
@@ -20,10 +19,12 @@ describe('net animation', () => {
     camera.position.set(0, 1.38, -1.42);
     camera.lookAt(0, -0.42, -7.4);
     camera.updateMatrixWorld();
-    const prepare = vi.spyOn(FishingCatchLibrary.prototype, 'prepare').mockImplementation(async () => (
-      new Mesh(new BoxGeometry(0.5, 0.1, 0.1), new MeshStandardMaterial())
+    const prepare = vi.fn(async () => (
+      new Mesh(new BoxGeometry(0.25, 0.1, 0.1), new MeshStandardMaterial())
     ));
-    const net = new NetFishingPresentation(gltf.scene, scene, scene, (output) => { output.height = 0; });
+    const net = new NetFishingPresentation(gltf.scene, scene, scene, (output) => { output.height = 0; }, {
+      prepare, hide: vi.fn(), dispose: vi.fn(),
+    });
     const point = new Vector3();
     try {
       net.show();
@@ -50,7 +51,6 @@ describe('net animation', () => {
       expect(basket.children).toHaveLength(0);
     } finally {
       net.dispose();
-      prepare.mockRestore();
     }
     expect(scene.children).toHaveLength(0);
   });
@@ -59,8 +59,10 @@ describe('net animation', () => {
     const scene = new Group();
     let finish!: (model: Group) => void;
     const pending = new Promise<Group>((resolve) => { finish = resolve; });
-    const prepare = vi.spyOn(FishingCatchLibrary.prototype, 'prepare').mockReturnValue(pending);
-    const net = new NetFishingPresentation(new Group(), scene, scene, (output) => { output.height = 0; });
+    const prepare = vi.fn().mockReturnValue(pending);
+    const net = new NetFishingPresentation(new Group(), scene, scene, (output) => { output.height = 0; }, {
+      prepare, hide: vi.fn(), dispose: vi.fn(),
+    });
     try {
       net.show();
       const load = net.prepare('cod', { x: 0, z: -6.4 });
@@ -70,7 +72,6 @@ describe('net animation', () => {
       expect(net.root.visible).toBe(false);
     } finally {
       net.dispose();
-      prepare.mockRestore();
     }
   });
 
@@ -86,7 +87,9 @@ describe('net animation', () => {
     boat.add(storedNet);
     boat.position.set(0, 0.22, 0);
     boat.rotation.set(0.02, 0, -0.03);
-    const net = new NetFishingPresentation(new Group(), scene, boat, (output) => { output.height = 0; });
+    const net = new NetFishingPresentation(new Group(), scene, boat, (output) => { output.height = 0; }, {
+      prepare: vi.fn(async () => null), hide: vi.fn(), dispose: vi.fn(),
+    });
     const pivot = net.root.getObjectByName('fishing-net-haul-pivot')!;
     const expectStoredPose = () => {
       scene.updateMatrixWorld(true);
