@@ -36,6 +36,7 @@ import { SurvivalPhase } from './survival/SurvivalPhase';
 import { PerformanceStats } from './ui/PerformanceStats';
 import { PostProcessingConsole } from './ui/PostProcessingConsole';
 import { SettingsMenu } from './ui/SettingsMenu';
+import { createSystemScreen } from './ui/SystemScreen';
 import {
   createSystemTuningPreference,
   type SystemTuningPreference,
@@ -196,6 +197,7 @@ function createTestRenderer(): WebGLRenderer {
     setPixelRatio: () => undefined,
     setSize: () => undefined,
     render: () => undefined,
+    compileAsync: async () => undefined,
     dispose: () => undefined,
     shadowMap: { enabled: true, type: 0 },
     capabilities: { getMaxAnisotropy: () => 1 },
@@ -225,6 +227,8 @@ export class Game {
   private factories!: GameFactories;
   private activePhase: GamePhase | null = null;
   private activeLease: ResourceLease<unknown> | null = null;
+  private pendingPreparation: Promise<void> | null = null;
+  private transitionScreen: HTMLElement | null = null;
   private performanceStats: PerformanceStats | null = null;
   private settingsMenu: SettingsMenu | null = null;
   private postProcessingConsole: PostProcessingConsole | null = null;
@@ -416,9 +420,11 @@ export class Game {
       () => postProcessingConsole?.dispose(),
       () => { this.settingsMenu?.dispose(); this.settingsMenu = null; },
       () => performanceStats?.dispose(),
-      () => this.resources.dispose(),
-      () => this.sceneRenderer.dispose(),
-      () => this.renderer.dispose(),
+      () => this.clearTransitionScreen(),
+      () => {
+        if (this.pendingPreparation === null) this.disposeRenderingResources();
+        else void this.pendingPreparation.then(() => this.disposeRenderingResources());
+      },
       () => this.renderer.domElement.remove(),
     ]);
   }
@@ -473,6 +479,8 @@ export class Game {
       };
       this.activePhase = null;
       this.activeLease = null;
+      this.pendingPreparation = null;
+      this.transitionScreen = null;
       this.performanceStats = null;
       this.postProcessingConsole = null;
       const tuningState = systemTuning.get();
@@ -665,39 +673,96 @@ export class Game {
   ): Promise<void> {
     const generation = ++this.phaseGeneration;
     return Promise.resolve().then(() => {
+      if (!this.ownsGeneration(generation)) return null;
       this.settingsMenu?.close();
       this.activePhase?.setOverlayActive?.(true);
+      this.showTransitionScreen();
       return acquire();
     }).then(lease => {
+      if (lease === null) return;
       if (!this.ownsGeneration(generation)) { lease.dispose(); return; }
-      const outgoing = this.takeActivePhase();
-      let phase: GamePhase | null = null;
-      let transferred = false;
-      try {
-        // Phase objects release their clones and scopes before the backing lease.
-        outgoing?.dispose();
-        this.resetCamera();
-        phase = create(lease.assets, generation);
-        if (!this.ownsGeneration(generation)) { const stale = phase; phase = null; stale.dispose(); return; }
-        this.applyPresentationOverrides(phase);
-        if (!this.ownsGeneration(generation)) { const stale = phase; phase = null; stale.dispose(); return; }
-        this.activePhase = phase;
-        this.activeLease = lease;
-        transferred = true;
-        this.synchronizePresentationControls();
-        phase.resize(window.innerWidth, window.innerHeight);
-        if (this.started && this.ownsGeneration(generation)) phase.start();
-      } catch (error) {
-        if (!transferred) {
-          try { phase?.dispose(); } catch { /* Keep the constructor error. */ }
-        }
-        throw error;
-      } finally {
-        if (!transferred) lease.dispose();
-      }
+      const previous = this.pendingPreparation;
+      const preparation = this.preparePhase(lease, create, generation, previous);
+      const settled = preparation.then(() => undefined, () => undefined);
+      this.pendingPreparation = settled;
+      void settled.then(() => {
+        if (this.pendingPreparation === settled) this.pendingPreparation = null;
+      });
+      return preparation;
     }).catch(error => {
       if (this.ownsGeneration(generation)) this.reportFatalError(error);
+    }).finally(() => {
+      if (this.ownsGeneration(generation)) this.clearTransitionScreen();
     });
+  }
+
+  private async preparePhase<T>(
+    lease: ResourceLease<T>,
+    create: (assets: T, generation: number) => GamePhase,
+    generation: number,
+    previous: Promise<void> | null,
+  ): Promise<void> {
+    if (previous !== null) await previous;
+    if (!this.ownsGeneration(generation)) { lease.dispose(); return; }
+    const outgoing = this.takeActivePhase();
+    let phase: GamePhase | null = null;
+    let transferred = false;
+    try {
+      // Phase objects release their clones and scopes before the backing lease.
+      outgoing?.dispose();
+      this.resetCamera();
+      phase = create(lease.assets, generation);
+      await this.preparePhasePresentation(phase, generation);
+      if (!this.ownsGeneration(generation)) { const stale = phase; phase = null; stale.dispose(); return; }
+      this.activePhase = phase;
+      this.activeLease = lease;
+      transferred = true;
+      this.synchronizePresentationControls();
+      if (this.started && this.ownsGeneration(generation)) phase.start();
+    } catch (error) {
+      if (!transferred) {
+        try { phase?.dispose(); } catch { /* Keep the preparation error. */ }
+      }
+      throw error;
+    } finally {
+      if (!transferred) lease.dispose();
+    }
+  }
+
+  private async preparePhasePresentation(phase: GamePhase, generation: number): Promise<void> {
+    if (!this.ownsGeneration(generation)) return;
+    this.applyPresentationOverrides(phase);
+    if (!this.ownsGeneration(generation)) return;
+    phase.resize(window.innerWidth, window.innerHeight);
+    if (phase.prepare === undefined) return;
+    await phase.prepare();
+    // A resize can arrive while shader compilation runs.
+    if (this.ownsGeneration(generation)) phase.resize(window.innerWidth, window.innerHeight);
+  }
+
+  private showTransitionScreen(): void {
+    if (this.transitionScreen !== null) return;
+    // The launcher owns the first loading screen until Game.ready settles.
+    if (this.context.mount.querySelector('.system-screen--loading') !== null) return;
+    const screen = createSystemScreen({ kind: 'loading' });
+    const progress = screen.querySelector('progress');
+    progress?.removeAttribute('value');
+    progress?.removeAttribute('aria-valuetext');
+    this.context.mount.append(screen);
+    this.transitionScreen = screen;
+  }
+
+  private clearTransitionScreen(): void {
+    this.transitionScreen?.remove();
+    this.transitionScreen = null;
+  }
+
+  private disposeRenderingResources(): void {
+    runCleanupSteps([
+      () => this.resources.dispose(),
+      () => this.sceneRenderer.dispose(),
+      () => this.renderer.dispose(),
+    ]);
   }
 
   private reportFatalError(error: unknown): void {

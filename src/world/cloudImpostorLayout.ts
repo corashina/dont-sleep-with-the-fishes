@@ -10,12 +10,16 @@ export const CLOUD_RINGS = [
 
 export const CLOUD_GROUP_COUNT = CLOUD_RINGS.reduce((count, ring) => count + ring.count, 0);
 export const CLOUD_RING_PHASE = 0.91;
+export const CLOUD_QUERY_COUNT = CLOUD_RINGS.reduce(
+  (count, ring, index) => count + (index < 2 ? ring.count : 5), 0,
+);
 
 export interface CloudImpostorLayout {
   centers: Vector4[];
   scales: Vector4[];
   blockers: Vector4[];
   bounds: Float32Array;
+  queryRings: Vector4[];
 }
 
 const variation = (index: number, salt: number): number => {
@@ -27,7 +31,15 @@ const variation = (index: number, salt: number): number => {
 export function createCloudImpostorLayout(): CloudImpostorLayout {
   const centers: Vector4[] = [];
   const scales: Vector4[] = [];
+  const queryRings: Vector4[] = [];
   for (const [ringIndex, ring] of CLOUD_RINGS.entries()) {
+    // Keep the exact decimal constants used by the original generated shader.
+    queryRings.push(new Vector4(
+      centers.length,
+      ring.count,
+      Number((ringIndex * CLOUD_RING_PHASE).toFixed(4)),
+      Number((ring.count / (Math.PI * 2)).toFixed(8)),
+    ));
     for (let slot = 0; slot < ring.count; slot++) {
       const index = centers.length;
       const angle = (slot + variation(index, 1) * 0.55) / ring.count * Math.PI * 2
@@ -53,6 +65,7 @@ export function createCloudImpostorLayout(): CloudImpostorLayout {
     scales,
     blockers: centers.map(() => new Vector4(-1, -1, -1, -1)),
     bounds: new Float32Array(CLOUD_GROUP_COUNT),
+    queryRings,
   };
 }
 
