@@ -1,4 +1,5 @@
 import { DriftingDebris } from './DriftingDebris';
+import { SceneFade } from '../rendering/SceneFade';
 import {
   Box3,
   ExtrudeGeometry,
@@ -78,7 +79,6 @@ const LIFEBOAT_FLOOR_OUTLINE = Object.freeze([
   Object.freeze({ x: -0.88, z: -0.6 }),
   Object.freeze({ x: -0.82, z: -1.35 }),
 ]);
-const RECEDE_OFFSET = Object.freeze({ x: 5.2, y: -0.28, z: -2 });
 const RETRIEVE_DURATIONS: Readonly<Record<DriftingCargoKind, number>> =
   Object.freeze({ barrel: 1.35, chest: 1.55, lifeboat: 1.8, container: 1.8, debris: 2 });
 
@@ -148,8 +148,7 @@ export class DriftingItemPresentation {
   private readonly quaternionScratch = new Quaternion();
   private readonly targetQuaternionScratch = new Quaternion();
   private readonly animationStartQuaternion = new Quaternion();
-  private readonly lifeboatExitStartPosition = new Vector3();
-  private readonly lifeboatExitStartQuaternion = new Quaternion();
+  private readonly lifeboatFade = new SceneFade();
   private animationStartScale = 1;
   private readonly waveSample: WaveSample = {
     height: 0,
@@ -270,10 +269,9 @@ export class DriftingItemPresentation {
     if (this.disposed || variant === null) return Promise.resolve();
     const target = variant === 'lifeboat' ? this.lifeboatCooler : this.roots[variant];
     if (variant === 'lifeboat') {
-      this.lifeboatExitStartPosition.copy(this.roots.lifeboat.position);
-      this.lifeboatExitStartQuaternion.copy(this.roots.lifeboat.quaternion);
       this.root.updateMatrixWorld(true);
       this.root.attach(this.lifeboatCooler);
+      this.lifeboatFade.begin([this.roots.lifeboat]);
     }
     this.animationStartPosition.copy(target.position);
     this.animationStartQuaternion.copy(target.quaternion);
@@ -337,7 +335,7 @@ export class DriftingItemPresentation {
 
     animation.elapsed = Math.min(animation.duration, animation.elapsed + Math.max(0, delta));
     const progress = animation.duration <= 0 ? 1 : animation.elapsed / animation.duration;
-    if (variant === 'debris') this.applyFloatingPose(variant, time);
+    if (variant === 'debris' || variant === 'lifeboat') this.applyFloatingPose(variant, time);
     this.applyRetrievePose(variant, progress);
     if (progress < 1) return;
 
@@ -360,6 +358,7 @@ export class DriftingItemPresentation {
 
   dispose(): void {
     if (this.disposed) return;
+    this.lifeboatFade.reset();
     this.cancelActiveAnimation();
     this.disposed = true;
     this.root.removeFromParent();
@@ -419,26 +418,9 @@ export class DriftingItemPresentation {
       this.animationStartScale + (this.targetScale(variant) - this.animationStartScale) * travel,
     );
     if (variant === 'lifeboat') {
-      const recede = smoothstep(Math.max(0, (progress - 0.38) / 0.62));
-      this.applyLifeboatExit(recede);
+      const fade = smoothstep(Math.max(0, (progress - 0.38) / 0.62));
+      this.lifeboatFade.apply(1 - fade);
     }
-  }
-
-  private applyLifeboatExit(progress: number): void {
-    this.targetPositionScratch.copy(this.basePositions.lifeboat);
-    this.targetPositionScratch.x += RECEDE_OFFSET.x * this.side;
-    this.targetPositionScratch.y += RECEDE_OFFSET.y;
-    this.targetPositionScratch.z += RECEDE_OFFSET.z;
-    this.roots.lifeboat.position.lerpVectors(
-      this.lifeboatExitStartPosition,
-      this.targetPositionScratch,
-      progress,
-    );
-    this.roots.lifeboat.quaternion.slerpQuaternions(
-      this.lifeboatExitStartQuaternion,
-      this.baseQuaternions.lifeboat,
-      progress,
-    );
   }
 
   private finishRetrieve(variant: DriftingCargoKind): void {
@@ -479,6 +461,7 @@ export class DriftingItemPresentation {
   }
 
   private resetAll(): void {
+    this.lifeboatFade.reset();
     this.resetCooler();
     this.resetPose('barrel');
     this.resetPose('chest');

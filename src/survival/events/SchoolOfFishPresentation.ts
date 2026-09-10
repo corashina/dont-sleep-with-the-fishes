@@ -12,6 +12,7 @@ import {
 import type { ItemInstanceId } from '../../game/ItemState';
 import { createWaveSample as waveSample, type WaveSample } from '../../ocean/WaveField';
 import { setFlatShading } from '../../rendering/modelPresentation';
+import { SceneFade } from '../../rendering/SceneFade';
 import {
   disposeResourceSets,
   runCleanupSteps,
@@ -73,7 +74,6 @@ const DEFAULT_VARIANT: SchoolVariant = {
   orbitRadiusZ: 1,
   depth: 0.3,
   approachScale: 0.6,
-  scatterScale: 0.8,
   speed: 1,
   bank: 0,
   flashOffset: 0,
@@ -111,6 +111,8 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
   readonly itemAimTarget = new Group();
 
   private readonly fishActors: FishActor[] = [];
+  private readonly fishFade = new SceneFade();
+  private sampleTime = 0;
   private readonly surfaceFins: Mesh[] = [];
   private readonly surfaceFlashes: Mesh[] = [];
   private readonly splashes: Mesh[] = [];
@@ -263,6 +265,8 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
   stage(context: EventSceneContext): void {
     if (this.disposed || context.eventId !== 'school-of-fish') return;
     this.clear();
+    this.sampleTime = 0;
+    this.fishFade.begin(this.fishActors.map(({ root }) => root));
     const variants = createSchoolVariants(MAX_FISH, context.variantSeed);
     this.activeFish = activeFishCount(context.variantSeed);
     for (let index = 0; index < this.fishActors.length; index += 1) {
@@ -274,11 +278,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     this.worldRoot.visible = true;
     this.boatRoot.visible = true;
     sampleSchoolReveal(0, this.sample);
-    for (let index = 0; index < this.fishActors.length; index += 1) {
-      const fish = this.fishActors[index]!;
-      fish.root.visible = index < this.activeFish;
-      fish.root.scale.setScalar(0.01);
-    }
+    this.applySample(this.sampleTime);
   }
 
   reveal(): Promise<void> {
@@ -286,7 +286,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     this.animation.cancel();
     this.activeChoiceId = null;
     sampleSchoolReveal(0, this.sample);
-    this.applySample(0);
+    this.applySample(this.sampleTime);
     return this.animation.start('reveal', SCHOOL_REVEAL_DURATION);
   }
 
@@ -305,7 +305,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     this.animation.cancel();
     this.activeChoiceId = choiceId;
     sampleSchoolItemUse(choiceId, 0, this.sample);
-    this.applySample(0);
+    this.applySample(this.sampleTime);
     return this.animation.start('item', schoolItemDuration(choiceId), {
       complete: true,
       cancel: false,
@@ -324,12 +324,13 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     this.worldRoot.userData.foodDelta = this.reactionState.foodDelta;
     this.catchActor.userData.foodDelta = this.reactionState.foodDelta;
     sampleSchoolReaction(this.reactionState, 0, this.sample);
-    this.applySample(0);
+    this.applySample(this.sampleTime);
     return this.animation.start('reaction', SCHOOL_REACTION_DURATION);
   }
 
   update(time: number, delta: number): void {
     if (this.disposed || !this.staged) return;
+    this.sampleTime = time;
     this.animation.update(time, Number.isFinite(delta) ? delta : 0);
     this.applySample(time);
   }
@@ -337,7 +338,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
   settleForVisibilityChange(): void {
     if (this.disposed) return;
     this.animation.settle();
-    this.applySample(0);
+    this.applySample(this.sampleTime);
   }
 
   skip(): void {
@@ -346,6 +347,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
 
   clear(): void {
     if (this.disposed) return;
+    this.fishFade.reset();
     this.animation.cancel();
     this.activeChoiceId = null;
     this.staged = false;
@@ -354,6 +356,7 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
 
   dispose(): void {
     if (this.disposed) return;
+    this.fishFade.reset();
     this.disposed = true;
     this.animation.cancel();
     this.activeChoiceId = null;
@@ -384,9 +387,9 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
     }
   }
 
-  private applySample(time: number): void {
-    const showCatch = this.sample.catchStrength > 0.008
-      && this.sample.foodDelta > 0;
+  private applyFish(time: number, showCatch: boolean): void {
+    this.fishFade.apply(this.sample.schoolAlpha);
+    this.finMaterial.opacity = 0.46 * this.sample.schoolAlpha;
     for (let index = 0; index < this.fishActors.length; index += 1) {
       const fish = this.fishActors[index]!;
       const variant = fish.variant;
@@ -405,9 +408,15 @@ export class SchoolOfFishPresentation implements DedicatedEventPresentation {
       );
       const bodyScale = pose.scale * 1.15;
       fish.root.scale.setScalar(bodyScale);
-      fish.root.visible = index < this.activeFish && (!showCatch || index !== 0);
+      fish.root.visible = this.sample.schoolAlpha > 0
+        && index < this.activeFish && (!showCatch || index !== 0);
     }
+  }
 
+  private applySample(time: number): void {
+    const showCatch = this.sample.catchStrength > 0.008
+      && this.sample.foodDelta > 0;
+    this.applyFish(time, showCatch);
     for (let index = 0; index < this.surfaceFins.length; index += 1) {
       const fin = this.surfaceFins[index]!;
       const fishIndex = (index * 3 + 1) % this.activeFish;

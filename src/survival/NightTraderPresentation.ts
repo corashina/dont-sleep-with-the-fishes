@@ -43,6 +43,7 @@ import type {
 import { eventSideFromSeed, type EventSide } from './eventVariant';
 import { TimedPresentationAnimation } from './TimedPresentationAnimation';
 import { NightTraderSign } from './NightTraderSign';
+import { SceneFade } from '../rendering/SceneFade';
 import { nightTraderOffers, nightTraderTrade } from './nightTraderTrades';
 
 type NightTraderAnimationKind =
@@ -58,7 +59,6 @@ const REFUSE_CHOICE_DURATION = 0.46;
 const RESULT_DURATION = 1.05;
 const DEPARTURE_DURATION = 1.3;
 const BOAT_BASE = new Vector3(4.9, 0.08, -7.1);
-const BOAT_AWAY = new Vector3(10.8, -0.2, -17.2);
 const ROWBOAT_FLOOR_Y = -0.24;
 const TRADER_POSITION = new Vector3(0.35, ROWBOAT_FLOOR_Y, -0.1);
 const CASE_TARGET = new Vector3(4.37, 1.02, -6.38);
@@ -114,7 +114,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
   private readonly exchangeGeometries = new Set<BufferGeometry>();
   private readonly exchangeMaterials = new Set<Material>();
   private readonly boatBase = BOAT_BASE.clone();
-  private readonly boatAway = BOAT_AWAY.clone();
+  private readonly departureFade = new SceneFade();
   private readonly caseTarget = CASE_TARGET.clone();
   private readonly paymentStart = PAYMENT_START.clone();
   private readonly rewardEnd = REWARD_END.clone();
@@ -225,6 +225,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
 
   stage(variantSeed = 0): void {
     if (this.disposed) return;
+    this.departureFade.reset();
     this.side = eventSideFromSeed(variantSeed);
     this.sign.setOffers(nightTraderOffers(variantSeed));
     this.applySideLayout();
@@ -293,6 +294,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
       }
       case 'trader-refuse':
         this.hidePayment();
+        this.departureFade.begin([this.vessel]);
         this.root.userData.state = 'departing';
         return this.startAnimation('result-refuse', DEPARTURE_DURATION);
       default:
@@ -325,6 +327,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
 
   dispose(): void {
     if (this.disposed) return;
+    this.departureFade.reset();
     this.animation.cancel();
     this.dependencies.supplyDisplay.releaseEventActor();
     this.dependencies.supplyDisplay.clearEventPose();
@@ -462,15 +465,11 @@ export class NightTraderPresentation implements FocusedEventPresentation {
   }
 
   private applyRefuseResult(progress: number): void {
-    const travel = smoothstep(progress);
-    this.boatMotionBase.lerpVectors(this.boatBase, this.boatAway, travel);
+    this.departureFade.apply(1 - smoothstep(progress));
     this.mist.visible = progress > 0.32;
     this.mistMaterial.opacity = Math.sin(
       smoothstep((progress - 0.32) / 0.68) * Math.PI,
     ) * 0.34;
-    this.lanternLight.intensity = 5.2 * (1 - smoothstep(
-      (progress - 0.52) / 0.48,
-    ));
     if (progress >= 1) {
       this.vessel.visible = false;
       this.lantern.visible = false;
@@ -687,6 +686,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
   }
 
   private resetStaticActors(): void {
+    this.departureFade.reset();
     this.vessel.visible = true;
     this.rowboat.visible = false;
     this.vessel.position.copy(this.boatBase);
@@ -705,8 +705,6 @@ export class NightTraderPresentation implements FocusedEventPresentation {
   private applySideLayout(): void {
     this.boatBase.copy(BOAT_BASE);
     this.boatBase.x *= this.side;
-    this.boatAway.copy(BOAT_AWAY);
-    this.boatAway.x *= this.side;
     this.caseTarget.copy(CASE_TARGET);
     this.caseTarget.x *= this.side;
     this.handoverTarget.position.copy(this.caseTarget);
