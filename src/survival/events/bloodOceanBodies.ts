@@ -10,7 +10,7 @@ export interface BloodOceanBody {
   readonly head: Group;
 }
 
-/** Shared geometry and materials for five worn, clothed sailors. */
+/** Shared geometry and materials for worn, clothed sailors. */
 export class BloodOceanBodies {
   private readonly geometries = new Set<BufferGeometry>();
   private readonly materials = new Set<MeshStandardMaterial>();
@@ -74,7 +74,8 @@ export class BloodOceanBodies {
     const figure = new Group();
     figure.rotation.x = -Math.PI / 2;
     root.add(figure);
-    const coat = this.coats[index]!;
+    const variant = index % this.coats.length;
+    const coat = this.coats[variant]!;
     this.part(figure, 'torn-coat', this.coat, coat, 0, 0, 0, 1, 1, 1);
     this.part(figure, 'left-lapel', this.lapel, this.seams, -0.16, 0.52, 0.14, 1, 1, 1);
     this.part(figure, 'right-lapel', this.lapel, coat, 0.16, 0.52, 0.15, -1, 1, 1);
@@ -87,7 +88,7 @@ export class BloodOceanBodies {
     for (const side of [-1, 1]) {
       const arm = new Group();
       arm.position.set(side * 0.26, 0.38, 0);
-      arm.rotation.z = side * (0.2 + index * 0.045);
+      arm.rotation.z = side * (0.2 + variant * 0.045);
       arm.rotation.x = side * 0.14;
       figure.add(arm);
       this.part(arm, 'sleeve', this.limb, coat, 0, -0.22, 0, 0.115, 0.48, 0.105);
@@ -100,7 +101,7 @@ export class BloodOceanBodies {
       }
       const leg = new Group();
       leg.position.set(side * 0.14, -0.35, -0.015);
-      leg.rotation.z = side * (0.08 + index * 0.025);
+      leg.rotation.z = side * (0.08 + variant * 0.025);
       figure.add(leg);
       this.part(leg, 'trouser-leg', this.limb, coat, 0, -0.28, 0, 0.115, 0.65, 0.105);
       this.part(leg, 'boot', this.box, this.boots, 0, -0.64, 0.035, 0.17, 0.2, 0.27);

@@ -124,15 +124,15 @@ describe('Ocean of Blood presentation', () => {
     event.dispose();
   });
 
-  it('reveals five floating bodies, aims at the tin, and returns a captured tin with the net', async () => {
+  it('reveals twelve floating bodies, aims at the tin, and returns a captured tin with the net', async () => {
     const { event, intensity, sample } = presentation();
     const reveal = event.reveal();
     event.update(9, BLOOD_OCEAN_REVEAL_SECONDS);
     await reveal;
     expect(intensity).toHaveBeenLastCalledWith(1);
     expect(event.worldRoot.visible).toBe(true);
-    expect(event.worldRoot.children.filter(child => child.name.startsWith('blood-ocean-body-'))).toHaveLength(5);
-    expect(sample).toHaveBeenCalledTimes(10);
+    expect(event.worldRoot.children.filter(child => child.name.startsWith('blood-ocean-body-'))).toHaveLength(12);
+    expect(sample).toHaveBeenCalledTimes(24);
     const tin = event.worldRoot.getObjectByName('blood-ocean-sealed-tin')!;
     expect(event.itemAimTarget.position.distanceTo(tin.getWorldPosition(new Vector3()))).toBeLessThan(0.001);
     const net = new Group();
@@ -145,6 +145,27 @@ describe('Ocean of Blood presentation', () => {
     expect(tin.visible).toBe(false);
     event.dispose();
     expect(intensity).toHaveBeenLastCalledWith(0);
+  });
+
+  it('keeps distant bodies apart on both sides of the view', async () => {
+    const { event } = presentation();
+    const reveal = event.reveal();
+    event.settleForVisibilityChange();
+    await reveal;
+    const bodies = event.worldRoot.children.filter(child => child.name.startsWith('blood-ocean-body-'));
+    const distant = bodies.slice(1);
+    expect(distant.filter(body => body.position.x < -3)).toHaveLength(5);
+    expect(distant.filter(body => body.position.x > 3)).toHaveLength(5);
+    expect(distant.every(body => body.position.z <= -8)).toBe(true);
+    for (let index = 0; index < bodies.length; index += 1) {
+      for (const other of bodies.slice(index + 1)) {
+        expect(bodies[index]!.position.distanceTo(other.position)).toBeGreaterThan(4);
+      }
+    }
+    const coats = bodies.map(body => body.getObjectByName('torn-coat') as Mesh);
+    expect(new Set(coats.map(coat => coat.material)).size).toBe(5);
+    expect(new Set(coats.map(coat => coat.geometry)).size).toBe(1);
+    event.dispose();
   });
 
   it('settles reveal, clears pending actions, and disposes geometry once', async () => {
@@ -191,7 +212,10 @@ describe('Ocean of Blood presentation', () => {
       sky.setBloodOceanIntensity(1);
       sky.update(2, state, camera);
       expect(sky.palette.horizonColor.r).toBeGreaterThan(sky.palette.horizonColor.b);
-      expect(sky.material.uniforms.uStarVisibility!.value).toBe(0);
+      expect(sky.material.uniforms.uStarVisibility!.value).toBeGreaterThan(0);
+      expect(sky.palette.cloudCoverage).toBe(0);
+      expect(sky.palette.moonVisibility).toBe(0);
+      expect(sky.palette.haze).toBeCloseTo(0.12);
       expect(sky.material.uniforms.uBloodOceanIntensity!.value).toBe(1);
       const next = { ...state, weather: 'calm' as const };
       sky.update(2, next, camera);

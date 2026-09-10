@@ -14,8 +14,11 @@ import { BloodOceanBodies } from './bloodOceanBodies';
 
 export const BLOOD_OCEAN_REVEAL_SECONDS = 9;
 const PLACEMENTS = [
-  [3.1, -3.2, 0.55], [-3.8, -5.8, -0.9], [2.1, -7.4, 0.3],
-  [-5.8, -10.2, 1.1], [6.6, -13.8, -0.5],
+  [3.1, -3.2, 0.55],
+  [-5.5, -8, -0.9], [-8, -14, 0.35], [-13, -19, 1.1],
+  [-10, -26, -0.4], [-19, -32, 0.7],
+  [7, -10, -0.5], [11, -16, 1.25], [9, -23, -0.75],
+  [18, -28, 0.2], [16, -37, -1.1], [-1, -31, 0.3],
 ] as const;
 const FACE_FORWARD = new Vector3(0, 0, 1);
 
@@ -140,7 +143,7 @@ export class OceanOfBloodPresentation implements DedicatedEventPresentation {
       const body = this.bodies[index]!;
       const drift = Math.sin(time * 0.13 + this.driftPhase + index * 1.9) * 0.13;
       const x = body.x * (1 + (1 - arrival) * 0.55) * (1 - gather * 0.15) + drift;
-      const z = body.z - (1 - arrival) * (index === 0 ? 2.5 : 5) + gather * (index + 1) * 0.36;
+      const z = body.z - (1 - arrival) * (index === 0 ? 2.5 : 5) + gather * Math.min(2, Math.abs(body.z) * 0.1);
       this.environment.sampleWorldWaveInto(this.wave, time, x, z, amplitude);
       body.root.position.set(x, this.wave.height - 0.055 - (1 - arrival) * 0.65 - sinking * 2.3, z);
       body.root.rotation.set(
