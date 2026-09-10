@@ -1,3 +1,4 @@
+import { AssetTextureLoader } from '../world/AssetLoaders';
 /// <reference types="vite/client" />
 
 import {
@@ -7,7 +8,6 @@ import {
   RepeatWrapping,
   SRGBColorSpace,
   Texture,
-  TextureLoader,
 } from 'three';
 import darkWoodColorUrl from '../assets/ship/dark-wood-color.webp';
 import darkWoodNormalUrl from '../assets/ship/dark-wood-normal.webp';
@@ -39,7 +39,7 @@ export class ShipAssets {
     readonly roomWallNormal: Texture,
   ) {}
 
-  static async load(loader: ShipTextureLoader = new TextureLoader()): Promise<ShipAssets> {
+  static async load(loader: ShipTextureLoader = new AssetTextureLoader()): Promise<ShipAssets> {
     const results = await Promise.allSettled([
       loader.loadAsync(darkWoodColorUrl),
       loader.loadAsync(darkWoodRoughnessUrl),

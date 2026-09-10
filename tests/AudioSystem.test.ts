@@ -180,7 +180,7 @@ describe('AudioSystem', () => {
       destination: {}, currentTime: 0, state: 'running', close: async () => undefined,
       decodeAudioData: async () => ({ duration: 1 }),
     };
-    const fetchAudio = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(0) }));
+    const fetchAudio = vi.fn(async () => new Response(new ArrayBuffer(0)));
     const backend = new WebAudioBackend(context as unknown as AudioContext, fetchAudio as unknown as typeof fetch);
     const system = AudioSystem.forTest(backend);
     const menu = await system.acquirePhaseAudio(MENU_SOUND_IDS);

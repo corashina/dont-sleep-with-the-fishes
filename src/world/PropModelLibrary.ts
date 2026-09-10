@@ -6,7 +6,7 @@ import {
   Mesh,
   Texture,
 } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { AssetModelLoader } from '../world/AssetLoaders';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import { ITEM_IDS, type ItemId, type ItemInstance } from '../game/ItemState';
 import {
@@ -88,7 +88,7 @@ function modelValidationError(
 }
 
 class GltfItemModelLoader implements ItemModelLoader {
-  private readonly loader = new GLTFLoader();
+  private readonly loader = new AssetModelLoader();
 
   async load(url: string): Promise<LoadedItemModel> {
     const gltf = await this.loader.loadAsync(url);

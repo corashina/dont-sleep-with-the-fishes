@@ -1,3 +1,4 @@
+import { AssetTextureLoader } from '../world/AssetLoaders';
 /// <reference types="vite/client" />
 
 import {
@@ -6,7 +7,6 @@ import {
   RepeatWrapping,
   SRGBColorSpace,
   Texture,
-  TextureLoader,
 } from 'three';
 import smoothSandUrl from '../assets/menu-sand/aerial-beach-01-diffuse.jpg';
 
@@ -27,7 +27,7 @@ export class MenuSandAssets {
   private constructor(readonly smooth: Texture) {}
 
   static async load(
-    loader: MenuSandTextureLoader = new TextureLoader(),
+    loader: MenuSandTextureLoader = new AssetTextureLoader(),
   ): Promise<MenuSandAssets> {
     try {
       return new MenuSandAssets(await loader.loadAsync(smoothSandUrl));

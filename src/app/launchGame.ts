@@ -6,6 +6,7 @@ import {
 import { ITEM_DEFINITIONS } from '../game/ItemState';
 import {
   createSystemScreen,
+  observeSystemScreenDownloads,
   updateSystemScreenProgress,
   type SystemScreenDescription,
 } from '../ui/SystemScreen';
@@ -260,6 +261,7 @@ export function launchGame(
     return { completion: Promise.resolve(null), cancel: () => undefined };
   }
   const loading = renderLoading(mount);
+  const stopDownloads = observeSystemScreenDownloads(loading);
   const invalid = (): boolean => cancelled || !mount.isConnected;
   const completion = (async (): Promise<Game | null> => {
     try {
@@ -282,6 +284,7 @@ export function launchGame(
       if (!invalid()) renderPreloadFailure(mount, error);
       return null;
     } finally {
+      stopDownloads();
       loading.remove();
     }
   })();
@@ -290,6 +293,7 @@ export function launchGame(
     cancel(): void {
       if (cancelled) return;
       cancelled = true;
+      stopDownloads();
       loading.remove();
       disposeCurrentOwnership();
     },
