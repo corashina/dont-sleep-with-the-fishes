@@ -15,6 +15,7 @@ import {
   LIFEBOAT_STARBOARD_EDGE_SHELF_SURFACE_Y,
   LIFEBOAT_FLOOR_SURFACE_Y,
   LIFEBOAT_GUNWALE_SURFACE_Y,
+  LIFEBOAT_PLAYER_BENCH_Z,
 } from './Lifeboat';
 import {
   COMPASS_CASE_SUPPORT_POINT,
@@ -119,20 +120,20 @@ const BOAT_STORAGE_SLOTS = {
     restingSlot('shelf', 'baitTin', -0.255, -1.660, -0.10, 0.375),
     restingSlot('shelf', 'baitTin', 0.255, -1.660, 0.12, 0.375),
   ],
-  ductTape: [restingSlot('shelf', 'ductTape', -0.55, -1.65, 0.05, 0.5, Math.PI / 2)],
+  ductTape: [restingSlot('shelf', 'ductTape', -0.48, LIFEBOAT_PLAYER_BENCH_Z - 0.05, 0.05, 0.5, Math.PI / 2)],
   compass: [restingSlot(
     'shelf',
     'compass',
-    0.78,
+    -0.60,
     -1.62,
     COMPASS_REST_ROTATION[1],
     0.5,
     COMPASS_REST_ROTATION[0],
     COMPASS_REST_ROTATION[2],
   )],
-  map: [restingSlot('shelf', 'map', 0, 0.65, 0)],
+  map: [restingSlot('shelf', 'map', 0, LIFEBOAT_PLAYER_BENCH_Z - 0.13, 0)],
   medicalKit: [restingSlot('floor', 'medicalKit', -0.50, -1.27, 0.10)],
-  spyglass: [restingSlot('floor', 'spyglass', -0.96, -1.15, Math.PI + 0.14)],
+  spyglass: [restingSlot('shelf', 'spyglass', 0.502, -1.64, Math.PI)],
   // Support the shaft on the rim, with the basket hanging outside the boat.
   fishingNet: [{
     surface: 'gunwale',
@@ -140,7 +141,7 @@ const BOAT_STORAGE_SLOTS = {
     rotation: [68 * Math.PI / 180, 42 * Math.PI / 180, -1.02758174],
     scale: 1,
   }],
-  knife: [restingSlot('floor', 'knife', 0.25, -0.55, 0, 0.5, Math.PI / 2)],
+  knife: [restingSlot('shelf', 'knife', 1.05, -1.62, 0, 0.5, Math.PI / 2)],
   bucket: [restingSlot('floor', 'bucket', 1.03, -1.00, -0.12)],
   flareGun: [restingSlot(
     'edgeShelf',
@@ -156,10 +157,16 @@ const BOAT_STORAGE_SLOTS = {
   anchor: [restingSlot('floor', 'anchor', 1.39, -0.50, 0.30, 0.5, 0, -0.20)],
   radio: [restingSlot('edgeShelf', 'radio', 1.35, -0.34, Math.PI * 1.5)],
   umbrella: [restingSlot('floor', 'umbrella', 0.55, -0.90, -Math.PI / 2, 0.5, 0, -Math.PI / 4)],
-  swimRing: [restingSlot('floor', 'swimRing', -1.36, -0.52, -0.08, 0.5, 0, -0.95)],
-  flashlight: [restingSlot('shelf', 'flashlight', 1.05, -1.62, -Math.PI / 2)],
+  // Mesh contact points keep the ring on a floorboard, leaning against the bench rail.
+  swimRing: [{
+    surface: 'floor',
+    position: [-1, LIFEBOAT_FLOOR_SURFACE_Y + 0.16600378, -1.2717],
+    rotation: [1.22, 0, 0],
+    scale: 0.5,
+  }],
+  flashlight: [restingSlot('shelf', 'flashlight', -1.03, -1.6, -Math.PI / 2)],
   shotgun: [restingSlot('floor', 'shotgun', -1.43, -1.16, 0.20, 0.5, Math.PI / 2)],
-  energyBar: [restingSlot('shelf', 'energyBar', 0.45, -1.64, Math.PI)],
+  energyBar: [restingSlot('shelf', 'energyBar', 0.48, LIFEBOAT_PLAYER_BENCH_Z - 0.05, Math.PI)],
   carlitos: [
     restingSlot('gunwale', 'carlitos', 1.58, -1.75, Math.PI, 0.68),
   ],

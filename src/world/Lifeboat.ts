@@ -16,6 +16,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { createLifeboatRailGeometry, mapLifeboatWoodGrain } from './LifeboatGeometry';
 import { mergeLifeboatFastenings } from './LifeboatFastenings';
 import type { LifeboatAssets } from './LifeboatAssets';
+import type { WaterExclusionLongitudinalProfile } from '../ocean/WaterExclusion';
 import {
   createLifeboatMaterials,
   type LifeboatMaterials,
@@ -32,6 +33,7 @@ export interface LifeboatBuild {
     readonly halfLength: number;
     readonly taperStart: number;
     readonly minimumLocalY: number;
+    readonly longitudinalProfile: WaterExclusionLongitudinalProfile;
   };
 }
 
@@ -41,10 +43,10 @@ const HULL_STATIONS = [
   { z: -2.08, halfWidth: 1.48 },
   { z: -1.12, halfWidth: 1.63 },
   { z: 0.00, halfWidth: 1.63 },
-  { z: 1.18, halfWidth: 1.60 },
-  { z: 2.20, halfWidth: 1.28 },
-  { z: 2.72, halfWidth: 0.72 },
-  { z: 3.00, halfWidth: 0.34 },
+  { z: 0.58, halfWidth: 1.60 },
+  { z: 1.60, halfWidth: 1.28 },
+  { z: 2.12, halfWidth: 0.72 },
+  { z: 2.40, halfWidth: 0.34 },
 ] as const;
 
 const FLOOR_EDGE_INSET = 0.06;
@@ -61,13 +63,13 @@ export const LIFEBOAT_FLOOR_RIB_CENTERS_Z = Object.freeze([
   -2.18,
   -1.45,
   -0.68,
-  0.12,
-  0.92,
-  1.72,
-  2.30,
+  0.32,
+  1.12,
+  1.70,
 ]);
 const DISPLAY_BENCH_Z = -1.58;
-export const LIFEBOAT_VISIBLE_STERN_BENCH_Z = 1.48;
+export const LIFEBOAT_PLAYER_BENCH_Z = 0.18;
+export const LIFEBOAT_VISIBLE_STERN_BENCH_Z = 0.88;
 
 export function lifeboatHullHalfWidthAt(z: number): number | null {
   for (let index = 0; index < HULL_STATIONS.length - 1; index += 1) {
@@ -307,7 +309,7 @@ function addFramesAndBenches(target: Group, materials: LifeboatMaterials): void 
     bench.position.z = z;
     return bench;
   };
-  [0.78, LIFEBOAT_VISIBLE_STERN_BENCH_Z].forEach((z, index) => {
+  [LIFEBOAT_PLAYER_BENCH_Z, LIFEBOAT_VISIBLE_STERN_BENCH_Z].forEach((z, index) => {
     benches.add(createBench(
       `survival-bench-${index}`,
       `survival-bench-seat-${index}`,
@@ -342,12 +344,12 @@ function addGunwalesAndKeel(target: Group, materials: LifeboatMaterials): void {
 
   target.add(gunwales);
 
-  const keel = new Mesh(new BoxGeometry(0.16, 0.16, 5.65), materials.darkTimber);
+  const keel = new Mesh(new BoxGeometry(0.16, 0.16, 5.05), materials.darkTimber);
   keel.name = 'lifeboat-keel-strip';
-  keel.position.set(0, -0.49, 0);
+  keel.position.set(0, -0.49, -0.3);
   target.add(keel);
 
-  for (const [name, z] of [['bow', -3], ['stern', 3]] as const) {
+  for (const [name, z] of [['bow', -3], ['stern', 2.4]] as const) {
     const capPlate = new Mesh(new RoundedBoxGeometry(0.58, 0.08, 0.30, 2, 0.015), materials.trimTimber);
     capPlate.name = `lifeboat-${name}-cap-plate`;
     capPlate.position.set(0, 0.38, z + (name === 'bow' ? 0.04 : -0.04));
@@ -359,7 +361,7 @@ function addWear(target: Group, materials: LifeboatMaterials): void {
   const wear = new Group();
   wear.name = 'lifeboat-wear-details';
   for (const sign of [-1, 1] as const) {
-    for (const [index, z] of [-1.78, -0.34, 1.22].entries()) {
+    for (const [index, z] of [-1.78, -0.34, 0.62].entries()) {
       const isSideShelf = index === 1;
       const scuff = new Mesh(
         new RoundedBoxGeometry(
@@ -385,13 +387,13 @@ function addWear(target: Group, materials: LifeboatMaterials): void {
   }
   const patch = new Mesh(new RoundedBoxGeometry(0.74, 0.06, 0.54, 2, 0.008), materials.cutWood);
   patch.name = 'damaged-plank-patch';
-  patch.position.set(-1.18, -0.28, 0.62);
+  patch.position.set(-1.18, -0.28, 0.02);
   patch.rotation.set(0.04, -0.16, 0.20);
   wear.add(patch);
   for (const x of [-1, 1]) {
     const lashing = new Mesh(new TorusGeometry(0.13, 0.018, 5, 12), materials.rope);
     lashing.name = `lifeboat-rope-lashing-${x < 0 ? 'port' : 'starboard'}`;
-    lashing.position.set(x * 1.48, 0.33, 2.18);
+    lashing.position.set(x * 1.48, 0.33, 1.58);
     lashing.rotation.y = Math.PI / 2;
     wear.add(lashing);
   }
@@ -473,17 +475,27 @@ export function createLifeboat(assets: LifeboatAssets): LifeboatBuild {
     darkTimberMaterial: materials.darkTimber,
     acceptanceBox: new Box3(
       new Vector3(-1.35, -0.30, -2.72),
-      new Vector3(1.35, 1.00, 2.72),
+      new Vector3(1.35, 1.00, 2.12),
     ),
     interiorBounds: new Box3(
       new Vector3(-1.45, -0.50, -2.96),
-      new Vector3(1.45, 1.00, 2.96),
+      new Vector3(1.45, 1.00, 2.36),
     ),
     waterExclusion: {
       halfWidth: 1.60,
-      halfLength: 3.04,
+      halfLength: 2.74,
       taperStart: 1.05,
       minimumLocalY: FLOOR_HEIGHT,
+      longitudinalProfile: {
+        minZ: -3.04,
+        maxZ: 2.44,
+        taperStartMinZ: -1.05,
+        taperStartMaxZ: 0.45,
+        lowerMinZ: -3.04,
+        lowerMaxZ: 2.44,
+        lowerTaperStartMinZ: -1.05,
+        lowerTaperStartMaxZ: 0.45,
+      },
     },
   };
 }

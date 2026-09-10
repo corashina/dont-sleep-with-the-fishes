@@ -1,6 +1,7 @@
 import { describe,expect,it } from 'vitest';
 import { Box3,Matrix4,Mesh,Quaternion,Raycaster,Texture,Vector3 } from 'three';
-import { createLifeboat } from '../src/world/Lifeboat';
+import { createLifeboat, LIFEBOAT_DISPLAY_SHELF_SURFACE_Y, LIFEBOAT_PLAYER_BENCH_Z } from '../src/world/Lifeboat';
+import { createWaterExclusion } from '../src/ocean/WaterExclusion';
 import { LifeboatAssets } from '../src/world/LifeboatAssets';
 import { BOAT_SUPPLY_GROUP_IDS,boatSupplyTransform } from '../src/world/BoatStorage';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
@@ -12,6 +13,38 @@ function buildBoat() {
 }
 
 describe('lifeboat visual geometry', () => {
+  it('shortens the empty middle while keeping the water mask inside both ends', () => {
+    const boat = buildBoat();
+    const floor = new Box3().setFromObject(boat.root.getObjectByName('survival-floor')!);
+    expect(floor.min.z).toBeCloseTo(-3);
+    expect(floor.max.z).toBeCloseTo(2.4);
+    expect(floor.max.z - floor.min.z).toBeCloseTo(5.4);
+    expect(boat.root.getObjectByName('survival-bench-0')!.position.z).toBe(LIFEBOAT_PLAYER_BENCH_Z);
+    expect(boat.root.getObjectByName('lifeboat-display-bench')!.position.z).toBe(-1.58);
+    const water = boat.waterExclusion;
+    const region = createWaterExclusion(boat.root, water.halfWidth, water.halfLength,
+      water.taperStart, water.minimumLocalY, undefined, water.longitudinalProfile);
+    expect(region.bounds.z).toBeCloseTo(floor.min.z - 0.04);
+    expect(region.bounds.w).toBeCloseTo(floor.max.z + 0.04);
+    expect(boat.acceptanceBox.max.z).toBeLessThan(floor.max.z);
+    expect(boat.interiorBounds.max.z).toBeLessThan(floor.max.z);
+  });
+
+  it.each([
+    ['knife', 'lifeboat-display-bench-seat'],
+    ['spyglass', 'lifeboat-display-bench-seat'],
+    ['ductTape', 'survival-bench-seat-0'],
+    ['map', 'survival-bench-seat-0'],
+    ['energyBar', 'survival-bench-seat-0'],
+  ] as const)('supports %s on its assigned bench', (id, seatName) => {
+    const boat = buildBoat();
+    const transform = boatSupplyTransform(id, 0);
+    const ray = new Raycaster(new Vector3(transform.position.x, 1, transform.position.z), new Vector3(0, -1, 0));
+    const contacts = ray.intersectObject(boat.root.getObjectByName(seatName)!);
+    expect(contacts.length).toBeGreaterThan(0);
+    expect(contacts[0]!.point.y).toBeCloseTo(LIFEBOAT_DISPLAY_SHELF_SURFACE_Y);
+  });
+
   it('keeps the front bench supports clear of the stored items', () => {
     const boat = buildBoat();
     const bench = boat.root.getObjectByName('lifeboat-display-bench')!;

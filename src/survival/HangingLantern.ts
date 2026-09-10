@@ -28,7 +28,7 @@ export const HANGING_LANTERN_LINE_LENGTH = 0.36;
 export const HANGING_LANTERN_LINE_RADIUS = 0.003;
 export const HANGING_LANTERN_MODEL_SCALE = 0.375;
 export const HANGING_LANTERN_POLE_RADIUS = 0.0225;
-export const HANGING_LANTERN_MOUNT = Object.freeze({ x: 0, y: 0.28, z: 2.35 });
+export const HANGING_LANTERN_MOUNT = Object.freeze({ x: 0, y: 0.28, z: 1.75 });
 export const HANGING_LANTERN_TIP = Object.freeze({ x: 0, y: 1.57, z: -1.7 });
 export const HANGING_LANTERN_MAX_SWING = Math.PI / 9;
 
