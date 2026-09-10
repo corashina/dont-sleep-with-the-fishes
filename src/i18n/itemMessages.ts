@@ -58,7 +58,6 @@ export const catchLabel = defineMessages({
   bait: { en: "Bait", pl: "Przynęta", "es-AR": "Carnada" },
   wetDuctTape: { en: "Wet Duct Tape", pl: "Mokra taśma klejąca", "es-AR": "Cinta adhesiva mojada" },
   brokenCompass: { en: "Broken Compass", pl: "Uszkodzony kompas", "es-AR": "Brújula rota" },
-  tornFishingNet: { en: "Torn Fishing Net", pl: "Podarta sieć rybacka", "es-AR": "Red de pesca rota" },
   energyBar: { en: "Energy Bar", pl: "Baton energetyczny", "es-AR": "Barra energética" },
 });
 

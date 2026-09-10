@@ -1,4 +1,5 @@
 import { onLanguageChange } from '../i18n/language';
+import { prepareScene } from '../rendering/prepareScene';
 import {
   Box3,
   Group,
@@ -610,6 +611,12 @@ export class ScavengePhase implements GamePhase {
 
   getPresentationPhase(): SkyPhase {
     return this.presentationPhase;
+  }
+
+  async prepare(): Promise<void> {
+    await prepareScene(this.context.renderer, this.scene, this.context.camera,
+      this.context.propModels.preparationRoots(), () => !this.disposed);
+    if (!this.disposed) this.render();
   }
 
   render(): void {

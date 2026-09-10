@@ -1,5 +1,6 @@
 import fishingMetadataJson from '../assets/models/fishing/fishing-model-metadata.json';
 import menuMetadataJson from '../assets/models/menu/menu-model-metadata.json';
+import { FISHING_MODEL_SIZES } from '../game/fishingModelSizes';
 
 export const MENU_MODEL_IDS = [
   'boat', 'rockA', 'rockB', 'rockC', 'coral', 'starfish',
@@ -39,8 +40,8 @@ const PRESENTATION = {
   skull: { targetLongestDimension: 0.52, rotation: [0, 0, 0], maxTriangles: 3500 },
   largeBone: { targetLongestDimension: 0.9, rotation: [0, 0, 0], maxTriangles: 1800 },
   shark: { targetLongestDimension: 4.8, rotation: [0, 0, 0], maxTriangles: 700 },
-  redSnapper: { targetLongestDimension: 0.76, rotation: [0, 0, 0], maxTriangles: 2000 },
-  seaweed: { targetLongestDimension: 0.62, rotation: [0, 0, 0], maxTriangles: 2000 },
+  redSnapper: { targetLongestDimension: FISHING_MODEL_SIZES.redSnapper, rotation: [0, 0, 0], maxTriangles: 2000 },
+  seaweed: { targetLongestDimension: FISHING_MODEL_SIZES.seaweed, rotation: [0, 0, 0], maxTriangles: 2000 },
 } as const;
 
 type GeneratedMetadata = MenuModelSpec['generatedMetadata'];

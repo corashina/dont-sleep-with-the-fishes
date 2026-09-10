@@ -217,6 +217,12 @@ function validateAnimations(
 export class PropModelLibrary {
   private disposed = false;
 
+  *preparationRoots(): Iterable<Group> {
+    for (const templates of [this.itemTemplates, this.equipmentTemplates, this.practicalLightTemplates, this.eventTemplates]) {
+      for (const { root } of templates.values()) yield root;
+    }
+  }
+
   private constructor(
     private readonly itemTemplates: ReadonlyMap<ItemId, ModelTemplate>,
     private readonly equipmentTemplates: ReadonlyMap<LifeboatEquipmentId, ModelTemplate>,

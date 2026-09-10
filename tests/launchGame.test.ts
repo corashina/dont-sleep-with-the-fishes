@@ -26,7 +26,7 @@ function mount(): HTMLElement {
 function dependencies(overrides: Partial<LaunchDependencies> = {}): LaunchDependencies {
   const asset = () => ({ dispose: vi.fn(), configure: vi.fn() });
   const loads = Object.fromEntries([
-    'loadMenuFont','loadMenuModels', 'loadMenuSandAssets', 'loadShipModels', 'loadSurvivalModels',
+    'loadMenuFont','loadMenuModels', 'loadMenuSandAssets', 'loadGameplayModels', 'loadSurvivalContent',
     'loadShipFurniture', 'loadSkyAssets', 'loadLifeboatAssets', 'loadShipAssets', 'loadPhysicsRuntime',
   ].map(key => [key, vi.fn(async () => asset())]));
   return {
@@ -93,8 +93,8 @@ describe('phase-based launch', () => {
     expect(loading).not.toBeNull();
     await flushPhases();
     expect(element.querySelector('.system-screen--loading')).toBe(loading);
-    expect(progress.value).toBe(4);
-    expect(progress.max).toBe(6);
+    expect(progress.value).toBe(60);
+    expect(progress.max).toBe(100);
     menu.resolve({ dispose: vi.fn(), configure: vi.fn() } as unknown as MenuModelLibrary);
     const game = await handle.completion;
     expect(game).not.toBeNull();
@@ -103,7 +103,7 @@ describe('phase-based launch', () => {
     expect(deps.loadMenuModels).toHaveBeenCalledOnce();
     expect(deps.loadShipAssets).not.toHaveBeenCalled();
     expect(deps.loadPhysicsRuntime).not.toHaveBeenCalled();
-    expect(deps.loadSurvivalModels).not.toHaveBeenCalled();
+    expect(deps.loadSurvivalContent).not.toHaveBeenCalled();
     handle.cancel();
   });
   it('cleans late menu assets after cancellation', async () => {
@@ -168,7 +168,7 @@ describe('phase-based launch', () => {
     const game = await handle.completion;
     expect(game).not.toBeNull();
     expect(progress.position).toBe(1);
-    expect(deps.loadSurvivalModels).toHaveBeenCalledOnce();
+    expect(deps.loadSurvivalContent).toHaveBeenCalledOnce();
     expect(deps.loadMenuModels).not.toHaveBeenCalled();
     expect(deps.loadShipAssets).not.toHaveBeenCalled();
     handle.cancel();

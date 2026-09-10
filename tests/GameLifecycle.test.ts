@@ -2061,6 +2061,7 @@ describe('ScavengePhase lifecycle integration', () => {
   });
 
   it('plays all ending dropdown entries and preserves the saved run when switching scenes', async () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
     const mount = document.createElement('main');
     document.body.append(mount);
 

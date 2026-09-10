@@ -1,27 +1,10 @@
 import type { AudioSystem, AudioLease } from '../audio/AudioSystem';
 import { runCleanupSteps } from '../world/SceneResources';
 import type { EventPresentationAdapter } from './EventPresentationAdapter';
-import { EventModelLibrary } from './EventModelLibrary';
-import {
-  EVENT_MODEL_IDS,
-  SURVIVAL_EVENT_MODEL_IDS,
-  type EventModelId,
-  type SurvivalEventModelId,
-} from './eventModelManifest';
+import type { EventModelLibrary } from './EventModelLibrary';
 import { EVENT_BUNDLE_SPECS } from './eventBundleManifest';
-import {
-  SurvivalEventModelLibrary,
-  type SurvivalEventModels,
-} from './SurvivalEventModelLibrary';
+import type { SurvivalEventModels } from './SurvivalEventModelLibrary';
 import type { SurvivalEventId } from './eventCatalog';
-
-function preservePrimaryErrorCleanup(steps: Array<() => void>): void {
-  try {
-    runCleanupSteps(steps);
-  } catch {
-    // The resource load or presenter construction error remains primary.
-  }
-}
 
 export interface EventPresenterHost {
   createEventPresentation(
@@ -36,20 +19,12 @@ export interface EventPresenterHost {
 export interface EventBundleLoaderDependencies {
   readonly audio: Pick<AudioSystem, 'acquireEventAudio'>;
   readonly host: EventPresenterHost;
-  readonly loadDedicatedModels?: (
-    ids: readonly EventModelId[],
-  ) => Promise<EventModelLibrary>;
-  readonly loadFeaturedModels?: (
-    ids: readonly SurvivalEventModelId[],
-  ) => Promise<SurvivalEventModelLibrary>;
+  readonly dedicatedModels: EventModelLibrary;
+  readonly featuredModels: SurvivalEventModels;
 }
 
 export class EventBundleLoadError extends Error {
-  constructor(
-    readonly eventId: SurvivalEventId,
-    message: string,
-    options?: ErrorOptions,
-  ) {
+  constructor(readonly eventId: SurvivalEventId, message: string, options?: ErrorOptions) {
     super(`Event ${eventId}: ${message}`, options);
     this.name = 'EventBundleLoadError';
   }
@@ -62,8 +37,6 @@ export class EventBundle {
     readonly eventId: SurvivalEventId,
     private readonly host: EventPresenterHost,
     private readonly adapter: EventPresentationAdapter,
-    private readonly featuredModels: SurvivalEventModelLibrary,
-    private readonly dedicatedModels: EventModelLibrary,
     private readonly audio: AudioLease,
   ) {}
 
@@ -78,104 +51,27 @@ export class EventBundle {
     runCleanupSteps([
       () => this.host.detach(this.adapter),
       () => this.adapter.dispose(),
-      () => this.featuredModels.dispose(),
-      () => this.dedicatedModels.dispose(),
       () => this.audio.dispose(),
     ]);
   }
 }
 
-const dedicatedModelIds = new Set<string>(EVENT_MODEL_IDS);
-const featuredModelIds = new Set<string>(SURVIVAL_EVENT_MODEL_IDS);
-
-function isDedicatedModelId(id: string): id is EventModelId {
-  return dedicatedModelIds.has(id);
-}
-
-function isFeaturedModelId(id: string): id is SurvivalEventModelId {
-  return featuredModelIds.has(id);
-}
-
 export class EventBundleLoader {
-  private readonly loadDedicatedModels: (
-    ids: readonly EventModelId[],
-  ) => Promise<EventModelLibrary>;
-  private readonly loadFeaturedModels: (
-    ids: readonly SurvivalEventModelId[],
-  ) => Promise<SurvivalEventModelLibrary>;
-
-  constructor(private readonly dependencies: EventBundleLoaderDependencies) {
-    this.loadDedicatedModels = dependencies.loadDedicatedModels
-      ?? ((ids) => EventModelLibrary.load(ids));
-    this.loadFeaturedModels = dependencies.loadFeaturedModels
-      ?? ((ids) => SurvivalEventModelLibrary.load(ids));
-  }
+  constructor(private readonly dependencies: EventBundleLoaderDependencies) {}
 
   async load(eventId: SurvivalEventId): Promise<EventBundle> {
-    const spec = EVENT_BUNDLE_SPECS[eventId];
-    const dedicatedIds = spec.models.filter(isDedicatedModelId);
-    const featuredIds = spec.models.filter(isFeaturedModelId);
-    if (dedicatedIds.length + featuredIds.length !== spec.models.length) {
-      throw new EventBundleLoadError(eventId, 'manifest contains an unknown model ID');
-    }
-
-    const results = await Promise.allSettled([
-      this.dependencies.audio.acquireEventAudio(spec.sounds),
-      this.loadDedicatedModels(dedicatedIds),
-      this.loadFeaturedModels(featuredIds),
-    ] as const);
-    const [audioResult, dedicatedResult, featuredResult] = results;
-    const failure = results.find(
-      (result): result is PromiseRejectedResult => result.status === 'rejected',
-    );
-    if (failure !== undefined) {
-      preservePrimaryErrorCleanup([
-        () => {
-          if (featuredResult.status === 'fulfilled') featuredResult.value.dispose();
-        },
-        () => {
-          if (dedicatedResult.status === 'fulfilled') dedicatedResult.value.dispose();
-        },
-        () => {
-          if (audioResult.status === 'fulfilled') audioResult.value.dispose();
-        },
-      ]);
-      const message = failure.reason instanceof Error
-        ? failure.reason.message
-        : String(failure.reason);
-      throw new EventBundleLoadError(eventId, message, { cause: failure.reason });
-    }
-
-    const audio = (audioResult as PromiseFulfilledResult<AudioLease>).value;
-    const dedicated = (
-      dedicatedResult as PromiseFulfilledResult<EventModelLibrary>
-    ).value;
-    const featured = (
-      featuredResult as PromiseFulfilledResult<SurvivalEventModelLibrary>
-    ).value;
-    let adapter: EventPresentationAdapter;
+    let audio: AudioLease | undefined;
     try {
-      adapter = this.dependencies.host.createEventPresentation(
-        eventId,
-        dedicated,
-        featured,
+      // Phase ownership keeps these buffers decoded. This lease owns event voices.
+      audio = await this.dependencies.audio.acquireEventAudio(EVENT_BUNDLE_SPECS[eventId].sounds);
+      const adapter = this.dependencies.host.createEventPresentation(
+        eventId, this.dependencies.dedicatedModels, this.dependencies.featuredModels,
       );
+      return new EventBundle(eventId, this.dependencies.host, adapter, audio);
     } catch (cause) {
-      preservePrimaryErrorCleanup([
-        () => featured.dispose(),
-        () => dedicated.dispose(),
-        () => audio.dispose(),
-      ]);
+      try { audio?.dispose(); } catch { /* Preserve the construction error. */ }
       const message = cause instanceof Error ? cause.message : String(cause);
       throw new EventBundleLoadError(eventId, message, { cause });
     }
-    return new EventBundle(
-      eventId,
-      this.dependencies.host,
-      adapter,
-      featured,
-      dedicated,
-      audio,
-    );
   }
 }

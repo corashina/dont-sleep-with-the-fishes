@@ -30,7 +30,7 @@ const catches = {
   sardine: 'sardynkę', bass: 'okonia', redSnapper: 'lucjana czerwonego', clownfish: 'błazenka',
   seaweed: 'wodorosty', boot: 'but', plasticBottle: 'plastikową butelkę', fishBones: 'rybie ości',
   bait: 'przynętę', wetDuctTape: 'mokrą taśmę klejącą', brokenCompass: 'uszkodzony kompas',
-  tornFishingNet: 'podartą sieć rybacką', energyBar: 'baton energetyczny',
+  energyBar: 'baton energetyczny',
 } satisfies Record<FishingCatchId, string>;
 
 export function journalItemName(itemId: ItemId): string {

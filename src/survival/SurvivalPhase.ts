@@ -1,5 +1,7 @@
 import { PerspectiveCamera } from 'three';
 import type { SurvivalPhaseContext, GamePhase } from '../app/GamePhase';
+import { prepareScene } from '../rendering/prepareScene';
+import type { SurvivalContent } from './SurvivalContent';
 import { AudioSystem } from '../audio/AudioSystem';
 import { SurvivalAudio } from '../audio/SurvivalAudio';
 import type { SurvivalEndingId } from '../game/ending';
@@ -191,12 +193,13 @@ function testContext(
   } as unknown as HTMLElement;
   return {
     mount,
-    renderer: { render: () => undefined } as unknown as SurvivalPhaseContext['renderer'],
+    renderer: { render: () => undefined, initTexture: () => undefined, compileAsync: async () => undefined } as unknown as SurvivalPhaseContext['renderer'],
     sceneRenderer,
     visualQuality: createVisualQualityPreference(() => undefined, null),
     waterQuality: createWaterQualityPreference(() => undefined, null),
     camera: new PerspectiveCamera(),
     propModels: {} as PropModelLibrary,
+    survivalContent: {} as SurvivalContent,
     maxTextureAnisotropy: 1,
     skyAssets: {} as SkyAssets,
     lifeboatAssets: {} as LifeboatAssets,
@@ -253,6 +256,7 @@ export class SurvivalPhase implements GamePhase {
     error instanceof Error ? error : new Error(String(error)),
   );
   private eventBundles!: SurvivalPhaseBundleManager;
+  private scenePreparations = 0;
   private itemAnimationLab = false;
   private itemAnimationLabCameraControls: ItemAnimationLabCameraControls | null = null;
   private rearCameraView = false;
@@ -324,6 +328,10 @@ export class SurvivalPhase implements GamePhase {
       context.lifeboatAssets,
       undefined,
       context.waterQuality?.get() ?? 'low',
+      context.survivalContent.featured,
+      context.survivalContent.events,
+      {},
+      context.survivalContent.fishing,
     );
     this.initialize(
       context,
@@ -338,7 +346,11 @@ export class SurvivalPhase implements GamePhase {
       start.kind === 'ending-preview' ? undefined : onCheckpointChange,
       reportInvariantError,
       itemAnimationLab,
-      new EventBundleManager(new EventBundleLoader({ audio: context.audio, host: world })),
+      new EventBundleManager(new EventBundleLoader({
+        audio: context.audio, host: world,
+        dedicatedModels: context.survivalContent.events,
+        featuredModels: context.survivalContent.featured,
+      })),
       context.onFatalError,
       initialEventResultId,
     );
@@ -447,7 +459,7 @@ export class SurvivalPhase implements GamePhase {
   }
 
   update(time: number, deltaSeconds: number): void {
-    if (this.disposed || this.documentIsHidden()) return;
+    if (this.disposed || this.scenePreparations > 0 || this.documentIsHidden()) return;
     if (this.gameplayPaused()) return;
     this.elapsedSeconds = this.simulationTimeInitialized
       ? this.elapsedSeconds + deltaSeconds
@@ -476,8 +488,26 @@ export class SurvivalPhase implements GamePhase {
     this.focusedEventFlow.syncTarget(width, height);
   }
 
+  async prepare(): Promise<void> {
+    if (this.world.scene === undefined || this.disposed) return;
+    const snapshot = this.session.snapshot();
+    if (!this.itemAnimationLab && snapshot.pendingEventId !== null && !isTerminal(snapshot.state)) {
+      await this.eventBundles.beginLoad(snapshot.pendingEventId as Parameters<EventBundleManager['beginLoad']>[0]);
+      if (this.disposed) return;
+      await this.eventBundles.activate(snapshot.pendingEventId as Parameters<EventBundleManager['activate']>[0]);
+    }
+    if (this.disposed) return;
+    const templates = [
+      ...this.context.propModels.preparationRoots(),
+      ...this.context.survivalContent.preparationRoots(),
+    ];
+    await prepareScene(this.context.renderer, this.world.scene, this.context.camera,
+      templates, () => !this.disposed);
+    if (!this.disposed) this.render();
+  }
+
   render(): void {
-    if (this.disposed || this.world.scene === undefined) return;
+    if (this.disposed || this.scenePreparations > 0 || this.world.scene === undefined) return;
     this.context.sceneRenderer.render(
       this.world.scene,
       this.context.camera,
@@ -486,6 +516,16 @@ export class SurvivalPhase implements GamePhase {
   }
 
   private async renderAndSettleCoveredScene(generation: number): Promise<boolean> {
+    if (this.world.scene !== undefined) {
+      this.scenePreparations += 1;
+      try {
+        await prepareScene(this.context.renderer, this.world.scene, this.context.camera,
+          [], () => this.isContinuationActive(generation));
+      } finally {
+        this.scenePreparations -= 1;
+      }
+    }
+    if (!this.isContinuationActive(generation)) return false;
     this.render();
     await (this.ui.settleCoveredScene?.() ?? Promise.resolve());
     return this.isContinuationActive(generation);

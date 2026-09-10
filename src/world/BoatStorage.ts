@@ -23,8 +23,6 @@ import {
 import { CARLITOS_SEATED_SUPPORT_LIFT } from './CarlitosRestPose';
 import { ITEM_MODEL_SPECS } from './itemModelManifest';
 
-const FISHING_NET_HANDLE_SUPPORT_POINT = new Vector3(0, 0.09820857, 0.82);
-
 export type BoatItemSurface = 'shelf' | 'floor' | 'gunwale' | 'edgeShelf';
 export type BoatSupplyGroupId = ItemId;
 
@@ -72,11 +70,9 @@ const restingSlot = (
     new Vector3(...modelBounds.min),
     new Vector3(...modelBounds.max),
   ).applyMatrix4(rotationMatrix);
-  const supportPointY = id === 'fishingNet'
-    ? FISHING_NET_HANDLE_SUPPORT_POINT.clone().applyMatrix4(rotationMatrix).y
-    : id === 'compass'
-      ? new Vector3(...COMPASS_CASE_SUPPORT_POINT).applyMatrix4(rotationMatrix).y
-      : rotatedBounds.min.y;
+  const supportPointY = id === 'compass'
+    ? new Vector3(...COMPASS_CASE_SUPPORT_POINT).applyMatrix4(rotationMatrix).y
+    : rotatedBounds.min.y;
   return {
     surface,
     position: [
@@ -137,8 +133,13 @@ const BOAT_STORAGE_SLOTS = {
   map: [restingSlot('shelf', 'map', 0, 0.65, 0)],
   medicalKit: [restingSlot('floor', 'medicalKit', -0.50, -1.27, 0.10)],
   spyglass: [restingSlot('floor', 'spyglass', -0.96, -1.15, Math.PI + 0.14)],
-  // Roll around the handle axis so the basket hangs down toward the water.
-  fishingNet: [restingSlot('floor', 'fishingNet', -0.77005223, -2.04704738, 42 * Math.PI / 180, 1, 68 * Math.PI / 180, -1.02758174)],
+  // Support the shaft on the rim, with the basket hanging outside the boat.
+  fishingNet: [{
+    surface: 'gunwale',
+    position: [-1.35, 0.28, -2.04704738],
+    rotation: [68 * Math.PI / 180, 42 * Math.PI / 180, -1.02758174],
+    scale: 1,
+  }],
   knife: [restingSlot('floor', 'knife', 0.25, -0.55, 0, 0.5, Math.PI / 2)],
   bucket: [restingSlot('floor', 'bucket', 1.03, -1.00, -0.12)],
   flareGun: [restingSlot(
