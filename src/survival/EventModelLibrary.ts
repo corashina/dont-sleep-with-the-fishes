@@ -7,7 +7,7 @@ import {
   SkinnedMesh,
   Texture,
 } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { AssetModelLoader } from '../world/AssetLoaders';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import {
   EVENT_MODEL_SPECS,
@@ -54,7 +54,7 @@ export class EventModelLoadError extends Error {
 }
 
 class GltfEventModelLoader implements EventModelLoader {
-  private readonly loader = new GLTFLoader();
+  private readonly loader = new AssetModelLoader();
 
   async load(url: string): Promise<Group> {
     const asset = await this.loader.loadAsync(url);

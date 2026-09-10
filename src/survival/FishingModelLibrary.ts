@@ -6,7 +6,7 @@ import {
   Skeleton,
   Texture,
 } from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { AssetModelLoader } from '../world/AssetLoaders';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { collectMaterialTextures, collectOwnedSkeletons } from '../rendering/modelPresentation';
 import { collectMeshResources, disposeResourceSets, ignoreCleanupError } from '../world/SceneResources';
@@ -14,7 +14,7 @@ import { catchModelSpec, type FishingCatchModelLoader } from './FishingCatchLibr
 import { FISHING_CATCHES } from './fishingCatalog';
 
 class GltfFishingModelLoader implements FishingCatchModelLoader {
-  private readonly loader = new GLTFLoader();
+  private readonly loader = new AssetModelLoader();
 
   async load(url: string): Promise<Object3D> {
     return (await this.loader.loadAsync(url)).scene;

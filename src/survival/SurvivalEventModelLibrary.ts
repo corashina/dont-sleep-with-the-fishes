@@ -9,7 +9,7 @@ import {
   Texture,
   Vector3,
 } from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { AssetModelLoader } from '../world/AssetLoaders';
 import {
   collectMeshResources,
   disposeResourceSets,
@@ -54,7 +54,7 @@ export class SurvivalEventModelLoadError extends Error {
 }
 
 class GltfSurvivalEventModelLoader implements SurvivalEventModelLoader {
-  private readonly loader = new GLTFLoader();
+  private readonly loader = new AssetModelLoader();
 
   async load(url: string): Promise<Object3D> {
     return (await this.loader.loadAsync(url)).scene;

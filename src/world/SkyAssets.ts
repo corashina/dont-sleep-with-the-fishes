@@ -1,10 +1,10 @@
+import { AssetTextureLoader } from '../world/AssetLoaders';
 import {
   ClampToEdgeWrapping,
   LinearFilter,
   LinearMipmapLinearFilter,
   SRGBColorSpace,
   Texture,
-  TextureLoader,
 } from 'three';
 import moonTextureUrl from '../assets/sky/moon-gibbous.png';
 
@@ -25,7 +25,7 @@ export class SkyAssets {
   private constructor(readonly moonTexture: Texture) {}
 
   static async load(
-    loader: SkyTextureLoader = new TextureLoader(),
+    loader: SkyTextureLoader = new AssetTextureLoader(),
   ): Promise<SkyAssets> {
     let moonTexture: Texture;
     try {

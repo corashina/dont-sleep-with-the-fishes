@@ -36,7 +36,7 @@ import { SurvivalPhase } from './survival/SurvivalPhase';
 import { PerformanceStats } from './ui/PerformanceStats';
 import { PostProcessingConsole } from './ui/PostProcessingConsole';
 import { SettingsMenu } from './ui/SettingsMenu';
-import { createSystemScreen, updateSystemScreenProgress } from './ui/SystemScreen';
+import { createSystemScreen, observeSystemScreenDownloads, updateSystemScreenProgress } from './ui/SystemScreen';
 import {
   createSystemTuningPreference,
   type SystemTuningPreference,
@@ -230,6 +230,7 @@ export class Game {
   private activeLease: ResourceLease<unknown> | null = null;
   private pendingPreparation: Promise<void> | null = null;
   private transitionScreen: HTMLElement | null = null;
+  private stopDownloadProgress: (() => void) | null = null;
   private preparing = false;
   private performanceStats: PerformanceStats | null = null;
   private settingsMenu: SettingsMenu | null = null;
@@ -755,8 +756,9 @@ export class Game {
 
   private showTransitionScreen(): void {
     if (this.transitionScreen !== null) return;
-    const screen = this.context.mount.querySelector<HTMLElement>('.system-screen--loading')
-      ?? createSystemScreen({ kind: 'loading' });
+    const existing = this.context.mount.querySelector<HTMLElement>('.system-screen--loading');
+    const screen = existing ?? createSystemScreen({ kind: 'loading' });
+    if (existing === null) this.stopDownloadProgress = observeSystemScreenDownloads(screen);
     this.context.mount.append(screen);
     this.transitionScreen = screen;
   }
@@ -766,6 +768,8 @@ export class Game {
   }
 
   private clearTransitionScreen(): void {
+    this.stopDownloadProgress?.();
+    this.stopDownloadProgress = null;
     this.transitionScreen?.remove();
     this.transitionScreen = null;
   }

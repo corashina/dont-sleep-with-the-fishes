@@ -1,3 +1,4 @@
+import { AssetTextureLoader } from '../world/AssetLoaders';
 /// <reference types="vite/client" />
 
 import {
@@ -7,7 +8,6 @@ import {
   RepeatWrapping,
   SRGBColorSpace,
   Texture,
-  TextureLoader,
 } from 'three';
 import colorUrl from '../assets/lifeboat/wood-planks-color.webp';
 import normalUrl from '../assets/lifeboat/wood-planks-normal.webp';
@@ -34,7 +34,7 @@ export class LifeboatAssets {
   ) {}
 
   static async load(
-    loader: LifeboatTextureLoader = new TextureLoader(),
+    loader: LifeboatTextureLoader = new AssetTextureLoader(),
   ): Promise<LifeboatAssets> {
     const results = await Promise.allSettled([
       loader.loadAsync(colorUrl),

@@ -1,4 +1,6 @@
 import { systemText } from '../i18n/systemMessages';
+import { getLanguage } from '../i18n/language';
+import { observeAssetDownloads } from '../app/AssetDownloads';
 export type SystemScreenDescription = {
   readonly kind: 'loading';
 } | {
@@ -45,7 +47,10 @@ export function createSystemScreen(
   const content = document.createElement('div');
   content.className = 'screen__content';
   if (description.kind === 'loading') {
-    content.append(loadingProgress());
+    content.append(
+      loadingProgress(),
+      textElement('p', 'system-loading-bytes ui-role-numeral', '0.0 / 0.0 MB'),
+    );
   } else {
     content.append(
       textElement('p', 'kicker ui-role-context', description.kicker),
@@ -64,6 +69,18 @@ export function createSystemScreen(
   return section;
 }
 
+export function observeSystemScreenDownloads(screen: HTMLElement): () => void {
+  const label = screen.querySelector<HTMLElement>('.system-loading-bytes');
+  const progress = screen.querySelector<HTMLProgressElement>('progress');
+  const format = new Intl.NumberFormat(getLanguage(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return observeAssetDownloads(({ loaded, total }) => {
+    if (label === null || progress === null) return;
+    const text = `${format.format(loaded / 1_000_000)} / ${total === null ? '…' : format.format(total / 1_000_000)} MB`;
+    label.textContent = text;
+    progress.setAttribute('aria-valuetext', `${Math.round(progress.position * 100)}%, ${text}`);
+  });
+}
+
 export function updateSystemScreenProgress(
   screen: HTMLElement,
   completed: number,
@@ -78,5 +95,6 @@ export function updateSystemScreenProgress(
     : 0;
   progress.max = safeTotal;
   progress.value = safeCompleted;
-  progress.setAttribute('aria-valuetext', `${Math.round(safeCompleted / safeTotal * 100)}%`);
+  const bytes = screen.querySelector('.system-loading-bytes')?.textContent;
+  progress.setAttribute('aria-valuetext', `${Math.round(safeCompleted / safeTotal * 100)}%${bytes ? `, ${bytes}` : ''}`);
 }

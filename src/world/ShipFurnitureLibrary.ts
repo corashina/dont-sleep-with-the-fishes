@@ -7,7 +7,7 @@ import {
   Texture,
   Vector3,
 } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { AssetModelLoader } from '../world/AssetLoaders';
 import {
   SHIP_FURNITURE_MAX_TOTAL_TRIANGLES,
   SHIP_FURNITURE_MODEL_IDS,
@@ -38,7 +38,7 @@ export class ShipFurnitureLoadError extends Error {
 }
 
 class GltfShipFurnitureLoader implements ShipFurnitureModelLoader {
-  private readonly loader = new GLTFLoader();
+  private readonly loader = new AssetModelLoader();
 
   async load(url: string): Promise<Group> {
     return (await this.loader.loadAsync(url)).scene;

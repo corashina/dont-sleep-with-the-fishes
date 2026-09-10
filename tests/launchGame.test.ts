@@ -61,7 +61,7 @@ describe('phase-based launch', () => {
     await flushPhases();
     expect(progress.max).toBe(6);
     expect(progress.value).toBe(2);
-    expect(progress.getAttribute('aria-valuetext')).toBe('33%');
+    expect(progress.getAttribute('aria-valuetext')).toBe('33%, 0.0 / 0.0 MB');
 
     font.resolve();
     await flushPhases();
@@ -77,7 +77,7 @@ describe('phase-based launch', () => {
     ready.resolve();
     await handle.completion;
     expect(progress.position).toBe(1);
-    expect(progress.getAttribute('aria-valuetext')).toBe('100%');
+    expect(progress.getAttribute('aria-valuetext')).toBe('100%, 0.0 / 0.0 MB');
     expect(progress.isConnected).toBe(false);
     handle.cancel();
   });

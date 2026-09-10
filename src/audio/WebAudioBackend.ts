@@ -1,3 +1,4 @@
+import { loadAssetBytes } from '../app/AssetDownloads';
 import type {
   AudioBackend,
   AudioListenerPose,
@@ -340,11 +341,7 @@ export class WebAudioBackend implements AudioBackend {
 
     let request: Promise<AudioBuffer>;
     request = (async () => {
-      const response = await this.fetchAudio(AUDIO_MANIFEST[id].url);
-      if (!response.ok) {
-        throw new Error(`Audio download failed for ${id}: ${response.status}`);
-      }
-      const bytes = await response.arrayBuffer();
+      const bytes = await loadAssetBytes(AUDIO_MANIFEST[id].url, this.fetchAudio);
       const buffer = await this.context.decodeAudioData(bytes);
       if (!this.disposed && (this.references.get(id) ?? 0) > 0) {
         this.buffers.set(id, buffer);
