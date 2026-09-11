@@ -16,10 +16,19 @@ export interface MissingPickupSet {
   readonly saved: readonly ItemInstance[];
 }
 
+export interface BalanceSimulationProgress {
+  readonly loadoutIndex: number;
+  readonly loadoutCount: number;
+  readonly completedRuns: number;
+  readonly totalRuns: number;
+}
+
 export interface BalanceSimulationConfig {
   readonly seedsPerLoadout: number;
   readonly fishingReactionSuccess: number;
   readonly loadoutLimit?: number;
+  readonly loadoutIndices?: readonly number[];
+  readonly onProgress?: (progress: BalanceSimulationProgress) => void;
 }
 
 export interface BalanceOutcomeBucket {
@@ -31,13 +40,20 @@ export interface BalanceOutcomeBucket {
   readonly blocked: number;
 }
 
+export interface BalanceScenarioReport extends BalanceOutcomeBucket {
+  readonly rescueRate: number;
+  readonly averageRescueDay: number | null;
+  readonly medianRescueDay: number | null;
+  readonly endingsByDay: Readonly<Record<string, number>>;
+}
+
 export interface BalanceReport extends BalanceOutcomeBucket {
   readonly rescueRate: number;
   readonly averageRescueDay: number | null;
   readonly medianRescueDay: number | null;
   readonly rescueDay30To35Rate: number;
-  /** Successful rescue days from the separate signal-disabled control cohort. */
-  readonly averageNoSignalRescueDay: number | null;
+  /** Signal-disabled control cohort. */
+  readonly noSignal: BalanceScenarioReport;
   readonly blockedLoadouts: readonly string[];
   readonly unrescuedLoadouts: readonly string[];
   readonly endingsByDay: Readonly<Record<string, number>>;
@@ -263,7 +279,15 @@ function runToTerminal(
   });
   const policyRandom = mulberry32(seed ^ 0x9e3779b9);
   while (session.snapshot().ending === null && session.snapshot().day <= 120) {
+    const before = session.snapshot();
     runCompetentDay(session, policyRandom, fishingReactionSuccess, signalsEnabled);
+    const after = session.snapshot();
+    if (after.ending === null && after.day === before.day) {
+      throw new Error(
+        `Simulation stalled on day ${before.day} in state '${after.state}'`
+        + ` with pending event '${after.pendingEventId ?? 'none'}'.`,
+      );
+    }
   }
   return session;
 }
@@ -304,11 +328,13 @@ type SessionEnding = ReturnType<SurvivalSession['snapshot']>['ending'];
 
 interface SimulationStats {
   readonly rescueDays: number[];
-  readonly noSignalRescueDays: number[];
   readonly blockedLoadouts: Set<string>;
   readonly totals: MutableBucket;
   readonly endingsByDay: Record<string, number>;
   readonly byRescueLead: Map<number, MutableBucket>;
+  readonly noSignalRescueDays: number[];
+  readonly noSignalTotals: MutableBucket;
+  readonly noSignalEndingsByDay: Record<string, number>;
 }
 
 function outcomeForEnding(ending: SessionEnding): OutcomeKey {
@@ -340,6 +366,17 @@ function recordSignalRun(
   if (ending?.id === 'rescue') stats.rescueDays.push(ending.day);
 }
 
+function recordNoSignalRun(session: SurvivalSession, stats: SimulationStats): void {
+  const ending = session.snapshot().ending;
+  const outcome = outcomeForEnding(ending);
+  recordOutcome(stats.noSignalTotals, outcome);
+  if (ending !== null) {
+    const dayKey = `${ending.id}:${ending.day}`;
+    stats.noSignalEndingsByDay[dayKey] = (stats.noSignalEndingsByDay[dayKey] ?? 0) + 1;
+  }
+  if (ending?.id === 'rescue') stats.noSignalRescueDays.push(ending.day);
+}
+
 function simulationSeed(loadoutIndex: number, runIndex: number): number {
   return (
     Math.imul(loadoutIndex + 1, 0x045d9f3b)
@@ -350,6 +387,7 @@ function simulationSeed(loadoutIndex: number, runIndex: number): number {
 function simulateLoadout(
   loadout: MissingPickupSet,
   loadoutIndex: number,
+  loadoutCount: number,
   config: BalanceSimulationConfig,
   stats: SimulationStats,
 ): BalanceOutcomeBucket {
@@ -364,10 +402,32 @@ function simulateLoadout(
       config.fishingReactionSuccess,
       false,
     );
-    const noSignalEnding = noSignalSession.snapshot().ending;
-    if (noSignalEnding?.id === 'rescue') stats.noSignalRescueDays.push(noSignalEnding.day);
+    recordNoSignalRun(noSignalSession, stats);
+    config.onProgress?.({
+      loadoutIndex,
+      loadoutCount,
+      completedRuns: loadoutIndex * config.seedsPerLoadout + runIndex + 1,
+      totalRuns: loadoutCount * config.seedsPerLoadout,
+    });
   }
   return freezeBucket(loadoutBucket);
+}
+
+function selectLoadouts(
+  allLoadouts: readonly MissingPickupSet[],
+  config: BalanceSimulationConfig,
+): readonly MissingPickupSet[] {
+  const selectedIndices = config.loadoutIndices;
+  if (selectedIndices !== undefined) {
+    for (const index of selectedIndices) {
+      if (!Number.isInteger(index) || index < 0 || index >= allLoadouts.length) {
+        throw new Error(`loadoutIndices contains invalid index ${index}.`);
+      }
+    }
+    return selectedIndices.map((index) => allLoadouts[index]!);
+  }
+  if (config.loadoutLimit === undefined) return allLoadouts;
+  return allLoadouts.slice(0, config.loadoutLimit);
 }
 
 export function runBalanceSimulation(
@@ -387,9 +447,7 @@ export function runBalanceSimulation(
   }
 
   const allLoadouts = enumerateMissingPickupSets();
-  const loadouts = config.loadoutLimit === undefined
-    ? allLoadouts
-    : allLoadouts.slice(0, config.loadoutLimit);
+  const loadouts = selectLoadouts(allLoadouts, config);
   const rescueDays: number[] = [];
   const noSignalRescueDays: number[] = [];
   const blockedLoadouts = new Set<string>();
@@ -397,6 +455,8 @@ export function runBalanceSimulation(
   const endingsByDay: Record<string, number> = {};
   const byMissingPickupSet: Record<string, BalanceOutcomeBucket> = {};
   const byRescueLead = new Map<number, MutableBucket>();
+  const noSignalTotals = emptyBucket();
+  const noSignalEndingsByDay: Record<string, number> = {};
   const stats: SimulationStats = {
     rescueDays,
     noSignalRescueDays,
@@ -404,20 +464,35 @@ export function runBalanceSimulation(
     totals,
     endingsByDay,
     byRescueLead,
+    noSignalTotals,
+    noSignalEndingsByDay,
   };
 
   loadouts.forEach((loadout, loadoutIndex) => {
-    byMissingPickupSet[loadout.key] = simulateLoadout(loadout, loadoutIndex, config, stats);
+    byMissingPickupSet[loadout.key] = simulateLoadout(
+      loadout,
+      loadoutIndex,
+      loadouts.length,
+      config,
+      stats,
+    );
   });
 
   const totalRuns = loadouts.length * config.seedsPerLoadout;
+  const noSignal: BalanceScenarioReport = Object.freeze({
+    ...freezeBucket(noSignalTotals),
+    rescueRate: totalRuns === 0 ? 0 : noSignalTotals.rescued / totalRuns,
+    averageRescueDay: average(noSignalRescueDays),
+    medianRescueDay: median(noSignalRescueDays),
+    endingsByDay: Object.freeze({ ...noSignalEndingsByDay }),
+  });
   return Object.freeze({
     ...freezeBucket(totals),
     rescueRate: totalRuns === 0 ? 0 : totals.rescued / totalRuns,
     averageRescueDay: average(rescueDays),
     medianRescueDay: median(rescueDays),
     rescueDay30To35Rate: rateInRange(rescueDays, 30, 35),
-    averageNoSignalRescueDay: average(noSignalRescueDays),
+    noSignal,
     blockedLoadouts: Object.freeze([...blockedLoadouts].sort()),
     unrescuedLoadouts: Object.freeze(Object.entries(byMissingPickupSet)
       .filter(([, bucket]) => bucket.rescued === 0)
@@ -425,6 +500,101 @@ export function runBalanceSimulation(
       .sort()),
     endingsByDay: Object.freeze({ ...endingsByDay }),
     byMissingPickupSet: Object.freeze({ ...byMissingPickupSet }),
+    byRescueLead: Object.freeze(Object.fromEntries(
+      [...byRescueLead.entries()].map(([lead, bucket]) => [lead, freezeBucket(bucket)]),
+    )),
+  });
+}
+
+function addBucket(target: MutableBucket, source: BalanceOutcomeBucket): void {
+  target.totalRuns += source.totalRuns;
+  target.rescued += source.rescued;
+  target.dead += source.dead;
+  target.sunk += source.sunk;
+  target.abducted += source.abducted;
+  target.blocked += source.blocked;
+}
+
+function endingDays(
+  endingsByDay: Readonly<Record<string, number>>,
+  endingId: string,
+): number[] {
+  const days: number[] = [];
+  for (const [key, count] of Object.entries(endingsByDay)) {
+    const [id, dayText] = key.split(':');
+    if (id !== endingId) continue;
+    const day = Number(dayText);
+    for (let index = 0; index < count; index += 1) days.push(day);
+  }
+  return days.sort((left, right) => left - right);
+}
+
+function addCounts(
+  target: Record<string, number>,
+  source: Readonly<Record<string, number>>,
+): void {
+  for (const [key, count] of Object.entries(source)) {
+    target[key] = (target[key] ?? 0) + count;
+  }
+}
+
+export function mergeBalanceReports(
+  reports: readonly BalanceReport[],
+): BalanceReport {
+  const totals = emptyBucket();
+  const noSignalTotals = emptyBucket();
+  const endingsByDay: Record<string, number> = {};
+  const noSignalEndingsByDay: Record<string, number> = {};
+  const blockedLoadouts = new Set<string>();
+  const unrescuedLoadouts = new Set<string>();
+  const byMissingPickupSet = new Map<string, MutableBucket>();
+  const byRescueLead = new Map<number, MutableBucket>();
+
+  for (const report of reports) {
+    addBucket(totals, report);
+    addBucket(noSignalTotals, report.noSignal);
+    addCounts(endingsByDay, report.endingsByDay);
+    addCounts(noSignalEndingsByDay, report.noSignal.endingsByDay);
+    for (const key of report.blockedLoadouts) blockedLoadouts.add(key);
+    for (const key of report.unrescuedLoadouts) unrescuedLoadouts.add(key);
+    for (const [key, bucket] of Object.entries(report.byMissingPickupSet)) {
+      const target = byMissingPickupSet.get(key) ?? emptyBucket();
+      addBucket(target, bucket);
+      byMissingPickupSet.set(key, target);
+    }
+    for (const [leadText, bucket] of Object.entries(report.byRescueLead)) {
+      const lead = Number(leadText);
+      const target = byRescueLead.get(lead) ?? emptyBucket();
+      addBucket(target, bucket);
+      byRescueLead.set(lead, target);
+    }
+  }
+
+  const totalRuns = totals.totalRuns;
+  const rescueDays = endingDays(endingsByDay, 'rescue');
+  const noSignalRescueDays = endingDays(noSignalEndingsByDay, 'rescue');
+  const noSignal: BalanceScenarioReport = Object.freeze({
+    ...freezeBucket(noSignalTotals),
+    rescueRate: noSignalTotals.totalRuns === 0
+      ? 0
+      : noSignalTotals.rescued / noSignalTotals.totalRuns,
+    averageRescueDay: average(noSignalRescueDays),
+    medianRescueDay: median(noSignalRescueDays),
+    endingsByDay: Object.freeze({ ...noSignalEndingsByDay }),
+  });
+  return Object.freeze({
+    ...freezeBucket(totals),
+    rescueRate: totalRuns === 0 ? 0 : totals.rescued / totalRuns,
+    averageRescueDay: average(rescueDays),
+    medianRescueDay: median(rescueDays),
+    rescueDay30To35Rate: rateInRange(rescueDays, 30, 35),
+    noSignal,
+    blockedLoadouts: Object.freeze([...blockedLoadouts].sort()),
+    unrescuedLoadouts: Object.freeze([...unrescuedLoadouts].sort()),
+    endingsByDay: Object.freeze({ ...endingsByDay }),
+    byMissingPickupSet: Object.freeze(Object.fromEntries(
+      [...byMissingPickupSet.entries()].map(([key, bucket]) => [key, freezeBucket(bucket)]),
+    )),
     byRescueLead: Object.freeze(Object.fromEntries(
       [...byRescueLead.entries()].map(([lead, bucket]) => [lead, freezeBucket(bucket)]),
     )),

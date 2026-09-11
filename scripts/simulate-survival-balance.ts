@@ -17,6 +17,6 @@ if (report.medianRescueDay === null
   || report.medianRescueDay < 33
   || report.medianRescueDay > 35) process.exitCode = 1;
 if (report.rescueDay30To35Rate < 0.45) process.exitCode = 1;
-if (report.averageNoSignalRescueDay === null
-  || report.averageNoSignalRescueDay < 39
-  || report.averageNoSignalRescueDay > 42) process.exitCode = 1;
+if (report.noSignal.averageRescueDay === null
+  || report.noSignal.averageRescueDay < 39
+  || report.noSignal.averageRescueDay > 42) process.exitCode = 1;
