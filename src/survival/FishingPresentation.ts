@@ -642,9 +642,9 @@ export class FishingPresentation {
     return this.startAnimation('miss', FISHING_MISS_DURATION);
   }
 
-  async playNetHaul(catchId: FishingCatchId, point: FishingCastPoint): Promise<void> {
+  async playNetHaul(catchId: FishingCatchId, point: FishingCastPoint, onWaterImpact: () => void): Promise<void> {
     if (this.disposed || this.net === null) return;
-    if (!await this.net.prepare(catchId, point) || this.disposed) return;
+    if (!await this.net.prepare(catchId, point, onWaterImpact) || this.disposed) return;
     this.phase = 'reeling';
     await this.startAnimation('net', NET_HAUL_DURATION);
   }

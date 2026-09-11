@@ -24,7 +24,7 @@ function waterUi() {
 }
 
 function waterAudio() {
-  return { fishingCast: vi.fn(), beginDive: vi.fn(), finishDive: vi.fn(), cancelDive: vi.fn() };
+  return { fishingNet: vi.fn(), fishingNetSplash: vi.fn(), beginDive: vi.fn(), finishDive: vi.fn(), cancelDive: vi.fn() };
 }
 
 function conditionLab(type: ItemId = 'bucket', condition: 'usable' | 'broken' | 'lost' = 'usable') {

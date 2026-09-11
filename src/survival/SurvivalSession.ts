@@ -1306,10 +1306,17 @@ export class SurvivalSession {
     return hullWear;
   }
 
-  private normalDawnEnergy(): DawnEnergy {
+  private dawnHungerIncrease(completedDay: number): number {
+    return resolveIntegerValue(
+      SURVIVAL_BALANCE.dawn.hungerIncrease,
+      mulberry32(deriveEventVariantSeed(this.seed, completedDay, 'dawn-hunger')),
+    );
+  }
+
+  private normalDawnEnergy(hungerIncrease = this.dawnHungerIncrease(this.day)): DawnEnergy {
     const hungerAfterDawn = Math.min(
       SURVIVAL_BALANCE.thresholds.maximum,
-      this.hunger + SURVIVAL_BALANCE.dawn.hungerIncrease,
+      this.hunger + hungerIncrease,
     );
     return hungerAfterDawn >= SURVIVAL_BALANCE.thresholds.starving
       ? SURVIVAL_BALANCE.dawn.starvingEnergy
@@ -1319,13 +1326,13 @@ export class SurvivalSession {
   }
 
   private dawnDeltas(hullWear: number): ResourceDelta {
-    const hungerIncrease = this.crewRestorationAtDawn ? 0 : SURVIVAL_BALANCE.dawn.hungerIncrease;
+    const hungerIncrease = this.crewRestorationAtDawn ? 0 : this.dawnHungerIncrease(this.day - 1);
     this.crewRestorationAtDawn = false;
     const hungerAfterDawn = Math.min(
       SURVIVAL_BALANCE.thresholds.maximum,
       this.hunger + hungerIncrease,
     );
-    const morningEnergy = this.nextDawnEnergyOverride ?? this.normalDawnEnergy();
+    const morningEnergy = this.nextDawnEnergyOverride ?? this.normalDawnEnergy(hungerIncrease);
     this.nextDawnEnergyOverride = null;
     const deltas: ResourceDelta = {
       hunger: hungerIncrease,

@@ -9,6 +9,7 @@ import { boatSupplyTransform } from '../world/BoatStorage';
 import { NET_BASKET_CENTER, NetCatchPlacement } from './NetCatchPlacement';
 
 export const NET_HAUL_DURATION = 4.8;
+const NET_WATER_CONTACT = 0.24;
 const smooth = (value: number): number => {
   const t = Math.min(1, Math.max(0, value));
   return t * t * (3 - 2 * t);
@@ -45,6 +46,7 @@ export class NetFishingPresentation {
   private progress = 0;
   private lastBurst = -1;
   private generation = 0;
+  private onWaterImpact: (() => void) | null = null;
 
   constructor(
     model: Object3D,
@@ -109,7 +111,7 @@ export class NetFishingPresentation {
       .decompose(this.storedPosition, this.storedRotation, this.storedScale);
   }
 
-  async prepare(catchId: FishingCatchId, point: FishingCastPoint): Promise<boolean> {
+  async prepare(catchId: FishingCatchId, point: FishingCastPoint, onWaterImpact?: () => void): Promise<boolean> {
     const generation = ++this.generation;
     this.waterWorld.set(Math.min(1.2, Math.max(-1.2, point.x)), 0, -3.9);
     this.basket.clear();
@@ -121,6 +123,7 @@ export class NetFishingPresentation {
       this.basket.add(model);
     }
     this.sample(0);
+    this.onWaterImpact = onWaterImpact ?? null;
     return true;
   }
 
@@ -149,6 +152,11 @@ export class NetFishingPresentation {
       Math.sin(t * Math.PI * 3) * 0.09 * (1 - t),
     );
     this.basket.visible = t >= 0.58;
+    if (t >= NET_WATER_CONTACT && this.onWaterImpact !== null) {
+      const onWaterImpact = this.onWaterImpact;
+      this.onWaterImpact = null;
+      onWaterImpact();
+    }
   }
 
   update(delta: number): void {
@@ -156,7 +164,7 @@ export class NetFishingPresentation {
     this.particles.update(delta);
     const t = this.progress;
     const burst = Math.floor(t * NET_HAUL_DURATION * 7);
-    if (t < 0.24 || t > 0.91 || burst === this.lastBurst) return;
+    if (t < NET_WATER_CONTACT || t > 0.91 || burst === this.lastBurst) return;
     this.lastBurst = burst;
     this.basket.getWorldPosition(this.splash);
     this.worldRoot.worldToLocal(this.splash);
@@ -165,6 +173,7 @@ export class NetFishingPresentation {
 
   clear(): void {
     this.generation += 1;
+    this.onWaterImpact = null;
     this.root.visible = false;
     this.basket.clear();
     this.catchLibrary.hide();

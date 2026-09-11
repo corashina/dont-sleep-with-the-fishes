@@ -1444,8 +1444,8 @@ export class BoatWorld {
     return this.fishingPresentation.playReel(catchId);
   }
 
-  playFishingNetHaul(catchId: FishingCatchId, point: FishingCastPoint): Promise<void> {
-    return this.fishingPresentation.playNetHaul(catchId, point);
+  playFishingNetHaul(catchId: FishingCatchId, point: FishingCastPoint, onWaterImpact: () => void): Promise<void> {
+    return this.fishingPresentation.playNetHaul(catchId, point, onWaterImpact);
   }
 
   projectFishingCatch(width: number, height: number): ProjectedBoatBounds | null {

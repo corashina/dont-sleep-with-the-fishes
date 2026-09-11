@@ -109,7 +109,8 @@ describe('AudioSystem', () => {
     audio.fishingCast();
     audio.fishingReel();
     audio.fishingNet();
-    expect(backend.voices.map(({ id }) => id)).toEqual(['fishingCast', 'fishingReel', 'fishingNet']);
+    audio.fishingNetSplash();
+    expect(backend.voices.map(({ id }) => id)).toEqual(['fishingCast', 'fishingReel', 'fishingNet', 'anchorSplash']);
     const net = backend.voices[2]!;
     audio.setPaused(true);
     expect(net.setPaused).toHaveBeenLastCalledWith(true);

@@ -1,4 +1,4 @@
-/** Shared longest dimensions in metres, used wherever these models appear. */
+/** Catch dimensions in metres. Fish sizes are also shared with events and the menu. */
 export const FISHING_MODEL_SIZES = Object.freeze({
   cod: 0.34, salmon: 0.34, tuna: 0.30, crab: 0.32, squid: 0.32,
   sardine: 0.29, bass: 0.34, redSnapper: 0.36, clownfish: 0.29,
@@ -8,8 +8,10 @@ export const FISHING_MODEL_SIZES = Object.freeze({
   brokenCan: 0.202, crushedCan: 0.15, backpack: 0.25,
   trafficCone: 0.21, clothesHanger: 0.28, toiletPlunger: 0.24,
   golfBall: 0.075, bowlingPin: 0.24, tableTennisPaddle: 0.25,
+  bait: 0.23, wetDuctTape: 0.25, brokenCompass: 0.24, energyBar: 0.31,
 });
 
+/** Larger item dimensions for scavenging, storage, and event displays. */
 export const FISHING_ITEM_SIZES = Object.freeze({
   baitTin: 0.36, ductTape: 0.55, compass: 0.48, energyBar: 0.48,
 });

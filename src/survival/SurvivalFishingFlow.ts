@@ -47,7 +47,7 @@ export type FishingUiPort = Pick<
 
 export type FishingAudioPort = Pick<
   SurvivalAudio,
-  'deny' | 'fishingCast' | 'fishingBite' | 'fishingReel' | 'fishingNet' | 'fishingResult'
+  'deny' | 'fishingCast' | 'fishingBite' | 'fishingReel' | 'fishingNet' | 'fishingNetSplash' | 'fishingResult'
 >;
 
 export interface SurvivalFishingFlowDependencies {
@@ -445,7 +445,9 @@ export class SurvivalFishingFlow {
     if (this.gear === 'net' && result.kind === 'catch') {
       const point = this.activeFishing!.view().castPoint!;
       this.dependencies.audio.fishingNet?.();
-      return this.dependencies.world.playFishingNetHaul(result.catch.id, point);
+      return this.dependencies.world.playFishingNetHaul(result.catch.id, point, () => {
+        this.dependencies.audio.fishingNetSplash();
+      });
     }
     if (result.kind === 'catch') {
       return this.dependencies.world.playFishingReel?.(result.catch.id) ?? Promise.resolve();

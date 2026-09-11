@@ -73,9 +73,12 @@ it('contains every production catch throughout the haul without resizing or inte
     for (const definition of FISHING_CATCHES) {
       const caught = (await prepare(definition.id))!;
       const size = new Box3().setFromObject(caught, true).getSize(new Vector3());
-      const expected = definition.presentation.kind === 'item'
-        ? ITEM_MODEL_SPECS[definition.presentation.itemId].targetLongestDimension
-        : FISHING_MODEL_SIZES[definition.id as keyof typeof FISHING_MODEL_SIZES];
+      const expected = FISHING_MODEL_SIZES[definition.id];
+      if (definition.presentation.kind === 'item') {
+        expect(expected, definition.id).toBeLessThan(
+          ITEM_MODEL_SPECS[definition.presentation.itemId].targetLongestDimension,
+        );
+      }
       expect(Math.max(size.x, size.y, size.z), definition.id).toBeCloseTo(expected, 6);
       const scale = caught.scale.clone();
       mock.mockResolvedValue(caught);
