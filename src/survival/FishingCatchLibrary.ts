@@ -377,7 +377,7 @@ export function catchModelSpec(
   const item = ITEM_MODEL_SPECS[definition.presentation.itemId];
   return {
     url: item.url,
-    targetLongestDimension: item.targetLongestDimension,
+    targetLongestDimension: FISHING_MODEL_SIZES[definition.id],
     rotation: item.rotation,
     maxTriangles: item.maxTriangles,
   };

@@ -119,6 +119,7 @@ function createRig(options: FishingRigOptions = {}) {
     fishingBite: vi.fn(() => calls.push('audio:bite')),
     fishingReel: vi.fn(() => calls.push('audio:reel')),
     fishingNet: vi.fn(() => calls.push('audio:net')),
+    fishingNetSplash: vi.fn(() => calls.push('audio:net-splash')),
     fishingResult: vi.fn(() => calls.push('audio:result')),
   };
   let paused = false;
@@ -192,7 +193,10 @@ describe('SurvivalFishingFlow', () => {
     expect(rig.flow.cast(640, 360, 1280, 720)).toBe(true);
     expect(rig.realSession.snapshot()).toMatchObject({ energy: 1, food: before.food + 1, bait: before.bait });
     expect(rig.animations.net).toHaveLength(1);
-    expect(rig.world.playFishingNetHaul).toHaveBeenCalledExactlyOnceWith('cod', rig.castPoint);
+    expect(rig.world.playFishingNetHaul).toHaveBeenCalledExactlyOnceWith('cod', rig.castPoint, expect.any(Function));
+    expect(rig.audio.fishingNetSplash).not.toHaveBeenCalled();
+    vi.mocked(rig.world.playFishingNetHaul).mock.calls[0]![2]();
+    expect(rig.audio.fishingNetSplash).toHaveBeenCalledOnce();
     expect(rig.animations.cast).toHaveLength(0);
     expect(rig.ui.showFishingResult).not.toHaveBeenCalled();
     expect(rig.flow.cast(640, 360, 1280, 720)).toBe(false);

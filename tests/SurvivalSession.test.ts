@@ -936,6 +936,33 @@ describe('SurvivalSession daytime actions', () => {
     }
   });
 
+  it.each([45, 65, 85])('varies daily hunger by 22–28 and preserves the roll after loading at hunger %s', (hunger) => {
+    const increases = new Set<number>();
+    for (let day = 1; day <= 35; day += 1) {
+      const session = new SurvivalSession(saved(), {
+        seed: 41,
+        initial: { day, hunger, food: 3, health: 50, energy: 0 },
+        initialEventId: 'quiet-night',
+      });
+      session.resolveEvent(choiceResponse('sleep'));
+      const restored = SurvivalSession.restore(session.exportCheckpoint());
+      const dawn = session.beginDawn();
+      expect(restored.beginDawn()).toEqual(dawn);
+      expect(restored.snapshot()).toEqual(session.snapshot());
+      const after = session.snapshot();
+      const increase = after.hunger - hunger;
+      expect(Number.isInteger(increase)).toBe(true);
+      expect(increase).toBeGreaterThanOrEqual(Math.min(22, 100 - hunger));
+      expect(increase).toBeLessThanOrEqual(Math.min(28, 100 - hunger));
+      if (hunger < 70) increases.add(increase);
+      expect(after.energy).toBe(after.hunger >= 90 ? 1 : after.hunger >= 70 ? 2 : 3);
+      expect(after.food).toBe(3);
+      expect(session.beginDawn().accepted).toBe(false);
+      expect(session.snapshot().hunger).toBe(after.hunger);
+    }
+    if (hunger < 70) expect([...increases].sort((a, b) => a - b)).toEqual([22, 23, 24, 25, 26, 27, 28]);
+  });
+
   it('applies dawn hunger, energy tiers, starvation, and terminal states once', () => {
     const session = new SurvivalSession(saved(), {
       seed: 1,

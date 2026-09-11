@@ -8,6 +8,35 @@ import { normalizeLongestDimensionTemplate } from '../src/world/modelValidation'
 import { boatSupplyTransform } from '../src/world/BoatStorage';
 
 describe('net animation', () => {
+  it('cues one splash at water contact, including skipped frames, and clears pending cues', async () => {
+    const scene = new Group();
+    const net = new NetFishingPresentation(new Group(), scene, scene, (output) => { output.height = 0; }, {
+      prepare: vi.fn(async () => null), hide: vi.fn(), dispose: vi.fn(),
+    });
+    const impact = vi.fn();
+    const point = { x: 0, z: -6.4 };
+    try {
+      net.show();
+      await net.prepare('cod', point, impact);
+      net.sample(0.239);
+      expect(impact).not.toHaveBeenCalled();
+      net.sample(0.24);
+      expect(impact).toHaveBeenCalledOnce();
+      net.sample(0.5);
+      net.sample(1);
+      expect(impact).toHaveBeenCalledOnce();
+      await net.prepare('cod', point, impact);
+      net.sample(1);
+      expect(impact).toHaveBeenCalledTimes(2);
+      await net.prepare('cod', point, impact);
+      net.clear();
+      net.sample(0.5);
+      expect(impact).toHaveBeenCalledTimes(2);
+    } finally {
+      net.dispose();
+    }
+  });
+
   it('keeps the production net in view, submerges the basket, and raises one catch', async () => {
     const bytes = await readFile('src/assets/models/items/fishingNet.glb');
     const data = new ArrayBuffer(bytes.byteLength);

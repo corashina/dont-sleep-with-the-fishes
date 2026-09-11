@@ -270,6 +270,10 @@ export class SurvivalAudio {
     if (!this.disposed) this.scope.play('fishingNet');
   }
 
+  fishingNetSplash(): void {
+    if (!this.disposed) this.scope.play('anchorSplash');
+  }
+
   fishingResult(result: FishingTerminalResult): void {
     if (this.disposed) return;
     if (result.kind === 'miss') {

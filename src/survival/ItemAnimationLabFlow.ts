@@ -75,7 +75,8 @@ export type ItemAnimationLabAudioPort = Pick<
   | 'eventItemCue'
   | 'repairToolbox'
   | 'meowCarlitos'
-  | 'fishingCast'
+  | 'fishingNet'
+  | 'fishingNetSplash'
   | 'beginDive'
   | 'finishDive'
   | 'cancelDive'
@@ -342,8 +343,10 @@ export class ItemAnimationLabFlow {
   private async playNetFishing(generation: number, operation: number): Promise<void> {
     await this.dependencies.world.enterFishingView('net');
     if (!this.isCurrent(generation, operation)) return;
-    this.dependencies.audio.fishingCast();
-    await this.dependencies.world.playFishingNetHaul('cod', this.dependencies.world.centeredFishingCast());
+    this.dependencies.audio.fishingNet();
+    await this.dependencies.world.playFishingNetHaul('cod', this.dependencies.world.centeredFishingCast(), () => {
+      if (this.isCurrent(generation, operation)) this.dependencies.audio.fishingNetSplash();
+    });
     if (!this.isCurrent(generation, operation)) return;
     await this.dependencies.world.exitFishingView();
   }

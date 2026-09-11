@@ -1,8 +1,5 @@
 import { Box3, Euler, Quaternion, Vector3 } from 'three';
-import {
-  ITEM_DEFINITIONS,
-  type ItemId,
-} from '../game/itemCatalog';
+import type { ItemId } from '../game/itemCatalog';
 import type { ItemInstance, ItemInstanceId } from '../game/ItemState';
 import type { CollisionBox } from '../player/collisions';
 import {
@@ -69,8 +66,6 @@ const UMBRELLA_FLOOR_ANGLE = -Math.PI / 4;
 const UMBRELLA_REST_TILT = -42.7 * Math.PI / 180;
 const UMBRELLA_REST_MIN_Y = -0.3008;
 const UMBRELLA_REST_MAX_Y = 0.3742;
-
-export const MAX_HEAVY_ITEM_DEPOSIT_DISTANCE = 14;
 
 const validatedSurfaceInputs = new WeakMap<
   readonly ShipItemSurface[],
@@ -395,20 +390,22 @@ function surfaceFitAvoidsBlockers(
 function chosenStandingPoint(
   surface: ShipItemSurface,
   context?: ShipPlacementContext,
-): { readonly point: Vector3; readonly depositDistance?: number } | undefined {
-  if (!context) return { point: surface.standingPoints[0]!.clone() };
-  let selected: { readonly point: Vector3; readonly depositDistance: number } | undefined;
+): Vector3 | undefined {
+  if (!context) return surface.standingPoints[0]!.clone();
+  let selected: Vector3 | undefined;
+  let shortestDistance = Infinity;
   for (const point of surface.standingPoints) {
     const distance = context.routeMetric.distance(
       [point.x, point.z],
       context.deposit,
     );
     if (distance === null || !Number.isFinite(distance) || distance < 0) continue;
-    if (!selected || distance < selected.depositDistance) {
-      selected = { point: point.clone(), depositDistance: distance };
+    if (distance < shortestDistance) {
+      selected = point;
+      shortestDistance = distance;
     }
   }
-  return selected;
+  return selected?.clone();
 }
 
 function candidateFor(
@@ -421,15 +418,7 @@ function candidateFor(
   if (!fit || !surfaceFitAvoidsBlockers(surface, instance.type, fit, blockers)) return undefined;
   const standing = chosenStandingPoint(surface, context);
   if (!standing) return undefined;
-  const weight = ITEM_DEFINITIONS[instance.type].weight;
-  if (weight === 3
-    && (surface.regionId === 'storageWorkroom' || surface.regionId === 'crewCabin')) {
-    return undefined;
-  }
-  if (standing.depositDistance !== undefined
-    && weight === 3
-    && standing.depositDistance > MAX_HEAVY_ITEM_DEPOSIT_DISTANCE + EPSILON) return undefined;
-  return { surface, fit, standingPoint: standing.point };
+  return { surface, fit, standingPoint: standing };
 }
 
 function transformFor(candidate: PlacementCandidate): ShipItemTransform {
@@ -480,18 +469,15 @@ function randomAssignment(
     || instances.length > new Set(surfaces.map(({ physicalSlotId }) => physicalSlotId)).size) {
     return undefined;
   }
-  const sorted = shuffled(instances, random).sort((left, right) =>
-    Number(ITEM_DEFINITIONS[right.type].weight === 3)
-      - Number(ITEM_DEFINITIONS[left.type].weight === 3)
-  );
+  const placementOrder = shuffled(instances, random);
   const assignments = new Map<ItemInstanceId, ShipItemTransform>();
   const usedSlots = new Set<string>();
   let visitedNodes = 0;
   const place = (index: number): boolean => {
     if (visitedNodes >= MAX_BACKTRACK_NODES_PER_ATTEMPT) return false;
     visitedNodes += 1;
-    if (index === sorted.length) return true;
-    const instance = sorted[index]!;
+    if (index === placementOrder.length) return true;
+    const instance = placementOrder[index]!;
     for (const candidate of eligible.get(instance.instanceId)!) {
       if (usedSlots.has(candidate.surface.physicalSlotId)
         || !separatedFromAssignments(candidate, assignments)) continue;
