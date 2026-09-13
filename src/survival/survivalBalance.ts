@@ -12,8 +12,8 @@ export const SURVIVAL_BALANCE = {
   },
   fishing: {
     backpackChance: 0.10,
-    minimumBiteDelaySeconds: 3,
-    biteDelayRangeSeconds: 4,
+    minimumBiteDelaySeconds: 2,
+    biteDelayRangeSeconds: 3,
     reactionSeconds: 6,
   },
   netFishing: {

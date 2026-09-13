@@ -33,7 +33,7 @@ import {
   deriveEventVariantSeed,
 } from './eventPresentationOutcome';
 import { driftingSupplyChoiceForVariant } from './driftingSupplies';
-import { nightTraderOffers, ownsNightTraderReward } from './nightTraderTrades';
+import { ownsNightTraderReward } from './nightTraderTrades';
 import { prepareTradeEvent } from './tradeEvents';
 import { isEventPresentationRoute } from './eventPresentationRoutes';
 import type { EventOutcomePresentation } from './eventPresentationTypes';
@@ -166,7 +166,7 @@ type EventPresentationState =
   | 'using'
   | 'resolving';
 
-const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk', 'abducted'];
+const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
 const MIDNIGHT_ATTACK_BLACKOUT_MS = 3_000;
 
 type SurvivalEventDefinition = NonNullable<ReturnType<typeof survivalEventById>>;
@@ -233,7 +233,7 @@ const FIXED_CHOICE_ANCHORS: Readonly<Record<string, string>> = {
   'flowers:sleep': 'event:flowers',
 };
 
-function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' | 'abducted' {
+function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' {
   return TERMINAL_STATES.includes(state);
 }
 
@@ -335,10 +335,6 @@ function focusedChoiceEnergy(
   return { energyCost: playerEnergyCost };
 }
 
-function focusedChoiceDismisses(eventId: string, choiceId: string): boolean {
-  return isDriftingItemEventId(eventId) && choiceId === 'sleep';
-}
-
 function focusedChoiceFor(
   event: SurvivalEventDefinition,
   choice: SurvivalEventChoice,
@@ -364,7 +360,6 @@ function focusedChoiceFor(
     instanceId,
     ...(anchorId === null ? {} : { anchorId }),
     ...focusedChoiceEnergy(choice),
-    ...(focusedChoiceDismisses(event.id, choice.id) ? { dismisses: true } : {}),
   };
 }
 
@@ -387,6 +382,7 @@ export function focusedChoicesFor(
 
 export class SurvivalEventFlow {
   private presentation: EventPresentationState = 'idle';
+  private retainedWorldPresentation = false;
   private choiceCheckpointReady = false;
   private islandConfirmationOpen = false;
   private eligibility = new Map<ItemInstanceId, EventResponseId>();
@@ -528,7 +524,11 @@ export class SurvivalEventFlow {
     if (!this.isLifecycleCurrent(generation)) return false;
     const operation = this.beginOperation();
     try {
-      if (this.presentation === 'choosing' || this.seagullOutcome !== null) {
+      if (
+        this.presentation === 'choosing'
+        || this.retainedWorldPresentation
+        || this.seagullOutcome !== null
+      ) {
         this.clearPresentation(false, true, true);
       }
       this.presentation = opensEvent ? 'transitioning' : 'sleeping';
@@ -685,9 +685,14 @@ export class SurvivalEventFlow {
     const pending = this.dependencies.session.snapshot();
     const eventId = pending.pendingEventId;
     if (eventId === null || !isInspectableEventId(eventId)) return undefined;
+    this.beginDeferredPresentationSync(pending, generation);
     const outcome = this.resolveFocusedChoiceOutcome(choice);
-    if (outcome === undefined || !this.isCurrent(generation, operation)) return undefined;
+    if (outcome === undefined || !this.isCurrent(generation, operation)) {
+      this.cancelDeferredPresentationSync(generation);
+      return undefined;
+    }
     if (!outcome.accepted) {
+      this.cancelDeferredPresentationSync(generation);
       this.rejectFocusedChoice();
       return { accepted: false };
     }
@@ -814,6 +819,10 @@ export class SurvivalEventFlow {
     reportCleanupErrors: boolean,
   ): void {
     if (!this.isCurrent(context.generation, context.operation)) return;
+    if (isDriftingItemEventId(context.eventId) && context.choice.id === 'sleep') {
+      this.retainFocusedWorldPresentation(reportCleanupErrors);
+      return;
+    }
     this.clearPresentation(false, reportCleanupErrors);
   }
 
@@ -1073,11 +1082,11 @@ export class SurvivalEventFlow {
   }
 
   private finishDeferredChoiceSync(
-    focusedResult: boolean,
+    deferUntilReaction: boolean,
     resolved: SurvivalSnapshot,
     generation: number,
   ): void {
-    if (!focusedResult) {
+    if (!deferUntilReaction) {
       this.cancelDeferredPresentationSync(generation);
       return;
     }
@@ -1109,15 +1118,13 @@ export class SurvivalEventFlow {
       return;
     }
     this.beginContextualChoice(eventId, choiceId);
-    const choice: EventChoicePresentation = {
-      choiceId,
-      instanceId: null,
-      condition: null,
-    };
+    const prepared = this.prepareContextualChoice(eventId, choiceId, pending);
+    const choice = prepared.choice;
     if (!await this.playContextualChoice(eventId, choice, generation, operation)) return;
     this.presentation = 'resolving';
     this.beginDeferredPresentationSync(pending, generation);
-    const response = this.contextualEventResponse(eventId, choiceId, pending);
+    const response = prepared.response
+      ?? this.contextualEventResponse(eventId, choiceId, pending);
     const outcome = this.dependencies.session.resolveEvent?.(response);
     if (outcome === undefined || !this.isCurrent(generation, operation)) {
       this.cancelDeferredPresentationSync(generation);
@@ -1139,6 +1146,30 @@ export class SurvivalEventFlow {
     );
   }
 
+  private prepareContextualChoice(
+    eventId: string,
+    choiceId: EventResponseId,
+    snapshot: SurvivalSnapshot,
+  ): {
+    readonly choice: EventChoicePresentation;
+    readonly response: Exclude<EventResponse, { readonly kind: 'endure' }> | null;
+  } {
+    const response = eventId === 'night-trader'
+      ? this.contextualEventResponse(eventId, choiceId, snapshot)
+      : null;
+    const selectedItem = response?.kind === 'item'
+      ? snapshot.inventory[response.instanceId]
+      : undefined;
+    return {
+      choice: {
+        choiceId,
+        instanceId: selectedItem?.instanceId ?? null,
+        condition: selectedItem?.condition ?? null,
+      },
+      response,
+    };
+  }
+
   private contextualEventResponse(
     eventId: string,
     choiceId: EventResponseId,
@@ -1146,6 +1177,21 @@ export class SurvivalEventFlow {
   ): Exclude<EventResponse, { readonly kind: 'endure' }> {
     const resultId = this.initialEventResultId;
     this.initialEventResultId = undefined;
+    if (eventId === 'night-trader') {
+      const event = pendingEventDefinition(snapshot);
+      const choice = event?.choices.find((candidate) => candidate.id === choiceId);
+      const instanceId = choice === undefined
+        ? null
+        : usableChoiceItemInstanceId(choice, snapshot);
+      if (instanceId !== null) {
+        return {
+          kind: 'item',
+          choiceId,
+          instanceId,
+          ...(resultId === undefined ? {} : { resultId }),
+        };
+      }
+    }
     if (eventId !== 'check-the-back' || choiceId !== 'check') {
       return {
         kind: 'choice',
@@ -1240,20 +1286,28 @@ export class SurvivalEventFlow {
       operation,
     )) return;
     const resolved = this.dependencies.session.snapshot();
-    this.finishDeferredChoiceSync(focusedResult, resolved, generation);
+    this.finishDeferredChoiceSync(
+      focusedResult || eventId === 'check-the-back',
+      resolved,
+      generation,
+    );
     const presentation = deriveEventOutcomePresentation(
       pending,
       resolved,
       outcome,
       selectedInstanceId,
     );
+    const resolvedChoice = selectedInstanceId === null ? choice : {
+      ...choice,
+      condition: resolved.inventory[selectedInstanceId]?.condition ?? 'lost',
+    };
     await this.runEventResolution(
       eventId,
       outcome,
       pending.state,
       generation,
       operation,
-      choice,
+      resolvedChoice,
       deriveEventPhysicalResponse(
         resolvedChoiceId,
         pending.inventory,
@@ -1818,7 +1872,7 @@ export class SurvivalEventFlow {
     this.dependencies.audio.finishEventReaction();
     if (!await this.resumeAfterVisibility(generation, operation)) return;
     const terminal = this.dependencies.session.snapshot();
-    if (focusedResult && !isTerminal(terminal.state)) {
+    if ((focusedResult || eventId === 'check-the-back') && !isTerminal(terminal.state)) {
       this.flushDeferredPresentationSync(terminal, generation);
     }
     if (isTerminal(terminal.state)) {
@@ -1894,7 +1948,7 @@ export class SurvivalEventFlow {
     if (!await this.holdDedicatedEventOutcome(context)) return;
     if (!await this.coverTerminalEventResolution(context)) return;
     const snapshot = this.dependencies.renderSnapshot();
-    if (snapshot.state === 'rescued' || snapshot.state === 'abducted') this.retainTerminalEventTableau();
+    if (snapshot.state === 'rescued') this.retainTerminalEventTableau();
     else this.clearPresentation();
     if (!await this.resetResolutionCoverProfile(context)) return;
     this.presentation = 'idle';
@@ -2302,13 +2356,9 @@ export class SurvivalEventFlow {
     event: NonNullable<ReturnType<typeof survivalEventById>>,
     snapshot: SurvivalSnapshot,
   ): Map<ItemInstanceId, EventResponseId> {
-    const offers = event.id === 'night-trader'
-      ? nightTraderOffers(deriveEventVariantSeed(snapshot.seed, snapshot.day, event.id))
-      : null;
+    if (event.id === 'night-trader') return new Map();
     const choiceByItem = new Map(
       event.choices
-        .filter((choice) => offers === null || (offers.some(({ id }) => id === choice.id)
-          && !ownsNightTraderReward(choice.id, snapshot.inventory)))
         .filter((choice) => choice.itemId !== undefined
           && this.meetsRequirements(choice.requirements, snapshot)
           && (choice.requiredChestState === undefined
@@ -2329,7 +2379,7 @@ export class SurvivalEventFlow {
     snapshot: SurvivalSnapshot,
   ): EventContextChoice[] {
     return event.choices
-      .filter((choice) => choice.itemId === undefined)
+      .filter((choice) => choice.itemId === undefined || event.id === 'night-trader')
       .flatMap((choice) => {
         const view = this.contextualChoiceFor(event, choice, snapshot);
         return view === null ? [] : [view];
@@ -2349,6 +2399,7 @@ export class SurvivalEventFlow {
         );
     if (this.hideContextualChoice(choice, companionAvailability)) return null;
     const currentReasons = () => this.contextualChoiceUnavailableReasons(
+      event,
       choice,
       snapshot,
       choice.companionAction === undefined ? companionAvailability : this.dependencies.session.companionEventActionAvailability?.(choice.companionAction),
@@ -2373,6 +2424,7 @@ export class SurvivalEventFlow {
   }
 
   private contextualChoiceUnavailableReasons(
+    event: SurvivalEventDefinition,
     choice: SurvivalEventChoice,
     snapshot: SurvivalSnapshot,
     companionAvailability: SessionCompanionAvailability | undefined,
@@ -2380,6 +2432,7 @@ export class SurvivalEventFlow {
     const reasons = (choice.requirements ?? [])
       .filter(({ resource, minimum }) => snapshot[resource] < minimum)
       .map((requirement) => requirementUnavailableReason(requirement, snapshot));
+    reasons.push(...this.nightTraderChoiceUnavailableReasons(event, choice, snapshot));
     if (choice.requiredChestState !== undefined
       && choice.requiredChestState !== snapshot.chest.state) {
       reasons.push(
@@ -2388,6 +2441,26 @@ export class SurvivalEventFlow {
     }
     const companionReason = companionAvailability?.unavailableReason;
     if (companionReason !== null && companionReason !== undefined) reasons.push(companionReason);
+    return reasons;
+  }
+
+  private nightTraderChoiceUnavailableReasons(
+    event: SurvivalEventDefinition,
+    choice: SurvivalEventChoice,
+    snapshot: SurvivalSnapshot,
+  ): string[] {
+    if (event.id !== 'night-trader' || choice.itemId === undefined) return [];
+    const reasons: string[] = [];
+    const resource = choice.itemId === 'cannedFood' ? 'food'
+      : choice.itemId === 'baitTin' ? 'bait' : null;
+    if (resource !== null && snapshot[resource] < 1) {
+      reasons.push(requirementUnavailableReason({ resource, minimum: 1 }, snapshot));
+    } else if (resource === null && usableChoiceItemInstanceId(choice, snapshot) === null) {
+      reasons.push(flowText('requiresItem', ITEM_LABELS[choice.itemId]));
+    }
+    if (ownsNightTraderReward(choice.id, snapshot.inventory)) {
+      reasons.push(domainMessage('tradeUnavailable'));
+    }
     return reasons;
   }
 
@@ -2589,11 +2662,45 @@ export class SurvivalEventFlow {
     this.dependencies.ui.clearEventPresentation?.();
   }
 
+  private retainFocusedWorldPresentation(reportCleanupErrors: boolean): void {
+    this.retainedWorldPresentation = true;
+    this.seagullOutcome = null;
+    this.islandConfirmationOpen = false;
+    this.cancelDeferredPresentationSync();
+    this.preparedEventId = null;
+    this.activeFocusedOperation = null;
+    this.eligibility.clear();
+    this.presentation = 'idle';
+    this.choiceCheckpointReady = false;
+    const steps: readonly (() => void)[] = [
+      () => this.dependencies.focused.clear(),
+      () => this.dependencies.audio.clearEvent(),
+      () => this.dependencies.world.setEventSelectedItem?.(null),
+      () => this.dependencies.world.setEventEligibleItems?.(null),
+      () => this.dependencies.ui.clearEventPresentation?.(),
+      () => this.dependencies.setAutomaticWeather(null),
+    ];
+    let firstError: unknown;
+    let failed = false;
+    for (const step of steps) {
+      try {
+        step();
+      } catch (error) {
+        if (!failed) {
+          firstError = error;
+          failed = true;
+        }
+      }
+    }
+    if (reportCleanupErrors && failed) this.dependencies.onFatalError(firstError);
+  }
+
   private clearPresentation(
     preserveDeferredSync = false,
     reportCleanupErrors = true,
     cancelPendingActivation = false,
   ): void {
+    this.retainedWorldPresentation = false;
     this.seagullOutcome = null;
     this.islandConfirmationOpen = false;
     if (!preserveDeferredSync) this.cancelDeferredPresentationSync();

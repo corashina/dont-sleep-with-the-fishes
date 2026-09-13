@@ -60,6 +60,33 @@ describe('Night Trader offers', () => {
     expect(outcome.eventResult?.resultId).toBe('trader-reward');
   });
 
+  it.each([
+    ['food', 'food', 'ductTape'],
+    ['bait', 'bait', 'energyBar'],
+  ] as const)('accepts the %s offer from resource stock without an item instance', (choiceId, resource, reward) => {
+    const session = new SurvivalSession([], {
+      seed: seedFor(choiceId),
+      initial: { day: 10, [resource]: 1 },
+      initialEventId: 'night-trader',
+    });
+
+    const outcome = session.resolveEvent({ kind: 'choice', choiceId });
+
+    expect(outcome.accepted).toBe(true);
+    expect(session.snapshot()[resource]).toBe(0);
+    expect(Object.values(session.snapshot().inventory).some((item) => (
+      item?.type === reward && item.condition === 'usable'
+    ))).toBe(true);
+  });
+
+  it('rejects a resource offer when its stock is empty', () => {
+    const session = new SurvivalSession([], {
+      seed: seedFor('food'), initial: { day: 10 }, initialEventId: 'night-trader',
+    });
+
+    expect(session.resolveEvent({ kind: 'choice', choiceId: 'food' }).accepted).toBe(false);
+  });
+
   it('rejects a catalog offer absent from this visit without taking payment', () => {
     const offers = nightTraderOffers(variant(17));
     const trade = NIGHT_TRADER_TRADES.find(({ id }) => !offers.some((offer) => offer.id === id))!;

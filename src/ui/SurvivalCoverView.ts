@@ -19,6 +19,7 @@ const DIVE_TRANSITION_MS = 750;
 const DIVE_COVERED_HOLD_MS = 250;
 const INSTANT_TRANSITION_MS = 0;
 const EVENT_OUTCOME_HOLD_MS = 2_000;
+const REWARD_RESULT_CLEAR_FALLBACK_MS = 250;
 const requireElement = createElementRequirement('survival cover view');
 
 interface PendingWork {
@@ -53,6 +54,7 @@ export class SurvivalCoverView {
   private pendingCoverTransition: PendingWork | null = null;
   private pendingDiveHold: PendingWork | null = null;
   private pendingRewardConfirmation: PendingWork | null = null;
+  private pendingRewardDismissal: PendingWork | null = null;
   private pendingCoveredSceneSettle: PendingWork | null = null;
   private pendingSleepHold: PendingWork | null = null;
   private pendingEventOutcomeHold: PendingWork | null = null;
@@ -165,6 +167,7 @@ export class SurvivalCoverView {
   showRewardResult(view: RewardResultView): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.pendingRewardConfirmation?.finish();
+    this.pendingRewardDismissal?.finish();
     this.resultRoot.classList.toggle('is-chest-reward', view.title === 'CHEST REWARD');
     this.currentReward = view;
     this.renderRewardText(view);
@@ -191,7 +194,7 @@ export class SurvivalCoverView {
   }
 
   private renderRewardText(view: RewardResultView): void {
-    this.resultTitle.textContent = rewardTitle(view.title);
+    this.resultTitle.textContent = rewardTitle();
     this.resultClose.setAttribute(
       'aria-label',
       view.title === 'ISLAND REWARDS'
@@ -284,6 +287,7 @@ export class SurvivalCoverView {
       () => this.settleCoverTransition(),
       () => this.settleDiveHold(),
       () => this.settleRewardConfirmation(),
+      () => this.settleRewardDismissal(),
       () => this.settleCoveredSceneWait(),
       () => this.settleSleepHold(),
       () => this.settleEventOutcomeHold(),
@@ -296,6 +300,7 @@ export class SurvivalCoverView {
       () => this.settleCoverTransition(),
       () => this.settleDiveHold(),
       () => this.settleRewardConfirmation(),
+      () => this.settleRewardDismissal(),
       () => this.settleCoveredSceneWait(),
       () => this.settleSleepHold(),
       () => this.settleEventOutcomeHold(),
@@ -327,6 +332,10 @@ export class SurvivalCoverView {
 
   settleRewardConfirmation(): void {
     this.pendingRewardConfirmation?.finish();
+  }
+
+  settleRewardDismissal(): void {
+    this.pendingRewardDismissal?.finish();
   }
 
   settleCoveredSceneWait(): void {
@@ -361,14 +370,37 @@ export class SurvivalCoverView {
     this.resultVisible = false;
     throwCleanupFailure(runCleanupSteps([
       () => this.onResultHide(),
-      () => this.resultRoot.classList.remove('is-chest-reward'),
-      () => { this.resultTitle.textContent = ''; },
-      () => { this.resultRewards.hidden = true; },
       () => this.removeRewardThumbnailErrorListener(),
-      () => this.resultRewards.replaceChildren(),
-      () => { this.resultLines.hidden = true; },
-      () => this.resultLines.replaceChildren(),
+      () => this.deferRewardResultReset(),
     ]));
+  }
+
+  private deferRewardResultReset(): void {
+    this.pendingRewardDismissal?.finish();
+    let timer = 0;
+    const finish = (): void => {
+      const current = this.pendingRewardDismissal?.finish === finish;
+      window.clearTimeout(timer);
+      this.resultRoot.removeEventListener('transitionend', handleTransitionEnd);
+      if (!current) return;
+      this.pendingRewardDismissal = null;
+      this.resetRewardResult();
+    };
+    const handleTransitionEnd = (event: TransitionEvent): void => {
+      if (event.target === this.resultRoot && event.propertyName === 'opacity') finish();
+    };
+    this.pendingRewardDismissal = { finish };
+    this.resultRoot.addEventListener('transitionend', handleTransitionEnd);
+    timer = window.setTimeout(finish, REWARD_RESULT_CLEAR_FALLBACK_MS);
+  }
+
+  private resetRewardResult(): void {
+    this.resultRoot.classList.remove('is-chest-reward');
+    this.resultTitle.textContent = '';
+    this.resultRewards.hidden = true;
+    this.resultRewards.replaceChildren();
+    this.resultLines.hidden = true;
+    this.resultLines.replaceChildren();
   }
 
   private renderReward(reward: RewardSummary | null): void {

@@ -442,6 +442,41 @@ describe('BoatWorld helpers', () => {
     propModels.dispose();
   });
 
+  it.each(['drifting-supplies', 'drifting-chest'] as const)(
+    'keeps Carlitos seated while he retrieves %s',
+    async (eventId) => {
+      const propModels = createTestPropModels();
+      const adapter = eventAdapterTestDouble(eventId);
+      const create = vi.spyOn(EventPresentationRegistry.prototype, 'create')
+        .mockReturnValue(adapter);
+      const world = new BoatWorld(
+        new PerspectiveCamera(),
+        propModels,
+        ...createTestSkyTextures(),
+      );
+
+      try {
+        world.syncInventory(snapshot([], { carlitos: createCarlitosState() }));
+        world.stageEvent(eventId);
+        const carlitos = world.scene.getObjectByName('carlitos-companion')!;
+        const seatedPosition = carlitos.position.clone();
+        const seatedRotation = carlitos.rotation.clone();
+
+        const retrieval = world.delegateDriftingItem(eventId);
+        world.update(0.5, 0.5);
+
+        expect(carlitos.position).toEqual(seatedPosition);
+        expect(carlitos.rotation.toArray()).toEqual(seatedRotation.toArray());
+        world.update(2, 1.5);
+        await retrieval;
+      } finally {
+        world.dispose();
+        create.mockRestore();
+        propModels.dispose();
+      }
+    },
+  );
+
   it('ignores a stale drifting-item retrieve command', async () => {
     const propModels = createTestPropModels();
     const adapter = eventAdapterTestDouble('drifting-supplies');
@@ -1370,7 +1405,6 @@ describe('BoatWorld helpers', () => {
     const internals = world as unknown as {
       cameraController: { dispose(): void };
       interactionProjector: { dispose(): void };
-      carlitosDelegation: { dispose(): void };
       itemUseController: { dispose(): void };
       eventPresentationHost: { dispose(): void };
       itemUseAdapter: { dispose(): void };
@@ -1405,7 +1439,6 @@ describe('BoatWorld helpers', () => {
     const ownerDisposals = [
       vi.spyOn(internals.cameraController, 'dispose'),
       vi.spyOn(internals.interactionProjector, 'dispose'),
-      vi.spyOn(internals.carlitosDelegation, 'dispose'),
       vi.spyOn(internals.itemUseController, 'dispose'),
       vi.spyOn(internals.eventPresentationHost, 'dispose'),
       vi.spyOn(internals.itemUseAdapter, 'dispose'),

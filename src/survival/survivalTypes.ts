@@ -1,7 +1,7 @@
 import type { OutcomeText } from './outcomeText';
 import type { ItemId, ItemInstance, ItemInstanceId } from '../game/ItemState';
 
-export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dead' | 'sunk' | 'abducted';
+export type SurvivalState = 'day' | 'dayEvent' | 'nightEvent' | 'rescued' | 'dead' | 'sunk';
 /** Gameplay weather remains separate from renderer-only presentation weather. */
 export type WeatherId = 'calm' | 'overcast' | 'squall';
 export type DayActionId =
@@ -76,7 +76,7 @@ export type RewardEntry =
       readonly quantity: 1;
     };
 
-export type DawnEnergy = 0 | 1 | 2 | 3 | 4;
+export type DawnEnergy = 1 | 2 | 3 | 4;
 
 export interface ActionOutcome {
   readonly text?: OutcomeText;
@@ -114,7 +114,6 @@ export type EventInventoryMutation =
   | { readonly kind: 'loseEventTarget'; readonly quantity: 1 };
 export interface EventEffects {
   readonly restoreCrew?: true;
-  readonly ending?: 'abduction';
   readonly maximumNextDawnEnergy?: DawnEnergy;
   readonly resources?: readonly ResourceEffect[];
   readonly items?: readonly EventInventoryMutation[];

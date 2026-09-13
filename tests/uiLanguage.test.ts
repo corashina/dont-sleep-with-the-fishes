@@ -83,8 +83,12 @@ describe('live gameplay translations', () => {
     views.push(view);
     document.body.append(...view.roots);
     await view.showReveal({ id: 'guarded-sleep', danger: 'safe', get revealText() { return getLanguage() === 'en' ? 'Keep watch.' : 'Czuwaj.'; } });
-    view.setSelection([{ id: 'watch', label: 'Watch', unavailableReason: null }]);
+    view.setSelection([
+      { id: 'watch', label: 'Watch', unavailableReason: null },
+      { id: 'sleep', label: 'Sleep Normally', unavailableReason: null },
+    ]);
     const choice = view.choiceButton('watch')!;
+    expect(view.choiceButton('sleep')?.textContent).toBe('No');
     choice.focus();
     let settled = false;
     void view.playChoiceBeat('watch', choice).then(() => { settled = true; });
@@ -93,6 +97,7 @@ describe('live gameplay translations', () => {
     expect(view.choiceButton('watch')).toBe(choice);
     expect(document.activeElement).toBe(choice);
     expect(choice.textContent).toBe('Tak');
+    expect(view.choiceButton('sleep')?.textContent).toBe('Nie');
     expect(choice.getAttribute('aria-pressed')).toBe('true');
     expect(find('[data-event-title]').textContent).toBe('Pozwolić Carlitosowi czuwać?');
     await Promise.resolve();
@@ -119,6 +124,8 @@ describe('live gameplay translations', () => {
     expect(choice.getAttribute('aria-description')).toBe('Brak energii.');
     expect(choice.querySelector('.focused-event-view__cost')?.getAttribute('aria-label')).toBe('2 energii');
     expect(find('[data-focused-event-title]').textContent).toBe('Dryfujące zapasy');
+    expect(find('[data-focused-event-description]').textContent)
+      .toBe('Zdobądź je sam albo wyślij Carlitosa, jeśli jest wypoczęty.');
   });
 
   it('refreshes fishing text without reissuing the cast', () => {
@@ -170,7 +177,7 @@ describe('live gameplay translations', () => {
     await Promise.resolve();
     expect(settled).toBe(false);
     expect(document.activeElement).toBe(view.resultClose);
-    expect(find('[data-dive-result-title]').textContent).toBe('WYNIK NURKOWANIA');
+    expect(find('[data-dive-result-title]').textContent).toBe('ODZYSKANE ZAPASY');
     expect(find('[data-dive-result-lines]').textContent).toBe('Brak zapasów.');
     view.confirmRewardResult();
     await Promise.resolve();

@@ -186,7 +186,7 @@ export function dayActionUnavailableReason(
 ): string | null {
   if (state.activeFishing) return t('finishFishing');
   if (invalidOption(action, option)) return t('invalidOption');
-  if (state.state === 'rescued' || state.state === 'dead' || state.state === 'sunk' || state.state === 'abducted') {
+  if (state.state === 'rescued' || state.state === 'dead' || state.state === 'sunk') {
     return t('terminal');
   }
   if (state.state !== 'day' && !isOptionalLootDayEvent(state)) {

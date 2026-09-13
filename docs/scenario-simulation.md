@@ -23,7 +23,6 @@ Total sessions: **20000**.
 | rescued | 8484 | 84.8% |
 | dead | 1479 | 14.8% |
 | sunk | 37 | 0.4% |
-| abducted | 0 | 0.0% |
 | blocked | 0 | 0.0% |
 
 ### Rescue timing (signal cohort)

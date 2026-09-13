@@ -127,7 +127,6 @@ lines.push('| --- | --- | --- |');
 lines.push(countRows('rescued', report.rescued, totalRuns));
 lines.push(countRows('dead', report.dead, totalRuns));
 lines.push(countRows('sunk', report.sunk, totalRuns));
-lines.push(countRows('abducted', report.abducted, totalRuns));
 lines.push(countRows('blocked', report.blocked, totalRuns));
 lines.push('');
 

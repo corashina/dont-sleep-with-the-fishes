@@ -17,13 +17,12 @@ function deferred<T = void>() {
 
 const driftingChoices = [
   { id: 'retrieve', label: 'Retrieve', unavailableReason: null, instanceId: null },
-  {
-    id: 'sleep', label: 'Leave', unavailableReason: null, instanceId: null,
-    dismisses: true,
-  },
+  { id: 'sleep', label: 'Leave', unavailableReason: null, instanceId: null },
 ] as const;
 
-function createRig(eventId: 'drifting-supplies' = 'drifting-supplies') {
+function createRig(
+  eventId: 'drifting-supplies' | 'drifting-chest' = 'drifting-supplies',
+) {
   const calls: string[] = [];
   let generation = 1;
   let pending = true;
@@ -79,6 +78,25 @@ function createRig(eventId: 'drifting-supplies' = 'drifting-supplies') {
 }
 
 describe('FocusedEventFlow', () => {
+
+  it.each(['drifting-supplies', 'drifting-chest'] as const)(
+    'returns from %s without resolving or clearing it',
+    async (eventId) => {
+      const rig = createRig(eventId);
+      await rig.flow.enter(eventId, driftingChoices);
+
+      await rig.flow.back();
+
+      expect(rig.world.exitFocusedEventView).toHaveBeenCalledOnce();
+      expect(rig.ui.hideFocusedEvent).toHaveBeenCalledOnce();
+      expect(rig.resolveChoice).not.toHaveBeenCalled();
+      expect(rig.setBusy).toHaveBeenLastCalledWith(false);
+      expect(rig.ui.restoreCommandFocus).toHaveBeenCalledOnce();
+
+      await rig.flow.enter(eventId, driftingChoices);
+      expect(rig.ui.showFocusedEvent).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it('rejects an ID and instance pair that was not rendered', async () => {
     const rig = createRig();

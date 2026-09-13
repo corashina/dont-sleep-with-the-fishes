@@ -33,6 +33,7 @@ export interface EventEligibility {
   readonly pressure?: number;
   readonly chestState?: ChestState;
   readonly hasCompanion?: boolean;
+  readonly companionExhausted?: boolean;
   readonly excludedIds?: ReadonlySet<string>;
 }
 
@@ -66,6 +67,7 @@ function matchesEventHistory(
 ): boolean {
   if (criteria.excludedIds?.has(eventEntry.id)) return false;
   if (eventEntry.requiresCompanion === true && criteria.hasCompanion !== true) return false;
+  if (eventEntry.id === 'guarded-sleep' && criteria.companionExhausted === true) return false;
   if (eventEntry.maximumAppearances !== undefined
     && (criteria.appearanceCounts.get(eventEntry.id) ?? 0) >= eventEntry.maximumAppearances) return false;
   if (eventEntry.minimumRescueLead !== undefined

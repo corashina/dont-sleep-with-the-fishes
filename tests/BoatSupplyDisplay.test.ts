@@ -25,4 +25,28 @@ describe('boat supply display', () => {
       models.dispose();
     }
   });
+
+  it('keeps remaining food cans in place when a seagull steals one', () => {
+    const models = createTestPropModels();
+    const display = new BoatSupplyDisplay(models, new Group(), []);
+    const base = new SurvivalSession([], { seed: 1 }).snapshot();
+    try {
+      display.sync({ ...base, food: 3 });
+      const cans = display.recordFor('cannedFood')!.root.children;
+      const positions = cans.slice(0, 3).map((can) => can.position.toArray());
+      const actor = display.borrowFoodCan()!;
+
+      expect(actor.root.position.toArray()).toEqual(positions[2]);
+      expect(cans.slice(0, 3).map((can) => can.visible)).toEqual([true, true, false]);
+
+      display.sync({ ...base, food: 2 });
+      actor.release();
+
+      expect(cans.slice(0, 3).map((can) => can.visible)).toEqual([true, true, false]);
+      expect(cans.slice(0, 2).map((can) => can.position.toArray())).toEqual(positions.slice(0, 2));
+    } finally {
+      display.dispose();
+      models.dispose();
+    }
+  });
 });

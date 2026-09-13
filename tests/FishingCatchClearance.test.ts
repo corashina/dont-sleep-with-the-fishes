@@ -53,6 +53,8 @@ it('keeps every production catch clear of the rod during reeling and reward disp
     const entering = world.enterFishingView();
     world.update(time += 1.2, 1.2);
     await entering;
+    const catchRest = world.scene.getObjectByName('fishing-catch-rest');
+    expect(catchRest?.position.z).toBeCloseTo(-1.96);
     for (const definition of FISHING_CATCHES) {
       for (const x of [-2.7, 0, 2.7]) {
         world.clearFishingPresentation();

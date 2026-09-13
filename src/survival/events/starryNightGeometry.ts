@@ -27,7 +27,7 @@ export function starryNightMaterial(fragmentShader: string): ShaderMaterial {
     transparent: true, depthWrite: false, side: DoubleSide,
     blending: AdditiveBlending, toneMapped: false,
     uniforms: {
-      time: { value: 0 }, reveal: { value: 0 }, power: { value: 1 }, opacity: { value: 1 },
+      time: { value: 0 }, reveal: { value: 0 }, opacity: { value: 1 },
     },
     vertexShader: `
       attribute float birth;
@@ -43,7 +43,7 @@ export function starryNightMaterial(fragmentShader: string): ShaderMaterial {
       }
     `,
     fragmentShader: `
-      uniform float time, reveal, power, opacity;
+      uniform float time, reveal, opacity;
       varying vec2 vUv;
       varying vec2 vLocalPosition;
       varying float vBirth, vWarmth;
@@ -66,7 +66,7 @@ const STAR_FRAGMENT = `
     float visible = smoothstep(vBirth, vBirth+0.12, reveal);
     vec3 color = mix(vec3(0.48, 0.73, 1.0), vec3(1.0, 0.73, 0.36), vWarmth);
     color = mix(color, vec3(1.0, 0.97, 0.89), core);
-    gl_FragColor = vec4(color * (core*2.0 + halo + rays*0.7) * power,
+    gl_FragColor = vec4(color * (core*2.0 + halo + rays*0.7),
       visible * twinkle * opacity * (1.0-smoothstep(0.7, 1.0, r)));
   }
 `;
@@ -104,7 +104,7 @@ const THREAD_FRAGMENT = `
     float visible = smoothstep(vBirth, vBirth+0.06, reveal);
     vec3 color = mix(vec3(0.38, 0.53, 0.9), vec3(0.65, 0.78, 1.0), cloud);
     color = mix(color, vec3(0.9, 0.78, 0.56), vWarmth*0.45);
-    gl_FragColor = vec4(color * power,
+    gl_FragColor = vec4(color,
       (wisps+dust*veil*twinkle*0.48)*taper*visible*opacity);
   }
 `;
@@ -178,12 +178,11 @@ export class StarryNightGeometry {
     this.meshes = [this.stars, this.threads];
   }
 
-  update(time: number, reveal: number, power: number, opacity: number): void {
+  update(time: number, reveal: number, opacity: number): void {
     for (const mesh of this.meshes) {
       const uniforms = mesh.material.uniforms;
       uniforms.time!.value = time;
       uniforms.reveal!.value = reveal;
-      uniforms.power!.value = power;
       uniforms.opacity!.value = opacity;
     }
   }

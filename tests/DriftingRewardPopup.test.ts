@@ -5,6 +5,21 @@ import { SurvivalCoverView } from '../src/ui/SurvivalCoverView';
 
 afterEach(() => setLanguage('en'));
 
+it.each(['DIVE RESULT', 'CHEST REWARD', 'SALVAGE', 'ISLAND REWARDS'] as const)(
+  'shows the salvage title for %s rewards',
+  async (title) => {
+    const view = new SurvivalCoverView();
+    try {
+      const result = view.showRewardResult({ title, lines: [], reward: null });
+      expect(view.resultRoot.querySelector('[data-dive-result-title]')?.textContent).toBe('SALVAGE');
+      view.confirmRewardResult();
+      await result;
+    } finally {
+      view.dispose();
+    }
+  },
+);
+
 it('shows every reward and preserves the bundle when the language changes', async () => {
   const view = new SurvivalCoverView();
   try {
@@ -26,6 +41,10 @@ it('shows every reward and preserves the bundle when the language changes', asyn
     expect(items()).toEqual(['cannedFood', 'baitTin', 'energyBar', 'umbrella']);
     view.confirmRewardResult();
     await result;
+    expect(items()).toEqual(['cannedFood', 'baitTin', 'energyBar', 'umbrella']);
+    const transitionEnd = new Event('transitionend');
+    Object.defineProperty(transitionEnd, 'propertyName', { value: 'opacity' });
+    view.resultRoot.dispatchEvent(transitionEnd);
     expect(items()).toEqual([]);
   } finally {
     view.dispose();
@@ -33,7 +52,7 @@ it('shows every reward and preserves the bundle when the language changes', asyn
 });
 
 
-it('shows the island rewards title and resolves only after close', async () => {
+it('shows the salvage title for island rewards and resolves only after close', async () => {
   const view = new SurvivalCoverView();
   try {
     view.onResultClose = () => view.confirmRewardResult();
@@ -43,7 +62,7 @@ it('shows the island rewards title and resolves only after close', async () => {
     } }).then(() => { closed = true; });
     await Promise.resolve();
     expect(closed).toBe(false);
-    expect(view.resultRoot.textContent).toContain('island rewards');
+    expect(view.resultRoot.textContent).toContain('SALVAGE');
     const close = view.resultRoot.querySelector<HTMLButtonElement>('[aria-label="Close island rewards"]')!;
     expect(close).not.toBeNull();
     close.click();

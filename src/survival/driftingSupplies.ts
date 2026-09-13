@@ -9,6 +9,29 @@ export const DRIFTING_SUPPLY_KINDS = Object.freeze([
 
 export type DriftingSupplyKind = typeof DRIFTING_SUPPLY_KINDS[number];
 
+export const DRIFTING_LOOT_TYPE_COOLDOWN_DAYS = 3;
+
+export type DriftingSupplyHistoryId = `drifting-supplies:${DriftingSupplyKind}`;
+
+export function driftingSupplyHistoryId(
+  kind: DriftingSupplyKind,
+): DriftingSupplyHistoryId {
+  return `drifting-supplies:${kind}`;
+}
+
+export const DRIFTING_SUPPLY_HISTORY_IDS = Object.freeze(
+  DRIFTING_SUPPLY_KINDS.map(driftingSupplyHistoryId),
+);
+
+export function isDriftingSupplyKindOnCooldown(
+  kind: DriftingSupplyKind,
+  day: number,
+  lastSeenDay: ReadonlyMap<string, number>,
+): boolean {
+  const lastSeen = lastSeenDay.get(driftingSupplyHistoryId(kind));
+  return lastSeen !== undefined && day - lastSeen < DRIFTING_LOOT_TYPE_COOLDOWN_DAYS;
+}
+
 export const DRIFTING_SUPPLY_PLAYER_ENERGY_COST = 1;
 
 export const DRIFTING_SUPPLY_DISTANCES = Object.freeze([

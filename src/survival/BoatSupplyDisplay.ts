@@ -174,6 +174,11 @@ interface PreparedEventActor {
   }[];
 }
 
+type BorrowedCopyTransform = Pick<
+  PreparedEventActor,
+  'copyPosition' | 'copyQuaternion' | 'copyScale'
+>;
+
 export const GENERIC_EVENT_ITEM_USE_DURATION = scaleEventItemDuration(0.65);
 const AGGREGATE_ITEM_IDS = new Set<ItemId>(['cannedFood', 'baitTin']);
 
@@ -563,10 +568,14 @@ export class BoatSupplyDisplay {
   }
 
   private applyBorrowedGroupVisibility(groupId: BoatSupplyGroupId): void {
-    const root = this.recordsById.get(groupId)!.root;
+    const record = this.recordsById.get(groupId)!;
+    const root = record.root;
     const keepOtherCans = groupId === 'cannedFood' && this.borrowedFoodCanId !== null;
     root.visible = keepOtherCans;
-    if (keepOtherCans && root.children[0] !== undefined) root.children[0].visible = false;
+    if (keepOtherCans) {
+      const stolenCan = root.children[record.visibleCopies - 1];
+      if (stolenCan !== undefined) stolenCan.visible = false;
+    }
   }
 
   borrowEventActor(instanceId: ItemInstanceId): BorrowedSupplyActor | null {
@@ -943,15 +952,20 @@ export class BoatSupplyDisplay {
     const root = prepared.root;
     record.root.parent!.add(root);
 
+    const copyTransform = this.borrowedCopyTransform(
+      instanceId,
+      groupId,
+      record.visibleCopies,
+      prepared,
+    );
+
     this.restoreSelectedGroup(groupId, previousSelectedItemId);
     record.root.visible = false;
     const binding: BorrowedSupplyBinding = {
       groupId,
       motionIndex: BOAT_SUPPLY_GROUP_IDS.indexOf(groupId),
       root,
-      copyPosition: prepared.copyPosition,
-      copyQuaternion: prepared.copyQuaternion,
-      copyScale: prepared.copyScale,
+      ...copyTransform,
       pose: createIdentitySupplyPose(),
     };
     this.borrowedBindings.set(instanceId, binding);
@@ -962,6 +976,22 @@ export class BoatSupplyDisplay {
     this.releaseBorrowedOnSync.delete(instanceId);
     this.applyBorrowedEventMotion(binding);
     return binding;
+  }
+
+  private borrowedCopyTransform(
+    instanceId: ItemInstanceId,
+    groupId: BoatSupplyGroupId,
+    visibleCopies: number,
+    fallback: BorrowedCopyTransform,
+  ): BorrowedCopyTransform {
+    if (instanceId !== this.foodSupplyActorId) return fallback;
+    const copy = this.copiesById.get(groupId)![visibleCopies - 1];
+    if (copy === undefined) return fallback;
+    return {
+      copyPosition: copy.root.position.clone(),
+      copyQuaternion: copy.root.quaternion.clone(),
+      copyScale: copy.root.scale.clone(),
+    };
   }
 
   private borrowableGroupId(instanceId: ItemInstanceId): BoatSupplyGroupId | null {

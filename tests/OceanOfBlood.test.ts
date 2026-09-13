@@ -67,7 +67,7 @@ describe('Ocean of Blood rules', () => {
     expect(eligibleEvents([event], { ...criteria, day: 30, appearanceCounts: new Map([[event.id, 1]]) })).toEqual([]);
   });
 
-  it.each([-1, 1.5, 5])('rejects an invalid energy cap: %s', (maximumNextDawnEnergy) => {
+  it.each([0, -1, 1.5, 5])('rejects an invalid energy cap: %s', (maximumNextDawnEnergy) => {
     const catalog = structuredClone(SURVIVAL_EVENTS);
     const event = catalog.find(event => event.id === 'ocean-of-blood')!;
     Object.assign(event.choices[1]!.outcomes[0]!.effects, { maximumNextDawnEnergy });
@@ -224,6 +224,26 @@ describe('Ocean of Blood presentation', () => {
       control.update(2, next, camera);
       expect(sky.palette).toEqual(control.palette);
       expect(sky.material.uniforms.uHorizonColor!.value).toEqual(control.palette.horizonColor);
+    } finally { sky.dispose(); control.dispose(); texture.dispose(); }
+  });
+
+  it('settles a weather and phase transition before the next visible frame', () => {
+    const texture = new Texture();
+    const initial = { weather: 'calm' as const, phase: 'day' as const, severity: 0 };
+    const target = { weather: 'squall' as const, phase: 'night' as const, severity: 0 };
+    const sky = new Skybox(new Scene(), initial, texture);
+    const control = new Skybox(new Scene(), target, texture);
+    const camera = new Vector3();
+    try {
+      sky.update(0.1, target, camera);
+      expect(sky.palette).not.toEqual(control.palette);
+      sky.settleTransition(target, camera);
+      expect(sky.palette.zenithColor.getHex()).toBe(control.palette.zenithColor.getHex());
+      expect(sky.palette.horizonColor.getHex()).toBe(control.palette.horizonColor.getHex());
+      expect(sky.palette.fogColor.getHex()).toBe(control.palette.fogColor.getHex());
+      expect(sky.palette.cloudCoverage).toBeCloseTo(control.palette.cloudCoverage);
+      expect(sky.palette.ambientLightIntensity).toBeCloseTo(control.palette.ambientLightIntensity);
+      expect(sky.palette.keyLightIntensity).toBeCloseTo(control.palette.keyLightIntensity);
     } finally { sky.dispose(); control.dispose(); texture.dispose(); }
   });
 

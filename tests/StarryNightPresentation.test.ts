@@ -84,6 +84,26 @@ describe('Starry Night presentation', () => {
     presentation.dispose();
   });
 
+  it('holds the constellation without a pulse until the wish reaction ends', async () => {
+    const { presentation } = setup();
+    const reveal = presentation.reveal();
+    presentation.update(0, STARRY_NIGHT_REVEAL_SECONDS);
+    await reveal;
+    const target = presentation.interactionTargets()[0]!.root;
+    const materials = target.children.map((child) => (child as import('three').Mesh).material as import('three').ShaderMaterial);
+    const reaction = presentation.react(result('wish'));
+    presentation.update(0, STARRY_NIGHT_BLESSING_SECONDS/2);
+    for (const material of materials) {
+      expect(material.uniforms.opacity!.value).toBe(1);
+      expect(material.uniforms.power).toBeUndefined();
+    }
+    presentation.update(0, STARRY_NIGHT_BLESSING_SECONDS/2);
+    await reaction;
+    expect(presentation.worldRoot.visible).toBe(true);
+    for (const material of materials) expect(material.uniforms.opacity!.value).toBe(1);
+    presentation.dispose();
+  });
+
   it('cancels a reveal and disposes each owned mesh once', async () => {
     const { presentation } = setup();
     const target = presentation.interactionTargets()[0]!.root;

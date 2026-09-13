@@ -264,14 +264,14 @@ describe('survival events', () => {
       .toThrow(/immediate energy.*night event/i);
   });
 
-  it.each([-1, 1.5, 5])(
-    'rejects next dawn energy outside zero through four: %s',
+  it.each([0, -1, 1.5, 5])(
+    'rejects next dawn energy outside one through four: %s',
     (nextDawnEnergy) => {
       const catalog = structuredClone(SURVIVAL_EVENTS) as any[];
       catalog[0].choices[0].outcomes[0].effects.nextDawnEnergy = nextDawnEnergy;
 
       expect(() => validateSurvivalEventCatalog(catalog))
-      .toThrow(/nextDawnEnergy.*integer.*zero through four/i);
+      .toThrow(/nextDawnEnergy.*integer.*one through four/i);
     },
   );
 

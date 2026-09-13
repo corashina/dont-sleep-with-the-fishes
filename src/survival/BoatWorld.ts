@@ -71,7 +71,6 @@ import {
 import { BoatInteractionProjector } from './BoatInteractionProjector';
 import { BoatSupplyDisplay } from './BoatSupplyDisplay';
 import { BoatCameraController } from './BoatCameraController';
-import { CarlitosDelegationPresentation } from './CarlitosDelegationPresentation';
 import { CarlitosPresentation, CARLITOS_FEED_DURATION } from './CarlitosPresentation';
 import { ChestDisplay } from './ChestDisplay';
 import {
@@ -365,7 +364,8 @@ export class BoatWorld {
   private readonly diveController: DivePresentationController;
   private readonly supplyDisplay: BoatSupplyDisplay;
   private readonly carlitos: CarlitosPresentation;
-  private readonly carlitosDelegation: CarlitosDelegationPresentation;
+  private ambientCarlitosSide: EventSide = 1;
+  private eventCarlitosSide: EventSide | null = null;
   private readonly chestDisplay: ChestDisplay;
   private readonly itemEffects: EventItemEffects;
   private readonly itemUseAdapter: EventItemUseAdapter;
@@ -515,7 +515,6 @@ export class BoatWorld {
     let sleepPillow: SleepPillow | null = null;
     let hangingLantern: HangingLantern | null = null;
     let carlitos: CarlitosPresentation | null = null;
-    let carlitosDelegation: CarlitosDelegationPresentation | null = null;
     let supplyDisplay: BoatSupplyDisplay | null = null;
     let chestDisplay: ChestDisplay | null = null;
     let itemUseAdapter: EventItemUseAdapter | null = null;
@@ -582,8 +581,6 @@ export class BoatWorld {
 
       carlitos = new CarlitosPresentation(propModels);
       this.carlitos = carlitos;
-      carlitosDelegation = new CarlitosDelegationPresentation(carlitos);
-      this.carlitosDelegation = carlitosDelegation;
       this.boat.add(carlitos.root);
 
       supplyDisplay = new BoatSupplyDisplay(
@@ -735,7 +732,6 @@ export class BoatWorld {
           () => itemUseAdapter?.dispose(),
           () => chestDisplay?.dispose(),
           () => supplyDisplay?.dispose(),
-          () => carlitosDelegation?.dispose(),
           () => carlitos?.dispose(),
           () => this.toolHoverOutline.dispose(),
           () => this.fishingAvailableOutline.dispose(),
@@ -794,7 +790,6 @@ export class BoatWorld {
         eventModels: dedicatedModels,
         featuredModels,
         dive: this.diveController,
-        delegateCarlitos: (retrieve) => this.carlitosDelegation.delegate(retrieve),
         supplies: this.supplyDisplay,
         carlitos: this.carlitos,
         vortexWave: this.vortexWave,
@@ -950,6 +945,23 @@ export class BoatWorld {
     this.weatherEffects.setWeather(id);
   }
 
+  settlePresentationEnvironment(time: number): void {
+    if (this.disposed) return;
+    this.camera.getWorldPosition(this.worldCameraPosition);
+    this.sky.settleTransition(this.skyState, this.worldCameraPosition);
+    this.applyBaseLighting(this.sky.palette);
+    this.syncOceanAtmosphere();
+    const fog = this.scene.fog as FogExp2;
+    this.ocean.update(
+      time,
+      this.weatherProfile.waveScale,
+      fog.density,
+      this.oceanAtmosphere,
+    );
+    this.weatherEffects.update(time, 0, this.worldCameraPosition);
+    this.ocean.follow(this.worldCameraPosition.x, this.worldCameraPosition.z);
+  }
+
   setLightningStrikeListener(listener: () => void): void {
     this.lightningStrikeListener = listener;
   }
@@ -967,7 +979,7 @@ export class BoatWorld {
     if (this.disposed) return;
     this.supplyDisplay.sync(snapshot);
     this.radioSignalAvailable = snapshot.radioSignalAvailable;
-    this.carlitosDelegation.setAmbientSide(eventSideFromSeed(snapshot.seed));
+    this.setCarlitosAmbientSide(eventSideFromSeed(snapshot.seed));
     this.carlitos.sync(snapshot.carlitos);
     this.chestState = snapshot.chest.state;
     this.chestDisplay.sync(snapshot.chest);
@@ -1166,7 +1178,6 @@ export class BoatWorld {
     variantSeed?: number,
   ): void {
     if (this.disposed) return;
-    this.carlitosDelegation.finish();
     this.weatherEventOperation += 1;
     this.itemUseController.clear(this.phase);
     this.repairToolboxAnimation.cancel();
@@ -1187,7 +1198,7 @@ export class BoatWorld {
       eventId,
       resolvedVariantSeed ?? 0,
     );
-    this.carlitosDelegation.setEventSide(carlitosEventSide);
+    this.setCarlitosEventSide(carlitosEventSide);
     this.activeFeaturedEventId = route === 'featured'
       ? eventId as FeaturedEventId
       : null;
@@ -1282,9 +1293,7 @@ export class BoatWorld {
       return Promise.resolve();
     }
     this.toolHoverOutline.setTarget(null);
-    return this.carlitosDelegation.delegate(
-      () => this.retrieveFeaturedDriftingItem(eventId),
-    );
+    return this.retrieveFeaturedDriftingItem(eventId);
   }
 
   private retrieveFeaturedDriftingItem(eventId: DriftingItemEventId): Promise<void> {
@@ -1360,7 +1369,7 @@ export class BoatWorld {
     if (this.disposed) return;
     this.cameraController.cancelFocusedEventView();
     this.weatherEventOperation += 1;
-    this.carlitosDelegation.setEventSide(null);
+    this.setCarlitosEventSide(null);
     this.itemUseController.clear(this.phase);
     this.eventPresentationHost.clear();
     this.resetDedicatedEffects();
@@ -1375,7 +1384,6 @@ export class BoatWorld {
     this.cameraController.settleForVisibilityChange();
     this.fishingPresentation.settleForVisibilityChange();
     this.weatherEventOperation += 1;
-    this.carlitosDelegation.finish();
     this.itemUseController.settleForVisibilityChange(this.phase);
     this.repairToolboxAnimation.cancel();
     this.skipSequence();
@@ -1561,13 +1569,7 @@ export class BoatWorld {
     );
     this.fishingPresentation.updateSurface(time, amplitudeScale);
     const fog = this.scene.fog as FogExp2;
-    const atmosphere = this.sky.palette;
-    this.oceanAtmosphere.phase = this.skyState.phase;
-    this.oceanAtmosphere.fogColor.copy(fog.color);
-    this.oceanAtmosphere.horizonColor.copy(atmosphere.horizonColor);
-    this.oceanAtmosphere.skyColor.copy(atmosphere.zenithColor);
-    this.oceanAtmosphere.sunColor.copy(atmosphere.sunColor);
-    this.oceanAtmosphere.sunVisibility = atmosphere.sunVisibility;
+    this.syncOceanAtmosphere();
     this.ocean.update(time, amplitudeScale, fog.density, this.oceanAtmosphere);
     this.boat.updateWorldMatrix(true, false);
     this.fishingPresentation.updateLineGeometry();
@@ -1577,6 +1579,17 @@ export class BoatWorld {
     this.weatherEffects.update(time, delta, this.worldCameraPosition);
     this.dispatchPendingLightningStrike();
     this.ocean.follow(this.worldCameraPosition.x, this.worldCameraPosition.z);
+  }
+
+  private syncOceanAtmosphere(): void {
+    const fog = this.scene.fog as FogExp2;
+    const atmosphere = this.sky.palette;
+    this.oceanAtmosphere.phase = this.skyState.phase;
+    this.oceanAtmosphere.fogColor.copy(fog.color);
+    this.oceanAtmosphere.horizonColor.copy(atmosphere.horizonColor);
+    this.oceanAtmosphere.skyColor.copy(atmosphere.zenithColor);
+    this.oceanAtmosphere.sunColor.copy(atmosphere.sunColor);
+    this.oceanAtmosphere.sunVisibility = atmosphere.sunVisibility;
   }
 
   private shouldSkipSceneUpdate(delta: number): boolean {
@@ -1605,7 +1618,6 @@ export class BoatWorld {
       delta,
       this.currentFocusedEventAimTarget(),
     );
-    this.carlitosDelegation.update(delta);
     this.supplyDisplay.update(delta);
     this.itemUseController.update(delta);
     this.repairToolboxAnimation.update(delta);
@@ -1654,7 +1666,6 @@ export class BoatWorld {
       },
       () => this.interactionProjector.dispose(),
       () => this.cancelActiveSequence(),
-      () => this.carlitosDelegation.dispose(),
       () => this.itemUseController.dispose(),
       () => this.repairToolboxAnimation.cancel(),
       () => this.eventPresentationHost.dispose(),
@@ -1890,6 +1901,16 @@ export class BoatWorld {
       default:
         return null;
     }
+  }
+
+  private setCarlitosAmbientSide(side: EventSide): void {
+    this.ambientCarlitosSide = side;
+    if (this.eventCarlitosSide === null) this.carlitos.setSeatSide(side);
+  }
+
+  private setCarlitosEventSide(side: EventSide | null): void {
+    this.eventCarlitosSide = side;
+    this.carlitos.setSeatSide(side ?? this.ambientCarlitosSide);
   }
 
   private isTerminalCue(cue: PresentationCue): boolean {

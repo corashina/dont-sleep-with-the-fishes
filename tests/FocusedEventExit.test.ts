@@ -14,10 +14,19 @@ const exitCases = [
   }))),
 ];
 
+function expectNoSleepCover(
+  eventId: 'drifting-supplies' | 'drifting-chest',
+  ui: Partial<SurvivalUI>,
+): void {
+  if (eventId !== 'drifting-supplies') return;
+  expect(ui.setSleepCovered).not.toHaveBeenCalled();
+  expect(ui.settleCoveredScene).not.toHaveBeenCalled();
+}
+
 describe('focused event dismiss actions', () => {
   for (const { eventId, energy, carlitos } of exitCases) {
     const declineId = 'sleep';
-    it.each(['choice', 'return'] as const)(`${eventId}, Energy ${energy}, Carlitos ${carlitos}: %s resolves the event`, async (exit) => {
+    it.each(['choice', 'return'] as const)(`${eventId}, Energy ${energy}, Carlitos ${carlitos}: %s has distinct exit behavior`, async (exit) => {
       const session = new SurvivalSession([
         ...(eventId === 'drifting-supplies' ? [{ instanceId: 'scubaSet-1' as const, type: 'scubaSet' as const }] : []),
         ...(carlitos !== 'absent' ? [{ instanceId: 'carlitos-1' as const, type: 'carlitos' as const }] : []),
@@ -28,6 +37,7 @@ describe('focused event dismiss actions', () => {
       const before = session.snapshot();
       const showFocusedEvent = vi.fn();
       const exitFocusedEventView = vi.fn(async () => {});
+      const clearEvent = vi.fn();
       const ui: Partial<SurvivalUI> = {
         setBusy: vi.fn(), render: vi.fn(), restoreCommandFocus: vi.fn(),
         showFocusedEvent, hideFocusedEvent: vi.fn(), clearEventPresentation: vi.fn(),
@@ -42,7 +52,7 @@ describe('focused event dismiss actions', () => {
           stageEvent: vi.fn(), revealEvent: vi.fn(async () => {}),
           enterFocusedEventView: vi.fn(async () => {}),
           exitFocusedEventView,
-          playEventChoice: vi.fn(async () => {}), clearEvent: vi.fn(),
+          playEventChoice: vi.fn(async () => {}), clearEvent,
         },
       }, eventId);
       try {
@@ -53,7 +63,7 @@ describe('focused event dismiss actions', () => {
         const choices = (showFocusedEvent.mock.calls[0]![0] as FocusedEventFocusView).choices;
         expect(choices).toEqual(expect.arrayContaining([
           expect.objectContaining({
-            id: declineId, unavailableReason: null, dismisses: true,
+            id: declineId, unavailableReason: null,
           }),
         ]));
         for (const choice of choices.filter(({ id }) => id !== declineId)) {
@@ -65,6 +75,16 @@ describe('focused event dismiss actions', () => {
         else ui.onFocusedEventChoice?.({ id: declineId, instanceId: null });
         await vi.waitFor(() => expect(exitFocusedEventView).toHaveBeenCalledOnce());
         await vi.waitFor(() => expect(ui.restoreCommandFocus).toHaveBeenCalled());
+        if (exit === 'return') {
+          expect(session.snapshot()).toEqual(before);
+          expect(clearEvent).not.toHaveBeenCalled();
+          expect(ui.clearEventPresentation).not.toHaveBeenCalled();
+          expect(ui.hideFocusedEvent).toHaveBeenCalledOnce();
+          expect(ui.setBusy).toHaveBeenLastCalledWith(false);
+          ui.onFocusedEventSelect?.(eventId);
+          await vi.waitFor(() => expect(showFocusedEvent).toHaveBeenCalledTimes(2));
+          return;
+        }
         expect(session.snapshot()).toMatchObject({
           state: 'day', pendingEventId: null,
           day: before.day, health: before.health, hunger: before.hunger,
@@ -73,12 +93,10 @@ describe('focused event dismiss actions', () => {
           carlitos: before.carlitos,
         });
         expect(ui.setBusy).toHaveBeenLastCalledWith(false);
+        expect(clearEvent).not.toHaveBeenCalled();
         expect(ui.clearEventPresentation).toHaveBeenCalled();
         expect(ui.hideFocusedEvent).toHaveBeenCalled();
-        if (eventId === 'drifting-supplies') {
-          expect(ui.setSleepCovered).not.toHaveBeenCalled();
-          expect(ui.settleCoveredScene).not.toHaveBeenCalled();
-        }
+        expectNoSleepCover(eventId, ui);
         ui.onFocusedEventSelect?.(eventId);
         await Promise.resolve();
         expect(showFocusedEvent).toHaveBeenCalledOnce();

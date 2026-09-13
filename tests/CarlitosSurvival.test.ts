@@ -18,16 +18,19 @@ describe('Carlitos survival integration', () => {
   });
 
   it.each(['tired', 'exhausted'] as const)('blocks all event help while %s without spending resources', (rest) => {
+    const unavailableReason = rest === 'tired'
+      ? 'Carlitos is tired. Keep him fed and happy before nightfall. He will recover after one good night.'
+      : 'Carlitos is exhausted. Keep him fed and happy before nightfall. He needs two good nights to recover.';
     for (const eventId of ['guarded-sleep', 'drifting-supplies', 'drifting-chest']) {
       const session = new SurvivalSession([...saved], {
         seed: 1, initialEventId: eventId, initialCarlitos: { rest },
       });
       const before = session.exportCheckpoint();
       expect(session.companionEventActionAvailability({ id: eventId === 'guarded-sleep' ? 'watchCarlitos' : 'delegateCarlitos' }))
-        .toMatchObject({ visible: true, unavailableReason: `Carlitos is ${rest}. He must rest before helping.` });
+        .toMatchObject({ visible: true, unavailableReason });
       const result = session.resolveEvent({ kind: 'choice', choiceId: eventId === 'guarded-sleep' ? 'watch' : 'delegate-carlitos' });
       expect(result.accepted).toBe(false);
-      expect(result.message).toBe(`Carlitos is ${rest}. He must rest before helping.`);
+      expect(result.message).toBe(unavailableReason);
       const after = session.exportCheckpoint();
       expect(after.carlitos).toEqual(before.carlitos);
       expect(after.randomState).toEqual(before.randomState);
@@ -44,6 +47,24 @@ describe('Carlitos survival integration', () => {
     expect(session.resolveEvent({ kind: 'choice', choiceId: 'watch' }).accepted).toBe(true);
     expect(session.snapshot().carlitos?.rest).toBe('tired');
     expect(session.snapshot().energy).toBe(playerEnergy);
+  });
+
+  it('never schedules Guarded Sleep while exhausted', () => {
+    let restedAppearances = 0;
+    for (let seed = 1; seed <= 100; seed += 1) {
+      const exhausted = new SurvivalSession([...saved], {
+        seed, initial: { day: 7 }, initialCarlitos: { rest: 'exhausted' },
+      });
+      exhausted.endDay();
+      expect(exhausted.snapshot().pendingEventId).not.toBe('guarded-sleep');
+
+      const rested = new SurvivalSession([...saved], {
+        seed, initial: { day: 7 }, initialCarlitos: { rest: 'rested' },
+      });
+      rested.endDay();
+      if (rested.snapshot().pendingEventId === 'guarded-sleep') restedAppearances += 1;
+    }
+    expect(restedAppearances).toBeGreaterThan(0);
   });
 
   it.each(['rested', 'tired', 'exhausted'] as const)('applies the fishing bonus only when rested: %s', (rest) => {

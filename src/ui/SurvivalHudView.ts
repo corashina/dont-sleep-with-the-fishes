@@ -280,7 +280,6 @@ export class SurvivalHudView {
   }
 
   private syncControls(): void {
-    this.journalMarker.disabled = this.busy;
     this.cameraTurn.disabled = this.busy;
     this.cameraReturn.disabled = this.busy;
   }

@@ -12,6 +12,7 @@ import {
 import type { DeathCause } from '../game/ending';
 import type { SurvivalReading } from '../game/runStatistics';
 import { SURVIVAL_EVENTS } from './eventCatalog';
+import { DRIFTING_SUPPLY_HISTORY_IDS } from './driftingSupplies';
 import { FISHING_CATCHES } from './fishingCatalog';
 import { CARLITOS_MAX_UNHAPPINESS, type CarlitosSnapshot } from './CarlitosState';
 import {
@@ -51,6 +52,7 @@ const MAX_UINT32 = 0xffff_ffff;
 const MAX_COUNTER = Number.MAX_SAFE_INTEGER;
 const ITEM_ID_SET = new Set<string>(ITEM_IDS);
 const EVENT_ID_SET = new Set(SURVIVAL_EVENTS.map(({ id }) => id));
+const EVENT_HISTORY_ID_SET = new Set([...EVENT_ID_SET, ...DRIFTING_SUPPLY_HISTORY_IDS]);
 const FISHING_CATCH_ID_SET = new Set(FISHING_CATCHES.map(({ id }) => id));
 const WEATHER_ID_SET = new Set<WeatherId>(['calm', 'overcast', 'squall']);
 const JOURNAL_WEATHER_ID_SET = new Set<string>(PRESENTATION_WEATHER_IDS);
@@ -221,7 +223,7 @@ function parseNextDawnEnergyExtension(
   value: Record<string, unknown>,
 ): ActionOutcomeExtensions | null {
   if (!('nextDawnEnergy' in value)) return {};
-  const nextDawnEnergy = parseInteger(value.nextDawnEnergy, 0, 4);
+  const nextDawnEnergy = parseInteger(value.nextDawnEnergy, 1, 4);
   return nextDawnEnergy === null ? null : { nextDawnEnergy: nextDawnEnergy as DawnEnergy };
 }
 
@@ -522,7 +524,12 @@ function parseSessionCheckpoint(value: unknown): SurvivalSessionCheckpoint | nul
   const carlitos = parseCarlitos(value.carlitos);
   const nextDawnEnergyOverride = parseNextDawnEnergyOverride(value.nextDawnEnergyOverride);
   const lastEventId = parseEventIdOrNull(value.lastEventId);
-  const lastSeenDays = parseEventNumberRecord(value.lastSeenDays, 0, day!);
+  const lastSeenDays = parseEventNumberRecord(
+    value.lastSeenDays,
+    0,
+    day!,
+    EVENT_HISTORY_ID_SET,
+  );
   const appearanceCounts = parseEventNumberRecord(value.appearanceCounts, 0, MAX_COUNTER);
   const lastOutcome = parseActionOutcome(value.lastOutcome);
   const lastHealthCause = parseDeathCause(value.lastHealthCause);
@@ -582,7 +589,7 @@ function parseHistory(value: unknown, currentDay: number): readonly SurvivalRead
 
 function parseNextDawnEnergyOverride(value: unknown): DawnEnergy | null | undefined {
   if (value === null) return null;
-  const parsed = parseInteger(value, 0, 4);
+  const parsed = parseInteger(value, 1, 4);
   return parsed === null ? undefined : parsed as DawnEnergy;
 }
 
@@ -709,12 +716,17 @@ function parseEventIdOrNull(value: unknown): string | null | undefined {
   return value === null ? null : typeof value === 'string' && EVENT_ID_SET.has(value) ? value : undefined;
 }
 
-function parseEventNumberRecord(value: unknown, minimum: number, maximum: number): Readonly<Record<string, number>> | null {
+function parseEventNumberRecord(
+  value: unknown,
+  minimum: number,
+  maximum: number,
+  validIds: ReadonlySet<string> = EVENT_ID_SET,
+): Readonly<Record<string, number>> | null {
   if (!isRecord(value)) return null;
   const record: Record<string, number> = {};
   for (const [eventId, rawNumber] of Object.entries(value)) {
     const number = parseInteger(rawNumber, minimum, maximum);
-    if (!EVENT_ID_SET.has(eventId) || number === null) return null;
+    if (!validIds.has(eventId) || number === null) return null;
     record[eventId] = number;
   }
   return Object.freeze(record);

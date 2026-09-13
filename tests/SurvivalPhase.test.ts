@@ -134,6 +134,22 @@ describe('survival checkpoints', () => {
     expect(render).toHaveBeenCalledTimes(2);
   });
 
+  it('opens the journal during a busy action presentation', () => {
+    const showJournal = vi.fn();
+    const phase = SurvivalPhase.forTest({
+      session: { snapshot: vi.fn(() => snapshot()) },
+      world: {},
+      ui: { showJournal },
+    });
+    const internals = phase as unknown as { setBusy(value: boolean): void };
+    phase.start();
+
+    internals.setBusy(true);
+    phase.handleJournalOpen();
+
+    expect(showJournal).toHaveBeenCalledWith([]);
+  });
+
   it.each([
     ['day event', 'drifting-supplies'],
     ['night event', 'bad-sleep'],
@@ -504,6 +520,54 @@ describe('SurvivalPhase orchestration', () => {
     });
     expect(setEventSelection).toHaveBeenCalledTimes(3);
     expect(retrieveDriftingItem).not.toHaveBeenCalled();
+  });
+
+  it('defers the retrieved chest inventory presentation until its animation ends', async () => {
+    const realSession = new SurvivalSession([], {
+      seed: 28,
+      initial: { day: 3, energy: 3 },
+      initialEventId: 'drifting-chest',
+    });
+    const retrieval = deferred();
+    const syncInventory = vi.fn();
+    const ui: Partial<SurvivalUI> = {
+      setSleepCovered: vi.fn(() => Promise.resolve()),
+      showEventReveal: vi.fn(() => Promise.resolve()),
+      setEventSelection: vi.fn(),
+      playEventChoiceBeat: vi.fn(() => Promise.resolve()),
+      setBusy: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const phase = SurvivalPhase.forTest({
+      session: realSession,
+      world: {
+        stageEvent: vi.fn(),
+        revealEvent: vi.fn(() => Promise.resolve()),
+        enterFocusedEventView: vi.fn(() => Promise.resolve()),
+        exitFocusedEventView: vi.fn(() => Promise.resolve()),
+        retrieveDriftingItem: vi.fn(() => retrieval.promise),
+        syncInventory,
+        dispose: vi.fn(() => retrieval.resolve()),
+      },
+      ui,
+    });
+
+    phase.start();
+    await flushPromises();
+    ui.onFocusedEventSelect?.('drifting-chest');
+    await flushPromises();
+    syncInventory.mockClear();
+
+    ui.onFocusedEventChoice?.({ id: 'retrieve', instanceId: null });
+    await flushPromises();
+    const reserved = realSession.snapshot();
+    expect(reserved.chest.state).toBe('closed');
+    phase.update(1, 0.016);
+    expect(syncInventory).not.toHaveBeenCalledWith(reserved);
+
+    retrieval.resolve();
+    await vi.waitFor(() => expect(syncInventory).toHaveBeenCalledWith(reserved));
+    phase.dispose();
   });
 
   it.each(['dispose', 'restart'] as const)(
@@ -896,6 +960,7 @@ describe('SurvivalPhase orchestration', () => {
       world: {
         scene: new Scene(),
         stageEvent: vi.fn(() => calls.push('stage')),
+        settlePresentationEnvironment: vi.fn(() => calls.push('weather-settled')),
         revealEvent: vi.fn(async () => { calls.push('reveal'); }),
         dispose: vi.fn(),
       },
@@ -921,7 +986,7 @@ describe('SurvivalPhase orchestration', () => {
     loading.resolve();
     await flushPromises();
     expect(calls).toEqual([
-      'load', 'cover', 'activate', 'active', 'stage', 'settle',
+      'load', 'cover', 'activate', 'active', 'stage', 'weather-settled', 'settle',
       'uncover', 'reveal', 'caption', 'selection',
     ]);
     phase.dispose();
@@ -1214,7 +1279,7 @@ describe('SurvivalPhase orchestration', () => {
     phase.dispose();
   });
 
-  it('orders a focused item result without showing outcome text', async () => {
+  it('selects a Night Trader offer directly and orders its focused result', async () => {
     const map = {
       instanceId: 'map-1' as const,
       type: 'map' as const,
@@ -1333,13 +1398,16 @@ describe('SurvivalPhase orchestration', () => {
 
     phase.start();
     await flushPromises();
-    expect([...ui.setEventSelection.mock.calls[0]![0]]).toEqual([
-      ['map-1', 'map'],
+    expect([...ui.setEventSelection.mock.calls[0]![0]]).toEqual([]);
+    const choices = ui.setEventSelection.mock.calls[0]![1];
+    expect(choices.map(({ id }: { id: string }) => id)).toEqual([
+      ...nightTraderOffers(deriveEventVariantSeed(traderMapSeed, 1, 'night-trader')).map(({ id }) => id),
+      'sleep',
     ]);
-    expect(ui.setEventSelection.mock.calls[0]![1]).toEqual([
-      { id: 'sleep', label: 'Refuse', unavailableReason: null },
-    ]);
-    phase.handleEventItem('map', 'map-1');
+    expect(choices.find(({ id }: { id: string }) => id === 'map')).toMatchObject({
+      id: 'map', label: 'Exchange: MAP → COMPASS', unavailableReason: null,
+    });
+    (ui as Partial<SurvivalUI>).onEventChoice?.('map');
     await flushPromises();
     expect(setEventEligibleItems).toHaveBeenLastCalledWith(new Set());
     expect(calls).toEqual(['stage', 'reveal', 'unlock', 'choice']);
@@ -1369,7 +1437,11 @@ describe('SurvivalPhase orchestration', () => {
       label: 'a missing event result',
       eventId: 'night-trader',
       choiceId: 'map',
-      route: 'item',
+      route: 'context',
+      usesInventory: true,
+      syncsBeforeError: false,
+      playsBeforeRecovery: true,
+      recoveredState: 'day',
       eventResult: undefined,
       received: 'missing',
     },
@@ -1378,6 +1450,10 @@ describe('SurvivalPhase orchestration', () => {
       eventId: 'midnight-tour',
       choiceId: 'visit',
       route: 'context',
+      usesInventory: false,
+      syncsBeforeError: true,
+      playsBeforeRecovery: false,
+      recoveredState: 'nightEvent',
       eventResult: {
         eventId: 'handyman',
         choiceId: 'visit',
@@ -1390,6 +1466,10 @@ describe('SurvivalPhase orchestration', () => {
       eventId: 'other-people',
       choiceId: 'sleep',
       route: 'endure',
+      usesInventory: false,
+      syncsBeforeError: false,
+      playsBeforeRecovery: true,
+      recoveredState: 'day',
       eventResult: {
         eventId: 'other-people',
         choiceId: 'flare',
@@ -1401,6 +1481,10 @@ describe('SurvivalPhase orchestration', () => {
     eventId,
     choiceId,
     route,
+    usesInventory,
+    syncsBeforeError,
+    playsBeforeRecovery,
+    recoveredState,
     eventResult,
     received,
   }) => {
@@ -1415,7 +1499,7 @@ describe('SurvivalPhase orchestration', () => {
       energy: 3,
       bait: 0,
       seed: traderMapSeed,
-      ...(route === 'item'
+      ...(usesInventory
         ? { inventory: inventory({ 'map-1': map }) }
         : {}),
     });
@@ -1441,7 +1525,7 @@ describe('SurvivalPhase orchestration', () => {
       expect(clearEventPresentation).toHaveBeenCalledOnce();
       expect(reactToEventOutcome).not.toHaveBeenCalled();
       expect(play).not.toHaveBeenCalled();
-      if (route !== 'context') {
+      if (!syncsBeforeError) {
         expect(syncInventory).not.toHaveBeenCalledWith(resolvedSnapshot);
       }
     });
@@ -1473,7 +1557,7 @@ describe('SurvivalPhase orchestration', () => {
             pendingEventId: null,
             energy: 0,
             bait: 1,
-            ...(route === 'item'
+            ...(usesInventory
               ? {
                   inventory: inventory({
                     'map-1': { ...map, condition: 'lost' },
@@ -1532,24 +1616,24 @@ describe('SurvivalPhase orchestration', () => {
     await flushPromises();
 
     expect(onInvariantError).toHaveBeenCalledOnce();
-    expect(calls).toEqual(route === 'context'
+    expect(calls).toEqual(syncsBeforeError
       ? ['clear-world', 'clear-ui', 'sync', 'error', 'focus']
       : ['clear-world', 'clear-ui', 'error', 'sync', 'focus']);
     expect(reactToEventOutcome).not.toHaveBeenCalled();
-    if (route === 'context') {
+    if (!playsBeforeRecovery) {
       expect(play).not.toHaveBeenCalled();
     } else {
       expect(play).toHaveBeenCalledOnce();
       expect(play).toHaveBeenCalledWith('none');
     }
-    if (route === 'context') {
+    if (syncsBeforeError) {
       expect(calls.indexOf('sync')).toBeLessThan(calls.indexOf('error'));
     } else {
       expect(calls.indexOf('error')).toBeLessThan(calls.indexOf('sync'));
     }
     expect(syncInventory).toHaveBeenCalledWith(current);
     expect(setBusy).toHaveBeenLastCalledWith(false);
-    expect(current.state).toBe(route === 'context' ? 'nightEvent' : 'day');
+    expect(current.state).toBe(recoveredState);
     phase.dispose();
   });
 

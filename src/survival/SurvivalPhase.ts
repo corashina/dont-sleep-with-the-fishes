@@ -139,13 +139,13 @@ function createTestEventBundleManager(): SurvivalPhaseBundleManager {
   };
 }
 
-const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk', 'abducted'];
+const TERMINAL_STATES: readonly SurvivalState[] = ['rescued', 'dead', 'sunk'];
 const OUTLINED_DAY_ACTIONS = [
   'eat', 'fish', 'netFish', 'openChest', 'repair', 'dive', 'repairItem', 'answerRadio', 'useEnergyBar', 'treat',
   'endDay',
 ] as const;
 
-function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' | 'abducted' {
+function isTerminal(state: SurvivalState): state is 'rescued' | 'dead' | 'sunk' {
   return TERMINAL_STATES.includes(state);
 }
 
@@ -523,6 +523,7 @@ export class SurvivalPhase implements GamePhase {
     if (this.world.scene !== undefined) {
       this.scenePreparations += 1;
       try {
+        this.world.settlePresentationEnvironment?.(this.elapsedSeconds);
         await prepareScene(this.context.renderer, this.world.scene, this.context.camera,
           [], () => this.isContinuationActive(generation));
         if (this.isContinuationActive(generation)) {
@@ -575,7 +576,7 @@ export class SurvivalPhase implements GamePhase {
   }
 
   handleJournalOpen(): void {
-    if (this.disposed || this.busy || this.gameplayPaused() || this.documentIsHidden()) return;
+    if (this.disposed || this.gameplayPaused() || this.documentIsHidden()) return;
     const snapshot = this.session.snapshot();
     this.lastReadJournalRevision = this.latestJournalRevision(snapshot);
     this.audio.journal();
@@ -985,7 +986,7 @@ export class SurvivalPhase implements GamePhase {
 
   private syncVisualState(snapshot: Readonly<SurvivalSnapshot>): void {
     this.visualState.elapsedSeconds = this.elapsedSeconds;
-    this.visualState.phase = snapshot.state === 'nightEvent' || snapshot.state === 'abducted' ? 'night' : 'day';
+    this.visualState.phase = snapshot.state === 'nightEvent' ? 'night' : 'day';
     this.visualState.weather = snapshot.weather;
   }
 

@@ -44,10 +44,10 @@ export class NightTraderSign {
       post.position.set(x, -0.85, -0.09);
       this.root.add(post);
     }
-    const lanternArm = new Mesh(new BoxGeometry(0.52, 0.055, 0.07), endGrain);
-    lanternArm.position.set(0.88, 1.08, -0.03);
+    const lanternArm = new Mesh(new BoxGeometry(0.66, 0.055, 0.07), endGrain);
+    lanternArm.position.set(0.31, 1.08, -0.03);
     const lanternHook = new Mesh(new BoxGeometry(0.05, 0.055, 0.45), nail);
-    lanternHook.position.set(1.1, 1.08, 0.16);
+    lanternHook.position.set(0, 1.08, 0.16);
     this.root.add(lanternArm, lanternHook);
     for (let row = 0; row < 5; row++) {
       const y = (2 - row) * ROW_HEIGHT;

@@ -534,7 +534,7 @@ describe('event selection contracts', () => {
     expect(rig.onFatalError).not.toHaveBeenCalled();
   });
 
-  it.each(['flashlight', 'flareGun'] as const)('waits for the UFO beam after %s and retains the final scene', async (itemId) => {
+  it.each(['flashlight', 'flareGun'] as const)('waits for the UFO beam after %s and clears the scene', async (itemId) => {
     const rig = createSessionRig(new SurvivalSession([
       { instanceId: `${itemId}-1`, type: itemId },
     ], { seed: 1113, initial: { day: 15 }, initialEventId: 'flying-saucer' }));
@@ -544,13 +544,15 @@ describe('event selection contracts', () => {
     rig.world.clearEvent.mockClear();
     rig.flow.resolveItem(itemId, `${itemId}-1`);
     await vi.waitFor(() => expect(rig.world.reactToEventOutcome).toHaveBeenCalledOnce());
-    expect(rig.realSession.snapshot().state).toBe('abducted');
+    expect(rig.realSession.snapshot().state).toBe('nightEvent');
     expect(rig.presentTerminal).not.toHaveBeenCalled();
     rig.flow.update(FLYBY_CHOICE_WINDOW_SECONDS);
     expect(rig.session.resolveEvent).toHaveBeenCalledOnce();
     beam.resolve();
-    await vi.waitFor(() => expect(rig.presentTerminal).toHaveBeenCalledOnce());
-    expect(rig.world.clearEvent).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(rig.flow.isIdle()).toBe(true));
+    expect(rig.presentTerminal).toHaveBeenCalledOnce();
+    expect(rig.presentTerminal).toHaveBeenCalledWith(expect.objectContaining({ ending: null }));
+    expect(rig.world.clearEvent).toHaveBeenCalledOnce();
     expect(rig.onFatalError).not.toHaveBeenCalled();
   });
 
@@ -724,6 +726,33 @@ describe('event selection contracts', () => {
       rig.flow.clear();
     },
   );
+
+  it('keeps gained food off the boat until the Check the Back reaction ends', async () => {
+    const rig = createSessionRig(new SurvivalSession([], {
+      seed: 105,
+      random: sequenceRandom([0]),
+      initial: { day: 2 },
+      initialEventId: 'check-the-back',
+    }));
+    const reaction = deferred();
+    rig.world.reactToEventOutcome.mockImplementation(() => reaction.promise);
+    await rig.flow.revealPending(rig.realSession.snapshot());
+
+    rig.flow.resolveContextual('check');
+    await vi.waitFor(() => expect(rig.world.reactToEventOutcome).toHaveBeenCalledOnce());
+    expect(rig.realSession.snapshot().food).toBe(1);
+
+    rig.flow.sync(rig.realSession.snapshot());
+    expect(rig.world.syncInventory).toHaveBeenLastCalledWith(
+      expect.objectContaining({ food: 0 }),
+    );
+
+    reaction.resolve();
+    await vi.waitFor(() => expect(rig.world.syncInventory).toHaveBeenLastCalledWith(
+      expect.objectContaining({ food: 1 }),
+    ));
+    rig.flow.clear();
+  });
 
   it('keeps the forced Fish result when automatic Knife use replaces Yes', async () => {
     const rig = createSessionRig(new SurvivalSession([
@@ -946,6 +975,40 @@ describe('SurvivalEventFlow', () => {
     expect(rig.renderSnapshot).not.toHaveBeenCalled();
     expect(rig.presentTerminal).not.toHaveBeenCalled();
   });
+
+  it.each(['drifting-supplies', 'drifting-chest'] as const)(
+    'keeps %s visible after Let It Drift, then clears it at night',
+    async (eventId) => {
+      const rig = createSessionRig(new SurvivalSession([], {
+        seed: 41,
+        initial: { day: 4 },
+        initialEventId: eventId,
+      }));
+      await rig.flow.revealPending(rig.realSession.snapshot());
+      await rig.flow.focusEvent(eventId);
+      rig.flow.setFocusedResolutionActive(true);
+
+      const resolution = rig.flow.resolveFocusedEventChoice({
+        id: 'sleep',
+        instanceId: null,
+      });
+      if (resolution === undefined || !resolution.accepted) {
+        throw new Error('Expected Let It Drift to resolve.');
+      }
+      resolution.clearEvent(true);
+
+      expect(rig.world.clearEvent).not.toHaveBeenCalled();
+      expect(rig.bundles.releaseActive).not.toHaveBeenCalled();
+      expect(rig.ui.clearEventPresentation).toHaveBeenCalledOnce();
+      expect(rig.flow.isIdle()).toBe(true);
+
+      rig.flow.beginNightTransition(rig.realSession.snapshot(), false);
+
+      expect(rig.world.clearEvent).toHaveBeenCalledOnce();
+      expect(rig.bundles.releaseActive).toHaveBeenCalledOnce();
+      rig.flow.dispose();
+    },
+  );
 
   it('reports only the first cleanup error after every cleanup step', () => {
     const firstError = new Error('audio cleanup failed');

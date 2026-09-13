@@ -2,6 +2,7 @@ import type { ItemId } from '../game/ItemState';
 import { nightTraderChoices, nightTraderEventForSeed } from './nightTraderTrades';
 import { HANDYMAN_ITEM_IDS } from './tradeRules';
 import {
+  DRIFTING_LOOT_TYPE_COOLDOWN_DAYS,
   DRIFTING_SUPPLY_KINDS,
   DRIFTING_SUPPLY_PLAYER_ENERGY_COST,
 } from './driftingSupplies';
@@ -389,8 +390,8 @@ const survivalEvents: SurvivalEventDefinition[] = [
         subtract('hull', { min: 20, max: 40 }),
       ], [consume('swimRing')]))),
     choice('sleep', 'eventText063', undefined,
-      outcome(80, 'eventText116', atNextDawn(0, effects([subtract('hull', { min: 20, max: 40 })]))),
-      outcome(30, 'eventText147', atNextDawn(2, effects([subtract('hull', { min: 50, max: 60 })], [loseRandom(1)])))),
+      outcome(80, 'eventText116', atNextDawn(1, effects([subtract('hull', { min: 20, max: 40 })]))),
+      outcome(30, 'eventText147', atNextDawn(2, effects([subtract('hull', { min: 50, max: 60 })])))),
   ], undefined, { minimumPressure: 1 }),
   event('shower-night', 'night', 'eventText038', 'uncertain', 'storm', 3, 2, 4, [
     choice('bucket', 'eventText065', 'bucket', outcome(90, 'eventText148'), outcome(10, 'eventText148', effects(undefined, [breakItem('bucket')]))),
@@ -487,7 +488,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(1, 'eventText183',
         effects([subtract('pressure', 1)], [consume('ductTape')]))),
     choice('sleep', 'eventText063', undefined,
-      outcome(60, 'eventText184', atNextDawn(0)),
+      outcome(60, 'eventText184', atNextDawn(1)),
       outcome(40, 'eventText181', atNextDawn(1, effects([subtract('hull', { min: 30, max: 40 }), subtract('health', 20)])))),
   ], undefined, { minimumPressure: 2 }),
   event('face-on-the-moon', 'night', 'eventText046', 'uncertain', 'darkness', 1, 17, 5, [
@@ -496,7 +497,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
       outcome(60, 'eventText180', atNextDawn(1, effects(undefined, [breakItem('spyglass')]))),
       outcome(40, 'eventText174', effects([add('pressure', 1)]))),
     choice('sleep', 'eventText063', undefined,
-      outcome(100, 'eventText184', atNextDawn(0)),
+      outcome(100, 'eventText184', atNextDawn(1)),
       outcome(20, 'eventText152', atNextDawn(2))),
   ], undefined, { minimumPressure: 3 }),
   event('shadow-figure', 'night', 'eventText047', 'dangerous', 'darkness', 1, 20, 3, [
@@ -534,7 +535,7 @@ const survivalEvents: SurvivalEventDefinition[] = [
     },
     contextualChoice('sleep', 'eventText081', outcome(1, 'eventText212')),
   ]),
-  event('drifting-chest', 'day', 'eventText050', 'safe', 'fish', 1, 3, 1, [
+  event('drifting-chest', 'day', 'eventText050', 'safe', 'fish', 1, 3, DRIFTING_LOOT_TYPE_COOLDOWN_DAYS, [
     {
       ...contextualChoice('retrieve', 'eventText079',
         featuredOutcome(
@@ -706,10 +707,10 @@ const survivalEvents: SurvivalEventDefinition[] = [
   ], undefined, { minimumRescueLead: 2, maximumAppearances: 2 }),
   event('flying-saucer', 'night', 'ufoTitle', 'dangerous', 'sighting', 1, 8, 15, [
     choice('flareGun', 'eventText070', 'flareGun', outcome(
-      1, 'ufoTaken', { ending: 'abduction', items: [consume('flareGun')] }, 'ufo-abduction',
+      1, 'ufoBeamHit', effects([subtract('health', 40)], [consume('flareGun')]), 'ufo-beam-hit',
     )),
     choice('flashlight', 'eventText071', 'flashlight', outcome(
-      1, 'ufoTaken', { ending: 'abduction' }, 'ufo-abduction',
+      1, 'ufoBeamHit', effects([subtract('health', 40)]), 'ufo-beam-hit',
     )),
     contextualChoice('sleep', 'ufoIgnore', outcome(1, 'ufoPassed', {}, 'ufo-pass')),
   ], undefined, { maximumAppearances: 1 }),
