@@ -226,13 +226,10 @@ function validateEffectRecord(value: unknown, path: string): PlainRecord {
     `${path}.effects`,
     'effect',
     [
-      'resources', 'items', 'chest', 'ending',
+      'resources', 'items', 'chest',
       'nextDawnEnergy', 'nextDawnEnergyReduction', 'maximumNextDawnEnergy', 'followUpNight', 'restoreCrew',
     ],
   );
-  if (Object.hasOwn(candidateEffects, 'ending') && candidateEffects.ending !== 'abduction') {
-    throw new Error(`${path}.effects.ending must be abduction`);
-  }
   if (Object.hasOwn(candidateEffects, 'restoreCrew') && candidateEffects.restoreCrew !== true) {
     throw new Error(`${path}.effects.restoreCrew must be true`);
   }
@@ -338,10 +335,10 @@ function validateDawnEnergyReduction(candidateEffects: PlainRecord, path: string
 function validateDawnEnergyCap(candidateEffects: PlainRecord, path: string): void {
   if (Object.hasOwn(candidateEffects, 'maximumNextDawnEnergy')) {
     const cap = candidateEffects.maximumNextDawnEnergy;
-    if (!Number.isInteger(cap) || (cap as number) < 0 || (cap as number) > 4
+    if (!Number.isInteger(cap) || (cap as number) < 1 || (cap as number) > 4
       || Object.hasOwn(candidateEffects, 'nextDawnEnergy')
       || Object.hasOwn(candidateEffects, 'nextDawnEnergyReduction')) {
-      throw new Error(`${path}.maximumNextDawnEnergy requires an exclusive integer from zero through four`);
+      throw new Error(`${path}.maximumNextDawnEnergy requires an exclusive integer from one through four`);
     }
   }
 }
@@ -358,10 +355,10 @@ function validateOptionalEffects(candidateEffects: PlainRecord, path: string): v
   }
   if (hasNextDawnEnergy && (
     !Number.isInteger(candidateEffects.nextDawnEnergy)
-    || (candidateEffects.nextDawnEnergy as number) < 0
+    || (candidateEffects.nextDawnEnergy as number) < 1
     || (candidateEffects.nextDawnEnergy as number) > 4
   )) {
-    throw new Error(`${path}.nextDawnEnergy must be an integer from zero through four`);
+    throw new Error(`${path}.nextDawnEnergy must be an integer from one through four`);
   }
   if (hasFollowUpNight && candidateEffects.followUpNight !== true) {
     throw new Error(`${path}.followUpNight must be true`);

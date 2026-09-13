@@ -60,11 +60,15 @@ describe('journal item changes', () => {
       deltas: { food: 2, bait: -1 }, inventoryMutations: [],
     }] }]);
     const items = [...view.root.querySelectorAll<HTMLElement>('[data-journal-day-items] .journal-item')];
-    expect(items.map((item) => item.dataset.itemType)).toEqual(['cannedFood', 'cannedFood', 'baitTin']);
-    expect(items.map((item) => item.querySelector('.journal-item__status')?.textContent)).toEqual(['+', '+', '−']);
+    expect(items.map((item) => item.dataset.itemType)).toEqual(['cannedFood', 'baitTin']);
+    expect(items.map((item) => item.dataset.itemCount)).toEqual(['2', '1']);
+    expect(items.map((item) => item.querySelector('.journal-item__status')?.textContent)).toEqual(['+', '−']);
     expect(items.map((item) => item.querySelector('img')?.getAttribute('src')))
-      .toEqual([itemThumbnailUrl('cannedFood'), itemThumbnailUrl('cannedFood'), itemThumbnailUrl('baitTin')]);
-    expect(items[2]!.getAttribute('title')).toContain('Used up');
+      .toEqual([itemThumbnailUrl('cannedFood'), itemThumbnailUrl('baitTin')]);
+    expect(items[0]!.querySelector('.journal-item__quantity')?.textContent).toBe('x2');
+    expect(items[0]!.querySelector('[role="img"]')?.getAttribute('aria-label')).toContain('x2');
+    expect(items[1]!.querySelector('.journal-item__quantity')).toBeNull();
+    expect(items[1]!.getAttribute('title')).toContain('Used up');
   });
 
   it('shows two pages with separate headings, weather, and a pending night', () => {
@@ -82,7 +86,7 @@ describe('journal item changes', () => {
     expect(pages[1]!.querySelectorAll('.journal-item')).toHaveLength(0);
   });
 
-  it('places recorded day and night changes below their text, including repeated items', () => {
+  it('places recorded day and night changes below their text and stacks repeated items', () => {
     const view = fixture();
     view.show([changes]);
     const day = view.root.querySelector<HTMLElement>('[data-journal-day-items]')!;
@@ -92,9 +96,11 @@ describe('journal item changes', () => {
     expect(day.hidden).toBe(false);
     expect(night.hidden).toBe(false);
     expect([...day.children].map((item) => (item as HTMLElement).dataset.itemChange))
-      .toEqual(['repair', 'consume', 'break', 'gain', 'gain']);
+      .toEqual(['repair', 'consume', 'break', 'gain']);
     expect([...day.querySelectorAll('.journal-item__status')].map((badge) => badge.textContent))
-      .toEqual(['✓', '−', '−', '+', '+']);
+      .toEqual(['✓', '−', '−', '+']);
+    expect(day.querySelector('[data-item-type="medicalKit"]')?.getAttribute('data-item-count')).toBe('2');
+    expect(day.querySelector('[data-item-type="medicalKit"] .journal-item__quantity')?.textContent).toBe('x2');
     expect(night.children).toHaveLength(1);
     expect(night.querySelector('.journal-item__status')?.textContent).toBe('−');
     expect(night.querySelector('img')?.getAttribute('src')).toBe(itemThumbnailUrl('medicalKit'));
@@ -122,13 +128,13 @@ describe('journal item changes', () => {
   it('clears changes on quiet and empty pages and restores them when returning', () => {
     const view = fixture();
     view.show([quiet, changes]);
-    expect(view.root.querySelectorAll('.journal-item')).toHaveLength(6);
+    expect(view.root.querySelectorAll('.journal-item')).toHaveLength(5);
     view.previous();
     expect(view.root.querySelectorAll('.journal-item')).toHaveLength(0);
     expect(view.root.querySelector<HTMLElement>('[data-journal-day-items]')!.hidden).toBe(true);
     expect(view.root.querySelector<HTMLElement>('[data-journal-night-items]')!.hidden).toBe(true);
     view.next();
-    expect(view.root.querySelectorAll('.journal-item')).toHaveLength(6);
+    expect(view.root.querySelectorAll('.journal-item')).toHaveLength(5);
     view.show([]);
     expect(view.root.querySelectorAll('.journal-item')).toHaveLength(0);
   });

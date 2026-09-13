@@ -180,7 +180,7 @@ export class NightTraderPresentation implements FocusedEventPresentation {
 
     this.lantern.name = 'night-trader-lantern';
     this.lanternLight = this.buildLantern();
-    this.lantern.position.set(1.08, 0.6, 0.35);
+    this.lantern.position.set(0, 0.6, 0.35);
     this.sign.root.add(this.lantern);
     this.lanternReflection.name = 'night-trader-lantern-reflection';
     this.reflectionMaterial = createMaterial(0xd48746, 0.64, {

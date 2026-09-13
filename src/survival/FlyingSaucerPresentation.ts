@@ -10,9 +10,9 @@ import type { ActionOutcome, EventResultPresentation } from './survivalTypes';
 import { eventSideFromSeed } from './eventVariant';
 import { TimedPresentationAnimation } from './TimedPresentationAnimation';
 
-export const UFO_ABDUCTION_DURATION = 11;
+export const UFO_BEAM_DURATION = 11;
 const CRUISE_SPEED = 10;
-type Animation = 'reveal' | 'pass' | 'abduct';
+type Animation = 'reveal' | 'pass' | 'beam';
 const smooth = (value: number): number => {
   const t = Math.max(0, Math.min(1, value));
   return t * t * (3 - 2 * t);
@@ -56,7 +56,6 @@ export class FlyingSaucerPresentation implements FocusedEventPresentation {
   private reactionBank = 0;
   private cruising = false;
   private ownsCamera = false;
-  private cameraLift = 0;
   private cameraTurn = 0;
   private staged = false;
   private disposed = false;
@@ -107,7 +106,7 @@ export class FlyingSaucerPresentation implements FocusedEventPresentation {
     glow.position.copy(lamp.position);
     this.runningLight.position.copy(lamp.position);
     this.craft.add(lamp, glow, this.runningLight);
-    this.beam.name = 'ufo-abduction-beam';
+    this.beam.name = 'ufo-beam';
     this.beam.frustumCulled = false;
     this.light.target.position.set(0, -0.5, 0);
     this.root.add(this.craft, this.beam, this.light, this.light.target);
@@ -150,7 +149,7 @@ export class FlyingSaucerPresentation implements FocusedEventPresentation {
     this.reactionStart.copy(this.craft.position);
     this.reactionBank = this.craft.rotation.z;
     this.acquireCamera();
-    if (result.resultId === 'ufo-abduction') return this.startAnimation('abduct', UFO_ABDUCTION_DURATION);
+    if (result.resultId === 'ufo-beam-hit') return this.startAnimation('beam', UFO_BEAM_DURATION);
     throw new Error(`Unsupported UFO result: ${result.resultId}`);
   }
 
@@ -180,7 +179,6 @@ export class FlyingSaucerPresentation implements FocusedEventPresentation {
       this.dependencies.camera.quaternion.copy(this.cameraStartQuaternion);
     }
     this.ownsCamera = false;
-    this.cameraLift = 0;
     this.cameraTurn = 0;
     this.root.userData.state = 'idle';
   }
@@ -204,8 +202,8 @@ export class FlyingSaucerPresentation implements FocusedEventPresentation {
   }
 
   private sample(kind: Animation, progress: number): void {
-    if (kind === 'abduct') {
-      const seconds = progress * UFO_ABDUCTION_DURATION;
+    if (kind === 'beam') {
+      const seconds = progress * UFO_BEAM_DURATION;
       this.sampleApproach(this.overhead, seconds / 5, 12);
       const beamStrength = smooth((seconds - 5) / 1.5);
       this.beam.visible = beamStrength > 0;
@@ -216,7 +214,6 @@ export class FlyingSaucerPresentation implements FocusedEventPresentation {
       this.light.position.copy(this.craft.position);
       this.light.intensity = beamStrength * 45;
       this.cameraTurn = smooth(seconds / 4);
-      this.cameraLift = smooth((seconds - 6.5) / 4.5) * 12;
     }
     if (this.ownsCamera) this.applyCamera();
   }
@@ -243,7 +240,7 @@ export class FlyingSaucerPresentation implements FocusedEventPresentation {
 
   private finish(kind: Animation): void {
     this.cruising = kind === 'reveal';
-    this.root.userData.state = kind === 'abduct' ? 'abducted' : kind === 'pass' ? 'passed' : 'revealed';
+    this.root.userData.state = kind === 'beam' ? 'hit' : kind === 'pass' ? 'passed' : 'revealed';
     if (kind === 'pass') this.root.visible = false;
   }
 
@@ -258,7 +255,6 @@ export class FlyingSaucerPresentation implements FocusedEventPresentation {
   private applyCamera(): void {
     const camera = this.dependencies.camera;
     camera.position.copy(this.cameraStart);
-    camera.position.y += this.cameraLift;
     camera.getWorldPosition(this.worldCamera);
     this.craft.getWorldPosition(this.worldTarget);
     this.lookMatrix.lookAt(this.worldCamera, this.worldTarget, camera.up);

@@ -20,6 +20,12 @@ function castToWaiting(session: FishingSession): void {
 
 describe('FishingSession', () => {
 
+  it('waits between two and five seconds for a bite', () => {
+    expect(createSession([0, 0]).snapshot().biteDelaySeconds).toBe(2);
+    expect(createSession([0.5, 0]).snapshot().biteDelaySeconds).toBe(3.5);
+    expect(createSession([1, 0]).snapshot().biteDelaySeconds).toBeLessThan(5);
+  });
+
   it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
     'rejects invalid fish weight multiplier %s',
     (fishWeightMultiplier) => {
@@ -53,8 +59,8 @@ describe('FishingSession', () => {
     expect(() => session.advance(-0.01)).toThrow(RangeError);
     expect(() => session.advance(Number.NaN)).toThrow(RangeError);
     expect(() => session.advance(Number.POSITIVE_INFINITY)).toThrow(RangeError);
-    session.advance(5.2);
-    expect(session.snapshot()).toMatchObject({ state: 'bite', waitingSeconds: 5 });
+    session.advance(session.snapshot().biteDelaySeconds + 0.2);
+    expect(session.snapshot()).toMatchObject({ state: 'bite', waitingSeconds: 3.5 });
     expect(session.snapshot().biteSeconds).toBeCloseTo(0.2);
   });
 
@@ -62,12 +68,14 @@ describe('FishingSession', () => {
     expect(SURVIVAL_BALANCE.fishing.reactionSeconds).toBe(6);
     const successful = createSession();
     castToWaiting(successful);
-    successful.advance(3 + SURVIVAL_BALANCE.fishing.reactionSeconds - 0.000001);
+    successful.advance(
+      successful.snapshot().biteDelaySeconds + SURVIVAL_BALANCE.fishing.reactionSeconds - 0.000001,
+    );
     expect(successful.reel()).toMatchObject({ accepted: true, result: { kind: 'catch' } });
 
     const missed = createSession();
     castToWaiting(missed);
-    missed.advance(3 + SURVIVAL_BALANCE.fishing.reactionSeconds);
+    missed.advance(missed.snapshot().biteDelaySeconds + SURVIVAL_BALANCE.fishing.reactionSeconds);
     expect(missed.snapshot()).toMatchObject({ state: 'missed', result: { kind: 'miss' } });
     expect(missed.reel().accepted).toBe(false);
   });

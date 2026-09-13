@@ -23,6 +23,18 @@ describe('night scheduling', () => {
     expect(pool.map(({ id }) => id)).not.toContain('guarded-sleep');
   });
 
+  it('excludes Guarded Sleep while Carlitos is exhausted', () => {
+    const guardedSleep = survivalEventById('guarded-sleep')!;
+    const restedPool = eligibleEvents([guardedSleep], {
+      ...eligibility(7), hasCompanion: true, companionExhausted: false,
+    });
+    const exhaustedPool = eligibleEvents([guardedSleep], {
+      ...eligibility(7), hasCompanion: true, companionExhausted: true,
+    });
+    expect(restedPool).toEqual([guardedSleep]);
+    expect(exhaustedPool).toEqual([]);
+  });
+
   it('makes Quiet Night eligible again exactly 15 days after its last occurrence', () => {
     const quiet = survivalEventById('quiet-night');
     expect(quiet).toBeDefined();

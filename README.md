@@ -316,7 +316,6 @@ loading and keeps the seven obstacle visuals static.
 - `src/survival/MoonEventPresentation` — owns the moon event lifecycle and reaction animation.
 - `src/survival/BoatInteractionProjector` — projects boat and event interaction targets.
 - `src/survival/DivePresentationController` — owns the active dive lifecycle and camera pose.
-- `src/survival/CarlitosDelegationPresentation` — owns Carlitos delegation motion and completion.
 - `src/world` and `src/ocean` — procedural ship and boat geometry, shared wave field, ocean shader, weather, and buoyancy.
 - `src/ocean/oceanShader` — owns shader bytes, quality defines, and quality uniforms.
 - `src/ocean/oceanGeometry` — owns stateless surface and horizon geometry builders.

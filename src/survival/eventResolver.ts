@@ -59,7 +59,6 @@ function resolvedEffects(
       ? { items: selected.effects.items.map((mutation) => ({ ...mutation })) }
       : {}),
     ...(selected.effects.chest !== undefined ? { chest: selected.effects.chest } : {}),
-    ...(selected.effects.ending !== undefined ? { ending: selected.effects.ending } : {}),
     ...(selected.effects.nextDawnEnergy !== undefined
       ? { nextDawnEnergy: selected.effects.nextDawnEnergy }
       : {}),

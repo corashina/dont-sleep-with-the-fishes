@@ -10,21 +10,20 @@ function session() {
 }
 
 describe('flying saucer event', () => {
-  it.each(['flareGun', 'flashlight'] as const)('ends the run after a %s signal', (itemId) => {
+  it.each(['flareGun', 'flashlight'] as const)('damages the player after a %s signal', (itemId) => {
     const game = session();
     const before = game.snapshot();
     const result = game.resolveEvent({ kind: 'item', choiceId: itemId, instanceId: `${itemId}-1` as ItemInstanceId });
-    expect(result).toMatchObject({ accepted: true, eventResult: { resultId: 'ufo-abduction' } });
+    expect(result).toMatchObject({ accepted: true, eventResult: { resultId: 'ufo-beam-hit' } });
     const after = game.snapshot();
     expect(after).toMatchObject({
-      state: 'abducted', pendingEventId: null,
-      ending: { id: 'abduction', day: 15, savedPickupCount: 2 },
-      health: before.health, hull: before.hull, rescueLead: before.rescueLead,
+      state: 'nightEvent', pendingEventId: null, ending: null,
+      health: before.health - 40, hull: before.hull, rescueLead: before.rescueLead,
     });
     expect(after.inventory['flareGun-1' as ItemInstanceId]?.condition).toBe(itemId === 'flareGun' ? 'consumed' : 'usable');
     expect(after.inventory['flashlight-1' as ItemInstanceId]?.condition).toBe('usable');
-    expect(game.endDay().accepted).toBe(false);
-    expect(() => game.exportCheckpoint()).toThrow('Cannot checkpoint terminal state.');
+    expect(game.exportCheckpoint().pendingEventId).toBeNull();
+    expect(game.beginDawn().accepted).toBe(true);
   });
 
   it.each(['hide', 'timeout'] as const)('survives by staying silent: %s', (action) => {

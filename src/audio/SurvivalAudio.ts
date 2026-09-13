@@ -411,7 +411,7 @@ export class SurvivalAudio {
   }
 
   beginEventReaction(eventId: string, outcome: ActionOutcome): void {
-    if (!this.disposed && eventId === 'flying-saucer' && outcome.eventResult?.resultId === 'ufo-pass') {
+    if (!this.disposed && eventId === 'flying-saucer') {
       this.scope.setLoopGain('ufoFlyby', 0, 5);
     }
     if (
@@ -509,10 +509,6 @@ export class SurvivalAudio {
 
   ending(id: SurvivalEndingId): void {
     if (this.disposed) return;
-    if (id === 'abduction') {
-      this.clearEvent();
-      return;
-    }
     if (id === 'rescue') this.scope.play('rescueHorn');
     const cue = id === 'rescue'
       ? 'rescueEnding'

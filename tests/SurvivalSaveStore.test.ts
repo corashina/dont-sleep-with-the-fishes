@@ -134,6 +134,7 @@ describe('SurvivalSaveStore', () => {
     ['meter', (value: any) => { value.checkpoint.session.health = Number.NaN; }],
     ['item', (value: any) => { value.checkpoint.session.savedItems = [{ instanceId: 'bad-1', type: 'bad' }]; }],
     ['event', (value: any) => { value.checkpoint.session.pendingEventId = 'unknown-event'; }],
+    ['dawn energy override', (value: any) => { value.checkpoint.session.nextDawnEnergyOverride = 0; }],
     ['journal', (value: any) => { value.checkpoint.session.journalEntries = [{ kind: 'bad' }]; }],
     ['random state', (value: any) => { value.checkpoint.session.randomState = -1; }],
   ] as const)('rejects an invalid %s', (_name, corrupt) => {

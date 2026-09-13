@@ -20,7 +20,7 @@ function session(hunger = 0, ...items: ItemId[]): SurvivalSession {
 }
 
 describe('Something Under Us rules', () => {
-  it.each([[0, 2], [60, 1], [80, 0]])('charges one dawn energy at hunger %s, including after saving', (hunger, energy) => {
+  it.each([[0, 2], [60, 1], [80, 1]])('charges one dawn energy without reducing wake-up energy below one at hunger %s, including after saving', (hunger, energy) => {
     const run = session(hunger);
     const health = run.snapshot().health;
     const hull = run.snapshot().hull;

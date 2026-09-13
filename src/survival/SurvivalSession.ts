@@ -23,7 +23,12 @@ import { drawDiveItem } from './diveRewards';
 import { resolveWeightedOutcome } from './eventResolver';
 import { drawMidnightCampItems } from './midnightCampLoot';
 import { drawDriftingLoot, driftingLootEffects } from './driftingLoot';
-import { driftingSupplyKindFromSeed, driftingSupplyChoiceForVariant } from './driftingSupplies';
+import {
+  driftingSupplyChoiceForVariant,
+  driftingSupplyHistoryId,
+  driftingSupplyKindFromSeed,
+  isDriftingSupplyKindOnCooldown,
+} from './driftingSupplies';
 import { deriveEventVariantSeed } from './eventPresentationOutcome';
 import { ownsNightTraderReward } from './nightTraderTrades';
 import {
@@ -456,7 +461,6 @@ export class SurvivalSession {
       });
       session.state = 'rescued';
     }
-    if (endingId === 'abduction') session.abduct();
     return session;
   }
 
@@ -913,6 +917,15 @@ export class SurvivalSession {
   ): ActionOutcome {
     const choice = this.pendingEvent!.choices.find(({ id }) => id === response.choiceId);
     if (choice?.itemId !== undefined) {
+      if (this.pendingEvent!.id === 'night-trader'
+        && (choice.itemId === 'cannedFood' || choice.itemId === 'baitTin')) {
+        return this.resolveEventChoice(
+          response.choiceId,
+          null,
+          choice.itemId,
+          response.resultId,
+        );
+      }
       return this.reject('choice-unavailable', t('unavailableResponse'));
     }
     return this.resolveEventChoice(response.choiceId, null, null, response.resultId);
@@ -1037,7 +1050,16 @@ export class SurvivalSession {
         mutation.kind === 'gain' && this.inventory.hasOwned(mutation.itemId)))) {
       return { code: 'trade-unavailable', message: t('tradeUnavailable') };
     }
-    return null;
+    return this.nightTraderResourceChoiceRejection(choice);
+  }
+
+  private nightTraderResourceChoiceRejection(choice: EventChoiceDefinition): Rejection | null {
+    if (this.pendingEvent?.id !== 'night-trader') return null;
+    const unavailable = choice.itemId === 'cannedFood' ? this.food < 1
+      : choice.itemId === 'baitTin' ? this.bait < 1 : false;
+    return unavailable
+      ? { code: 'requirements-unmet', message: t('requirements') }
+      : null;
   }
 
   private resolveChoiceOutcome(
@@ -1157,13 +1179,12 @@ export class SurvivalSession {
     event: SurvivalEventDefinition,
     resolved: WeightedEventOutcome,
   ): void {
-    if (resolved.effects.ending === 'abduction') this.abduct();
     if (resolved.effects.nextDawnEnergy !== undefined) {
       this.nextDawnEnergyOverride = resolved.effects.nextDawnEnergy;
     }
     if (resolved.effects.nextDawnEnergyReduction !== undefined) {
       this.nextDawnEnergyOverride = Math.max(
-        0, this.normalDawnEnergy() - resolved.effects.nextDawnEnergyReduction,
+        1, this.normalDawnEnergy() - resolved.effects.nextDawnEnergyReduction,
       ) as DawnEnergy;
     }
     if (resolved.effects.maximumNextDawnEnergy !== undefined) {
@@ -1173,6 +1194,12 @@ export class SurvivalSession {
     }
     this.resolveTerminal();
     this.lastEventId = event.id;
+    if (event.id === 'drifting-supplies') {
+      const kind = driftingSupplyKindFromSeed(
+        deriveEventVariantSeed(this.seed, this.day, event.id),
+      );
+      this.lastSeenDay.set(driftingSupplyHistoryId(kind), this.day);
+    }
     this.lastSeenDay.set(event.id, this.day);
     this.appearanceCounts.set(event.id, (this.appearanceCounts.get(event.id) ?? 0) + 1);
     this.clearPendingEvent();
@@ -1660,6 +1687,15 @@ export class SurvivalSession {
     phase: 'day' | 'night',
     excludedIds: ReadonlySet<string> = NO_EVENT_EXCLUSIONS,
   ): SurvivalEventDefinition {
+    const scheduledExclusions = new Set(excludedIds);
+    if (phase === 'day') {
+      const supplyKind = driftingSupplyKindFromSeed(
+        deriveEventVariantSeed(this.seed, this.day, 'drifting-supplies'),
+      );
+      if (isDriftingSupplyKindOnCooldown(supplyKind, this.day, this.lastSeenDay)) {
+        scheduledExclusions.add('drifting-supplies');
+      }
+    }
     return drawWeightedEvent(this.random, SURVIVAL_EVENTS, {
       phase,
       day: this.day,
@@ -1674,7 +1710,8 @@ export class SurvivalSession {
       pressure: this.pressure,
       chestState: this.chestState,
       hasCompanion: this.carlitos !== null,
-      excludedIds,
+      companionExhausted: this.carlitos?.rest === 'exhausted',
+      excludedIds: scheduledExclusions,
     });
   }
 
@@ -2272,13 +2309,8 @@ export class SurvivalSession {
     if (this.ending !== null) this.clearPendingEvent();
   }
 
-  private abduct(): void {
-    this.state = 'abducted';
-    this.ending = Object.freeze({ id: 'abduction', day: this.day, savedPickupCount: this.savedPickupCount });
-  }
-
   private isTerminal(): boolean {
-    return this.state === 'rescued' || this.state === 'dead' || this.state === 'sunk' || this.state === 'abducted';
+    return this.state === 'rescued' || this.state === 'dead' || this.state === 'sunk';
   }
 
   private clampMeters(): void {

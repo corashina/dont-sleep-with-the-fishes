@@ -1,5 +1,4 @@
 import { BufferGeometry, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial } from 'three';
-import { smoothstepUnchecked } from './animationMath';
 
 function createPlankGeometry(): BufferGeometry {
   const geometry = new BufferGeometry();
@@ -59,13 +58,12 @@ export class DriftingDebris {
     }
   }
 
-  setPose(side: -1 | 1, progress: number): void {
+  setPose(side: -1 | 1): void {
     for (let index = 0; index < PLACEMENTS.length; index += 1) {
       const [x, y, z, yaw, scale] = PLACEMENTS[index]!;
       const part = this.root.children[index]!;
-      const sink = smoothstepUnchecked(Math.max(0, Math.min(1, (progress - index * 0.025) / 0.825)));
-      part.position.set(x * side, y - 2 * sink, z);
-      part.rotation.set(0.03, yaw * side, -0.04 * side + sink * 0.12);
+      part.position.set(x * side, y, z);
+      part.rotation.set(0.03, yaw * side, -0.04 * side);
       part.scale.setScalar(scale);
     }
   }

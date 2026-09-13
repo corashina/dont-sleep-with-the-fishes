@@ -469,6 +469,10 @@ export class Skybox {
     return this.bloodPalette;
   }
 
+  settleTransition(state: SkyState, cameraPosition: Vector3): Readonly<SkyPalette> {
+    return this.update(TRANSITION_SECONDS, state, cameraPosition);
+  }
+
   resetTransient(): void {
     if (this.disposed) return;
     const uniforms = this.material.uniforms;

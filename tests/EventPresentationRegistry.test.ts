@@ -211,7 +211,6 @@ function createDependencies() {
           clear: vi.fn(),
           settleForVisibilityChange: vi.fn(),
         },
-        delegateCarlitos: async (retrieve: () => Promise<void>) => retrieve(),
       },
       focusedDependencies: {
         camera: new Group(),

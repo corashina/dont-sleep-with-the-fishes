@@ -16,6 +16,12 @@ import { OtherPeoplePresentation } from '../src/survival/OtherPeoplePresentation
 import type { FocusedEventPresentationDependencies } from '../src/survival/FocusedEventPresentation';
 
 describe('event option motion', () => {
+  it('covers the player with the Bucket during a thunderstorm', () => {
+    expect(resolveEventItemUseContext('thunderstorm', 'bucket', 'bucket')).toBe('bucket-helmet');
+    expect(resolveEventItemUseContext('leak', 'bucket', 'bucket')).toBe('bucket-scoop');
+    expect(resolveEventItemUseContext('school-of-fish', 'bucket', 'bucket')).toBe('bucket-scoop');
+  });
+
   it('synchronizes the net strike and tentacle recoil at contact', () => {
     expect(resolveEventItemUseContext('snatcher', 'fishingNet', 'fishingNet')).toBe('net-slap');
     expect(snatcherItemDuration('fishingNet')).toBe(eventItemUseDurationForItem('net-slap', 'fishingNet'));

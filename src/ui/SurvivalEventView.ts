@@ -17,6 +17,12 @@ import {
 const EVENT_CHOICE_BEAT_MS = 240;
 const requireElement = createElementRequirement('survival event view');
 
+function eventChoiceLabel(eventId: string | undefined, choice: EventContextChoice): string {
+  if (eventId !== 'guarded-sleep') return choice.label;
+  if (choice.id === 'watch') return uiText('yes');
+  return choice.id === 'sleep' ? uiText('no') : choice.label;
+}
+
 interface PendingWork {
   readonly finish: () => void;
 }
@@ -49,7 +55,7 @@ export class SurvivalEventView {
     for (const choice of this.currentChoices) {
       const button = this.choiceButton(choice.id);
       if (!button) continue;
-      const label = this.caption.dataset.eventId === 'guarded-sleep' && choice.id === 'watch' ? uiText('yes') : choice.label;
+      const label = eventChoiceLabel(this.caption.dataset.eventId, choice);
       if (button.firstChild?.nodeType === Node.TEXT_NODE) button.firstChild.textContent = label;
       const reason = button.querySelector('.event-choice__reason');
       if (reason && choice.unavailableReason !== null) { reason.textContent = choice.unavailableReason; button.dataset.unavailableReason = choice.unavailableReason; button.setAttribute('aria-description', choice.unavailableReason); }
@@ -195,13 +201,12 @@ export class SurvivalEventView {
     }
     const buttons = contextualChoices
       .filter((choice) => (
-        (checkBack || islandConfirmation || starryNight || choice.id !== 'sleep') && choice.anchorId === undefined
+        (checkBack || guardedSleep || islandConfirmation || starryNight || choice.id !== 'sleep') && choice.anchorId === undefined
       ))
-      .map((choice) => this.createChoice(
-        guardedSleep && choice.id === 'watch'
-          ? { ...choice, label: uiText('yes') }
-          : choice,
-      ));
+      .map((choice) => this.createChoice({
+        ...choice,
+        label: eventChoiceLabel(this.caption.dataset.eventId, choice),
+      }));
     this.choices.replaceChildren(...buttons);
     this.choices.hidden = buttons.length === 0;
     const showCaption = this.active && (

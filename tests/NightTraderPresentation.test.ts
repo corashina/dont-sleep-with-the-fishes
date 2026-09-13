@@ -16,6 +16,8 @@ describe('Night Trader sign', () => {
     presentation.stage(seed);
     presentation.root.updateMatrixWorld(true);
     const sign = presentation.root.getObjectByName('night-trader-sign')!;
+    const lantern = sign.getObjectByName('night-trader-lantern')!;
+    expect(lantern.position.x).toBe(0);
     expect(sign.userData.offers).toEqual(nightTraderOffers(seed).map(({ id, payment, reward }) => ({ id, payment, reward })));
     const position = sign.getWorldPosition(new Vector3());
     const normal = sign.getWorldDirection(new Vector3());

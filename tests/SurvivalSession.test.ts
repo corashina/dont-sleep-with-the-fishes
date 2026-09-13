@@ -318,7 +318,7 @@ describe('SurvivalSession Carlitos events', () => {
       state: { rest: 'exhausted' as const },
       expected: {
         visible: true,
-        unavailableReason: 'Carlitos is exhausted. He must rest before helping.',
+        unavailableReason: 'Carlitos is exhausted. Keep him fed and happy before nightfall. He needs two good nights to recover.',
       },
     },
     {
@@ -1089,18 +1089,16 @@ describe('SurvivalSession daytime actions', () => {
     });
   });
 
-  it('limits a catastrophic Tornado outcome to one random lost item', () => {
-    const session = new SurvivalSession(saved('bucket', 'map', 'spyglass'), {
+  it('keeps the flare gun after a catastrophic Tornado sleep outcome', () => {
+    const session = new SurvivalSession(saved('flareGun'), {
       seed: 17,
       random: sequenceRandom([0.9, 0, 0.99, 0]),
-      initialConditions: { 'map-1': 'broken' },
       initialEventId: 'tornado',
     });
-    session.resolveEvent({ kind: 'endure' });
+    const outcome = session.resolveEvent({ kind: 'choice', choiceId: 'sleep' });
+    expect(outcome.message).toBe('The boat is badly damaged.');
     expect(session.snapshot().inventory).toMatchObject({
-      'bucket-1': { condition: 'usable' },
-      'map-1': { condition: 'broken' },
-      'spyglass-1': { condition: 'lost' },
+      'flareGun-1': { condition: 'usable' },
     });
   });
 

@@ -36,7 +36,6 @@ export interface BalanceOutcomeBucket {
   readonly rescued: number;
   readonly dead: number;
   readonly sunk: number;
-  readonly abducted: number;
   readonly blocked: number;
 }
 
@@ -297,11 +296,11 @@ function average(values: readonly number[]): number | null {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-type OutcomeKey = 'rescued' | 'dead' | 'sunk' | 'abducted' | 'blocked';
+type OutcomeKey = 'rescued' | 'dead' | 'sunk' | 'blocked';
 type MutableBucket = { -readonly [Key in keyof BalanceOutcomeBucket]: number };
 
 function emptyBucket(): MutableBucket {
-  return { totalRuns: 0, rescued: 0, dead: 0, sunk: 0, abducted: 0, blocked: 0 };
+  return { totalRuns: 0, rescued: 0, dead: 0, sunk: 0, blocked: 0 };
 }
 
 function recordOutcome(bucket: MutableBucket, outcome: OutcomeKey): void {
@@ -341,7 +340,6 @@ function outcomeForEnding(ending: SessionEnding): OutcomeKey {
   if (ending === null) return 'blocked';
   if (ending.id === 'rescue') return 'rescued';
   if (ending.id === 'sinking') return 'sunk';
-  if (ending.id === 'abduction') return 'abducted';
   return 'dead';
 }
 
@@ -511,7 +509,6 @@ function addBucket(target: MutableBucket, source: BalanceOutcomeBucket): void {
   target.rescued += source.rescued;
   target.dead += source.dead;
   target.sunk += source.sunk;
-  target.abducted += source.abducted;
   target.blocked += source.blocked;
 }
 

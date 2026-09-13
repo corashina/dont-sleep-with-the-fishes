@@ -143,10 +143,10 @@ export interface EventItemUseSample {
 }
 
 const BUCKET_SCOOP_EVENTS: ReadonlySet<string> = new Set([
-  'leak', 'school-of-fish', 'thunderstorm',
+  'leak', 'school-of-fish',
 ]);
 const BUCKET_HELMET_EVENTS: ReadonlySet<string> = new Set([
-  'shower-night', 'bad-sleep', 'eerie-melody',
+  'shower-night', 'bad-sleep', 'thunderstorm', 'eerie-melody',
 ]);
 const UMBRELLA_OVERHEAD_EVENTS: ReadonlySet<string> = new Set([
   'shower-night', 'thunderstorm',

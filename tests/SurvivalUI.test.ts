@@ -225,7 +225,9 @@ describe('SurvivalUI', () => {
       seed: 1, initialCarlitos: { rest }, initialEventId: 'drifting-supplies',
     });
     const choices = focusedChoicesFor(survivalEventById('drifting-supplies')!, session.snapshot());
-    const reason = `Carlitos is ${rest}. He must rest before helping.`;
+    const reason = rest === 'tired'
+      ? 'Carlitos is tired. Keep him fed and happy before nightfall. He will recover after one good night.'
+      : 'Carlitos is exhausted. Keep him fed and happy before nightfall. He needs two good nights to recover.';
     const select = vi.fn();
     ui.onEventChoice = select;
     ui.render(session.snapshot(), () => null);
@@ -242,6 +244,11 @@ describe('SurvivalUI', () => {
     expect(select).not.toHaveBeenCalled();
 
     ui.showFocusedEvent({ eventId: 'drifting-supplies', choices, target: null });
+    const focusedView = mount.querySelector<HTMLElement>('[data-focused-event-view]')!;
+    expect(focusedView.dataset.placement).toBe('center');
+    expect(focusedView.dataset.anchorState).toBe('centered');
+    expect(focusedView.querySelector('[data-focused-event-description]')?.textContent)
+      .toBe('Recover it yourself, or send Carlitos if he is rested.');
     const button = mount.querySelector<HTMLButtonElement>('[data-focused-event-view] [data-event-choice="delegate-carlitos"]')!;
     expect(button.getAttribute('aria-disabled')).toBe('true');
     expect(button.querySelector('.event-choice__reason')!.textContent).toBe(reason);
@@ -249,7 +256,32 @@ describe('SurvivalUI', () => {
     button.click();
     expect(select).not.toHaveBeenCalled();
     setLanguage('pl');
-    expect(button.querySelector('.event-choice__reason')!.textContent).toContain('Musi odpocząć');
+    expect(button.querySelector('.event-choice__reason')!.textContent).toContain(
+      rest === 'tired' ? 'jednej spokojnej nocy' : 'dwóch spokojnych nocy',
+    );
+  });
+
+  it('keeps the drifting popup centered when its world target moves', () => {
+    const mount = document.createElement('main');
+    Object.defineProperty(mount, 'clientWidth', { configurable: true, value: 1000 });
+    Object.defineProperty(mount, 'clientHeight', { configurable: true, value: 700 });
+    mount.getBoundingClientRect = () => ({
+      x: 0, y: 0, top: 0, right: 1000, bottom: 700, left: 0, width: 1000, height: 700,
+      toJSON: () => ({}),
+    });
+    document.body.append(mount);
+    const ui = createUI(mount);
+    ui.showFocusedEvent({
+      eventId: 'drifting-chest',
+      target: { x: 900, y: 80, width: 60, height: 60, depth: 1, visible: true },
+      choices: [{ id: 'retrieve', label: 'RETRIEVE', unavailableReason: null, instanceId: null }],
+    });
+    const popup = mount.querySelector<HTMLElement>('[data-focused-event-view]')!;
+    expect(popup.dataset.placement).toBe('center');
+    expect(popup.getAttribute('aria-describedby')).toBe('focused-event-description');
+    expect(popup.style.getPropertyValue('--focused-event-x')).toBe('302px');
+    expect(popup.querySelector('[data-focused-event-description]')?.textContent)
+      .toBe('Bring it aboard yourself, or send Carlitos if he is rested.');
   });
 
   it('dismisses only the top popup and consumes the outside click', async () => {
@@ -282,6 +314,37 @@ describe('SurvivalUI', () => {
     expect(backgroundAction).not.toHaveBeenCalled();
     expect(popup.classList.contains('is-visible')).toBe(false);
   });
+
+  it.each(['drifting-supplies', 'drifting-chest'] as const)(
+    'routes an outside %s popup click to Back without selecting Leave',
+    (eventId) => {
+      const mount = document.createElement('main');
+      document.body.append(mount);
+      const ui = createUI(mount);
+      const back = vi.fn();
+      const choice = vi.fn();
+      ui.onFocusedEventBack = back;
+      ui.onFocusedEventChoice = choice;
+      ui.showFocusedEvent({
+        eventId,
+        target: null,
+        choices: [
+          { id: 'retrieve', label: 'RETRIEVE', unavailableReason: null, instanceId: null },
+          { id: 'sleep', label: 'LEAVE IT', unavailableReason: null, instanceId: null },
+        ],
+      });
+      const background = document.createElement('button');
+      const backgroundAction = vi.fn();
+      background.addEventListener('click', backgroundAction);
+      mount.append(background);
+
+      background.click();
+
+      expect(back).toHaveBeenCalledOnce();
+      expect(choice).not.toHaveBeenCalled();
+      expect(backgroundAction).not.toHaveBeenCalled();
+    },
+  );
 
   it('restamps accessible meter values after a covered transition', () => {
     const mount = document.createElement('main');
@@ -1070,6 +1133,21 @@ describe('SurvivalUI', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(document.activeElement).toBe(marker);
     expect(mount.querySelector('[data-journal]')?.hasAttribute('inert')).toBe(true);
+  });
+
+  it('keeps the journal marker available while actions are busy', () => {
+    const mount = document.createElement('main');
+    document.body.append(mount);
+    const ui = createUI(mount);
+    const open = vi.fn();
+    const marker = mount.querySelector<HTMLButtonElement>('[data-journal-open]')!;
+    ui.onJournalOpen = open;
+
+    ui.setBusy(true);
+    marker.click();
+
+    expect(marker.disabled).toBe(false);
+    expect(open).toHaveBeenCalledOnce();
   });
 
   it('locks ordinary anchors until event choices become available', () => {

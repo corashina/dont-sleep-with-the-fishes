@@ -147,11 +147,28 @@ export class FocusedEventFlow {
       || !this.isCurrent(generation)
       || !this.dependencies.isPendingEvent(eventId)
     ) return;
-    const dismissChoice = this.choices.find((choice) => (
-      choice.dismisses === true && choice.unavailableReason === null
-    ));
-    if (dismissChoice === undefined) return;
-    await this.choose({ id: dismissChoice.id, instanceId: dismissChoice.instanceId });
+    const operation = this.beginOperation();
+    this.focusState = 'returning';
+    this.dependencies.setBusy(true);
+    this.dependencies.ui.hideFocusedEvent?.();
+    try {
+      await (this.dependencies.world.exitFocusedEventView?.() ?? Promise.resolve());
+    } catch (error) {
+      if (this.isCurrentFocus(eventId, 'returning', generation, operation)) {
+        this.focusState = 'choosing';
+        this.showFocus();
+        this.dependencies.setBusy(false);
+      }
+      throw error;
+    }
+    if (!this.isCurrentFocus(eventId, 'returning', generation, operation)) return;
+
+    this.operationGeneration += 1;
+    this.activeEventId = null;
+    this.choices = [];
+    this.focusState = 'idle';
+    this.dependencies.setBusy(false);
+    this.dependencies.ui.restoreCommandFocus?.();
   }
 
   syncTarget(width: number, height: number): void {

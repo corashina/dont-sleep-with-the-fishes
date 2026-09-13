@@ -1,6 +1,6 @@
 // Importance: 9/10. Protects drifting-supply staging and retrieval motion.
 
-import { Group,Vector3 } from 'three';
+import { Group,Mesh,MeshStandardMaterial,Vector3 } from 'three';
 import { describe,expect,it,vi } from 'vitest';
 import { DriftingItemPresentation } from '../src/survival/DriftingItemPresentation';
 import type { DriftingWater } from '../src/survival/DriftingWaveMotion';
@@ -52,6 +52,26 @@ function createPresentation(player = new Group()): DriftingItemPresentation {
 }
 
 describe('DriftingItemPresentation', () => {
+
+  it('places the shipping container 50 percent farther than its distance tier', () => {
+    const presentation = createPresentation();
+    presentation.stage('drifting-supplies', seedFor('container', 'near'));
+
+    const position = presentation.interactionRoot()!.position;
+    expect(Math.abs(position.x)).toBeCloseTo(4.5);
+    expect(position.z).toBeCloseTo(-6.3);
+    presentation.dispose();
+  });
+
+  it('places debris 50 percent farther than its distance tier', () => {
+    const presentation = createPresentation();
+    presentation.stage('drifting-supplies', seedFor('debris', 'near'));
+
+    const position = presentation.interactionRoot()!.position;
+    expect(Math.abs(position.x)).toBeCloseTo(4.5);
+    expect(position.z).toBeCloseTo(-6.3);
+    presentation.dispose();
+  });
 
   it('detaches the cooler, opens it at the player, and removes the empty lifeboat', async () => {
     const presentation = createPresentation();
@@ -113,6 +133,27 @@ describe('DriftingItemPresentation', () => {
       presentation.dispose();
     },
   );
+
+  it('fades debris in place during retrieval', async () => {
+    const presentation = createPresentation();
+    presentation.stage('drifting-supplies', seedFor('debris', 'near'));
+    const plank = presentation.root.getObjectByName('wreckage-plank-0') as Mesh;
+    const startPosition = plank.position.clone();
+
+    const retrieval = presentation.retrieve();
+    presentation.update(1, 1);
+
+    const material = (plank.material as MeshStandardMaterial[])[0]!;
+    expect(plank.position).toEqual(startPosition);
+    expect(material.transparent).toBe(true);
+    expect(material.opacity).toBeGreaterThan(0);
+    expect(material.opacity).toBeLessThan(1);
+
+    presentation.update(2, 1);
+    await retrieval;
+    expect(presentation.resultRoot()!.visible).toBe(false);
+    presentation.dispose();
+  });
 
   it.each(['barrel', 'lifeboat', 'container'] as const)(
     'settles %s contact when visibility changes', async (kind) => {

@@ -1584,7 +1584,15 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .focused-event-view__card .scuba-popup-title {
   font-size: min(1.6rem, 6.5cqi);
   letter-spacing: .04em;
-  white-space: nowrap;
+  text-align: center;
+}
+.focused-event-view__description {
+  max-width: 34ch;
+  margin: -2px auto 18px;
+  color: #563b29;
+  font-size: .95rem;
+  line-height: 1.35;
+  text-align: center;
 }
 .focused-event-view__card nav {
   display: grid;
@@ -2830,6 +2838,20 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 }
 .journal-item[data-item-change="gain"] .journal-item__status,
 .journal-item[data-item-change="repair"] .journal-item__status { background: #3f6255; }
+.journal-item__quantity {
+  position: absolute;
+  right: -8px;
+  bottom: -7px;
+  z-index: 2;
+  padding: 2px 5px;
+  border: 2px solid #33251b;
+  border-radius: 9px;
+  color: #f4e1b9;
+  background: #5a3522;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
 .journal-page__edge-arrow {
   position: absolute;
   bottom: 12px;

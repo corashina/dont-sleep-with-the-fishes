@@ -72,7 +72,6 @@ export interface DedicatedEventEnvironment {
     DivePresentationController,
     'play' | 'clear' | 'settleForVisibilityChange'
   >;
-  readonly delegateCarlitos: (retrieve: () => Promise<void>) => Promise<void>;
   readonly supplies: BoatSupplyDisplay;
   readonly carlitos: CarlitosPresentation;
   readonly vortexWave: VortexWaveState;

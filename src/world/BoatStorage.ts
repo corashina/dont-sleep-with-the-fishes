@@ -154,7 +154,7 @@ const BOAT_STORAGE_SLOTS = {
     Math.PI,
   )],
   scubaSet: [restingSlot('floor', 'scubaSet', 1.33, -1.15, -0.04)],
-  anchor: [restingSlot('floor', 'anchor', 1.39, -0.50, 0.30, 0.5, 0, -0.20)],
+  anchor: [restingSlot('floor', 'anchor', 0.82, -0.50, 0.30, 0.5, 0, -0.20)],
   radio: [restingSlot('edgeShelf', 'radio', 1.35, -0.34, Math.PI * 1.5)],
   umbrella: [restingSlot('floor', 'umbrella', 0.55, -0.90, -Math.PI / 2, 0.5, 0, -Math.PI / 4)],
   // Mesh contact points keep the ring on a floorboard, leaning against the bench rail.

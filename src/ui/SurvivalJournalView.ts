@@ -173,16 +173,25 @@ export class SurvivalJournalView {
 
   private renderItems(container: HTMLElement, changes: readonly JournalItemChange[]): void {
     container.hidden = changes.length === 0;
-    container.replaceChildren(...changes.map((change) => {
+    const grouped = new Map<string, { change: JournalItemChange; count: number }>();
+    changes.forEach((change) => {
+      const key = `${change.itemId}:${change.kind}`;
+      const group = grouped.get(key);
+      if (group === undefined) grouped.set(key, { change, count: 1 });
+      else group.count += 1;
+    });
+    container.replaceChildren(...[...grouped.values()].map(({ change, count }) => {
       const item = document.createElement('li');
       item.className = 'journal-item';
       item.dataset.itemType = change.itemId;
       item.dataset.itemChange = change.kind;
-      item.title = change.label;
+      item.dataset.itemCount = String(count);
+      const label = count > 1 ? `${change.label} x${count}` : change.label;
+      item.title = label;
       const art = document.createElement('span');
       art.className = 'weight-circle journal-item__art';
       art.setAttribute('role', 'img');
-      art.setAttribute('aria-label', change.label);
+      art.setAttribute('aria-label', label);
       const thumbnail = document.createElement('img');
       thumbnail.className = 'weight-circle__thumbnail';
       thumbnail.src = itemThumbnailUrl(change.itemId);
@@ -195,6 +204,13 @@ export class SurvivalJournalView {
       badge.setAttribute('aria-hidden', 'true');
       badge.textContent = change.kind === 'gain' ? '+' : change.kind === 'repair' ? '✓' : '−';
       item.append(art, badge);
+      if (count > 1) {
+        const quantity = document.createElement('span');
+        quantity.className = 'journal-item__quantity ui-role-numeral';
+        quantity.setAttribute('aria-hidden', 'true');
+        quantity.textContent = `x${count}`;
+        item.append(quantity);
+      }
       return item;
     }));
   }

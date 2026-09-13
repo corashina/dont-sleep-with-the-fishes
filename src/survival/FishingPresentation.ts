@@ -55,7 +55,7 @@ const CENTERED_FISHING_CAST: FishingCastPoint = Object.freeze({ x: 0, z: -6.4 })
 const FISHING_TARGET_SIZE = 52;
 const FISHING_BITE_PARTICLE_INTERVAL_SECONDS = 0.12;
 const FISHING_BITE_PARTICLE_INTENSITY = 0.85;
-const FISHING_CATCH_REST = Object.freeze({ x: 0, y: 0.72, z: -2.16 });
+const FISHING_CATCH_REST = Object.freeze({ x: 0, y: 0.72, z: -1.96 });
 
 export interface FishingCameraControl {
   restoreBasePose(): void;

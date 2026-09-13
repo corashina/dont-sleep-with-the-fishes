@@ -14,12 +14,15 @@ import { runCleanupSteps, throwCleanupFailure } from './UiCleanup';
 import { returnArrowArtwork } from './uiArtwork';
 
 const ROUTINE_DIALOG_MARGIN = 20;
-const ROUTINE_DIALOG_GAP = 22;
 const FOCUSED_EVENT_BOTTOM_RESERVE = 128;
 const requireElement = createElementRequirement('focused event view');
 const FOCUSED_EVENT_TITLES: Readonly<Record<InspectableEventId, string>> = Object.freeze({
   get 'drifting-supplies'() { return uiText('suppliesTitle'); },
   get 'drifting-chest'() { return uiText('chestTitle'); },
+});
+const FOCUSED_EVENT_DESCRIPTIONS: Readonly<Record<InspectableEventId, string>> = Object.freeze({
+  get 'drifting-supplies'() { return uiText('suppliesDescription'); },
+  get 'drifting-chest'() { return uiText('chestDescription'); },
 });
 
 export class FocusedEventView {
@@ -35,8 +38,8 @@ export class FocusedEventView {
 
   private readonly choicesRoot: HTMLElement;
   private readonly title: HTMLElement;
+  private readonly description: HTMLElement;
   private currentEventId: InspectableEventId | null = null;
-  private target: FocusedEventFocusView['target'] = null;
   private readonly choicesById = new Map<EventResponseId, FocusedEventChoiceView>();
   private selectedChoiceId: EventResponseId | null = null;
   private busy = false;
@@ -44,7 +47,10 @@ export class FocusedEventView {
   private readonly unsubscribeLanguage: () => void;
   private refreshLanguage(): void {
     refreshUiText(this.root);
-    if (this.currentEventId !== null) this.title.textContent = FOCUSED_EVENT_TITLES[this.currentEventId];
+    if (this.currentEventId !== null) {
+      this.title.textContent = FOCUSED_EVENT_TITLES[this.currentEventId];
+      this.description.textContent = FOCUSED_EVENT_DESCRIPTIONS[this.currentEventId];
+    }
     for (const choice of this.choicesById.values()) {
       const button = this.choiceButton(choice.id);
       if (!button) continue;
@@ -62,9 +68,10 @@ export class FocusedEventView {
   constructor(private readonly coordinateRoot: HTMLElement) {
     const template = document.createElement('template');
     template.innerHTML = `
-      <section class="focused-event-view" data-focused-event-view role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="focused-event-title" inert>
+      <section class="focused-event-view" data-focused-event-view role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="focused-event-title" aria-describedby="focused-event-description" inert>
         <div class="dive-result__paper focused-event-view__card scuba-popup-paper">
           <h2 class="dive-result__title scuba-popup-title ui-role-display" id="focused-event-title" data-focused-event-title></h2>
+          <p class="focused-event-view__description ui-role-narrative" id="focused-event-description" data-focused-event-description></p>
           <nav data-focused-event-choices data-ui-aria="eventChoices" aria-label="${uiText('eventChoices')}"></nav>
         </div>
         <button type="button" class="focused-event-view__back" data-focused-event-back data-ui-aria="returnBoat" aria-label="${uiText('returnBoat')}">
@@ -75,6 +82,7 @@ export class FocusedEventView {
     this.card = requireElement(this.root, '.focused-event-view__card');
     this.backButton = requireElement(this.root, '[data-focused-event-back]');
     this.title = requireElement(this.root, '[data-focused-event-title]');
+    this.description = requireElement(this.root, '[data-focused-event-description]');
     this.choicesRoot = requireElement(this.root, '[data-focused-event-choices]');
     this.root.addEventListener('click', this.handleClick);
     window.addEventListener('resize', this.handleWindowResize);
@@ -87,7 +95,7 @@ export class FocusedEventView {
     this.currentEventId = view.eventId;
     this.backButton.setAttribute('aria-label', uiText('returnBoat'));
     this.title.textContent = FOCUSED_EVENT_TITLES[view.eventId];
-    this.target = view.target === null ? null : Object.freeze({ ...view.target });
+    this.description.textContent = FOCUSED_EVENT_DESCRIPTIONS[view.eventId];
     this.choicesById.clear();
     for (const choice of view.choices) this.choicesById.set(choice.id, choice);
     this.selectedChoiceId = null;
@@ -105,15 +113,13 @@ export class FocusedEventView {
     this.choicesById.clear();
     this.selectedChoiceId = null;
     this.title.textContent = '';
+    this.description.textContent = '';
     this.choicesRoot.replaceChildren();
     this.choicesRoot.hidden = false;
-    this.target = null;
   }
 
   updateTarget(target: FocusedEventFocusView['target']): void {
-    if (this.disposed || !this.visible) return;
-    this.target = target === null ? null : Object.freeze({ ...target });
-    this.position();
+    void target;
   }
 
   setBusy(busy: boolean): void {
@@ -259,34 +265,12 @@ export class FocusedEventView {
     const viewportWidth = Math.max(1, rootBounds.width || this.coordinateRoot.clientWidth || window.innerWidth);
     const viewportHeight = Math.max(1, rootBounds.height || this.coordinateRoot.clientHeight || window.innerHeight);
     const popupBottom = Math.max(ROUTINE_DIALOG_MARGIN, viewportHeight - FOCUSED_EVENT_BOTTOM_RESERVE);
-    const target = this.target?.visible === true ? this.target : null;
-    if (target === null) {
-      const width = Math.min(420, viewportWidth - ROUTINE_DIALOG_MARGIN * 2);
-      const maximumHeight = Math.max(1, popupBottom - ROUTINE_DIALOG_MARGIN);
-      const height = Math.min(maximumHeight, this.card.getBoundingClientRect().height || 360);
-      this.setPosition(width, maximumHeight, (viewportWidth - width) / 2, Math.max(ROUTINE_DIALOG_MARGIN, (popupBottom - height) / 2), 'center', 'fallback');
-      return;
-    }
-    const targetLeft = target.x - target.width / 2;
-    const targetRight = target.x + target.width / 2;
-    const leftWidth = Math.max(0, targetLeft - ROUTINE_DIALOG_GAP - ROUTINE_DIALOG_MARGIN);
-    const rightWidth = Math.max(0, viewportWidth - ROUTINE_DIALOG_MARGIN - targetRight - ROUTINE_DIALOG_GAP);
-    const horizontal = [
-      { placement: 'left', available: leftWidth, edge: targetLeft - ROUTINE_DIALOG_GAP },
-      { placement: 'right', available: rightWidth, edge: targetRight + ROUTINE_DIALOG_GAP },
-    ] as const;
-    const candidates = horizontal.filter(({ available }) => available >= 240);
-    const placement = (candidates.length > 0 ? candidates : horizontal).reduce((best, candidate) => {
-      const bestCenter = best.placement === 'left' ? best.edge - Math.min(420, best.available) / 2 : best.edge + Math.min(420, best.available) / 2;
-      const candidateCenter = candidate.placement === 'left' ? candidate.edge - Math.min(420, candidate.available) / 2 : candidate.edge + Math.min(420, candidate.available) / 2;
-      return Math.abs(candidateCenter - viewportWidth / 2) < Math.abs(bestCenter - viewportWidth / 2) ? candidate : best;
-    });
-    const width = Math.max(1, Math.min(420, placement.available));
+    const width = Math.max(1, Math.min(420, viewportWidth - ROUTINE_DIALOG_MARGIN * 2));
     const maximumHeight = Math.max(1, popupBottom - ROUTINE_DIALOG_MARGIN);
     const height = Math.min(maximumHeight, this.card.getBoundingClientRect().height || 360);
-    const x = placement.placement === 'left' ? placement.edge - width : placement.edge;
-    const y = Math.min(popupBottom - height, Math.max(ROUTINE_DIALOG_MARGIN, target.y - height / 2));
-    this.setPosition(width, maximumHeight, x, y, placement.placement, 'projected');
+    const x = (viewportWidth - width) / 2;
+    const y = Math.max(ROUTINE_DIALOG_MARGIN, (popupBottom - height) / 2);
+    this.setPosition(width, maximumHeight, x, y, 'center', 'centered');
   }
 
   private setPosition(width: number, maximumHeight: number, x: number, y: number, placement: string, anchorState: string): void {

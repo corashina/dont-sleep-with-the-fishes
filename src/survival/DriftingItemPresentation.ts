@@ -55,6 +55,7 @@ const SUPPLY_POSITIONS: Readonly<Record<
   middle: Object.freeze({ x: 4.4, z: -5.7 }),
   far: Object.freeze({ x: 5.8, z: -7.2 }),
 });
+const CONTAINER_DISTANCE_SCALE = 1.5;
 const CHEST_POSITION = Object.freeze({ x: 3, y: 0.02, z: -4.2 });
 const WATERLINE_Y: Readonly<Record<DriftingSupplyKind, number>> = Object.freeze({
   barrel: 0.02,
@@ -148,7 +149,7 @@ export class DriftingItemPresentation {
   private readonly quaternionScratch = new Quaternion();
   private readonly targetQuaternionScratch = new Quaternion();
   private readonly animationStartQuaternion = new Quaternion();
-  private readonly lifeboatFade = new SceneFade();
+  private readonly retrievalFade = new SceneFade();
   private animationStartScale = 1;
   private readonly waveSample: WaveSample = {
     height: 0,
@@ -241,7 +242,14 @@ export class DriftingItemPresentation {
       const distance = driftingSupplyDistanceFromSeed(variantSeed);
       const position = SUPPLY_POSITIONS[distance];
       const basePosition = this.basePositions[supplyKind!];
-      basePosition.set(position.x * this.side, WATERLINE_Y[supplyKind!], position.z);
+      const distanceScale = supplyKind === 'container' || supplyKind === 'debris'
+        ? CONTAINER_DISTANCE_SCALE
+        : 1;
+      basePosition.set(
+        position.x * distanceScale * this.side,
+        WATERLINE_Y[supplyKind!],
+        position.z * distanceScale,
+      );
       this.root.userData.supplyKind = supplyKind;
       this.root.userData.supplyDistance = distance;
     } else {
@@ -257,7 +265,7 @@ export class DriftingItemPresentation {
     this.resetAll();
     this.roots[this.activeVariant].visible = true;
     this.applyFloatingPose(this.activeVariant, 0);
-    this.debris.setPose(this.side, 0);
+    this.debris.setPose(this.side);
   }
 
   reveal(): Promise<void> {
@@ -271,7 +279,9 @@ export class DriftingItemPresentation {
     if (variant === 'lifeboat') {
       this.root.updateMatrixWorld(true);
       this.root.attach(this.lifeboatCooler);
-      this.lifeboatFade.begin([this.roots.lifeboat]);
+      this.retrievalFade.begin([this.roots.lifeboat]);
+    } else if (variant === 'debris') {
+      this.retrievalFade.begin([this.roots.debris]);
     }
     this.animationStartPosition.copy(target.position);
     this.animationStartQuaternion.copy(target.quaternion);
@@ -358,7 +368,7 @@ export class DriftingItemPresentation {
 
   dispose(): void {
     if (this.disposed) return;
-    this.lifeboatFade.reset();
+    this.retrievalFade.reset();
     this.cancelActiveAnimation();
     this.disposed = true;
     this.root.removeFromParent();
@@ -399,7 +409,7 @@ export class DriftingItemPresentation {
 
   private applyRetrievePose(variant: DriftingCargoKind, progress: number): void {
     if (variant === 'debris') {
-      this.debris.setPose(this.side, progress);
+      this.retrievalFade.apply(1 - smoothstep(progress));
       return;
     }
     this.readTargetPose(variant);
@@ -419,13 +429,13 @@ export class DriftingItemPresentation {
     );
     if (variant === 'lifeboat') {
       const fade = smoothstep(Math.max(0, (progress - 0.38) / 0.62));
-      this.lifeboatFade.apply(1 - fade);
+      this.retrievalFade.apply(1 - fade);
     }
   }
 
   private finishRetrieve(variant: DriftingCargoKind): void {
     this.state = 'held';
-    if (variant === 'debris') this.debris.setPose(this.side, 1);
+    if (variant === 'debris') this.debris.setPose(this.side);
     else this.applyHeldPose(variant);
     if (variant !== 'chest') this.resultRoot()!.visible = false;
     if (variant === 'lifeboat') this.roots.lifeboat.visible = false;
@@ -461,14 +471,14 @@ export class DriftingItemPresentation {
   }
 
   private resetAll(): void {
-    this.lifeboatFade.reset();
+    this.retrievalFade.reset();
     this.resetCooler();
     this.resetPose('barrel');
     this.resetPose('chest');
     this.resetPose('lifeboat');
     this.resetPose('container');
     this.resetPose('debris');
-    this.debris.setPose(this.side, 0);
+    this.debris.setPose(this.side);
     this.roots.barrel.visible = false;
     this.roots.chest.visible = false;
     this.roots.lifeboat.visible = false;
