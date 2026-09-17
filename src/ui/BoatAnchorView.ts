@@ -666,6 +666,13 @@ export class BoatAnchorView {
     button.type = 'button';
     button.className = 'boat-anchor';
     button.dataset.anchorId = anchor.id;
+    if (anchor.itemType !== null) {
+      const marker = document.createElement('span');
+      marker.className = 'boat-broken-marker';
+      marker.setAttribute('aria-hidden', 'true');
+      marker.innerHTML = '<svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M9 3H4v18h5l3-6-4-3 4-4zM15 3h5v18h-6l3-6-4-3 4-4z"/></svg>';
+      button.append(marker);
+    }
     if (anchor.tooltip !== false) {
       const tooltip = document.createElement('span');
       tooltip.className = 'boat-tooltip ui-role-context';

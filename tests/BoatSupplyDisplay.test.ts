@@ -1,10 +1,41 @@
-import { Group } from 'three';
+import { Group, Mesh, type Object3D } from 'three';
 import { describe,expect,it } from 'vitest';
 import { BoatSupplyDisplay } from '../src/survival/BoatSupplyDisplay';
 import { SurvivalSession } from '../src/survival/SurvivalSession';
 import { createTestPropModels } from './helpers/propModels';
 
 describe('boat supply display', () => {
+
+  // Importance: 95. Event copies must not retain stale damage after repair.
+  it('keeps borrowed geometry consistent through break and repair', () => {
+    const saved = [{ instanceId: 'knife-1', type: 'knife' }] as const;
+    const models = createTestPropModels();
+    const display = new BoatSupplyDisplay(models, new Group(), saved);
+    const usable = new SurvivalSession(saved, { seed: 1 }).snapshot();
+    const broken = new SurvivalSession(saved, {
+      seed: 1, initialConditions: { 'knife-1': 'broken' },
+    }).snapshot();
+    const firstMesh = (root: Object3D): Mesh => {
+      let result: Mesh | undefined;
+      root.traverse((object) => { if (result === undefined && object instanceof Mesh) result = object; });
+      return result!;
+    };
+    try {
+      display.sync(usable);
+      const copy = firstMesh(display.recordFor('knife')!.root);
+      const original = copy.geometry;
+      for (const state of [broken, usable, broken, usable]) {
+        display.sync(state);
+        expect(copy.geometry === original).toBe(state === usable);
+        const actor = display.borrowEventActor('knife-1')!;
+        expect(firstMesh(actor.root).geometry).toBe(copy.geometry);
+        actor.release();
+      }
+    } finally {
+      display.dispose();
+      models.dispose();
+    }
+  });
 
   it('starts borrowed food actors at the current layout after stock changes', () => {
     const saved = [{ instanceId: 'cannedFood-1', type: 'cannedFood' }] as const;

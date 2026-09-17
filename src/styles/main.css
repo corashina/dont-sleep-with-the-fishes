@@ -1011,8 +1011,38 @@ canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 .boat-anchor[aria-disabled="true"] { border-style: dashed; border-color: transparent; }
 
 .boat-anchor.is-depleted { filter: saturate(0.25); }
-.boat-anchor[data-condition="broken"] {
-  filter: saturate(0.3) brightness(0.76);
+.boat-broken-marker {
+  display: none;
+  position: absolute;
+  right: -5px;
+  top: -5px;
+  width: 23px;
+  height: 25px;
+  padding: 3px;
+  box-sizing: border-box;
+  background: #e2cfaa;
+  color: #51372c;
+  border: 1px solid #594637;
+  border-radius: 3px 1px 4px 2px;
+  box-shadow: 0 1px 3px #10202780;
+  transform: rotate(7deg);
+  pointer-events: none;
+}
+.boat-broken-marker svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.boat-anchor[data-condition="broken"] .boat-broken-marker {
+  display: block;
+}
+.boat-anchor[data-event-state="locked"] .boat-broken-marker {
+  display: none;
 }
 .boat-anchor:disabled { cursor: not-allowed; opacity: 0.42; }
 .boat-anchor[data-event-state="locked"] {

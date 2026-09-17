@@ -39,7 +39,7 @@ import {
 } from './fishingModelManifest';
 import { type ItemId } from '../game/ItemState';
 import { ITEM_MODEL_SPECS } from '../world/itemModelManifest';
-import { applyBrokenMaterialTreatment } from './itemConditionAppearance';
+import { prepareItemCondition, setItemBroken } from './itemConditionAppearance';
 import { buildSimpleJunk } from './JunkCatchModels';
 import { FISHING_MODEL_SIZES } from '../game/fishingModelSizes';
 
@@ -391,7 +391,9 @@ function decorateLoadedItemCatch(
   active.root.userData.fishingModelSource = 'item-model';
   active.root.userData.fishingItemId = definition.presentation.itemId;
   if (definition.presentation.condition !== 'broken') return;
-  for (const material of active.materials) applyBrokenMaterialTreatment(material);
+  setItemBroken(prepareItemCondition(
+    active.root, definition.presentation.itemId, active.geometries, active.materials,
+  ), true);
 }
 
 function prepareUnloadedCatch(definition: FishingCatchDefinition): ActiveCatch {
@@ -596,7 +598,7 @@ function prepareProceduralItemCatch(
   }
 
   if (condition === 'broken') {
-    for (const material of materials) applyBrokenMaterialTreatment(material);
+    setItemBroken(prepareItemCondition(root, itemId, geometries, materials), true);
   }
   root.name = `fishing-catch:${itemId}:procedural`;
   root.userData.fishingModelSource = 'procedural-item';

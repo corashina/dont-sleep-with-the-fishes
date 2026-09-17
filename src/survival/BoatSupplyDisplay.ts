@@ -36,7 +36,7 @@ import type {
 } from './survivalTypes';
 import type { SurvivalSnapshot } from './survivalSnapshot';
 import { scaleEventItemDuration } from './eventItemTiming';
-import { applyBrokenMaterialTreatment } from './itemConditionAppearance';
+import { prepareItemCondition, setItemBroken, type ItemConditionBinding } from './itemConditionAppearance';
 
 export interface BoatSupplyPresentationRecord {
   readonly groupId: BoatSupplyGroupId;
@@ -100,7 +100,7 @@ interface MutableRecord {
 interface CopyBinding {
   readonly root: Group;
   readonly presentation: PropPresentation | null;
-  readonly materials: readonly ConditionMaterialBinding[];
+  readonly appearance: readonly ItemConditionBinding[];
   instanceId: ItemInstanceId | null;
   condition: ItemCondition;
 }
@@ -120,12 +120,6 @@ function isActiveSupplyState(
 ): instance is ActiveSupplyState {
   return instance?.type === groupId
     && (instance.condition === 'usable' || instance.condition === 'broken');
-}
-
-interface ConditionMaterialBinding {
-  readonly mesh: Mesh;
-  readonly usable: Material | Material[];
-  readonly broken: Material | Material[];
 }
 
 interface ActiveAnimation {
@@ -168,7 +162,7 @@ interface PreparedEventActor {
   readonly copyPosition: Vector3;
   readonly copyQuaternion: Quaternion;
   readonly copyScale: Vector3;
-  readonly materialBindings: readonly {
+  readonly meshBindings: readonly {
     readonly source: Mesh;
     readonly target: Mesh;
   }[];
@@ -196,46 +190,12 @@ function createIdentitySupplyPose(): MutableSupplyPose {
   };
 }
 
-function transformMaterial(
-  material: Material | Material[],
-  transform: (entry: Material) => Material,
-): Material | Material[] {
-  return Array.isArray(material) ? material.map(transform) : transform(material);
-}
-
-function materialList(material: Material | Material[]): readonly Material[] {
-  return Array.isArray(material) ? material : [material];
-}
-
 function enableBoatSupplyShadows(root: Object3D): void {
   root.traverse((object) => {
     if (!(object instanceof Mesh)) return;
     object.castShadow = true;
     object.receiveShadow = true;
   });
-}
-
-function brokenMaterial(material: Material): Material {
-  const clone = material.clone();
-  applyBrokenMaterialTreatment(clone);
-  return clone;
-}
-
-function createConditionBindings(
-  root: Group,
-  ownedMaterials: Set<Material>,
-): readonly ConditionMaterialBinding[] {
-  const bindings: ConditionMaterialBinding[] = [];
-  root.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    const usable = object.material;
-    const broken = transformMaterial(usable, brokenMaterial);
-    for (const material of materialList(broken)) {
-      ownedMaterials.add(material);
-    }
-    bindings.push({ mesh: object, usable, broken });
-  });
-  return bindings;
 }
 
 export class BoatSupplyDisplay {
@@ -377,7 +337,7 @@ export class BoatSupplyDisplay {
     return {
       root: copy,
       presentation,
-      materials: createConditionBindings(copy, this.ownedMaterials),
+      appearance: prepareItemCondition(copy, groupId, this.ownedGeometries, this.ownedMaterials),
       instanceId: instance.instanceId,
       condition: 'lost',
     };
@@ -851,7 +811,7 @@ export class BoatSupplyDisplay {
           !this.presentationHiddenItemIds.has(copy.instanceId)
           && !this.eventStowedUntilDay.has(copy.instanceId)
         );
-      this.applyCopyMaterials(copy);
+      setItemBroken(copy.appearance, copy.condition === 'broken');
     }
     record.root.visible = copies.some((copy) => copy.root.visible);
   }
@@ -870,13 +830,6 @@ export class BoatSupplyDisplay {
     }
     const eligible = usableIds.find((id) => this.eventEligibleItemIds?.has(id) === true);
     return eligible ?? usableIds[0] ?? brokenIds[0] ?? null;
-  }
-
-  private applyCopyMaterials(copy: CopyBinding): void {
-    const broken = copy.condition === 'broken';
-    for (const binding of copy.materials) {
-      binding.mesh.material = broken ? binding.broken : binding.usable;
-    }
   }
 
   private cancelActiveAnimation(): void {
@@ -945,8 +898,9 @@ export class BoatSupplyDisplay {
       this.restoreSelectedGroup(groupId, previousSelectedItemId);
       return null;
     }
-    for (const binding of prepared.materialBindings) {
+    for (const binding of prepared.meshBindings) {
       binding.target.material = binding.source.material;
+      binding.target.geometry = binding.source.geometry;
     }
     prepared.heldCopy.visible = true;
     const root = prepared.root;
@@ -1057,7 +1011,7 @@ export class BoatSupplyDisplay {
       copyPosition,
       copyQuaternion,
       copyScale,
-      materialBindings: sourceMeshes.map((source, index) => ({
+      meshBindings: sourceMeshes.map((source, index) => ({
         source,
         target: targetMeshes[index]!,
       })),

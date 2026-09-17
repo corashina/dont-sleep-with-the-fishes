@@ -1251,6 +1251,7 @@ describe('SurvivalUI', () => {
     expect(onAction).not.toHaveBeenCalled();
   });
 
+  // Importance: 90. The damage marker must retain repair access and clear after repair.
   it.each(['bucket', 'flashlight'] as const)('keeps broken %s inspectable and exposes its item actions', (itemType) => {
     const mount = document.createElement('main');
     document.body.append(mount);
@@ -1274,8 +1275,24 @@ describe('SurvivalUI', () => {
     expect(broken.getAttribute('aria-description')).toContain('BROKEN');
     expect(broken.getAttribute('aria-description')).toContain('Choose Repair or Discard.');
     expect(broken.dataset.condition).toBe('broken');
+    const marker = broken.querySelector<HTMLElement>('.boat-broken-marker')!;
+    expect(marker.getAttribute('aria-hidden')).toBe('true');
+    expect(marker.querySelector('svg')).not.toBeNull();
     broken.focus();
     expect(document.activeElement).toBe(broken);
+    broken.click();
+    expect(mount.querySelector('[data-repair-target]')?.getAttribute('data-repair-target')).toBe(instanceId);
+    mount.querySelector<HTMLButtonElement>('[data-repair-cancel]')!.click();
+    const item = state.inventory[instanceId]!;
+    ui.render({ ...state, inventory: { ...state.inventory, [instanceId]: { ...item, condition: 'usable' } } }, () => null);
+    ui.setAnchors([{
+      id: instanceId, itemType, toolId: null, action: null, remainingUses: null,
+      quantity: 1, usableQuantity: 1, brokenQuantity: 0,
+      x: 320, y: 240, visible: true, depleted: false,
+    }]);
+    expect(broken.dataset.condition).toBe('usable');
+    expect(broken.querySelector('.boat-broken-marker')).toBe(marker);
+    expect(broken.querySelector('[role="tooltip"]')?.textContent).not.toContain('BROKEN');
   });
 
   it('uses the authored sleep-cover duration while preserving supersession and disposal', async () => {
