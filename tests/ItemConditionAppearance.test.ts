@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { BoxGeometry, BufferGeometry, Group, Material, Mesh, MeshStandardMaterial } from 'three';
+import { BoxGeometry, BufferGeometry, Group, Material, Mesh, MeshStandardMaterial, Texture } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { describe, expect, it } from 'vitest';
 import { ITEM_IDS, ITEM_DEFINITIONS } from '../src/game/ItemState';
@@ -16,7 +16,7 @@ describe('item condition appearance', () => {
       const data = new ArrayBuffer(bytes.byteLength);
       new Uint8Array(data).set(bytes);
       const loader = new GLTFLoader().register(() => ({
-        name: 'damage-materials', loadMaterial: async () => new MeshStandardMaterial(),
+        name: 'damage-textures', loadTexture: async () => new Texture(),
       }));
       const { scene } = await loader.parseAsync(data, '');
       normalizeLongestDimensionTemplate(scene, ITEM_MODEL_SPECS[id], (message) => new Error(message));
@@ -25,6 +25,25 @@ describe('item condition appearance', () => {
       const geometries = new Set<BufferGeometry>();
       const materials = new Set<Material>();
       const bindings = prepareItemCondition(root, id, geometries, materials);
+      // Importance: 90. Damage must affect working surfaces, not intact supports.
+      const changedMaterials = bindings.flatMap(({ usableMaterial }) => (
+        Array.isArray(usableMaterial) ? usableMaterial : [usableMaterial]
+      )).map((material) => material.name);
+      if (id === 'compass') expect(new Set(changedMaterials)).toEqual(new Set(['mat24']));
+      if (id === 'fishingNet') expect(new Set(changedMaterials)).toEqual(new Set(['fishnet_net']));
+      if (id === 'scubaSet') {
+        expect(new Set(changedMaterials)).toEqual(new Set(['Material.016', 'Material.037']));
+      }
+      if (id === 'compass' || id === 'scubaSet' || id === 'flashlight') {
+        const crackedGlass = bindings.filter(({ usableMaterial, brokenMaterial }) => (
+          Array.isArray(brokenMaterial)
+          && brokenMaterial.length > (Array.isArray(usableMaterial) ? usableMaterial.length : 1)
+        ));
+        expect(crackedGlass.length).toBeGreaterThan(0);
+        for (const { brokenGeometry } of crackedGlass) {
+          expect(brokenGeometry.groups.at(-1)!.count).toBeGreaterThan(0);
+        }
+      }
       setItemBroken(bindings, true);
       const positions = bindings.flatMap(({ mesh }) => [...mesh.geometry.getAttribute('position').array]);
       expect(positions.length).toBeGreaterThan(0);

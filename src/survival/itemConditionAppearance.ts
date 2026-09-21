@@ -1,6 +1,31 @@
-import { Box3, BufferGeometry, DoubleSide, Material, Matrix4, Mesh, Object3D, Vector3 } from 'three';
+import { Box3, BufferGeometry, DoubleSide, Material, Matrix4, Mesh, MeshStandardMaterial, Object3D, Vector3 } from 'three';
 import { ITEM_DEFINITIONS, type ItemId } from '../game/ItemState';
-import { createBrokenGeometry } from './brokenItemGeometry';
+import { createBrokenGeometry, type DamageSurface } from './brokenItemGeometry';
+
+function isScubaMask(mesh: Mesh): boolean {
+  let part: Object3D | null = mesh;
+  while (part !== null) {
+    if (part.name.includes('glasses') || part.name.includes('scubaGoggles')) return true;
+    part = part.parent;
+  }
+  return false;
+}
+
+function damageSurface(itemId: ItemId, mesh: Mesh): DamageSurface {
+  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  const hasMaterial = (name: string): boolean => materials.some((material) => material.name === name);
+  switch (itemId) {
+    case 'compass': return hasMaterial('mat24') ? 'glass' : 'none';
+    case 'scubaSet': {
+      if (!isScubaMask(mesh)) return 'none';
+      return hasMaterial('Material.016') ? 'glass' : 'body';
+    }
+    case 'fishingNet': return hasMaterial('fishnet_net') ? 'fabric' : 'none';
+    case 'flashlight': return hasMaterial('mat24') ? 'glass' : 'body';
+    case 'map': return 'fabric';
+    default: return 'body';
+  }
+}
 
 export interface ItemConditionBinding {
   readonly mesh: Mesh;
@@ -46,19 +71,32 @@ export function prepareItemCondition(
     ownedMaterials.add(clone);
     return clone;
   };
-  return meshes.map((mesh) => {
+  const bindings: ItemConditionBinding[] = [];
+  for (const mesh of meshes) {
+    const surface = damageSurface(itemId, mesh);
+    if (surface === 'none') continue;
     const toUnit = normalize.clone().multiply(toRoot).multiply(mesh.matrixWorld);
-    const brokenGeometry = createBrokenGeometry(mesh.geometry, toUnit, itemId);
+    const baseMaterials = Array.isArray(mesh.material) ? mesh.material.map(damagedMaterial) : [damagedMaterial(mesh.material)];
+    const brokenGeometry = createBrokenGeometry(mesh.geometry, toUnit, itemId, surface, baseMaterials.length);
+    if (surface === 'glass') {
+      const crackMaterial = new MeshStandardMaterial({
+        color: itemId === 'scubaSet' ? 0xd9cbb0 : 0x342c28,
+        roughness: 0.92, side: DoubleSide,
+        polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+      });
+      baseMaterials.push(crackMaterial);
+      ownedMaterials.add(crackMaterial);
+    }
     ownedGeometries.add(brokenGeometry);
-    return {
+    bindings.push({
       mesh,
       usableGeometry: mesh.geometry,
       brokenGeometry,
       usableMaterial: mesh.material,
-      brokenMaterial: Array.isArray(mesh.material)
-        ? mesh.material.map(damagedMaterial) : damagedMaterial(mesh.material),
-    };
-  });
+      brokenMaterial: baseMaterials.length === 1 ? baseMaterials[0]! : baseMaterials,
+    });
+  }
+  return bindings;
 }
 
 export function setItemBroken(bindings: readonly ItemConditionBinding[], broken: boolean): void {
