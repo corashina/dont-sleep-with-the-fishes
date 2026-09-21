@@ -394,6 +394,9 @@ function decorateLoadedItemCatch(
   setItemBroken(prepareItemCondition(
     active.root, definition.presentation.itemId, active.geometries, active.materials,
   ), true);
+  const size = new Box3().setFromObject(active.root, true).getSize(new Vector3());
+  active.root.scale.multiplyScalar(FISHING_MODEL_SIZES[definition.id] / Math.max(size.x, size.y, size.z));
+  active.root.updateMatrixWorld(true);
 }
 
 function prepareUnloadedCatch(definition: FishingCatchDefinition): ActiveCatch {

@@ -20,6 +20,13 @@ const BREAKS: Partial<Record<ItemId, Cut>> = {
   umbrella: (p) => p.x + jaggedEdge(p.y),
 };
 
+const NOTCHES: Partial<Record<ItemId, readonly Cut[]>> = {
+  map: [(p) => -0.20 - p.x,
+    (p) => (-0.20 - p.x) * 0.18 - p.z,
+    (p) => (-0.20 - p.x) * 0.18 + p.z],
+  spyglass: [(p) => -0.08 - p.x, (p) => p.z - 0.22, (p) => p.y + p.x * 0.30 + 0.015],
+};
+
 function jaggedEdge(value: number): number {
   return (Math.abs(((value + 0.5) * 8) % 2 - 1) - 0.5) * 0.055;
 }
@@ -70,14 +77,27 @@ function deform(point: Vector3, itemId: ItemId): void {
   switch (itemId) {
     case 'map':
       point.y += Math.max(0, point.x - 0.1) * Math.max(0, point.z + 0.1) * 0.55;
+      point.y += Math.max(0, -point.x - 0.10) * (0.14 + Math.abs(point.z)) * 0.75;
       break;
     case 'spyglass':
       if (point.x > 0.03) point.y -= Math.max(0, point.z - 0.10) * 0.7;
+      break;
+    case 'umbrella':
+      if (point.x < 0.08) {
+        point.x = Math.min(-0.08, point.x + Math.hypot(point.y, point.z) * 0.45);
+        point.y *= 0.16;
+        point.z *= 0.16;
+      }
       break;
   }
 }
 
 function separateFragment(point: Vector3, itemId: ItemId, side: number): void {
+  if (itemId === 'spyglass' && side < 0) {
+    const x = point.x;
+    point.x = x * Math.cos(0.12) - point.y * Math.sin(0.12) - 0.025;
+    point.y = x * Math.sin(0.12) + point.y * Math.cos(0.12) + 0.03;
+  }
   if (side <= 0) return;
   if (itemId === 'fishingNet') {
     const z = point.z;
@@ -91,6 +111,18 @@ function separateFragment(point: Vector3, itemId: ItemId, side: number): void {
   point.x = x * Math.cos(angle) - point.y * Math.sin(angle) + 0.07;
   point.y = x * Math.sin(angle) + point.y * Math.cos(angle) - 0.035;
   if (itemId === 'scubaSet' || itemId === 'anchor') point.y += 0.16;
+}
+
+function notchSections(section: Vertex[], itemId: ItemId): Vertex[][] {
+  const cuts = NOTCHES[itemId];
+  if (cuts === undefined) return [section];
+  const output: Vertex[][] = [];
+  let remainder = section;
+  for (const cut of cuts) {
+    output.push(clip(remainder, cut, -1));
+    remainder = clip(remainder, cut, 1);
+  }
+  return output;
 }
 
 export function createBrokenGeometry(
@@ -138,7 +170,9 @@ export function createBrokenGeometry(
   const emitBody = (start: number, count: number): void => {
     for (let offset = start; offset < start + count; offset += 3) {
       const triangle = [readVertex(offset), readVertex(offset + 1), readVertex(offset + 2)];
-      for (const section of fractureSections(triangle, itemId)) emitFragment(section);
+      for (const section of fractureSections(triangle, itemId)) {
+        for (const notched of notchSections(section, itemId)) emitFragment(notched);
+      }
     }
   };
   const groups = source.groups.length > 0 ? source.groups : [{

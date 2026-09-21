@@ -37,6 +37,7 @@ import type {
 import type { SurvivalSnapshot } from './survivalSnapshot';
 import { scaleEventItemDuration } from './eventItemTiming';
 import { prepareItemCondition, setItemBroken, type ItemConditionBinding } from './itemConditionAppearance';
+import { fitBrokenItemToStorage } from './brokenItemStorage';
 
 export interface BoatSupplyPresentationRecord {
   readonly groupId: BoatSupplyGroupId;
@@ -334,10 +335,12 @@ export class BoatSupplyDisplay {
     copy.visible = false;
     root.add(copy);
     collectMeshResources(copy, this.ownedGeometries, this.ownedMaterials);
+    const appearance = prepareItemCondition(copy, groupId, this.ownedGeometries, this.ownedMaterials);
+    fitBrokenItemToStorage(copy, appearance, groupId);
     return {
       root: copy,
       presentation,
-      appearance: prepareItemCondition(copy, groupId, this.ownedGeometries, this.ownedMaterials),
+      appearance,
       instanceId: instance.instanceId,
       condition: 'lost',
     };

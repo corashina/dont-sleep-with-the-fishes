@@ -41,6 +41,7 @@ describe('item condition appearance', () => {
       normalizeLongestDimensionTemplate(scene, ITEM_MODEL_SPECS[id], (message) => new Error(message));
       const root = new Group();
       root.add(scene);
+      const usableBounds = new Box3().setFromObject(root, true);
       const geometries = new Set<BufferGeometry>();
       const materials = new Set<Material>();
       const bindings = prepareItemCondition(root, id, geometries, materials);
@@ -56,6 +57,12 @@ describe('item condition appearance', () => {
         verifyCompassSplit(root, bindings);
       }
       setItemBroken(bindings, true);
+      // Importance: 90. The broken umbrella must fold shut rather than retain an open canopy.
+      if (id === 'umbrella') {
+        const damagedBounds = new Box3().setFromObject(root, true);
+        expect(damagedBounds.max.z - damagedBounds.min.z)
+          .toBeLessThan((usableBounds.max.z - usableBounds.min.z) * 0.25);
+      }
       const positions = bindings.flatMap(({ mesh }) => [...mesh.geometry.getAttribute('position').array]);
       expect(positions.length).toBeGreaterThan(0);
       expect(positions.every(Number.isFinite)).toBe(true);
