@@ -15,16 +15,19 @@ const BREAKS: Partial<Record<ItemId, Cut>> = {
   flashlight: (p) => p.x + p.y * 0.18 + jaggedEdge(p.y),
   knife: (p) => p.x + p.y * 0.22 + jaggedEdge(p.y) - 0.02,
   bucket: (p) => p.x + p.y * 0.16 + jaggedEdge(p.y),
-  anchor: (p) => p.x + jaggedEdge(p.y),
+  anchor: (p) => p.y + jaggedEdge(p.x),
   fishingNet: (p) => p.z + jaggedEdge(p.x) - 0.03,
-  umbrella: (p) => p.x + jaggedEdge(p.y),
+  umbrella: (p) => p.x + jaggedEdge(p.y) - 0.04,
 };
 
 const NOTCHES: Partial<Record<ItemId, readonly Cut[]>> = {
   map: [(p) => -0.20 - p.x,
     (p) => (-0.20 - p.x) * 0.18 - p.z,
     (p) => (-0.20 - p.x) * 0.18 + p.z],
-  spyglass: [(p) => -0.08 - p.x, (p) => p.z - 0.22, (p) => p.y + p.x * 0.30 + 0.015],
+  spyglass: [(p) => -0.08 - p.x, (p) => p.y + p.x * 0.30 + 0.08],
+  flashlight: [(p) => p.x - 0.30, (p) => p.y - 0.035, (p) => p.z + 0.04],
+  umbrella: [(p) => -0.10 - p.x, (p) => p.z - 0.16,
+    (p) => (p.z - 0.16) * 0.35 - p.y, (p) => (p.z - 0.16) * 0.35 + p.y],
 };
 
 function jaggedEdge(value: number): number {
@@ -47,7 +50,7 @@ function fractureSections(triangle: Vertex[], itemId: ItemId): Vertex[][] {
 
 function fractureAxis(itemId: ItemId): 'x' | 'y' | 'z' {
   if (itemId === 'map') return 'z';
-  if (itemId === 'scubaSet' || itemId === 'fishingNet') return 'x';
+  if (itemId === 'scubaSet' || itemId === 'fishingNet' || itemId === 'anchor') return 'x';
   return 'y';
 }
 
@@ -74,25 +77,24 @@ function clip(vertices: readonly Vertex[], cut: Cut, side: number): Vertex[] {
 }
 
 function deform(point: Vector3, itemId: ItemId): void {
-  switch (itemId) {
-    case 'map':
-      point.y += Math.max(0, point.x - 0.1) * Math.max(0, point.z + 0.1) * 0.55;
-      point.y += Math.max(0, -point.x - 0.10) * (0.14 + Math.abs(point.z)) * 0.75;
-      break;
-    case 'umbrella':
-      if (point.x < 0.08) {
-        point.x = Math.min(-0.08, point.x + Math.hypot(point.y, point.z) * 0.45);
-        point.y *= 0.16;
-        point.z *= 0.16;
-      }
-      break;
-  }
+  if (itemId !== 'map') return;
+  point.y += Math.max(0, point.x - 0.1) * Math.max(0, point.z + 0.1) * 0.55;
+  point.y += Math.max(0, -point.x - 0.10) * (0.14 + Math.abs(point.z)) * 0.75;
 }
 
 function separateFragment(point: Vector3, itemId: ItemId, side: number): void {
   if (side <= 0) return;
   if (itemId === 'fishingNet') {
     point.z += 0.03;
+    return;
+  }
+  if (itemId === 'anchor') {
+    point.x += 0.65;
+    point.y += 0.08;
+    return;
+  }
+  if (['spyglass', 'flashlight', 'umbrella'].includes(itemId)) {
+    point.x += 0.15;
     return;
   }
   if (itemId !== 'compass' && itemId !== 'knife' && itemId !== 'scubaSet' && itemId !== 'bucket') {

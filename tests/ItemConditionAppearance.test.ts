@@ -57,11 +57,11 @@ describe('item condition appearance', () => {
         verifyCompassSplit(root, bindings);
       }
       setItemBroken(bindings, true);
-      // Importance: 90. The broken umbrella must fold shut rather than retain an open canopy.
+      // Importance: 90. Damage must retain the umbrella's full canopy.
       if (id === 'umbrella') {
         const damagedBounds = new Box3().setFromObject(root, true);
         expect(damagedBounds.max.z - damagedBounds.min.z)
-          .toBeLessThan((usableBounds.max.z - usableBounds.min.z) * 0.25);
+          .toBeCloseTo(usableBounds.max.z - usableBounds.min.z, 5);
       }
       const positions = bindings.flatMap(({ mesh }) => [...mesh.geometry.getAttribute('position').array]);
       expect(positions.length).toBeGreaterThan(0);

@@ -138,6 +138,28 @@ function verifyStorageSupport(id: ItemId, root: Group, usable: Box3, boatMeshes:
   }
 }
 
+// Importance: 95. Seating the upper anchor half must not push it into the lower half.
+function verifyFragmentClearance(root: Group): void {
+  const halves = [new Group(), new Group()];
+  for (const mesh of meshes(root)) {
+    const fragments = mesh.geometry.getAttribute('damageFragment');
+    halves.forEach((half, fragment) => {
+      const indices = Array.from({ length: fragments.count }, (_, index) => index)
+        .filter((index) => fragments.getX(index) === fragment);
+      const geometry = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
+      geometry.setIndex(indices);
+      geometry.clearGroups();
+      half.add(new Mesh(geometry, Array.isArray(mesh.material) ? mesh.material[0] : mesh.material));
+    });
+  }
+  try {
+    expect(crossings(halves[0]!, meshes(halves[1]!)), `${root.name} fragment overlap`).toEqual([]);
+    expect(crossings(halves[1]!, meshes(halves[0]!)), `${root.name} reverse fragment overlap`).toEqual([]);
+  } finally {
+    halves.flatMap(meshes).forEach((mesh) => mesh.geometry.dispose());
+  }
+}
+
 // Importance: 95. Broken items must clear the actual boat and surrounding stored items.
 it('keeps every damaged production item clear of the boat and other supplies', async () => {
   const assets = LifeboatAssets.fromTextures(new Texture(), new Texture(), new Texture());
@@ -170,6 +192,7 @@ it('keeps every damaged production item clear of the boat and other supplies', a
     boat.updateWorldMatrix(true, true);
     for (const item of items.filter(({ id }) => ITEM_DEFINITIONS[id].breakable)) {
       verifyStorageSupport(item.id, item.root, item.usable, boatMeshes);
+      if (['anchor', 'umbrella', 'spyglass', 'flashlight'].includes(item.id)) verifyFragmentClearance(item.root);
       expect.soft(crossings(item.root, boatMeshes), `${item.id} intersects boat`).toEqual([]);
       for (const other of items.filter((other) => other !== item)) {
         expect.soft(crossings(item.root, meshes(other.root)), `${item.id} intersects ${other.root.name}`).toEqual([]);
