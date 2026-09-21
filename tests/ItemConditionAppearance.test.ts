@@ -1,11 +1,30 @@
 import { readFile } from 'node:fs/promises';
-import { BoxGeometry, BufferGeometry, Group, Material, Mesh, MeshStandardMaterial, Texture } from 'three';
+import { Box3, BoxGeometry, BufferGeometry, Group, Material, Mesh, MeshStandardMaterial, Raycaster, Texture, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { describe, expect, it } from 'vitest';
 import { ITEM_IDS, ITEM_DEFINITIONS } from '../src/game/ItemState';
 import { ITEM_MODEL_SPECS } from '../src/world/itemModelManifest';
 import { normalizeLongestDimensionTemplate } from '../src/world/modelValidation';
-import { prepareItemCondition, setItemBroken } from '../src/survival/itemConditionAppearance';
+import { prepareItemCondition, setItemBroken, type ItemConditionBinding } from '../src/survival/itemConditionAppearance';
+
+// Importance: 95. The compass must have an open split, retain both halves, and close on repair.
+function verifyCompassSplit(root: Group, bindings: readonly ItemConditionBinding[]): void {
+  const bounds = new Box3().setFromObject(root);
+  const center = bounds.getCenter(new Vector3());
+  const size = bounds.getSize(new Vector3());
+  const length = Math.max(size.x, size.y, size.z);
+  const hits = (x: number): number => new Raycaster(
+    new Vector3(center.x + x * length, center.y, center.z + length * 2),
+    new Vector3(0, 0, -1),
+  ).intersectObject(root, true).length;
+  expect(hits(0.06)).toBeGreaterThan(0);
+  setItemBroken(bindings, true);
+  expect(hits(0.06)).toBe(0);
+  expect(hits(-0.2)).toBeGreaterThan(0);
+  expect(hits(0.25)).toBeGreaterThan(0);
+  setItemBroken(bindings, false);
+  expect(hits(0.06)).toBeGreaterThan(0);
+}
 
 // Importance: 95. Damage must never alter a usable model or survive repair.
 describe('item condition appearance', () => {
@@ -29,12 +48,15 @@ describe('item condition appearance', () => {
       const changedMaterials = bindings.flatMap(({ usableMaterial }) => (
         Array.isArray(usableMaterial) ? usableMaterial : [usableMaterial]
       )).map((material) => material.name);
-      if (id === 'compass') expect(new Set(changedMaterials)).toEqual(new Set(['mat24']));
+      if (id === 'compass') {
+        expect(changedMaterials).toEqual(expect.arrayContaining(['mat20', 'mat21', 'mat24']));
+        verifyCompassSplit(root, bindings);
+      }
       if (id === 'fishingNet') expect(new Set(changedMaterials)).toEqual(new Set(['fishnet_net']));
       if (id === 'scubaSet') {
         expect(new Set(changedMaterials)).toEqual(new Set(['Material.016', 'Material.037']));
       }
-      if (id === 'compass' || id === 'scubaSet' || id === 'flashlight') {
+      if (id === 'scubaSet' || id === 'flashlight') {
         const crackedGlass = bindings.filter(({ usableMaterial, brokenMaterial }) => (
           Array.isArray(brokenMaterial)
           && brokenMaterial.length > (Array.isArray(usableMaterial) ? usableMaterial.length : 1)

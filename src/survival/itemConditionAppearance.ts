@@ -15,7 +15,7 @@ function damageSurface(itemId: ItemId, mesh: Mesh): DamageSurface {
   const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
   const hasMaterial = (name: string): boolean => materials.some((material) => material.name === name);
   switch (itemId) {
-    case 'compass': return hasMaterial('mat24') ? 'glass' : 'none';
+    case 'compass': return 'body';
     case 'scubaSet': {
       if (!isScubaMask(mesh)) return 'none';
       return hasMaterial('Material.016') ? 'glass' : 'body';
