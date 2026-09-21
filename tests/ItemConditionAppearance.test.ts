@@ -44,27 +44,16 @@ describe('item condition appearance', () => {
       const geometries = new Set<BufferGeometry>();
       const materials = new Set<Material>();
       const bindings = prepareItemCondition(root, id, geometries, materials);
-      // Importance: 90. Damage must affect working surfaces, not intact supports.
+      // Importance: 95. No intact mesh may bridge a fracture after the item breaks.
+      const meshes: Mesh[] = [];
+      root.traverse((object) => { if (object instanceof Mesh) meshes.push(object); });
+      expect(bindings.map(({ mesh }) => mesh)).toEqual(meshes);
       const changedMaterials = bindings.flatMap(({ usableMaterial }) => (
         Array.isArray(usableMaterial) ? usableMaterial : [usableMaterial]
       )).map((material) => material.name);
       if (id === 'compass') {
         expect(changedMaterials).toEqual(expect.arrayContaining(['mat20', 'mat21', 'mat24']));
         verifyCompassSplit(root, bindings);
-      }
-      if (id === 'fishingNet') expect(new Set(changedMaterials)).toEqual(new Set(['fishnet_net']));
-      if (id === 'scubaSet') {
-        expect(new Set(changedMaterials)).toEqual(new Set(['Material.016', 'Material.037']));
-      }
-      if (id === 'scubaSet' || id === 'flashlight') {
-        const crackedGlass = bindings.filter(({ usableMaterial, brokenMaterial }) => (
-          Array.isArray(brokenMaterial)
-          && brokenMaterial.length > (Array.isArray(usableMaterial) ? usableMaterial.length : 1)
-        ));
-        expect(crackedGlass.length).toBeGreaterThan(0);
-        for (const { brokenGeometry } of crackedGlass) {
-          expect(brokenGeometry.groups.at(-1)!.count).toBeGreaterThan(0);
-        }
       }
       setItemBroken(bindings, true);
       const positions = bindings.flatMap(({ mesh }) => [...mesh.geometry.getAttribute('position').array]);

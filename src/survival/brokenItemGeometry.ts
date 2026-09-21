@@ -6,29 +6,26 @@ interface Vertex {
   readonly point: Vector3;
   readonly attributes: readonly number[][];
 }
-export type DamageSurface = 'body' | 'fabric' | 'glass' | 'none';
-
 // Coordinates use the model's longest side as one unit, before its boat pose.
-const GLASS_CRACKS: Partial<Record<ItemId, Cut>> = {
-  scubaSet: (p) => p.x + p.y * 0.25 + jaggedEdge(p.y) - 0.085,
-  flashlight: (p) => p.z + p.y * 0.33 + jaggedEdge(p.y),
-};
-
 const BREAKS: Partial<Record<ItemId, Cut>> = {
   compass: (p) => p.x + p.y * 0.28 + jaggedEdge(p.y) - 0.03,
   map: (p) => p.x + jaggedEdge(p.z) - 0.08,
   spyglass: (p) => p.x + jaggedEdge(p.y),
-  scubaSet: (p) => p.x + jaggedEdge(p.y),
-  flashlight: (p) => p.x + p.y * 0.18 - 0.23,
+  scubaSet: (p) => p.y + jaggedEdge(p.x) + 0.08,
+  flashlight: (p) => p.x + p.y * 0.18 + jaggedEdge(p.y),
+  knife: (p) => p.x + p.y * 0.22 + jaggedEdge(p.y) - 0.02,
+  bucket: (p) => p.x + p.y * 0.16 + jaggedEdge(p.y),
+  anchor: (p) => p.y + jaggedEdge(p.x) + 0.08,
+  fishingNet: (p) => p.z + jaggedEdge(p.x) - 0.03,
+  umbrella: (p) => p.x + jaggedEdge(p.y),
 };
 
 function jaggedEdge(value: number): number {
   return (Math.abs(((value + 0.5) * 8) % 2 - 1) - 0.5) * 0.055;
 }
 
-function fractureSections(triangle: Vertex[], itemId: ItemId, surface: DamageSurface): Vertex[][] {
-  if (BREAKS[itemId] === undefined && surface !== 'glass') return [triangle];
-  const axis = itemId === 'map' ? 'z' : 'y';
+function fractureSections(triangle: Vertex[], itemId: ItemId): Vertex[][] {
+  const axis = fractureAxis(itemId);
   const output: Vertex[][] = [];
   let remainder = triangle;
   // Split at each tooth before clipping, so even a two-triangle map has torn edges.
@@ -41,16 +38,11 @@ function fractureSections(triangle: Vertex[], itemId: ItemId, surface: DamageSur
   return output;
 }
 
-const TEARS: Partial<Record<ItemId, readonly Cut[]>> = {
-  // A ripped basket, a leaking side wall, and a split canopy sector.
-  fishingNet: [(p) => p.x + 0.12, (p) => 0.11 - p.x,
-    (p) => p.z + 0.49 + p.x * 0.4, (p) => -0.22 - p.z + p.x * 0.3],
-  bucket: [(p) => p.x - 0.08, (p) => p.z - 0.03,
-    (p) => p.y + 0.32],
-  anchor: [(p) => p.x - 0.16 + p.y * 0.15],
-  umbrella: [(p) => -0.12 - p.x, (p) => p.y - 0.14,
-    (p) => p.z + 0.10, (p) => 0.10 - p.z],
-};
+function fractureAxis(itemId: ItemId): 'x' | 'y' | 'z' {
+  if (itemId === 'map') return 'z';
+  if (itemId === 'scubaSet' || itemId === 'anchor' || itemId === 'fishingNet') return 'x';
+  return 'y';
+}
 
 function interpolate(a: Vertex, b: Vertex, t: number): Vertex {
   return {
@@ -74,16 +66,6 @@ function clip(vertices: readonly Vertex[], cut: Cut, side: number): Vertex[] {
   return output;
 }
 
-function outsideTear(vertices: Vertex[], cuts: readonly Cut[]): Vertex[][] {
-  const output: Vertex[][] = [];
-  let remainder = vertices;
-  for (const cut of cuts) {
-    output.push(clip(remainder, cut, -1));
-    remainder = clip(remainder, cut, 1);
-  }
-  return output;
-}
-
 function deform(point: Vector3, itemId: ItemId): void {
   switch (itemId) {
     case 'map':
@@ -92,47 +74,29 @@ function deform(point: Vector3, itemId: ItemId): void {
     case 'spyglass':
       if (point.x > 0.03) point.y -= Math.max(0, point.z - 0.10) * 0.7;
       break;
-    case 'scubaSet':
-      point.y -= Math.max(0, point.x) * 0.65;
-      point.z += Math.max(0, point.x) * 0.25;
-      break;
-    case 'anchor': point.y += Math.max(0, point.x - 0.12) * 0.8; break;
-    case 'flashlight': point.y += Math.max(0, point.x - 0.18) * 0.55; break;
-    case 'fishingNet': point.y -= Math.max(0, 0.09 - Math.abs(point.x)) * 0.4; break;
-    case 'umbrella': bendCanopy(point); break;
-    case 'bucket':
-      if (point.x > 0.1) point.x -= Math.max(0, point.y + 0.3) * 0.22;
-      break;
   }
 }
 
 function separateFragment(point: Vector3, itemId: ItemId, side: number): void {
   if (side <= 0) return;
+  if (itemId === 'fishingNet') {
+    const z = point.z;
+    point.z = z * Math.cos(0.24) - point.x * Math.sin(0.24) + 0.08;
+    point.x = z * Math.sin(0.24) + point.x * Math.cos(0.24) + 0.08;
+    return;
+  }
   // Keep both pieces close enough to read as one damaged inventory item.
   const angle = itemId === 'compass' ? -0.12 : -0.28;
   const x = point.x;
   point.x = x * Math.cos(angle) - point.y * Math.sin(angle) + 0.07;
   point.y = x * Math.sin(angle) + point.y * Math.cos(angle) - 0.035;
-}
-
-function bendCanopy(point: Vector3): void {
-  if (point.x >= -0.10 || point.y <= 0) return;
-  point.x += point.y * 0.42;
-  point.y *= 0.48;
-}
-
-function liftCrack(point: Vector3, itemId: ItemId): void {
-  // Keep the fracture on the glass surface, clear of its original transparent face.
-  if (itemId === 'flashlight') point.x += 0.002;
-  else point.z += itemId === 'scubaSet' ? -0.002 : 0.002;
+  if (itemId === 'scubaSet' || itemId === 'anchor') point.y += 0.16;
 }
 
 export function createBrokenGeometry(
   source: BufferGeometry,
   toUnit: Matrix4,
   itemId: ItemId,
-  surface: DamageSurface,
-  crackMaterialIndex: number,
 ): BufferGeometry {
   const position = source.getAttribute('position');
   const names = Object.keys(source.attributes).filter((name) => name !== 'position' && name !== 'normal');
@@ -140,7 +104,6 @@ export function createBrokenGeometry(
   const outputPositions: number[] = [];
   const outputAttributes = names.map(() => [] as number[]);
   const fromUnit = toUnit.clone().invert();
-  const crack = surface === 'glass' ? GLASS_CRACKS[itemId] : undefined;
   const fracture = BREAKS[itemId];
   const geometry = new BufferGeometry();
   const readVertex = (offset: number): Vertex => {
@@ -152,11 +115,10 @@ export function createBrokenGeometry(
       )),
     };
   };
-  const emit = (polygon: readonly Vertex[], glassCrack = false, fragmentSide = 0): void => {
+  const emit = (polygon: readonly Vertex[], fragmentSide = 0): void => {
     for (let index = 1; index < polygon.length - 1; index += 1) {
       for (const vertex of [polygon[0]!, polygon[index]!, polygon[index + 1]!]) {
         const point = vertex.point.clone();
-        if (glassCrack) liftCrack(point, itemId);
         deform(point, itemId);
         separateFragment(point, itemId, fragmentSide);
         point.applyMatrix4(fromUnit);
@@ -165,25 +127,18 @@ export function createBrokenGeometry(
       }
     }
   };
-  const emitFragment = (section: Vertex[], glassCrack = false): void => {
+  const emitFragment = (section: Vertex[]): void => {
     if (fracture === undefined) {
-      emit(section, glassCrack);
+      emit(section);
       return;
     }
-    emit(clip(section, (p) => fracture(p) + 0.018, -1), glassCrack, -1);
-    emit(clip(section, (p) => fracture(p) - 0.018, 1), glassCrack, 1);
+    emit(clip(section, (p) => fracture(p) + 0.018, -1), -1);
+    emit(clip(section, (p) => fracture(p) - 0.018, 1), 1);
   };
   const emitBody = (start: number, count: number): void => {
-    const tears = TEARS[itemId];
     for (let offset = start; offset < start + count; offset += 3) {
       const triangle = [readVertex(offset), readVertex(offset + 1), readVertex(offset + 2)];
-      for (const section of fractureSections(triangle, itemId, surface)) {
-        if (itemId === 'knife') {
-          emit(clip(section, (p) => p.x + p.y * 0.22 - 0.10, -1));
-        } else {
-          for (const polygon of tears === undefined ? [section] : outsideTear(section, tears)) emitFragment(polygon);
-        }
-      }
+      for (const section of fractureSections(triangle, itemId)) emitFragment(section);
     }
   };
   const groups = source.groups.length > 0 ? source.groups : [{
@@ -193,18 +148,6 @@ export function createBrokenGeometry(
     const start = outputPositions.length / 3;
     emitBody(group.start, group.count);
     geometry.addGroup(start, outputPositions.length / 3 - start, group.materialIndex);
-  }
-  if (crack !== undefined) {
-    const start = outputPositions.length / 3;
-    const count = source.index?.count ?? position.count;
-    for (let offset = 0; offset < count; offset += 3) {
-      const triangle = [readVertex(offset), readVertex(offset + 1), readVertex(offset + 2)];
-      for (const section of fractureSections(triangle, itemId, surface)) {
-        const band = clip(clip(section, (p) => crack(p) + 0.004, 1), (p) => crack(p) - 0.004, -1);
-        emitFragment(band, true);
-      }
-    }
-    geometry.addGroup(start, outputPositions.length / 3 - start, crackMaterialIndex);
   }
   geometry.setAttribute('position', new Float32BufferAttribute(outputPositions, 3));
   names.forEach((name, index) => geometry.setAttribute(
