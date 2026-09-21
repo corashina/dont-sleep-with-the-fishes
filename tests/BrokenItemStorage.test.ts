@@ -76,6 +76,68 @@ function crossings(source: Object3D, targets: Mesh[]): string[] {
   return [...hits].map(([name, bounds]) => `${name}: ${JSON.stringify(bounds)}`);
 }
 
+// Importance: 95. Supporting one fragment must not leave the other floating above the boat.
+function fragmentBottoms(root: Object3D): number[] {
+  const bottoms = [Infinity, Infinity];
+  const point = new Vector3();
+  for (const mesh of meshes(root)) {
+    const positions = mesh.geometry.getAttribute('position');
+    const fragments = mesh.geometry.getAttribute('damageFragment');
+    for (let index = 0; index < positions.count; index += 1) {
+      point.fromBufferAttribute(positions, index).applyMatrix4(mesh.matrixWorld);
+      const fragment = fragments.getX(index);
+      bottoms[fragment] = Math.min(bottoms[fragment]!, point.y);
+    }
+  }
+  return bottoms;
+}
+
+function netFragmentContacts(root: Object3D, supports: Mesh[]): boolean[] {
+  const contacts = [false, false];
+  const ray = new Raycaster(new Vector3(), new Vector3(0, -1, 0), 0, 0.006);
+  const bounds = supports.map((mesh) => ({ mesh, box: new Box3().setFromObject(mesh, true) }));
+  const points = [new Vector3(), new Vector3(), new Vector3()];
+  for (const mesh of meshes(root)) {
+    const positions = mesh.geometry.getAttribute('position');
+    const fragments = mesh.geometry.getAttribute('damageFragment');
+    for (let index = 0; index < positions.count; index += 3) {
+      const fragment = fragments.getX(index);
+      if (contacts[fragment]) continue;
+      readTriangle(mesh, index, points);
+      for (let edge = 0; edge < 3; edge += 1) {
+        const start = points[edge]!;
+        const end = points[(edge + 1) % 3]!;
+        const steps = Math.max(1, Math.ceil(start.distanceTo(end) / 0.01));
+        for (let step = 0; step <= steps; step += 1) {
+          ray.ray.origin.lerpVectors(start, end, step / steps);
+          const nearby = bounds.filter(({ box }) => ray.ray.intersectsBox(box)).map(({ mesh }) => mesh);
+          if (ray.intersectObjects(nearby, false).length > 0) contacts[fragment] = true;
+        }
+      }
+      if (contacts.every(Boolean)) return contacts;
+    }
+  }
+  return contacts;
+}
+
+function verifyStorageSupport(id: ItemId, root: Group, usable: Box3, boatMeshes: Mesh[]): void {
+  if (id === 'fishingNet') {
+    expect(netFragmentContacts(root, boatMeshes)).toEqual([true, true]);
+    return;
+  }
+  if (['map', 'spyglass', 'anchor', 'umbrella', 'flashlight'].includes(id)) {
+    for (const bottom of fragmentBottoms(root)) {
+      expect(bottom, `${id} fragment contact`).toBeCloseTo(usable.min.y + 0.002, 5);
+    }
+  }
+  const bounds = new Box3().setFromObject(root, true);
+  expect(bounds.min.y, `${id} support`).toBeGreaterThanOrEqual(usable.min.y + 0.001);
+  for (const axis of ['x', 'z'] as const) {
+    expect(bounds.min[axis], `${id} ${axis} min`).toBeGreaterThanOrEqual(usable.min[axis] - 0.00001);
+    expect(bounds.max[axis], `${id} ${axis} max`).toBeLessThanOrEqual(usable.max[axis] + 0.00001);
+  }
+}
+
 // Importance: 95. Broken items must clear the actual boat and surrounding stored items.
 it('keeps every damaged production item clear of the boat and other supplies', async () => {
   const assets = LifeboatAssets.fromTextures(new Texture(), new Texture(), new Texture());
@@ -100,21 +162,14 @@ it('keeps every damaged production item clear of the boat and other supplies', a
         const bindings = prepareItemCondition(root, id, geometries, materials);
         const usable = new Box3().setFromObject(root, true);
         fitBrokenItemToStorage(root, bindings, id);
+        expect(root.rotation.toArray(), `${id} stored orientation`).toEqual(pose.rotation.toArray());
         setItemBroken(bindings, true);
         items.push({ id, root, usable, bindings });
       }
     }
     boat.updateWorldMatrix(true, true);
     for (const item of items.filter(({ id }) => ITEM_DEFINITIONS[id].breakable)) {
-      const bounds = new Box3().setFromObject(item.root, true);
-      // The net hangs outside its slot; verify its actual mesh against the curved rim below.
-      if (item.id !== 'fishingNet') {
-        expect(bounds.min.y, `${item.id} support`).toBeGreaterThanOrEqual(item.usable.min.y + 0.001);
-        for (const axis of ['x', 'z'] as const) {
-          expect(bounds.min[axis], `${item.id} ${axis} min`).toBeGreaterThanOrEqual(item.usable.min[axis] - 0.00001);
-          expect(bounds.max[axis], `${item.id} ${axis} max`).toBeLessThanOrEqual(item.usable.max[axis] + 0.00001);
-        }
-      }
+      verifyStorageSupport(item.id, item.root, item.usable, boatMeshes);
       expect.soft(crossings(item.root, boatMeshes), `${item.id} intersects boat`).toEqual([]);
       for (const other of items.filter((other) => other !== item)) {
         expect.soft(crossings(item.root, meshes(other.root)), `${item.id} intersects ${other.root.name}`).toEqual([]);

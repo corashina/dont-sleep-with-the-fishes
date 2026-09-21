@@ -1,4 +1,4 @@
-import { BufferGeometry, Float32BufferAttribute, Matrix4, Vector3 } from 'three';
+import { BufferGeometry, Float32BufferAttribute, Matrix4, Uint8BufferAttribute, Vector3 } from 'three';
 import type { ItemId } from '../game/ItemState';
 
 type Cut = (point: Vector3) => number;
@@ -15,7 +15,7 @@ const BREAKS: Partial<Record<ItemId, Cut>> = {
   flashlight: (p) => p.x + p.y * 0.18 + jaggedEdge(p.y),
   knife: (p) => p.x + p.y * 0.22 + jaggedEdge(p.y) - 0.02,
   bucket: (p) => p.x + p.y * 0.16 + jaggedEdge(p.y),
-  anchor: (p) => p.y + jaggedEdge(p.x) + 0.08,
+  anchor: (p) => p.x + jaggedEdge(p.y),
   fishingNet: (p) => p.z + jaggedEdge(p.x) - 0.03,
   umbrella: (p) => p.x + jaggedEdge(p.y),
 };
@@ -47,7 +47,7 @@ function fractureSections(triangle: Vertex[], itemId: ItemId): Vertex[][] {
 
 function fractureAxis(itemId: ItemId): 'x' | 'y' | 'z' {
   if (itemId === 'map') return 'z';
-  if (itemId === 'scubaSet' || itemId === 'anchor' || itemId === 'fishingNet') return 'x';
+  if (itemId === 'scubaSet' || itemId === 'fishingNet') return 'x';
   return 'y';
 }
 
@@ -79,9 +79,6 @@ function deform(point: Vector3, itemId: ItemId): void {
       point.y += Math.max(0, point.x - 0.1) * Math.max(0, point.z + 0.1) * 0.55;
       point.y += Math.max(0, -point.x - 0.10) * (0.14 + Math.abs(point.z)) * 0.75;
       break;
-    case 'spyglass':
-      if (point.x > 0.03) point.y -= Math.max(0, point.z - 0.10) * 0.7;
-      break;
     case 'umbrella':
       if (point.x < 0.08) {
         point.x = Math.min(-0.08, point.x + Math.hypot(point.y, point.z) * 0.45);
@@ -93,16 +90,13 @@ function deform(point: Vector3, itemId: ItemId): void {
 }
 
 function separateFragment(point: Vector3, itemId: ItemId, side: number): void {
-  if (itemId === 'spyglass' && side < 0) {
-    const x = point.x;
-    point.x = x * Math.cos(0.12) - point.y * Math.sin(0.12) - 0.025;
-    point.y = x * Math.sin(0.12) + point.y * Math.cos(0.12) + 0.03;
-  }
   if (side <= 0) return;
   if (itemId === 'fishingNet') {
-    const z = point.z;
-    point.z = z * Math.cos(0.24) - point.x * Math.sin(0.24) + 0.08;
-    point.x = z * Math.sin(0.24) + point.x * Math.cos(0.24) + 0.08;
+    point.z += 0.03;
+    return;
+  }
+  if (itemId !== 'compass' && itemId !== 'knife' && itemId !== 'scubaSet' && itemId !== 'bucket') {
+    point.x += 0.07;
     return;
   }
   // Keep both pieces close enough to read as one damaged inventory item.
@@ -110,7 +104,7 @@ function separateFragment(point: Vector3, itemId: ItemId, side: number): void {
   const x = point.x;
   point.x = x * Math.cos(angle) - point.y * Math.sin(angle) + 0.07;
   point.y = x * Math.sin(angle) + point.y * Math.cos(angle) - 0.035;
-  if (itemId === 'scubaSet' || itemId === 'anchor') point.y += 0.16;
+  if (itemId === 'scubaSet') point.y += 0.16;
 }
 
 function notchSections(section: Vertex[], itemId: ItemId): Vertex[][] {
@@ -134,6 +128,7 @@ export function createBrokenGeometry(
   const names = Object.keys(source.attributes).filter((name) => name !== 'position' && name !== 'normal');
   const attributes = names.map((name) => source.getAttribute(name));
   const outputPositions: number[] = [];
+  const outputFragments: number[] = [];
   const outputAttributes = names.map(() => [] as number[]);
   const fromUnit = toUnit.clone().invert();
   const fracture = BREAKS[itemId];
@@ -155,6 +150,7 @@ export function createBrokenGeometry(
         separateFragment(point, itemId, fragmentSide);
         point.applyMatrix4(fromUnit);
         outputPositions.push(point.x, point.y, point.z);
+        outputFragments.push(fragmentSide > 0 ? 1 : 0);
         vertex.attributes.forEach((values, attribute) => outputAttributes[attribute]!.push(...values));
       }
     }
@@ -184,6 +180,7 @@ export function createBrokenGeometry(
     geometry.addGroup(start, outputPositions.length / 3 - start, group.materialIndex);
   }
   geometry.setAttribute('position', new Float32BufferAttribute(outputPositions, 3));
+  geometry.setAttribute('damageFragment', new Uint8BufferAttribute(outputFragments, 1));
   names.forEach((name, index) => geometry.setAttribute(
     name, new Float32BufferAttribute(outputAttributes[index]!, attributes[index]!.itemSize),
   ));
